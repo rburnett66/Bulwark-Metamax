@@ -113,7 +113,7 @@ window.GAME_CONFIG = {
           "CHOOSEDIFFICUL",
           "STORE",
           "SETTINGS",
-          "CHOOSEFACTION",
+          "FACTIONANDCHAR",
           "INVENTORY",
           "HELP",
           "LEADERBOARD",
@@ -123,7 +123,7 @@ window.GAME_CONFIG = {
           "CHOOSEDIFFICUL",
           "STORE",
           "SETTINGS",
-          "CHOOSEFACTION",
+          "FACTIONANDCHAR",
           "INVENTORY",
           "HELP",
           "LEADERBOARD",
@@ -135,7 +135,7 @@ window.GAME_CONFIG = {
         "CHOOSEDIFFICUL",
         "STORE",
         "SETTINGS",
-        "CHOOSEFACTION",
+        "FACTIONANDCHAR",
         "INVENTORY",
         "HELP",
         "LEADERBOARD",
@@ -182,22 +182,25 @@ window.GAME_CONFIG = {
       "cfg": {
         "title": "SETTINGS",
         "navLabels": [
-          "MENU"
+          "MENU",
+          "STATESHARNESS"
         ],
         "labels": [
-          "MENU"
+          "MENU",
+          "STATESHARNESS"
         ],
         "back": "MENU"
       },
       "next": [
-        "MENU"
+        "MENU",
+        "STATESHARNESS"
       ]
     },
     {
-      "name": "CHOOSEFACTION",
+      "name": "FACTIONANDCHAR",
       "screen": "Stub",
       "cfg": {
-        "title": "CHOOSE FACTION",
+        "title": "FACTION AND CHARS",
         "navLabels": [
           "MENU"
         ],
@@ -293,6 +296,23 @@ window.GAME_CONFIG = {
       },
       "next": [
         "RESULTS"
+      ]
+    },
+    {
+      "name": "STATESHARNESS",
+      "screen": "Stub",
+      "cfg": {
+        "title": "STATES HARNESS",
+        "navLabels": [
+          "SETTINGS"
+        ],
+        "labels": [
+          "SETTINGS"
+        ],
+        "back": "SETTINGS"
+      },
+      "next": [
+        "SETTINGS"
       ]
     },
     {
