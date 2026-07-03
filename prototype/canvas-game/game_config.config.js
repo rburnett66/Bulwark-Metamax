@@ -265,7 +265,7 @@ window.GAME_CONFIG = {
       "name": "VIEWREPLAYS",
       "screen": "Stub",
       "cfg": {
-        "title": "View Replays",
+        "title": "VIEW REPLAYS",
         "navLabels": [
           "MENU"
         ],
