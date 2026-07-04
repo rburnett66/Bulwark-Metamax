@@ -15,5 +15,9 @@
     "scr_7g7m3jd": "stub"
   },
   "mode": "stubbed-framework",
-  "gameplayScreenId": null
+  "gameplayScreenId": "scr_zc7dhlv",
+  "gameplayScreenIds": [
+    "scr_zc7dhlv",
+    "scr_lcmu93t"
+  ]
 }

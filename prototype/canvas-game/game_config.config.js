@@ -130,7 +130,9 @@ window.GAME_CONFIG = {
       }
     ]
   },
-  "mechanics": [],
+  "mechanics": [
+    "SessionTimer"
+  ],
   "states": [
     {
       "name": "MENU",
@@ -177,16 +179,16 @@ window.GAME_CONFIG = {
       "cfg": {
         "title": "CHOOSE DIFFICULTY",
         "navLabels": [
-          "PLAY"
+          "GAMEPLAY"
         ],
         "labels": [
-          "PLAY"
+          "GAMEPLAY"
         ],
         "asset": "SC_scru4678ee",
-        "back": "PLAY"
+        "back": "GAMEPLAY"
       },
       "next": [
-        "PLAY"
+        "GAMEPLAY"
       ]
     },
     {
@@ -302,7 +304,7 @@ window.GAME_CONFIG = {
     },
     {
       "name": "VIEWREPLAYS",
-      "screen": "Stub",
+      "screen": "PlayField",
       "cfg": {
         "title": "VIEW REPLAYS",
         "navLabels": [
@@ -311,16 +313,16 @@ window.GAME_CONFIG = {
         "labels": [
           "MENU"
         ],
-        "asset": "SC_scrlcmu93t",
-        "back": "MENU"
+        "asset": "SC_scrlcmu93t"
       },
       "next": [
         "MENU"
-      ]
+      ],
+      "gameplay": true
     },
     {
-      "name": "PLAY",
-      "screen": "Stub",
+      "name": "GAMEPLAY",
+      "screen": "PlayField",
       "cfg": {
         "title": "PLAY",
         "navLabels": [
@@ -329,12 +331,12 @@ window.GAME_CONFIG = {
         "labels": [
           "RESULTS"
         ],
-        "asset": "SC_scrzc7dhlv",
-        "back": "RESULTS"
+        "asset": "SC_scrzc7dhlv"
       },
       "next": [
         "RESULTS"
-      ]
+      ],
+      "gameplay": true
     },
     {
       "name": "STATESHARNESS",

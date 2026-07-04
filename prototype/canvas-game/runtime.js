@@ -207,6 +207,12 @@
   function scene(name, renderFn) { scenes[name] = renderFn; }
   function go(name) { state = name; stateTime = 0; mouse.clicked = false; }
   function current() { return state; }
+  // A game's PLAY can span many screens (a battle, a shop-that-plays, a boss room) — a mechanic
+  // runs on ANY state flagged gameplay, not one hard-named 'GAMEPLAY'. inGameplay() is the gate
+  // generated mechanics use: `if (!R.inGameplay()) return;`. Back-compat: a state literally named
+  // GAMEPLAY counts even without the flag.
+  var _gpStates = {};
+  function inGameplay() { return _gpStates[state] === true || state === 'GAMEPLAY'; }
   function onUpdate(fn) { if (typeof fn === 'function') updaters.push(fn); }
 
   function loop(t) {
@@ -259,8 +265,11 @@
       if (!factory) throw new Error("[canvas-kit] config.mechanics names missing mechanic '" + m + "' — assembly failure (script not loaded before start?)");
       var inst = factory(config, shared); shared['mech_' + m] = inst; if (inst && inst.update) onUpdate(inst.update);
     });
-    if ((config.mechanics || []).length && !(config.states || []).some(function (s) { return s.name === 'GAMEPLAY'; })) {
-      throw new Error("[canvas-kit] mechanics are configured but no state is named 'GAMEPLAY' — the kit contract requires it (mechanics gate on GAMEPLAY and will silently no-op forever)");
+    // Register gameplay states (flag or the back-compat GAMEPLAY name). Mechanics gate on
+    // R.inGameplay(), so PLAY may span any number of screens.
+    (config.states || []).forEach(function (st) { if (st.gameplay === true || st.name === 'GAMEPLAY') _gpStates[st.name] = true; });
+    if ((config.mechanics || []).length && Object.keys(_gpStates).length === 0) {
+      throw new Error("[canvas-kit] mechanics are configured but NO state is marked gameplay (state.gameplay:true or a state named 'GAMEPLAY') — mechanics gate on R.inGameplay() and would silently no-op forever");
     }
     // screens
     (config.states || []).forEach(function (st) {
@@ -276,7 +285,7 @@
     init: init, loadAssets: loadAssets, img: img, drawBg: drawBg, drawSpr: drawSpr,
     roundRect: roundRect, text: text, clearBtns: clearBtns, addBtn: addBtn, drawBtns: drawBtns,
     spawn: spawn, updateParticles: updateParticles, drawParticles: drawParticles,
-    scene: scene, go: go, current: current, onUpdate: onUpdate, run: run, start: start,
+    scene: scene, go: go, current: current, inGameplay: inGameplay, onUpdate: onUpdate, run: run, start: start,
     useRegion: useRegion, isInRegion: isInRegion, isWater: isInRegion, pressed: pressed,
     srand: srand, rand: rand, logEvent: logEvent, exportReplay: exportReplay,
     get ctx() { return ctx; }, get W() { return CW; }, get H() { return CH; },
