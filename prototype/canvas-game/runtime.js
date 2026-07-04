@@ -63,8 +63,16 @@
     canvas.width = CW; canvas.height = CH;
     ctx = canvas.getContext('2d');
     function resize() {
+      // CRISP AT NATIVE RESOLUTION (mmdev-e29): the backing buffer matches the DISPLAYED size x
+      // devicePixelRatio, while every screen keeps drawing in logical CW x CH coordinates via the
+      // transform. The old code stretched a fixed 960x600 buffer over the window (no dpr), so the
+      // whole game upscale-blurred on any larger/HiDPI display — "screens crisp, game fuzzy".
       var r = Math.min(window.innerWidth / CW, window.innerHeight / CH);
+      var dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
       canvas.style.width = (CW * r) + 'px'; canvas.style.height = (CH * r) + 'px';
+      canvas.width = Math.max(1, Math.round(CW * r * dpr));
+      canvas.height = Math.max(1, Math.round(CH * r * dpr));
+      if (ctx.setTransform) ctx.setTransform(canvas.width / CW, 0, 0, canvas.height / CH, 0, 0);
     }
     window.addEventListener('resize', resize); resize();
     window.addEventListener('keydown', function (e) {
@@ -242,16 +250,23 @@
     for (s in (src.sprites || {})) assets['spr_' + s] = src.sprites[s];
     var shared = config.data || {};   // mutable game state shared across modules
     K.MMKit.game = shared;
+    // LOUD ASSEMBLY ASSERTIONS (mmdev-e29-s11): a missing factory or a broken kit contract is a
+    // BOOT FAILURE the gates can see — the old silent placeholder/skip converted four real wiring
+    // bugs into a green PASS (the Bulwark incident). Never hide assembly defects.
     // mechanics first (they expose update + helpers the gameplay screen uses)
     (config.mechanics || []).forEach(function (m) {
       var factory = K.MMKit.mechanics && K.MMKit.mechanics[m];
-      if (factory) { var inst = factory(config, shared); shared['mech_' + m] = inst; if (inst && inst.update) onUpdate(inst.update); }
+      if (!factory) throw new Error("[canvas-kit] config.mechanics names missing mechanic '" + m + "' — assembly failure (script not loaded before start?)");
+      var inst = factory(config, shared); shared['mech_' + m] = inst; if (inst && inst.update) onUpdate(inst.update);
     });
+    if ((config.mechanics || []).length && !(config.states || []).some(function (s) { return s.name === 'GAMEPLAY'; })) {
+      throw new Error("[canvas-kit] mechanics are configured but no state is named 'GAMEPLAY' — the kit contract requires it (mechanics gate on GAMEPLAY and will silently no-op forever)");
+    }
     // screens
     (config.states || []).forEach(function (st) {
       var factory = K.MMKit.screens && K.MMKit.screens[st.screen];
-      if (factory) scene(st.name, factory(st, config, shared));
-      else scene(st.name, function () { drawBg(null, '#0e2233'); text(st.name, CW / 2, CH / 2, 'bold 24px Trebuchet MS', '#9fb'); });
+      if (!factory) throw new Error("[canvas-kit] state '" + st.name + "' references missing screen factory '" + st.screen + "' — assembly failure (screen script not loaded before start?)");
+      scene(st.name, factory(st, config, shared));
     });
     go(config.first || (config.states && config.states[0] && config.states[0].name) || 'TITLE');
     loadAssets(assets, function () { run(); });
