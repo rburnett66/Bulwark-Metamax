@@ -30,51 +30,23 @@ window.GAME_CONFIG = {
     ]
   },
   "assets": {
-    "screens": {
-      "SC_scrab5f1vj": "content/screens/SC_scrab5f1vj.png",
-      "SC_scrbky3bf6": "content/screens/SC_scrbky3bf6.png",
-      "SC_scru4678ee": "content/screens/SC_scru4678ee.png",
-      "SC_scrzc7dhlv": "content/screens/SC_scrzc7dhlv.png",
-      "SC_scrrskt6dn": "content/screens/SC_scrrskt6dn.png",
-      "SC_scrae09vxa": "content/screens/SC_scrae09vxa.png",
-      "SC_scrwp1ium2": "content/screens/SC_scrwp1ium2.png",
-      "SC_scrlcmu93t": "content/screens/SC_scrlcmu93t.png",
-      "SC_screr2mf9n": "content/screens/SC_screr2mf9n.png",
-      "SC_scr29xml07": "content/screens/SC_scr29xml07.png",
-      "SC_scrm8rpgxd": "content/screens/SC_scrm8rpgxd.png",
-      "SC_scrxn5t664": "content/screens/SC_scrxn5t664.png"
-    },
-    "sprites": {
-      "4typeoftopdownviewofcomi": "content/sprites/4typeoftopdownviewofcomi.png",
-      "art17top": "content/sprites/art17top.png",
-      "art23top": "content/sprites/art23top.png",
-      "art29top": "content/sprites/art29top.png",
-      "art34top": "content/sprites/art34top.png",
-      "art8top": "content/sprites/art8top.png",
-      "chaplaingunnerruthbellam": "content/sprites/chaplaingunnerruthbellam.png",
-      "envoylyra9theleaderofthe": "content/sprites/envoylyra9theleaderofthe.png",
-      "mothersporeilyaleaderoft": "content/sprites/mothersporeilyaleaderoft.png",
-      "sheet": "content/sprites/sheet.png",
-      "tidepriestessmarenaleade": "content/sprites/tidepriestessmarenaleade.png",
-      "topdownviewof4typesofsep": "content/sprites/topdownviewof4typesofsep.png"
-    }
+    "screens": {},
+    "sprites": {}
   },
   "data": {
     "sessionSeconds": 120,
     "resultsState": "LEADERBOARD",
-    "avatarSprite": "4typeoftopdownviewofcomi",
+    "avatarSprite": "avatar",
     "charIndex": 0,
     "locationIndex": 0,
     "collected": [],
     "phase": "roam",
     "characters": [
       {
-        "name": "Player One",
-        "spr": "4typeoftopdownviewofcomi"
+        "name": "Player One"
       },
       {
-        "name": "Player Two",
-        "spr": "art17top"
+        "name": "Player Two"
       }
     ],
     "locations": [
@@ -160,7 +132,6 @@ window.GAME_CONFIG = {
           "LEADERBOARD",
           "VIEWREPLAYS"
         ],
-        "asset": "SC_scrab5f1vj",
         "back": "CHOOSEDIFFICUL"
       },
       "next": [
@@ -185,7 +156,6 @@ window.GAME_CONFIG = {
         "labels": [
           "GAMEPLAY"
         ],
-        "asset": "SC_scru4678ee",
         "back": "GAMEPLAY"
       },
       "next": [
@@ -203,7 +173,6 @@ window.GAME_CONFIG = {
         "labels": [
           "MENU"
         ],
-        "asset": "SC_scrrskt6dn",
         "back": "MENU"
       },
       "next": [
@@ -223,7 +192,6 @@ window.GAME_CONFIG = {
           "MENU",
           "STATESHARNESS"
         ],
-        "asset": "SC_screr2mf9n",
         "back": "MENU"
       },
       "next": [
@@ -242,7 +210,6 @@ window.GAME_CONFIG = {
         "labels": [
           "MENU"
         ],
-        "asset": "SC_scrm8rpgxd",
         "back": "MENU"
       },
       "next": [
@@ -260,7 +227,6 @@ window.GAME_CONFIG = {
         "labels": [
           "MENU"
         ],
-        "asset": "SC_scrae09vxa",
         "back": "MENU"
       },
       "next": [
@@ -278,7 +244,6 @@ window.GAME_CONFIG = {
         "labels": [
           "MENU"
         ],
-        "asset": "SC_scrbky3bf6",
         "back": "MENU"
       },
       "next": [
@@ -296,7 +261,6 @@ window.GAME_CONFIG = {
         "labels": [
           "MENU"
         ],
-        "asset": "SC_scrwp1ium2",
         "back": "MENU"
       },
       "next": [
@@ -313,8 +277,7 @@ window.GAME_CONFIG = {
         ],
         "labels": [
           "MENU"
-        ],
-        "asset": "SC_scrlcmu93t"
+        ]
       },
       "next": [
         "MENU"
@@ -331,8 +294,7 @@ window.GAME_CONFIG = {
         ],
         "labels": [
           "RESULTS"
-        ],
-        "asset": "SC_scrzc7dhlv"
+        ]
       },
       "next": [
         "RESULTS"
@@ -367,7 +329,6 @@ window.GAME_CONFIG = {
         "labels": [
           "MENU"
         ],
-        "asset": "SC_scr29xml07",
         "back": "MENU"
       },
       "next": [
@@ -385,7 +346,6 @@ window.GAME_CONFIG = {
         "labels": [
           "MENU"
         ],
-        "asset": "SC_scrxn5t664",
         "back": "MENU"
       },
       "next": [
