@@ -131,7 +131,8 @@ window.GAME_CONFIG = {
     ]
   },
   "mechanics": [
-    "SessionTimer"
+    "SessionTimer",
+    "DeterministicPlay"
   ],
   "states": [
     {
