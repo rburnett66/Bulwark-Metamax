@@ -189,7 +189,8 @@ export function waveUnitCount(wave) {
 
 /** Look up a wave by 1-based ordinal index; null if out of range. */
 export function getWave(index) {
-  return WAVES[index] || null;
+  if (index < 1 || index > WAVES.length) return null;
+  return WAVES[index - 1];
 }
 
 export default {
