@@ -234,178 +234,130 @@ export class DrawUnits {
 
     // HP bar
     this._drawHpBar(g, pos.x, bodyY - r - 6, u);
-
-    // targetsBase / structure-flag marker (siege units)
-    if (u.targetsBase === false || u.targets === 'Structures') {
-      g.lineStyle(1.5, 0xff00ff, 0.8);
-      g.drawRect(pos.x - r - 2, bodyY - r - 2, (r + 2) * 2, (r + 2) * 2);
-      g.lineStyle(0);
-    }
   }
 
-  // Draws a hostile silhouette cue around an enemy: a red spiked ring.
-  // The spike count differs by domain so enemy shapes stay differentiated.
-  _drawEnemyMarker(g, cx, cy, r, dom) {
-    const spikes = dom === 'flyer' ? 5 : dom === 'floater' ? 6 : 8;
-    const outer = r * 1.35;
-    const inner = r * 1.05;
-    g.lineStyle(1.5, 0xff2222, 0.85);
-    for (let i = 0; i < spikes; i++) {
-      const a0 = (i / spikes) * Math.PI * 2;
-      const a1 = ((i + 0.5) / spikes) * Math.PI * 2;
-      const px0 = cx + Math.cos(a0) * outer;
-      const py0 = cy + Math.sin(a0) * outer;
-      const px1 = cx + Math.cos(a1) * inner;
-      const py1 = cy + Math.sin(a1) * inner;
-      if (i === 0) g.moveTo(px0, py0);
-      else g.lineTo(px0, py0);
-      g.lineTo(px1, py1);
-    }
-    // close back to first outer point
-    g.lineTo(cx + outer, cy);
-    g.lineStyle(0);
+  // ---- Shade a base color by a brightness multiplier (0..1+) ----
+  _shade(color, mult) {
+    const rr = (color >> 16) & 0xff;
+    const gg = (color >> 8) & 0xff;
+    const bb = color & 0xff;
+    const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+    return (clamp(rr * mult) << 16) | (clamp(gg * mult) << 8) | clamp(bb * mult);
   }
 
+  // ---- Walker: friendly = rounded body; enemy = angular chevron ----
   _drawWalker(g, cx, cy, r, color, u, state, enemy) {
-    // legs
-    g.beginFill(enemy ? 0x330808 : 0x552211, 1);
-    g.drawRect(cx - r * 0.6, cy + r * 0.3, r * 1.2, r * 0.5);
-    g.endFill();
+    g.lineStyle(1.5, enemy ? 0x330000 : 0x222222, 0.9);
+    g.beginFill(color, 1);
     if (enemy) {
-      // enemy walkers use an angular (diamond) chassis to differ by shape
-      g.beginFill(color, 1);
-      g.moveTo(cx, cy - r * 0.9);
-      g.lineTo(cx + r * 0.9, cy);
-      g.lineTo(cx, cy + r * 0.9);
-      g.lineTo(cx - r * 0.9, cy);
+      // aggressive downward-pointing triangle (chevron/arrowhead)
+      g.moveTo(cx, cy + r);
+      g.lineTo(cx - r, cy - r * 0.7);
+      g.lineTo(cx - r * 0.4, cy - r * 0.7);
+      g.lineTo(cx, cy - r * 0.2);
+      g.lineTo(cx + r * 0.4, cy - r * 0.7);
+      g.lineTo(cx + r, cy - r * 0.7);
       g.closePath();
-      g.endFill();
     } else {
-      // body (square-ish chassis)
-      g.beginFill(color, 1);
-      g.drawRoundedRect(cx - r * 0.8, cy - r * 0.8, r * 1.6, r * 1.6, 3);
-      g.endFill();
+      // friendly: rounded soft body
+      g.drawCircle(cx, cy, r);
     }
-    // head/sensor
-    g.beginFill(this._shade(color, 1.3), 1);
-    g.drawCircle(cx, cy - r * 0.4, r * 0.35);
     g.endFill();
-    if (state === 'Death') {
-      g.lineStyle(2, 0x000000, 0.6);
-      g.moveTo(cx - r, cy - r);
-      g.lineTo(cx + r, cy + r);
-      g.lineStyle(0);
-    }
   }
 
+  // ---- Floater: friendly = rounded hull; enemy = jagged diamond ----
   _drawFloater(g, cx, cy, r, color, u, state, enemy) {
-    // submerged tint under water: swimmers read darker/lower
-    const submerged = u.submerged === true || u.role === 'swimmer';
-    // wake ripple
-    g.lineStyle(1.5, enemy ? 0xcc66ff : 0x66bbff, 0.5);
-    g.drawEllipse(cx, cy + r * 0.2, r * 1.4, r * 0.6);
-    g.lineStyle(0);
-    // hull
-    g.beginFill(submerged ? this._shade(color, 0.6) : color, submerged ? 0.7 : 1);
+    g.lineStyle(1.5, enemy ? 0x1a0033 : 0x113355, 0.9);
+    g.beginFill(color, 1);
     if (enemy) {
-      // enemy floaters use a sharp arrow-hull silhouette
-      g.moveTo(cx - r, cy);
-      g.lineTo(cx, cy - r * 0.65);
+      // hostile diamond hull
+      g.moveTo(cx, cy - r);
       g.lineTo(cx + r, cy);
-      g.lineTo(cx, cy + r * 0.7);
+      g.lineTo(cx, cy + r);
+      g.lineTo(cx - r, cy);
       g.closePath();
     } else {
+      // friendly boat-like ellipse
       g.drawEllipse(cx, cy, r, r * 0.7);
     }
     g.endFill();
-    // deck / turret
-    g.beginFill(this._shade(color, 1.25), submerged ? 0.6 : 1);
-    g.drawRect(cx - r * 0.35, cy - r * 0.55, r * 0.7, r * 0.6);
-    g.endFill();
-    if (state === 'Death') {
-      g.lineStyle(2, 0x000000, 0.6);
-      g.moveTo(cx - r, cy - r);
-      g.lineTo(cx + r, cy + r);
-      g.lineStyle(0);
-    }
   }
 
+  // ---- Flyer: friendly = smooth wings; enemy = swept spiky wings ----
   _drawFlyer(g, cx, cy, r, color, u, state, enemy) {
-    // wings
-    g.beginFill(this._shade(color, enemy ? 0.75 : 0.85), 0.95);
+    g.lineStyle(1.5, enemy ? 0x330011 : 0x554411, 0.9);
+    g.beginFill(color, 1);
     if (enemy) {
-      // swept-back, angular bat-like wings for enemy flyers
-      g.moveTo(cx, cy);
-      g.lineTo(cx - r * 1.7, cy - r * 0.5);
-      g.lineTo(cx - r * 0.6, cy + r * 0.2);
-      g.closePath();
-      g.moveTo(cx, cy);
-      g.lineTo(cx + r * 1.7, cy - r * 0.5);
-      g.lineTo(cx + r * 0.6, cy + r * 0.2);
+      // swept, spiky raptor silhouette
+      g.moveTo(cx, cy - r * 0.4);
+      g.lineTo(cx + r * 1.3, cy - r * 0.6);
+      g.lineTo(cx + r * 0.4, cy + r * 0.1);
+      g.lineTo(cx, cy + r * 0.6);
+      g.lineTo(cx - r * 0.4, cy + r * 0.1);
+      g.lineTo(cx - r * 1.3, cy - r * 0.6);
       g.closePath();
     } else {
-      g.drawEllipse(cx - r * 1.1, cy, r * 0.9, r * 0.45);
-      g.drawEllipse(cx + r * 1.1, cy, r * 0.9, r * 0.45);
+      // friendly smooth delta wing
+      g.moveTo(cx, cy - r * 0.5);
+      g.lineTo(cx + r, cy + r * 0.4);
+      g.lineTo(cx, cy + r * 0.2);
+      g.lineTo(cx - r, cy + r * 0.4);
+      g.closePath();
     }
     g.endFill();
-    // fuselage / body
-    g.beginFill(color, 1);
-    g.drawEllipse(cx, cy, r * 0.7, r * 0.55);
-    g.endFill();
-    // cockpit
-    g.beginFill(this._shade(color, 1.35), 1);
-    g.drawCircle(cx, cy - r * 0.1, r * 0.28);
-    g.endFill();
-    if (state === 'Death') {
-      g.lineStyle(2, 0x000000, 0.6);
-      g.moveTo(cx - r, cy - r);
-      g.lineTo(cx + r, cy + r);
-      g.lineStyle(0);
-    }
   }
 
+  // ---- Distinct spiked hostile ring so enemies read as enemies by shape ----
+  _drawEnemyMarker(g, cx, cy, r, dom) {
+    const spikes = 8;
+    const outer = r + 4;
+    const inner = r + 1.5;
+    g.lineStyle(1.25, 0xff2200, 0.85);
+    for (let i = 0; i < spikes; i++) {
+      const a0 = (i / spikes) * Math.PI * 2;
+      const a1 = ((i + 0.5) / spikes) * Math.PI * 2;
+      const x0 = cx + Math.cos(a0) * outer;
+      const y0 = cy + Math.sin(a0) * outer;
+      const x1 = cx + Math.cos(a1) * inner;
+      const y1 = cy + Math.sin(a1) * inner;
+      if (i === 0) g.moveTo(x0, y0);
+      else g.lineTo(x0, y0);
+      g.lineTo(x1, y1);
+    }
+    // close back to first outer point
+    g.lineTo(cx + outer, cy);
+  }
+
+  // ---- Weapon telegraph pointing toward target ----
   _drawWeapon(g, cx, cy, r, u) {
-    const tgt = u.target || u.aim;
-    if (!tgt) return;
-    let ax = tgt.x, ay = tgt.y;
-    if (ax == null && tgt.pos) { ax = tgt.pos.x; ay = tgt.pos.y; }
-    if (ax == null) return;
-    const tp = this._project(ax, ay);
-    const dx = tp.x - cx;
-    const dy = tp.y - cy;
+    const tx = u.targetX ?? u.target?.x;
+    const ty = u.targetY ?? u.target?.y;
+    if (tx == null || ty == null) return;
+    const dx = tx - (u.x ?? 0);
+    const dy = ty - (u.y ?? 0);
     const len = Math.hypot(dx, dy) || 1;
     const nx = dx / len;
     const ny = dy / len;
-    g.lineStyle(2, 0xffee88, u.attacking ? 0.9 : 0.4);
+    g.lineStyle(2, 0xffffff, 0.6);
     g.moveTo(cx, cy);
-    g.lineTo(cx + nx * r * 1.2, cy + ny * r * 1.2);
-    g.lineStyle(0);
+    g.lineTo(cx + nx * (r + 4), cy + ny * (r + 4));
   }
 
-  _drawHpBar(g, cx, cy, u) {
+  // ---- HP bar ----
+  _drawHpBar(g, cx, topY, u) {
     const hpMax = u.maxHp || u.hp || 1;
     const hp = Math.max(0, Math.min(hpMax, u.hp ?? hpMax));
     if (hp >= hpMax) return; // hide when full
     const w = 20;
     const h = 3;
     const frac = hp / hpMax;
-    g.beginFill(0x000000, 0.6);
-    g.drawRect(cx - w / 2 - 1, cy - 1, w + 2, h + 2);
+    g.beginFill(0x000000, 0.5);
+    g.drawRect(cx - w / 2 - 1, topY - 1, w + 2, h + 2);
     g.endFill();
     const col = frac > 0.5 ? 0x33cc33 : frac > 0.25 ? 0xcccc33 : 0xcc3333;
     g.beginFill(col, 1);
-    g.drawRect(cx - w / 2, cy, w * frac, h);
+    g.drawRect(cx - w / 2, topY, w * frac, h);
     g.endFill();
-  }
-
-  _shade(color, factor) {
-    const r = (color >> 16) & 0xff;
-    const gg = (color >> 8) & 0xff;
-    const b = color & 0xff;
-    const nr = Math.max(0, Math.min(255, Math.round(r * factor)));
-    const ng = Math.max(0, Math.min(255, Math.round(gg * factor)));
-    const nb = Math.max(0, Math.min(255, Math.round(b * factor)));
-    return (nr << 16) | (ng << 8) | nb;
   }
 
   destroy() {
