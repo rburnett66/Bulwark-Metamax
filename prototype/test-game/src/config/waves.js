@@ -1,16 +1,3 @@
-resa=[]
-
-I'll create the waves config file based on the model requirements: survive N waves = win, using Ground/Powder faction units (walker, floater/swimmer, flyer).
-
-```javascript
-// src/config/waves.js
-```
-
-Let me write the complete file:
-
-Looking at the vertical slice, the attacker faction is Ground/Powder with 3 units spanning behavior (walker/ground, a floater/swimmer type, flyer). Based on the roster, the natural picks for the "3 units spanning behavior" are a walker (GND-Troops), a flyer (GND-Copters), and something for the water lane. Since Ground/Powder has no native water unit, the vertical slice designates one unit to travel the water lane as a "floater" for the domain-coverage test.
-
-```javascript
 /**
  * src/config/waves.js
  * Wave spawn schedule / composition data (data-driven).
@@ -31,7 +18,7 @@ Looking at the vertical slice, the attacker faction is Ground/Powder with 3 unit
  */
 
 // Total number of waves the player must survive to win.
-export const WIN_WAVES = 5;
+export const WIN_WAVES = 10;
 
 // Seconds of build/prep time granted before the first wave may auto-start.
 // (The player can also start a wave early via the wave controls.)
@@ -98,14 +85,71 @@ export const WAVES = [
   },
   {
     id: 5,
-    name: 'Wave 5 — Final Assault',
-    reward: 150,
+    name: 'Wave 5 — Escalation',
+    reward: 110,
     groups: [
       { unitId: 'GND-Tanks',      count: 3, interval: 3.0, delay: 0.0, domain: DOMAINS.GROUND, tier: 2 },
-      { unitId: 'GND-HeavyTanks', count: 1, interval: 1.0, delay: 2.0, domain: DOMAINS.GROUND, tier: 2 },
-      { unitId: 'GND-Copters',    count: 4, interval: 2.0, delay: 1.0, domain: DOMAINS.AIR, tier: 2 },
+      { unitId: 'GND-Copters',    count: 4, interval: 2.0, delay: 1.0, domain: DOMAINS.AIR, tier: 1 },
       { unitId: 'GND-Trucks',     count: 4, interval: 2.0, delay: 3.0, domain: DOMAINS.WATER, tier: 1 },
       { unitId: 'GND-Troops',     count: 8, interval: 0.8, delay: 4.0, domain: DOMAINS.GROUND, tier: 1 },
+    ],
+  },
+  {
+    id: 6,
+    name: 'Wave 6 — Armored Column',
+    reward: 130,
+    groups: [
+      { unitId: 'GND-Tanks',      count: 4, interval: 2.6, delay: 0.0, domain: DOMAINS.GROUND, tier: 2 },
+      { unitId: 'GND-HeavyTanks', count: 1, interval: 1.0, delay: 2.0, domain: DOMAINS.GROUND, tier: 2 },
+      { unitId: 'GND-Artillery',  count: 2, interval: 4.5, delay: 4.0, domain: DOMAINS.GROUND, tier: 1 },
+      { unitId: 'GND-Troops',     count: 8, interval: 0.8, delay: 3.0, domain: DOMAINS.GROUND, tier: 1 },
+    ],
+  },
+  {
+    id: 7,
+    name: 'Wave 7 — Sky Strike',
+    reward: 150,
+    groups: [
+      { unitId: 'GND-Copters',    count: 6, interval: 1.8, delay: 0.0, domain: DOMAINS.AIR, tier: 2 },
+      { unitId: 'GND-Trucks',     count: 5, interval: 1.8, delay: 2.0, domain: DOMAINS.WATER, tier: 2 },
+      { unitId: 'GND-Troops',     count: 8, interval: 0.7, delay: 3.0, domain: DOMAINS.GROUND, tier: 1 },
+    ],
+  },
+  {
+    id: 8,
+    name: 'Wave 8 — Breakthrough',
+    reward: 175,
+    groups: [
+      { unitId: 'GND-HeavyTanks', count: 2, interval: 4.0, delay: 0.0, domain: DOMAINS.GROUND, tier: 2 },
+      { unitId: 'GND-Tanks',      count: 4, interval: 2.2, delay: 2.0, domain: DOMAINS.GROUND, tier: 2 },
+      { unitId: 'GND-Copters',    count: 4, interval: 2.0, delay: 3.0, domain: DOMAINS.AIR, tier: 2 },
+      { unitId: 'GND-Trucks',     count: 4, interval: 2.0, delay: 4.0, domain: DOMAINS.WATER, tier: 2 },
+      { unitId: 'GND-Troops',     count: 10, interval: 0.7, delay: 2.0, domain: DOMAINS.GROUND, tier: 1 },
+    ],
+  },
+  {
+    id: 9,
+    name: 'Wave 9 — Combined Onslaught',
+    reward: 210,
+    groups: [
+      { unitId: 'GND-HeavyTanks', count: 3, interval: 3.5, delay: 0.0, domain: DOMAINS.GROUND, tier: 3 },
+      { unitId: 'GND-Artillery',  count: 3, interval: 4.0, delay: 2.0, domain: DOMAINS.GROUND, tier: 2 },
+      { unitId: 'GND-Copters',    count: 6, interval: 1.6, delay: 1.0, domain: DOMAINS.AIR, tier: 2 },
+      { unitId: 'GND-Trucks',     count: 6, interval: 1.6, delay: 3.0, domain: DOMAINS.WATER, tier: 2 },
+      { unitId: 'GND-Troops',     count: 10, interval: 0.6, delay: 4.0, domain: DOMAINS.GROUND, tier: 2 },
+    ],
+  },
+  {
+    id: 10,
+    name: 'Wave 10 — Final Assault',
+    reward: 300,
+    groups: [
+      { unitId: 'GND-HeavyTanks', count: 4, interval: 3.0, delay: 0.0, domain: DOMAINS.GROUND, tier: 3 },
+      { unitId: 'GND-Tanks',      count: 5, interval: 2.0, delay: 2.0, domain: DOMAINS.GROUND, tier: 3 },
+      { unitId: 'GND-Artillery',  count: 3, interval: 4.0, delay: 3.0, domain: DOMAINS.GROUND, tier: 2 },
+      { unitId: 'GND-Copters',    count: 8, interval: 1.4, delay: 1.0, domain: DOMAINS.AIR, tier: 3 },
+      { unitId: 'GND-Trucks',     count: 6, interval: 1.6, delay: 3.0, domain: DOMAINS.WATER, tier: 2 },
+      { unitId: 'GND-Troops',     count: 14, interval: 0.5, delay: 4.0, domain: DOMAINS.GROUND, tier: 2 },
     ],
   },
 ];
@@ -145,7 +189,8 @@ export function waveUnitCount(wave) {
 
 /** Look up a wave by 1-based ordinal index; null if out of range. */
 export function getWave(index) {
-  return WAVES[index] || null;
+  if (index < 1 || index > WAVES.length) return null;
+  return WAVES[index - 1];
 }
 
 export default {
