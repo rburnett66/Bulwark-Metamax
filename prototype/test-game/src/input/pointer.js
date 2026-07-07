@@ -1,301 +1,342 @@
 // src/input/pointer.js
-// Single-pointer mouse/touch handling: hover ghost, drag-place, drop/cancel, select.
-// Reads sim state and issues commands. Identical handling for mouse & touch (single pointer).
+// Single-pointer mouse/touch handling for select / place / drag.
+// Normalizes mouse + touch into ONE pointer stream, converts screen coords
+// into board-space (world) coords via the renderer, and emits high-level
+// intents to a subscriber (typically src/input/controller.js).
+//
+// This module NEVER mutates sim state. It only reads pointer position and
+// dispatches semantic events; the controller maps those to sim commands.
 
-import { CONSTANTS } from '../config/constants.js';
+export const PointerEventType = Object.freeze({
+  DOWN: 'down',
+  MOVE: 'move',
+  UP: 'up',
+  TAP: 'tap',
+  DRAG_START: 'dragStart',
+  DRAG_MOVE: 'dragMove',
+  DRAG_END: 'dragEnd',
+  CANCEL: 'cancel',
+});
 
+const DRAG_THRESHOLD_PX = 6;   // screen px before a press becomes a drag
+const TAP_MAX_MS = 400;        // max press duration still counts as a tap
+
+/**
+ * PointerInput
+ *  - Attaches to a DOM element (the canvas).
+ *  - Supports a single active pointer (first finger / left mouse button).
+ *  - Provides world-space coords through a supplied projector.
+ *
+ * @param {Object} opts
+ * @param {HTMLCanvasElement|HTMLElement} opts.element  DOM element to listen on.
+ * @param {Function} [opts.screenToWorld]  (sx, sy) => {x, y} board coords.
+ *                                          Defaults to identity if omitted.
+ */
 export class PointerInput {
-  /**
-   * @param {object} opts
-   * @param {HTMLCanvasElement} opts.canvas - the pixi view canvas
-   * @param {object} opts.app - pixi application (for renderer resolution)
-   * @param {object} opts.sim - the sim (state + commands entry)
-   * @param {object} opts.state - sim state container
-   * @param {object} opts.placement - placement preview controller (src/input/placement.js)
-   * @param {object} opts.commands - command dispatcher (src/sim/commands.js)
-   * @param {object} opts.hud - HUD root (for selection panel + build panel)
-   * @param {object} opts.board - board geometry helpers
-   */
-  constructor(opts) {
-    this.canvas = opts.canvas;
-    this.app = opts.app;
-    this.sim = opts.sim;
-    this.state = opts.state;
-    this.placement = opts.placement;
-    this.commands = opts.commands;
-    this.hud = opts.hud;
-    this.board = opts.board;
+  constructor(opts = {}) {
+    if (!opts.element) {
+      throw new Error('PointerInput requires an element');
+    }
+    this.element = opts.element;
+    this.screenToWorld =
+      typeof opts.screenToWorld === 'function'
+        ? opts.screenToWorld
+        : (sx, sy) => ({ x: sx, y: sy });
 
-    // Pointer state
-    this.active = false;       // pointer currently down
-    this.dragging = false;     // in a drag-place session
-    this.worldX = 0;
-    this.worldY = 0;
-    this.screenX = 0;
-    this.screenY = 0;
-    this.downX = 0;
-    this.downY = 0;
-    this.dragThreshold = 6; // px to distinguish tap vs drag
+    // subscribers: fn(evt)
+    this._listeners = new Set();
 
-    // Placement mode: when a build item is chosen from build panel.
-    // placement.js holds the pending def; here we only route pointer.
-    this._boundDown = this._onPointerDown.bind(this);
-    this._boundMove = this._onPointerMove.bind(this);
-    this._boundUp = this._onPointerUp.bind(this);
-    this._boundLeave = this._onPointerLeave.bind(this);
-    this._boundContext = (e) => e.preventDefault();
+    // active pointer state
+    this._active = false;
+    this._pointerId = null;
+    this._isTouch = false;
+    this._dragging = false;
+    this._downTime = 0;
+    this._downScreen = { x: 0, y: 0 };
+    this._lastScreen = { x: 0, y: 0 };
+    this._downWorld = { x: 0, y: 0 };
+    this._lastWorld = { x: 0, y: 0 };
+
+    // bound handlers (so we can remove them)
+    this._onMouseDown = this._handleMouseDown.bind(this);
+    this._onMouseMove = this._handleMouseMove.bind(this);
+    this._onMouseUp = this._handleMouseUp.bind(this);
+    this._onTouchStart = this._handleTouchStart.bind(this);
+    this._onTouchMove = this._handleTouchMove.bind(this);
+    this._onTouchEnd = this._handleTouchEnd.bind(this);
+    this._onTouchCancel = this._handleTouchCancel.bind(this);
+    this._onContextMenu = this._handleContextMenu.bind(this);
 
     this._attach();
   }
 
-  _attach() {
-    const c = this.canvas;
-    // Pointer events unify mouse + touch + pen (single pointer).
-    c.addEventListener('pointerdown', this._boundDown, { passive: false });
-    window.addEventListener('pointermove', this._boundMove, { passive: false });
-    window.addEventListener('pointerup', this._boundUp, { passive: false });
-    c.addEventListener('pointerleave', this._boundLeave, { passive: false });
-    c.addEventListener('contextmenu', this._boundContext);
-    // Prevent scroll/zoom gestures interfering on touch
-    c.style.touchAction = 'none';
+  // ---- public API -------------------------------------------------------
+
+  /** Subscribe to pointer intents. Returns unsubscribe fn. */
+  on(fn) {
+    this._listeners.add(fn);
+    return () => this._listeners.delete(fn);
+  }
+
+  off(fn) {
+    this._listeners.delete(fn);
+  }
+
+  /** Current world position of the pointer (last seen). */
+  getWorldPosition() {
+    return { x: this._lastWorld.x, y: this._lastWorld.y };
+  }
+
+  /** Whether a pointer is currently pressed. */
+  isDown() {
+    return this._active;
+  }
+
+  /** Whether the active pointer has crossed the drag threshold. */
+  isDragging() {
+    return this._dragging;
+  }
+
+  /** Cancel any in-flight interaction (e.g. on mode switch / pause). */
+  cancel() {
+    if (this._active) {
+      this._emit(PointerEventType.CANCEL, this._makeEvt());
+    }
+    this._reset();
   }
 
   destroy() {
-    const c = this.canvas;
-    c.removeEventListener('pointerdown', this._boundDown);
-    window.removeEventListener('pointermove', this._boundMove);
-    window.removeEventListener('pointerup', this._boundUp);
-    c.removeEventListener('pointerleave', this._boundLeave);
-    c.removeEventListener('contextmenu', this._boundContext);
+    this._detach();
+    this._listeners.clear();
+    this._reset();
   }
 
-  // ---- coordinate conversion (screen px -> world/board coords) ----
-  _toLocal(e) {
-    const rect = this.canvas.getBoundingClientRect();
-    const sx = (e.clientX - rect.left) * (this.canvas.width / rect.width) /
-      (this.app && this.app.renderer ? this.app.renderer.resolution : 1);
-    const sy = (e.clientY - rect.top) * (this.canvas.height / rect.height) /
-      (this.app && this.app.renderer ? this.app.renderer.resolution : 1);
-    this.screenX = sx;
-    this.screenY = sy;
+  // ---- attach / detach --------------------------------------------------
 
-    // Convert screen -> world through the render root container transform.
-    // Renderer exposes a `worldContainer` we can use for inverse mapping.
-    let wx = sx, wy = sy;
-    if (this.sim && this.sim.renderer && this.sim.renderer.worldContainer) {
-      const wc = this.sim.renderer.worldContainer;
-      const p = wc.toLocal({ x: sx, y: sy });
-      wx = p.x;
-      wy = p.y;
-    } else if (this.board && this.board.screenToWorld) {
-      const p = this.board.screenToWorld(sx, sy);
-      wx = p.x; wy = p.y;
+  _attach() {
+    const el = this.element;
+    el.addEventListener('mousedown', this._onMouseDown, { passive: false });
+    // move/up on window so drags that leave the canvas still track
+    window.addEventListener('mousemove', this._onMouseMove, { passive: false });
+    window.addEventListener('mouseup', this._onMouseUp, { passive: false });
+
+    el.addEventListener('touchstart', this._onTouchStart, { passive: false });
+    el.addEventListener('touchmove', this._onTouchMove, { passive: false });
+    el.addEventListener('touchend', this._onTouchEnd, { passive: false });
+    el.addEventListener('touchcancel', this._onTouchCancel, { passive: false });
+
+    el.addEventListener('contextmenu', this._onContextMenu);
+  }
+
+  _detach() {
+    const el = this.element;
+    el.removeEventListener('mousedown', this._onMouseDown);
+    window.removeEventListener('mousemove', this._onMouseMove);
+    window.removeEventListener('mouseup', this._onMouseUp);
+
+    el.removeEventListener('touchstart', this._onTouchStart);
+    el.removeEventListener('touchmove', this._onTouchMove);
+    el.removeEventListener('touchend', this._onTouchEnd);
+    el.removeEventListener('touchcancel', this._onTouchCancel);
+
+    el.removeEventListener('contextmenu', this._onContextMenu);
+  }
+
+  // ---- coordinate helpers ----------------------------------------------
+
+  _screenFromClient(clientX, clientY) {
+    const rect = this.element.getBoundingClientRect();
+    // account for CSS scaling of the canvas element
+    const scaleX = this.element.width
+      ? this.element.width / rect.width
+      : 1;
+    const scaleY = this.element.height
+      ? this.element.height / rect.height
+      : 1;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  }
+
+  // ---- mouse ------------------------------------------------------------
+
+  _handleMouseDown(e) {
+    if (e.button !== 0) {
+      // right/middle button: treat as cancel gesture
+      if (this._active) {
+        this._emit(PointerEventType.CANCEL, this._makeEvt());
+        this._reset();
+      }
+      return;
     }
-    this.worldX = wx;
-    this.worldY = wy;
-    return { sx, sy, wx, wy };
-  }
-
-  _onPointerDown(e) {
+    if (this._active) return; // single pointer only
     e.preventDefault();
-    this.active = true;
-    const { sx, sy } = this._toLocal(e);
-    this.downX = sx;
-    this.downY = sy;
-    this.dragging = false;
+    const s = this._screenFromClient(e.clientX, e.clientY);
+    this._begin(s, false, 'mouse');
+  }
 
-    // Right-click / secondary cancels placement.
-    if (e.button === 2) {
-      this._cancelPlacement();
+  _handleMouseMove(e) {
+    if (!this._active || this._isTouch) return;
+    const s = this._screenFromClient(e.clientX, e.clientY);
+    this._move(s);
+  }
+
+  _handleMouseUp(e) {
+    if (!this._active || this._isTouch) return;
+    if (e.button !== 0) return;
+    const s = this._screenFromClient(e.clientX, e.clientY);
+    this._end(s);
+  }
+
+  _handleContextMenu(e) {
+    // suppress browser menu so right-click can be used as cancel
+    e.preventDefault();
+  }
+
+  // ---- touch ------------------------------------------------------------
+
+  _handleTouchStart(e) {
+    if (this._active) {
+      // additional finger while dragging -> cancel (single pointer model)
+      e.preventDefault();
+      this._emit(PointerEventType.CANCEL, this._makeEvt());
+      this._reset();
       return;
     }
+    const t = e.changedTouches[0];
+    if (!t) return;
+    e.preventDefault();
+    const s = this._screenFromClient(t.clientX, t.clientY);
+    this._pointerId = t.identifier;
+    this._begin(s, true, 'touch');
+  }
 
-    // If placement mode active (a build item was chosen), begin drag-place.
-    if (this.placement && this.placement.isPending()) {
-      this.dragging = true;
-      this.placement.updatePreview(this.worldX, this.worldY);
+  _handleTouchMove(e) {
+    if (!this._active || !this._isTouch) return;
+    const t = this._findTouch(e.changedTouches);
+    if (!t) return;
+    e.preventDefault();
+    const s = this._screenFromClient(t.clientX, t.clientY);
+    this._move(s);
+  }
+
+  _handleTouchEnd(e) {
+    if (!this._active || !this._isTouch) return;
+    const t = this._findTouch(e.changedTouches);
+    if (!t) return;
+    e.preventDefault();
+    const s = this._screenFromClient(t.clientX, t.clientY);
+    this._end(s);
+  }
+
+  _handleTouchCancel(e) {
+    if (!this._active || !this._isTouch) return;
+    e.preventDefault();
+    this._emit(PointerEventType.CANCEL, this._makeEvt());
+    this._reset();
+  }
+
+  _findTouch(list) {
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].identifier === this._pointerId) return list[i];
+    }
+    return null;
+  }
+
+  // ---- core state machine ----------------------------------------------
+
+  _begin(screen, isTouch, kind) {
+    this._active = true;
+    this._isTouch = isTouch;
+    this._dragging = false;
+    this._downTime = (typeof performance !== 'undefined')
+      ? performance.now()
+      : Date.now();
+    this._downScreen = { x: screen.x, y: screen.y };
+    this._lastScreen = { x: screen.x, y: screen.y };
+    const w = this.screenToWorld(screen.x, screen.y);
+    this._downWorld = { x: w.x, y: w.y };
+    this._lastWorld = { x: w.x, y: w.y };
+
+    this._emit(PointerEventType.DOWN, this._makeEvt());
+  }
+
+  _move(screen) {
+    this._lastScreen = { x: screen.x, y: screen.y };
+    const w = this.screenToWorld(screen.x, screen.y);
+    this._lastWorld = { x: w.x, y: w.y };
+
+    const dx = screen.x - this._downScreen.x;
+    const dy = screen.y - this._downScreen.y;
+    const distSq = dx * dx + dy * dy;
+
+    if (!this._dragging && distSq >= DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+      this._dragging = true;
+      this._emit(PointerEventType.DRAG_START, this._makeEvt());
+    }
+
+    this._emit(PointerEventType.MOVE, this._makeEvt());
+    if (this._dragging) {
+      this._emit(PointerEventType.DRAG_MOVE, this._makeEvt());
     }
   }
 
-  _onPointerMove(e) {
-    // Only meaningful once we have coordinates; always update hover for ghost.
-    e.preventDefault && e.preventDefault();
-    this._toLocal(e);
+  _end(screen) {
+    this._lastScreen = { x: screen.x, y: screen.y };
+    const w = this.screenToWorld(screen.x, screen.y);
+    this._lastWorld = { x: w.x, y: w.y };
 
-    // Determine drag start (screen distance beyond threshold)
-    if (this.active) {
-      const dx = this.screenX - this.downX;
-      const dy = this.screenY - this.downY;
-      if (Math.hypot(dx, dy) > this.dragThreshold) {
-        this.dragging = true;
+    const now = (typeof performance !== 'undefined')
+      ? performance.now()
+      : Date.now();
+    const elapsed = now - this._downTime;
+
+    const evt = this._makeEvt();
+
+    if (this._dragging) {
+      this._emit(PointerEventType.DRAG_END, evt);
+    } else if (elapsed <= TAP_MAX_MS) {
+      // quick press without significant movement = tap (select/place)
+      this._emit(PointerEventType.TAP, evt);
+    }
+
+    this._emit(PointerEventType.UP, evt);
+    this._reset();
+  }
+
+  _reset() {
+    this._active = false;
+    this._dragging = false;
+    this._pointerId = null;
+    this._isTouch = false;
+  }
+
+  // ---- event construction / dispatch -----------------------------------
+
+  _makeEvt() {
+    return {
+      // world (board) coordinates — what the sim / controller cares about
+      world: { x: this._lastWorld.x, y: this._lastWorld.y },
+      worldStart: { x: this._downWorld.x, y: this._downWorld.y },
+      // raw screen coordinates — useful for HUD hit-testing
+      screen: { x: this._lastScreen.x, y: this._lastScreen.y },
+      screenStart: { x: this._downScreen.x, y: this._downScreen.y },
+      dragging: this._dragging,
+      isTouch: this._isTouch,
+    };
+  }
+
+  _emit(type, evt) {
+    const out = { type, ...evt };
+    for (const fn of this._listeners) {
+      try {
+        fn(out);
+      } catch (err) {
+        // isolate listener failures so one bad subscriber can't break input
+        // eslint-disable-next-line no-console
+        console.error('PointerInput listener error:', err);
       }
-    }
-
-    // Update placement ghost preview when placement is pending.
-    if (this.placement && this.placement.isPending()) {
-      this.placement.updatePreview(this.worldX, this.worldY);
-    }
-  }
-
-  _onPointerUp(e) {
-    e.preventDefault && e.preventDefault();
-    if (!this.active) return;
-    this._toLocal(e);
-    const wasDragging = this.dragging;
-    this.active = false;
-    this.dragging = false;
-
-    if (e.button === 2) {
-      // secondary already handled on down
-      return;
-    }
-
-    // Placement pending -> attempt to drop.
-    if (this.placement && this.placement.isPending()) {
-      this._tryDrop();
-      return;
-    }
-
-    // Otherwise it's a select action (tap or short click).
-    // If it was a drag with no placement, treat as pan-less nop; still allow select on tap.
-    if (!wasDragging) {
-      this._trySelect();
-    } else {
-      // A drag with nothing pending: clear selection if released on empty ground.
-      const hit = this._hitTest(this.worldX, this.worldY);
-      if (!hit) this._clearSelection();
-    }
-  }
-
-  _onPointerLeave() {
-    // Cancel an in-progress hover ghost only visually; keep placement pending
-    // so the item is still selected, but hide the preview.
-    if (this.placement && this.placement.isPending()) {
-      this.placement.hidePreview();
-    }
-  }
-
-  // ---- placement flow ----
-  _tryDrop() {
-    const def = this.placement.getPending();
-    if (!def) { this._cancelPlacement(); return; }
-
-    // Recompute validity at drop point (space/terrain/cost via deploy check).
-    const preview = this.placement.updatePreview(this.worldX, this.worldY);
-    if (!preview || !preview.valid) {
-      // Invalid drop — keep placement mode so player can retry, but flash invalid.
-      this.placement.flashInvalid();
-      return;
-    }
-
-    // Snap to slot if structure requires a hard-point slot.
-    const slotIndex = (preview.slotIndex !== undefined && preview.slotIndex !== null)
-      ? preview.slotIndex : -1;
-
-    if (def.category === 'unit' || def.deploy) {
-      // Deploy troop: spawn at base, march to drop destination.
-      this.commands.dispatch({
-        type: 'deploy',
-        unitId: def.id,
-        x: preview.x,
-        y: preview.y,
-        tick: this.state.tick,
-      });
-    } else {
-      // Place a structure (tower/wall/moat).
-      this.commands.dispatch({
-        type: 'place',
-        structureId: def.id,
-        x: preview.x,
-        y: preview.y,
-        slot: slotIndex,
-        tick: this.state.tick,
-      });
-    }
-
-    // End placement mode after a successful drop.
-    this.placement.clear();
-    if (this.hud && this.hud.buildPanel && this.hud.buildPanel.clearSelection) {
-      this.hud.buildPanel.clearSelection();
-    }
-  }
-
-  _cancelPlacement() {
-    if (this.placement && this.placement.isPending()) {
-      this.placement.clear();
-      if (this.hud && this.hud.buildPanel && this.hud.buildPanel.clearSelection) {
-        this.hud.buildPanel.clearSelection();
-      }
-    }
-  }
-
-  // Called by build panel when user picks an item from the list.
-  beginPlacement(def) {
-    // Clear any current selection when starting to place.
-    this._clearSelection();
-    this.placement.begin(def);
-    this.placement.updatePreview(this.worldX, this.worldY);
-  }
-
-  // ---- selection flow ----
-  _trySelect() {
-    const hit = this._hitTest(this.worldX, this.worldY);
-    if (hit) {
-      this._select(hit);
-    } else {
-      this._clearSelection();
-    }
-  }
-
-  _hitTest(wx, wy) {
-    // Prefer structures (larger targets), then units. Nearest within radius.
-    const ents = this.state.entities;
-    let best = null;
-    let bestD = Infinity;
-
-    for (let i = 0; i < ents.length; i++) {
-      const e = ents[i];
-      if (e.dead) continue;
-      // Only allow selecting player-owned structures for the panel.
-      const isStruct = (e.type === 'tower' || e.type === 'wall' || e.type === 'moat');
-      const isBase = (e.type === 'base');
-      if (!isStruct && !isBase) continue;
-      const r = (e.footprint ? e.footprint.r : (e.radius || CONSTANTS.TILE * 0.5)) + 4;
-      const dx = e.x - wx;
-      const dy = e.y - wy;
-      const d = Math.hypot(dx, dy);
-      if (d <= r && d < bestD) {
-        bestD = d;
-        best = e;
-      }
-    }
-    return best;
-  }
-
-  _select(entity) {
-    this.state.selection = entity.id;
-    // Fire the select command so it's recorded in the battle log for replay.
-    this.commands.dispatch({
-      type: 'select',
-      entityId: entity.id,
-      tick: this.state.tick,
-    });
-    if (this.hud && this.hud.selectionPanel && this.hud.selectionPanel.show) {
-      this.hud.selectionPanel.show(entity);
-    }
-  }
-
-  _clearSelection() {
-    if (this.state.selection != null) {
-      this.state.selection = null;
-      this.commands.dispatch({
-        type: 'select',
-        entityId: null,
-        tick: this.state.tick,
-      });
-    }
-    if (this.hud && this.hud.selectionPanel && this.hud.selectionPanel.hide) {
-      this.hud.selectionPanel.hide();
     }
   }
 }

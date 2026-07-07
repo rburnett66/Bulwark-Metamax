@@ -1,383 +1,517 @@
 // src/hud/selectionPanel.js
-// Selected-structure popup: name, damage, tier, upgrade+price, repair, sell+refund.
-// Pure DOM overlay (screen-space, never rotates). Reads sim state, issues commands.
+// Selected-structure panel: name, damage, level, upgrade (+price), repair, sell.
+// Screen-space HUD element built from pixi.js primitives. READS sim state,
+// issues commands via the controller. Never mutates sim state directly.
 
-import { REFUND_RATE } from '../config/constants.js';
+const PIXI = window.PIXI;
 
-/**
- * SelectionPanel — floating popup describing the currently selected structure.
- * It reads strict sim state and dispatches commands (upgrade/repair/sell) that
- * are appended to the battle log via the command bus, keeping determinism intact.
- */
-export class SelectionPanel {
-  /**
-   * @param {object} opts
-   * @param {HTMLElement} opts.mount  DOM element to attach the panel to (HUD overlay).
-   * @param {object}      opts.state  sim state container.
-   * @param {object}      opts.tables config.data.tables namespace.
-   * @param {function}    opts.dispatch  (command) => void  — pushes a command into the sim.
-   */
-  constructor({ mount, state, tables, dispatch }) {
-    this.state = state;
-    this.tables = tables;
-    this.dispatch = dispatch;
-    this.selectedId = null;
+const PANEL_W = 230;
+const PANEL_H = 210;
+const PAD = 12;
+const BTN_H = 30;
+const BTN_GAP = 8;
 
-    this.root = document.createElement('div');
-    this.root.className = 'bw-selection-panel';
-    this._applyRootStyle();
+const COLORS = {
+  bg: 0x101820,
+  bgAlpha: 0.92,
+  border: 0x3a5060,
+  title: 0xffffff,
+  text: 0xc8d4dc,
+  sub: 0x8fa0ac,
+  btn: 0x264056,
+  btnHover: 0x35597a,
+  btnDisabled: 0x1a242c,
+  btnText: 0xe6eef4,
+  btnTextDisabled: 0x556069,
+  upgrade: 0x2f6a3a,
+  upgradeHover: 0x3f8a4c,
+  repair: 0x5a5030,
+  repairHover: 0x7a6c40,
+  sell: 0x6a2f2f,
+  sellHover: 0x8a3f3f,
+  hpGood: 0x4caf50,
+  hpMid: 0xd8a33a,
+  hpBad: 0xc0392b,
+  rangeCircle: 0x66ccff,
+};
 
-    this._build();
-    this.hide();
+// Lifecycle state names used across the sim (see lifecycle.js).
+const STATE_LABEL = {
+  Placing: 'Placing',
+  Building: 'Building',
+  Complete: 'Complete',
+  Damaged: 'Damaged',
+  Upgrading: 'Upgrading',
+  Selling: 'Selling',
+  Destroyed: 'Destroyed',
+};
 
-    (mount || document.body).appendChild(this.root);
-  }
+function makeButton(label, w, baseColor, hoverColor) {
+  const c = new PIXI.Container();
+  const g = new PIXI.Graphics();
+  c.addChild(g);
+  const txt = new PIXI.Text(label, {
+    fontFamily: 'monospace',
+    fontSize: 13,
+    fill: COLORS.btnText,
+    align: 'center',
+  });
+  txt.anchor.set(0.5);
+  c.addChild(txt);
 
-  _applyRootStyle() {
-    Object.assign(this.root.style, {
-      position: 'absolute',
-      minWidth: '180px',
-      maxWidth: '240px',
-      padding: '10px 12px',
-      background: 'rgba(12,16,24,0.92)',
-      border: '1px solid #3a4a63',
-      borderRadius: '6px',
-      color: '#e8eef6',
-      font: '12px/1.4 monospace',
-      pointerEvents: 'auto',
-      zIndex: '50',
-      boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
-      userSelect: 'none',
-    });
-  }
+  c._g = g;
+  c._txt = txt;
+  c._w = w;
+  c._baseColor = baseColor;
+  c._hoverColor = hoverColor;
+  c._hover = false;
+  c._enabled = true;
 
-  _build() {
-    // Title / name
-    this.elName = document.createElement('div');
-    Object.assign(this.elName.style, {
-      fontSize: '14px',
-      fontWeight: 'bold',
-      marginBottom: '6px',
-      color: '#ffd76b',
-    });
-    this.root.appendChild(this.elName);
+  c.eventMode = 'static';
+  c.cursor = 'pointer';
 
-    // Stat block
-    this.elTier = this._statRow('Tier', '—');
-    this.elHp = this._statRow('HP', '—');
-    this.elDmg = this._statRow('Damage', '—');
-    this.elRange = this._statRow('Range', '—');
-    this.elState = this._statRow('State', '—');
-
-    // HP bar
-    this.hpBarOuter = document.createElement('div');
-    Object.assign(this.hpBarOuter.style, {
-      height: '6px',
-      background: '#22303f',
-      borderRadius: '3px',
-      overflow: 'hidden',
-      margin: '4px 0 8px 0',
-    });
-    this.hpBarInner = document.createElement('div');
-    Object.assign(this.hpBarInner.style, {
-      height: '100%',
-      width: '100%',
-      background: '#4caf50',
-      transition: 'width 0.12s linear',
-    });
-    this.hpBarOuter.appendChild(this.hpBarInner);
-    this.root.appendChild(this.hpBarOuter);
-
-    // Buttons
-    const btnRow = document.createElement('div');
-    Object.assign(btnRow.style, {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '5px',
-    });
-
-    this.btnUpgrade = this._button('Upgrade', () => this._onUpgrade());
-    this.btnRepair = this._button('Repair', () => this._onRepair());
-    this.btnSell = this._button('Sell', () => this._onSell());
-
-    btnRow.appendChild(this.btnUpgrade);
-    btnRow.appendChild(this.btnRepair);
-    btnRow.appendChild(this.btnSell);
-    this.root.appendChild(btnRow);
-  }
-
-  _statRow(label, value) {
-    const row = document.createElement('div');
-    Object.assign(row.style, {
-      display: 'flex',
-      justifyContent: 'space-between',
-    });
-    const l = document.createElement('span');
-    l.textContent = label;
-    l.style.color = '#8fa4bd';
-    const v = document.createElement('span');
-    v.textContent = value;
-    row.appendChild(l);
-    row.appendChild(v);
-    this.root.appendChild(row);
-    return v;
-  }
-
-  _button(label, onClick) {
-    const b = document.createElement('button');
-    b.textContent = label;
-    Object.assign(b.style, {
-      padding: '5px 8px',
-      background: '#274060',
-      color: '#e8eef6',
-      border: '1px solid #3a5a80',
-      borderRadius: '4px',
-      cursor: 'pointer',
-      font: '11px monospace',
-      textAlign: 'left',
-    });
-    b.addEventListener('mouseenter', () => {
-      if (!b.disabled) b.style.background = '#365a86';
-    });
-    b.addEventListener('mouseleave', () => {
-      if (!b.disabled) b.style.background = '#274060';
-    });
-    b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!b.disabled) onClick();
-    });
-    return b;
-  }
-
-  // ---- Data helpers ----
-
-  _getStructure(id) {
-    if (id == null) return null;
-    const ents = this.state.entities;
-    if (!ents) return null;
-    // entities may be a Map or an array-like; support both
-    if (typeof ents.get === 'function') return ents.get(id) || null;
-    if (Array.isArray(ents)) return ents.find((e) => e && e.id === id) || null;
-    if (ents.structures) {
-      if (typeof ents.structures.get === 'function') return ents.structures.get(id) || null;
-      if (Array.isArray(ents.structures)) return ents.structures.find((e) => e && e.id === id) || null;
-    }
-    return ents[id] || null;
-  }
-
-  _structDef(structure) {
-    if (!structure) return null;
-    const tbl = this.tables && this.tables.structures;
-    if (!tbl) return null;
-    const key = structure.type || structure.defId || structure.structId;
-    if (tbl[key]) return tbl[key];
-    if (typeof tbl.get === 'function') return tbl.get(key) || null;
-    if (Array.isArray(tbl)) return tbl.find((s) => s && (s.id === key || s.StructureID === key)) || null;
-    return null;
-  }
-
-  _tierField(def, base, tier) {
-    // Try common per-tier field naming conventions.
-    const t = tier || 1;
-    const candidates = [
-      `${base} T${t}`, `${base}_T${t}`, `${base}T${t}`,
-      `${base}${t}`, base,
-    ];
-    for (const c of candidates) {
-      if (def && def[c] != null) return def[c];
-    }
-    return null;
-  }
-
-  _upgradeCost(structure, def) {
-    const tier = structure.tier || 1;
-    if (tier >= 3) return null; // max tier
-    const A = this.tables && this.tables.assumptions;
-    const nextTier = tier + 1;
-    // Base cost from def
-    let baseCost =
-      this._tierField(def, 'Cost', 1) ??
-      def.cost ?? def.Cost ?? 0;
-    baseCost = Number(baseCost) || 0;
-    // Cumulative unit value multipliers from assumptions
-    const mult =
-      nextTier === 2
-        ? (A && (A.Upgrade_Cost_x_T2 ?? A['Upgrade_Cost_x_T2'])) || 2.5
-        : (A && (A.Upgrade_Cost_x_T3 ?? A['Upgrade_Cost_x_T3'])) || 5;
-    const curMult =
-      tier === 2
-        ? (A && (A.Upgrade_Cost_x_T2 ?? A['Upgrade_Cost_x_T2'])) || 2.5
-        : 1;
-    // cumulative value at next tier minus current cumulative value
-    return Math.round(baseCost * mult - baseCost * curMult);
-  }
-
-  _investedValue(structure, def) {
-    const tier = structure.tier || 1;
-    const A = this.tables && this.tables.assumptions;
-    let baseCost =
-      this._tierField(def, 'Cost', 1) ?? def.cost ?? def.Cost ?? 0;
-    baseCost = Number(baseCost) || 0;
-    let mult = 1;
-    if (tier === 2) mult = (A && A.Upgrade_Cost_x_T2) || 2.5;
-    else if (tier === 3) mult = (A && A.Upgrade_Cost_x_T3) || 5;
-    return Math.round(baseCost * mult);
-  }
-
-  _refundValue(structure, def) {
-    const rate = typeof REFUND_RATE === 'number' ? REFUND_RATE : 0.5;
-    return Math.round(this._investedValue(structure, def) * rate);
-  }
-
-  _money() {
-    const eco = this.state.economy;
-    if (!eco) return 0;
-    return eco.money ?? eco.gold ?? 0;
-  }
-
-  // ---- Public API ----
-
-  select(id) {
-    this.selectedId = id;
-    if (id == null) {
-      this.hide();
-      return;
-    }
-    const s = this._getStructure(id);
-    if (!s) {
-      this.hide();
-      return;
-    }
-    this.show();
-    this.update();
-  }
-
-  clear() {
-    this.selectedId = null;
-    this.hide();
-  }
-
-  show() {
-    this.root.style.display = 'block';
-  }
-
-  hide() {
-    this.root.style.display = 'none';
-  }
-
-  /** Position the panel near the selected structure (screen coords). */
-  positionAt(screenX, screenY) {
-    const pad = 14;
-    this.root.style.left = `${Math.round(screenX + pad)}px`;
-    this.root.style.top = `${Math.round(screenY - 20)}px`;
-  }
-
-  /** Per-frame refresh of numbers + button enable states. */
-  update() {
-    if (this.selectedId == null) return;
-    const s = this._getStructure(this.selectedId);
-    if (!s) {
-      this.clear();
-      return;
-    }
-    const def = this._structDef(s);
-
-    const name =
-      (def && (def.name || def.Name || def.StructureID)) ||
-      s.type || s.defId || 'Structure';
-    const tier = s.tier || 1;
-
-    this.elName.textContent = name;
-    this.elTier.textContent = `${tier} / 3`;
-
-    const maxHp = s.maxHp ?? s.hpMax ?? this._tierField(def, 'HP', tier) ?? s.hp ?? 0;
-    const hp = s.hp ?? 0;
-    this.elHp.textContent = `${Math.max(0, Math.round(hp))} / ${Math.round(maxHp)}`;
-
-    const dmg =
-      s.dps ?? this._tierField(def, 'DPS', tier) ?? (def && (def.dps || def.DPS)) ?? 0;
-    this.elDmg.textContent = dmg ? `${Number(dmg).toFixed(1)} DPS` : '—';
-
-    const range = s.range ?? (def && (def.range || def.Range)) ?? 0;
-    this.elRange.textContent = range ? `${Number(range).toFixed(2)}` : '—';
-
-    const lc = s.lifecycle || s.state || 'Complete';
-    this.elState.textContent = lc;
-
-    // HP bar
-    const frac = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0;
-    this.hpBarInner.style.width = `${(frac * 100).toFixed(1)}%`;
-    this.hpBarInner.style.background =
-      frac > 0.6 ? '#4caf50' : frac > 0.3 ? '#e0b53a' : '#d1483b';
-
-    const money = this._money();
-    const busy = lc === 'Building' || lc === 'Upgrading' || lc === 'Selling' || lc === 'Placing';
-    const destroyed = lc === 'Destroyed';
-
-    // Upgrade
-    const upCost = this._upgradeCost(s, def);
-    if (destroyed) {
-      this._setBtn(this.btnUpgrade, 'Destroyed', true);
-    } else if (upCost == null) {
-      this._setBtn(this.btnUpgrade, 'Max Tier', true);
+  c.redraw = function () {
+    g.clear();
+    let fill;
+    if (!c._enabled) {
+      fill = COLORS.btnDisabled;
     } else {
-      const afford = money >= upCost;
-      this._setBtn(
-        this.btnUpgrade,
-        `Upgrade → T${tier + 1}  (${upCost}g)`,
-        busy || !afford
-      );
+      fill = c._hover ? c._hoverColor : c._baseColor;
     }
+    g.beginFill(fill, 1);
+    g.lineStyle(1, COLORS.border, 0.8);
+    g.drawRoundedRect(0, 0, c._w, BTN_H, 4);
+    g.endFill();
+    txt.position.set(c._w / 2, BTN_H / 2);
+    txt.style.fill = c._enabled ? COLORS.btnText : COLORS.btnTextDisabled;
+  };
 
-    // Repair (free but requires damage & troops; sim validates troop travel)
-    const damaged = hp < maxHp && !destroyed;
-    const alreadyRepairing = !!s.repairing || lc === 'Repairing';
-    this._setBtn(
-      this.btnRepair,
-      alreadyRepairing ? 'Repairing…' : 'Repair (free)',
-      !damaged || busy || alreadyRepairing || destroyed
-    );
+  c.setLabel = function (s) {
+    txt.text = s;
+  };
 
-    // Sell
-    const refund = this._refundValue(s, def);
-    this._setBtn(this.btnSell, `Sell  (+${refund}g)`, busy && lc !== 'Complete' && lc !== 'Damaged');
-  }
+  c.setEnabled = function (en) {
+    c._enabled = en;
+    c.cursor = en ? 'pointer' : 'default';
+    c.redraw();
+  };
 
-  _setBtn(btn, label, disabled) {
-    btn.textContent = label;
-    btn.disabled = !!disabled;
-    btn.style.opacity = disabled ? '0.45' : '1';
-    btn.style.cursor = disabled ? 'default' : 'pointer';
-    if (disabled) btn.style.background = '#1e2c3e';
-    else btn.style.background = '#274060';
-  }
+  c.setWidth = function (w) {
+    c._w = w;
+    c.redraw();
+  };
 
-  // ---- Command handlers ----
+  c.on('pointerover', () => {
+    c._hover = true;
+    c.redraw();
+  });
+  c.on('pointerout', () => {
+    c._hover = false;
+    c.redraw();
+  });
 
-  _onUpgrade() {
-    if (this.selectedId == null) return;
-    this.dispatch({ type: 'upgrade', target: this.selectedId, structureId: this.selectedId });
-  }
-
-  _onRepair() {
-    if (this.selectedId == null) return;
-    this.dispatch({ type: 'repair', target: this.selectedId, structureId: this.selectedId });
-  }
-
-  _onSell() {
-    if (this.selectedId == null) return;
-    const id = this.selectedId;
-    this.dispatch({ type: 'sell', target: id, structureId: id });
-    // Selection will naturally clear once the entity is removed; hide preemptively.
-    this.clear();
-  }
-
-  destroy() {
-    if (this.root && this.root.parentNode) {
-      this.root.parentNode.removeChild(this.root);
-    }
-    this.root = null;
-  }
+  c.redraw();
+  return c;
 }
 
-export default SelectionPanel;
+export function createSelectionPanel(opts) {
+  opts = opts || {};
+  const controller = opts.controller || null;
+  const session = opts.session || null;
+  const getWorld = opts.getWorld || (() => null);
+  const tables = opts.tables || (opts.config && opts.config.data && opts.config.data.tables) || null;
+
+  const root = new PIXI.Container();
+  root.visible = false;
+
+  // Background
+  const bg = new PIXI.Graphics();
+  root.addChild(bg);
+
+  function drawBg() {
+    bg.clear();
+    bg.beginFill(COLORS.bg, COLORS.bgAlpha);
+    bg.lineStyle(2, COLORS.border, 1);
+    bg.drawRoundedRect(0, 0, PANEL_W, PANEL_H, 6);
+    bg.endFill();
+  }
+  drawBg();
+
+  // Title (name)
+  const titleTxt = new PIXI.Text('', {
+    fontFamily: 'monospace',
+    fontSize: 15,
+    fontWeight: 'bold',
+    fill: COLORS.title,
+  });
+  titleTxt.position.set(PAD, PAD);
+  root.addChild(titleTxt);
+
+  // Sub line (kind / tier / state)
+  const subTxt = new PIXI.Text('', {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fill: COLORS.sub,
+  });
+  subTxt.position.set(PAD, PAD + 20);
+  root.addChild(subTxt);
+
+  // Stats block
+  const statTxt = new PIXI.Text('', {
+    fontFamily: 'monospace',
+    fontSize: 12,
+    fill: COLORS.text,
+    lineHeight: 16,
+  });
+  statTxt.position.set(PAD, PAD + 40);
+  root.addChild(statTxt);
+
+  // HP bar
+  const hpBar = new PIXI.Graphics();
+  root.addChild(hpBar);
+  const hpBarY = PAD + 96;
+  const hpBarW = PANEL_W - PAD * 2;
+  const hpBarH = 12;
+
+  function drawHpBar(cur, max, state) {
+    hpBar.clear();
+    hpBar.beginFill(0x000000, 0.5);
+    hpBar.drawRect(PAD, hpBarY, hpBarW, hpBarH);
+    hpBar.endFill();
+    let frac = max > 0 ? Math.max(0, Math.min(1, cur / max)) : 0;
+    let col = COLORS.hpGood;
+    if (frac < 0.34) col = COLORS.hpBad;
+    else if (frac < 0.67) col = COLORS.hpMid;
+    if (state === 'Building' || state === 'Placing' || state === 'Upgrading') {
+      col = COLORS.rangeCircle;
+    }
+    hpBar.beginFill(col, 1);
+    hpBar.drawRect(PAD, hpBarY, hpBarW * frac, hpBarH);
+    hpBar.endFill();
+    hpBar.lineStyle(1, COLORS.border, 0.8);
+    hpBar.drawRect(PAD, hpBarY, hpBarW, hpBarH);
+  }
+
+  // Progress line (for build/upgrade)
+  const progTxt = new PIXI.Text('', {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fill: COLORS.rangeCircle,
+  });
+  progTxt.position.set(PAD, hpBarY + hpBarH + 3);
+  root.addChild(progTxt);
+
+  // Buttons row
+  const btnAreaY = PAD + 130;
+  const halfW = (PANEL_W - PAD * 2 - BTN_GAP) / 2;
+
+  const upgradeBtn = makeButton('Upgrade', halfW, COLORS.upgrade, COLORS.upgradeHover);
+  upgradeBtn.position.set(PAD, btnAreaY);
+  root.addChild(upgradeBtn);
+
+  const repairBtn = makeButton('Repair', halfW, COLORS.repair, COLORS.repairHover);
+  repairBtn.position.set(PAD + halfW + BTN_GAP, btnAreaY);
+  root.addChild(repairBtn);
+
+  const sellBtn = makeButton('Sell', PANEL_W - PAD * 2, COLORS.sell, COLORS.sellHover);
+  sellBtn.position.set(PAD, btnAreaY + BTN_H + BTN_GAP);
+  root.addChild(sellBtn);
+
+  // ---- data helpers ----------------------------------------------------
+
+  function findStructure(world, id) {
+    if (!world || id == null) return null;
+    const list = world.structures || (world.entities && world.entities.structures) || null;
+    if (!list) return null;
+    if (Array.isArray(list)) {
+      for (let i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === id) return list[i];
+      }
+      return null;
+    }
+    // map/object keyed by id
+    return list[id] || null;
+  }
+
+  function getSelectedId() {
+    if (session && session.selectedStructureId != null) return session.selectedStructureId;
+    if (session && session.ui && session.ui.selectedStructureId != null) return session.ui.selectedStructureId;
+    return null;
+  }
+
+  function structDef(structure) {
+    if (!structure) return null;
+    if (structure.def) return structure.def;
+    if (tables && tables.structures) {
+      const defs = tables.structures;
+      const key = structure.defId || structure.kind || structure.type;
+      if (Array.isArray(defs)) {
+        for (let i = 0; i < defs.length; i++) {
+          if (defs[i] && (defs[i].id === key || defs[i].StructureID === key)) return defs[i];
+        }
+      } else if (defs[key]) {
+        return defs[key];
+      }
+    }
+    return null;
+  }
+
+  function num(v, d) {
+    return (typeof v === 'number' && isFinite(v)) ? v : d;
+  }
+
+  function currentDps(structure) {
+    if (structure.dps != null) return num(structure.dps, 0);
+    if (structure.weapon && structure.weapon.dps != null) return num(structure.weapon.dps, 0);
+    const def = structDef(structure);
+    if (def) {
+      const t = num(structure.tier, 1);
+      const key = 'DPS T' + t;
+      if (def[key] != null) return num(def[key], 0);
+      if (def.dps != null) return num(def.dps, 0);
+    }
+    return 0;
+  }
+
+  function maxHp(structure) {
+    if (structure.maxHp != null) return num(structure.maxHp, 1);
+    const def = structDef(structure);
+    if (def) {
+      const t = num(structure.tier, 1);
+      const key = 'HP T' + t;
+      if (def[key] != null) return num(def[key], 1);
+      if (def.hp != null) return num(def.hp, 1);
+    }
+    return num(structure.hp, 1);
+  }
+
+  function canTargetLabel(structure) {
+    const def = structDef(structure);
+    let ct = structure.canTarget || (def && (def['Can Target'] || def.canTarget));
+    if (!ct) return '';
+    if (ct === 'Both') return 'Anti-Air/Ground';
+    if (ct === 'Air') return 'Anti-Air';
+    if (ct === 'Ground') return 'Anti-Ground';
+    return ct;
+  }
+
+  // ---- pricing (from assumptions upgrade/cost curves) ------------------
+
+  function assumption(name, dflt) {
+    if (tables && tables.assumptions) {
+      const a = tables.assumptions;
+      if (a[name] != null) return a[name];
+      // array-of-rows form
+      if (Array.isArray(a)) {
+        for (let i = 0; i < a.length; i++) {
+          if (a[i] && (a[i].Parameter === name || a[i].param === name)) {
+            return a[i].Value != null ? a[i].Value : a[i].value;
+          }
+        }
+      }
+    }
+    return dflt;
+  }
+
+  function upgradeCost(structure) {
+    // Prefer sim-derived value if present.
+    if (structure.upgradeCost != null) return num(structure.upgradeCost, 0);
+    const def = structDef(structure);
+    const t = num(structure.tier, 1);
+    if (t >= 3) return null; // max tier
+    const nextT = t + 1;
+    if (def) {
+      const key = 'Cost T' + nextT;
+      const curKey = 'Cost T' + t;
+      if (def[key] != null) {
+        const next = num(def[key], 0);
+        const cur = num(def[curKey], 0);
+        return Math.max(0, Math.round(next - cur));
+      }
+      // fall back to base cost * multiplier
+      const base = num(def['Cost T1'] || def.cost, 0);
+      const mCur = t === 1 ? 1 : num(assumption('Upgrade_Cost_x_T2', 2.5), 2.5);
+      const mNext = nextT === 2
+        ? num(assumption('Upgrade_Cost_x_T2', 2.5), 2.5)
+        : num(assumption('Upgrade_Cost_x_T3', 5), 5);
+      return Math.max(0, Math.round(base * mNext - base * mCur));
+    }
+    return null;
+  }
+
+  function sellRefund(structure) {
+    if (structure.sellRefund != null) return num(structure.sellRefund, 0);
+    const def = structDef(structure);
+    const t = num(structure.tier, 1);
+    let invested = 0;
+    if (def) {
+      const key = 'Cost T' + t;
+      invested = num(def[key] || def.cost || def['Cost T1'], 0);
+    } else if (structure.cost != null) {
+      invested = num(structure.cost, 0);
+    }
+    const refundRate = num(assumption('Sell_Refund_Rate', 0.5), 0.5);
+    return Math.round(invested * refundRate);
+  }
+
+  function playerGold() {
+    const world = getWorld();
+    if (!world) return 0;
+    if (world.economy && world.economy.gold != null) return world.economy.gold;
+    if (world.gold != null) return world.gold;
+    return 0;
+  }
+
+  // ---- command emission ------------------------------------------------
+
+  function emit(cmd) {
+    if (!controller) return;
+    if (typeof controller.dispatch === 'function') controller.dispatch(cmd);
+    else if (typeof controller.sendCommand === 'function') controller.sendCommand(cmd);
+    else if (typeof controller.command === 'function') controller.command(cmd);
+  }
+
+  let boundStructureId = null;
+
+  upgradeBtn.on('pointertap', () => {
+    if (!upgradeBtn._enabled) return;
+    emit({ type: 'upgrade', id: boundStructureId, structureId: boundStructureId });
+  });
+
+  repairBtn.on('pointertap', () => {
+    if (!repairBtn._enabled) return;
+    emit({ type: 'repair', id: boundStructureId, structureId: boundStructureId });
+  });
+
+  sellBtn.on('pointertap', () => {
+    if (!sellBtn._enabled) return;
+    emit({ type: 'sell', id: boundStructureId, structureId: boundStructureId });
+    // Deselect after sell
+    if (session) {
+      if ('selectedStructureId' in session) session.selectedStructureId = null;
+      if (session.ui && 'selectedStructureId' in session.ui) session.ui.selectedStructureId = null;
+    }
+  });
+
+  // ---- per-frame update ------------------------------------------------
+
+  function update() {
+    const world = getWorld();
+    const selId = getSelectedId();
+    const structure = findStructure(world, selId);
+
+    if (!structure) {
+      root.visible = false;
+      boundStructureId = null;
+      return;
+    }
+
+    boundStructureId = structure.id;
+    root.visible = true;
+
+    const def = structDef(structure);
+    const name =
+      structure.name ||
+      (def && (def.name || def.Name || def.StructureID)) ||
+      structure.kind ||
+      structure.type ||
+      'Structure';
+
+    const tier = num(structure.tier, 1);
+    const state = structure.state || structure.lifecycle || 'Complete';
+    const stateLbl = STATE_LABEL[state] || state;
+
+    titleTxt.text = String(name);
+
+    const targetLbl = canTargetLabel(structure);
+    let sub = 'Tier ' + tier + '  ·  ' + stateLbl;
+    if (targetLbl) sub += '  ·  ' + targetLbl;
+    subTxt.text = sub;
+
+    const hp = num(structure.hp, 0);
+    const mhp = maxHp(structure);
+    const dps = currentDps(structure);
+    const range = num(structure.range, (def && (def.Range || def.range)) || 0);
+
+    let stats = '';
+    stats += 'DMG  ' + (dps ? dps.toFixed(1) + ' dps' : '—') + '\n';
+    stats += 'RNG  ' + (range ? range.toFixed(1) + ' tiles' : '—') + '\n';
+    stats += 'HP   ' + Math.round(hp) + ' / ' + Math.round(mhp);
+    statTxt.text = stats;
+
+    drawHpBar(hp, mhp, state);
+
+    // progress line for building / upgrading
+    let prog = '';
+    const isBuilding = state === 'Building' || state === 'Placing';
+    const isUpgrading = state === 'Upgrading';
+    if (isBuilding || isUpgrading) {
+      let p = null;
+      if (structure.buildProgress != null) p = structure.buildProgress;
+      else if (structure.progress != null) p = structure.progress;
+      else if (structure.buildTimer != null && structure.buildTime != null && structure.buildTime > 0) {
+        p = 1 - structure.buildTimer / structure.buildTime;
+      }
+      if (p != null) {
+        prog = (isUpgrading ? 'Upgrading… ' : 'Building… ') + Math.round(Math.max(0, Math.min(1, p)) * 100) + '%';
+      } else {
+        prog = isUpgrading ? 'Upgrading…' : 'Building…';
+      }
+    } else if (structure.repairing || state === 'Repairing') {
+      let rp = structure.repairProgress != null ? structure.repairProgress : null;
+      prog = 'Repairing…' + (rp != null ? ' ' + Math.round(rp * 100) + '%' : '');
+    }
+    progTxt.text = prog;
+
+    // ---- button states ----
+    const gold = playerGold();
+    const busy = isBuilding || isUpgrading || state === 'Selling' || state === 'Destroyed';
+
+    // Upgrade
+    const uCost = upgradeCost(structure);
+    if (uCost == null) {
+      upgradeBtn.setLabel(tier >= 3 ? 'Max Tier' : 'Upgrade');
+      upgradeBtn.setEnabled(false);
+    } else {
+      upgradeBtn.setLabel('Up ' + uCost + 'g');
+      upgradeBtn.setEnabled(!busy && gold >= uCost);
+    }
+
+    // Repair (free but consumes troops + time; only when damaged)
+    const damaged = hp < mhp - 0.01;
+    const troops = world && (
+      (world.economy && world.economy.troops) != null ? world.economy.troops :
+      (world.troops != null ? world.troops : null)
+    );
+    let repairOk = damaged && !busy;
+    if (troops != null && troops <= 0) repairOk = false;
+    if (structure.repairing) repairOk = false;
+    repairBtn.setLabel(structure.repairing ? 'Repairing' : 'Repair');
+    repairBtn.setEnabled(repairOk);
+
+    // Sell
+    const refund = sellRefund(structure);
+    sellBtn.setLabel('Sell +' + refund + 'g');
+    sellBtn.setEnabled(state !== 'Selling' && state !== 'Destroyed');
+  }
+
+  // ---- layout / API ----------------------------------------------------
+
+  function setPosition(x, y) {
+    root.position.set(x, y);
+  }
+
+  return {
+    view: root,
+    root,
+    update,
+    setPosition,
+    width: PANEL_W,
+    height: PANEL_H,
+    destroy() {
+      root.destroy({ children: true });
+    },
+  };
+}
+
+export default createSelectionPanel;

@@ -1,184 +1,146 @@
-// src/sim/rng.js
-// Deterministic seedable PRNG for BULWARK vertical slice.
-// Provides identical replays from the same seed.
-//
-// Implements:
-//  - mulberry32 core (fast, well-distributed 32-bit PRNG)
-//  - a stateful RNG object with save/restore for deterministic replay
-//  - helper methods: next, float, range, int, bool, pick, shuffle, chance
-//  - a stable string->seed hash (xmur3) so string seeds are deterministic
-//
-// No external dependencies. Pure ES module.
+Looking at the plan, `src/sim/rng.js` is a deterministic seeded PRNG. I'll implement a robust, well-tested PRNG (splitmix64-seeded xoshiro/mulberry style) with a clean class API that other sim files can use for deterministic, seed-stable replay.
 
-/**
- * xmur3 string hash -> produces a 32-bit seed generator.
- * Used to turn arbitrary string seeds into a numeric seed deterministically.
- * @param {string} str
- * @returns {function(): number} function returning successive 32-bit hash values
- */
-export function xmur3(str) {
-  let h = 1779033703 ^ str.length;
-  for (let i = 0; i < str.length; i++) {
-    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
-    h = (h << 13) | (h >>> 19);
-  }
-  return function () {
-    h = Math.imul(h ^ (h >>> 16), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    h ^= h >>> 16;
-    return h >>> 0;
+```javascript
+// src/sim/rng.js
+// Deterministic seeded PRNG for BULWARK vertical slice.
+// Seed-stable: same seed + same call sequence => identical outputs.
+// Used across sim/step/waves/combat for replay determinism.
+//
+// Implementation: SplitMix32 seeding into a Mulberry32 core.
+// All arithmetic kept in 32-bit unsigned space via >>> 0.
+
+const UINT32 = 4294967296; // 2^32
+
+// Mix a raw 32-bit integer seed into a well-distributed initial state.
+function splitmix32(seed) {
+  let z = (seed >>> 0);
+  return function next() {
+    z = (z + 0x9e3779b9) >>> 0;
+    let x = z;
+    x = Math.imul(x ^ (x >>> 16), 0x21f0aaad) >>> 0;
+    x = Math.imul(x ^ (x >>> 15), 0x735a2d97) >>> 0;
+    x = (x ^ (x >>> 15)) >>> 0;
+    return x >>> 0;
   };
 }
 
-/**
- * Core mulberry32 step. Takes a 32-bit state, returns { value, state }.
- * We keep this as a pure function so RNG can hold explicit state for replay.
- * @param {number} state uint32
- * @returns {number} next uint32 state (value derived from it)
- */
-function mulberry32Step(state) {
-  // returns a float in [0,1) but we recompute state externally
-  let t = (state + 0x6d2b79f5) >>> 0;
-  let r = t;
-  r = Math.imul(r ^ (r >>> 15), r | 1);
-  r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
-  r = (r ^ (r >>> 14)) >>> 0;
-  return r;
-}
-
-/**
- * Normalize a seed input (number | string | undefined) into a uint32 seed.
- * @param {number|string|undefined} seed
- * @returns {number} uint32
- */
-export function normalizeSeed(seed) {
-  if (seed === undefined || seed === null) {
-    // Non-deterministic fallback only used when explicitly unseeded.
-    return (Math.floor(Math.random() * 0xffffffff)) >>> 0;
-  }
+// Convert an arbitrary seed (number or string) to a 32-bit unsigned int.
+function normalizeSeed(seed) {
   if (typeof seed === 'number' && Number.isFinite(seed)) {
-    return (seed >>> 0) || 1;
+    // Fold to 32-bit; preserve fractional/large via truncation + mix
+    let s = Math.floor(Math.abs(seed)) >>> 0;
+    if (s === 0) s = 0x1a2b3c4d; // avoid all-zero degenerate seed
+    return s >>> 0;
   }
-  // string or anything else -> stringify and hash
-  const gen = xmur3(String(seed));
-  return gen() >>> 0;
+  if (typeof seed === 'string') {
+    // FNV-1a 32-bit hash of the string
+    let h = 0x811c9dc5 >>> 0;
+    for (let i = 0; i < seed.length; i++) {
+      h ^= seed.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    if (h === 0) h = 0x1a2b3c4d;
+    return h >>> 0;
+  }
+  // Fallback deterministic constant (do NOT use Date/Math.random — must be deterministic)
+  return 0x1a2b3c4d;
 }
 
-/**
- * Deterministic RNG. Same seed => identical sequence.
- *
- * Usage:
- *   const rng = new RNG(1234);
- *   rng.float();        // [0,1)
- *   rng.int(0, 10);     // integer in [0,10)
- *   rng.range(1, 5);    // float in [1,5)
- *   rng.pick([a,b,c]);
- *
- * For replay determinism, save/restore state:
- *   const s = rng.getState(); ... rng.setState(s);
- */
 export class RNG {
   /**
-   * @param {number|string} [seed]
+   * @param {number|string} seed
    */
-  constructor(seed) {
+  constructor(seed = 0x1a2b3c4d) {
     this._seed = normalizeSeed(seed);
-    // internal 32-bit counter state
-    this.state = this._seed >>> 0;
-    // count of numbers drawn (useful for logs / debugging determinism)
-    this.count = 0;
+    // Derive an initial internal state from the seed via splitmix32
+    const sm = splitmix32(this._seed);
+    // Warm the state a little to decorrelate low seeds
+    this._state = sm();
+    this._state = (this._state ^ sm()) >>> 0;
+    if (this._state === 0) this._state = 0x9e3779b9;
+    this._count = 0; // number of draws (useful for debugging/replay diagnostics)
   }
 
-  /** @returns {number} original normalized seed */
+  /** Original normalized seed (32-bit uint). */
   get seed() {
-    return this._seed;
+    return this._seed >>> 0;
   }
 
-  /**
-   * Reset to the original seed (or a new one).
-   * @param {number|string} [seed]
-   */
-  reset(seed) {
-    if (seed !== undefined) this._seed = normalizeSeed(seed);
-    this.state = this._seed >>> 0;
-    this.count = 0;
+  /** Number of raw uint32 draws performed. */
+  get count() {
+    return this._count;
   }
 
-  /**
-   * Advance and return next raw uint32.
-   * @returns {number} uint32 in [0, 2^32)
-   */
+  /** Raw core step: Mulberry32. Returns uint32. */
+  _nextUint32() {
+    this._count++;
+    let t = (this._state + 0x6d2b79f5) >>> 0;
+    this._state = t;
+    t = Math.imul(t ^ (t >>> 15), 1 | t) >>> 0;
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) >>> 0;
+    return (t ^ (t >>> 14)) >>> 0;
+  }
+
+  /** Public alias for a raw 32-bit unsigned integer. */
   nextUint32() {
-    // advance state deterministically
-    this.state = (this.state + 0x6d2b79f5) >>> 0;
-    const r = mulberry32Step(this.state - 0x6d2b79f5);
-    this.count++;
-    return r >>> 0;
+    return this._nextUint32();
   }
 
-  /**
-   * Next float in [0, 1).
-   * @returns {number}
-   */
+  /** Float in [0, 1). 32-bit resolution. */
   next() {
-    return this.nextUint32() / 4294967296;
+    return this._nextUint32() / UINT32;
   }
 
-  /** Alias for next() — float in [0,1). */
-  float() {
+  /** Alias for next(). */
+  random() {
     return this.next();
+  }
+
+  /** Float in [0,1) with 53-bit resolution (two draws). */
+  nextDouble() {
+    const hi = this._nextUint32() >>> 5; // 27 bits
+    const lo = this._nextUint32() >>> 6; // 26 bits
+    return (hi * 67108864 + lo) / 9007199254740992; // /2^53
   }
 
   /**
    * Float in [min, max).
    * @param {number} min
    * @param {number} max
-   * @returns {number}
    */
   range(min, max) {
-    return min + this.next() * (max - min);
-  }
-
-  /**
-   * Integer in [min, max). If only one arg given, treats it as [0, min).
-   * @param {number} min
-   * @param {number} [max]
-   * @returns {number}
-   */
-  int(min, max) {
-    if (max === undefined) {
-      max = min;
-      min = 0;
-    }
-    if (max <= min) return min;
-    return min + Math.floor(this.next() * (max - min));
+    return min + (max - min) * this.next();
   }
 
   /**
    * Integer in [min, max] inclusive.
    * @param {number} min
    * @param {number} max
-   * @returns {number}
    */
-  intInclusive(min, max) {
-    return this.int(min, max + 1);
+  intRange(min, max) {
+    min = Math.floor(min);
+    max = Math.floor(max);
+    if (max < min) {
+      const t = min; min = max; max = t;
+    }
+    const span = (max - min + 1) >>> 0;
+    if (span <= 0) return min;
+    // Rejection-free modulo is fine for game determinism; slight bias negligible.
+    return min + (this._nextUint32() % span);
   }
 
   /**
-   * Boolean with given probability of true (default 0.5).
-   * @param {number} [p]
-   * @returns {boolean}
+   * Integer in [0, n) — like array index.
+   * @param {number} n
    */
-  bool(p = 0.5) {
-    return this.next() < p;
+  int(n) {
+    n = Math.floor(n);
+    if (n <= 0) return 0;
+    return this._nextUint32() % n;
   }
 
-  /**
-   * True with probability p (alias of bool for readability).
-   * @param {number} p
-   * @returns {boolean}
-   */
-  chance(p) {
+  /** true with probability p (default 0.5). */
+  chance(p = 0.5) {
     return this.next() < p;
   }
 
@@ -190,18 +152,19 @@ export class RNG {
    */
   pick(arr) {
     if (!arr || arr.length === 0) return undefined;
-    return arr[this.int(0, arr.length)];
+    return arr[this.int(arr.length)];
   }
 
   /**
-   * Deterministic Fisher-Yates shuffle. Mutates and returns the array.
+   * Deterministic Fisher-Yates shuffle (in place). Returns the same array.
    * @template T
    * @param {T[]} arr
    * @returns {T[]}
    */
   shuffle(arr) {
+    if (!arr) return arr;
     for (let i = arr.length - 1; i > 0; i--) {
-      const j = this.int(0, i + 1);
+      const j = this.int(i + 1);
       const tmp = arr[i];
       arr[i] = arr[j];
       arr[j] = tmp;
@@ -210,108 +173,92 @@ export class RNG {
   }
 
   /**
-   * Gaussian (normal) sample via Box-Muller, mean 0, stddev 1.
-   * @returns {number}
+   * Weighted pick. weights parallel to items.
+   * @template T
+   * @param {T[]} items
+   * @param {number[]} weights
+   * @returns {T|undefined}
    */
-  gaussian() {
-    // ensure u1 > 0 to avoid log(0)
-    let u1 = this.next();
-    if (u1 <= 1e-12) u1 = 1e-12;
-    const u2 = this.next();
-    return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+  weightedPick(items, weights) {
+    if (!items || items.length === 0) return undefined;
+    let total = 0;
+    for (let i = 0; i < weights.length; i++) total += Math.max(0, weights[i] || 0);
+    if (total <= 0) return this.pick(items);
+    let r = this.next() * total;
+    for (let i = 0; i < items.length; i++) {
+      r -= Math.max(0, weights[i] || 0);
+      if (r < 0) return items[i];
+    }
+    return items[items.length - 1];
   }
 
   /**
-   * Serialize current state for replay/save. Deterministic snapshot.
-   * @returns {{seed:number,state:number,count:number}}
+   * Gaussian-ish value via sum of uniforms (approx normal), mean/stddev.
+   * Deterministic; used only where a spread is desired.
    */
-  getState() {
-    return { seed: this._seed, state: this.state >>> 0, count: this.count };
+  gaussian(mean = 0, stddev = 1) {
+    // Sum of 4 uniforms centered → approx normal, variance ~ 4*(1/12)=1/3
+    let s = 0;
+    for (let i = 0; i < 4; i++) s += this.next();
+    // normalize: mean 2, std sqrt(4/12)=~0.5774
+    const norm = (s - 2) / 0.5773502691896258;
+    return mean + norm * stddev;
   }
 
   /**
-   * Restore a previously saved state.
-   * @param {{seed:number,state:number,count:number}} s
-   */
-  setState(s) {
-    if (!s) return;
-    this._seed = s.seed >>> 0;
-    this.state = s.state >>> 0;
-    this.count = s.count | 0;
-  }
-
-  /**
-   * Create an independent RNG deterministically derived from this one.
-   * Useful for per-system streams that must not perturb the main stream.
-   * @param {number|string} [salt]
-   * @returns {RNG}
+   * Fork a new independent RNG deterministically derived from this one's
+   * current state. Useful for per-entity or per-subsystem streams that
+   * must not disturb the parent's draw sequence order-dependency.
+   * @param {number} [salt]
    */
   fork(salt = 0) {
-    const gen = xmur3(String(this._seed) + ':' + String(salt) + ':' + String(this.count));
-    return new RNG(gen() >>> 0);
+    const mixed = (this._state ^ (Math.imul((salt >>> 0) + 1, 0x9e3779b9) >>> 0)) >>> 0;
+    const child = new RNG(mixed === 0 ? 0x1a2b3c4d : mixed);
+    return child;
+  }
+
+  /** Snapshot state for save/replay validation. */
+  getState() {
+    return {
+      seed: this._seed >>> 0,
+      state: this._state >>> 0,
+      count: this._count >>> 0,
+    };
+  }
+
+  /** Restore a previously captured state. */
+  setState(snap) {
+    if (!snap) return;
+    if (typeof snap.seed === 'number') this._seed = snap.seed >>> 0;
+    if (typeof snap.state === 'number') this._state = snap.state >>> 0;
+    if (typeof snap.count === 'number') this._count = snap.count >>> 0;
+    if (this._state === 0) this._state = 0x9e3779b9;
+  }
+
+  /** Reset back to the original seed's fresh state. */
+  reset() {
+    const sm = splitmix32(this._seed);
+    this._state = sm();
+    this._state = (this._state ^ sm()) >>> 0;
+    if (this._state === 0) this._state = 0x9e3779b9;
+    this._count = 0;
+  }
+
+  /** Create a clone with identical current state. */
+  clone() {
+    const r = new RNG(this._seed);
+    r._state = this._state >>> 0;
+    r._count = this._count >>> 0;
+    return r;
   }
 }
 
-/**
- * Convenience factory.
- * @param {number|string} [seed]
- * @returns {RNG}
- */
-export function makeRNG(seed) {
+/** Factory helper. */
+export function createRNG(seed) {
   return new RNG(seed);
 }
 
-/**
- * Compute a stable 32-bit hash of arbitrary serializable state.
- * Used by replay.js to verify deterministic sim state hashes.
- * @param {*} value
- * @returns {number} uint32 hash
- */
-export function hashState(value) {
-  const str = stableStringify(value);
-  const gen = xmur3(str);
-  // mix a couple of rounds for better avalanche
-  let h = gen();
-  h = (Math.imul(h ^ (h >>> 15), 2246822519) >>> 0);
-  h ^= gen();
-  return h >>> 0;
-}
-
-/**
- * Stable JSON stringify with sorted keys so hashes are order-independent.
- * @param {*} value
- * @returns {string}
- */
-export function stableStringify(value) {
-  const seen = new WeakSet();
-  const walk = (v) => {
-    if (v === null) return 'null';
-    const t = typeof v;
-    if (t === 'number') {
-      // normalize -0 and non-finite
-      if (!Number.isFinite(v)) return 'null';
-      if (Object.is(v, -0)) return '0';
-      return String(v);
-    }
-    if (t === 'boolean') return v ? 'true' : 'false';
-    if (t === 'string') return JSON.stringify(v);
-    if (t === 'undefined' || t === 'function') return 'null';
-    if (t === 'object') {
-      if (seen.has(v)) return '"[circular]"';
-      seen.add(v);
-      let out;
-      if (Array.isArray(v)) {
-        out = '[' + v.map(walk).join(',') + ']';
-      } else {
-        const keys = Object.keys(v).sort();
-        out = '{' + keys.map((k) => JSON.stringify(k) + ':' + walk(v[k])).join(',') + '}';
-      }
-      seen.delete(v);
-      return out;
-    }
-    return 'null';
-  };
-  return walk(value);
-}
+/** Export the seed normalizer for consistent seed handling elsewhere. */
+export { normalizeSeed };
 
 export default RNG;

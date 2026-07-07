@@ -1,335 +1,349 @@
 // src/sim/commands.js
-// Input command definitions applied to the deterministic sim.
-// Commands are pure data descriptors + apply functions. Every command that
-// mutates the sim is logged (see log.js) so replay can re-drive the core.
-//
-// Command shapes (all serializable):
-//   { type: 'place',     structureId, slotIndex }
-//   { type: 'select',    entityId | null }
-//   { type: 'upgrade',   entityId }
-//   { type: 'sell',      entityId }
-//   { type: 'repair',    entityId }
-//   { type: 'deploy',    unitId, x, y }
-//   { type: 'startWave' }
-//
-// apply(sim, cmd) mutates sim.state deterministically and returns a result
-// { ok:boolean, reason?:string, ... }. It DOES NOT log; the driver (commands
-// queue in step / main) is responsible for logging accepted inputs so the
-// replay stream matches exactly. Use applyAndLog() to do both.
+// Command schema for the BULWARK deterministic sim.
+// Commands are plain, serializable data objects that get recorded into the
+// battle log and re-driven during replay. They are the ONLY authorized way to
+// mutate world state (via world.js reducer). Nothing here mutates state; this
+// module only defines/validates/normalizes command payloads.
 
-import * as lifecycle from './lifecycle.js';
-import * as economy from './economy.js';
-import * as entities from './entities.js';
-import * as spawn from './spawn.js';
-import * as waves from './waves.js';
-import * as placement from '../input/placement.js';
-
-// ------------------------------------------------------------------
-// Command constructors (factory helpers) — keep shapes canonical.
-// ------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Command type constants
+// ---------------------------------------------------------------------------
 
 export const CommandTypes = Object.freeze({
-  PLACE: 'place',
-  SELECT: 'select',
-  UPGRADE: 'upgrade',
-  SELL: 'sell',
-  REPAIR: 'repair',
-  DEPLOY: 'deploy',
-  START_WAVE: 'startWave',
+  PLACE: 'place',          // place a structure at a slot
+  SELECT: 'select',        // select a structure / entity (UI-driven, but recorded)
+  UPGRADE: 'upgrade',      // upgrade a structure one tier
+  SELL: 'sell',            // sell a structure for partial refund
+  DEPLOY: 'deploy',        // deploy a troop that marches to a drop location
+  START_WAVE: 'startWave', // begin the next wave
+  REPAIR: 'repair',        // repair a structure (troop-based, timed)
+  TARGET: 'target',        // set a structure's target priority / manual target
+  SET_SPEED: 'setSpeed',   // sim speed control (recorded for determinism parity)
+  PAUSE: 'pause',          // pause/resume toggle (recorded)
 });
 
-export function cmdPlace(structureId, slotIndex) {
-  return { type: CommandTypes.PLACE, structureId, slotIndex };
-}
-export function cmdSelect(entityId) {
-  return { type: CommandTypes.SELECT, entityId: entityId ?? null };
-}
-export function cmdUpgrade(entityId) {
-  return { type: CommandTypes.UPGRADE, entityId };
-}
-export function cmdSell(entityId) {
-  return { type: CommandTypes.SELL, entityId };
-}
-export function cmdRepair(entityId) {
-  return { type: CommandTypes.REPAIR, entityId };
-}
-export function cmdDeploy(unitId, x, y) {
-  return { type: CommandTypes.DEPLOY, unitId, x, y };
-}
-export function cmdStartWave() {
-  return { type: CommandTypes.START_WAVE };
-}
+export const ALL_COMMAND_TYPES = Object.freeze(Object.values(CommandTypes));
 
-// ------------------------------------------------------------------
-// Data table lookup helpers
-// ------------------------------------------------------------------
+// Valid target-priority modes for the TARGET command.
+export const TargetModes = Object.freeze({
+  FIRST: 'first',     // furthest along path toward base
+  LAST: 'last',       // least along path
+  NEAREST: 'nearest', // closest to the tower
+  STRONGEST: 'strongest', // highest hp
+  WEAKEST: 'weakest', // lowest hp
+  MANUAL: 'manual',   // explicit entity id
+});
 
-function tables(sim) {
-  return (sim.config && sim.config.data && sim.config.data.tables) || {};
+export const ALL_TARGET_MODES = Object.freeze(Object.values(TargetModes));
+
+// ---------------------------------------------------------------------------
+// Small validation helpers
+// ---------------------------------------------------------------------------
+
+function isFiniteNumber(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+function isNonEmptyString(v) {
+  return typeof v === 'string' && v.length > 0;
+}
+function isInt(v) {
+  return isFiniteNumber(v) && Math.floor(v) === v;
 }
 
-function findStructureDef(sim, structureId) {
-  const t = tables(sim);
-  const list = (t.structures && (t.structures.list || t.structures)) || [];
-  if (Array.isArray(list)) {
-    return list.find((s) => s.id === structureId || s.StructureID === structureId);
-  }
-  return list[structureId] || null;
-}
-
-function findUnitDef(sim, unitId) {
-  const t = tables(sim);
-  const list = (t.units && (t.units.list || t.units)) || [];
-  if (Array.isArray(list)) {
-    return list.find((u) => u.id === unitId || u.UnitID === unitId);
-  }
-  return list[unitId] || null;
-}
-
-// ------------------------------------------------------------------
-// Individual command handlers
-// ------------------------------------------------------------------
-
-function applyPlace(sim, cmd) {
-  const state = sim.state;
-  const def = findStructureDef(sim, cmd.structureId);
-  if (!def) return { ok: false, reason: 'unknown-structure' };
-
-  const slotIndex = cmd.slotIndex;
-  const slots = state.slots || [];
-  if (slotIndex == null || slotIndex < 0 || slotIndex >= slots.length) {
-    return { ok: false, reason: 'bad-slot' };
-  }
-  const slot = slots[slotIndex];
-  if (!slot) return { ok: false, reason: 'bad-slot' };
-
-  // Deploy validity check: space (slot occupied?), terrain, cost.
-  if (slot.occupiedBy != null) {
-    return { ok: false, reason: 'slot-occupied' };
-  }
-
-  const cost = economy.structureCost(sim, def, 1);
-  if (!economy.canAfford(sim, cost)) {
-    return { ok: false, reason: 'insufficient-funds' };
-  }
-
-  // Extra placement validity (terrain rules) delegated to placement module.
-  const valid = placement.isValidPlacement
-    ? placement.isValidPlacement(sim, def, slot)
-    : true;
-  if (!valid) {
-    return { ok: false, reason: 'invalid-terrain' };
-  }
-
-  // Spend, create structure entity in Placing→Building lifecycle.
-  economy.spend(sim, cost, 'build');
-  const ent = entities.createStructure(sim, def, {
-    x: slot.x,
-    y: slot.y,
-    slotIndex,
-    footprint: def.footprint || { w: 1, h: 1 },
-  });
-  slot.occupiedBy = ent.id;
-  lifecycle.beginBuild(sim, ent, def);
-
-  // Walls/moats reroute walkers — trigger recompute.
-  if (ent.blocksGround || def.terrain) {
-    if (sim.pathing && sim.pathing.markDirty) sim.pathing.markDirty(sim);
-  }
-
-  return { ok: true, entityId: ent.id };
-}
-
-function applySelect(sim, cmd) {
-  const state = sim.state;
-  const id = cmd.entityId ?? null;
-  if (id == null) {
-    state.selectedId = null;
-    return { ok: true, entityId: null };
-  }
-  const ent = state.entitiesById && state.entitiesById[id];
-  if (!ent) {
-    state.selectedId = null;
-    return { ok: false, reason: 'no-entity' };
-  }
-  state.selectedId = id;
-  return { ok: true, entityId: id };
-}
-
-function applyUpgrade(sim, cmd) {
-  const state = sim.state;
-  const ent = state.entitiesById && state.entitiesById[cmd.entityId];
-  if (!ent) return { ok: false, reason: 'no-entity' };
-  if (!ent.isStructure) return { ok: false, reason: 'not-structure' };
-  if (ent.lifecycle !== 'Complete' && ent.lifecycle !== 'Damaged') {
-    return { ok: false, reason: 'not-ready' };
-  }
-  if (ent.tier >= 3) return { ok: false, reason: 'max-tier' };
-  if (ent.lifecycle === 'Upgrading') return { ok: false, reason: 'busy' };
-
-  const def = findStructureDef(sim, ent.defId);
-  if (!def) return { ok: false, reason: 'unknown-structure' };
-
-  const nextTier = ent.tier + 1;
-  const cost = economy.structureUpgradeCost(sim, def, ent.tier, nextTier);
-  if (!economy.canAfford(sim, cost)) {
-    return { ok: false, reason: 'insufficient-funds' };
-  }
-
-  economy.spend(sim, cost, 'upgrade');
-  lifecycle.beginUpgrade(sim, ent, def, nextTier);
-  return { ok: true, entityId: ent.id, tier: nextTier };
-}
-
-function applySell(sim, cmd) {
-  const state = sim.state;
-  const ent = state.entitiesById && state.entitiesById[cmd.entityId];
-  if (!ent) return { ok: false, reason: 'no-entity' };
-  if (!ent.isStructure) return { ok: false, reason: 'not-structure' };
-  if (ent.lifecycle === 'Selling' || ent.lifecycle === 'Destroyed') {
-    return { ok: false, reason: 'busy' };
-  }
-
-  const def = findStructureDef(sim, ent.defId);
-  const refund = economy.sellRefund(sim, ent, def);
-
-  // Free the slot immediately for placement logic parity; entity plays out
-  // Selling lifecycle then Destroyed.
-  const slotIndex = ent.slotIndex;
-  if (slotIndex != null && state.slots && state.slots[slotIndex]) {
-    state.slots[slotIndex].occupiedBy = null;
-  }
-  economy.grant(sim, refund, 'sell');
-  lifecycle.beginSell(sim, ent, def);
-
-  if (ent.blocksGround) {
-    if (sim.pathing && sim.pathing.markDirty) sim.pathing.markDirty(sim);
-  }
-
-  if (state.selectedId === ent.id) state.selectedId = null;
-  return { ok: true, entityId: ent.id, refund };
-}
-
-function applyRepair(sim, cmd) {
-  const state = sim.state;
-  const ent = state.entitiesById && state.entitiesById[cmd.entityId];
-  if (!ent) return { ok: false, reason: 'no-entity' };
-  if (!ent.isStructure) return { ok: false, reason: 'not-structure' };
-  if (ent.lifecycle !== 'Damaged') return { ok: false, reason: 'not-damaged' };
-  if (ent.repairing) return { ok: false, reason: 'already-repairing' };
-
-  // Repairs are free but consume a troop that must travel to the structure.
-  const troop = spawn.reserveRepairTroop
-    ? spawn.reserveRepairTroop(sim, ent)
-    : null;
-  if (!troop) {
-    return { ok: false, reason: 'no-troop' };
-  }
-  lifecycle.beginRepair(sim, ent, troop);
-  return { ok: true, entityId: ent.id };
-}
-
-function applyDeploy(sim, cmd) {
-  const def = findUnitDef(sim, cmd.unitId);
-  if (!def) return { ok: false, reason: 'unknown-unit' };
-
-  const cost = economy.unitCost(sim, def, 1);
-  if (!economy.canAfford(sim, cost)) {
-    return { ok: false, reason: 'insufficient-funds' };
-  }
-
-  // Deploy validity: destination reachable / in-bounds / valid terrain.
-  const dest = { x: cmd.x, y: cmd.y };
-  const valid = spawn.isValidDeploy
-    ? spawn.isValidDeploy(sim, def, dest)
-    : true;
-  if (!valid) {
-    return { ok: false, reason: 'invalid-drop' };
-  }
-
-  economy.spend(sim, cost, 'deploy');
-  const unit = spawn.deployUnit(sim, def, dest);
-  return { ok: true, entityId: unit ? unit.id : null };
-}
-
-function applyStartWave(sim /*, cmd */) {
-  const res = waves.startWave(sim);
-  return res && res.ok !== undefined
-    ? res
-    : { ok: true, wave: sim.state.waves ? sim.state.waves.current : 0 };
-}
-
-// ------------------------------------------------------------------
-// Dispatch
-// ------------------------------------------------------------------
-
-const HANDLERS = {
-  [CommandTypes.PLACE]: applyPlace,
-  [CommandTypes.SELECT]: applySelect,
-  [CommandTypes.UPGRADE]: applyUpgrade,
-  [CommandTypes.SELL]: applySell,
-  [CommandTypes.REPAIR]: applyRepair,
-  [CommandTypes.DEPLOY]: applyDeploy,
-  [CommandTypes.START_WAVE]: applyStartWave,
-};
+// ---------------------------------------------------------------------------
+// Command factory functions
+// Each returns a normalized, plain-object command. `issuedBy` distinguishes
+// 'player' vs 'system' (e.g., automated wave spawns / harness) so the replay
+// can reproduce exactly.
+// ---------------------------------------------------------------------------
 
 /**
- * Apply a command to the sim WITHOUT logging.
- * Returns a result object { ok, reason?, ... }.
+ * PLACE — request to build a structure.
+ * @param {object} p
+ * @param {string} p.structureType  key into config.data.tables.structures
+ * @param {number} p.slot           hard-point slot index
+ * @param {string} [p.issuedBy='player']
  */
-export function apply(sim, cmd) {
-  if (!cmd || !cmd.type) return { ok: false, reason: 'bad-command' };
-  const handler = HANDLERS[cmd.type];
-  if (!handler) return { ok: false, reason: 'unknown-command' };
-  try {
-    return handler(sim, cmd) || { ok: true };
-  } catch (err) {
-    return { ok: false, reason: 'exception', error: String(err) };
-  }
+export function place({ structureType, slot, issuedBy = 'player' } = {}) {
+  return {
+    type: CommandTypes.PLACE,
+    structureType,
+    slot,
+    issuedBy,
+  };
 }
 
 /**
- * Apply a command and, if accepted (and it mutates state), record it into the
- * battle log stream at the current tick for deterministic replay.
- * 'select' is a UI-only command and is NOT logged (it never affects sim state
- * hash) — but we log everything else that succeeds.
+ * SELECT — mark an entity/structure as selected.
+ * @param {object} p
+ * @param {?string} p.id  entity id, or null to clear selection
  */
-export function applyAndLog(sim, cmd) {
-  const res = apply(sim, cmd);
-  if (res.ok && cmd.type !== CommandTypes.SELECT) {
-    if (sim.log && sim.log.recordInput) {
-      const tick = sim.state && sim.state.tick != null ? sim.state.tick : 0;
-      sim.log.recordInput(tick, cmd);
-    }
-  }
-  return res;
+export function select({ id = null, issuedBy = 'player' } = {}) {
+  return {
+    type: CommandTypes.SELECT,
+    id,
+    issuedBy,
+  };
 }
 
 /**
- * Drain a queue of commands (used by step.js before advancing systems).
- * Commands here are assumed to already be recorded (during live play) or
- * being replayed from the log (during replay). This applies WITHOUT logging.
+ * UPGRADE — advance a structure one tier.
  */
-export function applyQueue(sim, queue) {
-  const results = [];
-  if (!queue || !queue.length) return results;
-  for (let i = 0; i < queue.length; i++) {
-    results.push(apply(sim, queue[i]));
-  }
-  queue.length = 0;
-  return results;
+export function upgrade({ id, issuedBy = 'player' } = {}) {
+  return {
+    type: CommandTypes.UPGRADE,
+    id,
+    issuedBy,
+  };
 }
 
-export default {
-  CommandTypes,
-  cmdPlace,
-  cmdSelect,
-  cmdUpgrade,
-  cmdSell,
-  cmdRepair,
-  cmdDeploy,
-  cmdStartWave,
-  apply,
-  applyAndLog,
-  applyQueue,
-};
+/**
+ * SELL — remove a structure for partial refund.
+ */
+export function sell({ id, issuedBy = 'player' } = {}) {
+  return {
+    type: CommandTypes.SELL,
+    id,
+    issuedBy,
+  };
+}
+
+/**
+ * DEPLOY — spawn a troop at base that marches to a drop location.
+ * (The drop point is a DESTINATION order, not a spawn point.)
+ * @param {object} p
+ * @param {string} p.unitType  key into config.data.tables.units
+ * @param {number} p.x         world/tile x destination
+ * @param {number} p.y         world/tile y destination
+ */
+export function deploy({ unitType, x, y, issuedBy = 'player' } = {}) {
+  return {
+    type: CommandTypes.DEPLOY,
+    unitType,
+    x,
+    y,
+    issuedBy,
+  };
+}
+
+/**
+ * START_WAVE — begin the next wave.
+ */
+export function startWave({ issuedBy = 'player' } = {}) {
+  return {
+    type: CommandTypes.START_WAVE,
+    issuedBy,
+  };
+}
+
+/**
+ * REPAIR — request a troop-based, timed repair on a structure.
+ */
+export function repair({ id, issuedBy = 'player' } = {}) {
+  return {
+    type: CommandTypes.REPAIR,
+    id,
+    issuedBy,
+  };
+}
+
+/**
+ * TARGET — set a structure's targeting mode (and optional manual target).
+ * @param {object} p
+ * @param {string} p.id            structure id
+ * @param {string} p.mode          one of TargetModes
+ * @param {?string} [p.targetId]   required when mode === MANUAL
+ */
+export function target({ id, mode = TargetModes.FIRST, targetId = null, issuedBy = 'player' } = {}) {
+  return {
+    type: CommandTypes.TARGET,
+    id,
+    mode,
+    targetId,
+    issuedBy,
+  };
+}
+
+/**
+ * SET_SPEED — sim speed multiplier (1 = normal). Recorded for parity.
+ */
+export function setSpeed({ speed = 1, issuedBy = 'player' } = {}) {
+  return {
+    type: CommandTypes.SET_SPEED,
+    speed,
+    issuedBy,
+  };
+}
+
+/**
+ * PAUSE — toggle/set paused state. Recorded for parity.
+ */
+export function pause({ paused = true, issuedBy = 'player' } = {}) {
+  return {
+    type: CommandTypes.PAUSE,
+    paused: !!paused,
+    issuedBy,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Validation
+// Returns { ok:true } or { ok:false, reason:'...' }.
+// The world reducer uses this before applying; invalid commands are dropped
+// (but still may be logged as rejected for debugging).
+// ---------------------------------------------------------------------------
+
+export function validate(cmd) {
+  if (!cmd || typeof cmd !== 'object') {
+    return { ok: false, reason: 'command is not an object' };
+  }
+  if (!isNonEmptyString(cmd.type)) {
+    return { ok: false, reason: 'missing command type' };
+  }
+  if (!ALL_COMMAND_TYPES.includes(cmd.type)) {
+    return { ok: false, reason: `unknown command type: ${cmd.type}` };
+  }
+
+  switch (cmd.type) {
+    case CommandTypes.PLACE:
+      if (!isNonEmptyString(cmd.structureType)) {
+        return { ok: false, reason: 'place: missing structureType' };
+      }
+      if (!isInt(cmd.slot) || cmd.slot < 0) {
+        return { ok: false, reason: 'place: slot must be a non-negative integer' };
+      }
+      return { ok: true };
+
+    case CommandTypes.SELECT:
+      if (cmd.id !== null && !isNonEmptyString(cmd.id)) {
+        return { ok: false, reason: 'select: id must be a string or null' };
+      }
+      return { ok: true };
+
+    case CommandTypes.UPGRADE:
+      if (!isNonEmptyString(cmd.id)) {
+        return { ok: false, reason: 'upgrade: missing id' };
+      }
+      return { ok: true };
+
+    case CommandTypes.SELL:
+      if (!isNonEmptyString(cmd.id)) {
+        return { ok: false, reason: 'sell: missing id' };
+      }
+      return { ok: true };
+
+    case CommandTypes.DEPLOY:
+      if (!isNonEmptyString(cmd.unitType)) {
+        return { ok: false, reason: 'deploy: missing unitType' };
+      }
+      if (!isFiniteNumber(cmd.x) || !isFiniteNumber(cmd.y)) {
+        return { ok: false, reason: 'deploy: x/y must be finite numbers' };
+      }
+      return { ok: true };
+
+    case CommandTypes.START_WAVE:
+      return { ok: true };
+
+    case CommandTypes.REPAIR:
+      if (!isNonEmptyString(cmd.id)) {
+        return { ok: false, reason: 'repair: missing id' };
+      }
+      return { ok: true };
+
+    case CommandTypes.TARGET:
+      if (!isNonEmptyString(cmd.id)) {
+        return { ok: false, reason: 'target: missing id' };
+      }
+      if (!ALL_TARGET_MODES.includes(cmd.mode)) {
+        return { ok: false, reason: `target: invalid mode ${cmd.mode}` };
+      }
+      if (cmd.mode === TargetModes.MANUAL && !isNonEmptyString(cmd.targetId)) {
+        return { ok: false, reason: 'target: manual mode requires targetId' };
+      }
+      return { ok: true };
+
+    case CommandTypes.SET_SPEED:
+      if (!isFiniteNumber(cmd.speed) || cmd.speed <= 0) {
+        return { ok: false, reason: 'setSpeed: speed must be a positive number' };
+      }
+      return { ok: true };
+
+    case CommandTypes.PAUSE:
+      if (typeof cmd.paused !== 'boolean') {
+        return { ok: false, reason: 'pause: paused must be boolean' };
+      }
+      return { ok: true };
+
+    default:
+      return { ok: false, reason: `unhandled command type: ${cmd.type}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Normalization
+// Produces a canonical plain object with only the fields relevant to the type,
+// so log entries are stable and comparable across runs.
+// ---------------------------------------------------------------------------
+
+export function normalize(cmd) {
+  if (!cmd || typeof cmd !== 'object') return null;
+  const issuedBy = isNonEmptyString(cmd.issuedBy) ? cmd.issuedBy : 'player';
+
+  switch (cmd.type) {
+    case CommandTypes.PLACE:
+      return place({ structureType: cmd.structureType, slot: cmd.slot, issuedBy });
+    case CommandTypes.SELECT:
+      return select({ id: cmd.id ?? null, issuedBy });
+    case CommandTypes.UPGRADE:
+      return upgrade({ id: cmd.id, issuedBy });
+    case CommandTypes.SELL:
+      return sell({ id: cmd.id, issuedBy });
+    case CommandTypes.DEPLOY:
+      return deploy({ unitType: cmd.unitType, x: cmd.x, y: cmd.y, issuedBy });
+    case CommandTypes.START_WAVE:
+      return startWave({ issuedBy });
+    case CommandTypes.REPAIR:
+      return repair({ id: cmd.id, issuedBy });
+    case CommandTypes.TARGET:
+      return target({ id: cmd.id, mode: cmd.mode, targetId: cmd.targetId ?? null, issuedBy });
+    case CommandTypes.SET_SPEED:
+      return setSpeed({ speed: cmd.speed, issuedBy });
+    case CommandTypes.PAUSE:
+      return pause({ paused: cmd.paused, issuedBy });
+    default:
+      return null;
+  }
+}
+
+/**
+ * Convenience: validate + normalize together.
+ * @returns {{ok:true, command:object} | {ok:false, reason:string}}
+ */
+export function prepare(cmd) {
+  const v = validate(cmd);
+  if (!v.ok) return v;
+  const command = normalize(cmd);
+  if (!command) return { ok: false, reason: 'normalization failed' };
+  return { ok: true, command };
+}
+
+// Aggregate export mirroring the factory names for ergonomic imports.
+export const Commands = Object.freeze({
+  place,
+  select,
+  upgrade,
+  sell,
+  deploy,
+  startWave,
+  repair,
+  target,
+  setSpeed,
+  pause,
+  validate,
+  normalize,
+  prepare,
+  Types: CommandTypes,
+  TargetModes,
+});
+
+export default Commands;

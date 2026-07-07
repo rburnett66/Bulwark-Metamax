@@ -1,273 +1,342 @@
-package com.bulwark.economy;
+// src/sim/economy.js
+// BULWARK — Real-time economy system.
+// Money accrual over time, kill income, spend/refund for build/upgrade/repair,
+// and bankruptcy detection. Reads sim state; mutates only the economy fields.
+//
+// Deterministic: all math derives from fixed-timestep dt and integer-ish gold
+// tracked as a float but rounded at readouts. No RNG here.
+//
+// This module is intentionally framework-free so the headless combat/sim core
+// (simCore.js) uses the exact same code path as the balance harness.
 
-/**
- * Economy System - Real-time money accrual, kill income, spend on build/upgrade/repair, bankruptcy checks.
- * Wait — that's Java. Emitting JS below.
- */
-
-// (ignore the above header — actual file content follows)
-
-export const ECONOMY_DEFAULTS = {
-  startingGold: 1500,
-  accrualPerSecond: 12,        // passive income
-  killIncomeFraction: 0.35,    // fraction of unit Cost T1 granted on kill
-  repairGoldPerHp: 0.0,        // repairs are free (troop-consuming), gold cost 0
-  bankruptThreshold: 0,
+// -----------------------------------------------------------------------------
+// Economy tuning constants (data-driven defaults; overridable via config)
+// -----------------------------------------------------------------------------
+const ECON_DEFAULTS = {
+  startingGold: 1500,       // seed float for the vertical slice
+  passiveIncomePerSec: 12,  // live money accrual (real-time economy)
+  killBaseReward: 8,        // flat reward per attacker kill
+  killPowerFactor: 0.35,    // + reward scaled by unit power budget (100 pts)
+  sellRefundFraction: 0.5,  // partial refund on sell
+  repairGoldPerSec: 0,      // repairs are FREE (troop-based) per model
+  bankruptcyGold: 0,        // gold floor; below-cost purchases blocked
 };
 
+// -----------------------------------------------------------------------------
+// Economy factory / init
+// -----------------------------------------------------------------------------
+
 /**
- * Economy manages the player's gold as a strict sim-state field.
- * All mutations go through this module so replays stay deterministic.
- *
- * It reads config (constants) and data tables via the passed-in refs;
- * no hidden globals, no Math.random.
+ * Create the economy sub-state. Attach to world.economy.
+ * @param {object} opts - overrides for ECON_DEFAULTS (typically from config tables)
  */
-export class Economy {
-  /**
-   * @param {object} opts
-   * @param {number} [opts.startingGold]
-   * @param {number} [opts.accrualPerSecond]
-   * @param {number} [opts.killIncomeFraction]
-   * @param {number} [opts.refundRate]   fraction of spent gold returned on sell
-   */
-  constructor(opts = {}) {
-    this.startingGold = opts.startingGold ?? ECONOMY_DEFAULTS.startingGold;
-    this.accrualPerSecond = opts.accrualPerSecond ?? ECONOMY_DEFAULTS.accrualPerSecond;
-    this.killIncomeFraction = opts.killIncomeFraction ?? ECONOMY_DEFAULTS.killIncomeFraction;
-    this.refundRate = opts.refundRate ?? 0.5;
+export function createEconomy(opts = {}) {
+  const cfg = { ...ECON_DEFAULTS, ...opts };
+  return {
+    cfg,
+    gold: cfg.startingGold,
+    // running totals (for HUD deltas + audits)
+    totalEarned: cfg.startingGold,
+    totalSpent: 0,
+    totalKillIncome: 0,
+    totalPassive: 0,
+    totalRefunds: 0,
+    bankrupt: false,
+    // transient delta for the HUD to animate; drained each render pull
+    lastDelta: 0,
+    // accumulator so passive income is smooth under fixed dt
+    _accrue: 0,
+  };
+}
 
-    // Live state (deterministic; kept in whole gold via fractional carry)
-    this.gold = this.startingGold;
-    this._fracCarry = 0; // sub-integer accrual accumulator
-    this.totalEarned = 0;
-    this.totalSpent = 0;
-    this.killIncome = 0;
-    this.bankrupt = false;
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 
-    // Transient deltas for HUD animated readouts (view reads, never writes).
-    this.lastDelta = 0;
-    this.deltaEvents = []; // {amount, reason, x, y, t} — cleared by renderer each frame
+function econOf(world) {
+  // Tolerate either world.economy or a bare economy object being passed in.
+  if (world && world.economy) return world.economy;
+  return world;
+}
+
+function pushDelta(econ, amount) {
+  econ.lastDelta += amount;
+}
+
+/** Read + clear the animated HUD delta. */
+export function drainDelta(world) {
+  const econ = econOf(world);
+  const d = econ.lastDelta;
+  econ.lastDelta = 0;
+  return d;
+}
+
+/** Current gold (rounded for display). */
+export function getGold(world) {
+  return Math.round(econOf(world).gold);
+}
+
+/** Can the player afford `cost`? */
+export function canAfford(world, cost) {
+  return econOf(world).gold + 1e-6 >= (cost || 0);
+}
+
+// -----------------------------------------------------------------------------
+// Per-tick accrual (called by step.js each fixed step)
+// -----------------------------------------------------------------------------
+
+/**
+ * Accrue passive income for one fixed timestep.
+ * @param {object} world
+ * @param {number} dt - seconds for this step (fixed)
+ */
+export function tickEconomy(world, dt) {
+  const econ = econOf(world);
+  if (dt <= 0) return;
+
+  const gain = econ.cfg.passiveIncomePerSec * dt;
+  econ._accrue += gain;
+
+  // Bank whole/partial gold smoothly.
+  econ.gold += gain;
+  econ.totalEarned += gain;
+  econ.totalPassive += gain;
+  pushDelta(econ, gain);
+
+  // Recompute bankruptcy flag (informational — spend calls enforce it).
+  econ.bankrupt = econ.gold <= econ.cfg.bankruptcyGold + 1e-6;
+}
+
+// -----------------------------------------------------------------------------
+// Kill income
+// -----------------------------------------------------------------------------
+
+/**
+ * Compute the reward for killing a unit.
+ * Reward scales with the unit's power budget (100-pt baseline) so tougher
+ * units pay out more — derived, not hardcoded per unit.
+ * @param {object} econ
+ * @param {object} unit - killed attacker entity (may carry .power / .stats.power)
+ */
+function killReward(econ, unit) {
+  let power = 100;
+  if (unit) {
+    if (typeof unit.power === 'number') power = unit.power;
+    else if (unit.stats && typeof unit.stats.power === 'number') power = unit.stats.power;
+    else if (unit.def && typeof unit.def.power === 'number') power = unit.def.power;
   }
-
-  /** Serialize economy substate for save / replay hashing. */
-  serialize() {
-    return {
-      gold: this.gold,
-      fracCarry: this._fracCarry,
-      totalEarned: this.totalEarned,
-      totalSpent: this.totalSpent,
-      killIncome: this.killIncome,
-      bankrupt: this.bankrupt,
-    };
-  }
-
-  /** Restore economy substate (replay). */
-  deserialize(s) {
-    if (!s) return;
-    this.gold = s.gold ?? this.gold;
-    this._fracCarry = s.fracCarry ?? 0;
-    this.totalEarned = s.totalEarned ?? 0;
-    this.totalSpent = s.totalSpent ?? 0;
-    this.killIncome = s.killIncome ?? 0;
-    this.bankrupt = !!s.bankrupt;
-  }
-
-  /** Contribute to a deterministic state hash. */
-  hashInto(mix) {
-    // mix is a function(number) accumulating into a running hash
-    mix(this.gold);
-    mix(Math.round(this._fracCarry * 1000));
-    mix(this.totalEarned);
-    mix(this.totalSpent);
-    mix(this.killIncome);
-    mix(this.bankrupt ? 1 : 0);
-  }
-
-  /** Can the player afford `amount` gold? */
-  canAfford(amount) {
-    return this.gold >= Math.ceil(amount);
-  }
-
-  /**
-   * Attempt to spend gold. Returns true on success.
-   * @param {number} amount
-   * @param {string} reason  e.g. 'build','upgrade','repair'
-   */
-  spend(amount, reason = 'spend') {
-    const cost = Math.ceil(amount);
-    if (cost <= 0) return true;
-    if (this.gold < cost) return false;
-    this.gold -= cost;
-    this.totalSpent += cost;
-    this._pushDelta(-cost, reason);
-    this._checkBankruptcy();
-    return true;
-  }
-
-  /**
-   * Grant gold (kill income, refunds, cheats).
-   * @param {number} amount
-   * @param {string} reason
-   * @param {object} [pos]  {x,y} world position for HUD coin FX
-   */
-  grant(amount, reason = 'income', pos = null) {
-    const inc = Math.max(0, Math.round(amount));
-    if (inc <= 0) return;
-    this.gold += inc;
-    this.totalEarned += inc;
-    this._pushDelta(inc, reason, pos);
-    // Gaining gold can lift bankruptcy flag (informational only).
-    if (this.gold > ECONOMY_DEFAULTS.bankruptThreshold) this.bankrupt = false;
-  }
-
-  /**
-   * Passive real-time accrual. Called once per fixed sim step with dt seconds.
-   * Deterministic: integer gold with fractional carry, no float drift in gold.
-   * @param {number} dt seconds
-   */
-  accrue(dt) {
-    if (dt <= 0) return;
-    this._fracCarry += this.accrualPerSecond * dt;
-    if (this._fracCarry >= 1) {
-      const whole = Math.floor(this._fracCarry);
-      this._fracCarry -= whole;
-      this.gold += whole;
-      this.totalEarned += whole;
-      // Passive income is silent to the coin-FX stream (no per-tick popups),
-      // but still recorded in lastDelta for HUD tween smoothing.
-      this.lastDelta += whole;
-    }
-  }
-
-  /**
-   * Grant kill income for a slain attacker.
-   * Income is a fraction of the unit's T1 cost, read from data tables — no
-   * hardcoded balance. Falls back gracefully if cost missing.
-   * @param {object} unit   sim entity (must have .unitData or .costT1)
-   * @param {object} [pos]  world position for HUD coin FX
-   */
-  grantKill(unit, pos = null) {
-    let baseCost = 0;
-    if (unit) {
-      if (typeof unit.killReward === 'number') {
-        baseCost = unit.killReward;
-      } else if (typeof unit.costT1 === 'number') {
-        baseCost = unit.costT1;
-      } else if (unit.unitData && typeof unit.unitData.costT1 === 'number') {
-        baseCost = unit.unitData.costT1;
-      } else if (unit.data && typeof unit.data.costT1 === 'number') {
-        baseCost = unit.data.costT1;
-      }
-    }
-    const reward = Math.round(baseCost * this.killIncomeFraction);
-    if (reward > 0) {
-      this.killIncome += reward;
-      const p = pos || (unit ? { x: unit.x, y: unit.y } : null);
-      this.grant(reward, 'kill', p);
-    }
-    return reward;
-  }
-
-  /**
-   * Compute the refund for selling a structure.
-   * Refund = refundRate * gold invested so far (build + any upgrades).
-   * @param {object} structure  sim entity with .investedGold (preferred)
-   *                            or .costPaid
-   */
-  sellRefund(structure) {
-    let invested = 0;
-    if (structure) {
-      if (typeof structure.investedGold === 'number') invested = structure.investedGold;
-      else if (typeof structure.costPaid === 'number') invested = structure.costPaid;
-    }
-    return Math.floor(invested * this.refundRate);
-  }
-
-  /**
-   * Execute a sell: grant the refund, mark spend accounting.
-   * @param {object} structure
-   * @param {object} [pos]
-   * @returns {number} refunded gold
-   */
-  sell(structure, pos = null) {
-    const refund = this.sellRefund(structure);
-    if (refund > 0) {
-      const p = pos || (structure ? { x: structure.x, y: structure.y } : null);
-      this.grant(refund, 'sell', p);
-    }
-    return refund;
-  }
-
-  /**
-   * Cost check + spend helper for building a structure.
-   * @param {number} cost
-   * @returns {boolean} whether the build was affordable and charged
-   */
-  tryBuild(cost) {
-    return this.spend(cost, 'build');
-  }
-
-  /** Cost check + spend for upgrading a tier. */
-  tryUpgrade(cost) {
-    return this.spend(cost, 'upgrade');
-  }
-
-  /**
-   * Repairs are FREE (they consume troops + time, not gold — per model).
-   * This exists so callers have one economy entry point; it always succeeds
-   * on the gold side. Configurable gold-per-hp defaults to 0.
-   * @param {number} hpToRestore
-   */
-  tryRepair(hpToRestore = 0) {
-    const cost = Math.ceil(hpToRestore * ECONOMY_DEFAULTS.repairGoldPerHp);
-    if (cost <= 0) return true;
-    return this.spend(cost, 'repair');
-  }
-
-  _checkBankruptcy() {
-    if (this.gold <= ECONOMY_DEFAULTS.bankruptThreshold) {
-      this.bankrupt = true;
-    }
-  }
-
-  _pushDelta(amount, reason, pos = null) {
-    this.lastDelta += amount;
-    this.deltaEvents.push({
-      amount,
-      reason,
-      x: pos ? pos.x : null,
-      y: pos ? pos.y : null,
-    });
-    // Cap the FX queue so a long headless run doesn't grow unbounded.
-    if (this.deltaEvents.length > 256) {
-      this.deltaEvents.splice(0, this.deltaEvents.length - 256);
-    }
-  }
-
-  /**
-   * Renderer/HUD calls this each frame to drain queued coin FX + delta tween.
-   * Draining does not affect gold or replay state (view-only).
-   */
-  drainDeltas() {
-    const events = this.deltaEvents;
-    const delta = this.lastDelta;
-    this.deltaEvents = [];
-    this.lastDelta = 0;
-    return { events, delta };
-  }
+  return econ.cfg.killBaseReward + econ.cfg.killPowerFactor * power;
 }
 
 /**
- * Factory used by state.js to attach an economy substate.
- * Reads refund rate + starting gold from constants when provided.
+ * Grant income for a killed attacker. Called from combat.js on death.
+ * Returns the reward granted (for battle-log events).
+ * @param {object} world
+ * @param {object} unit - the killed enemy unit
  */
-export function createEconomy(constants = {}) {
-  return new Economy({
-    startingGold: constants.STARTING_GOLD,
-    accrualPerSecond: constants.INCOME_PER_SECOND,
-    killIncomeFraction: constants.KILL_INCOME_FRACTION,
-    refundRate: constants.REFUND_RATE,
+export function grantKillIncome(world, unit) {
+  const econ = econOf(world);
+  const reward = killReward(econ, unit);
+  econ.gold += reward;
+  econ.totalEarned += reward;
+  econ.totalKillIncome += reward;
+  pushDelta(econ, reward);
+
+  // Emit a HUD/FX event if the world supports an event queue.
+  emitEvent(world, {
+    type: 'kill_income',
+    amount: reward,
+    unitId: unit && unit.id,
+    x: unit && unit.x,
+    y: unit && unit.y,
+  });
+
+  econ.bankrupt = econ.gold <= econ.cfg.bankruptcyGold + 1e-6;
+  return reward;
+}
+
+// -----------------------------------------------------------------------------
+// Spend / refund
+// -----------------------------------------------------------------------------
+
+/**
+ * Attempt to spend `cost` gold for a purpose (build/upgrade/repair).
+ * Enforces bankruptcy: if it can't afford, returns false and spends nothing.
+ * @returns {boolean} success
+ */
+export function spend(world, cost, reason = 'spend', meta = {}) {
+  const econ = econOf(world);
+  cost = cost || 0;
+  if (cost < 0) cost = 0;
+
+  if (econ.gold + 1e-6 < cost) {
+    // Insufficient funds — bankruptcy blocks the transaction.
+    emitEvent(world, { type: 'spend_denied', reason, cost, gold: econ.gold, ...meta });
+    return false;
+  }
+
+  econ.gold -= cost;
+  econ.totalSpent += cost;
+  pushDelta(econ, -cost);
+  emitEvent(world, { type: 'spend', reason, amount: cost, ...meta });
+
+  econ.bankrupt = econ.gold <= econ.cfg.bankruptcyGold + 1e-6;
+  return true;
+}
+
+/**
+ * Refund gold (e.g. selling a structure for partial value).
+ * @param {number} baseValue - the full invested value to refund a fraction of
+ * @param {number} [fraction] - override refund fraction (defaults to cfg)
+ * @returns {number} amount refunded
+ */
+export function refund(world, baseValue, fraction, reason = 'sell', meta = {}) {
+  const econ = econOf(world);
+  const frac = (typeof fraction === 'number') ? fraction : econ.cfg.sellRefundFraction;
+  const amount = Math.max(0, (baseValue || 0) * frac);
+
+  econ.gold += amount;
+  econ.totalEarned += amount;
+  econ.totalRefunds += amount;
+  pushDelta(econ, amount);
+  emitEvent(world, { type: 'refund', reason, amount, ...meta });
+
+  econ.bankrupt = econ.gold <= econ.cfg.bankruptcyGold + 1e-6;
+  return amount;
+}
+
+/** Compute the sell refund value for a structure without applying it. */
+export function sellValue(world, structure) {
+  const econ = econOf(world);
+  const invested = structureInvested(structure);
+  return Math.floor(invested * econ.cfg.sellRefundFraction);
+}
+
+/**
+ * Sum the gold invested into a structure across build + upgrades.
+ * Reads structure.buildCost + structure.upgradeSpent, or falls back to .cost.
+ */
+export function structureInvested(structure) {
+  if (!structure) return 0;
+  if (typeof structure.investedGold === 'number') return structure.investedGold;
+  let total = 0;
+  if (typeof structure.buildCost === 'number') total += structure.buildCost;
+  else if (typeof structure.cost === 'number') total += structure.cost;
+  if (typeof structure.upgradeSpent === 'number') total += structure.upgradeSpent;
+  return total;
+}
+
+// -----------------------------------------------------------------------------
+// High-level transaction helpers used by commands / lifecycle
+// -----------------------------------------------------------------------------
+
+/**
+ * Try to pay for placing a structure. On success, records invested gold on the
+ * structure so sell refunds are accurate.
+ */
+export function payBuild(world, structure, cost) {
+  if (!spend(world, cost, 'build', { structureId: structure && structure.id })) {
+    return false;
+  }
+  if (structure) {
+    structure.buildCost = cost;
+    structure.investedGold = (structure.investedGold || 0) + cost;
+  }
+  return true;
+}
+
+/**
+ * Try to pay for upgrading a structure one tier.
+ */
+export function payUpgrade(world, structure, cost) {
+  if (!spend(world, cost, 'upgrade', { structureId: structure && structure.id })) {
+    return false;
+  }
+  if (structure) {
+    structure.upgradeSpent = (structure.upgradeSpent || 0) + cost;
+    structure.investedGold = (structure.investedGold || 0) + cost;
+  }
+  return true;
+}
+
+/**
+ * Sell a structure: refund partial value based on total invested gold.
+ * Returns the refunded amount.
+ */
+export function paySell(world, structure) {
+  const invested = structureInvested(structure);
+  return refund(world, invested, undefined, 'sell', {
+    structureId: structure && structure.id,
   });
 }
 
-export default Economy;
+/**
+ * Repairs are FREE in this model (troop-based), but this hook exists so the
+ * cost curve can be toggled via cfg.repairGoldPerSec without touching callers.
+ * Returns true if the (possibly zero) cost was paid.
+ */
+export function payRepairTick(world, dt) {
+  const econ = econOf(world);
+  const rate = econ.cfg.repairGoldPerSec;
+  if (rate <= 0) return true; // free
+  const cost = rate * dt;
+  return spend(world, cost, 'repair');
+}
+
+// -----------------------------------------------------------------------------
+// Bankruptcy
+// -----------------------------------------------------------------------------
+
+export function isBankrupt(world) {
+  return econOf(world).bankrupt === true;
+}
+
+// -----------------------------------------------------------------------------
+// Event emission (deterministic — appended to world.events if present)
+// -----------------------------------------------------------------------------
+
+function emitEvent(world, ev) {
+  if (world && Array.isArray(world.events)) {
+    world.events.push(ev);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Snapshot for HUD / battle-log audits
+// -----------------------------------------------------------------------------
+
+export function economySnapshot(world) {
+  const econ = econOf(world);
+  return {
+    gold: Math.round(econ.gold),
+    goldRaw: econ.gold,
+    totalEarned: econ.totalEarned,
+    totalSpent: econ.totalSpent,
+    totalKillIncome: econ.totalKillIncome,
+    totalPassive: econ.totalPassive,
+    totalRefunds: econ.totalRefunds,
+    bankrupt: econ.bankrupt,
+  };
+}
+
+export const ECONOMY_DEFAULTS = ECON_DEFAULTS;
+
+export default {
+  createEconomy,
+  tickEconomy,
+  grantKillIncome,
+  spend,
+  refund,
+  sellValue,
+  structureInvested,
+  payBuild,
+  payUpgrade,
+  paySell,
+  payRepairTick,
+  canAfford,
+  getGold,
+  drainDelta,
+  isBankrupt,
+  economySnapshot,
+  ECONOMY_DEFAULTS,
+};

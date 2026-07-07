@@ -1,463 +1,401 @@
 // src/sim/lifecycle.js
-// Structure lifecycle transitions:
-//   Placing -> Building -> Complete -> Damaged -> Destroyed
-//   plus Upgrading, Selling, and Repair.
+// Structure lifecycle FSM:
+//   Placing -> Building -> Complete -> (Damaged) -> Destroyed
+//   plus Upgrading and Selling
 //
-// This module is HEADLESS and DETERMINISTIC. It never touches rendering.
-// It mutates strict sim state (entities/economy) only, in fixed order,
-// stepped by the sim step loop.
+// This module is a pure, deterministic set of helpers that operate on a
+// structure entity's strict state. It NEVER touches rendering. The reducer
+// (world.js) and step orchestration (step.js) call these functions to advance
+// lifecycle timers and apply transitions.
 //
-// State machine (per structure entity):
-//
-//   PLACING    - transient authoring state before a build is committed.
-//                (Placement previews live in input/placement.js; a committed
-//                 build lands directly in BUILDING via beginBuild().)
-//   BUILDING   - build timer counting up; structure inert (no fire),
-//                partial HP shown. On completion -> COMPLETE.
-//   COMPLETE   - fully operational; can fire, take damage, upgrade, sell,
-//                or become DAMAGED.
-//   DAMAGED    - hp below the damaged threshold but > 0; still operational.
-//                Repair returns it toward COMPLETE.
-//   UPGRADING  - upgrade timer counting up; still operational at old tier's
-//                stats until completion; on completion tier increments and
-//                stats scale.
-//   SELLING    - sell timer (short); on completion the structure is removed
-//                and a partial refund is issued.
-//   DESTROYED  - hp reached 0; inert; produces rubble; removed after a decay.
+// All timings/costs come from data tables (config.data.tables) — no hardcoded
+// balance. Assumptions supply upgrade cost/hp/dps multipliers; structures table
+// supplies build time, base cost, hp, etc.
 
 export const LifecycleState = Object.freeze({
   PLACING: 'Placing',
   BUILDING: 'Building',
   COMPLETE: 'Complete',
   DAMAGED: 'Damaged',
+  DESTROYED: 'Destroyed',
   UPGRADING: 'Upgrading',
   SELLING: 'Selling',
-  DESTROYED: 'Destroyed',
 });
 
-// Fraction of maxHp below which a COMPLETE structure reads as DAMAGED.
-const DAMAGED_THRESHOLD = 0.6;
+// A structure is "operational" (can fire, be targeted as a live building)
+// only while it is Complete or Damaged (or Upgrading — it keeps working while
+// the tier rolls up, per typical TD behavior it can be paused; here we keep it
+// firing at current tier during the upgrade for simplicity/determinism).
+export function isOperational(structure) {
+  return (
+    structure.lifecycle === LifecycleState.COMPLETE ||
+    structure.lifecycle === LifecycleState.DAMAGED ||
+    structure.lifecycle === LifecycleState.UPGRADING
+  );
+}
 
-// How long (seconds) a sell takes.
-const SELL_TIME = 0.6;
+// A structure blocks terrain / occupies slots while it exists (not destroyed,
+// not still a pure ghost). Placing/Building already reserve space.
+export function occupiesSpace(structure) {
+  return structure.lifecycle !== LifecycleState.DESTROYED;
+}
 
-// How long a destroyed rubble decal lingers before removal (seconds).
-const RUBBLE_DECAY = 3.0;
+export function isAlive(structure) {
+  return structure.lifecycle !== LifecycleState.DESTROYED;
+}
 
-// Repair rate: fraction of maxHp restored per second while a troop is present.
-const REPAIR_RATE = 0.35;
+// Damage threshold at which we flip Complete <-> Damaged (visual/state cue).
+const DAMAGED_FRACTION = 0.6;
 
 // ---------------------------------------------------------------------------
-// Small helpers
+// Table access helpers
 // ---------------------------------------------------------------------------
 
-function isStructure(e) {
-  return e && (e.category === 'structure' || e.category === 'tower' ||
-               e.category === 'wall' || e.category === 'moat');
+function getTables(config) {
+  return (config && config.data && config.data.tables) || {};
 }
 
-function tierMultipliers(state, key, tier) {
-  // Pull upgrade multipliers from the assumptions table when available,
-  // otherwise fall back to the documented defaults.
-  const tables = state && state.tables ? state.tables : null;
-  const a = tables && tables.assumptions ? tables.assumptions : null;
-  const defaults = {
-    hp: { 2: 1.6, 3: 2.4 },
-    dps: { 2: 1.55, 3: 2.3 },
-    cost: { 2: 2.5, 3: 5 },
-  };
-  if (!a) {
-    return defaults[key][tier] || 1;
+function getStructureDef(config, defId) {
+  const tables = getTables(config);
+  const structs = tables.structures || {};
+  // structures table may be keyed by id or be an array
+  if (Array.isArray(structs)) {
+    return structs.find((s) => s.id === defId || s.StructureID === defId) || null;
   }
-  if (key === 'hp') {
-    return tier === 2 ? (a.Upgrade_HP_x_T2 ?? defaults.hp[2])
-         : tier === 3 ? (a.Upgrade_HP_x_T3 ?? defaults.hp[3]) : 1;
+  return structs[defId] || null;
+}
+
+function getAssumptions(config) {
+  const tables = getTables(config);
+  return tables.assumptions || {};
+}
+
+function num(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// Build time in sim seconds for a given def / tier.
+export function buildTimeFor(config, defId, tier) {
+  const def = getStructureDef(config, defId);
+  const base = def ? num(def.buildTime, num(def.BuildTime, 3)) : 3;
+  // upgrades take a fraction longer per tier
+  if (tier && tier > 1) return base * (1 + 0.5 * (tier - 1));
+  return base;
+}
+
+// HP for a def at a given tier (data-driven; falls back to Upgrade curves).
+export function maxHpFor(config, defId, tier) {
+  const def = getStructureDef(config, defId);
+  const a = getAssumptions(config);
+  if (!def) return 100;
+  const base =
+    num(def.hpT1, num(def.HP_T1, num(def.hp, num(def.HP, 100))));
+  if (tier <= 1) return base;
+  if (tier === 2) {
+    const t2 = num(def.hpT2, num(def.HP_T2, base * num(a.Upgrade_HP_x_T2, 1.6)));
+    return t2;
   }
-  if (key === 'dps') {
-    return tier === 2 ? (a.Upgrade_DPS_x_T2 ?? defaults.dps[2])
-         : tier === 3 ? (a.Upgrade_DPS_x_T3 ?? defaults.dps[3]) : 1;
-  }
-  if (key === 'cost') {
-    return tier === 2 ? (a.Upgrade_Cost_x_T2 ?? defaults.cost[2])
-         : tier === 3 ? (a.Upgrade_Cost_x_T3 ?? defaults.cost[3]) : 1;
-  }
-  return 1;
+  const t3 = num(def.hpT3, num(def.HP_T3, base * num(a.Upgrade_HP_x_T3, 2.4)));
+  return t3;
 }
 
-// Recompute a structure's tier-scaled combat stats from its base (tier1) stats.
-function applyTierStats(state, s) {
-  const tier = s.tier || 1;
-  const base = s.baseStats || {
-    hp: s.maxHp || s.hp || 100,
-    dps: s.dps || 0,
-    range: s.range || 0,
-  };
-  s.baseStats = base;
-
-  const hpMul = tier === 1 ? 1 : tierMultipliers(state, 'hp', tier);
-  const dpsMul = tier === 1 ? 1 : tierMultipliers(state, 'dps', tier);
-
-  const prevMax = s.maxHp || base.hp;
-  const newMax = base.hp * hpMul;
-
-  // Preserve current damage fraction when scaling up on upgrade.
-  const frac = prevMax > 0 ? (s.hp / prevMax) : 1;
-  s.maxHp = newMax;
-  s.hp = Math.max(1, Math.min(newMax, newMax * frac));
-
-  s.dps = base.dps * dpsMul;
-  s.range = base.range; // range does not scale with tier in this build
+// Cost to place tier1, or cumulative cost curve for upgrades.
+export function baseCostFor(config, defId) {
+  const def = getStructureDef(config, defId);
+  if (!def) return 50;
+  return num(def.costT1, num(def.Cost_T1, num(def.cost, num(def.Cost, 50))));
 }
 
-function refundValue(state, s) {
-  // Refund = refundRate * total invested value (cumulative cost for tier).
-  const refundRate = (state.config && state.config.refundRate != null)
-    ? state.config.refundRate
-    : 0.5;
-  const base = s.costBase != null ? s.costBase : (s.cost != null ? s.cost : 0);
-  const tier = s.tier || 1;
-  const cumMul = tier === 1 ? 1 : tierMultipliers(state, 'cost', tier);
-  return Math.floor(base * cumMul * refundRate);
+// Incremental cost to upgrade from current tier to next tier.
+export function upgradeCostFor(config, defId, currentTier) {
+  const def = getStructureDef(config, defId);
+  const a = getAssumptions(config);
+  const base = baseCostFor(config, defId);
+  if (!def) return base;
+  const c1 = base;
+  const c2 = num(
+    def.costT2,
+    num(def.Cost_T2, base * num(a.Upgrade_Cost_x_T2, 2.5))
+  );
+  const c3 = num(
+    def.costT3,
+    num(def.Cost_T3, base * num(a.Upgrade_Cost_x_T3, 5))
+  );
+  if (currentTier === 1) return Math.round(c2 - c1);
+  if (currentTier === 2) return Math.round(c3 - c2);
+  return 0; // already max tier
 }
 
-function upgradeCost(state, s) {
-  const nextTier = (s.tier || 1) + 1;
-  if (nextTier > 3) return Infinity;
-  const base = s.costBase != null ? s.costBase : (s.cost != null ? s.cost : 0);
-  const curMul = tierMultipliers(state, 'cost', s.tier || 1);
-  const nextMul = tierMultipliers(state, 'cost', nextTier);
-  // cumulative value model: pay the difference to reach next cumulative value.
-  return Math.max(0, Math.floor(base * (nextMul - curMul)));
+// Total gold value invested in this structure at its current tier (for refund).
+export function investedValueFor(config, defId, tier) {
+  const def = getStructureDef(config, defId);
+  const a = getAssumptions(config);
+  const base = baseCostFor(config, defId);
+  if (!def) return base;
+  if (tier <= 1) return base;
+  if (tier === 2)
+    return num(def.costT2, num(def.Cost_T2, base * num(a.Upgrade_Cost_x_T2, 2.5)));
+  return num(def.costT3, num(def.Cost_T3, base * num(a.Upgrade_Cost_x_T3, 5)));
 }
 
-function emit(state, ev) {
-  if (state.log && typeof state.log.event === 'function') {
-    state.log.event(ev);
-  } else if (state.events && typeof state.events.push === 'function') {
-    state.events.push(ev);
-  }
+// Partial refund on sell (data-driven; default 50%).
+export function sellValueFor(config, defId, tier) {
+  const def = getStructureDef(config, defId);
+  const frac = def ? num(def.sellRefund, num(def.SellRefund, 0.5)) : 0.5;
+  return Math.round(investedValueFor(config, defId, tier) * frac);
 }
+
+export const MAX_TIER = 3;
 
 // ---------------------------------------------------------------------------
-// Public commands (called by commands.js after validity checks)
+// Transition initiators (mutate the passed structure; caller handles economy)
 // ---------------------------------------------------------------------------
 
-// Commit a structure into BUILDING. Assumes cost already reserved/spent by
-// the caller (economy) and slot/space validity already checked.
-export function beginBuild(state, s) {
-  if (!isStructure(s)) return false;
-  s.state = LifecycleState.BUILDING;
-  s.tier = s.tier || 1;
-  s.buildTime = s.buildTime != null ? s.buildTime : 1.0;
-  s.buildTimer = 0;
-  s.active = false; // cannot fire while building
-  // During building it starts at low HP and rises to full on completion.
-  applyTierStats(state, s);
-  s.buildStartHp = Math.max(1, Math.floor(s.maxHp * 0.15));
-  s.hp = s.buildStartHp;
-  emit(state, { type: 'build_start', id: s.id, tick: state.tick });
+// Create the lifecycle fields on a freshly-placed structure. The entity factory
+// (entities.js) should call this so all structures share consistent shape.
+export function initLifecycle(structure, config, defId, tier = 1) {
+  structure.defId = defId;
+  structure.tier = tier;
+  structure.maxHp = maxHpFor(config, defId, tier);
+  structure.hp = structure.maxHp;
+  structure.lifecycle = LifecycleState.PLACING;
+  structure.buildTimer = 0;
+  structure.buildDuration = buildTimeFor(config, defId, tier);
+  structure.upgradeTimer = 0;
+  structure.upgradeDuration = 0;
+  structure.upgradeTargetTier = tier;
+  structure.sellTimer = 0;
+  structure.sellDuration = num(getStructureDef(config, defId) &&
+    getStructureDef(config, defId).sellTime, 0.4);
+  structure.destroyTimer = 0;
+  return structure;
+}
+
+// Confirm placement -> begin building. Returns true if state changed.
+export function beginBuild(structure, config) {
+  if (structure.lifecycle !== LifecycleState.PLACING) return false;
+  structure.lifecycle = LifecycleState.BUILDING;
+  structure.buildTimer = 0;
+  structure.buildDuration = buildTimeFor(config, structure.defId, structure.tier);
   return true;
 }
 
-// Begin an upgrade if legal. Returns true if started.
-export function beginUpgrade(state, s) {
-  if (!isStructure(s)) return false;
-  if ((s.tier || 1) >= 3) return false;
-  if (s.state !== LifecycleState.COMPLETE && s.state !== LifecycleState.DAMAGED) {
-    return false;
+// Attempt to start an upgrade. Caller must have validated/charged cost.
+export function beginUpgrade(structure, config) {
+  if (!isOperational(structure)) return false;
+  if (structure.lifecycle === LifecycleState.UPGRADING) return false;
+  if (structure.tier >= MAX_TIER) return false;
+  const nextTier = structure.tier + 1;
+  structure.lifecycle = LifecycleState.UPGRADING;
+  structure.upgradeTargetTier = nextTier;
+  structure.upgradeTimer = 0;
+  structure.upgradeDuration = buildTimeFor(config, structure.defId, nextTier);
+  return true;
+}
+
+// Attempt to start selling. Caller grants refund when sale completes.
+export function beginSell(structure /*, config */) {
+  if (structure.lifecycle === LifecycleState.DESTROYED) return false;
+  if (structure.lifecycle === LifecycleState.SELLING) return false;
+  structure.lifecycle = LifecycleState.SELLING;
+  structure.sellTimer = 0;
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Damage / heal (deterministic, integer-friendly)
+// ---------------------------------------------------------------------------
+
+// Apply damage; returns amount actually applied. Flips to Damaged/Destroyed.
+export function applyDamage(structure, amount) {
+  if (!isAlive(structure)) return 0;
+  if (
+    structure.lifecycle === LifecycleState.PLACING ||
+    structure.lifecycle === LifecycleState.SELLING
+  ) {
+    // ghosts / selling structures are not combat-live
+    return 0;
   }
-  const cost = upgradeCost(state, s);
-  if (state.economy && state.economy.money < cost) return false;
-  if (state.economy) {
-    state.economy.money -= cost;
-    if (typeof state.economy.spend === 'function') {
-      // economy.spend already deducted? avoid double: only mutate directly here.
+  const before = structure.hp;
+  structure.hp = Math.max(0, structure.hp - Math.max(0, amount));
+  const applied = before - structure.hp;
+
+  if (structure.hp <= 0) {
+    structure.hp = 0;
+    structure.lifecycle = LifecycleState.DESTROYED;
+    structure.destroyTimer = 0;
+  } else if (
+    structure.lifecycle === LifecycleState.COMPLETE ||
+    structure.lifecycle === LifecycleState.UPGRADING
+  ) {
+    if (structure.hp < structure.maxHp * DAMAGED_FRACTION) {
+      // stay in the same functional tier, but reflect Damaged if not upgrading
+      if (structure.lifecycle === LifecycleState.COMPLETE) {
+        structure.lifecycle = LifecycleState.DAMAGED;
+      }
     }
-  }
-  s.prevState = s.state;
-  s.state = LifecycleState.UPGRADING;
-  s.upgradeTime = s.upgradeTime != null ? s.upgradeTime : (s.buildTime || 1.0) * 1.5;
-  s.upgradeTimer = 0;
-  s.active = true; // stays operational during upgrade at old stats
-  emit(state, { type: 'upgrade_start', id: s.id, toTier: (s.tier || 1) + 1,
-                cost, tick: state.tick });
-  return true;
-}
-
-// Begin selling. Refund is issued on completion.
-export function beginSell(state, s) {
-  if (!isStructure(s)) return false;
-  if (s.state === LifecycleState.DESTROYED || s.state === LifecycleState.SELLING) {
-    return false;
-  }
-  s.state = LifecycleState.SELLING;
-  s.sellTime = SELL_TIME;
-  s.sellTimer = 0;
-  s.active = false;
-  s.pendingRefund = refundValue(state, s);
-  emit(state, { type: 'sell_start', id: s.id, refund: s.pendingRefund,
-                tick: state.tick });
-  return true;
-}
-
-// Begin (or continue eligibility for) a repair. Repairs are free but require
-// a troop present and take time. This flags the structure for repair; actual
-// progress happens in step() when a repair troop is assigned/present.
-export function beginRepair(state, s) {
-  if (!isStructure(s)) return false;
-  if (s.state !== LifecycleState.DAMAGED && s.state !== LifecycleState.COMPLETE) {
-    return false;
-  }
-  if (s.hp >= s.maxHp) return false;
-  s.repairRequested = true;
-  emit(state, { type: 'repair_request', id: s.id, tick: state.tick });
-  return true;
-}
-
-// Apply damage to a structure (called by combat core). Handles state flip
-// to DAMAGED / DESTROYED. Returns actual damage applied.
-export function damageStructure(state, s, amount) {
-  if (!isStructure(s)) return 0;
-  if (s.state === LifecycleState.DESTROYED ||
-      s.state === LifecycleState.SELLING) return 0;
-  const before = s.hp;
-  s.hp = Math.max(0, s.hp - amount);
-  const applied = before - s.hp;
-
-  if (s.hp <= 0) {
-    destroyStructure(state, s);
-  } else if (s.state === LifecycleState.COMPLETE &&
-             s.hp < s.maxHp * DAMAGED_THRESHOLD) {
-    s.state = LifecycleState.DAMAGED;
-    emit(state, { type: 'structure_damaged', id: s.id, tick: state.tick });
   }
   return applied;
 }
 
-function destroyStructure(state, s) {
-  s.state = LifecycleState.DESTROYED;
-  s.hp = 0;
-  s.active = false;
-  s.rubbleTimer = 0;
-  s.rubbleDecay = RUBBLE_DECAY;
-  // Free the slot immediately so a new structure can be queued there.
-  if (s.slotIndex != null && state.slots && state.slots[s.slotIndex]) {
-    state.slots[s.slotIndex].occupant = null;
+// Repair up by amount; used by repair.js when a troop finishes traveling.
+export function applyRepair(structure, amount) {
+  if (!isOperational(structure) && structure.lifecycle !== LifecycleState.BUILDING) {
+    return 0;
   }
-  emit(state, { type: 'structure_destroyed', id: s.id, tick: state.tick });
+  const before = structure.hp;
+  structure.hp = Math.min(structure.maxHp, structure.hp + Math.max(0, amount));
+  const healed = structure.hp - before;
+  if (
+    structure.lifecycle === LifecycleState.DAMAGED &&
+    structure.hp >= structure.maxHp * DAMAGED_FRACTION
+  ) {
+    structure.lifecycle = LifecycleState.COMPLETE;
+  }
+  return healed;
+}
 
-  // Terrain-affecting structures (walls/moats) change pathing when gone.
-  if ((s.category === 'wall' || s.category === 'moat') &&
-      state.pathing && typeof state.pathing.markDirty === 'function') {
-    state.pathing.markDirty();
+// Set structure fully repaired (timed free repair completion helper).
+export function repairFull(structure) {
+  structure.hp = structure.maxHp;
+  if (structure.lifecycle === LifecycleState.DAMAGED) {
+    structure.lifecycle = LifecycleState.COMPLETE;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Per-tick advancement (called from step.js in fixed order)
+// Per-tick advancement of timers. Called every fixed step by step.js.
+// Returns a list of lifecycle events (for battleLog + HUD feedback).
+// dt is fixed sim delta in seconds.
 // ---------------------------------------------------------------------------
 
-export function step(state, dt) {
-  const ents = state.entities;
-  const toRemove = [];
-
-  for (let i = 0; i < ents.length; i++) {
-    const s = ents[i];
-    if (!isStructure(s)) continue;
-
-    switch (s.state) {
-      case LifecycleState.BUILDING: {
-        s.buildTimer += dt;
-        const t = Math.min(1, s.buildTimer / Math.max(0.0001, s.buildTime));
-        // HP rises from build start to full over the build.
-        s.hp = s.buildStartHp + (s.maxHp - s.buildStartHp) * t;
-        if (s.buildTimer >= s.buildTime) {
-          s.hp = s.maxHp;
-          s.state = LifecycleState.COMPLETE;
-          s.active = true;
-          emit(state, { type: 'build_complete', id: s.id, tick: state.tick });
-          // A new wall/moat reroutes walkers.
-          if ((s.category === 'wall' || s.category === 'moat') &&
-              state.pathing && typeof state.pathing.markDirty === 'function') {
-            state.pathing.markDirty();
-          }
-        }
-        break;
+export function advance(structure, dt, config) {
+  const events = [];
+  switch (structure.lifecycle) {
+    case LifecycleState.BUILDING: {
+      structure.buildTimer += dt;
+      // during build, hp ramps so a fresh structure isn't instantly killable
+      const frac = clamp01(structure.buildTimer / (structure.buildDuration || 1e-6));
+      structure.hp = Math.max(
+        structure.hp,
+        Math.ceil(structure.maxHp * frac)
+      );
+      if (structure.buildTimer >= structure.buildDuration) {
+        structure.lifecycle = LifecycleState.COMPLETE;
+        structure.hp = structure.maxHp;
+        structure.buildTimer = structure.buildDuration;
+        events.push({ type: 'build_complete', id: structure.id });
       }
-
-      case LifecycleState.UPGRADING: {
-        s.upgradeTimer += dt;
-        if (s.upgradeTimer >= s.upgradeTime) {
-          s.tier = (s.tier || 1) + 1;
-          applyTierStats(state, s);
-          s.hp = s.maxHp; // completion tops up HP (pie-sweep flash cue)
-          s.state = (s.hp < s.maxHp * DAMAGED_THRESHOLD)
+      break;
+    }
+    case LifecycleState.UPGRADING: {
+      structure.upgradeTimer += dt;
+      if (structure.upgradeTimer >= structure.upgradeDuration) {
+        const newTier = structure.upgradeTargetTier;
+        const oldMax = structure.maxHp;
+        const hpFrac = oldMax > 0 ? structure.hp / oldMax : 1;
+        structure.tier = newTier;
+        structure.maxHp = maxHpFor(config, structure.defId, newTier);
+        // preserve proportional hp, then top off (upgrade repairs)
+        structure.hp = structure.maxHp;
+        structure.upgradeTimer = structure.upgradeDuration;
+        // recompute functional state
+        structure.lifecycle =
+          structure.hp < structure.maxHp * DAMAGED_FRACTION
             ? LifecycleState.DAMAGED
             : LifecycleState.COMPLETE;
-          s.active = true;
-          emit(state, { type: 'upgrade_complete', id: s.id, tier: s.tier,
-                        tick: state.tick });
-        }
-        break;
+        // (hpFrac retained conceptually; upgrade fully heals here)
+        void hpFrac;
+        events.push({
+          type: 'upgrade_complete',
+          id: structure.id,
+          tier: newTier,
+        });
       }
-
-      case LifecycleState.SELLING: {
-        s.sellTimer += dt;
-        if (s.sellTimer >= s.sellTime) {
-          if (state.economy) {
-            state.economy.money += s.pendingRefund || 0;
-          }
-          emit(state, { type: 'sell_complete', id: s.id,
-                        refund: s.pendingRefund || 0, tick: state.tick });
-          if (s.slotIndex != null && state.slots && state.slots[s.slotIndex]) {
-            state.slots[s.slotIndex].occupant = null;
-          }
-          if ((s.category === 'wall' || s.category === 'moat') &&
-              state.pathing && typeof state.pathing.markDirty === 'function') {
-            state.pathing.markDirty();
-          }
-          toRemove.push(s);
-        }
-        break;
-      }
-
-      case LifecycleState.DESTROYED: {
-        s.rubbleTimer += dt;
-        if (s.rubbleTimer >= s.rubbleDecay) {
-          toRemove.push(s);
-        }
-        break;
-      }
-
-      case LifecycleState.COMPLETE:
-      case LifecycleState.DAMAGED: {
-        // Repair progression: requires a troop present at the structure.
-        if (s.repairRequested && s.hp < s.maxHp) {
-          const troop = findRepairTroop(state, s);
-          if (troop) {
-            // Move the repair troop toward the structure, then repair.
-            const arrived = advanceRepairTroop(state, troop, s, dt);
-            if (arrived) {
-              s.hp = Math.min(s.maxHp, s.hp + s.maxHp * REPAIR_RATE * dt);
-              if (s.hp >= s.maxHp) {
-                s.hp = s.maxHp;
-                s.repairRequested = false;
-                if (troop) troop.repairTarget = null;
-                emit(state, { type: 'repair_complete', id: s.id,
-                              tick: state.tick });
-              }
-            }
-          }
-        }
-        // Flip DAMAGED<->COMPLETE based on current HP.
-        if (s.state === LifecycleState.DAMAGED &&
-            s.hp >= s.maxHp * DAMAGED_THRESHOLD) {
-          s.state = LifecycleState.COMPLETE;
-        } else if (s.state === LifecycleState.COMPLETE &&
-                   s.hp < s.maxHp * DAMAGED_THRESHOLD && s.hp > 0) {
-          s.state = LifecycleState.DAMAGED;
-        }
-        break;
-      }
-
-      default:
-        break;
+      break;
     }
-  }
-
-  if (toRemove.length) {
-    for (const s of toRemove) {
-      const idx = ents.indexOf(s);
-      if (idx >= 0) ents.splice(idx, 1);
+    case LifecycleState.SELLING: {
+      structure.sellTimer += dt;
+      if (structure.sellTimer >= (structure.sellDuration || 0)) {
+        structure.lifecycle = LifecycleState.DESTROYED;
+        events.push({
+          type: 'sell_complete',
+          id: structure.id,
+          refund: sellValueFor(config, structure.defId, structure.tier),
+        });
+      }
+      break;
     }
+    case LifecycleState.DESTROYED: {
+      structure.destroyTimer += dt;
+      break;
+    }
+    case LifecycleState.COMPLETE:
+    case LifecycleState.DAMAGED:
+    case LifecycleState.PLACING:
+    default:
+      break;
   }
+  return events;
 }
 
 // ---------------------------------------------------------------------------
-// Repair troop logistics (deterministic; consumes a troop's time)
+// Small utilities
 // ---------------------------------------------------------------------------
 
-function findRepairTroop(state, s) {
-  // Reuse an already-assigned troop if it still exists.
-  if (s.repairTroopId != null) {
-    const t = state.entities.find(e => e.id === s.repairTroopId);
-    if (t && t.category === 'repairTroop') return t;
-    s.repairTroopId = null;
-  }
-  // Find a free repair troop (spawned by economy/commands as friendly workers).
-  let best = null;
-  let bestD = Infinity;
-  for (const e of state.entities) {
-    if (e.category !== 'repairTroop') continue;
-    if (e.repairTarget != null) continue;
-    const dx = e.x - s.x;
-    const dy = e.y - s.y;
-    const d = dx * dx + dy * dy;
-    if (d < bestD) { bestD = d; best = e; }
-  }
-  if (best) {
-    best.repairTarget = s.id;
-    s.repairTroopId = best.id;
-  }
-  return best;
+function clamp01(v) {
+  if (v < 0) return 0;
+  if (v > 1) return 1;
+  return v;
 }
 
-function advanceRepairTroop(state, troop, s, dt) {
-  const dx = s.x - troop.x;
-  const dy = s.y - troop.y;
-  const dist = Math.hypot(dx, dy);
-  const reach = (troop.reach != null ? troop.reach : 0.75);
-  if (dist <= reach) return true;
-  const spd = (troop.speed != null ? troop.speed : 3.0);
-  const move = spd * dt;
-  if (move >= dist) {
-    troop.x = s.x;
-    troop.y = s.y;
-    return true;
+// Fractional build/upgrade progress (0..1) for renderer read-only use.
+export function progress(structure) {
+  if (structure.lifecycle === LifecycleState.BUILDING) {
+    return clamp01(structure.buildTimer / (structure.buildDuration || 1e-6));
   }
-  troop.x += (dx / dist) * move;
-  troop.y += (dy / dist) * move;
-  return false;
-}
-
-// ---------------------------------------------------------------------------
-// Query helpers used by HUD / renderer (read-only)
-// ---------------------------------------------------------------------------
-
-export function canUpgrade(state, s) {
-  if (!isStructure(s)) return false;
-  if ((s.tier || 1) >= 3) return false;
-  if (s.state !== LifecycleState.COMPLETE && s.state !== LifecycleState.DAMAGED) {
-    return false;
+  if (structure.lifecycle === LifecycleState.UPGRADING) {
+    return clamp01(structure.upgradeTimer / (structure.upgradeDuration || 1e-6));
   }
-  return state.economy ? state.economy.money >= upgradeCost(state, s) : false;
+  if (structure.lifecycle === LifecycleState.SELLING) {
+    return clamp01(structure.sellTimer / (structure.sellDuration || 1e-6));
+  }
+  return 1;
 }
 
-export function getUpgradeCost(state, s) {
-  return upgradeCost(state, s);
+export function canUpgrade(structure) {
+  return isOperational(structure) && structure.tier < MAX_TIER;
 }
 
-export function getRefund(state, s) {
-  return refundValue(state, s);
-}
-
-export function isOperational(s) {
-  return s && (s.state === LifecycleState.COMPLETE ||
-               s.state === LifecycleState.DAMAGED ||
-               s.state === LifecycleState.UPGRADING) &&
-         s.active === true;
+export function canSell(structure) {
+  return (
+    structure.lifecycle !== LifecycleState.DESTROYED &&
+    structure.lifecycle !== LifecycleState.SELLING
+  );
 }
 
 export default {
   LifecycleState,
+  MAX_TIER,
+  isOperational,
+  occupiesSpace,
+  isAlive,
+  initLifecycle,
   beginBuild,
   beginUpgrade,
   beginSell,
-  beginRepair,
-  damageStructure,
-  step,
+  applyDamage,
+  applyRepair,
+  repairFull,
+  advance,
+  progress,
   canUpgrade,
-  getUpgradeCost,
-  getRefund,
-  isOperational,
+  canSell,
+  buildTimeFor,
+  maxHpFor,
+  baseCostFor,
+  upgradeCostFor,
+  investedValueFor,
+  sellValueFor,
 };

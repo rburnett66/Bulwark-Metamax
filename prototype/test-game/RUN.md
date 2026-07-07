@@ -3,5 +3,5 @@
 Entry: `index.html`
 
 ```
-Serve the test-game folder over any static HTTP server (e.g. `npx serve .`) then open index.html; or just open index.html directly (bundled offline).
+Serve folder over http (e.g. npx serve) and open index.html, or open index.html directly if browser allows module loading
 ```

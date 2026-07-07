@@ -1,310 +1,201 @@
-// src/sim/waves.js
-// Wave spawning, wave counter, win-on-survive / lose-on-base-death.
-// Deterministic: consumes sim.rng and reads wave definitions from state.
-// Integrates with spawn/entities via injected factory (state.spawnAttacker) or
-// falls back to entities factory if present.
+function makeWaves(config, world) {
+  const tables = config.data.tables;
+  const waveData = tables.waves || {};
+  const schedule = waveData.schedule || defaultSchedule();
 
-import { CONFIG } from '../config/constants.js';
-
-/**
- * The waves system owns:
- *  - wave counter / phase (idle, spawning, active, won, lost)
- *  - spawning attackers over time from wave definitions
- *  - checking win-on-survive (all waves cleared) and lose-on-base-death
- *
- * State shape (see state.js):
- *   state.waves = {
- *     definitions: [ { units:[{unitId, count, domain, delay, interval, hp?, ...}], ... } ],
- *     current: -1,           // index of currently running wave (-1 = none started)
- *     count: 0,              // number of waves started
- *     total: N,              // total waves to survive
- *     phase: 'idle'|'spawning'|'active'|'won'|'lost',
- *     spawnQueue: [],        // pending spawn orders
- *     spawnTimer: 0,
- *     autoNext: false,
- *     timeSinceCleared: 0,
- *   }
- */
-
-export const WavePhase = Object.freeze({
-  IDLE: 'idle',
-  SPAWNING: 'spawning',
-  ACTIVE: 'active',
-  WON: 'won',
-  LOST: 'lost',
-});
-
-/**
- * Initialize / normalize the waves substate on a fresh sim state.
- * definitions: array of wave defs (from verticalSlice data).
- */
-export function initWaves(state, definitions) {
-  const defs = Array.isArray(definitions) ? definitions : [];
-  state.waves = {
-    definitions: defs,
-    current: -1,
-    count: 0,
-    total: defs.length,
-    phase: WavePhase.IDLE,
-    spawnQueue: [],
-    spawnTimer: 0,
-    autoNext: false,
-    timeSinceCleared: 0,
-    // grace time between "field cleared" and win check confirming (seconds)
-    clearGrace: (CONFIG && CONFIG.waves && CONFIG.waves.clearGrace) || 0.25,
+  return {
+    schedule,
+    totalWaves: waveData.totalWaves || schedule.length,
   };
-  return state.waves;
+}
+
+function defaultSchedule() {
+  // Fallback schedule referencing Ground/Powder faction units.
+  return [
+    { wave: 1, spawns: [
+      { unit: 'GND-Troops', count: 4, interval: 1.2, lane: 'ground' },
+    ]},
+    { wave: 2, spawns: [
+      { unit: 'GND-Troops', count: 5, interval: 1.0, lane: 'ground' },
+      { unit: 'GND-Trucks', count: 2, interval: 2.0, lane: 'ground' },
+    ]},
+    { wave: 3, spawns: [
+      { unit: 'GND-Tanks', count: 3, interval: 2.0, lane: 'ground' },
+      { unit: 'GND-Copters', count: 2, interval: 2.5, lane: 'air' },
+    ]},
+    { wave: 4, spawns: [
+      { unit: 'GND-Troops', count: 6, interval: 0.9, lane: 'ground' },
+      { unit: 'GND-Artillery', count: 2, interval: 3.0, lane: 'ground' },
+      { unit: 'GND-Planes', count: 2, interval: 2.5, lane: 'air' },
+    ]},
+    { wave: 5, spawns: [
+      { unit: 'GND-HeavyTanks', count: 3, interval: 2.5, lane: 'ground' },
+      { unit: 'GND-Missiles', count: 3, interval: 2.0, lane: 'air' },
+      { unit: 'GND-Copters', count: 2, interval: 3.0, lane: 'air' },
+    ]},
+  ];
 }
 
 /**
- * Whether a new wave can be started right now.
+ * Waves subsystem — deterministic wave lifecycle.
+ * State model (lives inside world.waves):
+ *   phase: 'idle' | 'spawning' | 'active' | 'won' | 'lost'
+ *   current: current wave number (0 = none started)
+ *   totalWaves: N to survive
+ *   queue: pending spawn events for the active wave [{unit, lane, at}]
+ *   spawnCursor: index into queue
+ *   timer: accumulated wave-local time (seconds)
+ *   spawnedCount / this-wave counters
  */
-export function canStartWave(state) {
-  const w = state.waves;
-  if (!w) return false;
-  if (w.phase === WavePhase.WON || w.phase === WavePhase.LOST) return false;
-  if (w.phase === WavePhase.SPAWNING || w.phase === WavePhase.ACTIVE) return false;
-  return w.current + 1 < w.definitions.length;
+
+export function initWaveState(config) {
+  const tables = config.data.tables;
+  const waveData = tables.waves || {};
+  const schedule = waveData.schedule || defaultSchedule();
+  const totalWaves = waveData.totalWaves || schedule.length;
+  return {
+    phase: 'idle',
+    current: 0,
+    totalWaves,
+    schedule,
+    queue: [],
+    spawnCursor: 0,
+    timer: 0,
+    spawnedThisWave: 0,
+    result: null, // 'win' | 'lose' | null
+  };
 }
 
 /**
- * Start the next wave. Builds a deterministic spawn queue from the definition.
- * Returns true if a wave was started.
+ * Begin the next wave. Called by the startWave command reducer.
+ * Returns list of events (for battle log).
  */
-export function startWave(state) {
-  const w = state.waves;
-  if (!canStartWave(state)) return false;
+export function startWave(world) {
+  const ws = world.waves;
+  const events = [];
+  if (ws.phase === 'won' || ws.phase === 'lost') return events;
+  if (ws.phase === 'spawning' || ws.phase === 'active') return events;
+  if (ws.current >= ws.totalWaves) return events;
 
-  w.current += 1;
-  w.count += 1;
-  w.phase = WavePhase.SPAWNING;
-  w.spawnTimer = 0;
-  w.timeSinceCleared = 0;
-
-  const def = w.definitions[w.current] || {};
-  const groups = Array.isArray(def.units) ? def.units : [];
+  const idx = ws.current; // 0-based into schedule for the wave about to start
+  const entry = ws.schedule[idx];
+  ws.current += 1;
+  ws.phase = 'spawning';
+  ws.timer = 0;
+  ws.spawnCursor = 0;
+  ws.spawnedThisWave = 0;
 
   const queue = [];
-  for (let g = 0; g < groups.length; g++) {
-    const grp = groups[g];
-    const count = grp.count || 1;
-    const delay = grp.delay || 0;      // delay before first spawn of this group
-    const interval = grp.interval != null ? grp.interval : 0.75; // between spawns
-    for (let i = 0; i < count; i++) {
-      queue.push({
-        time: delay + i * interval,
-        unitId: grp.unitId,
-        domain: grp.domain,           // walker | floater | flyer (optional override)
-        tier: grp.tier || 1,
-        targetsBase: grp.targetsBase,
-        overrides: grp.overrides || null,
-        groupIndex: g,
-      });
+  if (entry && entry.spawns) {
+    for (const s of entry.spawns) {
+      const count = s.count || 1;
+      const interval = s.interval != null ? s.interval : 1.0;
+      const startAt = s.delay || 0;
+      for (let i = 0; i < count; i++) {
+        queue.push({
+          unit: s.unit,
+          lane: s.lane || 'ground',
+          at: startAt + i * interval,
+        });
+      }
     }
   }
-  // Deterministic order: by time, then group, then original order.
-  queue.forEach((q, idx) => { q._seq = idx; });
-  queue.sort((a, b) => (a.time - b.time) || (a.groupIndex - b.groupIndex) || (a._seq - b._seq));
+  // Deterministic ordering: sort by spawn time, then by unit id.
+  queue.sort((a, b) => (a.at - b.at) || (a.unit < b.unit ? -1 : a.unit > b.unit ? 1 : 0));
+  ws.queue = queue;
 
-  w.spawnQueue = queue;
-
-  // Log the wave start event if a log stream exists.
-  if (state.log && typeof state.log.event === 'function') {
-    state.log.event('waveStart', { wave: w.current, count: queue.length });
-  }
-  return true;
+  events.push({ type: 'waveStart', wave: ws.current });
+  return events;
 }
 
 /**
- * Count live attacker entities on the field.
+ * Advance wave logic by dt seconds.
+ * spawnFn(unitId, lane) → spawns an attacker entity in the world.
+ * Returns array of events.
  */
-function liveAttackers(state) {
-  let n = 0;
-  const ents = state.entities || [];
-  for (let i = 0; i < ents.length; i++) {
-    const e = ents[i];
-    if (!e) continue;
-    if (e.dead) continue;
-    if (e.faction === 'attacker' || e.side === 'attacker' || e.isAttacker) {
-      if (e.hp > 0) n++;
+export function stepWaves(world, dt, spawnFn) {
+  const ws = world.waves;
+  const events = [];
+
+  if (ws.phase === 'won' || ws.phase === 'lost') return events;
+
+  // Lose check: base HP depleted (checked every tick regardless of phase).
+  if (baseDead(world)) {
+    ws.phase = 'lost';
+    ws.result = 'lose';
+    events.push({ type: 'gameOver', result: 'lose' });
+    return events;
+  }
+
+  if (ws.phase === 'spawning') {
+    ws.timer += dt;
+    while (ws.spawnCursor < ws.queue.length && ws.queue[ws.spawnCursor].at <= ws.timer) {
+      const ev = ws.queue[ws.spawnCursor];
+      ws.spawnCursor += 1;
+      ws.spawnedThisWave += 1;
+      if (typeof spawnFn === 'function') {
+        spawnFn(ev.unit, ev.lane);
+      }
+      events.push({ type: 'spawn', unit: ev.unit, lane: ev.lane, wave: ws.current });
     }
+    if (ws.spawnCursor >= ws.queue.length) {
+      ws.phase = 'active';
+      events.push({ type: 'waveSpawnComplete', wave: ws.current });
+    }
+  } else if (ws.phase === 'active') {
+    // Wave is over when all attackers are cleared from the world.
+    if (attackersRemaining(world) === 0) {
+      events.push({ type: 'waveClear', wave: ws.current });
+      if (ws.current >= ws.totalWaves) {
+        ws.phase = 'won';
+        ws.result = 'win';
+        events.push({ type: 'gameOver', result: 'win' });
+      } else {
+        ws.phase = 'idle';
+      }
+    }
+  }
+
+  return events;
+}
+
+function baseDead(world) {
+  const base = world.base;
+  if (!base) return false;
+  return base.hp <= 0;
+}
+
+function attackersRemaining(world) {
+  let n = 0;
+  const ents = world.entities || [];
+  for (const e of ents) {
+    if (e && e.side === 'attacker' && e.alive !== false && e.hp > 0) n++;
   }
   return n;
 }
 
-/**
- * Resolve the attacker spawn callback. Priority:
- *  1) state.spawnAttacker (wired by main.js/spawn.js)
- *  2) injected via options.spawn
- */
-function resolveSpawner(state, opts) {
-  if (opts && typeof opts.spawn === 'function') return opts.spawn;
-  if (typeof state.spawnAttacker === 'function') return state.spawnAttacker;
-  return null;
+/** Convenience queries for HUD */
+export function waveLabel(world) {
+  const ws = world.waves;
+  return `${ws.current}/${ws.totalWaves}`;
 }
 
-/**
- * Perform a single spawn order deterministically.
- */
-function doSpawn(state, order, spawner) {
-  if (!spawner) return null;
-  const ent = spawner(state, {
-    unitId: order.unitId,
-    domain: order.domain,
-    tier: order.tier,
-    targetsBase: order.targetsBase,
-    overrides: order.overrides,
-    wave: state.waves.current,
-  });
-  if (ent && state.log && typeof state.log.event === 'function') {
-    state.log.event('spawn', {
-      wave: state.waves.current,
-      unitId: order.unitId,
-      id: ent.id != null ? ent.id : undefined,
-    });
-  }
-  return ent;
+export function isGameOver(world) {
+  const ws = world.waves;
+  return ws.phase === 'won' || ws.phase === 'lost';
 }
 
-/**
- * Advance the wave system by dt seconds. Call once per fixed sim step,
- * AFTER combat has applied damage (so base HP is current) but ordering is
- * managed by step.js. Reads/writes only wave substate + spawns entities.
- */
-export function stepWaves(state, dt, opts) {
-  const w = state.waves;
-  if (!w) return;
-  if (w.phase === WavePhase.WON || w.phase === WavePhase.LOST) return;
-
-  // Lose condition: base HP depleted (checked every step).
-  if (isBaseDead(state)) {
-    setLost(state);
-    return;
-  }
-
-  const spawner = resolveSpawner(state, opts);
-
-  if (w.phase === WavePhase.SPAWNING) {
-    w.spawnTimer += dt;
-    // Emit all spawns whose scheduled time has elapsed (deterministic order).
-    while (w.spawnQueue.length > 0 && w.spawnQueue[0].time <= w.spawnTimer + 1e-9) {
-      const order = w.spawnQueue.shift();
-      doSpawn(state, order, spawner);
-    }
-    if (w.spawnQueue.length === 0) {
-      w.phase = WavePhase.ACTIVE;
-      w.timeSinceCleared = 0;
-    }
-  }
-
-  if (w.phase === WavePhase.ACTIVE) {
-    const alive = liveAttackers(state);
-    if (alive === 0) {
-      w.timeSinceCleared += dt;
-      if (w.timeSinceCleared >= w.clearGrace) {
-        onWaveCleared(state);
-      }
-    } else {
-      w.timeSinceCleared = 0;
-    }
-  }
+export function canStartWave(world) {
+  const ws = world.waves;
+  return (ws.phase === 'idle') && ws.current < ws.totalWaves;
 }
 
-/**
- * Called when the active wave has no live attackers left.
- */
-function onWaveCleared(state) {
-  const w = state.waves;
-  if (state.log && typeof state.log.event === 'function') {
-    state.log.event('waveCleared', { wave: w.current });
-  }
-
-  // Win condition: this was the last wave.
-  if (w.current + 1 >= w.definitions.length) {
-    setWon(state);
-    return;
-  }
-
-  // Otherwise return to idle; player (or auto) starts the next wave.
-  w.phase = WavePhase.IDLE;
-  w.timeSinceCleared = 0;
-
-  if (w.autoNext) {
-    startWave(state);
-  }
-}
-
-/**
- * Base death detection. Base entity is flagged isBase (from entities.js).
- */
-export function isBaseDead(state) {
-  const base = getBase(state);
-  if (!base) return false;
-  return base.hp <= 0 || base.dead === true;
-}
-
-export function getBase(state) {
-  if (state.base) return state.base;
-  const ents = state.entities || [];
-  for (let i = 0; i < ents.length; i++) {
-    if (ents[i] && ents[i].isBase) return ents[i];
-  }
-  return null;
-}
-
-function setWon(state) {
-  const w = state.waves;
-  w.phase = WavePhase.WON;
-  state.outcome = 'win';
-  if (state.log && typeof state.log.event === 'function') {
-    state.log.event('gameWon', { wave: w.current });
-  }
-}
-
-function setLost(state) {
-  const w = state.waves;
-  w.phase = WavePhase.LOST;
-  state.outcome = 'lose';
-  if (state.log && typeof state.log.event === 'function') {
-    state.log.event('gameLost', { wave: w.current });
-  }
-}
-
-/**
- * Convenience status readout for the HUD.
- */
-export function waveStatus(state) {
-  const w = state.waves;
-  if (!w) {
-    return { current: 0, total: 0, phase: WavePhase.IDLE, alive: 0, canStart: false, outcome: null };
-  }
-  return {
-    current: w.current + 1,       // 1-based for display
-    started: w.count,
-    total: w.total,
-    phase: w.phase,
-    alive: liveAttackers(state),
-    pending: w.spawnQueue.length,
-    canStart: canStartWave(state),
-    outcome: state.outcome || null,
-    autoNext: w.autoNext,
-  };
-}
-
-export function setAutoNext(state, on) {
-  if (state.waves) state.waves.autoNext = !!on;
-}
-
-export const Waves = {
-  init: initWaves,
-  start: startWave,
-  step: stepWaves,
-  canStart: canStartWave,
-  status: waveStatus,
-  isBaseDead,
-  getBase,
-  setAutoNext,
-  Phase: WavePhase,
+export default {
+  initWaveState,
+  startWave,
+  stepWaves,
+  waveLabel,
+  isGameOver,
+  canStartWave,
+  makeWaves,
 };
-
-export default Waves;

@@ -1,190 +1,124 @@
 const FIXED_DT = 1 / 60;
 
-export function createStepper(sim) {
-  let accumulator = 0;
-
-  function fixedStep() {
-    const state = sim.state;
-    if (state.status !== 'running') return;
-
-    const dt = FIXED_DT;
-    state.time += dt;
-    state.tick++;
-
-    // 1) Economy: money accrual over time
-    sim.economy.accrue(state, dt);
-
-    // 2) Waves: spawn attackers, advance wave logic
-    sim.waves.update(state, dt);
-
-    // 3) Spawn: march deployed troops from base to drop destinations
-    if (sim.spawn && sim.spawn.update) sim.spawn.update(state, dt);
-
-    // 4) Lifecycle: Placing→Building→Complete→Damaged→Destroyed, Upgrading, Selling, repairs
-    sim.lifecycle.update(state, dt);
-
-    // 5) Pathing: recompute walker paths around walls/moats when terrain dirty
-    sim.pathing.update(state, dt);
-
-    // 6) Movement: advance all mobile entities along their paths/lanes
-    stepMovement(sim, state, dt);
-
-    // 7) Vision: radar/air-sees-ground detection
-    if (sim.vision && sim.vision.update) sim.vision.update(state, dt);
-
-    // 8) Combat: targeting by domain, damage-type effectiveness, status, DPS
-    sim.combat.update(state, dt);
-
-    // 9) Attacker damage to base + structures
-    stepAttackerDamage(sim, state, dt);
-
-    // 10) Cleanup dead entities, grant kill income
-    stepCleanup(sim, state);
-
-    // 11) Win/lose evaluation
-    sim.waves.checkEndConditions(state);
+/**
+ * Advance the deterministic simulation by one fixed timestep.
+ * All systems are orchestrated here in a strict, deterministic order.
+ *
+ * @param {object} world      Central strict state container (from world.js)
+ * @param {object} systems    Bag of system modules {movement, pathfinding, targeting, combat, economy, repair, lifecycle, waves, vision}
+ * @param {number} dt         Timestep in seconds (defaults to FIXED_DT)
+ * @param {object} [log]      Optional battle log for recording events
+ */
+export function step(world, systems, dt = FIXED_DT, log = null) {
+  if (world.status !== 'playing') {
+    // still advance tick counter so replays stay aligned, but do no work
+    world.tick++;
+    world.time += dt;
+    return world;
   }
 
-  function stepMovement(sim, state, dt) {
-    for (const e of state.entities) {
-      if (e.dead) continue;
-      if (e.type !== 'walker' && e.type !== 'floater' && e.type !== 'flyer' && e.type !== 'troop') continue;
-      if (e.staggerTimer && e.staggerTimer > 0) {
-        e.staggerTimer -= dt;
-        continue;
-      }
-      let speed = e.speed || 0;
-      if (e.slowTimer && e.slowTimer > 0) {
-        e.slowTimer -= dt;
-        speed *= 0.5;
-      }
-      if (speed <= 0) continue;
-      advanceAlongPath(e, speed * dt);
-    }
+  const {
+    lifecycle,
+    pathfinding,
+    movement,
+    targeting,
+    combat,
+    economy,
+    repair,
+    waves,
+    vision,
+  } = systems;
+
+  // 1) Structure lifecycle transitions (Placing->Building->Complete, Upgrading, Selling, Destroyed cleanup)
+  if (lifecycle && lifecycle.update) {
+    lifecycle.update(world, dt, log);
   }
 
-  function advanceAlongPath(e, dist) {
-    if (!e.path || e.pathIndex == null) return;
-    while (dist > 0 && e.pathIndex < e.path.length) {
-      const target = e.path[e.pathIndex];
-      const dx = target.x - e.x;
-      const dy = target.y - e.y;
-      const d = Math.hypot(dx, dy);
-      if (d <= dist) {
-        e.x = target.x;
-        e.y = target.y;
-        dist -= d;
-        e.pathIndex++;
-      } else {
-        e.x += (dx / d) * dist;
-        e.y += (dy / d) * dist;
-        dist = 0;
-      }
-    }
-    if (e.pathIndex >= e.path.length) {
-      e.atDestination = true;
-    }
+  // 2) Terrain-dependent path recompute (walls/moats changed => rebuild walker paths)
+  if (pathfinding && pathfinding.update) {
+    pathfinding.update(world, dt, log);
   }
 
-  function stepAttackerDamage(sim, state, dt) {
-    const base = state.base;
-    for (const e of state.entities) {
-      if (e.dead || !e.isAttacker) continue;
-      if (!e.atDestination && !isInRangeOfBase(e, base)) continue;
-
-      if (e.targetsStructures) {
-        // artillery-type: attack nearest structure in range
-        const struct = findNearestStructureInRange(state, e);
-        if (struct) {
-          applyDamage(sim, struct, e.dps * dt, e.damageType, e);
-        } else if (isInRangeOfBase(e, base)) {
-          base.hp -= e.dps * dt;
-        }
-      } else {
-        if (isInRangeOfBase(e, base)) {
-          base.hp -= e.dps * dt;
-          e.attacking = true;
-        }
-      }
-    }
-    if (base.hp < 0) base.hp = 0;
+  // 3) Wave spawning / scheduling (may create new attacker entities)
+  if (waves && waves.update) {
+    waves.update(world, dt, log);
   }
 
-  function isInRangeOfBase(e, base) {
-    const r = (e.range || 1) * (sim.config?.tileSize || 1);
-    const d = Math.hypot(base.x - e.x, base.y - e.y);
-    return d <= r + (base.radius || 0);
+  // 4) Vision / detection stub (radar sees air, air sees ground)
+  if (vision && vision.update) {
+    vision.update(world, dt, log);
   }
 
-  function findNearestStructureInRange(state, e) {
-    let best = null;
-    let bestD = Infinity;
-    const r = (e.range || 1) * (sim.config?.tileSize || 1);
-    for (const s of state.structures) {
-      if (s.dead || s.state === 'Destroyed') continue;
-      const d = Math.hypot(s.x - e.x, s.y - e.y);
-      if (d <= r + (s.radius || 0) && d < bestD) {
-        bestD = d;
-        best = s;
-      }
-    }
-    return best;
+  // 5) Movement: domain pathing for walkers (ground), floaters (water), flyers (ignore terrain)
+  if (movement && movement.update) {
+    movement.update(world, dt, log);
   }
 
-  function applyDamage(sim, target, amount, damageType, source) {
-    if (sim.combat && sim.combat.applyTypedDamage) {
-      sim.combat.applyTypedDamage(target, amount, damageType, source);
-    } else {
-      target.hp -= amount;
-    }
-    if (target.hp <= 0) {
-      target.hp = 0;
-    }
+  // 6) Targeting: domain-aware weapon target selection for towers & attackers
+  if (targeting && targeting.update) {
+    targeting.update(world, dt, log);
   }
 
-  function stepCleanup(sim, state) {
-    for (const e of state.entities) {
-      if (e.dead) continue;
-      if (e.hp <= 0) {
-        e.dead = true;
-        e.deathTick = state.tick;
-        if (e.isAttacker && e.reward) {
-          sim.economy.grantKill(state, e.reward, e);
-          state.stats.kills++;
-        }
-        if (e.isAttacker) {
-          state.stats.attackersRemaining--;
+  // 7) Combat: firing, projectile travel, damage-type resolution, kills
+  if (combat && combat.update) {
+    combat.update(world, dt, log);
+  }
+
+  // 8) Repair: troop-based travel + timed free repairs
+  if (repair && repair.update) {
+    repair.update(world, dt, log);
+  }
+
+  // 9) Economy: live money accrual, kill income processing, spend/refund reconciliation
+  if (economy && economy.update) {
+    economy.update(world, dt, log);
+  }
+
+  // 10) Win/lose resolution (survive N waves = win; base HP 0 = lose)
+  resolveEndConditions(world, log);
+
+  // Advance deterministic clock LAST so all systems saw the same tick.
+  world.tick++;
+  world.time += dt;
+
+  return world;
+}
+
+/**
+ * Evaluate win/lose transitions from strict state.
+ */
+function resolveEndConditions(world, log) {
+  const base = world.base;
+  if (base && base.hp <= 0 && world.status === 'playing') {
+    base.hp = 0;
+    world.status = 'lost';
+    if (log && log.event) {
+      log.event(world.tick, { type: 'gameOver', result: 'lose', reason: 'baseDestroyed' });
+    }
+    return;
+  }
+
+  // Win when all scheduled waves are complete and no attackers remain alive.
+  if (world.status === 'playing' && world.waves) {
+    const w = world.waves;
+    const allWavesDone =
+      w.spawnedAll === true &&
+      w.currentIndex >= (w.total != null ? w.total : (w.schedule ? w.schedule.length : 0));
+    if (allWavesDone) {
+      const attackersAlive = world.entities
+        ? Object.values(world.entities).some(
+            (e) => e && e.faction === 'attacker' && e.alive !== false && e.hp > 0
+          )
+        : false;
+      if (!attackersAlive) {
+        world.status = 'won';
+        if (log && log.event) {
+          log.event(world.tick, { type: 'gameOver', result: 'win', reason: 'wavesSurvived' });
         }
       }
     }
-    // structures reaching 0 hp transition via lifecycle; mark destroyed
-    for (const s of state.structures) {
-      if (s.dead) continue;
-      if (s.hp <= 0 && s.state !== 'Destroyed') {
-        sim.lifecycle.destroy(state, s);
-      }
-    }
-    // Purge fully-expired dead entities after a grace period
-    state.entities = state.entities.filter(
-      (e) => !(e.dead && state.tick - e.deathTick > 30)
-    );
   }
-
-  function step(dt) {
-    accumulator += dt;
-    // clamp to avoid spiral of death
-    if (accumulator > 0.5) accumulator = 0.5;
-    let steps = 0;
-    while (accumulator >= FIXED_DT && steps < 240) {
-      // Apply queued commands deterministically at start of each fixed tick
-      sim.applyPendingCommands();
-      fixedStep();
-      accumulator -= FIXED_DT;
-      steps++;
-    }
-  }
-
-  return { step, fixedStep, FIXED_DT };
 }
 
 export { FIXED_DT };
+export default step;
