@@ -231,6 +231,52 @@ export const WAVES = Object.freeze([
       { unitId: 'GND-Planes',     count: 2, lane: 'air',    delay: 3, interval: 2.5 },
       { unitId: 'GND-Missiles',   count: 2, lane: 'air',    delay: 8, interval: 3.0 }
     ]
+  },
+  {
+    wave: 6,
+    spawns: [
+      { unitId: 'GND-Tanks',      count: 4, lane: 'ground', delay: 0, interval: 2.0 },
+      { unitId: 'GND-Trucks',     count: 3, lane: 'ground', delay: 2, interval: 1.5 },
+      { unitId: 'GND-Copters',    count: 3, lane: 'air',    delay: 1, interval: 2.0 },
+      { unitId: 'GND-Floaters',   count: 4, lane: 'water',  delay: 2, interval: 1.6 }
+    ]
+  },
+  {
+    wave: 7,
+    spawns: [
+      { unitId: 'GND-Troops',     count: 8, lane: 'ground', delay: 0, interval: 0.8 },
+      { unitId: 'GND-Artillery',  count: 3, lane: 'ground', delay: 3, interval: 2.5 },
+      { unitId: 'GND-Planes',     count: 3, lane: 'air',    delay: 2, interval: 2.0 }
+    ]
+  },
+  {
+    wave: 8,
+    spawns: [
+      { unitId: 'GND-HeavyTanks', count: 3, lane: 'ground', delay: 0, interval: 3.0 },
+      { unitId: 'GND-Tanks',      count: 4, lane: 'ground', delay: 2, interval: 1.8 },
+      { unitId: 'GND-Missiles',   count: 3, lane: 'air',    delay: 4, interval: 2.5 },
+      { unitId: 'GND-Floaters',   count: 5, lane: 'water',  delay: 1, interval: 1.4 }
+    ]
+  },
+  {
+    wave: 9,
+    spawns: [
+      { unitId: 'GND-Copters',    count: 4, lane: 'air',    delay: 0, interval: 1.6 },
+      { unitId: 'GND-Planes',     count: 4, lane: 'air',    delay: 2, interval: 1.8 },
+      { unitId: 'GND-Missiles',   count: 4, lane: 'air',    delay: 5, interval: 2.0 },
+      { unitId: 'GND-Artillery',  count: 3, lane: 'ground', delay: 1, interval: 2.5 }
+    ]
+  },
+  {
+    wave: 10,
+    spawns: [
+      { unitId: 'GND-HeavyTanks', count: 4,  lane: 'ground', delay: 0, interval: 2.5 },
+      { unitId: 'GND-Tanks',      count: 5,  lane: 'ground', delay: 2, interval: 1.5 },
+      { unitId: 'GND-Troops',     count: 10, lane: 'ground', delay: 1, interval: 0.7 },
+      { unitId: 'GND-Planes',     count: 4,  lane: 'air',    delay: 3, interval: 1.6 },
+      { unitId: 'GND-Missiles',   count: 4,  lane: 'air',    delay: 6, interval: 2.0 },
+      { unitId: 'GND-Floaters',   count: 6,  lane: 'water',  delay: 2, interval: 1.2 }
+    ]
   }
 ]);
 

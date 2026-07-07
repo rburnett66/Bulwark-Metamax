@@ -162,33 +162,36 @@ function cmdPlace(state, cmd) {
 }
 
 function cmdUpgrade(state, cmd) {
-  if (typeof cmd.structureId !== 'number') return { ok: false, reason: 'badCommand' };
-  const s = state.structures.get(cmd.structureId);
+  const sid = typeof cmd.id === 'number' ? cmd.id : cmd.structureId;
+  if (typeof sid !== 'number') return { ok: false, reason: 'badCommand' };
+  const s = state.structures.get(sid);
   if (!s) return { ok: false, reason: 'noStructure' };
-  if (!startUpgrade(state, cmd.structureId)) {
+  if (!startUpgrade(state, sid)) {
     return { ok: false, reason: s.tier >= 3 ? 'maxTier' : 'cost' };
   }
-  emitEvent(state, { type: 'upgradeStart', tick: state.tick, structureId: cmd.structureId });
+  emitEvent(state, { type: 'upgradeStart', tick: state.tick, structureId: sid });
   return { ok: true, reason: '' };
 }
 
 function cmdSell(state, cmd) {
-  if (typeof cmd.structureId !== 'number') return { ok: false, reason: 'badCommand' };
-  if (!state.structures.get(cmd.structureId)) return { ok: false, reason: 'noStructure' };
-  if (!startSell(state, cmd.structureId)) {
+  const sid = typeof cmd.id === 'number' ? cmd.id : cmd.structureId;
+  if (typeof sid !== 'number') return { ok: false, reason: 'badCommand' };
+  if (!state.structures.get(sid)) return { ok: false, reason: 'noStructure' };
+  if (!startSell(state, sid)) {
     return { ok: false, reason: 'busy' };
   }
-  emitEvent(state, { type: 'sellStart', tick: state.tick, structureId: cmd.structureId });
+  emitEvent(state, { type: 'sellStart', tick: state.tick, structureId: sid });
   return { ok: true, reason: '' };
 }
 
 function cmdRepair(state, cmd) {
-  if (typeof cmd.structureId !== 'number') return { ok: false, reason: 'badCommand' };
-  if (!state.structures.get(cmd.structureId)) return { ok: false, reason: 'noStructure' };
-  if (!requestRepair(state, cmd.structureId)) {
+  const sid = typeof cmd.id === 'number' ? cmd.id : cmd.structureId;
+  if (typeof sid !== 'number') return { ok: false, reason: 'badCommand' };
+  if (!state.structures.get(sid)) return { ok: false, reason: 'noStructure' };
+  if (!requestRepair(state, sid)) {
     return { ok: false, reason: 'noRepairNeeded' };
   }
-  emitEvent(state, { type: 'repairStart', tick: state.tick, structureId: cmd.structureId });
+  emitEvent(state, { type: 'repairStart', tick: state.tick, structureId: sid });
   return { ok: true, reason: '' };
 }
 
