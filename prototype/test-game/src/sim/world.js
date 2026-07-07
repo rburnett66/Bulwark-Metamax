@@ -59,7 +59,9 @@ export function createWorld(config, seed) {
       : 1500;
 
   const totalWaves =
-    tables.waves && tables.waves.total != null ? tables.waves.total : 5;
+    tables.waves && tables.waves.total != null
+      ? tables.waves.total
+      : Array.isArray(tables.waves) ? tables.waves.length : 5;
 
   const rng = makeRng(seed);
 
