@@ -1,387 +1,339 @@
-// src/render/hud.js
-// Functional DOM HUD for Bulwark vertical slice.
-// Reads sim state, dispatches commands via callbacks provided by main/input.
+import { STRUCTURES, ASSUMPTIONS, getStructureDef } from '../data/tables.js';
+import { getSellValue } from '../sim/economy.js';
 
-import { STRUCTURES, UNITS, ASSUMPTIONS } from '../data/tables.js';
+const STYLE_ID = 'bw-hud-style';
 
-export class HUD {
-  constructor(opts = {}) {
-    // opts: { onStartWave, onSelectBuild, onUpgrade, onRepair, onSell, onDeploy, onReplay, onHarness, onCancelBuild }
-    this.opts = opts;
-    this.lastMoney = null;
-    this.lastSelectedId = null;
-    this.lastSelectedRev = null;
-    this.buildButtons = new Map();
-    this.deployButtons = new Map();
-    this.selectedBuildKey = null;
-    this.bannerShown = false;
-    this._buildDom();
-  }
+const CSS = `
+.bw-hud { position:absolute; left:0; top:0; right:0; bottom:0; pointer-events:none;
+  font-family: 'Courier New', monospace; color:#e8e8e8; user-select:none; z-index:10; }
+.bw-hud * { box-sizing:border-box; }
+.bw-panel { background:rgba(10,14,20,0.85); border:1px solid #3a4a5a; border-radius:4px; padding:6px 8px; pointer-events:auto; }
+.bw-topbar { position:absolute; top:6px; left:6px; right:6px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.bw-hpwrap { display:flex; align-items:center; gap:6px; }
+.bw-hpbar { width:160px; height:14px; background:#2a1616; border:1px solid #713; position:relative; }
+.bw-hpfill { height:100%; background:#d33; width:100%; transition:width 0.15s linear; }
+.bw-hptext { font-size:11px; min-width:86px; }
+.bw-money { position:relative; font-size:15px; color:#ffd76a; font-weight:bold; min-width:110px; }
+.bw-delta { position:absolute; left:100%; top:0; margin-left:6px; font-size:12px; font-weight:bold;
+  animation: bw-delta-rise 0.9s ease-out forwards; pointer-events:none; white-space:nowrap; }
+@keyframes bw-delta-rise { from { opacity:1; transform:translateY(0);} to { opacity:0; transform:translateY(-16px);} }
+.bw-wave { font-size:13px; }
+.bw-btn { pointer-events:auto; background:#22303e; color:#e8e8e8; border:1px solid #4a6076; border-radius:3px;
+  padding:4px 8px; font-family:inherit; font-size:12px; cursor:pointer; }
+.bw-btn:hover:not(:disabled) { background:#2f4356; }
+.bw-btn:disabled { opacity:0.4; cursor:default; }
+.bw-btn.bw-selected { background:#3d6a3d; border-color:#7ac07a; }
+.bw-seed { font-size:11px; color:#8fa4b8; }
+.bw-palette { position:absolute; left:6px; top:56px; width:168px; display:flex; flex-direction:column; gap:4px; }
+.bw-palette .bw-title { font-size:11px; color:#9ab; margin-bottom:2px; }
+.bw-buildbtn { display:flex; justify-content:space-between; width:100%; text-align:left; }
+.bw-buildbtn .bw-cost { color:#ffd76a; }
+.bw-buildbtn.bw-poor { opacity:0.45; }
+.bw-selpanel { position:absolute; right:6px; top:56px; width:200px; font-size:12px; display:none; flex-direction:column; gap:4px; }
+.bw-selpanel .bw-sname { font-size:13px; font-weight:bold; color:#bfe0ff; }
+.bw-selpanel .bw-shpbar { width:100%; height:10px; background:#222; border:1px solid #555; }
+.bw-selpanel .bw-shpfill { height:100%; background:#4c4; }
+.bw-selrow { display:flex; gap:4px; }
+.bw-selrow .bw-btn { flex:1; font-size:11px; padding:3px 4px; }
+.bw-bottombar { position:absolute; left:6px; bottom:6px; right:6px; display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; }
+.bw-help { font-size:10px; color:#8fa4b8; line-height:1.4; }
+.bw-debug { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+.bw-seedinput { width:84px; background:#141a22; color:#e8e8e8; border:1px solid #4a6076; border-radius:3px;
+  font-family:inherit; font-size:12px; padding:3px 4px; pointer-events:auto; }
+.bw-toast { position:absolute; left:50%; top:70px; transform:translateX(-50%); background:rgba(60,20,20,0.92);
+  border:1px solid #c66; border-radius:4px; padding:6px 14px; font-size:13px; color:#ffd7d7;
+  display:none; pointer-events:none; }
+.bw-result { position:absolute; left:0; top:0; right:0; bottom:0; display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.55); pointer-events:auto; flex-direction:column; gap:14px; }
+.bw-result.bw-show { display:flex; }
+.bw-rbanner { font-size:36px; font-weight:bold; letter-spacing:2px; text-shadow:0 2px 8px #000; }
+.bw-rbanner.bw-win { color:#9f9; }
+.bw-rbanner.bw-lose { color:#f99; }
+`;
 
-  _el(tag, cls, text) {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+function injectStyle(doc) {
+  try {
+    if (doc.getElementById && doc.getElementById(STYLE_ID)) return;
+    const style = doc.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = CSS;
+    const host = doc.head || doc.body || doc.documentElement;
+    if (host) host.appendChild(style);
+  } catch (e) { /* styling is non-critical */ }
+}
 
-  _buildDom() {
-    let root = document.getElementById('hud');
-    if (!root) {
-      root = this._el('div');
-      root.id = 'hud';
-      document.body.appendChild(root);
+function el(doc, tag, className, text) {
+  const node = doc.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
+}
+
+export function createHud(mountEl, callbacks) {
+  const cbs = callbacks || {};
+  const doc = mountEl.ownerDocument || (typeof document !== 'undefined' ? document : null);
+  if (!doc) throw new Error('createHud: no document available');
+
+  // NOTE: do NOT use getComputedStyle here (may not exist in headless boot).
+  // Just ensure the mount element is a positioning context for the overlay.
+  try {
+    if (!mountEl.style.position || mountEl.style.position === 'static') {
+      mountEl.style.position = 'relative';
     }
-    root.innerHTML = '';
-    this.root = root;
+  } catch (e) { /* non-critical */ }
 
-    const style = document.createElement('style');
-    style.textContent = `
-      #hud { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;
-             font-family: monospace; font-size: 12px; color: #e8e8e8; z-index: 10; }
-      #hud .panel { position: absolute; background: rgba(10,14,20,0.85); border: 1px solid #3a4a5a;
-             border-radius: 4px; padding: 6px 8px; pointer-events: auto; }
-      #hud-top { top: 6px; left: 6px; display: flex; gap: 14px; align-items: center; }
-      #hud-top .stat { min-width: 90px; }
-      #hud-top .label { color: #8fa3b8; font-size: 10px; }
-      #hud-top .value { font-size: 15px; font-weight: bold; }
-      #hud-money-delta { display: inline-block; margin-left: 6px; font-size: 11px; transition: opacity 0.9s; opacity: 0; }
-      #hud-money-delta.pos { color: #7fe07f; } #hud-money-delta.neg { color: #ff8f8f; }
-      #hud button { pointer-events: auto; background: #1e2c3a; color: #dfe8f0; border: 1px solid #4a6078;
-             border-radius: 3px; padding: 4px 8px; font-family: monospace; font-size: 12px; cursor: pointer; }
-      #hud button:hover:not(:disabled) { background: #2c4256; }
-      #hud button:disabled { opacity: 0.4; cursor: default; }
-      #hud button.dim { opacity: 0.45; }
-      #hud button.selected { background: #3d5a76; border-color: #86b6e0; }
-      #hud-build { top: 66px; left: 6px; width: 190px; }
-      #hud-build .item, #hud-deploy .item { display: flex; justify-content: space-between; width: 100%; margin: 2px 0; }
-      #hud-deploy { top: 66px; right: 6px; width: 210px; }
-      #hud-select { bottom: 6px; left: 6px; width: 230px; }
-      #hud-select .row { margin: 3px 0; }
-      #hud-select .actions { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
-      #hud-controls { bottom: 6px; right: 6px; max-width: 260px; color: #9db2c6; font-size: 11px; line-height: 1.45; }
-      #hud-tools { top: 6px; right: 6px; display: flex; gap: 6px; }
-      #hud-banner { top: 34%; left: 50%; transform: translate(-50%, -50%); font-size: 34px; font-weight: bold;
-             padding: 18px 40px; text-align: center; display: none; }
-      #hud-banner.win { color: #8ff0a0; border-color: #4fa060; }
-      #hud-banner.lose { color: #ff9090; border-color: #a05050; }
-      #hud .sect-title { color: #a9c2d8; font-weight: bold; margin-bottom: 4px; font-size: 11px;
-             letter-spacing: 1px; text-transform: uppercase; }
-      #hud .hpbar { height: 6px; background: #402020; border-radius: 2px; overflow: hidden; margin-top: 2px; width: 110px; }
-      #hud .hpbar > div { height: 100%; background: #5fd06f; }
-    `;
-    root.appendChild(style);
+  injectStyle(doc);
 
-    // Top bar: base HP, money, wave, start wave.
-    const top = this._el('div', 'panel');
-    top.id = 'hud-top';
+  const root = el(doc, 'div', 'bw-hud');
 
-    const hpBox = this._el('div', 'stat');
-    hpBox.appendChild(this._el('div', 'label', 'BASE HP'));
-    this.hpValue = this._el('div', 'value', '-');
-    hpBox.appendChild(this.hpValue);
-    this.hpBar = this._el('div', 'hpbar');
-    this.hpBarFill = this._el('div');
-    this.hpBar.appendChild(this.hpBarFill);
-    hpBox.appendChild(this.hpBar);
-    top.appendChild(hpBox);
+  // ---- top bar --------------------------------------------------------
+  const topbar = el(doc, 'div', 'bw-topbar bw-panel');
+  const hpwrap = el(doc, 'div', 'bw-hpwrap');
+  const hpbar = el(doc, 'div', 'bw-hpbar');
+  const hpfill = el(doc, 'div', 'bw-hpfill');
+  hpbar.appendChild(hpfill);
+  const hptext = el(doc, 'span', 'bw-hptext', 'Base: --/--');
+  hpwrap.appendChild(hpbar);
+  hpwrap.appendChild(hptext);
 
-    const moneyBox = this._el('div', 'stat');
-    moneyBox.appendChild(this._el('div', 'label', 'GOLD'));
-    const mv = this._el('div', 'value');
-    this.moneyValue = this._el('span', null, '-');
-    this.moneyDelta = this._el('span');
-    this.moneyDelta.id = 'hud-money-delta';
-    mv.appendChild(this.moneyValue);
-    mv.appendChild(this.moneyDelta);
-    moneyBox.appendChild(mv);
-    top.appendChild(moneyBox);
+  const moneyEl = el(doc, 'span', 'bw-money', '0g');
+  const waveEl = el(doc, 'span', 'bw-wave', 'Wave 0/0');
+  const startWaveBtn = el(doc, 'button', 'bw-btn', 'Start Wave');
+  startWaveBtn.addEventListener('click', () => { if (cbs.onStartWave) cbs.onStartWave(); });
+  const seedEl = el(doc, 'span', 'bw-seed', 'seed: -');
 
-    const waveBox = this._el('div', 'stat');
-    waveBox.appendChild(this._el('div', 'label', 'WAVE'));
-    this.waveValue = this._el('div', 'value', '-');
-    waveBox.appendChild(this.waveValue);
-    top.appendChild(waveBox);
+  topbar.appendChild(hpwrap);
+  topbar.appendChild(moneyEl);
+  topbar.appendChild(waveEl);
+  topbar.appendChild(startWaveBtn);
+  topbar.appendChild(seedEl);
+  root.appendChild(topbar);
 
-    this.startWaveBtn = this._el('button', null, 'Start Wave');
-    this.startWaveBtn.addEventListener('click', () => {
-      if (this.opts.onStartWave) this.opts.onStartWave();
+  // ---- build palette --------------------------------------------------
+  const palette = el(doc, 'div', 'bw-palette bw-panel');
+  palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD'));
+  const paletteBtns = {};
+  for (const structId of Object.keys(STRUCTURES)) {
+    const def = STRUCTURES[structId];
+    const btn = el(doc, 'button', 'bw-btn bw-buildbtn');
+    const nameSpan = el(doc, 'span', null, def.name || structId);
+    const costSpan = el(doc, 'span', 'bw-cost', String(def.cost && def.cost[0] != null ? def.cost[0] : '?') + 'g');
+    btn.appendChild(nameSpan);
+    btn.appendChild(costSpan);
+    btn.addEventListener('click', () => {
+      const next = (hud.currentBuildSelection === structId) ? null : structId;
+      if (cbs.onBuildSelect) cbs.onBuildSelect(next);
     });
-    top.appendChild(this.startWaveBtn);
-    root.appendChild(top);
+    palette.appendChild(btn);
+    paletteBtns[structId] = btn;
+  }
+  root.appendChild(palette);
 
-    // Tool buttons: replay + harness.
-    const tools = this._el('div', 'panel');
-    tools.id = 'hud-tools';
-    const replayBtn = this._el('button', null, 'Replay');
-    replayBtn.title = 'Re-run battle log through fresh headless core, verify hash-identical determinism';
-    replayBtn.addEventListener('click', () => {
-      if (this.opts.onReplay) this.opts.onReplay();
-    });
-    tools.appendChild(replayBtn);
-    const harnessBtn = this._el('button', null, 'Harness');
-    harnessBtn.title = 'Run 100 automated headless battles; derive unit price = avg DPS';
-    harnessBtn.addEventListener('click', () => {
-      if (this.opts.onHarness) this.opts.onHarness();
-    });
-    tools.appendChild(harnessBtn);
-    root.appendChild(tools);
+  // ---- selected-structure panel ---------------------------------------
+  const selPanel = el(doc, 'div', 'bw-selpanel bw-panel');
+  const sname = el(doc, 'div', 'bw-sname', '-');
+  const sinfo = el(doc, 'div', null, '-');
+  const shpbar = el(doc, 'div', 'bw-shpbar');
+  const shpfill = el(doc, 'div', 'bw-shpfill');
+  shpbar.appendChild(shpfill);
+  const shptext = el(doc, 'div', null, '');
+  const selrow = el(doc, 'div', 'bw-selrow');
+  const upgradeBtn = el(doc, 'button', 'bw-btn', 'Upgrade');
+  const sellBtn = el(doc, 'button', 'bw-btn', 'Sell');
+  const repairBtn = el(doc, 'button', 'bw-btn', 'Repair');
+  upgradeBtn.addEventListener('click', () => { if (cbs.onUpgrade && hud.currentSelectedId != null) cbs.onUpgrade(hud.currentSelectedId); });
+  sellBtn.addEventListener('click', () => { if (cbs.onSell && hud.currentSelectedId != null) cbs.onSell(hud.currentSelectedId); });
+  repairBtn.addEventListener('click', () => { if (cbs.onRepair && hud.currentSelectedId != null) cbs.onRepair(hud.currentSelectedId); });
+  selrow.appendChild(upgradeBtn);
+  selrow.appendChild(sellBtn);
+  selrow.appendChild(repairBtn);
+  selPanel.appendChild(sname);
+  selPanel.appendChild(sinfo);
+  selPanel.appendChild(shpbar);
+  selPanel.appendChild(shptext);
+  selPanel.appendChild(selrow);
+  root.appendChild(selPanel);
 
-    // Build palette.
-    const build = this._el('div', 'panel');
-    build.id = 'hud-build';
-    build.appendChild(this._el('div', 'sect-title', 'Build'));
-    const structList = Array.isArray(STRUCTURES) ? STRUCTURES : Object.values(STRUCTURES);
-    for (const s of structList) {
-      const key = s.id || s.key || s.name;
-      const btn = this._el('button', 'item');
-      const nameSpan = this._el('span', null, s.name || key);
-      const priceSpan = this._el('span', null, String(Math.round(s.cost !== undefined ? s.cost : (s.costT1 !== undefined ? s.costT1 : 0))));
-      btn.appendChild(nameSpan);
-      btn.appendChild(priceSpan);
-      btn.dataset.cost = String(s.cost !== undefined ? s.cost : (s.costT1 !== undefined ? s.costT1 : 0));
-      btn.addEventListener('click', () => {
-        if (this.selectedBuildKey === key) {
-          this.selectedBuildKey = null;
-          if (this.opts.onCancelBuild) this.opts.onCancelBuild();
-          else if (this.opts.onSelectBuild) this.opts.onSelectBuild(null);
-        } else {
-          this.selectedBuildKey = key;
-          if (this.opts.onSelectBuild) this.opts.onSelectBuild(key);
+  // ---- bottom bar (help + debug) --------------------------------------
+  const bottombar = el(doc, 'div', 'bw-bottombar');
+  const help = el(doc, 'div', 'bw-help bw-panel',
+    'Click a build button, then a slot/cell to place. Click a structure to select it. Esc cancels build mode.');
+  const debug = el(doc, 'div', 'bw-debug bw-panel');
+  const exportBtn = el(doc, 'button', 'bw-btn', 'Export Log');
+  exportBtn.addEventListener('click', () => { if (cbs.onExportLog) cbs.onExportLog(); });
+  const replayBtn = el(doc, 'button', 'bw-btn', 'Run Replay');
+  replayBtn.addEventListener('click', () => { if (cbs.onRunReplay) cbs.onRunReplay(); });
+  const balanceBtn = el(doc, 'button', 'bw-btn', 'Balance Report');
+  balanceBtn.addEventListener('click', () => { if (cbs.onBalanceReport) cbs.onBalanceReport(); });
+  const seedInput = el(doc, 'input', 'bw-seedinput');
+  seedInput.setAttribute('type', 'text');
+  seedInput.setAttribute('placeholder', 'seed');
+  const restartBtn = el(doc, 'button', 'bw-btn', 'Restart');
+  restartBtn.addEventListener('click', () => {
+    if (!cbs.onRestart) return;
+    const n = Number(seedInput.value);
+    cbs.onRestart(Number.isFinite(n) && seedInput.value !== '' ? Math.floor(n) : hud.lastSeed);
+  });
+  debug.appendChild(exportBtn);
+  debug.appendChild(replayBtn);
+  debug.appendChild(balanceBtn);
+  debug.appendChild(seedInput);
+  debug.appendChild(restartBtn);
+  bottombar.appendChild(help);
+  bottombar.appendChild(debug);
+  root.appendChild(bottombar);
+
+  // ---- toast -----------------------------------------------------------
+  const toast = el(doc, 'div', 'bw-toast');
+  root.appendChild(toast);
+
+  // ---- result overlay ---------------------------------------------------
+  const resultEl = el(doc, 'div', 'bw-result');
+  const banner = el(doc, 'div', 'bw-rbanner', '');
+  const resultRestart = el(doc, 'button', 'bw-btn', 'Restart');
+  resultRestart.addEventListener('click', () => {
+    if (cbs.onRestart) cbs.onRestart(hud.lastSeed);
+  });
+  resultEl.appendChild(banner);
+  resultEl.appendChild(resultRestart);
+  root.appendChild(resultEl);
+
+  mountEl.appendChild(root);
+
+  const hud = {
+    doc,
+    root,
+    callbacks: cbs,
+    hpfill,
+    hptext,
+    moneyEl,
+    waveEl,
+    startWaveBtn,
+    seedEl,
+    paletteBtns,
+    selPanel,
+    sname,
+    sinfo,
+    shpfill,
+    shptext,
+    upgradeBtn,
+    sellBtn,
+    repairBtn,
+    toast,
+    toastTimer: null,
+    resultEl,
+    banner,
+    lastMoney: null,
+    lastSeed: 1,
+    currentSelectedId: null,
+    currentBuildSelection: null,
+    hideResult() {
+      resultEl.classList.remove('bw-show');
+      resultEl.style.display = 'none';
+    },
+  };
+  return hud;
+}
+
+export function updateHud(hud, state, ui) {
+  if (!hud || !state) return;
+  hud.lastSeed = state.seed;
+  hud.seedEl.textContent = 'seed: ' + state.seed;
+
+  // Base HP
+  const base = state.base || { hp: 0, maxHp: 1 };
+  const frac = base.maxHp > 0 ? Math.max(0, Math.min(1, base.hp / base.maxHp)) : 0;
+  hud.hpfill.style.width = (frac * 100).toFixed(1) + '%';
+  hud.hptext.textContent = 'Base: ' + Math.max(0, Math.ceil(base.hp)) + '/' + Math.ceil(base.maxHp);
+
+  // Money (with rising delta)
+  const money = Math.floor((state.economy && state.economy.money) || 0);
+  if (hud.lastMoney !== null && money !== hud.lastMoney) {
+    const diff = money - hud.lastMoney;
+    if (Math.abs(diff) >= 1) {
+      try {
+        const span = hud.doc.createElement('span');
+        span.className = 'bw-delta';
+        span.style.color = diff > 0 ? '#8f8' : '#f88';
+        span.textContent = (diff > 0 ? '+' : '') + diff;
+        hud.moneyEl.appendChild(span);
+        if (typeof setTimeout === 'function') {
+          setTimeout(() => { if (span.parentNode) span.parentNode.removeChild(span); }, 900);
         }
-        this._refreshBuildSelection();
-      });
-      build.appendChild(btn);
-      this.buildButtons.set(key, btn);
-    }
-    root.appendChild(build);
-
-    // Deploy list (player troop deployments).
-    const deploy = this._el('div', 'panel');
-    deploy.id = 'hud-deploy';
-    deploy.appendChild(this._el('div', 'sect-title', 'Deploy Troops'));
-    const unitList = Array.isArray(UNITS) ? UNITS : Object.values(UNITS);
-    const deployable = unitList.filter(u => u.deployable !== false).slice(0, 8);
-    for (const u of deployable) {
-      const key = u.id || u.key || u.name;
-      const btn = this._el('button', 'item');
-      btn.appendChild(this._el('span', null, u.name || key));
-      const cost = u.cost !== undefined ? u.cost : (u.costT1 !== undefined ? u.costT1 : 0);
-      btn.appendChild(this._el('span', null, String(Math.round(cost))));
-      btn.dataset.cost = String(cost);
-      btn.addEventListener('click', () => {
-        if (this.opts.onDeploy) this.opts.onDeploy(key);
-      });
-      deploy.appendChild(btn);
-      this.deployButtons.set(key, btn);
-    }
-    root.appendChild(deploy);
-
-    // Selected structure panel.
-    const sel = this._el('div', 'panel');
-    sel.id = 'hud-select';
-    sel.style.display = 'none';
-    sel.appendChild(this._el('div', 'sect-title', 'Structure'));
-    this.selName = this._el('div', 'row', '');
-    sel.appendChild(this.selName);
-    this.selTier = this._el('div', 'row', '');
-    sel.appendChild(this.selTier);
-    this.selHp = this._el('div', 'row', '');
-    sel.appendChild(this.selHp);
-    this.selState = this._el('div', 'row', '');
-    sel.appendChild(this.selState);
-    const actions = this._el('div', 'actions');
-    this.upgradeBtn = this._el('button', null, 'Upgrade');
-    this.upgradeBtn.addEventListener('click', () => {
-      if (this.opts.onUpgrade && this.lastSelectedId != null) this.opts.onUpgrade(this.lastSelectedId);
-    });
-    actions.appendChild(this.upgradeBtn);
-    this.repairBtn = this._el('button', null, 'Repair');
-    this.repairBtn.addEventListener('click', () => {
-      if (this.opts.onRepair && this.lastSelectedId != null) this.opts.onRepair(this.lastSelectedId);
-    });
-    actions.appendChild(this.repairBtn);
-    this.sellBtn = this._el('button', null, 'Sell');
-    this.sellBtn.addEventListener('click', () => {
-      if (this.opts.onSell && this.lastSelectedId != null) this.opts.onSell(this.lastSelectedId);
-    });
-    actions.appendChild(this.sellBtn);
-    sel.appendChild(actions);
-    this.selectPanel = sel;
-    root.appendChild(sel);
-
-    // Controls help.
-    const help = this._el('div', 'panel');
-    help.id = 'hud-controls';
-    help.innerHTML =
-      '<div class="sect-title">Controls</div>' +
-      'Click build item &rarr; click slot to place<br>' +
-      'Right-click / Esc: cancel placement<br>' +
-      'Click structure: select (U upgrade, R repair, X sell)<br>' +
-      'Click deploy unit &rarr; click destination to march<br>' +
-      'Space / button: start wave';
-    root.appendChild(help);
-
-    // Win/lose banner.
-    this.banner = this._el('div', 'panel');
-    this.banner.id = 'hud-banner';
-    root.appendChild(this.banner);
-  }
-
-  _refreshBuildSelection() {
-    for (const [key, btn] of this.buildButtons) {
-      if (key === this.selectedBuildKey) btn.classList.add('selected');
-      else btn.classList.remove('selected');
+      } catch (e) { /* non-critical */ }
     }
   }
-
-  setSelectedBuild(key) {
-    this.selectedBuildKey = key;
-    this._refreshBuildSelection();
+  hud.lastMoney = money;
+  // update the text node without wiping delta spans
+  if (hud.moneyEl.firstChild && hud.moneyEl.firstChild.nodeType === 3) {
+    hud.moneyEl.firstChild.nodeValue = money + 'g';
+  } else {
+    hud.moneyEl.insertBefore(hud.doc.createTextNode(money + 'g'), hud.moneyEl.firstChild || null);
   }
 
-  _flashMoneyDelta(delta) {
-    const el = this.moneyDelta;
-    el.textContent = (delta > 0 ? '+' : '') + Math.round(delta);
-    el.className = delta > 0 ? 'pos' : 'neg';
-    el.id = 'hud-money-delta';
-    el.style.transition = 'none';
-    el.style.opacity = '1';
-    // Force reflow then fade.
-    void el.offsetWidth;
-    el.style.transition = 'opacity 0.9s';
-    el.style.opacity = '0';
+  // Waves
+  const waves = state.waves || { current: 0, total: 0, active: false };
+  hud.waveEl.textContent = 'Wave ' + waves.current + '/' + waves.total + (waves.active ? ' (active)' : ' (build)');
+  hud.startWaveBtn.disabled = !!(waves.active || state.result || waves.current >= waves.total);
+
+  // Build palette
+  hud.currentBuildSelection = ui ? ui.buildSelection : null;
+  for (const structId of Object.keys(hud.paletteBtns)) {
+    const btn = hud.paletteBtns[structId];
+    const def = STRUCTURES[structId];
+    const cost = def && def.cost ? def.cost[0] : 0;
+    if (money < cost) btn.classList.add('bw-poor'); else btn.classList.remove('bw-poor');
+    if (ui && ui.buildSelection === structId) btn.classList.add('bw-selected'); else btn.classList.remove('bw-selected');
   }
 
-  showBanner(win) {
-    this.banner.textContent = win ? 'VICTORY — ALL WAVES SURVIVED' : 'DEFEAT — BASE DESTROYED';
-    this.banner.className = 'panel ' + (win ? 'win' : 'lose');
-    this.banner.style.display = 'block';
-    this.bannerShown = true;
+  // Selected structure panel
+  const selId = ui ? ui.selectedStructureId : null;
+  let s = null;
+  if (selId != null && state.structures && typeof state.structures.get === 'function') {
+    s = state.structures.get(selId) || null;
   }
+  if (!s) {
+    hud.currentSelectedId = null;
+    hud.selPanel.style.display = 'none';
+  } else {
+    hud.currentSelectedId = selId;
+    hud.selPanel.style.display = 'flex';
+    let def = null;
+    try { def = getStructureDef(s.structId); } catch (e) { def = null; }
+    hud.sname.textContent = (def && def.name ? def.name : s.structId) + ' T' + s.tier;
+    hud.sinfo.textContent = 'State: ' + s.lifecycle;
+    const sfrac = s.maxHp > 0 ? Math.max(0, Math.min(1, s.hp / s.maxHp)) : 0;
+    hud.shpfill.style.width = (sfrac * 100).toFixed(1) + '%';
+    hud.shptext.textContent = 'HP ' + Math.max(0, Math.ceil(s.hp)) + '/' + Math.ceil(s.maxHp);
 
-  showMessage(text) {
-    this.banner.textContent = text;
-    this.banner.className = 'panel';
-    this.banner.style.display = 'block';
-    const self = this;
-    setTimeout(function () {
-      if (!self.bannerShown) self.banner.style.display = 'none';
-    }, 2500);
-  }
-
-  // Called each render frame with the sim state.
-  update(state) {
-    if (!state) return;
-
-    // Base HP.
-    const base = state.base || {};
-    const hp = Math.max(0, Math.round(base.hp !== undefined ? base.hp : 0));
-    const maxHp = Math.max(1, Math.round(base.maxHp !== undefined ? base.maxHp : hp || 1));
-    this.hpValue.textContent = hp + ' / ' + maxHp;
-    this.hpBarFill.style.width = Math.max(0, Math.min(100, (hp / maxHp) * 100)) + '%';
-    this.hpBarFill.style.background = hp / maxHp > 0.5 ? '#5fd06f' : (hp / maxHp > 0.25 ? '#e0c05f' : '#e06f5f');
-
-    // Money + delta.
-    const money = Math.floor(state.economy ? state.economy.money : (state.money || 0));
-    this.moneyValue.textContent = String(money);
-    if (this.lastMoney !== null) {
-      const delta = money - this.lastMoney;
-      if (Math.abs(delta) >= 5) this._flashMoneyDelta(delta);
-    }
-    this.lastMoney = money;
-
-    // Wave counter.
-    const waves = state.waves || {};
-    const cur = waves.currentWave !== undefined ? waves.currentWave : (waves.waveIndex !== undefined ? waves.waveIndex : 0);
-    const total = waves.totalWaves !== undefined ? waves.totalWaves : (waves.count !== undefined ? waves.count : '?');
-    this.waveValue.textContent = Math.min(cur, total) + ' / ' + total;
-    const waveActive = !!(waves.active || waves.inProgress);
-    const gameOver = state.status === 'won' || state.status === 'lost' || state.won || state.lost;
-    this.startWaveBtn.disabled = waveActive || !!gameOver || cur >= (typeof total === 'number' ? total : Infinity);
-    this.startWaveBtn.textContent = waveActive ? 'Wave In Progress' : 'Start Wave';
-
-    // Affordability dimming on palettes.
-    for (const btn of this.buildButtons.values()) {
-      const cost = parseFloat(btn.dataset.cost) || 0;
-      btn.classList.toggle('dim', money < cost);
-    }
-    for (const btn of this.deployButtons.values()) {
-      const cost = parseFloat(btn.dataset.cost) || 0;
-      btn.classList.toggle('dim', money < cost);
-    }
-
-    // Selected structure panel.
-    const selId = state.selectedStructureId !== undefined ? state.selectedStructureId : null;
-    let sel = null;
-    if (selId != null && state.structures) {
-      const list = Array.isArray(state.structures) ? state.structures : Object.values(state.structures);
-      for (const s of list) {
-        if (s && s.id === selId) { sel = s; break; }
-      }
-    }
-    if (sel && sel.state !== 'Destroyed') {
-      this.lastSelectedId = sel.id;
-      this.selectPanel.style.display = 'block';
-      this.selName.textContent = (sel.name || sel.kind || 'Structure');
-      const tier = sel.tier || 1;
-      this.selTier.textContent = 'Tier: ' + tier + (tier < 3 ? '' : ' (max)');
-      const shp = Math.max(0, Math.round(sel.hp || 0));
-      const smax = Math.max(1, Math.round(sel.maxHp || shp || 1));
-      this.selHp.textContent = 'HP: ' + shp + ' / ' + smax;
-      this.selState.textContent = 'State: ' + (sel.state || 'Complete');
-
-      // Upgrade price: from structure data or upgrade cost curve.
-      let upCost = sel.upgradeCost;
-      if (upCost === undefined) {
-        const baseCost = sel.baseCost !== undefined ? sel.baseCost : (sel.cost || 0);
-        const t2x = ASSUMPTIONS.Upgrade_Cost_x_T2 !== undefined ? ASSUMPTIONS.Upgrade_Cost_x_T2 : 2.5;
-        const t3x = ASSUMPTIONS.Upgrade_Cost_x_T3 !== undefined ? ASSUMPTIONS.Upgrade_Cost_x_T3 : 5;
-        if (tier === 1) upCost = Math.round(baseCost * (t2x - 1));
-        else if (tier === 2) upCost = Math.round(baseCost * (t3x - t2x));
-        else upCost = 0;
-      }
-      const busy = sel.state === 'Building' || sel.state === 'Upgrading' || sel.state === 'Selling';
-      if (tier >= 3) {
-        this.upgradeBtn.textContent = 'Max Tier';
-        this.upgradeBtn.disabled = true;
-      } else {
-        this.upgradeBtn.textContent = 'Upgrade (' + Math.round(upCost) + ')';
-        this.upgradeBtn.disabled = busy || money < upCost;
-      }
-      const damaged = shp < smax;
-      this.repairBtn.textContent = sel.repairing ? 'Repairing...' : 'Repair (free)';
-      this.repairBtn.disabled = busy || !damaged || !!sel.repairing;
-
-      let refund = sel.sellRefund;
-      if (refund === undefined) {
-        const value = sel.value !== undefined ? sel.value : (sel.baseCost !== undefined ? sel.baseCost : (sel.cost || 0));
-        refund = Math.round(value * 0.5 * (smax > 0 ? shp / smax : 1));
-      }
-      this.sellBtn.textContent = 'Sell (+' + Math.round(refund) + ')';
-      this.sellBtn.disabled = sel.state === 'Selling';
-    } else {
-      this.lastSelectedId = null;
-      this.selectPanel.style.display = 'none';
-    }
-
-    // Win/lose banner.
-    if (!this.bannerShown) {
-      if (state.status === 'won' || state.won) this.showBanner(true);
-      else if (state.status === 'lost' || state.lost) this.showBanner(false);
-    }
-  }
-
-  reset() {
-    this.bannerShown = false;
-    this.banner.style.display = 'none';
-    this.lastMoney = null;
-    this.lastSelectedId = null;
-    this.selectedBuildKey = null;
-    this._refreshBuildSelection();
+    const busy = s.lifecycle === 'Building' || s.lifecycle === 'Upgrading' || s.lifecycle === 'Selling' || s.lifecycle === 'Placing';
+    const maxTier = def && def.hp ? def.hp.length : 3;
+    const upCost = (def && def.cost && s.tier < maxTier) ? def.cost[s.tier] : Infinity;
+    hud.upgradeBtn.disabled = busy || s.tier >= maxTier || money < upCost;
+    hud.upgradeBtn.textContent = s.tier >= maxTier ? 'Max Tier' : 'Upgrade (' + upCost + 'g)';
+    let sellVal = 0;
+    try { sellVal = getSellValue(s, STRUCTURES, ASSUMPTIONS); } catch (e) { sellVal = 0; }
+    hud.sellBtn.disabled = busy;
+    hud.sellBtn.textContent = 'Sell (+' + Math.floor(sellVal) + 'g)';
+    hud.repairBtn.disabled = busy || s.hp >= s.maxHp;
   }
 }
 
-export function createHUD(opts) {
-  return new HUD(opts);
+export function showResult(hud, result) {
+  if (!hud) return;
+  const win = result === 'win';
+  hud.banner.textContent = win ? 'VICTORY' : 'DEFEAT';
+  hud.banner.className = 'bw-rbanner ' + (win ? 'bw-win' : 'bw-lose');
+  hud.resultEl.style.display = 'flex';
+  hud.resultEl.classList.add('bw-show');
+}
+
+export function flashMessage(hud, text) {
+  if (!hud) return;
+  hud.toast.textContent = String(text);
+  hud.toast.style.display = 'block';
+  if (typeof clearTimeout === 'function' && hud.toastTimer) clearTimeout(hud.toastTimer);
+  if (typeof setTimeout === 'function') {
+    hud.toastTimer = setTimeout(() => { hud.toast.style.display = 'none'; }, 1600);
+  }
 }

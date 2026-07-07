@@ -1,409 +1,343 @@
-// src/sim/structures.js
-// Structure lifecycle state machine, placement validity, build timers,
-// upgrade one tier, sell partial refund, free troop-travel repair jobs.
+import { ASSUMPTIONS, STRUCTURES, MAP, getStructureDef } from '../data/tables.js';
+import { buildNavGrid, findWalkerPath, recomputeUnitPaths } from './pathfinding.js';
+import { createUnit, createStructure } from './entities.js';
+import { canAfford, spend, refund, getSellValue } from './economy.js';
+import { emitEvent } from './core.js';
 
-import { TABLES } from '../data/tables.js';
-import { makeStructure } from '../sim/entities.js';
-import { canPlaceStructureAt, occupyTiles, freeTiles, isSlotTile, tilesForFootprint } from '../sim/grid.js';
-import { recomputePaths } from '../sim/pathing.js';
-import { canAfford, spend, refund } from '../sim/economy.js';
+const REPAIR_TROOP_ID = 'GND-Troops';
 
-// Lifecycle state constants
-export const STRUCT_STATE = {
-  PLACING: 'Placing',
-  BUILDING: 'Building',
-  COMPLETE: 'Complete',
-  DAMAGED: 'Damaged',
-  DESTROYED: 'Destroyed',
-  UPGRADING: 'Upgrading',
-  SELLING: 'Selling',
-};
-
-const SELL_REFUND_FRACTION = 0.5; // partial refund
-const SELL_TIME = 1.0;            // seconds to tear down
-const REPAIR_RATE_FRACTION = 0.2; // fraction of max HP repaired per second once troop arrives
-const REPAIR_TROOP_SPEED = 2.0;   // tiles per second the repair troop travels
-
-function structDef(structId) {
-  const def = TABLES.structures[structId] || (TABLES.structuresList || []).find((s) => s.id === structId);
-  if (!def) throw new Error('Unknown structure id: ' + structId);
-  return def;
+function getMap(state) {
+  return state.map || MAP;
 }
 
-function buildTimeFor(def, tier) {
-  // Data-driven: buildTime from table, scaled slightly per tier if not specified per-tier
-  if (def.buildTime != null) {
-    return def.buildTime * (tier > 1 ? 0.75 : 1);
-  }
-  return 3;
+function isTowerKind(kind) {
+  return kind === 'antiGround' || kind === 'antiAir';
 }
 
-function costFor(def, tier) {
-  const t = tier || 1;
-  if (def.costByTier && def.costByTier[t - 1] != null) return def.costByTier[t - 1];
-  if (t === 1) return def.cost;
-  const a = TABLES.assumptions;
-  const mult = t === 2 ? a.Upgrade_Cost_x_T2 : a.Upgrade_Cost_x_T3;
-  return Math.round(def.cost * mult);
-}
-
-export function upgradeCost(structure) {
-  const def = structDef(structure.defId);
-  const nextTier = structure.tier + 1;
-  if (nextTier > (def.maxTier || 3)) return null;
-  // Incremental cost = cumulative value at next tier - cumulative value at current tier
-  return Math.max(0, costFor(def, nextTier) - costFor(def, structure.tier));
-}
-
-export function sellRefund(structure) {
-  const def = structDef(structure.defId);
-  const value = costFor(def, structure.tier);
-  return Math.floor(value * SELL_REFUND_FRACTION);
-}
-
-// ---------------------------------------------------------------------------
-// Placement validity: space + terrain + cost. Returns {ok, reason}
-// ---------------------------------------------------------------------------
-export function checkPlacement(state, structId, tx, ty) {
-  const def = structDef(structId);
-  const footprint = def.footprint || { w: 1, h: 1 };
-
-  // Space + terrain check via grid
-  const spaceOk = canPlaceStructureAt(state.grid, def, tx, ty);
-  if (!spaceOk.ok) return { ok: false, reason: spaceOk.reason || 'blocked' };
-
-  // Towers snap to hard-point slots; walls/moats go on terrain
-  if (def.requiresSlot) {
-    if (!isSlotTile(state.grid, tx, ty)) {
-      return { ok: false, reason: 'must place on hard-point slot' };
-    }
-    // slot not already occupied by another structure
-    for (const s of state.structures) {
-      if (s.state === STRUCT_STATE.DESTROYED) continue;
-      if (s.tx === tx && s.ty === ty) return { ok: false, reason: 'slot occupied' };
+function footprintCells(pos, footprint) {
+  const cells = [];
+  const w = (footprint && footprint.w) || 1;
+  const h = (footprint && footprint.h) || 1;
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      cells.push({ x: pos.x + dx, y: pos.y + dy });
     }
   }
-
-  // Cost check
-  const cost = costFor(def, 1);
-  if (!canAfford(state, cost)) {
-    return { ok: false, reason: 'insufficient funds', cost };
-  }
-
-  return { ok: true, cost, footprint };
+  return cells;
 }
 
-// ---------------------------------------------------------------------------
-// Place a structure: deduct cost, enter Building state with a timer.
-// Emits events into state.events. Returns the structure or null.
-// ---------------------------------------------------------------------------
-export function placeStructure(state, structId, tx, ty) {
-  const check = checkPlacement(state, structId, tx, ty);
-  if (!check.ok) {
-    state.events.push({ tick: state.tick, type: 'placeRejected', structId, tx, ty, reason: check.reason });
-    return null;
-  }
-
-  const def = structDef(structId);
-  const cost = costFor(def, 1);
-  spend(state, cost, 'build:' + structId);
-
-  const structure = makeStructure(def, tx, ty, state.nextEntityId++);
-  structure.defId = def.id;
-  structure.state = STRUCT_STATE.BUILDING;
-  structure.buildTimer = buildTimeFor(def, 1);
-  structure.buildTotal = structure.buildTimer;
-  structure.tier = 1;
-  structure.hp = 0; // HP rises as it builds
-  structure.repairJob = null;
-
-  state.structures.push(structure);
-
-  // Occupy tiles; walls/moats affect walker pathing immediately
-  occupyTiles(state.grid, structure, tilesForFootprint(def.footprint || { w: 1, h: 1 }, tx, ty));
-  if (def.blocksWalkers || def.isWall || def.isMoat) {
-    recomputePaths(state);
-  }
-
-  state.events.push({ tick: state.tick, type: 'placed', id: structure.id, structId, tx, ty, cost });
-  return structure;
+function structureCells(s) {
+  return footprintCells(s.pos, s.footprint);
 }
 
-// ---------------------------------------------------------------------------
-// Upgrade one tier: deduct incremental cost, enter Upgrading state.
-// ---------------------------------------------------------------------------
-export function startUpgrade(state, structure) {
-  if (!structure) return false;
-  if (structure.state !== STRUCT_STATE.COMPLETE && structure.state !== STRUCT_STATE.DAMAGED) {
-    state.events.push({ tick: state.tick, type: 'upgradeRejected', id: structure.id, reason: 'not ready' });
-    return false;
-  }
-  const def = structDef(structure.defId);
-  if (structure.tier >= (def.maxTier || 3)) {
-    state.events.push({ tick: state.tick, type: 'upgradeRejected', id: structure.id, reason: 'max tier' });
-    return false;
-  }
-  const cost = upgradeCost(structure);
-  if (cost == null || !canAfford(state, cost)) {
-    state.events.push({ tick: state.tick, type: 'upgradeRejected', id: structure.id, reason: 'insufficient funds' });
-    return false;
-  }
-  spend(state, cost, 'upgrade:' + structure.defId);
-  structure.prevState = structure.hp < structure.maxHp ? STRUCT_STATE.DAMAGED : STRUCT_STATE.COMPLETE;
-  structure.state = STRUCT_STATE.UPGRADING;
-  structure.buildTimer = buildTimeFor(def, structure.tier + 1);
-  structure.buildTotal = structure.buildTimer;
-  state.events.push({ tick: state.tick, type: 'upgradeStarted', id: structure.id, toTier: structure.tier + 1, cost });
-  return true;
+function cellKey(c) {
+  return c.x + ',' + c.y;
 }
 
-// ---------------------------------------------------------------------------
-// Sell: partial refund, enter Selling state then remove.
-// ---------------------------------------------------------------------------
-export function startSell(state, structure) {
-  if (!structure) return false;
-  if (structure.state === STRUCT_STATE.DESTROYED || structure.state === STRUCT_STATE.SELLING) {
-    return false;
+function liveStructures(state) {
+  const out = [];
+  for (const s of state.structures.values()) {
+    if (s.lifecycle !== 'Destroyed') out.push(s);
   }
-  const amount = sellRefund(structure);
-  structure.state = STRUCT_STATE.SELLING;
-  structure.sellTimer = SELL_TIME;
-  structure.sellRefundAmount = amount;
-  cancelRepairJob(state, structure);
-  state.events.push({ tick: state.tick, type: 'sellStarted', id: structure.id, refund: amount });
-  return true;
+  return out;
 }
 
-// ---------------------------------------------------------------------------
-// Repairs: free but require a troop to travel from the base to the structure.
-// Repair job phases: 'travel' -> 'repairing' -> done.
-// ---------------------------------------------------------------------------
-export function requestRepair(state, structure) {
-  if (!structure) return false;
-  if (structure.state !== STRUCT_STATE.DAMAGED && structure.state !== STRUCT_STATE.COMPLETE) {
-    state.events.push({ tick: state.tick, type: 'repairRejected', id: structure.id, reason: 'not repairable' });
-    return false;
+function occupiedCellSet(state) {
+  const set = new Set();
+  for (const s of liveStructures(state)) {
+    for (const c of structureCells(s)) set.add(cellKey(c));
   }
-  if (structure.hp >= structure.maxHp) {
-    state.events.push({ tick: state.tick, type: 'repairRejected', id: structure.id, reason: 'full hp' });
-    return false;
+  return set;
+}
+
+export function validatePlacement(state, structId, slotOrCell) {
+  let def;
+  try {
+    def = getStructureDef(structId);
+  } catch (e) {
+    return { ok: false, reason: 'noSlot' };
   }
-  if (structure.repairJob) {
-    return false; // already has a repair job
+  if (!slotOrCell || typeof slotOrCell.x !== 'number' || typeof slotOrCell.y !== 'number') {
+    return { ok: false, reason: 'terrain' };
   }
-  const base = state.base;
-  const dx = structure.tx - base.tx;
-  const dy = structure.ty - base.ty;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  structure.repairJob = {
-    phase: 'travel',
-    x: base.tx,
-    y: base.ty,
-    travelRemaining: dist,
-    totalDist: dist,
-    targetId: structure.id,
+  const map = getMap(state);
+  const cell = { x: Math.round(slotOrCell.x), y: Math.round(slotOrCell.y) };
+  const occupied = occupiedCellSet(state);
+
+  if (isTowerKind(def.kind)) {
+    // Towers must snap to a free hard-point slot.
+    let slotFound = false;
+    for (const slot of map.slots) {
+      if (slot.x === cell.x && slot.y === cell.y) { slotFound = true; break; }
+    }
+    if (!slotFound) return { ok: false, reason: 'noSlot' };
+    for (const c of footprintCells(cell, def.footprint)) {
+      if (occupied.has(cellKey(c))) return { ok: false, reason: 'occupied' };
+    }
+    if (!canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
+    return { ok: true, reason: '' };
+  }
+
+  // Walls / moats: must sit on buildable terrain, not overlap, not seal the ground lane.
+  const buildable = new Set();
+  for (const c of map.buildableCells) buildable.add(cellKey(c));
+  const forbidden = new Set([
+    cellKey(map.base),
+    cellKey(map.spawnGround),
+    cellKey(map.spawnWater)
+  ]);
+  const cells = footprintCells(cell, def.footprint);
+  for (const c of cells) {
+    if (c.x < 0 || c.y < 0 || c.x >= map.cols || c.y >= map.rows) return { ok: false, reason: 'terrain' };
+    if (occupied.has(cellKey(c))) return { ok: false, reason: 'occupied' };
+  }
+  for (const c of cells) {
+    if (!buildable.has(cellKey(c)) || forbidden.has(cellKey(c))) return { ok: false, reason: 'terrain' };
+  }
+  if (!canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
+
+  // Hypothetical nav grid with the new piece: the ground lane must stay open.
+  const ghost = {
+    id: -1,
+    structId: structId,
+    kind: def.kind,
+    pos: { x: cell.x, y: cell.y },
+    footprint: { w: (def.footprint && def.footprint.w) || 1, h: (def.footprint && def.footprint.h) || 1 },
+    lifecycle: 'Building',
+    hp: 1,
+    maxHp: 1
   };
-  state.events.push({ tick: state.tick, type: 'repairDispatched', id: structure.id, dist });
+  const testStructures = liveStructures(state).concat([ghost]);
+  const nav = buildNavGrid(map, testStructures);
+  const path = findWalkerPath(nav, { x: map.spawnGround.x, y: map.spawnGround.y }, { x: map.base.x, y: map.base.y });
+  if (!path) return { ok: false, reason: 'blocksPath' };
+
+  return { ok: true, reason: '' };
+}
+
+export function placeStructure(state, structId, slotOrCell) {
+  const check = validatePlacement(state, structId, slotOrCell);
+  if (!check.ok) return null;
+  const def = getStructureDef(structId);
+  const cost = def.cost[0];
+  if (!spend(state, cost, 'build:' + structId)) return null;
+
+  const cell = { x: Math.round(slotOrCell.x), y: Math.round(slotOrCell.y) };
+  const s = createStructure(state, structId, cell);
+  if (!state.structures.has(s.id)) state.structures.set(s.id, s);
+  s.lifecycle = 'Building';
+  s.progress = 0;
+  s.invested = cost;
+  s.repairPending = false;
+
+  emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: structId, phase: 'start', pos: { x: s.pos.x, y: s.pos.y } });
+
+  if (s.kind === 'wall' || s.kind === 'moat') {
+    recomputeUnitPaths(state);
+  }
+  return s;
+}
+
+export function startUpgrade(state, structureId) {
+  const s = state.structures.get(structureId);
+  if (!s) return false;
+  if (s.lifecycle !== 'Complete' && s.lifecycle !== 'Damaged') return false;
+  const def = getStructureDef(s.structId);
+  const maxTier = def.hp.length;
+  if (s.tier >= 3 || s.tier >= maxTier) return false;
+  const upCost = def.cost[s.tier] - def.cost[s.tier - 1];
+  if (!canAfford(state, upCost)) return false;
+  if (!spend(state, upCost, 'upgrade:' + s.structId)) return false;
+  s.invested = (s.invested || def.cost[0]) + upCost;
+  s.lifecycle = 'Upgrading';
+  s.progress = 0;
+  emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: s.structId, phase: 'upgradeStart', tier: s.tier + 1 });
   return true;
 }
 
-function cancelRepairJob(state, structure) {
-  if (structure.repairJob) {
-    structure.repairJob = null;
-    state.events.push({ tick: state.tick, type: 'repairCancelled', id: structure.id });
-  }
+export function startSell(state, structureId) {
+  const s = state.structures.get(structureId);
+  if (!s) return false;
+  if (s.lifecycle === 'Selling' || s.lifecycle === 'Destroyed') return false;
+  s.lifecycle = 'Selling';
+  s.progress = 0;
+  emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: s.structId, phase: 'sellStart' });
+  return true;
 }
 
-// ---------------------------------------------------------------------------
-// Damage handling — called by combat when a structure takes a hit.
-// ---------------------------------------------------------------------------
-export function damageStructure(state, structure, amount) {
-  if (structure.state === STRUCT_STATE.DESTROYED) return;
-  structure.hp -= amount;
-  if (structure.hp <= 0) {
-    structure.hp = 0;
-    destroyStructure(state, structure);
-  } else if (structure.state === STRUCT_STATE.COMPLETE) {
-    structure.state = STRUCT_STATE.DAMAGED;
-    state.events.push({ tick: state.tick, type: 'structDamaged', id: structure.id });
+export function requestRepair(state, structureId) {
+  const s = state.structures.get(structureId);
+  if (!s) return false;
+  if (s.lifecycle !== 'Damaged' && s.lifecycle !== 'Complete') return false;
+  if (s.hp >= s.maxHp) return false;
+  if (s.repairPending) return false;
+
+  const map = getMap(state);
+  const basePos = { x: map.base.x, y: map.base.y };
+  const troop = createUnit(state, REPAIR_TROOP_ID, 1, { x: basePos.x, y: basePos.y }, 'ground', 'defender');
+  if (!state.units.has(troop.id)) state.units.set(troop.id, troop);
+  troop.isRepairTroop = true;
+  troop.repairTargetId = s.id;
+  troop.state = 'repairMarch';
+  troop.dps = 0;
+  troop.targetId = null;
+  troop.targetsBase = false;
+
+  // Path from base to the structure (or an adjacent open cell if the footprint blocks walkers).
+  const nav = buildNavGrid(map, liveStructures(state));
+  let path = findWalkerPath(nav, basePos, { x: s.pos.x, y: s.pos.y });
+  if (!path) {
+    const neighbors = [
+      { x: s.pos.x - 1, y: s.pos.y },
+      { x: s.pos.x + ((s.footprint && s.footprint.w) || 1), y: s.pos.y },
+      { x: s.pos.x, y: s.pos.y - 1 },
+      { x: s.pos.x, y: s.pos.y + ((s.footprint && s.footprint.h) || 1) }
+    ];
+    for (const n of neighbors) {
+      if (n.x < 0 || n.y < 0 || n.x >= map.cols || n.y >= map.rows) continue;
+      const p = findWalkerPath(nav, basePos, n);
+      if (p) { path = p; break; }
+    }
   }
+  troop.path = path || [{ x: s.pos.x, y: s.pos.y }];
+  troop.pathIdx = 0;
+
+  s.repairPending = true;
+  emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: s.structId, phase: 'repairDispatch', troopId: troop.id });
+  return true;
 }
 
-function destroyStructure(state, structure) {
-  structure.state = STRUCT_STATE.DESTROYED;
-  cancelRepairJob(state, structure);
-  const def = structDef(structure.defId);
-  freeTiles(state.grid, structure, tilesForFootprint(def.footprint || { w: 1, h: 1 }, structure.tx, structure.ty));
-  if (def.blocksWalkers || def.isWall || def.isMoat) {
-    recomputePaths(state);
+function marchAlong(unit, dt) {
+  if (!unit.path || unit.path.length === 0) return true;
+  if (unit.pathIdx == null) unit.pathIdx = 0;
+  let remaining = (unit.speed || 1.5) * dt;
+  while (remaining > 0 && unit.pathIdx < unit.path.length) {
+    const wp = unit.path[unit.pathIdx];
+    const dx = wp.x - unit.pos.x;
+    const dy = wp.y - unit.pos.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d <= remaining || d < 1e-9) {
+      unit.pos.x = wp.x;
+      unit.pos.y = wp.y;
+      unit.pathIdx++;
+      remaining -= d;
+    } else {
+      unit.pos.x += (dx / d) * remaining;
+      unit.pos.y += (dy / d) * remaining;
+      remaining = 0;
+    }
   }
-  state.events.push({ tick: state.tick, type: 'structDestroyed', id: structure.id });
+  return unit.pathIdx >= unit.path.length;
 }
 
-function removeStructure(state, structure) {
-  const def = structDef(structure.defId);
-  freeTiles(state.grid, structure, tilesForFootprint(def.footprint || { w: 1, h: 1 }, structure.tx, structure.ty));
-  const idx = state.structures.indexOf(structure);
-  if (idx >= 0) state.structures.splice(idx, 1);
-  if (def.blocksWalkers || def.isWall || def.isMoat) {
-    recomputePaths(state);
-  }
+function distToStructure(unit, s) {
+  const w = (s.footprint && s.footprint.w) || 1;
+  const h = (s.footprint && s.footprint.h) || 1;
+  const cx = s.pos.x + (w - 1) / 2;
+  const cy = s.pos.y + (h - 1) / 2;
+  const dx = cx - unit.pos.x;
+  const dy = cy - unit.pos.y;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
-// ---------------------------------------------------------------------------
-// Per-tick update: build timers, upgrade timers, sell timers, repair jobs.
-// dt in seconds (fixed timestep).
-// ---------------------------------------------------------------------------
-export function updateStructures(state, dt) {
-  for (let i = state.structures.length - 1; i >= 0; i--) {
-    const s = state.structures[i];
+export function stepStructures(state, dt) {
+  const structs = Array.from(state.structures.values());
+  const toRemove = [];
+  let pathDirty = false;
 
-    switch (s.state) {
-      case STRUCT_STATE.BUILDING: {
-        s.buildTimer -= dt;
-        // HP rises proportionally with build progress
-        const progress = Math.min(1, 1 - Math.max(0, s.buildTimer) / s.buildTotal);
-        s.hp = Math.max(s.hp, Math.floor(s.maxHp * progress));
-        if (s.buildTimer <= 0) {
-          s.buildTimer = 0;
-          s.hp = s.maxHp;
-          s.state = STRUCT_STATE.COMPLETE;
-          state.events.push({ tick: state.tick, type: 'buildComplete', id: s.id });
-        }
-        break;
+  for (const s of structs) {
+    let def;
+    try {
+      def = getStructureDef(s.structId);
+    } catch (e) {
+      continue;
+    }
+    if (s.lifecycle === 'Placing') {
+      s.lifecycle = 'Building';
+      s.progress = 0;
+    }
+    if (s.lifecycle === 'Building') {
+      s.progress += def.buildTime > 0 ? dt / def.buildTime : 1;
+      if (s.progress >= 1) {
+        s.progress = 1;
+        s.lifecycle = 'Complete';
+        s.hp = s.maxHp;
+        emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: s.structId, phase: 'complete', pos: { x: s.pos.x, y: s.pos.y } });
       }
-
-      case STRUCT_STATE.UPGRADING: {
-        s.buildTimer -= dt;
-        if (s.buildTimer <= 0) {
-          s.buildTimer = 0;
-          applyTierUp(state, s);
-        }
-        break;
+    } else if (s.lifecycle === 'Upgrading') {
+      s.progress += def.upgradeTime > 0 ? dt / def.upgradeTime : 1;
+      if (s.progress >= 1) {
+        const frac = s.maxHp > 0 ? Math.max(0, Math.min(1, s.hp / s.maxHp)) : 1;
+        s.tier = Math.min(3, s.tier + 1);
+        s.maxHp = def.hp[s.tier - 1];
+        s.hp = frac * s.maxHp;
+        s.dps = def.dps[s.tier - 1];
+        s.progress = 0;
+        s.lifecycle = s.hp >= s.maxHp ? 'Complete' : 'Damaged';
+        emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: s.structId, phase: 'upgradeComplete', tier: s.tier });
       }
-
-      case STRUCT_STATE.SELLING: {
-        s.sellTimer -= dt;
-        if (s.sellTimer <= 0) {
-          refund(state, s.sellRefundAmount, 'sell:' + s.defId);
-          state.events.push({ tick: state.tick, type: 'sold', id: s.id, refund: s.sellRefundAmount });
-          removeStructure(state, s);
-        }
-        break;
+    } else if (s.lifecycle === 'Selling') {
+      s.progress += def.sellTime > 0 ? dt / def.sellTime : 1;
+      if (s.progress >= 1) {
+        const value = getSellValue(s, STRUCTURES, ASSUMPTIONS);
+        refund(state, value, 'sell:' + s.structId);
+        emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: s.structId, phase: 'sold', refund: value, pos: { x: s.pos.x, y: s.pos.y } });
+        toRemove.push(s);
       }
+    } else if (s.lifecycle === 'Destroyed') {
+      emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: s.structId, phase: 'destroyed', pos: { x: s.pos.x, y: s.pos.y } });
+      toRemove.push(s);
+    }
+  }
 
-      case STRUCT_STATE.COMPLETE:
-      case STRUCT_STATE.DAMAGED: {
-        updateRepairJob(state, s, dt);
-        // Damaged -> Complete when fully repaired
-        if (s.state === STRUCT_STATE.DAMAGED && s.hp >= s.maxHp) {
-          s.hp = s.maxHp;
-          s.state = STRUCT_STATE.COMPLETE;
-          state.events.push({ tick: state.tick, type: 'repairComplete', id: s.id });
-        }
-        break;
+  for (const s of toRemove) {
+    state.structures.delete(s.id);
+    if (s.kind === 'wall' || s.kind === 'moat') pathDirty = true;
+  }
+
+  // Repair troops: march to structure, then heal it over time.
+  for (const u of Array.from(state.units.values())) {
+    if (!u.isRepairTroop) continue;
+    const target = state.structures.get(u.repairTargetId);
+    if (!target || target.lifecycle === 'Destroyed' || target.lifecycle === 'Selling') {
+      if (target) target.repairPending = false;
+      state.units.delete(u.id);
+      continue;
+    }
+    if (u.hp <= 0) {
+      target.repairPending = false;
+      state.units.delete(u.id);
+      continue;
+    }
+    if (u.state === 'repairMarch') {
+      const arrivedPath = marchAlong(u, dt);
+      if (arrivedPath || distToStructure(u, target) <= 1.25) {
+        u.state = 'repairing';
+        emitEvent(state, { type: 'build', tick: state.tick, id: target.id, structId: target.structId, phase: 'repairStart', troopId: u.id });
       }
-
-      case STRUCT_STATE.DESTROYED: {
-        // Destroyed structures linger as rubble for the renderer; keep them.
-        break;
+    } else if (u.state === 'repairing') {
+      let def;
+      try {
+        def = getStructureDef(target.structId);
+      } catch (e) {
+        target.repairPending = false;
+        state.units.delete(u.id);
+        continue;
+      }
+      const duration = def.buildTime > 0 ? def.buildTime : 3;
+      const rate = target.maxHp / duration;
+      target.hp = Math.min(target.maxHp, target.hp + rate * dt);
+      if (target.hp >= target.maxHp) {
+        target.hp = target.maxHp;
+        if (target.lifecycle === 'Damaged') target.lifecycle = 'Complete';
+        target.repairPending = false;
+        state.units.delete(u.id);
+        emitEvent(state, { type: 'build', tick: state.tick, id: target.id, structId: target.structId, phase: 'repaired' });
       }
     }
   }
-}
 
-function applyTierUp(state, s) {
-  const def = structDef(s.defId);
-  const a = TABLES.assumptions;
-  const newTier = s.tier + 1;
-  const hpMult = newTier === 2 ? a.Upgrade_HP_x_T2 : a.Upgrade_HP_x_T3;
-  const dpsMult = newTier === 2 ? a.Upgrade_DPS_x_T2 : a.Upgrade_DPS_x_T3;
-
-  const hpFrac = s.maxHp > 0 ? s.hp / s.maxHp : 1;
-  const baseHp = def.hpByTier && def.hpByTier[newTier - 1] != null
-    ? def.hpByTier[newTier - 1]
-    : Math.round(def.hp * hpMult);
-  const baseDps = def.dpsByTier && def.dpsByTier[newTier - 1] != null
-    ? def.dpsByTier[newTier - 1]
-    : def.dps * dpsMult;
-
-  s.tier = newTier;
-  s.maxHp = baseHp;
-  s.hp = Math.round(baseHp * Math.max(hpFrac, 0.999)); // upgrade completes fully repaired if it was full
-  if (s.hp > s.maxHp) s.hp = s.maxHp;
-  s.dps = baseDps;
-  s.state = s.hp < s.maxHp ? STRUCT_STATE.DAMAGED : STRUCT_STATE.COMPLETE;
-  state.events.push({ tick: state.tick, type: 'upgradeComplete', id: s.id, tier: s.tier });
-}
-
-function updateRepairJob(state, s, dt) {
-  const job = s.repairJob;
-  if (!job) return;
-
-  if (job.phase === 'travel') {
-    const step = REPAIR_TROOP_SPEED * dt;
-    job.travelRemaining -= step;
-    // interpolate position for the renderer
-    const t = job.totalDist > 0 ? 1 - Math.max(0, job.travelRemaining) / job.totalDist : 1;
-    job.x = state.base.tx + (s.tx - state.base.tx) * t;
-    job.y = state.base.ty + (s.ty - state.base.ty) * t;
-    if (job.travelRemaining <= 0) {
-      job.phase = 'repairing';
-      job.x = s.tx;
-      job.y = s.ty;
-      state.events.push({ tick: state.tick, type: 'repairArrived', id: s.id });
-    }
-  } else if (job.phase === 'repairing') {
-    // Free repair: no gold cost, takes time
-    const heal = s.maxHp * REPAIR_RATE_FRACTION * dt;
-    s.hp = Math.min(s.maxHp, s.hp + heal);
-    if (s.hp >= s.maxHp) {
-      s.hp = s.maxHp;
-      s.repairJob = null;
-      if (s.state === STRUCT_STATE.DAMAGED) {
-        s.state = STRUCT_STATE.COMPLETE;
-      }
-      state.events.push({ tick: state.tick, type: 'repairComplete', id: s.id });
-    }
+  if (pathDirty) {
+    recomputeUnitPaths(state);
   }
-}
-
-// ---------------------------------------------------------------------------
-// Query helpers used by combat / renderer / HUD
-// ---------------------------------------------------------------------------
-export function isOperational(structure) {
-  return structure.state === STRUCT_STATE.COMPLETE || structure.state === STRUCT_STATE.DAMAGED;
-}
-
-export function isTargetable(structure) {
-  return structure.state !== STRUCT_STATE.DESTROYED && structure.state !== STRUCT_STATE.SELLING && structure.state !== STRUCT_STATE.PLACING;
-}
-
-export function getStructureById(state, id) {
-  for (const s of state.structures) {
-    if (s.id === id) return s;
-  }
-  return null;
-}
-
-export function structureAtTile(state, tx, ty) {
-  for (const s of state.structures) {
-    if (s.state === STRUCT_STATE.DESTROYED) continue;
-    const def = structDef(s.defId);
-    const fp = def.footprint || { w: 1, h: 1 };
-    if (tx >= s.tx && tx < s.tx + fp.w && ty >= s.ty && ty < s.ty + fp.h) return s;
-  }
-  return null;
-}
-
-export function buildProgress(structure) {
-  if (structure.state === STRUCT_STATE.BUILDING || structure.state === STRUCT_STATE.UPGRADING) {
-    if (!structure.buildTotal) return 1;
-    return Math.min(1, 1 - structure.buildTimer / structure.buildTotal);
-  }
-  return 1;
-}
-
-export function structureCost(structId) {
-  return costFor(structDef(structId), 1);
 }

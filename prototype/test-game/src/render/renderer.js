@@ -1,604 +1,385 @@
-// src/render/renderer.js
-// Read-only Pixi primitives view for BULWARK vertical slice.
-// Draws lanes/water tint bands, base, slot markers, units by domain,
-// towers with tier pips + dashed range circle, walls, projectiles,
-// hp bars, placement ghost with valid/invalid tint, and walker path lines.
+import { getStructureDef, getUnitDef } from '../data/tables.js';
 
-import { TABLES } from '../data/tables.js';
+const FX_DT = 1 / 60;
 
-const COLORS = {
-  sky: 0x101820,
-  ground: 0x3a5a2a,
-  groundBandLow: 0x33502a,
-  groundBandHigh: 0x476a33,
-  water: 0x1f4e79,
-  waterSub: 0x163a5c,
-  baseClearing: 0x5a5340,
-  base: 0xd6b84a,
-  baseOutline: 0x8a742a,
-  slot: 0x9aa0a6,
-  slotFill: 0x2a2f33,
-  walker: 0xe05a3a,
-  floater: 0x3ac0e0,
-  flyer: 0xe0d43a,
-  flyerShadow: 0x000000,
-  towerAG: 0x4a90d9,
-  towerAA: 0x9a5ad9,
-  wall: 0x8a8a8a,
-  moat: 0x2a6ea0,
-  projectile: 0xffe08a,
-  hpBack: 0x330000,
-  hpFront: 0x33dd33,
-  hpMid: 0xdddd33,
-  hpLow: 0xdd3333,
-  ghostValid: 0x33ff66,
-  ghostInvalid: 0xff3344,
-  pathLine: 0xffffff,
-  rangeCircle: 0xffffff,
-  building: 0xcccc44,
-  upgrading: 0x44ccff,
-  selling: 0xffaa33,
-  tierPip: 0xffffff,
+const KIND_COLORS = {
+  antiGround: 0x8a6a2f,
+  antiAir: 0x3f7fbf,
+  wall: 0x9aa0a6,
+  moat: 0x2f6db0
 };
 
-function structColor(s) {
-  if (s.kind === 'wall') return COLORS.wall;
-  if (s.kind === 'moat') return COLORS.moat;
-  if (s.canTargetAir) return COLORS.towerAA;
-  return COLORS.towerAG;
+const SIDE_COLORS = {
+  attacker: 0xd05040,
+  defender: 0x50a0e0
+};
+
+function cellKey(x, y) { return x + ',' + y; }
+
+function cellToLocal(renderer, cx, cy) {
+  const t = renderer.tile;
+  return { x: (cx + 0.5) * t, y: (cy + 0.5) * t };
 }
 
-export class Renderer {
-  constructor(app, sim) {
-    this.app = app;
-    this.sim = sim;
-    this.tile = 32;
-
-    this.root = new PIXI.Container();
-    app.stage.addChild(this.root);
-
-    // Layers back -> front
-    this.terrainLayer = new PIXI.Graphics();     // lanes, water, clearing, slots
-    this.pathLayer = new PIXI.Graphics();        // walker path lines
-    this.shadowLayer = new PIXI.Graphics();      // flyer shadows
-    this.structLayer = new PIXI.Graphics();      // walls, towers, base
-    this.unitLayer = new PIXI.Graphics();        // units
-    this.projLayer = new PIXI.Graphics();        // projectiles
-    this.fxLayer = new PIXI.Graphics();          // range circles, hp bars
-    this.ghostLayer = new PIXI.Graphics();       // placement ghost
-
-    this.root.addChild(
-      this.terrainLayer,
-      this.pathLayer,
-      this.shadowLayer,
-      this.structLayer,
-      this.unitLayer,
-      this.projLayer,
-      this.fxLayer,
-      this.ghostLayer
-    );
-
-    this._terrainDirtyKey = null;
-    this._layout(sim ? sim.state : null);
+function drawDashedCircle(g, cx, cy, radius, color, alpha, width) {
+  const segs = 48;
+  g.lineStyle(width || 1.5, color, alpha);
+  for (let i = 0; i < segs; i += 2) {
+    const a0 = (i / segs) * Math.PI * 2;
+    const a1 = ((i + 1) / segs) * Math.PI * 2;
+    g.moveTo(cx + Math.cos(a0) * radius, cy + Math.sin(a0) * radius);
+    g.lineTo(cx + Math.cos(a1) * radius, cy + Math.sin(a1) * radius);
   }
+  g.lineStyle(0);
+}
 
-  _layout(state) {
-    const grid = state && state.grid ? state.grid : { cols: 24, rows: 14 };
-    const cols = grid.cols || grid.width || 24;
-    const rows = grid.rows || grid.height || 14;
-    const availW = this.app.renderer.width;
-    const availH = this.app.renderer.height;
-    this.tile = Math.max(8, Math.floor(Math.min(availW / cols, availH / rows)));
-    this.cols = cols;
-    this.rows = rows;
-    this.root.x = Math.floor((availW - cols * this.tile) / 2);
-    this.root.y = Math.floor((availH - rows * this.tile) / 2);
-  }
+function drawHpBar(g, cx, topY, w, frac, backAlpha) {
+  const f = Math.max(0, Math.min(1, frac));
+  const h = 4;
+  g.lineStyle(0);
+  g.beginFill(0x000000, backAlpha == null ? 0.6 : backAlpha);
+  g.drawRect(cx - w / 2, topY, w, h);
+  g.endFill();
+  const col = f > 0.6 ? 0x4ad04a : (f > 0.3 ? 0xe0c040 : 0xe04040);
+  g.beginFill(col, 0.95);
+  g.drawRect(cx - w / 2 + 0.5, topY + 0.5, (w - 1) * f, h - 1);
+  g.endFill();
+}
 
-  // Convert tile coords (possibly fractional) to pixel center
-  tx(x) { return (x + 0.5) * this.tile; }
-  ty(y) { return (y + 0.5) * this.tile; }
+function drawStaticBoard(renderer, map) {
+  const t = renderer.tile;
+  const waterSet = new Set();
+  for (const c of map.waterCells) waterSet.add(cellKey(c.x, c.y));
+  const buildSet = new Set();
+  for (const c of map.buildableCells) buildSet.add(cellKey(c.x, c.y));
 
-  // Pixel -> tile coord, used by input
-  screenToTile(px, py) {
-    return {
-      x: Math.floor((px - this.root.x) / this.tile),
-      y: Math.floor((py - this.root.y) / this.tile),
-    };
-  }
+  const gWater = new PIXI.Graphics();
+  const gGround = new PIXI.Graphics();
 
-  // ---------------------------------------------------------------
-  render(state, view) {
-    // view: { ghost: {x,y,footprint,valid,range} | null, selectedId, interp }
-    if (!state) return;
-    view = view || {};
-
-    if (this.cols !== (state.grid.cols || state.grid.width) ||
-        this.rows !== (state.grid.rows || state.grid.height)) {
-      this._layout(state);
-      this._terrainDirtyKey = null;
-    }
-
-    this._drawTerrain(state);
-    this._drawPaths(state);
-    this._drawStructures(state, view.selectedId);
-    this._drawUnits(state);
-    this._drawProjectiles(state);
-    this._drawGhost(state, view.ghost);
-  }
-
-  // ---------------------------------------------------------------
-  _drawTerrain(state) {
-    const grid = state.grid;
-    // Terrain only changes when walls/moats change; key on structure count + grid rev.
-    const key = (grid.rev || 0) + ':' + (state.structures ? state.structures.length : 0) + ':' + this.tile;
-    if (key === this._terrainDirtyKey) return;
-    this._terrainDirtyKey = key;
-
-    const g = this.terrainLayer;
-    const t = this.tile;
-    g.clear();
-
-    // Background ground
-    g.beginFill(COLORS.ground);
-    g.drawRect(0, 0, this.cols * t, this.rows * t);
-    g.endFill();
-
-    // Per-tile bands
-    for (let y = 0; y < this.rows; y++) {
-      for (let x = 0; x < this.cols; x++) {
-        const tt = grid.tileAt ? grid.tileAt(x, y) : (grid.tiles ? grid.tiles[y * this.cols + x] : 'ground');
-        if (tt === 'water') {
-          // sub-surface tint then surface
-          g.beginFill(COLORS.waterSub);
-          g.drawRect(x * t, y * t, t, t);
-          g.endFill();
-          g.beginFill(COLORS.water, 0.75);
-          g.drawRect(x * t, y * t + t * 0.15, t, t * 0.7);
-          g.endFill();
-        } else if (tt === 'clearing' || tt === 'base') {
-          g.beginFill(COLORS.baseClearing);
-          g.drawRect(x * t, y * t, t, t);
-          g.endFill();
-        } else if (tt === 'ground') {
-          // subtle low/high banding by row for read
-          const band = y % 3;
-          if (band === 0) {
-            g.beginFill(COLORS.groundBandLow, 0.5);
-            g.drawRect(x * t, y * t, t, t);
-            g.endFill();
-          } else if (band === 2) {
-            g.beginFill(COLORS.groundBandHigh, 0.35);
-            g.drawRect(x * t, y * t, t, t);
-            g.endFill();
-          }
-        }
+  // ground cells in low/mid/high bands (skip water cells)
+  for (let y = 0; y < map.rows; y++) {
+    for (let x = 0; x < map.cols; x++) {
+      if (waterSet.has(cellKey(x, y))) continue;
+      const band = y < map.rows / 3 ? 0 : (y < (2 * map.rows) / 3 ? 1 : 2);
+      const shades = [0x33502c, 0x3c5c33, 0x45683a];
+      gGround.beginFill(shades[band], 1);
+      gGround.drawRect(x * t, y * t, t, t);
+      gGround.endFill();
+      if (buildSet.has(cellKey(x, y))) {
+        gGround.beginFill(0x5a7a4a, 0.35);
+        gGround.drawRect(x * t + 1, y * t + 1, t - 2, t - 2);
+        gGround.endFill();
       }
     }
+  }
 
-    // Grid faint lines
-    g.lineStyle(1, 0x000000, 0.08);
-    for (let x = 0; x <= this.cols; x++) {
-      g.moveTo(x * t, 0); g.lineTo(x * t, this.rows * t);
-    }
-    for (let y = 0; y <= this.rows; y++) {
-      g.moveTo(0, y * t); g.lineTo(this.cols * t, y * t);
-    }
-    g.lineStyle(0);
+  // water: sub-surface tint + lighter surface layer
+  for (const c of map.waterCells) {
+    gWater.beginFill(0x14395e, 1);
+    gWater.drawRect(c.x * t, c.y * t, t, t);
+    gWater.endFill();
+    gWater.beginFill(0x2a6aa0, 0.65);
+    gWater.drawRect(c.x * t, c.y * t, t, t * 0.45);
+    gWater.endFill();
+  }
 
-    // Slot markers
-    const slots = (grid.slots || []);
-    for (const s of slots) {
-      g.beginFill(COLORS.slotFill, 0.6);
-      g.lineStyle(1.5, COLORS.slot, 0.9);
-      g.drawRect(s.x * t + 3, s.y * t + 3, t - 6, t - 6);
-      g.endFill();
+  // grid lines
+  gGround.lineStyle(1, 0x000000, 0.12);
+  for (let x = 0; x <= map.cols; x++) {
+    gGround.moveTo(x * t, 0); gGround.lineTo(x * t, map.rows * t);
+  }
+  for (let y = 0; y <= map.rows; y++) {
+    gGround.moveTo(0, y * t); gGround.lineTo(map.cols * t, y * t);
+  }
+  gGround.lineStyle(0);
+
+  // lane polylines
+  const drawLane = (lane, color, alpha) => {
+    if (!lane || lane.length < 2) return;
+    gGround.lineStyle(3, color, alpha);
+    const p0 = cellToLocal(renderer, lane[0].x, lane[0].y);
+    gGround.moveTo(p0.x, p0.y);
+    for (let i = 1; i < lane.length; i++) {
+      const p = cellToLocal(renderer, lane[i].x, lane[i].y);
+      gGround.lineTo(p.x, p.y);
+    }
+    gGround.lineStyle(0);
+  };
+  drawLane(map.groundLane, 0x8a6a3a, 0.5);
+  drawLane(map.waterLane, 0x66aadd, 0.4);
+
+  // hard-point slots
+  for (const s of map.slots) {
+    gGround.lineStyle(2, 0xd8d8a0, 0.7);
+    gGround.drawRect(s.x * t + 3, s.y * t + 3, t - 6, t - 6);
+    gGround.lineStyle(0);
+  }
+
+  // spawn markers
+  const mark = (cell, color) => {
+    if (!cell) return;
+    const p = cellToLocal(renderer, cell.x, cell.y);
+    gGround.beginFill(color, 0.8);
+    gGround.drawCircle(p.x, p.y, t * 0.22);
+    gGround.endFill();
+  };
+  mark(map.spawnGround, 0xd05040);
+  mark(map.spawnWater, 0x4090d0);
+  mark(map.spawnAir, 0xd0a040);
+
+  // base marker
+  if (map.base) {
+    gGround.lineStyle(2, 0xe8d080, 0.9);
+    gGround.drawRect(map.base.x * t + 2, map.base.y * t + 2, t - 4, t - 4);
+    gGround.lineStyle(0);
+  }
+
+  renderer.layers.water.addChild(gWater);
+  renderer.layers.ground.addChild(gGround);
+}
+
+export function createRenderer(app, map) {
+  const tile = map.tile;
+  const root = new PIXI.Container();
+  app.stage.addChild(root);
+
+  const layerNames = ['water', 'ground', 'structures', 'units', 'air', 'fx', 'overlay'];
+  const layers = {};
+  for (let i = 0; i < layerNames.length; i++) {
+    const name = layerNames[i];
+    const c = new PIXI.Container();
+    layers[name] = c;
+    root.addChild(c);
+  }
+
+  const renderer = {
+    app: app,
+    map: map,
+    tile: tile,
+    root: root,
+    layers: layers,
+    dyn: {
+      structures: new PIXI.Graphics(),
+      units: new PIXI.Graphics(),
+      air: new PIXI.Graphics(),
+      overlay: new PIXI.Graphics()
+    },
+    fxG: new PIXI.Graphics(),
+    fxItems: []
+  };
+
+  layers.structures.addChild(renderer.dyn.structures);
+  layers.units.addChild(renderer.dyn.units);
+  layers.air.addChild(renderer.dyn.air);
+  layers.fx.addChild(renderer.fxG);
+  layers.overlay.addChild(renderer.dyn.overlay);
+
+  drawStaticBoard(renderer, map);
+  return renderer;
+}
+
+function spawnFx(renderer, ev) {
+  const pos = ev.pos || ev.cell || (ev.target && ev.target.pos) || null;
+  if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
+  const p = cellToLocal(renderer, pos.x, pos.y);
+  let color = 0xffffff, ttl = 0.4, kind = 'ring';
+  switch (ev.type) {
+    case 'kill': color = 0xe05040; ttl = 0.5; kind = 'ring'; break;
+    case 'damage': color = 0xffe080; ttl = 0.2; kind = 'flash'; break;
+    case 'coin': color = 0xf0c040; ttl = 0.6; kind = 'rise'; break;
+    case 'build': color = 0x60d060; ttl = 0.5; kind = 'ring'; break;
+    case 'spawn': color = 0x80b0ff; ttl = 0.35; kind = 'ring'; break;
+    default: return;
+  }
+  renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: ttl, color: color, kind: kind });
+}
+
+function updateFx(renderer) {
+  const g = renderer.fxG;
+  g.clear();
+  const t = renderer.tile;
+  const keep = [];
+  for (const fx of renderer.fxItems) {
+    fx.age += FX_DT;
+    if (fx.age >= fx.ttl) continue;
+    const f = fx.age / fx.ttl;
+    const alpha = 1 - f;
+    if (fx.kind === 'ring') {
+      g.lineStyle(2, fx.color, alpha);
+      g.drawCircle(fx.x, fx.y, t * 0.2 + f * t * 0.6);
       g.lineStyle(0);
-      // small diamond in center
-      const cx = this.tx(s.x), cy = this.ty(s.y);
-      g.beginFill(COLORS.slot, 0.5);
-      g.moveTo(cx, cy - 4);
-      g.lineTo(cx + 4, cy);
-      g.lineTo(cx, cy + 4);
-      g.lineTo(cx - 4, cy);
-      g.closePath();
+    } else if (fx.kind === 'flash') {
+      g.beginFill(fx.color, alpha * 0.8);
+      g.drawCircle(fx.x, fx.y, t * 0.15);
+      g.endFill();
+    } else if (fx.kind === 'rise') {
+      g.beginFill(fx.color, alpha);
+      g.drawCircle(fx.x, fx.y - f * t * 0.8, t * 0.12);
       g.endFill();
     }
+    keep.push(fx);
+  }
+  renderer.fxItems = keep;
+}
+
+export function renderFrame(renderer, state, ui, events) {
+  const t = renderer.tile;
+  const gS = renderer.dyn.structures; gS.clear();
+  const gU = renderer.dyn.units; gU.clear();
+  const gA = renderer.dyn.air; gA.clear();
+  const gO = renderer.dyn.overlay; gO.clear();
+
+  if (!state) { updateFx(renderer); return; }
+
+  // base
+  if (state.base) {
+    const bp = cellToLocal(renderer, state.base.pos.x, state.base.pos.y);
+    gS.beginFill(0xc0a040, 1);
+    gS.drawRect(bp.x - t * 0.4, bp.y - t * 0.4, t * 0.8, t * 0.8);
+    gS.endFill();
+    gS.lineStyle(2, 0xf0e0a0, 0.9);
+    gS.drawRect(bp.x - t * 0.4, bp.y - t * 0.4, t * 0.8, t * 0.8);
+    gS.lineStyle(0);
+    drawHpBar(gS, bp.x, bp.y - t * 0.62, t * 0.9, state.base.hp / Math.max(1, state.base.maxHp));
   }
 
-  // ---------------------------------------------------------------
-  _drawPaths(state) {
-    const g = this.pathLayer;
-    g.clear();
-    const units = state.units || [];
-    for (const u of units) {
-      if (!u.alive || u.domain !== 'walker') continue;
-      const path = u.path;
-      if (!path || path.length < 2) continue;
-      g.lineStyle(1.5, COLORS.pathLine, 0.22);
-      let started = false;
-      const startIdx = Math.max(0, u.pathIndex != null ? u.pathIndex : 0);
-      for (let i = startIdx; i < path.length; i++) {
-        const p = path[i];
-        const px = this.tx(p.x), py = this.ty(p.y);
-        if (!started) {
-          g.moveTo(this.tx(u.x), this.ty(u.y));
-          started = true;
-        }
-        g.lineTo(px, py);
-      }
-      g.lineStyle(0);
-    }
-  }
-
-  // ---------------------------------------------------------------
-  _drawStructures(state, selectedId) {
-    const g = this.structLayer;
-    const fx = this.fxLayer;
-    const t = this.tile;
-    g.clear();
-    fx.clear();
-
-    // Base
-    const base = state.base;
-    if (base) {
-      const bx = this.tx(base.x), by = this.ty(base.y);
-      const r = t * 0.9;
-      g.beginFill(COLORS.base);
-      g.lineStyle(2, COLORS.baseOutline, 1);
-      g.drawRect(bx - r / 2, by - r / 2, r, r);
-      g.endFill();
-      // inner keep
-      g.beginFill(COLORS.baseOutline);
-      g.drawRect(bx - r / 4, by - r / 4, r / 2, r / 2);
-      g.endFill();
-      g.lineStyle(0);
-      this._hpBar(fx, bx, by - r / 2 - 8, t * 1.2, base.hp, base.maxHp);
-    }
-
-    const structures = state.structures || [];
-    for (const s of structures) {
-      if (s.state === 'Destroyed') {
-        // rubble decal
-        g.beginFill(0x444444, 0.6);
-        g.drawCircle(this.tx(s.x), this.ty(s.y), t * 0.25);
-        g.endFill();
-        continue;
-      }
-      const cx = this.tx(s.x), cy = this.ty(s.y);
-      const isWall = s.kind === 'wall' || s.kind === 'moat';
-      const col = structColor(s);
-      const half = t * (isWall ? 0.46 : 0.38);
-
-      let alpha = 1;
-      if (s.state === 'Building' || s.state === 'Placing') alpha = 0.55;
-      if (s.state === 'Selling') alpha = 0.45;
-
-      if (isWall) {
-        g.beginFill(col, alpha);
-        g.lineStyle(1, 0x000000, 0.4 * alpha);
-        g.drawRect(cx - half, cy - half, half * 2, half * 2);
-        g.endFill();
-        if (s.kind === 'wall') {
-          // brick lines
-          g.lineStyle(1, 0x555555, 0.6 * alpha);
-          g.moveTo(cx - half, cy); g.lineTo(cx + half, cy);
-          g.moveTo(cx, cy - half); g.lineTo(cx, cy);
-          g.moveTo(cx - half / 2, cy); g.lineTo(cx - half / 2, cy + half);
-          g.moveTo(cx + half / 2, cy); g.lineTo(cx + half / 2, cy + half);
-        } else {
-          // moat ripple
-          g.lineStyle(1, 0x9ad0ff, 0.5 * alpha);
-          g.moveTo(cx - half * 0.6, cy - 3);
-          g.lineTo(cx, cy);
-          g.lineTo(cx + half * 0.6, cy - 3);
-        }
-        g.lineStyle(0);
-      } else {
-        // Tower: square base + circle turret
-        g.beginFill(0x22262a, alpha);
-        g.drawRect(cx - half, cy - half, half * 2, half * 2);
-        g.endFill();
-        g.beginFill(col, alpha);
-        g.lineStyle(1.5, 0x000000, 0.4 * alpha);
-        g.drawCircle(cx, cy, half * 0.75);
-        g.endFill();
-        g.lineStyle(0);
-
-        // Barrel toward target
-        let ang = -Math.PI / 2;
-        if (s.targetId != null) {
-          const tgt = (state.units || []).find(u => u.id === s.targetId && u.alive);
-          if (tgt) ang = Math.atan2(this.ty(tgt.y) - cy, this.tx(tgt.x) - cx);
-        }
-        g.lineStyle(3, 0x111111, alpha);
-        g.moveTo(cx, cy);
-        g.lineTo(cx + Math.cos(ang) * half, cy + Math.sin(ang) * half);
-        g.lineStyle(0);
-
-        // Anti-air marker: small triangle on top
-        if (s.canTargetAir) {
-          g.beginFill(0xffffff, 0.85 * alpha);
-          g.moveTo(cx, cy - half * 0.4);
-          g.lineTo(cx + 4, cy + 2);
-          g.lineTo(cx - 4, cy + 2);
-          g.closePath();
-          g.endFill();
-        }
-      }
-
-      // Tier pips
+  // structures
+  if (state.structures) {
+    for (const s of state.structures.values()) {
+      if (!s || s.lifecycle === 'Destroyed') continue;
+      const fp = s.footprint || { w: 1, h: 1 };
+      const px = s.pos.x * t;
+      const py = s.pos.y * t;
+      const w = fp.w * t;
+      const h = fp.h * t;
+      const color = KIND_COLORS[s.kind] != null ? KIND_COLORS[s.kind] : 0x888888;
+      const building = s.lifecycle === 'Placing' || s.lifecycle === 'Building';
+      const alpha = building ? 0.55 : (s.lifecycle === 'Selling' ? 0.4 : 1);
+      gS.beginFill(color, alpha);
+      gS.drawRect(px + 2, py + 2, w - 4, h - 4);
+      gS.endFill();
+      gS.lineStyle(1.5, 0x101418, 0.8);
+      gS.drawRect(px + 2, py + 2, w - 4, h - 4);
+      gS.lineStyle(0);
+      // tier pips
       const tier = s.tier || 1;
       for (let i = 0; i < tier; i++) {
-        g.beginFill(COLORS.tierPip, alpha);
-        g.drawCircle(cx - half + 4 + i * 7, cy + half - 4, 2.2);
-        g.endFill();
+        gS.beginFill(0xffffff, 0.9);
+        gS.drawCircle(px + 6 + i * 6, py + h - 6, 2);
+        gS.endFill();
       }
-
-      // Build / upgrade / sell progress bar
-      if (s.state === 'Building' || s.state === 'Upgrading' || s.state === 'Selling') {
-        const prog = Math.max(0, Math.min(1, s.progress != null ? s.progress : 0));
-        const w = t * 0.8;
-        const barCol = s.state === 'Building' ? COLORS.building :
-                       s.state === 'Upgrading' ? COLORS.upgrading : COLORS.selling;
-        fx.beginFill(0x000000, 0.6);
-        fx.drawRect(cx - w / 2, cy + half + 3, w, 4);
-        fx.endFill();
-        fx.beginFill(barCol, 0.95);
-        fx.drawRect(cx - w / 2, cy + half + 3, w * prog, 4);
-        fx.endFill();
+      // progress bar
+      if (s.lifecycle === 'Building' || s.lifecycle === 'Upgrading' || s.lifecycle === 'Selling') {
+        const frac = Math.max(0, Math.min(1, typeof s.progress === 'number' ? s.progress : 0));
+        gS.beginFill(0x000000, 0.6);
+        gS.drawRect(px + 3, py + h / 2 - 2, w - 6, 4);
+        gS.endFill();
+        gS.beginFill(0x60c0ff, 0.95);
+        gS.drawRect(px + 3.5, py + h / 2 - 1.5, (w - 7) * frac, 3);
+        gS.endFill();
       }
-
-      // HP bar (when damaged or building)
-      if (s.hp < s.maxHp || s.state === 'Damaged') {
-        this._hpBar(fx, cx, cy - half - 6, t * 0.8, s.hp, s.maxHp);
-      }
-
-      // Repair job indicator: small plus
-      if (s.repairing) {
-        fx.lineStyle(2, 0x66ff88, 0.9);
-        fx.moveTo(cx + half - 4, cy - half + 1); fx.lineTo(cx + half - 4, cy - half + 9);
-        fx.moveTo(cx + half - 8, cy - half + 5); fx.lineTo(cx + half, cy - half + 5);
-        fx.lineStyle(0);
-      }
-
-      // Selected: dashed range circle
-      if (selectedId != null && s.id === selectedId && s.range > 0) {
-        this._dashedCircle(fx, cx, cy, s.range * t, COLORS.rangeCircle, 0.7);
-        // selection box
-        fx.lineStyle(1.5, 0xffffff, 0.9);
-        fx.drawRect(cx - half - 3, cy - half - 3, (half + 3) * 2, (half + 3) * 2);
-        fx.lineStyle(0);
+      // hp bar
+      if (typeof s.hp === 'number' && typeof s.maxHp === 'number' && s.hp < s.maxHp) {
+        drawHpBar(gS, px + w / 2, py - 6, w - 4, s.hp / Math.max(1, s.maxHp));
       }
     }
   }
 
-  // ---------------------------------------------------------------
-  _drawUnits(state) {
-    const g = this.unitLayer;
-    const sh = this.shadowLayer;
-    const fx = this.fxLayer;
-    const t = this.tile;
-    g.clear();
-    sh.clear();
-
-    const units = (state.units || []).slice().sort((a, b) => a.y - b.y);
-
-    for (const u of units) {
-      if (!u.alive) continue;
-      const cx = this.tx(u.x), cy = this.ty(u.y);
-      const size = t * 0.32;
-      const friendly = u.team === 'player' || u.side === 'player';
-      const outline = friendly ? 0x66ff99 : 0x000000;
-
-      if (u.domain === 'walker') {
-        // soft ground shadow
-        sh.beginFill(0x000000, 0.25);
-        sh.drawEllipse(cx + 2, cy + size * 0.9, size * 0.9, size * 0.35);
-        sh.endFill();
-        // rectangle body
-        g.beginFill(friendly ? 0x55cc77 : COLORS.walker);
-        g.lineStyle(1, outline, 0.7);
-        g.drawRect(cx - size, cy - size, size * 2, size * 2);
-        g.endFill();
-        g.lineStyle(0);
-        // heavy variants: inner square
-        if (u.shape === 'Heavy Tanks' || u.shape === 'Tanks') {
-          g.beginFill(0x000000, 0.3);
-          g.drawRect(cx - size * 0.5, cy - size * 0.5, size, size);
-          g.endFill();
-        }
-        if (u.targetsStructures || u.targets === 'Structures') {
-          // artillery marker: barrel line
-          g.lineStyle(2, 0x222222, 0.9);
-          g.moveTo(cx, cy);
-          g.lineTo(cx + size * 1.4, cy - size * 1.4);
-          g.lineStyle(0);
-        }
-      } else if (u.domain === 'floater') {
-        // submerged tint under
-        sh.beginFill(COLORS.waterSub, 0.5);
-        sh.drawEllipse(cx, cy + 3, size * 1.1, size * 0.5);
-        sh.endFill();
-        // circle body
-        g.beginFill(friendly ? 0x55ccdd : COLORS.floater);
-        g.lineStyle(1, outline, 0.7);
-        g.drawCircle(cx, cy, size);
-        g.endFill();
-        g.lineStyle(0);
-        // wake ripple
-        sh.lineStyle(1, 0xbfe6ff, 0.4);
-        sh.moveTo(cx - size * 1.4, cy + size * 0.6);
-        sh.lineTo(cx - size * 0.4, cy + size * 0.6);
-        sh.lineStyle(0);
-      } else { // flyer
-        const alt = u.altitude != null ? u.altitude : 1;
-        const off = 6 + alt * 6;
-        // dim offset shadow conveying altitude
-        sh.beginFill(COLORS.flyerShadow, Math.max(0.08, 0.28 - alt * 0.08));
-        sh.drawEllipse(cx + off, cy + off, size * 0.9, size * 0.4);
-        sh.endFill();
-        // triangle-ish flyer (diamond)
-        g.beginFill(friendly ? 0xddee55 : COLORS.flyer);
-        g.lineStyle(1, outline, 0.7);
-        g.moveTo(cx, cy - size * 1.2);
-        g.lineTo(cx + size, cy + size * 0.7);
-        g.lineTo(cx - size, cy + size * 0.7);
-        g.closePath();
-        g.endFill();
-        g.lineStyle(0);
-        // rotor dot
-        g.beginFill(0x000000, 0.5);
-        g.drawCircle(cx, cy - size * 0.2, 2);
-        g.endFill();
-      }
-
-      // hp bar when damaged
-      if (u.hp < u.maxHp) {
-        this._hpBar(fx, cx, cy - size - 7, t * 0.7, u.hp, u.maxHp);
-      }
-
-      // vision flag: hidden units drawn faint (renderer just reads flag)
-      if (u.visible === false) {
-        g.beginFill(0x000000, 0.0); g.endFill();
+  // units
+  if (state.units) {
+    for (const u of state.units.values()) {
+      if (!u || u.hp <= 0) continue;
+      const side = u.side || u.kind || 'attacker';
+      const color = SIDE_COLORS[side] != null ? SIDE_COLORS[side] : 0xffffff;
+      const p = cellToLocal(renderer, u.pos.x, u.pos.y);
+      const r = t * 0.28;
+      if (u.domain === 'Flyer') {
+        const py = p.y - t * 0.35;
+        gA.beginFill(color, 1);
+        gA.moveTo(p.x, py - r);
+        gA.lineTo(p.x + r, py + r);
+        gA.lineTo(p.x - r, py + r);
+        gA.closePath();
+        gA.endFill();
+        gA.lineStyle(1, 0x101418, 0.7);
+        gA.drawCircle(p.x, p.y, 2);
+        gA.lineStyle(0);
+        drawHpBar(gA, p.x, py - r - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
+      } else if (u.domain === 'Floater') {
+        gU.beginFill(color, 1);
+        gU.drawEllipse(p.x, p.y, r * 1.15, r * 0.7);
+        gU.endFill();
+        gU.lineStyle(1, 0x101418, 0.8);
+        gU.drawEllipse(p.x, p.y, r * 1.15, r * 0.7);
+        gU.lineStyle(0);
+        drawHpBar(gU, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));
+      } else {
+        gU.beginFill(color, 1);
+        gU.drawCircle(p.x, p.y, r);
+        gU.endFill();
+        gU.lineStyle(1, 0x101418, 0.8);
+        gU.drawCircle(p.x, p.y, r);
+        gU.lineStyle(0);
+        drawHpBar(gU, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));
       }
     }
   }
 
-  // ---------------------------------------------------------------
-  _drawProjectiles(state) {
-    const g = this.projLayer;
-    g.clear();
-    const t = this.tile;
-    const projs = state.projectiles || [];
-    for (const p of projs) {
-      if (p.dead) continue;
-      const cx = this.tx(p.x), cy = this.ty(p.y);
-      g.beginFill(COLORS.projectile);
-      g.drawCircle(cx, cy, Math.max(2, t * 0.08));
-      g.endFill();
-      // short motion trail
-      if (p.vx != null || p.dx != null) {
-        const dx = p.vx != null ? p.vx : p.dx || 0;
-        const dy = p.vy != null ? p.vy : p.dy || 0;
-        const len = Math.hypot(dx, dy) || 1;
-        g.lineStyle(1.5, COLORS.projectile, 0.4);
-        g.moveTo(cx, cy);
-        g.lineTo(cx - (dx / len) * t * 0.3, cy - (dy / len) * t * 0.3);
-        g.lineStyle(0);
-      }
-    }
-
-    // impact flashes (transient events surfaced in state)
-    const fxEvents = state.fx || [];
-    for (const e of fxEvents) {
-      if (e.type === 'impact') {
-        g.lineStyle(2, 0xffaa44, 0.7);
-        g.drawCircle(this.tx(e.x), this.ty(e.y), t * 0.2 * (1 + (e.age || 0)));
-        g.lineStyle(0);
-      } else if (e.type === 'muzzle') {
-        g.beginFill(0xffffcc, 0.8);
-        g.drawCircle(this.tx(e.x), this.ty(e.y), 3);
-        g.endFill();
-      } else if (e.type === 'coin') {
-        g.beginFill(0xffd700, 0.9);
-        g.drawCircle(this.tx(e.x), this.ty(e.y) - (e.age || 0) * 10, 3);
-        g.endFill();
+  // selection range circle
+  if (ui && ui.selectedStructureId != null && state.structures) {
+    const sel = state.structures.get(ui.selectedStructureId);
+    if (sel) {
+      const fp = sel.footprint || { w: 1, h: 1 };
+      const cx = (sel.pos.x + fp.w / 2) * t;
+      const cy = (sel.pos.y + fp.h / 2) * t;
+      gO.lineStyle(2, 0xffffff, 0.9);
+      gO.drawRect(sel.pos.x * t + 1, sel.pos.y * t + 1, fp.w * t - 2, fp.h * t - 2);
+      gO.lineStyle(0);
+      let range = 0;
+      try {
+        const def = getStructureDef(sel.structId);
+        range = def && typeof def.range === 'number' ? def.range : 0;
+      } catch (e) { range = 0; }
+      if (range > 0) {
+        drawDashedCircle(gO, cx, cy, range * t, 0xffffff, 0.6, 1.5);
       }
     }
   }
 
-  // ---------------------------------------------------------------
-  _drawGhost(state, ghost) {
-    const g = this.ghostLayer;
-    g.clear();
-    if (!ghost) return;
-    const t = this.tile;
-    const col = ghost.valid ? COLORS.ghostValid : COLORS.ghostInvalid;
-    const fw = (ghost.footprint && ghost.footprint.w) || 1;
-    const fh = (ghost.footprint && ghost.footprint.h) || 1;
-
-    g.beginFill(col, 0.3);
-    g.lineStyle(2, col, 0.85);
-    g.drawRect(ghost.x * t, ghost.y * t, fw * t, fh * t);
-    g.endFill();
-    g.lineStyle(0);
-
-    // Range preview for towers
-    if (ghost.range && ghost.range > 0) {
-      const cx = (ghost.x + fw / 2) * t;
-      const cy = (ghost.y + fh / 2) * t;
-      this._dashedCircle(g, cx, cy, ghost.range * t, col, 0.5);
-    }
-
-    // March line for troop deploy: base -> drop destination
-    if (ghost.deploy && state.base) {
-      const bx = this.tx(state.base.x), by = this.ty(state.base.y);
-      const dx = (ghost.x + 0.5) * t, dy = (ghost.y + 0.5) * t;
-      this._dashedLine(g, bx, by, dx, dy, col, 0.7);
-    }
+  // ghost preview
+  if (ui && ui.buildSelection && ui.hoverCell) {
+    let fp = { w: 1, h: 1 };
+    try {
+      const def = getStructureDef(ui.buildSelection);
+      if (def && def.footprint) fp = def.footprint;
+    } catch (e) { /* unknown struct id: default footprint */ }
+    const ok = !!ui.hoverValid;
+    const tint = ok ? 0x40e060 : 0xe04040;
+    const gx = ui.hoverCell.x * t;
+    const gy = ui.hoverCell.y * t;
+    gO.beginFill(tint, 0.35);
+    gO.drawRect(gx, gy, fp.w * t, fp.h * t);
+    gO.endFill();
+    gO.lineStyle(2, tint, 0.9);
+    gO.drawRect(gx + 1, gy + 1, fp.w * t - 2, fp.h * t - 2);
+    gO.lineStyle(0);
   }
 
-  // ---------------------------------------------------------------
-  _hpBar(g, cx, topY, width, hp, maxHp) {
-    const frac = Math.max(0, Math.min(1, maxHp > 0 ? hp / maxHp : 0));
-    const col = frac > 0.6 ? COLORS.hpFront : frac > 0.3 ? COLORS.hpMid : COLORS.hpLow;
-    g.beginFill(COLORS.hpBack, 0.8);
-    g.drawRect(cx - width / 2, topY, width, 3.5);
-    g.endFill();
-    g.beginFill(col, 0.95);
-    g.drawRect(cx - width / 2, topY, width * frac, 3.5);
-    g.endFill();
+  // event FX
+  if (events && events.length) {
+    for (const ev of events) spawnFx(renderer, ev);
   }
-
-  _dashedCircle(g, cx, cy, radius, color, alpha) {
-    const circumference = 2 * Math.PI * radius;
-    const dashLen = 8, gapLen = 6;
-    const steps = Math.max(12, Math.floor(circumference / (dashLen + gapLen)));
-    g.lineStyle(1.5, color, alpha);
-    for (let i = 0; i < steps; i++) {
-      const a0 = (i / steps) * Math.PI * 2;
-      const a1 = a0 + (dashLen / circumference) * Math.PI * 2;
-      g.moveTo(cx + Math.cos(a0) * radius, cy + Math.sin(a0) * radius);
-      // subdivide arc into 2 segments for smoothness
-      const mid = (a0 + a1) / 2;
-      g.lineTo(cx + Math.cos(mid) * radius, cy + Math.sin(mid) * radius);
-      g.lineTo(cx + Math.cos(a1) * radius, cy + Math.sin(a1) * radius);
-    }
-    g.lineStyle(0);
-  }
-
-  _dashedLine(g, x0, y0, x1, y1, color, alpha) {
-    const dx = x1 - x0, dy = y1 - y0;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 1) return;
-    const dashLen = 7, gapLen = 5;
-    const nx = dx / dist, ny = dy / dist;
-    g.lineStyle(1.5, color, alpha);
-    let d = 0;
-    while (d < dist) {
-      const end = Math.min(d + dashLen, dist);
-      g.moveTo(x0 + nx * d, y0 + ny * d);
-      g.lineTo(x0 + nx * end, y0 + ny * end);
-      d = end + gapLen;
-    }
-    g.lineStyle(0);
-  }
-
-  resize() {
-    if (this.sim && this.sim.state) {
-      this._layout(this.sim.state);
-      this._terrainDirtyKey = null;
-    }
-  }
-
-  destroy() {
-    this.root.destroy({ children: true });
-  }
+  updateFx(renderer);
 }
 
-export function createRenderer(app, sim) {
-  return new Renderer(app, sim);
+export function screenToCell(renderer, sx, sy) {
+  const t = renderer.tile;
+  const x = Math.max(0, Math.min(renderer.map.cols - 1, Math.floor(sx / t)));
+  const y = Math.max(0, Math.min(renderer.map.rows - 1, Math.floor(sy / t)));
+  return { x: x, y: y };
 }
 
-export default Renderer;
+export function cellToScreen(renderer, cell) {
+  const t = renderer.tile;
+  return { x: (cell.x + 0.5) * t, y: (cell.y + 0.5) * t };
+}

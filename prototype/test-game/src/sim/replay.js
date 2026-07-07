@@ -1,281 +1,225 @@
-class ReplayDriver {
-  constructor(deps) {
-    // deps: { makeSim, commands, log }
-    // makeSim(seed) -> fresh sim instance with .step(dt) and .state
-    this.makeSim = deps.makeSim;
-    this.commands = deps.commands;
-    this.logModule = deps.log;
-  }
+import { createSim, applyCommand, stepSim, FIXED_DT } from './core.js';
 
-  // Re-drive a fresh headless core from a serialized log and produce
-  // the final deterministic state hash + per-checkpoint hashes.
-  replay(logData) {
-    const log = typeof logData === 'string' ? JSON.parse(logData) : logData;
-    const seed = log.seed >>> 0;
-    const dt = log.dt || (1 / 30);
-    const sim = this.makeSim(seed);
+/**
+ * Battle log + replay support.
+ *
+ * A BattleLog is the complete ordered record of a session:
+ *   { seed, commands: [{tick, cmd}], finalHash }
+ *
+ * Replays re-drive the headless sim core (createSim/applyCommand/stepSim)
+ * from the log and prove determinism by comparing FNV-1a state hashes.
+ */
 
-    // Build a tick->commands lookup from the ordered input stream.
-    const inputsByTick = new Map();
-    for (const entry of (log.inputs || [])) {
-      const t = entry.tick | 0;
-      if (!inputsByTick.has(t)) inputsByTick.set(t, []);
-      inputsByTick.get(t).push(entry);
-    }
+const MAX_REPLAY_TICKS = 1000000; // safety cap (~9 hours of sim time)
 
-    const totalTicks = log.finalTick | 0;
-    const checkpoints = [];
-    const checkpointEvery = log.checkpointEvery || 60;
-
-    for (let tick = 0; tick <= totalTicks; tick++) {
-      // Apply all inputs scheduled at this tick BEFORE stepping.
-      const cmds = inputsByTick.get(tick);
-      if (cmds) {
-        for (const c of cmds) {
-          this.applyCommand(sim, c);
-        }
-      }
-      // Advance one fixed step.
-      if (tick < totalTicks) sim.step(dt);
-
-      if (tick % checkpointEvery === 0) {
-        checkpoints.push({ tick, hash: this.hashState(sim.state) });
-      }
-    }
-
-    return {
-      seed,
-      finalTick: totalTicks,
-      finalHash: this.hashState(sim.state),
-      checkpoints,
-      state: sim.state,
-    };
-  }
-
-  applyCommand(sim, entry) {
-    // entry: { type, ...args }
-    if (this.commands && typeof this.commands.apply === 'function') {
-      this.commands.apply(sim, entry);
-      return;
-    }
-    // Fallback: direct dispatch if commands module exposes named handlers.
-    if (this.commands && typeof this.commands[entry.type] === 'function') {
-      this.commands[entry.type](sim, entry);
-    }
-  }
-
-  // Verify a live-recorded log reproduces the recorded final hash.
-  verify(logData) {
-    const log = typeof logData === 'string' ? JSON.parse(logData) : logData;
-    const recordedHash = log.finalHash != null ? (log.finalHash >>> 0) : null;
-    const result = this.replay(log);
-    const ok = recordedHash == null ? true : (result.finalHash === recordedHash);
-
-    // Also verify per-checkpoint hashes if the log carried them.
-    let checkpointOk = true;
-    let mismatchTick = -1;
-    if (Array.isArray(log.checkpoints) && log.checkpoints.length) {
-      const byTick = new Map();
-      for (const cp of result.checkpoints) byTick.set(cp.tick, cp.hash);
-      for (const rec of log.checkpoints) {
-        const got = byTick.get(rec.tick);
-        if (got == null) continue;
-        if ((got >>> 0) !== (rec.hash >>> 0)) {
-          checkpointOk = false;
-          mismatchTick = rec.tick;
-          break;
-        }
-      }
-    }
-
-    return {
-      deterministic: ok && checkpointOk,
-      hashMatch: ok,
-      checkpointMatch: checkpointOk,
-      mismatchTick,
-      recordedHash,
-      computedHash: result.finalHash,
-      result,
-    };
-  }
-
-  // Run the same sim twice from the same seed + input log and confirm
-  // both runs produce identical final hashes (pure determinism proof).
-  selfTest(logData) {
-    const a = this.replay(logData);
-    const b = this.replay(logData);
-    return {
-      deterministic: a.finalHash === b.finalHash,
-      hashA: a.finalHash,
-      hashB: b.finalHash,
-    };
-  }
-
-  // ---- Deterministic state hashing (order-stable FNV-1a over 32-bit) ----
-
-  hashState(state) {
-    const h = new Hasher();
-    this._hashState(h, state);
-    return h.value >>> 0;
-  }
-
-  _hashState(h, s) {
-    if (!s) { h.pushInt(0); return; }
-
-    // Base
-    if (s.base) {
-      h.pushStr('base');
-      h.pushFloat(s.base.x);
-      h.pushFloat(s.base.y);
-      h.pushFloat(s.base.hp);
-      h.pushInt(s.base.level | 0);
-    }
-
-    // Economy
-    if (s.economy) {
-      h.pushStr('econ');
-      h.pushFloat(s.economy.money);
-      h.pushInt((s.economy.bankrupt ? 1 : 0));
-    } else if (s.money != null) {
-      h.pushStr('money');
-      h.pushFloat(s.money);
-    }
-
-    // Waves
-    if (s.waves) {
-      h.pushStr('waves');
-      h.pushInt(s.waves.current | 0);
-      h.pushInt(s.waves.total | 0);
-      h.pushInt(s.waves.active ? 1 : 0);
-      h.pushFloat(s.waves.spawnTimer || 0);
-      h.pushInt(s.waves.spawnIndex | 0);
-    }
-
-    // Win / lose
-    h.pushStr('outcome');
-    h.pushInt(s.won ? 1 : 0);
-    h.pushInt(s.lost ? 1 : 0);
-    h.pushInt(s.gameOver ? 1 : 0);
-
-    // Time / tick
-    h.pushInt((s.tick != null ? s.tick : 0) | 0);
-
-    // RNG internal state (critical for determinism)
-    if (s.rng && s.rng.state != null) {
-      h.pushStr('rng');
-      h.pushInt(s.rng.state >>> 0);
-    }
-
-    // Entities: hash in a stable order by id.
-    const ents = this._collectEntities(s);
-    ents.sort((a, b) => {
-      const ia = a.id, ib = b.id;
-      if (ia < ib) return -1;
-      if (ia > ib) return 1;
-      return 0;
-    });
-    h.pushStr('entities');
-    h.pushInt(ents.length);
-    for (const e of ents) this._hashEntity(h, e);
-  }
-
-  _collectEntities(s) {
-    const out = [];
-    const push = (arr) => {
-      if (!arr) return;
-      if (Array.isArray(arr)) { for (const e of arr) if (e) out.push(e); }
-      else if (typeof arr === 'object') {
-        for (const k of Object.keys(arr)) { const e = arr[k]; if (e) out.push(e); }
-      }
-    };
-    push(s.entities);
-    push(s.attackers);
-    push(s.units);
-    push(s.structures);
-    push(s.towers);
-    push(s.walls);
-    push(s.troops);
-    push(s.projectiles);
-    return out;
-  }
-
-  _hashEntity(h, e) {
-    h.pushStr(String(e.id != null ? e.id : ''));
-    h.pushStr(String(e.kind != null ? e.kind : ''));
-    h.pushStr(String(e.type != null ? e.type : ''));
-    h.pushStr(String(e.domain != null ? e.domain : ''));
-    h.pushStr(String(e.state != null ? e.state : ''));
-    h.pushFloat(e.x);
-    h.pushFloat(e.y);
-    h.pushFloat(e.hp);
-    h.pushInt(e.tier | 0);
-    h.pushFloat(e.altitude || 0);
-    h.pushInt(e.dead ? 1 : 0);
-    // Target reference by id only (stable, avoids cycles).
-    if (e.target && e.target.id != null) h.pushStr('t:' + e.target.id);
-    else if (e.targetId != null) h.pushStr('t:' + e.targetId);
-    else h.pushInt(0);
-    // Timers that matter to lifecycle determinism.
-    h.pushFloat(e.buildTimer || 0);
-    h.pushFloat(e.upgradeTimer || 0);
-    h.pushFloat(e.repairTimer || 0);
-    h.pushFloat(e.cooldown || 0);
-    h.pushFloat(e.pathProgress || 0);
-    if (e.pathIndex != null) h.pushInt(e.pathIndex | 0);
-  }
+/**
+ * Create an empty battle log for a fresh session.
+ * @param {number} seed
+ * @returns {{seed:number, commands:Array<{tick:number, cmd:object}>, finalHash:string|null}}
+ */
+export function createLog(seed) {
+  return {
+    seed: seed | 0,
+    commands: [],
+    finalHash: null,
+  };
 }
 
-// FNV-1a 32-bit accumulator with quantized floats for cross-run stability.
-class Hasher {
-  constructor() {
-    this.value = 0x811c9dc5 >>> 0;
-    this._buf = new ArrayBuffer(4);
-    this._f32 = new Float32Array(this._buf);
-    this._u32 = new Uint32Array(this._buf);
-  }
-
-  _mix(byte) {
-    this.value ^= (byte & 0xff);
-    // FNV prime 16777619, kept in 32-bit
-    this.value = Math.imul(this.value, 0x01000193) >>> 0;
-  }
-
-  pushInt(n) {
-    let v = (n | 0) >>> 0;
-    this._mix(v & 0xff);
-    this._mix((v >>> 8) & 0xff);
-    this._mix((v >>> 16) & 0xff);
-    this._mix((v >>> 24) & 0xff);
-  }
-
-  pushFloat(f) {
-    if (f == null || Number.isNaN(f)) { this.pushInt(0x7fc00000); return; }
-    // Quantize to reduce float noise; sim is fixed-step deterministic
-    // but this guards against harmless representational drift.
-    const q = Math.round(f * 1024) / 1024;
-    this._f32[0] = q;
-    this.pushInt(this._u32[0]);
-  }
-
-  pushStr(str) {
-    const s = String(str);
-    this.pushInt(s.length);
-    for (let i = 0; i < s.length; i++) {
-      this._mix(s.charCodeAt(i) & 0xff);
-      this._mix((s.charCodeAt(i) >>> 8) & 0xff);
-    }
-  }
+/**
+ * Append an accepted command with its tick to the log.
+ * @param {object} log BattleLog
+ * @param {number} tick
+ * @param {object} cmd
+ */
+export function recordCommand(log, tick, cmd) {
+  if (!log || !Array.isArray(log.commands)) return;
+  log.commands.push({ tick: tick | 0, cmd: JSON.parse(JSON.stringify(cmd)) });
 }
 
-export { ReplayDriver, Hasher };
-export default ReplayDriver;
-
-export function createReplayDriver(deps) {
-  return new ReplayDriver(deps);
+/**
+ * Serialize a battle log to a JSON string for export.
+ * @param {object} log BattleLog
+ * @returns {string}
+ */
+export function serializeLog(log) {
+  return JSON.stringify(
+    {
+      version: 1,
+      seed: log.seed,
+      commands: log.commands,
+      finalHash: log.finalHash || null,
+    },
+    null,
+    2
+  );
 }
 
-// Convenience: hash any state with a standalone hasher (no driver needed).
+/**
+ * Parse an exported battle log JSON string.
+ * @param {string} json
+ * @returns {object} BattleLog
+ */
+export function deserializeLog(json) {
+  const raw = JSON.parse(json);
+  if (raw == null || typeof raw !== 'object') {
+    throw new Error('replay: invalid log JSON');
+  }
+  const seed = Number(raw.seed);
+  if (!Number.isFinite(seed)) {
+    throw new Error('replay: log missing numeric seed');
+  }
+  const commands = Array.isArray(raw.commands)
+    ? raw.commands
+        .filter((c) => c && typeof c === 'object' && c.cmd && typeof c.cmd === 'object')
+        .map((c) => ({ tick: Number(c.tick) | 0, cmd: c.cmd }))
+    : [];
+  // Keep stable order by tick (commands recorded during play are already
+  // ordered, but be defensive about hand-edited logs).
+  commands.sort((a, b) => a.tick - b.tick);
+  return {
+    seed: seed | 0,
+    commands,
+    finalHash: typeof raw.finalHash === 'string' ? raw.finalHash : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// FNV-1a hashing
+// ---------------------------------------------------------------------------
+
+function fnv1aInit() {
+  return 0x811c9dc5;
+}
+
+function fnv1aString(h, str) {
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i) & 0xff;
+    h = Math.imul(h, 0x01000193);
+  }
+  // separator between fields so "ab","c" differs from "a","bc"
+  h ^= 0x1f;
+  h = Math.imul(h, 0x01000193);
+  return h;
+}
+
+function numStr(n) {
+  if (n == null || !Number.isFinite(n)) return 'x';
+  // Quantize to avoid printing representation quirks while remaining
+  // deterministic (the sim itself is deterministic, so equal runs produce
+  // bit-identical values; quantization only shortens the strings).
+  return (Math.round(n * 4096) / 4096).toString();
+}
+
+/**
+ * Deterministic FNV-1a hash over tick, rng state, money, base hp, and all
+ * entity positions/hp. Entities are visited in ascending id order so the
+ * hash is independent of Map insertion quirks.
+ * @param {object} state SimState
+ * @returns {string} 8-char hex hash
+ */
 export function hashState(state) {
-  const driver = new ReplayDriver({});
-  return driver.hashState(state);
+  let h = fnv1aInit();
+
+  h = fnv1aString(h, 't' + (state.tick | 0));
+
+  let rngState = 0;
+  if (state.rng && typeof state.rng.getState === 'function') {
+    rngState = state.rng.getState();
+  }
+  h = fnv1aString(h, 'r' + numStr(rngState));
+
+  const money = state.economy ? state.economy.money : 0;
+  h = fnv1aString(h, 'm' + numStr(money));
+
+  const baseHp = state.base ? state.base.hp : 0;
+  h = fnv1aString(h, 'b' + numStr(baseHp));
+
+  // Units (sorted by id)
+  if (state.units) {
+    const ids = [];
+    state.units.forEach((_, id) => ids.push(id));
+    ids.sort((a, b) => a - b);
+    for (let i = 0; i < ids.length; i++) {
+      const u = state.units.get(ids[i]);
+      if (!u) continue;
+      h = fnv1aString(
+        h,
+        'u' + ids[i] + ':' + numStr(u.pos && u.pos.x) + ',' + numStr(u.pos && u.pos.y) + ':' + numStr(u.hp)
+      );
+    }
+  }
+
+  // Structures (sorted by id)
+  if (state.structures) {
+    const ids = [];
+    state.structures.forEach((_, id) => ids.push(id));
+    ids.sort((a, b) => a - b);
+    for (let i = 0; i < ids.length; i++) {
+      const s = state.structures.get(ids[i]);
+      if (!s) continue;
+      h = fnv1aString(
+        h,
+        's' + ids[i] + ':' + numStr(s.pos && s.pos.x) + ',' + numStr(s.pos && s.pos.y) + ':' + numStr(s.hp) + ':' + (s.tier | 0) + ':' + (s.lifecycle || '')
+      );
+    }
+  }
+
+  if (state.result) {
+    h = fnv1aString(h, 'w' + state.result);
+  }
+
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+// ---------------------------------------------------------------------------
+// Headless replay
+// ---------------------------------------------------------------------------
+
+/**
+ * Headlessly re-drive the sim from a battle log.
+ *
+ * Runs createSim(log.seed), applying each logged command at its recorded
+ * tick and stepping with FIXED_DT. Stops at `untilTick` if given; otherwise
+ * runs until all commands are consumed and the sim reaches a result (or a
+ * safety cap).
+ *
+ * @param {object} log BattleLog
+ * @param {number} [untilTick]
+ * @param {(state:object)=>void} [onTick]
+ * @returns {{state:object, hash:string, matches:boolean|null}}
+ */
+export function runReplay(log, untilTick, onTick) {
+  const state = createSim(log.seed);
+
+  const commands = (log.commands || []).slice().sort((a, b) => a.tick - b.tick);
+  let cmdIdx = 0;
+  const lastCmdTick = commands.length ? commands[commands.length - 1].tick : -1;
+
+  const hasLimit = typeof untilTick === 'number' && Number.isFinite(untilTick);
+  const limit = hasLimit ? Math.max(0, untilTick | 0) : MAX_REPLAY_TICKS;
+
+  while (state.tick < limit) {
+    // Apply every command recorded for the current tick before stepping.
+    while (cmdIdx < commands.length && commands[cmdIdx].tick <= state.tick) {
+      applyCommand(state, commands[cmdIdx].cmd);
+      cmdIdx++;
+    }
+
+    stepSim(state, FIXED_DT);
+
+    if (typeof onTick === 'function') {
+      onTick(state);
+    }
+
+    // Without an explicit limit, stop once the battle resolved and all
+    // recorded commands have been consumed.
+    if (!hasLimit && state.result !== null && state.tick > lastCmdTick) {
+      break;
+    }
+  }
+
+  const hash = hashState(state);
+  const matches = log.finalHash ? hash === log.finalHash : null;
+
+  return { state, hash, matches };
 }

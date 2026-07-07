@@ -1,441 +1,417 @@
-import { TABLES } from '../data/tables.js';
-import { mulberry32 } from './rng.js';
-import { createGrid, isWalkable, canPlaceStructureAt, applyStructureTerrain, removeStructureTerrain, slotPositions } from './grid.js';
-import { recomputePaths, pathFor, straightLinePath } from './pathing.js';
-import { makeBase, makeUnit, makeStructure } from './entities.js';
-import { updateStructures, tryPlaceStructure, tryUpgradeStructure, trySellStructure, tryRepairStructure } from './structures.js';
-import { updateCombat } from './combat.js';
-import { createWaveState, updateWaves, startWave } from './waves.js';
-import { createEconomy, updateEconomy, canAfford, spend, addIncome } from './economy.js';
-import { updateVision } from './vision.js';
+import { ASSUMPTIONS, WAVES, MAP, getUnitDef } from '../data/tables.js';
+import { createRng } from './rng.js';
+import { buildNavGrid, findWalkerPath, getFlyerPath, getWaterPath } from './pathfinding.js';
+import { createUnit, createBase } from './entities.js';
+import { acquireTarget, applyDamage, stepCombat } from './combat.js';
+import { initEconomy, stepEconomy, canAfford, spend } from './economy.js';
+import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
+import { initWaves, startNextWave, stepWaves } from './waves.js';
+import { createLog, recordCommand } from './replay.js';
 
-// ---------------------------------------------------------------------------
-// Headless deterministic sim core.
-// Fixed timestep, pure serializable state, zero rendering dependencies.
-// ---------------------------------------------------------------------------
+/**
+ * Fixed simulation timestep in seconds. The sim ONLY advances in these
+ * increments; the render loop accumulates real time and calls stepSim
+ * zero or more times per frame. This is the root of determinism.
+ */
+export const FIXED_DT = 1 / 30;
 
-export const TICK_RATE = 20;            // fixed sim ticks per second
-export const DT = 1 / TICK_RATE;        // seconds per tick
+/* ------------------------------------------------------------------ */
+/* Helpers (pure, local)                                               */
+/* ------------------------------------------------------------------ */
 
-export function createCore(seed, opts) {
-  opts = opts || {};
-  const rngState = { seed: seed >>> 0 };
-  const grid = createGrid(TABLES);
+function roundCell(pos) {
+  return { x: Math.round(pos.x), y: Math.round(pos.y) };
+}
+
+function dist(a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function laneForDomain(domain) {
+  if (domain === 'Flyer') return 'air';
+  if (domain === 'Floater') return 'water';
+  return 'ground';
+}
+
+/* ------------------------------------------------------------------ */
+/* createSim                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Build a fresh, fully deterministic SimState from a seed.
+ * Zero rendering concerns live here; the state is a plain data bag
+ * that every sibling sim module reads/mutates through its interface.
+ */
+export function createSim(seed, opts) {
+  const options = opts || {};
+  const map = options.map || MAP;
+  const waveTable = options.waves || WAVES;
+
   const state = {
-    seed: seed >>> 0,
     tick: 0,
     time: 0,
-    dt: DT,
-    status: 'playing',              // 'playing' | 'won' | 'lost'
-    nextId: 1,
-    grid,
+    seed: seed,
+    rng: createRng(seed),
+    map: map,
+    waveTable: waveTable,
     base: null,
-    units: [],                       // attacker + deployed friendly units
-    structures: [],
-    projectiles: [],
-    repairJobs: [],
-    economy: createEconomy(TABLES),
-    waves: createWaveState(TABLES),
-    events: [],                      // events emitted this tick (drained by log)
-    pathsDirty: true,
-    pathCache: {},
-    rngCalls: 0,
-    baseLevel: (TABLES.Assumptions && TABLES.Assumptions.Base_start_level) || 1,
+    units: new Map(),
+    structures: new Map(),
+    economy: initEconomy(ASSUMPTIONS),
+    waves: initWaves(waveTable),
+    navGrid: null,
+    events: [],
+    result: null,
+    selectedId: null,
+    log: createLog(seed),
+    // deterministic monotonically increasing id source consumed by
+    // entities.nextEntityId(state)
+    nextId: 1,
+    entityIdCounter: 0,
+    _resultEmitted: false
   };
-  state.base = makeBase(state, TABLES, grid);
-  recomputePaths(state);
-  state.pathsDirty = false;
+
+  state.base = createBase(map);
+  state.navGrid = buildNavGrid(map, []);
+  // cache the fixed water lane so waves/deploys can reuse it without recompute
+  state.waterPath = getWaterPath(map);
+
   return state;
 }
 
-// Deterministic RNG bound to sim state -------------------------------------
+/* ------------------------------------------------------------------ */
+/* emitEvent                                                           */
+/* ------------------------------------------------------------------ */
 
-export function rand(state) {
-  // mulberry32 evolves state.seed-derived stream; keep stream in state for
-  // full serializability.
-  if (state._rngStream === undefined || state._rngStreamSeed !== state.seed) {
-    state._rngStream = mulberry32(state.seed);
-    state._rngStreamSeed = state.seed;
-    // replay any consumed calls to restore stream position after deserialize
-    for (let i = 0; i < (state.rngCalls | 0); i++) state._rngStream();
-  }
-  state.rngCalls = (state.rngCalls | 0) + 1;
-  return state._rngStream();
-}
-
-export function randInt(state, n) {
-  return Math.floor(rand(state) * n);
-}
-
-// Event helper ---------------------------------------------------------------
-
-export function emit(state, type, data) {
-  const ev = { tick: state.tick, type };
-  if (data) for (const k in data) ev[k] = data[k];
+/**
+ * Append a sim event. Events are drained by stepSim each tick and
+ * consumed by the HUD / renderer FX / battle log.
+ */
+export function emitEvent(state, ev) {
   state.events.push(ev);
-  return ev;
 }
 
-// ---------------------------------------------------------------------------
-// Input command application. Every command is a plain serializable object:
-//   { cmd: 'startWave' }
-//   { cmd: 'place', kind: 'towerAG'|'towerAA'|'wall'|'moat', x, y }
-//   { cmd: 'upgrade', id }
-//   { cmd: 'sell', id }
-//   { cmd: 'repair', id }
-//   { cmd: 'deploy', unitId: 'GND-Troops', x, y }   (spawns at base, marches)
-// Returns { ok, reason?, events }
-// ---------------------------------------------------------------------------
+/* ------------------------------------------------------------------ */
+/* applyCommand                                                        */
+/* ------------------------------------------------------------------ */
 
+/**
+ * Validate + apply ONE player command at the current tick.
+ * Every ACCEPTED command is appended to the battle log (replay source).
+ * Returns {ok, reason} so the HUD can toast rejections.
+ */
 export function applyCommand(state, cmd) {
-  if (!cmd || state.status !== 'playing') {
-    return { ok: false, reason: 'inactive' };
+  if (!cmd || typeof cmd.type !== 'string') {
+    return { ok: false, reason: 'badCommand' };
   }
-  switch (cmd.cmd) {
-    case 'startWave':
-      return startWave(state);
+  if (state.result) {
+    return { ok: false, reason: 'gameOver' };
+  }
+
+  let result;
+  switch (cmd.type) {
     case 'place':
-      return tryPlaceStructure(state, cmd.kind, cmd.x | 0, cmd.y | 0);
+      result = cmdPlace(state, cmd);
+      break;
     case 'upgrade':
-      return tryUpgradeStructure(state, cmd.id);
+      result = cmdUpgrade(state, cmd);
+      break;
     case 'sell':
-      return trySellStructure(state, cmd.id);
+      result = cmdSell(state, cmd);
+      break;
     case 'repair':
-      return tryRepairStructure(state, cmd.id);
-    case 'deploy':
-      return deployTroop(state, cmd.unitId, cmd.x | 0, cmd.y | 0);
+      result = cmdRepair(state, cmd);
+      break;
+    case 'startWave':
+      result = cmdStartWave(state, cmd);
+      break;
+    case 'deployTroop':
+      result = cmdDeployTroop(state, cmd);
+      break;
     default:
-      return { ok: false, reason: 'unknown-command' };
+      result = { ok: false, reason: 'unknownCommand' };
+      break;
   }
+
+  if (result.ok) {
+    recordCommand(state.log, state.tick, cmd);
+  }
+  return result;
 }
 
-// Deploy friendly troop: spawns AT the base, marches to drop destination.
-function deployTroop(state, unitId, tx, ty) {
-  const def = TABLES.Units.find((u) => u.id === unitId);
-  if (!def) return { ok: false, reason: 'unknown-unit' };
-  const cost = def.cost1 !== undefined ? def.cost1 : def.cost;
-  if (!canAfford(state.economy, cost)) return { ok: false, reason: 'insufficient-funds' };
-  // deploy validity: destination must be inside board and traversable for domain
-  const g = state.grid;
-  if (tx < 0 || ty < 0 || tx >= g.width || ty >= g.height) {
-    return { ok: false, reason: 'out-of-bounds' };
-  }
-  if (def.domain === 'Walker' && !isWalkable(g, tx, ty, 'Walker')) {
-    return { ok: false, reason: 'blocked-terrain' };
-  }
-  if (def.domain === 'Floater' && !isWalkable(g, tx, ty, 'Floater')) {
-    return { ok: false, reason: 'not-water' };
-  }
-  spend(state.economy, cost);
-  const unit = makeUnit(state, def, state.base.x, state.base.y, {
-    team: 'player',
-    tier: 1,
-    dest: { x: tx, y: ty },
+function cmdPlace(state, cmd) {
+  const cell = cmd.cell || cmd.slot || cmd.pos;
+  if (!cmd.structId || !cell) return { ok: false, reason: 'badCommand' };
+
+  const v = validatePlacement(state, cmd.structId, cell);
+  if (!v.ok) return { ok: false, reason: v.reason || 'invalid' };
+
+  const s = placeStructure(state, cmd.structId, cell);
+  if (!s) return { ok: false, reason: 'cost' };
+
+  emitEvent(state, {
+    type: 'build',
+    tick: state.tick,
+    structureId: s.id,
+    structId: cmd.structId,
+    pos: { x: s.pos.x, y: s.pos.y }
   });
-  // path from base to destination in unit domain
-  if (def.domain === 'Flyer') {
-    unit.path = straightLinePath(state.base.x, state.base.y, tx, ty);
+  return { ok: true, reason: '' };
+}
+
+function cmdUpgrade(state, cmd) {
+  if (typeof cmd.structureId !== 'number') return { ok: false, reason: 'badCommand' };
+  const s = state.structures.get(cmd.structureId);
+  if (!s) return { ok: false, reason: 'noStructure' };
+  if (!startUpgrade(state, cmd.structureId)) {
+    return { ok: false, reason: s.tier >= 3 ? 'maxTier' : 'cost' };
+  }
+  emitEvent(state, { type: 'upgradeStart', tick: state.tick, structureId: cmd.structureId });
+  return { ok: true, reason: '' };
+}
+
+function cmdSell(state, cmd) {
+  if (typeof cmd.structureId !== 'number') return { ok: false, reason: 'badCommand' };
+  if (!state.structures.get(cmd.structureId)) return { ok: false, reason: 'noStructure' };
+  if (!startSell(state, cmd.structureId)) {
+    return { ok: false, reason: 'busy' };
+  }
+  emitEvent(state, { type: 'sellStart', tick: state.tick, structureId: cmd.structureId });
+  return { ok: true, reason: '' };
+}
+
+function cmdRepair(state, cmd) {
+  if (typeof cmd.structureId !== 'number') return { ok: false, reason: 'badCommand' };
+  if (!state.structures.get(cmd.structureId)) return { ok: false, reason: 'noStructure' };
+  if (!requestRepair(state, cmd.structureId)) {
+    return { ok: false, reason: 'noRepairNeeded' };
+  }
+  emitEvent(state, { type: 'repairStart', tick: state.tick, structureId: cmd.structureId });
+  return { ok: true, reason: '' };
+}
+
+function cmdStartWave(state, cmd) {
+  if (!startNextWave(state)) {
+    return { ok: false, reason: state.waves.active ? 'waveActive' : 'wavesDone' };
+  }
+  emitEvent(state, { type: 'wave', tick: state.tick, wave: state.waves.current });
+  return { ok: true, reason: '' };
+}
+
+function cmdDeployTroop(state, cmd) {
+  if (!cmd.unitId) return { ok: false, reason: 'badCommand' };
+  const dest = cmd.dest || cmd.cell || cmd.pos;
+  if (!dest) return { ok: false, reason: 'noDestination' };
+
+  let def;
+  try {
+    def = getUnitDef(cmd.unitId);
+  } catch (e) {
+    return { ok: false, reason: 'unknownUnit' };
+  }
+
+  const tier = cmd.tier === 2 || cmd.tier === 3 ? cmd.tier : 1;
+  const cost = def.cost[tier - 1];
+  if (!canAfford(state, cost)) return { ok: false, reason: 'cost' };
+
+  // Troops SPAWN at the player base; the drop point is a march ORDER.
+  const basePos = { x: state.base.pos.x, y: state.base.pos.y };
+  const destCell = roundCell(dest);
+
+  let path;
+  if (def.domain === 'Flyer' || def.domain === 'Floater') {
+    // flyers ignore terrain; floaters approximated as direct water travel
+    path = getFlyerPath(basePos, destCell);
   } else {
-    unit.path = pathFor(state, state.base.x, state.base.y, tx, ty, def.domain);
-    if (!unit.path) {
-      // refund on unreachable destination
-      addIncome(state.economy, cost);
-      state.units = state.units.filter((u) => u !== unit);
-      return { ok: false, reason: 'unreachable' };
-    }
+    path = findWalkerPath(state.navGrid, roundCell(basePos), destCell);
+    if (!path) return { ok: false, reason: 'blocked' };
   }
-  unit.pathIndex = 0;
-  emit(state, 'deploy', { id: unit.id, unitId, x: tx, y: ty, cost });
-  return { ok: true, id: unit.id };
+
+  if (!spend(state, cost, 'deploy:' + cmd.unitId)) {
+    return { ok: false, reason: 'cost' };
+  }
+
+  const unit = createUnit(state, cmd.unitId, tier, { x: basePos.x, y: basePos.y }, laneForDomain(def.domain), 'defender');
+  unit.path = path;
+  unit.pathIdx = 0;
+  unit.state = 'marching';
+  state.units.set(unit.id, unit);
+
+  emitEvent(state, {
+    type: 'spawn',
+    tick: state.tick,
+    unitId: cmd.unitId,
+    entityId: unit.id,
+    side: 'defender',
+    pos: { x: unit.pos.x, y: unit.pos.y }
+  });
+  return { ok: true, reason: '' };
 }
 
-// ---------------------------------------------------------------------------
-// Fixed timestep step. `inputs` is an array of commands to apply this tick
-// (may be empty/undefined). Pure state mutation; deterministic given
-// identical seed + identical command stream.
-// Returns array of events emitted during this tick.
-// ---------------------------------------------------------------------------
+/* ------------------------------------------------------------------ */
+/* stepMovement                                                        */
+/* ------------------------------------------------------------------ */
 
-export function step(state, inputs) {
-  state.events = [];
-  if (state.status !== 'playing') {
-    state.tick++;
-    state.time = state.tick * DT;
-    return state.events;
-  }
+/**
+ * Advance all units along their domain paths.
+ * - Attackers whose 'targets' flag is Base attack the base when in reach.
+ * - ONLY Targets:Structures units divert to attack structures.
+ * - Defender troops simply march to their ordered destination, then idle
+ *   (their firing is handled by stepCombat).
+ */
+export function stepMovement(state, dt) {
+  const base = state.base;
 
-  // 1. apply inputs (ordered)
-  if (inputs && inputs.length) {
-    for (let i = 0; i < inputs.length; i++) {
-      applyCommand(state, inputs[i]);
-    }
-  }
+  for (const unit of state.units.values()) {
+    if (unit.hp <= 0) continue;
 
-  // 2. recompute walker/floater paths if terrain changed (wall/moat placed/sold/destroyed)
-  if (state.pathsDirty) {
-    recomputePaths(state);
-    state.pathsDirty = false;
-  }
+    const isAttacker = unit.side === 'attacker';
+    let engaged = false;
 
-  // 3. economy accrual (real-time money)
-  updateEconomy(state, DT);
-
-  // 4. waves: spawn timing, wave progress, win check
-  updateWaves(state, DT);
-
-  // 5. structure lifecycle: building timers, upgrading, selling, repair jobs
-  updateStructures(state, DT);
-
-  // 6. unit movement
-  moveUnits(state, DT);
-
-  // 7. combat: targeting, cooldowns, projectiles, damage, kill income
-  updateCombat(state, DT);
-
-  // 8. vision flags
-  updateVision(state);
-
-  // 9. cleanup dead entities, terrain updates for destroyed walls
-  cleanup(state);
-
-  // 10. win/lose checks
-  if (state.base.hp <= 0 && state.status === 'playing') {
-    state.status = 'lost';
-    emit(state, 'lose', {});
-  } else if (state.status === 'playing' && state.waves.complete) {
-    // waves module sets complete when all waves survived and field is clear
-    const attackersLeft = state.units.some((u) => u.team === 'attacker' && u.hp > 0);
-    if (!attackersLeft) {
-      state.status = 'won';
-      emit(state, 'win', {});
-    }
-  }
-
-  state.tick++;
-  state.time = state.tick * DT;
-  return state.events;
-}
-
-// Unit movement --------------------------------------------------------------
-
-function moveUnits(state, dt) {
-  const units = state.units;
-  for (let i = 0; i < units.length; i++) {
-    const u = units[i];
-    if (u.hp <= 0 || u.dead) continue;
-    if (u.stunned && u.stunned > 0) {
-      u.stunned -= dt;
-      continue;
-    }
-    // engaged units holding to fire don't move (combat sets u.engaged)
-    if (u.engaged) continue;
-
-    let path = u.path;
-    if (!path || u.pathIndex === undefined) {
-      assignPath(state, u);
-      path = u.path;
-    }
-    if (!path || u.pathIndex >= path.length) {
-      // arrived: attackers at end reached base clearing; friendlies idle at dest
-      if (u.team === 'attacker') u.atBase = true;
-      continue;
-    }
-    let speed = u.speed;
-    if (u.chilled && u.chilled > 0 && u.domain !== 'Flyer') {
-      speed *= 0.6;
-      u.chilled -= dt;
-    }
-    let remaining = speed * dt;
-    while (remaining > 0 && u.pathIndex < path.length) {
-      const node = path[u.pathIndex];
-      const dx = node.x - u.x;
-      const dy = node.y - u.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist <= remaining || dist < 1e-9) {
-        u.x = node.x;
-        u.y = node.y;
-        u.pathIndex++;
-        remaining -= dist;
-      } else {
-        u.x += (dx / dist) * remaining;
-        u.y += (dy / dist) * remaining;
-        remaining = 0;
+    if (isAttacker && unit.targetsBase === false) {
+      // Structure hunter (e.g. artillery): divert to a live structure target.
+      let tgt = null;
+      if (unit.targetId != null) {
+        tgt = state.structures.get(unit.targetId) || null;
+        if (tgt && (tgt.hp <= 0 || tgt.lifecycle === 'Destroyed')) tgt = null;
+      }
+      if (!tgt) {
+        const tid = acquireTarget(state, unit);
+        unit.targetId = tid;
+        tgt = tid != null ? state.structures.get(tid) || null : null;
+      }
+      if (tgt && dist(unit.pos, tgt.pos) <= unit.range) {
+        unit.state = 'attacking';
+        engaged = true; // stepCombat resolves the actual fire
       }
     }
-    if (u.pathIndex >= path.length && u.team === 'attacker') {
-      u.atBase = true;
-    }
-  }
-}
 
-function assignPath(state, u) {
-  const g = state.grid;
-  let goal;
-  if (u.team === 'attacker') {
-    goal = { x: state.base.x, y: state.base.y };
-  } else if (u.dest) {
-    goal = u.dest;
-  } else {
-    u.path = [];
-    u.pathIndex = 0;
-    return;
-  }
-  const sx = Math.round(u.x), sy = Math.round(u.y);
-  if (u.domain === 'Flyer') {
-    u.path = straightLinePath(u.x, u.y, goal.x, goal.y);
-  } else {
-    u.path = pathFor(state, sx, sy, goal.x, goal.y, u.domain) || [];
-  }
-  u.pathIndex = 0;
-}
-
-// Reroute all ground units when terrain changes (called from structures via flag)
-export function markPathsDirty(state) {
-  state.pathsDirty = true;
-  for (let i = 0; i < state.units.length; i++) {
-    const u = state.units[i];
-    if (u.domain !== 'Flyer') {
-      u.path = null;
-      u.pathIndex = 0;
-    }
-  }
-}
-
-// Cleanup --------------------------------------------------------------------
-
-function cleanup(state) {
-  // dead units
-  const alive = [];
-  for (let i = 0; i < state.units.length; i++) {
-    const u = state.units[i];
-    if (u.hp <= 0 || u.dead) {
-      u.dead = true;
-      emit(state, 'unitDied', { id: u.id, unitId: u.unitId, team: u.team });
-      if (u.team === 'attacker') {
-        const bounty = u.bounty || 0;
-        if (bounty > 0) {
-          addIncome(state.economy, bounty);
-          emit(state, 'killIncome', { amount: bounty, from: u.id });
+    if (isAttacker && !engaged) {
+      // Base-targeters (and structure hunters with nothing left to siege)
+      // attack the base once within weapon reach.
+      const hasStructTarget = unit.targetsBase === false && unit.targetId != null;
+      if (!hasStructTarget) {
+        const reach = Math.max(unit.range || 0.5, 0.6);
+        if (dist(unit.pos, base.pos) <= reach) {
+          unit.state = 'attacking';
+          applyDamage(state, unit.id, base, unit.dps, unit.damageType, dt);
+          engaged = true;
         }
-        if (state.waves) state.waves.aliveAttackers = Math.max(0, (state.waves.aliveAttackers || 1) - 1);
       }
-    } else {
-      alive.push(u);
+    }
+
+    if (engaged) continue;
+
+    // ---- march along the current path -------------------------------
+    const path = unit.path;
+    if (path && unit.pathIdx < path.length) {
+      unit.state = 'moving';
+      let remaining = (unit.speed || 0) * dt;
+      while (remaining > 0 && unit.pathIdx < path.length) {
+        const wp = path[unit.pathIdx];
+        const dx = wp.x - unit.pos.x;
+        const dy = wp.y - unit.pos.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d <= remaining || d === 0) {
+          unit.pos.x = wp.x;
+          unit.pos.y = wp.y;
+          unit.pathIdx += 1;
+          remaining -= d;
+        } else {
+          unit.pos.x += (dx / d) * remaining;
+          unit.pos.y += (dy / d) * remaining;
+          remaining = 0;
+        }
+      }
+    }
+
+    // ---- path exhausted ---------------------------------------------
+    if (!path || unit.pathIdx >= path.length) {
+      if (isAttacker) {
+        // Not yet in reach of the base (walls may have shifted things):
+        // deterministically re-path toward the base by domain.
+        const reach = Math.max(unit.range || 0.5, 0.6);
+        if (dist(unit.pos, base.pos) > reach) {
+          if (unit.domain === 'Walker') {
+            const p = findWalkerPath(state.navGrid, roundCell(unit.pos), roundCell(base.pos));
+            if (p && p.length > 0) {
+              unit.path = p;
+              unit.pathIdx = 0;
+            } else {
+              unit.state = 'idle'; // fully walled off; wait for reroute
+            }
+          } else {
+            unit.path = getFlyerPath(unit.pos, base.pos);
+            unit.pathIdx = 0;
+          }
+        }
+      } else if (unit.state === 'moving' || unit.state === 'marching') {
+        unit.state = 'idle';
+      }
     }
   }
-  state.units = alive;
-
-  // destroyed structures: free terrain, mark paths dirty for walls/moats
-  const keep = [];
-  for (let i = 0; i < state.structures.length; i++) {
-    const s = state.structures[i];
-    if (s.state === 'Destroyed' && !s._terrainRemoved) {
-      removeStructureTerrain(state.grid, s);
-      s._terrainRemoved = true;
-      emit(state, 'structureDestroyed', { id: s.id, kind: s.kind });
-      if (s.blocksPath) markPathsDirty(state);
-      continue; // drop destroyed structures from list
-    }
-    if (s.state === 'Sold') {
-      continue;
-    }
-    keep.push(s);
-  }
-  state.structures = keep;
-
-  // dead projectiles
-  state.projectiles = state.projectiles.filter((p) => !p.dead);
-
-  // repair jobs whose target is gone
-  state.repairJobs = state.repairJobs.filter((j) => {
-    if (j.done) return false;
-    const target = state.structures.find((s) => s.id === j.structureId);
-    return !!target;
-  });
 }
 
-// ---------------------------------------------------------------------------
-// Serialization + state hash (for determinism/replay assertions)
-// ---------------------------------------------------------------------------
+/* ------------------------------------------------------------------ */
+/* stepSim                                                             */
+/* ------------------------------------------------------------------ */
 
-export function serializeState(state) {
-  // strip non-serializable runtime helpers (_rngStream)
-  const copy = {};
-  for (const k in state) {
-    if (k === '_rngStream' || k === '_rngStreamSeed' || k === 'pathCache') continue;
-    copy[k] = state[k];
+/**
+ * ONE deterministic fixed tick. Strict phase order:
+ *   economy -> waves/spawns -> movement -> structures -> combat ->
+ *   death cleanup -> win/lose.
+ * Returns (and drains) all events emitted since the last tick — including
+ * events emitted by commands applied between ticks — for HUD/FX/log use.
+ */
+export function stepSim(state, dtFixed) {
+  if (state.result && state._resultEmitted) {
+    // Game over: drain any leftover events, do not advance.
+    return state.events.splice(0, state.events.length);
   }
-  return JSON.stringify(copy, roundingReplacer);
-}
 
-function roundingReplacer(key, value) {
-  if (typeof value === 'number' && !Number.isInteger(value)) {
-    // quantize floats so hash is stable across identical runs
-    return Math.round(value * 1e6) / 1e6;
+  state.tick += 1;
+  state.time += dtFixed;
+
+  // 1. Economy: passive income accrual.
+  stepEconomy(state, dtFixed);
+
+  // 2. Waves: due spawns become attacker units; wave-clear / win detection.
+  stepWaves(state, dtFixed);
+
+  // 3. Movement: units advance along domain paths; base assaults land here.
+  stepMovement(state, dtFixed);
+
+  // 4. Structures: build/upgrade/sell/repair timers, lifecycle, destruction.
+  stepStructures(state, dtFixed);
+
+  // 5. Combat: units + completed towers acquire targets and fire;
+  //    kills grant income and emit kill events inside combat.
+  stepCombat(state, dtFixed);
+
+  // 6. Death cleanup: remove dead units deterministically (Map preserves
+  //    insertion order, so iteration + deletion is stable across runs).
+  const dead = [];
+  for (const unit of state.units.values()) {
+    if (unit.hp <= 0) dead.push(unit.id);
   }
-  return value;
-}
-
-// FNV-1a 32-bit hash of the canonical serialized state
-export function stateHash(state) {
-  const str = hashString(state);
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  for (let i = 0; i < dead.length; i++) {
+    state.units.delete(dead[i]);
+    if (state.selectedId === dead[i]) state.selectedId = null;
   }
-  return ('00000000' + h.toString(16)).slice(-8);
-}
 
-function hashString(state) {
-  // canonical, order-stable digest of the gameplay-relevant state
-  const parts = [];
-  parts.push('t' + state.tick, 's' + state.seed, 'st' + state.status, 'r' + state.rngCalls);
-  parts.push('b' + q(state.base.hp) + ',' + state.base.x + ',' + state.base.y);
-  parts.push('$' + q(state.economy.money));
-  parts.push('w' + state.waves.currentWave + '/' + state.waves.totalWaves + ':' + (state.waves.active ? 1 : 0));
-  const us = state.units.slice().sort((a, b) => a.id - b.id);
-  for (let i = 0; i < us.length; i++) {
-    const u = us[i];
-    parts.push('u' + u.id + ':' + u.unitId + ':' + q(u.x) + ',' + q(u.y) + ':' + q(u.hp) + ':' + u.team);
+  // 7. Win / lose transitions. stepWaves sets result='win' after the final
+  //    clear; base death always overrides to a loss.
+  if (state.base.hp <= 0) {
+    state.base.hp = 0;
+    if (state.result !== 'lose') state.result = 'lose';
   }
-  const ss = state.structures.slice().sort((a, b) => a.id - b.id);
-  for (let i = 0; i < ss.length; i++) {
-    const s = ss[i];
-    parts.push('S' + s.id + ':' + s.kind + ':' + s.x + ',' + s.y + ':' + q(s.hp) + ':' + s.tier + ':' + s.state);
+  if (state.result && !state._resultEmitted) {
+    state._resultEmitted = true;
+    emitEvent(state, { type: state.result, tick: state.tick, wave: state.waves.current });
   }
-  const ps = state.projectiles.slice().sort((a, b) => a.id - b.id);
-  for (let i = 0; i < ps.length; i++) {
-    const p = ps[i];
-    parts.push('p' + p.id + ':' + q(p.x) + ',' + q(p.y));
-  }
-  return parts.join('|');
+
+  // Drain this tick's events for HUD / renderer FX.
+  return state.events.splice(0, state.events.length);
 }
-
-function q(n) {
-  return Math.round(n * 1000) / 1000;
-}
-
-// ---------------------------------------------------------------------------
-// Headless run helper: drives a fresh core with a scripted command schedule.
-// schedule: { tick: [commands...] }  — used by harness + replay driver.
-// ---------------------------------------------------------------------------
-
-export function runHeadless(seed, schedule, maxTicks, onTick) {
-  const state = createCore(seed);
-  const limit = maxTicks || TICK_RATE * 60 * 10; // 10 min cap
-  while (state.status === 'playing' && state.tick < limit) {
-    const cmds = schedule ? schedule[state.tick] : undefined;
-    const events = step(state, cmds);
-    if (onTick) onTick(state, events);
-  }
-  return state;
-}
-
-// Utility: allocate a deterministic entity id
-export function nextId(state) {
-  return state.nextId++;
-}
-
-// Expose tables + slot helper for consumers that only import core
-export { TABLES, slotPositions, canPlaceStructureAt, applyStructureTerrain };
