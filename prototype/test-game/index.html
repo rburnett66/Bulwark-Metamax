@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>BULWARK — Vertical Slice (Test Build)</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: #0a0e12; overflow: hidden;
+    font-family: monospace, monospace;
+    color: #d8e0e6;
+    -webkit-user-select: none; user-select: none;
+    touch-action: none;
+  }
+  #app-root {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  }
+  canvas { display: block; }
+  #hud-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #hud-overlay .clickable { pointer-events: auto; }
+  #boot-error {
+    position: absolute; top: 10px; left: 10px; right: 10px;
+    background: #400; color: #fdd; padding: 10px; font-size: 12px;
+    white-space: pre-wrap; z-index: 999; display: none;
+    border: 1px solid #f66;
+  }
+</style>
+</head>
+<body>
+  <div id="app-root">
+    <div id="hud-overlay"></div>
+  </div>
+  <div id="boot-error"></div>
+
+  <script src="./vendor/pixi.min.js"></script>
+  <script>
+    // Verify pixi loaded before booting.
+    (function () {
+      var errBox = document.getElementById('boot-error');
+      function showErr(msg) {
+        errBox.style.display = 'block';
+        errBox.textContent = String(msg);
+      }
+      window.addEventListener('error', function (e) {
+        showErr('Runtime error:\n' + (e.error && e.error.stack ? e.error.stack : e.message));
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        showErr('Promise rejection:\n' + (e.reason && e.reason.stack ? e.reason.stack : e.reason));
+      });
+      if (typeof PIXI === 'undefined') {
+        showErr('FATAL: PIXI failed to load from ./vendor/pixi.min.js');
+      }
+    })();
+  </script>
+
+  <script type="module">
+    import { boot } from './src/main.js';
+    try {
+      boot({
+        rootId: 'app-root',
+        hudId: 'hud-overlay'
+      });
+    } catch (err) {
+      const errBox = document.getElementById('boot-error');
+      errBox.style.display = 'block';
+      errBox.textContent = 'Boot error:\n' + (err && err.stack ? err.stack : err);
+    }
+  </script>
+</body>
+</html>
