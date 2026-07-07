@@ -1,269 +1,388 @@
 // src/sim/vision.js
-// Radar-sees-air / air-sees-ground vision stub logic.
-//
-// This module implements the "minimal / explicitly stubbed" vision rules from
-// the MODEL:
-//   - Radar (ground defenses) SEES AIR but NOT ground.
-//   - Air units SEE GROUND at range.
-//   - Vision range is data-driven from unit/structure vision stats.
-//
-// It is PURE and DETERMINISTIC: it reads the strict world state and returns a
-// visibility summary. It never mutates positions, hp, waves, economy, etc.
-// Callable headless (same code path as the balance sim); no rendering here.
-//
-// Distance uses squared-distance comparisons to avoid sqrt nondeterminism.
+// Minimal deterministic vision model for BULWARK.
+//   Rule 1: radar detects AIR units, but NOT ground/water units.
+//   Rule 2: air units see ground at range (per-unit "Sees Ground" flag from tables).
+//   Rule 3: ground/water/structure observers see ground/water targets within vision range.
+// Exposed as per-entity visibility flags (entity.visibility / entity.visible), written by
+// updateVision(state), called from the headless sim core each tick. Pure state in/out —
+// no rendering, no randomness, stable iteration order (deterministic for replay hashing).
+
+import * as Tables from '../data/tables.js';
 
 // ---------------------------------------------------------------------------
-// Domain helpers
+// Assumptions / constants (data-driven, no hardcoded balance)
 // ---------------------------------------------------------------------------
 
-// Normalize a domain string to one of: 'air' | 'ground' | 'water'
-function normalizeDomain(domain) {
-  if (!domain) return 'ground';
-  const d = String(domain).toLowerCase();
-  if (d === 'flyer' || d === 'air' || d === 'flying') return 'air';
-  if (d === 'floater' || d === 'swimmer' || d === 'water') return 'water';
+function resolveAssumptions() {
+  const t = Tables;
+  const candidates = [
+    t.ASSUMPTIONS, t.Assumptions, t.assumptions,
+    t.TABLES && t.TABLES.assumptions, t.TABLES && t.TABLES.Assumptions,
+    t.TABLES && t.TABLES.ASSUMPTIONS,
+    t.tables && t.tables.assumptions,
+    t.default && t.default.assumptions,
+    t.default && t.default.Assumptions,
+    t.default && t.default.ASSUMPTIONS,
+  ];
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    if (c && typeof c === 'object') return c;
+  }
+  return {};
+}
+
+function num(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function assumption(names, fallback) {
+  const A = resolveAssumptions();
+  for (let i = 0; i < names.length; i++) {
+    const key = names[i];
+    if (A[key] !== undefined && A[key] !== null) {
+      const raw = (typeof A[key] === 'object' && A[key] !== null && 'value' in A[key])
+        ? A[key].value
+        : A[key];
+      const n = Number(raw);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return fallback;
+}
+
+export const VISION_BASE = assumption(
+  ['Vision_base', 'visionBase', 'VISION_BASE', 'vision_base'], 4
+);
+
+// Radar reach: generous relative to visual baseline — radar is a long-range
+// sensor that trades breadth (air-only) for reach. Derived from Vision_base
+// so it scales with global tuning rather than being an independent magic number.
+export const DEFAULT_RADAR_RANGE = VISION_BASE * 3;
+
+// ---------------------------------------------------------------------------
+// Small helpers (tolerant readers of entity shapes produced by entities.js /
+// structures.js — they never mutate anything except updateVision's flag writes)
+// ---------------------------------------------------------------------------
+
+function truthy(v) {
+  if (v === true || v === 1) return true;
+  if (typeof v === 'string') return /^(yes|true|y|1)$/i.test(v.trim());
+  return false;
+}
+
+function posOf(e) {
+  if (e && e.pos && e.pos.x !== undefined && e.pos.y !== undefined) return e.pos;
+  return e || { x: 0, y: 0 };
+}
+
+export function distance(a, b) {
+  const pa = posOf(a);
+  const pb = posOf(b);
+  const dx = num(pa.x, 0) - num(pb.x, 0);
+  const dy = num(pa.y, 0) - num(pb.y, 0);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+export function domainOf(e) {
+  if (!e) return 'ground';
+  const d = String(e.domain || e.moveDomain || e.travelDomain || '').toLowerCase();
+  if (d.indexOf('fly') !== -1 || d.indexOf('air') !== -1) return 'air';
+  if (d.indexOf('float') !== -1 || d.indexOf('swim') !== -1 || d.indexOf('water') !== -1) return 'water';
+  if (e.isFlyer === true) return 'air';
+  if (e.isFloater === true || e.isSwimmer === true) return 'water';
+  if (e.altitude !== undefined && e.altitude !== null && num(e.altitude, 0) > 0) return 'air';
   return 'ground';
 }
 
-function isAir(entity) {
-  return normalizeDomain(entity && entity.domain) === 'air';
+export function isAir(e) { return domainOf(e) === 'air'; }
+export function isWater(e) { return domainOf(e) === 'water'; }
+export function isGroundDomain(e) { return domainOf(e) === 'ground'; }
+
+function isStructureLike(e) {
+  if (!e) return false;
+  if (e.isStructure === true || e.isBase === true) return true;
+  const k = String(e.kind || e.type || '').toLowerCase();
+  return k === 'base' || k === 'structure' || k === 'tower' || k === 'wall' || k === 'moat';
 }
 
-// Ground for vision purposes lumps walkers + floaters (surface things) together
-// as "not air". The stubbed rule only distinguishes air vs. non-air.
-function isGroundLike(entity) {
-  return !isAir(entity);
+function isBaseEntity(e) {
+  if (!e) return false;
+  if (e.isBase === true) return true;
+  return String(e.kind || e.type || '').toLowerCase() === 'base';
+}
+
+export function sideOf(e) {
+  if (!e) return 'attacker';
+  const s = String(e.side || e.team || e.owner || e.faction === 'player' ? (e.side || e.team || e.owner || '') : '').toLowerCase();
+  if (s === 'defender' || s === 'player' || s === 'friendly' || s === 'ally') return 'defender';
+  if (s === 'attacker' || s === 'enemy' || s === 'wave') return 'attacker';
+  // Fallback: structures & base belong to the defender; units default to attacker
+  // unless explicitly flagged as player troops.
+  if (isStructureLike(e)) return 'defender';
+  if (e.isPlayerTroop === true || e.deployed === true) return 'defender';
+  return 'attacker';
+}
+
+function isAlive(e) {
+  if (!e) return false;
+  if (e.dead === true || e.removed === true) return false;
+  if (e.hp !== undefined && e.hp !== null && num(e.hp, 1) <= 0) return false;
+  const st = String(e.lifecycle || e.lifecycleState || '').toLowerCase();
+  if (st === 'destroyed' || st === 'sold') return false;
+  return true;
+}
+
+function canObserve(e) {
+  if (!isAlive(e)) return false;
+  // Structures under construction / being sold have no active sensors.
+  const st = String(e.lifecycle || e.lifecycleState || '').toLowerCase();
+  if (st === 'placing' || st === 'building' || st === 'selling') return false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
-// Geometry helpers (deterministic, sqrt-free comparisons)
+// Sensor capability queries
 // ---------------------------------------------------------------------------
 
-function pos(e) {
-  // Entities may store position as {x,y} directly or under .position
-  if (e == null) return { x: 0, y: 0 };
-  if (typeof e.x === 'number' && typeof e.y === 'number') return { x: e.x, y: e.y };
-  if (e.position && typeof e.position.x === 'number') {
-    return { x: e.position.x, y: e.position.y };
+function canTargetAir(e) {
+  if (!e) return false;
+  const ct = e.canTarget !== undefined ? e.canTarget : (e.targetDomains !== undefined ? e.targetDomains : null);
+  if (Array.isArray(ct)) {
+    for (let i = 0; i < ct.length; i++) {
+      const d = String(ct[i]).toLowerCase();
+      if (d === 'air' || d === 'flyer' || d === 'both' || d === 'all') return true;
+    }
+    return false;
   }
-  return { x: 0, y: 0 };
+  if (typeof ct === 'string') {
+    const d = ct.toLowerCase();
+    return d.indexOf('air') !== -1 || d.indexOf('both') !== -1 || d.indexOf('all') !== -1 || d.indexOf('fly') !== -1;
+  }
+  if (e.weapon) return canTargetAir(e.weapon);
+  return false;
 }
 
-function dist2(a, b) {
-  const pa = pos(a);
-  const pb = pos(b);
-  const dx = pa.x - pb.x;
-  const dy = pa.y - pb.y;
-  return dx * dx + dy * dy;
+export function hasRadar(e) {
+  if (!e) return false;
+  if (truthy(e.radar) || truthy(e.hasRadar)) return true;
+  // Anti-air weapons come paired with a radar in this minimal model,
+  // and the base itself carries a radar mast.
+  if (isBaseEntity(e)) return true;
+  if (isStructureLike(e) && canTargetAir(e)) return true;
+  return false;
+}
+
+export function radarRange(e) {
+  if (!e) return 0;
+  const r = num(e.radarRange, NaN);
+  if (Number.isFinite(r)) return r;
+  return DEFAULT_RADAR_RANGE;
+}
+
+export function visionRange(e) {
+  if (!e) return VISION_BASE;
+  const v = num(e.vision, NaN);
+  if (Number.isFinite(v)) return v;
+  const v2 = num(e.visionRange, NaN);
+  if (Number.isFinite(v2)) return v2;
+  const v3 = num(e.sight, NaN);
+  if (Number.isFinite(v3)) return v3;
+  return VISION_BASE;
+}
+
+// "Sees Ground" flag from the Units table: whether an AIR unit can spot ground
+// targets. Ground/water/structure observers always use plain visual range.
+export function seesGroundFlag(e) {
+  if (!e) return false;
+  if (!isAir(e)) return true;
+  return truthy(e.seesGround) || truthy(e.seesGroundFlag) || truthy(e['Sees Ground']);
+}
+
+// Radar signature: does radar pick this entity up at all? (air = yes, ground = no)
+export function radarSignature(e) {
+  if (!e) return false;
+  if (e.radarSignature !== undefined) return truthy(e.radarSignature);
+  if (e.radarDetect !== undefined) return truthy(e.radarDetect);
+  return isAir(e);
 }
 
 // ---------------------------------------------------------------------------
-// Vision-range resolution
+// Core detection predicate — the one rule everyone shares
 // ---------------------------------------------------------------------------
 
-// Return the observer's vision range in world units.
-// Falls back to a sane default; scales tile-based vision to pixels if a tile
-// size is supplied via world.geometry.tileSize.
-function visionRange(observer, world) {
-  const tileSize =
-    (world && world.geometry && world.geometry.tileSize) ||
-    (world && world.tileSize) ||
-    1;
-  let v = 0;
-  if (observer && typeof observer.vision === 'number') {
-    v = observer.vision;
-  } else if (observer && observer.stats && typeof observer.stats.vision === 'number') {
-    v = observer.stats.vision;
+export function canDetect(observer, target) {
+  if (!observer || !target || observer === target) return false;
+  if (!canObserve(observer) || !isAlive(target)) return false;
+
+  const d = distance(observer, target);
+
+  if (isAir(target)) {
+    // Air targets: only radar sees them from the ground; air sees air visually.
+    if (hasRadar(observer) && radarSignature(target) && d <= radarRange(observer)) return true;
+    if (isAir(observer) && d <= visionRange(observer)) return true;
+    return false;
+  }
+
+  // Ground / water targets: radar explicitly CANNOT see them.
+  if (isAir(observer)) {
+    // Air units see ground at range only if flagged for it.
+    return seesGroundFlag(observer) && d <= visionRange(observer);
+  }
+  // Ground / water / structure observers: plain visual range.
+  return d <= visionRange(observer);
+}
+
+// Which sensor produced the contact? Used to split the flags.
+function detectionKind(observer, target) {
+  if (!observer || !target || !canObserve(observer) || !isAlive(target)) return null;
+  const d = distance(observer, target);
+  if (isAir(target)) {
+    if (hasRadar(observer) && radarSignature(target) && d <= radarRange(observer)) return 'radar';
+    if (isAir(observer) && d <= visionRange(observer)) return 'visual';
+    return null;
+  }
+  if (isAir(observer)) {
+    return (seesGroundFlag(observer) && d <= visionRange(observer)) ? 'visual' : null;
+  }
+  return d <= visionRange(observer) ? 'visual' : null;
+}
+
+// ---------------------------------------------------------------------------
+// State-wide flag pass
+// ---------------------------------------------------------------------------
+
+function collectEntities(state) {
+  const out = [];
+  if (!state) return out;
+  if (state.base) out.push(state.base);
+  const lists = [state.structures, state.units, state.troops, state.attackers];
+  for (let i = 0; i < lists.length; i++) {
+    const list = lists[i];
+    if (!Array.isArray(list)) continue;
+    for (let j = 0; j < list.length; j++) {
+      const e = list[j];
+      if (e && out.indexOf(e) === -1) out.push(e);
+    }
+  }
+  return out;
+}
+
+function writeFlags(target, radar, visual) {
+  const visible = radar || visual;
+  if (!target.visibility) {
+    target.visibility = { radar: radar, visual: visual, visible: visible };
   } else {
-    v = 4; // Vision_base from Assumptions
+    target.visibility.radar = radar;
+    target.visibility.visual = visual;
+    target.visibility.visible = visible;
   }
-  return v * tileSize;
+  target.visible = visible;
+  target.detectedByRadar = radar;
 }
 
-// ---------------------------------------------------------------------------
-// Detection predicates (the actual stub RULES)
-// ---------------------------------------------------------------------------
-
-// Can a radar / ground defense DETECT this target?
-//   Rule: radar sees AIR, not ground.
-function radarDetects(observer, target) {
-  if (!observer || !target) return false;
-  // An entity is a "radar" if it flags radarDetect / canTargetAir, else assume
-  // ordinary ground defense that still uses radar for air spotting.
-  return isAir(target);
-}
-
-// Can an AIR observer detect this target?
-//   Rule: air units SEE GROUND at range (and also see other air).
-function airSees(observer, target) {
-  if (!observer || !target) return false;
-  // Air observers with the "seesGround" flag can spot ground; all air sees air.
-  const seesGround = observer.seesGround !== false; // default true for air
-  if (isAir(target)) return true;
-  return seesGround && isGroundLike(target);
-}
-
-// Generic can-observe check combining rules + range.
-// observer: an entity (structure or unit) with position + vision.
-// target: an entity with position + domain.
-function canObserve(observer, target, world) {
-  if (!observer || !target) return false;
-  if (observer === target) return false;
-
-  const observerIsAir = isAir(observer);
-
-  // Domain-eligibility per stub rules.
-  let eligible;
-  if (observerIsAir) {
-    eligible = airSees(observer, target);
-  } else {
-    // Ground observers use radar: see air only.
-    eligible = radarDetects(observer, target);
-  }
-  if (!eligible) return false;
-
-  // Range check (squared).
-  const r = visionRange(observer, world);
-  if (r <= 0) return false;
-  return dist2(observer, target) <= r * r;
-}
-
-// ---------------------------------------------------------------------------
-// Aggregate visibility computation over the whole world
-// ---------------------------------------------------------------------------
-
-// Collect the list of potential observers from the world.
-// Structures (towers) act as radar observers; friendly air units (if any)
-// act as air observers. Defensive side observes attackers.
-function collectObservers(world) {
-  const observers = [];
-  if (!world) return observers;
-
-  const structures = world.structures || (world.entities && world.entities.structures) || [];
-  for (let i = 0; i < structures.length; i++) {
-    const s = structures[i];
-    if (!s) continue;
-    // Only complete / operational structures observe.
-    const state = s.lifecycle || s.state;
-    if (state === 'Destroyed' || state === 'Selling' || state === 'Placing') continue;
-    observers.push(s);
-  }
-
-  // Deployed friendly units that are air-capable can also observe (future-proof).
-  const units = world.units || (world.entities && world.entities.units) || [];
-  for (let i = 0; i < units.length; i++) {
-    const u = units[i];
-    if (!u) continue;
-    if (u.friendly === true && isAir(u)) observers.push(u);
-  }
-
-  return observers;
-}
-
-// Collect targets to test visibility against (the attackers).
-function collectTargets(world) {
-  if (!world) return [];
-  const attackers = world.attackers || (world.entities && world.entities.attackers) || [];
-  if (attackers.length) return attackers.slice();
-  // Fallback: any hostile units.
-  const units = world.units || (world.entities && world.entities.units) || [];
-  return units.filter((u) => u && u.friendly !== true);
-}
-
-// Compute visibility for the whole world.
-// Returns:
-//   {
-//     visibleIds: Set<id>,          // target ids seen by at least one observer
-//     byObserver: Map<obsId, id[]>, // per-observer detected target ids
-//     detected(target): bool        // convenience predicate
-//   }
-// Deterministic: iteration order follows array order; no randomness.
-function computeVisibility(world) {
-  const observers = collectObservers(world);
-  const targets = collectTargets(world);
-
-  const visibleIds = new Set();
-  const byObserver = new Map();
-
-  for (let i = 0; i < observers.length; i++) {
-    const obs = observers[i];
-    const seen = [];
-    for (let j = 0; j < targets.length; j++) {
-      const tgt = targets[j];
-      if (canObserve(obs, tgt, world)) {
-        seen.push(tgt.id != null ? tgt.id : j);
-        if (tgt.id != null) visibleIds.add(tgt.id);
+function applyVisionPass(targets, observers) {
+  for (let t = 0; t < targets.length; t++) {
+    const target = targets[t];
+    if (!target) continue;
+    let radar = false;
+    let visual = false;
+    if (isAlive(target)) {
+      for (let o = 0; o < observers.length; o++) {
+        const kind = detectionKind(observers[o], target);
+        if (kind === 'radar') radar = true;
+        else if (kind === 'visual') visual = true;
+        if (radar && visual) break;
       }
     }
-    const key = obs.id != null ? obs.id : `obs_${i}`;
-    byObserver.set(key, seen);
+    writeFlags(target, radar, visual);
   }
-
-  return {
-    visibleIds,
-    byObserver,
-    detected(target) {
-      if (!target) return false;
-      if (target.id != null) return visibleIds.has(target.id);
-      // Fall back to a live scan.
-      for (let i = 0; i < observers.length; i++) {
-        if (canObserve(observers[i], target, world)) return true;
-      }
-      return false;
-    },
-  };
 }
 
-// ---------------------------------------------------------------------------
-// System-style step hook (optional; safe to call each tick)
-// ---------------------------------------------------------------------------
+/**
+ * Main entry — called by the sim core each fixed step.
+ * Writes per-entity visibility flags (entity.visibility = {radar, visual, visible},
+ * entity.visible, entity.detectedByRadar). Deterministic: stable order, no RNG.
+ * Returns the same state object for chaining.
+ */
+export function updateVision(state) {
+  if (!state) return state;
 
-// Writes a `.seen` boolean onto attacker entities as a *presentation* aid,
-// derived purely from state. This does not affect combat/pathing determinism
-// (targeting.js does its own domain checks); it is a stub tag for renderers /
-// fog-of-war. Because it's a pure function of state, replays remain stable.
-function stepVision(world) {
-  const vis = computeVisibility(world);
-  const targets = collectTargets(world);
-  for (let i = 0; i < targets.length; i++) {
-    const t = targets[i];
-    if (!t) continue;
-    t.seen = vis.detected(t);
+  const entities = collectEntities(state);
+  const defenders = [];
+  const attackers = [];
+  for (let i = 0; i < entities.length; i++) {
+    (sideOf(entities[i]) === 'defender' ? defenders : attackers).push(entities[i]);
   }
-  // Expose the latest snapshot for renderers / debug (read-only intent).
-  if (world) world.vision = vis;
-  return vis;
+
+  // Attackers are observed by the defense (radar towers / base / troops)...
+  applyVisionPass(attackers, defenders);
+  // ...and defensive structures/troops are observed by attackers
+  // (air units spot ground at range; walkers/floaters use plain vision).
+  applyVisionPass(defenders, attackers);
+
+  // The base is a landmark: always visible to everyone regardless of sensors.
+  if (state.base) {
+    writeFlags(state.base, state.base.detectedByRadar === true, true);
+  }
+
+  // Convenience aggregate for the HUD / renderer (read-only summary; counts
+  // only — kept scalar so the serialized state hash stays simple and stable).
+  let airContacts = 0;
+  let groundContacts = 0;
+  for (let i = 0; i < attackers.length; i++) {
+    const a = attackers[i];
+    if (!a || !isAlive(a) || !a.visible) continue;
+    if (isAir(a)) airContacts++;
+    else groundContacts++;
+  }
+  state.vision = state.vision || {};
+  state.vision.airContacts = airContacts;
+  state.vision.groundContacts = groundContacts;
+
+  return state;
 }
 
-// ---------------------------------------------------------------------------
-// Exports
-// ---------------------------------------------------------------------------
+/**
+ * Targeting helper for combat.js: is `target` currently visible to `side`?
+ * If the vision pass has never run on this entity, default to visible so the
+ * combat core still works headless without an explicit vision step.
+ */
+export function isVisibleTo(target, side) {
+  if (!target) return false;
+  if (!target.visibility) return true;
+  // Flags are written from the perspective of the OPPOSING side's sensors,
+  // so a defender asking about an attacker (and vice versa) just reads them.
+  if (side !== undefined && sideOf(target) === side) return true; // own units always known
+  return target.visibility.visible === true;
+}
 
-export {
-  normalizeDomain,
-  isAir,
-  isGroundLike,
-  visionRange,
-  radarDetects,
-  airSees,
-  canObserve,
-  computeVisibility,
-  collectObservers,
-  collectTargets,
-  stepVision,
-};
+/** Filter a candidate target list down to what `observer` can actually detect. */
+export function visibleTargets(observer, candidates) {
+  const out = [];
+  if (!observer || !Array.isArray(candidates)) return out;
+  for (let i = 0; i < candidates.length; i++) {
+    if (canDetect(observer, candidates[i])) out.push(candidates[i]);
+  }
+  return out;
+}
 
 export default {
-  normalizeDomain,
-  isAir,
-  isGroundLike,
-  visionRange,
-  radarDetects,
-  airSees,
-  canObserve,
-  computeVisibility,
-  collectObservers,
-  collectTargets,
-  stepVision,
+  VISION_BASE: VISION_BASE,
+  DEFAULT_RADAR_RANGE: DEFAULT_RADAR_RANGE,
+  updateVision: updateVision,
+  canDetect: canDetect,
+  isVisibleTo: isVisibleTo,
+  visibleTargets: visibleTargets,
+  distance: distance,
+  domainOf: domainOf,
+  isAir: isAir,
+  isWater: isWater,
+  isGroundDomain: isGroundDomain,
+  hasRadar: hasRadar,
+  radarRange: radarRange,
+  visionRange: visionRange,
+  seesGroundFlag: seesGroundFlag,
+  radarSignature: radarSignature,
+  sideOf: sideOf,
 };

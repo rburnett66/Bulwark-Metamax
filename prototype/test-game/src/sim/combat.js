@@ -1,592 +1,483 @@
-Looking at the model, I need to implement a headless combat core: firing with telegraph/wind-up, projectiles (ballistic/hitscan), damage-type × armor-class resolution, and kills. It must be deterministic and read from config tables.
-
-```javascript
 // src/sim/combat.js
-// Headless combat core: firing, projectiles, damage-type resolution, kills.
-// Deterministic. Reads stats from config.data.tables. Never renders.
-//
-// This module operates on the strict world state produced by world.js and
-// consumed by step.js. It handles:
-//   - Weapon cooldowns + telegraph/lock-on wind-up (time-to-fire) before launch
-//   - Projectile spawning (ballistic lob vs hitscan beam)
-//   - Projectile travel + impact
-//   - Damage-type x armor-class effectiveness resolution (+ AoE, status flags)
-//   - Kill detection, income grant, structure destruction handoff to lifecycle
-//
-// It exposes pure-ish functions that mutate world in place using the world's
-// deterministic RNG (world.rng) and fixed dt.
+// Weapon-domain targeting, effectiveness-matrix damage, target acquisition,
+// projectiles / fire cooldowns, kill->income events, attacker vs base/structure damage.
+// Pure deterministic sim code: no rendering deps, no Math.random (rng only via state.rng if ever needed).
 
-import { effectivenessMultiplier } from '../config/effectiveness.js';
+import { ASSUMPTIONS, EFFECTIVENESS } from '../data/tables.js';
 
 // ---------------------------------------------------------------------------
-// Small deterministic helpers
+// Tunables (read from Assumptions table when present, sane fallbacks otherwise)
 // ---------------------------------------------------------------------------
 
-function dist2(ax, ay, bx, by) {
-  const dx = ax - bx, dy = ay - by;
-  return dx * dx + dy * dy;
-}
-function dist(ax, ay, bx, by) {
-  return Math.sqrt(dist2(ax, ay, bx, by));
-}
-
-// Resolve an entity's live position (x,y) regardless of shape.
-function entPos(e) {
-  return { x: e.x, y: e.y };
+function assume(key, def) {
+  if (!ASSUMPTIONS) return def;
+  const v = ASSUMPTIONS[key];
+  if (typeof v === 'number') return v;
+  if (v && typeof v.value === 'number') return v.value;
+  return def;
 }
 
-// Is the entity alive / a valid target still in world?
-function isAlive(e) {
-  return e && !e.dead && e.hp > 0 &&
-    e.lifecycle !== 'Destroyed' && e.lifecycle !== 'Selling';
-}
-
-// Pull a weapon descriptor from an attacking entity (tower or unit).
-// Weapons are data-driven; entities carry resolved stats on themselves
-// (dps, range, damageType, armorTargeting, canTarget, aoe, status, projectileClass).
-function getWeapon(e) {
-  return {
-    dps: e.dps || 0,
-    range: e.range || 0,
-    damageType: e.damageType || 'Kinetic',
-    canTargetAir: !!e.canTargetAir,
-    canTargetGround: e.canTargetGround !== false,
-    aoe: e.aoe || 0,
-    status: e.status || '—',
-    // projectile class: 'beam' = hitscan, 'lob'/'ballistic' = traveling arc
-    projectileClass: e.projectileClass || (e.aoe > 0 ? 'lob' : 'bolt'),
-    projectileSpeed: e.projectileSpeed || 16, // tiles/sec for traveling shots
-    // fire cadence: shots per second derived so that dps == damagePerShot * fireRate
-    fireRate: e.fireRate || 1.0, // shots/sec
-    // time-to-fire (lock-on wind-up) telegraph, seconds
-    windUp: (e.windUp != null) ? e.windUp : 0.35,
-  };
-}
-
-// Damage per individual shot given dps and fireRate.
-function damagePerShot(w) {
-  return w.fireRate > 0 ? (w.dps / w.fireRate) : w.dps;
-}
+export const FIRE_INTERVAL = assume('Fire_interval', 1.0);            // seconds between shots
+export const PROJECTILE_SPEED = assume('Projectile_speed', 9.0);      // tiles / second
+export const KILL_INCOME_FRACTION = assume('Kill_income_fraction', 0.25);
+export const CHILL_DURATION = assume('Chill_duration', 2.0);
+export const CHILL_SLOW_FACTOR = assume('Chill_slow_factor', 0.5);
+export const STAGGER_DURATION = assume('Stagger_duration', 0.5);
+export const BURN_DURATION = assume('Burn_duration', 3.0);
+export const BURN_DPS_FRACTION = assume('Burn_dps_fraction', 0.2);
+export const TOXIN_DURATION = assume('Toxin_duration', 4.0);
+export const TOXIN_DPS_FRACTION = assume('Toxin_dps_fraction', 0.25);
+export const CHAIN_RADIUS = assume('Chain_radius', 1.5);
+export const CHAIN_DAMAGE_FRACTION = assume('Chain_damage_fraction', 0.5);
+export const RANGE_EPSILON = 0.001;
 
 // ---------------------------------------------------------------------------
-// Armor class of a target for effectiveness lookup
+// Domain / effectiveness helpers
 // ---------------------------------------------------------------------------
 
-function armorClassOf(target) {
-  if (target.kind === 'base') return 'Structure';
-  if (target.isStructure) return 'Structure';
-  if (target.armorClass) return target.armorClass;
-  // fallbacks by domain
-  if (target.domain === 'Flyer') return 'Aircraft';
-  return 'Machinery';
+export function isAir(e) {
+  if (!e) return false;
+  return e.domain === 'Flyer' || e.domain === 'flyer' || e.domain === 'Air' || e.domain === 'air' || e.flying === true;
 }
 
-// ---------------------------------------------------------------------------
-// Status effect application (Frost slow, Fire/Poison DoT, Electric/Concussion)
-// ---------------------------------------------------------------------------
+export function targetClassOf(e) {
+  return isAir(e) ? 'Air' : 'Ground';
+}
 
-function applyStatus(world, target, status, damageType, magnitude) {
-  if (!target || status === '—' || !status) return;
-  target.status = target.status || {};
+// A weapon declares which domains it may hit: 'Ground', 'Air', or 'Both'.
+export function weaponCanHit(canTarget, targetDomainClass) {
+  if (!canTarget) return targetDomainClass === 'Ground'; // default weapons are anti-ground
+  if (canTarget === 'Both') return true;
+  return canTarget === targetDomainClass;
+}
 
-  switch (damageType) {
-    case 'Frost': {
-      // Chill: slow ALL except air units (design rule).
-      if (target.domain !== 'Flyer') {
-        target.status.chill = { slow: 0.5, until: world.time + 2.0 };
+export function getEffectiveness(damageType, armorClass) {
+  if (!damageType || !armorClass) return 1;
+  const eff = EFFECTIVENESS;
+  if (!eff) return 1;
+  const row = eff[damageType];
+  if (row && typeof row[armorClass] === 'number') return row[armorClass];
+  // tolerate array-of-rows shape [{ 'Damage Type': 'Fire', Organic: 1.3, ... }]
+  if (Array.isArray(eff)) {
+    for (let i = 0; i < eff.length; i++) {
+      const r = eff[i];
+      if (r && (r.type === damageType || r['Damage Type'] === damageType || r.damageType === damageType)) {
+        if (typeof r[armorClass] === 'number') return r[armorClass];
       }
-      break;
     }
-    case 'Fire': {
-      // Burn DoT
-      target.status.burn = {
-        dps: magnitude * 0.25,
-        until: world.time + 3.0,
-        damageType: 'Fire',
-      };
-      break;
-    }
-    case 'Poison': {
-      // Toxin DoT (only meaningful vs organics; multiplier handled elsewhere)
-      target.status.toxin = {
-        dps: magnitude * 0.3,
-        until: world.time + 4.0,
-        damageType: 'Poison',
-      };
-      break;
-    }
-    case 'Concussion': {
-      // Stagger: brief machine stagger (disables firing for structures/machines)
-      const ac = armorClassOf(target);
-      if (ac === 'Machinery' || ac === 'Structure' || target.isStructure) {
-        target.status.stagger = { until: world.time + 0.6 };
-      }
-      break;
-    }
-    case 'Electric': {
-      // Overload: disables machines briefly
-      const ac = armorClassOf(target);
-      if (ac === 'Machinery' || ac === 'Structure') {
-        target.status.overload = { until: world.time + 0.8 };
-      }
-      break;
-    }
-    default:
-      break;
   }
-}
-
-// Is an entity currently disabled from firing by a status?
-export function isDisabled(world, e) {
-  if (!e.status) return false;
-  const s = e.status;
-  if (s.stagger && s.stagger.until > world.time) return true;
-  if (s.overload && s.overload.until > world.time) return true;
-  return false;
-}
-
-// Current speed multiplier from status (Frost chill).
-export function speedMultiplier(world, e) {
-  if (!e.status || !e.status.chill) return 1;
-  if (e.status.chill.until > world.time) return 1 - e.status.chill.slow;
   return 1;
 }
 
-// ---------------------------------------------------------------------------
-// Damage resolution
-// ---------------------------------------------------------------------------
-
-// Apply raw pre-type damage to a target through the effectiveness matrix.
-// Returns actual damage dealt (post-multiplier), and handles kill.
-export function dealDamage(world, source, target, rawAmount, damageType, evtType) {
-  if (!isAlive(target)) return 0;
-
-  const armor = armorClassOf(target);
-  const mult = effectivenessMultiplier(damageType, armor);
-  const amount = rawAmount * mult;
-
-  target.hp -= amount;
-
-  // Structure damage state transitions handled by lifecycle; flag here.
-  if (target.isStructure && target.lifecycle === 'Complete' && target.hp < (target.maxHp || target.hp)) {
-    target.lifecycle = 'Damaged';
-  }
-
-  // event log
-  world.events.push({
-    t: evtType || 'damage',
-    time: world.time,
-    tick: world.tick,
-    src: source ? source.id : null,
-    dst: target.id,
-    amount,
-    damageType,
-    mult,
-  });
-
-  // Kill / destruction
-  if (target.hp <= 0 && !target.dead) {
-    handleKill(world, source, target);
-  }
-  return amount;
+export function computeDamage(rawDamage, damageType, armorClass) {
+  return rawDamage * getEffectiveness(damageType, armorClass);
 }
 
-function handleKill(world, source, target) {
-  target.hp = 0;
+export function killIncomeFor(unit) {
+  const cost = (unit && (unit.cost || unit.price || unit.costT1)) || 0;
+  return Math.max(0, Math.round(cost * KILL_INCOME_FRACTION));
+}
 
-  if (target.kind === 'base') {
-    // base death handled by waves/step; mark it.
-    target.dead = true;
-    world.events.push({ t: 'baseDestroyed', time: world.time, tick: world.tick, dst: target.id });
-    world.baseDestroyed = true;
-    return;
+// ---------------------------------------------------------------------------
+// State access helpers
+// ---------------------------------------------------------------------------
+
+function dist(ax, ay, bx, by) {
+  const dx = ax - bx, dy = ay - by;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function unitAlive(u) {
+  return !!u && u.alive !== false && u.hp > 0;
+}
+
+function structureLive(s) {
+  if (!s || s.hp <= 0) return false;
+  const st = s.state;
+  return st !== 'Destroyed' && st !== 'Placing';
+}
+
+function structureCanFire(s) {
+  if (!structureLive(s)) return false;
+  const st = s.state;
+  return (st === 'Complete' || st === 'Damaged') && (s.dps || 0) > 0 && (s.range || 0) > 0;
+}
+
+function targetVisible(t) {
+  // vision.js exposes per-entity visibility flags; default to visible.
+  if (!t) return false;
+  if (t.detected === false) return false;
+  if (t.visible === false) return false;
+  return true;
+}
+
+function findEntity(state, id) {
+  if (id == null) return null;
+  if (state.base && (id === state.base.id || id === 'base')) return state.base;
+  const units = state.units || [];
+  for (let i = 0; i < units.length; i++) if (units[i].id === id) return units[i];
+  const structs = state.structures || [];
+  for (let i = 0; i < structs.length; i++) if (structs[i].id === id) return structs[i];
+  return null;
+}
+
+function pushEvent(state, events, ev) {
+  ev.tick = state.tick | 0;
+  events.push(ev);
+}
+
+// ---------------------------------------------------------------------------
+// Target acquisition (deterministic, sticky)
+// ---------------------------------------------------------------------------
+
+export function acquireTarget(shooter, candidates) {
+  const range = (shooter.range || 0) + RANGE_EPSILON;
+  const canTarget = shooter.canTarget;
+
+  const valid = (t) => {
+    if (t === shooter) return false;
+    if (t.isBase) { if (t.hp <= 0) return false; }
+    else if (t.isStructure || t.state !== undefined && t.footprint !== undefined) { if (!structureLive(t)) return false; }
+    else if (t.isStructure) { if (!structureLive(t)) return false; }
+    else if (!unitAlive(t) && !t.isBase && !t.isStructure) {
+      if (t.state !== undefined && t.tier !== undefined) { if (!structureLive(t)) return false; }
+      else return false;
+    }
+    if (!targetVisible(t)) return false;
+    if (!weaponCanHit(canTarget, targetClassOf(t))) return false;
+    return dist(shooter.x, shooter.y, t.x, t.y) <= range;
+  };
+
+  // sticky: keep the current target while it remains valid & in range
+  if (shooter.targetId != null) {
+    for (let i = 0; i < candidates.length; i++) {
+      if (candidates[i].id === shooter.targetId) {
+        if (valid(candidates[i])) return candidates[i];
+        break;
+      }
+    }
   }
 
-  if (target.isStructure) {
-    // structure destroyed -> lifecycle FSM will finalize removal
-    target.lifecycle = 'Destroyed';
-    target.dead = true;
-    target.status = target.status || {};
-    world.events.push({ t: 'structureDestroyed', time: world.time, tick: world.tick, dst: target.id, src: source ? source.id : null });
-    return;
+  let best = null, bestD = Infinity;
+  for (let i = 0; i < candidates.length; i++) {
+    const t = candidates[i];
+    if (!valid(t)) continue;
+    const d = dist(shooter.x, shooter.y, t.x, t.y);
+    if (d < bestD) { bestD = d; best = t; }
   }
-
-  // Attacker unit killed -> grant income to player, coin feedback event
-  target.dead = true;
-  const bounty = target.bounty != null ? target.bounty : Math.round((target.cost || 0) * 0.25);
-  if (world.economy) {
-    world.economy.gold += bounty;
-    world.economy.lastDelta = (world.economy.lastDelta || 0) + bounty;
-  }
-  world.events.push({
-    t: 'kill',
-    time: world.time,
-    tick: world.tick,
-    src: source ? source.id : null,
-    dst: target.id,
-    kind: target.kind,
-    bounty,
-    x: target.x,
-    y: target.y,
-  });
+  return best;
 }
 
 // ---------------------------------------------------------------------------
 // Projectiles
 // ---------------------------------------------------------------------------
 
-let PROJ_SEQ = 1;
-function nextProjId() { return 'proj' + (PROJ_SEQ++); }
-
-function spawnProjectile(world, source, target, w) {
-  const dmg = damagePerShot(w);
-  const proj = {
-    id: nextProjId(),
-    srcId: source.id,
-    dstId: target ? target.id : null,
-    x: source.x,
-    y: source.y,
-    // remember target position (for lob) but home for bolts
-    tx: target ? target.x : source.x,
-    ty: target ? target.y : source.y,
-    damage: dmg,
-    damageType: w.damageType,
-    aoe: w.aoe,
-    status: w.status,
-    projectileClass: w.projectileClass,
-    speed: w.projectileSpeed,
-    born: world.time,
-    dead: false,
+export function spawnProjectile(state, events, shooter, target) {
+  const interval = shooter.fireInterval || FIRE_INTERVAL;
+  const rawDamage = (shooter.dps || 0) * interval;
+  if (!state.projectiles) state.projectiles = [];
+  state._nextProjectileId = (state._nextProjectileId || 0) + 1;
+  const p = {
+    id: 'p' + state._nextProjectileId,
+    x: shooter.x, y: shooter.y,
+    tx: target.x, ty: target.y,
+    targetId: target.id,
+    team: shooter.team || (shooter.tier !== undefined ? 'defender' : 'attacker'),
+    sourceId: shooter.id,
+    damage: rawDamage,
+    damageType: shooter.damageType || 'Kinetic',
+    canTarget: shooter.canTarget || 'Ground',
+    aoe: shooter.aoe || 0,
+    speed: shooter.projectileSpeed || PROJECTILE_SPEED,
+    alive: true,
   };
+  state.projectiles.push(p);
+  shooter.lastShotTick = state.tick | 0;
+  pushEvent(state, events, { type: 'shot', from: shooter.id, to: target.id, x: shooter.x, y: shooter.y, tx: target.x, ty: target.y, damageType: p.damageType });
+  return p;
+}
 
-  if (w.projectileClass === 'beam') {
-    // Hitscan: resolve immediately.
-    proj.hitscan = true;
-    resolveProjectileImpact(world, proj, target);
-    proj.dead = true;
-    world.events.push({
-      t: 'beam', time: world.time, tick: world.tick,
-      src: source.id, dst: target ? target.id : null,
-      x0: source.x, y0: source.y, x1: proj.tx, y1: proj.ty,
-      damageType: w.damageType,
-    });
+// ---------------------------------------------------------------------------
+// Damage application (effectiveness matrix + status effects)
+// ---------------------------------------------------------------------------
+
+export function applyDamage(state, events, target, rawDamage, damageType, sourceTeam, sourceId) {
+  if (!target) return 0;
+  const armor = target.armorClass || (target.isBase || target.tier !== undefined ? 'Structure' : 'Organic');
+  const mult = getEffectiveness(damageType, armor);
+  const dmg = rawDamage * mult;
+  if (dmg <= 0 && damageType !== 'Frost') {
+    // zero-effect hit (e.g. poison vs structure) — still no status on immune
+    if (mult <= 0) return 0;
+  }
+  target.hp -= dmg;
+  if (target.hp < 0) target.hp = 0;
+
+  applyStatus(target, rawDamage, damageType, mult, sourceTeam, sourceId);
+
+  if (target.isBase || target === state.base) {
+    pushEvent(state, events, { type: 'baseDamaged', amount: dmg, hp: target.hp });
+    if (target.hp <= 0 && !target._destroyedReported) {
+      target._destroyedReported = true;
+      target.alive = false;
+      pushEvent(state, events, { type: 'baseDestroyed' });
+    }
+  } else if (target.tier !== undefined || target.isStructure) {
+    // structure
+    if (target.hp > 0) {
+      if (target.state === 'Complete') target.state = 'Damaged';
+      pushEvent(state, events, { type: 'structureDamaged', id: target.id, hp: target.hp, amount: dmg });
+    } else if (target.state !== 'Destroyed') {
+      target.state = 'Destroyed';
+      target.alive = false;
+      pushEvent(state, events, { type: 'structureDestroyed', id: target.id, x: target.x, y: target.y });
+      state.pathsDirty = true; // walls/moats gone -> walker paths must recompute
+    }
+  } else {
+    // unit
+    if (target.hp <= 0 && target.alive !== false) {
+      target.alive = false;
+      const income = (target.team === 'attacker' && sourceTeam === 'defender') ? killIncomeFor(target) : 0;
+      pushEvent(state, events, {
+        type: 'kill', id: target.id, kind: target.kind, team: target.team,
+        x: target.x, y: target.y, income, by: sourceId,
+      });
+    }
+  }
+  return dmg;
+}
+
+function applyStatus(target, rawDamage, damageType, mult, sourceTeam, sourceId) {
+  if (target.hp <= 0) return;
+  if (damageType === 'Frost') {
+    // Frost slows ALL except air units (design rule: no slow on air)
+    if (!isAir(target)) {
+      target.chillTimer = CHILL_DURATION;
+    }
+  } else if (damageType === 'Concussion') {
+    if ((target.armorClass || '') === 'Machinery') target.staggerTimer = STAGGER_DURATION;
+  } else if (damageType === 'Fire' && mult > 0) {
+    if (!target.dots) target.dots = [];
+    target.dots.push({ dps: rawDamage * mult * BURN_DPS_FRACTION, timeLeft: BURN_DURATION, damageType: 'Fire', sourceTeam, sourceId });
+  } else if (damageType === 'Poison' && mult > 0) {
+    if (!target.dots) target.dots = [];
+    target.dots.push({ dps: rawDamage * mult * TOXIN_DPS_FRACTION, timeLeft: TOXIN_DURATION, damageType: 'Poison', sourceTeam, sourceId });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-frame combat step
+// ---------------------------------------------------------------------------
+
+function tickStatuses(state, events, dt) {
+  const units = state.units || [];
+  for (let i = 0; i < units.length; i++) {
+    const u = units[i];
+    if (!unitAlive(u)) { u.slowFactor = 1; continue; }
+    if (u.chillTimer > 0) {
+      u.chillTimer -= dt;
+      u.slowFactor = CHILL_SLOW_FACTOR;
+      if (u.chillTimer <= 0) { u.chillTimer = 0; u.slowFactor = 1; }
+    } else {
+      u.slowFactor = 1;
+    }
+    if (u.staggerTimer > 0) { u.staggerTimer -= dt; if (u.staggerTimer < 0) u.staggerTimer = 0; }
+    if (u.dots && u.dots.length) {
+      for (let d = 0; d < u.dots.length; d++) {
+        const dot = u.dots[d];
+        const step = Math.min(dot.timeLeft, dt);
+        if (step > 0) {
+          u.hp -= dot.dps * step;
+          dot.timeLeft -= step;
+        }
+      }
+      u.dots = u.dots.filter((d) => d.timeLeft > 0);
+      if (u.hp <= 0 && u.alive !== false) {
+        u.hp = 0;
+        u.alive = false;
+        // credit last defender-sourced dot if any
+        let by = null, income = 0;
+        if (u.team === 'attacker') { income = killIncomeFor(u); }
+        pushEvent(state, events, { type: 'kill', id: u.id, kind: u.kind, team: u.team, x: u.x, y: u.y, income, by });
+      }
+    }
+  }
+}
+
+function fireShooter(state, events, shooter, candidates, dt) {
+  if (shooter.cooldown == null) shooter.cooldown = 0;
+  if (shooter.cooldown > 0) shooter.cooldown -= dt;
+
+  if ((shooter.dps || 0) <= 0 || (shooter.range || 0) <= 0) {
+    shooter.targetId = null;
+    shooter.attacking = false;
     return;
   }
 
-  world.projectiles.push(proj);
-  world.events.push({
-    t: 'muzzle', time: world.time, tick: world.tick,
-    src: source.id, x: source.x, y: source.y, damageType: w.damageType,
-  });
-}
+  const target = acquireTarget(shooter, candidates);
+  shooter.targetId = target ? target.id : null;
+  shooter.attacking = !!target;
 
-// Move projectiles, detect impact, resolve.
-export function stepProjectiles(world, dt) {
-  const live = [];
-  for (let i = 0; i < world.projectiles.length; i++) {
-    const p = world.projectiles[i];
-    if (p.dead) continue;
-
-    // homing: update target position if target still alive (bolts home; lobs go to remembered point)
-    const target = p.dstId ? world.byId[p.dstId] : null;
-    if (p.projectileClass !== 'lob' && isAlive(target)) {
-      p.tx = target.x;
-      p.ty = target.y;
-    }
-
-    const dx = p.tx - p.x;
-    const dy = p.ty - p.y;
-    const d = Math.sqrt(dx * dx + dy * dy);
-    const stepDist = p.speed * dt;
-
-    if (d <= stepDist || d < 1e-4) {
-      // impact
-      p.x = p.tx; p.y = p.ty;
-      resolveProjectileImpact(world, p, isAlive(target) ? target : null);
-      p.dead = true;
-      world.events.push({
-        t: 'impact', time: world.time, tick: world.tick,
-        x: p.x, y: p.y, damageType: p.damageType, aoe: p.aoe,
-      });
-      continue;
-    }
-
-    p.x += (dx / d) * stepDist;
-    p.y += (dy / d) * stepDist;
-
-    // safety: expire very old projectiles
-    if (world.time - p.born > 8) { p.dead = true; continue; }
-
-    live.push(p);
+  if (!target) return;
+  if (shooter.staggerTimer > 0) return; // concussion stagger suppresses fire
+  if (shooter.cooldown <= 0) {
+    shooter.cooldown += (shooter.fireInterval || FIRE_INTERVAL);
+    spawnProjectile(state, events, shooter, target);
   }
-  world.projectiles = live;
 }
 
-function resolveProjectileImpact(world, proj, primaryTarget) {
-  const source = world.byId[proj.srcId] || null;
+function resolveImpact(state, events, p, target) {
+  const ix = target ? target.x : p.tx;
+  const iy = target ? target.y : p.ty;
+  pushEvent(state, events, { type: 'impact', x: ix, y: iy, damageType: p.damageType, team: p.team });
 
-  if (proj.aoe && proj.aoe > 0) {
-    // Splash: damage every valid target of the source's targeting set within aoe.
-    const r = proj.aoe;
-    const r2 = r * r;
-    // Collect candidate targets: attackers OR structures depending on source
-    const cands = candidateTargetsForSplash(world, source);
-    for (let i = 0; i < cands.length; i++) {
-      const t = cands[i];
-      if (!isAlive(t)) continue;
-      if (dist2(t.x, t.y, proj.x, proj.y) <= r2) {
-        dealDamage(world, source, t, proj.damage, proj.damageType, 'splash');
-        applyStatus(world, t, proj.status, proj.damageType, proj.damage);
+  if (target) {
+    applyDamage(state, events, target, p.damage, p.damageType, p.team, p.sourceId);
+  }
+
+  // splash (AoE) — hits other valid enemies of this projectile's team within radius
+  if (p.aoe > 0) {
+    const splashTargets = enemiesOf(state, p.team);
+    for (let i = 0; i < splashTargets.length; i++) {
+      const t = splashTargets[i];
+      if (!t || (target && t.id === target.id)) continue;
+      if (!isLiveTarget(t)) continue;
+      if (!weaponCanHit(p.canTarget, targetClassOf(t))) continue;
+      if (dist(ix, iy, t.x, t.y) <= p.aoe + RANGE_EPSILON) {
+        applyDamage(state, events, t, p.damage, p.damageType, p.team, p.sourceId);
       }
     }
-    // ensure primary hit even if just outside epsilon
-    if (primaryTarget && isAlive(primaryTarget)) {
-      if (dist2(primaryTarget.x, primaryTarget.y, proj.x, proj.y) > r2) {
-        dealDamage(world, source, primaryTarget, proj.damage, proj.damageType, 'splash');
-        applyStatus(world, primaryTarget, proj.status, proj.damageType, proj.damage);
-      }
+  }
+
+  // electric chain — arcs to the single nearest additional enemy
+  if (p.damageType === 'Electric' && target) {
+    const pool = enemiesOf(state, p.team);
+    let best = null, bestD = Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      const t = pool[i];
+      if (!t || t.id === target.id || !isLiveTarget(t)) continue;
+      if (!weaponCanHit(p.canTarget, targetClassOf(t))) continue;
+      const d = dist(ix, iy, t.x, t.y);
+      if (d <= CHAIN_RADIUS + RANGE_EPSILON && d < bestD) { bestD = d; best = t; }
     }
-  } else {
-    if (primaryTarget && isAlive(primaryTarget)) {
-      dealDamage(world, source, primaryTarget, proj.damage, proj.damageType, 'hit');
-      applyStatus(world, primaryTarget, proj.status, proj.damageType, proj.damage);
-    }
+    if (best) applyDamage(state, events, best, p.damage * CHAIN_DAMAGE_FRACTION, p.damageType, p.team, p.sourceId);
   }
 }
 
-// Which entities can be splashed for a given source (based on side).
-function candidateTargetsForSplash(world, source) {
-  if (!source) return [];
-  if (source.side === 'defender') {
-    // tower splash hits attackers
-    return world.attackers || [];
+function isLiveTarget(t) {
+  if (!t) return false;
+  if (t.isBase) return t.hp > 0;
+  if (t.tier !== undefined || t.isStructure) return structureLive(t);
+  return unitAlive(t);
+}
+
+function enemiesOf(state, team) {
+  if (team === 'defender') {
+    return (state.units || []).filter((u) => u.team === 'attacker');
   }
-  // attacker splash hits structures + base
+  // attackers hurt defender-side property: structures + base
   const out = [];
-  if (world.structures) {
-    for (let i = 0; i < world.structures.length; i++) out.push(world.structures[i]);
-  }
-  if (world.base) out.push(world.base);
+  const structs = state.structures || [];
+  for (let i = 0; i < structs.length; i++) out.push(structs[i]);
+  if (state.base) out.push(state.base);
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// DoT ticking (Fire burn / Poison toxin)
-// ---------------------------------------------------------------------------
-
-export function stepStatusEffects(world, dt) {
-  const list = [];
-  if (world.attackers) for (const a of world.attackers) list.push(a);
-  if (world.structures) for (const s of world.structures) list.push(s);
-  if (world.base) list.push(world.base);
-
-  for (const e of list) {
-    if (!e.status || !isAlive(e)) continue;
-    const s = e.status;
-    // Burn
-    if (s.burn) {
-      if (s.burn.until > world.time) {
-        dealDamage(world, null, e, s.burn.dps * dt, s.burn.damageType, 'dot');
-      } else {
-        delete s.burn;
-      }
-    }
-    // Toxin
-    if (s.toxin && isAlive(e)) {
-      if (s.toxin.until > world.time) {
-        dealDamage(world, null, e, s.toxin.dps * dt, s.toxin.damageType, 'dot');
-      } else {
-        delete s.toxin;
-      }
-    }
-    // expire transient
-    if (s.chill && s.chill.until <= world.time) delete s.chill;
-    if (s.stagger && s.stagger.until <= world.time) delete s.stagger;
-    if (s.overload && s.overload.until <= world.time) delete s.overload;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Firing (towers + units with weapons)
-// ---------------------------------------------------------------------------
-// Firing lifecycle per shooter:
-//   fireCooldown: seconds until next shot is allowed
-//   aimTarget: currently locked target id
-//   windUpLeft: telegraph/lock-on remaining before launch (time-to-fire)
-//   aimState: 'idle' | 'aiming' | 'firing'
-//
-// The targeting module (targeting.js) selects targets; here we consume them.
-
-import { selectTarget } from './targeting.js';
-
-export function stepShooter(world, shooter, dt) {
-  if (!isAlive(shooter)) return;
-
-  // Structures must be Complete to fire.
-  if (shooter.isStructure && shooter.lifecycle !== 'Complete' && shooter.lifecycle !== 'Damaged') {
-    shooter.aimState = 'idle';
-    return;
-  }
-
-  // Disabled by status?
-  if (isDisabled(world, shooter)) {
-    shooter.aimState = 'idle';
-    return;
-  }
-
-  const w = getWeapon(shooter);
-  if (w.dps <= 0 || w.range <= 0) return;
-
-  // tick cooldown
-  if (shooter.fireCooldown == null) shooter.fireCooldown = 0;
-  if (shooter.fireCooldown > 0) shooter.fireCooldown -= dt;
-
-  // Acquire / validate target through targeting module.
-  let target = shooter.aimTarget ? world.byId[shooter.aimTarget] : null;
-  const inRange = target && isAlive(target) &&
-    dist(shooter.x, shooter.y, target.x, target.y) <= w.range;
-
-  if (!inRange) {
-    target = selectTarget(world, shooter, w);
-    if (target) {
-      shooter.aimTarget = target.id;
-      // start telegraph wind-up (head/sensor swing then lock-on)
-      shooter.windUpLeft = w.windUp;
-      shooter.aimState = 'aiming';
+export function updateProjectiles(state, events, dt) {
+  const projectiles = state.projectiles || [];
+  for (let i = 0; i < projectiles.length; i++) {
+    const p = projectiles[i];
+    if (!p.alive) continue;
+    const target = findEntity(state, p.targetId);
+    const live = isLiveTarget(target);
+    if (live) { p.tx = target.x; p.ty = target.y; }
+    const d = dist(p.x, p.y, p.tx, p.ty);
+    const step = p.speed * dt;
+    if (d <= step || d < RANGE_EPSILON) {
+      p.x = p.tx; p.y = p.ty;
+      p.alive = false;
+      if (live) resolveImpact(state, events, p, target);
+      else if (p.aoe > 0) resolveImpact(state, events, p, null); // AoE still detonates at last known point
     } else {
-      shooter.aimTarget = null;
-      shooter.windUpLeft = 0;
-      shooter.aimState = 'idle';
-      return;
+      p.x += ((p.tx - p.x) / d) * step;
+      p.y += ((p.ty - p.y) / d) * step;
     }
   }
-
-  if (!target || !isAlive(target)) {
-    shooter.aimTarget = null;
-    shooter.aimState = 'idle';
-    return;
-  }
-
-  // aim angle recorded for renderer (weapon rotation) — read-only presentation aid.
-  shooter.aimAngle = Math.atan2(target.y - shooter.y, target.x - shooter.x);
-
-  // wind-up (lock-on) must complete before the first shot launches.
-  if (shooter.windUpLeft == null) shooter.windUpLeft = 0;
-  if (shooter.windUpLeft > 0) {
-    shooter.windUpLeft -= dt;
-    shooter.aimState = 'aiming';
-    return;
-  }
-
-  // ready to fire?
-  if (shooter.fireCooldown <= 0) {
-    shooter.aimState = 'firing';
-    spawnProjectile(world, shooter, target, w);
-    shooter.fireCooldown = w.fireRate > 0 ? (1 / w.fireRate) : 1;
-  } else {
-    shooter.aimState = 'aiming';
-  }
-}
-
-// Run all shooters (towers + armed attacker units that hit structures/base via contact,
-// but ranged attackers use projectiles too).
-export function stepCombat(world, dt) {
-  // Defensive structures fire at attackers.
-  if (world.structures) {
-    for (let i = 0; i < world.structures.length; i++) {
-      const s = world.structures[i];
-      if (!s.isWeapon) continue;
-      s.side = 'defender';
-      stepShooter(world, s, dt);
-    }
-  }
-
-  // Attacker units fire/attack the base or structures.
-  if (world.attackers) {
-    for (let i = 0; i < world.attackers.length; i++) {
-      const a = world.attackers[i];
-      if (!isAlive(a)) continue;
-      a.side = 'attacker';
-      stepAttackerCombat(world, a, dt);
-    }
-  }
-
-  stepProjectiles(world, dt);
-  stepStatusEffects(world, dt);
-}
-
-// Attacker combat: attackers path to base and attack it (or structures if flagged).
-// Ranged attackers use projectiles; melee/contact attackers deal contact damage when
-// adjacent to their target.
-function stepAttackerCombat(world, a, dt) {
-  if (isDisabled(world, a)) return;
-  const w = getWeapon(a);
-  if (w.dps <= 0) return;
-
-  // determine what this attacker targets: 'Structures' or 'Base'
-  const targetsStructures = a.targets === 'Structures';
-
-  let target = a.aimTarget ? world.byId[a.aimTarget] : null;
-  const inRange = target && isAlive(target) &&
-    dist(a.x, a.y, target.x, target.y) <= Math.max(w.range, a.reach || 0.75);
-
-  if (!inRange) {
-    target = selectTarget(world, a, w);
-    if (target) {
-      a.aimTarget = target.id;
-      a.windUpLeft = w.windUp;
-      a.aimState = 'aiming';
-    } else {
-      a.aimTarget = null;
-      a.aimState = 'idle';
-      return;
-    }
-  }
-  if (!target || !isAlive(target)) { a.aimTarget = null; return; }
-
-  a.aimAngle = Math.atan2(target.y - a.y, target.x - a.x);
-
-  const reach = Math.max(w.range, a.reach || 0.75);
-  const d = dist(a.x, a.y, target.x, target.y);
-  if (d > reach) {
-    // still moving toward target; movement handled by movement.js
-    a.aimState = 'idle';
-    return;
-  }
-
-  if (a.fireCooldown == null) a.fireCooldown = 0;
-  if (a.fireCooldown > 0) a.fireCooldown -= dt;
-
-  if (a.windUpLeft == null) a.windUpLeft = 0;
-  if (a.windUpLeft > 0) { a.windUpLeft -= dt; a.aimState = 'aiming'; return; }
-
-  if (a.fireCooldown <= 0) {
-    a.aimState = 'firing';
-    if (w.range >= 1.5 || w.projectileClass !== 'bolt' || w.aoe > 0) {
-      // ranged / siege -> projectile
-      spawnProjectile(world, a, target, w);
-    } else {
-      // contact -> immediate damage
-      const dmg = damagePerShot(w);
-      dealDamage(world, a, target, dmg, w.damageType, 'melee');
-      applyStatus(world, target, w.status, w.damageType, dmg);
-    }
-    a.fireCooldown = w.fireRate > 0 ? (1 / w.fireRate) : 1;
-  } else {
-    a.aimState = 'aiming';
-  }
+  state.projectiles = projectiles.filter((p) => p.alive);
 }
 
 // ---------------------------------------------------------------------------
-// Public headless API surface
+// Main entry — called each fixed step by the headless core (same code path
+// the balance-sim harness drives; zero rendering dependencies).
 // ---------------------------------------------------------------------------
+
+export function updateCombat(state, dt, events) {
+  if (!events) {
+    if (!state.events) state.events = [];
+    events = state.events;
+  }
+
+  // 1) status effects & damage-over-time
+  tickStatuses(state, events, dt);
+
+  const units = state.units || [];
+  const structures = state.structures || [];
+  const attackers = units.filter((u) => u.team === 'attacker' && unitAlive(u));
+  const defenders = units.filter((u) => u.team !== 'attacker' && unitAlive(u));
+  const liveStructures = structures.filter(structureLive);
+  const base = state.base;
+
+  // 2) defensive structures fire at attackers (anti-air hits air; anti-ground cannot)
+  for (let i = 0; i < structures.length; i++) {
+    const s = structures[i];
+    if (!structureCanFire(s)) { s.targetId = null; continue; }
+    if (!s.team) s.team = 'defender';
+    fireShooter(state, events, s, attackers, dt);
+  }
+
+  // 3) deployed defender troops fight attackers
+  for (let i = 0; i < defenders.length; i++) {
+    fireShooter(state, events, defenders[i], attackers, dt);
+  }
+
+  // 4) attackers: basic units target the base only (structures are hazards);
+  //    flagged units (targets === 'Structures') besiege structures, base as fallback.
+  for (let i = 0; i < attackers.length; i++) {
+    const u = attackers[i];
+    const wantsStructures = u.targets === 'Structures' || u.targetsStructures === true || u.targetsBase === false;
+    let candidates;
+    if (wantsStructures) {
+      candidates = liveStructures.slice();
+      if (base && base.hp > 0) candidates.push(base);
+    } else {
+      candidates = (base && base.hp > 0) ? [base] : [];
+    }
+    fireShooter(state, events, u, candidates, dt);
+  }
+
+  // 5) projectiles travel and land
+  updateProjectiles(state, events, dt);
+
+  return events;
+}
+
+// Alias for integrators that prefer step naming.
+export const stepCombat = updateCombat;
 
 export default {
+  updateCombat,
   stepCombat,
-  stepShooter,
-  stepProjectiles,
-  stepStatusEffects,
-  dealDamage,
-  isDisabled,
-  speedMultiplier,
+  updateProjectiles,
+  acquireTarget,
+  spawnProjectile,
+  applyDamage,
+  computeDamage,
+  getEffectiveness,
+  weaponCanHit,
+  targetClassOf,
+  isAir,
+  killIncomeFor,
+  FIRE_INTERVAL,
+  PROJECTILE_SPEED,
+  KILL_INCOME_FRACTION,
 };

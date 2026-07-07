@@ -1,342 +1,556 @@
 // src/sim/economy.js
-// BULWARK — Real-time economy system.
-// Money accrual over time, kill income, spend/refund for build/upgrade/repair,
-// and bankruptcy detection. Reads sim state; mutates only the economy fields.
-//
-// Deterministic: all math derives from fixed-timestep dt and integer-ish gold
-// tracked as a float but rounded at readouts. No RNG here.
-//
-// This module is intentionally framework-free so the headless combat/sim core
-// (simCore.js) uses the exact same code path as the balance harness.
+// Real-time economy for the Bulwark vertical slice.
+// Responsibilities:
+//   - live money accrual (fixed-timestep deterministic)
+//   - kill -> income events
+//   - spend on build / upgrade (repairs are free money-wise; they consume troop travel time)
+//   - sell partial refund
+//   - bankruptcy detection
+//   - troop deployment cost + spawn-at-base / march-to-drop-destination orders
+// All balance numbers are read from the data tables (src/data/tables.js) — nothing hardcoded
+// except last-resort fallbacks used only if a table entry is missing.
 
-// -----------------------------------------------------------------------------
-// Economy tuning constants (data-driven defaults; overridable via config)
-// -----------------------------------------------------------------------------
-const ECON_DEFAULTS = {
-  startingGold: 1500,       // seed float for the vertical slice
-  passiveIncomePerSec: 12,  // live money accrual (real-time economy)
-  killBaseReward: 8,        // flat reward per attacker kill
-  killPowerFactor: 0.35,    // + reward scaled by unit power budget (100 pts)
-  sellRefundFraction: 0.5,  // partial refund on sell
-  repairGoldPerSec: 0,      // repairs are FREE (troop-based) per model
-  bankruptcyGold: 0,        // gold floor; below-cost purchases blocked
-};
+import * as TablesMod from '../data/tables.js';
+import * as Entities from './entities.js';
+import * as Pathing from './pathing.js';
 
-// -----------------------------------------------------------------------------
-// Economy factory / init
-// -----------------------------------------------------------------------------
+const TABLES =
+  TablesMod.TABLES ||
+  TablesMod.Tables ||
+  TablesMod.tables ||
+  TablesMod.default ||
+  TablesMod;
 
-/**
- * Create the economy sub-state. Attach to world.economy.
- * @param {object} opts - overrides for ECON_DEFAULTS (typically from config tables)
- */
-export function createEconomy(opts = {}) {
-  const cfg = { ...ECON_DEFAULTS, ...opts };
+// ---------------------------------------------------------------------------
+// Table access helpers (defensive against naming variants in the data file)
+// ---------------------------------------------------------------------------
+
+function assumptionsTable() {
+  return (TABLES && (TABLES.Assumptions || TABLES.assumptions || TABLES.ASSUMPTIONS)) || null;
+}
+
+function unitTable() {
+  return (TABLES && (TABLES.Units || TABLES.units || TABLES.UNITS)) || null;
+}
+
+function structureTable() {
+  return (TABLES && (TABLES.Structures || TABLES.structures || TABLES.STRUCTURES)) || null;
+}
+
+export function getAssumption(name, fallback) {
+  const A = assumptionsTable();
+  if (!A) return fallback;
+  if (Array.isArray(A)) {
+    for (let i = 0; i < A.length; i++) {
+      const row = A[i];
+      if (!row) continue;
+      const key = row.Parameter || row.parameter || row.name || row.Name || row.key || row.id;
+      if (key === name) {
+        const v = Number(row.Value != null ? row.Value : row.value);
+        if (isFinite(v)) return v;
+      }
+    }
+    return fallback;
+  }
+  if (A[name] != null) {
+    const v = Number(A[name].Value != null ? A[name].Value : A[name]);
+    if (isFinite(v)) return v;
+  }
+  return fallback;
+}
+
+function num(row, keys) {
+  if (!row) return NaN;
+  for (let i = 0; i < keys.length; i++) {
+    const v = row[keys[i]];
+    if (v != null) {
+      const n = Number(v);
+      if (isFinite(n)) return n;
+    }
+  }
+  return NaN;
+}
+
+function tableRows(table) {
+  if (!table) return [];
+  if (Array.isArray(table)) return table;
+  const out = [];
+  for (const k in table) {
+    if (Object.prototype.hasOwnProperty.call(table, k)) out.push(table[k]);
+  }
+  return out;
+}
+
+export function findRow(table, id) {
+  if (!table || id == null) return null;
+  if (!Array.isArray(table) && table[id]) return table[id];
+  const rows = tableRows(table);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    const rid =
+      row.UnitID || row.unitId || row.unitID ||
+      row.StructID || row.structId || row.structID ||
+      row.id || row.ID || row.key ||
+      row.Name || row.name;
+    if (rid === id) return row;
+  }
+  return null;
+}
+
+function rowCost(row, tier) {
+  if (!row) return NaN;
+  // array-style cost: cost:[t1,t2,t3]
+  const arr = row.cost || row.costs || row.Cost;
+  if (Array.isArray(arr)) {
+    const v = Number(arr[Math.min(Math.max(tier, 1), arr.length) - 1]);
+    if (isFinite(v)) return v;
+  }
+  let keys;
+  if (tier >= 3) keys = ['costT3', 'CostT3', 'Cost T3', 'cost_t3', 'cost3'];
+  else if (tier === 2) keys = ['costT2', 'CostT2', 'Cost T2', 'cost_t2', 'cost2'];
+  else keys = ['costT1', 'CostT1', 'Cost T1', 'cost_t1', 'cost1', 'cost', 'Cost', 'price', 'Price'];
+  let v = num(row, keys);
+  if (isFinite(v)) return v;
+  // derive from power budget: cost = power * gold-per-power * tier multiplier
+  const power = num(row, ['power', 'Power']);
+  if (isFinite(power)) {
+    const cpp = getAssumption('Cost_per_power_gold', 3);
+    const mult =
+      tier >= 3 ? getAssumption('Upgrade_Cost_x_T3', 5) :
+      tier === 2 ? getAssumption('Upgrade_Cost_x_T2', 2.5) : 1;
+    return power * cpp * mult;
+  }
+  return NaN;
+}
+
+// ---------------------------------------------------------------------------
+// Public price queries (data-driven)
+// ---------------------------------------------------------------------------
+
+export function unitCost(unitId, tier) {
+  const c = rowCost(findRow(unitTable(), unitId), tier || 1);
+  return isFinite(c) ? Math.round(c) : Infinity;
+}
+
+export function structureCost(structId, tier) {
+  const c = rowCost(findRow(structureTable(), structId), tier || 1);
+  return isFinite(c) ? Math.round(c) : Infinity;
+}
+
+// Cost to upgrade one tier: the delta of cumulative tier value.
+export function upgradeCost(baseCostT1, fromTier) {
+  const m2 = getAssumption('Upgrade_Cost_x_T2', 2.5);
+  const m3 = getAssumption('Upgrade_Cost_x_T3', 5);
+  if (!isFinite(baseCostT1)) return Infinity;
+  if (fromTier <= 1) return Math.round(baseCostT1 * (m2 - 1));
+  if (fromTier === 2) return Math.round(baseCostT1 * (m3 - m2));
+  return Infinity; // T3 is max tier
+}
+
+export function upgradeCostForStructure(structId, fromTier) {
+  return upgradeCost(structureCost(structId, 1), fromTier);
+}
+
+// Sell partial refund of everything invested so far.
+export function sellRefund(totalInvested, refundFraction) {
+  const f = refundFraction != null ? refundFraction : getAssumption('Sell_refund_fraction', 0.5);
+  if (!isFinite(totalInvested)) return 0;
+  return Math.max(0, Math.round(totalInvested * f));
+}
+
+// Repairs are FREE money-wise (they consume troop travel + time, handled by structures.js).
+export function repairCost() {
+  return 0;
+}
+
+let _cheapestCache = null;
+export function cheapestActionCost() {
+  if (_cheapestCache != null) return _cheapestCache;
+  let min = Infinity;
+  const tables = [unitTable(), structureTable()];
+  for (let t = 0; t < tables.length; t++) {
+    const rows = tableRows(tables[t]);
+    for (let i = 0; i < rows.length; i++) {
+      const c = rowCost(rows[i], 1);
+      if (isFinite(c) && c > 0 && c < min) min = c;
+    }
+  }
+  if (!isFinite(min)) min = 100;
+  _cheapestCache = Math.round(min);
+  return _cheapestCache;
+}
+
+// ---------------------------------------------------------------------------
+// Economy state
+// ---------------------------------------------------------------------------
+
+export function createEconomy(opts) {
+  opts = opts || {};
   return {
-    cfg,
-    gold: cfg.startingGold,
-    // running totals (for HUD deltas + audits)
-    totalEarned: cfg.startingGold,
+    money: Math.round(
+      opts.startMoney != null
+        ? opts.startMoney
+        : getAssumption('Start_Money', getAssumption('Starting_Gold', 1200))
+    ),
+    incomeRate:
+      opts.incomeRate != null
+        ? opts.incomeRate
+        : getAssumption('Income_per_sec', getAssumption('Gold_per_sec', 12)),
+    killFraction:
+      opts.killFraction != null
+        ? opts.killFraction
+        : getAssumption('Kill_income_fraction', 0.5),
+    sellFraction:
+      opts.sellFraction != null
+        ? opts.sellFraction
+        : getAssumption('Sell_refund_fraction', 0.5),
+    fractional: 0,      // sub-gold accumulator so money stays an integer
+    time: 0,            // sim-seconds elapsed
+    totalEarned: 0,
     totalSpent: 0,
-    totalKillIncome: 0,
-    totalPassive: 0,
-    totalRefunds: 0,
+    kills: 0,
+    killIncome: 0,
     bankrupt: false,
-    // transient delta for the HUD to animate; drained each render pull
-    lastDelta: 0,
-    // accumulator so passive income is smooth under fixed dt
-    _accrue: 0,
+    bankruptSince: -1,  // sim time at which bankruptcy started, -1 if solvent
+    deltas: [],         // recent {amount, reason, time} for HUD readout
+    events: []          // ordered economy events for the battle log (drained by core)
   };
 }
 
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
-
-function econOf(world) {
-  // Tolerate either world.economy or a bare economy object being passed in.
-  if (world && world.economy) return world.economy;
-  return world;
+function pushDelta(econ, amount, reason) {
+  econ.deltas.push({ amount: amount, reason: reason || '', time: econ.time });
+  while (econ.deltas.length > 12) econ.deltas.shift();
 }
 
-function pushDelta(econ, amount) {
-  econ.lastDelta += amount;
+function pushEvent(econ, ev) {
+  ev.time = econ.time;
+  econ.events.push(ev);
 }
 
-/** Read + clear the animated HUD delta. */
-export function drainDelta(world) {
-  const econ = econOf(world);
-  const d = econ.lastDelta;
-  econ.lastDelta = 0;
-  return d;
+// Drain queued economy events into the battle log (called by core each step).
+export function drainEvents(econ) {
+  if (econ.events.length === 0) return [];
+  const out = econ.events;
+  econ.events = [];
+  return out;
 }
 
-/** Current gold (rounded for display). */
-export function getGold(world) {
-  return Math.round(econOf(world).gold);
+function updateBankruptcy(econ) {
+  const broke = econ.money < cheapestActionCost();
+  if (broke && !econ.bankrupt) {
+    econ.bankrupt = true;
+    econ.bankruptSince = econ.time;
+    pushEvent(econ, { type: 'bankrupt', money: econ.money, floor: cheapestActionCost() });
+  } else if (!broke && econ.bankrupt) {
+    econ.bankrupt = false;
+    econ.bankruptSince = -1;
+    pushEvent(econ, { type: 'solvent', money: econ.money });
+  }
 }
 
-/** Can the player afford `cost`? */
-export function canAfford(world, cost) {
-  return econOf(world).gold + 1e-6 >= (cost || 0);
+export function isBankrupt(econ) {
+  return !!econ.bankrupt;
 }
 
-// -----------------------------------------------------------------------------
-// Per-tick accrual (called by step.js each fixed step)
-// -----------------------------------------------------------------------------
-
-/**
- * Accrue passive income for one fixed timestep.
- * @param {object} world
- * @param {number} dt - seconds for this step (fixed)
- */
-export function tickEconomy(world, dt) {
-  const econ = econOf(world);
-  if (dt <= 0) return;
-
-  const gain = econ.cfg.passiveIncomePerSec * dt;
-  econ._accrue += gain;
-
-  // Bank whole/partial gold smoothly.
-  econ.gold += gain;
-  econ.totalEarned += gain;
-  econ.totalPassive += gain;
-  pushDelta(econ, gain);
-
-  // Recompute bankruptcy flag (informational — spend calls enforce it).
-  econ.bankrupt = econ.gold <= econ.cfg.bankruptcyGold + 1e-6;
+// Fixed-timestep accrual. dt is in sim-seconds (deterministic when dt is constant).
+export function tickEconomy(econ, dt) {
+  econ.time += dt;
+  econ.fractional += econ.incomeRate * dt;
+  const gained = Math.floor(econ.fractional);
+  if (gained > 0) {
+    econ.fractional -= gained;
+    econ.money += gained;
+    econ.totalEarned += gained;
+  }
+  while (econ.deltas.length && econ.time - econ.deltas[0].time > 3) econ.deltas.shift();
+  updateBankruptcy(econ);
+  return econ;
 }
 
-// -----------------------------------------------------------------------------
+export const stepEconomy = tickEconomy;
+
+// ---------------------------------------------------------------------------
+// Spend / credit primitives
+// ---------------------------------------------------------------------------
+
+export function canAfford(econ, amount) {
+  const a = Math.round(amount);
+  return isFinite(a) && a <= econ.money;
+}
+
+export function spend(econ, amount, reason) {
+  const a = Math.round(amount);
+  if (!isFinite(a) || a < 0) return false;
+  if (a > econ.money) {
+    pushEvent(econ, { type: 'spend-denied', amount: a, reason: reason || '', money: econ.money });
+    return false;
+  }
+  econ.money -= a;
+  econ.totalSpent += a;
+  pushDelta(econ, -a, reason);
+  pushEvent(econ, { type: 'spend', amount: a, reason: reason || '', money: econ.money });
+  updateBankruptcy(econ);
+  return true;
+}
+
+export function credit(econ, amount, reason) {
+  const a = Math.round(amount);
+  if (!isFinite(a) || a <= 0) return 0;
+  econ.money += a;
+  econ.totalEarned += a;
+  pushDelta(econ, a, reason);
+  pushEvent(econ, { type: 'credit', amount: a, reason: reason || '', money: econ.money });
+  updateBankruptcy(econ);
+  return a;
+}
+
+export const refund = credit;
+
+// ---------------------------------------------------------------------------
 // Kill income
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
-/**
- * Compute the reward for killing a unit.
- * Reward scales with the unit's power budget (100-pt baseline) so tougher
- * units pay out more — derived, not hardcoded per unit.
- * @param {object} econ
- * @param {object} unit - killed attacker entity (may carry .power / .stats.power)
- */
-function killReward(econ, unit) {
-  let power = 100;
-  if (unit) {
-    if (typeof unit.power === 'number') power = unit.power;
-    else if (unit.stats && typeof unit.stats.power === 'number') power = unit.stats.power;
-    else if (unit.def && typeof unit.def.power === 'number') power = unit.def.power;
+// Called by combat.js (via core) whenever an attacker dies. Returns gold granted.
+export function onKill(econ, victim) {
+  let base = 0;
+  if (victim) {
+    if (isFinite(victim.bounty)) base = Number(victim.bounty);
+    else if (isFinite(victim.cost)) base = Number(victim.cost);
+    else {
+      const id = victim.unitId || victim.kind || victim.type || victim.id;
+      const c = unitCost(id, victim.tier || 1);
+      if (isFinite(c)) base = c;
+    }
   }
-  return econ.cfg.killBaseReward + econ.cfg.killPowerFactor * power;
+  const income = Math.max(1, Math.round(base * econ.killFraction));
+  econ.kills += 1;
+  econ.killIncome += income;
+  econ.money += income;
+  econ.totalEarned += income;
+  pushDelta(econ, income, 'kill');
+  pushEvent(econ, {
+    type: 'kill-income',
+    amount: income,
+    victim: victim ? (victim.unitId || victim.kind || victim.type || victim.id || 'unknown') : 'unknown',
+    money: econ.money
+  });
+  updateBankruptcy(econ);
+  return income;
 }
 
-/**
- * Grant income for a killed attacker. Called from combat.js on death.
- * Returns the reward granted (for battle-log events).
- * @param {object} world
- * @param {object} unit - the killed enemy unit
- */
-export function grantKillIncome(world, unit) {
-  const econ = econOf(world);
-  const reward = killReward(econ, unit);
-  econ.gold += reward;
-  econ.totalEarned += reward;
-  econ.totalKillIncome += reward;
-  pushDelta(econ, reward);
+// ---------------------------------------------------------------------------
+// Structure purchase helpers (structures.js does placement geometry; economy
+// gates the gold side so all money flows through one ledger)
+// ---------------------------------------------------------------------------
 
-  // Emit a HUD/FX event if the world supports an event queue.
-  emitEvent(world, {
-    type: 'kill_income',
-    amount: reward,
-    unitId: unit && unit.id,
-    x: unit && unit.x,
-    y: unit && unit.y,
+export function tryBuyStructure(econ, structId) {
+  const cost = structureCost(structId, 1);
+  if (!isFinite(cost)) return { ok: false, reason: 'unknown-structure', cost: Infinity };
+  if (!canAfford(econ, cost)) return { ok: false, reason: 'insufficient-funds', cost: cost };
+  spend(econ, cost, 'build:' + structId);
+  return { ok: true, cost: cost };
+}
+
+export function tryBuyUpgrade(econ, structId, fromTier) {
+  const cost = upgradeCostForStructure(structId, fromTier);
+  if (!isFinite(cost)) return { ok: false, reason: 'max-tier', cost: Infinity };
+  if (!canAfford(econ, cost)) return { ok: false, reason: 'insufficient-funds', cost: cost };
+  spend(econ, cost, 'upgrade:' + structId);
+  return { ok: true, cost: cost };
+}
+
+export function sellStructure(econ, structId, totalInvested) {
+  const back = sellRefund(
+    isFinite(totalInvested) ? totalInvested : structureCost(structId, 1),
+    econ.sellFraction
+  );
+  credit(econ, back, 'sell:' + structId);
+  return back;
+}
+
+// ---------------------------------------------------------------------------
+// Troop deployment: paid at deploy time; unit SPAWNS AT THE BASE and receives
+// a march order to the chosen drop destination (drop point is a destination,
+// NOT a spawn point). Validity: space + terrain + cost.
+// ---------------------------------------------------------------------------
+
+function resolveUnitFactory() {
+  return (
+    Entities.createUnit ||
+    Entities.makeUnit ||
+    Entities.spawnUnit ||
+    Entities.unitFromTable ||
+    null
+  );
+}
+
+function resolvePathFinder() {
+  return (
+    Pathing.findPath ||
+    Pathing.computePath ||
+    Pathing.pathFor ||
+    Pathing.bfs ||
+    null
+  );
+}
+
+function gridPassable(grid, domain, x, y) {
+  if (!grid) return true;
+  if (typeof grid.isPassable === 'function') return grid.isPassable(x, y, domain);
+  if (typeof grid.passable === 'function') return grid.passable(x, y, domain);
+  const d = String(domain || 'Walker').toLowerCase();
+  if (d === 'flyer' || d === 'air') return true;
+  if (d === 'floater' || d === 'swimmer' || d === 'water') {
+    if (typeof grid.isWater === 'function') return !!grid.isWater(x, y);
+    return true;
+  }
+  // walker: not water, not blocked by wall/moat/structure terrain
+  let ok = true;
+  if (typeof grid.isWater === 'function' && grid.isWater(x, y)) ok = false;
+  if (ok && typeof grid.isBlocked === 'function' && grid.isBlocked(x, y)) ok = false;
+  return ok;
+}
+
+function gridInBounds(grid, x, y) {
+  if (!grid) return true;
+  if (typeof grid.inBounds === 'function') return grid.inBounds(x, y);
+  if (typeof grid.isInBounds === 'function') return grid.isInBounds(x, y);
+  const w = grid.width != null ? grid.width : grid.cols;
+  const h = grid.height != null ? grid.height : grid.rows;
+  if (isFinite(w) && isFinite(h)) return x >= 0 && y >= 0 && x < w && y < h;
+  return true;
+}
+
+function gridOccupied(grid, x, y) {
+  if (!grid) return false;
+  if (typeof grid.isOccupied === 'function') return !!grid.isOccupied(x, y);
+  if (typeof grid.occupied === 'function') return !!grid.occupied(x, y);
+  return false;
+}
+
+function basePosition(state) {
+  const base =
+    (state && state.base) ||
+    (state && state.entities && state.entities.base) ||
+    null;
+  if (!base) return { x: 0, y: 0 };
+  const x = base.x != null ? base.x : (base.tileX != null ? base.tileX : (base.tx != null ? base.tx : 0));
+  const y = base.y != null ? base.y : (base.tileY != null ? base.tileY : (base.ty != null ? base.ty : 0));
+  return { x: x, y: y };
+}
+
+// Pure validity check (used by the HUD/input placement preview — no side effects).
+export function canDeploy(econ, state, unitId, dropX, dropY) {
+  const cost = unitCost(unitId, 1);
+  if (!isFinite(cost)) return { ok: false, reason: 'unknown-unit', cost: Infinity };
+  if (!canAfford(econ, cost)) return { ok: false, reason: 'insufficient-funds', cost: cost };
+  const grid = state ? state.grid : null;
+  if (!gridInBounds(grid, dropX, dropY)) return { ok: false, reason: 'out-of-bounds', cost: cost };
+  const row = findRow(unitTable(), unitId);
+  const domain = (row && (row.Domain || row.domain)) || 'Walker';
+  if (!gridPassable(grid, domain, dropX, dropY)) return { ok: false, reason: 'blocked-terrain', cost: cost };
+  if (gridOccupied(grid, dropX, dropY)) return { ok: false, reason: 'occupied', cost: cost };
+  return { ok: true, cost: cost, domain: domain };
+}
+
+// Full deploy: charges gold, spawns the unit at the base, issues a march order
+// (with a computed path for walkers/floaters) to the drop destination.
+export function deployTroop(econ, state, unitId, dropX, dropY) {
+  const check = canDeploy(econ, state, unitId, dropX, dropY);
+  if (!check.ok) {
+    pushEvent(econ, { type: 'deploy-denied', unitId: unitId, reason: check.reason, cost: check.cost });
+    return check;
+  }
+
+  const factory = resolveUnitFactory();
+  if (typeof factory !== 'function') {
+    return { ok: false, reason: 'no-unit-factory', cost: check.cost };
+  }
+  let unit = null;
+  try {
+    unit = factory(unitId, state && state.rng);
+  } catch (e) {
+    unit = null;
+  }
+  if (!unit) {
+    try { unit = factory(unitId); } catch (e2) { unit = null; }
+  }
+  if (!unit) return { ok: false, reason: 'spawn-failed', cost: check.cost };
+
+  const origin = basePosition(state);
+  unit.x = origin.x;
+  unit.y = origin.y;
+  unit.team = 'player';
+  unit.deployed = true;
+  unit.state = 'marching';
+  unit.dest = { x: dropX, y: dropY };
+  if (unit.cost == null) unit.cost = check.cost;
+
+  const domain = unit.domain || check.domain || 'Walker';
+  const d = String(domain).toLowerCase();
+  if (d !== 'flyer' && d !== 'air') {
+    const fp = resolvePathFinder();
+    if (fp && state && state.grid) {
+      let path = null;
+      try {
+        path = fp(state.grid, { x: origin.x, y: origin.y }, { x: dropX, y: dropY }, domain);
+      } catch (e) {
+        path = null;
+      }
+      if (!path || path.length === 0) {
+        pushEvent(econ, { type: 'deploy-denied', unitId: unitId, reason: 'unreachable', cost: check.cost });
+        return { ok: false, reason: 'unreachable', cost: check.cost };
+      }
+      unit.path = path;
+      unit.pathIndex = 0;
+    }
+  }
+
+  // Charge only once everything is valid — no gold lost on failed drops.
+  spend(econ, check.cost, 'deploy:' + unitId);
+
+  if (state) {
+    if (Array.isArray(state.units)) state.units.push(unit);
+    else if (Array.isArray(state.entities)) state.entities.push(unit);
+    else if (state.entities && Array.isArray(state.entities.units)) state.entities.units.push(unit);
+  }
+
+  pushEvent(econ, {
+    type: 'deploy',
+    unitId: unitId,
+    cost: check.cost,
+    from: { x: origin.x, y: origin.y },
+    to: { x: dropX, y: dropY }
   });
 
-  econ.bankrupt = econ.gold <= econ.cfg.bankruptcyGold + 1e-6;
-  return reward;
+  return { ok: true, unit: unit, cost: check.cost };
 }
 
-// -----------------------------------------------------------------------------
-// Spend / refund
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Serialization (stable subset for the deterministic state hash / replay)
+// ---------------------------------------------------------------------------
 
-/**
- * Attempt to spend `cost` gold for a purpose (build/upgrade/repair).
- * Enforces bankruptcy: if it can't afford, returns false and spends nothing.
- * @returns {boolean} success
- */
-export function spend(world, cost, reason = 'spend', meta = {}) {
-  const econ = econOf(world);
-  cost = cost || 0;
-  if (cost < 0) cost = 0;
-
-  if (econ.gold + 1e-6 < cost) {
-    // Insufficient funds — bankruptcy blocks the transaction.
-    emitEvent(world, { type: 'spend_denied', reason, cost, gold: econ.gold, ...meta });
-    return false;
-  }
-
-  econ.gold -= cost;
-  econ.totalSpent += cost;
-  pushDelta(econ, -cost);
-  emitEvent(world, { type: 'spend', reason, amount: cost, ...meta });
-
-  econ.bankrupt = econ.gold <= econ.cfg.bankruptcyGold + 1e-6;
-  return true;
-}
-
-/**
- * Refund gold (e.g. selling a structure for partial value).
- * @param {number} baseValue - the full invested value to refund a fraction of
- * @param {number} [fraction] - override refund fraction (defaults to cfg)
- * @returns {number} amount refunded
- */
-export function refund(world, baseValue, fraction, reason = 'sell', meta = {}) {
-  const econ = econOf(world);
-  const frac = (typeof fraction === 'number') ? fraction : econ.cfg.sellRefundFraction;
-  const amount = Math.max(0, (baseValue || 0) * frac);
-
-  econ.gold += amount;
-  econ.totalEarned += amount;
-  econ.totalRefunds += amount;
-  pushDelta(econ, amount);
-  emitEvent(world, { type: 'refund', reason, amount, ...meta });
-
-  econ.bankrupt = econ.gold <= econ.cfg.bankruptcyGold + 1e-6;
-  return amount;
-}
-
-/** Compute the sell refund value for a structure without applying it. */
-export function sellValue(world, structure) {
-  const econ = econOf(world);
-  const invested = structureInvested(structure);
-  return Math.floor(invested * econ.cfg.sellRefundFraction);
-}
-
-/**
- * Sum the gold invested into a structure across build + upgrades.
- * Reads structure.buildCost + structure.upgradeSpent, or falls back to .cost.
- */
-export function structureInvested(structure) {
-  if (!structure) return 0;
-  if (typeof structure.investedGold === 'number') return structure.investedGold;
-  let total = 0;
-  if (typeof structure.buildCost === 'number') total += structure.buildCost;
-  else if (typeof structure.cost === 'number') total += structure.cost;
-  if (typeof structure.upgradeSpent === 'number') total += structure.upgradeSpent;
-  return total;
-}
-
-// -----------------------------------------------------------------------------
-// High-level transaction helpers used by commands / lifecycle
-// -----------------------------------------------------------------------------
-
-/**
- * Try to pay for placing a structure. On success, records invested gold on the
- * structure so sell refunds are accurate.
- */
-export function payBuild(world, structure, cost) {
-  if (!spend(world, cost, 'build', { structureId: structure && structure.id })) {
-    return false;
-  }
-  if (structure) {
-    structure.buildCost = cost;
-    structure.investedGold = (structure.investedGold || 0) + cost;
-  }
-  return true;
-}
-
-/**
- * Try to pay for upgrading a structure one tier.
- */
-export function payUpgrade(world, structure, cost) {
-  if (!spend(world, cost, 'upgrade', { structureId: structure && structure.id })) {
-    return false;
-  }
-  if (structure) {
-    structure.upgradeSpent = (structure.upgradeSpent || 0) + cost;
-    structure.investedGold = (structure.investedGold || 0) + cost;
-  }
-  return true;
-}
-
-/**
- * Sell a structure: refund partial value based on total invested gold.
- * Returns the refunded amount.
- */
-export function paySell(world, structure) {
-  const invested = structureInvested(structure);
-  return refund(world, invested, undefined, 'sell', {
-    structureId: structure && structure.id,
-  });
-}
-
-/**
- * Repairs are FREE in this model (troop-based), but this hook exists so the
- * cost curve can be toggled via cfg.repairGoldPerSec without touching callers.
- * Returns true if the (possibly zero) cost was paid.
- */
-export function payRepairTick(world, dt) {
-  const econ = econOf(world);
-  const rate = econ.cfg.repairGoldPerSec;
-  if (rate <= 0) return true; // free
-  const cost = rate * dt;
-  return spend(world, cost, 'repair');
-}
-
-// -----------------------------------------------------------------------------
-// Bankruptcy
-// -----------------------------------------------------------------------------
-
-export function isBankrupt(world) {
-  return econOf(world).bankrupt === true;
-}
-
-// -----------------------------------------------------------------------------
-// Event emission (deterministic — appended to world.events if present)
-// -----------------------------------------------------------------------------
-
-function emitEvent(world, ev) {
-  if (world && Array.isArray(world.events)) {
-    world.events.push(ev);
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Snapshot for HUD / battle-log audits
-// -----------------------------------------------------------------------------
-
-export function economySnapshot(world) {
-  const econ = econOf(world);
+export function serializeEconomy(econ) {
   return {
-    gold: Math.round(econ.gold),
-    goldRaw: econ.gold,
-    totalEarned: econ.totalEarned,
-    totalSpent: econ.totalSpent,
-    totalKillIncome: econ.totalKillIncome,
-    totalPassive: econ.totalPassive,
-    totalRefunds: econ.totalRefunds,
-    bankrupt: econ.bankrupt,
+    money: econ.money,
+    frac: Math.round(econ.fractional * 1e6),
+    earned: econ.totalEarned,
+    spent: econ.totalSpent,
+    kills: econ.kills,
+    killIncome: econ.killIncome,
+    bankrupt: econ.bankrupt ? 1 : 0
   };
 }
 
-export const ECONOMY_DEFAULTS = ECON_DEFAULTS;
-
-export default {
-  createEconomy,
-  tickEconomy,
-  grantKillIncome,
-  spend,
-  refund,
-  sellValue,
-  structureInvested,
-  payBuild,
-  payUpgrade,
-  paySell,
-  payRepairTick,
-  canAfford,
-  getGold,
-  drainDelta,
-  isBankrupt,
-  economySnapshot,
-  ECONOMY_DEFAULTS,
-};
+export function restoreEconomy(econ, snap) {
+  if (!snap) return econ;
+  econ.money = snap.money | 0;
+  econ.fractional = (snap.frac || 0) / 1e6;
+  econ.totalEarned = snap.earned | 0;
+  econ.totalSpent = snap.spent | 0;
+  econ.kills = snap.kills | 0;
+  econ.killIncome = snap.killIncome | 0;
+  econ.bankrupt = !!snap.bankrupt;
+  return econ;
+}

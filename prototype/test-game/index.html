@@ -2,31 +2,170 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>BULWARK — Vertical Slice</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BULWARK — Vertical Slice (Test Build)</title>
 <style>
-  html,body{margin:0;padding:0;background:#0b0e12;overflow:hidden;height:100%;font-family:monospace;color:#cde;}
-  #app{position:fixed;inset:0;}
-  canvas{display:block;touch-action:none;}
-  #boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#8cf;font-size:18px;z-index:99;}
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #0b0e14;
+    color: #d7dce3;
+    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #app {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  /* Pixi canvas host */
+  #game-canvas-container {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+  #game-canvas-container canvas {
+    display: block;
+  }
+  /* HUD overlay root — hud.js builds its DOM inside this */
+  #hud-root {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none; /* hud.js re-enables on its interactive panels */
+  }
+  #hud-root button {
+    pointer-events: auto;
+    font-family: inherit;
+  }
+  /* Generic HUD panel styling that hud.js-created elements can inherit */
+  #hud-root .hud-panel {
+    pointer-events: auto;
+    position: absolute;
+    background: rgba(12, 16, 24, 0.86);
+    border: 1px solid #2e3a4d;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  #hud-root .hud-panel h3 {
+    margin: 0 0 4px 0;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #8fa8c7;
+  }
+  #hud-root button {
+    background: #1c2735;
+    color: #d7dce3;
+    border: 1px solid #3a4a60;
+    border-radius: 3px;
+    padding: 3px 8px;
+    margin: 1px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #hud-root button:hover:not(:disabled) {
+    background: #2a3a50;
+    border-color: #5a7294;
+  }
+  #hud-root button:disabled,
+  #hud-root button.unaffordable {
+    opacity: 0.45;
+    cursor: default;
+  }
+  #hud-root button.selected {
+    background: #35507a;
+    border-color: #7fa4d6;
+  }
+  #hud-root .money-delta {
+    position: absolute;
+    font-weight: bold;
+    pointer-events: none;
+  }
+  #hud-root .banner {
+    pointer-events: auto;
+    position: absolute;
+    left: 50%;
+    top: 40%;
+    transform: translate(-50%, -50%);
+    font-size: 42px;
+    font-weight: bold;
+    letter-spacing: 0.15em;
+    padding: 18px 42px;
+    background: rgba(10, 14, 22, 0.92);
+    border: 2px solid #5a7294;
+    border-radius: 8px;
+    text-align: center;
+  }
+  #hud-root .banner.win  { color: #7fe08a; border-color: #4ea85a; }
+  #hud-root .banner.lose { color: #e07f7f; border-color: #a84e4e; }
+  /* Boot error overlay (shown only if scripts fail to load) */
+  #boot-error {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    background: rgba(8, 10, 16, 0.95);
+    color: #ff9c9c;
+    padding: 24px;
+    font-family: monospace;
+    font-size: 13px;
+    white-space: pre-wrap;
+    overflow: auto;
+  }
 </style>
 </head>
 <body>
-<div id="app"></div>
-<div id="boot">Loading BULWARK…</div>
-<script src="vendor/pixi.min.js"></script>
-<script type="module">
-  import { main } from './src/main.js';
-  window.addEventListener('load', () => {
-    const boot = document.getElementById('boot');
-    try {
-      main(document.getElementById('app'));
-      if (boot) boot.remove();
-    } catch (e) {
-      if (boot) boot.textContent = 'Error: ' + (e && e.message ? e.message : e);
-      console.error(e);
-    }
-  });
-</script>
+  <div id="app">
+    <!-- Pixi renderer mounts its canvas here (src/render/renderer.js) -->
+    <div id="game-canvas-container"></div>
+
+    <!-- DOM HUD overlay root; src/render/hud.js populates this -->
+    <div id="hud-root"></div>
+
+    <div id="boot-error"></div>
+  </div>
+
+  <!-- Vendored Pixi (global PIXI), loaded before the game scripts -->
+  <script src="vendor/pixi.min.js"></script>
+
+  <!-- Game bootstrap (ES module; imports sim core, log, harness, renderer, hud, input) -->
+  <script type="module" src="src/main.js"></script>
+
+  <!-- Boot failure reporting: plain script, no eval, no string timers -->
+  <script>
+    (function () {
+      var errBox = document.getElementById('boot-error');
+      function showError(msg) {
+        if (!errBox) { return; }
+        errBox.style.display = 'block';
+        errBox.textContent += msg + '\n';
+      }
+      window.addEventListener('error', function (ev) {
+        if (ev && ev.message) {
+          showError('[error] ' + ev.message +
+            (ev.filename ? ('  (' + ev.filename + ':' + ev.lineno + ')') : ''));
+        } else if (ev && ev.target && ev.target.src) {
+          showError('[load failure] ' + ev.target.src);
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function (ev) {
+        var reason = ev && ev.reason;
+        showError('[unhandled rejection] ' +
+          (reason && reason.stack ? reason.stack : String(reason)));
+      });
+      if (typeof window.PIXI === 'undefined') {
+        // pixi script tag executes before this block; if PIXI is missing, report it
+        showError('[boot] vendor/pixi.min.js did not define global PIXI.');
+      }
+    })();
+  </script>
 </body>
 </html>

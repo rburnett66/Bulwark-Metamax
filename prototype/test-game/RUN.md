@@ -3,5 +3,5 @@
 Entry: `index.html`
 
 ```
-Serve folder over http (e.g. npx serve) and open index.html, or open index.html directly if browser allows module loading
+Open index.html in any modern browser (all scripts and pixi bundled locally, runs offline)
 ```

@@ -1,424 +1,300 @@
-package com.bulwark;
+window.__BULWARK_ENTITIES__ = window.__BULWARK_ENTITIES__ || {};
 
-Sorry, let me focus on the actual file requested.
+import { TABLES } from '../data/tables.js';
 
-```
-```
+// ---------------------------------------------------------------------------
+// Entity factories — all stats are read from src/data/tables.js (no hardcoded
+// balance). Factories return plain serializable state objects for the sim.
+// ---------------------------------------------------------------------------
 
-Here is `src/sim/entities.js`:
-
-import { statMath } from './statMath.js';
-
-let __eidCounter = 0;
-function nextId(prefix) {
-  __eidCounter += 1;
-  return `${prefix}_${__eidCounter}`;
-}
+let nextEntityId = 1;
 
 export function resetEntityIds() {
-  __eidCounter = 0;
+  nextEntityId = 1;
+}
+
+export function allocId() {
+  return nextEntityId++;
+}
+
+// Allow the sim core to restore id counter when deserializing / replaying.
+export function setNextEntityId(n) {
+  nextEntityId = n | 0;
+}
+
+export function getNextEntityId() {
+  return nextEntityId;
 }
 
 // ---------------------------------------------------------------------------
-// PLAYER BASE
+// Table lookups
 // ---------------------------------------------------------------------------
-export function createBase(config, geometry) {
-  const g = geometry || {};
-  const pos = g.base ? { x: g.base.x, y: g.base.y } : { x: 0, y: 0 };
-  const level = 1;
-  const maxHp = (config && config.data && config.data.tables && config.data.tables.baseHp) || 5000;
+
+export function getUnitDef(unitId) {
+  const def = TABLES.units.find((u) => u.id === unitId);
+  if (!def) throw new Error('Unknown unit id: ' + unitId);
+  return def;
+}
+
+export function getStructureDef(structId) {
+  const def = TABLES.structures.find((s) => s.id === structId);
+  if (!def) throw new Error('Unknown structure id: ' + structId);
+  return def;
+}
+
+export function listUnitDefs() {
+  return TABLES.units;
+}
+
+export function listStructureDefs() {
+  return TABLES.structures;
+}
+
+// ---------------------------------------------------------------------------
+// Tier stat helpers (data-driven from Assumptions upgrade multipliers or
+// explicit per-tier columns when present in the tables)
+// ---------------------------------------------------------------------------
+
+export function tierStat(def, key, tier) {
+  // Prefer explicit per-tier values from the tables (e.g. hp: [t1,t2,t3])
+  const val = def[key];
+  if (Array.isArray(val)) {
+    const idx = Math.max(0, Math.min(val.length - 1, (tier | 0) - 1));
+    return val[idx];
+  }
+  // Fall back to base value scaled by assumption multipliers
+  const a = TABLES.assumptions;
+  if (tier <= 1) return val;
+  if (key === 'hp') return val * (tier === 2 ? a.Upgrade_HP_x_T2 : a.Upgrade_HP_x_T3);
+  if (key === 'dps') return val * (tier === 2 ? a.Upgrade_DPS_x_T2 : a.Upgrade_DPS_x_T3);
+  return val;
+}
+
+export function tierCost(def, tier) {
+  if (Array.isArray(def.cost)) {
+    const idx = Math.max(0, Math.min(def.cost.length - 1, (tier | 0) - 1));
+    return def.cost[idx];
+  }
+  const a = TABLES.assumptions;
+  const base = def.cost;
+  if (tier <= 1) return base;
+  return base * (tier === 2 ? a.Upgrade_Cost_x_T2 : a.Upgrade_Cost_x_T3);
+}
+
+// Incremental price to upgrade from tier -> tier+1 (cumulative value delta).
+export function upgradePrice(def, fromTier) {
+  return Math.max(0, Math.round(tierCost(def, fromTier + 1) - tierCost(def, fromTier)));
+}
+
+// Partial refund on sell (fraction from assumptions, default 50%).
+export function sellRefund(def, tier) {
+  const frac =
+    TABLES.assumptions.Sell_refund_fraction != null
+      ? TABLES.assumptions.Sell_refund_fraction
+      : 0.5;
+  return Math.round(tierCost(def, tier) * frac);
+}
+
+// ---------------------------------------------------------------------------
+// Base
+// ---------------------------------------------------------------------------
+
+export function createBase(x, y) {
+  const b = TABLES.base;
   return {
-    id: nextId('base'),
-    type: 'base',
+    id: allocId(),
     kind: 'base',
-    x: pos.x,
-    y: pos.y,
-    level,
-    hp: maxHp,
-    maxHp,
+    x,
+    y,
+    hp: b.hp,
+    maxHp: b.hp,
+    level: b.level != null ? b.level : 1,
+    armorClass: b.armorClass || 'Structure',
     alive: true,
   };
 }
 
 // ---------------------------------------------------------------------------
-// UNIT FACTORIES (walker / floater / flyer)
+// Units (walker / floater / flyer) — attackers and deployed troops
 // ---------------------------------------------------------------------------
 
-function lookupUnitDef(config, unitId) {
-  const tables = config && config.data && config.data.tables;
-  if (!tables) return null;
-  const units = tables.units || [];
-  return units.find((u) => u.UnitID === unitId || u.id === unitId) || null;
-}
-
-// Derive full runtime stats for a unit at a given tier from the data tables,
-// using statMath (no hardcoded balance).
-function deriveUnitStats(config, def, tier) {
-  return statMath.deriveUnit(config, def, tier);
-}
-
-// Domain classification helpers
-function domainOf(def) {
-  const d = (def.Domain || def.domain || 'Walker').toLowerCase();
-  if (d.indexOf('fly') >= 0 || d === 'flyer' || d === 'air') return 'flyer';
-  if (d.indexOf('water') >= 0 || d === 'floater' || d === 'swimmer') return 'floater';
-  return 'walker';
-}
-
-// Base unit shell shared by all attacker units.
-function baseUnit(config, def, tier, opts) {
-  const stats = deriveUnitStats(config, def, tier);
-  const domain = domainOf(def);
-  const targetsBase = (def.Targets || def.targets || 'Base').toLowerCase().indexOf('struct') < 0;
-  const canTargetRaw = (def['Can Target'] || def.canTarget || 'Ground');
-  const ct = String(canTargetRaw).toLowerCase();
-  const canHitAir = ct.indexOf('both') >= 0 || ct.indexOf('air') >= 0;
-  const canHitGround = ct.indexOf('both') >= 0 || ct.indexOf('ground') >= 0;
-
+export function createUnit(unitId, x, y, opts) {
+  opts = opts || {};
+  const def = getUnitDef(unitId);
+  const tier = opts.tier || 1;
+  const hp = tierStat(def, 'hp', tier);
+  const dps = tierStat(def, 'dps', tier);
   return {
-    id: nextId(domain),
-    type: 'unit',
-    unitId: def.UnitID || def.id,
-    kind: def.Shape || def.shape || 'unit',
-    faction: def.Faction || def.faction || 'Ground / Powder',
-    domain,
-    armorClass: def['Armor Class'] || def.armorClass || 'Organic',
-    damageType: def['Damage Type'] || def.damageType || 'Kinetic',
-    tier: tier || 1,
-
-    x: opts && opts.x != null ? opts.x : 0,
-    y: opts && opts.y != null ? opts.y : 0,
-    altitude: 0,
-
-    hp: stats.hp,
-    maxHp: stats.hp,
-    dps: stats.dps,
-    range: stats.range,
-    speed: stats.speed,
-    vision: stats.vision,
-    aoe: Number(def['AoE r'] || def.aoe || 0),
-    status: def.Status && def.Status !== '—' ? def.Status : null,
-
-    // targeting flags
-    targetsBase,
-    targetsStructures: !targetsBase,
-    canHitAir,
-    canHitGround,
-    radarDetect: String(def['Radar-Detect'] || def.radarDetect || 'No').toLowerCase() === 'yes',
-    seesGround: String(def['Sees Ground'] || def.seesGround || 'No').toLowerCase() === 'yes',
-
-    // movement / path state
+    id: allocId(),
+    kind: 'unit',
+    unitId: def.id,
+    name: def.name || def.id,
+    faction: def.faction,
+    shape: def.shape,
+    role: def.role,
+    domain: def.domain, // 'walker' | 'floater' | 'flyer'
+    armorClass: def.armorClass, // 'Organic' | 'Machinery' | 'Aircraft' | ...
+    damageType: def.damageType, // 'Kinetic' | 'Concussion' | ...
+    canTarget: def.canTarget, // 'Ground' | 'Air' | 'Both'
+    targetsBase: def.targets === 'Base', // false => flagged to target structures
+    targetsStructures: def.targets === 'Structures',
+    aoeRadius: def.aoe || 0,
+    status: def.status || null,
+    radarDetect: !!def.radarDetect, // detected by radar (air)
+    seesGround: !!def.seesGround, // air units see ground at range
+    tier,
+    hp,
+    maxHp: hp,
+    dps,
+    range: def.range,
+    speed: def.speed,
+    vision: def.vision,
+    cost: tierCost(def, tier),
+    power: def.power,
+    // Positional / motion state
+    x,
+    y,
+    altitude: def.domain === 'flyer' ? (def.altitude != null ? def.altitude : 1) : 0,
+    // Team: 'attacker' (waves) or 'defender' (deployed troops)
+    team: opts.team || 'attacker',
+    lane: opts.lane || (def.domain === 'floater' ? 'water' : 'ground'),
+    // Path state (filled by pathing)
     path: null,
     pathIndex: 0,
-    waypoint: null,
-
-    // combat state
-    target: null,
+    destX: opts.destX != null ? opts.destX : null,
+    destY: opts.destY != null ? opts.destY : null,
+    // Combat state
+    targetId: null,
     cooldown: 0,
-    fireInterval: stats.fireInterval || 1,
-
-    animState: 'moving',
+    fireInterval: def.fireInterval != null ? def.fireInterval : 1,
+    // Vision flags (maintained by vision.js)
+    visible: true,
+    detected: def.domain !== 'flyer',
+    // Repair-job flag: deployed troop assigned to travel + repair a structure
+    repairJobId: null,
     alive: true,
+    state: 'moving', // 'moving' | 'attacking' | 'idle' | 'dead'
   };
 }
 
-export function createWalker(config, geometry, unitId, tier, opts) {
-  const def = lookupUnitDef(config, unitId);
-  if (!def) throw new Error(`Unknown unit id: ${unitId}`);
-  const g = geometry || {};
-  const spawn = g.groundSpawn || { x: 0, y: 0 };
-  const u = baseUnit(config, def, tier, {
-    x: opts && opts.x != null ? opts.x : spawn.x,
-    y: opts && opts.y != null ? opts.y : spawn.y,
-  });
-  u.domain = 'walker';
-  u.altitude = 0;
+export function createWalker(unitId, x, y, opts) {
+  const u = createUnit(unitId, x, y, opts);
+  if (u.domain !== 'walker') throw new Error(unitId + ' is not a walker');
   return u;
 }
 
-export function createFloater(config, geometry, unitId, tier, opts) {
-  const def = lookupUnitDef(config, unitId);
-  if (!def) throw new Error(`Unknown unit id: ${unitId}`);
-  const g = geometry || {};
-  const spawn = g.waterSpawn || { x: 0, y: 0 };
-  const u = baseUnit(config, def, tier, {
-    x: opts && opts.x != null ? opts.x : spawn.x,
-    y: opts && opts.y != null ? opts.y : spawn.y,
-  });
-  u.domain = 'floater';
-  u.altitude = 0;
-  u.submerged = String((def.Role || '')).toLowerCase().indexOf('sub') >= 0;
+export function createFloater(unitId, x, y, opts) {
+  const u = createUnit(unitId, x, y, opts);
+  if (u.domain !== 'floater') throw new Error(unitId + ' is not a floater');
   return u;
 }
 
-export function createFlyer(config, geometry, unitId, tier, opts) {
-  const def = lookupUnitDef(config, unitId);
-  if (!def) throw new Error(`Unknown unit id: ${unitId}`);
-  const g = geometry || {};
-  const spawn = g.groundSpawn || { x: 0, y: 0 };
-  const u = baseUnit(config, def, tier, {
-    x: opts && opts.x != null ? opts.x : spawn.x,
-    y: opts && opts.y != null ? opts.y : spawn.y,
-  });
-  u.domain = 'flyer';
-  u.altitude = (opts && opts.altitude != null) ? opts.altitude : 3;
-  return u;
-}
-
-// Generic dispatcher based on the unit's domain in the data table.
-export function createUnit(config, geometry, unitId, tier, opts) {
-  const def = lookupUnitDef(config, unitId);
-  if (!def) throw new Error(`Unknown unit id: ${unitId}`);
-  const domain = domainOf(def);
-  if (domain === 'flyer') return createFlyer(config, geometry, unitId, tier, opts);
-  if (domain === 'floater') return createFloater(config, geometry, unitId, tier, opts);
-  return createWalker(config, geometry, unitId, tier, opts);
-}
-
-// Deployed troop (player-controlled march). Spawns at base, marches to drop.
-export function createTroop(config, geometry, unitId, tier, dropPoint) {
-  const u = createUnit(config, geometry, unitId, tier, {
-    x: geometry && geometry.base ? geometry.base.x : 0,
-    y: geometry && geometry.base ? geometry.base.y : 0,
-  });
-  u.type = 'troop';
-  u.owner = 'player';
-  u.dropPoint = dropPoint ? { x: dropPoint.x, y: dropPoint.y } : null;
-  u.marching = true;
-  u.deployed = false;
+export function createFlyer(unitId, x, y, opts) {
+  const u = createUnit(unitId, x, y, opts);
+  if (u.domain !== 'flyer') throw new Error(unitId + ' is not a flyer');
   return u;
 }
 
 // ---------------------------------------------------------------------------
-// STRUCTURE FACTORIES (towers / wall / moat)
+// Structures (towers / walls / moats)
 // ---------------------------------------------------------------------------
 
-function lookupStructureDef(config, structId) {
-  const tables = config && config.data && config.data.tables;
-  if (!tables) return null;
-  const structs = tables.structures || [];
-  return structs.find((s) => s.StructID === structId || s.id === structId) || null;
-}
-
-function deriveStructureStats(config, def, tier) {
-  return statMath.deriveStructure(config, def, tier);
-}
-
-function structureCanTarget(def) {
-  const ct = String(def['Can Target'] || def.canTarget || 'Ground').toLowerCase();
-  const domainTheme = String(def.Domain || def.domain || '').toLowerCase();
-  const isAntiAir =
-    ct.indexOf('air') >= 0 ||
-    ct.indexOf('both') >= 0 ||
-    domainTheme.indexOf('air') >= 0 ||
-    String(def.Role || def.role || '').toLowerCase().indexOf('anti-air') >= 0 ||
-    String(def.Role || def.role || '').toLowerCase().indexOf('aa') >= 0;
-  const isAntiGround =
-    ct.indexOf('ground') >= 0 ||
-    ct.indexOf('both') >= 0 ||
-    (!isAntiAir);
-  return { canHitAir: !!isAntiAir, canHitGround: !!isAntiGround };
-}
-
-export function createTower(config, geometry, structId, tier, slot) {
-  const def = lookupStructureDef(config, structId);
-  if (!def) throw new Error(`Unknown structure id: ${structId}`);
-  const stats = deriveStructureStats(config, def, tier || 1);
-  const tt = structureCanTarget(def);
-  const pos = slot
-    ? { x: slot.x, y: slot.y }
-    : { x: 0, y: 0 };
-
+export function createStructure(structId, x, y, opts) {
+  opts = opts || {};
+  const def = getStructureDef(structId);
+  const tier = opts.tier || 1;
+  const hp = tierStat(def, 'hp', tier);
+  const dps = tierStat(def, 'dps', tier);
+  const isWeapon = def.type === 'tower' || (dps || 0) > 0;
   return {
-    id: nextId('tower'),
-    type: 'structure',
-    structClass: 'tower',
-    structId: def.StructID || def.id,
-    kind: def.Name || def.name || structId,
-    x: pos.x,
-    y: pos.y,
-    slotId: slot ? slot.id : null,
-    footprint: { w: 1, h: 1 },
-
-    tier: tier || 1,
-    hp: stats.hp,
-    maxHp: stats.hp,
-    dps: stats.dps,
-    range: stats.range,
-    fireInterval: stats.fireInterval || 1,
-    damageType: def['Damage Type'] || def.damageType || 'Kinetic',
-    armorClass: def['Armor Class'] || def.armorClass || 'Structure',
-    aoe: Number(def['AoE r'] || def.aoe || 0),
-
-    canHitAir: tt.canHitAir,
-    canHitGround: tt.canHitGround,
-
-    cost: stats.cost,
-    upgradeCost: stats.upgradeCost || null,
-    sellRefund: stats.sellRefund,
-    buildTime: stats.buildTime || 1,
-
-    // lifecycle FSM
-    lifecycle: 'Placing',
+    id: allocId(),
+    kind: 'structure',
+    structId: def.id,
+    name: def.name || def.id,
+    type: def.type, // 'tower' | 'wall' | 'moat' | 'radar'
+    armorClass: def.armorClass || 'Structure',
+    damageType: def.damageType || null,
+    canTarget: def.canTarget || null, // 'Ground' | 'Air' | 'Both' | null
+    canTargetAir: def.canTarget === 'Air' || def.canTarget === 'Both',
+    canTargetGround: def.canTarget === 'Ground' || def.canTarget === 'Both',
+    isWeapon,
+    blocksWalkers: def.type === 'wall' || def.type === 'moat',
+    hasRadar: !!def.radar, // radar detects air, not ground
+    tier,
+    maxTier: def.maxTier != null ? def.maxTier : (Array.isArray(def.hp) ? def.hp.length : 3),
+    hp,
+    maxHp: hp,
+    dps,
+    range: tierStat(def, 'range', tier) || 0,
+    fireInterval: def.fireInterval != null ? def.fireInterval : 1,
+    vision: def.vision != null ? def.vision : TABLES.assumptions.Vision_base,
+    cost: tierCost(def, tier),
+    buildTime: def.buildTime != null ? def.buildTime : 3,
+    footprint: def.footprint || { w: 1, h: 1 },
+    x,
+    y,
+    slotIndex: opts.slotIndex != null ? opts.slotIndex : null,
+    // Lifecycle: Placing -> Building -> Complete -> Damaged -> Destroyed,
+    // plus Upgrading and Selling (managed by structures.js)
+    state: opts.state || 'Placing',
     buildTimer: 0,
     upgradeTimer: 0,
     sellTimer: 0,
-
-    // combat
-    target: null,
+    repairTimer: 0,
+    repairUnitId: null, // troop en route / repairing (repairs free, need troop travel)
+    // Combat state
+    targetId: null,
     cooldown: 0,
-    aimAngle: 0,
-    animState: 'placing',
-
-    // repair
-    repairing: false,
-    repairTimer: 0,
-    assignedTroop: null,
-
     alive: true,
   };
 }
 
-export function createWall(config, geometry, structId, tier, cell) {
-  const def = lookupStructureDef(config, structId) || {
-    StructID: structId,
-    Name: 'Wall',
-  };
-  const stats = deriveStructureStats(config, def, tier || 1);
-  return {
-    id: nextId('wall'),
-    type: 'structure',
-    structClass: 'wall',
-    structId: def.StructID || def.id || structId,
-    kind: def.Name || def.name || 'Wall',
-    x: cell ? cell.x : 0,
-    y: cell ? cell.y : 0,
-    cell: cell ? { col: cell.col, row: cell.row } : null,
-    footprint: { w: 1, h: 1 },
-
-    tier: tier || 1,
-    hp: stats.hp,
-    maxHp: stats.hp,
-    dps: 0,
-    range: 0,
-    canHitAir: false,
-    canHitGround: false,
-
-    cost: stats.cost,
-    upgradeCost: stats.upgradeCost || null,
-    sellRefund: stats.sellRefund,
-    buildTime: stats.buildTime || 1,
-
-    blocksWalkers: true,
-    terrain: 'wall',
-
-    lifecycle: 'Placing',
-    buildTimer: 0,
-    upgradeTimer: 0,
-    sellTimer: 0,
-
-    repairing: false,
-    repairTimer: 0,
-    assignedTroop: null,
-
-    animState: 'placing',
-    alive: true,
-  };
+export function createTower(structId, x, y, opts) {
+  const s = createStructure(structId, x, y, opts);
+  if (s.type !== 'tower') throw new Error(structId + ' is not a tower');
+  return s;
 }
 
-export function createMoat(config, geometry, structId, tier, cell) {
-  const def = lookupStructureDef(config, structId) || {
-    StructID: structId,
-    Name: 'Moat',
-  };
-  const stats = deriveStructureStats(config, def, tier || 1);
-  const m = {
-    id: nextId('moat'),
-    type: 'structure',
-    structClass: 'moat',
-    structId: def.StructID || def.id || structId,
-    kind: def.Name || def.name || 'Moat',
-    x: cell ? cell.x : 0,
-    y: cell ? cell.y : 0,
-    cell: cell ? { col: cell.col, row: cell.row } : null,
-    footprint: { w: 1, h: 1 },
-
-    tier: tier || 1,
-    hp: stats.hp || 99999,
-    maxHp: stats.hp || 99999,
-    dps: 0,
-    range: 0,
-    canHitAir: false,
-    canHitGround: false,
-
-    cost: stats.cost,
-    upgradeCost: stats.upgradeCost || null,
-    sellRefund: stats.sellRefund,
-    buildTime: stats.buildTime || 1,
-
-    blocksWalkers: true,
-    terrain: 'moat',
-
-    lifecycle: 'Placing',
-    buildTimer: 0,
-    upgradeTimer: 0,
-    sellTimer: 0,
-
-    repairing: false,
-    repairTimer: 0,
-    assignedTroop: null,
-
-    animState: 'placing',
-    alive: true,
-  };
-  return m;
+export function createWall(structId, x, y, opts) {
+  const s = createStructure(structId, x, y, opts);
+  if (!s.blocksWalkers) throw new Error(structId + ' is not a wall/moat');
+  return s;
 }
 
-// Generic structure dispatcher — reads structClass from the data table.
-export function createStructure(config, geometry, structId, tier, placement) {
-  const def = lookupStructureDef(config, structId);
-  const cls = def
-    ? String(def.Class || def.class || def.structClass || '').toLowerCase()
-    : (structId.toLowerCase().indexOf('moat') >= 0
-        ? 'moat'
-        : structId.toLowerCase().indexOf('wall') >= 0
-          ? 'wall'
-          : 'tower');
-
-  if (cls === 'wall') return createWall(config, geometry, structId, tier, placement);
-  if (cls === 'moat') return createMoat(config, geometry, structId, tier, placement);
-  return createTower(config, geometry, structId, tier, placement);
+// Apply upgraded tier stats in place (called by structures.js when an upgrade
+// completes). Preserves damage fraction so upgrades do not fully heal.
+export function applyTierStats(structure, newTier) {
+  const def = getStructureDef(structure.structId);
+  const hpFrac = structure.maxHp > 0 ? structure.hp / structure.maxHp : 1;
+  const newMaxHp = tierStat(def, 'hp', newTier);
+  structure.tier = newTier;
+  structure.maxHp = newMaxHp;
+  structure.hp = Math.round(newMaxHp * hpFrac);
+  structure.dps = tierStat(def, 'dps', newTier);
+  structure.range = tierStat(def, 'range', newTier) || structure.range;
+  structure.cost = tierCost(def, newTier);
 }
 
-export function isStructure(e) {
-  return e && e.type === 'structure';
-}
-export function isTower(e) {
-  return e && e.structClass === 'tower';
-}
-export function isTerrain(e) {
-  return e && (e.structClass === 'wall' || e.structClass === 'moat');
-}
-export function isUnit(e) {
-  return e && (e.type === 'unit' || e.type === 'troop');
+// Same for units (deployed troops upgraded via base level, future-proof).
+export function applyUnitTierStats(unit, newTier) {
+  const def = getUnitDef(unit.unitId);
+  const hpFrac = unit.maxHp > 0 ? unit.hp / unit.maxHp : 1;
+  const newMaxHp = tierStat(def, 'hp', newTier);
+  unit.tier = newTier;
+  unit.maxHp = newMaxHp;
+  unit.hp = Math.round(newMaxHp * hpFrac);
+  unit.dps = tierStat(def, 'dps', newTier);
+  unit.cost = tierCost(def, newTier);
 }
 
-export const entities = {
-  resetEntityIds,
-  createBase,
-  createUnit,
-  createWalker,
-  createFloater,
-  createFlyer,
-  createTroop,
-  createStructure,
-  createTower,
-  createWall,
-  createMoat,
-  isStructure,
-  isTower,
-  isTerrain,
-  isUnit,
-};
+// ---------------------------------------------------------------------------
+// Convenience: deploy price for HUD / economy (spawn-at-base troop cost)
+// ---------------------------------------------------------------------------
 
-export default entities;
+export function unitDeployCost(unitId, tier) {
+  return Math.round(tierCost(getUnitDef(unitId), tier || 1));
+}
+
+export function structureBuildCost(structId, tier) {
+  return Math.round(tierCost(getStructureDef(structId), tier || 1));
+}
