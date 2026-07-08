@@ -99,14 +99,30 @@
   <!-- Vendored library (never rewritten, offline) -->
   <script src="vendor/pixi.min.js"></script>
 
-  <!-- Game modules are ES modules (export/import). Load the ENTRY as a module (it imports the rest in
-       dependency order) and expose boot on the global the classic bootstrap below expects. This replaces the
-       old 25 classic <script src> tags, which the browser rejects for ESM ("Unexpected token 'export'" /
-       "Cannot use import statement outside a module"). PIXI stays a classic global above. -->
-  <script type="module">
-    import { boot } from './src/main.js';
-    window.Bulwark = { boot };
-  </script>
+  <!-- Data layer -->
+  <script src="src/data/tables.js"></script>
+
+  <!-- Sim layer (dependency order: rng -> pathfinding -> entities -> combat/economy -> structures -> waves -> core -> replay -> balanceSim) -->
+  <script src="src/sim/rng.js"></script>
+  <script src="src/sim/pathfinding.js"></script>
+  <script src="src/sim/entities.js"></script>
+  <script src="src/sim/combat.js"></script>
+  <script src="src/sim/economy.js"></script>
+  <script src="src/sim/structures.js"></script>
+  <script src="src/sim/waves.js"></script>
+  <script src="src/sim/core.js"></script>
+  <script src="src/sim/replay.js"></script>
+  <script src="src/sim/balanceSim.js"></script>
+
+  <!-- Render layer -->
+  <script src="src/render/renderer.js"></script>
+  <script src="src/render/hud.js"></script>
+
+  <!-- Input layer -->
+  <script src="src/input/input.js"></script>
+
+  <!-- Wiring / boot -->
+  <script src="src/main.js"></script>
 
   <!-- Entry: mount and start once all classic scripts have executed in order. -->
   <script>

@@ -78,21 +78,30 @@ export function validatePlacement(state, structId, slotOrCell) {
     return { ok: true, reason: '' };
   }
 
-  // Walls / moats: must sit on buildable terrain, not overlap, not seal the ground lane.
-  const buildable = new Set();
-  for (const c of map.buildableCells) buildable.add(cellKey(c));
+  // Walls / moats: allowed anywhere EXCEPT high terrain, rocks, or trees; not overlap, not seal the ground lane.
   const forbidden = new Set([
     cellKey(map.base),
     cellKey(map.spawnGround),
     cellKey(map.spawnWater)
   ]);
+  const blockedTerrain = new Set(['high', 'rock', 'rocks', 'tree', 'trees']);
+  const terrainAtCell = (c) => {
+    if (map.terrainAt) return map.terrainAt(c.x, c.y);
+    if (Array.isArray(map.terrain)) {
+      const row = map.terrain[c.y];
+      if (row) return row[c.x];
+    }
+    return null;
+  };
   const cells = footprintCells(cell, def.footprint);
   for (const c of cells) {
     if (c.x < 0 || c.y < 0 || c.x >= map.cols || c.y >= map.rows) return { ok: false, reason: 'terrain' };
     if (occupied.has(cellKey(c))) return { ok: false, reason: 'occupied' };
   }
   for (const c of cells) {
-    if (!buildable.has(cellKey(c)) || forbidden.has(cellKey(c))) return { ok: false, reason: 'terrain' };
+    if (forbidden.has(cellKey(c))) return { ok: false, reason: 'terrain' };
+    const t = terrainAtCell(c);
+    if (t != null && blockedTerrain.has(t)) return { ok: false, reason: 'terrain' };
   }
   if (!canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
 
