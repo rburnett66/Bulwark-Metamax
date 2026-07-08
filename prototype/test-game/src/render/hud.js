@@ -275,7 +275,7 @@ function findEnemyRange(world, unit) {
   return null;
 }
 
-export function updateHud(hud, world, uiState) {
+export function updateHud(hud, world, uiState, logEvents) {
   if (!hud || !world) return;
   const els = hud.els;
   const ui = uiState || {};
@@ -314,7 +314,7 @@ export function updateHud(hud, world, uiState) {
       const entry = els.paletteBtns[id];
       if (money < entry.cost) entry.btn.classList.add('bw-poor');
       else entry.btn.classList.remove('bw-poor');
-      const sel = ui.buildStructureId || ui.selectedBuild || null;
+      const sel = ui.buildSelection || ui.buildStructureId || ui.selectedBuild || null;
       if (sel === id) entry.btn.classList.add('bw-selected');
       else entry.btn.classList.remove('bw-selected');
     }
@@ -428,6 +428,25 @@ export function updateHud(hud, world, uiState) {
         ui.selectedUnitRange = null;
         ui.showEnemyRange = null;
       } catch (e) { /* non-critical */ }
+    }
+  } catch (e) { /* non-critical */ }
+
+  // ---- battle log -----------------------------------------------------
+  // The sim drains its events each tick; main.js accumulates the history and passes it here. Append only the
+  // new tail into the log window. formatLogEntry existed but was never wired, and updateHud never received the
+  // events — so the log was always empty (mmdev-e56 seam fix).
+  try {
+    const body = hud.els.logbody;
+    if (body && Array.isArray(logEvents)) {
+      let n = body._logCount || 0;
+      if (logEvents.length < n) { body.textContent = ''; n = 0; }   // history reset (e.g. restart)
+      const doc = body.ownerDocument;
+      for (let i = n; i < logEvents.length; i++) {
+        const line = formatLogEntry(logEvents[i]);
+        if (line) body.appendChild(el(doc, 'div', 'bw-logline', line));
+      }
+      body._logCount = logEvents.length;
+      body.scrollTop = body.scrollHeight;
     }
   } catch (e) { /* non-critical */ }
 }

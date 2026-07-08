@@ -55,6 +55,7 @@ export function boot(mountEl, seed) {
   let ended = false;          // sim.result reached; stop stepping
   let accumulator = 0;        // fixed-timestep accumulator (seconds)
   let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame
+  let battleLog = [];         // persistent event history for the battle-log window (capped)
   let inputHandle = null;
 
   // ---------------------------------------------------------------------
@@ -204,7 +205,8 @@ export function boot(mountEl, seed) {
         }
         const evs = stepSim(sim, FIXED_DT);
         if (evs && evs.length) {
-          for (let i = 0; i < evs.length; i++) pendingEvents.push(evs[i]);
+          for (let i = 0; i < evs.length; i++) { pendingEvents.push(evs[i]); battleLog.push(evs[i]); }
+          if (battleLog.length > 400) battleLog.splice(0, battleLog.length - 400);
         }
         accumulator -= FIXED_DT;
         if (sim.result) {
@@ -222,7 +224,7 @@ export function boot(mountEl, seed) {
       }
     }
     renderFrame(renderer, sim, ui, pendingEvents);
-    updateHud(hud, sim, ui);
+    updateHud(hud, sim, ui, battleLog);
     pendingEvents = [];
   });
 
