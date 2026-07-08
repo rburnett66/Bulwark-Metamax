@@ -124,7 +124,9 @@ export function boot(mountEl, seed) {
   // HUD
   // ---------------------------------------------------------------------
   const hud = createHud(mountEl, {
-    onBuildSelect: (structId) => {
+    // NOTE: the HUD calls cbs.onSelectBuild — the provider name MUST match (was onBuildSelect, a
+    // callback-seam name mismatch, so clicking a build button called an undefined cb and nothing built).
+    onSelectBuild: (structId) => {
       ui.buildSelection = structId;
       if (structId !== null) ui.selectedStructureId = null;
     },
