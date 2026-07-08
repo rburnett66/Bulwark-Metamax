@@ -118,6 +118,11 @@ function onPointerDown(handle, ev) {
   // Selection mode: click a structure to select, empty ground to deselect.
   const structId = findStructureAtCell(state, cell);
   ui.selectedStructureId = structId;
+  if (structId === null) {
+    // Clicking empty ground clears any active build selection too.
+    ui.buildSelection = null;
+    ui.hoverValid = false;
+  }
 }
 
 function onContextMenu(handle, ev) {
