@@ -362,9 +362,11 @@ export function renderFrame(renderer, state, ui, events) {
   }
 
   // units (attackers = enemies) differentiated by shape + color
-  if (state.attackers) {
-    for (const u of state.attackers.values()) {
-      if (!u || u.dead || u.hp <= 0) continue;
+  // The sim stores ALL units in state.units keyed by `side` ('attacker' | 'defender'); there is no
+  // state.attackers/state.troops collection. Read the real state seam and filter by side (mmdev-e56 seam fix).
+  if (state.units) {
+    for (const u of state.units.values()) {
+      if (!u || u.side !== 'attacker' || u.dead || u.hp <= 0) continue;
       const def = getUnitDef ? getUnitDef(u.type || u.defId || u.kind) : null;
       const p = cellToLocal(renderer, u.pos.x, u.pos.y);
       const domain = (def && (def.domain || def.movement || def.movementDomain))
@@ -386,10 +388,10 @@ export function renderFrame(renderer, state, ui, events) {
     }
   }
 
-  // friendly troops (defenders)
-  if (state.troops) {
-    for (const u of state.troops.values()) {
-      if (!u || u.dead || u.hp <= 0) continue;
+  // friendly troops (defenders) — also live in state.units, side === 'defender'
+  if (state.units) {
+    for (const u of state.units.values()) {
+      if (!u || u.side !== 'defender' || u.dead || u.hp <= 0) continue;
       const p = cellToLocal(renderer, u.pos.x, u.pos.y);
       gU.beginFill(SIDE_COLORS.defender, 1);
       gU.drawCircle(p.x, p.y, t * 0.26);
