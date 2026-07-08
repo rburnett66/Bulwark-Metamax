@@ -367,7 +367,10 @@ export function renderFrame(renderer, state, ui, events) {
   if (state.units) {
     for (const u of state.units.values()) {
       if (!u || u.side !== 'attacker' || u.dead || u.hp <= 0) continue;
-      const def = getUnitDef ? getUnitDef(u.type || u.defId || u.kind) : null;
+      // The sim stores the unit's table key in u.unitId (e.g. 'GND-Troops'); u.kind is the SHAPE, not a key.
+      // getUnitDef THROWS on an unknown id, so read u.unitId and guard the throw (mmdev-e56 seam fix).
+      let def = null;
+      try { def = getUnitDef ? getUnitDef(u.unitId || u.type || u.defId) : null; } catch (e) { def = null; }
       const p = cellToLocal(renderer, u.pos.x, u.pos.y);
       const domain = (def && (def.domain || def.movement || def.movementDomain))
         || u.domain || u.movementDomain || null;
@@ -417,14 +420,28 @@ export function renderFrame(renderer, state, ui, events) {
   }
 
   // selection / hover overlay
-  if (ui && ui.selection) {
-    const sel = ui.selection;
-    if (sel.pos) {
-      const p = cellToLocal(renderer, sel.pos.x, sel.pos.y);
-      drawDashedCircle(gO, p.x, p.y, t * 0.5, 0xffffff, 0.8, 2);
-      if (sel.range) {
-        drawDashedCircle(gO, p.x, p.y, sel.range * t, 0xffe080, 0.5, 1.5);
+  // input sets ui.selectedStructureId (an id); updateHud sets ui.showEnemyRange for a selected enemy. The old
+  // code read ui.selection, which nothing sets — so selecting a tower showed no highlight (mmdev-e56 seam fix).
+  if (ui) {
+    const selId = ui.selectedStructureId;
+    if (selId != null && state.structures && state.structures.get) {
+      const s = state.structures.get(selId);
+      if (s && s.pos) {
+        const fp = s.footprint || { w: 1, h: 1 };
+        const cx = (s.pos.x + fp.w / 2) * t;
+        const cy = (s.pos.y + fp.h / 2) * t;
+        drawDashedCircle(gO, cx, cy, t * Math.max(fp.w, fp.h) * 0.6, 0xffffff, 0.9, 2);
       }
+    }
+    const er = ui.showEnemyRange;
+    if (er && er.x != null && er.y != null) {
+      const p = cellToLocal(renderer, er.x, er.y);
+      drawDashedCircle(gO, p.x, p.y, t * 0.5, 0xffffff, 0.8, 2);
+      if (er.range) drawDashedCircle(gO, p.x, p.y, er.range * t, 0xffe080, 0.5, 1.5);
+    }
+    if (ui.selection && ui.selection.pos) {   // legacy path, honored if anything sets it
+      const p = cellToLocal(renderer, ui.selection.pos.x, ui.selection.pos.y);
+      drawDashedCircle(gO, p.x, p.y, t * 0.5, 0xffffff, 0.8, 2);
     }
   }
 
