@@ -64,23 +64,11 @@ export function validatePlacement(state, structId, slotOrCell) {
   const cell = { x: Math.round(slotOrCell.x), y: Math.round(slotOrCell.y) };
   const occupied = occupiedCellSet(state);
 
-  if (isTowerKind(def.kind)) {
-    // Towers must snap to a free hard-point slot.
-    let slotFound = false;
-    for (const slot of map.slots) {
-      if (slot.x === cell.x && slot.y === cell.y) { slotFound = true; break; }
-    }
-    if (!slotFound) return { ok: false, reason: 'noSlot' };
-    for (const c of footprintCells(cell, def.footprint)) {
-      if (occupied.has(cellKey(c))) return { ok: false, reason: 'occupied' };
-    }
-    if (!canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
-    return { ok: true, reason: '' };
-  }
-
-  // Walls / moats: must sit on buildable terrain, not overlap, not seal the ground lane.
-  const buildable = new Set();
-  for (const c of map.buildableCells) buildable.add(cellKey(c));
+  // Walls/towers may be placed anywhere EXCEPT high terrain, rocks, or trees.
+  const isForbiddenTerrain = (c) => {
+    const t = map.terrain && map.terrain[c.y] ? map.terrain[c.y][c.x] : null;
+    return t === 'high' || t === 'rock' || t === 'rocks' || t === 'tree' || t === 'trees';
+  };
   const forbidden = new Set([
     cellKey(map.base),
     cellKey(map.spawnGround),
@@ -90,11 +78,14 @@ export function validatePlacement(state, structId, slotOrCell) {
   for (const c of cells) {
     if (c.x < 0 || c.y < 0 || c.x >= map.cols || c.y >= map.rows) return { ok: false, reason: 'terrain' };
     if (occupied.has(cellKey(c))) return { ok: false, reason: 'occupied' };
-  }
-  for (const c of cells) {
-    if (!buildable.has(cellKey(c)) || forbidden.has(cellKey(c))) return { ok: false, reason: 'terrain' };
+    if (forbidden.has(cellKey(c))) return { ok: false, reason: 'terrain' };
+    if (isForbiddenTerrain(c)) return { ok: false, reason: 'terrain' };
   }
   if (!canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
+
+  if (isTowerKind(def.kind)) {
+    return { ok: true, reason: '' };
+  }
 
   // Hypothetical nav grid with the new piece: the ground lane must stay open.
   const ghost = {
