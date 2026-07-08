@@ -49,17 +49,6 @@ const CSS = `
 .bw-rbanner { font-size:36px; font-weight:bold; letter-spacing:2px; text-shadow:0 2px 8px #000; }
 .bw-rbanner.bw-win { color:#9f9; }
 .bw-rbanner.bw-lose { color:#f99; }
-.bw-logtoggle { pointer-events:auto; }
-.bw-logwin { position:absolute; right:6px; bottom:6px; width:340px; max-width:60%; height:260px; max-height:60%;
-  display:none; flex-direction:column; gap:6px; pointer-events:auto; z-index:20; }
-.bw-logwin.bw-show { display:flex; }
-.bw-logwin .bw-loghead { display:flex; justify-content:space-between; align-items:center; }
-.bw-logwin .bw-logtitle { font-size:13px; font-weight:bold; color:#bfe0ff; }
-.bw-logwin .bw-logbtns { display:flex; gap:4px; }
-.bw-logbody { flex:1; overflow-y:auto; background:#0a0e14; border:1px solid #2a3a4a; border-radius:3px;
-  padding:4px 6px; font-size:11px; line-height:1.45; white-space:pre-wrap; word-break:break-word;
-  user-select:text; -webkit-user-select:text; cursor:text; }
-.bw-logbody .bw-logline { color:#c8d4e0; }
 `;
 
 function injectStyle(doc) {
@@ -78,28 +67,6 @@ function el(doc, tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined && text !== null) node.textContent = text;
   return node;
-}
-
-function formatLogEntry(entry) {
-  if (entry == null) return '';
-  if (typeof entry === 'string') return entry;
-  if (typeof entry === 'object') {
-    const t = (entry.tick != null) ? `[t${entry.tick}] ` : '';
-    const kind = entry.kind || entry.type || '';
-    let rest = '';
-    if (entry.text || entry.message) {
-      rest = entry.text || entry.message;
-    } else {
-      try {
-        const copy = Object.assign({}, entry);
-        delete copy.tick; delete copy.kind; delete copy.type;
-        const keys = Object.keys(copy);
-        if (keys.length) rest = keys.map((k) => `${k}=${copy[k]}`).join(' ');
-      } catch (e) { rest = ''; }
-    }
-    return `${t}${kind}${kind && rest ? ' ' : ''}${rest}`.trim();
-  }
-  return String(entry);
 }
 
 export function createHud(mountEl, callbacks) {
@@ -133,14 +100,12 @@ export function createHud(mountEl, callbacks) {
   const waveEl = el(doc, 'span', 'bw-wave', 'Wave 0/0');
   const startWaveBtn = el(doc, 'button', 'bw-btn', 'Start Wave');
   startWaveBtn.addEventListener('click', () => { if (cbs.onStartWave) cbs.onStartWave(); });
-  const logToggleBtn = el(doc, 'button', 'bw-btn bw-logtoggle', 'Log');
   const seedEl = el(doc, 'span', 'bw-seed', 'seed: -');
 
   topbar.appendChild(hpwrap);
   topbar.appendChild(moneyEl);
   topbar.appendChild(waveEl);
   topbar.appendChild(startWaveBtn);
-  topbar.appendChild(logToggleBtn);
   topbar.appendChild(seedEl);
   root.appendChild(topbar);
 
@@ -152,331 +117,223 @@ export function createHud(mountEl, callbacks) {
     const def = STRUCTURES[structId];
     const btn = el(doc, 'button', 'bw-btn bw-buildbtn');
     const nameSpan = el(doc, 'span', null, def.name || structId);
-    const costVal = (def.cost && def.cost[0] != null) ? def.cost[0] : (def.cost != null ? def.cost : 0);
-    const costSpan = el(doc, 'span', 'bw-cost', String(costVal) + 'g');
+    const costSpan = el(doc, 'span', 'bw-cost', String(def.cost && def.cost[0] != null ? def.cost[0] : '?') + 'g');
     btn.appendChild(nameSpan);
     btn.appendChild(costSpan);
-    btn.addEventListener('click', () => { if (cbs.onSelectBuild) cbs.onSelectBuild(structId); });
+    btn.addEventListener('click', () => {
+      const next = (hud.currentBuildSelection === structId) ? null : structId;
+      if (cbs.onBuildSelect) cbs.onBuildSelect(next);
+    });
     palette.appendChild(btn);
-    paletteBtns[structId] = { btn, cost: costVal };
+    paletteBtns[structId] = btn;
   }
   root.appendChild(palette);
 
-  // ---- selection panel ------------------------------------------------
-  const selpanel = el(doc, 'div', 'bw-selpanel bw-panel');
-  const selName = el(doc, 'div', 'bw-sname', '');
-  const selInfo = el(doc, 'div', 'bw-sinfo', '');
-  const selHpbar = el(doc, 'div', 'bw-shpbar');
-  const selHpfill = el(doc, 'div', 'bw-shpfill');
-  selHpbar.appendChild(selHpfill);
-  const selHptext = el(doc, 'div', 'bw-shptext', '');
-  const selRow = el(doc, 'div', 'bw-selrow');
+  // ---- selected-structure panel ---------------------------------------
+  const selPanel = el(doc, 'div', 'bw-selpanel bw-panel');
+  const sname = el(doc, 'div', 'bw-sname', '-');
+  const sinfo = el(doc, 'div', null, '-');
+  const shpbar = el(doc, 'div', 'bw-shpbar');
+  const shpfill = el(doc, 'div', 'bw-shpfill');
+  shpbar.appendChild(shpfill);
+  const shptext = el(doc, 'div', null, '');
+  const selrow = el(doc, 'div', 'bw-selrow');
   const upgradeBtn = el(doc, 'button', 'bw-btn', 'Upgrade');
   const sellBtn = el(doc, 'button', 'bw-btn', 'Sell');
-  upgradeBtn.addEventListener('click', () => { if (cbs.onUpgrade) cbs.onUpgrade(); });
-  sellBtn.addEventListener('click', () => { if (cbs.onSell) cbs.onSell(); });
-  selRow.appendChild(upgradeBtn);
-  selRow.appendChild(sellBtn);
-  selpanel.appendChild(selName);
-  selpanel.appendChild(selInfo);
-  selpanel.appendChild(selHpbar);
-  selpanel.appendChild(selHptext);
-  selpanel.appendChild(selRow);
-  root.appendChild(selpanel);
+  const repairBtn = el(doc, 'button', 'bw-btn', 'Repair');
+  upgradeBtn.addEventListener('click', () => { if (cbs.onUpgrade && hud.currentSelectedId != null) cbs.onUpgrade(hud.currentSelectedId); });
+  sellBtn.addEventListener('click', () => { if (cbs.onSell && hud.currentSelectedId != null) cbs.onSell(hud.currentSelectedId); });
+  repairBtn.addEventListener('click', () => { if (cbs.onRepair && hud.currentSelectedId != null) cbs.onRepair(hud.currentSelectedId); });
+  selrow.appendChild(upgradeBtn);
+  selrow.appendChild(sellBtn);
+  selrow.appendChild(repairBtn);
+  selPanel.appendChild(sname);
+  selPanel.appendChild(sinfo);
+  selPanel.appendChild(shpbar);
+  selPanel.appendChild(shptext);
+  selPanel.appendChild(selrow);
+  root.appendChild(selPanel);
 
-  // ---- bottom bar / help ----------------------------------------------
+  // ---- bottom bar (help + debug) --------------------------------------
   const bottombar = el(doc, 'div', 'bw-bottombar');
   const help = el(doc, 'div', 'bw-help bw-panel',
-    'Click structure or enemy to select. Click build button then a tile to place. ESC to cancel.');
+    'Click a build button, then a slot/cell to place. Click a structure to select it. Esc cancels build mode.');
   const debug = el(doc, 'div', 'bw-debug bw-panel');
+  const exportBtn = el(doc, 'button', 'bw-btn', 'Export Log');
+  exportBtn.addEventListener('click', () => { if (cbs.onExportLog) cbs.onExportLog(); });
+  const replayBtn = el(doc, 'button', 'bw-btn', 'Run Replay');
+  replayBtn.addEventListener('click', () => { if (cbs.onRunReplay) cbs.onRunReplay(); });
+  const balanceBtn = el(doc, 'button', 'bw-btn', 'Balance Report');
+  balanceBtn.addEventListener('click', () => { if (cbs.onBalanceReport) cbs.onBalanceReport(); });
   const seedInput = el(doc, 'input', 'bw-seedinput');
   seedInput.setAttribute('type', 'text');
   seedInput.setAttribute('placeholder', 'seed');
   const restartBtn = el(doc, 'button', 'bw-btn', 'Restart');
   restartBtn.addEventListener('click', () => {
-    if (cbs.onRestart) cbs.onRestart(seedInput.value || undefined);
+    if (!cbs.onRestart) return;
+    const n = Number(seedInput.value);
+    cbs.onRestart(Number.isFinite(n) && seedInput.value !== '' ? Math.floor(n) : hud.lastSeed);
   });
+  debug.appendChild(exportBtn);
+  debug.appendChild(replayBtn);
+  debug.appendChild(balanceBtn);
   debug.appendChild(seedInput);
   debug.appendChild(restartBtn);
   bottombar.appendChild(help);
   bottombar.appendChild(debug);
   root.appendChild(bottombar);
 
-  // ---- toast ----------------------------------------------------------
-  const toastEl = el(doc, 'div', 'bw-toast');
-  root.appendChild(toastEl);
+  // ---- toast -----------------------------------------------------------
+  const toast = el(doc, 'div', 'bw-toast');
+  root.appendChild(toast);
 
-  // ---- result overlay -------------------------------------------------
+  // ---- result overlay ---------------------------------------------------
   const resultEl = el(doc, 'div', 'bw-result');
-  const rbanner = el(doc, 'div', 'bw-rbanner', '');
-  const rRestartBtn = el(doc, 'button', 'bw-btn', 'Play Again');
-  rRestartBtn.addEventListener('click', () => { if (cbs.onRestart) cbs.onRestart(); });
-  resultEl.appendChild(rbanner);
-  resultEl.appendChild(rRestartBtn);
+  const banner = el(doc, 'div', 'bw-rbanner', '');
+  const resultRestart = el(doc, 'button', 'bw-btn', 'Restart');
+  resultRestart.addEventListener('click', () => {
+    if (cbs.onRestart) cbs.onRestart(hud.lastSeed);
+  });
+  resultEl.appendChild(banner);
+  resultEl.appendChild(resultRestart);
   root.appendChild(resultEl);
-
-  // ---- log window -----------------------------------------------------
-  const logwin = el(doc, 'div', 'bw-logwin bw-panel');
-  const loghead = el(doc, 'div', 'bw-loghead');
-  const logtitle = el(doc, 'div', 'bw-logtitle', 'Battle Log');
-  const logbtns = el(doc, 'div', 'bw-logbtns');
-  const logCloseBtn = el(doc, 'button', 'bw-btn', 'X');
-  logbtns.appendChild(logCloseBtn);
-  loghead.appendChild(logtitle);
-  loghead.appendChild(logbtns);
-  const logbody = el(doc, 'div', 'bw-logbody');
-  logwin.appendChild(loghead);
-  logwin.appendChild(logbody);
-  root.appendChild(logwin);
-
-  let logVisible = false;
-  function setLogVisible(v) {
-    logVisible = v;
-    if (v) logwin.classList.add('bw-show');
-    else logwin.classList.remove('bw-show');
-  }
-  logToggleBtn.addEventListener('click', () => setLogVisible(!logVisible));
-  logCloseBtn.addEventListener('click', () => setLogVisible(false));
 
   mountEl.appendChild(root);
 
-  let toastTimer = null;
-  let lastMoney = null;
-
   const hud = {
+    doc,
     root,
-    els: {
-      hpfill, hptext, moneyEl, waveEl, startWaveBtn, seedEl,
-      palette, paletteBtns, selpanel, selName, selInfo, selHpbar, selHpfill, selHptext,
-      upgradeBtn, sellBtn, toastEl, resultEl, rbanner, seedInput,
-      logwin, logbody,
-    },
     callbacks: cbs,
-    _lastMoney: () => lastMoney,
-    _setLastMoney: (v) => { lastMoney = v; },
-    _toastTimer: () => toastTimer,
-    _setToastTimer: (t) => { toastTimer = t; },
-    setLogVisible,
-    destroy() {
-      try { if (root.parentNode) root.parentNode.removeChild(root); } catch (e) { /* noop */ }
+    hpfill,
+    hptext,
+    moneyEl,
+    waveEl,
+    startWaveBtn,
+    seedEl,
+    paletteBtns,
+    selPanel,
+    sname,
+    sinfo,
+    shpfill,
+    shptext,
+    upgradeBtn,
+    sellBtn,
+    repairBtn,
+    toast,
+    toastTimer: null,
+    resultEl,
+    banner,
+    lastMoney: null,
+    lastSeed: 1,
+    currentSelectedId: null,
+    currentBuildSelection: null,
+    hideResult() {
+      resultEl.classList.remove('bw-show');
+      resultEl.style.display = 'none';
     },
   };
-
   return hud;
 }
 
-function findEnemyRange(world, unit) {
-  if (!unit) return null;
-  // Try common range fields directly on the unit.
-  const direct = unit.range != null ? unit.range
-    : (unit.attackRange != null ? unit.attackRange
-      : (unit.stats && unit.stats.range != null ? unit.stats.range : null));
-  if (direct != null) return direct;
-  return null;
-}
+export function updateHud(hud, state, ui) {
+  if (!hud || !state) return;
+  hud.lastSeed = state.seed;
+  hud.seedEl.textContent = 'seed: ' + state.seed;
 
-export function updateHud(hud, world, uiState, logEvents) {
-  if (!hud || !world) return;
-  const els = hud.els;
-  const ui = uiState || {};
+  // Base HP
+  const base = state.base || { hp: 0, maxHp: 1 };
+  const frac = base.maxHp > 0 ? Math.max(0, Math.min(1, base.hp / base.maxHp)) : 0;
+  hud.hpfill.style.width = (frac * 100).toFixed(1) + '%';
+  hud.hptext.textContent = 'Base: ' + Math.max(0, Math.ceil(base.hp)) + '/' + Math.ceil(base.maxHp);
 
-  // ---- base HP --------------------------------------------------------
-  try {
-    const base = world.base || (world.state && world.state.base);
-    if (base) {
-      const hp = base.hp != null ? base.hp : 0;
-      const maxHp = base.maxHp != null ? base.maxHp : (base.hpMax != null ? base.hpMax : hp);
-      const frac = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0;
-      els.hpfill.style.width = `${(frac * 100).toFixed(1)}%`;
-      els.hptext.textContent = `Base: ${Math.ceil(hp)}/${Math.ceil(maxHp)}`;
-    }
-  } catch (e) { /* non-critical */ }
-
-  // ---- money ----------------------------------------------------------
-  try {
-    const money = world.money != null ? world.money
-      : (world.economy && world.economy.money != null ? world.economy.money
-        : (world.gold != null ? world.gold : 0));
-    els.moneyEl.textContent = `${Math.floor(money)}g`;
-    const prev = hud._lastMoney();
-    if (prev != null && money !== prev) {
-      const diff = money - prev;
-      const doc = els.moneyEl.ownerDocument;
-      const delta = el(doc, 'span', 'bw-delta', `${diff > 0 ? '+' : ''}${Math.round(diff)}`);
-      delta.style.color = diff > 0 ? '#9f9' : '#f99';
-      els.moneyEl.appendChild(delta);
-      setTimeout(() => { try { if (delta.parentNode) delta.parentNode.removeChild(delta); } catch (e) {} }, 900);
-    }
-    hud._setLastMoney(money);
-
-    // palette affordability
-    for (const id of Object.keys(els.paletteBtns)) {
-      const entry = els.paletteBtns[id];
-      if (money < entry.cost) entry.btn.classList.add('bw-poor');
-      else entry.btn.classList.remove('bw-poor');
-      const sel = ui.buildSelection || ui.buildStructureId || ui.selectedBuild || null;
-      if (sel === id) entry.btn.classList.add('bw-selected');
-      else entry.btn.classList.remove('bw-selected');
-    }
-  } catch (e) { /* non-critical */ }
-
-  // ---- wave -----------------------------------------------------------
-  try {
-    const waves = world.waves || (world.state && world.state.waves) || {};
-    const cur = waves.current != null ? waves.current
-      : (waves.index != null ? waves.index : (world.waveIndex != null ? world.waveIndex : 0));
-    const total = waves.total != null ? waves.total
-      : (waves.count != null ? waves.count : (world.waveCount != null ? world.waveCount : 0));
-    els.waveEl.textContent = `Wave ${cur}/${total}`;
-    const active = waves.active != null ? waves.active : (world.waveActive || false);
-    els.startWaveBtn.disabled = !!active;
-  } catch (e) { /* non-critical */ }
-
-  // ---- seed -----------------------------------------------------------
-  try {
-    const seed = world.seed != null ? world.seed
-      : (world.rng && world.rng.seed != null ? world.rng.seed : null);
-    if (seed != null) els.seedEl.textContent = `seed: ${seed}`;
-  } catch (e) { /* non-critical */ }
-
-  // ---- selection panel ------------------------------------------------
-  try {
-    const selStructId = ui.selectedStructureId != null ? ui.selectedStructureId : null;
-    const selUnitId = ui.selectedUnitId != null ? ui.selectedUnitId
-      : (ui.selectedEnemyId != null ? ui.selectedEnemyId : null);
-
-    let shown = false;
-
-    if (selStructId != null) {
-      const struct = (typeof world.getStructure === 'function')
-        ? world.getStructure(selStructId)
-        : (world.structures && (world.structures[selStructId] ||
-            (Array.isArray(world.structures) && world.structures.find((s) => s && s.id === selStructId))));
-      if (struct) {
-        const def = getStructureDef ? getStructureDef(struct.type || struct.structId || struct.defId) : null;
-        els.selName.textContent = (def && def.name) || struct.type || struct.structId || 'Structure';
-        const tier = struct.tier != null ? struct.tier : (struct.level != null ? struct.level : 0);
-        els.selInfo.textContent = `Tier ${tier}`;
-        const hp = struct.hp != null ? struct.hp : 0;
-        const maxHp = struct.maxHp != null ? struct.maxHp : (struct.hpMax != null ? struct.hpMax : hp);
-        const frac = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0;
-        els.selHpfill.style.width = `${(frac * 100).toFixed(1)}%`;
-        els.selHptext.textContent = `HP ${Math.ceil(hp)}/${Math.ceil(maxHp)}`;
-        let sellVal = 0;
-        try { sellVal = getSellValue ? getSellValue(struct) : 0; } catch (e) { sellVal = 0; }
-        els.sellBtn.textContent = `Sell (${Math.round(sellVal)}g)`;
-        els.sellBtn.style.display = '';
-        els.upgradeBtn.style.display = '';
-        els.selpanel.style.display = 'flex';
-        shown = true;
-      }
-    }
-
-    if (!shown && selUnitId != null) {
-      let unit = null;
-      if (typeof world.getUnit === 'function') unit = world.getUnit(selUnitId);
-      if (!unit && world.units) {
-        unit = Array.isArray(world.units)
-          ? world.units.find((u) => u && u.id === selUnitId)
-          : world.units[selUnitId];
-      }
-      if (!unit && world.attackers) {
-        unit = Array.isArray(world.attackers)
-          ? world.attackers.find((u) => u && u.id === selUnitId)
-          : world.attackers[selUnitId];
-      }
-      if (unit) {
-        els.selName.textContent = unit.name || unit.type || unit.unitId || 'Enemy';
-        const rng = findEnemyRange(world, unit);
-        const dmg = unit.damage != null ? unit.damage
-          : (unit.dps != null ? unit.dps : (unit.stats && unit.stats.damage != null ? unit.stats.damage : null));
-        const parts = [];
-        if (rng != null) parts.push(`Range ${Number(rng).toFixed(1)}`);
-        if (dmg != null) parts.push(`Dmg ${Number(dmg).toFixed(0)}`);
-        els.selInfo.textContent = parts.join('  ');
-        const hp = unit.hp != null ? unit.hp : 0;
-        const maxHp = unit.maxHp != null ? unit.maxHp : (unit.hpMax != null ? unit.hpMax : hp);
-        const frac = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0;
-        els.selHpfill.style.width = `${(frac * 100).toFixed(1)}%`;
-        els.selHptext.textContent = `HP ${Math.ceil(hp)}/${Math.ceil(maxHp)}`;
-        // enemy units cannot be upgraded/sold by the player
-        els.upgradeBtn.style.display = 'none';
-        els.sellBtn.style.display = 'none';
-        els.selpanel.style.display = 'flex';
-
-        // expose range so the renderer can draw an attack-range indicator
-        try {
-          if (rng != null) {
-            ui.selectedUnitRange = Number(rng);
-            ui.showEnemyRange = {
-              unitId: unit.id,
-              range: Number(rng),
-              x: unit.x != null ? unit.x : (unit.pos && unit.pos.x),
-              y: unit.y != null ? unit.y : (unit.pos && unit.pos.y),
-            };
-          }
-        } catch (e) { /* non-critical */ }
-        shown = true;
-      }
-    }
-
-    if (!shown) {
-      els.selpanel.style.display = 'none';
-      els.upgradeBtn.style.display = '';
-      els.sellBtn.style.display = '';
+  // Money (with rising delta)
+  const money = Math.floor((state.economy && state.economy.money) || 0);
+  if (hud.lastMoney !== null && money !== hud.lastMoney) {
+    const diff = money - hud.lastMoney;
+    if (Math.abs(diff) >= 1) {
       try {
-        ui.selectedUnitRange = null;
-        ui.showEnemyRange = null;
+        const span = hud.doc.createElement('span');
+        span.className = 'bw-delta';
+        span.style.color = diff > 0 ? '#8f8' : '#f88';
+        span.textContent = (diff > 0 ? '+' : '') + diff;
+        hud.moneyEl.appendChild(span);
+        if (typeof setTimeout === 'function') {
+          setTimeout(() => { if (span.parentNode) span.parentNode.removeChild(span); }, 900);
+        }
       } catch (e) { /* non-critical */ }
     }
-  } catch (e) { /* non-critical */ }
+  }
+  hud.lastMoney = money;
+  // update the text node without wiping delta spans
+  if (hud.moneyEl.firstChild && hud.moneyEl.firstChild.nodeType === 3) {
+    hud.moneyEl.firstChild.nodeValue = money + 'g';
+  } else {
+    hud.moneyEl.insertBefore(hud.doc.createTextNode(money + 'g'), hud.moneyEl.firstChild || null);
+  }
 
-  // ---- battle log -----------------------------------------------------
-  // The sim drains its events each tick; main.js accumulates the history and passes it here. Append only the
-  // new tail into the log window. formatLogEntry existed but was never wired, and updateHud never received the
-  // events — so the log was always empty (mmdev-e56 seam fix).
-  try {
-    const body = hud.els.logbody;
-    if (body && Array.isArray(logEvents)) {
-      let n = body._logCount || 0;
-      if (logEvents.length < n) { body.textContent = ''; n = 0; }   // history reset (e.g. restart)
-      const doc = body.ownerDocument;
-      for (let i = n; i < logEvents.length; i++) {
-        const line = formatLogEntry(logEvents[i]);
-        if (line) body.appendChild(el(doc, 'div', 'bw-logline', line));
-      }
-      body._logCount = logEvents.length;
-      body.scrollTop = body.scrollHeight;
-    }
-  } catch (e) { /* non-critical */ }
-}
+  // Waves
+  const waves = state.waves || { current: 0, total: 0, active: false };
+  hud.waveEl.textContent = 'Wave ' + waves.current + '/' + waves.total + (waves.active ? ' (active)' : ' (build)');
+  hud.startWaveBtn.disabled = !!(waves.active || state.result || waves.current >= waves.total);
 
-export function flashMessage(hud, message, durationMs) {
-  if (!hud || !hud.els || !hud.els.toastEl) return;
-  const toastEl = hud.els.toastEl;
-  toastEl.textContent = String(message == null ? '' : message);
-  toastEl.style.display = 'block';
-  const prev = hud._toastTimer && hud._toastTimer();
-  if (prev) { try { clearTimeout(prev); } catch (e) {} }
-  const dur = durationMs != null ? durationMs : 1800;
-  const t = setTimeout(() => {
-    try { toastEl.style.display = 'none'; } catch (e) {}
-  }, dur);
-  if (hud._setToastTimer) hud._setToastTimer(t);
+  // Build palette
+  hud.currentBuildSelection = ui ? ui.buildSelection : null;
+  for (const structId of Object.keys(hud.paletteBtns)) {
+    const btn = hud.paletteBtns[structId];
+    const def = STRUCTURES[structId];
+    const cost = def && def.cost ? def.cost[0] : 0;
+    if (money < cost) btn.classList.add('bw-poor'); else btn.classList.remove('bw-poor');
+    if (ui && ui.buildSelection === structId) btn.classList.add('bw-selected'); else btn.classList.remove('bw-selected');
+  }
+
+  // Selected structure panel
+  const selId = ui ? ui.selectedStructureId : null;
+  let s = null;
+  if (selId != null && state.structures && typeof state.structures.get === 'function') {
+    s = state.structures.get(selId) || null;
+  }
+  if (!s) {
+    hud.currentSelectedId = null;
+    hud.selPanel.style.display = 'none';
+  } else {
+    hud.currentSelectedId = selId;
+    hud.selPanel.style.display = 'flex';
+    let def = null;
+    try { def = getStructureDef(s.structId); } catch (e) { def = null; }
+    hud.sname.textContent = (def && def.name ? def.name : s.structId) + ' T' + s.tier;
+    hud.sinfo.textContent = 'State: ' + s.lifecycle;
+    const sfrac = s.maxHp > 0 ? Math.max(0, Math.min(1, s.hp / s.maxHp)) : 0;
+    hud.shpfill.style.width = (sfrac * 100).toFixed(1) + '%';
+    hud.shptext.textContent = 'HP ' + Math.max(0, Math.ceil(s.hp)) + '/' + Math.ceil(s.maxHp);
+
+    const busy = s.lifecycle === 'Building' || s.lifecycle === 'Upgrading' || s.lifecycle === 'Selling' || s.lifecycle === 'Placing';
+    const maxTier = def && def.hp ? def.hp.length : 3;
+    const upCost = (def && def.cost && s.tier < maxTier) ? def.cost[s.tier] : Infinity;
+    hud.upgradeBtn.disabled = busy || s.tier >= maxTier || money < upCost;
+    hud.upgradeBtn.textContent = s.tier >= maxTier ? 'Max Tier' : 'Upgrade (' + upCost + 'g)';
+    let sellVal = 0;
+    try { sellVal = getSellValue(s, STRUCTURES, ASSUMPTIONS); } catch (e) { sellVal = 0; }
+    hud.sellBtn.disabled = busy;
+    hud.sellBtn.textContent = 'Sell (+' + Math.floor(sellVal) + 'g)';
+    hud.repairBtn.disabled = busy || s.hp >= s.maxHp;
+  }
 }
 
 export function showResult(hud, result) {
-  if (!hud || !hud.els || !hud.els.resultEl) return;
-  const { resultEl, rbanner } = hud.els;
-  if (result == null) {
-    resultEl.classList.remove('bw-show');
-    return;
-  }
-  const win = result === 'win' || result === true ||
-    (typeof result === 'object' && (result.win === true || result.outcome === 'win'));
-  rbanner.textContent = win ? 'VICTORY' : 'DEFEAT';
-  rbanner.className = `bw-rbanner ${win ? 'bw-win' : 'bw-lose'}`;
-  resultEl.classList.add('bw-show');
+  if (!hud) return;
+  const win = result === 'win';
+  hud.banner.textContent = win ? 'VICTORY' : 'DEFEAT';
+  hud.banner.className = 'bw-rbanner ' + (win ? 'bw-win' : 'bw-lose');
+  hud.resultEl.style.display = 'flex';
+  hud.resultEl.classList.add('bw-show');
 }
 
-export default createHud;
+export function flashMessage(hud, text) {
+  if (!hud) return;
+  hud.toast.textContent = String(text);
+  hud.toast.style.display = 'block';
+  if (typeof clearTimeout === 'function' && hud.toastTimer) clearTimeout(hud.toastTimer);
+  if (typeof setTimeout === 'function') {
+    hud.toastTimer = setTimeout(() => { hud.toast.style.display = 'none'; }, 1600);
+  }
+}

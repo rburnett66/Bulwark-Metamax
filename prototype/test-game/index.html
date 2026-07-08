@@ -100,9 +100,8 @@
   <script src="vendor/pixi.min.js"></script>
 
   <!-- Game modules are ES modules (export/import). Load the ENTRY as a module (it imports the rest in
-       dependency order) and expose boot on the global the classic bootstrap below expects. This replaces the
-       old 25 classic <script src> tags, which the browser rejects for ESM ("Unexpected token 'export'" /
-       "Cannot use import statement outside a module"). PIXI stays a classic global above. -->
+       dependency order) and expose boot on the global the classic bootstrap below expects. Replaces the old
+       25 classic <script src> tags, which the browser rejects for ESM. PIXI stays a classic global above. -->
   <script type="module">
     import { boot } from './src/main.js';
     window.Bulwark = Object.assign(window.Bulwark || {}, { boot });
