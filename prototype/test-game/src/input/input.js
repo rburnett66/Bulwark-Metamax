@@ -107,13 +107,8 @@ function onPointerDown(handle, ev) {
       slot: { x: cell.x, y: cell.y },
     });
     if (result && result.ok) {
-      // Shift-click keeps the tool active for rapid placement.
-      if (!ev.shiftKey) {
-        ui.buildSelection = null;
-        ui.hoverValid = false;
-      } else {
-        refreshHoverValidity(handle);
-      }
+      // Keep the tool active so multiple structures can be placed in a row.
+      refreshHoverValidity(handle);
     } else {
       refreshHoverValidity(handle);
     }
