@@ -14,6 +14,100 @@ const SIDE_COLORS = {
   defender: 0x50a0e0
 };
 
+// Differentiate enemy (attacker) units by shape and color.
+// Palette keyed by damage type / class so units read distinctly.
+const ENEMY_COLORS = {
+  ballistic: 0xd05040,
+  explosive: 0xe07030,
+  energy: 0x40d0c0,
+  chemical: 0x80d040,
+  kinetic: 0xd0b040,
+  arcane: 0xb060d0,
+  default: 0xd05040
+};
+
+// Shape keyed by movement domain so air/water/ground read distinctly.
+const ENEMY_SHAPES = {
+  flyer: 'triangle',
+  floater: 'diamond',
+  walker: 'square',
+  default: 'circle'
+};
+
+function enemyColorFor(def) {
+  if (!def) return ENEMY_COLORS.default;
+  const key = def.damageType || (def.damage && def.damage.type) || def.armorClass || def.class;
+  if (key != null && ENEMY_COLORS[key] != null) return ENEMY_COLORS[key];
+  return ENEMY_COLORS.default;
+}
+
+function enemyShapeFor(def, unit) {
+  const domain = (def && (def.domain || def.movement || def.movementDomain))
+    || (unit && (unit.domain || unit.movementDomain))
+    || null;
+  if (domain != null && ENEMY_SHAPES[domain] != null) return ENEMY_SHAPES[domain];
+  return ENEMY_SHAPES.default;
+}
+
+function drawEnemyShape(g, shape, cx, cy, r, color, alpha) {
+  g.lineStyle(0);
+  g.beginFill(color, alpha == null ? 1 : alpha);
+  switch (shape) {
+    case 'triangle': {
+      g.moveTo(cx, cy - r);
+      g.lineTo(cx + r * 0.9, cy + r * 0.75);
+      g.lineTo(cx - r * 0.9, cy + r * 0.75);
+      g.lineTo(cx, cy - r);
+      break;
+    }
+    case 'diamond': {
+      g.moveTo(cx, cy - r);
+      g.lineTo(cx + r, cy);
+      g.lineTo(cx, cy + r);
+      g.lineTo(cx - r, cy);
+      g.lineTo(cx, cy - r);
+      break;
+    }
+    case 'square': {
+      g.drawRect(cx - r * 0.85, cy - r * 0.85, r * 1.7, r * 1.7);
+      break;
+    }
+    default: {
+      g.drawCircle(cx, cy, r);
+      break;
+    }
+  }
+  g.endFill();
+  // outline for extra legibility
+  g.lineStyle(1.5, 0x000000, 0.4 * (alpha == null ? 1 : alpha));
+  switch (shape) {
+    case 'triangle': {
+      g.moveTo(cx, cy - r);
+      g.lineTo(cx + r * 0.9, cy + r * 0.75);
+      g.lineTo(cx - r * 0.9, cy + r * 0.75);
+      g.lineTo(cx, cy - r);
+      break;
+    }
+    case 'diamond': {
+      g.moveTo(cx, cy - r);
+      g.lineTo(cx + r, cy);
+      g.lineTo(cx, cy + r);
+      g.lineTo(cx - r, cy);
+      g.lineTo(cx, cy - r);
+      break;
+    }
+    case 'square': {
+      g.drawRect(cx - r * 0.85, cy - r * 0.85, r * 1.7, r * 1.7);
+      break;
+    }
+    default: {
+      g.drawCircle(cx, cy, r);
+      break;
+    }
+  }
+  g.lineStyle(0);
+}
+
 function cellKey(x, y) { return x + ',' + y; }
 
 function cellToLocal(renderer, cx, cy) {
@@ -258,128 +352,95 @@ export function renderFrame(renderer, state, ui, events) {
       gS.beginFill(color, alpha);
       gS.drawRect(px + 2, py + 2, w - 4, h - 4);
       gS.endFill();
-      gS.lineStyle(1.5, 0x101418, 0.8);
+      gS.lineStyle(1.5, 0x000000, 0.35 * alpha);
       gS.drawRect(px + 2, py + 2, w - 4, h - 4);
       gS.lineStyle(0);
-      // tier pips
-      const tier = s.tier || 1;
-      for (let i = 0; i < tier; i++) {
-        gS.beginFill(0xffffff, 0.9);
-        gS.drawCircle(px + 6 + i * 6, py + h - 6, 2);
-        gS.endFill();
-      }
-      // progress bar
-      if (s.lifecycle === 'Building' || s.lifecycle === 'Upgrading' || s.lifecycle === 'Selling') {
-        const frac = Math.max(0, Math.min(1, typeof s.progress === 'number' ? s.progress : 0));
-        gS.beginFill(0x000000, 0.6);
-        gS.drawRect(px + 3, py + h / 2 - 2, w - 6, 4);
-        gS.endFill();
-        gS.beginFill(0x60c0ff, 0.95);
-        gS.drawRect(px + 3.5, py + h / 2 - 1.5, (w - 7) * frac, 3);
-        gS.endFill();
-      }
-      // hp bar
-      if (typeof s.hp === 'number' && typeof s.maxHp === 'number' && s.hp < s.maxHp) {
-        drawHpBar(gS, px + w / 2, py - 6, w - 4, s.hp / Math.max(1, s.maxHp));
+      if (s.maxHp) {
+        drawHpBar(gS, px + w / 2, py - 2, w * 0.8, s.hp / Math.max(1, s.maxHp));
       }
     }
   }
 
-  // units
-  if (state.units) {
-    for (const u of state.units.values()) {
-      if (!u || u.hp <= 0) continue;
-      const side = u.side || u.kind || 'attacker';
-      const color = SIDE_COLORS[side] != null ? SIDE_COLORS[side] : 0xffffff;
+  // units (attackers = enemies) differentiated by shape + color
+  if (state.attackers) {
+    for (const u of state.attackers.values()) {
+      if (!u || u.dead || u.hp <= 0) continue;
+      const def = getUnitDef ? getUnitDef(u.type || u.defId || u.kind) : null;
       const p = cellToLocal(renderer, u.pos.x, u.pos.y);
-      const r = t * 0.28;
-      if (u.domain === 'Flyer') {
-        const py = p.y - t * 0.35;
-        gA.beginFill(color, 1);
-        gA.moveTo(p.x, py - r);
-        gA.lineTo(p.x + r, py + r);
-        gA.lineTo(p.x - r, py + r);
-        gA.closePath();
-        gA.endFill();
-        gA.lineStyle(1, 0x101418, 0.7);
-        gA.drawCircle(p.x, p.y, 2);
-        gA.lineStyle(0);
-        drawHpBar(gA, p.x, py - r - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
-      } else if (u.domain === 'Floater') {
-        gU.beginFill(color, 1);
-        gU.drawEllipse(p.x, p.y, r * 1.15, r * 0.7);
+      const domain = (def && (def.domain || def.movement || def.movementDomain))
+        || u.domain || u.movementDomain || null;
+      const g = domain === 'flyer' ? gA : gU;
+      const shape = enemyShapeFor(def, u);
+      const color = enemyColorFor(def);
+      const r = t * 0.3;
+      if (domain === 'flyer') {
+        // shadow beneath flyers for altitude read
+        gU.beginFill(0x000000, 0.25);
+        gU.drawEllipse(p.x, p.y + t * 0.18, r * 0.8, r * 0.35);
         gU.endFill();
-        gU.lineStyle(1, 0x101418, 0.8);
-        gU.drawEllipse(p.x, p.y, r * 1.15, r * 0.7);
-        gU.lineStyle(0);
-        drawHpBar(gU, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));
-      } else {
-        gU.beginFill(color, 1);
-        gU.drawCircle(p.x, p.y, r);
-        gU.endFill();
-        gU.lineStyle(1, 0x101418, 0.8);
-        gU.drawCircle(p.x, p.y, r);
-        gU.lineStyle(0);
-        drawHpBar(gU, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));
+      }
+      drawEnemyShape(g, shape, p.x, p.y, r, color, 1);
+      if (u.maxHp) {
+        drawHpBar(g, p.x, p.y - t * 0.5, t * 0.7, u.hp / Math.max(1, u.maxHp));
       }
     }
   }
 
-  // selection range circle
-  if (ui && ui.selectedStructureId != null && state.structures) {
-    const sel = state.structures.get(ui.selectedStructureId);
-    if (sel) {
-      const fp = sel.footprint || { w: 1, h: 1 };
-      const cx = (sel.pos.x + fp.w / 2) * t;
-      const cy = (sel.pos.y + fp.h / 2) * t;
-      gO.lineStyle(2, 0xffffff, 0.9);
-      gO.drawRect(sel.pos.x * t + 1, sel.pos.y * t + 1, fp.w * t - 2, fp.h * t - 2);
-      gO.lineStyle(0);
-      let range = 0;
-      try {
-        const def = getStructureDef(sel.structId);
-        range = def && typeof def.range === 'number' ? def.range : 0;
-      } catch (e) { range = 0; }
-      if (range > 0) {
-        drawDashedCircle(gO, cx, cy, range * t, 0xffffff, 0.6, 1.5);
+  // friendly troops (defenders)
+  if (state.troops) {
+    for (const u of state.troops.values()) {
+      if (!u || u.dead || u.hp <= 0) continue;
+      const p = cellToLocal(renderer, u.pos.x, u.pos.y);
+      gU.beginFill(SIDE_COLORS.defender, 1);
+      gU.drawCircle(p.x, p.y, t * 0.26);
+      gU.endFill();
+      gU.lineStyle(1.5, 0x000000, 0.35);
+      gU.drawCircle(p.x, p.y, t * 0.26);
+      gU.lineStyle(0);
+      if (u.maxHp) {
+        drawHpBar(gU, p.x, p.y - t * 0.45, t * 0.6, u.hp / Math.max(1, u.maxHp));
       }
     }
   }
 
-  // ghost preview
-  if (ui && ui.buildSelection && ui.hoverCell) {
-    let fp = { w: 1, h: 1 };
-    try {
-      const def = getStructureDef(ui.buildSelection);
-      if (def && def.footprint) fp = def.footprint;
-    } catch (e) { /* unknown struct id: default footprint */ }
-    const ok = !!ui.hoverValid;
-    const tint = ok ? 0x40e060 : 0xe04040;
-    const gx = ui.hoverCell.x * t;
-    const gy = ui.hoverCell.y * t;
-    gO.beginFill(tint, 0.35);
-    gO.drawRect(gx, gy, fp.w * t, fp.h * t);
-    gO.endFill();
-    gO.lineStyle(2, tint, 0.9);
-    gO.drawRect(gx + 1, gy + 1, fp.w * t - 2, fp.h * t - 2);
-    gO.lineStyle(0);
+  // projectiles
+  if (state.projectiles) {
+    for (const pr of state.projectiles.values ? state.projectiles.values() : state.projectiles) {
+      if (!pr) continue;
+      const p = cellToLocal(renderer, pr.pos.x, pr.pos.y);
+      gA.beginFill(0xffffff, 0.9);
+      gA.drawCircle(p.x, p.y, t * 0.08);
+      gA.endFill();
+    }
   }
 
-  // event FX
+  // selection / hover overlay
+  if (ui && ui.selection) {
+    const sel = ui.selection;
+    if (sel.pos) {
+      const p = cellToLocal(renderer, sel.pos.x, sel.pos.y);
+      drawDashedCircle(gO, p.x, p.y, t * 0.5, 0xffffff, 0.8, 2);
+      if (sel.range) {
+        drawDashedCircle(gO, p.x, p.y, sel.range * t, 0xffe080, 0.5, 1.5);
+      }
+    }
+  }
+
+  // events -> fx
   if (events && events.length) {
     for (const ev of events) spawnFx(renderer, ev);
   }
   updateFx(renderer);
 }
 
-export function screenToCell(renderer, sx, sy) {
+export function cellToScreen(renderer, cx, cy) {
   const t = renderer.tile;
-  const x = Math.max(0, Math.min(renderer.map.cols - 1, Math.floor(sx / t)));
-  const y = Math.max(0, Math.min(renderer.map.rows - 1, Math.floor(sy / t)));
-  return { x: x, y: y };
+  return { x: (cx + 0.5) * t, y: (cy + 0.5) * t };
 }
 
-export function cellToScreen(renderer, cell) {
+export function screenToCell(renderer, sx, sy) {
   const t = renderer.tile;
-  return { x: (cell.x + 0.5) * t, y: (cell.y + 0.5) * t };
+  return { x: Math.floor(sx / t), y: Math.floor(sy / t) };
 }
+
+export default { createRenderer, renderFrame, cellToScreen, screenToCell };
