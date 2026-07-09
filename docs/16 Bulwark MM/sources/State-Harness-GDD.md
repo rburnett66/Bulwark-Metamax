@@ -14,11 +14,14 @@ The Harness is **not** a separate faked view. It drives the **same deterministic
 acquisition, movement) through the **same render projection** the game uses, in isolation — so what you approve in
 the Harness is exactly what the game shows. (Projection architecture: ENGINE state → RENDER choreography.)
 
-Two principles govern the whole design:
+Three principles govern the whole design:
 - **One architecture, two scales (§5).** The Harness serves **both** a single unit (bench) **and** the full roster
   (field) on the same components — M1 is a real vertical slice of the full system, never a throwaway.
 - **Built on Pixi.js (§4).** It renders through the **game's own Pixi pipeline**, so unit visualizations are
   **pixel-accurate** to in-game — not an approximation in a separate canvas.
+- **Droppable, engine-usable units (§6).** A unit authored in the Harness is a **portable definition** (stats +
+  part-stack) that the **existing game engine loads, spawns, and plays** — authored once, dropped into the live
+  game. The Harness is a unit *factory*, not just a viewer.
 
 ---
 
@@ -143,19 +146,43 @@ scene**, so cross-unit readability + overlapping camera/shadow are validated bef
 
 ---
 
-## 6. Scope & milestones
-Per the Content-Production-Plan (*prove on a single walker first; no full-roster art before the pipeline
-validates*):
-- **M1 — one walker, full pipeline (the gating deliverable):** compose (base/weapon/head sprites + sizing) → drive
-  all seven states → preview under the camera with parallax + silhouette shadow.
-- **M2 — domains:** floater and flyer locomotion swaps; flyer altitude shadow.
-- **M3 — authoring:** save / load unit definitions, sprite-library browser, and **export to the game's `UNITS`
-  data** so a Harness-approved unit ships as game data.
+## 6. Droppable units — authored in the Harness, played by the engine
+Units authored in the Harness must be **usable by the existing game engine**, not just previewable. The Harness is
+a **unit factory**: its output is a **portable unit definition** — the game's `UNITS` stats **plus** the part-stack
+(base / weapon / head sprite refs + sizing + pivots) — in the **same format the engine loads, spawns, and plays**.
+
+- **One definition, both sides.** Because the Harness and the game share the sim (stats drive combat) and the Pixi
+  render (the part-stack draws the unit), a unit that reads correctly in the Harness **is** a game unit — dropping
+  it in needs no re-authoring and no engine code change.
+- **Engine loads units from a registry.** The engine reads unit definitions from a **data registry**, not only the
+  hardcoded `UNITS` — so a **dropped** unit is immediately spawnable + playable. The Harness writes/updates a
+  definition; the engine picks it up. *(This is the one structural change the requirement forces, and it lands in
+  M1 because it shapes the data model.)*
+- **Drop flow.** Author in the Harness → **drop** (write the definition + asset refs to the registry) → the unit
+  spawns in the live game and moves, acquires, attacks, and dies with its authored part-stack + stats.
+- **Determinism preserved.** A dropped unit runs on the same deterministic sim (seed + fixed dt) — replay-safe and
+  balance-checkable.
+
+The Harness doesn't just preview units — it **produces the roster the game runs**.
 
 ---
 
-## 7. Definition of Done (demonstrated, not just built)
+## 7. Scope & milestones
+Per the Content-Production-Plan (*prove on a single walker first; no full-roster art before the pipeline
+validates*):
+- **M1 — one walker, full pipeline (the gating deliverable):** compose (base/weapon/head sprites + sizing) → drive
+  all seven states → preview under the camera with parallax + silhouette shadow → **drop the walker into the live
+  engine and play it** (portable definition + registry loading proven on one unit).
+- **M2 — domains:** floater and flyer locomotion swaps; flyer altitude shadow.
+- **M3 — authoring at scale:** save / load unit definitions, sprite-library browser, roster batch, and the full
+  drop / export pipeline (§6) so the whole roster is authored → dropped → played.
+
+---
+
+## 8. Definition of Done (demonstrated, not just built)
 Done = **shown working in the Harness**, not merely present in code:
+- A unit authored in the Harness is **dropped into the existing game engine and is fully playable** — it spawns,
+  moves, acquires, attacks, and dies with its authored part-stack + stats, loaded from the registry (no code change).
 - Rendered with **Pixi.js** (the game's renderer) — the Harness view is **pixel-accurate** to what the game draws.
 - A unit is composed from **selectable base/weapon/head sprites at chosen sizes**, layered in correct z-order with
   working pivots.
