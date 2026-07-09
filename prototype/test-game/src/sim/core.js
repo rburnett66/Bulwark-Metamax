@@ -39,7 +39,9 @@ function computeFinalScore(state) {
   const eco = state.economy || {};
   const kills = (eco.kills != null ? eco.kills : (state.kills != null ? state.kills : (eco.totalKills || 0)));
   const goldSpent = (eco.totalSpent != null ? eco.totalSpent : (state.goldSpent || 0));
-  const goldRemaining = (eco.gold != null ? eco.gold : 0);
+  // The live balance is eco.money (economy.js), NOT eco.gold — reading eco.gold made remaining gold
+  // score as 0 even with a positive balance. Floor to whole gold for an integer score.
+  const goldRemaining = Math.max(0, Math.floor(eco.money != null ? eco.money : (eco.gold != null ? eco.gold : 0)));
 
   const totalSeconds = Math.max(0, Math.floor(state.time || 0));
   const minutes = Math.floor(totalSeconds / 60);
@@ -49,7 +51,7 @@ function computeFinalScore(state) {
   const MINUTE_PENALTY = 60;
   const SECOND_PENALTY = 1;
   const GOLD_SPENT_PENALTY = 1;
-  const GOLD_REMAINING_BONUS = 2;
+  const GOLD_REMAINING_BONUS = 1;   // +1 point per +1 gold remaining (owner)
 
   const score =
     kills * KILL_POINTS
