@@ -16,9 +16,87 @@ const SIDE_COLORS = {
 
 function cellKey(x, y) { return x + ',' + y; }
 
+// Layered part-stack: base < weapon < head, each with its own pivot.
+// zOrder drives child ordering; pivots are applied in local part space.
+const PART_STACK_ORDER = ['base', 'weapon', 'head'];
+const PART_STACK_Z = { base: 0, weapon: 1, head: 2 };
+
+function buildPartStack(parts) {
+  const container = new PIXI.Container();
+  const built = {};
+  const ordered = PART_STACK_ORDER.filter(function (name) { return parts && parts[name]; });
+  ordered.sort(function (a, b) { return PART_STACK_Z[a] - PART_STACK_Z[b]; });
+  for (let i = 0; i < ordered.length; i++) {
+    const name = ordered[i];
+    const def = parts[name];
+    const sprite = def.texture
+      ? new PIXI.Sprite(def.texture)
+      : new PIXI.Graphics();
+    if (!def.texture && def.draw) def.draw(sprite);
+    const pivot = def.pivot || { x: 0, y: 0 };
+    if (sprite.pivot && sprite.pivot.set) sprite.pivot.set(pivot.x, pivot.y);
+    const pos = def.pos || { x: 0, y: 0 };
+    sprite.x = pos.x; sprite.y = pos.y;
+    if (typeof def.rotation === 'number') sprite.rotation = def.rotation;
+    if (typeof def.scale === 'number') { if (sprite.scale && sprite.scale.set) sprite.scale.set(def.scale, def.scale); }
+    sprite.zIndex = PART_STACK_Z[name];
+    container.addChild(sprite);
+    built[name] = sprite;
+  }
+  container.sortableChildren = true;
+  if (container.sortChildren) container.sortChildren();
+  container.parts = built;
+  container.partOrder = ordered;
+  return container;
+}
+
 function cellToLocal(renderer, cx, cy) {
   const t = renderer.tile;
   return { x: (cx + 0.5) * t, y: (cy + 0.5) * t };
+}
+
+// Camera + silhouette-shadow projection (bottom-mid light source).
+// The light sits below-centre of the board, so shadows skew away from centre:
+// scale grows with distance from the bottom-mid anchor and skews horizontally
+// based on the entity's offset from the horizontal centre.
+function getCameraProjection(renderer) {
+  const map = renderer.map;
+  const t = renderer.tile;
+  const w = map.cols * t;
+  const h = map.rows * t;
+  return {
+    // light anchor: bottom-mid of the board
+    lightX: w * 0.5,
+    lightY: h * 1.15,
+    boardW: w,
+    boardH: h
+  };
+}
+
+// Project a silhouette shadow for an entity part-stack.
+// Returns transform params so the shadow tracks position + weapon aim.
+function projectShadow(renderer, localX, localY, aimRotation) {
+  const cam = getCameraProjection(renderer);
+  // horizontal skew: proportional to distance from centre (left/right correct)
+  const dx = (localX - cam.lightX) / (cam.boardW * 0.5);
+  const skewX = dx * 0.6;
+  // vertical distance from light -> vertical scale (top larger, bottom smaller)
+  const dyNorm = Math.max(0, (cam.lightY - localY) / cam.lightY);
+  const scaleY = 0.35 + dyNorm * 0.55;
+  const scaleX = 1 + Math.abs(dx) * 0.35;
+  // shadow offset points away from the light (bottom-mid)
+  const offX = (localX - cam.lightX) * 0.12;
+  const offY = (cam.lightY - localY) * 0.05;
+  return {
+    x: localX + offX,
+    y: localY + offY,
+    skewX: skewX,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    // shadow's own rotation tracks the weapon aim so the cast follows aiming
+    rotation: (aimRotation || 0) * 0.5 + skewX * 0.25,
+    alpha: 0.28 + dyNorm * 0.12
+  };
 }
 
 function drawDashedCircle(g, cx, cy, radius, color, alpha, width) {
