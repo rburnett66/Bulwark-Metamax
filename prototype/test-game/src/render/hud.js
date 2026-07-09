@@ -18,6 +18,8 @@ const CSS = `
   animation: bw-delta-rise 0.9s ease-out forwards; pointer-events:none; white-space:nowrap; }
 @keyframes bw-delta-rise { from { opacity:1; transform:translateY(0);} to { opacity:0; transform:translateY(-16px);} }
 .bw-wave { font-size:13px; }
+.bw-timer { font-size:18px; font-weight:bold; color:#8fe0ff; min-width:96px; letter-spacing:1px;
+  font-variant-numeric:tabular-nums; }
 .bw-btn { pointer-events:auto; background:#22303e; color:#e8e8e8; border:1px solid #4a6076; border-radius:3px;
   padding:4px 8px; font-family:inherit; font-size:12px; cursor:pointer; }
 .bw-btn:hover:not(:disabled) { background:#2f4356; }
@@ -96,6 +98,7 @@ export function createHud(mountEl, callbacks) {
   hpwrap.appendChild(hpbar);
   hpwrap.appendChild(hptext);
 
+  const timerEl = el(doc, 'span', 'bw-timer', '00:00:000');
   const moneyEl = el(doc, 'span', 'bw-money', '0g');
   const waveEl = el(doc, 'span', 'bw-wave', 'Wave 0/0');
   const startWaveBtn = el(doc, 'button', 'bw-btn', 'Start Wave');
@@ -103,6 +106,7 @@ export function createHud(mountEl, callbacks) {
   const seedEl = el(doc, 'span', 'bw-seed', 'seed: -');
 
   topbar.appendChild(hpwrap);
+  topbar.appendChild(timerEl);
   topbar.appendChild(moneyEl);
   topbar.appendChild(waveEl);
   topbar.appendChild(startWaveBtn);
