@@ -165,7 +165,10 @@ export function createRenderer(app, map) {
       overlay: new PIXI.Graphics()
     },
     fxG: new PIXI.Graphics(),
-    fxItems: []
+    fxItems: [],
+    shake: { time: 0, dur: 0, mag: 0 },
+    baseFire: null,
+    baseFirePos: null
   };
 
   layers.structures.addChild(renderer.dyn.structures);
@@ -179,7 +182,13 @@ export function createRenderer(app, map) {
 }
 
 function spawnFx(renderer, ev) {
-  const pos = ev.pos || ev.cell || (ev.target && ev.target.pos) || null;
+  const pos = ev.pos || ev.cell
+    || (ev.target && ev.target.pos) || (ev.target && ev.target.cell)
+    || (ev.ent && ev.ent.pos) || (ev.ent && ev.ent.cell)
+    || (ev.structure && ev.structure.pos) || (ev.structure && ev.structure.cell)
+    || (ev.base && ev.base.pos) || (ev.base && ev.base.cell)
+    || (renderer.map && renderer.map.base)
+    || null;
   if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
   const p = cellToLocal(renderer, pos.x, pos.y);
   // Gold gain on a kill: a floating "+N" that rises + fades AT the unit that died (moved off the HUD header).
@@ -197,6 +206,15 @@ function spawnFx(renderer, ev) {
     renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: 0.9, kind: 'text', txt: txt });
     return;
   }
+  if (ev.type === 'baseDestroyed' || ev.type === 'baseDestroy' || ev.type === 'gameOver' || (ev.type === 'destroy' && ev.isBase)) {
+    renderer.shake.time = 0; renderer.shake.dur = 0.8; renderer.shake.mag = renderer.tile * 0.7;
+    renderer.baseFire = 3.0; renderer.baseFirePos = { x: p.x, y: p.y };
+    return;
+  }
+  if (ev.type === 'structureDestroyed' || ev.type === 'structureDestroy' || (ev.type === 'destroy' && !ev.isBase)) {
+    renderer.shake.time = 0; renderer.shake.dur = 0.25; renderer.shake.mag = renderer.tile * 0.18;
+    return;
+  }
   let color = 0xffffff, ttl = 0.4, kind = 'ring';
   switch (ev.type) {
     case 'kill': color = 0xe05040; ttl = 0.5; kind = 'ring'; break;
@@ -212,6 +230,35 @@ function updateFx(renderer) {
   const g = renderer.fxG;
   g.clear();
   const t = renderer.tile;
+
+  // camera shake: decays over its duration and offsets the whole board root
+  if (renderer.shake && renderer.shake.dur > 0) {
+    renderer.shake.time += FX_DT;
+    const sf = 1 - renderer.shake.time / renderer.shake.dur;
+    if (sf <= 0) {
+      renderer.shake.dur = 0;
+      renderer.root.x = 0; renderer.root.y = 0;
+    } else {
+      const m = renderer.shake.mag * sf;
+      renderer.root.x = (Math.random() * 2 - 1) * m;
+      renderer.root.y = (Math.random() * 2 - 1) * m;
+    }
+  }
+
+  // base fire: spawn fresh flame particles while the timer is active
+  if (renderer.baseFire > 0 && renderer.baseFirePos) {
+    renderer.baseFire -= FX_DT;
+    for (let i = 0; i < 3; i++) {
+      const ox = (Math.random() * 2 - 1) * t * 0.4;
+      renderer.fxItems.push({
+        x: renderer.baseFirePos.x + ox,
+        y: renderer.baseFirePos.y + (Math.random() * 2 - 1) * t * 0.3,
+        age: 0, ttl: 0.4 + Math.random() * 0.3,
+        color: Math.random() < 0.5 ? 0xff6020 : 0xffc040,
+        kind: 'fire'
+      });
+    }
+  }
   const keep = [];
   for (const fx of renderer.fxItems) {
     fx.age += FX_DT;
@@ -234,6 +281,10 @@ function updateFx(renderer) {
     } else if (fx.kind === 'rise') {
       g.beginFill(fx.color, alpha);
       g.drawCircle(fx.x, fx.y - f * t * 0.8, t * 0.12);
+      g.endFill();
+    } else if (fx.kind === 'fire') {
+      g.beginFill(fx.color, alpha * 0.9);
+      g.drawCircle(fx.x, fx.y - f * t * 0.7, t * 0.18 * (1 - f * 0.5));
       g.endFill();
     }
     keep.push(fx);

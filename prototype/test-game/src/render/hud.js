@@ -51,6 +51,10 @@ const CSS = `
 .bw-rbanner { font-size:36px; font-weight:bold; letter-spacing:2px; text-shadow:0 2px 8px #000; }
 .bw-rbanner.bw-win { color:#9f9; }
 .bw-rbanner.bw-lose { color:#f99; }
+.bw-rscore { font-size:22px; font-weight:bold; color:#ffd76a; text-shadow:0 2px 8px #000; }
+.bw-rscore-breakdown { font-size:13px; color:#cfe0f0; line-height:1.6; text-align:left; background:rgba(10,14,20,0.6); border:1px solid #3a4a5a; border-radius:4px; padding:8px 14px; }
+.bw-rscore-breakdown .bw-pos { color:#9f9; }
+.bw-rscore-breakdown .bw-neg { color:#f99; }
 `;
 
 function injectStyle(doc) {

@@ -29,6 +29,58 @@ function dist(a, b) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/**
+ * Compute the Final Score presented when the game ends (final wave
+ * cleared or base destroyed). Points for kills; minus points for each
+ * minute and second played; minus points for all gold spent; bonus for
+ * remaining gold. Also records the elapsed time breakdown for display.
+ */
+function computeFinalScore(state) {
+  const eco = state.economy || {};
+  const kills = (eco.kills != null ? eco.kills : (state.kills || 0));
+  const goldSpent = state.goldSpent || 0;
+  const goldRemaining = (eco.gold != null ? eco.gold : 0);
+
+  const totalSeconds = Math.max(0, Math.floor(state.time || 0));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  const KILL_POINTS = 100;
+  const MINUTE_PENALTY = 60;
+  const SECOND_PENALTY = 1;
+  const GOLD_SPENT_PENALTY = 1;
+  const GOLD_REMAINING_BONUS = 2;
+
+  const score =
+    kills * KILL_POINTS
+    - minutes * MINUTE_PENALTY
+    - seconds * SECOND_PENALTY
+    - goldSpent * GOLD_SPENT_PENALTY
+    + goldRemaining * GOLD_REMAINING_BONUS;
+
+  return {
+    score: score,
+    kills: kills,
+    minutes: minutes,
+    seconds: seconds,
+    totalSeconds: totalSeconds,
+    goldSpent: goldSpent,
+    goldRemaining: goldRemaining
+  };
+}
+
+/**
+ * Finalize the game: compute + store the final score exactly once when a
+ * result is set (final wave cleared or base destroyed). Idempotent.
+ */
+function finalizeGame(state) {
+  if (!state.result) return;
+  if (state.finalScore == null) {
+    state.finalScore = computeFinalScore(state);
+    emitEvent(state, { type: 'finalScore', tick: state.tick, finalScore: state.finalScore });
+  }
+}
+
 function laneForDomain(domain) {
   if (domain === 'Flyer') return 'air';
   if (domain === 'Floater') return 'water';
@@ -64,6 +116,8 @@ export function createSim(seed, opts) {
     navGrid: null,
     events: [],
     result: null,
+    finalScore: null,
+    goldSpent: 0,
     selectedId: null,
     log: createLog(seed),
     // deterministic monotonically increasing id source consumed by
@@ -148,8 +202,11 @@ function cmdPlace(state, cmd) {
   const v = validatePlacement(state, cmd.structId, cell);
   if (!v.ok) return { ok: false, reason: v.reason || 'invalid' };
 
+  const goldBefore = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
   const s = placeStructure(state, cmd.structId, cell);
   if (!s) return { ok: false, reason: 'cost' };
+  const goldAfter = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
+  if (goldAfter < goldBefore) state.goldSpent += (goldBefore - goldAfter);
 
   emitEvent(state, {
     type: 'build',
@@ -166,9 +223,12 @@ function cmdUpgrade(state, cmd) {
   if (typeof sid !== 'number') return { ok: false, reason: 'badCommand' };
   const s = state.structures.get(sid);
   if (!s) return { ok: false, reason: 'noStructure' };
+  const gUp = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
   if (!startUpgrade(state, sid)) {
     return { ok: false, reason: s.tier >= 3 ? 'maxTier' : 'cost' };
   }
+  const gUpAfter = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
+  if (gUpAfter < gUp) state.goldSpent += (gUp - gUpAfter);
   emitEvent(state, { type: 'upgradeStart', tick: state.tick, structureId: sid });
   return { ok: true, reason: '' };
 }
@@ -188,9 +248,12 @@ function cmdRepair(state, cmd) {
   const sid = typeof cmd.id === 'number' ? cmd.id : cmd.structureId;
   if (typeof sid !== 'number') return { ok: false, reason: 'badCommand' };
   if (!state.structures.get(sid)) return { ok: false, reason: 'noStructure' };
+  const gRep = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
   if (!requestRepair(state, sid)) {
     return { ok: false, reason: 'noRepairNeeded' };
   }
+  const gRepAfter = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
+  if (gRepAfter < gRep) state.goldSpent += (gRep - gRepAfter);
   emitEvent(state, { type: 'repairStart', tick: state.tick, structureId: sid });
   return { ok: true, reason: '' };
 }
@@ -235,6 +298,7 @@ function cmdDeployTroop(state, cmd) {
   if (!spend(state, cost, 'deploy:' + cmd.unitId)) {
     return { ok: false, reason: 'cost' };
   }
+  state.goldSpent = (state.goldSpent || 0) + cost;
 
   const unit = createUnit(state, cmd.unitId, tier, { x: basePos.x, y: basePos.y }, laneForDomain(def.domain), 'defender');
   unit.path = path;
