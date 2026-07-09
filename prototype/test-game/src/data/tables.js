@@ -307,29 +307,42 @@ const waterCells = (() => {
   return cells;
 })();
 
-const baseDef = { x: 21, y: 8, hp: 2000 };
+const baseDef = { x: 21, y: 8, hp: 3000, footprint: { w: 3, h: 3 } };
 
-// Hard-point tower slots (fixed; count scales with base level in full game).
+// s10: the base is a 3x3 keep centred on (x,y). Its four CORNERS are buildable tower hard-points; the
+// five-cell plus in the middle is the base BODY (occupied — nothing can be placed there). baseDef.cells is
+// the body; baseDef.cornerSlots the four corners.
+const baseCornerSlots = [];
+const baseBodyCells = [];
+for (let dy = -1; dy <= 1; dy++) {
+  for (let dx = -1; dx <= 1; dx++) {
+    const c = { x: baseDef.x + dx, y: baseDef.y + dy };
+    (Math.abs(dx) === 1 && Math.abs(dy) === 1 ? baseCornerSlots : baseBodyCells).push(c);
+  }
+}
+baseDef.cells = baseBodyCells;
+baseDef.cornerSlots = baseCornerSlots;
+
+// Hard-point tower slots (fixed; count scales with base level in full game) + the base's 4 corner slots.
 const slots = [
   { x: 4,  y: 3 }, { x: 8,  y: 3 }, { x: 12, y: 3 }, { x: 16, y: 3 },
   { x: 4,  y: 7 }, { x: 8,  y: 7 }, { x: 12, y: 7 }, { x: 15, y: 9 },
-  { x: 17, y: 10 }, { x: 20, y: 5 }, { x: 20, y: 10 }, { x: 14, y: 9 }
+  { x: 17, y: 10 }, { x: 20, y: 5 }, { x: 20, y: 10 }, { x: 14, y: 9 },
+  ...baseCornerSlots
 ];
 
 // Buildable region for walls / moats: the central band around the ground
-// lane, excluding water, the base clearing, and hard-point slots.
+// lane, excluding water, the base body, and hard-point slots.
 const buildableCells = (() => {
   const isWater = (x, y) => waterCells.some(c => c.x === x && c.y === y);
   const isSlot = (x, y) => slots.some(s => s.x === x && s.y === y);
+  const isBaseBody = (x, y) => baseBodyCells.some(c => c.x === x && c.y === y);
   const cells = [];
   for (let y = 3; y <= 10; y++) {
     for (let x = 2; x <= 20; x++) {
       if (isWater(x, y)) continue;
       if (isSlot(x, y)) continue;
-      if (x === baseDef.x && y === baseDef.y) continue;
-      // keep the tile directly in front of the base clear so the lane can
-      // never be sealed by a single placement footprint
-      if (x === 20 && y === 8) continue;
+      if (isBaseBody(x, y)) continue;
       cells.push({ x, y });
     }
   }

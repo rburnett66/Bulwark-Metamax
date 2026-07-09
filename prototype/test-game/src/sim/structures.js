@@ -70,10 +70,11 @@ export function validatePlacement(state, structId, slotOrCell) {
     return t === 'high' || t === 'rock' || t === 'rocks' || t === 'tree' || t === 'trees';
   };
   const forbidden = new Set([
-    cellKey(map.base),
     cellKey(map.spawnGround),
     cellKey(map.spawnWater)
   ]);
+  // s10: the 3x3 base BODY is occupied — nothing can be placed on it; its 4 corner slots stay buildable.
+  for (const c of ((map.base && map.base.cells) || [map.base])) forbidden.add(cellKey(c));
   const cells = footprintCells(cell, def.footprint);
   for (const c of cells) {
     if (c.x < 0 || c.y < 0 || c.x >= map.cols || c.y >= map.rows) return { ok: false, reason: 'terrain' };

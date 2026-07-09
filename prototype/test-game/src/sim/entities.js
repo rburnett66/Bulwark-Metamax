@@ -126,6 +126,9 @@ export function createBase(map) {
     pos: { x: map.base.x, y: map.base.y },
     hp: map.base.hp,
     maxHp: map.base.hp,
+    footprint: map.base.footprint || { w: 1, h: 1 },   // s10: 3x3 keep
+    cells: (map.base.cells ? map.base.cells.map((c) => ({ x: c.x, y: c.y })) : null),
+    lastDamageTick: -Infinity,                          // s10: for passive base repair
     armorClass: 'Structure',
   };
 }
