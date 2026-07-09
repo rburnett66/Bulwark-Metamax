@@ -37,6 +37,12 @@ export function boot(mountEl, seed) {
   });
   const canvas = app.view || app.canvas;
   canvas.style.display = 'block';
+  // s9: at 64x32 the board is 2048x1024 — scale the canvas to fit its container (preserve aspect) so the bigger
+  // map stays fully visible without overflowing the panel. Internal render resolution is unchanged, and input
+  // already maps screen->cell via the canvas rect (input.js), so pointer placement stays correct when scaled.
+  canvas.style.maxWidth = '100%';
+  canvas.style.maxHeight = '100%';
+  canvas.style.height = 'auto';
   mountEl.appendChild(canvas);
 
   // ---------------------------------------------------------------------

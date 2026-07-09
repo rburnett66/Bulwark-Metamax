@@ -282,32 +282,31 @@ export const WAVES = Object.freeze([
 
 // ---------------------------------------------------------------------------
 // Map — the fixed slice/harness board.
-//   Ground lane: row 5 left→right, then column 18 down to row 8, ending in
-//   the base clearing. Water lane: river along row 11 turning north at
-//   column 19 toward the clearing. Both lanes end at the base at (21,8).
+//   Ground lane: row 12 left→right, then column 50 down to row 16, ending in
+//   the base clearing. Water lane: river along row 22 turning north at
+//   column 56 toward the clearing. Both lanes end at the base at (58,16). [s9: 64x32]
 // ---------------------------------------------------------------------------
-const MAP_COLS = 24;
-const MAP_ROWS = 16;
+const MAP_COLS = 64;
+const MAP_ROWS = 32;
 const MAP_TILE = 32;
 
 const groundLane = [
-  { x: 0, y: 5 }, { x: 18, y: 5 }, { x: 18, y: 8 }, { x: 20, y: 8 }
+  { x: 0, y: 12 }, { x: 50, y: 12 }, { x: 50, y: 16 }, { x: 56, y: 16 }
 ];
 
 const waterLane = [
-  { x: 0, y: 11 }, { x: 19, y: 11 }, { x: 19, y: 9 }
+  { x: 0, y: 22 }, { x: 56, y: 22 }, { x: 56, y: 17 }
 ];
 
-// River: row 11 from x0..19, plus the northward channel at x19, y9..10.
+// River: row 22 from x0..56, plus the northward channel at x56, y17..21 (ends beside the base).
 const waterCells = (() => {
   const cells = [];
-  for (let x = 0; x <= 19; x++) cells.push({ x, y: 11 });
-  cells.push({ x: 19, y: 10 });
-  cells.push({ x: 19, y: 9 });
+  for (let x = 0; x <= 56; x++) cells.push({ x, y: 22 });
+  for (let y = 21; y >= 17; y--) cells.push({ x: 56, y });
   return cells;
 })();
 
-const baseDef = { x: 21, y: 8, hp: 3000, footprint: { w: 3, h: 3 } };
+const baseDef = { x: 58, y: 16, hp: 3000, footprint: { w: 3, h: 3 } };
 
 // s10: the base is a 3x3 keep centred on (x,y). Its four CORNERS are buildable tower hard-points; the
 // five-cell plus in the middle is the base BODY (occupied — nothing can be placed there). baseDef.cells is
@@ -325,9 +324,10 @@ baseDef.cornerSlots = baseCornerSlots;
 
 // Hard-point tower slots (fixed; count scales with base level in full game) + the base's 4 corner slots.
 const slots = [
-  { x: 4,  y: 3 }, { x: 8,  y: 3 }, { x: 12, y: 3 }, { x: 16, y: 3 },
-  { x: 4,  y: 7 }, { x: 8,  y: 7 }, { x: 12, y: 7 }, { x: 15, y: 9 },
-  { x: 17, y: 10 }, { x: 20, y: 5 }, { x: 20, y: 10 }, { x: 14, y: 9 },
+  { x: 10, y: 6 },  { x: 20, y: 6 },  { x: 30, y: 6 },  { x: 40, y: 6 },
+  { x: 10, y: 14 }, { x: 20, y: 14 }, { x: 30, y: 14 }, { x: 40, y: 14 },
+  { x: 46, y: 10 }, { x: 46, y: 19 }, { x: 52, y: 12 }, { x: 52, y: 20 },
+  { x: 24, y: 20 }, { x: 34, y: 20 }, { x: 16, y: 24 }, { x: 30, y: 24 },
   ...baseCornerSlots
 ];
 
@@ -338,8 +338,8 @@ const buildableCells = (() => {
   const isSlot = (x, y) => slots.some(s => s.x === x && s.y === y);
   const isBaseBody = (x, y) => baseBodyCells.some(c => c.x === x && c.y === y);
   const cells = [];
-  for (let y = 3; y <= 10; y++) {
-    for (let x = 2; x <= 20; x++) {
+  for (let y = 5; y <= 26; y++) {
+    for (let x = 3; x <= 55; x++) {
       if (isWater(x, y)) continue;
       if (isSlot(x, y)) continue;
       if (isBaseBody(x, y)) continue;
@@ -356,9 +356,9 @@ export const MAP = Object.freeze({
   groundLane,
   waterLane,
   waterCells,
-  spawnGround: { x: 0, y: 5 },
-  spawnWater: { x: 0, y: 11 },
-  spawnAir: { x: 0, y: 2 },
+  spawnGround: { x: 0, y: 12 },
+  spawnWater: { x: 0, y: 22 },
+  spawnAir: { x: 0, y: 3 },
   base: baseDef,
   slots,
   buildableCells
