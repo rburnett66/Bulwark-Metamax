@@ -112,6 +112,12 @@ export function createHud(mountEl, callbacks) {
   const hptext = el(doc, 'span', 'bw-hptext', 'Base: --/--');
   hpwrap.appendChild(hpbar);
   hpwrap.appendChild(hptext);
+  cbs.__updHp = (hp, maxHp) => {
+    const m = maxHp || 1;
+    const cur = hp != null ? hp : 0;
+    hpfill.style.width = Math.max(0, Math.min(100, (cur / m) * 100)) + '%';
+    hptext.textContent = 'Base: ' + Math.max(0, Math.round(cur)) + '/' + Math.round(m);
+  };
 
   const timerEl = el(doc, 'span', 'bw-timer', '00:00:0');
   const moneyEl = el(doc, 'span', 'bw-money', '0g');
@@ -119,6 +125,24 @@ export function createHud(mountEl, callbacks) {
   const startWaveBtn = el(doc, 'button', 'bw-btn', 'Start Wave');
   startWaveBtn.addEventListener('click', () => { if (cbs.onStartWave) cbs.onStartWave(); });
   const seedEl = el(doc, 'span', 'bw-seed', 'seed: -');
+  cbs.__updMoney = (money) => { moneyEl.textContent = Math.round(money || 0) + 'g'; };
+  const PHASE_READOUT = {
+    build: 'BUILD', spawning: 'SPAWN', combat: 'FIGHT', cleared: 'CLEAR',
+    victory: 'WIN', defeat: 'LOSE', idle: 'IDLE'
+  };
+  cbs.__updWave = (cur, total, phase) => {
+    const label = (phase && PHASE_READOUT[phase]) || '';
+    waveEl.textContent = 'Wave ' + (cur || 0) + '/' + (total || 0) + (label ? ' [' + label + ']' : '');
+  };
+  cbs.__updSeed = (seed) => { seedEl.textContent = 'seed: ' + (seed != null ? seed : '-'); };
+  cbs.__updTimer = (t) => {
+    const secs = Math.max(0, t || 0);
+    const mm = Math.floor(secs / 60);
+    const ss = Math.floor(secs % 60);
+    const tenths = Math.floor((secs * 10) % 10);
+    timerEl.textContent = String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0') + ':' + tenths;
+  };
+  cbs.__updBtn = (canStart) => { startWaveBtn.disabled = !canStart; };
 
   topbar.appendChild(hpwrap);
   topbar.appendChild(timerEl);

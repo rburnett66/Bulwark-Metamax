@@ -119,6 +119,7 @@ export function createSim(seed, opts) {
     finalScore: null,
     goldSpent: 0,
     selectedId: null,
+    hudState: 'idle',
     log: createLog(seed),
     // deterministic monotonically increasing id source consumed by
     // entities.nextEntityId(state)
