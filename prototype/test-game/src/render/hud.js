@@ -98,7 +98,7 @@ export function createHud(mountEl, callbacks) {
   hpwrap.appendChild(hpbar);
   hpwrap.appendChild(hptext);
 
-  const timerEl = el(doc, 'span', 'bw-timer', '00:00:000');
+  const timerEl = el(doc, 'span', 'bw-timer', '00:00:0');
   const moneyEl = el(doc, 'span', 'bw-money', '0g');
   const waveEl = el(doc, 'span', 'bw-wave', 'Wave 0/0');
   const startWaveBtn = el(doc, 'button', 'bw-btn', 'Start Wave');

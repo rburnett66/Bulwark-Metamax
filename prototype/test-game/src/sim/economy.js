@@ -29,6 +29,14 @@ export function stepEconomy(state, dt) {
   if (!eco || dt <= 0) return;
   const gain = eco.incomePerSec * dt;
   if (gain > 0) {
+    if (!eco.accruing) {
+      eco.accruing = true;
+      emitEvent(state, {
+        type: 'timer',
+        tick: state.tick,
+        op: 'start'
+      });
+    }
     eco.money += gain;
     eco.totalEarned += gain;
   }
