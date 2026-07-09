@@ -182,11 +182,25 @@ function spawnFx(renderer, ev) {
   const pos = ev.pos || ev.cell || (ev.target && ev.target.pos) || null;
   if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
   const p = cellToLocal(renderer, pos.x, pos.y);
+  // Gold gain on a kill: a floating "+N" that rises + fades AT the unit that died (moved off the HUD header).
+  if (ev.type === 'coin') {
+    const amt = Math.round(ev.amount || 0);
+    if (amt <= 0) return;
+    let txt = null;
+    try {
+      txt = new PIXI.Text('+' + amt, { fontFamily: 'Courier New, monospace', fontSize: 13, fontWeight: 'bold',
+                                       fill: 0x8fff8f, stroke: 0x0c220c, strokeThickness: 3 });
+      if (txt.anchor && txt.anchor.set) txt.anchor.set(0.5, 1);
+      txt.x = p.x; txt.y = p.y - renderer.tile * 0.3;
+      renderer.layers.fx.addChild(txt);
+    } catch (e) { txt = null; }
+    renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: 0.9, kind: 'text', txt: txt });
+    return;
+  }
   let color = 0xffffff, ttl = 0.4, kind = 'ring';
   switch (ev.type) {
     case 'kill': color = 0xe05040; ttl = 0.5; kind = 'ring'; break;
     case 'damage': color = 0xffe080; ttl = 0.2; kind = 'flash'; break;
-    case 'coin': color = 0xf0c040; ttl = 0.6; kind = 'rise'; break;
     case 'build': color = 0x60d060; ttl = 0.5; kind = 'ring'; break;
     case 'spawn': color = 0x80b0ff; ttl = 0.35; kind = 'ring'; break;
     default: return;
@@ -201,10 +215,15 @@ function updateFx(renderer) {
   const keep = [];
   for (const fx of renderer.fxItems) {
     fx.age += FX_DT;
-    if (fx.age >= fx.ttl) continue;
+    if (fx.age >= fx.ttl) {
+      if (fx.txt && fx.txt.parent) fx.txt.parent.removeChild(fx.txt);   // free the floating-text object
+      continue;
+    }
     const f = fx.age / fx.ttl;
     const alpha = 1 - f;
-    if (fx.kind === 'ring') {
+    if (fx.kind === 'text') {
+      if (fx.txt) { fx.txt.y = fx.y - t * (0.3 + f * 1.1); fx.txt.alpha = alpha; }   // rise + fade at the unit
+    } else if (fx.kind === 'ring') {
       g.lineStyle(2, fx.color, alpha);
       g.drawCircle(fx.x, fx.y, t * 0.2 + f * t * 0.6);
       g.lineStyle(0);

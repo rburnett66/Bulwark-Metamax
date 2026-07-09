@@ -250,23 +250,8 @@ export function updateHud(hud, state, ui) {
   hud.hpfill.style.width = (frac * 100).toFixed(1) + '%';
   hud.hptext.textContent = 'Base: ' + Math.max(0, Math.ceil(base.hp)) + '/' + Math.ceil(base.maxHp);
 
-  // Money (with rising delta)
+  // Money — the gold-gain "+N" now floats at the dying unit on the map (render/renderer.js coin FX), not the HUD.
   const money = Math.floor((state.economy && state.economy.money) || 0);
-  if (hud.lastMoney !== null && money !== hud.lastMoney) {
-    const diff = money - hud.lastMoney;
-    if (Math.abs(diff) >= 1) {
-      try {
-        const span = hud.doc.createElement('span');
-        span.className = 'bw-delta';
-        span.style.color = diff > 0 ? '#8f8' : '#f88';
-        span.textContent = (diff > 0 ? '+' : '') + diff;
-        hud.moneyEl.appendChild(span);
-        if (typeof setTimeout === 'function') {
-          setTimeout(() => { if (span.parentNode) span.parentNode.removeChild(span); }, 900);
-        }
-      } catch (e) { /* non-critical */ }
-    }
-  }
   hud.lastMoney = money;
   // update the text node without wiping delta spans
   if (hud.moneyEl.firstChild && hud.moneyEl.firstChild.nodeType === 3) {
