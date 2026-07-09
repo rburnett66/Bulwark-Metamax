@@ -54,6 +54,10 @@ const CSS = `
 .bw-rscore { margin:6px 0 10px; text-align:center; }
 .bw-rscore-total { font-size:22px; font-weight:bold; letter-spacing:1px; color:#ffe08a; text-shadow:0 1px 4px #000; }
 .bw-rscore-line { font-size:12px; color:#bbb; margin-top:3px; }
+.bw-replaybar { position:absolute; left:50%; top:12px; transform:translateX(-50%); display:none;
+  background:rgba(20,42,72,0.94); color:#cfe6ff; border:1px solid rgba(120,180,220,0.75);
+  padding:5px 16px; border-radius:6px; font:bold 13px sans-serif; letter-spacing:1.5px; z-index:6;
+  box-shadow:0 2px 10px rgba(0,0,0,0.5); }
 .bw-rscore { font-size:22px; font-weight:bold; color:#ffd76a; text-shadow:0 2px 8px #000; }
 .bw-rscore-breakdown { font-size:13px; color:#cfe0f0; line-height:1.6; text-align:left; background:rgba(10,14,20,0.6); border:1px solid #3a4a5a; border-radius:4px; padding:8px 14px; }
 .bw-rscore-breakdown .bw-pos { color:#9f9; }
@@ -202,6 +206,10 @@ export function createHud(mountEl, callbacks) {
   const toast = el(doc, 'div', 'bw-toast');
   root.appendChild(toast);
 
+  // ---- replay-mode indicator --------------------------------------------
+  const replayBar = el(doc, 'div', 'bw-replaybar', '');
+  root.appendChild(replayBar);
+
   // ---- result overlay ---------------------------------------------------
   const resultEl = el(doc, 'div', 'bw-result');
   const banner = el(doc, 'div', 'bw-rbanner', '');
@@ -242,6 +250,7 @@ export function createHud(mountEl, callbacks) {
     resultEl,
     banner,
     scoreEl,
+    replayBar,
     lastMoney: null,
     lastSeed: 1,
     currentSelectedId: null,
@@ -249,6 +258,15 @@ export function createHud(mountEl, callbacks) {
     hideResult() {
       resultEl.classList.remove('bw-show');
       resultEl.style.display = 'none';
+    },
+    setReplay(active, label) {
+      if (!replayBar) return;
+      if (active) {
+        replayBar.textContent = '▶ REPLAY' + (label ? '  ·  ' + label : '');
+        replayBar.style.display = 'block';
+      } else {
+        replayBar.style.display = 'none';
+      }
     },
   };
   return hud;

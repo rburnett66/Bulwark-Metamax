@@ -54,6 +54,12 @@ export function boot(mountEl, seed) {
 
   const renderer = createRenderer(app, MAP);
 
+  // The last COMPLETED game, captured so "Run Replay" replays it even after Restart resets the live log, and
+  // after a page reload (persisted to localStorage). mmdev.
+  let lastReplayLog = null;
+  try { lastReplayLog = (typeof localStorage !== 'undefined' && localStorage.getItem('bulwark:lastReplay')) || null; }
+  catch (e) { /* storage blocked */ }
+
   let mode = 'play';          // 'play' | 'replay'
   let replayQueue = [];       // sorted commands during replay playback
   let replayIdx = 0;
@@ -159,9 +165,11 @@ export function boot(mountEl, seed) {
     },
     onRunReplay: () => {
       try {
-        // Clone the current log through serialize/deserialize so playback
-        // cannot mutate the live session log.
-        const cloned = deserializeLog(serializeLog(log));
+        // Replay the LAST COMPLETED game — captured on game end so it survives Restart (which resets the live
+        // log) and page reload. Mid-game with nothing finished yet → fall back to the current session if ended.
+        const src = lastReplayLog || (ended ? serializeLog(log) : null);
+        if (!src) { flashMessage(hud, 'no finished game to replay yet'); return; }
+        const cloned = deserializeLog(src);
         try {
           const check = runReplay(cloned);
           console.log('[Bulwark] headless replay hash:', check.hash, 'matches:', check.matches);
@@ -217,6 +225,11 @@ export function boot(mountEl, seed) {
           ended = true;
           if (mode === 'play') {
             log.finalHash = hashState(sim);
+            // Capture this finished game so "Run Replay" can replay it (survives Restart + reload).
+            try {
+              lastReplayLog = serializeLog(log);
+              if (typeof localStorage !== 'undefined') localStorage.setItem('bulwark:lastReplay', lastReplayLog);
+            } catch (e) { /* storage blocked/full */ }
           } else if (activeReplayLog && activeReplayLog.finalHash) {
             const h = hashState(sim);
             console.log('[Bulwark] replay final hash:', h,
@@ -225,6 +238,16 @@ export function boot(mountEl, seed) {
           }
           showResult(hud, sim.result, sim.finalScore);   // s12: show the computed final score
         }
+      }
+    }
+    // Replay-mode indicator — make it obvious a replay is playing (and when it finishes).
+    if (hud.setReplay) {
+      if (mode === 'replay') {
+        const s = Math.max(0, Math.floor(sim.time || 0));
+        const lbl = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0') + (ended ? '  (ended)' : '');
+        hud.setReplay(true, lbl);
+      } else {
+        hud.setReplay(false);
       }
     }
     renderFrame(renderer, sim, ui, pendingEvents);
