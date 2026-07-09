@@ -207,13 +207,18 @@ function spawnFx(renderer, ev) {
     renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: 0.9, kind: 'text', txt: txt });
     return;
   }
-  if (ev.type === 'baseDestroyed' || ev.type === 'baseDestroy' || ev.type === 'gameOver' || (ev.type === 'destroy' && ev.isBase)) {
+  // Base death / game over → big shake + base fire. The sim signals this as the game-over result ('lose'); the
+  // old 'baseDestroyed'/'gameOver' names were never emitted, so the shake never fired. (mmdev)
+  if (ev.type === 'lose' || ev.type === 'baseDestroyed' || ev.type === 'gameOver' || (ev.type === 'destroy' && ev.isBase)) {
     renderer.shake.time = 0; renderer.shake.dur = 0.8; renderer.shake.mag = renderer.tile * 0.7;
     renderer.baseFire = 3.0; renderer.baseFirePos = { x: p.x, y: p.y };
     return;
   }
-  if (ev.type === 'structureDestroyed' || ev.type === 'structureDestroy' || (ev.type === 'destroy' && !ev.isBase)) {
+  // Structure destroyed → small shake + debris ring. The sim emits type:'destroyed' (combat.js); the old
+  // 'structureDestroyed' name was never emitted. (mmdev)
+  if (ev.type === 'destroyed' || ev.type === 'structureDestroyed' || (ev.type === 'destroy' && !ev.isBase)) {
     renderer.shake.time = 0; renderer.shake.dur = 0.25; renderer.shake.mag = renderer.tile * 0.18;
+    renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: 0.5, color: 0xe05040, kind: 'ring' });
     return;
   }
   let color = 0xffffff, ttl = 0.4, kind = 'ring';
