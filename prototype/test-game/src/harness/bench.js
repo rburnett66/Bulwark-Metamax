@@ -3,42 +3,25 @@
  *
  * The interactive State Harness BENCH: pick a FACTION -> pick a UNIT -> see its part-stack rendered under the
  * pseudo-3D camera and DRIVE it through its states (scan / acquire / attack-aim / damage / heal / death). The
- * unit + its state are REAL sim entities (createUnit) read through readout.js; buildPartStack renders it;
- * drive.applyReadout wires the readout -> part transforms; camera.project places it (move it to see depth/skew).
- * No art pipeline — the whole bench boots from the game's Pixi global + the unit data.
+ * faction + unit roster is the DESIGN roster (roster.js, generated from the balance xlsx) — all 9 factions, not
+ * just the tutorial faction the game's tables.js implements. State is read through the real readout.js;
+ * buildPartStack renders the layers; drive.applyReadout wires readout -> part transforms; camera.project places it.
  */
 import { buildPartStack } from './partstack.js';
 import { project, shadowFor } from './camera.js';
 import { unitReadout } from './readout.js';
 import { unitParts } from './parts.js';
 import { applyReadout } from './drive.js';
-import { UNITS, WAVES, MAP } from '../data/tables.js';
-import { createSim } from '../sim/core.js';
-import { createUnit } from '../sim/entities.js';
+import { factionNames, unitsOf, ROSTER } from './roster.js';
 
 // A small, near-square bench "arena" so the camera gives a useful depth/scale range (unlike the full 64x32 map).
 const BENCH_MAP = { cols: 7, rows: 7, tile: 60 };
 const BASE_SCALE = 2.2;         // scale the small part-stack up so it reads clearly on the bench
 const TARGET_ID = 990001;       // sentinel id for the bench's movable practice target
 
-// ── Faction / unit selection (data-driven from UNITS) ────────────────────────────────────────────────
-export function factions() {
-  const out = [];
-  for (const id in UNITS) { const f = UNITS[id].faction; if (f && !out.includes(f)) out.push(f); }
-  return out.sort();
-}
-
-export function unitsForFaction(faction) {
-  const out = [];
-  for (const id in UNITS) if (UNITS[id].faction === faction) out.push({ id, label: unitLabel(id) });
-  return out.sort((a, b) => a.label.localeCompare(b.label));
-}
-
-function unitLabel(id) {
-  const d = UNITS[id];
-  if (!d) return id;
-  return `${d.role || id} — ${d.shape || d.domain || ''}`.trim();
-}
+// ── Faction / unit selection (design-driven from roster.js) ──────────────────────────────────────────
+export function factions() { return factionNames(); }
+export function unitsForFaction(faction) { return unitsOf(faction); }
 
 // ── The bench ────────────────────────────────────────────────────────────────────────────────────────
 export function bootBench(mountEl) {
@@ -53,37 +36,38 @@ export function bootBench(mountEl) {
   const grid = new PIXI.Graphics(); drawGrid(grid); app.stage.addChild(grid);
   const shadow = new PIXI.Graphics(); app.stage.addChild(shadow);   // under the unit
 
-  const b = { unitId: null, cell: { x: 3, y: 5 }, stack: null, sim: null, unit: null,
+  const b = { unitId: null, cell: { x: 3, y: 5 }, stack: null, state: null, unit: null,
               targetOn: false, targetDeg: -90 };
 
-  function rebuildSim() {
-    b.sim = createSim(1, { waves: WAVES, map: MAP });
-    if (!b.sim.units) b.sim.units = new Map();
-    if (!b.sim.structures) b.sim.structures = new Map();
-    b.unit = createUnit(b.sim, b.unitId, 1, { x: b.cell.x, y: b.cell.y }, 'ground', 'attacker');
-    if (b.unit && b.unit.id != null) b.sim.units.set(b.unit.id, b.unit);
+  // Minimal state + unit built from the DESIGN roster (readout.js only needs hp/maxHp/targetId/pos + a state with
+  // base/units/structures). This decouples the bench from tables.js so ALL 72 design units are inspectable.
+  function rebuildUnit() {
+    const def = ROSTER[b.unitId];
+    const maxHp = (def && def.hp && def.hp[0]) || 100;
+    b.state = { base: { pos: { x: b.cell.x, y: b.cell.y + 3 } }, units: new Map(), structures: new Map() };
+    b.unit = { id: 1, hp: maxHp, maxHp, pos: { x: b.cell.x, y: b.cell.y }, targetId: null };
     applyTarget();
   }
   function applyTarget() {
-    if (!b.unit || !b.sim) return;
+    if (!b.unit || !b.state) return;
     if (b.targetOn) {
       const rad = b.targetDeg * Math.PI / 180;
-      b.sim.structures.set(TARGET_ID, { id: TARGET_ID, pos: { x: b.cell.x + Math.cos(rad) * 3, y: b.cell.y + Math.sin(rad) * 3 } });
+      b.state.structures.set(TARGET_ID, { id: TARGET_ID, pos: { x: b.cell.x + Math.cos(rad) * 3, y: b.cell.y + Math.sin(rad) * 3 } });
       b.unit.targetId = TARGET_ID;
     } else {
-      b.sim.structures.delete(TARGET_ID);
+      b.state.structures.delete(TARGET_ID);
       b.unit.targetId = null;
     }
   }
   function rebuildStack() {
     if (b.stack) { app.stage.removeChild(b.stack); if (b.stack.destroy) b.stack.destroy({ children: true }); }
-    b.stack = buildPartStack(unitParts(UNITS[b.unitId]));
+    b.stack = buildPartStack(unitParts(ROSTER[b.unitId]));
     app.stage.addChild(b.stack);
   }
 
   app.ticker.add(() => {
     if (!b.stack || !b.unit) return;
-    const r = unitReadout(b.sim, b.unit);
+    const r = unitReadout(b.state, b.unit);
     applyReadout(b.stack, r);
     const p = project(BENCH_MAP, b.cell);
     b.stack.x = p.x; b.stack.y = p.y;
@@ -94,21 +78,21 @@ export function bootBench(mountEl) {
 
   return {
     factions, unitsForFaction,
-    setUnit(id) { b.unitId = id; rebuildSim(); rebuildStack(); },
+    setUnit(id) { b.unitId = id; rebuildUnit(); rebuildStack(); },
     acquire(on) { b.targetOn = !!on; applyTarget(); },
     moveTarget(deg) { b.targetDeg = deg; applyTarget(); },
     damage(frac) { if (b.unit) b.unit.hp = Math.max(0, b.unit.hp - b.unit.maxHp * (frac || 0.25)); },
     heal(frac) { if (b.unit) b.unit.hp = Math.min(b.unit.maxHp, b.unit.hp + b.unit.maxHp * (frac || 0.25)); },
     kill() { if (b.unit) b.unit.hp = 0; },
-    reset() { b.targetOn = false; b.targetDeg = -90; rebuildSim(); },
+    reset() { b.targetOn = false; b.targetDeg = -90; rebuildUnit(); },
     moveUnit(dx, dy) {
       b.cell.x = clamp(b.cell.x + dx, 0, BENCH_MAP.cols - 1);
       b.cell.y = clamp(b.cell.y + dy, 0, BENCH_MAP.rows - 1);
       if (b.unit) b.unit.pos = { x: b.cell.x, y: b.cell.y };
       applyTarget();
     },
-    readout() { return (b.unit && b.sim) ? unitReadout(b.sim, b.unit) : null; },
-    unitDef() { return UNITS[b.unitId] || null; },
+    readout() { return (b.unit && b.state) ? unitReadout(b.state, b.unit) : null; },
+    unitDef() { return ROSTER[b.unitId] || null; },
   };
 }
 
