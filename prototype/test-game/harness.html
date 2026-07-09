@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>State Harness — Bulwark</title>
+  <style>
+    :root { --bg:#0c1014; --panel:#141b22; --border:#26313c; --text:#dfe7ee; --muted:#8ea0b0; --accent:#5fe0ff; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; }
+    #wrap { display:flex; gap:18px; padding:18px; flex-wrap:wrap; align-items:flex-start; }
+    #harness-mount { background:#080b0e; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+    #harness-mount canvas { max-width:100%; height:auto; display:block; }
+    #controls { width:300px; min-width:260px; display:flex; flex-direction:column; gap:14px; }
+    h1 { font-size:18px; margin:0; }
+    .sub { color:var(--muted); font-size:12.5px; margin-top:-8px; }
+    .field { display:flex; flex-direction:column; gap:4px; }
+    .field label { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    select, button { font:inherit; color:var(--text); background:var(--panel); border:1px solid var(--border);
+      border-radius:6px; padding:7px 10px; cursor:pointer; }
+    select { width:100%; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    button:hover { border-color:var(--accent); }
+    button.active { border-color:var(--accent); color:var(--accent); }
+    .pad { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; width:150px; }
+    .pad button { padding:6px 0; }
+    #readout { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px; }
+    #readout h2 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:0 0 8px; }
+    .row { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #1b232c; }
+    .row:last-child { border-bottom:0; }
+    .row .k { color:var(--muted); }
+    .row .v { font-variant-numeric:tabular-nums; }
+    .bar { height:8px; background:#1b232c; border-radius:4px; overflow:hidden; margin-top:6px; }
+    .bar > i { display:block; height:100%; background:linear-gradient(90deg,#e05a5a,#e0c05a,#5ae08a); }
+    .state-pill { display:inline-block; padding:2px 8px; border-radius:10px; background:#1b232c; color:var(--accent); font-size:12px; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="harness-mount"></div>
+    <div id="controls">
+      <div>
+        <h1>State Harness</h1>
+        <div class="sub">Pick a faction and a unit, then drive it through its states. The preview is the game's accurate Pixi render.</div>
+      </div>
+
+      <div class="field">
+        <label for="faction">Faction</label>
+        <select id="faction"></select>
+      </div>
+      <div class="field">
+        <label for="unit">Unit</label>
+        <select id="unit"></select>
+      </div>
+
+      <div class="grid">
+        <button id="acquire">Acquire target</button>
+        <button id="attack">Pulse attack</button>
+        <button id="dmg">Damage −25%</button>
+        <button id="heal">Heal +25%</button>
+        <button id="kill">Destroy</button>
+        <button id="reset">Reset</button>
+      </div>
+
+      <div class="field">
+        <label>Aim target (deg) / move unit</label>
+        <div style="display:flex; gap:14px; align-items:center;">
+          <div>
+            <button id="rotL">◀ aim</button>
+            <button id="rotR">aim ▶</button>
+          </div>
+          <div class="pad">
+            <span></span><button id="up">↑</button><span></span>
+            <button id="left">←</button><button id="down">↓</button><button id="right">→</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="readout">
+        <h2>Readout <span id="state" class="state-pill">—</span></h2>
+        <div class="row"><span class="k">health</span><span class="v" id="r-health">—</span></div>
+        <div class="bar"><i id="r-bar" style="width:0%"></i></div>
+        <div class="row"><span class="k">has target</span><span class="v" id="r-target">—</span></div>
+        <div class="row"><span class="k">awareness</span><span class="v" id="r-aware">—</span></div>
+        <div class="row"><span class="k">aim angle</span><span class="v" id="r-aim">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/pixi.min.js"></script>
+  <script type="module">
+    import { bootBench } from './src/harness/bench.js';
+
+    const bench = bootBench(document.getElementById('harness-mount'));
+    const $ = (id) => document.getElementById(id);
+
+    // Faction -> Unit dropdowns (data-driven).
+    const fSel = $('faction'), uSel = $('unit');
+    bench.factions().forEach((f) => { const o = document.createElement('option'); o.value = f; o.textContent = f; fSel.appendChild(o); });
+    function fillUnits() {
+      uSel.innerHTML = '';
+      bench.unitsForFaction(fSel.value).forEach((u) => { const o = document.createElement('option'); o.value = u.id; o.textContent = u.label; uSel.appendChild(o); });
+      bench.setUnit(uSel.value);
+    }
+    fSel.onchange = fillUnits;
+    uSel.onchange = () => bench.setUnit(uSel.value);
+    fillUnits();
+
+    // State controls.
+    let acquired = false, aimDeg = -90;
+    $('acquire').onclick = () => {
+      acquired = !acquired; bench.acquire(acquired);
+      $('acquire').classList.toggle('active', acquired);
+      $('acquire').textContent = acquired ? 'Release target' : 'Acquire target';
+    };
+    $('attack').onclick = () => { if (!acquired) { acquired = true; bench.acquire(true); $('acquire').classList.add('active'); $('acquire').textContent = 'Release target'; } bench.damage(0.0); };
+    $('dmg').onclick = () => bench.damage(0.25);
+    $('heal').onclick = () => bench.heal(0.25);
+    $('kill').onclick = () => bench.kill();
+    $('reset').onclick = () => { acquired = false; aimDeg = -90; bench.reset(); $('acquire').classList.remove('active'); $('acquire').textContent = 'Acquire target'; };
+    $('rotL').onclick = () => { aimDeg -= 15; bench.moveTarget(aimDeg); };
+    $('rotR').onclick = () => { aimDeg += 15; bench.moveTarget(aimDeg); };
+    $('up').onclick = () => bench.moveUnit(0, -1);
+    $('down').onclick = () => bench.moveUnit(0, 1);
+    $('left').onclick = () => bench.moveUnit(-1, 0);
+    $('right').onclick = () => bench.moveUnit(1, 0);
+
+    // Live readout panel.
+    function label(r) {
+      if (r.health <= 0) return 'DESTROYED';
+      if (r.awareness >= 1) return 'ATTACKING';
+      return 'SCANNING';
+    }
+    setInterval(() => {
+      const r = bench.readout(); if (!r) return;
+      $('state').textContent = label(r);
+      $('r-health').textContent = (r.health * 100).toFixed(0) + '%';
+      $('r-bar').style.width = Math.max(0, Math.min(100, r.health * 100)) + '%';
+      $('r-target').textContent = r.hasTarget ? 'yes' : 'no';
+      $('r-aware').textContent = r.awareness.toFixed(0);
+      $('r-aim').textContent = (r.aimAngle == null) ? '—' : r.aimAngle.toFixed(2) + ' rad';
+    }, 100);
+  </script>
+</body>
+</html>
