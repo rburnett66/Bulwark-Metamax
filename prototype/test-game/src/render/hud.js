@@ -212,6 +212,7 @@ export function createHud(mountEl, callbacks) {
     hptext,
     moneyEl,
     waveEl,
+    timerEl,
     startWaveBtn,
     seedEl,
     paletteBtns,
@@ -239,10 +240,21 @@ export function createHud(mountEl, callbacks) {
   return hud;
 }
 
+/** Format a simulation-time value (seconds) as MM:SS for the HUD clock. */
+function fmtTime(sec) {
+  const s = Math.max(0, Math.floor(sec || 0));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return (m < 10 ? '0' + m : m) + ':' + (r < 10 ? '0' + r : r);
+}
+
 export function updateHud(hud, state, ui) {
   if (!hud || !state) return;
   hud.lastSeed = state.seed;
   hud.seedEl.textContent = 'seed: ' + state.seed;
+  // Game clock: the sim advances state.time each tick (sim/core.js:378), but the timer span was created and
+  // never updated (and wasn't even on the hud object). Tick it here so the clock actually counts up.
+  if (hud.timerEl) hud.timerEl.textContent = fmtTime(state.time);
 
   // Base HP
   const base = state.base || { hp: 0, maxHp: 1 };
