@@ -131,7 +131,8 @@ export function createHud(mountEl, callbacks) {
     victory: 'WIN', defeat: 'LOSE', idle: 'IDLE'
   };
   cbs.__updWave = (cur, total, phase) => {
-    const label = (phase && PHASE_READOUT[phase]) || '';
+    const key = phase != null ? String(phase).toLowerCase() : '';
+    const label = PHASE_READOUT[key] || (phase ? String(phase).toUpperCase() : '');
     waveEl.textContent = 'Wave ' + (cur || 0) + '/' + (total || 0) + (label ? ' [' + label + ']' : '');
   };
   cbs.__updSeed = (seed) => { seedEl.textContent = 'seed: ' + (seed != null ? seed : '-'); };
