@@ -14,7 +14,9 @@ export function initEconomy(assumptions) {
     money: startingMoney,
     incomePerSec: incomePerSec,
     totalEarned: startingMoney,
-    totalSpent: 0
+    totalSpent: 0,
+    goldSpent: 0,
+    kills: 0
   };
 }
 
@@ -81,6 +83,8 @@ export function spend(state, cost, reason) {
   }
   eco.money -= c;
   eco.totalSpent += c;
+  if (Number.isFinite(state.goldSpent)) state.goldSpent += c;
+  else state.goldSpent = c;
   if (eco.money < 0) eco.money = 0;
   emitEvent(state, {
     type: 'coin',
@@ -116,6 +120,9 @@ export function grantKillIncome(state, unit) {
     eco.money += amount;
     eco.totalEarned += amount;
   }
+  eco.kills = (Number.isFinite(eco.kills) ? eco.kills : 0) + 1;
+  if (Number.isFinite(state.kills)) state.kills += 1;
+  else state.kills = 1;
   emitEvent(state, {
     type: 'coin',
     tick: state.tick,

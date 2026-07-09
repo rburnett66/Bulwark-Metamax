@@ -37,8 +37,8 @@ function dist(a, b) {
  */
 function computeFinalScore(state) {
   const eco = state.economy || {};
-  const kills = (eco.kills != null ? eco.kills : (state.kills || 0));
-  const goldSpent = state.goldSpent || 0;
+  const kills = (eco.kills != null ? eco.kills : (state.kills != null ? state.kills : (eco.totalKills || 0)));
+  const goldSpent = (eco.totalSpent != null ? eco.totalSpent : (state.goldSpent || 0));
   const goldRemaining = (eco.gold != null ? eco.gold : 0);
 
   const totalSeconds = Math.max(0, Math.floor(state.time || 0));
@@ -145,6 +145,14 @@ export function createSim(seed, opts) {
  */
 export function emitEvent(state, ev) {
   state.events.push(ev);
+  // When a terminal result event is emitted (final wave cleared or base
+  // destroyed), compute + store the Final Score exactly once. finalizeGame
+  // is idempotent and no-ops until state.result is set.
+  if (ev && (ev.type === 'result' || ev.type === 'gameOver' || ev.type === 'victory' || ev.type === 'defeat' || ev.type === 'win' || ev.type === 'lose')) {
+    if (ev.type !== 'finalScore' && state.result) {
+      finalizeGame(state);
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
