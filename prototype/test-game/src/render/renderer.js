@@ -426,6 +426,20 @@ export function renderFrame(renderer, state, ui, events) {
     }
   }
 
+  // s5: selection range circle for a selected UNIT (enemy/defender) — click a unit to see its attack reach
+  if (ui && ui.selectedUnitId != null && state.units) {
+    const u = state.units.get(ui.selectedUnitId);
+    if (u && u.hp > 0) {
+      const p = cellToLocal(renderer, u.pos.x, u.pos.y);
+      gO.lineStyle(2, 0xff7070, 0.95);
+      gO.drawCircle(p.x, p.y, t * 0.34);                                  // selection ring on the unit
+      gO.lineStyle(0);
+      if (typeof u.range === 'number' && u.range > 0) {
+        drawDashedCircle(gO, p.x, p.y, u.range * t, 0xff8080, 0.6, 1.5);  // its reach
+      }
+    }
+  }
+
   // ghost preview
   if (ui && ui.buildSelection && ui.hoverCell) {
     let fp = { w: 1, h: 1 };

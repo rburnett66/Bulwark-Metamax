@@ -51,6 +51,9 @@ const CSS = `
 .bw-rbanner { font-size:36px; font-weight:bold; letter-spacing:2px; text-shadow:0 2px 8px #000; }
 .bw-rbanner.bw-win { color:#9f9; }
 .bw-rbanner.bw-lose { color:#f99; }
+.bw-rscore { margin:6px 0 10px; text-align:center; }
+.bw-rscore-total { font-size:22px; font-weight:bold; letter-spacing:1px; color:#ffe08a; text-shadow:0 1px 4px #000; }
+.bw-rscore-line { font-size:12px; color:#bbb; margin-top:3px; }
 .bw-rscore { font-size:22px; font-weight:bold; color:#ffd76a; text-shadow:0 2px 8px #000; }
 .bw-rscore-breakdown { font-size:13px; color:#cfe0f0; line-height:1.6; text-align:left; background:rgba(10,14,20,0.6); border:1px solid #3a4a5a; border-radius:4px; padding:8px 14px; }
 .bw-rscore-breakdown .bw-pos { color:#9f9; }
@@ -202,11 +205,13 @@ export function createHud(mountEl, callbacks) {
   // ---- result overlay ---------------------------------------------------
   const resultEl = el(doc, 'div', 'bw-result');
   const banner = el(doc, 'div', 'bw-rbanner', '');
+  const scoreEl = el(doc, 'div', 'bw-rscore', '');   // s12: final-score breakdown
   const resultRestart = el(doc, 'button', 'bw-btn', 'Restart');
   resultRestart.addEventListener('click', () => {
     if (cbs.onRestart) cbs.onRestart(hud.lastSeed);
   });
   resultEl.appendChild(banner);
+  resultEl.appendChild(scoreEl);
   resultEl.appendChild(resultRestart);
   root.appendChild(resultEl);
 
@@ -236,6 +241,7 @@ export function createHud(mountEl, callbacks) {
     toastTimer: null,
     resultEl,
     banner,
+    scoreEl,
     lastMoney: null,
     lastSeed: 1,
     currentSelectedId: null,
@@ -328,11 +334,26 @@ export function updateHud(hud, state, ui) {
   }
 }
 
-export function showResult(hud, result) {
+export function showResult(hud, result, finalScore) {
   if (!hud) return;
   const win = result === 'win';
   hud.banner.textContent = win ? 'VICTORY' : 'DEFEAT';
   hud.banner.className = 'bw-rbanner ' + (win ? 'bw-win' : 'bw-lose');
+  // s12: present the Final Score (kills − time − gold spent + gold left) the sim computes on game end.
+  if (hud.scoreEl) {
+    const fs = finalScore;
+    if (fs && typeof fs.score === 'number') {
+      const mm = String(fs.minutes != null ? fs.minutes : 0).padStart(2, '0');
+      const ss = String(fs.seconds != null ? fs.seconds : 0).padStart(2, '0');
+      hud.scoreEl.innerHTML =
+        '<div class="bw-rscore-total">SCORE ' + fs.score + '</div>' +
+        '<div class="bw-rscore-line">' + (fs.kills || 0) + ' kills · ' + mm + ':' + ss +
+        ' · ' + (fs.goldRemaining || 0) + ' gold left</div>';
+      hud.scoreEl.style.display = 'block';
+    } else {
+      hud.scoreEl.style.display = 'none';
+    }
+  }
   hud.resultEl.style.display = 'flex';
   hud.resultEl.classList.add('bw-show');
 }

@@ -10,12 +10,26 @@ export function createUiState() {
     hoverCell: null,
     hoverValid: false,
     selectedStructureId: null,
+    selectedUnitId: null,      // s5: a selected unit (enemy/defender) whose attack range is shown
   };
 }
 
 function buildOrder() {
   // Deterministic ordered list of structure ids for 1-4 shortcuts.
   return Object.keys(STRUCTURES);
+}
+
+function findUnitAtCell(state, cell) {
+  // s5: nearest live unit to the clicked cell (within ~0.7 cell) so a click on an enemy selects it.
+  if (!state || !state.units || !cell) return null;
+  let bestId = null;
+  let bestD = 0.7;
+  for (const u of state.units.values()) {
+    if (!u || u.hp <= 0) continue;
+    const d = Math.hypot(u.pos.x - cell.x, u.pos.y - cell.y);
+    if (d < bestD) { bestD = d; bestId = u.id; }
+  }
+  return bestId;
 }
 
 function findStructureAtCell(state, cell) {
@@ -115,13 +129,17 @@ function onPointerDown(handle, ev) {
     return;
   }
 
-  // Selection mode: click a structure to select, empty ground to deselect.
+  // Selection mode: click a structure to select; else a unit (enemy/defender) to inspect its range; else deselect.
   const structId = findStructureAtCell(state, cell);
   ui.selectedStructureId = structId;
+  ui.selectedUnitId = null;
   if (structId === null) {
-    // Clicking empty ground clears any active build selection too.
-    ui.buildSelection = null;
-    ui.hoverValid = false;
+    ui.selectedUnitId = findUnitAtCell(state, cell);   // s5: show the selected unit's attack range
+    if (ui.selectedUnitId === null) {
+      // Clicking empty ground clears any active build selection too.
+      ui.buildSelection = null;
+      ui.hoverValid = false;
+    }
   }
 }
 
@@ -143,6 +161,8 @@ function onKeyDown(handle, ev) {
       ui.hoverValid = false;
     } else if (ui.selectedStructureId !== null) {
       ui.selectedStructureId = null;
+    } else if (ui.selectedUnitId !== null) {
+      ui.selectedUnitId = null;
     }
     ev.preventDefault();
     return;

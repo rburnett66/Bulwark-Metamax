@@ -223,7 +223,7 @@ export function boot(mountEl, seed) {
               'expected:', activeReplayLog.finalHash,
               'match:', h === activeReplayLog.finalHash);
           }
-          showResult(hud, sim.result);
+          showResult(hud, sim.result, sim.finalScore);   // s12: show the computed final score
         }
       }
     }
