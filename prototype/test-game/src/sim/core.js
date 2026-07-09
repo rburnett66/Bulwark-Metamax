@@ -468,6 +468,11 @@ export function stepSim(state, dtFixed) {
     if (state.selectedId === dead[i]) state.selectedId = null;
   }
 
+  // s10: passive base repair — the keep slowly mends between assaults (capped at max; never revives a dead base).
+  if (state.base.hp > 0 && state.base.hp < state.base.maxHp) {
+    state.base.hp = Math.min(state.base.maxHp, state.base.hp + 8 * dtFixed);
+  }
+
   // 7. Win / lose transitions. stepWaves sets result='win' after the final
   //    clear; base death always overrides to a loss.
   if (state.base.hp <= 0) {

@@ -127,10 +127,11 @@ function drawStaticBoard(renderer, map) {
   mark(map.spawnWater, 0x4090d0);
   mark(map.spawnAir, 0xd0a040);
 
-  // base marker
+  // base marker — s10: outline each cell of the 3x3 keep
   if (map.base) {
     gGround.lineStyle(2, 0xe8d080, 0.9);
-    gGround.drawRect(map.base.x * t + 2, map.base.y * t + 2, t - 4, t - 4);
+    const cells = map.base.cells || [{ x: map.base.x, y: map.base.y }];
+    for (const bc of cells) gGround.drawRect(bc.x * t + 2, bc.y * t + 2, t - 4, t - 4);
     gGround.lineStyle(0);
   }
 
@@ -301,16 +302,20 @@ export function renderFrame(renderer, state, ui, events) {
 
   if (!state) { updateFx(renderer); return; }
 
-  // base
+  // base — s10: a 3x3 keep drawn as its body cells (the 4 corners are tower slots, drawn by the board)
   if (state.base) {
-    const bp = cellToLocal(renderer, state.base.pos.x, state.base.pos.y);
+    const cells = state.base.cells || [state.base.pos];
     gS.beginFill(0xc0a040, 1);
-    gS.drawRect(bp.x - t * 0.4, bp.y - t * 0.4, t * 0.8, t * 0.8);
+    for (const bc of cells) {
+      const cp = cellToLocal(renderer, bc.x, bc.y);
+      gS.drawRect(cp.x - t * 0.46, cp.y - t * 0.46, t * 0.92, t * 0.92);
+    }
     gS.endFill();
+    const bp = cellToLocal(renderer, state.base.pos.x, state.base.pos.y);
     gS.lineStyle(2, 0xf0e0a0, 0.9);
-    gS.drawRect(bp.x - t * 0.4, bp.y - t * 0.4, t * 0.8, t * 0.8);
+    gS.drawRect(bp.x - t * 1.5, bp.y - t * 1.5, t * 3, t * 3);   // keep outline
     gS.lineStyle(0);
-    drawHpBar(gS, bp.x, bp.y - t * 0.62, t * 0.9, state.base.hp / Math.max(1, state.base.maxHp));
+    drawHpBar(gS, bp.x, bp.y - t * 1.72, t * 2.2, state.base.hp / Math.max(1, state.base.maxHp));
   }
 
   // structures
