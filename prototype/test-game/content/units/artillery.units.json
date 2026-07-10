@@ -1,0 +1,178 @@
+{
+  "faction": "Artillery",
+  "sheet": "army_set_1.png",
+  "units": {
+    "ART-Troops": {
+      "shape": "Troops",
+      "role": "Skirmisher",
+      "rotation": 0,
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-quad-rotor-scout-drone-3.png",
+          "scale": 0.4,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-quad-rotor-scout-drone-3.png",
+          "scale": 0.55,
+          "offset": 0
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.3,
+          "offset": 0
+        }
+      }
+    },
+    "ART-Trucks": {
+      "shape": "Trucks",
+      "role": "Support",
+      "rotation": 90,
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-tank-chassis-2.png",
+          "scale": 0.55,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-tank-turret-1.png",
+          "scale": 0.4,
+          "offset": 0
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.3,
+          "offset": 0
+        }
+      }
+    },
+    "ART-Tanks": {
+      "shape": "Tanks",
+      "role": "Bruiser",
+      "rotation": 90,
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-tank-chassis-2.png",
+          "scale": 0.45,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-tank-turret-1.png",
+          "scale": 0.45,
+          "offset": 0
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.3,
+          "offset": 0
+        }
+      }
+    },
+    "ART-Artillery": {
+      "shape": "Artillery",
+      "role": "Siege",
+      "rotation": 90,
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-tank-chassis-3.png",
+          "scale": 0.4,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-tank-turret-1.png",
+          "scale": 0.65,
+          "offset": 0
+        },
+        "head": null
+      }
+    },
+    "ART-HeavyTanks": {
+      "shape": "Heavy Tanks",
+      "role": "Juggernaut",
+      "rotation": 90,
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-heavy-tank-chassis-2.png",
+          "scale": 1,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-triple-naval-turret-2.png",
+          "scale": 1.15,
+          "offset": 1
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.5,
+          "offset": 0
+        }
+      }
+    },
+    "ART-Copters": {
+      "shape": "Copters",
+      "role": "Harasser",
+      "rotation": 0,
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-quad-rotor-scout-drone-2.png",
+          "scale": 0.65,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-quad-rotor-scout-drone-2.png",
+          "scale": 1.05,
+          "offset": 0
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.3,
+          "offset": 0
+        }
+      }
+    },
+    "ART-Planes": {
+      "shape": "Planes",
+      "role": "Striker",
+      "rotation": 90,
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-bomber-drone-4.png",
+          "scale": 1,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-bomber-drone-4.png",
+          "scale": 1.5,
+          "offset": 0
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.3,
+          "offset": 0
+        }
+      }
+    },
+    "ART-Missiles": {
+      "shape": "Missiles",
+      "role": "Guided AA",
+      "rotation": 0,
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-quad-rotor-scout-drone-1.png",
+          "scale": 0.3,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-quad-rotor-scout-drone-1.png",
+          "scale": 0.5,
+          "offset": 0
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.3,
+          "offset": 0
+        }
+      }
+    }
+  }
+}

@@ -18,6 +18,7 @@ import { unitReadout } from './readout.js';
  */
 export function runScenario(spec) {
   const st = createSim(spec.seed || 1, { waves: WAVES, map: MAP });
+  if (st.base) st.base.cannon = null;   // isolated readout scenario — no base super-cannon interfering
   const u = createUnit(st, spec.unitId, spec.tier || 1, { x: spec.pos.x, y: spec.pos.y },
                        spec.lane || 'ground', spec.side || 'attacker');
   if (st.units && u && u.id != null && !st.units.has(u.id)) st.units.set(u.id, u);

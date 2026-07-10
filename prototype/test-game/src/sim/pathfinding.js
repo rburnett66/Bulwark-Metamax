@@ -27,13 +27,12 @@ export function buildNavGrid(map, structures) {
     }
   }
 
-  // Wall / moat footprints block walkers (any live lifecycle phase blocks;
-  // a destroyed or removed structure no longer exists in the list, but guard anyway).
+  // ALL live structures block walkers — walls, moats AND towers are solid obstacles units must path AROUND
+  // (a destroyed or removed structure no longer exists in the list, but guard anyway). Flyers ignore the grid.
   if (structures) {
     for (let i = 0; i < structures.length; i++) {
       const s = structures[i];
       if (!s) continue;
-      if (s.kind !== 'wall' && s.kind !== 'moat') continue;
       if (s.lifecycle === 'Destroyed') continue;
       const fp = s.footprint || { w: 1, h: 1 };
       const bx = Math.round(s.pos.x);
@@ -59,8 +58,9 @@ export function buildNavGrid(map, structures) {
  * Returns an array of cells (excluding start, including goal), or null if unreachable.
  * The goal cell itself is always treated as enterable (e.g. the base clearing).
  */
-export function findWalkerPath(navGrid, from, to) {
+export function findWalkerPath(navGrid, from, to, avoid) {
   const passable = navGrid.passable;
+  const hasAvoid = avoid && (avoid.size > 0 || avoid.length > 0);
   const cols = navGrid.cols;
   const rows = navGrid.rows;
 
@@ -103,6 +103,7 @@ export function findWalkerPath(navGrid, from, to) {
       const ni = ny * cols + nx;
       if (visited[ni]) continue;
       if (ni !== goal && !passable[ni]) continue;
+      if (hasAvoid && ni !== goal && avoid.has(ni)) continue;   // temporarily route AROUND jammed cells
       visited[ni] = 1;
       prev[ni] = cur;
       queue[tail++] = ni;
@@ -200,6 +201,7 @@ export function recomputeUnitPaths(state) {
 
   const navGrid = buildNavGrid(map, structures);
   state.navGrid = navGrid;
+  if (state.base) state.base._attackSlots = null;   // walls moved → recompute base ring slots against the new grid
 
   if (!state.units) return;
 

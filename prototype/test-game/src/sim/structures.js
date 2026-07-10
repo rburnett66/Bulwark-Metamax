@@ -84,10 +84,8 @@ export function validatePlacement(state, structId, slotOrCell) {
   }
   if (!canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
 
-  if (isTowerKind(def.kind)) {
-    return { ok: true, reason: '' };
-  }
-
+  // Every structure (towers included, now that they block) must leave the ground lane OPEN — reject any
+  // placement that would seal the base off so units can no longer path to it.
   // Hypothetical nav grid with the new piece: the ground lane must stay open.
   const ghost = {
     id: -1,
@@ -124,9 +122,7 @@ export function placeStructure(state, structId, slotOrCell) {
 
   emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: structId, phase: 'start', pos: { x: s.pos.x, y: s.pos.y } });
 
-  if (s.kind === 'wall' || s.kind === 'moat') {
-    recomputeUnitPaths(state);
-  }
+  recomputeUnitPaths(state);   // any structure now changes the nav grid → reroute walkers around it
   return s;
 }
 
@@ -284,7 +280,7 @@ export function stepStructures(state, dt) {
 
   for (const s of toRemove) {
     state.structures.delete(s.id);
-    if (s.kind === 'wall' || s.kind === 'moat') pathDirty = true;
+    pathDirty = true;   // any removed structure re-opens cells → walkers can reroute through them
   }
 
   // Repair troops: march to structure, then heal it over time.

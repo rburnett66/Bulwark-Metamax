@@ -1,9 +1,9 @@
-import { MAP, WAVES } from './data/tables.js';
+import { MAP, WAVES, makeWaves } from './data/tables.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame } from './render/renderer.js';
-import { createHud, updateHud, showResult, flashMessage } from './render/hud.js';
+import { createHud, updateHud, showResult, flashMessage, showWaveBanner } from './render/hud.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
 
 function parseSeedFromUrl() {
@@ -48,11 +48,19 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   // Session state (sim + log + ui). Re-created on restart / replay.
   // ---------------------------------------------------------------------
-  let sim = createSim(currentSeed, { waves: WAVES, map: MAP });
+  let currentWaves = WAVES;   // active enemy schedule — the mixed campaign, or one faction's waves (test picker)
+  let sim = createSim(currentSeed, { waves: currentWaves, map: MAP });
   let log = createLog(currentSeed);
   let ui = createUiState();
 
   const renderer = createRenderer(app, MAP);
+
+  // Load the AUTHORED unit art (faction .units.json + sheets) asynchronously; once ready, units that have art
+  // render as their real sprites. Non-blocking — the game runs with primitives until (and if) it resolves.
+  import('./render/unitArt.js').then(({ loadUnitArt }) => loadUnitArt()).then((art) => {
+    renderer.unitArt = art;
+    if (art && art.ready) console.log('[unitArt] loaded', Object.keys(art.defs).length, 'authored units');
+  }).catch((e) => console.warn('[unitArt] skipped:', e && e.message));
 
   // The last COMPLETED game, captured so "Run Replay" replays it even after Restart resets the live log, and
   // after a page reload (persisted to localStorage). mmdev.
@@ -96,7 +104,7 @@ export function boot(mountEl, seed) {
     const s = (typeof newSeed === 'number' && Number.isFinite(newSeed)) ? Math.floor(newSeed) : currentSeed;
     currentSeed = s;
     if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
-    sim = createSim(currentSeed, { waves: WAVES, map: MAP });
+    sim = createSim(currentSeed, { waves: currentWaves, map: MAP });
     log = createLog(currentSeed);
     ui = createUiState();
     mode = 'play';
@@ -119,7 +127,7 @@ export function boot(mountEl, seed) {
     mode = 'replay';
     currentSeed = Math.floor(replayLog.seed);
     activeReplayLog = replayLog;
-    sim = createSim(currentSeed, { waves: WAVES, map: MAP });
+    sim = createSim(currentSeed, { waves: currentWaves, map: MAP });
     ui = createUiState();
     replayQueue = (replayLog.commands || []).slice().sort((a, b) => a.tick - b.tick);
     replayIdx = 0;
@@ -141,6 +149,12 @@ export function boot(mountEl, seed) {
     },
     onStartWave: () => {
       submit({ type: 'startWave' });
+    },
+    onFactionSelect: (faction) => {
+      // Rebuild the enemy schedule for the chosen faction (or the campaign) and restart the run to test it.
+      currentWaves = faction ? makeWaves(faction) : WAVES;
+      restart(currentSeed);
+      flashMessage(hud, faction ? (faction + ' — ' + currentWaves.length + ' test waves') : 'Campaign restored');
     },
     onUpgrade: (id) => {
       submit({ type: 'upgrade', id });
@@ -218,7 +232,11 @@ export function boot(mountEl, seed) {
         }
         const evs = stepSim(sim, FIXED_DT);
         if (evs && evs.length) {
-          for (let i = 0; i < evs.length; i++) pendingEvents.push(evs[i]);
+          for (let i = 0; i < evs.length; i++) {
+            pendingEvents.push(evs[i]);
+            // Boldly announce who's attacking, before the wave's enemies appear.
+            if (evs[i].type === 'wave' && evs[i].phase === 'start' && evs[i].faction) showWaveBanner(hud, evs[i].faction);
+          }
         }
         accumulator -= FIXED_DT;
         if (sim.result) {
@@ -250,7 +268,7 @@ export function boot(mountEl, seed) {
         hud.setReplay(false);
       }
     }
-    renderFrame(renderer, sim, ui, pendingEvents);
+    renderFrame(renderer, sim, ui, pendingEvents, dtMs / 1000);   // pass REAL frame time so FX track sim time
     updateHud(hud, sim, ui);
     pendingEvents = [];
   });

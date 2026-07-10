@@ -26,6 +26,19 @@ export function nextEntityId(state) {
  * @param {'attacker'|'defender'} side owning side
  * @returns {object} Unit
  */
+// Physical footprint per shape (cell units; a tile = 1). Heavier ground units are bigger; air units modest.
+export function unitRadius(def) {
+  switch (def && def.shape) {
+    case 'Troops': return 0.24;
+    case 'Trucks': return 0.30;
+    case 'Artillery': return 0.32;
+    case 'Tanks': return 0.36;
+    case 'Heavy Tanks': return 0.42;
+    case 'Copters': case 'Planes': case 'Missiles': return 0.28;
+    default: return 0.30;
+  }
+}
+
 export function createUnit(state, unitId, tier, pos, lane, side) {
   const def = getUnitDef(unitId);
   const t = Math.min(3, Math.max(1, tier | 0));
@@ -51,6 +64,7 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
     dps: dps,
     range: def.range,
     speed: def.speed,
+    radius: unitRadius(def),   // physical footprint (cell units) — units can't overlap; heavier = bigger
     vision: def.vision,
     damageType: def.damageType,
     armorClass: def.armorClass,
@@ -130,6 +144,9 @@ export function createBase(map) {
     cells: (map.base.cells ? map.base.cells.map((c) => ({ x: c.x, y: c.y })) : null),
     lastDamageTick: -Infinity,                          // s10: for passive base repair
     armorClass: 'Structure',
+    // Long-range SUPER CANNON: slow to aim + a slow arcing shell, so it only lands on a target that STAYS PUT
+    // (the enemy's stationary siege/long-range units) — massive AOE. phase: idle → aim → flight → cooldown.
+    cannon: { phase: 'idle', timer: 0, aimPos: null, shotFrom: null, shotDur: 0 },
   };
 }
 

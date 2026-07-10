@@ -1,0 +1,235 @@
+{
+  "frames": {
+    "top-down-view-of-tank-turret-1.png": {
+      "frame": {
+        "x": 1,
+        "y": 1,
+        "w": 140,
+        "h": 266
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 140,
+        "h": 266
+      },
+      "sourceSize": {
+        "w": 140,
+        "h": 266
+      }
+    },
+    "top-down-view-of-triple-naval-turret-2.png": {
+      "frame": {
+        "x": 143,
+        "y": 1,
+        "w": 177,
+        "h": 262
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 177,
+        "h": 262
+      },
+      "sourceSize": {
+        "w": 177,
+        "h": 262
+      }
+    },
+    "top-down-view-of-bomber-drone-4.png": {
+      "frame": {
+        "x": 322,
+        "y": 1,
+        "w": 191,
+        "h": 248
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 191,
+        "h": 248
+      },
+      "sourceSize": {
+        "w": 191,
+        "h": 248
+      }
+    },
+    "top-down-view-of-tank-chassis-2.png": {
+      "frame": {
+        "x": 514,
+        "y": 1,
+        "w": 149,
+        "h": 246
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 149,
+        "h": 246
+      },
+      "sourceSize": {
+        "w": 149,
+        "h": 246
+      }
+    },
+    "top-down-view-of-tank-chassis-3.png": {
+      "frame": {
+        "x": 1,
+        "y": 268,
+        "w": 150,
+        "h": 236
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 150,
+        "h": 236
+      },
+      "sourceSize": {
+        "w": 150,
+        "h": 236
+      }
+    },
+    "top-down-view-of-tank-chassis-1.png": {
+      "frame": {
+        "x": 152,
+        "y": 268,
+        "w": 136,
+        "h": 224
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 136,
+        "h": 224
+      },
+      "sourceSize": {
+        "w": 136,
+        "h": 224
+      }
+    },
+    "top-down-view-of-heavy-tank-chassis-2.png": {
+      "frame": {
+        "x": 290,
+        "y": 268,
+        "w": 144,
+        "h": 211
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 211
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 211
+      }
+    },
+    "top-down-view-of-quad-rotor-scout-drone-1.png": {
+      "frame": {
+        "x": 436,
+        "y": 268,
+        "w": 199,
+        "h": 197
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 199,
+        "h": 197
+      },
+      "sourceSize": {
+        "w": 199,
+        "h": 197
+      }
+    },
+    "top-down-view-of-quad-rotor-scout-drone-2.png": {
+      "frame": {
+        "x": 1,
+        "y": 506,
+        "w": 201,
+        "h": 196
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 201,
+        "h": 196
+      },
+      "sourceSize": {
+        "w": 201,
+        "h": 196
+      }
+    },
+    "top-down-view-of-small-rader-dish-1.png": {
+      "frame": {
+        "x": 203,
+        "y": 506,
+        "w": 171,
+        "h": 189
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 171,
+        "h": 189
+      },
+      "sourceSize": {
+        "w": 171,
+        "h": 189
+      }
+    },
+    "top-down-view-of-quad-rotor-scout-drone-3.png": {
+      "frame": {
+        "x": 376,
+        "y": 506,
+        "w": 185,
+        "h": 187
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 185,
+        "h": 187
+      },
+      "sourceSize": {
+        "w": 185,
+        "h": 187
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    },
+    "scale": "1"
+  }
+}
