@@ -96,7 +96,9 @@ export function startNextWave(state) {
   // Gap = time for the departing unit to travel its own DIAMETER (+ a margin) and fully vacate the single spawn
   // cell, so both slow AND large units (e.g. Artillery/Heavy Tanks: radius ~0.42, speed ~0.39) clear before the
   // next appears. A flat clear-distance let big tanks pile because they never moved a full body-length in time.
-  const MIN_GAP = 0.5, MAX_GAP = 3.0;
+  // MAX_GAP raised with the sprite-sized footprints: a Heavy Tank (radius 1.48, speed ~0.39) needs
+  // several seconds to clear its own body off the spawn cell — the old 3s cap left big units stacking.
+  const MIN_GAP = 0.5, MAX_GAP = 6.0;
   const laneClearGap = (speed, radius) =>
     Math.max(MIN_GAP, Math.min(MAX_GAP, (2 * (radius || 0.3) + 0.25) / (speed || 1)));
   const lastByLane = {};

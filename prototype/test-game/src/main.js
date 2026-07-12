@@ -210,6 +210,10 @@ export function boot(mountEl, seed) {
         flashMessage(hud, 'balance report failed');
       }
     },
+    onToggleCollision: () => {
+      ui.debugCollision = !ui.debugCollision;
+      return ui.debugCollision;
+    },
     onRestart: (newSeed) => {
       restart(newSeed);
     },

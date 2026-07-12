@@ -10,7 +10,7 @@
  */
 
 import { LAYER_HEIGHT } from '../harness/camera.js';
-import { LAYER_FIT, dimsFor, UNIT_VIS_SCALE } from '../harness/parts.js';
+import { LAYER_FIT } from '../harness/parts.js';
 
 const LAYERS = ['base', 'weapon', 'head'];
 const Z = { base: 0, weapon: 1, head: 2 };
@@ -70,12 +70,10 @@ export function buildUnitSprite(art, unitId, tilePx, radius) {
   if (!def) return null;
   const sheet = art.sheets[def.sheet];
   if (!sheet) return null;
-  // target on-screen width of the BASE layer: the bench normalises art to LAYER_FIT.base (46) where it
-  // replaces a per-shape chassis dimsFor(shape).w wide — art reads 1.35–1.9× the unit's body in the tool.
-  // Reproduce that presence here: footprint diameter × (LAYER_FIT.base / chassis width). stackScale then
-  // maps the whole authoring space (per-layer proportions + offsets) onto the footprint identically.
-  const presence = (LAYER_FIT.base / dimsFor(def).w) * UNIT_VIS_SCALE;
-  const targetW = radius ? (tilePx * 2 * radius * presence) : (tilePx * 0.95);
+  // THE SPRITE BOX IS THE COLLISION BOX: base layer width = footprint diameter, 1:1 — the sim's
+  // unitRadius values are authored as visual half-widths (entities.js). stackScale then maps the
+  // bench authoring space (per-layer proportions + offsets) onto that footprint identically.
+  const targetW = radius ? (tilePx * 2 * radius) : (tilePx * 0.95);
   const stackScale = targetW / LAYER_FIT.base;
   const c = new PIXI.Container();
   const rot = (def.rotation || 0) * Math.PI / 180;   // authored FACING — applied per-layer, NOT to the container

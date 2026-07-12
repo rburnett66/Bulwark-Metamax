@@ -26,16 +26,19 @@ export function nextEntityId(state) {
  * @param {'attacker'|'defender'} side owning side
  * @returns {object} Unit
  */
-// Physical footprint per shape (cell units; a tile = 1). Heavier ground units are bigger; air units modest.
+// Physical footprint per shape (cell units; a tile = 1). THE COLLISION BOX IS THE SPRITE BOX:
+// these radii equal the unit's rendered half-width (the render draws exactly 2×radius), so
+// separation, spawn spacing, and crowding match what the player sees. Values = the old compact
+// footprints × art presence × the former 2.6 render magnification, folded into the sim.
 export function unitRadius(def) {
   switch (def && def.shape) {
-    case 'Troops': return 0.24;
-    case 'Trucks': return 0.30;
-    case 'Artillery': return 0.32;
-    case 'Tanks': return 0.36;
-    case 'Heavy Tanks': return 0.42;
-    case 'Copters': case 'Planes': case 'Missiles': return 0.28;
-    default: return 0.30;
+    case 'Troops': return 1.20;
+    case 'Trucks': return 1.28;
+    case 'Artillery': return 1.28;
+    case 'Tanks': return 1.44;
+    case 'Heavy Tanks': return 1.48;
+    case 'Copters': case 'Planes': case 'Missiles': return 1.29;
+    default: return 1.28;
   }
 }
 

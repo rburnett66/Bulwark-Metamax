@@ -274,6 +274,13 @@ export function createHud(mountEl, callbacks) {
   replayBtn.addEventListener('click', () => { if (cbs.onRunReplay) cbs.onRunReplay(); });
   const balanceBtn = el(doc, 'button', 'bw-btn', 'Balance Report');
   balanceBtn.addEventListener('click', () => { if (cbs.onBalanceReport) cbs.onBalanceReport(); });
+  const collisionBtn = el(doc, 'button', 'bw-btn', 'Collision: off');
+  collisionBtn.title = 'Draw every unit\'s collision circle + centre point (render-side only)';
+  collisionBtn.addEventListener('click', () => {
+    if (!cbs.onToggleCollision) return;
+    const on = cbs.onToggleCollision();
+    collisionBtn.textContent = 'Collision: ' + (on ? 'ON' : 'off');
+  });
   const seedInput = el(doc, 'input', 'bw-seedinput');
   seedInput.setAttribute('type', 'text');
   seedInput.setAttribute('placeholder', 'seed');
@@ -286,6 +293,7 @@ export function createHud(mountEl, callbacks) {
   debug.appendChild(exportBtn);
   debug.appendChild(replayBtn);
   debug.appendChild(balanceBtn);
+  debug.appendChild(collisionBtn);
   debug.appendChild(seedInput);
   debug.appendChild(restartBtn);
   bottombar.appendChild(help);

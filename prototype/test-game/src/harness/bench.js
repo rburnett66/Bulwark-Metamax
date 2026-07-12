@@ -10,7 +10,7 @@
 import { buildPartStack } from './partstack.js';
 import { project, shadowFor, layerLean, LAYER_HEIGHT } from './camera.js';
 import { unitReadout } from './readout.js';
-import { unitParts, LAYER_FIT, dimsFor, UNIT_VIS_SCALE } from './parts.js';
+import { unitParts, LAYER_FIT } from './parts.js';
 import { applyReadout } from './drive.js';
 import { UNITS, WAVES, MAP } from '../data/tables.js';
 import { createSim } from '../sim/core.js';
@@ -300,8 +300,7 @@ export function bootBench(mountEl) {
 function realTilePx(b) {
   if (!b || !b.unitId || !UNITS[b.unitId]) return 0;
   const radius = (b.unit && b.unit.radius) || 0.3;
-  const presence = (LAYER_FIT.base / dimsFor(UNITS[b.unitId]).w) * UNIT_VIS_SCALE;
-  const gameTiles = 2 * radius * presence;              // unit width on the battle map, in game tiles
+  const gameTiles = 2 * radius;                         // footprint IS the sprite box: width in game tiles
   if (!(gameTiles > 0)) return 0;
   return (LAYER_FIT.base * BASE_SCALE) / gameTiles;     // bench px per game tile
 }
