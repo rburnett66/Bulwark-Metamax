@@ -127,6 +127,20 @@ export function startNextWave(state) {
   return true;
 }
 
+// Is a live attacker body still covering this spawn point? (85% of summed collision radii —
+// the incoming unit may kiss the leaver's edge, but never materializes inside it.)
+function spawnBlocked(state, pos, unitId) {
+  if (!state.units) return false;
+  const rNew = unitRadius(getUnitDef(unitId));
+  for (const u of state.units.values()) {
+    if (!u || u.hp <= 0 || u.side !== 'attacker') continue;
+    const dx = u.pos.x - pos.x, dy = u.pos.y - pos.y;
+    const clear = ((u.radius || 0.3) + rNew) * 0.85;
+    if (dx * dx + dy * dy < clear * clear) return true;
+  }
+  return false;
+}
+
 function anyAttackersAlive(state) {
   if (!state.units) return false;
   for (const unit of state.units.values()) {
@@ -149,9 +163,29 @@ export function stepWaves(state, dt) {
 
   // Emit all spawns whose scheduled time has arrived. pendingSpawns is
   // sorted, so we consume from the front.
+  // SPACE-BASED GATE: the scheduled gap assumes the previous unit marches off at full speed, but a
+  // downstream jam backs the column up INTO the spawn cell — and a time-based gap then materializes
+  // units inside the queue (the pile-up). If a live body still physically covers the spawn point,
+  // HOLD that lane's spawn and retry next tick. Deterministic (pure sim state), replay-safe.
+  const heldLanes = {};
   while (w.pendingSpawns.length > 0 && w.pendingSpawns[0].time <= state.time) {
+    const head = w.pendingSpawns[0];
+    if (heldLanes[head.lane]) break;                    // keep in-lane order; other lanes drained already
+    const headPos = spawnPointForLane(map, head.lane);
+    // ground only: water/air spawns spread laterally, so their base point being covered is normal
+    if (head.lane === 'ground' && spawnBlocked(state, headPos, head.unitId)) {
+      heldLanes[head.lane] = true;
+      // Push the whole lane's schedule back so relative gaps survive the hold.
+      for (let i = 0; i < w.pendingSpawns.length; i++) {
+        if (w.pendingSpawns[i].lane === head.lane && w.pendingSpawns[i].time <= state.time) {
+          w.pendingSpawns[i].time = state.time + dt;
+        }
+      }
+      w.pendingSpawns.sort(function (a, b) { return (a.time - b.time) || (a.seq - b.seq); });
+      continue;
+    }
     const spawn = w.pendingSpawns.shift();
-    const pos = spawnPointForLane(map, spawn.lane);
+    const pos = headPos;
     let sx = pos.x, sy = pos.y;
     // WATER / AIR lanes spawn from a single cell but travel by straight-line getFlyerPath (they ignore terrain),
     // so — unlike ground units, which re-converge onto a shared route — a lateral spawn offset PERSISTS and pulls
