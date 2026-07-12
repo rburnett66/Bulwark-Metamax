@@ -159,67 +159,6 @@ function dist(a, b) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-// ── Local BUMP-AVOID ──────────────────────────────────────────────────────────────────────────────────────
-// On CONTACT with a SLOWER (or parked) walker ahead, plot a short two-point sidestep around its body and
-// rejoin this unit's OWN path a few waypoints on — a purposeful maneuver instead of per-tick separation
-// shoving ("bumping"). Same-speed columns don't weave (the follow-brake already paces them — overtaking a
-// unit as fast as you gains nothing). If neither side is passable terrain, keep braking behind.
-// Deterministic: fixed iteration order, side choice from geometry (tie → unit.id parity).
-function maybeBumpAround(state, unit) {
-  if (state.tick < (unit._bumpCooldownTick || 0)) return;   // one maneuver at a time
-  if (state.tick < (unit._detourGraceTick || 0)) return;    // don't stack onto a stuck-detour
-  const path = unit.path;
-  if (!path || unit.pathIdx >= path.length) return;
-  const wp = path[unit.pathIdx];
-  let dirx = wp.x - unit.pos.x, diry = wp.y - unit.pos.y;
-  const dl = Math.sqrt(dirx * dirx + diry * diry);
-  if (dl < 1e-6) return;
-  dirx /= dl; diry /= dl;
-  const rA = unit.radius || 0.3;
-
-  // nearest slower/parked body in the travel cone, at contact range
-  let blocker = null, bd = Infinity;
-  for (const other of state.units.values()) {
-    if (other === unit || other.hp <= 0 || other.domain !== 'Walker' || other.side !== unit.side) continue;
-    if ((other.speed || 0) >= (unit.speed || 0) - 0.05 && other.state !== 'attacking') continue;
-    const ox = other.pos.x - unit.pos.x, oy = other.pos.y - unit.pos.y;
-    const d = Math.sqrt(ox * ox + oy * oy);
-    if (d > rA + (other.radius || 0.3) + 0.35) continue;               // not touching
-    if ((ox * dirx + oy * diry) / (d || 1) < 0.35) continue;           // not ahead
-    if (d < bd) { bd = d; blocker = other; }
-  }
-  if (!blocker) return;
-
-  const rB = blocker.radius || 0.3;
-  const needLat = rA + rB + 0.25;                                      // lateral separation that clears both bodies
-  const px = -diry, py = dirx;                                         // left normal of travel
-  const blockerLeft = (blocker.pos.x - unit.pos.x) * px + (blocker.pos.y - unit.pos.y) * py;
-  // The maneuver is a forward SWERVE, not a side-hop: it adds only the MISSING lateral offset (the
-  // blocker may already sit half a body off-axis) and carries it while advancing, so the unit's
-  // heading barely turns — a perpendicular first waypoint read as violent "bumping" mid-march.
-  const extra = Math.max(0.35, needLat - Math.abs(blockerLeft));
-  const sides = blockerLeft > 0.05 ? [-1, 1] : blockerLeft < -0.05 ? [1, -1] : (unit.id % 2 ? [1, -1] : [-1, 1]);
-  const g = state.navGrid;
-  const passableAt = (x, y) => {
-    const cx = Math.round(x), cy = Math.round(y);
-    return cx >= 0 && cx < g.cols && cy >= 0 && cy < g.rows && g.passable[cy * g.cols + cx];
-  };
-  // rejoin the unit's own line beyond the blocker's body
-  let rejoin = unit.pathIdx;
-  const needAhead = bd + rA + rB + 1;
-  while (rejoin < path.length - 1 && dist(unit.pos, path[rejoin]) < needAhead) rejoin++;
-
-  for (const s of sides) {
-    const p1 = { x: unit.pos.x + dirx * 0.9 + px * s * extra * 0.6, y: unit.pos.y + diry * 0.9 + py * s * extra * 0.6 };
-    const p2 = { x: unit.pos.x + dirx * (bd + rB + 0.8) + px * s * extra, y: unit.pos.y + diry * (bd + rB + 0.8) + py * s * extra };
-    if (!passableAt(p1.x, p1.y) || !passableAt(p2.x, p2.y)) continue;
-    unit.path = [p1, p2].concat(path.slice(rejoin));                   // swerve out → glide past → back on the line
-    unit.pathIdx = 0;
-    unit._bumpCooldownTick = state.tick + 30;                          // ~1s before considering the next weave
-    return;
-  }
-}
-
 /**
  * Compute the Final Score presented when the game ends (final wave
  * cleared or base destroyed). Points for kills; minus points for each
@@ -614,9 +553,6 @@ export function stepMovement(state, dt) {
           }
           unit._stuck = 0;
         }
-        // Faster unit pressed against a slower body: sidestep around it and rejoin this line
-        // (purposeful bump-avoid — fires long before the 0.4s stuck threshold).
-        maybeBumpAround(state, unit);
       }
     }
 
