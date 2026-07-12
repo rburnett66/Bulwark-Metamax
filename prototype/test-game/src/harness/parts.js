@@ -32,7 +32,10 @@ const PALETTES = {
 function paletteFor(def) { return PALETTES[def && def.shape] || PALETTES._default; }
 
 // Rough silhouette size per class (walker default). Kept modest; the bench scales the whole stack up.
-function dimsFor(def) {
+// EXPORTED because it defines what "unit-sized" means in authoring space: art normalised to LAYER_FIT.base
+// (46) replaces a chassis this wide, so the GAME must render art at footprint × (46 / dims.w) to read at
+// the same presence as the bench (unitArt.js).
+export function dimsFor(def) {
   switch (def && def.shape) {
     case 'Heavy Tanks': return { w: 34, h: 24 };
     case 'Tanks':       return { w: 30, h: 20 };

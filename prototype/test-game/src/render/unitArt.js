@@ -10,7 +10,7 @@
  */
 
 import { LAYER_HEIGHT } from '../harness/camera.js';
-import { LAYER_FIT } from '../harness/parts.js';
+import { LAYER_FIT, dimsFor } from '../harness/parts.js';
 
 const LAYERS = ['base', 'weapon', 'head'];
 const Z = { base: 0, weapon: 1, head: 2 };
@@ -25,7 +25,7 @@ export async function loadUnitArt() {
       const fac = await fetch('content/units/' + file).then((r) => r.json());
       const sheetName = fac.sheet;
       if (sheetName && !art.sheets[sheetName]) art.sheets[sheetName] = await loadSheet(sheetName);
-      for (const uid in (fac.units || {})) art.defs[uid] = { sheet: sheetName, layers: fac.units[uid].layers || {}, rotation: fac.units[uid].rotation || 0 };
+      for (const uid in (fac.units || {})) art.defs[uid] = { sheet: sheetName, shape: fac.units[uid].shape || null, layers: fac.units[uid].layers || {}, rotation: fac.units[uid].rotation || 0 };
     }
     art.ready = Object.keys(art.defs).length > 0;
   } catch (e) {
@@ -65,17 +65,17 @@ export function hasArt(art, unitId) { return !!(art && art.defs[unitId] && art.s
  * far bigger than its footprint, so units that the sim held apart still visually overlapped ("bumping"). Pass
  * `radius` (sim footprint, cell units); falls back to a tile-normalised size if omitted. Null if no art.
  */
-const SPRITE_VIS_FACTOR = 1.15;   // sprite a touch larger than the bare footprint; the separation buffer covers it
 export function buildUnitSprite(art, unitId, tilePx, radius) {
   const def = art && art.defs[unitId];
   if (!def) return null;
   const sheet = art.sheets[def.sheet];
   if (!sheet) return null;
-  // target on-screen width of the BASE layer = footprint diameter (× a small presence factor).
-  // stackScale maps the bench's authoring space onto that footprint, so every layer keeps the EXACT
-  // proportions and height offsets tuned in the State Harness (LAYER_FIT: weapon ~65% of base, head ~39%).
-  // Previously every layer was normalised to the base's full width — weapons/heads rendered oversized.
-  const targetW = radius ? (tilePx * 2 * radius * SPRITE_VIS_FACTOR) : (tilePx * 0.95);
+  // target on-screen width of the BASE layer: the bench normalises art to LAYER_FIT.base (46) where it
+  // replaces a per-shape chassis dimsFor(shape).w wide — art reads 1.35–1.9× the unit's body in the tool.
+  // Reproduce that presence here: footprint diameter × (LAYER_FIT.base / chassis width). stackScale then
+  // maps the whole authoring space (per-layer proportions + offsets) onto the footprint identically.
+  const presence = LAYER_FIT.base / dimsFor(def).w;
+  const targetW = radius ? (tilePx * 2 * radius * presence) : (tilePx * 0.95);
   const stackScale = targetW / LAYER_FIT.base;
   const c = new PIXI.Container();
   const rot = (def.rotation || 0) * Math.PI / 180;   // authored FACING — applied per-layer, NOT to the container
