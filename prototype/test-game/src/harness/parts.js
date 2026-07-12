@@ -15,6 +15,12 @@
 // head ~39%) — one constant, or tool and battle-map scale drift apart. Shared by bench.js + unitArt.js.
 export const LAYER_FIT = { base: 46, weapon: 30, head: 18 };
 
+// GLOBAL battle-map unit magnification — THE one knob for how big units read in the game.
+// Sim footprints (separation/pathing) are untouched; this scales the RENDER of both authored art
+// and primitive fallbacks. 2.6 puts a Heavy Tank at ~3 tiles wide (the presence units have in the
+// authoring bench); 1.0 = strict sim footprint (units read under a tile — too small to enjoy).
+export const UNIT_VIS_SCALE = 2.6;
+
 // Palette per broad unit class (generic-safe fallback). Kept data-only so new factions/shapes just add a row.
 const PALETTES = {
   Troops:        { body: 0x6f8f3f, trim: 0x9bd15a, barrel: 0x2f3d1e, sensor: 0x7fd6e0 },

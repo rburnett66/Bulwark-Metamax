@@ -9,7 +9,7 @@ class Sprite extends Node { constructor(tex){ super(); this.texture=tex; this.wi
 globalThis.PIXI = { Container, Sprite };
 
 const { buildUnitSprite } = await import('./unitArt.js');
-const { LAYER_FIT, dimsFor } = await import('../harness/parts.js');
+const { LAYER_FIT, dimsFor, UNIT_VIS_SCALE } = await import('../harness/parts.js');
 
 const TEXW = 512;   // gallery frames are typically 512px — every layer uses the same source width here
 const art = {
@@ -28,10 +28,10 @@ const [base, weapon, head] = stack.children;
 
 // base layer = footprint diameter × the BENCH's presence ratio (art 46 wide over a Tanks chassis of 30),
 // so a unit reads at the same relative size on the battle map as in the authoring tool
-const presence = LAYER_FIT.base / dimsFor({ shape: 'Tanks' }).w;
-assert.ok(Math.abs(presence - 46 / 30) < 1e-9, 'Tanks presence ratio comes from the bench chassis dims');
+const presence = (LAYER_FIT.base / dimsFor({ shape: 'Tanks' }).w) * UNIT_VIS_SCALE;
+assert.ok(Math.abs(presence - (46 / 30) * UNIT_VIS_SCALE) < 1e-9, 'Tanks presence = bench ratio × global magnification');
 const targetW = tile * 2 * radius * presence;
-assert.ok(Math.abs(base.scale.x * TEXW - targetW) < 1e-9, 'base width == footprint × bench presence');
+assert.ok(Math.abs(base.scale.x * TEXW - targetW) < 1e-9, 'base width == footprint × presence');
 
 // per-layer proportions match the bench's LAYER_FIT ratios (weapon ~65%, head ~39% × authored 0.5)
 assert.ok(Math.abs(weapon.scale.x / base.scale.x - LAYER_FIT.weapon / LAYER_FIT.base) < 1e-9,

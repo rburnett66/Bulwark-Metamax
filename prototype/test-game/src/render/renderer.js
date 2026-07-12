@@ -1,6 +1,7 @@
 import { getStructureDef, getUnitDef } from '../data/tables.js';
 import { hasArt, buildUnitSprite } from './unitArt.js';
 import { layerLean } from '../harness/camera.js';
+import { UNIT_VIS_SCALE } from '../harness/parts.js';
 
 const FX_DT = 1 / 60;
 
@@ -674,8 +675,10 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           const facing = spr.__facing || 0;
           spr.rotation = facing;
           const cf = Math.cos(facing), sf = Math.sin(facing);
-          // ground shadow at the CONTACT point (height 0 — never leans), so the floating base reads as height
-          gU.beginFill(0x000000, 0.26); gU.drawEllipse(pa.x, pa.y + t * 0.06, t * 0.30, t * 0.15); gU.endFill();
+          // ground shadow at the CONTACT point (height 0 — never leans), sized to the magnified sprite
+          gU.beginFill(0x000000, 0.26);
+          gU.drawEllipse(pa.x, pa.y + t * 0.06, t * 0.30 * UNIT_VIS_SCALE, t * 0.15 * UNIT_VIS_SCALE);
+          gU.endFill();
           // per-layer camera LEAN (no distortion): shift each layer by its height × the unit's screen position.
           // Counter-rotate the stack+lean offset by the facing so the pseudo-3D shift stays SCREEN-aligned even
           // though the container itself is rotated to face movement.
@@ -686,14 +689,14 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
             child.x = sx * cf + sy * sf;
             child.y = -sx * sf + sy * cf;
           }
-          drawHpBar((u.domain === 'Flyer' ? gA : gU), pa.x, pa.y - t * 0.55 - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
+          drawHpBar((u.domain === 'Flyer' ? gA : gU), pa.x, pa.y - t * 0.55 * UNIT_VIS_SCALE - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
           continue;   // sprite drawn — skip the primitive
         }
       }
       const color = unitColor(u);   // faction-tinted for attackers, side-coloured otherwise
       const p = cellToLocal(renderer, u.pos.x, u.pos.y);
-      const r = t * (u.radius || 0.28);   // draw at the unit's ACTUAL sim footprint so visuals match separation
-                                          // (a fixed size drew small units too big → they LOOKED like they bumped)
+      const r = t * (u.radius || 0.28) * UNIT_VIS_SCALE;   // sim footprint × the global unit magnification, so
+                                          // primitive fallbacks read at the same presence as authored art
       if (u.domain === 'Flyer') {
         const py = p.y - t * 0.35;
         gA.beginFill(color, 1);
