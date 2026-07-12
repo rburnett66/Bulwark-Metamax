@@ -132,12 +132,19 @@ function discoverRoute(state, jam) {   // append a NEW spawn→base route that s
   for (const r of state.routes) if (sameRoute(r, p)) return;
   state.routes.push(p);
 }
-// The jammed region around a stuck unit: its cell (3×3) + the next few waypoints of its current line.
+// The jammed region around a stuck unit: its cell (3×3) + the next few waypoints of its current line
+// + THE CROWD — the cells of nearby walkers. The crowd IS the jam; without it, every stuck unit's
+// "detour" was a shortest path straight back through the same pile-up at the same wall corner.
 function jamCells(state, unit) {
   const g = state.navGrid, avoid = new Set(), cc = roundCell(unit.pos);
   const add = (x, y) => { if (x >= 0 && x < g.cols && y >= 0 && y < g.rows) avoid.add(y * g.cols + x); };
   for (let ddx = -1; ddx <= 1; ddx++) for (let ddy = -1; ddy <= 1; ddy++) add(cc.x + ddx, cc.y + ddy);
   if (unit.path) for (let k = unit.pathIdx; k < Math.min(unit.path.length, unit.pathIdx + 6); k++) { const w = roundCell(unit.path[k]); add(w.x, w.y); }
+  for (const other of state.units.values()) {   // deterministic iteration (insertion-ordered Map)
+    if (other === unit || other.hp <= 0 || other.domain !== 'Walker') continue;
+    const dx = other.pos.x - unit.pos.x, dy = other.pos.y - unit.pos.y;
+    if (dx * dx + dy * dy <= 6.25) { const oc = roundCell(other.pos); add(oc.x, oc.y); }   // within 2.5 cells
+  }
   return avoid;
 }
 
@@ -519,14 +526,27 @@ export function stepMovement(state, dt) {
     if (isAttacker && unit.domain === 'Walker' && unit.state !== 'attacking') {
       const dBase = dist(unit.pos, base.pos);
       if (dBase > 3) {   // only re-route units still NAVIGATING; near the base they're queueing, not lost
-        if (unit._lastDBase == null) unit._lastDBase = dBase;
-        if (dBase < unit._lastDBase - 0.015) { unit._lastDBase = dBase; unit._stuck = 0; }   // made progress
-        else if ((unit._stuck = (unit._stuck || 0) + 1) >= 12) {                              // ~0.4s no progress → re-route fast
+        // Progress = advancing ALONG THE UNIT'S OWN PATH (waypoint index rises, or it closes on the
+        // current waypoint) — NOT shrinking distance-to-base. A detour around an obstacle legitimately
+        // walks sideways or AWAY from the base for a stretch; the old distance-to-base metric kept
+        // flagging detouring units as "stuck" every 0.4s and yanked them back toward the blocked
+        // corridor — the fighting-at-the-wall jitter. A freshly granted detour also gets a grace
+        // window so it can actually be walked before stuck-detection resumes.
+        const wp = (unit.path && unit.pathIdx < unit.path.length) ? unit.path[unit.pathIdx] : null;
+        const dWp = wp ? dist(unit.pos, wp) : Infinity;
+        const advanced = unit._lastPathIdx == null || unit.pathIdx > unit._lastPathIdx ||
+                         (unit._lastDWp != null && dWp < unit._lastDWp - 0.015);
+        unit._lastPathIdx = unit.pathIdx; unit._lastDWp = dWp;
+        if (advanced || state.tick < (unit._detourGraceTick || 0)) { unit._stuck = 0; }
+        else if ((unit._stuck = (unit._stuck || 0) + 1) >= 12) {                   // ~0.4s truly wedged → route around
           const avoid = jamCells(state, unit);
           discoverRoute(state, avoid);                                             // append a reusable alternate
           const detour = findWalkerPath(state.navGrid, roundCell(unit.pos), roundCell(base.pos), avoid);
-          if (detour && detour.length > 0) { unit.path = detour; unit.pathIdx = 0; }   // this unit routes around now
-          unit._stuck = 0; unit._lastDBase = dBase;
+          if (detour && detour.length > 0) {
+            unit.path = detour; unit.pathIdx = 0;
+            unit._detourGraceTick = state.tick + 45;                               // ~1.5s to commit to going around
+          }
+          unit._stuck = 0;
         }
       }
     }
