@@ -2455,5 +2455,103 @@
     "category": "sprite-atlas:sheet",
     "prompt": "packed sprite sheet — sprite sheet",
     "style": "none"
+  },
+  {
+    "file": "f06acb52-6a2e-4a33-bb9f-138d6809f756.png",
+    "assetId": "f06acb52-6a2e-4a33-bb9f-138d6809f756",
+    "category": "Custom — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCustom: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. Field-Marshal Seraphine von Halbrecht —  angelic good character, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "90c14761-659c-4e5e-a01e-0c834e59b116.png",
+    "assetId": "90c14761-659c-4e5e-a01e-0c834e59b116",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. Colonel Aldric Vane —  pure good character, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "e1ff19b8-0ed0-4fb2-915c-bce950677663.png",
+    "assetId": "e1ff19b8-0ed0-4fb2-915c-bce950677663",
+    "category": "Custom — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCustom: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. Captain Otto von Halbrecht — good character, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "6cdb0156-d304-4443-9e59-d56d6d883517.png",
+    "assetId": "6cdb0156-d304-4443-9e59-d56d6d883517",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. CG — Sergeant \"Bricks\" Malloy — chaotic good, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "37fba19a-ffa3-4c88-b577-75f621e2a1f7.png",
+    "assetId": "37fba19a-ffa3-4c88-b577-75f621e2a1f7",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. Quartermaster Ines Roth — \"Someone counts the powder while they wave flags.\" neutral character, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "ec7a61db-026c-4c1b-9983-2ab148b0f01b.png",
+    "assetId": "ec7a61db-026c-4c1b-9983-2ab148b0f01b",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. Freikorps raider Grigor Vosk — chaotic evil character, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "2389e6ab-f469-45e6-84ec-178b6d60051d.png",
+    "assetId": "2389e6ab-f469-45e6-84ec-178b6d60051d",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. General Kord Stahl — evil character, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "7143e26f-8ec2-44c1-b7de-6a60a27ef94a.png",
+    "assetId": "7143e26f-8ec2-44c1-b7de-6a60a27ef94a",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. CG — Sergeant \"Bricks\" Malloy — chaotic good. Adjustment: remove the words from the flag, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "43d0555f-5f26-4286-a374-267882f415e6.png",
+    "assetId": "43d0555f-5f26-4286-a374-267882f415e6",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. Freikorps raider Grigor Vosk — chaotic evil character. Adjustment: remove words from maroon flag with crest, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "2bff1d65-51bd-49ce-addd-524765460113.png",
+    "assetId": "2bff1d65-51bd-49ce-addd-524765460113",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. Chancellor Wilhelmina Graf — pure evil character, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "9c9e8b6e-80a6-4e02-83bf-4506f61903ba.png",
+    "assetId": "9c9e8b6e-80a6-4e02-83bf-4506f61903ba",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. The Iron Regent (masked) — dark evil character. Adjustment: remove the words from the dark flags with battalion crest, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "ca89f224-5ec5-4090-8751-533f20a101ae.png",
+    "assetId": "ca89f224-5ec5-4090-8751-533f20a101ae",
+    "category": "Rework: remove words from dark flag with military crest",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. CG — Sergeant \"Bricks\" Malloy — chaotic good, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look. Rework: remove words from dark flag with military crest",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "3de56c27-f347-45ea-b82a-2a6c26a86c57.png",
+    "assetId": "3de56c27-f347-45ea-b82a-2a6c26a86c57",
+    "category": "Rework: remove words from dark flag with military crest",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. Freikorps raider Grigor Vosk — chaotic evil character, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look. Rework: remove words from dark flag with military crest",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "23957d03-8664-4864-9a1e-2862f6a1043f.png",
+    "assetId": "23957d03-8664-4864-9a1e-2862f6a1043f",
+    "category": "Rework: remove words from dark flag with military crest",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground / Powder — old-empire nationalist army; drab wool + brass, regimental flags, medals, bayonets and heavy armor; accent deep crimson. CG — Sergeant \"Bricks\" Malloy — chaotic good, stylized 3D render, soft rounded forms, warm cinematic lighting, expressive animated-feature film look. Rework: remove words from dark flag with military crest",
+    "style": "stylized_3d"
   }
 ]

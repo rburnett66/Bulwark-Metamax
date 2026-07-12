@@ -5,144 +5,200 @@
     "GRN-Troops": {
       "shape": "Troops",
       "role": "Skirmisher",
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "art_84_top.png",
-          "scale": 0.75
+          "scale": 0.6,
+          "offset": 0,
+          "offsetX": 0
         },
         "weapon": {
           "frame": "art_84_top.png",
-          "scale": 1
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
         },
         "head": {
-          "frame": "art_84_top.png",
-          "scale": 1.45
+          "frame": "art_110_top.png",
+          "scale": 1.45,
+          "offset": 0,
+          "offsetX": 0
         }
       }
     },
     "GRN-Trucks": {
       "shape": "Trucks",
       "role": "Support",
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "art_88_top.png",
-          "scale": 1
+          "scale": 1.15,
+          "offset": 0,
+          "offsetX": 5
         },
         "weapon": {
           "frame": "art_88_top.png",
-          "scale": 1.35
+          "scale": 1.35,
+          "offset": 0,
+          "offsetX": 5
         },
         "head": {
           "frame": "art_88_top.png",
-          "scale": 1
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
         }
       }
     },
     "GRN-Tanks": {
       "shape": "Tanks",
       "role": "Bruiser",
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "art_104_top.png",
-          "scale": 1
+          "scale": 1.15,
+          "offset": 0,
+          "offsetX": 7
         },
         "weapon": {
           "frame": "art_104_top.png",
-          "scale": 1
+          "scale": 1.3,
+          "offset": 0,
+          "offsetX": 5
         },
         "head": {
-          "frame": "art_104_top.png",
-          "scale": 1
+          "frame": "art_110_top.png",
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
         }
       }
     },
     "GRN-Artillery": {
       "shape": "Artillery",
       "role": "Siege",
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "art_104_top.png",
-          "scale": 1
+          "scale": 1.25,
+          "offset": -3,
+          "offsetX": 7
         },
         "weapon": {
           "frame": "art_104_top.png",
-          "scale": 1
+          "scale": 1.3,
+          "offset": 0,
+          "offsetX": 5
         },
         "head": {
-          "frame": "art_104_top.png",
-          "scale": 1
+          "frame": "art_110_top.png",
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
         }
       }
     },
     "GRN-HeavyTanks": {
       "shape": "Heavy Tanks",
       "role": "Juggernaut",
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "art_90_top.png",
-          "scale": 1.1
+          "scale": 1.35,
+          "offset": 0,
+          "offsetX": 10
         },
         "weapon": {
           "frame": "art_90_top.png",
-          "scale": 1.45
+          "scale": 1.9,
+          "offset": 0,
+          "offsetX": 10
         },
         "head": {
-          "frame": "art_90_top.png",
-          "scale": 1.3
+          "frame": "art_110_top.png",
+          "scale": 1.05,
+          "offset": 0,
+          "offsetX": 0
         }
       }
     },
     "GRN-Copters": {
       "shape": "Copters",
       "role": "Harasser",
+      "rotation": 30,
       "layers": {
         "base": {
           "frame": "art_109_top.png",
-          "scale": 0.7
+          "scale": 0.7,
+          "offset": 0,
+          "offsetX": 0
         },
         "weapon": {
           "frame": "art_109_top.png",
-          "scale": 0.9
+          "scale": 0.9,
+          "offset": 0,
+          "offsetX": 0
         },
         "head": {
           "frame": "art_109_top.png",
-          "scale": 0.8
+          "scale": 0.8,
+          "offset": 0,
+          "offsetX": 0
         }
       }
     },
     "GRN-Planes": {
       "shape": "Planes",
       "role": "Striker",
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "art_97_top.png",
-          "scale": 0.8
+          "scale": 0.8,
+          "offset": 0,
+          "offsetX": 0
         },
         "weapon": {
           "frame": "art_97_top.png",
-          "scale": 1.2
+          "scale": 1.15,
+          "offset": 0,
+          "offsetX": 0
         },
         "head": {
-          "frame": "art_97_top.png",
-          "scale": 0.5
+          "frame": "art_110_top.png",
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
         }
       }
     },
     "GRN-Missiles": {
       "shape": "Missiles",
       "role": "Guided AA",
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "art_110_top.png",
-          "scale": 1
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
         },
         "weapon": {
           "frame": "art_110_top.png",
-          "scale": 1
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
         },
         "head": {
           "frame": "art_110_top.png",
-          "scale": 1
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
         }
       }
     }

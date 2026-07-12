@@ -1,0 +1,521 @@
+# Bulwark Schedule Review — prototype coverage (2026-07-11)
+
+Proposed status updates for MetaMax project 16 (Supabase `pm_work_items`), derived from
+`FEATURE-INVENTORY.md` (main @ 688a4c6). Policy: a story is **done** when its outcome is
+functionally delivered by `prototype/test-game`, even where the implementation differs from
+the original technical plan (plain JS + seeded PRNG instead of fixed-point; tables.js instead
+of a dataset pipeline). Infrastructure that genuinely does not exist (CI gates, lint rules,
+xlsx pipeline, fixed-point math, camera rotation, screens/audio) stays **backlog**.
+
+**Proposed: 5 epics done, 8 in progress · 48 stories done, 12 in progress · 167 tasks done** · everything else stays backlog (267 items untouched)
+
+## Epics
+- 🔶 `epic_082b5dc5` Vertical slice assembly (The Clearing encounter)
+  - 🔶 `story_cb6ab439` As a developer I can load the locked Vertical_Slice dataset selection so that all slice content is instantiate — *content is fully data-driven (tables.js) but no dataset.<hash>.json loader/validation/checksum*
+    - ▫️ `task_8034e238` Implement Vertical_Slice dataset loader
+    - ▫️ `task_ae967613` Add dataset schema validation with fail-fast errors
+    - ▫️ `task_cf790af1` Enforce data-only instantiation via content audit check
+    - ▫️ `task_af03f836` Lock dataset selection with checksum guard
+  - ✅ `story_20e5ac29` As a player I can face the Ground/Powder attacker roster with walker, floater, and flyer movement shapes so th — *all 3 traversal domains live (walkers/floaters/flyers), spawning + death + bounty*
+    - ✅ `task_039b4f7e` Implement unit spawning from UnitDefs in sim core
+    - ✅ `task_9505adb9` Implement walker ground pathing with wall blocking
+    - ✅ `task_6d98dec8` Implement floater and flyer traversal
+    - ✅ `task_7717b6ec` Implement unit death and bounty ledger entry
+  - ✅ `story_759369db` As a player I can place the three defensive structures and defend the fixed Castle-tier base so that both atta — *4 structures placeable, domain-restricted targeting (cannon/flak), base breach = defeat*
+    - ✅ `task_90be2df1` Implement structure placement from StructureDefs
+    - ✅ `task_cb0d8f90` Implement domain-restricted targeting and attack resolution
+    - ✅ `task_55bf0e44` Instantiate Castle-tier base with breach handling
+  - ✅ `story_efbfafe1` As a player I can play through three build phases alternating with three waves so that the slice encounter run — *build phases alternate with waves end-to-end; headless run via test suite*
+    - ✅ `task_7d1066d5` Implement match phase state machine
+    - ✅ `task_bd7dbcf4` Implement wave spawner from WaveDef rows
+    - ✅ `task_55b3bd79` Implement match outcome resolution
+    - ✅ `task_c366eef9` Add headless end-to-end slice run
+  - 🔶 `story_2059af2c` As a player I can move through CHOOSE GEAR → PLAY → RESULTS so that the full slice loop is playable in the cli — *PLAY + results overlay exist; no CHOOSE GEAR screen or flow wiring*
+    - ▫️ `task_30b314f4` Build CHOOSE GEAR screen from dataset
+    - ✅ `task_5d43f985` Render The Clearing encounter in layered 2.5D
+    - ▫️ `task_2b73dab0` Implement RESULTS screen with bounty collect step
+    - ▫️ `task_fc4349dc` Wire flow state transitions
+- 🔶 `epic_126ef7bb` Combat resolution from dataset (damage × armor matrix)
+  - 🔶 `story_15ddc4e2` As a developer I can load the effectiveness matrix, unit stats, and faction mods from dataset.<hash>.json so t — *matrix/stats/mods live in tables.js, not a validated dataset artifact*
+    - ▫️ `task_bc084cd0` Define combat dataset schema types
+    - ▫️ `task_ee55cc2d` Implement dataset loader with injection seam
+    - ▫️ `task_59e34107` Validate matrix and unit-reference completeness
+    - ▫️ `task_6815583a` No-balance-constants guard test
+  - ✅ `story_a7a4c498` As a player I can have combat damage resolved through the dataset's damage×armor effectiveness matrix so that  — *per-hit damage resolved through the effectiveness matrix (src/sim/combat.js)*
+    - ✅ `task_1b82ab30` Implement effectiveness lookup function
+    - ✅ `task_668344cf` Implement per-hit damage resolution
+    - ✅ `task_885965aa` Apply faction modifiers from dataset
+    - ✅ `task_c24ec262` Expose headless resolver API for sim runner
+  - 🔶 `story_8cc132f0` Verify that effective-DPS for unit — *effective-DPS computed by the balance harness; no workbook conformance fixtures*
+    - ✅ `task_ecf18114` Implement effective-DPS computation
+    - ▫️ `task_9d9df92a` Export workbook Units sheet expectations to fixture
+    - ▫️ `task_84d9d161` Workbook conformance test suite
+- 🔶 `epic_3b14e787` Unit visual stack and combat FX (telegraph, three-part shot, structure FX)
+  - ✅ `story_517fc503` As a player I can see each unit rendered as a four-sublayer sprite stack with independently animated layers so — *part-stack sprites (base/weapon/head) independently animated, depth-sorted (3 sublayers, not 4)*
+    - ✅ `task_203a3a25` Define unit stack data schema
+    - ✅ `task_8acd4043` Build UnitStackRenderer component
+    - ✅ `task_6d6c2a4d` Per-sublayer animation state machines
+    - ✅ `task_07cf8a35` Depth sorting integration for stacked units
+  - 🔶 `story_8f072161` As a player I can see a sensor→weapon telegraph sequence before a unit fires so that attacks are readable and  — *sensor->weapon telegraph exists in the State Harness bench, not in-game*
+    - ▫️ `task_a250bd15` Consume telegraph events from sim event stream
+    - ▫️ `task_fc154aef` Sensor sublayer telegraph animation
+    - ▫️ `task_078747b2` Weapon sublayer charge/aim sequencing
+  - 🔶 `story_045a66db` As a player I can see every shot rendered as a three-part launch/travel/impact presentation so that combat out — *cannon has launch/travel/impact; tower shots are simpler*
+    - ▫️ `task_c56f3951` Shot presentation object pool and lifecycle
+    - ✅ `task_e715692c` Launch FX at weapon sublayer
+    - ✅ `task_21d2598c` Travel visual driven by sim projectile events
+    - ✅ `task_cd748338` Impact FX on hit/arrival events
+  - ✅ `story_cf9f8345` As a player I can see structure FX for building, damaged, firing, upgrading, and selling/destroying states so  — *structure lifecycle FX: build/upgrade progress, damage, sell/destroy, welding sparks*
+    - ✅ `task_1c7e8fa7` Structure lifecycle FX controller
+    - ✅ `task_dd72c1ea` Building and upgrade transition visuals
+    - ✅ `task_a4e1e25d` Damaged-state overlay from threshold events
+    - ✅ `task_35b93550` Sell/destroy FX and stack teardown
+  - ✅ `story_a667c043` As a developer I can drive all FX purely from the sim's ordered event stream so that replaying the same stream — *all FX driven from the sim's ordered event stream; replay reproduces them*
+    - ✅ `task_da7961e7` Single FX event dispatcher
+    - ▫️ `task_97dd8d8d` Deterministic FX trace recorder
+    - ▫️ `task_fcc406ab` Replay-vs-live FX equivalence harness
+- 🔶 `epic_483f72d5` Main-Menu replay reconstructor
+  - 🔶 `story_1e0acb80` As a player I can select a recorded battle from the Main Menu and load its seed + input log so that playback o — *last replay auto-loads from localStorage; no picker UI or validation*
+    - ✅ `task_abdbf0ef` Replay recording deserializer
+    - ▫️ `task_847d7fb6` Recording validation and version gate
+    - ▫️ `task_65a229e8` Main Menu replay picker UI
+    - ▫️ `task_de8f8433` Graceful failure path for bad recordings
+  - ✅ `story_ca31b015` As a developer I can re-run the sim core from a recorded seed + input log and verify the reconstructed event-s — *replay re-drives sim from seed+log, FNV-1a hash compared and shown*
+    - ✅ `task_80857f63` Replay input driver
+    - ✅ `task_676dcd02` Event-stream hasher (shared with recorder)
+    - ✅ `task_56a76bfa` Hash comparison and result report
+    - ✅ `task_db3828f4` Headless determinism harness
+  - ✅ `story_dca398fe` As a player I can watch the reconstructed battle rendered in the Main Menu exactly as it looked live so that t — *Run Replay plays the battle back live with a REPLAY indicator*
+    - ✅ `task_26143ef8` Route reconstructed events through the live presentation bridge
+    - ✅ `task_854684a7` Fixed-timestep playback loop in the Main Menu scene
+    - ✅ `task_43b9546f` Playback completion and result display
+- ✅ `epic_52dee734` Fixed-step sim core skeleton with ordered input queue
+  - ✅ `story_22d7443a` As a developer I can advance the simulation with a pure fixed-step tick loop so that combat results are identi — *fixed 30 Hz tick loop, identical in client and headless (node) runs*
+    - ✅ `task_43dac403` Define SimState and sim core module skeleton
+    - ✅ `task_eb62ec57` Implement fixed-step tick function
+    - ✅ `task_3058bdbb` Implement advance driver for multi-tick stepping
+    - ▫️ `task_2622fa1d` Add purity guard test for forbidden imports
+  - ✅ `story_50db865b` As a developer I can submit inputs into an ordered queue so that they are applied in deterministic tick order  — *tick-stamped ordered command queue; deterministic application*
+    - ✅ `task_be2de01a` Define input envelope and stable sort key
+    - ✅ `task_511dd5be` Implement enqueueInput with late-input rejection
+    - ✅ `task_788439af` Implement per-tick input drain and application phase
+    - ✅ `task_b8778240` Add cross-tick input scheduling test coverage
+  - ✅ `story_677fbef7` As a developer I can iterate entities in an explicitly ordered registry so that update order is deterministic  — *fixed-order entity iteration, monotonic ids; determinism test-verified*
+    - ✅ `task_10c8e43c` Implement entity registry with monotonic ID allocation
+    - ✅ `task_10d6b2db` Implement explicit ordered iteration
+    - ✅ `task_c5b99159` Implement deterministic mid-tick spawn/despawn semantics
+    - ✅ `task_88a465c7` Write determinism regression test for iteration order
+  - ✅ `story_c2a9612e` As a developer I can consume snapshots and an ordered event stream as the sim's only outputs so that the prese — *renderer/log/replay consume sim state + typed event stream only*
+    - ✅ `task_90b6ac9b` Implement per-tick ordered event buffer
+    - ✅ `task_df0bd686` Implement snapshot serialization of SimState
+    - ✅ `task_2a53ae12` Implement snapshot emission scheduling
+    - ✅ `task_b4122d11` Add end-to-end determinism acceptance test
+- ▫️ `epic_562c2985` Price simulator (power budgets → gold costs)
+  - ▫️ `story_802074cc` As a balance designer I can compute base gold prices from unit/structure power budgets so that prices are deri
+    - ▫️ `task_d44869af` Assumptions-sheet constant loader
+    - ▫️ `task_25f2b95f` Base price formula function
+    - ▫️ `task_32e1adab` Simulator runner over slice rows
+  - ▫️ `story_b003e5f1` As a balance designer I can have T2/T3 prices resolved through the Assumptions-sheet tier-scaling curves so th
+    - ▫️ `task_c121cd75` Tier curve parameter loader
+    - ▫️ `task_64603988` Tier scaling application
+    - ▫️ `task_d8ff914e` Workbook-matching rounding rules
+  - ▫️ `story_dcdec058` As a balance designer I can verify simulator output against the workbook formula cells for every slice row so 
+    - ▫️ `task_57bfd756` Formula-cell value extractor
+    - ▫️ `task_07c39d44` Per-row comparison harness
+    - ▫️ `task_adfb6ef5` Parity check in CI
+  - ▫️ `story_95122335` As a developer I can consume simulator-resolved prices from the canonical dataset so that no price values ever
+    - ▫️ `task_baf3ca10` Canonical dataset export
+    - ▫️ `task_4785beef` No-hardcoded-price guard
+- 🔶 `epic_69074476` Base-pathing and movement domains
+  - ▫️ `story_b953c329` As a simulation developer I can represent all unit positions and movement math in fixed-point so that the comb
+    - ▫️ `task_0e43db99` Implement fixed-point scalar type
+    - ▫️ `task_a07196a2` Implement fixed-point 2D vector operations
+    - ▫️ `task_cdc809ed` Add position state hash utility
+  - ✅ `story_ae235178` As a player I can watch walker units path along the ground to the base so that ground-domain attackers behave  — *walker ground pathing with wall blocking + reroute*
+    - ✅ `task_6e4b700f` Build walkable-terrain grid graph
+    - ✅ `task_651147cb` Implement deterministic pathfinding with stable tie-breaking
+    - ✅ `task_273406a3` Implement per-tick walker path following
+    - ✅ `task_537e0d89` Handle fully-blocked path fallback
+  - ✅ `story_683a21d0` As a player I can watch flyer units travel directly over terrain to the base so that the flyer domain is visua — *flyer direct-line traversal, distinct from walkers*
+    - ✅ `task_11db5d01` Implement direct-route flyer path generation
+    - ✅ `task_dfb4f85f` Integrate flyer domain into movement dispatch
+  - ✅ `story_72f0e6af` As a player I can watch floater/swimmer units traverse water toward the base so that the third movement domain — *floater/swimmer water-lane traversal*
+    - ✅ `task_6eeca18a` Add water-traversal mask to navigation grid
+    - ✅ `task_647d3e2b` Run pathfinder over floater mask
+    - ✅ `task_70f7ff5d` Implement floater per-tick movement
+  - ✅ `story_2401e454` As a designer I can rely on the targeting rule that basic units attack only the base while dataset-flagged uni — *base-only targeting for basic units; dataset-flagged units hit structures*
+    - ✅ `task_33f1194d` Parse structure-targeting flag from unit dataset
+    - ✅ `task_33a2b10c` Implement base-only target resolver for basic units
+    - ✅ `task_bf09bf98` Implement structure targeting for flagged units
+    - ✅ `task_25406d1f` Add retarget guard for basic units
+  - ✅ `story_975a17f2` As a developer I can replay a seed and spawn list and get identical positions every tick so that pathing deter — *seeded replay reproduces positions; rolling state hash; routes replay-safe (tests)*
+    - ✅ `task_6e105764` Enforce fixed system and entity update order
+    - ✅ `task_50bec717` Record per-tick position hashes into the battle log
+    - ✅ `task_c76ffcc9` Build seeded replay comparison harness
+    - ✅ `task_c88928bf` Add cross-domain determinism scenario fixtures
+- 🔶 `epic_6fdf45da` Seeded PRNG with reference vectors
+  - ✅ `story_d4cb4d10` As a sim-core developer I can generate deterministic pseudo-random sequences from a seed so that combat simula — *seeded mulberry32, sole randomness source, replays bit-identical*
+    - ✅ `task_2d28ad42` Implement integer-only PRNG core algorithm
+    - ✅ `task_0531bc72` Add bounded-integer draw API with rejection sampling
+    - ✅ `task_7e2d960d` Implement PRNG state serialization and restore
+    - ✅ `task_29b8c3d0` Wire PRNG into sim core as an injected instance
+  - ▫️ `story_cf8c4fa7` As a build engineer I can verify the PRNG against committed reference vectors in CI so that any generator drif
+    - ▫️ `task_b2d23b38` Generate and commit reference vector fixtures
+    - ▫️ `task_c81cb394` Implement reference-vector verification test suite
+    - ▫️ `task_517ba8b2` Add reference-vector check to the CI pipeline
+  - 🔶 `story_6c92cbbe` As a developer I can run the identical PRNG from the interactive client and the headless runner on different p — *one PRNG module shared client+headless; no cross-platform CI*
+    - ✅ `task_aa3e82b5` Package PRNG as a single shared module for client and headless runner
+    - ▫️ `task_05112114` Add headless-runner PRNG dump command
+    - ▫️ `task_14d4b839` Run cross-platform determinism check in CI matrix
+- ▫️ `epic_7df0faa9` Snapshot immutability at the sim→render boundary
+  - ▫️ `story_0a9a7b71` As a sim/presentation engineer I can rely on snapshots being deep-frozen in dev/test builds so that the presen
+    - ▫️ `task_efe3e522` Implement recursive deepFreeze utility
+    - ▫️ `task_1036b1ab` Identify and wrap the single snapshot hand-off choke point
+    - ▫️ `task_0c4d5e0c` Apply build-flagged freeze at the boundary
+  - ▫️ `story_8e74552b` As a presentation developer I can get an immediate, diagnostic error when my code attempts to mutate a snapsho
+    - ▫️ `task_2c680246` Enforce strict mode / TS strict settings across presentation modules
+    - ▫️ `task_053c44ac` Implement dev-only mutation-guard Proxy with property-path diagnostics
+    - ▫️ `task_6ad3c84a` Add static readonly typing for snapshot interfaces
+    - ▫️ `task_2cefb738` Add lint rule forbidding sim-internal imports from presentation
+  - ▫️ `story_287069b4` As a build owner I can verify the production path incurs no per-frame copy or freeze cost so that immutability
+    - ▫️ `task_b5412cd6` Build per-frame boundary hand-off micro-benchmark
+    - ▫️ `task_a96fc92d` Verify dead-code elimination of dev guards in production bundle
+    - ▫️ `task_c82e47ac` Add automated budget-regression gate
+  - ▫️ `story_7254442f` As a project maintainer I can run the immutability assertion suite in CI against a full slice session so that 
+    - ▫️ `task_635e2956` Build headless slice-session runner with dev guards enabled
+    - ▫️ `task_63e5b288` Add canary mutation probe to prove guards are live
+    - ▫️ `task_7556aa73` Wire assertion suite into CI pipeline
+    - ▫️ `task_47068906` Document the boundary contract
+- ✅ `epic_80784db4` Wave and economy loop (bounties, gold, build phases)
+  - ✅ `story_84e882f6` As a designer I can define waves in dataset wave scripts so that wave timing, composition, and counts are full — *waves fully data-driven from tables.js WAVES; spawn events on stream*
+    - ✅ `task_fe4b8bcb` Wave script schema and loader
+    - ✅ `task_e5529ec0` Tick-based spawn scheduler
+    - ✅ `task_7b31db8d` Composition and count enforcement
+    - ✅ `task_4cac7c30` Spawn events on the sim event stream
+  - ✅ `story_43a17901` As a player I can earn gold from kill bounties and spend gold on structures and units so that the economy driv — *gold ledger: kill bounties, purchase debits, affordability checks*
+    - ✅ `task_fd567d66` Integer gold ledger in sim core
+    - ✅ `task_b6d9e15b` Kill bounty crediting
+    - ✅ `task_8e43a442` Purchase debiting with affordability validation
+    - ✅ `task_87202ee8` Ledger reconciliation from event stream
+  - ✅ `story_6aca4579` As a player I can experience alternating Day Battle and Day Build phases so that the GDD §3 core loop of defen — *alternating build/battle phases (player-triggered waves)*
+    - ✅ `task_4371144d` Phase state machine
+    - ✅ `task_5e944912` Deterministic battle-end detection
+    - ✅ `task_704c6ef3` Phase-gated command validation
+  - ✅ `story_6620e7f6` As a developer I can replay a full slice wave (three waves, three build phases) headlessly and bit-for-bit so  — *headless deterministic slice runs with hashing (test suite)*
+    - ✅ `task_d4e8f8b5` Sample-Level slice dataset
+    - ✅ `task_4b9efd9b` Headless slice runner
+    - ✅ `task_e9844c1e` Deterministic state hashing
+    - ✅ `task_36c0d2c0` Bit-for-bit replay comparison test
+- ✅ `epic_84a325ee` HUD: live-priced lists, gold readout, affordability, phase indicator
+  - ✅ `story_773deacc` As a player I can see live dataset-derived prices on every unit and structure list entry so that I always know — *build buttons + action menus show live data-driven prices*
+    - ✅ `task_a7b766ce` Define price provider interface for HUD
+    - ✅ `task_8396bd50` Bind list entry widgets to PriceProvider
+    - ▫️ `task_9faea496` Add lint/CI guard against price constants in UI code
+    - ✅ `task_59f53fcf` Populate list contents from dataset entries
+  - ✅ `story_06890cb4` As a player I can instantly see which list entries I cannot afford so that I never do mental arithmetic agains — *unaffordable entries dim; ghost turns red on insufficient funds*
+    - ✅ `task_1249cc1a` Implement affordability evaluation on gold-change events
+    - ✅ `task_3b6700b1` Render unaffordable visual state on entries
+    - ✅ `task_465c1bbf` Re-evaluate affordability on price changes
+  - ✅ `story_d1d3f695` As a player I can see my current gold balance track the simulation ledger exactly so that the HUD never disagr — *gold readout reads the sim ledger directly*
+    - ✅ `task_f0a60ba6` Subscribe gold readout to sim event stream
+    - ✅ `task_bb88c3c4` Render gold readout widget
+    - ✅ `task_43d205d5` Add ledger-sync assertion in debug builds
+  - ✅ `story_7c8b093e` As a player I can see the current phase at all times so that I know whether I am deploying or in combat — *wave counter + phase label always visible*
+    - ✅ `task_19965cd9` Implement phase state model from sim events
+    - ✅ `task_c1f59077` Render phase indicator widget
+  - ✅ `story_7411a495` As a player I can open a structure context menu with upgrade and sell actions showing live prices so that I ca — *structure panel: upgrade/sell/repair with live costs + affordability*
+    - ✅ `task_5bb67c40` Implement context menu open/close on structure selection
+    - ✅ `task_08ddf48c` Populate lifecycle actions with live prices
+    - ✅ `task_29c08210` Dispatch upgrade/sell commands to the sim
+    - ✅ `task_4d050e22` Apply affordability state to upgrade action
+  - ✅ `story_6d5ea5f6` As a player I can rely on the HUD staying fixed on screen at layer 14 so that camera movement and world rotati — *DOM HUD is screen-fixed, never moves with the world*
+    - ✅ `task_1e637165` Create layer-14 screen-space HUD root
+    - ✅ `task_7a4d8479` Parent all HUD widgets to the HUD root
+    - ▫️ `task_98a30b79` Add HUD layer regression check
+- 🔶 `epic_8c010db8` Replay recorder and event-stream hasher
+  - ✅ `story_6ab3d2a4` As a developer I can record a play session as a canonical seed + tick-ordered input log so that any session ca — *every session silently records seed + tick-ordered commands*
+    - ✅ `task_3d383c9e` Define canonical recording format and serializer
+    - ✅ `task_00afce0d` Hook recorder into sim command ingress
+    - ✅ `task_c5fa157b` Implement recording deserializer with validation
+  - ✅ `story_cc31f6c1` As a developer I can compute FNV-1a and SHA-256 hashes over the sim's ordered event stream so that two runs ca — *canonical FNV-1a over sim state; replay compared by one value (no SHA-256)*
+    - ✅ `task_ab3ea693` Define canonical event byte encoding
+    - ✅ `task_32f3282c` Implement streaming FNV-1a 64-bit hasher
+    - ▫️ `task_8aca488e` Wire SHA-256 over the same encoded stream
+    - ✅ `task_2379425b` Repeated-replay hash stability test harness
+  - ✅ `story_63a9ed4c` As a developer I can replay a recorded session through the headless core and get a verified hash verdict so th — *headless replay verify with hash verdict (runReplay)*
+    - ✅ `task_3e72b8a2` Implement headless replay runner CLI
+    - ✅ `task_0ed483bd` Add expected-hash verification and exit codes
+  - ▫️ `story_3a38406f` As a team we can run the replay determinism check on at least two platforms in CI so that cross-platform deter
+    - ▫️ `task_ea3f7e19` Create golden fixture recordings with committed expected hashes
+    - ▫️ `task_55ea7ff4` Add cross-platform CI determinism matrix job
+- ▫️ `epic_9dbb25a2` Camera rotation with parallax and shadow consistency
+  - ▫️ `story_bcdf0836` As a player I can perform a camera rotation step so that I can view the battlefield from a different orientati
+    - ▫️ `task_86210afc` Camera rotation state machine
+    - ▫️ `task_228a5dea` Recompute back-to-front sprite sort under rotation
+    - ▫️ `task_1df8de39` Rotate world-anchored UI with world transform
+    - ▫️ `task_f89cc54a` Pin HUD to screen-space layer
+  - ▫️ `story_02ee9098` As a player I can rotate the camera without parallax layers breaking so that depth cues stay believable throug
+    - ▫️ `task_e68496b7` Derive parallax offsets from rotated camera basis
+    - ▫️ `task_d0691698` Preserve layer ordering through rotation tween
+    - ▫️ `task_9c9a150b` Parallax regression snapshot harness
+  - ▫️ `story_89c7849d` As a player I can see ground and dim air-unit shadows stay consistent with the rotated view so that unit posit
+    - ▫️ `task_b45c79bd` Rotate ground shadow anchors and orientation
+    - ▫️ `task_614a0123` Recompute dim air shadow offsets under rotation
+    - ▫️ `task_59c1389a` Shadow consistency check in snapshot harness
+  - ▫️ `story_57b46192` As a developer I can confirm camera rotation is presentation-only so that sim determinism and the replay hash 
+    - ▫️ `task_7d4fa07f` Enforce presentation-only rotation input path
+    - ▫️ `task_30e4f654` Replay-hash invariance test
+    - ▫️ `task_b39237ca` Sim-state snapshot comparison across rotation
+- ▫️ `epic_a9fb7d9a` xlsx ingestion and schema/referential-integrity validator
+  - ▫️ `story_22030617` As a build engineer I can parse bulwark-balance.xlsx into typed in-memory tables so that downstream validation
+    - ▫️ `task_0dbc507d` Add xlsx reading module with sheet discovery
+    - ▫️ `task_91a87526` Define typed schema descriptors per sheet
+    - ▫️ `task_7ef9d7ab` Row parser with type coercion and coordinate tracking
+    - ▫️ `task_81aacf91` Assemble parsed sheets into a single balance dataset object
+  - ▫️ `story_e022b650` As a designer I can have all cross-sheet references validated so that a typo in a faction, shape class, damage
+    - ▫️ `task_32375a31` Build canonical reference registries from source sheets
+    - ▫️ `task_f2bcd1f0` Validate faction and shape-class references on Units and Structures
+    - ▫️ `task_0faa7b97` Validate damage-type and armor-class references
+    - ▫️ `task_75a699e1` Validate Vertical_Slice manifest references
+  - ▫️ `story_100a2584` As a designer I can have the Effectiveness matrix validated as exactly 6 damage types by 5 armor classes so th
+    - ▫️ `task_0817d96e` Validate matrix axes cardinality
+    - ▫️ `task_12659381` Validate matrix completeness (all 30 cells)
+    - ▫️ `task_34109e37` Validate cell value type and sanity
+  - ▫️ `story_a3a0e53b` As a designer I can have every base unit's power budget validated to sum to exactly 100 points so that units e
+    - ▫️ `task_f0d98932` Identify base units and budget component columns
+    - ▫️ `task_622b03ab` Implement exact 100-point sum check
+    - ▫️ `task_8bf95452` Aggregate budget results into validation report
+  - ▫️ `story_2ead1f1c` As a build engineer I can run the validator as a build stage with actionable, machine-parsable errors so that 
+    - ▫️ `task_8abd5917` Shared ValidationError model and formatter
+    - ▫️ `task_cc4a6380` CLI entry point with error accumulation and exit codes
+    - ▫️ `task_150b432a` Wire validator into build pipeline before data baking
+- ✅ `epic_abf0062d` 2.5D renderer with 14-layer z-order and snapshot reads
+  - ✅ `story_508a361e` As a player I can see the battlefield rendered with correct depth ordering so that overlapping units, towers,  — *layered compositor + per-layer depth sort (7 layers, not 14)*
+    - ✅ `task_b5cd5aa4` Define 14-layer z-order constants module
+    - ✅ `task_070d98cf` Build layered Pixi stage scaffold
+    - ✅ `task_3b154b12` Implement per-layer back-to-front depth sorting
+    - ✅ `task_03e0342b` Entity-type to layer assignment mapping
+  - ✅ `story_ef5120a5` As a player I can see ground units cast ground shadows and flyers cast dim air shadows so that unit domain (gr — *ground shadows + lifted flyer shadows, correct z-order*
+    - ✅ `task_3d937ad1` Ground shadow rendering for ground units
+    - ✅ `task_f267a652` Dim air shadow rendering for flyers
+    - ✅ `task_c8ef464f` Place shadows in correct z-order layer
+  - ✅ `story_4369d1b3` As a developer I can drive the renderer purely from sim snapshots and the ordered event stream so that the det — *renderer reads sim state/events, never mutates (by architecture)*
+    - ✅ `task_cf5f1bcf` Read-only snapshot accessor interface
+    - ▫️ `task_3bdbc98d` Dev-mode deep-freeze guard on snapshots
+    - ✅ `task_657e1d2d` Ordered event stream subscriber
+    - ✅ `task_806bd520` Snapshot-driven render frame update
+  - ✅ `story_fe1bded3` As a player I can see world UI attached to the battlefield separately from the screen-fixed HUD so that in-wor — *world overlays (rings, banners) separate from screen-fixed HUD*
+    - ✅ `task_76d23db1` Screen-space HUD container on layer 14
+    - ✅ `task_3a9b4593` World UI element placement in layers 2–12
+    - ▫️ `task_28a881f1` Camera transform isolation test harness
+- ▫️ `epic_ccd761c1` Canonical dataset emitter and build embedding
+  - ▫️ `story_d4a2707e` As a build engineer I can serialize the validated workbook data into canonical JSON so that identical workbook
+    - ▫️ `task_3c9326a3` Define canonical JSON encoding rules
+    - ▫️ `task_a480efa0` Map validated workbook records to dataset schema
+    - ▫️ `task_909911e0` Reproducibility regression test harness
+  - ▫️ `story_538b3479` As a build engineer I can emit a content-addressed dataset.<hash>.json so that the filename provably identifie
+    - ▫️ `task_b1c6637f` Compute content hash of canonical bytes
+    - ▫️ `task_794e7d86` Write dataset.<hash>.json and self-verify
+  - ▫️ `story_43128333` As a build engineer I can emit a manifest alongside the dataset so that every artifact is traceable to its sou
+    - ▫️ `task_53d6b7f3` Define and emit manifest schema
+    - ▫️ `task_6afb6a81` Cross-validate manifest against dataset on emit
+  - ▫️ `story_c6ff6f55` As a developer I can have the dataset and manifest embedded into client and headless builds so that every runt
+    - ▫️ `task_492b9f93` Build-step embedding of dataset artifacts
+    - ▫️ `task_a9fb1b86` Shared dataset loader with hash verification
+    - ▫️ `task_ae6fa404` Client startup integration
+    - ▫️ `task_35a788de` Headless runner integration
+    - ▫️ `task_28a0ceb3` Client/headless dataset parity check
+- 🔶 `epic_d1c6e278` Deploy loop: pick → preview → confirm/cancel
+  - 🔶 `story_4c5d6425` As a player I can interact with the deploy loop using a single mouse pointer or a single finger so that input  — *single-pointer mouse flow complete; touch parity unverified*
+    - ▫️ `task_9cca9aac` Unified pointer event adapter
+    - ✅ `task_96724d56` Deploy interaction state machine
+    - ▫️ `task_a02e750a` Hover-independence guard
+  - ✅ `story_33ae851b` As a player I can pick a unit or structure from the deploy menu with one tap or click so that I can start a pl — *one click selects a build from the palette*
+    - ✅ `task_0cbc7de2` Deploy menu entries from data
+    - ✅ `task_56252024` Selection handling and highlight
+  - ✅ `story_22e72e49` As a player I can see a placement ghost and range circle in the world while previewing so that I know where my — *placement ghost + range circle with validity tint*
+    - ✅ `task_976b8f41` Ghost sprite in world layer
+    - ✅ `task_30436af9` Range circle in world UI layer
+    - ✅ `task_95de5e75` World transform applied to preview elements
+    - ✅ `task_add0900b` Placement validity check and tint
+  - ✅ `story_398bd565` As a player I can drop to confirm a placement or cancel it so that only deliberate placements affect the game, — *click-confirm / right-click-Esc-cancel placement, deterministic command*
+    - ✅ `task_d79f0a1d` DeployCommand and ordered input queue
+    - ✅ `task_d4f4624b` Core deploy command handler
+    - ✅ `task_ff750fe5` Confirm-on-drop wiring
+    - ✅ `task_dc0b9a11` Cancel path with sim-state guarantee
+- ▫️ `epic_d271774b` Fixed-point math library for sim core
+  - ▫️ `story_1e6517c9` As a sim-core developer I can perform basic fixed-point arithmetic (add, sub, mul, div) so that the determinis
+    - ▫️ `task_1334806a` Define fixed-point format and constants
+    - ▫️ `task_2ea1ddd7` Implement fpAdd and fpSub with overflow assertions
+    - ▫️ `task_757934c5` Implement fpMul with 64-bit intermediate
+    - ▫️ `task_8d2a2709` Implement fpDiv with defined divide-by-zero behavior
+    - ▫️ `task_838cce2b` Write overflow/precision documentation block
+  - ▫️ `story_d2191834` As a sim-core developer I can compute fixed-point sqrt, distance, and lerp so that gameplay math (ranges, targ
+    - ▫️ `task_220eafb1` Implement fpSqrt with fixed iteration count
+    - ▫️ `task_5e64f70e` Implement fpDistance and fpDistanceSq for 2D points
+    - ▫️ `task_651ac0b7` Implement fpLerp with documented rounding
+    - ▫️ `task_92f6464e` Add golden-vector regression table
+  - ▫️ `story_4863ad13` As a build engineer I can enforce and verify float-free, cross-platform-identical behavior so that the determi
+    - ▫️ `task_de60c426` Add static lint rule banning floats in the fixedpoint module
+    - ▫️ `task_da9c185d` Build cross-environment determinism harness
+    - ▫️ `task_e3633e2d` Wire assertion toggles for debug vs release builds
+- ▫️ `epic_dd0ceafe` Cross-platform slice determinism certification
+  - ▫️ `story_6f6df156` As a developer I can record full slice-session fixtures so that deterministic replays have canonical reference
+    - ▫️ `task_e177b2d2` Define fixture serialization schema
+    - ▫️ `task_372fb67b` Add fixture-recording mode to headless runner
+    - ▫️ `task_46e9668e` Author three canonical slice-session input scripts
+    - ▫️ `task_dbb3d234` Fixture manifest and integrity check
+  - ▫️ `story_ba6d9c18` As a developer I can replay recorded fixtures bit-for-bit on multiple platforms in CI so that cross-platform d
+    - ▫️ `task_fc0a3572` Implement replay-verification mode in headless runner
+    - ▫️ `task_887892e0` Build cross-platform CI matrix job
+    - ▫️ `task_123f2fd4` Cross-platform result aggregation step
+    - ▫️ `task_c94073a6` Deterministic build configuration audit
+  - ▫️ `story_6ddf387c` As a developer I can read a divergence-triage report that pinpoints the first divergent tick, entity, and even
+    - ▫️ `task_a37ed84c` Per-entity sub-hashing in the sim state hash
+    - ▫️ `task_1dbeba71` Event-log diff at divergent tick
+    - ▫️ `task_29fef8c0` Triage report generator
+    - ▫️ `task_6f794823` Fault-injection self-test for the triage pipeline
+  - ▫️ `story_7a2e072f` As a release manager I can rely on the certification job as a required CI gate with zero open determinism regr
+    - ▫️ `task_60a44238` Configure certification as required branch gate
+    - ▫️ `task_c2060bb2` Determinism regression tracker check
+    - ▫️ `task_12066333` Certification summary artifact
+- ✅ `epic_fa8e73f1` Structure lifecycle state machine
+  - ✅ `story_89a06d07` As a simulation developer I can define all eight structure lifecycle states and their legal transition table s — *full structure lifecycle state machine with legal transitions*
+    - ✅ `task_b60f68a4` Define StructureLifecycleState enum
+    - ✅ `task_4f5c0dae` Build static transition table
+    - ✅ `task_df9a41f2` Implement per-structure state holder
+  - ✅ `story_97719297` As a simulation developer I can drive lifecycle transitions purely from ticks and ordered inputs so that the s — *lifecycle driven by ticks + ordered commands; deterministic*
+    - ✅ `task_52bcc9ce` Implement tick-driven transition evaluation
+    - ✅ `task_f7fb0b42` Implement ordered-input transition handling
+    - ✅ `task_5b92e95d` Implement Aiming→Firing combat trigger and Damaged interleave
+    - ✅ `task_575ec846` Implement Selling and Destroying terminal paths
+  - ✅ `story_fd28ec44` As a systems consumer I can receive an emitted event for every lifecycle transition so that the presentation l — *events emitted on lifecycle transitions (consumed by FX/HUD)*
+    - ✅ `task_75b9316f` Define lifecycle transition event schema
+    - ✅ `task_02634374` Emit events on every transition
+    - ✅ `task_e5ef58b6` Headless lifecycle run harness
+  - ✅ `story_bf880dc3` As a simulation developer I can have invalid transitions rejected deterministically so that malformed or ill-t — *invalid placements/commands rejected deterministically*
+    - ✅ `task_dcdd366a` Implement transition validation gate
+    - ✅ `task_df56e6b5` Emit TransitionRejected events with reason codes
+    - ✅ `task_48f9a112` Determinism regression test for rejections
+
+## Standalone stories
+- ▫️ `story_10cd6436` As a sim-core developer I can rely on lint rules that forbid Math.random, Date.now, and performance.now in src
+  - ▫️ `task_b6c57a4d` Add ESLint override block scoped to src/core
+  - ▫️ `task_ee899865` Configure no-restricted-properties for Math.random
+  - ▫️ `task_e38ac3ca` Configure bans for Date.now and performance.now
+  - ▫️ `task_f9034ed1` Write lint self-test suite for nondeterministic API bans
+  - ▫️ `task_aed7d657` Sweep existing src/core for violations and remediate
+- ▫️ `story_210d8208` As a developer I can commit a versioned seed+input fixture set with its dataset hash so that the CI replay gat
+  - ▫️ `task_6537e709` Define fixture and manifest schema
+  - ▫️ `task_830a5d57` Author vertical-slice fixture set
+  - ▫️ `task_fff387bd` Implement fixture loader with dataset-hash check
+- ▫️ `story_574dd68b` As a player I can see troop march paths rendered along sim-provided unit positions so that I can read where at
+  - ▫️ `task_91095dd5` Sim snapshot reader for unit positions
+  - ▫️ `task_307325dc` March path segment builder
+  - ▫️ `task_85ff978f` Render march paths in world layers 2–12
+  - ▫️ `task_fc299f2f` Path lifecycle tied to sim events
+- ▫️ `story_7ae00310` As a developer I can generate a battle log as a pure projection of the ordered event stream so that the log ne
+  - ▫️ `task_383f8585` Define battle log line schema
+  - ▫️ `task_09090ef8` Implement event-to-line projection function
+  - ▫️ `task_7a0fa817` Implement log assembly from event stream
+- ▫️ `story_8def934e` As a developer I can invoke the headless runner from the command line with a dataset, seed, and input log so t
+  - ▫️ `task_d38b3071` Implement CLI argument parser
+  - ▫️ `task_61fdccff` Define exit-code and error-reporting contract
+  - ▫️ `task_bd96b7b9` Wire runner entrypoint and process bootstrap
+- ▫️ `story_aca14c9d` As a QA lead I can execute a structured Visuals §10 acceptance checklist so that every slice visual item is ve
+  - ▫️ `task_f64bd26a` Author §10 checklist artifact
+  - ▫️ `task_199c76f5` Build fixed deterministic demo scenario
+  - ▫️ `task_3c1de75d` Add layer/sublayer debug overlay
+- ▫️ `story_b1616be3` As a player I can navigate between screens via a single transition graph so that all screen changes follow the
+  - ▫️ `task_1debac33` Define transition graph data table
+  - ▫️ `task_6adbc49c` Implement ScreenStateMachine
+- ▫️ `story_edbc9eed` As a player I can use the MENU screen so that I can start a run or open settings
+  - ▫️ `task_caf5a260` Build MENU screen layout
+  - ▫️ `task_0d3e78a2` Wire MENU buttons to transitions
+- ▫️ `story_2df6573e` As a developer I can run the headless sim replay from the command line and get deterministic per-tick hashes s
+  - ▫️ `task_85ebe62a` Implement canonical per-tick state hashing
+  - ▫️ `task_1c2f1f80` Add replay-verify CLI mode to headless runner
+  - ▫️ `task_4c3bb02e` Emit machine-readable run report
+  - ▫️ `task_b07385a4` Add batch mode to run all fixtures
+- ▫️ `story_48f66a7c` As a developer I can have the runner load and verify dataset.<hash>.json so that simulations only execute agai
+  - ▫️ `task_16224316` Implement dataset file loader with schema validation
+  - ▫️ `task_87e45fd5` Implement content-hash recomputation and filename verification
+  - ▫️ `task_9716aecf` Record dataset hash into run metadata
+- ▫️ `story_5239f2d9` As a developer I can read distinct, human-readable log entries for every slice event category so that I can tr
+  - ▫️ `task_68e684e2` Format spawn and despawn events
+  - ▫️ `task_669e411d` Format shot and kill events
+  - ▫️ `task_a7fec5f4` Format bounty and lifecycle transition events
+- ▫️ `story_aa62f432` As a QA lead I can record the full walkthrough session with embedded seed metadata so that the evidence is rep
+  - ▫️ `task_03f4ede8` Recording harness with seed metadata
+  - ▫️ `task_5e775de1` Scripted walkthrough sequence with camera rotation step
+  - ▫️ `task_49c25a40` Execute and capture the single-session recording
+- ✅ `story_ada910ee` As a player I can see a coin/bounty animation exactly once per kill so that I get clear feedback on bounty ear — *floating '+N' gold text once per kill at the dying unit*
+  - ✅ `task_35d282c0` Kill/bounty event consumer with once-only dedup
+  - ✅ `task_b9f9ecdd` Coin animation spawn and playback
+  - ✅ `task_93b540e1` Coin sprite pooling
+- ▫️ `story_091cb6c8` As a player I can choose a defense location so that the run is set up on the slice's single field before gear 
+  - ▫️ `task_4c5ef4ad` Render location selection list
+  - ▫️ `task_94bbf9fa` Store selection and advance to CHOOSE GEAR
+- ▫️ `story_4d177d9d` As a sim-core developer I can have lint fail on float literals in src/core so that the combat core stays on in
+  - ▫️ `task_e2ff4888` Implement float-literal detection rule
+  - ▫️ `task_6189c6d5` Cover edge cases: negative floats, template contexts, and const configs
+  - ▫️ `task_8338cc34` Remediate existing float literals in src/core
+- ▫️ `story_a9a0a7ab` As a reviewer I can reproduce the recorded session from the committed seed so that the acceptance evidence is 
+  - ▫️ `task_0cc5ccd3` Reproducibility verification run
+  - ▫️ `task_cde8eeff` Commit evidence bundle
+- ▫️ `story_b123047c` As a developer I can run a headless slice session and receive a battle log file so that determinism triage wor
+  - ▫️ `task_9f23ade2` Wire formatter into headless runner
+  - ▫️ `task_472d5147` Normalize log file encoding and write mode
+- ✅ `story_e1d9f9ad` As a developer I can execute a full slice wave headlessly from a seed and input log so that battles run identi — *full slice waves run headlessly in node with no DOM/WebGL (tests)*
+  - ✅ `task_31fbdfd5` Implement input-log parser
+  - ✅ `task_a3648a53` Implement fixed-tick simulation loop driver
+  - ✅ `task_3ffa1bb3` Implement event-stream capture and hashing
+  - ✅ `task_d6c57349` Verify headless execution of full slice wave fixture
+- ▫️ `story_5d663cf0` As a build engineer I can have CI execute the headless replay on at least two OS targets and block the merge o
+  - ▫️ `task_d9a7c5ce` Configure two-platform CI matrix job
+  - ▫️ `task_44c881f5` Implement cross-platform hash comparison gate script
+  - ▫️ `task_dbeca847` Wire gate job as required status check
+  - ▫️ `task_d5185fe0` Publish gate summary to CI output
+- ▫️ `story_d7294c64` As a player I can choose my gear from live-priced deployable units and structures so that I enter PLAY with a 
+  - ▫️ `task_860e3894` Load live pricing from balance data
+  - ▫️ `task_96ed9e6a` Render gear grid with prices
+  - ▫️ `task_bd192a97` Confirm loadout and transition to PLAY
+- ▫️ `story_f1dc1fd6` As a player I can rotate the camera and see march paths and coin animations rotate correctly with the world so
+  - ▫️ `task_c02614b3` Route world-UI animations through world-to-screen transform
+  - ▫️ `task_a8605936` Camera rotation change propagation
+  - ▫️ `task_3780e096` Rotation regression fixture for M4 exit criteria
+- ▫️ `story_5ff00a9f` As a maintainer I can have CI block merges on these lint violations while exempting the presentation layer so 
+  - ▫️ `task_bc948a5a` Add lint job to CI pipeline as a required status check
+  - ▫️ `task_1cc3b774` Verify presentation-layer exemption in config and CI
+  - ▫️ `task_bddbfa1f` Document the determinism lint boundary
+- ✅ `story_28b63882` As a developer I can export the battle log from an interactive client session so that client and headless runs — *Export Log button emits the client session's battle log*
+  - ✅ `task_8463a43d` Wire formatter into client session shell
+  - ✅ `task_e95991eb` Guard against presentation-layer contamination
+- ▫️ `story_65f39671` As a project lead I can gate M5 sign-off on the checklist so that any failing §10 item becomes a blocking defe
+  - ▫️ `task_a4ebdbfa` Blocking-defect template for §10 items
+  - ▫️ `task_d1f4c11b` Sign-off gate check
+- 🔶 `story_568bf8ed` As a developer I can receive the event-stream hash, battle log, and final snapshot JSON from a run so that res — *hash + battle log produced; no final-snapshot JSON artifact*
+  - ✅ `task_efddf4d8` Implement battle log serializer
+  - ▫️ `task_bb28bec5` Implement final snapshot serializer
+  - ✅ `task_b88e36a6` Implement stdout summary and hash emission
+- 🔶 `story_5fdc2aa5` As a player I can return to gear select mid-battle and reach RESULTS on wave clear so that the in-battle flow  — *wave-clear -> results works; no gear-select return path*
+  - ▫️ `task_e7470e71` In-battle return to gear select
+  - ✅ `task_bfe4020b` Wave-clear detection to RESULTS
+- ▫️ `story_b75455df` As a developer I can see a diff report pinpointing the first-divergent tick when the gate fails so that I can 
+  - ▫️ `task_3fe97e5c` Implement first-divergent-tick finder
+  - ▫️ `task_816e2487` Generate structured diff report
+  - ▫️ `task_7a5e5280` Attach diff report to failed pipeline
+- ✅ `story_be72303d` As a developer I can run an automated determinism acceptance test that compares battle logs so that log diverg — *same-seed replay hash comparison catches divergence (in-game + tests)*
+  - ✅ `task_d9f377f9` Implement same-seed replay log comparison test
+  - ▫️ `task_ac8db141` Implement first-divergence diff reporter
+  - ✅ `task_d150bfaf` Add client-vs-headless comparison to acceptance suite
+- 🔶 `story_e3a26e78` As a player I can review my results and return to MENU so that the run loop closes cleanly — *results overlay + Restart; no MENU to return to*
+  - ✅ `task_27dc0fd9` Render results summary
+  - ▫️ `task_bbeee4db` Return to MENU from RESULTS
+- ✅ `story_e9ad6098` As a developer I can prove the headless runner and interactive client core produce identical output for the sa — *one shared sim module for client and headless; replay hash proves parity*
+  - ✅ `task_2ec44b4b` Build client-core parity harness
+  - ✅ `task_da3e38f5` Implement cross-runtime comparison test
+  - ▫️ `task_d69c57cc` Add determinism check to CI script
+- ▫️ `story_dcd7cfec` As a player I can adjust volume in SETTINGS and return to MENU so that I control audio without leaving the flo
+  - ▫️ `task_99591e76` Volume control bound to audio
+  - ▫️ `task_653bef78` Back to MENU from SETTINGS
