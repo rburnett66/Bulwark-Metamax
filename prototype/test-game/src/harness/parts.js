@@ -10,6 +10,11 @@
  *   head   <- awareness   (sensor)
  */
 
+// CANONICAL per-layer footprint widths (px, pre stack-scale) that authored sprites are normalised to.
+// The bench authors against these, and the GAME must render with the same ratios (weapon ~65% of base,
+// head ~39%) — one constant, or tool and battle-map scale drift apart. Shared by bench.js + unitArt.js.
+export const LAYER_FIT = { base: 46, weapon: 30, head: 18 };
+
 // Palette per broad unit class (generic-safe fallback). Kept data-only so new factions/shapes just add a row.
 const PALETTES = {
   Troops:        { body: 0x6f8f3f, trim: 0x9bd15a, barrel: 0x2f3d1e, sensor: 0x7fd6e0 },

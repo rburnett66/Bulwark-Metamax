@@ -10,6 +10,7 @@
  */
 
 import { LAYER_HEIGHT } from '../harness/camera.js';
+import { LAYER_FIT } from '../harness/parts.js';
 
 const LAYERS = ['base', 'weapon', 'head'];
 const Z = { base: 0, weapon: 1, head: 2 };
@@ -70,8 +71,12 @@ export function buildUnitSprite(art, unitId, tilePx, radius) {
   if (!def) return null;
   const sheet = art.sheets[def.sheet];
   if (!sheet) return null;
-  // target on-screen width of the base layer = footprint diameter (× a small presence factor)
+  // target on-screen width of the BASE layer = footprint diameter (× a small presence factor).
+  // stackScale maps the bench's authoring space onto that footprint, so every layer keeps the EXACT
+  // proportions and height offsets tuned in the State Harness (LAYER_FIT: weapon ~65% of base, head ~39%).
+  // Previously every layer was normalised to the base's full width — weapons/heads rendered oversized.
   const targetW = radius ? (tilePx * 2 * radius * SPRITE_VIS_FACTOR) : (tilePx * 0.95);
+  const stackScale = targetW / LAYER_FIT.base;
   const c = new PIXI.Container();
   const rot = (def.rotation || 0) * Math.PI / 180;   // authored FACING — applied per-layer, NOT to the container
   let any = false;                                   // (the container stays screen-aligned so the camera lean works)
@@ -81,11 +86,11 @@ export function buildUnitSprite(art, unitId, tilePx, radius) {
     if (!tex) continue;
     const spr = new PIXI.Sprite(tex);
     if (spr.anchor && spr.anchor.set) spr.anchor.set(0.5);
-    const fit = (targetW / Math.max(1, tex.width)) * (L.scale || 1);
+    const fit = ((LAYER_FIT[name] || LAYER_FIT.base) * stackScale / Math.max(1, tex.width)) * (L.scale || 1);
     spr.scale.set(fit, fit);
     spr.rotation = rot;
     spr.__height = LAYER_HEIGHT[name] || 0;            // physical height → the renderer applies the parallax lean
-    spr.__baseY = (L.offset || 0) * (tilePx / 60);     // authored height nudge (renderer adds the lean on top)
+    spr.__baseY = (L.offset || 0) * stackScale;        // authored height nudge in bench units (lean adds on top)
     spr.y = spr.__baseY;
     spr.zIndex = Z[name];
     c.addChild(spr);

@@ -10,7 +10,7 @@
 import { buildPartStack } from './partstack.js';
 import { project, shadowFor, layerLean, LAYER_HEIGHT } from './camera.js';
 import { unitReadout } from './readout.js';
-import { unitParts } from './parts.js';
+import { unitParts, LAYER_FIT } from './parts.js';
 import { applyReadout } from './drive.js';
 import { UNITS, WAVES, MAP } from '../data/tables.js';
 import { createSim } from '../sim/core.js';
@@ -20,9 +20,8 @@ import { createUnit } from '../sim/entities.js';
 const BENCH_MAP = { cols: 7, rows: 7, tile: 60 };
 const BASE_SCALE = 4.4;         // scale the small part-stack up so it reads clearly on the bench (~2x the old size)
 const TARGET_ID = 990001;       // sentinel id for the bench's movable practice target
-// Target on-stack width (px, pre BASE_SCALE) a CHOSEN sprite is normalised to, per layer — so a 512px art
-// frame reads at roughly the procedural part's footprint. drive.js multiplies state scale by this __fitScale.
-const LAYER_FIT = { base: 46, weapon: 30, head: 18 };
+// Per-layer sprite normalisation widths now live in parts.js (LAYER_FIT) — shared with the game's
+// unitArt.js so the bench preview and the battle map render authored art at IDENTICAL proportions.
 const LAYERS = ['base', 'weapon', 'head'];
 
 // ── Faction / unit selection (data-driven from UNITS) ────────────────────────────────────────────────
