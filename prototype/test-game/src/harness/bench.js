@@ -10,7 +10,7 @@
 import { buildPartStack } from './partstack.js';
 import { project, shadowFor, layerLean, LAYER_HEIGHT } from './camera.js';
 import { unitReadout } from './readout.js';
-import { unitParts, LAYER_FIT } from './parts.js';
+import { unitParts, LAYER_FIT, dimsFor, UNIT_VIS_SCALE } from './parts.js';
 import { applyReadout } from './drive.js';
 import { UNITS, WAVES, MAP } from '../data/tables.js';
 import { createSim } from '../sim/core.js';
@@ -204,7 +204,7 @@ export function bootBench(mountEl) {
 
   return {
     factions, unitsForFaction,
-    setUnit(id) { b.unitId = id; rebuildSim(); rebuildStack(); },
+    setUnit(id) { b.unitId = id; rebuildSim(); rebuildStack(); drawGrid(grid, realTilePx(b)); },
     acquire(on) { b.targetOn = !!on; applyTarget(); },
     moveTarget(deg) { b.targetDeg = deg; applyTarget(); },
     damage(frac) { if (b.unit) b.unit.hp = Math.max(0, b.unit.hp - b.unit.maxHp * (frac || 0.25)); },
@@ -293,10 +293,34 @@ export function bootBench(mountEl) {
   };
 }
 
-function drawGrid(g) {
-  g.clear(); g.lineStyle(1, 0x1a2028, 0.9);
-  for (let x = 0; x <= BENCH_MAP.cols; x++) { g.moveTo(x * BENCH_MAP.tile, 0); g.lineTo(x * BENCH_MAP.tile, BENCH_MAP.rows * BENCH_MAP.tile); }
-  for (let y = 0; y <= BENCH_MAP.rows; y++) { g.moveTo(0, y * BENCH_MAP.tile); g.lineTo(BENCH_MAP.cols * BENCH_MAP.tile, y * BENCH_MAP.tile); }
+// How many BENCH pixels equal ONE GAME TILE for the selected unit: the stack renders at
+// LAYER_FIT.base × BASE_SCALE bench px, and in the game the same unit spans
+// footprint-diameter × presence game tiles. Ratio = a true per-unit tile ruler
+// (approximate off-centre, where the bench camera adds a subtle depth falloff).
+function realTilePx(b) {
+  if (!b || !b.unitId || !UNITS[b.unitId]) return 0;
+  const radius = (b.unit && b.unit.radius) || 0.3;
+  const presence = (LAYER_FIT.base / dimsFor(UNITS[b.unitId]).w) * UNIT_VIS_SCALE;
+  const gameTiles = 2 * radius * presence;              // unit width on the battle map, in game tiles
+  if (!(gameTiles > 0)) return 0;
+  return (LAYER_FIT.base * BASE_SCALE) / gameTiles;     // bench px per game tile
+}
+
+// The bench grid is a GAME-TILE RULER: bold lines = one real battle-map tile for the selected
+// unit, faint lines = half-tile subdivisions. Falls back to the plain bench grid before a unit
+// is picked. Redrawn on unit selection (tile size depends on the unit's footprint + shape).
+function drawGrid(g, realTile) {
+  g.clear();
+  const W = BENCH_MAP.cols * BENCH_MAP.tile, H = BENCH_MAP.rows * BENCH_MAP.tile;
+  const step = (realTile && realTile > 8) ? realTile : BENCH_MAP.tile;
+  // faint half-tile subdivisions
+  g.lineStyle(1, 0x1a2028, 0.6);
+  for (let x = step / 2; x < W; x += step) { g.moveTo(x, 0); g.lineTo(x, H); }
+  for (let y = step / 2; y < H; y += step) { g.moveTo(0, y); g.lineTo(W, y); }
+  // BOLD real game-tile lines
+  g.lineStyle(2, 0x2c3a48, 1);
+  for (let x = 0; x <= W; x += step) { g.moveTo(x, 0); g.lineTo(x, H); }
+  for (let y = 0; y <= H; y += step) { g.moveTo(0, y); g.lineTo(W, y); }
 }
 
 function drawShadow(g, sh, health) {
