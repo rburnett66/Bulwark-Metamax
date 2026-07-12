@@ -82,8 +82,10 @@
   @keyframes breathe{from{opacity:.7}to{opacity:1;transform:scale(1.01)}}
   body.rm .c-portrait.speaking svg{animation:none}
   .p-scan{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.4) 3px 4px);
-    mix-blend-mode:overlay;pointer-events:none}
-  .p-veil{position:absolute;inset:0;background:#05080c;transition:opacity .5s}
+    mix-blend-mode:overlay;pointer-events:none;z-index:2}
+  .p-veil{position:absolute;inset:0;background:#05080c;transition:opacity .5s;z-index:3}
+  .c-portrait img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 10%;
+    filter:saturate(.9) contrast(1.05);z-index:1}   /* authored portrait over the silhouette, under scan+veil */
   .c-right{display:flex;flex-direction:column;min-height:0}
   .c-meta{font-size:9.5px;color:var(--dim);padding:7px 10px;border-bottom:1px solid var(--line);line-height:1.7;letter-spacing:.5px}
   .c-meta b{color:var(--accent);font-weight:600}
@@ -172,6 +174,7 @@
 import { FACTIONS, ORDER, ICONS, PORTRAIT, hash,
          initAudio, audioReady, setVolume, paramsFor,
          playUtterance, utterDuration, startStatic, playSweep, playDrop } from './src/comm/voice.js';
+import { portraitSlug } from './src/comm/commCard.js';   // same portrait convention as the battle card
 
 /* ---------- UI state ---------- */
 var stage=document.getElementById("stage"), idle=document.getElementById("idle");
@@ -275,6 +278,11 @@ async function runCall(card,d,callNo){
       footl=card.querySelector(".foot-l"), qchip=card.querySelector(".qchip");
   ic.innerHTML=""; nm.textContent=""; sub.textContent=""; meta.innerHTML=""; txt.textContent="";
   veil.style.opacity=1;
+  // authored portrait: content/dialog/portraits/<slug>.png, silhouette fallback (identical to the game)
+  var pimg=document.createElement("img");
+  pimg.alt=""; pimg.onerror=function(){pimg.remove();};
+  pimg.src="content/dialog/portraits/"+portraitSlug(d.character)+".png";
+  portrait.insertBefore(pimg, veil);
 
   // channel static bed for this faction — rides under the whole transmission
   var statCtl=audioReady()?startStatic(d.faction,parseFloat(staticSl.value)):null;
