@@ -327,18 +327,26 @@ export function startStatic(facId, mult) {
   const s = STATIC[facId]; if (!s) return null;
   mult = (mult == null ? 1 : mult); if (mult <= 0) return null;
   const src = AC.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  // GRIT: filtered band -> waveshaper drive (distorted crackle), plus a decorrelated broadband hiss
+  // floor — a lone narrow band under a smooth sine tremolo read as a pure warbling tone.
   const filt = AC.createBiquadFilter(); filt.type = s.type; filt.frequency.value = s.freq; filt.Q.value = s.q || 1;
+  const drive = AC.createWaveShaper(); drive.curve = driveCurve(0.6);
   const lvl = AC.createGain(); const base = s.level * mult;
-  src.connect(filt); filt.connect(lvl); lvl.connect(master);
+  src.connect(filt); filt.connect(drive); drive.connect(lvl); lvl.connect(master);
+  const hiss = AC.createBufferSource(); hiss.buffer = noiseBuf; hiss.loop = true; hiss.playbackRate.value = 0.83;
+  const hf = AC.createBiquadFilter(); hf.type = 'highpass'; hf.frequency.value = 900; hf.Q.value = 0.4;
+  const hg = AC.createGain(); hg.gain.value = 0.45;   // relative to lvl — the band stays dominant
+  hiss.connect(hf); hf.connect(hg); hg.connect(lvl);
   if (s.rev) { const w = AC.createGain(); w.gain.value = s.rev; lvl.connect(w); w.connect(convolver); }
   let lfo = null;
   if (s.trem) {
-    lfo = AC.createOscillator(); lfo.frequency.value = s.trem;
-    const ld = AC.createGain(); ld.gain.value = (s.tremDepth || 0.5) * base; lfo.connect(ld); ld.connect(lvl.gain); lfo.start();
+    // square LFO = choppy carrier DROPOUT (radio break-up) instead of a smooth sine warble
+    lfo = AC.createOscillator(); lfo.type = 'square'; lfo.frequency.value = s.trem;
+    const ld = AC.createGain(); ld.gain.value = (s.tremDepth || 0.5) * base * 0.5; lfo.connect(ld); ld.connect(lvl.gain); lfo.start();
   }
   lvl.gain.setValueAtTime(0.0001, AC.currentTime);
   lvl.gain.linearRampToValueAtTime(base, AC.currentTime + 0.4);
-  src.start();
+  src.start(); hiss.start();
   return { stop: function () {
     const t = AC.currentTime;
     try {
@@ -346,6 +354,7 @@ export function startStatic(facId, mult) {
       lvl.gain.linearRampToValueAtTime(0.0001, t + 0.4);
     } catch (e) { /* context closed */ }
     try { src.stop(t + 0.45); } catch (e) { /* already stopped */ }
+    try { hiss.stop(t + 0.45); } catch (e) { /* already stopped */ }
     if (lfo) { try { lfo.stop(t + 0.45); } catch (e) { /* already stopped */ } }
   } };
 }
