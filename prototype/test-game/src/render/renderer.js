@@ -176,7 +176,9 @@ export function createRenderer(app, map) {
   const root = new PIXI.Container();
   app.stage.addChild(root);
 
-  const layerNames = ['water', 'ground', 'structures', 'units', 'air', 'fx', 'overlay'];
+  // structHp is SECOND-highest by contract: structure/base health bars must always read over units,
+  // air, and FX. 'fog' is reserved as the permanent TOP layer for fog of war.
+  const layerNames = ['water', 'ground', 'structures', 'units', 'air', 'fx', 'overlay', 'structHp', 'fog'];
   const layers = {};
   for (let i = 0; i < layerNames.length; i++) {
     const name = layerNames[i];
@@ -195,7 +197,8 @@ export function createRenderer(app, map) {
       structures: new PIXI.Graphics(),
       units: new PIXI.Graphics(),
       air: new PIXI.Graphics(),
-      overlay: new PIXI.Graphics()
+      overlay: new PIXI.Graphics(),
+      structHp: new PIXI.Graphics()
     },
     fxG: new PIXI.Graphics(),
     fxItems: [],
@@ -216,6 +219,7 @@ export function createRenderer(app, map) {
   layers.air.addChild(renderer.dyn.air);
   layers.fx.addChild(renderer.fxG);
   layers.overlay.addChild(renderer.dyn.overlay);
+  layers.structHp.addChild(renderer.dyn.structHp);
 
   // Reusable FX spawners for callers outside the event pipeline (take CELL coords, e.g. scripted FX).
   renderer.spawnFireAt = (cellX, cellY, count, scale) => {
@@ -551,6 +555,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
   const gU = renderer.dyn.units; gU.clear();
   const gA = renderer.dyn.air; gA.clear();
   const gO = renderer.dyn.overlay; gO.clear();
+  const gH = renderer.dyn.structHp; gH.clear();   // structure/base HP bars — second-highest layer (under fog only)
 
   if (!state) { updateFx(renderer); return; }
 
@@ -567,7 +572,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     gS.lineStyle(2, 0xf0e0a0, 0.9);
     gS.drawRect(bp.x - t * 1.5, bp.y - t * 1.5, t * 3, t * 3);   // keep outline
     gS.lineStyle(0);
-    drawHpBar(gS, bp.x, bp.y - t * 1.72, t * 2.2, state.base.hp / Math.max(1, state.base.maxHp));
+    drawHpBar(gH, bp.x, bp.y - t * 1.72, t * 2.2, state.base.hp / Math.max(1, state.base.maxHp));
 
     // ── SUPER-CANNON TURRET — a visible barrel + charge gauge showing the cannon's live STATE ──
     //   idle: steel barrel slowly SCANS the field  ·  aim: swings onto the locked target, glows + a ring
@@ -633,7 +638,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       }
       // hp bar
       if (typeof s.hp === 'number' && typeof s.maxHp === 'number' && s.hp < s.maxHp) {
-        drawHpBar(gS, px + w / 2, py - 6, w - 4, s.hp / Math.max(1, s.maxHp));
+        drawHpBar(gH, px + w / 2, py - 6, w - 4, s.hp / Math.max(1, s.maxHp));
       }
     }
   }
