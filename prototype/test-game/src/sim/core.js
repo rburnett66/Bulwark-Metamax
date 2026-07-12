@@ -143,7 +143,12 @@ function jamCells(state, unit) {
   for (const other of state.units.values()) {   // deterministic iteration (insertion-ordered Map)
     if (other === unit || other.hp <= 0 || other.domain !== 'Walker') continue;
     const dx = other.pos.x - unit.pos.x, dy = other.pos.y - unit.pos.y;
-    if (dx * dx + dy * dy <= 6.25) { const oc = roundCell(other.pos); add(oc.x, oc.y); }   // within 2.5 cells
+    const near = (unit.radius || 0.3) + (other.radius || 0.3) + 2;   // neighbourhood scales with both bodies
+    if (dx * dx + dy * dy > near * near) continue;
+    // Stamp the other unit's WHOLE FOOTPRINT — units span several cells now (the collision box is the
+    // sprite box), and stamping only the centre cell let "detours" route straight through a tank's body.
+    const oc = roundCell(other.pos), rr = Math.ceil(other.radius || 0.3);
+    for (let ax = -rr; ax <= rr; ax++) for (let ay = -rr; ay <= rr; ay++) add(oc.x + ax, oc.y + ay);
   }
   return avoid;
 }
