@@ -27,84 +27,88 @@
     "ART-Trucks": {
       "shape": "Trucks",
       "role": "Support",
-      "rotation": 90,
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "top-down-view-of-tank-chassis-2.png",
-          "scale": 0.55,
+          "scale": 0.85,
           "offset": 0
         },
         "weapon": {
           "frame": "top-down-view-of-tank-turret-1.png",
-          "scale": 0.4,
-          "offset": 0
+          "scale": 0.7,
+          "offset": -20
         },
         "head": {
           "frame": "top-down-view-of-small-rader-dish-1.png",
           "scale": 0.3,
-          "offset": 0
+          "offset": 8
         }
       }
     },
     "ART-Tanks": {
       "shape": "Tanks",
       "role": "Bruiser",
-      "rotation": 90,
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "top-down-view-of-tank-chassis-2.png",
-          "scale": 0.45,
+          "scale": 0.9,
           "offset": 0
         },
         "weapon": {
           "frame": "top-down-view-of-tank-turret-1.png",
-          "scale": 0.45,
-          "offset": 0
+          "scale": 1.2,
+          "offset": -17
         },
         "head": {
           "frame": "top-down-view-of-small-rader-dish-1.png",
-          "scale": 0.3,
-          "offset": 0
+          "scale": 0.45,
+          "offset": -3
         }
       }
     },
     "ART-Artillery": {
       "shape": "Artillery",
       "role": "Siege",
-      "rotation": 90,
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "top-down-view-of-tank-chassis-3.png",
-          "scale": 0.4,
+          "scale": 0.7,
           "offset": 0
         },
         "weapon": {
           "frame": "top-down-view-of-tank-turret-1.png",
-          "scale": 0.65,
-          "offset": 0
+          "scale": 0.95,
+          "offset": -6
         },
-        "head": null
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.95,
+          "offset": 7
+        }
       }
     },
     "ART-HeavyTanks": {
       "shape": "Heavy Tanks",
       "role": "Juggernaut",
-      "rotation": 90,
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "top-down-view-of-heavy-tank-chassis-2.png",
-          "scale": 1,
+          "scale": 1.05,
           "offset": 0
         },
         "weapon": {
           "frame": "top-down-view-of-triple-naval-turret-2.png",
-          "scale": 1.15,
-          "offset": 1
+          "scale": 1.45,
+          "offset": -16
         },
         "head": {
           "frame": "top-down-view-of-small-rader-dish-1.png",
           "scale": 0.5,
-          "offset": 0
+          "offset": -7
         }
       }
     },
@@ -133,7 +137,7 @@
     "ART-Planes": {
       "shape": "Planes",
       "role": "Striker",
-      "rotation": 90,
+      "rotation": 0,
       "layers": {
         "base": {
           "frame": "top-down-view-of-bomber-drone-4.png",
