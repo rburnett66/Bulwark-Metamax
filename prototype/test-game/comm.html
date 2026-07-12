@@ -119,6 +119,9 @@
     <h2>Speaker</h2>
     <select id="charSel"></select>
 
+    <h2>Line</h2>
+    <select id="lineSel" title="Which authored signature line this character speaks"></select>
+
     <h2>Voice</h2>
     <label class="row">Gender
       <div class="seg" id="genderSeg">
@@ -175,14 +178,36 @@ import { FACTIONS, ORDER, ICONS, PORTRAIT, hash,
          initAudio, audioReady, setVolume, paramsFor,
          playUtterance, utterDuration, startStatic, playSweep, playDrop } from './src/comm/voice.js';
 import { portraitSlug } from './src/comm/commCard.js';   // same portrait convention as the battle card
+import { loadVoicePacks } from './src/comm/dialog.js';    // full 81-character roster (same packs the game speaks)
 
 /* ---------- UI state ---------- */
 var stage=document.getElementById("stage"), idle=document.getElementById("idle");
-var facGrid=document.getElementById("facGrid"), charSel=document.getElementById("charSel"), intentSel=document.getElementById("intentSel");
+var facGrid=document.getElementById("facGrid"), charSel=document.getElementById("charSel"), intentSel=document.getElementById("intentSel"), lineSel=document.getElementById("lineSel");
 var pitch=document.getElementById("pitch"),rate=document.getElementById("rate"),noise=document.getElementById("noise"),rev=document.getElementById("rev"),vol=document.getElementById("vol"),staticSl=document.getElementById("staticLvl");
 var atk=document.getElementById("atk"),sus=document.getElementById("sus"),ovl=document.getElementById("ovl");
 var goBtn=document.getElementById("go"),dualBtn=document.getElementById("dual"),rmChk=document.getElementById("rm");
 var cur="ground", curGender="female", busy=false;
+
+/* ── the speaker roster: the SAME 81 voice packs the game speaks, with every authored signature
+   line selectable; falls back to the built-in 3-sample cast if voicepacks.json is unavailable ── */
+var LINE_LABELS=[["m0","M0 · Challenge"],["winEfficient","Win — efficient"],["winClose","Win — close shave"],["defeat","Your defeat"],["reward","Reward"]];
+var CAST={};
+function buildCast(packs){
+  ORDER.forEach(function(k){
+    var fac=packs&&packs.factions&&packs.factions[k];
+    if(fac){
+      CAST[k]=fac.characters.map(function(c){
+        var lines=[];
+        LINE_LABELS.forEach(function(pair){var L=c.lines[pair[0]]; if(L)lines.push({label:pair[1]+(L.motive?" ("+L.motive+")":""),line:L.line,intent:L.intent||"statement"});});
+        return {n:c.name,a:c.align,g:c.gender,lines:lines};
+      });
+    }else{
+      CAST[k]=FACTIONS[k].cast.map(function(c){return {n:c.n,a:c.a,g:c.g,lines:[{label:"Sample line",line:c.line,intent:c.intent}]};});
+    }
+  });
+}
+function curChar(){ return CAST[cur][charSel.value|0]; }
+function curLine(){ var c=curChar(); return c.lines[lineSel.value|0]||c.lines[0]; }
 
 function buildFacGrid(){
   ORDER.forEach(function(k){
@@ -195,12 +220,14 @@ function selectFaction(k){
   cur=k; var f=FACTIONS[k];
   [].forEach.call(facGrid.children,function(c){c.classList.toggle("sel",c.dataset.k===k);});
   document.documentElement.style.setProperty("--accent",f.color);
-  charSel.innerHTML=""; f.cast.forEach(function(c,i){var o=document.createElement("option");o.value=i;o.textContent=c.a+" · "+c.n;charSel.appendChild(o);});
+  charSel.innerHTML=""; CAST[k].forEach(function(c,i){var o=document.createElement("option");o.value=i;o.textContent=c.a+" · "+c.n;charSel.appendChild(o);});
   charSel.value=0; loadChar();
 }
 function loadChar(){
-  var c=FACTIONS[cur].cast[charSel.value];
-  setGender(c.g); intentSel.value=c.intent;
+  var c=curChar();
+  lineSel.innerHTML=""; c.lines.forEach(function(L,i){var o=document.createElement("option");o.value=i;o.textContent=L.label;lineSel.appendChild(o);});
+  lineSel.value=0;
+  setGender(c.g); intentSel.value=curLine().intent;
   // reset sliders to faction defaults
   var f=FACTIONS[cur]; pitch.value=0; rate.value=1; noise.value=f.noise; rev.value=f.reverb;
   atk.value=(f.attack!=null?f.attack:0.012); sus.value=(f.sustain!=null?f.sustain:0); ovl.value=(f.overlap!=null?f.overlap:0);
@@ -209,6 +236,7 @@ function loadChar(){
 function setGender(g){curGender=g;[].forEach.call(document.getElementById("genderSeg").children,function(b){b.classList.toggle("on",b.dataset.g===g);});}
 document.getElementById("genderSeg").onclick=function(e){if(e.target.dataset.g)setGender(e.target.dataset.g);};
 charSel.onchange=loadChar;
+lineSel.onchange=function(){intentSel.value=curLine().intent;};
 function syncRangeLabels(){
   document.getElementById("pitchV").textContent=(pitch.value>0?"+":"")+pitch.value+" st";
   document.getElementById("rateV").textContent=parseFloat(rate.value).toFixed(2)+"×";
@@ -280,7 +308,8 @@ async function runCall(card,d,callNo){
   veil.style.opacity=1;
   // authored portrait: content/dialog/portraits/<slug>.png, silhouette fallback (identical to the game)
   var pimg=document.createElement("img");
-  pimg.alt=""; pimg.onerror=function(){pimg.remove();};
+  pimg.alt="";
+  pimg.onerror=function(){console.warn("[comm] no portrait for",d.character,"->",pimg.src); pimg.remove();};
   pimg.src="content/dialog/portraits/"+portraitSlug(d.character)+".png";
   portrait.insertBefore(pimg, veil);
 
@@ -327,9 +356,9 @@ async function runCall(card,d,callNo){
 async function receiveSingle(){
   if(busy)return; busy=true; setBusy(true); initAudio(parseFloat(vol.value)); idle.style.display="none";
   document.getElementById("cardR").className="card right";
-  var c=FACTIONS[cur].cast[charSel.value];
+  var c=curChar(), L=curLine();
   var d={faction:cur,character:c.n,alignment:c.a,gender:curGender,intent:intentSel.value,
-    line:c.line,pitchTrim:parseInt(pitch.value,10),params:paramsForUI(cur),pos:"left solo"};
+    line:L.line,pitchTrim:parseInt(pitch.value,10),params:paramsForUI(cur),pos:"left solo"};
   var card=document.getElementById("cardL"); card.className="card left solo";
   await runCall(card,d,null);
   busy=false; setBusy(false);
@@ -356,8 +385,10 @@ function setBusy(b){goBtn.disabled=b;dualBtn.disabled=b;}
 goBtn.onclick=receiveSingle;
 dualBtn.onclick=receiveDual;
 
-/* init */
-buildFacGrid(); selectFaction("ground"); syncRangeLabels();
+/* init — load the full roster first (same file the game reads), then boot the UI */
+buildFacGrid();
+buildCast(await loadVoicePacks());
+selectFaction("ground"); syncRangeLabels();
 </script>
 </body>
 </html>
