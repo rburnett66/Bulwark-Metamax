@@ -44,6 +44,18 @@ assert.strictEqual(pp.reverb, 0.9);
 assert.strictEqual(pp.vgain, VGAIN.water, 'loudness normalization attached');
 assert.strictEqual(paramsFor('water').noise, FACTIONS.water.noise, 'no-override keeps faction default');
 
+// envelope controls (attack/sustain/overlap): overridable, and every faction ships sane defaults
+const env = paramsFor('ground', { attack: 0.05, sustain: 0.4, overlap: 0.3 });
+assert.strictEqual(env.attack, 0.05);
+assert.strictEqual(env.sustain, 0.4);
+assert.strictEqual(env.overlap, 0.3);
+for (const k of ORDER) {
+  const f = FACTIONS[k];
+  assert.ok(f.attack > 0 && f.attack <= 0.08, `${k} attack in range`);
+  assert.ok(f.sustain >= 0 && f.sustain <= 0.85, `${k} sustain in range`);
+  assert.ok(f.overlap >= 0 && f.overlap <= 0.6, `${k} overlap in range`);
+}
+
 // data integrity: every voice key has gain/static/icon; casts complete
 for (const k of ORDER) {
   assert.ok(FACTIONS[k], `faction ${k} defined`);

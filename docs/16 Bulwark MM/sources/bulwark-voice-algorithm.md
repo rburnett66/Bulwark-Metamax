@@ -73,7 +73,7 @@ Each beat is a tiny subtractive-synthesis voice:
    - optional **+1 octave sine** (gain 0.28) — Arcane's angelic overtone;
    - optional **−1 octave sine sub** (gain 0.4) — Artillery/Dark Energy's chest-cavity gravitas.
 2. **Formant filter:** the stack feeds two *parallel* bandpasses at `f1` (Q 6) and `f2` (Q 9) — fixed "vowel" resonances that make a buzzing oscillator read as a *voice*. Each faction owns a vowel: Artillery's 600/900 Hz is a closed "aw" bark; Air's 500/2200 Hz is a bright "ee". Both formants scale ×1.12 for female speakers, ×0.95 for neutral (vocal-tract size).
-3. **Envelope:** linear attack to peak in **12 ms**, exponential decay to silence at 92% of the beat — the articulation that separates syllables. Peak = `0.24 × level` (exclaim 1.15, trail 0.8).
+3. **Envelope (per-faction ADSR-ish):** three faction parameters shape articulation — `attack` (onset ramp, 5 ms bark … 60 ms swell), `sustain` (the vowel's held level as a fraction of peak: 0 plucks, 0.5+ sings — decay reaches the sustain floor at 70% of the beat), and `overlap` (the release tail rings up to 60% **into the next beat**; every syllable owns its own oscillators and envelope, so consecutive syllables crossfade like independent channels — beat *timing* never changes, only the connective tissue). Peak = `0.24 × level` (exclaim 1.15, trail 0.8). Defaults: Water/Arcane/Dark sing legato (attack 40–60 ms, sustain ~0.5, overlap 0.4–0.5); Artillery/Greenies/High Tech keep their percussive bite.
 4. **Consonant onset:** a ≤50 ms burst of the shared white-noise buffer through a bandpass at `1800 + 2f` Hz (Q 2), gain `noise · (0.9 + 0.4·jit)`, exponential decay — the fricative "consonant" gating each syllable. Skipped when the faction's `noise` is near zero (High Tech speaks unnervingly clean; Dark Energy at 0.30 rasps).
 
 ---
@@ -147,6 +147,7 @@ Same seed, same tune — in the tool, in the game, and in every replay.
 ## 10. Tuning guide
 
 Everything audible is a table value in `FACTIONS` / `VGAIN` / `STATIC` (`src/comm/voice.js`) — tune in the Comm tool's sliders, then transcribe:
+- **Less punchy / more song:** `attack` up, `sustain` up, `overlap` up — the syllables swell and crossfade instead of plucking.
 - **More menace:** pitch down, `rate` down, `noise` up, `reverb` up, add `sub`.
 - **More comedy:** `rate` up, pitch up, `detune` up.
 - **More machine:** `ringmod` > 0, `noise` → 0, square wave.

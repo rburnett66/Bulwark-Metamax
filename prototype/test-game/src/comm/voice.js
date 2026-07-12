@@ -31,7 +31,7 @@ export const PORTRAIT = '<svg viewBox="0 0 100 100"><circle cx="50" cy="36" r="1
 export const FACTIONS = {
   ground: { name: 'Ground / Powder', trope: 'Nationalistic', color: '#c9962f',
     pitchM: 110, pitchF: 175, wave: 'sawtooth', f1: 700, f2: 1100, rate: 5.0, noise: 0.15, reverb: 0.15,
-    drive: 0.35, ringmod: 0, detune: 0, octave: false, lowpass: 6000,
+    drive: 0.35, ringmod: 0, detune: 0, octave: false, lowpass: 6000, attack: 0.012, sustain: 0.18, overlap: 0.10,
     cast: [
       { n: 'Chancellor Wilhelmina Graf', a: 'PE', g: 'female', intent: 'statement', line: 'You approach the seat of order, trespasser. Kneel, or be balanced against.' },
       { n: 'General Kord Stahl', a: 'E', g: 'male', intent: 'statement', line: 'Step onto my field and become a grave that means something.' },
@@ -39,7 +39,7 @@ export const FACTIONS = {
     ] },
   air: { name: 'Air', trope: 'Manga', color: '#48c7e6',
     pitchM: 165, pitchF: 245, wave: 'triangle', f1: 500, f2: 2200, rate: 7.0, noise: 0.05, reverb: 0.10,
-    drive: 0.05, ringmod: 0, detune: 6, octave: false, lowpass: 9000,
+    drive: 0.05, ringmod: 0, detune: 6, octave: false, lowpass: 9000, attack: 0.015, sustain: 0.25, overlap: 0.20,
     cast: [
       { n: 'Squadron-Mother Hikari "Dawnwing" Aoi', a: 'AG', g: 'female', intent: 'trail', line: 'You came up to my sky, groundling. Everyone comes home to me eventually…' },
       { n: 'Renegade "Viper" Ryu', a: 'CE', g: 'male', intent: 'exclaim', line: "Come on up, little snack — the sky belongs to whoever's fastest!" },
@@ -47,7 +47,7 @@ export const FACTIONS = {
     ] },
   hightech: { name: 'High Tech', trope: 'Capitalist', color: '#8fb6ff',
     pitchM: 130, pitchF: 200, wave: 'square', f1: 400, f2: 1800, rate: 6.0, noise: 0.03, reverb: 0.12,
-    drive: 0.0, ringmod: 0, detune: 0, octave: false, lowpass: 7000, bitcrush: true,
+    drive: 0.0, ringmod: 0, detune: 0, octave: false, lowpass: 7000, bitcrush: true, attack: 0.008, sustain: 0.12, overlap: 0.05,
     cast: [
       { n: 'CEO Adrian Sterling', a: 'PE', g: 'male', intent: 'statement', line: "I don't compete. I acquire. You are a debt I intend to collect in full." },
       { n: 'Hacker "Null" (Priya Nair)', a: 'CG', g: 'female', intent: 'statement', line: "Adrian's got a floor of lawyers looking for me, and here I am playing with you. Try to keep up." },
@@ -55,7 +55,7 @@ export const FACTIONS = {
     ] },
   artillery: { name: 'Artillery', trope: 'Military', color: '#d9a441',
     pitchM: 85, pitchF: 150, wave: 'square', f1: 600, f2: 900, rate: 3.5, noise: 0.20, reverb: 0.25,
-    drive: 0.25, ringmod: 0, detune: 0, octave: false, lowpass: 3400, sub: true,
+    drive: 0.25, ringmod: 0, detune: 0, octave: false, lowpass: 3400, sub: true, attack: 0.012, sustain: 0.10, overlap: 0.10,
     cast: [
       { n: 'Warlord-Gunner Vex Marrow', a: 'CE', g: 'male', intent: 'statement', line: "I flattened a reef once for less. Let's hear what you sound like." },
       { n: 'Chaplain-Gunner Ruth Bellamy', a: 'AG', g: 'female', intent: 'statement', line: 'Step onto my map, target. I will pray over your coordinates before I fire on them.' },
@@ -63,7 +63,7 @@ export const FACTIONS = {
     ] },
   water: { name: 'Water', trope: 'Sea-tribe Fantasy', color: '#33c3b0',
     pitchM: 120, pitchF: 190, wave: 'sine', f1: 450, f2: 1000, rate: 4.5, noise: 0.10, reverb: 0.55,
-    drive: 0.0, ringmod: 0, detune: 9, octave: false, lowpass: 2600,
+    drive: 0.0, ringmod: 0, detune: 9, octave: false, lowpass: 2600, attack: 0.05, sustain: 0.50, overlap: 0.45,
     cast: [
       { n: 'Abyssal Sovereign Thal', a: 'PE', g: 'male', intent: 'statement', line: 'You swim into my depths unbowed. The pressure will teach you the posture you refused.' },
       { n: 'Tide-Priestess Marena', a: 'AG', g: 'female', intent: 'statement', line: 'You stand where the water decides, landwalker. Kneel, and let the tide read you.' },
@@ -71,7 +71,7 @@ export const FACTIONS = {
     ] },
   arcane: { name: 'Arcane / Energy', trope: 'Theocracy', color: '#d7b24a',
     pitchM: 140, pitchF: 210, wave: 'sine', f1: 500, f2: 1500, rate: 4.0, noise: 0.05, reverb: 0.75,
-    drive: 0.0, ringmod: 0, detune: 0, octave: true, lowpass: 6000,
+    drive: 0.0, ringmod: 0, detune: 0, octave: true, lowpass: 6000, attack: 0.06, sustain: 0.55, overlap: 0.50,
     cast: [
       { n: 'The Ordained Prime, Vaelith', a: 'PE', g: 'male', intent: 'statement', line: 'Between her mercy and my judgment there is no quarrel. Kneel while kneeling is still permitted.' },
       { n: 'Hierophant Aurelia', a: 'AG', g: 'female', intent: 'statement', line: 'You come to the altar unbelieving. Hold still while the Light finds you.' },
@@ -79,7 +79,7 @@ export const FACTIONS = {
     ] },
   space: { name: 'Space Tech', trope: 'Sci-Fi Federation', color: '#7fd8ff',
     pitchM: 120, pitchF: 195, wave: 'square', f1: 400, f2: 2000, rate: 6.0, noise: 0.08, reverb: 0.20,
-    drive: 0.0, ringmod: 170, detune: 0, octave: false, lowpass: 8000,
+    drive: 0.0, ringmod: 170, detune: 0, octave: false, lowpass: 8000, attack: 0.010, sustain: 0.20, overlap: 0.10,
     cast: [
       { n: 'The Signal', a: 'DE', g: 'neutral', intent: 'statement', line: 'We hear your transmission, local. Convert. Assimilate. Continue.' },
       { n: 'Admiral Sarn', a: 'E', g: 'male', intent: 'statement', line: 'You are an ungoverned variable. Submit to the order, or be corrected out of it.' },
@@ -87,7 +87,7 @@ export const FACTIONS = {
     ] },
   dark: { name: 'Dark Energy', trope: 'Cult / Movement', color: '#d1495b',
     pitchM: 75, pitchF: 140, wave: 'sawtooth', f1: 550, f2: 800, rate: 3.0, noise: 0.30, reverb: 0.62,
-    drive: 0.35, ringmod: 0, detune: 5, octave: false, lowpass: 2200, sub: true,
+    drive: 0.35, ringmod: 0, detune: 5, octave: false, lowpass: 2200, sub: true, attack: 0.04, sustain: 0.45, overlap: 0.40,
     cast: [
       { n: 'The Architect, Malis', a: 'PE', g: 'male', intent: 'statement', line: 'You are a crooked line in a perfect plan, and I am the Architect of its correction.' },
       { n: 'The Hollow Prophet', a: 'DE', g: 'neutral', intent: 'trail', line: 'Set down your name with your walls. Nothing that ends here will have been you…' },
@@ -95,7 +95,7 @@ export const FACTIONS = {
     ] },
   greenies: { name: 'Greenies (Chem)', trope: 'Socialist Hive', color: '#8fd14f',
     pitchM: 200, pitchF: 280, wave: 'square', f1: 600, f2: 2600, rate: 9.0, noise: 0.25, reverb: 0.15,
-    drive: 0.1, ringmod: 0, detune: 14, octave: false, lowpass: 9000, swarm: true,
+    drive: 0.1, ringmod: 0, detune: 14, octave: false, lowpass: 9000, swarm: true, attack: 0.006, sustain: 0.05, overlap: 0.05,
     cast: [
       { n: 'The Root-Mind', a: 'PE', g: 'neutral', intent: 'statement', line: 'You are the fever, and I am the cool of the deep root come to correct you.' },
       { n: 'Mother-Spore Ilya', a: 'AG', g: 'female', intent: 'statement', line: 'Root here, or be rooted anyway — we love you the same.' },
@@ -185,6 +185,9 @@ export function paramsFor(key, over) {
   p.rate = f.rate * (over.rateMult != null ? over.rateMult : 1);
   if (over.noise != null) p.noise = over.noise;
   if (over.reverb != null) p.reverb = over.reverb;
+  if (over.attack != null) p.attack = over.attack;
+  if (over.sustain != null) p.sustain = over.sustain;
+  if (over.overlap != null) p.overlap = over.overlap;
   p.vgain = VGAIN[key];
   return p;
 }
@@ -238,12 +241,23 @@ function driveCurve(amount) {
   for (let i = 0; i < n; i++) { const x = i * 2 / n - 1; c[i] = (1 + k) * x / (1 + k * Math.abs(x)); }
   return c;
 }
-/* schedule one syllable */
+/* schedule one syllable.
+   Per-faction envelope (attack / sustain / overlap) replaces the old fixed 12ms-pluck:
+   - attack  : onset ramp seconds (5ms bark … 60ms swell)
+   - sustain : the vowel's held level as a fraction of peak (0 = pluck, 0.5+ = legato vowel)
+   - overlap : how far the release tail RINGS INTO THE NEXT BEAT (fraction of dur). Every syllable
+     owns its own oscillators + envelope, so tails and the next onset crossfade freely — the
+     "two channels" effect, except each syllable is its own channel. Beat timing is unchanged. */
 function syllable(t, dur, freq, p, g, chain) {
   const env = AC.createGain(); const peak = 0.24 * (g.level || 1);
+  const atk = Math.min((p.attack != null ? p.attack : 0.012), dur * 0.4);
+  const sus = Math.max(0, Math.min(0.85, p.sustain != null ? p.sustain : 0));
+  const ov = Math.max(0, Math.min(0.6, p.overlap != null ? p.overlap : 0));
+  const L = dur * (1 + ov);                        // audible length; the next beat still starts at t+dur
   env.gain.setValueAtTime(0.0001, t);
-  env.gain.linearRampToValueAtTime(peak, t + 0.012);
-  env.gain.exponentialRampToValueAtTime(0.0006, t + dur * 0.92);
+  env.gain.linearRampToValueAtTime(peak, t + atk);
+  env.gain.exponentialRampToValueAtTime(Math.max(peak * sus, 0.0008), t + dur * 0.7);
+  env.gain.exponentialRampToValueAtTime(0.0006, t + L);
   const fscale = (g.gender === 'female' ? 1.12 : g.gender === 'neutral' ? 0.95 : 1.0);
   const bp1 = AC.createBiquadFilter(); bp1.type = 'bandpass'; bp1.frequency.value = p.f1 * fscale; bp1.Q.value = 6;
   const bp2 = AC.createBiquadFilter(); bp2.type = 'bandpass'; bp2.frequency.value = p.f2 * fscale; bp2.Q.value = 9;
@@ -251,7 +265,7 @@ function syllable(t, dur, freq, p, g, chain) {
   function osc(type, det, gain) {
     const o = AC.createOscillator(); o.type = type; o.frequency.value = freq; o.detune.value = det;
     const og = AC.createGain(); og.gain.value = gain; o.connect(og); og.connect(bp1); og.connect(bp2);
-    o.start(t); o.stop(t + dur);
+    o.start(t); o.stop(t + L + 0.02);              // run through the overlap tail
   }
   osc(p.wave, 0, 0.9);
   if (p.detune) { osc(p.wave, p.detune, 0.5); osc(p.wave, -p.detune, 0.5); }
