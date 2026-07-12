@@ -72,7 +72,8 @@ export function bootBench(mountEl) {
 
   const b = { unitId: null, cell: { x: 3, y: 5 }, stack: null, sim: null, unit: null,
               targetOn: false, targetDeg: -90,
-              sheet: null, sheetName: '',                    // loaded atlas { textures, frameNames } + its file name
+              sheet: null, sheetName: '',                    // ACTIVE atlas { textures, frameNames } + its file name
+              sheets: {},                                    // every loaded atlas by name — units can span sheets
               byUnit: {} };                                  // PER-UNIT: id -> { base, weapon, head, scale:{...} }
 
   function rebuildSim() {
@@ -116,7 +117,8 @@ export function bootBench(mountEl) {
     app.stage.addChild(b.stack);
   }
   // A blank per-unit record: chosen frame per layer (null=procedural) + per-layer size + vertical offset.
-  function newRec() { return { base: null, weapon: null, head: null, scale: { base: 1, weapon: 1, head: 1 }, offset: { base: 0, weapon: 0, head: 0 }, rotation: 0 }; }
+  // `sheet` pins the record to the atlas its frames came from, so loading another sheet can't re-point them.
+  function newRec() { return { base: null, weapon: null, head: null, scale: { base: 1, weapon: 1, head: 1 }, offset: { base: 0, weapon: 0, head: 0 }, rotation: 0, sheet: null }; }
   // The current unit's assignment record (created on first touch).
   function cur() {
     if (!b.unitId) return null;
@@ -125,14 +127,16 @@ export function bootBench(mountEl) {
   }
   function texFor(name) {
     const c = cur(), f = c && c[name];
-    return (f && b.sheet && b.sheet.textures[f]) || null;
+    if (!f) return null;
+    const sheet = (c.sheet && b.sheets[c.sheet]) || b.sheet;   // the unit's own sheet wins over the active one
+    return (sheet && sheet.textures[f]) || null;
   }
   function unitDefFor(id) {                                  // PORTABLE def for one unit, or null if unauthored
     const c = b.byUnit[id];
     if (!c || !(c.base || c.weapon || c.head)) return null;
     const d = UNITS[id] || {}, layers = {};
     for (const name of LAYERS) layers[name] = c[name] ? { frame: c[name], scale: c.scale[name] || 1, offset: c.offset[name] || 0 } : null;
-    return { unit: id, faction: d.faction || null, shape: d.shape || null, role: d.role || null, rotation: c.rotation || 0, layers };
+    return { unit: id, faction: d.faction || null, shape: d.shape || null, role: d.role || null, rotation: c.rotation || 0, sheet: c.sheet || b.sheetName || null, layers };
   }
 
   let scanPhase = 0;   // advances each frame to sweep the head while it's scanning for a target
@@ -213,12 +217,17 @@ export function bootBench(mountEl) {
     unitDef() { return UNITS[b.unitId] || null; },
 
     // ── sprite sheet → part-stack layers, PER UNIT (sh-polish.sheets + .author) ──
-    loadSheet(sheet, name) { b.sheet = sheet || null; b.sheetName = name || ''; },
+    loadSheet(sheet, name) {
+      b.sheet = sheet || null; b.sheetName = name || '';
+      if (sheet && name) b.sheets[name] = sheet;
+      if (b.unitId) rebuildStack();   // assignments already referencing this sheet light up immediately
+    },
     sheetName() { return b.sheetName; },
+    hasSheet(name) { return !!b.sheets[name]; },
     frameNames() { return (b.sheet && b.sheet.frameNames) || []; },
     layers() { return LAYERS.slice(); },
     // Assignments are stored against the CURRENT unit, so each unit in a faction keeps its own sprites.
-    assignLayer(name, frame) { const c = cur(); if (c && LAYERS.includes(name)) { c[name] = frame || null; rebuildStack(); } },
+    assignLayer(name, frame) { const c = cur(); if (c && LAYERS.includes(name)) { c[name] = frame || null; if (frame) c.sheet = b.sheetName || c.sheet; rebuildStack(); } },
     clearLayer(name) { this.assignLayer(name, null); },
     setLayerScale(name, s) { const c = cur(); if (c && LAYERS.includes(name)) { c.scale[name] = Number(s) || 1; rebuildStack(); } },
     // Per-unit VERTICAL offset — the adjustable height between layers.
@@ -230,7 +239,7 @@ export function bootBench(mountEl) {
     // way is fixed in one go).
     rotateAllUnits(deg) { const d = Number(deg) || 0; for (const id in b.byUnit) if (this.isAuthored(id)) b.byUnit[id].rotation = d; },
     // The current unit's assignment (for syncing the UI when the unit changes).
-    assignments() { const c = cur(); return c ? { base: c.base, weapon: c.weapon, head: c.head, scale: { ...c.scale }, offset: { ...c.offset }, rotation: c.rotation || 0 } : null; },
+    assignments() { const c = cur(); return c ? { base: c.base, weapon: c.weapon, head: c.head, scale: { ...c.scale }, offset: { ...c.offset }, rotation: c.rotation || 0, sheet: c.sheet || null } : null; },
 
     // ── authoring progress ──
     isAuthored(id) { const c = b.byUnit[id]; return !!(c && (c.base || c.weapon || c.head)); },
@@ -241,12 +250,15 @@ export function bootBench(mountEl) {
     // Every authored unit in a faction, as ONE portable file the engine registry can load.
     exportFaction(faction) {
       const units = {};
+      let sheet = null;   // the sheet the faction's authored units actually reference (not just the active one)
       for (const id in UNITS) {
         if (UNITS[id].faction !== faction) continue;
         const def = unitDefFor(id);
-        if (def) units[id] = { shape: def.shape, role: def.role, rotation: def.rotation || 0, layers: def.layers };
+        if (!def) continue;
+        units[id] = { shape: def.shape, role: def.role, rotation: def.rotation || 0, layers: def.layers };
+        if (!sheet) sheet = b.byUnit[id].sheet;
       }
-      return { faction, sheet: b.sheetName || null, units };
+      return { faction, sheet: sheet || b.sheetName || null, units };
     },
     // Restore assignments from a saved faction file { units:{ id:{layers} } } or a single unit def { unit, layers }.
     importDefs(data) {
@@ -261,6 +273,8 @@ export function bootBench(mountEl) {
           if (L && typeof L.offset === 'number') c.offset[name] = L.offset;
         }
         if (typeof u.rotation === 'number') c.rotation = u.rotation;
+        // pin the record to the file's sheet so its frames resolve even when another sheet is active
+        if (data && data.sheet) c.sheet = data.sheet;
         return 1;
       };
       let n = 0;

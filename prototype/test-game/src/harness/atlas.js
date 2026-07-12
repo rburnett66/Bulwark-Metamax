@@ -28,6 +28,20 @@ export async function loadAtlasFromFiles(pngFile, jsonFile) {
   const [imageUrl, jsonText] = await Promise.all([_readDataURL(pngFile), jsonFile.text()]);
   let sheet;
   try { sheet = JSON.parse(jsonText); } catch (e) { throw new Error('atlas.json is not valid JSON'); }
+  return _sliceSheet(sheet, imageUrl);
+}
+
+/** Load a sheet the project already serves — the same content/sprite-atlas/<name>.json + .png pair the game's
+ *  unitArt.js fetches. `pngName` is the sheet file name a faction def records (e.g. "army_set_1.png"). */
+export async function loadAtlasFromUrl(pngName, baseUrl = 'content/sprite-atlas/') {
+  const base = String(pngName).replace(/\.png$/i, '');
+  const res = await fetch(baseUrl + base + '.json');
+  if (!res.ok) throw new Error(`sheet atlas ${base}.json not found under ${baseUrl}`);
+  const sheet = await res.json();
+  return _sliceSheet(sheet, baseUrl + base + '.png');
+}
+
+async function _sliceSheet(sheet, imageUrl) {
   const rects = parseAtlasFrames(sheet);
   const frameNames = Object.keys(rects);
   if (!frameNames.length) throw new Error('atlas.json has no usable "frames"');
