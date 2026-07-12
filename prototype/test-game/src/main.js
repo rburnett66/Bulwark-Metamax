@@ -5,6 +5,8 @@ import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame } from './render/renderer.js';
 import { createHud, updateHud, showResult, flashMessage, showWaveBanner } from './render/hud.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
+import { createComm } from './comm/commCard.js';
+import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, classifyOutcome } from './comm/dialog.js';
 
 function parseSeedFromUrl() {
   try {
@@ -116,6 +118,7 @@ export function boot(mountEl, seed) {
     pendingEvents = [];
     inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
     if (hud && hud.hideResult) hud.hideResult();
+    resetCommTracking();
   }
 
   function playReplay(replayLog) {
@@ -136,6 +139,7 @@ export function boot(mountEl, seed) {
     pendingEvents = [];
     inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
     if (hud && hud.hideResult) hud.hideResult();
+    resetCommTracking();
     flashMessage(hud, 'replay playback started');
   }
 
@@ -217,6 +221,41 @@ export function boot(mountEl, seed) {
   inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
 
   // ---------------------------------------------------------------------
+  // Comm dialog (render-side only), per the Dialog & Storytelling System doc:
+  // challenge on wave start (M0/M1), win commentary on wave clear (M2),
+  // concession/taunt on match end (M3/M4). Speakers + lines come from the 81
+  // authored voice packs (content/dialog/voicepacks.json), picked
+  // deterministically from (faction, wave, seed) so replays hear the same calls.
+  // ---------------------------------------------------------------------
+  const comm = createComm(document);
+  let voicePacks = null;
+  loadVoicePacks().then((p) => {
+    voicePacks = p;
+    if (p) console.log('[dialog] voice packs loaded:', Object.keys(p.factions).length, 'factions');
+  });
+  const factionVisits = {};      // faction -> waves seen (test-mode rotation, dialog.js)
+  let lastWaveFaction = null;    // wave 'clear' / match-end events carry no faction — remember it
+  let structuresLostThisWave = 0;
+
+  function resetCommTracking() {
+    for (const k in factionVisits) delete factionVisits[k];
+    lastWaveFaction = null;
+    structuresLostThisWave = 0;
+  }
+
+  function commChallenge(faction, wave) {
+    factionVisits[faction] = (factionVisits[faction] || 0) + 1;
+    lastWaveFaction = faction;
+    structuresLostThisWave = 0;
+    comm.showCall(challengeCall(voicePacks, faction, wave, currentSeed, factionVisits[faction])
+      || fallbackCall(faction, wave, currentSeed));
+  }
+  function commOutcome() {
+    const hpPct = (sim.base && sim.base.maxHp) ? Math.max(0, sim.base.hp) / sim.base.maxHp : 1;
+    return classifyOutcome(hpPct, structuresLostThisWave);
+  }
+
+  // ---------------------------------------------------------------------
   // Fixed-timestep game loop
   // ---------------------------------------------------------------------
   app.ticker.add(() => {
@@ -235,7 +274,15 @@ export function boot(mountEl, seed) {
           for (let i = 0; i < evs.length; i++) {
             pendingEvents.push(evs[i]);
             // Boldly announce who's attacking, before the wave's enemies appear.
-            if (evs[i].type === 'wave' && evs[i].phase === 'start' && evs[i].faction) showWaveBanner(hud, evs[i].faction);
+            if (evs[i].type === 'wave' && evs[i].phase === 'start' && evs[i].faction) {
+              showWaveBanner(hud, evs[i].faction);
+              commChallenge(evs[i].faction, evs[i].wave);
+            }
+            if (evs[i].type === 'destroyed') structuresLostThisWave++;
+            // M2 — the repelled faction comments on how the wave went (final wave: M3 handles it).
+            if (evs[i].type === 'wave' && evs[i].phase === 'clear' && lastWaveFaction && evs[i].wave < evs[i].total) {
+              comm.showCall(winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false));
+            }
           }
         }
         accumulator -= FIXED_DT;
@@ -255,6 +302,13 @@ export function boot(mountEl, seed) {
               'match:', h === activeReplayLog.finalHash);
           }
           showResult(hud, sim.result, sim.finalScore);   // s12: show the computed final score
+          // M3/M4 — the final word: concession from the last faction on a win, the
+          // Champion's authored defeat taunt on a loss.
+          if (lastWaveFaction) {
+            comm.showCall(sim.result === 'win'
+              ? winCall(voicePacks, lastWaveFaction, sim.waves ? sim.waves.current : 0, currentSeed, commOutcome(), true)
+              : defeatCall(voicePacks, lastWaveFaction, currentSeed));
+          }
         }
       }
     }

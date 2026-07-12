@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BULWARK — Comm Array (Procedural Voice Prototype)</title>
+<style>
+  :root{
+    --bg:#05070a; --panel:#0b1017; --ink:#c9d6e2; --dim:#5c6b7a; --line:#1a2430;
+    --accent:#3fb6c8; --accent2:#1b2a33;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:"SF Mono",ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;}
+  body{display:flex;flex-direction:column;min-height:100%;}
+  header{padding:10px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;
+    background:linear-gradient(180deg,#0a0f16,#070b11);}
+  header .logo{font-weight:700;letter-spacing:3px;color:#e7f2f7}
+  header .sub{color:var(--dim);font-size:12px;letter-spacing:1px}
+  main{flex:1;display:grid;grid-template-columns:290px 1fr;min-height:0}
+  /* ---- controls ---- */
+  .controls{border-right:1px solid var(--line);padding:14px;overflow:auto;background:#080c12}
+  .controls h2{font-size:11px;letter-spacing:2px;color:var(--dim);margin:16px 0 8px;text-transform:uppercase;font-weight:600}
+  .controls h2:first-child{margin-top:0}
+  .fac-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .fac{border:1px solid var(--line);background:#0b1119;color:var(--ink);border-radius:7px;padding:8px 4px;
+    cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:.15s;font-size:9px;text-align:center}
+  .fac svg{width:22px;height:22px}
+  .fac:hover{border-color:#2c3a48}
+  .fac.sel{border-color:var(--fc,#3fb6c8);box-shadow:0 0 0 1px var(--fc,#3fb6c8) inset,0 0 12px -4px var(--fc,#3fb6c8);color:#fff}
+  label.row{display:block;margin:8px 0;font-size:12px;color:var(--dim)}
+  select,input[type=range]{width:100%}
+  select{background:#0b1119;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px}
+  .seg{display:flex;gap:6px}
+  .seg button{flex:1;background:#0b1119;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px;cursor:pointer;font-size:11px}
+  .seg button.on{background:var(--accent);color:#04212a;border-color:var(--accent);font-weight:700}
+  .rangeval{float:right;color:var(--ink)}
+  .go{width:100%;margin-top:14px;padding:12px;border-radius:9px;border:1px solid var(--accent);
+    background:linear-gradient(180deg,var(--accent),#1c8494);color:#03222b;font-weight:700;letter-spacing:1px;cursor:pointer}
+  .go.alt{background:none;color:var(--accent);margin-top:8px}
+  .go:disabled{opacity:.5;cursor:default}
+  .hint{font-size:10px;color:var(--dim);line-height:1.5;margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
+  /* ---- stage ---- */
+  .stage-wrap{position:relative;min-width:0;background:
+    radial-gradient(120% 90% at 50% 0%,#0a121a 0%,#04070b 70%);overflow:hidden}
+  .stage{position:absolute;inset:0}
+  .stage::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.28) 2px 3px);opacity:.5}
+  body.rm .stage::after{opacity:.15}
+  .bezel{position:absolute;inset:16px;border:1px solid #12202b;border-radius:14px;
+    box-shadow:inset 0 0 60px -20px #000, inset 0 0 0 1px #0a141c;pointer-events:none}
+  .idle-note{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#2b3a47;
+    letter-spacing:3px;font-size:13px;text-align:center;padding:0 20px}
+  /* comm card */
+  .card{position:absolute;width:46%;height:74%;bottom:5%;
+    background:linear-gradient(180deg,#0a1119ee,#070c12ee);border:1px solid var(--accent,#2c3a48);
+    border-radius:12px;overflow:hidden;display:none;flex-direction:column;
+    box-shadow:0 0 40px -18px var(--accent),0 20px 50px -30px #000;--accent:#3fb6c8}
+  .card.show{display:flex}
+  .card.left{left:3%}
+  .card.right{right:3%}
+  .card.solo{left:50%;transform:translateX(-50%);width:64%;height:82%;bottom:6%}
+  .card.spent{filter:grayscale(.7) brightness(.5);border-color:#22303c}
+  .card.flash{animation:flash .35s}
+  body.rm .card.flash{animation:none}
+  @keyframes flash{0%{background:#fff}100%{}}
+  .c-head{display:flex;align-items:center;gap:9px;padding:9px 11px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 16%,#0a1119),#0a1119)}
+  .c-ic{width:26px;height:26px;color:var(--accent);flex:none;filter:drop-shadow(0 0 5px var(--accent))}
+  .c-ic svg{width:100%;height:100%}
+  .c-name{font-weight:700;color:#eef6fa;font-size:15px;letter-spacing:.5px;white-space:nowrap;overflow:hidden}
+  .c-sub{font-size:10px;color:var(--accent);letter-spacing:1px;margin-top:1px;text-transform:uppercase;opacity:.85}
+  .c-bars{margin-left:auto;display:flex;gap:2px;align-items:flex-end;height:16px}
+  .c-bars i{width:3px;height:5px;background:#26333f;border-radius:1px}
+  .c-bars i.lit{background:var(--accent);box-shadow:0 0 4px var(--accent)}
+  .c-body{flex:1;display:grid;grid-template-columns:40% 1fr;min-height:0}
+  .c-portrait{position:relative;border-right:1px solid var(--line);overflow:hidden;
+    background:radial-gradient(80% 70% at 50% 35%,color-mix(in srgb,var(--accent) 22%,#060a0f),#05080c)}
+  .c-portrait svg{position:absolute;inset:0;margin:auto;width:74%;height:74%;top:8%;
+    fill:color-mix(in srgb,var(--accent) 70%,#8ea);opacity:.9;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--accent) 50%,transparent))}
+  .c-portrait.speaking svg{animation:breathe .18s infinite alternate}
+  @keyframes breathe{from{opacity:.7}to{opacity:1;transform:scale(1.01)}}
+  body.rm .c-portrait.speaking svg{animation:none}
+  .p-scan{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.4) 3px 4px);
+    mix-blend-mode:overlay;pointer-events:none}
+  .p-veil{position:absolute;inset:0;background:#05080c;transition:opacity .5s}
+  .c-right{display:flex;flex-direction:column;min-height:0}
+  .c-meta{font-size:9.5px;color:var(--dim);padding:7px 10px;border-bottom:1px solid var(--line);line-height:1.7;letter-spacing:.5px}
+  .c-meta b{color:var(--accent);font-weight:600}
+  .c-meta .tl{color:#7fe6a1}
+  .c-text{flex:1;padding:12px 13px;font-size:14px;line-height:1.6;color:#dbe7f0;overflow:auto;white-space:pre-wrap}
+  .c-text::after{content:"▋";color:var(--accent);animation:blink 1s steps(1) infinite;margin-left:1px}
+  .card.spent .c-text::after,.card.signoff .c-text::after{display:none}
+  @keyframes blink{50%{opacity:0}}
+  .c-foot{padding:7px 11px;border-top:1px solid var(--line);font-size:10px;letter-spacing:2px;color:var(--dim);
+    display:flex;justify-content:space-between;align-items:center;min-height:26px}
+  .endstamp{color:#e06a6a;font-weight:700;opacity:0;transition:opacity .3s}
+  .card.signoff .endstamp{opacity:1}
+  .chip{border:1px solid var(--accent);color:var(--accent);border-radius:20px;padding:2px 8px;font-size:9px;letter-spacing:1px}
+  .qchip{border:1px solid #d8a13a;color:#f0c675;border-radius:6px;padding:2px 8px;font-size:9px;letter-spacing:1px;opacity:0;transition:.3s}
+  .qchip.on{opacity:1}
+  canvas.static{position:absolute;inset:0;width:100%;height:100%;opacity:0;transition:opacity .1s;pointer-events:none;mix-blend-mode:screen}
+  canvas.static.on{opacity:.85}
+  .callno{font-size:9px;letter-spacing:2px;color:var(--accent);white-space:nowrap;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">BULWARK</div>
+  <div class="sub">COMM ARRAY · UNIVERSAL TRANSLATOR · PROCEDURAL VOICE PROTOTYPE v1.0</div>
+</header>
+<main>
+  <section class="controls">
+    <h2>Faction (language)</h2>
+    <div class="fac-grid" id="facGrid"></div>
+
+    <h2>Speaker</h2>
+    <select id="charSel"></select>
+
+    <h2>Voice</h2>
+    <label class="row">Gender
+      <div class="seg" id="genderSeg">
+        <button data-g="male">Masc</button>
+        <button data-g="female">Fem</button>
+        <button data-g="neutral">Neutral</button>
+      </div>
+    </label>
+    <label class="row">Intent
+      <select id="intentSel">
+        <option value="statement">Statement (.)</option>
+        <option value="question">Question (?)</option>
+        <option value="exclaim">Exclaim (!)</option>
+        <option value="trail">Trail off (…)</option>
+      </select>
+    </label>
+    <label class="row">Pitch <span class="rangeval" id="pitchV"></span><input type="range" id="pitch" min="-12" max="12" value="0" step="1"></label>
+    <label class="row">Rate <span class="rangeval" id="rateV"></span><input type="range" id="rate" min="0.5" max="1.8" value="1" step="0.05"></label>
+    <label class="row">Noise <span class="rangeval" id="noiseV"></span><input type="range" id="noise" min="0" max="0.6" value="0.15" step="0.01"></label>
+    <label class="row">Reverb <span class="rangeval" id="revV"></span><input type="range" id="rev" min="0" max="0.9" value="0.2" step="0.01"></label>
+    <label class="row">Volume <span class="rangeval" id="volV"></span><input type="range" id="vol" min="0" max="1" value="0.8" step="0.02"></label>
+    <label class="row">Channel static <span class="rangeval" id="statV"></span><input type="range" id="staticLvl" min="0" max="1.6" value="1" step="0.05"></label>
+    <label class="row"><input type="checkbox" id="rm"> Reduce motion</label>
+
+    <button class="go" id="go">◉ Receive Transmission</button>
+    <button class="go alt" id="dual">◐ Dual-Call Diptych (§6.3)</button>
+
+    <div class="hint" id="hint">Tip: dial <b>Noise↑ Reverb↑ Pitch↓</b> for ominous, or <b>Rate↑ Pitch↑</b> for funny. The voice is invented "cant" — the typed text is the translation.</div>
+  </section>
+
+  <section class="stage-wrap">
+    <div class="stage" id="stage">
+      <div class="idle-note" id="idle">▚ AWAITING CARRIER — SELECT A FACTION &amp; RECEIVE A TRANSMISSION ▞</div>
+      <!-- cards injected -->
+      <div class="card left" id="cardL"></div>
+      <div class="card right" id="cardR"></div>
+    </div>
+    <div class="bezel"></div>
+  </section>
+</main>
+
+<script type="module">
+"use strict";
+/* ============================================================
+   BULWARK — Comm Screen tool (authoring / voice tuning)
+   The voice ENGINE + faction profiles live in src/comm/voice.js — shared with the
+   in-battle comm cards (src/comm/commCard.js), so tuning stays in one place.
+   Doc map: FACTIONS = §7.5 · buildBeats/synth = §7.3–7.4 · runCall = §3 · dual = §6.3
+   ============================================================ */
+import { FACTIONS, ORDER, ICONS, PORTRAIT, hash,
+         initAudio, audioReady, setVolume, paramsFor,
+         playUtterance, utterDuration, startStatic, playSweep, playDrop } from './src/comm/voice.js';
+
+/* ---------- UI state ---------- */
+var stage=document.getElementById("stage"), idle=document.getElementById("idle");
+var facGrid=document.getElementById("facGrid"), charSel=document.getElementById("charSel"), intentSel=document.getElementById("intentSel");
+var pitch=document.getElementById("pitch"),rate=document.getElementById("rate"),noise=document.getElementById("noise"),rev=document.getElementById("rev"),vol=document.getElementById("vol"),staticSl=document.getElementById("staticLvl");
+var goBtn=document.getElementById("go"),dualBtn=document.getElementById("dual"),rmChk=document.getElementById("rm");
+var cur="ground", curGender="female", busy=false;
+
+function buildFacGrid(){
+  ORDER.forEach(function(k){
+    var f=FACTIONS[k]; var b=document.createElement("button"); b.className="fac"; b.style.setProperty("--fc",f.color);
+    b.innerHTML='<span style="color:'+f.color+'">'+ICONS[k]+'</span><span>'+f.name.split(" / ")[0].split(" (")[0]+'</span>';
+    b.onclick=function(){selectFaction(k);}; b.dataset.k=k; facGrid.appendChild(b);
+  });
+}
+function selectFaction(k){
+  cur=k; var f=FACTIONS[k];
+  [].forEach.call(facGrid.children,function(c){c.classList.toggle("sel",c.dataset.k===k);});
+  document.documentElement.style.setProperty("--accent",f.color);
+  charSel.innerHTML=""; f.cast.forEach(function(c,i){var o=document.createElement("option");o.value=i;o.textContent=c.a+" · "+c.n;charSel.appendChild(o);});
+  charSel.value=0; loadChar();
+}
+function loadChar(){
+  var c=FACTIONS[cur].cast[charSel.value];
+  setGender(c.g); intentSel.value=c.intent;
+  // reset sliders to faction defaults
+  var f=FACTIONS[cur]; pitch.value=0; rate.value=1; noise.value=f.noise; rev.value=f.reverb; syncRangeLabels();
+}
+function setGender(g){curGender=g;[].forEach.call(document.getElementById("genderSeg").children,function(b){b.classList.toggle("on",b.dataset.g===g);});}
+document.getElementById("genderSeg").onclick=function(e){if(e.target.dataset.g)setGender(e.target.dataset.g);};
+charSel.onchange=loadChar;
+function syncRangeLabels(){
+  document.getElementById("pitchV").textContent=(pitch.value>0?"+":"")+pitch.value+" st";
+  document.getElementById("rateV").textContent=parseFloat(rate.value).toFixed(2)+"×";
+  document.getElementById("noiseV").textContent=parseFloat(noise.value).toFixed(2);
+  document.getElementById("revV").textContent=parseFloat(rev.value).toFixed(2);
+  document.getElementById("volV").textContent=Math.round(vol.value*100)+"%";
+  document.getElementById("statV").textContent=parseFloat(staticSl.value).toFixed(2)+"×";
+}
+[pitch,rate,noise,rev,vol,staticSl].forEach(function(s){s.oninput=function(){syncRangeLabels(); setVolume(parseFloat(vol.value));};});
+rmChk.onchange=function(){document.body.classList.toggle("rm",rmChk.checked);};
+
+/* live params from sliders overlaid on the faction profile (engine paramsFor does the merge) */
+function paramsForUI(k){
+  return paramsFor(k,{rateMult:parseFloat(rate.value),noise:parseFloat(noise.value),reverb:parseFloat(rev.value)});
+}
+
+/* ---------- choreography (§3) ---------- */
+function delay(ms){return new Promise(function(r){setTimeout(r,ms);});}
+function rm(){return rmChk.checked;}
+
+function cardHTML(callNo){
+  return ''+
+   '<div class="c-head"><span class="c-ic"></span><div><div class="c-name"></div><div class="c-sub"></div></div>'+
+     '<div class="c-bars"><i></i><i></i><i></i><i></i><i></i></div></div>'+
+   '<div class="c-body"><div class="c-portrait"><div class="p-scan"></div>'+PORTRAIT+'<div class="p-veil"></div></div>'+
+     '<div class="c-right"><div class="c-meta"></div><div class="c-text"></div>'+
+       '<div class="c-foot"><span class="callno"></span><span class="foot-l"></span><span class="qchip">◇ QUEST OFFER</span><span class="endstamp">— END —</span></div>'+
+     '</div></div>'+
+   '<canvas class="static"></canvas>';
+}
+function staticNoise(cv,on){
+  cv.classList.toggle("on",on); if(!on||rm())return;
+  var ctx=cv.getContext("2d"); cv.width=cv.clientWidth*0.5; cv.height=cv.clientHeight*0.5;
+  var img=ctx.createImageData(cv.width,cv.height), d=img.data;
+  for(var i=0;i<d.length;i+=4){var v=Math.random()*255;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;}
+  ctx.putImageData(img,0,0);
+  if(cv._raf)cancelAnimationFrame(cv._raf);
+  cv._raf=requestAnimationFrame(function(){staticNoise(cv,cv.classList.contains("on"));});
+}
+function typeText(el,text,durMs){
+  var glyphs="▚▞░▒▓/\\|<>#*+=";
+  return new Promise(function(res){
+    var start=performance.now(), len=text.length;
+    (function frame(now){
+      var prog=Math.min(1,(now-start)/Math.max(120,durMs));
+      var tgt=Math.floor(prog*len), s=text.slice(0,tgt);
+      if(tgt<len && !rm()) s+=glyphs[Math.floor(Math.random()*glyphs.length)];
+      el.textContent=s;
+      if(prog>=1){el.textContent=text;res();}else requestAnimationFrame(frame);
+    })(start);
+  });
+}
+
+async function runCall(card,d,callNo){
+  var f=FACTIONS[d.faction], p=d.params;
+  card.innerHTML=cardHTML(callNo);
+  card.style.setProperty("--accent",f.color);
+  card.className="card "+(d.pos)+" show";
+  if(callNo) card.querySelector(".callno").textContent=callNo;
+  var ic=card.querySelector(".c-ic"), nm=card.querySelector(".c-name"), sub=card.querySelector(".c-sub"),
+      meta=card.querySelector(".c-meta"), txt=card.querySelector(".c-text"), veil=card.querySelector(".p-veil"),
+      portrait=card.querySelector(".c-portrait"), bars=card.querySelectorAll(".c-bars i"), cv=card.querySelector(".static"),
+      footl=card.querySelector(".foot-l"), qchip=card.querySelector(".qchip");
+  ic.innerHTML=""; nm.textContent=""; sub.textContent=""; meta.innerHTML=""; txt.textContent="";
+  veil.style.opacity=1;
+
+  // channel static bed for this faction — rides under the whole transmission
+  var statCtl=audioReady()?startStatic(d.faction,parseFloat(staticSl.value)):null;
+
+  // S1 RF acquire
+  staticNoise(cv,true);
+  var chan=d.channel||("0"+(1+Math.floor(Math.random()*9)));
+  footl.textContent="◌ ACQUIRING…";
+  if(audioReady()){ playSweep(); }
+  for(var i=0;i<5;i++){ await delay(rm()?20:110); bars[i].classList.add("lit"); }
+  // S2 lock
+  staticNoise(cv,false); card.classList.add("flash"); setTimeout(function(){card.classList.remove("flash");},350);
+  ic.innerHTML=ICONS[d.faction];
+  meta.innerHTML='FACTION: <b>'+f.name.toUpperCase()+'</b><br>CH '+chan+' · ENCRYPTED<br><span class="tl">● UNIVERSAL TRANSLATOR: ACTIVE</span>';
+  footl.textContent="◉ SIGNAL LOCK";
+  await delay(rm()?60:380);
+  // S3 translator boot
+  sub.textContent="DECODING…"; await delay(rm()?60:340);
+  // S4 portrait resolve
+  portrait.style.setProperty("filter","none"); veil.style.opacity=0; await delay(rm()?60:460);
+  // S5 header populate
+  sub.textContent=f.name+" · "+d.alignment;
+  await typeText(nm,d.character,rm()?120:Math.min(700,d.character.length*28));
+  // S6 speak
+  portrait.classList.add("speaking");
+  var g={gender:d.gender,intent:d.intent,pitchTrim:d.pitchTrim||0,seed:d.seed||hash(d.character)};
+  var res=audioReady()?playUtterance(d.line,p,g):{duration:utterDuration(d.line,p,d.intent)};
+  footl.textContent="◉ RECEIVING";
+  await typeText(txt,d.line,res.duration*1000);
+  portrait.classList.remove("speaking");
+  if(d.challenge){ qchip.classList.add("on"); }
+  await delay(rm()?150:420);
+  // S7 sign-off
+  card.classList.add("signoff"); footl.textContent="";
+  playDrop();
+  if(statCtl) statCtl.stop();
+  await delay(rm()?80:520);
+  card.classList.remove("active");
+}
+
+/* ---------- triggers ---------- */
+async function receiveSingle(){
+  if(busy)return; busy=true; setBusy(true); initAudio(parseFloat(vol.value)); idle.style.display="none";
+  document.getElementById("cardR").className="card right";
+  var c=FACTIONS[cur].cast[charSel.value];
+  var d={faction:cur,character:c.n,alignment:c.a,gender:curGender,intent:intentSel.value,
+    line:c.line,pitchTrim:parseInt(pitch.value,10),params:paramsForUI(cur),pos:"left solo"};
+  var card=document.getElementById("cardL"); card.className="card left solo";
+  await runCall(card,d,null);
+  busy=false; setBusy(false);
+}
+async function receiveDual(){
+  if(busy)return; busy=true; setBusy(true); initAudio(parseFloat(vol.value)); idle.style.display="none";
+  // Diptych: #1 Artillery warlord (LL) ; #2 Water reef-princess schemer (LR) — they don't recognize each other
+  var L=document.getElementById("cardL"), R=document.getElementById("cardR");
+  L.className="card left"; R.className="card right";
+  var d1={faction:"artillery",character:"Warlord-Gunner Vex Marrow",alignment:"CE",gender:"male",intent:"statement",
+    channel:"04",line:"I flattened a reef once for less. Kneel, or be a range card.",pitchTrim:-1,params:paramsFor("artillery"),pos:"left"};
+  var d2={faction:"water",character:"Chieftain Coral",alignment:"PG",gender:"female",intent:"exclaim",
+    channel:"12",line:"Strike his guns from the tide, and the shoal will sing your name!",pitchTrim:0,params:paramsFor("water"),pos:"right",
+    challenge:true};
+  await runCall(L,d1,"CALL 1 · PRIMARY");
+  L.classList.add("spent");
+  await delay(rm()?150:500);
+  await runCall(R,d2,"CALL 2 · SECONDARY");
+  R.classList.add("spent");
+  busy=false; setBusy(false);
+}
+function setBusy(b){goBtn.disabled=b;dualBtn.disabled=b;}
+
+goBtn.onclick=receiveSingle;
+dualBtn.onclick=receiveDual;
+
+/* init */
+buildFacGrid(); selectFaction("ground"); syncRangeLabels();
+</script>
+</body>
+</html>
