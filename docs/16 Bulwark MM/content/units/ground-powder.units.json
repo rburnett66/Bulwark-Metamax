@@ -1,0 +1,158 @@
+{
+  "faction": "Ground / Powder",
+  "sheet": "army_set_1.png",
+  "units": {
+    "GND-Troops": {
+      "shape": "Troops",
+      "role": "Skirmisher",
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-quad-rotor-scout-drone-3.png",
+          "scale": 0.35,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-quad-rotor-scout-drone-3.png",
+          "scale": 0.55,
+          "offset": 0
+        },
+        "head": null
+      }
+    },
+    "GND-Trucks": {
+      "shape": "Trucks",
+      "role": "Support",
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-heavy-tank-chassis-2.png",
+          "scale": 0.3,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-tank-turret-1.png",
+          "scale": 0.3,
+          "offset": 0
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.3,
+          "offset": 0
+        }
+      }
+    },
+    "GND-Tanks": {
+      "shape": "Tanks",
+      "role": "Bruiser",
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-tank-chassis-2.png",
+          "scale": 0.4,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-tank-turret-1.png",
+          "scale": 0.45,
+          "offset": 0
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.3,
+          "offset": 0
+        }
+      }
+    },
+    "GND-Artillery": {
+      "shape": "Artillery",
+      "role": "Siege",
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-tank-chassis-2.png",
+          "scale": 0.35,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-tank-turret-1.png",
+          "scale": 0.6,
+          "offset": 0
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.3,
+          "offset": 0
+        }
+      }
+    },
+    "GND-HeavyTanks": {
+      "shape": "Heavy Tanks",
+      "role": "Juggernaut",
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-heavy-tank-chassis-2.png",
+          "scale": 0.5,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-triple-naval-turret-2.png",
+          "scale": 0.65,
+          "offset": 0
+        },
+        "head": {
+          "frame": "top-down-view-of-small-rader-dish-1.png",
+          "scale": 0.3,
+          "offset": 0
+        }
+      }
+    },
+    "GND-Copters": {
+      "shape": "Copters",
+      "role": "Harasser",
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-quad-rotor-scout-drone-1.png",
+          "scale": 1,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-quad-rotor-scout-drone-2.png",
+          "scale": 1,
+          "offset": 0
+        },
+        "head": null
+      }
+    },
+    "GND-Planes": {
+      "shape": "Planes",
+      "role": "Striker",
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-bomber-drone-4.png",
+          "scale": 0.45,
+          "offset": -3
+        },
+        "weapon": {
+          "frame": "top-down-view-of-bomber-drone-4.png",
+          "scale": 0.7,
+          "offset": 0
+        },
+        "head": null
+      }
+    },
+    "GND-Missiles": {
+      "shape": "Missiles",
+      "role": "Guided AA",
+      "layers": {
+        "base": {
+          "frame": "top-down-view-of-bomber-drone-4.png",
+          "scale": 0.3,
+          "offset": 0
+        },
+        "weapon": {
+          "frame": "top-down-view-of-bomber-drone-4.png",
+          "scale": 0.3,
+          "offset": 0
+        },
+        "head": null
+      }
+    }
+  }
+}

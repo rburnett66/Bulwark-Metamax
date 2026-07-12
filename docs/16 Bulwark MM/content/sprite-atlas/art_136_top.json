@@ -1,0 +1,55 @@
+{
+  "frames": {
+    "art_136_top_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 826,
+        "h": 846
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 826,
+        "h": 846
+      },
+      "sourceSize": {
+        "w": 826,
+        "h": 846
+      }
+    },
+    "art_136_top_1.png": {
+      "frame": {
+        "x": 835,
+        "y": 3,
+        "w": 34,
+        "h": 21
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 34,
+        "h": 21
+      },
+      "sourceSize": {
+        "w": 34,
+        "h": 21
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1053,
+      "h": 852
+    },
+    "scale": "1"
+  }
+}

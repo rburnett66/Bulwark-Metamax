@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "top-down-view-of-a-dung-beetle-1_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 624,
+        "h": 855
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 624,
+        "h": 855
+      },
+      "sourceSize": {
+        "w": 624,
+        "h": 855
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 920,
+      "h": 861
+    },
+    "scale": "1"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "top-down-view-of-tank-chassis-1_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 546,
+        "h": 898
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 546,
+        "h": 898
+      },
+      "sourceSize": {
+        "w": 546,
+        "h": 898
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 884,
+      "h": 904
+    },
+    "scale": "1"
+  }
+}

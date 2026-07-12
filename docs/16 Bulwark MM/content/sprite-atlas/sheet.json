@@ -1,0 +1,195 @@
+{
+  "frames": {
+    "art_90_top.png": {
+      "frame": {
+        "x": 1,
+        "y": 1,
+        "w": 230,
+        "h": 215
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 230,
+        "h": 215
+      },
+      "sourceSize": {
+        "w": 230,
+        "h": 215
+      }
+    },
+    "art_108_top.png": {
+      "frame": {
+        "x": 232,
+        "y": 1,
+        "w": 263,
+        "h": 213
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 263,
+        "h": 213
+      },
+      "sourceSize": {
+        "w": 263,
+        "h": 213
+      }
+    },
+    "art_104_top.png": {
+      "frame": {
+        "x": 1,
+        "y": 218,
+        "w": 249,
+        "h": 212
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 249,
+        "h": 212
+      },
+      "sourceSize": {
+        "w": 249,
+        "h": 212
+      }
+    },
+    "art_88_top.png": {
+      "frame": {
+        "x": 252,
+        "y": 218,
+        "w": 260,
+        "h": 209
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 260,
+        "h": 209
+      },
+      "sourceSize": {
+        "w": 260,
+        "h": 209
+      }
+    },
+    "art_109_top.png": {
+      "frame": {
+        "x": 1,
+        "y": 431,
+        "w": 269,
+        "h": 204
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 269,
+        "h": 204
+      },
+      "sourceSize": {
+        "w": 269,
+        "h": 204
+      }
+    },
+    "art_84_top.png": {
+      "frame": {
+        "x": 272,
+        "y": 431,
+        "w": 184,
+        "h": 188
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 184,
+        "h": 188
+      },
+      "sourceSize": {
+        "w": 184,
+        "h": 188
+      }
+    },
+    "art_110_top.png": {
+      "frame": {
+        "x": 457,
+        "y": 431,
+        "w": 250,
+        "h": 167
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 250,
+        "h": 167
+      },
+      "sourceSize": {
+        "w": 250,
+        "h": 167
+      }
+    },
+    "art_97_top.png": {
+      "frame": {
+        "x": 1,
+        "y": 636,
+        "w": 240,
+        "h": 138
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 240,
+        "h": 138
+      },
+      "sourceSize": {
+        "w": 240,
+        "h": 138
+      }
+    },
+    "art_96_top.png": {
+      "frame": {
+        "x": 242,
+        "y": 636,
+        "w": 237,
+        "h": 130
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 237,
+        "h": 130
+      },
+      "sourceSize": {
+        "w": 237,
+        "h": 130
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    },
+    "scale": "1"
+  }
+}

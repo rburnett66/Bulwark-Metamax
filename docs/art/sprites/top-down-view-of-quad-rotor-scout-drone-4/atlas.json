@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "top-down-view-of-quad-rotor-scout-drone-4_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 802,
+        "h": 778
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 802,
+        "h": 778
+      },
+      "sourceSize": {
+        "w": 802,
+        "h": 778
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 808,
+      "h": 784
+    },
+    "scale": "1"
+  }
+}

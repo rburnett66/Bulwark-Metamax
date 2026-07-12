@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "top-down-view-of-a-cockroach-1_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 821,
+        "h": 831
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 821,
+        "h": 831
+      },
+      "sourceSize": {
+        "w": 821,
+        "h": 831
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1039,
+      "h": 837
+    },
+    "scale": "1"
+  }
+}
