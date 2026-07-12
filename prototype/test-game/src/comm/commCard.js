@@ -44,7 +44,7 @@ const CSS = `
 .bw-comm-portrait svg{position:absolute;inset:0;margin:auto;width:70%;height:70%;top:6%;
   fill:color-mix(in srgb,var(--accent) 70%,#8ea);opacity:.9}
 .bw-comm-portrait img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
-  filter:saturate(.9) contrast(1.05)}
+  object-position:50% 10%;filter:saturate(.9) contrast(1.05)}   /* full-body art: frame the head */
 .bw-comm-portrait.speaking svg{animation:bwCommBreathe .18s infinite alternate}
 @keyframes bwCommBreathe{from{opacity:.7}to{opacity:1;transform:scale(1.01)}}
 @media (prefers-reduced-motion: reduce){.bw-comm-portrait.speaking svg{animation:none}}
