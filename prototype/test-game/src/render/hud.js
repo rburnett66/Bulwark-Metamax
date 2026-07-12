@@ -1,4 +1,4 @@
-import { STRUCTURES, ASSUMPTIONS, getStructureDef } from '../data/tables.js';
+import { STRUCTURES, ASSUMPTIONS, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
 
 const STYLE_ID = 'bw-hud-style';
@@ -9,6 +9,8 @@ const CSS = `
 .bw-hud * { box-sizing:border-box; }
 .bw-panel { background:rgba(10,14,20,0.85); border:1px solid #3a4a5a; border-radius:4px; padding:6px 8px; pointer-events:auto; }
 .bw-topbar { position:absolute; top:6px; left:6px; right:6px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.bw-faction { pointer-events:auto; background:#141b22; color:#e8e8e8; border:1px solid #26313c; border-radius:4px;
+  padding:3px 6px; font:inherit; font-size:12px; cursor:pointer; }
 .bw-hpwrap { display:flex; align-items:center; gap:6px; }
 .bw-hpbar { width:160px; height:14px; background:#2a1616; border:1px solid #713; position:relative; }
 .bw-hpfill { height:100%; background:#d33; width:100%; transition:width 0.15s linear; }
@@ -31,11 +33,23 @@ const CSS = `
 .bw-buildbtn { display:flex; justify-content:space-between; width:100%; text-align:left; }
 .bw-buildbtn .bw-cost { color:#ffd76a; }
 .bw-buildbtn.bw-poor { opacity:0.45; }
+.bw-key { font-weight:800; color:#ffe58a; }   /* bold keyboard-shortcut glyph on build + action buttons */
 .bw-selpanel { position:absolute; right:6px; top:56px; width:200px; font-size:12px; display:none; flex-direction:column; gap:4px; }
 .bw-selpanel .bw-sname { font-size:13px; font-weight:bold; color:#bfe0ff; }
 .bw-selpanel .bw-shpbar { width:100%; height:10px; background:#222; border:1px solid #555; }
 .bw-selpanel .bw-shpfill { height:100%; background:#4c4; }
 .bw-selrow { display:flex; gap:4px; }
+.bw-unitpanel { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); min-width:290px; max-width:460px;
+  background:rgba(9,14,20,0.94); border:1px solid #2c3e50; border-radius:7px; padding:8px 14px; display:none;
+  font-size:12px; color:#dfeef5; box-shadow:0 3px 16px rgba(0,0,0,0.55); z-index:20; }
+.bw-unitpanel .bw-uname { font-size:15px; font-weight:800; color:#ffe58a; }
+.bw-unitpanel .bw-usub { color:#8fb0c4; font-size:11px; margin-bottom:5px; text-transform:capitalize; }
+.bw-unitpanel .bw-uhp { height:6px; background:#1c2630; border-radius:3px; overflow:hidden; margin-bottom:6px; }
+.bw-unitpanel .bw-uhpfill { height:100%; background:#5c5; transition:width .1s; }
+.bw-unitpanel .bw-ustats { display:grid; grid-template-columns:1fr 1fr; gap:2px 18px; }
+.bw-unitpanel .bw-ustat { display:flex; justify-content:space-between; border-bottom:1px solid #182430; padding:1px 0; }
+.bw-unitpanel .bw-ustat .k { color:#7f9fb2; }
+.bw-unitpanel .bw-ustat .v { color:#eaf6ff; font-weight:600; }
 .bw-selrow .bw-btn { flex:1; font-size:11px; padding:3px 4px; }
 .bw-bottombar { position:absolute; left:6px; bottom:6px; right:6px; display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; }
 .bw-help { font-size:10px; color:#8fa4b8; line-height:1.4; }
@@ -51,6 +65,13 @@ const CSS = `
 .bw-rbanner { font-size:36px; font-weight:bold; letter-spacing:2px; text-shadow:0 2px 8px #000; }
 .bw-rbanner.bw-win { color:#9f9; }
 .bw-rbanner.bw-lose { color:#f99; }
+.bw-wavebanner { position:absolute; left:50%; top:34%; transform:translate(-50%,-50%); text-align:center;
+  pointer-events:none; opacity:0; transition:opacity .25s ease; z-index:30; white-space:nowrap; }
+.bw-wavebanner.bw-show { opacity:1; }
+.bw-wavebanner .bw-line { font-size:40px; font-weight:900; letter-spacing:1px; color:#ff5a3c;
+  text-shadow:0 3px 12px #000, 0 0 26px rgba(255,80,40,0.65); text-transform:uppercase; }
+.bw-wavebanner .bw-sub { font-size:18px; font-weight:700; letter-spacing:3px; color:#ffd6c8;
+  text-shadow:0 2px 6px #000; margin-top:6px; }
 .bw-rscore { margin:6px 0 10px; text-align:center; }
 .bw-rscore-total { font-size:22px; font-weight:bold; letter-spacing:1px; color:#ffe08a; text-shadow:0 1px 4px #000; }
 .bw-rscore-line { font-size:12px; color:#bbb; margin-top:3px; }
@@ -145,33 +166,54 @@ export function createHud(mountEl, callbacks) {
   };
   cbs.__updBtn = (canStart) => { startWaveBtn.disabled = !canStart; };
 
+  // Faction TEST picker — choose one faction so every wave spawns only its units (or "Campaign" for the mix).
+  // Changing it restarts the run with that faction's waves.
+  const factionSel = el(doc, 'select', 'bw-faction');
+  factionSel.title = 'Test a specific faction (restarts the run) — or Campaign for the full escalating mix';
+  const optAll = el(doc, 'option', null, 'Campaign (all)'); optAll.value = ''; factionSel.appendChild(optAll);
+  for (const f of factionsInRoster()) { const o = el(doc, 'option', null, f); o.value = f; factionSel.appendChild(o); }
+  factionSel.addEventListener('change', () => { if (cbs.onFactionSelect) cbs.onFactionSelect(factionSel.value || null); });
+
   topbar.appendChild(hpwrap);
   topbar.appendChild(timerEl);
   topbar.appendChild(moneyEl);
   topbar.appendChild(waveEl);
   topbar.appendChild(startWaveBtn);
+  topbar.appendChild(factionSel);
   topbar.appendChild(seedEl);
   root.appendChild(topbar);
 
   // ---- build palette --------------------------------------------------
   const palette = el(doc, 'div', 'bw-palette bw-panel');
-  palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD'));
+  palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD  (1-' + Object.keys(STRUCTURES).length + ', Esc cancels)'));
   const paletteBtns = {};
-  for (const structId of Object.keys(STRUCTURES)) {
+  const structOrder = Object.keys(STRUCTURES);              // hotkey N (1-based) selects structOrder[N-1]
+  const toggleBuild = (structId) => {
+    const next = (hud.currentBuildSelection === structId) ? null : structId;
+    if (cbs.onBuildSelect) cbs.onBuildSelect(next);
+  };
+  structOrder.forEach((structId, i) => {
     const def = STRUCTURES[structId];
     const btn = el(doc, 'button', 'bw-btn bw-buildbtn');
-    const nameSpan = el(doc, 'span', null, def.name || structId);
+    const key = i + 1;                                      // 1,2,3,4...
+    const nameSpan = el(doc, 'span');
+    if (key <= 9) {                                         // BOLD hotkey digit + the structure name
+      nameSpan.appendChild(el(doc, 'b', 'bw-key', String(key)));
+      nameSpan.appendChild(doc.createTextNode('  ' + (def.name || structId)));
+    } else {
+      nameSpan.textContent = def.name || structId;
+    }
     const costSpan = el(doc, 'span', 'bw-cost', String(def.cost && def.cost[0] != null ? def.cost[0] : '?') + 'g');
     btn.appendChild(nameSpan);
     btn.appendChild(costSpan);
-    btn.addEventListener('click', () => {
-      const next = (hud.currentBuildSelection === structId) ? null : structId;
-      if (cbs.onBuildSelect) cbs.onBuildSelect(next);
-    });
+    btn.addEventListener('click', () => toggleBuild(structId));
     palette.appendChild(btn);
     paletteBtns[structId] = btn;
-  }
+  });
   root.appendChild(palette);
+  // NB: the 1-4 / Esc build HOTKEYS are handled in input/input.js (which also refreshes the placement ghost);
+  // the palette buttons just mirror that via toggleBuild(). Don't add a second key handler here — two handlers
+  // double-toggle and cancel each other out (press = select then immediately deselect).
 
   // ---- selected-structure panel ---------------------------------------
   const selPanel = el(doc, 'div', 'bw-selpanel bw-panel');
@@ -182,9 +224,18 @@ export function createHud(mountEl, callbacks) {
   shpbar.appendChild(shpfill);
   const shptext = el(doc, 'div', null, '');
   const selrow = el(doc, 'div', 'bw-selrow');
-  const upgradeBtn = el(doc, 'button', 'bw-btn', 'Upgrade');
-  const sellBtn = el(doc, 'button', 'bw-btn', 'Sell');
-  const repairBtn = el(doc, 'button', 'bw-btn', 'Repair');
+  // action buttons carry their BOLD keyboard shortcut (handled in input/input.js): U upgrade, X sell, R repair
+  const actionBtn = (label, keyChar) => {
+    const b = el(doc, 'button', 'bw-btn');
+    b.appendChild(el(doc, 'b', 'bw-key', keyChar));       // BOLD hotkey glyph (persists across label updates)
+    const lbl = el(doc, 'span', null, ' ' + label);
+    b.appendChild(lbl);
+    b._label = lbl;                                       // updateHud rewrites THIS, not the whole button
+    return b;
+  };
+  const upgradeBtn = actionBtn('Upgrade', 'U');
+  const sellBtn = actionBtn('Sell', 'X');
+  const repairBtn = actionBtn('Repair', 'R');
   upgradeBtn.addEventListener('click', () => { if (cbs.onUpgrade && hud.currentSelectedId != null) cbs.onUpgrade(hud.currentSelectedId); });
   sellBtn.addEventListener('click', () => { if (cbs.onSell && hud.currentSelectedId != null) cbs.onSell(hud.currentSelectedId); });
   repairBtn.addEventListener('click', () => { if (cbs.onRepair && hud.currentSelectedId != null) cbs.onRepair(hud.currentSelectedId); });
@@ -197,6 +248,20 @@ export function createHud(mountEl, callbacks) {
   selPanel.appendChild(shptext);
   selPanel.appendChild(selrow);
   root.appendChild(selPanel);
+
+  // ---- selected UNIT info window (lower-middle) — name + live stats ----
+  const unitPanel = el(doc, 'div', 'bw-unitpanel');
+  const uname = el(doc, 'div', 'bw-uname', '-');
+  const usub = el(doc, 'div', 'bw-usub', '');
+  const uhp = el(doc, 'div', 'bw-uhp');
+  const uhpfill = el(doc, 'div', 'bw-uhpfill');
+  uhp.appendChild(uhpfill);
+  const ustats = el(doc, 'div', 'bw-ustats');
+  unitPanel.appendChild(uname);
+  unitPanel.appendChild(usub);
+  unitPanel.appendChild(uhp);
+  unitPanel.appendChild(ustats);
+  root.appendChild(unitPanel);
 
   // ---- bottom bar (help + debug) --------------------------------------
   const bottombar = el(doc, 'div', 'bw-bottombar');
@@ -230,6 +295,14 @@ export function createHud(mountEl, callbacks) {
   // ---- toast -----------------------------------------------------------
   const toast = el(doc, 'div', 'bw-toast');
   root.appendChild(toast);
+
+  // ---- pre-wave faction announcement -----------------------------------
+  const waveBanner = el(doc, 'div', 'bw-wavebanner');
+  const waveBannerMain = el(doc, 'div', 'bw-line', '');
+  const waveBannerSub = el(doc, 'div', 'bw-sub', 'prepare for attack!');
+  waveBanner.appendChild(waveBannerMain);
+  waveBanner.appendChild(waveBannerSub);
+  root.appendChild(waveBanner);
 
   // ---- replay-mode indicator --------------------------------------------
   const replayBar = el(doc, 'div', 'bw-replaybar', '');
@@ -270,8 +343,16 @@ export function createHud(mountEl, callbacks) {
     upgradeBtn,
     sellBtn,
     repairBtn,
+    unitPanel,
+    uname,
+    usub,
+    uhpfill,
+    ustats,
     toast,
     toastTimer: null,
+    waveBanner,
+    waveBannerMain,
+    waveBannerTimer: null,
     resultEl,
     banner,
     scoreEl,
@@ -368,12 +449,45 @@ export function updateHud(hud, state, ui) {
     const maxTier = def && def.hp ? def.hp.length : 3;
     const upCost = (def && def.cost && s.tier < maxTier) ? def.cost[s.tier] : Infinity;
     hud.upgradeBtn.disabled = busy || s.tier >= maxTier || money < upCost;
-    hud.upgradeBtn.textContent = s.tier >= maxTier ? 'Max Tier' : 'Upgrade (' + upCost + 'g)';
+    hud.upgradeBtn._label.textContent = ' ' + (s.tier >= maxTier ? 'Max Tier' : 'Upgrade (' + upCost + 'g)');   // keep bold U
     let sellVal = 0;
     try { sellVal = getSellValue(s, STRUCTURES, ASSUMPTIONS); } catch (e) { sellVal = 0; }
     hud.sellBtn.disabled = busy;
-    hud.sellBtn.textContent = 'Sell (+' + Math.floor(sellVal) + 'g)';
+    hud.sellBtn._label.textContent = ' Sell (+' + Math.floor(sellVal) + 'g)';   // keep bold X
     hud.repairBtn.disabled = busy || s.hp >= s.maxHp;
+  }
+
+  // ---- Selected UNIT info window (lower-middle): name + live stats ----
+  const uId = ui ? ui.selectedUnitId : null;
+  let u = null;
+  if (uId != null && state.units && typeof state.units.get === 'function') u = state.units.get(uId) || null;
+  if (!u || u.hp <= 0) {
+    hud.unitPanel.style.display = 'none';
+  } else {
+    hud.unitPanel.style.display = 'block';
+    const fmt = (n) => (typeof n === 'number' ? String(Math.round(n * 10) / 10) : (n == null ? '—' : String(n)));
+    hud.uname.textContent = (u.faction ? u.faction + ' ' : '') + (u.kind || u.unitId || 'Unit') + (u.tier > 1 ? '  T' + u.tier : '');
+    hud.usub.textContent = [u.role, u.domain, u.side].filter(Boolean).join(' · ');
+    const frac = u.maxHp > 0 ? Math.max(0, Math.min(1, u.hp / u.maxHp)) : 0;
+    hud.uhpfill.style.width = (frac * 100).toFixed(0) + '%';
+    hud.uhpfill.style.background = frac > 0.5 ? '#5c5' : (frac > 0.25 ? '#dd5' : '#e55');
+    const rows = [
+      ['HP', Math.max(0, Math.ceil(u.hp)) + ' / ' + Math.ceil(u.maxHp)],
+      ['DPS', fmt(u.dps)],
+      ['Range', fmt(u.range)],
+      ['Speed', fmt(u.speed)],
+      ['Armor', u.armorClass || '—'],
+      ['Damage', u.damageType || '—'],
+      ['Targets', u.canTarget || (u.targetsBase ? 'Base' : '—')],
+      ['Vision', fmt(u.vision)],
+    ];
+    while (hud.ustats.firstChild) hud.ustats.removeChild(hud.ustats.firstChild);
+    for (let i = 0; i < rows.length; i++) {
+      const row = el(hud.doc, 'div', 'bw-ustat');
+      row.appendChild(el(hud.doc, 'span', 'k', rows[i][0]));
+      row.appendChild(el(hud.doc, 'span', 'v', rows[i][1]));
+      hud.ustats.appendChild(row);
+    }
   }
 }
 
@@ -408,5 +522,17 @@ export function flashMessage(hud, text) {
   if (typeof clearTimeout === 'function' && hud.toastTimer) clearTimeout(hud.toastTimer);
   if (typeof setTimeout === 'function') {
     hud.toastTimer = setTimeout(() => { hud.toast.style.display = 'none'; }, 1600);
+  }
+}
+
+/** Boldly announce the attacking faction before the wave's enemies appear: "<Faction> Incoming, prepare for
+ *  attack!". Fires on the wave-start event; auto-fades after ~3s. */
+export function showWaveBanner(hud, faction) {
+  if (!hud || !hud.waveBanner) return;
+  hud.waveBannerMain.textContent = (faction || 'Enemy') + ' Incoming,';
+  hud.waveBanner.classList.add('bw-show');
+  if (typeof clearTimeout === 'function' && hud.waveBannerTimer) clearTimeout(hud.waveBannerTimer);
+  if (typeof setTimeout === 'function') {
+    hud.waveBannerTimer = setTimeout(() => { hud.waveBanner.classList.remove('bw-show'); }, 3000);
   }
 }

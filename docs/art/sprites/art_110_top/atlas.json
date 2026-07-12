@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "art_110_top_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 950,
+        "h": 661
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 950,
+        "h": 661
+      },
+      "sourceSize": {
+        "w": 950,
+        "h": 661
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 956,
+      "h": 667
+    },
+    "scale": "1"
+  }
+}

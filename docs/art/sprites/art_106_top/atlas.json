@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "art_106_top_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 734,
+        "h": 751
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 734,
+        "h": 751
+      },
+      "sourceSize": {
+        "w": 734,
+        "h": 751
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 935,
+      "h": 757
+    },
+    "scale": "1"
+  }
+}

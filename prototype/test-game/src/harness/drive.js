@@ -12,14 +12,20 @@ export function applyReadout(stack, r) {
   if (!stack || !stack.parts || !r) return;
   const { base, weapon, head } = stack.parts;
   const dead = r.health <= 0;
+  // Per-part fit multiplier: a chosen sprite is normalised to unit size via part.__fitScale (set by the bench);
+  // drawn primitives have none (fit = 1), so this is transparent to them. State scaling then multiplies on top.
+  const fit = (p) => (p && typeof p.__fitScale === 'number') ? p.__fitScale : 1;
 
   // WEAPON <- aim: point the barrel at the acquired target; return to rest (0) when idle.
-  if (weapon) weapon.rotation = (r.aimAngle != null) ? r.aimAngle : 0;
+  if (weapon) {
+    weapon.rotation = (r.aimAngle != null) ? r.aimAngle : 0;
+    const f = fit(weapon); if (weapon.scale && weapon.scale.set) weapon.scale.set(f, f);
+  }
 
   // BASE <- health: shrink + fade as hp drops (transform is the authoritative visual; tint is a bonus).
   if (base) {
     const h = Math.max(0, Math.min(1, r.health));
-    const s = 0.72 + 0.28 * h;
+    const s = fit(base) * (0.72 + 0.28 * h);
     if (base.scale && base.scale.set) base.scale.set(s, s);
     base.alpha = 0.45 + 0.55 * h;
     base.tint = healthTint(h);
@@ -28,7 +34,8 @@ export function applyReadout(stack, r) {
   // HEAD <- awareness: grows + brightens when locked on a target, dims while scanning.
   if (head) {
     const aware = r.awareness >= 1;
-    if (head.scale && head.scale.set) head.scale.set(aware ? 1.35 : 1, aware ? 1.35 : 1);
+    const s = fit(head) * (aware ? 1.35 : 1);
+    if (head.scale && head.scale.set) head.scale.set(s, s);
     head.alpha = aware ? 1 : 0.5;
     head.tint = aware ? 0x8ff0ff : 0x40525e;
   }

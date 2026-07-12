@@ -379,6 +379,7 @@ export function stepCombat(state, dt) {
       side: u.side,
       lane: u.lane,
       income: income,
+      radius: u.radius,                 // lets the render scale the burning-wreck flame to the unit's size
       pos: { x: u.pos.x, y: u.pos.y }
     });
     state.units.delete(id);

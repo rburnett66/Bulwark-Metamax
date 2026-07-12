@@ -1,0 +1,150 @@
+{
+  "faction": "Greenies (Chem)",
+  "sheet": "sheet.png",
+  "units": {
+    "GRN-Troops": {
+      "shape": "Troops",
+      "role": "Skirmisher",
+      "layers": {
+        "base": {
+          "frame": "art_84_top.png",
+          "scale": 0.75
+        },
+        "weapon": {
+          "frame": "art_84_top.png",
+          "scale": 1
+        },
+        "head": {
+          "frame": "art_84_top.png",
+          "scale": 1.45
+        }
+      }
+    },
+    "GRN-Trucks": {
+      "shape": "Trucks",
+      "role": "Support",
+      "layers": {
+        "base": {
+          "frame": "art_88_top.png",
+          "scale": 1
+        },
+        "weapon": {
+          "frame": "art_88_top.png",
+          "scale": 1.35
+        },
+        "head": {
+          "frame": "art_88_top.png",
+          "scale": 1
+        }
+      }
+    },
+    "GRN-Tanks": {
+      "shape": "Tanks",
+      "role": "Bruiser",
+      "layers": {
+        "base": {
+          "frame": "art_104_top.png",
+          "scale": 1
+        },
+        "weapon": {
+          "frame": "art_104_top.png",
+          "scale": 1
+        },
+        "head": {
+          "frame": "art_104_top.png",
+          "scale": 1
+        }
+      }
+    },
+    "GRN-Artillery": {
+      "shape": "Artillery",
+      "role": "Siege",
+      "layers": {
+        "base": {
+          "frame": "art_104_top.png",
+          "scale": 1
+        },
+        "weapon": {
+          "frame": "art_104_top.png",
+          "scale": 1
+        },
+        "head": {
+          "frame": "art_104_top.png",
+          "scale": 1
+        }
+      }
+    },
+    "GRN-HeavyTanks": {
+      "shape": "Heavy Tanks",
+      "role": "Juggernaut",
+      "layers": {
+        "base": {
+          "frame": "art_90_top.png",
+          "scale": 1.1
+        },
+        "weapon": {
+          "frame": "art_90_top.png",
+          "scale": 1.45
+        },
+        "head": {
+          "frame": "art_90_top.png",
+          "scale": 1.3
+        }
+      }
+    },
+    "GRN-Copters": {
+      "shape": "Copters",
+      "role": "Harasser",
+      "layers": {
+        "base": {
+          "frame": "art_109_top.png",
+          "scale": 0.7
+        },
+        "weapon": {
+          "frame": "art_109_top.png",
+          "scale": 0.9
+        },
+        "head": {
+          "frame": "art_109_top.png",
+          "scale": 0.8
+        }
+      }
+    },
+    "GRN-Planes": {
+      "shape": "Planes",
+      "role": "Striker",
+      "layers": {
+        "base": {
+          "frame": "art_97_top.png",
+          "scale": 0.8
+        },
+        "weapon": {
+          "frame": "art_97_top.png",
+          "scale": 1.2
+        },
+        "head": {
+          "frame": "art_97_top.png",
+          "scale": 0.5
+        }
+      }
+    },
+    "GRN-Missiles": {
+      "shape": "Missiles",
+      "role": "Guided AA",
+      "layers": {
+        "base": {
+          "frame": "art_110_top.png",
+          "scale": 1
+        },
+        "weapon": {
+          "frame": "art_110_top.png",
+          "scale": 1
+        },
+        "head": {
+          "frame": "art_110_top.png",
+          "scale": 1
+        }
+      }
+    }
+  }
+}

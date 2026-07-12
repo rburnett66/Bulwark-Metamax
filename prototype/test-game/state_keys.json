@@ -1,0 +1,11 @@
+{
+  "_comment": "Reality Layer ingestion config for the Bulwark game (root = prototype/test-game). STRUCTURAL PASS: Bulwark reads/writes sim state via direct property access (state.units, state.economy...), NOT string-keyed accessor fns, so the footprint allow-list (read_fns/write_fns/keys) is intentionally empty — the design/semantic footprint pass is a separate second run (RL-4). component_map folds Bulwark's JS subsystem folders (src/sim, src/render, src/data, src/input, main.js) into the component_kind enum; the State Harness authoring tool (src/harness) is the 'tool' component. exclude_tests drops the *.test.mjs suites so the graph maps the app, not its tests.",
+  "read_fns": [],
+  "write_fns": [],
+  "keys": [],
+  "exclude_tests": true,
+  "component_map": {
+    "_default": "game",
+    "harness": "tool"
+  }
+}

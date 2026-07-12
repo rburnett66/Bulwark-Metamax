@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "top-down-view-of-small-rader-dish-1_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 685,
+        "h": 755
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 685,
+        "h": 755
+      },
+      "sourceSize": {
+        "w": 685,
+        "h": 755
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 784,
+      "h": 761
+    },
+    "scale": "1"
+  }
+}

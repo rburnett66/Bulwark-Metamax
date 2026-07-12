@@ -1,5 +1,5 @@
 import { WAVES, MAP, getUnitDef } from '../data/tables.js';
-import { createUnit } from './entities.js';
+import { createUnit, unitRadius } from './entities.js';
 import { emitEvent } from './core.js';
 
 /**
@@ -51,7 +51,7 @@ export function startNextWave(state) {
   if (w.current >= w.total) return false;
 
   const nextIndex = w.current; // zero-based index into table; wave numbers are 1-based
-  const table = WAVES;
+  const table = state.waveTable || WAVES;   // the sim's OWN schedule (faction test / custom), not the global
   const waveDef = table[nextIndex];
   if (!waveDef) return false;
 
@@ -87,12 +87,39 @@ export function startNextWave(state) {
     return a.seq - b.seq;
   });
 
+  // SPACE OUT the queue per lane so no two units on the same lane materialize on the SAME tick and stack on the
+  // single spawn cell ("stuck at spawn"). The gap SCALES WITH THE DEPARTING UNIT'S SPEED — a crawling heavy /
+  // water-siege unit (speed ~0.39) needs far longer to clear the spawn cell than a fast one, and a flat gap left
+  // those factions (esp. Water: two units at 0.39) stacking. Gap ≈ time for the previous unit to move ~0.85 cell,
+  // clamped so a wave of slow units still enters at a reasonable cadence. Deterministic (schedule rebuilds
+  // identically, speeds come from the tables) → replay-safe. Preserves unit composition/order; only nudges timing.
+  // Gap = time for the departing unit to travel its own DIAMETER (+ a margin) and fully vacate the single spawn
+  // cell, so both slow AND large units (e.g. Artillery/Heavy Tanks: radius ~0.42, speed ~0.39) clear before the
+  // next appears. A flat clear-distance let big tanks pile because they never moved a full body-length in time.
+  const MIN_GAP = 0.5, MAX_GAP = 3.0;
+  const laneClearGap = (speed, radius) =>
+    Math.max(MIN_GAP, Math.min(MAX_GAP, (2 * (radius || 0.3) + 0.25) / (speed || 1)));
+  const lastByLane = {};
+  for (let s = 0; s < w.pendingSpawns.length; s++) {
+    const sp = w.pendingSpawns[s];
+    const prev = lastByLane[sp.lane];
+    if (prev != null) { const g = laneClearGap(prev.speed, prev.radius); if (sp.time < prev.time + g) sp.time = prev.time + g; }
+    const def = getUnitDef(sp.unitId);
+    lastByLane[sp.lane] = { time: sp.time, speed: def.speed || 1, radius: unitRadius(def) };
+  }
+  // Re-sort: pushing later spawns forward can reorder across lanes.
+  w.pendingSpawns.sort(function (a, b) {
+    if (a.time !== b.time) return a.time - b.time;
+    return a.seq - b.seq;
+  });
+
   emitEvent(state, {
     type: 'wave',
     tick: state.tick,
     phase: 'start',
     wave: w.current,
     total: w.total,
+    faction: waveDef.faction || null,   // who's attacking — for the pre-wave announcement banner
   });
 
   return true;
@@ -123,11 +150,26 @@ export function stepWaves(state, dt) {
   while (w.pendingSpawns.length > 0 && w.pendingSpawns[0].time <= state.time) {
     const spawn = w.pendingSpawns.shift();
     const pos = spawnPointForLane(map, spawn.lane);
+    let sx = pos.x, sy = pos.y;
+    // WATER / AIR lanes spawn from a single cell but travel by straight-line getFlyerPath (they ignore terrain),
+    // so — unlike ground units, which re-converge onto a shared route — a lateral spawn offset PERSISTS and pulls
+    // them apart. This clears the worst congestion on the 1-cell-wide water channel, where a crawling siege unit
+    // otherwise plugs everything behind it. Offset cycles by spawn sequence (deterministic → replay-safe) and is
+    // clamped to the board. Ground keeps the single spawn point (its routes would just re-stack an offset).
+    if (spawn.lane !== 'ground') {
+      const bp = state.base ? state.base.pos : { x: pos.x + 1, y: pos.y };
+      const ldx = bp.x - pos.x, ldy = bp.y - pos.y, ll = Math.sqrt(ldx * ldx + ldy * ldy) || 1;
+      const perpx = -ldy / ll, perpy = ldx / ll;
+      const SPREAD = [0, 1.2, -1.2, 2.4, -2.4, 0.6, -0.6, 1.8, -1.8];
+      const off = SPREAD[(spawn.seq || 0) % SPREAD.length];
+      sx = Math.max(0, Math.min((map.cols || 1) - 1, pos.x + perpx * off));
+      sy = Math.max(0, Math.min((map.rows || 1) - 1, pos.y + perpy * off));
+    }
     const unit = createUnit(
       state,
       spawn.unitId,
       1,
-      { x: pos.x, y: pos.y },
+      { x: sx, y: sy },
       spawn.lane,
       'attacker'
     );

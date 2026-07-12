@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>State Harness — Bulwark</title>
+  <title>Bulwark State Harness</title>
   <style>
     :root { --bg:#0c1014; --panel:#141b22; --border:#26313c; --text:#dfe7ee; --muted:#8ea0b0; --accent:#5fe0ff; }
     * { box-sizing: border-box; }
@@ -33,6 +33,23 @@
     .bar { height:8px; background:#1b232c; border-radius:4px; overflow:hidden; margin-top:6px; }
     .bar > i { display:block; height:100%; background:linear-gradient(90deg,#e05a5a,#e0c05a,#5ae08a); }
     .state-pill { display:inline-block; padding:2px 8px; border-radius:10px; background:#1b232c; color:var(--accent); font-size:12px; }
+    .layer-row { display:grid; grid-template-columns:50px 1fr 62px 62px; gap:6px; align-items:center; }
+    .layer-name { font-size:12px; color:var(--muted); }
+    .layer-row select { width:100%; }
+    input[type=file] { font-size:12px; color:var(--muted); }
+    #sheet-preview { flex:1 1 420px; min-width:320px; max-height:82vh; overflow:auto; }
+    #sheet-stage { position:relative; display:inline-block; vertical-align:top; border:1px solid var(--border);
+      border-radius:8px; overflow:hidden;
+      background:
+        linear-gradient(45deg,#1a222b 25%,transparent 25%), linear-gradient(-45deg,#1a222b 25%,transparent 25%),
+        linear-gradient(45deg,transparent 75%,#1a222b 75%), linear-gradient(-45deg,transparent 75%,#1a222b 75%);
+      background-size:22px 22px; background-position:0 0,0 11px,11px -11px,-11px 0; background-color:#0a0e12; }
+    #sheet-img { display:block; height:auto; image-rendering:auto; }   /* width set to 50% of natural in JS */
+    #sheet-title { position:absolute; left:0; right:0; top:0; padding:6px 10px; font-size:12px; font-weight:600;
+      color:#eaf2f8; background:linear-gradient(to bottom, rgba(0,0,0,.72), rgba(0,0,0,0)); z-index:2; }
+    .frame-label { position:absolute; font-size:9px; line-height:1.25; padding:0 3px; border-radius:3px;
+      background:rgba(0,0,0,.6); color:#cfe6ee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      pointer-events:none; z-index:1; }
   </style>
 </head>
 <body>
@@ -40,7 +57,7 @@
     <div id="harness-mount"></div>
     <div id="controls">
       <div>
-        <h1>State Harness</h1>
+        <h1>Bulwark State Harness</h1>
         <div class="sub">Pick a faction and a unit, then drive it through its states. The preview is the game's accurate Pixi render.</div>
       </div>
 
@@ -51,6 +68,29 @@
       <div class="field">
         <label for="unit">Unit</label>
         <select id="unit"></select>
+      </div>
+
+      <div class="field" style="border-top:1px solid var(--border); padding-top:12px; gap:8px;">
+        <label>Sprite sheet → layers</label>
+        <input type="file" id="sheet-file" accept=".png,.json,image/png,application/json" multiple />
+        <div id="sheet-status" class="sub" style="margin-top:0;">Open a sheet PNG + its atlas.json, then assign frames to Base / Weapon / Head. (A layer left on “— none —” keeps the vector part.)</div>
+        <div class="layer-row" style="grid-template-columns:50px 1fr 62px 62px;"><span class="layer-name" style="grid-column:1;"></span><span class="layer-name" style="text-align:center;">frame</span><span class="layer-name" style="text-align:center;">size</span><span class="layer-name" style="text-align:center;">height</span></div>
+        <div class="layer-row"><span class="layer-name">Base</span><select id="layer-base" disabled><option value="">— none —</option></select><input type="range" id="size-base" min="0.3" max="3" step="0.05" value="1" title="Base size" /><input type="range" id="offset-base" min="-40" max="40" step="1" value="0" title="Base height (vertical offset)" /></div>
+        <div class="layer-row"><span class="layer-name">Weapon</span><select id="layer-weapon" disabled><option value="">— none —</option></select><input type="range" id="size-weapon" min="0.3" max="3" step="0.05" value="1" title="Weapon size" /><input type="range" id="offset-weapon" min="-40" max="40" step="1" value="0" title="Weapon height (vertical offset)" /></div>
+        <div class="layer-row"><span class="layer-name">Head</span><select id="layer-head" disabled><option value="">— none —</option></select><input type="range" id="size-head" min="0.3" max="3" step="0.05" value="1" title="Head size" /><input type="range" id="offset-head" min="-40" max="40" step="1" value="0" title="Head height (vertical offset)" /></div>
+        <div class="layer-row" style="grid-template-columns:50px 1fr 56px;">
+          <span class="layer-name">Rotate</span>
+          <input type="range" id="unit-rotation" min="-180" max="180" step="15" value="0" title="Rotate this unit's art so it faces the right way (degrees)" />
+          <button id="rotate-all" title="Apply this rotation to EVERY authored unit — fix a whole sheet at once">→ all</button>
+        </div>
+        <button id="export-def" disabled>Export this unit (.json)</button>
+        <div class="layer-row" style="grid-template-columns:1fr 1fr;">
+          <button id="save-faction" disabled title="Save every authored unit in this faction as one .units.json">Save faction</button>
+          <button id="load-defs" title="Load a saved unit/faction .json back into the tool">Load…</button>
+        </div>
+        <button id="pick-folder" title="Grant a folder once so saves write straight into your project (e.g. ...\docs\16 Bulwark MM\content\sprite-atlas) — Chrome/Edge only">Set save folder…</button>
+        <input type="file" id="load-file" accept=".json,application/json" style="display:none;" />
+        <div id="author-progress" class="sub" style="margin-top:2px;">—</div>
       </div>
 
       <div class="grid">
@@ -85,11 +125,20 @@
         <div class="row"><span class="k">aim angle</span><span class="v" id="r-aim">—</span></div>
       </div>
     </div>
+
+    <!-- opened sprite sheet, shown to the RIGHT of the controls with a title overlay -->
+    <div id="sheet-preview" style="display:none;">
+      <div id="sheet-stage">
+        <img id="sheet-img" alt="opened sprite sheet" />
+        <div id="sheet-title">—</div>
+      </div>
+    </div>
   </div>
 
   <script src="vendor/pixi.min.js"></script>
   <script type="module">
     import { bootBench } from './src/harness/bench.js';
+    import { loadAtlasFromFiles } from './src/harness/atlas.js';
 
     const bench = bootBench(document.getElementById('harness-mount'));
     const $ = (id) => document.getElementById(id);
@@ -99,12 +148,126 @@
     bench.factions().forEach((f) => { const o = document.createElement('option'); o.value = f; o.textContent = f; fSel.appendChild(o); });
     function fillUnits() {
       uSel.innerHTML = '';
-      bench.unitsForFaction(fSel.value).forEach((u) => { const o = document.createElement('option'); o.value = u.id; o.textContent = u.label; uSel.appendChild(o); });
+      bench.unitsForFaction(fSel.value).forEach((u) => {
+        const o = document.createElement('option'); o.value = u.id; o.dataset.label = u.label; o.textContent = u.label; uSel.appendChild(o);
+      });
       bench.setUnit(uSel.value);
+      syncLayerUI();
     }
     fSel.onchange = fillUnits;
-    uSel.onchange = () => bench.setUnit(uSel.value);
-    fillUnits();
+    uSel.onchange = () => { bench.setUnit(uSel.value); syncLayerUI(); };
+
+    // Reflect the CURRENT unit's saved assignment in the layer dropdowns + size sliders, and refresh progress.
+    function syncLayerUI() {
+      const a = bench.assignments();
+      for (const name of LAYER_IDS) {
+        const sel = $(`layer-${name}`), sz = $(`size-${name}`), off = $(`offset-${name}`);
+        if (sel && !sel.disabled) sel.value = (a && a[name]) || '';
+        if (sz) sz.value = (a && a.scale && a.scale[name]) || 1;
+        if (off) off.value = (a && a.offset && a.offset[name]) || 0;
+      }
+      $('unit-rotation').value = (a && a.rotation) || 0;
+      updateProgress();
+    }
+    function updateProgress() {
+      const fac = fSel.value;
+      const total = bench.unitsForFaction(fac).length, done = bench.authoredInFaction(fac);
+      $('author-progress').textContent = `${done}/${total} units authored in ${fac}`;
+      $('save-faction').disabled = done === 0;
+      for (const o of uSel.options) o.textContent = (bench.isAuthored(o.value) ? '● ' : '○ ') + (o.dataset.label || o.value);
+    }
+
+    // Sprite sheet → layers: open a PNG + atlas.json, assign frames to base/weapon/head, size + export a def.
+    const LAYER_IDS = ['base', 'weapon', 'head'];
+    const setSheetStatus = (m) => { $('sheet-status').textContent = m; };
+    $('sheet-file').onchange = async (e) => {
+      const files = [...(e.target.files || [])];
+      const png = files.find((f) => /\.png$/i.test(f.name) || f.type === 'image/png');
+      const json = files.find((f) => /\.json$/i.test(f.name) || f.type === 'application/json');
+      if (!png || !json) { setSheetStatus('Select BOTH the sheet PNG and its atlas.json.'); return; }
+      setSheetStatus('Loading…');
+      try {
+        const atlas = await loadAtlasFromFiles(png, json);
+        bench.loadSheet(atlas, png.name);
+        const opts = '<option value="">— none —</option>' + atlas.frameNames.map((f) => `<option value="${f}">${f}</option>`).join('');
+        for (const name of LAYER_IDS) { const sel = $(`layer-${name}`); sel.innerHTML = opts; sel.disabled = false; }
+        $('export-def').disabled = false;
+        syncLayerUI();   // reflect the current unit's saved assignment now that the dropdowns exist
+        // Show the opened sheet to the right at 50% size, with a title overlay + a NAME label on each frame.
+        const stage = $('sheet-stage'), img = $('sheet-img');
+        [...stage.querySelectorAll('.frame-label')].forEach((n) => n.remove());
+        img.onload = () => {
+          const aw = img.naturalWidth, ah = img.naturalHeight;
+          img.style.width = Math.round(aw * 0.5) + 'px';   // 50% of natural
+          $('sheet-title').textContent = `${png.name}  ·  ${aw}×${ah}  ·  ${atlas.frameNames.length} frames`;
+          for (const name of atlas.frameNames) {
+            const r = atlas.rects[name]; if (!r) continue;
+            const lbl = document.createElement('div');
+            lbl.className = 'frame-label';
+            lbl.textContent = name;
+            lbl.title = name;
+            lbl.style.left = (r.x / aw * 100) + '%';
+            lbl.style.top = (r.y / ah * 100) + '%';
+            lbl.style.maxWidth = (r.w / aw * 100) + '%';
+            stage.appendChild(lbl);
+          }
+        };
+        img.src = atlas.imageUrl;
+        $('sheet-preview').style.display = '';
+        setSheetStatus(`Loaded ${atlas.frameNames.length} frame(s) — assign them to Base / Weapon / Head.`);
+      } catch (err) { setSheetStatus('Load failed: ' + ((err && err.message) || err)); }
+    };
+    for (const name of LAYER_IDS) {
+      $(`layer-${name}`).onchange = (e) => { bench.assignLayer(name, e.target.value || null); updateProgress(); };
+      $(`size-${name}`).oninput = (e) => bench.setLayerScale(name, Number(e.target.value));
+      $(`offset-${name}`).oninput = (e) => bench.setLayerOffset(name, Number(e.target.value));
+    }
+    $('unit-rotation').oninput = (e) => bench.setRotation(Number(e.target.value));
+    $('rotate-all').onclick = () => { const d = Number($('unit-rotation').value); bench.rotateAllUnits(d); setSheetStatus(`Rotated all authored units to ${d}°.`); };
+
+    // ── save / load (per-unit + whole-faction, to the project folder or Downloads) ──
+    let dirHandle = null;
+    const slug = (s) => (s || 'unit').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    async function writeFile(name, text) {
+      if (dirHandle) {
+        const fh = await dirHandle.getFileHandle(name, { create: true });
+        const w = await fh.createWritable(); await w.write(text); await w.close();
+        return 'your project folder';
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      return 'Downloads';
+    }
+    $('pick-folder').onclick = async () => {
+      if (!window.showDirectoryPicker) { setSheetStatus('Direct folder-save needs Chrome/Edge — otherwise saves go to Downloads.'); return; }
+      try { dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); setSheetStatus('Save folder set — Save faction / Export write straight there.'); }
+      catch { /* user cancelled the picker */ }
+    };
+    $('export-def').onclick = async () => {
+      const def = bench.exportUnitDef();
+      if (!def) { setSheetStatus('Assign a layer first — this unit has no sprites yet.'); return; }
+      const where = await writeFile(slug(def.unit) + '.def.json', JSON.stringify(def, null, 2));
+      setSheetStatus(`Exported ${def.unit} → ${where}.`);
+    };
+    $('save-faction').onclick = async () => {
+      const fac = fSel.value, data = bench.exportFaction(fac);
+      const n = Object.keys(data.units).length;
+      if (!n) { setSheetStatus('No authored units in this faction yet.'); return; }
+      const where = await writeFile(slug(fac) + '.units.json', JSON.stringify(data, null, 2));
+      setSheetStatus(`Saved ${n} unit(s) for ${fac} → ${slug(fac)}.units.json (${where}).`);
+    };
+    $('load-defs').onclick = () => $('load-file').click();
+    $('load-file').onchange = async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      try {
+        const n = bench.importDefs(JSON.parse(await f.text()));
+        syncLayerUI();
+        setSheetStatus(`Loaded ${n} unit assignment(s) from ${f.name}.`);
+      } catch (err) { setSheetStatus('Load failed: ' + ((err && err.message) || err)); }
+      e.target.value = '';
+    };
 
     // State controls.
     let acquired = false, aimDeg = -90;

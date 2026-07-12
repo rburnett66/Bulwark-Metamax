@@ -1,0 +1,2459 @@
+[
+  {
+    "file": "58dc816c-0c72-43d4-952e-eddda98f6047.png",
+    "assetId": "58dc816c-0c72-43d4-952e-eddda98f6047",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Greenies/Chem faction unit sprite sheet (socialist hive collective): 8 swarm shapes, cheap-and-many organic armor read, poison chem-cloud motifs, toxic green and rust palette, Idle/Moving/Attacking/Death, 2.5D layered, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "7c71cab4-9807-4da5-98c9-1837930d3eac.png",
+    "assetId": "7c71cab4-9807-4da5-98c9-1837930d3eac",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Dark Energy faction unit sprite sheet (cult, night-strong): 8 shapes with corruption/poison DoT motifs, energy armor read, ominous purple-black with sickly green glow, Idle/Moving/Attacking/Death, four-layer stack, 2.5D layered, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "e391f94c-5e6d-48c2-920e-14c26b36ee26.png",
+    "assetId": "e391f94c-5e6d-48c2-920e-14c26b36ee26",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Space Tech faction unit sprite sheet (sci-fi federation): 8 shapes with orbital-tech design, electric weapons, strong-vision sensor arrays, sleek white and blue federation palette, machinery armor, Idle/Moving/Attacking/Death, 2.5D fixed pitch, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "18877822-fbfe-4221-9db7-34d31fb7f0a3.png",
+    "assetId": "18877822-fbfe-4221-9db7-34d31fb7f0a3",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Arcane/Energy faction unit sprite sheet (fantasy theocracy): 8 shapes as shielded casters and energy-weapon constructs, fire damage glow, no-ammo etheral look, gold and violet holy palette, energy armor read, Idle/Moving/Attacking/Death, 2.5D layered, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "75856bae-58c3-4d55-b71d-608595a28b1a.png",
+    "assetId": "75856bae-58c3-4d55-b71d-608595a28b1a",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Water faction unit sprite sheet (fantasy sea tribes, leviathans): 8 shapes as swimmers/floaters and coastal creatures, organic armor read, frost damage accents, teal and coral palette, submerged sub-surface tint variants, Idle/Moving/Attacking/Death, 2.5D, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "3aea1048-c347-4449-8ec3-1525351e49cf.png",
+    "assetId": "3aea1048-c347-4449-8ec3-1525351e49cf",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Artillery faction unit sprite sheet (siege military doctrine): 8 shapes emphasizing long-barrel arc weapons, concussion motifs, drab tan camo palette, Idle/Moving/Attacking/Death, independently rotating weapon layer with lock-on wind-up, 2.5D layered, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "ac4641ae-95c6-4840-ae75-6922733af677.png",
+    "assetId": "ac4641ae-95c6-4840-ae75-6922733af677",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: High Tech faction unit sprite sheet (mega-corp capitalist): 8 shapes, electric damage glow, shield plating, precise expensive look, cool cyan and chrome palette, Idle/Moving/Attacking/Death, four-layer stack with sensor telegraph, 2.5D fixed pitch, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "a93320e6-58a4-41e8-bc3b-c3ceb8295234.png",
+    "assetId": "a93320e6-58a4-41e8-bc3b-c3ceb8295234",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground/Powder faction unit sprite sheet (Nationalistic old-empire army): Troops, Trucks, Tanks, Artillery, Heavy Tanks, Copters, Planes, Missiles. Four-layer stack legs/body/weapon/head, Idle/Moving/Attacking/Death states. Machinery-armor read, olive-and-brass palette, flags & honor motifs, fixed camera pitch top-down 2.5D, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "9d234ee8-7848-470b-ac0f-c1d6286a8465.png",
+    "assetId": "9d234ee8-7848-470b-ac0f-c1d6286a8465",
+    "category": "Title Treatment — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nTitle Treatment: BULWARK game logo title treatment, bold militaristic emblem lettering evoking fortification and multi-faction warfare, layered metallic shield/bulwark motif, subtle nine-faction color accents, clean readable on dark battlefield backdrop, hero marketing wordmark, cinematic lighting, anamorphic lens, film grain",
+    "style": "cinematic"
+  },
+  {
+    "file": "a2a88ad5-e05d-4e84-bded-f36b8ad029e5.png",
+    "assetId": "a2a88ad5-e05d-4e84-bded-f36b8ad029e5",
+    "category": "Package Shot — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nPackage Shot: BULWARK key art package shot: fortified outpost in a clearing under assault from mixed ground/air/water faction forces, dramatic 2.5D layered battlefield, dust and muzzle FX, gold pie-sweep completion flash glint, camera framing base-vs-threat relationship, cinematic hero composition, oil painting, rich textures, dramatic lighting",
+    "style": "oil_painting"
+  },
+  {
+    "file": "6c1d87c9-4e8d-4706-ac3f-1588005afea9.png",
+    "assetId": "6c1d87c9-4e8d-4706-ac3f-1588005afea9",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Hero portrait set for Ground/Powder alignment leaders: Field-Marshal Seraphine von Halbrecht (AG), General Kord Stahl (E), The Iron Regent masked (DE), Sergeant Bricks Malloy (CG). Nationalistic military dress, alignment-coded lighting from angelic gold to dark shadow, bust framing, concept art, professional illustration, detailed",
+    "style": "concept_art"
+  },
+  {
+    "file": "65597577-63c4-4d3d-9b13-d0205dda6a3f.png",
+    "assetId": "65597577-63c4-4d3d-9b13-d0205dda6a3f",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Hero portrait set for Air faction manga aces: Squadron-Mother Hikari Dawnwing Aoi (AG), Ace Jun Halo Sato (PG), The Nightingale ghost squadron (DE), Sky-Marshal Reiko Kurogane (PE). Flight suits, dramatic sky backlight, alignment mood coding, anime style, vibrant colors, clean linework",
+    "style": "anime"
+  },
+  {
+    "file": "cdb98444-95ad-4ddb-84a4-e904cf898ebf.png",
+    "assetId": "cdb98444-95ad-4ddb-84a4-e904cf898ebf",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Hero portrait set for Water sea-tribe leaders: Tide-Priestess Marena (AG), Abyssal Sovereign Thal (PE), Leviathan-Binder Morgause (E), Corsair Finn Saltmoor (CG). Fantasy RPG sea-tribe garb, bioluminescent underwater lighting, alignment coding, concept art, professional illustration, detailed",
+    "style": "concept_art"
+  },
+  {
+    "file": "0d4b941a-a933-4d22-9acb-854e56a6adb8.png",
+    "assetId": "0d4b941a-a933-4d22-9acb-854e56a6adb8",
+    "category": "Character — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Hero portrait set for Arcane/Energy theocracy and High Tech mega-corp leaders: shielded casters and corporate execs (CEO Adrian Sterling PE, Chief Ethicist Dr Grace Sterling AG). Robed energy-wielders vs sleek suited capitalists, alignment lighting, concept art, professional illustration, detailed",
+    "style": "concept_art"
+  },
+  {
+    "file": "401e256f-97a7-4f5f-81cd-c301240390d4.png",
+    "assetId": "401e256f-97a7-4f5f-81cd-c301240390d4",
+    "category": "Object — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Player Base outpost sprite set across levels showing added hard-point slots as progression reward, walled command center, 2.5D anchored footprint, damaged and repaired variants, gold completion pie-sweep glow, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "89afc28a-1c2c-42e4-b72e-22eb7eb92552.png",
+    "assetId": "89afc28a-1c2c-42e4-b72e-22eb7eb92552",
+    "category": "Object — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Structure sprite sheet — aerial & defensive: Balloons, Runway, Walls, Moats, Traps, Murder Holes. Lifecycle states Placing/Building/Aiming/Firing/Damaged/Destroyed/Upgrading 1-2-3, weapon-layer rotation, 2.5D with cast shadow, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "76673249-e536-49d2-af93-b6298d99f542.png",
+    "assetId": "76673249-e536-49d2-af93-b6298d99f542",
+    "category": "Object — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Structure sprite sheet — production buildings: Blacksmith, Armory, Barracks, Stables, Science Lab. Each with lifecycle states Placing(ghost)/Building/Complete/Damaged/Destroyed/Upgrading T1-T2-T3. 2.5D footprint anchor, cast soft shadow, faction-neutral fort palette, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "7b44df4c-e39a-4119-9045-2ac6368f92fc.png",
+    "assetId": "7b44df4c-e39a-4119-9045-2ac6368f92fc",
+    "category": "Background — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nBackground: Clearing/Field biome battlefield backdrop: open grassland with grass, bushes, shadow-casting trees, low/mid/high ground bands, drifting cloud overhead layer, sun-directional lighting for consistent shadows, 2.5D layered painter's-order world tile, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "4ea2405b-f238-4f2b-9fa4-12fd7246caae.png",
+    "assetId": "4ea2405b-f238-4f2b-9fa4-12fd7246caae",
+    "category": "Background — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nBackground: Mountain biome backdrop: elevation bands, high-ground plateaus and chokepoints, rocky terrain, sparse trees with shadows, drifting clouds, 2.5D layered fixed-pitch, isometric 3D, clean render, game UI style",
+    "style": "isometric"
+  },
+  {
+    "file": "eb935bcc-6694-48d2-ad65-4e21a2976530.png",
+    "assetId": "eb935bcc-6694-48d2-ad65-4e21a2976530",
+    "category": "Object — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Damage-type impact FX sprite sheet with redundant coding: Kinetic grey chevron sharp burst, Fire orange flame rising flicker, Poison green droplet pulsing cloud, Concussion blue-white ring shockwave, Electric cyan bolt jitter, Frost pale-blue crystal freeze. Each icon+motion frames, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "523ffb16-84d1-4e74-9c87-71364376113c.png",
+    "assetId": "523ffb16-84d1-4e74-9c87-71364376113c",
+    "category": "Object — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Muzzle-flash and projectile FX sheet: brief light flash with smoke/sparks, traveling tracers, ballistic artillery shells lobbed arcs, hitscan energy beams, guided missile trails. Matched to weapon classes, transparent bg, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "9d5c045e-adda-468d-87aa-dcc31e3d2dc2.png",
+    "assetId": "9d5c045e-adda-468d-87aa-dcc31e3d2dc2",
+    "category": "Object — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Environment & motion FX sheet: dirt/dust movement trails scaled by unit mass, water ripples and noisy wakes, structure construction rising dust, damage smoke, destruction dust+debris and rubble decal, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "7de167d2-e5bd-4f37-bb88-8f12ff61a864.png",
+    "assetId": "7de167d2-e5bd-4f37-bb88-8f12ff61a864",
+    "category": "Object — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Environment & motion FX sheet: dirt/dust movement trails scaled by unit mass, water ripples and noisy wakes, structure construction rising dust, damage smoke, destruction dust+debris and rubble decal, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "4b3e9fed-5f0b-44dc-bc90-86083ae82816.png",
+    "assetId": "4b3e9fed-5f0b-44dc-bc90-86083ae82816",
+    "category": "Object — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Placement preview overlays: translucent structure ghost with green valid / red invalid tint, dashed range circle for selected structures, deploy target marker, 2.5D anchored, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "aaf403d9-10a6-4910-a735-ad5e4b8f108e.png",
+    "assetId": "aaf403d9-10a6-4910-a735-ad5e4b8f108e",
+    "category": "Object — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Status effect indicators floating over units: Burning, Poisoned, Slowed, Stunned — each distinct icon+color+motion, redundant-coded per accessibility, small persistent badges, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "eec90380-c734-42e1-8fb6-14b1bf79d309.png",
+    "assetId": "eec90380-c734-42e1-8fb6-14b1bf79d309",
+    "category": "UI Element — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nUI Element: Main HUD frame (screen-space, never rotates): unit/structure deploy list panel with live gold pricing, gold counter, wave indicator, minimap. Militaristic BULWARK theme, clean flat readable layout, single-verb touch/mouse friendly, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "3b55f1c7-dac9-459e-a84b-b60374eda1df.png",
+    "assetId": "3b55f1c7-dac9-459e-a84b-b60374eda1df",
+    "category": "UI Element — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nUI Element: Structure contextual menu popup window: name, damage bar, level, buttons for Upgrade with price, Repair, Sell with sell price. Compact panel with dashed range circle callout, flat readable, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "1a762599-78c0-452f-ac6e-c12e4a773462.png",
+    "assetId": "1a762599-78c0-452f-ac6e-c12e4a773462",
+    "category": "UI Element — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nUI Element: Main Menu screen layout: Play, Continents, Replays (battle log), Settings, Accessibility. BULWARK branded, faction-tinted background, flat design UI panels, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "bc5fd536-df35-4047-a608-4e7beb363c7c.png",
+    "assetId": "bc5fd536-df35-4047-a608-4e7beb363c7c",
+    "category": "UI Element — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nUI Element: Faction select / continent map screen: nine-node directed counter graph arranged as a globe/continent progression, locked vs unlocked faction badges, earn-by-beating unlock indicators, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "4018b1a5-5a3e-4136-a233-1274290372d5.png",
+    "assetId": "4018b1a5-5a3e-4136-a233-1274290372d5",
+    "category": "UI Element — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nUI Element: Accessibility & settings panel: colour-blind palette toggles (Protanopia/Deuteranopia/Tritanopia), reduce-motion camera toggle, captions, input remap. Clean flat form controls, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "c89f61de-f11f-4c8b-9c62-b0c5b4bdd59f.png",
+    "assetId": "c89f61de-f11f-4c8b-9c62-b0c5b4bdd59f",
+    "category": "UI Element — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nUI Element: Deploy loop unit card set: per-unit tile with silhouette thumbnail, gold cost, tier stars, armor/damage-type icons, affordability state. Flat consistent card frames, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "025494e4-3953-49d4-9405-71d820484c10.png",
+    "assetId": "025494e4-3953-49d4-9405-71d820484c10",
+    "category": "Icon — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nIcon: Nine faction emblem icons: Ground/Powder, Air, High Tech, Artillery, Water, Arcane/Energy, Space Tech, Dark Energy, Greenies/Chem. Each a distinct crest matching trope and palette, 1:1 badge set, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "0140d30f-df7e-42da-a226-a9d636eb3722.png",
+    "assetId": "0140d30f-df7e-42da-a226-a9d636eb3722",
+    "category": "Icon — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nIcon: Eight shape-class silhouette icons: Troops, Trucks, Tanks, Artillery, Heavy Tanks, Copters, Planes, Missiles. Instantly readable role silhouettes for unit list, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "94dd41f8-6579-4965-81fd-ffa213c6b0d5.png",
+    "assetId": "94dd41f8-6579-4965-81fd-ffa213c6b0d5",
+    "category": "Icon — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nIcon: Nine alignment symbols: Angelic Good, Pure Good, Good, Chaotic Good, Neutral, Chaotic Evil, Evil, Pure Evil, Dark Evil — symmetric spectrum glyphs from radiant to dark, conviction-tiered ornamentation, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "15cf72c6-15d7-4ed9-a23f-e2f0488dd104.png",
+    "assetId": "15cf72c6-15d7-4ed9-a23f-e2f0488dd104",
+    "category": "Icon — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nIcon: Six damage-type icons and five armor-class icons: Kinetic chevron, Fire flame, Poison droplet, Concussion ring, Electric bolt, Frost crystal; Organic, Machinery, Aircraft, Structure, Energy armor badges, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "61128747-11cf-413b-93f6-f34f061480e0.png",
+    "assetId": "61128747-11cf-413b-93f6-f34f061480e0",
+    "category": "Icon — Bulwark MM Assets",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nIcon: Action & economy UI icons: gold coin, upgrade arrow, repair wrench, sell tag, build, camera-rotate, radar, vision-eye, scout. Consistent flat icon family, flat design, minimal, clean vectors, bold color",
+    "style": "flat_design"
+  },
+  {
+    "file": "2a4062cc-57f8-45e2-90c2-b8a4e1ccc8dd.png",
+    "assetId": "2a4062cc-57f8-45e2-90c2-b8a4e1ccc8dd",
+    "category": "",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nGeneric menu background for Bulwark game with no text of copy expect logo branding, cinematic lighting, anamorphic lens, film grain",
+    "style": "cinematic"
+  },
+  {
+    "file": "6f9c4d9c-730d-4c14-bec8-6c19e5d0d9c7.png",
+    "assetId": "6f9c4d9c-730d-4c14-bec8-6c19e5d0d9c7",
+    "category": "",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nGeneric menu background for Bulwark game, cinematic lighting, anamorphic lens, film grain",
+    "style": "cinematic"
+  },
+  {
+    "file": "41cbd8b8-8ef1-4c1f-bdda-4f676e6a2df9.png",
+    "assetId": "41cbd8b8-8ef1-4c1f-bdda-4f676e6a2df9",
+    "category": "",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nGeneric menu background for Bulwark game with no text of copy, cinematic lighting, anamorphic lens, film grain",
+    "style": "cinematic"
+  },
+  {
+    "file": "1b43c121-fcaa-4b50-a46c-967284774d41.png",
+    "assetId": "1b43c121-fcaa-4b50-a46c-967284774d41",
+    "category": "",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nGeneric menu background for Bulwark game with no text of copy, cinematic lighting, anamorphic lens, film grain",
+    "style": "cinematic"
+  },
+  {
+    "file": "a22cc716-54aa-4212-8a8a-7e92b2a3ec00.png",
+    "assetId": "a22cc716-54aa-4212-8a8a-7e92b2a3ec00",
+    "category": "",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nBulwark war room background for menu, cinematic lighting, anamorphic lens, film grain",
+    "style": "cinematic"
+  },
+  {
+    "file": "f48fbf36-f6b9-42f4-a9f5-c04d7fd55a12.png",
+    "assetId": "f48fbf36-f6b9-42f4-a9f5-c04d7fd55a12",
+    "category": "",
+    "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation — Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis — *Bulwark*  **Version:** 2.0 · **Date:** 2025-06-12 · **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players — who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nBulwark war room background for menu, cinematic lighting, anamorphic lens, film grain",
+    "style": "cinematic"
+  },
+  {
+    "file": "57537b19-5ef1-44b4-9ae9-3bb69aa6a0f9.png",
+    "assetId": "57537b19-5ef1-44b4-9ae9-3bb69aa6a0f9",
+    "category": "sprite:top-down-view-of-4-types-of-separated-ro",
+    "prompt": "Top down view of 4 types of separated rocks for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "62590df8-852b-479e-8271-f87f8b82f08a.png",
+    "assetId": "62590df8-852b-479e-8271-f87f8b82f08a",
+    "category": "sprite:top-down-view-of-4-types-of-separated-ro",
+    "prompt": "Top down view of 4 types of separated rocks for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "11a0f78c-197c-4d15-825a-a8ec98d891a4.png",
+    "assetId": "11a0f78c-197c-4d15-825a-a8ec98d891a4",
+    "category": "sprite:top-down-view-of-4-types-of-separated-gr",
+    "prompt": "Top down view of 4 types of separated grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "8def88ff-2b89-4dd5-bbc8-ca1ff032931c.png",
+    "assetId": "8def88ff-2b89-4dd5-bbc8-ca1ff032931c",
+    "category": "sprite:top-down-view-of-4-types-of-separated-gr",
+    "prompt": "Top down view of 4 types of separated grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "c9ca3442-cce1-4853-9318-fef365a0f071.png",
+    "assetId": "c9ca3442-cce1-4853-9318-fef365a0f071",
+    "category": "sprite:top-down-view-of-4-types-of-separated-ro",
+    "prompt": "Top down view of 4 types of separated rocks for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "4482f583-c0f0-4dd7-841c-dfb33ab4100e.png",
+    "assetId": "4482f583-c0f0-4dd7-841c-dfb33ab4100e",
+    "category": "sprite:top-down-view-of-4-types-of-separated-gr",
+    "prompt": "Top down view of 4 types of separated grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "07e9b1da-13bd-4b47-938e-9b1abf9698b1.png",
+    "assetId": "07e9b1da-13bd-4b47-938e-9b1abf9698b1",
+    "category": "sprite:top-down-view-of-4-types-of-separated-ro",
+    "prompt": "Top down view of 4 types of separated rocks for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "8080123c-1cde-484d-9e0f-d452aebec0b3.png",
+    "assetId": "8080123c-1cde-484d-9e0f-d452aebec0b3",
+    "category": "sprite-atlas:top-down-view-of-4-types-of-separated-ro",
+    "prompt": "Top down view of 4 types of separated rocks for sprite sheet — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "4a68af83-2d1a-44fa-8ce5-0cef411d81a5.png",
+    "assetId": "4a68af83-2d1a-44fa-8ce5-0cef411d81a5",
+    "category": "sprite:top-down-view-of-4-types-of-separated-gr",
+    "prompt": "Top down view of 4 types of separated grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "ff37f7e0-ae13-4e90-9209-930e6b8bedf5.png",
+    "assetId": "ff37f7e0-ae13-4e90-9209-930e6b8bedf5",
+    "category": "sprite:top-down-view-of-4-types-of-separated-bu",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "a4ea29df-2b47-41d8-9763-26d25840978b.png",
+    "assetId": "a4ea29df-2b47-41d8-9763-26d25840978b",
+    "category": "sprite-atlas:top-down-view-of-4-types-of-separated-gr",
+    "prompt": "Top down view of 4 types of separated grass for sprite sheet — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "418c4a87-c177-408b-9d66-9129da1cffe4.png",
+    "assetId": "418c4a87-c177-408b-9d66-9129da1cffe4",
+    "category": "sprite:top-down-view-of-4-types-of-separated-bu",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "0cd5ded0-2878-4743-a97a-c7095e494d1c.png",
+    "assetId": "0cd5ded0-2878-4743-a97a-c7095e494d1c",
+    "category": "sprite:top-down-view-of-4-types-of-separated-bu",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "93b035fd-03f9-4ac0-9123-b13d3eeb6b4e.png",
+    "assetId": "93b035fd-03f9-4ac0-9123-b13d3eeb6b4e",
+    "category": "sprite:top-down-view-of-4-types-of-separated-bu",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "bb92313e-2b4d-41ff-8905-1c8f72f904a4.png",
+    "assetId": "bb92313e-2b4d-41ff-8905-1c8f72f904a4",
+    "category": "sprite-atlas:top-down-view-of-4-types-of-separated-bu",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "928f1522-36c0-408f-a4a6-2bfdb4de8fd7.png",
+    "assetId": "928f1522-36c0-408f-a4a6-2bfdb4de8fd7",
+    "category": "sprite:top-down-view-of-4-types-of-separated-fl",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "522b11f4-2274-4366-a60c-4c9209d3faf1.png",
+    "assetId": "522b11f4-2274-4366-a60c-4c9209d3faf1",
+    "category": "sprite:top-down-view-of-4-types-of-separated-fl",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "5278f0ed-a2e5-4690-9fe1-99647a09e93e.png",
+    "assetId": "5278f0ed-a2e5-4690-9fe1-99647a09e93e",
+    "category": "sprite:top-down-view-of-4-types-of-separated-fl",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "8f946645-f233-4667-9ef5-106f6128f4ad.png",
+    "assetId": "8f946645-f233-4667-9ef5-106f6128f4ad",
+    "category": "sprite:top-down-view-of-4-types-of-separated-fl",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "020185b3-6584-4eb0-baef-e3a31dbb281a.png",
+    "assetId": "020185b3-6584-4eb0-baef-e3a31dbb281a",
+    "category": "sprite-atlas:top-down-view-of-4-types-of-separated-fl",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "4a94680a-b7ab-4980-995d-a44e56e6f3d8.png",
+    "assetId": "4a94680a-b7ab-4980-995d-a44e56e6f3d8",
+    "category": "sprite:top-down-view-of-4-types-of-separated-tr",
+    "prompt": "Top down view of 4 types of separated tree tops for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "10db434e-b0d9-48a0-922f-effee74d4a68.png",
+    "assetId": "10db434e-b0d9-48a0-922f-effee74d4a68",
+    "category": "sprite:top-down-view-of-4-types-of-separated-tr",
+    "prompt": "Top down view of 4 types of separated tree tops for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "6d337562-4309-42b2-9888-0457352d25fe.png",
+    "assetId": "6d337562-4309-42b2-9888-0457352d25fe",
+    "category": "sprite:top-down-view-of-4-types-of-separated-tr",
+    "prompt": "Top down view of 4 types of separated tree tops for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "88fb81bd-e512-4a92-b864-52fc7e4e7fc2.png",
+    "assetId": "88fb81bd-e512-4a92-b864-52fc7e4e7fc2",
+    "category": "sprite:top-down-view-of-4-types-of-separated-tr",
+    "prompt": "Top down view of 4 types of separated tree tops for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "aa84e0f0-bc40-40a5-a8f7-ba12ecfa8f69.png",
+    "assetId": "aa84e0f0-bc40-40a5-a8f7-ba12ecfa8f69",
+    "category": "sprite-atlas:top-down-view-of-4-types-of-separated-tr",
+    "prompt": "Top down view of 4 types of separated tree tops for sprite sheet — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "c341e8ff-935d-4962-98d5-075a428df7d0.png",
+    "assetId": "c341e8ff-935d-4962-98d5-075a428df7d0",
+    "category": "sprite:top-down-view-of-4-types-of-separated-fl",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "280b93d2-e2a1-4fde-b4b8-f6a3c347dbae.png",
+    "assetId": "280b93d2-e2a1-4fde-b4b8-f6a3c347dbae",
+    "category": "sprite:top-down-view-of-4-types-of-separated-fl",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "aaf0d053-6138-4e80-8098-18e39d82002d.png",
+    "assetId": "aaf0d053-6138-4e80-8098-18e39d82002d",
+    "category": "sprite:top-down-view-of-4-types-of-separated-fl",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "40059b23-85a4-4039-86a4-8e93b5c4c0b1.png",
+    "assetId": "40059b23-85a4-4039-86a4-8e93b5c4c0b1",
+    "category": "sprite-atlas:top-down-view-of-4-types-of-separated-fl",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "55be0bbb-cc0a-4d7b-8610-b800b8602997.png",
+    "assetId": "55be0bbb-cc0a-4d7b-8610-b800b8602997",
+    "category": "sprite:top-down-view-of-4-types-of-separated-bu",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "7c12fbdf-edd9-49fc-9c78-98b5581e13a4.png",
+    "assetId": "7c12fbdf-edd9-49fc-9c78-98b5581e13a4",
+    "category": "sprite:top-down-view-of-4-types-of-separated-bu",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "9f2d2d20-81e9-4543-9a9f-944ff3fdf7f9.png",
+    "assetId": "9f2d2d20-81e9-4543-9a9f-944ff3fdf7f9",
+    "category": "sprite:top-down-view-of-4-types-of-separated-bu",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "910df902-0560-4a12-96b1-31063508b981.png",
+    "assetId": "910df902-0560-4a12-96b1-31063508b981",
+    "category": "sprite:top-down-view-of-4-types-of-separated-bu",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "e6b53975-fba0-49de-8449-36ab515b2e81.png",
+    "assetId": "e6b53975-fba0-49de-8449-36ab515b2e81",
+    "category": "sprite-atlas:top-down-view-of-4-types-of-separated-bu",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "65912aa6-b2bb-4925-a28a-197e54aab9b1.png",
+    "assetId": "65912aa6-b2bb-4925-a28a-197e54aab9b1",
+    "category": "sprite:top-down-view-of-4-types-of-separated-gr",
+    "prompt": "Top down view of 4 types of separated grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "80d69f21-d089-4e72-949e-ff9f503b7a3d.png",
+    "assetId": "80d69f21-d089-4e72-949e-ff9f503b7a3d",
+    "category": "sprite:top-down-view-of-4-types-of-separated-gr",
+    "prompt": "Top down view of 4 types of separated grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "c69009f1-1504-42bc-bcf9-ecdef4174ed2.png",
+    "assetId": "c69009f1-1504-42bc-bcf9-ecdef4174ed2",
+    "category": "sprite:top-down-view-of-4-types-of-separated-gr",
+    "prompt": "Top down view of 4 types of separated grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "740e619a-97c7-4627-a6c9-acf8c001fac3.png",
+    "assetId": "740e619a-97c7-4627-a6c9-acf8c001fac3",
+    "category": "sprite:top-down-view-of-4-types-of-separated-gr",
+    "prompt": "Top down view of 4 types of separated grass for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "5662e222-0e44-468d-9961-816c52bab788.png",
+    "assetId": "5662e222-0e44-468d-9961-816c52bab788",
+    "category": "sprite-atlas:top-down-view-of-4-types-of-separated-gr",
+    "prompt": "Top down view of 4 types of separated grass for sprite sheet — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "35a5236d-f212-4fc1-bf35-2fe62d194b1a.png",
+    "assetId": "35a5236d-f212-4fc1-bf35-2fe62d194b1a",
+    "category": "sprite:art_8_top",
+    "prompt": "Top down view of 4 types of separated rocks for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "728c09cb-7706-4da1-a405-37e0f3a96e5b.png",
+    "assetId": "728c09cb-7706-4da1-a405-37e0f3a96e5b",
+    "category": "sprite:art_8_top",
+    "prompt": "Top down view of 4 types of separated rocks for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c5a92a69-ee58-4583-b017-a1cb4a1d9681.png",
+    "assetId": "c5a92a69-ee58-4583-b017-a1cb4a1d9681",
+    "category": "sprite:art_8_top",
+    "prompt": "Top down view of 4 types of separated rocks for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "84ffc44c-095a-48ce-9cdd-bca78d6ce3b2.png",
+    "assetId": "84ffc44c-095a-48ce-9cdd-bca78d6ce3b2",
+    "category": "sprite:art_8_top",
+    "prompt": "Top down view of 4 types of separated rocks for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "70aa269d-685f-4f00-b16a-95f4e6565e7e.png",
+    "assetId": "70aa269d-685f-4f00-b16a-95f4e6565e7e",
+    "category": "sprite-atlas:art_8_top",
+    "prompt": "Top down view of 4 types of separated rocks for sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "8a9e1c3a-8907-4583-ac09-968b309ae495.png",
+    "assetId": "8a9e1c3a-8907-4583-ac09-968b309ae495",
+    "category": "sprite:art_34_top",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "782e5d11-344e-46c1-b5fd-067f7b2ca41a.png",
+    "assetId": "782e5d11-344e-46c1-b5fd-067f7b2ca41a",
+    "category": "sprite:art_34_top",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "f8fcf810-3cab-450b-8e20-d6965240774f.png",
+    "assetId": "f8fcf810-3cab-450b-8e20-d6965240774f",
+    "category": "sprite:art_34_top",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "db674806-0d7e-4f0a-8e52-66e8729b3414.png",
+    "assetId": "db674806-0d7e-4f0a-8e52-66e8729b3414",
+    "category": "sprite-atlas:art_34_top",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "5cdb40de-6ee4-4201-8e82-71ba6f8dab45.png",
+    "assetId": "5cdb40de-6ee4-4201-8e82-71ba6f8dab45",
+    "category": "sprite:art_23_top",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "37910561-1f99-42c1-9c70-e7735fc86458.png",
+    "assetId": "37910561-1f99-42c1-9c70-e7735fc86458",
+    "category": "sprite:art_23_top",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "7a83a60e-3e75-4ed1-8563-b88ffa5ee0d1.png",
+    "assetId": "7a83a60e-3e75-4ed1-8563-b88ffa5ee0d1",
+    "category": "sprite:art_23_top",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "6ccaf000-c962-4c4c-bbd5-67d28940b60b.png",
+    "assetId": "6ccaf000-c962-4c4c-bbd5-67d28940b60b",
+    "category": "sprite:art_23_top",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "68412e1c-54f2-4554-b096-fba233eb3ad8.png",
+    "assetId": "68412e1c-54f2-4554-b096-fba233eb3ad8",
+    "category": "sprite:art_23_top",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "712524eb-f4d9-4516-a8bd-21c94234872e.png",
+    "assetId": "712524eb-f4d9-4516-a8bd-21c94234872e",
+    "category": "sprite-atlas:art_23_top",
+    "prompt": "Top down view of 4 types of separated flat ground cover grass for sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "0e7eab7a-ad61-420c-8652-54b9822fbb97.png",
+    "assetId": "0e7eab7a-ad61-420c-8652-54b9822fbb97",
+    "category": "sprite:art_29_top",
+    "prompt": "Top down view of 4 types of separated tree tops for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b67394a4-a7cb-43a6-8b83-26557b86a28a.png",
+    "assetId": "b67394a4-a7cb-43a6-8b83-26557b86a28a",
+    "category": "sprite:art_29_top",
+    "prompt": "Top down view of 4 types of separated tree tops for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "33f71d7f-30b4-4002-acc8-44fb6bb6d7a8.png",
+    "assetId": "33f71d7f-30b4-4002-acc8-44fb6bb6d7a8",
+    "category": "sprite:art_29_top",
+    "prompt": "Top down view of 4 types of separated tree tops for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "22e50fe5-6500-41fa-9037-5e5f09dc299d.png",
+    "assetId": "22e50fe5-6500-41fa-9037-5e5f09dc299d",
+    "category": "sprite:art_29_top",
+    "prompt": "Top down view of 4 types of separated tree tops for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "2139f216-14c6-417b-9bdd-feba37d6ccac.png",
+    "assetId": "2139f216-14c6-417b-9bdd-feba37d6ccac",
+    "category": "sprite-atlas:art_29_top",
+    "prompt": "Top down view of 4 types of separated tree tops for sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "6af4cc79-bffe-46ee-bd2d-3047ea7da7fc.png",
+    "assetId": "6af4cc79-bffe-46ee-bd2d-3047ea7da7fc",
+    "category": "sprite:art_17_top",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "93f5eab2-62b0-48bf-b88f-559b067b4f30.png",
+    "assetId": "93f5eab2-62b0-48bf-b88f-559b067b4f30",
+    "category": "sprite:art_17_top",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "ba6c21cf-296e-4a46-9543-d4cf6b3f73bb.png",
+    "assetId": "ba6c21cf-296e-4a46-9543-d4cf6b3f73bb",
+    "category": "sprite:art_17_top",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b4bb3a32-51f0-4d93-a3fb-d9056553fdcd.png",
+    "assetId": "b4bb3a32-51f0-4d93-a3fb-d9056553fdcd",
+    "category": "sprite:art_17_top",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "73642630-6669-4c84-a1d7-c73739ab44bd.png",
+    "assetId": "73642630-6669-4c84-a1d7-c73739ab44bd",
+    "category": "sprite-atlas:art_17_top",
+    "prompt": "Top down view of 4 types of separated bushes for sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "675c41da-bf69-47fb-b50d-d554729cfbbc.png",
+    "assetId": "675c41da-bf69-47fb-b50d-d554729cfbbc",
+    "category": "sprite:top-down-view-of-4-types-of-separated-ti-2",
+    "prompt": "Top down view of 4 types of separated tiny flower bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "33fa5653-d3b2-42d4-a73e-759ea535533b.png",
+    "assetId": "33fa5653-d3b2-42d4-a73e-759ea535533b",
+    "category": "sprite:top-down-view-of-4-types-of-separated-ti-2",
+    "prompt": "Top down view of 4 types of separated tiny flower bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "20e82556-b854-43d1-a292-5fdf2d1d763a.png",
+    "assetId": "20e82556-b854-43d1-a292-5fdf2d1d763a",
+    "category": "sprite:top-down-view-of-4-types-of-separated-ti-2",
+    "prompt": "Top down view of 4 types of separated tiny flower bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "2223f628-b03a-456b-887b-11ff8c652b33.png",
+    "assetId": "2223f628-b03a-456b-887b-11ff8c652b33",
+    "category": "sprite:top-down-view-of-4-types-of-separated-ti-2",
+    "prompt": "Top down view of 4 types of separated tiny flower bushes for sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "308f86c7-6cb4-4336-bca2-b63bc149d457.png",
+    "assetId": "308f86c7-6cb4-4336-bca2-b63bc149d457",
+    "category": "sprite-atlas:top-down-view-of-4-types-of-separated-ti-2",
+    "prompt": "Top down view of 4 types of separated tiny flower bushes for sprite sheet — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "9e5b237d-3e27-4131-a0df-6ae783088b4a.png",
+    "assetId": "9e5b237d-3e27-4131-a0df-6ae783088b4a",
+    "category": "sprite:envoy-lyra-9-the-leader-of-the-space-tec-3",
+    "prompt": "Envoy Lyra-9 the leader of the Space Tech faction",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "61c2b75b-fc8f-4233-86cb-904da8b0740e.png",
+    "assetId": "61c2b75b-fc8f-4233-86cb-904da8b0740e",
+    "category": "sprite-atlas:envoy-lyra-9-the-leader-of-the-space-tec-3",
+    "prompt": "Envoy Lyra-9 the leader of the Space Tech faction — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "7cd3487a-9253-4455-a736-c909879fff8f.png",
+    "assetId": "7cd3487a-9253-4455-a736-c909879fff8f",
+    "category": "sprite:tide-priestess-marena-leader-of-the-wate-3",
+    "prompt": "Tide-Priestess Marena leader of the Water faction",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "94b25502-812c-4436-9b5d-43ae450b05b7.png",
+    "assetId": "94b25502-812c-4436-9b5d-43ae450b05b7",
+    "category": "sprite-atlas:tide-priestess-marena-leader-of-the-wate-3",
+    "prompt": "Tide-Priestess Marena leader of the Water faction — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "c2b58959-c774-4868-87ee-3b455fa9373b.png",
+    "assetId": "c2b58959-c774-4868-87ee-3b455fa9373b",
+    "category": "sprite:mother-spore-ilya-leader-of-the-green-in-1",
+    "prompt": "Mother-Spore Ilya leader of the Green Insect faction",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "34e4ea21-537f-429e-a95b-47df64a12536.png",
+    "assetId": "34e4ea21-537f-429e-a95b-47df64a12536",
+    "category": "sprite-atlas:mother-spore-ilya-leader-of-the-green-in-1",
+    "prompt": "Mother-Spore Ilya leader of the Green Insect faction — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "378ac1f2-4f03-4a42-a350-76a3e120ce5f.png",
+    "assetId": "378ac1f2-4f03-4a42-a350-76a3e120ce5f",
+    "category": "sprite:chaplain-gunner-ruth-bellamy-leader-of-t-2",
+    "prompt": "Chaplain-Gunner Ruth Bellamy leader of the Artillery faction",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "53ba8395-7416-4d0c-8c4d-b2db969714ed.png",
+    "assetId": "53ba8395-7416-4d0c-8c4d-b2db969714ed",
+    "category": "sprite-atlas:chaplain-gunner-ruth-bellamy-leader-of-t-2",
+    "prompt": "Chaplain-Gunner Ruth Bellamy leader of the Artillery faction — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "c36ea6c4-f90a-4a05-9230-f94dd6bd06db.png",
+    "assetId": "c36ea6c4-f90a-4a05-9230-f94dd6bd06db",
+    "category": "sprite:mother-spore-ilya-leader-of-the-green-in-1",
+    "prompt": "Mother-Spore Ilya leader of the Green Insect faction",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "9c09a67b-0dae-451b-9c5e-86d82e7727a7.png",
+    "assetId": "9c09a67b-0dae-451b-9c5e-86d82e7727a7",
+    "category": "sprite-atlas:mother-spore-ilya-leader-of-the-green-in-1",
+    "prompt": "Mother-Spore Ilya leader of the Green Insect faction — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "d77cd732-b19a-4c8c-ab7d-8feaafc9d86f.png",
+    "assetId": "d77cd732-b19a-4c8c-ab7d-8feaafc9d86f",
+    "category": "sprite:top-down-view-of-a-lady-bug-1",
+    "prompt": "Top down view of a Lady bug",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "14f21acb-d152-4c22-89f2-5760101a08b8.png",
+    "assetId": "14f21acb-d152-4c22-89f2-5760101a08b8",
+    "category": "sprite:top-down-view-of-a-cockroach-1",
+    "prompt": "Top down view of a cockroach",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "7c0ec3cf-ded1-4c90-a12e-c5a9c10c82c3.png",
+    "assetId": "7c0ec3cf-ded1-4c90-a12e-c5a9c10c82c3",
+    "category": "sprite-atlas:top-down-view-of-a-lady-bug-1",
+    "prompt": "Top down view of a Lady bug — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "a3c46b14-b333-4246-8493-515de25d9ec8.png",
+    "assetId": "a3c46b14-b333-4246-8493-515de25d9ec8",
+    "category": "sprite:top-down-view-of-a-dung-beetle-1",
+    "prompt": "Top down view of a Dung Beetle",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "febe3445-e15e-438a-ba4c-85bda42d605e.png",
+    "assetId": "febe3445-e15e-438a-ba4c-85bda42d605e",
+    "category": "sprite-atlas:top-down-view-of-a-dung-beetle-1",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "d202e559-6b5f-44a1-a422-21ce20302edb.png",
+    "assetId": "d202e559-6b5f-44a1-a422-21ce20302edb",
+    "category": "sprite:top-down-view-of-a-purple-moth-1",
+    "prompt": "Top down view of a Purple Moth",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "21d607fe-5099-4f78-9ff5-4c570be233a9.png",
+    "assetId": "21d607fe-5099-4f78-9ff5-4c570be233a9",
+    "category": "sprite:top-down-view-of-a-dragon-fly-1",
+    "prompt": "Top down view of a Dragon Fly",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "aa70181a-cba7-4810-bc9b-f2ab6dcf8229.png",
+    "assetId": "aa70181a-cba7-4810-bc9b-f2ab6dcf8229",
+    "category": "sprite-atlas:top-down-view-of-a-black-moth-with-red-d-1",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "521090e1-37f2-46d3-8e9f-be979fb71158.png",
+    "assetId": "521090e1-37f2-46d3-8e9f-be979fb71158",
+    "category": "sprite-atlas:top-down-view-of-a-purple-moth-1",
+    "prompt": "Top down view of a Purple Moth — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "7364de4d-2f19-4abd-abb0-a39f875e6fb7.png",
+    "assetId": "7364de4d-2f19-4abd-abb0-a39f875e6fb7",
+    "category": "sprite-atlas:top-down-view-of-a-dragon-fly-1",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "c35cb4a8-c92e-4dfb-820f-9c615bb6ffac.png",
+    "assetId": "c35cb4a8-c92e-4dfb-820f-9c615bb6ffac",
+    "category": "sprite:top-down-view-of-a-oxysternon-conspicill-2",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "f4b99e02-2594-4955-ac3a-a6f02dc2daa7.png",
+    "assetId": "f4b99e02-2594-4955-ac3a-a6f02dc2daa7",
+    "category": "sprite:top-down-view-of-a-phanaeus-demon-1",
+    "prompt": "Top down view of a Phanaeus demon",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "6d1fc79a-7057-48d3-902e-ce65780d7eaa.png",
+    "assetId": "6d1fc79a-7057-48d3-902e-ce65780d7eaa",
+    "category": "sprite:top-down-view-of-a-fire-fly-1",
+    "prompt": "Top down view of a Fire fly",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "d9b1d78c-f0d1-44ba-9cdd-cd9d2ed7990c.png",
+    "assetId": "d9b1d78c-f0d1-44ba-9cdd-cd9d2ed7990c",
+    "category": "sprite:top-down-view-of-a-dragon-fly-1",
+    "prompt": "Top down view of a Dragon Fly",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "0b3a76b0-cbcf-40ad-962a-4018c912a499.png",
+    "assetId": "0b3a76b0-cbcf-40ad-962a-4018c912a499",
+    "category": "sprite-atlas:top-down-view-of-a-phanaeus-demon-1",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "3403a002-b079-4b3f-992f-a60c65475ef9.png",
+    "assetId": "3403a002-b079-4b3f-992f-a60c65475ef9",
+    "category": "sprite-atlas:top-down-view-of-a-fire-fly-1",
+    "prompt": "Top down view of a Fire fly — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "d7c817a0-3756-4908-9f69-e84b447bb897.png",
+    "assetId": "d7c817a0-3756-4908-9f69-e84b447bb897",
+    "category": "sprite-atlas:top-down-view-of-a-dragon-fly-1",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet",
+    "style": "stylized_3d"
+  },
+  {
+    "file": "47da28a6-6e14-49d1-ac1c-7b8d7af1260c.png",
+    "assetId": "47da28a6-6e14-49d1-ac1c-7b8d7af1260c",
+    "category": "sprite:art_84_top",
+    "prompt": "Top down view of a Lady bug",
+    "style": "none"
+  },
+  {
+    "file": "efcf5dbf-aab4-4b41-8e77-4db16856116c.png",
+    "assetId": "efcf5dbf-aab4-4b41-8e77-4db16856116c",
+    "category": "sprite-atlas:art_84_top",
+    "prompt": "Top down view of a Lady bug — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "7b102ce0-f9d6-4383-a94f-ed252c33c9b8.png",
+    "assetId": "7b102ce0-f9d6-4383-a94f-ed252c33c9b8",
+    "category": "sprite:art_88_top",
+    "prompt": "Top down view of a cockroach — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "9fa83ae5-fb51-4abe-a24e-086ebe744ec5.png",
+    "assetId": "9fa83ae5-fb51-4abe-a24e-086ebe744ec5",
+    "category": "sprite-atlas:art_88_top",
+    "prompt": "Top down view of a cockroach — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "50d6231d-a43d-4aeb-bfe2-94ad7175b853.png",
+    "assetId": "50d6231d-a43d-4aeb-bfe2-94ad7175b853",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "e2a43ebb-cbff-40c0-9965-1fa70d48c8da.png",
+    "assetId": "e2a43ebb-cbff-40c0-9965-1fa70d48c8da",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "01539ccd-5663-4752-9931-c0ca49f1da6b.png",
+    "assetId": "01539ccd-5663-4752-9931-c0ca49f1da6b",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "88c7e186-0e3e-4804-baca-257f6e9e5e9a.png",
+    "assetId": "88c7e186-0e3e-4804-baca-257f6e9e5e9a",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "abbf972c-4b09-4ad0-8a09-5b0e4f3ded21.png",
+    "assetId": "abbf972c-4b09-4ad0-8a09-5b0e4f3ded21",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "ac05176c-5aa4-40f4-950e-8f40d24f8691.png",
+    "assetId": "ac05176c-5aa4-40f4-950e-8f40d24f8691",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b5deb2ee-917e-46dd-9ee9-449bc94ffce9.png",
+    "assetId": "b5deb2ee-917e-46dd-9ee9-449bc94ffce9",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "6ac74101-6440-473f-a2b6-c06731a1e4fc.png",
+    "assetId": "6ac74101-6440-473f-a2b6-c06731a1e4fc",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "cba95e00-8eb8-42a8-9337-cfd334230424.png",
+    "assetId": "cba95e00-8eb8-42a8-9337-cfd334230424",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "654d6707-e72a-4cf0-acb6-acf0d1c30f9a.png",
+    "assetId": "654d6707-e72a-4cf0-acb6-acf0d1c30f9a",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "3d1cfef8-d414-4296-9e30-e665cc744176.png",
+    "assetId": "3d1cfef8-d414-4296-9e30-e665cc744176",
+    "category": "sprite-atlas:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "63bd34ad-434d-4334-acef-c0c9a3e29ced.png",
+    "assetId": "63bd34ad-434d-4334-acef-c0c9a3e29ced",
+    "category": "sprite:art_110_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "f96323d9-4ce3-41ab-b2c0-76fd7ac8a74f.png",
+    "assetId": "f96323d9-4ce3-41ab-b2c0-76fd7ac8a74f",
+    "category": "sprite-atlas:art_110_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "ee366ab2-c326-4658-b670-0e490eba45af.png",
+    "assetId": "ee366ab2-c326-4658-b670-0e490eba45af",
+    "category": "sprite:art_109_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "cc9b6f99-44ba-4e14-ae64-0ae73c76556e.png",
+    "assetId": "cc9b6f99-44ba-4e14-ae64-0ae73c76556e",
+    "category": "sprite-atlas:art_109_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "8e5db652-59a4-4f32-b71c-a87b9b3f5876.png",
+    "assetId": "8e5db652-59a4-4f32-b71c-a87b9b3f5876",
+    "category": "sprite:art_108_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "cdf7e0a6-271d-479f-9206-6ba3f9e37ed8.png",
+    "assetId": "cdf7e0a6-271d-479f-9206-6ba3f9e37ed8",
+    "category": "sprite:art_108_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b3b92b6c-336c-4022-8526-7ef91ba60fc9.png",
+    "assetId": "b3b92b6c-336c-4022-8526-7ef91ba60fc9",
+    "category": "sprite-atlas:art_108_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "70e479ad-40a4-4db9-9907-2b8739339bb7.png",
+    "assetId": "70e479ad-40a4-4db9-9907-2b8739339bb7",
+    "category": "sprite:art_104_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "f4c49e23-4bc5-4a74-b91a-1004043228c9.png",
+    "assetId": "f4c49e23-4bc5-4a74-b91a-1004043228c9",
+    "category": "sprite-atlas:art_104_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "31e439f3-a3f1-484a-bd3c-4a8945b601a8.png",
+    "assetId": "31e439f3-a3f1-484a-bd3c-4a8945b601a8",
+    "category": "sprite:art_97_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "5113988f-2a79-41ea-a3f6-86a859874271.png",
+    "assetId": "5113988f-2a79-41ea-a3f6-86a859874271",
+    "category": "sprite-atlas:art_97_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "70bc833e-290b-44d1-aeab-7e61cc00a4f7.png",
+    "assetId": "70bc833e-290b-44d1-aeab-7e61cc00a4f7",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "37d196a2-e21f-4cee-89ed-4c2b7e4c797b.png",
+    "assetId": "37d196a2-e21f-4cee-89ed-4c2b7e4c797b",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "5e0d7e9a-962b-4a04-b81d-3612ac9a4a69.png",
+    "assetId": "5e0d7e9a-962b-4a04-b81d-3612ac9a4a69",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "53c7e302-381c-432e-8746-9c231da820ad.png",
+    "assetId": "53c7e302-381c-432e-8746-9c231da820ad",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "955ac019-8512-46bb-9d0d-7cfc880ac805.png",
+    "assetId": "955ac019-8512-46bb-9d0d-7cfc880ac805",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "62ee02b4-56da-4c70-80d7-37769122c5be.png",
+    "assetId": "62ee02b4-56da-4c70-80d7-37769122c5be",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "e92b6f91-3b2d-44d4-886f-7aa3f38f4111.png",
+    "assetId": "e92b6f91-3b2d-44d4-886f-7aa3f38f4111",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "bcdad180-cc10-4aa9-8919-a7a798c4c8f5.png",
+    "assetId": "bcdad180-cc10-4aa9-8919-a7a798c4c8f5",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "1490f814-e9d6-4def-9586-063b9bd5a875.png",
+    "assetId": "1490f814-e9d6-4def-9586-063b9bd5a875",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "9fcbde4a-35db-4278-a2d0-3d249cbbdd62.png",
+    "assetId": "9fcbde4a-35db-4278-a2d0-3d249cbbdd62",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "834a2780-5b39-48dd-ac85-9480bee2d979.png",
+    "assetId": "834a2780-5b39-48dd-ac85-9480bee2d979",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "f86f44a7-00e6-42d0-87ff-5471efef8f3a.png",
+    "assetId": "f86f44a7-00e6-42d0-87ff-5471efef8f3a",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "e77f4cdf-30b5-43d9-892e-5f6e4c9654d1.png",
+    "assetId": "e77f4cdf-30b5-43d9-892e-5f6e4c9654d1",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "8a91c82e-b22f-4bec-abc8-ac31adb2b11c.png",
+    "assetId": "8a91c82e-b22f-4bec-abc8-ac31adb2b11c",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "5d3b72bb-19b6-45f8-9a60-a11cee204c81.png",
+    "assetId": "5d3b72bb-19b6-45f8-9a60-a11cee204c81",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c7e30633-fa5f-4799-b53a-69665aa93211.png",
+    "assetId": "c7e30633-fa5f-4799-b53a-69665aa93211",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "94f78491-a0ea-4f89-be4e-b0e58f02ad52.png",
+    "assetId": "94f78491-a0ea-4f89-be4e-b0e58f02ad52",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "4cd9b8fc-2757-4b59-8185-1cebc7b90601.png",
+    "assetId": "4cd9b8fc-2757-4b59-8185-1cebc7b90601",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "aced550b-7f4f-40a7-a03c-ad81d10c0452.png",
+    "assetId": "aced550b-7f4f-40a7-a03c-ad81d10c0452",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "d043a5b4-38de-41a6-a7d9-f8d6884202f5.png",
+    "assetId": "d043a5b4-38de-41a6-a7d9-f8d6884202f5",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "a07ee32a-0232-40e1-af35-827f5ec6b749.png",
+    "assetId": "a07ee32a-0232-40e1-af35-827f5ec6b749",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "59076641-f89c-49b6-9015-95a9d460832a.png",
+    "assetId": "59076641-f89c-49b6-9015-95a9d460832a",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "eea317a8-4335-4987-8e25-386e2dd40fc4.png",
+    "assetId": "eea317a8-4335-4987-8e25-386e2dd40fc4",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "4730c24a-7d4c-4efd-a59f-d77806410bd9.png",
+    "assetId": "4730c24a-7d4c-4efd-a59f-d77806410bd9",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c38732fa-6bae-447f-91e5-35e37fa9367e.png",
+    "assetId": "c38732fa-6bae-447f-91e5-35e37fa9367e",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "eb1a3f6b-145a-4fb0-84d0-43c4f1ca3f87.png",
+    "assetId": "eb1a3f6b-145a-4fb0-84d0-43c4f1ca3f87",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "f33165ba-a95a-4bd3-89ba-c60b5b1778b8.png",
+    "assetId": "f33165ba-a95a-4bd3-89ba-c60b5b1778b8",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "ead8480f-a4b7-4a60-b4d8-22c1716ade86.png",
+    "assetId": "ead8480f-a4b7-4a60-b4d8-22c1716ade86",
+    "category": "sprite-atlas:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "9036b7cc-87ca-40fb-910b-e7523377988a.png",
+    "assetId": "9036b7cc-87ca-40fb-910b-e7523377988a",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c4123a6e-6f28-4061-9ee8-de82cb40dd02.png",
+    "assetId": "c4123a6e-6f28-4061-9ee8-de82cb40dd02",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "42b694a4-9f11-4764-a6c7-b12e9f7ad0ed.png",
+    "assetId": "42b694a4-9f11-4764-a6c7-b12e9f7ad0ed",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "524a3420-dfe5-48e9-b4ba-1fadbc941ab6.png",
+    "assetId": "524a3420-dfe5-48e9-b4ba-1fadbc941ab6",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "66cdbd53-cfd0-45d3-8f01-3cfd830b2a4d.png",
+    "assetId": "66cdbd53-cfd0-45d3-8f01-3cfd830b2a4d",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "a88e44cc-febc-47b1-824c-05cfeb068e50.png",
+    "assetId": "a88e44cc-febc-47b1-824c-05cfeb068e50",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "19b0bfb9-db0d-44f1-9c09-097be6c0f88b.png",
+    "assetId": "19b0bfb9-db0d-44f1-9c09-097be6c0f88b",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "a3fc9be0-a565-48e0-bdc4-8e5c594d0703.png",
+    "assetId": "a3fc9be0-a565-48e0-bdc4-8e5c594d0703",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "005579e0-f11b-401f-821a-4fad50c96e58.png",
+    "assetId": "005579e0-f11b-401f-821a-4fad50c96e58",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "58082764-86c7-4d98-b0b7-79a4c975a725.png",
+    "assetId": "58082764-86c7-4d98-b0b7-79a4c975a725",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "ba6ecded-2c63-4652-ac2d-62cac6f16432.png",
+    "assetId": "ba6ecded-2c63-4652-ac2d-62cac6f16432",
+    "category": "sprite-atlas:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "3568e88e-e2f5-47ed-aea7-b16e4ed95ad1.png",
+    "assetId": "3568e88e-e2f5-47ed-aea7-b16e4ed95ad1",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "279eb9a5-8198-4236-8529-6bd3ba2b401b.png",
+    "assetId": "279eb9a5-8198-4236-8529-6bd3ba2b401b",
+    "category": "sprite-atlas:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "4f6a6d0c-841a-42d0-a7d6-907eee6df26b.png",
+    "assetId": "4f6a6d0c-841a-42d0-a7d6-907eee6df26b",
+    "category": "sprite:art_85_top",
+    "prompt": "Top down view of a Lady bug",
+    "style": "none"
+  },
+  {
+    "file": "a45d8ba8-e93f-49c5-b4b5-4bedd6bfe86c.png",
+    "assetId": "a45d8ba8-e93f-49c5-b4b5-4bedd6bfe86c",
+    "category": "sprite-atlas:art_85_top",
+    "prompt": "Top down view of a Lady bug — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "852d128b-939a-454a-8912-d9427b9f2d92.png",
+    "assetId": "852d128b-939a-454a-8912-d9427b9f2d92",
+    "category": "sprite:art_93_top",
+    "prompt": "Top down view of a cockroach — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "27336856-452d-4ad9-9508-975da2276cf1.png",
+    "assetId": "27336856-452d-4ad9-9508-975da2276cf1",
+    "category": "sprite-atlas:art_93_top",
+    "prompt": "Top down view of a cockroach — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "6fb70e40-8f24-44ed-96a6-7577f42f31f3.png",
+    "assetId": "6fb70e40-8f24-44ed-96a6-7577f42f31f3",
+    "category": "sprite:art_122_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "eda819be-27d8-475a-8539-d9aa37aa37fe.png",
+    "assetId": "eda819be-27d8-475a-8539-d9aa37aa37fe",
+    "category": "sprite-atlas:art_122_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b3176aae-45e3-43db-8868-b55245b40c57.png",
+    "assetId": "b3176aae-45e3-43db-8868-b55245b40c57",
+    "category": "sprite:art_124_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "0c3905c5-b2d5-4af4-91fa-de2466e0c179.png",
+    "assetId": "0c3905c5-b2d5-4af4-91fa-de2466e0c179",
+    "category": "sprite-atlas:art_124_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "d4f548c7-5156-4e60-a9e6-1de0d6b03bb1.png",
+    "assetId": "d4f548c7-5156-4e60-a9e6-1de0d6b03bb1",
+    "category": "sprite:art_125_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "03ed4a76-dc11-4e0a-bfd5-371cdffed94a.png",
+    "assetId": "03ed4a76-dc11-4e0a-bfd5-371cdffed94a",
+    "category": "sprite:art_125_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "6ac920dd-74a7-455a-b16e-37ce4e4936a0.png",
+    "assetId": "6ac920dd-74a7-455a-b16e-37ce4e4936a0",
+    "category": "sprite-atlas:art_125_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "266e3306-b901-4dc8-adb1-38b1d1d2fe86.png",
+    "assetId": "266e3306-b901-4dc8-adb1-38b1d1d2fe86",
+    "category": "sprite:art_129_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "26e035c1-207d-405f-90b4-f9b65d8ecdb9.png",
+    "assetId": "26e035c1-207d-405f-90b4-f9b65d8ecdb9",
+    "category": "sprite-atlas:art_129_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "911bc73c-e17a-4828-bc8b-c0675ffccf76.png",
+    "assetId": "911bc73c-e17a-4828-bc8b-c0675ffccf76",
+    "category": "sprite:art_130_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "eee6deec-eb0c-41aa-8762-28f3316d6b29.png",
+    "assetId": "eee6deec-eb0c-41aa-8762-28f3316d6b29",
+    "category": "sprite-atlas:art_130_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "5e05a19d-c4de-4054-b2af-5b7a360b4ec6.png",
+    "assetId": "5e05a19d-c4de-4054-b2af-5b7a360b4ec6",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c596fbd9-fed2-40e4-9b8c-7207edc5fc7c.png",
+    "assetId": "c596fbd9-fed2-40e4-9b8c-7207edc5fc7c",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "595a1f39-0aaf-4def-8719-72bb8fcc596d.png",
+    "assetId": "595a1f39-0aaf-4def-8719-72bb8fcc596d",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c179ac51-b6d4-4a77-a3cc-0fa055aafc39.png",
+    "assetId": "c179ac51-b6d4-4a77-a3cc-0fa055aafc39",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c90ca0c0-cde5-4268-945a-0f80a10e0833.png",
+    "assetId": "c90ca0c0-cde5-4268-945a-0f80a10e0833",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "95ce083a-cee8-47af-b0bb-99ab06d22d15.png",
+    "assetId": "95ce083a-cee8-47af-b0bb-99ab06d22d15",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b94018b8-da76-40f6-b988-5539e4d502c9.png",
+    "assetId": "b94018b8-da76-40f6-b988-5539e4d502c9",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "05187d5c-3d40-402d-95ee-b7fdb1613047.png",
+    "assetId": "05187d5c-3d40-402d-95ee-b7fdb1613047",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c887c0a0-596e-4880-87f6-fa6ca83a24cb.png",
+    "assetId": "c887c0a0-596e-4880-87f6-fa6ca83a24cb",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "77abf903-2146-44fe-92c4-0338c5f6f70a.png",
+    "assetId": "77abf903-2146-44fe-92c4-0338c5f6f70a",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "3b333c24-d096-4d05-8dac-fb69b0249181.png",
+    "assetId": "3b333c24-d096-4d05-8dac-fb69b0249181",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "5ae19b69-88e6-4f7d-9fca-ca392d3c6024.png",
+    "assetId": "5ae19b69-88e6-4f7d-9fca-ca392d3c6024",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "1d1b7a11-878f-462f-85d0-db6c04c332ad.png",
+    "assetId": "1d1b7a11-878f-462f-85d0-db6c04c332ad",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "9b5e406a-9150-40ed-81bf-448b0d204fec.png",
+    "assetId": "9b5e406a-9150-40ed-81bf-448b0d204fec",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "5984daba-5891-4fc8-ab6a-923d79cdfc27.png",
+    "assetId": "5984daba-5891-4fc8-ab6a-923d79cdfc27",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "49624a61-c84f-490d-b2c6-4dd02416d11d.png",
+    "assetId": "49624a61-c84f-490d-b2c6-4dd02416d11d",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "31f0e65f-d166-4065-b557-658abf772f08.png",
+    "assetId": "31f0e65f-d166-4065-b557-658abf772f08",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b21d31cd-3ece-4dea-9aad-cfc29b13d7f9.png",
+    "assetId": "b21d31cd-3ece-4dea-9aad-cfc29b13d7f9",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "6c9e2ce8-728a-4767-91b4-5ec7434e18fa.png",
+    "assetId": "6c9e2ce8-728a-4767-91b4-5ec7434e18fa",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "0afa4779-62c0-4ef3-aeb2-d373c88ce674.png",
+    "assetId": "0afa4779-62c0-4ef3-aeb2-d373c88ce674",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "3d211d4d-a55d-4edc-b3da-72ea30c65421.png",
+    "assetId": "3d211d4d-a55d-4edc-b3da-72ea30c65421",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "0395e525-5b7f-4b3d-9e4d-55d33c774fe4.png",
+    "assetId": "0395e525-5b7f-4b3d-9e4d-55d33c774fe4",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c00a1510-9eca-47e6-81ff-8c996308e63d.png",
+    "assetId": "c00a1510-9eca-47e6-81ff-8c996308e63d",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "bc9520fc-f68c-4ae6-bccd-380e6b038b53.png",
+    "assetId": "bc9520fc-f68c-4ae6-bccd-380e6b038b53",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "55d1b5bd-f2f6-4883-b83d-e0db21f0902f.png",
+    "assetId": "55d1b5bd-f2f6-4883-b83d-e0db21f0902f",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "e341f8ff-dccd-4801-9445-86a5f34e8ccf.png",
+    "assetId": "e341f8ff-dccd-4801-9445-86a5f34e8ccf",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "903f61cf-2aca-445a-bbee-43b04b62be51.png",
+    "assetId": "903f61cf-2aca-445a-bbee-43b04b62be51",
+    "category": "sprite:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "524aa97a-0aed-40a0-b586-c5e65c4fba7b.png",
+    "assetId": "524aa97a-0aed-40a0-b586-c5e65c4fba7b",
+    "category": "sprite-atlas:art_133_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "15604812-3ad2-4f49-b8ec-1c574fe6ae2b.png",
+    "assetId": "15604812-3ad2-4f49-b8ec-1c574fe6ae2b",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "abe08602-3552-4df9-8138-2c81e36ba987.png",
+    "assetId": "abe08602-3552-4df9-8138-2c81e36ba987",
+    "category": "sprite-atlas:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "11e3ccc4-a67e-4112-b563-71977c2ced64.png",
+    "assetId": "11e3ccc4-a67e-4112-b563-71977c2ced64",
+    "category": "sprite:art_119_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "10de6624-61eb-45fa-9fbf-30637830e9ba.png",
+    "assetId": "10de6624-61eb-45fa-9fbf-30637830e9ba",
+    "category": "sprite-atlas:art_119_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "83b917ee-d86d-4d2b-b5e7-3264ef98cbe6.png",
+    "assetId": "83b917ee-d86d-4d2b-b5e7-3264ef98cbe6",
+    "category": "sprite:art_134_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "90c68fd9-a8f8-4587-a1d9-6e3b1a59ab5f.png",
+    "assetId": "90c68fd9-a8f8-4587-a1d9-6e3b1a59ab5f",
+    "category": "sprite-atlas:art_134_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "d49bfa87-a387-47f3-a9ee-788f5c858f4d.png",
+    "assetId": "d49bfa87-a387-47f3-a9ee-788f5c858f4d",
+    "category": "sprite:art_141_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "5d2a3a61-7184-4504-baa1-ef500e075be3.png",
+    "assetId": "5d2a3a61-7184-4504-baa1-ef500e075be3",
+    "category": "sprite-atlas:art_141_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "9cb9f1a4-7fea-4e4c-b9a4-f5c47d5571cc.png",
+    "assetId": "9cb9f1a4-7fea-4e4c-b9a4-f5c47d5571cc",
+    "category": "sprite:art_106_top",
+    "prompt": "Top down view of a Lady bug — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "38bff8b4-8c86-4218-8cf7-3ede6bc5fb65.png",
+    "assetId": "38bff8b4-8c86-4218-8cf7-3ede6bc5fb65",
+    "category": "sprite-atlas:art_106_top",
+    "prompt": "Top down view of a Lady bug — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "ade4cef5-10dc-448a-a5fa-e28f5a8e80f0.png",
+    "assetId": "ade4cef5-10dc-448a-a5fa-e28f5a8e80f0",
+    "category": "sprite:art_116_top",
+    "prompt": "Top down view of a cockroach — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "4777af34-34fd-4c46-b905-57d89695c167.png",
+    "assetId": "4777af34-34fd-4c46-b905-57d89695c167",
+    "category": "sprite-atlas:art_116_top",
+    "prompt": "Top down view of a cockroach — sprite sheet — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "deae3a84-6669-48a4-92cd-65df37a8c094.png",
+    "assetId": "deae3a84-6669-48a4-92cd-65df37a8c094",
+    "category": "sprite:art_98_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "443ed70f-425d-4d7a-8710-64e93bf43f4b.png",
+    "assetId": "443ed70f-425d-4d7a-8710-64e93bf43f4b",
+    "category": "sprite-atlas:art_98_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "71991489-e17b-434b-b52e-ad92118467ee.png",
+    "assetId": "71991489-e17b-434b-b52e-ad92118467ee",
+    "category": "sprite:art_139_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "a09ce67f-dc93-46df-baa4-e78045747885.png",
+    "assetId": "a09ce67f-dc93-46df-baa4-e78045747885",
+    "category": "sprite-atlas:art_139_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "63355097-5c72-4985-a9b6-c22cb83f795a.png",
+    "assetId": "63355097-5c72-4985-a9b6-c22cb83f795a",
+    "category": "sprite:art_136_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "766a2293-a849-4bf5-a507-321fe5e7ee29.png",
+    "assetId": "766a2293-a849-4bf5-a507-321fe5e7ee29",
+    "category": "sprite:art_136_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "f1d0a882-fd92-49e5-8e2e-5ce2ee4c2cef.png",
+    "assetId": "f1d0a882-fd92-49e5-8e2e-5ce2ee4c2cef",
+    "category": "sprite-atlas:art_136_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "3ae7963c-be3a-440a-ab4a-b4223e8b3166.png",
+    "assetId": "3ae7963c-be3a-440a-ab4a-b4223e8b3166",
+    "category": "sprite:art_176_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "53b88fa6-d80b-43d5-a907-aca819a89cd9.png",
+    "assetId": "53b88fa6-d80b-43d5-a907-aca819a89cd9",
+    "category": "sprite-atlas:art_176_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "a480f48b-0d7d-4679-8a44-f87856f5d06c.png",
+    "assetId": "a480f48b-0d7d-4679-8a44-f87856f5d06c",
+    "category": "sprite:art_178_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "cd355ec2-a346-47b4-a8ee-38626ba16815.png",
+    "assetId": "cd355ec2-a346-47b4-a8ee-38626ba16815",
+    "category": "sprite-atlas:art_178_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "29bb9a64-9df5-4b62-9693-ddbb97ecdd11.png",
+    "assetId": "29bb9a64-9df5-4b62-9693-ddbb97ecdd11",
+    "category": "sprite:art_180_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b5cce1d4-fd8a-4321-ae17-8870e39c895c.png",
+    "assetId": "b5cce1d4-fd8a-4321-ae17-8870e39c895c",
+    "category": "sprite-atlas:art_180_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "98f94247-8f33-4091-be86-b933ff35fcbc.png",
+    "assetId": "98f94247-8f33-4091-be86-b933ff35fcbc",
+    "category": "sprite:art_182_top",
+    "prompt": "Top down view of a Lady bug — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "05187bc9-44c4-40a1-9b5e-bee39eee9e7a.png",
+    "assetId": "05187bc9-44c4-40a1-9b5e-bee39eee9e7a",
+    "category": "sprite-atlas:art_182_top",
+    "prompt": "Top down view of a Lady bug — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "eec0fba3-34c8-4193-85c3-ffd7f72ed2bc.png",
+    "assetId": "eec0fba3-34c8-4193-85c3-ffd7f72ed2bc",
+    "category": "sprite:art_184_top",
+    "prompt": "Top down view of a cockroach — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "05b55d95-d140-4a0f-b77c-dfd050c879d8.png",
+    "assetId": "05b55d95-d140-4a0f-b77c-dfd050c879d8",
+    "category": "sprite-atlas:art_184_top",
+    "prompt": "Top down view of a cockroach — sprite sheet — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "9ee310fb-6bbc-4499-8d31-2a4bc213b13c.png",
+    "assetId": "9ee310fb-6bbc-4499-8d31-2a4bc213b13c",
+    "category": "sprite:art_186_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "ca46e67d-f0f0-4daa-a6f5-155388b47a40.png",
+    "assetId": "ca46e67d-f0f0-4daa-a6f5-155388b47a40",
+    "category": "sprite-atlas:art_186_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b2ec2122-696c-4a30-9193-54e949b0aa17.png",
+    "assetId": "b2ec2122-696c-4a30-9193-54e949b0aa17",
+    "category": "sprite:art_191_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "32595456-bc27-4016-9bbf-b5dd2f167874.png",
+    "assetId": "32595456-bc27-4016-9bbf-b5dd2f167874",
+    "category": "sprite:art_191_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "526c3afe-39bd-43c5-8767-0a372feb379c.png",
+    "assetId": "526c3afe-39bd-43c5-8767-0a372feb379c",
+    "category": "sprite-atlas:art_191_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "4ef1892f-8164-4552-9e9f-5d503d84ac28.png",
+    "assetId": "4ef1892f-8164-4552-9e9f-5d503d84ac28",
+    "category": "sprite:art_189_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "28252b21-d991-4387-8923-0e374900f378.png",
+    "assetId": "28252b21-d991-4387-8923-0e374900f378",
+    "category": "sprite-atlas:art_189_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "64aba46a-84f3-40cd-a6a9-e1e86180f186.png",
+    "assetId": "64aba46a-84f3-40cd-a6a9-e1e86180f186",
+    "category": "sprite:art_172_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c6c35c4d-e3a2-4515-9882-46095f29ae8d.png",
+    "assetId": "c6c35c4d-e3a2-4515-9882-46095f29ae8d",
+    "category": "sprite-atlas:art_172_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "590a8255-10d2-48e0-b102-ea02fb4f8625.png",
+    "assetId": "590a8255-10d2-48e0-b102-ea02fb4f8625",
+    "category": "sprite:art_84_top",
+    "prompt": "Top down view of a Lady bug",
+    "style": "none"
+  },
+  {
+    "file": "519c2a5b-99ba-4362-90cd-54a933e6f866.png",
+    "assetId": "519c2a5b-99ba-4362-90cd-54a933e6f866",
+    "category": "sprite-atlas:art_84_top",
+    "prompt": "Top down view of a Lady bug — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "4d571a22-a8f7-4718-9deb-1254893f4729.png",
+    "assetId": "4d571a22-a8f7-4718-9deb-1254893f4729",
+    "category": "sprite:art_184_top",
+    "prompt": "Top down view of a cockroach — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "df9fe125-feb0-4b8c-898a-761413a64abd.png",
+    "assetId": "df9fe125-feb0-4b8c-898a-761413a64abd",
+    "category": "sprite-atlas:art_184_top",
+    "prompt": "Top down view of a cockroach — sprite sheet — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "a9080b23-6b0b-4f09-945f-f1443478891a.png",
+    "assetId": "a9080b23-6b0b-4f09-945f-f1443478891a",
+    "category": "sprite:art_186_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "39f0adff-d1c9-4600-a209-30c8c8e69259.png",
+    "assetId": "39f0adff-d1c9-4600-a209-30c8c8e69259",
+    "category": "sprite-atlas:art_186_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "72e7fda6-d8a1-4ee1-975b-14d7907b861e.png",
+    "assetId": "72e7fda6-d8a1-4ee1-975b-14d7907b861e",
+    "category": "sprite:art_189_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b69b3f46-76e4-48e7-b0ce-92a0b8829512.png",
+    "assetId": "b69b3f46-76e4-48e7-b0ce-92a0b8829512",
+    "category": "sprite-atlas:art_189_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "dae370f8-aeef-4576-9f26-6758aedd7bb7.png",
+    "assetId": "dae370f8-aeef-4576-9f26-6758aedd7bb7",
+    "category": "sprite:art_191_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "7270dcdd-dea1-4573-9e06-2ea485193583.png",
+    "assetId": "7270dcdd-dea1-4573-9e06-2ea485193583",
+    "category": "sprite:art_191_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c30efbeb-31c2-4bf3-b3d8-f3c35eba1ed2.png",
+    "assetId": "c30efbeb-31c2-4bf3-b3d8-f3c35eba1ed2",
+    "category": "sprite-atlas:art_191_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "21e2cdc1-031b-4839-a753-83a8f87d1889.png",
+    "assetId": "21e2cdc1-031b-4839-a753-83a8f87d1889",
+    "category": "sprite:art_194_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "da7cac22-f999-43ed-99be-55753b5d0147.png",
+    "assetId": "da7cac22-f999-43ed-99be-55753b5d0147",
+    "category": "sprite-atlas:art_194_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "34823dc5-e719-412a-b2ad-fe0e20408dd2.png",
+    "assetId": "34823dc5-e719-412a-b2ad-fe0e20408dd2",
+    "category": "sprite:art_196_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "e6c1ab68-f306-4997-b6c9-4fbb8a76886f.png",
+    "assetId": "e6c1ab68-f306-4997-b6c9-4fbb8a76886f",
+    "category": "sprite-atlas:art_196_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "662a80b9-d14c-4e14-a5f2-e7ec0e8454a7.png",
+    "assetId": "662a80b9-d14c-4e14-a5f2-e7ec0e8454a7",
+    "category": "sprite:art_198_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "6f8b136d-c742-4c88-b2a2-13f6c06da2bf.png",
+    "assetId": "6f8b136d-c742-4c88-b2a2-13f6c06da2bf",
+    "category": "sprite-atlas:art_198_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "06555ae4-69b0-49db-a382-9cf1f0cf4c40.png",
+    "assetId": "06555ae4-69b0-49db-a382-9cf1f0cf4c40",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "f44cee15-5ef9-415a-a3a1-d4c9c1894c45.png",
+    "assetId": "f44cee15-5ef9-415a-a3a1-d4c9c1894c45",
+    "category": "sprite-atlas:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "a52020ad-8133-4602-9fd6-f57975d5a5d9.png",
+    "assetId": "a52020ad-8133-4602-9fd6-f57975d5a5d9",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "0b9b623c-c92e-45eb-88de-d4c603f380b8.png",
+    "assetId": "0b9b623c-c92e-45eb-88de-d4c603f380b8",
+    "category": "sprite-atlas:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "71289434-9315-45de-b7e6-fc71f67f4e61.png",
+    "assetId": "71289434-9315-45de-b7e6-fc71f67f4e61",
+    "category": "sprite:art_109_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "99999257-9eb6-40dd-8951-cf1be487b278.png",
+    "assetId": "99999257-9eb6-40dd-8951-cf1be487b278",
+    "category": "sprite-atlas:art_109_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "03d8d218-83fd-4aa7-ad14-386b182394a0.png",
+    "assetId": "03d8d218-83fd-4aa7-ad14-386b182394a0",
+    "category": "sprite:art_110_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "4c6e91dd-8ddb-4b82-bcc4-12ec0106f45f.png",
+    "assetId": "4c6e91dd-8ddb-4b82-bcc4-12ec0106f45f",
+    "category": "sprite-atlas:art_110_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "d6cb2eb8-02a2-4715-a90f-e799b1ee08d3.png",
+    "assetId": "d6cb2eb8-02a2-4715-a90f-e799b1ee08d3",
+    "category": "sprite:art_97_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "3d3d9504-8d89-4ed2-843f-9bc1bc516c42.png",
+    "assetId": "3d3d9504-8d89-4ed2-843f-9bc1bc516c42",
+    "category": "sprite-atlas:art_97_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "f727009c-6d59-423c-95b7-c685de42e284.png",
+    "assetId": "f727009c-6d59-423c-95b7-c685de42e284",
+    "category": "sprite:art_104_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "745db96f-9023-4f85-8e25-46c572f31db7.png",
+    "assetId": "745db96f-9023-4f85-8e25-46c572f31db7",
+    "category": "sprite-atlas:art_104_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "03082e15-399c-44c6-bc03-0eda7547692f.png",
+    "assetId": "03082e15-399c-44c6-bc03-0eda7547692f",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "346bd5b5-e959-4114-9f05-ef1ef480dc3b.png",
+    "assetId": "346bd5b5-e959-4114-9f05-ef1ef480dc3b",
+    "category": "sprite-atlas:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "1e042efd-93c0-49cd-825b-191da35e2294.png",
+    "assetId": "1e042efd-93c0-49cd-825b-191da35e2294",
+    "category": "sprite:art_88_top",
+    "prompt": "Top down view of a cockroach — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "6a879746-0b9e-49a1-9099-02239603cf49.png",
+    "assetId": "6a879746-0b9e-49a1-9099-02239603cf49",
+    "category": "sprite-atlas:art_88_top",
+    "prompt": "Top down view of a cockroach — sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "078db6e7-6e70-48cd-8e6e-fa4be800be20.png",
+    "assetId": "078db6e7-6e70-48cd-8e6e-fa4be800be20",
+    "category": "sprite:art_84_top",
+    "prompt": "Top down view of a Lady bug",
+    "style": "none"
+  },
+  {
+    "file": "59ee3814-371f-4505-a1ab-c0c6a1dd4e83.png",
+    "assetId": "59ee3814-371f-4505-a1ab-c0c6a1dd4e83",
+    "category": "sprite-atlas:art_84_top",
+    "prompt": "Top down view of a Lady bug — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "9d13f706-71b8-4693-a279-47a2055bfddb.png",
+    "assetId": "9d13f706-71b8-4693-a279-47a2055bfddb",
+    "category": "sprite:art_84_top",
+    "prompt": "Top down view of a Lady bug",
+    "style": "none"
+  },
+  {
+    "file": "17cda6b1-c844-408c-9158-e5931acb1f6e.png",
+    "assetId": "17cda6b1-c844-408c-9158-e5931acb1f6e",
+    "category": "sprite:art_88_top",
+    "prompt": "Top down view of a cockroach — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "9c1a2071-9c03-4f60-b45d-ba78ecfd89c2.png",
+    "assetId": "9c1a2071-9c03-4f60-b45d-ba78ecfd89c2",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c3edd23e-7e9b-4076-a753-982d9e4cfd87.png",
+    "assetId": "c3edd23e-7e9b-4076-a753-982d9e4cfd87",
+    "category": "sprite:art_104_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "b1a355dd-274e-448a-aaf7-9a4b7935b55d.png",
+    "assetId": "b1a355dd-274e-448a-aaf7-9a4b7935b55d",
+    "category": "sprite:art_97_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "e4dbd556-450d-4f06-9d6f-e1a8cb3c6d09.png",
+    "assetId": "e4dbd556-450d-4f06-9d6f-e1a8cb3c6d09",
+    "category": "sprite:art_110_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "c3575fba-3429-4c81-aeaa-c1aee56438a9.png",
+    "assetId": "c3575fba-3429-4c81-aeaa-c1aee56438a9",
+    "category": "sprite:art_109_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "1c56307a-f81c-48ea-9aa3-8153309ae254.png",
+    "assetId": "1c56307a-f81c-48ea-9aa3-8153309ae254",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "713f9499-c2bb-4a09-a9e6-a497648978a2.png",
+    "assetId": "713f9499-c2bb-4a09-a9e6-a497648978a2",
+    "category": "sprite-atlas:sheet",
+    "prompt": "packed sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "481943ce-90cf-4f73-81b6-432c602a9656.png",
+    "assetId": "481943ce-90cf-4f73-81b6-432c602a9656",
+    "category": "sprite:art_84_top",
+    "prompt": "Top down view of a Lady bug",
+    "style": "none"
+  },
+  {
+    "file": "bce47b05-74e7-495b-9507-ca4ff2825759.png",
+    "assetId": "bce47b05-74e7-495b-9507-ca4ff2825759",
+    "category": "sprite:art_88_top",
+    "prompt": "Top down view of a cockroach — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "33f04da9-1212-4b97-84c9-2f432d1a487d.png",
+    "assetId": "33f04da9-1212-4b97-84c9-2f432d1a487d",
+    "category": "sprite:art_90_top",
+    "prompt": "Top down view of a Dung Beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "03a9b271-56a7-40d7-b697-75842a622afc.png",
+    "assetId": "03a9b271-56a7-40d7-b697-75842a622afc",
+    "category": "sprite:art_104_top",
+    "prompt": "Top down view of a Oxysternon conspicillatum beetle — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "96a17a8e-ddcd-428f-a80a-d756405bfdac.png",
+    "assetId": "96a17a8e-ddcd-428f-a80a-d756405bfdac",
+    "category": "sprite:art_108_top",
+    "prompt": "Top down view of a Phanaeus demon — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "8d4f8687-8571-4e2b-a87e-7b313df65803.png",
+    "assetId": "8d4f8687-8571-4e2b-a87e-7b313df65803",
+    "category": "sprite:art_97_top",
+    "prompt": "Top down view of a Purple Moth — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "53c185a5-9197-4134-8b74-e31781901231.png",
+    "assetId": "53c185a5-9197-4134-8b74-e31781901231",
+    "category": "sprite:art_110_top",
+    "prompt": "Top down view of a Dragon Fly — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "0853018f-c5f6-4602-88ac-a7bb49cc6fb5.png",
+    "assetId": "0853018f-c5f6-4602-88ac-a7bb49cc6fb5",
+    "category": "sprite:art_96_top",
+    "prompt": "Top down view of a Black moth with red dots — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "9d5c37d9-7dde-4c1b-82b7-3890ef15c8fe.png",
+    "assetId": "9d5c37d9-7dde-4c1b-82b7-3890ef15c8fe",
+    "category": "sprite:art_109_top",
+    "prompt": "Top down view of a Fire fly — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "8275b000-01b3-466b-a92a-b94e1b7db05c.png",
+    "assetId": "8275b000-01b3-466b-a92a-b94e1b7db05c",
+    "category": "sprite-atlas:sheet",
+    "prompt": "packed sprite sheet — sprite sheet",
+    "style": "none"
+  },
+  {
+    "file": "944c54f2-a2fa-48c5-82bf-2a74a40d0011.png",
+    "assetId": "944c54f2-a2fa-48c5-82bf-2a74a40d0011",
+    "category": "sprite:top-down-view-of-tank-turret-1",
+    "prompt": "top down view of Tank Turret",
+    "style": "none"
+  },
+  {
+    "file": "185c0313-ea47-4e00-a323-6805b007178a.png",
+    "assetId": "185c0313-ea47-4e00-a323-6805b007178a",
+    "category": "sprite:top-down-view-of-tank-chassis-2",
+    "prompt": "top down view of Tank chassis",
+    "style": "none"
+  },
+  {
+    "file": "14b7d09d-3ce7-48ce-b4f3-b080a961569e.png",
+    "assetId": "14b7d09d-3ce7-48ce-b4f3-b080a961569e",
+    "category": "sprite:top-down-view-of-heavy-tank-chassis-2",
+    "prompt": "top down view of  Heavy Tank chassis",
+    "style": "none"
+  },
+  {
+    "file": "982ef5df-17c2-40e4-9868-789e9f59cf38.png",
+    "assetId": "982ef5df-17c2-40e4-9868-789e9f59cf38",
+    "category": "sprite:top-down-view-of-triple-naval-turret-2",
+    "prompt": "top down view of triple naval Turret",
+    "style": "none"
+  },
+  {
+    "file": "d00ff6ca-b223-492e-a74c-a2511a026d1f.png",
+    "assetId": "d00ff6ca-b223-492e-a74c-a2511a026d1f",
+    "category": "sprite:top-down-view-of-tank-chassis-3",
+    "prompt": "top down view of Tank chassis",
+    "style": "none"
+  },
+  {
+    "file": "3f82ce22-fead-4f6b-a14e-75e22aa1dcd8.png",
+    "assetId": "3f82ce22-fead-4f6b-a14e-75e22aa1dcd8",
+    "category": "sprite:top-down-view-of-tank-chassis-1",
+    "prompt": "top down view of Tank chassis",
+    "style": "none"
+  },
+  {
+    "file": "6d577841-e302-4890-89e0-159149e011fd.png",
+    "assetId": "6d577841-e302-4890-89e0-159149e011fd",
+    "category": "sprite:top-down-view-of-small-rader-dish-1",
+    "prompt": "top down view of small Rader dish",
+    "style": "none"
+  },
+  {
+    "file": "3f1704a3-6b49-42c7-8c32-d5d23b213d5e.png",
+    "assetId": "3f1704a3-6b49-42c7-8c32-d5d23b213d5e",
+    "category": "sprite:top-down-view-of-quad-rotor-scout-drone-4",
+    "prompt": "top down view of quad rotor scout drone",
+    "style": "none"
+  },
+  {
+    "file": "b2d57665-3b19-4a3d-ab17-1426a154636e.png",
+    "assetId": "b2d57665-3b19-4a3d-ab17-1426a154636e",
+    "category": "sprite:top-down-view-of-bomber-drone-4",
+    "prompt": "top down view of Bomber drone",
+    "style": "none"
+  },
+  {
+    "file": "505efac4-f13d-4e70-b907-ce8b3f4d5ae6.png",
+    "assetId": "505efac4-f13d-4e70-b907-ce8b3f4d5ae6",
+    "category": "sprite:top-down-view-of-quad-rotor-scout-drone-3",
+    "prompt": "top down view of quad rotor scout drone",
+    "style": "none"
+  },
+  {
+    "file": "98fe512e-1c43-4d16-a7c5-02dc1631bb18.png",
+    "assetId": "98fe512e-1c43-4d16-a7c5-02dc1631bb18",
+    "category": "sprite-atlas:sheet",
+    "prompt": "packed sprite sheet — sprite sheet",
+    "style": "none"
+  }
+]

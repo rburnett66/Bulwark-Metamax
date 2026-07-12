@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "top-down-view-of-bomber-drone-4_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 765,
+        "h": 994
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 765,
+        "h": 994
+      },
+      "sourceSize": {
+        "w": 765,
+        "h": 994
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 949,
+      "h": 1000
+    },
+    "scale": "1"
+  }
+}

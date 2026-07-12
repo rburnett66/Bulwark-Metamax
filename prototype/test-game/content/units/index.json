@@ -1,0 +1,7 @@
+{
+  "factions": [
+    "artillery.units.json",
+    "greenies-chem-.units.json",
+    "ground-powder.units.json"
+  ]
+}
