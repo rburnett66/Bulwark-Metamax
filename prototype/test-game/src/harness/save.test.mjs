@@ -15,13 +15,14 @@ bench.loadSheet({ textures: { fA: { width: 100 }, fB: { width: 80 }, fC: { width
 // pick two Air units
 const air = bench.unitsForFaction('Air').map(u => u.id);
 const [u1, u2] = air;
-bench.setUnit(u1); bench.assignLayer('base', 'fA'); bench.setLayerScale('base', 1.5);
+bench.setUnit(u1); bench.assignLayer('base', 'fA'); bench.setLayerScale('base', 1.5); bench.setLayerOffsetX('base', 12);
 bench.setUnit(u2); bench.assignLayer('weapon', 'fB');
 
 // per-unit memory: switching back keeps u1's assignment, not u2's
 bench.setUnit(u1);
 assert.strictEqual(bench.assignments().base, 'fA', 'u1 remembers base=fA');
 assert.strictEqual(bench.assignments().scale.base, 1.5, 'u1 remembers scale');
+assert.strictEqual(bench.assignments().offsetX.base, 12, 'u1 remembers horizontal centering');
 assert.strictEqual(bench.assignments().weapon, null, 'u1 has no weapon (that was u2)');
 bench.setUnit(u2);
 assert.strictEqual(bench.assignments().weapon, 'fB', 'u2 remembers weapon=fB');
@@ -36,6 +37,7 @@ assert.strictEqual(bench.authoredInFaction('Water'), 0, 'no Water units authored
 const fac = bench.exportFaction('Air');
 assert.strictEqual(Object.keys(fac.units).length, 2, 'faction export has 2 units');
 assert.strictEqual(fac.units[u1].layers.base.frame, 'fA');
+assert.strictEqual(fac.units[u1].layers.base.offsetX, 12, 'faction export carries centering');
 assert.strictEqual(fac.units[u2].layers.weapon.frame, 'fB');
 assert.strictEqual(fac.sheet, 'air.png', 'faction export records the sheet');
 
@@ -46,6 +48,7 @@ assert.strictEqual(n, 2, 'imported 2 units');
 bench2.setUnit(u1);
 assert.strictEqual(bench2.assignments().base, 'fA', 'import restored u1 base');
 assert.strictEqual(bench2.assignments().scale.base, 1.5, 'import restored u1 scale');
+assert.strictEqual(bench2.assignments().offsetX.base, 12, 'import restored u1 centering');
 assert.strictEqual(bench2.authoredInFaction('Air'), 2, 'import restored progress');
 
 console.log('save.test OK — per-unit memory + faction export/import + progress');

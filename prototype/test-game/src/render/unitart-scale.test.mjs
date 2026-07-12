@@ -2,7 +2,7 @@
  *  part-stacks at the SAME per-layer proportions and offsets the State Harness authors against.
  *  Run: node src/render/unitart-scale.test.mjs */
 import assert from 'node:assert';
-class Node { constructor(){ this.children=[]; this.anchor={set(){}}; this.scale={x:1,y:1,set(a,b){this.x=a;this.y=b;}}; }
+class Node { constructor(){ this.children=[]; this.anchor={x:0,y:0,set(a,b){this.x=a;this.y=(b==null?a:b);}}; this.scale={x:1,y:1,set(a,b){this.x=a;this.y=b;}}; }
   addChild(c){this.children.push(c);return c;} destroy(){} }
 class Container extends Node { constructor(){ super(); this.sortableChildren=false; } sortChildren(){} }
 class Sprite extends Node { constructor(tex){ super(); this.texture=tex; this.width=tex.width; } }
@@ -15,7 +15,7 @@ const TEXW = 512;   // gallery frames are typically 512px — every layer uses t
 const art = {
   defs: { 'ART-Tanks': { sheet: 's.png', rotation: 90, layers: {
     base:   { frame: 'b', scale: 1,   offset: 0 },
-    weapon: { frame: 'w', scale: 1,   offset: -20 },
+    weapon: { frame: 'w', scale: 1,   offset: -20, offsetX: 10 },
     head:   { frame: 'h', scale: 0.5, offset: 8 },
   } } },
   sheets: { 's.png': { frames: { b: { width: TEXW }, w: { width: TEXW }, h: { width: TEXW } } } },
@@ -43,5 +43,9 @@ assert.ok(Math.abs(head.__baseY - (8 * stackScale)) < 1e-9, 'head offset in benc
 
 // authored rotation still lands on every layer
 assert.ok(Math.abs(base.rotation - Math.PI / 2) < 1e-9, 'authored facing applied');
+
+// horizontal centering = ANCHOR shift (rotates with facing): anchorX = 0.5 - offsetX/(LAYER_FIT × scale)
+assert.ok(Math.abs(base.anchor.x - 0.5) < 1e-9, 'no centering → anchor stays 0.5');
+assert.ok(Math.abs(weapon.anchor.x - (0.5 - 10 / LAYER_FIT.weapon)) < 1e-9, 'weapon centering shifts the anchor');
 
 console.log('unitart-scale.test OK — battle-map render matches the bench authoring scale exactly');

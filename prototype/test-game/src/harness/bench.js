@@ -104,7 +104,12 @@ export function bootBench(mountEl) {
     for (const name of LAYERS) {
       const tex = texFor(name);
       if (tex && parts[name]) {
-        parts[name] = { sprite: tex, pivot: { x: tex.width / 2, y: tex.height / 2 }, pos: { x: 0, y: (c && c.offset[name]) || 0 } };
+        // Horizontal centering: move the PIVOT to the art's visual centre (texture px), so the layer
+        // both aligns on the stack axis AND rotates around its true centre when aiming. The slider is
+        // in stack px; convert via the layer's fit (tex.width / (LAYER_FIT × size)).
+        const ox = (c && c.offsetX && c.offsetX[name]) || 0;
+        const oxTex = ox * tex.width / (LAYER_FIT[name] * ((c && c.scale[name]) || 1));
+        parts[name] = { sprite: tex, pivot: { x: tex.width / 2 - oxTex, y: tex.height / 2 }, pos: { x: 0, y: (c && c.offset[name]) || 0 } };
       }
     }
     b.stack = buildPartStack(parts);
@@ -115,9 +120,9 @@ export function bootBench(mountEl) {
     }
     app.stage.addChild(b.stack);
   }
-  // A blank per-unit record: chosen frame per layer (null=procedural) + per-layer size + vertical offset.
-  // `sheet` pins the record to the atlas its frames came from, so loading another sheet can't re-point them.
-  function newRec() { return { base: null, weapon: null, head: null, scale: { base: 1, weapon: 1, head: 1 }, offset: { base: 0, weapon: 0, head: 0 }, rotation: 0, sheet: null }; }
+  // A blank per-unit record: chosen frame per layer (null=procedural) + per-layer size + vertical offset +
+  // horizontal centering. `sheet` pins the record to the atlas its frames came from.
+  function newRec() { return { base: null, weapon: null, head: null, scale: { base: 1, weapon: 1, head: 1 }, offset: { base: 0, weapon: 0, head: 0 }, offsetX: { base: 0, weapon: 0, head: 0 }, rotation: 0, sheet: null }; }
   // The current unit's assignment record (created on first touch).
   function cur() {
     if (!b.unitId) return null;
@@ -134,7 +139,7 @@ export function bootBench(mountEl) {
     const c = b.byUnit[id];
     if (!c || !(c.base || c.weapon || c.head)) return null;
     const d = UNITS[id] || {}, layers = {};
-    for (const name of LAYERS) layers[name] = c[name] ? { frame: c[name], scale: c.scale[name] || 1, offset: c.offset[name] || 0 } : null;
+    for (const name of LAYERS) layers[name] = c[name] ? { frame: c[name], scale: c.scale[name] || 1, offset: c.offset[name] || 0, offsetX: (c.offsetX && c.offsetX[name]) || 0 } : null;
     return { unit: id, faction: d.faction || null, shape: d.shape || null, role: d.role || null, rotation: c.rotation || 0, sheet: c.sheet || b.sheetName || null, layers };
   }
 
@@ -189,7 +194,7 @@ export function bootBench(mountEl) {
       const part = parts[name]; if (!part) continue;
       const lean = layerLean(BENCH_MAP, b.cell, LAYER_HEIGHT[name] || 0);
       const authoredY = (c && c.offset && c.offset[name]) || 0;
-      part.x = lean.dx / S;
+      part.x = lean.dx / S;                       // centering rides the PIVOT, not the position
       part.y = authoredY + lean.dy / S;
     }
     // assigned sprites keep TRUE colours (health/awareness tint is for the vector primitives only)
@@ -231,6 +236,8 @@ export function bootBench(mountEl) {
     setLayerScale(name, s) { const c = cur(); if (c && LAYERS.includes(name)) { c.scale[name] = Number(s) || 1; rebuildStack(); } },
     // Per-unit VERTICAL offset — the adjustable height between layers.
     setLayerOffset(name, dy) { const c = cur(); if (c && LAYERS.includes(name)) { c.offset[name] = Number(dy) || 0; rebuildStack(); } },
+    // Per-unit HORIZONTAL centering — slide a layer's art left/right onto the stack's axis.
+    setLayerOffsetX(name, dx) { const c = cur(); if (c && LAYERS.includes(name)) { c.offsetX[name] = Number(dx) || 0; rebuildStack(); } },
     // Per-unit ROTATION (degrees) — orient the art so it faces the right way; applied in the harness AND baked
     // into the saved def so the game renders the unit at this orientation. (No rebuild — the ticker reads it.)
     setRotation(deg) { const c = cur(); if (c) c.rotation = Number(deg) || 0; },
@@ -238,7 +245,7 @@ export function bootBench(mountEl) {
     // way is fixed in one go).
     rotateAllUnits(deg) { const d = Number(deg) || 0; for (const id in b.byUnit) if (this.isAuthored(id)) b.byUnit[id].rotation = d; },
     // The current unit's assignment (for syncing the UI when the unit changes).
-    assignments() { const c = cur(); return c ? { base: c.base, weapon: c.weapon, head: c.head, scale: { ...c.scale }, offset: { ...c.offset }, rotation: c.rotation || 0, sheet: c.sheet || null } : null; },
+    assignments() { const c = cur(); return c ? { base: c.base, weapon: c.weapon, head: c.head, scale: { ...c.scale }, offset: { ...c.offset }, offsetX: { ...(c.offsetX || {}) }, rotation: c.rotation || 0, sheet: c.sheet || null } : null; },
 
     // ── authoring progress ──
     isAuthored(id) { const c = b.byUnit[id]; return !!(c && (c.base || c.weapon || c.head)); },
@@ -270,6 +277,7 @@ export function bootBench(mountEl) {
           c[name] = (L && L.frame) || null;
           if (L && typeof L.scale === 'number') c.scale[name] = L.scale;
           if (L && typeof L.offset === 'number') c.offset[name] = L.offset;
+          if (L && typeof L.offsetX === 'number') c.offsetX[name] = L.offsetX;
         }
         if (typeof u.rotation === 'number') c.rotation = u.rotation;
         // pin the record to the file's sheet so its frames resolve even when another sheet is active

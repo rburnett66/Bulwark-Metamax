@@ -33,7 +33,7 @@
     .bar { height:8px; background:#1b232c; border-radius:4px; overflow:hidden; margin-top:6px; }
     .bar > i { display:block; height:100%; background:linear-gradient(90deg,#e05a5a,#e0c05a,#5ae08a); }
     .state-pill { display:inline-block; padding:2px 8px; border-radius:10px; background:#1b232c; color:var(--accent); font-size:12px; }
-    .layer-row { display:grid; grid-template-columns:50px 1fr 62px 62px; gap:6px; align-items:center; }
+    .layer-row { display:grid; grid-template-columns:50px 1fr 52px 52px 52px; gap:6px; align-items:center; }
     .layer-name { font-size:12px; color:var(--muted); }
     .layer-row select { width:100%; }
     input[type=file] { font-size:12px; color:var(--muted); }
@@ -74,10 +74,10 @@
         <label>Sprite sheet → layers</label>
         <input type="file" id="sheet-file" accept=".png,.json,image/png,application/json" multiple />
         <div id="sheet-status" class="sub" style="margin-top:0;">Saved art auto-loads when you pick a faction (● in the list). Use this picker only for a NEW sheet: select the PNG + its atlas.json together, then assign frames to Base / Weapon / Head.</div>
-        <div class="layer-row" style="grid-template-columns:50px 1fr 62px 62px;"><span class="layer-name" style="grid-column:1;"></span><span class="layer-name" style="text-align:center;">frame</span><span class="layer-name" style="text-align:center;">size</span><span class="layer-name" style="text-align:center;">height</span></div>
-        <div class="layer-row"><span class="layer-name">Base</span><select id="layer-base" disabled><option value="">— none —</option></select><input type="range" id="size-base" min="0.3" max="3" step="0.05" value="1" title="Base size" /><input type="range" id="offset-base" min="-40" max="40" step="1" value="0" title="Base height (vertical offset)" /></div>
-        <div class="layer-row"><span class="layer-name">Weapon</span><select id="layer-weapon" disabled><option value="">— none —</option></select><input type="range" id="size-weapon" min="0.3" max="3" step="0.05" value="1" title="Weapon size" /><input type="range" id="offset-weapon" min="-40" max="40" step="1" value="0" title="Weapon height (vertical offset)" /></div>
-        <div class="layer-row"><span class="layer-name">Head</span><select id="layer-head" disabled><option value="">— none —</option></select><input type="range" id="size-head" min="0.3" max="3" step="0.05" value="1" title="Head size" /><input type="range" id="offset-head" min="-40" max="40" step="1" value="0" title="Head height (vertical offset)" /></div>
+        <div class="layer-row"><span class="layer-name" style="grid-column:1;"></span><span class="layer-name" style="text-align:center;">frame</span><span class="layer-name" style="text-align:center;">size</span><span class="layer-name" style="text-align:center;">height</span><span class="layer-name" style="text-align:center;">center</span></div>
+        <div class="layer-row"><span class="layer-name">Base</span><select id="layer-base" disabled><option value="">— none —</option></select><input type="range" id="size-base" min="0.3" max="3" step="0.05" value="1" title="Base size" /><input type="range" id="offset-base" min="-40" max="40" step="1" value="0" title="Base height (vertical offset)" /><input type="range" id="offx-base" min="-40" max="40" step="1" value="0" title="Base horizontal centering (slide the art onto the stack axis)" /></div>
+        <div class="layer-row"><span class="layer-name">Weapon</span><select id="layer-weapon" disabled><option value="">— none —</option></select><input type="range" id="size-weapon" min="0.3" max="3" step="0.05" value="1" title="Weapon size" /><input type="range" id="offset-weapon" min="-40" max="40" step="1" value="0" title="Weapon height (vertical offset)" /><input type="range" id="offx-weapon" min="-40" max="40" step="1" value="0" title="Weapon horizontal centering (slide the art onto the stack axis)" /></div>
+        <div class="layer-row"><span class="layer-name">Head</span><select id="layer-head" disabled><option value="">— none —</option></select><input type="range" id="size-head" min="0.3" max="3" step="0.05" value="1" title="Head size" /><input type="range" id="offset-head" min="-40" max="40" step="1" value="0" title="Head height (vertical offset)" /><input type="range" id="offx-head" min="-40" max="40" step="1" value="0" title="Head horizontal centering (slide the art onto the stack axis)" /></div>
         <div class="layer-row" style="grid-template-columns:50px 1fr 56px;">
           <span class="layer-name">Rotate</span>
           <input type="range" id="unit-rotation" min="-180" max="180" step="15" value="0" title="Rotate this unit's art so it faces the right way (degrees)" />
@@ -205,10 +205,11 @@
     function syncLayerUI() {
       const a = bench.assignments();
       for (const name of LAYER_IDS) {
-        const sel = $(`layer-${name}`), sz = $(`size-${name}`), off = $(`offset-${name}`);
+        const sel = $(`layer-${name}`), sz = $(`size-${name}`), off = $(`offset-${name}`), ox = $(`offx-${name}`);
         if (sel && !sel.disabled) sel.value = (a && a[name]) || '';
         if (sz) sz.value = (a && a.scale && a.scale[name]) || 1;
         if (off) off.value = (a && a.offset && a.offset[name]) || 0;
+        if (ox) ox.value = (a && a.offsetX && a.offsetX[name]) || 0;
       }
       $('unit-rotation').value = (a && a.rotation) || 0;
       updateProgress();
@@ -270,6 +271,7 @@
       $(`layer-${name}`).onchange = (e) => { bench.assignLayer(name, e.target.value || null); updateProgress(); };
       $(`size-${name}`).oninput = (e) => bench.setLayerScale(name, Number(e.target.value));
       $(`offset-${name}`).oninput = (e) => bench.setLayerOffset(name, Number(e.target.value));
+      $(`offx-${name}`).oninput = (e) => bench.setLayerOffsetX(name, Number(e.target.value));
     }
     $('unit-rotation').oninput = (e) => bench.setRotation(Number(e.target.value));
     $('rotate-all').onclick = () => { const d = Number($('unit-rotation').value); bench.rotateAllUnits(d); setSheetStatus(`Rotated all authored units to ${d}°.`); };

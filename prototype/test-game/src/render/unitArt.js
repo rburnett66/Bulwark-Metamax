@@ -85,7 +85,10 @@ export function buildUnitSprite(art, unitId, tilePx, radius) {
     const tex = L && L.frame && sheet.frames[L.frame];
     if (!tex) continue;
     const spr = new PIXI.Sprite(tex);
-    if (spr.anchor && spr.anchor.set) spr.anchor.set(0.5);
+    // Horizontal centering (authored in the bench, stack px) becomes an ANCHOR shift — anchor lives in
+    // texture space, so the correction rotates with the unit's facing instead of orbiting off-centre.
+    const anchorX = 0.5 - (L.offsetX || 0) / ((LAYER_FIT[name] || LAYER_FIT.base) * (L.scale || 1));
+    if (spr.anchor && spr.anchor.set) spr.anchor.set(anchorX, 0.5);
     const fit = ((LAYER_FIT[name] || LAYER_FIT.base) * stackScale / Math.max(1, tex.width)) * (L.scale || 1);
     spr.scale.set(fit, fit);
     spr.rotation = rot;
