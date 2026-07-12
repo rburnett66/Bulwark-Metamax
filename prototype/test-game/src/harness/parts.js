@@ -15,9 +15,10 @@
 // head ~39%) — one constant, or tool and battle-map scale drift apart. Shared by bench.js + unitArt.js.
 export const LAYER_FIT = { base: 46, weapon: 30, head: 18 };
 
-// (The former UNIT_VIS_SCALE render magnification is gone: unit size now lives in the SIM —
-// entities.unitRadius values are authored as visual half-widths, and the render draws them 1:1,
-// so the collision box IS the sprite box.)
+// Sprite-to-collision ratio: the rendered sprite is 4/3 of the sim footprint (collision boxes are
+// 25% smaller than the art — frames have padding, and a little visual overlap before bodies collide
+// reads natural). entities.unitRadius holds the COLLISION half-width; render multiplies by this.
+export const SPRITE_OVER_COLLISION = 4 / 3;
 
 // Palette per broad unit class (generic-safe fallback). Kept data-only so new factions/shapes just add a row.
 const PALETTES = {

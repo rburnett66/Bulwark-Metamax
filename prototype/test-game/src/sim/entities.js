@@ -26,19 +26,19 @@ export function nextEntityId(state) {
  * @param {'attacker'|'defender'} side owning side
  * @returns {object} Unit
  */
-// Physical footprint per shape (cell units; a tile = 1). THE COLLISION BOX IS THE SPRITE BOX:
-// these radii equal the unit's rendered half-width (the render draws exactly 2×radius), so
-// separation, spawn spacing, and crowding match what the player sees. Values = the old compact
-// footprints × art presence × the former 2.6 render magnification, folded into the sim.
+// Physical footprint per shape (cell units; a tile = 1). COLLISION = 75% OF THE SPRITE: the render
+// draws units at radius × SPRITE_OVER_COLLISION (harness/parts.js, 4/3), so these radii are the
+// collision half-widths — 25% inside the art, since frames carry padding and a touch of visual
+// overlap before bodies collide reads natural. Separation/spawn spacing use these numbers.
 export function unitRadius(def) {
   switch (def && def.shape) {
-    case 'Troops': return 1.20;
-    case 'Trucks': return 1.28;
-    case 'Artillery': return 1.28;
-    case 'Tanks': return 1.44;
-    case 'Heavy Tanks': return 1.48;
-    case 'Copters': case 'Planes': case 'Missiles': return 1.29;
-    default: return 1.28;
+    case 'Troops': return 0.90;
+    case 'Trucks': return 0.96;
+    case 'Artillery': return 0.96;
+    case 'Tanks': return 1.08;
+    case 'Heavy Tanks': return 1.11;
+    case 'Copters': case 'Planes': case 'Missiles': return 0.97;
+    default: return 0.96;
   }
 }
 

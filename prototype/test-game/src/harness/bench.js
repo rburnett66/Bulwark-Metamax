@@ -10,7 +10,7 @@
 import { buildPartStack } from './partstack.js';
 import { project, shadowFor, layerLean, LAYER_HEIGHT } from './camera.js';
 import { unitReadout } from './readout.js';
-import { unitParts, LAYER_FIT } from './parts.js';
+import { unitParts, LAYER_FIT, SPRITE_OVER_COLLISION } from './parts.js';
 import { applyReadout } from './drive.js';
 import { UNITS, WAVES, MAP } from '../data/tables.js';
 import { createSim } from '../sim/core.js';
@@ -300,7 +300,7 @@ export function bootBench(mountEl) {
 function realTilePx(b) {
   if (!b || !b.unitId || !UNITS[b.unitId]) return 0;
   const radius = (b.unit && b.unit.radius) || 0.3;
-  const gameTiles = 2 * radius;                         // footprint IS the sprite box: width in game tiles
+  const gameTiles = 2 * radius * SPRITE_OVER_COLLISION; // SPRITE width in game tiles (collision × 4/3)
   if (!(gameTiles > 0)) return 0;
   return (LAYER_FIT.base * BASE_SCALE) / gameTiles;     // bench px per game tile
 }

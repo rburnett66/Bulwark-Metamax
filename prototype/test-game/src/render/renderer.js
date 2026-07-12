@@ -1,6 +1,7 @@
 import { getStructureDef, getUnitDef } from '../data/tables.js';
 import { hasArt, buildUnitSprite } from './unitArt.js';
 import { layerLean } from '../harness/camera.js';
+import { SPRITE_OVER_COLLISION } from '../harness/parts.js';
 
 const FX_DT = 1 / 60;
 
@@ -688,13 +689,13 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
             child.x = sx * cf + sy * sf;
             child.y = -sx * sf + sy * cf;
           }
-          drawHpBar((u.domain === 'Flyer' ? gA : gU), pa.x, pa.y - t * ((u.radius || 0.3) + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
+          drawHpBar((u.domain === 'Flyer' ? gA : gU), pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
           continue;   // sprite drawn — skip the primitive
         }
       }
       const color = unitColor(u);   // faction-tinted for attackers, side-coloured otherwise
       const p = cellToLocal(renderer, u.pos.x, u.pos.y);
-      const r = t * (u.radius || 0.28);   // footprint IS the sprite box now — primitives draw it 1:1
+      const r = t * (u.radius || 0.28) * SPRITE_OVER_COLLISION;   // primitives draw at SPRITE size (collision × 4/3)
       if (u.domain === 'Flyer') {
         const py = p.y - t * 0.35;
         gA.beginFill(color, 1);

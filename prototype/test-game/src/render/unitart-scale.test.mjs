@@ -9,7 +9,7 @@ class Sprite extends Node { constructor(tex){ super(); this.texture=tex; this.wi
 globalThis.PIXI = { Container, Sprite };
 
 const { buildUnitSprite } = await import('./unitArt.js');
-const { LAYER_FIT } = await import('../harness/parts.js');
+const { LAYER_FIT, SPRITE_OVER_COLLISION } = await import('../harness/parts.js');
 const { unitRadius } = await import('../sim/entities.js');
 
 const TEXW = 512;   // gallery frames are typically 512px — every layer uses the same source width here
@@ -27,12 +27,12 @@ const stack = buildUnitSprite(art, 'ART-Tanks', tile, radius);
 assert.ok(stack, 'stack built');
 const [base, weapon, head] = stack.children;
 
-// THE COLLISION BOX IS THE SPRITE BOX: base layer width == footprint diameter, 1:1 — sim radii
-// (entities.unitRadius) are authored as visual half-widths, and separation/spawn spacing use the
-// same numbers the player sees
-assert.ok(radius > 1, 'sprite-sized footprint (Tanks reads ~3 tiles wide)');
-const targetW = tile * 2 * radius;
-assert.ok(Math.abs(base.scale.x * TEXW - targetW) < 1e-9, 'base width == footprint diameter, exactly');
+// Sprite = collision × 4/3: sim radii are the collision half-widths, 25% inside the art —
+// separation/spawn spacing use collision, the render draws the sprite box
+assert.ok(radius > 1, 'sprite-scaled footprint (Tanks collision ~1.08 cells)');
+assert.ok(Math.abs(SPRITE_OVER_COLLISION - 4 / 3) < 1e-9, 'sprite/collision ratio is 4/3');
+const targetW = tile * 2 * radius * SPRITE_OVER_COLLISION;
+assert.ok(Math.abs(base.scale.x * TEXW - targetW) < 1e-9, 'base width == collision diameter × 4/3, exactly');
 
 // per-layer proportions match the bench's LAYER_FIT ratios (weapon ~65%, head ~39% × authored 0.5)
 assert.ok(Math.abs(weapon.scale.x / base.scale.x - LAYER_FIT.weapon / LAYER_FIT.base) < 1e-9,
