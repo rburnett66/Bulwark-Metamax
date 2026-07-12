@@ -53,7 +53,7 @@ for (const k of ORDER) {
   const f = FACTIONS[k];
   assert.ok(f.attack > 0 && f.attack <= 0.08, `${k} attack in range`);
   assert.ok(f.sustain >= 0 && f.sustain <= 0.85, `${k} sustain in range`);
-  assert.ok(f.overlap >= 0 && f.overlap <= 0.6, `${k} overlap in range`);
+  assert.ok(f.overlap >= 0 && f.overlap <= 1.2, `${k} overlap in range`);
 }
 
 // data integrity: every voice key has gain/static/icon; casts complete

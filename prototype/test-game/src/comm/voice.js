@@ -252,7 +252,7 @@ function syllable(t, dur, freq, p, g, chain) {
   const env = AC.createGain(); const peak = 0.24 * (g.level || 1);
   const atk = Math.min((p.attack != null ? p.attack : 0.012), dur * 0.4);
   const sus = Math.max(0, Math.min(0.85, p.sustain != null ? p.sustain : 0));
-  const ov = Math.max(0, Math.min(0.6, p.overlap != null ? p.overlap : 0));
+  const ov = Math.max(0, Math.min(1.2, p.overlap != null ? p.overlap : 0));   // >1 = tails ring past a whole beat (drone)
   const L = dur * (1 + ov);                        // audible length; the next beat still starts at t+dur
   env.gain.setValueAtTime(0.0001, t);
   env.gain.linearRampToValueAtTime(peak, t + atk);
