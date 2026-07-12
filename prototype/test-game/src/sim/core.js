@@ -191,9 +191,13 @@ function maybeBumpAround(state, unit) {
   if (!blocker) return;
 
   const rB = blocker.radius || 0.3;
-  const lat = rA + rB + 0.25;                                          // lateral clearance: both bodies + margin
+  const needLat = rA + rB + 0.25;                                      // lateral separation that clears both bodies
   const px = -diry, py = dirx;                                         // left normal of travel
   const blockerLeft = (blocker.pos.x - unit.pos.x) * px + (blocker.pos.y - unit.pos.y) * py;
+  // The maneuver is a forward SWERVE, not a side-hop: it adds only the MISSING lateral offset (the
+  // blocker may already sit half a body off-axis) and carries it while advancing, so the unit's
+  // heading barely turns — a perpendicular first waypoint read as violent "bumping" mid-march.
+  const extra = Math.max(0.35, needLat - Math.abs(blockerLeft));
   const sides = blockerLeft > 0.05 ? [-1, 1] : blockerLeft < -0.05 ? [1, -1] : (unit.id % 2 ? [1, -1] : [-1, 1]);
   const g = state.navGrid;
   const passableAt = (x, y) => {
@@ -206,10 +210,10 @@ function maybeBumpAround(state, unit) {
   while (rejoin < path.length - 1 && dist(unit.pos, path[rejoin]) < needAhead) rejoin++;
 
   for (const s of sides) {
-    const p1 = { x: unit.pos.x + px * s * lat + dirx * 0.4, y: unit.pos.y + py * s * lat + diry * 0.4 };
-    const p2 = { x: blocker.pos.x + px * s * lat + dirx * (rB + 0.4), y: blocker.pos.y + py * s * lat + diry * (rB + 0.4) };
+    const p1 = { x: unit.pos.x + dirx * 0.9 + px * s * extra * 0.6, y: unit.pos.y + diry * 0.9 + py * s * extra * 0.6 };
+    const p2 = { x: unit.pos.x + dirx * (bd + rB + 0.8) + px * s * extra, y: unit.pos.y + diry * (bd + rB + 0.8) + py * s * extra };
     if (!passableAt(p1.x, p1.y) || !passableAt(p2.x, p2.y)) continue;
-    unit.path = [p1, p2].concat(path.slice(rejoin));                   // sidestep → pass → back on the primary line
+    unit.path = [p1, p2].concat(path.slice(rejoin));                   // swerve out → glide past → back on the line
     unit.pathIdx = 0;
     unit._bumpCooldownTick = state.tick + 30;                          // ~1s before considering the next weave
     return;
@@ -759,15 +763,20 @@ export function stepSeparation(state, dt) {
       //     out-run its own sideways escape and rear-end the slower unit ("butt bumping").
       const look = rSum + 1.0;
       if (d > 1e-6 && d < look) {
-        const nx = dx / d, ny = dy / d, str = (1 - d / look) * 0.7;
+        const nx = dx / d, ny = dy / d;
         const closeness = Math.max(0, Math.min(1, (look - d) / Math.max(1e-6, look - rSum)));   // 1 touching → 0 at look
+        // steering strength TAPERS with closeness — at the outer band it's a whisper, near contact it's firm.
+        // A flat force at distance made followers visibly lurch sideways a full body-gap away from the
+        // blocker ("bumping from a distance") as the corridor test flickered on/off.
+        const str = (1 - d / look) * 0.7 * closeness;
         // a's frame — is b blocking a's lane ahead?
         const fwdA = nx * hx[i] + ny * hy[i], latA = nx * (-hy[i]) + ny * (hx[i]);
         if ((hx[i] || hy[i]) && fwdA > 0 && Math.abs(latA) * d < rSum && (b.speed || 0) <= (a.speed || 0)) {
           const s = latA > 1e-3 ? -1 : (latA < -1e-3 ? 1 : (a.id < b.id ? 1 : -1));   // slide away from b's side
           px[i] += (-hy[i]) * s * str; py[i] += (hx[i]) * s * str;
           const excess = ((a.speed || 0) - (b.speed || 0)) * dt;                       // ground a gains on b per tick
-          if (excess > 0 && fwdA > 0.5) bk[i] = Math.max(bk[i], excess * closeness);   // pace behind, don't ram
+          if (excess > 0 && fwdA > 0.25) bk[i] = Math.max(bk[i], excess * closeness);  // pace behind — wider cone, so
+                                                                                       // sliding diagonal doesn't re-ram
         }
         // b's frame — is a blocking b's lane ahead?
         const fwdB = -nx * hx[j] - ny * hy[j], latB = -nx * (-hy[j]) - ny * (hx[j]);
@@ -775,7 +784,7 @@ export function stepSeparation(state, dt) {
           const s = latB > 1e-3 ? -1 : (latB < -1e-3 ? 1 : (b.id < a.id ? 1 : -1));
           px[j] += (-hy[j]) * s * str; py[j] += (hx[j]) * s * str;
           const excess = ((b.speed || 0) - (a.speed || 0)) * dt;
-          if (excess > 0 && fwdB > 0.5) bk[j] = Math.max(bk[j], excess * closeness);
+          if (excess > 0 && fwdB > 0.25) bk[j] = Math.max(bk[j], excess * closeness);
         }
       }
     }
@@ -783,6 +792,12 @@ export function stepSeparation(state, dt) {
 
   for (let i = 0; i < n; i++) {
     let ox = px[i], oy = py[i];
+    // NEVER propel a unit FORWARD along its own heading: a faster follower's radial push must not
+    // bulldoze the unit ahead toward the base ("truck ramming the tank, bump bump bump"). Crowd
+    // pressure may slide a body sideways or backward — forward motion comes ONLY from the unit's
+    // own movement step.
+    const fwdPush = ox * hx[i] + oy * hy[i];
+    if (fwdPush > 0) { ox -= hx[i] * fwdPush; oy -= hy[i] * fwdPush; }
     const ol = Math.sqrt(ox * ox + oy * oy);
     const b = bk[i];
     if (ol < 0.02 && b <= 0) continue;                             // DEAD-ZONE — ignore sub-visible nudges that
