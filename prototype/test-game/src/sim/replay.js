@@ -164,6 +164,16 @@ export function hashState(state) {
     }
   }
 
+  // Campaign resource nodes + harvester cargo (absent on classic maps → their hashes are unchanged).
+  if (state.resourceNodes) {
+    for (let i = 0; i < state.resourceNodes.length; i++) {
+      const n = state.resourceNodes[i];
+      h = fnv1aString(h, 'n' + n.id + ':' + numStr(n.remaining));
+    }
+    const hv = state.harvesterId != null && state.units ? state.units.get(state.harvesterId) : null;
+    if (hv) h = fnv1aString(h, 'hc' + numStr(hv.cargo) + ':' + numStr(hv.cargoValue));
+  }
+
   if (state.result) {
     h = fnv1aString(h, 'w' + state.result);
   }

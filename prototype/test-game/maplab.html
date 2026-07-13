@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BULWARK — Map Lab</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{ --bg:#0c1014; --panel:#10161d; --ink:#c9d6e2; --dim:#5c6b7a; --line:#26313c; --accent:#5fe0ff; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:'Courier New',monospace;font-size:13px}
+  #app{display:flex;height:100vh}
+  #side{width:330px;min-width:330px;background:var(--panel);border-right:1px solid var(--line);padding:12px;overflow-y:auto}
+  #main{flex:1;display:flex;flex-direction:column;min-width:0}
+  #bar{display:flex;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  #cwrap{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:12px}
+  canvas{background:#0a0e12;border:1px solid var(--line);image-rendering:pixelated;cursor:crosshair}
+  h1{font-size:13px;letter-spacing:3px;color:#e7f2f7;margin:0 0 10px}
+  h2{font-size:11px;letter-spacing:2px;color:var(--accent);margin:16px 0 6px;text-transform:uppercase}
+  label{display:block;color:var(--dim);font-size:11px;margin:8px 0 2px}
+  select,input,button{font:inherit;background:#141b22;color:var(--ink);border:1px solid #3a4a5a;border-radius:3px;padding:4px 7px}
+  button{cursor:pointer} button:hover{background:#1d2833}
+  button.on{color:var(--accent);border-color:var(--accent)}
+  #wave{width:150px;vertical-align:middle}
+  .kv{display:flex;justify-content:space-between;padding:1px 0}
+  .kv span:first-child{color:var(--dim)}
+  #legend div{display:flex;align-items:center;gap:6px;padding:1px 0}
+  .sw{width:12px;height:12px;border-radius:2px;display:inline-block}
+  #inspect{white-space:pre-wrap;font-size:11px;background:#0a0e12;border:1px solid var(--line);border-radius:3px;padding:6px;min-height:52px}
+  #valid{font-size:11px;padding:6px;border-radius:3px;margin-top:6px}
+  #valid.ok{background:#12301b;color:#8fe0a8} #valid.bad{background:#3a1616;color:#ff9d9d}
+  .btnrow{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+  #ovcount{color:var(--dim);font-size:11px}
+  table{width:100%;border-collapse:collapse;font-size:10px;margin-top:4px}
+  td,th{border:1px solid var(--line);padding:2px 4px;text-align:right}
+  th{color:var(--dim);font-weight:normal}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <h1>MAP LAB</h1>
+    <label>Map</label>
+    <select id="mapSel"></select>
+    <label>Seed</label>
+    <input id="seed" type="number" value="0" style="width:90px">
+    <label>Faction (premium/quest preview)</label>
+    <select id="factionSel"></select>
+
+    <h2>Meta</h2>
+    <div id="meta"></div>
+
+    <h2>Legend</h2>
+    <div id="legend">
+      <div><span class="sw" style="background:#3f6f4a"></span> primary — safe income (near base)</div>
+      <div><span class="sw" style="background:#e0b23f"></span> premium — blood price (new ring, spawn side)</div>
+      <div><span class="sw" style="background:#a86fe0"></span> quest — tempo price (far edge, opposite side)</div>
+      <div><span class="sw" style="background:#2a4a6a"></span> water &nbsp;·&nbsp; <span class="sw" style="background:#7a4a3a"></span> base</div>
+      <div><span class="sw" style="background:#ff5555"></span> ground spawn · <span class="sw" style="background:#8fd0ff"></span> air · <span class="sw" style="background:#4aa0e0"></span> water spawn</div>
+    </div>
+
+    <h2>Wave budgets</h2>
+    <table id="budgets"></table>
+
+    <h2>Inspect</h2>
+    <div id="inspect">click a cell…</div>
+    <div id="valid" class="ok">—</div>
+  </div>
+
+  <div id="main">
+    <div id="bar">
+      <span>Wave <input id="wave" type="range" min="1" max="8" value="8"> <b id="waveN">8</b></span>
+      <span style="color:var(--dim)">|</span>
+      <button class="mode on" data-mode="inspect">INSPECT</button>
+      <button class="mode" data-mode="water">WATER ±</button>
+      <button class="mode" data-mode="moveres">MOVE NODE</button>
+      <button class="mode" data-mode="addres">ADD NODE</button>
+      <button class="mode" data-mode="delres">DELETE NODE</button>
+      <button class="mode" data-mode="spawn">MOVE SPAWN</button>
+      <select id="addRole" style="display:none">
+        <option value="primary">primary</option><option value="premium">premium</option><option value="quest">quest</option>
+      </select>
+      <select id="spawnLane" style="display:none">
+        <option value="ground">ground</option><option value="air">air</option><option value="water">water</option>
+      </select>
+      <span style="color:var(--dim)">|</span>
+      <div class="btnrow">
+        <button id="undo">UNDO</button>
+        <button id="clearOv">RESET EDITS</button>
+        <button id="exportOv">EXPORT OVERRIDES</button>
+        <button id="importOv">IMPORT</button>
+        <input id="importFile" type="file" accept=".json" style="display:none">
+      </div>
+      <span id="ovcount"></span>
+    </div>
+    <div id="cwrap"><canvas id="cv"></canvas></div>
+  </div>
+</div>
+
+<script type="module">
+import { buildCampaignMap, resolveResourceTypes, applyOverrides } from './src/sim/mapgen.js';
+import { buildNavGrid, findWalkerPath } from './src/sim/pathfinding.js';
+import { MAPDATA } from './content/maps/mapdata.js';
+
+const $ = (id) => document.getElementById(id);
+const T = 24;                       // px per tile in the lab view
+let mapId = 1, seedV = 0, factionId = 1, wave = 8;
+let mode = 'inspect', pendingMove = null;   // resource id being moved
+let overrides = { waterAdd: [], waterRemove: [], resourceMove: [], resourceRemove: [], resourceAdd: [], spawnMove: [] };
+let history = [];                   // undo stack of override snapshots
+let map = null;
+
+// ── persistence: edits live per (map, seed) in localStorage; EXPORT writes the JSON the game
+//    loads from content/maps/overrides/map-<id>.json (drop the downloaded file there) ──
+const lsKey = () => `bw.maplab.ov.${mapId}.${seedV}`;
+function loadOv() {
+  try { const s = localStorage.getItem(lsKey()); if (s) return JSON.parse(s); } catch (e) { /* fresh */ }
+  return { waterAdd: [], waterRemove: [], resourceMove: [], resourceRemove: [], resourceAdd: [], spawnMove: [] };
+}
+function saveOv() { try { localStorage.setItem(lsKey(), JSON.stringify(overrides)); } catch (e) { /* full */ } }
+
+function rebuild() {
+  map = resolveResourceTypes(buildCampaignMap(mapId, { seed: seedV, overrides }), factionId);
+  validate(); draw(); meta(); budgets();
+  $('ovcount').textContent = ovCount() ? `${ovCount()} edit(s)` : '';
+}
+function ovCount() {
+  return overrides.waterAdd.length + overrides.waterRemove.length + overrides.resourceMove.length +
+         overrides.resourceRemove.length + overrides.resourceAdd.length + overrides.spawnMove.length;
+}
+function snapshot() { history.push(JSON.stringify(overrides)); if (history.length > 60) history.shift(); }
+
+// ── validation: the same hard rule the generator enforces — every ring's ground spawn reaches base ──
+function validate() {
+  const v = $('valid');
+  const bad = [];
+  for (const ring of map.rings) {
+    const nav = buildNavGrid(map, []);
+    const p = findWalkerPath(nav, ring.spawns.ground, { x: map.base.x, y: map.base.y });
+    if (!p || p.length === 0) bad.push(ring.wave);
+  }
+  const water = new Set(map.waterCells.map((c) => `${c.x},${c.y}`));
+  const drowned = map.resources.filter((r) => water.has(`${r.x},${r.y}`)).length;
+  if (bad.length || drowned) {
+    v.className = 'bad';
+    v.textContent = (bad.length ? `BROKEN: waves ${bad.join(',')} spawn cannot reach the base. ` : '') +
+                    (drowned ? `${drowned} node(s) under water.` : '');
+  } else { v.className = 'ok'; v.textContent = 'valid — all rings connect, no drowned nodes'; }
+}
+
+function meta() {
+  const r = map.roles || {};
+  $('meta').innerHTML = [
+    ['name', map.name], ['size', `${map.cols}×${map.rows}`], ['primary', map.primary],
+    ['premium (F' + factionId + ')', (r.premium || '?') + (r.swapped ? ' (swapped)' : '')],
+    ['quest', r.quest || '?'], ['water', map.hasWater ? 'yes' : 'no'],
+    ['difficulty', map.difficulty], ['par', map.parTimeSec + 's'], ['quest giver', 'Faction_' + map.questGiver],
+    ['nodes', map.resources.length],
+  ].map(([k, v]) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`).join('');
+}
+function budgets() {
+  $('budgets').innerHTML = '<tr><th>w</th><th>side</th><th>total</th><th>gnd</th><th>air</th><th>wtr</th><th>par</th></tr>' +
+    map.rings.map((r) => `<tr${r.wave === wave ? ' style="color:#5fe0ff"' : ''}><td>${r.wave}</td><td>${r.sideFocus}</td>` +
+      `<td>${r.budget.total}</td><td>${r.budget.ground}</td><td>${r.budget.air}</td><td>${r.budget.water}</td><td>${r.parSec}s</td></tr>`).join('');
+}
+
+const ROLE_COLOR = { primary: '#3f6f4a', premium: '#e0b23f', quest: '#a86fe0' };
+function draw() {
+  const cv = $('cv');
+  cv.width = map.cols * T; cv.height = map.rows * T;
+  const g = cv.getContext('2d');
+  const ring = map.rings[wave - 1];
+
+  // board + revealed/unrevealed
+  for (let y = 0; y < map.rows; y++) for (let x = 0; x < map.cols; x++) {
+    const inRing = x >= ring.rect.x0 && x <= ring.rect.x1 && y >= ring.rect.y0 && y <= ring.rect.y1;
+    g.fillStyle = inRing ? '#18222c' : '#0d1217';
+    g.fillRect(x * T, y * T, T - 1, T - 1);
+  }
+  // past ring outlines (the growth story at a glance)
+  for (let i = 0; i < wave; i++) {
+    const r = map.rings[i].rect;
+    g.strokeStyle = i === wave - 1 ? '#5fe0ff' : 'rgba(95,224,255,0.18)';
+    g.lineWidth = i === wave - 1 ? 2 : 1;
+    g.strokeRect(r.x0 * T + 1, r.y0 * T + 1, (r.x1 - r.x0 + 1) * T - 2, (r.y1 - r.y0 + 1) * T - 2);
+  }
+  // water
+  g.fillStyle = '#2a4a6a';
+  for (const c of map.waterCells) g.fillRect(c.x * T, c.y * T, T - 1, T - 1);
+  // base
+  for (const c of map.base.cells) { g.fillStyle = '#7a4a3a'; g.fillRect(c.x * T, c.y * T, T - 1, T - 1); }
+  for (const c of map.base.cornerSlots) { g.strokeStyle = '#c9a06a'; g.strokeRect(c.x * T + 3, c.y * T + 3, T - 7, T - 7); }
+  // slots
+  g.strokeStyle = 'rgba(200,200,220,0.35)';
+  for (const s of map.slots) g.strokeRect(s.x * T + 5, s.y * T + 5, T - 11, T - 11);
+  // resources visible up to the shown wave (their reveal wave <= current)
+  for (const r of map.resources) {
+    const revealed = r.wave <= wave;
+    g.globalAlpha = revealed ? 1 : 0.22;
+    g.fillStyle = ROLE_COLOR[r.role] || '#888';
+    const cx = r.x * T + T / 2, cy = r.y * T + T / 2;
+    g.beginPath(); g.arc(cx, cy, T * 0.34, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#0a0e12'; g.font = `${Math.floor(T * 0.42)}px monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(r.wave), cx, cy + 1);
+    if (pendingMove === r.id) { g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, T * 0.44, 0, Math.PI * 2); g.stroke(); }
+    g.globalAlpha = 1;
+  }
+  // spawns of the shown wave (+ faint older ones to see the push-out)
+  for (let i = 0; i < wave; i++) {
+    const s = map.rings[i].spawns, cur = i === wave - 1;
+    g.globalAlpha = cur ? 1 : 0.25;
+    g.fillStyle = '#ff5555'; g.fillRect(s.ground.x * T + 6, s.ground.y * T + 6, T - 13, T - 13);
+    g.fillStyle = '#8fd0ff'; g.beginPath();
+    g.moveTo(s.air.x * T + T / 2, s.air.y * T + 4); g.lineTo(s.air.x * T + T - 5, s.air.y * T + T - 5); g.lineTo(s.air.x * T + 5, s.air.y * T + T - 5);
+    g.closePath(); g.fill();
+    if (s.water) { g.fillStyle = '#4aa0e0'; g.beginPath(); g.arc(s.water.x * T + T / 2, s.water.y * T + T / 2, T * 0.28, 0, Math.PI * 2); g.fill(); }
+    g.globalAlpha = 1;
+  }
+  // side-focus arrow for the shown wave
+  g.fillStyle = '#ff9d5c'; g.font = `${T}px monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const ar = { L: ['⟵', 1.2, map.rows / 2], R: ['⟶', map.cols - 1.2, map.rows / 2], T: ['↑', map.cols / 2, 1.2], B: ['↓', map.cols / 2, map.rows - 1.2] }[ring.sideFocus];
+  if (ar) g.fillText(ar[0], ar[1] * T, ar[2] * T);
+}
+
+function cellAt(ev) {
+  const rect = $('cv').getBoundingClientRect();
+  return { x: Math.floor((ev.clientX - rect.left) / T), y: Math.floor((ev.clientY - rect.top) / T) };
+}
+function resAt(c) {
+  return map.resources.find((r) => r.x === c.x && r.y === c.y) || null;
+}
+
+$('cv').addEventListener('click', (ev) => {
+  const c = cellAt(ev);
+  if (c.x < 0 || c.y < 0 || c.x >= map.cols || c.y >= map.rows) return;
+  if (mode === 'inspect') {
+    const r = resAt(c);
+    const w = map.waterCells.some((k) => k.x === c.x && k.y === c.y);
+    const ring = map.rings.find((k) => c.x >= k.rect.x0 && c.x <= k.rect.x1 && c.y >= k.rect.y0 && c.y <= k.rect.y1);
+    $('inspect').textContent = JSON.stringify(r || {
+      cell: c, water: w, revealedAtWave: ring ? ring.wave : 'never',
+      grade: +(Math.hypot(c.x - map.base.x, c.y - map.base.y) / Math.hypot(map.cols / 2, map.rows / 2)).toFixed(2),
+    }, null, 1);
+    return;
+  }
+  snapshot();
+  if (mode === 'water') {
+    const gen = buildCampaignMap(mapId, { seed: seedV });   // generator's own water (pre-override)
+    const inGen = gen.waterCells.some((k) => k.x === c.x && k.y === c.y);
+    const isNow = map.waterCells.some((k) => k.x === c.x && k.y === c.y);
+    if (isNow) {   // remove: if generator put it there → waterRemove; if we added it → un-add
+      overrides.waterAdd = overrides.waterAdd.filter((k) => !(k.x === c.x && k.y === c.y));
+      if (inGen) overrides.waterRemove.push({ x: c.x, y: c.y });
+    } else {
+      overrides.waterRemove = overrides.waterRemove.filter((k) => !(k.x === c.x && k.y === c.y));
+      if (!inGen) overrides.waterAdd.push({ x: c.x, y: c.y });
+    }
+  } else if (mode === 'moveres') {
+    const r = resAt(c);
+    if (r && !pendingMove) { pendingMove = r.id; draw(); return; }
+    if (pendingMove) {
+      overrides.resourceMove = overrides.resourceMove.filter((m) => m.id !== pendingMove);
+      overrides.resourceMove.push({ id: pendingMove, x: c.x, y: c.y });
+      pendingMove = null;
+    }
+  } else if (mode === 'addres') {
+    overrides.resourceAdd.push({ role: $('addRole').value, wave, x: c.x, y: c.y });
+  } else if (mode === 'delres') {
+    const r = resAt(c);
+    if (r) {
+      if (r.id.startsWith('ov-')) overrides.resourceAdd = overrides.resourceAdd.filter((a) => !(a.x === r.x && a.y === r.y));
+      else overrides.resourceRemove.push(r.id);
+    }
+  } else if (mode === 'spawn') {
+    overrides.spawnMove = overrides.spawnMove.filter((s) => !(s.wave === wave && s.lane === $('spawnLane').value));
+    overrides.spawnMove.push({ wave, lane: $('spawnLane').value, x: c.x, y: c.y });
+  }
+  saveOv(); rebuild();
+});
+
+// ── controls ──
+for (const b of document.querySelectorAll('.mode')) {
+  b.addEventListener('click', () => {
+    mode = b.dataset.mode; pendingMove = null;
+    for (const x of document.querySelectorAll('.mode')) x.classList.toggle('on', x === b);
+    $('addRole').style.display = mode === 'addres' ? '' : 'none';
+    $('spawnLane').style.display = mode === 'spawn' ? '' : 'none';
+    draw();
+  });
+}
+$('wave').addEventListener('input', () => { wave = +$('wave').value; $('waveN').textContent = wave; draw(); budgets(); });
+$('seed').addEventListener('change', () => { seedV = +$('seed').value || 0; overrides = loadOv(); history = []; rebuild(); });
+$('undo').addEventListener('click', () => { if (history.length) { overrides = JSON.parse(history.pop()); saveOv(); rebuild(); } });
+$('clearOv').addEventListener('click', () => {
+  snapshot();
+  overrides = { waterAdd: [], waterRemove: [], resourceMove: [], resourceRemove: [], resourceAdd: [], spawnMove: [] };
+  saveOv(); rebuild();
+});
+$('exportOv').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(overrides, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `map-${mapId}.overrides.json`;   // drop into content/maps/overrides/ for the game to load
+  a.click();
+});
+$('importOv').addEventListener('click', () => $('importFile').click());
+$('importFile').addEventListener('change', async () => {
+  const f = $('importFile').files[0];
+  if (!f) return;
+  try { snapshot(); overrides = JSON.parse(await f.text()); saveOv(); rebuild(); }
+  catch (e) { alert('not a valid overrides JSON'); }
+});
+
+// ── boot ──
+for (const m of MAPDATA.maps) {
+  const o = document.createElement('option');
+  o.value = m.Map_ID; o.textContent = `${m.Map_ID} — ${m.Map_Name} (${m.Full_W}×${m.Full_H}, ${m.Primary_Resource}${m.Has_Water ? ', water' : ''})`;
+  $('mapSel').appendChild(o);
+}
+for (const f of MAPDATA.factions) {
+  const o = document.createElement('option');
+  o.value = f.Faction_ID; o.textContent = `${f.Faction_ID} — ${f.Faction_Name} (${f.Premium_Resource})`;
+  $('factionSel').appendChild(o);
+}
+$('mapSel').addEventListener('change', () => { mapId = +$('mapSel').value; overrides = loadOv(); history = []; rebuild(); });
+$('factionSel').addEventListener('change', () => { factionId = +$('factionSel').value; rebuild(); });
+overrides = loadOv();
+rebuild();
+</script>
+</body>
+</html>
