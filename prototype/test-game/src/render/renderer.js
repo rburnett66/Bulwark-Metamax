@@ -701,14 +701,24 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       let h = fp.h * t;
       if (onShip) { px += w * 0.125; py += h * 0.125; w *= 0.75; h *= 0.75; }
       // AUTHORED STRUCTURE ART (State Bench, faction "System"): STR-Cannon -> SYS-Cannon etc.
-      const sArtId = 'SYS-' + String(s.structId || '').replace(/^STR-/, '');
-      if (renderer.unitArt && hasArt(renderer.unitArt, sArtId) && !(renderer._noArt && renderer._noArt.has(sArtId))) {
+      // tier-aware art: an upgraded structure shows its 'SYS-X-<tier>' art when authored,
+      // else falls back to the base 'SYS-X' look
+      const sBase = 'SYS-' + String(s.structId || '').replace(/^STR-/, '');
+      const sTiered = (s.tier >= 2) ? (sBase + '-' + s.tier) : sBase;
+      const okArt = (id) => renderer.unitArt && hasArt(renderer.unitArt, id) && !(renderer._noArt && renderer._noArt.has(id));
+      const sArtId = okArt(sTiered) ? sTiered : sBase;
+      if (okArt(sArtId)) {
         liveStructIds.add(s.id);
         let sspr = renderer.structSprites.get(s.id);
+        if (sspr && sspr.__artId !== sArtId) {   // upgraded mid-life → rebuild with the new tier's art
+          sspr.destroy({ children: true });
+          renderer.structSprites.delete(s.id);
+          sspr = null;
+        }
         if (!sspr) {
           sspr = buildUnitSprite(renderer.unitArt, sArtId, t, (fp.w * 0.375));   // targetW == footprint width
           if (sspr && !sspr.children.length) { sspr.destroy(); sspr = null; }
-          if (sspr) { renderer.layers.structures.addChild(sspr); renderer.structSprites.set(s.id, sspr); }
+          if (sspr) { sspr.__artId = sArtId; renderer.layers.structures.addChild(sspr); renderer.structSprites.set(s.id, sspr); }
           else (renderer._noArt || (renderer._noArt = new Set())).add(sArtId);
         }
         if (sspr) {

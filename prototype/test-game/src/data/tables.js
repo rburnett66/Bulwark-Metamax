@@ -947,6 +947,37 @@ export const SYSTEM_UNITS = Object.freeze({
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [3000, 3000, 3000], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
   }),
+  // TIER ART SLOTS — author how each defense LOOKS at upgrade tiers 2/3 (stats live in STRUCTURES)
+  'SYS-Cannon-2': Object.freeze({
+    name: 'Cannon Tower (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Cannon Tower T2',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
+  'SYS-Cannon-3': Object.freeze({
+    name: 'Cannon Tower (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Cannon Tower T3',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
+  'SYS-Flak-2': Object.freeze({
+    name: 'Flak Tower (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Flak Tower T2',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
+  'SYS-Flak-3': Object.freeze({
+    name: 'Flak Tower (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Flak Tower T3',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
+  'SYS-Wall-2': Object.freeze({
+    name: 'Wall (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Wall T2',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
+  'SYS-Wall-3': Object.freeze({
+    name: 'Wall (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Wall T3',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
   'SYS-Cannon': Object.freeze({
     name: 'Cannon Tower', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Cannon Tower',
     armorClass: 'Structure', damageType: 'Kinetic', targets: 'Ground',
