@@ -593,21 +593,41 @@ export function updateHud(hud, state, ui) {
   } else {
     hud.unitPanel.style.display = 'block';
     const fmt = (n) => (typeof n === 'number' ? String(Math.round(n * 10) / 10) : (n == null ? '—' : String(n)));
-    hud.uname.textContent = (u.faction ? u.faction + ' ' : '') + (u.kind || u.unitId || 'Unit') + (u.tier > 1 ? '  T' + u.tier : '');
-    hud.usub.textContent = [u.role, u.domain, u.side].filter(Boolean).join(' · ');
     const frac = u.maxHp > 0 ? Math.max(0, Math.min(1, u.hp / u.maxHp)) : 0;
     hud.uhpfill.style.width = (frac * 100).toFixed(0) + '%';
     hud.uhpfill.style.background = frac > 0.5 ? '#5c5' : (frac > 0.25 ? '#dd5' : '#e55');
-    const rows = [
-      ['HP', Math.max(0, Math.ceil(u.hp)) + ' / ' + Math.ceil(u.maxHp)],
-      ['DPS', fmt(u.dps)],
-      ['Range', fmt(u.range)],
-      ['Speed', fmt(u.speed)],
-      ['Armor', u.armorClass || '—'],
-      ['Damage', u.damageType || '—'],
-      ['Targets', u.canTarget || (u.targetsBase ? 'Base' : '—')],
-      ['Vision', fmt(u.vision)],
-    ];
+    let rows;
+    if (u.isHarvester) {
+      // the HARVESTER is its own thing — a resource hauler, not a Ground/Powder truck. Its panel
+      // reads the economy loop (cargo, yield, job state), never combat stats it doesn't have.
+      const HARVEST_STATE = {
+        harvestIdle: 'docked — awaiting orders', harvestGo: 'driving to the field',
+        harvestPull: 'harvesting', harvestReturn: 'hauling home',
+      };
+      hud.uname.textContent = 'Harvester';
+      hud.usub.textContent = 'resource hauler · click a crystal field to send it';
+      rows = [
+        ['HP', Math.max(0, Math.ceil(u.hp)) + ' / ' + Math.ceil(u.maxHp)],
+        ['Cargo', Math.floor(u.cargo || 0) + ' / ' + (u.capacity || 0)],
+        ['Speed', fmt(u.speed)],
+        ['Yield', 'x' + fmt(u.yieldMult || 1)],
+        ['Status', HARVEST_STATE[u.state] || u.state || '—'],
+        ['Dock', u.homePos ? (u.homePos.x + ',' + u.homePos.y) : '—'],
+      ];
+    } else {
+      hud.uname.textContent = (u.faction ? u.faction + ' ' : '') + (u.kind || u.unitId || 'Unit') + (u.tier > 1 ? '  T' + u.tier : '');
+      hud.usub.textContent = [u.role, u.domain, u.side].filter(Boolean).join(' · ');
+      rows = [
+        ['HP', Math.max(0, Math.ceil(u.hp)) + ' / ' + Math.ceil(u.maxHp)],
+        ['DPS', fmt(u.dps)],
+        ['Range', fmt(u.range)],
+        ['Speed', fmt(u.speed)],
+        ['Armor', u.armorClass || '—'],
+        ['Damage', u.damageType || '—'],
+        ['Targets', u.canTarget || (u.targetsBase ? 'Base' : '—')],
+        ['Vision', fmt(u.vision)],
+      ];
+    }
     while (hud.ustats.firstChild) hud.ustats.removeChild(hud.ustats.firstChild);
     for (let i = 0; i < rows.length; i++) {
       const row = el(hud.doc, 'div', 'bw-ustat');
