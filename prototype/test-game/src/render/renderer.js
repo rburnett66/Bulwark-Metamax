@@ -1221,11 +1221,16 @@ export function screenToCell(renderer, sx, sy) {
   return { x: x, y: y };
 }
 
+// Ring-framing growth camera — playtest verdict (owner): the full field + 2-tile safe border
+// should be on screen from wave 1, so the zoom is OFF by default. Flip GROWTH_CAM to revisit
+// (the eased zoom-out per wave still works; it just wasn't the right feel at these map sizes).
+const GROWTH_CAM = false;
+
 function updateCamera(renderer, state, dt) {
   const cam = renderer.camera || (renderer.camera = { s: 1, x: 0, y: 0 });
   const map = state.map;
   let ts = 1, tx = 0, ty = 0;
-  if (map && map.rings && map.rings.length && map.openPlay) {
+  if (GROWTH_CAM && map && map.rings && map.rings.length && map.openPlay) {
     const t = renderer.tile;
     const w = state.waves || { current: 0, active: false };
     // active wave -> frame ITS ring; build phase / interlude -> frame the NEXT wave's ring
