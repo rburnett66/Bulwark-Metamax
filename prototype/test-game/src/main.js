@@ -141,6 +141,8 @@ export function boot(mountEl, seed) {
     inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
     if (hud && hud.hideResult) hud.hideResult();
     resetCommTracking();
+    preDialogFaction = null;
+    if (voicePacks !== null) playPreBattleDialog(null);   // wave-1 challenge before the first tap
   }
 
   function endInterlude() {
@@ -315,6 +317,8 @@ export function boot(mountEl, seed) {
   loadVoicePacks().then((p) => {
     voicePacks = p;
     if (p) console.log('[dialog] voice packs loaded:', Object.keys(p.factions).length, 'factions');
+    // boot lands on the tap-to-start interlude before the packs resolve — deliver wave 1's challenge now
+    if (interlude && mode === 'play' && !preDialogFaction) playPreBattleDialog(null);
   });
   const factionVisits = {};      // faction -> waves seen (test-mode rotation, dialog.js)
   let lastWaveFaction = null;    // wave 'clear' / match-end events carry no faction — remember it
@@ -326,12 +330,29 @@ export function boot(mountEl, seed) {
     structuresLostThisWave = 0;
   }
 
-  function commChallenge(faction, wave) {
+  function commChallenge(faction, wave, hold) {
     factionVisits[faction] = (factionVisits[faction] || 0) + 1;
     lastWaveFaction = faction;
     structuresLostThisWave = 0;
-    comm.showCall(challengeCall(voicePacks, faction, wave, currentSeed, factionVisits[faction])
-      || fallbackCall(faction, wave, currentSeed));
+    const call = challengeCall(voicePacks, faction, wave, currentSeed, factionVisits[faction])
+      || fallbackCall(faction, wave, currentSeed);
+    return comm.showCall(hold ? { ...call, hold: true } : call);
+  }
+
+  // ── PRE-BATTLE dialog sequence (owner: ALL dialog before the battle) ──
+  // Runs inside the frozen interlude: the cleared wave's commentary plays through, THEN the
+  // UPCOMING wave's challenge — whose speaker HOLDS on screen until the tap starts the fight.
+  let preDialogFaction = null;   // challenge already delivered pre-battle → skip it at wave start
+  function playPreBattleDialog(clearCall) {
+    const idx = sim.waves ? sim.waves.current : 0;          // next wave = table index `current`
+    const next = (currentWaves && currentWaves[idx]) || null;
+    const faction = (next && next.faction) || null;
+    void (async () => {
+      if (clearCall) await comm.showCall(clearCall);        // M2 runs fully (auto sign-off)
+      if (!interlude || mode !== 'play' || !faction) return;
+      preDialogFaction = faction;
+      await commChallenge(faction, idx + 1, true);          // M1 held — speaker waits for the tap
+    })();
   }
   function commOutcome() {
     const hpPct = (sim.base && sim.base.maxHp) ? Math.max(0, sim.base.hp) / sim.base.maxHp : 1;
@@ -359,7 +380,10 @@ export function boot(mountEl, seed) {
             // Boldly announce who's attacking, before the wave's enemies appear.
             if (evs[i].type === 'wave' && evs[i].phase === 'start' && evs[i].faction) {
               showWaveBanner(hud, evs[i].faction);
-              commChallenge(evs[i].faction, evs[i].wave);
+              // the challenge already played during the interlude (pre-battle sequencing); it only
+              // fires here when no interlude preceded the wave (replays)
+              if (preDialogFaction === evs[i].faction) preDialogFaction = null;
+              else commChallenge(evs[i].faction, evs[i].wave);
             }
             if (evs[i].type === 'destroyed') structuresLostThisWave++;
             // harvest feedback: what the haul was worth (quest hauls pay loyalty, not gold)
@@ -375,7 +399,7 @@ export function boot(mountEl, seed) {
               if (mode === 'play') {
                 interlude = true;
                 hud.setNextWavePrompt(true, 'TAP TO START NEXT WAVE');
-                if (call) comm.showCall({ ...call, hold: true });
+                playPreBattleDialog(call);   // M2 commentary, then the next wave's held challenge
               } else if (call) {
                 comm.showCall(call);
               }
