@@ -415,7 +415,8 @@ function spawnFx(renderer, ev) {
   renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: ttl, color: color, kind: kind });
   // burning wreckage scaled to the UNIT's size (0.28-radius unit → scale ~1), so the fire fits the unit instead
   // of a fixed oversized blob. ~4s burn.
-  if (ev.type === 'kill') spawnFlame(renderer, p.x, p.y, (ev.radius || 0.28) / 0.28, 4.0);
+  // owner tuning (2026-07-13): unit wreck fires shrunk 60% — full radius-scale flames dwarfed the units
+  if (ev.type === 'kill') spawnFlame(renderer, p.x, p.y, ((ev.radius || 0.28) / 0.28) * 0.4, 4.0);
 }
 
 function updateFx(renderer) {

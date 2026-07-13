@@ -199,7 +199,9 @@ export function buildCampaignMap(mapId, opts = {}) {
   // Resources grow as FIELDS — connected clusters of cells the harvester works as one job. Primary
   // fields are patches (2-3 cells: the safe income you settle into); premium is usually a single
   // rich cell (the one-shot prize); quest is always a lone node at the far edge.
-  const CLUSTER = { primary: (r) => 2 + (r() < 0.5 ? 1 : 0), premium: (r) => 1 + (r() < 0.25 ? 1 : 0), quest: () => 1 };
+  // Owner tuning (2026-07-13): primary fields shrank 2-3 → 1-2 cells — the board carried too much
+  // easy gold once collection landed (the harvest economy is now the faucet: no passive income).
+  const CLUSTER = { primary: (r) => 1 + (r() < 0.5 ? 1 : 0), premium: (r) => 1 + (r() < 0.25 ? 1 : 0), quest: () => 1 };
   const place = (n, wave, band, type, role, rect) => {
     const def = resourceDef(type, role === 'premium' ? 'Premium' : 'Primary');
     let bi = 0;

@@ -54,13 +54,13 @@ function fresh(seed) {
 {
   const { s } = fresh(5);
   const hv = s.units.get(s.harvesterId);
-  // primaries are placed as multi-cell fields — find one with ≥2 cells
+  // primaries are placed as 1-2 cell fields — find a 2-cell one (open play: any wave is workable)
   const byField = {};
-  for (const n of s.resourceNodes.filter((n) => n.role === 'primary' && n.wave === 1)) {
+  for (const n of s.resourceNodes.filter((n) => n.role === 'primary')) {
     (byField[n.fieldId] = byField[n.fieldId] || []).push(n);
   }
   const field = Object.values(byField).find((f) => f.length >= 2);
-  assert(field, 'a multi-cell primary field exists on wave 1');
+  assert(field, 'a multi-cell primary field exists somewhere on the map');
   applyCommand(s, { type: 'harvest', nodeId: field[0].id });
   // the whole FIELD drains from a single order (both cells hit zero at some point)
   let allDrained = false, restedHome = false, regrew = false, resumed = false;

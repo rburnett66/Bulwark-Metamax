@@ -29,6 +29,12 @@ const CSS = `
 .bw-btn:disabled { opacity:0.4; cursor:default; }
 .bw-btn.bw-selected { background:#3d6a3d; border-color:#7ac07a; }
 .bw-seed { font-size:11px; color:#8fa4b8; }
+.bw-nextwave { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:auto;
+  background:rgba(10,16,22,0.88); border:2px solid #5fe0ff; border-radius:8px; color:#e7f6ff;
+  font:inherit; font-size:22px; font-weight:bold; letter-spacing:3px; padding:18px 34px; cursor:pointer;
+  box-shadow:0 0 24px -6px #5fe0ff; animation: bw-nw-pulse 1.6s ease-in-out infinite; }
+.bw-nextwave:hover { background:rgba(20,32,44,0.92); }
+@keyframes bw-nw-pulse { 0%,100% { box-shadow:0 0 24px -6px #5fe0ff; } 50% { box-shadow:0 0 34px -2px #5fe0ff; } }
 .bw-palette { position:absolute; left:6px; top:56px; width:168px; display:flex; flex-direction:column; gap:4px; }
 .bw-palette .bw-title { font-size:11px; color:#9ab; margin-bottom:2px; }
 .bw-buildbtn { display:flex; justify-content:space-between; width:100%; text-align:left; }
@@ -191,6 +197,13 @@ export function createHud(mountEl, callbacks) {
   topbar.appendChild(factionSel);
   topbar.appendChild(mapSel);
   topbar.appendChild(seedEl);
+  // Between-wave INTERLUDE prompt — centered TAP TO START; shown while the sim is frozen after the
+  // wave-clear dialog (the speaker stays on screen). Clicking it is the only way time resumes.
+  const nextWaveBtn = el(doc, 'button', 'bw-nextwave', 'TAP TO START NEXT WAVE');
+  nextWaveBtn.style.display = 'none';
+  nextWaveBtn.addEventListener('click', () => { if (cbs.onNextWave) cbs.onNextWave(); });
+  root.appendChild(nextWaveBtn);
+
   // VERSION STAMP — which build this tab is actually running. The game's own VERSION (src/version.js —
   // bumped with every gameplay change) shows UNCONDITIONALLY, so it never depends on the server; the git
   // commit from serve_prototype.py's /__version is appended when available. Include it in bug reports.
@@ -366,6 +379,8 @@ export function createHud(mountEl, callbacks) {
     waveEl,
     timerEl,
     startWaveBtn,
+    nextWaveBtn,
+    setNextWavePrompt(on) { nextWaveBtn.style.display = on ? '' : 'none'; },
     seedEl,
     paletteBtns,
     selPanel,

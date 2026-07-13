@@ -80,6 +80,8 @@ export function boot(mountEl, seed) {
   let replayIdx = 0;
   let activeReplayLog = null; // log being played back (for final hash check)
   let ended = false;          // sim.result reached; stop stepping
+  let interlude = false;      // between-wave FREEZE: dialog speaker held on screen, sim/time/regrowth
+                              // all paused until the player taps START NEXT WAVE (play mode only)
   let accumulator = 0;        // fixed-timestep accumulator (seconds)
   let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame
   let inputHandle = null;
@@ -119,11 +121,22 @@ export function boot(mountEl, seed) {
     replayIdx = 0;
     activeReplayLog = null;
     ended = false;
+    interlude = false;
+    if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
     accumulator = 0;
     pendingEvents = [];
     inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
     if (hud && hud.hideResult) hud.hideResult();
     resetCommTracking();
+  }
+
+  function endInterlude() {
+    if (!interlude) return;
+    interlude = false;
+    accumulator = 0;                      // no time-jump on resume
+    hud.setNextWavePrompt(false);
+    comm.dismiss();                       // the held speaker signs off
+    submit({ type: 'startWave' });
   }
 
   // ── ring-campaign map switch (Map picker): rebuild board, waves, renderer — different maps have
@@ -185,8 +198,10 @@ export function boot(mountEl, seed) {
       if (structId !== null) ui.selectedStructureId = null;
     },
     onStartWave: () => {
+      if (interlude) { endInterlude(); return; }
       submit({ type: 'startWave' });
     },
+    onNextWave: () => { endInterlude(); },
     onFactionSelect: (faction) => {
       // Rebuild the enemy schedule for the chosen faction (or the mixed roster) and restart the run.
       currentTestFaction = faction || null;
@@ -301,7 +316,7 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   app.ticker.add(() => {
     const dtMs = (app.ticker && typeof app.ticker.deltaMS === 'number') ? app.ticker.deltaMS : 1000 / 60;
-    if (!ended) {
+    if (!ended && !interlude) {
       accumulator += Math.min(dtMs / 1000, 0.25);
       while (accumulator >= FIXED_DT && !ended) {
         if (mode === 'replay') {
@@ -326,8 +341,17 @@ export function boot(mountEl, seed) {
               flashMessage(hud, d.role === 'quest' ? `+${d.units} quest units (loyalty)` : `+${d.gold}g ${d.role}`);
             }
             // M2 — the repelled faction comments on how the wave went (final wave: M3 handles it).
-            if (evs[i].type === 'wave' && evs[i].phase === 'clear' && lastWaveFaction && evs[i].wave < evs[i].total) {
-              comm.showCall(winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false));
+            // In PLAY mode this opens the between-wave INTERLUDE: the speaker HOLDS on screen, the
+            // sim freezes (timer + regrowth included), and a centered TAP TO START prompt resumes.
+            if (evs[i].type === 'wave' && evs[i].phase === 'clear' && evs[i].wave < evs[i].total) {
+              const call = lastWaveFaction ? winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false) : null;
+              if (mode === 'play') {
+                interlude = true;
+                hud.setNextWavePrompt(true);
+                if (call) comm.showCall({ ...call, hold: true });
+              } else if (call) {
+                comm.showCall(call);
+              }
             }
           }
         }

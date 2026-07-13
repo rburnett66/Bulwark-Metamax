@@ -76,6 +76,13 @@ export function initHarvest(state, map) {
     harvestSec: nodeHarvestSec(r),
   }));
   state.mapScore = { goldFromPrimary: 0, goldFromPremium: 0, questUnits: 0 };
+  // HARVEST ECONOMY (owner, 2026-07-13): on resource maps the harvester IS the faucet — start with
+  // 900 gold and turn the passive gold timer OFF. Every coin after the opening build is hauled.
+  if (state.economy) {
+    state.economy.money = 900;
+    state.economy.totalEarned = 900;
+    state.economy.incomePerSec = 0;
+  }
   state.harvesterIds = [];
   spawnHarvester(state, homeCell(map));
 }
