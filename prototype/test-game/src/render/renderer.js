@@ -734,7 +734,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
               const dx = (tu.pos.x * t + t * 0.5) - (px + w / 2);
               const dy = (tu.pos.y * t + t * 0.5) - (py + h / 2);
               if (dx * dx + dy * dy > 1) {
-                const want = Math.atan2(dy, dx) + UNIT_FACING_OFFSET;
+                const want = Math.atan2(dy, dx) + UNIT_FACING_OFFSET + Math.PI;   // bench aiming convention is 180 deg from the unit one (owner: all towers aimed backwards)
                 sspr.__facing = (sspr.__facing == null) ? want : approachAngle(sspr.__facing, want, 0.25);
               }
             }
