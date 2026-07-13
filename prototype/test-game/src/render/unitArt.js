@@ -22,10 +22,18 @@ export async function loadUnitArt() {
   try {
     const manifest = await fetch('content/units/index.json').then((r) => r.json());
     for (const file of manifest.factions || []) {
-      const fac = await fetch('content/units/' + file).then((r) => r.json());
-      const sheetName = fac.sheet;
-      if (sheetName && !art.sheets[sheetName]) art.sheets[sheetName] = await loadSheet(sheetName);
-      for (const uid in (fac.units || {})) art.defs[uid] = { sheet: sheetName, shape: fac.units[uid].shape || null, layers: fac.units[uid].layers || {}, rotation: fac.units[uid].rotation || 0 };
+      // PER-FILE guard: a missing/broken faction def (e.g. system.units.json listed before its
+      // first save from the tool) must never take down every OTHER faction's art
+      try {
+        const res = await fetch('content/units/' + file);
+        if (!res.ok) { console.warn('[unitArt] skipped', file, '(' + res.status + ')'); continue; }
+        const fac = await res.json();
+        const sheetName = fac.sheet;
+        if (sheetName && !art.sheets[sheetName]) art.sheets[sheetName] = await loadSheet(sheetName);
+        for (const uid in (fac.units || {})) art.defs[uid] = { sheet: sheetName, shape: fac.units[uid].shape || null, layers: fac.units[uid].layers || {}, rotation: fac.units[uid].rotation || 0 };
+      } catch (e) {
+        console.warn('[unitArt] skipped', file, '—', e && e.message);
+      }
     }
     art.ready = Object.keys(art.defs).length > 0;
   } catch (e) {
