@@ -197,8 +197,11 @@ export function cmdHarvest(state, cmd) {
 function liveStructs(state) {
   return [...state.structures.values()].filter((s) => s.hp > 0 && s.lifecycle !== 'Destroyed');
 }
+function baseCells(state) {
+  return state.base ? (state.base.cells || [state.base.pos]) : [];
+}
 function routeTo(state, u, target) {
-  const nav = buildNavGrid(state.map, liveStructs(state));
+  const nav = buildNavGrid(state.map, liveStructs(state), baseCells(state));
   const from = { x: Math.round(u.pos.x), y: Math.round(u.pos.y) };
   u.path = findWalkerPath(nav, from, { x: target.x, y: target.y }) || [{ x: target.x, y: target.y }];
   u.pathIdx = 0;
@@ -206,7 +209,7 @@ function routeTo(state, u, target) {
   u.state = 'harvestGo';
 }
 function routeHome(state, u) {
-  const nav = buildNavGrid(state.map, liveStructs(state));
+  const nav = buildNavGrid(state.map, liveStructs(state), baseCells(state));
   const from = { x: Math.round(u.pos.x), y: Math.round(u.pos.y) };
   u.path = findWalkerPath(nav, from, u.homePos) || [u.homePos];
   u.pathIdx = 0;

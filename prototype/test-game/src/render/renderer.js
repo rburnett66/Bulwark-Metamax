@@ -586,7 +586,7 @@ function spawnFx(renderer, ev) {
   let color = 0xffffff, ttl = 0.4, kind = 'ring';
   switch (ev.type) {
     case 'kill': color = 0xe05040; ttl = 0.5; kind = 'ring'; break;
-    case 'damage': color = 0xffe080; ttl = 0.2; kind = 'flash'; break;
+    case 'damage': return;   // retired: the old yellow hit-dot — cosmetic projectiles flash at the impact point now (owner)
     case 'build': color = 0x60d060; ttl = 0.5; kind = 'ring'; break;
     case 'spawn': color = 0x80b0ff; ttl = 0.35; kind = 'ring'; break;
     default: return;
@@ -866,6 +866,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       const sTiered = (s.tier >= 2) ? (sBase + '-' + s.tier) : sBase;
       const okArt = (id) => renderer.unitArt && hasArt(renderer.unitArt, id) && !(renderer._noArt && renderer._noArt.has(id));
       const sArtId = okArt(sTiered) ? sTiered : sBase;
+      let artDrawn = false;
       if (okArt(sArtId)) {
         liveStructIds.add(s.id);
         let sspr = renderer.structSprites.get(s.id);
@@ -897,19 +898,31 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
                 sspr.__facing = (sspr.__facing == null) ? want : approachAngle(sspr.__facing, want, 0.25);
               }
             }
-            sspr.rotation = sspr.__facing || 0;
+            // two-layer turrets (base + barrel): only the BARREL tracks; the base stays planted.
+            // Single-layer turrets rotate whole, as before.
+            if (sspr.__weapon) sspr.__weapon.rotation = (sspr.__weapon.__baseRot || 0) + (sspr.__facing || 0);
+            else sspr.rotation = sspr.__facing || 0;
           }
+          artDrawn = true;
         }
       }
       const color = KIND_COLORS[s.kind] != null ? KIND_COLORS[s.kind] : 0x888888;
       const building = s.lifecycle === 'Placing' || s.lifecycle === 'Building';
       const alpha = building ? 0.55 : (s.lifecycle === 'Selling' ? 0.4 : 1);
-      gS.beginFill(color, alpha);
-      gS.drawRect(px + 2, py + 2, w - 4, h - 4);
-      gS.endFill();
-      gS.lineStyle(1.5, 0x101418, 0.8);
-      gS.drawRect(px + 2, py + 2, w - 4, h - 4);
-      gS.lineStyle(0);
+      if (artDrawn) {
+        // authored art carries the look — the old kind-colored cell block is gone (owner); a soft
+        // ground shadow sits under the sprite instead so it doesn't float
+        gS.beginFill(0x000000, 0.24 * alpha);
+        gS.drawEllipse(px + w / 2, py + h / 2 + h * 0.10, w * 0.46, h * 0.40);
+        gS.endFill();
+      } else {
+        gS.beginFill(color, alpha);
+        gS.drawRect(px + 2, py + 2, w - 4, h - 4);
+        gS.endFill();
+        gS.lineStyle(1.5, 0x101418, 0.8);
+        gS.drawRect(px + 2, py + 2, w - 4, h - 4);
+        gS.lineStyle(0);
+      }
       // tier pips
       const tier = s.tier || 1;
       for (let i = 0; i < tier; i++) {
@@ -1362,6 +1375,21 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
   }
 
   emitCombatFx(renderer, state);   // shells/tracers + damage fire + flyer sparks (cosmetic)
+
+  // UPGRADING structures spark like a repair in progress (owner) — same welding sparks, emitted
+  // across the footprint while the upgrade timer runs
+  if (state.structures) {
+    for (const us of state.structures.values()) {
+      if (!us || us.lifecycle !== 'Upgrading') continue;
+      if (Math.random() < 0.45) {
+        const fp = us.footprint || { w: 1, h: 1 };
+        const cx = us.pos.x + ((fp.w || 1) - 1) / 2 + (Math.random() * 2 - 1) * 0.3;
+        const cy = us.pos.y + ((fp.h || 1) - 1) / 2 + (Math.random() * 2 - 1) * 0.3;
+        const wp = cellToLocal(renderer, cx, cy);
+        spawnSparks(renderer, wp.x, wp.y - t * 0.12, 1 + (Math.random() * 2 | 0));
+      }
+    }
+  }
 
   // Repair SPARKS — a bot actively welding a structure (state 'repairing') throws sparks at the work site, so
   // the repair reads clearly (and confirms the structure's HP is climbing). Emitted at the bot's position.

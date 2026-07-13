@@ -46,12 +46,16 @@
       "shape": "Structure",
       "layers": {
         "base": {
-          "frame": "art_21_sci.png",
+          "frame": "art_17_sci.png",
           "offset": 0,
           "scale": 1
         },
         "head": null,
-        "weapon": null
+        "weapon": {
+          "frame": "art_21_sci.png",
+          "offset": 0,
+          "scale": 0.9
+        }
       }
     },
     "SYS-Cannon-2": {
@@ -59,12 +63,16 @@
       "shape": "Structure",
       "layers": {
         "base": {
-          "frame": "art_20_sci.png",
+          "frame": "map_10_sci.png",
           "offset": 0,
           "scale": 1
         },
         "head": null,
-        "weapon": null
+        "weapon": {
+          "frame": "art_20_sci.png",
+          "offset": 0,
+          "scale": 0.9
+        }
       }
     },
     "SYS-Cannon-3": {
@@ -72,12 +80,16 @@
       "shape": "Structure",
       "layers": {
         "base": {
-          "frame": "art_19_sci.png",
+          "frame": "art_15_sci.png",
           "offset": 0,
           "scale": 1
         },
         "head": null,
-        "weapon": null
+        "weapon": {
+          "frame": "art_19_sci.png",
+          "offset": 0,
+          "scale": 0.9
+        }
       }
     }
   }

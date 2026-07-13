@@ -7,12 +7,16 @@
       "shape": "Structure",
       "layers": {
         "base": {
-          "frame": "art_7_sci.png",
+          "frame": "art_3_sci.png",
           "offset": 0,
           "scale": 1
         },
         "head": null,
-        "weapon": null
+        "weapon": {
+          "frame": "art_7_sci.png",
+          "offset": 0,
+          "scale": 0.85
+        }
       }
     },
     "SYS-Flak-2": {
@@ -20,12 +24,16 @@
       "shape": "Structure",
       "layers": {
         "base": {
-          "frame": "art_5_sci.png",
+          "frame": "map_9_sci.png",
           "offset": 0,
           "scale": 1
         },
         "head": null,
-        "weapon": null
+        "weapon": {
+          "frame": "art_5_sci.png",
+          "offset": 0,
+          "scale": 0.85
+        }
       }
     },
     "SYS-Flak-3": {
@@ -38,7 +46,11 @@
           "scale": 1
         },
         "head": null,
-        "weapon": null
+        "weapon": {
+          "frame": "art_6_sci.png",
+          "offset": 0,
+          "scale": 0.85
+        }
       }
     }
   }

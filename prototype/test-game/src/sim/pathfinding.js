@@ -11,11 +11,19 @@ function clampInt(v, min, max) {
  * Rasterize water cells plus wall/moat footprints into a walker-blocking grid.
  * Towers are hazards but do NOT block walker movement; only walls and moats do.
  */
-export function buildNavGrid(map, structures) {
+export function buildNavGrid(map, structures, extraBlocked) {
   const cols = map.cols;
   const rows = map.rows;
   const passable = new Uint8Array(cols * rows);
   passable.fill(1);
+
+  // extra blocked cells (e.g. the BASE's 3x3 footprint — it isn't in state.structures, so
+  // harvesters were pathing straight through the keep)
+  if (extraBlocked) {
+    for (const c of extraBlocked) {
+      if (c && c.x >= 0 && c.x < cols && c.y >= 0 && c.y < rows) passable[c.y * cols + c.x] = 0;
+    }
+  }
 
   // Water blocks walkers.
   if (map.waterCells) {
