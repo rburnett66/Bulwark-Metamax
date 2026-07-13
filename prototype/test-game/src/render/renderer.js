@@ -656,6 +656,8 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
 
   // structures
   if (state.structures) {
+    if (!renderer.structSprites) renderer.structSprites = new Map();
+    const liveStructIds = new Set();
     for (const s of state.structures.values()) {
       if (!s || s.lifecycle === 'Destroyed') continue;
       const fp = s.footprint || { w: 1, h: 1 };
@@ -663,6 +665,22 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       const py = s.pos.y * t;
       const w = fp.w * t;
       const h = fp.h * t;
+      // AUTHORED STRUCTURE ART (State Bench, faction "System"): STR-Cannon -> SYS-Cannon etc.
+      const sArtId = 'SYS-' + String(s.structId || '').replace(/^STR-/, '');
+      if (renderer.unitArt && hasArt(renderer.unitArt, sArtId) && !(renderer._noArt && renderer._noArt.has(sArtId))) {
+        liveStructIds.add(s.id);
+        let sspr = renderer.structSprites.get(s.id);
+        if (!sspr) {
+          sspr = buildUnitSprite(renderer.unitArt, sArtId, t, (fp.w * 0.375));   // targetW == footprint width
+          if (sspr && !sspr.children.length) { sspr.destroy(); sspr = null; }
+          if (sspr) { renderer.layers.structures.addChild(sspr); renderer.structSprites.set(s.id, sspr); }
+          else (renderer._noArt || (renderer._noArt = new Set())).add(sArtId);
+        }
+        if (sspr) {
+          sspr.x = px + w / 2; sspr.y = py + h / 2;
+          sspr.alpha = (s.lifecycle === 'Building' || s.lifecycle === 'Placing') ? 0.55 : 1;
+        }
+      }
       const color = KIND_COLORS[s.kind] != null ? KIND_COLORS[s.kind] : 0x888888;
       const building = s.lifecycle === 'Placing' || s.lifecycle === 'Building';
       const alpha = building ? 0.55 : (s.lifecycle === 'Selling' ? 0.4 : 1);
@@ -702,11 +720,16 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       if (!u || u.hp <= 0) continue;
       // AUTHORED ART: draw a retained sprite part-stack (built lazily, cached by unit id) — so you can SEE
       // which unit/faction is attacking. Units without art fall through to the coloured primitive below.
-      if (renderer.unitArt && hasArt(renderer.unitArt, u.unitId)) {
+      const artId = u.artKey || u.unitId;   // the harvester borrows truck STATS but owns its ART slot
+      if (renderer.unitArt && hasArt(renderer.unitArt, artId) && !(renderer._noArt && renderer._noArt.has(artId))) {
         let spr = renderer.unitSprites.get(u.id);
         if (!spr) {
-          spr = buildUnitSprite(renderer.unitArt, u.unitId, t, u.radius);   // size the sprite to the sim footprint
+          spr = buildUnitSprite(renderer.unitArt, artId, t, u.radius);   // size the sprite to the sim footprint
+          // a sprite that built EMPTY (frame names missing from the sheet) would sim invisibly while
+          // the primitive path is skipped — an unseeable unit attacking the base. Treat as no-art.
+          if (spr && !spr.children.length) { spr.destroy(); spr = null; }
           if (spr) { renderer.unitSpriteLayer.addChild(spr); renderer.unitSprites.set(u.id, spr); }
+          else { (renderer._noArt || (renderer._noArt = new Set())).add(artId); }
         }
         if (spr) {
           const pa = cellToLocal(renderer, u.pos.x, u.pos.y);
@@ -954,12 +977,24 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         gO.lineStyle(0);
       }
     }
-    // harvester cargo bars (over each truck) — fill as they pull, empty on deposit
+    // harvester cargo bars (over each truck) — fill as they pull, empty on deposit — plus the LOAD
+    // ITSELF: crystal lumps stacked on the bed that grow with the haul, tinted by what's carried
     for (const hid of state.harvesterIds || []) {
       const hv = state.units.get(hid);
       if (hv && hv.hp > 0 && hv.capacity) {
         const p = cellToLocal(renderer, hv.pos.x, hv.pos.y);
         const w = t * 0.9, frac = Math.min(1, hv.cargo / hv.capacity);
+        if (frac > 0.02) {
+          const lumpC = COLOR_TINT[hv.cargoColor] || 0xffd76a;
+          const lump = (dx, dy, r) => {
+            gO.beginFill(lumpC, 0.95); gO.drawCircle(p.x + dx * t, p.y + dy * t, r); gO.endFill();
+            gO.lineStyle(1, 0x0a0e12, 0.7); gO.drawCircle(p.x + dx * t, p.y + dy * t, r); gO.lineStyle(0);
+          };
+          const base = t * 0.10 * (0.5 + 0.5 * frac);
+          lump(-0.10, 0.10, base);                       // the bed cluster grows with the load
+          if (frac > 0.35) lump(0.12, 0.14, base * 0.85);
+          if (frac > 0.7) lump(0.01, 0.02, base * 0.75);
+        }
         gO.beginFill(0x0a0e12, 0.8); gO.drawRect(p.x - w / 2, p.y + t * 0.55, w, 4); gO.endFill();
         gO.beginFill(0xffd76a, 0.95); gO.drawRect(p.x - w / 2, p.y + t * 0.55, w * frac, 4); gO.endFill();
       }
@@ -998,6 +1033,18 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         vec(e.pushX, e.pushY, 0xffe14d);
         vec(e.steerX, e.steerY, 0xff9d2a);
         vec(e.clampX, e.clampY, 0x2ad4ff);
+      }
+    }
+  }
+
+  // retire structure art sprites for structures that are gone/destroyed
+  if (renderer.structSprites && renderer.structSprites.size) {
+    for (const [sid, sspr] of renderer.structSprites) {
+      const st = state.structures && state.structures.get(sid);
+      if (!st || st.lifecycle === 'Destroyed') {
+        if (sspr.parent) sspr.parent.removeChild(sspr);
+        sspr.destroy({ children: true });
+        renderer.structSprites.delete(sid);
       }
     }
   }

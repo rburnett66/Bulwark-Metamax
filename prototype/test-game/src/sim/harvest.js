@@ -58,6 +58,7 @@ export function spawnHarvester(state) {
   const u = createUnit(state, HARVESTER_UNIT, 1, { x: pos.x, y: pos.y }, 'ground', 'defender');
   if (!state.units.has(u.id)) state.units.set(u.id, u);
   u.isHarvester = true;
+  u.artKey = 'SYS-Harvester';   // author its look in the State Bench under faction "System"
   u.state = 'harvestIdle';
   u.dps = 0; u.targetsBase = false; u.targetId = null;
   u.hp = s.hp; u.maxHp = s.hp; u.speed = s.speed;
