@@ -27,7 +27,7 @@
         "base": {
           "frame": "art_3_high.png",
           "offset": 0,
-          "scale": 1
+          "scale": 0.55
         },
         "head": null,
         "weapon": null
