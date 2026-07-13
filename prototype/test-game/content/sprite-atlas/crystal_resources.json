@@ -1,0 +1,215 @@
+{
+ "frames": {
+  "blue_2.png": {
+   "frame": {
+    "x": 3,
+    "y": 3,
+    "w": 239,
+    "h": 256
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 239,
+    "h": 256
+   },
+   "sourceSize": {
+    "w": 239,
+    "h": 256
+   }
+  },
+  "green_0.png": {
+   "frame": {
+    "x": 248,
+    "y": 3,
+    "w": 237,
+    "h": 256
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 237,
+    "h": 256
+   },
+   "sourceSize": {
+    "w": 237,
+    "h": 256
+   }
+  },
+  "green_1.png": {
+   "frame": {
+    "x": 491,
+    "y": 3,
+    "w": 234,
+    "h": 256
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 234,
+    "h": 256
+   },
+   "sourceSize": {
+    "w": 234,
+    "h": 256
+   }
+  },
+  "yellow_0.png": {
+   "frame": {
+    "x": 3,
+    "y": 265,
+    "w": 256,
+    "h": 248
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 256,
+    "h": 248
+   },
+   "sourceSize": {
+    "w": 256,
+    "h": 248
+   }
+  },
+  "green_2.png": {
+   "frame": {
+    "x": 265,
+    "y": 265,
+    "w": 256,
+    "h": 246
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 256,
+    "h": 246
+   },
+   "sourceSize": {
+    "w": 256,
+    "h": 246
+   }
+  },
+  "blue_0.png": {
+   "frame": {
+    "x": 527,
+    "y": 265,
+    "w": 256,
+    "h": 243
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 256,
+    "h": 243
+   },
+   "sourceSize": {
+    "w": 256,
+    "h": 243
+   }
+  },
+  "blue_1.png": {
+   "frame": {
+    "x": 3,
+    "y": 519,
+    "w": 256,
+    "h": 241
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 256,
+    "h": 241
+   },
+   "sourceSize": {
+    "w": 256,
+    "h": 241
+   }
+  },
+  "green_3.png": {
+   "frame": {
+    "x": 265,
+    "y": 519,
+    "w": 256,
+    "h": 219
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 256,
+    "h": 219
+   },
+   "sourceSize": {
+    "w": 256,
+    "h": 219
+   }
+  },
+  "blue_3.png": {
+   "frame": {
+    "x": 527,
+    "y": 519,
+    "w": 256,
+    "h": 214
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 256,
+    "h": 214
+   },
+   "sourceSize": {
+    "w": 256,
+    "h": 214
+   }
+  },
+  "red_0.png": {
+   "frame": {
+    "x": 3,
+    "y": 766,
+    "w": 204,
+    "h": 167
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 204,
+    "h": 167
+   },
+   "sourceSize": {
+    "w": 204,
+    "h": 167
+   }
+  }
+ },
+ "meta": {
+  "app": "metamax-sprites",
+  "version": "1.0",
+  "image": "crystal_resources.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 974,
+   "h": 936
+  },
+  "scale": "1"
+ }
+}

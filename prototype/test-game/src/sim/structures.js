@@ -142,6 +142,21 @@ export function placeStructure(state, structId, slotOrCell) {
 
   emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: structId, phase: 'start', pos: { x: s.pos.x, y: s.pos.y } });
 
+  // CRUSH RULE (owner, 2026-07-13): building on a resource DESTROYS it — permanently, even a
+  // regrowing primary. The ground is gone; nothing comes back, sell or no sell.
+  if (state.resourceNodes) {
+    const cells = footprintCells(cell, def.footprint);
+    for (const n of state.resourceNodes) {
+      if (n.remaining <= 0 && !n.respawns) continue;
+      if (cells.some((c) => c.x === n.x && c.y === n.y)) {
+        n.remaining = 0;
+        n.respawns = false;
+        n.respawnAt = null;
+        emitEvent(state, { type: 'nodeDestroyed', tick: state.tick, nodeId: n.id, pos: { x: n.x, y: n.y } });
+      }
+    }
+  }
+
   recomputeUnitPaths(state);   // any structure now changes the nav grid → reroute walkers around it
   return s;
 }

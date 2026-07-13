@@ -155,6 +155,20 @@ function fresh(seed) {
   assert(!rc.ok && /resources/.test(rc.reason), `classic map rejects the bay (${rc.reason})`);
 }
 
+// ── CRUSH RULE: building on a resource destroys it forever — even a regrowing primary ──
+{
+  const { s } = fresh(5);
+  s.economy.money = 100000;
+  const node = s.resourceNodes.find((n) => n.role === 'primary' && n.respawns);
+  const placed = applyCommand(s, { type: 'place', structId: 'STR-Wall', cell: { x: node.x, y: node.y } });
+  assert(placed.ok, `structure placed on the crystal (${placed.reason})`);
+  assert(node.remaining === 0 && node.respawns === false, 'crystal destroyed on placement');
+  for (let i = 0; i < 30 * 200; i++) stepSim(s, 1 / 30);
+  assert(node.remaining === 0 && node.respawnAt == null, 'crushed crystal never grows back');
+  const order = applyCommand(s, { type: 'harvest', nodeId: node.id });
+  if (!order.ok) assert(/exhaust/.test(order.reason), `crushed single-cell field rejects orders (${order.reason})`);
+}
+
 // ── determinism: identical seeds and orders → identical hash (nodes + cargo are hashed) ──
 {
   const runOnce = () => {

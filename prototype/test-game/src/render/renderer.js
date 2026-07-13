@@ -179,7 +179,9 @@ export function createRenderer(app, map) {
 
   // structHp is SECOND-highest by contract: structure/base health bars must always read over units,
   // air, and FX. 'fog' is reserved as the permanent TOP layer for fog of war.
-  const layerNames = ['water', 'ground', 'structures', 'units', 'air', 'fx', 'overlay', 'structHp', 'fog'];
+  // 'resources' sits ABOVE ground, BELOW structures/units — crystals grow out of the terrain and
+  // everything that moves or is built stands on top of them.
+  const layerNames = ['water', 'ground', 'resources', 'structures', 'units', 'air', 'fx', 'overlay', 'structHp', 'fog'];
   const layers = {};
   for (let i = 0; i < layerNames.length; i++) {
     const name = layerNames[i];
@@ -211,7 +213,10 @@ export function createRenderer(app, map) {
     // sitting above the primitive Graphics. `unitArt` is set by main.js once loadUnitArt() resolves.
     unitArt: null,
     unitSprites: new Map(),
-    unitSpriteLayer: new PIXI.Container()
+    unitSpriteLayer: new PIXI.Container(),
+    // Resource ART (crystal_resources sheet): a retained sprite per live node, keyed by node id.
+    resourceArt: null,
+    resourceSprites: new Map()
   };
 
   layers.structures.addChild(renderer.dyn.structures);
@@ -231,6 +236,15 @@ export function createRenderer(app, map) {
     const q = cellToLocal(renderer, cellX, cellY);
     spawnFlame(renderer, q.x, q.y, scale, ttl);
   };
+
+  // Crystal resource sheet — loaded lazily; nodes render as primitive circles until (and if) it lands.
+  // Maps with no resources never need it, so the fetch failure path is silent.
+  if (map.resources && map.resources.length) {
+    import('../harness/atlas.js')
+      .then(({ loadAtlasFromUrl }) => loadAtlasFromUrl('crystal_resources.png'))
+      .then((art) => { renderer.resourceArt = art; })
+      .catch((e) => console.warn('[resourceArt] skipped:', e && e.message));
+  }
 
   drawStaticBoard(renderer, map);
   return renderer;
@@ -818,16 +832,45 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       const hv0 = state.units.get(hid);
       if (hv0 && hv0.hp > 0 && hv0.fieldId) assignedFields.add(hv0.fieldId);
     }
+    // node ART: crystal sprites (role → colour pool, variant by node id) drawn on the 'resources'
+    // layer — above ground, below structures/units. Primitive circles are the not-yet-loaded fallback.
+    const art = renderer.resourceArt;
+    const pools = art && (renderer._resPools || (renderer._resPools = {
+      primary: art.frameNames.filter((n) => n.startsWith('green')),
+      premium: art.frameNames.filter((n) => n.startsWith('yellow') || n.startsWith('red')),
+      quest: art.frameNames.filter((n) => n.startsWith('blue')),
+    }));
+    const idHash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+    const liveIds = new Set();
     for (const node of state.resourceNodes || state.map.resources || []) {
       if (gated && node.wave > wv) continue;   // open play: every node is on the board from wave 1
       const p = cellToLocal(renderer, node.x, node.y);   // cellToLocal centers in the cell
       const frac = node.units ? Math.max(0, (node.remaining != null ? node.remaining : node.units) / node.units) : 1;
       const color = ROLE_COLOR[node.role] || 0x888888;
-      if (assignedFields.has(node.fieldId)) {   // a field some harvester is working
+      const gone = frac <= 0 && !node.respawns;          // consumed forever (or crushed by a structure)
+      if (assignedFields.has(node.fieldId) && !gone) {   // a field some harvester is working
         gO.lineStyle(1.5, 0xffffff, 0.7);
         gO.drawCircle(p.x, p.y, t * 0.3);
         gO.lineStyle(0);
       }
+      if (art) {
+        if (gone) continue;                              // sprite removed by the sweep below
+        liveIds.add(node.id);
+        let spr = renderer.resourceSprites.get(node.id);
+        if (!spr) {
+          const pool = (pools && pools[node.role] && pools[node.role].length) ? pools[node.role] : art.frameNames;
+          spr = new PIXI.Sprite(art.textures[pool[idHash(node.id) % pool.length]]);
+          spr.anchor.set(0.5, 0.68);                     // cluster base sits in the cell
+          renderer.layers.resources.addChild(spr);
+          renderer.resourceSprites.set(node.id, spr);
+        }
+        spr.x = p.x; spr.y = p.y + t * 0.18;
+        const targetH = t * 1.3 * (0.55 + 0.45 * frac);  // shrinks as the field drains
+        spr.scale.set(targetH / Math.max(1, spr.texture.height));
+        spr.alpha = frac > 0 ? 1 : 0.16;                 // regrowing primary lingers as a ghost
+        continue;
+      }
+      // ── primitive fallback (art not loaded yet) ──
       if (frac <= 0) {
         if (node.respawns) {          // regrowing — hollow ring so the spot stays readable
           gO.lineStyle(1.5, color, 0.5);
@@ -842,6 +885,16 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       gO.lineStyle(1, 0x0a0e12, 0.8);
       gO.drawCircle(p.x, p.y, t * (0.1 + 0.14 * frac));
       gO.lineStyle(0);
+    }
+    // retire sprites for nodes that are gone (crushed premium, off-map after an override reload)
+    if (art) {
+      for (const [id, spr] of renderer.resourceSprites) {
+        if (!liveIds.has(id)) {
+          if (spr.parent) spr.parent.removeChild(spr);
+          spr.destroy();
+          renderer.resourceSprites.delete(id);
+        }
+      }
     }
     // harvester cargo bars (over each truck) — fill as they pull, empty on deposit
     for (const hid of state.harvesterIds || []) {
