@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BULWARK — Vertical Slice (Test Build)</title>
 <link rel="icon" href="icons/icon-192.png">
 <!-- FULLSCREEN PLAY: the manifest makes "Add to Home Screen" launch as a chromeless fullscreen app
@@ -27,7 +27,10 @@
     display: flex;
     flex-direction: row;
     width: 100vw;
+    /* 100vh includes the area BEHIND mobile browser chrome — bottom HUD buttons rendered off-screen.
+       dvh tracks the actually-visible viewport; the vh line is the fallback for old browsers. */
     height: 100vh;
+    height: 100dvh;
     box-sizing: border-box;
   }
   #game-mount {
@@ -49,6 +52,7 @@
     flex: 0 0 300px;
     width: 300px;
     height: 100vh;
+    height: 100dvh;
     overflow-y: auto;
     background: #1b2028;
     border-left: 2px solid #2c3440;
