@@ -75,6 +75,32 @@ export function initHarvest(state, map) {
     respawns: !!r.respawns, respawnAt: null,
     harvestSec: nodeHarvestSec(r),
   }));
+  // FIELD IDENTITY IS CONNECTIVITY (owner spec: "all connected resource cells"): when the generator
+  // drops separate clusters that happen to ABUT, they read as one big field on the board — so they
+  // ARE one field. Re-label by 8-neighbour flood fill over same-role cells; one harvest order works
+  // the whole contiguous patch. Deterministic: nodes visited in array order.
+  {
+    const byCell = new Map(state.resourceNodes.map((n) => [`${n.x},${n.y}`, n]));
+    const seen = new Set();
+    let fid = 0;
+    for (const n of state.resourceNodes) {
+      if (seen.has(n.id)) continue;
+      const label = `fld-${++fid}`;
+      const stack = [n];
+      seen.add(n.id);
+      while (stack.length) {
+        const cur = stack.pop();
+        cur.fieldId = label;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const nb = byCell.get(`${cur.x + dx},${cur.y + dy}`);
+            if (nb && !seen.has(nb.id) && nb.role === n.role) { seen.add(nb.id); stack.push(nb); }
+          }
+        }
+      }
+    }
+  }
   state.mapScore = { goldFromPrimary: 0, goldFromPremium: 0, questUnits: 0 };
   // HARVEST ECONOMY (owner, 2026-07-13): on resource maps the harvester IS the faucet — start with
   // 900 gold and turn the passive gold timer OFF. Every coin after the opening build is hauled.

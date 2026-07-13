@@ -59,7 +59,10 @@ function fresh(seed) {
   for (const n of s.resourceNodes.filter((n) => n.role === 'primary')) {
     (byField[n.fieldId] = byField[n.fieldId] || []).push(n);
   }
-  const field = Object.values(byField).find((f) => f.length >= 2);
+  // the SMALLEST multi-cell field: a big merged patch never reads all-empty at one instant (cells
+  // regrow while the harvester works the far end — the intended perpetual farm), so the clean
+  // drain→rest→resume cycle is only observable on a small one
+  const field = Object.values(byField).filter((f) => f.length >= 2).sort((a, b) => a.length - b.length)[0];
   assert(field, 'a multi-cell primary field exists somewhere on the map');
   applyCommand(s, { type: 'harvest', nodeId: field[0].id });
   // the whole FIELD drains from a single order (both cells hit zero at some point)
@@ -153,6 +156,25 @@ function fresh(seed) {
   classic.economy.money = 5000;
   const rc = applyCommand(classic, { type: 'place', structId: 'STR-Harvestor', cell: { x: 10, y: 10 } });
   assert(!rc.ok && /resources/.test(rc.reason), `classic map rejects the bay (${rc.reason})`);
+}
+
+// ── FIELD = CONNECTIVITY: any two touching same-role cells share a fieldId (abutting generator
+//    clusters merge — the "harvester stopped after 2 cells of a big field" bug) ──
+{
+  const { s } = fresh(5);
+  const byCell = new Map(s.resourceNodes.map((n) => [`${n.x},${n.y}`, n]));
+  for (const n of s.resourceNodes) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nb = byCell.get(`${n.x + dx},${n.y + dy}`);
+        if (nb && nb.role === n.role) {
+          assert.strictEqual(nb.fieldId, n.fieldId,
+            `touching same-role cells share a field (${n.id}@${n.x},${n.y} vs ${nb.id}@${nb.x},${nb.y})`);
+        }
+      }
+    }
+  }
 }
 
 // ── CRUSH RULE: building on a resource destroys it forever — even a regrowing primary ──
