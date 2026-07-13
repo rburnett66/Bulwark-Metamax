@@ -129,6 +129,17 @@ function onPointerDown(handle, ev) {
     return;
   }
 
+  // HARVEST order (campaign maps): clicking a resource node sends the harvester to it. Takes
+  // precedence over selection — the node is the thing you're pointing at.
+  if (state.resourceNodes) {
+    const node = state.resourceNodes.find((n) => n.x === cell.x && n.y === cell.y);
+    if (node) {
+      const res = handle.submit({ type: 'harvest', nodeId: node.id });
+      if (res && res.ok) return;
+      // rejected (unrevealed / exhausted) → fall through to normal selection
+    }
+  }
+
   // Selection mode: click a structure to select; else a unit (enemy/defender) to inspect its range; else deselect.
   const structId = findStructureAtCell(state, cell);
   ui.selectedStructureId = structId;

@@ -320,6 +320,11 @@ export function boot(mountEl, seed) {
               commChallenge(evs[i].faction, evs[i].wave);
             }
             if (evs[i].type === 'destroyed') structuresLostThisWave++;
+            // harvest feedback: what the haul was worth (quest hauls pay loyalty, not gold)
+            if (evs[i].type === 'deposit') {
+              const d = evs[i];
+              flashMessage(hud, d.role === 'quest' ? `+${d.units} quest units (loyalty)` : `+${d.gold}g ${d.role}`);
+            }
             // M2 — the repelled faction comments on how the wave went (final wave: M3 handles it).
             if (evs[i].type === 'wave' && evs[i].phase === 'clear' && lastWaveFaction && evs[i].wave < evs[i].total) {
               comm.showCall(winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false));

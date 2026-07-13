@@ -6,6 +6,7 @@ import { acquireTarget, applyDamage, stepCombat } from './combat.js';
 import { initEconomy, stepEconomy, canAfford, spend } from './economy.js';
 import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
 import { initWaves, startNextWave, stepWaves } from './waves.js';
+import { initHarvest, cmdHarvest, stepHarvest } from './harvest.js';
 import { createLog, recordCommand } from './replay.js';
 
 /**
@@ -264,6 +265,8 @@ export function createSim(seed, opts) {
   state.navGrid = buildNavGrid(map, []);
   // cache the fixed water lane so waves/deploys can reuse it without recompute
   state.waterPath = getWaterPath(map);
+  // campaign maps carry resource nodes → runtime node state + the player's harvester (harvest.js)
+  initHarvest(state, map);
 
   return state;
 }
@@ -324,6 +327,9 @@ export function applyCommand(state, cmd) {
       break;
     case 'deployTroop':
       result = cmdDeployTroop(state, cmd);
+      break;
+    case 'harvest':
+      result = cmdHarvest(state, cmd);
       break;
     default:
       result = { ok: false, reason: 'unknownCommand' };
@@ -478,6 +484,8 @@ export function stepMovement(state, dt) {
     // this generic mover touched them it would clobber that state to 'moving' → they'd reach the structure but
     // never actually repair. Skip them here; they path around structures via their nav path and ignore units.
     if (unit.isRepairTroop) continue;
+    // HARVESTERS are owned by harvest.js (collect→haul→deposit FSM) for the same reason.
+    if (unit.isHarvester) continue;
 
     // STATIONARY tracking (for the base super-cannon: it only lands on units that stay put). Compares to the
     // position at the top of the previous tick, so it captures march + separation movement.
@@ -720,7 +728,7 @@ function dbgSep(state, id) {
  */
 export function stepContactClamp(state) {
   const units = [];
-  for (const u of state.units.values()) if (u.hp > 0 && !u.isRepairTroop) units.push(u);
+  for (const u of state.units.values()) if (u.hp > 0 && !u.isRepairTroop && !u.isHarvester) units.push(u);
   const n = units.length;
   if (n < 2) return;
   // TWO relaxation sweeps: pairs are resolved sequentially, so a later pair's correction can nudge a unit
@@ -788,7 +796,7 @@ export function stepSeparation(state, dt) {
   const units = [];
   // REPAIR TROOPS are excluded from separation entirely — they path AROUND structures (nav grid) but IGNORE other
   // units, marching straight to their target instead of bouncing through the crowd.
-  for (const u of state.units.values()) if (u.hp > 0 && u.state !== 'attacking' && !u.isRepairTroop) units.push(u);
+  for (const u of state.units.values()) if (u.hp > 0 && u.state !== 'attacking' && !u.isRepairTroop && !u.isHarvester) units.push(u);
   const n = units.length;
   if (n < 2) return;
   const layer = unitLayer;
@@ -958,6 +966,9 @@ export function stepSim(state, dtFixed) {
   //     so bodies glide to rest at sprite-touching distance — velocity-level resolution; no push-back
   //     oscillation ("slamming"/"bumping"), and no displacement source can compress the crowd through it.
   stepContactClamp(state);
+
+  // 3d. Harvest: the harvester's collect→haul→deposit loop + node regrowth (campaign maps only).
+  stepHarvest(state, dtFixed);
 
   // 4. Structures: build/upgrade/sell/repair timers, lifecycle, destruction.
   stepStructures(state, dtFixed);

@@ -745,17 +745,39 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     gO.lineStyle(2, 0x5fe0ff, 0.5);
     gO.drawRect(r.x0 * t + 1, r.y0 * t + 1, (r.x1 - r.x0 + 1) * t - 2, (r.y1 - r.y0 + 1) * t - 2);
     gO.lineStyle(0);
-    // resource nodes (visual only until harvesting lands): green primary / gold premium / purple quest
+    // resource nodes — LIVE state (state.resourceNodes): radius tracks remaining units, a hollow ring
+    // marks a regrowing primary, exhausted premium/quest fade out. Green primary / gold premium /
+    // purple quest — tier reads off distance, role reads off color (GDD §5.1).
     const ROLE_COLOR = { primary: 0x3f8f5a, premium: 0xe0b23f, quest: 0xa86fe0 };
-    for (const node of state.map.resources || []) {
+    for (const node of state.resourceNodes || state.map.resources || []) {
       if (node.wave > wv) continue;
       const p = cellToLocal(renderer, node.x, node.y);   // cellToLocal centers in the cell
-      gO.beginFill(ROLE_COLOR[node.role] || 0x888888, 0.9);
-      gO.drawCircle(p.x, p.y, t * 0.22);
+      const frac = node.units ? Math.max(0, (node.remaining != null ? node.remaining : node.units) / node.units) : 1;
+      const color = ROLE_COLOR[node.role] || 0x888888;
+      if (frac <= 0) {
+        if (node.respawns) {          // regrowing — hollow ring so the spot stays readable
+          gO.lineStyle(1.5, color, 0.5);
+          gO.drawCircle(p.x, p.y, t * 0.22);
+          gO.lineStyle(0);
+        }
+        continue;                     // consumed forever — gone from the board
+      }
+      gO.beginFill(color, 0.9);
+      gO.drawCircle(p.x, p.y, t * (0.1 + 0.14 * frac));
       gO.endFill();
       gO.lineStyle(1, 0x0a0e12, 0.8);
-      gO.drawCircle(p.x, p.y, t * 0.22);
+      gO.drawCircle(p.x, p.y, t * (0.1 + 0.14 * frac));
       gO.lineStyle(0);
+    }
+    // harvester cargo bar (over the truck) — fills as it pulls, empties on deposit
+    if (state.harvesterId != null) {
+      const hv = state.units.get(state.harvesterId);
+      if (hv && hv.hp > 0 && hv.capacity) {
+        const p = cellToLocal(renderer, hv.pos.x, hv.pos.y);
+        const w = t * 0.9, frac = Math.min(1, hv.cargo / hv.capacity);
+        gO.beginFill(0x0a0e12, 0.8); gO.drawRect(p.x - w / 2, p.y + t * 0.55, w, 4); gO.endFill();
+        gO.beginFill(0xffd76a, 0.95); gO.drawRect(p.x - w / 2, p.y + t * 0.55, w * frac, 4); gO.endFill();
+      }
     }
   }
 
