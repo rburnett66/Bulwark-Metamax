@@ -934,13 +934,8 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       const building = s.lifecycle === 'Placing' || s.lifecycle === 'Building';
       const alpha = building ? 0.55 : (s.lifecycle === 'Selling' ? 0.4 : 1);
       if (artDrawn) {
-        // authored art carries the look — the old kind-colored cell block is gone (owner); a soft
-        // ground shadow sits under the sprite instead so it doesn't float
-        // shadow must be BIGGER than the sprite (art is sized to the exact footprint — a smaller
-        // ellipse was 100% occluded, owner saw nothing) and pushed down-right so it reads as cast light
-        gS.beginFill(0x000000, 0.30 * alpha);
-        gS.drawEllipse(px + w / 2 + w * 0.06, py + h / 2 + h * 0.14, w * 0.56, h * 0.50);
-        gS.endFill();
+        // authored art + its SILHOUETTE shadow (black-tinted clone, drawn by the sprite block) —
+        // no primitives at all here (the interim ellipse shadow is gone, owner)
       } else {
         gS.beginFill(color, alpha);
         gS.drawRect(px + 2, py + 2, w - 4, h - 4);

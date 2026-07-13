@@ -221,6 +221,7 @@ export function boot(mountEl, seed) {
     },
     onNextWave: () => { endInterlude(); },
     onDeselect: () => { ui.selectedUnitId = null; ui.selectedStructureId = null; },
+    onNextMap: () => { if (currentMapId > 0 && currentMapId < 9) selectMap(currentMapId + 1); },
     onVolume: (channel, v) => { setChannelVolume(channel, v); },
     defaultFaction: DEFAULT_FACTION,
     onFactionSelect: (faction) => {
@@ -423,7 +424,15 @@ export function boot(mountEl, seed) {
               'expected:', activeReplayLog.finalHash,
               'match:', h === activeReplayLog.finalHash);
           }
-          showResult(hud, sim.result, sim.finalScore);   // s12: show the computed final score
+          // campaign advance (owner): victory offers the next, bigger map (1→9; none after 9 or on classic)
+          let nextMap = null;
+          if (sim.result === 'win' && currentMapId > 0 && currentMapId < 9) {
+            try {
+              const nm = buildCampaignMap(currentMapId + 1, { seed: 0 });
+              nextMap = { id: currentMapId + 1, name: nm.name || ('Map ' + (currentMapId + 1)), size: (nm.cols - 4) + 'x' + (nm.rows - 4) };
+            } catch (e) { nextMap = { id: currentMapId + 1, name: 'Map ' + (currentMapId + 1), size: '' }; }
+          }
+          showResult(hud, sim.result, sim.finalScore, nextMap);   // s12: show the computed final score
           // M3/M4 — the final word: concession from the last faction on a win, the
           // Champion's authored defeat taunt on a loss.
           if (lastWaveFaction) {
