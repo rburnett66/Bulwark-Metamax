@@ -8,6 +8,7 @@ import { createRenderer, renderFrame } from './render/renderer.js';
 import { createHud, updateHud, showResult, flashMessage, showWaveBanner } from './render/hud.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
+import { setChannelVolume } from './comm/voice.js';
 import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, classifyOutcome } from './comm/dialog.js';
 
 function parseSeedFromUrl() {
@@ -33,15 +34,18 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   const boardW = MAP.cols * MAP.tile;
   const boardH = MAP.rows * MAP.tile;
+  // Render at the DEVICE's pixel density (phones are 2-3x): without this the canvas rasterizes at
+  // 1x and gets CSS-upscaled — blurry board next to crisp DOM HUD ("every component a different
+  // resolution"). Capped so the physical framebuffer never exceeds ~4096px on a side (mobile GPU
+  // texture limits) — at 64px/tile the classic 64x32 board is already 4096 logical, so it runs 1x
+  // while small campaign maps get the full density.
+  const fitResolution = (w, h) => Math.max(1, Math.min(window.devicePixelRatio || 1, 3, 4096 / w, 4096 / h));
   const app = new PIXI.Application({
     width: boardW,
     height: boardH,
     backgroundColor: 0x0e1216,
     antialias: true,
-    // Render at the DEVICE's pixel density (phones are 2-3x): without this the canvas rasterizes at
-    // 1x and gets CSS-upscaled — blurry board next to crisp DOM HUD ("every component a different
-    // resolution"). autoDensity keeps the CSS size in logical pixels. Capped at 3x for fill-rate.
-    resolution: Math.min(window.devicePixelRatio || 1, 3),
+    resolution: fitResolution(boardW, boardH),
     autoDensity: true,
   });
   const canvas = app.view || app.canvas;
@@ -57,10 +61,13 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   // Session state (sim + log + ui). Re-created on restart / replay.
   // ---------------------------------------------------------------------
-  let currentWaves = WAVES;   // active enemy schedule — the mixed campaign, or one faction's waves (test picker)
+  // DEFAULTS (owner, 2026-07-13): Ground/Powder as the boot faction, and the game opens on the
+  // wave-1 TAP TO START overlay — load, tap anywhere, fight.
+  const DEFAULT_FACTION = 'Ground / Powder';
+  let currentWaves = makeWaves(DEFAULT_FACTION);   // active enemy schedule (test picker can change it)
   let currentMap = MAP;       // classic board, or a generated ring-campaign map (Map picker)
   let currentMapId = 0;       // 0 = classic
-  let currentTestFaction = null;
+  let currentTestFaction = DEFAULT_FACTION;
   let sim = createSim(currentSeed, { waves: currentWaves, map: currentMap });
   let log = createLog(currentSeed);
   let ui = createUiState();
@@ -126,8 +133,8 @@ export function boot(mountEl, seed) {
     replayIdx = 0;
     activeReplayLog = null;
     ended = false;
-    interlude = false;
-    if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
+    interlude = true;                                // every fresh board opens on the tap-to-start overlay
+    if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
     accumulator = 0;
     pendingEvents = [];
     inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
@@ -163,6 +170,7 @@ export function boot(mountEl, seed) {
       currentMap = m;
       currentWaves = buildCampaignWaves(m, currentTestFaction);
     }
+    app.renderer.resolution = fitResolution(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
     app.renderer.resize(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
     const art = renderer && renderer.unitArt;
     app.stage.removeChildren();
@@ -179,6 +187,8 @@ export function boot(mountEl, seed) {
     }
     if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
     mode = 'replay';
+    interlude = false;                               // replays run start-to-end, no tap gates
+    if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
     currentSeed = Math.floor(replayLog.seed);
     activeReplayLog = replayLog;
     sim = createSim(currentSeed, { waves: currentWaves, map: currentMap });
@@ -207,6 +217,8 @@ export function boot(mountEl, seed) {
       submit({ type: 'startWave' });
     },
     onNextWave: () => { endInterlude(); },
+    onVolume: (channel, v) => { setChannelVolume(channel, v); },
+    defaultFaction: DEFAULT_FACTION,
     onFactionSelect: (faction) => {
       // Rebuild the enemy schedule for the chosen faction (or the mixed roster) and restart the run.
       currentTestFaction = faction || null;
@@ -281,6 +293,10 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
 
+  // boot = a fresh board: open on the wave-1 tap-to-start overlay
+  interlude = true;
+  hud.setNextWavePrompt(true, 'TAP TO START');
+
   // ---------------------------------------------------------------------
   // Comm dialog (render-side only), per the Dialog & Storytelling System doc:
   // challenge on wave start (M0/M1), win commentary on wave clear (M2),
@@ -352,7 +368,7 @@ export function boot(mountEl, seed) {
               const call = lastWaveFaction ? winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false) : null;
               if (mode === 'play') {
                 interlude = true;
-                hud.setNextWavePrompt(true);
+                hud.setNextWavePrompt(true, 'TAP TO START NEXT WAVE');
                 if (call) comm.showCall({ ...call, hold: true });
               } else if (call) {
                 comm.showCall(call);
