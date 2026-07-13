@@ -49,19 +49,34 @@ function fresh(seed) {
   assert(depositGold >= expectedPerLoad, `gold ≈ capacity×value (got ${depositGold}, one load ≥ ${expectedPerLoad})`);
 }
 
-// ── primary regrowth: drain a node fully, clock forward, it refills ──
+// ── FIELDS: one order works the whole connected patch; drained field → rest at HOME; regrowth
+//    auto-redeploys the camped harvester ──
 {
   const { s } = fresh(5);
-  const node = s.resourceNodes.find((n) => n.role === 'primary' && n.wave === 1);
-  applyCommand(s, { type: 'harvest', nodeId: node.id });
-  let drained = false, regrew = false;
-  const respawnSec = MAPDATA.globalParams.Primary_Respawn_Sec || 75;
-  for (let i = 0; i < 30 * (respawnSec + 200) && !regrew; i++) {
-    for (const e of stepSim(s, 1 / 30)) if (e.type === 'nodeRespawn' && e.nodeId === node.id) regrew = true;
-    if (!drained && node.remaining <= 0) drained = true;
+  const hv = s.units.get(s.harvesterId);
+  // primaries are placed as multi-cell fields — find one with ≥2 cells
+  const byField = {};
+  for (const n of s.resourceNodes.filter((n) => n.role === 'primary' && n.wave === 1)) {
+    (byField[n.fieldId] = byField[n.fieldId] || []).push(n);
   }
-  assert(drained, 'primary node fully drained');
-  assert(regrew, 'primary node regrew (nodeRespawn fired — the camping harvester resumes instantly)');
+  const field = Object.values(byField).find((f) => f.length >= 2);
+  assert(field, 'a multi-cell primary field exists on wave 1');
+  applyCommand(s, { type: 'harvest', nodeId: field[0].id });
+  // the whole FIELD drains from a single order (both cells hit zero at some point)
+  let allDrained = false, restedHome = false, regrew = false, resumed = false;
+  const respawnSec = MAPDATA.globalParams.Primary_Respawn_Sec || 75;
+  for (let i = 0; i < 30 * (respawnSec + 300) && !(regrew && resumed); i++) {
+    for (const e of stepSim(s, 1 / 30)) {
+      if (e.type === 'nodeRespawn' && field.some((n) => n.id === e.nodeId)) regrew = true;
+    }
+    if (!allDrained && field.every((n) => n.remaining <= 0)) allDrained = true;
+    if (allDrained && !restedHome && hv.state === 'harvestIdle'
+        && Math.hypot(hv.pos.x - hv.homePos.x, hv.pos.y - hv.homePos.y) < 0.5) restedHome = true;
+    if (regrew && (hv.state === 'harvestGo' || hv.state === 'harvestPull')) resumed = true;
+  }
+  assert(allDrained, 'one order drained every cell of the field');
+  assert(restedHome, 'harvester rested at its home cell while the field was bare');
+  assert(regrew && resumed, 'field regrew and the camped harvester redeployed itself');
 }
 
 // ── premium: consumed forever; quest: loyalty units, zero gold ──
@@ -73,11 +88,16 @@ function fresh(seed) {
   const quest = s.resourceNodes.find((n) => n.role === 'quest');
   assert(prem && quest, 'premium + quest nodes exist');
   applyCommand(s, { type: 'harvest', nodeId: prem.id });
-  for (let i = 0; i < 30 * 600 && prem.remaining > 0; i++) stepSim(s, 1 / 30);
-  assert(prem.remaining <= 0, 'premium drained');
+  const premField = s.resourceNodes.filter((n) => n.fieldId === prem.fieldId);
+  for (let i = 0; i < 30 * 900 && premField.some((n) => n.remaining > 0); i++) stepSim(s, 1 / 30);
+  assert(premField.every((n) => n.remaining <= 0), 'premium field drained');
+  const hv = s.units.get(s.harvesterId);
   for (let i = 0; i < 30 * 100; i++) stepSim(s, 1 / 30);
   assert(prem.remaining <= 0 && prem.respawnAt == null, 'premium never regrows');
   assert(s.mapScore.goldFromPremium > 0, 'premium gold tallied separately');
+  // once a one-shot field is stripped, the job is OVER: assignment cleared, resting at home
+  assert(hv.fieldId == null && hv.state === 'harvestIdle', 'harvester released from the stripped premium field');
+  assert(Math.hypot(hv.pos.x - hv.homePos.x, hv.pos.y - hv.homePos.y) < 0.5, 'harvester rests at base until redeployed');
 
   const scoreBeforeQuest = s.mapScore.goldFromPrimary + s.mapScore.goldFromPremium;
   applyCommand(s, { type: 'harvest', nodeId: quest.id });

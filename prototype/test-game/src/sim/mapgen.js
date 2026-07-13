@@ -195,19 +195,45 @@ export function buildCampaignMap(mapId, opts = {}) {
   for (const c of cornerSlots) blocked.add(`${c.x},${c.y}`);
   const maxR = Math.hypot(full.Full_W / 2, full.Full_H / 2);
   const resources = [];
-  let rid = 1;
-  const place = (n, wave, band, type, role) => {
+  let rid = 1, fid = 1;
+  // Resources grow as FIELDS — connected clusters of cells the harvester works as one job. Primary
+  // fields are patches (2-3 cells: the safe income you settle into); premium is usually a single
+  // rich cell (the one-shot prize); quest is always a lone node at the far edge.
+  const CLUSTER = { primary: (r) => 2 + (r() < 0.5 ? 1 : 0), premium: (r) => 1 + (r() < 0.25 ? 1 : 0), quest: () => 1 };
+  const place = (n, wave, band, type, role, rect) => {
     const def = resourceDef(type, role === 'premium' ? 'Premium' : 'Primary');
-    for (let i = 0; i < n && i < band.length; i++) {
-      const c = band[i];
-      blocked.add(`${c.x},${c.y}`);
-      resources.push({
-        id: `r${mapId}-${rid++}`, type, role, wave, x: c.x, y: c.y,
-        grade: Math.min(1, Math.hypot(c.x - cx, c.y - cy) / maxR),   // radial gradient: tier reads off position
-        units: def ? def.Units_Per_Node : 20,
-        valuePerUnit: role === 'quest' ? 0 : (def ? def.Value_Per_Unit : 4),
-        respawns: role === 'primary' ? !!(def && def.Respawns_In_Match) : false,
-      });
+    let bi = 0;
+    for (let i = 0; i < n; i++) {
+      while (bi < band.length && blocked.has(`${band[bi].x},${band[bi].y}`)) bi++;
+      if (bi >= band.length) break;
+      const seed = band[bi++];
+      const fieldId = `f${mapId}-${fid++}`;
+      const cluster = [seed];
+      const want = CLUSTER[role](rng);
+      // grow the field over adjacent free cells inside the ring
+      while (cluster.length < want) {
+        const from = cluster[Math.floor(rng() * cluster.length)];
+        const cand = [];
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const q = { x: from.x + dx, y: from.y + dy };
+          if (q.x < rect.x0 || q.x > rect.x1 || q.y < rect.y0 || q.y > rect.y1) continue;
+          if (blocked.has(`${q.x},${q.y}`) || cluster.some((c) => c.x === q.x && c.y === q.y)) continue;
+          cand.push(q);
+        }
+        if (!cand.length) break;
+        cluster.push(cand[Math.floor(rng() * cand.length)]);
+      }
+      for (const c of cluster) {
+        blocked.add(`${c.x},${c.y}`);
+        resources.push({
+          id: `r${mapId}-${rid++}`, fieldId, type, role, wave, x: c.x, y: c.y,
+          grade: Math.min(1, Math.hypot(c.x - cx, c.y - cy) / maxR),   // radial gradient: tier reads off position
+          units: def ? def.Units_Per_Node : 20,
+          valuePerUnit: role === 'quest' ? 0 : (def ? def.Value_Per_Unit : 4),
+          respawns: role === 'primary' ? !!(def && def.Respawns_In_Match) : false,
+        });
+      }
     }
   };
   const primaryType = full.Primary_Resource;
@@ -217,18 +243,18 @@ export function buildCampaignMap(mapId, opts = {}) {
     // PRIMARY: in the new ring, inner half (near-base bias) — any side. Safe income.
     const primBand = bandCells(ring.rect, prevRect, null, rng, blocked)
       .sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
-    place(ring.nodes.primary, ring.wave, primBand, primaryType, 'primary');
+    place(ring.nodes.primary, ring.wave, primBand, primaryType, 'primary', ring.rect);
     // PREMIUM: deep in the new ring on the FOCUS side — the blood price. Type is per-faction
     // (rolesFor), so nodes carry role 'premium'; the campaign glue resolves the type at match
     // start. Placeholder type = the non-primary with the highest tier value.
     const premBand = bandCells(ring.rect, prevRect, ring.sideFocus, rng, blocked)
       .sort((a, b) => Math.hypot(b.x - cx, b.y - cy) - Math.hypot(a.x - cx, a.y - cy));
-    place(ring.nodes.premium, ring.wave, premBand, 'PREMIUM', 'premium');
+    place(ring.nodes.premium, ring.wave, premBand, 'PREMIUM', 'premium', ring.rect);
     // QUEST: waves 5–8, far edge (outer 20% of radius) on the OPPOSITE side — the tempo price.
     if (ring.nodes.quest > 0) {
       const qBand = bandCells(ring.rect, null, OPP[ring.sideFocus] || null, rng, blocked)
         .filter((c) => Math.hypot(c.x - cx, c.y - cy) / maxR >= 0.8 * (ring.rect.w / full.Full_W));
-      place(ring.nodes.quest, ring.wave, qBand, 'QUEST', 'quest');
+      place(ring.nodes.quest, ring.wave, qBand, 'QUEST', 'quest', ring.rect);
     }
     prevRect = ring.rect;
   }

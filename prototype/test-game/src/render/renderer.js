@@ -749,11 +749,18 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     // marks a regrowing primary, exhausted premium/quest fade out. Green primary / gold premium /
     // purple quest — tier reads off distance, role reads off color (GDD §5.1).
     const ROLE_COLOR = { primary: 0x3f8f5a, premium: 0xe0b23f, quest: 0xa86fe0 };
+    const hvUnit = state.harvesterId != null ? state.units.get(state.harvesterId) : null;
+    const assignedField = hvUnit && hvUnit.fieldId;
     for (const node of state.resourceNodes || state.map.resources || []) {
       if (node.wave > wv) continue;
       const p = cellToLocal(renderer, node.x, node.y);   // cellToLocal centers in the cell
       const frac = node.units ? Math.max(0, (node.remaining != null ? node.remaining : node.units) / node.units) : 1;
       const color = ROLE_COLOR[node.role] || 0x888888;
+      if (assignedField && node.fieldId === assignedField) {   // the field the harvester is working
+        gO.lineStyle(1.5, 0xffffff, 0.7);
+        gO.drawCircle(p.x, p.y, t * 0.3);
+        gO.lineStyle(0);
+      }
       if (frac <= 0) {
         if (node.respawns) {          // regrowing — hollow ring so the spot stays readable
           gO.lineStyle(1.5, color, 0.5);
