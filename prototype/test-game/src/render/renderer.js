@@ -1259,7 +1259,16 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           }
           if (cspr.texture !== wantTex) cspr.texture = wantTex;   // color follows the cargo
           cspr.visible = true;
-          cspr.x = p.x; cspr.y = p.y + t * 0.10;
+          // the load rides IN THE BED — 20% of the body toward the truck's REAR, following its
+          // live facing (owner: the payload sat centered on the cab)
+          const uspr = renderer.unitSprites && renderer.unitSprites.get(hid);
+          if (uspr && uspr.__facing != null) {
+            const hdg = uspr.__facing - UNIT_FACING_OFFSET;          // facing -> world heading angle
+            cspr.x = p.x - Math.cos(hdg) * t * 0.38;
+            cspr.y = p.y - Math.sin(hdg) * t * 0.38;
+          } else {
+            cspr.x = p.x; cspr.y = p.y + t * 0.10;                    // no facing yet (docked) — near-center
+          }
           const targetH = t * 0.34 * (0.55 + 0.45 * frac);        // grows with the load
           cspr.scale.set(targetH / Math.max(1, cspr.texture.height));
         } else if (cspr) {
