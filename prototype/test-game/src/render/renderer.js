@@ -397,6 +397,94 @@ function spawnSparks(renderer, x, y, count) {
   }
 }
 
+
+// ── COSMETIC COMBAT FX (owner): shells/tracers fly to their targets (damage stays hitscan —
+// pure presentation), damaged tanks/turrets burn at random offsets, damaged flyers throw small
+// welding-style sparks. All render-side (Math.random legal); the sim is untouched.
+const RANGED_SHAPES = { 'Tanks': 1, 'Heavy Tanks': 1, 'Artillery': 1, 'Planes': 1, 'Copters': 1, 'Missiles': 1 };
+const BURN_COLORS = [0xffd27a, 0xff9a3d, 0xff6a2a];
+function emitCombatFx(renderer, state) {
+  const t = renderer.tile;
+  if (!renderer._shotClock) renderer._shotClock = new Map();
+  const clock = renderer._shotClock;
+  const now = state.time || 0;
+  const dt = renderer._fxDt || FX_DT;
+  const targetPos = (tid) => {
+    if (tid == null) return null;
+    if (tid === -1) return state.base ? { x: state.base.pos.x, y: state.base.pos.y, air: false } : null;
+    const tu = state.units.get(tid);
+    if (tu && tu.hp > 0) return { x: tu.pos.x, y: tu.pos.y, air: tu.domain === 'Flyer' };
+    const ts = state.structures && state.structures.get(tid);
+    if (ts && ts.lifecycle !== 'Destroyed') {
+      const fp = ts.footprint || { w: 1, h: 1 };
+      return { x: ts.pos.x + ((fp.w || 1) - 1) / 2, y: ts.pos.y + ((fp.h || 1) - 1) / 2, air: false };
+    }
+    return null;
+  };
+  const fire = (id, from, to, kind, cadence, speed, color) => {
+    const next = clock.get(id) || 0;
+    if (now < next) return;
+    clock.set(id, now + cadence * (0.85 + Math.random() * 0.3));
+    renderer.fxItems.push({ kind: 'shot', x: from.x, y: from.y, tx: to.x, ty: to.y,
+      speed: speed * t, color: color, shotKind: kind, age: 0, ttl: 2.5 });
+  };
+  const burn = (x, y, spread, size) => {
+    renderer.fxItems.push({ kind: 'fire', x: x + (Math.random() * 2 - 1) * spread, y: y + (Math.random() * 2 - 1) * spread,
+      age: 0, ttl: 0.45 + Math.random() * 0.3, color: BURN_COLORS[(Math.random() * 3) | 0],
+      size: size, rise: t * 0.45, vx: (Math.random() * 2 - 1) * t * 0.06 });
+    if (Math.random() < 0.35) renderer.fxItems.push({ kind: 'smoke', x: x, y: y - t * 0.1, age: 0, ttl: 0.8,
+      color: 0x2a2d31, size: size * 1.2, rise: t * 0.6 });
+  };
+
+  if (state.structures) {
+    for (const st of state.structures.values()) {
+      if (!st || (st.lifecycle !== 'Complete' && st.lifecycle !== 'Damaged')) continue;
+      if (st.kind !== 'antiGround' && st.kind !== 'antiAir') continue;
+      const fp = st.footprint || { w: 1, h: 1 };
+      const c = cellToLocal(renderer, st.pos.x + ((fp.w || 1) - 1) / 2, st.pos.y + ((fp.h || 1) - 1) / 2);
+      if (st.targetId != null) {
+        const tp = targetPos(st.targetId);
+        if (tp) {
+          const lp = cellToLocal(renderer, tp.x, tp.y);
+          const ty = lp.y - (tp.air ? t * 0.35 : 0);
+          if (st.kind === 'antiGround') fire('s' + st.id, c, { x: lp.x, y: ty }, 'shell', 0.55, 13, 0xffd080);
+          else fire('s' + st.id, c, { x: lp.x, y: ty }, 'flak', 0.35, 18, 0x9fd4ff);
+        }
+      }
+      if (st.maxHp && st.hp > 0 && st.hp / st.maxHp < 0.5 && Math.random() < dt * 2.2) burn(c.x, c.y, t * 0.3, t * 0.1);
+    }
+  }
+
+  if (state.units) {
+    for (const u of state.units.values()) {
+      if (!u || u.hp <= 0 || u.isHarvester) continue;
+      let d = null;
+      try { d = getUnitDef(u.unitId); } catch (e) { continue; }
+      if (!d) continue;
+      const p = cellToLocal(renderer, u.pos.x, u.pos.y);
+      const isFlyer = u.domain === 'Flyer';
+      const lift = isFlyer ? t * 0.35 : 0;
+      if (RANGED_SHAPES[d.shape] && (d.range || 0) > 1.6 && u.targetId != null) {
+        const tp = targetPos(u.targetId);
+        if (tp) {
+          const lp = cellToLocal(renderer, tp.x, tp.y);
+          const grounded = d.shape === 'Tanks' || d.shape === 'Heavy Tanks' || d.shape === 'Artillery';
+          fire('u' + u.id, { x: p.x, y: p.y - lift }, { x: lp.x, y: lp.y - (tp.air ? t * 0.35 : 0) },
+            grounded ? 'shell' : 'tracer', 0.6, 15, u.side === 'attacker' ? 0xff9a70 : 0xbfe8ff);
+        }
+      }
+      const hpFrac = u.hp / Math.max(1, u.maxHp);
+      if (hpFrac < 0.5) {
+        if (isFlyer) {
+          if (Math.random() < dt * 2.0) spawnSparks(renderer, p.x + (Math.random() * 2 - 1) * t * 0.2, p.y - lift, 1);
+        } else if (d.shape === 'Tanks' || d.shape === 'Heavy Tanks' || d.shape === 'Artillery') {
+          if (Math.random() < dt * 2.0) burn(p.x, p.y, t * 0.25, t * 0.09);
+        }
+      }
+    }
+  }
+}
+
 function spawnFx(renderer, ev) {
   const pos = ev.pos || ev.cell
     || (ev.target && ev.target.pos) || (ev.target && ev.target.cell)
@@ -576,6 +664,31 @@ function updateFx(renderer) {
       g.beginFill(col, 0.5 + 0.5 * b);
       g.drawCircle(fx.x, fx.y, t * 0.05 * (0.45 + b));
       g.endFill();
+    } else if (fx.kind === 'shot') {
+      // cosmetic projectile: flies to the captured target point; impact burst on arrival
+      const dx = fx.tx - fx.x, dy = fx.ty - fx.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const step = fx.speed * dt;
+      if (dist <= step || dist < 1e-6) {
+        fx.age = fx.ttl;   // done
+        if (fx.shotKind === 'flak') {
+          // AIR-BURST: grey puffs + cold flash at altitude
+          for (let k = 0; k < 4; k++) renderer.fxItems.push({ kind: 'smoke', x: fx.tx + (Math.random() * 2 - 1) * t * 0.22,
+            y: fx.ty + (Math.random() * 2 - 1) * t * 0.22, age: 0, ttl: 0.5, color: 0x3a3f45, size: t * 0.1, rise: t * 0.15 });
+          renderer.fxItems.push({ kind: 'flash', x: fx.tx, y: fx.ty, age: 0, ttl: 0.12, color: 0xcfe8ff });
+        } else {
+          renderer.fxItems.push({ kind: 'flash', x: fx.tx, y: fx.ty, age: 0, ttl: 0.15, color: 0xffe6a0 });
+          if (fx.shotKind === 'shell') spawnSparks(renderer, fx.tx, fx.ty, 2);
+        }
+      } else {
+        fx.x += dx / dist * step; fx.y += dy / dist * step;
+        g.lineStyle(Math.max(1, t * 0.045), fx.color, 0.8);   // motion streak
+        g.moveTo(fx.x, fx.y); g.lineTo(fx.x - dx / dist * t * 0.28, fx.y - dy / dist * t * 0.28);
+        g.lineStyle(0);
+        g.beginFill(fx.color, 0.95);
+        g.drawCircle(fx.x, fx.y, t * (fx.shotKind === 'shell' ? 0.09 : 0.06));
+        g.endFill();
+      }
     } else if (fx.kind === 'reticle') {
       // pulsing target where the super-cannon will land (aim telegraph)
       const pulse = 0.5 + 0.5 * Math.sin(fx.age * 9);
@@ -1201,6 +1314,8 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     gO.drawRect(gx + 1, gy + 1, fp.w * t - 2, fp.h * t - 2);
     gO.lineStyle(0);
   }
+
+  emitCombatFx(renderer, state);   // shells/tracers + damage fire + flyer sparks (cosmetic)
 
   // Repair SPARKS — a bot actively welding a structure (state 'repairing') throws sparks at the work site, so
   // the repair reads clearly (and confirms the structure's HP is climbing). Emitted at the bot's position.
