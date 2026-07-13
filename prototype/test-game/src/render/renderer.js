@@ -827,10 +827,14 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     // marks a regrowing primary, exhausted premium/quest fade out. Green primary / gold premium /
     // purple quest — tier reads off distance, role reads off color (GDD §5.1).
     const ROLE_COLOR = { primary: 0x3f8f5a, premium: 0xe0b23f, quest: 0xa86fe0 };
+    // assigned-field rings were a debug aid while field identity was buggy — behind a flag now
+    // (settings panel), default off
     const assignedFields = new Set();
-    for (const hid of state.harvesterIds || []) {
-      const hv0 = state.units.get(hid);
-      if (hv0 && hv0.hp > 0 && hv0.fieldId) assignedFields.add(hv0.fieldId);
+    if (ui && ui.showFieldRings) {
+      for (const hid of state.harvesterIds || []) {
+        const hv0 = state.units.get(hid);
+        if (hv0 && hv0.hp > 0 && hv0.fieldId) assignedFields.add(hv0.fieldId);
+      }
     }
     // node ART: crystal sprites (role → colour pool, variant by node id) drawn on the 'resources'
     // layer — above ground, below structures/units. Primitive circles are the not-yet-loaded fallback.

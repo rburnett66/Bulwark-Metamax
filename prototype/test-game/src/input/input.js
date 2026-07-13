@@ -11,6 +11,7 @@ export function createUiState() {
     hoverValid: false,
     selectedStructureId: null,
     selectedUnitId: null,      // s5: a selected unit (enemy/defender) whose attack range is shown
+    showFieldRings: false,     // white rings on the harvester's assigned field — debug aid, off by default
   };
 }
 

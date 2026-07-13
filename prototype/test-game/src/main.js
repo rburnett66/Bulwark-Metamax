@@ -283,6 +283,10 @@ export function boot(mountEl, seed) {
       ui.debugCollision = !ui.debugCollision;
       return ui.debugCollision;
     },
+    onToggleFieldRings: () => {
+      ui.showFieldRings = !ui.showFieldRings;
+      return ui.showFieldRings;
+    },
     onRestart: (newSeed) => {
       restart(newSeed);
     },

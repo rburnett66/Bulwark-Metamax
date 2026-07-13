@@ -332,6 +332,13 @@ export function createHud(mountEl, callbacks) {
     const on = cbs.onToggleCollision();
     collisionBtn.textContent = 'Collision: ' + (on ? 'ON' : 'off');
   });
+  const fieldRingsBtn = el(doc, 'button', 'bw-btn', 'Field rings: off');
+  fieldRingsBtn.title = 'Mark the resource field(s) the harvesters are assigned to (debug aid)';
+  fieldRingsBtn.addEventListener('click', () => {
+    if (!cbs.onToggleFieldRings) return;
+    const on = cbs.onToggleFieldRings();
+    fieldRingsBtn.textContent = 'Field rings: ' + (on ? 'ON' : 'off');
+  });
   const seedInput = el(doc, 'input', 'bw-seedinput');
   seedInput.setAttribute('type', 'text');
   seedInput.setAttribute('placeholder', 'seed');
@@ -345,6 +352,7 @@ export function createHud(mountEl, callbacks) {
   debug.appendChild(replayBtn);
   debug.appendChild(balanceBtn);
   debug.appendChild(collisionBtn);
+  debug.appendChild(fieldRingsBtn);
   debug.appendChild(seedInput);
   debug.appendChild(restartBtn);
 
