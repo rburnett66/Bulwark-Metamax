@@ -103,6 +103,7 @@ export function buildUnitSprite(art, unitId, tilePx, radius) {
     spr.y = spr.__baseY;
     spr.zIndex = Z[name];
     c.addChild(spr);
+    if (name === 'weapon') { c.__weapon = spr; spr.__baseRot = rot; }   // turret barrels rotate independently of the base
     any = true;
   }
   if (!any) { if (c.destroy) c.destroy(); return null; }

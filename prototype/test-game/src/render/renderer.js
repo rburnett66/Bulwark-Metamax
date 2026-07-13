@@ -898,7 +898,10 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
                 sspr.__facing = (sspr.__facing == null) ? want : approachAngle(sspr.__facing, want, 0.25);
               }
             }
-            sspr.rotation = sspr.__facing || 0;
+            // two-layer turrets (base + barrel): only the BARREL tracks; the base stays planted.
+            // Single-layer turrets rotate whole, as before.
+            if (sspr.__weapon) sspr.__weapon.rotation = (sspr.__weapon.__baseRot || 0) + (sspr.__facing || 0);
+            else sspr.rotation = sspr.__facing || 0;
           }
           artDrawn = true;
         }
