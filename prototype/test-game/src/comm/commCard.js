@@ -112,6 +112,14 @@ function typeText(el, text, durMs, isLive) {
 function staticNoise(cv, on) {
   cv.classList.toggle('on', on);
   if (!on || reducedMotion()) return;
+  // the card may not have LAID OUT yet (boot fires the pre-battle call before first paint;
+  // display:none → flex is same-frame) — zero dims crash createImageData. Skip the draw and
+  // retry next frame; the rAF chain below keeps polling until layout gives real dimensions.
+  if (!(cv.clientWidth > 0) || !(cv.clientHeight > 0)) {
+    if (cv._raf) cancelAnimationFrame(cv._raf);
+    cv._raf = requestAnimationFrame(() => staticNoise(cv, cv.classList.contains('on')));
+    return;
+  }
   const ctx = cv.getContext('2d');
   cv.width = cv.clientWidth * 0.5; cv.height = cv.clientHeight * 0.5;
   const img = ctx.createImageData(cv.width, cv.height), d = img.data;
