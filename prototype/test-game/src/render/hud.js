@@ -62,15 +62,15 @@ const CSS = `
 .bw-unitpanel .bw-ustat .k { color:#7f9fb2; }
 .bw-unitpanel .bw-ustat .v { color:#eaf6ff; font-weight:600; }
 .bw-selrow .bw-btn { flex:1; font-size:11px; padding:3px 4px; }
-.bw-bottombar { position:absolute; left:6px; bottom:52px; display:none; flex-direction:column; gap:8px; align-items:flex-start;
+.bw-bottombar { position:absolute; left:6px; bottom:calc(52px + env(safe-area-inset-bottom, 0px)); display:none; flex-direction:column; gap:8px; align-items:flex-start;
   z-index:65; max-width:min(430px, calc(100vw - 16px)); }
 .bw-bottombar.open { display:flex; }
 .bw-help { font-size:10px; color:#8fa4b8; line-height:1.4; }
-.bw-gear { position:absolute; left:6px; bottom:6px; pointer-events:auto; z-index:66;
+.bw-gear { position:absolute; left:6px; bottom:calc(6px + env(safe-area-inset-bottom, 0px)); pointer-events:auto; z-index:66;
   background:rgba(10,16,22,0.9); border:1px solid #4a6076; border-radius:6px; color:#cfe3f0;
   font-size:18px; width:38px; height:38px; cursor:pointer; }
 .bw-gear:hover { background:#22303e; }
-.bw-fs { position:absolute; left:50px; bottom:6px; pointer-events:auto; z-index:66;
+.bw-fs { position:absolute; left:50px; bottom:calc(6px + env(safe-area-inset-bottom, 0px)); pointer-events:auto; z-index:66;
   background:rgba(10,16,22,0.9); border:1px solid #4a6076; border-radius:6px; color:#cfe3f0;
   font-size:16px; width:38px; height:38px; cursor:pointer; }
 .bw-fs:hover { background:#22303e; }
