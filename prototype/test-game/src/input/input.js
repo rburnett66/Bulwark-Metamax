@@ -30,7 +30,10 @@ function findUnitAtCell(state, cell) {
   for (const u of state.units.values()) {
     if (!u || u.hp <= 0) continue;
     const d = Math.hypot(u.pos.x - cell.x, u.pos.y - cell.y);
-    const pick = Math.max(0.7, (u.radius || 0.3) * 1.35);
+    // Harvesters are the most-tapped unit in the game (order flow is click-truck-click-field) and
+    // taps come from phones — give them a big grab zone; it also wins ties vs nearby enemies.
+    let pick = Math.max(0.7, (u.radius || 0.3) * 1.35);
+    if (u.isHarvester) pick = Math.max(1.5, pick * 2);
     const score = d / pick;
     if (score < bestScore) { bestScore = score; bestId = u.id; }
   }
