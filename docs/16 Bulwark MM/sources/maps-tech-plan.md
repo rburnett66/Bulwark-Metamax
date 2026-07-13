@@ -1,7 +1,9 @@
 # Maps Feature — Tech Plan
 
 Source of truth: `docs/sources/Bulwark-Map-GDD.md.docx` (v1.2, rules) + `docs/sources/Bulwark-Map-Data.xlsx`
-(values, formula-driven). GDD wins on conflict. This plan maps the design onto the test-game engine.
+(values, formula-driven) + **`docs/sources/Bulwark-Map-GDD-Amendment-A.md`** (owner playtest decisions —
+open play, crystal-color economy, docked harvester fleet; wins over v1.2 on conflict). This plan maps
+the design onto the test-game engine.
 
 ## Architecture
 

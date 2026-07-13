@@ -65,21 +65,28 @@ function fresh(seed) {
   const field = Object.values(byField).filter((f) => f.length >= 2).sort((a, b) => a.length - b.length)[0];
   assert(field, 'a multi-cell primary field exists somewhere on the map');
   applyCommand(s, { type: 'harvest', nodeId: field[0].id });
-  // the whole FIELD drains from a single order (both cells hit zero at some point)
-  let allDrained = false, restedHome = false, regrew = false, resumed = false;
+  // the whole FIELD drains from a single order; the harvester then returns to its dock and WAITS
+  // (owner spec: emptied field ends the job — no auto-redeploy, even after regrowth)
+  let allDrained = false, restedHome = false, regrew = false;
   const respawnSec = MAPDATA.globalParams.Primary_Respawn_Sec || 75;
-  for (let i = 0; i < 30 * (respawnSec + 300) && !(regrew && resumed); i++) {
+  for (let i = 0; i < 30 * (respawnSec + 300) && !(regrew && restedHome); i++) {
     for (const e of stepSim(s, 1 / 30)) {
       if (e.type === 'nodeRespawn' && field.some((n) => n.id === e.nodeId)) regrew = true;
     }
     if (!allDrained && field.every((n) => n.remaining <= 0)) allDrained = true;
     if (allDrained && !restedHome && hv.state === 'harvestIdle'
         && Math.hypot(hv.pos.x - hv.homePos.x, hv.pos.y - hv.homePos.y) < 0.5) restedHome = true;
-    if (regrew && (hv.state === 'harvestGo' || hv.state === 'harvestPull')) resumed = true;
   }
   assert(allDrained, 'one order drained every cell of the field');
-  assert(restedHome, 'harvester rested at its home cell while the field was bare');
-  assert(regrew && resumed, 'field regrew and the camped harvester redeployed itself');
+  assert(restedHome, 'harvester returned to its dock when the field emptied');
+  assert(hv.fieldId == null, 'the job is over — assignment cleared');
+  // regrowth does NOT redeploy it; a fresh order does
+  for (let i = 0; i < 30 * 20; i++) stepSim(s, 1 / 30);
+  assert(hv.state === 'harvestIdle', 'docked harvester waits for orders after regrowth');
+  if (field.some((n) => n.remaining > 0)) {
+    const again = applyCommand(s, { type: 'harvest', nodeId: field[0].id, harvesterId: hv.id });
+    assert(again.ok && hv.state === 'harvestGo', 'explicit order (harvesterId) redeploys the docked truck');
+  }
 }
 
 // ── premium: consumed forever; quest: loyalty units, zero gold ──
@@ -102,15 +109,16 @@ function fresh(seed) {
   assert(hv.fieldId == null && hv.state === 'harvestIdle', 'harvester released from the stripped premium field');
   assert(Math.hypot(hv.pos.x - hv.homePos.x, hv.pos.y - hv.homePos.y) < 0.5, 'harvester rests at base until redeployed');
 
-  const scoreBeforeQuest = s.mapScore.goldFromPrimary + s.mapScore.goldFromPremium;
   applyCommand(s, { type: 'harvest', nodeId: quest.id });
-  let questDepositGold = null;
-  for (let i = 0; i < 30 * 600 && questDepositGold === null; i++) {
-    for (const e of stepSim(s, 1 / 30)) if (e.type === 'deposit' && e.role === 'quest') questDepositGold = e.gold;
+  let questDeposit = null;
+  for (let i = 0; i < 30 * 600 && questDeposit === null; i++) {
+    for (const e of stepSim(s, 1 / 30)) if (e.type === 'deposit' && e.role === 'quest') questDeposit = e;
   }
+  // owner color economy: red/green count as HEADER quest objectives AND still pay gold
+  assert(questDeposit && questDeposit.gold > 0, 'quest haul pays gold too');
   assert(s.mapScore.questUnits > 0, 'quest units tallied');
-  assert.strictEqual(questDepositGold, 0, 'quest deposit carries NO gold');
-  assert.strictEqual(s.mapScore.goldFromPrimary + s.mapScore.goldFromPremium, scoreBeforeQuest, 'quest never touches the gold tallies');
+  assert(s.mapScore.questRed + s.mapScore.questGreen === s.mapScore.questUnits, 'quest split by crystal color');
+  assert(['red', 'green'].includes(questDeposit.color), 'quest deposit carries its crystal color');
 }
 
 // ── open play (default): a late-wave node is harvestable immediately; ring-gating still rejects ──
@@ -191,6 +199,29 @@ function fresh(seed) {
   if (!order.ok) assert(/exhaust/.test(order.reason), `crushed single-cell field rejects orders (${order.reason})`);
 }
 
+// ── DOCKS + CAP: harvesters spawn at the 4 base docks (top/bottom/left/right) in order; cap 4 ──
+{
+  const { s } = fresh(5);
+  s.economy.money = 100000;
+  const { dockCells } = await import('./harvest.js');
+  const docks = dockCells(s.map);
+  const first = s.units.get(s.harvesterId);
+  assert.deepStrictEqual({ x: first.homePos.x, y: first.homePos.y }, docks[0], 'starting harvester docks at position 1');
+  // buy up to the cap: 3 more bays convert; each takes the next open dock
+  const pocket = s.map.rings[0].rect;
+  const spots = [{ x: pocket.x0 + 1, y: pocket.y0 + 1 }, { x: pocket.x0 + 3, y: pocket.y0 + 1 }, { x: pocket.x1 - 1, y: pocket.y1 - 1 }];
+  for (const c of spots) {
+    const r = applyCommand(s, { type: 'place', structId: 'STR-Harvestor', cell: c });
+    assert(r.ok, `bay placed at ${c.x},${c.y} (${r.reason})`);
+  }
+  for (let i = 0; i < 30 * 30 && s.harvesterIds.length < 4; i++) stepSim(s, 1 / 30);
+  assert.strictEqual(s.harvesterIds.length, 4, 'fleet reached the cap of 4');
+  const homes = s.harvesterIds.map((id) => { const u = s.units.get(id); return `${u.homePos.x},${u.homePos.y}`; });
+  assert.strictEqual(new Set(homes).size, 4, 'each harvester has its own dock');
+  const fifth = applyCommand(s, { type: 'place', structId: 'STR-Harvestor', cell: { x: pocket.x0 + 5, y: pocket.y0 + 1 } });
+  assert(!fifth.ok && /cap/.test(fifth.reason), `fifth bay rejected at the cap (${fifth.reason})`);
+}
+
 // ── determinism: identical seeds and orders → identical hash (nodes + cargo are hashed) ──
 {
   const runOnce = () => {
@@ -203,4 +234,4 @@ function fresh(seed) {
   assert.strictEqual(runOnce(), runOnce(), 'harvest loop is deterministic');
 }
 
-console.log('harvest.test OK — cycle deposits gold, primary regrows, premium consumed, quest pays loyalty only, deterministic');
+console.log('harvest.test OK — docks+cap, explicit orders, all colors pay gold, red/green quest counters, wait-for-orders, deterministic');

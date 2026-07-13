@@ -204,6 +204,12 @@ export function createHud(mountEl, callbacks) {
   topbar.appendChild(timerEl);
   topbar.appendChild(moneyEl);
   topbar.appendChild(waveEl);
+  // QUEST objectives readout — red + green crystal units hauled (owner color economy). Hidden on
+  // boards with no resources.
+  const questEl = el(doc, 'span', 'bw-seed');
+  questEl.style.display = 'none';
+  questEl.title = 'Quest crystals hauled (red / green) — they also pay gold';
+  topbar.appendChild(questEl);
   topbar.appendChild(startWaveBtn);
   topbar.appendChild(factionSel);
   topbar.appendChild(mapSel);
@@ -332,6 +338,13 @@ export function createHud(mountEl, callbacks) {
     const on = cbs.onToggleCollision();
     collisionBtn.textContent = 'Collision: ' + (on ? 'ON' : 'off');
   });
+  const fieldRingsBtn = el(doc, 'button', 'bw-btn', 'Field rings: off');
+  fieldRingsBtn.title = 'Mark the resource field(s) the harvesters are assigned to (debug aid)';
+  fieldRingsBtn.addEventListener('click', () => {
+    if (!cbs.onToggleFieldRings) return;
+    const on = cbs.onToggleFieldRings();
+    fieldRingsBtn.textContent = 'Field rings: ' + (on ? 'ON' : 'off');
+  });
   const seedInput = el(doc, 'input', 'bw-seedinput');
   seedInput.setAttribute('type', 'text');
   seedInput.setAttribute('placeholder', 'seed');
@@ -345,6 +358,7 @@ export function createHud(mountEl, callbacks) {
   debug.appendChild(replayBtn);
   debug.appendChild(balanceBtn);
   debug.appendChild(collisionBtn);
+  debug.appendChild(fieldRingsBtn);
   debug.appendChild(seedInput);
   debug.appendChild(restartBtn);
 
@@ -429,6 +443,7 @@ export function createHud(mountEl, callbacks) {
     waveEl,
     timerEl,
     startWaveBtn,
+    questEl,
     nextWaveBtn,
     setNextWavePrompt(on, label) {
       nextWaveBtn.style.display = on ? 'flex' : 'none';
@@ -511,6 +526,17 @@ export function updateHud(hud, state, ui) {
     hud.moneyEl.insertBefore(hud.doc.createTextNode(money + 'g'), hud.moneyEl.firstChild || null);
   }
 
+  // Quest crystal objectives (campaign maps only)
+  if (hud.questEl) {
+    if (state.mapScore) {
+      hud.questEl.style.display = '';
+      hud.questEl.innerHTML = '<span style="color:#ff7a6a">● ' + (state.mapScore.questRed || 0) +
+        '</span> <span style="color:#7ae08a">● ' + (state.mapScore.questGreen || 0) + '</span>';
+    } else {
+      hud.questEl.style.display = 'none';
+    }
+  }
+
   // Waves
   const waves = state.waves || { current: 0, total: 0, active: false };
   hud.waveEl.textContent = 'Wave ' + waves.current + '/' + waves.total + (waves.active ? ' (active)' : ' (build)');
@@ -567,21 +593,41 @@ export function updateHud(hud, state, ui) {
   } else {
     hud.unitPanel.style.display = 'block';
     const fmt = (n) => (typeof n === 'number' ? String(Math.round(n * 10) / 10) : (n == null ? '—' : String(n)));
-    hud.uname.textContent = (u.faction ? u.faction + ' ' : '') + (u.kind || u.unitId || 'Unit') + (u.tier > 1 ? '  T' + u.tier : '');
-    hud.usub.textContent = [u.role, u.domain, u.side].filter(Boolean).join(' · ');
     const frac = u.maxHp > 0 ? Math.max(0, Math.min(1, u.hp / u.maxHp)) : 0;
     hud.uhpfill.style.width = (frac * 100).toFixed(0) + '%';
     hud.uhpfill.style.background = frac > 0.5 ? '#5c5' : (frac > 0.25 ? '#dd5' : '#e55');
-    const rows = [
-      ['HP', Math.max(0, Math.ceil(u.hp)) + ' / ' + Math.ceil(u.maxHp)],
-      ['DPS', fmt(u.dps)],
-      ['Range', fmt(u.range)],
-      ['Speed', fmt(u.speed)],
-      ['Armor', u.armorClass || '—'],
-      ['Damage', u.damageType || '—'],
-      ['Targets', u.canTarget || (u.targetsBase ? 'Base' : '—')],
-      ['Vision', fmt(u.vision)],
-    ];
+    let rows;
+    if (u.isHarvester) {
+      // the HARVESTER is its own thing — a resource hauler, not a Ground/Powder truck. Its panel
+      // reads the economy loop (cargo, yield, job state), never combat stats it doesn't have.
+      const HARVEST_STATE = {
+        harvestIdle: 'docked — awaiting orders', harvestGo: 'driving to the field',
+        harvestPull: 'harvesting', harvestReturn: 'hauling home',
+      };
+      hud.uname.textContent = 'Harvester';
+      hud.usub.textContent = 'resource hauler · click a crystal field to send it';
+      rows = [
+        ['HP', Math.max(0, Math.ceil(u.hp)) + ' / ' + Math.ceil(u.maxHp)],
+        ['Cargo', Math.floor(u.cargo || 0) + ' / ' + (u.capacity || 0)],
+        ['Speed', fmt(u.speed)],
+        ['Yield', 'x' + fmt(u.yieldMult || 1)],
+        ['Status', HARVEST_STATE[u.state] || u.state || '—'],
+        ['Dock', u.homePos ? (u.homePos.x + ',' + u.homePos.y) : '—'],
+      ];
+    } else {
+      hud.uname.textContent = (u.faction ? u.faction + ' ' : '') + (u.kind || u.unitId || 'Unit') + (u.tier > 1 ? '  T' + u.tier : '');
+      hud.usub.textContent = [u.role, u.domain, u.side].filter(Boolean).join(' · ');
+      rows = [
+        ['HP', Math.max(0, Math.ceil(u.hp)) + ' / ' + Math.ceil(u.maxHp)],
+        ['DPS', fmt(u.dps)],
+        ['Range', fmt(u.range)],
+        ['Speed', fmt(u.speed)],
+        ['Armor', u.armorClass || '—'],
+        ['Damage', u.damageType || '—'],
+        ['Targets', u.canTarget || (u.targetsBase ? 'Base' : '—')],
+        ['Vision', fmt(u.vision)],
+      ];
+    }
     while (hud.ustats.firstChild) hud.ustats.removeChild(hud.ustats.firstChild);
     for (let i = 0; i < rows.length; i++) {
       const row = el(hud.doc, 'div', 'bw-ustat');
