@@ -618,12 +618,30 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
   // base — s10: a 3x3 keep drawn as its body cells (the 4 corners are tower slots, drawn by the board)
   if (state.base) {
     const cells = state.base.cells || [state.base.pos];
-    gS.beginFill(0xc0a040, 1);
-    for (const bc of cells) {
-      const cp = cellToLocal(renderer, bc.x, bc.y);
-      gS.drawRect(cp.x - t * 0.46, cp.y - t * 0.46, t * 0.92, t * 0.92);
+    // AUTHORED BASE SHIP (State Bench, System faction, 'SYS-Base'): one sprite stretched across the
+    // full 3x3 footprint, replacing the gold plus-cells; outline, HP bar and the super-cannon
+    // turret still draw over it. Falls back to the primitives until (unless) it's authored.
+    let baseArtDrawn = false;
+    if (renderer.unitArt && hasArt(renderer.unitArt, 'SYS-Base') && !(renderer._noArt && renderer._noArt.has('SYS-Base'))) {
+      if (!renderer.baseSprite) {
+        const bs = buildUnitSprite(renderer.unitArt, 'SYS-Base', t, 3 / (2 * SPRITE_OVER_COLLISION));   // targetW = 3 tiles
+        if (bs && bs.children.length) { renderer.layers.structures.addChild(bs); renderer.baseSprite = bs; }
+        else { if (bs) bs.destroy(); (renderer._noArt || (renderer._noArt = new Set())).add('SYS-Base'); }
+      }
+      if (renderer.baseSprite) {
+        const bc0 = cellToLocal(renderer, state.base.pos.x, state.base.pos.y);
+        renderer.baseSprite.x = bc0.x; renderer.baseSprite.y = bc0.y;
+        baseArtDrawn = true;
+      }
     }
-    gS.endFill();
+    if (!baseArtDrawn) {
+      gS.beginFill(0xc0a040, 1);
+      for (const bc of cells) {
+        const cp = cellToLocal(renderer, bc.x, bc.y);
+        gS.drawRect(cp.x - t * 0.46, cp.y - t * 0.46, t * 0.92, t * 0.92);
+      }
+      gS.endFill();
+    }
     const bp = cellToLocal(renderer, state.base.pos.x, state.base.pos.y);
     gS.lineStyle(2, 0xf0e0a0, 0.9);
     gS.drawRect(bp.x - t * 1.5, bp.y - t * 1.5, t * 3, t * 3);   // keep outline
@@ -661,13 +679,19 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
   if (state.structures) {
     if (!renderer.structSprites) renderer.structSprites = new Map();
     const liveStructIds = new Set();
+    // structures MOUNTED ON THE SHIP (the base's 4 corner hardpoints) draw at 75% — turrets on the
+    // hull, not full towers parked on it (owner). Visual only; combat stats unchanged.
+    const shipSlots = new Set(((state.map && state.map.base && state.map.base.cornerSlots) || []).map((c) => c.x + ',' + c.y));
     for (const s of state.structures.values()) {
       if (!s || s.lifecycle === 'Destroyed') continue;
       const fp = s.footprint || { w: 1, h: 1 };
-      const px = s.pos.x * t;
-      const py = s.pos.y * t;
-      const w = fp.w * t;
-      const h = fp.h * t;
+      const onShip = shipSlots.has(s.pos.x + ',' + s.pos.y);
+      const shipScale = onShip ? 0.75 : 1;
+      let px = s.pos.x * t;
+      let py = s.pos.y * t;
+      let w = fp.w * t;
+      let h = fp.h * t;
+      if (onShip) { px += w * 0.125; py += h * 0.125; w *= 0.75; h *= 0.75; }
       // AUTHORED STRUCTURE ART (State Bench, faction "System"): STR-Cannon -> SYS-Cannon etc.
       const sArtId = 'SYS-' + String(s.structId || '').replace(/^STR-/, '');
       if (renderer.unitArt && hasArt(renderer.unitArt, sArtId) && !(renderer._noArt && renderer._noArt.has(sArtId))) {
@@ -681,6 +705,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         }
         if (sspr) {
           sspr.x = px + w / 2; sspr.y = py + h / 2;
+          sspr.scale.set(shipScale);   // container is built at scale 1; hull-mounted turrets shrink to 75%
           sspr.alpha = (s.lifecycle === 'Building' || s.lifecycle === 'Placing') ? 0.55 : 1;
         }
       }
