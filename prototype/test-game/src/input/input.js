@@ -2,7 +2,7 @@ import { STRUCTURES } from '../data/tables.js';
 import { validatePlacement } from '../sim/structures.js';
 import { screenToCell } from '../render/renderer.js';
 
-const BUILD_KEYS = ['1', '2', '3', '4'];
+const BUILD_KEYS = ['1', '2', '3', '4', '5'];   // 5 = Harvestor
 
 export function createUiState() {
   return {

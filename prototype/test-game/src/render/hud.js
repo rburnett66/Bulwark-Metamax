@@ -45,11 +45,15 @@ const CSS = `
   font-size:clamp(15px, 4.5vw, 22px); font-weight:bold; letter-spacing:3px; padding:16px 30px;
   box-shadow:0 0 24px -6px #5fe0ff; animation: bw-nw-pulse 1.6s ease-in-out infinite; }
 @keyframes bw-nw-pulse { 0%,100% { box-shadow:0 0 24px -6px #5fe0ff; } 50% { box-shadow:0 0 34px -2px #5fe0ff; } }
-.bw-palette { position:absolute; left:6px; top:56px; width:168px; display:flex; flex-direction:column; gap:4px; }
+.bw-palette { position:absolute; left:6px; top:56px; display:flex; flex-direction:column; gap:4px; }
 .bw-palette .bw-title { font-size:11px; color:#9ab; margin-bottom:2px; }
-.bw-buildbtn { display:flex; justify-content:space-between; width:100%; text-align:left; }
-.bw-buildbtn .bw-cost { color:#ffd76a; }
+.bw-palette-row { display:flex; flex-direction:column; gap:4px; }
+.bw-buildbtn { display:flex; flex-direction:column; align-items:center; gap:1px; width:52px; padding:5px 3px 3px; }
+.bw-bicon { position:relative; display:block; line-height:0; }
+.bw-bkey { position:absolute; top:-4px; left:-7px; font-size:9px; color:#ffe58a; }
+.bw-buildbtn .bw-cost { color:#ffd76a; font-size:10px; }
 .bw-buildbtn.bw-poor { opacity:0.45; }
+@media (max-width: 900px) { .bw-buildbtn { width:44px; } .bw-bicon svg { width:22px; height:22px; } }
 .bw-key { font-weight:800; color:#ffe58a; }   /* bold keyboard-shortcut glyph on build + action buttons */
 .bw-selpanel { position:absolute; right:6px; top:56px; width:200px; font-size:12px; display:none; flex-direction:column; gap:4px; }
 .bw-selpanel .bw-sname { font-size:13px; font-weight:bold; color:#bfe0ff; }
@@ -254,9 +258,19 @@ export function createHud(mountEl, callbacks) {
   }
   root.appendChild(topbar);
 
-  // ---- build palette --------------------------------------------------
+  // ---- build palette (ICON buttons — names live in the tooltip) -------
+  // Inline SVG glyphs, tinted to the board's structure colours, replace the text labels: on a phone
+  // the worded list ate a third of the screen. Hotkey badge top-left, live cost underneath.
+  const STRUCT_ICONS = {
+    antiGround: '<circle cx="12" cy="14" r="6" fill="#8a6a2f"/><rect x="10.6" y="3" width="2.8" height="9" rx="1" fill="#c9a45a"/>',
+    antiAir: '<circle cx="12" cy="15" r="5" fill="#3f7fbf"/><rect x="10.9" y="3.5" width="2.2" height="8" rx="1" transform="rotate(-28 12 12)" fill="#7fb4e0"/><rect x="10.9" y="3.5" width="2.2" height="8" rx="1" transform="rotate(28 12 12)" fill="#7fb4e0"/>',
+    wall: '<rect x="4" y="6" width="16" height="12" rx="1" fill="#9aa0a6"/><path d="M4 10h16M4 14h16M9 6v4M15 6v4M12 10v4M9 14v4M15 14v4" stroke="#5c6166" stroke-width="1.1"/>',
+    moat: '<rect x="4" y="6" width="16" height="12" rx="2" fill="#2f6db0"/><path d="M6 11c2-2 4 2 6 0s4 2 6 0M6 15c2-2 4 2 6 0s4 2 6 0" stroke="#8fc4ef" stroke-width="1.4" fill="none"/>',
+    harvestorBay: '<rect x="5" y="10" width="10" height="7" rx="1.5" fill="#c9a45a"/><rect x="15" y="12" width="5" height="5" rx="1" fill="#8a6a2f"/><circle cx="8" cy="18.5" r="1.8" fill="#3a3f45"/><circle cx="13" cy="18.5" r="1.8" fill="#3a3f45"/><circle cx="17.5" cy="18.5" r="1.5" fill="#3a3f45"/><path d="M7 10l2-4h4l1 4" fill="#e0c07a"/>',
+  };
   const palette = el(doc, 'div', 'bw-palette bw-panel');
-  palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD  (1-' + Object.keys(STRUCTURES).length + ', Esc cancels)'));
+  palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD'));
+  const paletteRow = el(doc, 'div', 'bw-palette-row');
   const paletteBtns = {};
   const structOrder = Object.keys(STRUCTURES);              // hotkey N (1-based) selects structOrder[N-1]
   const toggleBuild = (structId) => {
@@ -267,20 +281,18 @@ export function createHud(mountEl, callbacks) {
     const def = STRUCTURES[structId];
     const btn = el(doc, 'button', 'bw-btn bw-buildbtn');
     const key = i + 1;                                      // 1,2,3,4...
-    const nameSpan = el(doc, 'span');
-    if (key <= 9) {                                         // BOLD hotkey digit + the structure name
-      nameSpan.appendChild(el(doc, 'b', 'bw-key', String(key)));
-      nameSpan.appendChild(doc.createTextNode('  ' + (def.name || structId)));
-    } else {
-      nameSpan.textContent = def.name || structId;
-    }
+    btn.title = (key <= 9 ? '[' + key + '] ' : '') + (def.name || structId);
+    const icon = el(doc, 'span', 'bw-bicon');
+    icon.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26">' + (STRUCT_ICONS[def.kind] || '<rect x="6" y="6" width="12" height="12" fill="#888"/>') + '</svg>';
+    if (key <= 9) icon.appendChild(el(doc, 'b', 'bw-bkey', String(key)));
     const costSpan = el(doc, 'span', 'bw-cost', String(def.cost && def.cost[0] != null ? def.cost[0] : '?') + 'g');
-    btn.appendChild(nameSpan);
+    btn.appendChild(icon);
     btn.appendChild(costSpan);
     btn.addEventListener('click', () => toggleBuild(structId));
-    palette.appendChild(btn);
+    paletteRow.appendChild(btn);
     paletteBtns[structId] = btn;
   });
+  palette.appendChild(paletteRow);
   root.appendChild(palette);
   // NB: the 1-4 / Esc build HOTKEYS are handled in input/input.js (which also refreshes the placement ghost);
   // the palette buttons just mirror that via toggleBuild(). Don't add a second key handler here — two handlers
