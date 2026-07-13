@@ -262,6 +262,20 @@ export function stepHarvest(state, dt) {
 
 function stepOneHarvester(state, u, dt) {
   const nodes = state.resourceNodes;
+  // structure placed/sold/destroyed since this trip was planned → the old path may now cut
+  // through a wall. Re-route to the SAME destination on the fresh grid (deterministic: keyed
+  // to the sim's navVersion, bumped in recomputeUnitPaths).
+  if ((u.state === 'harvestGo' || u.state === 'harvestReturn') && u._navV !== (state.navVersion || 0)) {
+    u._navV = state.navVersion || 0;
+    if (u.state === 'harvestGo') {
+      const node = nodes && nodes.find((n) => n.id === u.harvestNodeId);
+      if (node) routeTo(state, u, node); else routeHome(state, u);
+    } else {
+      routeHome(state, u);
+    }
+  } else if (u._navV === undefined) {
+    u._navV = state.navVersion || 0;
+  }
   if (u.state === 'harvestIdle') {
     // docked, awaiting orders (owner spec: an emptied field ends the job — no auto-redeploy)
   } else if (u.state === 'harvestGo') {

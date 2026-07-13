@@ -194,6 +194,10 @@ export function getFlyerPath(from, to) {
  * holds position until terrain changes again.
  */
 export function recomputeUnitPaths(state) {
+  // nav grid changed (structure placed/sold/destroyed) — harvesters watch this to re-route
+  // mid-trip (their paths are otherwise computed once at order time and went STRAIGHT THROUGH
+  // walls built while driving).
+  state.navVersion = (state.navVersion || 0) + 1;
   const map = (state && state.map) || MAP;
   const structures = state && state.structures
     ? Array.from(state.structures.values())
