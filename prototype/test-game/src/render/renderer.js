@@ -485,6 +485,47 @@ function emitCombatFx(renderer, state) {
   }
 }
 
+// ── EXPLOSION GLOW (owner): additive-blend radial glow sprites — the cheap 2D "lighting"
+// shipped games use. White gradient texture tinted per event, scales up + fades over its life.
+// No lighting engine, no normal maps, phone-friendly.
+function glowTexture(renderer) {
+  if (renderer._glowTex) return renderer._glowTex;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const gr = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+  gr.addColorStop(0.4, 'rgba(255,255,255,0.4)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, 128, 128);
+  renderer._glowTex = PIXI.Texture.from(c);
+  return renderer._glowTex;
+}
+function spawnGlow(renderer, x, y, radiusTiles, ttl, tint) {
+  const spr = new PIXI.Sprite(glowTexture(renderer));
+  spr.anchor.set(0.5);
+  spr.blendMode = PIXI.BLEND_MODES.ADD;
+  spr.tint = (tint != null) ? tint : 0xffc070;
+  spr.x = x; spr.y = y;
+  spr.__age = 0; spr.__ttl = ttl || 0.35;
+  spr.__r = radiusTiles * renderer.tile;
+  spr.scale.set((spr.__r * 1.2) / 64);
+  renderer.layers.fx.addChild(spr);
+  (renderer.glows || (renderer.glows = [])).push(spr);
+}
+function updateGlows(renderer, dt) {
+  if (!renderer.glows || !renderer.glows.length) return;
+  const keep = [];
+  for (const gl of renderer.glows) {
+    gl.__age += dt;
+    const f = gl.__age / gl.__ttl;
+    if (f >= 1) { if (gl.parent) gl.parent.removeChild(gl); gl.destroy(); continue; }
+    gl.scale.set(((gl.__r * (1.2 + 1.0 * f))) / 64);   // blooms outward…
+    gl.alpha = Math.pow(1 - f, 1.6);                    // …while fading fast
+    keep.push(gl);
+  }
+  renderer.glows = keep;
+}
+
 function spawnFx(renderer, ev) {
   const pos = ev.pos || ev.cell
     || (ev.target && ev.target.pos) || (ev.target && ev.target.cell)
@@ -523,6 +564,7 @@ function spawnFx(renderer, ev) {
     renderer.shake.time = 0; renderer.shake.dur = 0.25; renderer.shake.mag = renderer.tile * 0.18;
     renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: 0.5, color: 0xe05040, kind: 'ring' });
     spawnFlame(renderer, p.x, p.y, 2.2, 5.0);   // a structure is bigger than a unit → a larger, ~5s fire
+    spawnGlow(renderer, p.x, p.y, 2.2, 0.5);    // explosion light bloom
     return;
   }
   // ── Base SUPER-CANNON visuals ──
@@ -555,12 +597,14 @@ function spawnFx(renderer, ev) {
   // owner tuning (2026-07-13): unit wreck fires shrunk 60% — full radius-scale flames dwarfed the units
   if (ev.type === 'kill') {
     spawnFlame(renderer, p.x, p.y, ((ev.radius || 0.28) / 0.28) * 0.4, 4.0);
+    spawnGlow(renderer, p.x, p.y, 0.9 * ((ev.radius || 0.28) / 0.28), 0.3);
     // the SCORE of the kill: a rising "+Ng" at the wreck (every attacker kill pays a bounty)
     if (ev.income > 0) spawnGoldFloat(renderer, p.x, p.y, '+' + Math.round(ev.income) + 'g');
   }
 }
 
 function updateFx(renderer) {
+  updateGlows(renderer, renderer._fxDt || FX_DT);
   updateFlames(renderer);   // advance flame emitters
   updateGoldFloats(renderer, FX_DT);   // rising +Ng kill-score texts (same fixed FX clock as particles)
   const g = renderer.fxG;
@@ -608,6 +652,7 @@ function updateFx(renderer) {
         // the shell has completed its arc and HIT THE GROUND — detonate NOW, exactly at the impact point. With FX
         // on real frame-time this lands on the same tick the sim applies the AOE damage (no explosion/damage lag).
         spawned.push({ x: fx.tx, y: fx.ty, age: 0, ttl: 0.6, kind: 'blast', radius: (fx.radius || 2.5) * 0.5 });   // 50% smaller blast
+        spawnGlow(renderer, fx.tx, fx.ty, (fx.radius || 2.5) * 0.9, 0.6);   // the ground lights up
         renderer.shake.time = 0; renderer.shake.dur = 0.4; renderer.shake.mag = renderer.tile * 0.5;
         // scatter 10-20 small fires at RANDOM points within the AOE radius (sqrt→uniform over the disk, not a
         // ring) to show the blast footprint. Pushed straight to the flame emitters (safe during this fxItems loop).
@@ -676,9 +721,10 @@ function updateFx(renderer) {
           for (let k = 0; k < 4; k++) renderer.fxItems.push({ kind: 'smoke', x: fx.tx + (Math.random() * 2 - 1) * t * 0.22,
             y: fx.ty + (Math.random() * 2 - 1) * t * 0.22, age: 0, ttl: 0.5, color: 0x3a3f45, size: t * 0.1, rise: t * 0.15 });
           renderer.fxItems.push({ kind: 'flash', x: fx.tx, y: fx.ty, age: 0, ttl: 0.12, color: 0xcfe8ff });
+          spawnGlow(renderer, fx.tx, fx.ty, 0.55, 0.22, 0xbfe0ff);   // cool air-burst bloom
         } else {
           renderer.fxItems.push({ kind: 'flash', x: fx.tx, y: fx.ty, age: 0, ttl: 0.15, color: 0xffe6a0 });
-          if (fx.shotKind === 'shell') spawnSparks(renderer, fx.tx, fx.ty, 2);
+          if (fx.shotKind === 'shell') { spawnSparks(renderer, fx.tx, fx.ty, 2); spawnGlow(renderer, fx.tx, fx.ty, 0.45, 0.2); }
         }
       } else {
         fx.x += dx / dist * step; fx.y += dy / dist * step;
