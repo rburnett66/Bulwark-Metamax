@@ -170,8 +170,10 @@ export function hashState(state) {
       const n = state.resourceNodes[i];
       h = fnv1aString(h, 'n' + n.id + ':' + numStr(n.remaining));
     }
-    const hv = state.harvesterId != null && state.units ? state.units.get(state.harvesterId) : null;
-    if (hv) h = fnv1aString(h, 'hc' + numStr(hv.cargo) + ':' + numStr(hv.cargoValue));
+    for (const hid of state.harvesterIds || []) {
+      const hv = state.units ? state.units.get(hid) : null;
+      if (hv) h = fnv1aString(h, 'hc' + hid + ':' + numStr(hv.cargo) + ':' + numStr(hv.cargoValue));
+    }
   }
 
   if (state.result) {

@@ -239,6 +239,15 @@ export function createComm(doc) {
     portrait.classList.remove('speaking');
     if (d.challenge) qchip.classList.add('on');
     await delay(rm ? 150 : 420); if (!live()) return;
+    // HOLD: a between-wave interlude keeps the speaker ON SCREEN after the line lands — the card
+    // skips its sign-off and stays up until dismiss() runs the fade. The token still guards
+    // staleness: a newer call (or the card's own click-to-close) supersedes the held card.
+    if (d.hold) { _held = { bed, myToken: my }; return; }
+    await _signOff(bed, live);
+  }
+
+  async function _signOff(bed, live) {
+    const rm = reducedMotion();
     // S7 sign-off
     card.classList.add('signoff');
     footl.textContent = '';
@@ -251,8 +260,18 @@ export function createComm(doc) {
     card.className = 'bw-comm';
   }
 
+  let _held = null;
+  /** Fade out a HELD card (no-op when nothing is held or a newer call took the card over). */
+  function dismiss() {
+    if (!_held) return;
+    const h = _held; _held = null;
+    if (h.myToken !== token) return;   // superseded — the newer call owns the card now
+    void _signOff(h.bed, () => token === h.myToken);
+  }
+
   return {
     showCall,
+    dismiss,
     get muted() { return muted; },
     destroy() { token++; stopAudio(); card.remove(); muteBtn.remove(); style.remove(); },
   };

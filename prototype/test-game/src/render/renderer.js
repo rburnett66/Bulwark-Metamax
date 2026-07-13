@@ -179,7 +179,9 @@ export function createRenderer(app, map) {
 
   // structHp is SECOND-highest by contract: structure/base health bars must always read over units,
   // air, and FX. 'fog' is reserved as the permanent TOP layer for fog of war.
-  const layerNames = ['water', 'ground', 'structures', 'units', 'air', 'fx', 'overlay', 'structHp', 'fog'];
+  // 'resources' sits ABOVE ground, BELOW structures/units — crystals grow out of the terrain and
+  // everything that moves or is built stands on top of them.
+  const layerNames = ['water', 'ground', 'resources', 'structures', 'units', 'air', 'fx', 'overlay', 'structHp', 'fog'];
   const layers = {};
   for (let i = 0; i < layerNames.length; i++) {
     const name = layerNames[i];
@@ -211,7 +213,10 @@ export function createRenderer(app, map) {
     // sitting above the primitive Graphics. `unitArt` is set by main.js once loadUnitArt() resolves.
     unitArt: null,
     unitSprites: new Map(),
-    unitSpriteLayer: new PIXI.Container()
+    unitSpriteLayer: new PIXI.Container(),
+    // Resource ART (crystal_resources sheet): a retained sprite per live node, keyed by node id.
+    resourceArt: null,
+    resourceSprites: new Map()
   };
 
   layers.structures.addChild(renderer.dyn.structures);
@@ -231,6 +236,15 @@ export function createRenderer(app, map) {
     const q = cellToLocal(renderer, cellX, cellY);
     spawnFlame(renderer, q.x, q.y, scale, ttl);
   };
+
+  // Crystal resource sheet — loaded lazily; nodes render as primitive circles until (and if) it lands.
+  // Maps with no resources never need it, so the fetch failure path is silent.
+  if (map.resources && map.resources.length) {
+    import('../harness/atlas.js')
+      .then(({ loadAtlasFromUrl }) => loadAtlasFromUrl('crystal_resources.png'))
+      .then((art) => { renderer.resourceArt = art; })
+      .catch((e) => console.warn('[resourceArt] skipped:', e && e.message));
+  }
 
   drawStaticBoard(renderer, map);
   return renderer;
@@ -415,7 +429,8 @@ function spawnFx(renderer, ev) {
   renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: ttl, color: color, kind: kind });
   // burning wreckage scaled to the UNIT's size (0.28-radius unit → scale ~1), so the fire fits the unit instead
   // of a fixed oversized blob. ~4s burn.
-  if (ev.type === 'kill') spawnFlame(renderer, p.x, p.y, (ev.radius || 0.28) / 0.28, 4.0);
+  // owner tuning (2026-07-13): unit wreck fires shrunk 60% — full radius-scale flames dwarfed the units
+  if (ev.type === 'kill') spawnFlame(renderer, p.x, p.y, ((ev.radius || 0.28) / 0.28) * 0.4, 4.0);
 }
 
 function updateFx(renderer) {
@@ -736,31 +751,127 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     const ring = state.map.rings[wv - 1];
     const r = ring.rect;
     const W = state.map.cols, H = state.map.rows;
-    gO.beginFill(0x05070a, 0.72);
-    if (r.y0 > 0) gO.drawRect(0, 0, W * t, r.y0 * t);                                        // top band
-    if (r.y1 < H - 1) gO.drawRect(0, (r.y1 + 1) * t, W * t, (H - 1 - r.y1) * t);             // bottom band
-    if (r.x0 > 0) gO.drawRect(0, r.y0 * t, r.x0 * t, (r.y1 - r.y0 + 1) * t);                 // left band
-    if (r.x1 < W - 1) gO.drawRect((r.x1 + 1) * t, r.y0 * t, (W - 1 - r.x1) * t, (r.y1 - r.y0 + 1) * t);
-    gO.endFill();
-    gO.lineStyle(2, 0x5fe0ff, 0.5);
-    gO.drawRect(r.x0 * t + 1, r.y0 * t + 1, (r.x1 - r.x0 + 1) * t - 2, (r.y1 - r.y0 + 1) * t - 2);
-    gO.lineStyle(0);
+    const gated = !state.map.openPlay;   // openPlay: whole board live — rings only schedule spawns
+    // LOCKED GROUND, not fog of war: a light veil that keeps the terrain readable underneath — the
+    // player should see what's coming and want it (the greed the ring design sells), never wonder
+    // what's hidden. A hard cyan border marks today's edge; the next ring is labeled with when it
+    // opens; each growth flashes the newly-opened band so the reveal is a visible beat.
+    const bands = (rect, inner) => {   // rects covering `rect` minus `inner`
+      const out = [];
+      if (inner.y0 > rect.y0) out.push([rect.x0, rect.y0, rect.x1 - rect.x0 + 1, inner.y0 - rect.y0]);
+      if (inner.y1 < rect.y1) out.push([rect.x0, inner.y1 + 1, rect.x1 - rect.x0 + 1, rect.y1 - inner.y1]);
+      if (inner.x0 > rect.x0) out.push([rect.x0, inner.y0, inner.x0 - rect.x0, inner.y1 - inner.y0 + 1]);
+      if (inner.x1 < rect.x1) out.push([inner.x1 + 1, inner.y0, rect.x1 - inner.x1, inner.y1 - inner.y0 + 1]);
+      return out;
+    };
+    if (gated) {
+      gO.beginFill(0x05070a, 0.38);
+      for (const [bx, by, bw, bh] of bands({ x0: 0, y0: 0, x1: W - 1, y1: H - 1 }, r)) {
+        gO.drawRect(bx * t, by * t, bw * t, bh * t);
+      }
+      gO.endFill();
+      gO.lineStyle(2, 0x5fe0ff, 0.85);
+      gO.drawRect(r.x0 * t + 1, r.y0 * t + 1, (r.x1 - r.x0 + 1) * t - 2, (r.y1 - r.y0 + 1) * t - 2);
+      gO.lineStyle(0);
+    }
+    // reveal flash: when the ring grows, the newly-opened band lights up and fades (~0.9s)
+    if (renderer._ringWave !== wv) {
+      if (renderer._ringWave != null && wv > renderer._ringWave && gated) {
+        renderer._ringReveal = { prev: state.map.rings[renderer._ringWave - 1].rect, cur: r, age: 0 };
+      }
+      renderer._ringWave = wv;
+    }
+    if (renderer._ringReveal) {
+      renderer._ringReveal.age += (frameDt || 0);
+      const a = 0.45 * (1 - renderer._ringReveal.age / 0.9);
+      if (a <= 0) renderer._ringReveal = null;
+      else {
+        gO.beginFill(0x9fe8ff, a);
+        for (const [bx, by, bw, bh] of bands(renderer._ringReveal.cur, renderer._ringReveal.prev)) {
+          gO.drawRect(bx * t, by * t, bw * t, bh * t);
+        }
+        gO.endFill();
+      }
+    }
+    // "OPENS WAVE N" on the next locked ring, placed in whichever band has room
+    if (!renderer.ringLabel) {
+      renderer.ringLabel = new PIXI.Text('', { fontFamily: 'Courier New', fontSize: 15, fontWeight: 'bold', fill: 0x8fd8ef });
+      renderer.ringLabel.alpha = 0.85;
+      renderer.layers.overlay.addChild(renderer.ringLabel);
+    }
+    if (gated && wv < state.map.rings.length) {
+      const nx = state.map.rings[wv].rect;
+      renderer.ringLabel.text = 'OPENS WAVE ' + (wv + 1);
+      renderer.ringLabel.visible = true;
+      if (nx.y0 < r.y0) {        // room above
+        renderer.ringLabel.anchor && renderer.ringLabel.anchor.set(0.5, 0.5);
+        renderer.ringLabel.x = ((r.x0 + r.x1 + 1) / 2) * t;
+        renderer.ringLabel.y = ((nx.y0 + r.y0) / 2) * t;
+      } else if (nx.x1 > r.x1) { // room to the right
+        renderer.ringLabel.anchor && renderer.ringLabel.anchor.set(0.5, 0.5);
+        renderer.ringLabel.x = ((r.x1 + 1 + nx.x1 + 1) / 2) * t;
+        renderer.ringLabel.y = ((r.y0 + r.y1 + 1) / 2) * t;
+      } else if (nx.x0 < r.x0) { // room to the left
+        renderer.ringLabel.anchor && renderer.ringLabel.anchor.set(0.5, 0.5);
+        renderer.ringLabel.x = ((nx.x0 + r.x0) / 2) * t;
+        renderer.ringLabel.y = ((r.y0 + r.y1 + 1) / 2) * t;
+      } else {                   // growth is downward only — label the bottom band
+        renderer.ringLabel.anchor && renderer.ringLabel.anchor.set(0.5, 0.5);
+        renderer.ringLabel.x = ((r.x0 + r.x1 + 1) / 2) * t;
+        renderer.ringLabel.y = ((r.y1 + 1 + nx.y1 + 1) / 2) * t;
+      }
+    } else {
+      renderer.ringLabel.visible = false;
+    }
     // resource nodes — LIVE state (state.resourceNodes): radius tracks remaining units, a hollow ring
     // marks a regrowing primary, exhausted premium/quest fade out. Green primary / gold premium /
     // purple quest — tier reads off distance, role reads off color (GDD §5.1).
     const ROLE_COLOR = { primary: 0x3f8f5a, premium: 0xe0b23f, quest: 0xa86fe0 };
-    const hvUnit = state.harvesterId != null ? state.units.get(state.harvesterId) : null;
-    const assignedField = hvUnit && hvUnit.fieldId;
+    const assignedFields = new Set();
+    for (const hid of state.harvesterIds || []) {
+      const hv0 = state.units.get(hid);
+      if (hv0 && hv0.hp > 0 && hv0.fieldId) assignedFields.add(hv0.fieldId);
+    }
+    // node ART: crystal sprites (role → colour pool, variant by node id) drawn on the 'resources'
+    // layer — above ground, below structures/units. Primitive circles are the not-yet-loaded fallback.
+    const art = renderer.resourceArt;
+    const pools = art && (renderer._resPools || (renderer._resPools = {
+      primary: art.frameNames.filter((n) => n.startsWith('green')),
+      premium: art.frameNames.filter((n) => n.startsWith('yellow') || n.startsWith('red')),
+      quest: art.frameNames.filter((n) => n.startsWith('blue')),
+    }));
+    const idHash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+    const liveIds = new Set();
     for (const node of state.resourceNodes || state.map.resources || []) {
-      if (node.wave > wv) continue;
+      if (gated && node.wave > wv) continue;   // open play: every node is on the board from wave 1
       const p = cellToLocal(renderer, node.x, node.y);   // cellToLocal centers in the cell
       const frac = node.units ? Math.max(0, (node.remaining != null ? node.remaining : node.units) / node.units) : 1;
       const color = ROLE_COLOR[node.role] || 0x888888;
-      if (assignedField && node.fieldId === assignedField) {   // the field the harvester is working
+      const gone = frac <= 0 && !node.respawns;          // consumed forever (or crushed by a structure)
+      if (assignedFields.has(node.fieldId) && !gone) {   // a field some harvester is working
         gO.lineStyle(1.5, 0xffffff, 0.7);
         gO.drawCircle(p.x, p.y, t * 0.3);
         gO.lineStyle(0);
       }
+      if (art) {
+        if (gone) continue;                              // sprite removed by the sweep below
+        liveIds.add(node.id);
+        let spr = renderer.resourceSprites.get(node.id);
+        if (!spr) {
+          const pool = (pools && pools[node.role] && pools[node.role].length) ? pools[node.role] : art.frameNames;
+          spr = new PIXI.Sprite(art.textures[pool[idHash(node.id) % pool.length]]);
+          spr.anchor.set(0.5, 0.68);                     // cluster base sits in the cell
+          renderer.layers.resources.addChild(spr);
+          renderer.resourceSprites.set(node.id, spr);
+        }
+        spr.x = p.x; spr.y = p.y + t * 0.06;
+        // owner tuning (2026-07-13): sized by playtest — ~3/4 of a tile tall when full
+        const targetH = t * 0.735 * (0.55 + 0.45 * frac);  // shrinks as the field drains
+        spr.scale.set(targetH / Math.max(1, spr.texture.height));
+        spr.alpha = frac > 0 ? 1 : 0.16;                 // regrowing primary lingers as a ghost
+        continue;
+      }
+      // ── primitive fallback (art not loaded yet) ──
       if (frac <= 0) {
         if (node.respawns) {          // regrowing — hollow ring so the spot stays readable
           gO.lineStyle(1.5, color, 0.5);
@@ -776,9 +887,19 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       gO.drawCircle(p.x, p.y, t * (0.1 + 0.14 * frac));
       gO.lineStyle(0);
     }
-    // harvester cargo bar (over the truck) — fills as it pulls, empties on deposit
-    if (state.harvesterId != null) {
-      const hv = state.units.get(state.harvesterId);
+    // retire sprites for nodes that are gone (crushed premium, off-map after an override reload)
+    if (art) {
+      for (const [id, spr] of renderer.resourceSprites) {
+        if (!liveIds.has(id)) {
+          if (spr.parent) spr.parent.removeChild(spr);
+          spr.destroy();
+          renderer.resourceSprites.delete(id);
+        }
+      }
+    }
+    // harvester cargo bars (over each truck) — fill as they pull, empty on deposit
+    for (const hid of state.harvesterIds || []) {
+      const hv = state.units.get(hid);
       if (hv && hv.hp > 0 && hv.capacity) {
         const p = cellToLocal(renderer, hv.pos.x, hv.pos.y);
         const w = t * 0.9, frac = Math.min(1, hv.cargo / hv.capacity);

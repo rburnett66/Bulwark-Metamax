@@ -64,6 +64,11 @@ export function validatePlacement(state, structId, slotOrCell) {
   const cell = { x: Math.round(slotOrCell.x), y: Math.round(slotOrCell.y) };
   const occupied = occupiedCellSet(state);
 
+  // The Harvestor bay buys a harvester — meaningless on boards with no resources (classic map).
+  if (def.kind === 'harvestorBay' && !state.resourceNodes) {
+    return { ok: false, reason: 'no resources on this map' };
+  }
+
   // Walls/towers may be placed anywhere EXCEPT high terrain, rocks, or trees.
   const isForbiddenTerrain = (c) => {
     const t = map.terrain && map.terrain[c.y] ? map.terrain[c.y][c.x] : null;
@@ -75,10 +80,10 @@ export function validatePlacement(state, structId, slotOrCell) {
   ]);
   // s10: the 3x3 base BODY is occupied — nothing can be placed on it; its 4 corner slots stay buildable.
   for (const c of ((map.base && map.base.cells) || [map.base])) forbidden.add(cellKey(c));
-  // CAMPAIGN maps grow in rings (GDD §3): building is allowed only on ground the current wave has
-  // revealed. Wave 0 (pre-battle build phase) = the wave-1 start pocket.
+  // Ring-gated campaign maps (GDD §3): building only on revealed ground. openPlay maps (the current
+  // default) build anywhere — rings still schedule the enemy spawns but never fence the player.
   let ringRect = null;
-  if (map.rings && map.rings.length) {
+  if (map.rings && map.rings.length && !map.openPlay) {
     const w = Math.max(1, Math.min((state.waves && state.waves.current) || 1, map.rings.length));
     ringRect = map.rings[w - 1].rect;
   }
@@ -109,9 +114,11 @@ export function validatePlacement(state, structId, slotOrCell) {
   };
   const testStructures = liveStructures(state).concat([ghost]);
   const nav = buildNavGrid(map, testStructures);
-  // campaign maps: the lane that must stay open runs from the CURRENT ring's ground spawn
-  const src = ringRect ? map.rings[Math.max(1, Math.min((state.waves && state.waves.current) || 1, map.rings.length)) - 1].spawns.ground
-                       : map.spawnGround;
+  // campaign maps: the lane that must stay open runs from the CURRENT wave's ground spawn
+  // (independent of ring-gating — openPlay maps still spawn per wave)
+  const src = (map.rings && map.rings.length)
+    ? map.rings[Math.max(1, Math.min((state.waves && state.waves.current) || 1, map.rings.length)) - 1].spawns.ground
+    : map.spawnGround;
   const path = findWalkerPath(nav, { x: src.x, y: src.y }, { x: map.base.x, y: map.base.y });
   if (!path) return { ok: false, reason: 'blocksPath' };
 
@@ -134,6 +141,21 @@ export function placeStructure(state, structId, slotOrCell) {
   s.repairPending = false;
 
   emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: structId, phase: 'start', pos: { x: s.pos.x, y: s.pos.y } });
+
+  // CRUSH RULE (owner, 2026-07-13): building on a resource DESTROYS it — permanently, even a
+  // regrowing primary. The ground is gone; nothing comes back, sell or no sell.
+  if (state.resourceNodes) {
+    const cells = footprintCells(cell, def.footprint);
+    for (const n of state.resourceNodes) {
+      if (n.remaining <= 0 && !n.respawns) continue;
+      if (cells.some((c) => c.x === n.x && c.y === n.y)) {
+        n.remaining = 0;
+        n.respawns = false;
+        n.respawnAt = null;
+        emitEvent(state, { type: 'nodeDestroyed', tick: state.tick, nodeId: n.id, pos: { x: n.x, y: n.y } });
+      }
+    }
+  }
 
   recomputeUnitPaths(state);   // any structure now changes the nav grid → reroute walkers around it
   return s;

@@ -78,12 +78,13 @@ def params_map(ws):
     return out
 
 
-# ── MAP-SIZE REWORK (owner, 2026-07-13): the original curve started and ended too small. New full
-# dims below (2:1-ish aspect throughout, reaching full size by map 8; map 9 stays the 64x32 finale).
+# ── MAP-SIZE REWORK (owner, 2026-07-13, rev 2): the whole map is playable from wave 1 (open play),
+# so these are the true per-map play areas. Owner specified maps 1-3 (24x16, 30x18, 34x20); the rest
+# complete the pattern (width alternates +6/+4, height +2 per map) landing exactly on 64x32 at map 9.
 # Lives here rather than in the workbook because openpyxl cannot recompute the derived sheets — fold
 # these into the Maps sheet in Excel when convenient (values here win until then).
-REWORK_DIMS = {1: (24, 12), 2: (30, 15), 3: (36, 17), 4: (42, 21),
-               5: (48, 24), 6: (54, 27), 7: (60, 30), 8: (64, 32), 9: (64, 32)}
+REWORK_DIMS = {1: (24, 16), 2: (30, 18), 3: (34, 20), 4: (40, 22), 5: (44, 24),
+               6: (50, 26), 7: (54, 28), 8: (60, 30), 9: (64, 32)}
 
 
 def playable_dims(full_w, full_h, fracs):
@@ -112,6 +113,9 @@ def playable_dims(full_w, full_h, fracs):
 
 def apply_rework(data):
     gp = data["globalParams"]
+    # Owner (2026-07-13): primary grow-back at 50% of the original rate — i.e. twice the respawn
+    # time (75s -> 150s). Slows the farming loop the time bonus is meant to fight.
+    gp["Primary_Respawn_Sec"] = round((gp.get("Primary_Respawn_Sec") or 75) * 2)
     setback = gp.get("Spawn_Setback", 2)
     per100 = gp.get("Par_Time_Per_100_Tiles", 42)
     waves_per_map = gp.get("Waves_Per_Map", 8)

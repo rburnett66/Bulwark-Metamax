@@ -47,7 +47,26 @@ function homeCell(map) {
   return { x: map.base.x, y: map.base.y + 2 };
 }
 
-/** Create runtime node state + the player's harvester. Called by createSim on campaign maps. */
+/** Spawn one harvester unit at `pos` (its home). Used at match start and by a completed
+ *  Harvestor bay (STR-Harvestor: buy a replacement/extra harvester for 500g). */
+export function spawnHarvester(state, pos) {
+  const s = harvesterStats();
+  const u = createUnit(state, HARVESTER_UNIT, 1, { x: pos.x, y: pos.y }, 'ground', 'defender');
+  if (!state.units.has(u.id)) state.units.set(u.id, u);
+  u.isHarvester = true;
+  u.state = 'harvestIdle';
+  u.dps = 0; u.targetsBase = false; u.targetId = null;
+  u.hp = s.hp; u.maxHp = s.hp; u.speed = s.speed;
+  u.cargo = 0; u.cargoValue = 0; u.capacity = s.capacity; u.yieldMult = s.yieldMult;
+  u.fieldId = null;        // the assigned FIELD (whole connected patch)
+  u.harvestNodeId = null;  // the specific cell being worked right now
+  u.homePos = { x: pos.x, y: pos.y };
+  state.harvesterIds.push(u.id);
+  state.harvesterId = state.harvesterIds[0];   // legacy single-id alias (first of the fleet)
+  return u;
+}
+
+/** Create runtime node state + the player's first harvester. Called by createSim on campaign maps. */
 export function initHarvest(state, map) {
   if (!map || !map.resources || !map.resources.length) return;
   state.resourceNodes = map.resources.map((r) => ({
@@ -57,19 +76,28 @@ export function initHarvest(state, map) {
     harvestSec: nodeHarvestSec(r),
   }));
   state.mapScore = { goldFromPrimary: 0, goldFromPremium: 0, questUnits: 0 };
-  const s = harvesterStats();
-  const home = homeCell(map);
-  const u = createUnit(state, HARVESTER_UNIT, 1, { x: home.x, y: home.y }, 'ground', 'defender');
-  if (!state.units.has(u.id)) state.units.set(u.id, u);
-  u.isHarvester = true;
-  u.state = 'harvestIdle';
-  u.dps = 0; u.targetsBase = false; u.targetId = null;
-  u.hp = s.hp; u.maxHp = s.hp; u.speed = s.speed;
-  u.cargo = 0; u.cargoValue = 0; u.capacity = s.capacity; u.yieldMult = s.yieldMult;
-  u.fieldId = null;        // the assigned FIELD (whole connected patch)
-  u.harvestNodeId = null;  // the specific cell being worked right now
-  u.homePos = home;
-  state.harvesterId = u.id;
+  // HARVEST ECONOMY (owner, 2026-07-13): on resource maps the harvester IS the faucet — start with
+  // 900 gold and turn the passive gold timer OFF. Every coin after the opening build is hauled.
+  if (state.economy) {
+    state.economy.money = 900;
+    state.economy.totalEarned = 900;
+    state.economy.incomePerSec = 0;
+  }
+  state.harvesterIds = [];
+  spawnHarvester(state, homeCell(map));
+}
+
+/** Alive harvesters, pruning the dead from the roster (deterministic — insertion order kept). */
+export function aliveHarvesters(state) {
+  if (!state.harvesterIds) return [];
+  const out = [];
+  state.harvesterIds = state.harvesterIds.filter((id) => {
+    const u = state.units.get(id);
+    if (u && u.hp > 0) { out.push(u); return true; }
+    return false;
+  });
+  state.harvesterId = state.harvesterIds[0] ?? null;
+  return out;
 }
 
 function nodeHarvestSec(r) {
@@ -78,6 +106,7 @@ function nodeHarvestSec(r) {
 }
 
 function nodeRevealed(state, node) {
+  if (state.map && state.map.openPlay) return true;   // open play: the whole board is harvestable
   const wv = Math.max(1, Math.min((state.waves && state.waves.current) || 1, 8));
   return node.wave <= wv;
 }
@@ -94,20 +123,25 @@ function nextFieldTarget(state, u) {
   return live[0];
 }
 
-/** Command: put the harvester on a FIELD. {type:'harvest', nodeId} — any cell of the field works. */
+/** Command: put a harvester on a FIELD. {type:'harvest', nodeId} — any cell of the field works.
+ *  With a fleet (Harvestor bays), the order goes to the nearest UNASSIGNED harvester, else the
+ *  nearest one gets retasked. */
 export function cmdHarvest(state, cmd) {
-  const u = state.units.get(state.harvesterId);
-  if (!u || u.hp <= 0) return { ok: false, reason: 'no harvester' };
+  const fleet = aliveHarvesters(state);
+  if (!fleet.length) return { ok: false, reason: 'no harvester — build a Harvestor' };
   const node = (state.resourceNodes || []).find((n) => n.id === cmd.nodeId);
   if (!node) return { ok: false, reason: 'no such node' };
   if (!nodeRevealed(state, node)) return { ok: false, reason: 'not revealed yet' };
   const live = fieldCells(state, node.fieldId).some((n) => n.remaining > 0 || n.respawns);
   if (!live) return { ok: false, reason: 'field exhausted' };
+  const byDist = (a, b) => (Math.hypot(a.pos.x - node.x, a.pos.y - node.y) - Math.hypot(b.pos.x - node.x, b.pos.y - node.y)) || (a.id - b.id);
+  const idle = fleet.filter((h) => !h.fieldId && h.state === 'harvestIdle').sort(byDist);
+  const u = idle[0] || fleet.slice().sort(byDist)[0];
   u.fieldId = node.fieldId;
   const target = node.remaining > 0 ? node : nextFieldTarget(state, u);
   if (target) routeTo(state, u, target);
   else u.state = 'harvestIdle';   // whole field regrowing — camp at home, auto-resume on respawn
-  emitEvent(state, { type: 'harvestOrder', tick: state.tick, nodeId: node.id, fieldId: node.fieldId, pos: { x: node.x, y: node.y } });
+  emitEvent(state, { type: 'harvestOrder', tick: state.tick, nodeId: node.id, fieldId: node.fieldId, unitId: u.id, pos: { x: node.x, y: node.y } });
   return { ok: true, reason: '' };
 }
 
@@ -159,9 +193,26 @@ export function stepHarvest(state, dt) {
     }
   }
 
-  const u = state.units.get(state.harvesterId);
-  if (!u || u.hp <= 0) return;
+  // HARVESTOR BAY conversion: a completed STR-Harvestor is a purchase, not a building — it turns
+  // into a new harvester unit homed on that cell and frees the ground.
+  if (state.structures) {
+    const done = [];
+    for (const s of state.structures.values()) {
+      if (s.structId === 'STR-Harvestor' && s.lifecycle === 'Complete') done.push(s);
+    }
+    for (const s of done) {
+      state.structures.delete(s.id);
+      if (!state.harvesterIds) state.harvesterIds = [];
+      const nu = spawnHarvester(state, { x: s.pos.x, y: s.pos.y });
+      emitEvent(state, { type: 'harvesterBuilt', tick: state.tick, unitId: nu.id, pos: { x: s.pos.x, y: s.pos.y } });
+    }
+  }
 
+  for (const u of aliveHarvesters(state)) stepOneHarvester(state, u, dt);
+}
+
+function stepOneHarvester(state, u, dt) {
+  const nodes = state.resourceNodes;
   if (u.state === 'harvestIdle') {
     // camped at home with a standing field assignment — head back out the moment the field regrows
     if (u.fieldId) {

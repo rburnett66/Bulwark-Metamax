@@ -54,13 +54,13 @@ function fresh(seed) {
 {
   const { s } = fresh(5);
   const hv = s.units.get(s.harvesterId);
-  // primaries are placed as multi-cell fields — find one with ≥2 cells
+  // primaries are placed as 1-2 cell fields — find a 2-cell one (open play: any wave is workable)
   const byField = {};
-  for (const n of s.resourceNodes.filter((n) => n.role === 'primary' && n.wave === 1)) {
+  for (const n of s.resourceNodes.filter((n) => n.role === 'primary')) {
     (byField[n.fieldId] = byField[n.fieldId] || []).push(n);
   }
   const field = Object.values(byField).find((f) => f.length >= 2);
-  assert(field, 'a multi-cell primary field exists on wave 1');
+  assert(field, 'a multi-cell primary field exists somewhere on the map');
   applyCommand(s, { type: 'harvest', nodeId: field[0].id });
   // the whole FIELD drains from a single order (both cells hit zero at some point)
   let allDrained = false, restedHome = false, regrew = false, resumed = false;
@@ -110,12 +110,63 @@ function fresh(seed) {
   assert.strictEqual(s.mapScore.goldFromPrimary + s.mapScore.goldFromPremium, scoreBeforeQuest, 'quest never touches the gold tallies');
 }
 
-// ── rejection paths: unrevealed node, exhausted premium ──
+// ── open play (default): a late-wave node is harvestable immediately; ring-gating still rejects ──
 {
   const { s } = fresh(5);
   const late = s.resourceNodes.find((n) => n.wave >= 5);
   const r1 = applyCommand(s, { type: 'harvest', nodeId: late.id });
-  assert(!r1.ok && /reveal/.test(r1.reason), `unrevealed node rejected (${r1.reason})`);
+  assert(r1.ok, `open play: far node orderable from wave 1 (${r1.reason || 'ok'})`);
+  const { s: gated } = fresh(5);
+  gated.map.openPlay = false;
+  const late2 = gated.resourceNodes.find((n) => n.wave >= 5);
+  const r2 = applyCommand(gated, { type: 'harvest', nodeId: late2.id });
+  assert(!r2.ok && /reveal/.test(r2.reason), `gated mode still rejects unrevealed nodes (${r2.reason})`);
+}
+
+// ── HARVESTOR bay: 500g buys a new harvester (recovery after death / second field) ──
+{
+  const { s } = fresh(5);
+  s.economy.money = 5000;
+  const first = s.units.get(s.harvesterId);
+  first.hp = 0;                                    // the harvester dies
+  for (let i = 0; i < 5; i++) stepSim(s, 1 / 30);  // cleanup runs
+  const dead = applyCommand(s, { type: 'harvest', nodeId: s.resourceNodes[0].id });
+  assert(!dead.ok && /Harvestor/.test(dead.reason), `no fleet -> helpful rejection (${dead.reason})`);
+  // buy a replacement via the build palette
+  const pocket = s.map.rings[0].rect;
+  const moneyBefore = s.economy.money;
+  const placed = applyCommand(s, { type: 'place', structId: 'STR-Harvestor', cell: { x: pocket.x0 + 2, y: pocket.y0 + 2 } });
+  assert(placed.ok, `Harvestor bay placed (${placed.reason})`);
+  assert(s.economy.money <= moneyBefore - 500, 'bay cost 500 gold');
+  let built = null;
+  for (let i = 0; i < 30 * 20 && !built; i++) {
+    for (const e of stepSim(s, 1 / 30)) if (e.type === 'harvesterBuilt') built = e;
+  }
+  assert(built, 'bay converted into a new harvester');
+  assert(s.harvesterIds.length === 1 && s.units.get(s.harvesterIds[0]).isHarvester, 'fleet has the new harvester');
+  assert(![...s.structures.values()].some((x) => x.structId === 'STR-Harvestor'), 'bay structure freed the cell');
+  const again = applyCommand(s, { type: 'harvest', nodeId: s.resourceNodes.find((n) => n.remaining > 0).id });
+  assert(again.ok, 'harvesting works again with the bought harvester');
+  // classic map: the bay is rejected (no resources to harvest)
+  const { MAP } = await import('../data/tables.js');
+  const classic = createSim(5, { map: MAP });
+  classic.economy.money = 5000;
+  const rc = applyCommand(classic, { type: 'place', structId: 'STR-Harvestor', cell: { x: 10, y: 10 } });
+  assert(!rc.ok && /resources/.test(rc.reason), `classic map rejects the bay (${rc.reason})`);
+}
+
+// ── CRUSH RULE: building on a resource destroys it forever — even a regrowing primary ──
+{
+  const { s } = fresh(5);
+  s.economy.money = 100000;
+  const node = s.resourceNodes.find((n) => n.role === 'primary' && n.respawns);
+  const placed = applyCommand(s, { type: 'place', structId: 'STR-Wall', cell: { x: node.x, y: node.y } });
+  assert(placed.ok, `structure placed on the crystal (${placed.reason})`);
+  assert(node.remaining === 0 && node.respawns === false, 'crystal destroyed on placement');
+  for (let i = 0; i < 30 * 200; i++) stepSim(s, 1 / 30);
+  assert(node.remaining === 0 && node.respawnAt == null, 'crushed crystal never grows back');
+  const order = applyCommand(s, { type: 'harvest', nodeId: node.id });
+  if (!order.ok) assert(/exhaust/.test(order.reason), `crushed single-cell field rejects orders (${order.reason})`);
 }
 
 // ── determinism: identical seeds and orders → identical hash (nodes + cargo are hashed) ──

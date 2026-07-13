@@ -16,13 +16,21 @@ import functools
 import http.server
 import json
 import os
+import socket
 import socketserver
 import subprocess
 import sys
 import threading
 import webbrowser
 
-html = sys.argv[1] if len(sys.argv) > 1 else "Bass-tastic-prototype.html"
+# --lan: also serve on the local network so a PHONE on the same Wi-Fi can play —
+#   python serve_prototype.py "prototype/test-game/index.html" --lan
+# then open the printed http://<pc-ip>:<port>/... URL on the phone. (Windows may ask to
+# allow python through the firewall the first time — allow on Private networks.)
+args = [a for a in sys.argv[1:] if a != "--lan"]
+LAN = "--lan" in sys.argv[1:]
+
+html = args[0] if args else "Bass-tastic-prototype.html"
 html = os.path.abspath(html)
 if not os.path.exists(html):
     sys.exit(f"Not found: {html}")
@@ -80,10 +88,11 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 Handler = functools.partial(_NoCacheHandler, directory=directory)
 
 # Find a free port starting at 9000.
+bind = "0.0.0.0" if LAN else "127.0.0.1"
 port = 9000
 while port < 9050:
     try:
-        httpd = socketserver.TCPServer(("127.0.0.1", port), Handler)
+        httpd = socketserver.TCPServer((bind, port), Handler)
         break
     except OSError:
         port += 1
@@ -91,7 +100,17 @@ else:
     sys.exit("No free port in 9000-9049.")
 
 url = f"http://127.0.0.1:{port}/{fname}"
-print(f"Serving {fname}\n  {url}\n(Ctrl+C to stop)")
+print(f"Serving {fname}\n  {url}")
+if LAN:
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("8.8.8.8", 80))          # no traffic sent — just resolves the outbound iface IP
+        lan_ip = probe.getsockname()[0]
+        probe.close()
+        print(f"  phone (same Wi-Fi): http://{lan_ip}:{port}/{fname}")
+    except OSError:
+        print("  (could not detect the LAN IP — run `ipconfig` and use the IPv4 address)")
+print("(Ctrl+C to stop)")
 threading.Timer(0.6, lambda: webbrowser.open(url)).start()
 try:
     httpd.serve_forever()
