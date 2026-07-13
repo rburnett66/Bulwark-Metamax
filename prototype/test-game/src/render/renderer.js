@@ -736,15 +736,75 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     const ring = state.map.rings[wv - 1];
     const r = ring.rect;
     const W = state.map.cols, H = state.map.rows;
-    gO.beginFill(0x05070a, 0.72);
-    if (r.y0 > 0) gO.drawRect(0, 0, W * t, r.y0 * t);                                        // top band
-    if (r.y1 < H - 1) gO.drawRect(0, (r.y1 + 1) * t, W * t, (H - 1 - r.y1) * t);             // bottom band
-    if (r.x0 > 0) gO.drawRect(0, r.y0 * t, r.x0 * t, (r.y1 - r.y0 + 1) * t);                 // left band
-    if (r.x1 < W - 1) gO.drawRect((r.x1 + 1) * t, r.y0 * t, (W - 1 - r.x1) * t, (r.y1 - r.y0 + 1) * t);
+    // LOCKED GROUND, not fog of war: a light veil that keeps the terrain readable underneath — the
+    // player should see what's coming and want it (the greed the ring design sells), never wonder
+    // what's hidden. A hard cyan border marks today's edge; the next ring is labeled with when it
+    // opens; each growth flashes the newly-opened band so the reveal is a visible beat.
+    const bands = (rect, inner) => {   // rects covering `rect` minus `inner`
+      const out = [];
+      if (inner.y0 > rect.y0) out.push([rect.x0, rect.y0, rect.x1 - rect.x0 + 1, inner.y0 - rect.y0]);
+      if (inner.y1 < rect.y1) out.push([rect.x0, inner.y1 + 1, rect.x1 - rect.x0 + 1, rect.y1 - inner.y1]);
+      if (inner.x0 > rect.x0) out.push([rect.x0, inner.y0, inner.x0 - rect.x0, inner.y1 - inner.y0 + 1]);
+      if (inner.x1 < rect.x1) out.push([inner.x1 + 1, inner.y0, rect.x1 - inner.x1, inner.y1 - inner.y0 + 1]);
+      return out;
+    };
+    gO.beginFill(0x05070a, 0.38);
+    for (const [bx, by, bw, bh] of bands({ x0: 0, y0: 0, x1: W - 1, y1: H - 1 }, r)) {
+      gO.drawRect(bx * t, by * t, bw * t, bh * t);
+    }
     gO.endFill();
-    gO.lineStyle(2, 0x5fe0ff, 0.5);
+    gO.lineStyle(2, 0x5fe0ff, 0.85);
     gO.drawRect(r.x0 * t + 1, r.y0 * t + 1, (r.x1 - r.x0 + 1) * t - 2, (r.y1 - r.y0 + 1) * t - 2);
     gO.lineStyle(0);
+    // reveal flash: when the ring grows, the newly-opened band lights up and fades (~0.9s)
+    if (renderer._ringWave !== wv) {
+      if (renderer._ringWave != null && wv > renderer._ringWave) {
+        renderer._ringReveal = { prev: state.map.rings[renderer._ringWave - 1].rect, cur: r, age: 0 };
+      }
+      renderer._ringWave = wv;
+    }
+    if (renderer._ringReveal) {
+      renderer._ringReveal.age += (frameDt || 0);
+      const a = 0.45 * (1 - renderer._ringReveal.age / 0.9);
+      if (a <= 0) renderer._ringReveal = null;
+      else {
+        gO.beginFill(0x9fe8ff, a);
+        for (const [bx, by, bw, bh] of bands(renderer._ringReveal.cur, renderer._ringReveal.prev)) {
+          gO.drawRect(bx * t, by * t, bw * t, bh * t);
+        }
+        gO.endFill();
+      }
+    }
+    // "OPENS WAVE N" on the next locked ring, placed in whichever band has room
+    if (!renderer.ringLabel) {
+      renderer.ringLabel = new PIXI.Text('', { fontFamily: 'Courier New', fontSize: 15, fontWeight: 'bold', fill: 0x8fd8ef });
+      renderer.ringLabel.alpha = 0.85;
+      renderer.layers.overlay.addChild(renderer.ringLabel);
+    }
+    if (wv < state.map.rings.length) {
+      const nx = state.map.rings[wv].rect;
+      renderer.ringLabel.text = 'OPENS WAVE ' + (wv + 1);
+      renderer.ringLabel.visible = true;
+      if (nx.y0 < r.y0) {        // room above
+        renderer.ringLabel.anchor && renderer.ringLabel.anchor.set(0.5, 0.5);
+        renderer.ringLabel.x = ((r.x0 + r.x1 + 1) / 2) * t;
+        renderer.ringLabel.y = ((nx.y0 + r.y0) / 2) * t;
+      } else if (nx.x1 > r.x1) { // room to the right
+        renderer.ringLabel.anchor && renderer.ringLabel.anchor.set(0.5, 0.5);
+        renderer.ringLabel.x = ((r.x1 + 1 + nx.x1 + 1) / 2) * t;
+        renderer.ringLabel.y = ((r.y0 + r.y1 + 1) / 2) * t;
+      } else if (nx.x0 < r.x0) { // room to the left
+        renderer.ringLabel.anchor && renderer.ringLabel.anchor.set(0.5, 0.5);
+        renderer.ringLabel.x = ((nx.x0 + r.x0) / 2) * t;
+        renderer.ringLabel.y = ((r.y0 + r.y1 + 1) / 2) * t;
+      } else {                   // growth is downward only — label the bottom band
+        renderer.ringLabel.anchor && renderer.ringLabel.anchor.set(0.5, 0.5);
+        renderer.ringLabel.x = ((r.x0 + r.x1 + 1) / 2) * t;
+        renderer.ringLabel.y = ((r.y1 + 1 + nx.y1 + 1) / 2) * t;
+      }
+    } else {
+      renderer.ringLabel.visible = false;
+    }
     // resource nodes — LIVE state (state.resourceNodes): radius tracks remaining units, a hollow ring
     // marks a regrowing primary, exhausted premium/quest fade out. Green primary / gold premium /
     // purple quest — tier reads off distance, role reads off color (GDD §5.1).
