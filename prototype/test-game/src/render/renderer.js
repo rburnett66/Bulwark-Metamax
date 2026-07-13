@@ -1376,6 +1376,21 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
 
   emitCombatFx(renderer, state);   // shells/tracers + damage fire + flyer sparks (cosmetic)
 
+  // UPGRADING structures spark like a repair in progress (owner) — same welding sparks, emitted
+  // across the footprint while the upgrade timer runs
+  if (state.structures) {
+    for (const us of state.structures.values()) {
+      if (!us || us.lifecycle !== 'Upgrading') continue;
+      if (Math.random() < 0.45) {
+        const fp = us.footprint || { w: 1, h: 1 };
+        const cx = us.pos.x + ((fp.w || 1) - 1) / 2 + (Math.random() * 2 - 1) * 0.3;
+        const cy = us.pos.y + ((fp.h || 1) - 1) / 2 + (Math.random() * 2 - 1) * 0.3;
+        const wp = cellToLocal(renderer, cx, cy);
+        spawnSparks(renderer, wp.x, wp.y - t * 0.12, 1 + (Math.random() * 2 | 0));
+      }
+    }
+  }
+
   // Repair SPARKS — a bot actively welding a structure (state 'repairing') throws sparks at the work site, so
   // the repair reads clearly (and confirms the structure's HP is climbing). Emitted at the bot's position.
   if (state.units && state.structures) {
