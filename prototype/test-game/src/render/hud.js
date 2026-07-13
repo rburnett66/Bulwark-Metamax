@@ -10,6 +10,15 @@ const CSS = `
 .bw-hud * { box-sizing:border-box; }
 .bw-panel { background:rgba(10,14,20,0.85); border:1px solid #3a4a5a; border-radius:4px; padding:6px 8px; pointer-events:auto; }
 .bw-topbar { position:absolute; top:6px; left:6px; right:6px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+@media (max-width: 900px) {
+  .bw-topbar { flex-wrap:nowrap; gap:6px; overflow:hidden; }
+  .bw-hpbar { width:80px; }
+  .bw-hptext { display:none; }
+  .bw-timer { font-size:13px; min-width:0; }
+  .bw-money { font-size:13px; min-width:0; }
+  .bw-wave { font-size:11px; white-space:nowrap; }
+  .bw-topbar .bw-btn { padding:3px 6px; font-size:11px; white-space:nowrap; }
+}
 .bw-faction { pointer-events:auto; background:#141b22; color:#e8e8e8; border:1px solid #26313c; border-radius:4px;
   padding:3px 6px; font:inherit; font-size:12px; cursor:pointer; }
 .bw-hpwrap { display:flex; align-items:center; gap:6px; }
@@ -219,9 +228,6 @@ export function createHud(mountEl, callbacks) {
   questEl.title = 'Quest crystals hauled (red / green) — they also pay gold';
   topbar.appendChild(questEl);
   topbar.appendChild(startWaveBtn);
-  topbar.appendChild(factionSel);
-  topbar.appendChild(mapSel);
-  topbar.appendChild(seedEl);
   // Between-wave INTERLUDE prompt — centered TAP TO START; shown while the sim is frozen after the
   // wave-clear dialog (the speaker stays on screen). Clicking it is the only way time resumes.
   const nextWaveBtn = el(doc, 'button', 'bw-nextwave');
@@ -236,7 +242,7 @@ export function createHud(mountEl, callbacks) {
   // commit from serve_prototype.py's /__version is appended when available. Include it in bug reports.
   const buildEl = el(doc, 'span', 'bw-seed', VERSION + ' ' + VERSION_NOTE);
   buildEl.title = 'game version (src/version.js)';
-  topbar.appendChild(buildEl);
+
   if (typeof console !== 'undefined') console.log('BULWARK ' + VERSION + ' (' + VERSION_NOTE + ')');
   if (typeof fetch === 'function') {
     fetch('/__version').then((r) => (r.ok ? r.json() : null)).then((v) => {
@@ -405,6 +411,14 @@ export function createHud(mountEl, callbacks) {
   // hand the persisted values to the game once at boot
   if (cbs.onVolume) for (const ch of ['master', 'dialog', 'game']) cbs.onVolume(ch, volumes[ch] ?? 1);
 
+  // session tools (enemy faction, board, seed/build readouts) live in SETTINGS — they were
+  // wrapping the top bar to 3+ lines on phones; the header now stays one line of live game state
+  const sessionPanel = el(doc, 'div', 'bw-debug bw-panel');
+  sessionPanel.appendChild(factionSel);
+  sessionPanel.appendChild(mapSel);
+  sessionPanel.appendChild(seedEl);
+  sessionPanel.appendChild(buildEl);
+  bottombar.appendChild(sessionPanel);
   bottombar.appendChild(volPanel);
   bottombar.appendChild(help);
   bottombar.appendChild(debug);
