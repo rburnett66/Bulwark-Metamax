@@ -865,8 +865,8 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           renderer.resourceSprites.set(node.id, spr);
         }
         spr.x = p.x; spr.y = p.y + t * 0.06;
-        // owner tuning (2026-07-13): 25% of the first-pass size — clusters read as pickups, not terrain
-        const targetH = t * 0.325 * (0.55 + 0.45 * frac);  // shrinks as the field drains
+        // owner tuning (2026-07-13): 25% of first pass, then +50% — ~half a tile tall when full
+        const targetH = t * 0.49 * (0.55 + 0.45 * frac);   // shrinks as the field drains
         spr.scale.set(targetH / Math.max(1, spr.texture.height));
         spr.alpha = frac > 0 ? 1 : 0.16;                 // regrowing primary lingers as a ghost
         continue;
