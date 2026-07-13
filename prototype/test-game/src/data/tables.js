@@ -936,34 +936,65 @@ export const MAP = Object.freeze({
 // and structId mapping (structures).
 export const SYSTEM_UNITS = Object.freeze({
   'SYS-Harvester': Object.freeze({
-    name: 'Harvester', kind: 'harvester', faction: 'System', domain: 'Walker',
+    name: 'Harvester', kind: 'harvester', faction: 'System', domain: 'Walker', role: 'Harvester',
     armorClass: 'Vehicle', damageType: 'None', targets: 'None',
     hp: [120, 120, 120], dps: [0, 0, 0], range: 0.5, speed: 3, power: 0, cost: [500, 500, 500]
   }),
   'SYS-Base': Object.freeze({
     // the 3x3 BASE SHIP — author its art as one square image (it renders across the full 3x3
     // footprint in-game; the keep outline + HP bar + super-cannon turret stay on top)
-    name: 'Base Ship', kind: 'structure', faction: 'System', domain: 'Walker',
+    name: 'Base Ship', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Base Ship',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [3000, 3000, 3000], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
   }),
+  // TIER ART SLOTS — author how each defense LOOKS at upgrade tiers 2/3 (stats live in STRUCTURES)
+  'SYS-Cannon-2': Object.freeze({
+    name: 'Cannon Tower (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Cannon Tower T2',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
+  'SYS-Cannon-3': Object.freeze({
+    name: 'Cannon Tower (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Cannon Tower T3',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
+  'SYS-Flak-2': Object.freeze({
+    name: 'Flak Tower (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Flak Tower T2',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
+  'SYS-Flak-3': Object.freeze({
+    name: 'Flak Tower (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Flak Tower T3',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
+  'SYS-Wall-2': Object.freeze({
+    name: 'Wall (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Wall T2',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
+  'SYS-Wall-3': Object.freeze({
+    name: 'Wall (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Wall T3',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
   'SYS-Cannon': Object.freeze({
-    name: 'Cannon Tower', kind: 'structure', faction: 'System', domain: 'Walker',
+    name: 'Cannon Tower', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Cannon Tower',
     armorClass: 'Structure', damageType: 'Kinetic', targets: 'Ground',
     hp: [400, 640, 960], dps: [45, 70, 104], range: 4.5, speed: 0, power: 0, cost: [300, 750, 1500]
   }),
   'SYS-Flak': Object.freeze({
-    name: 'Flak Tower', kind: 'structure', faction: 'System', domain: 'Walker',
+    name: 'Flak Tower', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Flak Tower',
     armorClass: 'Structure', damageType: 'Kinetic', targets: 'Air',
     hp: [360, 576, 864], dps: [40, 62, 92], range: 5.5, speed: 0, power: 0, cost: [300, 750, 1500]
   }),
   'SYS-Wall': Object.freeze({
-    name: 'Wall', kind: 'structure', faction: 'System', domain: 'Walker',
+    name: 'Wall', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Wall',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [600, 960, 1440], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [60, 150, 300]
   }),
   'SYS-Moat': Object.freeze({
-    name: 'Moat', kind: 'structure', faction: 'System', domain: 'Walker',
+    name: 'Moat', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Moat',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [400, 640, 960], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [80, 200, 400]
   }),
