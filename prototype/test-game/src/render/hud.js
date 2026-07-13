@@ -197,7 +197,8 @@ export function createHud(mountEl, callbacks) {
   const mapSel = el(doc, 'select', 'bw-faction');
   mapSel.title = 'Board: Classic (fixed slice) or a ring-campaign map 1-9 (restarts the run)';
   const optClassic = el(doc, 'option', null, 'Classic board'); optClassic.value = '0'; mapSel.appendChild(optClassic);
-  for (let m = 1; m <= 9; m++) { const o = el(doc, 'option', null, 'Map ' + m + ' (rings)'); o.value = String(m); mapSel.appendChild(o); }
+  for (let m = 1; m <= 9; m++) { const o = el(doc, 'option', null, 'Map ' + m); o.value = String(m); mapSel.appendChild(o); }
+  if (cbs.defaultMapId != null) mapSel.value = String(cbs.defaultMapId);   // boot board (main.js loads it)
   mapSel.addEventListener('change', () => { if (cbs.onMapSelect) cbs.onMapSelect(Number(mapSel.value) || 0); });
 
   topbar.appendChild(hpwrap);

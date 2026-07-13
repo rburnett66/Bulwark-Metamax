@@ -100,6 +100,10 @@ export function validatePlacement(state, structId, slotOrCell) {
   const cells = footprintCells(cell, def.footprint);
   for (const c of cells) {
     if (c.x < 0 || c.y < 0 || c.x >= map.cols || c.y >= map.rows) return { ok: false, reason: 'terrain' };
+    // the SAFE BORDER is approach terrain — enemies march through it, nobody builds on it
+    if (map.playArea && (c.x < map.playArea.x0 || c.x > map.playArea.x1 || c.y < map.playArea.y0 || c.y > map.playArea.y1)) {
+      return { ok: false, reason: 'outside the battlefield' };
+    }
     if (ringRect && (c.x < ringRect.x0 || c.x > ringRect.x1 || c.y < ringRect.y0 || c.y > ringRect.y1)) {
       return { ok: false, reason: 'outside the revealed ring' };
     }

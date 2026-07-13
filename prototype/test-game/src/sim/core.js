@@ -3,7 +3,7 @@ import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath, getFlyerPath, getWaterPath } from './pathfinding.js';
 import { createUnit, createBase } from './entities.js';
 import { acquireTarget, applyDamage, stepCombat } from './combat.js';
-import { initEconomy, stepEconomy, canAfford, spend } from './economy.js';
+import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
 import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
 import { initWaves, startNextWave, stepWaves } from './waves.js';
 import { initHarvest, cmdHarvest, stepHarvest } from './harvest.js';
@@ -989,9 +989,12 @@ export function stepSim(state, dtFixed) {
   for (let i = 0; i < dead.length; i++) {
     const u = state.units.get(dead[i]);
     // Any death NOT already resolved+emitted by combat (base super-cannon AOE, enemy ARTILLERY AOE, collisions,
-    // etc.) still emits a 'kill' so it produces the burning-wreck FX — EVERY destroyed unit burns, not just tower
-    // kills. FX-only (income/score are granted in combat.js, unchanged); deterministic so replays hold.
-    if (u) emitEvent(state, { type: 'kill', tick: state.tick, entityId: dead[i], unitId: u.unitId, side: u.side, lane: u.lane, income: 0, radius: u.radius, pos: { x: u.pos.x, y: u.pos.y } });
+    // etc.) still emits a 'kill' — and EVERY attacker kill pays the bounty (owner, 2026-07-13: with the
+    // harvest economy there is no passive income, so cannon/AOE kills paying zero read as broken).
+    if (u) {
+      const income = u.side === 'attacker' ? grantKillIncome(state, u) : 0;
+      emitEvent(state, { type: 'kill', tick: state.tick, entityId: dead[i], unitId: u.unitId, side: u.side, lane: u.lane, income, radius: u.radius, pos: { x: u.pos.x, y: u.pos.y } });
+    }
     state.units.delete(dead[i]);
     if (state.selectedId === dead[i]) state.selectedId = null;
   }

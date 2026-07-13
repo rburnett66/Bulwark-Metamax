@@ -61,9 +61,10 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   // Session state (sim + log + ui). Re-created on restart / replay.
   // ---------------------------------------------------------------------
-  // DEFAULTS (owner, 2026-07-13): Ground/Powder as the boot faction, and the game opens on the
-  // wave-1 TAP TO START overlay — load, tap anywhere, fight.
+  // DEFAULTS (owner, 2026-07-13): Map 1 (campaign) as the boot board, Ground/Powder as the boot
+  // faction, and the game opens on the wave-1 TAP TO START overlay — load, tap anywhere, fight.
   const DEFAULT_FACTION = 'Ground / Powder';
+  const DEFAULT_MAP_ID = 1;
   let currentWaves = makeWaves(DEFAULT_FACTION);   // active enemy schedule (test picker can change it)
   let currentMap = MAP;       // classic board, or a generated ring-campaign map (Map picker)
   let currentMapId = 0;       // 0 = classic
@@ -229,6 +230,7 @@ export function boot(mountEl, seed) {
       flashMessage(hud, faction ? (faction + ' — ' + currentWaves.length + ' waves') : 'Mixed roster restored');
     },
     onMapSelect: (mapId) => { void selectMap(mapId); },
+    defaultMapId: DEFAULT_MAP_ID,
     onUpgrade: (id) => {
       submit({ type: 'upgrade', id });
     },
@@ -297,9 +299,9 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
 
-  // boot = a fresh board: open on the wave-1 tap-to-start overlay
-  interlude = true;
-  hud.setNextWavePrompt(true, 'TAP TO START');
+  // boot = a fresh board on the DEFAULT MAP: selectMap rebuilds sim+renderer for map 1 and its
+  // restart() opens the wave-1 tap-to-start overlay
+  void selectMap(DEFAULT_MAP_ID);
 
   // ---------------------------------------------------------------------
   // Comm dialog (render-side only), per the Dialog & Storytelling System doc:

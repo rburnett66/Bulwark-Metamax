@@ -89,21 +89,29 @@ function drawStaticBoard(renderer, map) {
   const gWater = new PIXI.Graphics();
   const gGround = new PIXI.Graphics();
 
-  // ground cells in low/mid/high bands (skip water cells)
+  // ground cells in low/mid/high bands (skip water cells); the SAFE BORDER outside map.playArea
+  // is approach terrain — darker, never buildable-tinted
+  const pa = map.playArea || null;
+  const inPlay = (x, y) => !pa || (x >= pa.x0 && x <= pa.x1 && y >= pa.y0 && y <= pa.y1);
   for (let y = 0; y < map.rows; y++) {
     for (let x = 0; x < map.cols; x++) {
       if (waterSet.has(cellKey(x, y))) continue;
       const band = y < map.rows / 3 ? 0 : (y < (2 * map.rows) / 3 ? 1 : 2);
-      const shades = [0x33502c, 0x3c5c33, 0x45683a];
+      const shades = inPlay(x, y) ? [0x33502c, 0x3c5c33, 0x45683a] : [0x1f2b1c, 0x24321f, 0x293823];
       gGround.beginFill(shades[band], 1);
       gGround.drawRect(x * t, y * t, t, t);
       gGround.endFill();
-      if (buildSet.has(cellKey(x, y))) {
+      if (inPlay(x, y) && buildSet.has(cellKey(x, y))) {
         gGround.beginFill(0x5a7a4a, 0.35);
         gGround.drawRect(x * t + 1, y * t + 1, t - 2, t - 2);
         gGround.endFill();
       }
     }
+  }
+  if (pa) {   // battlefield outline
+    gGround.lineStyle(2, 0xcfe3a0, 0.5);
+    gGround.drawRect(pa.x0 * t + 1, pa.y0 * t + 1, (pa.x1 - pa.x0 + 1) * t - 2, (pa.y1 - pa.y0 + 1) * t - 2);
+    gGround.lineStyle(0);
   }
 
   // water: sub-surface tint + lighter surface layer
@@ -248,6 +256,30 @@ export function createRenderer(app, map) {
 
   drawStaticBoard(renderer, map);
   return renderer;
+}
+
+// Rising gold "+Ng" text at a kill/deposit — the visible score of the moment. PIXI.Text objects,
+// pooled per float, retired after ttl.
+function spawnGoldFloat(renderer, x, y, label) {
+  const t = new PIXI.Text(label, { fontFamily: 'Courier New', fontSize: Math.max(13, renderer.tile * 0.28),
+    fontWeight: 'bold', fill: 0xffd76a, stroke: 0x0a0e12, strokeThickness: 3 });
+  t.anchor && t.anchor.set(0.5, 1);
+  t.x = x; t.y = y - renderer.tile * 0.3;
+  renderer.layers.structHp.addChild(t);   // above units/FX so the score always reads
+  (renderer.goldFloats || (renderer.goldFloats = [])).push({ t, age: 0, ttl: 1.1 });
+}
+function updateGoldFloats(renderer, dt) {
+  if (!renderer.goldFloats || !renderer.goldFloats.length) return;
+  const keep = [];
+  for (const f of renderer.goldFloats) {
+    f.age += dt;
+    const p = f.age / f.ttl;
+    if (p >= 1) { if (f.t.parent) f.t.parent.removeChild(f.t); f.t.destroy(); continue; }
+    f.t.y -= dt * renderer.tile * 0.9;
+    f.t.alpha = p < 0.65 ? 1 : 1 - (p - 0.65) / 0.35;
+    keep.push(f);
+  }
+  renderer.goldFloats = keep;
 }
 
 // ── Burning-wreck FLAME (particle EMITTER — Graphics only, NO custom GL shader) ───────────────────────────
@@ -430,11 +462,16 @@ function spawnFx(renderer, ev) {
   // burning wreckage scaled to the UNIT's size (0.28-radius unit → scale ~1), so the fire fits the unit instead
   // of a fixed oversized blob. ~4s burn.
   // owner tuning (2026-07-13): unit wreck fires shrunk 60% — full radius-scale flames dwarfed the units
-  if (ev.type === 'kill') spawnFlame(renderer, p.x, p.y, ((ev.radius || 0.28) / 0.28) * 0.4, 4.0);
+  if (ev.type === 'kill') {
+    spawnFlame(renderer, p.x, p.y, ((ev.radius || 0.28) / 0.28) * 0.4, 4.0);
+    // the SCORE of the kill: a rising "+Ng" at the wreck (every attacker kill pays a bounty)
+    if (ev.income > 0) spawnGoldFloat(renderer, p.x, p.y, '+' + Math.round(ev.income) + 'g');
+  }
 }
 
 function updateFx(renderer) {
   updateFlames(renderer);   // advance flame emitters
+  updateGoldFloats(renderer, FX_DT);   // rising +Ng kill-score texts (same fixed FX clock as particles)
   const g = renderer.fxG;
   g.clear();
   const t = renderer.tile;
@@ -904,6 +941,17 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           spr.destroy();
           renderer.resourceSprites.delete(id);
         }
+      }
+    }
+    // SELECTED harvester: bold pulsing gold ring — the visible half of click-truck-then-click-field
+    if (ui && ui.selectedUnitId != null) {
+      const selU = state.units.get(ui.selectedUnitId);
+      if (selU && selU.isHarvester && selU.hp > 0) {
+        const p = cellToLocal(renderer, selU.pos.x, selU.pos.y);
+        const pulse = 0.75 + 0.25 * Math.sin((state.time || 0) * 6);
+        gO.lineStyle(3, 0xffd76a, pulse);
+        gO.drawCircle(p.x, p.y, t * 0.62);
+        gO.lineStyle(0);
       }
     }
     // harvester cargo bars (over each truck) — fill as they pull, empty on deposit

@@ -16,6 +16,10 @@ import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath } from './pathfinding.js';
 
 const TILE = 64;   // matches tables.js MAP_TILE — 64px/tile
+// SAFE BORDER (owner, 2026-07-13): 2 tiles of non-buildable approach terrain wrap the battlefield.
+// Enemy spawns live INSIDE it (2 outside the play edge, as the ring schedule always specified, no
+// more clamping onto the play area) and the player cannot build there. map.playArea marks the field.
+const BORDER = 2;
 const BASE_HP = 3000;
 
 export function mapDef(mapId) {
@@ -54,7 +58,8 @@ function spawnFor(full, rect, side, cy, cx) {
   else if (side === 'R') p = { x: rect.x1 + 2, y: cy };
   else if (side === 'T') p = { x: cx, y: rect.y0 - 2 };
   else p = { x: cx, y: rect.y1 + 2 };
-  return { x: Math.max(0, Math.min(full.Full_W - 1, p.x)), y: Math.max(0, Math.min(full.Full_H - 1, p.y)) };
+  return { x: Math.max(-BORDER, Math.min(full.Full_W - 1 + BORDER, p.x)),
+           y: Math.max(-BORDER, Math.min(full.Full_H - 1 + BORDER, p.y)) };
 }
 
 const OPP = { L: 'R', R: 'L', T: 'B', B: 'T' };
@@ -153,7 +158,7 @@ export function buildCampaignMap(mapId, opts = {}) {
     for (let d = 1; d < Math.max(full.Full_W, full.Full_H); d++) {
       for (const s of [1, -1]) {
         const q = vertical ? { x: p.x, y: p.y + d * s } : { x: p.x + d * s, y: p.y };
-        if (q.x < 0 || q.y < 0 || q.x >= full.Full_W || q.y >= full.Full_H) continue;
+        if (q.x < -BORDER || q.y < -BORDER || q.x >= full.Full_W + BORDER || q.y >= full.Full_H + BORDER) continue;
         if (!waterSet.has(`${q.x},${q.y}`)) return q;
       }
     }
@@ -299,6 +304,32 @@ export function buildCampaignMap(mapId, opts = {}) {
     difficulty: full.Difficulty, parTimeSec: full.Par_Time_Sec, questGiver: full.Quest_Giver_Faction,
     seed: opts.seed || 0, rings, resources,
   };
+  // ── SAFE BORDER: shift the whole battlefield +BORDER into a widened grid. The border ring is
+  //    approach terrain — spawns live there (finally OUTSIDE the play edge with no clamping), the
+  //    player cannot build there (structures.js checks map.playArea), resources never spawn there.
+  {
+    // identity-set guard: several map fields share point OBJECTS (spawnGround aliases
+    // rings[0].spawns.ground, slots embed base.cornerSlots) — each object shifts exactly once
+    const seenPts = new Set();
+    const sh = (c) => { if (c && !seenPts.has(c)) { seenPts.add(c); c.x += BORDER; c.y += BORDER; } };
+    map.cols += 2 * BORDER; map.rows += 2 * BORDER;
+    sh(map.spawnGround); sh(map.spawnWater); sh(map.spawnAir);
+    for (const c of map.waterCells) sh(c);
+    for (const c of map.waterLane) sh(c);
+    for (const c of map.groundLane) sh(c);
+    map.base.x += BORDER; map.base.y += BORDER;
+    for (const c of map.base.cells) sh(c);
+    for (const c of map.base.cornerSlots) sh(c);
+    for (const c of map.slots) sh(c);
+    for (const c of map.buildableCells) sh(c);
+    for (const r of map.resources) { r.x += BORDER; r.y += BORDER; }
+    for (const ring of map.rings) {
+      ring.rect.x0 += BORDER; ring.rect.x1 += BORDER; ring.rect.y0 += BORDER; ring.rect.y1 += BORDER;
+      sh(ring.spawns.ground); sh(ring.spawns.water); sh(ring.spawns.air);
+    }
+    map.border = BORDER;
+    map.playArea = { x0: BORDER, y0: BORDER, x1: map.cols - 1 - BORDER, y1: map.rows - 1 - BORDER };
+  }
   if (opts.overrides) applyOverrides(map, opts.overrides);
 
   // ── the contract's hard rule: every ring's ground spawn must reach the base ──
