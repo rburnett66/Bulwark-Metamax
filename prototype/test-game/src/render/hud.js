@@ -101,6 +101,8 @@ const CSS = `
 .bw-result.bw-show { display:flex; }
 .bw-rbanner { font-size:36px; font-weight:bold; letter-spacing:2px; text-shadow:0 2px 8px #000; }
 .bw-rbanner.bw-win { color:#9f9; }
+.bw-nextmap { font-size:16px; padding:10px 22px; margin-top:10px; background:#2c5c2c; border-color:#57a057; }
+.bw-nextmap:hover { background:#3a7a3a; }
 .bw-rbanner.bw-lose { color:#f99; }
 .bw-wavebanner { position:absolute; left:50%; top:34%; transform:translate(-50%,-50%); text-align:center;
   pointer-events:none; opacity:0; transition:opacity .25s ease; z-index:30; white-space:nowrap; }
@@ -493,6 +495,11 @@ export function createHud(mountEl, callbacks) {
   });
   resultEl.appendChild(banner);
   resultEl.appendChild(scoreEl);
+  // VICTORY → advance the campaign: the next, bigger map (owner). Shown by showResult on win.
+  const nextMapBtn = el(doc, 'button', 'bw-btn bw-nextmap', 'NEXT MAP →');
+  nextMapBtn.style.display = 'none';
+  nextMapBtn.addEventListener('click', () => { if (cbs.onNextMap) cbs.onNextMap(); });
+  resultEl.appendChild(nextMapBtn);
   resultEl.appendChild(resultRestart);
   root.appendChild(resultEl);
 
@@ -535,6 +542,7 @@ export function createHud(mountEl, callbacks) {
     waveBannerMain,
     waveBannerTimer: null,
     resultEl,
+    nextMapBtn,
     banner,
     scoreEl,
     replayBar,
@@ -703,9 +711,17 @@ export function updateHud(hud, state, ui) {
   }
 }
 
-export function showResult(hud, result, finalScore) {
+export function showResult(hud, result, finalScore, nextMap) {
   if (!hud) return;
   const win = result === 'win';
+  if (hud.nextMapBtn) {
+    if (win && nextMap) {
+      hud.nextMapBtn.textContent = 'NEXT MAP →  ' + (nextMap.name || ('Map ' + nextMap.id)) + ' (' + nextMap.size + ')';
+      hud.nextMapBtn.style.display = 'inline-block';
+    } else {
+      hud.nextMapBtn.style.display = 'none';
+    }
+  }
   hud.banner.textContent = win ? 'VICTORY' : 'DEFEAT';
   hud.banner.className = 'bw-rbanner ' + (win ? 'bw-win' : 'bw-lose');
   // s12: present the Final Score (kills − time − gold spent + gold left) the sim computes on game end.

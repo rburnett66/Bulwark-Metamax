@@ -689,7 +689,9 @@ export function stepMovement(state, dt) {
 // 4/3 × collision radius (render/harness SPRITE_OVER_COLLISION — mirrored here, NOT imported: the sim stays
 // render-free; unitart-scale.test pins the render side to the same 4/3). Resting at raw collision distance put
 // ~0.5 cells of visible sprite interpenetration on every clean follow — physics-correct frames READ as bumping.
-export const REST_RATIO = 4 / 3;
+export const REST_RATIO = 1.2;   // was 4/3 — the plan's fallback: the full sprite-touch ring made a big
+                                 // contested zone and queues jittered at its edge (owner playtest). At 1.2
+                                 // sprites overlap a whisker at rest; motion is calm.
 const REST_PAD = 0.02;
 export function contactDistR(rA, rB) { return (rA + rB) * REST_RATIO + REST_PAD; }
 function contactDist(a, b) { return contactDistR(a.radius || 0.3, b.radius || 0.3); }
@@ -855,9 +857,11 @@ export function stepSeparation(state, dt) {
       if (d > 1e-6 && d < look) {
         const nx = dx / d, ny = dy / d;
         const closeness = Math.max(0, Math.min(1, (look - d) / Math.max(1e-6, look - rSum)));   // 1 touching → 0 at look
-        // steering strength TAPERS with closeness — at the outer band it's a whisper, near contact it's firm.
-        // A flat force at distance made followers visibly lurch sideways a full body-gap away from the
-        // blocker ("bumping from a distance") as the corridor test flickered on/off.
+        // steering strength TAPERS with closeness — a whisper at the outer band, firm approaching contact,
+        // then CUT INSIDE THE REST RING (+0.15): at the ring the clamp owns the interaction, and steering a
+        // unit that cannot advance just wiggles it in place (owner: "jittery, related to the collision ring").
+        // The moment the leader moves and the gap re-opens, steering resumes and overtakes work as before.
+        if (d < rSum + 0.15) continue;
         const str = (1 - d / look) * 0.7 * closeness;
         // a's frame — is b blocking a's lane ahead?
         const fwdA = nx * hx[i] + ny * hy[i], latA = nx * (-hy[i]) + ny * (hx[i]);
