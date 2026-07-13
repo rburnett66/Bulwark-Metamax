@@ -679,13 +679,19 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
   if (state.structures) {
     if (!renderer.structSprites) renderer.structSprites = new Map();
     const liveStructIds = new Set();
+    // structures MOUNTED ON THE SHIP (the base's 4 corner hardpoints) draw at 75% — turrets on the
+    // hull, not full towers parked on it (owner). Visual only; combat stats unchanged.
+    const shipSlots = new Set(((state.map && state.map.base && state.map.base.cornerSlots) || []).map((c) => c.x + ',' + c.y));
     for (const s of state.structures.values()) {
       if (!s || s.lifecycle === 'Destroyed') continue;
       const fp = s.footprint || { w: 1, h: 1 };
-      const px = s.pos.x * t;
-      const py = s.pos.y * t;
-      const w = fp.w * t;
-      const h = fp.h * t;
+      const onShip = shipSlots.has(s.pos.x + ',' + s.pos.y);
+      const shipScale = onShip ? 0.75 : 1;
+      let px = s.pos.x * t;
+      let py = s.pos.y * t;
+      let w = fp.w * t;
+      let h = fp.h * t;
+      if (onShip) { px += w * 0.125; py += h * 0.125; w *= 0.75; h *= 0.75; }
       // AUTHORED STRUCTURE ART (State Bench, faction "System"): STR-Cannon -> SYS-Cannon etc.
       const sArtId = 'SYS-' + String(s.structId || '').replace(/^STR-/, '');
       if (renderer.unitArt && hasArt(renderer.unitArt, sArtId) && !(renderer._noArt && renderer._noArt.has(sArtId))) {
@@ -699,6 +705,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         }
         if (sspr) {
           sspr.x = px + w / 2; sspr.y = py + h / 2;
+          sspr.scale.set(shipScale);   // container is built at scale 1; hull-mounted turrets shrink to 75%
           sspr.alpha = (s.lifecycle === 'Building' || s.lifecycle === 'Placing') ? 0.55 : 1;
         }
       }
