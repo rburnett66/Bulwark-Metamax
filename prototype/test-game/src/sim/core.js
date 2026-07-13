@@ -483,11 +483,8 @@ export function stepMovement(state, dt) {
     // position at the top of the previous tick, so it captures march + separation movement.
     const mv = (unit._px != null) ? Math.hypot(unit.pos.x - unit._px, unit.pos.y - unit._py) : 1;
     unit._still = (mv < 0.03) ? (unit._still || 0) + 1 : 0;
-    unit._px = unit.pos.x; unit._py = unit.pos.y;
-
-    // this tick's own MOVEMENT displacement — the contact clamp (stepContactClamp) undoes only the closing
-    // part of it. Engaged/parked units keep 0 and act as immovable anvils in the clamp.
-    unit._mvx = 0; unit._mvy = 0;
+    unit._px = unit.pos.x; unit._py = unit.pos.y;   // ALSO the tick-start anchor for the contact clamp's
+                                                    // total-displacement measurement (stepContactClamp)
 
     const isAttacker = unit.side === 'attacker';
     let engaged = false;
@@ -546,7 +543,10 @@ export function stepMovement(state, dt) {
         const advanced = unit._lastPathIdx == null || unit.pathIdx > unit._lastPathIdx ||
                          (unit._lastDWp != null && dWp < unit._lastDWp - 0.015);
         unit._lastPathIdx = unit.pathIdx; unit._lastDWp = dWp;
-        if (advanced || state.tick < (unit._detourGraceTick || 0)) { unit._stuck = 0; }
+        // An active OVERTAKE also isn't stuck: the unit is deliberately aiming BESIDE its blocker, so its
+        // waypoint distance legitimately grows — flagging that as stuck fired detour re-paths mid-maneuver
+        // and sent units wandering (backtracking to detour waypoints after the pass).
+        if (advanced || state.tick < (unit._detourGraceTick || 0) || state.tick <= (unit._ovtUntil || 0)) { unit._stuck = 0; }
         else if ((unit._stuck = (unit._stuck || 0) + 1) >= 12) {                   // ~0.4s truly wedged → route around
           const avoid = jamCells(state, unit);
           discoverRoute(state, avoid);                                             // append a reusable alternate
@@ -587,6 +587,15 @@ export function stepMovement(state, dt) {
     const path = unit.path;
     if (path && unit.pathIdx < path.length) {
       unit.state = 'moving';
+      // after a detour (overtake / crowd displacement) never march BACK to stale waypoints: greedily skip
+      // any waypoint that is no closer than the one after it (on an undisturbed path the next waypoint is
+      // always farther, so this is a no-op; after a sideways excursion it re-enters the path nearest-ahead).
+      while (unit.pathIdx + 1 < path.length) {
+        const w0 = path[unit.pathIdx], w1 = path[unit.pathIdx + 1];
+        const d0 = (w0.x - unit.pos.x) * (w0.x - unit.pos.x) + (w0.y - unit.pos.y) * (w0.y - unit.pos.y);
+        const d1 = (w1.x - unit.pos.x) * (w1.x - unit.pos.x) + (w1.y - unit.pos.y) * (w1.y - unit.pos.y);
+        if (d1 <= d0) unit.pathIdx += 1; else break;
+      }
       let remaining = (unit.speed || 0) * dt;
       const ARRIVE = Math.max(0.35, remaining * 1.5);
       let guard = path.length + 2;
@@ -596,7 +605,14 @@ export function stepMovement(state, dt) {
         const dy = wp.y - unit.pos.y;
         const d = Math.sqrt(dx * dx + dy * dy);
         if (d <= ARRIVE) { unit.pathIdx += 1; continue; }        // close enough — head for the next waypoint
-        const desx = dx / d, desy = dy / d;                      // desired direction: straight at the waypoint
+        let desx = dx / d, desy = dy / d;                        // desired direction: straight at the waypoint
+        // OVERTAKE in progress (separation flagged a slower blocker dead ahead last tick): aim at the
+        // clearance point BESIDE the blocker instead — the waypoint pull resumes when the goal expires.
+        if (unit._ovtGoal && state.tick <= (unit._ovtUntil || 0)) {
+          const ox = unit._ovtGoal.x - unit.pos.x, oy = unit._ovtGoal.y - unit.pos.y;
+          const od = Math.sqrt(ox * ox + oy * oy);
+          if (od > 0.2) { desx = ox / od; desy = oy / od; }
+        }
         let h = unit.hdg;
         if (!h) { h = unit.hdg = { x: desx, y: desy }; }
         else {
@@ -608,7 +624,6 @@ export function stepMovement(state, dt) {
         unit.pos.x += h.x * step; unit.pos.y += h.y * step;
         remaining -= step;
       }
-      unit._mvx = unit.pos.x - unit._px; unit._mvy = unit.pos.y - unit._py;
     }
 
     // ---- path exhausted ---------------------------------------------
@@ -685,8 +700,12 @@ function dbgSep(state, id) {
 
 /**
  * CONTACT CLAMP — velocity-level collision resolution (the shipped-game approach: SupCom2/Factorio-style).
- * Runs right after stepMovement: for each same-layer pair now closer than contactDist, undo ONLY the part of
- * this tick's own MOVEMENT that closed the gap (never more), split between the pair by who did the closing.
+ * Runs LAST in the movement chain (after stepMovement AND stepSeparation), gating each unit's TOTAL tick
+ * displacement (march + avoidance steer + radial dissolve, measured from the tick-start position _px/_py):
+ * for each same-layer pair now closer than contactDist, undo ONLY the part of that displacement that closed
+ * the gap (never more), split between the pair by who did the closing. Gating only the march (an earlier
+ * design) let the steer compress dense crowds straight through their footprints — every displacement source
+ * must pass through this one boundary.
  * Properties that kill the "bumping":
  *   • tangential motion is untouched → a faster unit GLIDES along the boundary while its avoidance steer
  *     walks it around — no jitter;
@@ -704,6 +723,10 @@ export function stepContactClamp(state) {
   for (const u of state.units.values()) if (u.hp > 0 && !u.isRepairTroop) units.push(u);
   const n = units.length;
   if (n < 2) return;
+  // TWO relaxation sweeps: pairs are resolved sequentially, so a later pair's correction can nudge a unit
+  // back into an already-resolved pair (multi-pair squeeze in dense crowds); the second sweep mops that up.
+  // Closing is re-measured from the tick-start anchor each sweep, so corrections only ever shrink.
+  for (let pass = 0; pass < 2; pass++)
   for (let i = 0; i < n; i++) {
     const a = units[i];
     for (let j = i + 1; j < n; j++) {
@@ -715,8 +738,10 @@ export function stepContactClamp(state) {
       if (d2 >= C * C || d2 < 1e-12) continue;   // coincident pairs: the radial pass's id-tiebreak handles them
       const d = Math.sqrt(d2);
       const nx = dx / d, ny = dy / d;            // a → b
-      const ca = Math.max(0, (a._mvx || 0) * nx + (a._mvy || 0) * ny);      // a's closing motion this tick
-      const cb = Math.max(0, -((b._mvx || 0) * nx + (b._mvy || 0) * ny));   // b's closing motion this tick
+      const amx = (a._px != null) ? a.pos.x - a._px : 0, amy = (a._px != null) ? a.pos.y - a._py : 0;
+      const bmx = (b._px != null) ? b.pos.x - b._px : 0, bmy = (b._px != null) ? b.pos.y - b._py : 0;
+      const ca = Math.max(0, amx * nx + amy * ny);      // a's closing displacement this tick
+      const cb = Math.max(0, -(bmx * nx + bmy * ny));   // b's closing displacement this tick
       const closing = ca + cb;
       if (closing <= 0) continue;                // pre-existing overlap, not this tick's doing — hold, don't pop
       const deficit = Math.min(closing, C - d);  // undo movement only — NEVER push apart
@@ -731,6 +756,34 @@ export function stepContactClamp(state) {
   }
 }
 
+// OVERTAKE steering goal — the piece the lateral force alone can't do. A fast follower's PATH runs straight
+// THROUGH the slower leader, so its desired heading keeps re-aiming into the blocker; the contact clamp then
+// strips the closing motion and the follower creeps at the leader's pace, riding its bumper forever ("fast
+// units keep chasing slower units"). While a blocker is ahead in the corridor, give the follower a temporary
+// movement goal BESIDE the blocker (one rest-distance out on its escape side, half a look ahead) — the march
+// aims there instead of at its waypoint, carries it around at its own speed, and the goal expires a few ticks
+// after the corridor test stops firing (then the waypoint pull resumes). Deterministic: pure pair geometry.
+function setOvertakeGoal(state, u, blocker, ex, ey, nx, ny, rSum) {
+  // beside the blocker on the escape side, and half a body AHEAD along the pass axis (u → blocker) — NOT
+  // along u's own heading: the goal bends the heading, so heading-relative geometry feeds back into wobble.
+  u._ovtGoal = {
+    x: blocker.pos.x + ex * (rSum + 0.3) + nx * (rSum * 0.5),
+    y: blocker.pos.y + ey * (rSum + 0.3) + ny * (rSum * 0.5),
+  };
+  u._ovtBlocker = blocker.id;
+  u._ovtUntil = state.tick + 8;
+}
+
+// escape-side choice, STICKY per blocker: while an overtake of this blocker is in progress, keep the side
+// already committed to — the raw lateral sign flips as the follower crosses the blocker's lane line, and
+// re-deciding every tick swung units back and forth across the lane (wander/orbit).
+function escapeSide(state, u, blocker, lat, tiebreak) {
+  if (u._ovtBlocker === blocker.id && state.tick <= (u._ovtUntil || 0)) return u._ovtS;
+  const s = lat > 1e-3 ? -1 : (lat < -1e-3 ? 1 : tiebreak);
+  u._ovtS = s;
+  return s;
+}
+
 export function stepSeparation(state, dt) {
   const units = [];
   // REPAIR TROOPS are excluded from separation entirely — they path AROUND structures (nav grid) but IGNORE other
@@ -741,13 +794,20 @@ export function stepSeparation(state, dt) {
   const layer = unitLayer;
   const px = new Float64Array(n), py = new Float64Array(n);
   const sx = new Float64Array(n), sy = new Float64Array(n);   // lateral avoidance STEER, tracked apart for the debug overlay
-  // each unit's movement heading: the persistent blended heading (hdg) when it has one, else toward its waypoint
+  // each unit's PATH INTENT: direction toward its current waypoint — deliberately NOT the blended movement
+  // heading (unit.hdg). The overtake goal bends hdg toward the blocker's side, so gating "is the blocker
+  // ahead of me?" on hdg is self-fulfilling: the goal turns the unit at the blocker, the corridor test keeps
+  // firing, and the unit ORBITS its blocker forever. The waypoint direction is what the unit actually wants,
+  // and the goal can't bend it. (hdg is only a fallback for units mid-maneuver with no waypoint.)
   const hx = new Float64Array(n), hy = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     const u = units[i];
-    if (u.hdg) { hx[i] = u.hdg.x; hy[i] = u.hdg.y; continue; }
     const wp = (u.path && u.pathIdx < u.path.length) ? u.path[u.pathIdx] : null;
-    if (wp) { const dx = wp.x - u.pos.x, dy = wp.y - u.pos.y, l = Math.sqrt(dx * dx + dy * dy); if (l > 1e-6) { hx[i] = dx / l; hy[i] = dy / l; } }
+    if (wp) {
+      const dx = wp.x - u.pos.x, dy = wp.y - u.pos.y, l = Math.sqrt(dx * dx + dy * dy);
+      if (l > 1e-6) { hx[i] = dx / l; hy[i] = dy / l; continue; }
+    }
+    if (u.hdg) { hx[i] = u.hdg.x; hy[i] = u.hdg.y; }
   }
 
   for (let i = 0; i < n; i++) {
@@ -794,14 +854,16 @@ export function stepSeparation(state, dt) {
         // a's frame — is b blocking a's lane ahead?
         const fwdA = nx * hx[i] + ny * hy[i], latA = nx * (-hy[i]) + ny * (hx[i]);
         if ((hx[i] || hy[i]) && fwdA > 0 && Math.abs(latA) * d < rSum && (b.speed || 0) <= (a.speed || 0)) {
-          const s = latA > 1e-3 ? -1 : (latA < -1e-3 ? 1 : (a.id < b.id ? 1 : -1));   // slide away from b's side
+          const s = escapeSide(state, a, b, latA, (a.id < b.id ? 1 : -1));   // slide away from b's side (sticky)
           sx[i] += (-hy[i]) * s * str; sy[i] += (hx[i]) * s * str;
+          setOvertakeGoal(state, a, b, (-hy[i]) * s, (hx[i]) * s, nx, ny, rSum);
         }
         // b's frame — is a blocking b's lane ahead?
         const fwdB = -nx * hx[j] - ny * hy[j], latB = -nx * (-hy[j]) - ny * (hx[j]);
         if ((hx[j] || hy[j]) && fwdB > 0 && Math.abs(latB) * d < rSum && (a.speed || 0) <= (b.speed || 0)) {
-          const s = latB > 1e-3 ? -1 : (latB < -1e-3 ? 1 : (b.id < a.id ? 1 : -1));
+          const s = escapeSide(state, b, a, latB, (b.id < a.id ? 1 : -1));
           sx[j] += (-hy[j]) * s * str; sy[j] += (hx[j]) * s * str;
+          setOvertakeGoal(state, b, a, (-hy[j]) * s, (hx[j]) * s, -nx, -ny, rSum);
         }
       }
     }
@@ -889,12 +951,13 @@ export function stepSim(state, dtFixed) {
   state.debugSep = new Map();   // per-tick applied-force record for the HUD overlay (render-only, not hashed)
   stepMovement(state, dtFixed);
 
-  // 3b. Contact clamp: undo each pair's CLOSING movement so bodies glide to rest at sprite-touching distance —
-  //     velocity-level resolution; no push-back oscillation ("slamming"/"bumping").
-  stepContactClamp(state);
-
-  // 3c. Separation: dissolve true overlaps + steer faster units AROUND slower ones.
+  // 3b. Separation: dissolve true overlaps + steer faster units AROUND slower ones (sets overtake goals).
   stepSeparation(state, dtFixed);
+
+  // 3c. Contact clamp LAST: undo each pair's total CLOSING displacement this tick (march + steer + dissolve)
+  //     so bodies glide to rest at sprite-touching distance — velocity-level resolution; no push-back
+  //     oscillation ("slamming"/"bumping"), and no displacement source can compress the crowd through it.
+  stepContactClamp(state);
 
   // 4. Structures: build/upgrade/sell/repair timers, lifecycle, destruction.
   stepStructures(state, dtFixed);

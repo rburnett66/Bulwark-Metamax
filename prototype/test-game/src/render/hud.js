@@ -1,5 +1,6 @@
 import { STRUCTURES, ASSUMPTIONS, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
+import { VERSION, VERSION_NOTE } from '../version.js';
 
 const STYLE_ID = 'bw-hud-style';
 
@@ -181,17 +182,21 @@ export function createHud(mountEl, callbacks) {
   topbar.appendChild(startWaveBtn);
   topbar.appendChild(factionSel);
   topbar.appendChild(seedEl);
-  // BUILD STAMP — which git commit this tab is actually running (served by serve_prototype.py's /__version).
-  // Ends the "did my refresh pick up the new code?" guessing game; include it in bug reports.
-  const buildEl = el(doc, 'span', 'bw-seed', 'build: …');
-  buildEl.title = 'git commit this build was served from';
+  // VERSION STAMP — which build this tab is actually running. The game's own VERSION (src/version.js —
+  // bumped with every gameplay change) shows UNCONDITIONALLY, so it never depends on the server; the git
+  // commit from serve_prototype.py's /__version is appended when available. Include it in bug reports.
+  const buildEl = el(doc, 'span', 'bw-seed', VERSION + ' ' + VERSION_NOTE);
+  buildEl.title = 'game version (src/version.js)';
   topbar.appendChild(buildEl);
+  if (typeof console !== 'undefined') console.log('BULWARK ' + VERSION + ' (' + VERSION_NOTE + ')');
   if (typeof fetch === 'function') {
     fetch('/__version').then((r) => (r.ok ? r.json() : null)).then((v) => {
-      buildEl.textContent = 'build: ' + (v && v.commit ? v.commit + (v.dirty ? '+' : '') : '?');
-      if (v && v.branch) buildEl.title = 'branch ' + v.branch + (v.dirty ? ' (uncommitted changes)' : '');
-    }).catch(() => { buildEl.textContent = 'build: ?'; });
-  } else { buildEl.textContent = 'build: ?'; }
+      if (v && v.commit && v.commit !== 'unknown') {
+        buildEl.textContent = VERSION + ' ' + VERSION_NOTE + ' @' + v.commit + (v.dirty ? '+' : '');
+        if (v.branch) buildEl.title = 'game version @ git commit — branch ' + v.branch + (v.dirty ? ' (uncommitted changes)' : '');
+      }
+    }).catch(() => {});
+  }
   root.appendChild(topbar);
 
   // ---- build palette --------------------------------------------------
