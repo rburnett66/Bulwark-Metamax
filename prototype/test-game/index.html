@@ -4,7 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BULWARK — Vertical Slice (Test Build)</title>
-<link rel="icon" href="data:,"><!-- empty icon: stops the favicon.ico 404 console noise -->
+<link rel="icon" href="icons/icon-192.png">
+<!-- FULLSCREEN PLAY: the manifest makes "Add to Home Screen" launch as a chromeless fullscreen app
+     (the only true-fullscreen path on iOS); the in-game ⛶ button covers desktop/Android browsers. -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0c1014">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
   html, body {
     margin: 0;
