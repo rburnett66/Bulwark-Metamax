@@ -280,6 +280,11 @@ export function buildCampaignMap(mapId, opts = {}) {
 
   const g8 = rings[7].spawns.ground;
   const map = {
+    // OPEN PLAY (owner, 2026-07-13): the whole map is visible, buildable, and harvestable from
+    // wave 1 — ring rects remain as the per-wave SPAWN schedule (enemies enter farther out as
+    // waves progress) and as node metadata, but they no longer gate the player. Set false to
+    // restore GDD §3 ring-gating for a map.
+    openPlay: true,
     cols: full.Full_W, rows: full.Full_H, tile: TILE,
     spawnGround: rings[0].spawns.ground,
     spawnWater: rings[0].spawns.water || rings[0].spawns.ground,

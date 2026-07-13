@@ -78,6 +78,7 @@ function nodeHarvestSec(r) {
 }
 
 function nodeRevealed(state, node) {
+  if (state.map && state.map.openPlay) return true;   // open play: the whole board is harvestable
   const wv = Math.max(1, Math.min((state.waves && state.waves.current) || 1, 8));
   return node.wave <= wv;
 }

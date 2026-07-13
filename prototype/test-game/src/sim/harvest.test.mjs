@@ -110,12 +110,17 @@ function fresh(seed) {
   assert.strictEqual(s.mapScore.goldFromPrimary + s.mapScore.goldFromPremium, scoreBeforeQuest, 'quest never touches the gold tallies');
 }
 
-// ── rejection paths: unrevealed node, exhausted premium ──
+// ── open play (default): a late-wave node is harvestable immediately; ring-gating still rejects ──
 {
   const { s } = fresh(5);
   const late = s.resourceNodes.find((n) => n.wave >= 5);
   const r1 = applyCommand(s, { type: 'harvest', nodeId: late.id });
-  assert(!r1.ok && /reveal/.test(r1.reason), `unrevealed node rejected (${r1.reason})`);
+  assert(r1.ok, `open play: far node orderable from wave 1 (${r1.reason || 'ok'})`);
+  const { s: gated } = fresh(5);
+  gated.map.openPlay = false;
+  const late2 = gated.resourceNodes.find((n) => n.wave >= 5);
+  const r2 = applyCommand(gated, { type: 'harvest', nodeId: late2.id });
+  assert(!r2.ok && /reveal/.test(r2.reason), `gated mode still rejects unrevealed nodes (${r2.reason})`);
 }
 
 // ── determinism: identical seeds and orders → identical hash (nodes + cargo are hashed) ──

@@ -736,6 +736,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     const ring = state.map.rings[wv - 1];
     const r = ring.rect;
     const W = state.map.cols, H = state.map.rows;
+    const gated = !state.map.openPlay;   // openPlay: whole board live — rings only schedule spawns
     // LOCKED GROUND, not fog of war: a light veil that keeps the terrain readable underneath — the
     // player should see what's coming and want it (the greed the ring design sells), never wonder
     // what's hidden. A hard cyan border marks today's edge; the next ring is labeled with when it
@@ -748,17 +749,19 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       if (inner.x1 < rect.x1) out.push([inner.x1 + 1, inner.y0, rect.x1 - inner.x1, inner.y1 - inner.y0 + 1]);
       return out;
     };
-    gO.beginFill(0x05070a, 0.38);
-    for (const [bx, by, bw, bh] of bands({ x0: 0, y0: 0, x1: W - 1, y1: H - 1 }, r)) {
-      gO.drawRect(bx * t, by * t, bw * t, bh * t);
+    if (gated) {
+      gO.beginFill(0x05070a, 0.38);
+      for (const [bx, by, bw, bh] of bands({ x0: 0, y0: 0, x1: W - 1, y1: H - 1 }, r)) {
+        gO.drawRect(bx * t, by * t, bw * t, bh * t);
+      }
+      gO.endFill();
+      gO.lineStyle(2, 0x5fe0ff, 0.85);
+      gO.drawRect(r.x0 * t + 1, r.y0 * t + 1, (r.x1 - r.x0 + 1) * t - 2, (r.y1 - r.y0 + 1) * t - 2);
+      gO.lineStyle(0);
     }
-    gO.endFill();
-    gO.lineStyle(2, 0x5fe0ff, 0.85);
-    gO.drawRect(r.x0 * t + 1, r.y0 * t + 1, (r.x1 - r.x0 + 1) * t - 2, (r.y1 - r.y0 + 1) * t - 2);
-    gO.lineStyle(0);
     // reveal flash: when the ring grows, the newly-opened band lights up and fades (~0.9s)
     if (renderer._ringWave !== wv) {
-      if (renderer._ringWave != null && wv > renderer._ringWave) {
+      if (renderer._ringWave != null && wv > renderer._ringWave && gated) {
         renderer._ringReveal = { prev: state.map.rings[renderer._ringWave - 1].rect, cur: r, age: 0 };
       }
       renderer._ringWave = wv;
@@ -781,7 +784,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       renderer.ringLabel.alpha = 0.85;
       renderer.layers.overlay.addChild(renderer.ringLabel);
     }
-    if (wv < state.map.rings.length) {
+    if (gated && wv < state.map.rings.length) {
       const nx = state.map.rings[wv].rect;
       renderer.ringLabel.text = 'OPENS WAVE ' + (wv + 1);
       renderer.ringLabel.visible = true;
@@ -812,7 +815,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     const hvUnit = state.harvesterId != null ? state.units.get(state.harvesterId) : null;
     const assignedField = hvUnit && hvUnit.fieldId;
     for (const node of state.resourceNodes || state.map.resources || []) {
-      if (node.wave > wv) continue;
+      if (gated && node.wave > wv) continue;   // open play: every node is on the board from wave 1
       const p = cellToLocal(renderer, node.x, node.y);   // cellToLocal centers in the cell
       const frac = node.units ? Math.max(0, (node.remaining != null ? node.remaining : node.units) / node.units) : 1;
       const color = ROLE_COLOR[node.role] || 0x888888;

@@ -75,10 +75,10 @@ export function validatePlacement(state, structId, slotOrCell) {
   ]);
   // s10: the 3x3 base BODY is occupied — nothing can be placed on it; its 4 corner slots stay buildable.
   for (const c of ((map.base && map.base.cells) || [map.base])) forbidden.add(cellKey(c));
-  // CAMPAIGN maps grow in rings (GDD §3): building is allowed only on ground the current wave has
-  // revealed. Wave 0 (pre-battle build phase) = the wave-1 start pocket.
+  // Ring-gated campaign maps (GDD §3): building only on revealed ground. openPlay maps (the current
+  // default) build anywhere — rings still schedule the enemy spawns but never fence the player.
   let ringRect = null;
-  if (map.rings && map.rings.length) {
+  if (map.rings && map.rings.length && !map.openPlay) {
     const w = Math.max(1, Math.min((state.waves && state.waves.current) || 1, map.rings.length));
     ringRect = map.rings[w - 1].rect;
   }
@@ -109,9 +109,11 @@ export function validatePlacement(state, structId, slotOrCell) {
   };
   const testStructures = liveStructures(state).concat([ghost]);
   const nav = buildNavGrid(map, testStructures);
-  // campaign maps: the lane that must stay open runs from the CURRENT ring's ground spawn
-  const src = ringRect ? map.rings[Math.max(1, Math.min((state.waves && state.waves.current) || 1, map.rings.length)) - 1].spawns.ground
-                       : map.spawnGround;
+  // campaign maps: the lane that must stay open runs from the CURRENT wave's ground spawn
+  // (independent of ring-gating — openPlay maps still spawn per wave)
+  const src = (map.rings && map.rings.length)
+    ? map.rings[Math.max(1, Math.min((state.waves && state.waves.current) || 1, map.rings.length)) - 1].spawns.ground
+    : map.spawnGround;
   const path = findWalkerPath(nav, { x: src.x, y: src.y }, { x: map.base.x, y: map.base.y });
   if (!path) return { ok: false, reason: 'blocksPath' };
 

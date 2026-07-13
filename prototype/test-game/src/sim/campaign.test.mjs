@@ -74,7 +74,7 @@ const runA = runCampaign(7);
 const runB = runCampaign(7);
 assert.strictEqual(hashState(runA.s), hashState(runB.s), 'campaign runs deterministically');
 
-// ── placement gating: inside the wave-1 pocket ok; outside the revealed ring rejected ──
+// ── placement: OPEN PLAY (default) builds anywhere; ring-gating still enforces when enabled ──
 {
   const map = buildCampaignMap(1, { seed: 2 });
   const s = createSim(3, { map, waves: buildCampaignWaves(map) });
@@ -82,10 +82,14 @@ assert.strictEqual(hashState(runA.s), hashState(runB.s), 'campaign runs determin
   s.money = 100000;
   const inside = { x: pocket.x0 + 1, y: pocket.y0 + 1 };
   const outside = { x: map.rings[7].rect.x1 - 1, y: map.rings[7].rect.y1 - 1 };
+  assert(map.openPlay === true, 'campaign maps default to open play');
   const okIn = validatePlacement(s, 'STR-Wall', inside);
   const okOut = validatePlacement(s, 'STR-Wall', outside);
   assert(okIn.ok || okIn.reason === 'occupied', `inside the pocket is placeable (${okIn.reason || 'ok'})`);
-  assert(!okOut.ok && /ring/.test(okOut.reason), `outside the ring is rejected (${okOut.reason})`);
+  assert(okOut.ok || okOut.reason === 'occupied', `open play: the far corner is placeable too (${okOut.reason || 'ok'})`);
+  map.openPlay = false;   // ring-gated mode stays available per map
+  const gatedOut = validatePlacement(s, 'STR-Wall', outside);
+  assert(!gatedOut.ok && /ring/.test(gatedOut.reason), `gated mode still rejects outside the ring (${gatedOut.reason})`);
 }
 
 console.log('campaign.test OK — budgets filled, spawns advance with the ring, placement ring-gated, deterministic');
