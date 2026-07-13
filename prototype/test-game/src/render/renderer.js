@@ -733,6 +733,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
   // the true centre/pivot. Any visual offset between the dot and where the art READS as centred
   // is authoring (layer offsets / un-centred frames), not a sim displacement.
   if (ui && ui.debugCollision && state.units) {
+    const K = 20;       // force-vector scale: sim deltas are small fractions of a cell — amplify to readable length
     for (const u of state.units.values()) {
       if (!u || u.hp <= 0) continue;
       const p = cellToLocal(renderer, u.pos.x, u.pos.y);
@@ -741,8 +742,25 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       gO.drawCircle(p.x, p.y, r);
       gO.moveTo(p.x - 6, p.y); gO.lineTo(p.x + 6, p.y);
       gO.moveTo(p.x, p.y - 6); gO.lineTo(p.x, p.y + 6);
+      // faint outer circle = SPRITE boundary (collision × 4/3) — the sim's rest distance keeps THESE apart
+      gO.lineStyle(1, 0x2aff9d, 0.35);
+      gO.drawCircle(p.x, p.y, r * SPRITE_OVER_COLLISION);
       gO.lineStyle(0);
       gO.beginFill(0xff3355, 1); gO.drawCircle(p.x, p.y, 2.5); gO.endFill();
+      // this tick's applied crowd forces: yellow = radial overlap push, orange = avoidance steer, cyan = contact clamp
+      const e = state.debugSep && state.debugSep.get(u.id);
+      if (e) {
+        const vec = (vx, vy, color) => {
+          if (Math.abs(vx) < 1e-4 && Math.abs(vy) < 1e-4) return;
+          const q = cellToLocal(renderer, u.pos.x + vx * K, u.pos.y + vy * K);   // amplify in CELL space, then project
+          gO.lineStyle(2, color, 0.9);
+          gO.moveTo(p.x, p.y); gO.lineTo(q.x, q.y);
+          gO.lineStyle(0);
+        };
+        vec(e.pushX, e.pushY, 0xffe14d);
+        vec(e.steerX, e.steerY, 0xff9d2a);
+        vec(e.clampX, e.clampY, 0x2ad4ff);
+      }
     }
   }
 
