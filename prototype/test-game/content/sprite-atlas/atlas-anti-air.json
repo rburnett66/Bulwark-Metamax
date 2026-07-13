@@ -1,0 +1,135 @@
+{
+  "frames": {
+    "art_3_sci.png": {
+      "frame": {
+        "x": 2,
+        "y": 2,
+        "w": 336,
+        "h": 338
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 336,
+        "h": 338
+      },
+      "sourceSize": {
+        "w": 336,
+        "h": 338
+      }
+    },
+    "map_9_sci.png": {
+      "frame": {
+        "x": 341,
+        "y": 2,
+        "w": 332,
+        "h": 330
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 332,
+        "h": 330
+      },
+      "sourceSize": {
+        "w": 332,
+        "h": 330
+      }
+    },
+    "art_7_sci.png": {
+      "frame": {
+        "x": 2,
+        "y": 342,
+        "w": 281,
+        "h": 322
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 281,
+        "h": 322
+      },
+      "sourceSize": {
+        "w": 281,
+        "h": 322
+      }
+    },
+    "art_5_sci.png": {
+      "frame": {
+        "x": 286,
+        "y": 342,
+        "w": 326,
+        "h": 301
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 326,
+        "h": 301
+      },
+      "sourceSize": {
+        "w": 326,
+        "h": 301
+      }
+    },
+    "art_16_sci.png": {
+      "frame": {
+        "x": 614,
+        "y": 342,
+        "w": 258,
+        "h": 259
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 258,
+        "h": 259
+      },
+      "sourceSize": {
+        "w": 258,
+        "h": 259
+      }
+    },
+    "art_6_sci.png": {
+      "frame": {
+        "x": 2,
+        "y": 668,
+        "w": 262,
+        "h": 240
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 262,
+        "h": 240
+      },
+      "sourceSize": {
+        "w": 262,
+        "h": 240
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    },
+    "scale": "1"
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "faction": "System",
+  "sheet": "walls-cannons",
+  "units": {
+    "SYS-Wall": {
+      "role": "Wall",
+      "shape": "Structure",
+      "layers": {
+        "base": {
+          "frame": "map_13_sci.png",
+          "offset": 0,
+          "scale": 1
+        },
+        "head": null,
+        "weapon": null
+      }
+    },
+    "SYS-Wall-2": {
+      "role": "Wall T2",
+      "shape": "Structure",
+      "layers": {
+        "base": {
+          "frame": "map_12_sci.png",
+          "offset": 0,
+          "scale": 1
+        },
+        "head": null,
+        "weapon": null
+      }
+    },
+    "SYS-Wall-3": {
+      "role": "Wall T3",
+      "shape": "Structure",
+      "layers": {
+        "base": {
+          "frame": "map_11_sci.png",
+          "offset": 0,
+          "scale": 1
+        },
+        "head": null,
+        "weapon": null
+      }
+    },
+    "SYS-Cannon": {
+      "role": "Cannon Tower",
+      "shape": "Structure",
+      "layers": {
+        "base": {
+          "frame": "art_21_sci.png",
+          "offset": 0,
+          "scale": 1
+        },
+        "head": null,
+        "weapon": null
+      }
+    },
+    "SYS-Cannon-2": {
+      "role": "Cannon T2",
+      "shape": "Structure",
+      "layers": {
+        "base": {
+          "frame": "art_20_sci.png",
+          "offset": 0,
+          "scale": 1
+        },
+        "head": null,
+        "weapon": null
+      }
+    },
+    "SYS-Cannon-3": {
+      "role": "Cannon T3",
+      "shape": "Structure",
+      "layers": {
+        "base": {
+          "frame": "art_19_sci.png",
+          "offset": 0,
+          "scale": 1
+        },
+        "head": null,
+        "weapon": null
+      }
+    }
+  }
+}

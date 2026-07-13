@@ -1231,11 +1231,11 @@ function updateCamera(renderer, state, dt) {
     // active wave -> frame ITS ring; build phase / interlude -> frame the NEXT wave's ring
     const idx = Math.max(0, Math.min(w.active ? w.current - 1 : w.current, map.rings.length - 1));
     const r = map.rings[idx].rect;
-    const PAD = 2;   // tiles of breathing room — keeps the safe border (and incoming spawns) in view
+    const PAD = 3;   // tiles of breathing room — keeps the safe border (and incoming spawns) in view
     const rw = (r.x1 - r.x0 + 1 + PAD * 2) * t;
     const rh = (r.y1 - r.y0 + 1 + PAD * 2) * t;
     const W = map.cols * t, H = map.rows * t;
-    ts = Math.max(1, Math.min(W / rw, H / rh, 2.5));   // never below full-map, capped zoom-in
+    ts = Math.max(1, Math.min(W / rw, H / rh, 1.5));   // never below full-map; gentle cap (owner: 2.5x was too tight)
     const cx = ((r.x0 + r.x1 + 1) / 2) * t, cy = ((r.y0 + r.y1 + 1) / 2) * t;
     tx = Math.min(0, Math.max(W - W * ts, W / 2 - cx * ts));   // clamp: never show past the board edge
     ty = Math.min(0, Math.max(H - H * ts, H / 2 - cy * ts));
