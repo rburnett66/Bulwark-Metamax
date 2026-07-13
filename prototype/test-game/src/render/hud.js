@@ -30,6 +30,7 @@ const CSS = `
 .bw-btn.bw-selected { background:#3d6a3d; border-color:#7ac07a; }
 .bw-seed { font-size:11px; color:#8fa4b8; }
 .bw-nextwave { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:auto;
+  z-index:70; /* above the comm card (60): on phones the card can cover screen-center */
   background:rgba(10,16,22,0.88); border:2px solid #5fe0ff; border-radius:8px; color:#e7f6ff;
   font:inherit; font-size:22px; font-weight:bold; letter-spacing:3px; padding:18px 34px; cursor:pointer;
   box-shadow:0 0 24px -6px #5fe0ff; animation: bw-nw-pulse 1.6s ease-in-out infinite; }

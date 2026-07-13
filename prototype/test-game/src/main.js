@@ -38,6 +38,11 @@ export function boot(mountEl, seed) {
     height: boardH,
     backgroundColor: 0x0e1216,
     antialias: true,
+    // Render at the DEVICE's pixel density (phones are 2-3x): without this the canvas rasterizes at
+    // 1x and gets CSS-upscaled — blurry board next to crisp DOM HUD ("every component a different
+    // resolution"). autoDensity keeps the CSS size in logical pixels. Capped at 3x for fill-rate.
+    resolution: Math.min(window.devicePixelRatio || 1, 3),
+    autoDensity: true,
   });
   const canvas = app.view || app.canvas;
   canvas.style.display = 'block';
