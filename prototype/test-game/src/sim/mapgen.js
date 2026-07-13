@@ -15,7 +15,7 @@ import { MAPDATA } from '../../content/maps/mapdata.js';
 import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath } from './pathfinding.js';
 
-const TILE = 32;
+const TILE = 64;   // matches tables.js MAP_TILE — 64px/tile
 const BASE_HP = 3000;
 
 export function mapDef(mapId) {

@@ -194,15 +194,31 @@ export function paramsFor(key, over) {
 
 /* ---------- audio engine (lazy — module is import-safe headless) ---------- */
 let AC = null, master = null, comp = null, convolver = null, noiseBuf = null, audioOK = true;
+// CHANNEL buses under the master: dialog = everything this voice engine plays; game = the (future)
+// battle-SFX bus. Volumes are settable before the AudioContext exists (the settings panel applies
+// persisted values at boot; buses pick them up on init).
+let dialogBus = null, gameBus = null;
+const VOLS = { master: 0.8, dialog: 1, game: 1 };
+
+export function setChannelVolume(channel, v) {
+  const x = Math.max(0, Math.min(1, Number(v) || 0));
+  VOLS[channel] = x;
+  if (channel === 'master' && master) master.gain.value = x;
+  if (channel === 'dialog' && dialogBus) dialogBus.gain.value = x;
+  if (channel === 'game' && gameBus) gameBus.gain.value = x;
+}
+export function getGameBus() { return gameBus; }   // battle SFX connect here when they arrive
 
 export function initAudio(volume) {
   if (AC) { if (AC.state === 'suspended') AC.resume(); return true; }
   try {
     AC = new (window.AudioContext || window.webkitAudioContext)();
-    master = AC.createGain(); master.gain.value = (volume != null ? volume : 0.8);
+    master = AC.createGain(); master.gain.value = (volume != null ? volume : VOLS.master);
     comp = AC.createDynamicsCompressor();
     master.connect(comp); comp.connect(AC.destination);
-    convolver = AC.createConvolver(); convolver.buffer = makeImpulse(2.4, 3.2); convolver.connect(master);
+    dialogBus = AC.createGain(); dialogBus.gain.value = VOLS.dialog; dialogBus.connect(master);
+    gameBus = AC.createGain(); gameBus.gain.value = VOLS.game; gameBus.connect(master);
+    convolver = AC.createConvolver(); convolver.buffer = makeImpulse(2.4, 3.2); convolver.connect(dialogBus);
     const len = AC.sampleRate * 1.0;
     noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -231,7 +247,7 @@ function buildChain(p) {
   }
   const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = p.lowpass || 8000;
   node.connect(lp); node = lp;
-  node.connect(master);
+  node.connect(dialogBus);
   const wet = AC.createGain(); wet.gain.value = Math.min(1.2, (p.reverb || 0) * REVERB_MULT);
   node.connect(wet); wet.connect(convolver);
   return input;
@@ -311,14 +327,14 @@ export function playSweep() {
   const o = AC.createOscillator(), g = AC.createGain(); o.type = 'sawtooth';
   o.frequency.setValueAtTime(180, AC.currentTime); o.frequency.exponentialRampToValueAtTime(1400, AC.currentTime + 0.5);
   g.gain.setValueAtTime(0.06, AC.currentTime); g.gain.exponentialRampToValueAtTime(0.0005, AC.currentTime + 0.55);
-  o.connect(g); g.connect(master); o.start(); o.stop(AC.currentTime + 0.55);
+  o.connect(g); g.connect(dialogBus); o.start(); o.stop(AC.currentTime + 0.55);
 }
 export function playDrop() {
   if (!audioReady()) return;
   const o = AC.createOscillator(), g = AC.createGain(); o.type = 'sine';
   o.frequency.setValueAtTime(600, AC.currentTime); o.frequency.exponentialRampToValueAtTime(60, AC.currentTime + 0.4);
   g.gain.setValueAtTime(0.08, AC.currentTime); g.gain.exponentialRampToValueAtTime(0.0004, AC.currentTime + 0.45);
-  o.connect(g); g.connect(master); o.start(); o.stop(AC.currentTime + 0.45);
+  o.connect(g); g.connect(dialogBus); o.start(); o.stop(AC.currentTime + 0.45);
 }
 
 /* per-faction channel static bed; returns {stop()} or null */
@@ -332,7 +348,7 @@ export function startStatic(facId, mult) {
   const filt = AC.createBiquadFilter(); filt.type = s.type; filt.frequency.value = s.freq; filt.Q.value = s.q || 1;
   const drive = AC.createWaveShaper(); drive.curve = driveCurve(0.6);
   const lvl = AC.createGain(); const base = s.level * mult;
-  src.connect(filt); filt.connect(drive); drive.connect(lvl); lvl.connect(master);
+  src.connect(filt); filt.connect(drive); drive.connect(lvl); lvl.connect(dialogBus);
   const hiss = AC.createBufferSource(); hiss.buffer = noiseBuf; hiss.loop = true; hiss.playbackRate.value = 0.83;
   const hf = AC.createBiquadFilter(); hf.type = 'highpass'; hf.frequency.value = 900; hf.Q.value = 0.4;
   const hg = AC.createGain(); hg.gain.value = 0.45;   // relative to lvl — the band stays dominant

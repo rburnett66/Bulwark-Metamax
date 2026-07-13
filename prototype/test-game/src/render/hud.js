@@ -29,11 +29,12 @@ const CSS = `
 .bw-btn:disabled { opacity:0.4; cursor:default; }
 .bw-btn.bw-selected { background:#3d6a3d; border-color:#7ac07a; }
 .bw-seed { font-size:11px; color:#8fa4b8; }
-.bw-nextwave { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:auto;
-  background:rgba(10,16,22,0.88); border:2px solid #5fe0ff; border-radius:8px; color:#e7f6ff;
-  font:inherit; font-size:22px; font-weight:bold; letter-spacing:3px; padding:18px 34px; cursor:pointer;
+.bw-nextwave { position:absolute; inset:0; pointer-events:auto; cursor:pointer; border:none; background:transparent;
+  z-index:70; /* the WHOLE SCREEN is the tap target; sits above the comm card (60) */
+  display:flex; align-items:center; justify-content:center; font:inherit; }
+.bw-nextwave > span { background:rgba(10,16,22,0.88); border:2px solid #5fe0ff; border-radius:8px; color:#e7f6ff;
+  font-size:clamp(15px, 4.5vw, 22px); font-weight:bold; letter-spacing:3px; padding:16px 30px;
   box-shadow:0 0 24px -6px #5fe0ff; animation: bw-nw-pulse 1.6s ease-in-out infinite; }
-.bw-nextwave:hover { background:rgba(20,32,44,0.92); }
 @keyframes bw-nw-pulse { 0%,100% { box-shadow:0 0 24px -6px #5fe0ff; } 50% { box-shadow:0 0 34px -2px #5fe0ff; } }
 .bw-palette { position:absolute; left:6px; top:56px; width:168px; display:flex; flex-direction:column; gap:4px; }
 .bw-palette .bw-title { font-size:11px; color:#9ab; margin-bottom:2px; }
@@ -58,8 +59,17 @@ const CSS = `
 .bw-unitpanel .bw-ustat .k { color:#7f9fb2; }
 .bw-unitpanel .bw-ustat .v { color:#eaf6ff; font-weight:600; }
 .bw-selrow .bw-btn { flex:1; font-size:11px; padding:3px 4px; }
-.bw-bottombar { position:absolute; left:6px; bottom:6px; right:6px; display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; }
+.bw-bottombar { position:absolute; left:6px; bottom:52px; display:none; flex-direction:column; gap:8px; align-items:flex-start;
+  z-index:65; max-width:min(430px, calc(100vw - 16px)); }
+.bw-bottombar.open { display:flex; }
 .bw-help { font-size:10px; color:#8fa4b8; line-height:1.4; }
+.bw-gear { position:absolute; left:6px; bottom:6px; pointer-events:auto; z-index:66;
+  background:rgba(10,16,22,0.9); border:1px solid #4a6076; border-radius:6px; color:#cfe3f0;
+  font-size:18px; width:38px; height:38px; cursor:pointer; }
+.bw-gear:hover { background:#22303e; }
+.bw-vol { display:flex; align-items:center; gap:6px; font-size:11px; color:#8fa4b8; }
+.bw-vol input { width:110px; accent-color:#5fe0ff; }
+.bw-vol span.v { min-width:52px; }
 .bw-debug { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
 .bw-seedinput { width:84px; background:#141a22; color:#e8e8e8; border:1px solid #4a6076; border-radius:3px;
   font-family:inherit; font-size:12px; padding:3px 4px; pointer-events:auto; }
@@ -179,6 +189,7 @@ export function createHud(mountEl, callbacks) {
   factionSel.title = 'Test a specific faction (restarts the run) — or Campaign for the full escalating mix';
   const optAll = el(doc, 'option', null, 'Campaign (all)'); optAll.value = ''; factionSel.appendChild(optAll);
   for (const f of factionsInRoster()) { const o = el(doc, 'option', null, f); o.value = f; factionSel.appendChild(o); }
+  if (cbs.defaultFaction) factionSel.value = cbs.defaultFaction;   // boot pick (main.js seeds the waves to match)
   factionSel.addEventListener('change', () => { if (cbs.onFactionSelect) cbs.onFactionSelect(factionSel.value || null); });
 
   // MAP picker — the classic fixed board, or a generated ring-campaign map (maps GDD). Changing it
@@ -199,7 +210,9 @@ export function createHud(mountEl, callbacks) {
   topbar.appendChild(seedEl);
   // Between-wave INTERLUDE prompt — centered TAP TO START; shown while the sim is frozen after the
   // wave-clear dialog (the speaker stays on screen). Clicking it is the only way time resumes.
-  const nextWaveBtn = el(doc, 'button', 'bw-nextwave', 'TAP TO START NEXT WAVE');
+  const nextWaveBtn = el(doc, 'button', 'bw-nextwave');
+  const nextWaveLabel = el(doc, 'span', null, 'TAP TO START NEXT WAVE');
+  nextWaveBtn.appendChild(nextWaveLabel);
   nextWaveBtn.style.display = 'none';
   nextWaveBtn.addEventListener('click', () => { if (cbs.onNextWave) cbs.onNextWave(); });
   root.appendChild(nextWaveBtn);
@@ -334,9 +347,46 @@ export function createHud(mountEl, callbacks) {
   debug.appendChild(collisionBtn);
   debug.appendChild(seedInput);
   debug.appendChild(restartBtn);
+
+  // ---- SETTINGS: volume sliders (master / dialog / game) ---------------
+  // Values persist in localStorage and are applied via cbs.onVolume(channel, 0..1).
+  const volPanel = el(doc, 'div', 'bw-debug bw-panel');
+  const volumes = { master: 0.8, dialog: 1, game: 1 };
+  try { Object.assign(volumes, JSON.parse(localStorage.getItem('bw.volumes') || '{}')); } catch (e) { /* fresh */ }
+  const mkSlider = (channel, label) => {
+    const row = el(doc, 'div', 'bw-vol');
+    const name = el(doc, 'span', 'v', label);
+    const input = el(doc, 'input');
+    input.setAttribute('type', 'range');
+    input.setAttribute('min', '0'); input.setAttribute('max', '100');
+    input.value = String(Math.round((volumes[channel] ?? 1) * 100));
+    const pct = el(doc, 'span', null, input.value + '%');
+    input.addEventListener('input', () => {
+      const v = Number(input.value) / 100;
+      volumes[channel] = v;
+      pct.textContent = input.value + '%';
+      try { localStorage.setItem('bw.volumes', JSON.stringify(volumes)); } catch (e) { /* full */ }
+      if (cbs.onVolume) cbs.onVolume(channel, v);
+    });
+    row.appendChild(name); row.appendChild(input); row.appendChild(pct);
+    return row;
+  };
+  volPanel.appendChild(mkSlider('master', 'Master'));
+  volPanel.appendChild(mkSlider('dialog', 'Dialog'));
+  volPanel.appendChild(mkSlider('game', 'Game'));
+  // hand the persisted values to the game once at boot
+  if (cbs.onVolume) for (const ch of ['master', 'dialog', 'game']) cbs.onVolume(ch, volumes[ch] ?? 1);
+
+  bottombar.appendChild(volPanel);
   bottombar.appendChild(help);
   bottombar.appendChild(debug);
   root.appendChild(bottombar);
+
+  // gear button (lower-left) shows/hides the whole options stack — the board stays clean by default
+  const gearBtn = el(doc, 'button', 'bw-gear', '⚙');
+  gearBtn.title = 'Settings — volumes, debug tools, restart';
+  gearBtn.addEventListener('click', () => { bottombar.classList.toggle('open'); });
+  root.appendChild(gearBtn);
 
   // ---- toast -----------------------------------------------------------
   const toast = el(doc, 'div', 'bw-toast');
@@ -380,7 +430,10 @@ export function createHud(mountEl, callbacks) {
     timerEl,
     startWaveBtn,
     nextWaveBtn,
-    setNextWavePrompt(on) { nextWaveBtn.style.display = on ? '' : 'none'; },
+    setNextWavePrompt(on, label) {
+      nextWaveBtn.style.display = on ? 'flex' : 'none';
+      if (label) nextWaveLabel.textContent = label;
+    },
     seedEl,
     paletteBtns,
     selPanel,

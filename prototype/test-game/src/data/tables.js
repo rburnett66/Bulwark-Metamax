@@ -851,7 +851,7 @@ export function factionsInRoster() {
 // ---------------------------------------------------------------------------
 const MAP_COLS = 64;
 const MAP_ROWS = 32;
-const MAP_TILE = 32;
+const MAP_TILE = 64;   // 64px/tile (owner test 2026-07-13; was 32) — sharper board, esp. mobile
 
 const groundLane = [
   { x: 0, y: 12 }, { x: 50, y: 12 }, { x: 50, y: 16 }, { x: 56, y: 16 }

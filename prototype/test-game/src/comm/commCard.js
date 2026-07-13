@@ -29,7 +29,7 @@ const PORTRAIT_DIR = 'content/dialog/portraits/';
 
 /* Tool card skin (comm.html) at corner scale — same class names/roles, bw-comm prefixed. */
 const CSS = `
-.bw-comm{position:fixed;right:14px;bottom:120px;width:430px;z-index:60;display:none;flex-direction:column;
+.bw-comm{position:fixed;right:14px;bottom:120px;width:min(430px,calc(100vw - 20px));z-index:60;display:none;flex-direction:column;
   font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--accent,#3fb6c8);border-radius:12px;
   overflow:hidden;background:linear-gradient(180deg,#0a1119ee,#070c12ee);cursor:pointer;
   box-shadow:0 0 40px -18px var(--accent,#3fb6c8),0 20px 50px -30px #000;--accent:#3fb6c8}
