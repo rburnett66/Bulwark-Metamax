@@ -1,4 +1,6 @@
 import { MAP, WAVES, makeWaves } from './data/tables.js';
+import { buildCampaignMap, resolveResourceTypes } from './sim/mapgen.js';
+import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
@@ -51,11 +53,14 @@ export function boot(mountEl, seed) {
   // Session state (sim + log + ui). Re-created on restart / replay.
   // ---------------------------------------------------------------------
   let currentWaves = WAVES;   // active enemy schedule — the mixed campaign, or one faction's waves (test picker)
-  let sim = createSim(currentSeed, { waves: currentWaves, map: MAP });
+  let currentMap = MAP;       // classic board, or a generated ring-campaign map (Map picker)
+  let currentMapId = 0;       // 0 = classic
+  let currentTestFaction = null;
+  let sim = createSim(currentSeed, { waves: currentWaves, map: currentMap });
   let log = createLog(currentSeed);
   let ui = createUiState();
 
-  const renderer = createRenderer(app, MAP);
+  let renderer = createRenderer(app, currentMap);
 
   // Load the AUTHORED unit art (faction .units.json + sheets) asynchronously; once ready, units that have art
   // render as their real sprites. Non-blocking — the game runs with primitives until (and if) it resolves.
@@ -106,7 +111,7 @@ export function boot(mountEl, seed) {
     const s = (typeof newSeed === 'number' && Number.isFinite(newSeed)) ? Math.floor(newSeed) : currentSeed;
     currentSeed = s;
     if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
-    sim = createSim(currentSeed, { waves: currentWaves, map: MAP });
+    sim = createSim(currentSeed, { waves: currentWaves, map: currentMap });
     log = createLog(currentSeed);
     ui = createUiState();
     mode = 'play';
@@ -121,6 +126,34 @@ export function boot(mountEl, seed) {
     resetCommTracking();
   }
 
+  // ── ring-campaign map switch (Map picker): rebuild board, waves, renderer — different maps have
+  //    different sizes, so the PIXI surface resizes and the static board redraws. Overrides authored
+  //    in the Map Lab load from content/maps/overrides/map-<id>.json when present.
+  async function selectMap(mapId) {
+    currentMapId = mapId | 0;
+    if (!currentMapId) {
+      currentMap = MAP;
+      currentWaves = currentTestFaction ? makeWaves(currentTestFaction) : WAVES;
+    } else {
+      let overrides = null;
+      try {
+        const r = await fetch(`content/maps/overrides/map-${currentMapId}.json`);
+        if (r.ok) overrides = await r.json();
+      } catch (e) { /* no override file — generator output as-is */ }
+      const m = buildCampaignMap(currentMapId, { seed: 0, overrides });
+      resolveResourceTypes(m, 1);   // harvest lands later; faction 1 typing for the node markers
+      currentMap = m;
+      currentWaves = buildCampaignWaves(m, currentTestFaction);
+    }
+    app.renderer.resize(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
+    const art = renderer && renderer.unitArt;
+    app.stage.removeChildren();
+    renderer = createRenderer(app, currentMap);
+    if (art) renderer.unitArt = art;
+    restart(currentSeed);
+    flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
+  }
+
   function playReplay(replayLog) {
     if (!replayLog || typeof replayLog.seed !== 'number') {
       flashMessage(hud, 'invalid replay log');
@@ -130,7 +163,7 @@ export function boot(mountEl, seed) {
     mode = 'replay';
     currentSeed = Math.floor(replayLog.seed);
     activeReplayLog = replayLog;
-    sim = createSim(currentSeed, { waves: currentWaves, map: MAP });
+    sim = createSim(currentSeed, { waves: currentWaves, map: currentMap });
     ui = createUiState();
     replayQueue = (replayLog.commands || []).slice().sort((a, b) => a.tick - b.tick);
     replayIdx = 0;
@@ -155,11 +188,15 @@ export function boot(mountEl, seed) {
       submit({ type: 'startWave' });
     },
     onFactionSelect: (faction) => {
-      // Rebuild the enemy schedule for the chosen faction (or the campaign) and restart the run to test it.
-      currentWaves = faction ? makeWaves(faction) : WAVES;
+      // Rebuild the enemy schedule for the chosen faction (or the mixed roster) and restart the run.
+      currentTestFaction = faction || null;
+      currentWaves = currentMapId
+        ? buildCampaignWaves(currentMap, currentTestFaction)          // campaign map: refill the ring budgets
+        : (faction ? makeWaves(faction) : WAVES);
       restart(currentSeed);
-      flashMessage(hud, faction ? (faction + ' — ' + currentWaves.length + ' test waves') : 'Campaign restored');
+      flashMessage(hud, faction ? (faction + ' — ' + currentWaves.length + ' waves') : 'Mixed roster restored');
     },
+    onMapSelect: (mapId) => { void selectMap(mapId); },
     onUpgrade: (id) => {
       submit({ type: 'upgrade', id });
     },

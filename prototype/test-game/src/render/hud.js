@@ -175,12 +175,21 @@ export function createHud(mountEl, callbacks) {
   for (const f of factionsInRoster()) { const o = el(doc, 'option', null, f); o.value = f; factionSel.appendChild(o); }
   factionSel.addEventListener('change', () => { if (cbs.onFactionSelect) cbs.onFactionSelect(factionSel.value || null); });
 
+  // MAP picker — the classic fixed board, or a generated ring-campaign map (maps GDD). Changing it
+  // rebuilds the board (sizes differ per map) and restarts the run. Author/edit maps in the Map Lab.
+  const mapSel = el(doc, 'select', 'bw-faction');
+  mapSel.title = 'Board: Classic (fixed slice) or a ring-campaign map 1-9 (restarts the run)';
+  const optClassic = el(doc, 'option', null, 'Classic board'); optClassic.value = '0'; mapSel.appendChild(optClassic);
+  for (let m = 1; m <= 9; m++) { const o = el(doc, 'option', null, 'Map ' + m + ' (rings)'); o.value = String(m); mapSel.appendChild(o); }
+  mapSel.addEventListener('change', () => { if (cbs.onMapSelect) cbs.onMapSelect(Number(mapSel.value) || 0); });
+
   topbar.appendChild(hpwrap);
   topbar.appendChild(timerEl);
   topbar.appendChild(moneyEl);
   topbar.appendChild(waveEl);
   topbar.appendChild(startWaveBtn);
   topbar.appendChild(factionSel);
+  topbar.appendChild(mapSel);
   topbar.appendChild(seedEl);
   // VERSION STAMP — which build this tab is actually running. The game's own VERSION (src/version.js —
   // bumped with every gameplay change) shows UNCONDITIONALLY, so it never depends on the server; the git

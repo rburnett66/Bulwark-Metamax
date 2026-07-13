@@ -75,9 +75,19 @@ export function validatePlacement(state, structId, slotOrCell) {
   ]);
   // s10: the 3x3 base BODY is occupied — nothing can be placed on it; its 4 corner slots stay buildable.
   for (const c of ((map.base && map.base.cells) || [map.base])) forbidden.add(cellKey(c));
+  // CAMPAIGN maps grow in rings (GDD §3): building is allowed only on ground the current wave has
+  // revealed. Wave 0 (pre-battle build phase) = the wave-1 start pocket.
+  let ringRect = null;
+  if (map.rings && map.rings.length) {
+    const w = Math.max(1, Math.min((state.waves && state.waves.current) || 1, map.rings.length));
+    ringRect = map.rings[w - 1].rect;
+  }
   const cells = footprintCells(cell, def.footprint);
   for (const c of cells) {
     if (c.x < 0 || c.y < 0 || c.x >= map.cols || c.y >= map.rows) return { ok: false, reason: 'terrain' };
+    if (ringRect && (c.x < ringRect.x0 || c.x > ringRect.x1 || c.y < ringRect.y0 || c.y > ringRect.y1)) {
+      return { ok: false, reason: 'outside the revealed ring' };
+    }
     if (occupied.has(cellKey(c))) return { ok: false, reason: 'occupied' };
     if (forbidden.has(cellKey(c))) return { ok: false, reason: 'terrain' };
     if (isForbiddenTerrain(c)) return { ok: false, reason: 'terrain' };
@@ -99,7 +109,10 @@ export function validatePlacement(state, structId, slotOrCell) {
   };
   const testStructures = liveStructures(state).concat([ghost]);
   const nav = buildNavGrid(map, testStructures);
-  const path = findWalkerPath(nav, { x: map.spawnGround.x, y: map.spawnGround.y }, { x: map.base.x, y: map.base.y });
+  // campaign maps: the lane that must stay open runs from the CURRENT ring's ground spawn
+  const src = ringRect ? map.rings[Math.max(1, Math.min((state.waves && state.waves.current) || 1, map.rings.length)) - 1].spawns.ground
+                       : map.spawnGround;
+  const path = findWalkerPath(nav, { x: src.x, y: src.y }, { x: map.base.x, y: map.base.y });
   if (!path) return { ok: false, reason: 'blocksPath' };
 
   return { ok: true, reason: '' };

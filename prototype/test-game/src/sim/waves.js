@@ -17,7 +17,15 @@ import { emitEvent, contactDistR, REST_RATIO } from './core.js';
  * times is stable (sequence-number tiebreak).
  */
 
-function spawnPointForLane(map, lane) {
+function spawnPointForLane(map, lane, waveNumber) {
+  // CAMPAIGN maps (mapgen.js): spawns advance outward with the ring — each wave's points sit 2 tiles
+  // outside that wave's playable edge on its focus side. Classic maps keep the fixed points.
+  if (map.rings && map.rings.length) {
+    const w = Math.max(1, Math.min(waveNumber || 1, map.rings.length));
+    const s = map.rings[w - 1].spawns;
+    const p = lane === 'water' ? s.water : lane === 'air' ? s.air : s.ground;
+    if (p) return p;
+  }
   if (lane === 'water') return map.spawnWater;
   if (lane === 'air') return map.spawnAir;
   return map.spawnGround;
@@ -174,7 +182,7 @@ export function stepWaves(state, dt) {
   while (w.pendingSpawns.length > 0 && w.pendingSpawns[0].time <= state.time) {
     const head = w.pendingSpawns[0];
     if (heldLanes[head.lane]) break;                    // keep in-lane order; other lanes drained already
-    const headPos = spawnPointForLane(map, head.lane);
+    const headPos = spawnPointForLane(map, head.lane, w.current);
     // ground only: water/air spawns spread laterally, so their base point being covered is normal
     if (head.lane === 'ground' && spawnBlocked(state, headPos, head.unitId)) {
       heldLanes[head.lane] = true;

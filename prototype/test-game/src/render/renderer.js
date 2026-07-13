@@ -728,6 +728,37 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     }
   }
 
+  // ---- CAMPAIGN ring reveal (GDD §3): dim everything outside the current wave's playable rect,
+  //      outline the edge, and mark the map's resource nodes (revealed waves only). Render-side
+  //      only — the sim's gating lives in structures/waves. ----
+  if (state.map && state.map.rings && state.map.rings.length) {
+    const wv = Math.max(1, Math.min((state.waves && state.waves.current) || 1, state.map.rings.length));
+    const ring = state.map.rings[wv - 1];
+    const r = ring.rect;
+    const W = state.map.cols, H = state.map.rows;
+    gO.beginFill(0x05070a, 0.72);
+    if (r.y0 > 0) gO.drawRect(0, 0, W * t, r.y0 * t);                                        // top band
+    if (r.y1 < H - 1) gO.drawRect(0, (r.y1 + 1) * t, W * t, (H - 1 - r.y1) * t);             // bottom band
+    if (r.x0 > 0) gO.drawRect(0, r.y0 * t, r.x0 * t, (r.y1 - r.y0 + 1) * t);                 // left band
+    if (r.x1 < W - 1) gO.drawRect((r.x1 + 1) * t, r.y0 * t, (W - 1 - r.x1) * t, (r.y1 - r.y0 + 1) * t);
+    gO.endFill();
+    gO.lineStyle(2, 0x5fe0ff, 0.5);
+    gO.drawRect(r.x0 * t + 1, r.y0 * t + 1, (r.x1 - r.x0 + 1) * t - 2, (r.y1 - r.y0 + 1) * t - 2);
+    gO.lineStyle(0);
+    // resource nodes (visual only until harvesting lands): green primary / gold premium / purple quest
+    const ROLE_COLOR = { primary: 0x3f8f5a, premium: 0xe0b23f, quest: 0xa86fe0 };
+    for (const node of state.map.resources || []) {
+      if (node.wave > wv) continue;
+      const p = cellToLocal(renderer, node.x, node.y);   // cellToLocal centers in the cell
+      gO.beginFill(ROLE_COLOR[node.role] || 0x888888, 0.9);
+      gO.drawCircle(p.x, p.y, t * 0.22);
+      gO.endFill();
+      gO.lineStyle(1, 0x0a0e12, 0.8);
+      gO.drawCircle(p.x, p.y, t * 0.22);
+      gO.lineStyle(0);
+    }
+  }
+
   // ---- DEBUG: collision circles + centre points (render-side only; toggled from the HUD) ----
   // The green circle is the unit's SIM footprint (== the sprite box); the red dot is unit.pos —
   // the true centre/pivot. Any visual offset between the dot and where the art READS as centred
