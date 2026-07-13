@@ -725,6 +725,21 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           sspr.x = px + w / 2; sspr.y = py + h / 2;
           sspr.scale.set(shipScale);   // container is built at scale 1; hull-mounted turrets shrink to 75%
           sspr.alpha = (s.lifecycle === 'Building' || s.lifecycle === 'Placing') ? 0.55 : 1;
+          // TURRET TRACKING (owner): armed towers rotate to face their live target (the sim's
+          // s.targetId, refreshed every combat tick) — same smoothed facing as units. Walls/moats
+          // never rotate; a tower keeps its last bearing while idle (turrets don't snap home).
+          if (s.kind === 'antiGround' || s.kind === 'antiAir') {
+            const tu = (s.targetId != null) ? state.units.get(s.targetId) : null;
+            if (tu && tu.hp > 0) {
+              const dx = (tu.pos.x * t + t * 0.5) - (px + w / 2);
+              const dy = (tu.pos.y * t + t * 0.5) - (py + h / 2);
+              if (dx * dx + dy * dy > 1) {
+                const want = Math.atan2(dy, dx) + UNIT_FACING_OFFSET;
+                sspr.__facing = (sspr.__facing == null) ? want : approachAngle(sspr.__facing, want, 0.25);
+              }
+            }
+            sspr.rotation = sspr.__facing || 0;
+          }
         }
       }
       const color = KIND_COLORS[s.kind] != null ? KIND_COLORS[s.kind] : 0x888888;
