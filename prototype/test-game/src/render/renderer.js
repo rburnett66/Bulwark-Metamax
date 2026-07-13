@@ -230,6 +230,9 @@ export function createRenderer(app, map) {
   layers.structures.addChild(renderer.dyn.structures);
   layers.units.addChild(renderer.dyn.units);
   layers.units.addChild(renderer.unitSpriteLayer);   // sprites draw over the primitive unit layer
+  renderer.cargoLayer = new PIXI.Container();        // crystal loads ride ON TOP of the trucks
+  layers.units.addChild(renderer.cargoLayer);
+  renderer.cargoSprites = new Map();                 // harvester id -> crystal sprite in its bed
   layers.air.addChild(renderer.dyn.air);
   layers.fx.addChild(renderer.fxG);
   layers.overlay.addChild(renderer.dyn.overlay);
@@ -984,16 +987,30 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       if (hv && hv.hp > 0 && hv.capacity) {
         const p = cellToLocal(renderer, hv.pos.x, hv.pos.y);
         const w = t * 0.9, frac = Math.min(1, hv.cargo / hv.capacity);
-        if (frac > 0.02) {
-          const lumpC = COLOR_TINT[hv.cargoColor] || 0xffd76a;
-          const lump = (dx, dy, r) => {
-            gO.beginFill(lumpC, 0.95); gO.drawCircle(p.x + dx * t, p.y + dy * t, r); gO.endFill();
-            gO.lineStyle(1, 0x0a0e12, 0.7); gO.drawCircle(p.x + dx * t, p.y + dy * t, r); gO.lineStyle(0);
-          };
+        // the LOAD rides in the bed as the real crystal SPRITE (small) — the same atlas art the
+        // fields use, colour following the cargo, growing with the haul. Primitive lump fallback
+        // until the atlas resolves.
+        const cargoPool = pools && hv.cargoColor && pools[hv.cargoColor] && pools[hv.cargoColor].length ? pools[hv.cargoColor] : null;
+        let cspr = renderer.cargoSprites.get(hid);
+        if (frac > 0.02 && art && cargoPool) {
+          const wantTex = art.textures[cargoPool[0]];
+          if (!cspr) {
+            cspr = new PIXI.Sprite(wantTex);
+            cspr.anchor.set(0.5, 0.62);
+            renderer.cargoLayer.addChild(cspr);
+            renderer.cargoSprites.set(hid, cspr);
+          }
+          if (cspr.texture !== wantTex) cspr.texture = wantTex;   // color follows the cargo
+          cspr.visible = true;
+          cspr.x = p.x; cspr.y = p.y + t * 0.10;
+          const targetH = t * 0.34 * (0.55 + 0.45 * frac);        // grows with the load
+          cspr.scale.set(targetH / Math.max(1, cspr.texture.height));
+        } else if (cspr) {
+          cspr.visible = false;                                    // empty bed (or bed emptied)
+        } else if (frac > 0.02) {
+          const lumpC = COLOR_TINT[hv.cargoColor] || 0xffd76a;     // atlas not loaded yet — primitive lumps
           const base = t * 0.10 * (0.5 + 0.5 * frac);
-          lump(-0.10, 0.10, base);                       // the bed cluster grows with the load
-          if (frac > 0.35) lump(0.12, 0.14, base * 0.85);
-          if (frac > 0.7) lump(0.01, 0.02, base * 0.75);
+          gO.beginFill(lumpC, 0.95); gO.drawCircle(p.x - 0.1 * t, p.y + 0.1 * t, base); gO.endFill();
         }
         gO.beginFill(0x0a0e12, 0.8); gO.drawRect(p.x - w / 2, p.y + t * 0.55, w, 4); gO.endFill();
         gO.beginFill(0xffd76a, 0.95); gO.drawRect(p.x - w / 2, p.y + t * 0.55, w * frac, 4); gO.endFill();
@@ -1033,6 +1050,18 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         vec(e.pushX, e.pushY, 0xffe14d);
         vec(e.steerX, e.steerY, 0xff9d2a);
         vec(e.clampX, e.clampY, 0x2ad4ff);
+      }
+    }
+  }
+
+  // retire cargo sprites whose harvester is gone
+  if (renderer.cargoSprites && renderer.cargoSprites.size) {
+    for (const [hid, cspr] of renderer.cargoSprites) {
+      const hv = state.units && state.units.get(hid);
+      if (!hv || hv.hp <= 0) {
+        if (cspr.parent) cspr.parent.removeChild(cspr);
+        cspr.destroy();
+        renderer.cargoSprites.delete(hid);
       }
     }
   }
