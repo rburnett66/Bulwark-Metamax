@@ -52,23 +52,20 @@ function runCampaign(seed) {
     assert(sawSpawn, `wave ${wave} spawned ground units`);
     spawnPos.push(sawSpawn);
     const ring = currentRing(map, wave);
-    assert.deepStrictEqual(sawSpawn, ring.spawns.ground, `wave ${wave} spawns at the ring's ground point`);
+    // staged spawning: units assemble ACROSS the safe border on the wave's focus side
+    const pa = map.playArea;
+    const inBorder = sawSpawn.x < pa.x0 || sawSpawn.x > pa.x1 || sawSpawn.y < pa.y0 || sawSpawn.y > pa.y1;
+    assert(inBorder, `wave ${wave} stages in the safe border (got ${sawSpawn.x},${sawSpawn.y})`);
+    const sideOk = ring.sideFocus === 'L' ? sawSpawn.x < pa.x0 : ring.sideFocus === 'R' ? sawSpawn.x > pa.x1
+                 : ring.sideFocus === 'T' ? sawSpawn.y < pa.y0 : sawSpawn.y > pa.y1;
+    assert(sideOk, `wave ${wave} stages on its focus side (${ring.sideFocus})`);
     assert(s.waves.cleared || s.result, `wave ${wave} cleared`);
   }
   return { s, spawnPos };
 }
 const runA = runCampaign(7);
-// spawn distance from the base grows as the ring grows (the enemy walks farther) — compared within
-// the same axis class (L/R vs T/B), since a top spawn on a 2:1 board is nearer than a wide side spawn
-{
-  const mapChk = buildCampaignMap(1, { seed: 2 });
-  const base = { x: mapChk.base.x, y: mapChk.base.y };
-  const lr = mapChk.rings.filter((r) => r.sideFocus === 'L' || r.sideFocus === 'R');
-  assert(lr.length >= 2, 'at least two side-focused waves to compare');
-  const dFirst = Math.abs(runA.spawnPos[lr[0].wave - 1].x - base.x);
-  const dLast = Math.abs(runA.spawnPos[lr[lr.length - 1].wave - 1].x - base.x);
-  assert(dLast > dFirst, `side spawns pushed outward (wave${lr[0].wave} ${dFirst} -> wave${lr[lr.length - 1].wave} ${dLast})`);
-}
+// staged spawning superseded the old outward-push: every wave assembles in the fixed safe border
+// (per-wave side/border assertions above cover placement); nothing further to compare here
 
 // determinism of the full campaign flow
 const runB = runCampaign(7);

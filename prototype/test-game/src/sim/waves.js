@@ -17,6 +17,27 @@ import { emitEvent, contactDistR, REST_RATIO } from './core.js';
  * times is stable (sequence-number tiebreak).
  */
 
+// STAGING (owner, 2026-07-13): ground waves ASSEMBLE ACROSS THE SAFE BORDER on the wave's focus
+// side — spread laterally over the 2-deep band instead of single-filing through one cell — then
+// enter the battlefield. Deterministic per spawn seq; the border is always dry (rivers live inside
+// the play area), so no water checks needed.
+function stagedGroundPos(map, ring, seq) {
+  const pa = map.playArea;
+  if (!pa || !ring || !ring.sideFocus) return null;
+  const anchor = ring.spawns.ground;
+  const LAT = [0, 1, -1, 2, -2, 3, -3, 4, -4];
+  const lat = LAT[seq % LAT.length] + (Math.floor(seq / LAT.length) % 2 ? 1 : 0);
+  const depth = seq % 2;   // alternate between the two border rows/cols
+  let p;
+  if (ring.sideFocus === 'L')      p = { x: pa.x0 - 1 - depth, y: anchor.y + lat };
+  else if (ring.sideFocus === 'R') p = { x: pa.x1 + 1 + depth, y: anchor.y + lat };
+  else if (ring.sideFocus === 'T') p = { x: anchor.x + lat, y: pa.y0 - 1 - depth };
+  else                             p = { x: anchor.x + lat, y: pa.y1 + 1 + depth };
+  p.x = Math.max(0, Math.min(map.cols - 1, p.x));
+  p.y = Math.max(0, Math.min(map.rows - 1, p.y));
+  return p;
+}
+
 function spawnPointForLane(map, lane, waveNumber) {
   // CAMPAIGN maps (mapgen.js): spawns advance outward with the ring — each wave's points sit 2 tiles
   // outside that wave's playable edge on its focus side. Classic maps keep the fixed points.
@@ -182,7 +203,13 @@ export function stepWaves(state, dt) {
   while (w.pendingSpawns.length > 0 && w.pendingSpawns[0].time <= state.time) {
     const head = w.pendingSpawns[0];
     if (heldLanes[head.lane]) break;                    // keep in-lane order; other lanes drained already
-    const headPos = spawnPointForLane(map, head.lane, w.current);
+    let headPos = spawnPointForLane(map, head.lane, w.current);
+    // ground waves STAGE across the safe border (campaign maps): each unit gets its own spot in
+    // the band, deterministic by seq — the column enters the map as a front, not a single file
+    if (head.lane === 'ground' && map.rings && map.playArea) {
+      const ring = map.rings[Math.max(1, Math.min(w.current, map.rings.length)) - 1];
+      headPos = stagedGroundPos(map, ring, head.seq | 0) || headPos;
+    }
     // ground only: water/air spawns spread laterally, so their base point being covered is normal
     if (head.lane === 'ground' && spawnBlocked(state, headPos, head.unitId)) {
       heldLanes[head.lane] = true;

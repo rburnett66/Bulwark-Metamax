@@ -930,8 +930,40 @@ export const MAP = Object.freeze({
 // ---------------------------------------------------------------------------
 // Lookups (throw on missing — a bad id is always a programming error)
 // ---------------------------------------------------------------------------
+// SYSTEM units — authorable in the State Bench like any faction, but NEVER part of the enemy
+// roster/waves/balance (they live outside UNITS): the player's Harvester + the four structures.
+// Author their art in the tool under faction "System"; the game consumes it via artKey (harvester)
+// and structId mapping (structures).
+export const SYSTEM_UNITS = Object.freeze({
+  'SYS-Harvester': Object.freeze({
+    name: 'Harvester', kind: 'harvester', faction: 'System', domain: 'Walker',
+    armorClass: 'Vehicle', damageType: 'None', targets: 'None',
+    hp: [120, 120, 120], dps: [0, 0, 0], range: 0.5, speed: 3, power: 0, cost: [500, 500, 500]
+  }),
+  'SYS-Cannon': Object.freeze({
+    name: 'Cannon Tower', kind: 'structure', faction: 'System', domain: 'Walker',
+    armorClass: 'Structure', damageType: 'Kinetic', targets: 'Ground',
+    hp: [400, 640, 960], dps: [45, 70, 104], range: 4.5, speed: 0, power: 0, cost: [300, 750, 1500]
+  }),
+  'SYS-Flak': Object.freeze({
+    name: 'Flak Tower', kind: 'structure', faction: 'System', domain: 'Walker',
+    armorClass: 'Structure', damageType: 'Kinetic', targets: 'Air',
+    hp: [360, 576, 864], dps: [40, 62, 92], range: 5.5, speed: 0, power: 0, cost: [300, 750, 1500]
+  }),
+  'SYS-Wall': Object.freeze({
+    name: 'Wall', kind: 'structure', faction: 'System', domain: 'Walker',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [600, 960, 1440], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [60, 150, 300]
+  }),
+  'SYS-Moat': Object.freeze({
+    name: 'Moat', kind: 'structure', faction: 'System', domain: 'Walker',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [400, 640, 960], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [80, 200, 400]
+  }),
+});
+
 export function getUnitDef(unitId) {
-  const def = UNITS[unitId];
+  const def = UNITS[unitId] || SYSTEM_UNITS[unitId];
   if (!def) throw new Error('tables.getUnitDef: unknown unitId "' + unitId + '"');
   return def;
 }

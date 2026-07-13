@@ -74,8 +74,13 @@ function refreshHoverValidity(handle) {
 
 function pointerEventToCell(handle, ev) {
   const rect = handle.canvas.getBoundingClientRect();
-  const scaleX = rect.width > 0 ? handle.canvas.width / rect.width : 1;
-  const scaleY = rect.height > 0 ? handle.canvas.height / rect.height : 1;
+  // Map into LOGICAL board pixels (cols×tile), never canvas.width: with native-DPI rendering
+  // (resolution × autoDensity) canvas.width is the PHYSICAL buffer — dividing by it scaled every
+  // click by the device pixel ratio ("the mouse is not on top of the cursor").
+  const logicalW = handle.renderer.map.cols * handle.renderer.tile;
+  const logicalH = handle.renderer.map.rows * handle.renderer.tile;
+  const scaleX = rect.width > 0 ? logicalW / rect.width : 1;
+  const scaleY = rect.height > 0 ? logicalH / rect.height : 1;
   const sx = (ev.clientX - rect.left) * scaleX;
   const sy = (ev.clientY - rect.top) * scaleY;
   return screenToCell(handle.renderer, sx, sy);

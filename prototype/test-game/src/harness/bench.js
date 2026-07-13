@@ -12,7 +12,9 @@ import { project, shadowFor, layerLean, LAYER_HEIGHT } from './camera.js';
 import { unitReadout } from './readout.js';
 import { unitParts, LAYER_FIT, SPRITE_OVER_COLLISION } from './parts.js';
 import { applyReadout } from './drive.js';
-import { UNITS, WAVES, MAP } from '../data/tables.js';
+import { UNITS as GAME_UNITS, SYSTEM_UNITS, WAVES, MAP } from '../data/tables.js';
+// the bench authors EVERYTHING drawable: faction rosters + the System units (harvester, structures)
+const UNITS = { ...GAME_UNITS, ...SYSTEM_UNITS };
 import { createSim } from '../sim/core.js';
 import { createUnit } from '../sim/entities.js';
 

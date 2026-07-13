@@ -23,8 +23,13 @@ for (const def of MAPDATA.maps) {
                    'waterLane', 'groundLane', 'slots', 'buildableCells', 'base', 'rings', 'resources']) {
     assert(map[f] !== undefined, `map ${id}: contract field ${f}`);
   }
-  assert.strictEqual(map.cols, def.Full_W, `map ${id} cols`);
-  assert.strictEqual(map.rows, def.Full_H, `map ${id} rows`);
+  // grid = play area + the 2-tile safe border on every side (owner, 2026-07-13)
+  assert.strictEqual(map.cols, def.Full_W + 4, `map ${id} cols (play + border)`);
+  assert.strictEqual(map.rows, def.Full_H + 4, `map ${id} rows (play + border)`);
+  assert.deepStrictEqual(map.playArea, { x0: 2, y0: 2, x1: map.cols - 3, y1: map.rows - 3 }, `map ${id} playArea`);
+  const outsidePlay = (p) => p.x < map.playArea.x0 || p.x > map.playArea.x1 || p.y < map.playArea.y0 || p.y > map.playArea.y1;
+  assert(map.resources.every((r) => !outsidePlay(r)), `map ${id}: resources never spawn in the border`);
+  assert(outsidePlay(map.rings[7].spawns.ground), `map ${id}: wave-8 spawn sits in the safe border`);
   assert(map.base.cells.length === 5 && map.base.cornerSlots.length === 4, `map ${id} base plus-shape`);
   assert(map.buildableCells.length >= 45, `map ${id} enough buildable ground (${map.buildableCells.length})`);
 
@@ -38,7 +43,7 @@ for (const def of MAPDATA.maps) {
     assert(b.w >= a.w && b.h >= a.h, `map ${id} wave ${i + 1}: rings never shrink`);
   }
   const last = map.rings[7].rect;
-  assert(last.w === def.Full_W && last.h === def.Full_H, `map ${id} wave 8 reveals the full map`);
+  assert(last.w === def.Full_W && last.h === def.Full_H, `map ${id} wave 8 covers the full play area`);
 
   // GDD §4: spawns sit outside the current playable edge; side focus is a single side per wave
   for (const ring of map.rings) {
