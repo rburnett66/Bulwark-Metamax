@@ -416,14 +416,21 @@ export function createHud(mountEl, callbacks) {
   gearBtn.addEventListener('click', () => { bottombar.classList.toggle('open'); });
   root.appendChild(gearBtn);
 
-  // FULLSCREEN toggle (next to the gear). Desktop/Android browsers only — iOS Safari has no
-  // element fullscreen API, so the button hides there (Add to Home Screen is the iOS path; the
-  // manifest launches the game chromeless).
+  // FULLSCREEN toggle (pinned next to the gear on EVERY platform). Desktop/Android use the
+  // fullscreen API; iOS has none (hiding the button there just read as broken), so on iPhone the
+  // tap explains the real path: Share → Add to Home Screen launches the game chromeless. Inside
+  // the home-screen app it's already fullscreen, so the button hides only in standalone mode.
   const fsEl = doc.documentElement;
-  if (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen) {
+  const standalone = (typeof navigator !== 'undefined' && navigator.standalone) ||
+    (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches);
+  if (!standalone) {
     const fsBtn = el(doc, 'button', 'bw-fs', '⛶');
     fsBtn.title = 'Fullscreen (Esc exits) — on iPhone use Share → Add to Home Screen instead';
     fsBtn.addEventListener('click', () => {
+      if (!fsEl.requestFullscreen && !fsEl.webkitRequestFullscreen) {
+        flashMessage(hud, 'iPhone: tap Share → Add to Home Screen — launching from that icon plays fullscreen');
+        return;
+      }
       const fsNow = doc.fullscreenElement || doc.webkitFullscreenElement;
       if (fsNow) { (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc); }
       else { (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl); }
