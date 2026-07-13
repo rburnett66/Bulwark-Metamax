@@ -1,7 +1,7 @@
-import { ASSUMPTIONS, WAVES, MAP, getUnitDef } from '../data/tables.js';
+import { ASSUMPTIONS, WAVES, MAP, getUnitDef, getStructureDef } from '../data/tables.js';
 import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath, getFlyerPath, getWaterPath } from './pathfinding.js';
-import { createUnit, createBase } from './entities.js';
+import { createUnit, createBase, createStructure } from './entities.js';
 import { acquireTarget, applyDamage, stepCombat } from './combat.js';
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
 import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
@@ -221,6 +221,50 @@ function laneForDomain(domain) {
 }
 
 /* ------------------------------------------------------------------ */
+/* campaign carry                                                      */
+/* ------------------------------------------------------------------ */
+function applyCampaignCarry(state, carry) {
+  const eco = state.economy;
+  if (Number.isFinite(carry.gold)) {
+    eco.money = Math.max(0, Math.floor(carry.gold));
+    eco.totalEarned = eco.money;
+  }
+  const bp = state.base && state.base.pos;
+  const list = carry.structures || [];
+  if (!bp || !list.length) return;
+  let refunded = 0;
+  const boost = 1e9;                       // validatePlacement checks funds — carried defenses are already paid for
+  eco.money += boost;
+  for (const c of list) {
+    const cell = { x: bp.x + (c.dx | 0), y: bp.y + (c.dy | 0) };
+    let ok = false;
+    try { ok = !!validatePlacement(state, c.structId, cell).ok; } catch (e) { ok = false; }
+    if (ok && state.resourceNodes) {       // never auto-crush the new map's fields
+      const def = getStructureDef(c.structId);
+      const fw = (def.footprint && def.footprint.w) || 1, fh = (def.footprint && def.footprint.h) || 1;
+      for (const n of state.resourceNodes) {
+        if (n.remaining <= 0 && !n.respawns) continue;
+        if (n.x >= cell.x && n.x < cell.x + fw && n.y >= cell.y && n.y < cell.y + fh) { ok = false; break; }
+      }
+    }
+    if (!ok) { refunded += Math.max(0, c.invested | 0); continue; }
+    const def = getStructureDef(c.structId);
+    const st = createStructure(state, c.structId, cell);
+    const tier = Math.max(1, Math.min(def.hp.length, c.tier | 0 || 1));
+    st.tier = tier;
+    st.hp = st.maxHp = def.hp[tier - 1];
+    st.dps = def.dps[tier - 1];
+    st.lifecycle = 'Complete';
+    st.progress = 0;
+    st.invested = Math.max(0, c.invested | 0) || def.cost[0];
+    if (!state.structures.has(st.id)) state.structures.set(st.id, st);
+  }
+  eco.money -= boost;
+  if (refunded > 0) { eco.money += refunded; eco.totalEarned += refunded; }
+  state.navGrid = buildNavGrid(state.map, Array.from(state.structures.values()));
+}
+
+/* ------------------------------------------------------------------ */
 /* createSim                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -267,6 +311,13 @@ export function createSim(seed, opts) {
   state.waterPath = getWaterPath(map);
   // campaign maps carry resource nodes → runtime node state + the player's harvester (harvest.js)
   initHarvest(state, map);
+
+  // CAMPAIGN CARRY (owner): winning a map brings your remaining gold AND your standing defenses
+  // into the next battle. Structures re-plant at the same offsets from the NEW base; ones that
+  // can't legally fit (water, off-board, occupied, or sitting on a resource — no silent crush)
+  // refund their invested cost as gold instead. Applied at t=0, so it's part of the initial
+  // deterministic state.
+  if (options.carry) applyCampaignCarry(state, options.carry);
 
   return state;
 }

@@ -98,6 +98,7 @@ export function boot(mountEl, seed) {
   let accumulator = 0;        // fixed-timestep accumulator (seconds)
   let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame
   let inputHandle = null;
+  let pendingCarry = null;   // campaign carry (gold + defenses) applied by restart() until the map changes by hand
 
   // ---------------------------------------------------------------------
   // Command submission: validates via sim core, records accepted commands.
@@ -126,7 +127,7 @@ export function boot(mountEl, seed) {
     const s = (typeof newSeed === 'number' && Number.isFinite(newSeed)) ? Math.floor(newSeed) : currentSeed;
     currentSeed = s;
     if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
-    sim = createSim(currentSeed, { waves: currentWaves, map: currentMap });
+    sim = createSim(currentSeed, { waves: currentWaves, map: currentMap, carry: pendingCarry });
     log = createLog(currentSeed);
     ui = createUiState();
     mode = 'play';
@@ -221,7 +222,22 @@ export function boot(mountEl, seed) {
     },
     onNextWave: () => { endInterlude(); },
     onDeselect: () => { ui.selectedUnitId = null; ui.selectedStructureId = null; },
-    onNextMap: () => { if (currentMapId > 0 && currentMapId < 9) selectMap(currentMapId + 1); },
+    onNextMap: () => {
+      if (!(currentMapId > 0 && currentMapId < 9)) return;
+      // CAMPAIGN CARRY (owner): bank the leftover gold + every standing defense (offsets from the
+      // base) so the next map's first battle starts with them.
+      const carry = { gold: (sim.finalScore && sim.finalScore.goldRemaining) || 0, structures: [] };
+      const bp = sim.base && sim.base.pos;
+      if (bp && sim.structures) {
+        for (const st of sim.structures.values()) {
+          if (!st || st.lifecycle === 'Destroyed' || st.lifecycle === 'Selling') continue;
+          carry.structures.push({ structId: st.structId, tier: st.tier || 1,
+            dx: st.pos.x - bp.x, dy: st.pos.y - bp.y, invested: st.invested || 0 });
+        }
+      }
+      pendingCarry = carry;
+      void selectMap(currentMapId + 1);
+    },
     onVolume: (channel, v) => { setChannelVolume(channel, v); },
     defaultFaction: DEFAULT_FACTION,
     onFactionSelect: (faction) => {
@@ -233,7 +249,7 @@ export function boot(mountEl, seed) {
       restart(currentSeed);
       flashMessage(hud, faction ? (faction + ' — ' + currentWaves.length + ' waves') : 'Mixed roster restored');
     },
-    onMapSelect: (mapId) => { void selectMap(mapId); },
+    onMapSelect: (mapId) => { pendingCarry = null; void selectMap(mapId); },   // hand-picking a map = fresh start
     defaultMapId: DEFAULT_MAP_ID,
     onUpgrade: (id) => {
       submit({ type: 'upgrade', id });
