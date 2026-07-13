@@ -222,6 +222,18 @@ function fresh(seed) {
   assert(!fifth.ok && /cap/.test(fifth.reason), `fifth bay rejected at the cap (${fifth.reason})`);
 }
 
+// ── NO FRIENDLY FIRE: the base super-cannon's blast never hurts a harvester in the radius ──
+{
+  const { s } = fresh(5);
+  const hv = s.units.get(s.harvesterId);
+  const c = s.base.cannon;
+  c.aimPos = { x: hv.pos.x, y: hv.pos.y };   // shell lands ON the docked harvester
+  c.phase = 'flight'; c.timer = 0;
+  const hpBefore = hv.hp;
+  stepSim(s, 1 / 30);                        // impact resolves this tick
+  assert.strictEqual(hv.hp, hpBefore, 'harvester untouched by the base cannon blast');
+}
+
 // ── determinism: identical seeds and orders → identical hash (nodes + cargo are hashed) ──
 {
   const runOnce = () => {

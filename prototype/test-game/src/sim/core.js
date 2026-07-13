@@ -930,6 +930,8 @@ export function stepBaseCannon(state, dt) {
       for (const u of state.units.values()) {          // MASSIVE AOE at the locked spot
         if (u.hp <= 0) continue;
         if (u.altitude > 0 || u.domain === 'Flyer') continue;   // ground blast doesn't hit aircraft overhead
+        if (u.side !== 'attacker') continue;   // NO FRIENDLY FIRE (owner): the base's own shell never
+                                               // hurts harvesters or deployed defenders in the blast
         if (dist(u.pos, p) <= CANNON.aoe) applyDamage(state, -2, u, CANNON.damage, 'Concussion', 1);
       }
       emitEvent(state, { type: 'cannonImpact', tick: state.tick, pos: { x: p.x, y: p.y }, radius: CANNON.aoe });
