@@ -1,0 +1,233 @@
+{
+  "frames": {
+    "map_12_sci.png": {
+      "frame": {
+        "x": 1,
+        "y": 1,
+        "w": 190,
+        "h": 188
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 190,
+        "h": 188
+      },
+      "sourceSize": {
+        "w": 190,
+        "h": 188
+      }
+    },
+    "art_17_sci.png": {
+      "frame": {
+        "x": 192,
+        "y": 1,
+        "w": 182,
+        "h": 182
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 182,
+        "h": 182
+      },
+      "sourceSize": {
+        "w": 182,
+        "h": 182
+      }
+    },
+    "map_11_sci.png": {
+      "frame": {
+        "x": 1,
+        "y": 190,
+        "w": 174,
+        "h": 170
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 174,
+        "h": 170
+      },
+      "sourceSize": {
+        "w": 174,
+        "h": 170
+      }
+    },
+    "art_15_sci.png": {
+      "frame": {
+        "x": 177,
+        "y": 190,
+        "w": 152,
+        "h": 156
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 152,
+        "h": 156
+      },
+      "sourceSize": {
+        "w": 152,
+        "h": 156
+      }
+    },
+    "map_13_sci.png": {
+      "frame": {
+        "x": 330,
+        "y": 190,
+        "w": 167,
+        "h": 155
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 167,
+        "h": 155
+      },
+      "sourceSize": {
+        "w": 167,
+        "h": 155
+      }
+    },
+    "map_10_sci.png": {
+      "frame": {
+        "x": 1,
+        "y": 362,
+        "w": 145,
+        "h": 152
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 145,
+        "h": 152
+      },
+      "sourceSize": {
+        "w": 145,
+        "h": 152
+      }
+    },
+    "art_21_sci.png": {
+      "frame": {
+        "x": 147,
+        "y": 362,
+        "w": 120,
+        "h": 138
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 120,
+        "h": 138
+      },
+      "sourceSize": {
+        "w": 120,
+        "h": 138
+      }
+    },
+    "art_20_sci.png": {
+      "frame": {
+        "x": 269,
+        "y": 362,
+        "w": 108,
+        "h": 125
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 108,
+        "h": 125
+      },
+      "sourceSize": {
+        "w": 108,
+        "h": 125
+      }
+    },
+    "art_19_sci.png": {
+      "frame": {
+        "x": 378,
+        "y": 362,
+        "w": 101,
+        "h": 118
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 101,
+        "h": 118
+      },
+      "sourceSize": {
+        "w": 101,
+        "h": 118
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    },
+    "scale": "1",
+    "sourceAssets": [
+      {
+        "id": "dffa26d8-5990-43d3-9c81-3b3da4d0ff06",
+        "name": "map_13_sci"
+      },
+      {
+        "id": "1cf9520d-9167-4b2c-8e42-d57e327bf70f",
+        "name": "map_12_sci"
+      },
+      {
+        "id": "d23c0e2d-9c47-492a-b3f2-53beff274ee3",
+        "name": "map_11_sci"
+      },
+      {
+        "id": "9086e291-98e7-493d-b856-b1b655a0dd07",
+        "name": "art_15_sci"
+      },
+      {
+        "id": "7231dcc4-11d4-45d3-b431-1d0eded33aee",
+        "name": "map_10_sci"
+      },
+      {
+        "id": "1a799ab7-8747-43d1-a692-d3f013d476ea",
+        "name": "art_17_sci"
+      },
+      {
+        "id": "674dd17b-c255-4be4-a11a-845b9d40baa8",
+        "name": "art_21_sci"
+      },
+      {
+        "id": "6b411383-2889-4f30-b5ba-e67ecaf10640",
+        "name": "art_19_sci"
+      },
+      {
+        "id": "c3b321ce-be19-4fbc-8158-b7b865f355e0",
+        "name": "art_20_sci"
+      }
+    ]
+  }
+}

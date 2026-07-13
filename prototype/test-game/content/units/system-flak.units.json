@@ -1,0 +1,45 @@
+{
+  "faction": "System",
+  "sheet": "atlas-anti-air",
+  "units": {
+    "SYS-Flak": {
+      "role": "Flak Tower",
+      "shape": "Structure",
+      "layers": {
+        "base": {
+          "frame": "art_7_sci.png",
+          "offset": 0,
+          "scale": 1
+        },
+        "head": null,
+        "weapon": null
+      }
+    },
+    "SYS-Flak-2": {
+      "role": "Flak T2",
+      "shape": "Structure",
+      "layers": {
+        "base": {
+          "frame": "art_5_sci.png",
+          "offset": 0,
+          "scale": 1
+        },
+        "head": null,
+        "weapon": null
+      }
+    },
+    "SYS-Flak-3": {
+      "role": "Flak T3",
+      "shape": "Structure",
+      "layers": {
+        "base": {
+          "frame": "art_16_sci.png",
+          "offset": 0,
+          "scale": 1
+        },
+        "head": null,
+        "weapon": null
+      }
+    }
+  }
+}

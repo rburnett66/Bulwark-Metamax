@@ -278,6 +278,10 @@ export function createInput(canvas, renderer, getState, submit, ui) {
   add(canvas, 'contextmenu', ctxFn);
   add(window, 'keydown', keyFn);
 
+  // Live validity: gold arrives while the mouse sits still (harvester deposits) — the ghost
+  // must flip red->green without a pointermove. The main ticker calls this every frame.
+  handle.refreshHover = () => { if (!handle.destroyed) refreshHoverValidity(handle); };
+
   // Expose a helper the HUD build palette can drive (same code path as keys).
   handle.setBuildSelection = (structId) => {
     if (handle.destroyed) return;

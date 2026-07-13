@@ -449,6 +449,8 @@ export function boot(mountEl, seed) {
     // BEFORE the hold existed and the card would sit over the battle forever — release it the
     // frame it appears. dismiss() is a no-op when nothing is held.
     if (mode === 'play' && !interlude) comm.dismiss();
+    // placement ghost re-validates every frame — money changes while the pointer is still
+    if (inputHandle && inputHandle.refreshHover) inputHandle.refreshHover();
     renderFrame(renderer, sim, ui, pendingEvents, dtMs / 1000);   // pass REAL frame time so FX track sim time
     updateHud(hud, sim, ui);
     pendingEvents = [];

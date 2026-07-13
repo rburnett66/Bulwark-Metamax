@@ -3,6 +3,7 @@
     "artillery.units.json",
     "greenies-chem-.units.json",
     "ground-powder.units.json",
-    "system.units.json"
+    "system.units.json",
+    "system-flak.units.json"
   ]
 }

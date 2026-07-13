@@ -397,6 +397,135 @@ function spawnSparks(renderer, x, y, count) {
   }
 }
 
+
+// ── COSMETIC COMBAT FX (owner): shells/tracers fly to their targets (damage stays hitscan —
+// pure presentation), damaged tanks/turrets burn at random offsets, damaged flyers throw small
+// welding-style sparks. All render-side (Math.random legal); the sim is untouched.
+const RANGED_SHAPES = { 'Tanks': 1, 'Heavy Tanks': 1, 'Artillery': 1, 'Planes': 1, 'Copters': 1, 'Missiles': 1 };
+const BURN_COLORS = [0xffd27a, 0xff9a3d, 0xff6a2a];
+function emitCombatFx(renderer, state) {
+  const t = renderer.tile;
+  if (!renderer._shotClock) renderer._shotClock = new Map();
+  const clock = renderer._shotClock;
+  const now = state.time || 0;
+  const dt = renderer._fxDt || FX_DT;
+  const targetPos = (tid) => {
+    if (tid == null) return null;
+    if (tid === -1) return state.base ? { x: state.base.pos.x, y: state.base.pos.y, air: false } : null;
+    const tu = state.units.get(tid);
+    if (tu && tu.hp > 0) return { x: tu.pos.x, y: tu.pos.y, air: tu.domain === 'Flyer' };
+    const ts = state.structures && state.structures.get(tid);
+    if (ts && ts.lifecycle !== 'Destroyed') {
+      const fp = ts.footprint || { w: 1, h: 1 };
+      return { x: ts.pos.x + ((fp.w || 1) - 1) / 2, y: ts.pos.y + ((fp.h || 1) - 1) / 2, air: false };
+    }
+    return null;
+  };
+  const fire = (id, from, to, kind, cadence, speed, color) => {
+    const next = clock.get(id) || 0;
+    if (now < next) return;
+    clock.set(id, now + cadence * (0.85 + Math.random() * 0.3));
+    renderer.fxItems.push({ kind: 'shot', x: from.x, y: from.y, tx: to.x, ty: to.y,
+      speed: speed * t, color: color, shotKind: kind, age: 0, ttl: 2.5 });
+  };
+  const burn = (x, y, spread, size) => {
+    renderer.fxItems.push({ kind: 'fire', x: x + (Math.random() * 2 - 1) * spread, y: y + (Math.random() * 2 - 1) * spread,
+      age: 0, ttl: 0.45 + Math.random() * 0.3, color: BURN_COLORS[(Math.random() * 3) | 0],
+      size: size, rise: t * 0.45, vx: (Math.random() * 2 - 1) * t * 0.06 });
+    if (Math.random() < 0.35) renderer.fxItems.push({ kind: 'smoke', x: x, y: y - t * 0.1, age: 0, ttl: 0.8,
+      color: 0x2a2d31, size: size * 1.2, rise: t * 0.6 });
+  };
+
+  if (state.structures) {
+    for (const st of state.structures.values()) {
+      if (!st || (st.lifecycle !== 'Complete' && st.lifecycle !== 'Damaged')) continue;
+      if (st.kind !== 'antiGround' && st.kind !== 'antiAir') continue;
+      const fp = st.footprint || { w: 1, h: 1 };
+      const c = cellToLocal(renderer, st.pos.x + ((fp.w || 1) - 1) / 2, st.pos.y + ((fp.h || 1) - 1) / 2);
+      if (st.targetId != null) {
+        const tp = targetPos(st.targetId);
+        if (tp) {
+          const lp = cellToLocal(renderer, tp.x, tp.y);
+          const ty = lp.y - (tp.air ? t * 0.35 : 0);
+          if (st.kind === 'antiGround') fire('s' + st.id, c, { x: lp.x, y: ty }, 'shell', 0.55, 13, 0xffd080);
+          else fire('s' + st.id, c, { x: lp.x, y: ty }, 'flak', 0.35, 18, 0x9fd4ff);
+        }
+      }
+      if (st.maxHp && st.hp > 0 && st.hp / st.maxHp < 0.5 && Math.random() < dt * 2.2) burn(c.x, c.y, t * 0.3, t * 0.1);
+    }
+  }
+
+  if (state.units) {
+    for (const u of state.units.values()) {
+      if (!u || u.hp <= 0 || u.isHarvester) continue;
+      let d = null;
+      try { d = getUnitDef(u.unitId); } catch (e) { continue; }
+      if (!d) continue;
+      const p = cellToLocal(renderer, u.pos.x, u.pos.y);
+      const isFlyer = u.domain === 'Flyer';
+      const lift = isFlyer ? t * 0.35 : 0;
+      if (RANGED_SHAPES[d.shape] && (d.range || 0) > 1.6 && u.targetId != null) {
+        const tp = targetPos(u.targetId);
+        if (tp) {
+          const lp = cellToLocal(renderer, tp.x, tp.y);
+          const grounded = d.shape === 'Tanks' || d.shape === 'Heavy Tanks' || d.shape === 'Artillery';
+          fire('u' + u.id, { x: p.x, y: p.y - lift }, { x: lp.x, y: lp.y - (tp.air ? t * 0.35 : 0) },
+            grounded ? 'shell' : 'tracer', 0.6, 15, u.side === 'attacker' ? 0xff9a70 : 0xbfe8ff);
+        }
+      }
+      const hpFrac = u.hp / Math.max(1, u.maxHp);
+      if (hpFrac < 0.5) {
+        if (isFlyer) {
+          if (Math.random() < dt * 2.0) spawnSparks(renderer, p.x + (Math.random() * 2 - 1) * t * 0.2, p.y - lift, 1);
+        } else if (d.shape === 'Tanks' || d.shape === 'Heavy Tanks' || d.shape === 'Artillery') {
+          if (Math.random() < dt * 2.0) burn(p.x, p.y, t * 0.25, t * 0.09);
+        }
+      }
+    }
+  }
+}
+
+// ── EXPLOSION GLOW (owner): additive-blend radial glow sprites — the cheap 2D "lighting"
+// shipped games use. White gradient texture tinted per event, scales up + fades over its life.
+// No lighting engine, no normal maps, phone-friendly.
+function glowTexture(renderer) {
+  if (renderer._glowTex) return renderer._glowTex;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const gr = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+  gr.addColorStop(0.4, 'rgba(255,255,255,0.4)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, 128, 128);
+  renderer._glowTex = PIXI.Texture.from(c);
+  return renderer._glowTex;
+}
+function spawnGlow(renderer, x, y, radiusTiles, ttl, tint) {
+  const spr = new PIXI.Sprite(glowTexture(renderer));
+  spr.anchor.set(0.5);
+  spr.blendMode = PIXI.BLEND_MODES.ADD;
+  spr.tint = (tint != null) ? tint : 0xffc070;
+  spr.x = x; spr.y = y;
+  spr.__age = 0; spr.__ttl = ttl || 0.35;
+  spr.__r = radiusTiles * renderer.tile;
+  spr.scale.set((spr.__r * 1.2) / 64);
+  renderer.layers.fx.addChild(spr);
+  (renderer.glows || (renderer.glows = [])).push(spr);
+}
+function updateGlows(renderer, dt) {
+  if (!renderer.glows || !renderer.glows.length) return;
+  const keep = [];
+  for (const gl of renderer.glows) {
+    gl.__age += dt;
+    const f = gl.__age / gl.__ttl;
+    if (f >= 1) { if (gl.parent) gl.parent.removeChild(gl); gl.destroy(); continue; }
+    gl.scale.set(((gl.__r * (1.2 + 1.0 * f))) / 64);   // blooms outward…
+    gl.alpha = Math.pow(1 - f, 1.6);                    // …while fading fast
+    keep.push(gl);
+  }
+  renderer.glows = keep;
+}
+
 function spawnFx(renderer, ev) {
   const pos = ev.pos || ev.cell
     || (ev.target && ev.target.pos) || (ev.target && ev.target.cell)
@@ -435,6 +564,7 @@ function spawnFx(renderer, ev) {
     renderer.shake.time = 0; renderer.shake.dur = 0.25; renderer.shake.mag = renderer.tile * 0.18;
     renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: 0.5, color: 0xe05040, kind: 'ring' });
     spawnFlame(renderer, p.x, p.y, 2.2, 5.0);   // a structure is bigger than a unit → a larger, ~5s fire
+    spawnGlow(renderer, p.x, p.y, 2.2, 0.5);    // explosion light bloom
     return;
   }
   // ── Base SUPER-CANNON visuals ──
@@ -467,12 +597,14 @@ function spawnFx(renderer, ev) {
   // owner tuning (2026-07-13): unit wreck fires shrunk 60% — full radius-scale flames dwarfed the units
   if (ev.type === 'kill') {
     spawnFlame(renderer, p.x, p.y, ((ev.radius || 0.28) / 0.28) * 0.4, 4.0);
+    spawnGlow(renderer, p.x, p.y, 0.9 * ((ev.radius || 0.28) / 0.28), 0.3);
     // the SCORE of the kill: a rising "+Ng" at the wreck (every attacker kill pays a bounty)
     if (ev.income > 0) spawnGoldFloat(renderer, p.x, p.y, '+' + Math.round(ev.income) + 'g');
   }
 }
 
 function updateFx(renderer) {
+  updateGlows(renderer, renderer._fxDt || FX_DT);
   updateFlames(renderer);   // advance flame emitters
   updateGoldFloats(renderer, FX_DT);   // rising +Ng kill-score texts (same fixed FX clock as particles)
   const g = renderer.fxG;
@@ -520,6 +652,7 @@ function updateFx(renderer) {
         // the shell has completed its arc and HIT THE GROUND — detonate NOW, exactly at the impact point. With FX
         // on real frame-time this lands on the same tick the sim applies the AOE damage (no explosion/damage lag).
         spawned.push({ x: fx.tx, y: fx.ty, age: 0, ttl: 0.6, kind: 'blast', radius: (fx.radius || 2.5) * 0.5 });   // 50% smaller blast
+        spawnGlow(renderer, fx.tx, fx.ty, (fx.radius || 2.5) * 0.9, 0.6);   // the ground lights up
         renderer.shake.time = 0; renderer.shake.dur = 0.4; renderer.shake.mag = renderer.tile * 0.5;
         // scatter 10-20 small fires at RANDOM points within the AOE radius (sqrt→uniform over the disk, not a
         // ring) to show the blast footprint. Pushed straight to the flame emitters (safe during this fxItems loop).
@@ -576,6 +709,32 @@ function updateFx(renderer) {
       g.beginFill(col, 0.5 + 0.5 * b);
       g.drawCircle(fx.x, fx.y, t * 0.05 * (0.45 + b));
       g.endFill();
+    } else if (fx.kind === 'shot') {
+      // cosmetic projectile: flies to the captured target point; impact burst on arrival
+      const dx = fx.tx - fx.x, dy = fx.ty - fx.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const step = fx.speed * dt;
+      if (dist <= step || dist < 1e-6) {
+        fx.age = fx.ttl;   // done
+        if (fx.shotKind === 'flak') {
+          // AIR-BURST: grey puffs + cold flash at altitude
+          for (let k = 0; k < 4; k++) renderer.fxItems.push({ kind: 'smoke', x: fx.tx + (Math.random() * 2 - 1) * t * 0.22,
+            y: fx.ty + (Math.random() * 2 - 1) * t * 0.22, age: 0, ttl: 0.5, color: 0x3a3f45, size: t * 0.1, rise: t * 0.15 });
+          renderer.fxItems.push({ kind: 'flash', x: fx.tx, y: fx.ty, age: 0, ttl: 0.12, color: 0xcfe8ff });
+          spawnGlow(renderer, fx.tx, fx.ty, 0.55, 0.22, 0xbfe0ff);   // cool air-burst bloom
+        } else {
+          renderer.fxItems.push({ kind: 'flash', x: fx.tx, y: fx.ty, age: 0, ttl: 0.15, color: 0xffe6a0 });
+          if (fx.shotKind === 'shell') { spawnSparks(renderer, fx.tx, fx.ty, 2); spawnGlow(renderer, fx.tx, fx.ty, 0.45, 0.2); }
+        }
+      } else {
+        fx.x += dx / dist * step; fx.y += dy / dist * step;
+        g.lineStyle(Math.max(1, t * 0.045), fx.color, 0.8);   // motion streak
+        g.moveTo(fx.x, fx.y); g.lineTo(fx.x - dx / dist * t * 0.28, fx.y - dy / dist * t * 0.28);
+        g.lineStyle(0);
+        g.beginFill(fx.color, 0.95);
+        g.drawCircle(fx.x, fx.y, t * (fx.shotKind === 'shell' ? 0.09 : 0.06));
+        g.endFill();
+      }
     } else if (fx.kind === 'reticle') {
       // pulsing target where the super-cannon will land (aim telegraph)
       const pulse = 0.5 + 0.5 * Math.sin(fx.age * 9);
@@ -725,6 +884,21 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           sspr.x = px + w / 2; sspr.y = py + h / 2;
           sspr.scale.set(shipScale);   // container is built at scale 1; hull-mounted turrets shrink to 75%
           sspr.alpha = (s.lifecycle === 'Building' || s.lifecycle === 'Placing') ? 0.55 : 1;
+          // TURRET TRACKING (owner): armed towers rotate to face their live target (the sim's
+          // s.targetId, refreshed every combat tick) — same smoothed facing as units. Walls/moats
+          // never rotate; a tower keeps its last bearing while idle (turrets don't snap home).
+          if (s.kind === 'antiGround' || s.kind === 'antiAir') {
+            const tu = (s.targetId != null) ? state.units.get(s.targetId) : null;
+            if (tu && tu.hp > 0) {
+              const dx = (tu.pos.x * t + t * 0.5) - (px + w / 2);
+              const dy = (tu.pos.y * t + t * 0.5) - (py + h / 2);
+              if (dx * dx + dy * dy > 1) {
+                const want = Math.atan2(dy, dx) + UNIT_FACING_OFFSET + Math.PI;   // bench aiming convention is 180 deg from the unit one (owner: all towers aimed backwards)
+                sspr.__facing = (sspr.__facing == null) ? want : approachAngle(sspr.__facing, want, 0.25);
+              }
+            }
+            sspr.rotation = sspr.__facing || 0;
+          }
         }
       }
       const color = KIND_COLORS[s.kind] != null ? KIND_COLORS[s.kind] : 0x888888;
@@ -1187,6 +1361,8 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     gO.lineStyle(0);
   }
 
+  emitCombatFx(renderer, state);   // shells/tracers + damage fire + flyer sparks (cosmetic)
+
   // Repair SPARKS — a bot actively welding a structure (state 'repairing') throws sparks at the work site, so
   // the repair reads clearly (and confirms the structure's HP is climbing). Emitted at the bot's position.
   if (state.units && state.structures) {
@@ -1221,21 +1397,26 @@ export function screenToCell(renderer, sx, sy) {
   return { x: x, y: y };
 }
 
+// Ring-framing growth camera — playtest verdict (owner): the full field + 2-tile safe border
+// should be on screen from wave 1, so the zoom is OFF by default. Flip GROWTH_CAM to revisit
+// (the eased zoom-out per wave still works; it just wasn't the right feel at these map sizes).
+const GROWTH_CAM = false;
+
 function updateCamera(renderer, state, dt) {
   const cam = renderer.camera || (renderer.camera = { s: 1, x: 0, y: 0 });
   const map = state.map;
   let ts = 1, tx = 0, ty = 0;
-  if (map && map.rings && map.rings.length && map.openPlay) {
+  if (GROWTH_CAM && map && map.rings && map.rings.length && map.openPlay) {
     const t = renderer.tile;
     const w = state.waves || { current: 0, active: false };
     // active wave -> frame ITS ring; build phase / interlude -> frame the NEXT wave's ring
     const idx = Math.max(0, Math.min(w.active ? w.current - 1 : w.current, map.rings.length - 1));
     const r = map.rings[idx].rect;
-    const PAD = 2;   // tiles of breathing room — keeps the safe border (and incoming spawns) in view
+    const PAD = 3;   // tiles of breathing room — keeps the safe border (and incoming spawns) in view
     const rw = (r.x1 - r.x0 + 1 + PAD * 2) * t;
     const rh = (r.y1 - r.y0 + 1 + PAD * 2) * t;
     const W = map.cols * t, H = map.rows * t;
-    ts = Math.max(1, Math.min(W / rw, H / rh, 2.5));   // never below full-map, capped zoom-in
+    ts = Math.max(1, Math.min(W / rw, H / rh, 1.25));   // never below full-map; SUBTLE cap — ring 1 is only 10x6 on a 24x16 field, anything stronger reads as a close-up (owner, twice)
     const cx = ((r.x0 + r.x1 + 1) / 2) * t, cy = ((r.y0 + r.y1 + 1) / 2) * t;
     tx = Math.min(0, Math.max(W - W * ts, W / 2 - cx * ts));   // clamp: never show past the board edge
     ty = Math.min(0, Math.max(H - H * ts, H / 2 - cy * ts));
