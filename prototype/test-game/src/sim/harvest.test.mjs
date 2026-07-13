@@ -123,6 +123,38 @@ function fresh(seed) {
   assert(!r2.ok && /reveal/.test(r2.reason), `gated mode still rejects unrevealed nodes (${r2.reason})`);
 }
 
+// ── HARVESTOR bay: 500g buys a new harvester (recovery after death / second field) ──
+{
+  const { s } = fresh(5);
+  s.economy.money = 5000;
+  const first = s.units.get(s.harvesterId);
+  first.hp = 0;                                    // the harvester dies
+  for (let i = 0; i < 5; i++) stepSim(s, 1 / 30);  // cleanup runs
+  const dead = applyCommand(s, { type: 'harvest', nodeId: s.resourceNodes[0].id });
+  assert(!dead.ok && /Harvestor/.test(dead.reason), `no fleet -> helpful rejection (${dead.reason})`);
+  // buy a replacement via the build palette
+  const pocket = s.map.rings[0].rect;
+  const moneyBefore = s.economy.money;
+  const placed = applyCommand(s, { type: 'place', structId: 'STR-Harvestor', cell: { x: pocket.x0 + 2, y: pocket.y0 + 2 } });
+  assert(placed.ok, `Harvestor bay placed (${placed.reason})`);
+  assert(s.economy.money <= moneyBefore - 500, 'bay cost 500 gold');
+  let built = null;
+  for (let i = 0; i < 30 * 20 && !built; i++) {
+    for (const e of stepSim(s, 1 / 30)) if (e.type === 'harvesterBuilt') built = e;
+  }
+  assert(built, 'bay converted into a new harvester');
+  assert(s.harvesterIds.length === 1 && s.units.get(s.harvesterIds[0]).isHarvester, 'fleet has the new harvester');
+  assert(![...s.structures.values()].some((x) => x.structId === 'STR-Harvestor'), 'bay structure freed the cell');
+  const again = applyCommand(s, { type: 'harvest', nodeId: s.resourceNodes.find((n) => n.remaining > 0).id });
+  assert(again.ok, 'harvesting works again with the bought harvester');
+  // classic map: the bay is rejected (no resources to harvest)
+  const { MAP } = await import('../data/tables.js');
+  const classic = createSim(5, { map: MAP });
+  classic.economy.money = 5000;
+  const rc = applyCommand(classic, { type: 'place', structId: 'STR-Harvestor', cell: { x: 10, y: 10 } });
+  assert(!rc.ok && /resources/.test(rc.reason), `classic map rejects the bay (${rc.reason})`);
+}
+
 // ── determinism: identical seeds and orders → identical hash (nodes + cargo are hashed) ──
 {
   const runOnce = () => {

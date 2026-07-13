@@ -752,6 +752,18 @@ export const STRUCTURES = Object.freeze({
     range: 0, cost: [80, 200, 400],
     buildTime: 2, upgradeTime: 3, sellTime: 1,
     footprint: Object.freeze({ w: 1, h: 1 })
+  }),
+  'STR-Harvestor': Object.freeze({
+    // A PURCHASE, not a defense: place it on open ground and after the build time it converts into
+    // a new harvester unit (harvest.js) and frees the cell — the way to recover a dead harvester or
+    // run a second field. Campaign maps only (placement rejects boards with no resources).
+    name: 'Harvestor', kind: 'harvestorBay',
+    armorClass: 'Structure', damageType: 'None',
+    canTargetDomains: Object.freeze([]),
+    hp: [200, 200, 200], dps: [0, 0, 0],
+    range: 0, cost: [500, 500, 500],
+    buildTime: 4, upgradeTime: 0, sellTime: 1,
+    footprint: Object.freeze({ w: 1, h: 1 })
   })
 });
 

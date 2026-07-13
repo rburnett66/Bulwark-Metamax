@@ -64,6 +64,11 @@ export function validatePlacement(state, structId, slotOrCell) {
   const cell = { x: Math.round(slotOrCell.x), y: Math.round(slotOrCell.y) };
   const occupied = occupiedCellSet(state);
 
+  // The Harvestor bay buys a harvester — meaningless on boards with no resources (classic map).
+  if (def.kind === 'harvestorBay' && !state.resourceNodes) {
+    return { ok: false, reason: 'no resources on this map' };
+  }
+
   // Walls/towers may be placed anywhere EXCEPT high terrain, rocks, or trees.
   const isForbiddenTerrain = (c) => {
     const t = map.terrain && map.terrain[c.y] ? map.terrain[c.y][c.x] : null;
