@@ -220,6 +220,7 @@ export function boot(mountEl, seed) {
       submit({ type: 'startWave' });
     },
     onNextWave: () => { endInterlude(); },
+    onDeselect: () => { ui.selectedUnitId = null; ui.selectedStructureId = null; },
     onVolume: (channel, v) => { setChannelVolume(channel, v); },
     defaultFaction: DEFAULT_FACTION,
     onFactionSelect: (faction) => {

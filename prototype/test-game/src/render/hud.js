@@ -51,6 +51,9 @@ const CSS = `
   background:rgba(9,14,20,0.94); border:1px solid #2c3e50; border-radius:7px; padding:8px 14px; display:none;
   font-size:12px; color:#dfeef5; box-shadow:0 3px 16px rgba(0,0,0,0.55); z-index:20; }
 .bw-unitpanel .bw-uname { font-size:15px; font-weight:800; color:#ffe58a; }
+.bw-udeselect { position:absolute; top:6px; right:8px; background:none; border:1px solid #3a4a5a; border-radius:4px;
+  color:#9ec4d8; font:inherit; font-size:10px; letter-spacing:1px; padding:2px 8px; cursor:pointer; pointer-events:auto; }
+.bw-udeselect:hover { background:#22303e; color:#e7f6ff; }
 .bw-unitpanel .bw-usub { color:#8fb0c4; font-size:11px; margin-bottom:5px; text-transform:capitalize; }
 .bw-unitpanel .bw-uhp { height:6px; background:#1c2630; border-radius:3px; overflow:hidden; margin-bottom:6px; }
 .bw-unitpanel .bw-uhpfill { height:100%; background:#5c5; transition:width .1s; }
@@ -309,6 +312,12 @@ export function createHud(mountEl, callbacks) {
 
   // ---- selected UNIT info window (lower-middle) — name + live stats ----
   const unitPanel = el(doc, 'div', 'bw-unitpanel');
+  // DESELECT (top right): a selected harvester treats map clicks as ORDERS — this is the explicit
+  // way out (Esc works too, but phones have no Esc)
+  const deselectBtn = el(doc, 'button', 'bw-udeselect', '✕ DESELECT');
+  deselectBtn.title = 'Clear the selection — map clicks stop giving this unit orders (Esc also works)';
+  deselectBtn.addEventListener('click', () => { if (cbs.onDeselect) cbs.onDeselect(); });
+  unitPanel.appendChild(deselectBtn);
   const uname = el(doc, 'div', 'bw-uname', '-');
   const usub = el(doc, 'div', 'bw-usub', '');
   const uhp = el(doc, 'div', 'bw-uhp');

@@ -21,14 +21,18 @@ function buildOrder() {
 }
 
 function findUnitAtCell(state, cell) {
-  // s5: nearest live unit to the clicked cell (within ~0.7 cell) so a click on an enemy selects it.
+  // s5: pick the live unit whose BODY the click landed on. The pick radius scales with the unit's
+  // footprint (sprites draw at radius × 4/3) — a flat 0.7 only caught dead-center clicks on big
+  // units like the harvester trucks ("I can only select one harvester"). Nearest-by-coverage wins.
   if (!state || !state.units || !cell) return null;
   let bestId = null;
-  let bestD = 0.7;
+  let bestScore = 1;   // d / pickRadius — <1 means the click is on the body
   for (const u of state.units.values()) {
     if (!u || u.hp <= 0) continue;
     const d = Math.hypot(u.pos.x - cell.x, u.pos.y - cell.y);
-    if (d < bestD) { bestD = d; bestId = u.id; }
+    const pick = Math.max(0.7, (u.radius || 0.3) * 1.35);
+    const score = d / pick;
+    if (score < bestScore) { bestScore = score; bestId = u.id; }
   }
   return bestId;
 }
