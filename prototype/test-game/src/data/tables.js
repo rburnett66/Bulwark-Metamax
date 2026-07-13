@@ -940,6 +940,13 @@ export const SYSTEM_UNITS = Object.freeze({
     armorClass: 'Vehicle', damageType: 'None', targets: 'None',
     hp: [120, 120, 120], dps: [0, 0, 0], range: 0.5, speed: 3, power: 0, cost: [500, 500, 500]
   }),
+  'SYS-Base': Object.freeze({
+    // the 3x3 BASE SHIP — author its art as one square image (it renders across the full 3x3
+    // footprint in-game; the keep outline + HP bar + super-cannon turret stay on top)
+    name: 'Base Ship', kind: 'structure', faction: 'System', domain: 'Walker',
+    armorClass: 'Structure', damageType: 'None', targets: 'None',
+    hp: [3000, 3000, 3000], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
+  }),
   'SYS-Cannon': Object.freeze({
     name: 'Cannon Tower', kind: 'structure', faction: 'System', domain: 'Walker',
     armorClass: 'Structure', damageType: 'Kinetic', targets: 'Ground',

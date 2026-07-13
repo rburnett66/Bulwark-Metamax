@@ -618,12 +618,30 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
   // base — s10: a 3x3 keep drawn as its body cells (the 4 corners are tower slots, drawn by the board)
   if (state.base) {
     const cells = state.base.cells || [state.base.pos];
-    gS.beginFill(0xc0a040, 1);
-    for (const bc of cells) {
-      const cp = cellToLocal(renderer, bc.x, bc.y);
-      gS.drawRect(cp.x - t * 0.46, cp.y - t * 0.46, t * 0.92, t * 0.92);
+    // AUTHORED BASE SHIP (State Bench, System faction, 'SYS-Base'): one sprite stretched across the
+    // full 3x3 footprint, replacing the gold plus-cells; outline, HP bar and the super-cannon
+    // turret still draw over it. Falls back to the primitives until (unless) it's authored.
+    let baseArtDrawn = false;
+    if (renderer.unitArt && hasArt(renderer.unitArt, 'SYS-Base') && !(renderer._noArt && renderer._noArt.has('SYS-Base'))) {
+      if (!renderer.baseSprite) {
+        const bs = buildUnitSprite(renderer.unitArt, 'SYS-Base', t, 3 / (2 * SPRITE_OVER_COLLISION));   // targetW = 3 tiles
+        if (bs && bs.children.length) { renderer.layers.structures.addChild(bs); renderer.baseSprite = bs; }
+        else { if (bs) bs.destroy(); (renderer._noArt || (renderer._noArt = new Set())).add('SYS-Base'); }
+      }
+      if (renderer.baseSprite) {
+        const bc0 = cellToLocal(renderer, state.base.pos.x, state.base.pos.y);
+        renderer.baseSprite.x = bc0.x; renderer.baseSprite.y = bc0.y;
+        baseArtDrawn = true;
+      }
     }
-    gS.endFill();
+    if (!baseArtDrawn) {
+      gS.beginFill(0xc0a040, 1);
+      for (const bc of cells) {
+        const cp = cellToLocal(renderer, bc.x, bc.y);
+        gS.drawRect(cp.x - t * 0.46, cp.y - t * 0.46, t * 0.92, t * 0.92);
+      }
+      gS.endFill();
+    }
     const bp = cellToLocal(renderer, state.base.pos.x, state.base.pos.y);
     gS.lineStyle(2, 0xf0e0a0, 0.9);
     gS.drawRect(bp.x - t * 1.5, bp.y - t * 1.5, t * 3, t * 3);   // keep outline
