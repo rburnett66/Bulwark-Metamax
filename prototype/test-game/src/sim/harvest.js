@@ -29,27 +29,31 @@ function harvesterStats() {
   };
 }
 
-// open cell next to the base for the harvester to camp on — first free spot scanning outward
-function homeCell(map) {
-  const bad = new Set();
-  for (const c of map.base.cells || []) bad.add(`${c.x},${c.y}`);
-  for (const c of map.base.cornerSlots || []) bad.add(`${c.x},${c.y}`);
-  for (const c of map.waterCells || []) bad.add(`${c.x},${c.y}`);
-  for (const r of map.resources || []) bad.add(`${r.x},${r.y}`);
-  for (let radius = 2; radius <= 4; radius++) {
-    for (const [dx, dy] of [[0, radius], [0, -radius], [radius, 0], [-radius, 0],
-                            [radius, radius], [-radius, radius], [radius, -radius], [-radius, -radius]]) {
-      const q = { x: map.base.x + dx, y: map.base.y + dy };
-      if (q.x < 0 || q.y < 0 || q.x >= map.cols || q.y >= map.rows) continue;
-      if (!bad.has(`${q.x},${q.y}`)) return q;
-    }
+// The base keeps 4 harvester DOCKS just outside its 3x3 footprint — top, bottom, left, right
+// (owner spec). Dock order is the build order: a new harvester takes the first open one. Cap = 4.
+export const HARVESTER_CAP = 4;
+export function dockCells(map) {
+  const cx = map.base.x, cy = map.base.y;
+  const water = new Set((map.waterCells || []).map((c) => `${c.x},${c.y}`));
+  const raw = [{ x: cx, y: cy - 2 }, { x: cx, y: cy + 2 }, { x: cx - 2, y: cy }, { x: cx + 2, y: cy }];
+  return raw.filter((q) => q.x >= 0 && q.y >= 0 && q.x < map.cols && q.y < map.rows && !water.has(`${q.x},${q.y}`));
+}
+// first dock no live harvester calls home
+function firstOpenDock(state) {
+  const taken = new Set();
+  for (const id of state.harvesterIds || []) {
+    const u = state.units.get(id);
+    if (u && u.hp > 0 && u.homePos) taken.add(`${u.homePos.x},${u.homePos.y}`);
   }
-  return { x: map.base.x, y: map.base.y + 2 };
+  for (const d of dockCells(state.map)) if (!taken.has(`${d.x},${d.y}`)) return d;
+  return dockCells(state.map)[0] || { x: state.map.base.x, y: state.map.base.y + 2 };
 }
 
-/** Spawn one harvester unit at `pos` (its home). Used at match start and by a completed
- *  Harvestor bay (STR-Harvestor: buy a replacement/extra harvester for 500g). */
-export function spawnHarvester(state, pos) {
+/** Spawn one harvester at the FIRST OPEN DOCK (positions 1-4 around the base). Used at match
+ *  start and by a completed Harvestor bay. Returns null at the fleet cap. */
+export function spawnHarvester(state) {
+  if (aliveHarvesters(state).length >= HARVESTER_CAP) return null;
+  const pos = firstOpenDock(state);
   const s = harvesterStats();
   const u = createUnit(state, HARVESTER_UNIT, 1, { x: pos.x, y: pos.y }, 'ground', 'defender');
   if (!state.units.has(u.id)) state.units.set(u.id, u);
@@ -69,9 +73,15 @@ export function spawnHarvester(state, pos) {
 /** Create runtime node state + the player's first harvester. Called by createSim on campaign maps. */
 export function initHarvest(state, map) {
   if (!map || !map.resources || !map.resources.length) return;
+  // CRYSTAL COLOR economy (owner spec): blue + yellow(gold) crystals pay GOLD; red + green are the
+  // QUEST crystals — tracked in the header as objectives, but their haul ALSO pays gold.
+  //   role primary -> blue, premium -> yellow, quest -> red or green (split by id hash)
+  const hash8 = (str) => { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h); };
   state.resourceNodes = map.resources.map((r) => ({
     id: r.id, fieldId: r.fieldId || r.id, type: r.type, role: r.role, wave: r.wave, x: r.x, y: r.y,
-    units: r.units, remaining: r.units, valuePerUnit: r.valuePerUnit,
+    color: r.role === 'primary' ? 'blue' : r.role === 'premium' ? 'yellow' : (hash8(r.id) % 2 ? 'red' : 'green'),
+    units: r.units, remaining: r.units,
+    valuePerUnit: r.valuePerUnit || questGoldValue(r),   // quest nodes now pay gold too
     respawns: !!r.respawns, respawnAt: null,
     harvestSec: nodeHarvestSec(r),
   }));
@@ -101,7 +111,7 @@ export function initHarvest(state, map) {
       }
     }
   }
-  state.mapScore = { goldFromPrimary: 0, goldFromPremium: 0, questUnits: 0 };
+  state.mapScore = { goldFromPrimary: 0, goldFromPremium: 0, questUnits: 0, questRed: 0, questGreen: 0 };
   // HARVEST ECONOMY (owner, 2026-07-13): on resource maps the harvester IS the faucet — start with
   // 900 gold and turn the passive gold timer OFF. Every coin after the opening build is hauled.
   if (state.economy) {
@@ -110,7 +120,7 @@ export function initHarvest(state, map) {
     state.economy.incomePerSec = 0;
   }
   state.harvesterIds = [];
-  spawnHarvester(state, homeCell(map));
+  spawnHarvester(state);   // the starting harvester docks at position 1
 }
 
 /** Alive harvesters, pruning the dead from the roster (deterministic — insertion order kept). */
@@ -124,6 +134,12 @@ export function aliveHarvesters(state) {
   });
   state.harvesterId = state.harvesterIds[0] ?? null;
   return out;
+}
+
+// quest nodes pay their type's Primary-tier gold value (they used to pay zero)
+function questGoldValue(r) {
+  const def = MAPDATA.resources.find((d) => d.Resource === r.type && d.Tier === 'Primary');
+  return (def && def.Value_Per_Unit) || 4;
 }
 
 function nodeHarvestSec(r) {
@@ -149,24 +165,30 @@ function nextFieldTarget(state, u) {
   return live[0];
 }
 
-/** Command: put a harvester on a FIELD. {type:'harvest', nodeId} — any cell of the field works.
- *  With a fleet (Harvestor bays), the order goes to the nearest UNASSIGNED harvester, else the
- *  nearest one gets retasked. */
+/** Command: put a harvester on a FIELD. {type:'harvest', nodeId, harvesterId?} — any cell of the
+ *  field works. harvesterId (click the harvester, then the field) picks the exact truck; without
+ *  it the nearest idle harvester takes the job (nearest busy one retasks as a fallback). */
 export function cmdHarvest(state, cmd) {
   const fleet = aliveHarvesters(state);
   if (!fleet.length) return { ok: false, reason: 'no harvester — build a Harvestor' };
   const node = (state.resourceNodes || []).find((n) => n.id === cmd.nodeId);
   if (!node) return { ok: false, reason: 'no such node' };
   if (!nodeRevealed(state, node)) return { ok: false, reason: 'not revealed yet' };
-  const live = fieldCells(state, node.fieldId).some((n) => n.remaining > 0 || n.respawns);
+  const live = fieldCells(state, node.fieldId).some((n) => n.remaining > 0);
   if (!live) return { ok: false, reason: 'field exhausted' };
-  const byDist = (a, b) => (Math.hypot(a.pos.x - node.x, a.pos.y - node.y) - Math.hypot(b.pos.x - node.x, b.pos.y - node.y)) || (a.id - b.id);
-  const idle = fleet.filter((h) => !h.fieldId && h.state === 'harvestIdle').sort(byDist);
-  const u = idle[0] || fleet.slice().sort(byDist)[0];
+  let u = null;
+  if (cmd.harvesterId != null) {
+    u = fleet.find((h) => h.id === cmd.harvesterId) || null;
+    if (!u) return { ok: false, reason: 'that harvester is gone' };
+  } else {
+    const byDist = (a, b) => (Math.hypot(a.pos.x - node.x, a.pos.y - node.y) - Math.hypot(b.pos.x - node.x, b.pos.y - node.y)) || (a.id - b.id);
+    const idle = fleet.filter((h) => !h.fieldId && h.state === 'harvestIdle').sort(byDist);
+    u = idle[0] || fleet.slice().sort(byDist)[0];
+  }
   u.fieldId = node.fieldId;
   const target = node.remaining > 0 ? node : nextFieldTarget(state, u);
   if (target) routeTo(state, u, target);
-  else u.state = 'harvestIdle';   // whole field regrowing — camp at home, auto-resume on respawn
+  else u.state = 'harvestIdle';
   emitEvent(state, { type: 'harvestOrder', tick: state.tick, nodeId: node.id, fieldId: node.fieldId, unitId: u.id, pos: { x: node.x, y: node.y } });
   return { ok: true, reason: '' };
 }
@@ -229,8 +251,8 @@ export function stepHarvest(state, dt) {
     for (const s of done) {
       state.structures.delete(s.id);
       if (!state.harvesterIds) state.harvesterIds = [];
-      const nu = spawnHarvester(state, { x: s.pos.x, y: s.pos.y });
-      emitEvent(state, { type: 'harvesterBuilt', tick: state.tick, unitId: nu.id, pos: { x: s.pos.x, y: s.pos.y } });
+      const nu = spawnHarvester(state);   // takes the first open dock (positions 1-4)
+      if (nu) emitEvent(state, { type: 'harvesterBuilt', tick: state.tick, unitId: nu.id, pos: { x: nu.pos.x, y: nu.pos.y } });
     }
   }
 
@@ -240,11 +262,7 @@ export function stepHarvest(state, dt) {
 function stepOneHarvester(state, u, dt) {
   const nodes = state.resourceNodes;
   if (u.state === 'harvestIdle') {
-    // camped at home with a standing field assignment — head back out the moment the field regrows
-    if (u.fieldId) {
-      const target = nextFieldTarget(state, u);
-      if (target) routeTo(state, u, target);
-    }
+    // docked, awaiting orders (owner spec: an emptied field ends the job — no auto-redeploy)
   } else if (u.state === 'harvestGo') {
     const node = nodes.find((n) => n.id === u.harvestNodeId);
     if (!node) { routeHome(state, u); return; }
@@ -259,36 +277,38 @@ function stepOneHarvester(state, u, dt) {
       u.cargo += take;
       u.cargoValue += take * (node.valuePerUnit || 0);
       u.cargoRole = node.role;
+      u.cargoColor = node.color;
     }
     if (u.cargo >= u.capacity - 1e-9) { routeHome(state, u); return; }   // full — haul it home
     if (node.remaining <= 0) {
       const next = nextFieldTarget(state, u);
       if (next) routeTo(state, u, next);            // this cell is bare — work the next one
-      else routeHome(state, u);                     // field done (for now) — deliver what we have
+      else { u.fieldId = null; routeHome(state, u); }   // field EMPTIED — deliver and await orders
     }
   } else if (u.state === 'harvestReturn') {
     if (marchAlong(u, dt)) {
-      // DEPOSIT: gold into the build economy + the map-score tally; quest cargo pays loyalty units
+      // DEPOSIT (owner color economy): EVERY haul pays gold — blue/yellow are the economy crystals,
+      // red/green additionally count up the header QUEST objectives.
       if (u.cargo > 0) {
         const gold = Math.floor(u.cargoValue * (u.yieldMult || 1));
-        if (u.cargoRole === 'quest') {
-          state.mapScore.questUnits += Math.floor(u.cargo);
-        } else if (gold > 0) {
+        if (gold > 0) {
           if (state.economy) state.economy.money = (state.economy.money || 0) + gold;
           if (u.cargoRole === 'premium') state.mapScore.goldFromPremium += gold;
           else state.mapScore.goldFromPrimary += gold;
         }
-        emitEvent(state, { type: 'deposit', tick: state.tick, gold, units: Math.floor(u.cargo), role: u.cargoRole || 'primary', fieldId: u.fieldId });
-        u.cargo = 0; u.cargoValue = 0; u.cargoRole = null;
+        if (u.cargoColor === 'red' || u.cargoColor === 'green') {
+          const n = Math.floor(u.cargo);
+          state.mapScore.questUnits += n;
+          if (u.cargoColor === 'red') state.mapScore.questRed += n; else state.mapScore.questGreen += n;
+        }
+        emitEvent(state, { type: 'deposit', tick: state.tick, gold, units: Math.floor(u.cargo), role: u.cargoRole || 'primary', color: u.cargoColor || 'blue', fieldId: u.fieldId });
+        u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null;
       }
-      // back to the field if it has anything left; else REST AT BASE. A regrowing (primary) field
-      // keeps the assignment — harvestIdle auto-resumes on respawn; a stripped premium/quest field
-      // is finished, so the harvester waits for a new order.
-      const next = nextFieldTarget(state, u);
+      // still mid-job (came home full)? head back out; otherwise the job is over — WAIT at the dock
+      const next = u.fieldId ? nextFieldTarget(state, u) : null;
       if (next) routeTo(state, u, next);
       else {
-        const willRegrow = u.fieldId && fieldCells(state, u.fieldId).some((n) => n.respawns);
-        if (!willRegrow) u.fieldId = null;
+        u.fieldId = null;
         u.harvestNodeId = null;
         u.state = 'harvestIdle';
       }

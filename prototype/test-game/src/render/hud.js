@@ -204,6 +204,12 @@ export function createHud(mountEl, callbacks) {
   topbar.appendChild(timerEl);
   topbar.appendChild(moneyEl);
   topbar.appendChild(waveEl);
+  // QUEST objectives readout — red + green crystal units hauled (owner color economy). Hidden on
+  // boards with no resources.
+  const questEl = el(doc, 'span', 'bw-seed');
+  questEl.style.display = 'none';
+  questEl.title = 'Quest crystals hauled (red / green) — they also pay gold';
+  topbar.appendChild(questEl);
   topbar.appendChild(startWaveBtn);
   topbar.appendChild(factionSel);
   topbar.appendChild(mapSel);
@@ -437,6 +443,7 @@ export function createHud(mountEl, callbacks) {
     waveEl,
     timerEl,
     startWaveBtn,
+    questEl,
     nextWaveBtn,
     setNextWavePrompt(on, label) {
       nextWaveBtn.style.display = on ? 'flex' : 'none';
@@ -517,6 +524,17 @@ export function updateHud(hud, state, ui) {
     hud.moneyEl.firstChild.nodeValue = money + 'g';
   } else {
     hud.moneyEl.insertBefore(hud.doc.createTextNode(money + 'g'), hud.moneyEl.firstChild || null);
+  }
+
+  // Quest crystal objectives (campaign maps only)
+  if (hud.questEl) {
+    if (state.mapScore) {
+      hud.questEl.style.display = '';
+      hud.questEl.innerHTML = '<span style="color:#ff7a6a">● ' + (state.mapScore.questRed || 0) +
+        '</span> <span style="color:#7ae08a">● ' + (state.mapScore.questGreen || 0) + '</span>';
+    } else {
+      hud.questEl.style.display = 'none';
+    }
   }
 
   // Waves

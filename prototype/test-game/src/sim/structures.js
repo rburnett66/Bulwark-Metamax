@@ -64,9 +64,19 @@ export function validatePlacement(state, structId, slotOrCell) {
   const cell = { x: Math.round(slotOrCell.x), y: Math.round(slotOrCell.y) };
   const occupied = occupiedCellSet(state);
 
-  // The Harvestor bay buys a harvester — meaningless on boards with no resources (classic map).
-  if (def.kind === 'harvestorBay' && !state.resourceNodes) {
-    return { ok: false, reason: 'no resources on this map' };
+  // The Harvestor bay buys a harvester — meaningless on boards with no resources (classic map),
+  // and the fleet caps at 4 (one per base dock). Pending bays count against the cap.
+  if (def.kind === 'harvestorBay') {
+    if (!state.resourceNodes) return { ok: false, reason: 'no resources on this map' };
+    let fleet = 0;
+    for (const id of state.harvesterIds || []) {
+      const u = state.units.get(id);
+      if (u && u.hp > 0) fleet++;
+    }
+    for (const st of state.structures.values()) {
+      if (st.structId === 'STR-Harvestor' && st.lifecycle !== 'Destroyed' && st.lifecycle !== 'Selling') fleet++;
+    }
+    if (fleet >= 4) return { ok: false, reason: 'harvester cap (4)' };
   }
 
   // Walls/towers may be placed anywhere EXCEPT high terrain, rocks, or trees.

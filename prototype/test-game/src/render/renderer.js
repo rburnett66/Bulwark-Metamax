@@ -826,7 +826,9 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     // resource nodes — LIVE state (state.resourceNodes): radius tracks remaining units, a hollow ring
     // marks a regrowing primary, exhausted premium/quest fade out. Green primary / gold premium /
     // purple quest — tier reads off distance, role reads off color (GDD §5.1).
-    const ROLE_COLOR = { primary: 0x3f8f5a, premium: 0xe0b23f, quest: 0xa86fe0 };
+    // primitive fallback tints match the CRYSTAL COLORS (blue/yellow = gold economy, red/green = quest)
+    const COLOR_TINT = { blue: 0x4a90e0, yellow: 0xe0b23f, red: 0xd04040, green: 0x3f8f5a };
+    const ROLE_COLOR = { primary: 0x4a90e0, premium: 0xe0b23f, quest: 0xd04040 };
     // assigned-field rings were a debug aid while field identity was buggy — behind a flag now
     // (settings panel), default off
     const assignedFields = new Set();
@@ -839,10 +841,13 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     // node ART: crystal sprites (role → colour pool, variant by node id) drawn on the 'resources'
     // layer — above ground, below structures/units. Primitive circles are the not-yet-loaded fallback.
     const art = renderer.resourceArt;
+    // sprite pools keyed by the node's CRYSTAL COLOR (harvest.js assigns: primary=blue,
+    // premium=yellow, quest=red|green)
     const pools = art && (renderer._resPools || (renderer._resPools = {
-      primary: art.frameNames.filter((n) => n.startsWith('green')),
-      premium: art.frameNames.filter((n) => n.startsWith('yellow') || n.startsWith('red')),
-      quest: art.frameNames.filter((n) => n.startsWith('blue')),
+      blue: art.frameNames.filter((n) => n.startsWith('blue')),
+      green: art.frameNames.filter((n) => n.startsWith('green')),
+      yellow: art.frameNames.filter((n) => n.startsWith('yellow')),
+      red: art.frameNames.filter((n) => n.startsWith('red')),
     }));
     const idHash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
     const liveIds = new Set();
@@ -850,7 +855,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       if (gated && node.wave > wv) continue;   // open play: every node is on the board from wave 1
       const p = cellToLocal(renderer, node.x, node.y);   // cellToLocal centers in the cell
       const frac = node.units ? Math.max(0, (node.remaining != null ? node.remaining : node.units) / node.units) : 1;
-      const color = ROLE_COLOR[node.role] || 0x888888;
+      const color = COLOR_TINT[node.color] || ROLE_COLOR[node.role] || 0x888888;
       const gone = frac <= 0 && !node.respawns;          // consumed forever (or crushed by a structure)
       if (assignedFields.has(node.fieldId) && !gone) {   // a field some harvester is working
         gO.lineStyle(1.5, 0xffffff, 0.7);
@@ -862,7 +867,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         liveIds.add(node.id);
         let spr = renderer.resourceSprites.get(node.id);
         if (!spr) {
-          const pool = (pools && pools[node.role] && pools[node.role].length) ? pools[node.role] : art.frameNames;
+          const pool = (pools && pools[node.color] && pools[node.color].length) ? pools[node.color] : art.frameNames;
           spr = new PIXI.Sprite(art.textures[pool[idHash(node.id) % pool.length]]);
           spr.anchor.set(0.5, 0.68);                     // cluster base sits in the cell
           renderer.layers.resources.addChild(spr);

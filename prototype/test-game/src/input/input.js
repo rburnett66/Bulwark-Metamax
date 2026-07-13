@@ -130,13 +130,16 @@ function onPointerDown(handle, ev) {
     return;
   }
 
-  // HARVEST order (campaign maps): clicking a resource node sends the harvester to it. Takes
-  // precedence over selection — the node is the thing you're pointing at.
+  // HARVEST order (campaign maps): clicking a resource node sends a harvester to its field.
+  // With a HARVESTER SELECTED (click the truck first), the order goes to THAT truck — the owner's
+  // click-harvester-then-click-field flow; otherwise the nearest idle one takes it.
   if (state.resourceNodes) {
     const node = state.resourceNodes.find((n) => n.x === cell.x && n.y === cell.y);
     if (node) {
-      const res = handle.submit({ type: 'harvest', nodeId: node.id });
-      if (res && res.ok) return;
+      const sel = ui.selectedUnitId != null ? state.units.get(ui.selectedUnitId) : null;
+      const harvesterId = (sel && sel.isHarvester && sel.hp > 0) ? sel.id : undefined;
+      const res = handle.submit({ type: 'harvest', nodeId: node.id, harvesterId });
+      if (res && res.ok) return;   // selection kept — queue the same truck onto another field next
       // rejected (unrevealed / exhausted) → fall through to normal selection
     }
   }
