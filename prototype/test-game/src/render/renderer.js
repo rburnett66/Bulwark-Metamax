@@ -480,17 +480,19 @@ function updateFx(renderer) {
   const t = renderer.tile;
   const dt = renderer._fxDt || FX_DT;   // REAL frame time so FX track the real-time sim
 
-  // camera shake: decays over its duration and offsets the whole board root
+  // camera shake: decays over its duration and offsets the whole board root (rebased on the
+  // hybrid-growth camera position — see updateCamera)
   if (renderer.shake && renderer.shake.dur > 0) {
     renderer.shake.time += dt;
     const sf = 1 - renderer.shake.time / renderer.shake.dur;
     if (sf <= 0) {
       renderer.shake.dur = 0;
-      renderer.root.x = 0; renderer.root.y = 0;
+      renderer.root.x = (renderer.camera ? renderer.camera.x : 0);
+      renderer.root.y = (renderer.camera ? renderer.camera.y : 0);
     } else {
       const m = renderer.shake.mag * sf;
-      renderer.root.x = (Math.random() * 2 - 1) * m;
-      renderer.root.y = (Math.random() * 2 - 1) * m;
+      renderer.root.x = (renderer.camera ? renderer.camera.x : 0) + (Math.random() * 2 - 1) * m;
+      renderer.root.y = (renderer.camera ? renderer.camera.y : 0) + (Math.random() * 2 - 1) * m;
     }
   }
 
@@ -603,6 +605,12 @@ function updateFx(renderer) {
 }
 
 export function renderFrame(renderer, state, ui, events, frameDt) {
+  // HYBRID MAP GROWTH (owner): everything is PLAYABLE from wave 1 (open play), but the CAMERA
+  // starts framed on the wave-1 pocket and zooms out one step per wave — the world visibly grows
+  // (GDD §3's felt experience) without re-gating the player. Between waves it frames the NEXT
+  // wave's ring, so the zoom-out lands during the interlude. Wave 8 = full map; classic boards
+  // sit at scale 1; screen shake rides on top of the camera position.
+  updateCamera(renderer, state, frameDt || 0.016);
   // FX advance by REAL frame time (clamped) so the shell arc + blast land exactly when the sim applies damage —
   // a fixed 1/60 step drifted from the real-time sim whenever the frame rate wasn't 60fps (explosion/damage lag).
   renderer._fxDt = (typeof frameDt === 'number' && frameDt > 0) ? Math.min(frameDt, 1 / 20) : FX_DT;
@@ -1194,9 +1202,43 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
 
 export function screenToCell(renderer, sx, sy) {
   const t = renderer.tile;
-  const x = Math.max(0, Math.min(renderer.map.cols - 1, Math.floor(sx / t)));
-  const y = Math.max(0, Math.min(renderer.map.rows - 1, Math.floor(sy / t)));
+  // invert the camera transform (hybrid growth zoom): screen px -> world px -> cell
+  const cam = renderer.camera || { s: 1, x: 0, y: 0 };
+  const wx = (sx - cam.x) / cam.s;
+  const wy = (sy - cam.y) / cam.s;
+  const x = Math.max(0, Math.min(renderer.map.cols - 1, Math.floor(wx / t)));
+  const y = Math.max(0, Math.min(renderer.map.rows - 1, Math.floor(wy / t)));
   return { x: x, y: y };
+}
+
+function updateCamera(renderer, state, dt) {
+  const cam = renderer.camera || (renderer.camera = { s: 1, x: 0, y: 0 });
+  const map = state.map;
+  let ts = 1, tx = 0, ty = 0;
+  if (map && map.rings && map.rings.length && map.openPlay) {
+    const t = renderer.tile;
+    const w = state.waves || { current: 0, active: false };
+    // active wave -> frame ITS ring; build phase / interlude -> frame the NEXT wave's ring
+    const idx = Math.max(0, Math.min(w.active ? w.current - 1 : w.current, map.rings.length - 1));
+    const r = map.rings[idx].rect;
+    const PAD = 2;   // tiles of breathing room — keeps the safe border (and incoming spawns) in view
+    const rw = (r.x1 - r.x0 + 1 + PAD * 2) * t;
+    const rh = (r.y1 - r.y0 + 1 + PAD * 2) * t;
+    const W = map.cols * t, H = map.rows * t;
+    ts = Math.max(1, Math.min(W / rw, H / rh, 2.5));   // never below full-map, capped zoom-in
+    const cx = ((r.x0 + r.x1 + 1) / 2) * t, cy = ((r.y0 + r.y1 + 1) / 2) * t;
+    tx = Math.min(0, Math.max(W - W * ts, W / 2 - cx * ts));   // clamp: never show past the board edge
+    ty = Math.min(0, Math.max(H - H * ts, H / 2 - cy * ts));
+  }
+  const k = 1 - Math.exp(-dt * 2.2);   // smooth ease, ~1s to settle
+  cam.s += (ts - cam.s) * k;
+  cam.x += (tx - cam.x) * k;
+  cam.y += (ty - cam.y) * k;
+  renderer.root.scale.set(cam.s);
+  if (!renderer.shake || renderer.shake.dur <= 0) {   // shake owns position while active
+    renderer.root.x = cam.x;
+    renderer.root.y = cam.y;
+  }
 }
 
 export function cellToScreen(renderer, cell) {
