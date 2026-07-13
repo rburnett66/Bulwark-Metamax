@@ -27,5 +27,5 @@ for (let i = 0; i < 30 * 30 && !s.result; i++) {
     }
   }
 }
-assert(worstAway > 0.5, `field units keep a footprint apart (worst ratio ${worstAway.toFixed(2)}, want >0.5)`);
+assert(worstAway > 0.85, `field units keep a footprint apart (worst ratio ${worstAway.toFixed(2)}, want >0.85 — contact clamp holds bodies at rest distance)`);
 console.log(`separation.test OK — deterministic; footprints present; field overlap worst ratio ${worstAway.toFixed(2)} (1.0=touching)`);

@@ -181,6 +181,17 @@ export function createHud(mountEl, callbacks) {
   topbar.appendChild(startWaveBtn);
   topbar.appendChild(factionSel);
   topbar.appendChild(seedEl);
+  // BUILD STAMP — which git commit this tab is actually running (served by serve_prototype.py's /__version).
+  // Ends the "did my refresh pick up the new code?" guessing game; include it in bug reports.
+  const buildEl = el(doc, 'span', 'bw-seed', 'build: …');
+  buildEl.title = 'git commit this build was served from';
+  topbar.appendChild(buildEl);
+  if (typeof fetch === 'function') {
+    fetch('/__version').then((r) => (r.ok ? r.json() : null)).then((v) => {
+      buildEl.textContent = 'build: ' + (v && v.commit ? v.commit + (v.dirty ? '+' : '') : '?');
+      if (v && v.branch) buildEl.title = 'branch ' + v.branch + (v.dirty ? ' (uncommitted changes)' : '');
+    }).catch(() => { buildEl.textContent = 'build: ?'; });
+  } else { buildEl.textContent = 'build: ?'; }
   root.appendChild(topbar);
 
   // ---- build palette --------------------------------------------------

@@ -1,6 +1,6 @@
 import { WAVES, MAP, getUnitDef } from '../data/tables.js';
 import { createUnit, unitRadius } from './entities.js';
-import { emitEvent } from './core.js';
+import { emitEvent, contactDistR, REST_RATIO } from './core.js';
 
 /**
  * Wave scheduler.
@@ -99,8 +99,10 @@ export function startNextWave(state) {
   // MAX_GAP raised with the sprite-sized footprints: a Heavy Tank (radius 1.48, speed ~0.39) needs
   // several seconds to clear its own body off the spawn cell — the old 3s cap left big units stacking.
   const MIN_GAP = 0.5, MAX_GAP = 6.0;
+  // clear distance = the SPRITE diameter (collision × REST_RATIO — the sim's rest spacing), not the raw
+  // collision diameter: the space-based gate below holds at that boundary, so the schedule should too.
   const laneClearGap = (speed, radius) =>
-    Math.max(MIN_GAP, Math.min(MAX_GAP, (2 * (radius || 0.3) + 0.25) / (speed || 1)));
+    Math.max(MIN_GAP, Math.min(MAX_GAP, (2 * (radius || 0.3) * REST_RATIO + 0.25) / (speed || 1)));
   const lastByLane = {};
   for (let s = 0; s < w.pendingSpawns.length; s++) {
     const sp = w.pendingSpawns[s];
@@ -127,15 +129,16 @@ export function startNextWave(state) {
   return true;
 }
 
-// Is a live attacker body still covering this spawn point? (85% of summed collision radii —
-// the incoming unit may kiss the leaver's edge, but never materializes inside it.)
+// Is a live attacker body still covering this spawn point? Clear distance = the sim's REST distance
+// (contactDistR: sprites just touching) — a unit must never materialize inside the boundary the contact
+// clamp maintains, or it enters the world already "slammed" into the leaver.
 function spawnBlocked(state, pos, unitId) {
   if (!state.units) return false;
   const rNew = unitRadius(getUnitDef(unitId));
   for (const u of state.units.values()) {
     if (!u || u.hp <= 0 || u.side !== 'attacker') continue;
     const dx = u.pos.x - pos.x, dy = u.pos.y - pos.y;
-    const clear = ((u.radius || 0.3) + rNew) * 0.85;
+    const clear = contactDistR(u.radius || 0.3, rNew);
     if (dx * dx + dy * dy < clear * clear) return true;
   }
   return false;

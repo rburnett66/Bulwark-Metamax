@@ -485,6 +485,10 @@ export function stepMovement(state, dt) {
     unit._still = (mv < 0.03) ? (unit._still || 0) + 1 : 0;
     unit._px = unit.pos.x; unit._py = unit.pos.y;
 
+    // this tick's own MOVEMENT displacement — the contact clamp (stepContactClamp) undoes only the closing
+    // part of it. Engaged/parked units keep 0 and act as immovable anvils in the clamp.
+    unit._mvx = 0; unit._mvy = 0;
+
     const isAttacker = unit.side === 'attacker';
     let engaged = false;
 
@@ -571,31 +575,40 @@ export function stepMovement(state, dt) {
     }
 
     // ---- march along the current path -------------------------------
-    // Move toward the current waypoint and advance when reached. No hard SNAP onto the exact coordinate — the
+    // Move along a PERSISTENT BLENDED HEADING (unit.hdg) that eases toward the current waypoint each tick,
+    // and consume waypoints by ARRIVAL RADIUS instead of exact coordinate. The old exact-consume march snapped
+    // the movement direction to each new cell-to-cell segment, so a column zigzagged waypoint to waypoint and
+    // any unit displaced by the crowd visibly whipped its facing around ("turned around"); the blend converges
+    // in ~5 ticks — fast enough not to orbit, slow enough to read as a turn. No hard SNAP onto waypoints — the
     // unit keeps whatever position it settled at (so the separation pass's lateral nudges persist and units
     // spread) — and the periodic re-path above lets it find a NEW way around walls it's drifted or been pushed
     // toward, rather than fighting to stay on one line.
+    const HDG_BLEND = 0.35;
     const path = unit.path;
     if (path && unit.pathIdx < path.length) {
       unit.state = 'moving';
       let remaining = (unit.speed || 0) * dt;
+      const ARRIVE = Math.max(0.35, remaining * 1.5);
       let guard = path.length + 2;
       while (remaining > 0 && unit.pathIdx < path.length && guard-- > 0) {
         const wp = path[unit.pathIdx];
         const dx = wp.x - unit.pos.x;
         const dy = wp.y - unit.pos.y;
         const d = Math.sqrt(dx * dx + dy * dy);
-        if (d <= remaining || d === 0) {
-          const step = d;
-          if (d > 0) { unit.pos.x += (dx / d) * step; unit.pos.y += (dy / d) * step; }
-          unit.pathIdx += 1;
-          remaining -= step;
-        } else {
-          unit.pos.x += (dx / d) * remaining;
-          unit.pos.y += (dy / d) * remaining;
-          remaining = 0;
+        if (d <= ARRIVE) { unit.pathIdx += 1; continue; }        // close enough — head for the next waypoint
+        const desx = dx / d, desy = dy / d;                      // desired direction: straight at the waypoint
+        let h = unit.hdg;
+        if (!h) { h = unit.hdg = { x: desx, y: desy }; }
+        else {
+          h.x += HDG_BLEND * (desx - h.x); h.y += HDG_BLEND * (desy - h.y);
+          const hl = Math.sqrt(h.x * h.x + h.y * h.y);
+          if (hl > 1e-6) { h.x /= hl; h.y /= hl; } else { h.x = desx; h.y = desy; }   // degenerate (180° flip mid-blend)
         }
+        const step = Math.min(remaining, d);
+        unit.pos.x += h.x * step; unit.pos.y += h.y * step;
+        remaining -= step;
       }
+      unit._mvx = unit.pos.x - unit._px; unit._mvy = unit.pos.y - unit._py;
     }
 
     // ---- path exhausted ---------------------------------------------
@@ -649,7 +662,75 @@ export function stepMovement(state, dt) {
  *   • The push is applied with a LATERAL bias relative to each unit's heading — sideways slide, not a backward
  *     shove — so the faster unit routes around the slower one.
  */
-const SEP_BUFFER = 0.16;   // personal-space padding added to footprint sums so drawn bodies keep a visible gap
+// REST distance between two bodies = the distance at which their DRAWN sprites just touch. Sprites render at
+// 4/3 × collision radius (render/harness SPRITE_OVER_COLLISION — mirrored here, NOT imported: the sim stays
+// render-free; unitart-scale.test pins the render side to the same 4/3). Resting at raw collision distance put
+// ~0.5 cells of visible sprite interpenetration on every clean follow — physics-correct frames READ as bumping.
+export const REST_RATIO = 4 / 3;
+const REST_PAD = 0.02;
+export function contactDistR(rA, rB) { return (rA + rB) * REST_RATIO + REST_PAD; }
+function contactDist(a, b) { return contactDistR(a.radius || 0.3, b.radius || 0.3); }
+
+// air flies over the ground/water plane; only same-plane bodies interact
+function unitLayer(u) { return (u.altitude > 0 || u.domain === 'Flyer') ? 1 : 0; }
+
+// per-tick applied-force record for the HUD collision overlay (render-only; hashState ignores it).
+// push = radial overlap dissolve, steer = lateral avoidance (both pre-forward-strip), clamp = contact clamp.
+function dbgSep(state, id) {
+  if (!state.debugSep) state.debugSep = new Map();
+  let e = state.debugSep.get(id);
+  if (!e) { e = { pushX: 0, pushY: 0, steerX: 0, steerY: 0, clampX: 0, clampY: 0 }; state.debugSep.set(id, e); }
+  return e;
+}
+
+/**
+ * CONTACT CLAMP — velocity-level collision resolution (the shipped-game approach: SupCom2/Factorio-style).
+ * Runs right after stepMovement: for each same-layer pair now closer than contactDist, undo ONLY the part of
+ * this tick's own MOVEMENT that closed the gap (never more), split between the pair by who did the closing.
+ * Properties that kill the "bumping":
+ *   • tangential motion is untouched → a faster unit GLIDES along the boundary while its avoidance steer
+ *     walks it around — no jitter;
+ *   • a follower dead-behind a slower leader lands exactly at contactDist every tick → it paces the leader
+ *     with zero oscillation (the old position-push shoved it back each tick after movement closed in — the
+ *     spawn "slamming" and the backward shove that spun fast units around);
+ *   • correction ≤ this tick's closing motion → pairs that ALREADY overlap are held, never popped apart
+ *     (the research's radius-shrink trick expressed as a cap); the demoted radial push dissolves them;
+ *   • parked/attacking units participate as passive anvils (zero movement → zero share of the correction).
+ * Deterministic: fixed i<j order over the insertion-ordered unit array, movement deltas (_mvx/_mvy) frozen
+ * from stepMovement, positions corrected sequentially.
+ */
+export function stepContactClamp(state) {
+  const units = [];
+  for (const u of state.units.values()) if (u.hp > 0 && !u.isRepairTroop) units.push(u);
+  const n = units.length;
+  if (n < 2) return;
+  for (let i = 0; i < n; i++) {
+    const a = units[i];
+    for (let j = i + 1; j < n; j++) {
+      const b = units[j];
+      if (unitLayer(a) !== unitLayer(b)) continue;
+      const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
+      const C = contactDist(a, b);
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= C * C || d2 < 1e-12) continue;   // coincident pairs: the radial pass's id-tiebreak handles them
+      const d = Math.sqrt(d2);
+      const nx = dx / d, ny = dy / d;            // a → b
+      const ca = Math.max(0, (a._mvx || 0) * nx + (a._mvy || 0) * ny);      // a's closing motion this tick
+      const cb = Math.max(0, -((b._mvx || 0) * nx + (b._mvy || 0) * ny));   // b's closing motion this tick
+      const closing = ca + cb;
+      if (closing <= 0) continue;                // pre-existing overlap, not this tick's doing — hold, don't pop
+      const deficit = Math.min(closing, C - d);  // undo movement only — NEVER push apart
+      const fa = deficit * (ca / closing), fb = deficit * (cb / closing);
+      // NOTE: the march loop may have consumed a waypoint the clamp now pulls the unit a hair short of —
+      // harmless, it simply heads for the next one (arrival is radius-based).
+      a.pos.x -= nx * fa; a.pos.y -= ny * fa;
+      b.pos.x += nx * fb; b.pos.y += ny * fb;
+      if (fa > 0) { const e = dbgSep(state, a.id); e.clampX -= nx * fa; e.clampY -= ny * fa; }
+      if (fb > 0) { const e = dbgSep(state, b.id); e.clampX += nx * fb; e.clampY += ny * fb; }
+    }
+  }
+}
+
 export function stepSeparation(state, dt) {
   const units = [];
   // REPAIR TROOPS are excluded from separation entirely — they path AROUND structures (nav grid) but IGNORE other
@@ -657,13 +738,15 @@ export function stepSeparation(state, dt) {
   for (const u of state.units.values()) if (u.hp > 0 && u.state !== 'attacking' && !u.isRepairTroop) units.push(u);
   const n = units.length;
   if (n < 2) return;
-  const layer = (u) => (u.altitude > 0 || u.domain === 'Flyer') ? 1 : 0;
+  const layer = unitLayer;
   const px = new Float64Array(n), py = new Float64Array(n);
-  const bk = new Float64Array(n);   // per-unit forward BRAKE (deceleration when pacing behind a slower blocker)
-  // each unit's unit-heading toward its next waypoint (movement direction)
+  const sx = new Float64Array(n), sy = new Float64Array(n);   // lateral avoidance STEER, tracked apart for the debug overlay
+  // each unit's movement heading: the persistent blended heading (hdg) when it has one, else toward its waypoint
   const hx = new Float64Array(n), hy = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    const u = units[i], wp = (u.path && u.pathIdx < u.path.length) ? u.path[u.pathIdx] : null;
+    const u = units[i];
+    if (u.hdg) { hx[i] = u.hdg.x; hy[i] = u.hdg.y; continue; }
+    const wp = (u.path && u.pathIdx < u.path.length) ? u.path[u.pathIdx] : null;
     if (wp) { const dx = wp.x - u.pos.x, dy = wp.y - u.pos.y, l = Math.sqrt(dx * dx + dy * dy); if (l > 1e-6) { hx[i] = dx / l; hy[i] = dy / l; } }
   }
 
@@ -673,19 +756,22 @@ export function stepSeparation(state, dt) {
       const b = units[j];
       if (layer(a) !== layer(b)) continue;
       const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
-      // rSum includes a small PERSONAL-SPACE buffer beyond the raw footprints, so drawn bodies keep a visible
-      // gap and never appear to touch/bump even at the separation boundary.
-      const rSum = (a.radius || 0.3) + (b.radius || 0.3) + SEP_BUFFER;
+      const rawSum = (a.radius || 0.3) + (b.radius || 0.3);   // raw collision footprints — true interpenetration
+      const rSum = contactDistR(a.radius || 0.3, b.radius || 0.3);   // rest distance (sprites just touch)
       const d = Math.sqrt(dx * dx + dy * dy);
 
-      // (1) RADIAL separation while footprints overlap — the faster unit yields more.
-      if (d < rSum) {
+      // (1) RADIAL dissolve — ONLY while raw footprints truly interpenetrate (spawn stacks, cannon squeeze).
+      //     Keeping units APART at rest is the contact clamp's job now; running this push out to the rest
+      //     distance was the bump oscillation (movement closes, push shoves back, repeat). Gain halved so the
+      //     dissolve is a slide, not a pop; the faster unit still yields more.
+      if (d < rawSum) {
         let nx, ny, overlap;
-        if (d < 1e-6) { nx = 0; ny = (a.id < b.id ? -1 : 1); overlap = rSum; }
-        else { nx = dx / d; ny = dy / d; overlap = rSum - d; }
+        if (d < 1e-6) { nx = 0; ny = (a.id < b.id ? -1 : 1); overlap = rawSum; }
+        else { nx = dx / d; ny = dy / d; overlap = rawSum - d; }
         const sa = a.speed || 0.1, sb = b.speed || 0.1, sum = sa + sb;
-        px[i] -= nx * overlap * (sa / sum); py[i] -= ny * overlap * (sa / sum);
-        px[j] += nx * overlap * (sb / sum); py[j] += ny * overlap * (sb / sum);
+        const g = 0.5 * overlap;
+        px[i] -= nx * g * (sa / sum); py[i] -= ny * g * (sa / sum);
+        px[j] += nx * g * (sb / sum); py[j] += ny * g * (sb / sum);
       }
 
       // (2) FORWARD AVOIDANCE — steer around a unit genuinely BLOCKING the lane ahead. In the rear unit's own
@@ -695,8 +781,8 @@ export function stepSeparation(state, dt) {
       //     corridor, this stops firing — so the maneuver has a stable resting point (side-by-side) instead of
       //     oscillating between "on the route line, behind" and "shoved aside" (the hover/stutter). A whole wave
       //     of ONE unit type (identical speed) still splits into parallel lanes because the ≤-speed test fires.
-      //     A FASTER follower also BRAKES to the leader's pace while it's directly behind (bk[]), so it can't
-      //     out-run its own sideways escape and rear-end the slower unit ("butt bumping").
+      //     (The old follow-BRAKE is gone: the contact clamp is now the hard guarantee a follower can't close
+      //     into the leader, and the brake's backward correction was itself part of the visible "pressing".)
       const look = rSum + 1.0;
       if (d > 1e-6 && d < look) {
         const nx = dx / d, ny = dy / d;
@@ -709,25 +795,20 @@ export function stepSeparation(state, dt) {
         const fwdA = nx * hx[i] + ny * hy[i], latA = nx * (-hy[i]) + ny * (hx[i]);
         if ((hx[i] || hy[i]) && fwdA > 0 && Math.abs(latA) * d < rSum && (b.speed || 0) <= (a.speed || 0)) {
           const s = latA > 1e-3 ? -1 : (latA < -1e-3 ? 1 : (a.id < b.id ? 1 : -1));   // slide away from b's side
-          px[i] += (-hy[i]) * s * str; py[i] += (hx[i]) * s * str;
-          const excess = ((a.speed || 0) - (b.speed || 0)) * dt;                       // ground a gains on b per tick
-          if (excess > 0 && fwdA > 0.25) bk[i] = Math.max(bk[i], excess * closeness);  // pace behind — wider cone, so
-                                                                                       // sliding diagonal doesn't re-ram
+          sx[i] += (-hy[i]) * s * str; sy[i] += (hx[i]) * s * str;
         }
         // b's frame — is a blocking b's lane ahead?
         const fwdB = -nx * hx[j] - ny * hy[j], latB = -nx * (-hy[j]) - ny * (hx[j]);
         if ((hx[j] || hy[j]) && fwdB > 0 && Math.abs(latB) * d < rSum && (a.speed || 0) <= (b.speed || 0)) {
           const s = latB > 1e-3 ? -1 : (latB < -1e-3 ? 1 : (b.id < a.id ? 1 : -1));
-          px[j] += (-hy[j]) * s * str; py[j] += (hx[j]) * s * str;
-          const excess = ((b.speed || 0) - (a.speed || 0)) * dt;
-          if (excess > 0 && fwdB > 0.25) bk[j] = Math.max(bk[j], excess * closeness);
+          sx[j] += (-hy[j]) * s * str; sy[j] += (hx[j]) * s * str;
         }
       }
     }
   }
 
   for (let i = 0; i < n; i++) {
-    let ox = px[i], oy = py[i];
+    let ox = px[i] + sx[i], oy = py[i] + sy[i];
     // NEVER propel a unit FORWARD along its own heading: a faster follower's radial push must not
     // bulldoze the unit ahead toward the base ("truck ramming the tank, bump bump bump"). Crowd
     // pressure may slide a body sideways or backward — forward motion comes ONLY from the unit's
@@ -735,15 +816,13 @@ export function stepSeparation(state, dt) {
     const fwdPush = ox * hx[i] + oy * hy[i];
     if (fwdPush > 0) { ox -= hx[i] * fwdPush; oy -= hy[i] * fwdPush; }
     const ol = Math.sqrt(ox * ox + oy * oy);
-    const b = bk[i];
-    if (ol < 0.02 && b <= 0) continue;                             // DEAD-ZONE — ignore sub-visible nudges that
+    if (ol < 0.02) continue;                                        // DEAD-ZONE — ignore sub-visible nudges that
                                                                     // only cause shimmer; real avoidance is larger
-    if (ol >= 0.02) {
-      const maxStep = 0.15;                                         // clamp per tick — smooth, no teleporting
-      if (ol > maxStep) { ox = ox / ol * maxStep; oy = oy / ol * maxStep; }
-      units[i].pos.x += ox; units[i].pos.y += oy;
-    }
-    if (b > 0) { units[i].pos.x -= hx[i] * b; units[i].pos.y -= hy[i] * b; }   // BRAKE: back off along heading to pace the leader
+    const maxStep = 0.15;                                           // clamp per tick — smooth, no teleporting
+    if (ol > maxStep) { ox = ox / ol * maxStep; oy = oy / ol * maxStep; }
+    units[i].pos.x += ox; units[i].pos.y += oy;
+    const e = dbgSep(state, units[i].id);                           // overlay: radial vs steer, pre-strip components
+    e.pushX += px[i]; e.pushY += py[i]; e.steerX += sx[i]; e.steerY += sy[i];
   }
 }
 
@@ -807,9 +886,14 @@ export function stepSim(state, dtFixed) {
   stepWaves(state, dtFixed);
 
   // 3. Movement: units advance along domain paths; base assaults land here.
+  state.debugSep = new Map();   // per-tick applied-force record for the HUD overlay (render-only, not hashed)
   stepMovement(state, dtFixed);
 
-  // 3b. Separation: units have a footprint and can't overlap; faster units slide AROUND slower ones.
+  // 3b. Contact clamp: undo each pair's CLOSING movement so bodies glide to rest at sprite-touching distance —
+  //     velocity-level resolution; no push-back oscillation ("slamming"/"bumping").
+  stepContactClamp(state);
+
+  // 3c. Separation: dissolve true overlaps + steer faster units AROUND slower ones.
   stepSeparation(state, dtFixed);
 
   // 4. Structures: build/upgrade/sell/repair timers, lifecycle, destruction.

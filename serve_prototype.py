@@ -11,10 +11,13 @@ opens your browser, so it just works.
 
 Ctrl+C to stop.
 """
+import datetime
 import functools
 import http.server
+import json
 import os
 import socketserver
+import subprocess
 import sys
 import threading
 import webbrowser
@@ -39,6 +42,33 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             if h in self.headers:
                 del self.headers[h]
         return super().send_head()
+
+    def do_GET(self):
+        # /__version — which git commit the served tree is at, so the game HUD can show a build stamp
+        # ("is this tab actually running the new code?"). Dirty = uncommitted changes under the SERVED
+        # directory only (the repo's docs churn constantly; that isn't this prototype's dirtiness).
+        if self.path.split("?")[0] == "/__version":
+            try:
+                def git(*args):
+                    r = subprocess.run(["git", "-C", directory] + list(args),
+                                       capture_output=True, text=True, timeout=5)
+                    return r.stdout.strip() if r.returncode == 0 else ""
+                commit = git("rev-parse", "--short", "HEAD") or "unknown"
+                branch = git("rev-parse", "--abbrev-ref", "HEAD")
+                dirty = bool(git("status", "--porcelain", "--", "."))
+            except Exception:
+                commit, branch, dirty = "unknown", "", False
+            body = json.dumps({
+                "commit": commit, "branch": branch, "dirty": dirty,
+                "time": datetime.datetime.now().isoformat(timespec="seconds"),
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        super().do_GET()
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, must-revalidate")
