@@ -70,6 +70,10 @@ const CSS = `
   background:rgba(10,16,22,0.9); border:1px solid #4a6076; border-radius:6px; color:#cfe3f0;
   font-size:18px; width:38px; height:38px; cursor:pointer; }
 .bw-gear:hover { background:#22303e; }
+.bw-fs { position:absolute; left:50px; bottom:6px; pointer-events:auto; z-index:66;
+  background:rgba(10,16,22,0.9); border:1px solid #4a6076; border-radius:6px; color:#cfe3f0;
+  font-size:16px; width:38px; height:38px; cursor:pointer; }
+.bw-fs:hover { background:#22303e; }
 .bw-vol { display:flex; align-items:center; gap:6px; font-size:11px; color:#8fa4b8; }
 .bw-vol input { width:110px; accent-color:#5fe0ff; }
 .bw-vol span.v { min-width:52px; }
@@ -411,6 +415,24 @@ export function createHud(mountEl, callbacks) {
   gearBtn.title = 'Settings — volumes, debug tools, restart';
   gearBtn.addEventListener('click', () => { bottombar.classList.toggle('open'); });
   root.appendChild(gearBtn);
+
+  // FULLSCREEN toggle (next to the gear). Desktop/Android browsers only — iOS Safari has no
+  // element fullscreen API, so the button hides there (Add to Home Screen is the iOS path; the
+  // manifest launches the game chromeless).
+  const fsEl = doc.documentElement;
+  if (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen) {
+    const fsBtn = el(doc, 'button', 'bw-fs', '⛶');
+    fsBtn.title = 'Fullscreen (Esc exits) — on iPhone use Share → Add to Home Screen instead';
+    fsBtn.addEventListener('click', () => {
+      const fsNow = doc.fullscreenElement || doc.webkitFullscreenElement;
+      if (fsNow) { (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc); }
+      else { (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl); }
+    });
+    doc.addEventListener('fullscreenchange', () => {
+      fsBtn.textContent = (doc.fullscreenElement) ? '🗗' : '⛶';
+    });
+    root.appendChild(fsBtn);
+  }
 
   // ---- toast -----------------------------------------------------------
   const toast = el(doc, 'div', 'bw-toast');

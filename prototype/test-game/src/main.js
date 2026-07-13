@@ -444,6 +444,11 @@ export function boot(mountEl, seed) {
         hud.setReplay(false);
       }
     }
+    // SELF-HEALING dialog guard: a held card is only legitimate during an interlude. If the player
+    // tapped START while the challenge was still typing (fast mobile taps), the dismiss fired
+    // BEFORE the hold existed and the card would sit over the battle forever — release it the
+    // frame it appears. dismiss() is a no-op when nothing is held.
+    if (mode === 'play' && !interlude) comm.dismiss();
     renderFrame(renderer, sim, ui, pendingEvents, dtMs / 1000);   // pass REAL frame time so FX track sim time
     updateHud(hud, sim, ui);
     pendingEvents = [];
