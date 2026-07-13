@@ -830,8 +830,14 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       else if (cannon.phase === 'cooldown') { col = 0x9a6050; glow = 0.15; }
       else { col = 0x8090a0; glow = 0.22; }   // idle steel
       const ex = bp.x + Math.cos(ang) * len, ey = bp.y + Math.sin(ang) * len;
-      gS.beginFill(0x2b3138, 1); gS.drawCircle(bp.x, bp.y, t * 0.52); gS.endFill();           // turret mount
-      gS.lineStyle(t * 0.24, col, 1); gS.moveTo(bp.x, bp.y); gS.lineTo(ex, ey); gS.lineStyle(0);   // barrel
+      const authoredBarrel = renderer.baseSprite && renderer.baseSprite.__weapon;
+      if (authoredBarrel) {
+        // the owner's barrel art (right-facing) tracks the cannon's live angle; primitives yield
+        authoredBarrel.rotation = ang;
+      } else {
+        gS.beginFill(0x2b3138, 1); gS.drawCircle(bp.x, bp.y, t * 0.52); gS.endFill();           // turret mount
+        gS.lineStyle(t * 0.24, col, 1); gS.moveTo(bp.x, bp.y); gS.lineTo(ex, ey); gS.lineStyle(0);   // barrel
+      }
       if (glow > 0) { gS.beginFill(col, 0.5 * glow); gS.drawCircle(ex, ey, t * 0.22); gS.endFill(); }   // muzzle glow
       if (cannon.phase === 'aim') {   // CHARGE GAUGE — arc fills as the shot readies (timer counts down)
         const frac = Math.max(0, Math.min(1, 1 - (cannon.timer || 0) / (cannon.aimDur || 3)));

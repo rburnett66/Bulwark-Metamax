@@ -1,0 +1,23 @@
+{
+  "faction": "System",
+  "sheet": "base-art",
+  "units": {
+    "SYS-Base": {
+      "role": "Base Ship",
+      "shape": "Structure",
+      "layers": {
+        "base": {
+          "frame": "art_1_3x3.png",
+          "offset": 0,
+          "scale": 1
+        },
+        "head": null,
+        "weapon": {
+          "frame": "art_4_high.png",
+          "offset": 0,
+          "scale": 0.7
+        }
+      }
+    }
+  }
+}
