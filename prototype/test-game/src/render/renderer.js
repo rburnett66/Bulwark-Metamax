@@ -912,8 +912,10 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       if (artDrawn) {
         // authored art carries the look — the old kind-colored cell block is gone (owner); a soft
         // ground shadow sits under the sprite instead so it doesn't float
-        gS.beginFill(0x000000, 0.24 * alpha);
-        gS.drawEllipse(px + w / 2, py + h / 2 + h * 0.10, w * 0.46, h * 0.40);
+        // shadow must be BIGGER than the sprite (art is sized to the exact footprint — a smaller
+        // ellipse was 100% occluded, owner saw nothing) and pushed down-right so it reads as cast light
+        gS.beginFill(0x000000, 0.30 * alpha);
+        gS.drawEllipse(px + w / 2 + w * 0.06, py + h / 2 + h * 0.14, w * 0.56, h * 0.50);
         gS.endFill();
       } else {
         gS.beginFill(color, alpha);
