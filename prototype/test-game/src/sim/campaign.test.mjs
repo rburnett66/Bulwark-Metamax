@@ -58,11 +58,17 @@ function runCampaign(seed) {
   return { s, spawnPos };
 }
 const runA = runCampaign(7);
-// spawn distance from the base grows as the ring grows (the enemy walks farther)
-const base = { x: 12, y: 8 };
-const d1 = Math.hypot(runA.spawnPos[0].x - base.x, runA.spawnPos[0].y - base.y);
-const d8 = Math.hypot(runA.spawnPos[7].x - base.x, runA.spawnPos[7].y - base.y);
-assert(d8 > d1, `spawns pushed outward across the map (wave1 ${d1.toFixed(1)} -> wave8 ${d8.toFixed(1)})`);
+// spawn distance from the base grows as the ring grows (the enemy walks farther) — compared within
+// the same axis class (L/R vs T/B), since a top spawn on a 2:1 board is nearer than a wide side spawn
+{
+  const mapChk = buildCampaignMap(1, { seed: 2 });
+  const base = { x: mapChk.base.x, y: mapChk.base.y };
+  const lr = mapChk.rings.filter((r) => r.sideFocus === 'L' || r.sideFocus === 'R');
+  assert(lr.length >= 2, 'at least two side-focused waves to compare');
+  const dFirst = Math.abs(runA.spawnPos[lr[0].wave - 1].x - base.x);
+  const dLast = Math.abs(runA.spawnPos[lr[lr.length - 1].wave - 1].x - base.x);
+  assert(dLast > dFirst, `side spawns pushed outward (wave${lr[0].wave} ${dFirst} -> wave${lr[lr.length - 1].wave} ${dLast})`);
+}
 
 // determinism of the full campaign flow
 const runB = runCampaign(7);

@@ -144,6 +144,22 @@ export function buildCampaignMap(mapId, opts = {}) {
   }
   const waterSet = new Set(waterCells.map((c) => `${c.x},${c.y}`));
 
+  // a GROUND spawn must be dry — the river can cross any edge band, and a spawn cell on water is an
+  // impassable BFS source (units would materialize in the drink). Nudge along the spawn's axis to the
+  // nearest dry cell, deterministically.
+  const drySpawn = (p, side) => {
+    if (!waterSet.has(`${p.x},${p.y}`)) return p;
+    const vertical = side === 'L' || side === 'R';   // slide along the edge, not off it
+    for (let d = 1; d < Math.max(full.Full_W, full.Full_H); d++) {
+      for (const s of [1, -1]) {
+        const q = vertical ? { x: p.x, y: p.y + d * s } : { x: p.x + d * s, y: p.y };
+        if (q.x < 0 || q.y < 0 || q.x >= full.Full_W || q.y >= full.Full_H) continue;
+        if (!waterSet.has(`${q.x},${q.y}`)) return q;
+      }
+    }
+    return p;
+  };
+
   // ── rings: per-wave rect + spawns + budgets ──
   const rings = [];
   let prevRect = null;
@@ -153,7 +169,7 @@ export function buildCampaignMap(mapId, opts = {}) {
     // lateral spread along the focus edge so consecutive waves don't reuse the exact cell
     const gy = Math.max(rect.y0, Math.min(rect.y1, cy + Math.floor((rng() - 0.5) * rect.h * 0.5)));
     const gx = Math.max(rect.x0, Math.min(rect.x1, cx + Math.floor((rng() - 0.5) * rect.w * 0.5)));
-    const ground = spawnFor(full, rect, side, gy, gx);
+    const ground = drySpawn(spawnFor(full, rect, side, gy, gx), side);
     // water spawns on the river where it crosses the focus half (water maps only)
     let water = null;
     if (full.Has_Water && row.Water_Pts > 0 && waterLane.length) {

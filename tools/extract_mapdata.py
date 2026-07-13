@@ -78,6 +78,67 @@ def params_map(ws):
     return out
 
 
+# ── MAP-SIZE REWORK (owner, 2026-07-13): the original curve started and ended too small. New full
+# dims below (2:1-ish aspect throughout, reaching full size by map 8; map 9 stays the 64x32 finale).
+# Lives here rather than in the workbook because openpyxl cannot recompute the derived sheets — fold
+# these into the Maps sheet in Excel when convenient (values here win until then).
+REWORK_DIMS = {1: (24, 12), 2: (30, 15), 3: (36, 17), 4: (42, 21),
+               5: (48, 24), 6: (54, 27), 7: (60, 30), 8: (64, 32), 9: (64, 32)}
+
+
+def playable_dims(full_w, full_h, fracs):
+    """Per-wave playable dims from the growth curve, honoring the GDD's hard rules (§3.1-3.2):
+    every wave adds real area (≥2 tiles on an axis), rings never shrink, wave 8 = the full map,
+    waves 1-7 always leave something to reveal. Even-rounded so concentric rects stay centered."""
+    dims = []
+    for i, f in enumerate(fracs):
+        w = max(8, 2 * round(full_w * f / 2))
+        h = max(6, 2 * round(full_h * f / 2))
+        if i:
+            pw, ph = dims[-1]
+            w, h = max(w, pw), max(h, ph)
+            if w < pw + 2 and h < ph + 2:          # no real growth — force the width rule
+                if pw + 2 <= full_w:
+                    w = pw + 2
+                elif ph + 2 <= full_h:
+                    h = ph + 2
+        w, h = min(w, full_w), min(h, full_h)
+        if i < 7 and w >= full_w and h >= full_h:  # waves 1-7 must leave wave 8 a reveal
+            w = full_w - 2
+        dims.append((w, h))
+    dims[7] = (full_w, full_h)                     # wave 8: exactly the full map, no remainder
+    return dims
+
+
+def apply_rework(data):
+    gp = data["globalParams"]
+    setback = gp.get("Spawn_Setback", 2)
+    per100 = gp.get("Par_Time_Per_100_Tiles", 42)
+    waves_per_map = gp.get("Waves_Per_Map", 8)
+    fracs = [g["Linear_Fraction"] for g in sorted(data["growthCurve"], key=lambda g: g["Wave"])]
+    by_map = {}
+    for m in data["maps"]:
+        w, h = REWORK_DIMS.get(m["Map_ID"], (m["Full_W"], m["Full_H"]))
+        m["Full_W"], m["Full_H"] = w, h
+        m["Full_Area"] = w * h
+        m["Par_Time_Sec"] = round(per100 * m["Full_Area"] / 100 * waves_per_map)
+        by_map[m["Map_ID"]] = m
+    # recompute the dims-derived Wave_Table columns; budgets / sides / node counts stay authored
+    for m in data["maps"]:
+        dims = playable_dims(m["Full_W"], m["Full_H"], fracs)
+        rows = sorted([r for r in data["waveTable"] if r["Map_ID"] == m["Map_ID"]], key=lambda r: r["Wave"])
+        prev_area = 0
+        for r, (pw, ph) in zip(rows, dims):
+            r["Playable_W"], r["Playable_H"] = pw, ph
+            r["Playable_Area"] = pw * ph
+            r["Ring_Area_Added"] = pw * ph - prev_area
+            prev_area = pw * ph
+            r["Spawn_Dist_X"] = pw // 2 + setback
+            r["Spawn_Dist_Y"] = ph // 2 + setback
+            r["Wave_Par_Sec"] = max(15, round(per100 * pw * ph / 100))
+    return data
+
+
 def main():
     wb = openpyxl.load_workbook(XLSX, data_only=True)
     data = {
@@ -95,6 +156,8 @@ def main():
         "techTree": sheet_rows(wb["Tech_Tree"], lambda v: isinstance(v, str) and v.startswith("Faction_")),
         "questContract": sheet_rows(wb["Quest_Contract"], lambda v: isinstance(v, str) and (v.startswith("ACCEPT") or v.startswith("DECLINE"))),
     }
+
+    apply_rework(data)
 
     # ── validations the GDD demands (fail loud, never ship broken data) ──
     problems = []
