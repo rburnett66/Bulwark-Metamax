@@ -871,6 +871,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         liveStructIds.add(s.id);
         let sspr = renderer.structSprites.get(s.id);
         if (sspr && sspr.__artId !== sArtId) {   // upgraded mid-life → rebuild with the new tier's art
+          if (sspr.__shadow) { sspr.__shadow.destroy({ children: true }); renderer.structShadows && renderer.structShadows.delete(s.id); }
           sspr.destroy({ children: true });
           renderer.structSprites.delete(s.id);
           sspr = null;
@@ -878,7 +879,22 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         if (!sspr) {
           sspr = buildUnitSprite(renderer.unitArt, sArtId, t, (fp.w * 0.375));   // targetW == footprint width
           if (sspr && !sspr.children.length) { sspr.destroy(); sspr = null; }
-          if (sspr) { sspr.__artId = sArtId; renderer.layers.structures.addChild(sspr); renderer.structSprites.set(s.id, sspr); }
+          if (sspr) {
+            sspr.__artId = sArtId;
+            // SILHOUETTE SHADOW (owner): a black-tinted clone of the SAME art, drawn under it and
+            // offset down-right — the shadow carries the tower's real outline instead of an ellipse
+            const shad = buildUnitSprite(renderer.unitArt, sArtId, t, (fp.w * 0.375));
+            if (shad) {
+              for (const ch of shad.children) ch.tint = 0x000000;
+              shad.alpha = 0.32;
+              renderer.layers.structures.addChild(shad);
+              if (!renderer.structShadows) renderer.structShadows = new Map();
+              renderer.structShadows.set(s.id, shad);
+              sspr.__shadow = shad;
+            }
+            renderer.layers.structures.addChild(sspr);   // art added AFTER its shadow → draws on top
+            renderer.structSprites.set(s.id, sspr);
+          }
           else (renderer._noArt || (renderer._noArt = new Set())).add(sArtId);
         }
         if (sspr) {
@@ -902,6 +918,14 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
             // Single-layer turrets rotate whole, as before.
             if (sspr.__weapon) sspr.__weapon.rotation = (sspr.__weapon.__baseRot || 0) + (sspr.__facing || 0);
             else sspr.rotation = sspr.__facing || 0;
+          }
+          if (sspr.__shadow) {
+            const sh = sspr.__shadow;
+            sh.x = sspr.x + t * 0.10; sh.y = sspr.y + t * 0.12;   // cast-light offset (down-right)
+            sh.scale.set(shipScale);
+            sh.alpha = 0.32 * sspr.alpha;
+            sh.rotation = sspr.rotation;
+            if (sh.__weapon && sspr.__weapon) sh.__weapon.rotation = sspr.__weapon.rotation;
           }
           artDrawn = true;
         }
@@ -1303,6 +1327,11 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     for (const [sid, sspr] of renderer.structSprites) {
       const st = state.structures && state.structures.get(sid);
       if (!st || st.lifecycle === 'Destroyed') {
+        if (sspr.__shadow) {
+          if (sspr.__shadow.parent) sspr.__shadow.parent.removeChild(sspr.__shadow);
+          sspr.__shadow.destroy({ children: true });
+          if (renderer.structShadows) renderer.structShadows.delete(sid);
+        }
         if (sspr.parent) sspr.parent.removeChild(sspr);
         sspr.destroy({ children: true });
         renderer.structSprites.delete(sid);
