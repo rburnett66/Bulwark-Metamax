@@ -1,0 +1,84 @@
+/**
+ * src/save/save.js — THE campaign save. Single owner of persistent player state.
+ *
+ * Everything the menu reads and the game writes lives here, versioned, in one localStorage key.
+ * Design data (thresholds, rubrics, map rows) stays in content/maps/mapdata.js — this file holds
+ * only PLAYER state. Schema v1 (2026-07-15, the menu epic):
+ *
+ *   v                1 — bump on shape changes; migrate() upgrades old saves in place
+ *   goldBank         gold carried between maps (null = no campaign in flight → maps use their default)
+ *   carry            campaign carry snapshot {gold, structures:[{structId,tier,dx,dy,invested}]} | null
+ *   unlockedThrough  highest map id the player may enter (fixed 9-map sequence; beat N → N+1.
+ *                    The GDD's ≥3.0-star gate replaces "beat" when Story 4 lands stars.)
+ *   maps             { [mapId]: { beaten, bestScore, stars:[...8]|null, avg|null, contract|null } }
+ *                    contract: 'ACCEPTED'|'DECLINED'|'FULFILLED'|'BROKEN'
+ *   loyalty          { [factionId]: signed number } (cumulative; tech thresholds read this)
+ *   tech             { [factionId]: 0..3 } highest unlocked tier
+ *   harvesterLevel   1..5
+ *
+ * Determinism contract: any field that CHANGES A BATTLE (carry, tech, harvesterLevel, contract
+ * buffs) must be injected at createSim time — never mid-battle — so replays stay reproducible.
+ */
+
+const KEY = 'bulwark:save';
+
+export function defaultSave() {
+  return {
+    v: 1,
+    goldBank: null,
+    carry: null,
+    unlockedThrough: 1,
+    maps: {},
+    loyalty: {},
+    tech: {},
+    harvesterLevel: 1,
+  };
+}
+
+function migrate(s) {
+  if (!s || typeof s !== 'object' || typeof s.v !== 'number') return defaultSave();
+  // future: if (s.v === 1) { ...upgrade...; s.v = 2; }
+  return s;
+}
+
+export function loadSave() {
+  try {
+    const raw = typeof localStorage !== 'undefined' && localStorage.getItem(KEY);
+    if (!raw) return defaultSave();
+    return migrate(JSON.parse(raw));
+  } catch (e) {
+    return defaultSave();
+  }
+}
+
+export function writeSave(s) {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify(s));
+  } catch (e) { /* storage blocked/full — campaign state stays in-memory for the session */ }
+  return s;
+}
+
+/** Read-modify-write in one step: updateSave(s => { s.goldBank = 500; }) */
+export function updateSave(fn) {
+  const s = loadSave();
+  fn(s);
+  return writeSave(s);
+}
+
+/** Record a finished battle. Win unlocks the next map (sequence is fixed, 9 maps). */
+export function recordResult(mapId, result, finalScore) {
+  if (!mapId) return loadSave();   // classic board — no campaign record
+  return updateSave((s) => {
+    const m = s.maps[mapId] || (s.maps[mapId] = { beaten: false, bestScore: null, stars: null, avg: null, contract: null });
+    if (result === 'win') {
+      m.beaten = true;
+      const sc = finalScore && typeof finalScore.score === 'number' ? finalScore.score : null;
+      if (sc != null && (m.bestScore == null || sc > m.bestScore)) m.bestScore = sc;
+      if (mapId < 9) s.unlockedThrough = Math.max(s.unlockedThrough, mapId + 1);
+    }
+  });
+}
+
+export function resetSave() {
+  return writeSave(defaultSave());
+}

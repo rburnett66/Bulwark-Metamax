@@ -493,6 +493,8 @@ export function createHud(mountEl, callbacks) {
   resultRestart.addEventListener('click', () => {
     if (cbs.onRestart) cbs.onRestart(hud.lastSeed);
   });
+  const resultMenu = el(doc, 'button', 'bw-btn', 'Menu');
+  resultMenu.addEventListener('click', () => { if (cbs.onMainMenu) cbs.onMainMenu(); });
   resultEl.appendChild(banner);
   resultEl.appendChild(scoreEl);
   // VICTORY → advance the campaign: the next, bigger map (owner). Shown by showResult on win.
@@ -501,6 +503,7 @@ export function createHud(mountEl, callbacks) {
   nextMapBtn.addEventListener('click', () => { if (cbs.onNextMap) cbs.onNextMap(); });
   resultEl.appendChild(nextMapBtn);
   resultEl.appendChild(resultRestart);
+  resultEl.appendChild(resultMenu);
   root.appendChild(resultEl);
 
   mountEl.appendChild(root);

@@ -2,6 +2,8 @@ import { MAP, WAVES, makeWaves } from './data/tables.js';
 import { buildCampaignMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
+import { loadSave, updateSave, recordResult } from './save/save.js';
+import { createMenu } from './menu/menu.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame } from './render/renderer.js';
@@ -222,6 +224,7 @@ export function boot(mountEl, seed) {
     },
     onNextWave: () => { endInterlude(); },
     onDeselect: () => { ui.selectedUnitId = null; ui.selectedStructureId = null; },
+    onMainMenu: () => { if (hud && hud.hideResult) hud.hideResult(); menu.open('maps'); },
     onNextMap: () => {
       if (!(currentMapId > 0 && currentMapId < 9)) return;
       // CAMPAIGN CARRY (owner): bank the leftover gold + every standing defense (offsets from the
@@ -236,6 +239,7 @@ export function boot(mountEl, seed) {
         }
       }
       pendingCarry = carry;
+      updateSave((sv) => { sv.carry = carry; sv.goldBank = carry.gold; });
       void selectMap(currentMapId + 1);
     },
     onVolume: (channel, v) => { setChannelVolume(channel, v); },
@@ -321,7 +325,29 @@ export function boot(mountEl, seed) {
 
   // boot = a fresh board on the DEFAULT MAP: selectMap rebuilds sim+renderer for map 1 and its
   // restart() opens the wave-1 tap-to-start overlay
-  void selectMap(DEFAULT_MAP_ID);
+  // ── MAIN MENU (the menu epic, slice 1) ──────────────────────────────
+  // Boot lands on the menu; picking a map starts the battle underneath it. Dev loop is protected:
+  // ?map=N boots STRAIGHT into that map with no menu (0 = classic).
+  let devMap = null;
+  try {
+    const mm = /[?&]map=(\d+)/.exec(window.location.search || '');
+    if (mm) devMap = parseInt(mm[1], 10) | 0;
+  } catch (e) { /* file:// quirks */ }
+  {
+    const sv = loadSave();
+    if (sv.carry) pendingCarry = sv.carry;   // the campaign survives a page reload now
+  }
+  const menu = createMenu(mountEl, {
+    onPlayMap: (id) => { menu.close(); void selectMap(id); },
+    onReplay: () => {
+      menu.close();
+      void selectMap(devMap != null ? devMap : DEFAULT_MAP_ID);
+      // replay runs off the persisted last log once the board exists
+      setTimeout(() => { if (lastReplayLog) playReplay(lastReplayLog); }, 50);
+    },
+  });
+  if (devMap != null) { menu.close(); void selectMap(devMap); }
+  else void selectMap(loadSave().unlockedThrough <= 1 ? DEFAULT_MAP_ID : Math.min(9, loadSave().unlockedThrough));
 
   // ---------------------------------------------------------------------
   // Comm dialog (render-side only), per the Dialog & Storytelling System doc:
@@ -448,6 +474,7 @@ export function boot(mountEl, seed) {
               nextMap = { id: currentMapId + 1, name: nm.name || ('Map ' + (currentMapId + 1)), size: (nm.cols - 4) + 'x' + (nm.rows - 4) };
             } catch (e) { nextMap = { id: currentMapId + 1, name: 'Map ' + (currentMapId + 1), size: '' }; }
           }
+          recordResult(currentMapId, sim.result, sim.finalScore);   // campaign save: beaten/best/unlock
           showResult(hud, sim.result, sim.finalScore, nextMap);   // s12: show the computed final score
           // M3/M4 — the final word: concession from the last faction on a win, the
           // Champion's authored defeat taunt on a loss.
