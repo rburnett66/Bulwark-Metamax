@@ -268,6 +268,28 @@ export function stepHarvest(state, dt) {
   }
 
   for (const u of aliveHarvesters(state)) stepOneHarvester(state, u, dt);
+
+  // TRUCK-TRUCK SEPARATION (owner: 'harvesters need to stop colliding'): the fleet ignores the
+  // combat crowd by contract, but trucks sharing a field stacked on the same crystal. Gentle
+  // mutual push between MOVING trucks only (docked/pulling trucks hold their spot), deterministic
+  // i<j order, capped per tick — they fan out over neighbouring cells instead of overlapping.
+  const fleet = aliveHarvesters(state);
+  for (let i = 0; i < fleet.length; i++) {
+    for (let j = i + 1; j < fleet.length; j++) {
+      const a = fleet[i], b = fleet[j];
+      const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
+      const d = Math.hypot(dx, dy);
+      const want = 1.1;                        // ~a cell of daylight between truck centres
+      if (d >= want || d < 1e-6) continue;
+      const push = Math.min(0.06, (want - d) * 0.5);
+      const nx = dx / d, ny = dy / d;
+      const aMoves = a.state === 'harvestGo' || a.state === 'harvestReturn';
+      const bMoves = b.state === 'harvestGo' || b.state === 'harvestReturn';
+      const aShare = aMoves && bMoves ? 0.5 : (aMoves ? 1 : (bMoves ? 0 : 0.5));
+      a.pos.x -= nx * push * aShare; a.pos.y -= ny * push * aShare;
+      b.pos.x += nx * push * (1 - aShare); b.pos.y += ny * push * (1 - aShare);
+    }
+  }
 }
 
 function stepOneHarvester(state, u, dt) {
