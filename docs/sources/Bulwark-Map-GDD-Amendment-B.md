@@ -16,9 +16,8 @@ to fight.** Every collection or upgrade path is an ECONOMY with its own earn/spe
 | **Stars** | Wave rubric (5 conditions/wave) | Map unlocks (≥3.0 average) |
 | **Alignment** (good↔evil axis) | Whose contracts you fulfil (81-hero matrix) | Identity; future gating TBD |
 
-**Economy sync rule (open Q for owner):** current build banks *leftover* gold (spend-in-battle is
-gone forever — tension between fighting rich and banking). Alternative: bank a % of *total earned*.
-DECISION NEEDED.
+**Economy sync rule — DECIDED (owner, 2026-07-15): bank = LEFTOVER gold.** Spend-in-battle is
+gone forever; fight-rich vs bank-it is the intended tension.
 
 ## B2. Structure tier unlocks (gold economy)
 
@@ -27,8 +26,7 @@ unlocked in the meta, **individually per structure type**:
 
 - **Cannons**: unlock T2, then T3, then **T4 (NEW — improves range)**
 - **Anti-air**: unlock T2 → T3 → **T4 (range)**
-- **Walls**: unlock T2 → T3 → **T4 (range n/a — TBD what T4 walls grant; owner: "improves range"
-  reads as turret-family; walls T4 may be HP or repair — DECISION NEEDED)**
+- **Walls**: unlock T2 → T3 → **T4 = INCREASED HP (owner decided)**
 
 Bought with banked gold. In-battle upgrade button is gated on the meta unlock for that type.
 T4 requires extending the structures table (hp/cost/dps arrays gain a 4th entry) and tier-4 art
@@ -83,11 +81,13 @@ slots 24–27 were "?" and are proposed here):
    (16, 19–23 — new entities, one story each).
 4. T4 tier (tables, art slots, range semantics).
 
-## B5. Open decisions for the owner
+## B5. Decisions (owner, 2026-07-15)
 
-1. Bank = leftover gold (current) or % of total earned?
-2. Walls T4: what does it grant (no range)?
-3. Perk→faction assignment above: confirm or remap.
-4. Loyalty: perks unlock at cumulative thresholds (current) — or are perks *purchased* with
-   loyalty as a spend? (Cumulative preserved from workbook; spend would make rivalry burn hurt more.)
-5. Slots 24–27 proposals: keep/replace.
+1. Bank = LEFTOVER gold. DECIDED.
+2. Walls T4 = increased HP. DECIDED.
+3. Perk→faction assignment: SKIP FOR NOW — B3 table stays a proposal; no perk effects built yet.
+4. Loyalty: perks unlock at cumulative THRESHOLDS (100/260/520). DECIDED.
+5. Slots 24–27: discuss later.
+
+Build scope now: B2 (structure tier unlock economy). B3 effects deferred until the assignment
+is confirmed; T4 deferred until tables + art.
