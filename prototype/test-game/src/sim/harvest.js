@@ -36,6 +36,13 @@ function harvesterStats(state) {
 // The base keeps 4 harvester DOCKS just outside its 3x3 footprint — top, bottom, left, right
 // (owner spec). Dock order is the build order: a new harvester takes the first open one. Cap = 4.
 export const HARVESTER_CAP = 4;
+// PURCHASE LADDER (owner 2026-07-16): 1st free (given at wave start), then 500 / 750 / 1000.
+// Index = harvester count you ALREADY have when buying the next one.
+export const HARVESTER_PRICE = [0, 500, 750, 1000];
+export function harvesterPrice(state) {
+  const have = aliveHarvesters(state).length;
+  return have >= HARVESTER_CAP ? null : (HARVESTER_PRICE[have] || 0);
+}
 export function dockCells(map) {
   const cx = map.base.x, cy = map.base.y;
   const water = new Set((map.waterCells || []).map((c) => `${c.x},${c.y}`));
@@ -82,7 +89,13 @@ export function initHarvest(state, map) {
   // QUEST crystals — tracked in the header as objectives, but their haul ALSO pays gold.
   //   role primary -> blue, premium -> yellow, quest -> red or green (split by id hash)
   const hash8 = (str) => { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h); };
-  state.resourceNodes = map.resources.map((r) => ({
+  // Clear crops in the base's DOCK RING (owner: 'remove crops within 2 cells of the base to
+  // avoid confusion') — 2 cells from base CENTRE covers the 3x3 base + its 4 docks, where a crop
+  // under a harvester made taps ambiguous. Measured from centre so the wave-1 economy just
+  // beyond the ring survives (small maps seed their opening right next to the base).
+  const _bc = (state.base && state.base.pos) || { x: -999, y: -999 };
+  const _nearBase = (x, y) => Math.abs(x - _bc.x) <= 2 && Math.abs(y - _bc.y) <= 2;
+  state.resourceNodes = map.resources.filter((r) => !_nearBase(r.x, r.y)).map((r) => ({
     id: r.id, fieldId: r.fieldId || r.id, type: r.type, role: r.role, wave: r.wave, x: r.x, y: r.y,
     color: r.role === 'primary' ? 'blue' : r.role === 'premium' ? 'yellow' : (hash8(r.id) % 2 ? 'red' : 'green'),
     units: r.units, remaining: r.units,
@@ -236,6 +249,43 @@ function marchAlong(unit, dt) {
     else { unit.pos.x += (dx / d) * remaining; unit.pos.y += (dy / d) * remaining; remaining = 0; }
   }
   return unit.pathIdx >= unit.path.length;
+}
+
+/** BUY a harvester at the BASE (owner: 'select base to purchase'). Ladder-priced, cap 4.
+ *  Returns {ok, reason, cost}. */
+export function cmdBuyHarvester(state) {
+  const price = harvesterPrice(state);
+  if (price === null) return { ok: false, reason: 'max harvesters' };
+  const eco = state.economy;
+  if (!eco || (eco.money || 0) < price) return { ok: false, reason: 'need ' + price + 'g' };
+  eco.money -= price; eco.totalSpent = (eco.totalSpent || 0) + price; state.goldSpent = (state.goldSpent || 0) + price;
+  const u = spawnHarvester(state);
+  if (!u) { eco.money += price; return { ok: false, reason: 'no open dock' }; }
+  emitEvent(state, { type: 'harvesterBought', tick: state.tick, unitId: u.id, cost: price, pos: { x: u.pos.x, y: u.pos.y } });
+  return { ok: true, reason: '', cost: price };
+}
+
+/** Per-wave reset (owner): every wave opens with exactly ONE (free) harvester and a healed base. */
+export function resetFleetForWave(state) {
+  const ids = (state.harvesterIds || []).slice();
+  for (let i = 1; i < ids.length; i++) {   // keep the first, retire the rest
+    const u = state.units.get(ids[i]);
+    if (u) { state.units.delete(ids[i]); }
+  }
+  state.harvesterIds = ids.slice(0, 1).filter((id) => state.units.has(id));
+  if (!state.harvesterIds.length) { spawnHarvester(state); }   // none survived → give the free one
+  else {
+    const first = state.units.get(state.harvesterIds[0]);      // re-dock + refresh the survivor
+    if (first) {
+      const home = firstOpenDock(state);
+      first.pos = { x: home.x, y: home.y }; first.homePos = { x: home.x, y: home.y };
+      first.state = 'harvestIdle'; first.fieldId = null; first.harvestNodeId = null;
+      first.cargo = 0; first.cargoValue = 0; first.cargoRole = null; first.cargoColor = null;
+      const s = harvesterStats(state); first.hp = first.maxHp = s.hp;
+    }
+  }
+  state.harvesterId = state.harvesterIds[0];
+  if (state.base) state.base.hp = state.base.maxHp;            // healed base every wave (owner)
 }
 
 export function stepHarvest(state, dt) {

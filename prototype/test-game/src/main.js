@@ -591,6 +591,8 @@ export function boot(mountEl, seed) {
     if (mode === 'play' && !interlude) comm.dismiss();
     // placement ghost re-validates every frame — money changes while the pointer is still
     if (inputHandle && inputHandle.refreshHover) inputHandle.refreshHover();
+    // harvester/base interaction hints (owner): input sets ui.pendingHint, we flash it once
+    if (ui && ui.pendingHint) { flashMessage(hud, ui.pendingHint.text); ui.pendingHint = null; }
     renderFrame(renderer, sim, ui, pendingEvents, dtMs / 1000);   // pass REAL frame time so FX track sim time
     updateHud(hud, sim, ui);
     pendingEvents = [];
