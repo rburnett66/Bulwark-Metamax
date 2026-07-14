@@ -198,6 +198,13 @@ export function buildCampaignMap(mapId, opts = {}) {
   const blocked = new Set(waterSet);
   for (const c of baseCells) blocked.add(`${c.x},${c.y}`);
   for (const c of cornerSlots) blocked.add(`${c.x},${c.y}`);
+  // BASE GAP (owner): no crops within 2 cells of base centre (the dock ring). Block it HERE so the
+  // wave-1 economy seeds JUST OUTSIDE the gap — previously resources seeded inside it and harvest.js
+  // culled them, wiping the wave-1 primary income (the "no buying power" bug, 2026-07-14).
+  const BASE_GAP = 2;
+  for (let dy = -BASE_GAP; dy <= BASE_GAP; dy++) for (let dx = -BASE_GAP; dx <= BASE_GAP; dx++) {
+    blocked.add(`${cx + dx},${cy + dy}`);
+  }
   const maxR = Math.hypot(full.Full_W / 2, full.Full_H / 2);
   const resources = [];
   let rid = 1, fid = 1;
