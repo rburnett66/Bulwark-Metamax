@@ -5,7 +5,7 @@ import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, buyStructTier } from './save/save.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
-import { createMenu } from './menu/menu.js';
+import { createMenu, FACTION_NAMES } from './menu/menu.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame } from './render/renderer.js';
@@ -360,10 +360,23 @@ export function boot(mountEl, seed) {
   // ── MAIN MENU (the menu epic, slice 1) ──────────────────────────────
   // Boot lands on the menu; picking a map starts the battle underneath it. Dev loop is protected:
   // ?map=N boots STRAIGHT into that map with no menu (0 = classic).
-  let devMap = null;
+  // ── PLAYTEST OVERRIDES (owner 2026-07-16) — URL query jumps straight into a specific fight:
+  //   ?map=<0-9>   0 = classic board, 1-9 = campaign map
+  //   ?wave=<1-8>  start at this wave (earlier waves skipped; a gold stipend scales with it)
+  //   ?faction=<name>  enemy faction — fuzzy match (e.g. air, greenies, dark, powder)
+  //   ?seed=<n>    deterministic seed (already honored at boot)
+  // e.g. index.html?map=6&wave=5&faction=air  — map 6, opening on wave 5 vs the Air faction.
+  let devMap = null, devWave = null, devFaction = null;
   try {
-    const mm = /[?&]map=(\d+)/.exec(window.location.search || '');
-    if (mm) devMap = parseInt(mm[1], 10) | 0;
+    const q = window.location.search || '';
+    const mm = /[?&]map=(\d+)/.exec(q); if (mm) devMap = parseInt(mm[1], 10) | 0;
+    const wm = /[?&]wave=(\d+)/.exec(q); if (wm) devWave = Math.max(1, Math.min(8, parseInt(wm[1], 10) | 0));
+    const fm = /[?&]faction=([^&]+)/.exec(q);
+    if (fm) {
+      const q2 = decodeURIComponent(fm[1]).toLowerCase();
+      devFaction = FACTION_NAMES.find((n) => n.toLowerCase().includes(q2)) || null;   // fuzzy
+      if (devFaction) currentTestFaction = devFaction;
+    }
   } catch (e) { /* file:// quirks */ }
   {
     const sv = loadSave();
@@ -390,7 +403,19 @@ export function boot(mountEl, seed) {
       setTimeout(() => { if (lastReplayLog) playReplay(lastReplayLog); }, 50);
     },
   });
-  if (devMap != null) { menu.close(); void selectMap(devMap); }
+  if (devMap != null) {
+    menu.close();
+    void selectMap(devMap).then(() => {
+      if (devWave && devWave > 1 && sim.waves) {
+        // jump to the wave: skip earlier waves, grant a stipend that scales so the board isn't empty
+        sim.waves.current = devWave - 1;
+        sim.economy.money = Math.max(sim.economy.money || 0, 900 + (devWave - 1) * 450);
+        preDialogFaction = null;
+        if (voicePacks !== null && !suppressPreDialog) playPreBattleDialog(null);   // dialog for the jumped wave
+      }
+      flashMessage(hud, 'Playtest: map ' + devMap + (devWave ? ' · wave ' + devWave : '') + (devFaction ? ' · vs ' + devFaction : ''));
+    });
+  }
   else void selectMap(loadSave().unlockedThrough <= 1 ? DEFAULT_MAP_ID : Math.min(9, loadSave().unlockedThrough));
 
   // ---------------------------------------------------------------------
