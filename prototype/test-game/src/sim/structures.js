@@ -182,6 +182,12 @@ export function startUpgrade(state, structureId) {
   const def = getStructureDef(s.structId);
   const maxTier = def.hp.length;
   if (s.tier >= 3 || s.tier >= maxTier) return false;
+  // Amendment B2: the CAMPAIGN unlocks tiers per type (gold-bought in the menu). No meta on the
+  // sim (classic board / tests) = everything open, as before.
+  if (state.structTiers) {
+    const group = s.kind === 'antiGround' ? 'cannon' : s.kind === 'antiAir' ? 'flak' : 'wall';
+    if (s.tier + 1 > (state.structTiers[group] || 1)) return false;
+  }
   const upCost = def.cost[s.tier] - def.cost[s.tier - 1];
   if (!canAfford(state, upCost)) return false;
   if (!spend(state, upCost, 'upgrade:' + s.structId)) return false;

@@ -10,7 +10,7 @@
  * battle with no menu (main.js).
  */
 import { MAPDATA } from '../../content/maps/mapdata.js';
-import { loadSave } from '../save/save.js';
+import { loadSave, TIER_COSTS } from '../save/save.js';
 
 // workbook Faction_ID (1-9) -> the game's faction names, roster order (owner can re-map)
 export const FACTION_NAMES = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water',
@@ -165,6 +165,7 @@ export function createMenu(mountEl, cbs) {
   mkBtn('CAMPAIGN', 'map select', null, () => show('maps'));
   mkBtn('FACTIONS', 'choose your enemy', null, () => show('factions'));
   mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
+  mkBtn('TECH', 'unlock structure tiers', null, () => show('tech'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
   mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
   main.appendChild(menu);
@@ -292,6 +293,57 @@ export function createMenu(mountEl, cbs) {
     }
   }
 
+  // ── TECH screen (Amendment B2: per-type tier unlocks, bought with the gold bank) ──
+  const tech = el(doc, 'div', 'bwm-maps');
+  tech.style.display = 'none';
+  const th = el(doc, 'div', 'bwm-maps-head');
+  th.appendChild(el(doc, 'h2', null, 'TECH'));
+  const tbank = el(doc, 'span', 'bwm-bank', '');
+  th.appendChild(tbank);
+  const tback = el(doc, 'button', 'bwm-btn back'); tback.style.width = 'auto'; tback.style.padding = '8px 18px';
+  tback.appendChild(el(doc, 'span', null, '← MENU'));
+  tback.addEventListener('click', () => show('main'));
+  th.appendChild(tback);
+  tech.appendChild(th);
+  const tlist = el(doc, 'div');
+  tech.appendChild(tlist);
+  root.appendChild(tech);
+
+  const TECH_TYPES = [
+    { key: 'cannon', label: 'CANNONS', note: 'Anti-ground turret line. T4 (range) comes later.' },
+    { key: 'flak', label: 'ANTI-AIR', note: 'Flak tower line. T4 (range) comes later.' },
+    { key: 'wall', label: 'WALLS', note: 'Fortification line. T4 (extra HP) comes later.' },
+  ];
+  function refreshTech() {
+    const s = loadSave();
+    const bank = (s.carry && s.carry.gold) || 0;
+    tbank.textContent = 'BANK ' + bank + 'g';
+    tlist.textContent = '';
+    for (const tt of TECH_TYPES) {
+      const cur = (s.structTiers && s.structTiers[tt.key]) || 1;
+      const row = el(doc, 'div', 'bwm-hrow' + (cur >= 3 ? ' cur' : ''));
+      row.appendChild(el(doc, 'div', 'bwm-hlvl', 'T' + cur));
+      const st = el(doc, 'div', 'bwm-hstats');
+      st.innerHTML = '<b>' + tt.label + '</b> — battle upgrades unlocked through tier ' + cur +
+        '<br>' + tt.note;
+      row.appendChild(st);
+      if (cur < 3) {
+        const cost = TIER_COSTS[tt.key][cur - 1];
+        const buy = el(doc, 'button', 'bwm-hbuy', 'UNLOCK T' + (cur + 1) + ' — ' + cost + 'g');
+        buy.disabled = bank < cost;
+        buy.title = bank < cost ? 'Bank gold by finishing maps' : '';
+        buy.addEventListener('click', () => {
+          if (cbs.onBuyTier) cbs.onBuyTier(tt.key, cur + 1);
+          refreshTech();
+        });
+        row.appendChild(buy);
+      } else {
+        row.appendChild(el(doc, 'span', 'bwm-bank', 'MAXED (T4 soon)'));
+      }
+      tlist.appendChild(row);
+    }
+  }
+
   root.appendChild(el(doc, 'div', 'bwm-foot', 'BULWARK — TEST BUILD'));
 
   function fmtPar(sec) {
@@ -330,8 +382,10 @@ export function createMenu(mountEl, cbs) {
     maps.style.display = screen === 'maps' ? 'block' : 'none';
     factions.style.display = screen === 'factions' ? 'block' : 'none';
     harv.style.display = screen === 'harvester' ? 'block' : 'none';
+    tech.style.display = screen === 'tech' ? 'block' : 'none';
     if (screen === 'factions') refreshFactions();
     if (screen === 'harvester') refreshHarvester();
+    if (screen === 'tech') refreshTech();
     if (screen === 'maps') {
       mh.firstChild.textContent = chosenFaction ? 'CAMPAIGN — VS ' + chosenFaction.toUpperCase() : 'CAMPAIGN';
       refreshMaps();

@@ -2,7 +2,7 @@ import { MAP, WAVES, makeWaves } from './data/tables.js';
 import { buildCampaignMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
-import { loadSave, updateSave, recordResult } from './save/save.js';
+import { loadSave, updateSave, recordResult, buyStructTier } from './save/save.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
 import { createMenu } from './menu/menu.js';
@@ -132,7 +132,12 @@ export function boot(mountEl, seed) {
     const s = (typeof newSeed === 'number' && Number.isFinite(newSeed)) ? Math.floor(newSeed) : currentSeed;
     currentSeed = s;
     if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
-    sim = createSim(currentSeed, { waves: currentWaves, map: currentMap, carry: pendingCarry, harvesterLevel: loadSave().harvesterLevel || 1 });
+    {
+      const sv = loadSave();
+      sim = createSim(currentSeed, { waves: currentWaves, map: currentMap, carry: pendingCarry,
+        harvesterLevel: sv.harvesterLevel || 1,
+        structTiers: currentMapId ? sv.structTiers : null });   // classic board stays all-open
+    }
     log = createLog(currentSeed);
     ui = createUiState();
     mode = 'play';
@@ -359,6 +364,7 @@ export function boot(mountEl, seed) {
   const menu = createMenu(mountEl, {
     onPlayMap: (id) => { menu.close(); void selectMap(id); },
     onSelectFaction: (f) => { currentTestFaction = f || DEFAULT_FACTION; },   // the chosen enemy drives the wave builder
+    onBuyTier: (type, tier) => { buyStructTier(type, tier); },
     onBuyHarvester: (level, cost) => {
       updateSave((sv) => {
         if ((sv.harvesterLevel || 1) !== level - 1) return;                    // strict ladder
