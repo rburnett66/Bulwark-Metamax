@@ -379,6 +379,8 @@ export function boot(mountEl, seed) {
   {
     const sv = loadSave();
     if (sv.carry) pendingCarry = sv.carry;   // the campaign survives a page reload now
+    // enemy faction chosen in SETTINGS persists across reloads (URL ?faction= still wins)
+    if (!devFaction && sv.enemyFaction) currentTestFaction = sv.enemyFaction;
   }
   const menu = createMenu(mountEl, {
     onPlayMap: (id) => { menu.close(); void selectMap(id); },

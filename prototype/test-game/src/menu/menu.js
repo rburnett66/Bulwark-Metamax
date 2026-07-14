@@ -368,6 +368,27 @@ export function createMenu(mountEl, cbs) {
   sh.appendChild(sback);
   settings.appendChild(sh);
   const setBox = el(doc, 'div', 'bwm-set');
+  // FACTION selector (owner): choose / reset the enemy faction from settings (dev + play convenience)
+  {
+    const row = el(doc, 'div', 'bwm-srow');
+    row.appendChild(el(doc, 'label', null, 'ENEMY FACTION'));
+    const sel = el(doc, 'select');
+    sel.style.cssText = 'flex:1;background:#0c0e12;color:#e6ecf3;border:1px solid #2e3846;border-radius:5px;padding:6px 8px;font-size:12px';
+    const optMix = el(doc, 'option'); optMix.value = ''; optMix.textContent = 'Rotation (mixed)'; sel.appendChild(optMix);
+    for (const n of FACTION_NAMES) { const o = el(doc, 'option'); o.value = n; o.textContent = n; sel.appendChild(o); }
+    sel.value = (loadSave().enemyFaction) || 'Ground / Powder';
+    sel.addEventListener('change', () => {
+      const f = sel.value || null;
+      try { const sv = loadSave(); sv.enemyFaction = f || null; localStorage.setItem('bulwark:save', JSON.stringify(sv)); } catch (e) { /* */ }
+      if (cbs.onSelectFaction) cbs.onSelectFaction(f);
+    });
+    const rst = el(doc, 'button', 'bwm-btn'); rst.style.cssText = 'width:auto;padding:6px 12px;flex:0 0 auto';
+    rst.appendChild(el(doc, 'span', null, 'RESET'));
+    rst.title = 'Back to Ground / Powder';
+    rst.addEventListener('click', () => { sel.value = 'Ground / Powder'; sel.dispatchEvent(new Event('change')); });
+    row.appendChild(sel); row.appendChild(rst);
+    setBox.appendChild(row);
+  }
   const vols = { master: 0.8, dialog: 1, game: 1 };
   try { Object.assign(vols, JSON.parse(localStorage.getItem('bw.volumes') || '{}')); } catch (e) { /* fresh */ }
   for (const ch of ['master', 'dialog', 'game']) {
