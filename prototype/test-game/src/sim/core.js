@@ -810,6 +810,37 @@ export function stepTerrainClamp(state) {
     else if (keepY) { u.pos.x = u._px; }
     else { u.pos.x = u._px; u.pos.y = u._py; }   // fully wedged — stay put this tick
   }
+  // BODY REPULSION (owner: a tank's collision boundary must not overlap walls — a small corner
+  // clip is fine, but no RIDING the wall). The centre clamp above keeps the centre out of a wall
+  // cell; this pushes the unit's BODY off adjacent wall cells. For each blocked neighbour cell,
+  // find the closest point on that cell to the unit centre; if the body penetrates past a small
+  // tolerance, push the centre out along the shortest axis. Deterministic (pure grid geometry).
+  const TOL = 0.12;   // allowed corner clip before we push
+  for (const u of state.units.values()) {
+    if (!u || u.hp <= 0 || u.domain !== 'Walker' || u._px == null) continue;
+    const r = Math.min(u.radius || 0.3, 0.7);   // effective wall-collision radius (capped like the art)
+    const px = u.pos.x, py = u.pos.y;
+    const cx0 = Math.round(px), cy0 = Math.round(py);
+    let bestPen = 0, bestNx = 0, bestNy = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const wx = cx0 + dx, wy = cy0 + dy;
+      if (wx < 0 || wy < 0 || wx >= cols || wy >= rows) continue;
+      if (grid.passable[wy * cols + wx]) continue;   // only blocked cells repel
+      // wall cell occupies [wx-0.5, wx+0.5] x [wy-0.5, wy+0.5]; closest point to the unit centre
+      const clx = Math.max(wx - 0.5, Math.min(px, wx + 0.5));
+      const cly = Math.max(wy - 0.5, Math.min(py, wy + 0.5));
+      const ox = px - clx, oy = py - cly;
+      const d = Math.hypot(ox, oy);
+      const pen = r - d;
+      if (pen > bestPen + 1e-6) { bestPen = pen; const inv = d > 1e-6 ? 1 / d : 0; bestNx = ox * inv; bestNy = oy * inv; }
+    }
+    if (bestPen > TOL) {   // riding the wall — push the body out (keeping the tolerated clip)
+      const push = bestPen - TOL;
+      u.pos.x += bestNx * push;
+      u.pos.y += bestNy * push;
+    }
+  }
 }
 
 export function stepContactClamp(state) {
