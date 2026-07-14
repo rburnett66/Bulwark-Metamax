@@ -172,7 +172,6 @@ export function createMenu(mountEl, cbs) {
   mkBtn('CAMPAIGN', 'map select', null, () => show('maps'));
   mkBtn('FACTIONS', 'choose your enemy', null, () => show('factions'));
   mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
-  mkBtn('SETTINGS', 'audio & options', null, () => show('settings'));
   mkBtn('TECH', 'unlock structure tiers', null, () => show('tech'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
   mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
@@ -181,6 +180,7 @@ export function createMenu(mountEl, cbs) {
     if (cbs.onResetCampaign) cbs.onResetCampaign();
     show('main');   // refresh the Continue label + locks
   });
+  mkBtn('SETTINGS', 'audio & options', null, () => show('settings'));   // last
   main.appendChild(menu);
   root.appendChild(main);
 
