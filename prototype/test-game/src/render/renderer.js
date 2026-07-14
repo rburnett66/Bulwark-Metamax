@@ -815,6 +815,25 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     gS.lineStyle(0);
     drawHpBar(gH, bp.x, bp.y - t * 1.72, t * 2.2, state.base.hp / Math.max(1, state.base.maxHp));
 
+    // ── HARVESTER PURCHASE PROMPT (owner): when a harvester is selected, a message at the BASE
+    // tells you to tap it to buy another (the base is the shop). Shows the next price, or MAX.
+    if (!renderer.baseBuyText) {
+      renderer.baseBuyText = new PIXI.Text('', { fontFamily: 'Courier New', fontSize: 15, fontWeight: 'bold',
+        fill: 0xffe08a, stroke: 0x0a0e12, strokeThickness: 4, align: 'center' });
+      renderer.baseBuyText.anchor.set(0.5, 1);
+      renderer.layers.overlay.addChild(renderer.baseBuyText);
+    }
+    const bt = renderer.baseBuyText;
+    const selU = (ui && ui.selectedUnitId != null && state.units) ? state.units.get(ui.selectedUnitId) : null;
+    if (state.resourceNodes && selU && selU.isHarvester) {
+      const fleet = [...state.units.values()].filter((u) => u && u.isHarvester && u.hp > 0).length;
+      const PRICE = [0, 500, 750, 1000];
+      bt.text = fleet >= 4 ? '▲ MAX HARVESTERS (4)' : '▲ TAP BASE — HARVESTER $' + PRICE[fleet];
+      bt.x = bp.x; bt.y = bp.y - t * 2.0;
+      bt.scale.set(1 / ((renderer.camera && renderer.camera.s) || 1));   // constant on-screen size at any zoom
+      bt.visible = true;
+    } else if (bt) { bt.visible = false; }
+
     // ── SUPER-CANNON TURRET — a visible barrel + charge gauge showing the cannon's live STATE ──
     //   idle: steel barrel slowly SCANS the field  ·  aim: swings onto the locked target, glows + a ring
     //   charges up  ·  flight: recoiled, bright muzzle  ·  cooldown: dim/red, barrel resets.

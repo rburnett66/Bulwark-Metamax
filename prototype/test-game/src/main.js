@@ -259,22 +259,20 @@ export function boot(mountEl, seed) {
     onMainMenu: () => { if (hud && hud.hideResult) hud.hideResult(); menu.open('maps'); },
     onNextMap: () => {
       if (!(currentMapId > 0 && currentMapId < 9)) return;
-      // CAMPAIGN CARRY (owner): bank the leftover gold + every standing defense (offsets from the
-      // base) so the next map's first battle starts with them.
+      // MAP TRANSITION (owner 2026-07-16): a NEW map is a clean tactical slate — structures are
+      // CLEARED (only WAVE-to-wave within a map keeps them), the base is healed, resources are
+      // fresh, the camera zooms back in. The banked GOLD carries so you rebuild your fortress.
       const carry = { gold: (sim.finalScore && sim.finalScore.goldRemaining) || 0, structures: [] };
-      const bp = sim.base && sim.base.pos;
-      if (bp && sim.structures) {
-        for (const st of sim.structures.values()) {
-          if (!st || st.lifecycle === 'Destroyed' || st.lifecycle === 'Selling') continue;
-          carry.structures.push({ structId: st.structId, tier: st.tier || 1,
-            dx: st.pos.x - bp.x, dy: st.pos.y - bp.y, invested: st.invested || 0 });
-        }
-      }
       pendingCarry = carry;
       updateSave((sv) => { sv.carry = carry; sv.goldBank = carry.gold; });
       void selectMap(currentMapId + 1);
     },
     onVolume: (channel, v) => { setChannelVolume(channel, v); },
+    onBuyHarvesterUnit: () => {
+      const res = submit({ type: 'buyHarvester' });
+      flashMessage(hud, (res && res.ok) ? ('Harvester purchased' + (res.cost ? ' (−' + res.cost + 'g)' : ''))
+        : ((res && res.reason === 'max harvesters') ? 'Max harvesters (4)' : ('Harvester: ' + ((res && res.reason) || 'unavailable'))));
+    },
     defaultFaction: DEFAULT_FACTION,
     onFactionSelect: (faction) => {
       // Rebuild the enemy schedule for the chosen faction (or the mixed roster) and restart the run.
