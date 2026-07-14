@@ -1014,6 +1014,32 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           }
           const facing = spr.__facing || 0;
           spr.rotation = facing;
+          // SQUEEZE (owner): 2-wide units compress through 1-tile gaps. When both flanks
+          // (perpendicular to facing) are blocked cells, squash the sprite laterally to the gap
+          // width and stretch it slightly along the motion — the clip becomes a squeeze. Purely
+          // visual; the sim's centre-line passage is unchanged.
+          {
+            const grid = state.navGrid;
+            const halfW = (u.radius || 0.3) * SPRITE_OVER_COLLISION;   // sprite half-width, tiles
+            if (grid && grid.passable && halfW > 0.5) {
+              const wa = facing - UNIT_FACING_OFFSET;                   // world motion angle
+              const perpX = -Math.sin(wa), perpY = Math.cos(wa);
+              const blockedAt = (x, y) => {
+                const cx = Math.round(x), cy = Math.round(y);
+                if (cx < 0 || cy < 0 || cx >= grid.cols || cy >= grid.rows) return true;
+                return !grid.passable[cy * grid.cols + cx];
+              };
+              const L = blockedAt(u.pos.x + perpX, u.pos.y + perpY);
+              const R = blockedAt(u.pos.x - perpX, u.pos.y - perpY);
+              const want = (L && R) ? Math.min(1, 0.92 / (halfW * 2)) : 1;   // fit a ~1-tile slot
+              spr.__squeeze = (spr.__squeeze == null) ? 1 : spr.__squeeze + (want - spr.__squeeze) * 0.25;
+              const q = spr.__squeeze;
+              spr.scale.set(q, 1 + (1 - q) * 0.35);   // conserve a little volume: squash x, stretch y
+            } else if (spr.__squeeze != null && spr.__squeeze !== 1) {
+              spr.__squeeze += (1 - spr.__squeeze) * 0.25;
+              spr.scale.set(spr.__squeeze, 1 + (1 - spr.__squeeze) * 0.35);
+            }
+          }
           const cf = Math.cos(facing), sf = Math.sin(facing);
           // ground shadow at the CONTACT point (height 0 — never leans), sized to the unit's footprint
           gU.beginFill(0x000000, 0.26);
