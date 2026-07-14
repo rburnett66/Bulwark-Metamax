@@ -153,8 +153,11 @@ export function boot(mountEl, seed) {
     if (hud && hud.hideResult) hud.hideResult();
     resetCommTracking();
     preDialogFaction = null;
-    if (voicePacks !== null) playPreBattleDialog(null);   // wave-1 challenge before the first tap
+    // a contract modal (shown by selectMap after restart) suppresses the primary until answered,
+    // so the start tip can depend on the accept/decline outcome
+    if (voicePacks !== null && !suppressPreDialog) playPreBattleDialog(null);   // wave-1 challenge before the first tap
   }
+  let suppressPreDialog = false;
 
   function endInterlude() {
     if (!interlude) return;
@@ -197,14 +200,19 @@ export function boot(mountEl, seed) {
     // makes the pitch before the first tap. Skipped when the map seeds no quest fields (maps
     // 1-2) or the map's contract is already FULFILLED.
     runContract = null;
+    suppressPreDialog = false;
     if (currentMapId) {
       const sv = loadSave();
       const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
       const offer = already ? null : buildOffer(currentMapId, currentMap, voicePacks, sv);
       if (offer) {
+        // OWNER ordering: the CONTRACT MODAL resolves first, THEN the primary speaks — the
+        // start tip only exists when the answer is yes, so the dialog must wait for the answer.
+        suppressPreDialog = true;
+        comm.dismiss();
         showContractModal(mountEl, offer, {
-          onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); },
-          onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); },
+          onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); },
+          onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); },
         });
       }
     }
@@ -434,17 +442,15 @@ export function boot(mountEl, seed) {
       // ── OWNER DIALOG TIMING (2026-07-16) ──────────────────────────────────────────────
       // 1. PRIMARY character speaks (held; TAP TO CLOSE appears when the line ends)
       // 2. tapping closes it — the START prompt NEVER shows while a dialog is up
-      // 3. SECONDARY character (tips & story) only if the player earned a 5-STAR wave
+      // 3. SECONDARY (match START only): a TIP, iff the loyalty deal is live (contract accepted)
       // 4. one-second beat, THEN "TAP TO START"
       if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
       const closed = comm.waitForClose();
       await commChallenge(faction, idx + 1, true);          // primary, held
       await closed;
       if (!interlude || mode !== 'play') return;
-      const ws = sim.waveStars;
-      const fiveStar = (ws && ws.length) ? ws[ws.length - 1].stars === 5 : !!loadSave().lastRunFiveStar;
-      if (fiveStar && voicePacks) {
-        const tip = tipsCall(voicePacks, faction, (currentSeed | 0) + idx);
+      if (idx === 0 && runContract && voicePacks) {
+        const tip = tipsCall(voicePacks, runContract.giver, (currentSeed | 0) + idx, 'tip');
         if (tip) {
           const closed2 = comm.waitForClose();
           await comm.showCall(Object.assign({}, tip, { hold: true }));
@@ -536,6 +542,9 @@ export function boot(mountEl, seed) {
             } catch (e) { nextMap = { id: currentMapId + 1, name: 'Map ' + (currentMapId + 1), size: '' }; }
           }
           recordResult(currentMapId, sim.result, sim.finalScore, sim.waveStars, sim.waves ? sim.waves.total : 8, currentTestFaction);
+          // the SECONDARY's end-of-match reward faction (captured before runContract is cleared)
+          const rewardFaction = (runContract && runContract.giver) || lastWaveFaction;
+          const fiveStar = Array.isArray(sim.waveStars) && sim.waveStars.some((w) => w.stars === 5);
           // judge the ACCEPTED contract from the hauled quest crystals (red + green units)
           if (runContract) {
             const hauled = sim.mapScore ? (sim.mapScore.questRed || 0) + (sim.mapScore.questGreen || 0) : 0;
@@ -548,12 +557,19 @@ export function boot(mountEl, seed) {
           }
           showResult(hud, sim.result, sim.finalScore, nextMap, sim.waveStars);
           // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
-          // wave star score (banner) -> final map score (overlay) -> dialog.
+          // wave star score (banner) -> final map score (overlay) -> PRIMARY dialog -> then, as
+          // part of the REWARD FLOW, the SECONDARY grants the star bonus (5-star wave this battle).
           if (lastWaveFaction) {
             const call = sim.result === 'win'
               ? winCall(voicePacks, lastWaveFaction, sim.waves ? sim.waves.current : 0, currentSeed, commOutcome(), true)
               : defeatCall(voicePacks, lastWaveFaction, currentSeed);
-            setTimeout(() => comm.showCall(call), 1500);
+            setTimeout(async () => {
+              await comm.showCall(call);
+              if (sim.result === 'win' && fiveStar && voicePacks) {
+                const grant = tipsCall(voicePacks, rewardFaction, (currentSeed ^ 0x51ab), 'reward');
+                if (grant) comm.showCall(grant);
+              }
+            }, 1500);
           }
         }
       }

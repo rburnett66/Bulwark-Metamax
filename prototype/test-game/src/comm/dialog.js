@@ -98,21 +98,26 @@ export function defeatCall(packs, factionName, seed) {
 }
 
 /** Fallback spec from the comm tool's built-in 3-character cast (packs not loaded/missing). */
-/** SECONDARY speaker (owner): tips & story, earned by a 5-star wave in the previous battle.
- *  A DIFFERENT character from the same faction (good-leaning pick) shares a line — story color
- *  from their motivation + a phrase. Deterministic by seed. */
-export function tipsCall(packs, factionName, seed) {
+/** SECONDARY speaker (owner, 2026-07-16): bookends the match.
+ *  kind 'tip'    — match START, only when the LOYALTY deal is live (contract accepted): the
+ *                  giver's envoy tips the commander about the promised quest fields.
+ *  kind 'reward' — match END, only when the STAR BONUS applied (a 5-star wave this battle):
+ *                  the envoy grants the reward. Good-leaning cast pick, deterministic by seed. */
+export function tipsCall(packs, factionName, seed, kind) {
   const f = packs && packs.factions && packs.factions[factionName];
   if (!f || !f.characters || !f.characters.length) return null;
   const goodish = f.characters.filter((c) => ['AG', 'PG', 'G', 'CG', 'N'].includes(c.align));
   const cast = goodish.length ? goodish : f.characters;
   const ch = cast[Math.abs(seed | 0) % cast.length];
   const phrase = (ch.phrases || [])[Math.abs((seed | 0) >> 2) % Math.max(1, (ch.phrases || []).length)] || '';
-  const line = (ch.motivation ? ch.motivation + ' ' : '') + (phrase ? '“' + phrase + '”' : '');
+  const flavor = phrase ? ' “' + phrase + '”' : '';
+  const line = kind === 'reward'
+    ? 'Five stars, commander — the bonus is yours. ' + (ch.motivation || '') + flavor
+    : 'The contract stands. The crystals we spoke of lie beyond the front — push out when the ring opens, and haul at least four of every five.' + flavor;
   return {
     name: ch.name, faction: factionName, gender: ch.gender,
-    line: 'A word, commander — you fight like five stars. ' + line,
-    intent: 'statement', voiceSeed: (seed | 0) ^ 0x5157, label: 'FIELD REPORT',
+    line, intent: 'statement', voiceSeed: (seed | 0) ^ (kind === 'reward' ? 0x7e11 : 0x5157),
+    label: kind === 'reward' ? 'STAR BONUS' : 'FIELD TIP',
   };
 }
 
