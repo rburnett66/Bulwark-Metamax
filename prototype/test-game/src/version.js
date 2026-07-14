@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.07.15-z';
-export const VERSION_NOTE = 'troops 2 apart';
+export const VERSION = 'v2026.07.16-a';
+export const VERSION_NOTE = 'ground-war opening';

@@ -11,6 +11,14 @@ import { createRng } from './rng.js';
 // map 9 wave 8 (407 pts) ≈ a 16-unit assault. The single knob for overall campaign pressure.
 export const POINTS_TO_POWER = 4.0;
 
+function factionHasLane(faction, lane) {
+  for (const id in UNITS) {
+    const u = UNITS[id];
+    if (u.faction === faction && laneDomain(u) === lane && (u.power || 0) > 0) return true;
+  }
+  return false;
+}
+
 function laneDomain(u) {
   if (u.domain === 'Flyer') return 'air';
   if (u.domain === 'Floater' || u.domain === 'Swimmer') return 'water';
@@ -68,8 +76,13 @@ export function buildCampaignWaves(map, onlyFaction) {
     // unit, but ground can always spend it). The GDD budgets lanes on the MAP; the roster is the
     // designer's problem — ours is to never drop pressure on the floor.
     let groundPower = (ring.budget.ground || 0) * POINTS_TO_POWER;
+    // GROUND-WAR OPENING (owner, 2026-07-15): no air pressure in waves 1-2 — the air axis enters
+    // at wave 3 — UNLESS this wave's faction fields no ground at all (the Air faction IS its air;
+    // budgets roll into ground otherwise, so no pressure is dropped).
+    const groundOnly = ring.wave <= 2 && factionHasLane(faction, 'ground');
     for (const lane of ['air', 'water']) {
       const pts = ring.budget[lane] || 0;
+      if (lane === 'air' && groundOnly) { groundPower += pts * POINTS_TO_POWER; continue; }
       if (pts <= 0 || (lane === 'water' && !map.hasWater)) { groundPower += pts * POINTS_TO_POWER; continue; }
       const budget = pts * POINTS_TO_POWER;
       const ids = fillLane(faction, lane, budget, rng);
@@ -82,6 +95,7 @@ export function buildCampaignWaves(map, onlyFaction) {
     // spend the remaining ground budget on the lanes it does field, water first when the map has any
     let leftover = groundPower - spent(groundIds);
     for (const lane of (map.hasWater ? ['water', 'air'] : ['air'])) {
+      if (lane === 'air' && groundOnly) continue;   // the opening stays a ground war
       if (leftover < 60) break;
       const extra = fillLane(faction, lane, leftover, rng);
       leftover -= spent(extra);
