@@ -1,0 +1,44 @@
+// Node test for the voxel unit-pack contract + runtime selection. No PIXI, no browser.
+import { validatePack, partById } from './pack.js';
+import { angleBucket, mountScreen, altLift } from './select.js';
+
+let pass = 0, fail = 0;
+const ok = (name, cond, extra = '') => { if (cond) { pass++; } else { fail++; console.log(`  FAIL ${name} ${extra}`); } };
+
+// golden Abrams pack (tech plan §4)
+const abrams = {
+  id: 'abrams', class: 'ground', footprint: [64, 64, 16],
+  camera: { azimuth: 45, elevation: 30 }, layerSpacing: 2,
+  parts: [
+    { id: 'body', kind: 'directional', facings: 8, atlas: 'abrams.body.png', cell: [64, 64], pivot: [32, 44], zeroFacing: '+x' },
+    { id: 'turret', kind: 'stack', angles: 64, atlas: 'abrams.turret.png', cell: [64, 64], pivot: [32, 44], mount: [0, 0, 9] },
+  ],
+  shadow: { kind: 'ellipse', rx: 33, ry: 14, alt: 0 }, stats: { speed: 90, turnRate: 3, turretRate: 4 },
+};
+
+const v = validatePack(abrams);
+ok('valid Abrams pack', v.ok, JSON.stringify(v.errors));
+ok('partById turret', partById(abrams, 'turret')?.kind === 'stack');
+
+// broken packs must be caught
+ok('missing camera caught', !validatePack({ ...abrams, camera: null }).ok);
+ok('bad class caught', !validatePack({ ...abrams, class: 'boat' }).ok);
+ok('stack without angles caught', !validatePack({ ...abrams, parts: [{ id: 't', kind: 'stack', atlas: 'a', cell: [1, 1], pivot: [0, 0] }] }).ok);
+ok('empty parts caught', !validatePack({ ...abrams, parts: [] }).ok);
+
+// angle buckets match the prototype's bucketOf (bucket-0 = +X, STEP = 2π/n)
+ok('bucket 0 -> 0', angleBucket(0, 64) === 0);
+ok('bucket 2π -> 0', angleBucket(Math.PI * 2, 64) === 0);
+ok('bucket π/2 -> 16/64', angleBucket(Math.PI / 2, 64) === 16);
+ok('bucket π -> 32/64', angleBucket(Math.PI, 64) === 32);
+ok('bucket -π/2 wraps -> 48/64', angleBucket(-Math.PI / 2, 64) === 48);
+ok('directional 8: π/4 -> 1', angleBucket(Math.PI / 4, 8) === 1);
+
+// mount + alt
+const ms = mountScreen([0, 0, 9], 2);
+ok('mount [0,0,9] @ sp2 lifts 18px up', ms.x === 0 && ms.y === -18, JSON.stringify(ms));
+ok('ground alt = 0', altLift({ alt: 0 }) === 0);
+ok('air alt = 30', altLift({ alt: 30 }) === 30);
+
+console.log(`\nvoxel pack/select: ${pass} passed, ${fail} failed`);
+if (fail) process.exit(1);
