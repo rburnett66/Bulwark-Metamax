@@ -77,6 +77,8 @@ export const STAR_GATE = 3.0;
 export function recordResult(mapId, result, finalScore, waveStars, totalWaves, faction) {
   if (!mapId) return loadSave();   // classic board — no campaign record
   return updateSave((s) => {
+    // the SECONDARY dialog character (tips & story) is earned by a 5-star wave in the last battle
+    s.lastRunFiveStar = Array.isArray(waveStars) && waveStars.some((w) => w.stars === 5);
     const m = s.maps[mapId] || (s.maps[mapId] = { beaten: false, bestScore: null, stars: null, avg: null, contract: null });
     // per-FACTION campaign record (the Factions screen reads this): maps won vs them + star history
     if (faction && result === 'win') {

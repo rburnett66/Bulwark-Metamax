@@ -98,6 +98,24 @@ export function defeatCall(packs, factionName, seed) {
 }
 
 /** Fallback spec from the comm tool's built-in 3-character cast (packs not loaded/missing). */
+/** SECONDARY speaker (owner): tips & story, earned by a 5-star wave in the previous battle.
+ *  A DIFFERENT character from the same faction (good-leaning pick) shares a line — story color
+ *  from their motivation + a phrase. Deterministic by seed. */
+export function tipsCall(packs, factionName, seed) {
+  const f = packs && packs.factions && packs.factions[factionName];
+  if (!f || !f.characters || !f.characters.length) return null;
+  const goodish = f.characters.filter((c) => ['AG', 'PG', 'G', 'CG', 'N'].includes(c.align));
+  const cast = goodish.length ? goodish : f.characters;
+  const ch = cast[Math.abs(seed | 0) % cast.length];
+  const phrase = (ch.phrases || [])[Math.abs((seed | 0) >> 2) % Math.max(1, (ch.phrases || []).length)] || '';
+  const line = (ch.motivation ? ch.motivation + ' ' : '') + (phrase ? '“' + phrase + '”' : '');
+  return {
+    name: ch.name, faction: factionName, gender: ch.gender,
+    line: 'A word, commander — you fight like five stars. ' + line,
+    intent: 'statement', voiceSeed: (seed | 0) ^ 0x5157, label: 'FIELD REPORT',
+  };
+}
+
 export function fallbackCall(factionName, wave, seed) {
   const key = FACTION_KEY_BY_NAME[factionName];
   const f = key && FACTIONS[key];

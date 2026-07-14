@@ -13,7 +13,7 @@ import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showSta
 import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
 import { setChannelVolume } from './comm/voice.js';
-import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, classifyOutcome } from './comm/dialog.js';
+import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, tipsCall, classifyOutcome } from './comm/dialog.js';
 
 function parseSeedFromUrl() {
   try {
@@ -431,7 +431,29 @@ export function boot(mountEl, seed) {
       if (clearCall) await comm.showCall(clearCall);        // M2 runs fully (auto sign-off)
       if (!interlude || mode !== 'play' || !faction) return;
       preDialogFaction = faction;
-      await commChallenge(faction, idx + 1, true);          // M1 held — speaker waits for the tap
+      // ── OWNER DIALOG TIMING (2026-07-16) ──────────────────────────────────────────────
+      // 1. PRIMARY character speaks (held; TAP TO CLOSE appears when the line ends)
+      // 2. tapping closes it — the START prompt NEVER shows while a dialog is up
+      // 3. SECONDARY character (tips & story) only if the player earned a 5-STAR wave
+      // 4. one-second beat, THEN "TAP TO START"
+      if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
+      const closed = comm.waitForClose();
+      await commChallenge(faction, idx + 1, true);          // primary, held
+      await closed;
+      if (!interlude || mode !== 'play') return;
+      const ws = sim.waveStars;
+      const fiveStar = (ws && ws.length) ? ws[ws.length - 1].stars === 5 : !!loadSave().lastRunFiveStar;
+      if (fiveStar && voicePacks) {
+        const tip = tipsCall(voicePacks, faction, (currentSeed | 0) + idx);
+        if (tip) {
+          const closed2 = comm.waitForClose();
+          await comm.showCall(Object.assign({}, tip, { hold: true }));
+          await closed2;
+          if (!interlude || mode !== 'play') return;
+        }
+      }
+      await new Promise((r) => setTimeout(r, 1000));        // the 1-second beat
+      if (interlude && mode === 'play' && hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
     })();
   }
   function commOutcome() {
