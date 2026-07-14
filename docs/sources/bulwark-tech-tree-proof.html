@@ -100,8 +100,9 @@
   .node:focus-visible{outline:2px solid var(--pc-ink); outline-offset:2px;}
   .node.sel{border-color:var(--pc-ink); box-shadow:0 0 0 1px var(--pc-ink), 0 0 26px var(--pc-glow); transform:translateY(-2px);}
   .node.owned{border-color:var(--pc-deep);}
-  .node.locked{opacity:.5; cursor:not-allowed;}
-  .node.locked:hover{transform:none; box-shadow:none; border-color:var(--chrome);}
+  .node.locked{opacity:.5;}
+  .node.locked:hover{opacity:.72;}
+  .node.locked.sel{opacity:1;}
   .thumb{
     width:44px;height:44px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;
     background:radial-gradient(120% 120% at 50% 12%, var(--pc-fill), rgba(0,0,0,.35));
@@ -341,7 +342,7 @@ function renderTree(){
          <span class="meta"><div class="nm">${n.nm}</div><div class="sub">${n.sub}</div>
            <div class="cost">${st==='owned'?chk(12):IC.gold.replace('width="20" height="20"','width="12" height="12"')} ${st==='owned'?'Researched':fmt(n.cost)}</div>
          </span>${badge}`;
-      node.addEventListener('click',()=>{ if(st==='locked'){toast('Unlock this tier by beating a faction on Map 2.'); return;} select(n.id); });
+      node.addEventListener('click',()=>{ select(n.id); });   // locked nodes stay browsable for info
       col.appendChild(node);
     }
     g.appendChild(col);
@@ -437,16 +438,18 @@ function drawWires(){
     const mx=(rx+hx)/2;
     paths+=`<path d="M ${rx} ${ry} C ${mx} ${ry}, ${mx} ${hy}, ${hx} ${hy}" fill="none" stroke="${colColor[key]}" stroke-width="2.5" opacity=".55"/>`;
     paths+=`<path d="M ${rx} ${ry} C ${mx} ${ry}, ${mx} ${hy}, ${hx} ${hy}" fill="none" stroke="${colInk[key]}" stroke-width="1" opacity=".9"/>`;
-    // header -> each node, and node -> node spine
+    // one continuous spine per column, BEHIND the cards (svg z=1 < grid z=2): occluded where it
+    // crosses a card, visible through the gaps — reads as a single line threading behind the stack.
     const nodes=[...col.querySelectorAll('.node')];
-    let prev=head;
-    nodes.forEach(nd=>{
-      const r=nd.getBoundingClientRect();
-      const px=prev.left+18-b.left, py=prev.bottom-b.top;
-      const cx=r.left+18-b.left, cy=r.top-b.top;
-      paths+=`<path d="M ${px} ${py} C ${px} ${(py+cy)/2}, ${cx} ${(py+cy)/2}, ${cx} ${cy}" fill="none" stroke="${colInk[key]}" stroke-width="1.6" opacity=".4"/>`;
-      prev=r;
-    });
+    if(nodes.length){
+      const first=nodes[0].getBoundingClientRect();
+      const last=nodes[nodes.length-1].getBoundingClientRect();
+      const tx=first.left+24-b.left;
+      const topY=head.bottom-b.top-2;
+      const botY=last.top+last.height/2-b.top;
+      paths+=`<path d="M ${tx} ${topY} L ${tx} ${botY}" fill="none" stroke="${colInk[key]}" stroke-width="2" opacity=".5"/>`;
+      nodes.forEach(nd=>{ const r=nd.getBoundingClientRect(); paths+=`<circle cx="${tx}" cy="${r.top-b.top-2}" r="2.4" fill="${colInk[key]}" opacity=".75"/>`; });
+    }
   });
   svg.innerHTML=paths;
 }

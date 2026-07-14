@@ -65,8 +65,9 @@ const CSS = `
 .bwm-tt .tt-node:focus-visible{ outline:2px solid var(--pc-ink); outline-offset:2px; }
 .bwm-tt .tt-node.sel{ border-color:var(--pc-ink); box-shadow:0 0 0 1px var(--pc-ink), 0 0 24px var(--pc-glow); transform:translateY(-2px); }
 .bwm-tt .tt-node.owned{ border-color:var(--good); }
-.bwm-tt .tt-node.locked{ opacity:.5; cursor:not-allowed; }
-.bwm-tt .tt-node.locked:hover{ transform:none; box-shadow:none; border-color:var(--chrome); }
+.bwm-tt .tt-node.locked{ opacity:.5; }
+.bwm-tt .tt-node.locked:hover{ opacity:.72; }
+.bwm-tt .tt-node.locked.sel{ opacity:1; }
 .bwm-tt .tt-thumb{ width:42px; height:42px; flex:0 0 auto; border-radius:9px; display:grid; place-items:center; color:var(--pc-ink);
   background:radial-gradient(120% 120% at 50% 12%, var(--pc-fill), rgba(0,0,0,.35)); border:1px solid var(--pc-line); }
 .bwm-tt .tt-node .meta{ min-width:0; flex:1; }
@@ -266,7 +267,7 @@ export function buildTechTree(doc, cbs) {
              <div class="cost">${st === 'owned' ? chk(12) + ' Researched' : sizeIc(IC.gold, 12) + ' ' + fmt(n.cost)}</div>
            </span>${corner}`;
         b.addEventListener('click', () => {
-          if (st === 'locked') { toast('Unlock this tier by beating a faction on Map 2.'); return; }
+          // locked nodes are still browsable — you can read the info, you just can't research yet
           selected = n.id; renderInspect(readState()); markSel();
         });
         col.appendChild(b);
@@ -354,14 +355,22 @@ export function buildTechTree(doc, cbs) {
       const mx = (rx + hx) / 2;
       paths += `<path d="M ${rx} ${ry} C ${mx} ${ry}, ${mx} ${hy}, ${hx} ${hy}" fill="none" stroke="${c.deep}" stroke-width="2.5" opacity=".55"/>`;
       paths += `<path d="M ${rx} ${ry} C ${mx} ${ry}, ${mx} ${hy}, ${hx} ${hy}" fill="none" stroke="${c.ink}" stroke-width="1" opacity=".9"/>`;
-      let prev = head;
-      col.querySelectorAll('.tt-node').forEach((nd) => {
-        const r = nd.getBoundingClientRect();
-        const px = prev.left + 16 - b.left, py = prev.bottom - b.top;
-        const cx = r.left + 16 - b.left, cy = r.top - b.top;
-        paths += `<path d="M ${px} ${py} C ${px} ${(py + cy) / 2}, ${cx} ${(py + cy) / 2}, ${cx} ${cy}" fill="none" stroke="${c.ink}" stroke-width="1.5" opacity=".4"/>`;
-        prev = r;
-      });
+      // one continuous spine per column, drawn BEHIND the cards (svg z=1, grid z=2): it is
+      // occluded where it crosses a card and shows through the gaps, so it reads as a single
+      // line threading behind the stack. A pip at each card top marks the junction.
+      const nodeEls = col.querySelectorAll('.tt-node');
+      if (nodeEls.length) {
+        const first = nodeEls[0].getBoundingClientRect();
+        const last = nodeEls[nodeEls.length - 1].getBoundingClientRect();
+        const tx = first.left + 24 - b.left;                 // trunk sits over the icon column
+        const topY = head.bottom - b.top - 2;
+        const botY = last.top + last.height / 2 - b.top;
+        paths += `<path d="M ${tx} ${topY} L ${tx} ${botY}" fill="none" stroke="${c.ink}" stroke-width="2" opacity=".5"/>`;
+        nodeEls.forEach((nd) => {
+          const r = nd.getBoundingClientRect();
+          paths += `<circle cx="${tx}" cy="${r.top - b.top - 2}" r="2.4" fill="${c.ink}" opacity=".75"/>`;
+        });
+      }
     });
     svg.innerHTML = paths;
   }
