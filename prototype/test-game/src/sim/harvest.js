@@ -19,12 +19,16 @@ const HARVESTER_UNIT = 'GND-Trucks';   // the truck IS the harvester (own stats 
 
 // Baseline harvester = Factions sheet row 1 (the tuning reference) at upgrade level 1.
 // Faction choice + upgrade levels arrive with the campaign shell story.
-function harvesterStats() {
+function harvesterStats(state) {
   const f = (MAPDATA.factions && MAPDATA.factions[0]) || {};
+  // HARVESTER UPGRADES (workbook, levels 1-5): multipliers injected at createSim via
+  // state.harvesterLevel — part of the initial deterministic state, never mid-battle.
+  const lvl = Math.max(1, Math.min(5, (state && state.harvesterLevel) || 1));
+  const up = (MAPDATA.harvesterUpgrades || []).find((u) => u.Level === lvl) || {};
   return {
-    capacity: f.Harvester_Base_Capacity || 40,
-    speed: f.Harvester_Base_Speed || 3,
-    hp: f.Harvester_Base_HP || 120,
+    capacity: Math.round((f.Harvester_Base_Capacity || 40) * (up.Capacity_Mult || 1)),
+    speed: (f.Harvester_Base_Speed || 3) * (up.Speed_Mult || 1),
+    hp: Math.round((f.Harvester_Base_HP || 120) * (up.HP_Mult || 1)),
     yieldMult: f.Yield_Mult || 1,
   };
 }
@@ -54,7 +58,7 @@ function firstOpenDock(state) {
 export function spawnHarvester(state) {
   if (aliveHarvesters(state).length >= HARVESTER_CAP) return null;
   const pos = firstOpenDock(state);
-  const s = harvesterStats();
+  const s = harvesterStats(state);
   const u = createUnit(state, HARVESTER_UNIT, 1, { x: pos.x, y: pos.y }, 'ground', 'defender');
   if (!state.units.has(u.id)) state.units.set(u.id, u);
   u.isHarvester = true;
@@ -289,7 +293,10 @@ function stepOneHarvester(state, u, dt) {
     const node = nodes.find((n) => n.id === u.harvestNodeId);
     if (!node) { routeHome(state, u); return; }
     const rate = node.units / Math.max(1, node.harvestSec);   // units per second at this cell
-    const take = Math.min(rate * dt, Math.max(0, node.remaining), u.capacity - u.cargo);
+    // L5 unlock (workbook): PREMIUM FAST-HARVEST — endgame greed enabler
+    const lvl = state.harvesterLevel || 1;
+    const pullRate = (lvl >= 5 && node.role === 'premium') ? rate * 1.5 : rate;
+    const take = Math.min(pullRate * dt, Math.max(0, node.remaining), u.capacity - u.cargo);
     if (take > 0) {
       node.remaining -= take;
       u.cargo += take;
@@ -297,7 +304,9 @@ function stepOneHarvester(state, u, dt) {
       u.cargoRole = node.role;
       u.cargoColor = node.color;
     }
-    if (u.cargo >= u.capacity - 1e-9) { routeHome(state, u); return; }   // full — haul it home
+    // L3 unlock (workbook): AUTO-RETURN AT 90% — stop topping off on sparse cells (micro relief)
+    const fullAt = (state.harvesterLevel || 1) >= 3 ? u.capacity * 0.9 : u.capacity - 1e-9;
+    if (u.cargo >= fullAt) { routeHome(state, u); return; }   // full (enough) — haul it home
     if (node.remaining <= 0) {
       const next = nextFieldTarget(state, u);
       if (next) routeTo(state, u, next);            // this cell is bare — work the next one

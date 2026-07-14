@@ -132,7 +132,7 @@ export function boot(mountEl, seed) {
     const s = (typeof newSeed === 'number' && Number.isFinite(newSeed)) ? Math.floor(newSeed) : currentSeed;
     currentSeed = s;
     if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
-    sim = createSim(currentSeed, { waves: currentWaves, map: currentMap, carry: pendingCarry });
+    sim = createSim(currentSeed, { waves: currentWaves, map: currentMap, carry: pendingCarry, harvesterLevel: loadSave().harvesterLevel || 1 });
     log = createLog(currentSeed);
     ui = createUiState();
     mode = 'play';
@@ -359,6 +359,16 @@ export function boot(mountEl, seed) {
   const menu = createMenu(mountEl, {
     onPlayMap: (id) => { menu.close(); void selectMap(id); },
     onSelectFaction: (f) => { currentTestFaction = f || DEFAULT_FACTION; },   // the chosen enemy drives the wave builder
+    onBuyHarvester: (level, cost) => {
+      updateSave((sv) => {
+        if ((sv.harvesterLevel || 1) !== level - 1) return;                    // strict ladder
+        if (!sv.carry || (sv.carry.gold || 0) < cost) return;
+        sv.carry.gold -= cost;
+        sv.goldBank = sv.carry.gold;
+        sv.harvesterLevel = level;
+      });
+      pendingCarry = loadSave().carry;                                         // the battle sees the spent bank
+    },
     onReplay: () => {
       menu.close();
       void selectMap(devMap != null ? devMap : DEFAULT_MAP_ID);

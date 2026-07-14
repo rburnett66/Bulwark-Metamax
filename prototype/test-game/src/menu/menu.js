@@ -71,6 +71,18 @@ const CSS = `
   font-size:19px; border:1px solid #2e3846; background:#14181f; color:#3a4350; cursor:help; }
 .bwm-badge.lit { color:#0c0e12; background:linear-gradient(160deg,#f2c869,#d9a441);
   border-color:#f2c869; box-shadow:0 0 12px rgba(217,164,65,.35); }
+/* HARVESTER screen */
+.bwm-hrow { display:flex; align-items:center; gap:16px; background:#1a1f28; border:1px solid #2e3846;
+  padding:14px 18px; margin-bottom:10px; }
+.bwm-hrow.cur { border-color:#d9a441; }
+.bwm-hrow.locked { opacity:.5; }
+.bwm-hlvl { font-size:22px; font-weight:900; color:#f2c869; width:44px; }
+.bwm-hstats { flex:1; font-size:11px; color:#8fa0b3; line-height:1.55; }
+.bwm-hstats b { color:#e6ecf3; }
+.bwm-hbuy { padding:10px 18px; font-size:12px; letter-spacing:.12em; font-weight:700; cursor:pointer;
+  border:1px solid #f2c869; background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; }
+.bwm-hbuy:disabled { opacity:.35; cursor:default; }
+.bwm-bank { font-size:12px; letter-spacing:.14em; color:#f2c869; margin-left:14px; }
 /* MAPS screen */
 .bwm-maps { flex:1; padding:8px clamp(20px,4vw,60px) 24px; overflow-y:auto; min-height:0; }
 .bwm-maps-head { display:flex; align-items:baseline; gap:16px; margin:6px 2px 14px; }
@@ -152,6 +164,7 @@ export function createMenu(mountEl, cbs) {
   });
   mkBtn('CAMPAIGN', 'map select', null, () => show('maps'));
   mkBtn('FACTIONS', 'choose your enemy', null, () => show('factions'));
+  mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
   mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
   main.appendChild(menu);
@@ -229,6 +242,56 @@ export function createMenu(mountEl, cbs) {
 
   let chosenFaction = null;
 
+  // ── HARVESTER screen (workbook Harvester_Upgrades, levels 1-5, bought with the gold bank) ──
+  const harv = el(doc, 'div', 'bwm-maps');
+  harv.style.display = 'none';
+  const hh = el(doc, 'div', 'bwm-maps-head');
+  hh.appendChild(el(doc, 'h2', null, 'HARVESTER'));
+  const hbank = el(doc, 'span', 'bwm-bank', '');
+  hh.appendChild(hbank);
+  const hback = el(doc, 'button', 'bwm-btn back'); hback.style.width = 'auto'; hback.style.padding = '8px 18px';
+  hback.appendChild(el(doc, 'span', null, '← MENU'));
+  hback.addEventListener('click', () => show('main'));
+  hh.appendChild(hback);
+  harv.appendChild(hh);
+  const hlist = el(doc, 'div');
+  harv.appendChild(hlist);
+  root.appendChild(harv);
+
+  function refreshHarvester() {
+    const s = loadSave();
+    const lvl = s.harvesterLevel || 1;
+    const bank = (s.carry && s.carry.gold) || 0;
+    hbank.textContent = 'BANK ' + bank + 'g';
+    hlist.textContent = '';
+    for (const up of MAPDATA.harvesterUpgrades) {
+      const isCur = up.Level === lvl;
+      const owned = up.Level <= lvl;
+      const isNext = up.Level === lvl + 1;
+      const row = el(doc, 'div', 'bwm-hrow' + (isCur ? ' cur' : '') + (!owned && !isNext ? ' locked' : ''));
+      row.appendChild(el(doc, 'div', 'bwm-hlvl', 'L' + up.Level));
+      const st = el(doc, 'div', 'bwm-hstats');
+      st.innerHTML = 'Capacity <b>×' + up.Capacity_Mult + '</b> · Speed <b>×' + up.Speed_Mult +
+        '</b> · HP <b>×' + up.HP_Mult + '</b>' +
+        (up.Unlock && up.Unlock !== '—' ? ' · <b>' + up.Unlock + '</b>' : '') +
+        '<br>' + (up.Notes || '');
+      row.appendChild(st);
+      if (owned) {
+        row.appendChild(el(doc, 'span', 'bwm-bank', isCur ? 'CURRENT' : 'OWNED'));
+      } else if (isNext) {
+        const buy = el(doc, 'button', 'bwm-hbuy', 'BUY — ' + up.Gold_Cost + 'g');
+        buy.disabled = bank < up.Gold_Cost;
+        buy.title = bank < up.Gold_Cost ? 'Bank gold by finishing maps (your leftover gold carries forward)' : '';
+        buy.addEventListener('click', () => {
+          if (cbs.onBuyHarvester) cbs.onBuyHarvester(up.Level, up.Gold_Cost);
+          refreshHarvester();
+        });
+        row.appendChild(buy);
+      }
+      hlist.appendChild(row);
+    }
+  }
+
   root.appendChild(el(doc, 'div', 'bwm-foot', 'BULWARK — TEST BUILD'));
 
   function fmtPar(sec) {
@@ -266,7 +329,9 @@ export function createMenu(mountEl, cbs) {
     main.style.display = screen === 'main' ? 'flex' : 'none';
     maps.style.display = screen === 'maps' ? 'block' : 'none';
     factions.style.display = screen === 'factions' ? 'block' : 'none';
+    harv.style.display = screen === 'harvester' ? 'block' : 'none';
     if (screen === 'factions') refreshFactions();
+    if (screen === 'harvester') refreshHarvester();
     if (screen === 'maps') {
       mh.firstChild.textContent = chosenFaction ? 'CAMPAIGN — VS ' + chosenFaction.toUpperCase() : 'CAMPAIGN';
       refreshMaps();
