@@ -15,6 +15,7 @@ import { MAPDATA } from '../../content/maps/mapdata.js';
 import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath } from './pathfinding.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
+import { WAVE_WINDOWS } from '../../content/maps/wave-windows.js';
 
 const TILE = 64;   // matches tables.js MAP_TILE — 64px/tile
 // SAFE BORDER (owner, 2026-07-13): 2 tiles of non-buildable approach terrain wrap the battlefield.
@@ -399,14 +400,63 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
   }
   const def = mapDef(mapId);
   const primaryType = def.Primary_Resource || 'Powder';
-  // resources → game shape (role kept; premium/quest TYPE finalized later by resolveResourceTypes)
-  const resources = (forge.resources || [])
-    .filter((r) => !inBase(r.x, r.y))
-    .map((r, i) => ({ id: r.id || `t${mapId}-${i}-${r.x}-${r.y}`, type: primaryType, role: r.role || 'primary',
-      wave: r.wave || 1, x: r.x, y: r.y, grade: 0.5, units: 20, valuePerUnit: 4,
-      respawns: (r.role || 'primary') === 'primary' }));
-  // rings: workbook BUDGETS + one forge spawn point per lane (from the wave's spread)
+  const primDef = resourceDef(primaryType, 'Primary');
   const rows8 = waveRows(mapId);
+
+  // ── RESOURCES: guarantee each map's economy per wave ──────────────────────────────────────────
+  // Each resource binds to the FIRST wave-window that reveals it, and every wave is GUARANTEED its
+  // workbook node counts: primary (blue) near the base, premium (yellow, the faction resource —
+  // Flower/Crystal/Mineral) deeper, quest at the far edge. The forge's scattered pools are honored
+  // where they exist; any shortfall is backfilled on walkable cells inside that wave's window, so a
+  // map can never come up economically starved. Types/values for premium+quest resolve per faction
+  // later (resolveResourceTypes); primary carries its own value here.
+  const wins = ((forge.waveWindows && forge.waveWindows.length) ? forge.waveWindows : WAVE_WINDOWS)
+    .map((w) => ({ wave: w.wave, x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 }));
+  const waveFor = (x, y) => {
+    for (const w of wins) if (x >= w.x0 && x <= w.x1 && y >= w.y0 && y <= w.y1) return w.wave;
+    return wins.length ? wins[wins.length - 1].wave : 1;
+  };
+  const occupied = new Set([...waterCells, ...blockedCells].map((c) => `${c.x},${c.y}`));
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) occupied.add(`${bx + dx},${cy + dy}`); // base gap
+  const distC = (x, y) => Math.hypot(x - bx, y - cy);
+  let rid = 0;
+  const mkRes = (x, y, role, wave) => ({
+    id: `t${mapId}-${role[0]}${rid++}-${x}-${y}`, type: primaryType, role, wave, x, y, grade: 0.5,
+    units: (role === 'primary' && primDef) ? primDef.Units_Per_Node : 20,
+    valuePerUnit: (role === 'primary' && primDef) ? primDef.Value_Per_Unit : 4,
+    respawns: role === 'primary',
+  });
+  const resources = [];
+  for (const r of (forge.resources || [])) {           // honor the tool's scattered pools first
+    const k = `${r.x},${r.y}`;
+    if (occupied.has(k)) continue;
+    occupied.add(k);
+    resources.push(mkRes(r.x, r.y, r.role || 'primary', waveFor(r.x, r.y)));
+  }
+  for (const row of rows8) {                            // then GUARANTEE the workbook counts per wave
+    const wave = row.Wave;
+    const w = wins.find((x) => x.wave === wave) || { x0: 0, y0: 0, x1: cols - 1, y1: rows - 1 };
+    const cellsIn = [];
+    for (let y = Math.max(0, w.y0); y <= Math.min(rows - 1, w.y1); y++)
+      for (let x = Math.max(0, w.x0); x <= Math.min(cols - 1, w.x1); x++)
+        if (!occupied.has(`${x},${y}`)) cellsIn.push({ x, y });
+    const near = [...cellsIn].sort((a, b) => distC(a.x, a.y) - distC(b.x, b.y));
+    const far = [...cellsIn].sort((a, b) => distC(b.x, b.y) - distC(a.x, a.y));
+    const guarantee = (role, want, pool) => {
+      let have = resources.filter((rr) => rr.wave === wave && rr.role === role).length;
+      for (const c of pool) {
+        if (have >= want) break;
+        const k = `${c.x},${c.y}`;
+        if (occupied.has(k)) continue;
+        occupied.add(k); resources.push(mkRes(c.x, c.y, role, wave)); have++;
+      }
+    };
+    guarantee('primary', row.Primary_Nodes || 0, near);         // blue — near-base income
+    guarantee('premium', row.Premium_Nodes || 0, far);          // yellow — faction resource, deeper
+    if ((row.Quest_Nodes || 0) > 0) guarantee('quest', row.Quest_Nodes, far);   // far edge, waves 5-8
+  }
+
+  // rings: workbook BUDGETS + one forge spawn point per lane (from the wave's spread)
   const sbw = forge.spawnsByWave || (forge.spawns ? { 1: forge.spawns } : {});
   const pick = (wave, lane) => {
     const a = (sbw[wave] || sbw[String(wave)] || []).filter((s) => s.lane === lane);
