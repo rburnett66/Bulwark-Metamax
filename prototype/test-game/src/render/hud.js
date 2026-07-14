@@ -314,7 +314,6 @@ export function createHud(mountEl, callbacks) {
   harvBtn.appendChild(hCost);
   harvBtn.addEventListener('click', () => { if (cbs.onBuyHarvesterUnit) cbs.onBuyHarvesterUnit(); });
   paletteRow.appendChild(harvBtn);
-  hud.harvBtn = harvBtn; hud.harvCost = hCost;
   palette.appendChild(paletteRow);
   root.appendChild(palette);
   // NB: the 1-4 / Esc build HOTKEYS are handled in input/input.js (which also refreshes the placement ghost);
@@ -540,6 +539,8 @@ export function createHud(mountEl, callbacks) {
     doc,
     root,
     callbacks: cbs,
+    harvBtn,
+    harvCost: hCost,
     hpfill,
     hptext,
     moneyEl,
