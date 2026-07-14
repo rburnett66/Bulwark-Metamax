@@ -2,10 +2,14 @@ import { MAP, WAVES, makeWaves } from './data/tables.js';
 import { buildCampaignMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
+import { loadSave, updateSave, recordResult } from './save/save.js';
+import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
+import { showContractModal } from './render/contractModal.js';
+import { createMenu } from './menu/menu.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame } from './render/renderer.js';
-import { createHud, updateHud, showResult, flashMessage, showWaveBanner } from './render/hud.js';
+import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner } from './render/hud.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
 import { setChannelVolume } from './comm/voice.js';
@@ -99,6 +103,7 @@ export function boot(mountEl, seed) {
   let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame
   let inputHandle = null;
   let pendingCarry = null;   // campaign carry (gold + defenses) applied by restart() until the map changes by hand
+  let runContract = null;    // the ACCEPTED quest contract for the current map run (judged at match end)
 
   // ---------------------------------------------------------------------
   // Command submission: validates via sim core, records accepted commands.
@@ -182,6 +187,22 @@ export function boot(mountEl, seed) {
     if (art) renderer.unitArt = art;
     restart(currentSeed);
     flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
+
+    // ── QUEST CONTRACT offer (owner design): a character from the map's quest-giver faction
+    // makes the pitch before the first tap. Skipped when the map seeds no quest fields (maps
+    // 1-2) or the map's contract is already FULFILLED.
+    runContract = null;
+    if (currentMapId) {
+      const sv = loadSave();
+      const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
+      const offer = already ? null : buildOffer(currentMapId, currentMap, voicePacks, sv);
+      if (offer) {
+        showContractModal(mountEl, offer, {
+          onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); },
+          onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); },
+        });
+      }
+    }
   }
 
   function playReplay(replayLog) {
@@ -222,6 +243,7 @@ export function boot(mountEl, seed) {
     },
     onNextWave: () => { endInterlude(); },
     onDeselect: () => { ui.selectedUnitId = null; ui.selectedStructureId = null; },
+    onMainMenu: () => { if (hud && hud.hideResult) hud.hideResult(); menu.open('maps'); },
     onNextMap: () => {
       if (!(currentMapId > 0 && currentMapId < 9)) return;
       // CAMPAIGN CARRY (owner): bank the leftover gold + every standing defense (offsets from the
@@ -236,6 +258,7 @@ export function boot(mountEl, seed) {
         }
       }
       pendingCarry = carry;
+      updateSave((sv) => { sv.carry = carry; sv.goldBank = carry.gold; });
       void selectMap(currentMapId + 1);
     },
     onVolume: (channel, v) => { setChannelVolume(channel, v); },
@@ -321,7 +344,30 @@ export function boot(mountEl, seed) {
 
   // boot = a fresh board on the DEFAULT MAP: selectMap rebuilds sim+renderer for map 1 and its
   // restart() opens the wave-1 tap-to-start overlay
-  void selectMap(DEFAULT_MAP_ID);
+  // ── MAIN MENU (the menu epic, slice 1) ──────────────────────────────
+  // Boot lands on the menu; picking a map starts the battle underneath it. Dev loop is protected:
+  // ?map=N boots STRAIGHT into that map with no menu (0 = classic).
+  let devMap = null;
+  try {
+    const mm = /[?&]map=(\d+)/.exec(window.location.search || '');
+    if (mm) devMap = parseInt(mm[1], 10) | 0;
+  } catch (e) { /* file:// quirks */ }
+  {
+    const sv = loadSave();
+    if (sv.carry) pendingCarry = sv.carry;   // the campaign survives a page reload now
+  }
+  const menu = createMenu(mountEl, {
+    onPlayMap: (id) => { menu.close(); void selectMap(id); },
+    onSelectFaction: (f) => { currentTestFaction = f || DEFAULT_FACTION; },   // the chosen enemy drives the wave builder
+    onReplay: () => {
+      menu.close();
+      void selectMap(devMap != null ? devMap : DEFAULT_MAP_ID);
+      // replay runs off the persisted last log once the board exists
+      setTimeout(() => { if (lastReplayLog) playReplay(lastReplayLog); }, 50);
+    },
+  });
+  if (devMap != null) { menu.close(); void selectMap(devMap); }
+  else void selectMap(loadSave().unlockedThrough <= 1 ? DEFAULT_MAP_ID : Math.min(9, loadSave().unlockedThrough));
 
   // ---------------------------------------------------------------------
   // Comm dialog (render-side only), per the Dialog & Storytelling System doc:
@@ -396,6 +442,9 @@ export function boot(mountEl, seed) {
           for (let i = 0; i < evs.length; i++) {
             pendingEvents.push(evs[i]);
             // Boldly announce who's attacking, before the wave's enemies appear.
+            if (evs[i].type === 'waveStars') {
+              showStarBanner(hud, evs[i].wave, evs[i].stars);   // Story 4: stars FIRST, then the dialog beat
+            }
             if (evs[i].type === 'wave' && evs[i].phase === 'start' && evs[i].faction) {
               showWaveBanner(hud, evs[i].faction);
               // the challenge already played during the interlude (pre-battle sequencing); it only
@@ -448,13 +497,25 @@ export function boot(mountEl, seed) {
               nextMap = { id: currentMapId + 1, name: nm.name || ('Map ' + (currentMapId + 1)), size: (nm.cols - 4) + 'x' + (nm.rows - 4) };
             } catch (e) { nextMap = { id: currentMapId + 1, name: 'Map ' + (currentMapId + 1), size: '' }; }
           }
-          showResult(hud, sim.result, sim.finalScore, nextMap);   // s12: show the computed final score
-          // M3/M4 — the final word: concession from the last faction on a win, the
-          // Champion's authored defeat taunt on a loss.
+          recordResult(currentMapId, sim.result, sim.finalScore, sim.waveStars, sim.waves ? sim.waves.total : 8, currentTestFaction);
+          // judge the ACCEPTED contract from the hauled quest crystals (red + green units)
+          if (runContract) {
+            const hauled = sim.mapScore ? (sim.mapScore.questRed || 0) + (sim.mapScore.questGreen || 0) : 0;
+            const verdict = judgeContract(runContract, hauled, sim.result === 'win');
+            flashMessage(hud, verdict.outcome === 'FULFILLED'
+              ? 'CONTRACT FULFILLED — +' + verdict.gain + ' ' + runContract.giver + ' loyalty' +
+                (verdict.alignShift ? (verdict.alignShift > 0 ? ' · your reputation brightens' : ' · your reputation darkens') : '')
+              : 'CONTRACT BROKEN — ' + (verdict.gain >= 0 ? '+' : '') + verdict.gain + ' ' + runContract.giver + ' loyalty');
+            runContract = null;
+          }
+          showResult(hud, sim.result, sim.finalScore, nextMap, sim.waveStars);
+          // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
+          // wave star score (banner) -> final map score (overlay) -> dialog.
           if (lastWaveFaction) {
-            comm.showCall(sim.result === 'win'
+            const call = sim.result === 'win'
               ? winCall(voicePacks, lastWaveFaction, sim.waves ? sim.waves.current : 0, currentSeed, commOutcome(), true)
-              : defeatCall(voicePacks, lastWaveFaction, currentSeed));
+              : defeatCall(voicePacks, lastWaveFaction, currentSeed);
+            setTimeout(() => comm.showCall(call), 1500);
           }
         }
       }

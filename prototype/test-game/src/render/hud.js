@@ -107,6 +107,14 @@ const CSS = `
 .bw-wavebanner { position:absolute; left:50%; top:34%; transform:translate(-50%,-50%); text-align:center;
   pointer-events:none; opacity:0; transition:opacity .25s ease; z-index:30; white-space:nowrap; }
 .bw-wavebanner.bw-show { opacity:1; }
+.bw-starbanner { position:absolute; top:34%; left:50%; transform:translate(-50%,-50%); text-align:center;
+  opacity:0; transition:opacity .25s; pointer-events:none; z-index:55; }
+.bw-starbanner .stars { font-size:44px; letter-spacing:8px; color:#f2c869;
+  text-shadow:0 0 18px rgba(217,164,65,.6), 0 3px 12px rgba(0,0,0,.8); }
+.bw-starbanner .stars .off { color:#3a4350; text-shadow:none; }
+.bw-starbanner .lbl { font-size:13px; letter-spacing:.3em; color:#cfe3f0; margin-top:4px;
+  text-shadow:0 2px 8px rgba(0,0,0,.9); }
+.bw-starbanner.bw-show { opacity:1; }
 .bw-wavebanner .bw-line { font-size:40px; font-weight:900; letter-spacing:1px; color:#ff5a3c;
   text-shadow:0 3px 12px #000, 0 0 26px rgba(255,80,40,0.65); text-transform:uppercase; }
 .bw-wavebanner .bw-sub { font-size:18px; font-weight:700; letter-spacing:3px; color:#ffd6c8;
@@ -474,6 +482,13 @@ export function createHud(mountEl, callbacks) {
   root.appendChild(toast);
 
   // ---- pre-wave faction announcement -----------------------------------
+  const starBanner = el(doc, 'div', 'bw-starbanner');
+  const starRow = el(doc, 'div', 'stars', '');
+  const starLbl = el(doc, 'div', 'lbl', '');
+  starBanner.appendChild(starRow);
+  starBanner.appendChild(starLbl);
+  root.appendChild(starBanner);
+
   const waveBanner = el(doc, 'div', 'bw-wavebanner');
   const waveBannerMain = el(doc, 'div', 'bw-line', '');
   const waveBannerSub = el(doc, 'div', 'bw-sub', 'prepare for attack!');
@@ -493,6 +508,8 @@ export function createHud(mountEl, callbacks) {
   resultRestart.addEventListener('click', () => {
     if (cbs.onRestart) cbs.onRestart(hud.lastSeed);
   });
+  const resultMenu = el(doc, 'button', 'bw-btn', 'Menu');
+  resultMenu.addEventListener('click', () => { if (cbs.onMainMenu) cbs.onMainMenu(); });
   resultEl.appendChild(banner);
   resultEl.appendChild(scoreEl);
   // VICTORY → advance the campaign: the next, bigger map (owner). Shown by showResult on win.
@@ -501,6 +518,7 @@ export function createHud(mountEl, callbacks) {
   nextMapBtn.addEventListener('click', () => { if (cbs.onNextMap) cbs.onNextMap(); });
   resultEl.appendChild(nextMapBtn);
   resultEl.appendChild(resultRestart);
+  resultEl.appendChild(resultMenu);
   root.appendChild(resultEl);
 
   mountEl.appendChild(root);
@@ -543,6 +561,7 @@ export function createHud(mountEl, callbacks) {
     waveBannerTimer: null,
     resultEl,
     nextMapBtn,
+    starBanner, starRow, starLbl,
     banner,
     scoreEl,
     replayBar,
@@ -711,9 +730,26 @@ export function updateHud(hud, state, ui) {
   }
 }
 
-export function showResult(hud, result, finalScore, nextMap) {
+/** WAVE STARS banner (Story 4): big gold stars at wave clear — shown BEFORE the dialog beat. */
+export function showStarBanner(hud, wave, stars) {
+  if (!hud || !hud.starBanner) return;
+  hud.starRow.innerHTML = '';
+  for (let i = 1; i <= 5; i++) {
+    const sp = hud.doc.createElement('span');
+    sp.textContent = '★';
+    if (i > stars) sp.className = 'off';
+    hud.starRow.appendChild(sp);
+  }
+  hud.starLbl.textContent = 'WAVE ' + wave + ' — ' + stars + '/5';
+  hud.starBanner.classList.add('bw-show');
+  clearTimeout(hud._starT);
+  hud._starT = setTimeout(() => hud.starBanner.classList.remove('bw-show'), 2600);
+}
+
+export function showResult(hud, result, finalScore, nextMap, waveStars) {
   if (!hud) return;
   const win = result === 'win';
+  const starsArr = (Array.isArray(waveStars) && waveStars.length) ? waveStars.map((w) => w.stars) : null;
   if (hud.nextMapBtn) {
     if (win && nextMap) {
       hud.nextMapBtn.textContent = 'NEXT MAP →  ' + (nextMap.name || ('Map ' + nextMap.id)) + ' (' + nextMap.size + ')';
@@ -730,8 +766,12 @@ export function showResult(hud, result, finalScore, nextMap) {
     if (fs && typeof fs.score === 'number') {
       const mm = String(fs.minutes != null ? fs.minutes : 0).padStart(2, '0');
       const ss = String(fs.seconds != null ? fs.seconds : 0).padStart(2, '0');
+      const starsHtml = starsArr
+        ? '<div class="bw-rscore-line" style="color:#f2c869;letter-spacing:2px">★ ' + starsArr.join(' ') +
+          ' · avg ' + (Math.round(starsArr.reduce((a, b) => a + b, 0) / starsArr.length * 10) / 10) + '</div>'
+        : '';
       hud.scoreEl.innerHTML =
-        '<div class="bw-rscore-total">SCORE ' + fs.score + '</div>' +
+        '<div class="bw-rscore-total">SCORE ' + fs.score + '</div>' + starsHtml +
         '<div class="bw-rscore-line">' + (fs.kills || 0) + ' kills · ' + mm + ':' + ss +
         ' · ' + (fs.goldRemaining || 0) + ' gold left</div>';
       hud.scoreEl.style.display = 'block';

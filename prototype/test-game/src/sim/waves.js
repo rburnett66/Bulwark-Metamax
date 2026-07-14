@@ -73,6 +73,39 @@ export function initWaves(waveTable) {
  * @param {object} state - SimState
  * @returns {boolean} false if a wave is already active or all waves are done
  */
+/** Star_Rubric scorer — deterministic, judged at wave clear against the wave-start snapshot.
+ *  1 core untouched · 2 no harvesters lost · 3 primary quota (60% of the wave-ring's primary)
+ *  4 all ring premium claimed · 5 cleared under the ring's par. Conditions with no subject on
+ *  this board (classic: no nodes/ring) default TRUE so every board stays 5-starrable. */
+function scoreWave(state, w) {
+  const map = state.map;
+  const ring = map && map.rings && map.rings.length
+    ? map.rings[Math.max(1, Math.min(w.current, map.rings.length)) - 1] : null;
+  const ws = w.waveStart || {};
+  const hvAlive = (state.harvesterIds || []).reduce((a, id) => {
+    const u = state.units.get(id); return a + (u && u.hp > 0 ? 1 : 0);
+  }, 0);
+  let primaryQuota = true, premiumClaimed = true;
+  if (state.resourceNodes && ring) {
+    const prim = state.resourceNodes.filter((n) => n.wave === w.current && n.role === 'primary');
+    if (prim.length) {
+      const tot = prim.reduce((a, n) => a + n.units, 0);
+      const rem = prim.reduce((a, n) => a + Math.max(0, n.remaining), 0);
+      primaryQuota = tot > 0 ? (tot - rem) / tot >= 0.6 : true;
+    }
+    const prem = state.resourceNodes.filter((n) => n.wave === w.current && n.role === 'premium');
+    if (prem.length) premiumClaimed = prem.every((n) => n.remaining <= 0);
+  }
+  const flags = [
+    ws.baseHp == null || (state.base && state.base.hp >= ws.baseHp),   // 1 core takes no damage
+    ws.harvesters == null || hvAlive >= ws.harvesters,                  // 2 zero harvesters lost
+    primaryQuota,                                                       // 3 primary quota met
+    premiumClaimed,                                                     // 4 ring premium claimed
+    !(ring && ring.parSec) || (state.time - (ws.time || 0)) <= ring.parSec,   // 5 under par
+  ].map((f) => !!f);
+  return { wave: w.current, flags, stars: flags.reduce((a, f) => a + (f ? 1 : 0), 0) };
+}
+
 export function startNextWave(state) {
   const w = state.waves;
   if (!w) return false;
@@ -88,6 +121,14 @@ export function startNextWave(state) {
   w.active = true;
   w.cleared = false;
   w.pendingSpawns = [];
+  // STAR RUBRIC snapshot (Story 4): the five wave stars are judged against the state at wave start
+  w.waveStart = {
+    time: state.time,
+    baseHp: state.base ? state.base.hp : null,
+    harvesters: (state.harvesterIds || []).reduce((a, id) => {
+      const u = state.units.get(id); return a + (u && u.hp > 0 ? 1 : 0);
+    }, 0),
+  };
 
   let seq = 0;
   const now = state.time;
@@ -267,6 +308,11 @@ export function stepWaves(state, dt) {
   if (w.pendingSpawns.length === 0 && !anyAttackersAlive(state)) {
     w.active = false;
     w.cleared = true;
+
+    // ── WAVE STARS (Story 4, workbook Star_Rubric — five independent conditions, 1 star each) ──
+    const sc = scoreWave(state, w);
+    (state.waveStars || (state.waveStars = [])).push(sc);
+    emitEvent(state, { type: 'waveStars', tick: state.tick, wave: sc.wave, stars: sc.stars, flags: sc.flags.slice() });
 
     emitEvent(state, {
       type: 'wave',
