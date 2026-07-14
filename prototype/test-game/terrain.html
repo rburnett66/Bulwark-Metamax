@@ -11,7 +11,11 @@
   #app { display:flex; height:100vh; }
   #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#0a0c10; overflow:auto; padding:16px; }
   #cv { image-rendering:pixelated; box-shadow:0 8px 40px rgba(0,0,0,.6); border:1px solid var(--line); }
-  #side { width:340px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; padding:14px 16px; }
+  #side { width:660px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--line); padding:14px 16px; display:flex; flex-direction:column; overflow:hidden; }
+  #sideHead { flex:0 0 auto; }
+  #cols { display:flex; gap:14px; flex:1; min-height:0; margin-top:10px; }
+  .col { flex:1 1 0; min-width:0; overflow-y:auto; padding-right:4px; }
+  @media (max-width:1180px) { #side { width:360px; overflow-y:auto; } #cols { flex-direction:column; } .col { overflow:visible; } }
   h1 { font-size:15px; letter-spacing:.16em; margin:0 0 2px; }
   .sub { font-size:11px; color:var(--muted); margin-bottom:14px; }
   .grp { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px; }
@@ -44,71 +48,89 @@
 <div id="app">
   <div id="stage"><canvas id="cv"></canvas></div>
   <div id="side">
-    <h1>TERRAIN FORGE</h1>
-    <div class="sub">Stage 1 — algorithmic feature map. Set coverage % and noise per terrain, overlay water, then assign a tile sheet per type and export.</div>
-
-    <div class="grp">
-      <h2>Map</h2>
-      <div class="row"><label>Width</label><input type="number" id="cols" value="40" min="8" max="128"></div>
-      <div class="row"><label>Height</label><input type="number" id="rows" value="24" min="8" max="64"></div>
-      <div class="row"><label>Seed</label><input type="number" id="seed" value="7" min="1"><button class="ghost" id="reroll" style="width:auto;padding:5px 10px;margin:0">↻</button></div>
+    <div id="sideHead">
+      <h1>TERRAIN FORGE</h1>
+      <div class="sub">Stage 1 — algorithmic feature map. Tuning on the left; map commands on the right.</div>
     </div>
+    <div id="cols">
 
-    <div class="grp">
-      <h2>Terrain — coverage % · noise</h2>
-      <div class="hd"><span>%</span><span>noise</span></div>
-      <div id="terrainRows"></div>
-      <div class="note">Grass is the base fill. Higher-priority features (brush→rocks→trees→cliff) overwrite it. Small noisy blobs become mostly border — lower the noise for big solid forests.</div>
+      <div class="col" id="colA">
+        <div class="grp">
+          <h2>Terrain — coverage % · noise</h2>
+          <div class="hd"><span>%</span><span>noise</span></div>
+          <div id="terrainRows"></div>
+          <div class="note">Grass is the base fill. Higher-priority features (brush→rocks→trees→cliff) overwrite it. Small noisy blobs become mostly border — lower the noise for big solid forests.</div>
+        </div>
+
+        <div class="grp">
+          <h2>Water</h2>
+          <div class="row"><label>Mode</label><select id="waterMode"><option value="patches">Patches</option><option value="connected">Connected</option></select></div>
+          <div class="row"><label>Coverage</label><input type="range" id="waterPct" min="0" max="40" value="8"><span class="val" id="waterPctV">8</span></div>
+          <div class="row"><label>Noise</label><input type="range" id="waterNoise" min="0" max="100" value="25"><span class="val" id="waterNoiseV">25</span></div>
+        </div>
+
+        <div class="grp">
+          <h2>Tile palettes — up to 3 variants per type</h2>
+          <div id="paletteRows"></div>
+          <div class="note">Up to 3 sheet variants per type — Stage 2 scatters them deterministically per cell for variety. Sheets from content/sprite-atlas/. Blocking types (rocks, trees, cliff, cliff-border) block movement + building.</div>
+        </div>
+      </div>
+
+      <div class="col" id="colB">
+        <div class="grp">
+          <h2>Map</h2>
+          <div class="row"><label>Width</label><input type="number" id="cols" value="40" min="8" max="128"></div>
+          <div class="row"><label>Height</label><input type="number" id="rows" value="24" min="8" max="64"></div>
+          <div class="row"><label>Seed</label><input type="number" id="seed" value="7" min="1"><button class="ghost" id="reroll" style="width:auto;padding:5px 10px;margin:0">↻</button></div>
+        </div>
+
+        <div class="grp">
+          <h2>Composition</h2>
+          <div class="row"><label>Base gap</label><input type="range" id="baseGap" min="1" max="4" value="2"><span class="val" id="baseGapV">2</span></div>
+          <button class="ghost" id="genRes" style="margin-top:2px">Generate resources</button>
+          <div class="note">Base sits centre on cleared ground; the gap ring forces open terrain and excludes resources. Regenerating terrain clears resources/spawns.</div>
+        </div>
+
+        <div class="grp">
+          <h2>Wave windows &amp; attack tuning</h2>
+          <div class="row"><label>World mode</label><input type="checkbox" id="worldMode" checked><span class="note" style="margin:0">64×32 · base centred</span></div>
+          <div class="row"><label>Preview wave</label><div class="waveSel" id="waveSel"></div></div>
+          <div id="waveInfo" class="note" style="margin:2px 0 8px"></div>
+          <div class="row"><label>Spawn edge</label><select id="spawnEdge"><option value="window">Window (far side)</option><option value="world">World (outer)</option></select></div>
+          <div class="row"><label>Ground</label><input type="number" id="spGround" value="6" min="0" max="40"></div>
+          <div class="row"><label>Air</label><input type="number" id="spAir" value="4" min="0" max="40"></div>
+          <div class="row"><label>Water</label><input type="number" id="spWater" value="3" min="0" max="40"></div>
+          <div class="row"><label>Spread</label><input type="range" id="spSpread" min="10" max="100" value="100"><span class="val" id="spSpreadV">100</span></div>
+          <div class="row"><label>Spacing</label><input type="range" id="spSpacing" min="1" max="6" value="2"><span class="val" id="spSpacingV">2</span></div>
+          <button class="ghost" id="genSpawn" style="margin-top:2px">Generate spawns — all 8 waves</button>
+          <div class="note">Enemies attack from the window's FAR side. Spawns are placed EVENLY on that edge — wider spread + spacing = parallel lanes, the main lever against pathing collisions. Waves 7–8 surround.</div>
+        </div>
+
+        <div class="grp">
+          <h2>Save to faction slot</h2>
+          <div class="row"><label>Faction</label><select id="slotFaction"></select></div>
+          <div class="row"><label>Map #</label><select id="slotMap"></select></div>
+          <button class="ghost" id="saveSlot" style="margin-top:2px">Save map to slot</button>
+          <div class="row" style="margin-top:8px"><label>Load</label><select id="loadSlot"><option value="">— saved maps —</option></select><button class="ghost" id="loadSlotBtn" style="width:auto;padding:5px 10px;margin:0">Load</button></div>
+          <div id="slotInfo" class="note">Stored in this browser (localStorage), keyed by faction + map number. The game will read these slots when the campaign is wired to factions.</div>
+        </div>
+
+        <div class="grp">
+          <h2>Legend</h2>
+          <div class="lgh">Terrain — ⛔ blocks movement &amp; building</div>
+          <div class="legend" id="legTerrain"></div>
+          <div class="lgh">Resources</div>
+          <div class="legend" id="legRes"></div>
+          <div class="lgh">Markers</div>
+          <div class="legend" id="legMark"></div>
+          <div class="note">Spawn arrows point the way units attack (toward base). Colours ARE the engine's tileset-free playtest render.</div>
+        </div>
+
+        <button id="export">EXPORT terrain-map.json</button>
+        <button class="ghost" id="copy" style="margin-top:8px">Copy JSON to clipboard</button>
+      </div>
+
     </div>
-
-    <div class="grp">
-      <h2>Water</h2>
-      <div class="row"><label>Mode</label><select id="waterMode"><option value="patches">Patches</option><option value="connected">Connected</option></select></div>
-      <div class="row"><label>Coverage</label><input type="range" id="waterPct" min="0" max="40" value="8"><span class="val" id="waterPctV">8</span></div>
-      <div class="row"><label>Noise</label><input type="range" id="waterNoise" min="0" max="100" value="25"><span class="val" id="waterNoiseV">25</span></div>
-    </div>
-
-    <div class="grp">
-      <h2>Tile palettes — up to 3 variants per type</h2>
-      <div id="paletteRows"></div>
-      <div class="note">Up to 3 sheet variants per type — Stage 2 scatters them deterministically per cell for variety. Sheets from content/sprite-atlas/. Blocking types (rocks, trees, cliff, cliff-border) block movement + building.</div>
-    </div>
-
-    <div class="grp">
-      <h2>Composition</h2>
-      <div class="row"><label>Base gap</label><input type="range" id="baseGap" min="1" max="4" value="2"><span class="val" id="baseGapV">2</span></div>
-      <button class="ghost" id="genRes" style="margin-top:2px">Generate resources</button>
-      <div class="note">Base sits centre on cleared ground; the gap ring forces open terrain and excludes resources. Regenerating terrain clears resources/spawns (they depend on it).</div>
-    </div>
-
-    <div class="grp">
-      <h2>Wave windows &amp; attack tuning</h2>
-      <div class="row"><label>World mode</label><input type="checkbox" id="worldMode" checked><span class="note" style="margin:0">64×32 global · base centred · 8 wave windows</span></div>
-      <div class="row"><label>Preview wave</label><div class="waveSel" id="waveSel"></div></div>
-      <div id="waveInfo" class="note" style="margin:2px 0 8px"></div>
-      <div class="row"><label>Spawn edge</label><select id="spawnEdge"><option value="window">Window (far side)</option><option value="world">World (outer)</option></select></div>
-      <div class="row"><label>Ground</label><input type="number" id="spGround" value="6" min="0" max="40"></div>
-      <div class="row"><label>Air</label><input type="number" id="spAir" value="4" min="0" max="40"></div>
-      <div class="row"><label>Water</label><input type="number" id="spWater" value="3" min="0" max="40"></div>
-      <div class="row"><label>Spread</label><input type="range" id="spSpread" min="10" max="100" value="100"><span class="val" id="spSpreadV">100</span></div>
-      <div class="row"><label>Spacing</label><input type="range" id="spSpacing" min="1" max="6" value="2"><span class="val" id="spSpacingV">2</span></div>
-      <button class="ghost" id="genSpawn" style="margin-top:2px">Generate spawns — all 8 waves</button>
-      <div class="note">Enemies attack from the window's FAR side (base is at world centre). Spawns are placed EVENLY on that edge — wider spread + spacing spreads units into parallel lanes, the main lever against pathing collisions. Waves 7–8 surround.</div>
-    </div>
-
-    <div class="grp">
-      <h2>Legend</h2>
-      <div class="lgh">Terrain — ⛔ blocks movement &amp; building</div>
-      <div class="legend" id="legTerrain"></div>
-      <div class="lgh">Resources</div>
-      <div class="legend" id="legRes"></div>
-      <div class="lgh">Markers</div>
-      <div class="legend" id="legMark"></div>
-      <div class="note">Colours ARE the engine's tileset-free playtest render — every map is playable on these swatches before any tile art exists. Assign sheets above to paint them later.</div>
-    </div>
-
-    <button id="export">EXPORT terrain-map.json</button>
-    <button class="ghost" id="copy" style="margin-top:8px">Copy JSON to clipboard</button>
   </div>
 </div>
 
@@ -253,6 +275,7 @@ document.querySelectorAll('input,select').forEach((el) => el.addEventListener('i
     $('spSpreadV').textContent = $('spSpread').value; $('spSpacingV').textContent = $('spSpacing').value;
     return;   // no terrain re-roll; press Generate spawns to apply
   }
+  if (e.target.id === 'slotFaction' || e.target.id === 'slotMap' || e.target.id === 'loadSlot') return;   // slot pickers don't touch the map
   render();
 }));
 $('reroll').addEventListener('click', () => { $('seed').value = (Math.floor(Math.random() * 99999) + 1); render(); });
@@ -296,10 +319,18 @@ function drawOverlays(px) {
     ctx.fillStyle = RESOURCE_COLOR[nnn.color] || '#fff';
     ctx.beginPath(); ctx.arc(nnn.x * px + px / 2, nnn.y * px + px / 2, Math.max(2, px * 0.32), 0, 7); ctx.fill();
   }
-  // spawns — squares by lane colour, on the edges
+  // spawns — directional indicators: an arrow pointing toward the base (the attack vector), by lane
+  const bx = base ? base.pos.x : (worldMode() ? BASE.x - 1 : Math.floor(last.cols / 2));
+  const by = base ? base.pos.y : (worldMode() ? BASE.y - 1 : Math.floor(last.rows / 2));
   for (const sp of spawns) {
-    ctx.fillStyle = LANE_COLOR[sp.lane] || '#fff';
-    ctx.fillRect(sp.x * px + px * 0.15, sp.y * px + px * 0.15, px * 0.7, px * 0.7);
+    const col = LANE_COLOR[sp.lane] || '#fff';
+    const cx = sp.x * px + px / 2, cy = sp.y * px + px / 2, s = Math.max(4, px * 0.55);
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.atan2(by - sp.y, bx - sp.x));
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.moveTo(s, 0); ctx.lineTo(-s * 0.65, s * 0.6); ctx.lineTo(-s * 0.2, 0); ctx.lineTo(-s * 0.65, -s * 0.6); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1;
+    ctx.strokeRect(sp.x * px + px * 0.2, sp.y * px + px * 0.2, px * 0.6, px * 0.6);
   }
   // base — gold 3x3 + gap ring outline
   if (base) {
@@ -341,6 +372,50 @@ $('copy').addEventListener('click', async () => {
   catch (e) { $('copy').textContent = 'Clipboard blocked'; }
 });
 
+// ── faction map slots (a localStorage library keyed by faction + map number) ──
+const FACTIONS = ['Powder', 'Air', 'High Tech', 'Artillery', 'Water', 'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies'];
+const SLOT_KEY = 'bulwark:maps';
+const loadSlots = () => { try { return JSON.parse(localStorage.getItem(SLOT_KEY) || '{}'); } catch (e) { return {}; } };
+const slotId = (f, m) => `${f} · map ${m}`;
+$('slotFaction').innerHTML = FACTIONS.map((f) => `<option>${f}</option>`).join('');
+$('slotMap').innerHTML = Array.from({ length: 9 }, (_, i) => `<option>${i + 1}</option>`).join('');
+function refreshSlots() {
+  const keys = Object.keys(loadSlots());
+  $('loadSlot').innerHTML = '<option value="">— saved maps —</option>' + keys.map((k) => `<option value="${k}">${k}</option>`).join('');
+  if (keys.length) $('slotInfo').textContent = `${keys.length} saved: ${keys.join(', ')}`;
+}
+$('saveSlot').addEventListener('click', () => {
+  const id = slotId($('slotFaction').value, $('slotMap').value);
+  const slots = loadSlots(); slots[id] = exportObj();
+  try { localStorage.setItem(SLOT_KEY, JSON.stringify(slots)); $('slotInfo').textContent = `Saved → ${id}`; refreshSlots(); }
+  catch (e) { $('slotInfo').textContent = 'Save failed (storage full or blocked).'; }
+});
+$('loadSlotBtn').addEventListener('click', () => {
+  const id = $('loadSlot').value; if (!id) return;
+  const slots = loadSlots(); if (slots[id]) { loadState(slots[id]); $('slotInfo').textContent = `Loaded ${id}`; }
+});
+// apply a saved map: restore knobs, deterministically regen terrain, then overlay saved comp
+function loadState(obj) {
+  $('worldMode').checked = !!obj.worldMode;
+  $('seed').value = obj.seed;
+  if (!obj.worldMode) { $('cols').value = obj.cols; $('rows').value = obj.rows; }
+  if (obj.water) { $('waterMode').value = obj.water.mode; $('waterPct').value = Math.round(obj.water.pct); $('waterNoise').value = Math.round(obj.water.noise * 100); }
+  if (obj.types) for (const t of TUNABLE) if (obj.types[t.key]) {
+    document.querySelector(`[data-k="${t.key}"][data-f="pct"]`).value = Math.round(obj.types[t.key].pct);
+    document.querySelector(`[data-k="${t.key}"][data-f="noise"]`).value = Math.round(obj.types[t.key].noise * 100);
+  }
+  for (const k of Object.keys(palettes)) delete palettes[k];
+  if (obj.palettes) Object.assign(palettes, obj.palettes);
+  document.querySelectorAll('[data-p]').forEach((el) => { const arr = obj.palettes && obj.palettes[el.dataset.p]; el.value = arr ? (arr[+el.dataset.i] || '') : ''; });
+  if (obj.spawnTuning) { const t = obj.spawnTuning; $('spawnEdge').value = t.edge; $('spGround').value = t.ground; $('spAir').value = t.air; $('spWater').value = t.water; $('spSpread').value = Math.round(t.spread * 100); $('spSpacing').value = t.spacing; }
+  render();   // same seed + knobs → identical terrain, so the saved overlays line up
+  resources = obj.resources || [];
+  spawnsByWave = obj.spawnsByWave || (obj.spawns ? { 1: obj.spawns } : {});
+  if (obj.base) base = placeBase(last, obj.base.gap != null ? obj.base.gap : +$('baseGap').value, worldMode() ? { x: BASE.x - 1, y: BASE.y - 1 } : obj.base.pos);
+  syncWaveUI(); redraw();
+}
+
+refreshSlots();
 render();
 </script>
 </body>

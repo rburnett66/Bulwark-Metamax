@@ -170,14 +170,13 @@ export function createMenu(mountEl, cbs) {
     const s = loadSave();
     if (cbs.onPlayMap) cbs.onPlayMap(Math.min(9, s.unlockedThrough));
   });
-  mkBtn('CAMPAIGN', 'map select', null, () => show('maps'));
-  mkBtn('FACTIONS', 'choose your enemy', null, () => show('factions'));
+  mkBtn('FACTIONS', 'campaign — choose your enemy', null, () => show('factions'));
   mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
   mkBtn('TECH TREE', 'research upgrades', null, () => show('techtree'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
   mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
-  mkBtn('NEW CAMPAIGN', 'reset all progress', null, () => {
-    if (doc.defaultView && !doc.defaultView.confirm('Reset the whole campaign? Stars, gold, loyalty, tech and map unlocks are wiped.')) return;
+  mkBtn('RESET PROGRESS', 'wipe all progress', null, () => {
+    if (doc.defaultView && !doc.defaultView.confirm('Reset all progress? Stars, gold, loyalty, tech and faction records are wiped.')) return;
     if (cbs.onResetCampaign) cbs.onResetCampaign();
     show('main');   // refresh the Continue label + locks
   });
