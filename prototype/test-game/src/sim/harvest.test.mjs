@@ -123,17 +123,18 @@ function fresh(seed) {
   assert(['red', 'green'].includes(questDeposit.color), 'quest deposit carries its crystal color');
 }
 
-// ── open play (default): a late-wave node is harvestable immediately; ring-gating still rejects ──
+// ── RING SEEDING (owner, 2026-07-15): resources arrive WITH their wave — a late-ring node is NOT
+//    harvestable at wave 1 even in open play; advancing the wave reveals it. Push into the map. ──
 {
   const { s } = fresh(5);
   const late = s.resourceNodes.find((n) => n.wave >= 5);
   const r1 = applyCommand(s, { type: 'harvest', nodeId: late.id });
-  assert(r1.ok, `open play: far node orderable from wave 1 (${r1.reason || 'ok'})`);
-  const { s: gated } = fresh(5);
-  gated.map.openPlay = false;
-  const late2 = gated.resourceNodes.find((n) => n.wave >= 5);
-  const r2 = applyCommand(gated, { type: 'harvest', nodeId: late2.id });
-  assert(!r2.ok && /reveal/.test(r2.reason), `gated mode still rejects unrevealed nodes (${r2.reason})`);
+  assert(!r1.ok && /reveal/.test(r1.reason), `late-ring node rejected at wave 1 (${r1.reason})`);
+  s.waves.current = late.wave;   // its ring has opened
+  const r2 = applyCommand(s, { type: 'harvest', nodeId: late.id });
+  assert(r2.ok, `same node orderable once its wave arrives (${r2.reason || 'ok'})`);
+  const early = s.resourceNodes.find((n) => n.wave === 1);
+  assert(early.remaining === early.units, 'wave-1 fields carried untouched across the waves');
 }
 
 // ── HARVESTOR bay: 500g buys a new harvester (recovery after death / second field) ──
