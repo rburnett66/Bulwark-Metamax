@@ -302,6 +302,8 @@ export function createSim(seed, opts) {
     // entities.nextEntityId(state)
     nextId: 1,
     entityIdCounter: 0,
+    harvesterLevel: (options.harvesterLevel | 0) || 1,   // workbook upgrade level (menu-bought, save-owned)
+    structTiers: options.structTiers || null,            // Amendment B2: campaign tier unlocks (null = all open)
     _resultEmitted: false
   };
 

@@ -32,6 +32,7 @@ export function defaultSave() {
     loyalty: {},
     tech: {},
     harvesterLevel: 1,
+    structTiers: { cannon: 1, flak: 1, wall: 1 },   // Amendment B2: max in-battle tier unlocked per type (gold-bought)
     alignment: 0,        // the good/evil axis (owner): finishing a good hero's contract raises it,
                          // an evil hero's lowers it — the 81-character matrix supplies the givers
   };
@@ -42,6 +43,7 @@ function migrate(s) {
   // v1 field fills (schema grew within v1 during the epic — additive, no version bump needed)
   if (typeof s.alignment !== 'number') s.alignment = 0;
   if (!s.factionRecords) s.factionRecords = {};
+  if (!s.structTiers) s.structTiers = { cannon: 1, flak: 1, wall: 1 };
   return s;
 }
 
@@ -104,4 +106,22 @@ export function recordResult(mapId, result, finalScore, waveStars, totalWaves, f
 
 export function resetSave() {
   return writeSave(defaultSave());
+}
+
+/** Amendment B2 — structure tier unlock economy: gold buys the RIGHT to upgrade in battle,
+ *  per type, on a strict ladder. Costs: [T2, T3]. T4 lands with tables + art. */
+export const TIER_COSTS = { cannon: [600, 1500], flak: [600, 1500], wall: [400, 1000] };
+export function buyStructTier(type, tier) {
+  let ok = false;
+  updateSave((s) => {
+    const cur = (s.structTiers && s.structTiers[type]) || 1;
+    const cost = (TIER_COSTS[type] || [])[tier - 2];
+    if (tier !== cur + 1 || cost == null) return;
+    if (!s.carry || (s.carry.gold || 0) < cost) return;
+    s.carry.gold -= cost;
+    s.goldBank = s.carry.gold;
+    s.structTiers[type] = tier;
+    ok = true;
+  });
+  return ok;
 }
