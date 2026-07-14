@@ -3,6 +3,8 @@ import { buildCampaignMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult } from './save/save.js';
+import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
+import { showContractModal } from './render/contractModal.js';
 import { createMenu } from './menu/menu.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
@@ -101,6 +103,7 @@ export function boot(mountEl, seed) {
   let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame
   let inputHandle = null;
   let pendingCarry = null;   // campaign carry (gold + defenses) applied by restart() until the map changes by hand
+  let runContract = null;    // the ACCEPTED quest contract for the current map run (judged at match end)
 
   // ---------------------------------------------------------------------
   // Command submission: validates via sim core, records accepted commands.
@@ -184,6 +187,22 @@ export function boot(mountEl, seed) {
     if (art) renderer.unitArt = art;
     restart(currentSeed);
     flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
+
+    // ── QUEST CONTRACT offer (owner design): a character from the map's quest-giver faction
+    // makes the pitch before the first tap. Skipped when the map seeds no quest fields (maps
+    // 1-2) or the map's contract is already FULFILLED.
+    runContract = null;
+    if (currentMapId) {
+      const sv = loadSave();
+      const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
+      const offer = already ? null : buildOffer(currentMapId, currentMap, voicePacks, sv);
+      if (offer) {
+        showContractModal(mountEl, offer, {
+          onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); },
+          onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); },
+        });
+      }
+    }
   }
 
   function playReplay(replayLog) {
@@ -479,6 +498,16 @@ export function boot(mountEl, seed) {
             } catch (e) { nextMap = { id: currentMapId + 1, name: 'Map ' + (currentMapId + 1), size: '' }; }
           }
           recordResult(currentMapId, sim.result, sim.finalScore, sim.waveStars, sim.waves ? sim.waves.total : 8, currentTestFaction);
+          // judge the ACCEPTED contract from the hauled quest crystals (red + green units)
+          if (runContract) {
+            const hauled = sim.mapScore ? (sim.mapScore.questRed || 0) + (sim.mapScore.questGreen || 0) : 0;
+            const verdict = judgeContract(runContract, hauled, sim.result === 'win');
+            flashMessage(hud, verdict.outcome === 'FULFILLED'
+              ? 'CONTRACT FULFILLED — +' + verdict.gain + ' ' + runContract.giver + ' loyalty' +
+                (verdict.alignShift ? (verdict.alignShift > 0 ? ' · your reputation brightens' : ' · your reputation darkens') : '')
+              : 'CONTRACT BROKEN — ' + (verdict.gain >= 0 ? '+' : '') + verdict.gain + ' ' + runContract.giver + ' loyalty');
+            runContract = null;
+          }
           showResult(hud, sim.result, sim.finalScore, nextMap, sim.waveStars);
           // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
           // wave star score (banner) -> final map score (overlay) -> dialog.

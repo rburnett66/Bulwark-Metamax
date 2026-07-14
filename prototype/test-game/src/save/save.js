@@ -32,12 +32,16 @@ export function defaultSave() {
     loyalty: {},
     tech: {},
     harvesterLevel: 1,
+    alignment: 0,        // the good/evil axis (owner): finishing a good hero's contract raises it,
+                         // an evil hero's lowers it — the 81-character matrix supplies the givers
   };
 }
 
 function migrate(s) {
   if (!s || typeof s !== 'object' || typeof s.v !== 'number') return defaultSave();
-  // future: if (s.v === 1) { ...upgrade...; s.v = 2; }
+  // v1 field fills (schema grew within v1 during the epic — additive, no version bump needed)
+  if (typeof s.alignment !== 'number') s.alignment = 0;
+  if (!s.factionRecords) s.factionRecords = {};
   return s;
 }
 

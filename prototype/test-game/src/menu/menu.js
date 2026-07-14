@@ -187,6 +187,9 @@ export function createMenu(mountEl, cbs) {
 
   function refreshFactions() {
     const s = loadSave();
+    const al = s.alignment || 0;
+    fh.firstChild.textContent = 'FACTIONS — ALIGNMENT ' + (al > 0 ? '+' : '') + al + ' ' +
+      (al >= 4 ? 'GOOD' : al <= -4 ? 'EVIL' : 'NEUTRAL');
     fgrid.textContent = '';
     for (const row of MAPDATA.factions) {
       const fid = row.Faction_ID;
