@@ -35,6 +35,14 @@ export function buildNavGrid(map, structures, extraBlocked) {
     }
   }
 
+  // Terrain Forge blocking cells (rocks/trees/cliff) are impassable, same as water — Stage 2 maps.
+  if (map.blockedCells) {
+    for (let i = 0; i < map.blockedCells.length; i++) {
+      const c = map.blockedCells[i];
+      if (c.x >= 0 && c.x < cols && c.y >= 0 && c.y < rows) passable[c.y * cols + c.x] = 0;
+    }
+  }
+
   // ALL live structures block walkers — walls, moats AND towers are solid obstacles units must path AROUND
   // (a destroyed or removed structure no longer exists in the list, but guard anyway). Flyers ignore the grid.
   if (structures) {

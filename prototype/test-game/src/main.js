@@ -1,5 +1,5 @@
 import { MAP, WAVES, makeWaves } from './data/tables.js';
-import { buildCampaignMap, resolveResourceTypes } from './sim/mapgen.js';
+import { buildCampaignMap, buildTerrainMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, buyStructTier, resetSave } from './save/save.js';
@@ -171,18 +171,37 @@ export function boot(mountEl, seed) {
   // ── ring-campaign map switch (Map picker): rebuild board, waves, renderer — different maps have
   //    different sizes, so the PIXI surface resizes and the static board redraws. Overrides authored
   //    in the Map Lab load from content/maps/overrides/map-<id>.json when present.
+  // Read a Terrain Forge map for this map number from the tool's localStorage library
+  // ('bulwark:maps', keyed "<faction> · map N"). Same origin as terrain.html, so no file handoff.
+  function loadForgeMap(mapId) {
+    try {
+      const all = JSON.parse(localStorage.getItem('bulwark:maps') || '{}');
+      const key = Object.keys(all).find((k) => new RegExp(`\\bmap ${mapId}$`).test(k));
+      return key ? all[key] : null;
+    } catch (e) { return null; }
+  }
+
   async function selectMap(mapId) {
     currentMapId = mapId | 0;
     if (!currentMapId) {
       currentMap = MAP;
       currentWaves = currentTestFaction ? makeWaves(currentTestFaction) : WAVES;
     } else {
-      let overrides = null;
-      try {
-        const r = await fetch(`content/maps/overrides/map-${currentMapId}.json`);
-        if (r.ok) overrides = await r.json();
-      } catch (e) { /* no override file — generator output as-is */ }
-      const m = buildCampaignMap(currentMapId, { seed: 0, overrides });
+      // STAGE 2: a Terrain Forge map saved for this slot (terrain.html → Save) wins — it's read from
+      // the SAME-ORIGIN localStorage the tool writes, so authoring in the tool → playing here needs no
+      // file copy. Falls back to the workbook generator (+ any Map Lab override file) when none exists.
+      const forge = loadForgeMap(currentMapId);
+      let m;
+      if (forge) {
+        m = buildTerrainMap(forge, currentMapId, { seed: 0 });
+      } else {
+        let overrides = null;
+        try {
+          const r = await fetch(`content/maps/overrides/map-${currentMapId}.json`);
+          if (r.ok) overrides = await r.json();
+        } catch (e) { /* no override file — generator output as-is */ }
+        m = buildCampaignMap(currentMapId, { seed: 0, overrides });
+      }
       resolveResourceTypes(m, 1);   // harvest lands later; faction 1 typing for the node markers
       currentMap = m;
       currentWaves = buildCampaignWaves(m, currentTestFaction);

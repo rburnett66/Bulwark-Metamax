@@ -2,6 +2,10 @@ import { getStructureDef, getUnitDef } from '../data/tables.js';
 import { hasArt, buildUnitSprite } from './unitArt.js';
 import { layerLean } from '../harness/camera.js';
 import { SPRITE_OVER_COLLISION } from '../harness/parts.js';
+import { TERRAIN_COLOR } from '../terrain/terrainGen.js';
+
+// Terrain Forge palette as PIXI numeric colors (Stage 2 maps render by terrain type)
+const TERRAIN_HEX = TERRAIN_COLOR.map((c) => parseInt(c.slice(1), 16));
 
 const FX_DT = 1 / 60;
 
@@ -93,9 +97,19 @@ function drawStaticBoard(renderer, map) {
   // is approach terrain — darker, never buildable-tinted
   const pa = map.playArea || null;
   const inPlay = (x, y) => !pa || (x >= pa.x0 && x <= pa.x1 && y >= pa.y0 && y <= pa.y1);
+  // Stage 2: a Terrain Forge map paints each cell by its terrain type (the tool's tileset-free
+  // playtest palette). Otherwise the generated green bands + buildable tint (existing behavior).
+  const terr = map.terrain && map.fromForge ? map.terrain : null;
   for (let y = 0; y < map.rows; y++) {
     for (let x = 0; x < map.cols; x++) {
       if (waterSet.has(cellKey(x, y))) continue;
+      if (terr) {
+        const ti = terr[y * map.cols + x] | 0;
+        gGround.beginFill(TERRAIN_HEX[ti] != null ? TERRAIN_HEX[ti] : 0x3c5c33, 1);
+        gGround.drawRect(x * t, y * t, t, t);
+        gGround.endFill();
+        continue;
+      }
       const band = y < map.rows / 3 ? 0 : (y < (2 * map.rows) / 3 ? 1 : 2);
       const shades = inPlay(x, y) ? [0x33502c, 0x3c5c33, 0x45683a] : [0x1f2b1c, 0x24321f, 0x293823];
       gGround.beginFill(shades[band], 1);
