@@ -7,7 +7,7 @@ import { createMenu } from './menu/menu.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame } from './render/renderer.js';
-import { createHud, updateHud, showResult, flashMessage, showWaveBanner } from './render/hud.js';
+import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner } from './render/hud.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
 import { setChannelVolume } from './comm/voice.js';
@@ -422,6 +422,9 @@ export function boot(mountEl, seed) {
           for (let i = 0; i < evs.length; i++) {
             pendingEvents.push(evs[i]);
             // Boldly announce who's attacking, before the wave's enemies appear.
+            if (evs[i].type === 'waveStars') {
+              showStarBanner(hud, evs[i].wave, evs[i].stars);   // Story 4: stars FIRST, then the dialog beat
+            }
             if (evs[i].type === 'wave' && evs[i].phase === 'start' && evs[i].faction) {
               showWaveBanner(hud, evs[i].faction);
               // the challenge already played during the interlude (pre-battle sequencing); it only
@@ -474,14 +477,15 @@ export function boot(mountEl, seed) {
               nextMap = { id: currentMapId + 1, name: nm.name || ('Map ' + (currentMapId + 1)), size: (nm.cols - 4) + 'x' + (nm.rows - 4) };
             } catch (e) { nextMap = { id: currentMapId + 1, name: 'Map ' + (currentMapId + 1), size: '' }; }
           }
-          recordResult(currentMapId, sim.result, sim.finalScore);   // campaign save: beaten/best/unlock
-          showResult(hud, sim.result, sim.finalScore, nextMap);   // s12: show the computed final score
-          // M3/M4 — the final word: concession from the last faction on a win, the
-          // Champion's authored defeat taunt on a loss.
+          recordResult(currentMapId, sim.result, sim.finalScore, sim.waveStars, sim.waves ? sim.waves.total : 8);
+          showResult(hud, sim.result, sim.finalScore, nextMap, sim.waveStars);
+          // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
+          // wave star score (banner) -> final map score (overlay) -> dialog.
           if (lastWaveFaction) {
-            comm.showCall(sim.result === 'win'
+            const call = sim.result === 'win'
               ? winCall(voicePacks, lastWaveFaction, sim.waves ? sim.waves.current : 0, currentSeed, commOutcome(), true)
-              : defeatCall(voicePacks, lastWaveFaction, currentSeed));
+              : defeatCall(voicePacks, lastWaveFaction, currentSeed);
+            setTimeout(() => comm.showCall(call), 1500);
           }
         }
       }

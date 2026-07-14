@@ -65,8 +65,10 @@ export function updateSave(fn) {
   return writeSave(s);
 }
 
-/** Record a finished battle. Win unlocks the next map (sequence is fixed, 9 maps). */
-export function recordResult(mapId, result, finalScore) {
+/** Record a finished battle. The GDD gate: a >= 3.0 STAR AVERAGE unlocks the next map
+ *  (workbook Global_Params.Star_Gate). waveStars = the sim's per-wave rubric results. */
+export const STAR_GATE = 3.0;
+export function recordResult(mapId, result, finalScore, waveStars, totalWaves) {
   if (!mapId) return loadSave();   // classic board — no campaign record
   return updateSave((s) => {
     const m = s.maps[mapId] || (s.maps[mapId] = { beaten: false, bestScore: null, stars: null, avg: null, contract: null });
@@ -74,7 +76,14 @@ export function recordResult(mapId, result, finalScore) {
       m.beaten = true;
       const sc = finalScore && typeof finalScore.score === 'number' ? finalScore.score : null;
       if (sc != null && (m.bestScore == null || sc > m.bestScore)) m.bestScore = sc;
-      if (mapId < 9) s.unlockedThrough = Math.max(s.unlockedThrough, mapId + 1);
+      if (Array.isArray(waveStars) && waveStars.length) {
+        const stars = waveStars.map((w) => w.stars);
+        const avg = Math.round((stars.reduce((a, b) => a + b, 0) / (totalWaves || stars.length)) * 10) / 10;
+        if (m.avg == null || avg > m.avg) { m.stars = stars; m.avg = avg; }   // keep the BEST run
+        if (mapId < 9 && (m.avg || 0) >= STAR_GATE) s.unlockedThrough = Math.max(s.unlockedThrough, mapId + 1);
+      } else if (mapId < 9) {
+        s.unlockedThrough = Math.max(s.unlockedThrough, mapId + 1);   // no star data — beat-gate fallback
+      }
     }
   });
 }

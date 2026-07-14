@@ -165,10 +165,12 @@ export function createMenu(mountEl, cbs) {
       card.appendChild(el(doc, 'div', 'sz', row.Full_W + ' × ' + row.Full_H +
         (row.Has_Water ? '  ·  WATER' : '') + '  ·  DIFF ' + row.Difficulty.toFixed(2)));
       card.appendChild(el(doc, 'span', 'res', String(row.Primary_Resource).toUpperCase()));
-      card.appendChild(el(doc, 'div', 'note', locked ? 'Beat the previous map to unlock.' : (row.Notes || '')));
+      card.appendChild(el(doc, 'div', 'note', locked ? 'Reach a ★ 3.0 average on the previous map.' : (row.Notes || '')));
       const meta = el(doc, 'div', 'meta');
       meta.appendChild(el(doc, 'span', null, fmtPar(row.Par_Time_Sec)));
-      meta.appendChild(el(doc, 'span', 'best', rec.bestScore != null ? 'BEST ' + rec.bestScore : ''));
+      meta.appendChild(el(doc, 'span', 'best',
+        (rec.avg != null ? '★ ' + rec.avg.toFixed(1) + '  ' : '') +
+        (rec.bestScore != null ? 'BEST ' + rec.bestScore : '')));
       card.appendChild(meta);
       if (locked) card.appendChild(el(doc, 'span', 'lock', '🔒'));
       else if (rec.beaten) card.appendChild(el(doc, 'span', 'done', '✓ WON'));
