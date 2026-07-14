@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulwark — Terrain Forge</title>
+<style>
+  :root { --ink:#0c0e12; --panel:#161b22; --line:#28303b; --text:#e6ecf3; --muted:#8fa0b3; --gold:#d9a441; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--ink); color:var(--text); font-family:"Segoe UI",system-ui,sans-serif; }
+  #app { display:flex; height:100vh; }
+  #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#0a0c10; overflow:auto; padding:16px; }
+  #cv { image-rendering:pixelated; box-shadow:0 8px 40px rgba(0,0,0,.6); border:1px solid var(--line); }
+  #side { width:340px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; padding:14px 16px; }
+  h1 { font-size:15px; letter-spacing:.16em; margin:0 0 2px; }
+  .sub { font-size:11px; color:var(--muted); margin-bottom:14px; }
+  .grp { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px; }
+  .grp h2 { font-size:10px; letter-spacing:.22em; color:var(--muted); margin:0 0 8px; text-transform:uppercase; }
+  .row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+  .row label { flex:0 0 78px; font-size:12px; display:flex; align-items:center; gap:6px; }
+  .swatch { width:11px; height:11px; border-radius:2px; border:1px solid rgba(255,255,255,.2); }
+  .row input[type=range] { flex:1; min-width:0; accent-color:var(--gold); }
+  .row .val { flex:0 0 34px; text-align:right; font-size:11px; color:var(--gold); font-variant-numeric:tabular-nums; }
+  .row input[type=number], .row input[type=text], .row select { background:var(--ink); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:4px 6px; font-size:12px; }
+  .row input[type=number] { width:64px; }
+  .row input[type=text] { flex:1; min-width:0; }
+  .hd { font-size:10px; color:var(--muted); display:flex; gap:8px; padding:0 0 4px 86px; }
+  .hd span { flex:1; }
+  button { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border:none; border-radius:6px; padding:9px 0; width:100%; font-weight:700; letter-spacing:.08em; cursor:pointer; margin-top:4px; }
+  button.ghost { background:#1a1f28; color:var(--text); border:1px solid var(--line); }
+  .legend { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:10px; color:var(--muted); }
+  .legend span { display:flex; align-items:center; gap:4px; }
+  .note { font-size:10px; color:var(--muted); line-height:1.5; margin-top:6px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage"><canvas id="cv"></canvas></div>
+  <div id="side">
+    <h1>TERRAIN FORGE</h1>
+    <div class="sub">Stage 1 — algorithmic feature map. Set coverage % and noise per terrain, overlay water, then assign a tile sheet per type and export.</div>
+
+    <div class="grp">
+      <h2>Map</h2>
+      <div class="row"><label>Width</label><input type="number" id="cols" value="40" min="8" max="128"></div>
+      <div class="row"><label>Height</label><input type="number" id="rows" value="24" min="8" max="64"></div>
+      <div class="row"><label>Seed</label><input type="number" id="seed" value="7" min="1"><button class="ghost" id="reroll" style="width:auto;padding:5px 10px;margin:0">↻</button></div>
+    </div>
+
+    <div class="grp">
+      <h2>Terrain — coverage % · noise</h2>
+      <div class="hd"><span>%</span><span>noise</span></div>
+      <div id="terrainRows"></div>
+      <div class="note">Grass is the base fill. Higher-priority features (brush→rocks→trees→cliff) overwrite it. Small noisy blobs become mostly border — lower the noise for big solid forests.</div>
+    </div>
+
+    <div class="grp">
+      <h2>Water</h2>
+      <div class="row"><label>Mode</label><select id="waterMode"><option value="patches">Patches</option><option value="connected">Connected</option></select></div>
+      <div class="row"><label>Coverage</label><input type="range" id="waterPct" min="0" max="40" value="8"><span class="val" id="waterPctV">8</span></div>
+      <div class="row"><label>Noise</label><input type="range" id="waterNoise" min="0" max="100" value="25"><span class="val" id="waterNoiseV">25</span></div>
+    </div>
+
+    <div class="grp">
+      <h2>Tile palettes (sheet per type)</h2>
+      <div id="paletteRows"></div>
+      <div class="note">Sheet names from content/sprite-atlas/. Stage 2 bakes these over the feature map; blocking types (rocks, trees, cliff, cliff-border) block movement + building.</div>
+    </div>
+
+    <div class="grp">
+      <h2>Legend</h2>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <button id="export">EXPORT terrain-map.json</button>
+    <button class="ghost" id="copy" style="margin-top:8px">Copy JSON to clipboard</button>
+  </div>
+</div>
+
+<script type="module">
+import { generateTerrain, TERRAIN_NAME, TERRAIN_COLOR, BLOCKING, TERRAIN } from './src/terrain/terrainGen.js';
+
+// terrain types the user tunes (grass is the implicit base; borders are derived)
+const TUNABLE = [
+  { key: 'dirt',  color: TERRAIN_COLOR[TERRAIN.DIRT],  pct: 25, noise: 35 },
+  { key: 'brush', color: TERRAIN_COLOR[TERRAIN.BRUSH], pct: 12, noise: 50 },
+  { key: 'rocks', color: TERRAIN_COLOR[TERRAIN.ROCKS], pct: 8,  noise: 60 },
+  { key: 'trees', color: TERRAIN_COLOR[TERRAIN.TREES], pct: 15, noise: 40 },
+  { key: 'cliff', color: TERRAIN_COLOR[TERRAIN.CLIFF], pct: 5,  noise: 50 },
+];
+// every type (incl. base + borders) can take a sheet name
+const PALETTE_TYPES = ['grass', 'dirt', 'brush', 'rocks', 'trees', 'cliff', 'water', 'tree-border', 'rock-border', 'cliff-border'];
+const palettes = {};
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const $ = (id) => document.getElementById(id);
+
+// build terrain sliders
+const tRows = $('terrainRows');
+for (const t of TUNABLE) {
+  const row = document.createElement('div'); row.className = 'row';
+  row.innerHTML = `<label><span class="swatch" style="background:${t.color}"></span>${t.key}</label>
+    <input type="range" data-k="${t.key}" data-f="pct" min="0" max="60" value="${t.pct}">
+    <input type="range" data-k="${t.key}" data-f="noise" min="0" max="100" value="${t.noise}">`;
+  tRows.appendChild(row);
+}
+// build palette inputs
+const pRows = $('paletteRows');
+for (const key of PALETTE_TYPES) {
+  const row = document.createElement('div'); row.className = 'row';
+  const ci = TERRAIN_NAME.indexOf(key);
+  row.innerHTML = `<label><span class="swatch" style="background:${TERRAIN_COLOR[ci]}"></span>${key}</label>
+    <input type="text" data-p="${key}" placeholder="sheet name…">`;
+  pRows.appendChild(row);
+}
+// legend
+$('legend').innerHTML = TERRAIN_NAME.map((n, i) =>
+  `<span><span class="swatch" style="background:${TERRAIN_COLOR[i]}"></span>${n}${BLOCKING.has(i) ? ' ⛔' : ''}</span>`).join('');
+
+function opts() {
+  const types = {};
+  for (const t of TUNABLE) {
+    types[t.key] = {
+      pct: +document.querySelector(`[data-k="${t.key}"][data-f="pct"]`).value,
+      noise: +document.querySelector(`[data-k="${t.key}"][data-f="noise"]`).value / 100,
+    };
+  }
+  return {
+    cols: +$('cols').value, rows: +$('rows').value, seed: +$('seed').value, types,
+    water: { mode: $('waterMode').value, pct: +$('waterPct').value, noise: +$('waterNoise').value / 100 },
+  };
+}
+
+let last = null;
+function render() {
+  const o = opts();
+  last = generateTerrain(o);
+  const px = Math.max(4, Math.min(18, Math.floor(900 / o.cols)));
+  cv.width = o.cols * px; cv.height = o.rows * px;
+  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) {
+    ctx.fillStyle = TERRAIN_COLOR[last.terrain[y * o.cols + x]];
+    ctx.fillRect(x * px, y * px, px, px);
+  }
+  // faint blocking hatch
+  ctx.strokeStyle = 'rgba(0,0,0,.35)';
+  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) {
+    if (last.blocking[y * o.cols + x]) { ctx.beginPath(); ctx.moveTo(x * px, y * px); ctx.lineTo(x * px + px, y * px + px); ctx.stroke(); }
+  }
+  // live readouts
+  for (const t of TUNABLE) {} // (values shown inline via input; skip)
+  $('waterPctV').textContent = $('waterPct').value;
+  $('waterNoiseV').textContent = $('waterNoise').value;
+}
+
+document.querySelectorAll('input,select').forEach((el) => el.addEventListener('input', (e) => {
+  if (e.target.dataset.p != null) { const v = e.target.value.trim(); if (v) palettes[e.target.dataset.p] = v; else delete palettes[e.target.dataset.p]; return; }
+  render();
+}));
+$('reroll').addEventListener('click', () => { $('seed').value = (Math.floor(Math.random() * 99999) + 1); render(); });
+
+function exportObj() {
+  const o = opts();
+  return {
+    _tool: 'terrain-forge', _version: 1,
+    cols: o.cols, rows: o.rows, seed: o.seed, types: o.types, water: o.water,
+    palettes: { ...palettes },
+    // the baked feature map + blocking, so the game needn't regenerate (but could, from the knobs)
+    terrain: Array.from(last.terrain), blocking: Array.from(last.blocking),
+  };
+}
+$('export').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(exportObj())], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'terrain-map.json'; a.click(); URL.revokeObjectURL(a.href);
+});
+$('copy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(JSON.stringify(exportObj(), null, 2)); $('copy').textContent = 'Copied ✓'; setTimeout(() => $('copy').textContent = 'Copy JSON to clipboard', 1200); }
+  catch (e) { $('copy').textContent = 'Clipboard blocked'; }
+});
+
+render();
+</script>
+</body>
+</html>
