@@ -449,17 +449,26 @@ export function boot(mountEl, seed) {
       await commChallenge(faction, idx + 1, true);          // primary, held
       await closed;
       if (!interlude || mode !== 'play') return;
-      if (idx === 0 && runContract && voicePacks) {
-        const tip = tipsCall(voicePacks, runContract.giver, (currentSeed | 0) + idx, 'tip');
-        if (tip) {
-          const closed2 = comm.waitForClose();
-          await comm.showCall(Object.assign({}, tip, { hold: true }));
-          await closed2;
-          if (!interlude || mode !== 'play') return;
+      if (idx === 0) {
+        // MATCH START: optional secondary tip (contract accepted), 1s beat, explicit TAP TO START
+        // (the build phase before wave 1 stays player-paced).
+        if (runContract && voicePacks) {
+          const tip = tipsCall(voicePacks, runContract.giver, (currentSeed | 0) + idx, 'tip');
+          if (tip) {
+            const closed2 = comm.waitForClose();
+            await comm.showCall(Object.assign({}, tip, { hold: true }));
+            await closed2;
+            if (!interlude || mode !== 'play') return;
+          }
         }
+        await new Promise((r) => setTimeout(r, 1000));
+        if (interlude && mode === 'play' && hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
+      } else {
+        // BETWEEN WAVES: the close WAS the continue — a 1s beat, then start the next wave (its
+        // incoming-wave banner shows on wave start). No tap-to-start prompt.
+        await new Promise((r) => setTimeout(r, 1000));
+        if (interlude && mode === 'play') endInterlude();
       }
-      await new Promise((r) => setTimeout(r, 1000));        // the 1-second beat
-      if (interlude && mode === 'play' && hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
     })();
   }
   function commOutcome() {
@@ -502,17 +511,16 @@ export function boot(mountEl, seed) {
               const d = evs[i];
               flashMessage(hud, d.role === 'quest' ? `+${d.units} quest units (loyalty)` : `+${d.gold}g ${d.role}`);
             }
-            // M2 — the repelled faction comments on how the wave went (final wave: M3 handles it).
-            // In PLAY mode this opens the between-wave INTERLUDE: the speaker HOLDS on screen, the
-            // sim freezes (timer + regrowth included), and a centered TAP TO START prompt resumes.
+            // Between waves (owner 2026-07-16): ONE dialog from the opposing (next) faction, held.
+            // NO tap-to-start prompt — the dialog's TAP TO CLOSE is the continue: closing it (after
+            // a 1s beat) starts the next wave, which shows the usual incoming-wave banner. The held
+            // card IS the build breather; no M2 win-commentary between waves.
             if (evs[i].type === 'wave' && evs[i].phase === 'clear' && evs[i].wave < evs[i].total) {
-              const call = lastWaveFaction ? winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false) : null;
               if (mode === 'play') {
                 interlude = true;
-                hud.setNextWavePrompt(true, 'TAP TO START NEXT WAVE');
-                playPreBattleDialog(call);   // M2 commentary, then the next wave's held challenge
-              } else if (call) {
-                comm.showCall(call);
+                playPreBattleDialog(null);      // the next faction's challenge; close = continue
+              } else if (lastWaveFaction) {
+                comm.showCall(winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false));
               }
             }
           }
@@ -520,6 +528,9 @@ export function boot(mountEl, seed) {
         accumulator -= FIXED_DT;
         if (sim.result) {
           ended = true;
+          // battle over (owner): clear any selection so the unit/structure panel doesn't linger
+          // over the result overlay
+          ui.selectedUnitId = null; ui.selectedStructureId = null; ui.buildSelection = null; ui.hoverValid = false;
           if (mode === 'play') {
             log.finalHash = hashState(sim);
             // Capture this finished game so "Run Replay" can replay it (survives Restart + reload).
