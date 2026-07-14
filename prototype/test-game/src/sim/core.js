@@ -6,7 +6,7 @@ import { acquireTarget, applyDamage, stepCombat } from './combat.js';
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
 import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
 import { initWaves, startNextWave, stepWaves } from './waves.js';
-import { initHarvest, cmdHarvest, stepHarvest } from './harvest.js';
+import { initHarvest, cmdHarvest, stepHarvest, cmdBuyHarvester, resetFleetForWave } from './harvest.js';
 import { createLog, recordCommand } from './replay.js';
 
 /**
@@ -383,6 +383,9 @@ export function applyCommand(state, cmd) {
       break;
     case 'harvest':
       result = cmdHarvest(state, cmd);
+      break;
+    case 'buyHarvester':
+      result = cmdBuyHarvester(state);
       break;
     default:
       result = { ok: false, reason: 'unknownCommand' };

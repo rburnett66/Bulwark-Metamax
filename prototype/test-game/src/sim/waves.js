@@ -1,6 +1,7 @@
 import { WAVES, MAP, getUnitDef } from '../data/tables.js';
 import { createUnit, unitRadius } from './entities.js';
 import { emitEvent, contactDistR, REST_RATIO } from './core.js';
+import { resetFleetForWave } from './harvest.js';
 
 /**
  * Wave scheduler.
@@ -121,6 +122,7 @@ export function startNextWave(state) {
   w.active = true;
   w.cleared = false;
   w.pendingSpawns = [];
+  if (state.resourceNodes) resetFleetForWave(state);   // owner: each wave opens with 1 harvester + healed base
   // STAR RUBRIC snapshot (Story 4): the five wave stars are judged against the state at wave start
   w.waveStart = {
     time: state.time,

@@ -282,7 +282,8 @@ export function createHud(mountEl, callbacks) {
   palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD'));
   const paletteRow = el(doc, 'div', 'bw-palette-row');
   const paletteBtns = {};
-  const structOrder = Object.keys(STRUCTURES);              // hotkey N (1-based) selects structOrder[N-1]
+  // Harvestor moved to BASE PURCHASE (owner 2026-07-16) — no longer a build-palette entry.
+  const structOrder = Object.keys(STRUCTURES).filter((id) => STRUCTURES[id].kind !== 'harvestorBay');
   const toggleBuild = (structId) => {
     const next = (hud.currentBuildSelection === structId) ? null : structId;
     if (cbs.onBuildSelect) cbs.onBuildSelect(next);

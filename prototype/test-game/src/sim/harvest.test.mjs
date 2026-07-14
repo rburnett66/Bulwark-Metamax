@@ -30,8 +30,11 @@ function fresh(seed) {
   const { s } = fresh(5);
   s.waves.current = 8;   // ring seeding (2026-07-15): reveal the whole board — this block tests the
                          // ECONOMY math, not the reveal; a ring-spanning field would short the load
-  const node = s.resourceNodes.find((n) => n.role === 'primary' && n.wave === 1);
-  assert(node, 'a wave-1 primary node exists');
+  // pick the RICHEST primary cell so one truckload fills (crop-clear near base 2026-07-16 removed
+  // the small near-base fields; a single sparse cell would under-fill the load)
+  const node = s.resourceNodes.filter((n) => n.role === 'primary')
+    .sort((a, b) => b.units - a.units)[0];
+  assert(node, 'a primary node exists');
   const hv = s.units.get(s.harvesterId);
   const moneyBefore = s.economy.money;
   const res = applyCommand(s, { type: 'harvest', nodeId: node.id });
@@ -46,15 +49,17 @@ function fresh(seed) {
   // passive income also accrues — the deposit's contribution is the delta beyond it
   assert(s.economy.money >= moneyBefore + depositGold, 'deposits paid into the build economy on top of passive income');
   assert(s.mapScore.goldFromPrimary === depositGold, 'map score tallies primary gold');
-  // expected value: cargo × valuePerUnit × yieldMult (integer floor per deposit)
+  // expected value: cargo × valuePerUnit × yieldMult; per-TICK flooring accumulates a small
+  // shortfall across the pull, so allow a couple of gold of rounding slack
   const expectedPerLoad = Math.floor(Math.min(hv.capacity, node.units) * node.valuePerUnit * hv.yieldMult);
-  assert(depositGold >= expectedPerLoad, `gold ≈ capacity×value (got ${depositGold}, one load ≥ ${expectedPerLoad})`);
+  assert(depositGold >= expectedPerLoad - 3, `gold ≈ capacity×value (got ${depositGold}, one load ≈ ${expectedPerLoad})`);
 }
 
 // ── FIELDS: one order works the whole connected patch; drained field → rest at HOME; regrowth
 //    auto-redeploys the camped harvester ──
 {
   const { s } = fresh(5);
+  s.waves.current = 8;   // reveal the board — this block tests field DRAIN mechanics, not ring gating
   const hv = s.units.get(s.harvesterId);
   // primaries are placed as 1-2 cell fields — find a 2-cell one (open play: any wave is workable)
   const byField = {};

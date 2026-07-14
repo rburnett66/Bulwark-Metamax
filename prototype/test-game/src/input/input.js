@@ -12,6 +12,7 @@ export function createUiState() {
     selectedStructureId: null,
     selectedUnitId: null,      // s5: a selected unit (enemy/defender) whose attack range is shown
     showFieldRings: false,     // white rings on the harvester's assigned field — debug aid, off by default
+    pendingHint: null,         // {text, atBase} — set by input, consumed + flashed by the main ticker
   };
 }
 
@@ -38,6 +39,12 @@ function findUnitAtCell(state, cell) {
     if (score < bestScore) { bestScore = score; bestId = u.id; }
   }
   return bestId;
+}
+
+function cellInBase(state, cell) {
+  if (!state || !state.base) return false;
+  const cells = state.base.cells || [state.base.pos];
+  return cells.some((c) => c.x === cell.x && c.y === cell.y);
 }
 
 function findStructureAtCell(state, cell) {
@@ -156,12 +163,30 @@ function onPointerDown(handle, ev) {
     }
   }
 
+  // BASE CLICK = purchase a harvester (owner: 'select base to purchase'). The sim ladder-prices
+  // and caps; the hint carries the result to the HUD.
+  if (state.resourceNodes && cellInBase(state, cell)) {
+    const res = handle.submit({ type: 'buyHarvester' });
+    ui.pendingHint = (res && res.ok) ? { text: 'Harvester purchased' + (res.cost ? ' (−' + res.cost + 'g)' : ''), atBase: true }
+      : { text: (res && res.reason === 'max harvesters') ? 'Max harvesters' : ('Base: ' + ((res && res.reason) || 'purchase')), atBase: true };
+    ui.selectedStructureId = null; ui.selectedUnitId = null;
+    return;
+  }
+
   // Selection mode: click a structure to select; else a unit (enemy/defender) to inspect its range; else deselect.
   const structId = findStructureAtCell(state, cell);
   ui.selectedStructureId = structId;
   ui.selectedUnitId = null;
   if (structId === null) {
     ui.selectedUnitId = findUnitAtCell(state, cell);   // s5: show the selected unit's attack range
+    // CLICKING A HARVESTER pops a base message pointing at the purchase mechanism (owner)
+    if (ui.selectedUnitId != null && state.resourceNodes) {
+      const su = state.units.get(ui.selectedUnitId);
+      if (su && su.isHarvester) {
+        const fleet = [...state.units.values()].filter((u) => u.isHarvester && u.hp > 0).length;
+        ui.pendingHint = { text: fleet >= 4 ? 'Max harvesters' : 'Select base to purchase', atBase: true };
+      }
+    }
     if (ui.selectedUnitId === null) {
       // Clicking empty ground clears any active build selection too.
       ui.buildSelection = null;

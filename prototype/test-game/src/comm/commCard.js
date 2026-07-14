@@ -65,11 +65,15 @@ const CSS = `
 .bw-comm-meta .tl{color:#7fe6a1}
 .bw-comm-text{flex:1;padding:9px 11px;font-size:12.5px;line-height:1.55;color:#dbe7f0;white-space:pre-wrap;min-height:0}
 .bw-comm-text::after{content:"▋";color:var(--accent);animation:bwCommBlink 1s steps(1) infinite;margin-left:1px}
+.bw-comm .bw-tapclose { color:#ffd76a; letter-spacing:.2em; animation:bwTapPulse 1.1s ease-in-out infinite; }
+@keyframes bwTapPulse { 0%,100%{opacity:.45} 50%{opacity:1} }
 .bw-comm.signoff .bw-comm-text::after,.bw-comm.spent .bw-comm-text::after{display:none}
 @keyframes bwCommBlink{50%{opacity:0}}
 .bw-comm-foot{padding:6px 11px;border-top:1px solid #1a2430;font-size:9px;letter-spacing:2px;color:#5c6b7a;
   display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:24px}
 .bw-comm-end{color:#e06a6a;font-weight:700;opacity:0;transition:opacity .3s}
+.bw-comm .bw-tapclose { color:#ffd76a; letter-spacing:.2em; animation:bwTapPulse 1.1s ease-in-out infinite; }
+@keyframes bwTapPulse { 0%,100%{opacity:.45} 50%{opacity:1} }
 .bw-comm.signoff .bw-comm-end{opacity:1}
 .bw-comm-qchip{border:1px solid #d8a13a;color:#f0c675;border-radius:6px;padding:2px 8px;font-size:8.5px;letter-spacing:1px;opacity:0;transition:.3s}
 .bw-comm-qchip.on{opacity:1}
@@ -180,7 +184,7 @@ export function createComm(doc) {
       liveAudio = null;
     }
   }
-  card.addEventListener('click', () => { token++; stopAudio(); card.className = 'bw-comm'; });
+  card.addEventListener('click', () => { token++; stopAudio(); card.className = 'bw-comm'; _resolveClosed(); });
 
   /** Run one transmission from a call spec (dialog.js):
    *  { factionKey, name, sub, line, gender, intent, voiceSeed, challenge? }. Fire-and-forget.
@@ -250,8 +254,16 @@ export function createComm(doc) {
     // HOLD: a between-wave interlude keeps the speaker ON SCREEN after the line lands — the card
     // skips its sign-off and stays up until dismiss() runs the fade. The token still guards
     // staleness: a newer call (or the card's own click-to-close) supersedes the held card.
-    if (d.hold) { _held = { bed, myToken: my }; return; }
+    if (d.hold) {
+      _held = { bed, myToken: my };
+      // the dialog has ENDED — surface the close affordance (owner: 'tap to close appears after
+      // the dialog ends'); tapping anywhere on the card closes it (existing click handler)
+      footl.textContent = 'TAP TO CLOSE';
+      footl.classList.add('bw-tapclose');
+      return;
+    }
     await _signOff(bed, live);
+    _resolveClosed();
   }
 
   async function _signOff(bed, live) {
@@ -274,12 +286,22 @@ export function createComm(doc) {
     if (!_held) return;
     const h = _held; _held = null;
     if (h.myToken !== token) return;   // superseded — the newer call owns the card now
-    void _signOff(h.bed, () => token === h.myToken);
+    void (async () => { await _signOff(h.bed, () => token === h.myToken); _resolveClosed(); })();
   }
+
+  // ── close notification: sequencing (pre-match dialog -> 1s -> TAP TO START) awaits this ──
+  let _closeResolvers = [];
+  function _resolveClosed() {
+    const rs = _closeResolvers; _closeResolvers = [];
+    for (const r of rs) { try { r(); } catch (e) { /* listener error must not break the card */ } }
+  }
+  /** Resolves the next time the card fully closes (tap, dismiss, or natural sign-off). */
+  function waitForClose() { return new Promise((res) => _closeResolvers.push(res)); }
 
   return {
     showCall,
     dismiss,
+    waitForClose,
     get muted() { return muted; },
     destroy() { token++; stopAudio(); card.remove(); muteBtn.remove(); style.remove(); },
   };
