@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "art_5_blue_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 754,
+        "h": 624
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 754,
+        "h": 624
+      },
+      "sourceSize": {
+        "w": 754,
+        "h": 624
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 760,
+      "h": 630
+    },
+    "scale": "1"
+  }
+}

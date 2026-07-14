@@ -20,7 +20,7 @@
   "Time_Bonus_Cap": 400,
   "Par_Time_Per_100_Tiles": 42,
   "Premium_Ring_Seed": 3,
-  "Primary_Respawn_Sec": 150,
+  "Primary_Respawn_Sec": 600,
   "Uncollectable_Floor": 0.25,
   "Quest_First_Wave": 5,
   "Quest_Edge_Band": 0.8,

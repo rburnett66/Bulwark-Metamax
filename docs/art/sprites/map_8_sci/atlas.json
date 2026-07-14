@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "map_8_sci_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 698,
+        "h": 679
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 698,
+        "h": 679
+      },
+      "sourceSize": {
+        "w": 698,
+        "h": 679
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 704,
+      "h": 685
+    },
+    "scale": "1"
+  }
+}

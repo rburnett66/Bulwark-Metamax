@@ -1511,7 +1511,17 @@ export function screenToCell(renderer, sx, sy) {
 // Ring-framing growth camera — playtest verdict (owner): the full field + 2-tile safe border
 // should be on screen from wave 1, so the zoom is OFF by default. Flip GROWTH_CAM to revisit
 // (the eased zoom-out per wave still works; it just wasn't the right feel at these map sizes).
-const GROWTH_CAM = false;
+// GROWTH CAMERA (owner: the camera pulls back each wave to reveal more map — never meant to be off).
+// It frames the CURRENT ring and eases out as the ring grows, so the world visibly expands. Two
+// caps keep it playable on every screen:
+//   MAX_ZOOM — how far it zooms IN on the small early rings (dramatic + big, tappable cells).
+//   a TAPPABILITY FLOOR — it never zooms OUT so far that cells fall below ~MIN_CELL_CSS on THIS
+//     screen. On a phone + a 64-wide map that keeps the view framed on the active battle (you'd
+//     pan for the rest); on a 50" monitor the floor is slack so the whole map reveals. Screen-aware
+//     and automatic — the same map plays right on both.
+const GROWTH_CAM = true;
+const MAX_ZOOM = 2.6;
+const MIN_CELL_CSS = 14;   // touch floor — matches the current mobile map-1 comfort (~15px); only big maps get held zoomed-in
 
 function updateCamera(renderer, state, dt) {
   const cam = renderer.camera || (renderer.camera = { s: 1, x: 0, y: 0 });
@@ -1527,7 +1537,15 @@ function updateCamera(renderer, state, dt) {
     const rw = (r.x1 - r.x0 + 1 + PAD * 2) * t;
     const rh = (r.y1 - r.y0 + 1 + PAD * 2) * t;
     const W = map.cols * t, H = map.rows * t;
-    ts = Math.max(1, Math.min(W / rw, H / rh, 1.25));   // never below full-map; SUBTLE cap — ring 1 is only 10x6 on a 24x16 field, anything stronger reads as a close-up (owner, twice)
+    // TAPPABILITY FLOOR: at scale 1 a cell is (canvasCSSwidth / cols) px on screen; to keep it
+    // >= MIN_CELL_CSS we must stay zoomed to at least this scale (only bites on big-map + small-screen).
+    const canvasCssW = (renderer.app && renderer.app.view && renderer.app.view.clientWidth) || W;
+    const cellCssAt1 = canvasCssW / map.cols;
+    const floor = Math.max(0.5, MIN_CELL_CSS / Math.max(1, cellCssAt1));
+    // frame the ring so BOTH axes fit (+padding); zoom-IN capped; never zoom out past full board
+    const ringFill = Math.min(W / rw, H / rh);
+    ts = Math.min(MAX_ZOOM, Math.max(1, ringFill));   // ring framing, 1..MAX_ZOOM
+    ts = Math.max(ts, floor);                         // tappability: zoom in further on big-map+small-screen
     const cx = ((r.x0 + r.x1 + 1) / 2) * t, cy = ((r.y0 + r.y1 + 1) / 2) * t;
     tx = Math.min(0, Math.max(W - W * ts, W / 2 - cx * ts));   // clamp: never show past the board edge
     ty = Math.min(0, Math.max(H - H * ts, H / 2 - cy * ts));

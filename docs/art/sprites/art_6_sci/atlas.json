@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "art_6_sci_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 523,
+        "h": 479
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 523,
+        "h": 479
+      },
+      "sourceSize": {
+        "w": 523,
+        "h": 479
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 529,
+      "h": 485
+    },
+    "scale": "1"
+  }
+}

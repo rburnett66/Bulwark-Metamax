@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "yellow_crystal_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 694,
+        "h": 717
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 694,
+        "h": 717
+      },
+      "sourceSize": {
+        "w": 694,
+        "h": 717
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 712,
+      "h": 723
+    },
+    "scale": "1"
+  }
+}

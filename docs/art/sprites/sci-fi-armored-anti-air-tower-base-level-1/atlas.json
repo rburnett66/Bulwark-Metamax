@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "sci-fi-armored-anti-air-tower-base-level-1_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 810,
+        "h": 779
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 810,
+        "h": 779
+      },
+      "sourceSize": {
+        "w": 810,
+        "h": 779
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 816,
+      "h": 785
+    },
+    "scale": "1"
+  }
+}

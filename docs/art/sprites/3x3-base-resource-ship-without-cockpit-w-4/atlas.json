@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "3x3-base-resource-ship-without-cockpit-w-4_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 634,
+        "h": 665
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 634,
+        "h": 665
+      },
+      "sourceSize": {
+        "w": 634,
+        "h": 665
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 656,
+      "h": 671
+    },
+    "scale": "1"
+  }
+}

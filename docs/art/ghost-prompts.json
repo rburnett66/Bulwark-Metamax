@@ -1,0 +1,282 @@
+[
+ {
+  "id": "24eafc23-142f-4209-8646-11e7d63e8ed3",
+  "name": "title_2_title",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nTitle Treatment: BULWARK game logo title treatment, bold militaristic emblem lettering evoking fortification and multi-faction warfare, layered metallic shield/bulwark motif, subtle nine-faction color accents, clean readable on dark battlefield backdrop, hero marketing wordmark, cinematic lighting, anamorphic lens, film grain",
+  "style_id": "cinematic",
+  "created_at": "2026-07-12 06:27:15.971089"
+ },
+ {
+  "id": "923d5708-de1a-46cb-a83b-e9fc7405db00",
+  "name": "art_2_package",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nPackage Shot: BULWARK key art package shot: fortified outpost in a clearing under assault from mixed ground/air/water faction forces, dramatic 2.5D layered battlefield, dust and muzzle FX, gold pie-sweep completion flash glint, camera framing base-vs-threat relationship, cinematic hero composition, oil painting, rich textures, dramatic lighting",
+  "style_id": "oil_painting",
+  "created_at": "2026-07-12 06:27:16.525549"
+ },
+ {
+  "id": "a198d3ad-f5c6-4192-879f-d8fcd7857957",
+  "name": "art_3_package",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nPackage Shot: Vertical mobile store hero for BULWARK: single lane tower defense scene, walker/floater/flyer units marching toward a walled base, dim altitude flyer shadows, coin pickup burst, dramatic sky, portrait marketing crop, concept art, professional illustration, detailed",
+  "style_id": "concept_art",
+  "created_at": "2026-07-12 06:27:17.07934"
+ },
+ {
+  "id": "7d47404d-ca0b-4ea7-84cc-374b2f881a83",
+  "name": "chars_14_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Air faction unit sprite sheet (Manga ace-pilot): all 8 shapes with rotor/thrust layer replacing legs on flyers, Idle/Moving/Attacking/Death. Sleek fast fragile aircraft-armor read, sky-blue and white with red trim, aircraft silhouettes emphasized, 2.5D layered independently-rotating weapon/head. Adjustment: complete rework no propellers, next gen manga design, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:17.92887"
+ },
+ {
+  "id": "30be989e-923a-4b47-80ea-3a06f80f260e",
+  "name": "chars_16_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Air faction unit sprite sheet (Manga ace-pilot): all 8 shapes with rotor/thrust layer replacing legs on flyers, Idle/Moving/Attacking/Death. Sleek fast fragile aircraft-armor read, sky-blue and white with red trim, aircraft silhouettes emphasized, 2.5D layered independently-rotating weapon/head. Adjustment: use rotors on low end units and jets on high tier, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:18.756458"
+ },
+ {
+  "id": "cc44a263-4de2-49ab-8261-c2b8e39069fb",
+  "name": "chars_13_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Ground/Powder faction unit sprite sheet (Nationalistic old-empire army): Troops, Trucks, Tanks, Artillery, Heavy Tanks, Copters, Planes, Missiles. Four-layer stack legs/body/weapon/head, Idle/Moving/Attacking/Death states. Machinery-armor read, olive-and-brass palette, flags & honor motifs, fixed camera pitch top-down 2.5D, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:17.488351"
+ },
+ {
+  "id": "ee76a52a-2b9f-40cc-a6cd-b61a8022d777",
+  "name": "chars_15_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Air faction unit sprite sheet (Manga ace-pilot): all 8 shapes with rotor/thrust layer replacing legs on flyers, Idle/Moving/Attacking/Death. Sleek fast fragile aircraft-armor read, sky-blue and white with red trim, aircraft silhouettes emphasized, 2.5D layered independently-rotating weapon/head. Adjustment: use rotors on low end units and jets on high tier, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:18.340264"
+ },
+ {
+  "id": "2b5094b3-ab1b-4085-8783-3b64a5d589a2",
+  "name": "chars_17_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: High Tech faction unit sprite sheet (mega-corp capitalist): 8 shapes, electric damage glow, shield plating, precise expensive look, cool cyan and chrome palette, Idle/Moving/Attacking/Death, four-layer stack with sensor telegraph, 2.5D fixed pitch, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:19.214567"
+ },
+ {
+  "id": "4c00fdb1-eee6-424d-846b-7fabe85ccba2",
+  "name": "chars_19_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Water faction unit sprite sheet (fantasy sea tribes, leviathans): 8 shapes as swimmers/floaters and coastal creatures, organic armor read, frost damage accents, teal and coral palette, submerged sub-surface tint variants, Idle/Moving/Attacking/Death, 2.5D, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:20.042137"
+ },
+ {
+  "id": "a028377d-3d86-4b59-b68a-65cc967cb894",
+  "name": "chars_20_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Arcane/Energy faction unit sprite sheet (fantasy theocracy): 8 shapes as shielded casters and energy-weapon constructs, fire damage glow, no-ammo etheral look, gold and violet holy palette, energy armor read, Idle/Moving/Attacking/Death, 2.5D layered, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:20.587515"
+ },
+ {
+  "id": "8ee6807e-5729-4993-a3d8-660b2f9f6079",
+  "name": "chars_18_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Artillery faction unit sprite sheet (siege military doctrine): 8 shapes emphasizing long-barrel arc weapons, concussion motifs, drab tan camo palette, Idle/Moving/Attacking/Death, independently rotating weapon layer with lock-on wind-up, 2.5D layered, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:19.628582"
+ },
+ {
+  "id": "25fce5a2-55b6-4276-8247-e169c39584de",
+  "name": "chars_21_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Space Tech faction unit sprite sheet (sci-fi federation): 8 shapes with orbital-tech design, electric weapons, strong-vision sensor arrays, sleek white and blue federation palette, machinery armor, Idle/Moving/Attacking/Death, 2.5D fixed pitch, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:21.009572"
+ },
+ {
+  "id": "560fcbde-4073-4cbd-ba73-865587e9f036",
+  "name": "chars_23_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Greenies/Chem faction unit sprite sheet (socialist hive collective): 8 swarm shapes, cheap-and-many organic armor read, poison chem-cloud motifs, toxic green and rust palette, Idle/Moving/Attacking/Death, 2.5D layered, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:21.845399"
+ },
+ {
+  "id": "a93f9d30-44ff-46e6-ab0e-6c155bfe4676",
+  "name": "chars_25_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Hero portrait set for Air faction manga aces: Squadron-Mother Hikari Dawnwing Aoi (AG), Ace Jun Halo Sato (PG), The Nightingale ghost squadron (DE), Sky-Marshal Reiko Kurogane (PE). Flight suits, dramatic sky backlight, alignment mood coding, anime style, vibrant colors, clean linework",
+  "style_id": "anime",
+  "created_at": "2026-07-12 06:27:22.796705"
+ },
+ {
+  "id": "c8245164-98d6-459e-b71b-748703562fd9",
+  "name": "chars_27_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Hero portrait set for Arcane/Energy theocracy and High Tech mega-corp leaders: shielded casters and corporate execs (CEO Adrian Sterling PE, Chief Ethicist Dr Grace Sterling AG). Robed energy-wielders vs sleek suited capitalists, alignment lighting, concept art, professional illustration, detailed",
+  "style_id": "concept_art",
+  "created_at": "2026-07-12 06:27:23.636567"
+ },
+ {
+  "id": "9595f688-7391-4685-9981-e73ea50df672",
+  "name": "obj_12_object",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Player Base outpost sprite set across levels showing added hard-point slots as progression reward, walled command center, 2.5D anchored footprint, damaged and repaired variants, gold completion pie-sweep glow, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:25.02871"
+ },
+ {
+  "id": "50152acf-2f76-4225-a295-a17170696f18",
+  "name": "chars_22_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Dark Energy faction unit sprite sheet (cult, night-strong): 8 shapes with corruption/poison DoT motifs, energy armor read, ominous purple-black with sickly green glow, Idle/Moving/Attacking/Death, four-layer stack, 2.5D layered, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:21.431747"
+ },
+ {
+  "id": "783c0ba1-e6ea-49e2-abe3-83b015a26d75",
+  "name": "chars_24_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Hero portrait set for Ground/Powder alignment leaders: Field-Marshal Seraphine von Halbrecht (AG), General Kord Stahl (E), The Iron Regent masked (DE), Sergeant Bricks Malloy (CG). Nationalistic military dress, alignment-coded lighting from angelic gold to dark shadow, bust framing, concept art, professional illustration, detailed",
+  "style_id": "concept_art",
+  "created_at": "2026-07-12 06:27:22.370655"
+ },
+ {
+  "id": "80a2d100-bcae-4dda-b54a-3031ddd621cf",
+  "name": "chars_26_character",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nCharacter: Hero portrait set for Water sea-tribe leaders: Tide-Priestess Marena (AG), Abyssal Sovereign Thal (PE), Leviathan-Binder Morgause (E), Corsair Finn Saltmoor (CG). Fantasy RPG sea-tribe garb, bioluminescent underwater lighting, alignment coding, concept art, professional illustration, detailed",
+  "style_id": "concept_art",
+  "created_at": "2026-07-12 06:27:23.217221"
+ },
+ {
+  "id": "9cfd91ae-035a-4c8b-a437-7a436d355f2b",
+  "name": "obj_10_object",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Structure sprite sheet \u2014 production buildings: Blacksmith, Armory, Barracks, Stables, Science Lab. Each with lifecycle states Placing(ghost)/Building/Complete/Damaged/Destroyed/Upgrading T1-T2-T3. 2.5D footprint anchor, cast soft shadow, faction-neutral fort palette, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:24.054604"
+ },
+ {
+  "id": "6b8c89e3-5200-48c2-b61e-bf13f5bba14e",
+  "name": "obj_11_object",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Structure sprite sheet \u2014 aerial & defensive: Balloons, Runway, Walls, Moats, Traps, Murder Holes. Lifecycle states Placing/Building/Aiming/Firing/Damaged/Destroyed/Upgrading 1-2-3, weapon-layer rotation, 2.5D with cast shadow, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:24.604928"
+ },
+ {
+  "id": "22260e70-7294-4fee-ad17-ac1263ae1237",
+  "name": "bg_3_background",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nBackground: Clearing/Field biome battlefield backdrop: open grassland with grass, bushes, shadow-casting trees, low/mid/high ground bands, drifting cloud overhead layer, sun-directional lighting for consistent shadows, 2.5D layered painter's-order world tile, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:25.439462"
+ },
+ {
+  "id": "d539f627-d8f8-4ddf-9d3e-e0bd624eb1d9",
+  "name": "bg_5_background",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nBackground: River/Coast biome backdrop: water surface plus sub-surface tint band beside ground, ripple and wake zones, grass margins, shadow trees, domain-split lane layout, 2.5D layered, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:26.27088"
+ },
+ {
+  "id": "0951410c-0e2a-4c98-9042-1ede345d98f8",
+  "name": "bg_7_background",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nBackground: Path/single-lane starter biome backdrop: narrow route to base, minimal coverage, one-tower adjacency layout, grass and shadow tree edges, 2.5D layered tutorial board, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:27.102673"
+ },
+ {
+  "id": "35a4b56a-656f-4099-9ef2-b286c9adcc78",
+  "name": "obj_14_object",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Muzzle-flash and projectile FX sheet: brief light flash with smoke/sparks, traveling tracers, ballistic artillery shells lobbed arcs, hitscan energy beams, guided missile trails. Matched to weapon classes, transparent bg, flat design, minimal, clean vectors, bold color",
+  "style_id": "flat_design",
+  "created_at": "2026-07-12 06:27:27.960358"
+ },
+ {
+  "id": "39ca6051-ae3c-4f29-9c5f-f5ecae2203f5",
+  "name": "bg_4_background",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nBackground: River/Coast biome backdrop: water surface plus sub-surface tint band beside ground, ripple and wake zones, grass margins, shadow trees, domain-split lane layout, 2.5D layered, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:25.86124"
+ },
+ {
+  "id": "6f7eb50c-bc39-43bb-a012-2cdb1a680bff",
+  "name": "bg_6_background",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nBackground: Night-battle biome variant: same field board under moonlight, lighting-as-fog second layer darkening periphery, glowing unit muzzle FX visible, Dark Energy and Space Tech partial-vision zones, 2.5D layered, isometric 3D, clean render, game UI style",
+  "style_id": "isometric",
+  "created_at": "2026-07-12 06:27:26.684772"
+ },
+ {
+  "id": "3969360c-35be-4fcd-a67f-6ab28193392d",
+  "name": "obj_13_object",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Damage-type impact FX sprite sheet with redundant coding: Kinetic grey chevron sharp burst, Fire orange flame rising flicker, Poison green droplet pulsing cloud, Concussion blue-white ring shockwave, Electric cyan bolt jitter, Frost pale-blue crystal freeze. Each icon+motion frames, flat design, minimal, clean vectors, bold color",
+  "style_id": "flat_design",
+  "created_at": "2026-07-12 06:27:27.539331"
+ },
+ {
+  "id": "2c5fa287-7d85-4653-a733-79c247266bf5",
+  "name": "obj_15_object",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Gold pie-sweep completion flash FX: radial gold wedge sweeping 360 degrees once, universal done+paid motif for builds/repairs/upgrades, plus coin pickup burst animation frames for kills, classic console coin style. Adjustment: very simple gold outline shader based.  Separate animation for coins, flat design, minimal, clean vectors, bold color",
+  "style_id": "flat_design",
+  "created_at": "2026-07-12 06:27:28.516561"
+ },
+ {
+  "id": "867d5780-ab68-4b99-9447-c733cec7c7a7",
+  "name": "ui_3_main",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nUI Element: Main HUD frame (screen-space, never rotates): unit/structure deploy list panel with live gold pricing, gold counter, wave indicator, minimap. Militaristic BULWARK theme, clean flat readable layout, single-verb touch/mouse friendly, flat design, minimal, clean vectors, bold color",
+  "style_id": "flat_design",
+  "created_at": "2026-07-12 06:27:29.417788"
+ },
+ {
+  "id": "491622e6-e46c-40f6-981d-4a493b960a87",
+  "name": "obj_16_object",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nObject: Gold pie-sweep completion flash FX: radial gold wedge sweeping 360 degrees once, universal done+paid motif for builds/repairs/upgrades, plus coin pickup burst animation frames for kills, classic console coin style. Adjustment: very simple gold outline shader based.  Separate animation for coins, flat design, minimal, clean vectors, bold color",
+  "style_id": "flat_design",
+  "created_at": "2026-07-12 06:27:28.941561"
+ },
+ {
+  "id": "3a3cc31c-9980-4b15-8aae-597fd9da13b7",
+  "name": "ui_2_deploy",
+  "prompt": "[Project context: Project: Bulwark MM (game). # Market Validation \u2014 Bulwark MM  > **Sourcing note:** This analysis incorporates the full **`bulwark-gdd`** (v2.0) and its companion **`bulwark-visuals`** (v1.0). Concept, systems, and presentation fundamentals below are **confirmed from these source files** and no longer speculative. The **`bulwark-balance.xlsx`** workbook (the canonical, data-driven stat source) is referenced by both docs but w | # Audience-Player-Analysis.md  # Audience & Player Analysis \u2014 *Bulwark*  **Version:** 2.0 \u00b7 **Date:** 2025-06-12 \u00b7 **Prepared By:** MetaMax Research Brain (Research Role) **Purpose:** Define *Bulwark*'s target players \u2014 who they are, what motivates them, how they discover and commit to games, and what would make them feel this concept was built \"for them.\"  > **Sourc]\n\nUI Element: Deploy loop unit card set: per-unit tile with silhouette thumbnail, gold cost, tier stars, armor/damage-type icons, affordability state. Flat consistent card frames, flat design, minimal, clean vectors, bold color",
+  "style_id": "flat_design",
+  "created_at": "2026-07-12 06:27:29.83744"
+ },
+ {
+  "id": "d1ddac74-eed6-4ff9-9df8-a80a26f0ae83",
+  "name": "map_1_level",
+  "prompt": "Level 3Resource ship",
+  "style_id": "stylized_3d",
+  "created_at": "2026-07-13 17:25:32.551256"
+ },
+ {
+  "id": "81a15847-bf64-4dde-80de-f8451ce46d44",
+  "name": "art_1_high",
+  "prompt": "High tech ship to enhance attacks",
+  "style_id": "stylized_3d",
+  "created_at": "2026-07-13 17:38:37.7142"
+ },
+ {
+  "id": "2543ba94-c747-4a88-8819-de1764d51484",
+  "name": "art_1_starter",
+  "prompt": "Starter Ship",
+  "style_id": "stylized_3d",
+  "created_at": "2026-07-13 17:25:48.957696"
+ },
+ {
+  "id": "e81d66be-cf7d-40ab-90ce-36ccc9d364df",
+  "name": "art_2_heavy",
+  "prompt": "Heavy ship for defense",
+  "style_id": "stylized_3d",
+  "created_at": "2026-07-13 17:38:09.064217"
+ },
+ {
+  "id": "bdd6f009-1fd1-4ddd-9e7a-e60636f9a70a",
+  "name": "art_1_heavy",
+  "prompt": "Heavy ship for defense",
+  "style_id": "stylized_3d",
+  "created_at": "2026-07-13 17:39:05.289285"
+ },
+ {
+  "id": "dcac7d6a-cdb5-4afc-a490-2f2c97187cae",
+  "name": "art_1_base",
+  "prompt": "Base ship for resource collection",
+  "style_id": "stylized_3d",
+  "created_at": "2026-07-13 17:32:24.330695"
+ },
+ {
+  "id": "b94bbccb-de79-4321-a003-e59784946322",
+  "name": "art_2_high",
+  "prompt": "High tech ship to enhance attacks",
+  "style_id": "stylized_3d",
+  "created_at": "2026-07-13 17:38:51.622658"
+ },
+ {
+  "id": "41163a42-e672-4245-a42b-e160dd325b1d",
+  "name": "art_1_packed",
+  "prompt": "packed sprite sheet \u2014 sprite sheet",
+  "style_id": "none",
+  "created_at": "2026-07-13 19:20:56.529967"
+ }
+]

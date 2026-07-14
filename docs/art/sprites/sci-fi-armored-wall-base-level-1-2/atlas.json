@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "sci-fi-armored-wall-base-level-1-2_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 669,
+        "h": 620
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 669,
+        "h": 620
+      },
+      "sourceSize": {
+        "w": 669,
+        "h": 620
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 675,
+      "h": 626
+    },
+    "scale": "1"
+  }
+}
