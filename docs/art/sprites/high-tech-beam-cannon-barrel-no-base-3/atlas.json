@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "high-tech-beam-cannon-barrel-no-base-3_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 666,
+        "h": 213
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 666,
+        "h": 213
+      },
+      "sourceSize": {
+        "w": 666,
+        "h": 213
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 672,
+      "h": 219
+    },
+    "scale": "1"
+  }
+}

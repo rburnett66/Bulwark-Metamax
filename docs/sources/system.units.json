@@ -1,0 +1,101 @@
+{
+  "faction": "System",
+  "sheet": "base-art.png",
+  "units": {
+    "SYS-Harvester": {
+      "shape": null,
+      "role": "Harvester",
+      "rotation": 180,
+      "layers": {
+        "base": {
+          "frame": "art_3_high.png",
+          "scale": 0.3,
+          "offset": 0,
+          "offsetX": 0
+        },
+        "weapon": null,
+        "head": null
+      }
+    },
+    "SYS-Base": {
+      "shape": null,
+      "role": "Base Ship",
+      "rotation": 180,
+      "layers": {
+        "base": {
+          "frame": "art_3_3x3.png",
+          "scale": 1.6,
+          "offset": -3,
+          "offsetX": 0
+        },
+        "weapon": {
+          "frame": "art_6_high.png",
+          "scale": 0.65,
+          "offset": 0,
+          "offsetX": 0
+        },
+        "head": null
+      }
+    },
+    "SYS-Flak-2": {
+      "shape": null,
+      "role": "Flak Tower T2",
+      "rotation": 90,
+      "layers": {
+        "base": {
+          "frame": "map_9_sci.png",
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
+        },
+        "weapon": {
+          "frame": "art_5_sci.png",
+          "scale": 0.85,
+          "offset": 0,
+          "offsetX": 0
+        },
+        "head": null
+      }
+    },
+    "SYS-Flak-3": {
+      "shape": null,
+      "role": "Flak Tower T3",
+      "rotation": 90,
+      "layers": {
+        "base": {
+          "frame": "art_16_sci.png",
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
+        },
+        "weapon": {
+          "frame": "art_6_sci.png",
+          "scale": 0.85,
+          "offset": 0,
+          "offsetX": 0
+        },
+        "head": null
+      }
+    },
+    "SYS-Flak": {
+      "shape": null,
+      "role": "Flak Tower",
+      "rotation": 90,
+      "layers": {
+        "base": {
+          "frame": "art_3_sci.png",
+          "scale": 1,
+          "offset": 0,
+          "offsetX": 0
+        },
+        "weapon": {
+          "frame": "art_7_sci.png",
+          "scale": 0.85,
+          "offset": 0,
+          "offsetX": 0
+        },
+        "head": null
+      }
+    }
+  }
+}

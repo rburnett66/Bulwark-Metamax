@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "high-tech-harvester-vehicle-that-can-gat-3_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 441,
+        "h": 586
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 441,
+        "h": 586
+      },
+      "sourceSize": {
+        "w": 441,
+        "h": 586
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 556,
+      "h": 592
+    },
+    "scale": "1"
+  }
+}

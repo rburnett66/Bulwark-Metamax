@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "art_1_green_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 768,
+        "h": 651
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 768,
+        "h": 651
+      },
+      "sourceSize": {
+        "w": 768,
+        "h": 651
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 774,
+      "h": 657
+    },
+    "scale": "1"
+  }
+}

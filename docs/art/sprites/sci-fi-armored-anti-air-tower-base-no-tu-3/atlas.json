@@ -1,0 +1,35 @@
+{
+  "frames": {
+    "sci-fi-armored-anti-air-tower-base-no-tu-3_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 730,
+        "h": 726
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 730,
+        "h": 726
+      },
+      "sourceSize": {
+        "w": 730,
+        "h": 726
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 736,
+      "h": 732
+    },
+    "scale": "1"
+  }
+}

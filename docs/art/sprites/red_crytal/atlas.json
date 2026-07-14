@@ -1,0 +1,115 @@
+{
+  "frames": {
+    "red_crytal_0.png": {
+      "frame": {
+        "x": 3,
+        "y": 3,
+        "w": 776,
+        "h": 776
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 776,
+        "h": 776
+      },
+      "sourceSize": {
+        "w": 776,
+        "h": 776
+      }
+    },
+    "red_crytal_1.png": {
+      "frame": {
+        "x": 785,
+        "y": 3,
+        "w": 26,
+        "h": 93
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 26,
+        "h": 93
+      },
+      "sourceSize": {
+        "w": 26,
+        "h": 93
+      }
+    },
+    "red_crytal_2.png": {
+      "frame": {
+        "x": 817,
+        "y": 3,
+        "w": 26,
+        "h": 70
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 26,
+        "h": 70
+      },
+      "sourceSize": {
+        "w": 26,
+        "h": 70
+      }
+    },
+    "red_crytal_3.png": {
+      "frame": {
+        "x": 3,
+        "y": 785,
+        "w": 18,
+        "h": 43
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 18,
+        "h": 43
+      },
+      "sourceSize": {
+        "w": 18,
+        "h": 43
+      }
+    },
+    "red_crytal_4.png": {
+      "frame": {
+        "x": 27,
+        "y": 785,
+        "w": 24,
+        "h": 18
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      },
+      "sourceSize": {
+        "w": 24,
+        "h": 18
+      }
+    }
+  },
+  "meta": {
+    "app": "metamax-sprites",
+    "version": "1.0",
+    "image": "atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 850,
+      "h": 831
+    },
+    "scale": "1"
+  }
+}

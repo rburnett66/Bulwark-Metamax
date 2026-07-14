@@ -113,9 +113,10 @@ def playable_dims(full_w, full_h, fracs):
 
 def apply_rework(data):
     gp = data["globalParams"]
-    # Owner (2026-07-13): primary grow-back at 50% of the original rate — i.e. twice the respawn
-    # time (75s -> 150s). Slows the farming loop the time bonus is meant to fight.
-    gp["Primary_Respawn_Sec"] = round((gp.get("Primary_Respawn_Sec") or 75) * 2)
+    # Owner tuning history: regrow rate halved (75s -> 150s), then reduced another 75%
+    # (150s -> 600s). Net: primaries regrow at 1/8 the workbook rate — big merged fields can
+    # no longer sustain a perpetual farm ahead of the story-4 time bonus.
+    gp["Primary_Respawn_Sec"] = round((gp.get("Primary_Respawn_Sec") or 75) * 8)
     setback = gp.get("Spawn_Setback", 2)
     per100 = gp.get("Par_Time_Per_100_Tiles", 42)
     waves_per_map = gp.get("Waves_Per_Map", 8)
