@@ -42,3 +42,16 @@ ok('air alt = 30', altLift({ alt: 30 }) === 30);
 
 console.log(`\nvoxel pack/select: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
+
+// ── stack camera math ──
+import { elevationToSP, spToElevation, layerScreenY, stackRise } from './stack.js';
+let p2 = 0, f2 = 0; const ok2 = (n, c) => { if (c) p2++; else { f2++; console.log(`  FAIL ${n}`); } };
+ok2('top-down (90°) → SP 0', elevationToSP(90, 6) === 0);
+ok2('side-on (0°) → SP max', elevationToSP(0, 6) === 6);
+ok2('elevation monotonic (30>60 in SP)', elevationToSP(30, 6) > elevationToSP(60, 6));
+ok2('sp↔elevation round-trips at ends', spToElevation(0, 6) === 90 && spToElevation(6, 6) === 0);
+ok2('layer 0 at baseY', layerScreenY(0, 100, 2) === 100);
+ok2('layer 5 rises 10px @ sp2', layerScreenY(5, 100, 2) === 90);
+ok2('16-layer rise @ sp2 = 30', stackRise(16, 2) === 30);
+console.log(`voxel stack math: ${p2} passed, ${f2} failed`);
+if (f2) process.exit(1);
