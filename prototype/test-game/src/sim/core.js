@@ -746,7 +746,11 @@ export const REST_RATIO = 1.2;   // was 4/3 — the plan's fallback: the full sp
                                  // contested zone and queues jittered at its edge (owner playtest). At 1.2
                                  // sprites overlap a whisker at rest; motion is calm.
 const REST_PAD = 0.02;
-export function contactDistR(rA, rB) { return (rA + rB) * REST_RATIO + REST_PAD; }
+// TROOP SPACING FLOOR (owner, 2026-07-15): "keep troops 2 units apart and we will be fine" —
+// no ground pair rests closer than 2 tiles centre-to-centre, whatever their size. Crowds stay
+// readable, art can never overlap, funnels drain single-file with daylight.
+export const REST_MIN = 2.0;
+export function contactDistR(rA, rB) { return Math.max((rA + rB) * REST_RATIO + REST_PAD, REST_MIN); }
 function contactDist(a, b) { return contactDistR(a.radius || 0.3, b.radius || 0.3); }
 
 // air flies over the ground/water plane; only same-plane bodies interact
