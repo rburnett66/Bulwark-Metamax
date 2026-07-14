@@ -64,9 +64,9 @@
     </div>
 
     <div class="grp">
-      <h2>Tile palettes (sheet per type)</h2>
+      <h2>Tile palettes — up to 3 variants per type</h2>
       <div id="paletteRows"></div>
-      <div class="note">Sheet names from content/sprite-atlas/. Stage 2 bakes these over the feature map; blocking types (rocks, trees, cliff, cliff-border) block movement + building.</div>
+      <div class="note">Up to 3 sheet variants per type — Stage 2 scatters them deterministically per cell for variety. Sheets from content/sprite-atlas/. Blocking types (rocks, trees, cliff, cliff-border) block movement + building.</div>
     </div>
 
     <div class="grp">
@@ -126,7 +126,9 @@ for (const key of PALETTE_TYPES) {
   const row = document.createElement('div'); row.className = 'row';
   const ci = TERRAIN_NAME.indexOf(key);
   row.innerHTML = `<label><span class="swatch" style="background:${TERRAIN_COLOR[ci]}"></span>${key}</label>
-    <input type="text" data-p="${key}" placeholder="sheet name…">`;
+    <input type="text" data-p="${key}" data-i="0" placeholder="variant 1…" style="flex:1;min-width:0">
+    <input type="text" data-p="${key}" data-i="1" placeholder="2" style="width:52px;flex:0 0 auto">
+    <input type="text" data-p="${key}" data-i="2" placeholder="3" style="width:52px;flex:0 0 auto">`;
   pRows.appendChild(row);
 }
 // legend — proper + complete: terrain (blocking flagged), resources, markers
@@ -181,7 +183,12 @@ function render() {
 }
 
 document.querySelectorAll('input,select').forEach((el) => el.addEventListener('input', (e) => {
-  if (e.target.dataset.p != null) { const v = e.target.value.trim(); if (v) palettes[e.target.dataset.p] = v; else delete palettes[e.target.dataset.p]; return; }
+  if (e.target.dataset.p != null) {
+    const key = e.target.dataset.p;
+    const vals = [...document.querySelectorAll(`[data-p="${key}"]`)].map((el) => el.value.trim()).filter(Boolean);
+    if (vals.length) palettes[key] = vals; else delete palettes[key];   // up to 3 variants per type
+    return;
+  }
   render();
 }));
 $('reroll').addEventListener('click', () => { $('seed').value = (Math.floor(Math.random() * 99999) + 1); render(); });
