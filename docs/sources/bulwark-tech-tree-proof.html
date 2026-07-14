@@ -1,0 +1,461 @@
+<title>BULWARK — Tech Tree</title>
+<style>
+  :root{
+    --ground-0:#0b0e13; --ground-1:#12161e; --ground-2:#161b24;
+    --panel:#161b24; --panel-hi:#1c2330; --chrome:#2e3846; --chrome-hi:#3c4a5c;
+    --ink:#e6ecf3; --ink-dim:#9aabbd; --ink-mut:#6b7c90;
+    --gold:#f2c869; --gold-deep:#d9a441;
+    --base:#f2c869;  --base-deep:#c99a3a;
+    --econ:#57d98a;  --econ-deep:#2fae63;
+    --struct:#4aa3ff;--struct-deep:#2f6fd0;
+    --hitech:#b06cff;--hitech-deep:#7d3fd0;
+    --good:#57d98a; --warn:#e8b14a; --bad:#e46a6a;
+    --r:12px;
+    --fx-fast:.12s;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--ink); font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+    background:
+      radial-gradient(130% 100% at 12% 8%, rgba(30,38,52,.35), rgba(9,11,16,.0) 55%),
+      radial-gradient(120% 90% at 88% 92%, rgba(20,26,38,.5), rgba(9,11,16,.0) 60%),
+      linear-gradient(158deg,#0b0e13 0%, #12161e 55%, #0a0d12 100%);
+    background-attachment:fixed;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* faint circuit + scanline texture, straight out of the game's menu */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.5;
+    background:
+      repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0 1px,transparent 1px 3px),
+      radial-gradient(60% 50% at 50% 40%, transparent 60%, rgba(0,0,0,.35));
+  }
+  .wrap{position:relative; z-index:1; max-width:1320px; margin:0 auto; padding:26px 26px 40px;}
+
+  /* ── top bar ─────────────────────────────────────────── */
+  .top{display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap;}
+  .brand h1{
+    margin:0; font-size:clamp(34px,5vw,56px); font-weight:900; letter-spacing:.02em; line-height:.92;
+    text-transform:uppercase; text-wrap:balance;
+    background:linear-gradient(180deg,#ffffff 0%, #cdd5e0 55%, #808ea3 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 8px 34px rgba(0,0,0,.6);
+  }
+  .brand h1 em{font-style:normal; background:linear-gradient(180deg,var(--gold),var(--gold-deep));
+    -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .brand p{margin:6px 0 0; font-size:12px; letter-spacing:.34em; text-transform:uppercase; color:var(--ink-mut);}
+
+  .res{display:flex; gap:12px; align-items:center;}
+  .chip{
+    display:flex; align-items:center; gap:9px; padding:9px 15px 9px 11px; border-radius:999px;
+    background:linear-gradient(180deg,var(--panel-hi),var(--panel)); border:1px solid var(--chrome);
+    font-variant-numeric:tabular-nums; box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 3px 12px rgba(0,0,0,.35);
+  }
+  .chip .ic{width:22px;height:22px;flex:0 0 auto;display:grid;place-items:center;}
+  .chip b{font-size:16px; font-weight:800; letter-spacing:.02em;}
+  .chip small{display:block; font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-mut); margin-top:1px;}
+  .chip.gold b{color:var(--gold)} .chip.tier b{color:var(--struct)} .chip.fac b{color:var(--econ)}
+
+  /* ── tree canvas ─────────────────────────────────────── */
+  .board{position:relative; margin-top:22px;}
+  #wires{position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; overflow:visible;}
+  .grid{position:relative; z-index:2; display:grid; grid-template-columns:170px repeat(4,1fr); gap:20px 26px; align-items:start;}
+
+  /* root node */
+  .root{align-self:center;}
+  .rootcard{
+    border:1px solid var(--chrome-hi); border-radius:var(--r); padding:14px; text-align:center;
+    background:
+      radial-gradient(120% 120% at 50% 0%, rgba(242,200,105,.14), transparent 70%),
+      linear-gradient(180deg,var(--panel-hi),var(--panel));
+    box-shadow:0 0 0 1px rgba(242,200,105,.14), 0 10px 30px rgba(0,0,0,.5);
+  }
+  .rootcard .thumb{margin:0 auto 8px;}
+  .rootcard b{display:block; font-size:13px; letter-spacing:.06em;}
+  .rootcard .lvl{font-size:10px; letter-spacing:.22em; color:var(--gold); margin-top:3px;}
+
+  /* column */
+  .col{display:flex; flex-direction:column; gap:14px;}
+  .phead{
+    display:flex; align-items:center; gap:10px; padding:11px 13px; border-radius:10px;
+    border:1px solid var(--pc-line); background:linear-gradient(180deg,var(--pc-fill),transparent);
+    box-shadow:inset 0 0 22px var(--pc-glow);
+  }
+  .phead .pic{width:26px;height:26px;flex:0 0 auto;display:grid;place-items:center;
+    border-radius:7px; background:rgba(0,0,0,.28); border:1px solid var(--pc-line);}
+  .phead .pt{font-size:13px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--pc-ink);}
+  .phead .ps{font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-mut); margin-top:2px;}
+
+  /* node card */
+  .node{
+    position:relative; display:flex; gap:11px; align-items:center; text-align:left;
+    padding:10px 12px; border-radius:11px; cursor:pointer; width:100%;
+    border:1px solid var(--chrome); background:linear-gradient(180deg,var(--panel-hi),var(--panel));
+    transition:border-color var(--fx-fast), transform var(--fx-fast), box-shadow var(--fx-fast);
+    -webkit-tap-highlight-color:transparent;
+  }
+  .node:hover{transform:translateY(-2px); border-color:var(--pc-line); box-shadow:0 8px 22px rgba(0,0,0,.45), 0 0 0 1px var(--pc-line);}
+  .node:focus-visible{outline:2px solid var(--pc-ink); outline-offset:2px;}
+  .node.sel{border-color:var(--pc-ink); box-shadow:0 0 0 1px var(--pc-ink), 0 0 26px var(--pc-glow); transform:translateY(-2px);}
+  .node.owned{border-color:var(--pc-deep);}
+  .node.locked{opacity:.5; cursor:not-allowed;}
+  .node.locked:hover{transform:none; box-shadow:none; border-color:var(--chrome);}
+  .thumb{
+    width:44px;height:44px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;
+    background:radial-gradient(120% 120% at 50% 12%, var(--pc-fill), rgba(0,0,0,.35));
+    border:1px solid var(--pc-line);
+  }
+  .node .meta{min-width:0; flex:1;}
+  .node .nm{font-size:12.5px; font-weight:700; letter-spacing:.02em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .node .sub{font-size:10px; color:var(--ink-dim); letter-spacing:.02em; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .node .cost{display:flex; align-items:center; gap:4px; margin-top:5px; font-size:10.5px; font-variant-numeric:tabular-nums; letter-spacing:.02em; color:var(--gold);}
+  .node.owned .cost{color:var(--good);}
+  .node .tbadge{position:absolute; top:8px; right:9px; font-size:8.5px; letter-spacing:.14em;
+    color:var(--ink-mut); border:1px solid var(--chrome); border-radius:5px; padding:1px 5px; background:rgba(0,0,0,.3);}
+  .node .lockic{position:absolute; top:7px; right:9px; opacity:.8;}
+  .node.owned .tick{position:absolute; top:7px; right:9px; color:var(--good);}
+
+  /* tier color hooks per column */
+  .base  {--pc-ink:var(--base);   --pc-deep:var(--base-deep);   --pc-line:rgba(242,200,105,.5); --pc-fill:rgba(242,200,105,.12); --pc-glow:rgba(242,200,105,.28);}
+  .econ  {--pc-ink:var(--econ);   --pc-deep:var(--econ-deep);   --pc-line:rgba(87,217,138,.5);  --pc-fill:rgba(87,217,138,.12);  --pc-glow:rgba(87,217,138,.26);}
+  .struct{--pc-ink:var(--struct); --pc-deep:var(--struct-deep); --pc-line:rgba(74,163,255,.5);  --pc-fill:rgba(74,163,255,.12);  --pc-glow:rgba(74,163,255,.26);}
+  .hitech{--pc-ink:var(--hitech); --pc-deep:var(--hitech-deep); --pc-line:rgba(176,108,255,.5); --pc-fill:rgba(176,108,255,.13); --pc-glow:rgba(176,108,255,.28);}
+
+  /* tier lock veil on a column */
+  .col .locknote{display:none; font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-mut);
+    text-align:center; padding:4px; border:1px dashed var(--chrome); border-radius:7px; margin-top:-4px;}
+
+  /* ── bottom dock ─────────────────────────────────────── */
+  .dock{margin-top:26px; display:grid; grid-template-columns:1.25fr 1fr 1.4fr; gap:20px; align-items:stretch;}
+  @media(max-width:920px){.dock{grid-template-columns:1fr}}
+
+  .ult{
+    position:relative; border-radius:14px; padding:16px; overflow:hidden;
+    border:1px solid var(--gold-deep);
+    background:linear-gradient(150deg, rgba(242,200,105,.16), rgba(120,86,28,.10) 60%, rgba(0,0,0,.2));
+    box-shadow:0 0 0 1px rgba(242,200,105,.2), 0 14px 40px rgba(0,0,0,.5), inset 0 0 40px rgba(242,200,105,.06);
+  }
+  .ult .tag{display:inline-block; font-size:10px; font-weight:900; letter-spacing:.24em; color:#20170a;
+    background:linear-gradient(180deg,var(--gold),var(--gold-deep)); padding:4px 12px; border-radius:999px;}
+  .ult .row{display:flex; gap:14px; align-items:center; margin-top:12px;}
+  .ult .big{width:74px;height:74px;flex:0 0 auto;border-radius:12px;display:grid;place-items:center;
+    background:radial-gradient(120% 120% at 50% 10%, rgba(242,200,105,.24), rgba(0,0,0,.4)); border:1px solid var(--gold-deep);}
+  .ult h3{margin:0; font-size:18px; letter-spacing:.03em; text-transform:uppercase;}
+  .ult .lvl{font-size:10px; letter-spacing:.2em; color:var(--gold); margin-top:2px;}
+  .ult p{margin:8px 0 0; font-size:11.5px; color:var(--ink-dim); line-height:1.5; max-width:34ch;}
+  .ult .price{margin-top:12px; display:flex; align-items:center; gap:7px; font-size:18px; font-weight:900; color:var(--gold); font-variant-numeric:tabular-nums;}
+
+  .progress{border:1px solid var(--chrome); border-radius:14px; padding:16px; background:linear-gradient(180deg,var(--panel),var(--ground-1));}
+  .progress h4{margin:0 0 4px; font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:var(--ink-mut);}
+  .progress .hint{font-size:10.5px; color:var(--ink-dim); line-height:1.5; margin:0 0 14px;}
+  .tiers{display:flex; flex-direction:column; gap:9px;}
+  .tier{display:flex; align-items:center; gap:11px;}
+  .tier .dot{width:26px;height:26px;flex:0 0 auto;border-radius:7px;display:grid;place-items:center;
+    font-size:11px; font-weight:900; border:1px solid var(--chrome); color:var(--ink-mut); background:rgba(0,0,0,.25);}
+  .tier.on .dot{color:#0b0e13; background:linear-gradient(180deg,var(--gold),var(--gold-deep)); border-color:var(--gold); box-shadow:0 0 12px rgba(242,200,105,.4);}
+  .tier .tx{font-size:11.5px;}
+  .tier .tx b{letter-spacing:.06em;}
+  .tier .tx small{display:block; font-size:9.5px; color:var(--ink-mut); letter-spacing:.08em; text-transform:uppercase; margin-top:1px;}
+  .tier.on .tx small{color:var(--econ);}
+
+  .inspect{border:1px solid var(--chrome-hi); border-radius:14px; padding:16px; display:flex; flex-direction:column;
+    background:linear-gradient(180deg,var(--panel-hi),var(--panel)); box-shadow:0 14px 40px rgba(0,0,0,.45);}
+  .inspect .ihead{display:flex; gap:14px; align-items:flex-start;}
+  .inspect .iart{width:78px;height:78px;flex:0 0 auto;border-radius:12px;display:grid;place-items:center;
+    background:radial-gradient(120% 120% at 50% 10%, var(--i-fill,rgba(255,255,255,.06)), rgba(0,0,0,.4)); border:1px solid var(--i-line,var(--chrome));}
+  .inspect h3{margin:0; font-size:17px; letter-spacing:.02em;}
+  .inspect .ilvl{font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--i-ink,var(--ink-dim)); margin-top:3px;}
+  .inspect .idesc{font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:12px 0 0;}
+  .inspect .stats{display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;}
+  .stat{flex:1 1 0; min-width:90px; border:1px solid var(--chrome); border-radius:9px; padding:8px 10px; background:rgba(0,0,0,.22);}
+  .stat small{display:block; font-size:8.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-mut);}
+  .stat b{font-size:14px; font-variant-numeric:tabular-nums;}
+  .stat .up{color:var(--good); font-size:11px; margin-left:3px;}
+  .infl{margin-top:12px; font-size:10.5px; color:var(--ink-mut); letter-spacing:.04em; display:flex; align-items:center; gap:8px;}
+  .infl .bar{flex:1; height:6px; border-radius:3px; background:linear-gradient(90deg,var(--bad),#3a4350 50%, var(--good)); position:relative; opacity:.85;}
+  .infl .bar i{position:absolute; top:-3px; width:3px; height:12px; border-radius:2px; background:var(--ink); box-shadow:0 0 6px rgba(0,0,0,.6); transform:translateX(-50%);}
+  .buy{margin-top:auto; padding-top:14px; display:flex; align-items:center; gap:12px;}
+  .buy .p{font-size:20px; font-weight:900; color:var(--gold); font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:7px;}
+  .btn{
+    margin-left:auto; border:0; cursor:pointer; font-family:inherit; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+    font-size:13px; padding:13px 26px; border-radius:10px; color:#0b0e13;
+    background:linear-gradient(180deg,var(--gold),var(--gold-deep)); box-shadow:0 6px 18px rgba(242,200,105,.28);
+    transition:transform var(--fx-fast), box-shadow var(--fx-fast), filter var(--fx-fast);
+  }
+  .btn:hover{transform:translateY(-1px); box-shadow:0 9px 24px rgba(242,200,105,.4);}
+  .btn:active{transform:translateY(0);}
+  .btn:focus-visible{outline:2px solid #fff; outline-offset:2px;}
+  .btn.owned{background:linear-gradient(180deg,#2a3340,#1c2430); color:var(--good); box-shadow:none; cursor:default;}
+  .btn.cant{background:linear-gradient(180deg,#3a2226,#2a1a1e); color:var(--bad); box-shadow:none; cursor:not-allowed;}
+  .btn.locked{background:linear-gradient(180deg,#242c38,#1a212b); color:var(--ink-mut); box-shadow:none; cursor:not-allowed;}
+
+  .toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px); z-index:50;
+    background:linear-gradient(180deg,var(--panel-hi),var(--panel)); border:1px solid var(--gold-deep);
+    color:var(--ink); padding:11px 20px; border-radius:10px; font-size:12.5px; letter-spacing:.04em;
+    box-shadow:0 12px 34px rgba(0,0,0,.55), 0 0 0 1px rgba(242,200,105,.2); opacity:0; pointer-events:none;
+    transition:opacity .25s, transform .25s;}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .toast b{color:var(--gold);}
+
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  @media(max-width:760px){
+    .grid{grid-template-columns:1fr 1fr; }
+    .root{grid-column:1/-1;}
+    #wires{display:none;}
+  }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <h1>Tech <em>Tree</em></h1>
+      <p>Research upgrades · Fortify the Bulwark</p>
+    </div>
+    <div class="res" id="res"></div>
+  </div>
+
+  <div class="board">
+    <svg id="wires" aria-hidden="true"></svg>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div class="dock">
+    <div class="ult" id="ult"></div>
+    <div class="progress">
+      <h4>Tier Unlocks</h4>
+      <p class="hint">Beat a faction on <b>Map 2</b> to raise your tech clearance — any order. Each victory unlocks the next tier of upgrades across every path.</p>
+      <div class="tiers" id="tiers"></div>
+    </div>
+    <div class="inspect" id="inspect"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── icon set (inline SVG glyphs — stand-ins for the real upgrade art) ─── */
+const IC = {
+  gold:'<svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" fill="#f2c869" stroke="#8a6a1e" stroke-width="1.4"/><circle cx="12" cy="12" r="5.5" fill="none" stroke="#8a6a1e" stroke-width="1.2"/></svg>',
+  gem:'<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 3l6 5-6 13-6-13z" fill="#4aa3ff" stroke="#1c4c86" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 8h12" stroke="#bfe0ff" stroke-width="1"/></svg>',
+  flask:'<svg viewBox="0 0 24 24" width="18" height="18"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3" fill="rgba(87,217,138,.25)" stroke="#57d98a" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+  base:'<svg viewBox="0 0 40 40" width="40" height="40"><rect x="8" y="8" width="24" height="24" rx="3" fill="rgba(242,200,105,.18)" stroke="#f2c869" stroke-width="1.6"/><rect x="14" y="14" width="12" height="12" rx="2" fill="rgba(242,200,105,.35)" stroke="#f2c869" stroke-width="1.2"/><rect x="18.5" y="3" width="3" height="10" rx="1.2" fill="#f2c869"/></svg>',
+  shield:'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M16 4l10 3v8c0 7-5 11-10 13-5-2-10-6-10-13V7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  cannon:'<svg viewBox="0 0 32 32" width="30" height="30"><rect x="5" y="18" width="14" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="16" y="13" width="12" height="4" rx="2" transform="rotate(-16 22 15)" fill="currentColor"/><circle cx="9" cy="27" r="2.4" fill="currentColor"/></svg>',
+  eye:'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M3 16s5-8 13-8 13 8 13 8-5 8-13 8S3 16 3 16z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="16" r="3.5" fill="currentColor"/></svg>',
+  rpg:'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M6 20l14-9 5 2-4 6 3 6-5-1-11 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M22 13l4-4" stroke="currentColor" stroke-width="2"/></svg>',
+  sam:'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M16 3l4 10-4-2-4 2z" fill="currentColor"/><path d="M12 13l4 16 4-16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 24l-3 5M23 24l3 5" stroke="currentColor" stroke-width="2"/></svg>',
+  core:'<svg viewBox="0 0 32 32" width="30" height="30"><circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="16" r="4" fill="currentColor"/><path d="M16 6V2M16 30v-4M6 16H2M30 16h-4" stroke="currentColor" stroke-width="2"/></svg>',
+  bolt:'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M18 3L7 18h7l-2 11 12-16h-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  range:'<svg viewBox="0 0 32 32" width="30" height="30"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".6"/><circle cx="16" cy="16" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4v6M16 22v6M4 16h6M22 16h6" stroke="currentColor" stroke-width="2"/></svg>',
+  dual:'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M11 4l7 2v6c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V6z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M21 9l7 2v5c0 4.5-3.5 6.5-7 8" fill="none" stroke="currentColor" stroke-width="1.8" opacity=".7"/></svg>',
+  wrench:'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M20 6a6 6 0 0 0-8 7l-8 8 3 3 8-8a6 6 0 0 0 7-8l-4 4-3-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  drone:'<svg viewBox="0 0 32 32" width="30" height="30"><rect x="12" y="12" width="8" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="6" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="26" cy="6" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="26" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="26" cy="26" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 9l3 3M23 9l-3 3M9 23l3-3M23 23l-3-3" stroke="currentColor" stroke-width="1.6"/></svg>',
+  pick:'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M4 8c8-4 16-4 24 0" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8v20" stroke="currentColor" stroke-width="2.4"/><path d="M13 14h6" stroke="currentColor" stroke-width="2"/></svg>',
+  radar:'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M16 16L16 4a12 12 0 1 1-8 3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="16" r="2.4" fill="currentColor"/></svg>',
+  troop:'<svg viewBox="0 0 32 32" width="30" height="30"><circle cx="16" cy="9" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 27c0-5 4-8 9-8s9 3 9 8" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+  energy:'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M16 3l3 9h9l-7 6 3 10-8-6-8 6 3-10-7-6h9z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+  ult:'<svg viewBox="0 0 32 32" width="46" height="46"><rect x="4" y="19" width="16" height="7" rx="2" fill="rgba(242,200,105,.25)" stroke="#f2c869" stroke-width="2"/><rect x="16" y="13" width="14" height="5" rx="2.5" transform="rotate(-18 23 15)" fill="#f2c869"/><circle cx="8" cy="28" r="2.6" fill="#f2c869"/><path d="M6 12l2-4 2 4" stroke="#f2c869" stroke-width="1.6" fill="none"/></svg>',
+};
+
+/* ── data model (order / stats / prices are placeholders — tuned later) ── */
+const PATHS = [
+  {key:'base',   cls:'base',   name:'Base Systems',  sub:'Core defense & guns',   ic:'shield'},
+  {key:'econ',   cls:'econ',   name:'Economy',       sub:'Yield & sustain',       ic:'core'},
+  {key:'struct', cls:'struct', name:'Structures',    sub:'Turret & wall tech',    ic:'range'},
+  {key:'hitech', cls:'hitech', name:'Hi-Tech',       sub:'Drones & exotic',       ic:'energy'},
+];
+const NODES = {
+  base:[
+    {id:'b-def', nm:'Reinforced Hull', sub:'Defense', ic:'shield', tier:1, cost:400,  stat:['ARMOR','+8%'], desc:'Hardens the command base against direct fire and melee siege.', infl:.1},
+    {id:'b-atk', nm:'Cannon Calibration', sub:'Attack', ic:'cannon', tier:1, cost:400, stat:['DAMAGE','+10%'], desc:'Tunes the base super-cannon for higher per-shot damage.', infl:.15},
+    {id:'b-awr', nm:'Threat Awareness', sub:'Awareness', ic:'eye', tier:2, cost:900, stat:['SIGHT','+2 cell'], desc:'Extends the base sensor radius so incoming lanes light up earlier.', infl:0},
+    {id:'b-rpg', nm:'RPG Battery', sub:'Rocket ordnance', ic:'rpg', tier:3, cost:1800, stat:['SPLASH','+1 cell'], desc:'Adds a rocket pod for area damage against clustered ground units.', infl:.3},
+    {id:'b-sam', nm:'SAM Site', sub:'Surface-to-air', ic:'sam', tier:4, cost:3200, stat:['ANTI-AIR','+30%'], desc:'Mounts guided missiles that reach flyers ignoring your walls.', infl:.2},
+  ],
+  econ:[
+    {id:'e-hp',  nm:'Core Capacity', sub:'Base HP', ic:'core', tier:1, cost:400, stat:['BASE HP','+150'], desc:'Larger reactor housing raises the base health pool.', infl:-.1},
+    {id:'e-dmg', nm:'Output Boost', sub:'Harvest yield', ic:'bolt', tier:1, cost:400, stat:['GOLD/CROP','+12%'], desc:'Overclocks harvesters to pull more gold from each resource cell.', infl:-.15},
+    {id:'e-rng', nm:'Extended Reach', sub:'Harvest range', ic:'range', tier:2, cost:900, stat:['REACH','+1 cell'], desc:'Harvesters service resource cells one tile farther from base.', infl:0},
+    {id:'e-dual',nm:'Dual Refinery', sub:'Twin yield', ic:'dual', tier:3, cost:1800, stat:['YIELD','×2 node'], desc:'A second refinery line lets one node feed two harvesters at once.', infl:-.2},
+    {id:'e-rep', nm:'L4 Repair Bay', sub:'Repair slot', ic:'wrench', tier:4, cost:3200, stat:['REPAIR','+1 slot'], desc:'Unlocks a fourth field-repair slot for keeping structures alive.', infl:-.1},
+  ],
+  struct:[
+    {id:'s-hp',  nm:'Bulwark Plating', sub:'Structure HP', ic:'shield', tier:1, cost:500, stat:['STRUCT HP','+20%'], desc:'Thicker plating on every deployed cannon, flak, and wall.', infl:.1},
+    {id:'s-dmg', nm:'Munition Upgrade', sub:'Structure DMG', ic:'cannon', tier:1, cost:500, stat:['DAMAGE','+12%'], desc:'Standardized high-yield rounds across all built turrets.', infl:.15},
+    {id:'s-rng', nm:'Targeting Optics', sub:'Structure range', ic:'range', tier:2, cost:1000, stat:['RANGE','+1 cell'], desc:'Optical tracking widens the firing envelope of your turrets.', infl:0},
+    {id:'s-dual',nm:'Layered Armor', sub:'Dual defense', ic:'dual', tier:3, cost:2000, stat:['MITIGATION','+15%'], desc:'Composite layering resists both kinetic and energy damage.', infl:.2},
+    {id:'s-rep', nm:'Repair Slot IV', sub:'Structure repair', ic:'wrench', tier:4, cost:3400, stat:['REPAIR','+1 slot'], desc:'Dedicated repair channel for frontline structures under siege.', infl:.1},
+  ],
+  hitech:[
+    {id:'h-rep', nm:'Repair Drone', sub:'Auto-repair', ic:'drone', tier:2, cost:1500, stat:['HEAL','8/s'], desc:'A drone that patrols the line and welds damaged structures.', infl:-.1},
+    {id:'h-min', nm:'Mining Drone', sub:'Passive gold', ic:'pick', tier:2, cost:1500, stat:['GOLD','+5/s'], desc:'Autonomous miner that trickles gold without a harvester slot.', infl:-.2},
+    {id:'h-ewn', nm:'Early Warning Net', sub:'Recon', ic:'radar', tier:3, cost:2600, stat:['LEAD','+1 wave'], desc:'Reveals the next wave composition before it deploys.', infl:0},
+    {id:'h-l3',  nm:'L3 Troop Command', sub:'Allied troops', ic:'troop', tier:4, cost:3800, stat:['TROOPS','L3'], desc:'Fields a third rank of allied ground troops each wave.', infl:.25},
+    {id:'h-l4',  nm:'L4 Energy Core', sub:'Power grid', ic:'energy', tier:4, cost:4500, stat:['ENERGY','L4'], desc:'Top-tier reactor powering the most demanding exotic tech.', infl:.35},
+  ],
+};
+const ULT = {id:'ult', nm:'Apocalypse Cannon', lvl:'MK VII', cost:25000, ic:'ult',
+  desc:'Overcharges the base super-cannon into a map-wide orbital strike. Requires all four tiers unlocked.',
+  stat:[['DAMAGE','900'],['RANGE','GLOBAL']]};
+
+/* ── mutable session state (mock economy) ────────────────── */
+let gold = 12450;
+let tiersUnlocked = 2;            // beat 2 factions on map 2
+const owned = new Set(['b-atk']); // one already researched, to show the state
+let selected = 'h-l3';           // preselect the Orbital-Lance analogue
+
+const $ = s=>document.querySelector(s);
+const el = (t,c,h)=>{const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n;};
+const fmt = n=>n.toLocaleString('en-US');
+const findNode = id => Object.values(NODES).flat().find(n=>n.id===id) || (id===ULT.id?ULT:null);
+const status = n => owned.has(n.id) ? 'owned' : (n.tier>tiersUnlocked ? 'locked' : (gold>=n.cost ? 'buyable':'poor'));
+
+/* ── render: resource chips ──────────────────────────────── */
+function renderRes(){
+  $('#res').innerHTML =
+    `<div class="chip gold"><span class="ic">${IC.gold}</span><span><b id="goldv">${fmt(gold)}</b><small>Gold bank</small></span></div>
+     <div class="chip tier"><span class="ic">${IC.gem}</span><span><b>${tiersUnlocked}/4</b><small>Tiers unlocked</small></span></div>
+     <div class="chip fac"><span class="ic">${IC.flask}</span><span><b>${tiersUnlocked}/9</b><small>Map-2 factions</small></span></div>`;
+}
+
+/* ── render: tree grid ───────────────────────────────────── */
+function renderTree(){
+  const g = $('#grid'); g.innerHTML='';
+  g.appendChild(el('div','root',
+    `<div class="rootcard"><div class="thumb">${IC.base}</div><b>SYS-BASE</b><div class="lvl">Command Core · LVL 1</div></div>`));
+  for(const p of PATHS){
+    const col = el('div', 'col '+p.cls); col.dataset.path=p.key;
+    col.appendChild(el('div','phead',
+      `<span class="pic">${(IC[p.ic]||'').replace('width="30" height="30"','width="20" height="20"')}</span>
+       <span><div class="pt">${p.name}</div><div class="ps">${p.sub}</div></span>`));
+    for(const n of NODES[p.key]){
+      const st = status(n);
+      const node = el('button','node '+(st==='owned'?'owned':'')+(n.id===selected?' sel':'')+(st==='locked'?' locked':''));
+      node.dataset.id=n.id; node.type='button';
+      const badge = st==='owned' ? `<span class="tick">${chk()}</span>`
+                  : st==='locked' ? `<span class="lockic">${lockic()}</span>`
+                  : `<span class="tbadge">T${n.tier}</span>`;
+      node.innerHTML =
+        `<span class="thumb">${IC[n.ic]?`<span style="color:var(--pc-ink)">${IC[n.ic]}</span>`:''}</span>
+         <span class="meta"><div class="nm">${n.nm}</div><div class="sub">${n.sub}</div>
+           <div class="cost">${st==='owned'?chk(12):IC.gold.replace('width="20" height="20"','width="12" height="12"')} ${st==='owned'?'Researched':fmt(n.cost)}</div>
+         </span>${badge}`;
+      node.addEventListener('click',()=>{ if(st==='locked'){toast('Unlock this tier by beating a faction on Map 2.'); return;} select(n.id); });
+      col.appendChild(node);
+    }
+    g.appendChild(col);
+  }
+  requestAnimationFrame(drawWires);
+}
+const chk = (s=13)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}"><path d="M4 12l5 5 11-12" fill="none" stroke="#57d98a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const lockic = ()=>`<svg viewBox="0 0 24 24" width="14" height="14"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="#6b7c90" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="#6b7c90" stroke-width="2"/></svg>`;
+
+/* ── render: bottom dock ─────────────────────────────────── */
+function renderTiers(){
+  const names=['First blood','Second front','Third victory','Grand clearance'];
+  $('#tiers').innerHTML = [1,2,3,4].map(t=>{
+    const on = t<=tiersUnlocked;
+    return `<div class="tier ${on?'on':''}"><div class="dot">${t}</div>
+      <div class="tx"><b>Tier ${t}</b><small>${on?'Unlocked · '+names[t-1]:'Beat a Map-2 faction'}</small></div></div>`;
+  }).join('');
+}
+function renderUlt(){
+  const can = tiersUnlocked>=4 && gold>=ULT.cost;
+  $('#ult').innerHTML =
+    `<span class="tag">Ultimate</span>
+     <div class="row"><div class="big">${IC.ult}</div>
+       <div><h3>${ULT.nm}</h3><div class="lvl">${ULT.lvl} · Capstone</div>
+       <p>${ULT.desc}</p></div></div>
+     <div class="price">${IC.gold} ${fmt(ULT.cost)} ${tiersUnlocked<4?'<span style="font-size:11px;color:var(--ink-mut);letter-spacing:.1em">· needs all tiers</span>':''}</div>`;
+}
+function renderInspect(){
+  const n = findNode(selected); const st = status(n);
+  const path = PATHS.find(p=>NODES[p.key].some(x=>x.id===n.id));
+  const inkVar = path? `var(--${path.key==='base'?'base':path.key==='econ'?'econ':path.key==='struct'?'struct':'hitech'})` : 'var(--gold)';
+  const box = $('#inspect');
+  box.style.setProperty('--i-ink', inkVar);
+  box.style.setProperty('--i-line', inkVar);
+  box.style.setProperty('--i-fill', 'color-mix(in srgb, '+inkVar+' 18%, transparent)');
+  const inflPct = 50 + Math.round((n.infl||0)*50); // -1..1 -> 0..100
+  const inflWord = (n.infl||0)>0.05?'leans your alignment darker':(n.infl||0)<-0.05?'leans your alignment lighter':'alignment-neutral';
+  const btn = st==='owned' ? `<button class="btn owned" disabled>${chk(14)} Researched</button>`
+            : st==='locked'? `<button class="btn locked" disabled>Tier ${n.tier} locked</button>`
+            : st==='poor'  ? `<button class="btn cant" disabled>Not enough gold</button>`
+            : `<button class="btn" id="buyBtn">Research</button>`;
+  box.innerHTML =
+    `<div class="ihead">
+       <div class="iart" style="color:${inkVar}">${artFor(n)}</div>
+       <div><h3>${n.nm}</h3><div class="ilvl">${n.sub||'Capstone'} · Tier ${n.tier||4}</div></div>
+     </div>
+     <p class="idesc">${n.desc}</p>
+     <div class="stats">
+       ${(n.stat?[n.stat]:ULT.stat).map(s=>`<div class="stat"><small>${s[0]}</small><b>${s[1].replace('+','')}<span class="up">${s[1].startsWith('+')||s[1].startsWith('×')?s[1][0]:''}</span></b></div>`).join('')}
+       <div class="stat"><small>Cost</small><b>${fmt(n.cost)}</b></div>
+     </div>
+     <div class="infl"><span>Faction influence</span><span class="bar"><i style="left:${inflPct}%"></i></span><span style="min-width:118px;text-align:right">${inflWord}</span></div>
+     <div class="buy"><span class="p">${IC.gold} ${fmt(n.cost)}</span>${btn}</div>`;
+  const bb = $('#buyBtn'); if(bb) bb.addEventListener('click',()=>buy(n));
+}
+
+/* fix a bad replace above safely */
+function artFor(n){
+  const raw = IC[n.ic]||IC.core;
+  return raw.replace('width="30" height="30"','width="46" height="46"').replace('width="40" height="40"','width="46" height="46"');
+}
+
+function select(id){ selected=id; renderInspect(); markSel(); }
+function markSel(){
+  document.querySelectorAll('.node').forEach(x=>x.classList.toggle('sel', x.dataset.id===selected));
+}
+function buy(n){
+  if(gold<n.cost || owned.has(n.id) || n.tier>tiersUnlocked) return;
+  gold-=n.cost; owned.add(n.id);
+  renderRes(); renderTree(); renderUlt(); renderInspect();
+  toast(`<b>${n.nm}</b> researched · ${fmt(n.cost)} spent`);
+}
+let toastT;
+function toast(msg){ const t=$('#toast'); t.innerHTML=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+
+/* ── curved SVG connectors (the important part) ──────────── */
+function drawWires(){
+  const svg=$('#wires'), board=$('.board'), grid=$('#grid');
+  if(!board) return;
+  const b=board.getBoundingClientRect();
+  svg.setAttribute('viewBox',`0 0 ${b.width} ${b.height}`);
+  const root=document.querySelector('.rootcard'); if(!root) return;
+  const rr=root.getBoundingClientRect();
+  const rx=rr.right-b.left, ry=rr.top+rr.height/2-b.top;
+  let paths='';
+  const colColor={base:'#c99a3a',econ:'#2fae63',struct:'#2f6fd0',hitech:'#7d3fd0'};
+  const colInk ={base:'#f2c869',econ:'#57d98a',struct:'#4aa3ff',hitech:'#b06cff'};
+  document.querySelectorAll('.col').forEach(col=>{
+    const key=col.dataset.path;
+    const head=col.querySelector('.phead').getBoundingClientRect();
+    const hx=head.left-b.left, hy=head.top+head.height/2-b.top;
+    // root -> path header (big sweeping curve)
+    const mx=(rx+hx)/2;
+    paths+=`<path d="M ${rx} ${ry} C ${mx} ${ry}, ${mx} ${hy}, ${hx} ${hy}" fill="none" stroke="${colColor[key]}" stroke-width="2.5" opacity=".55"/>`;
+    paths+=`<path d="M ${rx} ${ry} C ${mx} ${ry}, ${mx} ${hy}, ${hx} ${hy}" fill="none" stroke="${colInk[key]}" stroke-width="1" opacity=".9"/>`;
+    // header -> each node, and node -> node spine
+    const nodes=[...col.querySelectorAll('.node')];
+    let prev=head;
+    nodes.forEach(nd=>{
+      const r=nd.getBoundingClientRect();
+      const px=prev.left+18-b.left, py=prev.bottom-b.top;
+      const cx=r.left+18-b.left, cy=r.top-b.top;
+      paths+=`<path d="M ${px} ${py} C ${px} ${(py+cy)/2}, ${cx} ${(py+cy)/2}, ${cx} ${cy}" fill="none" stroke="${colInk[key]}" stroke-width="1.6" opacity=".4"/>`;
+      prev=r;
+    });
+  });
+  svg.innerHTML=paths;
+}
+
+/* ── boot ────────────────────────────────────────────────── */
+function boot(){
+  renderRes(); renderTree(); renderTiers(); renderUlt(); renderInspect();
+  window.addEventListener('resize',()=>requestAnimationFrame(drawWires));
+}
+function colOf(k){return {base:'#f2c869',econ:'#57d98a',struct:'#4aa3ff',hitech:'#b06cff'}[k]||'#f2c869';}
+boot();
+</script>

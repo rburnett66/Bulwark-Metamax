@@ -12,6 +12,7 @@
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { loadSave, TIER_COSTS } from '../save/save.js';
 import { setChannelVolume } from '../comm/voice.js';
+import { buildTechTree } from './techtree.js';
 
 // workbook Faction_ID (1-9) -> the game's faction names, roster order (owner can re-map)
 export const FACTION_NAMES = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water',
@@ -172,7 +173,7 @@ export function createMenu(mountEl, cbs) {
   mkBtn('CAMPAIGN', 'map select', null, () => show('maps'));
   mkBtn('FACTIONS', 'choose your enemy', null, () => show('factions'));
   mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
-  mkBtn('TECH', 'unlock structure tiers', null, () => show('tech'));
+  mkBtn('TECH TREE', 'research upgrades', null, () => show('techtree'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
   mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
   mkBtn('NEW CAMPAIGN', 'reset all progress', null, () => {
@@ -357,6 +358,15 @@ export function createMenu(mountEl, cbs) {
     }
   }
 
+  // ── TECH TREE screen (the epic: curved color paths, node cards, research inspector) ──
+  const techTree = buildTechTree(doc, {
+    onBack: () => show('main'),
+    onClassic: () => show('tech'),                 // keep the Amendment-B2 structure-tier economy reachable
+    onResearch: (id, cost) => { if (cbs.onResearch) cbs.onResearch(id, cost); },
+  });
+  techTree.root.style.display = 'none';
+  root.appendChild(techTree.root);
+
   // ── SETTINGS (owner: settings on the main menu) — audio channels, shared with the in-game gear ──
   const settings = el(doc, 'div', 'bwm-maps');
   settings.style.display = 'none';
@@ -449,10 +459,12 @@ export function createMenu(mountEl, cbs) {
     factions.style.display = screen === 'factions' ? 'block' : 'none';
     harv.style.display = screen === 'harvester' ? 'block' : 'none';
     tech.style.display = screen === 'tech' ? 'block' : 'none';
+    techTree.root.style.display = screen === 'techtree' ? 'block' : 'none';
     settings.style.display = screen === 'settings' ? 'block' : 'none';
     if (screen === 'factions') refreshFactions();
     if (screen === 'harvester') refreshHarvester();
     if (screen === 'tech') refreshTech();
+    if (screen === 'techtree') techTree.refresh();
     if (screen === 'maps') {
       mh.firstChild.textContent = chosenFaction ? 'CAMPAIGN — VS ' + chosenFaction.toUpperCase() : 'CAMPAIGN';
       refreshMaps();
