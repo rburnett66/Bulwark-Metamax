@@ -66,10 +66,21 @@ awareness upgrades:
 3. **Grow vs slide.** When the window grows between waves, does the newly-revealed ground animate open
    (camera ease, current behavior) — good as-is, just confirming no hard cut is wanted.
 
-## Build phases (proposed)
+## Build phases
 
 0. **Capture** — this doc + `wave-windows.js` data file. ✅
+0.5 **Tool** — the Terrain Forge (`terrain.html`) authors it: World mode (64×32, base pinned to
+   centre), a wave-preview selector drawing all 8 window rects, and spawn generation on the window's
+   **far edge** per wave (`generateEdgeSpawns`), with **attack-tuning** controls — ground/air/water
+   counts, edge **spread**, and min **spacing** — that spread units into even parallel lanes to
+   minimise pathing collisions. Exports `waveWindows` + `spawnsByWave` + `spawnTuning`. ✅
 1. **Sim** — createSim/spawns read the wave window: base at center, spawn on the far edge, battle area
    = current window; camera frames it. Determinism-sensitive → its own reviewed change.
 2. **Minimap** — world view + window rect + base/structures/resources + far-side threat markers.
 3. **Telegraph wiring** — minimap reveal range driven by the awareness tech nodes.
+
+### Spawn = outer edge, always
+Spawns are placed only on the **outer edge** of the active area — the wave window's far side by
+default (`Spawn edge: Window`), or the true **world** outer edge (`Spawn edge: World`) if we want
+enemies to originate from the world boundary and march in. Never interior. Even spacing is the
+collision lever; the tool exposes it directly.

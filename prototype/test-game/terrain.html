@@ -33,6 +33,11 @@
   .note { font-size:10px; color:var(--muted); line-height:1.5; margin-top:6px; }
   .lgh { font-size:9px; letter-spacing:.14em; color:var(--gold); text-transform:uppercase; margin:8px 0 4px; }
   .lgh:first-child { margin-top:0; }
+  .waveSel { display:flex; gap:4px; flex:1; flex-wrap:wrap; }
+  .waveSel button { width:auto; flex:1 1 0; min-width:26px; padding:6px 0; margin:0; font-size:11px;
+    background:#1a1f28; color:var(--muted); border:1px solid var(--line); }
+  .waveSel button.on { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:var(--gold); }
+  .row input[type=checkbox] { accent-color:var(--gold); width:15px; height:15px; }
 </style>
 </head>
 <body>
@@ -73,8 +78,22 @@
       <h2>Composition</h2>
       <div class="row"><label>Base gap</label><input type="range" id="baseGap" min="1" max="4" value="2"><span class="val" id="baseGapV">2</span></div>
       <button class="ghost" id="genRes" style="margin-top:2px">Generate resources</button>
-      <button class="ghost" id="genSpawn" style="margin-top:6px">Generate spawns</button>
       <div class="note">Base sits centre on cleared ground; the gap ring forces open terrain and excludes resources. Regenerating terrain clears resources/spawns (they depend on it).</div>
+    </div>
+
+    <div class="grp">
+      <h2>Wave windows &amp; attack tuning</h2>
+      <div class="row"><label>World mode</label><input type="checkbox" id="worldMode" checked><span class="note" style="margin:0">64×32 global · base centred · 8 wave windows</span></div>
+      <div class="row"><label>Preview wave</label><div class="waveSel" id="waveSel"></div></div>
+      <div id="waveInfo" class="note" style="margin:2px 0 8px"></div>
+      <div class="row"><label>Spawn edge</label><select id="spawnEdge"><option value="window">Window (far side)</option><option value="world">World (outer)</option></select></div>
+      <div class="row"><label>Ground</label><input type="number" id="spGround" value="6" min="0" max="40"></div>
+      <div class="row"><label>Air</label><input type="number" id="spAir" value="4" min="0" max="40"></div>
+      <div class="row"><label>Water</label><input type="number" id="spWater" value="3" min="0" max="40"></div>
+      <div class="row"><label>Spread</label><input type="range" id="spSpread" min="10" max="100" value="100"><span class="val" id="spSpreadV">100</span></div>
+      <div class="row"><label>Spacing</label><input type="range" id="spSpacing" min="1" max="6" value="2"><span class="val" id="spSpacingV">2</span></div>
+      <button class="ghost" id="genSpawn" style="margin-top:2px">Generate spawns — all 8 waves</button>
+      <div class="note">Enemies attack from the window's FAR side (base is at world centre). Spawns are placed EVENLY on that edge — wider spread + spacing spreads units into parallel lanes, the main lever against pathing collisions. Waves 7–8 surround.</div>
     </div>
 
     <div class="grp">
@@ -94,7 +113,11 @@
 </div>
 
 <script type="module">
-import { generateTerrain, placeBase, generateResources, generateSpawns, TERRAIN_NAME, TERRAIN_COLOR, RESOURCE_COLOR, LANE_COLOR, BLOCKING, TERRAIN } from './src/terrain/terrainGen.js';
+import { generateTerrain, placeBase, generateResources, generateEdgeSpawns, TERRAIN_NAME, TERRAIN_COLOR, RESOURCE_COLOR, LANE_COLOR, BLOCKING, TERRAIN } from './src/terrain/terrainGen.js';
+import { WORLD, BASE, WAVE_WINDOWS, attackSide } from './content/maps/wave-windows.js';
+
+// wave window (1-indexed w,h,x,y) -> 0-indexed inclusive rect for the grid
+const winRect0 = (w) => ({ x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 });
 
 // terrain types the user tunes (grass is the implicit base; borders are derived)
 const TUNABLE = [
@@ -142,6 +165,31 @@ $('legMark').innerHTML = `<span><span class="swatch" style="background:#d9a441">
   + `<span><span class="swatch" style="background:${LANE_COLOR.water}"></span>water spawn</span>`
   + `<span><span class="swatch" style="border:1px solid rgba(0,0,0,.5);background:repeating-linear-gradient(45deg,#0000 0 2px,#0006 2px 3px)"></span>blocking hatch</span>`;
 
+// ── wave-window state ──
+let selWave = 1, spawnsByWave = {};
+const worldMode = () => $('worldMode').checked;
+// build the wave-preview selector (1..8)
+const waveSelEl = $('waveSel');
+for (const w of WAVE_WINDOWS) {
+  const b = document.createElement('button'); b.textContent = w.wave; b.dataset.w = w.wave;
+  b.addEventListener('click', () => { selWave = w.wave; syncWaveUI(); redraw(); });
+  waveSelEl.appendChild(b);
+}
+function syncWaveUI() {
+  [...waveSelEl.children].forEach((b) => b.classList.toggle('on', +b.dataset.w === selWave));
+  const w = WAVE_WINDOWS[selWave - 1];
+  $('waveInfo').textContent = worldMode()
+    ? `Wave ${w.wave} — ${w.w}×${w.h} @ (${w.x},${w.y}) · attack: ${attackSide(w).side}`
+    : 'Freeform map — spawns ring the whole edge (surround).';
+}
+function spawnTuning() {
+  return {
+    edge: $('spawnEdge').value,
+    ground: +$('spGround').value, air: +$('spAir').value, water: +$('spWater').value,
+    spread: +$('spSpread').value / 100, spacing: +$('spSpacing').value,
+  };
+}
+
 function opts() {
   const types = {};
   for (const t of TUNABLE) {
@@ -150,8 +198,11 @@ function opts() {
       noise: +document.querySelector(`[data-k="${t.key}"][data-f="noise"]`).value / 100,
     };
   }
+  // world mode locks the grid to the global 64×32 so the wave windows line up
+  const cols = worldMode() ? WORLD.w : +$('cols').value;
+  const rows = worldMode() ? WORLD.h : +$('rows').value;
   return {
-    cols: +$('cols').value, rows: +$('rows').value, seed: +$('seed').value, types,
+    cols, rows, seed: +$('seed').value, types,
     water: { mode: $('waterMode').value, pct: +$('waterPct').value, noise: +$('waterNoise').value / 100 },
   };
 }
@@ -159,10 +210,15 @@ function opts() {
 let last = null, resources = [], spawns = [];
 function render() {
   const o = opts();
+  // reflect world-mode grid lock in the disabled size inputs
+  $('cols').value = o.cols; $('rows').value = o.rows;
+  $('cols').disabled = $('rows').disabled = worldMode();
   last = generateTerrain(o);
-  base = placeBase(last, +$('baseGap').value);
+  // world mode pins the base to world-centre (32,16 → 0-indexed); else auto-centre
+  base = placeBase(last, +$('baseGap').value, worldMode() ? { x: BASE.x - 1, y: BASE.y - 1 } : null);
   // terrain changed → drop stale resources/spawns (positions depend on the grid)
-  resources = []; spawns = [];
+  resources = []; spawns = []; spawnsByWave = {};
+  syncWaveUI();
   const px = Math.max(4, Math.min(18, Math.floor(900 / o.cols)));
   cv.width = o.cols * px; cv.height = o.rows * px;
   for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) {
@@ -180,8 +236,12 @@ function render() {
   $('waterPctV').textContent = $('waterPct').value;
   $('waterNoiseV').textContent = $('waterNoise').value;
   $('baseGapV').textContent = $('baseGap').value;
+  $('spSpreadV').textContent = $('spSpread').value;
+  $('spSpacingV').textContent = $('spSpacing').value;
 }
 
+// spawn-tuning controls only change the NEXT spawn generation — don't re-roll the terrain
+const SPAWN_TUNE = new Set(['spGround', 'spAir', 'spWater', 'spSpread', 'spSpacing', 'spawnEdge']);
 document.querySelectorAll('input,select').forEach((el) => el.addEventListener('input', (e) => {
   if (e.target.dataset.p != null) {
     const key = e.target.dataset.p;
@@ -189,12 +249,30 @@ document.querySelectorAll('input,select').forEach((el) => el.addEventListener('i
     if (vals.length) palettes[key] = vals; else delete palettes[key];   // up to 3 variants per type
     return;
   }
+  if (SPAWN_TUNE.has(e.target.id)) {
+    $('spSpreadV').textContent = $('spSpread').value; $('spSpacingV').textContent = $('spSpacing').value;
+    return;   // no terrain re-roll; press Generate spawns to apply
+  }
   render();
 }));
 $('reroll').addEventListener('click', () => { $('seed').value = (Math.floor(Math.random() * 99999) + 1); render(); });
 $('genRes').addEventListener('click', () => { resources = generateResources(last, { seed: +$('seed').value }); redraw(); });
-$('genSpawn').addEventListener('click', () => { spawns = generateSpawns(last, { seed: +$('seed').value }); redraw(); });
+$('genSpawn').addEventListener('click', () => {
+  const t = spawnTuning();
+  spawnsByWave = {};
+  if (worldMode()) {
+    for (const w of WAVE_WINDOWS) {
+      const rect = t.edge === 'world' ? { x0: 0, y0: 0, x1: last.cols - 1, y1: last.rows - 1 } : winRect0(w);
+      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, spacing: t.spacing });
+    }
+  } else {
+    selWave = 1;   // freeform: one set, ringing the whole edge
+    spawnsByWave[1] = generateEdgeSpawns(last, { side: 'surround', ground: t.ground, air: t.air, water: t.water, spread: t.spread, spacing: t.spacing });
+  }
+  syncWaveUI(); redraw();
+});
 function redraw() {
+  spawns = spawnsByWave[selWave] || spawnsByWave[1] || [];
   const o = opts(); const px = Math.max(4, Math.min(18, Math.floor(900 / o.cols)));
   for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) { ctx.fillStyle = TERRAIN_COLOR[last.terrain[y * o.cols + x]]; ctx.fillRect(x * px, y * px, px, px); }
   ctx.strokeStyle = 'rgba(0,0,0,.35)';
@@ -204,6 +282,15 @@ function redraw() {
 
 let base = null;
 function drawOverlays(px) {
+  // wave windows (world mode): all faint, selected bold — the battle area per wave
+  if (worldMode()) {
+    for (const w of WAVE_WINDOWS) {
+      const r = winRect0(w), sel = w.wave === selWave;
+      ctx.strokeStyle = sel ? 'rgba(242,200,105,.95)' : 'rgba(242,200,105,.16)';
+      ctx.lineWidth = sel ? 2 : 1;
+      ctx.strokeRect(r.x0 * px, r.y0 * px, (r.x1 - r.x0 + 1) * px, (r.y1 - r.y0 + 1) * px);
+    }
+  }
   // resources — filled circles by crystal colour
   for (const nnn of resources) {
     ctx.fillStyle = RESOURCE_COLOR[nnn.color] || '#fff';
@@ -227,11 +314,19 @@ function drawOverlays(px) {
 function exportObj() {
   const o = opts();
   return {
-    _tool: 'terrain-forge', _version: 1,
+    _tool: 'terrain-forge', _version: 2,
     cols: o.cols, rows: o.rows, seed: o.seed, types: o.types, water: o.water,
     palettes: { ...palettes },
     base: base ? { pos: base.pos, gap: base.gap } : null,
-    resources, spawns,
+    // wave-window model: the map is a window into a fixed world; base at world-centre; spawns on the
+    // window's far edge per wave, tuned for even entry (fewer pathing collisions).
+    worldMode: worldMode(),
+    world: { w: WORLD.w, h: WORLD.h }, worldBase: { x: BASE.x, y: BASE.y },
+    waveWindows: WAVE_WINDOWS.map((w) => ({ ...w, attack: attackSide(w).side })),
+    spawnTuning: spawnTuning(),
+    spawnsByWave,
+    resources,
+    spawns: spawnsByWave[selWave] || spawns || [],   // the previewed wave, for back-compat
     // the baked feature map + blocking, so the game needn't regenerate (but could, from the knobs)
     terrain: Array.from(last.terrain), blocking: Array.from(last.blocking),
   };
