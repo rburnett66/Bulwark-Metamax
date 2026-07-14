@@ -984,7 +984,9 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       if (renderer.unitArt && hasArt(renderer.unitArt, artId) && !(renderer._noArt && renderer._noArt.has(artId))) {
         let spr = renderer.unitSprites.get(u.id);
         if (!spr) {
-          spr = buildUnitSprite(renderer.unitArt, artId, t, u.radius);   // size the sprite to the sim footprint
+          // MAX UNIT WIDTH 2 tiles (owner): the biggest bodies (radius ~0.96 -> 2.56 tiles of art)
+          // dwarfed the board and made every gap a clip. Art caps at 2 tiles; collision unchanged.
+          spr = buildUnitSprite(renderer.unitArt, artId, t, Math.min(u.radius || 0.3, 0.75));
           // a sprite that built EMPTY (frame names missing from the sheet) would sim invisibly while
           // the primitive path is skipped — an unseeable unit attacking the base. Treat as no-art.
           if (spr && !spr.children.length) { spr.destroy(); spr = null; }
