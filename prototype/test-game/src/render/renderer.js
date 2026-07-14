@@ -1001,8 +1001,13 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           // unit keeps its last facing. Smoothed so turns ease rather than snap.
           let hx = 0, hy = 0;
           const wp = (u.path && u.pathIdx < u.path.length) ? u.path[u.pathIdx] : null;
-          if (wp) { hx = wp.x - u.pos.x; hy = wp.y - u.pos.y; }
-          if (hx * hx + hy * hy < 1e-4 && u._px != null) { hx = u.pos.x - u._px; hy = u.pos.y - u._py; }
+          // FACE THE MOTION, not the waypoint (owner: units 'sliding sideways'): in dense funnels
+          // separation moves a unit laterally while its waypoint sits ahead — waypoint-facing made
+          // that read as strafing. Real displacement first; waypoint only when barely moving.
+          let mvx = 0, mvy = 0;
+          if (u._px != null) { mvx = u.pos.x - u._px; mvy = u.pos.y - u._py; }
+          if (mvx * mvx + mvy * mvy > 0.00002) { hx = mvx; hy = mvy; }
+          else if (wp) { hx = wp.x - u.pos.x; hy = wp.y - u.pos.y; }
           if (hx * hx + hy * hy > 1e-4) {
             const target = Math.atan2(hy, hx) + UNIT_FACING_OFFSET;
             spr.__facing = (spr.__facing == null) ? target : approachAngle(spr.__facing, target, 0.3);
