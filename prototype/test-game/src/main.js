@@ -384,7 +384,16 @@ export function boot(mountEl, seed) {
   }
   const menu = createMenu(mountEl, {
     onPlayMap: (id) => { menu.close(); void selectMap(id); },
-    onSelectFaction: (f) => { currentTestFaction = f || DEFAULT_FACTION; },
+    onSelectFaction: (f) => {
+      // Choosing/resetting the enemy is a FRESH battle (owner: reset includes wave + economy +
+      // structures): set the faction, drop the carried gold/defenses, rebuild the schedule and
+      // restart from wave 1 with a full base and starting economy.
+      currentTestFaction = f || DEFAULT_FACTION;
+      pendingCarry = null; runContract = null;
+      currentWaves = currentMapId ? buildCampaignWaves(currentMap, currentTestFaction)
+        : (currentTestFaction ? makeWaves(currentTestFaction) : WAVES);
+      restart(currentSeed);
+    },
     onResetCampaign: () => { resetSave(); pendingCarry = null; runContract = null; currentTestFaction = DEFAULT_FACTION; flashMessage(hud, 'Campaign reset — start from Map 1'); },   // the chosen enemy drives the wave builder
     onBuyTier: (type, tier) => { buyStructTier(type, tier); },
     onBuyHarvester: (level, cost) => {
