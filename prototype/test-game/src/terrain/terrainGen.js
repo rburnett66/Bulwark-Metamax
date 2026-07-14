@@ -151,3 +151,87 @@ function keepLargestBlob(water, cols, rows) {
   const keep = new Set(best || []);
   for (let i = 0; i < water.length; i++) if (!keep.has(i)) water[i] = 0;
 }
+
+// ── Stage 1b: base placement + resource / spawn generation (owner 2026-07-14) ─────────────────
+// All operate on a generateTerrain() result `g = {cols, rows, terrain, blocking}` and are pure +
+// seeded, so the tool, the export, and the game agree.
+
+function mulberrySeed(seed) { return mulberry32((seed | 0) || 1); }
+function isBlock(g, x, y) {
+  if (x < 0 || y < 0 || x >= g.cols || y >= g.rows) return true;
+  return !!g.blocking[y * g.cols + x];
+}
+function set(g, x, y, t) { g.terrain[y * g.cols + x] = t; g.blocking[y * g.cols + x] = BLOCKING.has(t) ? 1 : 0; }
+
+/** Place the 3x3 BASE centrally on open ground and enforce a CLEAR GAP around it: within `gap`
+ *  cells (Chebyshev from centre) all terrain is forced to open grass (the 'nothing gap'), which
+ *  also becomes the resource-exclusion zone. Returns { pos, cells, gap }. Mutates g. */
+export function placeBase(g, gap = 2) {
+  const cx = Math.floor(g.cols / 2), cy = Math.floor(g.rows / 2);
+  // spiral out from centre for the nearest 3x3 whose footprint fits in-bounds
+  let best = { x: cx, y: cy };
+  outer: for (let r = 0; r < Math.max(g.cols, g.rows); r++) {
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const x = cx + dx, y = cy + dy;
+      if (x - 1 >= 0 && y - 1 >= 0 && x + 1 < g.cols && y + 1 < g.rows) { best = { x, y }; break outer; }
+    }
+  }
+  const pos = best, cells = [];
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) cells.push({ x: pos.x + dx, y: pos.y + dy });
+  // clear the gap zone: force open terrain, strip blocking (the 'nothing gap' around the base)
+  for (let dy = -gap; dy <= gap; dy++) for (let dx = -gap; dx <= gap; dx++) {
+    const x = pos.x + dx, y = pos.y + dy;
+    if (x >= 0 && y >= 0 && x < g.cols && y < g.rows) set(g, x, y, TERRAIN.GRASS);
+  }
+  g.base = { pos, cells, gap };
+  return g.base;
+}
+
+/** Scatter RESOURCE nodes on walkable ground, honoring the base resource-gap, distributed by
+ *  distance from the base: primary (blue) common near, premium (yellow) mid, quest (red/green)
+ *  far. Deterministic. Returns [{x,y,role,color}]. */
+export function generateResources(g, opts = {}) {
+  const rnd = mulberrySeed((g.base ? 991 : 0) + (opts.seed || 13) * 7 + 5);
+  const base = g.base ? g.base.pos : { x: g.cols / 2, y: g.rows / 2 };
+  const gap = g.base ? g.base.gap : 2;
+  const density = opts.density != null ? opts.density : 0.05;   // fraction of walkable cells that seed
+  const maxR = Math.hypot(g.cols, g.rows) / 2;
+  const nodes = [];
+  for (let y = 0; y < g.rows; y++) for (let x = 0; x < g.cols; x++) {
+    if (isBlock(g, x, y)) continue;
+    if (Math.max(Math.abs(x - base.x), Math.abs(y - base.y)) <= gap) continue;   // resource gap
+    if (rnd() > density) continue;
+    const d = Math.hypot(x - base.x, y - base.y) / maxR;          // 0 at base → 1 at far corner
+    let role, color;
+    if (d < 0.45) { role = 'primary'; color = 'blue'; }
+    else if (d < 0.72) { role = rnd() < 0.6 ? 'primary' : 'premium'; color = role === 'premium' ? 'yellow' : 'blue'; }
+    else { const q = rnd(); role = q < 0.4 ? 'quest' : 'premium'; color = role === 'quest' ? (rnd() < 0.5 ? 'red' : 'green') : 'yellow'; }
+    nodes.push({ x, y, role, color });
+  }
+  return nodes;
+}
+
+/** SPAWN points on the map edges, tagged by lane: ground on walkable edge, water on water edge,
+ *  air on any edge. Colored by the tool. Deterministic. Returns [{x,y,lane}]. */
+export function generateSpawns(g, opts = {}) {
+  const rnd = mulberrySeed((opts.seed || 13) * 13 + 29);
+  const edges = [];
+  for (let x = 0; x < g.cols; x++) { edges.push({ x, y: 0 }); edges.push({ x, y: g.rows - 1 }); }
+  for (let y = 1; y < g.rows - 1; y++) { edges.push({ x: 0, y }); edges.push({ x: g.cols - 1, y }); }
+  const groundEdge = edges.filter((e) => !isBlock(g, e.x, e.y));
+  const waterEdge = edges.filter((e) => g.terrain[e.y * g.cols + e.x] === TERRAIN.WATER);
+  const pick = (arr, k) => {
+    const a = arr.slice(); const out = [];
+    for (let i = 0; i < k && a.length; i++) out.push(a.splice((rnd() * a.length) | 0, 1)[0]);
+    return out;
+  };
+  const spawns = [];
+  for (const e of pick(groundEdge, opts.ground || 6)) spawns.push({ x: e.x, y: e.y, lane: 'ground' });
+  for (const e of pick(edges, opts.air || 4)) spawns.push({ x: e.x, y: e.y, lane: 'air' });
+  for (const e of pick(waterEdge, opts.water || 3)) spawns.push({ x: e.x, y: e.y, lane: 'water' });
+  return spawns;
+}
+
+export const RESOURCE_COLOR = { blue: '#4a9fe0', yellow: '#e0c24a', red: '#e0574a', green: '#5ad06a' };
+export const LANE_COLOR = { ground: '#ff9a3d', air: '#5fe0ff', water: '#3a7fd0' };

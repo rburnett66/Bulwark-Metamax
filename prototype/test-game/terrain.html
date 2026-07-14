@@ -31,6 +31,8 @@
   .legend { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:10px; color:var(--muted); }
   .legend span { display:flex; align-items:center; gap:4px; }
   .note { font-size:10px; color:var(--muted); line-height:1.5; margin-top:6px; }
+  .lgh { font-size:9px; letter-spacing:.14em; color:var(--gold); text-transform:uppercase; margin:8px 0 4px; }
+  .lgh:first-child { margin-top:0; }
 </style>
 </head>
 <body>
@@ -68,8 +70,22 @@
     </div>
 
     <div class="grp">
+      <h2>Composition</h2>
+      <div class="row"><label>Base gap</label><input type="range" id="baseGap" min="1" max="4" value="2"><span class="val" id="baseGapV">2</span></div>
+      <button class="ghost" id="genRes" style="margin-top:2px">Generate resources</button>
+      <button class="ghost" id="genSpawn" style="margin-top:6px">Generate spawns</button>
+      <div class="note">Base sits centre on cleared ground; the gap ring forces open terrain and excludes resources. Regenerating terrain clears resources/spawns (they depend on it).</div>
+    </div>
+
+    <div class="grp">
       <h2>Legend</h2>
-      <div class="legend" id="legend"></div>
+      <div class="lgh">Terrain — ⛔ blocks movement &amp; building</div>
+      <div class="legend" id="legTerrain"></div>
+      <div class="lgh">Resources</div>
+      <div class="legend" id="legRes"></div>
+      <div class="lgh">Markers</div>
+      <div class="legend" id="legMark"></div>
+      <div class="note">Colours ARE the engine's tileset-free playtest render — every map is playable on these swatches before any tile art exists. Assign sheets above to paint them later.</div>
     </div>
 
     <button id="export">EXPORT terrain-map.json</button>
@@ -78,7 +94,7 @@
 </div>
 
 <script type="module">
-import { generateTerrain, TERRAIN_NAME, TERRAIN_COLOR, BLOCKING, TERRAIN } from './src/terrain/terrainGen.js';
+import { generateTerrain, placeBase, generateResources, generateSpawns, TERRAIN_NAME, TERRAIN_COLOR, RESOURCE_COLOR, LANE_COLOR, BLOCKING, TERRAIN } from './src/terrain/terrainGen.js';
 
 // terrain types the user tunes (grass is the implicit base; borders are derived)
 const TUNABLE = [
@@ -113,9 +129,16 @@ for (const key of PALETTE_TYPES) {
     <input type="text" data-p="${key}" placeholder="sheet name…">`;
   pRows.appendChild(row);
 }
-// legend
-$('legend').innerHTML = TERRAIN_NAME.map((n, i) =>
+// legend — proper + complete: terrain (blocking flagged), resources, markers
+$('legTerrain').innerHTML = TERRAIN_NAME.map((n, i) =>
   `<span><span class="swatch" style="background:${TERRAIN_COLOR[i]}"></span>${n}${BLOCKING.has(i) ? ' ⛔' : ''}</span>`).join('');
+$('legRes').innerHTML = [['blue', 'primary'], ['yellow', 'premium'], ['red', 'quest·red'], ['green', 'quest·green']]
+  .map(([c, label]) => `<span><span class="swatch" style="background:${RESOURCE_COLOR[c]};border-radius:50%"></span>${label}</span>`).join('');
+$('legMark').innerHTML = `<span><span class="swatch" style="background:#d9a441"></span>base (3×3)</span>`
+  + `<span><span class="swatch" style="background:${LANE_COLOR.ground}"></span>ground spawn</span>`
+  + `<span><span class="swatch" style="background:${LANE_COLOR.air}"></span>air spawn</span>`
+  + `<span><span class="swatch" style="background:${LANE_COLOR.water}"></span>water spawn</span>`
+  + `<span><span class="swatch" style="border:1px solid rgba(0,0,0,.5);background:repeating-linear-gradient(45deg,#0000 0 2px,#0006 2px 3px)"></span>blocking hatch</span>`;
 
 function opts() {
   const types = {};
@@ -131,10 +154,13 @@ function opts() {
   };
 }
 
-let last = null;
+let last = null, resources = [], spawns = [];
 function render() {
   const o = opts();
   last = generateTerrain(o);
+  base = placeBase(last, +$('baseGap').value);
+  // terrain changed → drop stale resources/spawns (positions depend on the grid)
+  resources = []; spawns = [];
   const px = Math.max(4, Math.min(18, Math.floor(900 / o.cols)));
   cv.width = o.cols * px; cv.height = o.rows * px;
   for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) {
@@ -146,10 +172,12 @@ function render() {
   for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) {
     if (last.blocking[y * o.cols + x]) { ctx.beginPath(); ctx.moveTo(x * px, y * px); ctx.lineTo(x * px + px, y * px + px); ctx.stroke(); }
   }
+  drawOverlays(px);
   // live readouts
   for (const t of TUNABLE) {} // (values shown inline via input; skip)
   $('waterPctV').textContent = $('waterPct').value;
   $('waterNoiseV').textContent = $('waterNoise').value;
+  $('baseGapV').textContent = $('baseGap').value;
 }
 
 document.querySelectorAll('input,select').forEach((el) => el.addEventListener('input', (e) => {
@@ -157,6 +185,37 @@ document.querySelectorAll('input,select').forEach((el) => el.addEventListener('i
   render();
 }));
 $('reroll').addEventListener('click', () => { $('seed').value = (Math.floor(Math.random() * 99999) + 1); render(); });
+$('genRes').addEventListener('click', () => { resources = generateResources(last, { seed: +$('seed').value }); redraw(); });
+$('genSpawn').addEventListener('click', () => { spawns = generateSpawns(last, { seed: +$('seed').value }); redraw(); });
+function redraw() {
+  const o = opts(); const px = Math.max(4, Math.min(18, Math.floor(900 / o.cols)));
+  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) { ctx.fillStyle = TERRAIN_COLOR[last.terrain[y * o.cols + x]]; ctx.fillRect(x * px, y * px, px, px); }
+  ctx.strokeStyle = 'rgba(0,0,0,.35)';
+  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) if (last.blocking[y * o.cols + x]) { ctx.beginPath(); ctx.moveTo(x * px, y * px); ctx.lineTo(x * px + px, y * px + px); ctx.stroke(); }
+  drawOverlays(px);
+}
+
+let base = null;
+function drawOverlays(px) {
+  // resources — filled circles by crystal colour
+  for (const nnn of resources) {
+    ctx.fillStyle = RESOURCE_COLOR[nnn.color] || '#fff';
+    ctx.beginPath(); ctx.arc(nnn.x * px + px / 2, nnn.y * px + px / 2, Math.max(2, px * 0.32), 0, 7); ctx.fill();
+  }
+  // spawns — squares by lane colour, on the edges
+  for (const sp of spawns) {
+    ctx.fillStyle = LANE_COLOR[sp.lane] || '#fff';
+    ctx.fillRect(sp.x * px + px * 0.15, sp.y * px + px * 0.15, px * 0.7, px * 0.7);
+  }
+  // base — gold 3x3 + gap ring outline
+  if (base) {
+    ctx.fillStyle = '#d9a441';
+    for (const c of base.cells) ctx.fillRect(c.x * px + 1, c.y * px + 1, px - 2, px - 2);
+    ctx.strokeStyle = 'rgba(217,164,65,.5)'; ctx.lineWidth = 1;
+    const g = base.gap;
+    ctx.strokeRect((base.pos.x - g) * px, (base.pos.y - g) * px, (2 * g + 1) * px, (2 * g + 1) * px);
+  }
+}
 
 function exportObj() {
   const o = opts();
@@ -164,6 +223,8 @@ function exportObj() {
     _tool: 'terrain-forge', _version: 1,
     cols: o.cols, rows: o.rows, seed: o.seed, types: o.types, water: o.water,
     palettes: { ...palettes },
+    base: base ? { pos: base.pos, gap: base.gap } : null,
+    resources, spawns,
     // the baked feature map + blocking, so the game needn't regenerate (but could, from the knobs)
     terrain: Array.from(last.terrain), blocking: Array.from(last.blocking),
   };
