@@ -4,6 +4,7 @@
     "greenies-chem-.units.json",
     "ground-powder.units.json",
     "system.units.json",
-    "system-flak.units.json"
+    "system-flak.units.json",
+    "system-base.units.json"
   ]
 }

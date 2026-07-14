@@ -830,8 +830,14 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       else if (cannon.phase === 'cooldown') { col = 0x9a6050; glow = 0.15; }
       else { col = 0x8090a0; glow = 0.22; }   // idle steel
       const ex = bp.x + Math.cos(ang) * len, ey = bp.y + Math.sin(ang) * len;
-      gS.beginFill(0x2b3138, 1); gS.drawCircle(bp.x, bp.y, t * 0.52); gS.endFill();           // turret mount
-      gS.lineStyle(t * 0.24, col, 1); gS.moveTo(bp.x, bp.y); gS.lineTo(ex, ey); gS.lineStyle(0);   // barrel
+      const authoredBarrel = renderer.baseSprite && renderer.baseSprite.__weapon;
+      if (authoredBarrel) {
+        // the owner's barrel art (right-facing) tracks the cannon's live angle; primitives yield
+        authoredBarrel.rotation = ang;
+      } else {
+        gS.beginFill(0x2b3138, 1); gS.drawCircle(bp.x, bp.y, t * 0.52); gS.endFill();           // turret mount
+        gS.lineStyle(t * 0.24, col, 1); gS.moveTo(bp.x, bp.y); gS.lineTo(ex, ey); gS.lineStyle(0);   // barrel
+      }
       if (glow > 0) { gS.beginFill(col, 0.5 * glow); gS.drawCircle(ex, ey, t * 0.22); gS.endFill(); }   // muzzle glow
       if (cannon.phase === 'aim') {   // CHARGE GAUGE — arc fills as the shot readies (timer counts down)
         const frac = Math.max(0, Math.min(1, 1 - (cannon.timer || 0) / (cannon.aimDur || 3)));
@@ -1253,7 +1259,16 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           }
           if (cspr.texture !== wantTex) cspr.texture = wantTex;   // color follows the cargo
           cspr.visible = true;
-          cspr.x = p.x; cspr.y = p.y + t * 0.10;
+          // the load rides IN THE BED — 20% of the body toward the truck's REAR, following its
+          // live facing (owner: the payload sat centered on the cab)
+          const uspr = renderer.unitSprites && renderer.unitSprites.get(hid);
+          if (uspr && uspr.__facing != null) {
+            const hdg = uspr.__facing - UNIT_FACING_OFFSET;          // facing -> world heading angle
+            cspr.x = p.x - Math.cos(hdg) * t * 0.38;
+            cspr.y = p.y - Math.sin(hdg) * t * 0.38;
+          } else {
+            cspr.x = p.x; cspr.y = p.y + t * 0.10;                    // no facing yet (docked) — near-center
+          }
           const targetH = t * 0.34 * (0.55 + 0.45 * frac);        // grows with the load
           cspr.scale.set(targetH / Math.max(1, cspr.texture.height));
         } else if (cspr) {
