@@ -2,7 +2,7 @@ import { MAP, WAVES, makeWaves } from './data/tables.js';
 import { buildCampaignMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
-import { loadSave, updateSave, recordResult, buyStructTier } from './save/save.js';
+import { loadSave, updateSave, recordResult, buyStructTier, resetSave } from './save/save.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
 import { createMenu, FACTION_NAMES } from './menu/menu.js';
@@ -259,22 +259,20 @@ export function boot(mountEl, seed) {
     onMainMenu: () => { if (hud && hud.hideResult) hud.hideResult(); menu.open('maps'); },
     onNextMap: () => {
       if (!(currentMapId > 0 && currentMapId < 9)) return;
-      // CAMPAIGN CARRY (owner): bank the leftover gold + every standing defense (offsets from the
-      // base) so the next map's first battle starts with them.
+      // MAP TRANSITION (owner 2026-07-16): a NEW map is a clean tactical slate — structures are
+      // CLEARED (only WAVE-to-wave within a map keeps them), the base is healed, resources are
+      // fresh, the camera zooms back in. The banked GOLD carries so you rebuild your fortress.
       const carry = { gold: (sim.finalScore && sim.finalScore.goldRemaining) || 0, structures: [] };
-      const bp = sim.base && sim.base.pos;
-      if (bp && sim.structures) {
-        for (const st of sim.structures.values()) {
-          if (!st || st.lifecycle === 'Destroyed' || st.lifecycle === 'Selling') continue;
-          carry.structures.push({ structId: st.structId, tier: st.tier || 1,
-            dx: st.pos.x - bp.x, dy: st.pos.y - bp.y, invested: st.invested || 0 });
-        }
-      }
       pendingCarry = carry;
       updateSave((sv) => { sv.carry = carry; sv.goldBank = carry.gold; });
       void selectMap(currentMapId + 1);
     },
     onVolume: (channel, v) => { setChannelVolume(channel, v); },
+    onBuyHarvesterUnit: () => {
+      const res = submit({ type: 'buyHarvester' });
+      flashMessage(hud, (res && res.ok) ? ('Harvester purchased' + (res.cost ? ' (−' + res.cost + 'g)' : ''))
+        : ((res && res.reason === 'max harvesters') ? 'Max harvesters (4)' : ('Harvester: ' + ((res && res.reason) || 'unavailable'))));
+    },
     defaultFaction: DEFAULT_FACTION,
     onFactionSelect: (faction) => {
       // Rebuild the enemy schedule for the chosen faction (or the mixed roster) and restart the run.
@@ -381,10 +379,22 @@ export function boot(mountEl, seed) {
   {
     const sv = loadSave();
     if (sv.carry) pendingCarry = sv.carry;   // the campaign survives a page reload now
+    // enemy faction chosen in SETTINGS persists across reloads (URL ?faction= still wins)
+    if (!devFaction && sv.enemyFaction) currentTestFaction = sv.enemyFaction;
   }
   const menu = createMenu(mountEl, {
     onPlayMap: (id) => { menu.close(); void selectMap(id); },
-    onSelectFaction: (f) => { currentTestFaction = f || DEFAULT_FACTION; },   // the chosen enemy drives the wave builder
+    onSelectFaction: (f) => {
+      // Choosing/resetting the enemy is a FRESH battle (owner: reset includes wave + economy +
+      // structures): set the faction, drop the carried gold/defenses, rebuild the schedule and
+      // restart from wave 1 with a full base and starting economy.
+      currentTestFaction = f || DEFAULT_FACTION;
+      pendingCarry = null; runContract = null;
+      currentWaves = currentMapId ? buildCampaignWaves(currentMap, currentTestFaction)
+        : (currentTestFaction ? makeWaves(currentTestFaction) : WAVES);
+      restart(currentSeed);
+    },
+    onResetCampaign: () => { resetSave(); pendingCarry = null; runContract = null; currentTestFaction = DEFAULT_FACTION; flashMessage(hud, 'Campaign reset — start from Map 1'); },   // the chosen enemy drives the wave builder
     onBuyTier: (type, tier) => { buyStructTier(type, tier); },
     onBuyHarvester: (level, cost) => {
       updateSave((sv) => {

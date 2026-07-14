@@ -92,8 +92,14 @@ export function findWalkerPath(navGrid, from, to, avoid) {
   visited[start] = 1;
   queue[tail++] = start;
 
-  const DX = [0, 1, 0, -1]; // N, E, S, W — fixed order for determinism
-  const DY = [-1, 0, 1, 0];
+  // 8-CONNECTED (owner: units should drive DIAGONALLY, not zig-zag). Orthogonals first for a
+  // deterministic tie order, then diagonals. A diagonal step is allowed ONLY when BOTH shared
+  // orthogonal cells are passable — no cutting through a wall corner (which is what made fat tanks
+  // clip structures). BFS on an 8-grid isn't shortest-by-distance, but the string-pull below
+  // straightens it into clean diagonals, so it reads right.
+  const DX = [0, 1, 0, -1, 1, 1, -1, -1]; // N, E, S, W, NE, SE, SW, NW
+  const DY = [-1, 0, 1, 0, -1, 1, 1, -1];
+  const pass = (x, y) => x >= 0 && x < cols && y >= 0 && y < rows && !!passable[y * cols + x];
 
   let found = false;
   while (head < tail) {
@@ -104,7 +110,7 @@ export function findWalkerPath(navGrid, from, to, avoid) {
     }
     const cx = cur % cols;
     const cy = (cur - cx) / cols;
-    for (let d = 0; d < 4; d++) {
+    for (let d = 0; d < 8; d++) {
       const nx = cx + DX[d];
       const ny = cy + DY[d];
       if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
@@ -112,6 +118,9 @@ export function findWalkerPath(navGrid, from, to, avoid) {
       if (visited[ni]) continue;
       if (ni !== goal && !passable[ni]) continue;
       if (hasAvoid && ni !== goal && avoid.has(ni)) continue;   // temporarily route AROUND jammed cells
+      if (d >= 4) {   // diagonal — require both orthogonal neighbours open (no corner cut)
+        if (!pass(cx + DX[d], cy) || !pass(cx, cy + DY[d])) continue;
+      }
       visited[ni] = 1;
       prev[ni] = cur;
       queue[tail++] = ni;
@@ -131,7 +140,41 @@ export function findWalkerPath(navGrid, from, to, avoid) {
     if (node === -1) return null; // safety: broken chain
   }
   path.reverse();
-  return path;
+  return smoothPath(path, passable, cols, rows);
+}
+
+/** STRING-PULL (owner: drive diagonally, no zig-zag): drop any waypoint the unit can skip because
+ *  it has clear line-of-sight to the NEXT one (a straight walkable line). Stair-steps collapse into
+ *  straight diagonals. Corner clearance holds because the LOS test walks the supercover cells. */
+function smoothPath(path, passable, cols, rows) {
+  if (!path || path.length <= 2) return path;
+  const clear = (a, b) => {
+    // supercover line a->b: every cell the segment touches must be passable (goal included is fine)
+    let x0 = a.x, y0 = a.y; const x1 = b.x, y1 = b.y;
+    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    for (;;) {
+      if (!(x0 >= 0 && x0 < cols && y0 >= 0 && y0 < rows && passable[y0 * cols + x0])) return false;
+      if (x0 === x1 && y0 === y1) return true;
+      const e2 = 2 * err;
+      let moved = false;
+      if (e2 > -dy) { err -= dy; x0 += sx; moved = true; }
+      if (e2 < dx) { err += dx; y0 += sy; moved = true; }
+      // when the step is diagonal, also require the two orthogonal cells open (no corner clip)
+      if (moved && e2 > -dy && e2 < dx) {
+        if (!(passable[y0 * cols + (x0 - sx)] && passable[(y0 - sy) * cols + x0])) return false;
+      }
+    }
+  };
+  const out = [path[0]];
+  let anchor = 0;
+  for (let i = 1; i < path.length; i++) {
+    if (i === path.length - 1 || !clear(path[anchor], path[i + 1])) {
+      out.push(path[i]); anchor = i;
+    }
+  }
+  return out;
 }
 
 /**

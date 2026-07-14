@@ -11,6 +11,8 @@
  */
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { loadSave, TIER_COSTS } from '../save/save.js';
+import { setChannelVolume } from '../comm/voice.js';
+import { buildTechTree } from './techtree.js';
 
 // workbook Faction_ID (1-9) -> the game's faction names, roster order (owner can re-map)
 export const FACTION_NAMES = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water',
@@ -71,6 +73,12 @@ const CSS = `
   font-size:19px; border:1px solid #2e3846; background:#14181f; color:#3a4350; cursor:help; }
 .bwm-badge.lit { color:#0c0e12; background:linear-gradient(160deg,#f2c869,#d9a441);
   border-color:#f2c869; box-shadow:0 0 12px rgba(217,164,65,.35); }
+/* SETTINGS screen */
+.bwm-set { max-width:420px; }
+.bwm-srow { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.bwm-srow label { flex:0 0 110px; font-size:12px; letter-spacing:.1em; color:#cfe3f0; }
+.bwm-srow input[type=range] { flex:1; accent-color:#d9a441; }
+.bwm-srow .v { flex:0 0 40px; text-align:right; font-size:12px; color:#f2c869; font-variant-numeric:tabular-nums; }
 /* HARVESTER screen */
 .bwm-hrow { display:flex; align-items:center; gap:16px; background:#1a1f28; border:1px solid #2e3846;
   padding:14px 18px; margin-bottom:10px; }
@@ -165,9 +173,15 @@ export function createMenu(mountEl, cbs) {
   mkBtn('CAMPAIGN', 'map select', null, () => show('maps'));
   mkBtn('FACTIONS', 'choose your enemy', null, () => show('factions'));
   mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
-  mkBtn('TECH', 'unlock structure tiers', null, () => show('tech'));
+  mkBtn('TECH TREE', 'research upgrades', null, () => show('techtree'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
   mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
+  mkBtn('NEW CAMPAIGN', 'reset all progress', null, () => {
+    if (doc.defaultView && !doc.defaultView.confirm('Reset the whole campaign? Stars, gold, loyalty, tech and map unlocks are wiped.')) return;
+    if (cbs.onResetCampaign) cbs.onResetCampaign();
+    show('main');   // refresh the Continue label + locks
+  });
+  mkBtn('SETTINGS', 'audio & options', null, () => show('settings'));   // last
   main.appendChild(menu);
   root.appendChild(main);
 
@@ -344,6 +358,68 @@ export function createMenu(mountEl, cbs) {
     }
   }
 
+  // ── TECH TREE screen (the epic: curved color paths, node cards, research inspector) ──
+  const techTree = buildTechTree(doc, {
+    onBack: () => show('main'),
+    onClassic: () => show('tech'),                 // keep the Amendment-B2 structure-tier economy reachable
+    onResearch: (id, cost) => { if (cbs.onResearch) cbs.onResearch(id, cost); },
+  });
+  techTree.root.style.display = 'none';
+  root.appendChild(techTree.root);
+
+  // ── SETTINGS (owner: settings on the main menu) — audio channels, shared with the in-game gear ──
+  const settings = el(doc, 'div', 'bwm-maps');
+  settings.style.display = 'none';
+  const sh = el(doc, 'div', 'bwm-maps-head');
+  sh.appendChild(el(doc, 'h2', null, 'SETTINGS'));
+  const sback = el(doc, 'button', 'bwm-btn back'); sback.style.width = 'auto'; sback.style.padding = '8px 18px';
+  sback.appendChild(el(doc, 'span', null, '← MENU'));
+  sback.addEventListener('click', () => show('main'));
+  sh.appendChild(sback);
+  settings.appendChild(sh);
+  const setBox = el(doc, 'div', 'bwm-set');
+  // FACTION selector (owner): choose / reset the enemy faction from settings (dev + play convenience)
+  {
+    const row = el(doc, 'div', 'bwm-srow');
+    row.appendChild(el(doc, 'label', null, 'ENEMY FACTION'));
+    const sel = el(doc, 'select');
+    sel.style.cssText = 'flex:1;background:#0c0e12;color:#e6ecf3;border:1px solid #2e3846;border-radius:5px;padding:6px 8px;font-size:12px';
+    const optMix = el(doc, 'option'); optMix.value = ''; optMix.textContent = 'Rotation (mixed)'; sel.appendChild(optMix);
+    for (const n of FACTION_NAMES) { const o = el(doc, 'option'); o.value = n; o.textContent = n; sel.appendChild(o); }
+    sel.value = (loadSave().enemyFaction) || 'Ground / Powder';
+    sel.addEventListener('change', () => {
+      const f = sel.value || null;
+      try { const sv = loadSave(); sv.enemyFaction = f || null; localStorage.setItem('bulwark:save', JSON.stringify(sv)); } catch (e) { /* */ }
+      if (cbs.onSelectFaction) cbs.onSelectFaction(f);
+    });
+    const rst = el(doc, 'button', 'bwm-btn'); rst.style.cssText = 'width:auto;padding:6px 12px;flex:0 0 auto';
+    rst.appendChild(el(doc, 'span', null, 'RESET'));
+    rst.title = 'Back to Ground / Powder';
+    rst.addEventListener('click', () => { sel.value = 'Ground / Powder'; sel.dispatchEvent(new Event('change')); });
+    row.appendChild(sel); row.appendChild(rst);
+    setBox.appendChild(row);
+  }
+  const vols = { master: 0.8, dialog: 1, game: 1 };
+  try { Object.assign(vols, JSON.parse(localStorage.getItem('bw.volumes') || '{}')); } catch (e) { /* fresh */ }
+  for (const ch of ['master', 'dialog', 'game']) {
+    const row = el(doc, 'div', 'bwm-srow');
+    row.appendChild(el(doc, 'label', null, ch.toUpperCase() + ' VOLUME'));
+    const sl = el(doc, 'input'); sl.type = 'range'; sl.min = '0'; sl.max = '100'; sl.value = String(Math.round((vols[ch] ?? 1) * 100));
+    const vlab = el(doc, 'span', 'v', sl.value + '%');
+    sl.addEventListener('input', () => {
+      const v = (+sl.value) / 100; vols[ch] = v; vlab.textContent = sl.value + '%';
+      try { localStorage.setItem('bw.volumes', JSON.stringify(vols)); } catch (e) { /* full */ }
+      try { setChannelVolume(ch, v); } catch (e) { /* audio not up yet */ }
+    });
+    row.appendChild(sl); row.appendChild(vlab);
+    setBox.appendChild(row);
+  }
+  setBox.appendChild(el(doc, 'div', 'note', 'Audio is shared with the in-game settings gear. More options land here as they ship.'));
+  const nsty = el(doc, 'style'); nsty.textContent = '.bwm-set .note{font-size:11px;color:#8fa0b3;margin-top:6px}';
+  setBox.appendChild(nsty);
+  settings.appendChild(setBox);
+  root.appendChild(settings);
+
   root.appendChild(el(doc, 'div', 'bwm-foot', 'BULWARK — TEST BUILD'));
 
   function fmtPar(sec) {
@@ -383,9 +459,12 @@ export function createMenu(mountEl, cbs) {
     factions.style.display = screen === 'factions' ? 'block' : 'none';
     harv.style.display = screen === 'harvester' ? 'block' : 'none';
     tech.style.display = screen === 'tech' ? 'block' : 'none';
+    techTree.root.style.display = screen === 'techtree' ? 'block' : 'none';
+    settings.style.display = screen === 'settings' ? 'block' : 'none';
     if (screen === 'factions') refreshFactions();
     if (screen === 'harvester') refreshHarvester();
     if (screen === 'tech') refreshTech();
+    if (screen === 'techtree') techTree.refresh();
     if (screen === 'maps') {
       mh.firstChild.textContent = chosenFaction ? 'CAMPAIGN — VS ' + chosenFaction.toUpperCase() : 'CAMPAIGN';
       refreshMaps();

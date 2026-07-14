@@ -33,6 +33,8 @@ export function defaultSave() {
     tech: {},
     harvesterLevel: 1,
     structTiers: { cannon: 1, flak: 1, wall: 1 },   // Amendment B2: max in-battle tier unlocked per type (gold-bought)
+    techNodes: {},       // Tech Tree epic: { [nodeId]: true } researched upgrades (gold-bought). Clearance
+                         // (which tiers are buyable) DERIVES from Map-2 faction wins — see techClearance().
     alignment: 0,        // the good/evil axis (owner): finishing a good hero's contract raises it,
                          // an evil hero's lowers it — the 81-character matrix supplies the givers
   };
@@ -44,7 +46,18 @@ function migrate(s) {
   if (typeof s.alignment !== 'number') s.alignment = 0;
   if (!s.factionRecords) s.factionRecords = {};
   if (!s.structTiers) s.structTiers = { cannon: 1, flak: 1, wall: 1 };
+  if (!s.techNodes) s.techNodes = {};
   return s;
+}
+
+/** Tech-tree clearance (0..4): the number of DISTINCT factions the player has beaten on Map 2,
+ *  in any order. Gates which tier of tech-tree upgrades is buyable. Reads factionRecords, which
+ *  recordResult() already stamps with mapsWon[mapId] per faction. */
+export function techClearance(s = loadSave()) {
+  const fr = s.factionRecords || {};
+  let n = 0;
+  for (const f of Object.keys(fr)) if (fr[f] && fr[f].mapsWon && fr[f].mapsWon[2]) n += 1;
+  return Math.min(4, n);
 }
 
 export function loadSave() {
@@ -123,6 +136,23 @@ export function buyStructTier(type, tier) {
     s.carry.gold -= cost;
     s.goldBank = s.carry.gold;
     s.structTiers[type] = tier;
+    ok = true;
+  });
+  return ok;
+}
+
+/** Tech Tree epic — research a node: spend the gold bank, mark it owned. Mirrors buyStructTier's
+ *  gold source (carry.gold, mirrored to goldBank). Clearance is enforced by the caller (the screen),
+ *  but we still guard cost + already-owned here. Returns true on success. */
+export function buyResearch(nodeId, cost) {
+  let ok = false;
+  updateSave((s) => {
+    if (!s.techNodes) s.techNodes = {};
+    if (s.techNodes[nodeId]) return;                       // already researched
+    if (!s.carry || (s.carry.gold || 0) < cost) return;    // not enough banked gold
+    s.carry.gold -= cost;
+    s.goldBank = s.carry.gold;
+    s.techNodes[nodeId] = true;
     ok = true;
   });
   return ok;

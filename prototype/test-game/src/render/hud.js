@@ -303,6 +303,17 @@ export function createHud(mountEl, callbacks) {
     paletteRow.appendChild(btn);
     paletteBtns[structId] = btn;
   });
+  // HARVESTER buy button (owner: keep it in the list). Bought at the base — clicking this or the
+  // base itself purchases the next one (free/500/750/1000, cap 4). Price refreshed by updateHud.
+  const harvBtn = el(doc, 'button', 'bw-btn bw-buildbtn bw-harvbtn');
+  harvBtn.title = 'Harvester — bought at the base (or tap this)';
+  const hIcon = el(doc, 'span', 'bw-bicon');
+  hIcon.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26">' + STRUCT_ICONS.harvestorBay + '</svg>';
+  const hCost = el(doc, 'span', 'bw-cost', '500g');
+  harvBtn.appendChild(hIcon);
+  harvBtn.appendChild(hCost);
+  harvBtn.addEventListener('click', () => { if (cbs.onBuyHarvesterUnit) cbs.onBuyHarvesterUnit(); });
+  paletteRow.appendChild(harvBtn);
   palette.appendChild(paletteRow);
   root.appendChild(palette);
   // NB: the 1-4 / Esc build HOTKEYS are handled in input/input.js (which also refreshes the placement ghost);
@@ -528,6 +539,8 @@ export function createHud(mountEl, callbacks) {
     doc,
     root,
     callbacks: cbs,
+    harvBtn,
+    harvCost: hCost,
     hpfill,
     hptext,
     moneyEl,
@@ -608,6 +621,16 @@ export function updateHud(hud, state, ui) {
   const frac = base.maxHp > 0 ? Math.max(0, Math.min(1, base.hp / base.maxHp)) : 0;
   hud.hpfill.style.width = (frac * 100).toFixed(1) + '%';
   hud.hptext.textContent = 'Base: ' + Math.max(0, Math.ceil(base.hp)) + '/' + Math.ceil(base.maxHp);
+
+  // Harvester buy button — live price / MAX / affordability (bought at the base, cap 4)
+  if (hud.harvCost && state.resourceNodes) {
+    const fleet = state.harvesterIds ? state.harvesterIds.filter((id) => { const u = state.units.get(id); return u && u.hp > 0; }).length : 0;
+    const PRICE = [0, 500, 750, 1000];
+    const gold = Math.floor((state.economy && state.economy.money) || 0);
+    hud.harvCost.textContent = fleet >= 4 ? 'MAX' : PRICE[fleet] + 'g';
+    hud.harvBtn.classList.toggle('bw-poor', fleet < 4 && gold < PRICE[fleet]);
+    hud.harvBtn.style.display = '';
+  } else if (hud.harvBtn) { hud.harvBtn.style.display = 'none'; }   // classic board: no harvesters
 
   // Money — the gold-gain "+N" now floats at the dying unit on the map (render/renderer.js coin FX), not the HUD.
   const money = Math.floor((state.economy && state.economy.money) || 0);
