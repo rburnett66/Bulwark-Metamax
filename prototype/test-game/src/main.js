@@ -2,7 +2,7 @@ import { MAP, WAVES, makeWaves } from './data/tables.js';
 import { buildCampaignMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
-import { loadSave, updateSave, recordResult, buyStructTier } from './save/save.js';
+import { loadSave, updateSave, recordResult, buyStructTier, resetSave } from './save/save.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
 import { createMenu, FACTION_NAMES } from './menu/menu.js';
@@ -382,7 +382,8 @@ export function boot(mountEl, seed) {
   }
   const menu = createMenu(mountEl, {
     onPlayMap: (id) => { menu.close(); void selectMap(id); },
-    onSelectFaction: (f) => { currentTestFaction = f || DEFAULT_FACTION; },   // the chosen enemy drives the wave builder
+    onSelectFaction: (f) => { currentTestFaction = f || DEFAULT_FACTION; },
+    onResetCampaign: () => { resetSave(); pendingCarry = null; runContract = null; currentTestFaction = DEFAULT_FACTION; flashMessage(hud, 'Campaign reset — start from Map 1'); },   // the chosen enemy drives the wave builder
     onBuyTier: (type, tier) => { buyStructTier(type, tier); },
     onBuyHarvester: (level, cost) => {
       updateSave((sv) => {

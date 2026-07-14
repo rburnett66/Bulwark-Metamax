@@ -168,6 +168,11 @@ export function createMenu(mountEl, cbs) {
   mkBtn('TECH', 'unlock structure tiers', null, () => show('tech'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
   mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
+  mkBtn('NEW CAMPAIGN', 'reset all progress', null, () => {
+    if (doc.defaultView && !doc.defaultView.confirm('Reset the whole campaign? Stars, gold, loyalty, tech and map unlocks are wiped.')) return;
+    if (cbs.onResetCampaign) cbs.onResetCampaign();
+    show('main');   // refresh the Continue label + locks
+  });
   main.appendChild(menu);
   root.appendChild(main);
 
