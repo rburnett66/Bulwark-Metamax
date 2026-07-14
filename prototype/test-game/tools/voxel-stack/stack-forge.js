@@ -8,13 +8,34 @@
  * The model here is a PLACEHOLDER procedural tank (base + turret) so the 3D tooling can be built and
  * felt now; artist-image ingest → real volumes is vox-s1/s3. Bake → atlases → export is vox-s3/s4.
  */
-import { elevationToSP, layerScreenY } from '../../src/render/voxel/stack.js';
-import { validatePack } from '../../src/render/voxel/pack.js';
-
+// Self-contained CLASSIC script (no ES-module imports) so it runs as a harness tab AND standalone —
+// module imports die on file:// and were the "can't make it work" failure. Mirrors
+// src/render/voxel/{stack,pack}.js (which the GAME runtime imports as modules); kept honest by the tests.
 const FOOT = 64, LAYERS = 16, ANGLES = 64, SP_MAX = 6, MOUNT_DZ = 9, WORLD_SCALE = 3;
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
+const elevationToSP = (elDeg, spMax = SP_MAX) => Math.max(0, Math.round(spMax * Math.cos(clamp(elDeg, 0, 90) * Math.PI / 180)));
+const layerScreenY = (k, baseY, sp) => baseY - k * sp;
+const _CLASSES = new Set(['ground', 'air', 'structure']), _KINDS = new Set(['directional', 'stack']);
+function validatePack(p) {
+  const e = [];
+  if (!p || typeof p !== 'object') return { ok: false, errors: ['not an object'] };
+  if (!p.id) e.push('missing id');
+  if (!_CLASSES.has(p.class)) e.push('bad class');
+  if (!Array.isArray(p.footprint) || p.footprint.length !== 3) e.push('footprint [W,D,H]');
+  if (!p.camera || typeof p.camera.azimuth !== 'number' || typeof p.camera.elevation !== 'number') e.push('camera {azimuth,elevation}');
+  if (typeof p.layerSpacing !== 'number') e.push('layerSpacing');
+  if (!Array.isArray(p.parts) || !p.parts.length) e.push('parts[]');
+  else p.parts.forEach((pt, i) => {
+    if (!pt.id) e.push(`part[${i}] id`);
+    if (!_KINDS.has(pt.kind)) e.push(`part[${i}] kind`);
+    if (!pt.atlas) e.push(`part[${i}] atlas`);
+    if (pt.kind === 'directional' && !(pt.facings > 0)) e.push(`part[${i}] facings`);
+    if (pt.kind === 'stack' && !(pt.angles > 0)) e.push(`part[${i}] angles`);
+  });
+  return { ok: e.length === 0, errors: e };
+}
 
 // rounded rect path helper
 function rr(g, x, y, w, h, r) {

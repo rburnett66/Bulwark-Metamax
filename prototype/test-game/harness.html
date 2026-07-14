@@ -13,8 +13,8 @@
     #tool-tabs button.tt { font:inherit; font-size:12px; letter-spacing:1.5px; padding:6px 14px; cursor:pointer;
       color:#8ea0b0; background:#0b1119; border:1px solid #26313c; border-radius:6px; }
     #tool-tabs button.tt.on { color:#5fe0ff; border-color:#5fe0ff; box-shadow:0 0 10px -4px #5fe0ff; }
-    #tab-comm, #tab-maplab, #tab-terrain { height:calc(100vh - 46px); }
-    #tab-comm iframe, #tab-maplab iframe, #tab-terrain iframe { width:100%; height:100%; border:0; display:block; }
+    #tab-comm, #tab-maplab, #tab-terrain, #tab-stack { height:calc(100vh - 46px); }
+    #tab-comm iframe, #tab-maplab iframe, #tab-terrain iframe, #tab-stack iframe { width:100%; height:100%; border:0; display:block; }
   </style>
   <style>
     :root { --bg:#0c1014; --panel:#141b22; --border:#26313c; --text:#dfe7ee; --muted:#8ea0b0; --accent:#5fe0ff; }
@@ -71,10 +71,12 @@
     <button class="tt" data-tab="comm">COMM ARRAY</button>
     <button class="tt" data-tab="maplab">MAP LAB</button>
     <button class="tt" data-tab="terrain">TERRAIN FORGE</button>
+    <button class="tt" data-tab="stack">STACK FORGE</button>
   </nav>
   <div id="tab-comm" style="display:none"><iframe id="comm-frame" title="Comm Array — procedural voice tool"></iframe></div>
   <div id="tab-maplab" style="display:none"><iframe id="maplab-frame" title="Map Lab — campaign map review & editing"></iframe></div>
   <div id="tab-terrain" style="display:none"><iframe id="terrain-frame" title="Terrain Forge — procedural feature-map generator"></iframe></div>
+  <div id="tab-stack" style="display:none"><iframe id="stack-frame" title="Stack Forge — voxel unit baker (orbit + camera-set)"></iframe></div>
   <script>
     // Master-tool tabs. The Comm tool stays its own document (comm.html) loaded lazily in a frame —
     // both tools keep their global styles/audio without collisions, and comm.html still works standalone.
@@ -86,18 +88,22 @@
         document.getElementById('tab-comm').style.display = (tab === 'comm') ? '' : 'none';
         document.getElementById('tab-maplab').style.display = (tab === 'maplab') ? '' : 'none';
         document.getElementById('tab-terrain').style.display = (tab === 'terrain') ? '' : 'none';
+        document.getElementById('tab-stack').style.display = (tab === 'stack') ? '' : 'none';
         const commFrame = document.getElementById('comm-frame');
         if (tab === 'comm' && !commFrame.src) commFrame.src = 'comm.html';   // lazy: no audio context until first visit
         const mapFrame = document.getElementById('maplab-frame');
         if (tab === 'maplab' && !mapFrame.src) mapFrame.src = 'maplab.html'; // lazy, same pattern
         const terrainFrame = document.getElementById('terrain-frame');
         if (tab === 'terrain' && !terrainFrame.src) terrainFrame.src = 'terrain.html';
+        const stackFrame = document.getElementById('stack-frame');
+        if (tab === 'stack' && !stackFrame.src) stackFrame.src = 'tools/voxel-stack/stack-forge.html';
         try { history.replaceState(null, '', tab === 'bench' ? '#' : '#' + tab); } catch (e) { /* file:// etc. */ }
       }
       for (const b of btns) b.addEventListener('click', () => show(b.dataset.tab));
       if (location.hash === '#comm') show('comm');       // deep link: harness.html#comm opens the Comm Array
       if (location.hash === '#maplab') show('maplab');   // deep link: harness.html#maplab opens the Map Lab
       if (location.hash === '#terrain') show('terrain');
+      if (location.hash === '#stack') show('stack');   // deep link: harness.html#stack opens Stack Forge
     });
   </script>
   <div id="wrap">
