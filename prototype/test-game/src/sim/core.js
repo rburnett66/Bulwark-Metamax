@@ -746,7 +746,11 @@ export const REST_RATIO = 1.2;   // was 4/3 — the plan's fallback: the full sp
                                  // contested zone and queues jittered at its edge (owner playtest). At 1.2
                                  // sprites overlap a whisker at rest; motion is calm.
 const REST_PAD = 0.02;
-export function contactDistR(rA, rB) { return (rA + rB) * REST_RATIO + REST_PAD; }
+// TROOP SPACING FLOOR (owner, 2026-07-15): "keep troops 2 units apart and we will be fine" —
+// no ground pair rests closer than 2 tiles centre-to-centre, whatever their size. Crowds stay
+// readable, art can never overlap, funnels drain single-file with daylight.
+export const REST_MIN = 2.0;
+export function contactDistR(rA, rB) { return Math.max((rA + rB) * REST_RATIO + REST_PAD, REST_MIN); }
 function contactDist(a, b) { return contactDistR(a.radius || 0.3, b.radius || 0.3); }
 
 // air flies over the ground/water plane; only same-plane bodies interact
@@ -781,6 +785,30 @@ function dbgSep(state, id) {
  * Deterministic: fixed i<j order over the insertion-ordered unit array, movement deltas (_mvx/_mvy) frozen
  * from stepMovement, positions corrected sequentially.
  */
+/** TERRAIN CLAMP (owner: 'units going through walls'): after all movement/pushes, a ground
+ *  unit whose centre landed in an impassable cell (wall/moat/base/water) is put back —
+ *  axis-split so tangential motion along a wall face survives (the glide, not the clip).
+ *  Deterministic: pure grid + per-tick displacement. */
+export function stepTerrainClamp(state) {
+  const grid = state.navGrid;
+  if (!grid || !grid.passable) return;
+  const cols = grid.cols, rows = grid.rows;
+  const blocked = (x, y) => {
+    const cx = Math.round(x), cy = Math.round(y);
+    if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return true;
+    return !grid.passable[cy * cols + cx];
+  };
+  for (const u of state.units.values()) {
+    if (!u || u.hp <= 0 || u.domain !== 'Walker' || u._px == null) continue;
+    if (!blocked(u.pos.x, u.pos.y)) continue;
+    const keepX = !blocked(u.pos.x, u._py);   // try sliding along one axis
+    const keepY = !blocked(u._px, u.pos.y);
+    if (keepX) { u.pos.y = u._py; }
+    else if (keepY) { u.pos.x = u._px; }
+    else { u.pos.x = u._px; u.pos.y = u._py; }   // fully wedged — stay put this tick
+  }
+}
+
 export function stepContactClamp(state) {
   const units = [];
   for (const u of state.units.values()) if (u.hp > 0 && !u.isRepairTroop && !u.isHarvester) units.push(u);
@@ -1025,6 +1053,9 @@ export function stepSim(state, dtFixed) {
   //     so bodies glide to rest at sprite-touching distance — velocity-level resolution; no push-back
   //     oscillation ("slamming"/"bumping"), and no displacement source can compress the crowd through it.
   stepContactClamp(state);
+  // 3c-bis. TERRAIN clamp: nobody ends the tick inside a wall/moat/base cell, whatever pushed them
+  // (separation pushes and overtake goals are terrain-blind — owner: "units going through walls").
+  stepTerrainClamp(state);
 
   // 3d. Harvest: the harvester's collect→haul→deposit loop + node regrowth (campaign maps only).
   stepHarvest(state, dtFixed);

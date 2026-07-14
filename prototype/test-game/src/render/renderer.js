@@ -984,7 +984,9 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       if (renderer.unitArt && hasArt(renderer.unitArt, artId) && !(renderer._noArt && renderer._noArt.has(artId))) {
         let spr = renderer.unitSprites.get(u.id);
         if (!spr) {
-          spr = buildUnitSprite(renderer.unitArt, artId, t, u.radius);   // size the sprite to the sim footprint
+          // MAX UNIT WIDTH 2 tiles (owner): the biggest bodies (radius ~0.96 -> 2.56 tiles of art)
+          // dwarfed the board and made every gap a clip. Art caps at 2 tiles; collision unchanged.
+          spr = buildUnitSprite(renderer.unitArt, artId, t, Math.min(u.radius || 0.3, 0.75));
           // a sprite that built EMPTY (frame names missing from the sheet) would sim invisibly while
           // the primitive path is skipped — an unseeable unit attacking the base. Treat as no-art.
           if (spr && !spr.children.length) { spr.destroy(); spr = null; }
@@ -1001,14 +1003,45 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           // unit keeps its last facing. Smoothed so turns ease rather than snap.
           let hx = 0, hy = 0;
           const wp = (u.path && u.pathIdx < u.path.length) ? u.path[u.pathIdx] : null;
-          if (wp) { hx = wp.x - u.pos.x; hy = wp.y - u.pos.y; }
-          if (hx * hx + hy * hy < 1e-4 && u._px != null) { hx = u.pos.x - u._px; hy = u.pos.y - u._py; }
+          // FACE THE MOTION, not the waypoint (owner: units 'sliding sideways'): in dense funnels
+          // separation moves a unit laterally while its waypoint sits ahead — waypoint-facing made
+          // that read as strafing. Real displacement first; waypoint only when barely moving.
+          let mvx = 0, mvy = 0;
+          if (u._px != null) { mvx = u.pos.x - u._px; mvy = u.pos.y - u._py; }
+          if (mvx * mvx + mvy * mvy > 0.00002) { hx = mvx; hy = mvy; }
+          else if (wp) { hx = wp.x - u.pos.x; hy = wp.y - u.pos.y; }
           if (hx * hx + hy * hy > 1e-4) {
             const target = Math.atan2(hy, hx) + UNIT_FACING_OFFSET;
             spr.__facing = (spr.__facing == null) ? target : approachAngle(spr.__facing, target, 0.3);
           }
           const facing = spr.__facing || 0;
           spr.rotation = facing;
+          // SQUEEZE (owner): 2-wide units compress through 1-tile gaps. When both flanks
+          // (perpendicular to facing) are blocked cells, squash the sprite laterally to the gap
+          // width and stretch it slightly along the motion — the clip becomes a squeeze. Purely
+          // visual; the sim's centre-line passage is unchanged.
+          {
+            const grid = state.navGrid;
+            const halfW = (u.radius || 0.3) * SPRITE_OVER_COLLISION;   // sprite half-width, tiles
+            if (grid && grid.passable && halfW > 0.5) {
+              const wa = facing - UNIT_FACING_OFFSET;                   // world motion angle
+              const perpX = -Math.sin(wa), perpY = Math.cos(wa);
+              const blockedAt = (x, y) => {
+                const cx = Math.round(x), cy = Math.round(y);
+                if (cx < 0 || cy < 0 || cx >= grid.cols || cy >= grid.rows) return true;
+                return !grid.passable[cy * grid.cols + cx];
+              };
+              const L = blockedAt(u.pos.x + perpX, u.pos.y + perpY);
+              const R = blockedAt(u.pos.x - perpX, u.pos.y - perpY);
+              const want = (L && R) ? Math.min(1, 0.92 / (halfW * 2)) : 1;   // fit a ~1-tile slot
+              spr.__squeeze = (spr.__squeeze == null) ? 1 : spr.__squeeze + (want - spr.__squeeze) * 0.25;
+              const q = spr.__squeeze;
+              spr.scale.set(q, 1 + (1 - q) * 0.35);   // conserve a little volume: squash x, stretch y
+            } else if (spr.__squeeze != null && spr.__squeeze !== 1) {
+              spr.__squeeze += (1 - spr.__squeeze) * 0.25;
+              spr.scale.set(spr.__squeeze, 1 + (1 - spr.__squeeze) * 0.35);
+            }
+          }
           const cf = Math.cos(facing), sf = Math.sin(facing);
           // ground shadow at the CONTACT point (height 0 — never leans), sized to the unit's footprint
           gU.beginFill(0x000000, 0.26);
