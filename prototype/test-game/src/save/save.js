@@ -68,10 +68,20 @@ export function updateSave(fn) {
 /** Record a finished battle. The GDD gate: a >= 3.0 STAR AVERAGE unlocks the next map
  *  (workbook Global_Params.Star_Gate). waveStars = the sim's per-wave rubric results. */
 export const STAR_GATE = 3.0;
-export function recordResult(mapId, result, finalScore, waveStars, totalWaves) {
+export function recordResult(mapId, result, finalScore, waveStars, totalWaves, faction) {
   if (!mapId) return loadSave();   // classic board — no campaign record
   return updateSave((s) => {
     const m = s.maps[mapId] || (s.maps[mapId] = { beaten: false, bestScore: null, stars: null, avg: null, contract: null });
+    // per-FACTION campaign record (the Factions screen reads this): maps won vs them + star history
+    if (faction && result === 'win') {
+      const fr = (s.factionRecords || (s.factionRecords = {}));
+      const f = fr[faction] || (fr[faction] = { mapsWon: {}, starSum: 0, starRuns: 0 });
+      f.mapsWon[mapId] = true;
+      if (Array.isArray(waveStars) && waveStars.length) {
+        f.starSum += waveStars.reduce((a, w) => a + w.stars, 0) / (totalWaves || waveStars.length);
+        f.starRuns += 1;
+      }
+    }
     if (result === 'win') {
       m.beaten = true;
       const sc = finalScore && typeof finalScore.score === 'number' ? finalScore.score : null;

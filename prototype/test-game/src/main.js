@@ -339,6 +339,7 @@ export function boot(mountEl, seed) {
   }
   const menu = createMenu(mountEl, {
     onPlayMap: (id) => { menu.close(); void selectMap(id); },
+    onSelectFaction: (f) => { currentTestFaction = f || DEFAULT_FACTION; },   // the chosen enemy drives the wave builder
     onReplay: () => {
       menu.close();
       void selectMap(devMap != null ? devMap : DEFAULT_MAP_ID);
@@ -477,7 +478,7 @@ export function boot(mountEl, seed) {
               nextMap = { id: currentMapId + 1, name: nm.name || ('Map ' + (currentMapId + 1)), size: (nm.cols - 4) + 'x' + (nm.rows - 4) };
             } catch (e) { nextMap = { id: currentMapId + 1, name: 'Map ' + (currentMapId + 1), size: '' }; }
           }
-          recordResult(currentMapId, sim.result, sim.finalScore, sim.waveStars, sim.waves ? sim.waves.total : 8);
+          recordResult(currentMapId, sim.result, sim.finalScore, sim.waveStars, sim.waves ? sim.waves.total : 8, currentTestFaction);
           showResult(hud, sim.result, sim.finalScore, nextMap, sim.waveStars);
           // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
           // wave star score (banner) -> final map score (overlay) -> dialog.

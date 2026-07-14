@@ -12,6 +12,15 @@
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { loadSave } from '../save/save.js';
 
+// workbook Faction_ID (1-9) -> the game's faction names, roster order (owner can re-map)
+export const FACTION_NAMES = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water',
+  'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies (Chem)'];
+const TECH_BADGES = [
+  { icon: '⚔', label: 'T1 UNIT', keyAt: 'T1 Unit @' },            // crossed swords
+  { icon: '⛨', label: 'T2 STRUCTURE', keyAt: 'T2 Structure @' },  // shield
+  { icon: '⬢', label: 'T3 BASE UPGRADE', keyAt: 'T3 Base Upgrade @' }, // hexagon
+];
+
 const CSS = `
 .bwm-root { position:absolute; inset:0; z-index:200; font-family:"Segoe UI",system-ui,sans-serif;
   color:#e6ecf3; background:
@@ -47,6 +56,21 @@ const CSS = `
 .bwm-btn.primary:hover { filter:brightness(1.06); }
 .bwm-btn:disabled { opacity:.38; cursor:default; }
 .bwm-btn:disabled:hover { border-color:#2e3846; background:#1a1f28; }
+/* FACTIONS screen */
+.bwm-fgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px; }
+.bwm-fcard { background:#1a1f28; border:1px solid #2e3846; padding:14px 16px; cursor:pointer;
+  transition:border-color .12s, transform .12s; }
+.bwm-fcard:hover { border-color:#d9a441; transform:translateY(-2px); }
+.bwm-fcard .fnm { font-size:15px; font-weight:800; letter-spacing:.1em; }
+.bwm-fcard .fprof { margin-top:6px; font-size:11px; color:#8fa0b3; line-height:1.45; min-height:30px; }
+.bwm-fcard .fstats { display:flex; gap:14px; margin-top:10px; font-size:10px; letter-spacing:.12em; color:#8fa0b3; }
+.bwm-fcard .fstats b { color:#e6ecf3; }
+.bwm-fcard .fstats .stars { color:#f2c869; }
+.bwm-badges { display:flex; gap:10px; margin-top:12px; }
+.bwm-badge { width:38px; height:38px; display:flex; align-items:center; justify-content:center;
+  font-size:19px; border:1px solid #2e3846; background:#14181f; color:#3a4350; cursor:help; }
+.bwm-badge.lit { color:#0c0e12; background:linear-gradient(160deg,#f2c869,#d9a441);
+  border-color:#f2c869; box-shadow:0 0 12px rgba(217,164,65,.35); }
 /* MAPS screen */
 .bwm-maps { flex:1; padding:8px clamp(20px,4vw,60px) 24px; overflow-y:auto; min-height:0; }
 .bwm-maps-head { display:flex; align-items:baseline; gap:16px; margin:6px 2px 14px; }
@@ -127,6 +151,7 @@ export function createMenu(mountEl, cbs) {
     if (cbs.onPlayMap) cbs.onPlayMap(Math.min(9, s.unlockedThrough));
   });
   mkBtn('CAMPAIGN', 'map select', null, () => show('maps'));
+  mkBtn('FACTIONS', 'choose your enemy', null, () => show('factions'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
   mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
   main.appendChild(menu);
@@ -145,6 +170,61 @@ export function createMenu(mountEl, cbs) {
   const grid = el(doc, 'div', 'bwm-grid');
   maps.appendChild(grid);
   root.appendChild(maps);
+
+  // ── FACTIONS screen (choose who to battle; per-faction campaign record + tech badges) ──
+  const factions = el(doc, 'div', 'bwm-maps');
+  factions.style.display = 'none';
+  const fh = el(doc, 'div', 'bwm-maps-head');
+  fh.appendChild(el(doc, 'h2', null, 'FACTIONS'));
+  const fback = el(doc, 'button', 'bwm-btn back'); fback.style.width = 'auto'; fback.style.padding = '8px 18px';
+  fback.appendChild(el(doc, 'span', null, '← MENU'));
+  fback.addEventListener('click', () => show('main'));
+  fh.appendChild(fback);
+  factions.appendChild(fh);
+  const fgrid = el(doc, 'div', 'bwm-fgrid');
+  factions.appendChild(fgrid);
+  root.appendChild(factions);
+
+  function refreshFactions() {
+    const s = loadSave();
+    fgrid.textContent = '';
+    for (const row of MAPDATA.factions) {
+      const fid = row.Faction_ID;
+      const name = FACTION_NAMES[fid - 1] || row.Faction_Name;
+      const rec = (s.factionRecords || {})[name] || {};
+      const tech = MAPDATA.techTree.find((t) => t.Faction === row.Faction_Name) || {};
+      const tier = (s.tech || {})[name] || 0;
+      const loyalty = (s.loyalty || {})[name] || 0;
+      const card = el(doc, 'div', 'bwm-fcard');
+      card.appendChild(el(doc, 'div', 'fnm', name.toUpperCase()));
+      card.appendChild(el(doc, 'div', 'fprof', (row.Profile || '') +
+        '  Premium: ' + row.Premium_Resource + '. Rival: ' + (FACTION_NAMES[(row.Rival_Faction || 0) - 1] || '—') + '.'));
+      const st = el(doc, 'div', 'fstats');
+      const mapsWon = rec.mapsWon ? Object.keys(rec.mapsWon).length : 0;
+      const avg = rec.starRuns ? Math.round((rec.starSum / rec.starRuns) * 10) / 10 : null;
+      st.innerHTML = 'MAPS <b>' + mapsWon + '/9</b>' +
+        '<span class="stars">★ ' + (avg != null ? avg.toFixed(1) : '—') + '</span>' +
+        'LOYALTY <b>' + loyalty + '</b>';
+      card.appendChild(st);
+      const badges = el(doc, 'div', 'bwm-badges');
+      TECH_BADGES.forEach((b, i) => {
+        const lit = tier >= i + 1;
+        const at = tech[b.keyAt];
+        const bd = el(doc, 'span', 'bwm-badge' + (lit ? ' lit' : ''), b.icon);
+        bd.title = b.label + (lit ? ' — UNLOCKED' : ' — unlocks at ' + at + ' cumulative loyalty (you have ' + loyalty + ')');
+        badges.appendChild(bd);
+      });
+      card.appendChild(badges);
+      card.addEventListener('click', () => {
+        if (cbs.onSelectFaction) cbs.onSelectFaction(name);
+        chosenFaction = name;
+        show('maps');
+      });
+      fgrid.appendChild(card);
+    }
+  }
+
+  let chosenFaction = null;
 
   root.appendChild(el(doc, 'div', 'bwm-foot', 'BULWARK — TEST BUILD'));
 
@@ -182,7 +262,12 @@ export function createMenu(mountEl, cbs) {
   function show(screen) {
     main.style.display = screen === 'main' ? 'flex' : 'none';
     maps.style.display = screen === 'maps' ? 'block' : 'none';
-    if (screen === 'maps') refreshMaps();
+    factions.style.display = screen === 'factions' ? 'block' : 'none';
+    if (screen === 'factions') refreshFactions();
+    if (screen === 'maps') {
+      mh.firstChild.textContent = chosenFaction ? 'CAMPAIGN — VS ' + chosenFaction.toUpperCase() : 'CAMPAIGN';
+      refreshMaps();
+    }
     if (screen === 'main') {
       const s = loadSave();
       const started = s.unlockedThrough > 1 || Object.keys(s.maps).length > 0;
