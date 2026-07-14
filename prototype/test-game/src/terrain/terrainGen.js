@@ -166,15 +166,21 @@ function set(g, x, y, t) { g.terrain[y * g.cols + x] = t; g.blocking[y * g.cols 
 /** Place the 3x3 BASE centrally on open ground and enforce a CLEAR GAP around it: within `gap`
  *  cells (Chebyshev from centre) all terrain is forced to open grass (the 'nothing gap'), which
  *  also becomes the resource-exclusion zone. Returns { pos, cells, gap }. Mutates g. */
-export function placeBase(g, gap = 2) {
-  const cx = Math.floor(g.cols / 2), cy = Math.floor(g.rows / 2);
-  // spiral out from centre for the nearest 3x3 whose footprint fits in-bounds
-  let best = { x: cx, y: cy };
-  outer: for (let r = 0; r < Math.max(g.cols, g.rows); r++) {
-    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-      const x = cx + dx, y = cy + dy;
-      if (x - 1 >= 0 && y - 1 >= 0 && x + 1 < g.cols && y + 1 < g.rows) { best = { x, y }; break outer; }
+export function placeBase(g, gap = 2, at = null) {
+  let best;
+  if (at) {
+    // pinned position (world-center for the wave-window model); clamp so the 3x3 fits in-bounds
+    best = { x: Math.max(1, Math.min(g.cols - 2, at.x | 0)), y: Math.max(1, Math.min(g.rows - 2, at.y | 0)) };
+  } else {
+    const cx = Math.floor(g.cols / 2), cy = Math.floor(g.rows / 2);
+    // spiral out from centre for the nearest 3x3 whose footprint fits in-bounds
+    best = { x: cx, y: cy };
+    outer: for (let r = 0; r < Math.max(g.cols, g.rows); r++) {
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = cx + dx, y = cy + dy;
+        if (x - 1 >= 0 && y - 1 >= 0 && x + 1 < g.cols && y + 1 < g.rows) { best = { x, y }; break outer; }
+      }
     }
   }
   const pos = best, cells = [];
@@ -230,6 +236,72 @@ export function generateSpawns(g, opts = {}) {
   for (const e of pick(groundEdge, opts.ground || 6)) spawns.push({ x: e.x, y: e.y, lane: 'ground' });
   for (const e of pick(edges, opts.air || 4)) spawns.push({ x: e.x, y: e.y, lane: 'air' });
   for (const e of pick(waterEdge, opts.water || 3)) spawns.push({ x: e.x, y: e.y, lane: 'water' });
+  return spawns;
+}
+
+/**
+ * Wave-window SPAWN generation — places spawns on the OUTER EDGE of a rect (the wave's battle
+ * window, or the whole world), on the attack side(s). Spawns are spaced EVENLY (not random): even,
+ * separated entry points are the single biggest lever for minimizing pathing collision, since units
+ * enter in parallel lanes instead of funnelling through one cell. Tunables:
+ *   rect     {x0,y0,x1,y1} 0-indexed inclusive — the edge to spawn on (default = full grid)
+ *   side     'west'|'east'|'north'|'south'|'surround' — which edge(s); surround splits across all 4
+ *   ground/air/water  counts per lane
+ *   spread   0..1 fraction of the edge length used (1 = full edge, .5 = centred half)
+ *   spacing  min cells between adjacent spawns on the same edge (collision knob)
+ * Ground spawns skip blocking cells; water spawns need a water edge; air uses any edge cell.
+ * Deterministic (no RNG — even layout is inherently stable). Returns [{x,y,lane}].
+ */
+export function generateEdgeSpawns(g, opts = {}) {
+  const r = opts.rect || { x0: 0, y0: 0, x1: g.cols - 1, y1: g.rows - 1 };
+  const side = opts.side || 'surround';
+  const spread = opts.spread != null ? Math.max(0.1, Math.min(1, opts.spread)) : 1;
+  const spacing = Math.max(1, opts.spacing || 2);
+  const counts = { ground: opts.ground != null ? opts.ground : 6, air: opts.air != null ? opts.air : 4, water: opts.water != null ? opts.water : 3 };
+  const sides = side === 'surround' ? ['west', 'east', 'north', 'south'] : [side];
+
+  const edgeCells = (s) => {
+    const cells = [];
+    if (s === 'west') for (let y = r.y0; y <= r.y1; y++) cells.push({ x: r.x0, y });
+    else if (s === 'east') for (let y = r.y0; y <= r.y1; y++) cells.push({ x: r.x1, y });
+    else if (s === 'north') for (let x = r.x0; x <= r.x1; x++) cells.push({ x, y: r.y0 });
+    else if (s === 'south') for (let x = r.x0; x <= r.x1; x++) cells.push({ x, y: r.y1 });
+    return cells;
+  };
+  // evenly place k points along the valid cells of an edge, centred by `spread`, honouring `spacing`
+  const place = (cells, k, valid) => {
+    const usable = cells.filter(valid);
+    if (!usable.length || k <= 0) return [];
+    const span = Math.max(1, Math.round(usable.length * spread));
+    const seg = usable.slice(Math.floor((usable.length - span) / 2), Math.floor((usable.length - span) / 2) + span);
+    const out = []; let lastIdx = -Infinity;
+    for (let i = 0; i < k; i++) {
+      let idx = seg.length === 1 ? 0 : Math.round((k === 1 ? 0.5 : i / (k - 1)) * (seg.length - 1));
+      if (idx - lastIdx < spacing) idx = lastIdx + spacing;      // enforce min separation
+      if (idx > seg.length - 1) break;                            // ran out of room
+      out.push(seg[idx]); lastIdx = idx;
+    }
+    return out;
+  };
+  const split = (total) => {                                      // divide a lane's count across sides
+    const b = Math.floor(total / sides.length), rem = total % sides.length;
+    return sides.map((_, i) => b + (i < rem ? 1 : 0));
+  };
+
+  const spawns = [], seen = new Set();
+  for (const lane of ['ground', 'air', 'water']) {
+    if (!counts[lane]) continue;
+    const parts = split(counts[lane]);
+    const valid = lane === 'water' ? (c) => g.terrain[c.y * g.cols + c.x] === TERRAIN.WATER
+      : lane === 'ground' ? (c) => !isBlock(g, c.x, c.y) : () => true;
+    sides.forEach((s, si) => {
+      for (const c of place(edgeCells(s), parts[si], valid)) {
+        const key = c.x + ',' + c.y + ',' + lane;
+        if (seen.has(key)) continue; seen.add(key);
+        spawns.push({ x: c.x, y: c.y, lane });
+      }
+    });
+  }
   return spawns;
 }
 
