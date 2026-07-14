@@ -22,7 +22,26 @@ so fighting each faction FEELS different and the first two waves TEACH it.*
 5. **Every arc answers the same three player questions in order:** wave 1–2 *"what is this
    faction?"* → wave 3–5 *"what do I build against it?"* → wave 6–8 *"did I commit enough?"*
 
-## 2. Shape vocabulary
+## 2. Mechanical differentiators (owner, 2026-07-16)
+
+Composition weights alone don't make factions FEEL different — each faction also gets a
+mechanical hook, applied as faction-level stat/behavior modifiers on its units (prototype:
+multipliers in FACTION_DOCTRINE.statMods, injected at unit creation; workbook should own the
+numbers once tuned):
+
+| Faction | Mechanical hook | Expression |
+|---|---|---|
+| Ground / Powder | The baseline | no mods — the reference army |
+| Air | **Ignores walls** | flyers path straight over mazes (inherent); doctrine: wall spend is wasted vs Air — the game must SAY so (wave-1 telegraph) |
+| High Tech | Shielded elite | fewer units; +HP "shield" tier on each (first N damage absorbed) |
+| Artillery | Outranges towers | siege pieces fire from beyond cannon range; must be sallied |
+| Water | **High volume, fast, squishy** | unit count ×~1.6, speed ×1.3, HP ×0.6 — a flood, not a column |
+| Arcane / Energy | Relentless cadence | flat tempo, no lulls; slight regen (no-ammo trope) |
+| Space Tech | Drop pulses | tight simultaneous clusters; +vision (ignores fog where present) |
+| Dark Energy | Wide + DoT | max lateral spread, flank rotation; poison DoT on hits |
+| Greenies (Chem) | **Hard shell** | HP ×1.5, speed ×0.75 — carapace columns that soak; chem area denial later |
+
+## 2b. Shape vocabulary
 
 Ground: **Troops** (skirmish), **Trucks** (fast support), **Tanks** (bruiser), **Artillery**
 (siege, outranges towers), **Heavy Tanks** (breaker). Air: **Copters** (harass), **Planes**
@@ -44,7 +63,9 @@ budget; 0 = absent by doctrine.
 - **Development (w3–5):** the sky opens HARD — Copters w3, Planes w4, air share ~2× other factions
   (weights, not budget). Ground stays screens.
 - **Climax (w6–8):** Missiles join (structure-killers); w8 is a *sky armada* with a token ground feint.
-- **Teaches:** flak is not optional; over-invest in AA vs this faction, skip the wall maze.
+- **Teaches:** flak is not optional; over-invest in AA vs this faction, skip the wall maze —
+  **air ignores walls entirely (owner)**: the wave-1 training screen should telegraph it (a lone
+  Copter overflies the player's first wall untouched, wave 3+ makes it doctrine).
 
 ### 3 · High Tech — "The Corporation" (precision, shields, expensive)
 - **Training (w1–2):** FEW but ELITE — the smallest unit COUNT of any faction's opening (weights
@@ -61,13 +82,16 @@ budget; 0 = absent by doctrine.
   w8: the *Gun Line* — max Artillery the budget affords.
 - **Teaches:** sally tactics — the harvester economy must fund forward cannons; turtling loses.
 
-### 5 · Water — "The Sea Tribes" (swimmers/floaters, coastal)
-- **Training (w1–2):** amphibious Troops probing from the water edge (water lane pts already in
-  the workbook on water maps); on dry maps a plain ground probe. Teaches: watch the coastline.
-- **Development (w3–5):** water lane carries the identity — Floater columns; air = spray (Copters only).
-- **Climax (w6–8):** simultaneous shore + ground pincers; w8 *Spring Tide* — max water-lane weight.
-- **Teaches:** coastal towers + moat placement; on dry maps they fight as a weaker generalist
-  (doctrine honestly says: Water away from water is beatable — reward for map knowledge).
+### 5 · Water — "The Flood" (HIGH VOLUME, FAST, SQUISHY — owner)
+- **Mechanics:** unit count ×~1.6 for the same budget, speed ×1.3, HP ×0.6. A flood, not a column.
+- **Training (w1–2):** a rush of cheap fast Troops/Trucks — many bodies, each dying easily.
+  Teaches: rate-of-fire and splash beat big single hits; don't over-invest in heavy cannons.
+- **Development (w3–5):** the flood widens — water lane joins on coastal maps, Copter spray;
+  tempo relentless, unit intervals short.
+- **Climax (w6–8):** w8 *Spring Tide* — the highest unit COUNT of any faction's finale, arriving
+  continuously; on water maps a simultaneous shore pincer.
+- **Teaches:** AOE + throughput; the super-cannon earns its keep; walls buy less time than usual
+  (fast units close the gaps quickly).
 
 ### 6 · Arcane / Energy — "The Theocracy" (energy weapons, shields, no ammo economy)
 - **Training (w1–2):** slow Troops processions in even, chanting cadence (uniform spawn spacing).
@@ -94,13 +118,16 @@ budget; 0 = absent by doctrine.
   the widest spawn footprint in the game, all lanes at once.
 - **Teaches:** all-around defense; the base ring, not the wall line.
 
-### 9 · Greenies (Chem) — "The Hive" (swarms, chem clouds, area denial)
-- **Training (w1–2):** the swarm in miniature — MAX unit count (weights hard toward Troops; the
-  budget buys many small bodies). Teaches: splash beats single-target here.
-- **Development (w3–5):** the swarm thickens; Copter clouds join w3; Heavy shapes weight ~0.
-- **Climax (w6–8):** w8 *Bloom* — the highest unit count of any wave in the game, nearly all
-  cheap shapes, arriving continuously (short intervals, no groups).
-- **Teaches:** the super-cannon + AOE positioning; economy of scale in defense.
+### 9 · Greenies (Chem) — "The Carapace" (HARD SHELL defenses — owner)
+- **Mechanics:** HP ×1.5, speed ×0.75 — slow, armored columns that SOAK damage; chem area denial
+  arrives with the climax.
+- **Training (w1–2):** a few shelled Troops/Tanks grinding forward, barely killable by a lone
+  cannon. Teaches: sustained DPS and focus matter; one tower is never enough vs the hive.
+- **Development (w3–5):** Tanks + Heavy Tanks weights climb early (earlier than any faction);
+  Copter shells w4; the column narrows onto one lane — a battering ram, not a flood.
+- **Climax (w6–8):** w8 *Bulldozer Bloom* — max Heavy/Tank weight, slowest and hardest wave in
+  the game; chem clouds (area denial around the column) if/when the FX system supports it.
+- **Teaches:** tier upgrades + hardened turret perks + focus fire; time-to-kill management.
 
 ## 4. Implementation mapping (for campaign.js)
 
@@ -109,10 +136,14 @@ knobs the scheduler already supports:
 
 ```
 FACTION_DOCTRINE[faction] = {
-  training:    { weights: {Troops, Trucks, Tanks, Artillery, HeavyTanks: 0, ...}, count_bias },
-  development: { weights: {...}, airShare× , sideFocus?, cadence? },
+  statMods:    { hpMult, speedMult, countBias, shieldHp?, regen?, dotOnHit? },   // the mechanical hook
+  training:    { weights: {Troops, Trucks, Tanks, Artillery, HeavyTanks: 0, ...} },
+  development: { weights: {...}, airShare×, sideFocus?, cadence? },
   climax:      { weights: {...}, grouping: 'flat'|'pulse'|'wide'|'swarm' },
 }
+// statMods apply at createUnit (deterministic, replay-safe); countBias expresses "same budget,
+// more/fewer bodies" by biasing fillLane toward cheap/expensive shapes. Balance numbers migrate
+// to the workbook once playtested.
 ```
 
 - `fillLane` picks by weight-biased selection instead of biggest-affordable (deterministic rng
