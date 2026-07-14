@@ -1172,7 +1172,16 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     const idHash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
     const liveIds = new Set();
     for (const node of state.resourceNodes || state.map.resources || []) {
-      if (gated && node.wave > wv) continue;   // open play: every node is on the board from wave 1
+      if (node.wave > wv) continue;   // RING SEEDING: a wave's fields arrive with its ring (owner)
+      // seed bloom — the moment a ring's field first appears, it announces itself
+      if (!renderer._seededNodes) renderer._seededNodes = new Set();
+      if (!renderer._seededNodes.has(node.id)) {
+        renderer._seededNodes.add(node.id);
+        if (state.time > 1) {   // skip the initial board fill — only mid-battle arrivals bloom
+          const sp = cellToLocal(renderer, node.x, node.y);
+          spawnGlow(renderer, sp.x, sp.y, 0.7, 0.5, COLOR_TINT[node.color] || 0xffd76a);
+        }
+      }
       const p = cellToLocal(renderer, node.x, node.y);   // cellToLocal centers in the cell
       const frac = node.units ? Math.max(0, (node.remaining != null ? node.remaining : node.units) / node.units) : 1;
       const color = COLOR_TINT[node.color] || ROLE_COLOR[node.role] || 0x888888;

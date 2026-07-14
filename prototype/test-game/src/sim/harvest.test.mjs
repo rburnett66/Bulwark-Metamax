@@ -28,6 +28,8 @@ function fresh(seed) {
 // ── full cycle on a primary node: money rises by units × value × yield; node drains then regrows ──
 {
   const { s } = fresh(5);
+  s.waves.current = 8;   // ring seeding (2026-07-15): reveal the whole board — this block tests the
+                         // ECONOMY math, not the reveal; a ring-spanning field would short the load
   const node = s.resourceNodes.find((n) => n.role === 'primary' && n.wave === 1);
   assert(node, 'a wave-1 primary node exists');
   const hv = s.units.get(s.harvesterId);

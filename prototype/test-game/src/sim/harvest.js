@@ -153,7 +153,10 @@ function nodeHarvestSec(r) {
 }
 
 function nodeRevealed(state, node) {
-  if (state.map && state.map.openPlay) return true;   // open play: the whole board is harvestable
+  // RING SEEDING (owner, 2026-07-15): resources arrive WITH their wave's ring — even in open play.
+  // Harvested state carries between waves; fresh fields (and the ring's premium) seed deeper into
+  // the map every wave, so the player must PUSH OUT to keep the economy growing. Build placement
+  // stays open-play; only the harvest economy is ring-gated.
   const wv = Math.max(1, Math.min((state.waves && state.waves.current) || 1, 8));
   return node.wave <= wv;
 }
