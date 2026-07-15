@@ -394,7 +394,7 @@ function drawGameBoard() {
   for (let r = 0; r <= rows; r++) gBoard.moveTo(bx, by + r * GAME_TILE).lineTo(bx + bw, by + r * GAME_TILE);
   gAnchor = { x: bx + bw / 2, y: by + GAME_TILE * 1.5 };                 // ground-contact point (a tile centre)
 }
-function placeGamePreview() { gameLayer.position.set(SCW - PVW - 16, SCH - PVH - 16); }
+function placeGamePreview() { gameLayer.position.set(SCW - PVW - 16, 16); }
 drawGameBoard();
 
 const imgs = { body: { top: null, side: null, front: null, back: null }, turret: { top: null, side: null, front: null, back: null } };
