@@ -205,31 +205,36 @@ function buildVolume(partId, foot, layers) {
   return { cd, H, filled, dbg: { bw, bh, Hv, Hraw: +Hraw.toFixed(1), tw: topC && topC.width, th: topC && topC.height, sw: sideC && sideC.width, sh: sideC && sideC.height, fw: frontC && frontC.width, fh: frontC && frontC.height } };
 }
 
-// carve a part into slice textures with GAME-ALIGNED directional lighting (normal · light).
+// Slice a part into layer textures as a STACK OF COLOURED CUBES. Tops render in FLAT neutral colour
+// (the clean cube colour — no per-pixel/height-field texture). Lighting lives on the EDGES: the exposed
+// vertical cube faces (a filled voxel with an empty same-layer neighbour) are the surfaces that catch the
+// game-aligned directional light — bright when the face points toward it, shaded when it points away.
 function makeSlices(partId, foot, layers, lightAz, lightK) {
-  const { cd, H, filled } = buildVolume(partId, foot, layers), N = foot * foot;
-  const la = lightAz * Math.PI / 180, lz = 0.6, lx = Math.cos(la), ly = -Math.sin(la);   // y-up (90°=top)
-  const ll = Math.hypot(lx, ly, lz), Lx = lx / ll, Ly = ly / ll, Lz = lz / ll, k = lightK / 100;
-  const lit = new Float32Array(N);
-  for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-    const i = y * foot + x;
-    const hxg = H[i + (x < foot - 1 ? 1 : 0)] - H[i - (x > 0 ? 1 : 0)];
-    const hyg = H[i + (y < foot - 1 ? foot : 0)] - H[i - (y > 0 ? foot : 0)];
-    const nl = Math.hypot(-hxg, -hyg, 1), nx = -hxg / nl, ny = -hyg / nl, nz = 1 / nl;
-    lit[i] = clamp(1 - k + k * (0.5 + Math.max(0, nx * Lx + ny * Ly + nz * Lz)), 0.35, 1.25);
-  }
+  const { cd, filled } = buildVolume(partId, foot, layers);
+  const la = lightAz * Math.PI / 180, Lx = Math.cos(la), Ly = -Math.sin(la);   // light-source dir, image space (y-down)
+  const k = clamp(lightK / 100, 0, 1), WALL = 0.52, RANGE = 0.46;              // wall base + directional swing
   const textures = [];
   for (let kk = 0; kk < layers; kk++) {
     const lc = document.createElement('canvas'); lc.width = lc.height = foot;
-    const img = lc.getContext('2d').createImageData(foot, foot), o = img.data, t = kk / Math.max(1, layers - 1);
+    const ctx = lc.getContext('2d'), img = ctx.createImageData(foot, foot), o = img.data;
     for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-      const i = y * foot + x;
-      if (!filled(x, y, kk)) { o[i * 4 + 3] = 0; continue; }
-      const shade = (filled(x, y, kk + 1) ? lerp(0.5, 0.95, t) : 1.0) * lit[i], p = i * 4;   // top surface lit
+      const i = y * foot + x, p = i * 4;
+      if (!filled(x, y, kk)) { o[p + 3] = 0; continue; }
+      let shade;
+      if (!filled(x, y, kk + 1)) {
+        shade = 1.0;                                              // TOP face — flat, neutral cube colour
+      } else {                                                    // WALL — directional light on the exposed faces
+        let d = -2;                                               // best (face · light) over exposed cube faces
+        if (!filled(x + 1, y, kk)) d = Math.max(d, Lx);          // +x face
+        if (!filled(x - 1, y, kk)) d = Math.max(d, -Lx);         // -x face
+        if (!filled(x, y - 1, kk)) d = Math.max(d, -Ly);         // image-up face
+        if (!filled(x, y + 1, kk)) d = Math.max(d, Ly);          // image-down face
+        shade = clamp(WALL + k * RANGE * (d <= -2 ? 0 : d), 0.3, 1.0);   // enclosed → flat ambient (unseen)
+      }
       o[p] = clamp(cd[p] * shade, 0, 255); o[p + 1] = clamp(cd[p + 1] * shade, 0, 255);
       o[p + 2] = clamp(cd[p + 2] * shade, 0, 255); o[p + 3] = 255;
     }
-    lc.getContext('2d').putImageData(img, 0, 0);
+    ctx.putImageData(img, 0, 0);
     textures.push(PIXI.Texture.from(lc));
   }
   return textures;
