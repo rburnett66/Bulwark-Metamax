@@ -16,6 +16,18 @@
     #sideHead { flex:0 0 auto; }
     #cols { display:flex; gap:12px; flex:1; min-height:0; margin-top:8px; }
     .col { flex:1 1 0; min-width:0; overflow:hidden; }
+    #units { width:240px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line); padding:12px; display:flex; flex-direction:column; overflow:hidden; }
+    #units h1 { margin-bottom:8px; }
+    #units select { width:100%; background:var(--ink); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px; font-size:12px; }
+    #unitGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; overflow-y:auto; align-content:start; }
+    .ucard { border:1px solid var(--line); border-radius:6px; padding:5px; cursor:pointer; text-align:center; background:#0e1a26; transition:border-color .1s; }
+    .ucard:hover { border-color:#3c5670; }
+    .ucard.sel { border-color:var(--gold); box-shadow:0 0 0 1px var(--gold); }
+    .ucard canvas { width:100%; height:56px; image-rendering:pixelated; background:#0a121c; border-radius:4px; display:block; }
+    .ucard .un { font-size:10px; margin-top:4px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ucard .ur { font-size:9px; color:var(--muted); }
+    .ucard .badge { font-size:8.5px; letter-spacing:.02em; }
+    .ucard .badge.ok { color:#57d98a; } .ucard .badge.no { color:#6b7c90; }
     h1 { font-size:15px; letter-spacing:.14em; margin:0 0 2px; }
     .sub { font-size:11px; color:var(--muted); margin-bottom:2px; line-height:1.45; }
     .grp { border:1px solid var(--line); border-radius:8px; padding:9px 11px; margin-bottom:9px; }
@@ -48,6 +60,13 @@
 </head>
 <body>
 <div id="app">
+  <div id="units">
+    <h1>UNIT SET</h1>
+    <select id="faction"></select>
+    <div class="note" id="setState" style="margin-top:6px">Pick a faction to load its unit set.</div>
+    <div id="unitGrid"></div>
+    <button class="ghost" id="addUnit" style="margin-top:8px">+ Add unit</button>
+  </div>
   <div id="stage"></div>
   <div id="side">
     <div id="sideHead">

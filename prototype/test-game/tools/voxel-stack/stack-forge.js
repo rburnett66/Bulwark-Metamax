@@ -98,7 +98,7 @@ function makeSlices(partId, foot, layers, lightAz, lightK) {
   const N = foot * foot, H = new Float32Array(N);
   for (let i = 0; i < N; i++) H[i] = cd[i * 4 + 3] > 20 ? (hd[i * 4] / 255) * layers : 0;
   // directional light: normal from height gradient, dotted with a fixed-elevation light at lightAz
-  const la = lightAz * Math.PI / 180, lz = 0.6, lx = Math.cos(la), ly = Math.sin(la);
+  const la = lightAz * Math.PI / 180, lz = 0.6, lx = Math.cos(la), ly = -Math.sin(la);   // y-up (90°=top)
   const ll = Math.hypot(lx, ly, lz), Lx = lx / ll, Ly = ly / ll, Lz = lz / ll, k = lightK / 100;
   const lit = new Float32Array(N);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
@@ -172,6 +172,23 @@ const grid = new PIXI.Graphics(); grid.lineStyle(1, 0x1d3040, 1);
 for (let g = -120; g <= 120; g += 20) { grid.moveTo(g, -80).lineTo(g, 80); grid.moveTo(-120, g * 0.66).lineTo(120, g * 0.66); }
 grid.position.set(0, 40); rig.addChild(grid);
 
+// light-source indicator — a sun on a ring at the light azimuth, in SCREEN space (on top of the
+// model), showing where the game-aligned light comes from. Elevation shrinks the ring (more overhead).
+const lightGfx = new PIXI.Graphics(); app.stage.addChild(lightGfx);
+function drawLight() {
+  const cx = 360, cy = 250, R = 150 + (1 - 0.6) * 90;   // ~overhead-ish ring
+  const la = state.lightAz * Math.PI / 180, sx = cx + Math.cos(la) * R, sy = cy - Math.sin(la) * R;   // y-up
+  const g = lightGfx; g.clear();
+  g.lineStyle(1, 0x2a4055, 0.5); g.drawCircle(cx, cy, R);                       // faint compass ring
+  g.lineStyle(4, 0xf2c869, 0.22);                                              // beam toward the model
+  g.moveTo(sx, sy).lineTo(cx + Math.cos(la) * 90, cy - Math.sin(la) * 90);
+  g.lineStyle(0);
+  g.beginFill(0xf2c869, 0.13); g.drawCircle(sx, sy, 24); g.endFill();          // glow
+  g.beginFill(0xffe4a0, 0.96); g.drawCircle(sx, sy, 10); g.endFill();          // sun
+  g.lineStyle(2, 0xffe4a0, 0.85);                                             // rays
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; g.moveTo(sx + Math.cos(a) * 13, sy + Math.sin(a) * 13).lineTo(sx + Math.cos(a) * 19, sy + Math.sin(a) * 19); }
+}
+
 const imgs = { body: { color: null, height: null }, turret: { color: null, height: null } };
 const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, spin: false, part: 'both',
   lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
@@ -228,7 +245,7 @@ $('taim').oninput = (e) => { state.taim = +e.target.value; $('taimV').textConten
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
 $('layers').oninput = (e) => { state.layers = +e.target.value; $('layersV').textContent = state.layers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; rebuildSlices(); };
-$('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').textContent = state.lightAz + '°'; rebuildSlices(); };
+$('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').textContent = state.lightAz + '°'; rebuildSlices(); drawLight(); };
 $('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; rebuildSlices(); };
 $('smooth').onchange = (e) => { state.smooth = e.target.checked; };
 $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').textContent = state.sharp.toFixed(2); };
@@ -313,6 +330,7 @@ $('saveUnit').onclick = () => {
   $('saveState').innerHTML = v.ok ? `<span class="lock">Saved "${built.pack.id}" ✓ (schema-valid)</span>` : 'Saved, but INVALID: ' + v.errors.join('; ');
   $('packJson').textContent = JSON.stringify(built.pack, null, 2);
   renderManifest();
+  renderRoster();   // flip this unit's card to "supplied ✓"
 };
 
 // ── downloads ──
@@ -325,4 +343,64 @@ $('dlSheet').onclick = () => {
 };
 $('dlManifest').onclick = () => dl('units.json', 'data:application/json,' + encodeURIComponent(JSON.stringify(loadManifest(), null, 2)));
 
-syncInputs(); renderManifest(); update();
+// ── faction unit set (left panel): ALL factions; a window per unit (empty = "needs art"); add units ──
+const FACTIONS = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water', 'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies (Chem)', 'System'];
+const ROLES = ['Skirmisher', 'Support', 'Bruiser', 'Siege', 'Juggernaut', 'Harasser', 'Striker', 'Guided AA'];
+const prefixFor = (name) => (name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'UNI');
+let filesIndex = [], curFaction = null, roster = [];
+async function initFactions() {
+  try { filesIndex = (await (await fetch('../../content/units/index.json')).json()).factions || []; } catch (e) { filesIndex = []; }
+  $('faction').innerHTML = FACTIONS.map((f) => `<option>${f}</option>`).join('');
+  $('faction').onchange = () => loadFaction($('faction').value);
+  loadFaction(FACTIONS[0]);
+}
+function fileForFaction(name) {
+  const norm = (s) => s.toLowerCase().replace(/[^a-z]/g, ''), key = norm(name).slice(0, 5);
+  return filesIndex.find((f) => norm(f).includes(key));
+}
+async function loadFaction(name) {
+  curFaction = name; roster = [];
+  const file = fileForFaction(name);
+  if (file) {
+    try { const d = await (await fetch('../../content/units/' + file)).json(); const u = d.units || {};
+      for (const id of Object.keys(u)) roster.push({ id, role: u[id].role || '', shape: u[id].shape || '' }); } catch (e) { /* fall through to slots */ }
+  }
+  if (!roster.length) { const p = prefixFor(name); roster = ROLES.map((r, i) => ({ id: `${p}-U${i + 1}`, role: r, shape: r })); }
+  renderRoster();
+}
+function renderRoster() {
+  const grid = $('unitGrid'), supplied = (loadManifest().units) || {};
+  grid.innerHTML = ''; let n = 0;
+  for (const u of roster) {
+    const has = !!supplied[u.id]; if (has) n++;
+    const card = document.createElement('div'); card.className = 'ucard' + (u.id === $('uid').value ? ' sel' : ''); card.dataset.uid = u.id;
+    card.innerHTML = `<canvas width="76" height="56"></canvas><div class="un">${u.id.replace(/^[A-Za-z]+-/, '')}</div><div class="ur">${u.role || '—'}</div><div class="badge ${has ? 'ok' : 'no'}">${has ? '✓ supplied' : 'needs art'}</div>`;
+    const g = card.querySelector('canvas').getContext('2d');
+    if (has && supplied[u.id].atlases && supplied[u.id].atlases.body) { const im = new Image(); im.onload = () => { g.clearRect(0, 0, 76, 56); g.drawImage(im, 0, 0, 76, 56); }; im.src = supplied[u.id].atlases.body; }
+    else { g.fillStyle = '#132234'; g.fillRect(0, 0, 76, 56); g.fillStyle = '#3c5670'; g.font = '9px sans-serif'; g.textAlign = 'center'; g.fillText(u.shape || u.role || '?', 38, 32); }
+    card.onclick = () => selectUnit(u.id);
+    grid.appendChild(card);
+  }
+  $('setState').innerHTML = `<b>${curFaction}</b> — <span class="lock">${n}/${roster.length}</span> supplied`;
+}
+$('addUnit').onclick = () => {
+  const p = prefixFor(curFaction || 'UNI'), id = (prompt('New unit id:', `${p}-U${roster.length + 1}`) || '').trim();
+  if (!id) return;
+  if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
+  renderRoster(); selectUnit(id);
+};
+function selectUnit(id) {
+  $('uid').value = id;
+  const m = (loadManifest().units) || {};
+  if (m[id]) {
+    const p = m[id].pack;
+    state.cls = p.class; state.foot = p.footprint[0]; state.layers = p.footprint[2];
+    if (p.light) { state.lightAz = p.light.azimuth; $('lightAz').value = state.lightAz; $('lightAzV').textContent = state.lightAz + '°'; }
+    $('res').value = state.foot; $('layers').value = state.layers; $('layersV').textContent = state.layers;
+    [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
+  }
+  document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
+  rebuildSlices(); drawLight();
+}
+
+syncInputs(); renderManifest(); update(); drawLight(); initFactions();
