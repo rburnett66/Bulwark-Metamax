@@ -3,7 +3,6 @@ import { hasArt, buildUnitSprite } from './unitArt.js';
 import { hasVoxel, buildVoxelUnit, updateVoxelUnit } from './voxel/loader.js';
 import { buildLive3D, updateLive3D } from './voxel/live3d.js';
 import { createProjectilePool } from './projectiles.js';
-import { getUnitDef } from '../data/tables.js';
 import { layerLean } from '../harness/camera.js';
 import { SPRITE_OVER_COLLISION } from '../harness/parts.js';
 import { TERRAIN_COLOR } from '../terrain/terrainGen.js';
