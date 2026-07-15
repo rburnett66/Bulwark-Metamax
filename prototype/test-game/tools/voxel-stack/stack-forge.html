@@ -16,10 +16,11 @@
     #sideHead { flex:0 0 auto; }
     #cols { display:flex; gap:12px; flex:1; min-height:0; margin-top:8px; }
     .col { flex:1 1 0; min-width:0; overflow:hidden; }
-    #units { width:240px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line); padding:12px; display:flex; flex-direction:column; overflow:hidden; }
+    #units { width:300px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line); padding:12px; display:flex; flex-direction:column; overflow-y:auto; }
     #units h1 { margin-bottom:8px; }
     #units select { width:100%; background:var(--ink); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px; font-size:12px; }
-    #unitGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; overflow-y:auto; align-content:start; }
+    #unitGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; max-height:190px; overflow-y:auto; align-content:start; }
+    #orbitDock { flex-shrink:0; margin-top:10px; border-top:1px solid var(--line); padding-top:6px; }
     .ucard { border:1px solid var(--line); border-radius:6px; padding:5px; cursor:pointer; text-align:center; background:#0e1a26; transition:border-color .1s; }
     .ucard:hover { border-color:#3c5670; }
     .ucard.sel { border-color:var(--gold); box-shadow:0 0 0 1px var(--gold); }
@@ -42,10 +43,10 @@
     .imgrow input[type=file] { flex:1; min-width:0; font-size:10px; color:var(--muted); }
     .imgrow canvas.thumb { flex:0 0 auto; width:30px; height:30px; border:1px solid var(--line); border-radius:3px; background:#0a121c; image-rendering:pixelated; }
     .imgrow .ok { color:#57d98a; } .imgrow .no { color:var(--muted); }
-    .views { display:flex; gap:6px; margin-bottom:4px; }
-    .vslot { flex:1; min-width:0; display:flex; flex-direction:column; }
+    .views { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:4px; }
+    .vslot { min-width:0; display:flex; flex-direction:column; }
     .vpick { cursor:pointer; text-align:center; }
-    .vpick canvas { width:100%; height:40px; border:1px solid var(--line); border-radius:4px; background:#0a121c; image-rendering:pixelated; display:block; }
+    .vpick canvas { width:100%; height:84px; border:1px solid var(--line); border-radius:4px; background:#0a121c; image-rendering:pixelated; display:block; }
     .vpick:hover canvas { border-color:#3c5670; }
     .vpick.set canvas { border-color:#57d98a; }
     .vpick.active canvas { box-shadow:0 0 0 2px var(--gold); }
@@ -80,6 +81,23 @@
     <div class="note" id="setState" style="margin-top:6px">Pick a faction to load its unit set.</div>
     <div id="unitGrid"></div>
     <button class="ghost" id="addUnit" style="margin-top:8px">+ Add unit</button>
+    <div id="orbitDock">
+      <h2 style="font-size:10px;letter-spacing:.2em;color:var(--muted);margin:0 0 8px;text-transform:uppercase">Orbit + camera</h2>
+      <div class="seg" id="partSeg" style="margin-bottom:8px"><button data-p="both" class="on">Both</button><button data-p="body">Base</button><button data-p="turret">Turret</button></div>
+      <div class="row"><label>View</label><div class="seg" id="viewSeg" style="flex:1"><button data-az="45" data-el="30">Iso</button><button data-az="90" data-el="10">Side</button><button data-az="0" data-el="10">Front</button><button data-az="0" data-el="90">Top</button></div></div>
+      <div class="row"><label>Azimuth</label><input type="range" id="az" min="0" max="359" value="0"><span class="val" id="azV">0°</span></div>
+      <div class="row"><label>Elevation</label><input type="range" id="el" min="0" max="90" value="30"><span class="val" id="elV">30°</span></div>
+      <div class="row"><label>Turret aim</label><input type="range" id="taim" min="0" max="359" value="0"><span class="val" id="taimV">0°</span></div>
+      <div class="row"><label>Mount ↔ f/b</label><input type="range" id="tdx" min="-32" max="32" value="0"><span class="val" id="tdxV">0</span></div>
+      <div class="row"><label>Mount ↕ up</label><input type="range" id="tmz" min="-16" max="16" value="0"><span class="val" id="tmzV">0</span></div>
+      <div class="row"><label>Pivot ↻ f/b</label><input type="range" id="tpiv" min="-50" max="50" value="0"><span class="val" id="tpivV">0</span></div>
+      <div class="row"><label>Barrel len</label><input type="range" id="blen" min="0" max="48" value="0"><span class="val" id="blenV">off</span></div>
+      <div class="row"><label>Barrel ⌀</label><input type="range" id="brad" min="1" max="10" value="4"><span class="val" id="bradV">4</span></div>
+      <div class="row"><label>Barrel z</label><input type="range" id="belev" min="0" max="100" value="55"><span class="val" id="belevV">55</span></div>
+      <div class="row"><label>Auto-spin</label><input type="checkbox" id="spin"><span class="note" style="margin:0">demo smooth turret</span></div>
+      <button class="ghost" id="setCam" style="margin-top:4px">Set camera for bake</button>
+      <div class="note" id="camState">Camera not set — orbit to a look, then Set.</div>
+    </div>
   </div>
   <div id="stage"></div>
   <div id="side">
@@ -110,25 +128,6 @@
         <b>Front</b> carve the height, <b>Back</b> for asymmetry (else Front is mirrored). Top alone = flat extrude;
         Top+Side = real height; +Front = full space-carve. Click a slot to browse, or <b>hover a slot + Ctrl+V to paste</b>.
         Opaque images get their corner keyed out. No files → placeholder.</div>
-    </div>
-
-    <div class="grp">
-      <h2>2 · Orbit + camera</h2>
-      <div class="seg" id="partSeg" style="margin-bottom:8px"><button data-p="both" class="on">Both</button><button data-p="body">Base</button><button data-p="turret">Turret</button></div>
-      <div class="row"><label>View</label><div class="seg" id="viewSeg" style="flex:1"><button data-az="45" data-el="30">Iso</button><button data-az="90" data-el="10">Side</button><button data-az="0" data-el="10">Front</button><button data-az="0" data-el="90">Top</button></div></div>
-      <div class="row"><label>Azimuth</label><input type="range" id="az" min="0" max="359" value="0"><span class="val" id="azV">0°</span></div>
-      <div class="row"><label>Elevation</label><input type="range" id="el" min="0" max="90" value="30"><span class="val" id="elV">30°</span></div>
-      <div class="row"><label>Turret aim</label><input type="range" id="taim" min="0" max="359" value="0"><span class="val" id="taimV">0°</span></div>
-      <div class="row"><label>Mount ↔ f/b</label><input type="range" id="tdx" min="-32" max="32" value="0"><span class="val" id="tdxV">0</span></div>
-      <div class="row"><label>Mount ↕ up</label><input type="range" id="tmz" min="-16" max="16" value="0"><span class="val" id="tmzV">0</span></div>
-      <div class="row"><label>Pivot ↻ f/b</label><input type="range" id="tpiv" min="-50" max="50" value="0"><span class="val" id="tpivV">0</span></div>
-      <div class="row"><label>Barrel len</label><input type="range" id="blen" min="0" max="48" value="0"><span class="val" id="blenV">off</span></div>
-      <div class="row"><label>Barrel ⌀</label><input type="range" id="brad" min="1" max="10" value="4"><span class="val" id="bradV">4</span></div>
-      <div class="row"><label>Barrel z</label><input type="range" id="belev" min="0" max="100" value="55"><span class="val" id="belevV">55</span></div>
-      <div class="note" style="margin:-2px 0 6px">Procedural round barrel on the turret — a real tube (len 0 = off) mounted forward, baked into every angle so it stays crisp. Sweeps with turret aim + pivot.</div>
-      <div class="row"><label>Auto-spin</label><input type="checkbox" id="spin"><span class="note" style="margin:0">demo smooth turret</span></div>
-      <button class="ghost" id="setCam" style="margin-top:4px">Set camera for bake</button>
-      <div class="note" id="camState">Camera not set — orbit to a look, then Set.</div>
     </div>
 
       </div>

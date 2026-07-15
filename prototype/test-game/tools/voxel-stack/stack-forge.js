@@ -537,7 +537,7 @@ $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) ret
 // ── orthographic view pickers: 4 thumbnails per part; click to browse OR hover + Ctrl+V to paste ──
 const VIEWS = ['top', 'side', 'front', 'back'];
 document.querySelectorAll('.views').forEach((box) => {
-  box.innerHTML = VIEWS.map((v) => `<div class="vslot"><label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="48" height="40"></canvas><input type="file" accept="image/*"></label><div class="vmeta"><span>${v[0].toUpperCase() + v.slice(1)}</span><span class="fl"><button type="button" class="flip" data-axis="h" title="Flip horizontal">⇔</button><button type="button" class="flip" data-axis="v" title="Flip vertical">⇕</button></span></div></div>`).join('');
+  box.innerHTML = VIEWS.map((v) => `<div class="vslot"><label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="128" height="84"></canvas><input type="file" accept="image/*"></label><div class="vmeta"><span>${v[0].toUpperCase() + v.slice(1)}</span><span class="fl"><button type="button" class="flip" data-axis="h" title="Flip horizontal">⇔</button><button type="button" class="flip" data-axis="v" title="Flip vertical">⇕</button></span></div></div>`).join('');
   box.addEventListener('click', (e) => {
     const btn = e.target.closest('.flip'); if (!btn) return;
     e.preventDefault(); const pick = btn.closest('.vslot').querySelector('.vpick');
@@ -556,7 +556,7 @@ function renderView(pick) {
   if (!src) return;
   const fl = flipState[part][view], im = (fl.h || fl.v) ? flipCanvas(src, fl.h, fl.v) : src;
   imgs[part][view] = im;
-  const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 48, 40); drawFit(g, keyedCanvas(im), 48, 40);
+  const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 128, 84); drawFit(g, keyedCanvas(im), 128, 84);
   pick.classList.add('set'); updateFlipBtns(pick); rebuildSlices();
 }
 function toggleFlip(part, view, axis) {
