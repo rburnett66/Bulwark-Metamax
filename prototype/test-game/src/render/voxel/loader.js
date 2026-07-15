@@ -101,15 +101,19 @@ export function buildVoxelUnit(store, id, tilePx, radius, spriteOverCollision) {
     s.scale.set(scale);
     return s;
   };
-  // SILHOUETTE SHADOW: the unit's own frame flipped about the ground line, squashed and sheared away
-  // from the world light, tinted black — the shadow matches the real shape and turns with the facing.
-  // Same textures as the unit, so it batches; no extra draws, no filters.
+  // SILHOUETTE SHADOW: the unit's own frame — NOT flipped (the camera is high, so the silhouette
+  // already approximates the ground shape) — squashed onto the ground, sheared and offset away from
+  // the world light, tinted black. Same textures as the unit, so it batches; no filters.
   const lightAz = ((pack.light && pack.light.azimuth) != null ? pack.light.azimuth : 135) * Math.PI / 180;
-  const lean = -Math.cos(lightAz) * 0.9;
+  const lean = -Math.cos(lightAz) * 0.5;                            // shear away from the sun
+  const shOffX = -Math.cos(lightAz) * targetW * 0.10;               // ground offset, same direction
+  const shOffY = Math.sin(lightAz) * targetW * 0.06;
   const mkShadow = (p, alpha) => {
     const s = mk(p);
     s.tint = 0x000000; s.alpha = alpha;
-    s.scale.set(scale, -scale * 0.45); s.skew.x = lean;
+    s.scale.set(scale, scale * 0.55); s.skew.x = lean;
+    s.__gx = shOffX; s.__gy = shOffY;                               // base ground offset (renderer re-grounds y)
+    s.position.set(shOffX, shOffY);
     return s;
   };
   const shBody = parts.body ? mkShadow(parts.body, 0.24) : null;
@@ -147,6 +151,6 @@ export function updateVoxelUnit(c, headingRad, aimRad) {
     const gy = m[0] * Math.sin(headingRad) + (m[1] || 0) * Math.cos(headingRad);
     v.turret.x = gx * B;
     v.turret.y = (gy * v.se - (m[2] || 0) * (v.pack.layerSpacing || 0)) * B;       // ground y foreshortened; dz lifts
-    if (v.shTurret) { v.shTurret.texture = tex; v.shTurret.x = gx * B; }           // barrel shadow tracks the aim
+    if (v.shTurret) { v.shTurret.texture = tex; v.shTurret.x = gx * B + (v.shTurret.__gx || 0); }   // barrel shadow tracks the aim
   }
 }

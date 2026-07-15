@@ -1059,7 +1059,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           }
           spr.__aim = (spr.__aim == null) ? aim : approachAngle(spr.__aim, aim, 0.35);
           // silhouette shadows stay ON THE GROUND: the container lifts with flyers, so counter-shift
-          if (spr.__shadows) for (const sh of spr.__shadows) sh.y = flyLift + t * 0.05;
+          if (spr.__shadows) for (const sh of spr.__shadows) sh.y = flyLift + (sh.__gy || t * 0.05);
           // BANK from the turn rate — Tier B's whole trick, and Tier C's roll input (spec §3B/§3C)
           let dHead = (spr.__prevHeading == null) ? 0 : heading - spr.__prevHeading;
           dHead = Math.atan2(Math.sin(dHead), Math.cos(dHead));

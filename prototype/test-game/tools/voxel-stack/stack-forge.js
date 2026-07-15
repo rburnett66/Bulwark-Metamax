@@ -746,7 +746,7 @@ const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim:
 let bodyFaces = null, turretFaces = null, bodyBaked = null, turretBaked = null, lastPack = null;
 let voxMeta = null, voxTex = null, voxSpr = null, voxShadow = null, voxSig = '';   // orbit cube-render canvas
 let gVoxMeta = null, gVoxTex = null, gVoxSpr = null, gVoxShadow = null;            // in-game inset canvas
-const shadowLean = () => -Math.cos(state.lightAz * Math.PI / 180) * 0.9;   // shear away from the sun
+const shadowLean = () => -Math.cos(state.lightAz * Math.PI / 180) * 0.5;   // shear away from the sun
 let voxBounds = { R: 64, HT: 40 };                                     // current model bounds (set by rebuild)
 const INSET_S = 3;                                                     // inset render px/voxel (scaled to game size)
 
@@ -762,11 +762,13 @@ function buildOrbitTarget(S) {
   if (voxSpr) { voxSpr.destroy(); voxShadow.destroy(); voxTex.destroy(true); }
   voxMeta = mkTarget(S, voxBounds.R, voxBounds.HT);
   voxTex = PIXI.Texture.from(voxMeta.cv);
-  // silhouette shadow: the model's own render flipped about the ground line, sheared off the sun
+  // silhouette shadow: the model's own render (un-flipped — high camera), squashed + sheared off the sun
+  const la0 = state.lightAz * Math.PI / 180;
   voxShadow = new PIXI.Sprite(voxTex);
-  voxShadow.anchor.set(0.5, voxMeta.groundY / voxMeta.Hp); voxShadow.position.set(0, state.baseY + 1);
+  voxShadow.anchor.set(0.5, voxMeta.groundY / voxMeta.Hp);
+  voxShadow.position.set(-Math.cos(la0) * state.foot * 0.10, state.baseY + Math.sin(la0) * state.foot * 0.06 + 1);
   voxShadow.tint = 0x000000; voxShadow.alpha = 0.22;
-  voxShadow.scale.set(1 / S, -0.45 / S); voxShadow.skew.x = shadowLean();
+  voxShadow.scale.set(1 / S, 0.55 / S); voxShadow.skew.x = shadowLean();
   rig.addChild(voxShadow);
   voxSpr = new PIXI.Sprite(voxTex); voxSpr.scale.set(1 / S);
   voxSpr.anchor.set(0.5, voxMeta.groundY / voxMeta.Hp); voxSpr.position.set(0, state.baseY);
@@ -798,10 +800,12 @@ function rebuildSlices() {
   if (gVoxSpr) { gVoxSpr.destroy(); gVoxShadow.destroy(); gVoxTex.destroy(true); }
   gVoxMeta = mkTarget(INSET_S, voxBounds.R, voxBounds.HT);
   gVoxTex = PIXI.Texture.from(gVoxMeta.cv);
+  const laI = state.lightAz * Math.PI / 180;
   gVoxShadow = new PIXI.Sprite(gVoxTex);
-  gVoxShadow.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp); gVoxShadow.position.set(0, 1);
+  gVoxShadow.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp);
+  gVoxShadow.position.set(-Math.cos(laI) * state.foot * 0.10, Math.sin(laI) * state.foot * 0.06 + 1);
   gVoxShadow.tint = 0x000000; gVoxShadow.alpha = 0.22;
-  gVoxShadow.scale.set(1 / INSET_S, -0.45 / INSET_S); gVoxShadow.skew.x = shadowLean();
+  gVoxShadow.scale.set(1 / INSET_S, 0.55 / INSET_S); gVoxShadow.skew.x = shadowLean();
   gUnit.addChild(gVoxShadow);
   gVoxSpr = new PIXI.Sprite(gVoxTex); gVoxSpr.scale.set(1 / INSET_S);
   gVoxSpr.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp); gVoxSpr.position.set(0, 0);
