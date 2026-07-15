@@ -62,42 +62,62 @@ function drawTurret(x, hx, f) {
   hx.fillStyle = '#e0e0e0'; rr(hx, c - f * 0.22, c - f * 0.20, f * 0.40, f * 0.40, 8); hx.fill();
 }
 
-// rasterize a loaded Image / procedural fn into a foot×foot color canvas + height canvas
-function partCanvases(partId, foot) {
-  const col = document.createElement('canvas'); col.width = col.height = foot;
-  const hgt = document.createElement('canvas'); hgt.width = hgt.height = foot;
-  const cx = col.getContext('2d'), hx = hgt.getContext('2d');
-  hx.fillStyle = '#000'; hx.fillRect(0, 0, foot, foot);
-  const src = imgs[partId];
-  if (src.color) {
-    cx.drawImage(src.color, 0, 0, foot, foot);
-    // if the image has NO transparency, key out the top-left corner colour as background so the
-    // silhouette isn't a solid block (the #1 "import doesn't work" cause with opaque PNGs/JPEGs)
-    const d0 = cx.getImageData(0, 0, foot, foot), px = d0.data;
-    let opaque = true; for (let i = 3; i < px.length; i += 4) { if (px[i] < 250) { opaque = false; break; } }
-    if (opaque) {
-      const kr = px[0], kg = px[1], kb = px[2];
-      for (let i = 0; i < px.length; i += 4) if (Math.abs(px[i] - kr) + Math.abs(px[i + 1] - kg) + Math.abs(px[i + 2] - kb) < 40) px[i + 3] = 0;
-      cx.putImageData(d0, 0, 0);
-    }
-    if (src.height) hx.drawImage(src.height, 0, 0, foot, foot);
-    else { // no height map → a flat slab under the silhouette (mid height)
-      const d = cx.getImageData(0, 0, foot, foot).data; const im = hx.createImageData(foot, foot), o = im.data;
-      for (let i = 0; i < foot * foot; i++) { const a = d[i * 4 + 3] > 20 ? 180 : 0; o[i * 4] = o[i * 4 + 1] = o[i * 4 + 2] = a; o[i * 4 + 3] = 255; }
-      hx.putImageData(im, 0, 0);
-    }
-  } else { (partId === 'turret' ? drawTurret : drawBody)(cx, hx, foot); }
-  return { col, hgt };
+// rasterize an Image into a w×h alpha grid; `elev` flips rows so the image TOP = highest layer (z-up).
+function alphaGrid(img, w, h, elev) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
+  for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
+    const row = elev ? (h - 1 - r) : r;            // elevation image: top of the image = highest z
+    out[row * w + a] = d[(r * w + a) * 4 + 3] > 40 ? 1 : 0;
+  }
+  return out;
 }
 
-// heightmap-extrude with GAME-ALIGNED directional lighting (normal · light). Returns slice textures.
+// Space-carve a part's volume from orthographic views: TOP → footprint + colour; SIDE (height along the
+// length) + FRONT (height across the width) → the carved height; BACK falls back for FRONT. A voxel is
+// filled only where every supplied view agrees. Top alone = flat extrude. No Top view → procedural.
+// Returns { cd (colour bytes), H (top-surface height/column), filled(x,y,z) }.
+function buildVolume(partId, foot, layers) {
+  const src = imgs[partId], N = foot * foot;
+  if (!src.top) {                                   // ── procedural placeholder (color + height) ──
+    const col = document.createElement('canvas'); col.width = col.height = foot;
+    const hgt = document.createElement('canvas'); hgt.width = hgt.height = foot;
+    const cx = col.getContext('2d'), hx = hgt.getContext('2d');
+    hx.fillStyle = '#000'; hx.fillRect(0, 0, foot, foot);
+    (partId === 'turret' ? drawTurret : drawBody)(cx, hx, foot);
+    const cd = cx.getImageData(0, 0, foot, foot).data, hd = hx.getImageData(0, 0, foot, foot).data;
+    const H = new Float32Array(N);
+    for (let i = 0; i < N; i++) H[i] = cd[i * 4 + 3] > 20 ? (hd[i * 4] / 255) * layers : 0;
+    return { cd, H, filled: (x, y, z) => z < H[y * foot + x] };
+  }
+  const tc = document.createElement('canvas'); tc.width = tc.height = foot;
+  const tx = tc.getContext('2d'); tx.drawImage(src.top, 0, 0, foot, foot);
+  const td = tx.getImageData(0, 0, foot, foot), cd = td.data;
+  let opaque = true; for (let i = 3; i < cd.length; i += 4) { if (cd[i] < 250) { opaque = false; break; } }
+  if (opaque) { const kr = cd[0], kg = cd[1], kb = cd[2];                       // key the corner background
+    for (let i = 0; i < cd.length; i += 4) if (Math.abs(cd[i] - kr) + Math.abs(cd[i + 1] - kg) + Math.abs(cd[i + 2] - kb) < 40) cd[i + 3] = 0;
+    tx.putImageData(td, 0, 0); }
+  const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
+  const sideG = src.side ? alphaGrid(src.side, foot, layers, true) : null;      // side(x,z): along the length
+  const widthG = (src.front && alphaGrid(src.front, foot, layers, true)) || (src.back && alphaGrid(src.back, foot, layers, true)) || null; // (y,z) across the width
+  const inGrid = (g, a, z) => z >= 0 && z < layers && !!g[z * foot + a];
+  const side = (x, z) => sideG ? inGrid(sideG, x, z) : z < layers;
+  const width = (y, z) => widthG ? inGrid(widthG, y, z) : z < layers;
+  const flat = !sideG && !widthG, defH = Math.round(layers * 0.66);
+  const filled = flat ? (x, y, z) => top(x, y) && z < defH
+    : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
+  const H = new Float32Array(N);
+  for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+    let h = 0; for (let z = layers - 1; z >= 0; z--) if (filled(x, y, z)) { h = z + 1; break; }
+    H[y * foot + x] = h;
+  }
+  return { cd, H, filled };
+}
+
+// carve a part into slice textures with GAME-ALIGNED directional lighting (normal · light).
 function makeSlices(partId, foot, layers, lightAz, lightK) {
-  const { col, hgt } = partCanvases(partId, foot);
-  const cd = col.getContext('2d').getImageData(0, 0, foot, foot).data;
-  const hd = hgt.getContext('2d').getImageData(0, 0, foot, foot).data;
-  const N = foot * foot, H = new Float32Array(N);
-  for (let i = 0; i < N; i++) H[i] = cd[i * 4 + 3] > 20 ? (hd[i * 4] / 255) * layers : 0;
-  // directional light: normal from height gradient, dotted with a fixed-elevation light at lightAz
+  const { cd, H, filled } = buildVolume(partId, foot, layers), N = foot * foot;
   const la = lightAz * Math.PI / 180, lz = 0.6, lx = Math.cos(la), ly = -Math.sin(la);   // y-up (90°=top)
   const ll = Math.hypot(lx, ly, lz), Lx = lx / ll, Ly = ly / ll, Lz = lz / ll, k = lightK / 100;
   const lit = new Float32Array(N);
@@ -106,17 +126,16 @@ function makeSlices(partId, foot, layers, lightAz, lightK) {
     const hxg = H[i + (x < foot - 1 ? 1 : 0)] - H[i - (x > 0 ? 1 : 0)];
     const hyg = H[i + (y < foot - 1 ? foot : 0)] - H[i - (y > 0 ? foot : 0)];
     const nl = Math.hypot(-hxg, -hyg, 1), nx = -hxg / nl, ny = -hyg / nl, nz = 1 / nl;
-    const lam = Math.max(0, nx * Lx + ny * Ly + nz * Lz);
-    lit[i] = clamp(1 - k + k * (0.5 + lam), 0.35, 1.25);   // ambient + directional
+    lit[i] = clamp(1 - k + k * (0.5 + Math.max(0, nx * Lx + ny * Ly + nz * Lz)), 0.35, 1.25);
   }
   const textures = [];
   for (let kk = 0; kk < layers; kk++) {
     const lc = document.createElement('canvas'); lc.width = lc.height = foot;
     const img = lc.getContext('2d').createImageData(foot, foot), o = img.data, t = kk / Math.max(1, layers - 1);
-    for (let i = 0; i < N; i++) {
-      if (H[i] <= kk) { o[i * 4 + 3] = 0; continue; }
-      const top = H[i] <= kk + 1;
-      const shade = (top ? 1.0 : lerp(0.5, 0.95, t)) * lit[i], p = i * 4;
+    for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      const i = y * foot + x;
+      if (!filled(x, y, kk)) { o[i * 4 + 3] = 0; continue; }
+      const shade = (filled(x, y, kk + 1) ? lerp(0.5, 0.95, t) : 1.0) * lit[i], p = i * 4;   // top surface lit
       o[p] = clamp(cd[p] * shade, 0, 255); o[p + 1] = clamp(cd[p + 1] * shade, 0, 255);
       o[p + 2] = clamp(cd[p + 2] * shade, 0, 255); o[p + 3] = 255;
     }
@@ -189,7 +208,7 @@ function drawLight() {
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; g.moveTo(sx + Math.cos(a) * 13, sy + Math.sin(a) * 13).lineTo(sx + Math.cos(a) * 19, sy + Math.sin(a) * 19); }
 }
 
-const imgs = { body: { color: null, height: null }, turret: { color: null, height: null } };
+const imgs = { body: { top: null, side: null, front: null, back: null }, turret: { top: null, side: null, front: null, back: null } };
 const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, spin: false, part: 'both',
   lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
 let bodyL = [], turretL = [], bodyBaked = null, turretBaked = null, lastPack = null;
@@ -252,16 +271,21 @@ $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').t
 $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
 $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.cls = b.dataset.c; [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
 
-// image loading
-document.querySelectorAll('input[type=file]').forEach((inp) => inp.addEventListener('change', (e) => {
-  const file = e.target.files[0]; if (!file) return; const part = inp.dataset.part, map = inp.dataset.map;
+// ── orthographic view pickers: build 4 thumbnails per part, wire the hidden file inputs ──
+const VIEWS = ['top', 'side', 'front', 'back'];
+document.querySelectorAll('.views').forEach((box) => {
+  box.innerHTML = VIEWS.map((v) => `<label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="48" height="40"></canvas><span>${v[0].toUpperCase() + v.slice(1)}</span><input type="file" accept="image/*"></label>`).join('');
+});
+document.querySelectorAll('.vpick input').forEach((inp) => inp.addEventListener('change', (e) => {
+  const pick = inp.closest('.vpick'), part = pick.dataset.part, view = pick.dataset.view, file = e.target.files[0];
+  if (!file) return;
   const im = new Image();
   im.onload = () => {
-    imgs[part][map] = im;
-    const tc = $(`${part}-${map}-t`); if (tc) { const g = tc.getContext('2d'); g.clearRect(0, 0, 30, 30); g.drawImage(im, 0, 0, 30, 30); }
-    rebuildSlices();   // preview updates immediately from the loaded art
+    imgs[part][view] = im;
+    const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 48, 40); g.drawImage(im, 0, 0, 48, 40);
+    pick.classList.add('set'); rebuildSlices();
   };
-  im.onerror = () => { alert('Could not load that image — is it a PNG/JPEG?'); };
+  im.onerror = () => alert('Could not load that image — PNG/JPEG?');
   im.src = URL.createObjectURL(file);
 }));
 

@@ -42,6 +42,13 @@
     .imgrow input[type=file] { flex:1; min-width:0; font-size:10px; color:var(--muted); }
     .imgrow canvas.thumb { flex:0 0 auto; width:30px; height:30px; border:1px solid var(--line); border-radius:3px; background:#0a121c; image-rendering:pixelated; }
     .imgrow .ok { color:#57d98a; } .imgrow .no { color:var(--muted); }
+    .views { display:flex; gap:6px; margin-bottom:4px; }
+    .vpick { flex:1; cursor:pointer; text-align:center; }
+    .vpick canvas { width:100%; height:40px; border:1px solid var(--line); border-radius:4px; background:#0a121c; image-rendering:pixelated; display:block; }
+    .vpick:hover canvas { border-color:#3c5670; }
+    .vpick.set canvas { border-color:#57d98a; }
+    .vpick span { font-size:9px; color:var(--muted); letter-spacing:.04em; }
+    .vpick input { display:none; }
     button { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border:none; border-radius:6px; padding:9px 0; width:100%; font-weight:700; letter-spacing:.06em; cursor:pointer; margin-top:4px; }
     button.ghost { background:#16283a; color:var(--text); border:1px solid var(--line); }
     button:disabled { opacity:.4; cursor:default; }
@@ -84,14 +91,12 @@
       <div class="row"><label>Layers</label><input type="range" id="layers" min="6" max="40" value="16"><span class="val" id="layersV">16</span></div>
       <div class="note" style="margin:-2px 0 2px">Per-object — footprint cell + stack height. Higher = crisper/taller, bigger sheet + VRAM.</div>
       <div class="note" style="margin:4px 0">BASE (directional body):</div>
-      <div class="imgrow"><label>color</label><input type="file" accept="image/*" data-part="body" data-map="color"><canvas class="thumb" id="body-color-t" width="30" height="30" title="loaded color"></canvas></div>
-      <div class="imgrow"><label>height</label><input type="file" accept="image/*" data-part="body" data-map="height"><canvas class="thumb" id="body-height-t" width="30" height="30" title="loaded height"></canvas></div>
+      <div class="views" data-part="body"></div>
       <div class="note" style="margin:6px 0 4px">TURRET (smooth stack):</div>
-      <div class="imgrow"><label>color</label><input type="file" accept="image/*" data-part="turret" data-map="color"><canvas class="thumb" id="turret-color-t" width="30" height="30" title="loaded color"></canvas></div>
-      <div class="imgrow"><label>height</label><input type="file" accept="image/*" data-part="turret" data-map="height"><canvas class="thumb" id="turret-height-t" width="30" height="30" title="loaded height"></canvas></div>
-      <div class="note">Color = the part's look (front = +X), top-down footprint. Height = grayscale, brighter =
-        taller (optional; flat slab if omitted). A fully-opaque image has its top-left corner keyed out as
-        background. No files → procedural placeholder. Full iso-view de-skew is vox-s3.</div>
+      <div class="views" data-part="turret"></div>
+      <div class="note">Draw each part from up to 4 orthographic angles — <b>Top</b> (footprint + colour), <b>Side</b> +
+        <b>Front</b> carve the height, <b>Back</b> for asymmetry (else Front is mirrored). Top alone = flat extrude;
+        Top+Side = real height; +Front = full space-carve. Opaque images get their corner keyed out. No files → placeholder.</div>
     </div>
 
     <div class="grp">
