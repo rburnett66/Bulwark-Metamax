@@ -36,9 +36,12 @@ function validatePack(p) {
   return { ok: e.length === 0, errors: e };
 }
 
-// bake geometry from a unit's resolution/layers/spacing
-function geom(foot, layers, sp) {
-  const DIAG = Math.ceil(foot * 1.42), RTW = DIAG + 8, RTH = DIAG + (layers - 1) * sp + 8;
+// bake geometry from a unit's resolution/layers/spacing. pivotPx offsets the rotation centre along the
+// length; the render texture is sized to the max pivot→corner radius so an offset barrel never clips.
+function geom(foot, layers, sp, pivotPx) {
+  pivotPx = pivotPx || 0;
+  const px = foot / 2 + pivotPx, R = Math.hypot(Math.max(px, foot - px), foot / 2);
+  const DIAG = Math.ceil(2 * R), RTW = DIAG + 8, RTH = DIAG + (layers - 1) * sp + 8;
   return { DIAG, RTW, RTH, CX: RTW / 2, BASEY: RTH - DIAG / 2 - 4 };
 }
 const rr = (g, x, y, w, h, r) => { r = Math.min(r, w / 2, h / 2); g.beginPath(); g.moveTo(x + r, y);
@@ -207,9 +210,9 @@ const SHARPEN_FRAG = `
     gl_FragColor = vec4(clamp(sharp,0.0,1.0), c.a);
   }`;
 function bakeAngleCache(renderer, slices, opts) {
-  const { frames, smooth, sharp, layers, sp, g } = opts, SS = smooth ? 2 : 1, STEP = (Math.PI * 2) / frames;
+  const { frames, smooth, sharp, layers, sp, g, pivotFrac = 0.5 } = opts, SS = smooth ? 2 : 1, STEP = (Math.PI * 2) / frames;
   const container = new PIXI.Container(), layerSprites = [];
-  for (let kk = 0; kk < layers; kk++) { const s = new PIXI.Sprite(slices[kk]); s.anchor.set(0.5); s.scale.set(SS); container.addChild(s); layerSprites.push(s); }
+  for (let kk = 0; kk < layers; kk++) { const s = new PIXI.Sprite(slices[kk]); s.anchor.set(pivotFrac, 0.5); s.scale.set(SS); container.addChild(s); layerSprites.push(s); }
   let bigRT = null, ds = null;
   if (smooth) {
     bigRT = PIXI.RenderTexture.create({ width: g.RTW * SS, height: g.RTH * SS }); bigRT.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
@@ -257,7 +260,7 @@ function drawLight() {
 }
 
 const imgs = { body: { top: null, side: null, front: null, back: null }, turret: { top: null, side: null, front: null, back: null } };
-const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, turretDx: 0, spin: false, part: 'both',
+const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, spin: false, part: 'both',
   lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
 let bodyL = [], turretL = [], bodyBaked = null, turretBaked = null, lastPack = null;
 
@@ -277,6 +280,7 @@ function update() {
   const sp = elevationToSP(state.el, SP_MAX), azR = state.az * Math.PI / 180, taimR = state.taim * Math.PI / 180;
   const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = Math.round(state.layers * 0.55);
   const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR);   // front-back mount offset
+  const pivotFrac = 0.5 + state.turretPivot / 100;                                  // turret rotation pivot
   if (state.baked) {
     for (const s of bodyL) s.visible = false; for (const s of turretL) s.visible = false;
     const bb = bucketOf(azR, state.baked.bodyFrames), tb = bucketOf(azR + taimR, state.baked.turretFrames);
@@ -287,7 +291,7 @@ function update() {
   }
   for (let k = 0; k < state.layers; k++) {
     bodyL[k].visible = showB; bodyL[k].position.set(0, state.baseY - k * sp); bodyL[k].rotation = azR;
-    turretL[k].visible = showT; turretL[k].position.set(ox, state.baseY - mountDz * sp - k * sp + oy); turretL[k].rotation = azR + taimR;
+    turretL[k].visible = showT; turretL[k].anchor.set(pivotFrac, 0.5); turretL[k].position.set(ox, state.baseY - mountDz * sp - k * sp + oy); turretL[k].rotation = azR + taimR;
   }
 }
 app.ticker.add(() => {
@@ -311,6 +315,7 @@ $('az').oninput = (e) => { state.az = +e.target.value; $('azV').textContent = st
 $('el').oninput = (e) => { state.el = +e.target.value; $('elV').textContent = state.el + '°'; };
 $('taim').oninput = (e) => { state.taim = +e.target.value; $('taimV').textContent = state.taim + '°'; };
 $('tdx').oninput = (e) => { state.turretDx = +e.target.value; $('tdxV').textContent = state.turretDx; };
+$('tpiv').oninput = (e) => { state.turretPivot = +e.target.value; $('tpivV').textContent = state.turretPivot; };
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
 $('layers').oninput = (e) => { state.layers = +e.target.value; $('layersV').textContent = state.layers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; rebuildSlices(); };
@@ -355,12 +360,14 @@ $('setCam').onclick = () => {
 
 // ── BAKE ──
 $('bake').onclick = () => {
-  const foot = state.foot, layers = state.layers, sp = elevationToSP(state.el, SP_MAX), g = geom(foot, layers, sp);
+  const foot = state.foot, layers = state.layers, sp = elevationToSP(state.el, SP_MAX);
+  const pivotPx = foot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
+  const g = geom(foot, layers, sp, pivotPx);   // render texture sized for the turret's (possibly offset) pivot
   const t0 = performance.now();
   const bs = makeSlices('body', foot, layers, state.lightAz, state.lightK);
   const ts = makeSlices('turret', foot, layers, state.lightAz, state.lightK);
-  const body = bakeAngleCache(app.renderer, bs, { frames: BODY_FRAMES, smooth: false, sharp: 0, layers, sp, g });
-  const turret = bakeAngleCache(app.renderer, ts, { frames: TURRET_FRAMES, smooth: state.smooth, sharp: state.sharp, layers, sp, g });
+  const body = bakeAngleCache(app.renderer, bs, { frames: BODY_FRAMES, smooth: false, sharp: 0, layers, sp, g, pivotFrac: 0.5 });
+  const turret = bakeAngleCache(app.renderer, ts, { frames: TURRET_FRAMES, smooth: state.smooth, sharp: state.sharp, layers, sp, g, pivotFrac });
   bs.forEach((t) => t.destroy(true)); ts.forEach((t) => t.destroy(true));
   state.baked = { body, turret, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, layers };
   bodyBaked = new PIXI.Sprite(body[0]); bodyBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); rig.addChild(bodyBaked);
