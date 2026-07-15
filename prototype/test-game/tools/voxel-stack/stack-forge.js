@@ -70,18 +70,33 @@ function drawFit(ctx, img, w, h) {
   const s = Math.min(w / img.width, h / img.height), dw = img.width * s, dh = img.height * s;
   ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
 }
-// knock out a solid (e.g. white) background: keys the corner colour when the 4 corners are a uniform
-// opaque background, with a feathered edge so anti-aliased outlines don't leave a halo. Mutates data.
+// knock out a solid (e.g. white) background by FLOOD-FILLING from the image border through
+// background-coloured pixels. Only bg actually connected to the edge is removed, so it works when the
+// object runs off an edge (tank tracks) AND when bg floats between object parts (above/below a barrel) —
+// the flood reaches those pockets from the border and stops at the object outline. Feathers the AA edge.
 function keyBackground(data, w, h) {
   const c = (x, y) => { const i = (y * w + x) * 4; return [data[i], data[i + 1], data[i + 2], data[i + 3]]; };
   const cs = [c(0, 0), c(w - 1, 0), c(0, h - 1), c(w - 1, h - 1)];
   const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
-  if (!cs.every((q) => q[3] > 200 && dist(q, cs[0]) < 45)) return;   // no uniform opaque bg → leave as-is
-  const kr = cs[0][0], kg = cs[0][1], kb = cs[0][2];
-  for (let i = 0; i < data.length; i += 4) {
-    const d = Math.abs(data[i] - kr) + Math.abs(data[i + 1] - kg) + Math.abs(data[i + 2] - kb);
-    if (d < 60) data[i + 3] = 0;                                     // background
-    else if (d < 130) data[i + 3] = Math.min(data[i + 3], Math.round((d - 60) / 70 * 255));  // feather the AA edge
+  // background seed = the opaque border colour shared by the most corners (majority vote)
+  let seed = null, best = 0;
+  for (const q of cs) { if (q[3] < 200) continue; let n = 0; for (const r of cs) if (r[3] > 200 && dist(q, r) < 45) n++; if (n > best) { best = n; seed = q; } }
+  if (!seed) return;                                                 // no opaque border colour → leave as-is
+  const kr = seed[0], kg = seed[1], kb = seed[2];
+  const near = (p) => Math.abs(data[p * 4] - kr) + Math.abs(data[p * 4 + 1] - kg) + Math.abs(data[p * 4 + 2] - kb);
+  const N = w * h, vis = new Uint8Array(N), st = [], TOL = 75;
+  const push = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const p = y * w + x; if (!vis[p] && near(p) < TOL) { vis[p] = 1; st.push(p); } };
+  for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }        // seed the whole border
+  for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
+  while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1); }
+  for (let p = 0; p < N; p++) {
+    if (vis[p]) { data[p * 4 + 3] = 0; continue; }                   // flooded background → transparent
+    const d = near(p);                                              // feather AA pixels touching removed bg
+    if (d < 130) {
+      const x = p % w, y = (p / w) | 0;
+      if ((x > 0 && vis[p - 1]) || (x < w - 1 && vis[p + 1]) || (y > 0 && vis[p - w]) || (y < h - 1 && vis[p + w]))
+        data[p * 4 + 3] = d < 60 ? 0 : Math.min(data[p * 4 + 3], Math.round((d - 60) / 70 * 255));
+    }
   }
 }
 // raster an image at native size and knock out its background → a canvas with clean alpha.
@@ -153,9 +168,15 @@ function buildVolume(partId, foot, layers) {
   }
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
-  // height in VOXELS at the SAME scale as the footprint (proportional; clamped to the layer budget)
-  const Hv = Math.min(layers, Math.max(1, sideC ? Math.round(sideC.height * s) : (frontC ? Math.round(frontC.height * s) : Math.round(layers * 0.66))));
-  const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height
+  // HEIGHT is the truth from the FRONT view — it's near-square, so it isn't distorted by a long barrel.
+  // Each profile's WIDTH maps to a known footprint dim (front width → depth bh, side width → length bw),
+  // so height = view.height × (that footprint dim / view.width). Prefer front; the side is then stretched
+  // (gridStretch) to this SAME Hv — i.e. the side's height is normalized to the front's truth.
+  const Hraw = frontC ? frontC.height * (bh / frontC.width)
+    : sideC ? sideC.height * (bw / sideC.width)
+    : layers * 0.66;
+  const Hv = Math.min(layers, Math.max(1, Math.round(Hraw)));
+  const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to front)
   const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
   const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= 0 && z < Hv && !!sideG[z * bw + (x - ox)]) : z < Hv;
   const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= 0 && z < Hv && !!frontG[z * bh + (y - oy)]) : z < Hv;
@@ -181,7 +202,7 @@ function buildVolume(partId, foot, layers) {
     let h = 0; for (let z = layers - 1; z >= 0; z--) if (filled(x, y, z)) { h = z + 1; break; }
     H[y * foot + x] = h;
   }
-  return { cd, H, filled };
+  return { cd, H, filled, dbg: { bw, bh, Hv, Hraw: +Hraw.toFixed(1), tw: topC && topC.width, th: topC && topC.height, sw: sideC && sideC.width, sh: sideC && sideC.height, fw: frontC && frontC.width, fh: frontC && frontC.height } };
 }
 
 // carve a part into slice textures with GAME-ALIGNED directional lighting (normal · light).
@@ -547,4 +568,4 @@ function selectUnit(id) {
 }
 
 syncInputs(); renderManifest(); update(); drawLight(); initFactions();
-window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume };   // debug/test hook (headless verification)
+window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, keyedCropped, gridStretch };   // debug/test hook (headless verification)
