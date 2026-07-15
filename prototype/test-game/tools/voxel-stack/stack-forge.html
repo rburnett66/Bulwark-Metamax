@@ -115,10 +115,12 @@
     <div class="grp">
       <h2>2 · Orbit + camera</h2>
       <div class="seg" id="partSeg" style="margin-bottom:8px"><button data-p="both" class="on">Both</button><button data-p="body">Base</button><button data-p="turret">Turret</button></div>
+      <div class="row"><label>View</label><div class="seg" id="viewSeg" style="flex:1"><button data-az="45" data-el="30">Iso</button><button data-az="90" data-el="10">Side</button><button data-az="0" data-el="10">Front</button><button data-az="0" data-el="90">Top</button></div></div>
       <div class="row"><label>Azimuth</label><input type="range" id="az" min="0" max="359" value="0"><span class="val" id="azV">0°</span></div>
       <div class="row"><label>Elevation</label><input type="range" id="el" min="0" max="90" value="30"><span class="val" id="elV">30°</span></div>
       <div class="row"><label>Turret aim</label><input type="range" id="taim" min="0" max="359" value="0"><span class="val" id="taimV">0°</span></div>
-      <div class="row"><label>Mount ↕ f/b</label><input type="range" id="tdx" min="-32" max="32" value="0"><span class="val" id="tdxV">0</span></div>
+      <div class="row"><label>Mount ↔ f/b</label><input type="range" id="tdx" min="-32" max="32" value="0"><span class="val" id="tdxV">0</span></div>
+      <div class="row"><label>Mount ↕ up</label><input type="range" id="tmz" min="-16" max="16" value="0"><span class="val" id="tmzV">0</span></div>
       <div class="row"><label>Pivot ↻ f/b</label><input type="range" id="tpiv" min="-50" max="50" value="0"><span class="val" id="tpivV">0</span></div>
       <div class="row"><label>Barrel len</label><input type="range" id="blen" min="0" max="48" value="0"><span class="val" id="blenV">off</span></div>
       <div class="row"><label>Barrel ⌀</label><input type="range" id="brad" min="1" max="10" value="4"><span class="val" id="bradV">4</span></div>

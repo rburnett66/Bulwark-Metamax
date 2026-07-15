@@ -406,16 +406,25 @@ function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
 }
-const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, spin: false, part: 'both',
+const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
 let bodyL = [], turretL = [], bodyBaked = null, turretBaked = null, lastPack = null;
 const voxPart = { body: null, turret: null };   // imported MagicaVoxel models (override the photo carve per part)
+let bodyMountZ = 9;                              // layer just above the body's top → where the turret sits
+
+// highest filled layer of the BODY (+1) → the layer the turret should sit ON, not inside
+function bodyTopLayer(foot, layers) {
+  const { filled } = buildVolume('body', foot, layers);
+  for (let z = layers - 1; z >= 0; z--) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (filled(x, y, z)) return z + 1;
+  return 0;
+}
 
 // (re)build the LIVE slice-stack sprites (LAYERS can change) — the orbit/camera-set preview
 function rebuildSlices() {
   for (const s of bodyL) s.destroy(); for (const s of turretL) s.destroy();
   if (bodyBaked) { bodyBaked.destroy(); bodyBaked = null; } if (turretBaked) { turretBaked.destroy(); turretBaked = null; }
   state.baked = null; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
+  bodyMountZ = bodyTopLayer(state.foot, state.layers);   // turret mounts on the body's actual top
   const bs = makeSlices('body', state.foot, state.layers, state.lightAz, state.lightK);
   const ts = makeSlices('turret', state.foot, state.layers, state.lightAz, state.lightK);
   const mk = (slices, parent) => slices.map((tex) => { const s = new PIXI.Sprite(tex); s.anchor.set(0.5); parent.addChild(s); return s; });
@@ -428,7 +437,7 @@ rebuildSlices();
 
 function update() {
   const sp = elevationToSP(state.el, SP_MAX), azR = state.az * Math.PI / 180, taimR = state.taim * Math.PI / 180;
-  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = Math.round(state.layers * 0.55);
+  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.layers);
   const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR);   // front-back mount offset
   const pivotFrac = 0.5 + state.turretPivot / 100;                                  // turret rotation pivot
   if (state.baked) {
@@ -452,7 +461,7 @@ function updateGamePreview() {
   const azR = gPrevAz * Math.PI / 180, taimR = state.taim * Math.PI / 180;
   const spG = elevationToSP(state.el, SP_MAX), uScale = (GAME_TILE * 1.7) / state.foot;   // footprint ≈ 1.7 tiles
   gUnit.scale.set(uScale); gUnit.position.set(gAnchor.x, gAnchor.y + GAME_TILE * 0.12);
-  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = Math.round(state.layers * 0.55);
+  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.layers);
   const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR), pivotFrac = 0.5 + state.turretPivot / 100, r = 0.75;
   gShadow.clear(); gShadow.beginFill(0x000000, 0.26); gShadow.drawEllipse(gAnchor.x, gAnchor.y + GAME_TILE * 0.06, GAME_TILE * r * 0.62, GAME_TILE * r * 0.31); gShadow.endFill();
   if (state.baked && gBodyBaked) {                                    // show the actual baked (smooth) game asset
@@ -489,6 +498,8 @@ $('az').oninput = (e) => { state.az = +e.target.value; $('azV').textContent = st
 $('el').oninput = (e) => { state.el = +e.target.value; $('elV').textContent = state.el + '°'; };
 $('taim').oninput = (e) => { state.taim = +e.target.value; $('taimV').textContent = state.taim + '°'; };
 $('tdx').oninput = (e) => { state.turretDx = +e.target.value; $('tdxV').textContent = state.turretDx; };
+$('tmz').oninput = (e) => { state.mountZ = +e.target.value; $('tmzV').textContent = (state.mountZ > 0 ? '+' : '') + state.mountZ; };
+$('viewSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.az = +b.dataset.az; state.el = +b.dataset.el; syncInputs(); };
 $('tpiv').oninput = (e) => { state.turretPivot = +e.target.value; $('tpivV').textContent = state.turretPivot; };
 $('blen').oninput = (e) => { state.barrelLen = +e.target.value; $('blenV').textContent = state.barrelLen || 'off'; rebuildSlices(); };
 $('brad').oninput = (e) => { state.barrelRad = +e.target.value; $('bradV').textContent = state.barrelRad; rebuildSlices(); };
@@ -611,7 +622,7 @@ function packAtlas(cache, g) {
 function buildPack() {
   const b = state.baked, id = ($('uid').value || 'unit').trim();
   const ba = packAtlas(b.body, b.g), ta = packAtlas(b.turret, b.g);
-  const pivot = [Math.round(b.g.CX), Math.round(b.g.BASEY)], mountDz = Math.round(b.layers * 0.55);
+  const pivot = [Math.round(b.g.CX), Math.round(b.g.BASEY)], mountDz = clamp(bodyMountZ + state.mountZ, 0, b.layers);
   const pack = {
     id, class: state.cls, footprint: [b.foot, b.foot, b.layers],
     camera: { azimuth: state.az | 0, elevation: state.el | 0 }, layerSpacing: b.sp,
