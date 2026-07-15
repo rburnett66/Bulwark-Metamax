@@ -127,11 +127,63 @@ function gridStretch(canvas, w, h, elev) {
   return out;
 }
 
+// ── MagicaVoxel .vox → a native voxel model { nx, ny, nz, data } (data: nx*ny*nz*4 rgba, a>0 = filled).
+// A .vox IS a stack of coloured cubes, so it skips the photo carve entirely — exact geometry + per-voxel
+// colour, fed straight into the same neutral-model → light → rotate/capture pipeline. First model only. ──
+const DEFAULT_VOX_PALETTE = (() => { const a = new Uint8Array(256 * 4); for (let i = 0; i < 256; i++) { a[i * 4] = a[i * 4 + 1] = a[i * 4 + 2] = Math.min(255, 48 + i * 3 / 4 | 0); a[i * 4 + 3] = 255; } return a; })();
+function parseVox(buf) {
+  const dv = new DataView(buf); let p = 0;
+  const u32 = () => { const v = dv.getUint32(p, true); p += 4; return v; };
+  const tag = () => { const s = String.fromCharCode(dv.getUint8(p), dv.getUint8(p + 1), dv.getUint8(p + 2), dv.getUint8(p + 3)); p += 4; return s; };
+  if (tag() !== 'VOX ') throw new Error('not a .vox file');
+  u32();                                                       // version
+  if (tag() !== 'MAIN') throw new Error('no MAIN chunk');
+  u32(); const end = p + u32();                                // MAIN content bytes (0) + children bytes
+  let size = null, rgba = null; const models = [];
+  while (p < end) {
+    const id = tag(), n = u32(), cN = u32(), next = p + n + cN;
+    if (id === 'SIZE') size = [u32(), u32(), u32()];
+    else if (id === 'XYZI') { const cnt = u32(), arr = new Uint8Array(cnt * 4); for (let i = 0; i < cnt * 4; i++) arr[i] = dv.getUint8(p + i); models.push({ size, vox: arr, count: cnt }); }
+    else if (id === 'RGBA') { rgba = new Uint8Array(1024); for (let i = 0; i < 1024; i++) rgba[i] = dv.getUint8(p + i); }
+    p = next;
+  }
+  if (!models.length || !models[0].size) throw new Error('no voxel models');
+  const m = models[0], [nx, ny, nz] = m.size, pal = rgba || DEFAULT_VOX_PALETTE, data = new Uint8Array(nx * ny * nz * 4);
+  for (let i = 0; i < m.count; i++) {
+    const x = m.vox[i * 4], y = m.vox[i * 4 + 1], z = m.vox[i * 4 + 2], c = m.vox[i * 4 + 3], pi = ((c - 1) & 255) * 4;
+    const di = ((z * ny + y) * nx + x) * 4;
+    data[di] = pal[pi]; data[di + 1] = pal[pi + 1]; data[di + 2] = pal[pi + 2]; data[di + 3] = 255;
+  }
+  return { nx, ny, nz, data };
+}
+// resample an imported voxel model into the tool's foot×foot×layers grid (aspect-preserving footprint,
+// centred; z fit to layers). Returns per-voxel colour (vcol) + filled(), matching buildVolume's shape.
+function buildVoxVolume(vm, foot, layers) {
+  const { nx, ny, nz, data } = vm, N = foot * foot;
+  const sxy = Math.min(foot / nx, foot / ny), bw = Math.max(1, Math.round(nx * sxy)), bh = Math.max(1, Math.round(ny * sxy));
+  const Hh = Math.min(layers, nz), offx = (foot - bw) >> 1, offy = (foot - bh) >> 1;
+  const vcol = new Uint8Array(layers * N * 3), fill = new Uint8Array(layers * N);
+  for (let z = 0; z < layers; z++) {
+    const mz = Math.floor(z * nz / Hh); if (mz >= nz) continue;
+    for (let y = 0; y < foot; y++) {
+      const my = Math.floor((y - offy) / sxy); if (my < 0 || my >= ny) continue;
+      for (let x = 0; x < foot; x++) {
+        const mx = Math.floor((x - offx) / sxy); if (mx < 0 || mx >= nx) continue;
+        const di = ((mz * ny + my) * nx + mx) * 4;
+        if (data[di + 3] > 0) { const oi = z * N + y * foot + x; fill[oi] = 1; vcol[oi * 3] = data[di]; vcol[oi * 3 + 1] = data[di + 1]; vcol[oi * 3 + 2] = data[di + 2]; }
+      }
+    }
+  }
+  const filled = (x, y, z) => (x >= 0 && x < foot && y >= 0 && y < foot && z >= 0 && z < layers) ? !!fill[z * N + y * foot + x] : false;
+  return { filled, vcol, cd: null, dbg: { vox: [nx, ny, nz], bw, bh, Hh } };
+}
+
 // Space-carve a part's volume from orthographic views: TOP → footprint + colour; SIDE (height along the
 // length) + FRONT (height across the width) → the carved height; BACK falls back for FRONT. A voxel is
 // filled only where every supplied view agrees. Top alone = flat extrude. No Top view → procedural.
 // Returns { cd (colour bytes), H (top-surface height/column), filled(x,y,z) }.
 function buildVolume(partId, foot, layers) {
+  if (voxPart[partId]) return buildVoxVolume(voxPart[partId], foot, layers);   // imported .vox → use it directly
   const src = imgs[partId], N = foot * foot;
   if (!src.top && !src.side && !src.front && !src.back) {   // ── no art at all → procedural placeholder ──
     const col = document.createElement('canvas'); col.width = col.height = foot;
@@ -210,7 +262,7 @@ function buildVolume(partId, foot, layers) {
 // vertical cube faces (a filled voxel with an empty same-layer neighbour) are the surfaces that catch the
 // game-aligned directional light — bright when the face points toward it, shaded when it points away.
 function makeSlices(partId, foot, layers, lightAz, lightK) {
-  const { cd, filled } = buildVolume(partId, foot, layers);
+  const { cd, filled, vcol } = buildVolume(partId, foot, layers), N = foot * foot;   // vcol = per-voxel colour (.vox)
   const la = lightAz * Math.PI / 180, Lx = Math.cos(la), Ly = -Math.sin(la);   // light-source dir, image space (y-down)
   const k = clamp(lightK / 100, 0, 1), WALL = 0.52, RANGE = 0.46;              // wall base + directional swing
   const textures = [];
@@ -231,8 +283,11 @@ function makeSlices(partId, foot, layers, lightAz, lightK) {
         if (!filled(x, y + 1, kk)) d = Math.max(d, Ly);          // image-down face
         shade = clamp(WALL + k * RANGE * (d <= -2 ? 0 : d), 0.3, 1.0);   // enclosed → flat ambient (unseen)
       }
-      o[p] = clamp(cd[p] * shade, 0, 255); o[p + 1] = clamp(cd[p + 1] * shade, 0, 255);
-      o[p + 2] = clamp(cd[p + 2] * shade, 0, 255); o[p + 3] = 255;
+      let cr, cg, cb;                                            // neutral cube colour: per-voxel (.vox) or per-column
+      if (vcol) { const c = (kk * N + i) * 3; cr = vcol[c]; cg = vcol[c + 1]; cb = vcol[c + 2]; }
+      else { cr = cd[p]; cg = cd[p + 1]; cb = cd[p + 2]; }
+      o[p] = clamp(cr * shade, 0, 255); o[p + 1] = clamp(cg * shade, 0, 255);
+      o[p + 2] = clamp(cb * shade, 0, 255); o[p + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
     textures.push(PIXI.Texture.from(lc));
@@ -354,6 +409,7 @@ function flipCanvas(im, h, v) {
 const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
 let bodyL = [], turretL = [], bodyBaked = null, turretBaked = null, lastPack = null;
+const voxPart = { body: null, turret: null };   // imported MagicaVoxel models (override the photo carve per part)
 
 // (re)build the LIVE slice-stack sprites (LAYERS can change) — the orbit/camera-set preview
 function rebuildSlices() {
@@ -440,6 +496,26 @@ $('belev').oninput = (e) => { state.barrelElev = +e.target.value; $('belevV').te
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
 $('layers').oninput = (e) => { state.layers = +e.target.value; $('layersV').textContent = state.layers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; rebuildSlices(); };
+// ── .vox import: bring a ready-made voxel model in as the base/turret (skips the carve) ──
+function fitToVox() {
+  let mx = 0, mh = 0;
+  for (const kk of ['body', 'turret']) { const v = voxPart[kk]; if (v) { mx = Math.max(mx, v.nx, v.ny); mh = Math.max(mh, v.nz); } }
+  if (!mx) return;
+  const res = [32, 48, 64, 96, 128]; state.foot = res.find((r) => r >= mx) || 128; state.layers = clamp(mh, 6, 40);
+  $('res').value = state.foot; $('layers').value = state.layers; $('layersV').textContent = state.layers;
+}
+function importVox(part, file) {
+  const rd = new FileReader();
+  rd.onload = () => {
+    try { const m = parseVox(rd.result); voxPart[part] = m; fitToVox(); rebuildSlices();
+      $('voxState').innerHTML = `<span class="lock">✓ ${part}: ${m.nx}×${m.ny}×${m.nz} voxels — foot ${state.foot}, layers ${state.layers}</span>`;
+    } catch (e) { alert('Could not read that .vox — ' + e.message); }
+  };
+  rd.readAsArrayBuffer(file);
+}
+$('voxBody').onchange = (e) => e.target.files[0] && importVox('body', e.target.files[0]);
+$('voxTurret').onchange = (e) => e.target.files[0] && importVox('turret', e.target.files[0]);
+$('voxClear').onclick = () => { voxPart.body = null; voxPart.turret = null; rebuildSlices(); $('voxState').textContent = 'Cleared — back to the photo carve.'; };
 $('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').textContent = state.lightAz + '°'; rebuildSlices(); drawLight(); };
 $('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; rebuildSlices(); };
 $('smooth').onchange = (e) => { state.smooth = e.target.checked; };
@@ -460,6 +536,7 @@ document.querySelectorAll('.views').forEach((box) => {
 const pickFor = (part, view) => document.querySelector(`.vpick[data-part="${part}"][data-view="${view}"]`);
 function setView(pick, im) {
   const part = pick.dataset.part, view = pick.dataset.view;
+  voxPart[part] = null;                                                       // photos override an imported .vox
   srcImg[part][view] = im; flipState[part][view] = { h: false, v: false };   // new image → clear flips
   renderView(pick);
 }
@@ -641,5 +718,5 @@ function selectUnit(id) {
 }
 
 syncInputs(); renderManifest(); layout(); update(); updateGamePreview(); initFactions();
-window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, keyedCropped, gridStretch,
+window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, keyedCropped, gridStretch, parseVox, voxPart, fitToVox,
   gdbg: () => ({ baked: !!state.baked, gbaked: !!gBodyBaked, gvis: gBodyBaked && gBodyBaked.visible, gkids: gUnit.children.length }) };   // debug/test hook
