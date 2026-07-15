@@ -71,6 +71,15 @@ function partCanvases(partId, foot) {
   const src = imgs[partId];
   if (src.color) {
     cx.drawImage(src.color, 0, 0, foot, foot);
+    // if the image has NO transparency, key out the top-left corner colour as background so the
+    // silhouette isn't a solid block (the #1 "import doesn't work" cause with opaque PNGs/JPEGs)
+    const d0 = cx.getImageData(0, 0, foot, foot), px = d0.data;
+    let opaque = true; for (let i = 3; i < px.length; i += 4) { if (px[i] < 250) { opaque = false; break; } }
+    if (opaque) {
+      const kr = px[0], kg = px[1], kb = px[2];
+      for (let i = 0; i < px.length; i += 4) if (Math.abs(px[i] - kr) + Math.abs(px[i + 1] - kg) + Math.abs(px[i + 2] - kb) < 40) px[i + 3] = 0;
+      cx.putImageData(d0, 0, 0);
+    }
     if (src.height) hx.drawImage(src.height, 0, 0, foot, foot);
     else { // no height map → a flat slab under the silhouette (mid height)
       const d = cx.getImageData(0, 0, foot, foot).data; const im = hx.createImageData(foot, foot), o = im.data;
@@ -229,7 +238,13 @@ $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) ret
 // image loading
 document.querySelectorAll('input[type=file]').forEach((inp) => inp.addEventListener('change', (e) => {
   const file = e.target.files[0]; if (!file) return; const part = inp.dataset.part, map = inp.dataset.map;
-  const im = new Image(); im.onload = () => { imgs[part][map] = im; $(`${part}-${map}-s`).textContent = '✓'; $(`${part}-${map}-s`).className = 'ok'; rebuildSlices(); };
+  const im = new Image();
+  im.onload = () => {
+    imgs[part][map] = im;
+    const tc = $(`${part}-${map}-t`); if (tc) { const g = tc.getContext('2d'); g.clearRect(0, 0, 30, 30); g.drawImage(im, 0, 0, 30, 30); }
+    rebuildSlices();   // preview updates immediately from the loaded art
+  };
+  im.onerror = () => { alert('Could not load that image — is it a PNG/JPEG?'); };
   im.src = URL.createObjectURL(file);
 }));
 
