@@ -62,11 +62,37 @@ function drawTurret(x, hx, f) {
   hx.fillStyle = '#e0e0e0'; rr(hx, c - f * 0.22, c - f * 0.20, f * 0.40, f * 0.40, 8); hx.fill();
 }
 
-// rasterize an Image into a w×h alpha grid; `elev` flips rows so the image TOP = highest layer (z-up).
+// aspect-preserving fit: draw img centred inside w×h WITHOUT stretching (fixes squished footprints).
+function drawFit(ctx, img, w, h) {
+  const s = Math.min(w / img.width, h / img.height), dw = img.width * s, dh = img.height * s;
+  ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+}
+// knock out a solid (e.g. white) background: keys the corner colour when the 4 corners are a uniform
+// opaque background, with a feathered edge so anti-aliased outlines don't leave a halo. Mutates data.
+function keyBackground(data, w, h) {
+  const c = (x, y) => { const i = (y * w + x) * 4; return [data[i], data[i + 1], data[i + 2], data[i + 3]]; };
+  const cs = [c(0, 0), c(w - 1, 0), c(0, h - 1), c(w - 1, h - 1)];
+  const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+  if (!cs.every((q) => q[3] > 200 && dist(q, cs[0]) < 45)) return;   // no uniform opaque bg → leave as-is
+  const kr = cs[0][0], kg = cs[0][1], kb = cs[0][2];
+  for (let i = 0; i < data.length; i += 4) {
+    const d = Math.abs(data[i] - kr) + Math.abs(data[i + 1] - kg) + Math.abs(data[i + 2] - kb);
+    if (d < 60) data[i + 3] = 0;                                     // background
+    else if (d < 130) data[i + 3] = Math.min(data[i + 3], Math.round((d - 60) / 70 * 255));  // feather the AA edge
+  }
+}
+// raster an image at native size and knock out its background → a canvas with clean alpha.
+function keyedCanvas(img) {
+  const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const id = g.getImageData(0, 0, cv.width, cv.height); keyBackground(id.data, cv.width, cv.height); g.putImageData(id, 0, 0);
+  return cv;
+}
+// rasterize a (bg-keyed) image into a w×h alpha grid; `elev` flips rows so image TOP = highest layer.
 function alphaGrid(img, w, h, elev) {
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const g = cv.getContext('2d'); g.drawImage(img, 0, 0, w, h);
-  const d = g.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
+  const ctx = cv.getContext('2d'); ctx.drawImage(keyedCanvas(img), 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
   for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
     const row = elev ? (h - 1 - r) : r;            // elevation image: top of the image = highest z
     out[row * w + a] = d[(r * w + a) * 4 + 3] > 40 ? 1 : 0;
@@ -92,21 +118,20 @@ function buildVolume(partId, foot, layers) {
     return { cd, H, filled: (x, y, z) => z < H[y * foot + x] };
   }
   const tc = document.createElement('canvas'); tc.width = tc.height = foot;
-  const tx = tc.getContext('2d'); tx.drawImage(src.top, 0, 0, foot, foot);
-  const td = tx.getImageData(0, 0, foot, foot), cd = td.data;
-  let opaque = true; for (let i = 3; i < cd.length; i += 4) { if (cd[i] < 250) { opaque = false; break; } }
-  if (opaque) { const kr = cd[0], kg = cd[1], kb = cd[2];                       // key the corner background
-    for (let i = 0; i < cd.length; i += 4) if (Math.abs(cd[i] - kr) + Math.abs(cd[i + 1] - kg) + Math.abs(cd[i + 2] - kb) < 40) cd[i + 3] = 0;
-    tx.putImageData(td, 0, 0); }
+  const tx = tc.getContext('2d'); drawFit(tx, keyedCanvas(src.top), foot, foot);   // bg-keyed + aspect-preserving
+  const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
-  const sideG = src.side ? alphaGrid(src.side, foot, layers, true) : null;      // side(x,z): along the length
-  const widthG = (src.front && alphaGrid(src.front, foot, layers, true)) || (src.back && alphaGrid(src.back, foot, layers, true)) || null; // (y,z) across the width
-  const inGrid = (g, a, z) => z >= 0 && z < layers && !!g[z * foot + a];
-  const side = (x, z) => sideG ? inGrid(sideG, x, z) : z < layers;
-  const width = (y, z) => widthG ? inGrid(widthG, y, z) : z < layers;
+  // footprint bbox → register the elevations to the shared axes (length x / width y), not the square
+  let minx = foot, miny = foot, maxx = 0, maxy = 0, any = false;
+  for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (top(x, y)) { any = true; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
+  if (!any) { minx = miny = 0; maxx = maxy = foot - 1; }
+  const bw = maxx - minx + 1, bh = maxy - miny + 1;
+  const sideG = src.side ? alphaGrid(src.side, bw, layers, true) : null;                                  // length × height
+  const widthG = src.front ? alphaGrid(src.front, bh, layers, true) : (src.back ? alphaGrid(src.back, bh, layers, true) : null);   // width × height
+  const side = (x, z) => sideG ? (x >= minx && x <= maxx && z >= 0 && z < layers && !!sideG[z * bw + (x - minx)]) : z < layers;
+  const width = (y, z) => widthG ? (y >= miny && y <= maxy && z >= 0 && z < layers && !!widthG[z * bh + (y - miny)]) : z < layers;
   const flat = !sideG && !widthG, defH = Math.round(layers * 0.66);
-  const filled = flat ? (x, y, z) => top(x, y) && z < defH
-    : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
+  const filled = flat ? (x, y, z) => top(x, y) && z < defH : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
   const H = new Float32Array(N);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     let h = 0; for (let z = layers - 1; z >= 0; z--) if (filled(x, y, z)) { h = z + 1; break; }
@@ -278,7 +303,7 @@ document.querySelectorAll('.views').forEach((box) => {
 });
 function setView(pick, im) {
   imgs[pick.dataset.part][pick.dataset.view] = im;
-  const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 48, 40); g.drawImage(im, 0, 0, 48, 40);
+  const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 48, 40); drawFit(g, keyedCanvas(im), 48, 40);
   pick.classList.add('set'); rebuildSlices();
 }
 let pasteTarget = null;
@@ -438,3 +463,4 @@ function selectUnit(id) {
 }
 
 syncInputs(); renderManifest(); update(); drawLight(); initFactions();
+window.__sf = { imgs, state, rebuildSlices, setView };   // debug/test hook (headless verification)
