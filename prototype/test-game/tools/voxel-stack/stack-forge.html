@@ -126,6 +126,8 @@
         <label class="ghost" style="flex:1;text-align:center;padding:6px 0;border-radius:6px;cursor:pointer;font-size:11px;background:#16283a;border:1px solid var(--line)">→ Turret<input type="file" id="voxTurret" accept=".vox" style="display:none"></label>
         <button class="ghost" id="voxClear" style="flex:0 0 52px;padding:6px 0;font-size:11px;margin:0">Clear</button></div>
       <div class="note" id="voxState" style="margin:-2px 0 2px">Import a MagicaVoxel <b>.vox</b> as the model directly — skips the carve; per-voxel colours, lit on the cube edges. Overrides the photos for that part; auto-fits resolution + layers.</div>
+      <button class="ghost" id="exportVox" style="margin:2px 0 2px;font-size:11px;padding:6px 0">Export model → .vox</button>
+      <div class="note" style="margin:-2px 0 2px">Turns the current model (carved or imported) into a real .vox — round-trip it through MagicaVoxel to refine, then re-import. Exports the active part (Both = assembled).</div>
       <div class="note" style="margin:4px 0">BASE (directional body):</div>
       <div class="views" data-part="body"></div>
       <div class="note" style="margin:6px 0 4px">TURRET (smooth stack):</div>

@@ -178,6 +178,52 @@ function buildVoxVolume(vm, foot, layers) {
   return { filled, vcol, cd: null, dbg: { vox: [nx, ny, nz], bw, bh, Hh } };
 }
 
+// ── .vox writer: turn our carved/imported data back into a real MagicaVoxel object (round-trips to any
+// voxel editor and back through parseVox). Serialises SIZE + XYZI + a ≤256 RGBA palette. ──
+function writeVox(nx, ny, nz, voxels, palette) {
+  const cnt = voxels.length, sizeC = 12, xyziC = 4 + cnt * 4, rgbaC = 1024, hdr = 12;
+  const children = (hdr + sizeC) + (hdr + xyziC) + (hdr + rgbaC), total = 8 + hdr + children;
+  const buf = new ArrayBuffer(total), dv = new DataView(buf); let p = 0;
+  const str = (s) => { for (let i = 0; i < 4; i++) dv.setUint8(p++, s.charCodeAt(i)); };
+  const u32 = (v) => { dv.setUint32(p, v, true); p += 4; };
+  str('VOX '); u32(150); str('MAIN'); u32(0); u32(children);
+  str('SIZE'); u32(sizeC); u32(0); u32(nx); u32(ny); u32(nz);
+  str('XYZI'); u32(xyziC); u32(0); u32(cnt);
+  for (const v of voxels) { dv.setUint8(p++, v.x); dv.setUint8(p++, v.y); dv.setUint8(p++, v.z); dv.setUint8(p++, v.ci); }
+  str('RGBA'); u32(rgbaC); u32(0);
+  for (let i = 0; i < 256; i++) { const c = palette[i] || [0, 0, 0]; dv.setUint8(p++, c[0]); dv.setUint8(p++, c[1]); dv.setUint8(p++, c[2]); dv.setUint8(p++, 255); }
+  return buf;
+}
+// gather a part's filled voxels (palette cleanup applied) as {x,y,z,r,g,b}, offset into place
+function collectVox(partId, foot, layers, zOff, xOff) {
+  const { cd, filled, vcol } = buildVolume(partId, foot, layers), N = foot * foot;
+  const quant = buildQuantiser(cd, vcol, filled, foot, layers, state.paletteN), out = [];
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+    if (!filled(x, y, z)) continue;
+    let r, g, b; if (vcol) { const c = (z * N + y * foot + x) * 3; r = vcol[c]; g = vcol[c + 1]; b = vcol[c + 2]; } else { const p = (y * foot + x) * 4; r = cd[p]; g = cd[p + 1]; b = cd[p + 2]; }
+    if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
+    const X = x + xOff, Z = z + zOff; if (X < 0 || X > 255 || Z < 0 || Z > 255) continue;
+    out.push({ x: X, y, z: Z, r, g, b });
+  }
+  return out;
+}
+// export the current model (body + turret assembled, or the active part) as a .vox download
+function exportVox() {
+  const foot = state.foot, layers = state.layers, mount = clamp(bodyMountZ + state.mountZ, 0, layers);
+  let cells = [];
+  if (state.part !== 'turret') cells = cells.concat(collectVox('body', foot, layers, 0, 0));
+  if (state.part !== 'body') cells = cells.concat(collectVox('turret', foot, layers, mount, Math.round(state.turretDx)));
+  if (!cells.length) { alert('Nothing to export — load art or a .vox first.'); return; }
+  const uniq = new Map(); for (const c of cells) { const k = (c.r << 16) | (c.g << 8) | c.b; if (!uniq.has(k)) uniq.set(k, [c.r, c.g, c.b]); }
+  let pal = [...uniq.values()]; if (pal.length > 255) pal = medianCut(pal, 255);
+  const pcache = new Map(), idxOf = (r, g, b) => { const k = (r << 16) | (g << 8) | b; let v = pcache.get(k); if (v !== undefined) return v; let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const q = pal[i], d = (q[0] - r) * (q[0] - r) + (q[1] - g) * (q[1] - g) + (q[2] - b) * (q[2] - b); if (d < bd) { bd = d; bi = i; } } pcache.set(k, bi); return bi; };
+  let nz = 1; for (const c of cells) if (c.z + 1 > nz) nz = c.z + 1;
+  const voxels = cells.map((c) => ({ x: c.x, y: c.y, z: c.z, ci: idxOf(c.r, c.g, c.b) + 1 }));
+  const buf = writeVox(foot, foot, nz, voxels, pal);
+  const id = ($('uid').value || 'unit').trim(), url = URL.createObjectURL(new Blob([buf], { type: 'application/octet-stream' }));
+  dl(`${id}.vox`, url); setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
 // Space-carve a part's volume from orthographic views: TOP → footprint + colour; SIDE (height along the
 // length) + FRONT (height across the width) → the carved height; BACK falls back for FRONT. A voxel is
 // filled only where every supplied view agrees. Top alone = flat extrude. No Top view → procedural.
@@ -570,6 +616,7 @@ function importVox(part, file) {
 $('voxBody').onchange = (e) => e.target.files[0] && importVox('body', e.target.files[0]);
 $('voxTurret').onchange = (e) => e.target.files[0] && importVox('turret', e.target.files[0]);
 $('voxClear').onclick = () => { voxPart.body = null; voxPart.turret = null; rebuildSlices(); $('voxState').textContent = 'Cleared — back to the photo carve.'; };
+$('exportVox').onclick = exportVox;
 $('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').textContent = state.lightAz + '°'; rebuildSlices(); drawLight(); };
 $('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; rebuildSlices(); };
 $('pal').oninput = (e) => { state.paletteN = +e.target.value; $('palV').textContent = state.paletteN || 'full'; rebuildSlices(); };
@@ -773,5 +820,5 @@ function selectUnit(id) {
 }
 
 syncInputs(); renderManifest(); layout(); update(); updateGamePreview(); initFactions();
-window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, keyedCropped, gridStretch, parseVox, voxPart, fitToVox,
+window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, keyedCropped, gridStretch, parseVox, voxPart, fitToVox, collectVox, writeVox, exportVox,
   gdbg: () => ({ baked: !!state.baked, gbaked: !!gBodyBaked, gvis: gBodyBaked && gBodyBaked.visible, gkids: gUnit.children.length }) };   // debug/test hook
