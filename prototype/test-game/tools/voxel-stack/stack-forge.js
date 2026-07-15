@@ -88,22 +88,25 @@ function keyedCanvas(img) {
   const id = g.getImageData(0, 0, cv.width, cv.height); keyBackground(id.data, cv.width, cv.height); g.putImageData(id, 0, 0);
   return cv;
 }
-// rasterize a (bg-keyed) image into a w×h alpha grid; `elev` flips rows so image TOP = highest layer.
-function alphaGrid(img, w, h, elev) {
-  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const ctx = cv.getContext('2d'); ctx.drawImage(keyedCanvas(img), 0, 0, w, h);
-  const d = ctx.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
-  for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
-    const row = elev ? (h - 1 - r) : r;            // elevation image: top of the image = highest z
-    out[row * w + a] = d[(r * w + a) * 4 + 3] > 40 ? 1 : 0;
-  }
-  return out;
+// keyed + CROPPED to the content bounding box — so empty margins and the raw image aspect ratio don't
+// distort registration (a long-barrel side view maps its CONTENT, not the whole rectangle).
+function keyedCropped(img) {
+  const k = keyedCanvas(img), d = k.getContext('2d').getImageData(0, 0, k.width, k.height).data;
+  let x0 = k.width, y0 = k.height, x1 = -1, y1 = -1;
+  for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+  if (x1 < x0) return k;
+  const cw = x1 - x0 + 1, ch = y1 - y0 + 1, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  cv.getContext('2d').drawImage(k, x0, y0, cw, ch, 0, 0, cw, ch);
+  return cv;
 }
-// [min,max] columns of an elevation grid that hold any material (its horizontal extent).
-function extentX(grid, w, layers) {
-  let lo = w, hi = -1;
-  for (let a = 0; a < w; a++) { let any = false; for (let z = 0; z < layers; z++) if (grid[z * w + a]) { any = true; break; } if (any) { if (a < lo) lo = a; if (a > hi) hi = a; } }
-  return hi >= lo ? [lo, hi] : [0, w - 1];
+// stretch a (keyed, cropped) content canvas to w×h and return an alpha grid; `elev` flips rows (z-up).
+function gridStretch(canvas, w, h, elev) {
+  h = Math.max(1, h);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d'); ctx.drawImage(canvas, 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
+  for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) { const row = elev ? (h - 1 - r) : r; out[row * w + a] = d[(r * w + a) * 4 + 3] > 40 ? 1 : 0; }
+  return out;
 }
 
 // Space-carve a part's volume from orthographic views: TOP → footprint + colour; SIDE (height along the
@@ -123,27 +126,35 @@ function buildVolume(partId, foot, layers) {
     for (let i = 0; i < N; i++) H[i] = cd[i * 4 + 3] > 20 ? (hd[i * 4] / 255) * layers : 0;
     return { cd, H, filled: (x, y, z) => z < H[y * foot + x] };
   }
-  const tc = document.createElement('canvas'); tc.width = tc.height = foot;
-  const tx = tc.getContext('2d');
-  if (src.top) { drawFit(tx, keyedCanvas(src.top), foot, foot); }   // top → footprint + colour (bg-keyed, aspect-fit)
-  else {                                                            // no Top → derive footprint from the elevations
-    const sX = src.side ? extentX(alphaGrid(src.side, foot, layers, true), foot, layers) : [Math.round(foot * 0.2), Math.round(foot * 0.8)];
-    const fX = (src.front || src.back) ? extentX(alphaGrid(src.front || src.back, foot, layers, true), foot, layers) : [Math.round(foot * 0.3), Math.round(foot * 0.7)];
-    tx.fillStyle = '#9a8c66'; tx.fillRect(sX[0], fX[0], sX[1] - sX[0] + 1, fX[1] - fX[0] + 1);
+  // crop every view to its content, then register by a COMMON scale taken from the top's fit — so the
+  // side's height maps PROPORTIONALLY (a long-barrel side doesn't get stretched vertically to fill layers).
+  const topC = src.top ? keyedCropped(src.top) : null;
+  const sideC = src.side ? keyedCropped(src.side) : null;
+  const frontC = src.front ? keyedCropped(src.front) : (src.back ? keyedCropped(src.back) : null);
+  const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
+  let s, bw, bh, ox, oy;
+  if (topC) {                                            // footprint + colour from the top (aspect-preserving)
+    s = Math.min(foot / topC.width, foot / topC.height);
+    bw = Math.max(1, Math.round(topC.width * s)); bh = Math.max(1, Math.round(topC.height * s));
+    ox = Math.floor((foot - bw) / 2); oy = Math.floor((foot - bh) / 2);
+    tx.drawImage(topC, ox, oy, bw, bh);
+  } else {                                               // no top: length from side, width from front
+    const SL = sideC ? sideC.width : foot, FW = frontC ? frontC.width : Math.round(foot * 0.5);
+    s = Math.min(foot / SL, foot / Math.max(1, FW));
+    bw = Math.max(1, Math.round(SL * s)); bh = Math.max(1, Math.round(FW * s));
+    ox = Math.floor((foot - bw) / 2); oy = Math.floor((foot - bh) / 2);
+    tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh);
   }
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
-  // footprint bbox → register the elevations to the shared axes (length x / width y), not the square
-  let minx = foot, miny = foot, maxx = 0, maxy = 0, any = false;
-  for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (top(x, y)) { any = true; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
-  if (!any) { minx = miny = 0; maxx = maxy = foot - 1; }
-  const bw = maxx - minx + 1, bh = maxy - miny + 1;
-  const sideG = src.side ? alphaGrid(src.side, bw, layers, true) : null;                                  // length × height
-  const widthG = src.front ? alphaGrid(src.front, bh, layers, true) : (src.back ? alphaGrid(src.back, bh, layers, true) : null);   // width × height
-  const side = (x, z) => sideG ? (x >= minx && x <= maxx && z >= 0 && z < layers && !!sideG[z * bw + (x - minx)]) : z < layers;
-  const width = (y, z) => widthG ? (y >= miny && y <= maxy && z >= 0 && z < layers && !!widthG[z * bh + (y - miny)]) : z < layers;
-  const flat = !sideG && !widthG, defH = Math.round(layers * 0.66);
-  const filled = flat ? (x, y, z) => top(x, y) && z < defH : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
+  // height in VOXELS at the SAME scale as the footprint (proportional; clamped to the layer budget)
+  const Hv = Math.min(layers, Math.max(1, sideC ? Math.round(sideC.height * s) : (frontC ? Math.round(frontC.height * s) : Math.round(layers * 0.66))));
+  const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height
+  const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
+  const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= 0 && z < Hv && !!sideG[z * bw + (x - ox)]) : z < Hv;
+  const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= 0 && z < Hv && !!frontG[z * bh + (y - oy)]) : z < Hv;
+  const flat = !sideG && !frontG;
+  const filled = flat ? (x, y, z) => top(x, y) && z < Hv : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
   const H = new Float32Array(N);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     let h = 0; for (let z = layers - 1; z >= 0; z--) if (filled(x, y, z)) { h = z + 1; break; }
