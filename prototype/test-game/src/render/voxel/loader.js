@@ -83,7 +83,11 @@ export function buildVoxelUnit(store, id, tilePx, radius, spriteOverCollision) {
   if (!e) return null;
   const { pack, parts } = e;
   const B = pack.renderScale || 1;                                  // atlas px per voxel
-  const targetW = tilePx * 2 * (radius || 0.3) * (spriteOverCollision || 4 / 3);
+  // WORLD SCALE: a pack that declares its size (scale.tiles, from the VOX_PER_TILE contract) renders
+  // at exactly that many tiles — voxel density is constant across every unit on the board. Packs
+  // without the contract (older saves) fall back to the sim-radius sizing.
+  const tiles = pack.scale && pack.scale.tiles;
+  const targetW = tiles ? tilePx * tiles : tilePx * 2 * (radius || 0.3) * (spriteOverCollision || 4 / 3);
   const scale = targetW / Math.max(1, pack.footprint[0] * B);       // screen px per atlas px
   const c = new PIXI.Container();
   const mk = (p) => {

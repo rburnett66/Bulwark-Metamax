@@ -17,6 +17,10 @@ const lerp = (a, b, t) => a + (b - a) * t;
 // screen px per layer at 1 px/voxel: a voxel is a real cube (zScale stretches it) seen at the camera tilt
 const layerSp = (elDeg) => state.zScale * Math.cos(clamp(elDeg, 0, 90) * Math.PI / 180);
 const WORLD_SCALE = 3, BODY_FRAMES = 16, TURRET_FRAMES = 64, MANIFEST_KEY = 'bulwark:stackforge';
+// THE world-scale contract (mirrors src/render/voxel/pack.js): 32 voxels = 1 tile for EVERY unit.
+// Bigger unit ⇒ higher Resolution, never a bigger stretch — voxel density is constant on the board.
+const VOX_PER_TILE = 32;
+const unitTiles = (foot) => foot / VOX_PER_TILE;
 const _CLASSES = new Set(['ground', 'air', 'structure']), _KINDS = new Set(['directional', 'stack']);
 function validatePack(p) {
   const e = [];
@@ -550,6 +554,108 @@ function drawLight() {
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; g.moveTo(sx + Math.cos(a) * 13, sy + Math.sin(a) * 13).lineTo(sx + Math.cos(a) * 19, sy + Math.sin(a) * 19); }
 }
 
+// ── SCALE CHART (below Orbit + camera): side views of the current model + saved units on ONE shared
+// px-per-tile ruler, in two faction rows (A vs B) for cross-faction comparison. World contract:
+// VOX_PER_TILE voxels = 1 tile — bigger unit means more voxels, never a bigger stretch. ──
+const chartCache = {};                        // unit id → { key, body, turret, ready } atlas images
+const prefixOf = (id) => (id.indexOf('-') > 0 ? id.slice(0, id.indexOf('-')) : id);
+function chartImgsFor(id, entry) {
+  const key = ((entry.atlases && entry.atlases.body) || '').length;
+  let rec = chartCache[id];
+  if (rec && rec.key === key) return rec.ready ? rec : null;
+  rec = chartCache[id] = { key, ready: false };
+  let n = 0; const done = () => { if (++n >= 2) { rec.ready = true; renderScaleChart(); } };
+  rec.body = new Image(); rec.body.onload = done; rec.body.onerror = done; rec.body.src = entry.atlases.body;
+  rec.turret = new Image(); rec.turret.onload = done; rec.turret.onerror = done; rec.turret.src = entry.atlases.turret;
+  return null;
+}
+function drawPackThumb(ctx, entry, x, w, groundY, T) {
+  const rec = chartImgsFor(entry.pack.id, entry); if (!rec) return;
+  const p = entry.pack, B = p.renderScale || 1, sc = (T / VOX_PER_TILE) / B;
+  const bp = (p.parts || []).find((q) => q.id === 'body'), tp = (p.parts || []).find((q) => q.id === 'turret');
+  const draw = (img, part, ox, oy) => {
+    if (!img || !part) return;
+    ctx.drawImage(img, 0, 0, part.cell[0], part.cell[1],
+      x + w / 2 - part.pivot[0] * sc + ox, groundY - part.pivot[1] * sc + oy, part.cell[0] * sc, part.cell[1] * sc);
+  };
+  draw(rec.body, bp, 0, 0);                                        // frame 0 = facing +x → a side-on look
+  if (tp) { const m = tp.mount || [0, 0, 0];
+    draw(rec.turret, tp, m[0] * B * sc, -(m[2] || 0) * (p.layerSpacing || 0) * B * sc); }
+}
+function drawCurrentThumb(ctx, x, w, groundY, T) {
+  if (!bodyFaces) return;
+  const S = T / VOX_PER_TILE, foot = state.foot, h = state.zScale;
+  const W2 = Math.max(4, Math.ceil(foot * S) + 6);
+  const H2 = Math.max(4, Math.ceil((state.bodyLayers + state.turretLayers + 2) * h * S + foot * S * 0.5) + 4);
+  const tc = document.createElement('canvas'); tc.width = W2; tc.height = H2;
+  const tctx = tc.getContext('2d'); tctx.lineWidth = 0.4; tctx.lineJoin = 'round';
+  const mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
+  const parts = [{ faces: bodyFaces, az: 0 }];
+  if (turretFaces) parts.push({ faces: turretFaces, az: 0, zOff: mountDz, gx: state.turretDx, gy: 0, pivotFrac: 0.5 + state.turretPivot / 100 });
+  renderParts(tctx, S, W2 / 2, H2 - 2, state.el, parts);
+  ctx.drawImage(tc, x + (w - W2) / 2, groundY - H2 + 2);
+}
+function syncChartSelects(prefixes) {
+  const mk = (sel) => {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">—</option>' + prefixes.map((p) => `<option>${p}</option>`).join('');
+    if (cur && prefixes.includes(cur)) sel.value = cur;
+  };
+  mk($('chartA')); mk($('chartB'));
+  if (!$('chartA').value && prefixes.length) {
+    const want = prefixOf(($('uid').value || '').trim());
+    $('chartA').value = prefixes.includes(want) ? want : prefixes[0];
+  }
+}
+function renderScaleChart() {
+  const cv = $('scaleChart'); if (!cv) return;
+  const tiles = unitTiles(state.foot);
+  $('resTiles').textContent = '= ' + (+tiles.toFixed(2)) + ' tile' + (tiles === 1 ? '' : 's');
+  const units = (loadManifest().units) || {};
+  const prefixes = [...new Set(Object.keys(units).map(prefixOf))].sort();
+  syncChartSelects(prefixes);
+  const rowsSel = [$('chartA').value, $('chartB').value];
+  const rows = [];
+  for (let r = 0; r < 2; r++) {
+    const list = [];
+    if (r === 0) list.push({ id: 'current', tiles, current: true });   // the model on the stage, always row A
+    if (rowsSel[r]) for (const id of Object.keys(units)) if (prefixOf(id) === rowsSel[r]) {
+      const p = units[id].pack;
+      list.push({ id, tiles: (p.scale && p.scale.tiles) || p.footprint[0] / VOX_PER_TILE, entry: units[id] });
+    }
+    if (list.length) rows.push(list);
+  }
+  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  if (!rows.length) return;
+  let T = 26;                                                        // ONE px-per-tile across BOTH rows
+  for (const row of rows) {
+    const tt = row.reduce((a, e) => a + e.tiles + 0.4, 0);
+    T = Math.min(T, (W - 10) / Math.max(1, tt));
+  }
+  const rowH = H / rows.length;
+  ctx.font = '8px sans-serif'; ctx.textBaseline = 'top';
+  rows.forEach((row, r) => {
+    const groundY = (r + 1) * rowH - 16;
+    ctx.strokeStyle = '#24384a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, groundY + 0.5); ctx.lineTo(W, groundY + 0.5); ctx.stroke();
+    ctx.fillStyle = '#3c5670';
+    for (let i = 0, tx = 5; tx < W; tx += T, i++) ctx.fillRect(tx, groundY + 1, 1, i % 2 ? 2 : 4);   // tile ruler
+    let x = 5;
+    for (const e of row) {
+      const w = e.tiles * T;
+      if (e.current) drawCurrentThumb(ctx, x, w, groundY, T);
+      else drawPackThumb(ctx, e.entry, x, w, groundY, T);
+      ctx.fillStyle = e.current ? '#f2c869' : '#8fa7bd';
+      const name = e.current ? '▶ current' : e.id.replace(/^[A-Za-z]+-/, '');
+      ctx.fillText(name.slice(0, Math.max(3, Math.floor(w / 5))), x, groundY + 6);
+      x += w + 0.4 * T;
+    }
+  });
+}
+$('chartA').onchange = renderScaleChart;
+$('chartB').onchange = renderScaleChart;
+
 // ── IN-GAME preview (bottom-right inset): the unit standing on a board tile at GAME scale + shadow,
 // slowly turning to show its facings — so you can judge how it reads on the board, not just in orbit.
 // Game facts (from src/render): 64px tile, ground greens 0x33502c/0x3c5c33/0x45683a, black grid @0.12,
@@ -668,6 +774,7 @@ function rebuildSlices() {
   gVoxSpr = new PIXI.Sprite(gVoxTex); gVoxSpr.scale.set(1 / INSET_S);
   gVoxSpr.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp); gVoxSpr.position.set(0, 0);
   gUnit.addChild(gVoxSpr);
+  setTimeout(renderScaleChart, 0);   // model changed → refresh the side-view scale chart
 }
 rebuildSlices();
 
@@ -994,6 +1101,7 @@ function buildPack() {
   const totalH = Math.max(b.bodyLayers, mountDz + b.turretLayers);
   const pack = {
     id, class: state.cls, footprint: [b.foot, b.foot, totalH],
+    scale: { voxPerTile: VOX_PER_TILE, tiles: unitTiles(b.foot) },   // the world-size contract
     camera: { azimuth: state.az | 0, elevation: state.el | 0 }, layerSpacing: Math.round(b.sp * 100) / 100,
     voxel: { height: state.zScale },
     renderScale: B,                                    // atlas px per voxel — draw frames at 1/renderScale
@@ -1036,7 +1144,8 @@ function doSaveUnit() {
   $('saveState').innerHTML = v.ok ? `<span class="lock">Saved "${built.pack.id}" ✓ (schema-valid)</span>` : 'Saved, but INVALID: ' + v.errors.join('; ');
   $('packJson').textContent = JSON.stringify(built.pack, null, 2);
   renderManifest();
-  renderRoster();   // flip this unit's card to "supplied ✓"
+  renderRoster();        // flip this unit's card to "supplied ✓"
+  renderScaleChart();    // the new unit joins the side-view scale chart
 }
 $('saveUnit').onclick = doSaveUnit;
 

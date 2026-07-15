@@ -9,6 +9,11 @@
 const CLASSES = new Set(['ground', 'air', 'structure']);
 const KINDS = new Set(['directional', 'stack']);
 
+/** THE world-scale contract: 32 voxels span exactly 1 tile, for every unit. A pack's on-screen size
+ *  is footprint/VOX_PER_TILE tiles (carried as pack.scale.tiles) — bigger units need more voxels,
+ *  never a bigger stretch. Keeps every unit's voxel density identical on the board. */
+export const VOX_PER_TILE = 32;
+
 /** Validate a unit pack against the contract. Returns { ok, errors:[...] }. Pure. */
 export function validatePack(p) {
   const e = [];
