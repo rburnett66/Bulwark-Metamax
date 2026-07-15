@@ -135,11 +135,14 @@ function buildVolume(partId, foot, layers) {
   const sideC = src.side ? keyedCropped(src.side) : null;
   const frontC = src.front ? keyedCropped(src.front) : (src.back ? keyedCropped(src.back) : null);
   const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
+  // procedural barrel reserves a FORWARD margin so the body shrinks back and the tube protrudes past it
+  const reach = (partId === 'turret' && state.barrelLen > 0) ? state.barrelLen : 0;
   let s, bw, bh, ox, oy;
   if (topC) {                                            // footprint + colour from the top (aspect-preserving)
-    s = Math.min(foot / topC.width, foot / topC.height);
+    const availW = Math.max(8, foot - reach);            // leave room up-front for the barrel
+    s = Math.min(availW / topC.width, foot / topC.height);
     bw = Math.max(1, Math.round(topC.width * s)); bh = Math.max(1, Math.round(topC.height * s));
-    ox = Math.floor((foot - bw) / 2); oy = Math.floor((foot - bh) / 2);
+    ox = Math.floor((availW - bw) / 2); oy = Math.floor((foot - bh) / 2);   // body sits toward the rear
     tx.drawImage(topC, ox, oy, bw, bh);
   } else {                                               // no top: length from side, width from front
     const SL = sideC ? sideC.width : foot, FW = frontC ? frontC.width : Math.round(foot * 0.5);
@@ -157,7 +160,22 @@ function buildVolume(partId, foot, layers) {
   const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= 0 && z < Hv && !!sideG[z * bw + (x - ox)]) : z < Hv;
   const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= 0 && z < Hv && !!frontG[z * bh + (y - oy)]) : z < Hv;
   const flat = !sideG && !frontG;
-  const filled = flat ? (x, y, z) => top(x, y) && z < Hv : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
+  const bodyFilled = flat ? (x, y, z) => top(x, y) && z < Hv : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
+  // procedural barrel: a real round tube along +X, placed relative to the body box, ORed into the volume
+  let inBarrel = null;
+  if (reach && topC) {
+    const cy = oy + bh / 2, r = Math.max(0.5, state.barrelRad);
+    const bx0 = ox + Math.round(bw * 0.35), bx1 = Math.min(foot - 1, ox + bw + reach);   // from inside the body to the tip
+    const bz = clamp(Math.round(state.barrelElev / 100 * (Hv - 1)), 0, layers - 1);
+    inBarrel = (x, y, z) => x >= bx0 && x <= bx1 && (y - cy) * (y - cy) + (z - bz) * (z - bz) <= r * r;
+    let R = 0, G = 0, B = 0, c = 0;                                  // barrel tint = darkened mean body colour
+    for (let i = 0; i < N; i++) { const p = i * 4; if (cd[p + 3] > 20) { R += cd[p]; G += cd[p + 1]; B += cd[p + 2]; c++; } }
+    const bt = c ? [R / c * 0.72 | 0, G / c * 0.72 | 0, B / c * 0.72 | 0] : [82, 84, 92];
+    for (let x = Math.max(0, bx0); x <= bx1; x++) for (let y = Math.max(0, Math.ceil(cy - r)); y <= Math.min(foot - 1, Math.floor(cy + r)); y++) {
+      const p = (y * foot + x) * 4; if (cd[p + 3] < 20) { cd[p] = bt[0]; cd[p + 1] = bt[1]; cd[p + 2] = bt[2]; cd[p + 3] = 255; }
+    }
+  }
+  const filled = inBarrel ? (x, y, z) => bodyFilled(x, y, z) || inBarrel(x, y, z) : bodyFilled;
   const H = new Float32Array(N);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     let h = 0; for (let z = layers - 1; z >= 0; z--) if (filled(x, y, z)) { h = z + 1; break; }
@@ -269,7 +287,7 @@ function flipCanvas(im, h, v) {
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
 }
 const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, spin: false, part: 'both',
-  lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
+  barrelLen: 0, barrelRad: 4, barrelElev: 55, lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
 let bodyL = [], turretL = [], bodyBaked = null, turretBaked = null, lastPack = null;
 
 // (re)build the LIVE slice-stack sprites (LAYERS can change) — the orbit/camera-set preview
@@ -324,6 +342,9 @@ $('el').oninput = (e) => { state.el = +e.target.value; $('elV').textContent = st
 $('taim').oninput = (e) => { state.taim = +e.target.value; $('taimV').textContent = state.taim + '°'; };
 $('tdx').oninput = (e) => { state.turretDx = +e.target.value; $('tdxV').textContent = state.turretDx; };
 $('tpiv').oninput = (e) => { state.turretPivot = +e.target.value; $('tpivV').textContent = state.turretPivot; };
+$('blen').oninput = (e) => { state.barrelLen = +e.target.value; $('blenV').textContent = state.barrelLen || 'off'; rebuildSlices(); };
+$('brad').oninput = (e) => { state.barrelRad = +e.target.value; $('bradV').textContent = state.barrelRad; rebuildSlices(); };
+$('belev').oninput = (e) => { state.barrelElev = +e.target.value; $('belevV').textContent = state.barrelElev; rebuildSlices(); };
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
 $('layers').oninput = (e) => { state.layers = +e.target.value; $('layersV').textContent = state.layers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; rebuildSlices(); };
@@ -526,4 +547,4 @@ function selectUnit(id) {
 }
 
 syncInputs(); renderManifest(); update(); drawLight(); initFactions();
-window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor };   // debug/test hook (headless verification)
+window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume };   // debug/test hook (headless verification)

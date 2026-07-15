@@ -115,6 +115,10 @@
       <div class="row"><label>Turret aim</label><input type="range" id="taim" min="0" max="359" value="0"><span class="val" id="taimV">0°</span></div>
       <div class="row"><label>Mount ↕ f/b</label><input type="range" id="tdx" min="-32" max="32" value="0"><span class="val" id="tdxV">0</span></div>
       <div class="row"><label>Pivot ↻ f/b</label><input type="range" id="tpiv" min="-50" max="50" value="0"><span class="val" id="tpivV">0</span></div>
+      <div class="row"><label>Barrel len</label><input type="range" id="blen" min="0" max="48" value="0"><span class="val" id="blenV">off</span></div>
+      <div class="row"><label>Barrel ⌀</label><input type="range" id="brad" min="1" max="10" value="4"><span class="val" id="bradV">4</span></div>
+      <div class="row"><label>Barrel z</label><input type="range" id="belev" min="0" max="100" value="55"><span class="val" id="belevV">55</span></div>
+      <div class="note" style="margin:-2px 0 6px">Procedural round barrel on the turret — a real tube (len 0 = off) mounted forward, baked into every angle so it stays crisp. Sweeps with turret aim + pivot.</div>
       <div class="row"><label>Auto-spin</label><input type="checkbox" id="spin"><span class="note" style="margin:0">demo smooth turret</span></div>
       <button class="ghost" id="setCam" style="margin-top:4px">Set camera for bake</button>
       <div class="note" id="camState">Camera not set — orbit to a look, then Set.</div>
