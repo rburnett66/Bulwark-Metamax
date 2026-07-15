@@ -448,9 +448,10 @@ function emitCombatFx(renderer, state) {
     const next = clock.get(id) || 0;
     if (now < next) return;
     clock.set(id, now + cadence * (0.85 + Math.random() * 0.3));
-    // pooled sprite path (spec §4): billboard dot + streak, single batched draw, zero per-frame alloc
+    // pooled sprite path (spec §4): billboard dot + streak, single batched draw, zero per-frame alloc.
+    // size is a sprite SCALE — the dot texture is 16px, so t*0.011 ≈ the old t*0.09-radius shell dot.
     renderer.projectiles.spawn(from.x, from.y, to.x, to.y, speed * t,
-      color, kind, t * (kind === 'shell' ? 0.012 : 0.008) * 16);
+      color, kind, t * (kind === 'shell' ? 0.011 : 0.0075));
   };
   const burn = (x, y, spread, size) => {
     renderer.fxItems.push({ kind: 'fire', x: x + (Math.random() * 2 - 1) * spread, y: y + (Math.random() * 2 - 1) * spread,
