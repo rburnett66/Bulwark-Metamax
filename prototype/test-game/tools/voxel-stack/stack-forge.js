@@ -1004,6 +1004,16 @@ function buildPack() {
     shadow: { kind: 'ellipse', rx: Math.round(b.foot / 2), ry: Math.round(b.foot * 0.22), alt: state.cls === 'air' ? 30 : 0 },
     stats: { speed: 90, turnRate: 3.0, turretRate: 4.0 },
   };
+  // Tier C (rendering-tiers spec §3C): embed the assembled voxel model so the game can render this
+  // unit as a LIVE 3D object with real pitch/roll. Big (~4B/voxel base64) — only for set-pieces.
+  if ($('embedModel').checked) {
+    const cells = collectVox('body', b.foot, b.bodyLayers, 0, 0)
+      .concat(collectVox('turret', b.foot, b.turretLayers, mountDz, Math.round(state.turretDx)));
+    let nz = 1; for (const c of cells) if (c.z + 1 > nz) nz = c.z + 1;
+    const data = new Uint8Array(b.foot * b.foot * nz * 4);
+    for (const c of cells) { const i = ((c.z * b.foot + c.y) * b.foot + c.x) * 4; data[i] = c.r; data[i + 1] = c.g; data[i + 2] = c.b; data[i + 3] = 255; }
+    pack.model = { nx: b.foot, ny: b.foot, nz, b64: b64FromU8(data) };
+  }
   return { pack, atlases: { body: ba.canvas.toDataURL('image/png'), turret: ta.canvas.toDataURL('image/png') } };
 }
 

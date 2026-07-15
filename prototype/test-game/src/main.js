@@ -86,6 +86,13 @@ export function boot(mountEl, seed) {
     if (art && art.ready) console.log('[unitArt] loaded', Object.keys(art.defs).length, 'authored units');
   }).catch((e) => console.warn('[unitArt] skipped:', e && e.message));
 
+  // VOXEL unit packs (Stack Forge): committed voxel-units.json + the Forge's localStorage manifest.
+  // Non-blocking; once ready, any unit whose id has a pack renders as its voxel body + aiming turret.
+  import('./render/voxel/loader.js').then(({ loadVoxelUnits }) => loadVoxelUnits()).then((vox) => {
+    renderer.voxelArt = vox;
+    if (vox && vox.ready) console.log('[voxel] loaded', Object.keys(vox.units).length, 'unit pack(s):', Object.keys(vox.units).join(', '));
+  }).catch((e) => console.warn('[voxel] skipped:', e && e.message));
+
   // The last COMPLETED game, captured so "Run Replay" replays it even after Restart resets the live log, and
   // after a page reload (persisted to localStorage). mmdev.
   let lastReplayLog = null;

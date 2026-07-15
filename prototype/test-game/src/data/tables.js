@@ -4,6 +4,7 @@
 // Transcribed from the bulwark-balance workbook (v1, even-baseline).
 // No balance numbers exist anywhere else in the codebase.
 // -----------------------------------------------------------------------------
+import { validateRenderTiers } from './renderTiers.js';
 
 // ---------------------------------------------------------------------------
 // Assumptions sheet + slice economy constants
@@ -62,7 +63,7 @@ export const DAMAGE_TYPES = Object.freeze({
 export const UNITS = Object.freeze({
   'GND-Troops': Object.freeze({
     faction: 'Ground / Powder', shape: 'Troops', role: 'Skirmisher',
-    domain: 'Walker', armorClass: 'Organic', damageType: 'Kinetic',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [220, 352, 528], dps: [45, 69.75, 103.5],
@@ -71,7 +72,7 @@ export const UNITS = Object.freeze({
   }),
   'GND-Trucks': Object.freeze({
     faction: 'Ground / Powder', shape: 'Trucks', role: 'Support',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Kinetic',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [275, 440, 660], dps: [15, 23.25, 34.5],
@@ -80,7 +81,7 @@ export const UNITS = Object.freeze({
   }),
   'GND-Tanks': Object.freeze({
     faction: 'Ground / Powder', shape: 'Tanks', role: 'Bruiser',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Kinetic',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [440, 704, 1056], dps: [45, 69.75, 103.5],
@@ -89,7 +90,7 @@ export const UNITS = Object.freeze({
   }),
   'GND-Artillery': Object.freeze({
     faction: 'Ground / Powder', shape: 'Artillery', role: 'Siege',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [165, 264, 396], dps: [60, 93, 138],
@@ -98,7 +99,7 @@ export const UNITS = Object.freeze({
   }),
   'GND-HeavyTanks': Object.freeze({
     faction: 'Ground / Powder', shape: 'Heavy Tanks', role: 'Juggernaut',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Kinetic',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [605, 968, 1452], dps: [37.5, 58.125, 86.25],
@@ -107,7 +108,7 @@ export const UNITS = Object.freeze({
   }),
   'GND-Copters': Object.freeze({
     faction: 'Ground / Powder', shape: 'Copters', role: 'Harasser',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Kinetic',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
     hp: [220, 352, 528], dps: [45, 69.75, 103.5],
@@ -116,7 +117,7 @@ export const UNITS = Object.freeze({
   }),
   'GND-Planes': Object.freeze({
     faction: 'Ground / Powder', shape: 'Planes', role: 'Striker',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Kinetic',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [165, 264, 396], dps: [52.5, 81.375, 120.75],
@@ -125,7 +126,7 @@ export const UNITS = Object.freeze({
   }),
   'GND-Missiles': Object.freeze({
     faction: 'Ground / Powder', shape: 'Missiles', role: 'Guided AA',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Kinetic',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [110, 176, 264], dps: [67.5, 104.625, 155.25],
@@ -134,7 +135,7 @@ export const UNITS = Object.freeze({
   }),
   'AIR-Troops': Object.freeze({
     faction: 'Air', shape: 'Troops', role: 'Skirmisher',
-    domain: 'Walker', armorClass: 'Organic', damageType: 'Kinetic',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [170, 272, 408], dps: [47.25, 73.2375, 108.675],
@@ -143,7 +144,7 @@ export const UNITS = Object.freeze({
   }),
   'AIR-Trucks': Object.freeze({
     faction: 'Air', shape: 'Trucks', role: 'Support',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Kinetic',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [212.5, 340, 510], dps: [15.75, 24.4125, 36.225],
@@ -152,7 +153,7 @@ export const UNITS = Object.freeze({
   }),
   'AIR-Tanks': Object.freeze({
     faction: 'Air', shape: 'Tanks', role: 'Bruiser',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Kinetic',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [340, 544, 816], dps: [47.25, 73.2375, 108.675],
@@ -161,7 +162,7 @@ export const UNITS = Object.freeze({
   }),
   'AIR-Artillery': Object.freeze({
     faction: 'Air', shape: 'Artillery', role: 'Siege',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [127.5, 204, 306], dps: [63, 97.65, 144.9],
@@ -170,7 +171,7 @@ export const UNITS = Object.freeze({
   }),
   'AIR-HeavyTanks': Object.freeze({
     faction: 'Air', shape: 'Heavy Tanks', role: 'Juggernaut',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Kinetic',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [467.5, 748, 1122], dps: [39.375, 61.0312, 90.5625],
@@ -179,7 +180,7 @@ export const UNITS = Object.freeze({
   }),
   'AIR-Copters': Object.freeze({
     faction: 'Air', shape: 'Copters', role: 'Harasser',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Kinetic',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
     hp: [170, 272, 408], dps: [47.25, 73.2375, 108.675],
@@ -188,7 +189,7 @@ export const UNITS = Object.freeze({
   }),
   'AIR-Planes': Object.freeze({
     faction: 'Air', shape: 'Planes', role: 'Striker',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Kinetic',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [127.5, 204, 306], dps: [55.125, 85.4437, 126.787],
@@ -197,16 +198,28 @@ export const UNITS = Object.freeze({
   }),
   'AIR-Missiles': Object.freeze({
     faction: 'Air', shape: 'Missiles', role: 'Guided AA',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Kinetic',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [85, 136, 204], dps: [70.875, 109.856, 163.012],
     range: 8.575, speed: 0.96, vision: 4,
     power: 102.05, cost: [306.15, 765.375, 1530.75]
   }),
+  // Tier C set-piece (Voxel-Rendering-Tiers spec §3): the heavy bomber renders as a LIVE 3D voxel model
+  // with real pitch/roll. Sparse by design — the bulk wave builder skips render_tier 'C' types, and
+  // spawn + data validation hard-cap simultaneous instances at MAX_LIVE_3D. Big, slow, event-tier.
+  'AIR-HeavyBomber': Object.freeze({
+    faction: 'Air', shape: 'Heavy Bomber', role: 'Siege',
+    domain: 'Flyer', render_tier: 'C', armorClass: 'Aircraft', damageType: 'Concussion',
+    canTarget: 'Ground', targets: 'Structures', aoeRadius: 2.5,
+    radarDetect: true, seesGround: true,
+    hp: [1210, 1936, 2904], dps: [90, 139.5, 207],
+    range: 4, speed: 0.55, vision: 6,
+    power: 210, cost: [630, 1575, 3150]
+  }),
   'HTC-Troops': Object.freeze({
     faction: 'High Tech', shape: 'Troops', role: 'Skirmisher',
-    domain: 'Walker', armorClass: 'Organic', damageType: 'Electric',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [190, 304, 456], dps: [47.25, 73.2375, 108.675],
@@ -215,7 +228,7 @@ export const UNITS = Object.freeze({
   }),
   'HTC-Trucks': Object.freeze({
     faction: 'High Tech', shape: 'Trucks', role: 'Support',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Electric',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [237.5, 380, 570], dps: [15.75, 24.4125, 36.225],
@@ -224,7 +237,7 @@ export const UNITS = Object.freeze({
   }),
   'HTC-Tanks': Object.freeze({
     faction: 'High Tech', shape: 'Tanks', role: 'Bruiser',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Electric',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [380, 608, 912], dps: [47.25, 73.2375, 108.675],
@@ -233,7 +246,7 @@ export const UNITS = Object.freeze({
   }),
   'HTC-Artillery': Object.freeze({
     faction: 'High Tech', shape: 'Artillery', role: 'Siege',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [142.5, 228, 342], dps: [63, 97.65, 144.9],
@@ -242,7 +255,7 @@ export const UNITS = Object.freeze({
   }),
   'HTC-HeavyTanks': Object.freeze({
     faction: 'High Tech', shape: 'Heavy Tanks', role: 'Juggernaut',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Electric',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [522.5, 836, 1254], dps: [39.375, 61.0312, 90.5625],
@@ -251,7 +264,7 @@ export const UNITS = Object.freeze({
   }),
   'HTC-Copters': Object.freeze({
     faction: 'High Tech', shape: 'Copters', role: 'Harasser',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Electric',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
     hp: [190, 304, 456], dps: [47.25, 73.2375, 108.675],
@@ -260,7 +273,7 @@ export const UNITS = Object.freeze({
   }),
   'HTC-Planes': Object.freeze({
     faction: 'High Tech', shape: 'Planes', role: 'Striker',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Electric',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [142.5, 228, 342], dps: [55.125, 85.4437, 126.787],
@@ -269,7 +282,7 @@ export const UNITS = Object.freeze({
   }),
   'HTC-Missiles': Object.freeze({
     faction: 'High Tech', shape: 'Missiles', role: 'Guided AA',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Electric',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [95, 152, 228], dps: [70.875, 109.856, 163.012],
@@ -278,7 +291,7 @@ export const UNITS = Object.freeze({
   }),
   'ART-Troops': Object.freeze({
     faction: 'Artillery', shape: 'Troops', role: 'Skirmisher',
-    domain: 'Walker', armorClass: 'Organic', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [184, 294.4, 441.6], dps: [49.5, 76.725, 113.85],
@@ -287,7 +300,7 @@ export const UNITS = Object.freeze({
   }),
   'ART-Trucks': Object.freeze({
     faction: 'Artillery', shape: 'Trucks', role: 'Support',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [230, 368, 552], dps: [16.5, 25.575, 37.95],
@@ -296,7 +309,7 @@ export const UNITS = Object.freeze({
   }),
   'ART-Tanks': Object.freeze({
     faction: 'Artillery', shape: 'Tanks', role: 'Bruiser',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [368, 588.8, 883.2], dps: [49.5, 76.725, 113.85],
@@ -305,7 +318,7 @@ export const UNITS = Object.freeze({
   }),
   'ART-Artillery': Object.freeze({
     faction: 'Artillery', shape: 'Artillery', role: 'Siege',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [138, 220.8, 331.2], dps: [66, 102.3, 151.8],
@@ -314,7 +327,7 @@ export const UNITS = Object.freeze({
   }),
   'ART-HeavyTanks': Object.freeze({
     faction: 'Artillery', shape: 'Heavy Tanks', role: 'Juggernaut',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [506, 809.6, 1214.4], dps: [41.25, 63.9375, 94.875],
@@ -323,7 +336,7 @@ export const UNITS = Object.freeze({
   }),
   'ART-Copters': Object.freeze({
     faction: 'Artillery', shape: 'Copters', role: 'Harasser',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Concussion',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Concussion',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
     hp: [184, 294.4, 441.6], dps: [49.5, 76.725, 113.85],
@@ -332,7 +345,7 @@ export const UNITS = Object.freeze({
   }),
   'ART-Planes': Object.freeze({
     faction: 'Artillery', shape: 'Planes', role: 'Striker',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Concussion',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [138, 220.8, 331.2], dps: [57.75, 89.5125, 132.825],
@@ -341,7 +354,7 @@ export const UNITS = Object.freeze({
   }),
   'ART-Missiles': Object.freeze({
     faction: 'Artillery', shape: 'Missiles', role: 'Guided AA',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Concussion',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Concussion',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [92, 147.2, 220.8], dps: [74.25, 115.088, 170.775],
@@ -350,7 +363,7 @@ export const UNITS = Object.freeze({
   }),
   'WTR-Troops': Object.freeze({
     faction: 'Water', shape: 'Troops', role: 'Skirmisher',
-    domain: 'Swimmer', armorClass: 'Organic', damageType: 'Frost',
+    domain: 'Swimmer', render_tier: 'A', armorClass: 'Organic', damageType: 'Frost',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [224, 358.4, 537.6], dps: [42.75, 66.2625, 98.325],
@@ -359,7 +372,7 @@ export const UNITS = Object.freeze({
   }),
   'WTR-Trucks': Object.freeze({
     faction: 'Water', shape: 'Trucks', role: 'Support',
-    domain: 'Floater', armorClass: 'Organic', damageType: 'Frost',
+    domain: 'Floater', render_tier: 'A', armorClass: 'Organic', damageType: 'Frost',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [280, 448, 672], dps: [14.25, 22.0875, 32.775],
@@ -368,7 +381,7 @@ export const UNITS = Object.freeze({
   }),
   'WTR-Tanks': Object.freeze({
     faction: 'Water', shape: 'Tanks', role: 'Bruiser',
-    domain: 'Swimmer', armorClass: 'Organic', damageType: 'Frost',
+    domain: 'Swimmer', render_tier: 'A', armorClass: 'Organic', damageType: 'Frost',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [448, 716.8, 1075.2], dps: [42.75, 66.2625, 98.325],
@@ -377,7 +390,7 @@ export const UNITS = Object.freeze({
   }),
   'WTR-Artillery': Object.freeze({
     faction: 'Water', shape: 'Artillery', role: 'Siege',
-    domain: 'Floater', armorClass: 'Organic', damageType: 'Concussion',
+    domain: 'Floater', render_tier: 'A', armorClass: 'Organic', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [168, 268.8, 403.2], dps: [57, 88.35, 131.1],
@@ -386,7 +399,7 @@ export const UNITS = Object.freeze({
   }),
   'WTR-HeavyTanks': Object.freeze({
     faction: 'Water', shape: 'Heavy Tanks', role: 'Juggernaut',
-    domain: 'Swimmer', armorClass: 'Organic', damageType: 'Frost',
+    domain: 'Swimmer', render_tier: 'A', armorClass: 'Organic', damageType: 'Frost',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [616, 985.6, 1478.4], dps: [35.625, 55.2188, 81.9375],
@@ -395,7 +408,7 @@ export const UNITS = Object.freeze({
   }),
   'WTR-Copters': Object.freeze({
     faction: 'Water', shape: 'Copters', role: 'Harasser',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Frost',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Frost',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
     hp: [224, 358.4, 537.6], dps: [42.75, 66.2625, 98.325],
@@ -404,7 +417,7 @@ export const UNITS = Object.freeze({
   }),
   'WTR-Planes': Object.freeze({
     faction: 'Water', shape: 'Planes', role: 'Striker',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Frost',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Frost',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [168, 268.8, 403.2], dps: [49.875, 77.3063, 114.713],
@@ -413,7 +426,7 @@ export const UNITS = Object.freeze({
   }),
   'WTR-Missiles': Object.freeze({
     faction: 'Water', shape: 'Missiles', role: 'Guided AA',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Frost',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Frost',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [112, 179.2, 268.8], dps: [64.125, 99.3937, 147.488],
@@ -422,7 +435,7 @@ export const UNITS = Object.freeze({
   }),
   'ARC-Troops': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Troops', role: 'Skirmisher',
-    domain: 'Walker', armorClass: 'Energy', damageType: 'Fire',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Fire',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [200, 320, 480], dps: [48.6, 75.33, 111.78],
@@ -431,7 +444,7 @@ export const UNITS = Object.freeze({
   }),
   'ARC-Trucks': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Trucks', role: 'Support',
-    domain: 'Walker', armorClass: 'Energy', damageType: 'Fire',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Fire',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [250, 400, 600], dps: [16.2, 25.11, 37.26],
@@ -440,7 +453,7 @@ export const UNITS = Object.freeze({
   }),
   'ARC-Tanks': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Tanks', role: 'Bruiser',
-    domain: 'Walker', armorClass: 'Energy', damageType: 'Fire',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Fire',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [400, 640, 960], dps: [48.6, 75.33, 111.78],
@@ -449,7 +462,7 @@ export const UNITS = Object.freeze({
   }),
   'ARC-Artillery': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Artillery', role: 'Siege',
-    domain: 'Walker', armorClass: 'Energy', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [150, 240, 360], dps: [64.8, 100.44, 149.04],
@@ -458,7 +471,7 @@ export const UNITS = Object.freeze({
   }),
   'ARC-HeavyTanks': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Heavy Tanks', role: 'Juggernaut',
-    domain: 'Walker', armorClass: 'Energy', damageType: 'Fire',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Fire',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [550, 880, 1320], dps: [40.5, 62.775, 93.15],
@@ -467,7 +480,7 @@ export const UNITS = Object.freeze({
   }),
   'ARC-Copters': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Copters', role: 'Harasser',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Fire',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Fire',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
     hp: [200, 320, 480], dps: [48.6, 75.33, 111.78],
@@ -476,7 +489,7 @@ export const UNITS = Object.freeze({
   }),
   'ARC-Planes': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Planes', role: 'Striker',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Fire',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Fire',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [150, 240, 360], dps: [56.7, 87.885, 130.41],
@@ -485,7 +498,7 @@ export const UNITS = Object.freeze({
   }),
   'ARC-Missiles': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Missiles', role: 'Guided AA',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Fire',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Fire',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [100, 160, 240], dps: [72.9, 112.995, 167.67],
@@ -494,7 +507,7 @@ export const UNITS = Object.freeze({
   }),
   'SPC-Troops': Object.freeze({
     faction: 'Space Tech', shape: 'Troops', role: 'Skirmisher',
-    domain: 'Walker', armorClass: 'Organic', damageType: 'Electric',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [192, 307.2, 460.8], dps: [44.1, 68.355, 101.43],
@@ -503,7 +516,7 @@ export const UNITS = Object.freeze({
   }),
   'SPC-Trucks': Object.freeze({
     faction: 'Space Tech', shape: 'Trucks', role: 'Support',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Electric',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [240, 384, 576], dps: [14.7, 22.785, 33.81],
@@ -512,7 +525,7 @@ export const UNITS = Object.freeze({
   }),
   'SPC-Tanks': Object.freeze({
     faction: 'Space Tech', shape: 'Tanks', role: 'Bruiser',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Electric',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [384, 614.4, 921.6], dps: [44.1, 68.355, 101.43],
@@ -521,7 +534,7 @@ export const UNITS = Object.freeze({
   }),
   'SPC-Artillery': Object.freeze({
     faction: 'Space Tech', shape: 'Artillery', role: 'Siege',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [144, 230.4, 345.6], dps: [58.8, 91.14, 135.24],
@@ -530,7 +543,7 @@ export const UNITS = Object.freeze({
   }),
   'SPC-HeavyTanks': Object.freeze({
     faction: 'Space Tech', shape: 'Heavy Tanks', role: 'Juggernaut',
-    domain: 'Walker', armorClass: 'Machinery', damageType: 'Electric',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [528, 844.8, 1267.2], dps: [36.75, 56.9625, 84.525],
@@ -539,7 +552,7 @@ export const UNITS = Object.freeze({
   }),
   'SPC-Copters': Object.freeze({
     faction: 'Space Tech', shape: 'Copters', role: 'Harasser',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Electric',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
     hp: [192, 307.2, 460.8], dps: [44.1, 68.355, 101.43],
@@ -548,7 +561,7 @@ export const UNITS = Object.freeze({
   }),
   'SPC-Planes': Object.freeze({
     faction: 'Space Tech', shape: 'Planes', role: 'Striker',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Electric',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [144, 230.4, 345.6], dps: [51.45, 79.7475, 118.335],
@@ -557,7 +570,7 @@ export const UNITS = Object.freeze({
   }),
   'SPC-Missiles': Object.freeze({
     faction: 'Space Tech', shape: 'Missiles', role: 'Guided AA',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Electric',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [96, 153.6, 230.4], dps: [66.15, 102.532, 152.145],
@@ -566,7 +579,7 @@ export const UNITS = Object.freeze({
   }),
   'DRK-Troops': Object.freeze({
     faction: 'Dark Energy', shape: 'Troops', role: 'Skirmisher',
-    domain: 'Walker', armorClass: 'Energy', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [180, 288, 432], dps: [50.4, 78.12, 115.92],
@@ -575,7 +588,7 @@ export const UNITS = Object.freeze({
   }),
   'DRK-Trucks': Object.freeze({
     faction: 'Dark Energy', shape: 'Trucks', role: 'Support',
-    domain: 'Walker', armorClass: 'Energy', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [225, 360, 540], dps: [16.8, 26.04, 38.64],
@@ -584,7 +597,7 @@ export const UNITS = Object.freeze({
   }),
   'DRK-Tanks': Object.freeze({
     faction: 'Dark Energy', shape: 'Tanks', role: 'Bruiser',
-    domain: 'Walker', armorClass: 'Energy', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [360, 576, 864], dps: [50.4, 78.12, 115.92],
@@ -593,7 +606,7 @@ export const UNITS = Object.freeze({
   }),
   'DRK-Artillery': Object.freeze({
     faction: 'Dark Energy', shape: 'Artillery', role: 'Siege',
-    domain: 'Walker', armorClass: 'Energy', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [135, 216, 324], dps: [67.2, 104.16, 154.56],
@@ -602,7 +615,7 @@ export const UNITS = Object.freeze({
   }),
   'DRK-HeavyTanks': Object.freeze({
     faction: 'Dark Energy', shape: 'Heavy Tanks', role: 'Juggernaut',
-    domain: 'Walker', armorClass: 'Energy', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [495, 792, 1188], dps: [42, 65.1, 96.6],
@@ -611,7 +624,7 @@ export const UNITS = Object.freeze({
   }),
   'DRK-Copters': Object.freeze({
     faction: 'Dark Energy', shape: 'Copters', role: 'Harasser',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
     hp: [180, 288, 432], dps: [50.4, 78.12, 115.92],
@@ -620,7 +633,7 @@ export const UNITS = Object.freeze({
   }),
   'DRK-Planes': Object.freeze({
     faction: 'Dark Energy', shape: 'Planes', role: 'Striker',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [135, 216, 324], dps: [58.8, 91.14, 135.24],
@@ -629,7 +642,7 @@ export const UNITS = Object.freeze({
   }),
   'DRK-Missiles': Object.freeze({
     faction: 'Dark Energy', shape: 'Missiles', role: 'Guided AA',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [90, 144, 216], dps: [75.6, 117.18, 173.88],
@@ -638,7 +651,7 @@ export const UNITS = Object.freeze({
   }),
   'GRN-Troops': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Troops', role: 'Skirmisher',
-    domain: 'Walker', armorClass: 'Organic', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
     hp: [164, 262.4, 393.6], dps: [44.1, 68.355, 101.43],
@@ -647,7 +660,7 @@ export const UNITS = Object.freeze({
   }),
   'GRN-Trucks': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Trucks', role: 'Support',
-    domain: 'Walker', armorClass: 'Organic', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
     hp: [205, 328, 492], dps: [14.7, 22.785, 33.81],
@@ -656,7 +669,7 @@ export const UNITS = Object.freeze({
   }),
   'GRN-Tanks': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Tanks', role: 'Bruiser',
-    domain: 'Walker', armorClass: 'Organic', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
     hp: [328, 524.8, 787.2], dps: [44.1, 68.355, 101.43],
@@ -665,7 +678,7 @@ export const UNITS = Object.freeze({
   }),
   'GRN-Artillery': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Artillery', role: 'Siege',
-    domain: 'Walker', armorClass: 'Organic', damageType: 'Concussion',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [123, 196.8, 295.2], dps: [58.8, 91.14, 135.24],
@@ -674,7 +687,7 @@ export const UNITS = Object.freeze({
   }),
   'GRN-HeavyTanks': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Heavy Tanks', role: 'Juggernaut',
-    domain: 'Walker', armorClass: 'Organic', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
     hp: [451, 721.6, 1082.4], dps: [36.75, 56.9625, 84.525],
@@ -683,7 +696,7 @@ export const UNITS = Object.freeze({
   }),
   'GRN-Copters': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Copters', role: 'Harasser',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [164, 262.4, 393.6], dps: [44.1, 68.355, 101.43],
@@ -692,7 +705,7 @@ export const UNITS = Object.freeze({
   }),
   'GRN-Planes': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Planes', role: 'Striker',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [123, 196.8, 295.2], dps: [51.45, 79.7475, 118.335],
@@ -701,7 +714,7 @@ export const UNITS = Object.freeze({
   }),
   'GRN-Missiles': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Missiles', role: 'Guided AA',
-    domain: 'Flyer', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [82, 131.2, 196.8], dps: [66.15, 102.532, 152.145],
@@ -781,7 +794,10 @@ function _laneFor(domain) {
 }
 function _buildWaves(units, onlyFaction) {
   const byFaction = {};
-  for (const id in units) { const f = units[id].faction; (byFaction[f] = byFaction[f] || []).push(id); }
+  for (const id in units) {
+    if (units[id].render_tier === 'C') continue;   // Tier C never enters the BULK wave rosters (spec §2/§5)
+    const f = units[id].faction; (byFaction[f] = byFaction[f] || []).push(id);
+  }
 
   // SINGLE-FACTION TEST: 8 escalating waves drawn only from the chosen faction (for testing that faction).
   if (onlyFaction) {
@@ -834,6 +850,17 @@ function _buildWaves(units, onlyFaction) {
   return waves;
 }
 export const WAVES = Object.freeze(_buildWaves(UNITS));
+
+// DATA-LOAD GATE (rendering-tiers spec §5): the tier contract is enforced the moment the tables load,
+// not just in CI — a Tier C type whose wave data can exceed MAX_LIVE_3D, or a unit without an explicit
+// render_tier, is a data bug that must fail loudly before a frame renders.
+{
+  const _v = validateRenderTiers(UNITS, [WAVES]);
+  if (!_v.ok) {
+    for (const err of _v.errors) console.error('[renderTiers]', err);
+    throw new Error('render-tier contract violated: ' + _v.errors[0]);
+  }
+}
 // Waves for a specific faction (test mode), or the mixed campaign when faction is falsy.
 export function makeWaves(faction) { return Object.freeze(_buildWaves(UNITS, faction || null)); }
 // The distinct factions in the roster (for the game's faction test-picker).
@@ -936,65 +963,65 @@ export const MAP = Object.freeze({
 // and structId mapping (structures).
 export const SYSTEM_UNITS = Object.freeze({
   'SYS-Harvester': Object.freeze({
-    name: 'Harvester', kind: 'harvester', faction: 'System', domain: 'Walker', role: 'Harvester',
+    name: 'Harvester', kind: 'harvester', faction: 'System', domain: 'Walker', render_tier: 'A', role: 'Harvester',
     armorClass: 'Vehicle', damageType: 'None', targets: 'None',
     hp: [120, 120, 120], dps: [0, 0, 0], range: 0.5, speed: 3, power: 0, cost: [500, 500, 500]
   }),
   'SYS-Base': Object.freeze({
     // the 3x3 BASE SHIP — author its art as one square image (it renders across the full 3x3
     // footprint in-game; the keep outline + HP bar + super-cannon turret stay on top)
-    name: 'Base Ship', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Base Ship',
+    name: 'Base Ship', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Base Ship',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [3000, 3000, 3000], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
   }),
   // TIER ART SLOTS — author how each defense LOOKS at upgrade tiers 2/3 (stats live in STRUCTURES)
   'SYS-Cannon-2': Object.freeze({
-    name: 'Cannon Tower (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Cannon Tower T2',
+    name: 'Cannon Tower (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Cannon Tower T2',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
   }),
   'SYS-Cannon-3': Object.freeze({
-    name: 'Cannon Tower (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Cannon Tower T3',
+    name: 'Cannon Tower (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Cannon Tower T3',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
   }),
   'SYS-Flak-2': Object.freeze({
-    name: 'Flak Tower (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Flak Tower T2',
+    name: 'Flak Tower (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Flak Tower T2',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
   }),
   'SYS-Flak-3': Object.freeze({
-    name: 'Flak Tower (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Flak Tower T3',
+    name: 'Flak Tower (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Flak Tower T3',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
   }),
   'SYS-Wall-2': Object.freeze({
-    name: 'Wall (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Wall T2',
+    name: 'Wall (Tier 2)', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Wall T2',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
   }),
   'SYS-Wall-3': Object.freeze({
-    name: 'Wall (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Wall T3',
+    name: 'Wall (Tier 3)', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Wall T3',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [0, 0, 0]
   }),
   'SYS-Cannon': Object.freeze({
-    name: 'Cannon Tower', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Cannon Tower',
+    name: 'Cannon Tower', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Cannon Tower',
     armorClass: 'Structure', damageType: 'Kinetic', targets: 'Ground',
     hp: [400, 640, 960], dps: [45, 70, 104], range: 4.5, speed: 0, power: 0, cost: [300, 750, 1500]
   }),
   'SYS-Flak': Object.freeze({
-    name: 'Flak Tower', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Flak Tower',
+    name: 'Flak Tower', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Flak Tower',
     armorClass: 'Structure', damageType: 'Kinetic', targets: 'Air',
     hp: [360, 576, 864], dps: [40, 62, 92], range: 5.5, speed: 0, power: 0, cost: [300, 750, 1500]
   }),
   'SYS-Wall': Object.freeze({
-    name: 'Wall', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Wall',
+    name: 'Wall', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Wall',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [600, 960, 1440], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [60, 150, 300]
   }),
   'SYS-Moat': Object.freeze({
-    name: 'Moat', kind: 'structure', faction: 'System', domain: 'Structure', role: 'Moat',
+    name: 'Moat', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Moat',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [400, 640, 960], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [80, 200, 400]
   }),

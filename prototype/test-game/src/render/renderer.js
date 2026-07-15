@@ -1,5 +1,9 @@
 import { getStructureDef, getUnitDef } from '../data/tables.js';
 import { hasArt, buildUnitSprite } from './unitArt.js';
+import { hasVoxel, buildVoxelUnit, updateVoxelUnit } from './voxel/loader.js';
+import { buildLive3D, updateLive3D } from './voxel/live3d.js';
+import { createProjectilePool } from './projectiles.js';
+import { getUnitDef } from '../data/tables.js';
 import { layerLean } from '../harness/camera.js';
 import { SPRITE_OVER_COLLISION } from '../harness/parts.js';
 import { TERRAIN_COLOR } from '../terrain/terrainGen.js';
@@ -226,6 +230,8 @@ export function createRenderer(app, map) {
       structHp: new PIXI.Graphics()
     },
     fxG: new PIXI.Graphics(),
+    // Tier A projectiles (rendering-tiers spec §4): pooled billboard sprites, one batched draw call.
+    projectiles: createProjectilePool(),
     fxItems: [],
     flames: [],            // live burning-wreck flame EMITTERS (particle-based, CSP-safe) — see spawnFlame/updateFlames
     shake: { time: 0, dur: 0, mag: 0 },
@@ -234,6 +240,9 @@ export function createRenderer(app, map) {
     // Authored unit ART: a retained sprite per live unit that has art (built lazily, keyed by unit.id),
     // sitting above the primitive Graphics. `unitArt` is set by main.js once loadUnitArt() resolves.
     unitArt: null,
+    // VOXEL unit packs (Stack Forge): takes precedence over authored art when a unit id has a pack.
+    // Set by main.js once loadVoxelUnits() resolves. Sprites share unitSprites (flagged with __vox).
+    voxelArt: null,
     unitSprites: new Map(),
     unitSpriteLayer: new PIXI.Container(),
     // Resource ART (crystal_resources sheet): a retained sprite per live node, keyed by node id.
@@ -248,6 +257,7 @@ export function createRenderer(app, map) {
   layers.units.addChild(renderer.cargoLayer);
   renderer.cargoSprites = new Map();                 // harvester id -> crystal sprite in its bed
   layers.air.addChild(renderer.dyn.air);
+  layers.fx.addChild(renderer.projectiles.container);   // shots under the burst/impact FX
   layers.fx.addChild(renderer.fxG);
   layers.overlay.addChild(renderer.dyn.overlay);
   layers.structHp.addChild(renderer.dyn.structHp);
@@ -439,8 +449,9 @@ function emitCombatFx(renderer, state) {
     const next = clock.get(id) || 0;
     if (now < next) return;
     clock.set(id, now + cadence * (0.85 + Math.random() * 0.3));
-    renderer.fxItems.push({ kind: 'shot', x: from.x, y: from.y, tx: to.x, ty: to.y,
-      speed: speed * t, color: color, shotKind: kind, age: 0, ttl: 2.5 });
+    // pooled sprite path (spec §4): billboard dot + streak, single batched draw, zero per-frame alloc
+    renderer.projectiles.spawn(from.x, from.y, to.x, to.y, speed * t,
+      color, kind, t * (kind === 'shell' ? 0.012 : 0.008) * 16);
   };
   const burn = (x, y, spread, size) => {
     renderer.fxItems.push({ kind: 'fire', x: x + (Math.random() * 2 - 1) * spread, y: y + (Math.random() * 2 - 1) * spread,
@@ -625,6 +636,20 @@ function updateFx(renderer) {
   g.clear();
   const t = renderer.tile;
   const dt = renderer._fxDt || FX_DT;   // REAL frame time so FX track the real-time sim
+  // Tier A projectiles (pooled sprites, zero per-frame alloc) fly here; the impact callback is
+  // EVENT-time — burst FX may allocate, the per-frame flight path never does. (spec §4)
+  renderer.projectiles.update(dt, (kind, tx, ty) => {
+    if (kind === 'flak') {
+      // AIR-BURST: grey puffs + cold flash at altitude
+      for (let k = 0; k < 4; k++) renderer.fxItems.push({ kind: 'smoke', x: tx + (Math.random() * 2 - 1) * t * 0.22,
+        y: ty + (Math.random() * 2 - 1) * t * 0.22, age: 0, ttl: 0.5, color: 0x3a3f45, size: t * 0.1, rise: t * 0.15 });
+      renderer.fxItems.push({ kind: 'flash', x: tx, y: ty, age: 0, ttl: 0.12, color: 0xcfe8ff });
+      spawnGlow(renderer, tx, ty, 0.55, 0.22, 0xbfe0ff);   // cool air-burst bloom
+    } else {
+      renderer.fxItems.push({ kind: 'flash', x: tx, y: ty, age: 0, ttl: 0.15, color: 0xffe6a0 });
+      if (kind === 'shell') { spawnSparks(renderer, tx, ty, 2); spawnGlow(renderer, tx, ty, 0.45, 0.2); }
+    }
+  });
 
   // camera shake: decays over its duration and offsets the whole board root (rebased on the
   // hybrid-growth camera position — see updateCamera)
@@ -723,32 +748,6 @@ function updateFx(renderer) {
       g.beginFill(col, 0.5 + 0.5 * b);
       g.drawCircle(fx.x, fx.y, t * 0.05 * (0.45 + b));
       g.endFill();
-    } else if (fx.kind === 'shot') {
-      // cosmetic projectile: flies to the captured target point; impact burst on arrival
-      const dx = fx.tx - fx.x, dy = fx.ty - fx.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const step = fx.speed * dt;
-      if (dist <= step || dist < 1e-6) {
-        fx.age = fx.ttl;   // done
-        if (fx.shotKind === 'flak') {
-          // AIR-BURST: grey puffs + cold flash at altitude
-          for (let k = 0; k < 4; k++) renderer.fxItems.push({ kind: 'smoke', x: fx.tx + (Math.random() * 2 - 1) * t * 0.22,
-            y: fx.ty + (Math.random() * 2 - 1) * t * 0.22, age: 0, ttl: 0.5, color: 0x3a3f45, size: t * 0.1, rise: t * 0.15 });
-          renderer.fxItems.push({ kind: 'flash', x: fx.tx, y: fx.ty, age: 0, ttl: 0.12, color: 0xcfe8ff });
-          spawnGlow(renderer, fx.tx, fx.ty, 0.55, 0.22, 0xbfe0ff);   // cool air-burst bloom
-        } else {
-          renderer.fxItems.push({ kind: 'flash', x: fx.tx, y: fx.ty, age: 0, ttl: 0.15, color: 0xffe6a0 });
-          if (fx.shotKind === 'shell') { spawnSparks(renderer, fx.tx, fx.ty, 2); spawnGlow(renderer, fx.tx, fx.ty, 0.45, 0.2); }
-        }
-      } else {
-        fx.x += dx / dist * step; fx.y += dy / dist * step;
-        g.lineStyle(Math.max(1, t * 0.045), fx.color, 0.8);   // motion streak
-        g.moveTo(fx.x, fx.y); g.lineTo(fx.x - dx / dist * t * 0.28, fx.y - dy / dist * t * 0.28);
-        g.lineStyle(0);
-        g.beginFill(fx.color, 0.95);
-        g.drawCircle(fx.x, fx.y, t * (fx.shotKind === 'shell' ? 0.09 : 0.06));
-        g.endFill();
-      }
     } else if (fx.kind === 'reticle') {
       // pulsing target where the super-cannon will land (aim telegraph)
       const pulse = 0.5 + 0.5 * Math.sin(fx.age * 9);
@@ -1014,6 +1013,75 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       // AUTHORED ART: draw a retained sprite part-stack (built lazily, cached by unit id) — so you can SEE
       // which unit/faction is attacking. Units without art fall through to the coloured primitive below.
       const artId = u.artKey || u.unitId;   // the harvester borrows truck STATS but owns its ART slot
+      // VOXEL PACKS (Stack Forge) take precedence: a body that snaps to N facings + a turret that aims
+      // smoothly from the baked angle cache. Pure texture swaps on retained sprites — no container
+      // rotation (the facing IS the frame), so the mount math matches the Forge preview exactly.
+      if (renderer.voxelArt && hasVoxel(renderer.voxelArt, artId)) {
+        const tier = (getUnitDef(artId) || {}).render_tier || 'A';
+        let spr = renderer.unitSprites.get(u.id);
+        if (spr && !spr.__vox && !spr.__live3d) {   // was authored art before the pack loaded — rebuild
+          if (spr.parent) spr.parent.removeChild(spr);
+          spr.destroy({ children: true }); renderer.unitSprites.delete(u.id); spr = null;
+        }
+        if (!spr) {
+          // Tier C (spec §3C): live 3D model — buildLive3D returns null past the §5 cap or when the
+          // pack embeds no model, and the unit then renders on the baked Tier B path instead.
+          if (tier === 'C') spr = buildLive3D(renderer.voxelArt.units[artId].pack, t, Math.min(u.radius || 0.3, 0.75), SPRITE_OVER_COLLISION);
+          if (!spr) spr = buildVoxelUnit(renderer.voxelArt, artId, t, Math.min(u.radius || 0.3, 0.75), SPRITE_OVER_COLLISION);
+          if (spr) { renderer.unitSpriteLayer.addChild(spr); renderer.unitSprites.set(u.id, spr); }
+        }
+        if (spr) {
+          const pa = cellToLocal(renderer, u.pos.x, u.pos.y);
+          const flyLift = (u.domain === 'Flyer' ? t * 0.35 : 0);
+          spr.x = pa.x; spr.y = pa.y - flyLift;
+          spr.visible = true;
+          // heading: real displacement first, waypoint only when barely moving (same as the authored
+          // path) — but as a WORLD angle (+X = east), the bake's bucket-0 convention. No facing offset.
+          let hx = 0, hy = 0;
+          const wp = (u.path && u.pathIdx < u.path.length) ? u.path[u.pathIdx] : null;
+          let mvx = 0, mvy = 0;
+          if (u._px != null) { mvx = u.pos.x - u._px; mvy = u.pos.y - u._py; }
+          if (mvx * mvx + mvy * mvy > 0.00002) { hx = mvx; hy = mvy; }
+          else if (wp) { hx = wp.x - u.pos.x; hy = wp.y - u.pos.y; }
+          if (hx * hx + hy * hy > 1e-4) {
+            const want = Math.atan2(hy, hx);
+            spr.__heading = (spr.__heading == null) ? want : approachAngle(spr.__heading, want, 0.3);
+          }
+          const heading = spr.__heading || 0;
+          spr.__facing = heading + UNIT_FACING_OFFSET;   // cargo/debug readers expect the sprite convention
+          // turret AIM: at the live combat target when there is one, else relax back to the heading
+          let aim = heading;
+          const tid = u.targetId;
+          if (tid !== null && tid !== undefined) {
+            const tgt = (tid === -1) ? (state.base || null)
+              : (state.units.get(tid) || (state.structures && state.structures.get(tid)) || null);
+            if (tgt && tgt.pos) aim = Math.atan2(tgt.pos.y - u.pos.y, tgt.pos.x - u.pos.x);
+          }
+          spr.__aim = (spr.__aim == null) ? aim : approachAngle(spr.__aim, aim, 0.35);
+          // BANK from the turn rate — Tier B's whole trick, and Tier C's roll input (spec §3B/§3C)
+          let dHead = (spr.__prevHeading == null) ? 0 : heading - spr.__prevHeading;
+          dHead = Math.atan2(Math.sin(dHead), Math.cos(dHead));
+          spr.__prevHeading = heading;
+          const dtF = renderer._fxDt || FX_DT;
+          const wantBank = Math.max(-0.6, Math.min(0.6, (dHead / Math.max(dtF, 1 / 240)) * 0.22));
+          spr.__bank = (spr.__bank == null) ? 0 : spr.__bank + (wantBank - spr.__bank) * 0.12;
+          if (spr.__live3d) {
+            updateLive3D(spr, heading, 0, spr.__bank);               // Tier C: REAL roll on the live model
+          } else {
+            updateVoxelUnit(spr, heading, spr.__aim);
+            if (tier !== 'A' && u.domain === 'Flyer') {              // Tier B: pure screen-space sprite
+              spr.rotation = spr.__bank * 0.45;                      // transform — a matrix multiply that
+              spr.skew.x = spr.__bank * 0.3;                         // stays inside the batch (spec §3B)
+            }
+          }
+          // ground shadow at the contact point + hp bar — same contract as the authored path
+          gU.beginFill(0x000000, 0.26);
+          gU.drawEllipse(pa.x, pa.y + t * 0.06, t * (u.radius || 0.3) * 0.62, t * (u.radius || 0.3) * 0.31);
+          gU.endFill();
+          drawHpBar((u.domain === 'Flyer' ? gA : gU), pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
+          continue;   // voxel sprite drawn — skip authored art and the primitive
+        }
+      }
       if (renderer.unitArt && hasArt(renderer.unitArt, artId) && !(renderer._noArt && renderer._noArt.has(artId))) {
         let spr = renderer.unitSprites.get(u.id);
         if (!spr) {

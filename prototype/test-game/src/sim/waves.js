@@ -1,7 +1,17 @@
 import { WAVES, MAP, getUnitDef } from '../data/tables.js';
+import { MAX_LIVE_3D } from '../data/renderTiers.js';
 import { createUnit, unitRadius } from './entities.js';
 import { emitEvent, contactDistR, REST_RATIO } from './core.js';
 import { resetFleetForWave } from './harvest.js';
+
+// Live Tier C (live-3D render) attackers on the field right now — the §5 sparsity cap counts these.
+function liveTierCCount(state) {
+  let n = 0;
+  for (const u of state.units.values()) {
+    if (u && u.hp > 0 && (getUnitDef(u.unitId) || {}).render_tier === 'C') n++;
+  }
+  return n;
+}
 
 /**
  * Wave scheduler.
@@ -262,6 +272,14 @@ export function stepWaves(state, dt) {
           w.pendingSpawns[i].time = state.time + dt;
         }
       }
+      w.pendingSpawns.sort(function (a, b) { return (a.time - b.time) || (a.seq - b.seq); });
+      continue;
+    }
+    // TIER C SPARSITY CAP (rendering-tiers spec §5, hard rule): a live-3D unit may never spawn past
+    // MAX_LIVE_3D simultaneous instances. QUEUE, don't drop — the spawn re-tries each tick and emits
+    // as soon as an existing Tier C unit dies. Deterministic (pure sim state), replay-safe.
+    if ((getUnitDef(head.unitId) || {}).render_tier === 'C' && liveTierCCount(state) >= MAX_LIVE_3D) {
+      head.time = state.time + dt;
       w.pendingSpawns.sort(function (a, b) { return (a.time - b.time) || (a.seq - b.seq); });
       continue;
     }

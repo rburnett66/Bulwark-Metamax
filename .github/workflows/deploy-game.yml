@@ -18,7 +18,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    # Data-contract gates (rendering-tiers spec §5): a Tier C unit whose wave data can exceed
+    # MAX_LIVE_3D, or a unit without an explicit render_tier, fails the build before it ships.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test prototype/test-game/src/data/renderTiers.test.mjs prototype/test-game/src/render/voxel/pack.test.mjs
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     environment:
       name: github-pages
