@@ -124,7 +124,7 @@ export function buildVoxelUnit(store, id, tilePx, radius, spriteOverCollision) {
   const shBody = parts.body ? mkShadow(parts.body, 0.24) : null;
   const shTurret = parts.turret ? mkShadow(parts.turret, 0.16) : null;
   if (shTurret) {
-    shTurret.__gx = shOffX * 1.6; shTurret.__gy = shOffY * 1.6;     // higher part → longer cast
+    shTurret.__gx = shOffX * 1.15; shTurret.__gy = shOffY * 1.15;   // higher part → slightly longer cast
     shTurret.position.set(shTurret.__gx, shTurret.__gy);
   }
   if (shBody) c.addChild(shBody);                                   // ground shadow
