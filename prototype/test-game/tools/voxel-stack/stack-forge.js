@@ -271,23 +271,33 @@ $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').t
 $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
 $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.cls = b.dataset.c; [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
 
-// ── orthographic view pickers: build 4 thumbnails per part, wire the hidden file inputs ──
+// ── orthographic view pickers: 4 thumbnails per part; click to browse OR hover + Ctrl+V to paste ──
 const VIEWS = ['top', 'side', 'front', 'back'];
 document.querySelectorAll('.views').forEach((box) => {
   box.innerHTML = VIEWS.map((v) => `<label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="48" height="40"></canvas><span>${v[0].toUpperCase() + v.slice(1)}</span><input type="file" accept="image/*"></label>`).join('');
 });
-document.querySelectorAll('.vpick input').forEach((inp) => inp.addEventListener('change', (e) => {
-  const pick = inp.closest('.vpick'), part = pick.dataset.part, view = pick.dataset.view, file = e.target.files[0];
-  if (!file) return;
-  const im = new Image();
-  im.onload = () => {
-    imgs[part][view] = im;
-    const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 48, 40); g.drawImage(im, 0, 0, 48, 40);
-    pick.classList.add('set'); rebuildSlices();
-  };
-  im.onerror = () => alert('Could not load that image — PNG/JPEG?');
-  im.src = URL.createObjectURL(file);
-}));
+function setView(pick, im) {
+  imgs[pick.dataset.part][pick.dataset.view] = im;
+  const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 48, 40); g.drawImage(im, 0, 0, 48, 40);
+  pick.classList.add('set'); rebuildSlices();
+}
+let pasteTarget = null;
+document.querySelectorAll('.vpick').forEach((pick) => {
+  pick.addEventListener('mouseenter', () => { pasteTarget = pick; document.querySelectorAll('.vpick').forEach((p) => p.classList.toggle('active', p === pick)); });
+  pick.querySelector('input').addEventListener('change', (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const im = new Image(); im.onload = () => setView(pick, im); im.onerror = () => alert('Could not load that image — PNG/JPEG?'); im.src = URL.createObjectURL(file);
+  });
+});
+// paste an image from the clipboard into the hovered/active view slot
+document.addEventListener('paste', (e) => {
+  const items = (e.clipboardData && e.clipboardData.items) || [];
+  for (const it of items) if (it.type && it.type.indexOf('image') === 0) {
+    const file = it.getAsFile(); if (!file || !pasteTarget) return;
+    const im = new Image(); im.onload = () => setView(pasteTarget, im); im.src = URL.createObjectURL(file);
+    e.preventDefault(); return;
+  }
+});
 
 $('setCam').onclick = () => {
   $('camState').innerHTML = `<span class="lock">✓ Camera set — azimuth ${state.az | 0}° · elevation ${state.el | 0}° · SP ${elevationToSP(state.el | 0, SP_MAX)}</span>`;
