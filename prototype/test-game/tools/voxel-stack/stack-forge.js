@@ -75,7 +75,8 @@ function drawFit(ctx, img, w, h) {
 // background-coloured pixels. Only bg actually connected to the edge is removed, so it works when the
 // object runs off an edge (tank tracks) AND when bg floats between object parts (above/below a barrel) —
 // the flood reaches those pockets from the border and stops at the object outline. Feathers the AA edge.
-function keyBackground(data, w, h) {
+function keyBackground(data, w, h, tol) {
+  tol = tol || 75;                                                   // cutout sensitivity (per-image, tunable)
   const c = (x, y) => { const i = (y * w + x) * 4; return [data[i], data[i + 1], data[i + 2], data[i + 3]]; };
   const cs = [c(0, 0), c(w - 1, 0), c(0, h - 1), c(w - 1, h - 1)];
   const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
@@ -85,32 +86,43 @@ function keyBackground(data, w, h) {
   if (!seed) return;                                                 // no opaque border colour → leave as-is
   const kr = seed[0], kg = seed[1], kb = seed[2];
   const near = (p) => Math.abs(data[p * 4] - kr) + Math.abs(data[p * 4 + 1] - kg) + Math.abs(data[p * 4 + 2] - kb);
-  const N = w * h, vis = new Uint8Array(N), st = [], TOL = 75;
-  const push = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const p = y * w + x; if (!vis[p] && near(p) < TOL) { vis[p] = 1; st.push(p); } };
+  const N = w * h, vis = new Uint8Array(N), st = [];
+  const hard = tol * 0.8, soft = tol * 1.75, span = Math.max(1, soft - hard);   // feather band scales with tol
+  const push = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const p = y * w + x; if (!vis[p] && near(p) < tol) { vis[p] = 1; st.push(p); } };
   for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }        // seed the whole border
   for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
   while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1); }
   for (let p = 0; p < N; p++) {
     if (vis[p]) { data[p * 4 + 3] = 0; continue; }                   // flooded background → transparent
     const d = near(p);                                              // feather AA pixels touching removed bg
-    if (d < 130) {
+    if (d < soft) {
       const x = p % w, y = (p / w) | 0;
       if ((x > 0 && vis[p - 1]) || (x < w - 1 && vis[p + 1]) || (y > 0 && vis[p - w]) || (y < h - 1 && vis[p + w]))
-        data[p * 4 + 3] = d < 60 ? 0 : Math.min(data[p * 4 + 3], Math.round((d - 60) / 70 * 255));
+        data[p * 4 + 3] = d < hard ? 0 : Math.min(data[p * 4 + 3], Math.round((d - hard) / span * 255));
     }
   }
 }
-// raster an image at native size and knock out its background → a canvas with clean alpha.
-function keyedCanvas(img) {
+// raster an image at native size and knock out its background → a canvas with clean alpha. Optional polygon
+// shapes ({ pts:[[x,y]…], cut }) then edit the result: KEEP shapes union into the subject (everything outside
+// all keeps is removed), CUT shapes punch holes. Keying runs FIRST (the flood needs the real image borders).
+function keyedCanvas(img, tol, polys) {
   const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
   const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
-  const id = g.getImageData(0, 0, cv.width, cv.height); keyBackground(id.data, cv.width, cv.height); g.putImageData(id, 0, 0);
+  const id = g.getImageData(0, 0, cv.width, cv.height); keyBackground(id.data, cv.width, cv.height, tol); g.putImageData(id, 0, 0);
+  if (polys && polys.length) {
+    const trace = (list) => { g.beginPath();
+      for (const q of list) { g.moveTo(q.pts[0][0], q.pts[0][1]); for (let i = 1; i < q.pts.length; i++) g.lineTo(q.pts[i][0], q.pts[i][1]); g.closePath(); } g.fill(); };
+    const keeps = polys.filter((q) => !q.cut && q.pts.length >= 3), cuts = polys.filter((q) => q.cut && q.pts.length >= 3);
+    if (keeps.length) { g.globalCompositeOperation = 'destination-in'; trace(keeps); }
+    if (cuts.length) { g.globalCompositeOperation = 'destination-out'; trace(cuts); }
+    g.globalCompositeOperation = 'source-over';
+  }
   return cv;
 }
 // keyed + CROPPED to the content bounding box — so empty margins and the raw image aspect ratio don't
 // distort registration (a long-barrel side view maps its CONTENT, not the whole rectangle).
-function keyedCropped(img) {
-  const k = keyedCanvas(img), d = k.getContext('2d').getImageData(0, 0, k.width, k.height).data;
+function keyedCropped(img, tol, poly) {
+  const k = keyedCanvas(img, tol, poly), d = k.getContext('2d').getImageData(0, 0, k.width, k.height).data;
   let x0 = k.width, y0 = k.height, x1 = -1, y1 = -1;
   for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
   if (x1 < x0) return k;
@@ -249,9 +261,10 @@ function buildVolume(partId, foot, layers) {
   }
   // crop every view to its content, then register by a COMMON scale taken from the top's fit — so the
   // side's height maps PROPORTIONALLY (a long-barrel side doesn't get stretched vertically to fill layers).
-  const topC = src.top ? keyedCropped(src.top) : null;
-  const sideC = src.side ? keyedCropped(src.side) : null;
-  const frontC = src.front ? keyedCropped(src.front) : (src.back ? keyedCropped(src.back) : null);
+  const tol = keyTolState[partId], pol = polyState[partId];
+  const topC = src.top ? keyedCropped(src.top, tol.top, pol.top) : null;
+  const sideC = src.side ? keyedCropped(src.side, tol.side, pol.side) : null;
+  const frontC = src.front ? keyedCropped(src.front, tol.front, pol.front) : (src.back ? keyedCropped(src.back, tol.back, pol.back) : null);
   const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
   // procedural barrel reserves a FORWARD margin so the body shrinks back and the tube protrudes past it
   const reach = (partId === 'turret' && state.barrelLen > 0) ? state.barrelLen : 0;
@@ -281,7 +294,7 @@ function buildVolume(partId, foot, layers) {
   const Hv = Math.min(layers, Math.max(1, Math.round(Hraw)));
   const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to front)
   const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
-  const backC = src.back ? keyedCropped(src.back) : null;           // colour-only: paints the −x walls
+  const backC = src.back ? keyedCropped(src.back, tol.back, pol.back) : null; // colour-only: paints the −x walls
   const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
   const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= 0 && z < Hv && !!sideG.m[z * bw + (x - ox)]) : z < Hv;
   const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= 0 && z < Hv && !!frontG.m[z * bh + (y - oy)]) : z < Hv;
@@ -592,6 +605,8 @@ const imgs = { body: { top: null, side: null, front: null, back: null }, turret:
 const mkViews = (v) => ({ top: v(), side: v(), front: v(), back: v() });
 const srcImg = { body: mkViews(() => null), turret: mkViews(() => null) };
 const flipState = { body: mkViews(() => ({ h: false, v: false })), turret: mkViews(() => ({ h: false, v: false })) };
+const keyTolState = { body: mkViews(() => 75), turret: mkViews(() => 75) };   // per-image cutout sensitivity
+const polyState = { body: mkViews(() => null), turret: mkViews(() => null) }; // per-image polygon cutout ([x,y] px)
 function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
@@ -792,10 +807,11 @@ $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) ret
 // ── orthographic view pickers: 4 thumbnails per part; click to browse OR hover + Ctrl+V to paste ──
 const VIEWS = ['top', 'side', 'front', 'back'];
 document.querySelectorAll('.views').forEach((box) => {
-  box.innerHTML = VIEWS.map((v) => `<div class="vslot"><label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="128" height="84"></canvas><input type="file" accept="image/*"></label><div class="vmeta"><span>${v[0].toUpperCase() + v.slice(1)}</span><span class="fl"><button type="button" class="flip" data-axis="h" title="Flip horizontal">⇔</button><button type="button" class="flip" data-axis="v" title="Flip vertical">⇕</button></span></div></div>`).join('');
+  box.innerHTML = VIEWS.map((v) => `<div class="vslot"><label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="128" height="84"></canvas><input type="file" accept="image/*"></label><div class="vmeta"><span>${v[0].toUpperCase() + v.slice(1)}</span><span class="fl"><button type="button" class="flip keybtn" title="Tune cutout outline">✂</button><button type="button" class="flip" data-axis="h" title="Flip horizontal">⇔</button><button type="button" class="flip" data-axis="v" title="Flip vertical">⇕</button></span></div></div>`).join('');
   box.addEventListener('click', (e) => {
     const btn = e.target.closest('.flip'); if (!btn) return;
     e.preventDefault(); const pick = btn.closest('.vslot').querySelector('.vpick');
+    if (btn.classList.contains('keybtn')) { openKeyModal(pick.dataset.part, pick.dataset.view); return; }
     toggleFlip(pick.dataset.part, pick.dataset.view, btn.dataset.axis);
   });
 });
@@ -804,6 +820,7 @@ function setView(pick, im) {
   const part = pick.dataset.part, view = pick.dataset.view;
   voxPart[part] = null;                                                       // photos override an imported .vox
   srcImg[part][view] = im; flipState[part][view] = { h: false, v: false };   // new image → clear flips
+  keyTolState[part][view] = 75; polyState[part][view] = null;                // …and reset the cutout tuning
   renderView(pick);
 }
 function renderView(pick) {
@@ -811,18 +828,109 @@ function renderView(pick) {
   if (!src) return;
   const fl = flipState[part][view], im = (fl.h || fl.v) ? flipCanvas(src, fl.h, fl.v) : src;
   imgs[part][view] = im;
-  const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 128, 84); drawFit(g, keyedCanvas(im), 128, 84);
+  const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 128, 84); drawFit(g, keyedCanvas(im, keyTolState[part][view], polyState[part][view]), 128, 84);
   pick.classList.add('set'); updateFlipBtns(pick); rebuildSlices();
 }
 function toggleFlip(part, view, axis) {
   if (!srcImg[part][view]) return;
-  flipState[part][view][axis] = !flipState[part][view][axis]; renderView(pickFor(part, view));
+  flipState[part][view][axis] = !flipState[part][view][axis];
+  const polys = polyState[part][view], im = srcImg[part][view];              // keep the shapes on the subject
+  if (polys) for (const q of polys) for (const p of q.pts) { if (axis === 'h') p[0] = im.width - 1 - p[0]; else p[1] = im.height - 1 - p[1]; }
+  renderView(pickFor(part, view));
 }
 function updateFlipBtns(pick) {
   const fl = flipState[pick.dataset.part][pick.dataset.view], slot = pick.closest('.vslot'); if (!slot) return;
   slot.querySelector('.flip[data-axis="h"]').classList.toggle('on', fl.h);
   slot.querySelector('.flip[data-axis="v"]').classList.toggle('on', fl.v);
 }
+// ── cutout tuner: modal with a live keyed preview, per-image sensitivity slider + polygon shapes.
+// workPolys = closed shapes ({pts, cut}); workPoly = the shape being drawn; polyCut = mode for it. ──
+let keyTarget = null, workPolys = [], workPoly = [], polyDrawing = false, polyCut = false, keyScale = 1;
+const clonePolys = (list) => list.map((q) => ({ cut: !!q.cut, pts: q.pts.map((p) => p.slice()) }));
+function syncPolyBtns() {
+  $('keyPoly').classList.toggle('on', polyDrawing);
+  $('keyPoly').textContent = polyDrawing ? '✏ Click points… (click 1st to close)' : '✏ Draw polygon';
+  $('keyPolyInv').classList.toggle('on', polyCut);
+  $('keyPolyInv').textContent = polyCut ? '➖ Cut inside' : '➕ Keep inside';
+  $('keyCanvas').style.cursor = polyDrawing ? 'crosshair' : 'default';
+}
+function openKeyModal(part, view) {
+  if (!imgs[part][view]) return;                                   // nothing loaded in this slot yet
+  keyTarget = { part, view };
+  $('keyTitle').textContent = (part === 'body' ? 'base' : part) + ' · ' + view;
+  $('keyTol').value = keyTolState[part][view]; $('keyTolV').textContent = keyTolState[part][view];
+  workPolys = clonePolys(polyState[part][view] || []);
+  workPoly = []; polyDrawing = false; polyCut = false; syncPolyBtns();
+  renderKeyPreview();
+  $('keyModal').hidden = false;
+}
+function renderKeyPreview() {
+  const im = imgs[keyTarget.part][keyTarget.view];
+  const maxW = Math.min(1440, window.innerWidth * 0.86), maxH = Math.min(1020, window.innerHeight * 0.72);
+  const cv = $('keyCanvas'), s = keyScale = Math.min(maxW / im.width, maxH / im.height, 12);
+  cv.width = Math.max(1, Math.round(im.width * s)); cv.height = Math.max(1, Math.round(im.height * s));
+  const g = cv.getContext('2d'); g.imageSmoothingEnabled = s < 1;
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.drawImage(keyedCanvas(im, +$('keyTol').value, workPolys), 0, 0, cv.width, cv.height);
+  const d = g.getImageData(0, 0, cv.width, cv.height).data, w = cv.width, hh = cv.height;   // outline overlay
+  const solid = (x, y) => x >= 0 && x < w && y >= 0 && y < hh && d[(y * w + x) * 4 + 3] > 40;
+  g.fillStyle = '#ff4fd8';
+  for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++)
+    if (solid(x, y) && (!solid(x - 1, y) || !solid(x + 1, y) || !solid(x, y - 1) || !solid(x, y + 1))) g.fillRect(x, y, 1, 1);
+  const drawPoly = (pts, closed, col) => {                         // shape paths + vertex handles
+    g.lineWidth = 1.5; g.strokeStyle = col;
+    g.beginPath(); g.moveTo(pts[0][0] * s, pts[0][1] * s);
+    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0] * s, pts[i][1] * s);
+    if (closed) g.closePath();
+    g.stroke();
+    g.fillStyle = col;
+    for (const p of pts) g.fillRect(p[0] * s - 2, p[1] * s - 2, 4, 4);
+  };
+  for (const q of workPolys) drawPoly(q.pts, true, q.cut ? '#e0625f' : '#f2c869');
+  if (workPoly.length) {
+    drawPoly(workPoly, false, polyCut ? '#e0625f' : '#f2c869');
+    g.strokeStyle = '#ff4fd8'; g.strokeRect(workPoly[0][0] * s - 4, workPoly[0][1] * s - 4, 8, 8);
+  }
+}
+$('keyCanvas').addEventListener('click', (e) => {
+  if (!polyDrawing) return;
+  const cv = $('keyCanvas'), r = cv.getBoundingClientRect(), css = cv.width / r.width;    // CSS px → canvas px
+  const x = (e.clientX - r.left) * css / keyScale, y = (e.clientY - r.top) * css / keyScale;
+  if (workPoly.length >= 3) {                                      // close by clicking the first point…
+    const dx = (workPoly[0][0] - x) * keyScale, dy = (workPoly[0][1] - y) * keyScale;
+    if (dx * dx + dy * dy < 120) {                                 // …and stay in draw mode for the next shape
+      workPolys.push({ pts: workPoly, cut: polyCut }); workPoly = [];
+      renderKeyPreview(); return;
+    }
+  }
+  workPoly.push([x, y]); renderKeyPreview();
+});
+$('keyPoly').onclick = () => {
+  polyDrawing = !polyDrawing; if (!polyDrawing) workPoly = [];     // toggle off = abandon the unfinished shape
+  syncPolyBtns(); renderKeyPreview();
+};
+$('keyPolyInv').onclick = () => { polyCut = !polyCut; syncPolyBtns(); renderKeyPreview(); };
+$('keyPolyUndo').onclick = () => {
+  if (workPoly.length) workPoly.pop(); else workPolys.pop();       // last point first, then whole shapes
+  renderKeyPreview();
+};
+$('keyPolyClear').onclick = () => { workPolys = []; workPoly = []; renderKeyPreview(); };
+$('keyTol').oninput = () => { $('keyTolV').textContent = $('keyTol').value; renderKeyPreview(); };
+$('keyApply').onclick = () => {
+  keyTolState[keyTarget.part][keyTarget.view] = +$('keyTol').value;
+  polyState[keyTarget.part][keyTarget.view] = workPolys.length ? clonePolys(workPolys) : null;
+  $('keyModal').hidden = true;
+  renderView(pickFor(keyTarget.part, keyTarget.view));             // re-key the thumb + re-carve the model
+};
+$('keyCancel').onclick = () => { $('keyModal').hidden = true; };
+$('keyModal').addEventListener('click', (e) => { if (e.target === $('keyModal')) $('keyModal').hidden = true; });
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || $('keyModal').hidden) return;
+  if (workPoly.length) { workPoly = []; renderKeyPreview(); }      // cancel the unfinished shape…
+  else if (polyDrawing) { polyDrawing = false; syncPolyBtns(); renderKeyPreview(); }   // …then exit draw mode…
+  else $('keyModal').hidden = true;                                // …then close the dialog
+});
+
 let pasteTarget = null;
 document.querySelectorAll('.vpick').forEach((pick) => {
   pick.addEventListener('mouseenter', () => { pasteTarget = pick; document.querySelectorAll('.vpick').forEach((p) => p.classList.toggle('active', p === pick)); });
@@ -986,5 +1094,5 @@ function selectUnit(id) {
 }
 
 syncInputs(); renderManifest(); layout(); update(); updateGamePreview(); initFactions();
-window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, buildModel, buildFaces, renderParts, drawScene, keyedCropped, gridStretch, parseVox, voxPart, fitToVox, collectVox, writeVox, exportVox, setGSpin, resizePreview, setZoom,
+window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, buildModel, buildFaces, renderParts, drawScene, keyedCropped, gridStretch, parseVox, voxPart, fitToVox, collectVox, writeVox, exportVox, setGSpin, resizePreview, setZoom, keyTolState, polyState, openKeyModal,
   gdbg: () => ({ baked: !!state.baked, gbaked: !!gBodyBaked, gvis: gBodyBaked && gBodyBaked.visible, gkids: gUnit.children.length }) };   // debug/test hook

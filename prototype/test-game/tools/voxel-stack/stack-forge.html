@@ -75,6 +75,14 @@
     .manifest { font-size:11px; }
     .manifest .u { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #1a2a3a; }
     .manifest .u b { color:var(--gold); }
+    #keyModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
+    #keyModal[hidden] { display:none; }
+    #keyBox { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 20px; width:min(1620px, 94vw); max-height:94vh; overflow:auto; box-shadow:0 18px 60px rgba(0,0,0,.6); }
+    #keyBox h2 { font-size:11px; letter-spacing:.18em; color:var(--muted); margin:0 0 4px; text-transform:uppercase; }
+    #keyBox h2 span { color:var(--gold); }
+    #keyCanvas { display:block; margin:8px auto 10px; max-width:100%; border:1px solid var(--line); border-radius:6px;
+      background:repeating-conic-gradient(#20242e 0 25%, #171a22 0 50%) 0 0/14px 14px; }
+    #keyBox button.on { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:#d9a441; }
   </style>
   <script src="../../vendor/pixi.min.js"></script>
 </head>
@@ -182,6 +190,25 @@
 
       </div>
     </div>
+  </div>
+</div>
+<div id="keyModal" hidden>
+  <div id="keyBox">
+    <h2>Tune cutout — <span id="keyTitle"></span></h2>
+    <canvas id="keyCanvas" width="460" height="320"></canvas>
+    <div class="row"><label>Sensitivity</label><input type="range" id="keyTol" min="5" max="220" value="75"><span class="val" id="keyTolV">75</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="ghost" id="keyPoly">✏ Draw polygon</button>
+      <button class="ghost" id="keyPolyInv">➕ Keep inside</button>
+      <button class="ghost" id="keyPolyUndo">↩ Undo</button>
+      <button class="ghost" id="keyPolyClear">✕ Clear</button>
+    </div>
+    <div class="note" style="margin:0 0 8px">Sensitivity: higher removes more background (looser match to the border colour),
+      lower keeps more edge pixels. <b>Polygons</b>: click to place points, click the first point to close a shape, draw as many
+      as you need. <b style="color:#f2c869">Keep</b> shapes union into the subject (everything outside all keeps is cut);
+      <b style="color:#e0625f">Cut</b> shapes remove what's inside them. Toggle the mode button before closing a shape.
+      Esc cancels an unfinished shape. The magenta line is the final cutout outline the carve + wall painting will use.</div>
+    <div style="display:flex;gap:8px"><button id="keyApply">Apply</button><button class="ghost" id="keyCancel">Cancel</button></div>
   </div>
 </div>
 <script src="stack-forge.js"></script>
