@@ -83,6 +83,11 @@
     #keyCanvas { display:block; margin:8px auto 10px; max-width:100%; border:1px solid var(--line); border-radius:6px;
       background:repeating-conic-gradient(#20242e 0 25%, #171a22 0 50%) 0 0/14px 14px; }
     #keyBox button.on { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:#d9a441; }
+    #saveAsModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
+    #saveAsModal[hidden] { display:none; }
+    #saveAsBox { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; width:380px; max-width:92vw; box-shadow:0 18px 60px rgba(0,0,0,.6); }
+    #saveAsBox h2 { font-size:11px; letter-spacing:.18em; color:var(--muted); margin:0 0 6px; text-transform:uppercase; }
+    #saveAsBox h2 span { color:var(--gold); }
   </style>
   <script src="../../vendor/pixi.min.js"></script>
 </head>
@@ -198,6 +203,18 @@
 
       </div>
     </div>
+  </div>
+</div>
+<div id="saveAsModal" hidden>
+  <div id="saveAsBox">
+    <h2>Save unit — <span id="saveAsTitle"></span></h2>
+    <div class="note" style="margin:0 0 10px">Save the model you're looking at as this unit? The tool sets the id,
+      bakes the angle cache with the current camera + bake settings, and writes the pack to the units manifest —
+      reload the game and the unit is in. You can keep editing afterwards.</div>
+    <button id="saveAsSprites">💾 Save as sprites (baked)</button>
+    <button class="ghost" id="saveAs3D" style="margin-top:6px">🧊 Save as 3D (live voxel model + baked fallback)</button>
+    <button class="ghost" id="saveAsEdit" style="margin-top:6px">✎ Just switch to this id (no save)</button>
+    <button class="ghost" id="saveAsCancel" style="margin-top:6px">Cancel</button>
   </div>
 </div>
 <div id="keyModal" hidden>

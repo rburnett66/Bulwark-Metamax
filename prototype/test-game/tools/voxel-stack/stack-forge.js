@@ -961,7 +961,7 @@ $('setCam').onclick = () => {
 };
 
 // ── BAKE ──
-$('bake').onclick = () => {
+function doBake() {
   const foot = state.foot, bL = state.bodyLayers, tL = state.turretLayers, sp = layerSp(state.el), B = state.bakeScale;
   const pivotPx = foot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
   const g = geom(foot, Math.max(bL, tL), sp, pivotPx);   // shared texture sized for the taller stack; both bottom-align at BASEY
@@ -976,7 +976,8 @@ $('bake').onclick = () => {
   const vram = ((g.RTW * B * g.RTH * B * 4 * (BODY_FRAMES + TURRET_FRAMES)) / 1048576).toFixed(1);
   $('bakeState').innerHTML = `<span class="lock">✓ Baked in ${(performance.now() - t0).toFixed(0)}ms · ${g.RTW * B}×${g.RTH * B} · ~${vram}MB cache</span>`;
   $('saveUnit').disabled = false; $('dlSheet').disabled = false;
-};
+}
+$('bake').onclick = doBake;
 
 // pack a part's baked frames into one atlas canvas (grid), return { canvas, cols, cell:[w,h] }
 function packAtlas(cache) {
@@ -1025,7 +1026,7 @@ function renderManifest() {
     ? ids.map((id) => `<div class="u"><b>${id}</b><span>${m.units[id].pack.class} · ${m.units[id].pack.footprint.join('×')}</span></div>`).join('')
     : 'No units saved yet.';
 }
-$('saveUnit').onclick = () => {
+function doSaveUnit() {
   if (!state.baked) return; const built = buildPack(); const v = validatePack(built.pack);
   const m = loadManifest();
   m.config = { camera: built.pack.camera, light: built.pack.light };   // shared game-wide config
@@ -1036,7 +1037,8 @@ $('saveUnit').onclick = () => {
   $('packJson').textContent = JSON.stringify(built.pack, null, 2);
   renderManifest();
   renderRoster();   // flip this unit's card to "supplied ✓"
-};
+}
+$('saveUnit').onclick = doSaveUnit;
 
 // ── downloads ──
 const dl = (name, url) => { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); };
@@ -1192,7 +1194,7 @@ function renderRoster() {
     const g = card.querySelector('canvas').getContext('2d');
     if (has && supplied[u.id].atlases && supplied[u.id].atlases.body) { const im = new Image(); im.onload = () => { g.clearRect(0, 0, 76, 56); g.drawImage(im, 0, 0, 76, 56); }; im.src = supplied[u.id].atlases.body; }
     else { g.fillStyle = '#132234'; g.fillRect(0, 0, 76, 56); g.fillStyle = '#3c5670'; g.font = '9px sans-serif'; g.textAlign = 'center'; g.fillText(u.shape || u.role || '?', 38, 32); }
-    card.onclick = () => selectUnit(u.id);
+    card.onclick = () => onCardClick(u.id);
     grid.appendChild(card);
   }
   $('setState').innerHTML = `<b>${curFaction}</b> — <span class="lock">${n}/${roster.length}</span> supplied`;
@@ -1218,8 +1220,72 @@ function selectUnit(id) {
   }
   document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
   rebuildSlices(); drawLight();
-  idb.get('proj:' + id).then((p) => { if (p) loadProject(p); }).catch(() => {});   // resume this unit's WIP
+  // resume this unit's work: full WIP project when one exists, else load the saved asset pack itself
+  idb.get('proj:' + id).then((p) => {
+    if (p) return loadProject(p).then(() => { $('projState').textContent = `Loaded "${id}" — continue editing.`; });
+    if (m[id]) return loadPackPreview(m[id]).then(() => {
+      $('projState').textContent = `Loaded "${id}" baked pack (no source project on this browser — art slots empty).`;
+    });
+  }).catch(() => {});
 }
+
+// rebuild the baked preview straight from a saved pack's atlases — "load asset pack and continue"
+async function loadPackPreview(entry) {
+  const p = entry.pack, B = p.renderScale || 1;
+  const mk = async (partId) => {
+    const part = (p.parts || []).find((q) => q.id === partId);
+    if (!part || !entry.atlases || !entry.atlases[partId]) return null;
+    const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = entry.atlases[partId]; });
+    const base = PIXI.BaseTexture.from(img);
+    const n = part.kind === 'directional' ? part.facings : part.angles, cols = part.cols || Math.ceil(Math.sqrt(n));
+    const frames = [];
+    for (let i = 0; i < n; i++) frames.push(new PIXI.Texture(base,
+      new PIXI.Rectangle((i % cols) * part.cell[0], ((i / cols) | 0) * part.cell[1], part.cell[0], part.cell[1])));
+    return { frames, part };
+  };
+  const body = await mk('body'), turret = await mk('turret');
+  if (!body || !turret) return;
+  const g = { RTW: body.part.cell[0], RTH: body.part.cell[1], CX: body.part.pivot[0], BASEY: body.part.pivot[1] };
+  state.baked = { body: body.frames, turret: turret.frames, bodyFrames: body.part.facings, turretFrames: turret.part.angles,
+    g, sp: p.layerSpacing, foot: p.footprint[0], bodyLayers: body.part.layers || p.footprint[2], turretLayers: turret.part.layers || p.footprint[2], scale: B };
+  const mkB = (tex, parent) => { const s = new PIXI.Sprite(tex); s.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); s.scale.set(1 / B); parent.addChild(s); return s; };
+  if (bodyBaked) { bodyBaked.destroy(); } if (turretBaked) { turretBaked.destroy(); }
+  if (gBodyBaked) { gBodyBaked.destroy(); } if (gTurretBaked) { gTurretBaked.destroy(); }
+  bodyBaked = mkB(body.frames[0], rig); turretBaked = mkB(turret.frames[0], rig);
+  gBodyBaked = mkB(body.frames[0], gUnit); gTurretBaked = mkB(turret.frames[0], gUnit);
+  lastPack = entry;                                     // downloads reuse the stored atlases as-is
+  $('dlSheet').disabled = false;
+  $('bakeState').innerHTML = `<span class="lock">✓ Showing the saved pack (${p.footprint.join('×')} · ${B}×)</span>`;
+}
+
+// ── ONE-CLICK save flow: click a roster card → fresh slot offers "save the current model as this
+// unit" (sprites or 3D) and the tool does the rest; a saved slot loads and you continue editing. ──
+let saveAsId = null;
+async function onCardClick(id) {
+  let saved = !!((loadManifest().units || {})[id]);
+  if (!saved) { try { saved = !!(await idb.get('proj:' + id)); } catch (e) { /* no store */ } }
+  if (saved) { selectUnit(id); return; }
+  saveAsId = id;
+  $('saveAsTitle').textContent = id;
+  $('saveAsModal').hidden = false;
+}
+function quickSave(id, as3D) {
+  $('uid').value = id;
+  if (as3D) $('embedModel').checked = true;
+  doBake();                                             // current camera + bake settings
+  doSaveUnit();                                         // pack → manifest, card flips to ✓
+  document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
+  $('projState').textContent = `Saved "${id}" as ${as3D ? '3D (live model + baked fallback)' : 'baked sprites'} — reload the game to see it.`;
+  doAutosave();                                         // park the working project under this id too
+}
+$('saveAsSprites').onclick = () => { $('saveAsModal').hidden = true; quickSave(saveAsId, false); };
+$('saveAs3D').onclick = () => { $('saveAsModal').hidden = true; quickSave(saveAsId, true); };
+$('saveAsEdit').onclick = () => {
+  $('saveAsModal').hidden = true; $('uid').value = saveAsId;
+  document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === saveAsId));
+};
+$('saveAsCancel').onclick = () => { $('saveAsModal').hidden = true; };
+$('saveAsModal').addEventListener('click', (e) => { if (e.target === $('saveAsModal')) $('saveAsModal').hidden = true; });
 
 syncInputs(); renderManifest(); layout(); update(); updateGamePreview(); initFactions();
 (async () => {                                                     // resume the last working session
