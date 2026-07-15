@@ -9,18 +9,23 @@
     * { box-sizing:border-box; }
     html,body { margin:0; height:100%; background:var(--ink); color:var(--text); font-family:"Segoe UI",system-ui,sans-serif; }
     #app { display:flex; height:100vh; }
-    #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#0a121c; overflow:hidden; }
+    #stage { flex:1; position:relative; display:flex; align-items:center; justify-content:center; background:#0a121c; overflow:hidden; }
     #stage canvas { border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,.5); cursor:grab; }
     #stage canvas:active { cursor:grabbing; }
     #side { width:640px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--line); padding:12px 14px; display:flex; flex-direction:column; overflow:hidden; }
     #sideHead { flex:0 0 auto; }
     #cols { display:flex; gap:12px; flex:1; min-height:0; margin-top:8px; }
     .col { flex:1 1 0; min-width:0; overflow:hidden; }
-    #units { width:300px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line); padding:12px; display:flex; flex-direction:column; overflow-y:auto; }
+    #units { width:250px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line); padding:12px; display:flex; flex-direction:column; overflow:hidden; }
     #units h1 { margin-bottom:8px; }
     #units select { width:100%; background:var(--ink); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px; font-size:12px; }
-    #unitGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; max-height:190px; overflow-y:auto; align-content:start; }
-    #orbitDock { flex-shrink:0; margin-top:10px; border-top:1px solid var(--line); padding-top:6px; }
+    #unitGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; overflow-y:auto; align-content:start; }
+    #orbitDock { position:absolute; left:12px; top:12px; width:226px; max-height:calc(100% - 24px); overflow-y:auto; z-index:5;
+      background:rgba(15,24,33,.82); border:1px solid var(--line); border-radius:10px; padding:9px 11px; box-shadow:0 8px 30px rgba(0,0,0,.45); }
+    #orbitDock::-webkit-scrollbar { width:0; }
+    #orbitDock .row label { flex:0 0 74px; font-size:11px; }
+    #orbitDock .row .val { flex:0 0 34px; }
+    #orbitDock .seg button { font-size:10.5px; padding:5px 0; }
     .ucard { border:1px solid var(--line); border-radius:6px; padding:5px; cursor:pointer; text-align:center; background:#0e1a26; transition:border-color .1s; }
     .ucard:hover { border-color:#3c5670; }
     .ucard.sel { border-color:var(--gold); box-shadow:0 0 0 1px var(--gold); }
@@ -81,10 +86,12 @@
     <div class="note" id="setState" style="margin-top:6px">Pick a faction to load its unit set.</div>
     <div id="unitGrid"></div>
     <button class="ghost" id="addUnit" style="margin-top:8px">+ Add unit</button>
+  </div>
+  <div id="stage">
     <div id="orbitDock">
       <h2 style="font-size:10px;letter-spacing:.2em;color:var(--muted);margin:0 0 8px;text-transform:uppercase">Orbit + camera</h2>
       <div class="seg" id="partSeg" style="margin-bottom:8px"><button data-p="both" class="on">Both</button><button data-p="body">Base</button><button data-p="turret">Turret</button></div>
-      <div class="row"><label>View</label><div class="seg" id="viewSeg" style="flex:1"><button data-az="45" data-el="30">Iso</button><button data-az="90" data-el="10">Side</button><button data-az="0" data-el="10">Front</button><button data-az="0" data-el="90">Top</button></div></div>
+      <div class="seg" id="viewSeg" style="margin-bottom:8px"><button data-az="45" data-el="30">Iso</button><button data-az="90" data-el="10">Side</button><button data-az="0" data-el="10">Front</button><button data-az="0" data-el="90">Top</button></div>
       <div class="row"><label>Azimuth</label><input type="range" id="az" min="0" max="359" value="0"><span class="val" id="azV">0°</span></div>
       <div class="row"><label>Elevation</label><input type="range" id="el" min="0" max="90" value="30"><span class="val" id="elV">30°</span></div>
       <div class="row"><label>Turret aim</label><input type="range" id="taim" min="0" max="359" value="0"><span class="val" id="taimV">0°</span></div>
@@ -99,7 +106,6 @@
       <div class="note" id="camState">Camera not set — orbit to a look, then Set.</div>
     </div>
   </div>
-  <div id="stage"></div>
   <div id="side">
     <div id="sideHead">
       <h1>STACK FORGE</h1>
@@ -134,9 +140,11 @@
       <div class="col">
 
     <div class="grp">
-      <h2>3 · Lighting (game-aligned)</h2>
+      <h2>3 · Lighting + colour</h2>
       <div class="row"><label>Light az</label><input type="range" id="lightAz" min="0" max="359" value="135"><span class="val" id="lightAzV">135°</span></div>
       <div class="row"><label>Contrast</label><input type="range" id="lightK" min="0" max="100" value="55"><span class="val" id="lightKV">55</span></div>
+      <div class="row"><label>Palette</label><input type="range" id="pal" min="0" max="32" value="0"><span class="val" id="palV">full</span></div>
+      <div class="note" style="margin:-2px 0 4px">Palette quantises the cube colours to N flat, contrasting shades (0 = full colour) — cleans camo/gradient noise so the block structure reads clean. Try <b>6–12</b>.</div>
       <div class="note">One global light for the whole game — it's stored in the units manifest and every unit
         bakes with it, so packs stay consistent with each other and the board. 135° = top-left (the game default).</div>
     </div>

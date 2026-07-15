@@ -257,12 +257,53 @@ function buildVolume(partId, foot, layers) {
   return { cd, H, filled, dbg: { bw, bh, Hv, Hraw: +Hraw.toFixed(1), tw: topC && topC.width, th: topC && topC.height, sw: sideC && sideC.width, sh: sideC && sideC.height, fw: frontC && frontC.width, fh: frontC && frontC.height } };
 }
 
+// median-cut → n representative colours. Flattens camo/gradients (and rich .vox palettes) into a small,
+// contrasting set of flat cube colours so the block structure reads clean instead of noisy.
+function medianCut(colors, n) {
+  if (!colors.length) return [[128, 128, 128]];
+  let boxes = [colors.slice()];
+  while (boxes.length < n) {
+    let bi = -1, best = -1;
+    for (let i = 0; i < boxes.length; i++) {
+      const b = boxes[i]; if (b.length < 2) continue;
+      let mn = [255, 255, 255], mx = [0, 0, 0];
+      for (const c of b) for (let ch = 0; ch < 3; ch++) { if (c[ch] < mn[ch]) mn[ch] = c[ch]; if (c[ch] > mx[ch]) mx[ch] = c[ch]; }
+      const range = Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]);
+      if (range > best) { best = range; bi = i; }
+    }
+    if (bi < 0) break;
+    const box = boxes[bi]; let mn = [255, 255, 255], mx = [0, 0, 0];
+    for (const c of box) for (let ch = 0; ch < 3; ch++) { if (c[ch] < mn[ch]) mn[ch] = c[ch]; if (c[ch] > mx[ch]) mx[ch] = c[ch]; }
+    const rg = [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]], ch = rg[1] > rg[0] ? (rg[2] > rg[1] ? 2 : 1) : (rg[2] > rg[0] ? 2 : 0);
+    box.sort((a, b) => a[ch] - b[ch]);
+    const mid = box.length >> 1; boxes.splice(bi, 1, box.slice(0, mid), box.slice(mid));
+  }
+  return boxes.map((b) => { let r = 0, g = 0, bl = 0; for (const c of b) { r += c[0]; g += c[1]; bl += c[2]; } const m = b.length || 1; return [Math.round(r / m), Math.round(g / m), Math.round(bl / m)]; });
+}
+// build a colour→palette quantiser over a part's filled voxels (null when Palette is off / full colour)
+function buildQuantiser(cd, vcol, filled, foot, layers, n) {
+  if (!n) return null;
+  const N = foot * foot, seen = new Set(), cols = [];
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+    if (!filled(x, y, z)) continue;
+    let r, g, b; if (vcol) { const c = (z * N + y * foot + x) * 3; r = vcol[c]; g = vcol[c + 1]; b = vcol[c + 2]; } else { const p = (y * foot + x) * 4; r = cd[p]; g = cd[p + 1]; b = cd[p + 2]; }
+    const key = (r << 16) | (g << 8) | b; if (!seen.has(key)) { seen.add(key); cols.push([r, g, b]); }
+  }
+  const pal = medianCut(cols, n), cache = new Map();
+  return (r, g, b) => {
+    const key = (r << 16) | (g << 8) | b; let v = cache.get(key); if (v !== undefined) return v;
+    let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - g) * (p[1] - g) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } }
+    v = pal[bi]; cache.set(key, v); return v;
+  };
+}
+
 // Slice a part into layer textures as a STACK OF COLOURED CUBES. Tops render in FLAT neutral colour
 // (the clean cube colour — no per-pixel/height-field texture). Lighting lives on the EDGES: the exposed
 // vertical cube faces (a filled voxel with an empty same-layer neighbour) are the surfaces that catch the
 // game-aligned directional light — bright when the face points toward it, shaded when it points away.
 function makeSlices(partId, foot, layers, lightAz, lightK) {
   const { cd, filled, vcol } = buildVolume(partId, foot, layers), N = foot * foot;   // vcol = per-voxel colour (.vox)
+  const quant = buildQuantiser(cd, vcol, filled, foot, layers, state.paletteN);       // palette cleanup (median-cut)
   const la = lightAz * Math.PI / 180, Lx = Math.cos(la), Ly = -Math.sin(la);   // light-source dir, image space (y-down)
   const k = clamp(lightK / 100, 0, 1), WALL = 0.52, RANGE = 0.46;              // wall base + directional swing
   const textures = [];
@@ -286,6 +327,7 @@ function makeSlices(partId, foot, layers, lightAz, lightK) {
       let cr, cg, cb;                                            // neutral cube colour: per-voxel (.vox) or per-column
       if (vcol) { const c = (kk * N + i) * 3; cr = vcol[c]; cg = vcol[c + 1]; cb = vcol[c + 2]; }
       else { cr = cd[p]; cg = cd[p + 1]; cb = cd[p + 2]; }
+      if (quant) { const q = quant(cr, cg, cb); cr = q[0]; cg = q[1]; cb = q[2]; }   // palette cleanup
       o[p] = clamp(cr * shade, 0, 255); o[p + 1] = clamp(cg * shade, 0, 255);
       o[p + 2] = clamp(cb * shade, 0, 255); o[p + 3] = 255;
     }
@@ -341,10 +383,11 @@ const grid = new PIXI.Graphics(); grid.lineStyle(1, 0x1d3040, 1);
 for (let g = -120; g <= 120; g += 20) { grid.moveTo(g, -80).lineTo(g, 80); grid.moveTo(-120, g * 0.66).lineTo(120, g * 0.66); }
 grid.position.set(0, 40); rig.addChild(grid);
 // keep the big orbit view centred as the stage resizes (fills the whole stage area now)
-let SCW = 720, SCH = 560;
+let SCW = 720, SCH = 560, MODEL_CX = 470;
 function layout() {
   SCW = app.screen.width; SCH = app.screen.height;
-  rig.position.set(SCW / 2, SCH * 0.56);
+  MODEL_CX = Math.min(SCW / 2 + 120, SCW - 160);   // shift right so the floating orbit panel doesn't cover the model
+  rig.position.set(MODEL_CX, SCH * 0.56);
   if (typeof placeGamePreview === 'function') placeGamePreview();
   drawLight();
 }
@@ -354,7 +397,7 @@ app.renderer.on('resize', layout);
 // model), showing where the game-aligned light comes from. Elevation shrinks the ring (more overhead).
 const lightGfx = new PIXI.Graphics(); app.stage.addChild(lightGfx);
 function drawLight() {
-  const cx = SCW / 2, cy = SCH * 0.44, R = 150 + (1 - 0.6) * 90;   // ~overhead-ish ring, centred on the stage
+  const cx = MODEL_CX, cy = SCH * 0.44, R = 150 + (1 - 0.6) * 90;   // ~overhead-ish ring, centred on the model
   const la = state.lightAz * Math.PI / 180, sx = cx + Math.cos(la) * R, sy = cy - Math.sin(la) * R;   // y-up
   const g = lightGfx; g.clear();
   g.lineStyle(1, 0x2a4055, 0.5); g.drawCircle(cx, cy, R);                       // faint compass ring
@@ -407,7 +450,7 @@ function flipCanvas(im, h, v) {
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
 }
 const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
-  barrelLen: 0, barrelRad: 4, barrelElev: 55, lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
+  barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
 let bodyL = [], turretL = [], bodyBaked = null, turretBaked = null, lastPack = null;
 const voxPart = { body: null, turret: null };   // imported MagicaVoxel models (override the photo carve per part)
 let bodyMountZ = 9;                              // layer just above the body's top → where the turret sits
@@ -529,6 +572,7 @@ $('voxTurret').onchange = (e) => e.target.files[0] && importVox('turret', e.targ
 $('voxClear').onclick = () => { voxPart.body = null; voxPart.turret = null; rebuildSlices(); $('voxState').textContent = 'Cleared — back to the photo carve.'; };
 $('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').textContent = state.lightAz + '°'; rebuildSlices(); drawLight(); };
 $('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; rebuildSlices(); };
+$('pal').oninput = (e) => { state.paletteN = +e.target.value; $('palV').textContent = state.paletteN || 'full'; rebuildSlices(); };
 $('smooth').onchange = (e) => { state.smooth = e.target.checked; };
 $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').textContent = state.sharp.toFixed(2); };
 $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
