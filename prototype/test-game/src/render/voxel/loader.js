@@ -108,8 +108,8 @@ export function buildVoxelUnit(store, id, tilePx, radius, spriteOverCollision) {
   // → the shadow projects to the LOWER-RIGHT, matching the lit/shaded faces exactly.
   const lightAz = ((pack.light && pack.light.azimuth) != null ? pack.light.azimuth : GAME_LIGHT_AZ) * Math.PI / 180;
   const lean = -Math.cos(lightAz) * 0.6;                            // shear away from the sun
-  const shOffX = -Math.cos(lightAz) * targetW * 0.16;               // ground offset, away from the sun
-  const shOffY = Math.sin(lightAz) * targetW * 0.10;
+  const shOffX = -Math.cos(lightAz) * targetW * 0.30;               // ground offset, away from the sun
+  const shOffY = Math.sin(lightAz) * targetW * 0.20;
   const mkShadow = (p, alpha) => {
     const s = mk(p);
     s.tint = 0x000000; s.alpha = alpha;

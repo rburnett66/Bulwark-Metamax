@@ -766,7 +766,7 @@ function buildOrbitTarget(S) {
   const la0 = state.lightAz * Math.PI / 180;
   voxShadow = new PIXI.Sprite(voxTex);
   voxShadow.anchor.set(0.5, voxMeta.groundY / voxMeta.Hp);
-  voxShadow.position.set(-Math.cos(la0) * state.foot * 0.16, state.baseY + Math.sin(la0) * state.foot * 0.10 + 1);
+  voxShadow.position.set(-Math.cos(la0) * state.foot * 0.30, state.baseY + Math.sin(la0) * state.foot * 0.20 + 1);
   voxShadow.tint = 0x000000; voxShadow.alpha = 0.22;
   voxShadow.scale.set(1 / S, 0.55 / S); voxShadow.skew.x = shadowLean();
   rig.addChild(voxShadow);
@@ -803,7 +803,7 @@ function rebuildSlices() {
   const laI = state.lightAz * Math.PI / 180;
   gVoxShadow = new PIXI.Sprite(gVoxTex);
   gVoxShadow.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp);
-  gVoxShadow.position.set(-Math.cos(laI) * state.foot * 0.16, Math.sin(laI) * state.foot * 0.10 + 1);
+  gVoxShadow.position.set(-Math.cos(laI) * state.foot * 0.30, Math.sin(laI) * state.foot * 0.20 + 1);
   gVoxShadow.tint = 0x000000; gVoxShadow.alpha = 0.22;
   gVoxShadow.scale.set(1 / INSET_S, 0.55 / INSET_S); gVoxShadow.skew.x = shadowLean();
   gUnit.addChild(gVoxShadow);

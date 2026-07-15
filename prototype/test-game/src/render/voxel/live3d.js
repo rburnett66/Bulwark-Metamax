@@ -84,7 +84,7 @@ export function buildLive3D(pack, tilePx, radius, spriteOverCollision) {
   const sh = new PIXI.Sprite(tex);
   sh.anchor.set(0.5, 0.5); sh.tint = 0x000000; sh.alpha = 0.22;
   sh.scale.set(1, 0.55); sh.skew.x = -Math.cos(laS) * 0.6;
-  sh.__gx = -Math.cos(laS) * targetW * 0.16; sh.__gy = Math.sin(laS) * targetW * 0.10;
+  sh.__gx = -Math.cos(laS) * targetW * 0.30; sh.__gy = Math.sin(laS) * targetW * 0.20;
   sh.position.set(sh.__gx, sh.__gy);
   c.addChild(sh); c.addChild(spr);
   c.__shadows = [sh];

@@ -685,7 +685,17 @@ export function stepMovement(state, dt) {
           if (hl > 1e-6) { h.x /= hl; h.y /= hl; } else { h.x = desx; h.y = desy; }   // degenerate (180° flip mid-blend)
         }
         const step = Math.min(remaining, d);
-        unit.pos.x += h.x * step; unit.pos.y += h.y * step;
+        // FACING-LOCKED MOTION (owner 2026-07-17): ground units render at 16 baked facings, so they
+        // MOVE along the nearest of those 16 angles too — displacement always matches the drawn
+        // frame and the sprite never reads as sliding sideways. The blended hdg stays continuous
+        // underneath, so turns still sweep facing-to-facing instead of thrashing. Walkers only —
+        // air stays smooth (Tier B banks through its turns).
+        let mx = h.x, my = h.y;
+        if (unit.domain === 'Walker') {
+          const q = Math.round(Math.atan2(h.y, h.x) / (Math.PI / 8)) * (Math.PI / 8);   // 2π/16 buckets
+          mx = Math.cos(q); my = Math.sin(q);
+        }
+        unit.pos.x += mx * step; unit.pos.y += my * step;
         remaining -= step;
       }
     }
