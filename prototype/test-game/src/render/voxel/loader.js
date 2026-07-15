@@ -118,14 +118,21 @@ export function buildVoxelUnit(store, id, tilePx, radius, spriteOverCollision) {
     s.position.set(shOffX, shOffY);
     return s;
   };
+  // LAYERED CAST (owner 2026-07-17): the hull's shadow lands on the GROUND (under everything);
+  // the turret's shadow draws ABOVE the hull — it drapes across the deck and spills onto the
+  // ground beyond it — and being cast from higher up, it carries a longer offset.
   const shBody = parts.body ? mkShadow(parts.body, 0.24) : null;
-  const shTurret = parts.turret ? mkShadow(parts.turret, 0.12) : null;
-  if (shBody) c.addChild(shBody);
-  if (shTurret) c.addChild(shTurret);
+  const shTurret = parts.turret ? mkShadow(parts.turret, 0.16) : null;
+  if (shTurret) {
+    shTurret.__gx = shOffX * 1.6; shTurret.__gy = shOffY * 1.6;     // higher part → longer cast
+    shTurret.position.set(shTurret.__gx, shTurret.__gy);
+  }
+  if (shBody) c.addChild(shBody);                                   // ground shadow
   const body = parts.body ? mk(parts.body) : null;
-  if (body) c.addChild(body);
+  if (body) c.addChild(body);                                       // hull
+  if (shTurret) c.addChild(shTurret);                               // turret shadow ON the hull + ground
   const turret = parts.turret ? mk(parts.turret) : null;
-  if (turret) c.addChild(turret);
+  if (turret) c.addChild(turret);                                   // turret on top
   c.__shadows = [shBody, shTurret].filter(Boolean);                 // renderer grounds these under flyers
   c.__vox = { pack, parts, body, turret, shBody, shTurret, scale, se: Math.sin(((pack.camera && pack.camera.elevation) || 30) * Math.PI / 180) };
   return c;
