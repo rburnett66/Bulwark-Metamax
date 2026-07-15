@@ -611,6 +611,7 @@ function renderScaleChart() {
   const cv = $('scaleChart'); if (!cv) return;
   const tiles = unitTiles(state.foot);
   $('resTiles').textContent = '= ' + (+tiles.toFixed(2)) + ' tile' + (tiles === 1 ? '' : 's');
+  syncSizeUI();                                        // keep the Unit-size slider honest after loads/res changes
   const units = (loadManifest().units) || {};
   const prefixes = [...new Set(Object.keys(units).map(prefixOf))].sort();
   syncChartSelects(prefixes);
@@ -882,7 +883,24 @@ $('belev').oninput = (e) => { state.barrelElev = +e.target.value; $('belevV').te
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
 $('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
 $('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
-$('res').onchange = (e) => { state.foot = +e.target.value; rebuildSlices(); };
+$('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); rebuildSlices(); };
+// fine world-size control (the VOX_PER_TILE contract): tiles → foot voxels, layers scale along
+function syncSizeUI() {
+  const t = unitTiles(state.foot);
+  $('uSize').value = Math.round(t * 100); $('uSizeV').textContent = t.toFixed(2) + ' t';
+  $('res').value = [32, 48, 64, 96, 128].includes(state.foot) ? state.foot : '';
+}
+function setUnitSize(tiles) {
+  const newFoot = clamp(Math.round(tiles * VOX_PER_TILE), 16, 256);
+  if (newFoot === state.foot) return;
+  const k = newFoot / state.foot;
+  state.foot = newFoot;
+  setLayers('body', clamp(Math.round(state.bodyLayers * k), 4, 40));      // keep the proportions
+  setLayers('turret', clamp(Math.round(state.turretLayers * k), 3, 40));
+  syncSizeUI(); rebuildSlices();
+}
+$('uSize').oninput = (e) => { $('uSizeV').textContent = (+e.target.value / 100).toFixed(2) + ' t'; };
+$('uSize').onchange = (e) => setUnitSize(+e.target.value / 100);          // re-carve on release
 // ── .vox import: bring a ready-made voxel model in as the base/turret (skips the carve) ──
 const setLayers = (which, v) => { const id = which === 'body' ? 'bodyLayers' : 'turretLayers'; state[id] = v; $(id).value = v; $(id + 'V').textContent = v; };
 function fitToVox() {
