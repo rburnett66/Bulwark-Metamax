@@ -99,6 +99,12 @@ function alphaGrid(img, w, h, elev) {
   }
   return out;
 }
+// [min,max] columns of an elevation grid that hold any material (its horizontal extent).
+function extentX(grid, w, layers) {
+  let lo = w, hi = -1;
+  for (let a = 0; a < w; a++) { let any = false; for (let z = 0; z < layers; z++) if (grid[z * w + a]) { any = true; break; } if (any) { if (a < lo) lo = a; if (a > hi) hi = a; } }
+  return hi >= lo ? [lo, hi] : [0, w - 1];
+}
 
 // Space-carve a part's volume from orthographic views: TOP → footprint + colour; SIDE (height along the
 // length) + FRONT (height across the width) → the carved height; BACK falls back for FRONT. A voxel is
@@ -106,7 +112,7 @@ function alphaGrid(img, w, h, elev) {
 // Returns { cd (colour bytes), H (top-surface height/column), filled(x,y,z) }.
 function buildVolume(partId, foot, layers) {
   const src = imgs[partId], N = foot * foot;
-  if (!src.top) {                                   // ── procedural placeholder (color + height) ──
+  if (!src.top && !src.side && !src.front && !src.back) {   // ── no art at all → procedural placeholder ──
     const col = document.createElement('canvas'); col.width = col.height = foot;
     const hgt = document.createElement('canvas'); hgt.width = hgt.height = foot;
     const cx = col.getContext('2d'), hx = hgt.getContext('2d');
@@ -118,7 +124,13 @@ function buildVolume(partId, foot, layers) {
     return { cd, H, filled: (x, y, z) => z < H[y * foot + x] };
   }
   const tc = document.createElement('canvas'); tc.width = tc.height = foot;
-  const tx = tc.getContext('2d'); drawFit(tx, keyedCanvas(src.top), foot, foot);   // bg-keyed + aspect-preserving
+  const tx = tc.getContext('2d');
+  if (src.top) { drawFit(tx, keyedCanvas(src.top), foot, foot); }   // top → footprint + colour (bg-keyed, aspect-fit)
+  else {                                                            // no Top → derive footprint from the elevations
+    const sX = src.side ? extentX(alphaGrid(src.side, foot, layers, true), foot, layers) : [Math.round(foot * 0.2), Math.round(foot * 0.8)];
+    const fX = (src.front || src.back) ? extentX(alphaGrid(src.front || src.back, foot, layers, true), foot, layers) : [Math.round(foot * 0.3), Math.round(foot * 0.7)];
+    tx.fillStyle = '#9a8c66'; tx.fillRect(sX[0], fX[0], sX[1] - sX[0] + 1, fX[1] - fX[0] + 1);
+  }
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
   // footprint bbox → register the elevations to the shared axes (length x / width y), not the square
@@ -234,7 +246,7 @@ function drawLight() {
 }
 
 const imgs = { body: { top: null, side: null, front: null, back: null }, turret: { top: null, side: null, front: null, back: null } };
-const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, spin: false, part: 'both',
+const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, turretDx: 0, spin: false, part: 'both',
   lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
 let bodyL = [], turretL = [], bodyBaked = null, turretBaked = null, lastPack = null;
 
@@ -253,17 +265,18 @@ rebuildSlices();
 function update() {
   const sp = elevationToSP(state.el, SP_MAX), azR = state.az * Math.PI / 180, taimR = state.taim * Math.PI / 180;
   const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = Math.round(state.layers * 0.55);
+  const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR);   // front-back mount offset
   if (state.baked) {
     for (const s of bodyL) s.visible = false; for (const s of turretL) s.visible = false;
     const bb = bucketOf(azR, state.baked.bodyFrames), tb = bucketOf(azR + taimR, state.baked.turretFrames);
     bodyBaked.texture = state.baked.body[bb]; bodyBaked.visible = showB; bodyBaked.position.set(0, state.baseY);
     turretBaked.texture = state.baked.turret[tb]; turretBaked.visible = showT;
-    turretBaked.position.set(0, state.baseY - mountDz * sp);
+    turretBaked.position.set(ox, state.baseY - mountDz * sp + oy);
     return;
   }
   for (let k = 0; k < state.layers; k++) {
     bodyL[k].visible = showB; bodyL[k].position.set(0, state.baseY - k * sp); bodyL[k].rotation = azR;
-    turretL[k].visible = showT; turretL[k].position.set(0, state.baseY - mountDz * sp - k * sp); turretL[k].rotation = azR + taimR;
+    turretL[k].visible = showT; turretL[k].position.set(ox, state.baseY - mountDz * sp - k * sp + oy); turretL[k].rotation = azR + taimR;
   }
 }
 app.ticker.add(() => {
@@ -286,6 +299,7 @@ function syncInputs() { $('az').value = state.az | 0; $('azV').textContent = (st
 $('az').oninput = (e) => { state.az = +e.target.value; $('azV').textContent = state.az + '°'; };
 $('el').oninput = (e) => { state.el = +e.target.value; $('elV').textContent = state.el + '°'; };
 $('taim').oninput = (e) => { state.taim = +e.target.value; $('taimV').textContent = state.taim + '°'; };
+$('tdx').oninput = (e) => { state.turretDx = +e.target.value; $('tdxV').textContent = state.turretDx; };
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
 $('layers').oninput = (e) => { state.layers = +e.target.value; $('layersV').textContent = state.layers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; rebuildSlices(); };
@@ -363,7 +377,7 @@ function buildPack() {
     light: { azimuth: state.lightAz, contrast: state.lightK },
     parts: [
       { id: 'body', kind: 'directional', facings: b.bodyFrames, atlas: `${id}.body.png`, cell: ba.cell, cols: ba.cols, pivot, zeroFacing: '+x' },
-      { id: 'turret', kind: 'stack', angles: b.turretFrames, atlas: `${id}.turret.png`, cell: ta.cell, cols: ta.cols, pivot, mount: [0, 0, mountDz] },
+      { id: 'turret', kind: 'stack', angles: b.turretFrames, atlas: `${id}.turret.png`, cell: ta.cell, cols: ta.cols, pivot, mount: [state.turretDx, 0, mountDz] },
     ],
     shadow: { kind: 'ellipse', rx: Math.round(b.foot / 2), ry: Math.round(b.foot * 0.22), alt: state.cls === 'air' ? 30 : 0 },
     stats: { speed: 90, turnRate: 3.0, turretRate: 4.0 },
