@@ -260,6 +260,14 @@ function drawLight() {
 }
 
 const imgs = { body: { top: null, side: null, front: null, back: null }, turret: { top: null, side: null, front: null, back: null } };
+// per-slot flip: keep the raw source + H/V flags so flips compose from the original (no quality drift)
+const mkViews = (v) => ({ top: v(), side: v(), front: v(), back: v() });
+const srcImg = { body: mkViews(() => null), turret: mkViews(() => null) };
+const flipState = { body: mkViews(() => ({ h: false, v: false })), turret: mkViews(() => ({ h: false, v: false })) };
+function flipCanvas(im, h, v) {
+  const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
+  const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
+}
 const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, spin: false, part: 'both',
   lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
 let bodyL = [], turretL = [], bodyBaked = null, turretBaked = null, lastPack = null;
@@ -329,12 +337,35 @@ $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) ret
 // ── orthographic view pickers: 4 thumbnails per part; click to browse OR hover + Ctrl+V to paste ──
 const VIEWS = ['top', 'side', 'front', 'back'];
 document.querySelectorAll('.views').forEach((box) => {
-  box.innerHTML = VIEWS.map((v) => `<label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="48" height="40"></canvas><span>${v[0].toUpperCase() + v.slice(1)}</span><input type="file" accept="image/*"></label>`).join('');
+  box.innerHTML = VIEWS.map((v) => `<div class="vslot"><label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="48" height="40"></canvas><input type="file" accept="image/*"></label><div class="vmeta"><span>${v[0].toUpperCase() + v.slice(1)}</span><span class="fl"><button type="button" class="flip" data-axis="h" title="Flip horizontal">⇔</button><button type="button" class="flip" data-axis="v" title="Flip vertical">⇕</button></span></div></div>`).join('');
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('.flip'); if (!btn) return;
+    e.preventDefault(); const pick = btn.closest('.vslot').querySelector('.vpick');
+    toggleFlip(pick.dataset.part, pick.dataset.view, btn.dataset.axis);
+  });
 });
+const pickFor = (part, view) => document.querySelector(`.vpick[data-part="${part}"][data-view="${view}"]`);
 function setView(pick, im) {
-  imgs[pick.dataset.part][pick.dataset.view] = im;
+  const part = pick.dataset.part, view = pick.dataset.view;
+  srcImg[part][view] = im; flipState[part][view] = { h: false, v: false };   // new image → clear flips
+  renderView(pick);
+}
+function renderView(pick) {
+  const part = pick.dataset.part, view = pick.dataset.view, src = srcImg[part][view];
+  if (!src) return;
+  const fl = flipState[part][view], im = (fl.h || fl.v) ? flipCanvas(src, fl.h, fl.v) : src;
+  imgs[part][view] = im;
   const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 48, 40); drawFit(g, keyedCanvas(im), 48, 40);
-  pick.classList.add('set'); rebuildSlices();
+  pick.classList.add('set'); updateFlipBtns(pick); rebuildSlices();
+}
+function toggleFlip(part, view, axis) {
+  if (!srcImg[part][view]) return;
+  flipState[part][view][axis] = !flipState[part][view][axis]; renderView(pickFor(part, view));
+}
+function updateFlipBtns(pick) {
+  const fl = flipState[pick.dataset.part][pick.dataset.view], slot = pick.closest('.vslot'); if (!slot) return;
+  slot.querySelector('.flip[data-axis="h"]').classList.toggle('on', fl.h);
+  slot.querySelector('.flip[data-axis="v"]').classList.toggle('on', fl.v);
 }
 let pasteTarget = null;
 document.querySelectorAll('.vpick').forEach((pick) => {
@@ -495,4 +526,4 @@ function selectUnit(id) {
 }
 
 syncInputs(); renderManifest(); update(); drawLight(); initFactions();
-window.__sf = { imgs, state, rebuildSlices, setView };   // debug/test hook (headless verification)
+window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor };   // debug/test hook (headless verification)
