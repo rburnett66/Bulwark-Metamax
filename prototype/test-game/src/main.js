@@ -216,9 +216,11 @@ export function boot(mountEl, seed) {
     app.renderer.resolution = fitResolution(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
     app.renderer.resize(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
     const art = renderer && renderer.unitArt;
+    const vox = renderer && renderer.voxelArt;   // voxel packs load once at boot — carry them too
     app.stage.removeChildren();
     renderer = createRenderer(app, currentMap);
     if (art) renderer.unitArt = art;
+    if (vox) renderer.voxelArt = vox;
     restart(currentSeed);
     flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
 
