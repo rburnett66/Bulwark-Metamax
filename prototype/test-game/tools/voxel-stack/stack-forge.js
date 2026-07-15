@@ -274,18 +274,27 @@ function bakeAngleCache(renderer, slices, opts) {
 const bucketOf = (a, n) => (((Math.round(a / ((Math.PI * 2) / n)) % n) + n) % n);
 
 // ── app + state ──
-const app = new PIXI.Application({ width: 720, height: 560, backgroundColor: 0x0a121c, antialias: false, resolution: window.devicePixelRatio || 1, autoDensity: true });
+const app = new PIXI.Application({ backgroundColor: 0x0a121c, antialias: false, resolution: window.devicePixelRatio || 1, autoDensity: true, resizeTo: $('stage') });
 $('stage').appendChild(app.view);
-const rig = new PIXI.Container(); rig.scale.set(WORLD_SCALE); rig.position.set(360, 300); app.stage.addChild(rig);
+const rig = new PIXI.Container(); rig.scale.set(WORLD_SCALE); app.stage.addChild(rig);
 const grid = new PIXI.Graphics(); grid.lineStyle(1, 0x1d3040, 1);
 for (let g = -120; g <= 120; g += 20) { grid.moveTo(g, -80).lineTo(g, 80); grid.moveTo(-120, g * 0.66).lineTo(120, g * 0.66); }
 grid.position.set(0, 40); rig.addChild(grid);
+// keep the big orbit view centred as the stage resizes (fills the whole stage area now)
+let SCW = 720, SCH = 560;
+function layout() {
+  SCW = app.screen.width; SCH = app.screen.height;
+  rig.position.set(SCW / 2, SCH * 0.56);
+  if (typeof placeGamePreview === 'function') placeGamePreview();
+  drawLight();
+}
+app.renderer.on('resize', layout);
 
 // light-source indicator — a sun on a ring at the light azimuth, in SCREEN space (on top of the
 // model), showing where the game-aligned light comes from. Elevation shrinks the ring (more overhead).
 const lightGfx = new PIXI.Graphics(); app.stage.addChild(lightGfx);
 function drawLight() {
-  const cx = 360, cy = 250, R = 150 + (1 - 0.6) * 90;   // ~overhead-ish ring
+  const cx = SCW / 2, cy = SCH * 0.44, R = 150 + (1 - 0.6) * 90;   // ~overhead-ish ring, centred on the stage
   const la = state.lightAz * Math.PI / 180, sx = cx + Math.cos(la) * R, sy = cy - Math.sin(la) * R;   // y-up
   const g = lightGfx; g.clear();
   g.lineStyle(1, 0x2a4055, 0.5); g.drawCircle(cx, cy, R);                       // faint compass ring
@@ -297,6 +306,36 @@ function drawLight() {
   g.lineStyle(2, 0xffe4a0, 0.85);                                             // rays
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; g.moveTo(sx + Math.cos(a) * 13, sy + Math.sin(a) * 13).lineTo(sx + Math.cos(a) * 19, sy + Math.sin(a) * 19); }
 }
+
+// ── IN-GAME preview (bottom-right inset): the unit standing on a board tile at GAME scale + shadow,
+// slowly turning to show its facings — so you can judge how it reads on the board, not just in orbit.
+// Game facts (from src/render): 64px tile, ground greens 0x33502c/0x3c5c33/0x45683a, black grid @0.12,
+// unit ≈ 2 tiles wide, flat ellipse shadow 0x000000 @0.26 (radii tile·r·0.62 × tile·r·0.31).
+const GAME_TILE = 54, PVW = 214, PVH = 210;            // preview px/tile (64 shrunk to fit) + inset size
+const gameLayer = new PIXI.Container(); app.stage.addChild(gameLayer);
+const gPanel = new PIXI.Graphics(); gameLayer.addChild(gPanel);
+const gWorld = new PIXI.Container(); gameLayer.addChild(gWorld);         // masked board + shadow + unit
+const gBoard = new PIXI.Graphics(); gWorld.addChild(gBoard);
+const gShadow = new PIXI.Graphics(); gWorld.addChild(gShadow);
+const gUnit = new PIXI.Container(); gWorld.addChild(gUnit);
+const gClip = new PIXI.Graphics(); gameLayer.addChild(gClip); gWorld.mask = gClip;
+const gTitle = new PIXI.Text('IN-GAME  ·  1 tile = 64px', { fontFamily: 'Segoe UI, sans-serif', fontSize: 10, fill: 0xb9c8d6, letterSpacing: 1.4 });
+gTitle.position.set(11, PVH - 16); gameLayer.addChild(gTitle);   // caption along the bottom, clear of the unit
+let gBodyL = [], gTurretL = [], gBodyBaked = null, gTurretBaked = null, gAnchor = { x: PVW / 2, y: PVH * 0.6 };
+gClip.beginFill(0xffffff); gClip.drawRoundedRect(0, 0, PVW, PVH, 10); gClip.endFill();
+function drawGameBoard() {
+  gPanel.clear(); gPanel.lineStyle(1, 0x24384a, 1); gPanel.beginFill(0x0e1216, 1); gPanel.drawRoundedRect(0, 0, PVW, PVH, 10); gPanel.endFill();
+  gBoard.clear();
+  const cols = 4, rows = 4, bw = cols * GAME_TILE, bh = rows * GAME_TILE, bands = [0x33502c, 0x3c5c33, 0x45683a];
+  const bx = (PVW - bw) / 2, by = PVH - bh + GAME_TILE;                  // board sits low; unit stands centre-ish
+  for (let ry = 0; ry < rows; ry++) for (let cx = 0; cx < cols; cx++) { gBoard.beginFill(bands[(cx * 7 + ry * 3) % 3]); gBoard.drawRect(bx + cx * GAME_TILE, by + ry * GAME_TILE, GAME_TILE, GAME_TILE); gBoard.endFill(); }
+  gBoard.lineStyle(1, 0x000000, 0.12);
+  for (let c = 0; c <= cols; c++) gBoard.moveTo(bx + c * GAME_TILE, by).lineTo(bx + c * GAME_TILE, by + bh);
+  for (let r = 0; r <= rows; r++) gBoard.moveTo(bx, by + r * GAME_TILE).lineTo(bx + bw, by + r * GAME_TILE);
+  gAnchor = { x: bx + bw / 2, y: by + GAME_TILE * 1.5 };                 // ground-contact point (a tile centre)
+}
+function placeGamePreview() { gameLayer.position.set(SCW - PVW - 16, SCH - PVH - 16); }
+drawGameBoard();
 
 const imgs = { body: { top: null, side: null, front: null, back: null }, turret: { top: null, side: null, front: null, back: null } };
 // per-slot flip: keep the raw source + H/V flags so flips compose from the original (no quality drift)
@@ -318,8 +357,11 @@ function rebuildSlices() {
   state.baked = null; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
   const bs = makeSlices('body', state.foot, state.layers, state.lightAz, state.lightK);
   const ts = makeSlices('turret', state.foot, state.layers, state.lightAz, state.lightK);
-  const mk = (slices) => slices.map((tex) => { const s = new PIXI.Sprite(tex); s.anchor.set(0.5); rig.addChild(s); return s; });
-  bodyL = mk(bs); turretL = mk(ts);
+  const mk = (slices, parent) => slices.map((tex) => { const s = new PIXI.Sprite(tex); s.anchor.set(0.5); parent.addChild(s); return s; });
+  bodyL = mk(bs, rig); turretL = mk(ts, rig);
+  for (const s of gBodyL) s.destroy(); for (const s of gTurretL) s.destroy();   // in-game preview shares the same textures
+  if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
+  gBodyL = mk(bs, gUnit); gTurretL = mk(ts, gUnit);
 }
 rebuildSlices();
 
@@ -341,9 +383,33 @@ function update() {
     turretL[k].visible = showT; turretL[k].anchor.set(pivotFrac, 0.5); turretL[k].position.set(ox, state.baseY - mountDz * sp - k * sp + oy); turretL[k].rotation = azR + taimR;
   }
 }
+// position the in-game preview: unit at GAME scale on the tile, slowly turning to show facings, with the
+// game shadow. Uses the same elevation as the bake camera so the preview matches what you'll ship.
+let gPrevAz = 0;
+function updateGamePreview() {
+  gPrevAz = (gPrevAz + 0.4) % 360;
+  const azR = gPrevAz * Math.PI / 180, taimR = state.taim * Math.PI / 180;
+  const spG = elevationToSP(state.el, SP_MAX), uScale = (GAME_TILE * 1.7) / state.foot;   // footprint ≈ 1.7 tiles
+  gUnit.scale.set(uScale); gUnit.position.set(gAnchor.x, gAnchor.y + GAME_TILE * 0.12);
+  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = Math.round(state.layers * 0.55);
+  const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR), pivotFrac = 0.5 + state.turretPivot / 100, r = 0.75;
+  gShadow.clear(); gShadow.beginFill(0x000000, 0.26); gShadow.drawEllipse(gAnchor.x, gAnchor.y + GAME_TILE * 0.06, GAME_TILE * r * 0.62, GAME_TILE * r * 0.31); gShadow.endFill();
+  if (state.baked && gBodyBaked) {                                    // show the actual baked (smooth) game asset
+    for (const s of gBodyL) s.visible = false; for (const s of gTurretL) s.visible = false;
+    const bb = bucketOf(azR, state.baked.bodyFrames), tb = bucketOf(azR + taimR, state.baked.turretFrames);
+    gBodyBaked.texture = state.baked.body[bb]; gBodyBaked.visible = showB; gBodyBaked.position.set(0, 0);
+    gTurretBaked.texture = state.baked.turret[tb]; gTurretBaked.visible = showT; gTurretBaked.position.set(ox, -mountDz * spG + oy);
+    return;
+  }
+  if (gBodyBaked) { gBodyBaked.visible = false; gTurretBaked.visible = false; }
+  for (let k = 0; k < state.layers; k++) {
+    gBodyL[k].visible = showB; gBodyL[k].position.set(0, -k * spG); gBodyL[k].rotation = azR;
+    gTurretL[k].visible = showT; gTurretL[k].anchor.set(pivotFrac, 0.5); gTurretL[k].position.set(ox, -mountDz * spG - k * spG + oy); gTurretL[k].rotation = azR + taimR;
+  }
+}
 app.ticker.add(() => {
   if (state.spin) { state.taim = (state.taim + 1.2) % 360; $('taim').value = state.taim | 0; $('taimV').textContent = (state.taim | 0) + '°'; }
-  update();
+  update(); updateGamePreview();
 });
 
 // ── orbit drag ──
@@ -445,6 +511,8 @@ $('bake').onclick = () => {
   state.baked = { body, turret, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, layers };
   bodyBaked = new PIXI.Sprite(body[0]); bodyBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); rig.addChild(bodyBaked);
   turretBaked = new PIXI.Sprite(turret[0]); turretBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); rig.addChild(turretBaked);
+  gBodyBaked = new PIXI.Sprite(body[0]); gBodyBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); gUnit.addChild(gBodyBaked);   // in-game preview
+  gTurretBaked = new PIXI.Sprite(turret[0]); gTurretBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); gUnit.addChild(gTurretBaked);
   const vram = ((g.RTW * g.RTH * 4 * (BODY_FRAMES + TURRET_FRAMES)) / 1048576).toFixed(1);
   $('bakeState').innerHTML = `<span class="lock">✓ Baked in ${(performance.now() - t0).toFixed(0)}ms · ${g.RTW}×${g.RTH} · ~${vram}MB cache</span>`;
   $('saveUnit').disabled = false; $('dlSheet').disabled = false;
@@ -567,5 +635,6 @@ function selectUnit(id) {
   rebuildSlices(); drawLight();
 }
 
-syncInputs(); renderManifest(); update(); drawLight(); initFactions();
-window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, keyedCropped, gridStretch };   // debug/test hook (headless verification)
+syncInputs(); renderManifest(); layout(); update(); updateGamePreview(); initFactions();
+window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, keyedCropped, gridStretch,
+  gdbg: () => ({ baked: !!state.baked, gbaked: !!gBodyBaked, gvis: gBodyBaked && gBodyBaked.visible, gkids: gUnit.children.length }) };   // debug/test hook
