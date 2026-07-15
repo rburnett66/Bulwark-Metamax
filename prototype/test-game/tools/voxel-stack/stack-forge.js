@@ -493,18 +493,19 @@ const SHARPEN_FRAG = `
     gl_FragColor = vec4(clamp(sharp,0.0,1.0), c.a);
   }`;
 function bakeAngleCache(renderer, faces, opts) {
-  const { frames, smooth, sharp, g, pivotFrac = 0.5, el } = opts, SS = smooth ? 2 : 1, STEP = (Math.PI * 2) / frames;
-  const cv = document.createElement('canvas'); cv.width = g.RTW * SS; cv.height = g.RTH * SS;
+  const { frames, smooth, sharp, g, pivotFrac = 0.5, el, scale = 1 } = opts, SS = smooth ? 2 : 1, STEP = (Math.PI * 2) / frames;
+  const W = g.RTW * scale, H = g.RTH * scale;                      // scale = baked px per voxel (crispness)
+  const cv = document.createElement('canvas'); cv.width = W * SS; cv.height = H * SS;
   const ctx = cv.getContext('2d'); ctx.lineWidth = 0.75 * SS; ctx.lineJoin = 'round';
   const tex = PIXI.Texture.from(cv); tex.baseTexture.scaleMode = smooth ? PIXI.SCALE_MODES.LINEAR : PIXI.SCALE_MODES.NEAREST;
   const spr = new PIXI.Sprite(tex); spr.scale.set(1 / SS);
-  if (smooth && sharp > 0) spr.filters = [new PIXI.Filter(undefined, SHARPEN_FRAG, { uSharp: sharp, uTexel: [1 / g.RTW, 1 / g.RTH] })];
+  if (smooth && sharp > 0) spr.filters = [new PIXI.Filter(undefined, SHARPEN_FRAG, { uSharp: sharp, uTexel: [1 / W, 1 / H] })];
   const cache = [];
   for (let a = 0; a < frames; a++) {
     ctx.clearRect(0, 0, cv.width, cv.height);
-    renderParts(ctx, SS, g.CX * SS, g.BASEY * SS, el, [{ faces, az: a * STEP, pivotFrac }]);   // true 3D frame
+    renderParts(ctx, scale * SS, g.CX * scale * SS, g.BASEY * scale * SS, el, [{ faces, az: a * STEP, pivotFrac }]);   // true 3D frame
     tex.baseTexture.update();
-    const rt = PIXI.RenderTexture.create({ width: g.RTW, height: g.RTH });
+    const rt = PIXI.RenderTexture.create({ width: W, height: H });
     rt.baseTexture.scaleMode = smooth ? PIXI.SCALE_MODES.LINEAR : PIXI.SCALE_MODES.NEAREST;
     renderer.render(spr, { renderTexture: rt });
     cache.push(rt);
@@ -607,12 +608,15 @@ const srcImg = { body: mkViews(() => null), turret: mkViews(() => null) };
 const flipState = { body: mkViews(() => ({ h: false, v: false })), turret: mkViews(() => ({ h: false, v: false })) };
 const keyTolState = { body: mkViews(() => 75), turret: mkViews(() => 75) };   // per-image cutout sensitivity
 const polyState = { body: mkViews(() => null), turret: mkViews(() => null) }; // per-image polygon cutout ([x,y] px)
+const imgURLCache = { body: mkViews(() => null), turret: mkViews(() => null) }; // PNG data-URL cache (project saves)
+const voxB64 = { body: null, turret: null };                                  // base64 cache of imported .vox data
+let bulkLoad = false;                                                         // true while restoring a project
 function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
 }
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
-  barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
+  barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null };
 let bodyFaces = null, turretFaces = null, bodyBaked = null, turretBaked = null, lastPack = null;
 let voxMeta = null, voxTex = null, voxSpr = null, voxSig = '';         // orbit cube-render canvas
 let gVoxMeta = null, gVoxTex = null, gVoxSpr = null;                   // in-game inset cube-render canvas
@@ -785,7 +789,7 @@ function fitToVox() {
 function importVox(part, file) {
   const rd = new FileReader();
   rd.onload = () => {
-    try { const m = parseVox(rd.result); voxPart[part] = m; fitToVox(); rebuildSlices();
+    try { const m = parseVox(rd.result); voxPart[part] = m; voxB64[part] = null; fitToVox(); rebuildSlices();
       $('voxState').innerHTML = `<span class="lock">✓ ${part}: ${m.nx}×${m.ny}×${m.nz} voxels — foot ${state.foot}, ${part} layers ${part === 'body' ? state.bodyLayers : state.turretLayers}</span>`;
     } catch (e) { alert('Could not read that .vox — ' + e.message); }
   };
@@ -793,7 +797,7 @@ function importVox(part, file) {
 }
 $('voxBody').onchange = (e) => e.target.files[0] && importVox('body', e.target.files[0]);
 $('voxTurret').onchange = (e) => e.target.files[0] && importVox('turret', e.target.files[0]);
-$('voxClear').onclick = () => { voxPart.body = null; voxPart.turret = null; rebuildSlices(); $('voxState').textContent = 'Cleared — back to the photo carve.'; };
+$('voxClear').onclick = () => { voxPart.body = null; voxPart.turret = null; voxB64.body = null; voxB64.turret = null; rebuildSlices(); $('voxState').textContent = 'Cleared — back to the photo carve.'; };
 $('exportVox').onclick = exportVox;
 $('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').textContent = state.lightAz + '°'; rebuildSlices(); drawLight(); };
 $('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; rebuildSlices(); };
@@ -801,6 +805,7 @@ $('pal').oninput = (e) => { state.paletteN = +e.target.value; $('palV').textCont
 $('zScale').oninput = (e) => { state.zScale = +e.target.value / 100; $('zScaleV').textContent = state.zScale.toFixed(2) + '×'; rebuildSlices(); };
 $('smooth').onchange = (e) => { state.smooth = e.target.checked; };
 $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').textContent = state.sharp.toFixed(2); };
+$('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
 $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
 $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.cls = b.dataset.c; [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
 
@@ -818,9 +823,10 @@ document.querySelectorAll('.views').forEach((box) => {
 const pickFor = (part, view) => document.querySelector(`.vpick[data-part="${part}"][data-view="${view}"]`);
 function setView(pick, im) {
   const part = pick.dataset.part, view = pick.dataset.view;
-  voxPart[part] = null;                                                       // photos override an imported .vox
+  voxPart[part] = null; voxB64[part] = null;                                  // photos override an imported .vox
   srcImg[part][view] = im; flipState[part][view] = { h: false, v: false };   // new image → clear flips
   keyTolState[part][view] = 75; polyState[part][view] = null;                // …and reset the cutout tuning
+  imgURLCache[part][view] = null;
   renderView(pick);
 }
 function renderView(pick) {
@@ -829,7 +835,8 @@ function renderView(pick) {
   const fl = flipState[part][view], im = (fl.h || fl.v) ? flipCanvas(src, fl.h, fl.v) : src;
   imgs[part][view] = im;
   const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 128, 84); drawFit(g, keyedCanvas(im, keyTolState[part][view], polyState[part][view]), 128, 84);
-  pick.classList.add('set'); updateFlipBtns(pick); rebuildSlices();
+  pick.classList.add('set'); updateFlipBtns(pick);
+  if (!bulkLoad) rebuildSlices();                                             // restore rebuilds once at the end
 }
 function toggleFlip(part, view, axis) {
   if (!srcImg[part][view]) return;
@@ -955,39 +962,40 @@ $('setCam').onclick = () => {
 
 // ── BAKE ──
 $('bake').onclick = () => {
-  const foot = state.foot, bL = state.bodyLayers, tL = state.turretLayers, sp = layerSp(state.el);
+  const foot = state.foot, bL = state.bodyLayers, tL = state.turretLayers, sp = layerSp(state.el), B = state.bakeScale;
   const pivotPx = foot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
   const g = geom(foot, Math.max(bL, tL), sp, pivotPx);   // shared texture sized for the taller stack; both bottom-align at BASEY
   const t0 = performance.now();
-  const body = bakeAngleCache(app.renderer, bodyFaces, { frames: BODY_FRAMES, smooth: false, sharp: 0, g, pivotFrac: 0.5, el: state.el });
-  const turret = bakeAngleCache(app.renderer, turretFaces, { frames: TURRET_FRAMES, smooth: state.smooth, sharp: state.sharp, g, pivotFrac, el: state.el });
-  state.baked = { body, turret, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, bodyLayers: bL, turretLayers: tL };
-  bodyBaked = new PIXI.Sprite(body[0]); bodyBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); rig.addChild(bodyBaked);
-  turretBaked = new PIXI.Sprite(turret[0]); turretBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); rig.addChild(turretBaked);
-  gBodyBaked = new PIXI.Sprite(body[0]); gBodyBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); gUnit.addChild(gBodyBaked);   // in-game preview
-  gTurretBaked = new PIXI.Sprite(turret[0]); gTurretBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); gUnit.addChild(gTurretBaked);
-  const vram = ((g.RTW * g.RTH * 4 * (BODY_FRAMES + TURRET_FRAMES)) / 1048576).toFixed(1);
-  $('bakeState').innerHTML = `<span class="lock">✓ Baked in ${(performance.now() - t0).toFixed(0)}ms · ${g.RTW}×${g.RTH} · ~${vram}MB cache</span>`;
+  const body = bakeAngleCache(app.renderer, bodyFaces, { frames: BODY_FRAMES, smooth: false, sharp: 0, g, pivotFrac: 0.5, el: state.el, scale: B });
+  const turret = bakeAngleCache(app.renderer, turretFaces, { frames: TURRET_FRAMES, smooth: state.smooth, sharp: state.sharp, g, pivotFrac, el: state.el, scale: B });
+  state.baked = { body, turret, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, bodyLayers: bL, turretLayers: tL, scale: B };
+  const mkBaked = (tex, parent) => { const s = new PIXI.Sprite(tex);       // frames are B px/voxel → shrink to world size
+    s.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); s.scale.set(1 / B); parent.addChild(s); return s; };
+  bodyBaked = mkBaked(body[0], rig); turretBaked = mkBaked(turret[0], rig);
+  gBodyBaked = mkBaked(body[0], gUnit); gTurretBaked = mkBaked(turret[0], gUnit);   // in-game preview
+  const vram = ((g.RTW * B * g.RTH * B * 4 * (BODY_FRAMES + TURRET_FRAMES)) / 1048576).toFixed(1);
+  $('bakeState').innerHTML = `<span class="lock">✓ Baked in ${(performance.now() - t0).toFixed(0)}ms · ${g.RTW * B}×${g.RTH * B} · ~${vram}MB cache</span>`;
   $('saveUnit').disabled = false; $('dlSheet').disabled = false;
 };
 
 // pack a part's baked frames into one atlas canvas (grid), return { canvas, cols, cell:[w,h] }
-function packAtlas(cache, g) {
-  const n = cache.length, cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
-  const cv = document.createElement('canvas'); cv.width = cols * g.RTW; cv.height = rows * g.RTH;
+function packAtlas(cache) {
+  const n = cache.length, cw = cache[0].width, ch = cache[0].height, cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
+  const cv = document.createElement('canvas'); cv.width = cols * cw; cv.height = rows * ch;
   const ctx = cv.getContext('2d');
-  for (let i = 0; i < n; i++) { const fc = app.renderer.extract.canvas(cache[i]); ctx.drawImage(fc, (i % cols) * g.RTW, ((i / cols) | 0) * g.RTH); }
-  return { canvas: cv, cols, cell: [g.RTW, g.RTH] };
+  for (let i = 0; i < n; i++) { const fc = app.renderer.extract.canvas(cache[i]); ctx.drawImage(fc, (i % cols) * cw, ((i / cols) | 0) * ch); }
+  return { canvas: cv, cols, cell: [cw, ch] };
 }
 function buildPack() {
-  const b = state.baked, id = ($('uid').value || 'unit').trim();
-  const ba = packAtlas(b.body, b.g), ta = packAtlas(b.turret, b.g);
-  const pivot = [Math.round(b.g.CX), Math.round(b.g.BASEY)], mountDz = clamp(bodyMountZ + state.mountZ, 0, b.bodyLayers);
+  const b = state.baked, id = ($('uid').value || 'unit').trim(), B = b.scale || 1;
+  const ba = packAtlas(b.body), ta = packAtlas(b.turret);
+  const pivot = [Math.round(b.g.CX * B), Math.round(b.g.BASEY * B)], mountDz = clamp(bodyMountZ + state.mountZ, 0, b.bodyLayers);
   const totalH = Math.max(b.bodyLayers, mountDz + b.turretLayers);
   const pack = {
     id, class: state.cls, footprint: [b.foot, b.foot, totalH],
     camera: { azimuth: state.az | 0, elevation: state.el | 0 }, layerSpacing: Math.round(b.sp * 100) / 100,
     voxel: { height: state.zScale },
+    renderScale: B,                                    // atlas px per voxel — draw frames at 1/renderScale
     light: { azimuth: state.lightAz, contrast: state.lightK },
     parts: [
       { id: 'body', kind: 'directional', facings: b.bodyFrames, atlas: `${id}.body.png`, cell: ba.cell, cols: ba.cols, pivot, layers: b.bodyLayers, zeroFacing: '+x' },
@@ -1029,6 +1037,115 @@ $('dlSheet').onclick = () => {
   dl(`${built.pack.id}.json`, 'data:application/json,' + encodeURIComponent(JSON.stringify(built.pack, null, 2)));
 };
 $('dlManifest').onclick = () => dl('units.json', 'data:application/json,' + encodeURIComponent(JSON.stringify(loadManifest(), null, 2)));
+
+// ── PROJECT save/load: the full working state (source art, cutout tuning, every setting) as one snapshot.
+// Autosaves to IndexedDB per unit id (localStorage is too small for art) and restores on reopen; the same
+// snapshot downloads/loads as a portable .sfproj.json file. ──
+const idb = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const q = indexedDB.open('bulwark-stackforge', 1);
+    q.onupgradeneeded = () => q.result.createObjectStore('projects');
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+  }));
+  const op = (mode, fn) => open().then((db) => new Promise((res, rej) => {
+    const tx = db.transaction('projects', mode), rq = fn(tx.objectStore('projects'));
+    tx.oncomplete = () => res(rq && rq.result); tx.onerror = () => rej(tx.error);
+  }));
+  return { put: (k, v) => op('readwrite', (s) => s.put(v, k)), get: (k) => op('readonly', (s) => s.get(k)) };
+})();
+const b64FromU8 = (a) => { let s = ''; for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };
+const u8FromB64 = (s) => { const bin = atob(s), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; };
+const loadImgURL = (url) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+function imgURL(part, view) {
+  const im = srcImg[part][view]; if (!im) return null;
+  let u = imgURLCache[part][view];
+  if (!u) { const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+    c.getContext('2d').drawImage(im, 0, 0); u = imgURLCache[part][view] = c.toDataURL('image/png'); }
+  return u;
+}
+function snapshotProject() {
+  const images = {}, vox = {};
+  for (const part of ['body', 'turret']) {
+    images[part] = {}; for (const v of VIEWS) images[part][v] = imgURL(part, v);
+    const m = voxPart[part];
+    vox[part] = m ? { nx: m.nx, ny: m.ny, nz: m.nz, b64: voxB64[part] || (voxB64[part] = b64FromU8(m.data)) } : null;
+  }
+  const st = { ...state }; delete st.baked;
+  return { format: 'stackforge-project', version: 1, id: ($('uid').value || 'unit').trim(),
+    state: st, flips: flipState, keyTol: keyTolState, polys: polyState, images, vox };
+}
+function syncAllControls() {
+  const set = (id, val, lab) => { $(id).value = val; if (lab !== undefined) $(id + 'V').textContent = lab; };
+  set('az', state.az | 0, (state.az | 0) + '°'); set('el', state.el | 0, (state.el | 0) + '°'); set('taim', state.taim | 0, (state.taim | 0) + '°');
+  set('tdx', state.turretDx, '' + state.turretDx); set('tmz', state.mountZ, (state.mountZ > 0 ? '+' : '') + state.mountZ);
+  set('tpiv', state.turretPivot, '' + state.turretPivot);
+  set('blen', state.barrelLen, state.barrelLen || 'off'); set('brad', state.barrelRad, '' + state.barrelRad); set('belev', state.barrelElev, '' + state.barrelElev);
+  set('bodyLayers', state.bodyLayers, '' + state.bodyLayers); set('turretLayers', state.turretLayers, '' + state.turretLayers);
+  set('zScale', Math.round(state.zScale * 100), state.zScale.toFixed(2) + '×');
+  set('lightAz', state.lightAz, state.lightAz + '°'); set('lightK', state.lightK, '' + state.lightK);
+  set('pal', state.paletteN, state.paletteN || 'full');
+  set('sharp', Math.round(state.sharp * 100), state.sharp.toFixed(2)); set('bakeScale', state.bakeScale, state.bakeScale + '×');
+  $('res').value = state.foot; $('smooth').checked = state.smooth; $('spin').checked = state.spin;
+  [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
+  [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.p === state.part));
+  rig.scale.set(state.zoom);
+}
+async function loadProject(p) {
+  bulkLoad = true;
+  try {
+    $('uid').value = p.id || 'unit';
+    Object.assign(state, p.state || {}); state.baked = null;
+    for (const part of ['body', 'turret']) {
+      const pv = p.vox && p.vox[part];
+      voxPart[part] = pv ? { nx: pv.nx, ny: pv.ny, nz: pv.nz, data: u8FromB64(pv.b64) } : null;
+      voxB64[part] = pv ? pv.b64 : null;
+      for (const v of VIEWS) {
+        flipState[part][v] = (p.flips && p.flips[part] && p.flips[part][v]) || { h: false, v: false };
+        keyTolState[part][v] = (p.keyTol && p.keyTol[part] && p.keyTol[part][v]) || 75;
+        polyState[part][v] = (p.polys && p.polys[part] && p.polys[part][v]) || null;
+        const pick = pickFor(part, v), url = p.images && p.images[part] && p.images[part][v];
+        if (url) { srcImg[part][v] = await loadImgURL(url); imgURLCache[part][v] = url; renderView(pick); }
+        else {
+          srcImg[part][v] = null; imgs[part][v] = null; imgURLCache[part][v] = null;
+          pick.classList.remove('set'); updateFlipBtns(pick);
+          pick.querySelector('canvas').getContext('2d').clearRect(0, 0, 128, 84);
+        }
+      }
+    }
+  } finally { bulkLoad = false; }
+  syncAllControls(); rebuildSlices(); drawLight(); renderRoster();
+}
+let autosaveTimer = 0;
+function scheduleAutosave() { if (bulkLoad) return; clearTimeout(autosaveTimer); autosaveTimer = setTimeout(doAutosave, 800); }
+async function doAutosave() {
+  if (bulkLoad) { scheduleAutosave(); return; }
+  try {
+    const p = snapshotProject();
+    await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id);
+    $('projState').textContent = `Autosaved "${p.id}" · ${new Date().toLocaleTimeString()}`;
+  } catch (e) { /* storage unavailable — project file still works */ }
+}
+document.addEventListener('input', scheduleAutosave, true);
+document.addEventListener('change', scheduleAutosave, true);
+document.addEventListener('click', scheduleAutosave, true);
+document.addEventListener('visibilitychange', () => { if (document.hidden) doAutosave(); });
+$('projSave').onclick = () => {
+  const p = snapshotProject(), url = URL.createObjectURL(new Blob([JSON.stringify(p)], { type: 'application/json' }));
+  dl(`${p.id}.sfproj.json`, url); setTimeout(() => URL.revokeObjectURL(url), 1500);
+};
+$('projLoad').addEventListener('change', (e) => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const p = JSON.parse(rd.result);
+      if (p.format !== 'stackforge-project') throw new Error('not a Stack Forge project file');
+      loadProject(p).then(() => { $('projState').textContent = `Loaded project "${p.id}".`; scheduleAutosave(); });
+    } catch (err) { alert('Could not load that project — ' + err.message); }
+  };
+  rd.readAsText(f);
+});
 
 // ── faction unit set (left panel): ALL factions; a window per unit (empty = "needs art"); add units ──
 const FACTIONS = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water', 'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies (Chem)', 'System'];
@@ -1091,8 +1208,17 @@ function selectUnit(id) {
   }
   document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
   rebuildSlices(); drawLight();
+  idb.get('proj:' + id).then((p) => { if (p) loadProject(p); }).catch(() => {});   // resume this unit's WIP
 }
 
 syncInputs(); renderManifest(); layout(); update(); updateGamePreview(); initFactions();
-window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, buildModel, buildFaces, renderParts, drawScene, keyedCropped, gridStretch, parseVox, voxPart, fitToVox, collectVox, writeVox, exportVox, setGSpin, resizePreview, setZoom, keyTolState, polyState, openKeyModal,
+(async () => {                                                     // resume the last working session
+  try {
+    const last = localStorage.getItem('bulwark:sf:last');
+    if (!last) return;
+    const p = await idb.get('proj:' + last);
+    if (p) { await loadProject(p); $('projState').textContent = `Restored "${p.id}" from autosave.`; }
+  } catch (e) { /* no stored session */ }
+})();
+window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, buildModel, buildFaces, renderParts, drawScene, keyedCropped, gridStretch, parseVox, voxPart, fitToVox, collectVox, writeVox, exportVox, setGSpin, resizePreview, setZoom, keyTolState, polyState, openKeyModal, snapshotProject, loadProject,
   gdbg: () => ({ baked: !!state.baked, gbaked: !!gBodyBaked, gvis: gBodyBaked && gBodyBaked.visible, gkids: gUnit.children.length }) };   // debug/test hook

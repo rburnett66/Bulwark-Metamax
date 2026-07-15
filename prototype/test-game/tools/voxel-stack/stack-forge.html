@@ -164,11 +164,13 @@
 
     <div class="grp">
       <h2>4 · Bake (smooth / sharpen)</h2>
+      <div class="row"><label>Bake res</label><input type="range" id="bakeScale" min="1" max="4" step="1" value="2"><span class="val" id="bakeScaleV">2×</span></div>
       <div class="row"><label>Smooth (2×)</label><input type="checkbox" id="smooth" checked><span class="note" style="margin:0">supersample AA</span></div>
       <div class="row"><label>Sharpen</label><input type="range" id="sharp" min="0" max="120" value="60"><span class="val" id="sharpV">0.60</span></div>
       <button id="bake">Bake angle cache</button>
       <div class="note" id="bakeState">Not baked. Bake renders the per-angle cache (body facings + turret 64
-        angles) with the CAS-lite unsharp pass. Preview switches to the baked frames.</div>
+        angles) with the CAS-lite unsharp pass. <b>Bake res</b> = atlas px per voxel — 1× is small but soft when
+        the game scales it up; 2× stays crisp at game size (4× the VRAM). Preview switches to the baked frames.</div>
     </div>
 
     <div class="grp">
@@ -177,6 +179,11 @@
       <button class="ghost" id="dlSheet" disabled style="margin-top:6px">Download sprite sheet(s) + JSON</button>
       <div class="note" id="saveState">Bake first. Save writes the pack (atlases + &lt;unit&gt;.json) to the
         manifest (browser) and offers a PNG sheet + JSON download the game loads.</div>
+      <button class="ghost" id="projSave" style="margin-top:8px">⬇ Save project file</button>
+      <label style="display:block;text-align:center;background:#16283a;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:9px 0;font-weight:700;letter-spacing:.06em;cursor:pointer;margin-top:6px;font-size:13px">⬆ Load project file<input type="file" id="projLoad" accept=".json,application/json" style="display:none"></label>
+      <div class="note" id="projState">Work-in-progress autosaves in this browser (source art, cutout tuning,
+        every setting) and restores when you reopen or click the unit's roster card. The project file is the
+        same snapshot as a portable download.</div>
       <pre id="packJson">{ }</pre>
     </div>
 
