@@ -112,7 +112,11 @@
           <div class="row"><label>Map #</label><select id="slotMap"></select></div>
           <button class="ghost" id="saveSlot" style="margin-top:2px">Save map to slot</button>
           <div class="row" style="margin-top:8px"><label>Load</label><select id="loadSlot"><option value="">— saved maps —</option></select><button class="ghost" id="loadSlotBtn" style="width:auto;padding:5px 10px;margin:0">Load</button></div>
-          <div id="slotInfo" class="note">Stored in this browser (localStorage), keyed by faction + map number. The game will read these slots when the campaign is wired to factions.</div>
+          <button class="ghost" id="exportSlot" style="margin-top:8px">Export slot file (ship path)</button>
+          <button class="ghost" id="exportAllSlots" style="margin-top:4px">Export ALL saved slots</button>
+          <div id="slotInfo" class="note">The game loads the ENEMY faction's slot for each map number — localStorage first
+            (this browser, instant), then the committed file. Export drops
+            <b>&lt;faction&gt;-map-&lt;n&gt;.json</b> — commit it to <b>content/maps/forge/</b> to ship.</div>
         </div>
 
         <div class="grp">
@@ -393,6 +397,29 @@ $('saveSlot').addEventListener('click', () => {
 $('loadSlotBtn').addEventListener('click', () => {
   const id = $('loadSlot').value; if (!id) return;
   const slots = loadSlots(); if (slots[id]) { loadState(slots[id]); $('slotInfo').textContent = `Loaded ${id}`; }
+});
+// ── SHIP PATH export: slot → content/maps/forge/<faction>-map-<n>.json (the file the game fetches
+// when no localStorage slot exists — survives browser wipes, deploys to Pages) ──
+const fileSlug = (f) => f.toLowerCase().replace(/[^a-z]+/g, '-').replace(/(^-+|-+$)/g, '');
+function dlJson(name, obj) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj)], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+$('exportSlot').addEventListener('click', () => {
+  const f = $('slotFaction').value, m = $('slotMap').value;
+  const slots = loadSlots();
+  const obj = slots[slotId(f, m)] || exportObj();          // the saved slot, else the map on screen
+  dlJson(`${fileSlug(f)}-map-${m}.json`, obj);
+  $('slotInfo').textContent = `Exported ${fileSlug(f)}-map-${m}.json → commit to content/maps/forge/`;
+});
+$('exportAllSlots').addEventListener('click', () => {
+  const slots = loadSlots(), keys = Object.keys(slots);
+  keys.forEach((k, i) => {
+    const mm = k.match(/^(.*) · map (\d+)$/); if (!mm) return;
+    setTimeout(() => dlJson(`${fileSlug(mm[1])}-map-${mm[2]}.json`, slots[k]), i * 350);
+  });
+  $('slotInfo').textContent = keys.length ? `Exported ${keys.length} file(s) → content/maps/forge/` : 'No saved slots yet.';
 });
 // apply a saved map: restore knobs, deterministically regen terrain, then overlay saved comp
 function loadState(obj) {
