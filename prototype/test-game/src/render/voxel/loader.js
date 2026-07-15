@@ -96,11 +96,27 @@ export function buildVoxelUnit(store, id, tilePx, radius, spriteOverCollision) {
     s.scale.set(scale);
     return s;
   };
+  // SILHOUETTE SHADOW: the unit's own frame flipped about the ground line, squashed and sheared away
+  // from the world light, tinted black — the shadow matches the real shape and turns with the facing.
+  // Same textures as the unit, so it batches; no extra draws, no filters.
+  const lightAz = ((pack.light && pack.light.azimuth) != null ? pack.light.azimuth : 135) * Math.PI / 180;
+  const lean = -Math.cos(lightAz) * 0.9;
+  const mkShadow = (p, alpha) => {
+    const s = mk(p);
+    s.tint = 0x000000; s.alpha = alpha;
+    s.scale.set(scale, -scale * 0.45); s.skew.x = lean;
+    return s;
+  };
+  const shBody = parts.body ? mkShadow(parts.body, 0.24) : null;
+  const shTurret = parts.turret ? mkShadow(parts.turret, 0.12) : null;
+  if (shBody) c.addChild(shBody);
+  if (shTurret) c.addChild(shTurret);
   const body = parts.body ? mk(parts.body) : null;
   if (body) c.addChild(body);
   const turret = parts.turret ? mk(parts.turret) : null;
   if (turret) c.addChild(turret);
-  c.__vox = { pack, parts, body, turret, scale, se: Math.sin(((pack.camera && pack.camera.elevation) || 30) * Math.PI / 180) };
+  c.__shadows = [shBody, shTurret].filter(Boolean);                 // renderer grounds these under flyers
+  c.__vox = { pack, parts, body, turret, shBody, shTurret, scale, se: Math.sin(((pack.camera && pack.camera.elevation) || 30) * Math.PI / 180) };
   return c;
 }
 
@@ -113,16 +129,19 @@ export function updateVoxelUnit(c, headingRad, aimRad) {
   const v = c.__vox;
   if (!v) return;
   if (v.body) {
-    const d = v.parts.body.def;
-    v.body.texture = v.parts.body.frames[angleBucket(headingRad, d.facings)];
+    const d = v.parts.body.def, tex = v.parts.body.frames[angleBucket(headingRad, d.facings)];
+    v.body.texture = tex;
+    if (v.shBody) v.shBody.texture = tex;                                          // shadow turns with the hull
   }
   if (v.turret) {
     const d = v.parts.turret.def;
-    v.turret.texture = v.parts.turret.frames[angleBucket(aimRad == null ? headingRad : aimRad, d.angles)];
+    const tex = v.parts.turret.frames[angleBucket(aimRad == null ? headingRad : aimRad, d.angles)];
+    v.turret.texture = tex;
     const m = d.mount || [0, 0, 0], B = (v.pack.renderScale || 1) * v.scale;
     const gx = m[0] * Math.cos(headingRad) - (m[1] || 0) * Math.sin(headingRad);   // mount, unit-local → world
     const gy = m[0] * Math.sin(headingRad) + (m[1] || 0) * Math.cos(headingRad);
     v.turret.x = gx * B;
     v.turret.y = (gy * v.se - (m[2] || 0) * (v.pack.layerSpacing || 0)) * B;       // ground y foreshortened; dz lifts
+    if (v.shTurret) { v.shTurret.texture = tex; v.shTurret.x = gx * B; }           // barrel shadow tracks the aim
   }
 }

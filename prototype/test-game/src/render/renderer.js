@@ -1058,6 +1058,8 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
             if (tgt && tgt.pos) aim = Math.atan2(tgt.pos.y - u.pos.y, tgt.pos.x - u.pos.x);
           }
           spr.__aim = (spr.__aim == null) ? aim : approachAngle(spr.__aim, aim, 0.35);
+          // silhouette shadows stay ON THE GROUND: the container lifts with flyers, so counter-shift
+          if (spr.__shadows) for (const sh of spr.__shadows) sh.y = flyLift + t * 0.05;
           // BANK from the turn rate — Tier B's whole trick, and Tier C's roll input (spec §3B/§3C)
           let dHead = (spr.__prevHeading == null) ? 0 : heading - spr.__prevHeading;
           dHead = Math.atan2(Math.sin(dHead), Math.cos(dHead));
@@ -1074,10 +1076,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
               spr.skew.x = spr.__bank * 0.3;                         // stays inside the batch (spec §3B)
             }
           }
-          // ground shadow at the contact point + hp bar — same contract as the authored path
-          gU.beginFill(0x000000, 0.26);
-          gU.drawEllipse(pa.x, pa.y + t * 0.06, t * (u.radius || 0.3) * 0.62, t * (u.radius || 0.3) * 0.31);
-          gU.endFill();
+          // hp bar only — the unit carries its own silhouette shadow (no flat ellipse for voxel units)
           drawHpBar((u.domain === 'Flyer' ? gA : gU), pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
           continue;   // voxel sprite drawn — skip authored art and the primitive
         }

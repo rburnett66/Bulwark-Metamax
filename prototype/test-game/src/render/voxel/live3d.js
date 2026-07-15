@@ -76,7 +76,14 @@ export function buildLive3D(pack, tilePx, radius, spriteOverCollision) {
   const spr = new PIXI.Sprite(tex);
   spr.anchor.set(0.5, 0.5);
   const c = new PIXI.Container();
-  c.addChild(spr);
+  // silhouette shadow: the live model's own canvas flipped/squashed/sheared — updates for free since
+  // the texture re-renders in place; the renderer grounds it under flying units via c.__shadows
+  const laS = ((pack.light && pack.light.azimuth) != null ? pack.light.azimuth : 135) * Math.PI / 180;
+  const sh = new PIXI.Sprite(tex);
+  sh.anchor.set(0.5, 0.5); sh.tint = 0x000000; sh.alpha = 0.22;
+  sh.scale.set(1, -0.45); sh.skew.x = -Math.cos(laS) * 0.9;
+  c.addChild(sh); c.addChild(spr);
+  c.__shadows = [sh];
   c.__live3d = {
     faces, h, S, cv, ctx, tex, R,
     el: (pack.camera && pack.camera.elevation) || 30,

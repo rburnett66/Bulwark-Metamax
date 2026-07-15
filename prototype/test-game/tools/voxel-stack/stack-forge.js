@@ -744,8 +744,9 @@ function flipCanvas(im, h, v) {
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null };
 let bodyFaces = null, turretFaces = null, bodyBaked = null, turretBaked = null, lastPack = null;
-let voxMeta = null, voxTex = null, voxSpr = null, voxSig = '';         // orbit cube-render canvas
-let gVoxMeta = null, gVoxTex = null, gVoxSpr = null;                   // in-game inset cube-render canvas
+let voxMeta = null, voxTex = null, voxSpr = null, voxShadow = null, voxSig = '';   // orbit cube-render canvas
+let gVoxMeta = null, gVoxTex = null, gVoxSpr = null, gVoxShadow = null;            // in-game inset canvas
+const shadowLean = () => -Math.cos(state.lightAz * Math.PI / 180) * 0.9;   // shear away from the sun
 let voxBounds = { R: 64, HT: 40 };                                     // current model bounds (set by rebuild)
 const INSET_S = 3;                                                     // inset render px/voxel (scaled to game size)
 
@@ -758,9 +759,15 @@ function mkTarget(S, R, HT) {
 }
 const orbitS = () => clamp(Math.ceil(state.zoom), 2, 8);   // render density tracks the zoom → crisp up close
 function buildOrbitTarget(S) {
-  if (voxSpr) { voxSpr.destroy(); voxTex.destroy(true); }
+  if (voxSpr) { voxSpr.destroy(); voxShadow.destroy(); voxTex.destroy(true); }
   voxMeta = mkTarget(S, voxBounds.R, voxBounds.HT);
   voxTex = PIXI.Texture.from(voxMeta.cv);
+  // silhouette shadow: the model's own render flipped about the ground line, sheared off the sun
+  voxShadow = new PIXI.Sprite(voxTex);
+  voxShadow.anchor.set(0.5, voxMeta.groundY / voxMeta.Hp); voxShadow.position.set(0, state.baseY + 1);
+  voxShadow.tint = 0x000000; voxShadow.alpha = 0.22;
+  voxShadow.scale.set(1 / S, -0.45 / S); voxShadow.skew.x = shadowLean();
+  rig.addChild(voxShadow);
   voxSpr = new PIXI.Sprite(voxTex); voxSpr.scale.set(1 / S);
   voxSpr.anchor.set(0.5, voxMeta.groundY / voxMeta.Hp); voxSpr.position.set(0, state.baseY);
   rig.addChild(voxSpr); voxSig = '';
@@ -788,9 +795,14 @@ function rebuildSlices() {
   voxBounds = { R: Math.ceil(foot * 0.71 + Math.abs(state.turretDx) + foot * Math.abs(state.turretPivot) / 100) + 2,
     HT: Math.ceil((state.bodyLayers + state.turretLayers + 4) * h) };
   buildOrbitTarget(orbitS());
-  if (gVoxSpr) { gVoxSpr.destroy(); gVoxTex.destroy(true); }
+  if (gVoxSpr) { gVoxSpr.destroy(); gVoxShadow.destroy(); gVoxTex.destroy(true); }
   gVoxMeta = mkTarget(INSET_S, voxBounds.R, voxBounds.HT);
   gVoxTex = PIXI.Texture.from(gVoxMeta.cv);
+  gVoxShadow = new PIXI.Sprite(gVoxTex);
+  gVoxShadow.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp); gVoxShadow.position.set(0, 1);
+  gVoxShadow.tint = 0x000000; gVoxShadow.alpha = 0.22;
+  gVoxShadow.scale.set(1 / INSET_S, -0.45 / INSET_S); gVoxShadow.skew.x = shadowLean();
+  gUnit.addChild(gVoxShadow);
   gVoxSpr = new PIXI.Sprite(gVoxTex); gVoxSpr.scale.set(1 / INSET_S);
   gVoxSpr.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp); gVoxSpr.position.set(0, 0);
   gUnit.addChild(gVoxSpr);
@@ -804,14 +816,14 @@ function update() {
   const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
   const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR) * se;   // mount offset, foreshortened
   if (state.baked) {
-    voxSpr.visible = false;
+    voxSpr.visible = false; voxShadow.visible = false;
     const bb = bucketOf(azR, state.baked.bodyFrames), tb = bucketOf(azR + taimR, state.baked.turretFrames);
     bodyBaked.texture = state.baked.body[bb]; bodyBaked.visible = showB; bodyBaked.position.set(0, state.baseY);
     turretBaked.texture = state.baked.turret[tb]; turretBaked.visible = showT;
     turretBaked.position.set(ox, state.baseY - mountDz * sp + oy);
     return;
   }
-  voxSpr.visible = true;
+  voxSpr.visible = true; voxShadow.visible = true;
   // only re-render the cube scene when something it depends on actually changed
   const sig = state.az.toFixed(1) + '|' + state.el.toFixed(1) + '|' + state.taim.toFixed(1) + '|' + state.turretDx + '|' +
     state.turretPivot + '|' + state.mountZ + '|' + state.part + '|' + state.lightAz + '|' + state.lightK + '|' + state.zScale;
@@ -828,15 +840,17 @@ function updateGamePreview() {
   gUnit.scale.set(uScale); gUnit.position.set(gAnchor.x, gAnchor.y + GAME_TILE * 0.12);
   const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
   const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR) * se, r = 0.75;
-  gShadow.clear(); gShadow.beginFill(0x000000, 0.26); gShadow.drawEllipse(gAnchor.x, gAnchor.y + GAME_TILE * 0.06, GAME_TILE * r * 0.62, GAME_TILE * r * 0.31); gShadow.endFill();
+  // faint contact blob only — the silhouette shadow carries the read for the live cube render
+  gShadow.clear(); gShadow.beginFill(0x000000, state.baked ? 0.26 : 0.10);
+  gShadow.drawEllipse(gAnchor.x, gAnchor.y + GAME_TILE * 0.06, GAME_TILE * r * 0.62, GAME_TILE * r * 0.31); gShadow.endFill();
   if (state.baked && gBodyBaked) {                                    // show the actual baked (smooth) game asset
-    gVoxSpr.visible = false;
+    gVoxSpr.visible = false; gVoxShadow.visible = false;
     const bb = bucketOf(azR, state.baked.bodyFrames), tb = bucketOf(azR + taimR, state.baked.turretFrames);
     gBodyBaked.texture = state.baked.body[bb]; gBodyBaked.visible = showB; gBodyBaked.position.set(0, 0);
     gTurretBaked.texture = state.baked.turret[tb]; gTurretBaked.visible = showT; gTurretBaked.position.set(ox, -mountDz * spG + oy);
     return;
   }
-  gVoxSpr.visible = true;
+  gVoxSpr.visible = true; gVoxShadow.visible = true;
   drawScene(gVoxMeta, state.el, azR, azR + taimR);                    // live cube render at game scale
   gVoxTex.baseTexture.update();
 }
