@@ -12,6 +12,7 @@
  */
 
 import { MAX_LIVE_3D } from '../../data/renderTiers.js';
+import { VOXEL_UNIT_SCALE } from './loader.js';
 
 const WALL = 0.52, RANGE = 0.46;              // the baked pipeline's lighting ramp (Stack Forge)
 const EPS = 0.01;                             // re-render threshold (rad) per orientation axis
@@ -67,7 +68,8 @@ export function buildLive3D(pack, tilePx, radius, spriteOverCollision) {
   const faces = buildFaces(m);
   if (!faces.length) return null;
   const h = (pack.voxel && pack.voxel.height) || 1.8;
-  const targetW = tilePx * 2 * (radius || 0.3) * (spriteOverCollision || 4 / 3);
+  const tiles = pack.scale && pack.scale.tiles;                       // same sizing + presentation factor
+  const targetW = (tiles ? tilePx * tiles : tilePx * 2 * (radius || 0.3) * (spriteOverCollision || 4 / 3)) * VOXEL_UNIT_SCALE;
   const S = Math.max(1, targetW / m.nx);                              // screen px per voxel
   const R = Math.ceil(Math.sqrt(m.nx * m.nx + m.ny * m.ny + m.nz * m.nz * h * h) / 2) + 2;
   const cv = document.createElement('canvas'); cv.width = cv.height = Math.ceil(2 * R * S);

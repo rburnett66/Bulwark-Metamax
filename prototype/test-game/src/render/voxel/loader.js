@@ -19,6 +19,11 @@ import { angleBucket } from './select.js';
 
 const MANIFEST_KEY = 'bulwark:stackforge';
 
+/** Global ON-MAP presentation factor for voxel units (owner 2026-07-17: 50% smaller on the board).
+ *  Applied at render only — the pack's VOX_PER_TILE scale contract and the tool are untouched, so
+ *  relative sizes between units stay exact; this just shrinks the whole voxel fleet on the map. */
+export const VOXEL_UNIT_SCALE = 0.5;
+
 /** Load every available pack. Never throws — returns { units, ready } (empty when nothing found). */
 export async function loadVoxelUnits() {
   const store = { units: {}, ready: false };
@@ -87,7 +92,7 @@ export function buildVoxelUnit(store, id, tilePx, radius, spriteOverCollision) {
   // at exactly that many tiles — voxel density is constant across every unit on the board. Packs
   // without the contract (older saves) fall back to the sim-radius sizing.
   const tiles = pack.scale && pack.scale.tiles;
-  const targetW = tiles ? tilePx * tiles : tilePx * 2 * (radius || 0.3) * (spriteOverCollision || 4 / 3);
+  const targetW = (tiles ? tilePx * tiles : tilePx * 2 * (radius || 0.3) * (spriteOverCollision || 4 / 3)) * VOXEL_UNIT_SCALE;
   const scale = targetW / Math.max(1, pack.footprint[0] * B);       // screen px per atlas px
   const c = new PIXI.Container();
   const mk = (p) => {
