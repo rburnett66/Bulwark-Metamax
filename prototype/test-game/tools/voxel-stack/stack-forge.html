@@ -75,6 +75,19 @@
     .manifest { font-size:11px; }
     .manifest .u { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #1a2a3a; }
     .manifest .u b { color:var(--gold); }
+    #keyModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
+    #keyModal[hidden] { display:none; }
+    #keyBox { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 20px; width:min(1620px, 94vw); max-height:94vh; overflow:auto; box-shadow:0 18px 60px rgba(0,0,0,.6); }
+    #keyBox h2 { font-size:11px; letter-spacing:.18em; color:var(--muted); margin:0 0 4px; text-transform:uppercase; }
+    #keyBox h2 span { color:var(--gold); }
+    #keyCanvas { display:block; margin:8px auto 10px; max-width:100%; border:1px solid var(--line); border-radius:6px;
+      background:repeating-conic-gradient(#20242e 0 25%, #171a22 0 50%) 0 0/14px 14px; }
+    #keyBox button.on { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:#d9a441; }
+    #saveAsModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
+    #saveAsModal[hidden] { display:none; }
+    #saveAsBox { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; width:380px; max-width:92vw; box-shadow:0 18px 60px rgba(0,0,0,.6); }
+    #saveAsBox h2 { font-size:11px; letter-spacing:.18em; color:var(--muted); margin:0 0 6px; text-transform:uppercase; }
+    #saveAsBox h2 span { color:var(--gold); }
   </style>
   <script src="../../vendor/pixi.min.js"></script>
 </head>
@@ -104,6 +117,15 @@
       <div class="row"><label>Auto-spin</label><input type="checkbox" id="spin"><span class="note" style="margin:0">demo smooth turret</span></div>
       <button class="ghost" id="setCam" style="margin-top:4px">Set camera for bake</button>
       <div class="note" id="camState">Camera not set — orbit to a look, then Set.</div>
+      <h2 style="font-size:10px;letter-spacing:.2em;color:var(--muted);margin:12px 0 6px;text-transform:uppercase">Scale · side views</h2>
+      <div class="row" style="margin-bottom:6px;gap:4px">
+        <select id="chartA" style="flex:1;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:3px 5px;font-size:10.5px"></select>
+        <span class="note" style="margin:0">vs</span>
+        <select id="chartB" style="flex:1;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:3px 5px;font-size:10.5px"></select>
+      </div>
+      <canvas id="scaleChart" width="204" height="200" style="width:100%;background:#0a121c;border:1px solid var(--line);border-radius:6px"></canvas>
+      <div class="note" id="scaleNote"><b>1 tile = 32 voxels</b> — the fixed world scale, every unit. Bigger unit ⇒ higher
+        Resolution (64px = 2 tiles, 96 = 3, 128 = 4). Both rows share one ruler, so sizes compare honestly.</div>
     </div>
   </div>
   <div id="side">
@@ -118,10 +140,14 @@
       <h2>1 · Unit + parts</h2>
       <div class="row"><label>Unit id</label><input type="text" id="uid" value="abrams" placeholder="unit id"></div>
       <div class="row"><label>Class</label><div class="seg" id="clsSeg"><button data-c="ground" class="on">Ground</button><button data-c="air">Air</button><button data-c="structure">Structure</button></div></div>
-      <div class="row"><label>Resolution</label><select id="res" style="flex:1;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px"><option>32</option><option>48</option><option selected>64</option><option>96</option><option>128</option></select><span class="note" style="margin:0">px cell</span></div>
+      <div class="row"><label>Resolution</label><select id="res" style="flex:1;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px"><option>32</option><option>48</option><option selected>64</option><option>96</option><option>128</option></select><span class="note" style="margin:0" id="resTiles">= 2 tiles</span></div>
+      <div class="row"><label>Unit size</label><input type="range" id="uSize" min="50" max="500" step="5" value="200"><span class="val" id="uSizeV">2.00 t</span></div>
+      <div class="note" style="margin:-2px 0 2px">Fine world-size control on the same voxel grid: 1 tile = 32 voxels, always. A
+        20% bigger unit gets 20% more voxels (layers scale along) — voxel size on the board never changes.</div>
       <div class="row"><label>Base layers</label><input type="range" id="bodyLayers" min="4" max="40" value="16"><span class="val" id="bodyLayersV">16</span></div>
       <div class="row"><label>Turret layers</label><input type="range" id="turretLayers" min="3" max="40" value="12"><span class="val" id="turretLayersV">12</span></div>
-      <div class="note" style="margin:-2px 0 2px">Stack height per part (a turret is usually shorter than the hull). Footprint px = Resolution. Higher = crisper/taller, bigger sheet + VRAM.</div>
+      <div class="row"><label>Cube height</label><input type="range" id="zScale" min="50" max="300" value="180"><span class="val" id="zScaleV">1.80×</span></div>
+      <div class="note" style="margin:-2px 0 2px">Stack height per part (a turret is usually shorter than the hull). Footprint px = Resolution. Cube height stretches each voxel vertically — <b>1.00×</b> = true cubes, higher reads chunkier. Higher = crisper/taller, bigger sheet + VRAM.</div>
       <div class="row"><label>Voxel .vox</label>
         <label class="ghost" style="flex:1;text-align:center;padding:6px 0;border-radius:6px;cursor:pointer;font-size:11px;background:#16283a;border:1px solid var(--line)">→ Base<input type="file" id="voxBody" accept=".vox" style="display:none"></label>
         <label class="ghost" style="flex:1;text-align:center;padding:6px 0;border-radius:6px;cursor:pointer;font-size:11px;background:#16283a;border:1px solid var(--line)">→ Turret<input type="file" id="voxTurret" accept=".vox" style="display:none"></label>
@@ -133,9 +159,10 @@
       <div class="views" data-part="body"></div>
       <div class="note" style="margin:6px 0 4px">TURRET (smooth stack):</div>
       <div class="views" data-part="turret"></div>
-      <div class="note">Draw each part from up to 4 orthographic angles — <b>Top</b> (footprint + colour), <b>Side</b> +
-        <b>Front</b> carve the height, <b>Back</b> for asymmetry (else Front is mirrored). Top alone = flat extrude;
-        Top+Side = real height; +Front = full space-carve. Click a slot to browse, or <b>hover a slot + Ctrl+V to paste</b>.
+      <div class="note">Draw each part from up to 4 orthographic angles — <b>Top</b> (footprint + top colour), <b>Side</b> +
+        <b>Front</b> carve the height <b>and paint the cube walls they depict</b> (side → long walls, front → nose),
+        <b>Back</b> paints the rear (else Front is mirrored). Top alone = flat extrude; Top+Side = real height;
+        +Front = full space-carve. Click a slot to browse, or <b>hover a slot + Ctrl+V to paste</b>.
         Opaque images get their corner keyed out. No files → placeholder.</div>
     </div>
 
@@ -154,19 +181,27 @@
 
     <div class="grp">
       <h2>4 · Bake (smooth / sharpen)</h2>
+      <div class="row"><label>Bake res</label><input type="range" id="bakeScale" min="1" max="4" step="1" value="2"><span class="val" id="bakeScaleV">2×</span></div>
       <div class="row"><label>Smooth (2×)</label><input type="checkbox" id="smooth" checked><span class="note" style="margin:0">supersample AA</span></div>
       <div class="row"><label>Sharpen</label><input type="range" id="sharp" min="0" max="120" value="60"><span class="val" id="sharpV">0.60</span></div>
       <button id="bake">Bake angle cache</button>
       <div class="note" id="bakeState">Not baked. Bake renders the per-angle cache (body facings + turret 64
-        angles) with the CAS-lite unsharp pass. Preview switches to the baked frames.</div>
+        angles) with the CAS-lite unsharp pass. <b>Bake res</b> = atlas px per voxel — 1× is small but soft when
+        the game scales it up; 2× stays crisp at game size (4× the VRAM). Preview switches to the baked frames.</div>
     </div>
 
     <div class="grp">
       <h2>5 · Save unit</h2>
+      <div class="row"><label>Embed model</label><input type="checkbox" id="embedModel"><span class="note" style="margin:0">Tier C live-3D — ships the voxel data in the pack</span></div>
       <button class="ghost" id="saveUnit" disabled>Save to units manifest</button>
       <button class="ghost" id="dlSheet" disabled style="margin-top:6px">Download sprite sheet(s) + JSON</button>
       <div class="note" id="saveState">Bake first. Save writes the pack (atlases + &lt;unit&gt;.json) to the
         manifest (browser) and offers a PNG sheet + JSON download the game loads.</div>
+      <button class="ghost" id="projSave" style="margin-top:8px">⬇ Save project file</button>
+      <label style="display:block;text-align:center;background:#16283a;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:9px 0;font-weight:700;letter-spacing:.06em;cursor:pointer;margin-top:6px;font-size:13px">⬆ Load project file<input type="file" id="projLoad" accept=".json,application/json" style="display:none"></label>
+      <div class="note" id="projState">Work-in-progress autosaves in this browser (source art, cutout tuning,
+        every setting) and restores when you reopen or click the unit's roster card. The project file is the
+        same snapshot as a portable download.</div>
       <pre id="packJson">{ }</pre>
     </div>
 
@@ -180,6 +215,37 @@
 
       </div>
     </div>
+  </div>
+</div>
+<div id="saveAsModal" hidden>
+  <div id="saveAsBox">
+    <h2>Save unit — <span id="saveAsTitle"></span></h2>
+    <div class="note" style="margin:0 0 10px">Save the model you're looking at as this unit? The tool sets the id,
+      bakes the angle cache with the current camera + bake settings, and writes the pack to the units manifest —
+      reload the game and the unit is in. You can keep editing afterwards.</div>
+    <button id="saveAsSprites">💾 Save as sprites (baked)</button>
+    <button class="ghost" id="saveAs3D" style="margin-top:6px">🧊 Save as 3D (live voxel model + baked fallback)</button>
+    <button class="ghost" id="saveAsEdit" style="margin-top:6px">✎ Just switch to this id (no save)</button>
+    <button class="ghost" id="saveAsCancel" style="margin-top:6px">Cancel</button>
+  </div>
+</div>
+<div id="keyModal" hidden>
+  <div id="keyBox">
+    <h2>Tune cutout — <span id="keyTitle"></span></h2>
+    <canvas id="keyCanvas" width="460" height="320"></canvas>
+    <div class="row"><label>Sensitivity</label><input type="range" id="keyTol" min="5" max="220" value="75"><span class="val" id="keyTolV">75</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="ghost" id="keyPoly">✏ Draw polygon</button>
+      <button class="ghost" id="keyPolyInv">➕ Keep inside</button>
+      <button class="ghost" id="keyPolyUndo">↩ Undo</button>
+      <button class="ghost" id="keyPolyClear">✕ Clear</button>
+    </div>
+    <div class="note" style="margin:0 0 8px">Sensitivity: higher removes more background (looser match to the border colour),
+      lower keeps more edge pixels. <b>Polygons</b>: click to place points, click the first point to close a shape, draw as many
+      as you need. <b style="color:#f2c869">Keep</b> shapes union into the subject (everything outside all keeps is cut);
+      <b style="color:#e0625f">Cut</b> shapes remove what's inside them. Toggle the mode button before closing a shape.
+      Esc cancels an unfinished shape. The magenta line is the final cutout outline the carve + wall painting will use.</div>
+    <div style="display:flex;gap:8px"><button id="keyApply">Apply</button><button class="ghost" id="keyCancel">Cancel</button></div>
   </div>
 </div>
 <script src="stack-forge.js"></script>

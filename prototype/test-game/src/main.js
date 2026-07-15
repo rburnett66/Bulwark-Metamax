@@ -86,6 +86,13 @@ export function boot(mountEl, seed) {
     if (art && art.ready) console.log('[unitArt] loaded', Object.keys(art.defs).length, 'authored units');
   }).catch((e) => console.warn('[unitArt] skipped:', e && e.message));
 
+  // VOXEL unit packs (Stack Forge): committed voxel-units.json + the Forge's localStorage manifest.
+  // Non-blocking; once ready, any unit whose id has a pack renders as its voxel body + aiming turret.
+  import('./render/voxel/loader.js').then(({ loadVoxelUnits }) => loadVoxelUnits()).then((vox) => {
+    renderer.voxelArt = vox;
+    if (vox && vox.ready) console.log('[voxel] loaded', Object.keys(vox.units).length, 'unit pack(s):', Object.keys(vox.units).join(', '));
+  }).catch((e) => console.warn('[voxel] skipped:', e && e.message));
+
   // The last COMPLETED game, captured so "Run Replay" replays it even after Restart resets the live log, and
   // after a page reload (persisted to localStorage). mmdev.
   let lastReplayLog = null;
@@ -171,14 +178,28 @@ export function boot(mountEl, seed) {
   // ── ring-campaign map switch (Map picker): rebuild board, waves, renderer — different maps have
   //    different sizes, so the PIXI surface resizes and the static board redraws. Overrides authored
   //    in the Map Lab load from content/maps/overrides/map-<id>.json when present.
-  // Read a Terrain Forge map for this map number from the tool's localStorage library
-  // ('bulwark:maps', keyed "<faction> · map N"). Same origin as terrain.html, so no file handoff.
-  function loadForgeMap(mapId) {
+  // ── TERRAIN FORGE lookup — the NEW mapping system (owner 2026-07-17): maps are FACTION-OWNED.
+  // Every faction battle loads the forge map authored for THAT faction + map number. The tool saves
+  // slots under short faction names ('Powder'); the game speaks full names ('Ground / Powder').
+  const FORGE_SLOT_NAME = { 'Ground / Powder': 'Powder', 'Greenies (Chem)': 'Greenies' };
+  const forgeSlotFaction = (f) => FORGE_SLOT_NAME[f] || f;
+  const forgeFileSlug = (f) => forgeSlotFaction(f).toLowerCase().replace(/[^a-z]+/g, '-').replace(/(^-+|-+$)/g, '');
+  // Lookup order: localStorage slot (the authoring hot loop — terrain.html Save, same origin) →
+  // committed content/maps/forge/<faction>-map-<n>.json (the SHIP path, survives browser wipes and
+  // deploys to Pages) → null, which falls back to the OLD workbook generator (testing only — all
+  // future map development happens in the forge).
+  async function loadForgeMap(mapId) {
+    const fac = forgeSlotFaction(currentTestFaction || DEFAULT_FACTION);
     try {
       const all = JSON.parse(localStorage.getItem('bulwark:maps') || '{}');
-      const key = Object.keys(all).find((k) => new RegExp(`\\bmap ${mapId}$`).test(k));
-      return key ? all[key] : null;
-    } catch (e) { return null; }
+      const hit = all[`${fac} · map ${mapId}`];
+      if (hit) return hit;
+    } catch (e) { /* unreadable store */ }
+    try {
+      const r = await fetch(`content/maps/forge/${forgeFileSlug(fac)}-map-${mapId}.json`);
+      if (r.ok) return await r.json();
+    } catch (e) { /* no committed map for this faction+slot */ }
+    return null;
   }
 
   async function selectMap(mapId) {
@@ -190,7 +211,7 @@ export function boot(mountEl, seed) {
       // STAGE 2: a Terrain Forge map saved for this slot (terrain.html → Save) wins — it's read from
       // the SAME-ORIGIN localStorage the tool writes, so authoring in the tool → playing here needs no
       // file copy. Falls back to the workbook generator (+ any Map Lab override file) when none exists.
-      const forge = loadForgeMap(currentMapId);
+      const forge = await loadForgeMap(currentMapId);
       let m;
       if (forge) {
         m = buildTerrainMap(forge, currentMapId, { seed: 0 });
@@ -209,9 +230,11 @@ export function boot(mountEl, seed) {
     app.renderer.resolution = fitResolution(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
     app.renderer.resize(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
     const art = renderer && renderer.unitArt;
+    const vox = renderer && renderer.voxelArt;   // voxel packs load once at boot — carry them too
     app.stage.removeChildren();
     renderer = createRenderer(app, currentMap);
     if (art) renderer.unitArt = art;
+    if (vox) renderer.voxelArt = vox;
     restart(currentSeed);
     flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
 
@@ -296,9 +319,13 @@ export function boot(mountEl, seed) {
     onFactionSelect: (faction) => {
       // Rebuild the enemy schedule for the chosen faction (or the mixed roster) and restart the run.
       currentTestFaction = faction || null;
-      currentWaves = currentMapId
-        ? buildCampaignWaves(currentMap, currentTestFaction)          // campaign map: refill the ring budgets
-        : (faction ? makeWaves(faction) : WAVES);
+      if (currentMapId) {
+        // FACTION-OWNED MAPS (forge): the battlefield belongs to the enemy faction, so switching
+        // enemies re-selects the map — the new faction's forge slot loads (or the generator fallback).
+        void selectMap(currentMapId);
+        return;
+      }
+      currentWaves = faction ? makeWaves(faction) : WAVES;
       restart(currentSeed);
       flashMessage(hud, faction ? (faction + ' — ' + currentWaves.length + ' waves') : 'Mixed roster restored');
     },

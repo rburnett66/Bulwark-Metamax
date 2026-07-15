@@ -55,8 +55,8 @@ function fresh(seed) {
   assert(depositGold >= expectedPerLoad - 3, `gold ≈ capacity×value (got ${depositGold}, one load ≈ ${expectedPerLoad})`);
 }
 
-// ── FIELDS: one order works the whole connected patch; drained field → rest at HOME; regrowth
-//    auto-redeploys the camped harvester ──
+// ── FIELDS: one order works the whole connected patch; a DRAINED field AUTO-CONTINUES onto the
+//    nearest field of the SAME resource (owner 2026-07-17); with none left → deliver, rest HOME ──
 {
   const { s } = fresh(5);
   s.waves.current = 8;   // reveal the board — this block tests field DRAIN mechanics, not ring gating
@@ -66,34 +66,48 @@ function fresh(seed) {
   for (const n of s.resourceNodes.filter((n) => n.role === 'primary')) {
     (byField[n.fieldId] = byField[n.fieldId] || []).push(n);
   }
-  // the SMALLEST multi-cell field: a big merged patch never reads all-empty at one instant (cells
-  // regrow while the harvester works the far end — the intended perpetual farm), so the clean
-  // drain→rest→resume cycle is only observable on a small one
-  const field = Object.values(byField).filter((f) => f.length >= 2).sort((a, b) => a.length - b.length)[0];
-  assert(field, 'a multi-cell primary field exists somewhere on the map');
+  // the SMALLEST multi-cell field WHOSE RESOURCE HAS ANOTHER FIELD to hop to: a big merged patch
+  // never reads all-empty at one instant, so the clean drain→hop cycle needs a small one
+  const fieldsAll = Object.values(byField);
+  const typeCount = {};
+  for (const f of fieldsAll) typeCount[f[0].type] = (typeCount[f[0].type] || 0) + 1;
+  const field = fieldsAll.filter((f) => f.length >= 2 && typeCount[f[0].type] >= 2)
+    .sort((a, b) => a.length - b.length)[0];
+  assert(field, 'a multi-cell primary field with a same-resource sibling exists on the map');
+  const fid = field[0].fieldId;
   applyCommand(s, { type: 'harvest', nodeId: field[0].id });
-  // the whole FIELD drains from a single order; the harvester then returns to its dock and WAITS
-  // (owner spec: emptied field ends the job — no auto-redeploy, even after regrowth)
-  let allDrained = false, restedHome = false, regrew = false;
-  const respawnSec = MAPDATA.globalParams.Primary_Respawn_Sec || 75;
-  for (let i = 0; i < 30 * (respawnSec + 300) && !(regrew && restedHome); i++) {
-    for (const e of stepSim(s, 1 / 30)) {
-      if (e.type === 'nodeRespawn' && field.some((n) => n.id === e.nodeId)) regrew = true;
-    }
+  // the whole FIELD drains from a single order; the harvester then hops to the nearest field of
+  // the same resource and keeps working — the job continues, no re-order needed
+  let allDrained = false, hopped = false;
+  for (let i = 0; i < 30 * 600 && !hopped; i++) {
+    stepSim(s, 1 / 30);
     if (!allDrained && field.every((n) => n.remaining <= 0)) allDrained = true;
-    if (allDrained && !restedHome && hv.state === 'harvestIdle'
-        && Math.hypot(hv.pos.x - hv.homePos.x, hv.pos.y - hv.homePos.y) < 0.5) restedHome = true;
+    if (allDrained && hv.fieldId && hv.fieldId !== fid) hopped = true;
   }
   assert(allDrained, 'one order drained every cell of the field');
-  assert(restedHome, 'harvester returned to its dock when the field emptied');
-  assert(hv.fieldId == null, 'the job is over — assignment cleared');
-  // regrowth does NOT redeploy it; a fresh order does
-  for (let i = 0; i < 30 * 20; i++) stepSim(s, 1 / 30);
-  assert(hv.state === 'harvestIdle', 'docked harvester waits for orders after regrowth');
-  if (field.some((n) => n.remaining > 0)) {
-    const again = applyCommand(s, { type: 'harvest', nodeId: field[0].id, harvesterId: hv.id });
-    assert(again.ok && hv.state === 'harvestGo', 'explicit order (harvesterId) redeploys the docked truck');
+  assert(hopped, 'drained field → auto-continued onto the nearest same-resource field');
+  const hopField = s.resourceNodes.find((n) => n.fieldId === hv.fieldId);
+  assert(hopField && hopField.type === field[0].type && hopField.color === field[0].color,
+    'the hop stays on the SAME resource (type + crystal colour)');
+  // with every OTHER same-resource field stripped (regrowth off), a drained field ends the job:
+  // deliver, dock, WAIT — idle is only for "nothing of this resource left anywhere"
+  for (const n of s.resourceNodes) {
+    n.respawns = false; n.respawnAt = null;
+    if (n.role === 'primary' && n.fieldId !== hv.fieldId) n.remaining = 0;
   }
+  let restedHome = false;
+  for (let i = 0; i < 30 * 600 && !restedHome; i++) {
+    stepSim(s, 1 / 30);
+    if (hv.state === 'harvestIdle'
+        && Math.hypot(hv.pos.x - hv.homePos.x, hv.pos.y - hv.homePos.y) < 0.5) restedHome = true;
+  }
+  assert(restedHome, 'no same-resource field left → delivered and rested at the dock');
+  assert(hv.fieldId == null, 'the job is over — assignment cleared');
+  // a fresh explicit order redeploys the docked truck
+  const target = s.resourceNodes.find((n) => n.fieldId === fid);
+  target.remaining = target.units;   // hand-regrow one cell so there is something to order onto
+  const again = applyCommand(s, { type: 'harvest', nodeId: target.id, harvesterId: hv.id });
+  assert(again.ok && hv.state === 'harvestGo', 'explicit order (harvesterId) redeploys the docked truck');
 }
 
 // ── premium: consumed forever; quest: loyalty units, zero gold ──
@@ -104,6 +118,9 @@ function fresh(seed) {
   const prem = s.resourceNodes.find((n) => n.role === 'premium');
   const quest = s.resourceNodes.find((n) => n.role === 'quest');
   assert(prem && quest, 'premium + quest nodes exist');
+  // strip every OTHER premium so the drain has no same-resource field to auto-continue onto —
+  // this block tests one-shot depletion + release, not the hop (covered above)
+  for (const n of s.resourceNodes) if (n.role === 'premium' && n.fieldId !== prem.fieldId) n.remaining = 0;
   applyCommand(s, { type: 'harvest', nodeId: prem.id });
   const premField = s.resourceNodes.filter((n) => n.fieldId === prem.fieldId);
   for (let i = 0; i < 30 * 900 && premField.some((n) => n.remaining > 0); i++) stepSim(s, 1 / 30);

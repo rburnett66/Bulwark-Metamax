@@ -158,7 +158,7 @@ function onPointerDown(handle, ev) {
       const sel = ui.selectedUnitId != null ? state.units.get(ui.selectedUnitId) : null;
       const harvesterId = (sel && sel.isHarvester && sel.hp > 0) ? sel.id : undefined;
       const res = handle.submit({ type: 'harvest', nodeId: node.id, harvesterId });
-      if (res && res.ok) return;   // selection kept — queue the same truck onto another field next
+      if (res && res.ok) { ui.selectedUnitId = null; return; }   // assigned → the selection drops (owner 2026-07-17)
       // rejected (unrevealed / exhausted) → fall through to normal selection
     }
   }

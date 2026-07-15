@@ -3,10 +3,9 @@
 // The harvester CAMPS at the base in an open cell. Clicking any cell of a resource FIELD (a connected
 // cluster of resource cells — mapgen grows primaries as 2-3 cell patches; premium is usually a single
 // rich cell) assigns the whole field as its job: fill up → haul home → deposit (gold visibly lands) →
-// return to the field's next unworked cell → repeat until the field is done, then rest at the base
-// until redeployed. A regrowing primary field keeps the assignment: the harvester rests at home while
-// the field is bare and heads back out on its own when it regrows. Premium/quest never regrow — once
-// stripped, the job is over.
+// return to the field's next unworked cell → repeat. When the field is STRIPPED the harvester
+// auto-continues on the nearest revealed field of the SAME resource (type + crystal colour, owner
+// 2026-07-17); only when no same-resource field exists does it deliver and rest at the dock.
 //
 // The harvester is driven HERE (marchAlong on its own nav path, like repair troops) — stepMovement,
 // separation, and the contact clamp all skip it, so the economy loop never tangles with the crowd sim.
@@ -185,6 +184,19 @@ function nextFieldTarget(state, u) {
     (Math.hypot(a.x - u.pos.x, a.y - u.pos.y) - Math.hypot(b.x - u.pos.x, b.y - u.pos.y)) || (a.id < b.id ? -1 : 1));
   return live[0];
 }
+// AUTO-CONTINUE (owner 2026-07-17): when the assigned field is stripped, the harvester finds the
+// NEAREST revealed field carrying the SAME resource (type + crystal colour) and keeps working.
+// Deterministic: distance, then id. Returns a node in the new field, or null when none exist.
+function nextSameResourceField(state, u) {
+  if (!u.resType) return null;
+  const live = (state.resourceNodes || []).filter((n) =>
+    n.fieldId !== u.fieldId && n.remaining > 0 && nodeRevealed(state, n) &&
+    n.type === u.resType && n.color === u.resColor);
+  if (!live.length) return null;
+  live.sort((a, b) =>
+    (Math.hypot(a.x - u.pos.x, a.y - u.pos.y) - Math.hypot(b.x - u.pos.x, b.y - u.pos.y)) || (a.id < b.id ? -1 : 1));
+  return live[0];
+}
 
 /** Command: put a harvester on a FIELD. {type:'harvest', nodeId, harvesterId?} — any cell of the
  *  field works. harvesterId (click the harvester, then the field) picks the exact truck; without
@@ -226,6 +238,7 @@ function routeTo(state, u, target) {
   u.path = findWalkerPath(nav, from, { x: target.x, y: target.y }) || [{ x: target.x, y: target.y }];
   u.pathIdx = 0;
   u.harvestNodeId = target.id;
+  u.resType = target.type; u.resColor = target.color;   // remember the resource — auto-continue matches it
   u.state = 'harvestGo';
 }
 function routeHome(state, u) {
@@ -359,7 +372,7 @@ function stepOneHarvester(state, u, dt) {
     u._navV = state.navVersion || 0;
   }
   if (u.state === 'harvestIdle') {
-    // docked, awaiting orders (owner spec: an emptied field ends the job — no auto-redeploy)
+    // docked, awaiting orders (idle only when NO same-resource field was left to auto-continue on)
   } else if (u.state === 'harvestGo') {
     const node = nodes.find((n) => n.id === u.harvestNodeId);
     if (!node) { routeHome(state, u); return; }
@@ -384,8 +397,14 @@ function stepOneHarvester(state, u, dt) {
     if (u.cargo >= fullAt) { routeHome(state, u); return; }   // full (enough) — haul it home
     if (node.remaining <= 0) {
       const next = nextFieldTarget(state, u);
-      if (next) routeTo(state, u, next);            // this cell is bare — work the next one
-      else { u.fieldId = null; routeHome(state, u); }   // field EMPTIED — deliver and await orders
+      if (next) { routeTo(state, u, next); return; }   // this cell is bare — work the next one
+      // field EMPTIED — auto-continue on the nearest field of the SAME resource (owner 2026-07-17)
+      const hop = nextSameResourceField(state, u);
+      if (hop) {
+        u.fieldId = hop.fieldId;
+        routeTo(state, u, hop);
+        emitEvent(state, { type: 'harvestOrder', tick: state.tick, nodeId: hop.id, fieldId: hop.fieldId, unitId: u.id, pos: { x: hop.x, y: hop.y } });
+      } else { u.fieldId = null; routeHome(state, u); }   // no same-resource field left — deliver, await orders
     }
   } else if (u.state === 'harvestReturn') {
     if (marchAlong(u, dt)) {
@@ -406,8 +425,16 @@ function stepOneHarvester(state, u, dt) {
         emitEvent(state, { type: 'deposit', tick: state.tick, gold, units: Math.floor(u.cargo), role: u.cargoRole || 'primary', color: u.cargoColor || 'blue', fieldId: u.fieldId });
         u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null;
       }
-      // still mid-job (came home full)? head back out; otherwise the job is over — WAIT at the dock
-      const next = u.fieldId ? nextFieldTarget(state, u) : null;
+      // still mid-job (came home full)? head back out — to the assigned field, or if it was
+      // stripped while hauling, to the nearest field of the SAME resource (owner 2026-07-17)
+      let next = u.fieldId ? nextFieldTarget(state, u) : null;
+      if (!next && u.fieldId) {
+        const hop = nextSameResourceField(state, u);
+        if (hop) {
+          u.fieldId = hop.fieldId; next = hop;
+          emitEvent(state, { type: 'harvestOrder', tick: state.tick, nodeId: hop.id, fieldId: hop.fieldId, unitId: u.id, pos: { x: hop.x, y: hop.y } });
+        }
+      }
       if (next) routeTo(state, u, next);
       else {
         u.fieldId = null;

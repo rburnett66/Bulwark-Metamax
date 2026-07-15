@@ -685,7 +685,44 @@ export function stepMovement(state, dt) {
           if (hl > 1e-6) { h.x /= hl; h.y /= hl; } else { h.x = desx; h.y = desy; }   // degenerate (180° flip mid-blend)
         }
         const step = Math.min(remaining, d);
-        unit.pos.x += h.x * step; unit.pos.y += h.y * step;
+        // FACING-LOCKED MOTION (owner 2026-07-17): ground units render at 16 baked facings, so they
+        // MOVE along the nearest of those 16 angles too — displacement always matches the drawn
+        // frame and the sprite never reads as sliding sideways. The blended hdg stays continuous
+        // underneath, so turns still sweep facing-to-facing instead of thrashing. Walkers only —
+        // air stays smooth (Tier B banks through its turns).
+        let mx = h.x, my = h.y;
+        if (unit.domain === 'Walker') {
+          const SEG = Math.PI / 8;                                    // 2π/16 buckets
+          let qi = Math.round(Math.atan2(h.y, h.x) / SEG);
+          // OBSTACLE STEER (owner 2026-07-17): probe ~0.75 ahead of the facing; if it runs into a
+          // blocked cell (wall/structure/water), TURN to the nearest clear facing — preferring the
+          // side of the waypoint — instead of grinding along the obstacle. The turn is committed
+          // into hdg so next tick continues around it, not back into it. Skipped on the final
+          // approach to the current waypoint (an adjacent-to-wall goal must stay reachable).
+          const grid = state.navGrid;
+          if (grid && grid.passable && d > 1.1) {
+            const blockedAhead = (bi) => {
+              const ang = bi * SEG;
+              const cx2 = Math.round(unit.pos.x + Math.cos(ang) * 0.75);
+              const cy2 = Math.round(unit.pos.y + Math.sin(ang) * 0.75);
+              if (cx2 < 0 || cy2 < 0 || cx2 >= grid.cols || cy2 >= grid.rows) return true;
+              return !grid.passable[cy2 * grid.cols + cx2];
+            };
+            if (blockedAhead(qi)) {
+              const side = (h.x * desy - h.y * desx) >= 0 ? 1 : -1;   // turn toward the waypoint's side first
+              for (let k = 1; k <= 6; k++) {
+                if (!blockedAhead(qi + k * side)) { qi += k * side; break; }
+                if (!blockedAhead(qi - k * side)) { qi -= k * side; break; }
+              }
+            }
+          }
+          const q = qi * SEG;
+          mx = Math.cos(q); my = Math.sin(q);
+          h.x += 0.5 * (mx - h.x); h.y += 0.5 * (my - h.y);           // commit the steer into the heading
+          const hl2 = Math.sqrt(h.x * h.x + h.y * h.y);
+          if (hl2 > 1e-6) { h.x /= hl2; h.y /= hl2; }
+        }
+        unit.pos.x += mx * step; unit.pos.y += my * step;
         remaining -= step;
       }
     }
@@ -997,7 +1034,11 @@ export function stepSeparation(state, dt) {
   }
 
   for (let i = 0; i < n; i++) {
-    let ox = px[i] + sx[i], oy = py[i] + sy[i];
+    // STEER, DON'T SLIDE (owner 2026-07-17): the lateral avoidance no longer displaces the body —
+    // it already bends the march through the overtake goal, so the unit TURNS and drives around the
+    // blocker at its own speed along a real facing. Only the radial interpenetration dissolve still
+    // moves positions (true overlaps: spawn stacks, cannon squeeze).
+    let ox = px[i], oy = py[i];
     // NEVER propel a unit FORWARD along its own heading: a faster follower's radial push must not
     // bulldoze the unit ahead toward the base ("truck ramming the tank, bump bump bump"). Crowd
     // pressure may slide a body sideways or backward — forward motion comes ONLY from the unit's
@@ -1010,7 +1051,7 @@ export function stepSeparation(state, dt) {
     const maxStep = 0.15;                                           // clamp per tick — smooth, no teleporting
     if (ol > maxStep) { ox = ox / ol * maxStep; oy = oy / ol * maxStep; }
     units[i].pos.x += ox; units[i].pos.y += oy;
-    const e = dbgSep(state, units[i].id);                           // overlay: radial vs steer, pre-strip components
+    const e = dbgSep(state, units[i].id);                           // overlay: radial vs steer INTENT (heading-borne)
     e.pushX += px[i]; e.pushY += py[i]; e.steerX += sx[i]; e.steerY += sy[i];
   }
 }
