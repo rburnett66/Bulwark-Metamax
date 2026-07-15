@@ -1,0 +1,41 @@
+/**
+ * src/render/voxel/pack.js — the "unit pack" data contract (Stack Forge emits, the game consumes).
+ *
+ * See docs/sources/Bulwark-Voxel-Stack-TechPlan.md §data-contract. The game NEVER reads raw artist
+ * PNGs — only packs. This module validates a pack's shape (pure, no PIXI) so both the tool's emitter
+ * and the game's loader gate on one schema, and it's Node/golden-testable.
+ */
+
+const CLASSES = new Set(['ground', 'air', 'structure']);
+const KINDS = new Set(['directional', 'stack']);
+
+/** Validate a unit pack against the contract. Returns { ok, errors:[...] }. Pure. */
+export function validatePack(p) {
+  const e = [];
+  if (!p || typeof p !== 'object') return { ok: false, errors: ['pack is not an object'] };
+  if (!p.id) e.push('missing id');
+  if (!CLASSES.has(p.class)) e.push(`class must be ground|air|structure (got ${JSON.stringify(p.class)})`);
+  if (!Array.isArray(p.footprint) || p.footprint.length !== 3) e.push('footprint must be [W, D, H]');
+  if (!p.camera || typeof p.camera.azimuth !== 'number' || typeof p.camera.elevation !== 'number')
+    e.push('camera { azimuth, elevation } (numbers) required — the angle set in Stack Forge');
+  if (typeof p.layerSpacing !== 'number') e.push('layerSpacing (number) required');
+  if (!Array.isArray(p.parts) || p.parts.length === 0) e.push('parts[] required (≥1)');
+  else p.parts.forEach((pt, i) => {
+    const at = `part[${i}]${pt && pt.id ? ` "${pt.id}"` : ''}`;
+    if (!pt || typeof pt !== 'object') { e.push(`${at} not an object`); return; }
+    if (!pt.id) e.push(`${at} missing id`);
+    if (!KINDS.has(pt.kind)) e.push(`${at} kind must be directional|stack (got ${JSON.stringify(pt.kind)})`);
+    if (!pt.atlas) e.push(`${at} missing atlas`);
+    if (!Array.isArray(pt.cell) || pt.cell.length !== 2) e.push(`${at} cell [w, h] required`);
+    if (!Array.isArray(pt.pivot) || pt.pivot.length !== 2) e.push(`${at} pivot [x, y] required`);
+    if (pt.kind === 'directional' && !(pt.facings > 0)) e.push(`${at} directional needs facings > 0`);
+    if (pt.kind === 'stack' && !(pt.angles > 0)) e.push(`${at} stack needs angles > 0`);
+    if (pt.mount && (!Array.isArray(pt.mount) || pt.mount.length !== 3)) e.push(`${at} mount must be [dx, dy, dz]`);
+  });
+  return { ok: e.length === 0, errors: e };
+}
+
+/** The part a runtime looks up by id. Convenience over pack.parts. */
+export function partById(pack, id) {
+  return (pack.parts || []).find((pt) => pt.id === id) || null;
+}
