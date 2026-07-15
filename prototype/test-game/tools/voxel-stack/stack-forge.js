@@ -569,20 +569,31 @@ function chartImgsFor(id, entry) {
   rec.turret = new Image(); rec.turret.onload = done; rec.turret.onerror = done; rec.turret.src = entry.atlases.turret;
   return null;
 }
-function drawPackThumb(ctx, entry, x, w, groundY, T) {
+function entryThumbH(e, T) {
+  if (e.current) {
+    const S = T / VOX_PER_TILE;
+    return Math.max(14, Math.ceil((state.bodyLayers + state.turretLayers + 2) * state.zScale * S + state.foot * S * 0.5) + 6);
+  }
+  const p = e.entry.pack, B = p.renderScale || 1, sc = (T / VOX_PER_TILE) / B;
+  const bp = (p.parts || []).find((q) => q.id === 'body');
+  return bp ? Math.max(14, Math.ceil(bp.cell[1] * sc) + 4) : 20;
+}
+// LEFT-ALIGNED side view: the unit's nose-to-tail length starts at xLeft and runs right over the grid
+function drawPackThumb(ctx, entry, xLeft, groundY, T) {
   const rec = chartImgsFor(entry.pack.id, entry); if (!rec) return;
-  const p = entry.pack, B = p.renderScale || 1, sc = (T / VOX_PER_TILE) / B;
+  const p = entry.pack, B = p.renderScale || 1, sc = (T / VOX_PER_TILE) / B, footB = p.footprint[0] * B;
   const bp = (p.parts || []).find((q) => q.id === 'body'), tp = (p.parts || []).find((q) => q.id === 'turret');
   const draw = (img, part, ox, oy) => {
     if (!img || !part) return;
     ctx.drawImage(img, 0, 0, part.cell[0], part.cell[1],
-      x + w / 2 - part.pivot[0] * sc + ox, groundY - part.pivot[1] * sc + oy, part.cell[0] * sc, part.cell[1] * sc);
+      xLeft - (part.pivot[0] - footB / 2) * sc + ox, groundY - part.pivot[1] * sc + oy,
+      part.cell[0] * sc, part.cell[1] * sc);
   };
   draw(rec.body, bp, 0, 0);                                        // frame 0 = facing +x → a side-on look
   if (tp) { const m = tp.mount || [0, 0, 0];
     draw(rec.turret, tp, m[0] * B * sc, -(m[2] || 0) * (p.layerSpacing || 0) * B * sc); }
 }
-function drawCurrentThumb(ctx, x, w, groundY, T) {
+function drawCurrentThumb(ctx, xLeft, groundY, T) {
   if (!bodyFaces) return;
   const S = T / VOX_PER_TILE, foot = state.foot, h = state.zScale;
   const W2 = Math.max(4, Math.ceil(foot * S) + 6);
@@ -593,7 +604,7 @@ function drawCurrentThumb(ctx, x, w, groundY, T) {
   const parts = [{ faces: bodyFaces, az: 0 }];
   if (turretFaces) parts.push({ faces: turretFaces, az: 0, zOff: mountDz, gx: state.turretDx, gy: 0, pivotFrac: 0.5 + state.turretPivot / 100 });
   renderParts(tctx, S, W2 / 2, H2 - 2, state.el, parts);
-  ctx.drawImage(tc, x + (w - W2) / 2, groundY - H2 + 2);
+  ctx.drawImage(tc, xLeft - (W2 - foot * S) / 2, groundY - H2 + 2);
 }
 function syncChartSelects(prefixes) {
   const mk = (sel) => {
@@ -616,43 +627,51 @@ function renderScaleChart() {
   const prefixes = [...new Set(Object.keys(units).map(prefixOf))].sort();
   syncChartSelects(prefixes);
   const rowsSel = [$('chartA').value, $('chartB').value];
-  const rows = [];
+  const sections = [];
   for (let r = 0; r < 2; r++) {
     const list = [];
-    if (r === 0) list.push({ id: 'current', tiles, current: true });   // the model on the stage, always row A
+    if (r === 0) list.push({ id: '▶ current', tiles, current: true });   // the model on the stage leads
     if (rowsSel[r]) for (const id of Object.keys(units)) if (prefixOf(id) === rowsSel[r]) {
       const p = units[id].pack;
       list.push({ id, tiles: (p.scale && p.scale.tiles) || p.footprint[0] / VOX_PER_TILE, entry: units[id] });
     }
-    if (list.length) rows.push(list);
+    if (list.length) sections.push({ label: rowsSel[r] || 'CURRENT', list });
   }
-  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
-  ctx.clearRect(0, 0, W, H);
-  if (!rows.length) return;
-  let T = 26;                                                        // ONE px-per-tile across BOTH rows
-  for (const row of rows) {
-    const tt = row.reduce((a, e) => a + e.tiles + 0.4, 0);
-    T = Math.min(T, (W - 10) / Math.max(1, tt));
-  }
-  const rowH = H / rows.length;
+  const W = cv.width;
+  if (!sections.length) { cv.getContext('2d').clearRect(0, 0, W, cv.height); return; }
+  // STACKED layout: one unit per line, side views left-aligned at X0 running RIGHT over the tile grid
+  const X0 = 46;
+  let maxTiles = 1;
+  for (const s of sections) for (const e of s.list) if (e.tiles > maxTiles) maxTiles = e.tiles;
+  const T = Math.min(26, (W - X0 - 8) / maxTiles);                   // ONE px-per-tile for everything
+  let total = 16;                                                    // top ruler strip
+  for (const s of sections) { total += 12; for (const e of s.list) total += entryThumbH(e, T) + 13; }
+  cv.height = Math.max(140, total);                                  // grow the canvas; the dock scrolls
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, W, cv.height);
   ctx.font = '8px sans-serif'; ctx.textBaseline = 'top';
-  rows.forEach((row, r) => {
-    const groundY = (r + 1) * rowH - 16;
-    ctx.strokeStyle = '#24384a'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, groundY + 0.5); ctx.lineTo(W, groundY + 0.5); ctx.stroke();
-    ctx.fillStyle = '#3c5670';
-    for (let i = 0, tx = 5; tx < W; tx += T, i++) ctx.fillRect(tx, groundY + 1, 1, i % 2 ? 2 : 4);   // tile ruler
-    let x = 5;
-    for (const e of row) {
-      const w = e.tiles * T;
-      if (e.current) drawCurrentThumb(ctx, x, w, groundY, T);
-      else drawPackThumb(ctx, e.entry, x, w, groundY, T);
+  // vertical tile grid + tile numbers along the top
+  for (let i = 0, gx = X0; gx <= W - 2; gx += T, i++) {
+    ctx.fillStyle = i % 1 === 0 ? 'rgba(60,86,112,.30)' : 'rgba(60,86,112,.18)';
+    ctx.fillRect(gx, 12, 1, cv.height - 12);
+    ctx.fillStyle = '#5a7188'; ctx.fillText(String(i), gx - (i > 9 ? 4 : 2), 2);
+  }
+  let y = 16;
+  for (const s of sections) {
+    ctx.fillStyle = '#f2c869'; ctx.fillText(s.label, 2, y); y += 12;
+    for (const e of s.list) {
+      const th = entryThumbH(e, T), groundY = y + th;
+      ctx.strokeStyle = '#24384a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(X0 - 3, groundY + 0.5); ctx.lineTo(W - 2, groundY + 0.5); ctx.stroke();
+      if (e.current) drawCurrentThumb(ctx, X0, groundY, T);
+      else drawPackThumb(ctx, e.entry, X0, groundY, T);
       ctx.fillStyle = e.current ? '#f2c869' : '#8fa7bd';
-      const name = e.current ? '▶ current' : e.id.replace(/^[A-Za-z]+-/, '');
-      ctx.fillText(name.slice(0, Math.max(3, Math.floor(w / 5))), x, groundY + 6);
-      x += w + 0.4 * T;
+      ctx.fillText(e.id.replace(/^[A-Za-z]+-/, '').slice(0, 8), 2, groundY - 16);
+      ctx.fillStyle = '#5a7188';
+      ctx.fillText((+e.tiles.toFixed(2)) + 't', 2, groundY - 7);
+      y = groundY + 13;
     }
-  });
+  }
 }
 $('chartA').onchange = renderScaleChart;
 $('chartB').onchange = renderScaleChart;
