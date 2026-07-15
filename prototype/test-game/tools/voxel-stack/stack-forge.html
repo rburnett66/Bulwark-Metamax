@@ -119,8 +119,9 @@
       <div class="row"><label>Unit id</label><input type="text" id="uid" value="abrams" placeholder="unit id"></div>
       <div class="row"><label>Class</label><div class="seg" id="clsSeg"><button data-c="ground" class="on">Ground</button><button data-c="air">Air</button><button data-c="structure">Structure</button></div></div>
       <div class="row"><label>Resolution</label><select id="res" style="flex:1;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px"><option>32</option><option>48</option><option selected>64</option><option>96</option><option>128</option></select><span class="note" style="margin:0">px cell</span></div>
-      <div class="row"><label>Layers</label><input type="range" id="layers" min="6" max="40" value="16"><span class="val" id="layersV">16</span></div>
-      <div class="note" style="margin:-2px 0 2px">Per-object — footprint cell + stack height. Higher = crisper/taller, bigger sheet + VRAM.</div>
+      <div class="row"><label>Base layers</label><input type="range" id="bodyLayers" min="4" max="40" value="16"><span class="val" id="bodyLayersV">16</span></div>
+      <div class="row"><label>Turret layers</label><input type="range" id="turretLayers" min="3" max="40" value="12"><span class="val" id="turretLayersV">12</span></div>
+      <div class="note" style="margin:-2px 0 2px">Stack height per part (a turret is usually shorter than the hull). Footprint px = Resolution. Higher = crisper/taller, bigger sheet + VRAM.</div>
       <div class="row"><label>Voxel .vox</label>
         <label class="ghost" style="flex:1;text-align:center;padding:6px 0;border-radius:6px;cursor:pointer;font-size:11px;background:#16283a;border:1px solid var(--line)">→ Base<input type="file" id="voxBody" accept=".vox" style="display:none"></label>
         <label class="ghost" style="flex:1;text-align:center;padding:6px 0;border-radius:6px;cursor:pointer;font-size:11px;background:#16283a;border:1px solid var(--line)">→ Turret<input type="file" id="voxTurret" accept=".vox" style="display:none"></label>

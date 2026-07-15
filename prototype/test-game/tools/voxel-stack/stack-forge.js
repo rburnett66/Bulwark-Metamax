@@ -196,11 +196,11 @@ function writeVox(nx, ny, nz, voxels, palette) {
 }
 // gather a part's filled voxels (palette cleanup applied) as {x,y,z,r,g,b}, offset into place
 function collectVox(partId, foot, layers, zOff, xOff) {
-  const { cd, filled, vcol } = buildVolume(partId, foot, layers), N = foot * foot;
-  const quant = buildQuantiser(cd, vcol, filled, foot, layers, state.paletteN), out = [];
+  const { filled, vcol } = buildModel(partId, foot, layers), N = foot * foot;
+  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN), out = [];
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     if (!filled(x, y, z)) continue;
-    let r, g, b; if (vcol) { const c = (z * N + y * foot + x) * 3; r = vcol[c]; g = vcol[c + 1]; b = vcol[c + 2]; } else { const p = (y * foot + x) * 4; r = cd[p]; g = cd[p + 1]; b = cd[p + 2]; }
+    const c = (z * N + y * foot + x) * 3; let r = vcol[c], g = vcol[c + 1], b = vcol[c + 2];
     if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
     const X = x + xOff, Z = z + zOff; if (X < 0 || X > 255 || Z < 0 || Z > 255) continue;
     out.push({ x: X, y, z: Z, r, g, b });
@@ -209,10 +209,10 @@ function collectVox(partId, foot, layers, zOff, xOff) {
 }
 // export the current model (body + turret assembled, or the active part) as a .vox download
 function exportVox() {
-  const foot = state.foot, layers = state.layers, mount = clamp(bodyMountZ + state.mountZ, 0, layers);
+  const foot = state.foot, mount = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
   let cells = [];
-  if (state.part !== 'turret') cells = cells.concat(collectVox('body', foot, layers, 0, 0));
-  if (state.part !== 'body') cells = cells.concat(collectVox('turret', foot, layers, mount, Math.round(state.turretDx)));
+  if (state.part !== 'turret') cells = cells.concat(collectVox('body', foot, state.bodyLayers, 0, 0));
+  if (state.part !== 'body') cells = cells.concat(collectVox('turret', foot, state.turretLayers, mount, Math.round(state.turretDx)));
   if (!cells.length) { alert('Nothing to export — load art or a .vox first.'); return; }
   const uniq = new Map(); for (const c of cells) { const k = (c.r << 16) | (c.g << 8) | c.b; if (!uniq.has(k)) uniq.set(k, [c.r, c.g, c.b]); }
   let pal = [...uniq.values()]; if (pal.length > 255) pal = medianCut(pal, 255);
@@ -303,6 +303,21 @@ function buildVolume(partId, foot, layers) {
   return { cd, H, filled, dbg: { bw, bh, Hv, Hraw: +Hraw.toFixed(1), tw: topC && topC.width, th: topC && topC.height, sw: sideC && sideC.width, sh: sideC && sideC.height, fw: frontC && frontC.width, fh: frontC && frontC.height } };
 }
 
+// Unified voxel model for every consumer: always per-voxel colour (vcol), whether the part came from a
+// .vox (already per-voxel) or the photo carve (per-column cd, materialised here). So there's ONE model —
+// a stack of coloured cubes — and no cd/vcol branching downstream. Returns { vcol, filled, dbg }.
+function buildModel(partId, foot, layers) {
+  const v = buildVolume(partId, foot, layers);
+  if (v.vcol) return v;                                              // .vox → already a voxel model
+  const N = foot * foot, cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
+  for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+    const i = y * foot + x, p = i * 4; if (cd[p + 3] < 20) continue;
+    const r = cd[p], g = cd[p + 1], b = cd[p + 2];
+    for (let z = 0; z < layers; z++) if (filled(x, y, z)) { const c = (z * N + i) * 3; vcol[c] = r; vcol[c + 1] = g; vcol[c + 2] = b; }
+  }
+  return { vcol, filled, cd: null, dbg: v.dbg };
+}
+
 // median-cut → n representative colours. Flattens camo/gradients (and rich .vox palettes) into a small,
 // contrasting set of flat cube colours so the block structure reads clean instead of noisy.
 function medianCut(colors, n) {
@@ -348,8 +363,8 @@ function buildQuantiser(cd, vcol, filled, foot, layers, n) {
 // vertical cube faces (a filled voxel with an empty same-layer neighbour) are the surfaces that catch the
 // game-aligned directional light — bright when the face points toward it, shaded when it points away.
 function makeSlices(partId, foot, layers, lightAz, lightK) {
-  const { cd, filled, vcol } = buildVolume(partId, foot, layers), N = foot * foot;   // vcol = per-voxel colour (.vox)
-  const quant = buildQuantiser(cd, vcol, filled, foot, layers, state.paletteN);       // palette cleanup (median-cut)
+  const { filled, vcol } = buildModel(partId, foot, layers), N = foot * foot;         // unified voxel model
+  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN);      // palette cleanup (median-cut)
   const la = lightAz * Math.PI / 180, Lx = Math.cos(la), Ly = -Math.sin(la);   // light-source dir, image space (y-down)
   const k = clamp(lightK / 100, 0, 1), WALL = 0.52, RANGE = 0.46;              // wall base + directional swing
   const textures = [];
@@ -370,9 +385,7 @@ function makeSlices(partId, foot, layers, lightAz, lightK) {
         if (!filled(x, y + 1, kk)) d = Math.max(d, Ly);          // image-down face
         shade = clamp(WALL + k * RANGE * (d <= -2 ? 0 : d), 0.3, 1.0);   // enclosed → flat ambient (unseen)
       }
-      let cr, cg, cb;                                            // neutral cube colour: per-voxel (.vox) or per-column
-      if (vcol) { const c = (kk * N + i) * 3; cr = vcol[c]; cg = vcol[c + 1]; cb = vcol[c + 2]; }
-      else { cr = cd[p]; cg = cd[p + 1]; cb = cd[p + 2]; }
+      const c = (kk * N + i) * 3; let cr = vcol[c], cg = vcol[c + 1], cb = vcol[c + 2];   // neutral cube colour
       if (quant) { const q = quant(cr, cg, cb); cr = q[0]; cg = q[1]; cb = q[2]; }   // palette cleanup
       o[p] = clamp(cr * shade, 0, 255); o[p + 1] = clamp(cg * shade, 0, 255);
       o[p + 2] = clamp(cb * shade, 0, 255); o[p + 3] = 255;
@@ -495,7 +508,7 @@ function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
 }
-const state = { foot: 64, layers: 16, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
+const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, smooth: true, sharp: 0.6, cls: 'ground', baseY: 24, baked: null };
 let bodyL = [], turretL = [], bodyBaked = null, turretBaked = null, lastPack = null;
 const voxPart = { body: null, turret: null };   // imported MagicaVoxel models (override the photo carve per part)
@@ -513,9 +526,9 @@ function rebuildSlices() {
   for (const s of bodyL) s.destroy(); for (const s of turretL) s.destroy();
   if (bodyBaked) { bodyBaked.destroy(); bodyBaked = null; } if (turretBaked) { turretBaked.destroy(); turretBaked = null; }
   state.baked = null; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
-  bodyMountZ = bodyTopLayer(state.foot, state.layers);   // turret mounts on the body's actual top
-  const bs = makeSlices('body', state.foot, state.layers, state.lightAz, state.lightK);
-  const ts = makeSlices('turret', state.foot, state.layers, state.lightAz, state.lightK);
+  bodyMountZ = bodyTopLayer(state.foot, state.bodyLayers);   // turret mounts on the body's actual top
+  const bs = makeSlices('body', state.foot, state.bodyLayers, state.lightAz, state.lightK);
+  const ts = makeSlices('turret', state.foot, state.turretLayers, state.lightAz, state.lightK);
   const mk = (slices, parent) => slices.map((tex) => { const s = new PIXI.Sprite(tex); s.anchor.set(0.5); parent.addChild(s); return s; });
   bodyL = mk(bs, rig); turretL = mk(ts, rig);
   for (const s of gBodyL) s.destroy(); for (const s of gTurretL) s.destroy();   // in-game preview shares the same textures
@@ -526,7 +539,7 @@ rebuildSlices();
 
 function update() {
   const sp = elevationToSP(state.el, SP_MAX), azR = state.az * Math.PI / 180, taimR = state.taim * Math.PI / 180;
-  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.layers);
+  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
   const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR);   // front-back mount offset
   const pivotFrac = 0.5 + state.turretPivot / 100;                                  // turret rotation pivot
   if (state.baked) {
@@ -537,10 +550,8 @@ function update() {
     turretBaked.position.set(ox, state.baseY - mountDz * sp + oy);
     return;
   }
-  for (let k = 0; k < state.layers; k++) {
-    bodyL[k].visible = showB; bodyL[k].position.set(0, state.baseY - k * sp); bodyL[k].rotation = azR;
-    turretL[k].visible = showT; turretL[k].anchor.set(pivotFrac, 0.5); turretL[k].position.set(ox, state.baseY - mountDz * sp - k * sp + oy); turretL[k].rotation = azR + taimR;
-  }
+  for (let k = 0; k < state.bodyLayers; k++) { bodyL[k].visible = showB; bodyL[k].position.set(0, state.baseY - k * sp); bodyL[k].rotation = azR; }
+  for (let k = 0; k < state.turretLayers; k++) { turretL[k].visible = showT; turretL[k].anchor.set(pivotFrac, 0.5); turretL[k].position.set(ox, state.baseY - mountDz * sp - k * sp + oy); turretL[k].rotation = azR + taimR; }
 }
 // position the in-game preview: unit at GAME scale on the tile, slowly turning to show facings, with the
 // game shadow. Uses the same elevation as the bake camera so the preview matches what you'll ship.
@@ -550,7 +561,7 @@ function updateGamePreview() {
   const azR = gPrevAz * Math.PI / 180, taimR = state.taim * Math.PI / 180;
   const spG = elevationToSP(state.el, SP_MAX), uScale = (GAME_TILE * 1.7) / state.foot;   // footprint ≈ 1.7 tiles
   gUnit.scale.set(uScale); gUnit.position.set(gAnchor.x, gAnchor.y + GAME_TILE * 0.12);
-  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.layers);
+  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
   const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR), pivotFrac = 0.5 + state.turretPivot / 100, r = 0.75;
   gShadow.clear(); gShadow.beginFill(0x000000, 0.26); gShadow.drawEllipse(gAnchor.x, gAnchor.y + GAME_TILE * 0.06, GAME_TILE * r * 0.62, GAME_TILE * r * 0.31); gShadow.endFill();
   if (state.baked && gBodyBaked) {                                    // show the actual baked (smooth) game asset
@@ -561,10 +572,8 @@ function updateGamePreview() {
     return;
   }
   if (gBodyBaked) { gBodyBaked.visible = false; gTurretBaked.visible = false; }
-  for (let k = 0; k < state.layers; k++) {
-    gBodyL[k].visible = showB; gBodyL[k].position.set(0, -k * spG); gBodyL[k].rotation = azR;
-    gTurretL[k].visible = showT; gTurretL[k].anchor.set(pivotFrac, 0.5); gTurretL[k].position.set(ox, -mountDz * spG - k * spG + oy); gTurretL[k].rotation = azR + taimR;
-  }
+  for (let k = 0; k < state.bodyLayers; k++) { gBodyL[k].visible = showB; gBodyL[k].position.set(0, -k * spG); gBodyL[k].rotation = azR; }
+  for (let k = 0; k < state.turretLayers; k++) { gTurretL[k].visible = showT; gTurretL[k].anchor.set(pivotFrac, 0.5); gTurretL[k].position.set(ox, -mountDz * spG - k * spG + oy); gTurretL[k].rotation = azR + taimR; }
 }
 app.ticker.add(() => {
   if (state.spin) { state.taim = (state.taim + 1.2) % 360; $('taim').value = state.taim | 0; $('taimV').textContent = (state.taim | 0) + '°'; }
@@ -594,21 +603,24 @@ $('blen').oninput = (e) => { state.barrelLen = +e.target.value; $('blenV').textC
 $('brad').oninput = (e) => { state.barrelRad = +e.target.value; $('bradV').textContent = state.barrelRad; rebuildSlices(); };
 $('belev').oninput = (e) => { state.barrelElev = +e.target.value; $('belevV').textContent = state.barrelElev; rebuildSlices(); };
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
-$('layers').oninput = (e) => { state.layers = +e.target.value; $('layersV').textContent = state.layers; rebuildSlices(); };
+$('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
+$('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; rebuildSlices(); };
 // ── .vox import: bring a ready-made voxel model in as the base/turret (skips the carve) ──
+const setLayers = (which, v) => { const id = which === 'body' ? 'bodyLayers' : 'turretLayers'; state[id] = v; $(id).value = v; $(id + 'V').textContent = v; };
 function fitToVox() {
-  let mx = 0, mh = 0;
-  for (const kk of ['body', 'turret']) { const v = voxPart[kk]; if (v) { mx = Math.max(mx, v.nx, v.ny); mh = Math.max(mh, v.nz); } }
+  let mx = 0;
+  for (const kk of ['body', 'turret']) { const v = voxPart[kk]; if (v) mx = Math.max(mx, v.nx, v.ny); }
   if (!mx) return;
-  const res = [32, 48, 64, 96, 128]; state.foot = res.find((r) => r >= mx) || 128; state.layers = clamp(mh, 6, 40);
-  $('res').value = state.foot; $('layers').value = state.layers; $('layersV').textContent = state.layers;
+  const res = [32, 48, 64, 96, 128]; state.foot = res.find((r) => r >= mx) || 128; $('res').value = state.foot;
+  if (voxPart.body) setLayers('body', clamp(voxPart.body.nz, 4, 40));
+  if (voxPart.turret) setLayers('turret', clamp(voxPart.turret.nz, 4, 40));
 }
 function importVox(part, file) {
   const rd = new FileReader();
   rd.onload = () => {
     try { const m = parseVox(rd.result); voxPart[part] = m; fitToVox(); rebuildSlices();
-      $('voxState').innerHTML = `<span class="lock">✓ ${part}: ${m.nx}×${m.ny}×${m.nz} voxels — foot ${state.foot}, layers ${state.layers}</span>`;
+      $('voxState').innerHTML = `<span class="lock">✓ ${part}: ${m.nx}×${m.ny}×${m.nz} voxels — foot ${state.foot}, ${part} layers ${part === 'body' ? state.bodyLayers : state.turretLayers}</span>`;
     } catch (e) { alert('Could not read that .vox — ' + e.message); }
   };
   rd.readAsArrayBuffer(file);
@@ -683,16 +695,16 @@ $('setCam').onclick = () => {
 
 // ── BAKE ──
 $('bake').onclick = () => {
-  const foot = state.foot, layers = state.layers, sp = elevationToSP(state.el, SP_MAX);
+  const foot = state.foot, bL = state.bodyLayers, tL = state.turretLayers, sp = elevationToSP(state.el, SP_MAX);
   const pivotPx = foot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
-  const g = geom(foot, layers, sp, pivotPx);   // render texture sized for the turret's (possibly offset) pivot
+  const g = geom(foot, Math.max(bL, tL), sp, pivotPx);   // shared texture sized for the taller stack; both bottom-align at BASEY
   const t0 = performance.now();
-  const bs = makeSlices('body', foot, layers, state.lightAz, state.lightK);
-  const ts = makeSlices('turret', foot, layers, state.lightAz, state.lightK);
-  const body = bakeAngleCache(app.renderer, bs, { frames: BODY_FRAMES, smooth: false, sharp: 0, layers, sp, g, pivotFrac: 0.5 });
-  const turret = bakeAngleCache(app.renderer, ts, { frames: TURRET_FRAMES, smooth: state.smooth, sharp: state.sharp, layers, sp, g, pivotFrac });
+  const bs = makeSlices('body', foot, bL, state.lightAz, state.lightK);
+  const ts = makeSlices('turret', foot, tL, state.lightAz, state.lightK);
+  const body = bakeAngleCache(app.renderer, bs, { frames: BODY_FRAMES, smooth: false, sharp: 0, layers: bL, sp, g, pivotFrac: 0.5 });
+  const turret = bakeAngleCache(app.renderer, ts, { frames: TURRET_FRAMES, smooth: state.smooth, sharp: state.sharp, layers: tL, sp, g, pivotFrac });
   bs.forEach((t) => t.destroy(true)); ts.forEach((t) => t.destroy(true));
-  state.baked = { body, turret, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, layers };
+  state.baked = { body, turret, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, bodyLayers: bL, turretLayers: tL };
   bodyBaked = new PIXI.Sprite(body[0]); bodyBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); rig.addChild(bodyBaked);
   turretBaked = new PIXI.Sprite(turret[0]); turretBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); rig.addChild(turretBaked);
   gBodyBaked = new PIXI.Sprite(body[0]); gBodyBaked.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); gUnit.addChild(gBodyBaked);   // in-game preview
@@ -713,14 +725,15 @@ function packAtlas(cache, g) {
 function buildPack() {
   const b = state.baked, id = ($('uid').value || 'unit').trim();
   const ba = packAtlas(b.body, b.g), ta = packAtlas(b.turret, b.g);
-  const pivot = [Math.round(b.g.CX), Math.round(b.g.BASEY)], mountDz = clamp(bodyMountZ + state.mountZ, 0, b.layers);
+  const pivot = [Math.round(b.g.CX), Math.round(b.g.BASEY)], mountDz = clamp(bodyMountZ + state.mountZ, 0, b.bodyLayers);
+  const totalH = Math.max(b.bodyLayers, mountDz + b.turretLayers);
   const pack = {
-    id, class: state.cls, footprint: [b.foot, b.foot, b.layers],
+    id, class: state.cls, footprint: [b.foot, b.foot, totalH],
     camera: { azimuth: state.az | 0, elevation: state.el | 0 }, layerSpacing: b.sp,
     light: { azimuth: state.lightAz, contrast: state.lightK },
     parts: [
-      { id: 'body', kind: 'directional', facings: b.bodyFrames, atlas: `${id}.body.png`, cell: ba.cell, cols: ba.cols, pivot, zeroFacing: '+x' },
-      { id: 'turret', kind: 'stack', angles: b.turretFrames, atlas: `${id}.turret.png`, cell: ta.cell, cols: ta.cols, pivot, mount: [state.turretDx, 0, mountDz] },
+      { id: 'body', kind: 'directional', facings: b.bodyFrames, atlas: `${id}.body.png`, cell: ba.cell, cols: ba.cols, pivot, layers: b.bodyLayers, zeroFacing: '+x' },
+      { id: 'turret', kind: 'stack', angles: b.turretFrames, atlas: `${id}.turret.png`, cell: ta.cell, cols: ta.cols, pivot, layers: b.turretLayers, mount: [state.turretDx, 0, mountDz] },
     ],
     shadow: { kind: 'ellipse', rx: Math.round(b.foot / 2), ry: Math.round(b.foot * 0.22), alt: state.cls === 'air' ? 30 : 0 },
     stats: { speed: 90, turnRate: 3.0, turretRate: 4.0 },
@@ -809,10 +822,13 @@ function selectUnit(id) {
   $('uid').value = id;
   const m = (loadManifest().units) || {};
   if (m[id]) {
-    const p = m[id].pack;
-    state.cls = p.class; state.foot = p.footprint[0]; state.layers = p.footprint[2];
+    const p = m[id].pack, bp = (p.parts || []).find((q) => q.id === 'body'), tp = (p.parts || []).find((q) => q.id === 'turret');
+    state.cls = p.class; state.foot = p.footprint[0];
+    state.bodyLayers = (bp && bp.layers) || p.footprint[2]; state.turretLayers = (tp && tp.layers) || p.footprint[2];
     if (p.light) { state.lightAz = p.light.azimuth; $('lightAz').value = state.lightAz; $('lightAzV').textContent = state.lightAz + '°'; }
-    $('res').value = state.foot; $('layers').value = state.layers; $('layersV').textContent = state.layers;
+    $('res').value = state.foot;
+    $('bodyLayers').value = state.bodyLayers; $('bodyLayersV').textContent = state.bodyLayers;
+    $('turretLayers').value = state.turretLayers; $('turretLayersV').textContent = state.turretLayers;
     [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
   }
   document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
