@@ -14,6 +14,12 @@ const KINDS = new Set(['directional', 'stack']);
  *  never a bigger stretch. Keeps every unit's voxel density identical on the board. */
 export const VOX_PER_TILE = 32;
 
+/** THE world-light contract: the sun sits TOP-LEFT of the screen (azimuth 135°, Stack Forge's
+ *  default) and shadows project to the LOWER-RIGHT. Packs carry the azimuth they were baked with
+ *  (pack.light.azimuth) and the game shades/shadows from that same value, so in-game lighting is
+ *  identical to the tool bake. This constant is the fallback + the game-wide standard. */
+export const GAME_LIGHT_AZ = 135;
+
 /** Validate a unit pack against the contract. Returns { ok, errors:[...] }. Pure. */
 export function validatePack(p) {
   const e = [];

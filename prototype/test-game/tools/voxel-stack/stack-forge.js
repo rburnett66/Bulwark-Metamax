@@ -746,7 +746,7 @@ const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim:
 let bodyFaces = null, turretFaces = null, bodyBaked = null, turretBaked = null, lastPack = null;
 let voxMeta = null, voxTex = null, voxSpr = null, voxShadow = null, voxSig = '';   // orbit cube-render canvas
 let gVoxMeta = null, gVoxTex = null, gVoxSpr = null, gVoxShadow = null;            // in-game inset canvas
-const shadowLean = () => -Math.cos(state.lightAz * Math.PI / 180) * 0.5;   // shear away from the sun
+const shadowLean = () => -Math.cos(state.lightAz * Math.PI / 180) * 0.6;   // shear away from the sun
 let voxBounds = { R: 64, HT: 40 };                                     // current model bounds (set by rebuild)
 const INSET_S = 3;                                                     // inset render px/voxel (scaled to game size)
 
@@ -766,7 +766,7 @@ function buildOrbitTarget(S) {
   const la0 = state.lightAz * Math.PI / 180;
   voxShadow = new PIXI.Sprite(voxTex);
   voxShadow.anchor.set(0.5, voxMeta.groundY / voxMeta.Hp);
-  voxShadow.position.set(-Math.cos(la0) * state.foot * 0.10, state.baseY + Math.sin(la0) * state.foot * 0.06 + 1);
+  voxShadow.position.set(-Math.cos(la0) * state.foot * 0.16, state.baseY + Math.sin(la0) * state.foot * 0.10 + 1);
   voxShadow.tint = 0x000000; voxShadow.alpha = 0.22;
   voxShadow.scale.set(1 / S, 0.55 / S); voxShadow.skew.x = shadowLean();
   rig.addChild(voxShadow);
@@ -803,7 +803,7 @@ function rebuildSlices() {
   const laI = state.lightAz * Math.PI / 180;
   gVoxShadow = new PIXI.Sprite(gVoxTex);
   gVoxShadow.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp);
-  gVoxShadow.position.set(-Math.cos(laI) * state.foot * 0.10, Math.sin(laI) * state.foot * 0.06 + 1);
+  gVoxShadow.position.set(-Math.cos(laI) * state.foot * 0.16, Math.sin(laI) * state.foot * 0.10 + 1);
   gVoxShadow.tint = 0x000000; gVoxShadow.alpha = 0.22;
   gVoxShadow.scale.set(1 / INSET_S, 0.55 / INSET_S); gVoxShadow.skew.x = shadowLean();
   gUnit.addChild(gVoxShadow);

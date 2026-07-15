@@ -14,7 +14,7 @@
  * angle i·2π/n; the runtime just rounds a world angle to the nearest bucket.
  */
 
-import { validatePack, partById } from './pack.js';
+import { validatePack, partById, GAME_LIGHT_AZ } from './pack.js';
 import { angleBucket } from './select.js';
 
 const MANIFEST_KEY = 'bulwark:stackforge';
@@ -104,10 +104,12 @@ export function buildVoxelUnit(store, id, tilePx, radius, spriteOverCollision) {
   // SILHOUETTE SHADOW: the unit's own frame — NOT flipped (the camera is high, so the silhouette
   // already approximates the ground shape) — squashed onto the ground, sheared and offset away from
   // the world light, tinted black. Same textures as the unit, so it batches; no filters.
-  const lightAz = ((pack.light && pack.light.azimuth) != null ? pack.light.azimuth : 135) * Math.PI / 180;
-  const lean = -Math.cos(lightAz) * 0.5;                            // shear away from the sun
-  const shOffX = -Math.cos(lightAz) * targetW * 0.10;               // ground offset, same direction
-  const shOffY = Math.sin(lightAz) * targetW * 0.06;
+  // WORLD LIGHT (pack.js contract): the same azimuth the pack was BAKED with — sun top-left (135°)
+  // → the shadow projects to the LOWER-RIGHT, matching the lit/shaded faces exactly.
+  const lightAz = ((pack.light && pack.light.azimuth) != null ? pack.light.azimuth : GAME_LIGHT_AZ) * Math.PI / 180;
+  const lean = -Math.cos(lightAz) * 0.6;                            // shear away from the sun
+  const shOffX = -Math.cos(lightAz) * targetW * 0.16;               // ground offset, away from the sun
+  const shOffY = Math.sin(lightAz) * targetW * 0.10;
   const mkShadow = (p, alpha) => {
     const s = mk(p);
     s.tint = 0x000000; s.alpha = alpha;
