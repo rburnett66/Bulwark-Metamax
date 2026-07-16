@@ -93,7 +93,8 @@ export function initHarvest(state, map) {
   // under a harvester made taps ambiguous. Measured from centre so the wave-1 economy just
   // beyond the ring survives (small maps seed their opening right next to the base).
   const _bc = (state.base && state.base.pos) || { x: -999, y: -999 };
-  const _nearBase = (x, y) => Math.abs(x - _bc.x) <= 2 && Math.abs(y - _bc.y) <= 2;
+  const _gapR = (map && map.baseGap) || 2;   // forge maps carry the authored base gap (story-mrmwo8dx6ke)
+  const _nearBase = (x, y) => Math.abs(x - _bc.x) <= _gapR && Math.abs(y - _bc.y) <= _gapR;
   state.resourceNodes = map.resources.filter((r) => !_nearBase(r.x, r.y)).map((r) => ({
     id: r.id, fieldId: r.fieldId || r.id, type: r.type, role: r.role, wave: r.wave, x: r.x, y: r.y,
     color: r.role === 'primary' ? 'blue' : r.role === 'premium' ? 'yellow' : (hash8(r.id) % 2 ? 'red' : 'green'),
@@ -278,26 +279,13 @@ export function cmdBuyHarvester(state) {
   return { ok: true, reason: '', cost: price };
 }
 
-/** Per-wave reset (owner): every wave opens with exactly ONE (free) harvester and a healed base. */
+/** Per-wave transition. OWNER RULE CHANGE (epic-mrmwh12kq3 / story-mrmwpzcl6wq, 2026-07-18):
+ *  harvesters PERSIST between waves — no retirement, no re-dock, no cargo wipe. Trucks keep their
+ *  field assignments and keep working straight through the interlude. Only a fully wiped fleet
+ *  gets the free starter (the economy must never dead-end); the healed base rule is unchanged. */
 export function resetFleetForWave(state) {
-  const ids = (state.harvesterIds || []).slice();
-  for (let i = 1; i < ids.length; i++) {   // keep the first, retire the rest
-    const u = state.units.get(ids[i]);
-    if (u) { state.units.delete(ids[i]); }
-  }
-  state.harvesterIds = ids.slice(0, 1).filter((id) => state.units.has(id));
-  if (!state.harvesterIds.length) { spawnHarvester(state); }   // none survived → give the free one
-  else {
-    const first = state.units.get(state.harvesterIds[0]);      // re-dock + refresh the survivor
-    if (first) {
-      const home = firstOpenDock(state);
-      first.pos = { x: home.x, y: home.y }; first.homePos = { x: home.x, y: home.y };
-      first.state = 'harvestIdle'; first.fieldId = null; first.harvestNodeId = null;
-      first.cargo = 0; first.cargoValue = 0; first.cargoRole = null; first.cargoColor = null;
-      const s = harvesterStats(state); first.hp = first.maxHp = s.hp;
-    }
-  }
-  state.harvesterId = state.harvesterIds[0];
+  if (!aliveHarvesters(state).length) spawnHarvester(state);   // none survived → give the free one
+  state.harvesterId = (state.harvesterIds || [])[0] ?? null;
   if (state.base) state.base.hp = state.base.maxHp;            // healed base every wave (owner)
 }
 

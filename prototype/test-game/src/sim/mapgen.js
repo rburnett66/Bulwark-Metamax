@@ -417,7 +417,10 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     return wins.length ? wins[wins.length - 1].wave : 1;
   };
   const occupied = new Set([...waterCells, ...blockedCells].map((c) => `${c.x},${c.y}`));
-  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) occupied.add(`${bx + dx},${cy + dy}`); // base gap
+  // BASE GAP (story-mrmwo8dx6ke): honor the forge's authored gap — clear ring BEYOND the 3x3
+  // footprint (half-width 1). gap=2 → no resources within ±3 of the base centre (docks included).
+  const baseGapR = 1 + ((forge.base && forge.base.gap != null) ? forge.base.gap : 2);
+  for (let dy = -baseGapR; dy <= baseGapR; dy++) for (let dx = -baseGapR; dx <= baseGapR; dx++) occupied.add(`${bx + dx},${cy + dy}`);
   const distC = (x, y) => Math.hypot(x - bx, y - cy);
   let rid = 0;
   const mkRes = (x, y, role, wave) => ({
@@ -488,6 +491,7 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     base, slots, buildableCells,
     terrain: T, blockedCells, fromForge: true,            // STAGE 2 extras
     palettes: forge.palettes || {},                       // tile-sheet names per terrain type (renderer bakes)
+    baseGap: baseGapR,                                    // resource/crop clear radius from base centre
     mapId, name: (def.Map_Name || `Map ${mapId}`) + ' (forge)', primary: primaryType,
     hasWater: waterCells.length > 0, difficulty: def.Difficulty, parTimeSec: def.Par_Time_Sec,
     questGiver: def.Quest_Giver_Faction, seed: opts.seed || 0, rings, resources,
