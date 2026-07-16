@@ -430,11 +430,13 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     respawns: role === 'primary',
   });
   const resources = [];
-  for (const r of (forge.resources || [])) {           // honor the tool's scattered pools first
+  for (const r of (forge.resources || [])) {           // honor the tool's authored/scattered pools first
     const k = `${r.x},${r.y}`;
     if (occupied.has(k)) continue;
     occupied.add(k);
-    resources.push(mkRes(r.x, r.y, r.role || 'primary', waveFor(r.x, r.y)));
+    const node = mkRes(r.x, r.y, r.role || 'primary', waveFor(r.x, r.y));
+    if (r.color) node.color = r.color;                 // authored rare-1/rare-2 (red/green) sticks
+    resources.push(node);
   }
   for (const row of rows8) {                            // then GUARANTEE the workbook counts per wave
     const wave = row.Wave;

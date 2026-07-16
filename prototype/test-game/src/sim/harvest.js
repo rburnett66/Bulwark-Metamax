@@ -97,7 +97,7 @@ export function initHarvest(state, map) {
   const _nearBase = (x, y) => Math.abs(x - _bc.x) <= _gapR && Math.abs(y - _bc.y) <= _gapR;
   state.resourceNodes = map.resources.filter((r) => !_nearBase(r.x, r.y)).map((r) => ({
     id: r.id, fieldId: r.fieldId || r.id, type: r.type, role: r.role, wave: r.wave, x: r.x, y: r.y,
-    color: r.role === 'primary' ? 'blue' : r.role === 'premium' ? 'yellow' : (hash8(r.id) % 2 ? 'red' : 'green'),
+    color: r.color || (r.role === 'primary' ? 'blue' : r.role === 'premium' ? 'yellow' : (hash8(r.id) % 2 ? 'red' : 'green')),
     units: r.units, remaining: r.units,
     valuePerUnit: r.valuePerUnit || questGoldValue(r),   // quest nodes now pay gold too
     respawns: !!r.respawns, respawnAt: null,

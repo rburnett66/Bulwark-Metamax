@@ -39,9 +39,20 @@ function _tileHash(x, y, salt) {
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return (h ^ (h >>> 16)) >>> 0;
 }
+// default coverage (mirrors the tool's PALETTE_DEFAULTS): forge maps saved without palettes still
+// render FULLY tiled — grass and cliff included — instead of falling back to flat colors.
+const DEFAULT_TERRAIN_SHEETS = {
+  grass: ['grass', 'grass-1', 'grass-2'], dirt: ['brown-dirt', 'dirt-rocky', 'tp1-dirt'],
+  brush: ['tall-grass', 'tall-bushes-2', 'tp1-brush'], rocks: ['rocks', 'tp1-rocks'],
+  trees: ['trees', 'trees-2', 'tp1-trees'], cliff: ['elevated-cliffs'],
+  water: ['ocean-1', 'ocean-2', 'tp1-water'], 'cliff-border': ['rock-cliff-border'],
+};
 async function bakeTerrainTiles(renderer, map, groundLayer) {
-  if (!map.fromForge || !map.terrain || !map.palettes) return;
-  const wanted = TERRAIN_NAME.map((key) => (map.palettes[key] || []).slice(0, 3));
+  if (!map.fromForge || !map.terrain) return;
+  const wanted = TERRAIN_NAME.map((key) => {
+    const own = (map.palettes && map.palettes[key]) || [];
+    return (own.length ? own : (DEFAULT_TERRAIN_SHEETS[key] || [])).slice(0, 3);
+  });
   if (!wanted.some((n) => n.length)) return;
   const t = renderer.tile;
   const byType = [];
@@ -59,8 +70,10 @@ async function bakeTerrainTiles(renderer, map, groundLayer) {
       const sheet = sheets[_tileHash(x, y, 1) % sheets.length];
       const tex = sheet.frames[_tileHash(x, y, 2) % sheet.frames.length];
       const s = new PIXI.Sprite(tex);
-      s.width = t; s.height = t;
-      s.position.set(x * t, y * t);
+      // EDGE BLEND (task-mrmwn65614v): tiles bleed ~0.75px past their cell on every side — with
+      // linear filtering the overlaps cross-fade, so the grid seams melt instead of reading as tiles.
+      s.width = t + 1.5; s.height = t + 1.5;
+      s.position.set(x * t - 0.75, y * t - 0.75);
       cont.addChild(s);
     }
   }
