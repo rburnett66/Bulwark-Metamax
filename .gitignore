@@ -1,3 +1,5 @@
 
 # orphaned canvas-game generation cache (removed 2026-07-14)
 prototype/_artcache/
+__pycache__/
+*.pyc
