@@ -736,6 +736,7 @@ const imgs = { body: { top: null, side: null, front: null, back: null }, turret:
 const mkViews = (v) => ({ top: v(), side: v(), front: v(), back: v() });
 const srcImg = { body: mkViews(() => null), turret: mkViews(() => null) };
 const flipState = { body: mkViews(() => ({ h: false, v: false })), turret: mkViews(() => ({ h: false, v: false })) };
+const rotState = { body: mkViews(() => 0), turret: mkViews(() => 0) };        // per-image rotation (0/90/180/270 CW)
 const keyTolState = { body: mkViews(() => 75), turret: mkViews(() => 75) };   // per-image cutout sensitivity
 const polyState = { body: mkViews(() => null), turret: mkViews(() => null) }; // per-image polygon cutout ([x,y] px)
 const imgURLCache = { body: mkViews(() => null), turret: mkViews(() => null) }; // PNG data-URL cache (project saves)
@@ -745,6 +746,13 @@ let bulkLoad = false;                                                         //
 function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
+}
+function rotCanvas(im, rot) {                                                 // rot ∈ {90,180,270}, clockwise
+  const sw = im.width, sh = im.height, c = document.createElement('canvas');
+  c.width = (rot % 180) ? sh : sw; c.height = (rot % 180) ? sw : sh;
+  const g = c.getContext('2d');
+  g.translate(c.width / 2, c.height / 2); g.rotate(rot * Math.PI / 180); g.drawImage(im, -sw / 2, -sh / 2);
+  return c;
 }
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null };
@@ -979,11 +987,12 @@ $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) ret
 // ── orthographic view pickers: 4 thumbnails per part; click to browse OR hover + Ctrl+V to paste ──
 const VIEWS = ['top', 'side', 'front', 'back'];
 document.querySelectorAll('.views').forEach((box) => {
-  box.innerHTML = VIEWS.map((v) => `<div class="vslot"><label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="128" height="84"></canvas><input type="file" accept="image/*"></label><div class="vmeta"><span>${v[0].toUpperCase() + v.slice(1)}</span><span class="fl"><button type="button" class="flip keybtn" title="Tune cutout outline">✂</button><button type="button" class="flip" data-axis="h" title="Flip horizontal">⇔</button><button type="button" class="flip" data-axis="v" title="Flip vertical">⇕</button></span></div></div>`).join('');
+  box.innerHTML = VIEWS.map((v) => `<div class="vslot"><label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="128" height="84"></canvas><input type="file" accept="image/*"></label><div class="vmeta"><span>${v[0].toUpperCase() + v.slice(1)}</span><span class="fl"><button type="button" class="flip keybtn" title="Tune cutout outline">✂</button>${v === 'top' ? '<button type="button" class="flip" data-rot="1" title="Rotate 90° clockwise">⟳</button>' : ''}<button type="button" class="flip" data-axis="h" title="Flip horizontal">⇔</button><button type="button" class="flip" data-axis="v" title="Flip vertical">⇕</button></span></div></div>`).join('');
   box.addEventListener('click', (e) => {
     const btn = e.target.closest('.flip'); if (!btn) return;
     e.preventDefault(); const pick = btn.closest('.vslot').querySelector('.vpick');
     if (btn.classList.contains('keybtn')) { openKeyModal(pick.dataset.part, pick.dataset.view); return; }
+    if (btn.dataset.rot) { toggleRot(pick.dataset.part, pick.dataset.view); return; }
     toggleFlip(pick.dataset.part, pick.dataset.view, btn.dataset.axis);
   });
 });
@@ -992,6 +1001,7 @@ function setView(pick, im) {
   const part = pick.dataset.part, view = pick.dataset.view;
   voxPart[part] = null; voxB64[part] = null;                                  // photos override an imported .vox
   srcImg[part][view] = im; flipState[part][view] = { h: false, v: false };   // new image → clear flips
+  rotState[part][view] = 0;
   keyTolState[part][view] = 75; polyState[part][view] = null;                // …and reset the cutout tuning
   imgURLCache[part][view] = null;
   renderView(pick);
@@ -999,7 +1009,8 @@ function setView(pick, im) {
 function renderView(pick) {
   const part = pick.dataset.part, view = pick.dataset.view, src = srcImg[part][view];
   if (!src) return;
-  const fl = flipState[part][view], im = (fl.h || fl.v) ? flipCanvas(src, fl.h, fl.v) : src;
+  const fl = flipState[part][view], flipped = (fl.h || fl.v) ? flipCanvas(src, fl.h, fl.v) : src;
+  const rot = rotState[part][view] || 0, im = rot ? rotCanvas(flipped, rot) : flipped;
   imgs[part][view] = im;
   const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 128, 84); drawFit(g, keyedCanvas(im, keyTolState[part][view], polyState[part][view]), 128, 84);
   pick.classList.add('set'); updateFlipBtns(pick);
@@ -1009,13 +1020,32 @@ function toggleFlip(part, view, axis) {
   if (!srcImg[part][view]) return;
   flipState[part][view][axis] = !flipState[part][view][axis];
   const polys = polyState[part][view], im = srcImg[part][view];              // keep the shapes on the subject
-  if (polys) for (const q of polys) for (const p of q.pts) { if (axis === 'h') p[0] = im.width - 1 - p[0]; else p[1] = im.height - 1 - p[1]; }
+  // polys live in DISPLAY space (post-flip, post-rot); a pre-rot flip shows up on screen on the
+  // other axis when the view is rotated 90/270, and display dims are the source dims swapped
+  const rot = rotState[part][view] || 0, swap = !!(rot % 180);
+  const W = swap ? im.height : im.width, H = swap ? im.width : im.height;
+  const dispAxis = swap ? (axis === 'h' ? 'v' : 'h') : axis;
+  if (polys) for (const q of polys) for (const p of q.pts) { if (dispAxis === 'h') p[0] = W - 1 - p[0]; else p[1] = H - 1 - p[1]; }
+  renderView(pickFor(part, view));
+}
+function toggleRot(part, view) {
+  if (!srcImg[part][view]) return;
+  const old = rotState[part][view] || 0;
+  rotState[part][view] = (old + 90) % 360;
+  const polys = polyState[part][view];
+  if (polys) {                                                               // 90° CW in display space: (x,y) → (H−1−y, x)
+    const im = srcImg[part][view], H = (old % 180) ? im.width : im.height;
+    for (const q of polys) for (const p of q.pts) { const x = p[0]; p[0] = H - 1 - p[1]; p[1] = x; }
+  }
   renderView(pickFor(part, view));
 }
 function updateFlipBtns(pick) {
-  const fl = flipState[pick.dataset.part][pick.dataset.view], slot = pick.closest('.vslot'); if (!slot) return;
+  const part = pick.dataset.part, view = pick.dataset.view;
+  const fl = flipState[part][view], slot = pick.closest('.vslot'); if (!slot) return;
   slot.querySelector('.flip[data-axis="h"]').classList.toggle('on', fl.h);
   slot.querySelector('.flip[data-axis="v"]').classList.toggle('on', fl.v);
+  const rb = slot.querySelector('.flip[data-rot]');
+  if (rb) { const rot = rotState[part][view] || 0; rb.classList.toggle('on', !!rot); rb.textContent = rot ? rot + '°' : '⟳'; rb.title = rot ? `Rotated ${rot}° — click for ${(rot + 90) % 360 || 'no'}°` : 'Rotate 90° clockwise'; }
 }
 // ── cutout tuner: modal with a live keyed preview, per-image sensitivity slider + polygon shapes.
 // workPolys = closed shapes ({pts, cut}); workPoly = the shape being drawn; polyCut = mode for it. ──
@@ -1488,7 +1518,7 @@ function snapshotProject() {
   }
   const st = { ...state }; delete st.baked;
   return { format: 'stackforge-project', version: 1, id: ($('uid').value || 'unit').trim(),
-    state: st, flips: flipState, keyTol: keyTolState, polys: polyState, images, vox,
+    state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, images, vox,
     palMap: [...palMap.entries()] };
 }
 function syncAllControls() {
@@ -1519,6 +1549,7 @@ async function loadProject(p) {
       voxB64[part] = pv ? pv.b64 : null;
       for (const v of VIEWS) {
         flipState[part][v] = (p.flips && p.flips[part] && p.flips[part][v]) || { h: false, v: false };
+        rotState[part][v] = (p.rots && p.rots[part] && p.rots[part][v]) || 0;
         keyTolState[part][v] = (p.keyTol && p.keyTol[part] && p.keyTol[part][v]) || 75;
         polyState[part][v] = (p.polys && p.polys[part] && p.polys[part][v]) || null;
         const pick = pickFor(part, v), url = p.images && p.images[part] && p.images[part][v];
