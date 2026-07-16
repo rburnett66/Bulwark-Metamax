@@ -100,7 +100,8 @@ window.GAME_CONFIG = {
       {
         "type": "Item C"
       }
-    ]
+    ],
+    "tables": {}
   },
   "mechanics": [
     "SessionTimer",
@@ -109,7 +110,7 @@ window.GAME_CONFIG = {
   "states": [
     {
       "name": "MENU",
-      "screen": "Stub",
+      "screen": "Menu",
       "cfg": {
         "title": "MENU",
         "navLabels": [
@@ -167,7 +168,7 @@ window.GAME_CONFIG = {
     },
     {
       "name": "STORE",
-      "screen": "Stub",
+      "screen": "Store",
       "cfg": {
         "title": "STORE",
         "navLabels": [
@@ -184,7 +185,7 @@ window.GAME_CONFIG = {
     },
     {
       "name": "SETTINGS",
-      "screen": "Stub",
+      "screen": "Settings",
       "cfg": {
         "title": "SETTINGS",
         "navLabels": [
@@ -221,7 +222,7 @@ window.GAME_CONFIG = {
     },
     {
       "name": "INVENTORY",
-      "screen": "Stub",
+      "screen": "Inventory",
       "cfg": {
         "title": "INVENTORY",
         "navLabels": [
