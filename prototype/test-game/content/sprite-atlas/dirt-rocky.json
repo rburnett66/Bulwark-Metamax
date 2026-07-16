@@ -1,0 +1,35 @@
+{
+ "frames": {
+  "flat-brown-dirt-with-some-small-rocks_0.png": {
+   "frame": {
+    "x": 3,
+    "y": 3,
+    "w": 461,
+    "h": 475
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 461,
+    "h": 475
+   },
+   "sourceSize": {
+    "w": 461,
+    "h": 475
+   }
+  }
+ },
+ "meta": {
+  "app": "metamax-sprites",
+  "version": "1.0",
+  "image": "dirt-rocky.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 474,
+   "h": 481
+  },
+  "scale": "1"
+ }
+}

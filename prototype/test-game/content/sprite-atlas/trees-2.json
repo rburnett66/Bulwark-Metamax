@@ -1,0 +1,35 @@
+{
+ "frames": {
+  "trees-2_0.png": {
+   "frame": {
+    "x": 3,
+    "y": 3,
+    "w": 858,
+    "h": 879
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 858,
+    "h": 879
+   },
+   "sourceSize": {
+    "w": 858,
+    "h": 879
+   }
+  }
+ },
+ "meta": {
+  "app": "metamax-sprites",
+  "version": "1.0",
+  "image": "trees-2.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 875,
+   "h": 885
+  },
+  "scale": "1"
+ }
+}

@@ -1,0 +1,35 @@
+{
+ "frames": {
+  "brown-dirt_0.png": {
+   "frame": {
+    "x": 3,
+    "y": 3,
+    "w": 830,
+    "h": 832
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 830,
+    "h": 832
+   },
+   "sourceSize": {
+    "w": 830,
+    "h": 832
+   }
+  }
+ },
+ "meta": {
+  "app": "metamax-sprites",
+  "version": "1.0",
+  "image": "brown-dirt.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 837,
+   "h": 838
+  },
+  "scale": "1"
+ }
+}

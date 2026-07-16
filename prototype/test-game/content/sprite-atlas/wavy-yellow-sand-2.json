@@ -1,0 +1,35 @@
+{
+ "frames": {
+  "wavy-yellow-sand-2_0.png": {
+   "frame": {
+    "x": 3,
+    "y": 3,
+    "w": 839,
+    "h": 844
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 839,
+    "h": 844
+   },
+   "sourceSize": {
+    "w": 839,
+    "h": 844
+   }
+  }
+ },
+ "meta": {
+  "app": "metamax-sprites",
+  "version": "1.0",
+  "image": "wavy-yellow-sand-2.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 848,
+   "h": 850
+  },
+  "scale": "1"
+ }
+}

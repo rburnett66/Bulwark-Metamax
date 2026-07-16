@@ -1,0 +1,35 @@
+{
+ "frames": {
+  "ocean-1_0.png": {
+   "frame": {
+    "x": 3,
+    "y": 3,
+    "w": 967,
+    "h": 943
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 967,
+    "h": 943
+   },
+   "sourceSize": {
+    "w": 967,
+    "h": 943
+   }
+  }
+ },
+ "meta": {
+  "app": "metamax-sprites",
+  "version": "1.0",
+  "image": "ocean-1.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 973,
+   "h": 949
+  },
+  "scale": "1"
+ }
+}

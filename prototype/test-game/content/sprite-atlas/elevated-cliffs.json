@@ -1,0 +1,33 @@
+{
+ "frames": {
+  "elevated-cliffs.png": {
+   "frame": {
+    "x": 1,
+    "y": 1,
+    "w": 872,
+    "h": 878
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 872,
+    "h": 878
+   },
+   "sourceSize": {
+    "w": 872,
+    "h": 878
+   }
+  }
+ },
+ "meta": {
+  "app": "compose_atlas",
+  "image": "elevated-cliffs.png",
+  "size": {
+   "w": 874,
+   "h": 880
+  },
+  "scale": "1"
+ }
+}

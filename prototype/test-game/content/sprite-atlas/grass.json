@@ -1,0 +1,35 @@
+{
+ "frames": {
+  "grass_0.png": {
+   "frame": {
+    "x": 3,
+    "y": 3,
+    "w": 747,
+    "h": 751
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 747,
+    "h": 751
+   },
+   "sourceSize": {
+    "w": 747,
+    "h": 751
+   }
+  }
+ },
+ "meta": {
+  "app": "metamax-sprites",
+  "version": "1.0",
+  "image": "grass.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 755,
+   "h": 757
+  },
+  "scale": "1"
+ }
+}

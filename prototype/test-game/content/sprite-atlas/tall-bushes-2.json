@@ -1,0 +1,35 @@
+{
+ "frames": {
+  "tall-bushes-2_0.png": {
+   "frame": {
+    "x": 3,
+    "y": 3,
+    "w": 875,
+    "h": 888
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 875,
+    "h": 888
+   },
+   "sourceSize": {
+    "w": 875,
+    "h": 888
+   }
+  }
+ },
+ "meta": {
+  "app": "metamax-sprites",
+  "version": "1.0",
+  "image": "tall-bushes-2.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 888,
+   "h": 894
+  },
+  "scale": "1"
+ }
+}

@@ -5,10 +5,72 @@ import { buildLive3D, updateLive3D } from './voxel/live3d.js';
 import { createProjectilePool } from './projectiles.js';
 import { layerLean } from '../harness/camera.js';
 import { SPRITE_OVER_COLLISION } from '../harness/parts.js';
-import { TERRAIN_COLOR } from '../terrain/terrainGen.js';
+import { TERRAIN_COLOR, TERRAIN_NAME } from '../terrain/terrainGen.js';
 
 // Terrain Forge palette as PIXI numeric colors (Stage 2 maps render by terrain type)
 const TERRAIN_HEX = TERRAIN_COLOR.map((c) => parseInt(c.slice(1), 16));
+
+// ── STAGE 2 TILE BAKE: paint the map's authored tile sheets (MetaMax art via content/sprite-atlas/)
+// over the flat type colors, ONCE, into a single RenderTexture — terrain is static, so battles pay
+// zero per-frame cost and ONE draw for the whole ground. The flat colors stay underneath as the
+// instant fallback (missing sheets, load failures, the tool's tileset-free maps). Variant + frame
+// picks are the tool's deterministic hash, so the game and the forge preview scatter identically.
+const _sheetCache = new Map();   // name → { frames: Texture[] } | null (across maps)
+async function _loadSheet(name) {
+  if (_sheetCache.has(name)) return _sheetCache.get(name);
+  let rec = null;
+  try {
+    const meta = await fetch(`content/sprite-atlas/${name}.json`).then((r) => (r.ok ? r.json() : null));
+    if (meta && meta.frames) {
+      const img = await new Promise((res, rej) => {
+        const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('img')); im.src = `content/sprite-atlas/${name}.png`;
+      });
+      const base = PIXI.BaseTexture.from(img);
+      const frames = Object.values(meta.frames).map((f) =>
+        new PIXI.Texture(base, new PIXI.Rectangle(f.frame.x | 0, f.frame.y | 0, f.frame.w | 0, f.frame.h | 0)));
+      if (frames.length) rec = { frames };
+    }
+  } catch (e) { /* sheet missing → flat color remains */ }
+  _sheetCache.set(name, rec);
+  return rec;
+}
+function _tileHash(x, y, salt) {
+  let h = (x * 374761393 + y * 668265263 + salt * 97) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+async function bakeTerrainTiles(renderer, map, groundLayer) {
+  if (!map.fromForge || !map.terrain || !map.palettes) return;
+  const wanted = TERRAIN_NAME.map((key) => (map.palettes[key] || []).slice(0, 3));
+  if (!wanted.some((n) => n.length)) return;
+  const t = renderer.tile;
+  const byType = [];
+  for (let ti = 0; ti < wanted.length; ti++) {
+    const sheets = (await Promise.all(wanted[ti].map(_loadSheet))).filter(Boolean);
+    byType[ti] = sheets.length ? sheets : null;
+  }
+  if (!byType.some(Boolean) || renderer._dead) return;
+  const cont = new PIXI.Container();
+  for (let y = 0; y < map.rows; y++) {
+    for (let x = 0; x < map.cols; x++) {
+      const ti = map.terrain[y * map.cols + x] | 0;
+      const sheets = byType[ti];
+      if (!sheets) continue;
+      const sheet = sheets[_tileHash(x, y, 1) % sheets.length];
+      const tex = sheet.frames[_tileHash(x, y, 2) % sheet.frames.length];
+      const s = new PIXI.Sprite(tex);
+      s.width = t; s.height = t;
+      s.position.set(x * t, y * t);
+      cont.addChild(s);
+    }
+  }
+  const rt = PIXI.RenderTexture.create({ width: map.cols * t, height: map.rows * t });
+  renderer.app.renderer.render(cont, { renderTexture: rt });
+  cont.destroy({ children: true });
+  const baked = new PIXI.Sprite(rt);
+  groundLayer.addChild(baked);                       // over the flat colors, under everything else
+  renderer._terrainBake = baked;
+}
 
 const FX_DT = 1 / 60;
 
@@ -195,6 +257,8 @@ function drawStaticBoard(renderer, map) {
 
   renderer.layers.water.addChild(gWater);
   renderer.layers.ground.addChild(gGround);
+  // Stage 2 tile bake: authored sheets paint over the flat colors once loaded (async, one draw call)
+  void bakeTerrainTiles(renderer, map, renderer.layers.ground);
 }
 
 export function createRenderer(app, map) {

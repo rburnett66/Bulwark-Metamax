@@ -1,0 +1,33 @@
+{
+ "frames": {
+  "rocks.png": {
+   "frame": {
+    "x": 1,
+    "y": 1,
+    "w": 788,
+    "h": 794
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 788,
+    "h": 794
+   },
+   "sourceSize": {
+    "w": 788,
+    "h": 794
+   }
+  }
+ },
+ "meta": {
+  "app": "compose_atlas",
+  "image": "rocks.png",
+  "size": {
+   "w": 790,
+   "h": 796
+  },
+  "scale": "1"
+ }
+}

@@ -1,0 +1,35 @@
+{
+ "frames": {
+  "tall-grass_0.png": {
+   "frame": {
+    "x": 3,
+    "y": 3,
+    "w": 800,
+    "h": 801
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 801
+   },
+   "sourceSize": {
+    "w": 800,
+    "h": 801
+   }
+  }
+ },
+ "meta": {
+  "app": "metamax-sprites",
+  "version": "1.0",
+  "image": "tall-grass.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 807,
+   "h": 807
+  },
+  "scale": "1"
+ }
+}

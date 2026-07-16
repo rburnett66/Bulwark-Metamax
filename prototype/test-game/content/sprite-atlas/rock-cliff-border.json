@@ -1,0 +1,33 @@
+{
+ "frames": {
+  "rock-cliff-border.png": {
+   "frame": {
+    "x": 1,
+    "y": 1,
+    "w": 844,
+    "h": 854
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 844,
+    "h": 854
+   },
+   "sourceSize": {
+    "w": 844,
+    "h": 854
+   }
+  }
+ },
+ "meta": {
+  "app": "compose_atlas",
+  "image": "rock-cliff-border.png",
+  "size": {
+   "w": 846,
+   "h": 856
+  },
+  "scale": "1"
+ }
+}

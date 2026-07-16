@@ -1,0 +1,33 @@
+{
+ "frames": {
+  "trees.png": {
+   "frame": {
+    "x": 1,
+    "y": 1,
+    "w": 769,
+    "h": 759
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 769,
+    "h": 759
+   },
+   "sourceSize": {
+    "w": 769,
+    "h": 759
+   }
+  }
+ },
+ "meta": {
+  "app": "compose_atlas",
+  "image": "trees.png",
+  "size": {
+   "w": 771,
+   "h": 761
+  },
+  "scale": "1"
+ }
+}
