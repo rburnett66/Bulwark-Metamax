@@ -223,6 +223,8 @@ function collectVox(partId, foot, layers, zOff, xOff) {
     if (!filled(x, y, z)) continue;
     const c = (z * N + y * foot + x) * 3; let r = vcol[c], g = vcol[c + 1], b = vcol[c + 2];
     if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
+    const t = palMap.get((r << 16) | (g << 8) | b);                  // colour tune follows .vox + Tier C exports
+    if (t) { r = t[0]; g = t[1]; b = t[2]; }
     const X = x + xOff, Z = z + zOff; if (X < 0 || X > 255 || Z < 0 || Z > 255) continue;
     out.push({ x: X, y, z: Z, r, g, b });
   }
@@ -288,15 +290,20 @@ function buildVolume(partId, foot, layers) {
   }
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
-  // HEIGHT is the truth from the FRONT view — it's near-square, so it isn't distorted by a long barrel.
-  // Each profile's WIDTH maps to a known footprint dim (front width → depth bh, side width → length bw),
-  // so height = view.height × (that footprint dim / view.width). Prefer front; the side is then stretched
-  // (gridStretch) to this SAME Hv — i.e. the side's height is normalized to the front's truth.
-  const Hraw = frontC ? frontC.height * (bh / frontC.width)
+  // NORMALIZATION CONTRACT: the top view is the master scale. Its fit fixes bw (length) and bh (width),
+  // and every elevation registers against those — side maps its width to bw (top↔side length-normalized),
+  // front maps its width to bh (top↔front width-normalized). HEIGHT follows the same rule at ONE uniform
+  // scale: prefer the side under the top's length scale — height = sideC.height × (bw / sideC.width) —
+  // so the side keeps its own proportions (a front rendered at a different zoom can no longer squash it).
+  // Without a top+side pair, the front is the truth (near-square, so a long barrel can't distort it).
+  // The other elevation is then stretched (gridStretch) to this SAME Hv.
+  const Hraw = (topC && sideC) ? sideC.height * (bw / sideC.width)
+    : frontC ? frontC.height * (bh / frontC.width)
     : sideC ? sideC.height * (bw / sideC.width)
     : layers * 0.66;
   const Hv = Math.min(layers, Math.max(1, Math.round(Hraw)));
-  const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to front)
+  if (Hraw > layers + 0.5) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
+  const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to the common Hv)
   const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
   const backC = src.back ? keyedCropped(src.back, tol.back, pol.back) : null; // colour-only: paints the −x walls
   const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
@@ -412,7 +419,9 @@ function buildFaces(partId, foot, layers) {
       const w = n === 0 ? null : wallCol(x, y, z, n);
       let r = w ? w[0] : vcol[c], g = w ? w[1] : vcol[c + 1], b = w ? w[2] : vcol[c + 2];
       if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
-      faces.push({ x, y, z, n, r, g, b, d: 0 });
+      const k = (r << 16) | (g << 8) | b, t = palMap.get(k);          // artist colour tune (palette tuner)
+      if (t) { r = t[0]; g = t[1]; b = t[2]; }
+      faces.push({ x, y, z, n, r, g, b, k, d: 0 });                   // k = pre-tune key, the tuner's handle
     };
     if (!filled(x, y, z + 1)) add(0);
     if (!filled(x + 1, y, z)) add(1);
@@ -732,14 +741,23 @@ const imgs = { body: { top: null, side: null, front: null, back: null }, turret:
 const mkViews = (v) => ({ top: v(), side: v(), front: v(), back: v() });
 const srcImg = { body: mkViews(() => null), turret: mkViews(() => null) };
 const flipState = { body: mkViews(() => ({ h: false, v: false })), turret: mkViews(() => ({ h: false, v: false })) };
+const rotState = { body: mkViews(() => 0), turret: mkViews(() => 0) };        // per-image rotation (0/90/180/270 CW)
 const keyTolState = { body: mkViews(() => 75), turret: mkViews(() => 75) };   // per-image cutout sensitivity
 const polyState = { body: mkViews(() => null), turret: mkViews(() => null) }; // per-image polygon cutout ([x,y] px)
 const imgURLCache = { body: mkViews(() => null), turret: mkViews(() => null) }; // PNG data-URL cache (project saves)
 const voxB64 = { body: null, turret: null };                                  // base64 cache of imported .vox data
+const palMap = new Map();                    // palette tuner: pre-tune colour key → replacement [r,g,b]
 let bulkLoad = false;                                                         // true while restoring a project
 function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
+}
+function rotCanvas(im, rot) {                                                 // rot ∈ {90,180,270}, clockwise
+  const sw = im.width, sh = im.height, c = document.createElement('canvas');
+  c.width = (rot % 180) ? sh : sw; c.height = (rot % 180) ? sw : sh;
+  const g = c.getContext('2d');
+  g.translate(c.width / 2, c.height / 2); g.rotate(rot * Math.PI / 180); g.drawImage(im, -sw / 2, -sh / 2);
+  return c;
 }
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null };
@@ -974,11 +992,12 @@ $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) ret
 // ── orthographic view pickers: 4 thumbnails per part; click to browse OR hover + Ctrl+V to paste ──
 const VIEWS = ['top', 'side', 'front', 'back'];
 document.querySelectorAll('.views').forEach((box) => {
-  box.innerHTML = VIEWS.map((v) => `<div class="vslot"><label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="128" height="84"></canvas><input type="file" accept="image/*"></label><div class="vmeta"><span>${v[0].toUpperCase() + v.slice(1)}</span><span class="fl"><button type="button" class="flip keybtn" title="Tune cutout outline">✂</button><button type="button" class="flip" data-axis="h" title="Flip horizontal">⇔</button><button type="button" class="flip" data-axis="v" title="Flip vertical">⇕</button></span></div></div>`).join('');
+  box.innerHTML = VIEWS.map((v) => `<div class="vslot"><label class="vpick" data-part="${box.dataset.part}" data-view="${v}"><canvas width="128" height="84"></canvas><input type="file" accept="image/*"></label><div class="vmeta"><span>${v[0].toUpperCase() + v.slice(1)}</span><span class="fl"><button type="button" class="flip keybtn" title="Tune cutout outline">✂</button>${v === 'top' ? '<button type="button" class="flip" data-rot="1" title="Rotate 90° clockwise">⟳</button>' : ''}<button type="button" class="flip" data-axis="h" title="Flip horizontal">⇔</button><button type="button" class="flip" data-axis="v" title="Flip vertical">⇕</button></span></div></div>`).join('');
   box.addEventListener('click', (e) => {
     const btn = e.target.closest('.flip'); if (!btn) return;
     e.preventDefault(); const pick = btn.closest('.vslot').querySelector('.vpick');
     if (btn.classList.contains('keybtn')) { openKeyModal(pick.dataset.part, pick.dataset.view); return; }
+    if (btn.dataset.rot) { toggleRot(pick.dataset.part, pick.dataset.view); return; }
     toggleFlip(pick.dataset.part, pick.dataset.view, btn.dataset.axis);
   });
 });
@@ -987,6 +1006,7 @@ function setView(pick, im) {
   const part = pick.dataset.part, view = pick.dataset.view;
   voxPart[part] = null; voxB64[part] = null;                                  // photos override an imported .vox
   srcImg[part][view] = im; flipState[part][view] = { h: false, v: false };   // new image → clear flips
+  rotState[part][view] = 0;
   keyTolState[part][view] = 75; polyState[part][view] = null;                // …and reset the cutout tuning
   imgURLCache[part][view] = null;
   renderView(pick);
@@ -994,7 +1014,8 @@ function setView(pick, im) {
 function renderView(pick) {
   const part = pick.dataset.part, view = pick.dataset.view, src = srcImg[part][view];
   if (!src) return;
-  const fl = flipState[part][view], im = (fl.h || fl.v) ? flipCanvas(src, fl.h, fl.v) : src;
+  const fl = flipState[part][view], flipped = (fl.h || fl.v) ? flipCanvas(src, fl.h, fl.v) : src;
+  const rot = rotState[part][view] || 0, im = rot ? rotCanvas(flipped, rot) : flipped;
   imgs[part][view] = im;
   const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 128, 84); drawFit(g, keyedCanvas(im, keyTolState[part][view], polyState[part][view]), 128, 84);
   pick.classList.add('set'); updateFlipBtns(pick);
@@ -1004,13 +1025,32 @@ function toggleFlip(part, view, axis) {
   if (!srcImg[part][view]) return;
   flipState[part][view][axis] = !flipState[part][view][axis];
   const polys = polyState[part][view], im = srcImg[part][view];              // keep the shapes on the subject
-  if (polys) for (const q of polys) for (const p of q.pts) { if (axis === 'h') p[0] = im.width - 1 - p[0]; else p[1] = im.height - 1 - p[1]; }
+  // polys live in DISPLAY space (post-flip, post-rot); a pre-rot flip shows up on screen on the
+  // other axis when the view is rotated 90/270, and display dims are the source dims swapped
+  const rot = rotState[part][view] || 0, swap = !!(rot % 180);
+  const W = swap ? im.height : im.width, H = swap ? im.width : im.height;
+  const dispAxis = swap ? (axis === 'h' ? 'v' : 'h') : axis;
+  if (polys) for (const q of polys) for (const p of q.pts) { if (dispAxis === 'h') p[0] = W - 1 - p[0]; else p[1] = H - 1 - p[1]; }
+  renderView(pickFor(part, view));
+}
+function toggleRot(part, view) {
+  if (!srcImg[part][view]) return;
+  const old = rotState[part][view] || 0;
+  rotState[part][view] = (old + 90) % 360;
+  const polys = polyState[part][view];
+  if (polys) {                                                               // 90° CW in display space: (x,y) → (H−1−y, x)
+    const im = srcImg[part][view], H = (old % 180) ? im.width : im.height;
+    for (const q of polys) for (const p of q.pts) { const x = p[0]; p[0] = H - 1 - p[1]; p[1] = x; }
+  }
   renderView(pickFor(part, view));
 }
 function updateFlipBtns(pick) {
-  const fl = flipState[pick.dataset.part][pick.dataset.view], slot = pick.closest('.vslot'); if (!slot) return;
+  const part = pick.dataset.part, view = pick.dataset.view;
+  const fl = flipState[part][view], slot = pick.closest('.vslot'); if (!slot) return;
   slot.querySelector('.flip[data-axis="h"]').classList.toggle('on', fl.h);
   slot.querySelector('.flip[data-axis="v"]').classList.toggle('on', fl.v);
+  const rb = slot.querySelector('.flip[data-rot]');
+  if (rb) { const rot = rotState[part][view] || 0; rb.classList.toggle('on', !!rot); rb.textContent = rot ? rot + '°' : '⟳'; rb.title = rot ? `Rotated ${rot}° — click for ${(rot + 90) % 360 || 'no'}°` : 'Rotate 90° clockwise'; }
 }
 // ── cutout tuner: modal with a live keyed preview, per-image sensitivity slider + polygon shapes.
 // workPolys = closed shapes ({pts, cut}); workPoly = the shape being drawn; polyCut = mode for it. ──
@@ -1189,6 +1229,146 @@ $('shapeCircle').onclick = () => { sheetShape = 'circle'; $('shapeCircle').class
 $('sheetClose').onclick = () => { $('sheetModal').hidden = true; };
 $('sheetModal').addEventListener('click', (e) => { if (e.target === $('sheetModal')) $('sheetModal').hidden = true; });
 
+// ── PALETTE TUNER (owner 2026-07-16): every colour the model uses as a swatch strip; pick one and
+// re-tint it on a hue strip + saturation/brightness square. Small palettes edit exactly; big
+// full-colour models are grouped by median-cut and the whole group shifts by the same hue/sat/value
+// delta so shading variation survives. Edits live in palMap, applied inside buildFaces/collectVox —
+// so orbit preview, in-game inset, bake, Tier C model embeds and .vox exports all agree.
+function rgb2hsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  return [h, mx ? d / mx : 0, mx];
+}
+function hsv2rgb(h, s, v) {
+  h = ((h % 360) + 360) % 360;
+  const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+const keyRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
+const cssOf = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+const hexOf = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+let palSwList = [], palSel = null, palH = 0, palS = 0, palVv = 1, palPending = false;
+function palRebuild() {                                            // throttle: one model re-carve per frame
+  if (palPending) return;
+  palPending = true;
+  requestAnimationFrame(() => { palPending = false; rebuildSlices(); scheduleAutosave(); });
+}
+const palCur = (k) => palMap.get(k) || keyRGB(k);
+function palSwatchCol(sw, orig) {                                  // count-weighted average of member colours
+  let r = 0, g = 0, b = 0, n = 0;
+  for (const [k, c] of sw.members) { const m = orig ? keyRGB(k) : palCur(k); r += m[0] * c; g += m[1] * c; b += m[2] * c; n += c; }
+  return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+}
+function palBuildSwatches() {
+  const tally = new Map();
+  for (const F of [bodyFaces, turretFaces]) if (F) for (const f of F.faces) tally.set(f.k, (tally.get(f.k) || 0) + 1);
+  const entries = [...tally.entries()];
+  let groups;
+  if (entries.length <= 28) groups = entries.map((e) => ({ members: [e] }));
+  else {                                                           // full-colour model → group into 18 families
+    const cents = medianCut(entries.map(([k]) => keyRGB(k)), 18);
+    groups = cents.map(() => ({ members: [] }));
+    for (const [k, c] of entries) {
+      const col = keyRGB(k); let bi = 0, bd = 1e9;
+      for (let i = 0; i < cents.length; i++) { const p = cents[i], d = (p[0] - col[0]) ** 2 + (p[1] - col[1]) ** 2 + (p[2] - col[2]) ** 2; if (d < bd) { bd = d; bi = i; } }
+      groups[bi].members.push([k, c]);
+    }
+    groups = groups.filter((g) => g.members.length);
+  }
+  const weight = (sw) => sw.members.reduce((n, [, c]) => n + c, 0);
+  groups.sort((a, b) => weight(b) - weight(a));
+  palSwList = groups; palSel = null; $('palPick').hidden = true;
+  const box = $('palSwatches'); box.innerHTML = '';
+  groups.forEach((sw, i) => {
+    const b = document.createElement('button');
+    b.className = 'palSw'; b.dataset.i = i;
+    b.style.background = cssOf(palSwatchCol(sw));
+    b.title = `${weight(sw)} faces · ${sw.members.length} colour(s)`;
+    if (sw.members.some(([k]) => palMap.has(k))) b.classList.add('edited');
+    b.onclick = () => palSelect(i);
+    box.appendChild(b);
+  });
+  $('palState').textContent = `${entries.length} distinct colour(s)` + (entries.length > 28 ? ' — grouped into families; a family shifts together.' : '.') +
+    (palMap.size ? ` ${palMap.size} tuned.` : '');
+}
+function palSelect(i) {
+  palSel = palSwList[i];
+  document.querySelectorAll('.palSw').forEach((b) => b.classList.toggle('sel', +b.dataset.i === i));
+  const cur = palSwatchCol(palSel);
+  [palH, palS, palVv] = rgb2hsv(cur[0], cur[1], cur[2]);
+  $('palPick').hidden = false;
+  $('palInfo').textContent = palSel.members.length === 1 ? 'Exact colour — replaced outright.' :
+    `${palSel.members.length} shades move together (same hue/brightness shift).`;
+  palDrawPickers(); palSyncChips();
+}
+function palSyncChips() {
+  const cur = palSwatchCol(palSel);
+  $('palWas').style.background = cssOf(palSwatchCol(palSel, true));
+  $('palNow').style.background = cssOf(cur);
+  $('palHex').textContent = hexOf(cur);
+}
+function palDrawPickers() {
+  const hc = $('palHue'), hg = hc.getContext('2d');
+  const grad = hg.createLinearGradient(0, 0, 0, hc.height);
+  for (let i = 0; i <= 6; i++) grad.addColorStop(i / 6, cssOf(hsv2rgb(i * 60, 1, 1)));
+  hg.fillStyle = grad; hg.fillRect(0, 0, hc.width, hc.height);
+  const hy = palH / 360 * hc.height;
+  hg.strokeStyle = '#fff'; hg.lineWidth = 2; hg.strokeRect(0.5, hy - 2, hc.width - 1, 4);
+  const sc = $('palSV'), sg = sc.getContext('2d'), W = sc.width, H = sc.height;
+  sg.fillStyle = cssOf(hsv2rgb(palH, 1, 1)); sg.fillRect(0, 0, W, H);
+  let g2 = sg.createLinearGradient(0, 0, W, 0); g2.addColorStop(0, 'rgba(255,255,255,1)'); g2.addColorStop(1, 'rgba(255,255,255,0)');
+  sg.fillStyle = g2; sg.fillRect(0, 0, W, H);
+  g2 = sg.createLinearGradient(0, 0, 0, H); g2.addColorStop(0, 'rgba(0,0,0,0)'); g2.addColorStop(1, 'rgba(0,0,0,1)');
+  sg.fillStyle = g2; sg.fillRect(0, 0, W, H);
+  const mx = palS * W, my = (1 - palVv) * H;
+  sg.beginPath(); sg.arc(mx, my, 6, 0, 7); sg.strokeStyle = palVv > 0.55 ? '#000' : '#fff'; sg.lineWidth = 2; sg.stroke();
+}
+function palApply() {                                              // push picker HSV into palMap for the swatch
+  if (!palSel) return;
+  const target = hsv2rgb(palH, palS, palVv);
+  if (palSel.members.length === 1) palMap.set(palSel.members[0][0], target);
+  else {
+    const cur = palSwatchCol(palSel), [ch, cs, cv] = rgb2hsv(cur[0], cur[1], cur[2]);
+    const dh = palH - ch, sr = cs > 0.02 ? palS / cs : null, vr = cv > 0.02 ? palVv / cv : null;
+    for (const [k] of palSel.members) {
+      let [h, s, v] = rgb2hsv(...palCur(k));
+      h = (h + dh + 360) % 360;
+      s = clamp(sr === null ? palS : s * sr, 0, 1);
+      v = clamp(vr === null ? palVv : v * vr, 0, 1);
+      palMap.set(k, hsv2rgb(h, s, v));
+    }
+  }
+  const btn = document.querySelector('.palSw.sel');
+  if (btn) { btn.style.background = cssOf(palSwatchCol(palSel)); btn.classList.add('edited'); }
+  palSyncChips(); palDrawPickers(); palRebuild();
+}
+function palPickerDrag(cv, apply) {
+  let on = false;
+  const at = (e) => { const r = cv.getBoundingClientRect(); return [clamp((e.clientX - r.left) / r.width, 0, 1), clamp((e.clientY - r.top) / r.height, 0, 1)]; };
+  cv.addEventListener('pointerdown', (e) => { on = true; cv.setPointerCapture(e.pointerId); apply(...at(e)); });
+  cv.addEventListener('pointermove', (e) => { if (on) apply(...at(e)); });
+  cv.addEventListener('pointerup', () => { on = false; });
+}
+palPickerDrag($('palHue'), (x, y) => { palH = y * 360; palApply(); });
+palPickerDrag($('palSV'), (x, y) => { palS = x; palVv = 1 - y; palApply(); });
+$('palResetOne').onclick = () => {
+  if (!palSel) return;
+  for (const [k] of palSel.members) palMap.delete(k);
+  const cur = palSwatchCol(palSel); [palH, palS, palVv] = rgb2hsv(cur[0], cur[1], cur[2]);
+  const btn = document.querySelector('.palSw.sel');
+  if (btn) { btn.style.background = cssOf(cur); btn.classList.remove('edited'); }
+  palSyncChips(); palDrawPickers(); palRebuild();
+};
+$('palResetAll').onclick = () => { palMap.clear(); palBuildSwatches(); palRebuild(); };
+$('openPal').onclick = () => { palBuildSwatches(); $('palModal').hidden = false; };
+$('palClose').onclick = () => { $('palModal').hidden = true; };
+$('palModal').addEventListener('click', (e) => { if (e.target === $('palModal')) $('palModal').hidden = true; });
+
 let pasteTarget = null;
 document.querySelectorAll('.vpick').forEach((pick) => {
   pick.addEventListener('mouseenter', () => { pasteTarget = pick; document.querySelectorAll('.vpick').forEach((p) => p.classList.toggle('active', p === pick)); });
@@ -1343,7 +1523,8 @@ function snapshotProject() {
   }
   const st = { ...state }; delete st.baked;
   return { format: 'stackforge-project', version: 1, id: ($('uid').value || 'unit').trim(),
-    state: st, flips: flipState, keyTol: keyTolState, polys: polyState, images, vox };
+    state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, images, vox,
+    palMap: [...palMap.entries()] };
 }
 function syncAllControls() {
   const set = (id, val, lab) => { $(id).value = val; if (lab !== undefined) $(id + 'V').textContent = lab; };
@@ -1366,12 +1547,14 @@ async function loadProject(p) {
   try {
     $('uid').value = p.id || 'unit';
     Object.assign(state, p.state || {}); state.baked = null;
+    palMap.clear(); if (p.palMap) for (const [k, c] of p.palMap) palMap.set(k, c);
     for (const part of ['body', 'turret']) {
       const pv = p.vox && p.vox[part];
       voxPart[part] = pv ? { nx: pv.nx, ny: pv.ny, nz: pv.nz, data: u8FromB64(pv.b64) } : null;
       voxB64[part] = pv ? pv.b64 : null;
       for (const v of VIEWS) {
         flipState[part][v] = (p.flips && p.flips[part] && p.flips[part][v]) || { h: false, v: false };
+        rotState[part][v] = (p.rots && p.rots[part] && p.rots[part][v]) || 0;
         keyTolState[part][v] = (p.keyTol && p.keyTol[part] && p.keyTol[part][v]) || 75;
         polyState[part][v] = (p.polys && p.polys[part] && p.polys[part][v]) || null;
         const pick = pickFor(part, v), url = p.images && p.images[part] && p.images[part][v];
