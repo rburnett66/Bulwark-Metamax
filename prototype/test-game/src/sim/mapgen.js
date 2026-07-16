@@ -492,6 +492,7 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     terrain: T, blockedCells, fromForge: true,            // STAGE 2 extras
     palettes: forge.palettes || {},                       // tile-sheet names per terrain type (renderer bakes)
     baseGap: baseGapR,                                    // resource/crop clear radius from base centre
+    waveWindows: wins,                                    // authored per-wave view rects — the camera frames THESE
     mapId, name: (def.Map_Name || `Map ${mapId}`) + ' (forge)', primary: primaryType,
     hasWater: waterCells.length > 0, difficulty: def.Difficulty, parTimeSec: def.Par_Time_Sec,
     questGiver: def.Quest_Giver_Faction, seed: opts.seed || 0, rings, resources,

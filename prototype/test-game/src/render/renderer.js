@@ -1691,12 +1691,22 @@ function updateCamera(renderer, state, dt) {
   const cam = renderer.camera || (renderer.camera = { s: 1, x: 0, y: 0 });
   const map = state.map;
   let ts = 1, tx = 0, ty = 0;
-  if (GROWTH_CAM && map && map.rings && map.rings.length && map.openPlay) {
+  const wins = (map && map.fromForge && map.waveWindows && map.waveWindows.length) ? map.waveWindows : null;
+  if (GROWTH_CAM && map && (wins || (map.rings && map.rings.length)) && map.openPlay) {
     const t = renderer.tile;
     const w = state.waves || { current: 0, active: false };
-    // active wave -> frame ITS ring; build phase / interlude -> frame the NEXT wave's ring
-    const idx = Math.max(0, Math.min(w.active ? w.current - 1 : w.current, map.rings.length - 1));
-    const r = map.rings[idx].rect;
+    // active wave -> frame ITS area; build phase / interlude -> frame the NEXT wave's area.
+    // FORGE MAPS (story-mrmwjoua234): the AUTHORED wave windows are the design contract for what the
+    // player sees each wave — frame those; workbook rings only for generator maps.
+    let r;
+    if (wins) {
+      const wantWave = Math.max(1, Math.min(w.active ? w.current : w.current + 1, wins[wins.length - 1].wave));
+      const win = wins.find((q) => q.wave === wantWave) || wins[wins.length - 1];
+      r = { x0: win.x0, y0: win.y0, x1: win.x1, y1: win.y1 };
+    } else {
+      const idx = Math.max(0, Math.min(w.active ? w.current - 1 : w.current, map.rings.length - 1));
+      r = map.rings[idx].rect;
+    }
     const PAD = 3;   // tiles of breathing room — keeps the safe border (and incoming spawns) in view
     const rw = (r.x1 - r.x0 + 1 + PAD * 2) * t;
     const rh = (r.y1 - r.y0 + 1 + PAD * 2) * t;
