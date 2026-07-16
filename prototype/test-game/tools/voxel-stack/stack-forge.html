@@ -92,6 +92,16 @@
     #sheetBox button.on { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:#d9a441; }
     .slotBtn { font-size:11px !important; padding:5px 0 !important; }
     .slotBtn.assigned { border-color:#57d98a !important; color:#57d98a !important; }
+    #palModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
+    #palModal[hidden] { display:none; }
+    #palBox { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 18px; width:640px; max-width:94vw; max-height:94vh; overflow:auto; box-shadow:0 18px 60px rgba(0,0,0,.6); }
+    #palBox h2 { font-size:11px; letter-spacing:.18em; color:var(--muted); margin:0 0 8px; text-transform:uppercase; }
+    #palSwatches { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+    .palSw { width:44px; height:34px; border:2px solid var(--line); border-radius:6px; cursor:pointer; padding:0; position:relative; }
+    .palSw.sel { border-color:var(--gold); box-shadow:0 0 0 2px rgba(242,200,105,.35); }
+    .palSw.edited::after { content:'●'; position:absolute; top:-6px; right:-2px; color:#57d98a; font-size:10px; }
+    #palSV, #palHue { border:1px solid var(--line); border-radius:6px; cursor:crosshair; touch-action:none; }
+    .palChip { width:40px; height:24px; border:1px solid var(--line); border-radius:5px; display:inline-block; vertical-align:middle; }
     #saveAsModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
     #saveAsModal[hidden] { display:none; }
     #saveAsBox { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; width:380px; max-width:92vw; box-shadow:0 18px 60px rgba(0,0,0,.6); }
@@ -187,6 +197,8 @@
       <div class="row"><label>Contrast</label><input type="range" id="lightK" min="0" max="100" value="55"><span class="val" id="lightKV">55</span></div>
       <div class="row"><label>Palette</label><input type="range" id="pal" min="0" max="32" value="0"><span class="val" id="palV">full</span></div>
       <div class="note" style="margin:-2px 0 4px">Palette quantises the cube colours to N flat, contrasting shades (0 = full colour) — cleans camo/gradient noise so the block structure reads clean. Try <b>6–12</b>.</div>
+      <button class="ghost" id="openPal">🎨 Tune colors…</button>
+      <div class="note" style="margin:2px 0 4px">See every colour the model uses, pick one, and re-tint it on a colour diagram (hue + saturation/brightness). Edits follow the unit into the bake, the game, and project saves.</div>
       <div class="note">One global light for the whole game — it's stored in the units manifest and every unit
         bakes with it, so packs stay consistent with each other and the board. 135° = top-left (the game default).</div>
     </div>
@@ -256,6 +268,28 @@
     </div>
     <div class="note" id="sheetState" style="margin:6px 0">No image loaded.</div>
     <button class="ghost" id="sheetClose">Done</button>
+  </div>
+</div>
+<div id="palModal" hidden>
+  <div id="palBox">
+    <h2>Tune colors — click a swatch, then re-tint it on the diagram</h2>
+    <div id="palSwatches"></div>
+    <div id="palPick" hidden>
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <canvas id="palSV" width="240" height="170"></canvas>
+        <canvas id="palHue" width="26" height="170"></canvas>
+        <div style="flex:1;min-width:150px">
+          <div class="note" style="margin:0 0 4px">was <span class="palChip" id="palWas"></span> → now <span class="palChip" id="palNow"></span> <span id="palHex" style="color:var(--muted)"></span></div>
+          <div class="note" id="palInfo" style="margin:0 0 8px"></div>
+          <button class="ghost" id="palResetOne" style="width:auto;padding:6px 12px">↺ Reset this color</button>
+        </div>
+      </div>
+    </div>
+    <div class="row" style="gap:6px;margin-top:8px">
+      <button class="ghost" id="palResetAll" style="width:auto;padding:6px 12px;margin:0">↺ Reset all</button>
+      <span class="note" id="palState" style="margin:0;flex:1"></span>
+      <button class="ghost" id="palClose" style="width:auto;padding:6px 14px;margin:0">Done</button>
+    </div>
   </div>
 </div>
 <div id="saveAsModal" hidden>

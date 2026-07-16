@@ -223,6 +223,8 @@ function collectVox(partId, foot, layers, zOff, xOff) {
     if (!filled(x, y, z)) continue;
     const c = (z * N + y * foot + x) * 3; let r = vcol[c], g = vcol[c + 1], b = vcol[c + 2];
     if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
+    const t = palMap.get((r << 16) | (g << 8) | b);                  // colour tune follows .vox + Tier C exports
+    if (t) { r = t[0]; g = t[1]; b = t[2]; }
     const X = x + xOff, Z = z + zOff; if (X < 0 || X > 255 || Z < 0 || Z > 255) continue;
     out.push({ x: X, y, z: Z, r, g, b });
   }
@@ -412,7 +414,9 @@ function buildFaces(partId, foot, layers) {
       const w = n === 0 ? null : wallCol(x, y, z, n);
       let r = w ? w[0] : vcol[c], g = w ? w[1] : vcol[c + 1], b = w ? w[2] : vcol[c + 2];
       if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
-      faces.push({ x, y, z, n, r, g, b, d: 0 });
+      const k = (r << 16) | (g << 8) | b, t = palMap.get(k);          // artist colour tune (palette tuner)
+      if (t) { r = t[0]; g = t[1]; b = t[2]; }
+      faces.push({ x, y, z, n, r, g, b, k, d: 0 });                   // k = pre-tune key, the tuner's handle
     };
     if (!filled(x, y, z + 1)) add(0);
     if (!filled(x + 1, y, z)) add(1);
@@ -736,6 +740,7 @@ const keyTolState = { body: mkViews(() => 75), turret: mkViews(() => 75) };   //
 const polyState = { body: mkViews(() => null), turret: mkViews(() => null) }; // per-image polygon cutout ([x,y] px)
 const imgURLCache = { body: mkViews(() => null), turret: mkViews(() => null) }; // PNG data-URL cache (project saves)
 const voxB64 = { body: null, turret: null };                                  // base64 cache of imported .vox data
+const palMap = new Map();                    // palette tuner: pre-tune colour key → replacement [r,g,b]
 let bulkLoad = false;                                                         // true while restoring a project
 function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
@@ -1189,6 +1194,146 @@ $('shapeCircle').onclick = () => { sheetShape = 'circle'; $('shapeCircle').class
 $('sheetClose').onclick = () => { $('sheetModal').hidden = true; };
 $('sheetModal').addEventListener('click', (e) => { if (e.target === $('sheetModal')) $('sheetModal').hidden = true; });
 
+// ── PALETTE TUNER (owner 2026-07-16): every colour the model uses as a swatch strip; pick one and
+// re-tint it on a hue strip + saturation/brightness square. Small palettes edit exactly; big
+// full-colour models are grouped by median-cut and the whole group shifts by the same hue/sat/value
+// delta so shading variation survives. Edits live in palMap, applied inside buildFaces/collectVox —
+// so orbit preview, in-game inset, bake, Tier C model embeds and .vox exports all agree.
+function rgb2hsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  return [h, mx ? d / mx : 0, mx];
+}
+function hsv2rgb(h, s, v) {
+  h = ((h % 360) + 360) % 360;
+  const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+const keyRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
+const cssOf = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+const hexOf = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+let palSwList = [], palSel = null, palH = 0, palS = 0, palVv = 1, palPending = false;
+function palRebuild() {                                            // throttle: one model re-carve per frame
+  if (palPending) return;
+  palPending = true;
+  requestAnimationFrame(() => { palPending = false; rebuildSlices(); scheduleAutosave(); });
+}
+const palCur = (k) => palMap.get(k) || keyRGB(k);
+function palSwatchCol(sw, orig) {                                  // count-weighted average of member colours
+  let r = 0, g = 0, b = 0, n = 0;
+  for (const [k, c] of sw.members) { const m = orig ? keyRGB(k) : palCur(k); r += m[0] * c; g += m[1] * c; b += m[2] * c; n += c; }
+  return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+}
+function palBuildSwatches() {
+  const tally = new Map();
+  for (const F of [bodyFaces, turretFaces]) if (F) for (const f of F.faces) tally.set(f.k, (tally.get(f.k) || 0) + 1);
+  const entries = [...tally.entries()];
+  let groups;
+  if (entries.length <= 28) groups = entries.map((e) => ({ members: [e] }));
+  else {                                                           // full-colour model → group into 18 families
+    const cents = medianCut(entries.map(([k]) => keyRGB(k)), 18);
+    groups = cents.map(() => ({ members: [] }));
+    for (const [k, c] of entries) {
+      const col = keyRGB(k); let bi = 0, bd = 1e9;
+      for (let i = 0; i < cents.length; i++) { const p = cents[i], d = (p[0] - col[0]) ** 2 + (p[1] - col[1]) ** 2 + (p[2] - col[2]) ** 2; if (d < bd) { bd = d; bi = i; } }
+      groups[bi].members.push([k, c]);
+    }
+    groups = groups.filter((g) => g.members.length);
+  }
+  const weight = (sw) => sw.members.reduce((n, [, c]) => n + c, 0);
+  groups.sort((a, b) => weight(b) - weight(a));
+  palSwList = groups; palSel = null; $('palPick').hidden = true;
+  const box = $('palSwatches'); box.innerHTML = '';
+  groups.forEach((sw, i) => {
+    const b = document.createElement('button');
+    b.className = 'palSw'; b.dataset.i = i;
+    b.style.background = cssOf(palSwatchCol(sw));
+    b.title = `${weight(sw)} faces · ${sw.members.length} colour(s)`;
+    if (sw.members.some(([k]) => palMap.has(k))) b.classList.add('edited');
+    b.onclick = () => palSelect(i);
+    box.appendChild(b);
+  });
+  $('palState').textContent = `${entries.length} distinct colour(s)` + (entries.length > 28 ? ' — grouped into families; a family shifts together.' : '.') +
+    (palMap.size ? ` ${palMap.size} tuned.` : '');
+}
+function palSelect(i) {
+  palSel = palSwList[i];
+  document.querySelectorAll('.palSw').forEach((b) => b.classList.toggle('sel', +b.dataset.i === i));
+  const cur = palSwatchCol(palSel);
+  [palH, palS, palVv] = rgb2hsv(cur[0], cur[1], cur[2]);
+  $('palPick').hidden = false;
+  $('palInfo').textContent = palSel.members.length === 1 ? 'Exact colour — replaced outright.' :
+    `${palSel.members.length} shades move together (same hue/brightness shift).`;
+  palDrawPickers(); palSyncChips();
+}
+function palSyncChips() {
+  const cur = palSwatchCol(palSel);
+  $('palWas').style.background = cssOf(palSwatchCol(palSel, true));
+  $('palNow').style.background = cssOf(cur);
+  $('palHex').textContent = hexOf(cur);
+}
+function palDrawPickers() {
+  const hc = $('palHue'), hg = hc.getContext('2d');
+  const grad = hg.createLinearGradient(0, 0, 0, hc.height);
+  for (let i = 0; i <= 6; i++) grad.addColorStop(i / 6, cssOf(hsv2rgb(i * 60, 1, 1)));
+  hg.fillStyle = grad; hg.fillRect(0, 0, hc.width, hc.height);
+  const hy = palH / 360 * hc.height;
+  hg.strokeStyle = '#fff'; hg.lineWidth = 2; hg.strokeRect(0.5, hy - 2, hc.width - 1, 4);
+  const sc = $('palSV'), sg = sc.getContext('2d'), W = sc.width, H = sc.height;
+  sg.fillStyle = cssOf(hsv2rgb(palH, 1, 1)); sg.fillRect(0, 0, W, H);
+  let g2 = sg.createLinearGradient(0, 0, W, 0); g2.addColorStop(0, 'rgba(255,255,255,1)'); g2.addColorStop(1, 'rgba(255,255,255,0)');
+  sg.fillStyle = g2; sg.fillRect(0, 0, W, H);
+  g2 = sg.createLinearGradient(0, 0, 0, H); g2.addColorStop(0, 'rgba(0,0,0,0)'); g2.addColorStop(1, 'rgba(0,0,0,1)');
+  sg.fillStyle = g2; sg.fillRect(0, 0, W, H);
+  const mx = palS * W, my = (1 - palVv) * H;
+  sg.beginPath(); sg.arc(mx, my, 6, 0, 7); sg.strokeStyle = palVv > 0.55 ? '#000' : '#fff'; sg.lineWidth = 2; sg.stroke();
+}
+function palApply() {                                              // push picker HSV into palMap for the swatch
+  if (!palSel) return;
+  const target = hsv2rgb(palH, palS, palVv);
+  if (palSel.members.length === 1) palMap.set(palSel.members[0][0], target);
+  else {
+    const cur = palSwatchCol(palSel), [ch, cs, cv] = rgb2hsv(cur[0], cur[1], cur[2]);
+    const dh = palH - ch, sr = cs > 0.02 ? palS / cs : null, vr = cv > 0.02 ? palVv / cv : null;
+    for (const [k] of palSel.members) {
+      let [h, s, v] = rgb2hsv(...palCur(k));
+      h = (h + dh + 360) % 360;
+      s = clamp(sr === null ? palS : s * sr, 0, 1);
+      v = clamp(vr === null ? palVv : v * vr, 0, 1);
+      palMap.set(k, hsv2rgb(h, s, v));
+    }
+  }
+  const btn = document.querySelector('.palSw.sel');
+  if (btn) { btn.style.background = cssOf(palSwatchCol(palSel)); btn.classList.add('edited'); }
+  palSyncChips(); palDrawPickers(); palRebuild();
+}
+function palPickerDrag(cv, apply) {
+  let on = false;
+  const at = (e) => { const r = cv.getBoundingClientRect(); return [clamp((e.clientX - r.left) / r.width, 0, 1), clamp((e.clientY - r.top) / r.height, 0, 1)]; };
+  cv.addEventListener('pointerdown', (e) => { on = true; cv.setPointerCapture(e.pointerId); apply(...at(e)); });
+  cv.addEventListener('pointermove', (e) => { if (on) apply(...at(e)); });
+  cv.addEventListener('pointerup', () => { on = false; });
+}
+palPickerDrag($('palHue'), (x, y) => { palH = y * 360; palApply(); });
+palPickerDrag($('palSV'), (x, y) => { palS = x; palVv = 1 - y; palApply(); });
+$('palResetOne').onclick = () => {
+  if (!palSel) return;
+  for (const [k] of palSel.members) palMap.delete(k);
+  const cur = palSwatchCol(palSel); [palH, palS, palVv] = rgb2hsv(cur[0], cur[1], cur[2]);
+  const btn = document.querySelector('.palSw.sel');
+  if (btn) { btn.style.background = cssOf(cur); btn.classList.remove('edited'); }
+  palSyncChips(); palDrawPickers(); palRebuild();
+};
+$('palResetAll').onclick = () => { palMap.clear(); palBuildSwatches(); palRebuild(); };
+$('openPal').onclick = () => { palBuildSwatches(); $('palModal').hidden = false; };
+$('palClose').onclick = () => { $('palModal').hidden = true; };
+$('palModal').addEventListener('click', (e) => { if (e.target === $('palModal')) $('palModal').hidden = true; });
+
 let pasteTarget = null;
 document.querySelectorAll('.vpick').forEach((pick) => {
   pick.addEventListener('mouseenter', () => { pasteTarget = pick; document.querySelectorAll('.vpick').forEach((p) => p.classList.toggle('active', p === pick)); });
@@ -1343,7 +1488,8 @@ function snapshotProject() {
   }
   const st = { ...state }; delete st.baked;
   return { format: 'stackforge-project', version: 1, id: ($('uid').value || 'unit').trim(),
-    state: st, flips: flipState, keyTol: keyTolState, polys: polyState, images, vox };
+    state: st, flips: flipState, keyTol: keyTolState, polys: polyState, images, vox,
+    palMap: [...palMap.entries()] };
 }
 function syncAllControls() {
   const set = (id, val, lab) => { $(id).value = val; if (lab !== undefined) $(id + 'V').textContent = lab; };
@@ -1366,6 +1512,7 @@ async function loadProject(p) {
   try {
     $('uid').value = p.id || 'unit';
     Object.assign(state, p.state || {}); state.baked = null;
+    palMap.clear(); if (p.palMap) for (const [k, c] of p.palMap) palMap.set(k, c);
     for (const part of ['body', 'turret']) {
       const pv = p.vox && p.vox[part];
       voxPart[part] = pv ? { nx: pv.nx, ny: pv.ny, nz: pv.nz, data: u8FromB64(pv.b64) } : null;
