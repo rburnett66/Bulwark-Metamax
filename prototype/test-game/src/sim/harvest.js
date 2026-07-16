@@ -177,9 +177,33 @@ function nodeRevealed(state, node) {
 function fieldCells(state, fieldId) {
   return state.resourceNodes.filter((n) => n.fieldId === fieldId);
 }
-// nearest field cell with anything left to pull (deterministic: distance, then id)
+// NODE RESERVATION (story-mrmwiikd60b): a cell being worked or driven to by one truck is off-limits
+// to the others — no two harvesters ever collect on the same location. Reservations are implicit:
+// the set of every OTHER live truck's current harvestNodeId while it's en route or pulling.
+function reservedNodes(state, exceptUnit) {
+  const taken = new Set();
+  for (const id of state.harvesterIds || []) {
+    if (exceptUnit && id === exceptUnit.id) continue;
+    const h = state.units.get(id);
+    if (h && h.hp > 0 && h.harvestNodeId && (h.state === 'harvestGo' || h.state === 'harvestPull')) taken.add(h.harvestNodeId);
+  }
+  return taken;
+}
+// nearest field cell with anything left to pull, skipping cells another truck has claimed
+// (deterministic: distance, then id)
 function nextFieldTarget(state, u) {
-  const live = fieldCells(state, u.fieldId).filter((n) => n.remaining > 0 && nodeRevealed(state, n));
+  const taken = reservedNodes(state, u);
+  const live = fieldCells(state, u.fieldId).filter((n) => n.remaining > 0 && nodeRevealed(state, n) && !taken.has(n.id));
+  if (!live.length) return null;
+  live.sort((a, b) =>
+    (Math.hypot(a.x - u.pos.x, a.y - u.pos.y) - Math.hypot(b.x - u.pos.x, b.y - u.pos.y)) || (a.id < b.id ? -1 : 1));
+  return live[0];
+}
+// IDLE AUTO-GATHER (owner 2026-07-16): an idle harvester finds the CLOSEST available resource —
+// any type, any field — revealed, non-empty, unreserved. Trucks only rest when the map is bare.
+function nearestFreeNode(state, u) {
+  const taken = reservedNodes(state, u);
+  const live = (state.resourceNodes || []).filter((n) => n.remaining > 0 && nodeRevealed(state, n) && !taken.has(n.id));
   if (!live.length) return null;
   live.sort((a, b) =>
     (Math.hypot(a.x - u.pos.x, a.y - u.pos.y) - Math.hypot(b.x - u.pos.x, b.y - u.pos.y)) || (a.id < b.id ? -1 : 1));
@@ -190,8 +214,9 @@ function nextFieldTarget(state, u) {
 // Deterministic: distance, then id. Returns a node in the new field, or null when none exist.
 function nextSameResourceField(state, u) {
   if (!u.resType) return null;
+  const taken = reservedNodes(state, u);
   const live = (state.resourceNodes || []).filter((n) =>
-    n.fieldId !== u.fieldId && n.remaining > 0 && nodeRevealed(state, n) &&
+    n.fieldId !== u.fieldId && n.remaining > 0 && nodeRevealed(state, n) && !taken.has(n.id) &&
     n.type === u.resType && n.color === u.resColor);
   if (!live.length) return null;
   live.sort((a, b) =>
@@ -220,7 +245,8 @@ export function cmdHarvest(state, cmd) {
     u = idle[0] || fleet.slice().sort(byDist)[0];
   }
   u.fieldId = node.fieldId;
-  const target = node.remaining > 0 ? node : nextFieldTarget(state, u);
+  // route to the clicked cell unless another truck already claimed it — then the nearest free cell
+  const target = (node.remaining > 0 && !reservedNodes(state, u).has(node.id)) ? node : nextFieldTarget(state, u);
   if (target) routeTo(state, u, target);
   else u.state = 'harvestIdle';
   emitEvent(state, { type: 'harvestOrder', tick: state.tick, nodeId: node.id, fieldId: node.fieldId, unitId: u.id, pos: { x: node.x, y: node.y } });
@@ -360,7 +386,11 @@ function stepOneHarvester(state, u, dt) {
     u._navV = state.navVersion || 0;
   }
   if (u.state === 'harvestIdle') {
-    // docked, awaiting orders (idle only when NO same-resource field was left to auto-continue on)
+    // IDLE AUTO-GATHER (owner 2026-07-16): an idle truck dispatches ITSELF to the closest available
+    // resource (any type). Trucks only truly rest when nothing revealed remains; explicit orders
+    // still override at any time (cmdHarvest retasks regardless of state).
+    const pick = nearestFreeNode(state, u);
+    if (pick) { u.fieldId = pick.fieldId; routeTo(state, u, pick); }
   } else if (u.state === 'harvestGo') {
     const node = nodes.find((n) => n.id === u.harvestNodeId);
     if (!node) { routeHome(state, u); return; }

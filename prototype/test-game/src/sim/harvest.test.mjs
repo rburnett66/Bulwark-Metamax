@@ -118,9 +118,9 @@ function fresh(seed) {
   const prem = s.resourceNodes.find((n) => n.role === 'premium');
   const quest = s.resourceNodes.find((n) => n.role === 'quest');
   assert(prem && quest, 'premium + quest nodes exist');
-  // strip every OTHER premium so the drain has no same-resource field to auto-continue onto —
-  // this block tests one-shot depletion + release, not the hop (covered above)
-  for (const n of s.resourceNodes) if (n.role === 'premium' && n.fieldId !== prem.fieldId) n.remaining = 0;
+  // strip EVERY other node so the drain has nothing to auto-continue OR auto-gather onto — this
+  // block tests one-shot depletion + release; the hop and idle auto-gather are covered elsewhere
+  for (const n of s.resourceNodes) { if (n.fieldId !== prem.fieldId) n.remaining = 0; n.respawns = false; n.respawnAt = null; }
   applyCommand(s, { type: 'harvest', nodeId: prem.id });
   const premField = s.resourceNodes.filter((n) => n.fieldId === prem.fieldId);
   for (let i = 0; i < 30 * 900 && premField.some((n) => n.remaining > 0); i++) stepSim(s, 1 / 30);
@@ -133,6 +133,8 @@ function fresh(seed) {
   assert(hv.fieldId == null && hv.state === 'harvestIdle', 'harvester released from the stripped premium field');
   assert(Math.hypot(hv.pos.x - hv.homePos.x, hv.pos.y - hv.homePos.y) < 0.5, 'harvester rests at base until redeployed');
 
+  // revive the quest field (stripped above to isolate the release test) for the quest-economy phase
+  for (const n of s.resourceNodes) if (n.fieldId === quest.fieldId) n.remaining = n.units;
   applyCommand(s, { type: 'harvest', nodeId: quest.id });
   let questDeposit = null;
   for (let i = 0; i < 30 * 600 && questDeposit === null; i++) {
@@ -272,3 +274,24 @@ function fresh(seed) {
 }
 
 console.log('harvest.test OK — docks+cap, explicit orders, all colors pay gold, red/green quest counters, wait-for-orders, deterministic');
+
+// ── RESERVATION + IDLE AUTO-GATHER (story-mrmwiikd60b + owner rule 2026-07-16) ──
+{
+  const { s } = fresh(5);
+  s.waves.current = 8;   // reveal the board
+  // IDLE AUTO-GATHER: the starting truck dispatches itself with NO order given
+  const hv = s.units.get(s.harvesterId);
+  for (let i = 0; i < 30 * 10 && hv.state === 'harvestIdle'; i++) stepSim(s, 1 / 30);
+  assert(hv.state !== 'harvestIdle' && hv.harvestNodeId, 'idle truck auto-dispatches to the closest resource');
+  // RESERVATION: a second truck must never claim the cell the first is working
+  const res = applyCommand(s, { type: 'buyHarvester' });
+  assert(res.ok, 'second harvester purchased');
+  const hv2 = [...s.units.values()].find((u) => u.isHarvester && u.id !== hv.id);
+  let overlap = false;
+  for (let i = 0; i < 30 * 120 && !overlap; i++) {
+    stepSim(s, 1 / 30);
+    const bothWorking = ['harvestGo', 'harvestPull'].includes(hv.state) && ['harvestGo', 'harvestPull'].includes(hv2.state);
+    if (bothWorking && hv.harvestNodeId && hv.harvestNodeId === hv2.harvestNodeId) overlap = true;
+  }
+  assert(!overlap, 'two working trucks never claim the same node (reservation holds)');
+}
