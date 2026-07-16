@@ -1,0 +1,33 @@
+{
+ "frames": {
+  "art_1_tall.png": {
+   "frame": {
+    "x": 1,
+    "y": 1,
+    "w": 219,
+    "h": 222
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 219,
+    "h": 222
+   },
+   "sourceSize": {
+    "w": 219,
+    "h": 222
+   }
+  }
+ },
+ "meta": {
+  "app": "split terrain_pack_1",
+  "image": "tp1-brush.png",
+  "size": {
+   "w": 221,
+   "h": 224
+  },
+  "scale": "1"
+ }
+}

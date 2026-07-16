@@ -1,0 +1,53 @@
+{
+ "frames": {
+  "art_1_rock.png": {
+   "frame": {
+    "x": 1,
+    "y": 1,
+    "w": 211,
+    "h": 214
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 211,
+    "h": 214
+   },
+   "sourceSize": {
+    "w": 211,
+    "h": 214
+   }
+  },
+  "art_2_rocks.png": {
+   "frame": {
+    "x": 213,
+    "y": 1,
+    "w": 197,
+    "h": 198
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 197,
+    "h": 198
+   },
+   "sourceSize": {
+    "w": 197,
+    "h": 198
+   }
+  }
+ },
+ "meta": {
+  "app": "split terrain_pack_1",
+  "image": "tp1-rocks.png",
+  "size": {
+   "w": 411,
+   "h": 216
+  },
+  "scale": "1"
+ }
+}

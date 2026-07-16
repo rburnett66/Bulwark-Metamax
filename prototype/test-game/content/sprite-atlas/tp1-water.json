@@ -1,0 +1,53 @@
+{
+ "frames": {
+  "art_1_ocean.png": {
+   "frame": {
+    "x": 1,
+    "y": 1,
+    "w": 242,
+    "h": 236
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 242,
+    "h": 236
+   },
+   "sourceSize": {
+    "w": 242,
+    "h": 236
+   }
+  },
+  "art_2_ocean.png": {
+   "frame": {
+    "x": 244,
+    "y": 1,
+    "w": 199,
+    "h": 199
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 199,
+    "h": 199
+   },
+   "sourceSize": {
+    "w": 199,
+    "h": 199
+   }
+  }
+ },
+ "meta": {
+  "app": "split terrain_pack_1",
+  "image": "tp1-water.png",
+  "size": {
+   "w": 444,
+   "h": 238
+  },
+  "scale": "1"
+ }
+}
