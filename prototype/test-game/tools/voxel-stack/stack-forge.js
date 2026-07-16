@@ -1100,6 +1100,95 @@ document.addEventListener('keydown', (e) => {
   else $('keyModal').hidden = true;                                // …then close the dialog
 });
 
+// ── SHEET SLICER (owner 2026-07-16): open ONE image holding several orthographic views, drag a
+// rectangle or circle over each region, click its destination slot — no external cutting. Circle
+// selections mask outside the circle to transparent (round turrets). Feeds setView like a file drop.
+let sheetImg = null, sheetScale = 1, sheetShape = 'rect', sheetSel = null, sheetDrag = null;
+const sheetCv = $('sheetCanvas'), sheetCtx = sheetCv.getContext('2d');
+function sheetDraw() {
+  sheetCtx.clearRect(0, 0, sheetCv.width, sheetCv.height);
+  if (!sheetImg) return;
+  sheetCtx.imageSmoothingEnabled = sheetScale < 1;
+  sheetCtx.drawImage(sheetImg, 0, 0, sheetImg.width * sheetScale, sheetImg.height * sheetScale);
+  if (!sheetSel) return;
+  const s = sheetSel, k = sheetScale;
+  sheetCtx.save();
+  sheetCtx.strokeStyle = '#f2c869'; sheetCtx.lineWidth = 2; sheetCtx.setLineDash([6, 4]);
+  if (s.kind === 'rect') sheetCtx.strokeRect(s.x * k, s.y * k, s.w * k, s.h * k);
+  else { sheetCtx.beginPath(); sheetCtx.arc(s.cx * k, s.cy * k, s.r * k, 0, 7); sheetCtx.stroke(); }
+  sheetCtx.restore();
+}
+function sheetSetImage(im) {
+  sheetImg = im; sheetSel = null;
+  const maxW = Math.min(1400, window.innerWidth * 0.88), maxH = Math.min(860, window.innerHeight * 0.58);
+  sheetScale = Math.min(maxW / im.width, maxH / im.height, 3);
+  sheetCv.width = Math.max(1, Math.round(im.width * sheetScale));
+  sheetCv.height = Math.max(1, Math.round(im.height * sheetScale));
+  $('sheetState').textContent = `${im.width}×${im.height} loaded — drag a region, then click its slot.`;
+  sheetDraw();
+}
+const sheetPos = (e) => {
+  const r = sheetCv.getBoundingClientRect(), f = sheetCv.width / r.width;   // CSS px → canvas px
+  return { x: (e.clientX - r.left) * f / sheetScale, y: (e.clientY - r.top) * f / sheetScale };
+};
+sheetCv.addEventListener('pointerdown', (e) => {
+  if (!sheetImg) return;
+  sheetDrag = sheetPos(e);
+  sheetCv.setPointerCapture(e.pointerId);
+});
+sheetCv.addEventListener('pointermove', (e) => {
+  if (!sheetDrag) return;
+  const p = sheetPos(e);
+  if (sheetShape === 'rect') {
+    sheetSel = { kind: 'rect', x: Math.min(sheetDrag.x, p.x), y: Math.min(sheetDrag.y, p.y),
+      w: Math.abs(p.x - sheetDrag.x), h: Math.abs(p.y - sheetDrag.y) };
+  } else {
+    sheetSel = { kind: 'circle', cx: sheetDrag.x, cy: sheetDrag.y, r: Math.hypot(p.x - sheetDrag.x, p.y - sheetDrag.y) };
+  }
+  sheetDraw();
+});
+sheetCv.addEventListener('pointerup', () => { sheetDrag = null; });
+function sheetCrop() {
+  const s = sheetSel;
+  if (!s || !sheetImg) return null;
+  if (s.kind === 'rect') {
+    if (s.w < 4 || s.h < 4) return null;
+    const cv2 = document.createElement('canvas');
+    cv2.width = Math.max(1, Math.round(s.w)); cv2.height = Math.max(1, Math.round(s.h));
+    cv2.getContext('2d').drawImage(sheetImg, s.x, s.y, s.w, s.h, 0, 0, cv2.width, cv2.height);
+    return cv2;
+  }
+  if (s.r < 3) return null;
+  const d = Math.max(2, Math.round(s.r * 2));
+  const cv2 = document.createElement('canvas'); cv2.width = cv2.height = d;
+  const g = cv2.getContext('2d');
+  g.beginPath(); g.arc(d / 2, d / 2, d / 2, 0, 7); g.clip();               // outside the circle → transparent
+  g.drawImage(sheetImg, s.cx - s.r, s.cy - s.r, s.r * 2, s.r * 2, 0, 0, d, d);
+  return cv2;
+}
+document.querySelectorAll('.slotBtn').forEach((b) => b.addEventListener('click', () => {
+  const crop = sheetCrop();
+  if (!crop) { $('sheetState').textContent = 'Drag a region first (a few pixels at least).'; return; }
+  setView(pickFor(b.dataset.sp, b.dataset.sv), crop);
+  b.classList.add('assigned');
+  $('sheetState').textContent = `→ ${b.dataset.sp === 'body' ? 'base' : b.dataset.sp} · ${b.dataset.sv} set. Drag the next region.`;
+}));
+$('openSheet').onclick = () => {
+  document.querySelectorAll('.slotBtn').forEach((b) => b.classList.remove('assigned'));
+  $('sheetModal').hidden = false;
+  if (!sheetImg) $('sheetState').textContent = 'Open or paste an image to start.';
+  sheetDraw();
+};
+$('sheetLoad').onclick = () => $('sheetFile').click();
+$('sheetFile').addEventListener('change', (e) => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  const im = new Image(); im.onload = () => sheetSetImage(im); im.src = URL.createObjectURL(f);
+});
+$('shapeRect').onclick = () => { sheetShape = 'rect'; $('shapeRect').classList.add('on'); $('shapeCircle').classList.remove('on'); };
+$('shapeCircle').onclick = () => { sheetShape = 'circle'; $('shapeCircle').classList.add('on'); $('shapeRect').classList.remove('on'); };
+$('sheetClose').onclick = () => { $('sheetModal').hidden = true; };
+$('sheetModal').addEventListener('click', (e) => { if (e.target === $('sheetModal')) $('sheetModal').hidden = true; });
+
 let pasteTarget = null;
 document.querySelectorAll('.vpick').forEach((pick) => {
   pick.addEventListener('mouseenter', () => { pasteTarget = pick; document.querySelectorAll('.vpick').forEach((p) => p.classList.toggle('active', p === pick)); });
@@ -1108,11 +1197,16 @@ document.querySelectorAll('.vpick').forEach((pick) => {
     const im = new Image(); im.onload = () => setView(pick, im); im.onerror = () => alert('Could not load that image — PNG/JPEG?'); im.src = URL.createObjectURL(file);
   });
 });
-// paste an image from the clipboard into the hovered/active view slot
+// paste an image from the clipboard: into the sheet slicer while it's open, else the hovered view slot
 document.addEventListener('paste', (e) => {
   const items = (e.clipboardData && e.clipboardData.items) || [];
   for (const it of items) if (it.type && it.type.indexOf('image') === 0) {
-    const file = it.getAsFile(); if (!file || !pasteTarget) return;
+    const file = it.getAsFile(); if (!file) return;
+    if (!$('sheetModal').hidden) {
+      const im = new Image(); im.onload = () => sheetSetImage(im); im.src = URL.createObjectURL(file);
+      e.preventDefault(); return;
+    }
+    if (!pasteTarget) return;
     const im = new Image(); im.onload = () => setView(pasteTarget, im); im.src = URL.createObjectURL(file);
     e.preventDefault(); return;
   }
