@@ -290,15 +290,20 @@ function buildVolume(partId, foot, layers) {
   }
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
-  // HEIGHT is the truth from the FRONT view — it's near-square, so it isn't distorted by a long barrel.
-  // Each profile's WIDTH maps to a known footprint dim (front width → depth bh, side width → length bw),
-  // so height = view.height × (that footprint dim / view.width). Prefer front; the side is then stretched
-  // (gridStretch) to this SAME Hv — i.e. the side's height is normalized to the front's truth.
-  const Hraw = frontC ? frontC.height * (bh / frontC.width)
+  // NORMALIZATION CONTRACT: the top view is the master scale. Its fit fixes bw (length) and bh (width),
+  // and every elevation registers against those — side maps its width to bw (top↔side length-normalized),
+  // front maps its width to bh (top↔front width-normalized). HEIGHT follows the same rule at ONE uniform
+  // scale: prefer the side under the top's length scale — height = sideC.height × (bw / sideC.width) —
+  // so the side keeps its own proportions (a front rendered at a different zoom can no longer squash it).
+  // Without a top+side pair, the front is the truth (near-square, so a long barrel can't distort it).
+  // The other elevation is then stretched (gridStretch) to this SAME Hv.
+  const Hraw = (topC && sideC) ? sideC.height * (bw / sideC.width)
+    : frontC ? frontC.height * (bh / frontC.width)
     : sideC ? sideC.height * (bw / sideC.width)
     : layers * 0.66;
   const Hv = Math.min(layers, Math.max(1, Math.round(Hraw)));
-  const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to front)
+  if (Hraw > layers + 0.5) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
+  const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to the common Hv)
   const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
   const backC = src.back ? keyedCropped(src.back, tol.back, pol.back) : null; // colour-only: paints the −x walls
   const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
