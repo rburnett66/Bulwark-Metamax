@@ -1,0 +1,53 @@
+{
+ "frames": {
+  "art_1_wavy.png": {
+   "frame": {
+    "x": 1,
+    "y": 1,
+    "w": 233,
+    "h": 234
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 233,
+    "h": 234
+   },
+   "sourceSize": {
+    "w": 233,
+    "h": 234
+   }
+  },
+  "art_2_flat.png": {
+   "frame": {
+    "x": 235,
+    "y": 1,
+    "w": 190,
+    "h": 191
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 190,
+    "h": 191
+   },
+   "sourceSize": {
+    "w": 190,
+    "h": 191
+   }
+  }
+ },
+ "meta": {
+  "app": "split terrain_pack_1",
+  "image": "tp1-dirt.png",
+  "size": {
+   "w": 426,
+   "h": 236
+  },
+  "scale": "1"
+ }
+}

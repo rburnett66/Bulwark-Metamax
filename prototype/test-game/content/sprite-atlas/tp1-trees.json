@@ -1,0 +1,53 @@
+{
+ "frames": {
+  "art_1_palm.png": {
+   "frame": {
+    "x": 1,
+    "y": 1,
+    "w": 238,
+    "h": 237
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 238,
+    "h": 237
+   },
+   "sourceSize": {
+    "w": 238,
+    "h": 237
+   }
+  },
+  "art_3_trees.png": {
+   "frame": {
+    "x": 240,
+    "y": 1,
+    "w": 214,
+    "h": 220
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 214,
+    "h": 220
+   },
+   "sourceSize": {
+    "w": 214,
+    "h": 220
+   }
+  }
+ },
+ "meta": {
+  "app": "split terrain_pack_1",
+  "image": "tp1-trees.png",
+  "size": {
+   "w": 455,
+   "h": 239
+  },
+  "scale": "1"
+ }
+}

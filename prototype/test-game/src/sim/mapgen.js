@@ -417,7 +417,10 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     return wins.length ? wins[wins.length - 1].wave : 1;
   };
   const occupied = new Set([...waterCells, ...blockedCells].map((c) => `${c.x},${c.y}`));
-  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) occupied.add(`${bx + dx},${cy + dy}`); // base gap
+  // BASE GAP (story-mrmwo8dx6ke): honor the forge's authored gap — clear ring BEYOND the 3x3
+  // footprint (half-width 1). gap=2 → no resources within ±3 of the base centre (docks included).
+  const baseGapR = 1 + ((forge.base && forge.base.gap != null) ? forge.base.gap : 2);
+  for (let dy = -baseGapR; dy <= baseGapR; dy++) for (let dx = -baseGapR; dx <= baseGapR; dx++) occupied.add(`${bx + dx},${cy + dy}`);
   const distC = (x, y) => Math.hypot(x - bx, y - cy);
   let rid = 0;
   const mkRes = (x, y, role, wave) => ({
@@ -427,11 +430,13 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     respawns: role === 'primary',
   });
   const resources = [];
-  for (const r of (forge.resources || [])) {           // honor the tool's scattered pools first
+  for (const r of (forge.resources || [])) {           // honor the tool's authored/scattered pools first
     const k = `${r.x},${r.y}`;
     if (occupied.has(k)) continue;
     occupied.add(k);
-    resources.push(mkRes(r.x, r.y, r.role || 'primary', waveFor(r.x, r.y)));
+    const node = mkRes(r.x, r.y, r.role || 'primary', waveFor(r.x, r.y));
+    if (r.color) node.color = r.color;                 // authored rare-1/rare-2 (red/green) sticks
+    resources.push(node);
   }
   for (const row of rows8) {                            // then GUARANTEE the workbook counts per wave
     const wave = row.Wave;
@@ -488,6 +493,8 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     base, slots, buildableCells,
     terrain: T, blockedCells, fromForge: true,            // STAGE 2 extras
     palettes: forge.palettes || {},                       // tile-sheet names per terrain type (renderer bakes)
+    baseGap: baseGapR,                                    // resource/crop clear radius from base centre
+    waveWindows: wins,                                    // authored per-wave view rects — the camera frames THESE
     mapId, name: (def.Map_Name || `Map ${mapId}`) + ' (forge)', primary: primaryType,
     hasWater: waterCells.length > 0, difficulty: def.Difficulty, parTimeSec: def.Par_Time_Sec,
     questGiver: def.Quest_Giver_Faction, seed: opts.seed || 0, rings, resources,

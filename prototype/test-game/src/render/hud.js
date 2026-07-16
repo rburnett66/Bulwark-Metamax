@@ -190,6 +190,10 @@ export function createHud(mountEl, callbacks) {
   const timerEl = el(doc, 'span', 'bw-timer', '00:00:0');
   const moneyEl = el(doc, 'span', 'bw-money', '0g');
   const waveEl = el(doc, 'span', 'bw-wave', 'Wave 0/0');
+  // ENEMY COUNTDOWN (owner 2026-07-18): live "enemies left" for the active wave — pending spawns +
+  // attackers still alive. The number counting to 0 IS the wave-progress readout.
+  const enemiesEl = el(doc, 'span', 'bw-wave', '');
+  enemiesEl.style.color = '#ff9d7a';
   const startWaveBtn = el(doc, 'button', 'bw-btn', 'Start Wave');
   startWaveBtn.addEventListener('click', () => { if (cbs.onStartWave) cbs.onStartWave(); });
   const seedEl = el(doc, 'span', 'bw-seed', 'seed: -');
@@ -235,6 +239,7 @@ export function createHud(mountEl, callbacks) {
   topbar.appendChild(timerEl);
   topbar.appendChild(moneyEl);
   topbar.appendChild(waveEl);
+  topbar.appendChild(enemiesEl);
   // QUEST objectives readout — red + green crystal units hauled (owner color economy). Hidden on
   // boards with no resources.
   const questEl = el(doc, 'span', 'bw-seed');
@@ -545,6 +550,7 @@ export function createHud(mountEl, callbacks) {
     hptext,
     moneyEl,
     waveEl,
+    enemiesEl,
     timerEl,
     startWaveBtn,
     questEl,
@@ -656,6 +662,14 @@ export function updateHud(hud, state, ui) {
   // Waves
   const waves = state.waves || { current: 0, total: 0, active: false };
   hud.waveEl.textContent = 'Wave ' + waves.current + '/' + waves.total + (waves.active ? ' (active)' : ' (build)');
+  // enemy countdown: pending spawns + live attackers, only while a wave is running
+  if (hud.enemiesEl) {
+    if (waves.active) {
+      let left = (waves.pendingSpawns ? waves.pendingSpawns.length : 0);
+      if (state.units) for (const u of state.units.values()) if (u && u.hp > 0 && u.side === 'attacker') left++;
+      hud.enemiesEl.textContent = '⚔ ' + left + ' left';
+    } else hud.enemiesEl.textContent = '';
+  }
   hud.startWaveBtn.disabled = !!(waves.active || state.result || waves.current >= waves.total);
 
   // Build palette
