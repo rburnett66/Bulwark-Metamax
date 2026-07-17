@@ -48,6 +48,13 @@
     max-width: 100%;
     max-height: 100%;
   }
+  /* MOBILE (owner 2026-07-16): the 2:1 world canvas letterboxes on portrait — centering it left a
+     dead band under the HUD topbar ("map appeared below the header"). Top-align it snug under the
+     topbar instead; the bottom band stays free for the unit panel / build palette. */
+  @media (max-width: 700px) {
+    #game-mount { align-items: flex-start; }
+    #game-mount canvas { margin-top: 46px; }
+  }
   #boot-error {
     position: fixed;
     left: 12px;

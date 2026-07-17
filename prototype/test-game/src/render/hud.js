@@ -705,8 +705,14 @@ export function updateHud(hud, state, ui) {
     const busy = s.lifecycle === 'Building' || s.lifecycle === 'Upgrading' || s.lifecycle === 'Selling' || s.lifecycle === 'Placing';
     const maxTier = def && def.hp ? def.hp.length : 3;
     const upCost = (def && def.cost && s.tier < maxTier) ? def.cost[s.tier] : Infinity;
-    hud.upgradeBtn.disabled = busy || s.tier >= maxTier || money < upCost;
-    hud.upgradeBtn._label.textContent = ' ' + (s.tier >= maxTier ? 'Max Tier' : 'Upgrade (' + upCost + 'g)');   // keep bold U
+    // mirror the sim's campaign tier gate (structures.js canUpgrade) so a locked tier reads LOCKED
+    // instead of enabling on gold and silently failing (owner 2026-07-16 mobile playtest)
+    const tierGroup = s.kind === 'antiGround' ? 'cannon' : s.kind === 'antiAir' ? 'flak' : 'wall';
+    const tierLocked = !!(state.structTiers && s.tier + 1 > (state.structTiers[tierGroup] || 1));
+    hud.upgradeBtn.disabled = busy || s.tier >= maxTier || tierLocked || money < upCost;
+    hud.upgradeBtn._label.textContent = ' ' + (s.tier >= maxTier ? 'Max Tier'
+      : tierLocked ? 'T' + (s.tier + 1) + ' locked (campaign)'
+      : 'Upgrade (' + upCost + 'g)');   // keep bold U
     let sellVal = 0;
     try { sellVal = getSellValue(s, STRUCTURES, ASSUMPTIONS); } catch (e) { sellVal = 0; }
     hud.sellBtn.disabled = busy;
