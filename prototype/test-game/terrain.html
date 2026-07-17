@@ -130,7 +130,8 @@
           <div class="row" style="margin-top:8px"><label>Load</label><select id="loadSlot"><option value="">— saved maps —</option></select><button class="ghost" id="loadSlotBtn" style="width:auto;padding:5px 10px;margin:0">Load</button></div>
           <button class="ghost" id="exportSlot" style="margin-top:8px">Export slot file (ship path)</button>
           <button class="ghost" id="exportAllSlots" style="margin-top:4px">Export ALL saved slots</button>
-          <button id="shipAllSlots" style="margin-top:4px">🚀 Ship ALL slots to repo (local dev)</button>
+          <button id="shipThis" style="margin-top:4px">🚀 Ship THIS map (what you see) + save slot</button>
+          <button class="ghost" id="shipAllSlots" style="margin-top:4px">🚀 Ship ALL saved slots</button>
           <div id="slotInfo" class="note">The game loads the ENEMY faction's slot for each map number — localStorage first
             (this browser, instant), then the committed file. Export drops
             <b>&lt;faction&gt;-map-&lt;n&gt;.json</b> — commit it to <b>content/maps/forge/</b> to ship.</div>
@@ -509,6 +510,19 @@ async function shipJson(rel, data) {
   if (!d.ok) throw new Error(d.error || 'ship failed');
   return d;
 }
+// ship EXACTLY what's on screen as the selected faction/map — kills the "shipped a stale saved
+// slot" footgun (owner 2026-07-16: re-ship went out with 0 resources because Save slot was skipped)
+$('shipThis').addEventListener('click', async () => {
+  const f = $('slotFaction').value, m = $('slotMap').value;
+  const obj = exportObj();                                  // the CURRENT screen, resources included
+  try {
+    await shipJson(`content/maps/forge/${fileSlug(f)}-map-${m}.json`, obj);
+    const slots = loadSlots(); slots[slotId(f, m)] = obj;   // and save the slot to match what shipped
+    try { localStorage.setItem(SLOT_KEY, JSON.stringify(slots)); } catch (e) { /* full */ }
+    refreshSlots();
+    $('slotInfo').textContent = `🚀 Shipped THIS map (${obj.resources.length} resources) → ${fileSlug(f)}-map-${m}.json + slot saved.`;
+  } catch (e) { $('slotInfo').textContent = `Ship failed: ${e.message}`; }
+});
 $('shipAllSlots').addEventListener('click', async () => {
   const slots = loadSlots(), keys = Object.keys(slots);
   if (!keys.length) { $('slotInfo').textContent = 'No saved slots yet.'; return; }
