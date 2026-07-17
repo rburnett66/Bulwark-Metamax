@@ -153,10 +153,11 @@ assert(m1.spawnGround.x === 2 && m1.rings[0].spawns.ground.x === 2, 'override sp
   // 3) off-window node bound to nearest window's wave (2), not the last
   const far = tm.resources.find((r) => r.x <= 6 && r.y <= 6);
   assert(far && far.wave === 2, `off-window node binds to nearest wave (got ${far && far.wave})`);
-  // 4) authored lane mix drives the budget: no water points → 0 water budget; all pressure kept
+  // 4) authored spawn points ARE the unit counts: 3 ground + 1 air ≈ 3+1 tier-1 units of budget
   const r1 = tm.rings[0];
   assert.strictEqual(r1.budget.water, 0, 'no authored water → no water budget');
-  assert(r1.budget.ground > r1.budget.air, 'ground outweighs air (3 points vs 1)');
+  assert.strictEqual(r1.budget.ground, 75, '3 ground points = 3 units = 75 budget pts');
+  assert.strictEqual(r1.budget.air, 25, '1 air point = 1 unit = 25 budget pts');
   assert.strictEqual(r1.budget.ground + r1.budget.air + r1.budget.water, r1.budget.total, 'no pressure dropped');
   // 5) every painted point reachable by the spawner (spawnList carries all of them)
   assert.strictEqual(r1.spawnList.ground.length, 3, 'all 3 ground points kept');

@@ -521,15 +521,30 @@ function emitCombatFx(renderer, state) {
     }
     return null;
   };
-  const fire = (id, from, to, kind, cadence, speed, color) => {
+  // owner 2026-07-16: flak rounds were near-invisible on phones (4x), cannon shells faint (2x)
+  const SHOT_SIZE = { shell: 0.022, flak: 0.03, tracer: 0.0075 };
+  const fire = (id, from, to, kind, cadence, speed, color, burst) => {
     const next = clock.get(id) || 0;
     if (now < next) return;
     clock.set(id, now + cadence * (0.85 + Math.random() * 0.3));
     // pooled sprite path (spec §4): billboard dot + streak, single batched draw, zero per-frame alloc.
     // size is a sprite SCALE — the dot texture is 16px, so t*0.011 ≈ the old t*0.09-radius shell dot.
-    renderer.projectiles.spawn(from.x, from.y, to.x, to.y, speed * t,
-      color, kind, t * (kind === 'shell' ? 0.011 : 0.0075));
+    const n = burst || 1;
+    for (let k = 0; k < n; k++) {
+      // burst rounds spray: jittered impact points, staggered a few frames apart (sim clock)
+      const jx = n > 1 ? (Math.random() * 2 - 1) * t * 0.16 : 0;
+      const jy = n > 1 ? (Math.random() * 2 - 1) * t * 0.16 : 0;
+      const args = [from.x, from.y, to.x + jx, to.y + jy, speed * t, color, kind, t * (SHOT_SIZE[kind] || 0.0075)];
+      if (k === 0) renderer.projectiles.spawn(...args);
+      else (renderer._shotQueue || (renderer._shotQueue = [])).push({ at: now + k * 0.07, args });
+    }
   };
+  // flush queued burst rounds that have come due
+  if (renderer._shotQueue && renderer._shotQueue.length) {
+    const due = [];
+    renderer._shotQueue = renderer._shotQueue.filter((q) => (now >= q.at ? (due.push(q), false) : true));
+    for (const q of due) renderer.projectiles.spawn(...q.args);
+  }
   const burn = (x, y, spread, size) => {
     renderer.fxItems.push({ kind: 'fire', x: x + (Math.random() * 2 - 1) * spread, y: y + (Math.random() * 2 - 1) * spread,
       age: 0, ttl: 0.45 + Math.random() * 0.3, color: BURN_COLORS[(Math.random() * 3) | 0],
@@ -549,7 +564,8 @@ function emitCombatFx(renderer, state) {
         if (tp) {
           const lp = cellToLocal(renderer, tp.x, tp.y);
           const ty = lp.y - (tp.air ? t * 0.35 : 0);
-          if (st.kind === 'antiGround') fire('s' + st.id, c, { x: lp.x, y: ty }, 'shell', 0.55, 13, 0xffd080);
+          // owner 2026-07-16: tower defense reads as a SPRAY of bullets — 4-round jittered burst
+          if (st.kind === 'antiGround') fire('s' + st.id, c, { x: lp.x, y: ty }, 'shell', 0.55, 13, 0xffd080, 4);
           else fire('s' + st.id, c, { x: lp.x, y: ty }, 'flak', 0.35, 18, 0x9fd4ff);
         }
       }
@@ -566,6 +582,21 @@ function emitCombatFx(renderer, state) {
       const p = cellToLocal(renderer, u.pos.x, u.pos.y);
       const isFlyer = u.domain === 'Flyer';
       const lift = isFlyer ? t * 0.35 : 0;
+      // TANK DUST (owner 2026-07-16): ground movers kick up dust at their tracks while rolling
+      if (!isFlyer) {
+        const lm = renderer._lastUnitPos || (renderer._lastUnitPos = new Map());
+        const prev = lm.get(u.id);
+        if (prev) {
+          const mdx = p.x - prev.x, mdy = p.y - prev.y;
+          if (Math.hypot(mdx, mdy) > t * 0.008 && Math.random() < dt * 7) {
+            renderer.fxItems.push({ kind: 'smoke',
+              x: p.x - mdx * 3 + (Math.random() * 2 - 1) * t * 0.08,
+              y: p.y - mdy * 3 + (Math.random() * 2 - 1) * t * 0.08 + t * 0.06,
+              age: 0, ttl: 0.5 + Math.random() * 0.25, color: 0x8a7a5e, size: t * 0.09, rise: t * 0.04 });
+          }
+        }
+        lm.set(u.id, { x: p.x, y: p.y });
+      }
       if (RANGED_SHAPES[d.shape] && (d.range || 0) > 1.6 && u.targetId != null) {
         const tp = targetPos(u.targetId);
         if (tp) {

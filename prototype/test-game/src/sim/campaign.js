@@ -101,7 +101,10 @@ export function buildCampaignWaves(map, onlyFaction) {
       leftover -= spent(extra);
       extra.forEach((unitId) => spawns.push({ unitId, lane: laneDomain(UNITS[unitId]), delay: 0, interval: 0, count: 1 }));
     }
-    spawns.forEach((sp, i) => { sp.delay = 1 + i * 1.5; });   // stagger the whole wave; the spawn gate spaces the rest
+    // stagger the whole wave; the spawn gate spaces the rest. BIG authored waves (owner 2026-07-16:
+    // 30-45 troops) compress the stagger so the assault lands inside ~30s instead of dripping for minutes.
+    const step = Math.min(1.5, 28 / Math.max(1, spawns.length));
+    spawns.forEach((sp, i) => { sp.delay = 1 + i * step; });
     waves.push({ faction, spawns });
   }
   return waves;
