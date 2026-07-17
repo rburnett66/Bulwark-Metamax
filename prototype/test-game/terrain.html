@@ -46,7 +46,7 @@
 </head>
 <body>
 <div id="app">
-  <div id="stage"><canvas id="cv"></canvas></div>
+  <div id="stage"><button id="fitScreen" class="ghost" style="position:sticky;top:6px;float:right;z-index:5;width:auto;padding:5px 12px;margin:0 0 4px 8px">⛶ Fit to screen</button><canvas id="cv"></canvas></div>
   <div id="side">
     <div id="sideHead">
       <h1>TERRAIN FORGE</h1>
@@ -130,7 +130,8 @@
           <div class="row" style="margin-top:8px"><label>Load</label><select id="loadSlot"><option value="">— saved maps —</option></select><button class="ghost" id="loadSlotBtn" style="width:auto;padding:5px 10px;margin:0">Load</button></div>
           <button class="ghost" id="exportSlot" style="margin-top:8px">Export slot file (ship path)</button>
           <button class="ghost" id="exportAllSlots" style="margin-top:4px">Export ALL saved slots</button>
-          <button id="shipAllSlots" style="margin-top:4px">🚀 Ship ALL slots to repo (local dev)</button>
+          <button id="shipThis" style="margin-top:4px">🚀 Ship THIS map (what you see) + save slot</button>
+          <button class="ghost" id="shipAllSlots" style="margin-top:4px">🚀 Ship ALL saved slots</button>
           <div id="slotInfo" class="note">The game loads the ENEMY faction's slot for each map number — localStorage first
             (this browser, instant), then the committed file. Export drops
             <b>&lt;faction&gt;-map-&lt;n&gt;.json</b> — commit it to <b>content/maps/forge/</b> to ship.</div>
@@ -289,10 +290,30 @@ function render() {
   last = generateTerrain(o);
   // world mode pins the base to world-centre (32,16 → 0-indexed); else auto-centre
   base = placeBase(last, +$('baseGap').value, worldMode() ? { x: BASE.x - 1, y: BASE.y - 1 } : null);
-  // terrain changed → drop stale resources/spawns (positions depend on the grid)
-  resources = []; spawns = []; spawnsByWave = {};
+  // terrain changed → REGENERATE resources + spawns on the new grid (owner 2026-07-16: the old
+  // behavior just CLEARED them, so a map saved after any terrain tweak silently shipped with zero
+  // resources). Hand-painted nodes (painted:true) survive when they still sit on open ground.
+  const painted = resources.filter((q) => q.painted);
+  resources = generateResources(last, { seed: o.seed });
+  for (const q of painted) {
+    const i = q.y * o.cols + q.x;
+    if (q.x < o.cols && q.y < o.rows && !BLOCKING.has(last.terrain[i])
+        && !resources.some((z) => z.x === q.x && z.y === q.y)) resources.push(q);
+  }
+  spawnsByWave = {}; spawns = [];
+  const t = spawnTuning();
+  if (worldMode()) {
+    for (const w of WAVE_WINDOWS) {
+      const rect = { x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 };
+      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, spacing: t.spacing });
+    }
+  } else {
+    spawnsByWave[1] = generateEdgeSpawns(last, { side: 'surround', ground: t.ground, air: t.air, water: t.water, spread: t.spread, spacing: t.spacing });
+  }
+  spawns = spawnsByWave[selWave] || spawnsByWave[1] || [];
+  updResCounts();
   syncWaveUI();
-  const px = Math.max(4, Math.min(18, Math.floor(900 / o.cols)));
+  const px = cellPx(o);
   cv.width = o.cols * px; cv.height = o.rows * px;
   for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) {
     ctx.fillStyle = TERRAIN_COLOR[last.terrain[y * o.cols + x]];
@@ -345,9 +366,19 @@ $('genSpawn').addEventListener('click', () => {
   }
   syncWaveUI(); redraw();
 });
+// cell size: classic = ~900px map; FIT TO SCREEN = fill the viewport space the canvas actually has
+let fitScreen = false;
+function cellPx(o) {
+  if (!fitScreen) return Math.max(4, Math.min(18, Math.floor(900 / o.cols)));
+  const rect = cv.getBoundingClientRect();
+  const availW = Math.max(240, (cv.parentElement ? cv.parentElement.clientWidth : window.innerWidth) - 8);
+  const availH = Math.max(240, window.innerHeight - rect.top - 16);
+  return Math.max(3, Math.floor(Math.min(availW / o.cols, availH / o.rows)));
+}
 function redraw() {
   spawns = spawnsByWave[selWave] || spawnsByWave[1] || [];
-  const o = opts(); const px = Math.max(4, Math.min(18, Math.floor(900 / o.cols)));
+  const o = opts(); const px = cellPx(o);
+  if (cv.width !== o.cols * px || cv.height !== o.rows * px) { cv.width = o.cols * px; cv.height = o.rows * px; }
   for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) { ctx.fillStyle = TERRAIN_COLOR[last.terrain[y * o.cols + x]]; ctx.fillRect(x * px, y * px, px, px); }
   ctx.strokeStyle = 'rgba(0,0,0,.35)';
   for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) if (last.blocking[y * o.cols + x]) { ctx.beginPath(); ctx.moveTo(x * px, y * px); ctx.lineTo(x * px + px, y * px + px); ctx.stroke(); }
@@ -479,6 +510,19 @@ async function shipJson(rel, data) {
   if (!d.ok) throw new Error(d.error || 'ship failed');
   return d;
 }
+// ship EXACTLY what's on screen as the selected faction/map — kills the "shipped a stale saved
+// slot" footgun (owner 2026-07-16: re-ship went out with 0 resources because Save slot was skipped)
+$('shipThis').addEventListener('click', async () => {
+  const f = $('slotFaction').value, m = $('slotMap').value;
+  const obj = exportObj();                                  // the CURRENT screen, resources included
+  try {
+    await shipJson(`content/maps/forge/${fileSlug(f)}-map-${m}.json`, obj);
+    const slots = loadSlots(); slots[slotId(f, m)] = obj;   // and save the slot to match what shipped
+    try { localStorage.setItem(SLOT_KEY, JSON.stringify(slots)); } catch (e) { /* full */ }
+    refreshSlots();
+    $('slotInfo').textContent = `🚀 Shipped THIS map (${obj.resources.length} resources) → ${fileSlug(f)}-map-${m}.json + slot saved.`;
+  } catch (e) { $('slotInfo').textContent = `Ship failed: ${e.message}`; }
+});
 $('shipAllSlots').addEventListener('click', async () => {
   const slots = loadSlots(), keys = Object.keys(slots);
   if (!keys.length) { $('slotInfo').textContent = 'No saved slots yet.'; return; }
@@ -539,10 +583,17 @@ cv.addEventListener('pointerdown', (e) => {
   else if (at >= 0 && resources[at].color === resPaint) resources.splice(at, 1);   // same colour = toggle off
   else {
     if (at >= 0) resources.splice(at, 1);
-    resources.push({ x, y, role: RES_ROLE[resPaint], color: resPaint });
+    resources.push({ x, y, role: RES_ROLE[resPaint], color: resPaint, painted: true });   // survives terrain re-rolls
   }
   updResCounts(); redraw();
 });
+$('fitScreen').addEventListener('click', () => {
+  fitScreen = !fitScreen;
+  $('fitScreen').style.background = fitScreen ? '#d9a441' : '';
+  $('fitScreen').style.color = fitScreen ? '#0c0e12' : '';
+  redraw();
+});
+window.addEventListener('resize', () => { if (fitScreen) redraw(); });
 applyPaletteDefaults();      // default coverage on a fresh tool
 updResCounts();
 </script>

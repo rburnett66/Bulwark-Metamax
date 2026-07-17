@@ -143,7 +143,9 @@ export function boot(mountEl, seed) {
       const sv = loadSave();
       sim = createSim(currentSeed, { waves: currentWaves, map: currentMap, carry: pendingCarry,
         harvesterLevel: sv.harvesterLevel || 1,
-        structTiers: currentMapId ? sv.structTiers : null });   // classic board stays all-open
+        // classic board AND forge maps stay all-open — the campaign tier-unlock shop (Amendment B2)
+        // has no UI yet, so gating forge playtests made upgrades silently impossible (owner 2026-07-16)
+        structTiers: currentMapId && !(currentMap && currentMap.fromForge) ? sv.structTiers : null });
     }
     log = createLog(currentSeed);
     ui = createUiState();

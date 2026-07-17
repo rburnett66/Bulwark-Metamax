@@ -363,9 +363,9 @@ export function createRenderer(app, map) {
 
 // Rising gold "+Ng" text at a kill/deposit — the visible score of the moment. PIXI.Text objects,
 // pooled per float, retired after ttl.
-function spawnGoldFloat(renderer, x, y, label) {
+function spawnGoldFloat(renderer, x, y, label, fill) {
   const t = new PIXI.Text(label, { fontFamily: 'Courier New', fontSize: Math.max(13, renderer.tile * 0.28),
-    fontWeight: 'bold', fill: 0xffd76a, stroke: 0x0a0e12, strokeThickness: 3 });
+    fontWeight: 'bold', fill: fill || 0xffd76a, stroke: 0x0a0e12, strokeThickness: 3 });
   t.anchor && t.anchor.set(0.5, 1);
   t.x = x; t.y = y - renderer.tile * 0.3;
   renderer.layers.structHp.addChild(t);   // above units/FX so the score always reads
@@ -667,6 +667,17 @@ function spawnFx(renderer, ev) {
     renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: 0.5, color: 0xe05040, kind: 'ring' });
     spawnFlame(renderer, p.x, p.y, 2.2, 5.0);   // a structure is bigger than a unit → a larger, ~5s fire
     spawnGlow(renderer, p.x, p.y, 2.2, 0.5);    // explosion light bloom
+    return;
+  }
+  // ── DELIVERY FANFARE (owner 2026-07-16): a load landing at base celebrates in ITS crystal's
+  // colour — ring + coin sparks + coloured bloom + a rising "+Ng" tinted to the resource. ──
+  if (ev.type === 'deposit') {
+    const COL = { blue: 0x58a6ff, yellow: 0xffd76a, red: 0xff6a6a, green: 0x7be08a };
+    const c = COL[ev.color] || 0xffd76a;
+    renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: 0.55, color: c, kind: 'ring' });
+    spawnSparks(renderer, p.x, p.y, 6);                       // the coin shower
+    spawnGlow(renderer, p.x, p.y, 0.85, 0.35, c);             // crystal-coloured bloom at the dock
+    if (ev.gold > 0) spawnGoldFloat(renderer, p.x, p.y, '+' + Math.round(ev.gold) + 'g', c);
     return;
   }
   // ── Base SUPER-CANNON visuals ──
@@ -1735,7 +1746,9 @@ function updateCamera(renderer, state, dt) {
     // frame the ring so BOTH axes fit (+padding); zoom-IN capped; never zoom out past full board
     const ringFill = Math.min(W / rw, H / rh);
     ts = Math.min(MAX_ZOOM, Math.max(1, ringFill));   // ring framing, 1..MAX_ZOOM
-    ts = Math.max(ts, floor);                         // tappability: zoom in further on big-map+small-screen
+    // tappability floor: generator maps only — on AUTHORED forge windows the design rect is the
+    // contract; the floor zoomed past it on phones and cropped the window (owner 2026-07-16 mobile)
+    if (!wins) ts = Math.max(ts, floor);
     const cx = ((r.x0 + r.x1 + 1) / 2) * t, cy = ((r.y0 + r.y1 + 1) / 2) * t;
     tx = Math.min(0, Math.max(W - W * ts, W / 2 - cx * ts));   // clamp: never show past the board edge
     ty = Math.min(0, Math.max(H - H * ts, H / 2 - cy * ts));

@@ -440,7 +440,7 @@ function stepOneHarvester(state, u, dt) {
           state.mapScore.questUnits += n;
           if (u.cargoColor === 'red') state.mapScore.questRed += n; else state.mapScore.questGreen += n;
         }
-        emitEvent(state, { type: 'deposit', tick: state.tick, gold, units: Math.floor(u.cargo), role: u.cargoRole || 'primary', color: u.cargoColor || 'blue', fieldId: u.fieldId });
+        emitEvent(state, { type: 'deposit', tick: state.tick, gold, units: Math.floor(u.cargo), role: u.cargoRole || 'primary', color: u.cargoColor || 'blue', fieldId: u.fieldId, pos: { x: u.pos.x, y: u.pos.y } });
         u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null;
       }
       // still mid-job (came home full)? head back out — to the assigned field, or if it was
