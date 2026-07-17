@@ -16,6 +16,7 @@ import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath } from './pathfinding.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
 import { WAVE_WINDOWS } from '../../content/maps/wave-windows.js';
+import { POINTS_TO_POWER } from './campaign.js';
 
 const TILE = 64;   // matches tables.js MAP_TILE — 64px/tile
 // SAFE BORDER (owner, 2026-07-13): 2 tiles of non-buildable approach terrain wrap the battlefield.
@@ -514,18 +515,22 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
   const rings = rows8.map((row, i) => {
     const wave = row.Wave || (i + 1);
     const ground = pick(wave, 'ground') || pick(wave, 'air') || { x: 0, y: cy };
-    // TROOP MIX FOLLOWS THE TOOL (owner 2026-07-16): when the forge authored this wave's spawn
-    // points, the lane split of the workbook budget follows the AUTHORED lane mix — a wave painted
-    // with no water points sends no water troops; more ground points = proportionally more ground.
-    // Total pressure (Spawn_Budget) stays the workbook's difficulty contract.
+    // TROOPS FOLLOW THE TOOL (owner 2026-07-16, v2): authored spawn points ARE the wave's unit
+    // counts — 30 painted ground points means ~30 ground troops, not a proportion of the workbook
+    // budget (the owner authored 50-80 point waves and got 4-9 units). One tier-1 unit ≈ 100 power
+    // = 100/POINTS_TO_POWER budget points; fillLane's big anchors/cheap bodies keep ±texture.
+    // Waves with NO authored points keep the workbook budget (generator behavior).
     const lists = { ground: laneList(wave, 'ground'), air: laneList(wave, 'air'), water: laneList(wave, 'water') };
     const nAuthored = lists.ground.length + lists.air.length + lists.water.length;
     let budget = { total: row.Spawn_Budget, ground: row.Ground_Pts, air: row.Air_Pts, water: row.Water_Pts };
     if (nAuthored > 0) {
-      const total = row.Spawn_Budget || ((row.Ground_Pts || 0) + (row.Air_Pts || 0) + (row.Water_Pts || 0));
-      const share = (n) => Math.round(total * n / nAuthored);
-      budget = { total, air: share(lists.air.length), water: share(lists.water.length), ground: 0 };
-      budget.ground = total - budget.air - budget.water;   // remainder → ground (never drop pressure)
+      const PTS_PER_UNIT = 100 / POINTS_TO_POWER;          // ≈ one tier-1 unit in budget points
+      budget = {
+        ground: Math.round(lists.ground.length * PTS_PER_UNIT),
+        air: Math.round(lists.air.length * PTS_PER_UNIT),
+        water: Math.round(lists.water.length * PTS_PER_UNIT),
+      };
+      budget.total = budget.ground + budget.air + budget.water;
     }
     return { wave, rect: fullRect, sideFocus: null,
       spawns: { ground, water: pick(wave, 'water'), air: pick(wave, 'air') || ground },
