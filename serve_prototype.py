@@ -11,15 +11,26 @@ opens your browser, so it just works.
 
 Ctrl+C to stop.
 """
+import datetime
 import functools
 import http.server
+import json
 import os
+import socket
 import socketserver
+import subprocess
 import sys
 import threading
 import webbrowser
 
-html = sys.argv[1] if len(sys.argv) > 1 else "Bass-tastic-prototype.html"
+# --lan: also serve on the local network so a PHONE on the same Wi-Fi can play —
+#   python serve_prototype.py "prototype/test-game/index.html" --lan
+# then open the printed http://<pc-ip>:<port>/... URL on the phone. (Windows may ask to
+# allow python through the firewall the first time — allow on Private networks.)
+args = [a for a in sys.argv[1:] if a != "--lan"]
+LAN = "--lan" in sys.argv[1:]
+
+html = args[0] if args else "Bass-tastic-prototype.html"
 html = os.path.abspath(html)
 if not os.path.exists(html):
     sys.exit(f"Not found: {html}")
@@ -40,6 +51,64 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
                 del self.headers[h]
         return super().send_head()
 
+    def do_GET(self):
+        # /__version — which git commit the served tree is at, so the game HUD can show a build stamp
+        # ("is this tab actually running the new code?"). Dirty = uncommitted changes under the SERVED
+        # directory only (the repo's docs churn constantly; that isn't this prototype's dirtiness).
+        if self.path.split("?")[0] == "/__version":
+            try:
+                def git(*args):
+                    r = subprocess.run(["git", "-C", directory] + list(args),
+                                       capture_output=True, text=True, timeout=5)
+                    return r.stdout.strip() if r.returncode == 0 else ""
+                commit = git("rev-parse", "--short", "HEAD") or "unknown"
+                branch = git("rev-parse", "--abbrev-ref", "HEAD")
+                dirty = bool(git("status", "--porcelain", "--", "."))
+            except Exception:
+                commit, branch, dirty = "unknown", "", False
+            body = json.dumps({
+                "commit": commit, "branch": branch, "dirty": dirty,
+                "time": datetime.datetime.now().isoformat(timespec="seconds"),
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        super().do_GET()
+
+    def do_POST(self):
+        # /__ship — the tools' one-click "Ship to repo": writes authored content (Terrain Forge maps,
+        # Stack Forge units manifest) into the SERVED tree's content/ folder so the dev-hot-loop
+        # localStorage state and the committed ship files can't silently diverge (owner 2026-07-16:
+        # the deployed game fell back to the generator map because no export was ever committed).
+        # Local dev only — the deployed static site has no POST, so the tools degrade gracefully.
+        if self.path.split("?")[0] != "/__ship":
+            self.send_error(404)
+            return
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+            req = json.loads(self.rfile.read(n))
+            rel = str(req.get("path", "")).replace("\\", "/").lstrip("/")
+            # whitelist: only json under content/ — never a path escape, never code
+            norm = os.path.normpath(rel).replace("\\", "/")
+            if norm != rel or not rel.startswith("content/") or not rel.endswith(".json") or ".." in rel:
+                raise ValueError(f"path not allowed: {rel!r} (must be content/**.json)")
+            dest = os.path.join(directory, *rel.split("/"))
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(dest, "w", encoding="utf-8") as f:
+                json.dump(req.get("data"), f, indent=None, separators=(",", ":"))
+            body = json.dumps({"ok": True, "path": rel, "bytes": os.path.getsize(dest)}).encode()
+            self.send_response(200)
+        except Exception as e:  # noqa: BLE001 — report the reason to the tool UI
+            body = json.dumps({"ok": False, "error": str(e)}).encode()
+            self.send_response(400)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, must-revalidate")
         self.send_header("Pragma", "no-cache")
@@ -50,10 +119,11 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 Handler = functools.partial(_NoCacheHandler, directory=directory)
 
 # Find a free port starting at 9000.
+bind = "0.0.0.0" if LAN else "127.0.0.1"
 port = 9000
 while port < 9050:
     try:
-        httpd = socketserver.TCPServer(("127.0.0.1", port), Handler)
+        httpd = socketserver.TCPServer((bind, port), Handler)
         break
     except OSError:
         port += 1
@@ -61,7 +131,17 @@ else:
     sys.exit("No free port in 9000-9049.")
 
 url = f"http://127.0.0.1:{port}/{fname}"
-print(f"Serving {fname}\n  {url}\n(Ctrl+C to stop)")
+print(f"Serving {fname}\n  {url}")
+if LAN:
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("8.8.8.8", 80))          # no traffic sent — just resolves the outbound iface IP
+        lan_ip = probe.getsockname()[0]
+        probe.close()
+        print(f"  phone (same Wi-Fi): http://{lan_ip}:{port}/{fname}")
+    except OSError:
+        print("  (could not detect the LAN IP — run `ipconfig` and use the IPv4 address)")
+print("(Ctrl+C to stop)")
 threading.Timer(0.6, lambda: webbrowser.open(url)).start()
 try:
     httpd.serve_forever()

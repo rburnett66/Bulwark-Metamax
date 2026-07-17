@@ -130,6 +130,7 @@
           <div class="row" style="margin-top:8px"><label>Load</label><select id="loadSlot"><option value="">— saved maps —</option></select><button class="ghost" id="loadSlotBtn" style="width:auto;padding:5px 10px;margin:0">Load</button></div>
           <button class="ghost" id="exportSlot" style="margin-top:8px">Export slot file (ship path)</button>
           <button class="ghost" id="exportAllSlots" style="margin-top:4px">Export ALL saved slots</button>
+          <button id="shipAllSlots" style="margin-top:4px">🚀 Ship ALL slots to repo (local dev)</button>
           <div id="slotInfo" class="note">The game loads the ENEMY faction's slot for each map number — localStorage first
             (this browser, instant), then the committed file. Export drops
             <b>&lt;faction&gt;-map-&lt;n&gt;.json</b> — commit it to <b>content/maps/forge/</b> to ship.</div>
@@ -467,6 +468,29 @@ $('exportAllSlots').addEventListener('click', () => {
     setTimeout(() => dlJson(`${fileSlug(mm[1])}-map-${mm[2]}.json`, slots[k]), i * 350);
   });
   $('slotInfo').textContent = keys.length ? `Exported ${keys.length} file(s) → content/maps/forge/` : 'No saved slots yet.';
+});
+// ── ONE-CLICK ship: write every saved slot straight into the repo's content/maps/forge/ through the
+// local dev server's /__ship endpoint — no download-and-move. Deployed static site: POST fails → the
+// button reports "local dev server only" and downloads remain the fallback.
+async function shipJson(rel, data) {
+  const r = await fetch('/__ship', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: rel, data }) });
+  const d = await r.json().catch(() => ({ ok: false, error: 'not a dev server' }));
+  if (!d.ok) throw new Error(d.error || 'ship failed');
+  return d;
+}
+$('shipAllSlots').addEventListener('click', async () => {
+  const slots = loadSlots(), keys = Object.keys(slots);
+  if (!keys.length) { $('slotInfo').textContent = 'No saved slots yet.'; return; }
+  let ok = 0, err = null;
+  for (const k of keys) {
+    const mm = k.match(/^(.*) · map (\d+)$/); if (!mm) continue;
+    try { await shipJson(`content/maps/forge/${fileSlug(mm[1])}-map-${mm[2]}.json`, slots[k]); ok++; }
+    catch (e) { err = e.message; }
+  }
+  $('slotInfo').textContent = err
+    ? `Shipped ${ok}/${keys.length} — ${err} (deployed site? use Export + commit instead)`
+    : `🚀 Shipped ${ok} map(s) into content/maps/forge/ — commit the repo to deploy.`;
 });
 // apply a saved map: restore knobs, deterministically regen terrain, then overlay saved comp
 function loadState(obj) {
