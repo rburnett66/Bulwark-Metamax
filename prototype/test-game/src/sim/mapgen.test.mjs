@@ -1,7 +1,7 @@
 /** mapgen.test.mjs — the campaign map generator honors the GDD's hard rules and the engine's MAP
  *  contract, deterministically, for all 9 maps. Run: node src/sim/mapgen.test.mjs */
 import assert from 'node:assert';
-import { buildCampaignMap, resolveResourceTypes, rolesFor, applyOverrides } from './mapgen.js';
+import { buildCampaignMap, buildTerrainMap, resolveResourceTypes, rolesFor, applyOverrides } from './mapgen.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { createSim, stepSim, applyCommand } from './core.js';
 import { hashState } from './replay.js';
@@ -116,4 +116,51 @@ assert(m1.waterCells.some((c) => c.x === 1 && c.y === 1), 'override water added'
 assert(m1.resources[0].x === origX + 1, 'override resource moved');
 assert(m1.spawnGround.x === 2 && m1.rings[0].spawns.ground.x === 2, 'override spawn moved');
 
-console.log(`mapgen.test OK — 9 maps: contract complete, rings grow, gradient holds, 81 pairings valid (27 swapped), sim-compatible, overrides apply`);
+// ── forge maps: authored fidelity (owner 2026-07-16) ──────────────────────────────────────────────
+{
+  const W = 64, H = 32, bx = 32, by = 16;
+  const forge = {
+    cols: W, rows: H, seed: 7, base: { pos: { x: bx, y: by }, gap: 2 },
+    terrain: new Array(W * H).fill(0), blocking: new Array(W * H).fill(0),
+    waveWindows: [
+      { wave: 1, x: 25, y: 11, w: 16, h: 12 },        // 1-indexed; contains the base
+      { wave: 2, x: 17, y: 7, w: 32, h: 20 },
+    ],
+    // painted: one node INSIDE the gap ring (must relocate, not vanish), one far outside any
+    // window (must bind to the NEAREST wave, not the last), one normal
+    resources: [
+      { x: bx + 1, y: by + 1, role: 'primary' },       // inside gap
+      { x: 1, y: 1, role: 'primary' },                 // off-window → nearest is wave 2
+      { x: bx + 6, y: by, role: 'premium', color: 'red' },
+    ],
+    // wave 1 painted with ground+air only (no water) → water budget must be 0
+    spawnsByWave: { 1: [
+      { x: 25, y: 12, lane: 'ground' }, { x: 25, y: 14, lane: 'ground' }, { x: 25, y: 16, lane: 'ground' },
+      { x: 27, y: 11, lane: 'air' },
+    ] },
+  };
+  const tm = buildTerrainMap(forge, 1, { seed: 7 });
+  const gapR = tm.baseGap;
+  // 1) no resource sits inside the gap, and the painted in-gap node was RELOCATED (count preserved)
+  for (const r of tm.resources) {
+    assert(Math.max(Math.abs(r.x - bx), Math.abs(r.y - by)) > gapR, `resource ${r.id} outside the base gap`);
+  }
+  assert(tm.resources.some((r) => r.color === 'red'), 'authored color sticks');
+  // 2) starter field: >=3 wave-1 primary nodes within gap+3 of the base
+  const near = tm.resources.filter((r) => r.role === 'primary' && r.wave === 1
+    && Math.hypot(r.x - bx, r.y - by) <= gapR + 3);
+  assert(near.length >= 3, `starter field near base (got ${near.length})`);
+  // 3) off-window node bound to nearest window's wave (2), not the last
+  const far = tm.resources.find((r) => r.x <= 6 && r.y <= 6);
+  assert(far && far.wave === 2, `off-window node binds to nearest wave (got ${far && far.wave})`);
+  // 4) authored lane mix drives the budget: no water points → 0 water budget; all pressure kept
+  const r1 = tm.rings[0];
+  assert.strictEqual(r1.budget.water, 0, 'no authored water → no water budget');
+  assert(r1.budget.ground > r1.budget.air, 'ground outweighs air (3 points vs 1)');
+  assert.strictEqual(r1.budget.ground + r1.budget.air + r1.budget.water, r1.budget.total, 'no pressure dropped');
+  // 5) every painted point reachable by the spawner (spawnList carries all of them)
+  assert.strictEqual(r1.spawnList.ground.length, 3, 'all 3 ground points kept');
+  assert.strictEqual(r1.spawnList.air.length, 1, 'air point kept');
+}
+
+console.log(`mapgen.test OK — 9 maps: contract complete, rings grow, gradient holds, 81 pairings valid (27 swapped), sim-compatible, overrides apply, forge fidelity (gap relocation, starter field, nearest-wave binding, authored lane budgets)`);

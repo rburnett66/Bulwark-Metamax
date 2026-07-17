@@ -414,7 +414,15 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     .map((w) => ({ wave: w.wave, x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 }));
   const waveFor = (x, y) => {
     for (const w of wins) if (x >= w.x0 && x <= w.x1 && y >= w.y0 && y <= w.y1) return w.wave;
-    return wins.length ? wins[wins.length - 1].wave : 1;
+    // outside every window → bind to the NEAREST window's wave (owner 2026-07-16: the old
+    // last-window fallback silently pushed off-window painted nodes to wave 8 — "too few resources")
+    let best = 1, bd = Infinity;
+    for (const w of wins) {
+      const dx = Math.max(w.x0 - x, 0, x - w.x1), dy = Math.max(w.y0 - y, 0, y - w.y1);
+      const d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = w.wave; }
+    }
+    return best;
   };
   const occupied = new Set([...waterCells, ...blockedCells].map((c) => `${c.x},${c.y}`));
   // BASE GAP (story-mrmwo8dx6ke): honor the forge's authored gap — clear ring BEYOND the 3x3
@@ -430,13 +438,46 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     respawns: role === 'primary',
   });
   const resources = [];
+  // nearest free cell to (x,y), searching outward — used to RELOCATE authored nodes that land on
+  // occupied cells (water/blocked/base-gap) instead of silently dropping them (owner 2026-07-16:
+  // painted fields near the base vanished into the gap ring → "the game starts with too few")
+  const nearestFree = (x, y, maxR = 6) => {
+    for (let R = 1; R <= maxR; R++) for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== R) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      if (!occupied.has(`${nx},${ny}`)) return { x: nx, y: ny };
+    }
+    return null;
+  };
   for (const r of (forge.resources || [])) {           // honor the tool's authored/scattered pools first
-    const k = `${r.x},${r.y}`;
-    if (occupied.has(k)) continue;
-    occupied.add(k);
-    const node = mkRes(r.x, r.y, r.role || 'primary', waveFor(r.x, r.y));
+    let { x, y } = r;
+    if (occupied.has(`${x},${y}`)) {
+      const alt = nearestFree(x, y);                   // pushed just past the gap/obstacle, field intact
+      if (!alt) continue;
+      x = alt.x; y = alt.y;
+    }
+    occupied.add(`${x},${y}`);
+    const node = mkRes(x, y, r.role || 'primary', waveFor(x, y));
     if (r.color) node.color = r.color;                 // authored rare-1/rare-2 (red/green) sticks
     resources.push(node);
+  }
+  // STARTER FIELD (owner 2026-07-16): a small primary field must sit just beyond the base gap —
+  // "that would be the reason the ship landed there." Guarantee >=3 wave-1 primary nodes within
+  // gap+3 of the base whatever the paint/backfill produced.
+  {
+    const nearR = baseGapR + 3;
+    let have = resources.filter((n) => n.role === 'primary' && n.wave === 1 && distC(n.x, n.y) <= nearR).length;
+    let R = baseGapR + 1;
+    while (have < 3 && R <= nearR) {
+      for (let dy = -R; dy <= R && have < 3; dy++) for (let dx = -R; dx <= R && have < 3; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== R) continue;
+        const x = bx + dx, y = cy + dy, k = `${x},${y}`;
+        if (x < 0 || y < 0 || x >= cols || y >= rows || occupied.has(k)) continue;
+        occupied.add(k); resources.push(mkRes(x, y, 'primary', 1)); have++;
+      }
+      R++;
+    }
   }
   for (const row of rows8) {                            // then GUARANTEE the workbook counts per wave
     const wave = row.Wave;
@@ -468,12 +509,28 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     return a.length ? { x: a[(a.length / 2) | 0].x, y: a[(a.length / 2) | 0].y } : null;
   };
   const fullRect = { x0: 0, y0: 0, x1: cols - 1, y1: rows - 1, w: cols, h: rows };
+  const laneList = (wave, lane) => (sbw[wave] || sbw[String(wave)] || [])
+    .filter((s) => s.lane === lane).map((s) => ({ x: s.x, y: s.y }));
   const rings = rows8.map((row, i) => {
     const wave = row.Wave || (i + 1);
     const ground = pick(wave, 'ground') || pick(wave, 'air') || { x: 0, y: cy };
+    // TROOP MIX FOLLOWS THE TOOL (owner 2026-07-16): when the forge authored this wave's spawn
+    // points, the lane split of the workbook budget follows the AUTHORED lane mix — a wave painted
+    // with no water points sends no water troops; more ground points = proportionally more ground.
+    // Total pressure (Spawn_Budget) stays the workbook's difficulty contract.
+    const lists = { ground: laneList(wave, 'ground'), air: laneList(wave, 'air'), water: laneList(wave, 'water') };
+    const nAuthored = lists.ground.length + lists.air.length + lists.water.length;
+    let budget = { total: row.Spawn_Budget, ground: row.Ground_Pts, air: row.Air_Pts, water: row.Water_Pts };
+    if (nAuthored > 0) {
+      const total = row.Spawn_Budget || ((row.Ground_Pts || 0) + (row.Air_Pts || 0) + (row.Water_Pts || 0));
+      const share = (n) => Math.round(total * n / nAuthored);
+      budget = { total, air: share(lists.air.length), water: share(lists.water.length), ground: 0 };
+      budget.ground = total - budget.air - budget.water;   // remainder → ground (never drop pressure)
+    }
     return { wave, rect: fullRect, sideFocus: null,
       spawns: { ground, water: pick(wave, 'water'), air: pick(wave, 'air') || ground },
-      budget: { total: row.Spawn_Budget, ground: row.Ground_Pts, air: row.Air_Pts, water: row.Water_Pts },
+      spawnList: nAuthored > 0 ? lists : null,              // ALL painted points — spawner cycles them
+      budget,
       parSec: row.Wave_Par_Sec, nodes: { primary: 0, premium: 0, quest: 0, primaryQuota: 0 } };
   });
   // buildable / advisory slots: any open non-base, non-water, non-blocked cell
