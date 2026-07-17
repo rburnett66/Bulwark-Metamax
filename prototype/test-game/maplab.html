@@ -71,6 +71,7 @@
     <div id="bar">
       <span>Wave <input id="wave" type="range" min="1" max="8" value="8"> <b id="waveN">8</b></span>
       <span style="color:var(--dim)">|</span>
+      <button id="fit" title="Size the map to the window">⛶ FIT</button>
       <button class="mode on" data-mode="inspect">INSPECT</button>
       <button class="mode" data-mode="water">WATER ±</button>
       <button class="mode" data-mode="moveres">MOVE NODE</button>
@@ -103,7 +104,8 @@ import { buildNavGrid, findWalkerPath } from './src/sim/pathfinding.js';
 import { MAPDATA } from './content/maps/mapdata.js';
 
 const $ = (id) => document.getElementById(id);
-const T = 24;                       // px per tile in the lab view
+let T = 24;                         // px per tile in the lab view (fit-to-screen recomputes it)
+let fitScreen = false;
 let mapId = 1, seedV = 0, factionId = 1, wave = 8;
 let mode = 'inspect', pendingMove = null;   // resource id being moved
 let overrides = { waterAdd: [], waterRemove: [], resourceMove: [], resourceRemove: [], resourceAdd: [], spawnMove: [] };
@@ -167,6 +169,11 @@ function budgets() {
 const ROLE_COLOR = { primary: '#3f6f4a', premium: '#e0b23f', quest: '#a86fe0' };
 function draw() {
   const cv = $('cv');
+  // fit-to-screen: size tiles to the canvas wrap (owner 2026-07-16); classic = fixed 24px
+  if (fitScreen) {
+    const r = $('cwrap');
+    T = Math.max(4, Math.floor(Math.min((r.clientWidth - 26) / map.cols, (r.clientHeight - 26) / map.rows)));
+  } else T = 24;
   cv.width = map.cols * T; cv.height = map.rows * T;
   const g = cv.getContext('2d');
   const ring = map.rings[wave - 1];
@@ -289,6 +296,13 @@ for (const b of document.querySelectorAll('.mode')) {
   });
 }
 $('wave').addEventListener('input', () => { wave = +$('wave').value; $('waveN').textContent = wave; draw(); budgets(); });
+$('fit').addEventListener('click', () => {
+  fitScreen = !fitScreen;
+  $('fit').style.background = fitScreen ? 'var(--accent)' : '';
+  $('fit').style.color = fitScreen ? '#0a0e12' : '';
+  draw();
+});
+window.addEventListener('resize', () => { if (fitScreen) draw(); });
 $('seed').addEventListener('change', () => { seedV = +$('seed').value || 0; overrides = loadOv(); history = []; rebuild(); });
 $('undo').addEventListener('click', () => { if (history.length) { overrides = JSON.parse(history.pop()); saveOv(); rebuild(); } });
 $('clearOv').addEventListener('click', () => {
