@@ -49,12 +49,17 @@ function stagedGroundPos(map, ring, seq) {
   return p;
 }
 
-function spawnPointForLane(map, lane, waveNumber) {
+function spawnPointForLane(map, lane, waveNumber, seq) {
   // CAMPAIGN maps (mapgen.js): spawns advance outward with the ring — each wave's points sit 2 tiles
   // outside that wave's playable edge on its focus side. Classic maps keep the fixed points.
   if (map.rings && map.rings.length) {
     const w = Math.max(1, Math.min(waveNumber || 1, map.rings.length));
-    const s = map.rings[w - 1].spawns;
+    const ring = map.rings[w - 1];
+    // FORGE MAPS (owner 2026-07-16): the tool authors MULTIPLE spawn points per lane — units cycle
+    // through all of them (deterministic by seq) so the wave enters exactly where it was painted.
+    const list = ring.spawnList && ring.spawnList[lane];
+    if (list && list.length) return list[(seq | 0) % list.length];
+    const s = ring.spawns;
     const p = lane === 'water' ? s.water : lane === 'air' ? s.air : s.ground;
     if (p) return p;
   }
@@ -256,7 +261,7 @@ export function stepWaves(state, dt) {
   while (w.pendingSpawns.length > 0 && w.pendingSpawns[0].time <= state.time) {
     const head = w.pendingSpawns[0];
     if (heldLanes[head.lane]) break;                    // keep in-lane order; other lanes drained already
-    let headPos = spawnPointForLane(map, head.lane, w.current);
+    let headPos = spawnPointForLane(map, head.lane, w.current, head.seq | 0);
     // ground waves STAGE across the safe border (campaign maps): each unit gets its own spot in
     // the band, deterministic by seq — the column enters the map as a front, not a single file
     if (head.lane === 'ground' && map.rings && map.playArea) {

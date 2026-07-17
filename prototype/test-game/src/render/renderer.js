@@ -1720,7 +1720,10 @@ function updateCamera(renderer, state, dt) {
       const idx = Math.max(0, Math.min(w.active ? w.current - 1 : w.current, map.rings.length - 1));
       r = map.rings[idx].rect;
     }
-    const PAD = 3;   // tiles of breathing room — keeps the safe border (and incoming spawns) in view
+    // Breathing room: generator rings get 3 tiles so the safe border stays visible. AUTHORED forge
+    // windows get NONE — the designer's H/W/X/Y rect IS the intended view (owner 2026-07-16: "the
+    // camera does not perfectly match the design"); padding made every window read ~6 tiles wider.
+    const PAD = wins ? 0 : 3;
     const rw = (r.x1 - r.x0 + 1 + PAD * 2) * t;
     const rh = (r.y1 - r.y0 + 1 + PAD * 2) * t;
     const W = map.cols * t, H = map.rows * t;

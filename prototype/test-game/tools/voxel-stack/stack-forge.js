@@ -1502,7 +1502,8 @@ const idb = (() => {
     const tx = db.transaction('projects', mode), rq = fn(tx.objectStore('projects'));
     tx.oncomplete = () => res(rq && rq.result); tx.onerror = () => rej(tx.error);
   }));
-  return { put: (k, v) => op('readwrite', (s) => s.put(v, k)), get: (k) => op('readonly', (s) => s.get(k)) };
+  return { put: (k, v) => op('readwrite', (s) => s.put(v, k)), get: (k) => op('readonly', (s) => s.get(k)),
+    keys: () => op('readonly', (s) => s.getAllKeys()) };
 })();
 const b64FromU8 = (a) => { let s = ''; for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };
 const u8FromB64 = (s) => { const bin = atob(s), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; };
@@ -1699,17 +1700,41 @@ async function loadPackPreview(entry) {
   $('bakeState').innerHTML = `<span class="lock">✓ Showing the saved pack (${p.footprint.join('×')} · ${B}×)</span>`;
 }
 
-// ── ONE-CLICK save flow: click a roster card → fresh slot offers "save the current model as this
-// unit" (sprites or 3D) and the tool does the rest; a saved slot loads and you continue editing. ──
+// ── ONE-CLICK save flow: clicking a roster card is ALWAYS a save — "save the current model as this
+// unit" (sprites or 3D). It never loads (that clobbered work in progress); loading an existing unit
+// goes through the 📂 Load button, which lists every unit with a WIP project or a saved pack. ──
 let saveAsId = null;
-async function onCardClick(id) {
-  let saved = !!((loadManifest().units || {})[id]);
-  if (!saved) { try { saved = !!(await idb.get('proj:' + id)); } catch (e) { /* no store */ } }
-  if (saved) { selectUnit(id); return; }
+function onCardClick(id) {
   saveAsId = id;
   $('saveAsTitle').textContent = id;
+  $('saveAsWarn').hidden = !((loadManifest().units || {})[id]);   // overwrite warning on supplied slots
   $('saveAsModal').hidden = false;
 }
+async function openLoadModal() {
+  const m = loadManifest().units || {};
+  let projIds = [];
+  try { projIds = ((await idb.keys()) || []).filter((k) => typeof k === 'string' && k.startsWith('proj:')).map((k) => k.slice(5)); } catch (e) { /* no store */ }
+  const wip = new Set(projIds), packed = new Set(Object.keys(m));
+  const ids = [...new Set([...roster.map((u) => u.id), ...wip, ...packed])].filter((id) => wip.has(id) || packed.has(id));
+  ids.sort((a, b) => {                                            // current roster first, then the rest A→Z
+    const ra = roster.findIndex((u) => u.id === a), rb = roster.findIndex((u) => u.id === b);
+    if ((ra < 0) !== (rb < 0)) return ra < 0 ? 1 : -1;
+    return ra >= 0 ? ra - rb : a.localeCompare(b);
+  });
+  const list = $('loadList'); list.innerHTML = '';
+  if (!ids.length) list.innerHTML = '<div class="note">Nothing saved yet — bake a unit and click its slot to save one.</div>';
+  for (const id of ids) {
+    const b = document.createElement('button');
+    b.className = 'ghost loadRow';
+    b.innerHTML = `<span class="lid">${id}</span><span class="ltag">${wip.has(id) ? '✎ project' : ''}${wip.has(id) && packed.has(id) ? ' · ' : ''}${packed.has(id) ? '📦 pack' : ''}</span>`;
+    b.onclick = () => { $('loadModal').hidden = true; doAutosave(); selectUnit(id); };   // flush WIP before it's replaced
+    list.appendChild(b);
+  }
+  $('loadModal').hidden = false;
+}
+$('loadUnit').onclick = openLoadModal;
+$('loadCancel').onclick = () => { $('loadModal').hidden = true; };
+$('loadModal').addEventListener('click', (e) => { if (e.target === $('loadModal')) $('loadModal').hidden = true; });
 function quickSave(id, as3D) {
   $('uid').value = id;
   if (as3D) $('embedModel').checked = true;
