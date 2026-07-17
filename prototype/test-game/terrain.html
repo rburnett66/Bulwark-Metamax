@@ -289,8 +289,28 @@ function render() {
   last = generateTerrain(o);
   // world mode pins the base to world-centre (32,16 → 0-indexed); else auto-centre
   base = placeBase(last, +$('baseGap').value, worldMode() ? { x: BASE.x - 1, y: BASE.y - 1 } : null);
-  // terrain changed → drop stale resources/spawns (positions depend on the grid)
-  resources = []; spawns = []; spawnsByWave = {};
+  // terrain changed → REGENERATE resources + spawns on the new grid (owner 2026-07-16: the old
+  // behavior just CLEARED them, so a map saved after any terrain tweak silently shipped with zero
+  // resources). Hand-painted nodes (painted:true) survive when they still sit on open ground.
+  const painted = resources.filter((q) => q.painted);
+  resources = generateResources(last, { seed: o.seed });
+  for (const q of painted) {
+    const i = q.y * o.cols + q.x;
+    if (q.x < o.cols && q.y < o.rows && !BLOCKING.has(last.terrain[i])
+        && !resources.some((z) => z.x === q.x && z.y === q.y)) resources.push(q);
+  }
+  spawnsByWave = {}; spawns = [];
+  const t = spawnTuning();
+  if (worldMode()) {
+    for (const w of WAVE_WINDOWS) {
+      const rect = { x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 };
+      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, spacing: t.spacing });
+    }
+  } else {
+    spawnsByWave[1] = generateEdgeSpawns(last, { side: 'surround', ground: t.ground, air: t.air, water: t.water, spread: t.spread, spacing: t.spacing });
+  }
+  spawns = spawnsByWave[selWave] || spawnsByWave[1] || [];
+  updResCounts();
   syncWaveUI();
   const px = Math.max(4, Math.min(18, Math.floor(900 / o.cols)));
   cv.width = o.cols * px; cv.height = o.rows * px;
@@ -539,7 +559,7 @@ cv.addEventListener('pointerdown', (e) => {
   else if (at >= 0 && resources[at].color === resPaint) resources.splice(at, 1);   // same colour = toggle off
   else {
     if (at >= 0) resources.splice(at, 1);
-    resources.push({ x, y, role: RES_ROLE[resPaint], color: resPaint });
+    resources.push({ x, y, role: RES_ROLE[resPaint], color: resPaint, painted: true });   // survives terrain re-rolls
   }
   updResCounts(); redraw();
 });
