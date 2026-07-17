@@ -1487,6 +1487,19 @@ $('dlSheet').onclick = () => {
   dl(`${built.pack.id}.json`, 'data:application/json,' + encodeURIComponent(JSON.stringify(built.pack, null, 2)));
 };
 $('dlManifest').onclick = () => dl('units.json', 'data:application/json,' + encodeURIComponent(JSON.stringify(loadManifest(), null, 2)));
+// ONE-CLICK ship (owner 2026-07-16): write the live manifest straight to the repo ship path through
+// the dev server's /__ship — the deployed game reads content/units/voxel-units.json, and forgetting
+// this export was why deployed showed no voxel units. Static site: POST fails → graceful message.
+$('shipManifest').onclick = async () => {
+  try {
+    const r = await fetch('/__ship', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: 'content/units/voxel-units.json', data: loadManifest() }) });
+    const d = await r.json().catch(() => ({ ok: false, error: 'not a dev server' }));
+    $('projState').textContent = d.ok
+      ? `🚀 Shipped ${Object.keys(loadManifest().units || {}).length} unit(s) → content/units/voxel-units.json — commit to deploy.`
+      : `Ship failed: ${d.error || 'unknown'} (deployed site? use Download units.json instead)`;
+  } catch (e) { $('projState').textContent = 'Ship failed: ' + e.message; }
+};
 
 // ── PROJECT save/load: the full working state (source art, cutout tuning, every setting) as one snapshot.
 // Autosaves to IndexedDB per unit id (localStorage is too small for art) and restores on reopen; the same

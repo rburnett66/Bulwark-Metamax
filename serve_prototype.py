@@ -78,6 +78,37 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def do_POST(self):
+        # /__ship — the tools' one-click "Ship to repo": writes authored content (Terrain Forge maps,
+        # Stack Forge units manifest) into the SERVED tree's content/ folder so the dev-hot-loop
+        # localStorage state and the committed ship files can't silently diverge (owner 2026-07-16:
+        # the deployed game fell back to the generator map because no export was ever committed).
+        # Local dev only — the deployed static site has no POST, so the tools degrade gracefully.
+        if self.path.split("?")[0] != "/__ship":
+            self.send_error(404)
+            return
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+            req = json.loads(self.rfile.read(n))
+            rel = str(req.get("path", "")).replace("\\", "/").lstrip("/")
+            # whitelist: only json under content/ — never a path escape, never code
+            norm = os.path.normpath(rel).replace("\\", "/")
+            if norm != rel or not rel.startswith("content/") or not rel.endswith(".json") or ".." in rel:
+                raise ValueError(f"path not allowed: {rel!r} (must be content/**.json)")
+            dest = os.path.join(directory, *rel.split("/"))
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(dest, "w", encoding="utf-8") as f:
+                json.dump(req.get("data"), f, indent=None, separators=(",", ":"))
+            body = json.dumps({"ok": True, "path": rel, "bytes": os.path.getsize(dest)}).encode()
+            self.send_response(200)
+        except Exception as e:  # noqa: BLE001 — report the reason to the tool UI
+            body = json.dumps({"ok": False, "error": str(e)}).encode()
+            self.send_response(400)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, must-revalidate")
         self.send_header("Pragma", "no-cache")
