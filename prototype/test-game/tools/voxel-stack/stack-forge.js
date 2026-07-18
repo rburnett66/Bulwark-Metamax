@@ -928,6 +928,7 @@ function bodyTopLayer(foot, layers) {
 let gridView = 'top', gridLayer = 0, gridModel = null;   // gridModel: cached buildModel, invalidated by rebuildSlices
 let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn cell layout, so pointer edits map back to voxels
 let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
+let gridBoxSel = null;                                    // active Box⌫ marquee {c0,r0,c1,r1} in grid cells, drawn by renderGridView
 // geometry box axis mapping: for each grid view, which world-axis span each in-plane axis (col,row) reads
 // and whether the grid coord is reversed vs the axis value. cap: x/y=foot, z=layers. Used by both the
 // geom overlay draw and the drag editing so they stay in lock-step.
@@ -1032,6 +1033,25 @@ function renderGridView() {
     ctx.stroke();
   }
   ctx.strokeStyle = 'rgba(120,160,200,.55)'; ctx.lineWidth = 1; ctx.strokeRect(ox + .5, oy + .5, gw - 1, gh - 1);
+
+  if (gridBoxSel) {                                                // Box⌫ marquee (delete region on release)
+    const c0 = Math.min(gridBoxSel.c0, gridBoxSel.c1), c1 = Math.max(gridBoxSel.c0, gridBoxSel.c1), r0 = Math.min(gridBoxSel.r0, gridBoxSel.r1), r1 = Math.max(gridBoxSel.r0, gridBoxSel.r1);
+    ctx.strokeStyle = '#e0625f'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.strokeRect(ox + c0 * cell + 0.5, oy + r0 * cell + 0.5, (c1 - c0 + 1) * cell - 1, (r1 - r0 + 1) * cell - 1);
+    ctx.setLineDash([]);
+  }
+  // FRONT/BACK MISMATCH: the carve takes width geometry from the front; the back only paints the −x wall.
+  // Where their silhouettes disagree, the back art won't line up with the geometry — flag it red so you
+  // can fix it with a few face paints (owner 2026-07-18). Only when both a front and back image exist.
+  if ((gridView === 'front' || gridView === 'back') && V && V.front && V.back) {
+    const A = V.front, B = V.back, bhh = A.w, Hvv = A.h, z0v = V.z0 || 0, oyv = V.oy;
+    ctx.fillStyle = 'rgba(224,98,95,.5)';
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+      const [, y, z] = ax.toVox(cx, cy, slice), iy = y - oyv, iz = z - z0v;
+      if (iy < 0 || iy >= bhh || iz < 0 || iz >= Hvv) continue;
+      if (!!A.m[iz * bhh + iy] !== !!B.m[iz * bhh + iy]) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+    }
+  }
 
   if (geomActive) {
     // GEOMETRY RECONCILE: overlay the source silhouette where its span rect maps onto the grid, plus a
@@ -1278,6 +1298,28 @@ if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
 if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; rebuildSlices(); scheduleAutosave();
 };
+// MIRROR one half of the part onto the other across its y (left↔right) centre, writing voxEdit so the
+// result sticks through the orbit/bake/exports. dir 'LR' copies left→right, 'RL' right→left. Source and
+// target halves are disjoint (split at the model's y-centre), so reading source while writing target is
+// safe. Colours mirror too. (owner 2026-07-18)
+function mirrorModel(part, dir) {
+  const foot = state.foot, layers = part === 'turret' ? state.turretLayers : state.bodyLayers, N = foot * foot;
+  const m = buildModel(part, foot, layers);
+  let ymin = foot, ymax = -1;
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (m.filled(x, y, z)) { if (y < ymin) ymin = y; if (y > ymax) ymax = y; }
+  if (ymax < 0) return;
+  const cy2 = ymin + ymax, ed = voxEdit[part];                     // 2×centre; mirror of y is (cy2 − y)
+  for (let z = 0; z < layers; z++) for (let x = 0; x < foot; x++) for (let y = 0; y < foot; y++) {
+    const isTarget = dir === 'LR' ? (y * 2 > cy2) : (y * 2 < cy2);
+    if (!isTarget) continue;
+    const sy = cy2 - y, k = z * N + y * foot + x;
+    if (sy >= 0 && sy < foot && m.filled(x, sy, z)) { const c = (z * N + sy * foot + x) * 3; ed.set(k, [m.vcol[c], m.vcol[c + 1], m.vcol[c + 2]]); }
+    else ed.set(k, 'del');
+  }
+  gridModel = null; rebuildSlices(); scheduleAutosave();
+}
+if ($('gridMirrorLR')) $('gridMirrorLR').onclick = () => mirrorModel(gridPart(), 'LR');
+if ($('gridMirrorRL')) $('gridMirrorRL').onclick = () => mirrorModel(gridPart(), 'RL');
 (() => {
   const cv = $('gridCanvas'); if (!cv) return;
   // the paint colour: the swatch chosen in the grid tool row (also settable by clicking a swatch in
@@ -1308,7 +1350,8 @@ if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
     renderGridView();                                                // live repaint (overlay is layered on the cached carve)
     return true;
   };
-  let painting = false, dirty = false;
+  let painting = false, dirty = false, boxing = null;
+  const cellOf = (e) => { const g = gridGeom; if (!g) return null; const { px, py } = ptCell(e); return { cx: clamp(Math.floor((px - g.ox) / g.cell), 0, g.cols - 1), cy: clamp(Math.floor((py - g.oy) / g.cell), 0, g.rows - 1) }; };
   // ── GEOMETRY drag (owner 2026-07-18): in Geometry mode, drag the box edges to stretch a dimension or
   // the interior to move it. Edits write the shared world-axis spans in geomState, so linked views move
   // in lock-step. On first edit we snapshot the current auto spans and flip auto→false. The uncolored
@@ -1368,11 +1411,28 @@ if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
       dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
     }
     if (!gridGeom || !gridGeom.editable) return;
-    const erase = gridTool === 'erase' || e.button === 2;
+    if (gridTool === 'box' && e.button !== 2) {                    // Box⌫: rubber-band a region to delete
+      const c = cellOf(e); if (!c) return;
+      boxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy }; gridBoxSel = boxing; renderGridView();
+      cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+    }
+    const erase = gridTool === 'erase' || gridTool === 'box' || e.button === 2;   // right-drag erases even in box mode
     if (editAt(e, erase)) { painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
   });
-  cv.addEventListener('pointermove', (e) => { if (geomDrag) geomMove(e); else if (painting) editAt(e, gridTool === 'erase' || (e.buttons & 2)); });
-  const finish = () => { painting = false; geomDrag = null; if (dirty) { dirty = false; gridModel = null; rebuildSlices(); scheduleAutosave(); } };  // full re-carve on release
+  cv.addEventListener('pointermove', (e) => {
+    if (geomDrag) geomMove(e);
+    else if (boxing) { const c = cellOf(e); if (c) { boxing.c1 = c.cx; boxing.r1 = c.cy; gridBoxSel = boxing; renderGridView(); } }
+    else if (painting) editAt(e, gridTool === 'erase' || gridTool === 'box' || (e.buttons & 2));
+  });
+  const finish = () => {
+    if (boxing) {                                                  // delete every voxel inside the marquee on this slice
+      const g = gridGeom, ed = voxEdit[g.part], N = g.foot * g.foot;
+      const c0 = Math.min(boxing.c0, boxing.c1), c1 = Math.max(boxing.c0, boxing.c1), r0 = Math.min(boxing.r0, boxing.r1), r1 = Math.max(boxing.r0, boxing.r1);
+      for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) { const [x, y, z] = g.toVox(cx, cy, g.slice); ed.set(z * N + y * g.foot + x, 'del'); }
+      boxing = null; gridBoxSel = null; dirty = true;
+    }
+    painting = false; geomDrag = null; if (dirty) { dirty = false; gridModel = null; rebuildSlices(); scheduleAutosave(); }  // full re-carve on release
+  };
   cv.addEventListener('pointerup', finish);
   cv.addEventListener('pointercancel', finish);
   cv.addEventListener('contextmenu', (e) => { if (gridGeom && (gridGeom.editable || gridGeom.geom)) e.preventDefault(); });   // right-drag = erase (paint)
