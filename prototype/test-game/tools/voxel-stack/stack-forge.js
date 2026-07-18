@@ -1053,7 +1053,7 @@ function renderGridView() {
     const sx = bsp[spanKey[g.col.axis]], sy = bsp[spanKey[g.row.axis]];
     ctx.fillStyle = '#8fa7bd'; ctx.font = '9px sans-serif'; ctx.textBaseline = 'top';
     ctx.fillText(`${g.col.axis.toUpperCase()} ${sx.lo}–${sx.hi} · ${g.row.axis.toUpperCase()} ${sy.lo}–${sy.hi}${geomState[part].auto ? '  (auto)' : ''}`, ox + 3, oy + 3);
-  } else if (!isTop && cell >= 2) {
+  } else if (gridView !== 'top' && cell >= 2) {
     // TOP-DOWN reference (Paint mode, side/front/back): a small footprint map in the corner with a line
     // marking where the current slice sits, so you know which part of the model you're on.
     const mc = Math.max(1, Math.floor(Math.min(64, Math.min(W, H) * 0.30) / foot)), mw = mc * foot, mmx = W - mw - 6, mmy = 16;
