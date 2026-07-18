@@ -250,12 +250,16 @@
 
     <div class="grp">
       <h2>5 · Save unit</h2>
-      <div class="row"><label>Embed model</label><input type="checkbox" id="embedModel"><span class="note" style="margin:0">Tier C live-3D — ships the voxel data in the pack</span></div>
+      <div class="row"><label>Embed model</label><input type="checkbox" id="embedModel" checked><span class="note" style="margin:0">Ships the voxel model in the pack (Tier C live-3D). Local editing already reloads from the autosaved WIP.</span></div>
       <button class="ghost" id="saveUnit" disabled>Save to units manifest</button>
       <button class="ghost" id="dlSheet" disabled style="margin-top:6px">Download sprite sheet(s) + JSON</button>
       <div class="note" id="saveState">Bake first. Save writes the pack (atlases + &lt;unit&gt;.json) to the
         manifest (browser) and offers a PNG sheet + JSON download the game loads.</div>
-      <button class="ghost" id="projSave" style="margin-top:8px">⬇ Save project file</button>
+      <div class="row" style="margin-top:8px;gap:6px;align-items:center">
+        <button class="ghost" id="wipSaveNow" style="width:auto;padding:6px 12px;margin:0">💾 Save WIP now</button>
+        <span class="note" id="wipStatus" style="margin:0;flex:1;font-weight:600">✓ saved</span>
+      </div>
+      <button class="ghost" id="projSave" style="margin-top:6px">⬇ Save project file</button>
       <label style="display:block;text-align:center;background:#16283a;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:9px 0;font-weight:700;letter-spacing:.06em;cursor:pointer;margin-top:6px;font-size:13px">⬆ Load project file<input type="file" id="projLoad" accept=".json,application/json" style="display:none"></label>
       <div class="note" id="projState">Work-in-progress autosaves in this browser (source art, cutout tuning,
         every setting) and restores when you reopen or click the unit's roster card. The project file is the
@@ -349,8 +353,8 @@
       reload the game and the unit is in. You can keep editing afterwards.</div>
     <div class="note" id="saveAsWarn" style="margin:0 0 10px;color:#e0975f" hidden>⚠ This slot already has a saved unit — <b>Save</b> overwrites it. To view/continue that unit instead, use <b>📂 Load this unit</b> below.</div>
     <button id="saveAsLoad" style="margin:0 0 8px;background:#1d3a2a;border:1px solid #2f6f4a" hidden>📂 Load this unit into the editor</button>
-    <button id="saveAsSprites">💾 Save as sprites (baked)</button>
-    <button class="ghost" id="saveAs3D" style="margin-top:6px">🧊 Save as 3D (live voxel model + baked fallback)</button>
+    <button id="saveAs3D">🧊 Save as 3D — editable model + baked (recommended)</button>
+    <button class="ghost" id="saveAsSprites" style="margin-top:6px">💾 Save as sprites only (baked, not re-editable)</button>
     <button class="ghost" id="saveAsCancel" style="margin-top:6px">Cancel</button>
   </div>
 </div>

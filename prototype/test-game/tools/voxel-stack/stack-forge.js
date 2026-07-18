@@ -994,6 +994,24 @@ function renderGridView() {
     ctx.stroke();
   }
   ctx.strokeStyle = 'rgba(120,160,200,.55)'; ctx.lineWidth = 1; ctx.strokeRect(ox + .5, oy + .5, gw - 1, gh - 1);
+
+  // TOP-DOWN reference (only when editing a side/front/back slice): a small footprint map in the corner
+  // with a line marking where the current slice sits, so you know which part of the model you're on.
+  if (!isTop && cell >= 2) {
+    const mc = Math.max(1, Math.floor(Math.min(64, Math.min(W, H) * 0.30) / foot)), mw = mc * foot, mmx = W - mw - 6, mmy = 16;
+    ctx.fillStyle = 'rgba(6,11,18,.92)'; ctx.fillRect(mmx - 3, mmy - 3, mw + 6, mw + 6);
+    ctx.fillStyle = 'rgba(150,185,220,.5)';                          // footprint: any voxel in the (x,y) column
+    for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      let any = false; for (let z = 0; z < layers && !any; z++) if (filled(x, y, z)) any = true;
+      if (any) ctx.fillRect(mmx + x * mc, mmy + y * mc, mc, mc);
+    }
+    ctx.strokeStyle = '#f2c869'; ctx.lineWidth = 1.5; ctx.beginPath();  // current-slice line (depth axis)
+    if (gridView === 'side') { const yy = mmy + slice * mc + mc / 2; ctx.moveTo(mmx, yy); ctx.lineTo(mmx + mw, yy); }
+    else { const sx = gridView === 'back' ? (foot - 1 - slice) : slice, xx = mmx + sx * mc + mc / 2; ctx.moveTo(xx, mmy); ctx.lineTo(xx, mmy + mw); }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,160,200,.6)'; ctx.lineWidth = 1; ctx.strokeRect(mmx + .5, mmy + .5, mw - 1, mw - 1);
+    ctx.fillStyle = '#8fa7bd'; ctx.font = '8px sans-serif'; ctx.textBaseline = 'alphabetic'; ctx.fillText('top ref', mmx, mmy - 4);
+  }
 }
 
 function rebuildSlices() {
@@ -1920,20 +1938,31 @@ function projectHasContent(p) {
   }
   return false;
 }
-function scheduleAutosave() { if (bulkLoad) return; clearTimeout(autosaveTimer); autosaveTimer = setTimeout(doAutosave, 800); }
+function setWipStatus(txt, kind) { const el = $('wipStatus'); if (!el) return; el.textContent = txt; el.style.color = kind === 'saved' ? '#57d98a' : kind === 'dirty' ? '#e0b060' : 'var(--muted)'; }
+function scheduleAutosave() {
+  if (bulkLoad) return;
+  clearTimeout(autosaveTimer); autosaveTimer = setTimeout(doAutosave, 500);
+  setWipStatus('● unsaved…', 'dirty');
+}
 async function doAutosave() {
   if (bulkLoad) { scheduleAutosave(); return; }
+  clearTimeout(autosaveTimer);
   try {
     const p = snapshotProject(activeUnitId);               // key off the loaded unit, not the mutable id box
-    if (!projectHasContent(p)) return;                    // don't clobber a real WIP / shipped pack with an empty snapshot
+    if (!projectHasContent(p)) { setWipStatus('— nothing to save', 'muted'); return; }   // don't clobber a real WIP with an empty snapshot
     await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id);
-    $('projState').textContent = `Autosaved "${p.id}" · ${new Date().toLocaleTimeString()}`;
-  } catch (e) { /* storage unavailable — project file still works */ }
+    const t = new Date().toLocaleTimeString();
+    $('projState').textContent = `Autosaved "${p.id}" · ${t}`;
+    setWipStatus(`✓ saved ${t}`, 'saved');
+  } catch (e) { setWipStatus('⚠ save failed', 'dirty'); }
 }
+if ($('wipSaveNow')) $('wipSaveNow').onclick = () => doAutosave();
 document.addEventListener('input', scheduleAutosave, true);
 document.addEventListener('change', scheduleAutosave, true);
 document.addEventListener('click', scheduleAutosave, true);
 document.addEventListener('visibilitychange', () => { if (document.hidden) doAutosave(); });
+window.addEventListener('pagehide', () => doAutosave());              // best-effort flush before a reload/close
+window.addEventListener('beforeunload', () => doAutosave());          // capture edits made in the last moment
 $('projSave').onclick = () => {
   const p = snapshotProject(), url = URL.createObjectURL(new Blob([JSON.stringify(p)], { type: 'application/json' }));
   dl(`${p.id}.sfproj.json`, url); setTimeout(() => URL.revokeObjectURL(url), 1500);
@@ -2117,7 +2146,7 @@ $('loadCancel').onclick = () => { $('loadModal').hidden = true; };
 $('loadModal').addEventListener('click', (e) => { if (e.target === $('loadModal')) $('loadModal').hidden = true; });
 function quickSave(id, as3D) {
   $('uid').value = id;
-  if (as3D) $('embedModel').checked = true;
+  $('embedModel').checked = !!as3D;                     // 3D embeds the editable model; sprites explicitly does not
   doBake();                                             // current camera + bake settings
   doSaveUnit();                                         // pack → manifest, card flips to ✓
   document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
