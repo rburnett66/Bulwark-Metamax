@@ -2338,6 +2338,33 @@ async function openLoadModal() {
 }
 $('loadUnit').onclick = openLoadModal;
 $('loadCancel').onclick = () => { $('loadModal').hidden = true; };
+// LOAD DIAGNOSTIC (owner 2026-07-18): for every unit, report the FACTS that decide the load path —
+// does a WIP project exist in IndexedDB, does it actually have content, which source views/vox it holds,
+// is there a pack (saved vs shipped-only), and exactly what selectUnit() will do. Reading this instead
+// of inferring is how we stop guessing about load.
+async function diagnoseLoad() {
+  const m = suppliedUnits(), localUnits = loadManifest().units || {};
+  let projIds = [];
+  try { projIds = ((await idb.keys()) || []).filter((k) => typeof k === 'string' && k.startsWith('proj:')).map((k) => k.slice(5)); } catch (e) { /* no store */ }
+  const ids = [...new Set([...projIds, ...Object.keys(m)])].sort();
+  const rows = [];
+  for (const id of ids) {
+    let wip = null; try { wip = await idb.get('proj:' + id); } catch (e) { /* skip */ }
+    const hasWip = !!wip, content = wip ? projectHasContent(wip) : false;
+    const viewsOf = (part) => (wip && wip.images && wip.images[part]) ? VIEWS.filter((v) => wip.images[part][v]).map((v) => v[0]).join('') : '';
+    const imgs = wip ? `b:${viewsOf('body') || '-'} t:${viewsOf('turret') || '-'}` : '-';
+    const vox = (wip && wip.vox) ? ['body', 'turret'].filter((p) => wip.vox[p]).join(',') || '-' : '-';
+    const pack = !!m[id], packKind = pack ? (localUnits[id] ? 'saved' : (shippedUnits[id] ? 'shipped' : 'other')) : '-';
+    const action = hasWip ? (content ? 'loadProject → EDITABLE' : 'loadProject → EMPTY (!)') : (pack ? 'loadPackPreview → baked only' : 'nothing to load');
+    rows.push({ id, wip: hasWip ? (content ? 'yes' : 'EMPTY') : '-', imgs, vox, layers: wip && wip.state ? `${wip.state.bodyLayers}/${wip.state.turretLayers}` : '-', pack: packKind, 'load →': action });
+  }
+  console.table(rows);
+  const empties = rows.filter((r) => r.wip === 'EMPTY').map((r) => r.id);
+  const el = $('loadDiagNote');
+  if (el) el.innerHTML = `Dumped <b>${rows.length}</b> units to the Console (F12). ` + (empties.length ? `<span style="color:#e0975f">Empty WIPs (load blank): ${empties.join(', ')}</span>` : 'No empty WIPs.');
+  return rows;
+}
+if ($('loadDiag')) $('loadDiag').onclick = diagnoseLoad;
 $('loadModal').addEventListener('click', (e) => { if (e.target === $('loadModal')) $('loadModal').hidden = true; });
 function quickSave(id, as3D) {
   $('uid').value = id;

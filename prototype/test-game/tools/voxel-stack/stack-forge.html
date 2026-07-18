@@ -349,7 +349,11 @@
     <h2>Load an existing unit</h2>
     <div class="note" style="margin:0 0 4px">Loads that unit's work-in-progress project when this browser has one, otherwise its saved pack. Your current edits are autosaved under their own unit id first.</div>
     <div id="loadList"></div>
-    <button class="ghost" id="loadCancel" style="margin-top:10px">Cancel</button>
+    <div class="row" style="margin-top:10px;gap:8px">
+      <button class="ghost" id="loadDiag" style="width:auto;padding:6px 12px;margin:0">🔍 Diagnose all</button>
+      <button class="ghost" id="loadCancel" style="width:auto;padding:6px 12px;margin:0">Cancel</button>
+    </div>
+    <div class="note" id="loadDiagNote" style="margin:6px 0 0"></div>
   </div>
 </div>
 <div id="saveAsModal" hidden>
