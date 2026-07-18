@@ -251,6 +251,40 @@ function exportVox() {
 // length) + FRONT (height across the width) → the carved height; BACK falls back for FRONT. A voxel is
 // filled only where every supplied view agrees. Top alone = flat extrude. No Top view → procedural.
 // Returns { cd (colour bytes), H (top-surface height/column), filled(x,y,z) }.
+// GEOMETRY placement (owner 2026-07-18): the legacy "top = master scale" normalization, expressed as
+// the three world-axis spans [lo,hi) the carve reads — spanX/spanY = footprint length/width, spanZ =
+// height. The geometry step will let the user override these; keeping the math here verbatim means auto
+// placement is byte-identical to before. Every downstream mask derives bw/bh/Hv/ox/oy/z0 from the spans.
+function autoSpans(topC, sideC, frontC, foot, layers, reach) {
+  let s, bw, bh, ox, oy;
+  if (topC) {                                            // footprint from the top (aspect-preserving)
+    const availW = Math.max(8, foot - reach);            // leave room up-front for the barrel
+    s = Math.min(availW / topC.width, foot / topC.height);
+    bw = Math.max(1, Math.round(topC.width * s)); bh = Math.max(1, Math.round(topC.height * s));
+    ox = Math.floor((availW - bw) / 2); oy = Math.floor((foot - bh) / 2);   // body sits toward the rear
+  } else {                                               // no top: length from side, width from front
+    const SL = sideC ? sideC.width : foot, FW = frontC ? frontC.width : Math.round(foot * 0.5);
+    s = Math.min(foot / SL, foot / Math.max(1, FW));
+    bw = Math.max(1, Math.round(SL * s)); bh = Math.max(1, Math.round(FW * s));
+    ox = Math.floor((foot - bw) / 2); oy = Math.floor((foot - bh) / 2);
+  }
+  // HEIGHT: prefer the side under the top's length scale, so the side keeps its own proportions.
+  const Hraw = (topC && sideC) ? sideC.height * (bw / sideC.width)
+    : frontC ? frontC.height * (bh / frontC.width)
+    : sideC ? sideC.height * (bw / sideC.width)
+    : layers * 0.66;
+  const Hv = Math.min(layers, Math.max(1, Math.round(Hraw)));
+  return { spanX: { lo: ox, hi: ox + bw }, spanY: { lo: oy, hi: oy + bh }, spanZ: { lo: 0, hi: Hv }, Hraw };
+}
+// the spans the carve uses: auto placement (autoSpans) unless the artist has manually reconciled this
+// part in the geometry step, in which case use the saved spans, clamped to the grid (lo<hi, hi≤foot/≤layers).
+function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
+  const g = geomState[partId];
+  if (!g || g.auto || !g.spanX) return autoSpans(topC, sideC, frontC, foot, layers, reach);
+  const span = (s, cap) => { let lo = Math.max(0, Math.min(cap - 1, s.lo | 0)), hi = Math.max(lo + 1, Math.min(cap, s.hi | 0)); return { lo, hi }; };
+  const spanZ = span(g.spanZ, layers);
+  return { spanX: span(g.spanX, foot), spanY: span(g.spanY, foot), spanZ, Hraw: spanZ.hi - spanZ.lo };
+}
 function buildVolume(partId, foot, layers) {
   if (voxPart[partId]) return buildVoxVolume(voxPart[partId], foot, layers);   // imported .vox → use it directly
   const src = imgs[partId], N = foot * foot;
@@ -274,44 +308,27 @@ function buildVolume(partId, foot, layers) {
   const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
   // procedural barrel reserves a FORWARD margin so the body shrinks back and the tube protrudes past it
   const reach = (partId === 'turret' && state.barrelLen > 0) ? state.barrelLen : 0;
-  let s, bw, bh, ox, oy;
-  if (topC) {                                            // footprint + colour from the top (aspect-preserving)
-    const availW = Math.max(8, foot - reach);            // leave room up-front for the barrel
-    s = Math.min(availW / topC.width, foot / topC.height);
-    bw = Math.max(1, Math.round(topC.width * s)); bh = Math.max(1, Math.round(topC.height * s));
-    ox = Math.floor((availW - bw) / 2); oy = Math.floor((foot - bh) / 2);   // body sits toward the rear
-    tx.drawImage(topC, ox, oy, bw, bh);
-  } else {                                               // no top: length from side, width from front
-    const SL = sideC ? sideC.width : foot, FW = frontC ? frontC.width : Math.round(foot * 0.5);
-    s = Math.min(foot / SL, foot / Math.max(1, FW));
-    bw = Math.max(1, Math.round(SL * s)); bh = Math.max(1, Math.round(FW * s));
-    ox = Math.floor((foot - bw) / 2); oy = Math.floor((foot - bh) / 2);
-    tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh);
-  }
+  // GEOMETRY: placement comes from three shared world-axis spans (auto today via autoSpans; the geometry
+  // step will override them). Every mask below derives from the spans — z0 lets a silhouette sit off the
+  // ground (z0=0 today, so behaviour is unchanged). Reconciliation is implicit: shared axes = shared span.
+  const sp = geomSpans(partId, topC, sideC, frontC, foot, layers, reach);
+  const ox = sp.spanX.lo, bw = sp.spanX.hi - sp.spanX.lo;
+  const oy = sp.spanY.lo, bh = sp.spanY.hi - sp.spanY.lo;
+  const z0 = sp.spanZ.lo, Hv = sp.spanZ.hi - sp.spanZ.lo, Hraw = sp.Hraw;
+  if (Hraw > layers + 0.5) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
+  if (topC) tx.drawImage(topC, ox, oy, bw, bh);                    // footprint + colour from the top
+  else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
-  // NORMALIZATION CONTRACT: the top view is the master scale. Its fit fixes bw (length) and bh (width),
-  // and every elevation registers against those — side maps its width to bw (top↔side length-normalized),
-  // front maps its width to bh (top↔front width-normalized). HEIGHT follows the same rule at ONE uniform
-  // scale: prefer the side under the top's length scale — height = sideC.height × (bw / sideC.width) —
-  // so the side keeps its own proportions (a front rendered at a different zoom can no longer squash it).
-  // Without a top+side pair, the front is the truth (near-square, so a long barrel can't distort it).
-  // The other elevation is then stretched (gridStretch) to this SAME Hv.
-  const Hraw = (topC && sideC) ? sideC.height * (bw / sideC.width)
-    : frontC ? frontC.height * (bh / frontC.width)
-    : sideC ? sideC.height * (bw / sideC.width)
-    : layers * 0.66;
-  const Hv = Math.min(layers, Math.max(1, Math.round(Hraw)));
-  if (Hraw > layers + 0.5) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
   const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to the common Hv)
   const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
   const backC = src.back ? keyedCropped(src.back, tol.back, pol.back) : null; // colour-only: paints the −x walls
   const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
-  const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= 0 && z < Hv && !!sideG.m[z * bw + (x - ox)]) : z < Hv;
-  const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= 0 && z < Hv && !!frontG.m[z * bh + (y - oy)]) : z < Hv;
+  const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= z0 && z < z0 + Hv && !!sideG.m[(z - z0) * bw + (x - ox)]) : (z >= z0 && z < z0 + Hv);
+  const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv && !!frontG.m[(z - z0) * bh + (y - oy)]) : (z >= z0 && z < z0 + Hv);
   const flat = !sideG && !frontG;
-  const views = (sideG || frontG || backG) ? { side: sideG, front: frontG, back: backG, ox, oy } : null;
-  const bodyFilled = flat ? (x, y, z) => top(x, y) && z < Hv : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
+  const views = (sideG || frontG || backG) ? { side: sideG, front: frontG, back: backG, ox, oy, z0 } : null;
+  const bodyFilled = flat ? (x, y, z) => top(x, y) && z >= z0 && z < z0 + Hv : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
   // procedural barrel: a real round tube along +X, placed relative to the body box, ORed into the volume
   let inBarrel = null;
   if (reach && topC) {
@@ -344,6 +361,11 @@ function buildVolume(partId, foot, layers) {
 // Applied at the tail of buildModel so the orbit preview, side chart, bake, in-game inset, Tier C
 // embed and .vox export all see the same edited model (owner 2026-07-17).
 const voxEdit = { body: new Map(), turret: new Map() };
+// GEOMETRY reconciliation state (owner 2026-07-18): per-part placement of the source views on the
+// target grid, as three shared world-axis spans. `auto:true` = follow autoSpans (legacy); the geometry
+// step flips it to false and stores explicit spanX/spanY/spanZ {lo,hi}. `bottomFrom` = where the −z
+// underside derives from. Persisted in the project (version 2). Shared axes = shared span object.
+const geomState = { body: { auto: true, bottomFrom: 'top' }, turret: { auto: true, bottomFrom: 'top' } };
 // the space-carved model BEFORE manual edits (buildVolume is not cached — callers that only need the
 // base, like the live slice editor, cache this and layer edits on cheaply).
 function buildModelRaw(partId, foot, layers) {
@@ -497,9 +519,10 @@ function buildFaces(partId, foot, layers) {
   };
   const wallCol = (x, y, z, n) => {
     if (!V) return null;
-    if (n >= 3) return pick(V.side, x - V.ox, z, n === 4);
-    if (n === 2 && V.back) return pick(V.back, y - V.oy, z, false);
-    return pick(V.front, y - V.oy, z, n === 2);
+    const zz = z - (V.z0 || 0);                          // masks are Hv tall from z0; index into them from z0
+    if (n >= 3) return pick(V.side, x - V.ox, zz, n === 4);
+    if (n === 2 && V.back) return pick(V.back, y - V.oy, zz, false);
+    return pick(V.front, y - V.oy, zz, n === 2);
   };
   const faces = [];
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
@@ -932,10 +955,10 @@ function renderGridView() {
   const rawCol = (x, y, z) => {
     const e = ed.get(z * N + y * foot + x); if (Array.isArray(e)) return e;
     if (V) {
-      let w = null;
-      if (gridView === 'side') w = pickWall(V.side, x - V.ox, z, false);            // ±y wall ← side art
-      else if (gridView === 'front') w = pickWall(V.front, y - V.oy, z, false);     // +x wall ← front art
-      else if (gridView === 'back') w = V.back ? pickWall(V.back, y - V.oy, z, false) : pickWall(V.front, y - V.oy, z, true); // -x wall ← back (or mirrored front)
+      let w = null; const zz = z - (V.z0 || 0);                                     // masks are Hv tall from z0
+      if (gridView === 'side') w = pickWall(V.side, x - V.ox, zz, false);           // ±y wall ← side art
+      else if (gridView === 'front') w = pickWall(V.front, y - V.oy, zz, false);    // +x wall ← front art
+      else if (gridView === 'back') w = V.back ? pickWall(V.back, y - V.oy, zz, false) : pickWall(V.front, y - V.oy, zz, true); // -x wall ← back (or mirrored front)
       if (w) return w;
     }
     const c = (z * N + y * foot + x) * 3; return [base.vcol[c], base.vcol[c + 1], base.vcol[c + 2]];   // Top faces / fallback
@@ -1872,10 +1895,11 @@ function snapshotProject(idOverride) {
     vox[part] = m ? { nx: m.nx, ny: m.ny, nz: m.nz, b64: voxB64[part] || (voxB64[part] = b64FromU8(m.data)) } : null;
   }
   const st = { ...state }; delete st.baked;
-  return { format: 'stackforge-project', version: 1, id: (idOverride || $('uid').value || 'unit').trim(),
+  return { format: 'stackforge-project', version: 2, id: (idOverride || $('uid').value || 'unit').trim(),
     state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, images, vox,
     palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop],
-    voxEdit: { body: [...voxEdit.body], turret: [...voxEdit.turret] } };
+    voxEdit: { body: [...voxEdit.body], turret: [...voxEdit.turret] },
+    geom: { body: { ...geomState.body }, turret: { ...geomState.turret } } };
 }
 function syncAllControls() {
   const set = (id, val, lab) => { $(id).value = val; if (lab !== undefined) $(id + 'V').textContent = lab; };
@@ -1904,6 +1928,7 @@ async function loadProject(p) {
     palDrop.clear(); if (p.palDrop) for (const k of p.palDrop) palDrop.add(k);
     voxEdit.body.clear(); voxEdit.turret.clear();
     if (p.voxEdit) { for (const [k, v] of p.voxEdit.body || []) voxEdit.body.set(k, v); for (const [k, v] of p.voxEdit.turret || []) voxEdit.turret.set(k, v); }
+    for (const part of ['body', 'turret']) geomState[part] = (p.geom && p.geom[part]) ? { ...p.geom[part] } : { auto: true, bottomFrom: 'top' };  // v1 projects → auto (identical to before)
     for (const part of ['body', 'turret']) {
       const pv = p.vox && p.vox[part];
       voxPart[part] = pv ? { nx: pv.nx, ny: pv.ny, nz: pv.nz, data: u8FromB64(pv.b64) } : null;
