@@ -315,7 +315,7 @@ function buildVolume(partId, foot, layers) {
   const ox = sp.spanX.lo, bw = sp.spanX.hi - sp.spanX.lo;
   const oy = sp.spanY.lo, bh = sp.spanY.hi - sp.spanY.lo;
   const z0 = sp.spanZ.lo, Hv = sp.spanZ.hi - sp.spanZ.lo, Hraw = sp.Hraw;
-  if (Hraw > layers + 0.5) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
+  if (Hraw > layers + 0.5 && !suppressSquashWarn) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
   if (topC) tx.drawImage(topC, ox, oy, bw, bh);                    // footprint + colour from the top
   else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
@@ -863,6 +863,7 @@ const palMap = new Map();                    // palette tuner: pre-tune colour k
 const palKeep = new Set();                   // palette reducer: colour keys the artist pinned to survive reduction
 const palDrop = new Set();                    // palette reducer: colour keys the artist marked to eliminate (remap away)
 let bulkLoad = false;                                                         // true while restoring a project
+let suppressSquashWarn = false;                                              // quiet the squash warning during the auto-fit probe
 // the STABLE key the WIP autosaves under — set only by an explicit load/save/new, NOT by the free-text
 // Unit-id box. This keeps a stray edit to that box from misfiling the unit you're actually editing.
 let activeUnitId = 'unit';
@@ -2042,7 +2043,22 @@ async function loadProject(p) {
       }
     }
   } finally { bulkLoad = false; }
+  fitLayersToArt();                                    // raise Layers so tall art never loads squashed
   syncAllControls(); rebuildSlices(); drawLight(); renderRoster();
+}
+// raise a part's Layers to fit its art height (never lowers). Only auto-placed parts can squash — a
+// manually-reconciled span already sets the height. Probed with the squash warning muted.
+function fitLayersToArt() {
+  suppressSquashWarn = true;
+  try {
+    for (const part of ['body', 'turret']) {
+      if (voxPart[part]) continue;                     // .vox defines its own height
+      const src = imgs[part]; if (!src || (!src.top && !src.side && !src.front && !src.back)) continue;
+      const key = part === 'body' ? 'bodyLayers' : 'turretLayers';
+      const dbg = buildVolume(part, state.foot, state[key]).dbg;
+      if (dbg && dbg.Hraw > state[key] + 0.5) state[key] = Math.min(40, Math.ceil(dbg.Hraw));
+    }
+  } finally { suppressSquashWarn = false; }
 }
 let autosaveTimer = 0;
 // a project is worth persisting only if it has real editable content — source art, an imported .vox,
