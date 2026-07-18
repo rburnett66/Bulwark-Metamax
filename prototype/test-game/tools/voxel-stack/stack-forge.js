@@ -840,6 +840,9 @@ const palMap = new Map();                    // palette tuner: pre-tune colour k
 const palKeep = new Set();                   // palette reducer: colour keys the artist pinned to survive reduction
 const palDrop = new Set();                    // palette reducer: colour keys the artist marked to eliminate (remap away)
 let bulkLoad = false;                                                         // true while restoring a project
+// the STABLE key the WIP autosaves under — set only by an explicit load/save/new, NOT by the free-text
+// Unit-id box. This keeps a stray edit to that box from misfiling the unit you're actually editing.
+let activeUnitId = 'unit';
 function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
@@ -1779,6 +1782,7 @@ function renderManifest() {
 }
 function doSaveUnit() {
   if (!state.baked) return; const built = buildPack(); const v = validatePack(built.pack);
+  activeUnitId = built.pack.id;                           // an explicit save under this id is a deliberate rename → follow it
   const m = loadManifest();
   m.config = { camera: built.pack.camera, light: built.pack.light };   // shared game-wide config
   m.units = m.units || {}; m.units[built.pack.id] = built;
@@ -1842,7 +1846,7 @@ function imgURL(part, view) {
     c.getContext('2d').drawImage(im, 0, 0); u = imgURLCache[part][view] = c.toDataURL('image/png'); }
   return u;
 }
-function snapshotProject() {
+function snapshotProject(idOverride) {
   const images = {}, vox = {};
   for (const part of ['body', 'turret']) {
     images[part] = {}; for (const v of VIEWS) images[part][v] = imgURL(part, v);
@@ -1850,7 +1854,7 @@ function snapshotProject() {
     vox[part] = m ? { nx: m.nx, ny: m.ny, nz: m.nz, b64: voxB64[part] || (voxB64[part] = b64FromU8(m.data)) } : null;
   }
   const st = { ...state }; delete st.baked;
-  return { format: 'stackforge-project', version: 1, id: ($('uid').value || 'unit').trim(),
+  return { format: 'stackforge-project', version: 1, id: (idOverride || $('uid').value || 'unit').trim(),
     state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, images, vox,
     palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop],
     voxEdit: { body: [...voxEdit.body], turret: [...voxEdit.turret] } };
@@ -1875,7 +1879,7 @@ function syncAllControls() {
 async function loadProject(p) {
   bulkLoad = true;
   try {
-    $('uid').value = p.id || 'unit';
+    $('uid').value = p.id || 'unit'; activeUnitId = (p.id || 'unit');   // anchor the WIP key to the restored project
     Object.assign(state, p.state || {}); state.baked = null;
     palMap.clear(); if (p.palMap) for (const [k, c] of p.palMap) palMap.set(k, c);
     palKeep.clear(); if (p.palKeep) for (const k of p.palKeep) palKeep.add(k);
@@ -1920,7 +1924,7 @@ function scheduleAutosave() { if (bulkLoad) return; clearTimeout(autosaveTimer);
 async function doAutosave() {
   if (bulkLoad) { scheduleAutosave(); return; }
   try {
-    const p = snapshotProject();
+    const p = snapshotProject(activeUnitId);               // key off the loaded unit, not the mutable id box
     if (!projectHasContent(p)) return;                    // don't clobber a real WIP / shipped pack with an empty snapshot
     await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id);
     $('projState').textContent = `Autosaved "${p.id}" · ${new Date().toLocaleTimeString()}`;
@@ -2017,7 +2021,7 @@ function clearSourceArt() {
   gridModel = null;
 }
 function selectUnit(id) {
-  $('uid').value = id;
+  $('uid').value = id; activeUnitId = id;                 // anchor the WIP key to the unit being loaded
   const m = suppliedUnits();
   if (m[id]) {
     const p = m[id].pack, bp = (p.parts || []).find((q) => q.id === 'body'), tp = (p.parts || []).find((q) => q.id === 'turret');
