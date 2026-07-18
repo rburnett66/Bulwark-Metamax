@@ -349,7 +349,7 @@ function buildVolume(partId, foot, layers) {
     let h = 0; for (let z = layers - 1; z >= 0; z--) if (filled(x, y, z)) { h = z + 1; break; }
     H[y * foot + x] = h;
   }
-  return { cd, H, filled, views, dbg: { bw, bh, Hv, Hraw: +Hraw.toFixed(1), tw: topC && topC.width, th: topC && topC.height, sw: sideC && sideC.width, sh: sideC && sideC.height, fw: frontC && frontC.width, fh: frontC && frontC.height } };
+  return { cd, H, filled, views, sp, dbg: { bw, bh, Hv, Hraw: +Hraw.toFixed(1), tw: topC && topC.width, th: topC && topC.height, sw: sideC && sideC.width, sh: sideC && sideC.height, fw: frontC && frontC.width, fh: frontC && frontC.height } };
 }
 
 // Unified voxel model for every consumer: always per-voxel colour (vcol), whether the part came from a
@@ -370,14 +370,14 @@ const geomState = { body: { auto: true, bottomFrom: 'top' }, turret: { auto: tru
 // base, like the live slice editor, cache this and layer edits on cheaply).
 function buildModelRaw(partId, foot, layers) {
   const v = buildVolume(partId, foot, layers), N = foot * foot;
-  if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, dbg: v.dbg };  // .vox → already voxels
+  if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };  // .vox → already voxels
   const cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     const i = y * foot + x, p = i * 4; if (cd[p + 3] < 20) continue;
     const r = cd[p], g = cd[p + 1], b = cd[p + 2];
     for (let z = 0; z < layers; z++) if (filled(x, y, z)) { const c = (z * N + i) * 3; vcol[c] = r; vcol[c + 1] = g; vcol[c + 2] = b; }
   }
-  return { vcol, filled, cd: null, views: v.views, dbg: v.dbg };
+  return { vcol, filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };
 }
 // layer the voxEdit overlay onto a raw model (clone vcol so buildVolume's arrays are never mutated).
 function applyVoxEdits(m, partId, foot, layers) {
@@ -926,6 +926,17 @@ function bodyTopLayer(foot, layers) {
 // independent of the zScale cube-height stretch used by the 3D render.
 let gridView = 'top', gridLayer = 0, gridModel = null;   // gridModel: cached buildModel, invalidated by rebuildSlices
 let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn cell layout, so pointer edits map back to voxels
+let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
+// geometry box axis mapping: for each grid view, which world-axis span each in-plane axis (col,row) reads
+// and whether the grid coord is reversed vs the axis value. cap: x/y=foot, z=layers. Used by both the
+// geom overlay draw and the drag editing so they stay in lock-step.
+const GEOAX = {
+  top:   { col: { axis: 'x', flip: false }, row: { axis: 'y', flip: false } },
+  side:  { col: { axis: 'x', flip: false }, row: { axis: 'z', flip: true } },
+  front: { col: { axis: 'y', flip: false }, row: { axis: 'z', flip: true } },
+  back:  { col: { axis: 'y', flip: true },  row: { axis: 'z', flip: true } },
+};
+const spanKey = { x: 'spanX', y: 'spanY', z: 'spanZ' };
 const gridPart = () => (state.part === 'turret' ? 'turret' : 'body');
 const gridLayersOf = (part) => (part === 'turret' ? state.turretLayers : state.bodyLayers);
 function renderGridView() {
@@ -935,7 +946,7 @@ function renderGridView() {
   // cache the RAW (pre-edit) carve; voxEdit is layered on cheaply below so live painting never re-carves.
   if (!gridModel || gridModel.part !== part || gridModel.foot !== foot || gridModel.layers !== layers) {
     const m = buildModelRaw(part, foot, layers);
-    gridModel = { part, foot, layers, vcol: m.vcol, filled: m.filled, views: m.views };
+    gridModel = { part, foot, layers, vcol: m.vcol, filled: m.filled, views: m.views, sp: m.sp };
   }
   const base = gridModel, ed = voxEdit[part], V = base.views;
   const filled = (x, y, z) => {
@@ -975,8 +986,10 @@ function renderGridView() {
   const ax = AX[gridView] || AX.top, cols = ax.cols, rows = ax.rows, depth = ax.depth;
   gridLayer = clamp(gridLayer, 0, Math.max(0, depth - 1));
   const slice = gridLayer;
-  const lr = $('gridLayerRow'); if (lr) lr.style.display = '';    // layer + tools on EVERY view now
-  const tr = $('gridToolRow'); if (tr) tr.style.display = '';
+  const geomMode = gridMode === 'geom';
+  const lr = $('gridLayerRow'); if (lr) lr.style.display = '';    // layer slider useful in both modes
+  const tr = $('gridToolRow'); if (tr) tr.style.display = geomMode ? 'none' : '';   // paint tools hidden in Geometry
+  const gr2 = $('gridGeoRow'); if (gr2) gr2.style.display = geomMode ? '' : 'none'; // geometry controls shown in Geometry
   const ls = $('gridLayer'); if (ls) ls.max = String(Math.max(0, depth - 1));
   const lv = $('gridLayerV'); if (lv) lv.textContent = `${ax.axis} ${slice}` + (gridView === 'top' && slice === 0 ? ' top' : '');
 
@@ -995,7 +1008,8 @@ function renderGridView() {
 
   const W = cv.width, H = cv.height, cell = Math.max(1, Math.floor(Math.min(W / cols, H / rows)));
   const gw = cell * cols, gh = cell * rows, ox = Math.floor((W - gw) / 2), oy = Math.floor((H - gh) / 2);
-  gridGeom = { cell, ox, oy, cols, rows, depth, slice, toVox: ax.toVox, foot, layers, part, editable: true };
+  const geomActive = gridMode === 'geom' && V && base.sp && GEOAX[gridView];  // reconcile overlay (image-carved only)
+  gridGeom = { cell, ox, oy, cols, rows, depth, slice, toVox: ax.toVox, foot, layers, part, editable: !geomActive };
   ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, W, H);
   // faint checker so the empty grid still reads as a grid at any zoom
   if (cell >= 4) { ctx.fillStyle = 'rgba(255,255,255,.025)';
@@ -1003,10 +1017,10 @@ function renderGridView() {
   // faint silhouette of the WHOLE model (all depths) so the active slice reads in context
   ctx.fillStyle = 'rgba(150,185,220,.13)';
   for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if (anyDepth(cx, cy)) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
-  // the ACTIVE slice, solid + palette-correct
+  // the ACTIVE slice — palette-correct in Paint mode, flat grey in Geometry mode (shape, not colour)
   for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
     const col = cellAt(cx, cy); if (!col) continue;
-    ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+    ctx.fillStyle = geomActive ? '#68788a' : `rgb(${col[0]},${col[1]},${col[2]})`;
     ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
   }
   // a REAL grid: cell lines across the WHOLE area (occupied + empty) + a crisp outer frame
@@ -1018,9 +1032,30 @@ function renderGridView() {
   }
   ctx.strokeStyle = 'rgba(120,160,200,.55)'; ctx.lineWidth = 1; ctx.strokeRect(ox + .5, oy + .5, gw - 1, gh - 1);
 
-  // TOP-DOWN reference (only when editing a side/front/back slice): a small footprint map in the corner
-  // with a line marking where the current slice sits, so you know which part of the model you're on.
-  if (!isTop && cell >= 2) {
+  if (geomActive) {
+    // GEOMETRY RECONCILE: overlay the source silhouette where its span rect maps onto the grid, plus a
+    // draggable box (drag an edge to stretch that dimension, the interior to move). Shared spans keep
+    // the other views in lock-step. spans come from base.sp (auto today; the user's saved override once
+    // they drag). n: the box's two in-plane axes read GEOAX[view].col/row.
+    const g = GEOAX[gridView], capOf = (a) => (a === 'z' ? layers : foot);
+    // box reads live geomState when the part is manually reconciled (so it moves during a drag without a
+    // full re-carve every frame); otherwise the auto spans the carve just used.
+    const bsp = (geomState[part] && geomState[part].spanX) ? geomState[part] : base.sp;
+    const rng = (info) => { const s = bsp[spanKey[info.axis]], cap = capOf(info.axis); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
+    const cR = rng(g.col), rR = rng(g.row);
+    const bx = ox + cR.lo * cell, by = oy + rR.lo * cell, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cell;
+    const keyed = imgs[part][gridView] ? keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView]) : null;
+    if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
+    ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
+    ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
+    for (const [hx, hy] of [[bx + bw2 / 2, by], [bx + bw2 / 2, by + bh2], [bx, by + bh2 / 2], [bx + bw2, by + bh2 / 2]]) ctx.fillRect(hx - 4, hy - 4, 8, 8);
+    gridGeom.geom = { bx, by, bw: bw2, bh: bh2, cell, ox, oy, gw, gh, col: g.col, row: g.row, foot, layers };
+    const sx = bsp[spanKey[g.col.axis]], sy = bsp[spanKey[g.row.axis]];
+    ctx.fillStyle = '#8fa7bd'; ctx.font = '9px sans-serif'; ctx.textBaseline = 'top';
+    ctx.fillText(`${g.col.axis.toUpperCase()} ${sx.lo}–${sx.hi} · ${g.row.axis.toUpperCase()} ${sy.lo}–${sy.hi}${geomState[part].auto ? '  (auto)' : ''}`, ox + 3, oy + 3);
+  } else if (!isTop && cell >= 2) {
+    // TOP-DOWN reference (Paint mode, side/front/back): a small footprint map in the corner with a line
+    // marking where the current slice sits, so you know which part of the model you're on.
     const mc = Math.max(1, Math.floor(Math.min(64, Math.min(W, H) * 0.30) / foot)), mw = mc * foot, mmx = W - mw - 6, mmy = 16;
     ctx.fillStyle = 'rgba(6,11,18,.92)'; ctx.fillRect(mmx - 3, mmy - 3, mw + 6, mw + 6);
     ctx.fillStyle = 'rgba(150,185,220,.5)';                          // footprint: any voxel in the (x,y) column
@@ -1223,7 +1258,9 @@ $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').t
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
 $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
 
-// ── grid-view panel: face selector + z-slice walker ──
+// ── grid-view panel: mode (paint vs geometry) + face selector + z-slice walker ──
+if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+if ($('gridResetGeo')) $('gridResetGeo').onclick = () => { const part = gridPart(); geomState[part] = { auto: true, bottomFrom: geomState[part].bottomFrom || 'top' }; gridModel = null; rebuildSlices(); scheduleAutosave(); };
 $('gridViewSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridView = b.dataset.v; gridLayer = 0; [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
 $('gridLayer').oninput = (e) => { gridLayer = +e.target.value; renderGridView(); };
 // ── SLICE EDITOR (owner 2026-07-17): on the Top view, click/drag to add or erase voxels in the
@@ -1271,16 +1308,73 @@ if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
     return true;
   };
   let painting = false, dirty = false;
+  // ── GEOMETRY drag (owner 2026-07-18): in Geometry mode, drag the box edges to stretch a dimension or
+  // the interior to move it. Edits write the shared world-axis spans in geomState, so linked views move
+  // in lock-step. On first edit we snapshot the current auto spans and flip auto→false. The uncolored
+  // carve re-runs on pointer-up (heavy); the box + silhouette track live off geomState.
+  const capOf = (a, foot, layers) => (a === 'z' ? layers : foot);
+  const ensureGeomSpans = () => {                                   // freeze current placement into geomState, editable
+    const part = gridGeom.part, gs = geomState[part];
+    if (!gs.spanX && gridModel && gridModel.sp) { gs.spanX = { ...gridModel.sp.spanX }; gs.spanY = { ...gridModel.sp.spanY }; gs.spanZ = { ...gridModel.sp.spanZ }; }
+    gs.auto = false;
+  };
+  const ptCell = (e) => { const r = cv.getBoundingClientRect(); return { px: (e.clientX - r.left) * (cv.width / r.width), py: (e.clientY - r.top) * (cv.height / r.height) }; };
+  const geomHit = (e) => {
+    const g = gridGeom && gridGeom.geom; if (!g) return null;
+    const { px, py } = ptCell(e), T = Math.max(6, g.cell * 0.6);
+    const onX = px >= g.bx - T && px <= g.bx + g.bw + T, onY = py >= g.by - T && py <= g.by + g.bh + T;
+    if (!onX || !onY) return null;
+    if (Math.abs(px - g.bx) < T) return 'L';
+    if (Math.abs(px - (g.bx + g.bw)) < T) return 'R';
+    if (Math.abs(py - g.by) < T) return 'T';
+    if (Math.abs(py - (g.by + g.bh)) < T) return 'B';
+    if (px > g.bx && px < g.bx + g.bw && py > g.by && py < g.by + g.bh) return 'move';
+    return null;
+  };
+  let geomDrag = null;                                             // { mode, gc0, gr0, cR0, rR0 }
+  const gridRectFromSpans = (g) => {
+    const gs = geomState[gridGeom.part];
+    const rng = (info) => { const s = gs[spanKey[info.axis]], cap = capOf(info.axis, g.foot, g.layers); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
+    return { cR: rng(g.col), rR: rng(g.row) };
+  };
+  const spansFromGridRect = (g, cR, rR) => {
+    const gs = geomState[gridGeom.part];
+    const put = (info, lo, hi) => { const cap = capOf(info.axis, g.foot, g.layers); lo = clamp(Math.round(lo), 0, cap - 1); hi = clamp(Math.round(hi), lo + 1, cap); gs[spanKey[info.axis]] = info.flip ? { lo: cap - hi, hi: cap - lo } : { lo, hi }; };
+    put(g.col, cR.lo, cR.hi); put(g.row, rR.lo, rR.hi);
+  };
+  const geomMove = (e) => {
+    const g = gridGeom.geom; if (!g || !geomDrag) return;
+    const { px, py } = ptCell(e), gc = (px - g.ox) / g.cell, gr = (py - g.oy) / g.cell;
+    let { cR, rR } = gridRectFromSpans(g);
+    if (geomDrag.mode === 'move') {
+      const dcx = Math.round(gc - geomDrag.gc0), dcy = Math.round(gr - geomDrag.gr0);
+      const cw = geomDrag.cR0.hi - geomDrag.cR0.lo, rh = geomDrag.rR0.hi - geomDrag.rR0.lo;
+      let cl = clamp(geomDrag.cR0.lo + dcx, 0, g.foot - cw), rl = clamp(geomDrag.rR0.lo + dcy, 0, (g.row.axis === 'z' ? g.layers : g.foot) - rh);
+      cR = { lo: cl, hi: cl + cw }; rR = { lo: rl, hi: rl + rh };
+    } else if (geomDrag.mode === 'L') cR.lo = gc;
+    else if (geomDrag.mode === 'R') cR.hi = gc;
+    else if (geomDrag.mode === 'T') rR.lo = gr;
+    else if (geomDrag.mode === 'B') rR.hi = gr;
+    spansFromGridRect(g, cR, rR);
+    renderGridView();                                              // box + silhouette track live; carve re-runs on release
+  };
   cv.addEventListener('pointerdown', (e) => {
+    if (gridGeom && gridGeom.geom) {                               // Geometry mode: box drag
+      const mode = geomHit(e); if (!mode) return;
+      ensureGeomSpans();
+      const g = gridGeom.geom, { px, py } = ptCell(e), r = gridRectFromSpans(g);
+      geomDrag = { mode, gc0: (px - g.ox) / g.cell, gr0: (py - g.oy) / g.cell, cR0: r.cR, rR0: r.rR };
+      dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+    }
     if (!gridGeom || !gridGeom.editable) return;
     const erase = gridTool === 'erase' || e.button === 2;
     if (editAt(e, erase)) { painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
   });
-  cv.addEventListener('pointermove', (e) => { if (painting) editAt(e, gridTool === 'erase' || (e.buttons & 2)); });
-  const finish = () => { painting = false; if (dirty) { dirty = false; rebuildSlices(); scheduleAutosave(); } };  // full model refresh on release
+  cv.addEventListener('pointermove', (e) => { if (geomDrag) geomMove(e); else if (painting) editAt(e, gridTool === 'erase' || (e.buttons & 2)); });
+  const finish = () => { painting = false; geomDrag = null; if (dirty) { dirty = false; gridModel = null; rebuildSlices(); scheduleAutosave(); } };  // full re-carve on release
   cv.addEventListener('pointerup', finish);
   cv.addEventListener('pointercancel', finish);
-  cv.addEventListener('contextmenu', (e) => { if (gridGeom && gridGeom.editable) e.preventDefault(); });   // right-drag = erase
+  cv.addEventListener('contextmenu', (e) => { if (gridGeom && (gridGeom.editable || gridGeom.geom)) e.preventDefault(); });   // right-drag = erase (paint)
 })();
 // keep the grid canvas buffer matched to its displayed size so resizing stays crisp, and re-render
 if (window.ResizeObserver) {
