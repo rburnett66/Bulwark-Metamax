@@ -111,7 +111,7 @@ function keyBackground(data, w, h, tol) {
 // all keeps is removed), CUT shapes punch holes. Keying runs FIRST (the flood needs the real image borders).
 function keyedCanvas(img, tol, polys) {
   const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
-  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
   const id = g.getImageData(0, 0, cv.width, cv.height); keyBackground(id.data, cv.width, cv.height, tol); g.putImageData(id, 0, 0);
   if (polys && polys.length) {
     const trace = (list) => { g.beginPath();
@@ -139,7 +139,7 @@ function keyedCropped(img, tol, poly) {
 function gridStretch(canvas, w, h, elev) {
   h = Math.max(1, h);
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const ctx = cv.getContext('2d'); ctx.drawImage(canvas, 0, 0, w, h);
+  const ctx = cv.getContext('2d', { willReadFrequently: true }); ctx.drawImage(canvas, 0, 0, w, h);
   const d = ctx.getImageData(0, 0, w, h).data, m = new Uint8Array(w * h), c = new Uint8Array(w * h * 3);
   for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
     const row = elev ? (h - 1 - r) : r, i = row * w + a, p = (r * w + a) * 4;
@@ -217,8 +217,8 @@ function writeVox(nx, ny, nz, voxels, palette) {
 }
 // gather a part's filled voxels (palette cleanup applied) as {x,y,z,r,g,b}, offset into place
 function collectVox(partId, foot, layers, zOff, xOff) {
-  const { filled, vcol } = buildModel(partId, foot, layers), N = foot * foot;
-  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN), out = [];
+  const { filled, vcol, views } = buildModel(partId, foot, layers), N = foot * foot;
+  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, views), out = [];
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     if (!filled(x, y, z)) continue;
     const c = (z * N + y * foot + x) * 3; let r = vcol[c], g = vcol[c + 1], b = vcol[c + 2];
@@ -257,7 +257,7 @@ function buildVolume(partId, foot, layers) {
   if (!src.top && !src.side && !src.front && !src.back) {   // ── no art at all → procedural placeholder ──
     const col = document.createElement('canvas'); col.width = col.height = foot;
     const hgt = document.createElement('canvas'); hgt.width = hgt.height = foot;
-    const cx = col.getContext('2d'), hx = hgt.getContext('2d');
+    const cx = col.getContext('2d', { willReadFrequently: true }), hx = hgt.getContext('2d', { willReadFrequently: true });
     hx.fillStyle = '#000'; hx.fillRect(0, 0, foot, foot);
     (partId === 'turret' ? drawTurret : drawBody)(cx, hx, foot);
     const cd = cx.getImageData(0, 0, foot, foot).data, hd = hx.getImageData(0, 0, foot, foot).data;
@@ -338,10 +338,18 @@ function buildVolume(partId, foot, layers) {
 // Unified voxel model for every consumer: always per-voxel colour (vcol), whether the part came from a
 // .vox (already per-voxel) or the photo carve (per-column cd, materialised here). So there's ONE model —
 // a stack of coloured cubes — and no cd/vcol branching downstream. Returns { vcol, filled, dbg }.
-function buildModel(partId, foot, layers) {
-  const v = buildVolume(partId, foot, layers);
-  if (v.vcol) return v;                                              // .vox → already a voxel model
-  const N = foot * foot, cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
+// per-part manual voxel edits from the grid slice editor: key = z*N + y*foot + x →
+//   'del'   the voxel is force-removed (even if the source carved it)
+//   [r,g,b] the voxel is force-added/painted with this raw colour
+// Applied at the tail of buildModel so the orbit preview, side chart, bake, in-game inset, Tier C
+// embed and .vox export all see the same edited model (owner 2026-07-17).
+const voxEdit = { body: new Map(), turret: new Map() };
+// the space-carved model BEFORE manual edits (buildVolume is not cached — callers that only need the
+// base, like the live slice editor, cache this and layer edits on cheaply).
+function buildModelRaw(partId, foot, layers) {
+  const v = buildVolume(partId, foot, layers), N = foot * foot;
+  if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, dbg: v.dbg };  // .vox → already voxels
+  const cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     const i = y * foot + x, p = i * 4; if (cd[p + 3] < 20) continue;
     const r = cd[p], g = cd[p + 1], b = cd[p + 2];
@@ -349,6 +357,20 @@ function buildModel(partId, foot, layers) {
   }
   return { vcol, filled, cd: null, views: v.views, dbg: v.dbg };
 }
+// layer the voxEdit overlay onto a raw model (clone vcol so buildVolume's arrays are never mutated).
+function applyVoxEdits(m, partId, foot, layers) {
+  const ed = voxEdit[partId]; if (!ed || !ed.size) return m;
+  const N = foot * foot, vc = m.vcol.slice();
+  for (const [k, val] of ed) if (val !== 'del') { const c = k * 3; vc[c] = val[0]; vc[c + 1] = val[1]; vc[c + 2] = val[2]; }
+  const base = m.filled;
+  const editedFilled = (x, y, z) => {
+    if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) return false;
+    const e = ed.get(z * N + y * foot + x);
+    return e !== undefined ? e !== 'del' : base(x, y, z);
+  };
+  return { vcol: vc, filled: editedFilled, cd: null, views: m.views, dbg: m.dbg };
+}
+function buildModel(partId, foot, layers) { return applyVoxEdits(buildModelRaw(partId, foot, layers), partId, foot, layers); }
 
 // median-cut → n representative colours. Flattens camo/gradients (and rich .vox palettes) into a small,
 // contrasting set of flat cube colours so the block structure reads clean instead of noisy.
@@ -373,16 +395,84 @@ function medianCut(colors, n) {
   }
   return boxes.map((b) => { let r = 0, g = 0, bl = 0; for (const c of b) { r += c[0]; g += c[1]; bl += c[2]; } const m = b.length || 1; return [Math.round(r / m), Math.round(g / m), Math.round(bl / m)]; });
 }
+// ── HUE-FAMILY PALETTE REDUCER (owner 2026-07-17) ─────────────────────────────────────────────────
+// Plain median-cut is population-blind: a hull that is mostly grey/brown has a huge low-hue mass, so
+// every split lands back in it and sparse accents (a washed-out blue window, a gold stripe) get
+// averaged away — "reduce and you get nothing but grey/brown." Instead we bucket EVERY colour by hue
+// (only near-perfect grey goes to one neutral bucket), guarantee each hue family present at least one
+// palette slot, then split the remaining budget across families by population. A lone washed accent
+// can never be out-voted by the grey/brown mass. Pinned colours are always kept on top of that.
+const chromaOf = (r, g, b) => Math.max(r, g, b) - Math.min(r, g, b);
+function weightedMedianCut(entries, n) {
+  if (!entries.length || n <= 0) return [];
+  let boxes = [entries.slice()];
+  const rangeOf = (b) => { let mn = [255, 255, 255], mx = [0, 0, 0]; for (const e of b) for (let ch = 0; ch < 3; ch++) { const v = e.rgb[ch]; if (v < mn[ch]) mn[ch] = v; if (v > mx[ch]) mx[ch] = v; } return [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]]; };
+  while (boxes.length < n) {
+    let bi = -1, best = -1;
+    for (let i = 0; i < boxes.length; i++) { if (boxes[i].length < 2) continue; const rg = rangeOf(boxes[i]); const m = Math.max(rg[0], rg[1], rg[2]); if (m > best) { best = m; bi = i; } }
+    if (bi < 0) break;
+    const box = boxes[bi], rg = rangeOf(box), ch = rg[1] > rg[0] ? (rg[2] > rg[1] ? 2 : 1) : (rg[2] > rg[0] ? 2 : 0);
+    box.sort((a, b) => a.rgb[ch] - b.rgb[ch]);
+    const total = box.reduce((s, e) => s + e.c, 0); let acc = 0, mid = 1;
+    for (let i = 0; i < box.length; i++) { acc += box[i].c; if (acc >= total / 2) { mid = Math.max(1, Math.min(box.length - 1, i + 1)); break; } }
+    boxes.splice(bi, 1, box.slice(0, mid), box.slice(mid));
+  }
+  return boxes.map((b) => { let r = 0, g = 0, bl = 0, w = 0; for (const e of b) { r += e.rgb[0] * e.c; g += e.rgb[1] * e.c; bl += e.rgb[2] * e.c; w += e.c; } w = w || 1; return [Math.round(r / w), Math.round(g / w), Math.round(bl / w)]; });
+}
+function buildPalette(counts, n, pins, drops) {
+  const nearAny = (rgb, list, d2) => (list || []).some((p) => (p[0] - rgb[0]) ** 2 + (p[1] - rgb[1]) ** 2 + (p[2] - rgb[2]) ** 2 < d2);
+  const NEUTRAL_CH = 16;                                             // only near-perfect grey is "neutral"
+  const bucketOf = (rgb) => chromaOf(...rgb) < NEUTRAL_CH ? 'n' : 'h' + (Math.round(rgb2hsv(...rgb)[0] / 15) % 24);
+  let entries = [...counts.entries()].map(([k, c]) => ({ rgb: [(k >> 16) & 255, (k >> 8) & 255, k & 255], c }));
+  // ELIMINATE: a dropped colour removes its WHOLE hue family (e.g. eliminate one grey → all greys go);
+  // those voxels remap to the nearest surviving colour in the quantiser. (Guard: never drop everything.)
+  if (drops && drops.length) {
+    const dropB = new Set(drops.map(bucketOf));
+    const kept = entries.filter((e) => !dropB.has(bucketOf(e.rgb)));
+    if (kept.length) entries = kept;
+  }
+  const seeds = (pins || []).map((p) => p.slice());
+  if (entries.length + seeds.length <= n) {                          // budget covers every survivor → keep them all
+    for (const e of entries) if (!nearAny(e.rgb, seeds, 1)) seeds.push(e.rgb);
+    return seeds.slice(0, n);
+  }
+  let budget = n - seeds.length;
+  if (budget <= 0) return seeds.slice(0, n);
+  const fams = new Map();                                            // hue bucket (or 'n' = grey) → members + population
+  for (const e of entries) {
+    const key = chromaOf(...e.rgb) < NEUTRAL_CH ? 'n' : 'h' + (Math.round(rgb2hsv(...e.rgb)[0] / 15) % 24);
+    let f = fams.get(key); if (!f) { f = { items: [], pop: 0 }; fams.set(key, f); }
+    f.items.push(e); f.pop += e.c;
+  }
+  const fl = [...fams.values()], order = fl.map((_, i) => i).sort((a, b) => fl[b].pop - fl[a].pop);
+  const alloc = fl.map(() => 0);
+  let left = budget;
+  for (const i of order) { if (left <= 0) break; alloc[i] = 1; left--; }         // 1 slot per family (biggest pop first)
+  const active = order.filter((i) => alloc[i] > 0), totalPop = active.reduce((s, i) => s + fl[i].pop, 0) || 1;
+  const rema = active.map((i) => ({ i, w: fl[i].pop / totalPop * left })); let used = 0;
+  for (const r of rema) { const add = Math.floor(r.w); alloc[r.i] += add; used += add; }   // proportional to population
+  rema.sort((a, b) => (b.w % 1) - (a.w % 1));
+  for (let k = 0; k < left - used && k < rema.length; k++) alloc[rema[k].i]++;   // largest-remainder for the leftovers
+  for (let i = 0; i < fl.length; i++) if (alloc[i] > 0) for (const c of weightedMedianCut(fl[i].items, alloc[i])) seeds.push(c);
+  return seeds.slice(0, n);
+}
 // build a colour→palette quantiser over a part's filled voxels (null when Palette is off / full colour)
-function buildQuantiser(cd, vcol, filled, foot, layers, n) {
+// `views` (side/front/back source art) is folded in so colours that only appear on a WALL — a blue
+// window, a gold stripe painted only in the side sheet — are palette candidates too, instead of being
+// quantised away against a top-only palette. buildFaces and the grid pass the same views → they agree.
+function buildQuantiser(cd, vcol, filled, foot, layers, n, views) {
   if (!n) return null;
-  const N = foot * foot, seen = new Set(), cols = [];
+  const N = foot * foot, counts = new Map();
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     if (!filled(x, y, z)) continue;
     let r, g, b; if (vcol) { const c = (z * N + y * foot + x) * 3; r = vcol[c]; g = vcol[c + 1]; b = vcol[c + 2]; } else { const p = (y * foot + x) * 4; r = cd[p]; g = cd[p + 1]; b = cd[p + 2]; }
-    const key = (r << 16) | (g << 8) | b; if (!seen.has(key)) { seen.add(key); cols.push([r, g, b]); }
+    const key = (r << 16) | (g << 8) | b; counts.set(key, (counts.get(key) || 0) + 1);
   }
-  const pal = medianCut(cols, n), cache = new Map();
+  if (views) for (const g of [views.side, views.front, views.back]) if (g && g.m) {
+    for (let i = 0; i < g.w * g.h; i++) if (g.m[i]) { const key = (g.c[i * 3] << 16) | (g.c[i * 3 + 1] << 8) | g.c[i * 3 + 2]; counts.set(key, (counts.get(key) || 0) + 1); }
+  }
+  const kRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
+  const pal = buildPalette(counts, n, [...palKeep].map(kRGB), [...palDrop].map(kRGB)), cache = new Map();
   return (r, g, b) => {
     const key = (r << 16) | (g << 8) | b; let v = cache.get(key); if (v !== undefined) return v;
     let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - g) * (p[1] - g) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } }
@@ -396,7 +486,7 @@ function buildQuantiser(cd, vcol, filled, foot, layers, n) {
 // n: 0 = top, 1 = +x, 2 = −x, 3 = +y, 4 = −y (grid space, y = image-down).
 function buildFaces(partId, foot, layers) {
   const { filled, vcol, views: V } = buildModel(partId, foot, layers), N = foot * foot; // unified voxel model
-  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN);      // palette cleanup (median-cut)
+  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, V);   // palette cleanup (incl. wall art)
   // wall colour comes from the elevation view that DEPICTS that wall: side view → ±y walls (far side
   // mirrored), front view → +x wall, back view → −x wall (mirrored front when no back was drawn).
   // Top view keeps colouring the tops. Fallback everywhere = the voxel's column colour.
@@ -652,7 +742,7 @@ function renderScaleChart() {
   const X0 = 46;
   let maxTiles = 1;
   for (const s of sections) for (const e of s.list) if (e.tiles > maxTiles) maxTiles = e.tiles;
-  const T = Math.min(26, (W - X0 - 8) / maxTiles);                   // ONE px-per-tile for everything
+  const T = Math.min(18, (W - X0 - 8) / maxTiles);                   // ONE px-per-tile for everything (~30% smaller per unit → ~9 fit)
   let total = 16;                                                    // top ruler strip
   for (const s of sections) { total += 12; for (const e of s.list) total += entryThumbH(e, T) + 13; }
   cv.height = Math.max(140, total);                                  // grow the canvas; the dock scrolls
@@ -730,7 +820,7 @@ function drawGameBoard() {
 }
 function placeGamePreview() { gameLayer.position.set(SCW - PVW - 16, 16); }
 function resizePreview(w, h) {
-  PVW = clamp(w, 150, 520) | 0; PVH = clamp(h, 140, 480) | 0;
+  PVW = clamp(w, 150, 1100) | 0; PVH = clamp(h, 140, 900) | 0;   // raised ceiling: drag the in-game inset much larger
   GAME_TILE = BASE_TILE * PVW / BASE_PVW;
   drawGameBoard(); placeGamePreview();
 }
@@ -747,6 +837,8 @@ const polyState = { body: mkViews(() => null), turret: mkViews(() => null) }; //
 const imgURLCache = { body: mkViews(() => null), turret: mkViews(() => null) }; // PNG data-URL cache (project saves)
 const voxB64 = { body: null, turret: null };                                  // base64 cache of imported .vox data
 const palMap = new Map();                    // palette tuner: pre-tune colour key → replacement [r,g,b]
+const palKeep = new Set();                   // palette reducer: colour keys the artist pinned to survive reduction
+const palDrop = new Set();                    // palette reducer: colour keys the artist marked to eliminate (remap away)
 let bulkLoad = false;                                                         // true while restoring a project
 function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
@@ -803,6 +895,104 @@ function bodyTopLayer(foot, layers) {
 }
 
 // (re)build the voxel models + the cube-render canvases — the orbit/camera-set preview and the inset
+// ── Orthographic grid view (upper-left): a flat, square-voxel view of one face. Top walks z-slices
+// top→bottom (the slice view); Side/Front/Back are silhouettes. Voxels are always square (true cubes),
+// independent of the zScale cube-height stretch used by the 3D render.
+let gridView = 'top', gridLayer = 0, gridModel = null;   // gridModel: cached buildModel, invalidated by rebuildSlices
+let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn cell layout, so pointer edits map back to voxels
+const gridPart = () => (state.part === 'turret' ? 'turret' : 'body');
+const gridLayersOf = (part) => (part === 'turret' ? state.turretLayers : state.bodyLayers);
+function renderGridView() {
+  const cv = $('gridCanvas'); if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const part = gridPart(), foot = state.foot, layers = gridLayersOf(part), N = foot * foot;
+  // cache the RAW (pre-edit) carve; voxEdit is layered on cheaply below so live painting never re-carves.
+  if (!gridModel || gridModel.part !== part || gridModel.foot !== foot || gridModel.layers !== layers) {
+    const m = buildModelRaw(part, foot, layers);
+    gridModel = { part, foot, layers, vcol: m.vcol, filled: m.filled, views: m.views };
+  }
+  const base = gridModel, ed = voxEdit[part], V = base.views;
+  const filled = (x, y, z) => {
+    if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) return false;
+    const e = ed.get(z * N + y * foot + x);
+    return e !== undefined ? e !== 'del' : base.filled(x, y, z);
+  };
+  // FACE COLOUR: sample the SAME source the 3D render paints for the face this view shows — Top faces
+  // from the top-down colour, Side/Front/Back walls from the side/front/back source art — so once
+  // quant+tuner run below the grid matches in-game (buildFaces), not a flat top-projection. Painted
+  // voxels carry their own colour.
+  const pickWall = (g, ix, z, mirror) => {
+    if (!g || !g.m || ix < 0 || ix >= g.w || z < 0 || z >= g.h) return null;
+    const i = z * g.w + (mirror ? g.w - 1 - ix : ix);
+    return g.m[i] ? [g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]] : null;
+  };
+  const rawCol = (x, y, z) => {
+    const e = ed.get(z * N + y * foot + x); if (Array.isArray(e)) return e;
+    if (V) {
+      let w = null;
+      if (gridView === 'side') w = pickWall(V.side, x - V.ox, z, false);            // ±y wall ← side art
+      else if (gridView === 'front') w = pickWall(V.front, y - V.oy, z, false);     // +x wall ← front art
+      else if (gridView === 'back') w = V.back ? pickWall(V.back, y - V.oy, z, false) : pickWall(V.front, y - V.oy, z, true); // -x wall ← back (or mirrored front)
+      if (w) return w;
+    }
+    const c = (z * N + y * foot + x) * 3; return [base.vcol[c], base.vcol[c + 1], base.vcol[c + 2]];   // Top faces / fallback
+  };
+  // Every view is a SLICE perpendicular to a depth axis; the Layer slider walks slices along it, so
+  // add/erase editing works in all four. Top→z (from the top), Side→y, Front/Back→x. toVox maps an
+  // in-plane cell (col,row) + slice index to a voxel (x,y,z).
+  const AX = {
+    top:   { cols: foot, rows: foot,   depth: layers, axis: 'z', toVox: (c, r, s) => [c, r, layers - 1 - s] },
+    side:  { cols: foot, rows: layers, depth: foot,   axis: 'y', toVox: (c, r, s) => [c, s, layers - 1 - r] },
+    front: { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [s, c, layers - 1 - r] },
+    back:  { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [foot - 1 - s, foot - 1 - c, layers - 1 - r] },
+  };
+  const ax = AX[gridView] || AX.top, cols = ax.cols, rows = ax.rows, depth = ax.depth;
+  gridLayer = clamp(gridLayer, 0, Math.max(0, depth - 1));
+  const slice = gridLayer;
+  const lr = $('gridLayerRow'); if (lr) lr.style.display = '';    // layer + tools on EVERY view now
+  const tr = $('gridToolRow'); if (tr) tr.style.display = '';
+  const ls = $('gridLayer'); if (ls) ls.max = String(Math.max(0, depth - 1));
+  const lv = $('gridLayerV'); if (lv) lv.textContent = `${ax.axis} ${slice}` + (gridView === 'top' && slice === 0 ? ' top' : '');
+
+  // palette-correct colour: exactly what the 3D render bakes — raw voxel → paletteN reduction → tuner.
+  // quant reads an overlay-aware colour buffer so painted voxels join the palette (cheap copy, no re-carve).
+  let qvcol = base.vcol;
+  if (ed.size) { qvcol = base.vcol.slice(); for (const [k, val] of ed) if (val !== 'del') { const c = k * 3; qvcol[c] = val[0]; qvcol[c + 1] = val[1]; qvcol[c + 2] = val[2]; } }
+  const quant = buildQuantiser(null, qvcol, filled, foot, layers, state.paletteN, V);
+  const colAt = (x, y, z) => {
+    let [r, g, b] = rawCol(x, y, z);
+    if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
+    const t = palMap.get((r << 16) | (g << 8) | b); return t || [r, g, b];
+  };
+  const cellAt = (cx, cy) => { const [x, y, z] = ax.toVox(cx, cy, slice); return filled(x, y, z) ? colAt(x, y, z) : null; };
+  const anyDepth = (cx, cy) => { for (let s = 0; s < depth; s++) { const [x, y, z] = ax.toVox(cx, cy, s); if (filled(x, y, z)) return true; } return false; };
+
+  const W = cv.width, H = cv.height, cell = Math.max(1, Math.floor(Math.min(W / cols, H / rows)));
+  const gw = cell * cols, gh = cell * rows, ox = Math.floor((W - gw) / 2), oy = Math.floor((H - gh) / 2);
+  gridGeom = { cell, ox, oy, cols, rows, depth, slice, toVox: ax.toVox, foot, layers, part, editable: true };
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, W, H);
+  // faint checker so the empty grid still reads as a grid at any zoom
+  if (cell >= 4) { ctx.fillStyle = 'rgba(255,255,255,.025)';
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if ((cx + cy) & 1) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell); }
+  // faint silhouette of the WHOLE model (all depths) so the active slice reads in context
+  ctx.fillStyle = 'rgba(150,185,220,.13)';
+  for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if (anyDepth(cx, cy)) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+  // the ACTIVE slice, solid + palette-correct
+  for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+    const col = cellAt(cx, cy); if (!col) continue;
+    ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+    ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+  }
+  // a REAL grid: cell lines across the WHOLE area (occupied + empty) + a crisp outer frame
+  if (cell >= 3) {
+    ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let cx = 0; cx <= cols; cx++) { ctx.moveTo(ox + cx * cell + .5, oy); ctx.lineTo(ox + cx * cell + .5, oy + gh); }
+    for (let cy = 0; cy <= rows; cy++) { ctx.moveTo(ox, oy + cy * cell + .5); ctx.lineTo(ox + gw, oy + cy * cell + .5); }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(120,160,200,.55)'; ctx.lineWidth = 1; ctx.strokeRect(ox + .5, oy + .5, gw - 1, gh - 1);
+}
+
 function rebuildSlices() {
   if (bodyBaked) { bodyBaked.destroy(); bodyBaked = null; } if (turretBaked) { turretBaked.destroy(); turretBaked = null; }
   if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
@@ -829,6 +1019,7 @@ function rebuildSlices() {
   gVoxSpr.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp); gVoxSpr.position.set(0, 0);
   gUnit.addChild(gVoxSpr);
   setTimeout(renderScaleChart, 0);   // model changed → refresh the side-view scale chart
+  gridModel = null; renderGridView(); // model changed → invalidate cache + refresh the grid view
 }
 rebuildSlices();
 
@@ -981,12 +1172,97 @@ $('voxClear').onclick = () => { voxPart.body = null; voxPart.turret = null; voxB
 $('exportVox').onclick = exportVox;
 $('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').textContent = state.lightAz + '°'; rebuildSlices(); drawLight(); };
 $('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; rebuildSlices(); };
-$('pal').oninput = (e) => { state.paletteN = +e.target.value; $('palV').textContent = state.paletteN || 'full'; rebuildSlices(); };
+// #pal handler is defined with #palN below (setPaletteN keeps both sliders in lock-step)
 $('zScale').oninput = (e) => { state.zScale = +e.target.value / 100; $('zScaleV').textContent = state.zScale.toFixed(2) + '×'; rebuildSlices(); };
 $('smooth').onchange = (e) => { state.smooth = e.target.checked; };
 $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').textContent = state.sharp.toFixed(2); };
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
-$('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
+$('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+
+// ── grid-view panel: face selector + z-slice walker ──
+$('gridViewSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridView = b.dataset.v; gridLayer = 0; [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+$('gridLayer').oninput = (e) => { gridLayer = +e.target.value; renderGridView(); };
+// ── SLICE EDITOR (owner 2026-07-17): on the Top view, click/drag to add or erase voxels in the
+// current z-layer. Erase removes even source-carved voxels; paint adds using that column's own
+// colour (grey for a fresh column — recolour later in the palette window). Edits land in voxEdit and
+// flow through buildModel, so the orbit preview, side chart, bake and exports all follow. Full model
+// rebuild is deferred to pointer-up so painting stays responsive; the grid itself repaints live.
+if ($('gridToolSeg')) $('gridToolSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridTool = b.dataset.t; [...$('gridToolSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
+if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
+  const g = gridGeom; if (!g) return; const ed = voxEdit[g.part], N = g.foot * g.foot;
+  for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = g.toVox(cx, cy, g.slice); ed.set(z * N + y * g.foot + x, 'del'); }
+  gridModel = null; renderGridView(); rebuildSlices(); scheduleAutosave();
+};
+if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
+  voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; rebuildSlices(); scheduleAutosave();
+};
+(() => {
+  const cv = $('gridCanvas'); if (!cv) return;
+  // the paint colour: the swatch chosen in the grid tool row (also settable by clicking a swatch in
+  // the Palette window). Explicit colour beats guessing, and it round-trips through the reducer/tuner.
+  const gridPaintRGB = () => { const h = ($('gridPaintCol') && $('gridPaintCol').value) || '#8fa7bd'; return [parseInt(h.slice(1, 3), 16) || 0, parseInt(h.slice(3, 5), 16) || 0, parseInt(h.slice(5, 7), 16) || 0]; };
+  // (kept for reference/eyedrop) colour of the nearest existing voxel along the current view's depth axis
+  const sampleColor = (cx, cy) => {
+    const g = gridGeom, gm = gridModel; if (!g || !gm) return [150, 150, 150];
+    const N = gm.foot * gm.foot, ed = voxEdit[g.part];
+    const isFilled = (x, y, z) => { if (x < 0 || y < 0 || z < 0 || x >= gm.foot || y >= gm.foot || z >= gm.layers) return false; const o = ed.get(z * N + y * gm.foot + x); return o !== undefined ? o !== 'del' : gm.filled(x, y, z); };
+    const colOf = (x, y, z) => { const o = ed.get(z * N + y * gm.foot + x); if (Array.isArray(o)) return o; const c = (z * N + y * gm.foot + x) * 3; return [gm.vcol[c], gm.vcol[c + 1], gm.vcol[c + 2]]; };
+    for (let d = 1; d < g.depth; d++) for (const s of [g.slice - d, g.slice + d]) {
+      if (s < 0 || s >= g.depth) continue;
+      const [x, y, z] = g.toVox(cx, cy, s); if (isFilled(x, y, z)) return colOf(x, y, z);
+    }
+    return [150, 150, 150];
+  };
+  const editAt = (e, erase) => {
+    const g = gridGeom; if (!g || !g.editable) return false;
+    const r = cv.getBoundingClientRect();
+    const px = (e.clientX - r.left) * (cv.width / r.width), py = (e.clientY - r.top) * (cv.height / r.height);
+    const cx = Math.floor((px - g.ox) / g.cell), cy = Math.floor((py - g.oy) / g.cell);
+    if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows) return false;
+    const [x, y, z] = g.toVox(cx, cy, g.slice), N = g.foot * g.foot, k = z * N + y * g.foot + x, ed = voxEdit[g.part];
+    const ov = ed.get(k), curFilled = ov !== undefined ? ov !== 'del' : gridModel.filled(x, y, z);
+    if (erase) { if (!curFilled) return false; ed.set(k, 'del'); }   // nothing to remove here
+    else { if (curFilled) return false; ed.set(k, gridPaintRGB()); }   // add only where empty, in the chosen paint colour
+    renderGridView();                                                // live repaint (overlay is layered on the cached carve)
+    return true;
+  };
+  let painting = false, dirty = false;
+  cv.addEventListener('pointerdown', (e) => {
+    if (!gridGeom || !gridGeom.editable) return;
+    const erase = gridTool === 'erase' || e.button === 2;
+    if (editAt(e, erase)) { painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
+  });
+  cv.addEventListener('pointermove', (e) => { if (painting) editAt(e, gridTool === 'erase' || (e.buttons & 2)); });
+  const finish = () => { painting = false; if (dirty) { dirty = false; rebuildSlices(); scheduleAutosave(); } };  // full model refresh on release
+  cv.addEventListener('pointerup', finish);
+  cv.addEventListener('pointercancel', finish);
+  cv.addEventListener('contextmenu', (e) => { if (gridGeom && gridGeom.editable) e.preventDefault(); });   // right-drag = erase
+})();
+// keep the grid canvas buffer matched to its displayed size so resizing stays crisp, and re-render
+if (window.ResizeObserver) {
+  const gcv = $('gridCanvas');
+  new ResizeObserver(() => {
+    const w = Math.max(1, Math.round(gcv.clientWidth)), h = Math.max(1, Math.round(gcv.clientHeight));
+    if (gcv.width !== w || gcv.height !== h) { gcv.width = w; gcv.height = h; renderGridView(); }
+  }).observe(gcv);
+}
+// drag a floating window by its header (resize is the native CSS corner handle)
+function makeDraggable(panelId, handleId) {
+  const p = $(panelId), h = $(handleId); if (!p || !h) return;
+  let dx = 0, dy = 0, drag = false;
+  h.addEventListener('pointerdown', (e) => { drag = true; const r = p.getBoundingClientRect(); dx = e.clientX - r.left; dy = e.clientY - r.top; h.setPointerCapture(e.pointerId); e.preventDefault(); });
+  h.addEventListener('pointermove', (e) => { if (!drag) return; const s = (p.offsetParent || document.body).getBoundingClientRect(); p.style.left = Math.max(0, e.clientX - s.left - dx) + 'px'; p.style.top = Math.max(0, e.clientY - s.top - dy) + 'px'; });
+  h.addEventListener('pointerup', () => { drag = false; });
+}
+makeDraggable('gridPanel', 'gridDrag');
+makeDraggable('palModal', 'palDrag');
+makeDraggable('scalePanel', 'scaleDrag');
+// the Scale chart grows as tall as it needs (renderScaleChart sets its height) and the panel scrolls;
+// keep its buffer width matched to the panel so it stays crisp and re-lays out on resize.
+if (window.ResizeObserver && $('scaleScroll')) {
+  const ss = $('scaleScroll'), scv = $('scaleChart');
+  new ResizeObserver(() => { const w = Math.max(140, Math.round(ss.clientWidth)); if (scv.width !== w) scv.width = w; renderScaleChart(); }).observe(ss);
+}
 $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.cls = b.dataset.c; [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
 
 // ── orthographic view pickers: 4 thumbnails per part; click to browse OR hover + Ctrl+V to paste ──
@@ -1290,6 +1566,8 @@ function palBuildSwatches() {
     b.style.background = cssOf(palSwatchCol(sw));
     b.title = `${weight(sw)} faces · ${sw.members.length} colour(s)`;
     if (sw.members.some(([k]) => palMap.has(k))) b.classList.add('edited');
+    if (swatchPinned(palSwatchCol(sw))) b.classList.add('pinned');
+    if (swatchDropped(palSwatchCol(sw))) b.classList.add('dropped');
     b.onclick = () => palSelect(i);
     box.appendChild(b);
   });
@@ -1300,11 +1578,12 @@ function palSelect(i) {
   palSel = palSwList[i];
   document.querySelectorAll('.palSw').forEach((b) => b.classList.toggle('sel', +b.dataset.i === i));
   const cur = palSwatchCol(palSel);
+  const gp = $('gridPaintCol'); if (gp) gp.value = hexOf(cur);        // selecting a swatch loads it as the grid paint colour
   [palH, palS, palVv] = rgb2hsv(cur[0], cur[1], cur[2]);
   $('palPick').hidden = false;
   $('palInfo').textContent = palSel.members.length === 1 ? 'Exact colour — replaced outright.' :
     `${palSel.members.length} shades move together (same hue/brightness shift).`;
-  palDrawPickers(); palSyncChips();
+  palDrawPickers(); palSyncChips(); updateKeepBtn();
 }
 function palSyncChips() {
   const cur = palSwatchCol(palSel);
@@ -1365,9 +1644,44 @@ $('palResetOne').onclick = () => {
   palSyncChips(); palDrawPickers(); palRebuild();
 };
 $('palResetAll').onclick = () => { palMap.clear(); palBuildSwatches(); palRebuild(); };
-$('openPal').onclick = () => { palBuildSwatches(); $('palModal').hidden = false; };
+// palette SIZE + reduction — shared by the side-panel slider (#pal) and the floating window (#palN),
+// both kept in lock-step. Re-carves the model, then refreshes the swatch strip if the window is open.
+function palReduceRefresh() { rebuildSlices(); if (!$('palModal').hidden) palBuildSwatches(); scheduleAutosave(); }
+function setPaletteN(v) {
+  state.paletteN = v;
+  $('pal').value = v; $('palV').textContent = v || 'full';
+  $('palN').value = v; $('palNV').textContent = v || 'full';
+  palReduceRefresh();
+}
+$('pal').oninput = (e) => setPaletteN(+e.target.value);
+$('palN').oninput = (e) => setPaletteN(+e.target.value);
+// KEEP a colour (always in the reduced palette) or ELIMINATE it (dropped, voxels remap to nearest
+// survivor). The two are mutually exclusive; both toggle on the selected swatch.
+const keyOf = (c) => (c[0] << 16) | (c[1] << 8) | c[2];
+const nearIn = (set, c) => { for (const k of set) { const p = keyRGB(k); if ((p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2 < 24 * 24) return k; } return null; };
+function swatchPinned(c) { return nearIn(palKeep, c); }
+function swatchDropped(c) { return nearIn(palDrop, c); }
+function updateKeepBtn() {
+  if (!palSel) return;
+  const c = palSwatchCol(palSel), pinned = swatchPinned(c) != null, dropped = swatchDropped(c) != null;
+  const kb = $('palKeepBtn'); if (kb) { kb.textContent = pinned ? '📌 Kept — click to release' : '📌 Keep this color'; kb.classList.toggle('on', pinned); }
+  const db = $('palDropBtn'); if (db) { db.textContent = dropped ? '🚫 Eliminated — click to restore' : '🚫 Eliminate this color'; db.classList.toggle('on', dropped); }
+}
+$('palKeepBtn').onclick = () => {
+  if (!palSel) return;
+  const c = palSwatchCol(palSel), existing = swatchPinned(c);
+  if (existing != null) palKeep.delete(existing); else { palKeep.add(keyOf(c)); const d = swatchDropped(c); if (d != null) palDrop.delete(d); }
+  updateKeepBtn(); palReduceRefresh();
+};
+$('palDropBtn').onclick = () => {
+  if (!palSel) return;
+  const c = palSwatchCol(palSel), existing = swatchDropped(c);
+  if (existing != null) palDrop.delete(existing); else { palDrop.add(keyOf(c)); const k = swatchPinned(c); if (k != null) palKeep.delete(k); }
+  updateKeepBtn(); palReduceRefresh();
+};
+$('palClearKeep').onclick = () => { palKeep.clear(); palDrop.clear(); palReduceRefresh(); updateKeepBtn(); };
+$('openPal').onclick = () => { $('palN').value = state.paletteN; $('palNV').textContent = state.paletteN || 'full'; palBuildSwatches(); $('palModal').hidden = false; };
 $('palClose').onclick = () => { $('palModal').hidden = true; };
-$('palModal').addEventListener('click', (e) => { if (e.target === $('palModal')) $('palModal').hidden = true; });
 
 let pasteTarget = null;
 document.querySelectorAll('.vpick').forEach((pick) => {
@@ -1538,7 +1852,8 @@ function snapshotProject() {
   const st = { ...state }; delete st.baked;
   return { format: 'stackforge-project', version: 1, id: ($('uid').value || 'unit').trim(),
     state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, images, vox,
-    palMap: [...palMap.entries()] };
+    palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop],
+    voxEdit: { body: [...voxEdit.body], turret: [...voxEdit.turret] } };
 }
 function syncAllControls() {
   const set = (id, val, lab) => { $(id).value = val; if (lab !== undefined) $(id + 'V').textContent = lab; };
@@ -1550,6 +1865,7 @@ function syncAllControls() {
   set('zScale', Math.round(state.zScale * 100), state.zScale.toFixed(2) + '×');
   set('lightAz', state.lightAz, state.lightAz + '°'); set('lightK', state.lightK, '' + state.lightK);
   set('pal', state.paletteN, state.paletteN || 'full');
+  set('palN', state.paletteN, state.paletteN || 'full');
   set('sharp', Math.round(state.sharp * 100), state.sharp.toFixed(2)); set('bakeScale', state.bakeScale, state.bakeScale + '×');
   $('res').value = state.foot; $('smooth').checked = state.smooth; $('spin').checked = state.spin;
   [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
@@ -1562,6 +1878,10 @@ async function loadProject(p) {
     $('uid').value = p.id || 'unit';
     Object.assign(state, p.state || {}); state.baked = null;
     palMap.clear(); if (p.palMap) for (const [k, c] of p.palMap) palMap.set(k, c);
+    palKeep.clear(); if (p.palKeep) for (const k of p.palKeep) palKeep.add(k);
+    palDrop.clear(); if (p.palDrop) for (const k of p.palDrop) palDrop.add(k);
+    voxEdit.body.clear(); voxEdit.turret.clear();
+    if (p.voxEdit) { for (const [k, v] of p.voxEdit.body || []) voxEdit.body.set(k, v); for (const [k, v] of p.voxEdit.turret || []) voxEdit.turret.set(k, v); }
     for (const part of ['body', 'turret']) {
       const pv = p.vox && p.vox[part];
       voxPart[part] = pv ? { nx: pv.nx, ny: pv.ny, nz: pv.nz, data: u8FromB64(pv.b64) } : null;
@@ -1584,11 +1904,24 @@ async function loadProject(p) {
   syncAllControls(); rebuildSlices(); drawLight(); renderRoster();
 }
 let autosaveTimer = 0;
+// a project is worth persisting only if it has real editable content — source art, an imported .vox,
+// or manual voxel edits. A baked-only pack preview (loadPackPreview clears the source) has NONE of
+// these, so autosaving it would overwrite a genuine WIP with an empty shell and hijack sf:last — the
+// root cause of "the unit I worked on reloads empty".
+function projectHasContent(p) {
+  for (const part of ['body', 'turret']) {
+    if (p.vox && p.vox[part]) return true;
+    if (p.voxEdit && p.voxEdit[part] && p.voxEdit[part].length) return true;
+    if (p.images && p.images[part]) for (const v of VIEWS) if (p.images[part][v]) return true;
+  }
+  return false;
+}
 function scheduleAutosave() { if (bulkLoad) return; clearTimeout(autosaveTimer); autosaveTimer = setTimeout(doAutosave, 800); }
 async function doAutosave() {
   if (bulkLoad) { scheduleAutosave(); return; }
   try {
     const p = snapshotProject();
+    if (!projectHasContent(p)) return;                    // don't clobber a real WIP / shipped pack with an empty snapshot
     await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id);
     $('projState').textContent = `Autosaved "${p.id}" · ${new Date().toLocaleTimeString()}`;
   } catch (e) { /* storage unavailable — project file still works */ }
@@ -1619,8 +1952,17 @@ const FACTIONS = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water', '
 const ROLES = ['Skirmisher', 'Support', 'Bruiser', 'Siege', 'Juggernaut', 'Harasser', 'Striker', 'Guided AA'];
 const prefixFor = (name) => (name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'UNI');
 let filesIndex = [], curFaction = null, roster = [];
+// SHIPPED units (the deployed manifest with baked art) are pulled in so the roster/Load list surface
+// units that exist in the game but were never saved in THIS browser — otherwise a fresh browser shows
+// every slot as "needs art" and nothing loads. A localStorage-saved unit of the same id wins.
+let shippedUnits = {};
+const suppliedUnits = () => ({ ...shippedUnits, ...(loadManifest().units || {}) });
+async function loadShipped() {
+  try { const d = await (await fetch('../../content/units/voxel-units.json')).json(); shippedUnits = d.units || {}; } catch (e) { shippedUnits = {}; }
+}
 async function initFactions() {
   try { filesIndex = (await (await fetch('../../content/units/index.json')).json()).factions || []; } catch (e) { filesIndex = []; }
+  await loadShipped();                                            // so "supplied ✓" + Load reflect deployed art
   $('faction').innerHTML = FACTIONS.map((f) => `<option>${f}</option>`).join('');
   $('faction').onchange = () => loadFaction($('faction').value);
   loadFaction(FACTIONS[0]);
@@ -1640,7 +1982,7 @@ async function loadFaction(name) {
   renderRoster();
 }
 function renderRoster() {
-  const grid = $('unitGrid'), supplied = (loadManifest().units) || {};
+  const grid = $('unitGrid'), supplied = suppliedUnits();
   grid.innerHTML = ''; let n = 0;
   for (const u of roster) {
     const has = !!supplied[u.id]; if (has) n++;
@@ -1660,9 +2002,23 @@ $('addUnit').onclick = () => {
   if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
   renderRoster(); selectUnit(id);
 };
+// wipe the current unit's source art/vox + per-view cutout state so switching to a pack-only unit
+// doesn't keep re-carving and displaying the PREVIOUS unit (the "still looking at Base" bug).
+function clearSourceArt() {
+  for (const part of ['body', 'turret']) {
+    voxPart[part] = null; voxB64[part] = null;
+    for (const v of VIEWS) {
+      srcImg[part][v] = null; imgs[part][v] = null; imgURLCache[part][v] = null;
+      flipState[part][v] = { h: false, v: false }; rotState[part][v] = 0; keyTolState[part][v] = 75; polyState[part][v] = null;
+      const pick = pickFor(part, v);
+      if (pick) { pick.classList.remove('set'); updateFlipBtns(pick); const cvs = pick.querySelector('canvas'); if (cvs) cvs.getContext('2d').clearRect(0, 0, cvs.width, cvs.height); }
+    }
+  }
+  gridModel = null;
+}
 function selectUnit(id) {
   $('uid').value = id;
-  const m = (loadManifest().units) || {};
+  const m = suppliedUnits();
   if (m[id]) {
     const p = m[id].pack, bp = (p.parts || []).find((q) => q.id === 'body'), tp = (p.parts || []).find((q) => q.id === 'turret');
     state.cls = p.class; state.foot = p.footprint[0];
@@ -1674,14 +2030,19 @@ function selectUnit(id) {
     [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
   }
   document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
-  rebuildSlices(); drawLight();
-  // resume this unit's work: full WIP project when one exists, else load the saved asset pack itself
+  drawLight();
+  // a WIP project restores full editable source (loadProject rebuilds); otherwise DROP the previous
+  // unit's source so it stops rendering, then show the saved pack's baked model in the orbit.
   idb.get('proj:' + id).then((p) => {
     if (p) return loadProject(p).then(() => { $('projState').textContent = `Loaded "${id}" — continue editing.`; });
+    clearSourceArt();
     if (m[id]) return loadPackPreview(m[id]).then(() => {
-      $('projState').textContent = `Loaded "${id}" baked pack (no source project on this browser — art slots empty).`;
+      gridModel = null; renderGridView();                           // reflect the cleared source (baked shows in orbit)
+      $('projState').textContent = `Loaded "${id}" baked pack — orbit/in-game show the baked model; no editable source on this browser.`;
     });
-  }).catch(() => {});
+    rebuildSlices();
+    $('projState').textContent = `Nothing to load for "${id}" (no WIP project and no saved pack).`;
+  }).catch((e) => { console.error('[load] failed for', id, e); $('projState').textContent = `Load failed for "${id}": ${(e && e.message) || e}`; });
 }
 
 // rebuild the baked preview straight from a saved pack's atlases — "load asset pack and continue"
@@ -1720,11 +2081,13 @@ let saveAsId = null;
 function onCardClick(id) {
   saveAsId = id;
   $('saveAsTitle').textContent = id;
-  $('saveAsWarn').hidden = !((loadManifest().units || {})[id]);   // overwrite warning on supplied slots
+  const exists = !!suppliedUnits()[id];                            // has art (saved locally or shipped) → loadable
+  $('saveAsWarn').hidden = !exists;
+  $('saveAsLoad').hidden = !exists;                                // offer Load when there's something to load
   $('saveAsModal').hidden = false;
 }
 async function openLoadModal() {
-  const m = loadManifest().units || {};
+  const m = suppliedUnits();
   let projIds = [];
   try { projIds = ((await idb.keys()) || []).filter((k) => typeof k === 'string' && k.startsWith('proj:')).map((k) => k.slice(5)); } catch (e) { /* no store */ }
   const wip = new Set(projIds), packed = new Set(Object.keys(m));
@@ -1757,12 +2120,9 @@ function quickSave(id, as3D) {
   $('projState').textContent = `Saved "${id}" as ${as3D ? '3D (live model + baked fallback)' : 'baked sprites'} — reload the game to see it.`;
   doAutosave();                                         // park the working project under this id too
 }
+$('saveAsLoad').onclick = () => { $('saveAsModal').hidden = true; doAutosave(); selectUnit(saveAsId); };   // actually load it
 $('saveAsSprites').onclick = () => { $('saveAsModal').hidden = true; quickSave(saveAsId, false); };
 $('saveAs3D').onclick = () => { $('saveAsModal').hidden = true; quickSave(saveAsId, true); };
-$('saveAsEdit').onclick = () => {
-  $('saveAsModal').hidden = true; $('uid').value = saveAsId;
-  document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === saveAsId));
-};
 $('saveAsCancel').onclick = () => { $('saveAsModal').hidden = true; };
 $('saveAsModal').addEventListener('click', (e) => { if (e.target === $('saveAsModal')) $('saveAsModal').hidden = true; });
 

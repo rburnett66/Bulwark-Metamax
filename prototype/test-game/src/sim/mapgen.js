@@ -463,21 +463,25 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     if (r.color) node.color = r.color;                 // authored rare-1/rare-2 (red/green) sticks
     resources.push(node);
   }
-  // STARTER FIELD (owner 2026-07-16): a small primary field must sit just beyond the base gap —
-  // "that would be the reason the ship landed there." Guarantee >=3 wave-1 primary nodes within
-  // gap+3 of the base whatever the paint/backfill produced.
+  // STARTER FIELD (owner 2026-07-17): the ship landed HERE because of the resources, so wave 1 must
+  // open with a genuine field — a dense ring of primary nodes hugging the base gap, not the old bare
+  // >=3. It has to read as abundance the moment the match starts so the player over-invests in
+  // harvesters early (respawning primary income snowballs). Pack the annulus just beyond the gap,
+  // closest ring first, up to STARTER_FIELD_NODES, counting whatever the paint/backfill already put
+  // near the base.
   {
+    const STARTER_FIELD_NODES = 8;
     const nearR = baseGapR + 3;
-    let have = resources.filter((n) => n.role === 'primary' && n.wave === 1 && distC(n.x, n.y) <= nearR).length;
-    let R = baseGapR + 1;
-    while (have < 3 && R <= nearR) {
-      for (let dy = -R; dy <= R && have < 3; dy++) for (let dx = -R; dx <= R && have < 3; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== R) continue;
-        const x = bx + dx, y = cy + dy, k = `${x},${y}`;
-        if (x < 0 || y < 0 || x >= cols || y >= rows || occupied.has(k)) continue;
-        occupied.add(k); resources.push(mkRes(x, y, 'primary', 1)); have++;
-      }
-      R++;
+    const isNear = (n) => n.role === 'primary' && n.wave === 1 && distC(n.x, n.y) <= nearR;
+    let have = resources.filter(isNear).length;
+    for (let R = baseGapR + 1; R <= nearR && have < STARTER_FIELD_NODES; R++) {
+      for (let dy = -R; dy <= R && have < STARTER_FIELD_NODES; dy++)
+        for (let dx = -R; dx <= R && have < STARTER_FIELD_NODES; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== R) continue;   // walk this ring's perimeter
+          const x = bx + dx, y = cy + dy, k = `${x},${y}`;
+          if (x < 0 || y < 0 || x >= cols || y >= rows || occupied.has(k)) continue;
+          occupied.add(k); resources.push(mkRes(x, y, 'primary', 1)); have++;
+        }
     }
   }
   for (const row of rows8) {                            // then GUARANTEE the workbook counts per wave
