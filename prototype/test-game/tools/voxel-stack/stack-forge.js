@@ -2030,7 +2030,7 @@ const idb = (() => {
     tx.oncomplete = () => res(rq && rq.result); tx.onerror = () => rej(tx.error);
   }));
   return { put: (k, v) => op('readwrite', (s) => s.put(v, k)), get: (k) => op('readonly', (s) => s.get(k)),
-    keys: () => op('readonly', (s) => s.getAllKeys()) };
+    del: (k) => op('readwrite', (s) => s.delete(k)), keys: () => op('readonly', (s) => s.getAllKeys()) };
 })();
 const b64FromU8 = (a) => { let s = ''; for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };
 const u8FromB64 = (s) => { const bin = atob(s), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; };
@@ -2328,11 +2328,19 @@ async function openLoadModal() {
   const list = $('loadList'); list.innerHTML = '';
   if (!ids.length) list.innerHTML = '<div class="note">Nothing saved yet — bake a unit and click its slot to save one.</div>';
   for (const id of ids) {
+    const row = document.createElement('div'); row.className = 'row'; row.style.gap = '4px';
     const b = document.createElement('button');
-    b.className = 'ghost loadRow';
+    b.className = 'ghost loadRow'; b.style.flex = '1';
     b.innerHTML = `<span class="lid">${id}</span><span class="ltag">${wip.has(id) ? '✎ project' : ''}${wip.has(id) && packed.has(id) ? ' · ' : ''}${packed.has(id) ? '📦 pack' : ''}</span>`;
     b.onclick = () => { $('loadModal').hidden = true; doAutosave(); selectUnit(id); };   // flush WIP before it's replaced
-    list.appendChild(b);
+    row.appendChild(b);
+    if (wip.has(id)) {                                                 // delete the WIP project (falls back to the pack, or gone)
+      const del = document.createElement('button'); del.className = 'ghost'; del.textContent = '🗑'; del.title = 'Delete this browser WIP project';
+      del.style.cssText = 'width:auto;padding:6px 9px;margin:0;flex:0 0 auto';
+      del.onclick = async (e) => { e.stopPropagation(); if (!confirm(`Delete the work-in-progress project for "${id}"? (Its saved pack, if any, stays.)`)) return; await idb.del('proj:' + id); if (activeUnitId === id) localStorage.removeItem('bulwark:sf:last'); openLoadModal(); };
+      row.appendChild(del);
+    }
+    list.appendChild(row);
   }
   $('loadModal').hidden = false;
 }
@@ -2347,21 +2355,27 @@ async function diagnoseLoad() {
   let projIds = [];
   try { projIds = ((await idb.keys()) || []).filter((k) => typeof k === 'string' && k.startsWith('proj:')).map((k) => k.slice(5)); } catch (e) { /* no store */ }
   const ids = [...new Set([...projIds, ...Object.keys(m)])].sort();
+  const hashStr = (s) => { let h = 5381; for (let i = 0; i < s.length; i += 7) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };  // sampled djb2 — same art → same hash
   const rows = [];
   for (const id of ids) {
     let wip = null; try { wip = await idb.get('proj:' + id); } catch (e) { /* skip */ }
     const hasWip = !!wip, content = wip ? projectHasContent(wip) : false;
     const viewsOf = (part) => (wip && wip.images && wip.images[part]) ? VIEWS.filter((v) => wip.images[part][v]).map((v) => v[0]).join('') : '';
     const imgs = wip ? `b:${viewsOf('body') || '-'} t:${viewsOf('turret') || '-'}` : '-';
-    const vox = (wip && wip.vox) ? ['body', 'turret'].filter((p) => wip.vox[p]).join(',') || '-' : '-';
+    const bTop = wip && wip.images && wip.images.body && wip.images.body.top;   // the ACTUAL body-top art
+    const art = bTop ? hashStr(bTop) : '-';
     const pack = !!m[id], packKind = pack ? (localUnits[id] ? 'saved' : (shippedUnits[id] ? 'shipped' : 'other')) : '-';
     const action = hasWip ? (content ? 'loadProject → EDITABLE' : 'loadProject → EMPTY (!)') : (pack ? 'loadPackPreview → baked only' : 'nothing to load');
-    rows.push({ id, wip: hasWip ? (content ? 'yes' : 'EMPTY') : '-', imgs, vox, layers: wip && wip.state ? `${wip.state.bodyLayers}/${wip.state.turretLayers}` : '-', pack: packKind, 'load →': action });
+    rows.push({ id, wip: hasWip ? (content ? 'yes' : 'EMPTY') : '-', imgs, artHash: art, layers: wip && wip.state ? `${wip.state.bodyLayers}/${wip.state.turretLayers}` : '-', pack: packKind, 'load →': action });
   }
   console.table(rows);
-  const empties = rows.filter((r) => r.wip === 'EMPTY').map((r) => r.id);
+  // group by art hash: any hash shared by >1 unit means those units carry the SAME source art (corruption)
+  const byArt = {};
+  for (const r of rows) if (r.artHash !== '-') (byArt[r.artHash] = byArt[r.artHash] || []).push(r.id);
+  const dupes = Object.values(byArt).filter((g) => g.length > 1);
+  if (dupes.length) console.warn('[diag] units SHARING the same body art (corrupted WIPs):', dupes);
   const el = $('loadDiagNote');
-  if (el) el.innerHTML = `Dumped <b>${rows.length}</b> units to the Console (F12). ` + (empties.length ? `<span style="color:#e0975f">Empty WIPs (load blank): ${empties.join(', ')}</span>` : 'No empty WIPs.');
+  if (el) el.innerHTML = `Dumped <b>${rows.length}</b> units to the Console. ` + (dupes.length ? `<span style="color:#e0975f">Same-art groups (corrupted): ${dupes.map((g) => g.join('=')).join(' · ')}</span>` : 'No shared-art corruption.');
   return rows;
 }
 if ($('loadDiag')) $('loadDiag').onclick = diagnoseLoad;
