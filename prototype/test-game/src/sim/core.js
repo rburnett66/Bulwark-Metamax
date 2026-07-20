@@ -1,6 +1,6 @@
 import { ASSUMPTIONS, WAVES, MAP, getUnitDef, getStructureDef } from '../data/tables.js';
 import { createRng } from './rng.js';
-import { buildNavGrid, findWalkerPath, getFlyerPath, getWaterPath } from './pathfinding.js';
+import { buildNavGrid, findWalkerPath, findRoute, getFlyerPath, getWaterPath } from './pathfinding.js';
 import { createUnit, createBase, createStructure } from './entities.js';
 import { acquireTarget, applyDamage, stepCombat } from './combat.js';
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
@@ -50,14 +50,14 @@ function seedRoute(state) {
   if (state.routes.length) return;
   const spawn = (state.map && state.map.spawnGround) || { x: 0, y: 0 };
   const from = roundCell(spawn), to = roundCell(state.base.pos);
-  const primary = findWalkerPath(state.navGrid, from, to);
+  const primary = findRoute(state.navGrid, from, to);   // prefer a 2-wide corridor
   if (!primary || !primary.length) return;
   state.routes.push(primary);
   // Seed several DISTINCT corridors up front: each avoids the cells of the routes already found (buffer 1 for
   // a lane of clear space between them, then buffer 0 as a fallback), so units fan out from the very start.
   for (let k = 0; k < 4 && state.routes.length < MAX_ROUTES; k++) {
-    let alt = findWalkerPath(state.navGrid, from, to, routeCellsSet(state, 1));
-    if (!alt || !alt.length) alt = findWalkerPath(state.navGrid, from, to, routeCellsSet(state, 0));
+    let alt = findRoute(state.navGrid, from, to, routeCellsSet(state, 1));
+    if (!alt || !alt.length) alt = findRoute(state.navGrid, from, to, routeCellsSet(state, 0));
     if (alt && alt.length && !state.routes.some((r) => sameRoute(r, alt))) state.routes.push(alt);
     else break;
   }
@@ -127,8 +127,8 @@ function discoverRoute(state, jam) {   // append a NEW spawn→base route that s
   const from = roundCell(spawn), to = roundCell(state.base.pos);
   const avoid = routeCellsSet(state, 0);
   if (jam) for (const c of jam) avoid.add(c);
-  let p = findWalkerPath(state.navGrid, from, to, avoid);          // avoid existing routes + the jam → diverse
-  if (!p || !p.length) p = findWalkerPath(state.navGrid, from, to, jam);   // fallback: just skirt the jam
+  let p = findRoute(state.navGrid, from, to, avoid);          // prefer 2-wide, avoid existing routes + the jam
+  if (!p || !p.length) p = findRoute(state.navGrid, from, to, jam);   // fallback: just skirt the jam
   if (!p || !p.length) return;
   for (const r of state.routes) if (sameRoute(r, p)) return;
   state.routes.push(p);
@@ -610,7 +610,7 @@ export function stepMovement(state, dt) {
         else if ((unit._stuck = (unit._stuck || 0) + 1) >= 12) {                   // ~0.4s truly wedged → route around
           const avoid = jamCells(state, unit);
           discoverRoute(state, avoid);                                             // append a reusable alternate
-          const detour = findWalkerPath(state.navGrid, roundCell(unit.pos), roundCell(base.pos), avoid);
+          const detour = findRoute(state.navGrid, roundCell(unit.pos), roundCell(base.pos), avoid);   // stuck → reroute wide, around the jam
           if (detour && detour.length > 0) {
             unit.path = detour; unit.pathIdx = 0;
             unit._detourGraceTick = state.tick + 45;                               // ~1.5s to commit to going around
@@ -736,7 +736,7 @@ export function stepMovement(state, dt) {
             // re-path (already had a route) heads for this unit's own base SLOT so the mob rings the base.
             const p = (unit.routeIdx == null && (!unit.path || unit.path.length === 0))
               ? assignRoutePath(state, unit)
-              : findWalkerPath(state.navGrid, roundCell(unit.pos), baseTargetFor(state, unit));
+              : findRoute(state.navGrid, roundCell(unit.pos), baseTargetFor(state, unit));   // prefer 2-wide on the long haul
             if (p && p.length > 0) {
               unit.path = p;
               unit.pathIdx = 0;
