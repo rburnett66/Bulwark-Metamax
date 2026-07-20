@@ -633,7 +633,11 @@ function gridSelSet() {
   if (!gridSel || !gridGeom) return null;
   const g = gridGeom, foot = g.foot, N = foot * foot, set = new Set();
   const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
-  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); set.add(z * N + y * foot + x); }
+  const through = g.slice === 0;   // Layer 0 = surface projection → selection spans the WHOLE column (all depth); real layers stay limited to that one layer
+  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
+    if (through) { for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s); set.add(z * N + y * foot + x); } }
+    else { const [x, y, z] = gridTargetVox(g, cx, cy); set.add(z * N + y * foot + x); }
+  }
   return { part: g.part, set };
 }
 // assemble the current unit (body + mounted turret, honouring the part filter) and render it into a canvas
