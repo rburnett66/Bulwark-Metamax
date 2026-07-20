@@ -1177,40 +1177,46 @@ function renderGridView() {
     if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
     const t = palMap.get((r << 16) | (g << 8) | b); return t || [r, g, b];
   };
-  // ── ALIGN mode (owner 2026-07-20): stack the carved TOP projection (X×Y) above the SIDE projection (X×Z),
-  //    sharing the vertical X/length axis, to validate the carve + spot bad voxels from two angles. Read-only. ──
+  // ── ALIGN mode (owner 2026-07-20): third-angle projection of the CARVED model. TOP (X×Y) above SIDE (X×Z)
+  //    share the length axis X (vertical seam → X aligns down the left column); FRONT (Y×Z) sits to the RIGHT
+  //    of SIDE and shares the height axis Z (horizontal seam → Z aligns across the bottom row). Top↔Front share
+  //    Y diagonally (a 90° rotation apart). Validates that the view sizes line up + spot bad voxels. Read-only. ──
   if (gridAlign) {
     const lr2 = $('gridLayerRow'); if (lr2) lr2.style.display = 'none';
     const tr2 = $('gridToolRow'); if (tr2) tr2.style.display = 'none';
     const gr3 = $('gridGeoRow'); if (gr3) gr3.style.display = 'none';
     const gp2 = $('gridPalette'); if (gp2) gp2.style.display = 'none';
     const SEP = 2, Wc = cv.width, Hc = cv.height;
-    const cellA = Math.max(1, Math.floor(Math.min(Wc / foot, Hc / (foot + layers + SEP))));
-    const oxA = Math.floor((Wc - foot * cellA) / 2);
-    const oyTop = Math.floor((Hc - (foot + layers + SEP) * cellA) / 2);
-    const oySide = oyTop + (foot + SEP) * cellA;
+    const cellA = Math.max(1, Math.floor(Math.min(Wc / (2 * foot + SEP), Hc / (foot + layers + SEP))));
+    const gwA = (2 * foot + SEP) * cellA, ghA = (foot + layers + SEP) * cellA;
+    const oxL = Math.floor((Wc - gwA) / 2), oyT = Math.floor((Hc - ghA) / 2);
+    const oyB = oyT + (foot + SEP) * cellA;                 // bottom row: SIDE + FRONT
+    const oxF = oxL + (foot + SEP) * cellA;                 // right column: FRONT
     const surf = (axm, cx, cy) => { for (let s = 0; s < axm.depth; s++) { const [x, y, z] = axm.toVox(cx, cy, s); if (filled(x, y, z)) return colAt(x, y, z); } return null; };
     ctx.clearRect(0, 0, Wc, Hc); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, Wc, Hc);
-    const drawPane = (axm, pcols, prows, py, label) => {
-      if (cellA >= 4) { ctx.fillStyle = 'rgba(255,255,255,.025)'; for (let cy = 0; cy < prows; cy++) for (let cx = 0; cx < pcols; cx++) if ((cx + cy) & 1) ctx.fillRect(oxA + cx * cellA, py + cy * cellA, cellA, cellA); }
-      for (let cy = 0; cy < prows; cy++) for (let cx = 0; cx < pcols; cx++) { const col = surf(axm, cx, cy); if (col) { ctx.fillStyle = cssOf(col); ctx.fillRect(oxA + cx * cellA, py + cy * cellA, cellA, cellA); } }
-      ctx.strokeStyle = 'rgba(120,150,180,.45)'; ctx.lineWidth = 1; ctx.strokeRect(oxA + 0.5, py + 0.5, pcols * cellA - 1, prows * cellA - 1);
-      ctx.fillStyle = 'rgba(143,167,189,.92)'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'top'; ctx.fillText(label, oxA + 3, py + 3);
+    const drawPane = (axm, ox, oy, pcols, prows, label) => {
+      if (cellA >= 4) { ctx.fillStyle = 'rgba(255,255,255,.025)'; for (let cy = 0; cy < prows; cy++) for (let cx = 0; cx < pcols; cx++) if ((cx + cy) & 1) ctx.fillRect(ox + cx * cellA, oy + cy * cellA, cellA, cellA); }
+      for (let cy = 0; cy < prows; cy++) for (let cx = 0; cx < pcols; cx++) { const col = surf(axm, cx, cy); if (col) { ctx.fillStyle = cssOf(col); ctx.fillRect(ox + cx * cellA, oy + cy * cellA, cellA, cellA); } }
+      ctx.strokeStyle = 'rgba(120,150,180,.45)'; ctx.lineWidth = 1; ctx.strokeRect(ox + 0.5, oy + 0.5, pcols * cellA - 1, prows * cellA - 1);
+      ctx.fillStyle = 'rgba(143,167,189,.92)'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'top'; ctx.fillText(label, ox + 3, oy + 3);
     };
-    drawPane(AX.top, foot, foot, oyTop, 'TOP  X×Y');
-    drawPane(AX.side, foot, layers, oySide, 'SIDE  X×Z');
-    // X-extent (length) guides drawn through BOTH panes — the shared axis reads at a glance
-    let minx = foot, maxx = -1;
-    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (filled(x, y, z)) { if (x < minx) minx = x; if (x > maxx) maxx = x; }
+    drawPane(AX.top,   oxL, oyT, foot, foot,   'TOP  X×Y');
+    drawPane(AX.side,  oxL, oyB, foot, layers, 'SIDE  X×Z');
+    drawPane(AX.front, oxF, oyB, foot, layers, 'FRONT  Y×Z');
+    // shared-axis alignment guides: X (length, gold) vertical through TOP+SIDE; Z (height, cyan) horizontal through SIDE+FRONT
+    let minx = foot, maxx = -1, minz = layers, maxz = -1;
+    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (filled(x, y, z)) { if (x < minx) minx = x; if (x > maxx) maxx = x; if (z < minz) minz = z; if (z > maxz) maxz = z; }
     if (maxx >= 0) {
-      const y0 = oyTop, y1 = oySide + layers * cellA;
-      ctx.setLineDash([4, 3]); ctx.strokeStyle = 'rgba(242,200,105,.7)'; ctx.lineWidth = 1;
-      for (const gx of [minx, maxx + 1]) { const lx = oxA + gx * cellA; ctx.beginPath(); ctx.moveTo(lx + 0.5, y0); ctx.lineTo(lx + 0.5, y1); ctx.stroke(); }
-      ctx.strokeStyle = 'rgba(95,224,255,.55)'; const cxp = Math.round(oxA + (minx + maxx + 1) / 2 * cellA); ctx.beginPath(); ctx.moveTo(cxp + 0.5, y0); ctx.lineTo(cxp + 0.5, y1); ctx.stroke();
+      ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(242,200,105,.7)';            // X extent — vertical, spanning TOP and SIDE (left column)
+      for (const gx of [minx, maxx + 1]) { const lx = oxL + gx * cellA + 0.5; ctx.beginPath(); ctx.moveTo(lx, oyT); ctx.lineTo(lx, oyB + layers * cellA); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(95,224,255,.6)';             // Z extent — horizontal, spanning SIDE and FRONT (bottom row)
+      for (const zEdge of [layers - 1 - maxz, layers - minz]) { const ly = oyB + zEdge * cellA + 0.5; ctx.beginPath(); ctx.moveTo(oxL, ly); ctx.lineTo(oxF + foot * cellA, ly); ctx.stroke(); }
       ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(242,200,105,.9)'; ctx.font = '9px sans-serif'; ctx.textBaseline = 'bottom'; ctx.fillText('length ' + (maxx - minx + 1) + ' vox', oxA + minx * cellA + 2, oySide - 2);
+      ctx.fillStyle = 'rgba(242,200,105,.9)'; ctx.font = '9px sans-serif'; ctx.textBaseline = 'bottom'; ctx.fillText('len ' + (maxx - minx + 1), oxL + minx * cellA + 2, oyB - 2);
+      ctx.fillStyle = 'rgba(95,224,255,.9)'; ctx.textBaseline = 'top'; ctx.fillText('ht ' + (maxz - minz + 1), oxF + 3, oyB + (layers - 1 - maxz) * cellA + 1);
     }
-    gridGeom = { align: true, editable: false, cell: cellA, ox: oxA, oyTop, oySide, foot, layers, part };
+    gridGeom = { align: true, editable: false, cell: cellA, ox: oxL, oyTop: oyT, oySide: oyB, foot, layers, part };
     return;
   }
   const cellAt = (cx, cy) => {
