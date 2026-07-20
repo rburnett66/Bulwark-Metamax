@@ -21,6 +21,34 @@ const WORLD_SCALE = 3, BODY_FRAMES = 16, TURRET_FRAMES = 64, MANIFEST_KEY = 'bul
 // Bigger unit ⇒ higher Resolution, never a bigger stretch — voxel density is constant on the board.
 const VOX_PER_TILE = 32;
 const unitTiles = (foot) => foot / VOX_PER_TILE;
+// COLLISION footprint: mirrors the game (loader.VOXEL_UNIT_SCALE 0.5) with a small pad so the body touches
+// just before it collides. Half-width in TILES = tiles · 0.5 · 1.2 / 2 = tiles · 0.3. Shown as a ring in the
+// in-game preview and shipped as pack.collision so the sim's unit radius matches the tank on screen.
+const GAME_UNIT_SCALE = 0.5, COLLISION_PAD = 1.2;
+const collisionTilesFor = (foot) => unitTiles(foot) * GAME_UNIT_SCALE * COLLISION_PAD / 2;
+// collision from the ACTUAL filled body extent, NOT the footprint resolution (which includes padding) — so
+// the ring + shipped pack.collision match the VISIBLE tank, not the oversized bounding box. Cached per model.
+let _collCache = { sig: '', tiles: 0 };
+function bodyExtentTiles() {
+  // hash the edits (key + del/fill flag), not just the count — erase-then-repaint keeps size constant but
+  // changes the extent, so a size-only signature would return a stale (too-small) collision radius.
+  let h = 0; for (const [k, v] of voxEdit.body) h = (h * 31 + k + (v === 'del' ? 1 : 2)) | 0;
+  const foot = state.foot, layers = state.bodyLayers, sig = foot + ':' + layers + ':' + voxEdit.body.size + ':' + h;
+  if (_collCache.sig === sig) return _collCache.tiles;
+  let ex = foot;
+  try {
+    const m = buildModel('body', foot, layers);
+    let minx = foot, maxx = -1, miny = foot, maxy = -1;
+    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      if (!m.filled(x, y, z)) continue;
+      if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
+    }
+    if (maxx >= 0) ex = Math.max(maxx - minx + 1, maxy - miny + 1);   // widest horizontal span of real voxels
+  } catch (e) { /* fall back to footprint */ }
+  const tiles = (ex / VOX_PER_TILE) * GAME_UNIT_SCALE * COLLISION_PAD / 2;
+  _collCache = { sig, tiles };
+  return tiles;
+}
 const _CLASSES = new Set(['ground', 'air', 'structure']), _KINDS = new Set(['directional', 'stack']);
 function validatePack(p) {
   const e = [];
@@ -111,7 +139,7 @@ function keyBackground(data, w, h, tol) {
 // all keeps is removed), CUT shapes punch holes. Keying runs FIRST (the flood needs the real image borders).
 function keyedCanvas(img, tol, polys) {
   const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
-  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
   const id = g.getImageData(0, 0, cv.width, cv.height); keyBackground(id.data, cv.width, cv.height, tol); g.putImageData(id, 0, 0);
   if (polys && polys.length) {
     const trace = (list) => { g.beginPath();
@@ -139,7 +167,7 @@ function keyedCropped(img, tol, poly) {
 function gridStretch(canvas, w, h, elev) {
   h = Math.max(1, h);
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const ctx = cv.getContext('2d'); ctx.drawImage(canvas, 0, 0, w, h);
+  const ctx = cv.getContext('2d', { willReadFrequently: true }); ctx.drawImage(canvas, 0, 0, w, h);
   const d = ctx.getImageData(0, 0, w, h).data, m = new Uint8Array(w * h), c = new Uint8Array(w * h * 3);
   for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
     const row = elev ? (h - 1 - r) : r, i = row * w + a, p = (r * w + a) * 4;
@@ -217,8 +245,8 @@ function writeVox(nx, ny, nz, voxels, palette) {
 }
 // gather a part's filled voxels (palette cleanup applied) as {x,y,z,r,g,b}, offset into place
 function collectVox(partId, foot, layers, zOff, xOff) {
-  const { filled, vcol } = buildModel(partId, foot, layers), N = foot * foot;
-  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN), out = [];
+  const { filled, vcol, views } = buildModel(partId, foot, layers), N = foot * foot;
+  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, views), out = [];
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     if (!filled(x, y, z)) continue;
     const c = (z * N + y * foot + x) * 3; let r = vcol[c], g = vcol[c + 1], b = vcol[c + 2];
@@ -251,13 +279,47 @@ function exportVox() {
 // length) + FRONT (height across the width) → the carved height; BACK falls back for FRONT. A voxel is
 // filled only where every supplied view agrees. Top alone = flat extrude. No Top view → procedural.
 // Returns { cd (colour bytes), H (top-surface height/column), filled(x,y,z) }.
+// GEOMETRY placement (owner 2026-07-18): the legacy "top = master scale" normalization, expressed as
+// the three world-axis spans [lo,hi) the carve reads — spanX/spanY = footprint length/width, spanZ =
+// height. The geometry step will let the user override these; keeping the math here verbatim means auto
+// placement is byte-identical to before. Every downstream mask derives bw/bh/Hv/ox/oy/z0 from the spans.
+function autoSpans(topC, sideC, frontC, foot, layers, reach) {
+  let s, bw, bh, ox, oy;
+  if (topC) {                                            // footprint from the top (aspect-preserving)
+    const availW = Math.max(8, foot - reach);            // leave room up-front for the barrel
+    s = Math.min(availW / topC.width, foot / topC.height);
+    bw = Math.max(1, Math.round(topC.width * s)); bh = Math.max(1, Math.round(topC.height * s));
+    ox = Math.floor((availW - bw) / 2); oy = Math.floor((foot - bh) / 2);   // body sits toward the rear
+  } else {                                               // no top: length from side, width from front
+    const SL = sideC ? sideC.width : foot, FW = frontC ? frontC.width : Math.round(foot * 0.5);
+    s = Math.min(foot / SL, foot / Math.max(1, FW));
+    bw = Math.max(1, Math.round(SL * s)); bh = Math.max(1, Math.round(FW * s));
+    ox = Math.floor((foot - bw) / 2); oy = Math.floor((foot - bh) / 2);
+  }
+  // HEIGHT: prefer the side under the top's length scale, so the side keeps its own proportions.
+  const Hraw = (topC && sideC) ? sideC.height * (bw / sideC.width)
+    : frontC ? frontC.height * (bh / frontC.width)
+    : sideC ? sideC.height * (bw / sideC.width)
+    : layers * 0.66;
+  const Hv = Math.min(layers, Math.max(1, Math.round(Hraw)));
+  return { spanX: { lo: ox, hi: ox + bw }, spanY: { lo: oy, hi: oy + bh }, spanZ: { lo: 0, hi: Hv }, Hraw };
+}
+// the spans the carve uses: auto placement (autoSpans) unless the artist has manually reconciled this
+// part in the geometry step, in which case use the saved spans, clamped to the grid (lo<hi, hi≤foot/≤layers).
+function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
+  const g = geomState[partId];
+  if (!g || g.auto || !g.spanX) return autoSpans(topC, sideC, frontC, foot, layers, reach);
+  const span = (s, cap) => { let lo = Math.max(0, Math.min(cap - 1, s.lo | 0)), hi = Math.max(lo + 1, Math.min(cap, s.hi | 0)); return { lo, hi }; };
+  const spanZ = span(g.spanZ, layers);
+  return { spanX: span(g.spanX, foot), spanY: span(g.spanY, foot), spanZ, Hraw: spanZ.hi - spanZ.lo };
+}
 function buildVolume(partId, foot, layers) {
   if (voxPart[partId]) return buildVoxVolume(voxPart[partId], foot, layers);   // imported .vox → use it directly
   const src = imgs[partId], N = foot * foot;
   if (!src.top && !src.side && !src.front && !src.back) {   // ── no art at all → procedural placeholder ──
     const col = document.createElement('canvas'); col.width = col.height = foot;
     const hgt = document.createElement('canvas'); hgt.width = hgt.height = foot;
-    const cx = col.getContext('2d'), hx = hgt.getContext('2d');
+    const cx = col.getContext('2d', { willReadFrequently: true }), hx = hgt.getContext('2d', { willReadFrequently: true });
     hx.fillStyle = '#000'; hx.fillRect(0, 0, foot, foot);
     (partId === 'turret' ? drawTurret : drawBody)(cx, hx, foot);
     const cd = cx.getImageData(0, 0, foot, foot).data, hd = hx.getImageData(0, 0, foot, foot).data;
@@ -274,44 +336,27 @@ function buildVolume(partId, foot, layers) {
   const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
   // procedural barrel reserves a FORWARD margin so the body shrinks back and the tube protrudes past it
   const reach = (partId === 'turret' && state.barrelLen > 0) ? state.barrelLen : 0;
-  let s, bw, bh, ox, oy;
-  if (topC) {                                            // footprint + colour from the top (aspect-preserving)
-    const availW = Math.max(8, foot - reach);            // leave room up-front for the barrel
-    s = Math.min(availW / topC.width, foot / topC.height);
-    bw = Math.max(1, Math.round(topC.width * s)); bh = Math.max(1, Math.round(topC.height * s));
-    ox = Math.floor((availW - bw) / 2); oy = Math.floor((foot - bh) / 2);   // body sits toward the rear
-    tx.drawImage(topC, ox, oy, bw, bh);
-  } else {                                               // no top: length from side, width from front
-    const SL = sideC ? sideC.width : foot, FW = frontC ? frontC.width : Math.round(foot * 0.5);
-    s = Math.min(foot / SL, foot / Math.max(1, FW));
-    bw = Math.max(1, Math.round(SL * s)); bh = Math.max(1, Math.round(FW * s));
-    ox = Math.floor((foot - bw) / 2); oy = Math.floor((foot - bh) / 2);
-    tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh);
-  }
+  // GEOMETRY: placement comes from three shared world-axis spans (auto today via autoSpans; the geometry
+  // step will override them). Every mask below derives from the spans — z0 lets a silhouette sit off the
+  // ground (z0=0 today, so behaviour is unchanged). Reconciliation is implicit: shared axes = shared span.
+  const sp = geomSpans(partId, topC, sideC, frontC, foot, layers, reach);
+  const ox = sp.spanX.lo, bw = sp.spanX.hi - sp.spanX.lo;
+  const oy = sp.spanY.lo, bh = sp.spanY.hi - sp.spanY.lo;
+  const z0 = sp.spanZ.lo, Hv = sp.spanZ.hi - sp.spanZ.lo, Hraw = sp.Hraw;
+  if (Hraw > layers + 0.5 && !suppressSquashWarn) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
+  if (topC) tx.drawImage(topC, ox, oy, bw, bh);                    // footprint + colour from the top
+  else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
-  // NORMALIZATION CONTRACT: the top view is the master scale. Its fit fixes bw (length) and bh (width),
-  // and every elevation registers against those — side maps its width to bw (top↔side length-normalized),
-  // front maps its width to bh (top↔front width-normalized). HEIGHT follows the same rule at ONE uniform
-  // scale: prefer the side under the top's length scale — height = sideC.height × (bw / sideC.width) —
-  // so the side keeps its own proportions (a front rendered at a different zoom can no longer squash it).
-  // Without a top+side pair, the front is the truth (near-square, so a long barrel can't distort it).
-  // The other elevation is then stretched (gridStretch) to this SAME Hv.
-  const Hraw = (topC && sideC) ? sideC.height * (bw / sideC.width)
-    : frontC ? frontC.height * (bh / frontC.width)
-    : sideC ? sideC.height * (bw / sideC.width)
-    : layers * 0.66;
-  const Hv = Math.min(layers, Math.max(1, Math.round(Hraw)));
-  if (Hraw > layers + 0.5) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
   const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to the common Hv)
   const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
   const backC = src.back ? keyedCropped(src.back, tol.back, pol.back) : null; // colour-only: paints the −x walls
   const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
-  const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= 0 && z < Hv && !!sideG.m[z * bw + (x - ox)]) : z < Hv;
-  const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= 0 && z < Hv && !!frontG.m[z * bh + (y - oy)]) : z < Hv;
+  const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= z0 && z < z0 + Hv && !!sideG.m[(z - z0) * bw + (x - ox)]) : (z >= z0 && z < z0 + Hv);
+  const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv && !!frontG.m[(z - z0) * bh + (y - oy)]) : (z >= z0 && z < z0 + Hv);
   const flat = !sideG && !frontG;
-  const views = (sideG || frontG || backG) ? { side: sideG, front: frontG, back: backG, ox, oy } : null;
-  const bodyFilled = flat ? (x, y, z) => top(x, y) && z < Hv : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
+  const views = (sideG || frontG || backG) ? { side: sideG, front: frontG, back: backG, ox, oy, z0 } : null;
+  const bodyFilled = flat ? (x, y, z) => top(x, y) && z >= z0 && z < z0 + Hv : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
   // procedural barrel: a real round tube along +X, placed relative to the body box, ORed into the volume
   let inBarrel = null;
   if (reach && topC) {
@@ -332,23 +377,50 @@ function buildVolume(partId, foot, layers) {
     let h = 0; for (let z = layers - 1; z >= 0; z--) if (filled(x, y, z)) { h = z + 1; break; }
     H[y * foot + x] = h;
   }
-  return { cd, H, filled, views, dbg: { bw, bh, Hv, Hraw: +Hraw.toFixed(1), tw: topC && topC.width, th: topC && topC.height, sw: sideC && sideC.width, sh: sideC && sideC.height, fw: frontC && frontC.width, fh: frontC && frontC.height } };
+  return { cd, H, filled, views, sp, dbg: { bw, bh, Hv, Hraw: +Hraw.toFixed(1), tw: topC && topC.width, th: topC && topC.height, sw: sideC && sideC.width, sh: sideC && sideC.height, fw: frontC && frontC.width, fh: frontC && frontC.height } };
 }
 
 // Unified voxel model for every consumer: always per-voxel colour (vcol), whether the part came from a
 // .vox (already per-voxel) or the photo carve (per-column cd, materialised here). So there's ONE model —
 // a stack of coloured cubes — and no cd/vcol branching downstream. Returns { vcol, filled, dbg }.
-function buildModel(partId, foot, layers) {
-  const v = buildVolume(partId, foot, layers);
-  if (v.vcol) return v;                                              // .vox → already a voxel model
-  const N = foot * foot, cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
+// per-part manual voxel edits from the grid slice editor: key = z*N + y*foot + x →
+//   'del'   the voxel is force-removed (even if the source carved it)
+//   [r,g,b] the voxel is force-added/painted with this raw colour
+// Applied at the tail of buildModel so the orbit preview, side chart, bake, in-game inset, Tier C
+// embed and .vox export all see the same edited model (owner 2026-07-17).
+const voxEdit = { body: new Map(), turret: new Map() };
+// GEOMETRY reconciliation state (owner 2026-07-18): per-part placement of the source views on the
+// target grid, as three shared world-axis spans. `auto:true` = follow autoSpans (legacy); the geometry
+// step flips it to false and stores explicit spanX/spanY/spanZ {lo,hi}. `bottomFrom` = where the −z
+// underside derives from. Persisted in the project (version 2). Shared axes = shared span object.
+const geomState = { body: { auto: true, bottomFrom: 'top' }, turret: { auto: true, bottomFrom: 'top' } };
+// the space-carved model BEFORE manual edits (buildVolume is not cached — callers that only need the
+// base, like the live slice editor, cache this and layer edits on cheaply).
+function buildModelRaw(partId, foot, layers) {
+  const v = buildVolume(partId, foot, layers), N = foot * foot;
+  if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };  // .vox → already voxels
+  const cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     const i = y * foot + x, p = i * 4; if (cd[p + 3] < 20) continue;
     const r = cd[p], g = cd[p + 1], b = cd[p + 2];
     for (let z = 0; z < layers; z++) if (filled(x, y, z)) { const c = (z * N + i) * 3; vcol[c] = r; vcol[c + 1] = g; vcol[c + 2] = b; }
   }
-  return { vcol, filled, cd: null, views: v.views, dbg: v.dbg };
+  return { vcol, filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };
 }
+// layer the voxEdit overlay onto a raw model (clone vcol so buildVolume's arrays are never mutated).
+function applyVoxEdits(m, partId, foot, layers) {
+  const ed = voxEdit[partId]; if (!ed || !ed.size) return m;
+  const N = foot * foot, vc = m.vcol.slice();
+  for (const [k, val] of ed) if (val !== 'del') { const c = k * 3; vc[c] = val[0]; vc[c + 1] = val[1]; vc[c + 2] = val[2]; }
+  const base = m.filled;
+  const editedFilled = (x, y, z) => {
+    if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) return false;
+    const e = ed.get(z * N + y * foot + x);
+    return e !== undefined ? e !== 'del' : base(x, y, z);
+  };
+  return { vcol: vc, filled: editedFilled, cd: null, views: m.views, dbg: m.dbg };
+}
+function buildModel(partId, foot, layers) { return applyVoxEdits(buildModelRaw(partId, foot, layers), partId, foot, layers); }
 
 // median-cut → n representative colours. Flattens camo/gradients (and rich .vox palettes) into a small,
 // contrasting set of flat cube colours so the block structure reads clean instead of noisy.
@@ -373,16 +445,88 @@ function medianCut(colors, n) {
   }
   return boxes.map((b) => { let r = 0, g = 0, bl = 0; for (const c of b) { r += c[0]; g += c[1]; bl += c[2]; } const m = b.length || 1; return [Math.round(r / m), Math.round(g / m), Math.round(bl / m)]; });
 }
+// ── HUE-FAMILY PALETTE REDUCER (owner 2026-07-17) ─────────────────────────────────────────────────
+// Plain median-cut is population-blind: a hull that is mostly grey/brown has a huge low-hue mass, so
+// every split lands back in it and sparse accents (a washed-out blue window, a gold stripe) get
+// averaged away — "reduce and you get nothing but grey/brown." Instead we bucket EVERY colour by hue
+// (only near-perfect grey goes to one neutral bucket), guarantee each hue family present at least one
+// palette slot, then split the remaining budget across families by population. A lone washed accent
+// can never be out-voted by the grey/brown mass. Pinned colours are always kept on top of that.
+const chromaOf = (r, g, b) => Math.max(r, g, b) - Math.min(r, g, b);
+function weightedMedianCut(entries, n) {
+  if (!entries.length || n <= 0) return [];
+  let boxes = [entries.slice()];
+  const rangeOf = (b) => { let mn = [255, 255, 255], mx = [0, 0, 0]; for (const e of b) for (let ch = 0; ch < 3; ch++) { const v = e.rgb[ch]; if (v < mn[ch]) mn[ch] = v; if (v > mx[ch]) mx[ch] = v; } return [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]]; };
+  while (boxes.length < n) {
+    let bi = -1, best = -1;
+    for (let i = 0; i < boxes.length; i++) { if (boxes[i].length < 2) continue; const rg = rangeOf(boxes[i]); const m = Math.max(rg[0], rg[1], rg[2]); if (m > best) { best = m; bi = i; } }
+    if (bi < 0) break;
+    const box = boxes[bi], rg = rangeOf(box), ch = rg[1] > rg[0] ? (rg[2] > rg[1] ? 2 : 1) : (rg[2] > rg[0] ? 2 : 0);
+    box.sort((a, b) => a.rgb[ch] - b.rgb[ch]);
+    const total = box.reduce((s, e) => s + e.c, 0); let acc = 0, mid = 1;
+    for (let i = 0; i < box.length; i++) { acc += box[i].c; if (acc >= total / 2) { mid = Math.max(1, Math.min(box.length - 1, i + 1)); break; } }
+    boxes.splice(bi, 1, box.slice(0, mid), box.slice(mid));
+  }
+  return boxes.map((b) => { let r = 0, g = 0, bl = 0, w = 0; for (const e of b) { r += e.rgb[0] * e.c; g += e.rgb[1] * e.c; bl += e.rgb[2] * e.c; w += e.c; } w = w || 1; return [Math.round(r / w), Math.round(g / w), Math.round(bl / w)]; });
+}
+function buildPalette(counts, n, pins, drops) {
+  const nearAny = (rgb, list, d2) => (list || []).some((p) => (p[0] - rgb[0]) ** 2 + (p[1] - rgb[1]) ** 2 + (p[2] - rgb[2]) ** 2 < d2);
+  const NEUTRAL_CH = 16;                                             // only near-perfect grey is "neutral"
+  const bucketOf = (rgb) => chromaOf(...rgb) < NEUTRAL_CH ? 'n' : 'h' + (Math.round(rgb2hsv(...rgb)[0] / 15) % 24);
+  let entries = [...counts.entries()].map(([k, c]) => ({ rgb: [(k >> 16) & 255, (k >> 8) & 255, k & 255], c }));
+  // ELIMINATE: a dropped colour removes its WHOLE hue family (e.g. eliminate one grey → all greys go);
+  // those voxels remap to the nearest surviving colour in the quantiser. (Guard: never drop everything.)
+  if (drops && drops.length) {
+    const dropB = new Set(drops.map(bucketOf));
+    const kept = entries.filter((e) => !dropB.has(bucketOf(e.rgb)));
+    if (kept.length) entries = kept;
+  }
+  const seeds = (pins || []).map((p) => p.slice());
+  if (entries.length + seeds.length <= n) {                          // budget covers every survivor → keep them all
+    for (const e of entries) if (!nearAny(e.rgb, seeds, 1)) seeds.push(e.rgb);
+    return seeds.slice(0, n);
+  }
+  let budget = n - seeds.length;
+  if (budget <= 0) return seeds.slice(0, n);
+  const fams = new Map();                                            // hue bucket (or 'n' = grey) → members + population
+  for (const e of entries) {
+    const key = bucketOf(e.rgb);
+    let f = fams.get(key); if (!f) { f = { items: [], pop: 0 }; fams.set(key, f); }
+    f.items.push(e); f.pop += e.c;
+  }
+  const famKeys = [...fams.keys()], fl = [...fams.values()];
+  // a family the artist already PINNED a colour in is already represented — don't mint a base slot for it,
+  // so pinning one black/grey no longer forces the reducer to add extra greys on top of it.
+  const pinnedFams = new Set(seeds.map((s) => bucketOf(s)));
+  const order = fl.map((_, i) => i).sort((a, b) => fl[b].pop - fl[a].pop);
+  const alloc = fl.map(() => 0);
+  let left = budget;
+  for (const i of order) { if (left <= 0) break; if (pinnedFams.has(famKeys[i])) continue; alloc[i] = 1; left--; }   // 1 slot per UNPINNED family
+  const active = order.filter((i) => alloc[i] > 0), totalPop = active.reduce((s, i) => s + fl[i].pop, 0) || 1;
+  const rema = active.map((i) => ({ i, w: fl[i].pop / totalPop * left })); let used = 0;
+  for (const r of rema) { const add = Math.floor(r.w); alloc[r.i] += add; used += add; }   // proportional to population
+  rema.sort((a, b) => (b.w % 1) - (a.w % 1));
+  for (let k = 0; k < left - used && k < rema.length; k++) alloc[rema[k].i]++;   // largest-remainder for the leftovers
+  for (let i = 0; i < fl.length; i++) if (alloc[i] > 0) for (const c of weightedMedianCut(fl[i].items, alloc[i])) seeds.push(c);
+  return seeds.slice(0, n);
+}
 // build a colour→palette quantiser over a part's filled voxels (null when Palette is off / full colour)
-function buildQuantiser(cd, vcol, filled, foot, layers, n) {
+// `views` (side/front/back source art) is folded in so colours that only appear on a WALL — a blue
+// window, a gold stripe painted only in the side sheet — are palette candidates too, instead of being
+// quantised away against a top-only palette. buildFaces and the grid pass the same views → they agree.
+function buildQuantiser(cd, vcol, filled, foot, layers, n, views) {
   if (!n) return null;
-  const N = foot * foot, seen = new Set(), cols = [];
+  const N = foot * foot, counts = new Map();
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     if (!filled(x, y, z)) continue;
     let r, g, b; if (vcol) { const c = (z * N + y * foot + x) * 3; r = vcol[c]; g = vcol[c + 1]; b = vcol[c + 2]; } else { const p = (y * foot + x) * 4; r = cd[p]; g = cd[p + 1]; b = cd[p + 2]; }
-    const key = (r << 16) | (g << 8) | b; if (!seen.has(key)) { seen.add(key); cols.push([r, g, b]); }
+    const key = (r << 16) | (g << 8) | b; counts.set(key, (counts.get(key) || 0) + 1);
   }
-  const pal = medianCut(cols, n), cache = new Map();
+  if (views) for (const g of [views.side, views.front, views.back]) if (g && g.m) {
+    for (let i = 0; i < g.w * g.h; i++) if (g.m[i]) { const key = (g.c[i * 3] << 16) | (g.c[i * 3 + 1] << 8) | g.c[i * 3 + 2]; counts.set(key, (counts.get(key) || 0) + 1); }
+  }
+  const kRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
+  const pal = buildPalette(counts, n, [...palKeep].map(kRGB), [...palDrop].map(kRGB)), cache = new Map();
   return (r, g, b) => {
     const key = (r << 16) | (g << 8) | b; let v = cache.get(key); if (v !== undefined) return v;
     let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - g) * (p[1] - g) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } }
@@ -396,7 +540,7 @@ function buildQuantiser(cd, vcol, filled, foot, layers, n) {
 // n: 0 = top, 1 = +x, 2 = −x, 3 = +y, 4 = −y (grid space, y = image-down).
 function buildFaces(partId, foot, layers) {
   const { filled, vcol, views: V } = buildModel(partId, foot, layers), N = foot * foot; // unified voxel model
-  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN);      // palette cleanup (median-cut)
+  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, V);   // palette cleanup (incl. wall art)
   // wall colour comes from the elevation view that DEPICTS that wall: side view → ±y walls (far side
   // mirrored), front view → +x wall, back view → −x wall (mirrored front when no back was drawn).
   // Top view keeps colouring the tops. Fallback everywhere = the voxel's column colour.
@@ -407,9 +551,10 @@ function buildFaces(partId, foot, layers) {
   };
   const wallCol = (x, y, z, n) => {
     if (!V) return null;
-    if (n >= 3) return pick(V.side, x - V.ox, z, n === 4);
-    if (n === 2 && V.back) return pick(V.back, y - V.oy, z, false);
-    return pick(V.front, y - V.oy, z, n === 2);
+    const zz = z - (V.z0 || 0);                          // masks are Hv tall from z0; index into them from z0
+    if (n >= 3) return pick(V.side, x - V.ox, zz, n === 4);
+    if (n === 2 && V.back) return pick(V.back, y - V.oy, zz, false);
+    return pick(V.front, y - V.oy, zz, n === 2);
   };
   const faces = [];
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
@@ -475,20 +620,32 @@ function renderParts(ctx, S, cx, groundY, el, parts) {
         ctx.moveTo(PX(x0, Y), PY(x0, Y, z)); ctx.lineTo(PX(x0 + 1, Y), PY(x0 + 1, Y, z));
         ctx.lineTo(PX(x0 + 1, Y), PY(x0 + 1, Y, z + 1)); ctx.lineTo(PX(x0, Y), PY(x0, Y, z + 1));
       }
-      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.closePath(); ctx.fill();
+      if (P.sel && P.sel.has(f.z * F.foot * F.foot + f.y * F.foot + f.x)) {   // outline GRID-VIEW-selected voxels in cyan
+        ctx.strokeStyle = '#5fe0ff'; ctx.lineWidth = 1.75; ctx.stroke(); ctx.lineWidth = 0.75;
+      } else ctx.stroke();
     }
   }
 }
 
+// the voxels currently selected in the GRID VIEW (rect × current slice), keyed for the 3D outline. null = none.
+function gridSelSet() {
+  if (!gridSel || !gridGeom) return null;
+  const g = gridGeom, foot = g.foot, N = foot * foot, set = new Set();
+  const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
+  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); set.add(z * N + y * foot + x); }
+  return { part: g.part, set };
+}
 // assemble the current unit (body + mounted turret, honouring the part filter) and render it into a canvas
 function drawScene(meta, el, bodyAz, turretAz) {
   const ctx = meta.ctx; ctx.clearRect(0, 0, meta.W, meta.Hp);
   const mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
+  const sel = gridSelSet();
   const parts = [];
-  if (state.part !== 'turret') parts.push({ faces: bodyFaces, az: bodyAz });
+  if (state.part !== 'turret') parts.push({ faces: bodyFaces, az: bodyAz, sel: sel && sel.part === 'body' ? sel.set : null });
   if (state.part !== 'body') parts.push({ faces: turretFaces, az: turretAz, zOff: mountDz,
     gx: state.turretDx * Math.cos(bodyAz), gy: state.turretDx * Math.sin(bodyAz),
-    pivotFrac: 0.5 + state.turretPivot / 100 });
+    pivotFrac: 0.5 + state.turretPivot / 100, sel: sel && sel.part === 'turret' ? sel.set : null });
   renderParts(ctx, meta.S, meta.cx, meta.groundY, el, parts);
 }
 
@@ -528,6 +685,58 @@ function bakeAngleCache(renderer, faces, opts) {
 }
 const bucketOf = (a, n) => (((Math.round(a / ((Math.PI * 2) / n)) % n) + n) % n);
 
+// ── SHADOW BAKE (Shading epic S1): a REAL cast-shadow shape, not the old top-sprite-sheared hack.
+// Every FILLED voxel drops its footprint to the ground plane, sheared away from the world-fixed sun by
+// its height; the union of dark quads is the true silhouette the volume would throw. Baked per angle
+// into an atlas parallel to the frame atlas, so the runtime just picks a frame (no runtime distortion).
+// Sun is screen-fixed lower-right (matches src/render/sun.js — top-left sun, azimuth 135°).
+const SHADOW_EL = 55;                                   // shadow light elevation (°): steeper = shorter
+const SHADOW_DIRX = Math.SQRT1_2, SHADOW_DIRY = Math.SQRT1_2;   // screen lower-right unit vector
+// per-voxel-height screen shear (px), given px-per-voxel S and voxel height zScale
+const shadowGain = (S) => S * state.zScale / Math.tan(SHADOW_EL * Math.PI / 180);
+
+function renderShadowVolume(ctx, S, cx, groundY, el, foot, layers, filled, az, pivotFrac) {
+  const se = Math.sin(el * Math.PI / 180), ca = Math.cos(az), sa = Math.sin(az);
+  const cx0 = foot * (pivotFrac == null ? 0.5 : pivotFrac), cy0 = foot / 2, gain = shadowGain(S);
+  ctx.fillStyle = '#000';
+  for (let z = 0; z < layers; z++) {
+    const dx = gain * z * SHADOW_DIRX, dy = gain * z * SHADOW_DIRY;     // height shear, screen px
+    for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      if (!filled(x, y, z)) continue;
+      const P = (X, Y) => {                                             // footprint corner → ground, sheared
+        const rx = (X - cx0) * ca - (Y - cy0) * sa, ry = (X - cx0) * sa + (Y - cy0) * ca;
+        return [cx + S * rx + dx, groundY + S * ry * se + dy];
+      };
+      const a = P(x, y), b = P(x + 1, y), c = P(x + 1, y + 1), d = P(x, y + 1);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+      ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.closePath(); ctx.fill();
+    }
+  }
+}
+
+// Mirror of bakeAngleCache for the shadow: per-angle ground silhouette RTs, same geom so shadowFrames
+// align 1:1 with the body/turret frames (same pivot) — the runtime draws them at the unit's anchor.
+function bakeShadowCache(renderer, filled, opts) {
+  const { frames, g, pivotFrac = 0.5, el, scale = 1, foot, layers } = opts, STEP = (Math.PI * 2) / frames;
+  const W = g.RTW * scale, H = g.RTH * scale;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const tex = PIXI.Texture.from(cv); tex.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
+  const spr = new PIXI.Sprite(tex);
+  const cache = [];
+  for (let a = 0; a < frames; a++) {
+    ctx.clearRect(0, 0, W, H);
+    renderShadowVolume(ctx, scale, g.CX * scale, g.BASEY * scale, el, foot, layers, filled, a * STEP, pivotFrac);
+    tex.baseTexture.update();
+    const rt = PIXI.RenderTexture.create({ width: W, height: H });
+    rt.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
+    renderer.render(spr, { renderTexture: rt });
+    cache.push(rt);
+  }
+  spr.destroy(); tex.destroy(true);
+  return cache;
+}
+
 // ── app + state ──
 const app = new PIXI.Application({ backgroundColor: 0x0a121c, antialias: false, resolution: window.devicePixelRatio || 1, autoDensity: true, resizeTo: $('stage') });
 $('stage').appendChild(app.view);
@@ -537,10 +746,13 @@ for (let g = -120; g <= 120; g += 20) { grid.moveTo(g, -80).lineTo(g, 80); grid.
 grid.position.set(0, 40); rig.addChild(grid);
 // keep the big orbit view centred as the stage resizes (fills the whole stage area now)
 let SCW = 720, SCH = 560, MODEL_CX = 470;
+let rigPan = { x: 0, y: 0 };                        // user PAN of the main view (middle/shift-drag) — move it aside for the Grid View
+function rigX() { return MODEL_CX + rigPan.x; }
+function rigY() { return SCH * 0.56 + rigPan.y; }
 function layout() {
   SCW = app.screen.width; SCH = app.screen.height;
   MODEL_CX = Math.min(SCW / 2 + 120, SCW - 160);   // shift right so the floating orbit panel doesn't cover the model
-  rig.position.set(MODEL_CX, SCH * 0.56);
+  rig.position.set(rigX(), rigY());
   if (typeof placeGamePreview === 'function') placeGamePreview();
   drawLight();
 }
@@ -550,7 +762,7 @@ app.renderer.on('resize', layout);
 // model), showing where the game-aligned light comes from. Elevation shrinks the ring (more overhead).
 const lightGfx = new PIXI.Graphics(); app.stage.addChild(lightGfx);
 function drawLight() {
-  const cx = MODEL_CX, cy = SCH * 0.44, R = 150 + (1 - 0.6) * 90;   // ~overhead-ish ring, centred on the model
+  const cx = rigX(), cy = SCH * 0.44 + rigPan.y, R = 150 + (1 - 0.6) * 90;   // ~overhead-ish ring, centred on the model
   const la = state.lightAz * Math.PI / 180, sx = cx + Math.cos(la) * R, sy = cy - Math.sin(la) * R;   // y-up
   const g = lightGfx; g.clear();
   g.lineStyle(1, 0x2a4055, 0.5); g.drawCircle(cx, cy, R);                       // faint compass ring
@@ -652,7 +864,7 @@ function renderScaleChart() {
   const X0 = 46;
   let maxTiles = 1;
   for (const s of sections) for (const e of s.list) if (e.tiles > maxTiles) maxTiles = e.tiles;
-  const T = Math.min(26, (W - X0 - 8) / maxTiles);                   // ONE px-per-tile for everything
+  const T = Math.min(18, (W - X0 - 8) / maxTiles);                   // ONE px-per-tile for everything (~30% smaller per unit → ~9 fit)
   let total = 16;                                                    // top ruler strip
   for (const s of sections) { total += 12; for (const e of s.list) total += entryThumbH(e, T) + 13; }
   cv.height = Math.max(140, total);                                  // grow the canvas; the dock scrolls
@@ -697,6 +909,7 @@ const gWorld = new PIXI.Container(); gameLayer.addChild(gWorld);         // mask
 const gBoard = new PIXI.Graphics(); gWorld.addChild(gBoard);
 const gShadow = new PIXI.Graphics(); gWorld.addChild(gShadow);
 const gUnit = new PIXI.Container(); gWorld.addChild(gUnit);
+const gCollision = new PIXI.Graphics(); gWorld.addChild(gCollision);   // collision footprint ring, over the unit
 const gClip = new PIXI.Graphics(); gameLayer.addChild(gClip); gWorld.mask = gClip;
 const gTitle = new PIXI.Text('IN-GAME  ·  1 tile = 64px', { fontFamily: 'Segoe UI, sans-serif', fontSize: 10, fill: 0xb9c8d6, letterSpacing: 1.4 });
 gameLayer.addChild(gTitle);                                             // caption along the bottom, clear of the unit
@@ -730,7 +943,7 @@ function drawGameBoard() {
 }
 function placeGamePreview() { gameLayer.position.set(SCW - PVW - 16, 16); }
 function resizePreview(w, h) {
-  PVW = clamp(w, 150, 520) | 0; PVH = clamp(h, 140, 480) | 0;
+  PVW = clamp(w, 150, 1100) | 0; PVH = clamp(h, 140, 900) | 0;   // raised ceiling: drag the in-game inset much larger
   GAME_TILE = BASE_TILE * PVW / BASE_PVW;
   drawGameBoard(); placeGamePreview();
 }
@@ -747,7 +960,15 @@ const polyState = { body: mkViews(() => null), turret: mkViews(() => null) }; //
 const imgURLCache = { body: mkViews(() => null), turret: mkViews(() => null) }; // PNG data-URL cache (project saves)
 const voxB64 = { body: null, turret: null };                                  // base64 cache of imported .vox data
 const palMap = new Map();                    // palette tuner: pre-tune colour key → replacement [r,g,b]
+let palEpoch = 0;                            // bumps on any palette reduce/tune → paint strip recomputes
+const palKeep = new Set();                   // palette reducer: colour keys the artist pinned to survive reduction
+const palDrop = new Set();                    // palette reducer: colour keys the artist marked to eliminate (remap away)
 let bulkLoad = false;                                                         // true while restoring a project
+let loadingUnit = false;                                                      // true from selectUnit() until its async load resolves — blocks autosave clobbering the new slot
+let suppressSquashWarn = false;                                              // quiet the squash warning during the auto-fit probe
+// the STABLE key the WIP autosaves under — set only by an explicit load/save/new, NOT by the free-text
+// Unit-id box. This keeps a stray edit to that box from misfiling the unit you're actually editing.
+let activeUnitId = 'unit';
 function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
@@ -803,6 +1024,264 @@ function bodyTopLayer(foot, layers) {
 }
 
 // (re)build the voxel models + the cube-render canvases — the orbit/camera-set preview and the inset
+// ── Orthographic grid view (upper-left): a flat, square-voxel view of one face. Top walks z-slices
+// top→bottom (the slice view); Side/Front/Back are silhouettes. Voxels are always square (true cubes),
+// independent of the zScale cube-height stretch used by the 3D render.
+let gridView = 'top', gridLayer = 0, gridModel = null;   // gridModel: cached buildModel, invalidated by rebuildSlices
+let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn cell layout, so pointer edits map back to voxels
+let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
+let gridBoxSel = null;                                    // transient marquee being dragged {c0,r0,c1,r1} in grid cells
+let gridSel = null;                                       // PERSISTENT selection {c0,r0,c1,r1} — masks paint/erase; cleared on ESC
+let gridGuides = true;                                    // centre point + H/V centre lines (alignment/symmetry guide)
+// geometry box axis mapping: for each grid view, which world-axis span each in-plane axis (col,row) reads
+// and whether the grid coord is reversed vs the axis value. cap: x/y=foot, z=layers. Used by both the
+// geom overlay draw and the drag editing so they stay in lock-step.
+const GEOAX = {
+  top:   { col: { axis: 'x', flip: false }, row: { axis: 'y', flip: false } },
+  side:  { col: { axis: 'x', flip: false }, row: { axis: 'z', flip: true } },
+  front: { col: { axis: 'y', flip: false }, row: { axis: 'z', flip: true } },
+  back:  { col: { axis: 'y', flip: true },  row: { axis: 'z', flip: true } },
+};
+const spanKey = { x: 'spanX', y: 'spanY', z: 'spanZ' };
+const gridPart = () => (state.part === 'turret' ? 'turret' : 'body');
+const gridLayersOf = (part) => (part === 'turret' ? state.turretLayers : state.bodyLayers);
+// LAYER 0 = raycast "surface": the target voxel at a grid cell is the FIRST filled voxel along the view's
+// depth axis (what a ray straight into the model would hit), so painting Layer 0 recolours the FACING
+// surface and it shows in the 3D view. Deeper layers address their exact depth slice as before.
+function gridFilledAt(g, x, y, z) {
+  if (x < 0 || y < 0 || z < 0 || x >= g.foot || y >= g.foot || z >= g.layers) return false;
+  const o = voxEdit[g.part].get(z * g.foot * g.foot + y * g.foot + x);
+  return o !== undefined ? o !== 'del' : (gridModel && gridModel.filled ? gridModel.filled(x, y, z) : false);
+}
+function gridTargetVox(g, cx, cy) {
+  if (g.slice === 0) {                                        // LAYER 0 = the non-layer SURFACE projection
+    for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) return v; }
+    return g.toVox(cx, cy, 0);                                // empty column → near surface (paint adds; erase no-ops)
+  }
+  return g.toVox(cx, cy, g.slice - 1);                        // layers 1..depth address real slices 0..depth-1
+}
+// the inline paint palette = the ACTUAL displayed palette. Folds in the SAME reduction (state.paletteN) +
+// colour tune (palMap) the render applies, so reducing/tuning in 🎨 Tune colors is reflected here — most-
+// used first. Full colours when the palette is at full; a safety cap only for huge full-colour photo carves.
+function modelPalette(m, foot, layers) {
+  const N = foot * foot, counts = new Map();
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+    if (!m.filled(x, y, z)) continue;
+    const c = (z * N + y * foot + x) * 3, k = (m.vcol[c] << 16) | (m.vcol[c + 1] << 8) | m.vcol[c + 2];
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  // fold in the WALL colours (side/front/back art) so the strip is the WHOLE model's palette, not just the
+  // top faces — this is why colours seem to "change per side" at full colour: each face uses its own sheet.
+  const V = m.views;
+  if (V) for (const gg of [V.side, V.front, V.back]) if (gg && gg.m) {
+    for (let i = 0; i < gg.w * gg.h; i++) if (gg.m[i]) { const k = (gg.c[i * 3] << 16) | (gg.c[i * 3 + 1] << 8) | gg.c[i * 3 + 2]; counts.set(k, (counts.get(k) || 0) + 1); }
+  }
+  const kRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
+  const tuned = (c) => { const t = palMap.get((c[0] << 16) | (c[1] << 8) | c[2]); return t || c; };
+  let list;
+  if (state.paletteN > 0) {                                          // the ONE simplified palette every face snaps to
+    list = buildPalette(counts, state.paletteN, [...palKeep].map(kRGB), [...palDrop].map(kRGB)).map(tuned);
+  } else {                                                           // full colour: every distinct colour, most-used first
+    list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 512).map(([k]) => tuned(kRGB(k)));
+  }
+  const seen = new Set(), out = [];                                  // dedupe (tune can collapse colours together)
+  for (const c of list) { const k = (c[0] << 16) | (c[1] << 8) | c[2]; if (!seen.has(k)) { seen.add(k); out.push(c); } }
+  return out;
+}
+function renderGridView() {
+  const cv = $('gridCanvas'); if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const part = gridPart(), foot = state.foot, layers = gridLayersOf(part), N = foot * foot;
+  // cache the RAW (pre-edit) carve; voxEdit is layered on cheaply below so live painting never re-carves.
+  if (!gridModel || gridModel.part !== part || gridModel.foot !== foot || gridModel.layers !== layers) {
+    const m = buildModelRaw(part, foot, layers);
+    gridModel = { part, foot, layers, vcol: m.vcol, filled: m.filled, views: m.views, sp: m.sp, palette: modelPalette(m, foot, layers), palSig: state.paletteN + ':' + palEpoch };
+  } else {
+    const sig = state.paletteN + ':' + palEpoch;                     // reduce/tune changed → refresh the paint strip only
+    if (gridModel.palSig !== sig) { gridModel.palette = modelPalette(gridModel, foot, layers); gridModel.palSig = sig; }
+  }
+  const base = gridModel, ed = voxEdit[part], V = base.views;
+  const filled = (x, y, z) => {
+    if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) return false;
+    const e = ed.get(z * N + y * foot + x);
+    return e !== undefined ? e !== 'del' : base.filled(x, y, z);
+  };
+  // FACE COLOUR: sample the SAME source the 3D render paints for the face this view shows — Top faces
+  // from the top-down colour, Side/Front/Back walls from the side/front/back source art — so once
+  // quant+tuner run below the grid matches in-game (buildFaces), not a flat top-projection. Painted
+  // voxels carry their own colour.
+  const pickWall = (g, ix, z, mirror) => {
+    if (!g || !g.m || ix < 0 || ix >= g.w || z < 0 || z >= g.h) return null;
+    const i = z * g.w + (mirror ? g.w - 1 - ix : ix);
+    return g.m[i] ? [g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]] : null;
+  };
+  const rawCol = (x, y, z) => {
+    const e = ed.get(z * N + y * foot + x); if (Array.isArray(e)) return e;
+    if (V) {
+      let w = null; const zz = z - (V.z0 || 0);                                     // masks are Hv tall from z0
+      if (gridView === 'side') w = pickWall(V.side, x - V.ox, zz, false);           // ±y wall ← side art
+      else if (gridView === 'front') w = pickWall(V.front, y - V.oy, zz, false);    // +x wall ← front art
+      else if (gridView === 'back') w = V.back ? pickWall(V.back, y - V.oy, zz, false) : pickWall(V.front, y - V.oy, zz, true); // -x wall ← back (or mirrored front)
+      if (w) return w;
+    }
+    const c = (z * N + y * foot + x) * 3; return [base.vcol[c], base.vcol[c + 1], base.vcol[c + 2]];   // Top faces / fallback
+  };
+  // Every view is a SLICE perpendicular to a depth axis; the Layer slider walks slices along it, so
+  // add/erase editing works in all four. Top→z (from the top), Side→y, Front/Back→x. toVox maps an
+  // in-plane cell (col,row) + slice index to a voxel (x,y,z).
+  const AX = {
+    top:   { cols: foot, rows: foot,   depth: layers, axis: 'z', toVox: (c, r, s) => [c, r, layers - 1 - s] },
+    side:  { cols: foot, rows: layers, depth: foot,   axis: 'y', toVox: (c, r, s) => [c, s, layers - 1 - r] },
+    front: { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [s, c, layers - 1 - r] },
+    back:  { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [foot - 1 - s, foot - 1 - c, layers - 1 - r] },
+  };
+  const ax = AX[gridView] || AX.top, cols = ax.cols, rows = ax.rows, depth = ax.depth;
+  gridLayer = clamp(gridLayer, 0, depth);   // 0 = surface projection (non-layer); 1..depth = real slices 0..depth-1
+  const slice = gridLayer;
+  const geomMode = gridMode === 'geom';
+  const lr = $('gridLayerRow'); if (lr) lr.style.display = '';    // layer slider useful in both modes
+  const tr = $('gridToolRow'); if (tr) tr.style.display = geomMode ? 'none' : '';   // paint tools hidden in Geometry
+  const gr2 = $('gridGeoRow'); if (gr2) gr2.style.display = geomMode ? '' : 'none'; // geometry controls shown in Geometry
+  // inline PAINT PALETTE — the model's colours as swatches, shown only in Paint mode (no need to open the Palette window)
+  const gpal = $('gridPalette');
+  if (gpal) {
+    const showPal = !geomMode && gridTool === 'paint';
+    gpal.style.display = showPal ? 'flex' : 'none';
+    const psig = part + ':' + foot + ':' + layers + ':' + (base.palette ? base.palette.length : 0);
+    if (showPal && gpal.dataset.sig !== psig) {
+      gpal.dataset.sig = psig; gpal.innerHTML = '';
+      for (const c of (base.palette || [])) {
+        const b = document.createElement('button');
+        b.style.cssText = 'width:18px;height:18px;padding:0;margin:0;border:1px solid #2a3a4a;border-radius:3px;cursor:pointer;background:' + cssOf(c);
+        b.title = hexOf(c);
+        b.onclick = () => { const gp = $('gridPaintCol'); if (gp) gp.value = hexOf(c); };
+        gpal.appendChild(b);
+      }
+    }
+  }
+  const ls = $('gridLayer'); if (ls) ls.max = String(depth);   // +1 for the surface projection at position 0
+  const lv = $('gridLayerV'); if (lv) lv.textContent = slice === 0 ? 'surface ▲' : `${ax.axis} ${slice - 1}`;
+
+  // palette-correct colour: exactly what the 3D render bakes — raw voxel → paletteN reduction → tuner.
+  // quant reads an overlay-aware colour buffer so painted voxels join the palette (cheap copy, no re-carve).
+  let qvcol = base.vcol;
+  if (ed.size) { qvcol = base.vcol.slice(); for (const [k, val] of ed) if (val !== 'del') { const c = k * 3; qvcol[c] = val[0]; qvcol[c + 1] = val[1]; qvcol[c + 2] = val[2]; } }
+  const quant = buildQuantiser(null, qvcol, filled, foot, layers, state.paletteN, V);
+  const colAt = (x, y, z) => {
+    let [r, g, b] = rawCol(x, y, z);
+    if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
+    const t = palMap.get((r << 16) | (g << 8) | b); return t || [r, g, b];
+  };
+  const cellAt = (cx, cy) => {
+    if (slice === 0) {                                              // LAYER 0 = surface: FIRST filled voxel along depth
+      for (let s = 0; s < depth; s++) { const [x, y, z] = ax.toVox(cx, cy, s); if (filled(x, y, z)) return colAt(x, y, z); }
+      return null;
+    }
+    const [x, y, z] = ax.toVox(cx, cy, slice - 1); return filled(x, y, z) ? colAt(x, y, z) : null;
+  };
+  const anyDepth = (cx, cy) => { for (let s = 0; s < depth; s++) { const [x, y, z] = ax.toVox(cx, cy, s); if (filled(x, y, z)) return true; } return false; };
+
+  // ONE scale for every view: size the cell from the LARGEST grid (top = foot × foot), not this view's own
+  // rows — otherwise the short side/front views (foot × layers) grow their cells and render at a different
+  // scale. A voxel is now the same square px in top/side/front/back; shorter views just centre with padding.
+  const W = cv.width, H = cv.height;
+  const uCols = foot, uRows = Math.max(foot, layers);
+  const cell = Math.max(1, Math.floor(Math.min(W / uCols, H / uRows)));
+  const gw = cell * cols, gh = cell * rows, ox = Math.floor((W - gw) / 2), oy = Math.floor((H - gh) / 2);
+  const geomActive = gridMode === 'geom' && V && base.sp && GEOAX[gridView];  // reconcile overlay (image-carved only)
+  gridGeom = { cell, ox, oy, cols, rows, depth, slice, toVox: ax.toVox, foot, layers, part, editable: !geomActive };
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, W, H);
+  // faint checker so the empty grid still reads as a grid at any zoom
+  if (cell >= 4) { ctx.fillStyle = 'rgba(255,255,255,.025)';
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if ((cx + cy) & 1) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell); }
+  // faint silhouette of the WHOLE model (all depths) so the active slice reads in context
+  ctx.fillStyle = 'rgba(150,185,220,.13)';
+  for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if (anyDepth(cx, cy)) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+  // the ACTIVE slice — palette-correct in Paint mode, flat grey in Geometry mode (shape, not colour)
+  for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+    const col = cellAt(cx, cy); if (!col) continue;
+    ctx.fillStyle = geomActive ? '#68788a' : `rgb(${col[0]},${col[1]},${col[2]})`;
+    ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+  }
+  // a REAL grid: cell lines across the WHOLE area (occupied + empty) + a crisp outer frame
+  if (cell >= 3) {
+    ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let cx = 0; cx <= cols; cx++) { ctx.moveTo(ox + cx * cell + .5, oy); ctx.lineTo(ox + cx * cell + .5, oy + gh); }
+    for (let cy = 0; cy <= rows; cy++) { ctx.moveTo(ox, oy + cy * cell + .5); ctx.lineTo(ox + gw, oy + cy * cell + .5); }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(120,160,200,.55)'; ctx.lineWidth = 1; ctx.strokeRect(ox + .5, oy + .5, gw - 1, gh - 1);
+
+  const drawMarquee = (s, stroke, fill) => {
+    const c0 = Math.min(s.c0, s.c1), c1 = Math.max(s.c0, s.c1), r0 = Math.min(s.r0, s.r1), r1 = Math.max(s.r0, s.r1);
+    const rx = ox + c0 * cell + 0.5, ry = oy + r0 * cell + 0.5, rw = (c1 - c0 + 1) * cell - 1, rh = (r1 - r0 + 1) * cell - 1;
+    if (fill) { ctx.fillStyle = fill; ctx.fillRect(rx, ry, rw, rh); }
+    ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.strokeRect(rx, ry, rw, rh); ctx.setLineDash([]);
+  };
+  if (gridGuides) {                                               // centre point + H/V centre lines — align + check symmetry
+    const cxp = ox + (cols / 2) * cell, cyp = oy + (rows / 2) * cell;
+    ctx.strokeStyle = 'rgba(242,200,105,.40)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(Math.round(cxp) + 0.5, oy); ctx.lineTo(Math.round(cxp) + 0.5, oy + rows * cell); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, Math.round(cyp) + 0.5); ctx.lineTo(ox + cols * cell, Math.round(cyp) + 0.5); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(242,200,105,.95)'; ctx.beginPath(); ctx.arc(cxp, cyp, Math.max(2, cell * 0.14), 0, Math.PI * 2); ctx.fill();
+  }
+  if (gridSel) drawMarquee(gridSel, '#5fe0ff', 'rgba(95,224,255,.10)');   // persistent selection (masks paint/erase, ESC clears)
+  if (gridBoxSel) drawMarquee(gridBoxSel, '#e0625f', null);               // marquee being dragged
+  // FRONT/BACK MISMATCH: the carve takes width geometry from the front; the back only paints the −x wall.
+  // Where their silhouettes disagree, the back art won't line up with the geometry — flag it red so you
+  // can fix it with a few face paints (owner 2026-07-18). Only when both a front and back image exist.
+  if ((gridView === 'front' || gridView === 'back') && V && V.front && V.back) {
+    const A = V.front, B = V.back, bhh = A.w, Hvv = A.h, z0v = V.z0 || 0, oyv = V.oy;
+    ctx.fillStyle = 'rgba(224,98,95,.5)';
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+      const [, y, z] = ax.toVox(cx, cy, slice), iy = y - oyv, iz = z - z0v;
+      if (iy < 0 || iy >= bhh || iz < 0 || iz >= Hvv) continue;
+      if (!!A.m[iz * bhh + iy] !== !!B.m[iz * bhh + iy]) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+    }
+  }
+
+  if (geomActive) {
+    // GEOMETRY RECONCILE: overlay the source silhouette where its span rect maps onto the grid, plus a
+    // draggable box (drag an edge to stretch that dimension, the interior to move). Shared spans keep
+    // the other views in lock-step. spans come from base.sp (auto today; the user's saved override once
+    // they drag). n: the box's two in-plane axes read GEOAX[view].col/row.
+    const g = GEOAX[gridView], capOf = (a) => (a === 'z' ? layers : foot);
+    // box reads live geomState when the part is manually reconciled (so it moves during a drag without a
+    // full re-carve every frame); otherwise the auto spans the carve just used.
+    const bsp = (geomState[part] && geomState[part].spanX) ? geomState[part] : base.sp;
+    const rng = (info) => { const s = bsp[spanKey[info.axis]], cap = capOf(info.axis); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
+    const cR = rng(g.col), rR = rng(g.row);
+    const bx = ox + cR.lo * cell, by = oy + rR.lo * cell, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cell;
+    const keyed = imgs[part][gridView] ? keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView]) : null;
+    if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
+    ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
+    ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
+    for (const [hx, hy] of [[bx + bw2 / 2, by], [bx + bw2 / 2, by + bh2], [bx, by + bh2 / 2], [bx + bw2, by + bh2 / 2]]) ctx.fillRect(hx - 4, hy - 4, 8, 8);
+    gridGeom.geom = { bx, by, bw: bw2, bh: bh2, cell, ox, oy, gw, gh, col: g.col, row: g.row, foot, layers };
+    const sx = bsp[spanKey[g.col.axis]], sy = bsp[spanKey[g.row.axis]];
+    ctx.fillStyle = '#8fa7bd'; ctx.font = '9px sans-serif'; ctx.textBaseline = 'top';
+    ctx.fillText(`${g.col.axis.toUpperCase()} ${sx.lo}–${sx.hi} · ${g.row.axis.toUpperCase()} ${sy.lo}–${sy.hi}${geomState[part].auto ? '  (auto)' : ''}`, ox + 3, oy + 3);
+  } else if (gridView !== 'top' && cell >= 2) {
+    // TOP-DOWN reference (Paint mode, side/front/back): a small footprint map in the corner with a line
+    // marking where the current slice sits, so you know which part of the model you're on.
+    const mc = Math.max(1, Math.floor(Math.min(64, Math.min(W, H) * 0.30) / foot)), mw = mc * foot, mmx = W - mw - 6, mmy = 16;
+    ctx.fillStyle = 'rgba(6,11,18,.92)'; ctx.fillRect(mmx - 3, mmy - 3, mw + 6, mw + 6);
+    ctx.fillStyle = 'rgba(150,185,220,.5)';                          // footprint: any voxel in the (x,y) column
+    for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      let any = false; for (let z = 0; z < layers && !any; z++) if (filled(x, y, z)) any = true;
+      if (any) ctx.fillRect(mmx + x * mc, mmy + y * mc, mc, mc);
+    }
+    ctx.strokeStyle = '#f2c869'; ctx.lineWidth = 1.5; ctx.beginPath();  // current-slice line (depth axis)
+    if (gridView === 'side') { const yy = mmy + slice * mc + mc / 2; ctx.moveTo(mmx, yy); ctx.lineTo(mmx + mw, yy); }
+    else { const sx = gridView === 'back' ? (foot - 1 - slice) : slice, xx = mmx + sx * mc + mc / 2; ctx.moveTo(xx, mmy); ctx.lineTo(xx, mmy + mw); }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,160,200,.6)'; ctx.lineWidth = 1; ctx.strokeRect(mmx + .5, mmy + .5, mw - 1, mw - 1);
+    ctx.fillStyle = '#8fa7bd'; ctx.font = '8px sans-serif'; ctx.textBaseline = 'alphabetic'; ctx.fillText('top ref', mmx, mmy - 4);
+  }
+}
+
 function rebuildSlices() {
   if (bodyBaked) { bodyBaked.destroy(); bodyBaked = null; } if (turretBaked) { turretBaked.destroy(); turretBaked = null; }
   if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
@@ -829,6 +1308,7 @@ function rebuildSlices() {
   gVoxSpr.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp); gVoxSpr.position.set(0, 0);
   gUnit.addChild(gVoxSpr);
   setTimeout(renderScaleChart, 0);   // model changed → refresh the side-view scale chart
+  gridModel = null; renderGridView(); // model changed → invalidate cache + refresh the grid view
 }
 rebuildSlices();
 
@@ -848,7 +1328,8 @@ function update() {
   voxSpr.visible = true; voxShadow.visible = true;
   // only re-render the cube scene when something it depends on actually changed
   const sig = state.az.toFixed(1) + '|' + state.el.toFixed(1) + '|' + state.taim.toFixed(1) + '|' + state.turretDx + '|' +
-    state.turretPivot + '|' + state.mountZ + '|' + state.part + '|' + state.lightAz + '|' + state.lightK + '|' + state.zScale;
+    state.turretPivot + '|' + state.mountZ + '|' + state.part + '|' + state.lightAz + '|' + state.lightK + '|' + state.zScale +
+    '|' + (gridSel ? gridSel.c0 + ',' + gridSel.r0 + ',' + gridSel.c1 + ',' + gridSel.r1 + ':' + gridView + ':' + gridLayer : 'x');   // re-render on selection change
   if (sig !== voxSig) { voxSig = sig; drawScene(voxMeta, state.el, azR, azR + taimR); voxTex.baseTexture.update(); }
 }
 // position the in-game preview: unit at GAME scale on the tile, slowly turning to show facings, with the
@@ -858,8 +1339,15 @@ function updateGamePreview() {
   if (gSpin && !gDragPrev) gPrevAz = (gPrevAz + 0.4) % 360;
   const azR = gPrevAz * Math.PI / 180, taimR = state.taim * Math.PI / 180;
   const spG = layerSp(state.el), se = Math.sin(state.el * Math.PI / 180);
-  const uScale = (GAME_TILE * 1.7) / state.foot;                      // footprint ≈ 1.7 tiles
+  const uScale = GAME_TILE * GAME_UNIT_SCALE / VOX_PER_TILE;          // GAME-ACCURATE: footprint × 0.5 tiles (matches loader.js VOXEL_UNIT_SCALE)
   gUnit.scale.set(uScale); gUnit.position.set(gAnchor.x, gAnchor.y + GAME_TILE * 0.12);
+  // COLLISION footprint ring — the sim's unit radius, ~1.2× the on-screen tank width (option 2). Cyan ring.
+  {
+    const rr = bodyExtentTiles() * GAME_TILE, cyGround = gAnchor.y + GAME_TILE * 0.06;
+    gCollision.clear();
+    gCollision.beginFill(0x5fe0ff, 0.07); gCollision.drawCircle(gAnchor.x, cyGround, rr); gCollision.endFill();
+    gCollision.lineStyle(1.5, 0x5fe0ff, 0.85); gCollision.drawCircle(gAnchor.x, cyGround, rr); gCollision.lineStyle(0);
+  }
   const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
   const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR) * se, r = 0.75;
   // faint contact blob only — the silhouette shadow carries the read for the live cube render
@@ -882,7 +1370,9 @@ app.ticker.add(() => {
 });
 
 // ── orbit drag (main stage) + IN-GAME inset interactions (buttons / drag-to-turn / corner resize) ──
-let drag = null;
+let drag = null, pan = null;
+// double-click empty stage → recentre the panned view
+app.view.addEventListener('dblclick', (e) => { if (insetHit(e).inside) return; rigPan = { x: 0, y: 0 }; rig.position.set(rigX(), rigY()); drawLight(); });
 const insetHit = (e) => { const px = e.offsetX - gameLayer.x, py = e.offsetY - gameLayer.y;
   return { px, py, inside: px >= 0 && px <= PVW && py >= 0 && py <= PVH }; };
 app.view.addEventListener('pointerdown', (e) => {
@@ -894,11 +1384,15 @@ app.view.addEventListener('pointerdown', (e) => {
     gDragPrev = { x: e.clientX, az: gPrevAz };                                            // drag the unit itself
     return;
   }
-  drag = { x: e.clientX, y: e.clientY, az: state.az, el: state.el };
+  if (e.button === 1 || e.shiftKey) {                                                     // MIDDLE or SHIFT+drag = PAN the view aside
+    pan = { x: e.clientX, y: e.clientY, px: rigPan.x, py: rigPan.y }; e.preventDefault(); return;
+  }
+  drag = { x: e.clientX, y: e.clientY, az: state.az, el: state.el };                       // left-drag = orbit rotate
 });
-window.addEventListener('pointerup', () => { drag = null; gDragPrev = null; gResize = null; });
+window.addEventListener('pointerup', () => { drag = null; gDragPrev = null; gResize = null; pan = null; });
 window.addEventListener('pointermove', (e) => {
   if (gResize) { resizePreview(gResize.w - (e.clientX - gResize.x), gResize.h + (e.clientY - gResize.y)); return; }
+  if (pan) { rigPan.x = pan.px + (e.clientX - pan.x); rigPan.y = pan.py + (e.clientY - pan.y); rig.position.set(rigX(), rigY()); drawLight(); return; }
   if (gDragPrev) { gPrevAz = ((gDragPrev.az + (e.clientX - gDragPrev.x) * 0.6) % 360 + 360) % 360; return; }
   if (drag) {
     state.az = ((drag.az + (e.clientX - drag.x) * 0.6) % 360 + 360) % 360;
@@ -981,12 +1475,254 @@ $('voxClear').onclick = () => { voxPart.body = null; voxPart.turret = null; voxB
 $('exportVox').onclick = exportVox;
 $('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').textContent = state.lightAz + '°'; rebuildSlices(); drawLight(); };
 $('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; rebuildSlices(); };
-$('pal').oninput = (e) => { state.paletteN = +e.target.value; $('palV').textContent = state.paletteN || 'full'; rebuildSlices(); };
+// #pal handler is defined with #palN below (setPaletteN keeps both sliders in lock-step)
 $('zScale').oninput = (e) => { state.zScale = +e.target.value / 100; $('zScaleV').textContent = state.zScale.toFixed(2) + '×'; rebuildSlices(); };
 $('smooth').onchange = (e) => { state.smooth = e.target.checked; };
 $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').textContent = state.sharp.toFixed(2); };
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
-$('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
+$('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; gridSel = null; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+
+// ── grid-view panel: mode (paint vs geometry) + face selector + z-slice walker ──
+if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; gridSel = null; [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+if ($('gridResetGeo')) $('gridResetGeo').onclick = () => { const part = gridPart(); geomState[part] = { auto: true, bottomFrom: geomState[part].bottomFrom || 'top' }; gridModel = null; rebuildSlices(); scheduleAutosave(); };
+$('gridViewSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridView = b.dataset.v; gridLayer = 0; gridSel = null; [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };   // views have different col/row dims — a selection can't carry over
+$('gridLayer').oninput = (e) => { gridLayer = +e.target.value; renderGridView(); };
+// ── SLICE EDITOR (owner 2026-07-17): on the Top view, click/drag to add or erase voxels in the
+// current z-layer. Erase removes even source-carved voxels; paint adds using that column's own
+// colour (grey for a fresh column — recolour later in the palette window). Edits land in voxEdit and
+// flow through buildModel, so the orbit preview, side chart, bake and exports all follow. Full model
+// rebuild is deferred to pointer-up so painting stays responsive; the grid itself repaints live.
+if ($('gridToolSeg')) $('gridToolSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridTool = b.dataset.t; [...$('gridToolSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
+  const g = gridGeom; if (!g) return; pushUndo(); const ed = voxEdit[g.part], N = g.foot * g.foot;
+  for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); ed.set(z * N + y * g.foot + x, 'del'); }
+  gridModel = null; renderGridView(); rebuildSlices(); scheduleAutosave();
+};
+if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
+  pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; rebuildSlices(); scheduleAutosave();
+};
+if ($('gridGuides')) $('gridGuides').onchange = (e) => { gridGuides = e.target.checked; renderGridView(); };
+// MIRROR one half of the current view onto the other, folding across the GRID CENTRE LINE (the ✛ guide),
+// NOT the model's content centre — so each half lands symmetric about the centreline (owner: centre the
+// model to the guide, then mirror). View-relative via gridGeom.toVox: 'col' folds the vertical centreline
+// (visual left↔right), 'row' folds the horizontal centreline (visual top↔bottom). srcLow copies the low
+// half (left/top) onto the high half (right/bottom); !srcLow does the reverse.
+function mirrorGrid(axis, srcLow) {
+  const g = gridGeom; if (!g) return; pushUndo();
+  const part = g.part, foot = g.foot, N = foot * foot, { cols, rows, depth, toVox } = g;
+  const m = buildModel(part, foot, g.layers), ed = voxEdit[part];
+  const isCol = axis === 'col', c2 = (isCol ? cols : rows) - 1;      // 2×centre of the GRID (mirror index = c2 − a)
+  for (let s = 0; s < depth; s++) for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
+    const a = isCol ? c : r;
+    if (srcLow ? (a * 2 <= c2) : (a * 2 >= c2)) continue;            // write only the TARGET half
+    const sc = isCol ? (c2 - c) : c, sr = isCol ? r : (c2 - r);
+    const [tx, ty, tz] = toVox(c, r, s), k = tz * N + ty * foot + tx;
+    if (sc >= 0 && sc < cols && sr >= 0 && sr < rows) {
+      const [sx, sy, sz] = toVox(sc, sr, s);
+      if (m.filled(sx, sy, sz)) { const cc = (sz * N + sy * foot + sx) * 3; ed.set(k, [m.vcol[cc], m.vcol[cc + 1], m.vcol[cc + 2]]); }
+      else ed.set(k, 'del');
+    } else ed.set(k, 'del');
+  }
+  gridModel = null; rebuildSlices(); scheduleAutosave();
+}
+if ($('gridMirrorLR')) $('gridMirrorLR').onclick = () => mirrorGrid('col', true);    // left → right, across the vertical centreline
+if ($('gridMirrorRL')) $('gridMirrorRL').onclick = () => mirrorGrid('col', false);   // right → left
+if ($('gridMirrorTB')) $('gridMirrorTB').onclick = () => mirrorGrid('row', true);    // top → bottom, across the horizontal centreline
+if ($('gridMirrorBT')) $('gridMirrorBT').onclick = () => mirrorGrid('row', false);   // bottom → top
+// select every cell on the current layer (a whole-layer selection to paint/erase within)
+if ($('gridSelLayer')) $('gridSelLayer').onclick = () => { const g = gridGeom; if (!g) return; gridSel = { c0: 0, r0: 0, c1: g.cols - 1, r1: g.rows - 1 }; renderGridView(); };
+// delete EVERY voxel in the active selection (the surface voxels on Layer 0, or the slice voxels on a real
+// layer). Shared by Delete/Backspace and by pressing Erase while a selection is active.
+// ── UNDO / REDO for grid voxel edits (paint/erase strokes + bulk ops). Snapshots the voxEdit layer. ──
+let undoStack = [], redoStack = [];
+const snapVoxEdit = () => ({ body: new Map(voxEdit.body), turret: new Map(voxEdit.turret) });
+function pushUndo() { undoStack.push(snapVoxEdit()); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; }
+function applyVoxSnap(s) { for (const part of ['body', 'turret']) { voxEdit[part].clear(); for (const [k, v] of s[part]) voxEdit[part].set(k, v); } gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); }
+function gridUndo() { if (!undoStack.length) return; redoStack.push(snapVoxEdit()); applyVoxSnap(undoStack.pop()); }
+function gridRedo() { if (!redoStack.length) return; undoStack.push(snapVoxEdit()); applyVoxSnap(redoStack.pop()); }
+
+function deleteSelection() {
+  const g = gridGeom; if (!gridSel || !g || !g.editable) return false;
+  pushUndo();
+  const ed = voxEdit[g.part], N = g.foot * g.foot;
+  const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
+  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); ed.set(z * N + y * g.foot + x, 'del'); }
+  gridModel = null; rebuildSlices(); scheduleAutosave(); return true;
+}
+// FILL the selection with the current paint colour — recolours EVERY existing voxel in it (on Layer 0, that's
+// every facing surface voxel; on a real layer, every filled slice voxel). Never adds voxels.
+function fillSelection() {
+  const g = gridGeom; if (!gridSel || !g || !g.editable) return false;
+  const ed = voxEdit[g.part], N = g.foot * g.foot, rgb = (() => { const h = $('gridPaintCol').value; return [parseInt(h.slice(1, 3), 16) || 0, parseInt(h.slice(3, 5), 16) || 0, parseInt(h.slice(5, 7), 16) || 0]; })();
+  const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
+  let n = 0; const pending = [];
+  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); if (gridFilledAt(g, x, y, z)) { pending.push(z * N + y * g.foot + x); n++; } }
+  if (!n) return false;
+  pushUndo();
+  for (const k of pending) ed.set(k, rgb);
+  gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); return true;
+}
+if ($('gridFill')) $('gridFill').onclick = () => fillSelection();
+// ESC clears the selection; Delete erases it; Enter/F fills it; Ctrl+Z / Ctrl+Y undo/redo
+document.addEventListener('keydown', (e) => {
+  if (!$('keyModal') || !$('keyModal').hidden) return;               // don't fight the cutout modal's own ESC
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { if (e.shiftKey) gridRedo(); else gridUndo(); e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { gridRedo(); e.preventDefault(); return; }
+  if (e.key === 'Escape' && gridSel) { gridSel = null; renderGridView(); }
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && gridSel) { if (deleteSelection()) e.preventDefault(); }
+  else if ((e.key === 'Enter' || e.key === 'f' || e.key === 'F') && gridSel) { if (fillSelection()) e.preventDefault(); }
+});
+(() => {
+  const cv = $('gridCanvas'); if (!cv) return;
+  // the paint colour: the swatch chosen in the grid tool row (also settable by clicking a swatch in
+  // the Palette window). Explicit colour beats guessing, and it round-trips through the reducer/tuner.
+  const gridPaintRGB = () => { const h = ($('gridPaintCol') && $('gridPaintCol').value) || '#8fa7bd'; return [parseInt(h.slice(1, 3), 16) || 0, parseInt(h.slice(3, 5), 16) || 0, parseInt(h.slice(5, 7), 16) || 0]; };
+  // (kept for reference/eyedrop) colour of the nearest existing voxel along the current view's depth axis
+  const sampleColor = (cx, cy) => {
+    const g = gridGeom, gm = gridModel; if (!g || !gm) return [150, 150, 150];
+    const N = gm.foot * gm.foot, ed = voxEdit[g.part];
+    const isFilled = (x, y, z) => { if (x < 0 || y < 0 || z < 0 || x >= gm.foot || y >= gm.foot || z >= gm.layers) return false; const o = ed.get(z * N + y * gm.foot + x); return o !== undefined ? o !== 'del' : gm.filled(x, y, z); };
+    const colOf = (x, y, z) => { const o = ed.get(z * N + y * gm.foot + x); if (Array.isArray(o)) return o; const c = (z * N + y * gm.foot + x) * 3; return [gm.vcol[c], gm.vcol[c + 1], gm.vcol[c + 2]]; };
+    for (let d = 1; d < g.depth; d++) for (const s of [g.slice - d, g.slice + d]) {
+      if (s < 0 || s >= g.depth) continue;
+      const [x, y, z] = g.toVox(cx, cy, s); if (isFilled(x, y, z)) return colOf(x, y, z);
+    }
+    return [150, 150, 150];
+  };
+  const editAt = (e, erase) => {
+    const g = gridGeom; if (!g || !g.editable) return false;
+    const r = cv.getBoundingClientRect();
+    const px = (e.clientX - r.left) * (cv.width / r.width), py = (e.clientY - r.top) * (cv.height / r.height);
+    const cx = Math.floor((px - g.ox) / g.cell), cy = Math.floor((py - g.oy) / g.cell);
+    if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows) return false;
+    if (gridSel) {                                                   // an active selection MASKS editing to inside it
+      const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
+      if (cx < c0 || cx > c1 || cy < r0 || cy > r1) return false;
+    }
+    const [x, y, z] = gridTargetVox(g, cx, cy), N = g.foot * g.foot, k = z * N + y * g.foot + x, ed = voxEdit[g.part];
+    const ov = ed.get(k), curFilled = ov !== undefined ? ov !== 'del' : gridModel.filled(x, y, z);
+    if (erase) { if (!curFilled) return false; ed.set(k, 'del'); }   // nothing to remove here
+    // paint: RECOLOUR a filled voxel, or (on a real layer) add one where empty. Layer 0 = surface → recolour
+    // the facing voxel ONLY, never spawn a new voxel on an empty column.
+    else { if (g.slice === 0 && !curFilled) return false; ed.set(k, gridPaintRGB()); }
+    renderGridView();                                                // live repaint (overlay is layered on the cached carve)
+    return true;
+  };
+  let painting = false, dirty = false, boxing = null;
+  const cellOf = (e) => { const g = gridGeom; if (!g) return null; const { px, py } = ptCell(e); return { cx: clamp(Math.floor((px - g.ox) / g.cell), 0, g.cols - 1), cy: clamp(Math.floor((py - g.oy) / g.cell), 0, g.rows - 1) }; };
+  // ── GEOMETRY drag (owner 2026-07-18): in Geometry mode, drag the box edges to stretch a dimension or
+  // the interior to move it. Edits write the shared world-axis spans in geomState, so linked views move
+  // in lock-step. On first edit we snapshot the current auto spans and flip auto→false. The uncolored
+  // carve re-runs on pointer-up (heavy); the box + silhouette track live off geomState.
+  const capOf = (a, foot, layers) => (a === 'z' ? layers : foot);
+  const ensureGeomSpans = () => {                                   // freeze current placement into geomState, editable
+    const part = gridGeom.part, gs = geomState[part];
+    if (!gs.spanX && gridModel && gridModel.sp) { gs.spanX = { ...gridModel.sp.spanX }; gs.spanY = { ...gridModel.sp.spanY }; gs.spanZ = { ...gridModel.sp.spanZ }; }
+    gs.auto = false;
+  };
+  const ptCell = (e) => { const r = cv.getBoundingClientRect(); return { px: (e.clientX - r.left) * (cv.width / r.width), py: (e.clientY - r.top) * (cv.height / r.height) }; };
+  const geomHit = (e) => {
+    const g = gridGeom && gridGeom.geom; if (!g) return null;
+    const { px, py } = ptCell(e), T = Math.max(6, g.cell * 0.6);
+    const onX = px >= g.bx - T && px <= g.bx + g.bw + T, onY = py >= g.by - T && py <= g.by + g.bh + T;
+    if (!onX || !onY) return null;
+    if (Math.abs(px - g.bx) < T) return 'L';
+    if (Math.abs(px - (g.bx + g.bw)) < T) return 'R';
+    if (Math.abs(py - g.by) < T) return 'T';
+    if (Math.abs(py - (g.by + g.bh)) < T) return 'B';
+    if (px > g.bx && px < g.bx + g.bw && py > g.by && py < g.by + g.bh) return 'move';
+    return null;
+  };
+  let geomDrag = null;                                             // { mode, gc0, gr0, cR0, rR0 }
+  const gridRectFromSpans = (g) => {
+    const gs = geomState[gridGeom.part];
+    const rng = (info) => { const s = gs[spanKey[info.axis]], cap = capOf(info.axis, g.foot, g.layers); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
+    return { cR: rng(g.col), rR: rng(g.row) };
+  };
+  const spansFromGridRect = (g, cR, rR) => {
+    const gs = geomState[gridGeom.part];
+    const put = (info, lo, hi) => { const cap = capOf(info.axis, g.foot, g.layers); lo = clamp(Math.round(lo), 0, cap - 1); hi = clamp(Math.round(hi), lo + 1, cap); gs[spanKey[info.axis]] = info.flip ? { lo: cap - hi, hi: cap - lo } : { lo, hi }; };
+    put(g.col, cR.lo, cR.hi); put(g.row, rR.lo, rR.hi);
+  };
+  const geomMove = (e) => {
+    const g = gridGeom.geom; if (!g || !geomDrag) return;
+    const { px, py } = ptCell(e), gc = (px - g.ox) / g.cell, gr = (py - g.oy) / g.cell;
+    let { cR, rR } = gridRectFromSpans(g);
+    if (geomDrag.mode === 'move') {
+      const dcx = Math.round(gc - geomDrag.gc0), dcy = Math.round(gr - geomDrag.gr0);
+      const cw = geomDrag.cR0.hi - geomDrag.cR0.lo, rh = geomDrag.rR0.hi - geomDrag.rR0.lo;
+      let cl = clamp(geomDrag.cR0.lo + dcx, 0, g.foot - cw), rl = clamp(geomDrag.rR0.lo + dcy, 0, (g.row.axis === 'z' ? g.layers : g.foot) - rh);
+      cR = { lo: cl, hi: cl + cw }; rR = { lo: rl, hi: rl + rh };
+    } else if (geomDrag.mode === 'L') cR.lo = gc;
+    else if (geomDrag.mode === 'R') cR.hi = gc;
+    else if (geomDrag.mode === 'T') rR.lo = gr;
+    else if (geomDrag.mode === 'B') rR.hi = gr;
+    spansFromGridRect(g, cR, rR);
+    renderGridView();                                              // box + silhouette track live; carve re-runs on release
+  };
+  cv.addEventListener('pointerdown', (e) => {
+    if (gridGeom && gridGeom.geom) {                               // Geometry mode: box drag
+      const mode = geomHit(e); if (!mode) return;
+      ensureGeomSpans();
+      const g = gridGeom.geom, { px, py } = ptCell(e), r = gridRectFromSpans(g);
+      geomDrag = { mode, gc0: (px - g.ox) / g.cell, gr0: (py - g.oy) / g.cell, cR0: r.cR, rR0: r.rR };
+      dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+    }
+    if (!gridGeom || !gridGeom.editable) return;
+    // Erase = freehand, and if a selection is active editAt masks it to inside the selection (so you scrub
+    // away voxels within the region). Bulk-delete the whole selection is the Delete key — not an erase click,
+    // which previously got stuck (deleted the selection once, then every click was a no-op).
+    if (gridTool === 'box' && e.button !== 2) {                    // Box⌫: rubber-band a region to delete
+      const c = cellOf(e); if (!c) return;
+      boxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy }; gridBoxSel = boxing; renderGridView();
+      cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+    }
+    const erase = gridTool === 'erase' || gridTool === 'box' || e.button === 2;   // right-drag erases even in box mode
+    const before = snapVoxEdit();                                  // capture BEFORE the stroke for one undo entry
+    if (editAt(e, erase)) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (geomDrag) geomMove(e);
+    else if (boxing) { const c = cellOf(e); if (c) { boxing.c1 = c.cx; boxing.r1 = c.cy; gridBoxSel = boxing; renderGridView(); } }
+    else if (painting) editAt(e, gridTool === 'erase' || gridTool === 'box' || (e.buttons & 2));
+  });
+  const finish = () => {
+    if (boxing) {                                                  // release the marquee → PERSISTENT selection (stays until ESC)
+      gridSel = { c0: Math.min(boxing.c0, boxing.c1), r0: Math.min(boxing.r0, boxing.r1), c1: Math.max(boxing.c0, boxing.c1), r1: Math.max(boxing.r0, boxing.r1) };
+      boxing = null; gridBoxSel = null; renderGridView();
+    }
+    painting = false; geomDrag = null; if (dirty) { dirty = false; gridModel = null; rebuildSlices(); scheduleAutosave(); }  // full re-carve on release
+  };
+  cv.addEventListener('pointerup', finish);
+  cv.addEventListener('pointercancel', finish);
+  cv.addEventListener('contextmenu', (e) => { if (gridGeom && (gridGeom.editable || gridGeom.geom)) e.preventDefault(); });   // right-drag = erase (paint)
+})();
+// keep the grid canvas buffer matched to its displayed size so resizing stays crisp, and re-render
+if (window.ResizeObserver) {
+  const gcv = $('gridCanvas');
+  new ResizeObserver(() => {
+    const w = Math.max(1, Math.round(gcv.clientWidth)), h = Math.max(1, Math.round(gcv.clientHeight));
+    if (gcv.width !== w || gcv.height !== h) { gcv.width = w; gcv.height = h; renderGridView(); }
+  }).observe(gcv);
+}
+// drag a floating window by its header (resize is the native CSS corner handle)
+function makeDraggable(panelId, handleId) {
+  const p = $(panelId), h = $(handleId); if (!p || !h) return;
+  let dx = 0, dy = 0, drag = false;
+  h.addEventListener('pointerdown', (e) => { drag = true; const r = p.getBoundingClientRect(); dx = e.clientX - r.left; dy = e.clientY - r.top; h.setPointerCapture(e.pointerId); e.preventDefault(); });
+  h.addEventListener('pointermove', (e) => { if (!drag) return; const s = (p.offsetParent || document.body).getBoundingClientRect(); p.style.left = Math.max(0, e.clientX - s.left - dx) + 'px'; p.style.top = Math.max(0, e.clientY - s.top - dy) + 'px'; });
+  h.addEventListener('pointerup', () => { drag = false; });
+}
+makeDraggable('gridPanel', 'gridDrag');
+makeDraggable('palModal', 'palDrag');
+makeDraggable('scalePanel', 'scaleDrag');
+// the Scale chart grows as tall as it needs (renderScaleChart sets its height) and the panel scrolls;
+// keep its buffer width matched to the panel so it stays crisp and re-lays out on resize.
+if (window.ResizeObserver && $('scaleScroll')) {
+  const ss = $('scaleScroll'), scv = $('scaleChart');
+  new ResizeObserver(() => { const w = Math.max(140, Math.round(ss.clientWidth)); if (scv.width !== w) scv.width = w; renderScaleChart(); }).observe(ss);
+}
 $('clsSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.cls = b.dataset.c; [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c === b)); };
 
 // ── orthographic view pickers: 4 thumbnails per part; click to browse OR hover + Ctrl+V to paste ──
@@ -1055,6 +1791,9 @@ function updateFlipBtns(pick) {
 // ── cutout tuner: modal with a live keyed preview, per-image sensitivity slider + polygon shapes.
 // workPolys = closed shapes ({pts, cut}); workPoly = the shape being drawn; polyCut = mode for it. ──
 let keyTarget = null, workPolys = [], workPoly = [], polyDrawing = false, polyCut = false, keyScale = 1;
+// zoom/pan viewport for the cutout tuner: keyScale = fit scale (image→canvas), keyZoom ≥1 magnifies, and
+// keyPan{X,Y} is the top-left of the visible region in IMAGE px. Effective scale = keyScale·keyZoom.
+let keyZoom = 1, keyPanX = 0, keyPanY = 0;
 const clonePolys = (list) => list.map((q) => ({ cut: !!q.cut, pts: q.pts.map((p) => p.slice()) }));
 function syncPolyBtns() {
   $('keyPoly').classList.toggle('on', polyDrawing);
@@ -1070,6 +1809,7 @@ function openKeyModal(part, view) {
   $('keyTol').value = keyTolState[part][view]; $('keyTolV').textContent = keyTolState[part][view];
   workPolys = clonePolys(polyState[part][view] || []);
   workPoly = []; polyDrawing = false; polyCut = false; syncPolyBtns();
+  keyZoom = 1; keyPanX = 0; keyPanY = 0;                            // reset the zoom viewport for a fresh image
   renderKeyPreview();
   $('keyModal').hidden = false;
 }
@@ -1078,9 +1818,14 @@ function renderKeyPreview() {
   const maxW = Math.min(1440, window.innerWidth * 0.86), maxH = Math.min(1020, window.innerHeight * 0.72);
   const cv = $('keyCanvas'), s = keyScale = Math.min(maxW / im.width, maxH / im.height, 12);
   cv.width = Math.max(1, Math.round(im.width * s)); cv.height = Math.max(1, Math.round(im.height * s));
-  const g = cv.getContext('2d'); g.imageSmoothingEnabled = s < 1;
+  // viewport: at keyZoom>1 we draw a magnified sub-region; keep pan inside the image
+  const sx = s * keyZoom, regionW = cv.width / sx, regionH = cv.height / sx;
+  keyPanX = Math.max(0, Math.min(Math.max(0, im.width - regionW), keyPanX));
+  keyPanY = Math.max(0, Math.min(Math.max(0, im.height - regionH), keyPanY));
+  const toX = (ix) => (ix - keyPanX) * sx, toY = (iy) => (iy - keyPanY) * sx;   // image px → canvas px
+  const g = cv.getContext('2d'); g.imageSmoothingEnabled = sx < 1;
   g.clearRect(0, 0, cv.width, cv.height);
-  g.drawImage(keyedCanvas(im, +$('keyTol').value, workPolys), 0, 0, cv.width, cv.height);
+  g.drawImage(keyedCanvas(im, +$('keyTol').value, workPolys), keyPanX, keyPanY, regionW, regionH, 0, 0, cv.width, cv.height);
   const d = g.getImageData(0, 0, cv.width, cv.height).data, w = cv.width, hh = cv.height;   // outline overlay
   const solid = (x, y) => x >= 0 && x < w && y >= 0 && y < hh && d[(y * w + x) * 4 + 3] > 40;
   g.fillStyle = '#ff4fd8';
@@ -1088,25 +1833,30 @@ function renderKeyPreview() {
     if (solid(x, y) && (!solid(x - 1, y) || !solid(x + 1, y) || !solid(x, y - 1) || !solid(x, y + 1))) g.fillRect(x, y, 1, 1);
   const drawPoly = (pts, closed, col) => {                         // shape paths + vertex handles
     g.lineWidth = 1.5; g.strokeStyle = col;
-    g.beginPath(); g.moveTo(pts[0][0] * s, pts[0][1] * s);
-    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0] * s, pts[i][1] * s);
+    g.beginPath(); g.moveTo(toX(pts[0][0]), toY(pts[0][1]));
+    for (let i = 1; i < pts.length; i++) g.lineTo(toX(pts[i][0]), toY(pts[i][1]));
     if (closed) g.closePath();
     g.stroke();
     g.fillStyle = col;
-    for (const p of pts) g.fillRect(p[0] * s - 2, p[1] * s - 2, 4, 4);
+    for (const p of pts) g.fillRect(toX(p[0]) - 2, toY(p[1]) - 2, 4, 4);
   };
   for (const q of workPolys) drawPoly(q.pts, true, q.cut ? '#e0625f' : '#f2c869');
   if (workPoly.length) {
     drawPoly(workPoly, false, polyCut ? '#e0625f' : '#f2c869');
-    g.strokeStyle = '#ff4fd8'; g.strokeRect(workPoly[0][0] * s - 4, workPoly[0][1] * s - 4, 8, 8);
+    g.strokeStyle = '#ff4fd8'; g.strokeRect(toX(workPoly[0][0]) - 4, toY(workPoly[0][1]) - 4, 8, 8);
+  }
+  if (keyZoom > 1.001) {                                            // zoom readout, so you know you're magnified
+    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(4, 4, 60, 16);
+    g.fillStyle = '#7fd4c2'; g.font = '11px Segoe UI, sans-serif'; g.fillText(keyZoom.toFixed(1) + '×  ⇧scroll', 8, 16);
   }
 }
 $('keyCanvas').addEventListener('click', (e) => {
   if (!polyDrawing) return;
   const cv = $('keyCanvas'), r = cv.getBoundingClientRect(), css = cv.width / r.width;    // CSS px → canvas px
-  const x = (e.clientX - r.left) * css / keyScale, y = (e.clientY - r.top) * css / keyScale;
+  const sx = keyScale * keyZoom;                                   // canvas px → image px through the zoom viewport
+  const x = (e.clientX - r.left) * css / sx + keyPanX, y = (e.clientY - r.top) * css / sx + keyPanY;
   if (workPoly.length >= 3) {                                      // close by clicking the first point…
-    const dx = (workPoly[0][0] - x) * keyScale, dy = (workPoly[0][1] - y) * keyScale;
+    const dx = (workPoly[0][0] - x) * sx, dy = (workPoly[0][1] - y) * sx;   // threshold in canvas px
     if (dx * dx + dy * dy < 120) {                                 // …and stay in draw mode for the next shape
       workPolys.push({ pts: workPoly, cut: polyCut }); workPoly = [];
       renderKeyPreview(); return;
@@ -1114,6 +1864,20 @@ $('keyCanvas').addEventListener('click', (e) => {
   }
   workPoly.push([x, y]); renderKeyPreview();
 });
+// ⇧ + wheel → zoom toward the cursor for precise cutout tuning. Keeps the image point under the pointer
+// fixed while magnifying; wheel without Shift is left alone (page/modal scroll).
+$('keyCanvas').addEventListener('wheel', (e) => {
+  if (!e.shiftKey || $('keyModal').hidden) return;
+  e.preventDefault();
+  const cv = $('keyCanvas'), r = cv.getBoundingClientRect(), css = cv.width / r.width;
+  const mx = (e.clientX - r.left) * css, my = (e.clientY - r.top) * css;    // cursor in canvas px
+  const sx0 = keyScale * keyZoom;
+  const iu = mx / sx0 + keyPanX, iv = my / sx0 + keyPanY;                    // image point under the cursor
+  keyZoom = Math.max(1, Math.min(20, keyZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+  const sx1 = keyScale * keyZoom;
+  keyPanX = iu - mx / sx1; keyPanY = iv - my / sx1;                          // re-anchor so that point stays put
+  renderKeyPreview();
+}, { passive: false });
 $('keyPoly').onclick = () => {
   polyDrawing = !polyDrawing; if (!polyDrawing) workPoly = [];     // toggle off = abandon the unfinished shape
   syncPolyBtns(); renderKeyPreview();
@@ -1252,8 +2016,9 @@ function hsv2rgb(h, s, v) {
 const keyRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
 const cssOf = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const hexOf = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
-let palSwList = [], palSel = null, palH = 0, palS = 0, palVv = 1, palPending = false;
+let palSwList = [], palSel = null, palH = 0, palS = 0, palVv = 1, palPending = false, palShowAll = false;
 function palRebuild() {                                            // throttle: one model re-carve per frame
+  palEpoch++;                                                      // palette changed → paint strip refreshes
   if (palPending) return;
   palPending = true;
   requestAnimationFrame(() => { palPending = false; rebuildSlices(); scheduleAutosave(); });
@@ -1269,7 +2034,7 @@ function palBuildSwatches() {
   for (const F of [bodyFaces, turretFaces]) if (F) for (const f of F.faces) tally.set(f.k, (tally.get(f.k) || 0) + 1);
   const entries = [...tally.entries()];
   let groups;
-  if (entries.length <= 28) groups = entries.map((e) => ({ members: [e] }));
+  if (palShowAll || entries.length <= 28) groups = entries.map((e) => ({ members: [e] }));   // one swatch per exact colour → pin individuals
   else {                                                           // full-colour model → group into 18 families
     const cents = medianCut(entries.map(([k]) => keyRGB(k)), 18);
     groups = cents.map(() => ({ members: [] }));
@@ -1290,21 +2055,25 @@ function palBuildSwatches() {
     b.style.background = cssOf(palSwatchCol(sw));
     b.title = `${weight(sw)} faces · ${sw.members.length} colour(s)`;
     if (sw.members.some(([k]) => palMap.has(k))) b.classList.add('edited');
+    if (swatchPinned(palSwatchCol(sw))) b.classList.add('pinned');
+    if (swatchDropped(palSwatchCol(sw))) b.classList.add('dropped');
     b.onclick = () => palSelect(i);
     box.appendChild(b);
   });
-  $('palState').textContent = `${entries.length} distinct colour(s)` + (entries.length > 28 ? ' — grouped into families; a family shifts together.' : '.') +
+  $('palState').textContent = `${entries.length} distinct colour(s)` +
+    (!palShowAll && entries.length > 28 ? ' — grouped into families; a family shifts together. Tick “Show every colour” to pin exact shades.' : '.') +
     (palMap.size ? ` ${palMap.size} tuned.` : '');
 }
 function palSelect(i) {
   palSel = palSwList[i];
   document.querySelectorAll('.palSw').forEach((b) => b.classList.toggle('sel', +b.dataset.i === i));
   const cur = palSwatchCol(palSel);
+  const gp = $('gridPaintCol'); if (gp) gp.value = hexOf(cur);        // selecting a swatch loads it as the grid paint colour
   [palH, palS, palVv] = rgb2hsv(cur[0], cur[1], cur[2]);
   $('palPick').hidden = false;
   $('palInfo').textContent = palSel.members.length === 1 ? 'Exact colour — replaced outright.' :
     `${palSel.members.length} shades move together (same hue/brightness shift).`;
-  palDrawPickers(); palSyncChips();
+  palDrawPickers(); palSyncChips(); updateKeepBtn();
 }
 function palSyncChips() {
   const cur = palSwatchCol(palSel);
@@ -1365,9 +2134,88 @@ $('palResetOne').onclick = () => {
   palSyncChips(); palDrawPickers(); palRebuild();
 };
 $('palResetAll').onclick = () => { palMap.clear(); palBuildSwatches(); palRebuild(); };
-$('openPal').onclick = () => { palBuildSwatches(); $('palModal').hidden = false; };
+// MERGE the selected family's shades into ONE colour (all members → the picked colour, not a proportional shift)
+if ($('palMergeBtn')) $('palMergeBtn').onclick = () => {
+  if (!palSel) return;
+  const target = hsv2rgb(palH, palS, palVv);
+  for (const [k] of palSel.members) palMap.set(k, target);
+  const btn = document.querySelector('.palSw.sel');
+  if (btn) { btn.style.background = cssOf(palSwatchCol(palSel)); btn.classList.add('edited'); }
+  palSyncChips(); palDrawPickers(); palRebuild();
+};
+// REPAINT to my picks: make the palette EXACTLY the kept colours so every voxel snaps to its nearest one.
+if ($('palToKept')) $('palToKept').onclick = () => {
+  if (!palKeep.size) { $('palState').textContent = 'Pin the colours you want first (📌 Keep), then repaint.'; return; }
+  setPaletteN(palKeep.size);   // budget == #pins → buildPalette returns exactly the pinned set → quantiser snaps to it
+  if ($('palNV')) $('palNV').textContent = String(palKeep.size);
+  if ($('palN')) $('palN').value = String(palKeep.size);
+};
+// CONSOLIDATE → REMAP: commit the working palette into the MODEL. Every voxel is snapped to its nearest
+// working colour and WRITTEN as a voxel edit, so the model's own stored colours become the working palette
+// (consistent across all sides — no more per-face source bleed). The SOURCE is untouched: it's the raw
+// carve + your source sheets underneath, and "Reset edits" restores it exactly.
+function remapModelToWorking() {
+  const n = state.paletteN || palKeep.size;
+  if (!n) { $('palState').textContent = 'Consolidate first — set a Palette size or 📌 Keep colours — then remap.'; return; }
+  const kRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
+  pushUndo();                                                     // remap rewrites every voxel — make it a single undoable step
+  let touched = 0;
+  for (const part of ['body', 'turret']) {
+    const foot = state.foot, layers = part === 'body' ? state.bodyLayers : state.turretLayers, N = foot * foot;
+    const m = buildModel(part, foot, layers), ed = voxEdit[part];
+    const quant = buildQuantiser(null, m.vcol, m.filled, foot, layers, n, m.views);
+    if (!quant) continue;
+    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      if (!m.filled(x, y, z)) continue;
+      const c = (z * N + y * foot + x) * 3;
+      let [r, g, b] = quant(m.vcol[c], m.vcol[c + 1], m.vcol[c + 2]);
+      const t = palMap.get((r << 16) | (g << 8) | b); if (t) [r, g, b] = t;   // apply the colour tune too
+      ed.set(z * N + y * foot + x, [r, g, b]); touched++;
+    }
+  }
+  gridModel = null; rebuildSlices(); scheduleAutosave();
+  $('palState').textContent = `Remapped ${touched} voxel(s) to the working palette. Source preserved — Reset edits restores it.`;
+}
+if ($('palRemap')) $('palRemap').onclick = remapModelToWorking;
+// palette SIZE + reduction — shared by the side-panel slider (#pal) and the floating window (#palN),
+// both kept in lock-step. Re-carves the model, then refreshes the swatch strip if the window is open.
+function palReduceRefresh() { palEpoch++; rebuildSlices(); if (!$('palModal').hidden) palBuildSwatches(); scheduleAutosave(); }
+function setPaletteN(v) {
+  state.paletteN = v;
+  $('pal').value = v; $('palV').textContent = v || 'full';
+  $('palN').value = v; $('palNV').textContent = v || 'full';
+  palReduceRefresh();
+}
+$('pal').oninput = (e) => setPaletteN(+e.target.value);
+$('palN').oninput = (e) => setPaletteN(+e.target.value);
+// KEEP a colour (always in the reduced palette) or ELIMINATE it (dropped, voxels remap to nearest
+// survivor). The two are mutually exclusive; both toggle on the selected swatch.
+const keyOf = (c) => (c[0] << 16) | (c[1] << 8) | c[2];
+const nearIn = (set, c) => { for (const k of set) { const p = keyRGB(k); if ((p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2 < 24 * 24) return k; } return null; };
+function swatchPinned(c) { return nearIn(palKeep, c); }
+function swatchDropped(c) { return nearIn(palDrop, c); }
+function updateKeepBtn() {
+  if (!palSel) return;
+  const c = palSwatchCol(palSel), pinned = swatchPinned(c) != null, dropped = swatchDropped(c) != null;
+  const kb = $('palKeepBtn'); if (kb) { kb.textContent = pinned ? '📌 Kept — click to release' : '📌 Keep this color'; kb.classList.toggle('on', pinned); }
+  const db = $('palDropBtn'); if (db) { db.textContent = dropped ? '🚫 Eliminated — click to restore' : '🚫 Eliminate this color'; db.classList.toggle('on', dropped); }
+}
+$('palKeepBtn').onclick = () => {
+  if (!palSel) return;
+  const c = palSwatchCol(palSel), existing = swatchPinned(c);
+  if (existing != null) palKeep.delete(existing); else { palKeep.add(keyOf(c)); const d = swatchDropped(c); if (d != null) palDrop.delete(d); }
+  updateKeepBtn(); palReduceRefresh();
+};
+$('palDropBtn').onclick = () => {
+  if (!palSel) return;
+  const c = palSwatchCol(palSel), existing = swatchDropped(c);
+  if (existing != null) palDrop.delete(existing); else { palDrop.add(keyOf(c)); const k = swatchPinned(c); if (k != null) palKeep.delete(k); }
+  updateKeepBtn(); palReduceRefresh();
+};
+$('palClearKeep').onclick = () => { palKeep.clear(); palDrop.clear(); palReduceRefresh(); updateKeepBtn(); };
+if ($('palShowAll')) $('palShowAll').onchange = (e) => { palShowAll = e.target.checked; palBuildSwatches(); };
+$('openPal').onclick = () => { $('palN').value = state.paletteN; $('palNV').textContent = state.paletteN || 'full'; palBuildSwatches(); $('palModal').hidden = false; };
 $('palClose').onclick = () => { $('palModal').hidden = true; };
-$('palModal').addEventListener('click', (e) => { if (e.target === $('palModal')) $('palModal').hidden = true; });
 
 let pasteTarget = null;
 document.querySelectorAll('.vpick').forEach((pick) => {
@@ -1404,7 +2252,11 @@ function doBake() {
   const t0 = performance.now();
   const body = bakeAngleCache(app.renderer, bodyFaces, { frames: BODY_FRAMES, smooth: false, sharp: 0, g, pivotFrac: 0.5, el: state.el, scale: B });
   const turret = bakeAngleCache(app.renderer, turretFaces, { frames: TURRET_FRAMES, smooth: state.smooth, sharp: state.sharp, g, pivotFrac, el: state.el, scale: B });
-  state.baked = { body, turret, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, bodyLayers: bL, turretLayers: tL, scale: B };
+  // S1: cast-shadow shape atlas, from the filled volume (aligned 1:1 with the frame atlases)
+  const bodyFilled = buildModel('body', foot, bL).filled, turretFilled = buildModel('turret', foot, tL).filled;
+  const bodyShadow = bakeShadowCache(app.renderer, bodyFilled, { frames: BODY_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B, foot, layers: bL });
+  const turretShadow = bakeShadowCache(app.renderer, turretFilled, { frames: TURRET_FRAMES, g, pivotFrac, el: state.el, scale: B, foot, layers: tL });
+  state.baked = { body, turret, bodyShadow, turretShadow, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, bodyLayers: bL, turretLayers: tL, scale: B };
   const mkBaked = (tex, parent) => { const s = new PIXI.Sprite(tex);       // frames are B px/voxel → shrink to world size
     s.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); s.scale.set(1 / B); parent.addChild(s); return s; };
   bodyBaked = mkBaked(body[0], rig); turretBaked = mkBaked(turret[0], rig);
@@ -1426,6 +2278,7 @@ function packAtlas(cache) {
 function buildPack() {
   const b = state.baked, id = ($('uid').value || 'unit').trim(), B = b.scale || 1;
   const ba = packAtlas(b.body), ta = packAtlas(b.turret);
+  const bsa = b.bodyShadow ? packAtlas(b.bodyShadow) : null, tsa = b.turretShadow ? packAtlas(b.turretShadow) : null;   // S1 shadow atlases
   const pivot = [Math.round(b.g.CX * B), Math.round(b.g.BASEY * B)], mountDz = clamp(bodyMountZ + state.mountZ, 0, b.bodyLayers);
   const totalH = Math.max(b.bodyLayers, mountDz + b.turretLayers);
   const pack = {
@@ -1436,11 +2289,18 @@ function buildPack() {
     renderScale: B,                                    // atlas px per voxel — draw frames at 1/renderScale
     light: { azimuth: state.lightAz, contrast: state.lightK },
     parts: [
-      { id: 'body', kind: 'directional', facings: b.bodyFrames, atlas: `${id}.body.png`, cell: ba.cell, cols: ba.cols, pivot, layers: b.bodyLayers, zeroFacing: '+x' },
-      { id: 'turret', kind: 'stack', angles: b.turretFrames, atlas: `${id}.turret.png`, cell: ta.cell, cols: ta.cols, pivot, layers: b.turretLayers, mount: [state.turretDx, 0, mountDz] },
+      { id: 'body', kind: 'directional', facings: b.bodyFrames, atlas: `${id}.body.png`, cell: ba.cell, cols: ba.cols, pivot, layers: b.bodyLayers, zeroFacing: '+x',
+        ...(bsa ? { shadowAtlas: `${id}.body.shadow.png`, shadowCell: bsa.cell, shadowCols: bsa.cols } : {}) },
+      { id: 'turret', kind: 'stack', angles: b.turretFrames, atlas: `${id}.turret.png`, cell: ta.cell, cols: ta.cols, pivot, layers: b.turretLayers, mount: [state.turretDx, 0, mountDz],
+        ...(tsa ? { shadowAtlas: `${id}.turret.shadow.png`, shadowCell: tsa.cell, shadowCols: tsa.cols } : {}) },
     ],
-    shadow: { kind: 'ellipse', rx: Math.round(b.foot / 2), ry: Math.round(b.foot * 0.22), alt: state.cls === 'air' ? 30 : 0 },
+    // S1: baked cast-shadow shapes replace the runtime skew. `elevation`/`dir` are recorded so the game
+    // (and flyer shadows) can offset consistently; ellipse fields kept as the pre-shadow-atlas fallback.
+    shadow: (bsa && tsa)
+      ? { kind: 'baked', elevation: SHADOW_EL, dir: [SHADOW_DIRX, SHADOW_DIRY], alt: state.cls === 'air' ? 30 : 0 }
+      : { kind: 'ellipse', rx: Math.round(b.foot / 2), ry: Math.round(b.foot * 0.22), alt: state.cls === 'air' ? 30 : 0 },
     stats: { speed: 90, turnRate: 3.0, turretRate: 4.0 },
+    collision: +bodyExtentTiles().toFixed(3),   // sim unit-radius half-width (tiles) from the real body extent; matches the preview ring
   };
   // Tier C (rendering-tiers spec §3C): embed the assembled voxel model so the game can render this
   // unit as a LIVE 3D object with real pitch/roll. Big (~4B/voxel base64) — only for set-pieces.
@@ -1452,7 +2312,10 @@ function buildPack() {
     for (const c of cells) { const i = ((c.z * b.foot + c.y) * b.foot + c.x) * 4; data[i] = c.r; data[i + 1] = c.g; data[i + 2] = c.b; data[i + 3] = 255; }
     pack.model = { nx: b.foot, ny: b.foot, nz, b64: b64FromU8(data) };
   }
-  return { pack, atlases: { body: ba.canvas.toDataURL('image/png'), turret: ta.canvas.toDataURL('image/png') } };
+  const atlases = { body: ba.canvas.toDataURL('image/png'), turret: ta.canvas.toDataURL('image/png') };
+  if (bsa) atlases['body.shadow'] = bsa.canvas.toDataURL('image/png');
+  if (tsa) atlases['turret.shadow'] = tsa.canvas.toDataURL('image/png');
+  return { pack, atlases };
 }
 
 // ── SAVE to manifest ──
@@ -1465,6 +2328,7 @@ function renderManifest() {
 }
 function doSaveUnit() {
   if (!state.baked) return; const built = buildPack(); const v = validatePack(built.pack);
+  activeUnitId = built.pack.id;                           // an explicit save under this id is a deliberate rename → follow it
   const m = loadManifest();
   m.config = { camera: built.pack.camera, light: built.pack.light };   // shared game-wide config
   m.units = m.units || {}; m.units[built.pack.id] = built;
@@ -1516,7 +2380,7 @@ const idb = (() => {
     tx.oncomplete = () => res(rq && rq.result); tx.onerror = () => rej(tx.error);
   }));
   return { put: (k, v) => op('readwrite', (s) => s.put(v, k)), get: (k) => op('readonly', (s) => s.get(k)),
-    keys: () => op('readonly', (s) => s.getAllKeys()) };
+    del: (k) => op('readwrite', (s) => s.delete(k)), keys: () => op('readonly', (s) => s.getAllKeys()) };
 })();
 const b64FromU8 = (a) => { let s = ''; for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };
 const u8FromB64 = (s) => { const bin = atob(s), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; };
@@ -1528,7 +2392,7 @@ function imgURL(part, view) {
     c.getContext('2d').drawImage(im, 0, 0); u = imgURLCache[part][view] = c.toDataURL('image/png'); }
   return u;
 }
-function snapshotProject() {
+function snapshotProject(idOverride) {
   const images = {}, vox = {};
   for (const part of ['body', 'turret']) {
     images[part] = {}; for (const v of VIEWS) images[part][v] = imgURL(part, v);
@@ -1536,9 +2400,11 @@ function snapshotProject() {
     vox[part] = m ? { nx: m.nx, ny: m.ny, nz: m.nz, b64: voxB64[part] || (voxB64[part] = b64FromU8(m.data)) } : null;
   }
   const st = { ...state }; delete st.baked;
-  return { format: 'stackforge-project', version: 1, id: ($('uid').value || 'unit').trim(),
+  return { format: 'stackforge-project', version: 2, id: (idOverride || $('uid').value || 'unit').trim(),
     state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, images, vox,
-    palMap: [...palMap.entries()] };
+    palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop],
+    voxEdit: { body: [...voxEdit.body], turret: [...voxEdit.turret] },
+    geom: { body: { ...geomState.body }, turret: { ...geomState.turret } } };
 }
 function syncAllControls() {
   const set = (id, val, lab) => { $(id).value = val; if (lab !== undefined) $(id + 'V').textContent = lab; };
@@ -1550,6 +2416,7 @@ function syncAllControls() {
   set('zScale', Math.round(state.zScale * 100), state.zScale.toFixed(2) + '×');
   set('lightAz', state.lightAz, state.lightAz + '°'); set('lightK', state.lightK, '' + state.lightK);
   set('pal', state.paletteN, state.paletteN || 'full');
+  set('palN', state.paletteN, state.paletteN || 'full');
   set('sharp', Math.round(state.sharp * 100), state.sharp.toFixed(2)); set('bakeScale', state.bakeScale, state.bakeScale + '×');
   $('res').value = state.foot; $('smooth').checked = state.smooth; $('spin').checked = state.spin;
   [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
@@ -1558,10 +2425,16 @@ function syncAllControls() {
 }
 async function loadProject(p) {
   bulkLoad = true;
+  undoStack.length = 0; redoStack.length = 0; gridSel = null;   // undo history + selection belong to the OUTGOING unit — never let them apply to this one
   try {
-    $('uid').value = p.id || 'unit';
+    $('uid').value = p.id || 'unit'; activeUnitId = (p.id || 'unit');   // anchor the WIP key to the restored project
     Object.assign(state, p.state || {}); state.baked = null;
     palMap.clear(); if (p.palMap) for (const [k, c] of p.palMap) palMap.set(k, c);
+    palKeep.clear(); if (p.palKeep) for (const k of p.palKeep) palKeep.add(k);
+    palDrop.clear(); if (p.palDrop) for (const k of p.palDrop) palDrop.add(k);
+    voxEdit.body.clear(); voxEdit.turret.clear();
+    if (p.voxEdit) { for (const [k, v] of p.voxEdit.body || []) voxEdit.body.set(k, v); for (const [k, v] of p.voxEdit.turret || []) voxEdit.turret.set(k, v); }
+    for (const part of ['body', 'turret']) geomState[part] = (p.geom && p.geom[part]) ? { ...p.geom[part] } : { auto: true, bottomFrom: 'top' };  // v1 projects → auto (identical to before)
     for (const part of ['body', 'turret']) {
       const pv = p.vox && p.vox[part];
       voxPart[part] = pv ? { nx: pv.nx, ny: pv.ny, nz: pv.nz, data: u8FromB64(pv.b64) } : null;
@@ -1581,22 +2454,61 @@ async function loadProject(p) {
       }
     }
   } finally { bulkLoad = false; }
+  fitLayersToArt();                                    // raise Layers so tall art never loads squashed
   syncAllControls(); rebuildSlices(); drawLight(); renderRoster();
 }
-let autosaveTimer = 0;
-function scheduleAutosave() { if (bulkLoad) return; clearTimeout(autosaveTimer); autosaveTimer = setTimeout(doAutosave, 800); }
-async function doAutosave() {
-  if (bulkLoad) { scheduleAutosave(); return; }
+// raise a part's Layers to fit its art height (never lowers). Only auto-placed parts can squash — a
+// manually-reconciled span already sets the height. Probed with the squash warning muted.
+function fitLayersToArt() {
+  suppressSquashWarn = true;
   try {
-    const p = snapshotProject();
-    await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id);
-    $('projState').textContent = `Autosaved "${p.id}" · ${new Date().toLocaleTimeString()}`;
-  } catch (e) { /* storage unavailable — project file still works */ }
+    for (const part of ['body', 'turret']) {
+      if (voxPart[part]) continue;                     // .vox defines its own height
+      const src = imgs[part]; if (!src || (!src.top && !src.side && !src.front && !src.back)) continue;
+      const key = part === 'body' ? 'bodyLayers' : 'turretLayers';
+      const dbg = buildVolume(part, state.foot, state[key]).dbg;
+      if (dbg && dbg.Hraw > state[key] + 0.5) state[key] = Math.min(40, Math.ceil(dbg.Hraw));
+    }
+  } finally { suppressSquashWarn = false; }
 }
+let autosaveTimer = 0;
+// a project is worth persisting only if it has real editable content — source art, an imported .vox,
+// or manual voxel edits. A baked-only pack preview (loadPackPreview clears the source) has NONE of
+// these, so autosaving it would overwrite a genuine WIP with an empty shell and hijack sf:last — the
+// root cause of "the unit I worked on reloads empty".
+function projectHasContent(p) {
+  for (const part of ['body', 'turret']) {
+    if (p.vox && p.vox[part]) return true;
+    if (p.voxEdit && p.voxEdit[part] && p.voxEdit[part].length) return true;
+    if (p.images && p.images[part]) for (const v of VIEWS) if (p.images[part][v]) return true;
+  }
+  return false;
+}
+function setWipStatus(txt, kind) { const el = $('wipStatus'); if (!el) return; el.textContent = txt; el.style.color = kind === 'saved' ? '#57d98a' : kind === 'dirty' ? '#e0b060' : 'var(--muted)'; }
+function scheduleAutosave() {
+  if (bulkLoad || loadingUnit) return;                    // never arm a save while a unit is loading (would key the OLD model to the NEW slot)
+  clearTimeout(autosaveTimer); autosaveTimer = setTimeout(doAutosave, 500);
+  setWipStatus('● unsaved…', 'dirty');
+}
+async function doAutosave() {
+  if (bulkLoad || loadingUnit) { return; }                // in-flight load owns the slot — don't write over it
+  clearTimeout(autosaveTimer);
+  try {
+    const p = snapshotProject(activeUnitId);               // key off the loaded unit, not the mutable id box
+    if (!projectHasContent(p)) { setWipStatus('— nothing to save', 'muted'); return; }   // don't clobber a real WIP with an empty snapshot
+    await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id);
+    const t = new Date().toLocaleTimeString();
+    $('projState').textContent = `Autosaved "${p.id}" · ${t}`;
+    setWipStatus(`✓ saved ${t}`, 'saved');
+  } catch (e) { setWipStatus('⚠ save failed', 'dirty'); }
+}
+if ($('wipSaveNow')) $('wipSaveNow').onclick = () => doAutosave();
 document.addEventListener('input', scheduleAutosave, true);
 document.addEventListener('change', scheduleAutosave, true);
 document.addEventListener('click', scheduleAutosave, true);
 document.addEventListener('visibilitychange', () => { if (document.hidden) doAutosave(); });
+window.addEventListener('pagehide', () => doAutosave());              // best-effort flush before a reload/close
+window.addEventListener('beforeunload', () => doAutosave());          // capture edits made in the last moment
 $('projSave').onclick = () => {
   const p = snapshotProject(), url = URL.createObjectURL(new Blob([JSON.stringify(p)], { type: 'application/json' }));
   dl(`${p.id}.sfproj.json`, url); setTimeout(() => URL.revokeObjectURL(url), 1500);
@@ -1619,8 +2531,17 @@ const FACTIONS = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water', '
 const ROLES = ['Skirmisher', 'Support', 'Bruiser', 'Siege', 'Juggernaut', 'Harasser', 'Striker', 'Guided AA'];
 const prefixFor = (name) => (name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'UNI');
 let filesIndex = [], curFaction = null, roster = [];
+// SHIPPED units (the deployed manifest with baked art) are pulled in so the roster/Load list surface
+// units that exist in the game but were never saved in THIS browser — otherwise a fresh browser shows
+// every slot as "needs art" and nothing loads. A localStorage-saved unit of the same id wins.
+let shippedUnits = {};
+const suppliedUnits = () => ({ ...shippedUnits, ...(loadManifest().units || {}) });
+async function loadShipped() {
+  try { const d = await (await fetch('../../content/units/voxel-units.json')).json(); shippedUnits = d.units || {}; } catch (e) { shippedUnits = {}; }
+}
 async function initFactions() {
   try { filesIndex = (await (await fetch('../../content/units/index.json')).json()).factions || []; } catch (e) { filesIndex = []; }
+  await loadShipped();                                            // so "supplied ✓" + Load reflect deployed art
   $('faction').innerHTML = FACTIONS.map((f) => `<option>${f}</option>`).join('');
   $('faction').onchange = () => loadFaction($('faction').value);
   loadFaction(FACTIONS[0]);
@@ -1640,7 +2561,7 @@ async function loadFaction(name) {
   renderRoster();
 }
 function renderRoster() {
-  const grid = $('unitGrid'), supplied = (loadManifest().units) || {};
+  const grid = $('unitGrid'), supplied = suppliedUnits();
   grid.innerHTML = ''; let n = 0;
   for (const u of roster) {
     const has = !!supplied[u.id]; if (has) n++;
@@ -1660,9 +2581,30 @@ $('addUnit').onclick = () => {
   if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
   renderRoster(); selectUnit(id);
 };
+// wipe the current unit's source art/vox + per-view cutout state so switching to a pack-only unit
+// doesn't keep re-carving and displaying the PREVIOUS unit (the "still looking at Base" bug).
+function clearSourceArt() {
+  for (const part of ['body', 'turret']) {
+    voxPart[part] = null; voxB64[part] = null;
+    for (const v of VIEWS) {
+      srcImg[part][v] = null; imgs[part][v] = null; imgURLCache[part][v] = null;
+      flipState[part][v] = { h: false, v: false }; rotState[part][v] = 0; keyTolState[part][v] = 75; polyState[part][v] = null;
+      const pick = pickFor(part, v);
+      if (pick) { pick.classList.remove('set'); updateFlipBtns(pick); const cvs = pick.querySelector('canvas'); if (cvs) cvs.getContext('2d').clearRect(0, 0, cvs.width, cvs.height); }
+    }
+  }
+  gridModel = null;
+}
 function selectUnit(id) {
-  $('uid').value = id;
-  const m = (loadManifest().units) || {};
+  // SAFETY: flush the OUTGOING unit under ITS OWN id first (so its last edits aren't lost or misfiled),
+  // cancel any click-armed autosave, and block autosaves until the incoming unit finishes loading — the
+  // async load must own the slot, or a stale-model autosave overwrites the unit you're switching to.
+  clearTimeout(autosaveTimer);
+  try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }
+  undoStack.length = 0; redoStack.length = 0; gridSel = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
+  loadingUnit = true;
+  $('uid').value = id; activeUnitId = id;                 // anchor the WIP key to the unit being loaded
+  const m = suppliedUnits();
   if (m[id]) {
     const p = m[id].pack, bp = (p.parts || []).find((q) => q.id === 'body'), tp = (p.parts || []).find((q) => q.id === 'turret');
     state.cls = p.class; state.foot = p.footprint[0];
@@ -1674,14 +2616,20 @@ function selectUnit(id) {
     [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
   }
   document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
-  rebuildSlices(); drawLight();
-  // resume this unit's work: full WIP project when one exists, else load the saved asset pack itself
+  drawLight();
+  // a WIP project restores full editable source (loadProject rebuilds); otherwise DROP the previous
+  // unit's source so it stops rendering, then show the saved pack's baked model in the orbit.
   idb.get('proj:' + id).then((p) => {
     if (p) return loadProject(p).then(() => { $('projState').textContent = `Loaded "${id}" — continue editing.`; });
+    clearSourceArt();
     if (m[id]) return loadPackPreview(m[id]).then(() => {
-      $('projState').textContent = `Loaded "${id}" baked pack (no source project on this browser — art slots empty).`;
+      gridModel = null; renderGridView();                           // reflect the cleared source (baked shows in orbit)
+      $('projState').textContent = `Loaded "${id}" baked pack — orbit/in-game show the baked model; no editable source on this browser.`;
     });
-  }).catch(() => {});
+    rebuildSlices();
+    $('projState').textContent = `Nothing to load for "${id}" (no WIP project and no saved pack).`;
+  }).catch((e) => { console.error('[load] failed for', id, e); $('projState').textContent = `Load failed for "${id}": ${(e && e.message) || e}`; })
+    .finally(() => { loadingUnit = false; });              // load done → autosaves may resume, now correctly keyed to this unit
 }
 
 // rebuild the baked preview straight from a saved pack's atlases — "load asset pack and continue"
@@ -1720,11 +2668,13 @@ let saveAsId = null;
 function onCardClick(id) {
   saveAsId = id;
   $('saveAsTitle').textContent = id;
-  $('saveAsWarn').hidden = !((loadManifest().units || {})[id]);   // overwrite warning on supplied slots
+  const exists = !!suppliedUnits()[id];                            // has art (saved locally or shipped) → loadable
+  $('saveAsWarn').hidden = !exists;
+  $('saveAsLoad').hidden = !exists;                                // offer Load when there's something to load
   $('saveAsModal').hidden = false;
 }
 async function openLoadModal() {
-  const m = loadManifest().units || {};
+  const m = suppliedUnits();
   let projIds = [];
   try { projIds = ((await idb.keys()) || []).filter((k) => typeof k === 'string' && k.startsWith('proj:')).map((k) => k.slice(5)); } catch (e) { /* no store */ }
   const wip = new Set(projIds), packed = new Set(Object.keys(m));
@@ -1737,32 +2687,73 @@ async function openLoadModal() {
   const list = $('loadList'); list.innerHTML = '';
   if (!ids.length) list.innerHTML = '<div class="note">Nothing saved yet — bake a unit and click its slot to save one.</div>';
   for (const id of ids) {
+    const row = document.createElement('div'); row.className = 'row'; row.style.gap = '4px';
     const b = document.createElement('button');
-    b.className = 'ghost loadRow';
+    b.className = 'ghost loadRow'; b.style.flex = '1';
     b.innerHTML = `<span class="lid">${id}</span><span class="ltag">${wip.has(id) ? '✎ project' : ''}${wip.has(id) && packed.has(id) ? ' · ' : ''}${packed.has(id) ? '📦 pack' : ''}</span>`;
     b.onclick = () => { $('loadModal').hidden = true; doAutosave(); selectUnit(id); };   // flush WIP before it's replaced
-    list.appendChild(b);
+    row.appendChild(b);
+    if (wip.has(id)) {                                                 // delete the WIP project (falls back to the pack, or gone)
+      const del = document.createElement('button'); del.className = 'ghost'; del.textContent = '🗑'; del.title = 'Delete this browser WIP project';
+      del.style.cssText = 'width:auto;padding:6px 9px;margin:0;flex:0 0 auto';
+      del.onclick = async (e) => { e.stopPropagation(); if (!confirm(`Delete the work-in-progress project for "${id}"? (Its saved pack, if any, stays.)`)) return; await idb.del('proj:' + id); if (activeUnitId === id) localStorage.removeItem('bulwark:sf:last'); openLoadModal(); };
+      row.appendChild(del);
+    }
+    list.appendChild(row);
   }
   $('loadModal').hidden = false;
 }
 $('loadUnit').onclick = openLoadModal;
 $('loadCancel').onclick = () => { $('loadModal').hidden = true; };
+// LOAD DIAGNOSTIC (owner 2026-07-18): for every unit, report the FACTS that decide the load path —
+// does a WIP project exist in IndexedDB, does it actually have content, which source views/vox it holds,
+// is there a pack (saved vs shipped-only), and exactly what selectUnit() will do. Reading this instead
+// of inferring is how we stop guessing about load.
+async function diagnoseLoad() {
+  const m = suppliedUnits(), localUnits = loadManifest().units || {};
+  let projIds = [];
+  try { projIds = ((await idb.keys()) || []).filter((k) => typeof k === 'string' && k.startsWith('proj:')).map((k) => k.slice(5)); } catch (e) { /* no store */ }
+  const ids = [...new Set([...projIds, ...Object.keys(m)])].sort();
+  const hashStr = (s) => { let h = 5381; for (let i = 0; i < s.length; i += 7) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };  // sampled djb2 — same art → same hash
+  const rows = [];
+  for (const id of ids) {
+    let wip = null; try { wip = await idb.get('proj:' + id); } catch (e) { /* skip */ }
+    const hasWip = !!wip, content = wip ? projectHasContent(wip) : false;
+    const viewsOf = (part) => (wip && wip.images && wip.images[part]) ? VIEWS.filter((v) => wip.images[part][v]).map((v) => v[0]).join('') : '';
+    const imgs = wip ? `b:${viewsOf('body') || '-'} t:${viewsOf('turret') || '-'}` : '-';
+    const bTop = wip && wip.images && wip.images.body && wip.images.body.top;   // the ACTUAL body-top art
+    const art = bTop ? hashStr(bTop) : '-';
+    const pack = !!m[id], packKind = pack ? (localUnits[id] ? 'saved' : (shippedUnits[id] ? 'shipped' : 'other')) : '-';
+    const action = hasWip ? (content ? 'loadProject → EDITABLE' : 'loadProject → EMPTY (!)') : (pack ? 'loadPackPreview → baked only' : 'nothing to load');
+    rows.push({ id, wip: hasWip ? (content ? 'yes' : 'EMPTY') : '-', imgs, artHash: art, layers: wip && wip.state ? `${wip.state.bodyLayers}/${wip.state.turretLayers}` : '-', pack: packKind, 'load →': action });
+  }
+  console.table(rows);
+  // group by art hash: any hash shared by >1 unit means those units carry the SAME source art (corruption)
+  const byArt = {};
+  for (const r of rows) if (r.artHash !== '-') (byArt[r.artHash] = byArt[r.artHash] || []).push(r.id);
+  const dupes = Object.values(byArt).filter((g) => g.length > 1);
+  if (dupes.length) console.warn('[diag] units SHARING the same body art (corrupted WIPs):', dupes);
+  const el = $('loadDiagNote');
+  if (el) el.innerHTML = `Dumped <b>${rows.length}</b> units to the Console. ` + (dupes.length ? `<span style="color:#e0975f">Same-art groups (corrupted): ${dupes.map((g) => g.join('=')).join(' · ')}</span>` : 'No shared-art corruption.');
+  return rows;
+}
+if ($('loadDiag')) $('loadDiag').onclick = diagnoseLoad;
 $('loadModal').addEventListener('click', (e) => { if (e.target === $('loadModal')) $('loadModal').hidden = true; });
 function quickSave(id, as3D) {
   $('uid').value = id;
-  if (as3D) $('embedModel').checked = true;
+  $('embedModel').checked = !!as3D;                     // 3D embeds the editable model; sprites explicitly does not
   doBake();                                             // current camera + bake settings
   doSaveUnit();                                         // pack → manifest, card flips to ✓
   document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
   $('projState').textContent = `Saved "${id}" as ${as3D ? '3D (live model + baked fallback)' : 'baked sprites'} — reload the game to see it.`;
   doAutosave();                                         // park the working project under this id too
 }
-$('saveAsSprites').onclick = () => { $('saveAsModal').hidden = true; quickSave(saveAsId, false); };
-$('saveAs3D').onclick = () => { $('saveAsModal').hidden = true; quickSave(saveAsId, true); };
-$('saveAsEdit').onclick = () => {
-  $('saveAsModal').hidden = true; $('uid').value = saveAsId;
-  document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === saveAsId));
-};
+$('saveAsLoad').onclick = () => { $('saveAsModal').hidden = true; doAutosave(); selectUnit(saveAsId); };   // actually load it
+// SAFETY: overwriting an EXISTING saved unit needs an explicit yes — clicking a roster card to *select* it
+// must never silently replace it with the current model (owner data-loss report).
+const confirmOverwrite = () => !suppliedUnits()[saveAsId] || confirm(`Overwrite the saved unit “${saveAsId}” with the current model?\n\nThe saved version is replaced. To open that unit instead, use “📂 Load this unit”.`);
+$('saveAsSprites').onclick = () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; quickSave(saveAsId, false); };
+$('saveAs3D').onclick = () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; quickSave(saveAsId, true); };
 $('saveAsCancel').onclick = () => { $('saveAsModal').hidden = true; };
 $('saveAsModal').addEventListener('click', (e) => { if (e.target === $('saveAsModal')) $('saveAsModal').hidden = true; });
 

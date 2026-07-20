@@ -304,6 +304,9 @@ export function createSim(seed, opts) {
     entityIdCounter: 0,
     harvesterLevel: (options.harvesterLevel | 0) || 1,   // workbook upgrade level (menu-bought, save-owned)
     structTiers: options.structTiers || null,            // Amendment B2: campaign tier unlocks (null = all open)
+    // per-unit collision radii derived from the voxel pack footprint (unitId → half-width tiles). Lets a
+    // unit's collision match the tank you SEE instead of the shape-table default. null → unitRadius(def).
+    voxelRadii: options.voxelRadii || null,
     _resultEmitted: false
   };
 
@@ -405,11 +408,8 @@ function cmdPlace(state, cmd) {
   const v = validatePlacement(state, cmd.structId, cell);
   if (!v.ok) return { ok: false, reason: v.reason || 'invalid' };
 
-  const goldBefore = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
-  const s = placeStructure(state, cmd.structId, cell);
+  const s = placeStructure(state, cmd.structId, cell);   // placeStructure→spend() tracks state.goldSpent
   if (!s) return { ok: false, reason: 'cost' };
-  const goldAfter = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
-  if (goldAfter < goldBefore) state.goldSpent += (goldBefore - goldAfter);
 
   emitEvent(state, {
     type: 'build',
@@ -426,12 +426,9 @@ function cmdUpgrade(state, cmd) {
   if (typeof sid !== 'number') return { ok: false, reason: 'badCommand' };
   const s = state.structures.get(sid);
   if (!s) return { ok: false, reason: 'noStructure' };
-  const gUp = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
-  if (!startUpgrade(state, sid)) {
+  if (!startUpgrade(state, sid)) {   // startUpgrade→spend() tracks state.goldSpent
     return { ok: false, reason: s.tier >= 3 ? 'maxTier' : 'cost' };
   }
-  const gUpAfter = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
-  if (gUpAfter < gUp) state.goldSpent += (gUp - gUpAfter);
   emitEvent(state, { type: 'upgradeStart', tick: state.tick, structureId: sid });
   return { ok: true, reason: '' };
 }
@@ -451,12 +448,9 @@ function cmdRepair(state, cmd) {
   const sid = typeof cmd.id === 'number' ? cmd.id : cmd.structureId;
   if (typeof sid !== 'number') return { ok: false, reason: 'badCommand' };
   if (!state.structures.get(sid)) return { ok: false, reason: 'noStructure' };
-  const gRep = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
-  if (!requestRepair(state, sid)) {
+  if (!requestRepair(state, sid)) {   // requestRepair→spend() tracks state.goldSpent
     return { ok: false, reason: 'noRepairNeeded' };
   }
-  const gRepAfter = (state.economy && state.economy.gold != null) ? state.economy.gold : 0;
-  if (gRepAfter < gRep) state.goldSpent += (gRep - gRepAfter);
   emitEvent(state, { type: 'repairStart', tick: state.tick, structureId: sid });
   return { ok: true, reason: '' };
 }
@@ -501,7 +495,7 @@ function cmdDeployTroop(state, cmd) {
   if (!spend(state, cost, 'deploy:' + cmd.unitId)) {
     return { ok: false, reason: 'cost' };
   }
-  state.goldSpent = (state.goldSpent || 0) + cost;
+  // spend() already tracks state.goldSpent — no manual add (was double-counting deploys).
 
   const unit = createUnit(state, cmd.unitId, tier, { x: basePos.x, y: basePos.y }, laneForDomain(def.domain), 'defender');
   unit.path = path;
@@ -531,6 +525,8 @@ function cmdDeployTroop(state, cmd) {
  * - Defender troops simply march to their ordered destination, then idle
  *   (their firing is handled by stepCombat).
  */
+const SLOW_FACTOR = 0.5;   // frost chill: fraction of normal ground speed while slowUntil holds (retune via stats)
+
 export function stepMovement(state, dt) {
   const base = state.base;
 
@@ -661,6 +657,7 @@ export function stepMovement(state, dt) {
         if (d1 <= d0) unit.pathIdx += 1; else break;
       }
       let remaining = (unit.speed || 0) * dt;
+      if (unit.slowUntil && state.tick < unit.slowUntil) remaining *= SLOW_FACTOR;   // frost chill active → move slower
       const ARRIVE = Math.max(0.35, remaining * 1.5);
       let guard = path.length + 2;
       while (remaining > 0 && unit.pathIdx < path.length && guard-- > 0) {

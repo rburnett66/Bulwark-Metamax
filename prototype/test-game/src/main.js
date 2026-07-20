@@ -8,7 +8,8 @@ import { showContractModal } from './render/contractModal.js';
 import { createMenu, FACTION_NAMES } from './menu/menu.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
-import { createRenderer, renderFrame } from './render/renderer.js';
+import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
+import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
 import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner } from './render/hud.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
@@ -123,6 +124,10 @@ export function boot(mountEl, seed) {
     if (ended) {
       return { ok: false, reason: 'ended' };
     }
+    // Starting a wave while the tap-to-start overlay is up must go through endInterlude (unfreeze + dismiss
+    // the held dialog), or the sim stays paused and the challenge card sticks. Covers SPACE (input.js) and
+    // any raw startWave. endInterlude clears `interlude` before it re-submits, so this doesn't recurse.
+    if (cmd && cmd.type === 'startWave' && interlude) { endInterlude(); return { ok: true, reason: '' }; }
     const res = applyCommand(sim, cmd);
     if (res.ok) {
       recordCommand(log, sim.tick, cmd);
@@ -141,13 +146,27 @@ export function boot(mountEl, seed) {
     if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
     {
       const sv = loadSave();
-      sim = createSim(currentSeed, { waves: currentWaves, map: currentMap, carry: pendingCarry,
-        harvesterLevel: sv.harvesterLevel || 1,
+      // collision radii from the loaded voxel packs so a unit's footprint matches the tank on screen
+      // (option 2: ~1.2× the rendered half-width). Derived from scale.tiles → works on existing packs.
+      const voxelRadii = {};
+      const va = renderer && renderer.voxelArt;
+      if (va && va.units) for (const id of Object.keys(va.units)) {
+        const p = va.units[id].pack || {};
+        const tiles = (p.scale && p.scale.tiles) || (((p.footprint && p.footprint[0]) || 32) / 32);
+        // Prefer the pack's baked collision (measured from the real body extent in Stack Forge). Otherwise
+        // ESTIMATE from the footprint — the drawn body is ~⅔ of the padded footprint, so scale down so
+        // collision isn't oversized. Re-bake a unit to replace this estimate with the exact value.
+        voxelRadii[id] = (p.collision != null) ? p.collision : tiles * VOXEL_UNIT_SCALE * 0.4;
+      }
+      const simInit = { waves: currentWaves, map: currentMap, carry: pendingCarry,
+        harvesterLevel: sv.harvesterLevel || 1, voxelRadii,
         // classic board AND forge maps stay all-open — the campaign tier-unlock shop (Amendment B2)
         // has no UI yet, so gating forge playtests made upgrades silently impossible (owner 2026-07-16)
-        structTiers: currentMapId && !(currentMap && currentMap.fromForge) ? sv.structTiers : null });
+        structTiers: currentMapId && !(currentMap && currentMap.fromForge) ? sv.structTiers : null,
+        mapId: currentMapId, faction: currentTestFaction || null };
+      sim = createSim(currentSeed, simInit);
+      log = createLog(currentSeed, simInit);   // capture the init so an in-memory replay reproduces THIS board, not default MAP/WAVES
     }
-    log = createLog(currentSeed);
     ui = createUiState();
     mode = 'play';
     replayQueue = [];
@@ -204,35 +223,53 @@ export function boot(mountEl, seed) {
     return null;
   }
 
+  let mapSelectSeq = 0;   // guards against overlapping selectMap() calls: only the newest may install a board
   async function selectMap(mapId) {
-    currentMapId = mapId | 0;
-    if (!currentMapId) {
-      currentMap = MAP;
-      currentWaves = currentTestFaction ? makeWaves(currentTestFaction) : WAVES;
-    } else {
-      // STAGE 2: a Terrain Forge map saved for this slot (terrain.html → Save) wins — it's read from
-      // the SAME-ORIGIN localStorage the tool writes, so authoring in the tool → playing here needs no
-      // file copy. Falls back to the workbook generator (+ any Map Lab override file) when none exists.
-      const forge = await loadForgeMap(currentMapId);
-      let m;
-      if (forge) {
-        m = buildTerrainMap(forge, currentMapId, { seed: 0 });
+    const mySeq = ++mapSelectSeq;
+    const id = mapId | 0;
+    let nextMap, nextWaves;
+    try {
+      if (!id) {
+        nextMap = MAP;
+        nextWaves = currentTestFaction ? makeWaves(currentTestFaction) : WAVES;
       } else {
-        let overrides = null;
-        try {
-          const r = await fetch(`content/maps/overrides/map-${currentMapId}.json`);
-          if (r.ok) overrides = await r.json();
-        } catch (e) { /* no override file — generator output as-is */ }
-        m = buildCampaignMap(currentMapId, { seed: 0, overrides });
+        // STAGE 2: a Terrain Forge map saved for this slot (terrain.html → Save) wins — it's read from
+        // the SAME-ORIGIN localStorage the tool writes, so authoring in the tool → playing here needs no
+        // file copy. Falls back to the workbook generator (+ any Map Lab override file) when none exists.
+        const forge = await loadForgeMap(id);
+        if (mySeq !== mapSelectSeq) return;                 // a newer selectMap superseded us during the load
+        let m;
+        if (forge) {
+          m = buildTerrainMap(forge, id, { seed: 0 });
+        } else {
+          let overrides = null;
+          try {
+            const r = await fetch(`content/maps/overrides/map-${id}.json`);
+            if (r.ok) overrides = await r.json();
+          } catch (e) { /* no override file — generator output as-is */ }
+          if (mySeq !== mapSelectSeq) return;
+          m = buildCampaignMap(id, { seed: 0, overrides });
+        }
+        resolveResourceTypes(m, 1);   // harvest lands later; faction 1 typing for the node markers
+        nextMap = m;
+        nextWaves = buildCampaignWaves(m, currentTestFaction);
       }
-      resolveResourceTypes(m, 1);   // harvest lands later; faction 1 typing for the node markers
-      currentMap = m;
-      currentWaves = buildCampaignWaves(m, currentTestFaction);
+    } catch (e) {
+      // A corrupt-but-JSON-parseable forge slot (the known WIP-corruption case) makes the builder throw.
+      // Bail cleanly — never leave currentMapId advanced against a stale board (was an unhandled rejection).
+      console.error('[selectMap] build failed for map', id, e);
+      flashMessage(hud, `Map ${id} failed to load — ${(e && e.message) || e}`);
+      return;
     }
+    if (mySeq !== mapSelectSeq) return;                     // superseded after the build, before we commit
+    currentMapId = id;
+    currentMap = nextMap;
+    currentWaves = nextWaves;
     app.renderer.resolution = fitResolution(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
     app.renderer.resize(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
     const art = renderer && renderer.unitArt;
     const vox = renderer && renderer.voxelArt;   // voxel packs load once at boot — carry them too
+    destroyRenderer(renderer);                   // free the old renderer's GPU tree before replacing it
     app.stage.removeChildren();
     renderer = createRenderer(app, currentMap);
     if (art) renderer.unitArt = art;
@@ -273,7 +310,7 @@ export function boot(mountEl, seed) {
     if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
     currentSeed = Math.floor(replayLog.seed);
     activeReplayLog = replayLog;
-    sim = createSim(currentSeed, { waves: currentWaves, map: currentMap });
+    sim = createSim(currentSeed, { waves: currentWaves, map: currentMap, carry: pendingCarry });
     ui = createUiState();
     replayQueue = (replayLog.commands || []).slice().sort((a, b) => a.tick - b.tick);
     replayIdx = 0;
@@ -458,23 +495,28 @@ export function boot(mountEl, seed) {
       menu.close();
       void selectMap(devMap != null ? devMap : DEFAULT_MAP_ID);
       // replay runs off the persisted last log once the board exists
-      setTimeout(() => { if (lastReplayLog) playReplay(lastReplayLog); }, 50);
+      setTimeout(() => { if (lastReplayLog) playReplay(deserializeLog(lastReplayLog)); }, 50);   // lastReplayLog is a JSON string — playReplay wants the parsed log
     },
   });
-  if (devMap != null) {
-    menu.close();
-    void selectMap(devMap).then(() => {
-      if (devWave && devWave > 1 && sim.waves) {
-        // jump to the wave: skip earlier waves, grant a stipend that scales so the board isn't empty
-        sim.waves.current = devWave - 1;
-        sim.economy.money = Math.max(sim.economy.money || 0, 900 + (devWave - 1) * 450);
-        preDialogFaction = null;
-        if (voicePacks !== null && !suppressPreDialog) playPreBattleDialog(null);   // dialog for the jumped wave
-      }
-      flashMessage(hud, 'Playtest: map ' + devMap + (devWave ? ' · wave ' + devWave : '') + (devFaction ? ' · vs ' + devFaction : ''));
-    });
-  }
-  else void selectMap(loadSave().unlockedThrough <= 1 ? DEFAULT_MAP_ID : Math.min(9, loadSave().unlockedThrough));
+  // Defer the initial board dispatch to a microtask so the rest of this init function (comm, voicePacks,
+  // factionVisits, resetCommTracking …) finishes declaring first. The classic-board path (?map=0) runs
+  // selectMap synchronously through restart(), which touches those bindings — running it inline threw a TDZ.
+  queueMicrotask(() => {
+    if (devMap != null) {
+      menu.close();
+      void selectMap(devMap).then(() => {
+        if (devWave && devWave > 1 && sim.waves) {
+          // jump to the wave: skip earlier waves, grant a stipend that scales so the board isn't empty
+          sim.waves.current = devWave - 1;
+          sim.economy.money = Math.max(sim.economy.money || 0, 900 + (devWave - 1) * 450);
+          preDialogFaction = null;
+          if (voicePacks !== null && !suppressPreDialog) playPreBattleDialog(null);   // dialog for the jumped wave
+        }
+        flashMessage(hud, 'Playtest: map ' + devMap + (devWave ? ' · wave ' + devWave : '') + (devFaction ? ' · vs ' + devFaction : ''));
+      });
+    }
+    else void selectMap(loadSave().unlockedThrough <= 1 ? DEFAULT_MAP_ID : Math.min(9, loadSave().unlockedThrough));
+  });
 
   // ---------------------------------------------------------------------
   // Comm dialog (render-side only), per the Dialog & Storytelling System doc:

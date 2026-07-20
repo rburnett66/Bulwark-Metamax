@@ -67,7 +67,9 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
     dps: dps,
     range: def.range,
     speed: def.speed,
-    radius: unitRadius(def),   // physical footprint (cell units) — units can't overlap; heavier = bigger
+    // physical footprint (cell units) — units can't overlap. Prefer the voxel-pack-derived radius (matches
+    // the tank on screen); fall back to the shape table for non-voxel / headless units.
+    radius: (state.voxelRadii && state.voxelRadii[def.artKey || unitId]) || unitRadius(def),
     vision: def.vision,
     damageType: def.damageType,
     armorClass: def.armorClass,

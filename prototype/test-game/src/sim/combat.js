@@ -221,7 +221,7 @@ export function applyDamage(state, sourceId, target, rawDps, damageType, dt) {
   if (typeFlags && typeFlags.slow && !killed &&
       target.unitId !== undefined &&
       !(target.domain === 'Flyer' && !typeFlags.slowsAir)) {
-    target.slowTimer = Math.max(target.slowTimer || 0, CHILL_DURATION);
+    target.slowUntil = Math.max(target.slowUntil || 0, state.tick + Math.max(1, Math.round(CHILL_DURATION / Math.max(dt, 1e-6))));   // stepMovement reads slowUntil
   }
 
   // Structure lifecycle transitions.
@@ -314,15 +314,27 @@ export function stepCombat(state, dt) {
       unit.targetId = tid;
     }
 
-    unit.state = 'Attacking';
-    const res = applyDamage(state, unit.id, target, unit.dps, unit.damageType, dt);
-    if (res.killed) {
-      unit.targetId = null;
-      if (target.unitId !== undefined && target.id !== undefined) {
-        deadUnitIds.push(target.id);
+    unit.state = 'attacking';   // lowercase — core.js movement/separation gates test 'attacking'
+    if (target !== state.base) {   // base damage is owned by stepMovement (footprint reach) — don't double-apply
+      const res = applyDamage(state, unit.id, target, unit.dps, unit.damageType, dt);
+      if (res.killed) {
+        unit.targetId = null;
+        if (target.unitId !== undefined && target.id !== undefined) {
+          deadUnitIds.push(target.id);
+        }
+        // Structures: lifecycle already flipped to Destroyed by applyDamage.
       }
-      // Structures: lifecycle already flipped to Destroyed by applyDamage.
-      // Base: core stepSim detects hp<=0 and sets the lose result.
+    }
+    // SPLASH: units with aoeRadius also damage other enemies near the primary target (retune via stats).
+    if (unit.aoeRadius > 0 && target.pos) {
+      const px = target.pos.x, py = target.pos.y, r2 = unit.aoeRadius * unit.aoeRadius;
+      for (const other of state.units.values()) {
+        if (other === target || other.hp <= 0 || other.side === unit.side) continue;
+        if (!canHitDomain(unit.canTarget, other.domain)) continue;
+        const ox = other.pos.x - px, oy = other.pos.y - py;
+        if (ox * ox + oy * oy > r2) continue;
+        if (applyDamage(state, unit.id, other, unit.dps, unit.damageType, dt).killed) deadUnitIds.push(other.id);
+      }
     }
   }
 

@@ -20,8 +20,13 @@
     #units h1 { margin-bottom:8px; }
     #units select { width:100%; background:var(--ink); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px; font-size:12px; }
     #unitGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; overflow-y:auto; align-content:start; }
+    #gridPanel { position:absolute; left:248px; top:12px; width:520px; height:560px; min-width:150px; min-height:190px; resize:both; overflow:hidden; z-index:6;
+      display:flex; flex-direction:column; background:rgba(15,24,33,.92); border:1px solid var(--line); border-radius:10px; padding:9px 11px; box-shadow:0 8px 30px rgba(0,0,0,.45); }
     #orbitDock { position:absolute; left:12px; top:12px; width:226px; max-height:calc(100% - 24px); overflow-y:auto; z-index:5;
       background:rgba(15,24,33,.82); border:1px solid var(--line); border-radius:10px; padding:9px 11px; box-shadow:0 8px 30px rgba(0,0,0,.45); }
+    #scalePanel { position:absolute; right:12px; top:12px; width:258px; height:460px; min-width:180px; min-height:200px; max-height:calc(100% - 24px); resize:both; overflow:hidden; z-index:6;
+      display:flex; flex-direction:column; background:rgba(15,24,33,.92); border:1px solid var(--line); border-radius:10px; padding:9px 11px; box-shadow:0 8px 30px rgba(0,0,0,.45); }
+    #scaleDrag { font-size:10px; letter-spacing:.2em; color:var(--muted); margin:0 0 7px; text-transform:uppercase; cursor:move; flex:0 0 auto; }
     #orbitDock::-webkit-scrollbar { width:0; }
     #orbitDock .row label { flex:0 0 74px; font-size:11px; }
     #orbitDock .row .val { flex:0 0 34px; }
@@ -92,14 +97,18 @@
     #sheetBox button.on { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:#d9a441; }
     .slotBtn { font-size:11px !important; padding:5px 0 !important; }
     .slotBtn.assigned { border-color:#57d98a !important; color:#57d98a !important; }
-    #palModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
+    #palModal { position:absolute; left:490px; top:12px; width:472px; min-width:320px; min-height:230px; max-height:calc(100% - 24px); z-index:20;
+      display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; resize:both; box-shadow:0 18px 60px rgba(0,0,0,.6); }
     #palModal[hidden] { display:none; }
-    #palBox { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 18px; width:640px; max-width:94vw; max-height:94vh; overflow:auto; box-shadow:0 18px 60px rgba(0,0,0,.6); }
-    #palBox h2 { font-size:11px; letter-spacing:.18em; color:var(--muted); margin:0 0 8px; text-transform:uppercase; }
+    #palDrag { font-size:10px; letter-spacing:.2em; color:var(--muted); margin:0; padding:11px 14px 8px; text-transform:uppercase; cursor:move; flex:0 0 auto; }
+    #palBox { padding:0 14px 12px; overflow:auto; flex:1 1 auto; min-height:0; }
     #palSwatches { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
     .palSw { width:44px; height:34px; border:2px solid var(--line); border-radius:6px; cursor:pointer; padding:0; position:relative; }
     .palSw.sel { border-color:var(--gold); box-shadow:0 0 0 2px rgba(242,200,105,.35); }
     .palSw.edited::after { content:'●'; position:absolute; top:-6px; right:-2px; color:#57d98a; font-size:10px; }
+    .palSw.pinned::before { content:'📌'; position:absolute; top:-9px; left:-5px; font-size:11px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.8); }
+    .palSw.dropped::before { content:'🚫'; position:absolute; top:-9px; left:-5px; font-size:11px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.8); }
+    .palSw.dropped { opacity:.4; }
     #palSV, #palHue { border:1px solid var(--line); border-radius:6px; cursor:crosshair; touch-action:none; }
     .palChip { width:40px; height:24px; border:1px solid var(--line); border-radius:5px; display:inline-block; vertical-align:middle; }
     #loadModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
@@ -129,6 +138,32 @@
     <button class="ghost" id="addUnit" style="margin-top:8px">+ Add unit</button>
   </div>
   <div id="stage">
+    <div id="gridPanel">
+      <h2 style="font-size:10px;letter-spacing:.2em;color:var(--muted);margin:0 0 7px;text-transform:uppercase;cursor:move" id="gridDrag">Grid view · drag ⤢ corner to resize</h2>
+      <div class="seg" id="gridModeSeg" style="margin-bottom:6px;flex:0 0 auto"><button data-m="geom">Geometry</button><button data-m="paint" class="on">Paint</button></div>
+      <div class="seg" id="gridViewSeg" style="margin-bottom:6px;flex:0 0 auto"><button data-v="top" class="on">Top</button><button data-v="side">Side</button><button data-v="front">Front</button><button data-v="back">Back</button></div>
+      <canvas id="gridCanvas" width="204" height="204" style="flex:1;min-height:0;width:100%;image-rendering:pixelated;background:#0a121c;border:1px solid var(--line);border-radius:6px;display:block;box-sizing:border-box;cursor:crosshair;touch-action:none"></canvas>
+      <div class="row" id="gridLayerRow" style="margin-top:6px;gap:5px;flex:0 0 auto"><label style="flex:0 0 auto;font-size:11px">Layer</label><input type="range" id="gridLayer" min="0" max="0" value="0" style="flex:1"><span class="val" id="gridLayerV" style="flex:0 0 48px">top</span></div>
+      <div class="row" id="gridToolRow" style="margin-top:5px;gap:5px;flex:0 0 auto;align-items:center;flex-wrap:wrap">
+        <div class="seg" id="gridToolSeg" style="flex:0 0 auto"><button data-t="erase" class="on">Erase</button><button data-t="paint">Paint</button><button data-t="box" title="Drag a box to make a selection that STAYS until ESC — paint/erase then only affect inside it">▢ Select</button></div>
+        <label style="flex:0 0 auto;font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer" title="Paint color — click a swatch below, or a swatch in the Palette window">🖌<input type="color" id="gridPaintCol" value="#8fa7bd" style="width:24px;height:20px;padding:0;border:1px solid var(--line);border-radius:4px;background:none;cursor:pointer"></label>
+        <div id="gridPalette" style="display:none;flex-wrap:wrap;gap:3px;flex:1 1 100%;margin-top:1px" title="This model's colours — click to load as the paint colour"></div>
+        <button class="ghost" id="gridMirrorLR" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Copy the left half onto the right (mirror)">⇆ L→R</button>
+        <button class="ghost" id="gridMirrorRL" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Copy the right half onto the left (mirror)">⇆ R→L</button>
+        <button class="ghost" id="gridMirrorTB" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Mirror the top half of this view onto the bottom">⇅ T→B</button>
+        <button class="ghost" id="gridMirrorBT" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Mirror the bottom half of this view onto the top">⇅ B→T</button>
+        <button class="ghost" id="gridSelLayer" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Select every cell on this layer (paint/erase within it; ESC clears)">▣ Select layer</button>
+        <button class="ghost" id="gridFill" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Fill the selection with the paint colour — recolours every existing voxel in it (Enter/F). On Layer 0 that paints all facing voxels one colour.">🪣 Fill</button>
+        <button class="ghost" id="gridClearLayer" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px">Clear layer</button>
+        <button class="ghost" id="gridResetEdits" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px">Reset edits</button>
+        <label style="flex:0 0 auto;font-size:10.5px;display:flex;align-items:center;gap:4px;cursor:pointer" title="Centre point + horizontal/vertical centre lines"><input type="checkbox" id="gridGuides" checked>✛ Guides</label>
+      </div>
+      <div class="row" id="gridGeoRow" style="margin-top:5px;gap:5px;flex:0 0 auto;align-items:center;display:none">
+        <button class="ghost" id="gridResetGeo" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px">↺ Reset to auto</button>
+        <span class="note" style="margin:0;flex:1">Drag the cyan box: an edge to stretch, inside to move. Shared axes move linked views.</span>
+      </div>
+      <div class="note" id="gridNote" style="margin:4px 0 0;flex:0 0 auto">Paint = per-voxel slice editor (right-drag erases). Geometry = reconcile the view silhouettes on the grid before colour.</div>
+    </div>
     <div id="orbitDock">
       <h2 style="font-size:10px;letter-spacing:.2em;color:var(--muted);margin:0 0 8px;text-transform:uppercase">Orbit + camera</h2>
       <div class="seg" id="partSeg" style="margin-bottom:8px"><button data-p="both" class="on">Both</button><button data-p="body">Base</button><button data-p="turret">Turret</button></div>
@@ -145,15 +180,18 @@
       <div class="row"><label>Auto-spin</label><input type="checkbox" id="spin"><span class="note" style="margin:0">demo smooth turret</span></div>
       <button class="ghost" id="setCam" style="margin-top:4px">Set camera for bake</button>
       <div class="note" id="camState">Camera not set — orbit to a look, then Set.</div>
-      <h2 style="font-size:10px;letter-spacing:.2em;color:var(--muted);margin:12px 0 6px;text-transform:uppercase">Scale · side views</h2>
-      <div class="row" style="margin-bottom:6px;gap:4px">
+    </div>
+    <div id="scalePanel">
+      <h2 id="scaleDrag">Scale · side views — drag header · ⤢ corner to resize</h2>
+      <div class="row" style="margin:0 0 6px;gap:4px;flex:0 0 auto">
         <select id="chartA" style="flex:1;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:3px 5px;font-size:10.5px"></select>
         <span class="note" style="margin:0">vs</span>
         <select id="chartB" style="flex:1;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:3px 5px;font-size:10.5px"></select>
       </div>
-      <canvas id="scaleChart" width="204" height="200" style="width:100%;background:#0a121c;border:1px solid var(--line);border-radius:6px"></canvas>
-      <div class="note" id="scaleNote"><b>1 tile = 32 voxels</b> — the fixed world scale, every unit. Bigger unit ⇒ higher
-        Resolution (64px = 2 tiles, 96 = 3, 128 = 4). Both rows share one ruler, so sizes compare honestly.</div>
+      <div id="scaleScroll" style="flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden">
+        <canvas id="scaleChart" width="204" height="200" style="width:100%;display:block;background:#0a121c;border:1px solid var(--line);border-radius:6px"></canvas>
+      </div>
+      <div class="note" id="scaleNote" style="flex:0 0 auto;margin:4px 0 0"><b>1 tile = 32 voxels</b> — fixed world scale. Bigger unit ⇒ higher Resolution (64px = 2 tiles, 96 = 3, 128 = 4). One shared ruler.</div>
     </div>
   </div>
   <div id="side">
@@ -225,12 +263,16 @@
 
     <div class="grp">
       <h2>5 · Save unit</h2>
-      <div class="row"><label>Embed model</label><input type="checkbox" id="embedModel"><span class="note" style="margin:0">Tier C live-3D — ships the voxel data in the pack</span></div>
+      <div class="row"><label>Embed model</label><input type="checkbox" id="embedModel" checked><span class="note" style="margin:0">Ships the voxel model in the pack (Tier C live-3D). Local editing already reloads from the autosaved WIP.</span></div>
       <button class="ghost" id="saveUnit" disabled>Save to units manifest</button>
       <button class="ghost" id="dlSheet" disabled style="margin-top:6px">Download sprite sheet(s) + JSON</button>
       <div class="note" id="saveState">Bake first. Save writes the pack (atlases + &lt;unit&gt;.json) to the
         manifest (browser) and offers a PNG sheet + JSON download the game loads.</div>
-      <button class="ghost" id="projSave" style="margin-top:8px">⬇ Save project file</button>
+      <div class="row" style="margin-top:8px;gap:6px;align-items:center">
+        <button class="ghost" id="wipSaveNow" style="width:auto;padding:6px 12px;margin:0">💾 Save WIP now</button>
+        <span class="note" id="wipStatus" style="margin:0;flex:1;font-weight:600">✓ saved</span>
+      </div>
+      <button class="ghost" id="projSave" style="margin-top:6px">⬇ Save project file</button>
       <label style="display:block;text-align:center;background:#16283a;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:9px 0;font-weight:700;letter-spacing:.06em;cursor:pointer;margin-top:6px;font-size:13px">⬆ Load project file<input type="file" id="projLoad" accept=".json,application/json" style="display:none"></label>
       <div class="note" id="projState">Work-in-progress autosaves in this browser (source art, cutout tuning,
         every setting) and restores when you reopen or click the unit's roster card. The project file is the
@@ -281,8 +323,11 @@
   </div>
 </div>
 <div id="palModal" hidden>
+  <h2 id="palDrag">Palette · consolidate SOURCE → WORKING — drag header · ⤢ corner to resize</h2>
   <div id="palBox">
-    <h2>Tune colors — click a swatch, then re-tint it on the diagram</h2>
+    <div class="note" style="margin:0 0 6px">These are the model's <b>SOURCE</b> colours (from the original art). Reduce / keep / merge to a <b>WORKING</b> set, then <b>⬇ Remap model</b> to bake it in. Source is never lost — <b>Reset edits</b> restores it.</div>
+    <div class="row" style="gap:6px;margin:0 0 8px"><label style="flex:0 0 auto;font-size:11px">Working size</label><input type="range" id="palN" min="0" max="32" value="0" style="flex:1"><span class="val" id="palNV" style="flex:0 0 42px">full</span></div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin:0 0 8px;cursor:pointer" title="Show every distinct SOURCE colour individually (no family grouping) so you can pin exact colours"><input type="checkbox" id="palShowAll">Show full source palette (pin exact shades)</label>
     <div id="palSwatches"></div>
     <div id="palPick" hidden>
       <div class="row" style="gap:10px;align-items:flex-start">
@@ -291,12 +336,20 @@
         <div style="flex:1;min-width:150px">
           <div class="note" style="margin:0 0 4px">was <span class="palChip" id="palWas"></span> → now <span class="palChip" id="palNow"></span> <span id="palHex" style="color:var(--muted)"></span></div>
           <div class="note" id="palInfo" style="margin:0 0 8px"></div>
+          <div class="row" style="gap:6px;margin:0 0 6px;flex-wrap:wrap">
+            <button class="ghost" id="palKeepBtn" style="width:auto;padding:6px 12px;margin:0">📌 Keep this color</button>
+            <button class="ghost" id="palDropBtn" style="width:auto;padding:6px 12px;margin:0">🚫 Eliminate this color</button>
+            <button class="ghost" id="palMergeBtn" style="width:auto;padding:6px 12px;margin:0" title="Collapse all shades in this swatch into the single picked colour">🔗 Merge to 1 color</button>
+          </div>
           <button class="ghost" id="palResetOne" style="width:auto;padding:6px 12px">↺ Reset this color</button>
         </div>
       </div>
     </div>
     <div class="row" style="gap:6px;margin-top:8px">
+      <button id="palRemap" style="width:auto;padding:7px 14px;margin:0" title="Consolidate: bake the WORKING palette into the model — every voxel is written to its nearest working colour, so all sides match. Source stays intact (Reset edits restores it).">⬇ Remap model to working palette</button>
+      <button class="ghost" id="palToKept" style="width:auto;padding:7px 14px;margin:0" title="Set the working palette to exactly your pinned colours (live preview) — then Remap to bake it in">🎯 Working = my kept colors</button>
       <button class="ghost" id="palResetAll" style="width:auto;padding:6px 12px;margin:0">↺ Reset all</button>
+      <button class="ghost" id="palClearKeep" style="width:auto;padding:6px 12px;margin:0">Clear keep/drop</button>
       <span class="note" id="palState" style="margin:0;flex:1"></span>
       <button class="ghost" id="palClose" style="width:auto;padding:6px 14px;margin:0">Done</button>
     </div>
@@ -307,7 +360,11 @@
     <h2>Load an existing unit</h2>
     <div class="note" style="margin:0 0 4px">Loads that unit's work-in-progress project when this browser has one, otherwise its saved pack. Your current edits are autosaved under their own unit id first.</div>
     <div id="loadList"></div>
-    <button class="ghost" id="loadCancel" style="margin-top:10px">Cancel</button>
+    <div class="row" style="margin-top:10px;gap:8px">
+      <button class="ghost" id="loadDiag" style="width:auto;padding:6px 12px;margin:0">🔍 Diagnose all</button>
+      <button class="ghost" id="loadCancel" style="width:auto;padding:6px 12px;margin:0">Cancel</button>
+    </div>
+    <div class="note" id="loadDiagNote" style="margin:6px 0 0"></div>
   </div>
 </div>
 <div id="saveAsModal" hidden>
@@ -316,10 +373,10 @@
     <div class="note" style="margin:0 0 10px">Save the model you're looking at as this unit? The tool sets the id,
       bakes the angle cache with the current camera + bake settings, and writes the pack to the units manifest —
       reload the game and the unit is in. You can keep editing afterwards.</div>
-    <div class="note" id="saveAsWarn" style="margin:0 0 10px;color:#e0975f" hidden>⚠ This slot already has a saved unit — saving <b>overwrites</b> it. To edit the saved unit instead, cancel and use 📂 Load an existing unit.</div>
-    <button id="saveAsSprites">💾 Save as sprites (baked)</button>
-    <button class="ghost" id="saveAs3D" style="margin-top:6px">🧊 Save as 3D (live voxel model + baked fallback)</button>
-    <button class="ghost" id="saveAsEdit" style="margin-top:6px">✎ Just switch to this id (no save)</button>
+    <div class="note" id="saveAsWarn" style="margin:0 0 10px;color:#e0975f" hidden>⚠ This slot already has a saved unit — <b>Save</b> overwrites it. To view/continue that unit instead, use <b>📂 Load this unit</b> below.</div>
+    <button id="saveAsLoad" style="margin:0 0 8px;background:#1d3a2a;border:1px solid #2f6f4a" hidden>📂 Load this unit into the editor</button>
+    <button id="saveAs3D">🧊 Save as 3D — editable model + baked (recommended)</button>
+    <button class="ghost" id="saveAsSprites" style="margin-top:6px">💾 Save as sprites only (baked, not re-editable)</button>
     <button class="ghost" id="saveAsCancel" style="margin-top:6px">Cancel</button>
   </div>
 </div>

@@ -6,6 +6,8 @@
  * and the game's loader gate on one schema, and it's Node/golden-testable.
  */
 
+import { SUN } from '../sun.js';
+
 const CLASSES = new Set(['ground', 'air', 'structure']);
 const KINDS = new Set(['directional', 'stack']);
 
@@ -17,8 +19,8 @@ export const VOX_PER_TILE = 32;
 /** THE world-light contract: the sun sits TOP-LEFT of the screen (azimuth 135°, Stack Forge's
  *  default) and shadows project to the LOWER-RIGHT. Packs carry the azimuth they were baked with
  *  (pack.light.azimuth) and the game shades/shadows from that same value, so in-game lighting is
- *  identical to the tool bake. This constant is the fallback + the game-wide standard. */
-export const GAME_LIGHT_AZ = 135;
+ *  identical to the tool bake. Sourced from src/render/sun.js — the one place the sun is defined. */
+export const GAME_LIGHT_AZ = SUN.azimuthDeg;
 
 /** Validate a unit pack against the contract. Returns { ok, errors:[...] }. Pure. */
 export function validatePack(p) {
@@ -42,6 +44,11 @@ export function validatePack(p) {
     if (pt.kind === 'directional' && !(pt.facings > 0)) e.push(`${at} directional needs facings > 0`);
     if (pt.kind === 'stack' && !(pt.angles > 0)) e.push(`${at} stack needs angles > 0`);
     if (pt.mount && (!Array.isArray(pt.mount) || pt.mount.length !== 3)) e.push(`${at} mount must be [dx, dy, dz]`);
+    // optional baked cast-shadow atlas (Shading epic S1) — present together or not at all
+    if (pt.shadowAtlas) {
+      if (!Array.isArray(pt.shadowCell) || pt.shadowCell.length !== 2) e.push(`${at} shadowCell [w, h] required with shadowAtlas`);
+      if (!(pt.shadowCols > 0)) e.push(`${at} shadowCols > 0 required with shadowAtlas`);
+    }
   });
   return { ok: e.length === 0, errors: e };
 }
