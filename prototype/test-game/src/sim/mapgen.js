@@ -15,6 +15,7 @@ import { MAPDATA } from '../../content/maps/mapdata.js';
 import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath } from './pathfinding.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
+import { bakedBlocking } from '../terrain/terrainBake.js';
 import { WAVE_WINDOWS } from '../../content/maps/wave-windows.js';
 import { POINTS_TO_POWER } from './campaign.js';
 
@@ -381,7 +382,15 @@ export function resolveResourceTypes(map, factionId) {
 export function buildTerrainMap(forge, mapId, opts = {}) {
   const cols = forge.cols | 0, rows = forge.rows | 0;
   const T = forge.terrain || [];
-  const B = forge.blocking || [];
+  // BLOCKING must match what the digicam bake DRAWS. The bake domain-warps its terrain samples for organic
+  // cliff outlines, so the grid-aligned forge.blocking desyncs from the drawn cliffs — units then path onto
+  // cells that look like solid cliff ("walks into a cliff and gets stuck"). When the caller passes the same
+  // bake tune the render uses (tf.bake.v1), recompute the blocking under that warp so sim == picture.
+  // seed/sub/warp mirror bakeTerrain's own defaults exactly (seed ?? 7, sub ?? 5, warp ?? 0.6) so the sim's
+  // blocking equals the drawn terrain whether or not a tf.bake.v1 tune is present.
+  const B = opts.bakeTune
+    ? bakedBlocking({ cols, rows, terrain: T }, { seed: opts.bakeTune.seed, sub: opts.bakeTune.sub, warp: opts.bakeTune.warp })
+    : (forge.blocking || []);
   const bpos = (forge.base && forge.base.pos) || { x: Math.floor(cols / 2), y: Math.floor(rows / 2) };
   const bx = Math.max(1, Math.min(cols - 2, bpos.x | 0));
   const cy = Math.max(1, Math.min(rows - 2, bpos.y | 0));

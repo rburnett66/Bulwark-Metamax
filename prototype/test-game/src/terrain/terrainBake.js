@@ -14,7 +14,7 @@
  * Gaussian on the height field (design §2.2); the only smoothing is a median on the plan shape.
  */
 
-import { TERRAIN } from './terrainGen.js';
+import { TERRAIN, BLOCKING } from './terrainGen.js';
 
 // Default stack, LOW→HIGH — ORDER MATCHES MAP GENERATION (terrainGen.js feature priority brush < rocks <
 // trees < cliff), so a trees region reads as higher-layered than a rocks region, exactly as generation
@@ -314,4 +314,29 @@ export function bakeTerrain(map, opt = {}) {
   }
 
   return cv;
+}
+
+// Blocking grid that MATCHES the baked picture. The render domain-warps its terrain samples (organic cliff
+// outlines), so the grid-aligned forge.blocking desyncs from the drawn cliffs — units then path onto cells
+// that LOOK like solid cliff (the "units walk into a cliff and get stuck" report). This applies the SAME warp
+// at tile resolution: a tile is blocked when the majority of its sub-cells sample a blocking source type, so
+// the sim's nav grid and the rendered terrain agree. Pure + deterministic (seed/sub/warp only) — same knobs
+// the game passes to bakeTerrain via tf.bake.v1, so what you see is what units avoid.
+export function bakedBlocking(map, opt = {}) {
+  const { cols, rows, terrain } = map;
+  const seed = opt.seed ?? 7;
+  const sub = Math.max(1, Math.min(12, Math.round(opt.sub ?? 5)));
+  const warp = Math.max(0, Math.min(2, opt.warp ?? 0.6));
+  const fc = cols * sub, fr = rows * sub, amp = warp * sub, wf = 1 / (sub * 2.2);
+  const count = new Int32Array(cols * rows);
+  for (let fy = 0; fy < fr; fy++) for (let fx = 0; fx < fc; fx++) {
+    let wx = fx, wy = fy;
+    if (amp > 0) { wx += (fbm(fx * wf, fy * wf, seed + 31) - 0.5) * 2 * amp; wy += (fbm(fx * wf, fy * wf, seed + 67) - 0.5) * 2 * amp; }
+    const cx = wx < 0 ? 0 : wx >= fc ? cols - 1 : (wx / sub) | 0;
+    const cy = wy < 0 ? 0 : wy >= fr ? rows - 1 : (wy / sub) | 0;
+    if (BLOCKING.has(terrain[cy * cols + cx])) count[((fy / sub) | 0) * cols + ((fx / sub) | 0)]++;
+  }
+  const half = (sub * sub) / 2, out = new Uint8Array(cols * rows);
+  for (let i = 0; i < out.length; i++) out[i] = count[i] > half ? 1 : 0;
+  return out;
 }
