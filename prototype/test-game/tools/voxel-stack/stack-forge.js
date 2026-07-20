@@ -1586,10 +1586,24 @@ function gridRedo() { if (!redoStack.length) return; undoStack.push(snapVoxEdit(
 
 function deleteSelection() {
   const g = gridGeom; if (!gridSel || !g || !g.editable) return false;
-  pushUndo();
   const ed = voxEdit[g.part], N = g.foot * g.foot;
   const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
-  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); ed.set(z * N + y * g.foot + x, 'del'); }
+  const cutThrough = g.slice === 0;   // Layer 0 = surface projection → a delete cuts the ENTIRE column (all depth) through
+  const baseFilled = (gridModel && gridModel.filled) || (() => false);
+  const isFilled = (x, y, z) => { const o = ed.get(z * N + y * g.foot + x); return o !== undefined ? o !== 'del' : baseFilled(x, y, z); };
+  // anything actually there to delete on this layer? (skip a no-op confirm / undo entry → no "stuck" feeling)
+  let any = false;
+  for (let cy = r0; cy <= r1 && !any; cy++) for (let cx = c0; cx <= c1 && !any; cx++) {
+    if (cutThrough) { for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s); if (isFilled(x, y, z)) { any = true; break; } } }
+    else { const [x, y, z] = g.toVox(cx, cy, g.slice - 1); if (isFilled(x, y, z)) any = true; }
+  }
+  if (!any) return false;
+  if (cutThrough && !confirm('Delete on Layer 0 (surface) cuts ALL THE WAY THROUGH the object — every selected column, front to back. Continue?')) return false;
+  pushUndo();
+  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
+    if (cutThrough) { for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s); ed.set(z * N + y * g.foot + x, 'del'); } }
+    else { const [x, y, z] = g.toVox(cx, cy, g.slice - 1); ed.set(z * N + y * g.foot + x, 'del'); }
+  }
   gridModel = null; rebuildSlices(); scheduleAutosave(); return true;
 }
 // FILL the selection with the current paint colour — recolours EVERY existing voxel in it (on Layer 0, that's
@@ -1713,9 +1727,10 @@ document.addEventListener('keydown', (e) => {
       dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
     }
     if (!gridGeom || !gridGeom.editable) return;
-    // Erase = freehand, and if a selection is active editAt masks it to inside the selection (so you scrub
-    // away voxels within the region). Bulk-delete the whole selection is the Delete key — not an erase click,
-    // which previously got stuck (deleted the selection once, then every click was a no-op).
+    // DELETE with a SELECTION active → delete the selected voxels on the CURRENT layer (Layer 0 cuts the whole
+    // column through, after a confirm). Deliberately one layer at a time: walk the Layer slider and delete again;
+    // an already-empty layer just no-ops (no stuck loop). Right-click still freehand-deletes within the selection.
+    if (gridTool === 'erase' && gridSel && e.button !== 2) { deleteSelection(); e.preventDefault(); return; }
     if (gridTool === 'box' && e.button !== 2) {                    // Box⌫: rubber-band a region to delete
       const c = cellOf(e); if (!c) return;
       boxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy }; gridBoxSel = boxing; renderGridView();
