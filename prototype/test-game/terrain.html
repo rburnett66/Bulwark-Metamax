@@ -150,6 +150,8 @@
           <div class="row"><label>Air</label><input type="number" id="spAir" value="4" min="0" max="40"></div>
           <div class="row"><label>Water</label><input type="number" id="spWater" value="3" min="0" max="40"></div>
           <div class="row"><label>Spread</label><input type="range" id="spSpread" min="10" max="100" value="100"><span class="val" id="spSpreadV">100</span></div>
+          <div class="row"><label>Placement</label><input type="range" id="spBias" min="0" max="100" value="50"><span class="val" id="spBiasV">50</span></div>
+          <div class="note">Placement slides the spawn band along the attack edge: 0 = start (TOP on a left/right attack, LEFT on a top/bottom attack), 50 = centred, 100 = end. Lower Spread + Placement 0 groups spawns tight in the upper corner — keeps units off bottom-hugging paths that wander off-screen.</div>
           <div class="row"><label>Spacing</label><input type="range" id="spSpacing" min="1" max="6" value="2"><span class="val" id="spSpacingV">2</span></div>
           <button class="ghost" id="genSpawn" style="margin-top:2px">Generate spawns — all 8 waves</button>
           <button class="ghost" id="spawnEditBtn" style="margin-top:2px">Move spawns (drag) — edits current wave</button>
@@ -285,7 +287,7 @@ function spawnTuning() {
   return {
     edge: $('spawnEdge').value,
     ground: +$('spGround').value, air: +$('spAir').value, water: +$('spWater').value,
-    spread: +$('spSpread').value / 100, spacing: +$('spSpacing').value,
+    spread: +$('spSpread').value / 100, bias: +$('spBias').value / 100, spacing: +$('spSpacing').value,
   };
 }
 
@@ -347,10 +349,10 @@ function render() {
   if (worldMode()) {
     for (const w of WAVE_WINDOWS) {
       const rect = { x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 };
-      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, spacing: t.spacing });
+      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
     }
   } else {
-    spawnsByWave[1] = generateEdgeSpawns(last, { side: 'surround', ground: t.ground, air: t.air, water: t.water, spread: t.spread, spacing: t.spacing });
+    spawnsByWave[1] = generateEdgeSpawns(last, { side: 'surround', ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
   }
   spawns = spawnsByWave[selWave] || spawnsByWave[1] || [];
   updResCounts();
@@ -366,11 +368,12 @@ function render() {
   $('waterNoiseV').textContent = $('waterNoise').value;
   $('baseGapV').textContent = $('baseGap').value;
   $('spSpreadV').textContent = $('spSpread').value;
+  $('spBiasV').textContent = $('spBias').value;
   $('spSpacingV').textContent = $('spSpacing').value;
 }
 
 // spawn-tuning controls only change the NEXT spawn generation — don't re-roll the terrain
-const SPAWN_TUNE = new Set(['spGround', 'spAir', 'spWater', 'spSpread', 'spSpacing', 'spawnEdge']);
+const SPAWN_TUNE = new Set(['spGround', 'spAir', 'spWater', 'spSpread', 'spBias', 'spSpacing', 'spawnEdge']);
 const BAKE_TUNE = new Set(['bakeSub', 'bakeSmooth', 'bakeWarp', 'bakeBand', 'bakeCliff', 'bakeFace', 'bakeShStr', 'bakeShLen', 'bakeShSoft']);   // re-bake, no re-roll (stack has its own handlers)
 document.querySelectorAll('input,select').forEach((el) => el.addEventListener('input', (e) => {
   if (e.target.dataset.p != null) {
@@ -380,7 +383,7 @@ document.querySelectorAll('input,select').forEach((el) => el.addEventListener('i
     return;
   }
   if (SPAWN_TUNE.has(e.target.id)) {
-    $('spSpreadV').textContent = $('spSpread').value; $('spSpacingV').textContent = $('spSpacing').value;
+    $('spSpreadV').textContent = $('spSpread').value; $('spBiasV').textContent = $('spBias').value; $('spSpacingV').textContent = $('spSpacing').value;
     return;   // no terrain re-roll; press Generate spawns to apply
   }
   if (BAKE_TUNE.has(e.target.id)) {
@@ -407,11 +410,11 @@ $('genSpawn').addEventListener('click', () => {
   if (worldMode()) {
     for (const w of WAVE_WINDOWS) {
       const rect = t.edge === 'world' ? { x0: 0, y0: 0, x1: last.cols - 1, y1: last.rows - 1 } : winRect0(w);
-      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, spacing: t.spacing });
+      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
     }
   } else {
     selWave = 1;   // freeform: one set, ringing the whole edge
-    spawnsByWave[1] = generateEdgeSpawns(last, { side: 'surround', ground: t.ground, air: t.air, water: t.water, spread: t.spread, spacing: t.spacing });
+    spawnsByWave[1] = generateEdgeSpawns(last, { side: 'surround', ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
   }
   syncWaveUI(); redraw();
 });
@@ -640,7 +643,7 @@ function loadState(obj) {
   if (obj.palettes) Object.assign(palettes, obj.palettes);
   document.querySelectorAll('[data-p]').forEach((el) => { const arr = obj.palettes && obj.palettes[el.dataset.p]; el.value = arr ? (arr[+el.dataset.i] || '') : ''; });
   applyPaletteDefaults();   // maps saved without palettes get the default coverage
-  if (obj.spawnTuning) { const t = obj.spawnTuning; $('spawnEdge').value = t.edge; $('spGround').value = t.ground; $('spAir').value = t.air; $('spWater').value = t.water; $('spSpread').value = Math.round(t.spread * 100); $('spSpacing').value = t.spacing; }
+  if (obj.spawnTuning) { const t = obj.spawnTuning; $('spawnEdge').value = t.edge; $('spGround').value = t.ground; $('spAir').value = t.air; $('spWater').value = t.water; $('spSpread').value = Math.round(t.spread * 100); $('spBias').value = Math.round((t.bias != null ? t.bias : 0.5) * 100); $('spSpacing').value = t.spacing; }
   render();   // same seed + knobs → identical terrain, so the saved overlays line up
   resources = obj.resources || [];
   updResCounts();
