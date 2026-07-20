@@ -30,15 +30,18 @@ export function nextEntityId(state) {
 // draws units at radius × SPRITE_OVER_COLLISION (harness/parts.js, 4/3), so these radii are the
 // collision half-widths — 25% inside the art, since frames carry padding and a touch of visual
 // overlap before bodies collide reads natural. Separation/spawn spacing use these numbers.
+// Owner 2026-07-20: HALVED from the old (~0.9–1.1) values — units render ~1 tile on the board, so the
+// old radii drew a ~2-tile collision circle and jammed units in the 1-tile gaps between cliff/rock
+// blocks (stuck + facing oscillation). These give a ~1-tile collision that fits single-file passages.
 export function unitRadius(def) {
   switch (def && def.shape) {
-    case 'Troops': return 0.90;
-    case 'Trucks': return 0.96;
-    case 'Artillery': return 0.96;
-    case 'Tanks': return 1.08;
-    case 'Heavy Tanks': return 1.11;
-    case 'Copters': case 'Planes': case 'Missiles': return 0.97;
-    default: return 0.96;
+    case 'Troops': return 0.38;
+    case 'Trucks': return 0.42;
+    case 'Artillery': return 0.42;
+    case 'Tanks': return 0.46;
+    case 'Heavy Tanks': return 0.50;
+    case 'Copters': case 'Planes': case 'Missiles': return 0.42;
+    default: return 0.42;
   }
 }
 

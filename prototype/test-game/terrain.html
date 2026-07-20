@@ -152,7 +152,8 @@
           <div class="row"><label>Spread</label><input type="range" id="spSpread" min="10" max="100" value="100"><span class="val" id="spSpreadV">100</span></div>
           <div class="row"><label>Spacing</label><input type="range" id="spSpacing" min="1" max="6" value="2"><span class="val" id="spSpacingV">2</span></div>
           <button class="ghost" id="genSpawn" style="margin-top:2px">Generate spawns — all 8 waves</button>
-          <div class="note">Enemies attack from the window's FAR side. Spawns are placed EVENLY on that edge — wider spread + spacing = parallel lanes, the main lever against pathing collisions. Waves 7–8 surround.</div>
+          <button class="ghost" id="spawnEditBtn" style="margin-top:2px">Move spawns (drag) — edits current wave</button>
+          <div class="note">Enemies attack from the window's FAR side. Spawns are placed EVENLY on that edge — wider spread + spacing = parallel lanes, the main lever against pathing collisions. Waves 7–8 surround. <b>Move spawns:</b> toggle on, then drag a spawn arrow to open ground clear of cliff/rock regions; right-click deletes. Edits the WAVE shown in the preview selector.</div>
         </div>
 
         <div class="grp">
@@ -676,6 +677,40 @@ cv.addEventListener('pointerdown', (e) => {
   }
   updResCounts(); redraw();
 });
+// ── spawn EDIT: drag a spawn point to open ground (account for cliff/rock regions the generator
+//    placed spawns onto), right-click to delete. Edits the previewed wave (spawnsByWave[selWave]). ──
+let spawnEdit = false, dragSpawn = null;
+function cellFromEvent(e) {
+  const r = cv.getBoundingClientRect(), px = cv.width / last.cols;
+  return { x: Math.floor((e.clientX - r.left) * (cv.width / r.width) / px),
+           y: Math.floor((e.clientY - r.top) * (cv.height / r.height) / px) };
+}
+$('spawnEditBtn').addEventListener('click', () => {
+  spawnEdit = !spawnEdit;
+  if (spawnEdit) { resPaint = null; document.querySelectorAll('.resPaint').forEach((x) => x.style.background = ''); }
+  $('spawnEditBtn').style.background = spawnEdit ? '#d9a441' : '';
+  $('spawnEditBtn').style.color = spawnEdit ? '#0c0e12' : '';
+  cv.style.cursor = spawnEdit ? 'move' : '';
+});
+cv.addEventListener('pointerdown', (e) => {
+  if (!spawnEdit || !last) return;
+  const { x, y } = cellFromEvent(e);
+  const list = spawnsByWave[selWave] || (spawnsByWave[selWave] = []);
+  const idx = list.findIndex((s) => s.x === x && s.y === y);
+  if (e.button === 2) { if (idx >= 0) { list.splice(idx, 1); spawns = list; redraw(); } e.preventDefault(); return; }   // right-click delete
+  if (idx >= 0) { dragSpawn = list[idx]; spawns = list; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
+});
+cv.addEventListener('pointermove', (e) => {
+  if (!dragSpawn || !last) return;
+  const { x, y } = cellFromEvent(e);
+  dragSpawn.x = Math.max(0, Math.min(last.cols - 1, x));
+  dragSpawn.y = Math.max(0, Math.min(last.rows - 1, y));
+  redraw();
+});
+function endSpawnDrag() { if (dragSpawn) { dragSpawn = null; redraw(); } }
+cv.addEventListener('pointerup', endSpawnDrag);
+cv.addEventListener('pointercancel', endSpawnDrag);
+cv.addEventListener('contextmenu', (e) => { if (spawnEdit) e.preventDefault(); });
 $('fitScreen').addEventListener('click', () => {
   fitScreen = !fitScreen;
   if (fitScreen) { zoomPx = 0; $('zoomV').textContent = 'auto'; }   // fit + explicit zoom are exclusive
