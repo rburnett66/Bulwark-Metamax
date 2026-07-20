@@ -305,6 +305,25 @@ export function stepWaves(state, dt) {
       sx = Math.max(0, Math.min((map.cols || 1) - 1, pos.x + perpx * off));
       sy = Math.max(0, Math.min((map.rows || 1) - 1, pos.y + perpy * off));
     }
+    // GROUND spawn that landed on a blocked cell — the map editor placed a cliff/rock region over an
+    // authored spawn point, so the unit would spawn walled-in and go idle forever. Nudge to the nearest
+    // walkable cell (deterministic ring scan → replay-safe). Water/air ignore the nav grid.
+    if (spawn.lane === 'ground' && state.navGrid) {
+      const g = state.navGrid, cx = Math.round(sx), cy = Math.round(sy);
+      const passable = (x, y) => x >= 0 && y >= 0 && x < g.cols && y < g.rows && !!g.passable[y * g.cols + x];
+      if (!passable(cx, cy)) {
+        let best = null;
+        for (let r = 1; r <= 8 && !best; r++) {
+          for (let dy = -r; dy <= r && !best; dy++) {
+            for (let dx = -r; dx <= r; dx++) {
+              if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;   // only the ring at radius r
+              if (passable(cx + dx, cy + dy)) { best = { x: cx + dx, y: cy + dy }; break; }
+            }
+          }
+        }
+        if (best) { sx = best.x; sy = best.y; }
+      }
+    }
     const unit = createUnit(
       state,
       spawn.unitId,
