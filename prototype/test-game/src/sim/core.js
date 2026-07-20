@@ -925,10 +925,18 @@ export function stepContactClamp(state) {
 function setOvertakeGoal(state, u, blocker, ex, ey, nx, ny, rSum) {
   // beside the blocker on the escape side, and half a body AHEAD along the pass axis (u → blocker) — NOT
   // along u's own heading: the goal bends the heading, so heading-relative geometry feeds back into wobble.
-  u._ovtGoal = {
-    x: blocker.pos.x + ex * (rSum + 0.3) + nx * (rSum * 0.5),
-    y: blocker.pos.y + ey * (rSum + 0.3) + ny * (rSum * 0.5),
-  };
+  const gx = blocker.pos.x + ex * (rSum + 0.3) + nx * (rSum * 0.5);
+  const gy = blocker.pos.y + ey * (rSum + 0.3) + ny * (rSum * 0.5);
+  // CORRIDOR GUARD (owner 2026-07-20: "tanks get stuck in the crack"): in a 1-tile gap the escape side is a
+  // cliff wall, so this goal lands INSIDE a blocked cell — the follower then drives into the wall, the terrain
+  // clamp shoves it back, and it oscillates in the crack forever. If there's no room to pass, DON'T overtake;
+  // let the follower queue single-file behind the blocker (the contact clamp already paces it).
+  const g = state.navGrid;
+  if (g && g.passable) {
+    const cx = Math.round(gx), cy = Math.round(gy);
+    if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows || !g.passable[cy * g.cols + cx]) return;
+  }
+  u._ovtGoal = { x: gx, y: gy };
   u._ovtBlocker = blocker.id;
   u._ovtUntil = state.tick + 8;
 }

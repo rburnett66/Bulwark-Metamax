@@ -240,7 +240,12 @@ export function boot(mountEl, seed) {
         if (mySeq !== mapSelectSeq) return;                 // a newer selectMap superseded us during the load
         let m;
         if (forge) {
-          m = buildTerrainMap(forge, id, { seed: 0 });
+          // Pass the render's bake tune (tf.bake.v1) so the sim's blocking is warped to MATCH the drawn
+          // cliffs — otherwise units path around the grid-aligned blocking and appear to walk into the
+          // organically-warped cliffs. {} → buildTerrainMap uses bakeTerrain's own defaults (still matches).
+          let bakeTune = {};
+          try { const t = JSON.parse(localStorage.getItem('tf.bake.v1')); if (t && typeof t === 'object') bakeTune = t; } catch (_) { /* default tune */ }
+          m = buildTerrainMap(forge, id, { seed: 0, bakeTune });
         } else {
           let overrides = null;
           try {
