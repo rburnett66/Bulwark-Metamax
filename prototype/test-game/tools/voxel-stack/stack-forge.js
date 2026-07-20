@@ -1535,7 +1535,15 @@ $('gridLayer').oninput = (e) => { gridLayer = +e.target.value; renderGridView();
 // colour (grey for a fresh column — recolour later in the palette window). Edits land in voxEdit and
 // flow through buildModel, so the orbit preview, side chart, bake and exports all follow. Full model
 // rebuild is deferred to pointer-up so painting stays responsive; the grid itself repaints live.
-if ($('gridToolSeg')) $('gridToolSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridTool = b.dataset.t; [...$('gridToolSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+if ($('gridToolSeg')) $('gridToolSeg').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  gridTool = b.dataset.t;
+  [...$('gridToolSeg').children].forEach((c) => c.classList.toggle('on', c === b));
+  renderGridView();   // sets gridGeom for the current view/layer first
+  // Clicking 🗑 Delete with an active selection deletes it right away (like Fill acts on the selection) — Layer 0
+  // cuts the whole column through with a confirm. The tool also stays selected for freehand delete afterward.
+  if (gridTool === 'erase' && gridSel) deleteSelection();
+};
 if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
   const g = gridGeom; if (!g) return; pushUndo(); const ed = voxEdit[g.part], N = g.foot * g.foot;
   for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); ed.set(z * N + y * g.foot + x, 'del'); }
