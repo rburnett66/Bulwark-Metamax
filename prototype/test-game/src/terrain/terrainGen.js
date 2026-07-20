@@ -256,6 +256,10 @@ export function generateEdgeSpawns(g, opts = {}) {
   const r = opts.rect || { x0: 0, y0: 0, x1: g.cols - 1, y1: g.rows - 1 };
   const side = opts.side || 'surround';
   const spread = opts.spread != null ? Math.max(0.1, Math.min(1, opts.spread)) : 1;
+  // BIAS = WHERE along the attack edge the spread band sits: 0 = start of the edge, 0.5 = centred (default),
+  // 1 = end. Edge cells run top→bottom on west/east and left→right on north/south, so for a LEFT-edge attack
+  // bias 0 clusters spawns UPPER-LEFT (keeps units off paths that hug the bottom and wander off-screen).
+  const bias = opts.bias != null ? Math.max(0, Math.min(1, opts.bias)) : 0.5;
   const spacing = Math.max(1, opts.spacing || 2);
   const counts = { ground: opts.ground != null ? opts.ground : 6, air: opts.air != null ? opts.air : 4, water: opts.water != null ? opts.water : 3 };
   const sides = side === 'surround' ? ['west', 'east', 'north', 'south'] : [side];
@@ -273,7 +277,8 @@ export function generateEdgeSpawns(g, opts = {}) {
     const usable = cells.filter(valid);
     if (!usable.length || k <= 0) return [];
     const span = Math.max(1, Math.round(usable.length * spread));
-    const seg = usable.slice(Math.floor((usable.length - span) / 2), Math.floor((usable.length - span) / 2) + span);
+    const off = Math.round((usable.length - span) * bias);   // slide the band along the edge per bias (0=start … 1=end)
+    const seg = usable.slice(off, off + span);
     const out = []; let lastIdx = -Infinity;
     for (let i = 0; i < k; i++) {
       let idx = seg.length === 1 ? 0 : Math.round((k === 1 ? 0.5 : i / (k - 1)) * (seg.length - 1));
