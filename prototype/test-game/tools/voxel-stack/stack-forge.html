@@ -141,7 +141,7 @@
     <div id="gridPanel">
       <h2 style="font-size:10px;letter-spacing:.2em;color:var(--muted);margin:0 0 7px;text-transform:uppercase;cursor:move" id="gridDrag">Grid view · drag ⤢ corner to resize</h2>
       <div class="seg" id="gridModeSeg" style="margin-bottom:6px;flex:0 0 auto"><button data-m="geom">Geometry</button><button data-m="paint" class="on">Paint</button></div>
-      <div class="seg" id="gridViewSeg" style="margin-bottom:6px;flex:0 0 auto"><button data-v="top" class="on">Top</button><button data-v="side">Side</button><button data-v="front">Front</button><button data-v="back">Back</button></div>
+      <div class="seg" id="gridViewSeg" style="margin-bottom:6px;flex:0 0 auto"><button data-v="top" class="on">Top</button><button data-v="side">Side</button><button data-v="front">Front</button><button data-v="back">Back</button><button id="gridAlignBtn" data-v="align" title="Stack the carved TOP projection above the SIDE projection, length-aligned, to validate the carve">⊞ Align</button></div>
       <canvas id="gridCanvas" width="204" height="204" style="flex:1;min-height:0;width:100%;image-rendering:pixelated;background:#0a121c;border:1px solid var(--line);border-radius:6px;display:block;box-sizing:border-box;cursor:crosshair;touch-action:none"></canvas>
       <div class="row" id="gridLayerRow" style="margin-top:6px;gap:5px;flex:0 0 auto"><label style="flex:0 0 auto;font-size:11px">Layer</label><input type="range" id="gridLayer" min="0" max="0" value="0" style="flex:1"><span class="val" id="gridLayerV" style="flex:0 0 48px">top</span></div>
       <div class="row" id="gridToolRow" style="margin-top:5px;gap:5px;flex:0 0 auto;align-items:center;flex-wrap:wrap">

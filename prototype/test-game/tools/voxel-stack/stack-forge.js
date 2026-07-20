@@ -1030,6 +1030,7 @@ function bodyTopLayer(foot, layers) {
 let gridView = 'top', gridLayer = 0, gridModel = null;   // gridModel: cached buildModel, invalidated by rebuildSlices
 let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn cell layout, so pointer edits map back to voxels
 let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
+let gridAlign = false;                                   // ⊞ Align T/S: carved TOP projection stacked above SIDE, length-aligned (read-only, Pass 1)
 let gridBoxSel = null;                                    // transient marquee being dragged {c0,r0,c1,r1} in grid cells
 let gridSel = null;                                       // PERSISTENT selection {c0,r0,c1,r1} — masks paint/erase; cleared on ESC
 let gridGuides = true;                                    // centre point + H/V centre lines (alignment/symmetry guide)
@@ -1172,6 +1173,42 @@ function renderGridView() {
     if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
     const t = palMap.get((r << 16) | (g << 8) | b); return t || [r, g, b];
   };
+  // ── ALIGN mode (owner 2026-07-20): stack the carved TOP projection (X×Y) above the SIDE projection (X×Z),
+  //    sharing the vertical X/length axis, to validate the carve + spot bad voxels from two angles. Read-only. ──
+  if (gridAlign) {
+    const lr2 = $('gridLayerRow'); if (lr2) lr2.style.display = 'none';
+    const tr2 = $('gridToolRow'); if (tr2) tr2.style.display = 'none';
+    const gr3 = $('gridGeoRow'); if (gr3) gr3.style.display = 'none';
+    const gp2 = $('gridPalette'); if (gp2) gp2.style.display = 'none';
+    const SEP = 2, Wc = cv.width, Hc = cv.height;
+    const cellA = Math.max(1, Math.floor(Math.min(Wc / foot, Hc / (foot + layers + SEP))));
+    const oxA = Math.floor((Wc - foot * cellA) / 2);
+    const oyTop = Math.floor((Hc - (foot + layers + SEP) * cellA) / 2);
+    const oySide = oyTop + (foot + SEP) * cellA;
+    const surf = (axm, cx, cy) => { for (let s = 0; s < axm.depth; s++) { const [x, y, z] = axm.toVox(cx, cy, s); if (filled(x, y, z)) return colAt(x, y, z); } return null; };
+    ctx.clearRect(0, 0, Wc, Hc); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, Wc, Hc);
+    const drawPane = (axm, pcols, prows, py, label) => {
+      if (cellA >= 4) { ctx.fillStyle = 'rgba(255,255,255,.025)'; for (let cy = 0; cy < prows; cy++) for (let cx = 0; cx < pcols; cx++) if ((cx + cy) & 1) ctx.fillRect(oxA + cx * cellA, py + cy * cellA, cellA, cellA); }
+      for (let cy = 0; cy < prows; cy++) for (let cx = 0; cx < pcols; cx++) { const col = surf(axm, cx, cy); if (col) { ctx.fillStyle = cssOf(col); ctx.fillRect(oxA + cx * cellA, py + cy * cellA, cellA, cellA); } }
+      ctx.strokeStyle = 'rgba(120,150,180,.45)'; ctx.lineWidth = 1; ctx.strokeRect(oxA + 0.5, py + 0.5, pcols * cellA - 1, prows * cellA - 1);
+      ctx.fillStyle = 'rgba(143,167,189,.92)'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'top'; ctx.fillText(label, oxA + 3, py + 3);
+    };
+    drawPane(AX.top, foot, foot, oyTop, 'TOP  X×Y');
+    drawPane(AX.side, foot, layers, oySide, 'SIDE  X×Z');
+    // X-extent (length) guides drawn through BOTH panes — the shared axis reads at a glance
+    let minx = foot, maxx = -1;
+    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (filled(x, y, z)) { if (x < minx) minx = x; if (x > maxx) maxx = x; }
+    if (maxx >= 0) {
+      const y0 = oyTop, y1 = oySide + layers * cellA;
+      ctx.setLineDash([4, 3]); ctx.strokeStyle = 'rgba(242,200,105,.7)'; ctx.lineWidth = 1;
+      for (const gx of [minx, maxx + 1]) { const lx = oxA + gx * cellA; ctx.beginPath(); ctx.moveTo(lx + 0.5, y0); ctx.lineTo(lx + 0.5, y1); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(95,224,255,.55)'; const cxp = Math.round(oxA + (minx + maxx + 1) / 2 * cellA); ctx.beginPath(); ctx.moveTo(cxp + 0.5, y0); ctx.lineTo(cxp + 0.5, y1); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(242,200,105,.9)'; ctx.font = '9px sans-serif'; ctx.textBaseline = 'bottom'; ctx.fillText('length ' + (maxx - minx + 1) + ' vox', oxA + minx * cellA + 2, oySide - 2);
+    }
+    gridGeom = { align: true, editable: false, cell: cellA, ox: oxA, oyTop, oySide, foot, layers, part };
+    return;
+  }
   const cellAt = (cx, cy) => {
     if (slice === 0) {                                              // LAYER 0 = surface: FIRST filled voxel along depth
       for (let s = 0; s < depth; s++) { const [x, y, z] = ax.toVox(cx, cy, s); if (filled(x, y, z)) return colAt(x, y, z); }
@@ -1485,7 +1522,13 @@ $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) re
 // ── grid-view panel: mode (paint vs geometry) + face selector + z-slice walker ──
 if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; gridSel = null; [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
 if ($('gridResetGeo')) $('gridResetGeo').onclick = () => { const part = gridPart(); geomState[part] = { auto: true, bottomFrom: geomState[part].bottomFrom || 'top' }; gridModel = null; rebuildSlices(); scheduleAutosave(); };
-$('gridViewSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridView = b.dataset.v; gridLayer = 0; gridSel = null; [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };   // views have different col/row dims — a selection can't carry over
+$('gridViewSeg').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'gridAlignBtn') { gridAlign = !gridAlign; b.classList.toggle('on', gridAlign); gridSel = null; renderGridView(); return; }   // ⊞ Align: toggle the dual-projection overlay
+  gridView = b.dataset.v; gridLayer = 0; gridSel = null; gridAlign = false;                                     // picking a single face exits Align
+  const ab = $('gridAlignBtn'); if (ab) ab.classList.remove('on');
+  [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b && c.id !== 'gridAlignBtn')); renderGridView();
+};   // views have different col/row dims — a selection can't carry over
 $('gridLayer').oninput = (e) => { gridLayer = +e.target.value; renderGridView(); };
 // ── SLICE EDITOR (owner 2026-07-17): on the Top view, click/drag to add or erase voxels in the
 // current z-layer. Erase removes even source-carved voxels; paint adds using that column's own
