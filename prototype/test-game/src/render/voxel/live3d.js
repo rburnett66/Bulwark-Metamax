@@ -13,6 +13,7 @@
 
 import { MAX_LIVE_3D } from '../../data/renderTiers.js';
 import { VOXEL_UNIT_SCALE } from './loader.js';
+import { GAME_LIGHT_AZ } from './pack.js';
 
 const WALL = 0.52, RANGE = 0.46;              // the baked pipeline's lighting ramp (Stack Forge)
 const EPS = 0.01;                             // re-render threshold (rad) per orientation axis
@@ -80,7 +81,7 @@ export function buildLive3D(pack, tilePx, radius, spriteOverCollision) {
   const c = new PIXI.Container();
   // silhouette shadow: the live model's own canvas (un-flipped — high camera), squashed/sheared and
   // offset off the sun; updates for free since the texture re-renders in place. c.__shadows grounds it.
-  const laS = ((pack.light && pack.light.azimuth) != null ? pack.light.azimuth : 135) * Math.PI / 180;   // = GAME_LIGHT_AZ standard
+  const laS = ((pack.light && pack.light.azimuth) != null ? pack.light.azimuth : GAME_LIGHT_AZ) * Math.PI / 180;
   const sh = new PIXI.Sprite(tex);
   sh.anchor.set(0.5, 0.5); sh.tint = 0x000000; sh.alpha = 0.22;
   sh.scale.set(1, 0.55); sh.skew.x = -Math.cos(laS) * 0.6;
@@ -91,7 +92,7 @@ export function buildLive3D(pack, tilePx, radius, spriteOverCollision) {
   c.__live3d = {
     faces, h, S, cv, ctx, tex, R,
     el: (pack.camera && pack.camera.elevation) || 30,
-    lightAz: (pack.light && pack.light.azimuth) || 135,
+    lightAz: (pack.light && pack.light.azimuth) || GAME_LIGHT_AZ,
     lightK: (pack.light && pack.light.contrast) || 55,
     yaw: NaN, pitch: NaN, roll: NaN,                                  // force first render
   };

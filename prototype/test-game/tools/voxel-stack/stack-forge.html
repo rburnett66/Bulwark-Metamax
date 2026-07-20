@@ -20,7 +20,7 @@
     #units h1 { margin-bottom:8px; }
     #units select { width:100%; background:var(--ink); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px; font-size:12px; }
     #unitGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; overflow-y:auto; align-content:start; }
-    #gridPanel { position:absolute; left:248px; top:12px; width:224px; height:330px; min-width:150px; min-height:190px; resize:both; overflow:hidden; z-index:6;
+    #gridPanel { position:absolute; left:248px; top:12px; width:520px; height:560px; min-width:150px; min-height:190px; resize:both; overflow:hidden; z-index:6;
       display:flex; flex-direction:column; background:rgba(15,24,33,.92); border:1px solid var(--line); border-radius:10px; padding:9px 11px; box-shadow:0 8px 30px rgba(0,0,0,.45); }
     #orbitDock { position:absolute; left:12px; top:12px; width:226px; max-height:calc(100% - 24px); overflow-y:auto; z-index:5;
       background:rgba(15,24,33,.82); border:1px solid var(--line); border-radius:10px; padding:9px 11px; box-shadow:0 8px 30px rgba(0,0,0,.45); }
@@ -145,12 +145,18 @@
       <canvas id="gridCanvas" width="204" height="204" style="flex:1;min-height:0;width:100%;image-rendering:pixelated;background:#0a121c;border:1px solid var(--line);border-radius:6px;display:block;box-sizing:border-box;cursor:crosshair;touch-action:none"></canvas>
       <div class="row" id="gridLayerRow" style="margin-top:6px;gap:5px;flex:0 0 auto"><label style="flex:0 0 auto;font-size:11px">Layer</label><input type="range" id="gridLayer" min="0" max="0" value="0" style="flex:1"><span class="val" id="gridLayerV" style="flex:0 0 48px">top</span></div>
       <div class="row" id="gridToolRow" style="margin-top:5px;gap:5px;flex:0 0 auto;align-items:center;flex-wrap:wrap">
-        <div class="seg" id="gridToolSeg" style="flex:0 0 auto"><button data-t="erase" class="on">Erase</button><button data-t="paint">Paint</button><button data-t="box" title="Drag a box to delete all voxels inside it on this layer">Box⌫</button></div>
-        <label style="flex:0 0 auto;font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer" title="Paint color — or click a swatch in the Palette window to load it here">🖌<input type="color" id="gridPaintCol" value="#8fa7bd" style="width:24px;height:20px;padding:0;border:1px solid var(--line);border-radius:4px;background:none;cursor:pointer"></label>
+        <div class="seg" id="gridToolSeg" style="flex:0 0 auto"><button data-t="erase" class="on">Erase</button><button data-t="paint">Paint</button><button data-t="box" title="Drag a box to make a selection that STAYS until ESC — paint/erase then only affect inside it">▢ Select</button></div>
+        <label style="flex:0 0 auto;font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer" title="Paint color — click a swatch below, or a swatch in the Palette window">🖌<input type="color" id="gridPaintCol" value="#8fa7bd" style="width:24px;height:20px;padding:0;border:1px solid var(--line);border-radius:4px;background:none;cursor:pointer"></label>
+        <div id="gridPalette" style="display:none;flex-wrap:wrap;gap:3px;flex:1 1 100%;margin-top:1px" title="This model's colours — click to load as the paint colour"></div>
         <button class="ghost" id="gridMirrorLR" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Copy the left half onto the right (mirror)">⇆ L→R</button>
         <button class="ghost" id="gridMirrorRL" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Copy the right half onto the left (mirror)">⇆ R→L</button>
+        <button class="ghost" id="gridMirrorTB" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Mirror the top half of this view onto the bottom">⇅ T→B</button>
+        <button class="ghost" id="gridMirrorBT" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Mirror the bottom half of this view onto the top">⇅ B→T</button>
+        <button class="ghost" id="gridSelLayer" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Select every cell on this layer (paint/erase within it; ESC clears)">▣ Select layer</button>
+        <button class="ghost" id="gridFill" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Fill the selection with the paint colour — recolours every existing voxel in it (Enter/F). On Layer 0 that paints all facing voxels one colour.">🪣 Fill</button>
         <button class="ghost" id="gridClearLayer" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px">Clear layer</button>
         <button class="ghost" id="gridResetEdits" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px">Reset edits</button>
+        <label style="flex:0 0 auto;font-size:10.5px;display:flex;align-items:center;gap:4px;cursor:pointer" title="Centre point + horizontal/vertical centre lines"><input type="checkbox" id="gridGuides" checked>✛ Guides</label>
       </div>
       <div class="row" id="gridGeoRow" style="margin-top:5px;gap:5px;flex:0 0 auto;align-items:center;display:none">
         <button class="ghost" id="gridResetGeo" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px">↺ Reset to auto</button>
@@ -317,9 +323,11 @@
   </div>
 </div>
 <div id="palModal" hidden>
-  <h2 id="palDrag">Palette · reduce + keep colors — drag header · ⤢ corner to resize</h2>
+  <h2 id="palDrag">Palette · consolidate SOURCE → WORKING — drag header · ⤢ corner to resize</h2>
   <div id="palBox">
-    <div class="row" style="gap:6px;margin:0 0 8px"><label style="flex:0 0 auto;font-size:11px">Palette size</label><input type="range" id="palN" min="0" max="32" value="0" style="flex:1"><span class="val" id="palNV" style="flex:0 0 42px">full</span></div>
+    <div class="note" style="margin:0 0 6px">These are the model's <b>SOURCE</b> colours (from the original art). Reduce / keep / merge to a <b>WORKING</b> set, then <b>⬇ Remap model</b> to bake it in. Source is never lost — <b>Reset edits</b> restores it.</div>
+    <div class="row" style="gap:6px;margin:0 0 8px"><label style="flex:0 0 auto;font-size:11px">Working size</label><input type="range" id="palN" min="0" max="32" value="0" style="flex:1"><span class="val" id="palNV" style="flex:0 0 42px">full</span></div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin:0 0 8px;cursor:pointer" title="Show every distinct SOURCE colour individually (no family grouping) so you can pin exact colours"><input type="checkbox" id="palShowAll">Show full source palette (pin exact shades)</label>
     <div id="palSwatches"></div>
     <div id="palPick" hidden>
       <div class="row" style="gap:10px;align-items:flex-start">
@@ -331,12 +339,15 @@
           <div class="row" style="gap:6px;margin:0 0 6px;flex-wrap:wrap">
             <button class="ghost" id="palKeepBtn" style="width:auto;padding:6px 12px;margin:0">📌 Keep this color</button>
             <button class="ghost" id="palDropBtn" style="width:auto;padding:6px 12px;margin:0">🚫 Eliminate this color</button>
+            <button class="ghost" id="palMergeBtn" style="width:auto;padding:6px 12px;margin:0" title="Collapse all shades in this swatch into the single picked colour">🔗 Merge to 1 color</button>
           </div>
           <button class="ghost" id="palResetOne" style="width:auto;padding:6px 12px">↺ Reset this color</button>
         </div>
       </div>
     </div>
     <div class="row" style="gap:6px;margin-top:8px">
+      <button id="palRemap" style="width:auto;padding:7px 14px;margin:0" title="Consolidate: bake the WORKING palette into the model — every voxel is written to its nearest working colour, so all sides match. Source stays intact (Reset edits restores it).">⬇ Remap model to working palette</button>
+      <button class="ghost" id="palToKept" style="width:auto;padding:7px 14px;margin:0" title="Set the working palette to exactly your pinned colours (live preview) — then Remap to bake it in">🎯 Working = my kept colors</button>
       <button class="ghost" id="palResetAll" style="width:auto;padding:6px 12px;margin:0">↺ Reset all</button>
       <button class="ghost" id="palClearKeep" style="width:auto;padding:6px 12px;margin:0">Clear keep/drop</button>
       <span class="note" id="palState" style="margin:0;flex:1"></span>

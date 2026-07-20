@@ -2,6 +2,7 @@ import { MAP } from '../data/tables.js';
 
 function clampInt(v, min, max) {
   const n = Math.round(v);
+  if (!Number.isFinite(n)) return min;   // NaN/Inf pos would round to NaN → index NaN coerces to cell 0, corrupting the BFS
   if (n < min) return min;
   if (n > max) return max;
   return n;
@@ -273,6 +274,7 @@ export function recomputeUnitPaths(state) {
     if (unit.hp <= 0) continue;
     if (unit.state === 'dead' || unit.state === 'dying') continue;
     if (unit.domain !== 'Walker') continue;
+    if (unit.isHarvester) continue;   // harvest.js owns harvester routing (it blocks the base); this grid is base-passable
 
     // Determine the unit's current destination.
     let dest = null;

@@ -6,6 +6,7 @@ import { createProjectilePool } from './projectiles.js';
 import { layerLean } from '../harness/camera.js';
 import { SPRITE_OVER_COLLISION } from '../harness/parts.js';
 import { TERRAIN_COLOR, TERRAIN_NAME } from '../terrain/terrainGen.js';
+import { bakeTerrain, DEFAULT_STACK } from '../terrain/terrainBake.js';
 
 // Terrain Forge palette as PIXI numeric colors (Stage 2 maps render by terrain type)
 const TERRAIN_HEX = TERRAIN_COLOR.map((c) => parseInt(c.slice(1), 16));
@@ -47,6 +48,35 @@ const DEFAULT_TERRAIN_SHEETS = {
   trees: ['trees', 'trees-2', 'tp1-trees'], cliff: ['elevated-cliffs'],
   water: ['ocean-1', 'ocean-2', 'tp1-water'], 'cliff-border': ['rock-cliff-border'],
 };
+// Stage 2 (Shading epic T.5): render a forge map with the Terrain Forge DIGICAM BAKE — the exact
+// terrainBake.js the tool previews (material stack, terracing, organic outlines, baked cast shadows).
+// The author's stack + tuning ride same-origin localStorage (tf.stack.v2 / tf.bake.v1) so the game matches
+// the tool. Returns true on success; false (not a forge map, or a bake error) lets the caller fall back to
+// the older sprite-tile bake. One synchronous bake at map load — no per-frame cost (it's baked pixels).
+function bakeDigicamGround(renderer, map, groundLayer) {
+  if (!map.fromForge || !map.terrain) return false;
+  let stack = DEFAULT_STACK, tune = {};
+  try { const s = JSON.parse(localStorage.getItem('tf.stack.v2')); if (Array.isArray(s) && s.length) stack = s; } catch (_) { /* default stack */ }
+  try { const t = JSON.parse(localStorage.getItem('tf.bake.v1')); if (t && typeof t === 'object') tune = t; } catch (_) { /* default tuning */ }
+  try {
+    const canvas = bakeTerrain({ cols: map.cols, rows: map.rows, terrain: map.terrain }, { ...tune, stack });
+    // bakeTerrain returns an OffscreenCanvas in the browser; copy to a plain canvas so PIXI.Texture.from is
+    // guaranteed to accept it (OffscreenCanvas support varies) rather than silently falling back to tiles.
+    let src = canvas;
+    if (typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas) {
+      src = document.createElement('canvas'); src.width = canvas.width; src.height = canvas.height;
+      src.getContext('2d').drawImage(canvas, 0, 0);
+    }
+    const tex = PIXI.Texture.from(src);
+    tex.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
+    const spr = new PIXI.Sprite(tex);
+    spr.width = map.cols * map.tile; spr.height = map.rows * map.tile;   // fit the bake to the board
+    groundLayer.addChild(spr);
+    renderer._terrainBake = spr;
+    return true;
+  } catch (e) { console.error('[terrain] digicam bake failed — falling back to sprite tiles:', e); return false; }
+}
+
 async function bakeTerrainTiles(renderer, map, groundLayer) {
   if (!map.fromForge || !map.terrain) return;
   const wanted = TERRAIN_NAME.map((key) => {
@@ -270,8 +300,30 @@ function drawStaticBoard(renderer, map) {
 
   renderer.layers.water.addChild(gWater);
   renderer.layers.ground.addChild(gGround);
-  // Stage 2 tile bake: authored sheets paint over the flat colors once loaded (async, one draw call)
-  void bakeTerrainTiles(renderer, map, renderer.layers.ground);
+  // Stage 2 ground: the DIGICAM bake (Terrain Forge look) wins for forge maps; if it's unavailable or
+  // errors, fall back to the authored sprite-tile bake. Either paints over the flat colors, under everything.
+  if (!bakeDigicamGround(renderer, map, renderer.layers.ground))
+    void bakeTerrainTiles(renderer, map, renderer.layers.ground);
+}
+
+// Free a renderer's OWN GPU resources before it is replaced (map change / restart). The shared unit/voxel
+// texture atlases (renderer.unitArt/voxelArt) are carried forward to the next renderer, so we destroy the
+// display tree's sprites/graphics but NOT their textures (texture:false).
+export function destroyRenderer(renderer) {
+  if (!renderer) return;
+  try {
+    if (renderer._terrainBake && renderer._terrainBake.destroy) {   // the big leak: per-map terrain bake RenderTexture/Texture
+      renderer._terrainBake.destroy({ children: true, texture: true, baseTexture: true });
+      renderer._terrainBake = null;
+    }
+    if (renderer._glowTex && renderer._glowTex.destroy) { renderer._glowTex.destroy(true); renderer._glowTex = null; }
+    const pj = renderer.projectiles;                                 // projectile atlas is built per pool → per renderer
+    if (pj && pj.dot && pj.dot.baseTexture && pj.dot.baseTexture.destroy) { try { pj.dot.baseTexture.destroy(); } catch (_) { /* shared? leave it */ } }
+    if (renderer.root && renderer.root.destroy) {
+      renderer.root.destroy({ children: true, texture: false, baseTexture: false });
+      renderer.root = null;
+    }
+  } catch (e) { /* best-effort teardown — never block a map switch */ }
 }
 
 export function createRenderer(app, map) {
@@ -326,6 +378,8 @@ export function createRenderer(app, map) {
     resourceSprites: new Map()
   };
 
+  renderer.dustG = new PIXI.Graphics();
+  layers.resources.addChild(renderer.dustG);         // ground dust: above the terrain, UNDER structures + units
   layers.structures.addChild(renderer.dyn.structures);
   layers.units.addChild(renderer.dyn.units);
   layers.units.addChild(renderer.unitSpriteLayer);   // sprites draw over the primitive unit layer
@@ -753,6 +807,7 @@ function updateFx(renderer) {
   updateGoldFloats(renderer, FX_DT);   // rising +Ng kill-score texts (same fixed FX clock as particles)
   const g = renderer.fxG;
   g.clear();
+  const dg = renderer.dustG; if (dg) dg.clear();   // ground dust draws on its own layer, UNDER units
   const t = renderer.tile;
   const dt = renderer._fxDt || FX_DT;   // REAL frame time so FX track the real-time sim
   // Tier A projectiles (pooled sprites, zero per-frame alloc) fly here; the impact callback is
@@ -805,7 +860,7 @@ function updateFx(renderer) {
   for (const fx of renderer.fxItems) {
     fx.age += dt;
     if (fx.age >= fx.ttl) {
-      if (fx.txt && fx.txt.parent) fx.txt.parent.removeChild(fx.txt);   // free the floating-text object
+      if (fx.txt) { if (fx.txt.parent) fx.txt.parent.removeChild(fx.txt); fx.txt.destroy(); }   // free the floating-text object AND its canvas-backed texture
       if (fx.kind === 'shell') {
         // the shell has completed its arc and HIT THE GROUND — detonate NOW, exactly at the impact point. With FX
         // on real frame-time this lands on the same tick the sim applies the AOE damage (no explosion/damage lag).
@@ -889,10 +944,47 @@ function updateFx(renderer) {
       g.beginFill(0xffce70, alpha * 0.5); g.drawCircle(fx.x, fx.y, fx.radius * t * (0.35 + f * 0.85)); g.endFill();
       g.beginFill(0xff5020, alpha * 0.45); g.drawCircle(fx.x, fx.y, fx.radius * t * (0.15 + f * 0.5)); g.endFill();
       g.lineStyle(3, 0xff7030, alpha); g.drawCircle(fx.x, fx.y, fx.radius * t * f); g.lineStyle(0);
+    } else if (fx.kind === 'dust') {
+      // ground dust kicked up behind a moving walker: drifts out + back, hugs the ground, expands + fades.
+      // Drawn on dustG (below the units) so tanks drive OVER their own dust, not under it.
+      const dgt = dg || g;
+      const rise = (fx.rise != null) ? fx.rise : t * 0.12, sz = (fx.size != null) ? fx.size : t * 0.12;
+      const fxp = fx.x + (fx.vx || 0) * f, fyp = fx.y + (fx.vy || 0) * f - f * rise;
+      dgt.beginFill(fx.color, (1 - f) * (1 - f) * 0.3);            // soft quadratic fade-out
+      dgt.drawCircle(fxp, fyp, sz * (0.6 + f * 1.3));              // billows outward as it settles
+      dgt.endFill();
     }
     keep.push(fx);
   }
   renderer.fxItems = spawned.length ? keep.concat(spawned) : keep;
+}
+
+// Ground dust: a moving WALKER kicks up soft puffs from its rear-LEFT and rear-RIGHT. Throttled per unit,
+// pushed into fxItems so each puff lingers (ttl ≥ 0.5s) and fades on the shared FX clock. No effect on the sim.
+function emitGroundDust(renderer, u) {
+  if (u.domain !== 'Walker' || u._px == null) return;                 // ground units only
+  const mvx = u.pos.x - u._px, mvy = u.pos.y - u._py, spd2 = mvx * mvx + mvy * mvy;
+  if (spd2 < 2e-5) return;                                            // essentially stationary → no dust
+  u._dustT = (u._dustT || 0) + (renderer._fxDt || FX_DT);
+  if (u._dustT < 0.05) return;                                        // ~20 emissions/sec, frame-rate independent
+  u._dustT = 0;
+  const t = renderer.tile, inv = 1 / Math.sqrt(spd2), hx = mvx * inv, hy = mvy * inv;   // heading unit vec
+  const perpX = -hy, perpY = hx;                                      // perpendicular = left/right of travel
+  const p = cellToLocal(renderer, u.pos.x, u.pos.y);
+  // u.radius is the COLLISION half-width (~2× the drawn body). Emit at the VISIBLE rear, not the collision ring.
+  const vr = (u.radius || 0.3) * 0.5;
+  const rear = vr * 0.45 * t, side = vr * 0.35 * t;   // placement pulled to the unit's own rear corners (1.0 scale)
+  for (const s of [1, -1]) {                                          // rear-left (+1) and rear-right (−1)
+    renderer.fxItems.push({
+      kind: 'dust',
+      x: p.x - hx * rear + perpX * side * s,
+      y: p.y - hy * rear + perpY * side * s + t * 0.06,               // behind the feet, hugging the ground
+      age: 0, ttl: 0.55 + Math.random() * 0.4,                        // ≥ 500ms (up to ~0.95s)
+      color: 0xc2b291, size: t * (0.10 + Math.random() * 0.06), rise: t * (0.08 + Math.random() * 0.10),
+      vx: (-hx * 0.18 + perpX * s * 0.28) * t + (Math.random() * 2 - 1) * t * 0.05,   // drift back + outward
+      vy: (-hy * 0.18 + perpY * s * 0.28) * t,
+    });
+  }
 }
 
 export function renderFrame(renderer, state, ui, events, frameDt) {
@@ -1129,6 +1221,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
   if (state.units) {
     for (const u of state.units.values()) {
       if (!u || u.hp <= 0) continue;
+      emitGroundDust(renderer, u);   // moving walkers kick up rear dust (lingers ≥500ms; sim-neutral)
       // AUTHORED ART: draw a retained sprite part-stack (built lazily, cached by unit id) — so you can SEE
       // which unit/faction is attacking. Units without art fall through to the coloured primitive below.
       const artId = u.artKey || u.unitId;   // the harvester borrows truck STATS but owns its ART slot
@@ -1178,7 +1271,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           }
           spr.__aim = (spr.__aim == null) ? aim : approachAngle(spr.__aim, aim, 0.35);
           // silhouette shadows stay ON THE GROUND: the container lifts with flyers, so counter-shift
-          if (spr.__shadows) for (const sh of spr.__shadows) sh.y = flyLift + (sh.__gy || t * 0.05);
+          if (spr.__shadows) for (const sh of spr.__shadows) sh.y = flyLift + (sh.__gy || 0);
           // BANK from the turn rate — Tier B's whole trick, and Tier C's roll input (spec §3B/§3C)
           let dHead = (spr.__prevHeading == null) ? 0 : heading - spr.__prevHeading;
           dHead = Math.atan2(Math.sin(dHead), Math.cos(dHead));
@@ -1312,6 +1405,33 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         gU.lineStyle(0);
         drawHpBar(gU, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));
       }
+    }
+  }
+
+  // ---- FORGE / openPlay maps: no hard ring lock, but still DIM the board outside the current wave's
+  //      authored window (+ the base zone) so the active battle area reads clearly and enemies emerge from
+  //      a dim border instead of popping in at full brightness. Cheap: ≤4 rectangular bands, no per-cell
+  //      work, redrawn on the same overlay graphics that's already cleared each frame. ----
+  if (GROWTH_CAM && state.map && state.map.openPlay && state.map.fromForge && state.map.waveWindows && state.map.waveWindows.length) {
+    const wins = state.map.waveWindows, W = state.map.cols, H = state.map.rows;
+    const wv = state.waves || { current: 0, active: false };
+    const wantWave = Math.max(1, Math.min(wv.active ? wv.current : wv.current + 1, wins[wins.length - 1].wave));
+    const win = wins.find((q) => q.wave === wantWave) || wins[wins.length - 1];
+    const wr = (win.x0 != null)                                   // tolerate either {x0..} or {x,y,w,h}
+      ? { x0: win.x0, y0: win.y0, x1: win.x1, y1: win.y1 }
+      : { x0: win.x - 1, y0: win.y - 1, x1: win.x - 1 + win.w - 1, y1: win.y - 1 + win.h - 1 };
+    let x0 = wr.x0, y0 = wr.y0, x1 = wr.x1, y1 = wr.y1;
+    if (state.base) { x0 = Math.min(x0, state.base.pos.x - 2); y0 = Math.min(y0, state.base.pos.y - 2); x1 = Math.max(x1, state.base.pos.x + 2); y1 = Math.max(y1, state.base.pos.y + 2); }
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(W - 1, x1); y1 = Math.min(H - 1, y1);
+    const bnd = [];                                               // the ≤4 bands of the board outside [x0..x1, y0..y1]
+    if (y0 > 0) bnd.push([0, 0, W, y0]);
+    if (y1 < H - 1) bnd.push([0, y1 + 1, W, H - 1 - y1]);
+    if (x0 > 0) bnd.push([0, y0, x0, y1 - y0 + 1]);
+    if (x1 < W - 1) bnd.push([x1 + 1, y0, W - 1 - x1, y1 - y0 + 1]);
+    if (bnd.length) {
+      gO.beginFill(0x05070a, 0.34);
+      for (const [bx, by, bw, bh] of bnd) gO.drawRect(bx * t, by * t, bw * t, bh * t);
+      gO.endFill();
     }
   }
 
@@ -1620,6 +1740,13 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         renderer.unitSprites.delete(id);
       }
     }
+  }
+  // prune per-unit tracking maps for entities that no longer exist (else they grow unbounded over a session)
+  if (renderer._shotClock && renderer._shotClock.size) {
+    for (const id of renderer._shotClock.keys()) if (!(state.units && state.units.has(id)) && !(state.structures && state.structures.has(id))) renderer._shotClock.delete(id);
+  }
+  if (renderer._lastUnitPos && renderer._lastUnitPos.size) {
+    for (const id of renderer._lastUnitPos.keys()) if (!(state.units && state.units.has(id))) renderer._lastUnitPos.delete(id);
   }
 
   // selection range circle

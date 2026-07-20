@@ -57,7 +57,22 @@ async function addManifest(store, manifest, atlasBase) {
         const frames = [];
         for (let i = 0; i < n; i++) frames.push(new PIXI.Texture(baseTex,
           new PIXI.Rectangle((i % cols) * pt.cell[0], ((i / cols) | 0) * pt.cell[1], pt.cell[0], pt.cell[1])));
-        parts[pt.id] = { def: pt, frames };
+        // S1: baked cast-shadow frames (parallel atlas, same pivot as the sprite). Optional — old packs
+        // have none and fall back to the runtime ellipse in buildVoxelUnit.
+        let shadowFrames = null;
+        if (pt.shadowAtlas && Array.isArray(pt.shadowCell)) {
+          const ssrc = (entry.atlases && entry.atlases[pt.id + '.shadow']) || (atlasBase ? atlasBase + pt.shadowAtlas : null);
+          if (ssrc) {
+            const sImg = await loadImage(ssrc);
+            const sBase = PIXI.BaseTexture.from(sImg);
+            sBase.scaleMode = PIXI.SCALE_MODES.LINEAR;
+            const scols = pt.shadowCols || cols;
+            shadowFrames = [];
+            for (let i = 0; i < n; i++) shadowFrames.push(new PIXI.Texture(sBase,
+              new PIXI.Rectangle((i % scols) * pt.shadowCell[0], ((i / scols) | 0) * pt.shadowCell[1], pt.shadowCell[0], pt.shadowCell[1])));
+          }
+        }
+        parts[pt.id] = { def: pt, frames, shadowFrames };
       }
       store.units[id] = { pack, parts };
     } catch (e) {
@@ -101,20 +116,26 @@ export function buildVoxelUnit(store, id, tilePx, radius, spriteOverCollision) {
     s.scale.set(scale);
     return s;
   };
-  // SILHOUETTE SHADOW: the unit's own frame — NOT flipped (the camera is high, so the silhouette
-  // already approximates the ground shape) — squashed onto the ground, sheared and offset away from
-  // the world light, tinted black. Same textures as the unit, so it batches; no filters.
-  // WORLD LIGHT (pack.js contract): the same azimuth the pack was BAKED with — sun top-left (135°)
-  // → the shadow projects to the LOWER-RIGHT, matching the lit/shaded faces exactly.
+  // CAST SHADOW (Shading epic S1): prefer the BAKED shadow shape — a true ground silhouette projected
+  // from the voxel volume at bake time (pack.parts[].shadowAtlas), drawn at the unit's own pivot so the
+  // shear is already in the pixels. No runtime skew/squash (that old hack sheared the top sprite and read
+  // wrong). Old packs without a shadow atlas fall back to the legacy squashed-silhouette below.
   const lightAz = ((pack.light && pack.light.azimuth) != null ? pack.light.azimuth : GAME_LIGHT_AZ) * Math.PI / 180;
-  const lean = -Math.cos(lightAz) * 0.6;                            // shear away from the sun
-  const shOffX = -Math.cos(lightAz) * targetW * 0.30;               // ground offset, away from the sun
-  const shOffY = Math.sin(lightAz) * targetW * 0.20;
+  const lean = -Math.cos(lightAz) * 0.6;
+  const shOffX = -Math.cos(lightAz) * targetW * 0.30, shOffY = Math.sin(lightAz) * targetW * 0.20;
   const mkShadow = (p, alpha) => {
-    const s = mk(p);
+    if (p.shadowFrames && p.shadowFrames.length) {
+      const s = new PIXI.Sprite(p.shadowFrames[0]);
+      s.anchor.set(p.def.pivot[0] / p.def.cell[0], p.def.pivot[1] / p.def.cell[1]);   // same pivot as the sprite
+      s.scale.set(scale);
+      s.tint = 0x000000; s.alpha = alpha;
+      s.__gx = 0; s.__gy = 0;                                       // shear is baked in; sits at the contact point
+      return s;
+    }
+    const s = mk(p);                                                // legacy fallback: squashed/sheared top sprite
     s.tint = 0x000000; s.alpha = alpha;
     s.scale.set(scale, scale * 0.55); s.skew.x = lean;
-    s.__gx = shOffX; s.__gy = shOffY;                               // base ground offset (renderer re-grounds y)
+    s.__gx = shOffX; s.__gy = shOffY;
     s.position.set(shOffX, shOffY);
     return s;
   };
@@ -147,19 +168,21 @@ export function updateVoxelUnit(c, headingRad, aimRad) {
   const v = c.__vox;
   if (!v) return;
   if (v.body) {
-    const d = v.parts.body.def, tex = v.parts.body.frames[angleBucket(headingRad, d.facings)];
-    v.body.texture = tex;
-    if (v.shBody) v.shBody.texture = tex;                                          // shadow turns with the hull
+    const d = v.parts.body.def, bkt = angleBucket(headingRad, d.facings);
+    v.body.texture = v.parts.body.frames[bkt];
+    if (v.shBody) v.shBody.texture = (v.parts.body.shadowFrames || v.parts.body.frames)[bkt];   // shadow turns with the hull
   }
   if (v.turret) {
-    const d = v.parts.turret.def;
-    const tex = v.parts.turret.frames[angleBucket(aimRad == null ? headingRad : aimRad, d.angles)];
-    v.turret.texture = tex;
+    const d = v.parts.turret.def, bkt = angleBucket(aimRad == null ? headingRad : aimRad, d.angles);
+    v.turret.texture = v.parts.turret.frames[bkt];
     const m = d.mount || [0, 0, 0], B = (v.pack.renderScale || 1) * v.scale;
     const gx = m[0] * Math.cos(headingRad) - (m[1] || 0) * Math.sin(headingRad);   // mount, unit-local → world
     const gy = m[0] * Math.sin(headingRad) + (m[1] || 0) * Math.cos(headingRad);
     v.turret.x = gx * B;
     v.turret.y = (gy * v.se - (m[2] || 0) * (v.pack.layerSpacing || 0)) * B;       // ground y foreshortened; dz lifts
-    if (v.shTurret) { v.shTurret.texture = tex; v.shTurret.x = gx * B + (v.shTurret.__gx || 0); }   // barrel shadow tracks the aim
+    if (v.shTurret) {                                                              // barrel shadow tracks the aim
+      v.shTurret.texture = (v.parts.turret.shadowFrames || v.parts.turret.frames)[bkt];
+      v.shTurret.x = gx * B + (v.shTurret.__gx || 0);
+    }
   }
 }

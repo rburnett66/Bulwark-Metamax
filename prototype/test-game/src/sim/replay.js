@@ -17,9 +17,10 @@ const MAX_REPLAY_TICKS = 1000000; // safety cap (~9 hours of sim time)
  * @param {number} seed
  * @returns {{seed:number, commands:Array<{tick:number, cmd:object}>, finalHash:string|null}}
  */
-export function createLog(seed) {
+export function createLog(seed, init) {
   return {
     seed: seed | 0,
+    init: init || null,   // createSim opts (waves/map/carry/…) so a replay reproduces THIS board, not default MAP/WAVES
     commands: [],
     finalHash: null,
   };
@@ -42,10 +43,21 @@ export function recordCommand(log, tick, cmd) {
  * @returns {string}
  */
 export function serializeLog(log) {
+  // Serialize only the JSON-safe, rebuildable init scalars — NOT the live map/waves objects (typed arrays
+  // don't round-trip through JSON). In-app replay reuses the live currentMap; cross-session headless replay
+  // of a forge map still needs its map rebuilt from mapId+faction (a deeper feature), but carry/tiers travel.
+  const init = log.init ? {
+    mapId: log.init.mapId != null ? log.init.mapId : null,
+    faction: log.init.faction || null,
+    carry: log.init.carry || null,
+    harvesterLevel: log.init.harvesterLevel || 1,
+    structTiers: log.init.structTiers || null,
+  } : null;
   return JSON.stringify(
     {
       version: 1,
       seed: log.seed,
+      init: init,
       commands: log.commands,
       finalHash: log.finalHash || null,
     },
@@ -78,6 +90,7 @@ export function deserializeLog(json) {
   commands.sort((a, b) => a.tick - b.tick);
   return {
     seed: seed | 0,
+    init: (raw.init && typeof raw.init === 'object') ? raw.init : null,
     commands,
     finalHash: typeof raw.finalHash === 'string' ? raw.finalHash : null,
   };
@@ -201,7 +214,7 @@ export function hashState(state) {
  * @returns {{state:object, hash:string, matches:boolean|null}}
  */
 export function runReplay(log, untilTick, onTick) {
-  const state = createSim(log.seed);
+  const state = createSim(log.seed, log.init || undefined);   // reproduce the original board when the log carries its init
 
   const commands = (log.commands || []).slice().sort((a, b) => a.tick - b.tick);
   let cmdIdx = 0;

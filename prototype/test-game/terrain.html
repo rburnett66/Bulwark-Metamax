@@ -9,7 +9,7 @@
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; background:var(--ink); color:var(--text); font-family:"Segoe UI",system-ui,sans-serif; }
   #app { display:flex; height:100vh; }
-  #stage { flex:1; display:flex; align-items:center; justify-content:center; background:#0a0c10; overflow:auto; padding:16px; }
+  #stage { flex:1; display:flex; align-items:safe center; justify-content:safe center; background:#0a0c10; overflow:auto; padding:16px; }
   #cv { image-rendering:pixelated; box-shadow:0 8px 40px rgba(0,0,0,.6); border:1px solid var(--line); }
   #side { width:660px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--line); padding:14px 16px; display:flex; flex-direction:column; overflow:hidden; }
   #sideHead { flex:0 0 auto; }
@@ -42,14 +42,29 @@
     background:#1a1f28; color:var(--muted); border:1px solid var(--line); }
   .waveSel button.on { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:var(--gold); }
   .row input[type=checkbox] { accent-color:var(--gold); width:15px; height:15px; }
+  /* draggable / collapsible / persisted control panels */
+  .grp > h2 { cursor:grab; user-select:none; }
+  .grp > h2::before { content:"\2237  "; color:var(--muted); opacity:.55; }
+  .grp.dragging > h2 { cursor:grabbing; }
+  .grp.floating { position:fixed; z-index:60; width:326px; max-height:84vh; overflow-y:auto; overflow-x:hidden;
+    background:var(--panel); box-shadow:0 12px 44px rgba(0,0,0,.7); border-color:var(--gold); }
+  .grp.collapsed > *:not(h2) { display:none; }
+  .grp.collapsed { padding-bottom:9px; }
+  #panelReset { position:fixed; bottom:10px; right:12px; z-index:61; width:auto; padding:6px 12px; font-size:11px; }
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="stage"><button id="fitScreen" class="ghost" style="position:sticky;top:6px;float:right;z-index:5;width:auto;padding:5px 12px;margin:0 0 4px 8px">⛶ Fit to screen</button><canvas id="cv"></canvas></div>
+  <div id="stage"><button id="fitScreen" class="ghost" style="position:sticky;top:6px;float:right;z-index:5;width:auto;padding:5px 12px;margin:0 0 4px 8px">⛶ Fit to screen</button><div style="position:sticky;top:6px;float:right;z-index:5;margin:0 8px 4px 0;display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:6px;padding:3px 8px"><span style="font-size:12px;opacity:.8">Zoom</span><input type="range" id="zoom" min="4" max="64" value="12" style="width:96px"><span class="val" id="zoomV" style="min-width:56px">auto</span><button id="zoom1" class="ghost" style="width:auto;padding:2px 9px;margin:0">1:1 game</button></div><label style="position:sticky;top:6px;float:right;z-index:5;padding:5px 12px;margin:0 8px 4px 0;display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:6px;cursor:pointer"><input type="checkbox" id="bakedView">🏔️ Baked view</label><canvas id="cv"></canvas></div>
   <div id="side">
     <div id="sideHead">
-      <h1>TERRAIN FORGE</h1>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <h1 style="margin:0">TERRAIN FORGE</h1>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button id="toMenu" class="ghost" style="width:auto;padding:6px 12px;margin:0;white-space:nowrap">🧰 Tool menu</button>
+          <button id="playtest" style="width:auto;padding:6px 14px;margin:0;white-space:nowrap">▶ Playtest</button>
+        </div>
+      </div>
       <div class="sub">Stage 1 — algorithmic feature map. Tuning on the left; map commands on the right.</div>
     </div>
     <div id="cols">
@@ -82,6 +97,24 @@
           <div class="row"><label>Width</label><input type="number" id="cols" value="40" min="8" max="128"></div>
           <div class="row"><label>Height</label><input type="number" id="rows" value="24" min="8" max="64"></div>
           <div class="row"><label>Seed</label><input type="number" id="seed" value="7" min="1"><button class="ghost" id="reroll" style="width:auto;padding:5px 10px;margin:0">↻</button></div>
+        </div>
+        <div class="grp">
+          <h2>Baked view — digicam / rigid-voxel</h2>
+          <div class="note" style="margin:0 0 6px">Tick 🏔️ Baked view above the map. Sub-sample splits each cell into N×N so shorelines terrace grass→dirt→rock→water.</div>
+          <div class="row"><label>Sub-sample</label><input type="range" id="bakeSub" min="1" max="10" value="5"><span class="val" id="bakeSubV">5</span></div>
+          <div class="row"><label>Corner smooth</label><input type="range" id="bakeSmooth" min="0" max="4" value="1"><span class="val" id="bakeSmoothV">1</span></div>
+          <div class="row"><label>Organic outline</label><input type="range" id="bakeWarp" min="0" max="140" value="60"><span class="val" id="bakeWarpV">60</span></div>
+          <div class="row"><label>Terrace band</label><input type="range" id="bakeBand" min="1" max="6" value="2"><span class="val" id="bakeBandV">2</span></div>
+          <div class="row"><label>Cliff height</label><input type="range" id="bakeCliff" min="0" max="8" value="3"><span class="val" id="bakeCliffV">3</span><span class="note" style="margin:0 0 0 6px">cube layers (0 = flat)</span></div>
+          <div class="row"><label>Face dark</label><input type="range" id="bakeFace" min="20" max="80" value="55"><span class="val" id="bakeFaceV">55</span></div>
+          <div class="note" style="margin:8px 0 3px">Cast shadows — cliffs &amp; steps shade the ground down-right (baked, free in-game). <b>Length</b> = sun height (lower = longer).</div>
+          <div class="row"><label>Shadow strength</label><input type="range" id="bakeShStr" min="0" max="80" value="40"><span class="val" id="bakeShStrV">40</span></div>
+          <div class="row"><label>Shadow length</label><input type="range" id="bakeShLen" min="5" max="80" value="25"><span class="val" id="bakeShLenV">25°</span></div>
+          <div class="row"><label>Shadow soft</label><input type="range" id="bakeShSoft" min="0" max="4" value="1"><span class="val" id="bakeShSoftV">1</span></div>
+          <div class="note" style="margin:8px 0 3px">Material stack — top = high ground. <b>layers</b> = band thickness · <b>curve</b>: linear or steep · noise below each.</div>
+          <div id="stackEditor"></div>
+          <button class="ghost" id="stackAdd" style="width:auto;padding:5px 10px;margin:4px 6px 0 0">+ material</button>
+          <button class="ghost" id="stackReset" style="width:auto;padding:5px 10px;margin:4px 0 0">reset stack</button>
         </div>
 
         <div class="grp">
@@ -159,6 +192,7 @@
 <script type="module">
 import { generateTerrain, placeBase, generateResources, generateEdgeSpawns, TERRAIN_NAME, TERRAIN_COLOR, RESOURCE_COLOR, LANE_COLOR, BLOCKING, TERRAIN } from './src/terrain/terrainGen.js';
 import { WORLD, BASE, WAVE_WINDOWS, attackSide } from './content/maps/wave-windows.js';
+import { bakeTerrain, DEFAULT_STACK } from './src/terrain/terrainBake.js?v=7';
 
 // wave window (1-indexed w,h,x,y) -> 0-indexed inclusive rect for the grid
 const winRect0 = (w) => ({ x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 });
@@ -271,7 +305,14 @@ function opts() {
   };
 }
 
-let last = null, resources = [], spawns = [];
+let last = null, resources = [], spawns = [], bakedCanvas = null;
+// Baked-view material stack (per-map, persisted). Top of the array = highest ground.
+const STACK_KEY = 'tf.stack.v2';   // v2: gen-priority order (water<shore<dirt<grass<brush<rocks<trees<cliff)
+let bakeStack = (() => {
+  try { const s = JSON.parse(localStorage.getItem(STACK_KEY)); if (Array.isArray(s) && s.length) return s; } catch (_) {}
+  return JSON.parse(JSON.stringify(DEFAULT_STACK));
+})();
+const persistStack = () => localStorage.setItem(STACK_KEY, JSON.stringify(bakeStack));
 // resource PAINT layer (owner 2026-07-16): place/remove the four resource kinds by hand
 let resPaint = null;                                    // 'blue'|'yellow'|'red'|'green'|'erase'|null
 const showRes = { blue: true, yellow: true, red: true, green: true };
@@ -315,15 +356,8 @@ function render() {
   syncWaveUI();
   const px = cellPx(o);
   cv.width = o.cols * px; cv.height = o.rows * px;
-  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) {
-    ctx.fillStyle = TERRAIN_COLOR[last.terrain[y * o.cols + x]];
-    ctx.fillRect(x * px, y * px, px, px);
-  }
-  // faint blocking hatch
-  ctx.strokeStyle = 'rgba(0,0,0,.35)';
-  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) {
-    if (last.blocking[y * o.cols + x]) { ctx.beginPath(); ctx.moveTo(x * px, y * px); ctx.lineTo(x * px + px, y * px + px); ctx.stroke(); }
-  }
+  rebake(o);          // terrain changed → rebuild the baked view (only if the toggle is on)
+  paintGround(o, px); // flat playtest colors, or the digicam/rigid-voxel bake blitted down
   drawOverlays(px);
   // live readouts
   for (const t of TUNABLE) {} // (values shown inline via input; skip)
@@ -336,6 +370,7 @@ function render() {
 
 // spawn-tuning controls only change the NEXT spawn generation — don't re-roll the terrain
 const SPAWN_TUNE = new Set(['spGround', 'spAir', 'spWater', 'spSpread', 'spSpacing', 'spawnEdge']);
+const BAKE_TUNE = new Set(['bakeSub', 'bakeSmooth', 'bakeWarp', 'bakeBand', 'bakeCliff', 'bakeFace', 'bakeShStr', 'bakeShLen', 'bakeShSoft']);   // re-bake, no re-roll (stack has its own handlers)
 document.querySelectorAll('input,select').forEach((el) => el.addEventListener('input', (e) => {
   if (e.target.dataset.p != null) {
     const key = e.target.dataset.p;
@@ -346,6 +381,19 @@ document.querySelectorAll('input,select').forEach((el) => el.addEventListener('i
   if (SPAWN_TUNE.has(e.target.id)) {
     $('spSpreadV').textContent = $('spSpread').value; $('spSpacingV').textContent = $('spSpacing').value;
     return;   // no terrain re-roll; press Generate spawns to apply
+  }
+  if (BAKE_TUNE.has(e.target.id)) {
+    if ($('bakeSubV')) $('bakeSubV').textContent = $('bakeSub').value;
+    if ($('bakeSmoothV')) $('bakeSmoothV').textContent = $('bakeSmooth').value;
+    if ($('bakeWarpV')) $('bakeWarpV').textContent = $('bakeWarp').value;
+    if ($('bakeBandV')) $('bakeBandV').textContent = $('bakeBand').value;
+    if ($('bakeCliffV')) $('bakeCliffV').textContent = $('bakeCliff').value;
+    if ($('bakeFaceV')) $('bakeFaceV').textContent = $('bakeFace').value;
+    if ($('bakeShStrV')) $('bakeShStrV').textContent = $('bakeShStr').value;
+    if ($('bakeShLenV')) $('bakeShLenV').textContent = $('bakeShLen').value + '°';
+    if ($('bakeShSoftV')) $('bakeShSoftV').textContent = $('bakeShSoft').value;
+    rebake(opts()); redraw();   // bake-only: re-bake the current map, no re-roll
+    return;
   }
   if (e.target.id === 'slotFaction' || e.target.id === 'slotMap' || e.target.id === 'loadSlot') return;   // slot pickers don't touch the map
   render();
@@ -366,22 +414,63 @@ $('genSpawn').addEventListener('click', () => {
   }
   syncWaveUI(); redraw();
 });
-// cell size: classic = ~900px map; FIT TO SCREEN = fill the viewport space the canvas actually has
+// cell size: classic = ~900px map; FIT TO SCREEN = fill the viewport; ZOOM = explicit px/cell (64 = game).
 let fitScreen = false;
+let zoomPx = 0;               // 0 = auto/fit; >0 = fixed px per cell (the game renders at 64)
 function cellPx(o) {
+  if (zoomPx > 0) return zoomPx;                    // explicit zoom wins (game scale = 64px/cell)
   if (!fitScreen) return Math.max(4, Math.min(18, Math.floor(900 / o.cols)));
   const rect = cv.getBoundingClientRect();
   const availW = Math.max(240, (cv.parentElement ? cv.parentElement.clientWidth : window.innerWidth) - 8);
   const availH = Math.max(240, window.innerHeight - rect.top - 16);
   return Math.max(3, Math.floor(Math.min(availW / o.cols, availH / o.rows)));
 }
+// Repaint the ground: the flat playtest colors, or — when Baked view is on — the cached digicam/rigid-voxel
+// bake scaled down into the fit-to-screen canvas (smoothing off keeps the grain crisp).
+function paintGround(o, px) {
+  if (bakedCanvas) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(bakedCanvas, 0, 0, cv.width, cv.height);
+    return;
+  }
+  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) { ctx.fillStyle = TERRAIN_COLOR[last.terrain[y * o.cols + x]]; ctx.fillRect(x * px, y * px, px, px); }
+  ctx.strokeStyle = 'rgba(0,0,0,.35)';
+  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) if (last.blocking[y * o.cols + x]) { ctx.beginPath(); ctx.moveTo(x * px, y * px); ctx.lineTo(x * px + px, y * px + px); ctx.stroke(); }
+}
+// Gather the Baked-view panel settings for the offscreen bake.
+function bakeParams(o) {
+  const val = (id, dflt) => ($(id) ? $(id).value : dflt);
+  return {
+    seed: o.seed,
+    sub: +val('bakeSub', 5),
+    smooth: +val('bakeSmooth', 1),
+    warp: (+val('bakeWarp', 60)) / 100,
+    band: +val('bakeBand', 2),
+    cliffDrop: +val('bakeCliff', 3),
+    faceDark: (+val('bakeFace', 55)) / 100,
+    shadowStrength: (+val('bakeShStr', 40)) / 100,
+    shadowEl: +val('bakeShLen', 25),
+    shadowSoft: +val('bakeShSoft', 1),
+    stack: bakeStack,
+  };
+}
+// Rebuild the offscreen bake from the current grid — only when Baked view is on; else clear the cache.
+// Fail-safe: a bake error logs + falls back to the flat render so the forge can never blank out.
+function rebake(o) {
+  if (!($('bakedView') && $('bakedView').checked && last)) { bakedCanvas = null; return; }
+  const p = bakeParams(o);
+  // persist the tuning so the GAME bakes the map identically (renderer.js reads tf.bake.v1 + tf.stack.v2)
+  try { const { stack, ...tune } = p; localStorage.setItem('tf.bake.v1', JSON.stringify(tune)); } catch (_) { /* full/blocked */ }   // keep seed in tune so the game's re-bake uses the authored warp/grain, not the default seed 7
+  try { bakedCanvas = bakeTerrain(last, p); }
+  catch (err) { console.error('[terrainBake] bake failed:', err); bakedCanvas = null; }
+}
+
 function redraw() {
   spawns = spawnsByWave[selWave] || spawnsByWave[1] || [];
   const o = opts(); const px = cellPx(o);
   if (cv.width !== o.cols * px || cv.height !== o.rows * px) { cv.width = o.cols * px; cv.height = o.rows * px; }
-  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) { ctx.fillStyle = TERRAIN_COLOR[last.terrain[y * o.cols + x]]; ctx.fillRect(x * px, y * px, px, px); }
-  ctx.strokeStyle = 'rgba(0,0,0,.35)';
-  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) if (last.blocking[y * o.cols + x]) { ctx.beginPath(); ctx.moveTo(x * px, y * px); ctx.lineTo(x * px + px, y * px + px); ctx.stroke(); }
+  paintGround(o, px);   // reuses the cached bake (rebuilt in render() when the terrain changes)
   drawOverlays(px);
 }
 
@@ -589,13 +678,140 @@ cv.addEventListener('pointerdown', (e) => {
 });
 $('fitScreen').addEventListener('click', () => {
   fitScreen = !fitScreen;
+  if (fitScreen) { zoomPx = 0; $('zoomV').textContent = 'auto'; }   // fit + explicit zoom are exclusive
   $('fitScreen').style.background = fitScreen ? '#d9a441' : '';
   $('fitScreen').style.color = fitScreen ? '#0c0e12' : '';
   redraw();
 });
 window.addEventListener('resize', () => { if (fitScreen) redraw(); });
+// ZOOM: view the map at an explicit px/cell so authors can inspect at the game's real 64px/cell scale.
+function setFit(off) { if (off && fitScreen) { fitScreen = false; $('fitScreen').style.background = ''; $('fitScreen').style.color = ''; } }
+function applyZoom(px) {
+  zoomPx = px; setFit(true);
+  $('zoom').value = px;
+  $('zoomV').textContent = px + 'px' + (px >= 64 ? ' = game' : '');
+  redraw();
+}
+$('zoom').addEventListener('input', () => applyZoom(+$('zoom').value));
+$('zoom1').addEventListener('click', () => applyZoom(64));
+const gotoTop = (url) => { try { (window.top || window).location.href = url; } catch (e) { window.location.href = url; } };
+// TOOL MENU: back to the harness (the tool's home). Breaks out of the iframe when embedded; standalone too.
+$('toMenu').addEventListener('click', () => {
+  if (!confirm('Return to the tool menu (harness)?\nAnything not saved to a slot or shipped will be lost.')) return;
+  gotoTop('harness.html');
+});
+// PLAYTEST: save the CURRENT map to its faction/map slot (the game reads localStorage first, same origin,
+// so it shows exactly what's on screen — no stale-slot trap), then launch the game straight into that slot.
+$('playtest').addEventListener('click', () => {
+  const f = $('slotFaction').value, m = $('slotMap').value;
+  try {
+    const slots = loadSlots(); slots[slotId(f, m)] = exportObj();
+    localStorage.setItem(SLOT_KEY, JSON.stringify(slots));
+  } catch (e) { /* storage full/blocked — the game still loads the shipped file for this slot */ }
+  gotoTop(`index.html?map=${encodeURIComponent(m)}&faction=${encodeURIComponent(f)}`);
+});
 applyPaletteDefaults();      // default coverage on a fresh tool
 updResCounts();
+
+// ── Baked-view material stack editor (the vertical color stack; per-map, persisted) ──
+function renderStackEditor() {
+  const host = $('stackEditor'); if (!host) return;
+  host.innerHTML = '';
+  for (let vi = bakeStack.length - 1; vi >= 0; vi--) {   // render top (high ground) first
+    const m = bakeStack[vi];
+    const row = document.createElement('div'); row.className = 'row'; row.style.gap = '5px';
+    row.innerHTML =
+      `<input type="color" value="${m.color}" data-si="${vi}" data-sf="color" style="width:32px;padding:1px;flex:0 0 auto">`
+      + `<input type="text" value="${m.key}" data-si="${vi}" data-sf="key" style="flex:1;min-width:0" title="material name">`
+      + `<input type="number" value="${m.layers}" min="1" max="15" data-si="${vi}" data-sf="layers" style="width:40px" title="layers (thickness)">`
+      + `<select data-si="${vi}" data-sf="curve" title="transition curve" style="width:58px;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;font-size:11px">`
+      + `<option value="linear"${m.curve === 'linear' ? ' selected' : ''}>linear</option>`
+      + `<option value="aggressive"${m.curve === 'aggressive' ? ' selected' : ''}>steep</option></select>`
+      + `<button class="ghost" data-si="${vi}" data-sf="del" style="width:auto;padding:3px 7px;margin:0" title="remove material">×</button>`;
+    host.appendChild(row);
+    const nz = document.createElement('div'); nz.className = 'row'; nz.style.marginBottom = '10px';
+    nz.innerHTML = `<label style="flex:0 0 46px;font-size:10px;color:var(--muted)">noise</label>`
+      + `<input type="range" min="0" max="100" value="${Math.round((m.noise ?? 0.5) * 100)}" data-si="${vi}" data-sf="noise">`
+      + `<span class="val">${Math.round((m.noise ?? 0.5) * 100)}</span>`;
+    host.appendChild(nz);
+  }
+  host.querySelectorAll('[data-si]').forEach((el) => {
+    const i = +el.dataset.si, f = el.dataset.sf;
+    const ev = (el.type === 'color' || el.type === 'range') ? 'input' : 'change';
+    el.addEventListener(ev, () => {
+      if (f === 'del') { if (bakeStack.length > 2) { bakeStack.splice(i, 1); persistStack(); renderStackEditor(); rebake(opts()); redraw(); } return; }
+      if (f === 'layers') bakeStack[i].layers = Math.max(1, Math.min(15, +el.value | 0));
+      else if (f === 'noise') { bakeStack[i].noise = (+el.value) / 100; if (el.nextElementSibling) el.nextElementSibling.textContent = el.value; }
+      else bakeStack[i][f] = el.value;   // color, key, curve
+      persistStack(); rebake(opts()); redraw();
+    });
+  });
+}
+if ($('stackAdd')) $('stackAdd').addEventListener('click', () => {
+  bakeStack.push({ key: 'layer' + bakeStack.length, color: '#8a8f96', noise: 0.5, layers: 2, curve: 'linear' });
+  persistStack(); renderStackEditor(); rebake(opts()); redraw();
+});
+if ($('stackReset')) $('stackReset').addEventListener('click', () => {
+  bakeStack = JSON.parse(JSON.stringify(DEFAULT_STACK)); persistStack(); renderStackEditor(); rebake(opts()); redraw();
+});
+renderStackEditor();
+
+// ── Draggable / collapsible / persisted control panels ──────────────────────────────────────────────
+// The menu is too tall to scroll comfortably, so each .grp can be DRAGGED out to a floating spot (grab its
+// header) — position remembered — or CLICKED on its header to collapse to just the title. State persists in
+// localStorage; "⟲ Reset panels" (bottom-right) re-docks everything.
+(function () {
+  const KEY = 'tf.panels.v1';
+  const state = JSON.parse(localStorage.getItem(KEY) || '{}');
+  const save = () => localStorage.setItem(KEY, JSON.stringify(state));
+  const slug = (s) => (s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28);
+
+  document.querySelectorAll('.grp').forEach((grp) => {
+    const h2 = grp.querySelector(':scope > h2'); if (!h2) return;
+    const id = grp.dataset.panel = slug(h2.textContent);
+    const st = state[id] || {};
+    if (st.collapsed) grp.classList.add('collapsed');
+    if (st.x != null) { grp.classList.add('floating'); grp.style.left = st.x + 'px'; grp.style.top = st.y + 'px'; }
+
+    let downX, downY, startL, startT, moved, dragging = false;
+    h2.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      dragging = true; moved = false; downX = e.clientX; downY = e.clientY;
+      const r = grp.getBoundingClientRect(); startL = r.left; startT = r.top;
+      grp.classList.add('dragging');
+      try { h2.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    h2.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - downX, dy = e.clientY - downY;
+      if (!moved && Math.hypot(dx, dy) < 4) return;   // small threshold separates a click from a drag
+      if (!moved) { moved = true; grp.classList.add('floating'); grp.style.left = startL + 'px'; grp.style.top = startT + 'px'; }
+      grp.style.left = Math.max(0, Math.min(window.innerWidth - 60, startL + dx)) + 'px';
+      grp.style.top = Math.max(0, Math.min(window.innerHeight - 28, startT + dy)) + 'px';
+    });
+    const end = (e) => {
+      if (!dragging) return;
+      dragging = false; grp.classList.remove('dragging');
+      try { h2.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (moved) {
+        const r = grp.getBoundingClientRect();
+        state[id] = Object.assign(state[id] || {}, { x: Math.round(r.left), y: Math.round(r.top) });
+      } else {                                          // a click with no drag → collapse / expand
+        grp.classList.toggle('collapsed');
+        state[id] = Object.assign(state[id] || {}, { collapsed: grp.classList.contains('collapsed') });
+      }
+      save();
+    };
+    h2.addEventListener('pointerup', end);
+    h2.addEventListener('pointercancel', end);
+  });
+
+  const btn = document.createElement('button');
+  btn.id = 'panelReset'; btn.className = 'ghost'; btn.textContent = '⟲ Reset panels';
+  btn.title = 'Re-dock all panels and clear saved positions';
+  btn.addEventListener('click', () => { localStorage.removeItem(KEY); location.reload(); });
+  document.body.appendChild(btn);
+})();
 </script>
 </body>
 </html>
