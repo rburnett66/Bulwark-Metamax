@@ -66,7 +66,28 @@ export function buildNavGrid(map, structures, extraBlocked) {
     }
   }
 
-  return { passable, cols, rows };
+  // CLEARANCE: a cell is "wide" (fits a 2-tile-wide passage) when it belongs to a fully-passable 2×2 block
+  // in any of its four orientations. Routing prefers wide cells so units take 2-wide corridors and only
+  // thread a 1-tile crack when no wider route to the goal exists. Pure + deterministic.
+  const wide = new Uint8Array(cols * rows);
+  const pz = (x, y) => x >= 0 && x < cols && y >= 0 && y < rows && !!passable[y * cols + x];
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    if (!passable[y * cols + x]) continue;
+    if ((pz(x, y) && pz(x + 1, y) && pz(x, y + 1) && pz(x + 1, y + 1)) ||
+        (pz(x - 1, y) && pz(x, y) && pz(x - 1, y + 1) && pz(x, y + 1)) ||
+        (pz(x, y - 1) && pz(x + 1, y - 1) && pz(x, y) && pz(x + 1, y)) ||
+        (pz(x - 1, y - 1) && pz(x, y - 1) && pz(x - 1, y) && pz(x, y))) wide[y * cols + x] = 1;
+  }
+  return { passable, cols, rows, wide };
+}
+
+/** Route a walker preferring 2-tile-wide corridors: try a WIDE-only path first (never squeezes through a
+ *  1-tile crack when a wider way to the goal exists), and only fall back to the full grid when no wide route
+ *  reaches the goal. Deterministic. Use this for long-haul routes; the base-ring approach stays full-grid. */
+export function findRoute(navGrid, from, to, avoid) {
+  const w = findWalkerPath(navGrid, from, to, avoid, true);
+  if (w && w.length) return w;
+  return findWalkerPath(navGrid, from, to, avoid, false);
 }
 
 /**
@@ -75,8 +96,9 @@ export function buildNavGrid(map, structures, extraBlocked) {
  * Returns an array of cells (excluding start, including goal), or null if unreachable.
  * The goal cell itself is always treated as enterable (e.g. the base clearing).
  */
-export function findWalkerPath(navGrid, from, to, avoid) {
+export function findWalkerPath(navGrid, from, to, avoid, wideOnly) {
   const passable = navGrid.passable;
+  const wide = (wideOnly && navGrid.wide) ? navGrid.wide : null;   // wideOnly → traverse only 2-wide cells (start/goal exempt)
   const hasAvoid = avoid && (avoid.size > 0 || avoid.length > 0);
   const cols = navGrid.cols;
   const rows = navGrid.rows;
@@ -108,7 +130,7 @@ export function findWalkerPath(navGrid, from, to, avoid) {
   // straightens it into clean diagonals, so it reads right.
   const DX = [0, 1, 0, -1, 1, 1, -1, -1]; // N, E, S, W, NE, SE, SW, NW
   const DY = [-1, 0, 1, 0, -1, 1, 1, -1];
-  const pass = (x, y) => x >= 0 && x < cols && y >= 0 && y < rows && !!passable[y * cols + x];
+  const pass = (x, y) => x >= 0 && x < cols && y >= 0 && y < rows && !!passable[y * cols + x] && (!wide || !!wide[y * cols + x]);
 
   let found = false;
   while (head < tail) {
@@ -125,7 +147,7 @@ export function findWalkerPath(navGrid, from, to, avoid) {
       if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
       const ni = ny * cols + nx;
       if (visited[ni]) continue;
-      if (ni !== goal && !passable[ni]) continue;
+      if (ni !== goal && (!passable[ni] || (wide && !wide[ni]))) continue;   // wideOnly: skip 1-tile-crack cells
       if (hasAvoid && ni !== goal && avoid.has(ni)) continue;   // temporarily route AROUND jammed cells
       if (d >= 4) {   // diagonal — require both orthogonal neighbours open (no corner cut)
         if (!pass(cx + DX[d], cy) || !pass(cx, cy + DY[d])) continue;
@@ -149,14 +171,15 @@ export function findWalkerPath(navGrid, from, to, avoid) {
     if (node === -1) return null; // safety: broken chain
   }
   path.reverse();
-  return smoothPath(path, passable, cols, rows);
+  return smoothPath(path, passable, cols, rows, wide);
 }
 
 /** STRING-PULL (owner: drive diagonally, no zig-zag): drop any waypoint the unit can skip because
  *  it has clear line-of-sight to the NEXT one (a straight walkable line). Stair-steps collapse into
  *  straight diagonals. Corner clearance holds because the LOS test walks the supercover cells. */
-function smoothPath(path, passable, cols, rows) {
+function smoothPath(path, passable, cols, rows, wide) {
   if (!path || path.length <= 2) return path;
+  const ok = (i) => passable[i] && (!wide || wide[i]);   // a straightened line may only cross traversable cells
   const clear = (a, b) => {
     // supercover line a->b: every cell the segment touches must be passable (goal included is fine)
     let x0 = a.x, y0 = a.y; const x1 = b.x, y1 = b.y;
@@ -164,7 +187,7 @@ function smoothPath(path, passable, cols, rows) {
     const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
     let err = dx - dy;
     for (;;) {
-      if (!(x0 >= 0 && x0 < cols && y0 >= 0 && y0 < rows && passable[y0 * cols + x0])) return false;
+      if (!(x0 >= 0 && x0 < cols && y0 >= 0 && y0 < rows && ok(y0 * cols + x0))) return false;
       if (x0 === x1 && y0 === y1) return true;
       const e2 = 2 * err;
       let moved = false;
@@ -172,7 +195,7 @@ function smoothPath(path, passable, cols, rows) {
       if (e2 < dx) { err += dx; y0 += sy; moved = true; }
       // when the step is diagonal, also require the two orthogonal cells open (no corner clip)
       if (moved && e2 > -dy && e2 < dx) {
-        if (!(passable[y0 * cols + (x0 - sx)] && passable[(y0 - sy) * cols + x0])) return false;
+        if (!(ok(y0 * cols + (x0 - sx)) && ok((y0 - sy) * cols + x0))) return false;
       }
     }
   };
