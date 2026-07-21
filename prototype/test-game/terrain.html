@@ -317,7 +317,9 @@ let last = null, resources = [], spawns = [], bakedCanvas = null;
 // affine terrain and clumps props around each, deterministic per seed. terrainGen's RNG is module-private,
 // so a small mulberry32 is inlined here.
 let decor = [], decorCatalog = {};
-const TERRAIN_AFFINITY = { 0: 'open', 1: 'open', 2: 'brush', 3: 'rocks', 4: 'trees', 5: 'cliff' };   // terrain[] id → affinity key
+// terrain[] id → affinity key. Border types (7-9) belong to their region so a painted forest/rock/cliff
+// area — which is mostly its BORDER cells — counts for that affinity (else 'trees' matches almost nothing).
+const TERRAIN_AFFINITY = { 0: 'open', 1: 'open', 2: 'brush', 3: 'rocks', 4: 'trees', 5: 'cliff', 7: 'trees', 8: 'rocks', 9: 'cliff' };
 function decorRng(seed) { let a = (seed | 0) || 1; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 let decorShipped = {};   // the shipped manifest (fetched once); localStorage is re-read live on every scatter
 const mergeCatalog = (m, into) => { for (const [id, e] of Object.entries((m && m.decor) || {})) into[id] = (e.pack && e.pack.decor) || {}; };
