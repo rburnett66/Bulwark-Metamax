@@ -540,6 +540,7 @@ function buildQuantiser(cd, vcol, filled, foot, layers, n, views) {
 // n: 0 = top, 1 = +x, 2 = −x, 3 = +y, 4 = −y (grid space, y = image-down).
 function buildFaces(partId, foot, layers) {
   const { filled, vcol, views: V } = buildModel(partId, foot, layers), N = foot * foot; // unified voxel model
+  const ed = voxEdit[partId];                                                            // explicit paints override wall art
   const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, V);   // palette cleanup (incl. wall art)
   // wall colour comes from the elevation view that DEPICTS that wall: side view → ±y walls (far side
   // mirrored), front view → +x wall, back view → −x wall (mirrored front when no back was drawn).
@@ -560,8 +561,9 @@ function buildFaces(partId, foot, layers) {
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     if (!filled(x, y, z)) continue;
     const c = (z * N + y * foot + x) * 3;
+    const painted = ed && Array.isArray(ed.get(c / 3));   // a voxel the artist painted in Grid View: its colour is authoritative
     const add = (n) => {
-      const w = n === 0 ? null : wallCol(x, y, z, n);
+      const w = (n === 0 || painted) ? null : wallCol(x, y, z, n);   // painted → use the voxel colour so in-game matches the grid
       let r = w ? w[0] : vcol[c], g = w ? w[1] : vcol[c + 1], b = w ? w[2] : vcol[c + 2];
       if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
       const k = (r << 16) | (g << 8) | b, t = palMap.get(k);          // artist colour tune (palette tuner)
@@ -1682,6 +1684,95 @@ function fillSelection() {
   gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); return true;
 }
 if ($('gridFill')) $('gridFill').onclick = () => fillSelection();
+// ── DIAGNOSTIC: report how the source view art (V) maps onto this part's exposed faces, so a misaligned
+// image (e.g. front tips reading black in-game) is visible as a coverage gap, not guesswork. Read-only.
+function gridDiag() {
+  const part = gridPart(), foot = state.foot, layers = gridLayersOf(part), N = foot * foot;
+  const m = buildModel(part, foot, layers), V = m.views, filled = m.filled;
+  const F = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && filled(x, y, z);
+  const hit = (g, ix, z, mir) => { if (!g || !g.m || ix < 0 || ix >= g.w || z < 0 || z >= g.h) return false; return !!g.m[z * g.w + (mir ? g.w - 1 - ix : ix)]; };
+  const ox = (V && V.ox) || 0, oy = (V && V.oy) || 0, z0 = (V && V.z0) || 0;
+  const grp = { fx: [0, 0], bx: [0, 0], sy: [0, 0] };            // [exposed faces, faces the art colours]
+  let bx0 = 1e9, bx1 = -1, by0 = 1e9, by1 = -1, bz0 = 1e9, bz1 = -1;
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+    if (!F(x, y, z)) continue;
+    if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; if (z < bz0) bz0 = z; if (z > bz1) bz1 = z;
+    const zz = z - z0;
+    if (!F(x + 1, y, z)) { grp.fx[0]++; if (V && hit(V.front, y - oy, zz, false)) grp.fx[1]++; }         // +x front (barrel tips)
+    if (!F(x - 1, y, z)) { grp.bx[0]++; if (V && (V.back ? hit(V.back, y - oy, zz, false) : hit(V.front, y - oy, zz, true))) grp.bx[1]++; }
+    if (!F(x, y + 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, false)) grp.sy[1]++; }
+    if (!F(x, y - 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, true)) grp.sy[1]++; }
+  }
+  const artDim = (g) => (g && g.m) ? `${g.w}x${g.h}` : '—none';
+  const pct = (a) => a[0] ? `${a[1]}/${a[0]} (${Math.round(100 * a[1] / a[0])}% art, ${a[0] - a[1]} fall back to voxel colour)` : 'none';
+  const L = [
+    `STACK-FORGE DIAG — part=${part}  foot=${foot}  layers=${layers}`,
+    `filled bbox: x[${bx0}..${bx1}] y[${by0}..${by1}] z[${bz0}..${bz1}]`,
+    V ? `view art: ox=${ox} oy=${oy} z0=${z0}   front=${artDim(V.front)}  side=${artDim(V.side)}  back=${artDim(V.back)}` : 'view art: NONE (walls use per-voxel colour)',
+    `+x front faces (barrel tips):  ${pct(grp.fx)}`,
+    `-x back faces:                 ${pct(grp.bx)}`,
+    `±y side faces:                 ${pct(grp.sy)}`,
+    `front-view index: y-oy over [${by0 - oy}..${by1 - oy}] into 0..${V && V.front ? V.front.w - 1 : '?'}   (out-of-range ⇒ black tips)`,
+    `side-view index:  x-ox over [${bx0 - ox}..${bx1 - ox}] into 0..${V && V.side ? V.side.w - 1 : '?'}`,
+  ];
+  console.log(L.join('\n'));
+  alert(L.join('\n'));
+}
+if ($('gridDiag')) $('gridDiag').onclick = () => gridDiag();
+// ── RE-PROJECT: reapply the facing's source image onto its aligned surface by FITTING the image to the
+// model's silhouette (not the stored ox/oy — those may be off, which is why sides read as top-layer colour).
+// Geometry is untouched; each sampled pixel is SNAPPED to the active (reduced/tuned) palette and baked as
+// real paint, so it shows in-game. Masked to the active selection when there is one. Preserves the art's own
+// axis convention (across-axis + height→up), so it fixes offset/scale — if it comes out mirrored, that's a
+// separate flip to confirm.
+function reprojectSurface() {
+  const g = gridGeom; if (!g || !g.editable) { alert('Re-project: switch to a paint facing (Front / Side / Back).'); return false; }
+  const V = gridModel && gridModel.views;
+  const src = gridView === 'side' ? (V && V.side) : gridView === 'front' ? (V && V.front) : gridView === 'back' ? (V && (V.back || V.front)) : null;
+  if (!src || !src.m) { alert('Re-project: no source image for this facing (Top has none).'); return false; }
+  const ed = voxEdit[g.part], N = g.foot * g.foot;
+  // source image content bbox — the drawn pixels only
+  let iX0 = 1e9, iX1 = -1, iY0 = 1e9, iY1 = -1;
+  for (let iy = 0; iy < src.h; iy++) for (let ix = 0; ix < src.w; ix++) if (src.m[iy * src.w + ix]) { if (ix < iX0) iX0 = ix; if (ix > iX1) iX1 = ix; if (iy < iY0) iY0 = iy; if (iy > iY1) iY1 = iy; }
+  if (iX1 < 0) { alert('Re-project: the source image is empty.'); return false; }
+  // gather this facing's surface voxels + the model silhouette bbox in the two in-plane WORLD axes (across, z)
+  const colAxis = gridView === 'side' ? 'x' : 'y';     // side → world x across; front/back → world y across
+  const useSel = gridSelVox && gridSelVox.part === g.part;
+  const firstHit = (cx, cy) => { for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) return v; } return null; };
+  const surf = []; let c0 = 1e9, c1 = -1, r0 = 1e9, r1 = -1;
+  for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
+    const v = firstHit(cx, cy); if (!v) continue;      // FIRST face the ray hits only — never deeper voxels
+    const x = v[0], y = v[1], z = v[2], k = z * N + y * g.foot + x;
+    if (useSel && !gridSelVox.set.has(k)) continue;
+    const cv = colAxis === 'x' ? x : y;
+    if (cv < c0) c0 = cv; if (cv > c1) c1 = cv; if (z < r0) r0 = z; if (z > r1) r1 = z;
+    surf.push([k, cv, z]);
+  }
+  if (!surf.length) { alert('Re-project: no target surface' + (useSel ? ' within the selection.' : '.')); return false; }
+  // nearest-colour snap to the model's active (reduced/tuned) palette — "pick the nearest colour"
+  const pal = (gridModel && gridModel.palette) || [];
+  const snap = (r, gg, b) => { if (!pal.length) return [r, gg, b]; let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - gg) * (p[1] - gg) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } } return pal[bi]; };
+  const sampleArt = (ix, iy) => {                     // nearest drawn pixel within a small radius (silhouettes have gaps)
+    for (let rad = 0; rad <= 2; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      const px = ix + dx, py = iy + dy; if (px < 0 || py < 0 || px >= src.w || py >= src.h) continue;
+      const i = py * src.w + px; if (src.m[i]) return [src.c[i * 3], src.c[i * 3 + 1], src.c[i * 3 + 2]];
+    }
+    return null;
+  };
+  const cSpan = Math.max(1, c1 - c0), rSpan = Math.max(1, r1 - r0);
+  const pending = [];
+  for (const [k, cv, z] of surf) {
+    const ix = Math.round(iX0 + ((cv - c0) / cSpan) * (iX1 - iX0));
+    const iy = Math.round(iY0 + ((z - r0) / rSpan) * (iY1 - iY0));   // image row 0 = z0 (bottom) → higher z = higher row (matches art)
+    const col = sampleArt(ix, iy); if (col) pending.push([k, snap(col[0], col[1], col[2])]);
+  }
+  if (!pending.length) { alert('Re-project: no colours sampled from the image.'); return false; }
+  pushUndo();
+  for (const [k, col] of pending) ed.set(k, col);
+  gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave();
+  return true;
+}
+if ($('gridReproj')) $('gridReproj').onclick = () => reprojectSurface();
 // ESC clears the selection; Delete erases it; Enter/F fills it; Ctrl+Z / Ctrl+Y undo/redo
 document.addEventListener('keydown', (e) => {
   if (!$('keyModal') || !$('keyModal').hidden) return;               // don't fight the cutout modal's own ESC
