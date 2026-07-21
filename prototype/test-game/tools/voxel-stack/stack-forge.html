@@ -213,7 +213,7 @@
       <div class="row"><label>Unit size</label><input type="range" id="uSize" min="50" max="500" step="5" value="200"><span class="val" id="uSizeV">2.00 t</span></div>
       <div class="note" style="margin:-2px 0 2px">Fine world-size control on the same voxel grid: 1 tile = 32 voxels, always. A
         20% bigger unit gets 20% more voxels (layers scale along) — voxel size on the board never changes.</div>
-      <div class="row"><label>Base layers</label><input type="range" id="bodyLayers" min="4" max="40" value="16"><span class="val" id="bodyLayersV">16</span></div>
+      <div class="row"><label>Base layers</label><input type="range" id="bodyLayers" min="4" max="128" value="16"><span class="val" id="bodyLayersV">16</span></div>
       <div class="row"><label>Turret layers</label><input type="range" id="turretLayers" min="3" max="40" value="12"><span class="val" id="turretLayersV">12</span></div>
       <div class="row"><label>Cube height</label><input type="range" id="zScale" min="50" max="300" value="180"><span class="val" id="zScaleV">1.80×</span></div>
       <div class="note" style="margin:-2px 0 2px">Stack height per part (a turret is usually shorter than the hull). Footprint px = Resolution. Cube height stretches each voxel vertically — <b>1.00×</b> = true cubes, higher reads chunkier. Higher = crisper/taller, bigger sheet + VRAM.</div>
@@ -306,6 +306,7 @@
           <label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer"><input type="checkbox" id="decAff_rocks">rocks</label>
           <label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer"><input type="checkbox" id="decAff_cliff">cliff</label>
         </div></div>
+      <div class="row"><label>Shape</label><input type="checkbox" id="decRevolve" checked><span class="note" style="margin:0">🌲 Revolve — spin the Front/Side profile into a round, tall solid (trees, rocks). Off = the tank box carve. Tip: raise <b>Base layers</b> for height (a tree is ~80 tall × 30 wide).</span></div>
       <div class="row"><label>Base density</label><input type="range" id="decDensity" min="0" max="100" value="50"><span class="val" id="decDensityV">50</span></div>
       <div class="row"><label>Blocks tiles</label><input type="checkbox" id="decBlocks"><span class="note" style="margin:0">Blocks movement/building (writes into the map's blocking layer). Leave off for pure cosmetic dressing.</span></div>
       <button id="bakeDecor" style="margin-top:4px">Bake decor (1 frame + shadow)</button>

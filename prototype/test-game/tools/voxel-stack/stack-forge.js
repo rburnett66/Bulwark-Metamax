@@ -331,8 +331,41 @@ function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
   const spanZ = span(g.spanZ, layers);
   return { spanX: span(g.spanX, foot), spanY: span(g.spanY, foot), spanZ, Hraw: spanZ.hi - spanZ.lo };
 }
+// DECOR carve — a tall SOLID OF REVOLUTION for organic props (trees, rocks). The tank pipeline intersects
+// Front∩Side through a rectangular footprint → shoeboxes; a tree is round and tall. This revolves the FRONT
+// silhouette around the vertical axis (radius per height = its half-width), centred in the footprint, at the
+// full Base-layers height. Each voxel's colour = the AVERAGE of the front + side colour at that height, per
+// the artist's request. No wall art (views:null) → the averaged colour shows on every face.
+function buildDecorVolume(partId, foot, layers) {
+  const src = imgs[partId], N = foot * foot, empty = { vcol: new Uint8Array(layers * N * 3), filled: () => false, views: null, sp: null, dbg: {} };
+  const tol = keyTolState[partId], pol = polyState[partId], pk = pickState[partId];
+  const front = src.front ? keyedCropped(src.front, tol.front, pol.front, pk.front) : (src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : null);
+  if (!front) return empty;
+  const side = src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : front;
+  const Hv = Math.max(1, layers);                              // decor uses the full Base-layers height (trees are tall)
+  const pw = Math.max(2, Math.round(front.width / front.height * Hv));   // canopy diameter from the art aspect
+  const cx = (foot - 1) / 2, cy = (foot - 1) / 2, half = (pw - 1) / 2;
+  const fG = gridStretch(front, pw, Hv, true), sG = gridStretch(side, pw, Hv, true);
+  const rad = new Float32Array(Hv);                            // revolve radius per height = front silhouette half-width
+  for (let z = 0; z < Hv; z++) { let rm = -1; for (let a = 0; a < pw; a++) if (fG.m[z * pw + a]) { const dd = Math.abs(a - half); if (dd > rm) rm = dd; } rad[z] = rm + 0.5; }
+  const colAt = (g, z, off) => { const a = Math.round(half + off); if (a < 0 || a >= pw) return null; const i = z * pw + a; return g.m[i] ? [g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]] : null; };
+  const vcol = new Uint8Array(layers * N * 3), fill = new Uint8Array(layers * N);
+  for (let z = 0; z < Hv; z++) {
+    const r = rad[z]; if (r < 0.5) continue;
+    for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      const dx = x - cx, dy = y - cy; if (dx * dx + dy * dy > r * r) continue;
+      fill[z * N + y * foot + x] = 1;
+      const fc = colAt(fG, z, dy), sc = colAt(sG, z, dx), c = (z * N + y * foot + x) * 3;   // front↔y, side↔x
+      if (fc && sc) { vcol[c] = (fc[0] + sc[0]) >> 1; vcol[c + 1] = (fc[1] + sc[1]) >> 1; vcol[c + 2] = (fc[2] + sc[2]) >> 1; }
+      else { const cc = fc || sc || [90, 120, 60]; vcol[c] = cc[0]; vcol[c + 1] = cc[1]; vcol[c + 2] = cc[2]; }
+    }
+  }
+  const filled = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && !!fill[z * N + y * foot + x];
+  return { vcol, filled, views: null, sp: null, dbg: { bw: pw, bh: pw, Hv } };
+}
 function buildVolume(partId, foot, layers) {
   if (voxPart[partId]) return buildVoxVolume(voxPart[partId], foot, layers);   // imported .vox → use it directly
+  if (editingDecor && partId === 'body' && state.decorRevolve) return buildDecorVolume(partId, foot, layers);   // organic decor
   const src = imgs[partId], N = foot * foot;
   if (!src.top && !src.side && !src.front && !src.back) {   // ── no art at all → procedural placeholder ──
     const col = document.createElement('canvas'); col.width = col.height = foot;
@@ -1023,7 +1056,8 @@ function rotCanvas(im, rot) {                                                 //
   return c;
 }
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
-  barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null };
+  barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
+  decorRevolve: true };   // decor: carve as a solid of revolution (organic — trees/rocks) rather than the tank box intersection
 let bodyFaces = null, turretFaces = null, bodyBaked = null, turretBaked = null, lastPack = null;
 let voxMeta = null, voxTex = null, voxSpr = null, voxShadow = null, voxSig = '';   // orbit cube-render canvas
 let gVoxMeta = null, gVoxTex = null, gVoxSpr = null, gVoxShadow = null;            // in-game inset canvas
@@ -1602,7 +1636,14 @@ $('zScale').oninput = (e) => { state.zScale = +e.target.value / 100; $('zScaleV'
 $('smooth').onchange = (e) => { state.smooth = e.target.checked; };
 $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').textContent = state.sharp.toFixed(2); };
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
-$('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; gridSel = null; gridSelVox = null; gridSelView = null; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+$('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; if (editingDecor && b.dataset.p !== 'body') return; state.part = b.dataset.p; gridSel = null; gridSelVox = null; gridSelView = null; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+// decor is a single BODY part — force body-only so the turret placeholder never shows while authoring a prop
+function forceDecorBodyOnly() {
+  state.part = 'body';
+  [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.p === 'body'));
+  gridSel = null; gridSelVox = null; gridSelView = null;
+  renderGridView();
+}
 
 // ── grid-view panel: mode (paint vs geometry) + face selector + z-slice walker ──
 if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; gridSel = null; gridSelVox = null; gridSelView = null; [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
@@ -2700,7 +2741,8 @@ function loadDecorForEdit(id) {
   if ($('did')) $('did').value = id;
   if (entry && entry.pack) setDecorFields(entry.pack.decor);
   idb.get('decor:' + id).then((p) => {
-    if (p) return loadProject(p).then(() => { $('projState').textContent = `Loaded decor "${id}" — edit the body art, then re-bake/save in the 🌿 Decor panel.`; });
+    if (p) return loadProject(p).then(() => { forceDecorBodyOnly(); $('projState').textContent = `Loaded decor "${id}" — edit the body art, then re-bake/save in the 🌿 Decor panel.`; });
+    forceDecorBodyOnly();
     $('projState').textContent = `Decor "${id}" has no editable source on this browser (shipped only) — its baked pack still ships.`;
   }).catch((e) => { $('projState').textContent = `Load failed for decor "${id}": ${(e && e.message) || e}`; });
 }
@@ -2765,6 +2807,7 @@ if ($('bakeDecor')) $('bakeDecor').onclick = bakeDecor;
 if ($('saveDecor')) $('saveDecor').onclick = doSaveDecor;
 if ($('shipDecor')) $('shipDecor').onclick = shipDecor;
 if ($('decDensity')) $('decDensity').oninput = () => { $('decDensityV').textContent = $('decDensity').value; };
+if ($('decRevolve')) $('decRevolve').onchange = () => { state.decorRevolve = $('decRevolve').checked; gridModel = null; rebuildSlices(); renderGridView(); };
 renderDecorManifest();
 
 // ── PROJECT save/load: the full working state (source art, cutout tuning, every setting) as one snapshot.
@@ -2821,6 +2864,7 @@ function syncAllControls() {
   set('palN', state.paletteN, state.paletteN || 'full');
   set('sharp', Math.round(state.sharp * 100), state.sharp.toFixed(2)); set('bakeScale', state.bakeScale, state.bakeScale + '×');
   $('res').value = state.foot; $('smooth').checked = state.smooth; $('spin').checked = state.spin;
+  if ($('decRevolve')) $('decRevolve').checked = state.decorRevolve !== false;
   [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
   [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.p === state.part));
   rig.scale.set(state.zoom);
@@ -2965,10 +3009,18 @@ async function loadFaction(name) {
     editingDecor = null;
   }
   curFaction = name; roster = [];
-  if (name === DECOR_SET) {                                        // Terrain set: roster = saved decor props
+  if (name === DECOR_SET) {                                        // Terrain set = decor mode (body-only + revolve + decor: autosave)
+    if (!editingDecor) {                                          // arriving fresh from a unit → flush it, start a clean decor slate
+      clearTimeout(autosaveTimer);
+      try { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* flush unit */ }
+      editingDecor = (($('did') && $('did').value) || 'decor').trim();
+      clearSourceArt(); state.decorBaked = null; gridModel = null;
+      state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }
+      rebuildSlices();
+    }
     const dm = loadDecorManifest().decor || {};
     roster = Object.keys(dm).map((id) => ({ id, role: 'decor', shape: '🌿', decor: true }));
-    renderRoster(); return;
+    renderRoster(); forceDecorBodyOnly(); return;
   }
   const file = fileForFaction(name);
   if (file) {
@@ -3006,7 +3058,8 @@ $('addUnit').onclick = () => {
       else { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); }
     } catch (e) { /* best-effort */ }
     editingDecor = id; if ($('did')) $('did').value = id;
-    clearSourceArt(); state.decorBaked = null; gridModel = null; rebuildSlices();   // clean slate for the new prop
+    state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }   // decor tends tall — raise height
+    clearSourceArt(); state.decorBaked = null; gridModel = null; state.part = 'body'; rebuildSlices(); forceDecorBodyOnly();   // clean slate, body-only
     if (!roster.some((u) => u.id === id)) roster.push({ id, role: 'decor', shape: '🌿', decor: true });
     renderRoster();
     $('projState').textContent = `New decor "${id}" — load Top/Side/Front art as the body, set the 🌿 Decor panel, then Bake + Save.`;
