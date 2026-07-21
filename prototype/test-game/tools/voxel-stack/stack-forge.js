@@ -1231,6 +1231,10 @@ function renderGridView() {
     side:  { cols: foot, rows: layers, depth: foot,   axis: 'y', toVox: (c, r, s) => [c, s, layers - 1 - r] },
     front: { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [foot - 1 - s, foot - 1 - c, layers - 1 - r] },  // +x FRONT: raycast from +x, col→y so grid LEFT = model left (matches the orbit)
     back:  { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [s, c, layers - 1 - r] },                        // −x BACK: raycast from x=0, opposite-side col→y
+    // ¾ ANGLE (decor): a DIAGONAL slice along the (1,1) camera ray. col → the in-plane diagonal h = x−y
+    // (constant along a ray); depth s walks from the +x+y CORNER inward, so the first hit is the surface the
+    // game camera sees. Lets you paint the corner faces the Angle slab cut. cols span the full diagonal.
+    angle: { cols: foot * 2 - 1, rows: layers, depth: foot, axis: 'diag', toVox: (c, r, s) => { const h = c - (foot - 1), xs = Math.min(foot - 1, foot - 1 + h), x = xs - s; return [x, x - h, layers - 1 - r]; } },
   };
   const ax = AX[gridView] || AX.top, cols = ax.cols, rows = ax.rows, depth = ax.depth;
   gridLayer = clamp(gridLayer, 0, depth);   // 0 = surface projection (non-layer); 1..depth = real slices 0..depth-1
@@ -1238,6 +1242,7 @@ function renderGridView() {
   const geomMode = gridMode === 'geom';
   const lr = $('gridLayerRow'); if (lr) lr.style.display = '';    // layer slider useful in both modes
   const tr = $('gridToolRow'); if (tr) tr.style.display = geomMode ? 'none' : '';   // paint tools hidden in Geometry
+  if ($('gridReproj')) { const a = gridView === 'angle'; $('gridReproj').textContent = a ? '◇ Carve to outline' : '🖼 Re-project'; $('gridReproj').title = a ? 'Select the shape to KEEP, then this marks voxels outside the ¾ outline for deletion — press Delete to remove them.' : "Re-project this facing's source image onto the surface."; }
   const gr2 = $('gridGeoRow'); if (gr2) gr2.style.display = geomMode ? '' : 'none'; // geometry controls shown in Geometry
   // inline PAINT PALETTE — the model's colours as swatches, shown only in Paint mode (no need to open the Palette window)
   const gpal = $('gridPalette');
@@ -1362,6 +1367,7 @@ function renderGridView() {
       side:  { t: 'UP',    b: 'DOWN',  l: 'BACK',  r: 'FRONT', note: 'SIDE · viewed from the RIGHT (−Y)' },
       front: { t: 'UP',    b: 'DOWN',  l: 'LEFT',  r: 'RIGHT', note: 'FRONT · viewed from +X' },
       back:  { t: 'UP',    b: 'DOWN',  l: 'RIGHT', r: 'LEFT',  note: 'BACK · viewed from −X' },
+      angle: { t: 'UP',    b: 'DOWN',  l: 'LEFT',  r: 'RIGHT', note: '¾ ANGLE · diagonal slice along the +X+Y camera ray' },
     }[gridView];
     if (ORI) {
       const lab = (text, cx, cy, inside) => {
@@ -1448,6 +1454,7 @@ function renderGridView() {
     }
     ctx.strokeStyle = '#f2c869'; ctx.lineWidth = 1.5; ctx.beginPath();  // current-slice line (depth axis)
     if (gridView === 'side') { const yy = mmy + slice * mc + mc / 2; ctx.moveTo(mmx, yy); ctx.lineTo(mmx + mw, yy); }
+    else if (gridView === 'angle') { ctx.moveTo(mmx + slice * mc, mmy); ctx.lineTo(mmx, mmy + slice * mc); }   // diagonal slice, from the +x+y corner
     else { const sx = gridView === 'back' ? (foot - 1 - slice) : slice, xx = mmx + sx * mc + mc / 2; ctx.moveTo(xx, mmy); ctx.lineTo(xx, mmy + mw); }
     ctx.stroke();
     ctx.strokeStyle = 'rgba(120,160,200,.6)'; ctx.lineWidth = 1; ctx.strokeRect(mmx + .5, mmy + .5, mw - 1, mw - 1);
@@ -1662,6 +1669,9 @@ function setBackSlotLabel(txt) {
   if (s) s.textContent = txt;
   const sb = document.querySelector('.slotBtn[data-sp="body"][data-sv="back"]');   // Slice-a-Sheet destination
   if (sb) sb.textContent = txt;
+  const decorMode = txt === 'Angle ¾';                                             // only decor exposes the ¾ Angle grid facing
+  if ($('gridAngleBtn')) $('gridAngleBtn').style.display = decorMode ? '' : 'none';
+  if (!decorMode && gridView === 'angle') { gridView = 'top'; [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.v === 'top')); }
 }
 // decor is a single BODY part — force body-only so the turret placeholder never shows while authoring a prop
 function forceDecorBodyOnly() {
@@ -1827,6 +1837,25 @@ function reprojectSurface() {
   const snap = (r, gg, b) => { if (!pal.length) return [r, gg, b]; let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - gg) * (p[1] - gg) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } } return pal[bi]; };
   const useSelT = gridSelVox && gridSelVox.part === g.part;
   const firstHit1 = (cx, cy) => { for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) return v; } return null; };
+  // ¾ ANGLE view owns NO face (voxels are axis-aligned cubes), so it can't "paint a facing" — instead it
+  // PROJECTS a diagonal cut: marquee-select the shape to KEEP, and this marks every filled voxel whose
+  // diagonal projection (col = x−y+foot−1, row = layers−1−z) falls OUTSIDE the box for deletion. The button
+  // reads "◇ Carve to outline" here; press Delete to remove the marked voxels. An interactive ¾ carve.
+  if (gridView === 'angle') {
+    if (!gridSel) { alert('Angle carve: drag a ▢ Select box around the shape to KEEP first, then press ◇ Carve to outline.'); return false; }
+    const foot = g.foot, layers = g.layers;
+    const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
+    const outside = new Set();
+    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      if (!gridFilledAt(g, x, y, z)) continue;
+      const col = (x - y) + (foot - 1), row = layers - 1 - z;   // this voxel's cell in the Angle projection
+      if (col < c0 || col > c1 || row < r0 || row > r1) outside.add(z * N + y * foot + x);
+    }
+    if (!outside.size) { alert('Angle carve: every voxel is inside the outline — nothing to remove.'); return false; }
+    gridSelVox = { part: g.part, set: outside }; gridSelView = gridView;   // select the OUTSIDE voxels; Delete removes them
+    renderGridView();
+    return true;
+  }
   // TOP (units) has no side-sheet, and DECOR has no wall art at all (views:null — its colour is the baked
   // per-voxel front+side average). In both cases the source IS the carved vcol: re-project = restore it onto
   // the first face the ray hits, on ANY facing.
