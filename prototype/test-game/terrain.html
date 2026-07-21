@@ -420,6 +420,11 @@ function render() {
   spawns = spawnsByWave[selWave] || spawnsByWave[1] || [];
   decor = scatterDecor(last, o.seed);                 // clustered decor groves (may stamp blocking[] for blocking types)
   console.log('[decor] scattered', decor.length, 'prop(s) from', Object.keys(decorCatalog).length, 'catalog type(s)');
+  // #1: no resources in water or under a tree grove (keep crystals reachable). Water=6.
+  const decorCells = new Set(decor.map((d) => d.x + ',' + d.y));
+  const beforeN = resources.length;
+  resources = resources.filter((r) => last.terrain[r.y * o.cols + r.x] !== 6 && !decorCells.has(r.x + ',' + r.y));
+  if (resources.length !== beforeN) updResCounts();
   updResCounts();
   syncWaveUI();
   const px = cellPx(o);

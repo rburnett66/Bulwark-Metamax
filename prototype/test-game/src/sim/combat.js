@@ -134,7 +134,11 @@ export function acquireTarget(state, shooter) {
   if (!range || range <= 0) return null;
 
   if (shooter.side === 'attacker') {
-    if (shooter.targetsBase) {
+    // #4: JUGGERNAUTS shoot defences they pass while still advancing on the base — so unlike basic attackers
+    // (which ignore towers), they target the nearest structure in range like siege, falling back to the base.
+    // core.js only ever STOPS (engages) a base-targeter at the base, so a juggernaut keeps moving while it fires.
+    const isJugg = shooter.role === 'Juggernaut';
+    if (shooter.targetsBase && !isJugg) {
       // Basic attackers ignore towers entirely; they only attack the base.
       if (state.base && state.base.hp > 0 &&
           distBetween(shooter.pos, state.base.pos) <= range) {
@@ -142,7 +146,7 @@ export function acquireTarget(state, shooter) {
       }
       return null;
     }
-    // Targets:'Structures' (e.g. Artillery): nearest live structure in range.
+    // Structure hunters (Artillery) AND juggernauts: nearest live structure in range.
     let bestId = null;
     let bestD = Infinity;
     for (const s of state.structures.values()) {

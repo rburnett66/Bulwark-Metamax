@@ -1295,8 +1295,11 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           }
           const heading = spr.__heading || 0;
           spr.__facing = heading + UNIT_FACING_OFFSET;   // cargo/debug readers expect the sprite convention
-          // turret AIM: at the live combat target when there is one, else relax back to the heading
+          // turret AIM: live combat target > (#6) the BASE for small tanks (keep the objective in the crosshairs
+          // while they drive, whatever way they move) > relax to the heading. Juggernauts keep the default so
+          // their turret tracks the defences they pass (#4).
           let aim = heading;
+          if (u.domain === 'Walker' && u.role !== 'Juggernaut' && state.base && state.base.pos) aim = Math.atan2(state.base.pos.y - u.pos.y, state.base.pos.x - u.pos.x);
           const tid = u.targetId;
           if (tid !== null && tid !== undefined) {
             const tgt = (tid === -1) ? (state.base || null)
