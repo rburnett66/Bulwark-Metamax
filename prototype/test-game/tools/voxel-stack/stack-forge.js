@@ -107,35 +107,45 @@ function drawFit(ctx, img, w, h) {
 // background-coloured pixels. Only bg actually connected to the edge is removed, so it works when the
 // object runs off an edge (tank tracks) AND when bg floats between object parts (above/below a barrel) —
 // the flood reaches those pockets from the border and stops at the object outline. Feathers the AA edge.
-function keyBackground(data, w, h, tol) {
+function keyBackground(data, w, h, tol, picks) {
   tol = tol || 75;                                                   // cutout sensitivity (per-image, tunable)
-  const c = (x, y) => { const i = (y * w + x) * 4; return [data[i], data[i + 1], data[i + 2], data[i + 3]]; };
-  const cs = [c(0, 0), c(w - 1, 0), c(0, h - 1), c(w - 1, h - 1)];
-  const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
-  // background seed = the opaque border colour shared by the most corners (majority vote)
-  let seed = null, best = 0;
-  for (const q of cs) { if (q[3] < 200) continue; let n = 0; for (const r of cs) if (r[3] > 200 && dist(q, r) < 45) n++; if (n > best) { best = n; seed = q; } }
-  if (!seed) return;                                                 // no opaque border colour → leave as-is
-  const kr = seed[0], kg = seed[1], kb = seed[2];
-  const near = (p) => Math.abs(data[p * 4] - kr) + Math.abs(data[p * 4 + 1] - kg) + Math.abs(data[p * 4 + 2] - kb);
-  // SATURATION GUARD: a background key must never remove a pixel that is much more CHROMATIC than the
-  // background seed. A white/grey seed (chroma≈0) would otherwise let a high tolerance eat saturated
-  // subject pixels (dark-green leaves touching white). Chroma = max−min channel; we only remove where the
-  // pixel is at most SAT_GUARD more saturated than the seed — so raising the slider erases stubborn
-  // off-white without ever touching green. Relative to the seed, so a coloured background still keys.
-  const satOf = (p) => { const r = data[p * 4], g = data[p * 4 + 1], b = data[p * 4 + 2]; return Math.max(r, g, b) - Math.min(r, g, b); };
-  const seedSat = Math.max(kr, kg, kb) - Math.min(kr, kg, kb), SAT_GUARD = 40;
-  const bgOK = (p) => (satOf(p) - seedSat) <= SAT_GUARD;            // false → a saturated subject pixel, keep it
+  const satC = (r, g, b) => Math.max(r, g, b) - Math.min(r, g, b), SAT_GUARD = 40;
+  // SEED COLOURS: explicit eyedropper picks ("touch to remove") take over; otherwise majority-vote the
+  // opaque corners for the background colour. Multiple picks let you knock out several tints in one go;
+  // each pick can also carry the clicked point so an INTERIOR patch of that colour (not touching the
+  // border) still floods.
+  let seeds, seedPts = [];
+  if (picks && picks.length) {
+    seeds = picks.map((p) => p.col);
+    seedPts = picks.filter((p) => p.pt).map((p) => p.pt);
+  } else {
+    const c = (x, y) => { const i = (y * w + x) * 4; return [data[i], data[i + 1], data[i + 2], data[i + 3]]; };
+    const cs = [c(0, 0), c(w - 1, 0), c(0, h - 1), c(w - 1, h - 1)];
+    const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+    let seed = null, best = 0;
+    for (const q of cs) { if (q[3] < 200) continue; let n = 0; for (const r of cs) if (r[3] > 200 && dist(q, r) < 45) n++; if (n > best) { best = n; seed = q; } }
+    if (!seed) return;                                               // no opaque border colour → leave as-is
+    seeds = [[seed[0], seed[1], seed[2]]];
+  }
+  const seedSat = seeds.map((s) => satC(s[0], s[1], s[2]));
+  // nearest seed (Manhattan) + its index → the tolerance test and the per-seed CHROMA GUARD below.
+  const nearInfo = (p) => { const r = data[p * 4], g = data[p * 4 + 1], b = data[p * 4 + 2]; let bd = 1e9, bi = 0;
+    for (let i = 0; i < seeds.length; i++) { const s = seeds[i], d = Math.abs(r - s[0]) + Math.abs(g - s[1]) + Math.abs(b - s[2]); if (d < bd) { bd = d; bi = i; } } return [bd, bi]; };
+  // SATURATION GUARD: never remove a pixel much more CHROMATIC than the matched seed (chroma = max−min).
+  // A white/grey seed (chroma≈0) would otherwise let a high tolerance eat saturated subject pixels
+  // (dark-green leaves touching white). Relative to the seed, so a coloured background still keys.
+  const okChroma = (p, bi) => (satC(data[p * 4], data[p * 4 + 1], data[p * 4 + 2]) - seedSat[bi]) <= SAT_GUARD;
   const N = w * h, vis = new Uint8Array(N), st = [];
   const hard = tol * 0.8, soft = tol * 1.75, span = Math.max(1, soft - hard);   // feather band scales with tol
-  const push = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const p = y * w + x; if (!vis[p] && near(p) < tol && bgOK(p)) { vis[p] = 1; st.push(p); } };
+  const push = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const p = y * w + x; if (vis[p]) return; const ni = nearInfo(p); if (ni[0] < tol && okChroma(p, ni[1])) { vis[p] = 1; st.push(p); } };
   for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }        // seed the whole border
   for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
+  for (const pt of seedPts) push(pt[0] | 0, pt[1] | 0);             // eyedropper points seed interior regions too
   while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1); }
   for (let p = 0; p < N; p++) {
     if (vis[p]) { data[p * 4 + 3] = 0; continue; }                   // flooded background → transparent
-    const d = near(p);                                              // feather AA pixels touching removed bg
-    if (d < soft && bgOK(p)) {                                      // …but never feather a saturated subject edge
+    const ni = nearInfo(p), d = ni[0];                             // feather AA pixels touching removed bg
+    if (d < soft && okChroma(p, ni[1])) {                           // …but never feather a saturated subject edge
       const x = p % w, y = (p / w) | 0;
       if ((x > 0 && vis[p - 1]) || (x < w - 1 && vis[p + 1]) || (y > 0 && vis[p - w]) || (y < h - 1 && vis[p + w]))
         data[p * 4 + 3] = d < hard ? 0 : Math.min(data[p * 4 + 3], Math.round((d - hard) / span * 255));
@@ -145,10 +155,10 @@ function keyBackground(data, w, h, tol) {
 // raster an image at native size and knock out its background → a canvas with clean alpha. Optional polygon
 // shapes ({ pts:[[x,y]…], cut }) then edit the result: KEEP shapes union into the subject (everything outside
 // all keeps is removed), CUT shapes punch holes. Keying runs FIRST (the flood needs the real image borders).
-function keyedCanvas(img, tol, polys) {
+function keyedCanvas(img, tol, polys, picks) {
   const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
   const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
-  const id = g.getImageData(0, 0, cv.width, cv.height); keyBackground(id.data, cv.width, cv.height, tol); g.putImageData(id, 0, 0);
+  const id = g.getImageData(0, 0, cv.width, cv.height); keyBackground(id.data, cv.width, cv.height, tol, picks); g.putImageData(id, 0, 0);
   if (polys && polys.length) {
     const trace = (list) => { g.beginPath();
       for (const q of list) { g.moveTo(q.pts[0][0], q.pts[0][1]); for (let i = 1; i < q.pts.length; i++) g.lineTo(q.pts[i][0], q.pts[i][1]); g.closePath(); } g.fill(); };
@@ -161,8 +171,8 @@ function keyedCanvas(img, tol, polys) {
 }
 // keyed + CROPPED to the content bounding box — so empty margins and the raw image aspect ratio don't
 // distort registration (a long-barrel side view maps its CONTENT, not the whole rectangle).
-function keyedCropped(img, tol, poly) {
-  const k = keyedCanvas(img, tol, poly), d = k.getContext('2d').getImageData(0, 0, k.width, k.height).data;
+function keyedCropped(img, tol, poly, picks) {
+  const k = keyedCanvas(img, tol, poly, picks), d = k.getContext('2d').getImageData(0, 0, k.width, k.height).data;
   let x0 = k.width, y0 = k.height, x1 = -1, y1 = -1;
   for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
   if (x1 < x0) return k;
@@ -337,10 +347,10 @@ function buildVolume(partId, foot, layers) {
   }
   // crop every view to its content, then register by a COMMON scale taken from the top's fit — so the
   // side's height maps PROPORTIONALLY (a long-barrel side doesn't get stretched vertically to fill layers).
-  const tol = keyTolState[partId], pol = polyState[partId];
-  const topC = src.top ? keyedCropped(src.top, tol.top, pol.top) : null;
-  const sideC = src.side ? keyedCropped(src.side, tol.side, pol.side) : null;
-  const frontC = src.front ? keyedCropped(src.front, tol.front, pol.front) : (src.back ? keyedCropped(src.back, tol.back, pol.back) : null);
+  const tol = keyTolState[partId], pol = polyState[partId], pk = pickState[partId];
+  const topC = src.top ? keyedCropped(src.top, tol.top, pol.top, pk.top) : null;
+  const sideC = src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : null;
+  const frontC = src.front ? keyedCropped(src.front, tol.front, pol.front, pk.front) : (src.back ? keyedCropped(src.back, tol.back, pol.back, pk.back) : null);
   const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
   // procedural barrel reserves a FORWARD margin so the body shrinks back and the tube protrudes past it
   const reach = (partId === 'turret' && state.barrelLen > 0) ? state.barrelLen : 0;
@@ -358,7 +368,7 @@ function buildVolume(partId, foot, layers) {
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
   const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to the common Hv)
   const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
-  const backC = src.back ? keyedCropped(src.back, tol.back, pol.back) : null; // colour-only: paints the −x walls
+  const backC = src.back ? keyedCropped(src.back, tol.back, pol.back, pk.back) : null; // colour-only: paints the −x walls
   const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
   const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= z0 && z < z0 + Hv && !!sideG.m[(z - z0) * bw + (x - ox)]) : (z >= z0 && z < z0 + Hv);
   const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv && !!frontG.m[(z - z0) * bh + (y - oy)]) : (z >= z0 && z < z0 + Hv);
@@ -984,6 +994,7 @@ const flipState = { body: mkViews(() => ({ h: false, v: false })), turret: mkVie
 const rotState = { body: mkViews(() => 0), turret: mkViews(() => 0) };        // per-image rotation (0/90/180/270 CW)
 const keyTolState = { body: mkViews(() => 75), turret: mkViews(() => 75) };   // per-image cutout sensitivity
 const polyState = { body: mkViews(() => null), turret: mkViews(() => null) }; // per-image polygon cutout ([x,y] px)
+const pickState = { body: mkViews(() => []), turret: mkViews(() => []) };     // per-image eyedropper "touch to remove" colours: [{col:[r,g,b], pt:[x,y]}]
 const imgURLCache = { body: mkViews(() => null), turret: mkViews(() => null) }; // PNG data-URL cache (project saves)
 const voxB64 = { body: null, turret: null };                                  // base64 cache of imported .vox data
 const palMap = new Map();                    // palette tuner: pre-tune colour key → replacement [r,g,b]
@@ -1361,7 +1372,7 @@ function renderGridView() {
     const rng = (info) => { const s = bsp[spanKey[info.axis]], cap = capOf(info.axis); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
     const cR = rng(g.col), rR = rng(g.row);
     const bx = ox + cR.lo * cell, by = oy + rR.lo * cell, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cell;
-    const keyed = imgs[part][gridView] ? keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView]) : null;
+    const keyed = imgs[part][gridView] ? keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]) : null;
     if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
@@ -1987,7 +1998,7 @@ function setView(pick, im) {
   voxPart[part] = null; voxB64[part] = null;                                  // photos override an imported .vox
   srcImg[part][view] = im; flipState[part][view] = { h: false, v: false };   // new image → clear flips
   rotState[part][view] = 0;
-  keyTolState[part][view] = 75; polyState[part][view] = null;                // …and reset the cutout tuning
+  keyTolState[part][view] = 75; polyState[part][view] = null; pickState[part][view] = [];   // …and reset the cutout tuning
   imgURLCache[part][view] = null;
   renderView(pick);
 }
@@ -1997,7 +2008,7 @@ function renderView(pick) {
   const fl = flipState[part][view], flipped = (fl.h || fl.v) ? flipCanvas(src, fl.h, fl.v) : src;
   const rot = rotState[part][view] || 0, im = rot ? rotCanvas(flipped, rot) : flipped;
   imgs[part][view] = im;
-  const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 128, 84); drawFit(g, keyedCanvas(im, keyTolState[part][view], polyState[part][view]), 128, 84);
+  const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 128, 84); drawFit(g, keyedCanvas(im, keyTolState[part][view], polyState[part][view], pickState[part][view]), 128, 84);
   pick.classList.add('set'); updateFlipBtns(pick);
   if (!bulkLoad) rebuildSlices();                                             // restore rebuilds once at the end
 }
@@ -2046,21 +2057,32 @@ let keyTarget = null, workPolys = [], workPoly = [], polyDrawing = false, polyCu
 // zoom/pan viewport for the cutout tuner: keyScale = fit scale (image→canvas), keyZoom ≥1 magnifies, and
 // keyPan{X,Y} is the top-left of the visible region in IMAGE px. Effective scale = keyScale·keyZoom.
 let keyZoom = 1, keyPanX = 0, keyPanY = 0;
+// eyedropper "touch to remove": workPicks = [{col:[r,g,b], pt:[x,y]}] sampled from the ORIGINAL image;
+// pickMode arms the next canvas click to sample instead of drawing a polygon. keyOrig caches the raw
+// (un-keyed) pixels so a pick reads the true source colour, not the already-keyed preview.
+let workPicks = [], pickMode = false, keyOrig = null;
+const clonePicks = (list) => (list || []).map((q) => ({ col: q.col.slice(), pt: q.pt ? q.pt.slice() : null }));
 const clonePolys = (list) => list.map((q) => ({ cut: !!q.cut, pts: q.pts.map((p) => p.slice()) }));
 function syncPolyBtns() {
   $('keyPoly').classList.toggle('on', polyDrawing);
   $('keyPoly').textContent = polyDrawing ? '✏ Click points… (click 1st to close)' : '✏ Draw polygon';
   $('keyPolyInv').classList.toggle('on', polyCut);
   $('keyPolyInv').textContent = polyCut ? '➖ Cut inside' : '➕ Keep inside';
-  $('keyCanvas').style.cursor = polyDrawing ? 'crosshair' : 'default';
+  if ($('keyPick')) { $('keyPick').classList.toggle('on', pickMode); $('keyPick').textContent = pickMode ? '🎯 Click a colour to remove…' : '🎯 Pick colour to remove'; }
+  $('keyCanvas').style.cursor = (polyDrawing || pickMode) ? 'crosshair' : 'default';
 }
 function openKeyModal(part, view) {
   if (!imgs[part][view]) return;                                   // nothing loaded in this slot yet
   keyTarget = { part, view };
+  const im = imgs[part][view];
+  const oc = document.createElement('canvas'); oc.width = im.width; oc.height = im.height;   // raw source for the eyedropper
+  const og = oc.getContext('2d', { willReadFrequently: true }); og.drawImage(im, 0, 0);
+  keyOrig = og.getImageData(0, 0, im.width, im.height);
   $('keyTitle').textContent = (part === 'body' ? 'base' : part) + ' · ' + view;
   $('keyTol').value = keyTolState[part][view]; $('keyTolV').textContent = keyTolState[part][view];
   workPolys = clonePolys(polyState[part][view] || []);
-  workPoly = []; polyDrawing = false; polyCut = false; syncPolyBtns();
+  workPicks = clonePicks(pickState[part][view]);
+  workPoly = []; polyDrawing = false; polyCut = false; pickMode = false; syncPolyBtns();
   keyZoom = 1; keyPanX = 0; keyPanY = 0;                            // reset the zoom viewport for a fresh image
   renderKeyPreview();
   $('keyModal').hidden = false;
@@ -2077,7 +2099,7 @@ function renderKeyPreview() {
   const toX = (ix) => (ix - keyPanX) * sx, toY = (iy) => (iy - keyPanY) * sx;   // image px → canvas px
   const g = cv.getContext('2d'); g.imageSmoothingEnabled = sx < 1;
   g.clearRect(0, 0, cv.width, cv.height);
-  g.drawImage(keyedCanvas(im, +$('keyTol').value, workPolys), keyPanX, keyPanY, regionW, regionH, 0, 0, cv.width, cv.height);
+  g.drawImage(keyedCanvas(im, +$('keyTol').value, workPolys, workPicks), keyPanX, keyPanY, regionW, regionH, 0, 0, cv.width, cv.height);
   const d = g.getImageData(0, 0, cv.width, cv.height).data, w = cv.width, hh = cv.height;   // outline overlay
   const solid = (x, y) => x >= 0 && x < w && y >= 0 && y < hh && d[(y * w + x) * 4 + 3] > 40;
   g.fillStyle = '#ff4fd8';
@@ -2092,6 +2114,11 @@ function renderKeyPreview() {
     g.fillStyle = col;
     for (const p of pts) g.fillRect(toX(p[0]) - 2, toY(p[1]) - 2, 4, 4);
   };
+  for (const pk of workPicks) if (pk.pt) {                          // 🎯 marker at each sampled colour, ringed white
+    const px = toX(pk.pt[0] + 0.5), py = toY(pk.pt[1] + 0.5);
+    g.beginPath(); g.arc(px, py, 5, 0, Math.PI * 2); g.fillStyle = `rgb(${pk.col[0]},${pk.col[1]},${pk.col[2]})`; g.fill();
+    g.lineWidth = 1.5; g.strokeStyle = '#fff'; g.stroke();
+  }
   for (const q of workPolys) drawPoly(q.pts, true, q.cut ? '#e0625f' : '#f2c869');
   if (workPoly.length) {
     drawPoly(workPoly, false, polyCut ? '#e0625f' : '#f2c869');
@@ -2103,10 +2130,15 @@ function renderKeyPreview() {
   }
 }
 $('keyCanvas').addEventListener('click', (e) => {
-  if (!polyDrawing) return;
+  if (!polyDrawing && !pickMode) return;
   const cv = $('keyCanvas'), r = cv.getBoundingClientRect(), css = cv.width / r.width;    // CSS px → canvas px
   const sx = keyScale * keyZoom;                                   // canvas px → image px through the zoom viewport
   const x = (e.clientX - r.left) * css / sx + keyPanX, y = (e.clientY - r.top) * css / sx + keyPanY;
+  if (pickMode) {                                                  // 🎯 eyedropper: sample the RAW source colour + seed point
+    const ix = Math.max(0, Math.min(keyOrig.width - 1, x | 0)), iy = Math.max(0, Math.min(keyOrig.height - 1, y | 0)), o = (iy * keyOrig.width + ix) * 4;
+    if (keyOrig.data[o + 3] > 20) { workPicks.push({ col: [keyOrig.data[o], keyOrig.data[o + 1], keyOrig.data[o + 2]], pt: [ix, iy] }); renderKeyPreview(); }
+    return;
+  }
   if (workPoly.length >= 3) {                                      // close by clicking the first point…
     const dx = (workPoly[0][0] - x) * sx, dy = (workPoly[0][1] - y) * sx;   // threshold in canvas px
     if (dx * dx + dy * dy < 120) {                                 // …and stay in draw mode for the next shape
@@ -2125,7 +2157,7 @@ $('keyCanvas').addEventListener('wheel', (e) => {
   const mx = (e.clientX - r.left) * css, my = (e.clientY - r.top) * css;    // cursor in canvas px
   const sx0 = keyScale * keyZoom;
   const iu = mx / sx0 + keyPanX, iv = my / sx0 + keyPanY;                    // image point under the cursor
-  keyZoom = Math.max(1, Math.min(20, keyZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+  keyZoom = Math.max(1, Math.min(80, keyZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));   // up to 80× so single pixels are trimmable on 4K art
   const sx1 = keyScale * keyZoom;
   keyPanX = iu - mx / sx1; keyPanY = iv - my / sx1;                          // re-anchor so that point stays put
   renderKeyPreview();
@@ -2140,10 +2172,15 @@ $('keyPolyUndo').onclick = () => {
   renderKeyPreview();
 };
 $('keyPolyClear').onclick = () => { workPolys = []; workPoly = []; renderKeyPreview(); };
+// 🎯 eyedropper "touch to remove": arm/undo/clear the picked background colours
+if ($('keyPick')) $('keyPick').onclick = () => { pickMode = !pickMode; if (pickMode) { polyDrawing = false; workPoly = []; } syncPolyBtns(); renderKeyPreview(); };
+if ($('keyPickUndo')) $('keyPickUndo').onclick = () => { workPicks.pop(); renderKeyPreview(); };
+if ($('keyPickClear')) $('keyPickClear').onclick = () => { workPicks = []; renderKeyPreview(); };
 $('keyTol').oninput = () => { $('keyTolV').textContent = $('keyTol').value; renderKeyPreview(); };
 $('keyApply').onclick = () => {
   keyTolState[keyTarget.part][keyTarget.view] = +$('keyTol').value;
   polyState[keyTarget.part][keyTarget.view] = workPolys.length ? clonePolys(workPolys) : null;
+  pickState[keyTarget.part][keyTarget.view] = clonePicks(workPicks);
   $('keyModal').hidden = true;
   renderView(pickFor(keyTarget.part, keyTarget.view));             // re-key the thumb + re-carve the model
 };
@@ -2153,6 +2190,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || $('keyModal').hidden) return;
   if (workPoly.length) { workPoly = []; renderKeyPreview(); }      // cancel the unfinished shape…
   else if (polyDrawing) { polyDrawing = false; syncPolyBtns(); renderKeyPreview(); }   // …then exit draw mode…
+  else if (pickMode) { pickMode = false; syncPolyBtns(); renderKeyPreview(); }         // …then exit the eyedropper…
   else $('keyModal').hidden = true;                                // …then close the dialog
 });
 
@@ -2734,7 +2772,7 @@ function snapshotProject(idOverride) {
   }
   const st = { ...state }; delete st.baked;
   return { format: 'stackforge-project', version: 2, id: (idOverride || $('uid').value || 'unit').trim(),
-    state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, images, vox,
+    state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, picks: pickState, images, vox,
     palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop],
     voxEdit: { body: [...voxEdit.body], turret: [...voxEdit.turret] },
     geom: { body: { ...geomState.body }, turret: { ...geomState.turret } } };
@@ -2777,6 +2815,7 @@ async function loadProject(p) {
         rotState[part][v] = (p.rots && p.rots[part] && p.rots[part][v]) || 0;
         keyTolState[part][v] = (p.keyTol && p.keyTol[part] && p.keyTol[part][v]) || 75;
         polyState[part][v] = (p.polys && p.polys[part] && p.polys[part][v]) || null;
+        pickState[part][v] = (p.picks && p.picks[part] && p.picks[part][v]) || [];
         const pick = pickFor(part, v), url = p.images && p.images[part] && p.images[part][v];
         if (url) { srcImg[part][v] = await loadImgURL(url); imgURLCache[part][v] = url; renderView(pick); }
         else {
@@ -2921,7 +2960,7 @@ function clearSourceArt() {
     voxPart[part] = null; voxB64[part] = null;
     for (const v of VIEWS) {
       srcImg[part][v] = null; imgs[part][v] = null; imgURLCache[part][v] = null;
-      flipState[part][v] = { h: false, v: false }; rotState[part][v] = 0; keyTolState[part][v] = 75; polyState[part][v] = null;
+      flipState[part][v] = { h: false, v: false }; rotState[part][v] = 0; keyTolState[part][v] = 75; polyState[part][v] = null; pickState[part][v] = [];
       const pick = pickFor(part, v);
       if (pick) { pick.classList.remove('set'); updateFlipBtns(pick); const cvs = pick.querySelector('canvas'); if (cvs) cvs.getContext('2d').clearRect(0, 0, cvs.width, cvs.height); }
     }

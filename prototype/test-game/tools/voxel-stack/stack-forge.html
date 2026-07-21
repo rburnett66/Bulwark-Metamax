@@ -412,18 +412,25 @@
   <div id="keyBox">
     <h2>Tune cutout — <span id="keyTitle"></span></h2>
     <canvas id="keyCanvas" width="460" height="320"></canvas>
-    <div class="row"><label>Sensitivity</label><input type="range" id="keyTol" min="5" max="220" value="75"><span class="val" id="keyTolV">75</span></div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
+    <div class="row"><label>Sensitivity</label><input type="range" id="keyTol" min="5" max="320" value="75"><span class="val" id="keyTolV">75</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      <button class="ghost" id="keyPick">🎯 Pick colour to remove</button>
+      <button class="ghost" id="keyPickUndo">↩ Undo pick</button>
+      <button class="ghost" id="keyPickClear">✕ Clear picks</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
       <button class="ghost" id="keyPoly">✏ Draw polygon</button>
       <button class="ghost" id="keyPolyInv">➕ Keep inside</button>
       <button class="ghost" id="keyPolyUndo">↩ Undo</button>
       <button class="ghost" id="keyPolyClear">✕ Clear</button>
     </div>
-    <div class="note" style="margin:0 0 8px">Sensitivity: higher removes more background (looser match to the border colour),
-      lower keeps more edge pixels. <b>Polygons</b>: click to place points, click the first point to close a shape, draw as many
-      as you need. <b style="color:#f2c869">Keep</b> shapes union into the subject (everything outside all keeps is cut);
-      <b style="color:#e0625f">Cut</b> shapes remove what's inside them. Toggle the mode button before closing a shape.
-      Esc cancels an unfinished shape. The magenta line is the final cutout outline the carve + wall painting will use.</div>
+    <div class="note" style="margin:0 0 8px">Sensitivity: higher removes more background (looser match to the seed colour),
+      lower keeps more edge pixels. Saturated subject colours are protected, so you can raise it to erase stubborn off-white
+      without eating (e.g.) green leaves. <b style="color:#7fd4c2">🎯 Pick colour</b>: click the button, then click any background
+      colour in the image to knock it out — click several tints to remove them all (each ringed marker is one pick). <b>Zoom</b>:
+      <b>Shift + scroll</b> magnifies toward the cursor up to 80× so single pixels are trimmable on 4K art.
+      <b>Polygons</b>: click points, click the first to close; <b style="color:#f2c869">Keep</b> shapes union into the subject,
+      <b style="color:#e0625f">Cut</b> shapes remove what's inside. Esc backs out of the current mode. The magenta line is the final cutout outline.</div>
     <div style="display:flex;gap:8px"><button id="keyApply">Apply</button><button class="ghost" id="keyCancel">Cancel</button></div>
   </div>
 </div>
