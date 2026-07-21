@@ -633,11 +633,14 @@ function renderParts(ctx, S, cx, groundY, el, parts) {
 // Build the voxel set for the CURRENT marquee rect in the current facing/slice (Layer 0 = whole column
 // through depth = "select the objects"). Called on commit to freeze the selection into voxels so it can
 // then persist across facing switches.
-function buildSelVox() {
+function buildSelVox(surfaceOnly) {
   if (!gridSel || !gridGeom) return null;
   const g = gridGeom, foot = g.foot, N = foot * foot, set = new Set();
   const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
-  const through = g.slice === 0;   // Layer 0 = surface projection → selection spans the WHOLE column (all depth); real layers stay limited to that one layer
+  // Layer 0 marquee = select the WHOLE column through depth ("select the objects", for cross-facing painting).
+  // surfaceOnly (Select layer) stays on the visible surface — else a full-rect Layer-0 selection on the Top
+  // view would grab the entire model (every z in every column). Real layers always stay limited to their slice.
+  const through = !surfaceOnly && g.slice === 0;
   for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
     if (through) { for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s); set.add(z * N + y * foot + x); } }
     else { const [x, y, z] = gridTargetVox(g, cx, cy); set.add(z * N + y * foot + x); }
@@ -1641,7 +1644,7 @@ if ($('gridMirrorRL')) $('gridMirrorRL').onclick = () => mirrorGrid('col', false
 if ($('gridMirrorTB')) $('gridMirrorTB').onclick = () => mirrorGrid('row', true);    // top → bottom, across the horizontal centreline
 if ($('gridMirrorBT')) $('gridMirrorBT').onclick = () => mirrorGrid('row', false);   // bottom → top
 // select every cell on the current layer (a whole-layer selection to paint/erase within)
-if ($('gridSelLayer')) $('gridSelLayer').onclick = () => { const g = gridGeom; if (!g) return; gridSel = { c0: 0, r0: 0, c1: g.cols - 1, r1: g.rows - 1 }; gridSelView = gridView; gridSelVox = buildSelVox(); renderGridView(); };
+if ($('gridSelLayer')) $('gridSelLayer').onclick = () => { const g = gridGeom; if (!g) return; gridSel = { c0: 0, r0: 0, c1: g.cols - 1, r1: g.rows - 1 }; gridSelView = gridView; gridSelVox = buildSelVox(true); renderGridView(); };
 // delete EVERY voxel in the active selection (the surface voxels on Layer 0, or the slice voxels on a real
 // layer). Shared by Delete/Backspace and by pressing Erase while a selection is active.
 // ── UNDO / REDO for grid voxel edits (paint/erase strokes + bulk ops). Snapshots the voxEdit layer. ──
@@ -1726,11 +1729,28 @@ if ($('gridDiag')) $('gridDiag').onclick = () => gridDiag();
 // axis convention (across-axis + height→up), so it fixes offset/scale — if it comes out mirrored, that's a
 // separate flip to confirm.
 function reprojectSurface() {
-  const g = gridGeom; if (!g || !g.editable) { alert('Re-project: switch to a paint facing (Front / Side / Back).'); return false; }
+  const g = gridGeom; if (!g || !g.editable) { alert('Re-project: switch to a paint facing (Top / Front / Side / Back).'); return false; }
+  const N = g.foot * g.foot, ed = voxEdit[g.part];
+  const pal = (gridModel && gridModel.palette) || [];
+  const snap = (r, gg, b) => { if (!pal.length) return [r, gg, b]; let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - gg) * (p[1] - gg) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } } return pal[bi]; };
+  const useSelT = gridSelVox && gridSelVox.part === g.part;
+  const firstHit1 = (cx, cy) => { for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) return v; } return null; };
+  if (gridView === 'top') {                            // TOP has no side-sheet — its source IS the top-down carve colour
+    const vcol = gridModel && gridModel.vcol; if (!vcol) { alert('Re-project: no top-down colour to project.'); return false; }
+    const pend = [];
+    for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
+      const v = firstHit1(cx, cy); if (!v) continue;   // topmost filled voxel in this column
+      const x = v[0], y = v[1], z = v[2], k = z * N + y * g.foot + x;
+      if (useSelT && !gridSelVox.set.has(k)) continue;
+      const c = k * 3; pend.push([k, snap(vcol[c], vcol[c + 1], vcol[c + 2])]);
+    }
+    if (!pend.length) { alert('Re-project (Top): no surface' + (useSelT ? ' in the selection.' : '.')); return false; }
+    pushUndo(); for (const [k, col] of pend) ed.set(k, col);
+    gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); return true;
+  }
   const V = gridModel && gridModel.views;
   const src = gridView === 'side' ? (V && V.side) : gridView === 'front' ? (V && V.front) : gridView === 'back' ? (V && (V.back || V.front)) : null;
   if (!src || !src.m) { alert('Re-project: no source image for this facing (Top has none).'); return false; }
-  const ed = voxEdit[g.part], N = g.foot * g.foot;
   // source image content bbox — the drawn pixels only
   let iX0 = 1e9, iX1 = -1, iY0 = 1e9, iY1 = -1;
   for (let iy = 0; iy < src.h; iy++) for (let ix = 0; ix < src.w; ix++) if (src.m[iy * src.w + ix]) { if (ix < iX0) iX0 = ix; if (ix > iX1) iX1 = ix; if (iy < iY0) iY0 = iy; if (iy > iY1) iY1 = iy; }
@@ -1738,20 +1758,25 @@ function reprojectSurface() {
   // gather this facing's surface voxels + the model silhouette bbox in the two in-plane WORLD axes (across, z)
   const colAxis = gridView === 'side' ? 'x' : 'y';     // side → world x across; front/back → world y across
   const useSel = gridSelVox && gridSelVox.part === g.part;
-  const firstHit = (cx, cy) => { for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) return v; } return null; };
+  const bothSides = gridView === 'side';               // one side sheet feeds BOTH ±y walls → do left AND right in one pass
+  // the surface faces the ray hits: NEAR (from s=0) always; the FAR side too on the Side facing.
+  const rayHits = (cx, cy) => {
+    const out = [];
+    for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) { out.push(v); break; } }
+    if (bothSides) for (let s = g.depth - 1; s >= 0; s--) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) { if (!out.length || out[0][0] !== v[0] || out[0][1] !== v[1] || out[0][2] !== v[2]) out.push(v); break; } }
+    return out;
+  };
   const surf = []; let c0 = 1e9, c1 = -1, r0 = 1e9, r1 = -1;
   for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
-    const v = firstHit(cx, cy); if (!v) continue;      // FIRST face the ray hits only — never deeper voxels
-    const x = v[0], y = v[1], z = v[2], k = z * N + y * g.foot + x;
-    if (useSel && !gridSelVox.set.has(k)) continue;
-    const cv = colAxis === 'x' ? x : y;
-    if (cv < c0) c0 = cv; if (cv > c1) c1 = cv; if (z < r0) r0 = z; if (z > r1) r1 = z;
-    surf.push([k, cv, z]);
+    for (const v of rayHits(cx, cy)) {                 // FIRST face(s) the ray hits — near (+ far on Side); never interior voxels
+      const x = v[0], y = v[1], z = v[2], k = z * N + y * g.foot + x;
+      if (useSel && !gridSelVox.set.has(k)) continue;
+      const cv = colAxis === 'x' ? x : y;
+      if (cv < c0) c0 = cv; if (cv > c1) c1 = cv; if (z < r0) r0 = z; if (z > r1) r1 = z;
+      surf.push([k, cv, z]);
+    }
   }
   if (!surf.length) { alert('Re-project: no target surface' + (useSel ? ' within the selection.' : '.')); return false; }
-  // nearest-colour snap to the model's active (reduced/tuned) palette — "pick the nearest colour"
-  const pal = (gridModel && gridModel.palette) || [];
-  const snap = (r, gg, b) => { if (!pal.length) return [r, gg, b]; let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - gg) * (p[1] - gg) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } } return pal[bi]; };
   const sampleArt = (ix, iy) => {                     // nearest drawn pixel within a small radius (silhouettes have gaps)
     for (let rad = 0; rad <= 2; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
       const px = ix + dx, py = iy + dy; if (px < 0 || py < 0 || px >= src.w || py >= src.h) continue;
