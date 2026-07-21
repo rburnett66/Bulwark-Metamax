@@ -174,7 +174,7 @@ export function buildVoxelUnit(store, id, tilePx, radius, spriteOverCollision) {
       s.anchor.set(p.def.pivot[0] / p.def.cell[0], p.def.pivot[1] / p.def.cell[1]);   // same pivot as the sprite
       s.scale.set(scale);
       s.tint = 0x000000; s.alpha = alpha;
-      s.__gx = 0; s.__gy = 0;                                       // shear is baked in; sits at the contact point
+      s.__gx = shOffX * 0.5; s.__gy = shOffY * 0.5; s.position.set(s.__gx, s.__gy);   // #3: nudge the cast OUT toward the light so short bodies (tanks) don't sit on top of their own shadow
       return s;
     }
     const s = mk(p);                                                // legacy fallback: squashed/sheared top sprite

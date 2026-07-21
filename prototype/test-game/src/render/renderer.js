@@ -650,7 +650,7 @@ function emitCombatFx(renderer, state) {
         const tp = targetPos(st.targetId);
         if (tp) {
           const lp = cellToLocal(renderer, tp.x, tp.y);
-          const ty = lp.y - (tp.air ? t * 0.35 : 0);
+          const ty = lp.y - (tp.air ? t * 1.05 : 0);
           // owner 2026-07-16: tower defense reads as a SPRAY of bullets — 4-round jittered burst
           if (st.kind === 'antiGround') fire('s' + st.id, c, { x: lp.x, y: ty }, 'shell', 0.55, 13, 0xffd080, 4);
           else fire('s' + st.id, c, { x: lp.x, y: ty }, 'flak', 0.35, 18, 0x9fd4ff);
@@ -668,7 +668,7 @@ function emitCombatFx(renderer, state) {
       if (!d) continue;
       const p = cellToLocal(renderer, u.pos.x, u.pos.y);
       const isFlyer = u.domain === 'Flyer';
-      const lift = isFlyer ? t * 0.35 : 0;
+      const lift = isFlyer ? t * 1.05 : 0;   // planes fly 3× higher now that trees stand on the board
       // TANK DUST (owner 2026-07-16): ground movers kick up dust at their tracks while rolling
       if (!isFlyer) {
         const lm = renderer._lastUnitPos || (renderer._lastUnitPos = new Map());
@@ -689,7 +689,7 @@ function emitCombatFx(renderer, state) {
         if (tp) {
           const lp = cellToLocal(renderer, tp.x, tp.y);
           const grounded = d.shape === 'Tanks' || d.shape === 'Heavy Tanks' || d.shape === 'Artillery';
-          fire('u' + u.id, { x: p.x, y: p.y - lift }, { x: lp.x, y: lp.y - (tp.air ? t * 0.35 : 0) },
+          fire('u' + u.id, { x: p.x, y: p.y - lift }, { x: lp.x, y: lp.y - (tp.air ? t * 1.05 : 0) },
             grounded ? 'shell' : 'tracer', 0.6, 15, u.side === 'attacker' ? 0xff9a70 : 0xbfe8ff);
         }
       }
@@ -1277,7 +1277,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         }
         if (spr) {
           const pa = cellToLocal(renderer, u.pos.x, u.pos.y);
-          const flyLift = (u.domain === 'Flyer' ? t * 0.35 : 0);
+          const flyLift = (u.domain === 'Flyer' ? t * 1.05 : 0);
           spr.x = pa.x; spr.y = pa.y - flyLift;
           spr.zIndex = pa.y;                              // Story 4: sort with decor by ground-contact y
           spr.visible = true;
@@ -1323,7 +1323,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
             }
           }
           // hp bar only — the unit carries its own silhouette shadow (no flat ellipse for voxel units)
-          drawHpBar((u.domain === 'Flyer' ? gA : gU), pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
+          drawHpBar(gH, pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: on the structHp layer so it draws OVER trees
           continue;   // voxel sprite drawn — skip authored art and the primitive
         }
       }
@@ -1341,7 +1341,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         }
         if (spr) {
           const pa = cellToLocal(renderer, u.pos.x, u.pos.y);
-          const flyLift = (u.domain === 'Flyer' ? t * 0.35 : 0);
+          const flyLift = (u.domain === 'Flyer' ? t * 1.05 : 0);
           spr.x = pa.x; spr.y = pa.y - flyLift;
           spr.zIndex = pa.y;                              // Story 4: sort with decor by ground-contact y
           spr.visible = true;
@@ -1404,7 +1404,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
             child.x = sx * cf + sy * sf;
             child.y = -sx * sf + sy * cf;
           }
-          drawHpBar((u.domain === 'Flyer' ? gA : gU), pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
+          drawHpBar(gH, pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: on the structHp layer so it draws OVER trees
           continue;   // sprite drawn — skip the primitive
         }
       }
@@ -1422,7 +1422,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         gA.lineStyle(1, 0x101418, 0.7);
         gA.drawCircle(p.x, p.y, 2);
         gA.lineStyle(0);
-        drawHpBar(gA, p.x, py - r - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));
+        drawHpBar(gH, p.x, py - r - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: over trees
       } else if (u.domain === 'Floater' || u.domain === 'Swimmer') {
         gU.beginFill(color, 1);
         gU.drawEllipse(p.x, p.y, r * 1.15, r * 0.7);
@@ -1430,7 +1430,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         gU.lineStyle(1, 0x101418, 0.8);
         gU.drawEllipse(p.x, p.y, r * 1.15, r * 0.7);
         gU.lineStyle(0);
-        drawHpBar(gU, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));
+        drawHpBar(gH, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: over trees
       } else {
         gU.beginFill(color, 1);
         gU.drawCircle(p.x, p.y, r);
@@ -1438,7 +1438,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         gU.lineStyle(1, 0x101418, 0.8);
         gU.drawCircle(p.x, p.y, r);
         gU.lineStyle(0);
-        drawHpBar(gU, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));
+        drawHpBar(gH, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: over trees
       }
     }
   }
