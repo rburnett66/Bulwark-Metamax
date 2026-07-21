@@ -1654,11 +1654,14 @@ $('smooth').onchange = (e) => { state.smooth = e.target.checked; };
 $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').textContent = state.sharp.toFixed(2); };
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
 $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; if (editingDecor && b.dataset.p !== 'body') return; state.part = b.dataset.p; gridSel = null; gridSelVox = null; gridSelView = null; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
-// relabel the body's back view slot ("Back" ⇄ "Angle ¾") — decor repurposes it as the optional ¾ view
+// relabel the body's back slot ("Back" ⇄ "Angle ¾") everywhere it appears — the view drop slot AND the
+// Slice-a-Sheet destination button — since decor repurposes Back as the optional ¾ view.
 function setBackSlotLabel(txt) {
   const bk = document.querySelector('.vpick[data-part="body"][data-view="back"]');
   const s = bk && bk.closest('.vslot') && bk.closest('.vslot').querySelector('.vmeta span');
   if (s) s.textContent = txt;
+  const sb = document.querySelector('.slotBtn[data-sp="body"][data-sv="back"]');   // Slice-a-Sheet destination
+  if (sb) sb.textContent = txt;
 }
 // decor is a single BODY part — force body-only so the turret placeholder never shows while authoring a prop
 function forceDecorBodyOnly() {
