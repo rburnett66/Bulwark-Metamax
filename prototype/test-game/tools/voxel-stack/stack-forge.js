@@ -3039,17 +3039,21 @@ async function loadFaction(name) {
   }
   curFaction = name; roster = [];
   if (name === DECOR_SET) {                                        // Terrain set = decor mode (body-only + revolve + decor: autosave)
-    if (!editingDecor) {                                          // arriving fresh from a unit → flush it, start a clean decor slate
+    // roster = every decor the browser knows: baked (manifest) + IN-PROGRESS WIP (IndexedDB decor:*)
+    const dm = loadDecorManifest().decor || {}, ids = new Set(Object.keys(dm));
+    try { const keys = (await idb.keys()) || []; for (const k of keys) if (typeof k === 'string' && k.startsWith('decor:')) ids.add(k.slice(6)); } catch (e) { /* no store */ }
+    roster = [...ids].map((id) => ({ id, role: dm[id] ? 'baked' : 'WIP', shape: '🌿', decor: true, wip: !dm[id] }));
+    if (!editingDecor) {                                          // arriving fresh from a unit
       clearTimeout(autosaveTimer);
       try { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* flush unit */ }
-      editingDecor = (($('did') && $('did').value) || 'decor').trim();
+      const lastDecor = (() => { try { return localStorage.getItem('bulwark:sf:lastDecor'); } catch (e) { return null; } })();
+      if (lastDecor && ids.has(lastDecor)) { renderRoster(); loadDecorForEdit(lastDecor); return; }   // reopen your last prop
+      editingDecor = (($('did') && $('did').value) || 'decor').trim();   // else a clean new slate
       resetPalette();
       clearSourceArt(); state.decorBaked = null; gridModel = null;
       state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }
       rebuildSlices();
     }
-    const dm = loadDecorManifest().decor || {};
-    roster = Object.keys(dm).map((id) => ({ id, role: 'decor', shape: '🌿', decor: true }));
     renderRoster(); forceDecorBodyOnly(); return;
   }
   const file = fileForFaction(name);
@@ -3070,7 +3074,8 @@ function renderRoster() {
     const card = document.createElement('div'); card.className = 'ucard' + (u.id === selId ? ' sel' : ''); card.dataset.uid = u.id;
     const atlas = has && supplied[u.id].atlases ? (decorSet ? supplied[u.id].atlases.decor : supplied[u.id].atlases.body) : null;
     const name = decorSet ? u.id : u.id.replace(/^[A-Za-z]+-/, '');   // decor shows its FULL id (matches the Unit Id field); units drop the faction prefix
-    card.innerHTML = `<canvas width="76" height="56"></canvas><div class="un">${name}</div><div class="ur">${u.role || '—'}</div><div class="badge ${has ? 'ok' : 'no'}">${has ? '✓ supplied' : 'needs art'}</div>`;
+    const badge = decorSet ? (has ? '✓ baked' : '● WIP') : (has ? '✓ supplied' : 'needs art');   // decor WIP is real saved work, not "needs art"
+    card.innerHTML = `<canvas width="76" height="56"></canvas><div class="un">${name}</div><div class="ur">${u.role || '—'}</div><div class="badge ${has ? 'ok' : 'no'}">${badge}</div>`;
     const g = card.querySelector('canvas').getContext('2d');
     if (atlas) { const im = new Image(); im.onload = () => { g.clearRect(0, 0, 76, 56); g.drawImage(im, 0, 0, 76, 56); }; im.src = atlas; }
     else { g.fillStyle = '#132234'; g.fillRect(0, 0, 76, 56); g.fillStyle = '#3c5670'; g.font = '9px sans-serif'; g.textAlign = 'center'; g.fillText(u.shape || u.role || '?', 38, 32); }
