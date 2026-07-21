@@ -331,13 +331,13 @@ function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
   const spanZ = span(g.spanZ, layers);
   return { spanX: span(g.spanX, foot), spanY: span(g.spanY, foot), spanZ, Hraw: spanZ.hi - spanZ.lo };
 }
-// DECOR carve — a tall shaped solid for organic props (trees, rocks). The tank pipeline intersects
-// Front∩Side through a rectangular footprint → shoeboxes; a prop is round and tall. This LOFTS a cross
-// section per height whose radius varies BY DIRECTION: the Front half-width along one axis, the Side
-// half-width along the other, and — when a ¾ ANGLE view is supplied (the otherwise-unused Back slot) — the
-// Angle half-width at the 45° corner. Front+Side alone → an ellipse; +Angle → a directionally-shaped blob
-// (no longer a pure circle), which is what a prop seen from one fixed camera angle wants. Each voxel's
-// colour = the average of the front+side colour at that height. No wall art (views:null) → colour on every face.
+// DECOR carve — a tall shaped solid for organic props (trees, rocks) via a VISUAL HULL. The tank pipeline
+// intersects Front∩Side through a rectangular footprint at unit proportions → shoeboxes. Here each supplied
+// view is a SLAB that slices the volume at its per-height half-width, and its mirror carves the opposite
+// face: Front bounds ±y, Side bounds ±x, and the optional ¾ ANGLE view (the otherwise-unused Back slot,
+// relabelled "Angle ¾") bounds the diagonal. Three views → a 6-sided (hexagonal) cross-section that tapers
+// with height; Front+Side alone → 4 sides. Each voxel's colour = the average of the front+side colour at
+// that height. No wall art (views:null) → colour shows on every face.
 function buildDecorVolume(partId, foot, layers) {
   const src = imgs[partId], N = foot * foot, empty = { vcol: new Uint8Array(layers * N * 3), filled: () => false, views: null, sp: null, dbg: {} };
   const tol = keyTolState[partId], pol = polyState[partId], pk = pickState[partId];
@@ -351,21 +351,18 @@ function buildDecorVolume(partId, foot, layers) {
   const fG = gridStretch(front, pw, Hv, true), sG = gridStretch(side, pw, Hv, true), aG = angle ? gridStretch(angle, pw, Hv, true) : null;
   const halfW = (g) => { const arr = new Float32Array(Hv); for (let z = 0; z < Hv; z++) { let rm = -1; for (let a = 0; a < pw; a++) if (g.m[z * pw + a]) { const dd = Math.abs(a - half); if (dd > rm) rm = dd; } arr[z] = rm + 0.5; } return arr; };
   const rF = halfW(fG), rS = halfW(sG), rA = aG ? halfW(aG) : null;   // per-height half-widths (front↔y-axis, side↔x-axis, angle↔45°)
-  // radius for a voxel's direction: fold to the [x-axis..y-axis] octant, then interpolate through the
-  // control radii (side at the x-axis, angle at 45°, front at the y-axis).
-  const radAt = (z, dx, dy) => {
-    const ax = Math.abs(dx), ay = Math.abs(dy);
-    const t = (ax === 0 && ay === 0) ? 0 : Math.atan2(ay, ax) / (Math.PI / 2);   // 0 = along x (side), 1 = along y (front)
-    const rs = rS[z], rf = rF[z];
-    if (rA) { const ra = rA[z]; return t <= 0.5 ? rs + (ra - rs) * (t * 2) : ra + (rf - ra) * ((t - 0.5) * 2); }
-    return rs + (rf - rs) * t;
-  };
+  const HALF = Math.SQRT1_2;   // the ¾ view is a DIAGONAL slab: keep where |(dx−dy)/√2| ≤ its half-width
   const colAt = (g, z, off) => { const a = Math.round(half + off); if (a < 0 || a >= pw) return null; const i = z * pw + a; return g.m[i] ? [g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]] : null; };
   const vcol = new Uint8Array(layers * N * 3), fill = new Uint8Array(layers * N);
   for (let z = 0; z < Hv; z++) {
-    if (rF[z] < 0.5 && rS[z] < 0.5) continue;
+    const rf = rF[z], rs = rS[z]; if (rf < 0.5 && rs < 0.5) continue;
+    const ra = rA ? rA[z] : Infinity;
     for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-      const dx = x - cx, dy = y - cy, r = radAt(z, dx, dy); if (r < 0.5 || dx * dx + dy * dy > r * r) continue;
+      const dx = x - cx, dy = y - cy;
+      // VISUAL-HULL INTERSECTION: each view is a slab that slices the volume; its mirror gives the opposite
+      // face. Front bounds ±y, Side bounds ±x, the ¾ Angle bounds the diagonal → 3 views = a 6-sided
+      // (hexagonal) cross-section that tapers by the per-height half-widths. No angle view → 4 sides.
+      if (Math.abs(dy) > rf || Math.abs(dx) > rs || Math.abs((dx - dy) * HALF) > ra) continue;
       fill[z * N + y * foot + x] = 1;
       const fc = colAt(fG, z, dy), sc = colAt(sG, z, dx), c = (z * N + y * foot + x) * 3;   // front↔y, side↔x
       if (fc && sc) { vcol[c] = (fc[0] + sc[0]) >> 1; vcol[c + 1] = (fc[1] + sc[1]) >> 1; vcol[c + 2] = (fc[2] + sc[2]) >> 1; }
