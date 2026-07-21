@@ -1007,6 +1007,10 @@ let suppressSquashWarn = false;                                              // 
 // the STABLE key the WIP autosaves under — set only by an explicit load/save/new, NOT by the free-text
 // Unit-id box. This keeps a stray edit to that box from misfiling the unit you're actually editing.
 let activeUnitId = 'unit';
+// DECOR set: when set to a decor id, the editor is working on a DECOR (Terrain set), NOT a unit — WIP
+// autosaves under a separate `decor:` IndexedDB namespace so authoring decor can never collide with or
+// overwrite a unit (the Tree-1 wipe). Cleared whenever a unit is loaded.
+let editingDecor = null;
 function flipCanvas(im, h, v) {
   const w = im.width, hh = im.height, c = document.createElement('canvas'); c.width = w; c.height = hh;
   const g = c.getContext('2d'); g.translate(h ? w : 0, v ? hh : 0); g.scale(h ? -1 : 1, v ? -1 : 1); g.drawImage(im, 0, 0); return c;
@@ -2676,6 +2680,30 @@ function decorFields() {
   const blocks = !!($('decBlocks') && $('decBlocks').checked);
   return { affinity, density, blocks };
 }
+function setDecorFields(d) {                                        // restore the 🌿 panel from a saved decor's metadata
+  d = d || {};
+  for (const t of DECOR_TERRAINS) { const c = $('decAff_' + t); if (c) c.checked = (d.affinity || []).includes(t); }
+  if ($('decDensity')) { $('decDensity').value = d.density != null ? d.density : 50; if ($('decDensityV')) $('decDensityV').textContent = $('decDensity').value; }
+  if ($('decBlocks')) $('decBlocks').checked = !!d.blocks;
+}
+// Terrain set: clicking a decor card LOADS the prop for editing (never saves). Flushes whatever we were on
+// under its own namespace first, switches into decor editing (WIP isolated to `decor:`), restores the body
+// art from the decor WIP + the panel fields from the saved pack. Saving stays explicit (🌿 Save/Ship).
+function loadDecorForEdit(id) {
+  clearTimeout(autosaveTimer);
+  try {
+    if (editingDecor) { const out = snapshotProject(editingDecor); if (projectHasContent(out)) idb.put('decor:' + editingDecor, out); }
+    else { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); }
+  } catch (e) { /* best-effort flush */ }
+  editingDecor = id;
+  const entry = (loadDecorManifest().decor || {})[id];
+  if ($('did')) $('did').value = id;
+  if (entry && entry.pack) setDecorFields(entry.pack.decor);
+  idb.get('decor:' + id).then((p) => {
+    if (p) return loadProject(p).then(() => { $('projState').textContent = `Loaded decor "${id}" — edit the body art, then re-bake/save in the 🌿 Decor panel.`; });
+    $('projState').textContent = `Decor "${id}" has no editable source on this browser (shipped only) — its baked pack still ships.`;
+  }).catch((e) => { $('projState').textContent = `Load failed for decor "${id}": ${(e && e.message) || e}`; });
+}
 function bakeDecor() {
   if (!bodyFaces) { alert('Decor: author the prop as the BODY first (load Top / Side / Front in step 1), then Bake decor.'); return; }
   const foot = state.foot, bL = state.bodyLayers, sp = layerSp(state.el), B = state.bakeScale;
@@ -2716,9 +2744,12 @@ function doSaveDecor() {
   m.config = { camera: built.pack.camera, light: built.pack.light };
   m.decor = m.decor || {}; m.decor[built.pack.id] = built;
   try { localStorage.setItem(DECOR_MANIFEST_KEY, JSON.stringify(m)); } catch (e) { $('decorSaveState').textContent = 'Save failed (storage full — ship instead).'; return; }
+  editingDecor = built.pack.id;                                    // now editing this decor → WIP isolates to decor:
+  try { idb.put('decor:' + built.pack.id, snapshotProject(built.pack.id)); } catch (e) { /* WIP is best-effort */ }
   $('decorSaveState').innerHTML = `<span class="lock">Saved decor "${built.pack.id}" ✓</span>`;
   if ($('decorPackJson')) $('decorPackJson').textContent = JSON.stringify(built.pack, null, 2);
   renderDecorManifest();
+  if (isDecorSet()) loadFaction(DECOR_SET);                        // refresh the Terrain roster with the new/updated prop
 }
 async function shipDecor() {
   try {
@@ -2866,11 +2897,13 @@ async function doAutosave() {
   if (bulkLoad || loadingUnit) { return; }                // in-flight load owns the slot — don't write over it
   clearTimeout(autosaveTimer);
   try {
-    const p = snapshotProject(activeUnitId);               // key off the loaded unit, not the mutable id box
+    const decorId = editingDecor;                          // editing a DECOR → isolate the WIP to the decor: namespace
+    const p = snapshotProject(decorId || activeUnitId);    // key off the loaded unit/decor, not the mutable id box
     if (!projectHasContent(p)) { setWipStatus('— nothing to save', 'muted'); return; }   // don't clobber a real WIP with an empty snapshot
-    await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id);
+    if (decorId) { await idb.put('decor:' + decorId, p); localStorage.setItem('bulwark:sf:lastDecor', decorId); }
+    else { await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id); }
     const t = new Date().toLocaleTimeString();
-    $('projState').textContent = `Autosaved "${p.id}" · ${t}`;
+    $('projState').textContent = `Autosaved ${decorId ? 'decor ' : ''}"${p.id}" · ${t}`;
     setWipStatus(`✓ saved ${t}`, 'saved');
   } catch (e) { setWipStatus('⚠ save failed', 'dirty'); }
 }
@@ -2899,7 +2932,11 @@ $('projLoad').addEventListener('change', (e) => {
 });
 
 // ── faction unit set (left panel): ALL factions; a window per unit (empty = "needs art"); add units ──
-const FACTIONS = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water', 'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies (Chem)', 'System'];
+// The Terrain set is a decor-only pseudo-faction: its roster comes from the DECOR manifest, cards LOAD a
+// prop for editing (never save), and everything routes through the isolated decor flow — no unit collision.
+const DECOR_SET = '🌿 Terrain (decor)';
+const isDecorSet = () => curFaction === DECOR_SET;
+const FACTIONS = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water', 'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies (Chem)', 'System', DECOR_SET];
 const ROLES = ['Skirmisher', 'Support', 'Bruiser', 'Siege', 'Juggernaut', 'Harasser', 'Striker', 'Guided AA'];
 const prefixFor = (name) => (name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'UNI');
 let filesIndex = [], curFaction = null, roster = [];
@@ -2923,7 +2960,16 @@ function fileForFaction(name) {
   return filesIndex.find((f) => norm(f).includes(key));
 }
 async function loadFaction(name) {
+  if (name !== DECOR_SET && editingDecor) {                        // leaving the Terrain set for units → flush + exit decor editing
+    try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) idb.put('decor:' + editingDecor, dout); } catch (e) { /* flush */ }
+    editingDecor = null;
+  }
   curFaction = name; roster = [];
+  if (name === DECOR_SET) {                                        // Terrain set: roster = saved decor props
+    const dm = loadDecorManifest().decor || {};
+    roster = Object.keys(dm).map((id) => ({ id, role: 'decor', shape: '🌿', decor: true }));
+    renderRoster(); return;
+  }
   const file = fileForFaction(name);
   if (file) {
     try { const d = await (await fetch('../../content/units/' + file)).json(); const u = d.units || {};
@@ -2933,21 +2979,39 @@ async function loadFaction(name) {
   renderRoster();
 }
 function renderRoster() {
-  const grid = $('unitGrid'), supplied = suppliedUnits();
+  const decorSet = isDecorSet();
+  const grid = $('unitGrid'), supplied = decorSet ? (loadDecorManifest().decor || {}) : suppliedUnits();
   grid.innerHTML = ''; let n = 0;
   for (const u of roster) {
     const has = !!supplied[u.id]; if (has) n++;
-    const card = document.createElement('div'); card.className = 'ucard' + (u.id === $('uid').value ? ' sel' : ''); card.dataset.uid = u.id;
+    const selId = decorSet ? editingDecor : $('uid').value;
+    const card = document.createElement('div'); card.className = 'ucard' + (u.id === selId ? ' sel' : ''); card.dataset.uid = u.id;
+    const atlas = has && supplied[u.id].atlases ? (decorSet ? supplied[u.id].atlases.decor : supplied[u.id].atlases.body) : null;
     card.innerHTML = `<canvas width="76" height="56"></canvas><div class="un">${u.id.replace(/^[A-Za-z]+-/, '')}</div><div class="ur">${u.role || '—'}</div><div class="badge ${has ? 'ok' : 'no'}">${has ? '✓ supplied' : 'needs art'}</div>`;
     const g = card.querySelector('canvas').getContext('2d');
-    if (has && supplied[u.id].atlases && supplied[u.id].atlases.body) { const im = new Image(); im.onload = () => { g.clearRect(0, 0, 76, 56); g.drawImage(im, 0, 0, 76, 56); }; im.src = supplied[u.id].atlases.body; }
+    if (atlas) { const im = new Image(); im.onload = () => { g.clearRect(0, 0, 76, 56); g.drawImage(im, 0, 0, 76, 56); }; im.src = atlas; }
     else { g.fillStyle = '#132234'; g.fillRect(0, 0, 76, 56); g.fillStyle = '#3c5670'; g.font = '9px sans-serif'; g.textAlign = 'center'; g.fillText(u.shape || u.role || '?', 38, 32); }
-    card.onclick = () => onCardClick(u.id);
+    card.onclick = decorSet ? () => loadDecorForEdit(u.id) : () => onCardClick(u.id);
     grid.appendChild(card);
   }
-  $('setState').innerHTML = `<b>${curFaction}</b> — <span class="lock">${n}/${roster.length}</span> supplied`;
+  $('setState').innerHTML = `<b>${curFaction}</b> — <span class="lock">${n}/${roster.length}</span> ${decorSet ? 'decor' : 'supplied'}`;
 }
 $('addUnit').onclick = () => {
+  if (isDecorSet()) {                                              // Terrain set: start a FRESH decor prop on a clean editor
+    const id = (prompt('New decor id:', 'decor-' + (roster.length + 1)) || '').trim();
+    if (!id) return;
+    clearTimeout(autosaveTimer);
+    try {                                                          // flush whatever we were on under its own namespace first
+      if (editingDecor) { const out = snapshotProject(editingDecor); if (projectHasContent(out)) idb.put('decor:' + editingDecor, out); }
+      else { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); }
+    } catch (e) { /* best-effort */ }
+    editingDecor = id; if ($('did')) $('did').value = id;
+    clearSourceArt(); state.decorBaked = null; gridModel = null; rebuildSlices();   // clean slate for the new prop
+    if (!roster.some((u) => u.id === id)) roster.push({ id, role: 'decor', shape: '🌿', decor: true });
+    renderRoster();
+    $('projState').textContent = `New decor "${id}" — load Top/Side/Front art as the body, set the 🌿 Decor panel, then Bake + Save.`;
+    return;
+  }
   const p = prefixFor(curFaction || 'UNI'), id = (prompt('New unit id:', `${p}-U${roster.length + 1}`) || '').trim();
   if (!id) return;
   if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
@@ -2972,6 +3036,7 @@ function selectUnit(id) {
   // cancel any click-armed autosave, and block autosaves until the incoming unit finishes loading — the
   // async load must own the slot, or a stale-model autosave overwrites the unit you're switching to.
   clearTimeout(autosaveTimer);
+  if (editingDecor) { try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) idb.put('decor:' + editingDecor, dout); } catch (e) { /* flush decor */ } editingDecor = null; }   // leaving decor editing for a unit
   try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }
   undoStack.length = 0; redoStack.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
   loadingUnit = true;
