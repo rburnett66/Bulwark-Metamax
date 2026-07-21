@@ -331,29 +331,41 @@ function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
   const spanZ = span(g.spanZ, layers);
   return { spanX: span(g.spanX, foot), spanY: span(g.spanY, foot), spanZ, Hraw: spanZ.hi - spanZ.lo };
 }
-// DECOR carve — a tall SOLID OF REVOLUTION for organic props (trees, rocks). The tank pipeline intersects
-// Front∩Side through a rectangular footprint → shoeboxes; a tree is round and tall. This revolves the FRONT
-// silhouette around the vertical axis (radius per height = its half-width), centred in the footprint, at the
-// full Base-layers height. Each voxel's colour = the AVERAGE of the front + side colour at that height, per
-// the artist's request. No wall art (views:null) → the averaged colour shows on every face.
+// DECOR carve — a tall shaped solid for organic props (trees, rocks). The tank pipeline intersects
+// Front∩Side through a rectangular footprint → shoeboxes; a prop is round and tall. This LOFTS a cross
+// section per height whose radius varies BY DIRECTION: the Front half-width along one axis, the Side
+// half-width along the other, and — when a ¾ ANGLE view is supplied (the otherwise-unused Back slot) — the
+// Angle half-width at the 45° corner. Front+Side alone → an ellipse; +Angle → a directionally-shaped blob
+// (no longer a pure circle), which is what a prop seen from one fixed camera angle wants. Each voxel's
+// colour = the average of the front+side colour at that height. No wall art (views:null) → colour on every face.
 function buildDecorVolume(partId, foot, layers) {
   const src = imgs[partId], N = foot * foot, empty = { vcol: new Uint8Array(layers * N * 3), filled: () => false, views: null, sp: null, dbg: {} };
   const tol = keyTolState[partId], pol = polyState[partId], pk = pickState[partId];
   const front = src.front ? keyedCropped(src.front, tol.front, pol.front, pk.front) : (src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : null);
   if (!front) return empty;
   const side = src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : front;
+  const angle = src.back ? keyedCropped(src.back, tol.back, pol.back, pk.back) : null;   // ¾ view (Back slot) — optional
   const Hv = Math.max(1, layers);                              // decor uses the full Base-layers height (trees are tall)
   const pw = Math.max(2, Math.round(front.width / front.height * Hv));   // canopy diameter from the art aspect
   const cx = (foot - 1) / 2, cy = (foot - 1) / 2, half = (pw - 1) / 2;
-  const fG = gridStretch(front, pw, Hv, true), sG = gridStretch(side, pw, Hv, true);
-  const rad = new Float32Array(Hv);                            // revolve radius per height = front silhouette half-width
-  for (let z = 0; z < Hv; z++) { let rm = -1; for (let a = 0; a < pw; a++) if (fG.m[z * pw + a]) { const dd = Math.abs(a - half); if (dd > rm) rm = dd; } rad[z] = rm + 0.5; }
+  const fG = gridStretch(front, pw, Hv, true), sG = gridStretch(side, pw, Hv, true), aG = angle ? gridStretch(angle, pw, Hv, true) : null;
+  const halfW = (g) => { const arr = new Float32Array(Hv); for (let z = 0; z < Hv; z++) { let rm = -1; for (let a = 0; a < pw; a++) if (g.m[z * pw + a]) { const dd = Math.abs(a - half); if (dd > rm) rm = dd; } arr[z] = rm + 0.5; } return arr; };
+  const rF = halfW(fG), rS = halfW(sG), rA = aG ? halfW(aG) : null;   // per-height half-widths (front↔y-axis, side↔x-axis, angle↔45°)
+  // radius for a voxel's direction: fold to the [x-axis..y-axis] octant, then interpolate through the
+  // control radii (side at the x-axis, angle at 45°, front at the y-axis).
+  const radAt = (z, dx, dy) => {
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    const t = (ax === 0 && ay === 0) ? 0 : Math.atan2(ay, ax) / (Math.PI / 2);   // 0 = along x (side), 1 = along y (front)
+    const rs = rS[z], rf = rF[z];
+    if (rA) { const ra = rA[z]; return t <= 0.5 ? rs + (ra - rs) * (t * 2) : ra + (rf - ra) * ((t - 0.5) * 2); }
+    return rs + (rf - rs) * t;
+  };
   const colAt = (g, z, off) => { const a = Math.round(half + off); if (a < 0 || a >= pw) return null; const i = z * pw + a; return g.m[i] ? [g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]] : null; };
   const vcol = new Uint8Array(layers * N * 3), fill = new Uint8Array(layers * N);
   for (let z = 0; z < Hv; z++) {
-    const r = rad[z]; if (r < 0.5) continue;
+    if (rF[z] < 0.5 && rS[z] < 0.5) continue;
     for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-      const dx = x - cx, dy = y - cy; if (dx * dx + dy * dy > r * r) continue;
+      const dx = x - cx, dy = y - cy, r = radAt(z, dx, dy); if (r < 0.5 || dx * dx + dy * dy > r * r) continue;
       fill[z * N + y * foot + x] = 1;
       const fc = colAt(fG, z, dy), sc = colAt(sG, z, dx), c = (z * N + y * foot + x) * 3;   // front↔y, side↔x
       if (fc && sc) { vcol[c] = (fc[0] + sc[0]) >> 1; vcol[c + 1] = (fc[1] + sc[1]) >> 1; vcol[c + 2] = (fc[2] + sc[2]) >> 1; }
@@ -1645,10 +1657,17 @@ $('smooth').onchange = (e) => { state.smooth = e.target.checked; };
 $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').textContent = state.sharp.toFixed(2); };
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
 $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; if (editingDecor && b.dataset.p !== 'body') return; state.part = b.dataset.p; gridSel = null; gridSelVox = null; gridSelView = null; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+// relabel the body's back view slot ("Back" ⇄ "Angle ¾") — decor repurposes it as the optional ¾ view
+function setBackSlotLabel(txt) {
+  const bk = document.querySelector('.vpick[data-part="body"][data-view="back"]');
+  const s = bk && bk.closest('.vslot') && bk.closest('.vslot').querySelector('.vmeta span');
+  if (s) s.textContent = txt;
+}
 // decor is a single BODY part — force body-only so the turret placeholder never shows while authoring a prop
 function forceDecorBodyOnly() {
   state.part = 'body';
   [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.p === 'body'));
+  setBackSlotLabel('Angle ¾');                        // the Back slot holds the optional 3/4 view for the decor loft
   gridSel = null; gridSelVox = null; gridSelView = null;
   renderGridView();
 }
@@ -3103,6 +3122,7 @@ function selectUnit(id) {
   if (editingDecor) { try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) idb.put('decor:' + editingDecor, dout); } catch (e) { /* flush decor */ } editingDecor = null; }   // leaving decor editing for a unit
   try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }
   resetPalette();                                        // per-unit palette — clear it (a WIP re-applies its own via loadProject)
+  setBackSlotLabel('Back');                              // units use the Back slot as the rear view again
   undoStack.length = 0; redoStack.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
   loadingUnit = true;
   $('uid').value = id; activeUnitId = id;                 // anchor the WIP key to the unit being loaded
