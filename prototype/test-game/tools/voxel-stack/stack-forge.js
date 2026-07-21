@@ -1148,6 +1148,7 @@ let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn
 let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
 let gridAlign = false;                                   // ⊞ Align T/S: carved TOP projection stacked above SIDE, length-aligned (read-only, Pass 1)
 let gridBoxSel = null;                                    // transient marquee being dragged {c0,r0,c1,r1} in grid cells
+let gridLasso = null, lassoMode = false;                 // Story 5: ◇ Angle lasso — freeform outline (cell points) for the visual-hull carve
 let gridSel = null;                                       // last marquee rect (in gridSelView's facing) — for the dashed outline in that one view
 let gridSelView = null;                                   // which gridView the gridSel rect belongs to
 let gridSelVox = null;                                    // PERSISTENT selection { part, set:<voxel keys> } — survives facing/layer switches, so a Layer-0 object selection can be painted on every face without reselecting
@@ -1266,6 +1267,7 @@ function renderGridView() {
   const lr = $('gridLayerRow'); if (lr) lr.style.display = '';    // layer slider useful in both modes
   const tr = $('gridToolRow'); if (tr) tr.style.display = geomMode ? 'none' : '';   // paint tools hidden in Geometry
   if ($('gridAngleBtn')) $('gridAngleBtn').style.display = editingDecor ? '' : 'none';   // ¾ Angle facing is decor-only — show it whenever editing decor
+  if ($('gridLassoBtn')) { $('gridLassoBtn').style.display = gridView === 'angle' ? '' : 'none'; $('gridLassoBtn').classList.toggle('on', lassoMode && gridView === 'angle'); }   // lasso is Angle-only
   if ($('gridReproj')) { const a = gridView === 'angle'; $('gridReproj').textContent = a ? '◇ Carve to outline' : '🖼 Re-project'; $('gridReproj').title = a ? 'Select the shape to KEEP, then this marks voxels outside the ¾ outline for deletion — press Delete to remove them.' : "Re-project this facing's source image onto the surface."; }
   const gr2 = $('gridGeoRow'); if (gr2) gr2.style.display = geomMode ? '' : 'none'; // geometry controls shown in Geometry
   // inline PAINT PALETTE — the model's colours as swatches, shown only in Paint mode (no need to open the Palette window)
@@ -1455,6 +1457,15 @@ function renderGridView() {
     if (gridSel && gridSelView === gridView) drawMarquee(gridSel, '#5fe0ff', null);
   }
   if (gridBoxSel) drawMarquee(gridBoxSel, '#e0625f', null);               // marquee being dragged
+  if (gridLasso && gridLasso.length) {                                    // ◇ Angle lasso outline (cell points)
+    const px = (p) => ox + (p.c + 0.5) * cell, py = (p) => oy + (p.r + 0.5) * cell;
+    ctx.strokeStyle = '#ffb454'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px(gridLasso[0]), py(gridLasso[0]));
+    for (let i = 1; i < gridLasso.length; i++) ctx.lineTo(px(gridLasso[i]), py(gridLasso[i]));
+    if (!lassoMode) ctx.closePath();                                      // closed once finished
+    ctx.stroke();
+    ctx.fillStyle = '#ffb454'; for (const p of gridLasso) { ctx.beginPath(); ctx.arc(px(p), py(p), 2.5, 0, 7); ctx.fill(); }
+    if (lassoMode && gridLasso.length >= 3) { ctx.strokeStyle = '#fff'; ctx.strokeRect(px(gridLasso[0]) - 4, py(gridLasso[0]) - 4, 8, 8); }   // click here to close
+  }
   // FRONT/BACK MISMATCH: the carve takes width geometry from the front; the back only paints the −x wall.
   // Where their silhouettes disagree, the back art won't line up with the geometry — flag it red so you
   // can fix it with a few face paints (owner 2026-07-18). Only when both a front and back image exist.
@@ -1737,7 +1748,7 @@ if ($('gridResetGeo')) $('gridResetGeo').onclick = () => { const part = gridPart
 $('gridViewSeg').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.id === 'gridAlignBtn') { gridAlign = !gridAlign; b.classList.toggle('on', gridAlign); renderGridView(); return; }   // ⊞ Align: toggle the dual-projection overlay (keeps the selection)
-  gridView = b.dataset.v; gridLayer = 0; gridAlign = false;                                     // picking a single facing exits Align; the voxel selection PERSISTS across facings (paint faces without reselecting)
+  gridView = b.dataset.v; gridLayer = 0; gridAlign = false; gridLasso = null; lassoMode = false;   // picking a single facing exits Align + the lasso; the voxel selection PERSISTS across facings (paint faces without reselecting)
   const ab = $('gridAlignBtn'); if (ab) ab.classList.remove('on');
   [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b && c.id !== 'gridAlignBtn')); renderGridView();
 };   // views have different col/row dims — a selection can't carry over
@@ -1890,14 +1901,18 @@ function reprojectSurface() {
   // diagonal projection (col = x−y+foot−1, row = layers−1−z) falls OUTSIDE the box for deletion. The button
   // reads "◇ Carve to outline" here; press Delete to remove the marked voxels. An interactive ¾ carve.
   if (gridView === 'angle') {
-    if (!gridSel) { alert('Angle carve: drag a ▢ Select box around the shape to KEEP first, then press ◇ Carve to outline.'); return false; }
+    const poly = (gridLasso && gridLasso.length >= 3) ? gridLasso : null;   // Story 5: lasso outline wins over the rect
+    if (!poly && !gridSel) { alert('Angle carve: draw a ◇ Lasso outline (or drag a ▢ Select box) around the shape to KEEP, then press ◇ Carve to outline.'); return false; }
     const foot = g.foot, layers = g.layers;
-    const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
+    let c0, c1, r0, r1;
+    if (!poly) { c0 = Math.min(gridSel.c0, gridSel.c1); c1 = Math.max(gridSel.c0, gridSel.c1); r0 = Math.min(gridSel.r0, gridSel.r1); r1 = Math.max(gridSel.r0, gridSel.r1); }
+    const inPoly = (cc, rr) => { let inside = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if (((a.r > rr) !== (b.r > rr)) && (cc < (b.c - a.c) * (rr - a.r) / (b.r - a.r) + a.c)) inside = !inside; } return inside; };
+    const keep = poly ? inPoly : (cc, rr) => cc >= c0 && cc <= c1 && rr >= r0 && rr <= r1;
     const outside = new Set();
     for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
       if (!gridFilledAt(g, x, y, z)) continue;
       const col = (x - y) + (foot >> 1), row = layers - 1 - z;   // this voxel's cell in the (centred) Angle projection
-      if (col < c0 || col > c1 || row < r0 || row > r1) outside.add(z * N + y * foot + x);
+      if (!keep(col, row)) outside.add(z * N + y * foot + x);
     }
     if (!outside.size) { alert('Angle carve: every voxel is inside the outline — nothing to remove.'); return false; }
     gridSelVox = { part: g.part, set: outside }; gridSelView = gridView;   // select the OUTSIDE voxels; Delete removes them
@@ -1970,13 +1985,16 @@ function reprojectSurface() {
   return true;
 }
 if ($('gridReproj')) $('gridReproj').onclick = () => reprojectSurface();
+if ($('gridLassoBtn')) $('gridLassoBtn').onclick = () => { lassoMode = !lassoMode; if (lassoMode) gridLasso = []; else if (gridLasso && gridLasso.length < 3) gridLasso = null; $('gridLassoBtn').classList.toggle('on', lassoMode); renderGridView(); };
 // ESC clears the selection; Delete erases it; Enter/F fills it; Ctrl+Z / Ctrl+Y undo/redo
 document.addEventListener('keydown', (e) => {
   if (!$('keyModal') || !$('keyModal').hidden) return;               // don't fight the cutout modal's own ESC
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { if (e.shiftKey) gridRedo(); else gridUndo(); e.preventDefault(); return; }
   if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { gridRedo(); e.preventDefault(); return; }
-  if (e.key === 'Escape' && (gridSel || gridSelVox)) { gridSel = null; gridSelVox = null; gridSelView = null; renderGridView(); }
+  if (e.key === 'Escape' && lassoMode) { lassoMode = false; if (gridLasso && gridLasso.length) gridLasso.pop(); if (gridLasso && !gridLasso.length) gridLasso = null; renderGridView(); }   // ESC backs out of the lasso first
+  else if (e.key === 'Escape' && gridLasso) { gridLasso = null; renderGridView(); }   // …then clears a finished lasso
+  else if (e.key === 'Escape' && (gridSel || gridSelVox)) { gridSel = null; gridSelVox = null; gridSelView = null; renderGridView(); }
   else if ((e.key === 'Delete' || e.key === 'Backspace') && gridSelVox) { if (deleteSelection()) e.preventDefault(); }
   else if ((e.key === 'Enter' || e.key === 'f' || e.key === 'F') && gridSelVox) { if (fillSelection()) e.preventDefault(); }
 });
@@ -2076,6 +2094,13 @@ document.addEventListener('keydown', (e) => {
       dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
     }
     if (!gridGeom || !gridGeom.editable) return;
+    if (lassoMode && e.button !== 2) {                             // ◇ Angle lasso: click points; click near the first to close
+      const c = cellOf(e); if (!c) return;
+      if (!gridLasso) gridLasso = [];
+      if (gridLasso.length >= 3 && Math.hypot(gridLasso[0].c - c.cx, gridLasso[0].r - c.cy) < 1.6) { lassoMode = false; if ($('gridLassoBtn')) $('gridLassoBtn').classList.remove('on'); }
+      else gridLasso.push({ c: c.cx, r: c.cy });
+      renderGridView(); e.preventDefault(); return;
+    }
     // DELETE with a SELECTION active → delete the selected voxels on the CURRENT layer (Layer 0 cuts the whole
     // column through, after a confirm). Deliberately one layer at a time: walk the Layer slider and delete again;
     // an already-empty layer just no-ops (no stuck loop). Right-click still freehand-deletes within the selection.
