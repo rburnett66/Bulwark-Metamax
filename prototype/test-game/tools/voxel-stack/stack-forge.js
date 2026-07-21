@@ -1232,9 +1232,9 @@ function renderGridView() {
     front: { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [foot - 1 - s, foot - 1 - c, layers - 1 - r] },  // +x FRONT: raycast from +x, col→y so grid LEFT = model left (matches the orbit)
     back:  { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [s, c, layers - 1 - r] },                        // −x BACK: raycast from x=0, opposite-side col→y
     // ¾ ANGLE (decor): a DIAGONAL slice along the (1,1) camera ray. col → the in-plane diagonal h = x−y
-    // (constant along a ray); depth s walks from the +x+y CORNER inward, so the first hit is the surface the
-    // game camera sees. Lets you paint the corner faces the Angle slab cut. cols span the full diagonal.
-    angle: { cols: foot * 2 - 1, rows: layers, depth: foot, axis: 'diag', toVox: (c, r, s) => { const h = c - (foot - 1), xs = Math.min(foot - 1, foot - 1 + h), x = xs - s; return [x, x - h, layers - 1 - r]; } },
+    // (constant along a ray), CENTRED so the facing is foot-wide like Front/Side (matches the same-size source
+    // art); depth s walks from the +x+y CORNER inward, so the first hit is the surface the camera sees.
+    angle: { cols: foot, rows: layers, depth: foot, axis: 'diag', toVox: (c, r, s) => { const h = c - (foot >> 1), xs = Math.min(foot - 1, foot - 1 + h), x = xs - s; return [x, x - h, layers - 1 - r]; } },
   };
   const ax = AX[gridView] || AX.top, cols = ax.cols, rows = ax.rows, depth = ax.depth;
   gridLayer = clamp(gridLayer, 0, depth);   // 0 = surface projection (non-layer); 1..depth = real slices 0..depth-1
@@ -1242,6 +1242,7 @@ function renderGridView() {
   const geomMode = gridMode === 'geom';
   const lr = $('gridLayerRow'); if (lr) lr.style.display = '';    // layer slider useful in both modes
   const tr = $('gridToolRow'); if (tr) tr.style.display = geomMode ? 'none' : '';   // paint tools hidden in Geometry
+  if ($('gridAngleBtn')) $('gridAngleBtn').style.display = editingDecor ? '' : 'none';   // ¾ Angle facing is decor-only — show it whenever editing decor
   if ($('gridReproj')) { const a = gridView === 'angle'; $('gridReproj').textContent = a ? '◇ Carve to outline' : '🖼 Re-project'; $('gridReproj').title = a ? 'Select the shape to KEEP, then this marks voxels outside the ¾ outline for deletion — press Delete to remove them.' : "Re-project this facing's source image onto the surface."; }
   const gr2 = $('gridGeoRow'); if (gr2) gr2.style.display = geomMode ? '' : 'none'; // geometry controls shown in Geometry
   // inline PAINT PALETTE — the model's colours as swatches, shown only in Paint mode (no need to open the Palette window)
@@ -1285,7 +1286,7 @@ function renderGridView() {
     const gp2 = $('gridPalette'); if (gp2) gp2.style.display = 'none';
     if (editingDecor) {                                    // DECOR: the 3 carving views (Front / ¾ Angle / Side) in a row, height-aligned
       const SEP = 2, Wc = cv.width, Hc = cv.height;
-      const panes = [{ ax: AX.front, cols: foot, label: 'FRONT  Y×Z' }, { ax: AX.angle, cols: foot * 2 - 1, label: '¾ ANGLE  H×Z' }, { ax: AX.side, cols: foot, label: 'SIDE  X×Z' }];
+      const panes = [{ ax: AX.front, cols: foot, label: 'FRONT  Y×Z' }, { ax: AX.angle, cols: foot, label: '¾ ANGLE  H×Z' }, { ax: AX.side, cols: foot, label: 'SIDE  X×Z' }];
       const totalCols = panes.reduce((s, p) => s + p.cols, 0) + SEP * (panes.length - 1);
       const cellA = Math.max(1, Math.floor(Math.min(Wc / totalCols, Hc / (layers + 1))));
       const gw = totalCols * cellA, gh = layers * cellA, ox0 = Math.floor((Wc - gw) / 2), oy = Math.floor((Hc - gh) / 2);
@@ -1702,6 +1703,7 @@ function forceDecorBodyOnly() {
   [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.p === 'body'));
   [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === 'decor'));
   setBackSlotLabel('Angle ¾');                        // the Back slot holds the optional 3/4 view for the decor loft
+  if (gridView === 'top') { gridView = 'front'; [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.v === 'front')); }   // decor's Top is DERIVED, not authored — start on Front
   gridSel = null; gridSelVox = null; gridSelView = null;
   renderGridView();
 }
@@ -1871,7 +1873,7 @@ function reprojectSurface() {
     const outside = new Set();
     for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
       if (!gridFilledAt(g, x, y, z)) continue;
-      const col = (x - y) + (foot - 1), row = layers - 1 - z;   // this voxel's cell in the Angle projection
+      const col = (x - y) + (foot >> 1), row = layers - 1 - z;   // this voxel's cell in the (centred) Angle projection
       if (col < c0 || col > c1 || row < r0 || row > r1) outside.add(z * N + y * foot + x);
     }
     if (!outside.size) { alert('Angle carve: every voxel is inside the outline — nothing to remove.'); return false; }
