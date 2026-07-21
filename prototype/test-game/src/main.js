@@ -94,6 +94,13 @@ export function boot(mountEl, seed) {
     if (vox && vox.ready) console.log('[voxel] loaded', Object.keys(vox.units).length, 'unit pack(s):', Object.keys(vox.units).join(', '));
   }).catch((e) => console.warn('[voxel] skipped:', e && e.message));
 
+  // VOXEL DECOR packs (Stack Forge Terrain set) → renderer.decorArt; the renderer places map.decor[] groves.
+  import('./render/voxel/loader.js').then(({ loadVoxelDecor }) => loadVoxelDecor()).then((dec) => {
+    renderer.decorArt = dec;
+    if (renderer._decorMap) renderer._decorMap = null;   // force a rebuild now that packs are available
+    if (dec && dec.ready) console.log('[decor] loaded', Object.keys(dec.decor).length, 'decor pack(s):', Object.keys(dec.decor).join(', '));
+  }).catch((e) => console.warn('[decor] skipped:', e && e.message));
+
   // The last COMPLETED game, captured so "Run Replay" replays it even after Restart resets the live log, and
   // after a page reload (persisted to localStorage). mmdev.
   let lastReplayLog = null;
@@ -274,11 +281,13 @@ export function boot(mountEl, seed) {
     app.renderer.resize(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
     const art = renderer && renderer.unitArt;
     const vox = renderer && renderer.voxelArt;   // voxel packs load once at boot — carry them too
+    const dec = renderer && renderer.decorArt;   // decor packs too
     destroyRenderer(renderer);                   // free the old renderer's GPU tree before replacing it
     app.stage.removeChildren();
     renderer = createRenderer(app, currentMap);
     if (art) renderer.unitArt = art;
     if (vox) renderer.voxelArt = vox;
+    if (dec) renderer.decorArt = dec;
     restart(currentSeed);
     flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
 

@@ -90,6 +90,50 @@ function loadImage(url) {
   });
 }
 
+// ── VOXEL DECOR (static props): a decor pack is a single-frame directional part (facings:1) + a baked
+// cast shadow — no rotation. Loaded from its own manifest/ship path; the map's decor[] places instances. ──
+const DECOR_MANIFEST_KEY = 'bulwark:stackforge:decor';
+export async function loadVoxelDecor() {
+  const store = { decor: {}, ready: false };
+  try { const res = await fetch('content/decor/voxel-decor.json'); if (res.ok) await addDecorManifest(store, await res.json(), 'content/decor/voxel/'); } catch (e) { /* optional */ }
+  try { const m = JSON.parse(localStorage.getItem(DECOR_MANIFEST_KEY) || 'null'); if (m) await addDecorManifest(store, m, null); } catch (e) { /* dev-live */ }
+  store.ready = Object.keys(store.decor).length > 0;
+  return store;
+}
+async function addDecorManifest(store, manifest, atlasBase) {
+  for (const id of Object.keys(manifest.decor || {})) {
+    try {
+      const entry = manifest.decor[id], pack = entry.pack || entry, pt = (pack.parts || [])[0];
+      if (!pt) throw new Error('no part');
+      const src = (entry.atlases && entry.atlases[pt.id]) || (atlasBase ? atlasBase + pt.atlas : null);
+      if (!src) throw new Error('no atlas source');
+      const baseTex = PIXI.BaseTexture.from(await loadImage(src)); baseTex.scaleMode = PIXI.SCALE_MODES.LINEAR;
+      const frame = new PIXI.Texture(baseTex, new PIXI.Rectangle(0, 0, pt.cell[0], pt.cell[1]));   // facings:1 → frame 0
+      let shadowFrame = null;
+      if (pt.shadowAtlas && Array.isArray(pt.shadowCell)) {
+        const ssrc = (entry.atlases && entry.atlases[pt.id + '.shadow']) || (atlasBase ? atlasBase + pt.shadowAtlas : null);
+        if (ssrc) { const sBase = PIXI.BaseTexture.from(await loadImage(ssrc)); sBase.scaleMode = PIXI.SCALE_MODES.LINEAR; shadowFrame = new PIXI.Texture(sBase, new PIXI.Rectangle(0, 0, pt.shadowCell[0], pt.shadowCell[1])); }
+      }
+      store.decor[id] = { pack, def: pt, frame, shadowFrame };
+    } catch (e) { console.warn('[decor] skipped pack', id, '—', e && e.message); }
+  }
+}
+export function hasDecor(store, type) { return !!(store && store.decor && store.decor[type]); }
+/** Retained display object for one decor instance: baked cast-shadow under a single static sprite. */
+export function buildDecorSprite(store, type, tilePx) {
+  const e = store && store.decor && store.decor[type];
+  if (!e) return null;
+  const { pack, def, frame, shadowFrame } = e, B = pack.renderScale || 1;
+  const tiles = pack.scale && pack.scale.tiles;
+  const targetW = (tiles ? tilePx * tiles : tilePx) * VOXEL_UNIT_SCALE;
+  const scale = targetW / Math.max(1, pack.footprint[0] * B);        // screen px per atlas px (same contract as units)
+  const ax = def.pivot[0] / def.cell[0], ay = def.pivot[1] / def.cell[1];   // pivot = ground contact
+  const c = new PIXI.Container();
+  if (shadowFrame) { const sh = new PIXI.Sprite(shadowFrame); sh.anchor.set(ax, ay); sh.scale.set(scale); sh.tint = 0x000000; sh.alpha = 0.24; c.addChild(sh); }
+  const s = new PIXI.Sprite(frame); s.anchor.set(ax, ay); s.scale.set(scale); c.addChild(s);
+  return c;
+}
+
 /** True if this unit id has a loaded voxel pack. */
 export function hasVoxel(store, id) { return !!(store && store.units && store.units[id]); }
 

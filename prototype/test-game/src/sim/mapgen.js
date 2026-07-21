@@ -573,6 +573,7 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     mapId, name: (def.Map_Name || `Map ${mapId}`) + ' (forge)', primary: primaryType,
     hasWater: waterCells.length > 0, difficulty: def.Difficulty, parTimeSec: def.Par_Time_Sec,
     questGiver: def.Quest_Giver_Faction, seed: opts.seed || 0, rings, resources,
+    decor: forge.decor || [],                             // voxel-decor groves {x,y,type} scattered in Terrain Forge (Stage 3 renders them)
   };
 }
 

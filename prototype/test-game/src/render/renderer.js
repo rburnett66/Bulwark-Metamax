@@ -1,6 +1,6 @@
 import { getStructureDef, getUnitDef } from '../data/tables.js';
 import { hasArt, buildUnitSprite } from './unitArt.js';
-import { hasVoxel, buildVoxelUnit, updateVoxelUnit } from './voxel/loader.js';
+import { hasVoxel, buildVoxelUnit, updateVoxelUnit, buildDecorSprite } from './voxel/loader.js';
 import { buildLive3D, updateLive3D } from './voxel/live3d.js';
 import { createProjectilePool } from './projectiles.js';
 import { layerLean } from '../harness/camera.js';
@@ -164,6 +164,28 @@ function cellKey(x, y) { return x + ',' + y; }
 function cellToLocal(renderer, cx, cy) {
   const t = renderer.tile;
   return { x: (cx + 0.5) * t, y: (cy + 0.5) * t };
+}
+
+// VOXEL DECOR: static props from map.decor[] built ONCE per map into the 'decor' layer. Each instance is a
+// baked sprite + shadow at its cell's contact point, zIndex = screen-y so decor self-sorts (nearer in front).
+// Rebuilds when the map object changes; a no-op every other frame. Needs renderer.decorArt (set by main.js).
+function renderDecor(renderer) {
+  if (!renderer.decorArt) return;
+  const map = renderer.map;
+  if (renderer._decorMap === map) return;              // already built for this map
+  renderer._decorMap = map;
+  const layer = renderer.layers.decor;
+  layer.removeChildren(); renderer.decorSprites.clear();
+  if (!map || !Array.isArray(map.decor) || !map.decor.length) return;
+  for (let i = 0; i < map.decor.length; i++) {
+    const d = map.decor[i];
+    const spr = buildDecorSprite(renderer.decorArt, d.type, renderer.tile);
+    if (!spr) continue;                                 // unknown/failed decor type → skip
+    const p = cellToLocal(renderer, d.x, d.y);
+    spr.x = p.x; spr.y = p.y; spr.zIndex = p.y;
+    layer.addChild(spr);
+    renderer.decorSprites.set(i, spr);
+  }
 }
 
 function drawDashedCircle(g, cx, cy, radius, color, alpha, width) {
@@ -335,7 +357,9 @@ export function createRenderer(app, map) {
   // air, and FX. 'fog' is reserved as the permanent TOP layer for fog of war.
   // 'resources' sits ABOVE ground, BELOW structures/units — crystals grow out of the terrain and
   // everything that moves or is built stands on top of them.
-  const layerNames = ['water', 'ground', 'resources', 'structures', 'units', 'air', 'fx', 'overlay', 'structHp', 'fog'];
+  // 'decor' sits above resources/structures, below units — static voxel props (trees) draw behind the
+  // moving units (v1 occlusion: scenery behind the action). It self-sorts by contact-y among its own sprites.
+  const layerNames = ['water', 'ground', 'resources', 'structures', 'decor', 'units', 'air', 'fx', 'overlay', 'structHp', 'fog'];
   const layers = {};
   for (let i = 0; i < layerNames.length; i++) {
     const name = layerNames[i];
@@ -375,8 +399,13 @@ export function createRenderer(app, map) {
     unitSpriteLayer: new PIXI.Container(),
     // Resource ART (crystal_resources sheet): a retained sprite per live node, keyed by node id.
     resourceArt: null,
-    resourceSprites: new Map()
+    resourceSprites: new Map(),
+    // VOXEL DECOR packs (Stack Forge Terrain set): set by main.js once loadVoxelDecor() resolves. Static
+    // props placed from map.decor[]; built once per map into the 'decor' layer, keyed by instance index.
+    decorArt: null,
+    decorSprites: new Map()
   };
+  renderer.layers.decor.sortableChildren = true;
 
   renderer.dustG = new PIXI.Graphics();
   layers.resources.addChild(renderer.dustG);         // ground dust: above the terrain, UNDER structures + units
@@ -1530,6 +1559,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         if (hv0 && hv0.hp > 0 && hv0.fieldId) assignedFields.add(hv0.fieldId);
       }
     }
+    renderDecor(renderer);   // build the static decor props once for this map (no-op after)
     // node ART: crystal sprites (role → colour pool, variant by node id) drawn on the 'resources'
     // layer — above ground, below structures/units. Primitive circles are the not-yet-loaded fallback.
     const art = renderer.resourceArt;
