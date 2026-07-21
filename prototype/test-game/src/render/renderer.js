@@ -181,12 +181,14 @@ function renderDecor(renderer) {
   for (const spr of renderer.decorSprites.values()) { if (spr.parent) spr.parent.removeChild(spr); spr.destroy({ children: true }); }
   renderer.decorSprites.clear();
   if (!map || !Array.isArray(map.decor) || !map.decor.length) return;
+  const t = renderer.tile;
   for (let i = 0; i < map.decor.length; i++) {
     const d = map.decor[i];
-    const spr = buildDecorSprite(renderer.decorArt, d.type, renderer.tile);
+    const spr = buildDecorSprite(renderer.decorArt, d.type, t, d.s || 1);   // per-tree ±15% scale (grove variation)
     if (!spr) continue;                                 // unknown/failed decor type → skip
     const p = cellToLocal(renderer, d.x, d.y);
-    spr.x = p.x; spr.y = p.y; spr.zIndex = p.y;         // contact-y → interleaves with units
+    const sx = p.x + (d.dx || 0) * t, sy = p.y + (d.dy || 0) * t;           // sub-cell pixel stagger
+    spr.x = sx; spr.y = sy; spr.zIndex = sy;            // contact-y → interleaves with units
     layer.addChild(spr);
     renderer.decorSprites.set(i, spr);
   }

@@ -120,12 +120,12 @@ async function addDecorManifest(store, manifest, atlasBase) {
 }
 export function hasDecor(store, type) { return !!(store && store.decor && store.decor[type]); }
 /** Retained display object for one decor instance: baked cast-shadow under a single static sprite. */
-export function buildDecorSprite(store, type, tilePx) {
+export function buildDecorSprite(store, type, tilePx, instS) {
   const e = store && store.decor && store.decor[type];
   if (!e) return null;
   const { pack, def, frame, shadowFrame } = e, B = pack.renderScale || 1;
   const tiles = pack.scale && pack.scale.tiles;
-  const ds = (pack.decor && pack.decor.scale) || 1;                  // Story 7: decor sizes by its OWN scale, not the unit 0.5× board-shrink
+  const ds = ((pack.decor && pack.decor.scale) || 1) * (instS || 1);  // Story 7 pack scale × per-instance ±15% (grove variation)
   const targetW = (tiles ? tilePx * tiles : tilePx) * ds;
   const scale = targetW / Math.max(1, pack.footprint[0] * B);        // screen px per atlas px
   const ax = def.pivot[0] / def.cell[0], ay = def.pivot[1] / def.cell[1];   // pivot = ground contact
