@@ -2866,12 +2866,13 @@ function buildDecorPack() {
   return { pack, atlases };
 }
 function doSaveDecor() {
-  if (!state.decorBaked) { alert('Bake the decor first.'); return; }
+  if (!state.decorBaked) bakeDecor();                              // AUTO-BAKE: a reload clears the baked textures, so Save bakes on demand
+  if (!state.decorBaked) { alert('Save decor: author the prop as the body (Front / Side) first — there is nothing to bake yet.'); return; }
   const built = buildDecorPack();
   const m = loadDecorManifest();
   m.config = { camera: built.pack.camera, light: built.pack.light };
   m.decor = m.decor || {}; m.decor[built.pack.id] = built;
-  try { localStorage.setItem(DECOR_MANIFEST_KEY, JSON.stringify(m)); } catch (e) { $('decorSaveState').textContent = 'Save failed (storage full — ship instead).'; return; }
+  try { localStorage.setItem(DECOR_MANIFEST_KEY, JSON.stringify(m)); } catch (e) { alert('Save decor FAILED (localStorage full). Use 🚀 Ship decor to write it to disk instead.'); return; }
   editingDecor = built.pack.id;                                    // now editing this decor → WIP isolates to decor:
   try { idb.put('decor:' + built.pack.id, snapshotProject(built.pack.id)); } catch (e) { /* WIP is best-effort */ }
   $('decorSaveState').innerHTML = `<span class="lock">Saved decor "${built.pack.id}" ✓</span>`;
@@ -2880,6 +2881,8 @@ function doSaveDecor() {
   if (isDecorSet()) loadFaction(DECOR_SET);                        // refresh the Terrain roster with the new/updated prop
 }
 async function shipDecor() {
+  const n = Object.keys((loadDecorManifest().decor) || {}).length;
+  if (!n) { alert('Ship decor: the decor manifest is EMPTY — click "Save to decor manifest" first (it auto-bakes). Nothing was shipped.'); return; }
   try {
     const r = await fetch('/__ship', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: 'content/decor/voxel-decor.json', data: loadDecorManifest() }) });
@@ -2930,7 +2933,7 @@ function snapshotProject(idOverride) {
     const m = voxPart[part];
     vox[part] = m ? { nx: m.nx, ny: m.ny, nz: m.nz, b64: voxB64[part] || (voxB64[part] = b64FromU8(m.data)) } : null;
   }
-  const st = { ...state }; delete st.baked;
+  const st = { ...state }; delete st.baked; delete st.decorBaked;   // baked textures are PIXI objects — never serialise them into the WIP
   return { format: 'stackforge-project', version: 2, id: (idOverride || $('uid').value || 'unit').trim(),
     state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, picks: pickState, images, vox,
     palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop],

@@ -15,11 +15,11 @@
     #side { width:640px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--line); padding:12px 14px; display:flex; flex-direction:column; overflow:hidden; }
     #sideHead { flex:0 0 auto; }
     #cols { display:flex; gap:12px; flex:1; min-height:0; margin-top:8px; }
-    .col { flex:1 1 0; min-width:0; overflow:hidden; }
+    .col { flex:1 1 0; min-width:0; overflow-y:auto; overflow-x:hidden; }   /* scroll each column so tall panels (e.g. Decor) aren't clipped off the bottom */
     #units { width:250px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line); padding:12px; display:flex; flex-direction:column; overflow:hidden; }
     #units h1 { margin-bottom:8px; }
     #units select { width:100%; background:var(--ink); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px; font-size:12px; }
-    #unitGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; overflow-y:auto; align-content:start; }
+    #unitGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; overflow-y:auto; align-content:start; flex:1 1 0; min-height:60px; }
     #gridPanel { position:absolute; left:248px; top:12px; width:520px; height:560px; min-width:150px; min-height:190px; resize:both; overflow:hidden; z-index:6;
       display:flex; flex-direction:column; background:rgba(15,24,33,.92); border:1px solid var(--line); border-radius:10px; padding:9px 11px; box-shadow:0 8px 30px rgba(0,0,0,.45); }
     #orbitDock { position:absolute; left:12px; top:12px; width:226px; max-height:calc(100% - 24px); overflow-y:auto; z-index:5;
@@ -135,7 +135,13 @@
     <button class="ghost" id="loadUnit" style="margin-top:8px">📂 Load an existing unit…</button>
     <div class="note" style="margin:4px 0 0">Clicking a slot below <b>saves</b> the model you're editing to it. Loading is only ever through this button.</div>
     <div id="unitGrid"></div>
-    <button class="ghost" id="addUnit" style="margin-top:8px">+ Add unit</button>
+    <button class="ghost" id="addUnit" style="margin-top:8px;flex:0 0 auto">+ Add unit</button>
+    <div style="flex:0 0 auto;border-top:1px solid var(--line);margin-top:10px;padding-top:8px">
+      <h2 style="margin:0 0 6px">Units manifest</h2>
+      <div class="manifest" id="manifest" style="max-height:120px;overflow-y:auto">No units saved yet.</div>
+      <button class="ghost" id="dlManifest" style="margin-top:8px">Download units.json</button>
+      <button id="shipManifest" style="margin-top:4px">🚀 Ship units to repo (local dev)</button>
+    </div>
   </div>
   <div id="stage">
     <div id="gridPanel">
@@ -284,15 +290,6 @@
     </div>
 
     <div class="grp">
-      <h2>Units manifest</h2>
-      <div class="manifest" id="manifest">No units saved yet.</div>
-      <button class="ghost" id="dlManifest" style="margin-top:8px">Download units.json</button>
-      <button id="shipManifest" style="margin-top:4px">🚀 Ship units to repo (local dev)</button>
-      <div class="note">The game's data-driven loader reads this manifest (bulwark:stackforge) — id → pack.
-        One shared config (camera + light) sits at the top so every unit agrees.</div>
-    </div>
-
-    <div class="grp">
       <h2>🌿 Decor (static prop)</h2>
       <div class="note" style="margin-top:0">Author the prop as the <b>body</b> in step 1 (Top / Side / Front — no turret needed),
         then bake it as decor: ONE frame at the game camera + one real cast shadow. Decor never rotates, so it needs no facing atlas.
@@ -311,7 +308,7 @@
       <div class="row"><label>Blocks tiles</label><input type="checkbox" id="decBlocks"><span class="note" style="margin:0">Blocks movement/building (writes into the map's blocking layer). Leave off for pure cosmetic dressing.</span></div>
       <button id="bakeDecor" style="margin-top:4px">Bake decor (1 frame + shadow)</button>
       <div class="note" id="decorBakeState">Not baked.</div>
-      <button class="ghost" id="saveDecor" disabled style="margin-top:4px">Save to decor manifest</button>
+      <button class="ghost" id="saveDecor" style="margin-top:4px">Save to decor manifest</button>
       <button id="shipDecor" style="margin-top:4px">🚀 Ship decor to repo (local dev)</button>
       <div class="note" id="decorSaveState">Bake first. Saves to the decor manifest (bulwark:stackforge:decor) and ships to content/decor/voxel-decor.json.</div>
       <div class="manifest" id="decorManifest">No decor saved yet.</div>
