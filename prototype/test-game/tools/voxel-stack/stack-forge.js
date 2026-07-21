@@ -49,7 +49,7 @@ function bodyExtentTiles() {
   _collCache = { sig, tiles };
   return tiles;
 }
-const _CLASSES = new Set(['ground', 'air', 'structure']), _KINDS = new Set(['directional', 'stack']);
+const _CLASSES = new Set(['ground', 'air', 'structure', 'decor']), _KINDS = new Set(['directional', 'stack']);
 function validatePack(p) {
   const e = [];
   if (!p || typeof p !== 'object') return { ok: false, errors: ['not an object'] };
@@ -1662,8 +1662,9 @@ function setBackSlotLabel(txt) {
 }
 // decor is a single BODY part — force body-only so the turret placeholder never shows while authoring a prop
 function forceDecorBodyOnly() {
-  state.part = 'body';
+  state.part = 'body'; state.cls = 'decor';
   [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.p === 'body'));
+  [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === 'decor'));
   setBackSlotLabel('Angle ¾');                        // the Back slot holds the optional 3/4 view for the decor loft
   gridSel = null; gridSelVox = null; gridSelView = null;
   renderGridView();
@@ -2787,7 +2788,7 @@ function buildDecorPack() {
   const fa = packAtlas(b.frame), sa = b.shadow ? packAtlas(b.shadow) : null;
   const pivot = [Math.round(b.g.CX * B), Math.round(b.g.BASEY * B)], meta = decorFields();
   const pack = {
-    id, type: 'decor', class: 'structure', footprint: [b.foot, b.foot, b.layers],
+    id, type: 'decor', class: 'decor', footprint: [b.foot, b.foot, b.layers],
     scale: { voxPerTile: VOX_PER_TILE, tiles: unitTiles(b.foot) },
     camera: { azimuth: 0, elevation: state.el | 0 }, layerSpacing: Math.round(b.sp * 100) / 100,
     voxel: { height: state.zScale }, renderScale: B,
@@ -3065,7 +3066,8 @@ function renderRoster() {
     const selId = decorSet ? editingDecor : $('uid').value;
     const card = document.createElement('div'); card.className = 'ucard' + (u.id === selId ? ' sel' : ''); card.dataset.uid = u.id;
     const atlas = has && supplied[u.id].atlases ? (decorSet ? supplied[u.id].atlases.decor : supplied[u.id].atlases.body) : null;
-    card.innerHTML = `<canvas width="76" height="56"></canvas><div class="un">${u.id.replace(/^[A-Za-z]+-/, '')}</div><div class="ur">${u.role || '—'}</div><div class="badge ${has ? 'ok' : 'no'}">${has ? '✓ supplied' : 'needs art'}</div>`;
+    const name = decorSet ? u.id : u.id.replace(/^[A-Za-z]+-/, '');   // decor shows its FULL id (matches the Unit Id field); units drop the faction prefix
+    card.innerHTML = `<canvas width="76" height="56"></canvas><div class="un">${name}</div><div class="ur">${u.role || '—'}</div><div class="badge ${has ? 'ok' : 'no'}">${has ? '✓ supplied' : 'needs art'}</div>`;
     const g = card.querySelector('canvas').getContext('2d');
     if (atlas) { const im = new Image(); im.onload = () => { g.clearRect(0, 0, 76, 56); g.drawImage(im, 0, 0, 76, 56); }; im.src = atlas; }
     else { g.fillStyle = '#132234'; g.fillRect(0, 0, 76, 56); g.fillStyle = '#3c5670'; g.font = '9px sans-serif'; g.textAlign = 'center'; g.fillText(u.shape || u.role || '?', 38, 32); }

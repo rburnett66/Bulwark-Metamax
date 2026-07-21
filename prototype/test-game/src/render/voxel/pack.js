@@ -8,7 +8,7 @@
 
 import { SUN } from '../sun.js';
 
-const CLASSES = new Set(['ground', 'air', 'structure']);
+const CLASSES = new Set(['ground', 'air', 'structure', 'decor']);
 const KINDS = new Set(['directional', 'stack']);
 
 /** THE world-scale contract: 32 voxels span exactly 1 tile, for every unit. A pack's on-screen size
@@ -27,7 +27,7 @@ export function validatePack(p) {
   const e = [];
   if (!p || typeof p !== 'object') return { ok: false, errors: ['pack is not an object'] };
   if (!p.id) e.push('missing id');
-  if (!CLASSES.has(p.class)) e.push(`class must be ground|air|structure (got ${JSON.stringify(p.class)})`);
+  if (!CLASSES.has(p.class)) e.push(`class must be ground|air|structure|decor (got ${JSON.stringify(p.class)})`);
   if (!Array.isArray(p.footprint) || p.footprint.length !== 3) e.push('footprint must be [W, D, H]');
   if (!p.camera || typeof p.camera.azimuth !== 'number' || typeof p.camera.elevation !== 'number')
     e.push('camera { azimuth, elevation } (numbers) required — the angle set in Stack Forge');
