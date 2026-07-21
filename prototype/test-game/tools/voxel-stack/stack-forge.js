@@ -2880,18 +2880,40 @@ function doSaveDecor() {
   renderDecorManifest();
   if (isDecorSet()) loadFaction(DECOR_SET);                        // refresh the Terrain roster with the new/updated prop
 }
+// Ship the decor STRAIGHT TO DISK — the decor atlas is too big for localStorage (the units manifest fills
+// it), so we never rely on the localStorage manifest here. Bake if needed, build the pack fresh, MERGE it
+// into whatever's already shipped (so multiple props accumulate), and write the file. This is the one-click
+// path: authoring → disk → Terrain Forge/​game read the shipped file.
 async function shipDecor() {
-  const n = Object.keys((loadDecorManifest().decor) || {}).length;
-  if (!n) { alert('Ship decor: the decor manifest is EMPTY — click "Save to decor manifest" first (it auto-bakes). Nothing was shipped.'); return; }
+  if (!state.decorBaked) bakeDecor();
+  if (!state.decorBaked) { alert('Ship decor: author + bake the prop (body Front / Side) first.'); return; }
+  const built = buildDecorPack();
+  let man = { decor: {} };
+  try { const r0 = await fetch('../../content/decor/voxel-decor.json', { cache: 'no-store' }); if (r0.ok) man = await r0.json(); } catch (_) {}   // accumulate onto the shipped file (tool runs from tools/voxel-stack)
+  man.decor = man.decor || {};
+  try { const ls = loadDecorManifest(); if (ls && ls.decor) Object.assign(man.decor, ls.decor); } catch (_) {}   // + any localStorage packs (if it had room)
+  man.decor[built.pack.id] = built;                                                                              // the one we just built
+  man.config = { camera: built.pack.camera, light: built.pack.light };
   try {
-    const r = await fetch('/__ship', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: 'content/decor/voxel-decor.json', data: loadDecorManifest() }) });
+    const r = await fetch('/__ship', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'content/decor/voxel-decor.json', data: man }) });
     const d = await r.json().catch(() => ({ ok: false, error: 'not a dev server' }));
-    $('decorSaveState').textContent = d.ok
-      ? `🚀 Shipped ${Object.keys(loadDecorManifest().decor || {}).length} decor → content/decor/voxel-decor.json — commit to deploy.`
-      : `Ship failed: ${d.error || 'unknown'} (deployed site? run on the dev server).`;
+    if (d.ok) {
+      $('decorSaveState').innerHTML = `<span class="lock">🚀 Shipped "${built.pack.id}" (${Object.keys(man.decor).length} decor total) → content/decor/voxel-decor.json ✓</span>`;
+      editingDecor = built.pack.id;
+      try { idb.put('decor:' + built.pack.id, snapshotProject(built.pack.id)); } catch (e) { /* WIP best-effort */ }
+      if ($('decorPackJson')) $('decorPackJson').textContent = JSON.stringify(built.pack, null, 2);
+      renderDecorManifestFromDisk(man);
+      if (isDecorSet()) loadFaction(DECOR_SET);
+    } else $('decorSaveState').textContent = `Ship failed: ${d.error || 'unknown'} (run on the dev server).`;
   } catch (e) { $('decorSaveState').textContent = 'Ship failed: ' + e.message; }
 }
+function renderDecorManifestFromDisk(man) {   // show the shipped list even when localStorage is full
+  const el = $('decorManifest'); if (!el) return;
+  const ids = Object.keys((man && man.decor) || {});
+  el.innerHTML = ids.length ? ids.map((id) => { const dd = (man.decor[id].pack && man.decor[id].pack.decor) || {}; return `<div class="u"><b>${id}</b><span>${(dd.affinity || []).join('/') || 'any'} · d${dd.density != null ? dd.density : '?'}${dd.blocks ? ' · blocks' : ''}</span></div>`; }).join('') : 'No decor saved yet.';
+}
+// ONE CLICK = shipDecor: bake if needed → build the pack → write it to the LOCAL repo file. No localStorage.
+if ($('decorSaveShip')) $('decorSaveShip').onclick = shipDecor;
 if ($('bakeDecor')) $('bakeDecor').onclick = bakeDecor;
 if ($('saveDecor')) $('saveDecor').onclick = doSaveDecor;
 if ($('shipDecor')) $('shipDecor').onclick = shipDecor;
@@ -3101,6 +3123,7 @@ async function loadFaction(name) {
   if (name === DECOR_SET) {                                        // Terrain set = decor mode (body-only + revolve + decor: autosave)
     // roster = every decor the browser knows: baked (manifest) + IN-PROGRESS WIP (IndexedDB decor:*)
     const dm = loadDecorManifest().decor || {}, ids = new Set(Object.keys(dm));
+    try { const r = await fetch('../../content/decor/voxel-decor.json', { cache: 'no-store' }); if (r.ok) { const sh = await r.json(); for (const id of Object.keys((sh && sh.decor) || {})) ids.add(id); } } catch (e) { /* shipped file (disk truth, since localStorage may be full) */ }
     try { const keys = (await idb.keys()) || []; for (const k of keys) if (typeof k === 'string' && k.startsWith('decor:')) ids.add(k.slice(6)); } catch (e) { /* no store */ }
     roster = [...ids].map((id) => ({ id, role: dm[id] ? 'baked' : 'WIP', shape: '🌿', decor: true, wip: !dm[id] }));
     if (!editingDecor) {                                          // arriving fresh from a unit

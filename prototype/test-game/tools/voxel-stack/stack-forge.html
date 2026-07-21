@@ -306,11 +306,10 @@
       <div class="row"><label>Shape</label><input type="checkbox" id="decRevolve" checked><span class="note" style="margin:0">🌲 Revolve — spin the Front/Side profile into a round, tall solid (trees, rocks). Off = the tank box carve. Tip: raise <b>Base layers</b> for height (a tree is ~80 tall × 30 wide).</span></div>
       <div class="row"><label>Base density</label><input type="range" id="decDensity" min="0" max="100" value="50"><span class="val" id="decDensityV">50</span></div>
       <div class="row"><label>Blocks tiles</label><input type="checkbox" id="decBlocks"><span class="note" style="margin:0">Blocks movement/building (writes into the map's blocking layer). Leave off for pure cosmetic dressing.</span></div>
-      <button id="bakeDecor" style="margin-top:4px">Bake decor (1 frame + shadow)</button>
+      <button class="ghost" id="bakeDecor" style="margin-top:4px">Bake decor (preview only)</button>
       <div class="note" id="decorBakeState">Not baked.</div>
-      <button class="ghost" id="saveDecor" style="margin-top:4px">Save to decor manifest</button>
-      <button id="shipDecor" style="margin-top:4px">🚀 Ship decor to repo (local dev)</button>
-      <div class="note" id="decorSaveState">Bake first. Saves to the decor manifest (bulwark:stackforge:decor) and ships to content/decor/voxel-decor.json.</div>
+      <button id="decorSaveShip" style="margin-top:6px;font-weight:700">🚀 Save decor → local disk</button>
+      <div class="note" id="decorSaveState">One click: bakes + writes the pack to <b>content/decor/voxel-decor.json</b> (your local repo, via the dev server — no localStorage, no ephemeral disk). Then Ctrl+Shift+R Terrain Forge → Playtest.</div>
       <div class="manifest" id="decorManifest">No decor saved yet.</div>
       <pre id="decorPackJson">{ }</pre>
     </div>
