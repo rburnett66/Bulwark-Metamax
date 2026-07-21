@@ -174,15 +174,19 @@ function renderDecor(renderer) {
   const map = renderer.map;
   if (renderer._decorMap === map) return;              // already built for this map
   renderer._decorMap = map;
-  const layer = renderer.layers.decor;
-  layer.removeChildren(); renderer.decorSprites.clear();
+  // Story 4: decor lives in the SHARED unitSpriteLayer and sorts with units by ground-contact y (zIndex), so
+  // a unit walking behind a pine is occluded by it and draws over it when in front. Clear only OUR sprites —
+  // the layer is shared with unit sprites, so never removeChildren().
+  const layer = renderer.unitSpriteLayer;
+  for (const spr of renderer.decorSprites.values()) { if (spr.parent) spr.parent.removeChild(spr); spr.destroy({ children: true }); }
+  renderer.decorSprites.clear();
   if (!map || !Array.isArray(map.decor) || !map.decor.length) return;
   for (let i = 0; i < map.decor.length; i++) {
     const d = map.decor[i];
     const spr = buildDecorSprite(renderer.decorArt, d.type, renderer.tile);
     if (!spr) continue;                                 // unknown/failed decor type → skip
     const p = cellToLocal(renderer, d.x, d.y);
-    spr.x = p.x; spr.y = p.y; spr.zIndex = p.y;
+    spr.x = p.x; spr.y = p.y; spr.zIndex = p.y;         // contact-y → interleaves with units
     layer.addChild(spr);
     renderer.decorSprites.set(i, spr);
   }
@@ -357,9 +361,7 @@ export function createRenderer(app, map) {
   // air, and FX. 'fog' is reserved as the permanent TOP layer for fog of war.
   // 'resources' sits ABOVE ground, BELOW structures/units — crystals grow out of the terrain and
   // everything that moves or is built stands on top of them.
-  // 'decor' sits above resources/structures, below units — static voxel props (trees) draw behind the
-  // moving units (v1 occlusion: scenery behind the action). It self-sorts by contact-y among its own sprites.
-  const layerNames = ['water', 'ground', 'resources', 'structures', 'decor', 'units', 'air', 'fx', 'overlay', 'structHp', 'fog'];
+  const layerNames = ['water', 'ground', 'resources', 'structures', 'units', 'air', 'fx', 'overlay', 'structHp', 'fog'];
   const layers = {};
   for (let i = 0; i < layerNames.length; i++) {
     const name = layerNames[i];
@@ -405,7 +407,7 @@ export function createRenderer(app, map) {
     decorArt: null,
     decorSprites: new Map()
   };
-  renderer.layers.decor.sortableChildren = true;
+  renderer.unitSpriteLayer.sortableChildren = true;   // Story 4: decor + units interleave by contact-y zIndex
 
   renderer.dustG = new PIXI.Graphics();
   layers.resources.addChild(renderer.dustG);         // ground dust: above the terrain, UNDER structures + units
@@ -1275,6 +1277,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           const pa = cellToLocal(renderer, u.pos.x, u.pos.y);
           const flyLift = (u.domain === 'Flyer' ? t * 0.35 : 0);
           spr.x = pa.x; spr.y = pa.y - flyLift;
+          spr.zIndex = pa.y;                              // Story 4: sort with decor by ground-contact y
           spr.visible = true;
           // heading: real displacement first, waypoint only when barely moving (same as the authored
           // path) — but as a WORLD angle (+X = east), the bake's bucket-0 convention. No facing offset.
@@ -1338,6 +1341,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           const pa = cellToLocal(renderer, u.pos.x, u.pos.y);
           const flyLift = (u.domain === 'Flyer' ? t * 0.35 : 0);
           spr.x = pa.x; spr.y = pa.y - flyLift;
+          spr.zIndex = pa.y;                              // Story 4: sort with decor by ground-contact y
           spr.visible = true;
           // FACE MOVEMENT: turn the whole part-stack to point along the unit's heading — from the next path
           // waypoint, else its last-tick movement — so it drives forward instead of sliding sideways. A still
