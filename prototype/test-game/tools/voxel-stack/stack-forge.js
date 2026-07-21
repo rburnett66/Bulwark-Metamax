@@ -118,16 +118,24 @@ function keyBackground(data, w, h, tol) {
   if (!seed) return;                                                 // no opaque border colour → leave as-is
   const kr = seed[0], kg = seed[1], kb = seed[2];
   const near = (p) => Math.abs(data[p * 4] - kr) + Math.abs(data[p * 4 + 1] - kg) + Math.abs(data[p * 4 + 2] - kb);
+  // SATURATION GUARD: a background key must never remove a pixel that is much more CHROMATIC than the
+  // background seed. A white/grey seed (chroma≈0) would otherwise let a high tolerance eat saturated
+  // subject pixels (dark-green leaves touching white). Chroma = max−min channel; we only remove where the
+  // pixel is at most SAT_GUARD more saturated than the seed — so raising the slider erases stubborn
+  // off-white without ever touching green. Relative to the seed, so a coloured background still keys.
+  const satOf = (p) => { const r = data[p * 4], g = data[p * 4 + 1], b = data[p * 4 + 2]; return Math.max(r, g, b) - Math.min(r, g, b); };
+  const seedSat = Math.max(kr, kg, kb) - Math.min(kr, kg, kb), SAT_GUARD = 40;
+  const bgOK = (p) => (satOf(p) - seedSat) <= SAT_GUARD;            // false → a saturated subject pixel, keep it
   const N = w * h, vis = new Uint8Array(N), st = [];
   const hard = tol * 0.8, soft = tol * 1.75, span = Math.max(1, soft - hard);   // feather band scales with tol
-  const push = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const p = y * w + x; if (!vis[p] && near(p) < tol) { vis[p] = 1; st.push(p); } };
+  const push = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const p = y * w + x; if (!vis[p] && near(p) < tol && bgOK(p)) { vis[p] = 1; st.push(p); } };
   for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }        // seed the whole border
   for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
   while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1); }
   for (let p = 0; p < N; p++) {
     if (vis[p]) { data[p * 4 + 3] = 0; continue; }                   // flooded background → transparent
     const d = near(p);                                              // feather AA pixels touching removed bg
-    if (d < soft) {
+    if (d < soft && bgOK(p)) {                                      // …but never feather a saturated subject edge
       const x = p % w, y = (p / w) | 0;
       if ((x > 0 && vis[p - 1]) || (x < w - 1 && vis[p + 1]) || (y > 0 && vis[p - w]) || (y < h - 1 && vis[p + w]))
         data[p * 4 + 3] = d < hard ? 0 : Math.min(data[p * 4 + 3], Math.round((d - hard) / span * 255));
