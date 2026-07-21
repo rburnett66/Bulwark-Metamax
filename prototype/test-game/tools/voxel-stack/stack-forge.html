@@ -304,6 +304,15 @@
           <label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer"><input type="checkbox" id="decAff_cliff">cliff</label>
         </div></div>
       <div class="row"><label>Shape</label><input type="checkbox" id="decRevolve" checked><span class="note" style="margin:0">🌲 Revolve — spin the Front/Side profile into a round, tall solid (trees, rocks). Off = the tank box carve. Tip: raise <b>Base layers</b> for height (a tree is ~80 tall × 30 wide).</span></div>
+      <div class="row"><label>Procedural</label><input type="checkbox" id="decProc"><span class="note" style="margin:0">🌲 Generate a tree from parameters — no source art (Story 6). Uses the sliders below instead of the carve.</span></div>
+      <div id="decProcRow" style="display:none;padding:2px 0 2px 6px;border-left:2px solid var(--line)">
+        <div class="row"><label>Trunk height</label><input type="range" id="decTrunkH" min="2" max="120" value="30"><span class="val" id="decTrunkHV">30</span></div>
+        <div class="row"><label>Trunk radius</label><input type="range" id="decTrunkR" min="1" max="10" value="3"><span class="val" id="decTrunkRV">3</span></div>
+        <div class="row"><label>Canopy</label><div class="seg" id="decCanopySeg" style="flex:1"><button data-c="cone" class="on">Cone</button><button data-c="round">Round</button><button data-c="blob">Blob</button></div></div>
+        <div class="row"><label>Canopy radius</label><input type="range" id="decCanopyR" min="3" max="30" value="14"><span class="val" id="decCanopyRV">14</span></div>
+        <div class="row"><label>Canopy base</label><input type="range" id="decCanopyBase" min="0" max="90" value="30"><span class="val" id="decCanopyBaseV">30</span></div>
+      </div>
+      <div class="row"><label>On-map scale</label><input type="range" id="decScale" min="30" max="300" value="100"><span class="val" id="decScaleV">1.0×</span></div>
       <div class="row"><label>Base density</label><input type="range" id="decDensity" min="0" max="100" value="50"><span class="val" id="decDensityV">50</span></div>
       <div class="row"><label>Blocks tiles</label><input type="checkbox" id="decBlocks"><span class="note" style="margin:0">Blocks movement/building (writes into the map's blocking layer). Leave off for pure cosmetic dressing.</span></div>
       <button class="ghost" id="bakeDecor" style="margin-top:4px">Bake decor (preview only)</button>

@@ -125,8 +125,9 @@ export function buildDecorSprite(store, type, tilePx) {
   if (!e) return null;
   const { pack, def, frame, shadowFrame } = e, B = pack.renderScale || 1;
   const tiles = pack.scale && pack.scale.tiles;
-  const targetW = (tiles ? tilePx * tiles : tilePx) * VOXEL_UNIT_SCALE;
-  const scale = targetW / Math.max(1, pack.footprint[0] * B);        // screen px per atlas px (same contract as units)
+  const ds = (pack.decor && pack.decor.scale) || 1;                  // Story 7: decor sizes by its OWN scale, not the unit 0.5× board-shrink
+  const targetW = (tiles ? tilePx * tiles : tilePx) * ds;
+  const scale = targetW / Math.max(1, pack.footprint[0] * B);        // screen px per atlas px
   const ax = def.pivot[0] / def.cell[0], ay = def.pivot[1] / def.cell[1];   // pivot = ground contact
   const c = new PIXI.Container();
   if (shadowFrame) { const sh = new PIXI.Sprite(shadowFrame); sh.anchor.set(ax, ay); sh.scale.set(scale); sh.tint = 0x000000; sh.alpha = 0.24; c.addChild(sh); }

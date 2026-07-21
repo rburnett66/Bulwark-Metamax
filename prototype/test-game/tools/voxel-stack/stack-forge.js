@@ -338,7 +338,29 @@ function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
 // relabelled "Angle ¾") bounds the diagonal. Three views → a 6-sided (hexagonal) cross-section that tapers
 // with height; Front+Side alone → 4 sides. Each voxel's colour = the average of the front+side colour at
 // that height. No wall art (views:null) → colour shows on every face.
+// Story 6 — PROCEDURAL tree: trunk cylinder + canopy (cone / round / blob) from panel params, no source art.
+function buildProceduralTree(foot, layers) {
+  const N = foot * foot, cx = (foot - 1) / 2, cy = (foot - 1) / 2;
+  const trunkH = clamp(state.decorTrunkH | 0, 1, layers), trunkR = Math.max(0.5, state.decorTrunkR);
+  const canopyBase = clamp(state.decorCanopyBase | 0, 0, layers - 1), canopyR = Math.max(1, state.decorCanopyR), shape = state.decorCanopy || 'cone';
+  const trunkCol = [96, 66, 38], canopyCol = [46, 120, 54];
+  const vcol = new Uint8Array(layers * N * 3), fill = new Uint8Array(layers * N);
+  const set = (x, y, z, col) => { if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) return; const k = z * N + y * foot + x; fill[k] = 1; const c = k * 3; vcol[c] = col[0]; vcol[c + 1] = col[1]; vcol[c + 2] = col[2]; };
+  const disc = (z, r, col) => { if (r < 0.5) return; for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) { const dx = x - cx, dy = y - cy; if (dx * dx + dy * dy <= r * r) set(x, y, z, col); } };
+  for (let z = 0; z < trunkH; z++) disc(z, trunkR, trunkCol);        // trunk
+  const chH = Math.max(1, layers - canopyBase);
+  for (let z = canopyBase; z < layers; z++) {                        // canopy — radius profile by shape
+    const f = (z - canopyBase) / chH;                                // 0 at base → 1 at top
+    let r; if (shape === 'cone') r = canopyR * (1 - f);
+    else if (shape === 'round') r = canopyR * Math.sqrt(Math.max(0, 1 - (2 * f - 1) * (2 * f - 1)));
+    else r = canopyR * (0.55 + 0.45 * Math.sin(f * Math.PI));        // blob: fat middle
+    disc(z, r, canopyCol);
+  }
+  const filled = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && !!fill[z * N + y * foot + x];
+  return { vcol, filled, views: null, sp: null, dbg: { proc: true } };
+}
 function buildDecorVolume(partId, foot, layers) {
+  if (state.decorProc) return buildProceduralTree(foot, layers);    // Story 6: parameters, not silhouettes
   const src = imgs[partId], N = foot * foot, empty = { vcol: new Uint8Array(layers * N * 3), filled: () => false, views: null, sp: null, dbg: {} };
   const tol = keyTolState[partId], pol = polyState[partId], pk = pickState[partId];
   const front = src.front ? keyedCropped(src.front, tol.front, pol.front, pk.front) : (src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : null);
@@ -374,7 +396,7 @@ function buildDecorVolume(partId, foot, layers) {
 }
 function buildVolume(partId, foot, layers) {
   if (voxPart[partId]) return buildVoxVolume(voxPart[partId], foot, layers);   // imported .vox → use it directly
-  if (editingDecor && partId === 'body' && state.decorRevolve) return buildDecorVolume(partId, foot, layers);   // organic decor
+  if (editingDecor && partId === 'body' && (state.decorRevolve || state.decorProc)) return buildDecorVolume(partId, foot, layers);   // organic / procedural decor
   const src = imgs[partId], N = foot * foot;
   if (!src.top && !src.side && !src.front && !src.back) {   // ── no art at all → procedural placeholder ──
     const col = document.createElement('canvas'); col.width = col.height = foot;
@@ -1074,7 +1096,8 @@ function rotCanvas(im, rot) {                                                 //
 }
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
-  decorRevolve: true };   // decor: carve as a solid of revolution (organic — trees/rocks) rather than the tank box intersection
+  decorRevolve: true,   // decor: carve as a solid of revolution (organic — trees/rocks) rather than the tank box intersection
+  decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30 };   // decor on-map scale + procedural-tree params (Stories 6,7)
 let bodyFaces = null, turretFaces = null, bodyBaked = null, turretBaked = null, lastPack = null;
 let voxMeta = null, voxTex = null, voxSpr = null, voxShadow = null, voxSig = '';   // orbit cube-render canvas
 let gVoxMeta = null, gVoxTex = null, gVoxSpr = null, gVoxShadow = null;            // in-game inset canvas
@@ -2804,13 +2827,15 @@ function decorFields() {
   const affinity = DECOR_TERRAINS.filter((t) => { const c = $('decAff_' + t); return c && c.checked; });
   const density = $('decDensity') ? +$('decDensity').value : 50;
   const blocks = !!($('decBlocks') && $('decBlocks').checked);
-  return { affinity, density, blocks };
+  return { affinity, density, blocks, scale: state.decorScale || 1 };   // Story 7: on-map scale carried in the pack
 }
 function setDecorFields(d) {                                        // restore the 🌿 panel from a saved decor's metadata
   d = d || {};
   for (const t of DECOR_TERRAINS) { const c = $('decAff_' + t); if (c) c.checked = (d.affinity || []).includes(t); }
   if ($('decDensity')) { $('decDensity').value = d.density != null ? d.density : 50; if ($('decDensityV')) $('decDensityV').textContent = $('decDensity').value; }
   if ($('decBlocks')) $('decBlocks').checked = !!d.blocks;
+  state.decorScale = d.scale || 1;
+  if ($('decScale')) { $('decScale').value = Math.round(state.decorScale * 100); if ($('decScaleV')) $('decScaleV').textContent = state.decorScale.toFixed(1) + '×'; }
 }
 // Terrain set: clicking a decor card LOADS the prop for editing (never saves). Flushes whatever we were on
 // under its own namespace first, switches into decor editing (WIP isolated to `decor:`), restores the body
@@ -2859,7 +2884,7 @@ function buildDecorPack() {
     ],
     shadow: sa ? { kind: 'baked', elevation: SHADOW_EL, dir: [SHADOW_DIRX, SHADOW_DIRY], alt: 0 }
       : { kind: 'ellipse', rx: Math.round(b.foot / 2), ry: Math.round(b.foot * 0.22), alt: 0 },
-    decor: { affinity: meta.affinity, density: meta.density, blocks: meta.blocks },   // Stage 2 auto-scatter rules
+    decor: { affinity: meta.affinity, density: meta.density, blocks: meta.blocks, scale: meta.scale },   // Stage 2 auto-scatter + Story 7 on-map scale
   };
   const atlases = { decor: fa.canvas.toDataURL('image/png') };
   if (sa) atlases['decor.shadow'] = sa.canvas.toDataURL('image/png');
@@ -2919,6 +2944,13 @@ if ($('saveDecor')) $('saveDecor').onclick = doSaveDecor;
 if ($('shipDecor')) $('shipDecor').onclick = shipDecor;
 if ($('decDensity')) $('decDensity').oninput = () => { $('decDensityV').textContent = $('decDensity').value; };
 if ($('decRevolve')) $('decRevolve').onchange = () => { state.decorRevolve = $('decRevolve').checked; gridModel = null; rebuildSlices(); renderGridView(); };
+// Stories 6 & 7 — procedural-tree params + on-map scale
+const decRebuild = () => { gridModel = null; rebuildSlices(); renderGridView(); };
+if ($('decScale')) $('decScale').oninput = () => { state.decorScale = (+$('decScale').value) / 100; if ($('decScaleV')) $('decScaleV').textContent = state.decorScale.toFixed(1) + '×'; };   // on-map size only — no re-carve
+if ($('decProc')) $('decProc').onchange = () => { state.decorProc = $('decProc').checked; if ($('decProcRow')) $('decProcRow').style.display = state.decorProc ? '' : 'none'; decRebuild(); };
+const decProcSlider = (id, key) => { if ($(id)) $(id).oninput = () => { state[key] = +$(id).value; if ($(id + 'V')) $(id + 'V').textContent = $(id).value; if (state.decorProc) decRebuild(); }; };
+decProcSlider('decTrunkH', 'decorTrunkH'); decProcSlider('decTrunkR', 'decorTrunkR'); decProcSlider('decCanopyR', 'decorCanopyR'); decProcSlider('decCanopyBase', 'decorCanopyBase');
+if ($('decCanopySeg')) $('decCanopySeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.decorCanopy = b.dataset.c; [...$('decCanopySeg').children].forEach((c) => c.classList.toggle('on', c === b)); if (state.decorProc) decRebuild(); };
 renderDecorManifest();
 
 // ── PROJECT save/load: the full working state (source art, cutout tuning, every setting) as one snapshot.
@@ -2976,6 +3008,12 @@ function syncAllControls() {
   set('sharp', Math.round(state.sharp * 100), state.sharp.toFixed(2)); set('bakeScale', state.bakeScale, state.bakeScale + '×');
   $('res').value = state.foot; $('smooth').checked = state.smooth; $('spin').checked = state.spin;
   if ($('decRevolve')) $('decRevolve').checked = state.decorRevolve !== false;
+  if ($('decProc')) $('decProc').checked = !!state.decorProc;
+  if ($('decProcRow')) $('decProcRow').style.display = state.decorProc ? '' : 'none';
+  const setDec = (id, v, lab) => { if ($(id)) { $(id).value = v; if ($(id + 'V')) $(id + 'V').textContent = lab != null ? lab : v; } };
+  setDec('decScale', Math.round((state.decorScale || 1) * 100), (state.decorScale || 1).toFixed(1) + '×');
+  setDec('decTrunkH', state.decorTrunkH); setDec('decTrunkR', state.decorTrunkR); setDec('decCanopyR', state.decorCanopyR); setDec('decCanopyBase', state.decorCanopyBase);
+  if ($('decCanopySeg')) [...$('decCanopySeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === (state.decorCanopy || 'cone')));
   [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
   [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.p === state.part));
   rig.scale.set(state.zoom);
