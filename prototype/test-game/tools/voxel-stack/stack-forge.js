@@ -2609,6 +2609,87 @@ $('shipManifest').onclick = async () => {
   } catch (e) { $('projState').textContent = 'Ship failed: ' + e.message; }
 };
 
+// ── DECOR (Stage 1): author a static prop as the BODY (Top/Side/Front), bake ONE frame + one real cast
+// shadow, and save/ship a decor pack the map generator auto-scatters. Reuses the unit carve/render/shadow;
+// no turret, no rotation. Decor packs live in their OWN manifest (bulwark:stackforge:decor) and ship path
+// (content/decor/voxel-decor.json), so the unit flow is completely untouched.
+const DECOR_MANIFEST_KEY = 'bulwark:stackforge:decor';
+const DECOR_FRAMES = 1;
+const DECOR_TERRAINS = ['open', 'brush', 'trees', 'rocks', 'cliff'];   // affinity keys (Stage 2 maps these to the map's terrain ids)
+const loadDecorManifest = () => { try { return JSON.parse(localStorage.getItem(DECOR_MANIFEST_KEY) || '{}'); } catch (e) { return {}; } };
+function renderDecorManifest() {
+  const el = $('decorManifest'); if (!el) return;
+  const m = loadDecorManifest(), ids = Object.keys(m.decor || {});
+  el.innerHTML = ids.length
+    ? ids.map((id) => { const d = (m.decor[id].pack && m.decor[id].pack.decor) || {}; return `<div class="u"><b>${id}</b><span>${(d.affinity || []).join('/') || 'any'} · d${d.density != null ? d.density : '?'}${d.blocks ? ' · blocks' : ''}</span></div>`; }).join('')
+    : 'No decor saved yet.';
+}
+function decorFields() {
+  const affinity = DECOR_TERRAINS.filter((t) => { const c = $('decAff_' + t); return c && c.checked; });
+  const density = $('decDensity') ? +$('decDensity').value : 50;
+  const blocks = !!($('decBlocks') && $('decBlocks').checked);
+  return { affinity, density, blocks };
+}
+function bakeDecor() {
+  if (!bodyFaces) { alert('Decor: author the prop as the BODY first (load Top / Side / Front in step 1), then Bake decor.'); return; }
+  const foot = state.foot, bL = state.bodyLayers, sp = layerSp(state.el), B = state.bakeScale;
+  const g = geom(foot, bL, sp, 0);                                     // body-only, centred pivot
+  const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, smooth: false, sharp: 0, g, pivotFrac: 0.5, el: state.el, scale: B });
+  const filled = buildModel('body', foot, bL).filled;
+  const shadow = bakeShadowCache(app.renderer, filled, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B, foot, layers: bL });
+  state.decorBaked = { frame, shadow, g, sp, foot, layers: bL, scale: B };
+  $('decorBakeState').innerHTML = `<span class="lock">✓ Decor baked · 1 frame + cast shadow · ${g.RTW * B}×${g.RTH * B}</span>`;
+  if ($('saveDecor')) $('saveDecor').disabled = false;
+}
+function buildDecorPack() {
+  const b = state.decorBaked, id = (($('did') && $('did').value) || 'decor').trim(), B = b.scale || 1;
+  const fa = packAtlas(b.frame), sa = b.shadow ? packAtlas(b.shadow) : null;
+  const pivot = [Math.round(b.g.CX * B), Math.round(b.g.BASEY * B)], meta = decorFields();
+  const pack = {
+    id, type: 'decor', class: 'structure', footprint: [b.foot, b.foot, b.layers],
+    scale: { voxPerTile: VOX_PER_TILE, tiles: unitTiles(b.foot) },
+    camera: { azimuth: 0, elevation: state.el | 0 }, layerSpacing: Math.round(b.sp * 100) / 100,
+    voxel: { height: state.zScale }, renderScale: B,
+    light: { azimuth: state.lightAz, contrast: state.lightK },
+    parts: [
+      { id: 'decor', kind: 'directional', facings: DECOR_FRAMES, atlas: `${id}.decor.png`, cell: fa.cell, cols: fa.cols, pivot, layers: b.layers, zeroFacing: '+x',
+        ...(sa ? { shadowAtlas: `${id}.decor.shadow.png`, shadowCell: sa.cell, shadowCols: sa.cols } : {}) },
+    ],
+    shadow: sa ? { kind: 'baked', elevation: SHADOW_EL, dir: [SHADOW_DIRX, SHADOW_DIRY], alt: 0 }
+      : { kind: 'ellipse', rx: Math.round(b.foot / 2), ry: Math.round(b.foot * 0.22), alt: 0 },
+    decor: { affinity: meta.affinity, density: meta.density, blocks: meta.blocks },   // Stage 2 auto-scatter rules
+  };
+  const atlases = { decor: fa.canvas.toDataURL('image/png') };
+  if (sa) atlases['decor.shadow'] = sa.canvas.toDataURL('image/png');
+  return { pack, atlases };
+}
+function doSaveDecor() {
+  if (!state.decorBaked) { alert('Bake the decor first.'); return; }
+  const built = buildDecorPack();
+  const m = loadDecorManifest();
+  m.config = { camera: built.pack.camera, light: built.pack.light };
+  m.decor = m.decor || {}; m.decor[built.pack.id] = built;
+  try { localStorage.setItem(DECOR_MANIFEST_KEY, JSON.stringify(m)); } catch (e) { $('decorSaveState').textContent = 'Save failed (storage full — ship instead).'; return; }
+  $('decorSaveState').innerHTML = `<span class="lock">Saved decor "${built.pack.id}" ✓</span>`;
+  if ($('decorPackJson')) $('decorPackJson').textContent = JSON.stringify(built.pack, null, 2);
+  renderDecorManifest();
+}
+async function shipDecor() {
+  try {
+    const r = await fetch('/__ship', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: 'content/decor/voxel-decor.json', data: loadDecorManifest() }) });
+    const d = await r.json().catch(() => ({ ok: false, error: 'not a dev server' }));
+    $('decorSaveState').textContent = d.ok
+      ? `🚀 Shipped ${Object.keys(loadDecorManifest().decor || {}).length} decor → content/decor/voxel-decor.json — commit to deploy.`
+      : `Ship failed: ${d.error || 'unknown'} (deployed site? run on the dev server).`;
+  } catch (e) { $('decorSaveState').textContent = 'Ship failed: ' + e.message; }
+}
+if ($('bakeDecor')) $('bakeDecor').onclick = bakeDecor;
+if ($('saveDecor')) $('saveDecor').onclick = doSaveDecor;
+if ($('shipDecor')) $('shipDecor').onclick = shipDecor;
+if ($('decDensity')) $('decDensity').oninput = () => { $('decDensityV').textContent = $('decDensity').value; };
+renderDecorManifest();
+
 // ── PROJECT save/load: the full working state (source art, cutout tuning, every setting) as one snapshot.
 // Autosaves to IndexedDB per unit id (localStorage is too small for art) and restores on reopen; the same
 // snapshot downloads/loads as a portable .sfproj.json file. ──
