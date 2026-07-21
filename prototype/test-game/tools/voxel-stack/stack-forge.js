@@ -1827,16 +1827,19 @@ function reprojectSurface() {
   const snap = (r, gg, b) => { if (!pal.length) return [r, gg, b]; let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - gg) * (p[1] - gg) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } } return pal[bi]; };
   const useSelT = gridSelVox && gridSelVox.part === g.part;
   const firstHit1 = (cx, cy) => { for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) return v; } return null; };
-  if (gridView === 'top') {                            // TOP has no side-sheet — its source IS the top-down carve colour
-    const vcol = gridModel && gridModel.vcol; if (!vcol) { alert('Re-project: no top-down colour to project.'); return false; }
+  // TOP (units) has no side-sheet, and DECOR has no wall art at all (views:null — its colour is the baked
+  // per-voxel front+side average). In both cases the source IS the carved vcol: re-project = restore it onto
+  // the first face the ray hits, on ANY facing.
+  if (gridView === 'top' || !(gridModel && gridModel.views)) {
+    const vcol = gridModel && gridModel.vcol; if (!vcol) { alert('Re-project: no carved colour to project.'); return false; }
     const pend = [];
     for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
-      const v = firstHit1(cx, cy); if (!v) continue;   // topmost filled voxel in this column
+      const v = firstHit1(cx, cy); if (!v) continue;   // first filled voxel the ray hits in this column
       const x = v[0], y = v[1], z = v[2], k = z * N + y * g.foot + x;
       if (useSelT && !gridSelVox.set.has(k)) continue;
       const c = k * 3; pend.push([k, snap(vcol[c], vcol[c + 1], vcol[c + 2])]);
     }
-    if (!pend.length) { alert('Re-project (Top): no surface' + (useSelT ? ' in the selection.' : '.')); return false; }
+    if (!pend.length) { alert('Re-project: no surface' + (useSelT ? ' in the selection.' : '.')); return false; }
     pushUndo(); for (const [k, col] of pend) ed.set(k, col);
     gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); return true;
   }
