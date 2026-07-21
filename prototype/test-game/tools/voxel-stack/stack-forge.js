@@ -540,6 +540,7 @@ function buildQuantiser(cd, vcol, filled, foot, layers, n, views) {
 // n: 0 = top, 1 = +x, 2 = −x, 3 = +y, 4 = −y (grid space, y = image-down).
 function buildFaces(partId, foot, layers) {
   const { filled, vcol, views: V } = buildModel(partId, foot, layers), N = foot * foot; // unified voxel model
+  const ed = voxEdit[partId];                                                            // explicit paints override wall art
   const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, V);   // palette cleanup (incl. wall art)
   // wall colour comes from the elevation view that DEPICTS that wall: side view → ±y walls (far side
   // mirrored), front view → +x wall, back view → −x wall (mirrored front when no back was drawn).
@@ -560,8 +561,9 @@ function buildFaces(partId, foot, layers) {
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     if (!filled(x, y, z)) continue;
     const c = (z * N + y * foot + x) * 3;
+    const painted = ed && Array.isArray(ed.get(c / 3));   // a voxel the artist painted in Grid View: its colour is authoritative
     const add = (n) => {
-      const w = n === 0 ? null : wallCol(x, y, z, n);
+      const w = (n === 0 || painted) ? null : wallCol(x, y, z, n);   // painted → use the voxel colour so in-game matches the grid
       let r = w ? w[0] : vcol[c], g = w ? w[1] : vcol[c + 1], b = w ? w[2] : vcol[c + 2];
       if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
       const k = (r << 16) | (g << 8) | b, t = palMap.get(k);          // artist colour tune (palette tuner)
@@ -628,17 +630,30 @@ function renderParts(ctx, S, cx, groundY, el, parts) {
   }
 }
 
-// the voxels currently selected in the GRID VIEW (rect × current slice), keyed for the 3D outline. null = none.
-function gridSelSet() {
+// Build the voxel set for the CURRENT marquee rect in the current facing/slice (Layer 0 = whole column
+// through depth = "select the objects"). Called on commit to freeze the selection into voxels so it can
+// then persist across facing switches.
+function buildSelVox(surfaceOnly) {
   if (!gridSel || !gridGeom) return null;
   const g = gridGeom, foot = g.foot, N = foot * foot, set = new Set();
   const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
-  const through = g.slice === 0;   // Layer 0 = surface projection → selection spans the WHOLE column (all depth); real layers stay limited to that one layer
+  // Layer 0 marquee = select the WHOLE column through depth ("select the objects", for cross-facing painting).
+  // surfaceOnly (Select layer) stays on the visible surface — else a full-rect Layer-0 selection on the Top
+  // view would grab the entire model (every z in every column). Real layers always stay limited to their slice.
+  const through = !surfaceOnly && g.slice === 0;
   for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
     if (through) { for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s); set.add(z * N + y * foot + x); } }
     else { const [x, y, z] = gridTargetVox(g, cx, cy); set.add(z * N + y * foot + x); }
   }
   return { part: g.part, set };
+}
+// The PERSISTENT selection as voxels (survives facing/layer switches), keyed for the 3D outline + masking.
+function gridSelSet() { return gridSelVox; }
+// Is the voxel this cell would edit in the current facing/slice part of the persistent selection?
+function gridCellSelected(g, cx, cy) {
+  if (!gridSelVox || !g || gridSelVox.part !== g.part) return false;
+  const [x, y, z] = gridTargetVox(g, cx, cy);
+  return gridSelVox.set.has(z * g.foot * g.foot + y * g.foot + x);
 }
 // assemble the current unit (body + mounted turret, honouring the part filter) and render it into a canvas
 function drawScene(meta, el, bodyAz, turretAz) {
@@ -1036,8 +1051,11 @@ let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn
 let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
 let gridAlign = false;                                   // ⊞ Align T/S: carved TOP projection stacked above SIDE, length-aligned (read-only, Pass 1)
 let gridBoxSel = null;                                    // transient marquee being dragged {c0,r0,c1,r1} in grid cells
-let gridSel = null;                                       // PERSISTENT selection {c0,r0,c1,r1} — masks paint/erase; cleared on ESC
+let gridSel = null;                                       // last marquee rect (in gridSelView's facing) — for the dashed outline in that one view
+let gridSelView = null;                                   // which gridView the gridSel rect belongs to
+let gridSelVox = null;                                    // PERSISTENT selection { part, set:<voxel keys> } — survives facing/layer switches, so a Layer-0 object selection can be painted on every face without reselecting
 let gridGuides = true;                                    // centre point + H/V centre lines (alignment/symmetry guide)
+let gridOrient = true;                                    // orientation indicator: label each grid edge with the world direction it faces
 // geometry box axis mapping: for each grid view, which world-axis span each in-plane axis (col,row) reads
 // and whether the grid coord is reversed vs the axis value. cap: x/y=foot, z=layers. Used by both the
 // geom overlay draw and the drag editing so they stay in lock-step.
@@ -1259,6 +1277,34 @@ function renderGridView() {
   }
   ctx.strokeStyle = 'rgba(120,160,200,.55)'; ctx.lineWidth = 1; ctx.strokeRect(ox + .5, oy + .5, gw - 1, gh - 1);
 
+  // ORIENTATION INDICATOR (2026-07-21): label each edge with the WORLD direction it faces, read straight
+  // from the same `ax.toVox` mapping the grid edits use — so the TOP/SIDE (and base-vs-turret) orientation
+  // is explicit and any disagreement with the 3D orbit is immediately visible. World axes: x=+FRONT/−BACK,
+  // y=+LEFT(foot-1)/−RIGHT(0), z=UP. The four maps agree front=+x, so all views share it; base and turret
+  // use the SAME map, so this reads the same for both parts.
+  if (gridOrient) {
+    const ORI = {
+      top:   { t: 'RIGHT', b: 'LEFT',  l: 'BACK',  r: 'FRONT', note: 'TOP · looking down (−Z)' },
+      side:  { t: 'UP',    b: 'DOWN',  l: 'BACK',  r: 'FRONT', note: 'SIDE · viewed from the RIGHT (−Y)' },
+      front: { t: 'UP',    b: 'DOWN',  l: 'LEFT',  r: 'RIGHT', note: 'FRONT · viewed from +X' },
+      back:  { t: 'UP',    b: 'DOWN',  l: 'RIGHT', r: 'LEFT',  note: 'BACK · viewed from −X' },
+    }[gridView];
+    if (ORI) {
+      const lab = (text, cx, cy, inside) => {
+        ctx.font = '9px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if (inside) { const w = ctx.measureText(text).width + 6; ctx.fillStyle = 'rgba(6,12,20,.72)'; ctx.fillRect(cx - w / 2, cy - 7, w, 13); }
+        ctx.fillStyle = inside ? 'rgba(140,210,255,.95)' : 'rgba(120,200,255,.8)';
+        ctx.fillText(text, cx, cy);
+      };
+      lab(ORI.t, ox + gw / 2, oy >= 14 ? oy - 6 : oy + 8, oy < 14);
+      lab(ORI.b, ox + gw / 2, (H - (oy + gh)) >= 14 ? oy + gh + 7 : oy + gh - 8, (H - (oy + gh)) < 14);
+      lab(ORI.l, ox >= 36 ? ox - 18 : ox + 16, oy + gh / 2, ox < 36);
+      lab(ORI.r, (W - (ox + gw)) >= 36 ? ox + gw + 18 : ox + gw - 16, oy + gh / 2, (W - (ox + gw)) < 36);
+      ctx.font = '9px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillStyle = 'rgba(120,200,255,.6)'; ctx.fillText(ORI.note, 4, 4);
+    }
+  }
+
   const drawMarquee = (s, stroke, fill) => {
     const c0 = Math.min(s.c0, s.c1), c1 = Math.max(s.c0, s.c1), r0 = Math.min(s.r0, s.r1), r1 = Math.max(s.r0, s.r1);
     const rx = ox + c0 * cell + 0.5, ry = oy + r0 * cell + 0.5, rw = (c1 - c0 + 1) * cell - 1, rh = (r1 - r0 + 1) * cell - 1;
@@ -1274,7 +1320,13 @@ function renderGridView() {
     ctx.setLineDash([]);
     ctx.fillStyle = 'rgba(242,200,105,.95)'; ctx.beginPath(); ctx.arc(cxp, cyp, Math.max(2, cell * 0.14), 0, Math.PI * 2); ctx.fill();
   }
-  if (gridSel) drawMarquee(gridSel, '#5fe0ff', 'rgba(95,224,255,.10)');   // persistent selection (masks paint/erase, ESC clears)
+  // SELECTION: highlight the SELECTED voxels visible in THIS facing (they persist across facings so a Layer-0
+  // object pick can be painted on every face), plus the exact dashed rect only in the facing it was drawn in.
+  if (gridSelVox && gridSelVox.part === part) {
+    ctx.fillStyle = 'rgba(95,224,255,.16)';
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if (gridCellSelected(gridGeom, cx, cy)) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+    if (gridSel && gridSelView === gridView) drawMarquee(gridSel, '#5fe0ff', null);
+  }
   if (gridBoxSel) drawMarquee(gridBoxSel, '#e0625f', null);               // marquee being dragged
   // FRONT/BACK MISMATCH: the carve takes width geometry from the front; the back only paints the −x wall.
   // Where their silhouettes disagree, the back art won't line up with the geometry — flag it red so you
@@ -1376,7 +1428,7 @@ function update() {
   // only re-render the cube scene when something it depends on actually changed
   const sig = state.az.toFixed(1) + '|' + state.el.toFixed(1) + '|' + state.taim.toFixed(1) + '|' + state.turretDx + '|' +
     state.turretPivot + '|' + state.mountZ + '|' + state.part + '|' + state.lightAz + '|' + state.lightK + '|' + state.zScale +
-    '|' + (gridSel ? gridSel.c0 + ',' + gridSel.r0 + ',' + gridSel.c1 + ',' + gridSel.r1 + ':' + gridView + ':' + gridLayer : 'x');   // re-render on selection change
+    '|' + (gridSelVox ? gridSelVox.set.size + ':' + gridSelVox.part + ':' + gridView + ':' + gridLayer : 'x');   // re-render on selection change
   if (sig !== voxSig) { voxSig = sig; drawScene(voxMeta, state.el, azR, azR + taimR); voxTex.baseTexture.update(); }
 }
 // position the in-game preview: unit at GAME scale on the tile, slowly turning to show facings, with the
@@ -1527,15 +1579,15 @@ $('zScale').oninput = (e) => { state.zScale = +e.target.value / 100; $('zScaleV'
 $('smooth').onchange = (e) => { state.smooth = e.target.checked; };
 $('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').textContent = state.sharp.toFixed(2); };
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
-$('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; gridSel = null; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+$('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.part = b.dataset.p; gridSel = null; gridSelVox = null; gridSelView = null; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
 
 // ── grid-view panel: mode (paint vs geometry) + face selector + z-slice walker ──
-if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; gridSel = null; [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; gridSel = null; gridSelVox = null; gridSelView = null; [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
 if ($('gridResetGeo')) $('gridResetGeo').onclick = () => { const part = gridPart(); geomState[part] = { auto: true, bottomFrom: geomState[part].bottomFrom || 'top' }; gridModel = null; rebuildSlices(); scheduleAutosave(); };
 $('gridViewSeg').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
-  if (b.id === 'gridAlignBtn') { gridAlign = !gridAlign; b.classList.toggle('on', gridAlign); gridSel = null; renderGridView(); return; }   // ⊞ Align: toggle the dual-projection overlay
-  gridView = b.dataset.v; gridLayer = 0; gridSel = null; gridAlign = false;                                     // picking a single face exits Align
+  if (b.id === 'gridAlignBtn') { gridAlign = !gridAlign; b.classList.toggle('on', gridAlign); renderGridView(); return; }   // ⊞ Align: toggle the dual-projection overlay (keeps the selection)
+  gridView = b.dataset.v; gridLayer = 0; gridAlign = false;                                     // picking a single facing exits Align; the voxel selection PERSISTS across facings (paint faces without reselecting)
   const ab = $('gridAlignBtn'); if (ab) ab.classList.remove('on');
   [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b && c.id !== 'gridAlignBtn')); renderGridView();
 };   // views have different col/row dims — a selection can't carry over
@@ -1552,7 +1604,7 @@ if ($('gridToolSeg')) $('gridToolSeg').onclick = (e) => {
   renderGridView();   // sets gridGeom for the current view/layer first
   // Clicking 🗑 Delete with an active selection deletes it right away (like Fill acts on the selection) — Layer 0
   // cuts the whole column through with a confirm. The tool also stays selected for freehand delete afterward.
-  if (gridTool === 'erase' && gridSel) deleteSelection();
+  if (gridTool === 'erase' && gridSelVox) deleteSelection();
 };
 if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
   const g = gridGeom; if (!g) return; pushUndo(); const ed = voxEdit[g.part], N = g.foot * g.foot;
@@ -1563,6 +1615,7 @@ if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; rebuildSlices(); scheduleAutosave();
 };
 if ($('gridGuides')) $('gridGuides').onchange = (e) => { gridGuides = e.target.checked; renderGridView(); };
+if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.checked; renderGridView(); };
 // MIRROR one half of the current view onto the other, folding across the GRID CENTRE LINE (the ✛ guide),
 // NOT the model's content centre — so each half lands symmetric about the centreline (owner: centre the
 // model to the guide, then mirror). View-relative via gridGeom.toVox: 'col' folds the vertical centreline
@@ -1591,7 +1644,7 @@ if ($('gridMirrorRL')) $('gridMirrorRL').onclick = () => mirrorGrid('col', false
 if ($('gridMirrorTB')) $('gridMirrorTB').onclick = () => mirrorGrid('row', true);    // top → bottom, across the horizontal centreline
 if ($('gridMirrorBT')) $('gridMirrorBT').onclick = () => mirrorGrid('row', false);   // bottom → top
 // select every cell on the current layer (a whole-layer selection to paint/erase within)
-if ($('gridSelLayer')) $('gridSelLayer').onclick = () => { const g = gridGeom; if (!g) return; gridSel = { c0: 0, r0: 0, c1: g.cols - 1, r1: g.rows - 1 }; renderGridView(); };
+if ($('gridSelLayer')) $('gridSelLayer').onclick = () => { const g = gridGeom; if (!g) return; gridSel = { c0: 0, r0: 0, c1: g.cols - 1, r1: g.rows - 1 }; gridSelView = gridView; gridSelVox = buildSelVox(true); renderGridView(); };
 // delete EVERY voxel in the active selection (the surface voxels on Layer 0, or the slice voxels on a real
 // layer). Shared by Delete/Backspace and by pressing Erase while a selection is active.
 // ── UNDO / REDO for grid voxel edits (paint/erase strokes + bulk ops). Snapshots the voxEdit layer. ──
@@ -1603,50 +1656,157 @@ function gridUndo() { if (!undoStack.length) return; redoStack.push(snapVoxEdit(
 function gridRedo() { if (!redoStack.length) return; undoStack.push(snapVoxEdit()); applyVoxSnap(redoStack.pop()); }
 
 function deleteSelection() {
-  const g = gridGeom; if (!gridSel || !g || !g.editable) return false;
+  const g = gridGeom; if (!gridSelVox || !g || !g.editable || gridSelVox.part !== g.part) return false;
   const ed = voxEdit[g.part], N = g.foot * g.foot;
-  const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
   const cutThrough = g.slice === 0;   // Layer 0 = surface projection → a delete cuts the ENTIRE column (all depth) through
   const baseFilled = (gridModel && gridModel.filled) || (() => false);
   const isFilled = (x, y, z) => { const o = ed.get(z * N + y * g.foot + x); return o !== undefined ? o !== 'del' : baseFilled(x, y, z); };
-  // anything actually there to delete on this layer? (skip a no-op confirm / undo entry → no "stuck" feeling)
-  let any = false;
-  for (let cy = r0; cy <= r1 && !any; cy++) for (let cx = c0; cx <= c1 && !any; cx++) {
-    if (cutThrough) { for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s); if (isFilled(x, y, z)) { any = true; break; } } }
-    else { const [x, y, z] = g.toVox(cx, cy, g.slice - 1); if (isFilled(x, y, z)) any = true; }
+  // filled, SELECTED voxels reachable in the current facing (the slice, or the whole column on Layer 0)
+  const targets = [];
+  for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
+    if (cutThrough) { for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s), k = z * N + y * g.foot + x; if (gridSelVox.set.has(k) && isFilled(x, y, z)) targets.push(k); } }
+    else { const [x, y, z] = g.toVox(cx, cy, g.slice - 1), k = z * N + y * g.foot + x; if (gridSelVox.set.has(k) && isFilled(x, y, z)) targets.push(k); }
   }
-  if (!any) return false;
-  if (cutThrough && !confirm('Delete on Layer 0 (surface) cuts ALL THE WAY THROUGH the object — every selected column, front to back. Continue?')) return false;
+  if (!targets.length) return false;
+  if (cutThrough && !confirm('Delete on Layer 0 (surface) cuts ALL THE WAY THROUGH the selected objects — front to back. Continue?')) return false;
   pushUndo();
-  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
-    if (cutThrough) { for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s); ed.set(z * N + y * g.foot + x, 'del'); } }
-    else { const [x, y, z] = g.toVox(cx, cy, g.slice - 1); ed.set(z * N + y * g.foot + x, 'del'); }
-  }
+  for (const k of targets) ed.set(k, 'del');
   gridModel = null; rebuildSlices(); scheduleAutosave(); return true;
 }
 // FILL the selection with the current paint colour — recolours EVERY existing voxel in it (on Layer 0, that's
 // every facing surface voxel; on a real layer, every filled slice voxel). Never adds voxels.
 function fillSelection() {
-  const g = gridGeom; if (!gridSel || !g || !g.editable) return false;
+  const g = gridGeom; if (!gridSelVox || !g || !g.editable || gridSelVox.part !== g.part) return false;
   const ed = voxEdit[g.part], N = g.foot * g.foot, rgb = (() => { const h = $('gridPaintCol').value; return [parseInt(h.slice(1, 3), 16) || 0, parseInt(h.slice(3, 5), 16) || 0, parseInt(h.slice(5, 7), 16) || 0]; })();
-  const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
   let n = 0; const pending = [];
-  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); if (gridFilledAt(g, x, y, z)) { pending.push(z * N + y * g.foot + x); n++; } }
+  // recolour the SELECTED voxels whose face this facing shows (the surface voxel per cell)
+  for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy), k = z * N + y * g.foot + x; if (gridSelVox.set.has(k) && gridFilledAt(g, x, y, z)) { pending.push(k); n++; } }
   if (!n) return false;
   pushUndo();
   for (const k of pending) ed.set(k, rgb);
   gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); return true;
 }
 if ($('gridFill')) $('gridFill').onclick = () => fillSelection();
+// ── DIAGNOSTIC: report how the source view art (V) maps onto this part's exposed faces, so a misaligned
+// image (e.g. front tips reading black in-game) is visible as a coverage gap, not guesswork. Read-only.
+function gridDiag() {
+  const part = gridPart(), foot = state.foot, layers = gridLayersOf(part), N = foot * foot;
+  const m = buildModel(part, foot, layers), V = m.views, filled = m.filled;
+  const F = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && filled(x, y, z);
+  const hit = (g, ix, z, mir) => { if (!g || !g.m || ix < 0 || ix >= g.w || z < 0 || z >= g.h) return false; return !!g.m[z * g.w + (mir ? g.w - 1 - ix : ix)]; };
+  const ox = (V && V.ox) || 0, oy = (V && V.oy) || 0, z0 = (V && V.z0) || 0;
+  const grp = { fx: [0, 0], bx: [0, 0], sy: [0, 0] };            // [exposed faces, faces the art colours]
+  let bx0 = 1e9, bx1 = -1, by0 = 1e9, by1 = -1, bz0 = 1e9, bz1 = -1;
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+    if (!F(x, y, z)) continue;
+    if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; if (z < bz0) bz0 = z; if (z > bz1) bz1 = z;
+    const zz = z - z0;
+    if (!F(x + 1, y, z)) { grp.fx[0]++; if (V && hit(V.front, y - oy, zz, false)) grp.fx[1]++; }         // +x front (barrel tips)
+    if (!F(x - 1, y, z)) { grp.bx[0]++; if (V && (V.back ? hit(V.back, y - oy, zz, false) : hit(V.front, y - oy, zz, true))) grp.bx[1]++; }
+    if (!F(x, y + 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, false)) grp.sy[1]++; }
+    if (!F(x, y - 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, true)) grp.sy[1]++; }
+  }
+  const artDim = (g) => (g && g.m) ? `${g.w}x${g.h}` : '—none';
+  const pct = (a) => a[0] ? `${a[1]}/${a[0]} (${Math.round(100 * a[1] / a[0])}% art, ${a[0] - a[1]} fall back to voxel colour)` : 'none';
+  const L = [
+    `STACK-FORGE DIAG — part=${part}  foot=${foot}  layers=${layers}`,
+    `filled bbox: x[${bx0}..${bx1}] y[${by0}..${by1}] z[${bz0}..${bz1}]`,
+    V ? `view art: ox=${ox} oy=${oy} z0=${z0}   front=${artDim(V.front)}  side=${artDim(V.side)}  back=${artDim(V.back)}` : 'view art: NONE (walls use per-voxel colour)',
+    `+x front faces (barrel tips):  ${pct(grp.fx)}`,
+    `-x back faces:                 ${pct(grp.bx)}`,
+    `±y side faces:                 ${pct(grp.sy)}`,
+    `front-view index: y-oy over [${by0 - oy}..${by1 - oy}] into 0..${V && V.front ? V.front.w - 1 : '?'}   (out-of-range ⇒ black tips)`,
+    `side-view index:  x-ox over [${bx0 - ox}..${bx1 - ox}] into 0..${V && V.side ? V.side.w - 1 : '?'}`,
+  ];
+  console.log(L.join('\n'));
+  alert(L.join('\n'));
+}
+if ($('gridDiag')) $('gridDiag').onclick = () => gridDiag();
+// ── RE-PROJECT: reapply the facing's source image onto its aligned surface by FITTING the image to the
+// model's silhouette (not the stored ox/oy — those may be off, which is why sides read as top-layer colour).
+// Geometry is untouched; each sampled pixel is SNAPPED to the active (reduced/tuned) palette and baked as
+// real paint, so it shows in-game. Masked to the active selection when there is one. Preserves the art's own
+// axis convention (across-axis + height→up), so it fixes offset/scale — if it comes out mirrored, that's a
+// separate flip to confirm.
+function reprojectSurface() {
+  const g = gridGeom; if (!g || !g.editable) { alert('Re-project: switch to a paint facing (Top / Front / Side / Back).'); return false; }
+  const N = g.foot * g.foot, ed = voxEdit[g.part];
+  const pal = (gridModel && gridModel.palette) || [];
+  const snap = (r, gg, b) => { if (!pal.length) return [r, gg, b]; let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - gg) * (p[1] - gg) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } } return pal[bi]; };
+  const useSelT = gridSelVox && gridSelVox.part === g.part;
+  const firstHit1 = (cx, cy) => { for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) return v; } return null; };
+  if (gridView === 'top') {                            // TOP has no side-sheet — its source IS the top-down carve colour
+    const vcol = gridModel && gridModel.vcol; if (!vcol) { alert('Re-project: no top-down colour to project.'); return false; }
+    const pend = [];
+    for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
+      const v = firstHit1(cx, cy); if (!v) continue;   // topmost filled voxel in this column
+      const x = v[0], y = v[1], z = v[2], k = z * N + y * g.foot + x;
+      if (useSelT && !gridSelVox.set.has(k)) continue;
+      const c = k * 3; pend.push([k, snap(vcol[c], vcol[c + 1], vcol[c + 2])]);
+    }
+    if (!pend.length) { alert('Re-project (Top): no surface' + (useSelT ? ' in the selection.' : '.')); return false; }
+    pushUndo(); for (const [k, col] of pend) ed.set(k, col);
+    gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); return true;
+  }
+  const V = gridModel && gridModel.views;
+  const src = gridView === 'side' ? (V && V.side) : gridView === 'front' ? (V && V.front) : gridView === 'back' ? (V && (V.back || V.front)) : null;
+  if (!src || !src.m) { alert('Re-project: no source image for this facing (Top has none).'); return false; }
+  // source image content bbox — the drawn pixels only
+  let iX0 = 1e9, iX1 = -1, iY0 = 1e9, iY1 = -1;
+  for (let iy = 0; iy < src.h; iy++) for (let ix = 0; ix < src.w; ix++) if (src.m[iy * src.w + ix]) { if (ix < iX0) iX0 = ix; if (ix > iX1) iX1 = ix; if (iy < iY0) iY0 = iy; if (iy > iY1) iY1 = iy; }
+  if (iX1 < 0) { alert('Re-project: the source image is empty.'); return false; }
+  // gather this facing's surface voxels + the model silhouette bbox in the two in-plane WORLD axes (across, z)
+  const colAxis = gridView === 'side' ? 'x' : 'y';     // side → world x across; front/back → world y across
+  const useSel = gridSelVox && gridSelVox.part === g.part;
+  const bothSides = gridView === 'side';               // one side sheet feeds BOTH ±y walls → do left AND right in one pass
+  // the surface faces the ray hits: NEAR (from s=0) always; the FAR side too on the Side facing.
+  const rayHits = (cx, cy) => {
+    const out = [];
+    for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) { out.push(v); break; } }
+    if (bothSides) for (let s = g.depth - 1; s >= 0; s--) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) { if (!out.length || out[0][0] !== v[0] || out[0][1] !== v[1] || out[0][2] !== v[2]) out.push(v); break; } }
+    return out;
+  };
+  const surf = []; let c0 = 1e9, c1 = -1, r0 = 1e9, r1 = -1;
+  for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
+    for (const v of rayHits(cx, cy)) {                 // FIRST face(s) the ray hits — near (+ far on Side); never interior voxels
+      const x = v[0], y = v[1], z = v[2], k = z * N + y * g.foot + x;
+      if (useSel && !gridSelVox.set.has(k)) continue;
+      const cv = colAxis === 'x' ? x : y;
+      if (cv < c0) c0 = cv; if (cv > c1) c1 = cv; if (z < r0) r0 = z; if (z > r1) r1 = z;
+      surf.push([k, cv, z]);
+    }
+  }
+  if (!surf.length) { alert('Re-project: no target surface' + (useSel ? ' within the selection.' : '.')); return false; }
+  const sampleArt = (ix, iy) => {                     // nearest drawn pixel within a small radius (silhouettes have gaps)
+    for (let rad = 0; rad <= 2; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      const px = ix + dx, py = iy + dy; if (px < 0 || py < 0 || px >= src.w || py >= src.h) continue;
+      const i = py * src.w + px; if (src.m[i]) return [src.c[i * 3], src.c[i * 3 + 1], src.c[i * 3 + 2]];
+    }
+    return null;
+  };
+  const cSpan = Math.max(1, c1 - c0), rSpan = Math.max(1, r1 - r0);
+  const pending = [];
+  for (const [k, cv, z] of surf) {
+    const ix = Math.round(iX0 + ((cv - c0) / cSpan) * (iX1 - iX0));
+    const iy = Math.round(iY0 + ((z - r0) / rSpan) * (iY1 - iY0));   // image row 0 = z0 (bottom) → higher z = higher row (matches art)
+    const col = sampleArt(ix, iy); if (col) pending.push([k, snap(col[0], col[1], col[2])]);
+  }
+  if (!pending.length) { alert('Re-project: no colours sampled from the image.'); return false; }
+  pushUndo();
+  for (const [k, col] of pending) ed.set(k, col);
+  gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave();
+  return true;
+}
+if ($('gridReproj')) $('gridReproj').onclick = () => reprojectSurface();
 // ESC clears the selection; Delete erases it; Enter/F fills it; Ctrl+Z / Ctrl+Y undo/redo
 document.addEventListener('keydown', (e) => {
   if (!$('keyModal') || !$('keyModal').hidden) return;               // don't fight the cutout modal's own ESC
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { if (e.shiftKey) gridRedo(); else gridUndo(); e.preventDefault(); return; }
   if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { gridRedo(); e.preventDefault(); return; }
-  if (e.key === 'Escape' && gridSel) { gridSel = null; renderGridView(); }
-  else if ((e.key === 'Delete' || e.key === 'Backspace') && gridSel) { if (deleteSelection()) e.preventDefault(); }
-  else if ((e.key === 'Enter' || e.key === 'f' || e.key === 'F') && gridSel) { if (fillSelection()) e.preventDefault(); }
+  if (e.key === 'Escape' && (gridSel || gridSelVox)) { gridSel = null; gridSelVox = null; gridSelView = null; renderGridView(); }
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && gridSelVox) { if (deleteSelection()) e.preventDefault(); }
+  else if ((e.key === 'Enter' || e.key === 'f' || e.key === 'F') && gridSelVox) { if (fillSelection()) e.preventDefault(); }
 });
 (() => {
   const cv = $('gridCanvas'); if (!cv) return;
@@ -1671,11 +1831,10 @@ document.addEventListener('keydown', (e) => {
     const px = (e.clientX - r.left) * (cv.width / r.width), py = (e.clientY - r.top) * (cv.height / r.height);
     const cx = Math.floor((px - g.ox) / g.cell), cy = Math.floor((py - g.oy) / g.cell);
     if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows) return false;
-    if (gridSel) {                                                   // an active selection MASKS editing to inside it
-      const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
-      if (cx < c0 || cx > c1 || cy < r0 || cy > r1) return false;
-    }
     const [x, y, z] = gridTargetVox(g, cx, cy), N = g.foot * g.foot, k = z * N + y * g.foot + x, ed = voxEdit[g.part];
+    // a selection MASKS editing to the SELECTED VOXELS (not a view rect): pick objects once in Layer 0, then
+    // paint their front/side/back faces across facings — corner voxels paint from any view — without reselecting.
+    if (gridSelVox && gridSelVox.part === g.part && !gridSelVox.set.has(k)) return false;
     const ov = ed.get(k), curFilled = ov !== undefined ? ov !== 'del' : gridModel.filled(x, y, z);
     if (erase) { if (!curFilled) return false; ed.set(k, 'del'); }   // nothing to remove here
     // paint: RECOLOUR a filled voxel, or (on a real layer) add one where empty. Layer 0 = surface → recolour
@@ -1748,7 +1907,7 @@ document.addEventListener('keydown', (e) => {
     // DELETE with a SELECTION active → delete the selected voxels on the CURRENT layer (Layer 0 cuts the whole
     // column through, after a confirm). Deliberately one layer at a time: walk the Layer slider and delete again;
     // an already-empty layer just no-ops (no stuck loop). Right-click still freehand-deletes within the selection.
-    if (gridTool === 'erase' && gridSel && e.button !== 2) { deleteSelection(); e.preventDefault(); return; }
+    if (gridTool === 'erase' && gridSelVox && e.button !== 2) { deleteSelection(); e.preventDefault(); return; }
     if (gridTool === 'box' && e.button !== 2) {                    // Box⌫: rubber-band a region to delete
       const c = cellOf(e); if (!c) return;
       boxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy }; gridBoxSel = boxing; renderGridView();
@@ -1766,6 +1925,7 @@ document.addEventListener('keydown', (e) => {
   const finish = () => {
     if (boxing) {                                                  // release the marquee → PERSISTENT selection (stays until ESC)
       gridSel = { c0: Math.min(boxing.c0, boxing.c1), r0: Math.min(boxing.r0, boxing.r1), c1: Math.max(boxing.c0, boxing.c1), r1: Math.max(boxing.r0, boxing.r1) };
+      gridSelView = gridView; gridSelVox = buildSelVox();   // freeze to voxels so the selection persists across facings
       boxing = null; gridBoxSel = null; renderGridView();
     }
     painting = false; geomDrag = null; if (dirty) { dirty = false; gridModel = null; rebuildSlices(); scheduleAutosave(); }  // full re-carve on release
@@ -2509,7 +2669,7 @@ function syncAllControls() {
 }
 async function loadProject(p) {
   bulkLoad = true;
-  undoStack.length = 0; redoStack.length = 0; gridSel = null;   // undo history + selection belong to the OUTGOING unit — never let them apply to this one
+  undoStack.length = 0; redoStack.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // undo history + selection belong to the OUTGOING unit — never let them apply to this one
   try {
     $('uid').value = p.id || 'unit'; activeUnitId = (p.id || 'unit');   // anchor the WIP key to the restored project
     Object.assign(state, p.state || {}); state.baked = null;
@@ -2685,7 +2845,7 @@ function selectUnit(id) {
   // async load must own the slot, or a stale-model autosave overwrites the unit you're switching to.
   clearTimeout(autosaveTimer);
   try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }
-  undoStack.length = 0; redoStack.length = 0; gridSel = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
+  undoStack.length = 0; redoStack.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
   loadingUnit = true;
   $('uid').value = id; activeUnitId = id;                 // anchor the WIP key to the unit being loaded
   const m = suppliedUnits();

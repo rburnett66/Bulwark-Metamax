@@ -154,9 +154,12 @@
         <button class="ghost" id="gridMirrorBT" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Mirror the bottom half of this view onto the top">⇅ B→T</button>
         <button class="ghost" id="gridSelLayer" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Select every cell on this layer (paint/erase within it; ESC clears)">▣ Select layer</button>
         <button class="ghost" id="gridFill" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Fill the selection with the paint colour — recolours every existing voxel in it (Enter/F). On Layer 0 that paints all facing voxels one colour.">🪣 Fill</button>
+        <button class="ghost" id="gridReproj" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Re-project this facing's source image onto the surface — fits the image to the model silhouette, snaps each pixel to the active palette, and paints only the FIRST face the ray hits. Geometry unchanged. Masked to the selection if one is active.">🖼 Re-project</button>
+        <button class="ghost" id="gridDiag" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Diagnose how the source view art maps onto this part's faces — shows offsets, art sizes, and per-face coverage (low +x coverage = black/top-colour tips).">🔬 Diag</button>
         <button class="ghost" id="gridClearLayer" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px">Clear layer</button>
         <button class="ghost" id="gridResetEdits" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px">Reset edits</button>
         <label style="flex:0 0 auto;font-size:10.5px;display:flex;align-items:center;gap:4px;cursor:pointer" title="Centre point + horizontal/vertical centre lines"><input type="checkbox" id="gridGuides" checked>✛ Guides</label>
+        <label style="flex:0 0 auto;font-size:10.5px;display:flex;align-items:center;gap:4px;cursor:pointer" title="Label each grid edge with the world direction it faces (Front/Back/Left/Right/Up/Down) — check the Top/Side/base/turret orientation matches the 3D model"><input type="checkbox" id="gridOrient" checked>🧭 Orient</label>
       </div>
       <div class="row" id="gridGeoRow" style="margin-top:5px;gap:5px;flex:0 0 auto;align-items:center;display:none">
         <button class="ghost" id="gridResetGeo" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px">↺ Reset to auto</button>
