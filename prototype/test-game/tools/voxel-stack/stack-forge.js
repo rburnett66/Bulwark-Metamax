@@ -1038,6 +1038,7 @@ let gridAlign = false;                                   // ⊞ Align T/S: carve
 let gridBoxSel = null;                                    // transient marquee being dragged {c0,r0,c1,r1} in grid cells
 let gridSel = null;                                       // PERSISTENT selection {c0,r0,c1,r1} — masks paint/erase; cleared on ESC
 let gridGuides = true;                                    // centre point + H/V centre lines (alignment/symmetry guide)
+let gridOrient = true;                                    // orientation indicator: label each grid edge with the world direction it faces
 // geometry box axis mapping: for each grid view, which world-axis span each in-plane axis (col,row) reads
 // and whether the grid coord is reversed vs the axis value. cap: x/y=foot, z=layers. Used by both the
 // geom overlay draw and the drag editing so they stay in lock-step.
@@ -1258,6 +1259,34 @@ function renderGridView() {
     ctx.stroke();
   }
   ctx.strokeStyle = 'rgba(120,160,200,.55)'; ctx.lineWidth = 1; ctx.strokeRect(ox + .5, oy + .5, gw - 1, gh - 1);
+
+  // ORIENTATION INDICATOR (2026-07-21): label each edge with the WORLD direction it faces, read straight
+  // from the same `ax.toVox` mapping the grid edits use — so the TOP/SIDE (and base-vs-turret) orientation
+  // is explicit and any disagreement with the 3D orbit is immediately visible. World axes: x=+FRONT/−BACK,
+  // y=+LEFT(foot-1)/−RIGHT(0), z=UP. The four maps agree front=+x, so all views share it; base and turret
+  // use the SAME map, so this reads the same for both parts.
+  if (gridOrient) {
+    const ORI = {
+      top:   { t: 'RIGHT', b: 'LEFT',  l: 'BACK',  r: 'FRONT', note: 'TOP · looking down (−Z)' },
+      side:  { t: 'UP',    b: 'DOWN',  l: 'BACK',  r: 'FRONT', note: 'SIDE · viewed from the RIGHT (−Y)' },
+      front: { t: 'UP',    b: 'DOWN',  l: 'LEFT',  r: 'RIGHT', note: 'FRONT · viewed from +X' },
+      back:  { t: 'UP',    b: 'DOWN',  l: 'RIGHT', r: 'LEFT',  note: 'BACK · viewed from −X' },
+    }[gridView];
+    if (ORI) {
+      const lab = (text, cx, cy, inside) => {
+        ctx.font = '9px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if (inside) { const w = ctx.measureText(text).width + 6; ctx.fillStyle = 'rgba(6,12,20,.72)'; ctx.fillRect(cx - w / 2, cy - 7, w, 13); }
+        ctx.fillStyle = inside ? 'rgba(140,210,255,.95)' : 'rgba(120,200,255,.8)';
+        ctx.fillText(text, cx, cy);
+      };
+      lab(ORI.t, ox + gw / 2, oy >= 14 ? oy - 6 : oy + 8, oy < 14);
+      lab(ORI.b, ox + gw / 2, (H - (oy + gh)) >= 14 ? oy + gh + 7 : oy + gh - 8, (H - (oy + gh)) < 14);
+      lab(ORI.l, ox >= 36 ? ox - 18 : ox + 16, oy + gh / 2, ox < 36);
+      lab(ORI.r, (W - (ox + gw)) >= 36 ? ox + gw + 18 : ox + gw - 16, oy + gh / 2, (W - (ox + gw)) < 36);
+      ctx.font = '9px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillStyle = 'rgba(120,200,255,.6)'; ctx.fillText(ORI.note, 4, 4);
+    }
+  }
 
   const drawMarquee = (s, stroke, fill) => {
     const c0 = Math.min(s.c0, s.c1), c1 = Math.max(s.c0, s.c1), r0 = Math.min(s.r0, s.r1), r1 = Math.max(s.r0, s.r1);
@@ -1563,6 +1592,7 @@ if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; rebuildSlices(); scheduleAutosave();
 };
 if ($('gridGuides')) $('gridGuides').onchange = (e) => { gridGuides = e.target.checked; renderGridView(); };
+if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.checked; renderGridView(); };
 // MIRROR one half of the current view onto the other, folding across the GRID CENTRE LINE (the ✛ guide),
 // NOT the model's content centre — so each half lands symmetric about the centreline (owner: centre the
 // model to the guide, then mirror). View-relative via gridGeom.toVox: 'col' folds the vertical centreline
