@@ -1283,6 +1283,29 @@ function renderGridView() {
     const tr2 = $('gridToolRow'); if (tr2) tr2.style.display = 'none';
     const gr3 = $('gridGeoRow'); if (gr3) gr3.style.display = 'none';
     const gp2 = $('gridPalette'); if (gp2) gp2.style.display = 'none';
+    if (editingDecor) {                                    // DECOR: the 3 carving views (Front / ¾ Angle / Side) in a row, height-aligned
+      const SEP = 2, Wc = cv.width, Hc = cv.height;
+      const panes = [{ ax: AX.front, cols: foot, label: 'FRONT  Y×Z' }, { ax: AX.angle, cols: foot * 2 - 1, label: '¾ ANGLE  H×Z' }, { ax: AX.side, cols: foot, label: 'SIDE  X×Z' }];
+      const totalCols = panes.reduce((s, p) => s + p.cols, 0) + SEP * (panes.length - 1);
+      const cellA = Math.max(1, Math.floor(Math.min(Wc / totalCols, Hc / (layers + 1))));
+      const gw = totalCols * cellA, gh = layers * cellA, ox0 = Math.floor((Wc - gw) / 2), oy = Math.floor((Hc - gh) / 2);
+      ctx.clearRect(0, 0, Wc, Hc); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, Wc, Hc);
+      const surf = (axm, cx, cy) => { for (let s = 0; s < axm.depth; s++) { const [x, y, z] = axm.toVox(cx, cy, s); if (filled(x, y, z)) return colAt(x, y, z); } return null; };
+      let ox = ox0;
+      for (const p of panes) {
+        if (cellA >= 4) { ctx.fillStyle = 'rgba(255,255,255,.025)'; for (let cy = 0; cy < layers; cy++) for (let cx = 0; cx < p.cols; cx++) if ((cx + cy) & 1) ctx.fillRect(ox + cx * cellA, oy + cy * cellA, cellA, cellA); }
+        for (let cy = 0; cy < layers; cy++) for (let cx = 0; cx < p.cols; cx++) { const col = surf(p.ax, cx, cy); if (col) { ctx.fillStyle = cssOf(col); ctx.fillRect(ox + cx * cellA, oy + cy * cellA, cellA, cellA); } }
+        ctx.strokeStyle = 'rgba(120,150,180,.45)'; ctx.lineWidth = 1; ctx.strokeRect(ox + 0.5, oy + 0.5, p.cols * cellA - 1, layers * cellA - 1);
+        ctx.fillStyle = 'rgba(143,167,189,.92)'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'top'; ctx.fillText(p.label, ox + 3, oy + 3);
+        ox += (p.cols + SEP) * cellA;
+      }
+      let minz = layers, maxz = -1; for (let z = 0; z < layers; z++) { let any = false; for (let y = 0; y < foot && !any; y++) for (let x = 0; x < foot && !any; x++) if (filled(x, y, z)) any = true; if (any) { if (z < minz) minz = z; if (z > maxz) maxz = z; } }
+      if (maxz >= 0) { ctx.setLineDash([4, 3]); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(95,224,255,.6)';   // shared Z (height) guide across all three
+        for (const zEdge of [layers - 1 - maxz, layers - minz]) { const ly = oy + zEdge * cellA + 0.5; ctx.beginPath(); ctx.moveTo(ox0, ly); ctx.lineTo(ox0 + gw, ly); ctx.stroke(); } ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(95,224,255,.9)'; ctx.font = '9px sans-serif'; ctx.textBaseline = 'top'; ctx.fillText('ht ' + (maxz - minz + 1), ox0 + 3, oy + (layers - 1 - maxz) * cellA + 1); }
+      gridGeom = { align: true, editable: false, cell: cellA, ox: ox0, oyTop: oy, oySide: oy, foot, layers, part };
+      return;
+    }
     const SEP = 2, Wc = cv.width, Hc = cv.height;
     const cellA = Math.max(1, Math.floor(Math.min(Wc / (2 * foot + SEP), Hc / (foot + layers + SEP))));
     const gwA = (2 * foot + SEP) * cellA, ghA = (foot + layers + SEP) * cellA;
