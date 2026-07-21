@@ -1034,6 +1034,14 @@ const palMap = new Map();                    // palette tuner: pre-tune colour k
 let palEpoch = 0;                            // bumps on any palette reduce/tune → paint strip recomputes
 const palKeep = new Set();                   // palette reducer: colour keys the artist pinned to survive reduction
 const palDrop = new Set();                    // palette reducer: colour keys the artist marked to eliminate (remap away)
+// palette tuning (reduce count + tune map + keep/drop) is a PER-UNIT property — clear it on every unit/decor
+// load so one model's palette never bleeds into the next. Callers reset AFTER flushing the outgoing unit, so
+// its saved palette is preserved; a loaded WIP re-applies its own palette right after via loadProject.
+function resetPalette() {
+  palMap.clear(); palKeep.clear(); palDrop.clear(); state.paletteN = 0; palEpoch++;
+  if ($('pal')) { $('pal').value = 0; if ($('palV')) $('palV').textContent = 'full'; }
+  if ($('palN')) { $('palN').value = 0; if ($('palNV')) $('palNV').textContent = 'full'; }
+}
 let bulkLoad = false;                                                         // true while restoring a project
 let loadingUnit = false;                                                      // true from selectUnit() until its async load resolves — blocks autosave clobbering the new slot
 let suppressSquashWarn = false;                                              // quiet the squash warning during the auto-fit probe
@@ -2737,6 +2745,7 @@ function loadDecorForEdit(id) {
     else { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); }
   } catch (e) { /* best-effort flush */ }
   editingDecor = id;
+  resetPalette();                                                  // per-decor palette (a WIP re-applies its own via loadProject)
   const entry = (loadDecorManifest().decor || {})[id];
   if ($('did')) $('did').value = id;
   if (entry && entry.pack) setDecorFields(entry.pack.decor);
@@ -3014,6 +3023,7 @@ async function loadFaction(name) {
       clearTimeout(autosaveTimer);
       try { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* flush unit */ }
       editingDecor = (($('did') && $('did').value) || 'decor').trim();
+      resetPalette();
       clearSourceArt(); state.decorBaked = null; gridModel = null;
       state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }
       rebuildSlices();
@@ -3059,6 +3069,7 @@ $('addUnit').onclick = () => {
     } catch (e) { /* best-effort */ }
     editingDecor = id; if ($('did')) $('did').value = id;
     state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }   // decor tends tall — raise height
+    resetPalette();
     clearSourceArt(); state.decorBaked = null; gridModel = null; state.part = 'body'; rebuildSlices(); forceDecorBodyOnly();   // clean slate, body-only
     if (!roster.some((u) => u.id === id)) roster.push({ id, role: 'decor', shape: '🌿', decor: true });
     renderRoster();
@@ -3091,6 +3102,7 @@ function selectUnit(id) {
   clearTimeout(autosaveTimer);
   if (editingDecor) { try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) idb.put('decor:' + editingDecor, dout); } catch (e) { /* flush decor */ } editingDecor = null; }   // leaving decor editing for a unit
   try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }
+  resetPalette();                                        // per-unit palette — clear it (a WIP re-applies its own via loadProject)
   undoStack.length = 0; redoStack.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
   loadingUnit = true;
   $('uid').value = id; activeUnitId = id;                 // anchor the WIP key to the unit being loaded
