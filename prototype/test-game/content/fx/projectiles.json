@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "_comment": "Per-id projectile FX authored in the Shooting Gallery (RANGE mode → Save FX). Entries: { kind: shell|flak|tracer, color: '#rrggbb', speed (tiles/s), size (x), cadence (s), burst (rounds) }. Ids not listed fire the classic hardcoded look. Export from the gallery and commit here to SHIP (content must be committed to ship).",
+  "units": {}
+}

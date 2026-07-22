@@ -101,6 +101,18 @@ export function boot(mountEl, seed) {
     if (dec && dec.ready) console.log('[decor] loaded', Object.keys(dec.decor).length, 'decor pack(s):', Object.keys(dec.decor).join(', '));
   }).catch((e) => console.warn('[decor] skipped:', e && e.message));
 
+  // PROJECTILE FX table (Shooting Gallery authoring → emitCombatFx): shipped content/fx/projectiles.json
+  // + dev-live localStorage overlay (gallery saves win). Ids not in the table keep the classic look.
+  import('./render/projFx.js').then(async ({ mergeProjFx, PROJ_FX_LS_KEY }) => {
+    let shipped = null;
+    try { const r = await fetch('content/fx/projectiles.json'); if (r.ok) shipped = await r.json(); } catch (e) { /* optional */ }
+    let local = null;
+    try { local = JSON.parse(localStorage.getItem(PROJ_FX_LS_KEY) || 'null'); } catch (e) { /* dev-live */ }
+    renderer.projFx = mergeProjFx(shipped && shipped.units, local && (local.units || local));
+    const n = Object.keys(renderer.projFx).length;
+    if (n) console.log('[projfx] authored projectile FX for', n, 'id(s):', Object.keys(renderer.projFx).join(', '));
+  }).catch((e) => console.warn('[projfx] skipped:', e && e.message));
+
   // The last COMPLETED game, captured so "Run Replay" replays it even after Restart resets the live log, and
   // after a page reload (persisted to localStorage). mmdev.
   let lastReplayLog = null;

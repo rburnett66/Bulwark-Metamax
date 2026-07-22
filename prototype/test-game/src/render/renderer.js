@@ -610,7 +610,7 @@ function emitCombatFx(renderer, state) {
   };
   // owner 2026-07-16: flak rounds were near-invisible on phones (4x), cannon shells faint (2x)
   const SHOT_SIZE = { shell: 0.022, flak: 0.03, tracer: 0.0075 };
-  const fire = (id, from, to, kind, cadence, speed, color, burst) => {
+  const fire = (id, from, to, kind, cadence, speed, color, burst, sizeMult) => {
     const next = clock.get(id) || 0;
     if (now < next) return;
     clock.set(id, now + cadence * (0.85 + Math.random() * 0.3));
@@ -621,11 +621,14 @@ function emitCombatFx(renderer, state) {
       // burst rounds spray: jittered impact points, staggered a few frames apart (sim clock)
       const jx = n > 1 ? (Math.random() * 2 - 1) * t * 0.16 : 0;
       const jy = n > 1 ? (Math.random() * 2 - 1) * t * 0.16 : 0;
-      const args = [from.x, from.y, to.x + jx, to.y + jy, speed * t, color, kind, t * (SHOT_SIZE[kind] || 0.0075)];
+      const args = [from.x, from.y, to.x + jx, to.y + jy, speed * t, color, kind, t * (SHOT_SIZE[kind] || 0.0075) * (sizeMult || 1)];
       if (k === 0) renderer.projectiles.spawn(...args);
       else (renderer._shotQueue || (renderer._shotQueue = [])).push({ at: now + k * 0.07, args });
     }
   };
+  // AUTHORED PROJECTILE FX (Shooting Gallery → renderer.projFx, see projFx.js): per-id overrides for
+  // the recipes below; every id not in the table fires exactly the classic hardcoded look.
+  const pfx = renderer.projFx || null;
   // flush queued burst rounds that have come due
   if (renderer._shotQueue && renderer._shotQueue.length) {
     const due = [];
@@ -652,8 +655,13 @@ function emitCombatFx(renderer, state) {
           const lp = cellToLocal(renderer, tp.x, tp.y);
           const ty = lp.y - (tp.air ? t * 1.05 : 0);
           // owner 2026-07-16: tower defense reads as a SPRAY of bullets — 4-round jittered burst
-          if (st.kind === 'antiGround') fire('s' + st.id, c, { x: lp.x, y: ty }, 'shell', 0.55, 13, 0xffd080, 4);
-          else fire('s' + st.id, c, { x: lp.x, y: ty }, 'flak', 0.35, 18, 0x9fd4ff);
+          const tfx = pfx && pfx[st.structId];
+          if (st.kind === 'antiGround') fire('s' + st.id, c, { x: lp.x, y: ty },
+            (tfx && tfx.kind) || 'shell', (tfx && tfx.cadence) || 0.55, (tfx && tfx.speed) || 13,
+            (tfx && tfx.color !== undefined) ? tfx.color : 0xffd080, (tfx && tfx.burst) || 4, tfx && tfx.size);
+          else fire('s' + st.id, c, { x: lp.x, y: ty },
+            (tfx && tfx.kind) || 'flak', (tfx && tfx.cadence) || 0.35, (tfx && tfx.speed) || 18,
+            (tfx && tfx.color !== undefined) ? tfx.color : 0x9fd4ff, (tfx && tfx.burst) || 1, tfx && tfx.size);
         }
       }
       if (st.maxHp && st.hp > 0 && st.hp / st.maxHp < 0.5 && Math.random() < dt * 2.2) burn(c.x, c.y, t * 0.3, t * 0.1);
@@ -689,8 +697,11 @@ function emitCombatFx(renderer, state) {
         if (tp) {
           const lp = cellToLocal(renderer, tp.x, tp.y);
           const grounded = d.shape === 'Tanks' || d.shape === 'Heavy Tanks' || d.shape === 'Artillery';
+          const ufx = pfx && pfx[u.unitId];
           fire('u' + u.id, { x: p.x, y: p.y - lift }, { x: lp.x, y: lp.y - (tp.air ? t * 1.05 : 0) },
-            grounded ? 'shell' : 'tracer', 0.6, 15, u.side === 'attacker' ? 0xff9a70 : 0xbfe8ff);
+            (ufx && ufx.kind) || (grounded ? 'shell' : 'tracer'), (ufx && ufx.cadence) || 0.6, (ufx && ufx.speed) || 15,
+            (ufx && ufx.color !== undefined) ? ufx.color : (u.side === 'attacker' ? 0xff9a70 : 0xbfe8ff),
+            (ufx && ufx.burst) || 1, ufx && ufx.size);
         }
       }
       const hpFrac = u.hp / Math.max(1, u.maxHp);

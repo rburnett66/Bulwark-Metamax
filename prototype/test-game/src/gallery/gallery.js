@@ -21,6 +21,7 @@ import {
   unitShooter, towerShooter, measure, splashHits, retuneDiff,
 } from './calc.js';
 import { runGauntlet, runGauntletMatrix, runFactionSweep, GAUNTLET_DEFENSES } from './lane.js';
+import { PROJ_FX_LS_KEY, mergeProjFx, normalizeFxEntry, serializeFxEntry } from '../render/projFx.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -131,8 +132,24 @@ export function bootGallery() {
     $('diff-out').textContent = diff || '— tune dps / type / aoe above and the paste-able tables.js diff appears here —';
     $('copy-diff').disabled = !diff;
 
-    view.configure(shooter, target, m, gameFxDefaultsDirty ? null : gameFxDefaults(shooter));
+    view.configure(shooter, target, m, gameFxDefaultsDirty ? null : fxDefaultsFor(shooter));
     if (mode === 'gauntlet') runGauntletNow();   // shooter/tier changes re-run the live gauntlet
+  }
+
+  /* ── persisted projectile FX (ticket mm-9d73309eb351): saved (dev-live) > shipped > game default ── */
+  let shippedFx = {};   // content/fx/projectiles.json, normalized — loads async below
+  fetch('content/fx/projectiles.json').then((r) => (r.ok ? r.json() : null))
+    .then((j) => { shippedFx = mergeProjFx(j && j.units, null); recompute(); })
+    .catch(() => { /* optional file */ });
+  const readLocalFx = () => { try { return JSON.parse(localStorage.getItem(PROJ_FX_LS_KEY) || '{}') || {}; } catch (e) { return {}; } };
+  const shooterFxId = () => (sel.shooterKind === 'tower' ? sel.shooterStruct : sel.shooterUnit);
+  function fxDefaultsFor(shooter) {
+    const id = shooterFxId();
+    const localEntry = normalizeFxEntry(readLocalFx()[id]);
+    const saved = localEntry || shippedFx[id] || null;
+    const prov = localEntry ? 'saved (dev-live)' : (shippedFx[id] ? 'shipped' : 'game default');
+    const el = $('fx-prov'); if (el) el.textContent = prov;
+    return saved ? Object.assign({}, gameFxDefaults(shooter), saved) : gameFxDefaults(shooter);
   }
 
   /* ── shooter events ── */
@@ -152,7 +169,7 @@ export function bootGallery() {
     for (const id of ['edit-hp', 'edit-range', 'edit-speed']) $(id).disabled = !isUnit;
     $('shooter-range').textContent = fmt(shooter.range, 2) + ' tiles';
   }
-  function pickShooter() { sel.edits = {}; syncEditFields(); recompute(); }
+  function pickShooter() { sel.edits = {}; gameFxDefaultsDirty = false; syncEditFields(); recompute(); }   // new unit → load ITS fx defaults
   $('shooter-kind').onchange = (e) => {
     sel.shooterKind = e.target.value;
     $('shooter-unit-row').style.display = sel.shooterKind === 'unit' ? '' : 'none';
@@ -229,7 +246,47 @@ export function bootGallery() {
   $('fx-kind').onchange = $('fx-kind').oninput; $('fx-color').onchange = $('fx-color').oninput;
   $('fx-auto').onchange = (e) => view.setAutoFire(e.target.checked);
   $('fx-shot').onclick = () => view.fireOnce();
-  $('fx-defaults').onclick = () => { gameFxDefaultsDirty = false; recompute(); };
+  $('fx-defaults').onclick = () => { gameFxDefaultsDirty = false; recompute(); };   // reload saved > shipped > game default
+
+  /* save / revert / export — the authored look the GAME fires (renderer.projFx) */
+  $('fx-save').onclick = () => {
+    const id = shooterFxId();
+    const entry = serializeFxEntry(readFx());
+    if (!entry) { $('fx-save-status').textContent = 'Nothing valid to save.'; return; }
+    const all = readLocalFx(); all[id] = entry;
+    try { localStorage.setItem(PROJ_FX_LS_KEY, JSON.stringify(all)); } catch (e) { $('fx-save-status').textContent = 'Save failed: ' + e.message; return; }
+    gameFxDefaultsDirty = false;
+    $('fx-prov').textContent = 'saved (dev-live)';
+    $('fx-save-status').innerHTML = 'Saved <b>' + id + '</b> (dev-live) — reload the game tab and it fires this look. Export → commit to ship.';
+  };
+  $('fx-revert').onclick = () => {
+    const id = shooterFxId();
+    const all = readLocalFx();
+    if (all[id] !== undefined) {
+      delete all[id];
+      try { localStorage.setItem(PROJ_FX_LS_KEY, JSON.stringify(all)); } catch (e) { /* storage blocked */ }
+    }
+    gameFxDefaultsDirty = false;
+    recompute();
+    $('fx-save-status').textContent = 'Reverted ' + id + (shippedFx[id]
+      ? ' to the SHIPPED entry (remove it from content/fx/projectiles.json to fully reset).'
+      : ' to the game default.');
+  };
+  $('fx-export').onclick = () => {
+    const merged = mergeProjFx(shippedFx, readLocalFx());   // union, dev-live wins
+    const units = {};
+    for (const id of Object.keys(merged)) units[id] = serializeFxEntry(merged[id]);
+    const payload = JSON.stringify({
+      version: 1,
+      _comment: 'Authored in the Shooting Gallery (RANGE mode). Commit as prototype/test-game/content/fx/projectiles.json to ship — content must be committed to ship.',
+      units,
+    }, null, 2);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+    a.download = 'projectiles.json'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    $('fx-save-status').innerHTML = 'Exported ' + Object.keys(units).length + ' entrie(s) to Downloads — commit as <b>content\\fx\\projectiles.json</b> to ship.';
+  };
 
   // The view reports its FX config back so the sliders mirror game defaults on selection change.
   view.onFxApplied = (fx) => {

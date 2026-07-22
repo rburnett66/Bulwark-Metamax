@@ -162,7 +162,16 @@
             <div class="inline"><input type="range" id="fx-burst" min="1" max="6" step="1" value="1" /><span class="num" id="fx-burst-num">×1</span></div></div>
           <div class="field"><label for="fx-auto">auto-fire</label>
             <div class="inline"><input type="checkbox" id="fx-auto" checked style="flex:0 0 auto" /><button id="fx-shot" style="flex:1">Single volley</button></div></div>
-          <div class="field"><label>&nbsp;</label><button id="fx-defaults">Game defaults for this shooter</button></div>
+          <div class="field"><label>&nbsp;</label><button id="fx-defaults">Reload this unit's defaults</button></div>
+          <div class="field" style="grid-column:1 / -1">
+            <label>persist — loaded from: <span id="fx-prov" style="color:var(--accent)">game default</span></label>
+            <div class="inline">
+              <button id="fx-save">Save FX for this unit</button>
+              <button id="fx-revert">Revert to game default</button>
+              <button id="fx-export">Export projectiles.json</button>
+            </div>
+            <div class="sub" id="fx-save-status" style="margin-top:2px">Saves are dev-live (the game reads them on reload). Export → commit as <b>content\fx\projectiles.json</b> to SHIP.</div>
+          </div>
         </div>
       </div>
     </div>
