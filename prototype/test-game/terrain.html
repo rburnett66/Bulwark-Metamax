@@ -122,7 +122,7 @@
           <div class="row"><label>Base gap</label><input type="range" id="baseGap" min="1" max="4" value="2"><span class="val" id="baseGapV">2</span></div>
           <div class="row"><label>Decor density</label><input type="range" id="decorDensity" min="0" max="100" value="50"><span class="val" id="decorDensityV">50</span></div>
           <div class="row"><label>Placement noise</label><input type="range" id="decorNoise" min="0" max="100" value="40"><span class="val" id="decorNoiseV">40</span></div>
-          <div class="note" style="margin:2px 0 0">🌿 Auto-scatters saved decor as clustered groves (3-5 per dot) on affine, non-water terrain. Density = how many groves; noise = how spread out (higher = more gaps so units can path through blocking trees).</div>
+          <div class="note" style="margin:2px 0 0">🌿 Impassable cores (trees/rocks/cliff) are FULLY covered — a blocked cell always shows its prop. Density/noise only shape the pathable border scatter: density = how many groves (3-5 per dot), noise = how spread out.</div>
           <button class="ghost" id="genRes" style="margin-top:2px">Generate resources</button>
           <div class="row" style="margin-top:6px;gap:4px;flex-wrap:wrap">
             <button class="ghost resPaint" data-res="blue" style="flex:1;min-width:64px">🔵 Blue</button>
@@ -350,12 +350,29 @@ function scatterDecor(g, seed) {
     && g.terrain[y * g.cols + x] !== WATER
     && aff.has(TERRAIN_AFFINITY[g.terrain[y * g.cols + x]]);
   const GROVE_FACTOR = 0.10, JIT = 1.5 + nz * 4.5; let stream = 0;   // rule 1: way more groves · rule 5: noise widens the clump (1.5..6 cells)
+  // Core terrain (TREES/ROCKS/CLIFF, not their borders) is inherently impassable — it must READ
+  // impassable. Sparse props on a blocking core looked walkable while blocking[] said no (owner:
+  // "tree terrain = impassible and completely covered"). Cores get FULL coverage below; density/
+  // noise only shape the pathable border scatter.
+  const CORE_BLOCKING = new Set([3, 4, 5]);   // TERRAIN.ROCKS / TREES / CLIFF
+  const isCore = (x, y) => CORE_BLOCKING.has(g.terrain[y * g.cols + x]);
   for (const id of ids) {
     const d = decorCatalog[id], aff = new Set(d.affinity || []); if (!aff.size) continue;
     const dens = Math.max(0, Math.min(1, ((d.density != null ? d.density : 50) / 100) * globalD)); if (dens <= 0) continue;
-    const cells = []; for (let y = 0; y < g.rows; y++) for (let x = 0; x < g.cols; x++) if (eligible(x, y, aff)) cells.push([x, y]);
-    if (!cells.length) continue;
     const rnd = decorRng((seed | 0) + (++stream) * 131 + 0x5EED);
+    // FULL-COVER pass: every core cell in this decor's affinity gets a prop (sub-cell stagger +
+    // per-prop scale keep it organic; the region is already impassable so coverage can't hurt pathing).
+    for (let y = 0; y < g.rows; y++) for (let x = 0; x < g.cols; x++) {
+      if (!isCore(x, y) || !eligible(x, y, aff)) continue;
+      const ck = x + ',' + y; if (occupied.has(ck)) continue; occupied.add(ck);
+      const dx = +((rnd() * 2 - 1) * 0.4).toFixed(2), dy = +((rnd() * 2 - 1) * 0.4).toFixed(2);
+      const sc = +(0.85 + rnd() * 0.30).toFixed(2);
+      out.push({ x, y, type: id, dx, dy, s: sc });
+      if (d.blocks) g.blocking[y * g.cols + x] = 1;
+    }
+    // GROVE pass (borders + other affine, pathable terrain): unchanged sparse/noisy clusters.
+    const cells = []; for (let y = 0; y < g.rows; y++) for (let x = 0; x < g.cols; x++) if (!isCore(x, y) && eligible(x, y, aff)) cells.push([x, y]);
+    if (!cells.length) continue;
     const seeds = Math.max(1, Math.round(cells.length * dens * GROVE_FACTOR));
     for (let s = 0; s < seeds; s++) {
       const c = cells[(rnd() * cells.length) | 0], n = 3 + (rnd() * 3 | 0);   // rule 3: ALWAYS a group of 3-5 around each dot
