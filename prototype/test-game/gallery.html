@@ -34,7 +34,10 @@
     #right { flex:1 1 640px; min-width:520px; display:flex; flex-direction:column; gap:12px; }
     #gallery-mount { background:#080b0e; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
     #gallery-mount canvas { max-width:100%; height:auto; display:block; }
-    #fx-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px; }
+    #fx-grid, #g-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px; }
+    #matrix-wrap table { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
+    #matrix-wrap th, #matrix-wrap td { text-align:left; padding:4px 8px; border-bottom:1px solid #1b232c; white-space:nowrap; }
+    #matrix-wrap th { color:var(--muted); font-weight:600; }
     #diff-out { background:#0b1119; border:1px solid var(--border); border-radius:6px; padding:8px; margin:0;
       font:12px/1.5 ui-monospace, Consolas, monospace; color:#cfe6ee; white-space:pre-wrap; word-break:break-all; min-height:52px; }
   </style>
@@ -102,10 +105,41 @@
         <pre id="diff-out">—</pre>
         <button id="copy-diff" disabled>Copy retune diff</button>
       </div>
+
+      <div class="box" id="gauntlet-metrics" style="display:none">
+        <h2>Gauntlet readout — measured on the run</h2>
+        <div class="row"><span class="k">outcome</span><span class="v" id="gm-outcome">—</span></div>
+        <div class="row"><span class="k">run time</span><span class="v" id="gm-time">—</span></div>
+        <div class="row"><span class="k">target acquired</span><span class="v" id="gm-acquire">—</span></div>
+        <div class="row"><span class="k">acquired at range</span><span class="v" id="gm-acqdist">—</span></div>
+        <div class="row"><span class="k">damage taken</span><span class="v" id="gm-dmg">—</span></div>
+        <div class="row"><span class="k">dps received</span><span class="v" id="gm-dpsr">—</span></div>
+        <div class="row"><span class="k">time under fire</span><span class="v" id="gm-fire">—</span></div>
+        <div class="row"><span class="k">hp remaining</span><span class="v" id="gm-hp">—</span></div>
+        <div class="row"><span class="k">distance traveled</span><span class="v" id="gm-travel">—</span></div>
+        <div class="row"><span class="k">dps dealt (tower+base)</span><span class="v" id="gm-dpsd">—</span></div>
+        <div class="row"><span class="k">mine</span><span class="v" id="gm-mine">—</span></div>
+      </div>
     </div>
 
     <div id="right">
+      <div id="mode-bar" style="display:flex; gap:8px;">
+        <button id="mode-range" class="on" style="flex:1; border-color:var(--accent); color:var(--accent);">RANGE — fx &amp; matchup sandbox</button>
+        <button id="mode-gauntlet" style="flex:1;">GAUNTLET — spawn→base vs a defense</button>
+      </div>
       <div id="gallery-mount"></div>
+      <div id="gauntlet-mount" style="display:none; background:#080b0e; border:1px solid var(--border); border-radius:8px; overflow:hidden;"></div>
+      <div class="box" id="gauntlet-controls" style="display:none">
+        <h2>Gauntlet — real sim run (createSim/stepSim), replayed</h2>
+        <div id="g-grid">
+          <div class="field"><label for="g-defense">defense</label><select id="g-defense"></select></div>
+          <div class="field"><label>replay speed</label>
+            <div class="inline"><input type="range" id="g-speed" min="1" max="16" step="1" value="4" /><span class="num" id="g-speed-num">4×</span></div></div>
+          <div class="field"><label>&nbsp;</label><button id="g-restart">Restart run</button></div>
+          <div class="field" style="grid-column:1 / -1"><button id="g-matrix">Run FULL MATRIX for this attacker (none + cannon T1-3 + flak T1-3 + mine)</button></div>
+        </div>
+        <div id="matrix-wrap" style="overflow-x:auto;"></div>
+      </div>
       <div class="box">
         <h2>Projectile &amp; impact FX (the game's pooled Tier A layer)</h2>
         <div id="fx-grid">

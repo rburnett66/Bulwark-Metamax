@@ -12,14 +12,15 @@
  * Needs global PIXI (vendor/pixi.min.js), loaded by gallery.html.
  */
 
-import { UNITS, STRUCTURES, DAMAGE_TYPES, ASSUMPTIONS } from '../data/tables.js';
+import { UNITS, STRUCTURES, DAMAGE_TYPES, ASSUMPTIONS, MAP } from '../data/tables.js';
 import { createProjectilePool } from '../render/projectiles.js';
-import { cellToLocal, spawnFx, updateFx } from '../render/renderer.js';
+import { cellToLocal, spawnFx, updateFx, spawnFireClump, spawnGlow } from '../render/renderer.js';
 import { applyDamage } from '../sim/combat.js';
 import {
   makeState, makeUnitTarget, makeStructureTarget, makeArmorTarget,
   unitShooter, towerShooter, measure, splashHits, retuneDiff,
 } from './calc.js';
+import { runGauntlet, runGauntletMatrix, GAUNTLET_DEFENSES } from './lane.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -129,6 +130,7 @@ export function bootGallery() {
     $('copy-diff').disabled = !diff;
 
     view.configure(shooter, target, m, gameFxDefaultsDirty ? null : gameFxDefaults(shooter));
+    if (mode === 'gauntlet') runGauntletNow();   // shooter/tier changes re-run the live gauntlet
   }
 
   /* ── shooter events ── */
@@ -228,6 +230,78 @@ export function bootGallery() {
     $('fx-burst').value = fx.burst; $('fx-burst-num').textContent = '×' + fx.burst;
   };
 
+  /* ══════════════════════ GAUNTLET mode (Epic M0) ══════════════════════ */
+  const gview = createGauntletView($('gauntlet-mount'));
+  fillSelect($('g-defense'), GAUNTLET_DEFENSES.map((d) => [d.key, d.label]), 'cannon1');
+  let mode = 'range';
+  const rangeOnlyBoxes = [$('fx-grid').parentElement, $('edit-dps').closest('.box'),
+                          $('target-mode').closest('.box'), $('r-legal').closest('.box'), $('diff-out').closest('.box')];
+  const modeBtn = (btn, on) => { btn.style.borderColor = on ? 'var(--accent)' : ''; btn.style.color = on ? 'var(--accent)' : ''; };
+
+  function currentDefense() { return GAUNTLET_DEFENSES.find((d) => d.key === $('g-defense').value) || GAUNTLET_DEFENSES[0]; }
+
+  function runGauntletNow() {
+    if (mode !== 'gauntlet') return;
+    if (sel.shooterKind !== 'unit') {
+      $('gm-outcome').textContent = 'pick a UNIT shooter — towers defend, they don’t run the lane';
+      $('gm-outcome').style.color = '#e0c05a';
+      return;
+    }
+    const d = currentDefense();
+    const r = runGauntlet({ unitId: sel.shooterUnit, tier: sel.shooterTier, defense: d, collectTrace: true });
+    gview.load(r, d);
+    $('gm-outcome').textContent = r.outcome === 'reached' ? 'REACHED BASE' : r.outcome.toUpperCase();
+    $('gm-outcome').style.color = r.outcome === 'reached' ? '#5ae08a' : '#e05a5a';
+    $('gm-time').textContent = r.time + ' s';
+    $('gm-acquire').textContent = r.tAcquire == null ? 'never' : r.tAcquire + ' s after spawn';
+    $('gm-acqdist').textContent = r.acquireDist == null ? '—' : r.acquireDist + ' tiles';
+    $('gm-dmg').textContent = String(r.damageTaken);
+    $('gm-dpsr').textContent = String(r.dpsReceived);
+    $('gm-fire').textContent = r.timeUnderFire + ' s';
+    $('gm-hp').textContent = r.hpLeft + ' (' + Math.round(r.hpFrac * 100) + '%)';
+    $('gm-travel').textContent = r.traveled + ' tiles';
+    $('gm-dpsd').textContent = String(r.dpsDealt);
+    $('gm-mine').textContent = r.mine
+      ? (r.mine.triggered ? 'boom @ ' + (Math.round(r.mine.at * 100) / 100) + 's — ' + r.mine.dealt + ' dmg' : 'never triggered')
+      : '—';
+  }
+
+  function setMode(m) {
+    mode = m;
+    modeBtn($('mode-range'), m === 'range'); modeBtn($('mode-gauntlet'), m === 'gauntlet');
+    $('gallery-mount').style.display = m === 'range' ? '' : 'none';
+    $('gauntlet-mount').style.display = m === 'gauntlet' ? '' : 'none';
+    $('gauntlet-controls').style.display = m === 'gauntlet' ? '' : 'none';
+    $('gauntlet-metrics').style.display = m === 'gauntlet' ? '' : 'none';
+    for (const b of rangeOnlyBoxes) if (b) b.style.display = m === 'range' ? '' : 'none';
+    view.setActive(m === 'range');
+    gview.setActive(m === 'gauntlet');
+    if (m === 'gauntlet') runGauntletNow();
+  }
+  $('mode-range').onclick = () => setMode('range');
+  $('mode-gauntlet').onclick = () => setMode('gauntlet');
+  $('g-defense').onchange = runGauntletNow;
+  $('g-speed').oninput = (e) => { $('g-speed-num').textContent = e.target.value + '×'; gview.setSpeed(Number(e.target.value)); };
+  $('g-restart').onclick = () => gview.restart();
+  $('g-matrix').onclick = () => {
+    if (sel.shooterKind !== 'unit') { $('matrix-wrap').innerHTML = '<div class="sub">Pick a UNIT shooter first.</div>'; return; }
+    $('matrix-wrap').innerHTML = '<div class="sub">running ' + GAUNTLET_DEFENSES.length + ' sims…</div>';
+    const unitId = sel.shooterUnit, tier = sel.shooterTier;
+    setTimeout(() => {   // let the spinner paint before the synchronous sims
+      const rows = runGauntletMatrix(unitId, tier);
+      const cells = rows.map((r, i) =>
+        '<tr><td>' + GAUNTLET_DEFENSES[i].label + '</td>' +
+        '<td style="color:' + (r.outcome === 'reached' ? '#5ae08a' : '#e05a5a') + '">' + r.outcome + '</td>' +
+        '<td>' + Math.round(r.hpFrac * 100) + '%</td><td>' + r.damageTaken + '</td><td>' + r.dpsReceived + '</td>' +
+        '<td>' + (r.tAcquire == null ? '—' : r.tAcquire + 's') + '</td><td>' + r.time + 's</td></tr>').join('');
+      $('matrix-wrap').innerHTML =
+        '<table><tr><th>' + unitId + ' T' + tier + ' vs…</th><th>Outcome</th><th>HP left</th>' +
+        '<th>Dmg taken</th><th>DPS recv</th><th>Acquired</th><th>Time</th></tr>' + cells + '</table>';
+    }, 30);
+  };
+
+  setMode('range');
+
   recompute();   // boot: shooter/target defaults → readout + first scene
 }
 
@@ -324,8 +398,11 @@ function createRangeView(mount) {
     caption.text = `range ${((st.shooter && st.shooter.range) || 0).toFixed(2)} tiles · ticks = 1 tile · ${st.legal ? 'live fire' : 'HOLD — illegal target domain'}`;
   }
 
+  let active = true;   // mode toggle: an inactive view skips its ticker work entirely
+
   const rv = {
     onFxApplied: null,
+    setActive(v) { active = !!v; },
     /** New shooter/target selection from the panel. */
     configure(shooter, target, m, fxDefaults) {
       st.shooter = shooter; st.target = target; st.effDps = m.effDps; st.legal = m.legal && m.effDps > 0;
@@ -378,6 +455,7 @@ function createRangeView(mount) {
   }
 
   app.ticker.add(() => {
+    if (!active) return;
     const dt = Math.min(0.05, app.ticker.deltaMS / 1000);
     st.clock += dt;
 
@@ -437,4 +515,159 @@ function createRangeView(mount) {
   });
 
   return rv;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Gauntlet view — top-down replay of a runGauntlet() result on the harness
+   board. Positions/hp come from the REAL sim's trace; the shots/impacts/kill
+   FX layer on top exactly the way the game's cosmetic layer does (renderer
+   recipes + the shared updateFx/spawnFx engine on a shim).
+   ═══════════════════════════════════════════════════════════════════════════ */
+function createGauntletView(mount) {
+  const COLS = MAP.cols, ROWS = MAP.rows, T = 14;               // 64×32 → 896×448
+  const W = COLS * T, H = ROWS * T;
+  const app = new PIXI.Application({ width: W, height: H, background: 0x0a0f14, antialias: true });
+  mount.appendChild(app.view);
+  const root = new PIXI.Container(); app.stage.addChild(root);
+  const board = new PIXI.Graphics(); root.addChild(board);      // static per run
+  const actors = new PIXI.Graphics(); root.addChild(actors);    // unit + tower + mine, per frame
+  const pool = createProjectilePool();
+  const fxLayer = new PIXI.Container(); const fxG = new PIXI.Graphics();
+  fxLayer.addChild(pool.container); fxLayer.addChild(fxG); root.addChild(fxLayer);
+  const R = {                                                    // renderer-shim (same contract as the range view)
+    tile: T, fxG, dustG: null, fxItems: [], flames: [], glows: [], goldFloats: [],
+    projectiles: { container: pool.container, spawn: (...a) => pool.spawn(...a), clear: () => pool.clear(), update: (dt, cb) => pool.update(dt, cb) },
+    layers: { fx: fxLayer, structHp: fxLayer }, shake: { time: 0, dur: 0, mag: 0 },
+    root, camera: { x: 0, y: 0 }, baseFire: 0, baseFirePos: null, _fxDt: 1 / 60,
+  };
+  const caption = new PIXI.Text('', { fontFamily: 'system-ui', fontSize: 12, fill: 0x8ea0b0 });
+  caption.position.set(8, H - 20); app.stage.addChild(caption);
+
+  const TRACE_DT = 3 / 30;                                       // lane.js samples every 3 ticks
+  const st = { active: false, run: null, defense: null, towerCell: null, towerDef: null,
+               t: 0, speed: 4, nextShot: 0, queue: [], clock: 0, boomDone: false, endDone: false, restartAt: null };
+  const cpx = (c) => ({ x: (c.x + 0.5) * T, y: (c.y + 0.5) * T });
+
+  function drawBoard() {
+    board.clear();
+    board.beginFill(0x0d141b).drawRect(0, 0, W, H).endFill();
+    board.lineStyle(1, 0x131c25, 1);
+    for (let x = 8; x < COLS; x += 8) { board.moveTo(x * T, 0); board.lineTo(x * T, H); }
+    for (let y = 8; y < ROWS; y += 8) { board.moveTo(0, y * T); board.lineTo(W, y * T); }
+    board.lineStyle(0);
+    for (const c of (MAP.base.cells || [])) {                    // the simulated base, right side
+      const p = cpx(c); board.beginFill(0x2c3a4a).lineStyle(1, 0x46586a, 1).drawRect(p.x - T / 2, p.y - T / 2, T, T).endFill().lineStyle(0);
+    }
+    const sp = cpx(MAP.spawnGround); board.beginFill(0x3a5a3a).drawCircle(sp.x, sp.y, T * 0.35).endFill();
+    const sa = cpx(MAP.spawnAir); board.beginFill(0x3a4a6a).drawCircle(sa.x, sa.y, T * 0.35).endFill();
+    const sw = cpx(MAP.spawnWater); board.beginFill(0x2a4a5a).drawCircle(sw.x, sw.y, T * 0.35).endFill();
+    if (st.towerCell && st.towerDef) {                           // defense fixture + its range ring
+      const p = cpx(st.towerCell);
+      board.beginFill(st.towerDef.kind === 'antiAir' ? 0x2a3a5c : 0x4a3a2a).lineStyle(1, 0x8ea0b0, 0.9)
+        .drawRect(p.x - T * 0.45, p.y - T * 0.45, T * 0.9, T * 0.9).endFill().lineStyle(0);
+      board.lineStyle(1, st.towerDef.kind === 'antiAir' ? 0x6fa0e0 : 0xe0b070, 0.35).drawCircle(p.x, p.y, st.towerDef.range * T).lineStyle(0);
+    }
+  }
+
+  function unitAt(t) {                                           // lerp the sim trace
+    const tr = st.run && st.run.trace;
+    if (!tr || !tr.length) return null;
+    const f = t / TRACE_DT;
+    const i = Math.min(tr.length - 1, Math.floor(f));
+    const j = Math.min(tr.length - 1, i + 1);
+    const k = Math.min(1, Math.max(0, f - i));
+    return { x: tr[i].x + (tr[j].x - tr[i].x) * k, y: tr[i].y + (tr[j].y - tr[i].y) * k, hp: tr[i].hp, last: i >= tr.length - 1 };
+  }
+
+  const gv = {
+    setActive(v) { st.active = !!v; },
+    setSpeed(n) { st.speed = n; },
+    /** Show a fresh runGauntlet() result. */
+    load(run, defenseEntry) {
+      st.run = run; st.defense = defenseEntry;
+      st.towerCell = (defenseEntry && defenseEntry.structId) ? MAP.slots[6] : null;
+      st.towerDef = (defenseEntry && defenseEntry.structId) ? STRUCTURES[defenseEntry.structId] : null;
+      st.t = 0; st.nextShot = 0; st.queue.length = 0; st.boomDone = false; st.endDone = false; st.restartAt = null;
+      pool.clear(); R.fxItems.length = 0; R.flames.length = 0;
+      drawBoard();
+    },
+    restart() { if (st.run) gv.load(st.run, st.defense); },
+  };
+
+  /* tower cosmetic fire — the renderer's emitCombatFx recipes (spray for cannon, flak bursts) */
+  function towerFire(unitPos) {
+    const from = cpx(st.towerCell);
+    const to = { x: (unitPos.x + 0.5) * T, y: (unitPos.y + 0.5) * T };
+    const cannon = st.towerDef.kind !== 'antiAir';
+    const kind = cannon ? 'shell' : 'flak', color = cannon ? 0xffd080 : 0x9fd4ff;
+    const cadence = cannon ? 0.55 : 0.35, speed = cannon ? 13 : 18, burst = cannon ? 4 : 1;
+    if (st.clock < st.nextShot) return;
+    st.nextShot = st.clock + cadence * (0.85 + Math.random() * 0.3);
+    for (let k = 0; k < burst; k++) {
+      const jx = burst > 1 ? (Math.random() * 2 - 1) * T * 0.16 : 0;
+      const jy = burst > 1 ? (Math.random() * 2 - 1) * T * 0.16 : 0;
+      const args = [from.x, from.y, to.x + jx, to.y + jy, speed * T, color, kind, T * SHOT_SIZE[kind]];
+      if (k === 0) pool.spawn(...args);
+      else st.queue.push({ at: st.clock + k * 0.07, args });
+    }
+  }
+
+  app.ticker.add(() => {
+    if (!st.active || !st.run) return;
+    const dt = Math.min(0.05, app.ticker.deltaMS / 1000);
+    st.clock += dt;
+    const u = unitAt(st.t);
+    const r = st.run;
+
+    if (!u) return;
+    if (!u.last) st.t += dt * st.speed;                          // replay advances at chosen speed
+
+    // tower shoots while the sim says it had the lock (tAcquire → death/exit)
+    if (st.towerCell && r.tAcquire != null && r.time != null &&
+        st.t >= r.tAcquire && !u.last && u.hp > 0) towerFire(u);
+    if (st.queue.length) {
+      const due = []; st.queue = st.queue.filter((q) => (st.clock >= q.at ? (due.push(q), false) : true));
+      for (const q of due) pool.spawn(...q.args);
+    }
+
+    // mine: red dot until the recorded trigger time, then the real explosion FX once
+    if (r.mine && r.mine.triggered && !st.boomDone && st.t >= r.mine.at) {
+      st.boomDone = true;
+      const p = cpx(r.mine.pos);
+      spawnFireClump(R, p.x, p.y, 14, 1.1);
+      spawnGlow(R, p.x, p.y, 1.4, 0.4);
+      R.shake.time = 0; R.shake.dur = 0.3; R.shake.mag = T * 0.4;
+    }
+
+    // end of trace: died → the game's kill FX; reached → caption. Then loop the replay.
+    if (u.last && !st.endDone) {
+      st.endDone = true;
+      if (r.outcome === 'died') spawnFx(R, { type: 'kill', pos: { x: u.x, y: u.y }, radius: 0.4, income: 0 });
+      st.restartAt = st.clock + 1.8;
+    }
+    if (st.restartAt !== null && st.clock >= st.restartAt) gv.restart();
+
+    R._fxDt = Math.min(dt, 1 / 20);
+    updateFx(R);                                                 // the game's FX engine, verbatim
+
+    /* actors */
+    actors.clear();
+    if (r.mine && (!st.boomDone)) {                              // the buried red dot (design M3.2)
+      const p = cpx(r.mine.pos);
+      const pulse = 0.6 + 0.4 * Math.sin(st.clock * 4);
+      actors.beginFill(0xe03030, pulse).drawCircle(p.x, p.y, T * 0.18).endFill();
+    }
+    if (u.hp > 0 && !(u.last && r.outcome === 'died')) {
+      const p = { x: (u.x + 0.5) * T, y: (u.y + 0.5) * T };
+      const air = UNITS[r.unitId] && UNITS[r.unitId].domain === 'Flyer';
+      actors.beginFill(air ? 0x6fa0e0 : 0xd0a060, 1).lineStyle(1, 0x101418, 0.8).drawCircle(p.x, p.y, T * 0.32).endFill().lineStyle(0);
+      const maxHp = UNITS[r.unitId] ? UNITS[r.unitId].hp[(r.tier || 1) - 1] : 100;
+      const frac = Math.max(0, Math.min(1, u.hp / maxHp));
+      actors.beginFill(0x10151b).drawRect(p.x - T * 0.5, p.y - T * 0.75, T, 3).endFill();
+      actors.beginFill(frac > 0.5 ? 0x5ae08a : frac > 0.25 ? 0xe0c05a : 0xe05a5a).drawRect(p.x - T * 0.5, p.y - T * 0.75, T * frac, 3).endFill();
+    }
+    caption.text = `${r.unitId} T${r.tier} vs ${st.defense ? st.defense.label : '—'} · t=${st.t.toFixed(1)}s/${r.time}s · ${r.outcome === 'reached' ? 'REACHED BASE (' + Math.round(r.hpFrac * 100) + '% hp)' : r.outcome.toUpperCase()} · ${st.speed}× replay`;
+  });
+
+  return gv;
 }

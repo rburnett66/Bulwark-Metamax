@@ -61,7 +61,7 @@ function pickHarnessTowers() {
  * Place a harness structure and force it straight to Complete at full hp.
  * These are fixed test fixtures — they bypass the economy on purpose.
  */
-function placeCompletedStructure(state, structId, slot) {
+export function placeCompletedStructure(state, structId, slot) {   // exported: gallery gauntlet reuses the fixture path
   const s = createStructure(state, structId, slot);
   s.lifecycle = 'Complete';
   s.progress = 1;
@@ -87,7 +87,7 @@ function spawnForLane(lane) {
 }
 
 /** Guarantee the test unit has a domain-correct path to the base. */
-function ensureUnitPath(state, unit, lane, spawn) {
+export function ensureUnitPath(state, unit, lane, spawn) {   // exported: gallery gauntlet reuses the lane pathing
   if (unit.path && unit.path.length > 0) return;
   const basePos = { x: MAP.base.x, y: MAP.base.y };
   if (lane === 'air') {
