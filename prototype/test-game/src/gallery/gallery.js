@@ -12,8 +12,9 @@
  * Needs global PIXI (vendor/pixi.min.js), loaded by gallery.html.
  */
 
-import { UNITS, STRUCTURES, DAMAGE_TYPES, EFFECTIVENESS } from '../data/tables.js';
+import { UNITS, STRUCTURES, DAMAGE_TYPES, ASSUMPTIONS } from '../data/tables.js';
 import { createProjectilePool } from '../render/projectiles.js';
+import { cellToLocal, spawnFx, updateFx } from '../render/renderer.js';
 import { applyDamage } from '../sim/combat.js';
 import {
   makeState, makeUnitTarget, makeStructureTarget, makeArmorTarget,
@@ -231,33 +232,67 @@ export function bootGallery() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Range view — a tiny Pixi scene around the SHIPPING projectile pool.
+   Range view — a Pixi scene that drives the GAME's FX engine verbatim.
+
+   No FX are drawn here: shots fly through createProjectilePool, impacts/
+   flames/glows/shake all happen inside renderer.updateFx / renderer.spawnFx
+   running against a minimal renderer-shim, so what you see IS what the game
+   renders — the gallery only supplies the stage, the turret/dummy primitives
+   and the tool overlays (HP bar, damage numbers, kill counter).
    ═══════════════════════════════════════════════════════════════════════════ */
 function createRangeView(mount) {
   const W = 920, H = 520, T = 50;                       // px, tile size
   const app = new PIXI.Application({ width: W, height: H, background: 0x0a0f14, antialias: true });
   mount.appendChild(app.view);
 
+  const root = new PIXI.Container();                    // shim.root — camera shake offsets this, like the game
+  app.stage.addChild(root);
+
   /* static backdrop: horizon + ground + range ticks */
   const back = new PIXI.Graphics();
   back.beginFill(0x0d141b).drawRect(0, 0, W, H * 0.62).endFill();
   back.beginFill(0x111a14).drawRect(0, H * 0.62, W, H * 0.38).endFill();
   back.lineStyle(1, 0x26313c, 1).moveTo(0, H * 0.62).lineTo(W, H * 0.62);
-  app.stage.addChild(back);
+  root.addChild(back);
   const ticks = new PIXI.Graphics();
-  app.stage.addChild(ticks);
+  root.addChild(ticks);
 
-  const fxG = new PIXI.Graphics();                      // impact FX (redrawn per frame)
-  const pool = createProjectilePool();                  // ← the game's Tier A projectile layer
-  const actors = new PIXI.Graphics();                   // turret + dummy (redrawn per frame)
-  app.stage.addChild(actors); app.stage.addChild(pool.container); app.stage.addChild(fxG);
+  const actors = new PIXI.Graphics();                   // turret + dummy primitives (redrawn per frame)
+  root.addChild(actors);
+
+  /* renderer-SHIM: the minimal surface renderer.updateFx/spawnFx touch. The FX
+     code itself is imported from renderer.js — identical draw, layer order
+     (projectiles under fxG, glows/text on top; renderer.js:423) and constants. */
+  const pool = createProjectilePool();
+  const fxLayer = new PIXI.Container();
+  const fxG = new PIXI.Graphics();
+  fxLayer.addChild(pool.container);
+  fxLayer.addChild(fxG);
+  root.addChild(fxLayer);
+  const R = {
+    tile: T, fxG, dustG: null,
+    fxItems: [], flames: [], glows: [], goldFloats: [],
+    projectiles: null,                                  // wrapped below: game impact FX + gallery damage hook
+    layers: { fx: fxLayer, structHp: fxLayer },
+    shake: { time: 0, dur: 0, mag: 0 },
+    root, camera: { x: 0, y: 0 },
+    baseFire: 0, baseFirePos: null,
+    _fxDt: 1 / 60,
+  };
+  R.projectiles = {
+    container: pool.container,
+    spawn: (...a) => pool.spawn(...a),
+    clear: () => pool.clear(),
+    // updateFx passes the game's impact callback; the gallery adds its damage hook after it
+    update: (dt, gameImpact) => pool.update(dt, (kind, x, y) => { gameImpact(kind, x, y); onHit(kind, x, y); }),
+  };
 
   const caption = new PIXI.Text('', { fontFamily: 'system-ui', fontSize: 13, fill: 0x8ea0b0 });
   caption.position.set(12, H - 24); app.stage.addChild(caption);
   const killText = new PIXI.Text('', { fontFamily: 'system-ui', fontSize: 13, fill: 0x5ae08a });
   killText.position.set(12, 12); app.stage.addChild(killText);
 
-  /* damage-number pool (event-time text, recycled) */
+  /* damage-number pool (tool overlay, not a game effect) */
   const dmgPool = []; const dmgLive = [];
   function popDamage(x, y, txt, color) {
     const t = dmgPool.pop() || new PIXI.Text('', { fontFamily: 'system-ui', fontSize: 12, fontWeight: '700', fill: 0xffffff });
@@ -267,21 +302,25 @@ function createRangeView(mount) {
 
   const st = {
     shooter: null, target: null, victim: null, fx: gameDefaultsFallback(),
-    auto: true, clock: 0, next: 0, queue: [], fxItems: [],
+    auto: true, clock: 0, next: 0, queue: [],
     spawnAt: 0, kills: 0, lastKill: null, respawnAt: null,
-    sx: 90, sy: 0, tx: 0, ty: 0, aim: 0, muzzle: 0, effDps: 0, legal: true,
+    cell: { sx: 1.3, sy: 0, tx: 7, ty: 0 },             // CELL coords, like the sim — px via cellToLocal
+    sx: 90, sy: 0, tx: 0, ty: 0, aim: 0, effDps: 0, legal: true,
   };
   function gameDefaultsFallback() { return { kind: 'shell', color: 0xff9a70, speed: 15, cadence: 0.6, burst: 1 }; }
 
-  const groundY = H * 0.62 + 60;
+  const groundRow = (H * 0.62 + 60) / T - 0.5;          // cell row whose center sits on the ground line
   function layout() {
     const range = Math.max(1.5, Math.min(13, (st.shooter && st.shooter.range) || 6));
-    st.sx = 90; st.sy = groundY;
-    st.tx = st.sx + range * T;
+    st.cell.sx = 1.3; st.cell.sy = groundRow;
+    st.cell.tx = st.cell.sx + range; st.cell.ty = groundRow;
+    const s = cellToLocal(R, st.cell.sx, st.cell.sy);
+    const p = cellToLocal(R, st.cell.tx, st.cell.ty);
     const air = st.target && st.target.domain === 'Flyer';
-    st.ty = groundY - (air ? T * 2.1 : 0);
+    st.sx = s.x; st.sy = s.y;
+    st.tx = p.x; st.ty = p.y - (air ? T * 1.05 : 0);    // flyers lift t*1.05 — same as emitCombatFx
     ticks.clear(); ticks.lineStyle(1, 0x1b232c, 1);
-    for (let i = 1; i <= 13; i++) { const x = st.sx + i * T; ticks.moveTo(x, groundY + 14).lineTo(x, groundY + (i % 5 ? 18 : 24)); }
+    for (let i = 1; i <= 13; i++) { const x = st.sx + i * T; ticks.moveTo(x, st.sy + 14).lineTo(x, st.sy + (i % 5 ? 18 : 24)); }
     caption.text = `range ${((st.shooter && st.shooter.range) || 0).toFixed(2)} tiles · ticks = 1 tile · ${st.legal ? 'live fire' : 'HOLD — illegal target domain'}`;
   }
 
@@ -292,7 +331,8 @@ function createRangeView(mount) {
       st.shooter = shooter; st.target = target; st.effDps = m.effDps; st.legal = m.legal && m.effDps > 0;
       if (fxDefaults) { st.fx = fxDefaults; if (rv.onFxApplied) rv.onFxApplied(st.fx); }
       st.victim = { ...target, pos: { ...target.pos } };
-      st.spawnAt = st.clock; st.respawnAt = null; st.queue.length = 0; pool.clear();
+      st.spawnAt = st.clock; st.respawnAt = null; st.queue.length = 0;
+      R.projectiles.clear(); R.fxItems.length = 0; R.flames.length = 0;   // glows fade out on their own
       layout();
     },
     applyFx(fx) { st.fx = fx; },
@@ -300,47 +340,42 @@ function createRangeView(mount) {
     fireOnce() { volley(); },
   };
 
-  /* one volley — mirrors renderer.js fire(): cadence jitter, burst stagger + impact jitter */
+  /* one volley — mirrors renderer.js fire(): burst stagger 0.07s + impact jitter t*0.16.
+     No muzzle flash: units don't have one in-game (only the base super-cannon does). */
   function volley() {
     if (!st.legal || !st.victim || st.victim.hp <= 0) return;
     const n = Math.max(1, st.fx.burst | 0);
     const muzzleX = st.sx + Math.cos(st.aim) * T * 0.55, muzzleY = st.sy - T * 0.32 + Math.sin(st.aim) * T * 0.55;
-    st.muzzle = 0.08;
     for (let k = 0; k < n; k++) {
       const jx = n > 1 ? (Math.random() * 2 - 1) * T * 0.16 : 0;
       const jy = n > 1 ? (Math.random() * 2 - 1) * T * 0.16 : 0;
       const args = [muzzleX, muzzleY, st.tx + jx, st.ty + jy, st.fx.speed * T, st.fx.color, st.fx.kind, T * (SHOT_SIZE[st.fx.kind] || 0.0075) * st.fx.size];
-      if (k === 0) pool.spawn(...args);
+      if (k === 0) R.projectiles.spawn(...args);
       else st.queue.push({ at: st.clock + k * 0.07, args });
     }
   }
 
-  function onImpact(kind, x, y) {
-    // event-time FX (spec §4): allocation is fine here, never in the flight path
-    if (kind === 'flak') {
-      st.fxItems.push({ k: 'flash', x, y, age: 0, ttl: 0.22, color: 0xbfe0ff, size: T * 0.5 });
-      for (let i = 0; i < 3; i++) st.fxItems.push({ k: 'puff', x: x + rnd(T * 0.2), y: y + rnd(T * 0.15), age: 0, ttl: 0.7, color: 0x555b63, size: T * 0.14, rise: T * 0.3 });
-    } else if (kind === 'shell') {
-      st.fxItems.push({ k: 'flash', x, y, age: 0, ttl: 0.2, color: 0xffd27a, size: T * 0.4 });
-      st.fxItems.push({ k: 'ring', x, y, age: 0, ttl: 0.3, color: 0xff9a3d, size: T * 0.45 });
-      st.fxItems.push({ k: 'puff', x, y: y - T * 0.1, age: 0, ttl: 0.8, color: 0x2a2d31, size: T * 0.16, rise: T * 0.4 });
-    } else {
-      st.fxItems.push({ k: 'flash', x, y, age: 0, ttl: 0.12, color: 0xfff0b0, size: T * 0.18 });
-    }
-    // the REAL damage path: one shot's worth of continuous dps, per landed round
-    if (st.victim && st.victim.hp > 0 && st.legal && st.shooter) {
-      const shotDt = st.fx.cadence / Math.max(1, st.fx.burst | 0);
-      const r = applyDamage(makeState(), null, st.victim, st.shooter.dps, st.shooter.damageType, shotDt);
-      if (r.dealt > 0) popDamage(st.tx, st.ty, '-' + (Math.round(r.dealt * 10) / 10), 0xffe9c9);
-      if (r.killed) {
-        st.kills++; st.lastKill = st.clock - st.spawnAt; st.respawnAt = st.clock + 1.0;
-        st.fxItems.push({ k: 'ring', x: st.tx, y: st.ty, age: 0, ttl: 0.5, color: 0xffb060, size: T * 1.1 });
-        st.fxItems.push({ k: 'flash', x: st.tx, y: st.ty, age: 0, ttl: 0.3, color: 0xffe0a0, size: T * 0.9 });
-        for (let i = 0; i < 6; i++) st.fxItems.push({ k: 'puff', x: st.tx + rnd(T * 0.3), y: st.ty + rnd(T * 0.2), age: 0, ttl: 0.9, color: [0xffd27a, 0xff9a3d, 0xff6a2a][i % 3], size: T * 0.13, rise: T * 0.5 });
+  /* Gallery damage hook — runs AFTER the game's own impact FX (see the
+     projectiles wrapper on the shim). Impact visuals are entirely updateFx's. */
+  function onHit(kind, x, y) {
+    if (!(st.victim && st.victim.hp > 0 && st.legal && st.shooter)) return;
+    const shotDt = st.fx.cadence / Math.max(1, st.fx.burst | 0);
+    const r = applyDamage(makeState(), null, st.victim, st.shooter.dps, st.shooter.damageType, shotDt);
+    if (r.dealt > 0) popDamage(st.tx, st.ty, '-' + (Math.round(r.dealt * 10) / 10), 0xffe9c9);
+    if (r.killed) {
+      st.kills++; st.lastKill = st.clock - st.spawnAt; st.respawnAt = st.clock + 1.4;
+      // death FX = the game's OWN event pipeline: units get the 'kill' ring +
+      // radius-scaled wreck fire + bloom (+Ng bounty float); structures get
+      // 'destroyed' (shake + debris ring + big 5s fire). renderer.spawnFx verbatim.
+      const pos = { x: st.cell.tx, y: st.cell.ty };
+      if (st.victim.structId !== undefined) {
+        spawnFx(R, { type: 'destroyed', pos });
+      } else {
+        const income = st.victim.costT1 ? ASSUMPTIONS.killIncomeFrac * st.victim.costT1 : 0;
+        spawnFx(R, { type: 'kill', pos, radius: st.victim.radius, income });
       }
     }
   }
-  const rnd = (s) => (Math.random() * 2 - 1) * s;
 
   app.ticker.add(() => {
     const dt = Math.min(0.05, app.ticker.deltaMS / 1000);
@@ -350,33 +385,34 @@ function createRangeView(mount) {
     if (st.auto && st.clock >= st.next) { volley(); st.next = st.clock + st.fx.cadence * (0.85 + Math.random() * 0.3); }
     if (st.queue.length) {
       const due = []; st.queue = st.queue.filter((q) => (st.clock >= q.at ? (due.push(q), false) : true));
-      for (const q of due) pool.spawn(...q.args);
+      for (const q of due) R.projectiles.spawn(...q.args);
     }
-    pool.update(dt, onImpact);
 
-    // respawn the dummy after a kill
+    // ── the game's FX engine, verbatim: advances projectiles (firing the game
+    // impact recipes + our damage hook), flames, glows, shake, and draws fxItems.
+    R._fxDt = Math.min(dt, 1 / 20);                     // same clamp as renderFrame (renderer.js:1032)
+    updateFx(R);
+
+    // respawn the dummy after a kill (the game wreck fire keeps burning meanwhile)
     if (st.respawnAt !== null && st.clock >= st.respawnAt && st.target) {
       st.victim = { ...st.target, pos: { ...st.target.pos } };
       st.spawnAt = st.clock; st.respawnAt = null;
     }
     killText.text = st.kills ? `kills ${st.kills} · last kill ${st.lastKill.toFixed(2)} s` : '';
 
-    /* actors */
+    /* actors (tool primitives — the FX around them are the game's) */
     st.aim = Math.atan2(st.ty - (st.sy - T * 0.32), st.tx - st.sx);
     actors.clear();
-    // turret: pad + body + barrel (+ muzzle flash)
     actors.beginFill(0x1b232c).drawEllipse(st.sx, st.sy + 4, T * 0.5, T * 0.16).endFill();
     actors.beginFill(0x2f3d4a).drawRoundedRect(st.sx - T * 0.3, st.sy - T * 0.34, T * 0.6, T * 0.36, 4).endFill();
     actors.lineStyle(6, 0x46586a, 1).moveTo(st.sx, st.sy - T * 0.32)
       .lineTo(st.sx + Math.cos(st.aim) * T * 0.55, st.sy - T * 0.32 + Math.sin(st.aim) * T * 0.55).lineStyle(0);
-    if (st.muzzle > 0) { st.muzzle -= dt; actors.beginFill(0xfff0b0, Math.max(0, st.muzzle / 0.08) * 0.9)
-      .drawCircle(st.sx + Math.cos(st.aim) * T * 0.62, st.sy - T * 0.32 + Math.sin(st.aim) * T * 0.62, T * 0.12).endFill(); }
     // dummy target: shadow, crate (bobbing if airborne), HP bar
     if (st.victim) {
       const air = st.target.domain === 'Flyer';
       const bob = air ? Math.sin(st.clock * 2.2) * 4 : 0;
       const dead = st.victim.hp <= 0;
-      actors.beginFill(0x000000, air ? 0.25 : 0.35).drawEllipse(st.tx, groundY + 4, T * 0.4, T * 0.13).endFill();
+      actors.beginFill(0x000000, air ? 0.25 : 0.35).drawEllipse(st.tx, st.sy + 4, T * 0.4, T * 0.13).endFill();
       if (!dead) {
         const y = st.ty + bob;
         actors.beginFill(air ? 0x3a4a5c : 0x4a4034).lineStyle(2, 0x26313c, 1)
@@ -392,18 +428,7 @@ function createRangeView(mount) {
       }
     }
 
-    /* impact FX + damage numbers */
-    fxG.clear();
-    st.fxItems = st.fxItems.filter((f) => {
-      f.age += dt;
-      const p = f.age / f.ttl;
-      if (p >= 1) return false;
-      const a = 1 - p;
-      if (f.k === 'flash') fxG.beginFill(f.color, a * 0.85).drawCircle(f.x, f.y, f.size * (0.6 + p * 0.8)).endFill();
-      else if (f.k === 'ring') fxG.lineStyle(2 + 2 * a, f.color, a).drawCircle(f.x, f.y, f.size * (0.3 + p)).lineStyle(0);
-      else if (f.k === 'puff') fxG.beginFill(f.color, a * 0.6).drawCircle(f.x, f.y - (f.rise || 0) * p, f.size * (0.7 + p * 0.9)).endFill();
-      return true;
-    });
+    /* damage numbers (tool overlay) */
     for (let i = dmgLive.length - 1; i >= 0; i--) {
       const d = dmgLive[i]; d.age += dt;
       d.t.y -= 26 * dt; d.t.alpha = 1 - d.age / 0.8;

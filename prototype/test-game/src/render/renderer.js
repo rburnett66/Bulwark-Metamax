@@ -161,7 +161,7 @@ function unitColor(u) {
 
 function cellKey(x, y) { return x + ',' + y; }
 
-function cellToLocal(renderer, cx, cy) {
+export function cellToLocal(renderer, cx, cy) {   // exported: the Shooting Gallery drives the same FX code
   const t = renderer.tile;
   return { x: (cx + 0.5) * t, y: (cy + 0.5) * t };
 }
@@ -478,7 +478,7 @@ function updateGoldFloats(renderer, dt) {
 // throws up flickering, colour-ramped flame particles + smoke every frame for its whole life (fed through the
 // existing 'fire'/'smoke' Graphics draw). It reads as a LIVING fire, burns for `ttl` seconds, and scales with
 // `scale`. Render-only + non-deterministic (Math.random); FX never feed the sim, so replays are unaffected.
-function spawnFlame(renderer, x, y, scale, ttl) {
+export function spawnFlame(renderer, x, y, scale, ttl) {
   const s = scale || 1;
   renderer.flames.push({ x: x, y: y, scale: s, age: 0, ttl: ttl || 4.0, emit: 0 });
   spawnFireClump(renderer, x, y, Math.round(6 * s), s);   // instant burst so it appears the moment it dies
@@ -533,7 +533,7 @@ function updateFlames(renderer) {
 // non-deterministic (Math.random for variation); FX never feed the sim, so this can't affect replays.
 // Reusable: also exposed as renderer.spawnFireClump(localX, localY, count, scale).
 const FIRE_COLORS = [0xff4a15, 0xff6a1e, 0xff8a2a, 0xffb63c, 0xffd85c];
-function spawnFireClump(renderer, x, y, count, scale) {
+export function spawnFireClump(renderer, x, y, count, scale) {
   const t = renderer.tile, n = (count == null ? 10 : count), s = scale || 1;   // count 0 → smoke + flash only
   for (let i = 0; i < n; i++) {
     const ang = Math.random() * Math.PI * 2, spd = Math.random();
@@ -567,7 +567,7 @@ function spawnFireClump(renderer, x, y, count, scale) {
 // DOWN under gravity, brightness fading and colour cooling to ember-red as they fall. Render-only (Math.random).
 const SPARK_COLORS = [0xffffe0, 0xfff0a0, 0xffd050, 0xffa838];
 const SPARK_GRAVITY_TILES = 10;   // downward accel in tiles/sec^2 → sparks fall back after their upward launch
-function spawnSparks(renderer, x, y, count) {
+export function spawnSparks(renderer, x, y, count) {
   const t = renderer.tile, n = count || 5;
   for (let i = 0; i < n; i++) {
     const ang = -Math.PI / 2 + (Math.random() * 2 - 1) * 1.0;   // mostly UP, wide fan
@@ -720,7 +720,7 @@ function glowTexture(renderer) {
   renderer._glowTex = PIXI.Texture.from(c);
   return renderer._glowTex;
 }
-function spawnGlow(renderer, x, y, radiusTiles, ttl, tint) {
+export function spawnGlow(renderer, x, y, radiusTiles, ttl, tint) {
   const spr = new PIXI.Sprite(glowTexture(renderer));
   spr.anchor.set(0.5);
   spr.blendMode = PIXI.BLEND_MODES.ADD;
@@ -746,7 +746,7 @@ function updateGlows(renderer, dt) {
   renderer.glows = keep;
 }
 
-function spawnFx(renderer, ev) {
+export function spawnFx(renderer, ev) {
   const pos = ev.pos || ev.cell
     || (ev.target && ev.target.pos) || (ev.target && ev.target.cell)
     || (ev.ent && ev.ent.pos) || (ev.ent && ev.ent.cell)
@@ -834,7 +834,7 @@ function spawnFx(renderer, ev) {
   }
 }
 
-function updateFx(renderer) {
+export function updateFx(renderer) {
   updateGlows(renderer, renderer._fxDt || FX_DT);
   updateFlames(renderer);   // advance flame emitters
   updateGoldFloats(renderer, FX_DT);   // rising +Ng kill-score texts (same fixed FX clock as particles)
