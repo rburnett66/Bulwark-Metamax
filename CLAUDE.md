@@ -31,6 +31,16 @@ Bulwark splits cleanly into a runtime half and an authoring half. Two focused su
 - Pipeline: `.github/workflows/deploy-game.yml`. A push to **`main`** touching `prototype/test-game/**` runs the gate, then publishes to GitHub Pages → **https://rburnett66.github.io/Bulwark-Metamax/** (the mobile link). Only `prototype/test-game/**` ships.
 - **Don't push or deploy unless explicitly asked.** Hand back a clean, tested branch.
 
+## Tracking — MetaMax FIRST, always
+
+**No development without MetaMax tickets.** Bulwark is tracked as **Bulwark MM (project 16)** on the
+owner's MetaMax platform (`metamax-reality` MCP; local backend on :8000). Before ANY dev task:
+check the board (`list_workstreams`), create/update the epic + stories (`create_ticket` — statuses
+current while you work, not after), and mirror design docs (`post_document`; the repo copy under
+`docs/16 Bulwark MM/design/` stays canonical). Stamp commits with the returned
+`closes [MM-<work_item_id>]` so reconcile auto-advances tickets. Repo markdown alone is NOT
+visible tracking — the owner runs every project through the MetaMax board.
+
 ## Session start
 
 This machine crashes mid-work — never reason from a remembered picture. Before any task: `git fetch` + `git status -sb` + `git log --oneline -8` (current branch AND `origin/main`), and `git worktree list`. Detailed working memory (Stack Forge, geometry/WIP, shading, game audit, voxel decor) is in the user's memory index (`MEMORY.md`).
