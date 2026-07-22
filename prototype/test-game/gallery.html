@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bulwark Shooting Gallery</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { --bg:#0c1014; --panel:#141b22; --border:#26313c; --text:#dfe7ee; --muted:#8ea0b0; --accent:#5fe0ff; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; }
+    #wrap { display:flex; gap:18px; padding:18px; flex-wrap:wrap; align-items:flex-start; }
+    #panel { width:340px; min-width:300px; display:flex; flex-direction:column; gap:12px; }
+    h1 { font-size:18px; margin:0; }
+    .sub { color:var(--muted); font-size:12.5px; margin-top:-6px; }
+    .box { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+    .box h2 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:0; }
+    .field { display:flex; flex-direction:column; gap:3px; }
+    .field label { font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    select, button, input[type=number] { font:inherit; color:var(--text); background:#0b1119; border:1px solid var(--border); border-radius:6px; padding:6px 9px; }
+    select { width:100%; cursor:pointer; }
+    button { cursor:pointer; }
+    button:hover { border-color:var(--accent); }
+    button:disabled { opacity:.45; cursor:default; }
+    .inline { display:flex; gap:8px; align-items:center; }
+    .inline > * { flex:1; }
+    .inline .num { flex:0 0 44px; text-align:right; color:var(--accent); font-variant-numeric:tabular-nums; font-size:12.5px; }
+    input[type=range] { width:100%; }
+    input[type=color] { width:100%; height:30px; padding:2px; background:#0b1119; border:1px solid var(--border); border-radius:6px; cursor:pointer; }
+    .row { display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid #1b232c; font-size:13px; }
+    .row:last-child { border-bottom:0; }
+    .row .k { color:var(--muted); }
+    .row .v { font-variant-numeric:tabular-nums; }
+    #right { flex:1 1 640px; min-width:520px; display:flex; flex-direction:column; gap:12px; }
+    #gallery-mount { background:#080b0e; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+    #gallery-mount canvas { max-width:100%; height:auto; display:block; }
+    #fx-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px; }
+    #diff-out { background:#0b1119; border:1px solid var(--border); border-radius:6px; padding:8px; margin:0;
+      font:12px/1.5 ui-monospace, Consolas, monospace; color:#cfe6ee; white-space:pre-wrap; word-break:break-all; min-height:52px; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="panel">
+      <div>
+        <h1>Shooting Gallery</h1>
+        <div class="sub">Balance sandbox on the REAL combat + projectile code. Read-only: retunes leave as a paste-able tables.js diff.</div>
+      </div>
+
+      <div class="box">
+        <h2>Shooter</h2>
+        <div class="field"><label for="shooter-kind">kind</label>
+          <select id="shooter-kind"><option value="unit">Unit</option><option value="tower">Tower</option></select></div>
+        <div class="field" id="shooter-faction-row"><label for="shooter-faction">faction</label><select id="shooter-faction"></select></div>
+        <div class="field" id="shooter-unit-row"><label for="shooter-unit">unit</label><select id="shooter-unit"></select></div>
+        <div class="field" id="shooter-struct-row" style="display:none"><label for="shooter-struct">tower</label><select id="shooter-struct"></select></div>
+        <div class="field"><label>tier</label>
+          <div class="inline"><input type="range" id="shooter-tier" min="1" max="3" step="1" value="1" /><span class="num" id="shooter-tier-num">T1</span></div></div>
+        <div class="row"><span class="k">weapon range</span><span class="v" id="shooter-range">—</span></div>
+      </div>
+
+      <div class="box">
+        <h2>Live edit (sandbox only)</h2>
+        <div class="field"><label for="edit-dps">raw dps (at this tier)</label><input type="number" id="edit-dps" min="0" step="0.5" /></div>
+        <div class="field"><label for="edit-type">damage type</label><select id="edit-type"></select></div>
+        <div class="field"><label for="edit-aoe">aoe radius (tiles)</label><input type="number" id="edit-aoe" min="0" step="0.25" /></div>
+        <button id="edit-reset">Reset to tables.js</button>
+      </div>
+
+      <div class="box">
+        <h2>Target</h2>
+        <div class="field"><label for="target-mode">what gets shot</label>
+          <select id="target-mode">
+            <option value="unit">Unit</option>
+            <option value="armor">Armor-class dummy</option>
+            <option value="struct">Structure</option>
+          </select></div>
+        <div class="field" id="target-faction-row"><label for="target-faction">faction</label><select id="target-faction"></select></div>
+        <div class="field" id="target-unit-row"><label for="target-unit">unit</label><select id="target-unit"></select>
+          <div class="inline"><input type="range" id="target-tier" min="1" max="3" step="1" value="1" /><span class="num" id="target-tier-num">T1</span></div></div>
+        <div class="field" id="target-armor-row" style="display:none"><label for="target-armor">armor class</label><select id="target-armor"></select>
+          <label for="target-hp" style="margin-top:4px">dummy hp</label><input type="number" id="target-hp" min="1" step="10" value="300" /></div>
+        <div class="field" id="target-struct-row" style="display:none"><label for="target-struct">structure</label><select id="target-struct"></select>
+          <div class="inline"><input type="range" id="target-struct-tier" min="1" max="3" step="1" value="1" /><span class="num" id="target-struct-tier-num">T1</span></div></div>
+      </div>
+
+      <div class="box">
+        <h2>Readout — real applyDamage()</h2>
+        <div class="row"><span class="k">legal hit</span><span class="v" id="r-legal">—</span></div>
+        <div class="row"><span class="k">effectiveness</span><span class="v" id="r-mult">—</span></div>
+        <div class="row"><span class="k">raw dps</span><span class="v" id="r-raw">—</span></div>
+        <div class="row"><span class="k">effective dps</span><span class="v" id="r-eff">—</span></div>
+        <div class="row"><span class="k">target hp</span><span class="v" id="r-hp">—</span></div>
+        <div class="row"><span class="k">time to kill</span><span class="v" id="r-ttk">—</span></div>
+        <div class="row"><span class="k">splash victims</span><span class="v" id="r-splash">—</span></div>
+        <div class="row"><span class="k">cluster dps</span><span class="v" id="r-cluster">—</span></div>
+        <div class="row"><span class="k">status effect</span><span class="v" id="r-status">—</span></div>
+      </div>
+
+      <div class="box">
+        <h2>Retune diff → tables.js</h2>
+        <pre id="diff-out">—</pre>
+        <button id="copy-diff" disabled>Copy retune diff</button>
+      </div>
+    </div>
+
+    <div id="right">
+      <div id="gallery-mount"></div>
+      <div class="box">
+        <h2>Projectile &amp; impact FX (the game's pooled Tier A layer)</h2>
+        <div id="fx-grid">
+          <div class="field"><label for="fx-kind">kind</label>
+            <select id="fx-kind"><option value="shell">shell</option><option value="flak">flak</option><option value="tracer">tracer</option></select></div>
+          <div class="field"><label for="fx-color">color</label><input type="color" id="fx-color" value="#ff9a70" /></div>
+          <div class="field"><label>speed (tiles/s)</label>
+            <div class="inline"><input type="range" id="fx-speed" min="4" max="40" step="1" value="15" /><span class="num" id="fx-speed-num">15</span></div></div>
+          <div class="field"><label>size</label>
+            <div class="inline"><input type="range" id="fx-size" min="0.5" max="4" step="0.25" value="1" /><span class="num" id="fx-size-num">1×</span></div></div>
+          <div class="field"><label>cadence</label>
+            <div class="inline"><input type="range" id="fx-cadence" min="0.15" max="2" step="0.05" value="0.6" /><span class="num" id="fx-cadence-num">0.6 s</span></div></div>
+          <div class="field"><label>burst rounds</label>
+            <div class="inline"><input type="range" id="fx-burst" min="1" max="6" step="1" value="1" /><span class="num" id="fx-burst-num">×1</span></div></div>
+          <div class="field"><label for="fx-auto">auto-fire</label>
+            <div class="inline"><input type="checkbox" id="fx-auto" checked style="flex:0 0 auto" /><button id="fx-shot" style="flex:1">Single volley</button></div></div>
+          <div class="field"><label>&nbsp;</label><button id="fx-defaults">Game defaults for this shooter</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/pixi.min.js"></script>
+  <script type="module">
+    import { bootGallery } from './src/gallery/gallery.js';
+    bootGallery();
+  </script>
+</body>
+</html>
