@@ -1782,7 +1782,17 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
   }
   // prune per-unit tracking maps for entities that no longer exist (else they grow unbounded over a session)
   if (renderer._shotClock && renderer._shotClock.size) {
-    for (const id of renderer._shotClock.keys()) if (!(state.units && state.units.has(id)) && !(state.structures && state.structures.has(id))) renderer._shotClock.delete(id);
+    // _shotClock keys are PREFIXED ('u12' unit, 's7' structure — see fire()). Checking the raw key
+    // against the numeric-id entity maps always missed, so every clock entry was pruned every frame —
+    // which disabled the cadence gate entirely: a shell spawned per FRAME and streams read as laser
+    // beams. Strip the prefix and check the matching map.
+    for (const id of renderer._shotClock.keys()) {
+      const n = Number(String(id).slice(1));
+      const live = String(id)[0] === 's'
+        ? (state.structures && state.structures.has(n))
+        : (state.units && state.units.has(n));
+      if (!live) renderer._shotClock.delete(id);
+    }
   }
   if (renderer._lastUnitPos && renderer._lastUnitPos.size) {
     for (const id of renderer._lastUnitPos.keys()) if (!(state.units && state.units.has(id))) renderer._lastUnitPos.delete(id);
