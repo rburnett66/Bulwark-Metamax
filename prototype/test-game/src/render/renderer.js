@@ -1252,6 +1252,15 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
 
   // units
   if (state.units) {
+    // The SELECTED unit's HP bar must always read on top: bars share one Graphics (gH), where later
+    // draws paint over earlier ones — in a crowd, units iterated after the selected one covered its
+    // bar. Defer the selected unit's bar and draw it after the loop, last on the graphics.
+    const selBarId = (ui && ui.selectedUnitId != null) ? ui.selectedUnitId : null;
+    let selBar = null;
+    const unitHpBar = (u, cx, topY, w, frac) => {
+      if (selBarId !== null && u.id === selBarId) { selBar = [cx, topY, w, frac]; return; }
+      drawHpBar(gH, cx, topY, w, frac);
+    };
     for (const u of state.units.values()) {
       if (!u || u.hp <= 0) continue;
       emitGroundDust(renderer, u);   // moving walkers kick up rear dust (lingers ≥500ms; sim-neutral)
@@ -1326,7 +1335,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
             }
           }
           // hp bar only — the unit carries its own silhouette shadow (no flat ellipse for voxel units)
-          drawHpBar(gH, pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: on the structHp layer so it draws OVER trees
+          unitHpBar(u, pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: structHp layer (over trees); selected unit defers to draw last
           continue;   // voxel sprite drawn — skip authored art and the primitive
         }
       }
@@ -1407,7 +1416,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
             child.x = sx * cf + sy * sf;
             child.y = -sx * sf + sy * cf;
           }
-          drawHpBar(gH, pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: on the structHp layer so it draws OVER trees
+          unitHpBar(u, pa.x, pa.y - t * ((u.radius || 0.3) * SPRITE_OVER_COLLISION + 0.2) - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: structHp layer (over trees); selected unit defers to draw last
           continue;   // sprite drawn — skip the primitive
         }
       }
@@ -1425,7 +1434,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         gA.lineStyle(1, 0x101418, 0.7);
         gA.drawCircle(p.x, p.y, 2);
         gA.lineStyle(0);
-        drawHpBar(gH, p.x, py - r - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: over trees
+        unitHpBar(u, p.x, py - r - 7, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: over trees; selected defers
       } else if (u.domain === 'Floater' || u.domain === 'Swimmer') {
         gU.beginFill(color, 1);
         gU.drawEllipse(p.x, p.y, r * 1.15, r * 0.7);
@@ -1433,7 +1442,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         gU.lineStyle(1, 0x101418, 0.8);
         gU.drawEllipse(p.x, p.y, r * 1.15, r * 0.7);
         gU.lineStyle(0);
-        drawHpBar(gH, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: over trees
+        unitHpBar(u, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: over trees; selected defers
       } else {
         gU.beginFill(color, 1);
         gU.drawCircle(p.x, p.y, r);
@@ -1441,9 +1450,11 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         gU.lineStyle(1, 0x101418, 0.8);
         gU.drawCircle(p.x, p.y, r);
         gU.lineStyle(0);
-        drawHpBar(gH, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: over trees
+        unitHpBar(u, p.x, p.y - r - 8, t * 0.7, u.hp / Math.max(1, u.maxHp));   // #2: over trees; selected defers
       }
     }
+    // deferred: the selected unit's bar goes down LAST on gH — nothing drawn this frame can cover it
+    if (selBar) drawHpBar(gH, selBar[0], selBar[1], selBar[2], selBar[3], 0.85);
   }
 
   // ---- FORGE / openPlay maps: no hard ring lock, but still DIM the board outside the current wave's
