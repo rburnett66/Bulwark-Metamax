@@ -140,7 +140,9 @@
             <div class="inline"><input type="range" id="g-speed" min="1" max="16" step="1" value="4" /><span class="num" id="g-speed-num">4×</span></div></div>
           <div class="field"><label>&nbsp;</label><button id="g-restart">Restart run</button></div>
           <div class="field" style="grid-column:1 / -1"><button id="g-matrix">Run FULL MATRIX for this attacker (none + cannon T1-3 + flak T1-3 + mine)</button></div>
-          <div class="field" style="grid-column:1 / -1"><button id="g-sweep">SWEEP the whole faction — every unit × every defense (table stats, ignores live edits)</button></div>
+          <div class="field"><label for="g-sweep-scope">sweep scope</label>
+            <select id="g-sweep-scope"><option value="faction">shooter's faction</option><option value="roster">ENTIRE ROSTER</option></select></div>
+          <div class="field" style="grid-column:span 2"><label>&nbsp;</label><button id="g-sweep">SWEEP units × defenses — strengths / weaknesses grid (table stats)</button></div>
         </div>
         <div id="matrix-wrap" style="overflow-x:auto;"></div>
       </div>

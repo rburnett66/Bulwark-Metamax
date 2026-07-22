@@ -322,22 +322,45 @@ export function bootGallery() {
   };
 
   $('g-sweep').onclick = () => {
-    const fac = $('shooter-faction').value;
-    $('matrix-wrap').innerHTML = '<div class="sub">sweeping ' + fac + ' — every unit × ' + GAUNTLET_DEFENSES.length + ' defenses (table stats)…</div>';
+    // STRENGTHS/WEAKNESSES GRID (owner): units × defenses, one faction or the whole roster.
+    // Chunked per faction so the UI paints progress — a full-roster sweep is ~600 real sim runs.
+    const scope = $('g-sweep-scope').value;
+    const facs = scope === 'roster' ? factions : [$('shooter-faction').value];
     const tier = sel.shooterTier;
-    setTimeout(() => {
+    const nDef = GAUNTLET_DEFENSES.length;
+    const kills = new Array(nDef).fill(0);          // column tally: how much of the roster each defense stops
+    let unitCount = 0, bodyHtml = '', idx = 0;
+    const head = '<tr><th>unit @ T' + tier + '</th>' + GAUNTLET_DEFENSES.map((d) => '<th>' + d.label + '</th>').join('') + '<th>survives</th></tr>';
+    $('matrix-wrap').innerHTML = '<div class="sub" id="sweep-progress">sweeping 0/' + facs.length + ' faction(s)…</div>';
+    const step = () => {
+      if (idx >= facs.length) {
+        const foot = '<tr><th>stops how many?</th>' + kills.map((k, i) => '<th>' + (i === 0 ? '—' : k + '/' + unitCount) + '</th>').join('') + '<th></th></tr>';
+        $('matrix-wrap').innerHTML = '<table>' + head + bodyHtml + foot + '</table>' +
+          '<div class="sub" style="margin-top:4px">green = reached base (hp remaining) · red ✕ = died (tiles traveled) · ' +
+          '"survives n/7" counts the 7 real defenses (no-defense control excluded) · table stats @ T' + tier + ', live edits NOT applied</div>';
+        return;
+      }
+      const fac = facs[idx];
       const sweep = runFactionSweep(fac, tier);
-      const head = '<tr><th>' + fac + ' @ T' + tier + '</th>' + GAUNTLET_DEFENSES.map((d) => '<th>' + d.label + '</th>').join('') + '</tr>';
-      const rows = sweep.map((u) =>
-        '<tr><td>' + u.shape + ' <span style="color:var(--muted)">' + u.domain + '</span></td>' +
-        u.runs.map((r) => r.outcome === 'reached'
-          ? '<td style="color:#5ae08a">' + Math.round(r.hpFrac * 100) + '%</td>'
-          : (r.outcome === 'died'
-            ? '<td style="color:#e05a5a">✕ ' + Math.round(r.traveled) + 't</td>'
-            : '<td style="color:#e0c05a">' + r.outcome + '</td>')).join('') + '</tr>').join('');
-      $('matrix-wrap').innerHTML = '<table>' + head + rows + '</table>' +
-        '<div class="sub" style="margin-top:4px">green = reached base (hp remaining) · red ✕ = died (tiles traveled) · table stats, live edits NOT applied</div>';
-    }, 30);
+      if (facs.length > 1) bodyHtml += '<tr><td colspan="' + (nDef + 2) + '" style="color:var(--accent)">' + fac + '</td></tr>';
+      for (const u of sweep) {
+        unitCount++;
+        let survived = 0;
+        const cells = u.runs.map((r, i) => {
+          if (r.outcome === 'reached') { if (i > 0) survived++; return '<td style="color:#5ae08a">' + Math.round(r.hpFrac * 100) + '%</td>'; }
+          if (r.outcome === 'died') { if (i > 0) kills[i]++; return '<td style="color:#e05a5a">✕ ' + Math.round(r.traveled) + 't</td>'; }
+          return '<td style="color:#e0c05a">' + r.outcome + '</td>';
+        }).join('');
+        bodyHtml += '<tr><td>' + (facs.length > 1 ? u.shape : u.unitId + ' · ' + u.shape) +
+          ' <span style="color:var(--muted)">' + u.domain + '</span></td>' + cells +
+          '<td' + (survived === nDef - 1 ? ' style="color:#5ae08a"' : (survived === 0 ? ' style="color:#e05a5a"' : '')) + '>' + survived + '/' + (nDef - 1) + '</td></tr>';
+      }
+      idx++;
+      const prog = $('sweep-progress');
+      if (prog) prog.textContent = 'sweeping ' + idx + '/' + facs.length + ' faction(s)… (' + fac + ' done)';
+      setTimeout(step, 15);
+    };
+    setTimeout(step, 30);
   };
 
   setMode('range');
