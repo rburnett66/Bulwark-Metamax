@@ -72,6 +72,15 @@ test('splash: zero without aoe, several packed neighbours for artillery', () => 
   assert.equal(splashHits(arty, makeUnitTarget('AIR-Copters', 1)), 0);     // anti-ground splash can't catch flyers
 });
 
+test('retuneDiff: hp re-derives via upgradeHpX; range/speed are scalars', () => {
+  const d = retuneDiff('GND-Tanks', { hp: 500, range: 4, speed: 1 });
+  assert.match(d, /hp: \[500, 800, 1200\]/);                // 500 × 1.6 / × 2.4
+  assert.match(d, /was \[440, 704, 1056\]/);
+  assert.match(d, /range: 4,\s+\/\/ was 3.75/);
+  assert.match(d, /speed: 1,\s+\/\/ was 0.736/);
+  assert.equal(retuneDiff('GND-Tanks', { hp: 440, range: 3.75, speed: 0.736 }), '', 'table values → no diff');
+});
+
 test('retuneDiff: only changed fields, T2/T3 re-derived, empty when clean', () => {
   assert.equal(retuneDiff('GND-Tanks', { dps: UNITS['GND-Tanks'].dps[0] }), '');
   const d = retuneDiff('GND-Tanks', { dps: 50, damageType: 'Fire' });

@@ -59,6 +59,7 @@ export function unitShooter(unitId, tier, edits = {}) {
     unitId, tier: t, shape: def.shape, range: def.range,
     dps: def.dps[t - 1], damageType: def.damageType,
     aoeRadius: def.aoeRadius || 0, canTarget: def.canTarget,
+    hp: def.hp[t - 1], speed: def.speed,   // survivability knobs — the gauntlet tunes these too
   }, edits);
 }
 
@@ -150,14 +151,19 @@ export function splashHits(shooter, target, spacing = 0.8) {
 const round3 = (n) => Math.round(n * 1000) / 1000;
 
 /**
- * Paste-able tables.js fragment for the edited fields. A dps edit takes the
- * tuned T1 value and re-derives T2/T3 with the workbook upgrade multipliers.
- * Returns '' when nothing differs from the table baseline.
+ * Paste-able tables.js fragment for the edited fields. hp/dps edits take the
+ * tuned T1 value and re-derive T2/T3 with the workbook upgrade multipliers;
+ * range/speed are scalars. Returns '' when nothing differs from the baseline.
  */
 export function retuneDiff(unitId, edits = {}) {
   const def = UNITS[unitId];
   if (!def) return '';
   const lines = [];
+  if (edits.hp !== undefined && edits.hp !== def.hp[0]) {
+    const t2 = round3(edits.hp * ASSUMPTIONS.upgradeHpX.t2);
+    const t3 = round3(edits.hp * ASSUMPTIONS.upgradeHpX.t3);
+    lines.push(`    hp: [${edits.hp}, ${t2}, ${t3}],   // was [${def.hp.join(', ')}]`);
+  }
   if (edits.dps !== undefined && edits.dps !== def.dps[0]) {
     const t2 = round3(edits.dps * ASSUMPTIONS.upgradeDpsX.t2);
     const t3 = round3(edits.dps * ASSUMPTIONS.upgradeDpsX.t3);
@@ -168,6 +174,12 @@ export function retuneDiff(unitId, edits = {}) {
   }
   if (edits.aoeRadius !== undefined && edits.aoeRadius !== (def.aoeRadius || 0)) {
     lines.push(`    aoeRadius: ${edits.aoeRadius},   // was ${def.aoeRadius || 0}`);
+  }
+  if (edits.range !== undefined && edits.range !== def.range) {
+    lines.push(`    range: ${edits.range},   // was ${def.range}`);
+  }
+  if (edits.speed !== undefined && edits.speed !== def.speed) {
+    lines.push(`    speed: ${edits.speed},   // was ${def.speed}`);
   }
   if (!lines.length) return '';
   return `  '${unitId}': {   // SHOOTING GALLERY retune — merge into UNITS['${unitId}']\n${lines.join('\n')}\n  }`;

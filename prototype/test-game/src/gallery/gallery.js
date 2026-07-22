@@ -20,7 +20,7 @@ import {
   makeState, makeUnitTarget, makeStructureTarget, makeArmorTarget,
   unitShooter, towerShooter, measure, splashHits, retuneDiff,
 } from './calc.js';
-import { runGauntlet, runGauntletMatrix, GAUNTLET_DEFENSES } from './lane.js';
+import { runGauntlet, runGauntletMatrix, runFactionSweep, GAUNTLET_DEFENSES } from './lane.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -120,9 +120,11 @@ export function bootGallery() {
     let diff = '';
     if (sel.shooterKind === 'unit' && Object.keys(sel.edits).length) {
       const t1 = { ...sel.edits };
-      if (t1.dps !== undefined && sel.shooterTier > 1) {   // field edits fire-tier dps; the table wants T1
-        const x = sel.shooterTier === 2 ? 1.55 : 2.3;
-        t1.dps = Math.round((t1.dps / x) * 1000) / 1000;
+      if (sel.shooterTier > 1) {   // fields edit fire-tier values; the table wants T1 (T2/T3 re-derive)
+        const dx = sel.shooterTier === 2 ? ASSUMPTIONS.upgradeDpsX.t2 : ASSUMPTIONS.upgradeDpsX.t3;
+        const hx = sel.shooterTier === 2 ? ASSUMPTIONS.upgradeHpX.t2 : ASSUMPTIONS.upgradeHpX.t3;
+        if (t1.dps !== undefined) t1.dps = Math.round((t1.dps / dx) * 1000) / 1000;
+        if (t1.hp !== undefined) t1.hp = Math.round((t1.hp / hx) * 1000) / 1000;
       }
       diff = retuneDiff(sel.shooterUnit, t1);
     }
@@ -136,12 +138,18 @@ export function bootGallery() {
   /* ── shooter events ── */
   let gameFxDefaultsDirty = false;   // once you touch the FX sliders, selection changes stop resetting them
   function syncEditFields() {
-    const shooter = sel.shooterKind === 'tower'
-      ? towerShooter(sel.shooterStruct, sel.shooterTier)
-      : unitShooter(sel.shooterUnit, sel.shooterTier);
+    const isUnit = sel.shooterKind === 'unit';
+    const shooter = isUnit
+      ? unitShooter(sel.shooterUnit, sel.shooterTier)
+      : towerShooter(sel.shooterStruct, sel.shooterTier);
     $('edit-dps').value = shooter.dps;
     $('edit-type').value = shooter.damageType;
     $('edit-aoe').value = shooter.aoeRadius;
+    $('edit-hp').value = isUnit ? shooter.hp : '';
+    $('edit-range').value = isUnit ? shooter.range : '';
+    $('edit-speed').value = isUnit ? shooter.speed : '';
+    // survivability/mobility knobs only mean something for a unit running the lane
+    for (const id of ['edit-hp', 'edit-range', 'edit-speed']) $(id).disabled = !isUnit;
     $('shooter-range').textContent = fmt(shooter.range, 2) + ' tiles';
   }
   function pickShooter() { sel.edits = {}; syncEditFields(); recompute(); }
@@ -168,6 +176,9 @@ export function bootGallery() {
   $('edit-dps').oninput = (e) => { const v = Number(e.target.value); if (isFinite(v) && v >= 0) setEdit('dps', v); };
   $('edit-type').onchange = (e) => setEdit('damageType', e.target.value);
   $('edit-aoe').oninput = (e) => { const v = Number(e.target.value); if (isFinite(v) && v >= 0) setEdit('aoeRadius', v); };
+  $('edit-hp').oninput = (e) => { const v = Number(e.target.value); if (isFinite(v) && v > 0) setEdit('hp', v); };
+  $('edit-range').oninput = (e) => { const v = Number(e.target.value); if (isFinite(v) && v >= 0) setEdit('range', v); };
+  $('edit-speed').oninput = (e) => { const v = Number(e.target.value); if (isFinite(v) && v > 0) setEdit('speed', v); };
   $('edit-reset').onclick = pickShooter;
 
   /* ── target events ── */
@@ -234,8 +245,9 @@ export function bootGallery() {
   const gview = createGauntletView($('gauntlet-mount'));
   fillSelect($('g-defense'), GAUNTLET_DEFENSES.map((d) => [d.key, d.label]), 'cannon1');
   let mode = 'range';
-  const rangeOnlyBoxes = [$('fx-grid').parentElement, $('edit-dps').closest('.box'),
-                          $('target-mode').closest('.box'), $('r-legal').closest('.box'), $('diff-out').closest('.box')];
+  // the edit + retune boxes stay visible in BOTH modes — edits drive the gauntlet too
+  const rangeOnlyBoxes = [$('fx-grid').parentElement,
+                          $('target-mode').closest('.box'), $('r-legal').closest('.box')];
   const modeBtn = (btn, on) => { btn.style.borderColor = on ? 'var(--accent)' : ''; btn.style.color = on ? 'var(--accent)' : ''; };
 
   function currentDefense() { return GAUNTLET_DEFENSES.find((d) => d.key === $('g-defense').value) || GAUNTLET_DEFENSES[0]; }
@@ -248,19 +260,23 @@ export function bootGallery() {
       return;
     }
     const d = currentDefense();
-    const r = runGauntlet({ unitId: sel.shooterUnit, tier: sel.shooterTier, defense: d, collectTrace: true });
+    const edits = Object.keys(sel.edits).length ? { ...sel.edits } : null;
+    const r = runGauntlet({ unitId: sel.shooterUnit, tier: sel.shooterTier, defense: d, edits: edits || undefined, collectTrace: true });
+    const b = edits ? runGauntlet({ unitId: sel.shooterUnit, tier: sel.shooterTier, defense: d }) : null;   // table baseline for the delta
     gview.load(r, d);
-    $('gm-outcome').textContent = r.outcome === 'reached' ? 'REACHED BASE' : r.outcome.toUpperCase();
+    const cmp = (v, bv) => (b && String(v) !== String(bv)) ? v + '  (table: ' + bv + ')' : String(v);
+    const oc = (x) => x.outcome === 'reached' ? 'REACHED BASE' : x.outcome.toUpperCase();
+    $('gm-outcome').textContent = b ? cmp(oc(r), oc(b)) : oc(r);
     $('gm-outcome').style.color = r.outcome === 'reached' ? '#5ae08a' : '#e05a5a';
-    $('gm-time').textContent = r.time + ' s';
+    $('gm-time').textContent = cmp(r.time + ' s', b ? b.time + ' s' : '');
     $('gm-acquire').textContent = r.tAcquire == null ? 'never' : r.tAcquire + ' s after spawn';
     $('gm-acqdist').textContent = r.acquireDist == null ? '—' : r.acquireDist + ' tiles';
-    $('gm-dmg').textContent = String(r.damageTaken);
-    $('gm-dpsr').textContent = String(r.dpsReceived);
-    $('gm-fire').textContent = r.timeUnderFire + ' s';
-    $('gm-hp').textContent = r.hpLeft + ' (' + Math.round(r.hpFrac * 100) + '%)';
-    $('gm-travel').textContent = r.traveled + ' tiles';
-    $('gm-dpsd').textContent = String(r.dpsDealt);
+    $('gm-dmg').textContent = cmp(r.damageTaken, b ? b.damageTaken : '');
+    $('gm-dpsr').textContent = cmp(r.dpsReceived, b ? b.dpsReceived : '');
+    $('gm-fire').textContent = cmp(r.timeUnderFire + ' s', b ? b.timeUnderFire + ' s' : '');
+    $('gm-hp').textContent = cmp(r.hpLeft + ' (' + Math.round(r.hpFrac * 100) + '%)', b ? b.hpLeft + ' (' + Math.round(b.hpFrac * 100) + '%)' : '');
+    $('gm-travel').textContent = cmp(r.traveled + ' tiles', b ? b.traveled + ' tiles' : '');
+    $('gm-dpsd').textContent = cmp(r.dpsDealt, b ? b.dpsDealt : '');
     $('gm-mine').textContent = r.mine
       ? (r.mine.triggered ? 'boom @ ' + (Math.round(r.mine.at * 100) / 100) + 's — ' + r.mine.dealt + ' dmg' : 'never triggered')
       : '—';
@@ -285,18 +301,42 @@ export function bootGallery() {
   $('g-restart').onclick = () => gview.restart();
   $('g-matrix').onclick = () => {
     if (sel.shooterKind !== 'unit') { $('matrix-wrap').innerHTML = '<div class="sub">Pick a UNIT shooter first.</div>'; return; }
-    $('matrix-wrap').innerHTML = '<div class="sub">running ' + GAUNTLET_DEFENSES.length + ' sims…</div>';
+    const edits = Object.keys(sel.edits).length ? { ...sel.edits } : null;
+    $('matrix-wrap').innerHTML = '<div class="sub">running ' + (GAUNTLET_DEFENSES.length * (edits ? 2 : 1)) + ' sims…</div>';
     const unitId = sel.shooterUnit, tier = sel.shooterTier;
     setTimeout(() => {   // let the spinner paint before the synchronous sims
-      const rows = runGauntletMatrix(unitId, tier);
+      const rows = runGauntletMatrix(unitId, tier, 1, edits);
+      const base = edits ? runGauntletMatrix(unitId, tier) : null;   // table column for the tune delta
       const cells = rows.map((r, i) =>
         '<tr><td>' + GAUNTLET_DEFENSES[i].label + '</td>' +
         '<td style="color:' + (r.outcome === 'reached' ? '#5ae08a' : '#e05a5a') + '">' + r.outcome + '</td>' +
-        '<td>' + Math.round(r.hpFrac * 100) + '%</td><td>' + r.damageTaken + '</td><td>' + r.dpsReceived + '</td>' +
+        '<td>' + Math.round(r.hpFrac * 100) + '%</td>' +
+        (base ? '<td style="color:var(--muted)">' + base[i].outcome + ' ' + Math.round(base[i].hpFrac * 100) + '%</td>' : '') +
+        '<td>' + r.damageTaken + '</td><td>' + r.dpsReceived + '</td>' +
         '<td>' + (r.tAcquire == null ? '—' : r.tAcquire + 's') + '</td><td>' + r.time + 's</td></tr>').join('');
       $('matrix-wrap').innerHTML =
-        '<table><tr><th>' + unitId + ' T' + tier + ' vs…</th><th>Outcome</th><th>HP left</th>' +
+        '<table><tr><th>' + unitId + ' T' + tier + (edits ? ' (EDITED)' : '') + ' vs…</th><th>Outcome</th><th>HP left</th>' +
+        (base ? '<th>Table run</th>' : '') +
         '<th>Dmg taken</th><th>DPS recv</th><th>Acquired</th><th>Time</th></tr>' + cells + '</table>';
+    }, 30);
+  };
+
+  $('g-sweep').onclick = () => {
+    const fac = $('shooter-faction').value;
+    $('matrix-wrap').innerHTML = '<div class="sub">sweeping ' + fac + ' — every unit × ' + GAUNTLET_DEFENSES.length + ' defenses (table stats)…</div>';
+    const tier = sel.shooterTier;
+    setTimeout(() => {
+      const sweep = runFactionSweep(fac, tier);
+      const head = '<tr><th>' + fac + ' @ T' + tier + '</th>' + GAUNTLET_DEFENSES.map((d) => '<th>' + d.label + '</th>').join('') + '</tr>';
+      const rows = sweep.map((u) =>
+        '<tr><td>' + u.shape + ' <span style="color:var(--muted)">' + u.domain + '</span></td>' +
+        u.runs.map((r) => r.outcome === 'reached'
+          ? '<td style="color:#5ae08a">' + Math.round(r.hpFrac * 100) + '%</td>'
+          : (r.outcome === 'died'
+            ? '<td style="color:#e05a5a">✕ ' + Math.round(r.traveled) + 't</td>'
+            : '<td style="color:#e0c05a">' + r.outcome + '</td>')).join('') + '</tr>').join('');
+      $('matrix-wrap').innerHTML = '<table>' + head + rows + '</table>' +
+        '<div class="sub" style="margin-top:4px">green = reached base (hp remaining) · red ✕ = died (tiles traveled) · table stats, live edits NOT applied</div>';
     }, 30);
   };
 

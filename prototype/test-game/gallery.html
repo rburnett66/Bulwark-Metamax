@@ -62,11 +62,14 @@
         <div class="row"><span class="k">weapon range</span><span class="v" id="shooter-range">—</span></div>
       </div>
 
-      <div class="box">
-        <h2>Live edit (sandbox only)</h2>
+      <div class="box" id="edit-box">
+        <h2>Live edit (sandbox — drives BOTH modes)</h2>
         <div class="field"><label for="edit-dps">raw dps (at this tier)</label><input type="number" id="edit-dps" min="0" step="0.5" /></div>
         <div class="field"><label for="edit-type">damage type</label><select id="edit-type"></select></div>
         <div class="field"><label for="edit-aoe">aoe radius (tiles)</label><input type="number" id="edit-aoe" min="0" step="0.25" /></div>
+        <div class="field"><label for="edit-hp">hp (at this tier)</label><input type="number" id="edit-hp" min="1" step="5" /></div>
+        <div class="field"><label for="edit-range">weapon range (tiles)</label><input type="number" id="edit-range" min="0" step="0.25" /></div>
+        <div class="field"><label for="edit-speed">speed (tiles/s)</label><input type="number" id="edit-speed" min="0.05" step="0.05" /></div>
         <button id="edit-reset">Reset to tables.js</button>
       </div>
 
@@ -137,6 +140,7 @@
             <div class="inline"><input type="range" id="g-speed" min="1" max="16" step="1" value="4" /><span class="num" id="g-speed-num">4×</span></div></div>
           <div class="field"><label>&nbsp;</label><button id="g-restart">Restart run</button></div>
           <div class="field" style="grid-column:1 / -1"><button id="g-matrix">Run FULL MATRIX for this attacker (none + cannon T1-3 + flak T1-3 + mine)</button></div>
+          <div class="field" style="grid-column:1 / -1"><button id="g-sweep">SWEEP the whole faction — every unit × every defense (table stats, ignores live edits)</button></div>
         </div>
         <div id="matrix-wrap" style="overflow-x:auto;"></div>
       </div>

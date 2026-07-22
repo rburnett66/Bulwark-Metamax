@@ -17,7 +17,7 @@
  * fixed seed, no wall-clock, no Math.random.
  */
 
-import { MAP, STRUCTURES, getUnitDef } from '../data/tables.js';
+import { MAP, STRUCTURES, UNITS, getUnitDef } from '../data/tables.js';
 import { createSim, stepSim, FIXED_DT } from '../sim/core.js';
 import { createUnit } from '../sim/entities.js';
 import { applyDamage } from '../sim/combat.js';
@@ -88,6 +88,11 @@ export function runGauntlet(opts) {
   const { unitId, tier = 1, defense = GAUNTLET_DEFENSES[0], seed = 1, slotIndex = DEFAULT_SLOT, collectTrace = false } = opts;
   const unitDef = getUnitDef(unitId);   // throws on unknown id
   const state = createSim(seed >>> 0, { waves: [], map: MAP });
+  // The BASE SUPER-CANNON is out of scope for a LANE measurement: its _still threshold (0.03
+  // tiles/tick ≈ 0.9 t/s) reads every roster artillery/heavy-tank as "stationary" and snipes them
+  // MID-MARCH (see MetaMax finding ticket). The gauntlet ends at the doorstep, so the base's own
+  // deterrent is disabled — the run measures the picked defense, nothing else.
+  if (state.base) state.base.cannon = null;
 
   // ── defense fixture ──
   let tower = null;
@@ -107,6 +112,17 @@ export function runGauntlet(opts) {
   const unit = createUnit(state, unitId, tier, { x: spawn.x, y: spawn.y }, lane, 'attacker');
   if (!state.units.has(unit.id)) state.units.set(unit.id, unit);
   ensureUnitPath(state, unit, lane, spawn);
+
+  // ── TUNING OVERRIDES (sandbox): the gallery's live edits, applied to the spawned entity.
+  // The sim reads entity fields, so overridden stats run through the REAL combat/movement code —
+  // only the values are sandboxed. Copy a keeper into tables.js via the retune diff.
+  const edits = opts.edits || null;
+  if (edits) {
+    if (edits.hp !== undefined && isFinite(edits.hp) && edits.hp > 0) { unit.hp = edits.hp; unit.maxHp = edits.hp; }
+    for (const k of ['dps', 'speed', 'range', 'damageType', 'aoeRadius']) {
+      if (edits[k] !== undefined) unit[k] = edits[k];
+    }
+  }
 
   // ── mine fixture (M0 prototype): buried on the scouted route (see above) ──
   const mine = opts._minePos
@@ -193,6 +209,24 @@ export function runGauntlet(opts) {
 }
 
 /** The owner's matrix: every defense config for one attacker+tier. Deterministic. */
-export function runGauntletMatrix(unitId, tier = 1, seed = 1) {
-  return GAUNTLET_DEFENSES.map((d) => runGauntlet({ unitId, tier, defense: d, seed }));
+export function runGauntletMatrix(unitId, tier = 1, seed = 1, edits = null) {
+  return GAUNTLET_DEFENSES.map((d) => runGauntlet({ unitId, tier, defense: d, seed, edits: edits || undefined }));
+}
+
+/**
+ * Faction sweep — the counter-matrix reality check: every unit of a faction ×
+ * every defense config, compacted for the grid view. Table stats only (no
+ * edits): this is the overview a tune gets compared against.
+ */
+export function runFactionSweep(faction, tier = 1, seed = 1) {
+  const ids = Object.keys(UNITS).filter((id) => UNITS[id].faction === faction);
+  return ids.map((unitId) => ({
+    unitId,
+    shape: UNITS[unitId].shape,
+    domain: UNITS[unitId].domain,
+    runs: GAUNTLET_DEFENSES.map((d) => {
+      const r = runGauntlet({ unitId, tier, defense: d, seed });
+      return { defense: d.key, outcome: r.outcome, hpFrac: r.hpFrac, time: r.time, traveled: r.traveled };
+    }),
+  }));
 }

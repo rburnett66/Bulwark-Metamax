@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { EFFECTIVENESS, UNITS } from '../data/tables.js';
-import { runGauntlet, runGauntletMatrix, GAUNTLET_DEFENSES, MINE_SPEC } from './lane.js';
+import { runGauntlet, runGauntletMatrix, runFactionSweep, GAUNTLET_DEFENSES, MINE_SPEC } from './lane.js';
 
 const D = Object.fromEntries(GAUNTLET_DEFENSES.map((d) => [d.key, d]));
 
@@ -64,6 +64,29 @@ test('mine (M0 spec): triggers on a walker with an effectiveness-honest burst, i
   const air = runGauntlet({ unitId: 'AIR-Copters', tier: 1, defense: D.mine });
   assert.equal(air.mine.triggered, false, 'air units never trigger mines');
   assert.equal(air.damageTaken, 0);
+});
+
+test('tuning overrides ride the real sim (hp saves, speed hastens, deterministic)', () => {
+  const dead = runGauntlet({ unitId: 'GND-Troops', tier: 1, defense: D.cannon3 });
+  assert.equal(dead.outcome, 'died', 'baseline troops die to cannon T3');
+  const tanky = runGauntlet({ unitId: 'GND-Troops', tier: 1, defense: D.cannon3, edits: { hp: 100000 } });
+  assert.equal(tanky.outcome, 'reached', 'hp override survives the same gauntlet');
+  assert.ok(tanky.damageTaken > 0, 'still took the cannon fire');
+  const slow = runGauntlet({ unitId: 'GND-Troops', tier: 1, defense: D.none });
+  const fast = runGauntlet({ unitId: 'GND-Troops', tier: 1, defense: D.none, edits: { speed: 4 } });
+  assert.ok(fast.time < slow.time, `speed 4 (${fast.time}s) beats table (${slow.time}s)`);
+  const a = runGauntlet({ unitId: 'GND-Troops', tier: 1, defense: D.cannon1, edits: { hp: 500, dps: 60 } });
+  const b = runGauntlet({ unitId: 'GND-Troops', tier: 1, defense: D.cannon1, edits: { hp: 500, dps: 60 } });
+  assert.deepEqual(a, b, 'edited runs stay deterministic');
+});
+
+test('faction sweep: every unit x every defense, no-defense column always reaches', () => {
+  const sweep = runFactionSweep('Ground / Powder', 1);
+  assert.equal(sweep.length, 8, 'Ground / Powder fields 8 units');
+  for (const u of sweep) {
+    assert.equal(u.runs.length, GAUNTLET_DEFENSES.length, u.unitId + ' covers all defenses');
+    assert.equal(u.runs[0].outcome, 'reached', u.unitId + ' reaches with no defense');
+  }
 });
 
 test('matrix covers the owner set: none + cannon x3 + flak x3 + mine', () => {
