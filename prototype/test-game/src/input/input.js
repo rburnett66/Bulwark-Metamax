@@ -151,15 +151,25 @@ function onPointerDown(handle, ev) {
 
   // HARVEST order (campaign maps): clicking a resource node sends a harvester to its field.
   // With a HARVESTER SELECTED (click the truck first), the order goes to THAT truck — the owner's
-  // click-harvester-then-click-field flow; otherwise the nearest idle one takes it.
+  // SUBJECT → ACTION grammar: a completed action drops the subject; a failed action KEEPS it
+  // (the subject only changes when the order lands or another unit is picked); otherwise the
+  // nearest idle truck takes the job.
   if (state.resourceNodes) {
     const node = state.resourceNodes.find((n) => n.x === cell.x && n.y === cell.y);
     if (node) {
       const sel = ui.selectedUnitId != null ? state.units.get(ui.selectedUnitId) : null;
       const harvesterId = (sel && sel.isHarvester && sel.hp > 0) ? sel.id : undefined;
       const res = handle.submit({ type: 'harvest', nodeId: node.id, harvesterId });
-      if (res && res.ok) { ui.selectedUnitId = null; return; }   // assigned → the selection drops (owner 2026-07-17)
-      // rejected (unrevealed / exhausted) → fall through to normal selection
+      if (res && res.ok) {
+        ui.selectedUnitId = null;   // action assigned → the subject drops (owner 2026-07-17)
+        ui.pendingHint = { text: harvesterId != null ? 'Harvester dispatched' : 'Nearest harvester dispatched' };
+        return;
+      }
+      // action REJECTED (unrevealed / exhausted / truck gone): say why, and if a harvester was the
+      // subject, KEEP it selected — a failed order must not silently eat the selection.
+      ui.pendingHint = { text: 'Harvest: ' + ((res && res.reason) || 'unavailable') };
+      if (harvesterId != null) return;
+      // no harvester subject → fall through to normal selection
     }
   }
 
