@@ -15,10 +15,9 @@ const CSS = `
   padding:20px 22px; font-family:"Segoe UI",system-ui,sans-serif; color:#e6ecf3; box-shadow:0 18px 60px rgba(0,0,0,.6); }
 .bwd-kicker { font-size:10px; letter-spacing:.4em; color:#d9a441; margin-bottom:4px; }
 .bwd-title { font-size:18px; font-weight:800; letter-spacing:.03em; margin-bottom:12px; }
-.bwd-wave { border:1px solid #263040; border-radius:6px; padding:8px 10px; margin-bottom:7px; }
-.bwd-wave .wn { font-size:11px; letter-spacing:.18em; color:#8fa0b3; }
-.bwd-wave .wl { font-size:13px; color:#cfe3f0; margin-top:2px; }
-.bwd-lane-air { color:#bfe0ff; } .bwd-lane-ground { color:#ffd0a0; } .bwd-lane-water { color:#7fd6e0; }
+.bwd-unit { border:1px solid #263040; border-radius:6px; padding:9px 11px; margin-bottom:7px; font-size:13px; color:#cfe3f0; }
+.bwd-unit.new { border-color:#7a2e2e; background:#1e1414; }
+.bwd-unit .warn { display:block; font-size:11px; font-weight:800; letter-spacing:.12em; color:#ff6a5a; margin-bottom:3px; }
 .bwd-cards { display:flex; gap:10px; flex-wrap:wrap; }
 .bwd-bonus { flex:1 1 150px; min-width:140px; background:#1a1f28; border:1px solid #2e3846; border-radius:8px;
   padding:14px 12px; cursor:pointer; text-align:center; transition:border-color .1s, transform .05s; }
@@ -49,26 +48,22 @@ function veilCard(mountEl) {
 }
 
 /**
- * WB2 — wave preview. `waves` is the schedule (WAVES / makeWaves output): each
- * entry { wave, faction?, spawns:[{unitId, count, lane}] }. `getShape` maps a
- * unitId to a readable shape (getUnitDef(id).shape). onStart resolves + closes.
+ * WB2 — INCOMING WAVE INTEL for ONE wave (owner rev): a DESCRIPTION of the unit
+ * types in the upcoming wave — no counts. A type appearing for the first time
+ * THIS BATTLE is flagged "WARNING NEW UNIT". `info` = { wave, faction?,
+ * units:[{desc, isNew}] } (built by the caller, which owns the seen-set).
+ * onStart resolves + closes; escapeHtml keeps unit descriptions render-safe.
  */
-export function showWavePreview(mountEl, waves, getShape, onStart) {
+function esc(s) { return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+export function showWaveIntel(mountEl, info, onStart) {
   const { doc, veil, card } = veilCard(mountEl);
-  const rows = (waves || []).map((w) => {
-    const groups = {};   // lane → "3× Tanks, 2× Copters"
-    for (const s of w.spawns || []) {
-      const lane = s.lane || 'ground';
-      (groups[lane] = groups[lane] || []).push(s.count + '× ' + getShape(s.unitId));
-    }
-    const lanes = Object.keys(groups).map((ln) =>
-      '<span class="bwd-lane-' + ln + '">' + groups[ln].join(', ') + '</span>').join('  ·  ');
-    return '<div class="bwd-wave"><div class="wn">WAVE ' + w.wave +
-      (w.faction ? ' — ' + w.faction : '') + '</div><div class="wl">' + (lanes || '—') + '</div></div>';
-  }).join('');
+  const rows = (info.units || []).map((u) =>
+    '<div class="bwd-unit' + (u.isNew ? ' new' : '') + '">' +
+      (u.isNew ? '<span class="warn">⚠ WARNING · NEW UNIT</span>' : '') + esc(u.desc) + '</div>').join('');
   card.innerHTML =
-    '<div class="bwd-kicker">INTEL — INCOMING</div>' +
-    '<div class="bwd-title">What to expect</div>' + rows;
+    '<div class="bwd-kicker">INCOMING WAVE INTEL</div>' +
+    '<div class="bwd-title">Wave ' + info.wave + (info.faction ? ' — ' + esc(info.faction) : '') + '</div>' +
+    (rows || '<div class="bwd-unit">—</div>');
   const btn = doc.createElement('button'); btn.className = 'bwd-btn go'; btn.textContent = 'TO THE WALLS ▶';
   btn.addEventListener('click', () => { veil.remove(); if (onStart) onStart(); });
   card.appendChild(btn);

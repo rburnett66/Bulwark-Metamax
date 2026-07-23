@@ -5,7 +5,7 @@ import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, buyStructTier, resetSave } from './save/save.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
-import { showWavePreview, showBonusPicker } from './render/gameDialog.js';
+import { showWaveIntel, showBonusPicker } from './render/gameDialog.js';
 import { getBonusDef } from './data/tables.js';
 import { createMenu, FACTION_NAMES } from './menu/menu.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
@@ -130,6 +130,26 @@ export function boot(mountEl, seed) {
   let ended = false;          // sim.result reached; stop stepping
   let interlude = false;      // between-wave FREEZE: dialog speaker held on screen, sim/time/regrowth
                               // all paused until the player taps START NEXT WAVE (play mode only)
+  let seenUnitTypes = new Set();   // WB2 intel: unit types deployed so far THIS battle → flags NEW units
+
+  // Readable one-line description of an enemy unit type for the incoming-wave intel (no counts).
+  function describeUnit(unitId) {
+    let d; try { d = getUnitDef(unitId); } catch (e) { return unitId; }
+    const tgt = d.canTarget === 'Both' ? 'air & ground' : d.canTarget === 'Air' ? 'air only' : 'ground';
+    return d.shape + ' — ' + d.role + ' · ' + d.damageType + ', hits ' + tgt;
+  }
+  // Intel payload for ONE wave: distinct unit types (no counts), each flagged NEW if unseen this battle.
+  // Marks the wave's types as seen (intel precedes deployment, so seen == previewed).
+  function waveIntel(waveEntry) {
+    if (!waveEntry) return null;
+    const units = [];
+    for (const s of waveEntry.spawns || []) {
+      if (units.find((u) => u.id === s.unitId)) continue;   // dedupe within the wave
+      units.push({ id: s.unitId, desc: describeUnit(s.unitId), isNew: !seenUnitTypes.has(s.unitId) });
+    }
+    for (const s of waveEntry.spawns || []) seenUnitTypes.add(s.unitId);
+    return { wave: waveEntry.wave, faction: waveEntry.faction, units };
+  }
   let accumulator = 0;        // fixed-timestep accumulator (seconds)
   let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame
   let inputHandle = null;
@@ -166,6 +186,7 @@ export function boot(mountEl, seed) {
   function restart(newSeed) {
     const s = (typeof newSeed === 'number' && Number.isFinite(newSeed)) ? Math.floor(newSeed) : currentSeed;
     currentSeed = s;
+    seenUnitTypes = new Set();   // fresh battle → every unit type is "new" again for the intel warnings
     if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
     {
       const sv = loadSave();
@@ -314,9 +335,10 @@ export function boot(mountEl, seed) {
     // 1-2) or the map's contract is already FULFILLED.
     runContract = null;
     suppressPreDialog = false;
-    // WB2 — WAVE PREVIEW: after the contract dialog resolves (or immediately when there's none),
-    // show the incoming-wave lineup once per map entry. The reusable gameDialog shell.
-    const showPreview = () => showWavePreview(mountEl, currentWaves, _shapeOf, null);
+    // WB2 — WAVE INTEL: after the contract dialog resolves (or immediately when there's none),
+    // brief the FIRST wave's unit types (no counts; new units flagged). Per-wave intel for later
+    // waves fires from the interlude below.
+    const showPreview = () => { const info = waveIntel(currentWaves[0]); if (info) showWaveIntel(mountEl, info, null); };
     if (currentMapId) {
       const sv = loadSave();
       const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
@@ -337,8 +359,6 @@ export function boot(mountEl, seed) {
       showPreview();
     }
   }
-  // _shapeOf: unitId → readable shape for the wave preview (WB2). Defined here so it closes over nothing.
-  function _shapeOf(unitId) { try { return getUnitDef(unitId).shape; } catch (e) { return unitId; } }
 
   function playReplay(replayLog) {
     if (!replayLog || typeof replayLog.seed !== 'number') {
@@ -692,6 +712,11 @@ export function boot(mountEl, seed) {
               if (mode === 'play') {
                 interlude = true;
                 playPreBattleDialog(null);      // the next faction's challenge; close = continue
+                // NEXT-WAVE INTEL: brief the upcoming wave's unit types (new ones flagged). Chained
+                // AFTER the bonus pick so the two dialogs never stack. clearedWave (1-based) indexes
+                // the next wave: currentWaves[clearedWave] == wave (clearedWave+1).
+                const clearedWave = evs[i].wave;
+                const showNextIntel = () => { const info = waveIntel(currentWaves[clearedWave]); if (info) showWaveIntel(mountEl, info, null); };
                 // WB5 — BONUS PICKER: the sim rolled a 3-of-16 offer at this clear (sim.bonuses.offer).
                 // The pick submits chooseBonus (replay-logged); no pick before the next wave = forfeit.
                 if (sim.bonuses && sim.bonuses.offer && sim.bonuses.offer.length) {
@@ -699,7 +724,10 @@ export function boot(mountEl, seed) {
                     const res = submit({ type: 'chooseBonus', bonusId });
                     const d = getBonusDef(bonusId);
                     flashMessage(hud, (res && res.ok) ? ('Bonus: ' + (d ? d.label : bonusId)) : ('Bonus failed: ' + ((res && res.reason) || '')));
+                    showNextIntel();
                   }, sim.bonuses.owned);
+                } else {
+                  showNextIntel();
                 }
               } else if (lastWaveFaction) {
                 comm.showCall(winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false));
