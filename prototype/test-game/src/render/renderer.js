@@ -1157,11 +1157,20 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         gS.lineStyle(t * 0.24, col, 1); gS.moveTo(bp.x, bp.y); gS.lineTo(ex, ey); gS.lineStyle(0);   // barrel
       }
       if (glow > 0) { gS.beginFill(col, 0.5 * glow); gS.drawCircle(ex, ey, t * 0.22); gS.endFill(); }   // muzzle glow
-      if (cannon.phase === 'aim') {   // CHARGE GAUGE — arc fills as the shot readies (timer counts down)
+      if (cannon.phase === 'aim') {
+        // CHARGE GAUGE — a ring around the turret that sweeps CLOCKWISE from 12 o'clock; when the
+        // circle completes, the shot fires. Drawn on the OVERLAY (gO) at a radius OUTSIDE the base
+        // ship sprite — on gS it was buried under the authored SYS-Base art (owner: "used to be a
+        // circle around the turret... now gone"). Faint full track shows the circle it's filling.
         const frac = Math.max(0, Math.min(1, 1 - (cannon.timer || 0) / (cannon.aimDur || 3)));
-        gS.lineStyle(t * 0.13, 0xffd060, 0.95);
-        gS.arc(bp.x, bp.y, t * 0.74, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
-        gS.lineStyle(0);
+        const gr = t * 1.15;
+        gO.lineStyle(t * 0.10, 0x3a2a10, 0.7); gO.drawCircle(bp.x, bp.y, gr); gO.lineStyle(0);   // track
+        gO.lineStyle(t * 0.16, 0xffd060, 0.98);
+        gO.arc(bp.x, bp.y, gr, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);   // clockwise fill
+        gO.lineStyle(0);
+        gO.beginFill(0xffe890, 0.95);   // leading pip rides the sweep head
+        gO.drawCircle(bp.x + Math.cos(-Math.PI / 2 + frac * Math.PI * 2) * gr, bp.y + Math.sin(-Math.PI / 2 + frac * Math.PI * 2) * gr, t * 0.12);
+        gO.endFill();
       }
     }
   }
