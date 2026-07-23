@@ -133,7 +133,8 @@ const KIND_COLORS = {
   antiGround: 0x8a6a2f,
   antiAir: 0x3f7fbf,
   wall: 0x9aa0a6,
-  moat: 0x2f6db0
+  moat: 0x2f6db0,   // legacy — the moat build slot became the Mine Drone (kind 'mine')
+  mine: 0xe03030
 };
 
 const SIDE_COLORS = {
@@ -413,6 +414,8 @@ export function createRenderer(app, map) {
 
   renderer.dustG = new PIXI.Graphics();
   layers.resources.addChild(renderer.dustG);         // ground dust: above the terrain, UNDER structures + units
+  renderer.mineG = new PIXI.Graphics();
+  layers.resources.addChild(renderer.mineG);         // MINE DRONES: armed red dots UNDER units (tanks roll onto them)
   layers.structures.addChild(renderer.dyn.structures);
   layers.units.addChild(renderer.dyn.units);
   layers.units.addChild(renderer.unitSpriteLayer);   // sprites draw over the primitive unit layer
@@ -821,6 +824,17 @@ export function spawnFx(renderer, ev) {
     // keeping the explosion locked to the visual touchdown instead of a separately-timed sim event.
     renderer.fxItems.push({ x: a.x, y: a.y, fx: a.x, fy: a.y, tx: b.x, ty: b.y, age: 0, ttl: ev.dur || 1.6, kind: 'shell', radius: ev.radius || 2.5 });
     renderer.fxItems.push({ x: a.x, y: a.y, age: 0, ttl: 0.25, color: 0xfff0b0, kind: 'flash' });   // muzzle flash
+    return;
+  }
+  // ── MINE DRONE visuals (mines.js events) ──
+  if (ev.type === 'mineArmed') {
+    renderer.fxItems.push({ x: p.x, y: p.y, age: 0, ttl: 0.4, color: 0xe03030, kind: 'ring' });   // it just dug in
+    return;
+  }
+  if (ev.type === 'mineExplode') {
+    spawnFireClump(renderer, p.x, p.y, 12, 0.9);                     // the boom, through the shipping FX pipeline
+    spawnGlow(renderer, p.x, p.y, 1.0, 0.35);
+    renderer.shake.time = 0; renderer.shake.dur = 0.25; renderer.shake.mag = renderer.tile * 0.25;
     return;
   }
   // NB: the sim still emits 'cannonImpact' (it drives the AOE damage), but the VISUAL blast is spawned by the
@@ -1257,6 +1271,38 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       // hp bar
       if (typeof s.hp === 'number' && typeof s.maxHp === 'number' && s.hp < s.maxHp) {
         drawHpBar(gH, px + w / 2, py - 6, w - 4, s.hp / Math.max(1, s.maxHp));
+      }
+    }
+  }
+
+  // ── MINE DRONES (mines.js): couriers in flight (air) + armed red FLASHING dots (under units) ──
+  if (renderer.mineG) {
+    const gM = renderer.mineG;
+    gM.clear();
+    if (state.mines && state.mines.size) {
+      for (const m of state.mines.values()) {
+        const p = cellToLocal(renderer, m.pos.x, m.pos.y);
+        if (m.state === 'flying') {
+          // courier: defender-tinted dart at drone altitude + ground shadow, nose toward the target
+          const q = cellToLocal(renderer, m.target.x, m.target.y);
+          const ang = Math.atan2(q.y - p.y, q.x - p.x);
+          const ay = p.y - t * 0.9;
+          gA.beginFill(0xbfe8ff, 1);
+          gA.moveTo(p.x + Math.cos(ang) * t * 0.22, ay + Math.sin(ang) * t * 0.22);
+          gA.lineTo(p.x + Math.cos(ang + 2.6) * t * 0.13, ay + Math.sin(ang + 2.6) * t * 0.13);
+          gA.lineTo(p.x + Math.cos(ang - 2.6) * t * 0.13, ay + Math.sin(ang - 2.6) * t * 0.13);
+          gA.closePath(); gA.endFill();
+          gA.beginFill(0xe03030, 0.9); gA.drawCircle(p.x, ay, t * 0.07); gA.endFill();   // the carried mine
+          gM.beginFill(0x000000, 0.2); gM.drawEllipse(p.x, p.y, t * 0.16, t * 0.07); gM.endFill();
+        } else {
+          // ARMED: the red FLASHING light (owner spec) + a faint trigger ring
+          const pulse = 0.45 + 0.45 * Math.sin((state.time || 0) * 6);
+          gM.beginFill(0xe03030, pulse); gM.drawCircle(p.x, p.y, t * 0.14); gM.endFill();
+          gM.beginFill(0xffb0b0, pulse); gM.drawCircle(p.x, p.y, t * 0.05); gM.endFill();
+          let mdef = null;
+          try { mdef = getStructureDef(m.structId); } catch (e) { /* unknown id */ }
+          if (mdef) { gM.lineStyle(1, 0xe03030, 0.18); gM.drawCircle(p.x, p.y, (mdef.triggerRadius || 0.45) * t); gM.lineStyle(0); }
+        }
       }
     }
   }
@@ -1872,6 +1918,16 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     gO.lineStyle(2, tint, 0.9);
     gO.drawRect(gx + 1, gy + 1, fp.w * t - 2, fp.h * t - 2);
     gO.lineStyle(0);
+    // mine ghost: read as a MINE, not a building — red dot + trigger/blast circles
+    try {
+      const gdef = getStructureDef(ui.buildSelection);
+      if (gdef && gdef.kind === 'mine') {
+        const cx = gx + t / 2, cy = gy + t / 2;
+        gO.beginFill(0xe03030, ok ? 0.85 : 0.35); gO.drawCircle(cx, cy, t * 0.12); gO.endFill();
+        gO.lineStyle(1.5, tint, 0.9); gO.drawCircle(cx, cy, (gdef.triggerRadius || 0.45) * t);
+        gO.lineStyle(1, tint, 0.5); gO.drawCircle(cx, cy, (gdef.blastRadius || 0.5) * t); gO.lineStyle(0);
+      }
+    } catch (e) { /* unknown build id */ }
   }
 
   emitCombatFx(renderer, state);   // shells/tracers + damage fire + flyer sparks (cosmetic)

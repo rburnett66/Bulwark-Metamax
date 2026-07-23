@@ -55,12 +55,13 @@ test('flak shreds flyers by tier', () => {
   assert.ok(s3 <= s1, 'higher flak tier is never kinder to the flyer');
 });
 
-test('mine (M0 spec): triggers on a walker with an effectiveness-honest burst, ignores flyers', () => {
+test('mine (rev 2 spec): one-shots the tank on trigger, ignores flyers', () => {
   const tank = runGauntlet({ unitId: 'GND-Tanks', tier: 1, defense: D.mine });
   assert.ok(tank.mine.triggered, 'mine fired on the tank');
-  const expected = MINE_SPEC.damage * EFFECTIVENESS[MINE_SPEC.damageType][UNITS['GND-Tanks'].armorClass];
+  const rawBurst = MINE_SPEC.damage * EFFECTIVENESS[MINE_SPEC.damageType][UNITS['GND-Tanks'].armorClass];
+  const expected = Math.min(UNITS['GND-Tanks'].hp[0], rawBurst);   // applyDamage caps dealt at remaining hp
   assert.ok(Math.abs(tank.mine.dealt - expected) < 0.5, `burst ${tank.mine.dealt} ≈ ${expected}`);
-  assert.ok(tank.damageTaken >= expected - 0.5, 'the tank actually took the burst');
+  assert.equal(tank.outcome, 'died', 'rev 2: the mine eliminates any tank');
   const air = runGauntlet({ unitId: 'AIR-Copters', tier: 1, defense: D.mine });
   assert.equal(air.mine.triggered, false, 'air units never trigger mines');
   assert.equal(air.damageTaken, 0);

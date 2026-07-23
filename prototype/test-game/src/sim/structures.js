@@ -113,6 +113,22 @@ export function validatePlacement(state, structId, slotOrCell) {
   }
   if (!canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
 
+  // MINE (Land-Mine rev 2): a LAND mine — never in water — capped, and it never blocks (mines live
+  // in state.mines, not structures), so the seal-off ghost check below doesn't apply to it.
+  if (def.kind === 'mine') {
+    if (map.waterCells) {
+      for (const c of cells) {
+        for (let i = 0; i < map.waterCells.length; i++) {
+          if (map.waterCells[i].x === c.x && map.waterCells[i].y === c.y) return { ok: false, reason: 'terrain' };
+        }
+      }
+    }
+    let mines = 0;
+    if (state.mines) for (const m of state.mines.values()) if (m.state === 'flying' || m.state === 'armed') mines++;
+    if (mines >= (def.cap || 8)) return { ok: false, reason: 'max mines (' + (def.cap || 8) + ')' };
+    return { ok: true, reason: '' };
+  }
+
   // Every structure (towers included, now that they block) must leave the ground lane OPEN — reject any
   // placement that would seal the base off so units can no longer path to it.
   // Hypothetical nav grid with the new piece: the ground lane must stay open.

@@ -282,6 +282,7 @@ export function createHud(mountEl, callbacks) {
     wall: '<rect x="4" y="6" width="16" height="12" rx="1" fill="#9aa0a6"/><path d="M4 10h16M4 14h16M9 6v4M15 6v4M12 10v4M9 14v4M15 14v4" stroke="#5c6166" stroke-width="1.1"/>',
     moat: '<rect x="4" y="6" width="16" height="12" rx="2" fill="#2f6db0"/><path d="M6 11c2-2 4 2 6 0s4 2 6 0M6 15c2-2 4 2 6 0s4 2 6 0" stroke="#8fc4ef" stroke-width="1.4" fill="none"/>',
     harvestorBay: '<rect x="5" y="10" width="10" height="7" rx="1.5" fill="#c9a45a"/><rect x="15" y="12" width="5" height="5" rx="1" fill="#8a6a2f"/><circle cx="8" cy="18.5" r="1.8" fill="#3a3f45"/><circle cx="13" cy="18.5" r="1.8" fill="#3a3f45"/><circle cx="17.5" cy="18.5" r="1.5" fill="#3a3f45"/><path d="M7 10l2-4h4l1 4" fill="#e0c07a"/>',
+    mine: '<circle cx="12" cy="14" r="4.5" fill="#7a2a2a"/><circle cx="12" cy="14" r="2" fill="#ff4040"/><path d="M12 3v4M8 5l1.5 2.5M16 5l-1.5 2.5" stroke="#9fd4ff" stroke-width="1.4" fill="none"/><circle cx="12" cy="14" r="6.5" fill="none" stroke="#e03030" stroke-width="0.8" stroke-dasharray="2 2"/>',
   };
   const palette = el(doc, 'div', 'bw-palette bw-panel');
   palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD'));

@@ -7,6 +7,7 @@ import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './e
 import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
 import { initWaves, startNextWave, stepWaves } from './waves.js';
 import { initHarvest, cmdHarvest, stepHarvest, cmdBuyHarvester, resetFleetForWave } from './harvest.js';
+import { deployMine, stepMines } from './mines.js';
 import { createLog, recordCommand } from './replay.js';
 
 /**
@@ -288,6 +289,7 @@ export function createSim(seed, opts) {
     base: null,
     units: new Map(),
     structures: new Map(),
+    mines: new Map(),   // MINE DRONES (mines.js): flying couriers + armed mines — never structures
     economy: initEconomy(ASSUMPTIONS),
     waves: initWaves(waveTable),
     navGrid: null,
@@ -407,6 +409,14 @@ function cmdPlace(state, cmd) {
 
   const v = validatePlacement(state, cmd.structId, cell);
   if (!v.ok) return { ok: false, reason: v.reason || 'invalid' };
+
+  // MINE DRONE: the purchase launches a courier, never a structure (mines are walkable +
+  // untargetable — state.mines). deployMine spends, records, and emits its own events.
+  let mineDef = null;
+  try { mineDef = getStructureDef(cmd.structId); } catch (e) { /* validated above */ }
+  if (mineDef && mineDef.kind === 'mine') {
+    return deployMine(state, cmd.structId, { x: Math.round(cell.x), y: Math.round(cell.y) });
+  }
 
   const s = placeStructure(state, cmd.structId, cell);   // placeStructure→spend() tracks state.goldSpent
   if (!s) return { ok: false, reason: 'cost' };
@@ -1149,6 +1159,10 @@ export function stepSim(state, dtFixed) {
 
   // 5b. Base super-cannon: aim at a stationary siege unit, fire a slow arcing shell, massive AOE on impact.
   stepBaseCannon(state, dtFixed);
+
+  // 5c. Mine drones: courier flight, arming, ground-contact detonation (mines.js). Runs BEFORE the
+  //     death cleanup below so mine kills resolve with the standard kill event + bounty this tick.
+  stepMines(state, dtFixed);
 
   // 6. Death cleanup: remove dead units deterministically (Map preserves
   //    insertion order, so iteration + deletion is stable across runs).

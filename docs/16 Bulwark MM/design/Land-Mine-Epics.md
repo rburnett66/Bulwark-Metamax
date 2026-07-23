@@ -21,32 +21,32 @@ the gauntlet says the numbers are worth shipping.
 - [ ] M0.5 Measurement pass with the owner: pick the mine's cost point, settle Kinetic-vs-Concussion
   (design Q2) and the trigger radius feel (Q3). Update `Land-Mine-Design.md` with the numbers.
 
-## Epic M1 — Data & sim core  *(the mine becomes real)*
-- [ ] M1.1 `tables.js`: `STR-Mine` row (`kind:'mine'`, damage referencing `STR-Cannon.dps[0]`,
+## Epic M1 — Data & sim core  *(the mine becomes real)*  ✅ DONE (rev 2 — see build log)
+- [x] M1.1 `tables.js`: `STR-Mine` row (`kind:'mine'`, damage referencing `STR-Cannon.dps[0]`,
   triggerRadius, blastRadius, cost from M0.5, cap 8). No literals in sim code.
-- [ ] M1.2 `src/sim/mines.js`: `state.mines` + `stepMines` — drone flight (`getFlyerPath`), bury on
+- [x] M1.2 `src/sim/mines.js`: `state.mines` + `stepMines` — drone flight (`getFlyerPath`), bury on
   arrival, deterministic trigger scan (ascending id), blast via `applyDamage` to every ground
   attacker in radius, `mineDeploy`/`mineArmed`/`mineExplode` events, mine deleted on detonation.
-- [ ] M1.3 Command `{type:'placeMine', cell}`: validate (passable land, non-water, cap, gold),
+- [x] M1.3 Command `{type:'placeMine', cell}`: validate (passable land, non-water, cap, gold),
   spend, spawn courier. Wired into `core.js` command dispatch + `stepMines` into the tick order.
-- [ ] M1.4 Node tests: determinism (two seeded runs identical), air immunity, blast hits a clump,
+- [x] M1.4 Node tests: determinism (two seeded runs identical), air immunity, blast hits a clump,
   cap enforced, replay log round-trips a mine game.
 
-## Epic M2 — Deploy UX  *(subject→action consistent)*
-- [ ] M2.1 Build palette slot + key `6`: mine ghost on hover (red dot + blast ring), red/green
+## Epic M2 — Deploy UX  *(subject→action consistent)*  ✅ DONE (rev 2 — see build log)
+- [x] M2.1 Build palette slot + key `6`: mine ghost on hover (red dot + blast ring), red/green
   validity via the real `placeMine` validation.
-- [ ] M2.2 Place → command → HUD flash ('Mine drone launched'), palette stays active for laying a
+- [x] M2.2 Place → command → HUD flash ('Mine drone launched'), palette stays active for laying a
   field of mines (same repeat-place convention as structures).
-- [ ] M2.3 HUD: armed-mine count / cap indicator; reject reasons flash (cap, gold, bad cell).
+- [x] M2.3 HUD: armed-mine count / cap indicator; reject reasons flash (cap, gold, bad cell).
 
-## Epic M3 — Render  *(drone, dot, boom)*
-- [ ] M3.1 Drone in flight: Tier A primitive (small defender-tinted dart) at first; Stack Forge
+## Epic M3 — Render  *(drone, dot, boom)*  ✅ DONE (rev 2 — see build log)
+- [x] M3.1 Drone in flight: Tier A primitive (small defender-tinted dart) at first; Stack Forge
   voxel pack later. Render-tier entry if it ships as a `UNITS` row.
-- [ ] M3.2 Armed mine: red dot on the resources layer (under units, over terrain) + subtle 1s pulse;
+- [x] M3.2 Armed mine: red dot on the resources layer (under units, over terrain) + subtle 1s pulse;
   visible to the player only (no enemy AI reaction — design Q4 v1).
-- [ ] M3.3 Explosion through the shipping FX pipeline: `spawnFireClump` + `spawnGlow` + small shake
+- [x] M3.3 Explosion through the shipping FX pipeline: `spawnFireClump` + `spawnGlow` + small shake
   keyed off `mineExplode` in `spawnFx` — no bespoke FX path.
-- [ ] M3.4 Shooting Gallery gauntlet swaps its `MINE_SPEC` prototype for the real `STR-Mine` table
+- [x] M3.4 Shooting Gallery gauntlet swaps its `MINE_SPEC` prototype for the real `STR-Mine` table
   row + `stepMines` (prototype retired; gallery keeps exercising shipping code only).
 
 ## Epic M4 — Balance & ship
@@ -61,3 +61,11 @@ the gauntlet says the numbers are worth shipping.
 ### Build log
 - 2026-07-22 — design rev 1 + epics created. M0 started in the same session (gauntlet runner,
   prototype `MINE_SPEC`, lane view + matrix in the Shooting Gallery).
+- 2026-07-22 (later) — **design rev 2** (owner): mine takes the MOAT build slot (hotkey 4), damage →
+  one-shot-any-tank (1500 Kinetic burst), blast → 0.5. **M1+M2+M3 BUILT in one pass**: STR-Mine row
+  (tables.js), `src/sim/mines.js` (state.mines — never structures: walkable/untargetable/no nav
+  blocking; deploy→fly→arm→ground-contact detonation through the real applyDamage), cmdPlace routes
+  kind 'mine' to deployMine, stepMines at 5c; validatePlacement mine branch (land-only, cap, no
+  seal-off check); renderer: courier dart + red flashing dot + mineExplode via spawnFireClump/Glow;
+  HUD mine icon; gallery MINE_SPEC reads the real row (M3.4 done). 11-test mines suite;
+  52/52 across all suites. M0.5 (cost point) folds into M4.

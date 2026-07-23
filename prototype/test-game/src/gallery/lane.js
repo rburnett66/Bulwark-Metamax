@@ -24,13 +24,14 @@ import { applyDamage } from '../sim/combat.js';
 import { recomputeUnitPaths } from '../sim/pathfinding.js';
 import { placeCompletedStructure, ensureUnitPath } from '../sim/balanceSim.js';
 
-/** LAND-MINE prototype constants (design rev 1). "Same damage as the base turret for now":
- *  the burst reads the live Cannon T1 dps so cannon retunes carry through automatically. */
+/** LAND-MINE spec — now the REAL shipped row (design rev 2, M3.4: prototype retired).
+ *  The gauntlet's mine reads STR-Mine so table retunes carry through automatically. */
+const MINE_ROW = STRUCTURES['STR-Mine'];
 export const MINE_SPEC = Object.freeze({
-  damage: STRUCTURES['STR-Cannon'].dps[0],   // 45 — one-shot burst
-  damageType: STRUCTURES['STR-Cannon'].damageType,   // Kinetic (design Q2: A/B Concussion here)
-  triggerRadius: 0.45,                       // tiles from the buried dot
-  blastRadius: 1.0,                          // AoE around the trigger point
+  damage: MINE_ROW.dps[0],                       // 1500 — one-shot-any-tank burst
+  damageType: MINE_ROW.damageType,               // Kinetic
+  triggerRadius: MINE_ROW.triggerRadius || 0.45, // tiles from the buried dot
+  blastRadius: MINE_ROW.blastRadius || 0.5,      // small AoE around the trigger point
 });
 
 /** The matrix the owner asked for: cannon T1-3, anti-air T1-3, land mine (+ a no-defense control). */

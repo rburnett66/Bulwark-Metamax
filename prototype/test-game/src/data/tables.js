@@ -757,14 +757,20 @@ export const STRUCTURES = Object.freeze({
     buildTime: 2, upgradeTime: 3, sellTime: 1,
     footprint: Object.freeze({ w: 1, h: 1 })
   }),
-  'STR-Moat': Object.freeze({
-    name: 'Moat', kind: 'moat',
+  'STR-Mine': Object.freeze({
+    // MINE DRONE (Land-Mine-Design rev 2, replaces the Moat in this build slot): a drone flies from
+    // the base, buries at the target cell as a red flashing dot, and the first enemy GROUND unit to
+    // touch it eats ONE burst — sized to eliminate any tank in the roster (max walker: GND-HeavyTanks
+    // T3 @ 1452 hp; Energy-armor heavies need 1200 effective at Kinetic ×1.1). Single use, small
+    // blast. Mines are NOT structures at runtime — they live in state.mines (walkable, untargetable).
+    name: 'Mine Drone', kind: 'mine',
     armorClass: 'Structure', damageType: 'Kinetic',
-    canTargetDomains: [],
-    hp: [400, 640, 960], dps: [0, 0, 0],
-    range: 0, cost: [80, 200, 400],
-    buildTime: 2, upgradeTime: 3, sellTime: 1,
-    footprint: Object.freeze({ w: 1, h: 1 })
+    canTargetDomains: Object.freeze([]),
+    hp: [1, 1, 1], dps: [1500, 1500, 1500],   // dps[0] = the one-shot burst
+    range: 0, cost: [150, 150, 150],          // initial price — M4 tunes via gallery/balanceSim
+    buildTime: 0, upgradeTime: 0, sellTime: 0,
+    footprint: Object.freeze({ w: 1, h: 1 }),
+    triggerRadius: 0.45, blastRadius: 0.5, droneSpeed: 6, cap: 8
   }),
   'STR-Harvestor': Object.freeze({
     // A PURCHASE, not a defense: place it on open ground and after the build time it converts into
@@ -1024,6 +1030,13 @@ export const SYSTEM_UNITS = Object.freeze({
     name: 'Moat', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Moat',
     armorClass: 'Structure', damageType: 'None', targets: 'None',
     hp: [400, 640, 960], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [80, 200, 400]
+  }),
+  'SYS-Mine': Object.freeze({
+    // art hook for the Mine Drone (STR-Mine): authored/voxel art may land here later; the game
+    // renders a primitive red dot until it does.
+    name: 'Mine Drone', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Mine',
+    armorClass: 'Structure', damageType: 'Kinetic', targets: 'None',
+    hp: [1, 1, 1], dps: [0, 0, 0], range: 0, speed: 0, power: 0, cost: [150, 150, 150]
   }),
 });
 
