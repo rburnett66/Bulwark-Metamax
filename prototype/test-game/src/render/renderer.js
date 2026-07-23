@@ -482,9 +482,11 @@ function updateGoldFloats(renderer, dt) {
 // existing 'fire'/'smoke' Graphics draw). It reads as a LIVING fire, burns for `ttl` seconds, and scales with
 // `scale`. Render-only + non-deterministic (Math.random); FX never feed the sim, so replays are unaffected.
 export function spawnFlame(renderer, x, y, scale, ttl) {
-  const s = scale || 1;
-  renderer.flames.push({ x: x, y: y, scale: s, age: 0, ttl: ttl || 4.0, emit: 0 });
-  spawnFireClump(renderer, x, y, Math.round(6 * s), s);   // instant burst so it appears the moment it dies
+  const s0 = scale || 1;
+  // fxScale (map FX tier, tables.js): applied ONCE here for the emitter; the clump call below passes
+  // the RAW scale because spawnFireClump applies the tier itself — never double-scale.
+  renderer.flames.push({ x: x, y: y, scale: s0 * (renderer.fxScale || 1), age: 0, ttl: ttl || 4.0, emit: 0 });
+  spawnFireClump(renderer, x, y, Math.round(6 * s0), s0);   // instant burst so it appears the moment it dies
 }
 
 function updateFlames(renderer) {
@@ -537,7 +539,8 @@ function updateFlames(renderer) {
 // Reusable: also exposed as renderer.spawnFireClump(localX, localY, count, scale).
 const FIRE_COLORS = [0xff4a15, 0xff6a1e, 0xff8a2a, 0xffb63c, 0xffd85c];
 export function spawnFireClump(renderer, x, y, count, scale) {
-  const t = renderer.tile, n = (count == null ? 10 : count), s = scale || 1;   // count 0 → smoke + flash only
+  // s carries the map FX tier (renderer.fxScale, tables.FX_SCALE_TIERS) — sizes, spread and rise all scale
+  const t = renderer.tile, n = (count == null ? 10 : count), s = (scale || 1) * (renderer.fxScale || 1);   // count 0 → smoke + flash only
   for (let i = 0; i < n; i++) {
     const ang = Math.random() * Math.PI * 2, spd = Math.random();
     renderer.fxItems.push({
@@ -571,10 +574,10 @@ export function spawnFireClump(renderer, x, y, count, scale) {
 const SPARK_COLORS = [0xffffe0, 0xfff0a0, 0xffd050, 0xffa838];
 const SPARK_GRAVITY_TILES = 10;   // downward accel in tiles/sec^2 → sparks fall back after their upward launch
 export function spawnSparks(renderer, x, y, count) {
-  const t = renderer.tile, n = count || 5;
+  const t = renderer.tile, n = count || 5, fs = renderer.fxScale || 1;
   for (let i = 0; i < n; i++) {
     const ang = -Math.PI / 2 + (Math.random() * 2 - 1) * 1.0;   // mostly UP, wide fan
-    const spd = (1.0 + Math.random() * 2.2) * t;                 // launch speed (px/sec)
+    const spd = (1.0 + Math.random() * 2.2) * t * fs;            // launch speed (px/sec) — FX tier widens the fan
     renderer.fxItems.push({
       x: x + (Math.random() * 2 - 1) * t * 0.28,
       y: y + (Math.random() * 2 - 1) * t * 0.1,
@@ -619,6 +622,8 @@ function emitCombatFx(renderer, state) {
     clock.set(id, now + cadence * (0.85 + Math.random() * 0.3));
     // pooled sprite path (spec §4): billboard dot + streak, single batched draw, zero per-frame alloc.
     // size is a sprite SCALE — the dot texture is 16px, so t*0.011 ≈ the old t*0.09-radius shell dot.
+    // PROJECTILES are deliberately EXCLUDED from the map FX tier (renderer.fxScale) — owner: "not too
+    // much sizing on projectiles"; shots keep their gallery-authored size while impacts carry the tier.
     const n = burst || 1;
     for (let k = 0; k < n; k++) {
       // burst rounds spray: jittered impact points, staggered a few frames apart (sim clock)
@@ -638,12 +643,13 @@ function emitCombatFx(renderer, state) {
     renderer._shotQueue = renderer._shotQueue.filter((q) => (now >= q.at ? (due.push(q), false) : true));
     for (const q of due) renderer.projectiles.spawn(...q.args);
   }
+  const fs = renderer.fxScale || 1;   // map FX tier — damage-burn flames scale, cosmetic shots do NOT (fire() below)
   const burn = (x, y, spread, size) => {
-    renderer.fxItems.push({ kind: 'fire', x: x + (Math.random() * 2 - 1) * spread, y: y + (Math.random() * 2 - 1) * spread,
+    renderer.fxItems.push({ kind: 'fire', x: x + (Math.random() * 2 - 1) * spread * fs, y: y + (Math.random() * 2 - 1) * spread * fs,
       age: 0, ttl: 0.45 + Math.random() * 0.3, color: BURN_COLORS[(Math.random() * 3) | 0],
-      size: size, rise: t * 0.45, vx: (Math.random() * 2 - 1) * t * 0.06 });
+      size: size * fs, rise: t * 0.45 * fs, vx: (Math.random() * 2 - 1) * t * 0.06 });
     if (Math.random() < 0.35) renderer.fxItems.push({ kind: 'smoke', x: x, y: y - t * 0.1, age: 0, ttl: 0.8,
-      color: 0x2a2d31, size: size * 1.2, rise: t * 0.6 });
+      color: 0x2a2d31, size: size * 1.2 * fs, rise: t * 0.6 * fs });
   };
 
   if (state.structures) {
@@ -741,7 +747,7 @@ export function spawnGlow(renderer, x, y, radiusTiles, ttl, tint) {
   spr.tint = (tint != null) ? tint : 0xffc070;
   spr.x = x; spr.y = y;
   spr.__age = 0; spr.__ttl = ttl || 0.35;
-  spr.__r = radiusTiles * renderer.tile;
+  spr.__r = radiusTiles * renderer.tile * (renderer.fxScale || 1);   // map FX tier
   spr.scale.set((spr.__r * 1.2) / 64);
   renderer.layers.fx.addChild(spr);
   (renderer.glows || (renderer.glows = [])).push(spr);
@@ -867,14 +873,17 @@ export function updateFx(renderer) {
   g.clear();
   const dg = renderer.dustG; if (dg) dg.clear();   // ground dust draws on its own layer, UNDER units
   const t = renderer.tile;
+  const fs = renderer.fxScale || 1;   // map FX tier (tables.FX_SCALE_TIERS): battle effects only —
+                                      // blast/reticle/shell arcs stay 1:1 (they encode REAL damage radii),
+                                      // dust/text stay 1:1 (ambient/info), projectiles excluded in fire().
   const dt = renderer._fxDt || FX_DT;   // REAL frame time so FX track the real-time sim
   // Tier A projectiles (pooled sprites, zero per-frame alloc) fly here; the impact callback is
   // EVENT-time — burst FX may allocate, the per-frame flight path never does. (spec §4)
   renderer.projectiles.update(dt, (kind, tx, ty) => {
     if (kind === 'flak') {
-      // AIR-BURST: grey puffs + cold flash at altitude
-      for (let k = 0; k < 4; k++) renderer.fxItems.push({ kind: 'smoke', x: tx + (Math.random() * 2 - 1) * t * 0.22,
-        y: ty + (Math.random() * 2 - 1) * t * 0.22, age: 0, ttl: 0.5, color: 0x3a3f45, size: t * 0.1, rise: t * 0.15 });
+      // AIR-BURST: grey puffs + cold flash at altitude (sized by the map FX tier)
+      for (let k = 0; k < 4; k++) renderer.fxItems.push({ kind: 'smoke', x: tx + (Math.random() * 2 - 1) * t * 0.22 * fs,
+        y: ty + (Math.random() * 2 - 1) * t * 0.22 * fs, age: 0, ttl: 0.5, color: 0x3a3f45, size: t * 0.1 * fs, rise: t * 0.15 * fs });
       renderer.fxItems.push({ kind: 'flash', x: tx, y: ty, age: 0, ttl: 0.12, color: 0xcfe8ff });
       spawnGlow(renderer, tx, ty, 0.55, 0.22, 0xbfe0ff);   // cool air-burst bloom
     } else {
@@ -943,26 +952,26 @@ export function updateFx(renderer) {
       if (fx.txt) { fx.txt.y = fx.y - t * (0.3 + f * 1.1); fx.txt.alpha = alpha; }   // rise + fade at the unit
     } else if (fx.kind === 'ring') {
       g.lineStyle(2, fx.color, alpha);
-      g.drawCircle(fx.x, fx.y, t * 0.2 + f * t * 0.6);
+      g.drawCircle(fx.x, fx.y, (t * 0.2 + f * t * 0.6) * fs);
       g.lineStyle(0);
     } else if (fx.kind === 'flash') {
       g.beginFill(fx.color, alpha * 0.8);
-      g.drawCircle(fx.x, fx.y, t * 0.15);
+      g.drawCircle(fx.x, fx.y, t * 0.15 * fs);
       g.endFill();
     } else if (fx.kind === 'rise') {
       g.beginFill(fx.color, alpha);
-      g.drawCircle(fx.x, fx.y - f * t * 0.8, t * 0.12);
+      g.drawCircle(fx.x, fx.y - f * t * 0.8, t * 0.12 * fs);
       g.endFill();
     } else if (fx.kind === 'fire') {
-      const rise = (fx.rise != null) ? fx.rise : t * 0.7;
-      const sz = (fx.size != null) ? fx.size : t * 0.18;
+      const rise = (fx.rise != null) ? fx.rise : t * 0.7 * fs;   // explicit sizes arrive pre-scaled (clump/flame)
+      const sz = (fx.size != null) ? fx.size : t * 0.18 * fs;
       const fxp = fx.x + (fx.vx || 0) * f;
       g.beginFill(fx.color, alpha * 0.92);
       g.drawCircle(fxp, fx.y - f * rise, sz * (1 - f * 0.6));   // flame floats up + shrinks
       g.endFill();
     } else if (fx.kind === 'smoke') {
-      const rise = (fx.rise != null) ? fx.rise : t * 0.9;
-      const sz = (fx.size != null) ? fx.size : t * 0.25;
+      const rise = (fx.rise != null) ? fx.rise : t * 0.9 * fs;
+      const sz = (fx.size != null) ? fx.size : t * 0.25 * fs;
       const fxp = fx.x + (fx.vx || 0) * f;
       g.beginFill(fx.color, (1 - f) * 0.32);
       g.drawCircle(fxp, fx.y - f * rise, sz * (0.6 + f));       // smoke expands as it rises
@@ -974,11 +983,11 @@ export function updateFx(renderer) {
       fx.y += fx.vy * dt;
       const b = 1 - f;                                  // brightness/heat fades over life
       const col = b > 0.45 ? fx.color : 0xff5416;       // cools to ember-red as it dies
-      g.lineStyle(Math.max(1, t * 0.03 * b), col, 0.35 + 0.55 * b);   // short motion streak
+      g.lineStyle(Math.max(1, t * 0.03 * b * fs), col, 0.35 + 0.55 * b);   // short motion streak
       g.moveTo(fx.x, fx.y); g.lineTo(fx.x - fx.vx * dt * 2.5, fx.y - fx.vy * dt * 2.5);
       g.lineStyle(0);
       g.beginFill(col, 0.5 + 0.5 * b);
-      g.drawCircle(fx.x, fx.y, t * 0.05 * (0.45 + b));
+      g.drawCircle(fx.x, fx.y, t * 0.05 * (0.45 + b) * fs);
       g.endFill();
     } else if (fx.kind === 'reticle') {
       // pulsing target where the super-cannon will land (aim telegraph)

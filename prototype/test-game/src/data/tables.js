@@ -1040,6 +1040,27 @@ export const SYSTEM_UNITS = Object.freeze({
   }),
 });
 
+// ---------------------------------------------------------------------------
+// FX scale tiers (owner 2026-07-22): battle EFFECTS — explosions, fire clumps,
+// wreck flames, glows, smoke — read bigger on the early maps. PROJECTILES are
+// deliberately excluded (renderer fire() ignores this; owner: "not too much
+// sizing on projectiles"), and gameplay-derived radii (super-cannon blast,
+// aim reticle) stay 1:1 so visuals never lie about damage footprints.
+// The map-5 boundary is an owner-review knob (tickets mm-37d6e930c3c2/…5566).
+// ---------------------------------------------------------------------------
+export const FX_SCALE_TIERS = Object.freeze([
+  Object.freeze({ maxMap: 3, scale: 3 }),
+  Object.freeze({ maxMap: 5, scale: 2 }),
+]);
+export function fxScaleForMap(mapId) {
+  const id = Number(mapId);
+  if (!Number.isFinite(id) || id <= 0) return 1;   // classic/unknown boards → neutral
+  for (let i = 0; i < FX_SCALE_TIERS.length; i++) {
+    if (id <= FX_SCALE_TIERS[i].maxMap) return FX_SCALE_TIERS[i].scale;
+  }
+  return 1;
+}
+
 export function getUnitDef(unitId) {
   const def = UNITS[unitId] || SYSTEM_UNITS[unitId];
   if (!def) throw new Error('tables.getUnitDef: unknown unitId "' + unitId + '"');
