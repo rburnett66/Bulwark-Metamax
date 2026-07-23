@@ -30,6 +30,10 @@ const CSS = `
   font-weight:700; cursor:pointer; border:1px solid #2e3846; background:#1a1f28; color:#e6ecf3; border-radius:4px; }
 .bwd-btn.go { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:#f2c869; }
 .bwd-owned { margin-top:12px; font-size:11px; color:#8fa0b3; }
+.bwd-htp { font-size:13.5px; line-height:1.6; color:#cfe3f0; }
+.bwd-tips { margin:12px 0 0; padding:0; list-style:none; }
+.bwd-tips li { font-size:13px; line-height:1.5; color:#cfe3f0; padding:6px 0; border-bottom:1px solid #1c2530; }
+.bwd-tips li:last-child { border-bottom:0; }
 `;
 
 function ensureStyle(doc) {
@@ -65,6 +69,30 @@ export function showWaveIntel(mountEl, info, onStart) {
     '<div class="bwd-title">Wave ' + info.wave + (info.faction ? ' — ' + esc(info.faction) : '') + '</div>' +
     (rows || '<div class="bwd-unit">—</div>');
   const btn = doc.createElement('button'); btn.className = 'bwd-btn go'; btn.textContent = 'TO THE WALLS ▶';
+  btn.addEventListener('click', () => { veil.remove(); if (onStart) onStart(); });
+  card.appendChild(btn);
+  return { close: () => veil.remove() };
+}
+
+/**
+ * HOW TO PLAY — the onboarding brief, shown once before the first map dialog.
+ * `onStart` resolves + closes. Copy owned by the caller (owner-authored).
+ */
+export function showHowToPlay(mountEl, onStart) {
+  const { doc, veil, card } = veilCard(mountEl);
+  card.innerHTML =
+    '<div class="bwd-kicker">HOW TO PLAY</div>' +
+    '<div class="bwd-title">Welcome to the valley, Scoundrel</div>' +
+    '<div class="bwd-htp">You’ve landed on a planet to gather <b>valuable resources</b> — but you may need to ' +
+      'build a few <b>defenses</b> to keep away some pesky locals.</div>' +
+    '<ul class="bwd-tips">' +
+      '<li>🗣️ <b>Pay attention to characters</b> — they drop tips, hints and strategies.</li>' +
+      '<li>⛏️ <b>More harvesters mean more resources.</b> Buy them at the base.</li>' +
+      '<li>💎 Don’t forget the <b>premium resources</b> near the edge of the valley.</li>' +
+      '<li>🔧 <b>Repair</b> any structure that gets damaged — or <b>sell</b> ones you won’t need.</li>' +
+    '</ul>' +
+    '<div class="bwd-htp" style="text-align:center;color:#f2c869;font-weight:700;margin-top:12px">Good luck, Scoundrel!</div>';
+  const btn = doc.createElement('button'); btn.className = 'bwd-btn go'; btn.textContent = 'LET’S GO ▶';
   btn.addEventListener('click', () => { veil.remove(); if (onStart) onStart(); });
   card.appendChild(btn);
   return { close: () => veil.remove() };

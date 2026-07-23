@@ -5,7 +5,7 @@ import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, buyStructTier, resetSave } from './save/save.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
-import { showWaveIntel, showBonusPicker } from './render/gameDialog.js';
+import { showWaveIntel, showBonusPicker, showHowToPlay } from './render/gameDialog.js';
 import { getBonusDef } from './data/tables.js';
 import { createMenu, FACTION_NAMES } from './menu/menu.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
@@ -340,24 +340,40 @@ export function boot(mountEl, seed) {
     // brief the FIRST wave's unit types (no counts; new units flagged). Per-wave intel for later
     // waves fires from the interlude below.
     const showPreview = () => { const info = waveIntel(currentWaves[0], 1); if (info) showWaveIntel(mountEl, info, null); };
-    if (currentMapId) {
-      const sv = loadSave();
-      const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
-      const offer = already ? null : buildOffer(currentMapId, currentMap, voicePacks, sv);
-      if (offer) {
-        // OWNER ordering: the CONTRACT MODAL resolves first, THEN the primary speaks — the
-        // start tip only exists when the answer is yes, so the dialog must wait for the answer.
-        suppressPreDialog = true;
-        comm.dismiss();
-        showContractModal(mountEl, offer, {
-          onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); showPreview(); },
-          onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); showPreview(); },
-        });
+    const runIntro = () => {
+      if (currentMapId) {
+        const sv = loadSave();
+        const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
+        const offer = already ? null : buildOffer(currentMapId, currentMap, voicePacks, sv);
+        if (offer) {
+          // OWNER ordering: the CONTRACT MODAL resolves first, THEN the primary speaks — the
+          // start tip only exists when the answer is yes, so the dialog must wait for the answer.
+          suppressPreDialog = true;
+          comm.dismiss();
+          showContractModal(mountEl, offer, {
+            onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); showPreview(); },
+            onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); showPreview(); },
+          });
+        } else {
+          showPreview();
+        }
       } else {
         showPreview();
       }
+    };
+    // HOW TO PLAY (owner): the onboarding brief shows ONCE, before the first map dialog — then the
+    // normal contract/wave-intel flow proceeds. localStorage-gated so returning players skip it.
+    let htpSeen = false;
+    try { htpSeen = localStorage.getItem('bulwark:howToPlaySeen') === '1'; } catch (e) { /* storage blocked */ }
+    if (!htpSeen) {
+      suppressPreDialog = true; comm.dismiss();
+      showHowToPlay(mountEl, () => {
+        try { localStorage.setItem('bulwark:howToPlaySeen', '1'); } catch (e) { /* storage blocked */ }
+        suppressPreDialog = false;
+        runIntro();
+      });
     } else {
-      showPreview();
+      runIntro();
     }
   }
 
