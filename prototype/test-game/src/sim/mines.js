@@ -20,6 +20,7 @@ import { applyDamage } from './combat.js';
 import { spend } from './economy.js';
 import { nextEntityId } from './entities.js';
 import { emitEvent } from './core.js';
+import { consumeMineCredit } from './bonuses.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -39,7 +40,8 @@ export function deployMine(state, structId, cell) {
   const def = getStructureDef(structId);
   if (!state.mines) state.mines = new Map();
   if (liveMineCount(state) >= (def.cap || 8)) return { ok: false, reason: 'max mines (' + (def.cap || 8) + ')' };
-  if (!spend(state, def.cost[0], 'build:' + structId)) return { ok: false, reason: 'cost' };
+  // WAVE BONUS 12: a free mine-layer credit covers the deploy before gold is charged.
+  if (!consumeMineCredit(state) && !spend(state, def.cost[0], 'build:' + structId)) return { ok: false, reason: 'cost' };
   const base = state.base ? state.base.pos : { x: 0, y: 0 };
   const m = {
     id: nextEntityId(state),

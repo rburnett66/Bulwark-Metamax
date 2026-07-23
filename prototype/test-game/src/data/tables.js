@@ -1071,6 +1071,40 @@ function tierLookup(tiers, mapId) {
 export function fxScaleForMap(mapId) { return tierLookup(FX_SCALE_TIERS, mapId); }
 export function projScaleForMap(mapId) { return tierLookup(PROJ_SCALE_TIERS, mapId); }
 
+// ---------------------------------------------------------------------------
+// WAVE BONUSES (Wave-Bonuses-Design rev 1): pick 1 of 3 at each wave end. Pure
+// data — the sim reads these, never a literal. `kind` drives applyBonus():
+//   dmgMod (persistent, additive) · heal (structures by kind, instant to full)
+//   healBase (+mag of max) · harvMod (persistent) · healHarv · mineCredit
+//   cannonMod (persistent) · unlockTier (raise the tier cap for a group)
+// PRE-NERFS ship WITH the feature so these bonuses have room to matter.
+// ---------------------------------------------------------------------------
+export const BONUS_NERFS = Object.freeze({
+  harvesterSpeedMult: 0.65,     // starting harvester speed −35% (bonus 8 buys back)
+  baseCannonRangeMult: 0.70,    // base super-cannon range −30% (bonus 13)
+  baseCannonPowerMult: 0.50,    // base super-cannon damage −50% (bonus 14)
+  startTierCap: 2,              // turrets AND walls start capped at T2 (bonuses 15/16 unlock T3)
+});
+export const BONUSES = Object.freeze([
+  Object.freeze({ id: 'dmg_air',      label: '+10% damage vs air',      kind: 'dmgMod',    target: 'air',    mag: 0.10 }),
+  Object.freeze({ id: 'dmg_ground',   label: '+10% damage vs ground',   kind: 'dmgMod',    target: 'ground', mag: 0.10 }),
+  Object.freeze({ id: 'dmg_troops',   label: '+10% damage vs troops',   kind: 'dmgMod',    target: 'troops', mag: 0.10 }),
+  Object.freeze({ id: 'heal_walls',   label: 'Heal all walls',          kind: 'heal',      target: 'wall' }),
+  Object.freeze({ id: 'heal_cannons', label: 'Heal all cannons',        kind: 'heal',      target: 'antiGround' }),
+  Object.freeze({ id: 'heal_base',    label: 'Heal base 10%',           kind: 'healBase',  mag: 0.10 }),
+  Object.freeze({ id: 'heal_aa',      label: 'Heal all anti-air',       kind: 'heal',      target: 'antiAir' }),
+  Object.freeze({ id: 'harv_speed',   label: '+20% harvester speed',    kind: 'harvMod',   field: 'speed',    mag: 0.20 }),
+  Object.freeze({ id: 'harv_cap',     label: '+20% harvester capacity', kind: 'harvMod',   field: 'capacity', mag: 0.20 }),
+  Object.freeze({ id: 'harv_hp',      label: '+20% harvester hp',       kind: 'harvMod',   field: 'hp',       mag: 0.20 }),
+  Object.freeze({ id: 'heal_harv',    label: 'Heal all harvesters',     kind: 'healHarv' }),
+  Object.freeze({ id: 'mine_drones',  label: 'Add mine-layer drones',   kind: 'mineCredit', mag: 3 }),
+  Object.freeze({ id: 'cannon_range', label: 'Base cannon +10% range',  kind: 'cannonMod', field: 'range',  mag: 0.10 }),
+  Object.freeze({ id: 'cannon_dmg',   label: 'Base cannon +10% damage', kind: 'cannonMod', field: 'damage', mag: 0.10 }),
+  Object.freeze({ id: 'tier3_turret', label: 'Enable Tier-3 turrets',   kind: 'unlockTier', groups: Object.freeze(['cannon', 'flak']) }),
+  Object.freeze({ id: 'tier3_wall',   label: 'Enable Tier-3 walls',     kind: 'unlockTier', groups: Object.freeze(['wall']) }),
+]);
+export function getBonusDef(id) { return BONUSES.find((b) => b.id === id) || null; }
+
 export function getUnitDef(unitId) {
   const def = UNITS[unitId] || SYSTEM_UNITS[unitId];
   if (!def) throw new Error('tables.getUnitDef: unknown unitId "' + unitId + '"');

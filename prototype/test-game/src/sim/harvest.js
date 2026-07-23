@@ -10,6 +10,7 @@
 // The harvester is driven HERE (marchAlong on its own nav path, like repair troops) — stepMovement,
 // separation, and the contact clamp all skip it, so the economy loop never tangles with the crowd sim.
 import { MAPDATA } from '../../content/maps/mapdata.js';
+import { BONUS_NERFS } from '../data/tables.js';
 import { createUnit } from './entities.js';
 import { buildNavGrid, findWalkerPath } from './pathfinding.js';
 import { emitEvent } from './core.js';
@@ -24,10 +25,14 @@ function harvesterStats(state) {
   // state.harvesterLevel — part of the initial deterministic state, never mid-battle.
   const lvl = Math.max(1, Math.min(5, (state && state.harvesterLevel) || 1));
   const up = (MAPDATA.harvesterUpgrades || []).find((u) => u.Level === lvl) || {};
+  // WAVE BONUSES: starting harvester speed −35% (pre-nerf); bonuses 8/9/10 add +20% speed/capacity/hp
+  // to future spawns (the existing fleet is scaled in applyBonus). Persistent run mods live on state.bonuses.
+  const nerf = BONUS_NERFS.harvesterSpeedMult;
+  const b = (state && state.bonuses && state.bonuses.harv) || { speed: 0, capacity: 0, hp: 0 };
   return {
-    capacity: Math.round((f.Harvester_Base_Capacity || 40) * (up.Capacity_Mult || 1)),
-    speed: (f.Harvester_Base_Speed || 3) * (up.Speed_Mult || 1),
-    hp: Math.round((f.Harvester_Base_HP || 120) * (up.HP_Mult || 1)),
+    capacity: Math.round((f.Harvester_Base_Capacity || 40) * (up.Capacity_Mult || 1) * (1 + b.capacity)),
+    speed: (f.Harvester_Base_Speed || 3) * (up.Speed_Mult || 1) * nerf * (1 + b.speed),
+    hp: Math.round((f.Harvester_Base_HP || 120) * (up.HP_Mult || 1) * (1 + b.hp)),
     yieldMult: f.Yield_Mult || 1,
   };
 }

@@ -3,6 +3,7 @@ import { MAX_LIVE_3D } from '../data/renderTiers.js';
 import { createUnit, unitRadius } from './entities.js';
 import { emitEvent, contactDistR, REST_RATIO } from './core.js';
 import { resetFleetForWave } from './harvest.js';
+import { rollBonusOffer } from './bonuses.js';
 
 // Live Tier C (live-3D render) attackers on the field right now — the §5 sparsity cap counts these.
 function liveTierCCount(state) {
@@ -365,6 +366,10 @@ export function stepWaves(state, dt) {
       wave: w.current,
       total: w.total,
     });
+
+    // WAVE BONUSES: roll the 3-of-16 offer from the seeded rng (deterministic → replay-identical).
+    // Not on the final wave — that clear is a win, no interlude to choose in.
+    if (w.current < w.total) rollBonusOffer(state);
 
     // Surviving the final wave = win (unless the base already died).
     if (w.current >= w.total && state.result === null) {

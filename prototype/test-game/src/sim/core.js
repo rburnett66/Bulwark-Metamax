@@ -1,4 +1,4 @@
-import { ASSUMPTIONS, WAVES, MAP, getUnitDef, getStructureDef } from '../data/tables.js';
+import { ASSUMPTIONS, WAVES, MAP, getUnitDef, getStructureDef, BONUS_NERFS } from '../data/tables.js';
 import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath, findRoute, getFlyerPath, getWaterPath } from './pathfinding.js';
 import { createUnit, createBase, createStructure } from './entities.js';
@@ -8,6 +8,7 @@ import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepa
 import { initWaves, startNextWave, stepWaves } from './waves.js';
 import { initHarvest, cmdHarvest, stepHarvest, cmdBuyHarvester, resetFleetForWave } from './harvest.js';
 import { deployMine, stepMines } from './mines.js';
+import { initBonuses, applyBonus, cannonRange, cannonDamage } from './bonuses.js';
 import { createLog, recordCommand } from './replay.js';
 
 /**
@@ -305,13 +306,16 @@ export function createSim(seed, opts) {
     nextId: 1,
     entityIdCounter: 0,
     harvesterLevel: (options.harvesterLevel | 0) || 1,   // workbook upgrade level (menu-bought, save-owned)
-    structTiers: options.structTiers || null,            // Amendment B2: campaign tier unlocks (null = all open)
+    // WAVE-BONUS pre-nerf (WB3): turrets AND walls START capped at T2 — bonuses 15/16 unlock T3. When a
+    // campaign save supplies its own tiers we honor them; otherwise cap at startTierCap instead of "all open".
+    structTiers: options.structTiers || { cannon: BONUS_NERFS.startTierCap, flak: BONUS_NERFS.startTierCap, wall: BONUS_NERFS.startTierCap },
     // per-unit collision radii derived from the voxel pack footprint (unitId → half-width tiles). Lets a
     // unit's collision match the tank you SEE instead of the shape-table default. null → unitRadius(def).
     voxelRadii: options.voxelRadii || null,
     _resultEmitted: false
   };
 
+  initBonuses(state);   // WAVE BONUSES: persistent run mods + the per-wave offer (bonuses.js)
   state.base = createBase(map);
   state.navGrid = buildNavGrid(map, []);
   // cache the fixed water lane so waves/deploys can reuse it without recompute
@@ -391,6 +395,9 @@ export function applyCommand(state, cmd) {
       break;
     case 'buyHarvester':
       result = cmdBuyHarvester(state);
+      break;
+    case 'chooseBonus':
+      result = applyBonus(state, cmd.bonusId);   // WAVE BONUSES — validates against the current offer
       break;
     default:
       result = { ok: false, reason: 'unknownCommand' };
@@ -1086,7 +1093,7 @@ export function stepBaseCannon(state, dt) {
       if (u.hp <= 0 || u.side !== 'attacker') continue;
       if (u.altitude > 0 || u.domain === 'Flyer') continue;   // GROUND artillery — never targets air units
       if ((u._still || 0) < CANNON.stillTicks) continue;
-      if (dist(u.pos, base.pos) > CANNON.range) continue;
+      if (dist(u.pos, base.pos) > cannonRange(state, CANNON.range)) continue;   // WB: pre-nerf −30% + buyback
       if (!best || u._still > best._still || (u._still === best._still && u.id < best.id)) best = u;
     }
     if (best) {
@@ -1107,7 +1114,7 @@ export function stepBaseCannon(state, dt) {
         if (u.altitude > 0 || u.domain === 'Flyer') continue;   // ground blast doesn't hit aircraft overhead
         if (u.side !== 'attacker') continue;   // NO FRIENDLY FIRE (owner): the base's own shell never
                                                // hurts harvesters or deployed defenders in the blast
-        if (dist(u.pos, p) <= CANNON.aoe) applyDamage(state, -2, u, CANNON.damage, 'Concussion', 1);
+        if (dist(u.pos, p) <= CANNON.aoe) applyDamage(state, -2, u, cannonDamage(state, CANNON.damage), 'Concussion', 1);   // WB: pre-nerf −50% + buyback
       }
       emitEvent(state, { type: 'cannonImpact', tick: state.tick, pos: { x: p.x, y: p.y }, radius: CANNON.aoe });
       c.phase = 'cooldown'; c.timer = CANNON.cooldown;

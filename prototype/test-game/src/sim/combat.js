@@ -9,6 +9,7 @@
 import { EFFECTIVENESS, DAMAGE_TYPES, getStructureDef } from '../data/tables.js';
 import { grantKillIncome } from './economy.js';
 import { emitEvent } from './core.js';
+import { bonusDamageMult } from './bonuses.js';
 
 /** Sentinel target id used internally for the player base (base has no entity id). */
 const BASE_TARGET_ID = -1;
@@ -371,7 +372,8 @@ export function stepCombat(state, dt) {
       s.targetId = tid;
     }
 
-    const res = applyDamage(state, s.id, target, dps, def.damageType, dt);
+    // WAVE BONUSES: +% defender damage vs air / ground / troops (bonuses 1-3), applied to TOWER fire.
+    const res = applyDamage(state, s.id, target, dps * bonusDamageMult(state, target), def.damageType, dt);
     if (res.killed) {
       s.targetId = null;
       deadUnitIds.push(target.id);
