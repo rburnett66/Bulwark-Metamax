@@ -1052,14 +1052,24 @@ export const FX_SCALE_TIERS = Object.freeze([
   Object.freeze({ maxMap: 3, scale: 3 }),
   Object.freeze({ maxMap: 5, scale: 2 }),
 ]);
-export function fxScaleForMap(mapId) {
+// PROJECTILE tiers run the OTHER way (owner: "level 1 is at least 2x too big"): the SHOT_SIZE
+// constants carry a 2026-07-16 phone-visibility bump (flak 4x, shells 2x) that oversizes shots on
+// the zoomed early maps. Numbers at tile 64 before damping: shell dot ≈22.5px + 68px streak,
+// flak ≈31px + 92px, tracer ≈7.7px. Damping halves maps 1-3.
+export const PROJ_SCALE_TIERS = Object.freeze([
+  Object.freeze({ maxMap: 3, scale: 0.5 }),
+  Object.freeze({ maxMap: 5, scale: 0.75 }),
+]);
+function tierLookup(tiers, mapId) {
   const id = Number(mapId);
   if (!Number.isFinite(id) || id <= 0) return 1;   // classic/unknown boards → neutral
-  for (let i = 0; i < FX_SCALE_TIERS.length; i++) {
-    if (id <= FX_SCALE_TIERS[i].maxMap) return FX_SCALE_TIERS[i].scale;
+  for (let i = 0; i < tiers.length; i++) {
+    if (id <= tiers[i].maxMap) return tiers[i].scale;
   }
   return 1;
 }
+export function fxScaleForMap(mapId) { return tierLookup(FX_SCALE_TIERS, mapId); }
+export function projScaleForMap(mapId) { return tierLookup(PROJ_SCALE_TIERS, mapId); }
 
 export function getUnitDef(unitId) {
   const def = UNITS[unitId] || SYSTEM_UNITS[unitId];

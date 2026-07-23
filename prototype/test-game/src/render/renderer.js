@@ -629,7 +629,8 @@ function emitCombatFx(renderer, state) {
       // burst rounds spray: jittered impact points, staggered a few frames apart (sim clock)
       const jx = n > 1 ? (Math.random() * 2 - 1) * t * 0.16 : 0;
       const jy = n > 1 ? (Math.random() * 2 - 1) * t * 0.16 : 0;
-      const args = [from.x, from.y, to.x + jx, to.y + jy, speed * t, color, kind, t * (SHOT_SIZE[kind] || 0.0075) * (sizeMult || 1)];
+      const args = [from.x, from.y, to.x + jx, to.y + jy, speed * t, color, kind,
+        t * (SHOT_SIZE[kind] || 0.0075) * (sizeMult || 1) * (renderer.projScale || 1)];   // per-map damping (tables.PROJ_SCALE_TIERS)
       if (k === 0) renderer.projectiles.spawn(...args);
       else (renderer._shotQueue || (renderer._shotQueue = [])).push({ at: now + k * 0.07, args });
     }

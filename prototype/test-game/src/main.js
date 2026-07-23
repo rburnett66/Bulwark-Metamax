@@ -1,4 +1,4 @@
-import { MAP, WAVES, makeWaves, fxScaleForMap } from './data/tables.js';
+import { MAP, WAVES, makeWaves, fxScaleForMap, projScaleForMap } from './data/tables.js';
 import { buildCampaignMap, buildTerrainMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
@@ -79,7 +79,8 @@ export function boot(mountEl, seed) {
   let ui = createUiState();
 
   let renderer = createRenderer(app, currentMap);
-  renderer.fxScale = fxScaleForMap(currentMapId);   // battle-FX size tier for this map (projectiles excluded)
+  renderer.fxScale = fxScaleForMap(currentMapId);     // battle-FX size tier for this map
+  renderer.projScale = projScaleForMap(currentMapId); // projectile damping (early maps shrink shots)
 
   // Load the AUTHORED unit art (faction .units.json + sheets) asynchronously; once ready, units that have art
   // render as their real sprites. Non-blocking — the game runs with primitives until (and if) it resolves.
@@ -298,7 +299,8 @@ export function boot(mountEl, seed) {
     destroyRenderer(renderer);                   // free the old renderer's GPU tree before replacing it
     app.stage.removeChildren();
     renderer = createRenderer(app, currentMap);
-    renderer.fxScale = fxScaleForMap(currentMapId);   // battle-FX size tier for this map (projectiles excluded)
+    renderer.fxScale = fxScaleForMap(currentMapId);     // battle-FX size tier for this map
+  renderer.projScale = projScaleForMap(currentMapId); // projectile damping (early maps shrink shots)
     if (art) renderer.unitArt = art;
     if (vox) renderer.voxelArt = vox;
     if (dec) renderer.decorArt = dec;

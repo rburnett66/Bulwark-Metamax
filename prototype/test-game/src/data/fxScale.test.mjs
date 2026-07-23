@@ -3,7 +3,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { fxScaleForMap, FX_SCALE_TIERS } from './tables.js';
+import { fxScaleForMap, projScaleForMap, FX_SCALE_TIERS, PROJ_SCALE_TIERS } from './tables.js';
+
+test('projectile damping runs INVERSE to the FX tiers: 0.5x (1-3), 0.75x (4-5), 1x (6+)', () => {
+  assert.equal(projScaleForMap(1), 0.5);
+  assert.equal(projScaleForMap(3), 0.5);
+  assert.equal(projScaleForMap(4), 0.75);
+  assert.equal(projScaleForMap(5), 0.75);
+  assert.equal(projScaleForMap(6), 1);
+  assert.equal(projScaleForMap(0), 1);
+  assert.equal(projScaleForMap(undefined), 1);
+  assert.ok(Array.isArray(PROJ_SCALE_TIERS) && PROJ_SCALE_TIERS.length >= 1);
+});
 
 test('tiers: 3x (1-3), 2x (4-5), 1x (6-8+)', () => {
   assert.equal(fxScaleForMap(1), 3);
