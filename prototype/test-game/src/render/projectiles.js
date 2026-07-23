@@ -47,15 +47,17 @@ export function createProjectilePool() {
     const dot = new PIXI.Sprite(tex.dot); dot.anchor.set(0.5);
     const streak = new PIXI.Sprite(tex.streak); streak.anchor.set(1, 0.5);   // tail behind the dot
     container.addChild(streak); container.addChild(dot);
-    return { dot, streak, x: 0, y: 0, tx: 0, ty: 0, speed: 0, kind: '', size: 1 };
+    return { dot, streak, x: 0, y: 0, tx: 0, ty: 0, speed: 0, kind: '', size: 1, slen: 1, swid: 1 };
   }
   return {
     container,
     get count() { return active.length; },
-    /** Launch a shot. Pure pool reuse — no allocation once the pool is warm. */
-    spawn(fromX, fromY, toX, toY, speed, color, kind, size) {
+    /** Launch a shot. Pure pool reuse — no allocation once the pool is warm.
+     *  streakLen/streakWid: independent tail multipliers (authored per unit; default 1 = classic). */
+    spawn(fromX, fromY, toX, toY, speed, color, kind, size, streakLen, streakWid) {
       const s = alloc();
       s.x = fromX; s.y = fromY; s.tx = toX; s.ty = toY; s.speed = speed; s.kind = kind || ''; s.size = size || 1;
+      s.slen = streakLen || 1; s.swid = streakWid || 1;
       s.dot.tint = color; s.streak.tint = color;
       s.dot.visible = true; s.streak.visible = true;
       s.dot.scale.set(s.size);
@@ -80,7 +82,7 @@ export function createProjectilePool() {
         s.dot.position.set(s.x, s.y);
         s.streak.position.set(s.x, s.y);
         s.streak.rotation = Math.atan2(ny, nx);
-        s.streak.scale.set(s.size * 0.9, s.size);
+        s.streak.scale.set(s.size * 0.9 * s.slen, s.size * s.swid);   // length × width, independently authored
       }
     },
     /** Hide + recycle everything (map change / restart). */

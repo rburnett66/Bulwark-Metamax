@@ -253,6 +253,8 @@ export function bootGallery() {
       size: Number($('fx-size').value),
       cadence: Number($('fx-cadence').value),
       burst: Number($('fx-burst').value),
+      streakLen: Number($('fx-slen').value),
+      streakWid: Number($('fx-swid').value),
     };
   }
   fxInput('fx-kind', () => {});
@@ -261,6 +263,8 @@ export function bootGallery() {
   fxInput('fx-size', (e) => { $('fx-size-num').textContent = e.target.value + '×'; });
   fxInput('fx-cadence', (e) => { $('fx-cadence-num').textContent = e.target.value + ' s'; });
   fxInput('fx-burst', (e) => { $('fx-burst-num').textContent = '×' + e.target.value; });
+  fxInput('fx-slen', (e) => { $('fx-slen-num').textContent = e.target.value + '×'; });
+  fxInput('fx-swid', (e) => { $('fx-swid-num').textContent = e.target.value + '×'; });
   $('fx-kind').onchange = $('fx-kind').oninput; $('fx-color').onchange = $('fx-color').oninput;
   $('fx-auto').onchange = (e) => view.setAutoFire(e.target.checked);
   $('fx-shot').onclick = () => view.fireOnce();
@@ -314,6 +318,8 @@ export function bootGallery() {
     $('fx-size').value = fx.size; $('fx-size-num').textContent = fx.size + '×';
     $('fx-cadence').value = fx.cadence; $('fx-cadence-num').textContent = fx.cadence + ' s';
     $('fx-burst').value = fx.burst; $('fx-burst-num').textContent = '×' + fx.burst;
+    $('fx-slen').value = fx.streakLen || 1; $('fx-slen-num').textContent = (fx.streakLen || 1) + '×';
+    $('fx-swid').value = fx.streakWid || 1; $('fx-swid-num').textContent = (fx.streakWid || 1) + '×';
   };
 
   /* ══════════════════════ GAUNTLET mode (Epic M0) ══════════════════════ */
@@ -611,7 +617,8 @@ function createRangeView(mount) {
     for (let k = 0; k < n; k++) {
       const jx = n > 1 ? (Math.random() * 2 - 1) * T * 0.16 : 0;
       const jy = n > 1 ? (Math.random() * 2 - 1) * T * 0.16 : 0;
-      const args = [muzzleX, muzzleY, st.tx + jx, st.ty + jy, st.fx.speed * T, st.fx.color, st.fx.kind, T * (SHOT_SIZE[st.fx.kind] || 0.0075) * st.fx.size];
+      const args = [muzzleX, muzzleY, st.tx + jx, st.ty + jy, st.fx.speed * T, st.fx.color, st.fx.kind,
+        T * (SHOT_SIZE[st.fx.kind] || 0.0075) * st.fx.size, st.fx.streakLen || 1, st.fx.streakWid || 1];
       if (k === 0) R.projectiles.spawn(...args);
       else st.queue.push({ at: st.clock + k * 0.07, args });
     }

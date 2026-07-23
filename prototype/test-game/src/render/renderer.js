@@ -616,7 +616,7 @@ function emitCombatFx(renderer, state) {
   };
   // owner 2026-07-16: flak rounds were near-invisible on phones (4x), cannon shells faint (2x)
   const SHOT_SIZE = { shell: 0.022, flak: 0.03, tracer: 0.0075 };
-  const fire = (id, from, to, kind, cadence, speed, color, burst, sizeMult) => {
+  const fire = (id, from, to, kind, cadence, speed, color, burst, sizeMult, streakLen, streakWid) => {
     const next = clock.get(id) || 0;
     if (now < next) return;
     clock.set(id, now + cadence * (0.85 + Math.random() * 0.3));
@@ -630,7 +630,8 @@ function emitCombatFx(renderer, state) {
       const jx = n > 1 ? (Math.random() * 2 - 1) * t * 0.16 : 0;
       const jy = n > 1 ? (Math.random() * 2 - 1) * t * 0.16 : 0;
       const args = [from.x, from.y, to.x + jx, to.y + jy, speed * t, color, kind,
-        t * (SHOT_SIZE[kind] || 0.0075) * (sizeMult || 1) * (renderer.projScale || 1)];   // per-map damping (tables.PROJ_SCALE_TIERS)
+        t * (SHOT_SIZE[kind] || 0.0075) * (sizeMult || 1) * (renderer.projScale || 1),   // per-map damping (tables.PROJ_SCALE_TIERS)
+        streakLen, streakWid];                                                            // authored tail length/width
       if (k === 0) renderer.projectiles.spawn(...args);
       else (renderer._shotQueue || (renderer._shotQueue = [])).push({ at: now + k * 0.07, args });
     }
@@ -668,10 +669,12 @@ function emitCombatFx(renderer, state) {
           const tfx = pfx && pfx[st.structId];
           if (st.kind === 'antiGround') fire('s' + st.id, c, { x: lp.x, y: ty },
             (tfx && tfx.kind) || 'shell', (tfx && tfx.cadence) || 0.55, (tfx && tfx.speed) || 13,
-            (tfx && tfx.color !== undefined) ? tfx.color : 0xffd080, (tfx && tfx.burst) || 4, tfx && tfx.size);
+            (tfx && tfx.color !== undefined) ? tfx.color : 0xffd080, (tfx && tfx.burst) || 4, tfx && tfx.size,
+            tfx && tfx.streakLen, tfx && tfx.streakWid);
           else fire('s' + st.id, c, { x: lp.x, y: ty },
             (tfx && tfx.kind) || 'flak', (tfx && tfx.cadence) || 0.35, (tfx && tfx.speed) || 18,
-            (tfx && tfx.color !== undefined) ? tfx.color : 0x9fd4ff, (tfx && tfx.burst) || 1, tfx && tfx.size);
+            (tfx && tfx.color !== undefined) ? tfx.color : 0x9fd4ff, (tfx && tfx.burst) || 1, tfx && tfx.size,
+            tfx && tfx.streakLen, tfx && tfx.streakWid);
         }
       }
       if (st.maxHp && st.hp > 0 && st.hp / st.maxHp < 0.5 && Math.random() < dt * 2.2) burn(c.x, c.y, t * 0.3, t * 0.1);
@@ -711,7 +714,7 @@ function emitCombatFx(renderer, state) {
           fire('u' + u.id, { x: p.x, y: p.y - lift }, { x: lp.x, y: lp.y - (tp.air ? t * 1.05 : 0) },
             (ufx && ufx.kind) || (grounded ? 'shell' : 'tracer'), (ufx && ufx.cadence) || 0.6, (ufx && ufx.speed) || 15,
             (ufx && ufx.color !== undefined) ? ufx.color : (u.side === 'attacker' ? 0xff9a70 : 0xbfe8ff),
-            (ufx && ufx.burst) || 1, ufx && ufx.size);
+            (ufx && ufx.burst) || 1, ufx && ufx.size, ufx && ufx.streakLen, ufx && ufx.streakWid);
         }
       }
       const hpFrac = u.hp / Math.max(1, u.maxHp);

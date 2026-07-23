@@ -46,6 +46,8 @@ export function normalizeFxEntry(e) {
   const size = num(e.size, 0.25, 6); if (size !== null) out.size = size;
   const cadence = num(e.cadence, 0.05, 5); if (cadence !== null) out.cadence = cadence;
   const burst = num(e.burst, 1, 8); if (burst !== null) out.burst = Math.round(burst);
+  const streakLen = num(e.streakLen, 0.1, 6); if (streakLen !== null) out.streakLen = streakLen;
+  const streakWid = num(e.streakWid, 0.1, 6); if (streakWid !== null) out.streakWid = streakWid;
   return Object.keys(out).length ? out : null;
 }
 
