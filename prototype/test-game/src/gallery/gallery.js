@@ -857,11 +857,12 @@ function createGauntletView(mount) {
       const pulse = 0.6 + 0.4 * Math.sin(st.clock * 4);
       actors.beginFill(0xe03030, pulse).drawCircle(p.x, p.y, T * 0.18).endFill();
     }
-    if (u.hp > 0 && !(u.last && r.outcome === 'died')) {
+    const ghost = !!r.immortal && u.hp <= 0;   // probe past its would-die point: keeps walking, reads DEAD
+    if ((u.hp > 0 || ghost) && !(u.last && r.outcome === 'died')) {
       const p = { x: (u.x + 0.5) * T, y: (u.y + 0.5) * T };
       const air = UNITS[r.unitId] && UNITS[r.unitId].domain === 'Flyer';
-      actors.beginFill(air ? 0x6fa0e0 : 0xd0a060, 1).lineStyle(1, 0x101418, 0.8).drawCircle(p.x, p.y, T * 0.32).endFill().lineStyle(0);
-      const maxHp = UNITS[r.unitId] ? UNITS[r.unitId].hp[(r.tier || 1) - 1] : 100;
+      actors.beginFill(air ? 0x6fa0e0 : 0xd0a060, ghost ? 0.35 : 1).lineStyle(1, ghost ? 0xe05a5a : 0x101418, 0.8).drawCircle(p.x, p.y, T * 0.32).endFill().lineStyle(0);
+      const maxHp = r.realHp || (UNITS[r.unitId] ? UNITS[r.unitId].hp[(r.tier || 1) - 1] : 100);
       const frac = Math.max(0, Math.min(1, u.hp / maxHp));
       actors.beginFill(0x10151b).drawRect(p.x - T * 0.5, p.y - T * 0.75, T, 3).endFill();
       actors.beginFill(frac > 0.5 ? 0x5ae08a : frac > 0.25 ? 0xe0c05a : 0xe05a5a).drawRect(p.x - T * 0.5, p.y - T * 0.75, T * frac, 3).endFill();

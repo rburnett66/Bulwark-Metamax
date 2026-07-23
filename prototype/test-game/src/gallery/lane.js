@@ -316,7 +316,9 @@ export function runFiringLine(opts) {
       if (wouldDieAt === null && cumDamage >= realHp - 1e-9) {
         wouldDieAt = { time: Math.round(state.time * 100) / 100, traveled: Math.round(traveled * 100) / 100 };
       }
-      if (trace && (tk % 3 === 0)) trace.push({ x: live.pos.x, y: live.pos.y, hp: live.hp });
+      // probe runs trace VIRTUAL hp (real hp minus damage so far) — the viewer's bar must drain,
+      // not sit pinned at the 1e9 probe pool ("unit taking no damage", owner remote test)
+      if (trace && (tk % 3 === 0)) trace.push({ x: live.pos.x, y: live.pos.y, hp: immortal ? Math.max(0, realHp - cumDamage) : live.hp });
     }
 
     if (!live || live.hp <= 0) { outcome = 'died'; break; }
