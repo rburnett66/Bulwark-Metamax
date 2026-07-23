@@ -79,6 +79,8 @@ const CSS = `
   z-index:65; max-width:min(430px, calc(100vw - 16px)); }
 .bw-bottombar.open { display:flex; }
 .bw-help { font-size:10px; color:#8fa4b8; line-height:1.4; }
+.bw-minimap { position:absolute; left:6px; bottom:calc(46px + env(safe-area-inset-bottom, 0px)); width:128px; height:64px;
+  background:rgba(8,12,16,0.82); border:1px solid #2a3a4a; border-radius:4px; z-index:60; image-rendering:pixelated; }
 .bw-gear { position:absolute; left:6px; bottom:calc(6px + env(safe-area-inset-bottom, 0px)); pointer-events:auto; z-index:66;
   background:rgba(10,16,22,0.9); border:1px solid #4a6076; border-radius:6px; color:#cfe3f0;
   font-size:18px; width:38px; height:38px; cursor:pointer; }
@@ -604,7 +606,37 @@ export function createHud(mountEl, callbacks) {
       }
     },
   };
+
+  // ---- MINIMAP radar (epic mm-8e045fed61fb): 128x64 lower-left, above the gear button ----
+  const minimap = el(doc, 'canvas', 'bw-minimap');
+  minimap.width = 128; minimap.height = 64;
+  root.appendChild(minimap);
+  hud.minimap = minimap;
+  hud._mmNext = 0;
+
   return hud;
+}
+
+/** MINIMAP radar draw (owner spec): ONLY the base — centered — enemy GROUND units as red dots,
+ *  AIR units as white dots. No terrain/structures/resources/friendlies in v1. Base-centered
+ *  framing at 2px/cell; off-window blips clamp to the radar edge. */
+function drawMinimap(cv, state) {
+  const g = cv.getContext('2d');
+  if (!g) return;
+  const W = cv.width, H = cv.height, S = 2;   // 2px per board cell
+  g.clearRect(0, 0, W, H);
+  const bx = state.base.pos.x, by = state.base.pos.y;
+  const px = (x) => Math.max(1, Math.min(W - 3, (W / 2) + (x - bx) * S));
+  const py = (y) => Math.max(1, Math.min(H - 3, (H / 2) + (y - by) * S));
+  for (const u of state.units.values()) {
+    if (!u || u.hp <= 0 || u.side !== 'attacker') continue;
+    g.fillStyle = (u.domain === 'Flyer') ? '#ffffff' : '#ff4040';
+    g.fillRect(px(u.pos.x), py(u.pos.y), 2, 2);
+  }
+  g.fillStyle = '#69c0ff';                     // the base — the radar's fixed center
+  g.fillRect(W / 2 - 2, H / 2 - 2, 5, 5);
+  g.strokeStyle = 'rgba(140,180,210,0.6)';
+  g.strokeRect(W / 2 - 3.5, H / 2 - 3.5, 8, 8);
 }
 
 /** Format a simulation-time value (seconds) as MM:SS for the HUD clock. */
@@ -622,6 +654,14 @@ export function updateHud(hud, state, ui) {
   // Game clock: the sim advances state.time each tick (sim/core.js:378), but the timer span was created and
   // never updated (and wasn't even on the hud object). Tick it here so the clock actually counts up.
   if (hud.timerEl) hud.timerEl.textContent = fmtTime(state.time);
+  // MINIMAP radar: throttled to 500ms (owner spec) — wall clock is fine, this never feeds the sim.
+  if (hud.minimap && state.base) {
+    const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (nowMs >= (hud._mmNext || 0)) {
+      hud._mmNext = nowMs + 500;
+      drawMinimap(hud.minimap, state);
+    }
+  }
 
   // Base HP
   const base = state.base || { hp: 0, maxHp: 1 };
