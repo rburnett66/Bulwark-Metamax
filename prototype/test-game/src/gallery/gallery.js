@@ -169,7 +169,7 @@ export function bootGallery() {
     for (const id of ['edit-hp', 'edit-range', 'edit-speed']) $(id).disabled = !isUnit;
     $('shooter-range').textContent = fmt(shooter.range, 2) + ' tiles';
   }
-  function pickShooter() { sel.edits = {}; gameFxDefaultsDirty = false; syncEditFields(); recompute(); }   // new unit → load ITS fx defaults
+  function pickShooter() { sel.edits = {}; gameFxDefaultsDirty = false; ensureLegalTarget(); syncEditFields(); recompute(); }   // new unit → load ITS fx defaults + a legal target
   $('shooter-kind').onchange = (e) => {
     sel.shooterKind = e.target.value;
     $('shooter-unit-row').style.display = sel.shooterKind === 'unit' ? '' : 'none';
@@ -199,15 +199,33 @@ export function bootGallery() {
   $('edit-reset').onclick = pickShooter;
 
   /* ── target events ── */
-  $('target-mode').onchange = (e) => {
-    sel.targetMode = e.target.value;
+  function setTargetMode(m) {
+    sel.targetMode = m;
+    $('target-mode').value = m;
     for (const [mode, ids] of [['unit', ['target-faction-row', 'target-unit-row']],
                                ['armor', ['target-armor-row']],
                                ['struct', ['target-struct-row']]]) {
       for (const id of ids) $(id).style.display = sel.targetMode === mode ? '' : 'none';
     }
-    recompute();
-  };
+  }
+  $('target-mode').onchange = (e) => { setTargetMode(e.target.value); recompute(); };
+
+  /* Picking a SHOOTER self-heals an illegal pairing (owner: Flak vs the ground default read as
+     'gallery broken') — air-only shooters get a flyer target, ground-only shooters shed one.
+     Manual target picks may still go illegal on purpose; the readout explains those. */
+  function ensureLegalTarget() {
+    const m0 = measure(buildShooter(), buildTarget());
+    if (m0.legal) return;
+    const shooter = buildShooter();
+    if (shooter.canTarget === 'Air') {
+      const flyers = unitsOf($('target-faction').value).filter((id) => UNITS[id].domain === 'Flyer');
+      if (flyers.length) { setTargetMode('unit'); sel.targetUnit = flyers[0]; fillTargetUnits(); $('target-unit').value = flyers[0]; }
+      else { setTargetMode('armor'); sel.targetArmor = 'Aircraft'; $('target-armor').value = 'Aircraft'; }
+    } else {
+      const grounded = unitsOf($('target-faction').value).filter((id) => UNITS[id].domain !== 'Flyer');
+      if (grounded.length) { setTargetMode('unit'); sel.targetUnit = grounded[0]; fillTargetUnits(); $('target-unit').value = grounded[0]; }
+    }
+  }
   $('target-faction').onchange = () => { fillTargetUnits(); sel.targetUnit = $('target-unit').value; recompute(); };
   $('target-unit').onchange = (e) => { sel.targetUnit = e.target.value; recompute(); };
   $('target-tier').oninput = (e) => { sel.targetTier = Number(e.target.value); $('target-tier-num').textContent = 'T' + sel.targetTier; recompute(); };
