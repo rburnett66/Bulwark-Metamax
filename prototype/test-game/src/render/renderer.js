@@ -2068,21 +2068,6 @@ function updateCamera(renderer, state, dt) {
       const wantWave = Math.max(1, Math.min(w.active ? w.current : w.current + 1, wins[wins.length - 1].wave));
       const win = wins.find((q) => q.wave === wantWave) || wins[wins.length - 1];
       r = { x0: win.x0, y0: win.y0, x1: win.x1, y1: win.y1 };
-      // SG1 (owner: "units path outside the viewable area"): forge windows frame with zero padding, but
-      // spawns are authored ON/PAST the window edge — so grow the frame to include THIS wave's spawn
-      // cells + a 1-tile margin. Units are then always visible at spawn; when spawns already sit inside
-      // the window the frame is unchanged (authored view preserved).
-      const ring = map.rings && map.rings[wantWave - 1];
-      if (ring) {
-        const M = 1;
-        const eat = (p) => { if (p && typeof p.x === 'number') r = { x0: Math.min(r.x0, p.x - M), y0: Math.min(r.y0, p.y - M), x1: Math.max(r.x1, p.x + M), y1: Math.max(r.y1, p.y + M) }; };
-        const sl = ring.spawnList, sp = ring.spawns;
-        for (const lane of ['ground', 'air', 'water']) {
-          if (sl && Array.isArray(sl[lane])) for (const p of sl[lane]) eat(p);
-          else if (sp && sp[lane]) eat(sp[lane]);
-        }
-        r = { x0: Math.max(0, r.x0), y0: Math.max(0, r.y0), x1: Math.min(map.cols - 1, r.x1), y1: Math.min(map.rows - 1, r.y1) };
-      }
     } else {
       const idx = Math.max(0, Math.min(w.active ? w.current - 1 : w.current, map.rings.length - 1));
       r = map.rings[idx].rect;
