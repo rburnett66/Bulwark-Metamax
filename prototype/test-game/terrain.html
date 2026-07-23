@@ -288,7 +288,7 @@ function syncWaveUI() {
   [...waveSelEl.children].forEach((b) => b.classList.toggle('on', +b.dataset.w === selWave));
   const w = WAVE_WINDOWS[selWave - 1];
   $('waveInfo').textContent = worldMode()
-    ? `Wave ${w.wave} — ${w.w}×${w.h} @ (${w.x},${w.y}) · attack: ${attackSide(w).side}`
+    ? `Wave ${w.wave} — ${w.w}×${w.h} @ (${w.x},${w.y}) · attack: ${attackSide(w, realBaseWorld()).side}`
     : 'Freeform map — spawns ring the whole edge (surround).';
 }
 function spawnTuning() {
@@ -434,7 +434,7 @@ function render() {
   if (worldMode()) {
     for (const w of WAVE_WINDOWS) {
       const rect = { x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 };
-      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
+      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w, realBaseWorld()).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
     }
   } else {
     spawnsByWave[1] = generateEdgeSpawns(last, { side: 'surround', ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
@@ -504,7 +504,7 @@ $('genSpawn').addEventListener('click', () => {
   if (worldMode()) {
     for (const w of WAVE_WINDOWS) {
       const rect = t.edge === 'world' ? { x0: 0, y0: 0, x1: last.cols - 1, y1: last.rows - 1 } : winRect0(w);
-      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
+      spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w, realBaseWorld()).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
     }
   } else {
     selWave = 1;   // freeform: one set, ringing the whole edge
@@ -573,6 +573,10 @@ function redraw() {
 }
 
 let base = null;
+// attackSide() must measure from the MAP's real base, not the world-center constant — so spawns group
+// on the side AWAY from wherever the base actually sits (owner: base lower-left → units from upper-right).
+// base.pos is 0-indexed grid; wave-window coords are 1-indexed world, so +1. Falls back to the constant.
+function realBaseWorld() { return (base && base.pos) ? { x: base.pos.x + 1, y: base.pos.y + 1 } : BASE; }
 function drawOverlays(px) {
   // wave windows (world mode): all faint, selected bold — the battle area per wave
   if (worldMode()) {
@@ -629,8 +633,8 @@ function exportObj() {
     // wave-window model: the map is a window into a fixed world; base at world-centre; spawns on the
     // window's far edge per wave, tuned for even entry (fewer pathing collisions).
     worldMode: worldMode(),
-    world: { w: WORLD.w, h: WORLD.h }, worldBase: { x: BASE.x, y: BASE.y },
-    waveWindows: WAVE_WINDOWS.map((w) => ({ ...w, attack: attackSide(w).side })),
+    world: { w: WORLD.w, h: WORLD.h }, worldBase: realBaseWorld(),
+    waveWindows: WAVE_WINDOWS.map((w) => ({ ...w, attack: attackSide(w, realBaseWorld()).side })),
     spawnTuning: spawnTuning(),
     spawnsByWave,
     resources,
