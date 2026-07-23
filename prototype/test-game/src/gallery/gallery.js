@@ -20,7 +20,7 @@ import {
   makeState, makeUnitTarget, makeStructureTarget, makeArmorTarget,
   unitShooter, towerShooter, measure, splashHits, retuneDiff,
 } from './calc.js';
-import { runGauntlet, runGauntletMatrix, runFactionSweep, GAUNTLET_DEFENSES } from './lane.js';
+import { runGauntlet, runGauntletMatrix, runFactionSweep, runFiringLine, GAUNTLET_DEFENSES } from './lane.js';
 import { PROJ_FX_LS_KEY, mergeProjFx, normalizeFxEntry, serializeFxEntry } from '../render/projFx.js';
 
 const $ = (id) => document.getElementById(id);
@@ -318,14 +318,19 @@ export function bootGallery() {
 
   /* ══════════════════════ GAUNTLET mode (Epic M0) ══════════════════════ */
   const gview = createGauntletView($('gauntlet-mount'));
-  fillSelect($('g-defense'), GAUNTLET_DEFENSES.map((d) => [d.key, d.label]), 'cannon1');
+  fillSelect($('g-defense'),
+    [['line', '★ FULL FIRING LINE — cannon T1-3 + flak T1-3 + mine (the original design)'],
+     ...GAUNTLET_DEFENSES.map((d) => [d.key, d.label])], 'line');
   let mode = 'range';
   // the edit + retune boxes stay visible in BOTH modes — edits drive the gauntlet too
   const rangeOnlyBoxes = [$('fx-grid').parentElement,
                           $('target-mode').closest('.box'), $('r-legal').closest('.box')];
   const modeBtn = (btn, on) => { btn.style.borderColor = on ? 'var(--accent)' : ''; btn.style.color = on ? 'var(--accent)' : ''; };
 
-  function currentDefense() { return GAUNTLET_DEFENSES.find((d) => d.key === $('g-defense').value) || GAUNTLET_DEFENSES[0]; }
+  function currentDefense() {
+    if ($('g-defense').value === 'line') return { key: 'line', label: 'Firing line' };
+    return GAUNTLET_DEFENSES.find((d) => d.key === $('g-defense').value) || GAUNTLET_DEFENSES[0];
+  }
 
   function runGauntletNow() {
     if (mode !== 'gauntlet') return;
@@ -335,6 +340,7 @@ export function bootGallery() {
       return;
     }
     const d = currentDefense();
+    if (d.key === 'line') { runFiringLineNow(d); return; }
     const edits = Object.keys(sel.edits).length ? { ...sel.edits } : null;
     const r = runGauntlet({ unitId: sel.shooterUnit, tier: sel.shooterTier, defense: d, edits: edits || undefined, collectTrace: true });
     const b = edits ? runGauntlet({ unitId: sel.shooterUnit, tier: sel.shooterTier, defense: d }) : null;   // table baseline for the delta
@@ -355,6 +361,47 @@ export function bootGallery() {
     $('gm-mine').textContent = r.mine
       ? (r.mine.triggered ? 'boom @ ' + (Math.round(r.mine.at * 100) / 100) + 's — ' + r.mine.dealt + ' dmg' : 'never triggered')
       : '—';
+  }
+
+  /** The owner's original design: the full firing line, per-tower damage vs the moving target. */
+  function runFiringLineNow(d) {
+    const edits = Object.keys(sel.edits).length ? { ...sel.edits } : null;
+    const immortal = $('g-immortal').checked;
+    const r = runFiringLine({ unitId: sel.shooterUnit, tier: sel.shooterTier, edits: edits || undefined, immortal, collectTrace: true });
+    const b = edits ? runFiringLine({ unitId: sel.shooterUnit, tier: sel.shooterTier, immortal }) : null;
+    gview.load(r, d);
+    const verdict = immortal
+      ? (r.wouldDieAt ? 'PROBE — would DIE at ' + r.wouldDieAt.traveled + 't / ' + r.wouldDieAt.time + 's'
+                      : 'PROBE — would SURVIVE the whole line')
+      : (r.outcome === 'reached' ? 'REACHED BASE' : r.outcome.toUpperCase());
+    $('gm-outcome').textContent = verdict + (b && b.wouldDieAt && r.wouldDieAt && b.wouldDieAt.traveled !== r.wouldDieAt.traveled
+      ? '  (table: dies at ' + b.wouldDieAt.traveled + 't)' : '');
+    $('gm-outcome').style.color = (immortal ? !r.wouldDieAt : r.outcome === 'reached') ? '#5ae08a' : '#e05a5a';
+    $('gm-time').textContent = r.time + ' s';
+    $('gm-acquire').textContent = 'per tower — see table below the lane';
+    $('gm-acqdist').textContent = '—';
+    $('gm-dmg').textContent = r.totalDamage + (b && b.totalDamage !== r.totalDamage ? '  (table: ' + b.totalDamage + ')' : '');
+    $('gm-dpsr').textContent = '—';
+    $('gm-fire').textContent = '—';
+    $('gm-hp').textContent = immortal ? ('real hp ' + r.realHp + ' vs ' + r.totalDamage + ' total dmg') : (r.hpLeft + ' left');
+    $('gm-travel').textContent = r.traveled + ' tiles';
+    $('gm-dpsd').textContent = '—';
+    $('gm-mine').textContent = r.mine.triggered ? 'boom @ ' + (Math.round(r.mine.at * 100) / 100) + 's — ' + r.mine.dealt + ' dmg' : 'never triggered';
+    // per-tower table — the measurement the line exists for
+    const rows = r.towers.map((t, i) =>
+      '<tr><td>' + t.label + '</td>' +
+      '<td>' + (t.tAcquire == null ? '<span style="color:#e05a5a">no lock</span>' : t.tAcquire + 's') + '</td>' +
+      '<td>' + t.lockTime + 's</td>' +
+      '<td' + (t.damage > 0 ? '' : ' style="color:var(--muted)"') + '>' + t.damage +
+      (b ? ' <span style="color:var(--muted)">(' + b.towers[i].damage + ')</span>' : '') + '</td>' +
+      '<td>' + t.effDps + '</td></tr>').join('') +
+      '<tr><td>Mine (M0)</td><td>' + (r.mine.triggered ? (Math.round(r.mine.at * 100) / 100) + 's' : '<span style="color:#e05a5a">no trigger</span>') + '</td>' +
+      '<td>—</td><td>' + r.mine.dealt + '</td><td>—</td></tr>';
+    $('matrix-wrap').innerHTML =
+      '<table><tr><th>' + r.unitId + ' T' + r.tier + (edits ? ' (EDITED' + (b ? ', table in grey' : '') + ')' : '') + ' vs the line</th>' +
+      '<th>Acquired</th><th>Lock</th><th>Damage</th><th>Eff DPS</th></tr>' + rows + '</table>' +
+      '<div class="sub" style="margin-top:4px">0-damage rows = that tower can’t legally touch this runner (the counter matrix, inline) · ' +
+      (immortal ? 'immortal probe: every tower gets its full pass; “would die” compares cumulative damage to the unit’s real ' + r.realHp + ' hp' : 'live run: the unit can die mid-line') + '</div>';
   }
 
   function setMode(m) {
@@ -682,8 +729,8 @@ function createGauntletView(mount) {
   caption.position.set(8, H - 20); app.stage.addChild(caption);
 
   const TRACE_DT = 3 / 30;                                       // lane.js samples every 3 ticks
-  const st = { active: false, run: null, defense: null, towerCell: null, towerDef: null,
-               t: 0, speed: 4, nextShot: 0, queue: [], clock: 0, boomDone: false, endDone: false, restartAt: null };
+  const st = { active: false, run: null, defense: null, towers: [],
+               t: 0, speed: 4, queue: [], clock: 0, boomDone: false, endDone: false, restartAt: null };
   const cpx = (c) => ({ x: (c.x + 0.5) * T, y: (c.y + 0.5) * T });
 
   function drawBoard() {
@@ -699,11 +746,11 @@ function createGauntletView(mount) {
     const sp = cpx(MAP.spawnGround); board.beginFill(0x3a5a3a).drawCircle(sp.x, sp.y, T * 0.35).endFill();
     const sa = cpx(MAP.spawnAir); board.beginFill(0x3a4a6a).drawCircle(sa.x, sa.y, T * 0.35).endFill();
     const sw = cpx(MAP.spawnWater); board.beginFill(0x2a4a5a).drawCircle(sw.x, sw.y, T * 0.35).endFill();
-    if (st.towerCell && st.towerDef) {                           // defense fixture + its range ring
-      const p = cpx(st.towerCell);
-      board.beginFill(st.towerDef.kind === 'antiAir' ? 0x2a3a5c : 0x4a3a2a).lineStyle(1, 0x8ea0b0, 0.9)
+    for (const tw of st.towers) {                                // defense fixtures + their range rings
+      const p = cpx(tw.cell);
+      board.beginFill(tw.def.kind === 'antiAir' ? 0x2a3a5c : 0x4a3a2a).lineStyle(1, 0x8ea0b0, 0.9)
         .drawRect(p.x - T * 0.45, p.y - T * 0.45, T * 0.9, T * 0.9).endFill().lineStyle(0);
-      board.lineStyle(1, st.towerDef.kind === 'antiAir' ? 0x6fa0e0 : 0xe0b070, 0.35).drawCircle(p.x, p.y, st.towerDef.range * T).lineStyle(0);
+      board.lineStyle(1, tw.def.kind === 'antiAir' ? 0x6fa0e0 : 0xe0b070, 0.3).drawCircle(p.x, p.y, tw.def.range * T).lineStyle(0);
     }
   }
 
@@ -720,27 +767,34 @@ function createGauntletView(mount) {
   const gv = {
     setActive(v) { st.active = !!v; },
     setSpeed(n) { st.speed = n; },
-    /** Show a fresh runGauntlet() result. */
+    /** Show a fresh runGauntlet() / runFiringLine() result. */
     load(run, defenseEntry) {
       st.run = run; st.defense = defenseEntry;
-      st.towerCell = (defenseEntry && defenseEntry.structId) ? MAP.slots[6] : null;
-      st.towerDef = (defenseEntry && defenseEntry.structId) ? STRUCTURES[defenseEntry.structId] : null;
-      st.t = 0; st.nextShot = 0; st.queue.length = 0; st.boomDone = false; st.endDone = false; st.restartAt = null;
+      st.towers = [];
+      if (run.towers) {                                          // FIRING LINE: the whole row, lock windows from the sim
+        for (const t of run.towers) st.towers.push({
+          cell: t.cell, def: STRUCTURES[t.structId],
+          tAcquire: t.tAcquire, lockEnd: t.tAcquire == null ? null : t.tAcquire + t.lockTime, next: 0,
+        });
+      } else if (defenseEntry && defenseEntry.structId) {        // single-defense run: fire while in range
+        st.towers.push({ cell: MAP.slots[6], def: STRUCTURES[defenseEntry.structId], tAcquire: run.tAcquire, lockEnd: Infinity, next: 0 });
+      }
+      st.t = 0; st.queue.length = 0; st.boomDone = false; st.endDone = false; st.restartAt = null;
       pool.clear(); R.fxItems.length = 0; R.flames.length = 0;
       drawBoard();
     },
     restart() { if (st.run) gv.load(st.run, st.defense); },
   };
 
-  /* tower cosmetic fire — the renderer's emitCombatFx recipes (spray for cannon, flak bursts) */
-  function towerFire(unitPos) {
-    const from = cpx(st.towerCell);
+  /* per-tower cosmetic fire — the renderer's emitCombatFx recipes (spray for cannon, flak bursts) */
+  function towerFire(tw, unitPos) {
+    if (st.clock < tw.next) return;
+    const from = cpx(tw.cell);
     const to = { x: (unitPos.x + 0.5) * T, y: (unitPos.y + 0.5) * T };
-    const cannon = st.towerDef.kind !== 'antiAir';
+    const cannon = tw.def.kind !== 'antiAir';
     const kind = cannon ? 'shell' : 'flak', color = cannon ? 0xffd080 : 0x9fd4ff;
     const cadence = cannon ? 0.55 : 0.35, speed = cannon ? 13 : 18, burst = cannon ? 4 : 1;
-    if (st.clock < st.nextShot) return;
-    st.nextShot = st.clock + cadence * (0.85 + Math.random() * 0.3);
+    tw.next = st.clock + cadence * (0.85 + Math.random() * 0.3);
     for (let k = 0; k < burst; k++) {
       const jx = burst > 1 ? (Math.random() * 2 - 1) * T * 0.16 : 0;
       const jy = burst > 1 ? (Math.random() * 2 - 1) * T * 0.16 : 0;
@@ -760,9 +814,17 @@ function createGauntletView(mount) {
     if (!u) return;
     if (!u.last) st.t += dt * st.speed;                          // replay advances at chosen speed
 
-    // tower shoots while the sim says it had the lock (tAcquire → death/exit)
-    if (st.towerCell && r.tAcquire != null && r.time != null &&
-        st.t >= r.tAcquire && !u.last && u.hp > 0) towerFire(u);
+    // each tower shoots inside ITS sim-recorded lock window (single runs: while in range)
+    if (!u.last && u.hp > 0) {
+      for (const tw of st.towers) {
+        if (tw.tAcquire == null || st.t < tw.tAcquire || st.t > tw.lockEnd) continue;
+        if (tw.lockEnd === Infinity) {   // single-defense run: no recorded window — gate by range
+          const p = cpx(tw.cell);
+          if (Math.hypot((u.x + 0.5) * T - p.x, (u.y + 0.5) * T - p.y) > tw.def.range * T * 1.15) continue;
+        }
+        towerFire(tw, u);
+      }
+    }
     if (st.queue.length) {
       const due = []; st.queue = st.queue.filter((q) => (st.clock >= q.at ? (due.push(q), false) : true));
       for (const q of due) pool.spawn(...q.args);

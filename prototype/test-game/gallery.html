@@ -136,6 +136,8 @@
         <h2>Gauntlet — real sim run (createSim/stepSim), replayed</h2>
         <div id="g-grid">
           <div class="field"><label for="g-defense">defense</label><select id="g-defense"></select></div>
+          <div class="field"><label for="g-immortal">immortal probe (firing line)</label>
+            <div class="inline"><input type="checkbox" id="g-immortal" checked style="flex:0 0 auto" /><span class="sub" style="flex:1; margin-top:0">measure EVERY tower; off = live run</span></div></div>
           <div class="field"><label>replay speed</label>
             <div class="inline"><input type="range" id="g-speed" min="1" max="16" step="1" value="4" /><span class="num" id="g-speed-num">4×</span></div></div>
           <div class="field"><label>&nbsp;</label><button id="g-restart">Restart run</button></div>

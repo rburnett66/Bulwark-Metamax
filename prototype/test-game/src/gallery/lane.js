@@ -17,7 +17,7 @@
  * fixed seed, no wall-clock, no Math.random.
  */
 
-import { MAP, STRUCTURES, UNITS, getUnitDef } from '../data/tables.js';
+import { MAP, STRUCTURES, UNITS, EFFECTIVENESS, getUnitDef } from '../data/tables.js';
 import { createSim, stepSim, FIXED_DT } from '../sim/core.js';
 import { createUnit } from '../sim/entities.js';
 import { applyDamage } from '../sim/combat.js';
@@ -204,6 +204,144 @@ export function runGauntlet(opts) {
     traveled: Math.round(traveled * 100) / 100,
     dpsDealt: Math.round(dpsDealt * 10) / 10,
     mine: mine ? { triggered: mine.triggeredAt !== null, at: mine.triggeredAt, dealt: Math.round(mine.dealt * 10) / 10, pos: mine.pos } : null,
+    trace,
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   FIRING LINE — the owner's original gallery design: ONE lane, a spaced series
+   of every tower below it, damage measured PER TOWER against the moving target.
+   Towers that can't legally touch the runner read 0 (the counter matrix inline).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/** The line, in pass order along the route. Mine last (it ends a mortal run). */
+export const FIRING_LINE = Object.freeze([
+  Object.freeze({ structId: 'STR-Cannon', tier: 1, label: 'Cannon T1' }),
+  Object.freeze({ structId: 'STR-Cannon', tier: 2, label: 'Cannon T2' }),
+  Object.freeze({ structId: 'STR-Cannon', tier: 3, label: 'Cannon T3' }),
+  Object.freeze({ structId: 'STR-Flak', tier: 1, label: 'Flak T1' }),
+  Object.freeze({ structId: 'STR-Flak', tier: 2, label: 'Flak T2' }),
+  Object.freeze({ structId: 'STR-Flak', tier: 3, label: 'Flak T3' }),
+  Object.freeze({ mine: true, label: 'Mine (M0)' }),
+]);
+const LINE_FRACS = [0.12, 0.23, 0.34, 0.45, 0.56, 0.67];   // tower route-fractions; mine at 0.86
+const LINE_OFFSET = 2;                                      // tiles BELOW the route (the owner's sketch)
+
+/**
+ * One firing-line run. Towers auto-place LINE_OFFSET tiles below the runner's
+ * SCOUTED route (so ground/air/water lanes all engage), the mine buries on the
+ * route near the end. immortal=true (default) turns the runner into a probe —
+ * every tower gets its full pass, and 'wouldDieAt' reports where cumulative
+ * damage crosses the unit's REAL hp. immortal=false is a live survivability run.
+ * Deterministic; per-tower damage uses the same dps × effectiveness × dt the
+ * combat tick applies (cross-checked by tests against actual hp loss).
+ */
+export function runFiringLine(opts) {
+  const { unitId, tier = 1, seed = 1, edits = null, immortal = true, collectTrace = false } = opts;
+  const unitDef = getUnitDef(unitId);
+
+  // scout the real route (no defenses) to lay the line along it
+  const scout = runGauntlet({ unitId, tier, seed, edits: edits || undefined, defense: GAUNTLET_DEFENSES[0], collectTrace: true });
+  const tr = scout.trace && scout.trace.length ? scout.trace : [{ x: MAP.base.x, y: MAP.base.y }];
+  const at = (f) => tr[Math.min(tr.length - 1, Math.floor(tr.length * f))];
+
+  const state = createSim(seed >>> 0, { waves: [], map: MAP });
+  if (state.base) state.base.cannon = null;               // lane measurement — no base super-cannon
+
+  const towers = [];
+  FIRING_LINE.forEach((fix, i) => {
+    if (fix.mine) return;
+    const p = at(LINE_FRACS[i]);
+    const cell = {
+      x: Math.max(0, Math.min(MAP.cols - 1, Math.round(p.x))),
+      y: Math.max(0, Math.min(MAP.rows - 1, Math.round(p.y) + LINE_OFFSET)),
+    };
+    const def = STRUCTURES[fix.structId];
+    const s = placeCompletedStructure(state, fix.structId, cell);
+    s.tier = fix.tier; s.hp = def.hp[fix.tier - 1]; s.maxHp = s.hp;
+    towers.push({ fix, cell, s, def, tAcquire: null, lockTicks: 0, damage: 0 });
+  });
+  recomputeUnitPaths(state);
+
+  const lane = laneFor(unitDef.domain);
+  const spawn = spawnFor(lane);
+  const unit = createUnit(state, unitId, tier, { x: spawn.x, y: spawn.y }, lane, 'attacker');
+  if (!state.units.has(unit.id)) state.units.set(unit.id, unit);
+  ensureUnitPath(state, unit, lane, spawn);
+  if (edits) {
+    if (edits.hp !== undefined && isFinite(edits.hp) && edits.hp > 0) { unit.hp = edits.hp; unit.maxHp = edits.hp; }
+    for (const k of ['dps', 'speed', 'range', 'damageType', 'aoeRadius']) if (edits[k] !== undefined) unit[k] = edits[k];
+  }
+  const realHp = unit.maxHp;                              // 'would die at' measures against THIS
+  if (immortal) { unit.hp = 1e9; unit.maxHp = 1e9; }      // probe mode: every tower gets its pass
+
+  const minePos = at(0.86);
+  const mine = { pos: { x: minePos.x, y: minePos.y }, armed: true, triggeredAt: null, dealt: 0 };
+
+  const baseHp0 = state.base.hp;
+  const maxTicks = Math.ceil(MAX_SECONDS / FIXED_DT);
+  let cumDamage = 0, wouldDieAt = null, traveled = 0;
+  let prevHp = unit.hp, prevPos = { x: unit.pos.x, y: unit.pos.y };
+  let outcome = 'timeout';
+  const trace = collectTrace ? [] : null;
+
+  for (let tk = 0; tk < maxTicks; tk++) {
+    stepSim(state, FIXED_DT);
+    const live = state.units.get(unit.id);
+
+    // per-tower attribution: a locked tower deals dps × effectiveness × dt this tick —
+    // the exact formula stepCombat applies, so the split sums to the real hp loss.
+    for (const t of towers) {
+      if (t.s.targetId !== unit.id || !live || live.hp <= 0) continue;
+      if (t.tAcquire === null) t.tAcquire = state.time;
+      t.lockTicks++;
+      const row = EFFECTIVENESS[t.def.damageType];
+      const mult = (row && row[unit.armorClass] !== undefined) ? row[unit.armorClass] : 1;
+      t.damage += t.def.dps[t.fix.tier - 1] * mult * FIXED_DT;
+    }
+
+    if (mine.armed && live && live.hp > 0 && live.domain !== 'Flyer' &&
+        dist(live.pos, mine.pos) <= MINE_SPEC.triggerRadius) {
+      mine.armed = false; mine.triggeredAt = state.time;
+      const r = applyDamage(state, null, live, MINE_SPEC.damage, MINE_SPEC.damageType, 1);
+      mine.dealt = r.dealt;
+      if (r.killed) state.units.delete(live.id);
+    }
+
+    if (live) {
+      traveled += dist(live.pos, prevPos);
+      prevPos = { x: live.pos.x, y: live.pos.y };
+      if (live.hp < prevHp - 1e-9) cumDamage += prevHp - live.hp;
+      prevHp = live.hp;
+      if (wouldDieAt === null && cumDamage >= realHp - 1e-9) {
+        wouldDieAt = { time: Math.round(state.time * 100) / 100, traveled: Math.round(traveled * 100) / 100 };
+      }
+      if (trace && (tk % 3 === 0)) trace.push({ x: live.pos.x, y: live.pos.y, hp: live.hp });
+    }
+
+    if (!live || live.hp <= 0) { outcome = 'died'; break; }
+    if (state.base.hp < baseHp0 - 1e-9 ||
+        baseFootprintDist(live.pos) <= Math.max(live.range || 0.5, 1.4) + 0.05) { outcome = 'reached'; break; }
+    if (state.result) { outcome = 'reached'; break; }
+  }
+
+  const liveEnd = state.units.get(unit.id);
+  return {
+    unitId, tier, immortal, outcome,
+    time: Math.round(state.time * 100) / 100,
+    realHp,
+    totalDamage: Math.round(cumDamage * 10) / 10,
+    wouldDieAt,                                            // null = survives the whole line on real hp
+    hpLeft: immortal ? null : Math.round(Math.max(0, liveEnd ? liveEnd.hp : 0) * 10) / 10,
+    traveled: Math.round(traveled * 100) / 100,
+    towers: towers.map((t) => ({
+      label: t.fix.label, structId: t.fix.structId, tier: t.fix.tier, cell: t.cell,
+      tAcquire: t.tAcquire === null ? null : Math.round(t.tAcquire * 100) / 100,
+      lockTime: Math.round(t.lockTicks * FIXED_DT * 100) / 100,
+      damage: Math.round(t.damage * 10) / 10,
+      effDps: t.lockTicks ? Math.round((t.damage / (t.lockTicks * FIXED_DT)) * 10) / 10 : 0,
+    })),
+    mine: { triggered: mine.triggeredAt !== null, at: mine.triggeredAt, dealt: Math.round(mine.dealt * 10) / 10, pos: mine.pos },
     trace,
   };
 }
