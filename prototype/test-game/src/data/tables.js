@@ -1048,10 +1048,10 @@ export const SYSTEM_UNITS = Object.freeze({
 // aim reticle) stay 1:1 so visuals never lie about damage footprints.
 // The map-5 boundary is an owner-review knob (tickets mm-37d6e930c3c2/…5566).
 // ---------------------------------------------------------------------------
-export const FX_SCALE_TIERS = Object.freeze([
-  Object.freeze({ maxMap: 3, scale: 3 }),
-  Object.freeze({ maxMap: 5, scale: 2 }),
-]);
+// OWNER LIVE VERDICT (2026-07-22, map 1): with the 3x tier the explosions read "10x too big" —
+// the tier STACKED on the growth camera's ~2.6x wave-1 zoom (see updateCamera). Tiers are OFF
+// (empty = 1x everywhere); the open fix is zoom-NORMALIZATION (divide by cam.s), not multipliers.
+export const FX_SCALE_TIERS = Object.freeze([]);
 // PROJECTILE tiers run the OTHER way (owner: "level 1 is at least 2x too big"): the SHOT_SIZE
 // constants carry a 2026-07-16 phone-visibility bump (flak 4x, shells 2x) that oversizes shots on
 // the zoomed early maps. Numbers at tile 64 before damping: shell dot ≈22.5px + 68px streak,
