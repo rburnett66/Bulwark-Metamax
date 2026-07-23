@@ -994,12 +994,16 @@ export function updateFx(renderer) {
       g.drawCircle(fx.x, fx.y, t * 0.05 * (0.45 + b) * fs);
       g.endFill();
     } else if (fx.kind === 'reticle') {
-      // pulsing target where the super-cannon will land (aim telegraph)
+      // pulsing target where the super-cannon will land (aim telegraph). BOLD stroke — at 2px the
+      // camera zoom shrank it sub-pixel on phones (owner: "targeting circle ... may be on a hidden
+      // layer"); it was rendering, just invisible. A faint fill makes the blast footprint read too.
       const pulse = 0.5 + 0.5 * Math.sin(fx.age * 9);
-      g.lineStyle(2, 0xff5030, 0.45 + 0.45 * pulse);
-      g.drawCircle(fx.x, fx.y, fx.radius * t);
-      g.moveTo(fx.x - fx.radius * t, fx.y); g.lineTo(fx.x + fx.radius * t, fx.y);
-      g.moveTo(fx.x, fx.y - fx.radius * t); g.lineTo(fx.x, fx.y + fx.radius * t);
+      const R = fx.radius * t;
+      g.beginFill(0xff5030, 0.12 * (0.5 + pulse)); g.drawCircle(fx.x, fx.y, R); g.endFill();
+      g.lineStyle(5, 0xff5030, 0.6 + 0.4 * pulse);
+      g.drawCircle(fx.x, fx.y, R);
+      g.moveTo(fx.x - R, fx.y); g.lineTo(fx.x + R, fx.y);
+      g.moveTo(fx.x, fx.y - R); g.lineTo(fx.x, fx.y + R);
       g.lineStyle(0);
     } else if (fx.kind === 'shell') {
       // the 3D arcing shell: ground point lerps from→to; a sine arc lifts it off the plane, shadow tracks below
