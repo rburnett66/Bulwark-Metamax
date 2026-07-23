@@ -1,10 +1,12 @@
-import { MAP, WAVES, makeWaves, fxScaleForMap, projScaleForMap } from './data/tables.js';
+import { MAP, WAVES, makeWaves, fxScaleForMap, projScaleForMap, getUnitDef } from './data/tables.js';
 import { buildCampaignMap, buildTerrainMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, buyStructTier, resetSave } from './save/save.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
+import { showWavePreview, showBonusPicker } from './render/gameDialog.js';
+import { getBonusDef } from './data/tables.js';
 import { createMenu, FACTION_NAMES } from './menu/menu.js';
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
@@ -312,6 +314,9 @@ export function boot(mountEl, seed) {
     // 1-2) or the map's contract is already FULFILLED.
     runContract = null;
     suppressPreDialog = false;
+    // WB2 — WAVE PREVIEW: after the contract dialog resolves (or immediately when there's none),
+    // show the incoming-wave lineup once per map entry. The reusable gameDialog shell.
+    const showPreview = () => showWavePreview(mountEl, currentWaves, _shapeOf, null);
     if (currentMapId) {
       const sv = loadSave();
       const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
@@ -322,12 +327,18 @@ export function boot(mountEl, seed) {
         suppressPreDialog = true;
         comm.dismiss();
         showContractModal(mountEl, offer, {
-          onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); },
-          onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); },
+          onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); showPreview(); },
+          onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); showPreview(); },
         });
+      } else {
+        showPreview();
       }
+    } else {
+      showPreview();
     }
   }
+  // _shapeOf: unitId → readable shape for the wave preview (WB2). Defined here so it closes over nothing.
+  function _shapeOf(unitId) { try { return getUnitDef(unitId).shape; } catch (e) { return unitId; } }
 
   function playReplay(replayLog) {
     if (!replayLog || typeof replayLog.seed !== 'number') {
@@ -681,6 +692,15 @@ export function boot(mountEl, seed) {
               if (mode === 'play') {
                 interlude = true;
                 playPreBattleDialog(null);      // the next faction's challenge; close = continue
+                // WB5 — BONUS PICKER: the sim rolled a 3-of-16 offer at this clear (sim.bonuses.offer).
+                // The pick submits chooseBonus (replay-logged); no pick before the next wave = forfeit.
+                if (sim.bonuses && sim.bonuses.offer && sim.bonuses.offer.length) {
+                  showBonusPicker(mountEl, sim.bonuses.offer, getBonusDef, (bonusId) => {
+                    const res = submit({ type: 'chooseBonus', bonusId });
+                    const d = getBonusDef(bonusId);
+                    flashMessage(hud, (res && res.ok) ? ('Bonus: ' + (d ? d.label : bonusId)) : ('Bonus failed: ' + ((res && res.reason) || '')));
+                  }, sim.bonuses.owned);
+                }
               } else if (lastWaveFaction) {
                 comm.showCall(winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false));
               }
