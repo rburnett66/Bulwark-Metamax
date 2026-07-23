@@ -1904,13 +1904,13 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           try { const d2 = getStructureDef(s.structId); r2 = (d2 && d2.range) || 0; } catch (e) { continue; }
           if (r2 <= 0) continue;
           const sfp = s.footprint || { w: 1, h: 1 };
-          gO.lineStyle(1, covColor, 0.28);
+          gO.lineStyle(3, covColor, 0.3);   // 3× width — thin rings were near-invisible on mobile (owner)
           gO.drawCircle((s.pos.x + sfp.w / 2) * t, (s.pos.y + sfp.h / 2) * t, r2 * t);
           gO.lineStyle(0);
         }
       }
       if (range > 0) {
-        drawDashedCircle(gO, cx, cy, range * t, 0xffffff, 0.6, 1.5);
+        drawDashedCircle(gO, cx, cy, range * t, 0xffffff, 0.7, 4.5);   // 3× width for mobile legibility
       }
     }
   }
@@ -1939,7 +1939,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       gO.drawCircle(p.x, p.y, t * 0.34);                                  // selection ring on the unit
       gO.lineStyle(0);
       if (typeof u.range === 'number' && u.range > 0) {
-        drawDashedCircle(gO, p.x, p.y, u.range * t, 0xff8080, 0.6, 1.5);  // its reach
+        drawDashedCircle(gO, p.x, p.y, u.range * t, 0xff8080, 0.7, 4.5);  // its reach — 3× width for mobile
       }
     }
   }
