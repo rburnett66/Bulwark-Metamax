@@ -257,26 +257,29 @@ function onKeyDown(handle, ev) {
 
   const lower = typeof key === 'string' ? key.toLowerCase() : '';
 
+  // SUBJECT→ACTION grammar (owner): a completed action CONSUMES the selection; a failed action
+  // keeps the subject and flashes the sim's reason — matching the harvester flow above.
+  const structAction = (type, label) => {
+    if (ui.selectedStructureId === null) return;
+    const res = handle.submit({ type, structureId: ui.selectedStructureId });
+    if (res && res.ok) ui.selectedStructureId = null;
+    else ui.pendingHint = { text: label + ': ' + ((res && res.reason) || 'unavailable') };
+  };
+
   if (lower === 'u') {
-    if (ui.selectedStructureId !== null) {
-      handle.submit({ type: 'upgrade', structureId: ui.selectedStructureId });
-    }
+    structAction('upgrade', 'Upgrade');
     ev.preventDefault();
     return;
   }
 
   if (lower === 'x') {
-    if (ui.selectedStructureId !== null) {
-      handle.submit({ type: 'sell', structureId: ui.selectedStructureId });
-    }
+    structAction('sell', 'Sell');
     ev.preventDefault();
     return;
   }
 
   if (lower === 'r') {
-    if (ui.selectedStructureId !== null) {
-      handle.submit({ type: 'repair', structureId: ui.selectedStructureId });
-    }
+    structAction('repair', 'Repair');
     ev.preventDefault();
     return;
   }

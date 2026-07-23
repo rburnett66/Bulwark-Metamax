@@ -1879,7 +1879,9 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
     for (const id of renderer._lastUnitPos.keys()) if (!(state.units && state.units.has(id))) renderer._lastUnitPos.delete(id);
   }
 
-  // selection range circle
+  // selection range circle — plus DEFENSIVE COVERAGE (owner): selecting a tower shows the range of
+  // EVERY live tower of the same kind, faint, so the defensive net and its gaps read at a glance.
+  // The selected tower stays primary (bright dashed ring + outline).
   if (ui && ui.selectedStructureId != null && state.structures) {
     const sel = state.structures.get(ui.selectedStructureId);
     if (sel) {
@@ -1894,8 +1896,36 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
         const def = getStructureDef(sel.structId);
         range = def && typeof def.range === 'number' ? def.range : 0;
       } catch (e) { range = 0; }
+      if (range > 0 && (sel.kind === 'antiGround' || sel.kind === 'antiAir')) {
+        const covColor = sel.kind === 'antiAir' ? 0x6fa0e0 : 0xe0b070;
+        for (const s of state.structures.values()) {
+          if (s.id === sel.id || s.kind !== sel.kind || s.lifecycle === 'Destroyed' || s.hp <= 0) continue;
+          let r2 = 0;
+          try { const d2 = getStructureDef(s.structId); r2 = (d2 && d2.range) || 0; } catch (e) { continue; }
+          if (r2 <= 0) continue;
+          const sfp = s.footprint || { w: 1, h: 1 };
+          gO.lineStyle(1, covColor, 0.28);
+          gO.drawCircle((s.pos.x + sfp.w / 2) * t, (s.pos.y + sfp.h / 2) * t, r2 * t);
+          gO.lineStyle(0);
+        }
+      }
       if (range > 0) {
         drawDashedCircle(gO, cx, cy, range * t, 0xffffff, 0.6, 1.5);
+      }
+    }
+  }
+  // MINE coverage: mines aren't selectable (state.mines, not structures), so their coverage surface
+  // is the mine GHOST — while placing (build key 4), every armed mine's trigger ring lights up so
+  // the field's gaps read exactly like tower coverage does on selection.
+  if (ui && ui.buildSelection && state.mines && state.mines.size) {
+    let bdef = null;
+    try { bdef = getStructureDef(ui.buildSelection); } catch (e) { /* unknown */ }
+    if (bdef && bdef.kind === 'mine') {
+      for (const m of state.mines.values()) {
+        if (m.state !== 'armed') continue;
+        gO.lineStyle(1, 0xe03030, 0.35);
+        gO.drawCircle((m.pos.x + 0.5) * t, (m.pos.y + 0.5) * t, (bdef.triggerRadius || 0.45) * t);
+        gO.lineStyle(0);
       }
     }
   }

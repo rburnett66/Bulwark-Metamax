@@ -400,15 +400,22 @@ export function boot(mountEl, seed) {
     },
     onMapSelect: (mapId) => { pendingCarry = null; void selectMap(mapId); },   // hand-picking a map = fresh start
     defaultMapId: DEFAULT_MAP_ID,
+    // SUBJECT→ACTION grammar (owner): a completed action CONSUMES the selection; a failed one keeps
+    // the subject and says why — same rules as the harvester flow (input.js).
     onUpgrade: (id) => {
-      submit({ type: 'upgrade', id });
+      const res = submit({ type: 'upgrade', id });
+      if (res && res.ok) ui.selectedStructureId = null;
+      else flashMessage(hud, 'Upgrade: ' + ((res && res.reason) || 'unavailable'));
     },
     onSell: (id) => {
       const res = submit({ type: 'sell', id });
-      if (res.ok) ui.selectedStructureId = null;
+      if (res && res.ok) ui.selectedStructureId = null;
+      else flashMessage(hud, 'Sell: ' + ((res && res.reason) || 'unavailable'));
     },
     onRepair: (id) => {
-      submit({ type: 'repair', id });
+      const res = submit({ type: 'repair', id });
+      if (res && res.ok) ui.selectedStructureId = null;
+      else flashMessage(hud, 'Repair: ' + ((res && res.reason) || 'unavailable'));
     },
     onExportLog: () => {
       try {
