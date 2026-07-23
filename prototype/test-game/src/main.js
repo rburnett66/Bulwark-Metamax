@@ -140,7 +140,7 @@ export function boot(mountEl, seed) {
   }
   // Intel payload for ONE wave: distinct unit types (no counts), each flagged NEW if unseen this battle.
   // Marks the wave's types as seen (intel precedes deployment, so seen == previewed).
-  function waveIntel(waveEntry) {
+  function waveIntel(waveEntry, waveNum) {
     if (!waveEntry) return null;
     const units = [];
     for (const s of waveEntry.spawns || []) {
@@ -148,7 +148,8 @@ export function boot(mountEl, seed) {
       units.push({ id: s.unitId, desc: describeUnit(s.unitId), isNew: !seenUnitTypes.has(s.unitId) });
     }
     for (const s of waveEntry.spawns || []) seenUnitTypes.add(s.unitId);
-    return { wave: waveEntry.wave, faction: waveEntry.faction, units };
+    // waveNum passed explicitly — campaign wave entries don't all carry a .wave field ("Wave undefined").
+    return { wave: (waveNum != null ? waveNum : waveEntry.wave), faction: waveEntry.faction, units };
   }
   let accumulator = 0;        // fixed-timestep accumulator (seconds)
   let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame
@@ -338,7 +339,7 @@ export function boot(mountEl, seed) {
     // WB2 — WAVE INTEL: after the contract dialog resolves (or immediately when there's none),
     // brief the FIRST wave's unit types (no counts; new units flagged). Per-wave intel for later
     // waves fires from the interlude below.
-    const showPreview = () => { const info = waveIntel(currentWaves[0]); if (info) showWaveIntel(mountEl, info, null); };
+    const showPreview = () => { const info = waveIntel(currentWaves[0], 1); if (info) showWaveIntel(mountEl, info, null); };
     if (currentMapId) {
       const sv = loadSave();
       const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
@@ -715,8 +716,8 @@ export function boot(mountEl, seed) {
                 // NEXT-WAVE INTEL: brief the upcoming wave's unit types (new ones flagged). Chained
                 // AFTER the bonus pick so the two dialogs never stack. clearedWave (1-based) indexes
                 // the next wave: currentWaves[clearedWave] == wave (clearedWave+1).
-                const clearedWave = evs[i].wave;
-                const showNextIntel = () => { const info = waveIntel(currentWaves[clearedWave]); if (info) showWaveIntel(mountEl, info, null); };
+                const clearedWave = evs[i].wave;   // 1-based; next wave = clearedWave + 1, index clearedWave
+                const showNextIntel = () => { const info = waveIntel(currentWaves[clearedWave], clearedWave + 1); if (info) showWaveIntel(mountEl, info, null); };
                 // WB5 — BONUS PICKER: the sim rolled a 3-of-16 offer at this clear (sim.bonuses.offer).
                 // The pick submits chooseBonus (replay-logged); no pick before the next wave = forfeit.
                 if (sim.bonuses && sim.bonuses.offer && sim.bonuses.offer.length) {
