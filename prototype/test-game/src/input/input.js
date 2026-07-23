@@ -133,6 +133,17 @@ function onPointerDown(handle, ev) {
   const state = handle.getState();
 
   if (ui.buildSelection) {
+    // SUBJECT beats TOOL (owner): clicking an already-BUILT structure while a build tool is armed
+    // re-focuses onto that structure — select it and drop the tool — instead of a dead 'occupied'
+    // placement attempt. Empty cells still place as before.
+    const hit = findStructureAtCell(state, cell);
+    if (hit !== null) {
+      ui.buildSelection = null;
+      ui.hoverValid = false;
+      ui.selectedStructureId = hit;
+      ui.selectedUnitId = null;
+      return;
+    }
     // Attempt placement via command; sim validates authoritatively.
     const result = handle.submit({
       type: 'place',
