@@ -1,0 +1,12 @@
+# Design Questions (auto-review)
+
+- **[high/model]** Structures are stated to 'snap to base hard-point slots', but the wall/moat piece must be placed mid-lane to visibly reroute walkers. Are walls/moats exempt from hard-point placement, and if so, what are their placement rules (valid tiles, lane restrictions)?  
+  _Two rules directly conflict: hard-point-only placement makes the 'wall/moat reroutes walkers' acceptance item impossible to satisfy. Placement semantics for terrain pieces must be resolved before building the deploy loop._
+- **[high/model]** Acceptance requires all 3 towers to 'take damage', but the slice's basic attackers explicitly path to the base and ignore structures, and no slice unit is flagged Targets=Structures. What damages towers in the slice — a flagged attacker variant, incidental AoE, or something else?  
+  _The acceptance item has no supporting rule: the stated slice roster cannot produce structure damage, so damage/repair/destroy flows for towers are untestable as specified._
+- **[high/model]** The economy rule says money is spent on 'build/repair/upgrade' (and acceptance requires spend→repair), but the lifecycle rule says 'repairs are free but repair troops are not', with travel time. Which repair model applies in the slice, and does the slice include a repair troop unit at all?  
+  _Two model rules disagree on whether repair costs money directly; the repair-troop model also implies a fourth unit type not in the declared 3-attacker/3-defense slice roster._
+- **[medium/model]** Win is 'survive N waves' — what is N for the slice, and where are wave composition, spawn timing, and per-wave bounty values defined (balance xlsx table, or hardcoded for the slice)?  
+  _The win acceptance item depends on concrete wave data that no rule pins down; 'no hardcoded balance' implies a table that isn't identified in the model._
+- **[medium/scope]** Vision/radar rules are 'implemented or explicitly stubbed in slice' — which ones are stubbed? Specifically, does the anti-air tower need radar to acquire the flyer, and does the swimmer's 'harder to hit / limited vision' sub-surface rule apply in the slice?  
+  _This is an explicit open decision; whether targeting depends on the vision system or bypasses it changes the acquisition implementation for both slice towers._
