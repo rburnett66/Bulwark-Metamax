@@ -748,6 +748,62 @@ function drawScene(meta, el, bodyAz, turretAz) {
     gx: state.turretDx * Math.cos(bodyAz), gy: state.turretDx * Math.sin(bodyAz),
     pivotFrac: 0.5 + state.turretPivot / 100, sel: sel && sel.part === 'turret' ? sel.set : null });
   renderParts(ctx, meta.S, meta.cx, meta.groundY, el, parts);
+  if (state.showDimBox) drawDimBox(ctx, meta, el, bodyAz, state.part === 'turret' ? 'turret' : 'body');
+}
+
+// ── DIMENSION BOX (SF1): a 3D box sized to the unit (foot×foot×layers, zScale-stretched) drawn through
+// the SAME orthographic transform as renderParts, so it tracks orbit. Per-cell gridlines (faint per
+// voxel, bold per tile = VOX_PER_TILE) + a face label on every visible side, and each loaded view image
+// projected onto its matching face (top, side mirrored, front, back — the carve's own convention). ──
+function drawDimBox(ctx, meta, el, az, part) {
+  const foot = state.foot, layers = (part === 'turret' ? state.turretLayers : state.bodyLayers);
+  if (!foot || !layers) return;
+  const S = meta.S, cx = meta.cx, groundY = meta.groundY;
+  const eR = el * Math.PI / 180, se = Math.sin(eR), ce = Math.cos(eR), h = state.zScale;
+  const ca = Math.cos(az), sa = Math.sin(az);
+  const cx0 = foot / 2, cy0 = foot / 2;
+  const PX = (X, Y) => cx + S * (X * ca - Y * sa);
+  const PY = (X, Y, Z) => groundY + S * ((X * sa + Y * ca) * se - Z * h * ce);
+  const P = (X, Y, Z) => ({ x: PX(X - cx0, Y - cy0), y: PY(X - cx0, Y - cy0, Z) });   // world voxel coords → screen
+  const view = imgs[part] || {};
+
+  // affine image map: image rect → the face parallelogram (o = img(0,0), u = img(w,0), v = img(0,h))
+  const projImg = (img, o, u, v) => {
+    if (!img) return; const w = img.width || img.naturalWidth, hi = img.height || img.naturalHeight; if (!w || !hi) return;
+    ctx.save(); ctx.globalAlpha = 0.82;
+    ctx.setTransform((u.x - o.x) / w, (u.y - o.y) / w, (v.x - o.x) / hi, (v.y - o.y) / hi, o.x, o.y);
+    ctx.drawImage(img, 0, 0, w, hi);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.restore();
+  };
+  // per-cell gridlines across a face defined by corner A and full edges to B (u) and C (v), nu×nv cells
+  const faceGrid = (A, B, C, nu, nv) => {
+    const line = (p0, p1, tile) => { ctx.strokeStyle = tile ? 'rgba(120,205,255,0.55)' : 'rgba(120,205,255,0.13)'; ctx.lineWidth = tile ? 1.3 : 0.5; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke(); };
+    for (let i = 0; i <= nu; i++) { const t = i / nu, p0 = { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t }; line(p0, { x: p0.x + (C.x - A.x), y: p0.y + (C.y - A.y) }, i % VOX_PER_TILE === 0); }
+    for (let j = 0; j <= nv; j++) { const t = j / nv, p0 = { x: A.x + (C.x - A.x) * t, y: A.y + (C.y - A.y) * t }; line(p0, { x: p0.x + (B.x - A.x), y: p0.y + (B.y - A.y) }, j % VOX_PER_TILE === 0); }
+  };
+  const label = (A, B, C, txt) => { const m = { x: (A.x + B.x + C.x + (B.x + C.x - A.x)) / 4, y: (A.y + B.y + C.y + (B.y + C.y - A.y)) / 4 }; ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(200,235,255,0.9)'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(txt, m.x, m.y); ctx.restore(); };
+
+  // which walls face the camera (same convention as renderParts camDot = [se, sa, -sa, ca, -ca])
+  const showFront = sa > 0.02, showBack = sa < -0.02, showPlusY = ca > 0.02, showMinusY = ca < -0.02;
+  const F = foot, L = layers;
+
+  // FACES (image projected, then gridlines + label over it). Corner order per face = (A origin, B=A+u, C=A+v).
+  // TOP (Z=L): img x→X, y→Y
+  { const A = P(0, 0, L), B = P(F, 0, L), C = P(0, F, L); projImg(view.top, A, B, C); faceGrid(A, B, C, F, F); label(A, B, C, 'TOP  ' + (F / VOX_PER_TILE).toFixed(2) + '×' + (F / VOX_PER_TILE).toFixed(2) + ' tiles'); }
+  // +X FRONT: img x→Y, y→down(Z hi→lo)
+  if (showFront) { const A = P(F, 0, L), B = P(F, F, L), C = P(F, 0, 0); projImg(view.front, A, B, C); faceGrid(A, B, C, F, L); label(A, B, C, 'FRONT'); }
+  // −X BACK (mirrored): img x→Y reversed
+  if (showBack) { const A = P(0, F, L), B = P(0, 0, L), C = P(0, F, 0); projImg(view.back, A, B, C); faceGrid(A, B, C, F, L); label(A, B, C, 'BACK'); }
+  // SIDE = the visible ±Y wall (far mirrored): img x→X (length), y→down(Z)
+  if (showPlusY) { const A = P(0, F, L), B = P(F, F, L), C = P(0, F, 0); projImg(view.side, A, B, C); faceGrid(A, B, C, F, L); label(A, B, C, 'SIDE'); }
+  else if (showMinusY) { const A = P(F, 0, L), B = P(0, 0, L), C = P(F, 0, 0); projImg(view.side, A, B, C); faceGrid(A, B, C, F, L); label(A, B, C, 'SIDE'); }
+
+  // wireframe box edges (bold, over everything)
+  const c = [P(0, 0, 0), P(F, 0, 0), P(F, F, 0), P(0, F, 0), P(0, 0, L), P(F, 0, L), P(F, F, L), P(0, F, L)];
+  const E = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
+  ctx.strokeStyle = 'rgba(95,224,255,0.9)'; ctx.lineWidth = 1.6;
+  for (const [a, b] of E) { ctx.beginPath(); ctx.moveTo(c[a].x, c[a].y); ctx.lineTo(c[b].x, c[b].y); ctx.stroke(); }
+  ctx.lineWidth = 0.75;
 }
 
 // ── bake: per-angle cache with 2× supersample + CAS-lite unsharp (ported from the prototype) ──
@@ -1097,7 +1153,8 @@ function rotCanvas(im, rot) {                                                 //
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
   decorRevolve: true,   // decor: carve as a solid of revolution (organic — trees/rocks) rather than the tank box intersection
-  decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30 };   // decor on-map scale + procedural-tree params (Stories 6,7)
+  decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30,   // decor on-map scale + procedural-tree params (Stories 6,7)
+  showDimBox: false };   // SF1: the 3D dimension box + per-face view-image projections overlay
 let bodyFaces = null, turretFaces = null, bodyBaked = null, turretBaked = null, lastPack = null;
 let voxMeta = null, voxTex = null, voxSpr = null, voxShadow = null, voxSig = '';   // orbit cube-render canvas
 let gVoxMeta = null, gVoxTex = null, gVoxSpr = null, gVoxShadow = null;            // in-game inset canvas
@@ -1567,7 +1624,8 @@ function update() {
   // only re-render the cube scene when something it depends on actually changed
   const sig = state.az.toFixed(1) + '|' + state.el.toFixed(1) + '|' + state.taim.toFixed(1) + '|' + state.turretDx + '|' +
     state.turretPivot + '|' + state.mountZ + '|' + state.part + '|' + state.lightAz + '|' + state.lightK + '|' + state.zScale +
-    '|' + (gridSelVox ? gridSelVox.set.size + ':' + gridSelVox.part + ':' + gridView + ':' + gridLayer : 'x');   // re-render on selection change
+    '|' + (gridSelVox ? gridSelVox.set.size + ':' + gridSelVox.part + ':' + gridView + ':' + gridLayer : 'x') +   // re-render on selection change
+    '|dim' + (state.showDimBox ? state.foot + ':' + state.bodyLayers + ':' + state.turretLayers : '0');   // SF1 dimension-box overlay
   if (sig !== voxSig) { voxSig = sig; drawScene(voxMeta, state.el, azR, azR + taimR); voxTex.baseTexture.update(); }
 }
 // position the in-game preview: unit at GAME scale on the tile, slowly turning to show facings, with the
@@ -1668,6 +1726,7 @@ $('blen').oninput = (e) => { state.barrelLen = +e.target.value; $('blenV').textC
 $('brad').oninput = (e) => { state.barrelRad = +e.target.value; $('bradV').textContent = state.barrelRad; rebuildSlices(); };
 $('belev').oninput = (e) => { state.barrelElev = +e.target.value; $('belevV').textContent = state.barrelElev; rebuildSlices(); };
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
+$('dimBox').onchange = (e) => { state.showDimBox = e.target.checked; voxSig = ''; };   // SF1: toggle the dimension box + projections
 $('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
 $('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); rebuildSlices(); };
