@@ -1475,32 +1475,39 @@ function renderGridView() {
   // ONE scale for every view: size the cell from the LARGEST grid (top = foot × foot), not this view's own
   // rows — otherwise the short side/front views (foot × layers) grow their cells and render at a different
   // scale. A voxel is now the same square px in top/side/front/back; shorter views just centre with padding.
+  // Voxels stay TRUE CUBES in the data; the render (and the dim box) STRETCH height by zScale, so the grid
+  // must scale its Z axis the same way or it won't agree with the render/box (owner 2026-07-30 — the side/
+  // front/back read ~5× too tall because this unit's zScale < 1 squashes height in the render but the grid
+  // was square). Only views whose ROWS are Z (side/front/back/angle) scale; TOP (rows = Y) stays square.
+  // cellV = vertical px-per-voxel for THIS view; cols keep the square `cell` so a voxel's WIDTH reads the same.
+  const zsc = (gridView === 'top') ? 1 : state.zScale;
   const W = cv.width, H = cv.height;
-  const uCols = foot, uRows = Math.max(foot, layers);
+  const uCols = foot, uRows = Math.max(foot, layers * zsc, layers * state.zScale);   // fit the tallest possible view (side/front scaled by zScale)
   const fitCell = Math.max(1, Math.floor(Math.min(W / uCols, H / uRows)));
-  const cell = Math.max(1, Math.floor(fitCell * gridZoom));               // scroll-wheel zoom
-  const gw = cell * cols, gh = cell * rows;
+  const cell = Math.max(1, Math.floor(fitCell * gridZoom));               // scroll-wheel zoom (square voxel WIDTH)
+  const cellV = Math.max(1, Math.round(cell * zsc));                      // voxel HEIGHT in px for this view (zScale-scaled: <1 squashes, >1 stretches)
+  const gw = cell * cols, gh = cellV * rows;
   const ox = Math.floor((W - gw) / 2) + gridPanX, oy = Math.floor((H - gh) / 2) + gridPanY;
   const geomActive = gridMode === 'geom' && V && base.sp && GEOAX[gridView];  // reconcile overlay (image-carved only)
-  gridGeom = { cell, ox, oy, cols, rows, depth, slice, toVox: ax.toVox, foot, layers, part, editable: !geomActive };
+  gridGeom = { cell, cellV, zsc, ox, oy, cols, rows, depth, slice, toVox: ax.toVox, foot, layers, part, editable: !geomActive };
   ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, W, H);
   // faint checker so the empty grid still reads as a grid at any zoom
   if (cell >= 4) { ctx.fillStyle = 'rgba(255,255,255,.025)';
-    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if ((cx + cy) & 1) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell); }
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if ((cx + cy) & 1) ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV); }
   // faint silhouette of the WHOLE model (all depths) so the active slice reads in context
   ctx.fillStyle = 'rgba(150,185,220,.13)';
-  for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if (anyDepth(cx, cy)) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+  for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if (anyDepth(cx, cy)) ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
   // the ACTIVE slice — palette-correct in Paint mode, flat grey in Geometry mode (shape, not colour)
   for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
     const col = cellAt(cx, cy); if (!col) continue;
     ctx.fillStyle = geomActive ? '#68788a' : `rgb(${col[0]},${col[1]},${col[2]})`;
-    ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+    ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
   }
   // a REAL grid: cell lines across the WHOLE area (occupied + empty) + a crisp outer frame
   if (cell >= 3) {
     ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1; ctx.beginPath();
     for (let cx = 0; cx <= cols; cx++) { ctx.moveTo(ox + cx * cell + .5, oy); ctx.lineTo(ox + cx * cell + .5, oy + gh); }
-    for (let cy = 0; cy <= rows; cy++) { ctx.moveTo(ox, oy + cy * cell + .5); ctx.lineTo(ox + gw, oy + cy * cell + .5); }
+    for (let cy = 0; cy <= rows; cy++) { ctx.moveTo(ox, oy + cy * cellV + .5); ctx.lineTo(ox + gw, oy + cy * cellV + .5); }
     ctx.stroke();
   }
   ctx.strokeStyle = 'rgba(120,160,200,.55)'; ctx.lineWidth = 1; ctx.strokeRect(ox + .5, oy + .5, gw - 1, gh - 1);
@@ -1551,15 +1558,15 @@ function renderGridView() {
 
   const drawMarquee = (s, stroke, fill) => {
     const c0 = Math.min(s.c0, s.c1), c1 = Math.max(s.c0, s.c1), r0 = Math.min(s.r0, s.r1), r1 = Math.max(s.r0, s.r1);
-    const rx = ox + c0 * cell + 0.5, ry = oy + r0 * cell + 0.5, rw = (c1 - c0 + 1) * cell - 1, rh = (r1 - r0 + 1) * cell - 1;
+    const rx = ox + c0 * cell + 0.5, ry = oy + r0 * cellV + 0.5, rw = (c1 - c0 + 1) * cell - 1, rh = (r1 - r0 + 1) * cellV - 1;
     if (fill) { ctx.fillStyle = fill; ctx.fillRect(rx, ry, rw, rh); }
     ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
     ctx.strokeRect(rx, ry, rw, rh); ctx.setLineDash([]);
   };
   if (gridGuides) {                                               // centre point + H/V centre lines — align + check symmetry
-    const cxp = ox + (cols / 2) * cell, cyp = oy + (rows / 2) * cell;
+    const cxp = ox + (cols / 2) * cell, cyp = oy + (rows / 2) * cellV;
     ctx.strokeStyle = 'rgba(242,200,105,.40)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-    ctx.beginPath(); ctx.moveTo(Math.round(cxp) + 0.5, oy); ctx.lineTo(Math.round(cxp) + 0.5, oy + rows * cell); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(Math.round(cxp) + 0.5, oy); ctx.lineTo(Math.round(cxp) + 0.5, oy + rows * cellV); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(ox, Math.round(cyp) + 0.5); ctx.lineTo(ox + cols * cell, Math.round(cyp) + 0.5); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = 'rgba(242,200,105,.95)'; ctx.beginPath(); ctx.arc(cxp, cyp, Math.max(2, cell * 0.14), 0, Math.PI * 2); ctx.fill();
@@ -1568,7 +1575,7 @@ function renderGridView() {
   // object pick can be painted on every face), plus the exact dashed rect only in the facing it was drawn in.
   if (gridSelVox && gridSelVox.part === part) {
     ctx.fillStyle = 'rgba(95,224,255,.16)';
-    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if (gridCellSelected(gridGeom, cx, cy)) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if (gridCellSelected(gridGeom, cx, cy)) ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
     if (gridSel && gridSelView === gridView) drawMarquee(gridSel, '#5fe0ff', null);
   }
   if (gridBoxSel) drawMarquee(gridBoxSel, '#e0625f', null);               // marquee being dragged
@@ -1590,7 +1597,7 @@ function renderGridView() {
     for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
       const [, y, z] = ax.toVox(cx, cy, slice), iy = y - oyv, iz = z - z0v;
       if (iy < 0 || iy >= bhh || iz < 0 || iz >= Hvv) continue;
-      if (!!A.m[iz * bhh + iy] !== !!B.m[iz * bhh + iy]) ctx.fillRect(ox + cx * cell, oy + cy * cell, cell, cell);
+      if (!!A.m[iz * bhh + iy] !== !!B.m[iz * bhh + iy]) ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
     }
   }
 
@@ -1605,13 +1612,13 @@ function renderGridView() {
     const bsp = (geomState[part] && geomState[part].spanX) ? geomState[part] : base.sp;
     const rng = (info) => { const s = bsp[spanKey[info.axis]], cap = capOf(info.axis); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
     const cR = rng(g.col), rR = rng(g.row);
-    const bx = ox + cR.lo * cell, by = oy + rR.lo * cell, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cell;
+    const bx = ox + cR.lo * cell, by = oy + rR.lo * cellV, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cellV;
     const keyed = imgs[part][gridView] ? keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]) : null;
     if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
     for (const [hx, hy] of [[bx + bw2 / 2, by], [bx + bw2 / 2, by + bh2], [bx, by + bh2 / 2], [bx + bw2, by + bh2 / 2]]) ctx.fillRect(hx - 4, hy - 4, 8, 8);
-    gridGeom.geom = { bx, by, bw: bw2, bh: bh2, cell, ox, oy, gw, gh, col: g.col, row: g.row, foot, layers };
+    gridGeom.geom = { bx, by, bw: bw2, bh: bh2, cell, cellV, ox, oy, gw, gh, col: g.col, row: g.row, foot, layers };
     const sx = bsp[spanKey[g.col.axis]], sy = bsp[spanKey[g.row.axis]];
     ctx.fillStyle = '#8fa7bd'; ctx.font = '9px sans-serif'; ctx.textBaseline = 'top';
     ctx.fillText(`${g.col.axis.toUpperCase()} ${sx.lo}–${sx.hi} · ${g.row.axis.toUpperCase()} ${sy.lo}–${sy.hi}${geomState[part].auto ? '  (auto)' : ''}`, ox + 3, oy + 3);
@@ -1936,15 +1943,16 @@ $('gridCanvas').addEventListener('wheel', (e) => {
   e.preventDefault();
   const cv = $('gridCanvas'), rect = cv.getBoundingClientRect();
   const px = (e.clientX - rect.left) * (cv.width / rect.width), py = (e.clientY - rect.top) * (cv.height / rect.height);
-  const cxu = (px - g.ox) / g.cell, cyu = (py - g.oy) / g.cell;   // grid-cell coord under the cursor (stays fixed)
+  const cxu = (px - g.ox) / g.cell, cyu = (py - g.oy) / g.cellV;   // grid-cell coord under the cursor (stays fixed)
   const oldZoom = gridZoom;
   gridZoom = clamp(gridZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), 1, 12);
   if (gridZoom === oldZoom) return;
   if (gridZoom <= 1.001) { gridZoom = 1; gridPanX = 0; gridPanY = 0; renderGridView(); return; }   // snap back to centered fit
   const baseCell = g.cell / oldZoom, cell2 = Math.max(1, Math.floor(baseCell * gridZoom));
-  const oxC = Math.floor((cv.width - cell2 * g.cols) / 2), oyC = Math.floor((cv.height - cell2 * g.rows) / 2);
+  const cellV2 = Math.max(1, Math.round(cell2 * (g.zsc || 1)));   // vertical px follows the view's zScale scaling
+  const oxC = Math.floor((cv.width - cell2 * g.cols) / 2), oyC = Math.floor((cv.height - cellV2 * g.rows) / 2);
   gridPanX = Math.round(px - cxu * cell2 - oxC);   // keep the pre-zoom cell under the cursor
-  gridPanY = Math.round(py - cyu * cell2 - oyC);
+  gridPanY = Math.round(py - cyu * cellV2 - oyC);
   renderGridView();
 }, { passive: false });
 // ── SLICE EDITOR (owner 2026-07-17): on the Top view, click/drag to add or erase voxels in the
@@ -2234,7 +2242,7 @@ document.addEventListener('keydown', (e) => {
     const g = gridGeom; if (!g || !g.editable) return false;
     const r = cv.getBoundingClientRect();
     const px = (e.clientX - r.left) * (cv.width / r.width), py = (e.clientY - r.top) * (cv.height / r.height);
-    const cx = Math.floor((px - g.ox) / g.cell), cy = Math.floor((py - g.oy) / g.cell);
+    const cx = Math.floor((px - g.ox) / g.cell), cy = Math.floor((py - g.oy) / g.cellV);
     if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows) return false;
     const [x, y, z] = gridTargetVox(g, cx, cy), N = g.foot * g.foot, k = z * N + y * g.foot + x, ed = voxEdit[g.part];
     // a selection MASKS editing to the SELECTED VOXELS (not a view rect): pick objects once in Layer 0, then
@@ -2249,7 +2257,7 @@ document.addEventListener('keydown', (e) => {
     return true;
   };
   let painting = false, dirty = false, boxing = null;
-  const cellOf = (e) => { const g = gridGeom; if (!g) return null; const { px, py } = ptCell(e); return { cx: clamp(Math.floor((px - g.ox) / g.cell), 0, g.cols - 1), cy: clamp(Math.floor((py - g.oy) / g.cell), 0, g.rows - 1) }; };
+  const cellOf = (e) => { const g = gridGeom; if (!g) return null; const { px, py } = ptCell(e); return { cx: clamp(Math.floor((px - g.ox) / g.cell), 0, g.cols - 1), cy: clamp(Math.floor((py - g.oy) / g.cellV), 0, g.rows - 1) }; };
   // ── GEOMETRY drag (owner 2026-07-18): in Geometry mode, drag the box edges to stretch a dimension or
   // the interior to move it. Edits write the shared world-axis spans in geomState, so linked views move
   // in lock-step. On first edit we snapshot the current auto spans and flip auto→false. The uncolored
@@ -2286,7 +2294,7 @@ document.addEventListener('keydown', (e) => {
   };
   const geomMove = (e) => {
     const g = gridGeom.geom; if (!g || !geomDrag) return;
-    const { px, py } = ptCell(e), gc = (px - g.ox) / g.cell, gr = (py - g.oy) / g.cell;
+    const { px, py } = ptCell(e), gc = (px - g.ox) / g.cell, gr = (py - g.oy) / g.cellV;
     let { cR, rR } = gridRectFromSpans(g);
     if (geomDrag.mode === 'move') {
       const dcx = Math.round(gc - geomDrag.gc0), dcy = Math.round(gr - geomDrag.gr0);
@@ -2305,7 +2313,7 @@ document.addEventListener('keydown', (e) => {
       const mode = geomHit(e); if (!mode) return;
       ensureGeomSpans();
       const g = gridGeom.geom, { px, py } = ptCell(e), r = gridRectFromSpans(g);
-      geomDrag = { mode, gc0: (px - g.ox) / g.cell, gr0: (py - g.oy) / g.cell, cR0: r.cR, rR0: r.rR };
+      geomDrag = { mode, gc0: (px - g.ox) / g.cell, gr0: (py - g.oy) / g.cellV, cR0: r.cR, rR0: r.rR };
       dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
     }
     if (!gridGeom || !gridGeom.editable) return;
