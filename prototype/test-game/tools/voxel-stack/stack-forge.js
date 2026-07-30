@@ -2242,8 +2242,15 @@ function setView(pick, im) {
 function renderView(pick) {
   const part = pick.dataset.part, view = pick.dataset.view, src = srcImg[part][view];
   if (!src) return;
-  const fl = flipState[part][view], flipped = (fl.h || fl.v) ? flipCanvas(src, fl.h, fl.v) : src;
-  const rot = rotState[part][view] || 0, im = rot ? rotCanvas(flipped, rot) : flipped;
+  // Flip in DISPLAY space: the top view can be ROTATED (only view with ⟳), and flipping the SOURCE
+  // then rotating made ⇕ come out as a left/right mirror on a 90/270 view (owner bug). Under a quarter
+  // turn the on-screen axes swap, so apply the button's flip to the source axis that becomes it —
+  // matching toggleFlip's dispAxis convention. No-op on un-rotated views.
+  const fl = flipState[part][view];
+  const rot = rotState[part][view] || 0, swap = !!(rot % 180);
+  const fh = swap ? fl.v : fl.h, fv = swap ? fl.h : fl.v;
+  const flipped = (fl.h || fl.v) ? flipCanvas(src, fh, fv) : src;
+  const im = rot ? rotCanvas(flipped, rot) : flipped;
   imgs[part][view] = im;
   const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 128, 84); drawFit(g, keyedCanvas(im, keyTolState[part][view], polyState[part][view], pickState[part][view]), 128, 84);
   pick.classList.add('set'); updateFlipBtns(pick);
