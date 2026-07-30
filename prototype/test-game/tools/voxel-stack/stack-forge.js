@@ -1644,7 +1644,9 @@ function renderGridView() {
     const rng = (info) => { const s = bsp[spanKey[info.axis]], cap = capOf(info.axis); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
     const cR = rng(g.col), rR = rng(g.row);
     const bx = ox + cR.lo * cell, by = oy + rR.lo * cellV, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cellV;
-    const keyed = imgs[part][gridView] ? keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]) : null;
+    // apply the SAME per-side scale/align (xf) the carve uses, or the geometry overlay (raw image) won't match
+    // the paint voxels (transformed) once a side is aligned — owner: "geometry and paint do not match".
+    const keyed = imgs[part][gridView] ? xfCanvas(keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]), (imgXf[part] || {})[gridView]) : null;
     if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
