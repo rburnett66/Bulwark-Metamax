@@ -801,25 +801,26 @@ function drawDimBox(ctx, meta, el, az, part) {
 
   // which walls face the camera (same convention as renderParts camDot = [se, sa, -sa, ca, -ca])
   const showFront = sa > 0.02, showBack = sa < -0.02, showPlusY = ca > 0.02, showMinusY = ca < -0.02;
-  const F = foot, L = layers;
 
-  // SF2 placement: images sit at the unit's footprint sub-rect + height inside the full grid box, so
-  // stretching/moving the placement (sliders/Generate) shows live. Gridlines/labels stay on the full face.
+  // The box IS the UNIT's bounding box — its length/width/height are the unit's real dimensions
+  // (the placement), NOT the full voxel grid. So the height reads in proportion to the length, images
+  // FILL the box faces, and the gridlines are the unit's own cells. SF2 sliders resize this box.
   const pl = effPlace(part);
-  const x0 = pl.ox, x1 = pl.ox + pl.bw, y0 = pl.oy, y1 = pl.oy + pl.bh, zt = pl.z0 + pl.Hv, zb = pl.z0;
-  // FACES (image projected, then gridlines + label over it). Corner order per face = (A origin, B=A+u, C=A+v).
-  // TOP (Z=L): img x→X, y→Y — at the footprint rect
-  { projImg(view.top, P(x0, y0, L), P(x1, y0, L), P(x0, y1, L)); faceGrid(P(0, 0, L), P(F, 0, L), P(0, F, L), F, F); label(P(0, 0, L), P(F, 0, L), P(0, F, L), 'TOP  ' + (F / VOX_PER_TILE).toFixed(2) + '×' + (F / VOX_PER_TILE).toFixed(2) + ' tiles'); }
-  // +X FRONT: img x→Y (width), y→down(Z)
-  if (showFront) { projImg(view.front, P(F, y0, zt), P(F, y1, zt), P(F, y0, zb)); faceGrid(P(F, 0, L), P(F, F, L), P(F, 0, 0), F, L); label(P(F, 0, L), P(F, F, L), P(F, 0, 0), 'FRONT'); }
-  // −X BACK (mirrored): img x→Y reversed
-  if (showBack) { projImg(view.back, P(0, y1, zt), P(0, y0, zt), P(0, y1, zb)); faceGrid(P(0, F, L), P(0, 0, L), P(0, F, 0), F, L); label(P(0, F, L), P(0, 0, L), P(0, F, 0), 'BACK'); }
-  // SIDE = the visible ±Y wall (far mirrored): img x→X (length), y→down(Z)
-  if (showPlusY) { projImg(view.side, P(x0, F, zt), P(x1, F, zt), P(x0, F, zb)); faceGrid(P(0, F, L), P(F, F, L), P(0, F, 0), F, L); label(P(0, F, L), P(F, F, L), P(0, F, 0), 'SIDE'); }
-  else if (showMinusY) { projImg(view.side, P(x1, 0, zt), P(x0, 0, zt), P(x1, 0, zb)); faceGrid(P(F, 0, L), P(0, 0, L), P(F, 0, 0), F, L); label(P(F, 0, L), P(0, 0, L), P(F, 0, 0), 'SIDE'); }
+  const x0 = pl.ox, x1 = pl.ox + pl.bw, y0 = pl.oy, y1 = pl.oy + pl.bh, zb = pl.z0, zt = pl.z0 + pl.Hv;
+  const nL = pl.bw, nW = pl.bh, nH = pl.Hv, tl = (v) => (v / VOX_PER_TILE).toFixed(2);
+  // FACES (image projected onto the FULL face, then gridlines + label). Corner order = (A origin, B=A+u, C=A+v).
+  // TOP (Z=zt): img x→X (length), y→Y (width)
+  { const A = P(x0, y0, zt), B = P(x1, y0, zt), C = P(x0, y1, zt); projImg(view.top, A, B, C); faceGrid(A, B, C, nL, nW); label(A, B, C, 'TOP  L' + tl(nL) + '×W' + tl(nW) + ' t'); }
+  // +X FRONT: img x→Y (width), y→down(Z height)
+  if (showFront) { const A = P(x1, y0, zt), B = P(x1, y1, zt), C = P(x1, y0, zb); projImg(view.front, A, B, C); faceGrid(A, B, C, nW, nH); label(A, B, C, 'FRONT  H' + tl(nH) + ' t'); }
+  // −X BACK (mirrored)
+  if (showBack) { const A = P(x0, y1, zt), B = P(x0, y0, zt), C = P(x0, y1, zb); projImg(view.back, A, B, C); faceGrid(A, B, C, nW, nH); label(A, B, C, 'BACK'); }
+  // SIDE = the visible ±Y wall (far mirrored): img x→X (length), y→down(Z height)
+  if (showPlusY) { const A = P(x0, y1, zt), B = P(x1, y1, zt), C = P(x0, y1, zb); projImg(view.side, A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
+  else if (showMinusY) { const A = P(x1, y0, zt), B = P(x0, y0, zt), C = P(x1, y0, zb); projImg(view.side, A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
 
-  // wireframe box edges (bold, over everything)
-  const c = [P(0, 0, 0), P(F, 0, 0), P(F, F, 0), P(0, F, 0), P(0, 0, L), P(F, 0, L), P(F, F, L), P(0, F, L)];
+  // wireframe = the unit's bounding box (placement)
+  const c = [P(x0, y0, zb), P(x1, y0, zb), P(x1, y1, zb), P(x0, y1, zb), P(x0, y0, zt), P(x1, y0, zt), P(x1, y1, zt), P(x0, y1, zt)];
   const E = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
   ctx.strokeStyle = 'rgba(95,224,255,0.9)'; ctx.lineWidth = 1.6;
   for (const [a, b] of E) { ctx.beginPath(); ctx.moveTo(c[a].x, c[a].y); ctx.lineTo(c[b].x, c[b].y); ctx.stroke(); }
