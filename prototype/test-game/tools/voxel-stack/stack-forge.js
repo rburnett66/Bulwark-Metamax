@@ -417,9 +417,10 @@ function buildVolume(partId, foot, layers) {
   // crop every view to its content, then register by a COMMON scale taken from the top's fit — so the
   // side's height maps PROPORTIONALLY (a long-barrel side doesn't get stretched vertically to fill layers).
   const tol = keyTolState[partId], pol = polyState[partId], pk = pickState[partId];
-  const topC = src.top ? keyedCropped(src.top, tol.top, pol.top, pk.top) : null;
-  const sideC = src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : null;
-  const frontC = src.front ? keyedCropped(src.front, tol.front, pol.front, pk.front) : (src.back ? keyedCropped(src.back, tol.back, pol.back, pk.back) : null);
+  const xf = imgXf[partId] || {};   // SF2 per-side alignment (scale/offset) folded into the carve
+  const topC = src.top ? xfCanvas(keyedCropped(src.top, tol.top, pol.top, pk.top), xf.top) : null;
+  const sideC = src.side ? xfCanvas(keyedCropped(src.side, tol.side, pol.side, pk.side), xf.side) : null;
+  const frontC = src.front ? xfCanvas(keyedCropped(src.front, tol.front, pol.front, pk.front), xf.front) : (src.back ? xfCanvas(keyedCropped(src.back, tol.back, pol.back, pk.back), xf.back) : null);
   const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
   // procedural barrel reserves a FORWARD margin so the body shrinks back and the tube protrudes past it
   const reach = (partId === 'turret' && state.barrelLen > 0) ? state.barrelLen : 0;
@@ -781,7 +782,8 @@ function drawDimBox(ctx, meta, el, az, part) {
   const PX = (X, Y) => cx + S * (X * ca - Y * sa);
   const PY = (X, Y, Z) => groundY + S * ((X * sa + Y * ca) * se - Z * h * ce);
   const P = (X, Y, Z) => ({ x: PX(X - cx0, Y - cy0), y: PY(X - cx0, Y - cy0, Z) });   // world voxel coords → screen
-  const view = imgs[part] || {};
+  const raw = imgs[part] || {}, xfp = imgXf[part] || {};
+  const view = { top: xfCanvas(raw.top, xfp.top), side: xfCanvas(raw.side, xfp.side), front: xfCanvas(raw.front, xfp.front), back: xfCanvas(raw.back, xfp.back) };   // per-side alignment
 
   // affine image map: image rect → the face parallelogram (o = img(0,0), u = img(w,0), v = img(0,h))
   const projImg = (img, o, u, v) => {
@@ -1130,6 +1132,18 @@ function resizePreview(w, h) {
 drawGameBoard();
 
 const imgs = { body: { top: null, side: null, front: null, back: null }, turret: { top: null, side: null, front: null, back: null } };
+// SF2 per-side ALIGNMENT: independent scale (sx,sy) + offset (ox,oy as fraction of the image) per view,
+// so a reference that doesn't match the box can be stretched/nudged to fit. Applied to the box projection
+// AND the carve (buildVolume) so Generate reflects the alignment.
+const mkXf = () => ({ top: { sx: 1, sy: 1, ox: 0, oy: 0 }, side: { sx: 1, sy: 1, ox: 0, oy: 0 }, front: { sx: 1, sy: 1, ox: 0, oy: 0 }, back: { sx: 1, sy: 1, ox: 0, oy: 0 } });
+const imgXf = { body: mkXf(), turret: mkXf() };
+function xfCanvas(im, xf) {
+  if (!im || !xf || (xf.sx === 1 && xf.sy === 1 && xf.ox === 0 && xf.oy === 0)) return im;
+  const w = im.width || im.naturalWidth, h = im.height || im.naturalHeight; if (!w || !h) return im;
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+  g.translate(w / 2 + (xf.ox || 0) * w, h / 2 + (xf.oy || 0) * h); g.scale(xf.sx || 1, xf.sy || 1); g.drawImage(im, -w / 2, -h / 2);
+  return c;
+}
 // per-slot flip: keep the raw source + H/V flags so flips compose from the original (no quality drift)
 const mkViews = (v) => ({ top: v(), side: v(), front: v(), back: v() });
 const srcImg = { body: mkViews(() => null), turret: mkViews(() => null) };
@@ -1772,7 +1786,7 @@ $('blen').oninput = (e) => { state.barrelLen = +e.target.value; $('blenV').textC
 $('brad').oninput = (e) => { state.barrelRad = +e.target.value; $('bradV').textContent = state.barrelRad; rebuildSlices(); };
 $('belev').oninput = (e) => { state.barrelElev = +e.target.value; $('belevV').textContent = state.barrelElev; rebuildSlices(); };
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
-$('dimBox').onchange = (e) => { state.showDimBox = e.target.checked; voxSig = ''; const r = $('boxSizeRow'); if (r) r.style.display = e.target.checked ? '' : 'none'; if (e.target.checked) boxSyncSliders(); };   // SF1 toggle + SF2 sizing panel
+$('dimBox').onchange = (e) => { state.showDimBox = e.target.checked; voxSig = ''; const r = $('boxSizeRow'); if (r) r.style.display = e.target.checked ? '' : 'none'; if (e.target.checked) { boxSyncSliders(); xfSyncSliders(); } };   // SF1 toggle + SF2 sizing panel
 
 // ── SF2: size & place the reference images in the dim box, then Generate the geometry ──
 const boxPart = () => (state.part === 'turret' ? 'turret' : 'body');
@@ -1805,6 +1819,25 @@ if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit
   const part = boxPart(); geomState[part] = { auto: true, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top' };
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
 };
+
+// SF2 per-side ALIGNMENT: select a side, then high-res scale/align sliders stretch & nudge that image.
+let boxSide = 'top';
+function xfSyncSliders() {
+  const xf = imgXf[boxPart()][boxSide] || { sx: 1, sy: 1, ox: 0, oy: 0 };
+  const set = (id, v) => { const el = $(id); if (el) el.value = String(v); const lv = $(id + 'V'); if (lv) lv.textContent = (+v).toFixed(2); };
+  set('xfSx', xf.sx); set('xfSy', xf.sy); set('xfOx', xf.ox); set('xfOy', xf.oy);
+}
+if ($('boxSideSeg')) $('boxSideSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; boxSide = b.dataset.v; [...$('boxSideSeg').children].forEach((c) => c.classList.toggle('on', c === b)); xfSyncSliders(); };
+function xfEdit(field, val, live) {
+  imgXf[boxPart()][boxSide][field] = val;
+  const lv = $({ sx: 'xfSxV', sy: 'xfSyV', ox: 'xfOxV', oy: 'xfOyV' }[field]); if (lv) lv.textContent = val.toFixed(2);
+  if (live) { voxSig = ''; } else { gridModel = null; rebuildSlices(); scheduleAutosave(); }   // input = redraw box; release = re-carve
+}
+if ($('xfSx')) { $('xfSx').oninput = (e) => xfEdit('sx', +e.target.value, true); $('xfSx').onchange = (e) => xfEdit('sx', +e.target.value, false); }
+if ($('xfSy')) { $('xfSy').oninput = (e) => xfEdit('sy', +e.target.value, true); $('xfSy').onchange = (e) => xfEdit('sy', +e.target.value, false); }
+if ($('xfOx')) { $('xfOx').oninput = (e) => xfEdit('ox', +e.target.value, true); $('xfOx').onchange = (e) => xfEdit('ox', +e.target.value, false); }
+if ($('xfOy')) { $('xfOy').oninput = (e) => xfEdit('oy', +e.target.value, true); $('xfOy').onchange = (e) => xfEdit('oy', +e.target.value, false); }
+if ($('xfReset')) $('xfReset').onclick = () => { imgXf[boxPart()][boxSide] = { sx: 1, sy: 1, ox: 0, oy: 0 }; xfSyncSliders(); gridModel = null; rebuildSlices(); scheduleAutosave(); };
 $('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
 $('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); rebuildSlices(); };
@@ -3283,7 +3316,8 @@ function snapshotProject(idOverride) {
     state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, picks: pickState, images, vox,
     palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop],
     voxEdit: { body: [...voxEdit.body], turret: [...voxEdit.turret] },
-    geom: { body: { ...geomState.body }, turret: { ...geomState.turret } } };
+    geom: { body: { ...geomState.body }, turret: { ...geomState.turret } },
+    imgXf: { body: JSON.parse(JSON.stringify(imgXf.body)), turret: JSON.parse(JSON.stringify(imgXf.turret)) } };   // SF2 per-side alignment
 }
 function syncAllControls() {
   const set = (id, val, lab) => { $(id).value = val; if (lab !== undefined) $(id + 'V').textContent = lab; };
@@ -3322,6 +3356,7 @@ async function loadProject(p) {
     voxEdit.body.clear(); voxEdit.turret.clear();
     if (p.voxEdit) { for (const [k, v] of p.voxEdit.body || []) voxEdit.body.set(k, v); for (const [k, v] of p.voxEdit.turret || []) voxEdit.turret.set(k, v); }
     for (const part of ['body', 'turret']) geomState[part] = (p.geom && p.geom[part]) ? { ...p.geom[part] } : { auto: true, bottomFrom: 'top' };  // v1 projects → auto (identical to before)
+    for (const part of ['body', 'turret']) imgXf[part] = (p.imgXf && p.imgXf[part]) ? p.imgXf[part] : mkXf();   // SF2 per-side alignment
     for (const part of ['body', 'turret']) {
       const pv = p.vox && p.vox[part];
       voxPart[part] = pv ? { nx: pv.nx, ny: pv.ny, nz: pv.nz, data: u8FromB64(pv.b64) } : null;
