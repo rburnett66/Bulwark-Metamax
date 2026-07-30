@@ -1911,10 +1911,31 @@ function mirrorGrid(axis, srcLow) {
   }
   gridModel = null; rebuildSlices(); scheduleAutosave();
 }
-if ($('gridMirrorLR')) $('gridMirrorLR').onclick = () => mirrorGrid('col', true);    // left → right, across the vertical centreline
-if ($('gridMirrorRL')) $('gridMirrorRL').onclick = () => mirrorGrid('col', false);   // right → left
-if ($('gridMirrorTB')) $('gridMirrorTB').onclick = () => mirrorGrid('row', true);    // top → bottom, across the horizontal centreline
-if ($('gridMirrorBT')) $('gridMirrorBT').onclick = () => mirrorGrid('row', false);   // bottom → top
+// WORLD-axis mirror (owner: the old view-relative mirror folded the screen axis, so 'L-R' in the top/side
+// view mirrored FRONT↔BACK instead of left↔right). These fold a fixed WORLD axis regardless of facing —
+// matching the compass: left↔right = Y, front↔back = X — so a mirror always means what its label says.
+function mirrorWorld(axis, srcSecond) {
+  const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part), N = foot * foot;
+  pushUndo();
+  const m = buildModel(part, foot, layers), ed = voxEdit[part];
+  const cap = (axis === 'z') ? layers : foot, c2 = cap - 1;
+  const coord = (x, y, z) => (axis === 'x' ? x : axis === 'y' ? y : z);
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+    const a = coord(x, y, z);
+    if (srcSecond ? (a * 2 <= c2) : (a * 2 >= c2)) continue;   // write only the TARGET half
+    const sa = c2 - a, sx = axis === 'x' ? sa : x, sy = axis === 'y' ? sa : y, sz = axis === 'z' ? sa : z;
+    const k = z * N + y * foot + x;
+    if (m.filled(sx, sy, sz)) { const cc = (sz * N + sy * foot + sx) * 3; ed.set(k, [m.vcol[cc], m.vcol[cc + 1], m.vcol[cc + 2]]); }
+    else ed.set(k, 'del');
+  }
+  gridModel = null; rebuildSlices(); scheduleAutosave();
+}
+if ($('gridMirrorLR')) $('gridMirrorLR').onclick = () => mirrorWorld('y', false);   // left↔right (world Y) — bilateral symmetry
+if ($('gridMirrorRL')) $('gridMirrorRL').onclick = () => mirrorWorld('y', true);
+if ($('gridMirrorTB')) $('gridMirrorTB').onclick = () => mirrorWorld('x', false);   // front↔back (world X)
+if ($('gridMirrorBT')) $('gridMirrorBT').onclick = () => mirrorWorld('x', true);
+if ($('gridUndoBtn')) $('gridUndoBtn').onclick = () => gridUndo();
+if ($('gridRedoBtn')) $('gridRedoBtn').onclick = () => gridRedo();
 // select every cell on the current layer (a whole-layer selection to paint/erase within)
 if ($('gridSelLayer')) $('gridSelLayer').onclick = () => { const g = gridGeom; if (!g) return; gridSel = { c0: 0, r0: 0, c1: g.cols - 1, r1: g.rows - 1 }; gridSelView = gridView; gridSelVox = buildSelVox(true); renderGridView(); };
 // delete EVERY voxel in the active selection (the surface voxels on Layer 0, or the slice voxels on a real
