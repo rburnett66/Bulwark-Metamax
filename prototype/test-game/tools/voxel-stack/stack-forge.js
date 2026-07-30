@@ -332,7 +332,12 @@ function autoSpans(topC, sideC, frontC, foot, layers, reach) {
 function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
   const g = geomState[partId];
   if (!g || g.auto || !g.spanX) return autoSpans(topC, sideC, frontC, foot, layers, reach);
-  const span = (s, cap) => { let lo = Math.max(0, Math.min(cap - 1, s.lo | 0)), hi = Math.max(lo + 1, Math.min(cap, s.hi | 0)); return { lo, hi }; };
+  // INVARIANT: footOf/gridLayersOf make the grid ⊇ geometry, so this clamp should be a no-op. If it ever fires,
+  // the grid is smaller than the geometry (only possible at the hard 128 ceiling) — make that LOUD, never silent.
+  const span = (s, cap) => {
+    if ((s.hi | 0) > cap && !geomSpans._warned) { geomSpans._warned = true; console.warn(`[stack-forge] ${partId}: geometry span ${s.hi} exceeds grid ${cap} — CLAMPED (128-voxel ceiling). Reduce the unit or split it.`); }
+    let lo = Math.max(0, Math.min(cap - 1, s.lo | 0)), hi = Math.max(lo + 1, Math.min(cap, s.hi | 0)); return { lo, hi };
+  };
   const spanZ = span(g.spanZ, layers);
   return { spanX: span(g.spanX, foot), spanY: span(g.spanY, foot), spanZ, Hraw: spanZ.hi - spanZ.lo };
 }
@@ -1193,8 +1198,18 @@ const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim:
   decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30,   // decor on-map scale + procedural-tree params (Stories 6,7)
   showDimBox: false,   // SF1: the 3D dimension box + per-face view-image projections overlay
   turretFoot: 64 };    // SF3: turret footprint (voxels), INDEPENDENT of base foot — a turret can be smaller than the hull
-// SF3: the footprint (voxels) for a part — turret has its own; body uses the base foot.
-const footOf = (part) => (part === 'turret' ? (state.turretFoot || state.foot) : state.foot);
+// ── SINGLE-SOURCE GRID INVARIANT (owner 2026-07-30) ─────────────────────────────────────────────────────
+// The recurring "clamp / chop / geometry-vs-paint mismatch" had ONE root cause: the carve grid (foot×foot×
+// layers) and the geometry spans were two independently-mutated states, and geomSpans reconciled a conflict
+// by SILENTLY clamping the spans to the grid (dropping voxels). Fix it structurally: the EFFECTIVE grid is a
+// DERIVED value = max(requested resolution, committed geometry extent), computed HERE — the one accessor every
+// consumer reads. So `grid ⊇ geometry` holds BY CONSTRUCTION; no mutator (res / Cube / import / load / drag)
+// can make the carve clamp. The only residual clamp is the hard 128-voxel ceiling, which updateDims flags red.
+// RES_STEPS / snapRes / effFoot / effLayers come from grid-fit.js (the single, unit-tested source of the math).
+function geomExtentXY(part) { const g = geomState[part]; return (g && !g.auto && g.spanX) ? Math.max(g.spanX.hi, g.spanY.hi) : 0; }
+function geomExtentZ(part) { const g = geomState[part]; return (g && !g.auto && g.spanZ) ? g.spanZ.hi : 0; }
+// SF3: the footprint (voxels) for a part — turret has its own; body uses the base foot. Never smaller than the geometry.
+const footOf = (part) => effFoot(part === 'turret' ? (state.turretFoot || state.foot) : state.foot, geomExtentXY(part));
 let bodyFaces = null, turretFaces = null, bodyBaked = null, turretBaked = null, lastPack = null;
 let voxMeta = null, voxTex = null, voxSpr = null, voxShadow = null, voxSig = '';   // orbit cube-render canvas
 let gVoxMeta = null, gVoxTex = null, gVoxSpr = null, gVoxShadow = null;            // in-game inset canvas
@@ -1264,7 +1279,7 @@ const GEOAX = {
 };
 const spanKey = { x: 'spanX', y: 'spanY', z: 'spanZ' };
 const gridPart = () => (state.part === 'turret' ? 'turret' : 'body');
-const gridLayersOf = (part) => (part === 'turret' ? state.turretLayers : state.bodyLayers);
+const gridLayersOf = (part) => effLayers(part === 'turret' ? state.turretLayers : state.bodyLayers, geomExtentZ(part));
 // LAYER 0 = raycast "surface": the target voxel at a grid cell is the FIRST filled voxel along the view's
 // depth axis (what a ray straight into the model would hit), so painting Layer 0 recolours the FACING
 // surface and it shows in the 3D view. Deeper layers address their exact depth slice as before.
@@ -1675,21 +1690,18 @@ function renderGridView() {
   }
 }
 
-// Grow the carve grid to hold the geometry spans instead of letting geomSpans CLAMP them (which chops the
-// model in the grid — owner: "fix the grid view clamping"). Spans can outrun foot/layers after ⬛ Cube shrinks
-// foot, a Resolution drop, or a loaded unit; here we bump Resolution (foot) to the nearest step that fits the
-// footprint and raise layers to fit the height, so the grid always shows the whole model. Only-grow (never
-// shrinks), so a unit longer than it is tall keeps its length. 128 voxels is the hard ceiling.
+// PERSIST the derived effective grid (footOf/gridLayersOf already guarantee grid ⊇ geometry for every reader;
+// this writes it back into state + the UI so export, the sliders, and the Resolution dropdown all agree). It
+// only ever grows to fit the geometry — a unit longer than it is tall keeps its length; 128 voxels is the hard
+// ceiling. This is the single reconciliation point, called at the top of every carve (rebuildSlices).
 function ensureGridFits() {
-  const res = [32, 48, 64, 96, 128]; let changed = false;
-  for (const part of ['body', 'turret']) {
-    const g = geomState[part]; if (!g || g.auto || !g.spanX) continue;
-    const isT = part === 'turret', curFoot = isT ? (state.turretFoot || state.foot) : state.foot;
-    const need = Math.max(g.spanX.hi, g.spanY.hi);
-    if (need > curFoot) { const nf = res.find((r) => r >= need) || 128; if (isT) { state.turretFoot = nf; if ($('turretRes')) $('turretRes').value = nf; } else { state.foot = nf; if ($('res')) $('res').value = nf; } changed = true; }
-    const lid = isT ? 'turretLayers' : 'bodyLayers', zNeed = Math.min(128, g.spanZ.hi);
-    if (zNeed > state[lid]) { const el = $(lid); if (el && +el.max < zNeed) el.max = String(zNeed); state[lid] = zNeed; if (el) { el.value = zNeed; const lv = $(lid + 'V'); if (lv) lv.textContent = String(zNeed); } changed = true; }
-  }
+  let changed = false;
+  const setFoot = (key, sel, v) => { if (v !== state[key]) { state[key] = v; const el = $(sel); if (el) el.value = RES_STEPS.includes(v) ? v : ''; changed = true; } };
+  const setLay = (key, sel, v) => { if (v !== state[key]) { const el = $(sel); if (el && +el.max < v) el.max = String(v); state[key] = v; if (el) { el.value = v; const lv = $(sel + 'V'); if (lv) lv.textContent = String(v); } changed = true; } };
+  setFoot('foot', 'res', footOf('body'));
+  if (geomExtentXY('turret')) setFoot('turretFoot', 'turretRes', footOf('turret'));
+  setLay('bodyLayers', 'bodyLayers', gridLayersOf('body'));
+  setLay('turretLayers', 'turretLayers', gridLayersOf('turret'));
   if (changed) syncSizeUI();
 }
 function rebuildSlices() {
