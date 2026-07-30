@@ -1371,7 +1371,7 @@ function renderGridView() {
   // inline PAINT PALETTE — the model's colours as swatches, shown only in Paint mode (no need to open the Palette window)
   const gpal = $('gridPalette');
   if (gpal) {
-    const showPal = !geomMode && gridTool === 'paint';
+    const showPal = !geomMode && (gridTool === 'paint' || gridTool === 'add');   // Add uses the paint colour too
     gpal.style.display = showPal ? 'flex' : 'none';
     const psig = part + ':' + foot + ':' + layers + ':' + (base.palette ? base.palette.length : 0);
     if (showPal && gpal.dataset.sig !== psig) {
@@ -1846,9 +1846,16 @@ if ($('xfOx')) { $('xfOx').oninput = (e) => xfEdit('ox', +e.target.value, true);
 if ($('xfOy')) { $('xfOy').oninput = (e) => xfEdit('oy', +e.target.value, true); $('xfOy').onchange = (e) => xfEdit('oy', +e.target.value, false); }
 if ($('xfReset')) $('xfReset').onclick = () => { imgXf[boxPart()][boxSide] = { sx: 1, sy: 1, ox: 0, oy: 0 }; xfSyncSliders(); gridModel = null; rebuildSlices(); scheduleAutosave(); };
 $('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
-// ⬛ Cube: make the build volume a true voxel cube — Base layers = Resolution (length). Height then reads
-// relative to length instead of the free-floating 128 max; on-screen height is still scaled by Cube height (zScale).
-if ($('bodyCube')) $('bodyCube').onclick = () => { setLayers('body', clamp(state.foot, 4, 128)); rebuildSlices(); };
+// ⬛ Cube: make the build volume a true voxel cube driven by the HEIGHT you set — footprint (length×width) snaps
+// to match Base layers (owner: "if the height is 64, set base to 64×64"). Footprint is a discrete Resolution, so
+// height snaps to the nearest one and both axes end equal. On-screen height is still scaled by Cube height (zScale).
+if ($('bodyCube')) $('bodyCube').onclick = () => {
+  const res = [32, 48, 64, 96, 128];
+  const target = res.reduce((a, b) => Math.abs(b - state.bodyLayers) <= Math.abs(a - state.bodyLayers) ? b : a);
+  state.foot = target; if ($('res')) $('res').value = target;      // footprint = height (nearest Resolution)
+  setLayers('body', target);                                       // exact cube: layers = foot = target
+  syncSizeUI(); rebuildSlices();
+};
 $('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); rebuildSlices(); };
 $('turretRes').onchange = (e) => { state.turretFoot = +e.target.value; syncSizeUI(); rebuildSlices(); };   // SF3
@@ -2241,25 +2248,37 @@ document.addEventListener('keydown', (e) => {
     }
     return [150, 150, 150];
   };
-  const editAt = (e, erase) => {
+  const editAt = (e, mode) => {   // mode: 'erase' | 'paint' | 'add'
     const g = gridGeom; if (!g || !g.editable) return false;
     const r = cv.getBoundingClientRect();
     const px = (e.clientX - r.left) * (cv.width / r.width), py = (e.clientY - r.top) * (cv.height / r.height);
     const cx = Math.floor((px - g.ox) / g.cell), cy = Math.floor((py - g.oy) / g.cellV);
     if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows) return false;
-    const [x, y, z] = gridTargetVox(g, cx, cy), N = g.foot * g.foot, k = z * N + y * g.foot + x, ed = voxEdit[g.part];
-    // a selection MASKS editing to the SELECTED VOXELS (not a view rect): pick objects once in Layer 0, then
+    let [x, y, z] = gridTargetVox(g, cx, cy);
+    // ADD is the mirror of Delete. On a real Layer slice it fills that slice's cell. On Layer 0 (surface) it
+    // EXTRUDES one step toward the camera from the first-hit voxel (build the surface out); an empty column
+    // seeds at the far/ground plane so the new voxel is grounded, not floating at the front.
+    if (mode === 'add' && g.slice === 0) {
+      let s0 = -1;
+      for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) { s0 = s; break; } }
+      if (s0 === 0) return false;                                    // already at the front face — nothing to extrude onto
+      [x, y, z] = g.toVox(cx, cy, s0 > 0 ? s0 - 1 : g.depth - 1);
+    }
+    const N = g.foot * g.foot, k = z * N + y * g.foot + x, ed = voxEdit[g.part];
+    // a selection MASKS erase/paint to the SELECTED VOXELS (not a view rect): pick objects once in Layer 0, then
     // paint their front/side/back faces across facings — corner voxels paint from any view — without reselecting.
-    if (gridSelVox && gridSelVox.part === g.part && !gridSelVox.set.has(k)) return false;
+    // (Add is exempt: you're spawning NEW cells that aren't in the selection set.)
+    if (mode !== 'add' && gridSelVox && gridSelVox.part === g.part && !gridSelVox.set.has(k)) return false;
     const ov = ed.get(k), curFilled = ov !== undefined ? ov !== 'del' : gridModel.filled(x, y, z);
-    if (erase) { if (!curFilled) return false; ed.set(k, 'del'); }   // nothing to remove here
+    if (mode === 'erase') { if (!curFilled) return false; ed.set(k, 'del'); }        // nothing to remove here
+    else if (mode === 'add') { if (curFilled) return false; ed.set(k, gridPaintRGB()); }  // only spawn on EMPTY cells (mirror of erase)
     // paint: RECOLOUR a filled voxel, or (on a real layer) add one where empty. Layer 0 = surface → recolour
     // the facing voxel ONLY, never spawn a new voxel on an empty column.
     else { if (g.slice === 0 && !curFilled) return false; ed.set(k, gridPaintRGB()); }
     renderGridView();                                                // live repaint (overlay is layered on the cached carve)
     return true;
   };
-  let painting = false, dirty = false, boxing = null;
+  let painting = false, dirty = false, boxing = null, paintMode = 'erase';   // paintMode: the action held for the whole stroke
   const cellOf = (e) => { const g = gridGeom; if (!g) return null; const { px, py } = ptCell(e); return { cx: clamp(Math.floor((px - g.ox) / g.cell), 0, g.cols - 1), cy: clamp(Math.floor((py - g.oy) / g.cellV), 0, g.rows - 1) }; };
   // ── GEOMETRY drag (owner 2026-07-18): in Geometry mode, drag the box edges to stretch a dimension or
   // the interior to move it. Edits write the shared world-axis spans in geomState, so linked views move
@@ -2336,14 +2355,15 @@ document.addEventListener('keydown', (e) => {
       boxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy }; gridBoxSel = boxing; renderGridView();
       cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
     }
-    const erase = gridTool === 'erase' || gridTool === 'box' || e.button === 2;   // right-drag erases even in box mode
+    // right-drag always erases; otherwise the active tool ('add' spawns, 'paint' recolours, 'erase'/'box' delete)
+    paintMode = (e.button === 2 || gridTool === 'erase' || gridTool === 'box') ? 'erase' : gridTool;
     const before = snapVoxEdit();                                  // capture BEFORE the stroke for one undo entry
-    if (editAt(e, erase)) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
+    if (editAt(e, paintMode)) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
   });
   cv.addEventListener('pointermove', (e) => {
     if (geomDrag) geomMove(e);
     else if (boxing) { const c = cellOf(e); if (c) { boxing.c1 = c.cx; boxing.r1 = c.cy; gridBoxSel = boxing; renderGridView(); } }
-    else if (painting) editAt(e, gridTool === 'erase' || gridTool === 'box' || (e.buttons & 2));
+    else if (painting) editAt(e, (e.buttons & 2) ? 'erase' : paintMode);   // right-drag mid-stroke still erases
   });
   const finish = () => {
     if (boxing) {                                                  // release the marquee → PERSISTENT selection (stays until ESC)
