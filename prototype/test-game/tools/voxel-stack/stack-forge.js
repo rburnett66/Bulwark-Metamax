@@ -1824,13 +1824,13 @@ if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit
 let boxSide = 'top';
 function xfSyncSliders() {
   const xf = imgXf[boxPart()][boxSide] || { sx: 1, sy: 1, ox: 0, oy: 0 };
-  const set = (id, v) => { const el = $(id); if (el) el.value = String(v); const lv = $(id + 'V'); if (lv) lv.textContent = (+v).toFixed(2); };
+  const set = (id, v) => { const el = $(id); if (el) el.value = String(v); const lv = $(id + 'V'); if (lv) lv.textContent = (+v).toFixed(3); };
   set('xfSx', xf.sx); set('xfSy', xf.sy); set('xfOx', xf.ox); set('xfOy', xf.oy);
 }
 if ($('boxSideSeg')) $('boxSideSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; boxSide = b.dataset.v; [...$('boxSideSeg').children].forEach((c) => c.classList.toggle('on', c === b)); xfSyncSliders(); };
 function xfEdit(field, val, live) {
   imgXf[boxPart()][boxSide][field] = val;
-  const lv = $({ sx: 'xfSxV', sy: 'xfSyV', ox: 'xfOxV', oy: 'xfOyV' }[field]); if (lv) lv.textContent = val.toFixed(2);
+  const lv = $({ sx: 'xfSxV', sy: 'xfSyV', ox: 'xfOxV', oy: 'xfOyV' }[field]); if (lv) lv.textContent = val.toFixed(3);
   if (live) { voxSig = ''; } else { gridModel = null; rebuildSlices(); scheduleAutosave(); }   // input = redraw box; release = re-carve
 }
 if ($('xfSx')) { $('xfSx').oninput = (e) => xfEdit('sx', +e.target.value, true); $('xfSx').onchange = (e) => xfEdit('sx', +e.target.value, false); }
