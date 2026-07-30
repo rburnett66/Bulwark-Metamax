@@ -1846,6 +1846,9 @@ if ($('xfOx')) { $('xfOx').oninput = (e) => xfEdit('ox', +e.target.value, true);
 if ($('xfOy')) { $('xfOy').oninput = (e) => xfEdit('oy', +e.target.value, true); $('xfOy').onchange = (e) => xfEdit('oy', +e.target.value, false); }
 if ($('xfReset')) $('xfReset').onclick = () => { imgXf[boxPart()][boxSide] = { sx: 1, sy: 1, ox: 0, oy: 0 }; xfSyncSliders(); gridModel = null; rebuildSlices(); scheduleAutosave(); };
 $('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
+// ⬛ Cube: make the build volume a true voxel cube — Base layers = Resolution (length). Height then reads
+// relative to length instead of the free-floating 128 max; on-screen height is still scaled by Cube height (zScale).
+if ($('bodyCube')) $('bodyCube').onclick = () => { setLayers('body', clamp(state.foot, 4, 128)); rebuildSlices(); };
 $('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); rebuildSlices(); };
 $('turretRes').onchange = (e) => { state.turretFoot = +e.target.value; syncSizeUI(); rebuildSlices(); };   // SF3
