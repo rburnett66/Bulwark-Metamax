@@ -815,9 +815,11 @@ function drawDimBox(ctx, meta, el, az, part) {
   if (showFront) { const A = P(x1, y0, zt), B = P(x1, y1, zt), C = P(x1, y0, zb); projImg(view.front, A, B, C); faceGrid(A, B, C, nW, nH); label(A, B, C, 'FRONT  H' + tl(nH) + ' t'); }
   // −X BACK (mirrored)
   if (showBack) { const A = P(x0, y1, zt), B = P(x0, y0, zt), C = P(x0, y1, zb); projImg(view.back, A, B, C); faceGrid(A, B, C, nW, nH); label(A, B, C, 'BACK'); }
-  // SIDE = the visible ±Y wall (far mirrored): img x→X (length), y→down(Z height)
+  // SIDE = the visible ±Y wall. Both walls put the unit's FRONT at the +X (x1) end, so they read as
+  // natural mirror images when you orbit around (owner: the left side was reversed vs top/front — it
+  // must mirror the right). img x→X (length, back→front = x0→x1), y→down(Z height).
   if (showPlusY) { const A = P(x0, y1, zt), B = P(x1, y1, zt), C = P(x0, y1, zb); projImg(view.side, A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
-  else if (showMinusY) { const A = P(x1, y0, zt), B = P(x0, y0, zt), C = P(x1, y0, zb); projImg(view.side, A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
+  else if (showMinusY) { const A = P(x0, y0, zt), B = P(x1, y0, zt), C = P(x0, y0, zb); projImg(view.side, A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
 
   // wireframe = the unit's bounding box (placement)
   const c = [P(x0, y0, zb), P(x1, y0, zb), P(x1, y1, zb), P(x0, y1, zb), P(x0, y0, zt), P(x1, y0, zt), P(x1, y1, zt), P(x0, y1, zt)];
