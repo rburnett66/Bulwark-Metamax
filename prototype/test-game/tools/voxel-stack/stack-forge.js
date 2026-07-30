@@ -439,7 +439,7 @@ function buildVolume(partId, foot, layers) {
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
   const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to the common Hv)
   const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
-  const backC = src.back ? keyedCropped(src.back, tol.back, pol.back, pk.back) : null; // colour-only: paints the −x walls
+  const backC = src.back ? xfCanvas(keyedCropped(src.back, tol.back, pol.back, pk.back), xf.back) : null; // colour-only: paints the −x walls (xf.back → matches the box's Back projection)
   const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
   const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= z0 && z < z0 + Hv && !!sideG.m[(z - z0) * bw + (x - ox)]) : (z >= z0 && z < z0 + Hv);
   const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv && !!frontG.m[(z - z0) * bh + (y - oy)]) : (z >= z0 && z < z0 + Hv);
