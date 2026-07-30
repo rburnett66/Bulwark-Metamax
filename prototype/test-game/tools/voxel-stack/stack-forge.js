@@ -1802,15 +1802,19 @@ const boxPart = () => (state.part === 'turret' ? 'turret' : 'body');
 function boxSyncSliders() {
   const part = boxPart(), foot = footOf(part), layers = (part === 'turret' ? state.turretLayers : state.bodyLayers);
   const p = effPlace(part);
+  // Size/place up to the hard 128 voxel ceiling — NOT the current foot/layers. The box may exceed the current
+  // grid; Generate grows Resolution/layers to fit so the carve never clamps (owner: "the carve clamps are the problem").
   const set = (id, v, max) => { const el = $(id); if (el) { el.max = String(max); el.value = String(Math.round(v)); } const lv = $(id + 'V'); if (lv) lv.textContent = String(Math.round(v)); };
-  set('boxLen', p.bw, foot); set('boxWid', p.bh, foot); set('boxHt', p.Hv, layers);
-  set('boxOx', p.ox, Math.max(0, foot - 1)); set('boxOy', p.oy, Math.max(0, foot - 1));
+  set('boxLen', p.bw, 128); set('boxWid', p.bh, 128); set('boxHt', p.Hv, 128);
+  set('boxOx', p.ox, Math.max(0, 128 - p.bw)); set('boxOy', p.oy, Math.max(0, 128 - p.bh));
 }
 function boxEdit(field, val) {
   const part = boxPart();
   if (!boxPlace[part]) boxPlace[part] = { ...effPlace(part) };   // start from the current placement
-  boxPlace[part][field] = val;
-  const lv = $({ bw: 'boxLenV', bh: 'boxWidV', Hv: 'boxHtV', ox: 'boxOxV', oy: 'boxOyV' }[field]); if (lv) lv.textContent = String(val);
+  const p = boxPlace[part]; p[field] = val;
+  p.bw = clamp(p.bw || 1, 1, 128); p.bh = clamp(p.bh || 1, 1, 128); p.Hv = clamp(p.Hv || 1, 1, 128);   // hard voxel ceiling
+  p.ox = clamp(p.ox || 0, 0, 128 - p.bw); p.oy = clamp(p.oy || 0, 0, 128 - p.bh); p.z0 = clamp(p.z0 || 0, 0, 128 - p.Hv);
+  const lv = $({ bw: 'boxLenV', bh: 'boxWidV', Hv: 'boxHtV', ox: 'boxOxV', oy: 'boxOyV' }[field]); if (lv) lv.textContent = String(Math.round(p[field]));
   voxSig = '';   // redraw the box with the new placement
 }
 if ($('boxLen')) $('boxLen').oninput = (e) => boxEdit('bw', +e.target.value);
@@ -1820,8 +1824,22 @@ if ($('boxOx')) $('boxOx').oninput = (e) => boxEdit('ox', +e.target.value);
 if ($('boxOy')) $('boxOy').oninput = (e) => boxEdit('oy', +e.target.value);
 if ($('boxGen')) $('boxGen').onclick = () => {   // commit the pending placement into the carve (overrides autoSpans)
   const part = boxPart(), p = boxPlace[part] || effPlace(part);
+  // The carve grid is foot×foot×layers; explicit spans past it get CLAMPED, which chops the model (owner:
+  // "the carve clamps are the problem" — box looks perfect, grid chopped in the back). So GROW the grid to hold
+  // the box the owner sized: raise Resolution (foot) to the nearest step that fits the footprint, and raise
+  // layers to fit the height. Only the hard 128 ceiling can still clamp. Growing foot enlarges the on-board
+  // unit (voxels/tile is constant) — adjust overall size via Unit-size after if needed.
+  const res = [32, 48, 64, 96, 128];
+  const footNeed = Math.max(p.ox + p.bw, p.oy + p.bh);
+  const newFoot = res.find((r) => r >= footNeed) || 128;
+  if (part === 'turret') { if (newFoot > (state.turretFoot || state.foot)) { state.turretFoot = newFoot; if ($('turretRes')) $('turretRes').value = newFoot; } }
+  else if (newFoot > state.foot) { state.foot = newFoot; if ($('res')) $('res').value = newFoot; }
+  syncSizeUI();
+  const layersNeed = (p.z0 || 0) + p.Hv, lid = part === 'turret' ? 'turretLayers' : 'bodyLayers';
+  if (layersNeed > state[lid]) { const el = $(lid); if (el && +el.max < layersNeed) el.max = String(Math.min(128, layersNeed)); setLayers(part === 'turret' ? 'turret' : 'body', Math.min(128, layersNeed)); }
+  const foot = footOf(part), layers = state[lid];   // grown grid — spans now fit without clamping (except the 128 ceiling)
   geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
-    spanX: { lo: p.ox, hi: p.ox + p.bw }, spanY: { lo: p.oy, hi: p.oy + p.bh }, spanZ: { lo: p.z0 || 0, hi: (p.z0 || 0) + p.Hv } };
+    spanX: { lo: p.ox, hi: Math.min(foot, p.ox + p.bw) }, spanY: { lo: p.oy, hi: Math.min(foot, p.oy + p.bh) }, spanZ: { lo: p.z0 || 0, hi: Math.min(layers, (p.z0 || 0) + p.Hv) } };
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
 };
 if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit
