@@ -110,6 +110,19 @@
     .palSw.dropped::before { content:'🚫'; position:absolute; top:-9px; left:-5px; font-size:11px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.8); }
     .palSw.dropped { opacity:.4; }
     #palSV, #palHue { border:1px solid var(--line); border-radius:6px; cursor:crosshair; touch-action:none; }
+    #remapModal { position:absolute; left:490px; top:12px; width:472px; min-width:320px; min-height:230px; max-height:calc(100% - 24px); z-index:21;
+      display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; resize:both; box-shadow:0 18px 60px rgba(0,0,0,.6); }
+    #remapModal[hidden] { display:none; }
+    #remapDrag { font-size:10px; letter-spacing:.2em; color:var(--muted); margin:0; padding:11px 14px 8px; text-transform:uppercase; cursor:move; flex:0 0 auto; }
+    #remapBox { overflow:auto; flex:1 1 auto; min-height:0; }
+    .rmSw { width:30px; height:26px; border:2px solid var(--line); border-radius:5px; cursor:grab; position:relative; }
+    .rmSw[draggable=true]:active { cursor:grabbing; }
+    .rmSw.assigned { opacity:.35; }                                   /* a top colour that's been mapped */
+    .rmSw .tag { position:absolute; bottom:-5px; right:-3px; font-size:8px; color:var(--gold); background:var(--panel); border-radius:3px; padding:0 1px; }
+    .rmSlot { width:30px; height:26px; border:2px dashed var(--line); border-radius:5px; position:relative; }
+    .rmSlot.filled { border-style:solid; }
+    .rmSlot.over { border-color:var(--gold); box-shadow:0 0 0 2px rgba(242,200,105,.4); }
+    .rmSlot .n { position:absolute; top:-6px; left:-2px; font-size:8px; color:var(--muted); }
     .palChip { width:40px; height:24px; border:1px solid var(--line); border-radius:5px; display:inline-block; vertical-align:middle; }
     #loadModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
     #loadModal[hidden] { display:none; }
@@ -389,6 +402,24 @@
       <button class="ghost" id="palClearKeep" style="width:auto;padding:6px 12px;margin:0">Clear keep/drop</button>
       <span class="note" id="palState" style="margin:0;flex:1"></span>
       <button class="ghost" id="palClose" style="width:auto;padding:6px 14px;margin:0">Done</button>
+    </div>
+  </div>
+</div>
+<div id="remapModal" hidden>
+  <h2 id="remapDrag">Palette remap — drag a top colour onto a bottom slot · drag header to move</h2>
+  <div id="remapBox" style="padding:12px 14px">
+    <div class="note" style="margin:0 0 6px">TOP = the model's current colours. Drag each onto an <b>empty</b> bottom slot to KEEP it, or onto a <b>filled</b> bottom colour to ELIMINATE it (that colour becomes the one you dropped onto). Then <b>Bake</b> to hard-copy the new palette into every voxel.</div>
+    <div class="note" style="margin:8px 0 3px;font-weight:600">Current palette</div>
+    <div id="remapTop" style="display:flex;flex-wrap:wrap;gap:4px;min-height:26px"></div>
+    <div class="note" style="margin:12px 0 3px;font-weight:600">New palette (drop targets)</div>
+    <div id="remapBottom" style="display:flex;flex-wrap:wrap;gap:4px;min-height:26px"></div>
+    <div class="row" style="gap:6px;margin-top:12px">
+      <button id="remapBake" style="width:auto;padding:7px 14px;margin:0" title="Hard-copy the assigned colours into every voxel">⬇ Bake remap into model</button>
+      <button class="ghost" id="remapAllDown" style="width:auto;padding:6px 12px;margin:0" title="Copy every current colour straight down (identity start)">Copy all down</button>
+      <button class="ghost" id="remapReset" style="width:auto;padding:6px 12px;margin:0">↺ Clear</button>
+      <button class="ghost" id="remapAdvanced" style="width:auto;padding:6px 12px;margin:0" title="Old nearest-match consolidate tool">Advanced…</button>
+      <span class="note" id="remapState" style="margin:0;flex:1"></span>
+      <button class="ghost" id="remapClose" style="width:auto;padding:6px 14px;margin:0">Done</button>
     </div>
   </div>
 </div>

@@ -2762,8 +2762,80 @@ $('palDropBtn').onclick = () => {
 };
 $('palClearKeep').onclick = () => { palKeep.clear(); palDrop.clear(); palReduceRefresh(); updateKeepBtn(); };
 if ($('palShowAll')) $('palShowAll').onchange = (e) => { palShowAll = e.target.checked; palBuildSwatches(); };
-$('openPal').onclick = () => { $('palN').value = state.paletteN; $('palNV').textContent = state.paletteN || 'full'; palBuildSwatches(); $('palModal').hidden = false; };
+function openPalAdvanced() { $('palN').value = state.paletteN; $('palNV').textContent = state.paletteN || 'full'; palBuildSwatches(); $('palModal').hidden = false; }
 $('palClose').onclick = () => { $('palModal').hidden = true; };
+
+// ── SF4: explicit two-row palette remap. TOP = the model's current per-voxel colours; BOTTOM = keep/
+// eliminate slots. Drag a top colour onto an EMPTY slot to keep it there; onto a FILLED slot to make
+// that top colour BECOME the slot's colour (eliminate). Bake hard-copies the assignment into every
+// voxel (voxEdit), so the palette is fixed per voxel and the result paints/exports solidly. ──
+let rmSrcKeys = [];              // distinct current colours (packed ints), most-used first
+let rmTargets = [];             // bottom slots: {r,g,b} or null (equal count to rmSrcKeys)
+let rmAssign = new Map();       // sourceKey → slotIndex
+let rmDragKey = null;
+const rmUnpack = (k) => ({ r: (k >> 16) & 255, g: (k >> 8) & 255, b: k & 255 });
+const rmHex = (k) => '#' + (k & 0xffffff).toString(16).padStart(6, '0');
+function rmCurrentColors() {
+  const tally = new Map();
+  const add = (part, layers) => { for (const c of collectVox(part, footOf(part), layers, 0, 0)) { const k = (c.r << 16) | (c.g << 8) | c.b; tally.set(k, (tally.get(k) || 0) + 1); } };
+  add('body', state.bodyLayers); add('turret', state.turretLayers);
+  return [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+}
+function rmRender() {
+  const top = $('remapTop'), bot = $('remapBottom'); if (!top || !bot) return;
+  top.innerHTML = ''; bot.innerHTML = '';
+  rmSrcKeys.forEach((k) => {
+    const d = document.createElement('div'); d.className = 'rmSw' + (rmAssign.has(k) ? ' assigned' : '');
+    d.style.background = rmHex(k); d.draggable = true; d.dataset.key = k; d.title = rmHex(k);
+    if (rmAssign.has(k)) { const t = document.createElement('span'); t.className = 'tag'; t.textContent = '→' + (rmAssign.get(k) + 1); d.appendChild(t); }
+    d.addEventListener('dragstart', () => { rmDragKey = k; });
+    top.appendChild(d);
+  });
+  if (rmTargets.length !== rmSrcKeys.length) rmTargets = rmSrcKeys.map((_, i) => rmTargets[i] || null);
+  rmTargets.forEach((t, i) => {
+    const s = document.createElement('div'); s.className = 'rmSlot' + (t ? ' filled' : '');
+    if (t) s.style.background = 'rgb(' + t.r + ',' + t.g + ',' + t.b + ')';
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = i + 1; s.appendChild(n);
+    s.addEventListener('dragover', (e) => { e.preventDefault(); s.classList.add('over'); });
+    s.addEventListener('dragleave', () => s.classList.remove('over'));
+    s.addEventListener('drop', (e) => { e.preventDefault(); s.classList.remove('over'); rmDrop(i); });
+    bot.appendChild(s);
+  });
+  $('remapState').textContent = rmTargets.filter(Boolean).length + ' kept · ' + rmAssign.size + '/' + rmSrcKeys.length + ' mapped';
+}
+function rmDrop(slot) {
+  if (rmDragKey == null) return; const k = rmDragKey; rmDragKey = null;
+  if (!rmTargets[slot]) rmTargets[slot] = rmUnpack(k);   // empty slot → keep this colour here
+  rmAssign.set(k, slot);                                  // this source now maps to that slot's colour
+  rmRender();
+}
+function openRemap() {
+  rmSrcKeys = rmCurrentColors();
+  if (rmTargets.length !== rmSrcKeys.length) { rmTargets = rmSrcKeys.map(() => null); rmAssign.clear(); }
+  rmRender(); $('remapModal').hidden = false;
+}
+$('openPal').onclick = openRemap;   // SF4: the 🎨 button now opens the explicit remap (old tuner via Advanced)
+$('remapClose').onclick = () => { $('remapModal').hidden = true; };
+$('remapReset').onclick = () => { rmTargets = rmSrcKeys.map(() => null); rmAssign.clear(); rmRender(); };
+$('remapAllDown').onclick = () => { rmTargets = rmSrcKeys.map(rmUnpack); rmAssign = new Map(rmSrcKeys.map((k, i) => [k, i])); rmRender(); };
+$('remapAdvanced').onclick = () => { $('remapModal').hidden = true; openPalAdvanced(); };
+$('remapBake').onclick = () => {
+  if (!rmAssign.size) { $('remapState').textContent = 'drag a top colour onto a bottom slot first'; return; }
+  pushUndo();
+  let touched = 0;
+  for (const part of ['body', 'turret']) {
+    const foot = footOf(part), layers = part === 'body' ? state.bodyLayers : state.turretLayers, N = foot * foot;
+    for (const c of collectVox(part, foot, layers, 0, 0)) {
+      const slot = rmAssign.get((c.r << 16) | (c.g << 8) | c.b);
+      if (slot == null || !rmTargets[slot]) continue;
+      const t = rmTargets[slot]; voxEdit[part].set(c.z * N + c.y * foot + c.x, [t.r, t.g, t.b]); touched++;
+    }
+  }
+  gridModel = null; rebuildSlices(); scheduleAutosave();
+  rmSrcKeys = rmCurrentColors(); rmRender();   // reflect the now-consolidated model
+  $('remapState').textContent = 'baked ' + touched + ' voxels → ' + rmTargets.filter(Boolean).length + ' colours';
+};
+makeDraggable('remapModal', 'remapDrag');
 
 let pasteTarget = null;
 document.querySelectorAll('.vpick').forEach((pick) => {
