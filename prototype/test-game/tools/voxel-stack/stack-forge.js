@@ -281,7 +281,12 @@ function exportVox() {
   const foot = state.foot, mount = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
   let cells = [];
   if (state.part !== 'turret') cells = cells.concat(collectVox('body', foot, state.bodyLayers, 0, 0));
-  if (state.part !== 'body') cells = cells.concat(collectVox('turret', foot, state.turretLayers, mount, Math.round(state.turretDx)));
+  if (state.part !== 'body') {                                     // SF3: center the (smaller) turret in the base grid
+    const tFoot = footOf('turret'), tc = Math.floor((foot - tFoot) / 2);
+    const tcells = collectVox('turret', tFoot, state.turretLayers, mount, 0);
+    for (const c of tcells) { c.x += tc + Math.round(state.turretDx); c.y += tc; }
+    cells = cells.concat(tcells);
+  }
   if (!cells.length) { alert('Nothing to export — load art or a .vox first.'); return; }
   const uniq = new Map(); for (const c of cells) { const k = (c.r << 16) | (c.g << 8) | c.b; if (!uniq.has(k)) uniq.set(k, [c.r, c.g, c.b]); }
   let pal = [...uniq.values()]; if (pal.length > 255) pal = medianCut(pal, 255);
@@ -756,7 +761,7 @@ function drawScene(meta, el, bodyAz, turretAz) {
 // voxel, bold per tile = VOX_PER_TILE) + a face label on every visible side, and each loaded view image
 // projected onto its matching face (top, side mirrored, front, back — the carve's own convention). ──
 function drawDimBox(ctx, meta, el, az, part) {
-  const foot = state.foot, layers = (part === 'turret' ? state.turretLayers : state.bodyLayers);
+  const foot = footOf(part), layers = (part === 'turret' ? state.turretLayers : state.bodyLayers);
   if (!foot || !layers) return;
   const S = meta.S, cx = meta.cx, groundY = meta.groundY;
   const eR = el * Math.PI / 180, se = Math.sin(eR), ce = Math.cos(eR), h = state.zScale;
@@ -1154,7 +1159,10 @@ const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim:
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
   decorRevolve: true,   // decor: carve as a solid of revolution (organic — trees/rocks) rather than the tank box intersection
   decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30,   // decor on-map scale + procedural-tree params (Stories 6,7)
-  showDimBox: false };   // SF1: the 3D dimension box + per-face view-image projections overlay
+  showDimBox: false,   // SF1: the 3D dimension box + per-face view-image projections overlay
+  turretFoot: 64 };    // SF3: turret footprint (voxels), INDEPENDENT of base foot — a turret can be smaller than the hull
+// SF3: the footprint (voxels) for a part — turret has its own; body uses the base foot.
+const footOf = (part) => (part === 'turret' ? (state.turretFoot || state.foot) : state.foot);
 let bodyFaces = null, turretFaces = null, bodyBaked = null, turretBaked = null, lastPack = null;
 let voxMeta = null, voxTex = null, voxSpr = null, voxShadow = null, voxSig = '';   // orbit cube-render canvas
 let gVoxMeta = null, gVoxTex = null, gVoxSpr = null, gVoxShadow = null;            // in-game inset canvas
@@ -1269,7 +1277,7 @@ function modelPalette(m, foot, layers) {
 function renderGridView() {
   const cv = $('gridCanvas'); if (!cv) return;
   const ctx = cv.getContext('2d');
-  const part = gridPart(), foot = state.foot, layers = gridLayersOf(part), N = foot * foot;
+  const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part), N = foot * foot;
   // cache the RAW (pre-edit) carve; voxEdit is layered on cheaply below so live painting never re-carves.
   if (!gridModel || gridModel.part !== part || gridModel.foot !== foot || gridModel.layers !== layers) {
     const m = buildModelRaw(part, foot, layers);
@@ -1583,7 +1591,7 @@ function rebuildSlices() {
   state.baked = null; voxSig = ''; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
   bodyMountZ = bodyTopLayer(state.foot, state.bodyLayers);   // turret mounts on the body's actual top
   bodyFaces = buildFaces('body', state.foot, state.bodyLayers);
-  turretFaces = buildFaces('turret', state.foot, state.turretLayers);
+  turretFaces = buildFaces('turret', footOf('turret'), state.turretLayers);   // SF3: turret's own footprint
   // canvases sized to the worst case at any azimuth: footprint diagonal + offsets + the full stack height
   const foot = state.foot, h = state.zScale;
   voxBounds = { R: Math.ceil(foot * 0.71 + Math.abs(state.turretDx) + foot * Math.abs(state.turretPivot) / 100) + 2,
@@ -1625,7 +1633,7 @@ function update() {
   const sig = state.az.toFixed(1) + '|' + state.el.toFixed(1) + '|' + state.taim.toFixed(1) + '|' + state.turretDx + '|' +
     state.turretPivot + '|' + state.mountZ + '|' + state.part + '|' + state.lightAz + '|' + state.lightK + '|' + state.zScale +
     '|' + (gridSelVox ? gridSelVox.set.size + ':' + gridSelVox.part + ':' + gridView + ':' + gridLayer : 'x') +   // re-render on selection change
-    '|dim' + (state.showDimBox ? state.foot + ':' + state.bodyLayers + ':' + state.turretLayers : '0');   // SF1 dimension-box overlay
+    '|dim' + (state.showDimBox ? state.foot + ':' + footOf('turret') + ':' + state.bodyLayers + ':' + state.turretLayers : '0');   // SF1 dim box (+SF3 turret foot)
   if (sig !== voxSig) { voxSig = sig; drawScene(voxMeta, state.el, azR, azR + taimR); voxTex.baseTexture.update(); }
 }
 // position the in-game preview: unit at GAME scale on the tile, slowly turning to show facings, with the
@@ -1730,11 +1738,17 @@ $('dimBox').onchange = (e) => { state.showDimBox = e.target.checked; voxSig = ''
 $('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
 $('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); rebuildSlices(); };
+$('turretRes').onchange = (e) => { state.turretFoot = +e.target.value; syncSizeUI(); rebuildSlices(); };   // SF3
 // fine world-size control (the VOX_PER_TILE contract): tiles → foot voxels, layers scale along
 function syncSizeUI() {
   const t = unitTiles(state.foot);
   $('uSize').value = Math.round(t * 100); $('uSizeV').textContent = t.toFixed(2) + ' t';
   $('res').value = [32, 48, 64, 96, 128].includes(state.foot) ? state.foot : '';
+  if ($('turretRes')) {   // SF3: turret footprint readout, in tiles, vs the base
+    const tf = state.turretFoot || state.foot;
+    $('turretRes').value = [16, 24, 32, 48, 64, 96, 128].includes(tf) ? tf : '';
+    if ($('turretResTiles')) $('turretResTiles').textContent = tf === state.foot ? '= base' : (tf / VOX_PER_TILE).toFixed(2) + ' t';
+  }
 }
 function setUnitSize(tiles) {
   const newFoot = clamp(Math.round(tiles * VOX_PER_TILE), 16, 256);
@@ -1753,7 +1767,7 @@ function fitToVox() {
   let mx = 0;
   for (const kk of ['body', 'turret']) { const v = voxPart[kk]; if (v) mx = Math.max(mx, v.nx, v.ny); }
   if (!mx) return;
-  const res = [32, 48, 64, 96, 128]; state.foot = res.find((r) => r >= mx) || 128; $('res').value = state.foot;
+  const res = [32, 48, 64, 96, 128]; state.foot = res.find((r) => r >= mx) || 128; $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; }
   if (voxPart.body) setLayers('body', clamp(voxPart.body.nz, 4, 40));
   if (voxPart.turret) setLayers('turret', clamp(voxPart.turret.nz, 4, 40));
 }
@@ -1910,7 +1924,7 @@ if ($('gridFill')) $('gridFill').onclick = () => fillSelection();
 // ── DIAGNOSTIC: report how the source view art (V) maps onto this part's exposed faces, so a misaligned
 // image (e.g. front tips reading black in-game) is visible as a coverage gap, not guesswork. Read-only.
 function gridDiag() {
-  const part = gridPart(), foot = state.foot, layers = gridLayersOf(part), N = foot * foot;
+  const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part), N = foot * foot;
   const m = buildModel(part, foot, layers), V = m.views, filled = m.filled;
   const F = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && filled(x, y, z);
   const hit = (g, ix, z, mir) => { if (!g || !g.m || ix < 0 || ix >= g.w || z < 0 || z >= g.h) return false; return !!g.m[z * g.w + (mir ? g.w - 1 - ix : ix)]; };
@@ -2695,7 +2709,7 @@ function remapModelToWorking() {
   pushUndo();                                                     // remap rewrites every voxel — make it a single undoable step
   let touched = 0;
   for (const part of ['body', 'turret']) {
-    const foot = state.foot, layers = part === 'body' ? state.bodyLayers : state.turretLayers, N = foot * foot;
+    const foot = footOf(part), layers = part === 'body' ? state.bodyLayers : state.turretLayers, N = foot * foot;
     const m = buildModel(part, foot, layers), ed = voxEdit[part];
     const quant = buildQuantiser(null, m.vcol, m.filled, foot, layers, n, m.views);
     if (!quant) continue;
@@ -2787,9 +2801,9 @@ function doBake() {
   const body = bakeAngleCache(app.renderer, bodyFaces, { frames: BODY_FRAMES, smooth: false, sharp: 0, g, pivotFrac: 0.5, el: state.el, scale: B });
   const turret = bakeAngleCache(app.renderer, turretFaces, { frames: TURRET_FRAMES, smooth: state.smooth, sharp: state.sharp, g, pivotFrac, el: state.el, scale: B });
   // S1: cast-shadow shape atlas, from the filled volume (aligned 1:1 with the frame atlases)
-  const bodyFilled = buildModel('body', foot, bL).filled, turretFilled = buildModel('turret', foot, tL).filled;
+  const bodyFilled = buildModel('body', foot, bL).filled, turretFilled = buildModel('turret', footOf('turret'), tL).filled;
   const bodyShadow = bakeShadowCache(app.renderer, bodyFilled, { frames: BODY_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B, foot, layers: bL });
-  const turretShadow = bakeShadowCache(app.renderer, turretFilled, { frames: TURRET_FRAMES, g, pivotFrac, el: state.el, scale: B, foot, layers: tL });
+  const turretShadow = bakeShadowCache(app.renderer, turretFilled, { frames: TURRET_FRAMES, g, pivotFrac, el: state.el, scale: B, foot: footOf('turret'), layers: tL });
   state.baked = { body, turret, bodyShadow, turretShadow, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, bodyLayers: bL, turretLayers: tL, scale: B };
   const mkBaked = (tex, parent) => { const s = new PIXI.Sprite(tex);       // frames are B px/voxel → shrink to world size
     s.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); s.scale.set(1 / B); parent.addChild(s); return s; };
@@ -2839,11 +2853,16 @@ function buildPack() {
   // Tier C (rendering-tiers spec §3C): embed the assembled voxel model so the game can render this
   // unit as a LIVE 3D object with real pitch/roll. Big (~4B/voxel base64) — only for set-pieces.
   if ($('embedModel').checked) {
-    const cells = collectVox('body', b.foot, b.bodyLayers, 0, 0)
-      .concat(collectVox('turret', b.foot, b.turretLayers, mountDz, Math.round(state.turretDx)));
-    let nz = 1; for (const c of cells) if (c.z + 1 > nz) nz = c.z + 1;
+    // SF3: body fills the b.foot grid; the (possibly smaller) turret is CENTERED into it — its own
+    // footOf('turret') grid offset by (b.foot − turretFoot)/2, plus the turretDx mount shift on x.
+    const tFoot = footOf('turret'), tc = Math.floor((b.foot - tFoot) / 2), tdx = Math.round(state.turretDx);
+    const bodyCells = collectVox('body', b.foot, b.bodyLayers, 0, 0);
+    const turretCells = collectVox('turret', tFoot, b.turretLayers, mountDz, 0);
+    let nz = 1; for (const c of bodyCells) if (c.z + 1 > nz) nz = c.z + 1; for (const c of turretCells) if (c.z + 1 > nz) nz = c.z + 1;
     const data = new Uint8Array(b.foot * b.foot * nz * 4);
-    for (const c of cells) { const i = ((c.z * b.foot + c.y) * b.foot + c.x) * 4; data[i] = c.r; data[i + 1] = c.g; data[i + 2] = c.b; data[i + 3] = 255; }
+    const put = (c, ox, oy) => { const X = c.x + ox, Y = c.y + oy; if (X < 0 || Y < 0 || X >= b.foot || Y >= b.foot) return; const i = ((c.z * b.foot + Y) * b.foot + X) * 4; data[i] = c.r; data[i + 1] = c.g; data[i + 2] = c.b; data[i + 3] = 255; };
+    for (const c of bodyCells) put(c, 0, 0);
+    for (const c of turretCells) put(c, tc + tdx, tc);
     pack.model = { nx: b.foot, ny: b.foot, nz, b64: b64FromU8(data) };
   }
   const atlases = { body: ba.canvas.toDataURL('image/png'), turret: ta.canvas.toDataURL('image/png') };
@@ -3097,7 +3116,7 @@ function syncAllControls() {
   set('pal', state.paletteN, state.paletteN || 'full');
   set('palN', state.paletteN, state.paletteN || 'full');
   set('sharp', Math.round(state.sharp * 100), state.sharp.toFixed(2)); set('bakeScale', state.bakeScale, state.bakeScale + '×');
-  $('res').value = state.foot; $('smooth').checked = state.smooth; $('spin').checked = state.spin;
+  $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; } $('smooth').checked = state.smooth; $('spin').checked = state.spin;
   if ($('decRevolve')) $('decRevolve').checked = state.decorRevolve !== false;
   if ($('decProc')) $('decProc').checked = !!state.decorProc;
   if ($('decProcRow')) $('decProcRow').style.display = state.decorProc ? '' : 'none';
@@ -3115,6 +3134,7 @@ async function loadProject(p) {
   try {
     $('uid').value = p.id || 'unit'; activeUnitId = (p.id || 'unit');   // anchor the WIP key to the restored project
     Object.assign(state, p.state || {}); state.baked = null;
+    if (!(p.state && p.state.turretFoot)) state.turretFoot = state.foot;   // SF3: pre-turret-res projects → turret matches base
     palMap.clear(); if (p.palMap) for (const [k, c] of p.palMap) palMap.set(k, c);
     palKeep.clear(); if (p.palKeep) for (const k of p.palKeep) palKeep.add(k);
     palDrop.clear(); if (p.palDrop) for (const k of p.palDrop) palDrop.add(k);
@@ -3153,7 +3173,7 @@ function fitLayersToArt() {
       if (voxPart[part]) continue;                     // .vox defines its own height
       const src = imgs[part]; if (!src || (!src.top && !src.side && !src.front && !src.back)) continue;
       const key = part === 'body' ? 'bodyLayers' : 'turretLayers';
-      const dbg = buildVolume(part, state.foot, state[key]).dbg;
+      const dbg = buildVolume(part, footOf(part), state[key]).dbg;
       if (dbg && dbg.Hraw > state[key] + 0.5) state[key] = Math.min(40, Math.ceil(dbg.Hraw));
     }
   } finally { suppressSquashWarn = false; }
@@ -3351,7 +3371,7 @@ function selectUnit(id) {
     state.cls = p.class; state.foot = p.footprint[0];
     state.bodyLayers = (bp && bp.layers) || p.footprint[2]; state.turretLayers = (tp && tp.layers) || p.footprint[2];
     if (p.light) { state.lightAz = p.light.azimuth; $('lightAz').value = state.lightAz; $('lightAzV').textContent = state.lightAz + '°'; }
-    $('res').value = state.foot;
+    $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; }
     $('bodyLayers').value = state.bodyLayers; $('bodyLayersV').textContent = state.bodyLayers;
     $('turretLayers').value = state.turretLayers; $('turretLayersV').textContent = state.turretLayers;
     [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
