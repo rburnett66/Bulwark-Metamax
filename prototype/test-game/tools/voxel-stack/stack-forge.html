@@ -22,14 +22,16 @@
     #unitGrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; overflow-y:auto; align-content:start; flex:1 1 0; min-height:60px; }
     #gridPanel { position:absolute; left:248px; top:12px; width:520px; height:560px; min-width:150px; min-height:190px; resize:both; overflow:hidden; z-index:6;
       display:flex; flex-direction:column; background:rgba(15,24,33,.92); border:1px solid var(--line); border-radius:10px; padding:9px 11px; box-shadow:0 8px 30px rgba(0,0,0,.45); }
-    #orbitDock { position:absolute; left:12px; top:12px; width:226px; max-height:calc(100% - 24px); overflow-y:auto; z-index:5;
+    #orbitDock { position:absolute; left:12px; top:12px; width:226px; min-width:226px; max-width:calc(100% - 24px);
+      max-height:calc(100% - 24px); overflow:auto; resize:both; z-index:5;   /* drag the ⤢ corner to widen → longer sliders */
       background:rgba(15,24,33,.82); border:1px solid var(--line); border-radius:10px; padding:9px 11px; box-shadow:0 8px 30px rgba(0,0,0,.45); }
     #scalePanel { position:absolute; right:12px; top:12px; width:258px; height:460px; min-width:180px; min-height:200px; max-height:calc(100% - 24px); resize:both; overflow:hidden; z-index:6;
       display:flex; flex-direction:column; background:rgba(15,24,33,.92); border:1px solid var(--line); border-radius:10px; padding:9px 11px; box-shadow:0 8px 30px rgba(0,0,0,.45); }
     #scaleDrag { font-size:10px; letter-spacing:.2em; color:var(--muted); margin:0 0 7px; text-transform:uppercase; cursor:move; flex:0 0 auto; }
     #orbitDock::-webkit-scrollbar { width:0; }
     #orbitDock .row label { flex:0 0 74px; font-size:11px; }
-    #orbitDock .row .val { flex:0 0 34px; }
+    #orbitDock .row .val { flex:0 0 40px; }
+    #orbitDock .row input[type=range] { flex:1 1 auto; min-width:0; }   /* sliders fill the panel width — wider dock = more alignment resolution */
     #orbitDock .seg button { font-size:10.5px; padding:5px 0; }
     .ucard { border:1px solid var(--line); border-radius:6px; padding:5px; cursor:pointer; text-align:center; background:#0e1a26; transition:border-color .1s; }
     .ucard:hover { border-color:#3c5670; }
