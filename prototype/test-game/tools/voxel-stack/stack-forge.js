@@ -1308,6 +1308,34 @@ function modelPalette(m, foot, layers) {
   for (const c of list) { const k = (c[0] << 16) | (c[1] << 8) | c[2]; if (!seen.has(k)) { seen.add(k); out.push(c); } }
   return out;
 }
+// x/y/z DIMENSION readout — the model's carved voxel bounding box vs the grid it lives in, so clamping is
+// visible: an axis whose model extent hits the grid edge AND whose intended span (geomState) runs past the
+// grid is flagged CLAMPED in red. Shown in the grid header + over the primary view. (owner request)
+function modelBBox(filled, foot, layers) {
+  let x0 = foot, x1 = -1, y0 = foot, y1 = -1, z0 = layers, z1 = -1;
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (filled(x, y, z)) {
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
+  }
+  return { x0, x1, y0, y1, z0, z1 };
+}
+function updateDims(part, foot, layers, base) {
+  const gd = $('gridDims'), sd = $('stageDims'); if (!gd && !sd) return;
+  const bb = base.bbox || modelBBox(base.filled, foot, layers), { x0, x1, y0, y1, z0, z1 } = bb;
+  if (x1 < 0) { if (gd) gd.textContent = 'empty'; if (sd) sd.textContent = ''; return; }
+  const Lx = x1 - x0 + 1, Wy = y1 - y0 + 1, Hz = z1 - z0 + 1;
+  const g = geomState[part];                                          // intended spans (explicit) — used to detect a clamp
+  const want = (g && !g.auto && g.spanX) ? { x: g.spanX.hi, y: g.spanY.hi, z: g.spanZ.hi } : null;
+  // clamped if the model reaches the grid edge on an axis AND the intended span wanted more than the grid holds
+  const clX = x1 >= foot - 1 && (want ? want.x > foot : false);
+  const clY = y1 >= foot - 1 && (want ? want.y > foot : false);
+  const clZ = z1 >= layers - 1 && (want ? want.z > layers : false);
+  const T = VOX_PER_TILE, tl = (v) => (v / T).toFixed(2);
+  const ax = (lab, n, cl) => cl ? `⚠${lab}${n}` : `${lab}${n}`;
+  const txt = `${part}  ${ax('X', Lx, clX)} × ${ax('Y', Wy, clY)} × ${ax('Z', Hz, clZ)} vox  (${tl(Lx)}×${tl(Wy)}×${tl(Hz)} t)  ·  grid ${foot}×${foot}×${layers}`;
+  const anyCl = clX || clY || clZ;
+  if (gd) { gd.textContent = txt + (anyCl ? '  — CLAMPED' : ''); gd.style.color = anyCl ? '#e0625f' : '#8fa7bd'; }
+  if (sd) { sd.textContent = txt + (anyCl ? '  — CLAMPED, raise Resolution' : ''); sd.style.color = anyCl ? '#e0625f' : '#8fa7bd'; sd.style.borderColor = anyCl ? '#e0625f' : 'var(--line)'; }
+}
 function renderGridView() {
   const cv = $('gridCanvas'); if (!cv) return;
   const ctx = cv.getContext('2d');
@@ -1315,12 +1343,13 @@ function renderGridView() {
   // cache the RAW (pre-edit) carve; voxEdit is layered on cheaply below so live painting never re-carves.
   if (!gridModel || gridModel.part !== part || gridModel.foot !== foot || gridModel.layers !== layers) {
     const m = buildModelRaw(part, foot, layers);
-    gridModel = { part, foot, layers, vcol: m.vcol, filled: m.filled, views: m.views, sp: m.sp, palette: modelPalette(m, foot, layers), palSig: state.paletteN + ':' + palEpoch };
+    gridModel = { part, foot, layers, vcol: m.vcol, filled: m.filled, views: m.views, sp: m.sp, palette: modelPalette(m, foot, layers), palSig: state.paletteN + ':' + palEpoch, bbox: modelBBox(m.filled, foot, layers) };
   } else {
     const sig = state.paletteN + ':' + palEpoch;                     // reduce/tune changed → refresh the paint strip only
     if (gridModel.palSig !== sig) { gridModel.palette = modelPalette(gridModel, foot, layers); gridModel.palSig = sig; }
   }
   const base = gridModel, ed = voxEdit[part], V = base.views;
+  updateDims(part, foot, layers, base);   // x/y/z readout in the grid header + primary view; flags clamped axes
   const filled = (x, y, z) => {
     if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) return false;
     const e = ed.get(z * N + y * foot + x);
