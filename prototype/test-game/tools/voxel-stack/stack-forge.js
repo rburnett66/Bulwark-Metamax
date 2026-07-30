@@ -1246,6 +1246,7 @@ let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn
 let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
 let gridAlign = false;                                   // ⊞ Align T/S: carved TOP projection stacked above SIDE, length-aligned (read-only, Pass 1)
 let gridBoxSel = null;                                    // transient marquee being dragged {c0,r0,c1,r1} in grid cells
+let gridAddBox = null;                                    // ➕ Add: transient rubber-band that extrudes the surface patch on release
 let gridLasso = null, lassoMode = false;                 // Story 5: ◇ Angle lasso — freeform outline (cell points) for the visual-hull carve
 let gridSel = null;                                       // last marquee rect (in gridSelView's facing) — for the dashed outline in that one view
 let gridSelView = null;                                   // which gridView the gridSel rect belongs to
@@ -1579,6 +1580,7 @@ function renderGridView() {
     if (gridSel && gridSelView === gridView) drawMarquee(gridSel, '#5fe0ff', null);
   }
   if (gridBoxSel) drawMarquee(gridBoxSel, '#e0625f', null);               // marquee being dragged
+  if (gridAddBox) drawMarquee(gridAddBox, '#5fe07a', 'rgba(95,224,122,.14)');   // ➕ Add surface-extrude patch
   if (gridLasso && gridLasso.length) {                                    // ◇ Angle lasso outline (cell points)
     const px = (p) => ox + (p.c + 0.5) * cell, py = (p) => oy + (p.r + 0.5) * cell;
     ctx.strokeStyle = '#ffb454'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px(gridLasso[0]), py(gridLasso[0]));
@@ -2248,37 +2250,50 @@ document.addEventListener('keydown', (e) => {
     }
     return [150, 150, 150];
   };
-  const editAt = (e, mode) => {   // mode: 'erase' | 'paint' | 'add'
+  const editAt = (e, erase) => {
     const g = gridGeom; if (!g || !g.editable) return false;
     const r = cv.getBoundingClientRect();
     const px = (e.clientX - r.left) * (cv.width / r.width), py = (e.clientY - r.top) * (cv.height / r.height);
     const cx = Math.floor((px - g.ox) / g.cell), cy = Math.floor((py - g.oy) / g.cellV);
     if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows) return false;
-    let [x, y, z] = gridTargetVox(g, cx, cy);
-    // ADD is the mirror of Delete. On a real Layer slice it fills that slice's cell. On Layer 0 (surface) it
-    // EXTRUDES one step toward the camera from the first-hit voxel (build the surface out); an empty column
-    // seeds at the far/ground plane so the new voxel is grounded, not floating at the front.
-    if (mode === 'add' && g.slice === 0) {
-      let s0 = -1;
-      for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) { s0 = s; break; } }
-      if (s0 === 0) return false;                                    // already at the front face — nothing to extrude onto
-      [x, y, z] = g.toVox(cx, cy, s0 > 0 ? s0 - 1 : g.depth - 1);
-    }
-    const N = g.foot * g.foot, k = z * N + y * g.foot + x, ed = voxEdit[g.part];
-    // a selection MASKS erase/paint to the SELECTED VOXELS (not a view rect): pick objects once in Layer 0, then
+    const [x, y, z] = gridTargetVox(g, cx, cy), N = g.foot * g.foot, k = z * N + y * g.foot + x, ed = voxEdit[g.part];
+    // a selection MASKS editing to the SELECTED VOXELS (not a view rect): pick objects once in Layer 0, then
     // paint their front/side/back faces across facings — corner voxels paint from any view — without reselecting.
-    // (Add is exempt: you're spawning NEW cells that aren't in the selection set.)
-    if (mode !== 'add' && gridSelVox && gridSelVox.part === g.part && !gridSelVox.set.has(k)) return false;
+    if (gridSelVox && gridSelVox.part === g.part && !gridSelVox.set.has(k)) return false;
     const ov = ed.get(k), curFilled = ov !== undefined ? ov !== 'del' : gridModel.filled(x, y, z);
-    if (mode === 'erase') { if (!curFilled) return false; ed.set(k, 'del'); }        // nothing to remove here
-    else if (mode === 'add') { if (curFilled) return false; ed.set(k, gridPaintRGB()); }  // only spawn on EMPTY cells (mirror of erase)
+    if (erase) { if (!curFilled) return false; ed.set(k, 'del'); }   // nothing to remove here
     // paint: RECOLOUR a filled voxel, or (on a real layer) add one where empty. Layer 0 = surface → recolour
     // the facing voxel ONLY, never spawn a new voxel on an empty column.
     else { if (g.slice === 0 && !curFilled) return false; ed.set(k, gridPaintRGB()); }
     renderGridView();                                                // live repaint (overlay is layered on the cached carve)
     return true;
   };
-  let painting = false, dirty = false, boxing = null, paintMode = 'erase';   // paintMode: the action held for the whole stroke
+  // ➕ Add = SURFACE EXTRUDE. Rubber-band a patch of the surface, drag, release → each column in the patch grows
+  // one voxel toward the camera (mirror of Delete peeling it), in the current paint colour. On a real Layer slice
+  // it just fills that slice's empty cells. Returns true if it added anything.
+  const extrudeAddCell = (g, cx, cy, ed, rgb) => {
+    let x, y, z;
+    if (g.slice === 0) {
+      let s0 = -1;
+      for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); if (gridFilledAt(g, v[0], v[1], v[2])) { s0 = s; break; } }
+      if (s0 === 0) return false;                                    // surface already at the front face — nowhere to grow
+      [x, y, z] = g.toVox(cx, cy, s0 > 0 ? s0 - 1 : g.depth - 1);    // one step toward camera; empty column seeds at the ground plane
+    } else [x, y, z] = g.toVox(cx, cy, g.slice - 1);
+    const N = g.foot * g.foot, k = z * N + y * g.foot + x;
+    const ov = ed.get(k), curFilled = ov !== undefined ? ov !== 'del' : gridModel.filled(x, y, z);
+    if (curFilled) return false;                                     // only spawn on EMPTY cells
+    ed.set(k, rgb.slice()); return true;
+  };
+  const commitAddBox = () => {
+    const g = gridGeom, b = gridAddBox; if (!g || !b) return;
+    const c0 = clamp(Math.min(b.c0, b.c1), 0, g.cols - 1), c1 = clamp(Math.max(b.c0, b.c1), 0, g.cols - 1);
+    const r0 = clamp(Math.min(b.r0, b.r1), 0, g.rows - 1), r1 = clamp(Math.max(b.r0, b.r1), 0, g.rows - 1);
+    const ed = voxEdit[g.part], rgb = gridPaintRGB(); let any = false;
+    for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) if (extrudeAddCell(g, cx, cy, ed, rgb)) any = true;
+    if (any) { gridModel = null; rebuildSlices(); scheduleAutosave(); }
+    return any;
+  };
+  let painting = false, dirty = false, boxing = null, addBoxing = null;   // addBoxing: the ➕ Add surface-extrude rubber-band
   const cellOf = (e) => { const g = gridGeom; if (!g) return null; const { px, py } = ptCell(e); return { cx: clamp(Math.floor((px - g.ox) / g.cell), 0, g.cols - 1), cy: clamp(Math.floor((py - g.oy) / g.cellV), 0, g.rows - 1) }; };
   // ── GEOMETRY drag (owner 2026-07-18): in Geometry mode, drag the box edges to stretch a dimension or
   // the interior to move it. Edits write the shared world-axis spans in geomState, so linked views move
@@ -2355,17 +2370,27 @@ document.addEventListener('keydown', (e) => {
       boxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy }; gridBoxSel = boxing; renderGridView();
       cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
     }
-    // right-drag always erases; otherwise the active tool ('add' spawns, 'paint' recolours, 'erase'/'box' delete)
-    paintMode = (e.button === 2 || gridTool === 'erase' || gridTool === 'box') ? 'erase' : gridTool;
+    if (gridTool === 'add' && e.button !== 2) {                    // ➕ Add: rubber-band a surface patch → extrude on release
+      const c = cellOf(e); if (!c) return;
+      addBoxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy }; gridAddBox = addBoxing; renderGridView();
+      cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+    }
+    const erase = gridTool === 'erase' || gridTool === 'box' || gridTool === 'add' || e.button === 2;   // right-drag (or right-click in Add) erases
     const before = snapVoxEdit();                                  // capture BEFORE the stroke for one undo entry
-    if (editAt(e, paintMode)) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
+    if (editAt(e, erase)) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
   });
   cv.addEventListener('pointermove', (e) => {
     if (geomDrag) geomMove(e);
+    else if (addBoxing) { const c = cellOf(e); if (c) { addBoxing.c1 = c.cx; addBoxing.r1 = c.cy; gridAddBox = addBoxing; renderGridView(); } }
     else if (boxing) { const c = cellOf(e); if (c) { boxing.c1 = c.cx; boxing.r1 = c.cy; gridBoxSel = boxing; renderGridView(); } }
-    else if (painting) editAt(e, (e.buttons & 2) ? 'erase' : paintMode);   // right-drag mid-stroke still erases
+    else if (painting) editAt(e, gridTool === 'erase' || gridTool === 'box' || gridTool === 'add' || (e.buttons & 2));   // right-drag mid-stroke still erases
   });
   const finish = () => {
+    if (addBoxing) {                                               // ➕ Add: release → extrude the surface patch in the paint colour
+      const before = snapVoxEdit();
+      if (commitAddBox()) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; }
+      addBoxing = null; gridAddBox = null; renderGridView();
+    }
     if (boxing) {                                                  // release the marquee → PERSISTENT selection (stays until ESC)
       gridSel = { c0: Math.min(boxing.c0, boxing.c1), r0: Math.min(boxing.r0, boxing.r1), c1: Math.max(boxing.c0, boxing.c1), r1: Math.max(boxing.r0, boxing.r1) };
       gridSelView = gridView; gridSelVox = buildSelVox();   // freeze to voxels so the selection persists across facings
