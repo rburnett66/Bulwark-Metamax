@@ -110,19 +110,20 @@
     .palSw.dropped::before { content:'🚫'; position:absolute; top:-9px; left:-5px; font-size:11px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.8); }
     .palSw.dropped { opacity:.4; }
     #palSV, #palHue { border:1px solid var(--line); border-radius:6px; cursor:crosshair; touch-action:none; }
-    #remapModal { position:absolute; left:490px; top:12px; width:472px; min-width:320px; min-height:230px; max-height:calc(100% - 24px); z-index:21;
+    #remapModal { position:absolute; left:300px; top:12px; width:760px; min-width:420px; min-height:300px; max-height:calc(100% - 24px); z-index:21;
       display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; resize:both; box-shadow:0 18px 60px rgba(0,0,0,.6); }
     #remapModal[hidden] { display:none; }
     #remapDrag { font-size:10px; letter-spacing:.2em; color:var(--muted); margin:0; padding:11px 14px 8px; text-transform:uppercase; cursor:move; flex:0 0 auto; }
     #remapBox { overflow:auto; flex:1 1 auto; min-height:0; }
-    .rmSw { width:30px; height:26px; border:2px solid var(--line); border-radius:5px; cursor:grab; position:relative; }
+    #remapTop, #remapBottom { gap:10px !important; min-height:78px !important; }
+    .rmSw { width:90px; height:78px; border:3px solid var(--line); border-radius:8px; cursor:grab; position:relative; }
     .rmSw[draggable=true]:active { cursor:grabbing; }
     .rmSw.assigned { opacity:.35; }                                   /* a top colour that's been mapped */
-    .rmSw .tag { position:absolute; bottom:-5px; right:-3px; font-size:8px; color:var(--gold); background:var(--panel); border-radius:3px; padding:0 1px; }
-    .rmSlot { width:30px; height:26px; border:2px dashed var(--line); border-radius:5px; position:relative; }
+    .rmSw .tag { position:absolute; bottom:-8px; right:-5px; font-size:15px; font-weight:700; color:var(--gold); background:var(--panel); border-radius:4px; padding:0 4px; }
+    .rmSlot { width:90px; height:78px; border:3px dashed var(--line); border-radius:8px; position:relative; }
     .rmSlot.filled { border-style:solid; }
-    .rmSlot.over { border-color:var(--gold); box-shadow:0 0 0 2px rgba(242,200,105,.4); }
-    .rmSlot .n { position:absolute; top:-6px; left:-2px; font-size:8px; color:var(--muted); }
+    .rmSlot.over { border-color:var(--gold); box-shadow:0 0 0 3px rgba(242,200,105,.4); }
+    .rmSlot .n { position:absolute; top:-9px; left:-3px; font-size:13px; color:var(--muted); }
     .palChip { width:40px; height:24px; border:1px solid var(--line); border-radius:5px; display:inline-block; vertical-align:middle; }
     #loadModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
     #loadModal[hidden] { display:none; }
