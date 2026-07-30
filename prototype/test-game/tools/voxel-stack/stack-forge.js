@@ -427,6 +427,7 @@ function buildVolume(partId, foot, layers) {
   // step will override them). Every mask below derives from the spans — z0 lets a silhouette sit off the
   // ground (z0=0 today, so behaviour is unchanged). Reconciliation is implicit: shared axes = shared span.
   const sp = geomSpans(partId, topC, sideC, frontC, foot, layers, reach);
+  lastSpans[partId] = sp;   // SF2: the dim box reads the placement the carve actually used
   const ox = sp.spanX.lo, bw = sp.spanX.hi - sp.spanX.lo;
   const oy = sp.spanY.lo, bh = sp.spanY.hi - sp.spanY.lo;
   const z0 = sp.spanZ.lo, Hv = sp.spanZ.hi - sp.spanZ.lo, Hraw = sp.Hraw;
@@ -481,6 +482,16 @@ const voxEdit = { body: new Map(), turret: new Map() };
 // step flips it to false and stores explicit spanX/spanY/spanZ {lo,hi}. `bottomFrom` = where the −z
 // underside derives from. Persisted in the project (version 2). Shared axes = shared span object.
 const geomState = { body: { auto: true, bottomFrom: 'top' }, turret: { auto: true, bottomFrom: 'top' } };
+let lastSpans = { body: null, turret: null };            // SF2: last spans the carve used, per part (box init)
+let boxPlace = { body: null, turret: null };             // SF2: PENDING box placement {ox,oy,bw,bh,z0,Hv} (null = follow the carve)
+// SF2: the placement the dim box draws — the pending edit, else the carve's current spans, else the full box.
+function effPlace(part) {
+  if (boxPlace[part]) return boxPlace[part];
+  const sp = lastSpans[part];
+  if (sp) return { ox: sp.spanX.lo, oy: sp.spanY.lo, bw: sp.spanX.hi - sp.spanX.lo, bh: sp.spanY.hi - sp.spanY.lo, z0: sp.spanZ.lo, Hv: sp.spanZ.hi - sp.spanZ.lo };
+  const foot = footOf(part), layers = (part === 'turret' ? state.turretLayers : state.bodyLayers);
+  return { ox: 0, oy: 0, bw: foot, bh: foot, z0: 0, Hv: layers };
+}
 // the space-carved model BEFORE manual edits (buildVolume is not cached — callers that only need the
 // base, like the live slice editor, cache this and layer edits on cheaply).
 function buildModelRaw(partId, foot, layers) {
@@ -792,16 +803,20 @@ function drawDimBox(ctx, meta, el, az, part) {
   const showFront = sa > 0.02, showBack = sa < -0.02, showPlusY = ca > 0.02, showMinusY = ca < -0.02;
   const F = foot, L = layers;
 
+  // SF2 placement: images sit at the unit's footprint sub-rect + height inside the full grid box, so
+  // stretching/moving the placement (sliders/Generate) shows live. Gridlines/labels stay on the full face.
+  const pl = effPlace(part);
+  const x0 = pl.ox, x1 = pl.ox + pl.bw, y0 = pl.oy, y1 = pl.oy + pl.bh, zt = pl.z0 + pl.Hv, zb = pl.z0;
   // FACES (image projected, then gridlines + label over it). Corner order per face = (A origin, B=A+u, C=A+v).
-  // TOP (Z=L): img x→X, y→Y
-  { const A = P(0, 0, L), B = P(F, 0, L), C = P(0, F, L); projImg(view.top, A, B, C); faceGrid(A, B, C, F, F); label(A, B, C, 'TOP  ' + (F / VOX_PER_TILE).toFixed(2) + '×' + (F / VOX_PER_TILE).toFixed(2) + ' tiles'); }
-  // +X FRONT: img x→Y, y→down(Z hi→lo)
-  if (showFront) { const A = P(F, 0, L), B = P(F, F, L), C = P(F, 0, 0); projImg(view.front, A, B, C); faceGrid(A, B, C, F, L); label(A, B, C, 'FRONT'); }
+  // TOP (Z=L): img x→X, y→Y — at the footprint rect
+  { projImg(view.top, P(x0, y0, L), P(x1, y0, L), P(x0, y1, L)); faceGrid(P(0, 0, L), P(F, 0, L), P(0, F, L), F, F); label(P(0, 0, L), P(F, 0, L), P(0, F, L), 'TOP  ' + (F / VOX_PER_TILE).toFixed(2) + '×' + (F / VOX_PER_TILE).toFixed(2) + ' tiles'); }
+  // +X FRONT: img x→Y (width), y→down(Z)
+  if (showFront) { projImg(view.front, P(F, y0, zt), P(F, y1, zt), P(F, y0, zb)); faceGrid(P(F, 0, L), P(F, F, L), P(F, 0, 0), F, L); label(P(F, 0, L), P(F, F, L), P(F, 0, 0), 'FRONT'); }
   // −X BACK (mirrored): img x→Y reversed
-  if (showBack) { const A = P(0, F, L), B = P(0, 0, L), C = P(0, F, 0); projImg(view.back, A, B, C); faceGrid(A, B, C, F, L); label(A, B, C, 'BACK'); }
+  if (showBack) { projImg(view.back, P(0, y1, zt), P(0, y0, zt), P(0, y1, zb)); faceGrid(P(0, F, L), P(0, 0, L), P(0, F, 0), F, L); label(P(0, F, L), P(0, 0, L), P(0, F, 0), 'BACK'); }
   // SIDE = the visible ±Y wall (far mirrored): img x→X (length), y→down(Z)
-  if (showPlusY) { const A = P(0, F, L), B = P(F, F, L), C = P(0, F, 0); projImg(view.side, A, B, C); faceGrid(A, B, C, F, L); label(A, B, C, 'SIDE'); }
-  else if (showMinusY) { const A = P(F, 0, L), B = P(0, 0, L), C = P(F, 0, 0); projImg(view.side, A, B, C); faceGrid(A, B, C, F, L); label(A, B, C, 'SIDE'); }
+  if (showPlusY) { projImg(view.side, P(x0, F, zt), P(x1, F, zt), P(x0, F, zb)); faceGrid(P(0, F, L), P(F, F, L), P(0, F, 0), F, L); label(P(0, F, L), P(F, F, L), P(0, F, 0), 'SIDE'); }
+  else if (showMinusY) { projImg(view.side, P(x1, 0, zt), P(x0, 0, zt), P(x1, 0, zb)); faceGrid(P(F, 0, L), P(0, 0, L), P(F, 0, 0), F, L); label(P(F, 0, L), P(0, 0, L), P(F, 0, 0), 'SIDE'); }
 
   // wireframe box edges (bold, over everything)
   const c = [P(0, 0, 0), P(F, 0, 0), P(F, F, 0), P(0, F, 0), P(0, 0, L), P(F, 0, L), P(F, F, L), P(0, F, L)];
@@ -1754,7 +1769,39 @@ $('blen').oninput = (e) => { state.barrelLen = +e.target.value; $('blenV').textC
 $('brad').oninput = (e) => { state.barrelRad = +e.target.value; $('bradV').textContent = state.barrelRad; rebuildSlices(); };
 $('belev').oninput = (e) => { state.barrelElev = +e.target.value; $('belevV').textContent = state.barrelElev; rebuildSlices(); };
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
-$('dimBox').onchange = (e) => { state.showDimBox = e.target.checked; voxSig = ''; };   // SF1: toggle the dimension box + projections
+$('dimBox').onchange = (e) => { state.showDimBox = e.target.checked; voxSig = ''; const r = $('boxSizeRow'); if (r) r.style.display = e.target.checked ? '' : 'none'; if (e.target.checked) boxSyncSliders(); };   // SF1 toggle + SF2 sizing panel
+
+// ── SF2: size & place the reference images in the dim box, then Generate the geometry ──
+const boxPart = () => (state.part === 'turret' ? 'turret' : 'body');
+function boxSyncSliders() {
+  const part = boxPart(), foot = footOf(part), layers = (part === 'turret' ? state.turretLayers : state.bodyLayers);
+  const p = effPlace(part);
+  const set = (id, v, max) => { const el = $(id); if (el) { el.max = String(max); el.value = String(Math.round(v)); } const lv = $(id + 'V'); if (lv) lv.textContent = String(Math.round(v)); };
+  set('boxLen', p.bw, foot); set('boxWid', p.bh, foot); set('boxHt', p.Hv, layers);
+  set('boxOx', p.ox, Math.max(0, foot - 1)); set('boxOy', p.oy, Math.max(0, foot - 1));
+}
+function boxEdit(field, val) {
+  const part = boxPart();
+  if (!boxPlace[part]) boxPlace[part] = { ...effPlace(part) };   // start from the current placement
+  boxPlace[part][field] = val;
+  const lv = $({ bw: 'boxLenV', bh: 'boxWidV', Hv: 'boxHtV', ox: 'boxOxV', oy: 'boxOyV' }[field]); if (lv) lv.textContent = String(val);
+  voxSig = '';   // redraw the box with the new placement
+}
+if ($('boxLen')) $('boxLen').oninput = (e) => boxEdit('bw', +e.target.value);
+if ($('boxWid')) $('boxWid').oninput = (e) => boxEdit('bh', +e.target.value);
+if ($('boxHt')) $('boxHt').oninput = (e) => boxEdit('Hv', +e.target.value);
+if ($('boxOx')) $('boxOx').oninput = (e) => boxEdit('ox', +e.target.value);
+if ($('boxOy')) $('boxOy').oninput = (e) => boxEdit('oy', +e.target.value);
+if ($('boxGen')) $('boxGen').onclick = () => {   // commit the pending placement into the carve (overrides autoSpans)
+  const part = boxPart(), p = boxPlace[part] || effPlace(part);
+  geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
+    spanX: { lo: p.ox, hi: p.ox + p.bw }, spanY: { lo: p.oy, hi: p.oy + p.bh }, spanZ: { lo: p.z0 || 0, hi: (p.z0 || 0) + p.Hv } };
+  boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
+};
+if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit
+  const part = boxPart(); geomState[part] = { auto: true, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top' };
+  boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
+};
 $('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
 $('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); rebuildSlices(); };

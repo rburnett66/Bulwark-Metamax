@@ -205,6 +205,15 @@
       <div class="row"><label>Barrel z</label><input type="range" id="belev" min="0" max="100" value="55"><span class="val" id="belevV">55</span></div>
       <div class="row"><label>Auto-spin</label><input type="checkbox" id="spin"><span class="note" style="margin:0">demo smooth turret</span></div>
       <div class="row"><label>▦ Dim box</label><input type="checkbox" id="dimBox"><span class="note" style="margin:0">unit box + gridlines + view projections (base/turret via part)</span></div>
+      <div id="boxSizeRow" style="display:none;border-left:2px solid var(--line);padding-left:8px;margin:2px 0 2px 4px">
+        <div class="note" style="margin:0 0 4px">SF2 — size &amp; place the images in the box, then Generate. (Part = base/turret.)</div>
+        <div class="row"><label>Length ↔</label><input type="range" id="boxLen" min="1" max="128" value="32"><span class="val" id="boxLenV">32</span></div>
+        <div class="row"><label>Width ↕</label><input type="range" id="boxWid" min="1" max="128" value="32"><span class="val" id="boxWidV">32</span></div>
+        <div class="row"><label>Height ⤒</label><input type="range" id="boxHt" min="1" max="128" value="16"><span class="val" id="boxHtV">16</span></div>
+        <div class="row"><label>Shift fwd/back</label><input type="range" id="boxOx" min="0" max="127" value="0"><span class="val" id="boxOxV">0</span></div>
+        <div class="row"><label>Shift left/right</label><input type="range" id="boxOy" min="0" max="127" value="0"><span class="val" id="boxOyV">0</span></div>
+        <div class="row" style="gap:6px"><button id="boxGen" style="width:auto;padding:6px 12px;margin:0">⬇ Generate geometry</button><button class="ghost" id="boxAuto" style="width:auto;padding:6px 12px;margin:0">Auto-fit</button></div>
+      </div>
       <button class="ghost" id="setCam" style="margin-top:4px">Set camera for bake</button>
       <div class="note" id="camState">Camera not set — orbit to a look, then Set.</div>
     </div>
