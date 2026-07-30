@@ -1209,6 +1209,7 @@ function bodyTopLayer(foot, layers) {
 // top→bottom (the slice view); Side/Front/Back are silhouettes. Voxels are always square (true cubes),
 // independent of the zScale cube-height stretch used by the 3D render.
 let gridView = 'top', gridLayer = 0, gridModel = null;   // gridModel: cached buildModel, invalidated by rebuildSlices
+let gridZoom = 1, gridPanX = 0, gridPanY = 0;            // scroll-wheel zoom of the grid editor (cursor-anchored)
 let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn cell layout, so pointer edits map back to voxels
 let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
 let gridAlign = false;                                   // ⊞ Align T/S: carved TOP projection stacked above SIDE, length-aligned (read-only, Pass 1)
@@ -1444,8 +1445,10 @@ function renderGridView() {
   // scale. A voxel is now the same square px in top/side/front/back; shorter views just centre with padding.
   const W = cv.width, H = cv.height;
   const uCols = foot, uRows = Math.max(foot, layers);
-  const cell = Math.max(1, Math.floor(Math.min(W / uCols, H / uRows)));
-  const gw = cell * cols, gh = cell * rows, ox = Math.floor((W - gw) / 2), oy = Math.floor((H - gh) / 2);
+  const fitCell = Math.max(1, Math.floor(Math.min(W / uCols, H / uRows)));
+  const cell = Math.max(1, Math.floor(fitCell * gridZoom));               // scroll-wheel zoom
+  const gw = cell * cols, gh = cell * rows;
+  const ox = Math.floor((W - gw) / 2) + gridPanX, oy = Math.floor((H - gh) / 2) + gridPanY;
   const geomActive = gridMode === 'geom' && V && base.sp && GEOAX[gridView];  // reconcile overlay (image-carved only)
   gridGeom = { cell, ox, oy, cols, rows, depth, slice, toVox: ax.toVox, foot, layers, part, editable: !geomActive };
   ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, W, H);
@@ -1822,10 +1825,28 @@ $('gridViewSeg').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.id === 'gridAlignBtn') { gridAlign = !gridAlign; b.classList.toggle('on', gridAlign); renderGridView(); return; }   // ⊞ Align: toggle the dual-projection overlay (keeps the selection)
   gridView = b.dataset.v; gridLayer = 0; gridAlign = false; gridLasso = null; lassoMode = false;   // picking a single facing exits Align + the lasso; the voxel selection PERSISTS across facings (paint faces without reselecting)
+  gridZoom = 1; gridPanX = 0; gridPanY = 0;   // fresh facing → reset the scroll-wheel zoom
   const ab = $('gridAlignBtn'); if (ab) ab.classList.remove('on');
   [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b && c.id !== 'gridAlignBtn')); renderGridView();
 };   // views have different col/row dims — a selection can't carry over
 $('gridLayer').oninput = (e) => { gridLayer = +e.target.value; renderGridView(); };
+// scroll-wheel ZOOM of the grid editor, anchored under the cursor (owner). Wheel down = out, up = in.
+$('gridCanvas').addEventListener('wheel', (e) => {
+  const g = gridGeom; if (!g || g.align) return;   // align overlay is read-only / self-laid-out
+  e.preventDefault();
+  const cv = $('gridCanvas'), rect = cv.getBoundingClientRect();
+  const px = (e.clientX - rect.left) * (cv.width / rect.width), py = (e.clientY - rect.top) * (cv.height / rect.height);
+  const cxu = (px - g.ox) / g.cell, cyu = (py - g.oy) / g.cell;   // grid-cell coord under the cursor (stays fixed)
+  const oldZoom = gridZoom;
+  gridZoom = clamp(gridZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), 1, 12);
+  if (gridZoom === oldZoom) return;
+  if (gridZoom <= 1.001) { gridZoom = 1; gridPanX = 0; gridPanY = 0; renderGridView(); return; }   // snap back to centered fit
+  const baseCell = g.cell / oldZoom, cell2 = Math.max(1, Math.floor(baseCell * gridZoom));
+  const oxC = Math.floor((cv.width - cell2 * g.cols) / 2), oyC = Math.floor((cv.height - cell2 * g.rows) / 2);
+  gridPanX = Math.round(px - cxu * cell2 - oxC);   // keep the pre-zoom cell under the cursor
+  gridPanY = Math.round(py - cyu * cell2 - oyC);
+  renderGridView();
+}, { passive: false });
 // ── SLICE EDITOR (owner 2026-07-17): on the Top view, click/drag to add or erase voxels in the
 // current z-layer. Erase removes even source-carved voxels; paint adds using that column's own
 // colour (grey for a fresh column — recolour later in the palette window). Edits land in voxEdit and
