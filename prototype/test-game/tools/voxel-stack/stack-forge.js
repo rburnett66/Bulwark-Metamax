@@ -1644,7 +1644,25 @@ function renderGridView() {
   }
 }
 
+// Grow the carve grid to hold the geometry spans instead of letting geomSpans CLAMP them (which chops the
+// model in the grid — owner: "fix the grid view clamping"). Spans can outrun foot/layers after ⬛ Cube shrinks
+// foot, a Resolution drop, or a loaded unit; here we bump Resolution (foot) to the nearest step that fits the
+// footprint and raise layers to fit the height, so the grid always shows the whole model. Only-grow (never
+// shrinks), so a unit longer than it is tall keeps its length. 128 voxels is the hard ceiling.
+function ensureGridFits() {
+  const res = [32, 48, 64, 96, 128]; let changed = false;
+  for (const part of ['body', 'turret']) {
+    const g = geomState[part]; if (!g || g.auto || !g.spanX) continue;
+    const isT = part === 'turret', curFoot = isT ? (state.turretFoot || state.foot) : state.foot;
+    const need = Math.max(g.spanX.hi, g.spanY.hi);
+    if (need > curFoot) { const nf = res.find((r) => r >= need) || 128; if (isT) { state.turretFoot = nf; if ($('turretRes')) $('turretRes').value = nf; } else { state.foot = nf; if ($('res')) $('res').value = nf; } changed = true; }
+    const lid = isT ? 'turretLayers' : 'bodyLayers', zNeed = Math.min(128, g.spanZ.hi);
+    if (zNeed > state[lid]) { const el = $(lid); if (el && +el.max < zNeed) el.max = String(zNeed); state[lid] = zNeed; if (el) { el.value = zNeed; const lv = $(lid + 'V'); if (lv) lv.textContent = String(zNeed); } changed = true; }
+  }
+  if (changed) syncSizeUI();
+}
 function rebuildSlices() {
+  ensureGridFits();                                   // never let the grid clamp/chop the model — grow to fit the spans first
   if (bodyBaked) { bodyBaked.destroy(); bodyBaked = null; } if (turretBaked) { turretBaked.destroy(); turretBaked = null; }
   if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
   state.baked = null; voxSig = ''; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
