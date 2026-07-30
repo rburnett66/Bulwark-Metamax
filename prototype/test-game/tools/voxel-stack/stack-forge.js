@@ -1915,7 +1915,18 @@ function xfSyncSliders() {
   const set = (id, v) => { const el = $(id); if (el) el.value = String(v); const lv = $(id + 'V'); if (lv) lv.textContent = (+v).toFixed(3); };
   set('xfSx', xf.sx); set('xfSy', xf.sy); set('xfOx', xf.ox); set('xfOy', xf.oy);
 }
-if ($('boxSideSeg')) $('boxSideSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; boxSide = b.dataset.v; [...$('boxSideSeg').children].forEach((c) => c.classList.toggle('on', c === b)); xfSyncSliders(); };
+if ($('boxSideSeg')) $('boxSideSeg').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  boxSide = b.dataset.v;
+  [...$('boxSideSeg').children].forEach((c) => c.classList.toggle('on', c === b));
+  // Point the orbit camera STRAIGHT AT the face you're aligning so the selector, the primary view, and the
+  // Length/Width/Height + Scale/Align controls all correspond (owner: selecting 'side' was showing 'front', and
+  // Width did nothing because Y was edge-on). az/el follow drawDimBox's own face-visibility rule — showFront at
+  // az 90 (+X), the ±Y SIDE wall at az 0, BACK (−X) at az 270, TOP looking down — so the box's face LABEL agrees.
+  const CAM = { top: { az: 0, el: 85 }, side: { az: 0, el: 18 }, front: { az: 90, el: 18 }, back: { az: 270, el: 18 } }[boxSide];
+  if (CAM) { state.az = CAM.az; state.el = CAM.el; syncInputs(); voxSig = ''; renderGridView(); }
+  xfSyncSliders();
+};
 function xfEdit(field, val, live) {
   imgXf[boxPart()][boxSide][field] = val;
   const lv = $({ sx: 'xfSxV', sy: 'xfSyV', ox: 'xfOxV', oy: 'xfOyV' }[field]); if (lv) lv.textContent = val.toFixed(3);
