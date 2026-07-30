@@ -1500,6 +1500,21 @@ function renderGridView() {
       ctx.font = '9px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
       ctx.fillStyle = 'rgba(120,200,255,.6)'; ctx.fillText(ORI.note, 4, 4);
     }
+    // ROTATING COMPASS (owner): a rose that turns with the object's azimuth so you always know where
+    // Front / Left / Back / Right point while editing a slice — especially in the side view. Front (+X,
+    // the unit's facing / zeroFacing) is gold; the whole rose spins by state.az.
+    const R = 20, ccx = W - R - 12, ccy = H - R - 12, a = state.az * Math.PI / 180;
+    ctx.save(); ctx.translate(ccx, ccy);
+    ctx.strokeStyle = 'rgba(120,200,255,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.rotate(a);
+    const dirs = [['F', 0, -1, 'rgba(242,200,105,.95)'], ['R', 1, 0, 'rgba(140,210,255,.85)'], ['B', 0, 1, 'rgba(140,210,255,.85)'], ['L', -1, 0, 'rgba(140,210,255,.85)']];
+    ctx.font = 'bold 10px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 1.5;
+    for (const [lab, dx, dy, col] of dirs) {
+      ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(dx * R * 0.5, dy * R * 0.5); ctx.lineTo(dx * R * 0.86, dy * R * 0.86); ctx.stroke();
+      ctx.save(); ctx.translate(dx * (R + 8), dy * (R + 8)); ctx.rotate(-a); ctx.fillStyle = col; ctx.fillText(lab, 0, 0); ctx.restore();   // keep labels upright
+    }
+    ctx.fillStyle = 'rgba(242,200,105,.95)'; ctx.beginPath(); ctx.moveTo(0, -R * 0.86); ctx.lineTo(-3.5, -R * 0.55); ctx.lineTo(3.5, -R * 0.55); ctx.closePath(); ctx.fill();   // front arrowhead
+    ctx.restore();
   }
 
   const drawMarquee = (s, stroke, fill) => {
@@ -1703,7 +1718,9 @@ window.addEventListener('pointermove', (e) => {
   if (gDragPrev) { gPrevAz = ((gDragPrev.az + (e.clientX - gDragPrev.x) * 0.6) % 360 + 360) % 360; return; }
   if (drag) {
     state.az = ((drag.az + (e.clientX - drag.x) * 0.6) % 360 + 360) % 360;
-    state.el = clamp(drag.el - (e.clientY - drag.y) * 0.35, 0, 90); syncInputs(); return;
+    state.el = clamp(drag.el - (e.clientY - drag.y) * 0.35, 0, 90); syncInputs();
+    renderGridView();   // grid compass rotates with the object as you orbit
+    return;
   }
   if (e.target !== app.view) return;                                                      // cursor hints
   const q = insetHit(e);
@@ -1726,12 +1743,12 @@ app.view.addEventListener('wheel', (e) => {
 function syncInputs() { $('az').value = state.az | 0; $('azV').textContent = (state.az | 0) + '°'; $('el').value = state.el | 0; $('elV').textContent = (state.el | 0) + '°'; }
 
 // ── controls ──
-$('az').oninput = (e) => { state.az = +e.target.value; $('azV').textContent = state.az + '°'; };
+$('az').oninput = (e) => { state.az = +e.target.value; $('azV').textContent = state.az + '°'; renderGridView(); };   // spin the grid compass with az
 $('el').oninput = (e) => { state.el = +e.target.value; $('elV').textContent = state.el + '°'; };
 $('taim').oninput = (e) => { state.taim = +e.target.value; $('taimV').textContent = state.taim + '°'; };
 $('tdx').oninput = (e) => { state.turretDx = +e.target.value; $('tdxV').textContent = state.turretDx; };
 $('tmz').oninput = (e) => { state.mountZ = +e.target.value; $('tmzV').textContent = (state.mountZ > 0 ? '+' : '') + state.mountZ; };
-$('viewSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.az = +b.dataset.az; state.el = +b.dataset.el; syncInputs(); };
+$('viewSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.az = +b.dataset.az; state.el = +b.dataset.el; syncInputs(); renderGridView(); };
 $('tpiv').oninput = (e) => { state.turretPivot = +e.target.value; $('tpivV').textContent = state.turretPivot; };
 $('blen').oninput = (e) => { state.barrelLen = +e.target.value; $('blenV').textContent = state.barrelLen || 'off'; rebuildSlices(); };
 $('brad').oninput = (e) => { state.barrelRad = +e.target.value; $('bradV').textContent = state.barrelRad; rebuildSlices(); };
