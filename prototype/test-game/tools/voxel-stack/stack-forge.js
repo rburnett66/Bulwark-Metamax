@@ -195,7 +195,7 @@ function keyedCropped(img, tol, poly, picks) {
 // it from there — this is the owner's cell-accurate placement, honored 1:1 by the carve. `Normalize` (button)
 // just resets xf to the contain fit. Returns the mask (m), colours (c) AND the placed canvas (cv) so the
 // projections render exactly what the carve uses.
-function placeSliceOnGrid(keyed, xf, w, h, elev) {
+function placeSliceOnGrid(keyed, xf, w, h, elev, smooth) {
   w = Math.max(1, w | 0); h = Math.max(1, h | 0);
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
@@ -203,7 +203,7 @@ function placeSliceOnGrid(keyed, xf, w, h, elev) {
   const sx = (xf && xf.sx) || 1, sy = (xf && xf.sy) || 1;
   const dw = kw * fit * sx, dh = kh * fit * sy;
   const cxp = w / 2 + ((xf && xf.ox) || 0) * w, cyp = h / 2 + ((xf && xf.oy) || 0) * h;
-  ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, cxp - dw / 2, cyp - dh / 2, dw, dh);
+  ctx.imageSmoothingEnabled = !!smooth; ctx.drawImage(keyed, cxp - dw / 2, cyp - dh / 2, dw, dh);   // mask: crisp; projection: smooth
   const d = ctx.getImageData(0, 0, w, h).data, m = new Uint8Array(w * h), c = new Uint8Array(w * h * 3);
   for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
     const row = elev ? (h - 1 - r) : r, i = row * w + a, p = (r * w + a) * 4;
@@ -216,7 +216,10 @@ function placeSliceOnGrid(keyed, xf, w, h, elev) {
 function placedCanvas(part, view, w, h) {
   const src = imgs[part]; if (!src || !src[view]) return null;
   const keyed = keyedCropped(src[view], keyTolState[part][view], polyState[part][view], pickState[part][view]);
-  return placeSliceOnGrid(keyed, (imgXf[part] || {})[view], w, h, false).cv;
+  // render the SAME placement at HIGH res (smooth) so the projection is sharp — the carve mask uses the low-res
+  // crisp version separately. Placement (fit/sx/sy/ox/oy) is resolution-independent, so they match.
+  const SS = Math.max(1, Math.ceil(384 / Math.max(w | 0, h | 0, 1)));
+  return placeSliceOnGrid(keyed, (imgXf[part] || {})[view], (w | 0) * SS, (h | 0) * SS, false, true).cv;
 }
 // stretch a (keyed, cropped) content canvas to w×h → alpha mask (m) + RGB samples (c) so elevation views
 // both CARVE the volume and PAINT the cube walls they depict; `elev` flips rows (z-up).
@@ -1719,7 +1722,7 @@ function renderGridView() {
     // no-normalize: draw the SAME placed slice the carve masks (placedCanvas), at the box-grid cell size, so the
     // overlay, the orbit box and the carved voxels are one object — no gridStretch re-fit.
     const keyed = placedCanvas(part, gridView, cR.hi - cR.lo, rR.hi - rR.lo);
-    if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
+    if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = true; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
     for (const [hx, hy] of [[bx + bw2 / 2, by], [bx + bw2 / 2, by + bh2], [bx, by + bh2 / 2], [bx + bw2, by + bh2 / 2]]) ctx.fillRect(hx - 4, hy - 4, 8, 8);
