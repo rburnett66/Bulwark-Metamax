@@ -1916,9 +1916,17 @@ function commitBoxPlace(part) {
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
 }
 if ($('boxGen')) $('boxGen').onclick = () => commitBoxPlace(boxPart());   // commit the pending placement into the carve
-if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit
+if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit (box follows the aligned slices, TOP master)
   const part = boxPart(); geomState[part] = { auto: true, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top' };
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
+};
+// Stage 3: manual Length/Width/Height are an ADVANCED override — collapsed by default so per-slice align is the
+// primary sizing control (no two fighting size systems). Toggle reveals the manual span sliders.
+if ($('boxManualToggle')) $('boxManualToggle').onclick = () => {
+  const r = $('boxManualRow'); if (!r) return;
+  const show = r.style.display === 'none';
+  r.style.display = show ? '' : 'none';
+  $('boxManualToggle').textContent = '⚙ Manual box size ' + (show ? '▾' : '▸');
 };
 
 // SF2 per-side ALIGNMENT: select a side, then high-res scale/align sliders stretch & nudge that image.
