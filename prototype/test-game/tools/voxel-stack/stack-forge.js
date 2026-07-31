@@ -787,8 +787,9 @@ function drawDimBox(ctx, meta, el, az, part) {
   const PX = (X, Y) => cx + S * (X * ca - Y * sa);
   const PY = (X, Y, Z) => groundY + S * ((X * sa + Y * ca) * se - Z * h * ce);
   const P = (X, Y, Z) => ({ x: PX(X - cx0, Y - cy0), y: PY(X - cx0, Y - cy0, Z) });   // world voxel coords → screen
-  const raw = imgs[part] || {}, xfp = imgXf[part] || {};
-  const view = { top: xfCanvas(raw.top, xfp.top), side: xfCanvas(raw.side, xfp.side), front: xfCanvas(raw.front, xfp.front), back: xfCanvas(raw.back, xfp.back) };   // per-side alignment
+  // Stage 2: project the SAME keyed cutout the carve consumes (sliceCanvas), NOT the raw photo — so the orbit
+  // box face, the grid overlay, and the carved voxels all show one slice (exposes any keyed-silhouette gap).
+  const view = { top: sliceCanvas(part, 'top'), side: sliceCanvas(part, 'side'), front: sliceCanvas(part, 'front'), back: sliceCanvas(part, 'back') };
 
   // affine image map: image rect → the face parallelogram (o = img(0,0), u = img(w,0), v = img(0,h))
   const projImg = (img, o, u, v) => projectSliceAffine(ctx, img, o, u, v, 0.82);
@@ -1555,7 +1556,7 @@ function renderGridView() {
   // the ACTIVE slice — palette-correct in Paint mode, flat grey in Geometry mode (shape, not colour)
   for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
     const col = cellAt(cx, cy); if (!col) continue;
-    ctx.fillStyle = geomActive ? '#68788a' : `rgb(${col[0]},${col[1]},${col[2]})`;
+    ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;   // Stage 2: true color in Geometry mode too, so the grid reads as the same object as orbit/paint
     ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
   }
   // a REAL grid: cell lines across the WHOLE area (occupied + empty) + a crisp outer frame
@@ -1672,7 +1673,7 @@ function renderGridView() {
     const bx = ox + cR.lo * cell, by = oy + rR.lo * cellV, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cellV;
     // apply the SAME per-side scale/align (xf) the carve uses, or the geometry overlay (raw image) won't match
     // the paint voxels (transformed) once a side is aligned — owner: "geometry and paint do not match".
-    const keyed = imgs[part][gridView] ? xfCanvas(keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]), (imgXf[part] || {})[gridView]) : null;
+    const keyed = sliceCanvas(part, gridView);   // Stage 2: one source — the same keyed cutout the orbit box + carve use
     if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
