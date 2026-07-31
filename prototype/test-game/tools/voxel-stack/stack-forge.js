@@ -791,13 +791,7 @@ function drawDimBox(ctx, meta, el, az, part) {
   const view = { top: xfCanvas(raw.top, xfp.top), side: xfCanvas(raw.side, xfp.side), front: xfCanvas(raw.front, xfp.front), back: xfCanvas(raw.back, xfp.back) };   // per-side alignment
 
   // affine image map: image rect → the face parallelogram (o = img(0,0), u = img(w,0), v = img(0,h))
-  const projImg = (img, o, u, v) => {
-    if (!img) return; const w = img.width || img.naturalWidth, hi = img.height || img.naturalHeight; if (!w || !hi) return;
-    ctx.save(); ctx.globalAlpha = 0.82;
-    ctx.setTransform((u.x - o.x) / w, (u.y - o.y) / w, (v.x - o.x) / hi, (v.y - o.y) / hi, o.x, o.y);
-    ctx.drawImage(img, 0, 0, w, hi);
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.restore();
-  };
+  const projImg = (img, o, u, v) => projectSliceAffine(ctx, img, o, u, v, 0.82);
   // per-cell gridlines across a face defined by corner A and full edges to B (u) and C (v), nu×nv cells
   const faceGrid = (A, B, C, nu, nv) => {
     const line = (p0, p1, tile) => { ctx.strokeStyle = tile ? 'rgba(120,205,255,0.55)' : 'rgba(120,205,255,0.13)'; ctx.lineWidth = tile ? 1.3 : 0.5; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke(); };
@@ -1148,6 +1142,22 @@ function xfCanvas(im, xf) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
   g.translate(w / 2 + (xf.ox || 0) * w, h / 2 + (xf.oy || 0) * h); g.scale(xf.sx || 1, xf.sy || 1); g.drawImage(im, -w / 2, -h / 2);
   return c;
+}
+// sliceCanvas(part, view): the EXACT per-face canvas the carve consumes — the keyed cutout of the source slice
+// with the per-side align transform (imgXf) applied. ONE source shared by the carve (buildVolume) and both
+// camera overlays (drawDimBox + grid geometry overlay) so all three show the same slice. Null if no source.
+function sliceCanvas(part, view) {
+  const src = imgs[part]; if (!src || !src[view]) return null;
+  return xfCanvas(keyedCropped(src[view], keyTolState[part][view], polyState[part][view], pickState[part][view]), (imgXf[part] || {})[view]);
+}
+// projectSliceAffine: affine-map an image rect onto a face parallelogram (o=img(0,0), u=img(w,0), v=img(0,h)).
+// Lifted from drawDimBox's projImg so both cameras project slices through one path (default alpha 0.82).
+function projectSliceAffine(ctx, img, o, u, v, alpha) {
+  if (!img) return; const w = img.width || img.naturalWidth, hi = img.height || img.naturalHeight; if (!w || !hi) return;
+  ctx.save(); ctx.globalAlpha = (alpha == null ? 0.82 : alpha);
+  ctx.setTransform((u.x - o.x) / w, (u.y - o.y) / w, (v.x - o.x) / hi, (v.y - o.y) / hi, o.x, o.y);
+  ctx.drawImage(img, 0, 0, w, hi);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.restore();
 }
 // per-slot flip: keep the raw source + H/V flags so flips compose from the original (no quality drift)
 const mkViews = (v) => ({ top: v(), side: v(), front: v(), back: v() });
@@ -1883,13 +1893,13 @@ if ($('boxWid')) $('boxWid').oninput = (e) => boxEdit('bh', +e.target.value);
 if ($('boxHt')) $('boxHt').oninput = (e) => boxEdit('Hv', +e.target.value);
 if ($('boxOx')) $('boxOx').oninput = (e) => boxEdit('ox', +e.target.value);
 if ($('boxOy')) $('boxOy').oninput = (e) => boxEdit('oy', +e.target.value);
-if ($('boxGen')) $('boxGen').onclick = () => {   // commit the pending placement into the carve (overrides autoSpans)
-  const part = boxPart(), p = boxPlace[part] || effPlace(part);
-  // The carve grid is foot×foot×layers; explicit spans past it get CLAMPED, which chops the model (owner:
-  // "the carve clamps are the problem" — box looks perfect, grid chopped in the back). So GROW the grid to hold
-  // the box the owner sized: raise Resolution (foot) to the nearest step that fits the footprint, and raise
-  // layers to fit the height. Only the hard 128 ceiling can still clamp. Growing foot enlarges the on-board
-  // unit (voxels/tile is constant) — adjust overall size via Unit-size after if needed.
+// commitBoxPlace(part): commit the pending Subject-box placement into the carve. GROWS the grid to fit
+// (Resolution + layers) so geomSpans never clamps — the grid-fit invariant — then writes the explicit spans.
+// The SINGLE commit path, shared by the Generate button and (Stage 1) the grid box-drag release.
+function commitBoxPlace(part) {
+  const p = boxPlace[part] || effPlace(part);
+  // GROW the grid to hold the box the owner sized (raise Resolution + layers) so the carve never clamps; only
+  // the hard 128 ceiling can still clamp. Growing foot enlarges the on-board unit (voxels/tile constant).
   const res = [32, 48, 64, 96, 128];
   const footNeed = Math.max(p.ox + p.bw, p.oy + p.bh);
   const newFoot = res.find((r) => r >= footNeed) || 128;
@@ -1902,7 +1912,8 @@ if ($('boxGen')) $('boxGen').onclick = () => {   // commit the pending placement
   geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
     spanX: { lo: p.ox, hi: Math.min(foot, p.ox + p.bw) }, spanY: { lo: p.oy, hi: Math.min(foot, p.oy + p.bh) }, spanZ: { lo: p.z0 || 0, hi: Math.min(layers, (p.z0 || 0) + p.Hv) } };
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
-};
+}
+if ($('boxGen')) $('boxGen').onclick = () => commitBoxPlace(boxPart());   // commit the pending placement into the carve
 if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit
   const part = boxPart(); geomState[part] = { auto: true, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top' };
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
