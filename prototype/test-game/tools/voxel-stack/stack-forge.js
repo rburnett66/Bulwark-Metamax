@@ -172,54 +172,13 @@ function keyedCanvas(img, tol, polys, picks) {
 // keyed + CROPPED to the content bounding box — so empty margins and the raw image aspect ratio don't
 // distort registration (a long-barrel side view maps its CONTENT, not the whole rectangle).
 function keyedCropped(img, tol, poly, picks) {
-  const k = keyedCanvas(img, tol, poly, picks), W = k.width, H = k.height, d = k.getContext('2d').getImageData(0, 0, W, H).data;
-  // ROBUST crop bbox: count filled pixels per row/col, then crop to the rows/cols that carry real content
-  // (>= 2% of the densest row/col). A stray speck / un-cleared noise pixel in an empty region no longer
-  // inflates the bbox — which, when the slice is scaled to the grid, used to compress the whole profile.
-  const colN = new Int32Array(W), rowN = new Int32Array(H); let maxC = 0, maxR = 0;
-  for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) if (d[(yy * W + xx) * 4 + 3] > 40) { colN[xx]++; rowN[yy]++; }
-  for (let i = 0; i < W; i++) if (colN[i] > maxC) maxC = colN[i];
-  for (let i = 0; i < H; i++) if (rowN[i] > maxR) maxR = rowN[i];
-  if (maxC === 0) return k;
-  const cT = Math.max(1, Math.round(maxC * 0.02)), rT = Math.max(1, Math.round(maxR * 0.02));
-  let x0 = W, x1 = -1, y0 = H, y1 = -1;
-  for (let i = 0; i < W; i++) if (colN[i] >= cT) { if (i < x0) x0 = i; if (i > x1) x1 = i; }
-  for (let i = 0; i < H; i++) if (rowN[i] >= rT) { if (i < y0) y0 = i; if (i > y1) y1 = i; }
-  if (x1 < x0 || y1 < y0) return k;
+  const k = keyedCanvas(img, tol, poly, picks), d = k.getContext('2d').getImageData(0, 0, k.width, k.height).data;
+  let x0 = k.width, y0 = k.height, x1 = -1, y1 = -1;
+  for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+  if (x1 < x0) return k;
   const cw = x1 - x0 + 1, ch = y1 - y0 + 1, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   cv.getContext('2d').drawImage(k, x0, y0, cw, ch, 0, 0, cw, ch);
   return cv;
-}
-// PLACE a keyed slice onto a w×h cell grid WITHOUT normalizing (no aspect-distorting stretch-to-fill). At the
-// default xf {sx:1,sy:1,ox:0,oy:0} the slice is CONTAINed (aspect-preserving fit); Scale/Slide (imgXf) adjust
-// it from there — this is the owner's cell-accurate placement, honored 1:1 by the carve. `Normalize` (button)
-// just resets xf to the contain fit. Returns the mask (m), colours (c) AND the placed canvas (cv) so the
-// projections render exactly what the carve uses.
-function placeSliceOnGrid(keyed, xf, w, h, elev, smooth) {
-  w = Math.max(1, w | 0); h = Math.max(1, h | 0);
-  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const ctx = cv.getContext('2d', { willReadFrequently: true });
-  const kw = keyed.width || 1, kh = keyed.height || 1, fit = Math.min(w / kw, h / kh);   // sx=sy=1 → contain
-  const sx = (xf && xf.sx) || 1, sy = (xf && xf.sy) || 1;
-  const dw = kw * fit * sx, dh = kh * fit * sy;
-  const cxp = w / 2 + ((xf && xf.ox) || 0) * w, cyp = h / 2 + ((xf && xf.oy) || 0) * h;
-  ctx.imageSmoothingEnabled = !!smooth; ctx.drawImage(keyed, cxp - dw / 2, cyp - dh / 2, dw, dh);   // mask: crisp; projection: smooth
-  const d = ctx.getImageData(0, 0, w, h).data, m = new Uint8Array(w * h), c = new Uint8Array(w * h * 3);
-  for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
-    const row = elev ? (h - 1 - r) : r, i = row * w + a, p = (r * w + a) * 4;
-    if (d[p + 3] > 40) { m[i] = 1; c[i * 3] = d[p]; c[i * 3 + 1] = d[p + 1]; c[i * 3 + 2] = d[p + 2]; }
-  }
-  return { m, c, w, h, cv };
-}
-// the placed canvas for a view on a w×h box grid — what BOTH the orbit dim box and the grid overlay project,
-// so the projections render exactly what the carve masks (placeSliceOnGrid) produce. cv only (no mask).
-function placedCanvas(part, view, w, h) {
-  const src = imgs[part]; if (!src || !src[view]) return null;
-  const keyed = keyedCropped(src[view], keyTolState[part][view], polyState[part][view], pickState[part][view]);
-  // render the SAME placement at HIGH res (smooth) so the projection is sharp — the carve mask uses the low-res
-  // crisp version separately. Placement (fit/sx/sy/ox/oy) is resolution-independent, so they match.
-  const SS = Math.max(1, Math.ceil(384 / Math.max(w | 0, h | 0, 1)));
-  return placeSliceOnGrid(keyed, (imgXf[part] || {})[view], (w | 0) * SS, (h | 0) * SS, false, true).cv;
 }
 // stretch a (keyed, cropped) content canvas to w×h → alpha mask (m) + RGB samples (c) so elevation views
 // both CARVE the volume and PAINT the cube walls they depict; `elev` flips rows (z-up).
@@ -464,14 +423,9 @@ function buildVolume(partId, foot, layers) {
   // side's height maps PROPORTIONALLY (a long-barrel side doesn't get stretched vertically to fill layers).
   const tol = keyTolState[partId], pol = polyState[partId], pk = pickState[partId];
   const xf = imgXf[partId] || {};   // SF2 per-side alignment (scale/offset) folded into the carve
-  // keyed cutouts (robust-cropped) — reused for autoSpans box sizing (xfCanvas) AND the no-normalize masks
-  const topKeyed = src.top ? keyedCropped(src.top, tol.top, pol.top, pk.top) : null;
-  const sideKeyed = src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : null;
-  const frontKeyed = src.front ? keyedCropped(src.front, tol.front, pol.front, pk.front) : (src.back ? keyedCropped(src.back, tol.back, pol.back, pk.back) : null);
-  const backKeyed = src.back ? keyedCropped(src.back, tol.back, pol.back, pk.back) : null;
-  const topC = topKeyed ? xfCanvas(topKeyed, xf.top) : null;
-  const sideC = sideKeyed ? xfCanvas(sideKeyed, xf.side) : null;
-  const frontC = frontKeyed ? xfCanvas(frontKeyed, src.front ? xf.front : xf.back) : null;
+  const topC = src.top ? xfCanvas(keyedCropped(src.top, tol.top, pol.top, pk.top), xf.top) : null;
+  const sideC = src.side ? xfCanvas(keyedCropped(src.side, tol.side, pol.side, pk.side), xf.side) : null;
+  const frontC = src.front ? xfCanvas(keyedCropped(src.front, tol.front, pol.front, pk.front), xf.front) : (src.back ? xfCanvas(keyedCropped(src.back, tol.back, pol.back, pk.back), xf.back) : null);
   const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
   // procedural barrel reserves a FORWARD margin so the body shrinks back and the tube protrudes past it
   const reach = (partId === 'turret' && state.barrelLen > 0) ? state.barrelLen : 0;
@@ -488,11 +442,10 @@ function buildVolume(partId, foot, layers) {
   else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
-  // NO-NORMALIZE carve: place each keyed slice onto the box grid at YOUR imgXf (aspect-preserving), NOT the old
-  // gridStretch fill. So the mask is exactly what you aligned — the side's gap carves at true proportions.
-  const sideG = sideKeyed ? placeSliceOnGrid(sideKeyed, xf.side, bw, Hv, true) : null;    // length × height
-  const frontG = frontKeyed ? placeSliceOnGrid(frontKeyed, src.front ? xf.front : xf.back, bh, Hv, true) : null; // width × height
-  const backG = backKeyed ? placeSliceOnGrid(backKeyed, xf.back, bh, Hv, true) : null;    // colour-only −x walls
+  const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to the common Hv)
+  const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
+  const backC = src.back ? xfCanvas(keyedCropped(src.back, tol.back, pol.back, pk.back), xf.back) : null; // colour-only: paints the −x walls (xf.back → matches the box's Back projection)
+  const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
   const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= z0 && z < z0 + Hv && !!sideG.m[(z - z0) * bw + (x - ox)]) : (z >= z0 && z < z0 + Hv);
   const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv && !!frontG.m[(z - z0) * bh + (y - oy)]) : (z >= z0 && z < z0 + Hv);
   const flat = !sideG && !frontG;
@@ -836,8 +789,7 @@ function drawDimBox(ctx, meta, el, az, part) {
   const P = (X, Y, Z) => ({ x: PX(X - cx0, Y - cy0), y: PY(X - cx0, Y - cy0, Z) });   // world voxel coords → screen
   // Stage 2: project the SAME keyed cutout the carve consumes (sliceCanvas), NOT the raw photo — so the orbit
   // box face, the grid overlay, and the carved voxels all show one slice (exposes any keyed-silhouette gap).
-  // Each face projects the PLACED slice (placedCanvas) at the face's cell size — exactly what the carve masks,
-  // so orbit box, grid overlay, and carved voxels agree. (Computed per face below where nL/nW/nH are known.)
+  const view = { top: sliceCanvas(part, 'top'), side: sliceCanvas(part, 'side'), front: sliceCanvas(part, 'front'), back: sliceCanvas(part, 'back') };
 
   // affine image map: image rect → the face parallelogram (o = img(0,0), u = img(w,0), v = img(0,h))
   const projImg = (img, o, u, v) => projectSliceAffine(ctx, img, o, u, v, 0.82);
@@ -860,16 +812,16 @@ function drawDimBox(ctx, meta, el, az, part) {
   const nL = pl.bw, nW = pl.bh, nH = pl.Hv, tl = (v) => (v / VOX_PER_TILE).toFixed(2);
   // FACES (image projected onto the FULL face, then gridlines + label). Corner order = (A origin, B=A+u, C=A+v).
   // TOP (Z=zt): img x→X (length), y→Y (width)
-  { const A = P(x0, y0, zt), B = P(x1, y0, zt), C = P(x0, y1, zt); projImg(placedCanvas(part, 'top', nL, nW), A, B, C); faceGrid(A, B, C, nL, nW); label(A, B, C, 'TOP  L' + tl(nL) + '×W' + tl(nW) + ' t'); }
+  { const A = P(x0, y0, zt), B = P(x1, y0, zt), C = P(x0, y1, zt); projImg(view.top, A, B, C); faceGrid(A, B, C, nL, nW); label(A, B, C, 'TOP  L' + tl(nL) + '×W' + tl(nW) + ' t'); }
   // +X FRONT: img x→Y (width), y→down(Z height)
-  if (showFront) { const A = P(x1, y0, zt), B = P(x1, y1, zt), C = P(x1, y0, zb); projImg(placedCanvas(part, 'front', nW, nH), A, B, C); faceGrid(A, B, C, nW, nH); label(A, B, C, 'FRONT  H' + tl(nH) + ' t'); }
+  if (showFront) { const A = P(x1, y0, zt), B = P(x1, y1, zt), C = P(x1, y0, zb); projImg(view.front, A, B, C); faceGrid(A, B, C, nW, nH); label(A, B, C, 'FRONT  H' + tl(nH) + ' t'); }
   // −X BACK (mirrored)
-  if (showBack) { const A = P(x0, y1, zt), B = P(x0, y0, zt), C = P(x0, y1, zb); projImg(placedCanvas(part, 'back', nW, nH), A, B, C); faceGrid(A, B, C, nW, nH); label(A, B, C, 'BACK'); }
+  if (showBack) { const A = P(x0, y1, zt), B = P(x0, y0, zt), C = P(x0, y1, zb); projImg(view.back, A, B, C); faceGrid(A, B, C, nW, nH); label(A, B, C, 'BACK'); }
   // SIDE = the visible ±Y wall. Both walls put the unit's FRONT at the +X (x1) end, so they read as
   // natural mirror images when you orbit around (owner: the left side was reversed vs top/front — it
   // must mirror the right). img x→X (length, back→front = x0→x1), y→down(Z height).
-  if (showPlusY) { const A = P(x0, y1, zt), B = P(x1, y1, zt), C = P(x0, y1, zb); projImg(placedCanvas(part, 'side', nL, nH), A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
-  else if (showMinusY) { const A = P(x0, y0, zt), B = P(x1, y0, zt), C = P(x0, y0, zb); projImg(placedCanvas(part, 'side', nL, nH), A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
+  if (showPlusY) { const A = P(x0, y1, zt), B = P(x1, y1, zt), C = P(x0, y1, zb); projImg(view.side, A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
+  else if (showMinusY) { const A = P(x0, y0, zt), B = P(x1, y0, zt), C = P(x0, y0, zb); projImg(view.side, A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
 
   // wireframe = the unit's bounding box (placement)
   const c = [P(x0, y0, zb), P(x1, y0, zb), P(x1, y1, zb), P(x0, y1, zb), P(x0, y0, zt), P(x1, y0, zt), P(x1, y1, zt), P(x0, y1, zt)];
@@ -1719,10 +1671,10 @@ function renderGridView() {
     const rng = (info) => { const s = bsp[spanKey[info.axis]], cap = capOf(info.axis); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
     const cR = rng(g.col), rR = rng(g.row);
     const bx = ox + cR.lo * cell, by = oy + rR.lo * cellV, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cellV;
-    // no-normalize: draw the SAME placed slice the carve masks (placedCanvas), at the box-grid cell size, so the
-    // overlay, the orbit box and the carved voxels are one object — no gridStretch re-fit.
-    const keyed = placedCanvas(part, gridView, cR.hi - cR.lo, rR.hi - rR.lo);
-    if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = true; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
+    // apply the SAME per-side scale/align (xf) the carve uses, or the geometry overlay (raw image) won't match
+    // the paint voxels (transformed) once a side is aligned — owner: "geometry and paint do not match".
+    const keyed = sliceCanvas(part, gridView);   // Stage 2: one source — the same keyed cutout the orbit box + carve use
+    if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
     for (const [hx, hy] of [[bx + bw2 / 2, by], [bx + bw2 / 2, by + bh2], [bx, by + bh2 / 2], [bx + bw2, by + bh2 / 2]]) ctx.fillRect(hx - 4, hy - 4, 8, 8);
@@ -2008,17 +1960,6 @@ if ($('xfSy')) { $('xfSy').oninput = (e) => xfEdit('sy', +e.target.value, true);
 if ($('xfOx')) { $('xfOx').oninput = (e) => xfEdit('ox', +e.target.value, true); $('xfOx').onchange = (e) => xfEdit('ox', +e.target.value, false); }
 if ($('xfOy')) { $('xfOy').oninput = (e) => xfEdit('oy', +e.target.value, true); $('xfOy').onchange = (e) => xfEdit('oy', +e.target.value, false); }
 if ($('xfReset')) $('xfReset').onclick = () => { imgXf[boxPart()][boxSide] = { sx: 1, sy: 1, ox: 0, oy: 0 }; xfSyncSliders(); gridModel = null; rebuildSlices(); scheduleAutosave(); };
-// ⊡ Normalize side (REQUEST ONLY): set this side's imgXf so the slice FILLS the box (the old auto-fit stretch).
-// The carve never does this on its own — it honors your scale/slide; this button applies the fit when you want it.
-if ($('boxNormalize')) $('boxNormalize').onclick = () => {
-  const part = boxPart(), view = boxSide, src = imgs[part]; if (!src || !src[view]) return;
-  const keyed = keyedCropped(src[view], keyTolState[part][view], polyState[part][view], pickState[part][view]);
-  const pl = effPlace(part), kw = keyed.width || 1, kh = keyed.height || 1;
-  const [w, h] = ({ top: [pl.bw, pl.bh], side: [pl.bw, pl.Hv], front: [pl.bh, pl.Hv], back: [pl.bh, pl.Hv] }[view]) || [pl.bw, pl.Hv];
-  const fit = Math.min(w / kw, h / kh) || 1;                 // contain scale; sx/sy above it fill the box
-  imgXf[part][view] = { sx: (w / kw) / fit, sy: (h / kh) / fit, ox: 0, oy: 0 };
-  xfSyncSliders(); gridModel = null; rebuildSlices(); scheduleAutosave();
-};
 $('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
 // ⬛ Cube: make the build volume a true voxel cube driven by the HEIGHT you set — footprint (length×width) snaps
 // to match Base layers (owner: "if the height is 64, set base to 64×64"). Footprint is a discrete Resolution, so
