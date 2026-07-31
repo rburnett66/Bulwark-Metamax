@@ -1940,6 +1940,8 @@ if ($('boxSideSeg')) $('boxSideSeg').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
   boxSide = b.dataset.v;
   [...$('boxSideSeg').children].forEach((c) => c.classList.toggle('on', c === b));
+  // Stage 4: switch the Grid View to the same facing so the selector, grid, and orbit all show one face.
+  if (['top', 'side', 'front', 'back'].includes(boxSide)) { gridView = boxSide; gridLayer = 0; const gs = $('gridViewSeg'); if (gs) [...gs.children].forEach((c) => c.classList.toggle('on', c.dataset.v === boxSide)); }
   // Point the orbit camera STRAIGHT AT the face you're aligning so the selector, the primary view, and the
   // Length/Width/Height + Scale/Align controls all correspond (owner: selecting 'side' was showing 'front', and
   // Width did nothing because Y was edge-on). az/el follow drawDimBox's own face-visibility rule — showFront at
@@ -2056,6 +2058,8 @@ $('gridViewSeg').onclick = (e) => {
   if (b.id === 'gridAlignBtn') { gridAlign = !gridAlign; b.classList.toggle('on', gridAlign); renderGridView(); return; }   // ⊞ Align: toggle the dual-projection overlay (keeps the selection)
   gridView = b.dataset.v; gridLayer = 0; gridAlign = false; gridLasso = null; lassoMode = false;   // picking a single facing exits Align + the lasso; the voxel selection PERSISTS across facings (paint faces without reselecting)
   gridZoom = 1; gridPanX = 0; gridPanY = 0;   // fresh facing → reset the scroll-wheel zoom
+  // Stage 4: the grid facing IS the align side — keep the box-side selector + Scale/Align sliders on this face.
+  if (['top', 'side', 'front', 'back'].includes(gridView)) { boxSide = gridView; const ss = $('boxSideSeg'); if (ss) [...ss.children].forEach((c) => c.classList.toggle('on', c.dataset.v === boxSide)); if (typeof xfSyncSliders === 'function') xfSyncSliders(); }
   const ab = $('gridAlignBtn'); if (ab) ab.classList.remove('on');
   [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b && c.id !== 'gridAlignBtn')); renderGridView();
 };   // views have different col/row dims — a selection can't carry over
