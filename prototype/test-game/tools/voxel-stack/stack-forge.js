@@ -1663,9 +1663,10 @@ function renderGridView() {
     // the other views in lock-step. spans come from base.sp (auto today; the user's saved override once
     // they drag). n: the box's two in-plane axes read GEOAX[view].col/row.
     const g = GEOAX[gridView], capOf = (a) => (a === 'z' ? layers : foot);
-    // box reads live geomState when the part is manually reconciled (so it moves during a drag without a
-    // full re-carve every frame); otherwise the auto spans the carve just used.
-    const bsp = (geomState[part] && geomState[part].spanX) ? geomState[part] : base.sp;
+    // Stage 1: the box reads effPlace — the SAME single placement the orbit dim box reads (boxPlace pending
+    // edits, else the carve's spans) — so the grid box and the orbit box track together at every instant.
+    const _pl = effPlace(part);
+    const bsp = { spanX: { lo: _pl.ox, hi: _pl.ox + _pl.bw }, spanY: { lo: _pl.oy, hi: _pl.oy + _pl.bh }, spanZ: { lo: _pl.z0 || 0, hi: (_pl.z0 || 0) + _pl.Hv } };
     const rng = (info) => { const s = bsp[spanKey[info.axis]], cap = capOf(info.axis); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
     const cR = rng(g.col), rR = rng(g.row);
     const bx = ox + cR.lo * cell, by = oy + rR.lo * cellV, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cellV;
@@ -2401,10 +2402,9 @@ document.addEventListener('keydown', (e) => {
   // in lock-step. On first edit we snapshot the current auto spans and flip auto→false. The uncolored
   // carve re-runs on pointer-up (heavy); the box + silhouette track live off geomState.
   const capOf = (a, foot, layers) => (a === 'z' ? layers : foot);
-  const ensureGeomSpans = () => {                                   // freeze current placement into geomState, editable
-    const part = gridGeom.part, gs = geomState[part];
-    if (!gs.spanX && gridModel && gridModel.sp) { gs.spanX = { ...gridModel.sp.spanX }; gs.spanY = { ...gridModel.sp.spanY }; gs.spanZ = { ...gridModel.sp.spanZ }; }
-    gs.auto = false;
+  const ensureBoxPlace = () => {                                    // Stage 1: seed the pending boxPlace from the current placement so the drag edits the ONE store
+    const part = gridGeom.part;
+    if (!boxPlace[part]) boxPlace[part] = { ...effPlace(part) };
   };
   const ptCell = (e) => { const r = cv.getBoundingClientRect(); return { px: (e.clientX - r.left) * (cv.width / r.width), py: (e.clientY - r.top) * (cv.height / r.height) }; };
   const geomHit = (e) => {
@@ -2420,14 +2420,25 @@ document.addEventListener('keydown', (e) => {
     return null;
   };
   let geomDrag = null;                                             // { mode, gc0, gr0, cR0, rR0 }
+  // Stage 1: the drag reads/writes the SAME placement store the sliders + orbit use (boxPlace via effPlace),
+  // not geomState directly — so the orbit box tracks the drag live and release commits through commitBoxPlace.
+  const plSpans = (part) => { const pl = effPlace(part); return { spanX: { lo: pl.ox, hi: pl.ox + pl.bw }, spanY: { lo: pl.oy, hi: pl.oy + pl.bh }, spanZ: { lo: pl.z0 || 0, hi: (pl.z0 || 0) + pl.Hv } }; };
   const gridRectFromSpans = (g) => {
-    const gs = geomState[gridGeom.part];
-    const rng = (info) => { const s = gs[spanKey[info.axis]], cap = capOf(info.axis, g.foot, g.layers); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
+    const sp = plSpans(gridGeom.part);
+    const rng = (info) => { const s = sp[spanKey[info.axis]], cap = capOf(info.axis, g.foot, g.layers); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
     return { cR: rng(g.col), rR: rng(g.row) };
   };
   const spansFromGridRect = (g, cR, rR) => {
-    const gs = geomState[gridGeom.part];
-    const put = (info, lo, hi) => { const cap = capOf(info.axis, g.foot, g.layers); lo = clamp(Math.round(lo), 0, cap - 1); hi = clamp(Math.round(hi), lo + 1, cap); gs[spanKey[info.axis]] = info.flip ? { lo: cap - hi, hi: cap - lo } : { lo, hi }; };
+    const part = gridGeom.part; if (!boxPlace[part]) boxPlace[part] = { ...effPlace(part) };
+    const bp = boxPlace[part];
+    const put = (info, lo, hi) => {
+      const cap = capOf(info.axis, g.foot, g.layers);
+      lo = clamp(Math.round(lo), 0, cap - 1); hi = clamp(Math.round(hi), lo + 1, cap);
+      const s = info.flip ? { lo: cap - hi, hi: cap - lo } : { lo, hi };
+      if (info.axis === 'x') { bp.ox = s.lo; bp.bw = s.hi - s.lo; }
+      else if (info.axis === 'y') { bp.oy = s.lo; bp.bh = s.hi - s.lo; }
+      else { bp.z0 = s.lo; bp.Hv = s.hi - s.lo; }
+    };
     put(g.col, cR.lo, cR.hi); put(g.row, rR.lo, rR.hi);
   };
   const geomMove = (e) => {
@@ -2444,12 +2455,13 @@ document.addEventListener('keydown', (e) => {
     else if (geomDrag.mode === 'T') rR.lo = gr;
     else if (geomDrag.mode === 'B') rR.hi = gr;
     spansFromGridRect(g, cR, rR);
-    renderGridView();                                              // box + silhouette track live; carve re-runs on release
+    voxSig = '';                                                  // Stage 1: orbit dim box reads effPlace → it tracks the drag live too
+    renderGridView();                                             // grid box + silhouette track live; carve re-runs on release
   };
   cv.addEventListener('pointerdown', (e) => {
     if (gridGeom && gridGeom.geom) {                               // Geometry mode: box drag
       const mode = geomHit(e); if (!mode) return;
-      ensureGeomSpans();
+      ensureBoxPlace();
       const g = gridGeom.geom, { px, py } = ptCell(e), r = gridRectFromSpans(g);
       geomDrag = { mode, gc0: (px - g.ox) / g.cell, gr0: (py - g.oy) / g.cellV, cR0: r.cR, rR0: r.rR };
       dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
@@ -2497,7 +2509,10 @@ document.addEventListener('keydown', (e) => {
       gridSelView = gridView; gridSelVox = buildSelVox();   // freeze to voxels so the selection persists across facings
       boxing = null; gridBoxSel = null; renderGridView();
     }
-    painting = false; geomDrag = null; if (dirty) { dirty = false; gridModel = null; rebuildSlices(); scheduleAutosave(); }  // full re-carve on release
+    const wasGeom = !!geomDrag;                                   // Stage 1: a geom box-drag commits through the ONE grow-grid path (grid-fit safe)
+    painting = false; geomDrag = null;
+    if (wasGeom) { dirty = false; commitBoxPlace(gridGeom.part); }
+    else if (dirty) { dirty = false; gridModel = null; rebuildSlices(); scheduleAutosave(); }  // full re-carve on release
   };
   cv.addEventListener('pointerup', finish);
   cv.addEventListener('pointercancel', finish);
