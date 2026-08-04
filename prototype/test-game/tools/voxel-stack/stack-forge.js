@@ -185,7 +185,9 @@ function keyedCropped(img, tol, poly, picks) {
 function gridStretch(canvas, w, h, elev) {
   h = Math.max(1, h);
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const ctx = cv.getContext('2d', { willReadFrequently: true }); ctx.drawImage(canvas, 0, 0, w, h);
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = false;                               // ALPHA IS BINARY: opaque or clear, never averaged
+  ctx.drawImage(canvas, 0, 0, w, h);
   const d = ctx.getImageData(0, 0, w, h).data, m = new Uint8Array(w * h), c = new Uint8Array(w * h * 3);
   for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
     const row = elev ? (h - 1 - r) : r, i = row * w + a, p = (r * w + a) * 4;
@@ -438,7 +440,7 @@ function buildVolume(partId, foot, layers) {
   const oy = sp.spanY.lo, bh = sp.spanY.hi - sp.spanY.lo;
   const z0 = sp.spanZ.lo, Hv = sp.spanZ.hi - sp.spanZ.lo, Hraw = sp.Hraw;
   if (Hraw > layers + 0.5 && !suppressSquashWarn) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
-  if (topC) tx.drawImage(topC, ox, oy, bw, bh);                    // footprint + colour from the top
+  if (topC) { tx.imageSmoothingEnabled = false; tx.drawImage(topC, ox, oy, bw, bh); }   // footprint + colour; alpha stays binary
   else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
