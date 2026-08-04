@@ -537,7 +537,15 @@ function setPlace(part, p) {
 }
 // the space-carved model BEFORE manual edits (buildVolume is not cached — callers that only need the
 // base, like the live slice editor, cache this and layer edits on cheaply).
+const carveCache = { body: null, turret: null };   // { foot, layers, m } — cleared only by recarve()
 function buildModelRaw(partId, foot, layers) {
+  const hit = carveCache[partId];
+  if (hit && hit.foot === foot && hit.layers === layers && carveStage === null) return hit.m;
+  const m = carveRaw(partId, foot, layers);
+  if (carveStage === null) carveCache[partId] = { foot, layers, m };   // never cache a partial stage
+  return m;
+}
+function carveRaw(partId, foot, layers) {
   const v = buildVolume(partId, foot, layers), N = foot * foot;
   if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };  // .vox → already voxels
   const cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
@@ -1280,7 +1288,7 @@ function bodyTopLayer(foot, layers) {
 // ── Orthographic grid view (upper-left): a flat, square-voxel view of one face. Top walks z-slices
 // top→bottom (the slice view); Side/Front/Back are silhouettes. Voxels are always square (true cubes),
 // independent of the zScale cube-height stretch used by the 3D render.
-let gridView = 'top', gridLayer = 0, gridModel = null;   // gridModel: cached buildModel, invalidated by rebuildSlices
+let gridView = 'top', gridLayer = 0, gridModel = null;   // gridModel: cached buildModel, invalidated by recarve
 let gridZoom = 1, gridPanX = 0, gridPanY = 0;            // scroll-wheel zoom of the grid editor (cursor-anchored)
 let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn cell layout, so pointer edits map back to voxels
 let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
@@ -1720,9 +1728,9 @@ function renderGridView() {
 // PERSIST the derived effective grid (footOf/gridLayersOf already guarantee grid ⊇ geometry for every reader;
 // this writes it back into state + the UI so export, the sliders, and the Resolution dropdown all agree). It
 // only ever grows to fit the geometry — a unit longer than it is tall keeps its length; 128 voxels is the hard
-// ceiling. This is the single reconciliation point, called at the top of every carve (rebuildSlices).
-function rebuildSlices() {
-  // STEP MODE IS MOMENTARY. carveStage is a global and rebuildSlices is called from 42 places, so a stage
+// ceiling. This is the single reconciliation point, called at the top of every carve (recarve).
+function refreshModel() {
+  // STEP MODE IS MOMENTARY. carveStage is a global and recarve is called from 42 places, so a stage
   // left set would make every later carve — including a bake or a save — run half-finished. Any rebuild
   // that is not the step viewer's own drops back to the full carve.
   if (carveStage !== null && !steppingNow) { carveStage = null; const b = $('stepBanner'); if (b) b.style.display = 'none'; }
@@ -1754,7 +1762,15 @@ function rebuildSlices() {
   setTimeout(renderScaleChart, 0);   // model changed → refresh the side-view scale chart
   gridModel = null; renderGridView(); // model changed → invalidate cache + refresh the grid view
 }
-rebuildSlices();
+refreshModel();
+
+// ── THE THREE LEVELS (owner 2026-08-04: "maybe calling rebuild slices from 42 locations is the bug").
+// recarve()      source images -> masks -> clear/fill/cut. The ONLY thing that runs buildVolume.
+// refreshModel() rebuild faces from the CACHED carve + your voxel edits, then redraw. Paint, erase,
+//                undo, palette, lighting — none of these can change geometry, so none re-carve.
+// refreshView()  redraw from the faces already built. Camera only.
+function recarve() { carveCache.body = null; carveCache.turret = null; refreshModel(); }
+function refreshView() { voxSig = ''; renderGridView(); }
 
 function update() {
   const sp = layerSp(state.el), se = Math.sin(state.el * Math.PI / 180);
@@ -1873,9 +1889,9 @@ $('tdx').oninput = (e) => { state.turretDx = +e.target.value; $('tdxV').textCont
 $('tmz').oninput = (e) => { state.mountZ = +e.target.value; $('tmzV').textContent = (state.mountZ > 0 ? '+' : '') + state.mountZ; };
 $('viewSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.az = +b.dataset.az; state.el = +b.dataset.el; syncInputs(); renderGridView(); };
 $('tpiv').oninput = (e) => { state.turretPivot = +e.target.value; $('tpivV').textContent = state.turretPivot; };
-$('blen').oninput = (e) => { state.barrelLen = +e.target.value; $('blenV').textContent = state.barrelLen || 'off'; rebuildSlices(); };
-$('brad').oninput = (e) => { state.barrelRad = +e.target.value; $('bradV').textContent = state.barrelRad; rebuildSlices(); };
-$('belev').oninput = (e) => { state.barrelElev = +e.target.value; $('belevV').textContent = state.barrelElev; rebuildSlices(); };
+$('blen').oninput = (e) => { state.barrelLen = +e.target.value; $('blenV').textContent = state.barrelLen || 'off'; recarve(); };
+$('brad').oninput = (e) => { state.barrelRad = +e.target.value; $('bradV').textContent = state.barrelRad; recarve(); };
+$('belev').oninput = (e) => { state.barrelElev = +e.target.value; $('belevV').textContent = state.barrelElev; recarve(); };
 $('spin').onchange = (e) => { state.spin = e.target.checked; };
 $('dimBox').onchange = (e) => { state.showDimBox = e.target.checked; voxSig = ''; const r = $('boxSizeRow'); if (r) r.style.display = e.target.checked ? '' : 'none'; if (e.target.checked) { boxSyncSliders(); xfSyncSliders(); } };   // SF1 toggle + SF2 sizing panel
 
@@ -1905,11 +1921,11 @@ if ($('boxOy')) $('boxOy').oninput = (e) => boxEdit('oy', +e.target.value);
 if ($('boxGen')) $('boxGen').onclick = () => {   // re-carve at the current placement
   const part = boxPart();
   setPlace(part, effPlace(part));            // normalise/clamp whatever is in the store, then carve
-  gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
+  gridModel = null; recarve(); scheduleAutosave(); boxSyncSliders();
 };
 if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit
   const part = boxPart(); geomState[part] = { auto: true, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top' };
-  gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
+  gridModel = null; recarve(); scheduleAutosave(); boxSyncSliders();
 };
 
 // SF2 per-side ALIGNMENT: select a side, then high-res scale/align sliders stretch & nudge that image.
@@ -1923,14 +1939,14 @@ if ($('boxSideSeg')) $('boxSideSeg').onclick = (e) => { const b = e.target.close
 function xfEdit(field, val, live) {
   imgXf[boxPart()][boxSide][field] = val;
   const lv = $({ sx: 'xfSxV', sy: 'xfSyV', ox: 'xfOxV', oy: 'xfOyV' }[field]); if (lv) lv.textContent = val.toFixed(3);
-  if (live) { voxSig = ''; } else { gridModel = null; rebuildSlices(); scheduleAutosave(); }   // input = redraw box; release = re-carve
+  if (live) { voxSig = ''; } else { gridModel = null; recarve(); scheduleAutosave(); }   // input = redraw box; release = re-carve
 }
 if ($('xfSx')) { $('xfSx').oninput = (e) => xfEdit('sx', +e.target.value, true); $('xfSx').onchange = (e) => xfEdit('sx', +e.target.value, false); }
 if ($('xfSy')) { $('xfSy').oninput = (e) => xfEdit('sy', +e.target.value, true); $('xfSy').onchange = (e) => xfEdit('sy', +e.target.value, false); }
 if ($('xfOx')) { $('xfOx').oninput = (e) => xfEdit('ox', +e.target.value, true); $('xfOx').onchange = (e) => xfEdit('ox', +e.target.value, false); }
 if ($('xfOy')) { $('xfOy').oninput = (e) => xfEdit('oy', +e.target.value, true); $('xfOy').onchange = (e) => xfEdit('oy', +e.target.value, false); }
-if ($('xfReset')) $('xfReset').onclick = () => { imgXf[boxPart()][boxSide] = { sx: 1, sy: 1, ox: 0, oy: 0 }; xfSyncSliders(); gridModel = null; rebuildSlices(); scheduleAutosave(); };
-$('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
+if ($('xfReset')) $('xfReset').onclick = () => { imgXf[boxPart()][boxSide] = { sx: 1, sy: 1, ox: 0, oy: 0 }; xfSyncSliders(); gridModel = null; recarve(); scheduleAutosave(); };
+$('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; recarve(); };
 // ⬛ Cube: make the build volume a true voxel cube driven by the HEIGHT you set — footprint (length×width) snaps
 // to match Base layers (owner: "if the height is 64, set base to 64×64"). Footprint is a discrete Resolution, so
 // height snaps to the nearest one and both axes end equal. On-screen height is still scaled by Cube height (zScale).
@@ -1939,11 +1955,11 @@ if ($('bodyCube')) $('bodyCube').onclick = () => {
   const target = res.reduce((a, b) => Math.abs(b - state.bodyLayers) <= Math.abs(a - state.bodyLayers) ? b : a);
   state.foot = target; if ($('res')) $('res').value = target;      // footprint = height (nearest Resolution)
   setLayers('body', target);                                       // exact cube: layers = foot = target
-  syncSizeUI(); rebuildSlices();
+  syncSizeUI(); recarve();
 };
-$('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
-$('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); rebuildSlices(); };
-$('turretRes').onchange = (e) => { state.turretFoot = +e.target.value; syncSizeUI(); rebuildSlices(); };   // SF3
+$('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; recarve(); };
+$('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); recarve(); };
+$('turretRes').onchange = (e) => { state.turretFoot = +e.target.value; syncSizeUI(); recarve(); };   // SF3
 // fine world-size control (the VOX_PER_TILE contract): tiles → foot voxels, layers scale along
 function syncSizeUI() {
   const t = unitTiles(state.foot);
@@ -1962,7 +1978,7 @@ function setUnitSize(tiles) {
   state.foot = newFoot;
   setLayers('body', clamp(Math.round(state.bodyLayers * k), 4, 40));      // keep the proportions
   setLayers('turret', clamp(Math.round(state.turretLayers * k), 3, 40));
-  syncSizeUI(); rebuildSlices();
+  syncSizeUI(); recarve();
 }
 $('uSize').oninput = (e) => { $('uSizeV').textContent = (+e.target.value / 100).toFixed(2) + ' t'; };
 $('uSize').onchange = (e) => setUnitSize(+e.target.value / 100);          // re-carve on release
@@ -1979,7 +1995,7 @@ function fitToVox() {
 function importVox(part, file) {
   const rd = new FileReader();
   rd.onload = () => {
-    try { const m = parseVox(rd.result); voxPart[part] = m; voxB64[part] = null; fitToVox(); rebuildSlices();
+    try { const m = parseVox(rd.result); voxPart[part] = m; voxB64[part] = null; fitToVox(); recarve();
       $('voxState').innerHTML = `<span class="lock">✓ ${part}: ${m.nx}×${m.ny}×${m.nz} voxels — foot ${state.foot}, ${part} layers ${part === 'body' ? state.bodyLayers : state.turretLayers}</span>`;
     } catch (e) { alert('Could not read that .vox — ' + e.message); }
   };
@@ -1987,12 +2003,12 @@ function importVox(part, file) {
 }
 $('voxBody').onchange = (e) => e.target.files[0] && importVox('body', e.target.files[0]);
 $('voxTurret').onchange = (e) => e.target.files[0] && importVox('turret', e.target.files[0]);
-$('voxClear').onclick = () => { voxPart.body = null; voxPart.turret = null; voxB64.body = null; voxB64.turret = null; rebuildSlices(); $('voxState').textContent = 'Cleared — back to the photo carve.'; };
+$('voxClear').onclick = () => { voxPart.body = null; voxPart.turret = null; voxB64.body = null; voxB64.turret = null; recarve(); $('voxState').textContent = 'Cleared — back to the photo carve.'; };
 $('exportVox').onclick = exportVox;
-$('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').textContent = state.lightAz + '°'; rebuildSlices(); drawLight(); };
-$('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; rebuildSlices(); };
+$('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').textContent = state.lightAz + '°'; refreshModel(); drawLight(); };
+$('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; refreshModel(); };
 // #pal handler is defined with #palN below (setPaletteN keeps both sliders in lock-step)
-$('zScale').oninput = (e) => { state.zScale = +e.target.value / 100; $('zScaleV').textContent = state.zScale.toFixed(2) + '×'; rebuildSlices(); };
+$('zScale').oninput = (e) => { state.zScale = +e.target.value / 100; $('zScaleV').textContent = state.zScale.toFixed(2) + '×'; refreshModel(); };
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
 $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; if (editingDecor && b.dataset.p !== 'body') return; state.part = b.dataset.p; gridSel = null; gridSelVox = null; gridSelView = null; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
 // relabel the body's back slot ("Back" ⇄ "Angle ¾") everywhere it appears — the view drop slot AND the
@@ -2020,7 +2036,7 @@ function forceDecorBodyOnly() {
 
 // ── grid-view panel: mode (paint vs geometry) + face selector + z-slice walker ──
 if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; gridSel = null; gridSelVox = null; gridSelView = null; [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
-if ($('gridResetGeo')) $('gridResetGeo').onclick = () => { const part = gridPart(); geomState[part] = { auto: true, bottomFrom: geomState[part].bottomFrom || 'top' }; gridModel = null; rebuildSlices(); scheduleAutosave(); };
+if ($('gridResetGeo')) $('gridResetGeo').onclick = () => { const part = gridPart(); geomState[part] = { auto: true, bottomFrom: geomState[part].bottomFrom || 'top' }; gridModel = null; recarve(); scheduleAutosave(); };
 $('gridViewSeg').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.id === 'gridAlignBtn') { gridAlign = !gridAlign; b.classList.toggle('on', gridAlign); renderGridView(); return; }   // ⊞ Align: toggle the dual-projection overlay (keeps the selection)
@@ -2065,7 +2081,7 @@ if ($('gridToolSeg')) $('gridToolSeg').onclick = (e) => {
 if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
   const g = gridGeom; if (!g) return; pushUndo(); const ed = voxEdit[g.part], N = g.foot * g.foot;
   for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); ed.set(z * N + y * g.foot + x, 'del'); }
-  gridModel = null; renderGridView(); rebuildSlices(); scheduleAutosave();
+  gridModel = null; renderGridView(); refreshModel(); scheduleAutosave();
 };
 // ⬛ REGENERATE GEOMETRY — re-run the carve on demand and SAY what it produced. Reports the voxel count and
 // bounding box, and names the state that is riding on top of the carve, since that state persists across
@@ -2073,7 +2089,7 @@ if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
 if ($('gridRegen')) $('gridRegen').onclick = () => {
   carveStage = null;                                   // a manual regenerate always runs the whole carve
   const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part);
-  gridModel = null; TRACE = []; rebuildSlices(); const steps = TRACE; TRACE = null; renderGridView();
+  gridModel = null; TRACE = []; recarve(); const steps = TRACE; TRACE = null; renderGridView();
   for (const st of steps) console.info(`    ${String(st.n).padStart(8)}  ${st.label}${st.extra ? '   — ' + st.extra : ''}`);
   const m = buildModel(part, foot, layers), N = foot * foot;
   let n = 0; for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (m.filled(x, y, z)) n++;
@@ -2098,7 +2114,7 @@ function showStage() {
   gridModel = null;
   TRACE = [];
   steppingNow = true;
-  try { rebuildSlices(); } finally { steppingNow = false; }
+  try { recarve(); } finally { steppingNow = false; }
   const steps = TRACE; TRACE = null;
   renderGridView();
   const m = buildModel(part, foot, layers);
@@ -2128,7 +2144,7 @@ window.addEventListener('keydown', (e) => {
   }
 });
 if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
-  pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; rebuildSlices(); scheduleAutosave();
+  pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; refreshModel(); scheduleAutosave();
 };
 if ($('gridGuides')) $('gridGuides').onchange = (e) => { gridGuides = e.target.checked; renderGridView(); };
 if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.checked; renderGridView(); };
@@ -2153,7 +2169,7 @@ function mirrorGrid(axis, srcLow) {
       else ed.set(k, 'del');
     } else ed.set(k, 'del');
   }
-  gridModel = null; rebuildSlices(); scheduleAutosave();
+  gridModel = null; refreshModel(); scheduleAutosave();
 }
 // WORLD-axis mirror (owner: the old view-relative mirror folded the screen axis, so 'L-R' in the top/side
 // view mirrored FRONT↔BACK instead of left↔right). These fold a fixed WORLD axis regardless of facing —
@@ -2172,7 +2188,7 @@ function mirrorWorld(axis, srcSecond) {
     if (m.filled(sx, sy, sz)) { const cc = (sz * N + sy * foot + sx) * 3; ed.set(k, [m.vcol[cc], m.vcol[cc + 1], m.vcol[cc + 2]]); }
     else ed.set(k, 'del');
   }
-  gridModel = null; rebuildSlices(); scheduleAutosave();
+  gridModel = null; refreshModel(); scheduleAutosave();
 }
 if ($('gridMirrorLR')) $('gridMirrorLR').onclick = () => mirrorWorld('y', false);   // left↔right (world Y) — bilateral symmetry
 if ($('gridMirrorRL')) $('gridMirrorRL').onclick = () => mirrorWorld('y', true);
@@ -2188,7 +2204,7 @@ if ($('gridSelLayer')) $('gridSelLayer').onclick = () => { const g = gridGeom; i
 let undoStack = [], redoStack = [];
 const snapVoxEdit = () => ({ body: new Map(voxEdit.body), turret: new Map(voxEdit.turret) });
 function pushUndo() { undoStack.push(snapVoxEdit()); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; }
-function applyVoxSnap(s) { for (const part of ['body', 'turret']) { voxEdit[part].clear(); for (const [k, v] of s[part]) voxEdit[part].set(k, v); } gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); }
+function applyVoxSnap(s) { for (const part of ['body', 'turret']) { voxEdit[part].clear(); for (const [k, v] of s[part]) voxEdit[part].set(k, v); } gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); }
 function gridUndo() { if (!undoStack.length) return; redoStack.push(snapVoxEdit()); applyVoxSnap(undoStack.pop()); }
 function gridRedo() { if (!redoStack.length) return; undoStack.push(snapVoxEdit()); applyVoxSnap(redoStack.pop()); }
 
@@ -2208,7 +2224,7 @@ function deleteSelection() {
   if (cutThrough && !confirm('Delete on Layer 0 (surface) cuts ALL THE WAY THROUGH the selected objects — front to back. Continue?')) return false;
   pushUndo();
   for (const k of targets) ed.set(k, 'del');
-  gridModel = null; rebuildSlices(); scheduleAutosave(); return true;
+  gridModel = null; refreshModel(); scheduleAutosave(); return true;
 }
 // FILL the selection with the current paint colour — recolours EVERY existing voxel in it (on Layer 0, that's
 // every facing surface voxel; on a real layer, every filled slice voxel). Never adds voxels.
@@ -2221,7 +2237,7 @@ function fillSelection() {
   if (!n) return false;
   pushUndo();
   for (const k of pending) ed.set(k, rgb);
-  gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); return true;
+  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); return true;
 }
 if ($('gridFill')) $('gridFill').onclick = () => fillSelection();
 // ── DIAGNOSTIC: report how the source view art (V) maps onto this part's exposed faces, so a misaligned
@@ -2309,7 +2325,7 @@ function reprojectSurface() {
     }
     if (!pend.length) { alert('Re-project: no surface' + (useSelT ? ' in the selection.' : '.')); return false; }
     pushUndo(); for (const [k, col] of pend) ed.set(k, col);
-    gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); return true;
+    gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); return true;
   }
   const V = gridModel && gridModel.views;
   const src = gridView === 'side' ? (V && V.side) : gridView === 'front' ? (V && V.front) : gridView === 'back' ? (V && (V.back || V.front)) : null;
@@ -2357,7 +2373,7 @@ function reprojectSurface() {
   if (!pending.length) { alert('Re-project: no colours sampled from the image.'); return false; }
   pushUndo();
   for (const [k, col] of pending) ed.set(k, col);
-  gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave();
+  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
   return true;
 }
 if ($('gridReproj')) $('gridReproj').onclick = () => reprojectSurface();
@@ -2431,7 +2447,7 @@ document.addEventListener('keydown', (e) => {
     const r0 = clamp(Math.min(b.r0, b.r1), 0, g.rows - 1), r1 = clamp(Math.max(b.r0, b.r1), 0, g.rows - 1);
     const ed = voxEdit[g.part], rgb = gridPaintRGB(); let any = false;
     for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) if (extrudeAddCell(g, cx, cy, ed, rgb)) any = true;
-    if (any) { gridModel = null; rebuildSlices(); scheduleAutosave(); }
+    if (any) { gridModel = null; refreshModel(); scheduleAutosave(); }
     return any;
   };
   let painting = false, dirty = false, boxing = null, addBoxing = null;   // addBoxing: the ➕ Add surface-extrude rubber-band
@@ -2537,7 +2553,7 @@ document.addEventListener('keydown', (e) => {
       gridSelView = gridView; gridSelVox = buildSelVox();   // freeze to voxels so the selection persists across facings
       boxing = null; gridBoxSel = null; renderGridView();
     }
-    painting = false; geomDrag = null; if (dirty) { dirty = false; gridModel = null; rebuildSlices(); scheduleAutosave(); }  // full re-carve on release
+    painting = false; geomDrag = null; if (dirty) { dirty = false; gridModel = null; refreshModel(); scheduleAutosave(); }  // full re-carve on release
   };
   cv.addEventListener('pointerup', finish);
   cv.addEventListener('pointercancel', finish);
@@ -2607,7 +2623,7 @@ function renderView(pick) {
   imgs[part][view] = im;
   const g = pick.querySelector('canvas').getContext('2d'); g.clearRect(0, 0, 128, 84); drawFit(g, keyedCanvas(im, keyTolState[part][view], polyState[part][view], pickState[part][view]), 128, 84);
   pick.classList.add('set'); updateFlipBtns(pick);
-  if (!bulkLoad) rebuildSlices();                                             // restore rebuilds once at the end
+  if (!bulkLoad) recarve();                                             // restore rebuilds once at the end
 }
 function toggleFlip(part, view, axis) {
   if (!srcImg[part][view]) return;
@@ -2908,7 +2924,7 @@ function palRebuild() {                                            // throttle: 
   palEpoch++;                                                      // palette changed → paint strip refreshes
   if (palPending) return;
   palPending = true;
-  requestAnimationFrame(() => { palPending = false; rebuildSlices(); scheduleAutosave(); });
+  requestAnimationFrame(() => { palPending = false; refreshModel(); scheduleAutosave(); });
 }
 const palCur = (k) => palMap.get(k) || keyRGB(k);
 function palSwatchCol(sw, orig) {                                  // count-weighted average of member colours
@@ -3060,13 +3076,13 @@ function remapModelToWorking() {
       ed.set(z * N + y * foot + x, [r, g, b]); touched++;
     }
   }
-  gridModel = null; rebuildSlices(); scheduleAutosave();
+  gridModel = null; refreshModel(); scheduleAutosave();
   $('palState').textContent = `Remapped ${touched} voxel(s) to the working palette. Source preserved — Reset edits restores it.`;
 }
 if ($('palRemap')) $('palRemap').onclick = remapModelToWorking;
 // palette SIZE + reduction — shared by the side-panel slider (#pal) and the floating window (#palN),
 // both kept in lock-step. Re-carves the model, then refreshes the swatch strip if the window is open.
-function palReduceRefresh() { palEpoch++; rebuildSlices(); if (!$('palModal').hidden) palBuildSwatches(); scheduleAutosave(); }
+function palReduceRefresh() { palEpoch++; refreshModel(); if (!$('palModal').hidden) palBuildSwatches(); scheduleAutosave(); }
 function setPaletteN(v) {
   state.paletteN = v;
   $('pal').value = v; $('palV').textContent = v || 'full';
@@ -3170,7 +3186,7 @@ $('remapBake').onclick = () => {
       const t = rmTargets[slot]; voxEdit[part].set(c.z * N + c.y * foot + c.x, [t.r, t.g, t.b]); touched++;
     }
   }
-  gridModel = null; rebuildSlices(); scheduleAutosave();
+  gridModel = null; refreshModel(); scheduleAutosave();
   rmSrcKeys = rmCurrentColors(); rmRender();   // reflect the now-consolidated model
   $('remapState').textContent = 'baked ' + touched + ' voxels → ' + rmTargets.filter(Boolean).length + ' colours';
 };
@@ -3465,7 +3481,7 @@ if ($('saveDecor')) $('saveDecor').onclick = doSaveDecor;
 if ($('shipDecor')) $('shipDecor').onclick = shipDecor;
 if ($('decDensity')) $('decDensity').oninput = () => { $('decDensityV').textContent = $('decDensity').value; };
 // Stories 6 & 7 — procedural-tree params + on-map scale
-const decRebuild = () => { gridModel = null; rebuildSlices(); renderGridView(); };
+const decRebuild = () => { gridModel = null; recarve(); renderGridView(); };
 if ($('decScale')) $('decScale').oninput = () => { state.decorScale = (+$('decScale').value) / 100; if ($('decScaleV')) $('decScaleV').textContent = state.decorScale.toFixed(1) + '×'; };   // on-map size only — no re-carve
 if ($('decProc')) $('decProc').onchange = () => { state.decorProc = $('decProc').checked; if ($('decProcRow')) $('decProcRow').style.display = state.decorProc ? '' : 'none'; decRebuild(); };
 const decProcSlider = (id, key) => { if ($(id)) $(id).oninput = () => { state[key] = +$(id).value; if ($(id + 'V')) $(id + 'V').textContent = $(id).value; if (state.decorProc) decRebuild(); }; };
@@ -3572,7 +3588,7 @@ async function loadProject(p) {
       }
     }
   } finally { bulkLoad = false; }
-  syncAllControls(); rebuildSlices(); drawLight(); renderRoster();
+  syncAllControls(); recarve(); drawLight(); renderRoster();
 }
 let autosaveTimer = 0;
 // a project is worth persisting only if it has real editable content — source art, an imported .vox,
@@ -3680,7 +3696,7 @@ async function loadFaction(name) {
       resetPalette();
       clearSourceArt(); state.decorBaked = null; gridModel = null;
       state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }
-      rebuildSlices();
+      recarve();
     }
     renderRoster(); forceDecorBodyOnly(); return;
   }
@@ -3724,7 +3740,7 @@ $('addUnit').onclick = () => {
     editingDecor = id; if ($('did')) $('did').value = id;
     state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }   // decor tends tall — raise height
     resetPalette();
-    clearSourceArt(); state.decorBaked = null; gridModel = null; state.part = 'body'; rebuildSlices(); forceDecorBodyOnly();   // clean slate, body-only
+    clearSourceArt(); state.decorBaked = null; gridModel = null; state.part = 'body'; recarve(); forceDecorBodyOnly();   // clean slate, body-only
     if (!roster.some((u) => u.id === id)) roster.push({ id, role: 'decor', shape: '🌿', decor: true });
     renderRoster();
     $('projState').textContent = `New decor "${id}" — load Top/Side/Front art as the body, set the 🌿 Decor panel, then Bake + Save.`;
@@ -3783,7 +3799,7 @@ function selectUnit(id) {
       gridModel = null; renderGridView();                           // reflect the cleared source (baked shows in orbit)
       $('projState').textContent = `Loaded "${id}" baked pack — orbit/in-game show the baked model; no editable source on this browser.`;
     });
-    rebuildSlices();
+    recarve();
     $('projState').textContent = `Nothing to load for "${id}" (no WIP project and no saved pack).`;
   }).catch((e) => { console.error('[load] failed for', id, e); $('projState').textContent = `Load failed for "${id}": ${(e && e.message) || e}`; })
     .finally(() => { loadingUnit = false; });              // load done → autosaves may resume, now correctly keyed to this unit
@@ -3923,5 +3939,5 @@ syncInputs(); renderManifest(); layout(); update(); updateGamePreview(); initFac
     if (p) { await loadProject(p); $('projState').textContent = `Restored "${p.id}" from autosave.`; }
   } catch (e) { /* no stored session */ }
 })();
-window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, buildModel, buildFaces, renderParts, drawScene, keyedCropped, sliceMask, parseVox, voxPart, fitToVox, collectVox, writeVox, exportVox, setGSpin, resizePreview, setZoom, keyTolState, polyState, openKeyModal, snapshotProject, loadProject,
+window.__sf = { imgs, state, recarve, setView, toggleFlip, pickFor, buildVolume, buildModel, buildFaces, renderParts, drawScene, keyedCropped, sliceMask, parseVox, voxPart, fitToVox, collectVox, writeVox, exportVox, setGSpin, resizePreview, setZoom, keyTolState, polyState, openKeyModal, snapshotProject, loadProject,
   gdbg: () => ({ baked: !!state.baked, gbaked: !!gBodyBaked, gvis: gBodyBaked && gBodyBaked.visible, gkids: gUnit.children.length }) };   // debug/test hook
