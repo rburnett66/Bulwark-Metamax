@@ -585,12 +585,11 @@ function applyVoxEdits(m, partId, foot, layers) {
   };
   return { vcol: vc, filled: editedFilled, cd: null, views: m.views, dbg: m.dbg };
 }
-// THE CARVE IS THE MODEL. The voxEdit overlay is commented out, not deleted — the edit tools, undo and
-// persistence all still exist and still record, they simply no longer alter the carved result. Restore by
-// putting the applyVoxEdits call back.
+// The carve produces the model; voxEdit is then layered on top of it. It was disabled while the carve
+// was being fixed in isolation — re-enabled now that deleting geometry is wanted, since a delete IS a
+// voxEdit. Everything the artist removes lives here, never in the carve.
 function buildModel(partId, foot, layers) {
-  return buildModelRaw(partId, foot, layers);
-  // return applyVoxEdits(buildModelRaw(partId, foot, layers), partId, foot, layers);
+  return applyVoxEdits(buildModelRaw(partId, foot, layers), partId, foot, layers);
 }
 
 // median-cut → n representative colours. Flattens camo/gradients (and rich .vox palettes) into a small,
@@ -2145,6 +2144,23 @@ function runCarve(upTo, label) {
 if ($('carveTop'))   $('carveTop').onclick   = () => runCarve('top',   'CARVE TOP');
 if ($('carveSide'))  $('carveSide').onclick  = () => runCarve('side',  'CARVE TOP + SIDE');
 if ($('carveFront')) $('carveFront').onclick = () => runCarve('front', 'CARVE TOP + SIDE + FRONT');
+// Delete the voxels this facing/layer is showing, when there is no selection. Layer 0 is the surface
+// raycast, so it removes the facing skin; a real layer removes that slice.
+function deleteCurrentLayer() {
+  const g = gridGeom; if (!g || !g.editable) return false;
+  const ed = voxEdit[g.part], N = g.foot * g.foot; let n = 0;
+  const before = snapVoxEdit();
+  for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
+    const [x, y, z] = gridTargetVox(g, cx, cy);
+    if (!gridFilledAt(g, x, y, z)) continue;
+    ed.set(z * N + y * g.foot + x, 'del'); n++;
+  }
+  if (!n) return false;
+  undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0;
+  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
+  return true;
+}
+if ($('gridDeleteBtn')) $('gridDeleteBtn').onclick = () => { if (gridSelVox) deleteSelection(); else deleteCurrentLayer(); };
 if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; refreshModel(); scheduleAutosave();
 };
@@ -2389,7 +2405,10 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && lassoMode) { lassoMode = false; if (gridLasso && gridLasso.length) gridLasso.pop(); if (gridLasso && !gridLasso.length) gridLasso = null; renderGridView(); }   // ESC backs out of the lasso first
   else if (e.key === 'Escape' && gridLasso) { gridLasso = null; renderGridView(); }   // …then clears a finished lasso
   else if (e.key === 'Escape' && (gridSel || gridSelVox)) { gridSel = null; gridSelVox = null; gridSelView = null; renderGridView(); }
-  else if ((e.key === 'Delete' || e.key === 'Backspace') && gridSelVox) { if (deleteSelection()) e.preventDefault(); }
+  else if (e.key === 'Escape') { gridUndo(); e.preventDefault(); }   // …then ESC UNDOES the last edit
+  else if ((e.key === 'Delete' || e.key === 'Backspace')) {          // DEL: selection if there is one, else the current layer
+    if (gridSelVox ? deleteSelection() : deleteCurrentLayer()) e.preventDefault();
+  }
   else if ((e.key === 'Enter' || e.key === 'f' || e.key === 'F') && gridSelVox) { if (fillSelection()) e.preventDefault(); }
 });
 (() => {
