@@ -424,14 +424,32 @@ function buildVolume(partId, foot, layers) {
   const frontG = frontC ? sliceMask(frontC, bh, Hv, true) : null; // width × height
   const backC = src.back ? xfCanvas(keyedCanvas(src.back, tol.back, pol.back, pk.back), xf.back) : null; // colour-only: paints the −x walls
   const backG = backC ? sliceMask(backC, bh, Hv, true) : null;
-  const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= z0 && z < z0 + Hv && !!sideG.m[(z - z0) * bw + (x - ox)]) : (z >= z0 && z < z0 + Hv);
-  const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv && !!frontG.m[(z - z0) * bh + (y - oy)]) : (z >= z0 && z < z0 + Hv);
-  // THE STARTING VOLUME: a clean solid block, exactly the box and nothing more. The carve only REMOVES.
-  const solid = (x, y, z) => x >= ox && x < ox + bw && y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv;
-  const flat = !sideG && !frontG;
   const views = (sideG || frontG || backG) ? { side: sideG, front: frontG, back: backG, ox, oy, z0 } : null;
-  const bodyFilled = flat ? (x, y, z) => solid(x, y, z) && top(x, y)
-    : (x, y, z) => solid(x, y, z) && top(x, y) && side(x, z) && width(y, z);
+
+  // ── THE CARVE (owner 2026-08-04): 1. clear the volume  2. fill it with solid geo  3. apply each SLICE as
+  // a mask and cut every voxel the slice does not cover with opacity. The mask IS the slice. Each cut runs
+  // over the real volume in turn — nothing is lazy, nothing is re-derived, and a slice can only REMOVE.
+  const VOL = new Uint8Array(layers * N);                          // 1. CLEAR
+  for (let z = z0; z < z0 + Hv; z++) for (let y = oy; y < oy + bh; y++)
+    for (let x = ox; x < ox + bw; x++) VOL[z * N + y * foot + x] = 1;   // 2. FILL SOLID (exactly the box)
+  // 3. CUT with each slice. TOP masks (x,y); SIDE masks (x,z); FRONT masks (y,z). A missing slice cuts
+  // nothing on its axis — it cannot add material, so the block simply stays solid there.
+  const cut = (g, idx) => {
+    if (!g) return;
+    for (let z = z0; z < z0 + Hv; z++) for (let y = oy; y < oy + bh; y++) for (let x = ox; x < ox + bw; x++) {
+      const k = z * N + y * foot + x;
+      if (VOL[k] && !g.m[idx(x, y, z)]) VOL[k] = 0;                // not covered by opacity → cut it away
+    }
+  };
+  cut(topG, (x, y) => (y - oy) * bw + (x - ox));                  // TOP ONLY, for now
+  if (!topG) {   // no top slice: the footprint falls back to the flat fill drawn into cd above
+    for (let z = z0; z < z0 + Hv; z++) for (let y = oy; y < oy + bh; y++) for (let x = ox; x < ox + bw; x++) {
+      const k = z * N + y * foot + x;
+      if (VOL[k] && cd[(y * foot + x) * 4 + 3] <= INK_A) VOL[k] = 0;
+    }
+  }
+  const bodyFilled = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers
+    && !!VOL[z * N + y * foot + x];
   // procedural barrel: a real round tube along +X, placed relative to the body box, ORed into the volume
   let inBarrel = null;
   if (reach && topC) {
@@ -824,33 +842,21 @@ function drawDimBox(ctx, meta, el, az, part) {
 }
 
 // ── bake: per-angle cache with 2× supersample + CAS-lite unsharp (ported from the prototype) ──
-const SHARPEN_FRAG = `
-  precision mediump float; varying vec2 vTextureCoord; uniform sampler2D uSampler;
-  uniform vec2 uTexel; uniform float uSharp;
-  void main() {
-    vec4 c = texture2D(uSampler, vTextureCoord);
-    vec3 n = texture2D(uSampler, vTextureCoord + vec2(0.0,-uTexel.y)).rgb;
-    vec3 s = texture2D(uSampler, vTextureCoord + vec2(0.0, uTexel.y)).rgb;
-    vec3 e = texture2D(uSampler, vTextureCoord + vec2( uTexel.x,0.0)).rgb;
-    vec3 w = texture2D(uSampler, vTextureCoord + vec2(-uTexel.x,0.0)).rgb;
-    vec3 blur = (n+s+e+w)*0.25; vec3 sharp = c.rgb + uSharp*(c.rgb - blur);
-    gl_FragColor = vec4(clamp(sharp,0.0,1.0), c.a);
-  }`;
+// (the CAS-lite unsharp pass is gone — it blurred the frame in order to sharpen it)
 function bakeAngleCache(renderer, faces, opts) {
-  const { frames, smooth, sharp, g, pivotFrac = 0.5, el, scale = 1 } = opts, SS = smooth ? 2 : 1, STEP = (Math.PI * 2) / frames;
+  const { frames, g, pivotFrac = 0.5, el, scale = 1 } = opts, SS = 1, STEP = (Math.PI * 2) / frames;   // SS=1: no supersample AA
   const W = g.RTW * scale, H = g.RTH * scale;                      // scale = baked px per voxel (crispness)
   const cv = document.createElement('canvas'); cv.width = W * SS; cv.height = H * SS;
   const ctx = cv.getContext('2d'); ctx.lineWidth = 0.75 * SS; ctx.lineJoin = 'round';
-  const tex = PIXI.Texture.from(cv); tex.baseTexture.scaleMode = smooth ? PIXI.SCALE_MODES.LINEAR : PIXI.SCALE_MODES.NEAREST;
+  const tex = PIXI.Texture.from(cv); tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
   const spr = new PIXI.Sprite(tex); spr.scale.set(1 / SS);
-  if (smooth && sharp > 0) spr.filters = [new PIXI.Filter(undefined, SHARPEN_FRAG, { uSharp: sharp, uTexel: [1 / W, 1 / H] })];
   const cache = [];
   for (let a = 0; a < frames; a++) {
     ctx.clearRect(0, 0, cv.width, cv.height);
     renderParts(ctx, scale * SS, g.CX * scale * SS, g.BASEY * scale * SS, el, [{ faces, az: a * STEP, pivotFrac }]);   // true 3D frame
     tex.baseTexture.update();
     const rt = PIXI.RenderTexture.create({ width: W, height: H });
-    rt.baseTexture.scaleMode = smooth ? PIXI.SCALE_MODES.LINEAR : PIXI.SCALE_MODES.NEAREST;
+    rt.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
     renderer.render(spr, { renderTexture: rt });
     cache.push(rt);
   }
@@ -895,7 +901,7 @@ function bakeShadowCache(renderer, filled, opts) {
   const W = g.RTW * scale, H = g.RTH * scale;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
-  const tex = PIXI.Texture.from(cv); tex.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
+  const tex = PIXI.Texture.from(cv); tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
   const spr = new PIXI.Sprite(tex);
   const cache = [];
   for (let a = 0; a < frames; a++) {
@@ -903,7 +909,7 @@ function bakeShadowCache(renderer, filled, opts) {
     renderShadowVolume(ctx, scale, g.CX * scale, g.BASEY * scale, el, foot, layers, filled, a * STEP, pivotFrac);
     tex.baseTexture.update();
     const rt = PIXI.RenderTexture.create({ width: W, height: H });
-    rt.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
+    rt.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
     renderer.render(spr, { renderTexture: rt });
     cache.push(rt);
   }
@@ -1180,7 +1186,7 @@ function rotCanvas(im, rot) {                                                 //
   return c;
 }
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
-  barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
+  barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
   decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30,   // decor on-map scale + procedural-tree params (Stories 6,7)
   showDimBox: false,   // SF1: the 3D dimension box + per-face view-image projections overlay
   turretFoot: 64 };    // SF3: turret footprint (voxels), INDEPENDENT of base foot — a turret can be smaller than the hull
@@ -1947,8 +1953,6 @@ $('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').t
 $('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; rebuildSlices(); };
 // #pal handler is defined with #palN below (setPaletteN keeps both sliders in lock-step)
 $('zScale').oninput = (e) => { state.zScale = +e.target.value / 100; $('zScaleV').textContent = state.zScale.toFixed(2) + '×'; rebuildSlices(); };
-$('smooth').onchange = (e) => { state.smooth = e.target.checked; };
-$('sharp').oninput = (e) => { state.sharp = +e.target.value / 100; $('sharpV').textContent = state.sharp.toFixed(2); };
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
 $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; if (editingDecor && b.dataset.p !== 'body') return; state.part = b.dataset.p; gridSel = null; gridSelVox = null; gridSelView = null; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
 // relabel the body's back slot ("Back" ⇄ "Angle ¾") everywhere it appears — the view drop slot AND the
@@ -2022,6 +2026,28 @@ if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
   const g = gridGeom; if (!g) return; pushUndo(); const ed = voxEdit[g.part], N = g.foot * g.foot;
   for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); ed.set(z * N + y * g.foot + x, 'del'); }
   gridModel = null; renderGridView(); rebuildSlices(); scheduleAutosave();
+};
+// ⬛ REGENERATE GEOMETRY — re-run the carve on demand and SAY what it produced. Reports the voxel count and
+// bounding box, and names the state that is riding on top of the carve, since that state persists across
+// reloads and is what makes a correct carve still look wrong.
+if ($('gridRegen')) $('gridRegen').onclick = () => {
+  const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part);
+  gridModel = null; rebuildSlices(); renderGridView();
+  const m = buildModel(part, foot, layers), N = foot * foot;
+  let n = 0; for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (m.filled(x, y, z)) n++;
+  const bb = modelBBox(m.filled, foot, layers);
+  const dim = bb.x1 < 0 ? 'EMPTY' : `${bb.x1 - bb.x0 + 1}×${bb.y1 - bb.y0 + 1}×${bb.z1 - bb.z0 + 1}`;
+  const g = geomState[part], box = (g && !g.auto && g.spanX) ? 'MANUAL' : 'full grid';
+  const ed = voxEdit[part].size, xf = imgXf[part], pol = polyState[part], pk = pickState[part];
+  const moved = ['top', 'side', 'front', 'back'].filter((v) => xf[v] && (xf[v].sx !== 1 || xf[v].sy !== 1 || xf[v].ox !== 0 || xf[v].oy !== 0));
+  const cutPoly = ['top', 'side', 'front', 'back'].filter((v) => pol[v] && pol[v].length);
+  const picked = ['top', 'side', 'front', 'back'].filter((v) => pk[v] && pk[v].length);
+  const riders = [ed ? `${ed} voxel edits` : null, box === 'MANUAL' ? 'manual box' : null,
+    moved.length ? `aligned: ${moved.join('/')}` : null, cutPoly.length ? `poly cuts: ${cutPoly.join('/')}` : null,
+    picked.length ? `key picks: ${picked.join('/')}` : null].filter(Boolean);
+  const msg = `${n} voxels · ${dim} · grid ${foot}×${foot}×${layers} · box ${box}` + (riders.length ? `  ⚠ ${riders.join(' · ')}` : '  (clean)');
+  const gd = $('gridDims'); if (gd) { gd.textContent = msg; gd.style.color = n ? (riders.length ? '#f2c869' : '#8fa7bd') : '#e0625f'; }
+  console.info('[stack-forge] regenerate — ' + msg);
 };
 if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; rebuildSlices(); scheduleAutosave();
@@ -2590,7 +2616,7 @@ function renderKeyPreview() {
   keyPanX = Math.max(0, Math.min(Math.max(0, im.width - regionW), keyPanX));
   keyPanY = Math.max(0, Math.min(Math.max(0, im.height - regionH), keyPanY));
   const toX = (ix) => (ix - keyPanX) * sx, toY = (iy) => (iy - keyPanY) * sx;   // image px → canvas px
-  const g = cv.getContext('2d'); g.imageSmoothingEnabled = sx < 1;
+  const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;   // no smoothing anywhere
   g.clearRect(0, 0, cv.width, cv.height);
   g.drawImage(keyedCanvas(im, +$('keyTol').value, workPolys, workPicks), keyPanX, keyPanY, regionW, regionH, 0, 0, cv.width, cv.height);
   const d = g.getImageData(0, 0, cv.width, cv.height).data, w = cv.width, hh = cv.height;   // outline overlay
@@ -2695,7 +2721,7 @@ const sheetCv = $('sheetCanvas'), sheetCtx = sheetCv.getContext('2d');
 function sheetDraw() {
   sheetCtx.clearRect(0, 0, sheetCv.width, sheetCv.height);
   if (!sheetImg) return;
-  sheetCtx.imageSmoothingEnabled = sheetScale < 1;
+  sheetCtx.imageSmoothingEnabled = false;   // no smoothing anywhere
   sheetCtx.drawImage(sheetImg, 0, 0, sheetImg.width * sheetScale, sheetImg.height * sheetScale);
   if (!sheetSel) return;
   const s = sheetSel, k = sheetScale;
@@ -3105,8 +3131,8 @@ function doBake() {
   const pivotPx = foot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
   const g = geom(foot, Math.max(bL, tL), sp, pivotPx);   // shared texture sized for the taller stack; both bottom-align at BASEY
   const t0 = performance.now();
-  const body = bakeAngleCache(app.renderer, bodyFaces, { frames: BODY_FRAMES, smooth: false, sharp: 0, g, pivotFrac: 0.5, el: state.el, scale: B });
-  const turret = bakeAngleCache(app.renderer, turretFaces, { frames: TURRET_FRAMES, smooth: state.smooth, sharp: state.sharp, g, pivotFrac, el: state.el, scale: B });
+  const body = bakeAngleCache(app.renderer, bodyFaces, { frames: BODY_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B });
+  const turret = bakeAngleCache(app.renderer, turretFaces, { frames: TURRET_FRAMES, g, pivotFrac, el: state.el, scale: B });
   // S1: cast-shadow shape atlas, from the filled volume (aligned 1:1 with the frame atlases)
   const bodyFilled = buildModel('body', foot, bL).filled, turretFilled = buildModel('turret', footOf('turret'), tL).filled;
   const bodyShadow = bakeShadowCache(app.renderer, bodyFilled, { frames: BODY_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B, foot, layers: bL });
@@ -3278,7 +3304,7 @@ function bakeDecor() {
   if (!bodyFaces) { alert('Decor: author the prop as the BODY first (load Top / Side / Front in step 1), then Bake decor.'); return; }
   const foot = state.foot, bL = state.bodyLayers, sp = layerSp(state.el), B = state.bakeScale;
   const g = geom(foot, bL, sp, 0);                                     // body-only, centred pivot
-  const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, smooth: false, sharp: 0, g, pivotFrac: 0.5, el: state.el, scale: B });
+  const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B });
   const filled = buildModel('body', foot, bL).filled;
   const shadow = bakeShadowCache(app.renderer, filled, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B, foot, layers: bL });
   state.decorBaked = { frame, shadow, g, sp, foot, layers: bL, scale: B };
@@ -3422,8 +3448,8 @@ function syncAllControls() {
   set('lightAz', state.lightAz, state.lightAz + '°'); set('lightK', state.lightK, '' + state.lightK);
   set('pal', state.paletteN, state.paletteN || 'full');
   set('palN', state.paletteN, state.paletteN || 'full');
-  set('sharp', Math.round(state.sharp * 100), state.sharp.toFixed(2)); set('bakeScale', state.bakeScale, state.bakeScale + '×');
-  $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; } $('smooth').checked = state.smooth; $('spin').checked = state.spin;
+  set('bakeScale', state.bakeScale, state.bakeScale + '×');
+  $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; } $('spin').checked = state.spin;
   if ($('decProc')) $('decProc').checked = !!state.decorProc;
   if ($('decProcRow')) $('decProcRow').style.display = state.decorProc ? '' : 'none';
   const setDec = (id, v, lab) => { if ($(id)) { $(id).value = v; if ($(id + 'V')) $(id + 'V').textContent = lab != null ? lab : v; } };
