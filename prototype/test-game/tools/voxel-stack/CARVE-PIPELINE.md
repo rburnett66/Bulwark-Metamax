@@ -137,7 +137,7 @@ This runs after the carve and overrides it completely.
 
 ```
 renderGridView  :1352  caches buildModelRaw into gridModel (keyed part+foot+layers)
-                :1381  filled() re-applies voxEdit on top of the cache          ✂ again
+                :1359  filled() re-applies voxEdit on top of the cache          ✂ again
                        draws the current slice / surface projection
 
 update()        :1734  builds a signature of az/el/taim/part/light/zScale/selection/dimbox
