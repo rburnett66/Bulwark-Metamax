@@ -334,23 +334,17 @@ function exportVox() {
 // the three world-axis spans [lo,hi) the carve reads — spanX/spanY = footprint length/width, spanZ =
 // height. The geometry step will let the user override these; keeping the math here verbatim means auto
 // placement is byte-identical to before. Every downstream mask derives bw/bh/Hv/ox/oy/z0 from the spans.
+// SOLID BLOCK (owner 2026-08-03): "if the carve were made to a solid block the block would never need to be
+// bigger in any dimension than the longest side .. use the base layers and turret layers to define a starting
+// cube." A space carve only ever REMOVES material, so the source block is a CUBE of side = this part's Layers
+// (bodyLayers / turretLayers) and the three views carve it down. No aspect fitting here — the views do the
+// shaping. Replaces the old "top = master scale" normalization, which produced silly slabs (a 64x64 footprint
+// under a 28-high box) for units that are really tanks/trucks/planes.
 function autoSpans(topC, sideC, frontC, foot, layers, reach) {
-  let s, bw, bh, ox, oy;
-  if (topC) {                                            // footprint from the top (aspect-preserving)
-    const availW = Math.max(8, foot - reach);            // leave room up-front for the barrel
-    s = Math.min(availW / topC.width, foot / topC.height);
-    bw = Math.max(1, Math.round(topC.width * s)); bh = Math.max(1, Math.round(topC.height * s));
-    ox = Math.floor((availW - bw) / 2); oy = Math.floor((foot - bh) / 2);   // body sits toward the rear
-  } else {                                               // no top: length from side, width from front
-    const SL = sideC ? sideC.width : foot, FW = frontC ? frontC.width : Math.round(foot * 0.5);
-    s = Math.min(foot / SL, foot / Math.max(1, FW));
-    bw = Math.max(1, Math.round(SL * s)); bh = Math.max(1, Math.round(FW * s));
-    ox = Math.floor((foot - bw) / 2); oy = Math.floor((foot - bh) / 2);
-  }
-  // HEIGHT: the full box height — do NOT derive it from the slice aspect (that was the squash normalize). The
-  // side/front slices are PLACED within this box by placeSample, so a short profile just leaves empty margins.
-  const Hv = layers;
-  return { spanX: { lo: ox, hi: ox + bw }, spanY: { lo: oy, hi: oy + bh }, spanZ: { lo: 0, hi: Hv }, Hraw: Hv };
+  const L = Math.max(1, Math.min(foot, layers | 0));     // cube side; the grid (foot) is the hard ceiling
+  // centre the cube, but keep the barrel's forward margin so a procedural tube still has room to protrude
+  const ox = clamp(Math.floor((foot - L - reach) / 2), 0, foot - L), oy = Math.floor((foot - L) / 2);
+  return { spanX: { lo: ox, hi: ox + L }, spanY: { lo: oy, hi: oy + L }, spanZ: { lo: 0, hi: L }, Hraw: L };
 }
 // the spans the carve uses: auto placement (autoSpans) unless the artist has manually reconciled this
 // part in the geometry step, in which case use the saved spans, clamped to the grid (lo<hi, hi≤foot/≤layers).
