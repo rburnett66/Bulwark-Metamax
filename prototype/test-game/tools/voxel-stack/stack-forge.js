@@ -404,10 +404,22 @@ function buildVolume(partId, foot, layers) {
   const ox = sp.spanX.lo, bw = sp.spanX.hi - sp.spanX.lo;
   const oy = sp.spanY.lo, bh = sp.spanY.hi - sp.spanY.lo;
   const z0 = sp.spanZ.lo, Hv = sp.spanZ.hi - sp.spanZ.lo, Hraw = sp.Hraw;
-  if (topC) { tx.imageSmoothingEnabled = false; tx.drawImage(topC, ox, oy, bw, bh); }   // footprint + colour; alpha stays binary
-  else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
+  // ONE RESAMPLER FOR EVERY FACE. The footprint used to come from tx.drawImage — a canvas rescale that
+  // point-samples each cell centre, so whether a feature survived depended on its PHASE, not its size,
+  // while the elevations went through sliceMask's coverage test. Measured on detailed art at box 64: the
+  // two silhouettes disagreed on 414 of 1728 cells, 366 of them cells the elevations wanted. Each one is a
+  // whole vertical column the intersection then removed — the gaps and holes. Now the top goes through
+  // sliceMask too, and its colour comes from the same cells, so a carved voxel can never lack a colour.
+  if (!topC) { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }   // no top → plain box from side/front
   const cd = tx.getImageData(0, 0, foot, foot).data;
-  const top = (x, y) => cd[(y * foot + x) * 4 + 3] > INK_A;   // same ink test as sliceMask
+  const topG = topC ? sliceMask(topC, bw, bh, false) : null;
+  if (topG) for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+    const i = y * bw + x; if (!topG.m[i]) continue;
+    const p = ((oy + y) * foot + (ox + x)) * 4;
+    cd[p] = topG.c[i * 3]; cd[p + 1] = topG.c[i * 3 + 1]; cd[p + 2] = topG.c[i * 3 + 2]; cd[p + 3] = 255;
+  }
+  const top = topG ? (x, y) => x >= ox && x < ox + bw && y >= oy && y < oy + bh && !!topG.m[(y - oy) * bw + (x - ox)]
+    : (x, y) => cd[(y * foot + x) * 4 + 3] > INK_A;
   const sideG = sideC ? sliceMask(sideC, bw, Hv, true) : null;    // length × height 
   const frontG = frontC ? sliceMask(frontC, bh, Hv, true) : null; // width × height
   const backC = src.back ? xfCanvas(keyedCanvas(src.back, tol.back, pol.back, pk.back), xf.back) : null; // colour-only: paints the −x walls
