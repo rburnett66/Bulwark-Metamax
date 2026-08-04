@@ -21,8 +21,8 @@ const WORLD_SCALE = 3, BODY_FRAMES = 16, TURRET_FRAMES = 64, MANIFEST_KEY = 'bul
 // Bigger unit ⇒ higher Resolution, never a bigger stretch — voxel density is constant on the board.
 const VOX_PER_TILE = 32;
 const RES_MAX = 96;              // grid ceiling (owner 2026-08-03: "cap max size to 96 cells for now")
-// INK: the ONE alpha threshold that decides "this cell is part of the subject". keyBackground feathers edges to
-// graded alpha, so every view MUST agree on where the silhouette ends. The top footprint used to test >20 while
+// INK: the ONE alpha threshold that decides "this cell is part of the subject". Every view MUST agree on where
+// the silhouette ends (keying is hard-edged now, so alpha is binary). The top footprint used to test >20 while
 // every elevation mask tested >40 — cells in that 21..40 band were inside the top but outside side/front, which
 // rimmed the silhouette in top-colour (the wall mask missed them, so wallCol fell back to the column colour) and
 // left stray voxels on any axis whose elevation view was absent.
@@ -113,7 +113,7 @@ function drawFit(ctx, img, w, h) {
 // knock out a solid (e.g. white) background by FLOOD-FILLING from the image border through
 // background-coloured pixels. Only bg actually connected to the edge is removed, so it works when the
 // object runs off an edge (tank tracks) AND when bg floats between object parts (above/below a barrel) —
-// the flood reaches those pockets from the border and stops at the object outline. Feathers the AA edge.
+// the flood reaches those pockets from the border and stops at the object outline. HARD edge, binary alpha.
 function keyBackground(data, w, h, tol, picks) {
   tol = tol || 75;                                                   // cutout sensitivity (per-image, tunable)
   const satC = (r, g, b) => Math.max(r, g, b) - Math.min(r, g, b), SAT_GUARD = 40;
@@ -143,7 +143,7 @@ function keyBackground(data, w, h, tol, picks) {
   // (dark-green leaves touching white). Relative to the seed, so a coloured background still keys.
   const okChroma = (p, bi) => (satC(data[p * 4], data[p * 4 + 1], data[p * 4 + 2]) - seedSat[bi]) <= SAT_GUARD;
   const N = w * h, vis = new Uint8Array(N), st = [];
-  const hard = tol * 0.8, soft = tol * 1.75, span = Math.max(1, soft - hard);   // feather band scales with tol
+  const hard = tol * 0.8;                                            // HARD edge only — no feather band (owner 2026-08-03)
   const push = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const p = y * w + x; if (vis[p]) return; const ni = nearInfo(p); if (ni[0] < tol && okChroma(p, ni[1])) { vis[p] = 1; st.push(p); } };
   for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }        // seed the whole border
   for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
@@ -151,11 +151,14 @@ function keyBackground(data, w, h, tol, picks) {
   while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1); }
   for (let p = 0; p < N; p++) {
     if (vis[p]) { data[p * 4 + 3] = 0; continue; }                   // flooded background → transparent
-    const ni = nearInfo(p), d = ni[0];                             // feather AA pixels touching removed bg
-    if (d < soft && okChroma(p, ni[1])) {                           // …but never feather a saturated subject edge
+    // HARD EDGE: a near-background pixel touching removed background goes fully transparent. Alpha stays
+    // BINARY — no graded feather band. Partial alpha is what let the views disagree about where the
+    // silhouette ends (see INK_A); a voxel is in or out, so the cutout should be too.
+    const ni = nearInfo(p), d = ni[0];
+    if (d < hard && okChroma(p, ni[1])) {                           // …but never eat a saturated subject edge
       const x = p % w, y = (p / w) | 0;
       if ((x > 0 && vis[p - 1]) || (x < w - 1 && vis[p + 1]) || (y > 0 && vis[p - w]) || (y < h - 1 && vis[p + w]))
-        data[p * 4 + 3] = d < hard ? 0 : Math.min(data[p * 4 + 3], Math.round((d - hard) / span * 255));
+        data[p * 4 + 3] = 0;
     }
   }
 }
@@ -534,11 +537,41 @@ function effPlace(part) {
 function buildModelRaw(partId, foot, layers) {
   const v = buildVolume(partId, foot, layers), N = foot * foot;
   if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };  // .vox → already voxels
-  const cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
-  for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-    const i = y * foot + x, p = i * 4; if (cd[p + 3] <= INK_A) continue;
-    const r = cd[p], g = cd[p + 1], b = cd[p + 2];
-    for (let z = 0; z < layers; z++) if (filled(x, y, z)) { const c = (z * N + i) * 3; vcol[c] = r; vcol[c + 1] = g; vcol[c + 2] = b; }
+  const cd = v.cd, filled = v.filled, V = v.views, vcol = new Uint8Array(layers * N * 3);
+  // ── PROJECTION PHASE (owner 2026-08-03: "carve all sides then project all sides with left and right side
+  // mirrored appropriately"). The carve is finished by here — `filled` is finaL. Now every view is projected
+  // onto the SURFACE voxels it can actually see, instead of every voxel in a column taking the top's colour:
+  //   +z exposed → TOP view          (the footprint colour)
+  //   +y exposed → SIDE view         · −y exposed → SIDE view MIRRORED (the two flanks are mirror images, so
+  //                                    the unit's front stays at the +x end when you orbit to either side)
+  //   +x exposed → FRONT view        · −x exposed → BACK view, or the FRONT mirrored when no back was drawn
+  // Interior voxels (no exposed face) fall back to the top's column colour, as before.
+  // Precedence is top → side → front/back so a top-surface voxel keeps its top colour; buildFaces still
+  // resolves each FACE independently, so this only decides the single per-voxel colour that the .vox export,
+  // the grid slice editor and the palette see — those used to be top-only.
+  const F = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && filled(x, y, z);
+  const smp = (g, ix, z, mirror) => {
+    if (!g || !g.m || ix < 0 || ix >= g.w || z < 0 || z >= g.h) return null;
+    const i = z * g.w + (mirror ? g.w - 1 - ix : ix);
+    return g.m[i] ? [g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]] : null;
+  };
+  const vox = (V && V.ox) || 0, voy = (V && V.oy) || 0, vz0 = (V && V.z0) || 0;
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+    if (!filled(x, y, z)) continue;
+    const i = y * foot + x, p = i * 4, zz = z - vz0;
+    const topCol = cd[p + 3] > INK_A ? [cd[p], cd[p + 1], cd[p + 2]] : null;
+    let col = null;
+    if (!F(x, y, z + 1)) col = topCol;                                              // +z → top view
+    if (!col && V) {
+      if (!F(x, y + 1, z)) col = smp(V.side, x - vox, zz, false);                   // +y → side
+      if (!col && !F(x, y - 1, z)) col = smp(V.side, x - vox, zz, true);            // −y → side MIRRORED
+      if (!col && !F(x + 1, y, z)) col = smp(V.front, y - voy, zz, false);          // +x → front
+      if (!col && !F(x - 1, y, z)) col = V.back ? smp(V.back, y - voy, zz, false)   // −x → back, else front mirrored
+        : smp(V.front, y - voy, zz, true);
+    }
+    if (!col) col = topCol;                                                          // interior / unpainted
+    if (!col) continue;
+    const c = (z * N + i) * 3; vcol[c] = col[0]; vcol[c + 1] = col[1]; vcol[c + 2] = col[2];
   }
   return { vcol, filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };
 }
@@ -1718,7 +1751,7 @@ function renderGridView() {
     if (gkeyed) {
       const boxW = cR.hi - cR.lo, boxH = rR.hi - rR.lo, pr = sliceRect(gkeyed.width, gkeyed.height, boxW, boxH, (imgXf[part] || {})[gridView], gridView !== 'top');   // match the carve's ground anchor
       const cpx = bw2 / boxW, cpy = bh2 / boxH;
-      ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false;   // no blur: the overlay shows the cells the carve reads
       ctx.drawImage(gkeyed, bx + pr.px * cpx, by + pr.py * cpy, pr.pw * cpx, pr.ph * cpy); ctx.globalAlpha = 1;
     }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
