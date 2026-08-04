@@ -20,12 +20,6 @@ const INK_A = 40;
 // ── TRACE: instruments the REAL carve path so every step reports its own voxel/pixel count. Armed by
 // ⬛ Regenerate geometry; null otherwise, so the cost is one null check per step.
 let TRACE = null;
-// ── STEP MODE (owner 2026-08-04): SPACE walks the carve one stage at a time so each stage can be eyeballed.
-// null = run the whole carve. Otherwise stop after the numbered stage below.
-const CARVE_STAGES = ['0 · CLEAR — empty volume', '1 · FILL SOLID — the box, before any cut',
-  '2 · CUT by TOP slice', '3 · + procedural barrel (turret only)', '4 · + your voxel edits (final)'];
-let carveStage = null;
-let steppingNow = false;   // true ONLY inside showStage's own rebuild
 const T = (label, n, extra) => { if (TRACE) TRACE.push({ label, n, extra: extra || '' }); };
 const countOpaque = (cv) => { if (!cv) return -1; const d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, cv.width, cv.height).data; let k = 0; for (let i = 0; i < cv.width * cv.height; i++) if (d[i * 4 + 3] > INK_A) k++; return k; };
 const countMask = (g) => { if (!g) return -1; let k = 0; for (let i = 0; i < g.m.length; i++) if (g.m[i]) k++; return k; };
@@ -457,9 +451,8 @@ function buildVolume(partId, foot, layers) {
   // ── THE CARVE (owner 2026-08-04): 1. clear the volume  2. fill it with solid geo  3. apply each SLICE as
   // a mask and cut every voxel the slice does not cover with opacity. The mask IS the slice. Each cut runs
   // over the real volume in turn — nothing is lazy, nothing is re-derived, and a slice can only REMOVE.
-  const ST = carveStage;                                           // null = every stage
-  const VOL = new Uint8Array(layers * N);                          // 1. CLEAR  (stage 0 stops here)
-  if (ST === null || ST >= 1) for (let z = z0; z < z0 + Hv; z++) for (let y = oy; y < oy + bh; y++)
+  const VOL = new Uint8Array(layers * N);                          // 1. CLEAR
+  for (let z = z0; z < z0 + Hv; z++) for (let y = oy; y < oy + bh; y++)
     for (let x = ox; x < ox + bw; x++) VOL[z * N + y * foot + x] = 1;   // 2. FILL SOLID (exactly the box)
   T('after FILL SOLID', countVol(VOL), 'the clean starting block');
   // 3. CUT with each slice. TOP masks (x,y); SIDE masks (x,z); FRONT masks (y,z). A missing slice cuts
@@ -471,9 +464,9 @@ function buildVolume(partId, foot, layers) {
       if (VOL[k] && !g.m[idx(x, y, z)]) VOL[k] = 0;                // not covered by opacity → cut it away
     }
   };
-  if (ST === null || ST >= 2) cut(topG, (x, y) => (y - oy) * bw + (x - ox));   // TOP ONLY, for now
+  cut(topG, (x, y) => (y - oy) * bw + (x - ox));                  // TOP ONLY, for now
   T('after CUT by top', countVol(VOL), topG ? 'top slice applied' : 'no top slice — nothing cut here');
-  if (!topG && (ST === null || ST >= 2)) {   // no top slice: footprint falls back to the flat fill in cd
+  if (!topG) {   // no top slice: the footprint falls back to the flat fill drawn into cd above
     for (let z = z0; z < z0 + Hv; z++) for (let y = oy; y < oy + bh; y++) for (let x = ox; x < ox + bw; x++) {
       const k = z * N + y * foot + x;
       if (VOL[k] && cd[(y * foot + x) * 4 + 3] <= INK_A) VOL[k] = 0;
@@ -484,7 +477,7 @@ function buildVolume(partId, foot, layers) {
     && !!VOL[z * N + y * foot + x];
   // procedural barrel: a real round tube along +X, placed relative to the body box, ORed into the volume
   let inBarrel = null;
-  if (reach && topC && (ST === null || ST >= 3)) {
+  if (reach && topC) {
     const cy = oy + bh / 2, r = Math.max(0.5, state.barrelRad);
     const bx0 = ox + Math.round(bw * 0.35), bx1 = Math.min(foot - 1, ox + bw + reach);   // from inside the body to the tip
     const bz = clamp(Math.round(state.barrelElev / 100 * (Hv - 1)), 0, layers - 1);
@@ -540,9 +533,9 @@ function setPlace(part, p) {
 const carveCache = { body: null, turret: null };   // { foot, layers, m } — cleared only by recarve()
 function buildModelRaw(partId, foot, layers) {
   const hit = carveCache[partId];
-  if (hit && hit.foot === foot && hit.layers === layers && carveStage === null) return hit.m;
+  if (hit && hit.foot === foot && hit.layers === layers) return hit.m;
   const m = carveRaw(partId, foot, layers);
-  if (carveStage === null) carveCache[partId] = { foot, layers, m };   // never cache a partial stage
+  carveCache[partId] = { foot, layers, m };
   return m;
 }
 function carveRaw(partId, foot, layers) {
@@ -569,11 +562,7 @@ function applyVoxEdits(m, partId, foot, layers) {
   };
   return { vcol: vc, filled: editedFilled, cd: null, views: m.views, dbg: m.dbg };
 }
-function buildModel(partId, foot, layers) {
-  const m = buildModelRaw(partId, foot, layers);
-  if (carveStage !== null && carveStage < 4) return m;             // step mode: edits are stage 4
-  return applyVoxEdits(m, partId, foot, layers);
-}
+function buildModel(partId, foot, layers) { return applyVoxEdits(buildModelRaw(partId, foot, layers), partId, foot, layers); }
 
 // median-cut → n representative colours. Flattens camo/gradients (and rich .vox palettes) into a small,
 // contrasting set of flat cube colours so the block structure reads clean instead of noisy.
@@ -1730,10 +1719,6 @@ function renderGridView() {
 // only ever grows to fit the geometry — a unit longer than it is tall keeps its length; 128 voxels is the hard
 // ceiling. This is the single reconciliation point, called at the top of every carve (recarve).
 function refreshModel() {
-  // STEP MODE IS MOMENTARY. carveStage is a global and recarve is called from 42 places, so a stage
-  // left set would make every later carve — including a bake or a save — run half-finished. Any rebuild
-  // that is not the step viewer's own drops back to the full carve.
-  if (carveStage !== null && !steppingNow) { carveStage = null; const b = $('stepBanner'); if (b) b.style.display = 'none'; }
   carveEpoch++;                                       // invalidate anything cached against the previous carve
   if (bodyBaked) { bodyBaked.destroy(); bodyBaked = null; } if (turretBaked) { turretBaked.destroy(); turretBaked = null; }
   if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
@@ -2087,7 +2072,6 @@ if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
 // bounding box, and names the state that is riding on top of the carve, since that state persists across
 // reloads and is what makes a correct carve still look wrong.
 if ($('gridRegen')) $('gridRegen').onclick = () => {
-  carveStage = null;                                   // a manual regenerate always runs the whole carve
   const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part);
   gridModel = null; TRACE = []; recarve(); const steps = TRACE; TRACE = null; renderGridView();
   for (const st of steps) console.info(`    ${String(st.n).padStart(8)}  ${st.label}${st.extra ? '   — ' + st.extra : ''}`);
@@ -2107,42 +2091,6 @@ if ($('gridRegen')) $('gridRegen').onclick = () => {
   const gd = $('gridDims'); if (gd) { gd.textContent = msg; gd.style.color = n ? (riders.length ? '#f2c869' : '#8fa7bd') : '#e0625f'; }
   console.info('[stack-forge] regenerate — ' + msg);
 };
-// ── SPACE steps the carve one stage at a time. Each press re-runs the REAL carve but stops after that
-// stage, so what you see is that stage's actual volume — not a mock-up. SHIFT+SPACE steps back, ESC exits.
-function showStage() {
-  const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part);
-  gridModel = null;
-  TRACE = [];
-  steppingNow = true;
-  try { recarve(); } finally { steppingNow = false; }
-  const steps = TRACE; TRACE = null;
-  renderGridView();
-  const m = buildModel(part, foot, layers);
-  let n = 0; for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (m.filled(x, y, z)) n++;
-  const bb = modelBBox(m.filled, foot, layers);
-  const dim = bb.x1 < 0 ? 'empty' : `${bb.x1 - bb.x0 + 1}×${bb.y1 - bb.y0 + 1}×${bb.z1 - bb.z0 + 1}`;
-  const label = carveStage === null ? 'FULL CARVE (space to step)' : CARVE_STAGES[carveStage];
-  const ban = $('stepBanner');
-  if (ban) { ban.style.display = carveStage === null ? 'none' : ''; ban.textContent = `⏸ STEP ${label} — this is a PARTIAL carve. ESC or any control returns to the full carve.`; }
-  const gd = $('gridDims');
-  if (gd) { gd.textContent = `${label}  →  ${n} voxels · ${dim}`; gd.style.color = carveStage === null ? '#8fa7bd' : '#f2c869'; }
-  console.info(`[stack-forge] ${label} → ${n} voxels, ${dim}`);
-  for (const st of steps) console.info(`    ${String(st.n).padStart(8)}  ${st.label}${st.extra ? '   — ' + st.extra : ''}`);
-}
-window.addEventListener('keydown', (e) => {
-  const t = e.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-  if (typing) return;
-  if (e.code === 'Space') {
-    e.preventDefault();
-    if (carveStage === null) carveStage = 0;
-    else if (e.shiftKey) carveStage = Math.max(0, carveStage - 1);
-    else carveStage = carveStage + 1;
-    if (carveStage > CARVE_STAGES.length - 1) carveStage = null;   // past the last stage → back to the full carve
-    showStage();
-  } else if (e.code === 'Escape' && carveStage !== null) {
-    carveStage = null; showStage();
-  }
-});
 if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; refreshModel(); scheduleAutosave();
 };
