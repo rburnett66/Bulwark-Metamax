@@ -1953,7 +1953,10 @@ if ($('boxSideSeg')) $('boxSideSeg').onclick = (e) => { const b = e.target.close
 function xfEdit(field, val, live) {
   imgXf[boxPart()][boxSide][field] = val;
   const lv = $({ sx: 'xfSxV', sy: 'xfSyV', ox: 'xfOxV', oy: 'xfOyV' }[field]); if (lv) lv.textContent = val.toFixed(3);
-  if (live) { voxSig = ''; } else { gridModel = null; recarve(); scheduleAutosave(); }   // input = redraw box; release = re-carve
+  // live drag: redraw the orbit box AND the grid overlay so the slice moves under the cursor.
+  // release: re-carve. Previously only voxSig was reset, so the grid never updated while dragging.
+  if (live) { voxSig = ''; renderGridView(); }
+  else { gridModel = null; recarve(); scheduleAutosave(); }
 }
 if ($('xfSx')) { $('xfSx').oninput = (e) => xfEdit('sx', +e.target.value, true); $('xfSx').onchange = (e) => xfEdit('sx', +e.target.value, false); }
 if ($('xfSy')) { $('xfSy').oninput = (e) => xfEdit('sy', +e.target.value, true); $('xfSy').onchange = (e) => xfEdit('sy', +e.target.value, false); }
@@ -2054,7 +2057,14 @@ if ($('gridResetGeo')) $('gridResetGeo').onclick = () => { const part = gridPart
 $('gridViewSeg').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.id === 'gridAlignBtn') { gridAlign = !gridAlign; b.classList.toggle('on', gridAlign); renderGridView(); return; }   // ⊞ Align: toggle the dual-projection overlay (keeps the selection)
-  gridView = b.dataset.v; gridLayer = 0; gridAlign = false; gridLasso = null; lassoMode = false;   // picking a single facing exits Align + the lasso; the voxel selection PERSISTS across facings (paint faces without reselecting)
+  gridView = b.dataset.v; gridLayer = 0; gridAlign = false; gridLasso = null; lassoMode = false;
+  // TWO-WAY: the Scale/Align sliders edit imgXf[part][boxSide], so boxSide must follow the facing you
+  // are viewing or they edit a slice that is not on screen.
+  if (['top', 'side', 'front', 'back'].includes(gridView)) {
+    boxSide = gridView;
+    const ss = $('boxSideSeg'); if (ss) [...ss.children].forEach((c) => c.classList.toggle('on', c.dataset.v === boxSide));
+    if (typeof xfSyncSliders === 'function') xfSyncSliders();
+  }   // picking a single facing exits Align + the lasso; the voxel selection PERSISTS across facings (paint faces without reselecting)
   gridZoom = 1; gridPanX = 0; gridPanY = 0;   // fresh facing → reset the scroll-wheel zoom
   const ab = $('gridAlignBtn'); if (ab) ab.classList.remove('on');
   [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b && c.id !== 'gridAlignBtn')); renderGridView();
