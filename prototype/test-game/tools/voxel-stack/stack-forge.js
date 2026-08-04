@@ -522,8 +522,23 @@ function effPlace(part) {
     bh: g.spanY.hi - g.spanY.lo, z0: g.spanZ.lo, Hv: g.spanZ.hi - g.spanZ.lo };
   return { ox: 0, oy: 0, bw: footOf(part), bh: footOf(part), z0: 0, Hv: gridLayersOf(part) };
 }
+// THE BOX LEADS, THE GRID FOLLOWS. Dragging an edge past the current grid was impossible: both writers
+// clamped to foot/layers, and fix 3 removed the old grow-to-fit. The drag is now bounded only by RES_MAX
+// and the grid grows to hold whatever box you drag.
+function growGridFor(part, needXY, needZ) {
+  const isT = part === 'turret', lid = isT ? 'turretLayers' : 'bodyLayers';
+  const wantF = clamp(Math.ceil(Math.max(needXY, 1) / 4) * 4, 16, RES_MAX);
+  const wantL = clamp(Math.max(needZ, 1) | 0, 1, RES_MAX);
+  const curF = isT ? (state.turretFoot || state.foot) : state.foot;
+  let changed = false;
+  if (wantF > curF) { if (isT) state.turretFoot = wantF; else state.foot = wantF; const el = $(isT ? 'turretRes' : 'res'); if (el) el.value = wantF; changed = true; }
+  if (wantL > state[lid]) { const el = $(lid); if (el && +el.max < wantL) el.max = String(wantL); state[lid] = wantL; if (el) { el.value = wantL; const lv = $(lid + 'V'); if (lv) lv.textContent = String(wantL); } changed = true; }
+  if (changed) syncSizeUI();
+  return changed;
+}
 function setPlace(part, p) {
-  const foot = footOf(part), layers = gridLayersOf(part);
+  growGridFor(part, Math.max((p.ox | 0) + (p.bw | 0), (p.oy | 0) + (p.bh | 0)), (p.z0 | 0) + (p.Hv | 0));
+  const foot = footOf(part), layers = gridLayersOf(part);   // re-read AFTER the grow
   const cl = (lo, sz, cap) => { const a = clamp(lo | 0, 0, cap - 1); return { lo: a, hi: clamp(a + Math.max(1, sz | 0), a + 1, cap) }; };
   geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
     spanX: cl(p.ox, p.bw, foot), spanY: cl(p.oy, p.bh, foot), spanZ: cl(p.z0 || 0, p.Hv, layers) };
@@ -2432,7 +2447,7 @@ document.addEventListener('keydown', (e) => {
   // the interior to move it. Edits write the shared world-axis spans in geomState, so linked views move
   // in lock-step. On first edit we snapshot the current auto spans and flip auto→false. The uncolored
   // carve re-runs on pointer-up (heavy); the box + silhouette track live off geomState.
-  const capOf = (a, foot, layers) => (a === 'z' ? layers : foot);
+  const capOf = () => RES_MAX;   // the drag is bounded by the ceiling, not by today's grid
   const ensureGeomSpans = () => {                                   // freeze current placement into geomState, editable
     const part = gridGeom.part, gs = geomState[part];
     if (!gs.spanX && gridModel && gridModel.sp) { gs.spanX = { ...gridModel.sp.spanX }; gs.spanY = { ...gridModel.sp.spanY }; gs.spanZ = { ...gridModel.sp.spanZ }; }
@@ -2461,6 +2476,7 @@ document.addEventListener('keydown', (e) => {
     const gs = geomState[gridGeom.part];
     const put = (info, lo, hi) => { const cap = capOf(info.axis, g.foot, g.layers); lo = clamp(Math.round(lo), 0, cap - 1); hi = clamp(Math.round(hi), lo + 1, cap); gs[spanKey[info.axis]] = info.flip ? { lo: cap - hi, hi: cap - lo } : { lo, hi }; };
     put(g.col, cR.lo, cR.hi); put(g.row, rR.lo, rR.hi);
+    growGridFor(gridGeom.part, Math.max(gs.spanX.hi, gs.spanY.hi), gs.spanZ.hi);   // grid follows the box
   };
   const geomMove = (e) => {
     const g = gridGeom.geom; if (!g || !geomDrag) return;
@@ -2469,7 +2485,7 @@ document.addEventListener('keydown', (e) => {
     if (geomDrag.mode === 'move') {
       const dcx = Math.round(gc - geomDrag.gc0), dcy = Math.round(gr - geomDrag.gr0);
       const cw = geomDrag.cR0.hi - geomDrag.cR0.lo, rh = geomDrag.rR0.hi - geomDrag.rR0.lo;
-      let cl = clamp(geomDrag.cR0.lo + dcx, 0, g.foot - cw), rl = clamp(geomDrag.rR0.lo + dcy, 0, (g.row.axis === 'z' ? g.layers : g.foot) - rh);
+      let cl = clamp(geomDrag.cR0.lo + dcx, 0, RES_MAX - cw), rl = clamp(geomDrag.rR0.lo + dcy, 0, RES_MAX - rh);
       cR = { lo: cl, hi: cl + cw }; rR = { lo: rl, hi: rl + rh };
     } else if (geomDrag.mode === 'L') cR.lo = gc;
     else if (geomDrag.mode === 'R') cR.hi = gc;
