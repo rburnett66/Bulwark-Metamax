@@ -1955,6 +1955,58 @@ function commitBoxPlace(part) {
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
 }
 if ($('boxGen')) $('boxGen').onclick = () => commitBoxPlace(boxPart());   // commit the pending placement into the carve
+// ── ⇲ TRIM TO FIT (owner 2026-08-03): "when the carve is done ... shrink the cube size to dimensions + N cells
+// on each length, this will give a little space for adding polish." Shrinks the CUBE (the build volume / spans),
+// NOT the grid — changing foot would move in-game world scale (unitTiles) and invalidate every voxEdit key,
+// which is indexed z*foot² + y*foot + x.
+//
+// The catch: slices contain-fit the box (sliceRect), so shrinking the box alone would RESCALE the model with it,
+// and trimming twice would drift (shrink → refit → shrink…). So we compensate imgXf per view: scale by
+// base/base' and reposition to hold the same ABSOLUTE cells. The carve then reproduces the SAME voxels inside
+// the smaller cube, which makes a second Trim a no-op instead of a runaway.
+state.trimPad = 5;
+function trimToFit(part) {
+  const foot = footOf(part), layers = gridLayersOf(part);
+  const m = buildModel(part, foot, layers), bb = modelBBox(m.filled, foot, layers);
+  if (bb.x1 < 0) { alert('Trim: nothing carved yet — load art and Generate first.'); return; }
+  const sp = lastSpans[part];
+  if (!sp) { alert('Trim: no carve spans yet — press ⬇ Generate first.'); return; }
+  const pad = Math.max(0, state.trimPad | 0);
+  const oldX = sp.spanX.lo, oldW = sp.spanX.hi - sp.spanX.lo;
+  const oldY = sp.spanY.lo, oldH = sp.spanY.hi - sp.spanY.lo;
+  const oldZ = sp.spanZ.lo, oldV = sp.spanZ.hi - sp.spanZ.lo;
+  // the trimmed cube: carved bbox grown by the polish margin, clamped to the grid
+  const nx0 = clamp(bb.x0 - pad, 0, foot - 1), nx1 = clamp(bb.x1 + 1 + pad, nx0 + 1, foot);
+  const ny0 = clamp(bb.y0 - pad, 0, foot - 1), ny1 = clamp(bb.y1 + 1 + pad, ny0 + 1, foot);
+  const nz0 = clamp(bb.z0 - pad, 0, layers - 1), nz1 = clamp(bb.z1 + 1 + pad, nz0 + 1, layers);
+  const nW = nx1 - nx0, nH = ny1 - ny0, nV = nz1 - nz0;
+  // hold each slice's content at the same absolute cells inside the new box. u = horizontal (always centred),
+  // v = vertical (elevations are floor-anchored, the top view is centred) — mirroring sliceRect exactly.
+  const adjust = (view, W, H, W2, H2, loU, loU2, loV, loV2, floorV) => {
+    const srcIm = imgs[part] && imgs[part][view]; if (!srcIm) return;
+    const keyed = keyedCropped(srcIm, keyTolState[part][view], polyState[part][view], pickState[part][view]);
+    const kw = keyed.width || 1, kh = keyed.height || 1, xf = imgXf[part][view] || { sx: 1, sy: 1, ox: 0, oy: 0 };
+    const base = Math.min(W / kw, H / kh), base2 = Math.min(W2 / kw, H2 / kh);
+    if (!(base > 0) || !(base2 > 0)) return;
+    const sx = xf.sx || 1, sy = xf.sy || 1, pw = kw * base * sx, ph = kh * base * sy;   // content size is PRESERVED
+    const px = (W - pw) / 2 + (xf.ox || 0) * W;                                        // u: centred + offset
+    const ox2 = (loU + px - loU2 - (W2 - pw) / 2) / W2;
+    let oy2;
+    if (floorV) { const zbot = loV - (xf.oy || 0) * H; oy2 = (loV2 - zbot) / H2; }      // v: floor-anchored (z-up)
+    else { const py = (H - ph) / 2 + (xf.oy || 0) * H; oy2 = (loV + py - loV2 - (H2 - ph) / 2) / H2; }
+    imgXf[part][view] = { sx: sx * (base / base2), sy: sy * (base / base2), ox: ox2, oy: oy2 };
+  };
+  adjust('top',   oldW, oldH, nW, nH, oldX, nx0, oldY, ny0, false);   // top: x→X, y→Y, both centred
+  adjust('side',  oldW, oldV, nW, nV, oldX, nx0, oldZ, nz0, true);    // side: x→X, y→Z (floor)
+  adjust('front', oldH, oldV, nH, nV, oldY, ny0, oldZ, nz0, true);    // front: x→Y, y→Z (floor)
+  adjust('back',  oldH, oldV, nH, nV, oldY, ny0, oldZ, nz0, true);    // back: colour-only, same box as front
+  geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
+    spanX: { lo: nx0, hi: nx1 }, spanY: { lo: ny0, hi: ny1 }, spanZ: { lo: nz0, hi: nz1 } };
+  boxPlace[part] = null; gridModel = null; xfSyncSliders(); rebuildSlices(); scheduleAutosave(); boxSyncSliders();
+  console.info(`[stack-forge] ${part}: trimmed cube ${oldW}×${oldH}×${oldV} → ${nW}×${nH}×${nV} (model ${bb.x1 - bb.x0 + 1}×${bb.y1 - bb.y0 + 1}×${bb.z1 - bb.z0 + 1} + ${pad} each side)`);
+}
+if ($('boxTrim')) $('boxTrim').onclick = () => trimToFit(boxPart());
+if ($('trimPad')) $('trimPad').oninput = (e) => { state.trimPad = +e.target.value; if ($('trimPadV')) $('trimPadV').textContent = state.trimPad + ' cells'; };
 if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit (box follows the aligned slices, TOP master)
   const part = boxPart(); geomState[part] = { auto: true, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top' };
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
