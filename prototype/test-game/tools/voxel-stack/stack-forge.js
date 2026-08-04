@@ -25,6 +25,7 @@ let TRACE = null;
 const CARVE_STAGES = ['0 · CLEAR — empty volume', '1 · FILL SOLID — the box, before any cut',
   '2 · CUT by TOP slice', '3 · + procedural barrel (turret only)', '4 · + your voxel edits (final)'];
 let carveStage = null;
+let steppingNow = false;   // true ONLY inside showStage's own rebuild
 const T = (label, n, extra) => { if (TRACE) TRACE.push({ label, n, extra: extra || '' }); };
 const countOpaque = (cv) => { if (!cv) return -1; const d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, cv.width, cv.height).data; let k = 0; for (let i = 0; i < cv.width * cv.height; i++) if (d[i * 4 + 3] > INK_A) k++; return k; };
 const countMask = (g) => { if (!g) return -1; let k = 0; for (let i = 0; i < g.m.length; i++) if (g.m[i]) k++; return k; };
@@ -1721,6 +1722,10 @@ function renderGridView() {
 // only ever grows to fit the geometry — a unit longer than it is tall keeps its length; 128 voxels is the hard
 // ceiling. This is the single reconciliation point, called at the top of every carve (rebuildSlices).
 function rebuildSlices() {
+  // STEP MODE IS MOMENTARY. carveStage is a global and rebuildSlices is called from 42 places, so a stage
+  // left set would make every later carve — including a bake or a save — run half-finished. Any rebuild
+  // that is not the step viewer's own drops back to the full carve.
+  if (carveStage !== null && !steppingNow) { carveStage = null; const b = $('stepBanner'); if (b) b.style.display = 'none'; }
   carveEpoch++;                                       // invalidate anything cached against the previous carve
   if (bodyBaked) { bodyBaked.destroy(); bodyBaked = null; } if (turretBaked) { turretBaked.destroy(); turretBaked = null; }
   if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
@@ -2092,7 +2097,8 @@ function showStage() {
   const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part);
   gridModel = null;
   TRACE = [];
-  rebuildSlices();
+  steppingNow = true;
+  try { rebuildSlices(); } finally { steppingNow = false; }
   const steps = TRACE; TRACE = null;
   renderGridView();
   const m = buildModel(part, foot, layers);
@@ -2100,6 +2106,8 @@ function showStage() {
   const bb = modelBBox(m.filled, foot, layers);
   const dim = bb.x1 < 0 ? 'empty' : `${bb.x1 - bb.x0 + 1}×${bb.y1 - bb.y0 + 1}×${bb.z1 - bb.z0 + 1}`;
   const label = carveStage === null ? 'FULL CARVE (space to step)' : CARVE_STAGES[carveStage];
+  const ban = $('stepBanner');
+  if (ban) { ban.style.display = carveStage === null ? 'none' : ''; ban.textContent = `⏸ STEP ${label} — this is a PARTIAL carve. ESC or any control returns to the full carve.`; }
   const gd = $('gridDims');
   if (gd) { gd.textContent = `${label}  →  ${n} voxels · ${dim}`; gd.style.color = carveStage === null ? '#8fa7bd' : '#f2c869'; }
   console.info(`[stack-forge] ${label} → ${n} voxels, ${dim}`);
