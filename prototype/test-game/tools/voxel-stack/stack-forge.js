@@ -593,6 +593,13 @@ function projectViews(filled, foot, layers, cd, V) {
 // grid size changes underneath it) we fall back to a live carve, so nothing regresses for an existing project.
 function buildModelRaw(partId, foot, layers) {
   const f = frozen[partId];
+  // A frozen model that gets SKIPPED because the caller computed a different grid is exactly the bug that made
+  // Create Geometry look dead: the freeze is keyed on footOf/gridLayersOf, so any caller using the raw
+  // state.foot/state.bodyLayers silently fell through to a live carve. Never let that pass quietly again.
+  if (f && (f.foot !== foot || f.layers !== layers) && !buildModelRaw._warned) {
+    buildModelRaw._warned = true;
+    console.error(`[stack-forge] ${partId}: frozen geometry is ${f.foot}×${f.foot}×${f.layers} but a caller asked for ${foot}×${foot}×${layers} — the frozen model is being IGNORED. Callers must use footOf(part)/gridLayersOf(part).`);
+  }
   if (f && f.foot === foot && f.layers === layers) {
     const N = foot * foot;
     return { vcol: f.vcol, cd: f.cd, views: f.views, sp: f.sp, dbg: f.dbg,
@@ -1874,8 +1881,12 @@ function rebuildSlices() {
   if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
   state.baked = null; voxSig = ''; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
   bodyMountZ = bodyTopLayer(state.foot, state.bodyLayers);   // turret mounts on the body's actual top
-  bodyFaces = buildFaces('body', state.foot, state.bodyLayers);
-  turretFaces = buildFaces('turret', footOf('turret'), state.turretLayers);   // SF3: turret's own footprint
+  // GRID MUST MATCH THE FREEZE. footOf/gridLayersOf are the EFFECTIVE grid (they grow past the stored
+  // slider when the geometry needs it). createGeometry freezes the model keyed on exactly those, so building
+  // faces on the raw state.foot/state.bodyLayers made every consumer miss the frozen model and silently fall
+  // back to a live carve — which is why Create Geometry appeared to do nothing at all.
+  bodyFaces = buildFaces('body', footOf('body'), gridLayersOf('body'));
+  turretFaces = buildFaces('turret', footOf('turret'), gridLayersOf('turret'));   // SF3: turret's own footprint
   // canvases sized to the worst case at any azimuth: footprint diagonal + offsets + the full stack height
   const foot = state.foot, h = state.zScale;
   voxBounds = { R: Math.ceil(foot * 0.71 + Math.abs(state.turretDx) + foot * Math.abs(state.turretPivot) / 100) + 2,
@@ -3452,7 +3463,7 @@ $('setCam').onclick = () => {
 
 // ── BAKE ──
 function doBake() {
-  const foot = state.foot, bL = state.bodyLayers, tL = state.turretLayers, sp = layerSp(state.el), B = state.bakeScale;
+  const foot = footOf('body'), bL = gridLayersOf('body'), tL = gridLayersOf('turret'), sp = layerSp(state.el), B = state.bakeScale;   // effective grid — must match the freeze
   const pivotPx = foot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
   const g = geom(foot, Math.max(bL, tL), sp, pivotPx);   // shared texture sized for the taller stack; both bottom-align at BASEY
   const t0 = performance.now();
@@ -3627,7 +3638,7 @@ function loadDecorForEdit(id) {
 }
 function bakeDecor() {
   if (!bodyFaces) { alert('Decor: author the prop as the BODY first (load Top / Side / Front in step 1), then Bake decor.'); return; }
-  const foot = state.foot, bL = state.bodyLayers, sp = layerSp(state.el), B = state.bakeScale;
+  const foot = footOf('body'), bL = gridLayersOf('body'), sp = layerSp(state.el), B = state.bakeScale;   // effective grid — must match the freeze
   const g = geom(foot, bL, sp, 0);                                     // body-only, centred pivot
   const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, smooth: false, sharp: 0, g, pivotFrac: 0.5, el: state.el, scale: B });
   const filled = buildModel('body', foot, bL).filled;
