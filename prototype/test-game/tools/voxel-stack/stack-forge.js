@@ -2447,7 +2447,10 @@ document.addEventListener('keydown', (e) => {
   // the interior to move it. Edits write the shared world-axis spans in geomState, so linked views move
   // in lock-step. On first edit we snapshot the current auto spans and flip auto→false. The uncolored
   // carve re-runs on pointer-up (heavy); the box + silhouette track live off geomState.
-  const capOf = () => RES_MAX;   // the drag is bounded by the ceiling, not by today's grid
+  // capOf is the FLIP PIVOT for a reversed axis — it MUST be the real grid dimension, or the mapping is
+  // wrong. Read it fresh: growGridFor can raise the grid mid-drag. (The drag's RANGE is bounded by
+  // RES_MAX separately, in put(), which is where growth belongs.)
+  const capOf = (a) => (a === 'z' ? gridLayersOf(gridGeom.part) : footOf(gridGeom.part));
   const ensureGeomSpans = () => {                                   // freeze current placement into geomState, editable
     const part = gridGeom.part, gs = geomState[part];
     if (!gs.spanX && gridModel && gridModel.sp) { gs.spanX = { ...gridModel.sp.spanX }; gs.spanY = { ...gridModel.sp.spanY }; gs.spanZ = { ...gridModel.sp.spanZ }; }
@@ -2469,14 +2472,20 @@ document.addEventListener('keydown', (e) => {
   let geomDrag = null;                                             // { mode, gc0, gr0, cR0, rR0 }
   const gridRectFromSpans = (g) => {
     const gs = geomState[gridGeom.part];
-    const rng = (info) => { const s = gs[spanKey[info.axis]], cap = capOf(info.axis, g.foot, g.layers); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
+    const rng = (info) => { const s = gs[spanKey[info.axis]], cap = capOf(info.axis); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
     return { cR: rng(g.col), rR: rng(g.row) };
   };
   const spansFromGridRect = (g, cR, rR) => {
     const gs = geomState[gridGeom.part];
-    const put = (info, lo, hi) => { const cap = capOf(info.axis, g.foot, g.layers); lo = clamp(Math.round(lo), 0, cap - 1); hi = clamp(Math.round(hi), lo + 1, cap); gs[spanKey[info.axis]] = info.flip ? { lo: cap - hi, hi: cap - lo } : { lo, hi }; };
+    const put = (info, lo, hi) => {
+      lo = Math.round(lo); hi = Math.round(hi);
+      const need = clamp(Math.max(lo, hi), 1, RES_MAX);            // grow BEFORE the flip pivot is read
+      if (info.axis === 'z') growGridFor(gridGeom.part, 0, need); else growGridFor(gridGeom.part, need, 0);
+      const cap = capOf(info.axis);
+      lo = clamp(lo, 0, cap - 1); hi = clamp(hi, lo + 1, cap);
+      gs[spanKey[info.axis]] = info.flip ? { lo: cap - hi, hi: cap - lo } : { lo, hi };
+    };
     put(g.col, cR.lo, cR.hi); put(g.row, rR.lo, rR.hi);
-    growGridFor(gridGeom.part, Math.max(gs.spanX.hi, gs.spanY.hi), gs.spanZ.hi);   // grid follows the box
   };
   const geomMove = (e) => {
     const g = gridGeom.geom; if (!g || !geomDrag) return;
