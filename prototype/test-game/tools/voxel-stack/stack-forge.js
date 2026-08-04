@@ -228,6 +228,11 @@ function placeSample(keyed, xf, boxW, boxH, elev) {
   const r = sliceRect(keyed.width, keyed.height, boxW, boxH, xf);
   const cv = document.createElement('canvas'); cv.width = boxW; cv.height = boxH;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
+  // ALPHA COMES FROM THE ORIGINAL SLICE (owner 2026-08-04). `keyed` is the keyedCropped cutout of the source
+  // image; the mask below must read ITS alpha, never a display projection's. The overlays draw the same slice
+  // at globalAlpha 0.42/0.82 for legibility, so make it explicit here that this canvas is opaque-compositing:
+  // globalAlpha pinned to 1 and 'copy' so nothing from a previous state can dilute the alpha we then threshold.
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'copy';
   ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, r.px, r.py, r.pw, r.ph);   // PLACE, never fill
   const d = ctx.getImageData(0, 0, boxW, boxH).data, m = new Uint8Array(boxW * boxH), c = new Uint8Array(boxW * boxH * 3);
   for (let rr = 0; rr < boxH; rr++) for (let a = 0; a < boxW; a++) {
@@ -477,7 +482,8 @@ function buildVolume(partId, foot, layers) {
   const oy = sp.spanY.lo, bh = sp.spanY.hi - sp.spanY.lo;
   const z0 = sp.spanZ.lo, Hv = sp.spanZ.hi - sp.spanZ.lo, Hraw = sp.Hraw;
   // TOP footprint + colour — PLACED at the artist's imgXf inside the box (no stretch-to-fill)
-  if (topKeyed) { const r = sliceRect(topKeyed.width, topKeyed.height, bw, bh, xf.top); tx.imageSmoothingEnabled = false; tx.drawImage(topKeyed, ox + r.px, oy + r.py, r.pw, r.ph); }
+  // same rule as placeSample: the footprint's alpha is the ORIGINAL slice's, never a projection's
+  if (topKeyed) { const r = sliceRect(topKeyed.width, topKeyed.height, bw, bh, xf.top); tx.globalAlpha = 1; tx.imageSmoothingEnabled = false; tx.drawImage(topKeyed, ox + r.px, oy + r.py, r.pw, r.ph); }
   else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > INK_A;   // same ink test as the elevation masks
@@ -619,8 +625,17 @@ function createGeometry(partId) {
   gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave();
   const bb = modelBBox(buildModel(partId, foot, layers).filled, foot, layers);
   const dim = bb.x1 < 0 ? 'EMPTY' : `${bb.x1 - bb.x0 + 1}×${bb.y1 - bb.y0 + 1}×${bb.z1 - bb.z0 + 1}`;
-  console.info(`[stack-forge] ${partId}: created geometry — ${n} voxels, ${dim} in a ${foot}×${foot}×${layers} grid`);
-  if (!n) alert('Create Geometry produced NO voxels — check that a slice is loaded and the views overlap.');
+  // PER-VIEW COVERAGE — the carve is an intersection, so ONE empty mask empties the whole result. Report each
+  // view's ink so an empty carve names its cause instead of just saying "nothing happened".
+  const V = m.views, cov = (g) => { if (!g || !g.m) return 'none'; let k = 0; for (let i = 0; i < g.m.length; i++) if (g.m[i]) k++; return `${k}/${g.m.length}`; };
+  let topInk = 0; if (m.cd) for (let i = 0; i < N; i++) if (m.cd[i * 4 + 3] > INK_A) topInk++;
+  const report = `top ${topInk}/${N} · side ${cov(V && V.side)} · front ${cov(V && V.front)} · back ${cov(V && V.back)}`;
+  console.info(`[stack-forge] ${partId}: created geometry — ${n} voxels, ${dim} in a ${foot}×${foot}×${layers} grid   [slice ink: ${report}]`);
+  const sd = $('stageDims'), gd = $('gridDims');
+  const line = n ? `created ${n} vox · ${dim} · grid ${foot}×${foot}×${layers}` : `Create Geometry: EMPTY — ${report}`;
+  if (sd) { sd.textContent = line; sd.style.color = n ? '#8fa7bd' : '#e0625f'; }
+  if (gd) { gd.textContent = line; gd.style.color = n ? '#8fa7bd' : '#e0625f'; }
+  if (!n) alert(`Create Geometry produced NO voxels.\n\nThe carve intersects every supplied view, so one empty slice empties the result.\nSlice ink: ${report}\n\n"none" = that view has no image. "0/N" = the image keyed to nothing — raise its cutout tolerance.`);
   else if (n < layers * N * 0.002) console.warn(`[stack-forge] ${partId}: only ${n} voxels in a ${foot}×${foot}×${layers} grid — the cube is Layers-sized (${Math.min(foot, layers)}³), so raise Base layers or press ⬛ Cube if the model looks tiny.`);
   return n;
 }
