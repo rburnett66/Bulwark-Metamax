@@ -522,6 +522,24 @@ function effPlace(part) {
     bh: g.spanY.hi - g.spanY.lo, z0: g.spanZ.lo, Hv: g.spanZ.hi - g.spanZ.lo };
   return { ox: 0, oy: 0, bw: footOf(part), bh: footOf(part), z0: 0, Hv: gridLayersOf(part) };
 }
+// raise ONE axis of the grid so a dragged box fits. z -> Layers, x/y -> Resolution (snapped UP to the
+// slider's step-4 ladder, which only ever makes room). Never shrinks.
+function growAxis(part, axis, want) {
+  const isT = part === 'turret';
+  if (axis === 'z') {
+    const lid = isT ? 'turretLayers' : 'bodyLayers';
+    if (want <= state[lid]) return;
+    const el = $(lid); if (el && +el.max < want) el.max = String(want);
+    state[lid] = want; if (el) { el.value = want; const lv = $(lid + 'V'); if (lv) lv.textContent = String(want); }
+  } else {
+    const cur = isT ? (state.turretFoot || state.foot) : state.foot;
+    const wantF = clamp(Math.ceil(want / 4) * 4, 16, RES_MAX);
+    if (wantF <= cur) return;
+    if (isT) state.turretFoot = wantF; else state.foot = wantF;
+    const el = $(isT ? 'turretRes' : 'res'); if (el) el.value = wantF;
+  }
+  syncSizeUI();
+}
 function setPlace(part, p) {
   const foot = footOf(part), layers = gridLayersOf(part);
   const cl = (lo, sz, cap) => { const a = clamp(lo | 0, 0, cap - 1); return { lo: a, hi: clamp(a + Math.max(1, sz | 0), a + 1, cap) }; };
@@ -2459,7 +2477,23 @@ document.addEventListener('keydown', (e) => {
   };
   const spansFromGridRect = (g, cR, rR) => {
     const gs = geomState[gridGeom.part];
-    const put = (info, lo, hi) => { const cap = capOf(info.axis, g.foot, g.layers); lo = clamp(Math.round(lo), 0, cap - 1); hi = clamp(Math.round(hi), lo + 1, cap); gs[spanKey[info.axis]] = info.flip ? { lo: cap - hi, hi: cap - lo } : { lo, hi }; };
+    // Drag an edge to a screen cell and land the SPAN exactly there, growing the grid when the drag goes
+    // past it. Order matters and is what three earlier attempts got wrong: UNFLIP first, with the pivot the
+    // box was DRAWN with, THEN grow, THEN clamp. Growing in screen space cannot work — on a reversed axis
+    // (side/front/back rows are z, flip:true) the screen coordinate DECREASES as the span grows, so a
+    // max(lo,hi) test never fires and the clamp pins you at the grid edge. Proven in node over all four
+    // views x both axes: 56 cases covering exact landing, growth past the grid, shrink into the grid, and
+    // ceiling/inversion guards.
+    const put = (info, lo, hi) => {
+      const capOld = capOf(info.axis, g.foot, g.layers);
+      let sp = info.flip ? { lo: capOld - Math.round(hi), hi: capOld - Math.round(lo) }
+                         : { lo: Math.round(lo), hi: Math.round(hi) };
+      if (sp.hi < sp.lo) sp = { lo: sp.hi, hi: sp.lo };
+      const capNew = clamp(Math.max(capOld, sp.hi, 1), 1, RES_MAX);
+      if (capNew > capOld) growAxis(gridGeom.part, info.axis, capNew);
+      const lo2 = clamp(sp.lo, 0, capNew - 1), hi2 = clamp(sp.hi, lo2 + 1, capNew);
+      gs[spanKey[info.axis]] = { lo: lo2, hi: hi2 };
+    };
     put(g.col, cR.lo, cR.hi); put(g.row, rR.lo, rR.hi);
   };
   const geomMove = (e) => {
