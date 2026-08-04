@@ -21,6 +21,12 @@ const WORLD_SCALE = 3, BODY_FRAMES = 16, TURRET_FRAMES = 64, MANIFEST_KEY = 'bul
 // Bigger unit ⇒ higher Resolution, never a bigger stretch — voxel density is constant on the board.
 const VOX_PER_TILE = 32;
 const RES_MAX = 96;              // grid ceiling (owner 2026-08-03: "cap max size to 96 cells for now")
+// INK: the ONE alpha threshold that decides "this cell is part of the subject". keyBackground feathers edges to
+// graded alpha, so every view MUST agree on where the silhouette ends. The top footprint used to test >20 while
+// every elevation mask tested >40 — cells in that 21..40 band were inside the top but outside side/front, which
+// rimmed the silhouette in top-colour (the wall mask missed them, so wallCol fell back to the column colour) and
+// left stray voxels on any axis whose elevation view was absent.
+const INK_A = 40;
 const unitTiles = (foot) => foot / VOX_PER_TILE;
 // COLLISION footprint: mirrors the game (loader.VOXEL_UNIT_SCALE 0.5) with a small pad so the body touches
 // just before it collides. Half-width in TILES = tiles · 0.5 · 1.2 / 2 = tiles · 0.3. Shown as a ring in the
@@ -175,7 +181,7 @@ function keyedCanvas(img, tol, polys, picks) {
 function keyedCropped(img, tol, poly, picks) {
   const k = keyedCanvas(img, tol, poly, picks), d = k.getContext('2d').getImageData(0, 0, k.width, k.height).data;
   let x0 = k.width, y0 = k.height, x1 = -1, y1 = -1;
-  for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+  for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > INK_A) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
   if (x1 < x0) return k;
   const cw = x1 - x0 + 1, ch = y1 - y0 + 1, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   cv.getContext('2d').drawImage(k, x0, y0, cw, ch, 0, 0, cw, ch);
@@ -190,7 +196,7 @@ function gridStretch(canvas, w, h, elev) {
   const d = ctx.getImageData(0, 0, w, h).data, m = new Uint8Array(w * h), c = new Uint8Array(w * h * 3);
   for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
     const row = elev ? (h - 1 - r) : r, i = row * w + a, p = (r * w + a) * 4;
-    if (d[p + 3] > 40) { m[i] = 1; c[i * 3] = d[p]; c[i * 3 + 1] = d[p + 1]; c[i * 3 + 2] = d[p + 2]; }
+    if (d[p + 3] > INK_A) { m[i] = 1; c[i * 3] = d[p]; c[i * 3 + 1] = d[p + 1]; c[i * 3 + 2] = d[p + 2]; }
   }
   return { m, c, w, h };
 }
@@ -218,7 +224,7 @@ function placeSample(keyed, xf, boxW, boxH, elev) {
   const d = ctx.getImageData(0, 0, boxW, boxH).data, m = new Uint8Array(boxW * boxH), c = new Uint8Array(boxW * boxH * 3);
   for (let rr = 0; rr < boxH; rr++) for (let a = 0; a < boxW; a++) {
     const row = elev ? (boxH - 1 - rr) : rr, i = row * boxW + a, p = (rr * boxW + a) * 4;
-    if (d[p + 3] > 40) { m[i] = 1; c[i * 3] = d[p]; c[i * 3 + 1] = d[p + 1]; c[i * 3 + 2] = d[p + 2]; }
+    if (d[p + 3] > INK_A) { m[i] = 1; c[i * 3] = d[p]; c[i * 3 + 1] = d[p + 1]; c[i * 3 + 2] = d[p + 2]; }
   }
   return { m, c, w: boxW, h: boxH };
 }
@@ -466,7 +472,7 @@ function buildVolume(partId, foot, layers) {
   if (topKeyed) { const r = sliceRect(topKeyed.width, topKeyed.height, bw, bh, xf.top); tx.imageSmoothingEnabled = false; tx.drawImage(topKeyed, ox + r.px, oy + r.py, r.pw, r.ph); }
   else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
-  const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
+  const top = (x, y) => cd[(y * foot + x) * 4 + 3] > INK_A;   // same ink test as the elevation masks
   // side/front/back masks — PLACED (placeSample), not stretched. Empty cells stay empty → natural margins.
   const sideG = sideKeyed ? placeSample(sideKeyed, xf.side, bw, Hv, true) : null;    // length × height
   const frontG = frontKeyed ? placeSample(frontKeyed, src.front ? xf.front : xf.back, bh, Hv, true) : null; // width × height
@@ -484,10 +490,10 @@ function buildVolume(partId, foot, layers) {
     const bz = clamp(Math.round(state.barrelElev / 100 * (Hv - 1)), 0, layers - 1);
     inBarrel = (x, y, z) => x >= bx0 && x <= bx1 && (y - cy) * (y - cy) + (z - bz) * (z - bz) <= r * r;
     let R = 0, G = 0, B = 0, c = 0;                                  // barrel tint = darkened mean body colour
-    for (let i = 0; i < N; i++) { const p = i * 4; if (cd[p + 3] > 20) { R += cd[p]; G += cd[p + 1]; B += cd[p + 2]; c++; } }
+    for (let i = 0; i < N; i++) { const p = i * 4; if (cd[p + 3] > INK_A) { R += cd[p]; G += cd[p + 1]; B += cd[p + 2]; c++; } }
     const bt = c ? [R / c * 0.72 | 0, G / c * 0.72 | 0, B / c * 0.72 | 0] : [82, 84, 92];
     for (let x = Math.max(0, bx0); x <= bx1; x++) for (let y = Math.max(0, Math.ceil(cy - r)); y <= Math.min(foot - 1, Math.floor(cy + r)); y++) {
-      const p = (y * foot + x) * 4; if (cd[p + 3] < 20) { cd[p] = bt[0]; cd[p + 1] = bt[1]; cd[p + 2] = bt[2]; cd[p + 3] = 255; }
+      const p = (y * foot + x) * 4; if (cd[p + 3] <= INK_A) { cd[p] = bt[0]; cd[p + 1] = bt[1]; cd[p + 2] = bt[2]; cd[p + 3] = 255; }
     }
   }
   const filled = inBarrel ? (x, y, z) => bodyFilled(x, y, z) || inBarrel(x, y, z) : bodyFilled;
@@ -530,7 +536,7 @@ function buildModelRaw(partId, foot, layers) {
   if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };  // .vox → already voxels
   const cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-    const i = y * foot + x, p = i * 4; if (cd[p + 3] < 20) continue;
+    const i = y * foot + x, p = i * 4; if (cd[p + 3] <= INK_A) continue;
     const r = cd[p], g = cd[p + 1], b = cd[p + 2];
     for (let z = 0; z < layers; z++) if (filled(x, y, z)) { const c = (z * N + i) * 3; vcol[c] = r; vcol[c + 1] = g; vcol[c + 2] = b; }
   }
