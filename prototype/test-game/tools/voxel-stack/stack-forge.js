@@ -423,9 +423,9 @@ function buildVolume(partId, foot, layers) {
   // side's height maps PROPORTIONALLY (a long-barrel side doesn't get stretched vertically to fill layers).
   const tol = keyTolState[partId], pol = polyState[partId], pk = pickState[partId];
   const xf = imgXf[partId] || {};   // SF2 per-side alignment (scale/offset) folded into the carve
-  const topC = src.top ? xfCanvas(keyedCropped(src.top, tol.top, pol.top, pk.top), xf.top) : null;
-  const sideC = src.side ? xfCanvas(keyedCropped(src.side, tol.side, pol.side, pk.side), xf.side) : null;
-  const frontC = src.front ? xfCanvas(keyedCropped(src.front, tol.front, pol.front, pk.front), xf.front) : (src.back ? xfCanvas(keyedCropped(src.back, tol.back, pol.back, pk.back), xf.back) : null);
+  const topC = src.top ? xfCanvas(keyedCanvas(src.top, tol.top, pol.top, pk.top), xf.top) : null;      // UNCROPPED: keeps position + size
+  const sideC = src.side ? xfCanvas(keyedCanvas(src.side, tol.side, pol.side, pk.side), xf.side) : null;
+  const frontC = src.front ? xfCanvas(keyedCanvas(src.front, tol.front, pol.front, pk.front), xf.front) : (src.back ? xfCanvas(keyedCanvas(src.back, tol.back, pol.back, pk.back), xf.back) : null);
   const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
   // procedural barrel reserves a FORWARD margin so the body shrinks back and the tube protrudes past it
   const reach = (partId === 'turret' && state.barrelLen > 0) ? state.barrelLen : 0;
@@ -444,7 +444,7 @@ function buildVolume(partId, foot, layers) {
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
   const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to the common Hv)
   const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
-  const backC = src.back ? xfCanvas(keyedCropped(src.back, tol.back, pol.back, pk.back), xf.back) : null; // colour-only: paints the −x walls (xf.back → matches the box's Back projection)
+  const backC = src.back ? xfCanvas(keyedCanvas(src.back, tol.back, pol.back, pk.back), xf.back) : null; // colour-only: paints the −x walls
   const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
   const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= z0 && z < z0 + Hv && !!sideG.m[(z - z0) * bw + (x - ox)]) : (z >= z0 && z < z0 + Hv);
   const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv && !!frontG.m[(z - z0) * bh + (y - oy)]) : (z >= z0 && z < z0 + Hv);
@@ -1661,7 +1661,7 @@ function renderGridView() {
     const bx = ox + cR.lo * cell, by = oy + rR.lo * cellV, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cellV;
     // apply the SAME per-side scale/align (xf) the carve uses, or the geometry overlay (raw image) won't match
     // the paint voxels (transformed) once a side is aligned — owner: "geometry and paint do not match".
-    const keyed = imgs[part][gridView] ? xfCanvas(keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]), (imgXf[part] || {})[gridView]) : null;
+    const keyed = imgs[part][gridView] ? xfCanvas(keyedCanvas(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]), (imgXf[part] || {})[gridView]) : null;   // UNCROPPED: match the carve
     if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
