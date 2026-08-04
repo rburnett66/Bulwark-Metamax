@@ -535,20 +535,34 @@ function effPlace(part) {
   const foot = footOf(part), layers = (part === 'turret' ? state.turretLayers : state.bodyLayers);
   return { ox: 0, oy: 0, bw: foot, bh: foot, z0: 0, Hv: layers };
 }
-// the space-carved model BEFORE manual edits (buildVolume is not cached — callers that only need the
-// base, like the live slice editor, cache this and layer edits on cheaply).
-function buildModelRaw(partId, foot, layers) {
+// ── THE PIPELINE (owner 2026-08-04): "a create geometry button that fires off the carve and projection.
+// Then I need to be able to edit geo, then reproject, then paint."
+//   ⬛ Create Geometry → carveModel(): CARVE the block down with the views, then PROJECT the views onto it,
+//                        then FREEZE the result. Nothing else re-carves — adjusting a slice or a slider can
+//                        never silently rebuild the geometry under your edits.
+//   edit geo           → voxEdit add/remove, layered on the frozen model
+//   🖼 Reproject        → re-run ONLY the projection over the CURRENT (frozen + edited) geometry
+//   paint              → voxEdit colours, which always win over the projection
+const frozen = { body: null, turret: null };   // { foot, layers, fill, vcol, cd, views, sp, dbg }
+// the space-carved + projected model BEFORE manual edits. Called by Create Geometry; every other consumer
+// reads the FROZEN copy via buildModelRaw below.
+function carveModel(partId, foot, layers) {
   const v = buildVolume(partId, foot, layers), N = foot * foot;
   if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };  // .vox → already voxels
-  const cd = v.cd, filled = v.filled, V = v.views, vcol = new Uint8Array(layers * N * 3);
-  // ── PROJECTION PHASE (owner 2026-08-03: "carve all sides then project all sides with left and right side
-  // mirrored appropriately"). The carve is finished by here — `filled` is finaL. Now every view is projected
-  // onto the SURFACE voxels it can actually see, instead of every voxel in a column taking the top's colour:
-  //   +z exposed → TOP view          (the footprint colour)
-  //   +y exposed → SIDE view         · −y exposed → SIDE view MIRRORED (the two flanks are mirror images, so
-  //                                    the unit's front stays at the +x end when you orbit to either side)
-  //   +x exposed → FRONT view        · −x exposed → BACK view, or the FRONT mirrored when no back was drawn
-  // Interior voxels (no exposed face) fall back to the top's column colour, as before.
+  const vcol = projectViews(v.filled, foot, layers, v.cd, v.views);
+  return { vcol, filled: v.filled, cd: v.cd, views: v.views, sp: v.sp, dbg: v.dbg };
+}
+// ── PROJECTION PHASE, standalone so ⬛ Create Geometry and 🖼 Reproject run the IDENTICAL code. Takes a
+// FINISHED geometry (`filled`) and paints every view onto the surface voxels it can see. Reproject passes the
+// edited geometry, so colours follow voxels you added or removed.
+//   +z exposed → TOP view          (the footprint colour)
+//   +y exposed → SIDE view         · −y exposed → SIDE view MIRRORED (the two flanks are mirror images, so
+//                                    the unit's front stays at the +x end when you orbit to either side)
+//   +x exposed → FRONT view        · −x exposed → BACK view, or the FRONT mirrored when no back was drawn
+// Interior voxels (no exposed face) fall back to the top's column colour.
+function projectViews(filled, foot, layers, cd, V) {
+  const N = foot * foot, vcol = new Uint8Array(layers * N * 3);
+  if (!cd) return vcol;
   // Precedence is top → side → front/back so a top-surface voxel keeps its top colour; buildFaces still
   // resolves each FACE independently, so this only decides the single per-voxel colour that the .vox export,
   // the grid slice editor and the palette see — those used to be top-only.
@@ -576,7 +590,52 @@ function buildModelRaw(partId, foot, layers) {
     if (!col) continue;
     const c = (z * N + i) * 3; vcol[c] = col[0]; vcol[c + 1] = col[1]; vcol[c + 2] = col[2];
   }
-  return { vcol, filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };
+  return vcol;
+}
+// Every consumer reads the FROZEN model. Until ⬛ Create Geometry has been pressed for this part (or after the
+// grid size changes underneath it) we fall back to a live carve, so nothing regresses for an existing project.
+function buildModelRaw(partId, foot, layers) {
+  const f = frozen[partId];
+  if (f && f.foot === foot && f.layers === layers) {
+    const N = foot * foot;
+    return { vcol: f.vcol, cd: f.cd, views: f.views, sp: f.sp, dbg: f.dbg,
+      filled: (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && !!f.fill[z * N + y * foot + x] };
+  }
+  return carveModel(partId, foot, layers);
+}
+// ⬛ CREATE GEOMETRY — the one explicit trigger: carve, project, freeze. Adjust slices all you like beforehand;
+// nothing is built until you press it, and once frozen nothing rebuilds it but another press.
+function createGeometry(partId) {
+  const foot = footOf(partId), layers = gridLayersOf(partId), N = foot * foot;
+  frozen[partId] = null;                                   // carve fresh, never from the frozen copy
+  const m = carveModel(partId, foot, layers);
+  const fill = new Uint8Array(layers * N);
+  let n = 0;
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++)
+    if (m.filled(x, y, z)) { fill[z * N + y * foot + x] = 1; n++; }
+  frozen[partId] = { foot, layers, fill, vcol: m.vcol, cd: m.cd, views: m.views, sp: m.sp, dbg: m.dbg };
+  gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave();
+  const bb = modelBBox(buildModel(partId, foot, layers).filled, foot, layers);
+  const dim = bb.x1 < 0 ? 'EMPTY' : `${bb.x1 - bb.x0 + 1}×${bb.y1 - bb.y0 + 1}×${bb.z1 - bb.z0 + 1}`;
+  console.info(`[stack-forge] ${partId}: created geometry — ${n} voxels, ${dim} in a ${foot}×${foot}×${layers} grid`);
+  if (!n) alert('Create Geometry produced NO voxels — check that a slice is loaded and the views overlap.');
+  else if (n < layers * N * 0.002) console.warn(`[stack-forge] ${partId}: only ${n} voxels in a ${foot}×${foot}×${layers} grid — the cube is Layers-sized (${Math.min(foot, layers)}³), so raise Base layers or press ⬛ Cube if the model looks tiny.`);
+  return n;
+}
+// 🖼 REPROJECT — re-run ONLY the projection over the CURRENT geometry (frozen + your add/erase edits), so
+// colours follow voxels you added or removed. Geometry is untouched; painted voxels still win downstream.
+function reprojectGeometry(partId) {
+  const f = frozen[partId];
+  if (!f) { alert('Reproject: press ⬛ Create Geometry first.'); return; }
+  const { foot, layers } = f, N = foot * foot, ed = voxEdit[partId];
+  const filled = (x, y, z) => {
+    if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) return false;
+    const e = ed && ed.get(z * N + y * foot + x);
+    return e !== undefined ? e !== 'del' : !!f.fill[z * N + y * foot + x];
+  };
+  f.vcol = projectViews(filled, foot, layers, f.cd, f.views);
+  gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave();
+  console.info(`[stack-forge] ${partId}: reprojected views onto the current geometry`);
 }
 // layer the voxEdit overlay onto a raw model (clone vcol so buildVolume's arrays are never mutated).
 function applyVoxEdits(m, partId, foot, layers) {
@@ -1999,7 +2058,9 @@ function commitBoxPlace(part) {
     spanX: { lo: p.ox, hi: Math.min(foot, p.ox + p.bw) }, spanY: { lo: p.oy, hi: Math.min(foot, p.oy + p.bh) }, spanZ: { lo: p.z0 || 0, hi: Math.min(layers, (p.z0 || 0) + p.Hv) } };
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
 }
-if ($('boxGen')) $('boxGen').onclick = () => commitBoxPlace(boxPart());   // commit the pending placement into the carve
+// ⬛ Create Geometry: commit the pending box placement, then CARVE + PROJECT + FREEZE in one explicit step.
+if ($('boxGen')) $('boxGen').onclick = () => { const p = boxPart(); commitBoxPlace(p); createGeometry(p); };
+if ($('boxReproject')) $('boxReproject').onclick = () => reprojectGeometry(boxPart());
 // ── ⇲ TRIM TO FIT (owner 2026-08-03): "when the carve is done ... shrink the cube size to dimensions + N cells
 // on each length, this will give a little space for adding polish." Shrinks the CUBE (the build volume / spans),
 // NOT the grid — changing foot would move in-game world scale (unitTiles) and invalidate every voxEdit key,
