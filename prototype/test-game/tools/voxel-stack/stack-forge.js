@@ -2091,6 +2091,28 @@ if ($('gridRegen')) $('gridRegen').onclick = () => {
   const gd = $('gridDims'); if (gd) { gd.textContent = msg; gd.style.color = n ? (riders.length ? '#f2c869' : '#8fa7bd') : '#e0625f'; }
   console.info('[stack-forge] regenerate — ' + msg);
 };
+// ↺ RESET AUTHORING STATE — clears every persisted layer that rides on top of the carve, in one press.
+// Six things are serialised by snapshotProject and restored by loadProject, and each one changes what you
+// see: voxel edits (applied AFTER the carve), a manual box, per-slice align, polygon cuts, eyedropper key
+// picks, and per-view cutout tolerance. Your loaded slice IMAGES are untouched — only the state on top.
+if ($('gridResetAll')) $('gridResetAll').onclick = () => {
+  const n = voxEdit.body.size + voxEdit.turret.size;
+  if (!confirm(`Reset all authoring state?
+
+Clears ${n} voxel edit(s), the box, per-slice align, polygon cuts, key picks and cutout tolerance for BOTH parts.
+
+Your loaded slice images are kept.`)) return;
+  pushUndo();
+  for (const part of ['body', 'turret']) {
+    voxEdit[part].clear();
+    geomState[part] = { auto: true, bottomFrom: 'top' };
+    imgXf[part] = mkXf();
+    for (const v of ['top', 'side', 'front', 'back']) { polyState[part][v] = null; pickState[part][v] = []; keyTolState[part][v] = 75; }
+  }
+  gridModel = null; carveCache.body = null; carveCache.turret = null;
+  xfSyncSliders(); boxSyncSliders(); recarve(); renderGridView(); scheduleAutosave();
+  console.info('[stack-forge] authoring state reset — edits, box, align, polys, picks and tolerance cleared');
+};
 if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; refreshModel(); scheduleAutosave();
 };
