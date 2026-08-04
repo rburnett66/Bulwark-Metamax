@@ -209,21 +209,23 @@ function gridStretch(canvas, w, h, elev) {
 // the cell rect a keyed slice occupies in a boxW×boxH grid at its imgXf placement. sx/sy=1 → aspect-preserving
 // contain; the artist scales/slides from there. NO stretch-to-fill, NO aspect refit — a smaller slice leaves
 // empty margins (the "10×10 in 20×20" case). Shared by the carve mask and the full-res projection.
-// `floor` = an ELEVATION slice (side/front/back): anchor it to the BOTTOM of the box, not the middle. Without
-// this a short profile centres vertically and — because placeSample flips rows for z-up — the carved unit
-// FLOATS at z=(boxH−ph)/2 instead of sitting on the ground. The TOP view is a footprint (x/y), so it centres.
-function sliceRect(kw, kh, boxW, boxH, xf, floor) {
+// ORIGINAL DESIGN (owner 2026-08-04): "the slice should be presented in the middle of the face". Every slice
+// — top and elevations alike — lands CENTRED at the contain-fit; the artist moves and stretches it from there
+// with the on-slice handles. (An earlier revision floor-anchored the elevations; that was not the design.)
+function sliceRect(kw, kh, boxW, boxH, xf) {
   const base = Math.min(boxW / (kw || 1), boxH / (kh || 1)), sx = (xf && xf.sx) || 1, sy = (xf && xf.sy) || 1;
   const pw = (kw || 1) * base * sx, ph = (kh || 1) * base * sy;
-  const py0 = floor ? (boxH - ph) : (boxH - ph) / 2;   // floor: bottom edge on the box floor → z=0 after the elev flip
-  return { px: (boxW - pw) / 2 + ((xf && xf.ox) || 0) * boxW, py: py0 + ((xf && xf.oy) || 0) * boxH, pw, ph };
+  return { px: (boxW - pw) / 2 + ((xf && xf.ox) || 0) * boxW, py: (boxH - ph) / 2 + ((xf && xf.oy) || 0) * boxH, pw, ph };
 }
+// the contain-fit scale a slice is measured against — sx/sy of 1 means exactly this. Handles convert a dragged
+// pixel size back into sx/sy through it, so the sliders and the handles stay one number.
+const sliceBase = (kw, kh, boxW, boxH) => Math.min(boxW / (kw || 1), boxH / (kh || 1));
 // PLACE a keyed slice onto a boxW×boxH cell grid at the artist's imgXf — the no-gridStretch, no-normalize carve
 // mask. Draws the slice at `sliceRect` (crisp/nearest), empty cells stay empty. Emits mask m + color c per cell,
 // box-sized, so `side/width/top` and all color code index it EXACTLY like gridStretch's output. `elev` flips z.
 function placeSample(keyed, xf, boxW, boxH, elev) {
   boxW = Math.max(1, boxW | 0); boxH = Math.max(1, boxH | 0);
-  const r = sliceRect(keyed.width, keyed.height, boxW, boxH, xf, elev);   // elev views are the ground-anchored ones
+  const r = sliceRect(keyed.width, keyed.height, boxW, boxH, xf);
   const cv = document.createElement('canvas'); cv.width = boxW; cv.height = boxH;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, r.px, r.py, r.pw, r.ph);   // PLACE, never fill
@@ -924,7 +926,7 @@ function drawDimBox(ctx, meta, el, az, part) {
   const projPlaced = (view, A, B, C, boxW, boxH) => {
     const src = imgs[part]; if (!src || !src[view]) return;
     const keyed = keyedCropped(src[view], keyTolState[part][view], polyState[part][view], pickState[part][view]);
-    const r = sliceRect(keyed.width, keyed.height, boxW, boxH, (imgXf[part] || {})[view], view !== 'top');   // match the carve's ground anchor
+    const r = sliceRect(keyed.width, keyed.height, boxW, boxH, (imgXf[part] || {})[view]);
     const u = { x: B.x - A.x, y: B.y - A.y }, v = { x: C.x - A.x, y: C.y - A.y };
     const o = { x: A.x + (r.px / boxW) * u.x + (r.py / boxH) * v.x, y: A.y + (r.px / boxW) * u.y + (r.py / boxH) * v.y };
     projImg(keyed, o, { x: o.x + (r.pw / boxW) * u.x, y: o.y + (r.pw / boxW) * u.y }, { x: o.x + (r.ph / boxH) * v.x, y: o.y + (r.ph / boxH) * v.y });
@@ -1814,10 +1816,22 @@ function renderGridView() {
     // empty margins, crisp. cell↔px: bw2/boxW, bh2/boxH.
     const gkeyed = imgs[part][gridView] ? keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]) : null;
     if (gkeyed) {
-      const boxW = cR.hi - cR.lo, boxH = rR.hi - rR.lo, pr = sliceRect(gkeyed.width, gkeyed.height, boxW, boxH, (imgXf[part] || {})[gridView], gridView !== 'top');   // match the carve's ground anchor
+      const boxW = cR.hi - cR.lo, boxH = rR.hi - rR.lo, pr = sliceRect(gkeyed.width, gkeyed.height, boxW, boxH, (imgXf[part] || {})[gridView]);
       const cpx = bw2 / boxW, cpy = bh2 / boxH;
       ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false;   // no blur: the overlay shows the cells the carve reads
       ctx.drawImage(gkeyed, bx + pr.px * cpx, by + pr.py * cpy, pr.pw * cpx, pr.ph * cpy); ctx.globalAlpha = 1;
+      // ── SLICE HANDLES (owner's original design): drag an EDGE to stretch that one axis, a CORNER to scale
+      // both. Amber, to read as a different object from the cyan box handles. Recorded in BOTH screen px (hit
+      // testing) and box-cell units (the drag converts back to imgXf sx/sy/ox/oy through sliceBase).
+      const sx0 = bx + pr.px * cpx, sy0 = by + pr.py * cpy, sw0 = pr.pw * cpx, sh0 = pr.ph * cpy;
+      gridGeom.slice = { x: sx0, y: sy0, w: sw0, h: sh0, pxCell: pr.px, pyCell: pr.py, pwCell: pr.pw, phCell: pr.ph,
+        kw: gkeyed.width, kh: gkeyed.height, boxW, boxH, bx, by, cpx, cpy, view: gridView, part };
+      ctx.strokeStyle = 'rgba(242,200,105,.85)'; ctx.lineWidth = 1; ctx.setLineDash([3, 2]);
+      ctx.strokeRect(sx0 + .5, sy0 + .5, sw0 - 1, sh0 - 1); ctx.setLineDash([]);
+      ctx.fillStyle = '#f2c869';
+      for (const [hx, hy] of [[sx0, sy0], [sx0 + sw0, sy0], [sx0, sy0 + sh0], [sx0 + sw0, sy0 + sh0],          // corners
+                              [sx0 + sw0 / 2, sy0], [sx0 + sw0 / 2, sy0 + sh0], [sx0, sy0 + sh0 / 2], [sx0 + sw0, sy0 + sh0 / 2]])  // edges
+        ctx.fillRect(hx - 4, hy - 4, 8, 8);
     }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
@@ -2088,7 +2102,7 @@ function trimToFit(part) {
   const nW = nx1 - nx0, nH = ny1 - ny0, nV = nz1 - nz0;
   // hold each slice's content at the same absolute cells inside the new box. u = horizontal (always centred),
   // v = vertical (elevations are floor-anchored, the top view is centred) — mirroring sliceRect exactly.
-  const adjust = (view, W, H, W2, H2, loU, loU2, loV, loV2, floorV) => {
+  const adjust = (view, W, H, W2, H2, loU, loU2, loV, loV2) => {
     const srcIm = imgs[part] && imgs[part][view]; if (!srcIm) return;
     const keyed = keyedCropped(srcIm, keyTolState[part][view], polyState[part][view], pickState[part][view]);
     const kw = keyed.width || 1, kh = keyed.height || 1, xf = imgXf[part][view] || { sx: 1, sy: 1, ox: 0, oy: 0 };
@@ -2097,15 +2111,14 @@ function trimToFit(part) {
     const sx = xf.sx || 1, sy = xf.sy || 1, pw = kw * base * sx, ph = kh * base * sy;   // content size is PRESERVED
     const px = (W - pw) / 2 + (xf.ox || 0) * W;                                        // u: centred + offset
     const ox2 = (loU + px - loU2 - (W2 - pw) / 2) / W2;
-    let oy2;
-    if (floorV) { const zbot = loV - (xf.oy || 0) * H; oy2 = (loV2 - zbot) / H2; }      // v: floor-anchored (z-up)
-    else { const py = (H - ph) / 2 + (xf.oy || 0) * H; oy2 = (loV + py - loV2 - (H2 - ph) / 2) / H2; }
+    const py = (H - ph) / 2 + (xf.oy || 0) * H;                                       // v: centred, like sliceRect
+    const oy2 = (loV + py - loV2 - (H2 - ph) / 2) / H2;
     imgXf[part][view] = { sx: sx * (base / base2), sy: sy * (base / base2), ox: ox2, oy: oy2 };
   };
-  adjust('top',   oldW, oldH, nW, nH, oldX, nx0, oldY, ny0, false);   // top: x→X, y→Y, both centred
-  adjust('side',  oldW, oldV, nW, nV, oldX, nx0, oldZ, nz0, true);    // side: x→X, y→Z (floor)
-  adjust('front', oldH, oldV, nH, nV, oldY, ny0, oldZ, nz0, true);    // front: x→Y, y→Z (floor)
-  adjust('back',  oldH, oldV, nH, nV, oldY, ny0, oldZ, nz0, true);    // back: colour-only, same box as front
+  adjust('top',   oldW, oldH, nW, nH, oldX, nx0, oldY, ny0);   // top: x→X, y→Y, both centred
+  adjust('side',  oldW, oldV, nW, nV, oldX, nx0, oldZ, nz0);    // side: x→X, y→Z (floor)
+  adjust('front', oldH, oldV, nH, nV, oldY, ny0, oldZ, nz0);    // front: x→Y, y→Z (floor)
+  adjust('back',  oldH, oldV, nH, nV, oldY, ny0, oldZ, nz0);    // back: colour-only, same box as front
   geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
     spanX: { lo: nx0, hi: nx1 }, spanY: { lo: ny0, hi: ny1 }, spanZ: { lo: nz0, hi: nz1 } };
   boxPlace[part] = null; gridModel = null; xfSyncSliders(); rebuildSlices(); scheduleAutosave(); boxSyncSliders();
@@ -2647,6 +2660,38 @@ document.addEventListener('keydown', (e) => {
     if (px > g.bx && px < g.bx + g.bw && py > g.by && py < g.by + g.bh) return 'move';
     return null;
   };
+  // ── SLICE HANDLES: scale the SLICE (imgXf), not the box. Edge handle → that axis only; corner → both.
+  // The opposite edge/corner stays pinned, so a drag reads as a stretch rather than a re-centre.
+  const sliceHit = (e) => {
+    const s = gridGeom && gridGeom.slice; if (!s) return null;
+    const { px, py } = ptCell(e), T = 6;
+    const L = s.x, R = s.x + s.w, TT = s.y, B = s.y + s.h;
+    if (px < L - T || px > R + T || py < TT - T || py > B + T) return null;
+    const nL = Math.abs(px - L) <= T, nR = Math.abs(px - R) <= T;
+    const nT = Math.abs(py - TT) <= T, nB = Math.abs(py - B) <= T;
+    if (nT && nL) return 'TL'; if (nT && nR) return 'TR';
+    if (nB && nL) return 'BL'; if (nB && nR) return 'BR';
+    if (nL) return 'L'; if (nR) return 'R'; if (nT) return 'T'; if (nB) return 'B';
+    return null;                                                   // interior → fall through to the box drag
+  };
+  let sliceDrag = null;                                            // { mode, px0, py0, pw0, ph0 } in BOX-CELL units
+  const sliceMove = (e) => {
+    const s = gridGeom && gridGeom.slice; if (!s || !sliceDrag) return;
+    const { px, py } = ptCell(e);
+    const u = (px - s.bx) / s.cpx, v = (py - s.by) / s.cpy;        // pointer in box-cell units
+    const { mode, px0, py0, pw0, ph0 } = sliceDrag;
+    let nx = px0, ny = py0, nw = pw0, nh = ph0;
+    if (mode.includes('L')) { const right = px0 + pw0; nx = Math.min(u, right - 0.5); nw = right - nx; }
+    if (mode.includes('R')) { nw = Math.max(0.5, u - px0); }
+    if (mode.includes('T')) { const bot = py0 + ph0; ny = Math.min(v, bot - 0.5); nh = bot - ny; }
+    if (mode.includes('B')) { nh = Math.max(0.5, v - py0); }
+    const base = sliceBase(s.kw, s.kh, s.boxW, s.boxH); if (!(base > 0)) return;
+    imgXf[s.part][s.view] = {                                      // px/pw → sx/ox exactly as sliceRect reads them
+      sx: nw / (s.kw * base), sy: nh / (s.kh * base),
+      ox: (nx - (s.boxW - nw) / 2) / s.boxW, oy: (ny - (s.boxH - nh) / 2) / s.boxH,
+    };
+    xfSyncSliders(); voxSig = ''; renderGridView();                // sliders + orbit box track the drag live
+  };
   let geomDrag = null;                                             // { mode, gc0, gr0, cR0, rR0 }
   // Stage 1: the drag reads/writes the SAME placement store the sliders + orbit use (boxPlace via effPlace),
   // not geomState directly — so the orbit box tracks the drag live and release commits through commitBoxPlace.
@@ -2687,6 +2732,14 @@ document.addEventListener('keydown', (e) => {
     renderGridView();                                             // grid box + silhouette track live; carve re-runs on release
   };
   cv.addEventListener('pointerdown', (e) => {
+    if (gridGeom && gridGeom.slice) {                              // Geometry mode: SLICE handles win over the box
+      const sm = sliceHit(e);
+      if (sm) {
+        const s = gridGeom.slice;
+        sliceDrag = { mode: sm, px0: s.pxCell, py0: s.pyCell, pw0: s.pwCell, ph0: s.phCell };
+        dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+      }
+    }
     if (gridGeom && gridGeom.geom) {                               // Geometry mode: box drag
       const mode = geomHit(e); if (!mode) return;
       ensureBoxPlace();
@@ -2721,7 +2774,8 @@ document.addEventListener('keydown', (e) => {
     if (editAt(e, erase)) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
   });
   cv.addEventListener('pointermove', (e) => {
-    if (geomDrag) geomMove(e);
+    if (sliceDrag) sliceMove(e);
+    else if (geomDrag) geomMove(e);
     else if (addBoxing) { const c = cellOf(e); if (c) { addBoxing.c1 = c.cx; addBoxing.r1 = c.cy; gridAddBox = addBoxing; renderGridView(); } }
     else if (boxing) { const c = cellOf(e); if (c) { boxing.c1 = c.cx; boxing.r1 = c.cy; gridBoxSel = boxing; renderGridView(); } }
     else if (painting) editAt(e, gridTool === 'erase' || gridTool === 'box' || gridTool === 'add' || (e.buttons & 2));   // right-drag mid-stroke still erases
@@ -2736,6 +2790,10 @@ document.addEventListener('keydown', (e) => {
       gridSel = { c0: Math.min(boxing.c0, boxing.c1), r0: Math.min(boxing.r0, boxing.r1), c1: Math.max(boxing.c0, boxing.c1), r1: Math.max(boxing.r0, boxing.r1) };
       gridSelView = gridView; gridSelVox = buildSelVox();   // freeze to voxels so the selection persists across facings
       boxing = null; gridBoxSel = null; renderGridView();
+    }
+    if (sliceDrag) {                                              // a SLICE handle drag only moved imgXf — no box commit
+      sliceDrag = null; dirty = false;
+      gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); return;
     }
     const wasGeom = !!geomDrag;                                   // Stage 1: a geom box-drag commits through the ONE grow-grid path (grid-fit safe)
     painting = false; geomDrag = null;
