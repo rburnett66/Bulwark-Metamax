@@ -33,11 +33,12 @@ const collisionTilesFor = (foot) => unitTiles(foot) * GAME_UNIT_SCALE * COLLISIO
 // collision from the ACTUAL filled body extent, NOT the footprint resolution (which includes padding) — so
 // the ring + shipped pack.collision match the VISIBLE tank, not the oversized bounding box. Cached per model.
 let _collCache = { sig: '', tiles: 0 };
+let carveEpoch = 0;      // bumped on every re-carve; part of the collision cache key so new art can't return a stale radius
 function bodyExtentTiles() {
   // hash the edits (key + del/fill flag), not just the count — erase-then-repaint keeps size constant but
   // changes the extent, so a size-only signature would return a stale (too-small) collision radius.
   let h = 0; for (const [k, v] of voxEdit.body) h = (h * 31 + k + (v === 'del' ? 1 : 2)) | 0;
-  const foot = state.foot, layers = state.bodyLayers, sig = foot + ':' + layers + ':' + voxEdit.body.size + ':' + h;
+  const foot = state.foot, layers = state.bodyLayers, sig = carveEpoch + ':' + foot + ':' + layers + ':' + voxEdit.body.size + ':' + h;
   if (_collCache.sig === sig) return _collCache.tiles;
   let ex = foot;
   try {
@@ -328,32 +329,18 @@ function exportVox() {
 // the three world-axis spans [lo,hi) the carve reads — spanX/spanY = footprint length/width, spanZ =
 // height. The geometry step will let the user override these; keeping the math here verbatim means auto
 // placement is byte-identical to before. Every downstream mask derives bw/bh/Hv/ox/oy/z0 from the spans.
-function autoSpans(topC, sideC, frontC, foot, layers, reach) {
-  let s, bw, bh, ox, oy;
-  if (topC) {                                            // footprint from the top (aspect-preserving)
-    const availW = Math.max(8, foot - reach);            // leave room up-front for the barrel
-    s = Math.min(availW / topC.width, foot / topC.height);
-    bw = Math.max(1, Math.round(topC.width * s)); bh = Math.max(1, Math.round(topC.height * s));
-    ox = Math.floor((availW - bw) / 2); oy = Math.floor((foot - bh) / 2);   // body sits toward the rear
-  } else {                                               // no top: length from side, width from front
-    const SL = sideC ? sideC.width : foot, FW = frontC ? frontC.width : Math.round(foot * 0.5);
-    s = Math.min(foot / SL, foot / Math.max(1, FW));
-    bw = Math.max(1, Math.round(SL * s)); bh = Math.max(1, Math.round(FW * s));
-    ox = Math.floor((foot - bw) / 2); oy = Math.floor((foot - bh) / 2);
-  }
-  // HEIGHT: prefer the side under the top's length scale, so the side keeps its own proportions.
-  const Hraw = (topC && sideC) ? sideC.height * (bw / sideC.width)
-    : frontC ? frontC.height * (bh / frontC.width)
-    : sideC ? sideC.height * (bw / sideC.width)
-    : layers * 0.66;
-  const Hv = Math.min(layers, Math.max(1, Math.round(Hraw)));
-  return { spanX: { lo: ox, hi: ox + bw }, spanY: { lo: oy, hi: oy + bh }, spanZ: { lo: 0, hi: Hv }, Hraw };
+// THE BOX IS THE GRID (owner 2026-08-04). The slices are stretched over the SIDES OF A BOX and their
+// collisions carve it; the box is therefore simply the grid the artist sized with Resolution (x/y) and
+// Layers (z). Nothing here derives a sub-box from the art's aspect ratio — that was the "top = master
+// scale" normalize, and it is the thing that made a 20px and a 100px drawing carve the same block.
+function autoSpans(foot, layers) {
+  return { spanX: { lo: 0, hi: foot }, spanY: { lo: 0, hi: foot }, spanZ: { lo: 0, hi: layers }, Hraw: layers };
 }
 // the spans the carve uses: auto placement (autoSpans) unless the artist has manually reconciled this
 // part in the geometry step, in which case use the saved spans, clamped to the grid (lo<hi, hi≤foot/≤layers).
 function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
   const g = geomState[partId];
-  if (!g || g.auto || !g.spanX) return autoSpans(topC, sideC, frontC, foot, layers, reach);
+  if (!g || g.auto || !g.spanX) return autoSpans(foot, layers);
   // INVARIANT: footOf/gridLayersOf make the grid ⊇ geometry, so this clamp should be a no-op. If it ever fires,
   // the grid is smaller than the geometry (only possible at the hard 128 ceiling) — make that LOUD, never silent.
   const span = (s, cap) => {
@@ -363,14 +350,7 @@ function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
   const spanZ = span(g.spanZ, layers);
   return { spanX: span(g.spanX, foot), spanY: span(g.spanY, foot), spanZ, Hraw: spanZ.hi - spanZ.lo };
 }
-// DECOR carve — a tall shaped solid for organic props (trees, rocks) via a VISUAL HULL. The tank pipeline
-// intersects Front∩Side through a rectangular footprint at unit proportions → shoeboxes. Here each supplied
-// view is a SLAB that slices the volume at its per-height half-width, and its mirror carves the opposite
-// face: Front bounds ±y, Side bounds ±x, and the optional ¾ ANGLE view (the otherwise-unused Back slot,
-// relabelled "Angle ¾") bounds the diagonal. Three views → a 6-sided (hexagonal) cross-section that tapers
-// with height; Front+Side alone → 4 sides. Each voxel's colour = the average of the front+side colour at
-// that height. No wall art (views:null) → colour shows on every face.
-// Story 6 — PROCEDURAL tree: trunk cylinder + canopy (cone / round / blob) from panel params, no source art.
+// Story 6 — PROCEDURAL tree: trunk cylinder + canopy from panel params, no source art.
 function buildProceduralTree(foot, layers) {
   const N = foot * foot, cx = (foot - 1) / 2, cy = (foot - 1) / 2;
   const trunkH = clamp(state.decorTrunkH | 0, 1, layers), trunkR = Math.max(0.5, state.decorTrunkR);
@@ -391,44 +371,10 @@ function buildProceduralTree(foot, layers) {
   const filled = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && !!fill[z * N + y * foot + x];
   return { vcol, filled, views: null, sp: null, dbg: { proc: true } };
 }
-function buildDecorVolume(partId, foot, layers) {
-  if (state.decorProc) return buildProceduralTree(foot, layers);    // Story 6: parameters, not silhouettes
-  const src = imgs[partId], N = foot * foot, empty = { vcol: new Uint8Array(layers * N * 3), filled: () => false, views: null, sp: null, dbg: {} };
-  const tol = keyTolState[partId], pol = polyState[partId], pk = pickState[partId];
-  const front = src.front ? keyedCropped(src.front, tol.front, pol.front, pk.front) : (src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : null);
-  if (!front) return empty;
-  const side = src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : front;
-  const angle = src.back ? keyedCropped(src.back, tol.back, pol.back, pk.back) : null;   // ¾ view (Back slot) — optional
-  const Hv = Math.max(1, layers);                              // decor uses the full Base-layers height (trees are tall)
-  const pw = Math.max(2, Math.round(front.width / front.height * Hv));   // canopy diameter from the art aspect
-  const cx = (foot - 1) / 2, cy = (foot - 1) / 2, half = (pw - 1) / 2;
-  const fG = sliceMask(front, pw, Hv, true), sG = sliceMask(side, pw, Hv, true), aG = angle ? sliceMask(angle, pw, Hv, true) : null;
-  const halfW = (g) => { const arr = new Float32Array(Hv); for (let z = 0; z < Hv; z++) { let rm = -1; for (let a = 0; a < pw; a++) if (g.m[z * pw + a]) { const dd = Math.abs(a - half); if (dd > rm) rm = dd; } arr[z] = rm + 0.5; } return arr; };
-  const rF = halfW(fG), rS = halfW(sG), rA = aG ? halfW(aG) : null;   // per-height half-widths (front↔y-axis, side↔x-axis, angle↔45°)
-  const HALF = Math.SQRT1_2;   // the ¾ view is a DIAGONAL slab: keep where |(dx−dy)/√2| ≤ its half-width
-  const colAt = (g, z, off) => { const a = Math.round(half + off); if (a < 0 || a >= pw) return null; const i = z * pw + a; return g.m[i] ? [g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]] : null; };
-  const vcol = new Uint8Array(layers * N * 3), fill = new Uint8Array(layers * N);
-  for (let z = 0; z < Hv; z++) {
-    const rf = rF[z], rs = rS[z]; if (rf < 0.5 && rs < 0.5) continue;
-    const ra = rA ? rA[z] : Infinity;
-    for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-      const dx = x - cx, dy = y - cy;
-      // VISUAL-HULL INTERSECTION: each view is a slab that slices the volume; its mirror gives the opposite
-      // face. Front bounds ±y, Side bounds ±x, the ¾ Angle bounds the diagonal → 3 views = a 6-sided
-      // (hexagonal) cross-section that tapers by the per-height half-widths. No angle view → 4 sides.
-      if (Math.abs(dy) > rf || Math.abs(dx) > rs || Math.abs((dx - dy) * HALF) > ra) continue;
-      fill[z * N + y * foot + x] = 1;
-      const fc = colAt(fG, z, dy), sc = colAt(sG, z, dx), c = (z * N + y * foot + x) * 3;   // front↔y, side↔x
-      if (fc && sc) { vcol[c] = (fc[0] + sc[0]) >> 1; vcol[c + 1] = (fc[1] + sc[1]) >> 1; vcol[c + 2] = (fc[2] + sc[2]) >> 1; }
-      else { const cc = fc || sc || [90, 120, 60]; vcol[c] = cc[0]; vcol[c + 1] = cc[1]; vcol[c + 2] = cc[2]; }
-    }
-  }
-  const filled = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && !!fill[z * N + y * foot + x];
-  return { vcol, filled, views: null, sp: null, dbg: { bw: pw, bh: pw, Hv } };
-}
 function buildVolume(partId, foot, layers) {
   if (voxPart[partId]) return buildVoxVolume(voxPart[partId], foot, layers);   // imported .vox → use it directly
-  if (editingDecor && partId === 'body' && (state.decorRevolve || state.decorProc)) return buildDecorVolume(partId, foot, layers);   // organic / procedural decor
+  if (editingDecor && partId === 'body' && state.decorProc) return buildProceduralTree(foot, layers);   // parameters, not slices
+  // NOTE: no decor carve fork. Decor and units run the SAME slices-over-a-box intersection.
   const src = imgs[partId], N = foot * foot;
   if (!src.top && !src.side && !src.front && !src.back) {   // ── no art at all → procedural placeholder ──
     const col = document.createElement('canvas'); col.width = col.height = foot;
@@ -455,11 +401,9 @@ function buildVolume(partId, foot, layers) {
   // step will override them). Every mask below derives from the spans — z0 lets a silhouette sit off the
   // ground (z0=0 today, so behaviour is unchanged). Reconciliation is implicit: shared axes = shared span.
   const sp = geomSpans(partId, topC, sideC, frontC, foot, layers, reach);
-  lastSpans[partId] = sp;   // SF2: the dim box reads the placement the carve actually used
   const ox = sp.spanX.lo, bw = sp.spanX.hi - sp.spanX.lo;
   const oy = sp.spanY.lo, bh = sp.spanY.hi - sp.spanY.lo;
   const z0 = sp.spanZ.lo, Hv = sp.spanZ.hi - sp.spanZ.lo, Hraw = sp.Hraw;
-  if (Hraw > layers + 0.5 && !suppressSquashWarn) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
   if (topC) { tx.imageSmoothingEnabled = false; tx.drawImage(topC, ox, oy, bw, bh); }   // footprint + colour; alpha stays binary
   else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
@@ -470,9 +414,12 @@ function buildVolume(partId, foot, layers) {
   const backG = backC ? sliceMask(backC, bh, Hv, true) : null;
   const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= z0 && z < z0 + Hv && !!sideG.m[(z - z0) * bw + (x - ox)]) : (z >= z0 && z < z0 + Hv);
   const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv && !!frontG.m[(z - z0) * bh + (y - oy)]) : (z >= z0 && z < z0 + Hv);
+  // THE STARTING VOLUME: a clean solid block, exactly the box and nothing more. The carve only REMOVES.
+  const solid = (x, y, z) => x >= ox && x < ox + bw && y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv;
   const flat = !sideG && !frontG;
   const views = (sideG || frontG || backG) ? { side: sideG, front: frontG, back: backG, ox, oy, z0 } : null;
-  const bodyFilled = flat ? (x, y, z) => top(x, y) && z >= z0 && z < z0 + Hv : (x, y, z) => top(x, y) && side(x, z) && width(y, z);
+  const bodyFilled = flat ? (x, y, z) => solid(x, y, z) && top(x, y)
+    : (x, y, z) => solid(x, y, z) && top(x, y) && side(x, z) && width(y, z);
   // procedural barrel: a real round tube along +X, placed relative to the body box, ORed into the volume
   let inBarrel = null;
   if (reach && topC) {
@@ -510,15 +457,21 @@ const voxEdit = { body: new Map(), turret: new Map() };
 // step flips it to false and stores explicit spanX/spanY/spanZ {lo,hi}. `bottomFrom` = where the −z
 // underside derives from. Persisted in the project (version 2). Shared axes = shared span object.
 const geomState = { body: { auto: true, bottomFrom: 'top' }, turret: { auto: true, bottomFrom: 'top' } };
-let lastSpans = { body: null, turret: null };            // SF2: last spans the carve used, per part (box init)
-let boxPlace = { body: null, turret: null };             // SF2: PENDING box placement {ox,oy,bw,bh,z0,Hv} (null = follow the carve)
-// SF2: the placement the dim box draws — the pending edit, else the carve's current spans, else the full box.
+// ONE PLACEMENT STORE. geomState[part] is the single source of truth for the box; every reader goes
+// through effPlace and every writer through setPlace. The old lastSpans (a global side effect written
+// inside buildVolume) and boxPlace (a pending copy only the 3D box read) are gone — they were two extra
+// stores that the 2D box, the 3D box and the carve each read differently.
 function effPlace(part) {
-  if (boxPlace[part]) return boxPlace[part];
-  const sp = lastSpans[part];
-  if (sp) return { ox: sp.spanX.lo, oy: sp.spanY.lo, bw: sp.spanX.hi - sp.spanX.lo, bh: sp.spanY.hi - sp.spanY.lo, z0: sp.spanZ.lo, Hv: sp.spanZ.hi - sp.spanZ.lo };
-  const foot = footOf(part), layers = (part === 'turret' ? state.turretLayers : state.bodyLayers);
-  return { ox: 0, oy: 0, bw: foot, bh: foot, z0: 0, Hv: layers };
+  const g = geomState[part];
+  if (g && !g.auto && g.spanX) return { ox: g.spanX.lo, oy: g.spanY.lo, bw: g.spanX.hi - g.spanX.lo,
+    bh: g.spanY.hi - g.spanY.lo, z0: g.spanZ.lo, Hv: g.spanZ.hi - g.spanZ.lo };
+  return { ox: 0, oy: 0, bw: footOf(part), bh: footOf(part), z0: 0, Hv: gridLayersOf(part) };
+}
+function setPlace(part, p) {
+  const foot = footOf(part), layers = gridLayersOf(part);
+  const cl = (lo, sz, cap) => { const a = clamp(lo | 0, 0, cap - 1); return { lo: a, hi: clamp(a + Math.max(1, sz | 0), a + 1, cap) }; };
+  geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
+    spanX: cl(p.ox, p.bw, foot), spanY: cl(p.oy, p.bh, foot), spanZ: cl(p.z0 || 0, p.Hv, layers) };
 }
 // the space-carved model BEFORE manual edits (buildVolume is not cached — callers that only need the
 // base, like the live slice editor, cache this and layer edits on cheaply).
@@ -1196,7 +1149,6 @@ function resetPalette() {
 }
 let bulkLoad = false;                                                         // true while restoring a project
 let loadingUnit = false;                                                      // true from selectUnit() until its async load resolves — blocks autosave clobbering the new slot
-let suppressSquashWarn = false;                                              // quiet the squash warning during the auto-fit probe
 // the STABLE key the WIP autosaves under — set only by an explicit load/save/new, NOT by the free-text
 // Unit-id box. This keeps a stray edit to that box from misfiling the unit you're actually editing.
 let activeUnitId = 'unit';
@@ -1217,7 +1169,6 @@ function rotCanvas(im, rot) {                                                 //
 }
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, smooth: true, sharp: 0.6, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
-  decorRevolve: true,   // decor: carve as a solid of revolution (organic — trees/rocks) rather than the tank box intersection
   decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30,   // decor on-map scale + procedural-tree params (Stories 6,7)
   showDimBox: false,   // SF1: the 3D dimension box + per-face view-image projections overlay
   turretFoot: 64 };    // SF3: turret footprint (voxels), INDEPENDENT of base foot — a turret can be smaller than the hull
@@ -1228,11 +1179,8 @@ const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim:
 // DERIVED value = max(requested resolution, committed geometry extent), computed HERE — the one accessor every
 // consumer reads. So `grid ⊇ geometry` holds BY CONSTRUCTION; no mutator (res / Cube / import / load / drag)
 // can make the carve clamp. The only residual clamp is the hard 128-voxel ceiling, which updateDims flags red.
-// RES_STEPS / snapRes / effFoot / effLayers come from grid-fit.js (the single, unit-tested source of the math).
-function geomExtentXY(part) { const g = geomState[part]; return (g && !g.auto && g.spanX) ? Math.max(g.spanX.hi, g.spanY.hi) : 0; }
-function geomExtentZ(part) { const g = geomState[part]; return (g && !g.auto && g.spanZ) ? g.spanZ.hi : 0; }
 // SF3: the footprint (voxels) for a part — turret has its own; body uses the base foot. Never smaller than the geometry.
-const footOf = (part) => effFoot(part === 'turret' ? (state.turretFoot || state.foot) : state.foot, geomExtentXY(part));
+const footOf = (part) => (part === 'turret' ? (state.turretFoot || state.foot) : state.foot);   // the grid IS the box — nothing derives it
 let bodyFaces = null, turretFaces = null, bodyBaked = null, turretBaked = null, lastPack = null;
 let voxMeta = null, voxTex = null, voxSpr = null, voxShadow = null, voxSig = '';   // orbit cube-render canvas
 let gVoxMeta = null, gVoxTex = null, gVoxSpr = null, gVoxShadow = null;            // in-game inset canvas
@@ -1304,7 +1252,7 @@ const GEOAX = {
 };
 const spanKey = { x: 'spanX', y: 'spanY', z: 'spanZ' };
 const gridPart = () => (state.part === 'turret' ? 'turret' : 'body');
-const gridLayersOf = (part) => effLayers(part === 'turret' ? state.turretLayers : state.bodyLayers, geomExtentZ(part));
+const gridLayersOf = (part) => (part === 'turret' ? state.turretLayers : state.bodyLayers);
 // LAYER 0 = raycast "surface": the target voxel at a grid cell is the FIRST filled voxel along the view's
 // depth axis (what a ray straight into the model would hit), so painting Layer 0 recolours the FACING
 // surface and it shows in the 3D view. Deeper layers address their exact depth slice as before.
@@ -1719,18 +1667,8 @@ function renderGridView() {
 // this writes it back into state + the UI so export, the sliders, and the Resolution dropdown all agree). It
 // only ever grows to fit the geometry — a unit longer than it is tall keeps its length; 128 voxels is the hard
 // ceiling. This is the single reconciliation point, called at the top of every carve (rebuildSlices).
-function ensureGridFits() {
-  let changed = false;
-  const setFoot = (key, sel, v) => { if (v !== state[key]) { state[key] = v; const el = $(sel); if (el) el.value = RES_STEPS.includes(v) ? v : ''; changed = true; } };
-  const setLay = (key, sel, v) => { if (v !== state[key]) { const el = $(sel); if (el && +el.max < v) el.max = String(v); state[key] = v; if (el) { el.value = v; const lv = $(sel + 'V'); if (lv) lv.textContent = String(v); } changed = true; } };
-  setFoot('foot', 'res', footOf('body'));
-  if (geomExtentXY('turret')) setFoot('turretFoot', 'turretRes', footOf('turret'));
-  setLay('bodyLayers', 'bodyLayers', gridLayersOf('body'));
-  setLay('turretLayers', 'turretLayers', gridLayersOf('turret'));
-  if (changed) syncSizeUI();
-}
 function rebuildSlices() {
-  ensureGridFits();                                   // never let the grid clamp/chop the model — grow to fit the spans first
+  carveEpoch++;                                       // invalidate anything cached against the previous carve
   if (bodyBaked) { bodyBaked.destroy(); bodyBaked = null; } if (turretBaked) { turretBaked.destroy(); turretBaked = null; }
   if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
   state.baked = null; voxSig = ''; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
@@ -1895,42 +1833,25 @@ function boxSyncSliders() {
   set('boxOx', p.ox, Math.max(0, 128 - p.bw)); set('boxOy', p.oy, Math.max(0, 128 - p.bh));
 }
 function boxEdit(field, val) {
-  const part = boxPart();
-  if (!boxPlace[part]) boxPlace[part] = { ...effPlace(part) };   // start from the current placement
-  const p = boxPlace[part]; p[field] = val;
-  p.bw = clamp(p.bw || 1, 1, 128); p.bh = clamp(p.bh || 1, 1, 128); p.Hv = clamp(p.Hv || 1, 1, 128);   // hard voxel ceiling
-  p.ox = clamp(p.ox || 0, 0, 128 - p.bw); p.oy = clamp(p.oy || 0, 0, 128 - p.bh); p.z0 = clamp(p.z0 || 0, 0, 128 - p.Hv);
-  const lv = $({ bw: 'boxLenV', bh: 'boxWidV', Hv: 'boxHtV', ox: 'boxOxV', oy: 'boxOyV' }[field]); if (lv) lv.textContent = String(Math.round(p[field]));
-  voxSig = '';   // redraw the box with the new placement
+  const part = boxPart(), p = effPlace(part);                    // read the one store…
+  p[field] = val;
+  setPlace(part, p);                                             // …and write straight back to it, clamped to the grid
+  const lv = $({ bw: 'boxLenV', bh: 'boxWidV', Hv: 'boxHtV', ox: 'boxOxV', oy: 'boxOyV' }[field]); if (lv) lv.textContent = String(Math.round(val));
+  voxSig = ''; gridModel = null;                                 // 2D box, 3D box and carve all read effPlace → all track
 }
 if ($('boxLen')) $('boxLen').oninput = (e) => boxEdit('bw', +e.target.value);
 if ($('boxWid')) $('boxWid').oninput = (e) => boxEdit('bh', +e.target.value);
 if ($('boxHt')) $('boxHt').oninput = (e) => boxEdit('Hv', +e.target.value);
 if ($('boxOx')) $('boxOx').oninput = (e) => boxEdit('ox', +e.target.value);
 if ($('boxOy')) $('boxOy').oninput = (e) => boxEdit('oy', +e.target.value);
-if ($('boxGen')) $('boxGen').onclick = () => {   // commit the pending placement into the carve (overrides autoSpans)
-  const part = boxPart(), p = boxPlace[part] || effPlace(part);
-  // The carve grid is foot×foot×layers; explicit spans past it get CLAMPED, which chops the model (owner:
-  // "the carve clamps are the problem" — box looks perfect, grid chopped in the back). So GROW the grid to hold
-  // the box the owner sized: raise Resolution (foot) to the nearest step that fits the footprint, and raise
-  // layers to fit the height. Only the hard 128 ceiling can still clamp. Growing foot enlarges the on-board
-  // unit (voxels/tile is constant) — adjust overall size via Unit-size after if needed.
-  const res = [32, 48, 64, 96, 128];
-  const footNeed = Math.max(p.ox + p.bw, p.oy + p.bh);
-  const newFoot = res.find((r) => r >= footNeed) || 128;
-  if (part === 'turret') { if (newFoot > (state.turretFoot || state.foot)) { state.turretFoot = newFoot; if ($('turretRes')) $('turretRes').value = newFoot; } }
-  else if (newFoot > state.foot) { state.foot = newFoot; if ($('res')) $('res').value = newFoot; }
-  syncSizeUI();
-  const layersNeed = (p.z0 || 0) + p.Hv, lid = part === 'turret' ? 'turretLayers' : 'bodyLayers';
-  if (layersNeed > state[lid]) { const el = $(lid); if (el && +el.max < layersNeed) el.max = String(Math.min(128, layersNeed)); setLayers(part === 'turret' ? 'turret' : 'body', Math.min(128, layersNeed)); }
-  const foot = footOf(part), layers = state[lid];   // grown grid — spans now fit without clamping (except the 128 ceiling)
-  geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
-    spanX: { lo: p.ox, hi: Math.min(foot, p.ox + p.bw) }, spanY: { lo: p.oy, hi: Math.min(foot, p.oy + p.bh) }, spanZ: { lo: p.z0 || 0, hi: Math.min(layers, (p.z0 || 0) + p.Hv) } };
-  boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
+if ($('boxGen')) $('boxGen').onclick = () => {   // re-carve at the current placement
+  const part = boxPart();
+  setPlace(part, effPlace(part));            // normalise/clamp whatever is in the store, then carve
+  gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
 };
 if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit
   const part = boxPart(); geomState[part] = { auto: true, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top' };
-  boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
+  gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
 };
 
 // SF2 per-side ALIGNMENT: select a side, then high-res scale/align sliders stretch & nudge that image.
@@ -3427,7 +3348,6 @@ if ($('bakeDecor')) $('bakeDecor').onclick = bakeDecor;
 if ($('saveDecor')) $('saveDecor').onclick = doSaveDecor;
 if ($('shipDecor')) $('shipDecor').onclick = shipDecor;
 if ($('decDensity')) $('decDensity').oninput = () => { $('decDensityV').textContent = $('decDensity').value; };
-if ($('decRevolve')) $('decRevolve').onchange = () => { state.decorRevolve = $('decRevolve').checked; gridModel = null; rebuildSlices(); renderGridView(); };
 // Stories 6 & 7 — procedural-tree params + on-map scale
 const decRebuild = () => { gridModel = null; rebuildSlices(); renderGridView(); };
 if ($('decScale')) $('decScale').oninput = () => { state.decorScale = (+$('decScale').value) / 100; if ($('decScaleV')) $('decScaleV').textContent = state.decorScale.toFixed(1) + '×'; };   // on-map size only — no re-carve
@@ -3492,7 +3412,6 @@ function syncAllControls() {
   set('palN', state.paletteN, state.paletteN || 'full');
   set('sharp', Math.round(state.sharp * 100), state.sharp.toFixed(2)); set('bakeScale', state.bakeScale, state.bakeScale + '×');
   $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; } $('smooth').checked = state.smooth; $('spin').checked = state.spin;
-  if ($('decRevolve')) $('decRevolve').checked = state.decorRevolve !== false;
   if ($('decProc')) $('decProc').checked = !!state.decorProc;
   if ($('decProcRow')) $('decProcRow').style.display = state.decorProc ? '' : 'none';
   const setDec = (id, v, lab) => { if ($(id)) { $(id).value = v; if ($(id + 'V')) $(id + 'V').textContent = lab != null ? lab : v; } };
@@ -3537,22 +3456,7 @@ async function loadProject(p) {
       }
     }
   } finally { bulkLoad = false; }
-  fitLayersToArt();                                    // raise Layers so tall art never loads squashed
   syncAllControls(); rebuildSlices(); drawLight(); renderRoster();
-}
-// raise a part's Layers to fit its art height (never lowers). Only auto-placed parts can squash — a
-// manually-reconciled span already sets the height. Probed with the squash warning muted.
-function fitLayersToArt() {
-  suppressSquashWarn = true;
-  try {
-    for (const part of ['body', 'turret']) {
-      if (voxPart[part]) continue;                     // .vox defines its own height
-      const src = imgs[part]; if (!src || (!src.top && !src.side && !src.front && !src.back)) continue;
-      const key = part === 'body' ? 'bodyLayers' : 'turretLayers';
-      const dbg = buildVolume(part, footOf(part), state[key]).dbg;
-      if (dbg && dbg.Hraw > state[key] + 0.5) state[key] = Math.min(40, Math.ceil(dbg.Hraw));
-    }
-  } finally { suppressSquashWarn = false; }
 }
 let autosaveTimer = 0;
 // a project is worth persisting only if it has real editable content — source art, an imported .vox,
