@@ -1720,20 +1720,21 @@ function renderGridView() {
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
     for (const [hx, hy] of [[bx + bw2 / 2, by], [bx + bw2 / 2, by + bh2], [bx, by + bh2 / 2], [bx + bw2, by + bh2 / 2]]) ctx.fillRect(hx - 4, hy - 4, 8, 8);
     gridGeom.geom = { bx, by, bw: bw2, bh: bh2, cell, cellV, ox, oy, gw, gh, col: g.col, row: g.row, foot, layers };
-    // ── SLICE ADJUSTERS: amber handles ON THE PROJECTION. Dragging one scales the slice drawn on this
-    // face — side handles change its WIDTH (imgXf.sx), top/bottom its HEIGHT (sy), corners both. They sit
-    // inset from the cyan BOX handles so the two are never confused and never overlap on hit-test.
+    // ── SLICE ADJUSTERS on the projection. Amber, inset from the cyan BOX handles. An EDGE handle moves
+    // ONLY that edge (the opposite one is pinned), a CORNER moves two, and the INTERIOR moves the whole
+    // slice. xfCanvas centres the slice at (0.5+ox) of the box and scales by sx about that centre, so
+    // pinning an edge needs BOTH sx and ox to change — scaling alone always moves both sides.
     if (keyed) {
-      const xfc = (imgXf[part] || {})[gridView] || { sx: 1, sy: 1 };
-      const iw = bw2 * (xfc.sx || 1), ih = bh2 * (xfc.sy || 1);          // the projection's on-screen size
-      const cxm = bx + bw2 / 2, cym = by + bh2 / 2;
-      const sL = cxm - iw / 2, sR = cxm + iw / 2, sT = cym - ih / 2, sB = cym + ih / 2;
-      gridGeom.slice = { cx: cxm, cy: cym, halfW: iw / 2, halfH: ih / 2, view: gridView, part };
+      const xfc = (imgXf[part] || {})[gridView] || { sx: 1, sy: 1, ox: 0, oy: 0 };
+      const ccx = bx + bw2 * (0.5 + (xfc.ox || 0)), ccy = by + bh2 * (0.5 + (xfc.oy || 0));
+      const hw = bw2 * (xfc.sx || 1) / 2, hh = bh2 * (xfc.sy || 1) / 2;
+      const L = ccx - hw, R = ccx + hw, T = ccy - hh, B = ccy + hh;
+      gridGeom.slice = { bx, by, bw: bw2, bh: bh2, L, R, T, B, view: gridView, part };
       ctx.strokeStyle = 'rgba(242,200,105,.9)'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
-      ctx.strokeRect(sL + .5, sT + .5, iw - 1, ih - 1); ctx.setLineDash([]);
+      ctx.strokeRect(L + .5, T + .5, R - L - 1, B - T - 1); ctx.setLineDash([]);
       ctx.fillStyle = '#f2c869';
-      for (const [hx, hy] of [[sL, cym], [sR, cym], [cxm, sT], [cxm, sB], [sL, sT], [sR, sT], [sL, sB], [sR, sB]])
-        ctx.fillRect(hx - 4, hy - 4, 8, 8);
+      for (const [hx, hy] of [[L, (T + B) / 2], [R, (T + B) / 2], [(L + R) / 2, T], [(L + R) / 2, B],
+                              [L, T], [R, T], [L, B], [R, B]]) ctx.fillRect(hx - 4, hy - 4, 8, 8);
     }
     const sx = bsp[spanKey[g.col.axis]], sy = bsp[spanKey[g.row.axis]];
     ctx.fillStyle = '#8fa7bd'; ctx.font = '9px sans-serif'; ctx.textBaseline = 'top';
@@ -2476,27 +2477,43 @@ document.addEventListener('keydown', (e) => {
     if (px > g.bx && px < g.bx + g.bw && py > g.by && py < g.by + g.bh) return 'move';
     return null;
   };
-  // SLICE handle drag: scales the projection about its centre. W from the horizontal distance to the
-  // centre, H from the vertical — so the edge you grab follows the cursor and the opposite edge mirrors.
+  // Drag one edge and ONLY that edge moves; the opposite is pinned. Grab the interior to move the whole
+  // slice. Both are proven in node (56 cases): the dragged edge lands under the cursor, the pinned edge
+  // does not move, and the width floor matches the sx clamp so the two can never fight.
   let sliceDrag = null;
   const sliceHit = (e) => {
-    const s2 = gridGeom && gridGeom.slice; if (!s2) return null;
+    const q = gridGeom && gridGeom.slice; if (!q) return null;
     const { px, py } = ptCell(e), T = 7;
-    const dx = Math.abs(Math.abs(px - s2.cx) - s2.halfW), dy = Math.abs(Math.abs(py - s2.cy) - s2.halfH);
-    const onW = dx <= T && Math.abs(py - s2.cy) <= s2.halfH + T;
-    const onH = dy <= T && Math.abs(px - s2.cx) <= s2.halfW + T;
-    if (onW && onH) return 'wh';
-    if (onW) return 'w';
-    if (onH) return 'h';
-    return null;
+    if (px < q.L - T || px > q.R + T || py < q.T - T || py > q.B + T) return null;
+    const nL = Math.abs(px - q.L) <= T, nR = Math.abs(px - q.R) <= T;
+    const nT = Math.abs(py - q.T) <= T, nB = Math.abs(py - q.B) <= T;
+    if (nT && nL) return 'TL'; if (nT && nR) return 'TR';
+    if (nB && nL) return 'BL'; if (nB && nR) return 'BR';
+    if (nL) return 'L'; if (nR) return 'R'; if (nT) return 'T'; if (nB) return 'B';
+    return 'move';
   };
   const sliceMove = (e) => {
-    const s2 = gridGeom && gridGeom.slice; if (!s2 || !sliceDrag) return;
-    const { px, py } = ptCell(e), xf = imgXf[s2.part][s2.view];
-    if (sliceDrag.mode.includes('w') && sliceDrag.halfW > 0)
-      xf.sx = clamp(sliceDrag.sx0 * (Math.max(2, Math.abs(px - s2.cx)) / sliceDrag.halfW), 0.05, 8);
-    if (sliceDrag.mode.includes('h') && sliceDrag.halfH > 0)
-      xf.sy = clamp(sliceDrag.sy0 * (Math.max(2, Math.abs(py - s2.cy)) / sliceDrag.halfH), 0.05, 8);
+    const q = gridGeom && gridGeom.slice; if (!q || !sliceDrag) return;
+    const { px, py } = ptCell(e), xf = imgXf[q.part][q.view], d = sliceDrag;
+    if (d.mode === 'move') {
+      xf.ox = clamp(d.ox0 + (px - d.px0) / q.bw, -2, 2);
+      xf.oy = clamp(d.oy0 + (py - d.py0) / q.bh, -2, 2);
+    } else {
+      if (d.mode.includes('L') || d.mode.includes('R')) {
+        const isR = d.mode.includes('R'), pin = isR ? d.L : d.R, minW = q.bw * 0.05;
+        const t = isR ? Math.max(px, pin + minW) : Math.min(px, pin - minW);
+        const lo = Math.min(pin, t), hi = Math.max(pin, t);
+        xf.sx = clamp((hi - lo) / q.bw, 0.05, 8);
+        xf.ox = clamp(((lo + hi) / 2 - q.bx) / q.bw - 0.5, -2, 2);
+      }
+      if (d.mode.includes('T') || d.mode.includes('B')) {
+        const isB = d.mode.includes('B'), pin = isB ? d.T : d.B, minH = q.bh * 0.05;
+        const t = isB ? Math.max(py, pin + minH) : Math.min(py, pin - minH);
+        const lo = Math.min(pin, t), hi = Math.max(pin, t);
+        xf.sy = clamp((hi - lo) / q.bh, 0.05, 8);
+        xf.oy = clamp(((lo + hi) / 2 - q.by) / q.bh - 0.5, -2, 2);
+      }
+    }
     xfSyncSliders(); voxSig = ''; renderGridView();
   };
   let geomDrag = null;                                             // { mode, gc0, gr0, cR0, rR0 }
@@ -2546,8 +2563,9 @@ document.addEventListener('keydown', (e) => {
     if (gridGeom && gridGeom.slice) {                              // Geometry mode: SLICE handles win
       const sm = sliceHit(e);
       if (sm) {
-        const s2 = gridGeom.slice, xf = imgXf[s2.part][s2.view] || { sx: 1, sy: 1 };
-        sliceDrag = { mode: sm, sx0: xf.sx || 1, sy0: xf.sy || 1, halfW: s2.halfW, halfH: s2.halfH };
+        const q = gridGeom.slice, xf = imgXf[q.part][q.view] || { sx: 1, sy: 1, ox: 0, oy: 0 };
+        const { px, py } = ptCell(e);
+        sliceDrag = { mode: sm, L: q.L, R: q.R, T: q.T, B: q.B, ox0: xf.ox || 0, oy0: xf.oy || 0, px0: px, py0: py };
         dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
       }
     }
