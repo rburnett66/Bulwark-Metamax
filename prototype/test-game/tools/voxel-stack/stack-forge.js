@@ -196,17 +196,21 @@ function gridStretch(canvas, w, h, elev) {
 // the cell rect a keyed slice occupies in a boxW×boxH grid at its imgXf placement. sx/sy=1 → aspect-preserving
 // contain; the artist scales/slides from there. NO stretch-to-fill, NO aspect refit — a smaller slice leaves
 // empty margins (the "10×10 in 20×20" case). Shared by the carve mask and the full-res projection.
-function sliceRect(kw, kh, boxW, boxH, xf) {
+// `floor` = an ELEVATION slice (side/front/back): anchor it to the BOTTOM of the box, not the middle. Without
+// this a short profile centres vertically and — because placeSample flips rows for z-up — the carved unit
+// FLOATS at z=(boxH−ph)/2 instead of sitting on the ground. The TOP view is a footprint (x/y), so it centres.
+function sliceRect(kw, kh, boxW, boxH, xf, floor) {
   const base = Math.min(boxW / (kw || 1), boxH / (kh || 1)), sx = (xf && xf.sx) || 1, sy = (xf && xf.sy) || 1;
   const pw = (kw || 1) * base * sx, ph = (kh || 1) * base * sy;
-  return { px: (boxW - pw) / 2 + ((xf && xf.ox) || 0) * boxW, py: (boxH - ph) / 2 + ((xf && xf.oy) || 0) * boxH, pw, ph };
+  const py0 = floor ? (boxH - ph) : (boxH - ph) / 2;   // floor: bottom edge on the box floor → z=0 after the elev flip
+  return { px: (boxW - pw) / 2 + ((xf && xf.ox) || 0) * boxW, py: py0 + ((xf && xf.oy) || 0) * boxH, pw, ph };
 }
 // PLACE a keyed slice onto a boxW×boxH cell grid at the artist's imgXf — the no-gridStretch, no-normalize carve
 // mask. Draws the slice at `sliceRect` (crisp/nearest), empty cells stay empty. Emits mask m + color c per cell,
 // box-sized, so `side/width/top` and all color code index it EXACTLY like gridStretch's output. `elev` flips z.
 function placeSample(keyed, xf, boxW, boxH, elev) {
   boxW = Math.max(1, boxW | 0); boxH = Math.max(1, boxH | 0);
-  const r = sliceRect(keyed.width, keyed.height, boxW, boxH, xf);
+  const r = sliceRect(keyed.width, keyed.height, boxW, boxH, xf, elev);   // elev views are the ground-anchored ones
   const cv = document.createElement('canvas'); cv.width = boxW; cv.height = boxH;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, r.px, r.py, r.pw, r.ph);   // PLACE, never fill
@@ -824,7 +828,7 @@ function drawDimBox(ctx, meta, el, az, part) {
   const projPlaced = (view, A, B, C, boxW, boxH) => {
     const src = imgs[part]; if (!src || !src[view]) return;
     const keyed = keyedCropped(src[view], keyTolState[part][view], polyState[part][view], pickState[part][view]);
-    const r = sliceRect(keyed.width, keyed.height, boxW, boxH, (imgXf[part] || {})[view]);
+    const r = sliceRect(keyed.width, keyed.height, boxW, boxH, (imgXf[part] || {})[view], view !== 'top');   // match the carve's ground anchor
     const u = { x: B.x - A.x, y: B.y - A.y }, v = { x: C.x - A.x, y: C.y - A.y };
     const o = { x: A.x + (r.px / boxW) * u.x + (r.py / boxH) * v.x, y: A.y + (r.px / boxW) * u.y + (r.py / boxH) * v.y };
     projImg(keyed, o, { x: o.x + (r.pw / boxW) * u.x, y: o.y + (r.pw / boxW) * u.y }, { x: o.x + (r.ph / boxH) * v.x, y: o.y + (r.ph / boxH) * v.y });
@@ -1711,7 +1715,7 @@ function renderGridView() {
     // empty margins, crisp. cell↔px: bw2/boxW, bh2/boxH.
     const gkeyed = imgs[part][gridView] ? keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]) : null;
     if (gkeyed) {
-      const boxW = cR.hi - cR.lo, boxH = rR.hi - rR.lo, pr = sliceRect(gkeyed.width, gkeyed.height, boxW, boxH, (imgXf[part] || {})[gridView]);
+      const boxW = cR.hi - cR.lo, boxH = rR.hi - rR.lo, pr = sliceRect(gkeyed.width, gkeyed.height, boxW, boxH, (imgXf[part] || {})[gridView], gridView !== 'top');   // match the carve's ground anchor
       const cpx = bw2 / boxW, cpy = bh2 / boxH;
       ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = true;
       ctx.drawImage(gkeyed, bx + pr.px * cpx, by + pr.py * cpy, pr.pw * cpx, pr.ph * cpy); ctx.globalAlpha = 1;
