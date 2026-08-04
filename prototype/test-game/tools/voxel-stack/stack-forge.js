@@ -20,13 +20,6 @@ const WORLD_SCALE = 3, BODY_FRAMES = 16, TURRET_FRAMES = 64, MANIFEST_KEY = 'bul
 // THE world-scale contract (mirrors src/render/voxel/pack.js): 32 voxels = 1 tile for EVERY unit.
 // Bigger unit ⇒ higher Resolution, never a bigger stretch — voxel density is constant on the board.
 const VOX_PER_TILE = 32;
-const RES_MAX = 96;              // grid ceiling (owner 2026-08-03: "cap max size to 96 cells for now")
-// INK: the ONE alpha threshold that decides "this cell is part of the subject". Every view MUST agree on where
-// the silhouette ends (keying is hard-edged now, so alpha is binary). The top footprint used to test >20 while
-// every elevation mask tested >40 — cells in that 21..40 band were inside the top but outside side/front, which
-// rimmed the silhouette in top-colour (the wall mask missed them, so wallCol fell back to the column colour) and
-// left stray voxels on any axis whose elevation view was absent.
-const INK_A = 40;
 const unitTiles = (foot) => foot / VOX_PER_TILE;
 // COLLISION footprint: mirrors the game (loader.VOXEL_UNIT_SCALE 0.5) with a small pad so the body touches
 // just before it collides. Half-width in TILES = tiles · 0.5 · 1.2 / 2 = tiles · 0.3. Shown as a ring in the
@@ -113,7 +106,7 @@ function drawFit(ctx, img, w, h) {
 // knock out a solid (e.g. white) background by FLOOD-FILLING from the image border through
 // background-coloured pixels. Only bg actually connected to the edge is removed, so it works when the
 // object runs off an edge (tank tracks) AND when bg floats between object parts (above/below a barrel) —
-// the flood reaches those pockets from the border and stops at the object outline. HARD edge, binary alpha.
+// the flood reaches those pockets from the border and stops at the object outline. Feathers the AA edge.
 function keyBackground(data, w, h, tol, picks) {
   tol = tol || 75;                                                   // cutout sensitivity (per-image, tunable)
   const satC = (r, g, b) => Math.max(r, g, b) - Math.min(r, g, b), SAT_GUARD = 40;
@@ -143,7 +136,7 @@ function keyBackground(data, w, h, tol, picks) {
   // (dark-green leaves touching white). Relative to the seed, so a coloured background still keys.
   const okChroma = (p, bi) => (satC(data[p * 4], data[p * 4 + 1], data[p * 4 + 2]) - seedSat[bi]) <= SAT_GUARD;
   const N = w * h, vis = new Uint8Array(N), st = [];
-  const soft = tol * 1.75;                                           // AA-halo band: REMOVED outright, never ramped
+  const hard = tol * 0.8, soft = tol * 1.75, span = Math.max(1, soft - hard);   // feather band scales with tol
   const push = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const p = y * w + x; if (vis[p]) return; const ni = nearInfo(p); if (ni[0] < tol && okChroma(p, ni[1])) { vis[p] = 1; st.push(p); } };
   for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }        // seed the whole border
   for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
@@ -151,17 +144,11 @@ function keyBackground(data, w, h, tol, picks) {
   while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1); }
   for (let p = 0; p < N; p++) {
     if (vis[p]) { data[p * 4 + 3] = 0; continue; }                   // flooded background → transparent
-    // HARD EDGE: the anti-aliased halo — a pixel within `soft` of the background AND touching removed
-    // background — goes FULLY transparent. Alpha stays BINARY; partial alpha is what let the views disagree
-    // about where the silhouette ends (see INK_A), so a voxel is in or out and the cutout should be too.
-    // NOTE: the cut must stay at `soft`, the full width of the old ramp. Narrowing it to `hard` leaves the
-    // halo at full alpha, and that ring of near-background pixels carves into solid noise voxels.
-    // Adjacency to the flood keeps this to a ONE-pixel ring, so it eats the AA edge and nothing more.
-    const ni = nearInfo(p), d = ni[0];
-    if (d < soft && okChroma(p, ni[1])) {                           // …but never eat a saturated subject edge
+    const ni = nearInfo(p), d = ni[0];                             // feather AA pixels touching removed bg
+    if (d < soft && okChroma(p, ni[1])) {                           // …but never feather a saturated subject edge
       const x = p % w, y = (p / w) | 0;
       if ((x > 0 && vis[p - 1]) || (x < w - 1 && vis[p + 1]) || (y > 0 && vis[p - w]) || (y < h - 1 && vis[p + w]))
-        data[p * 4 + 3] = 0;
+        data[p * 4 + 3] = d < hard ? 0 : Math.min(data[p * 4 + 3], Math.round((d - hard) / span * 255));
     }
   }
 }
@@ -187,7 +174,7 @@ function keyedCanvas(img, tol, polys, picks) {
 function keyedCropped(img, tol, poly, picks) {
   const k = keyedCanvas(img, tol, poly, picks), d = k.getContext('2d').getImageData(0, 0, k.width, k.height).data;
   let x0 = k.width, y0 = k.height, x1 = -1, y1 = -1;
-  for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > INK_A) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+  for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
   if (x1 < x0) return k;
   const cw = x1 - x0 + 1, ch = y1 - y0 + 1, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   cv.getContext('2d').drawImage(k, x0, y0, cw, ch, 0, 0, cw, ch);
@@ -202,37 +189,9 @@ function gridStretch(canvas, w, h, elev) {
   const d = ctx.getImageData(0, 0, w, h).data, m = new Uint8Array(w * h), c = new Uint8Array(w * h * 3);
   for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
     const row = elev ? (h - 1 - r) : r, i = row * w + a, p = (r * w + a) * 4;
-    if (d[p + 3] > INK_A) { m[i] = 1; c[i * 3] = d[p]; c[i * 3 + 1] = d[p + 1]; c[i * 3 + 2] = d[p + 2]; }
+    if (d[p + 3] > 40) { m[i] = 1; c[i * 3] = d[p]; c[i * 3 + 1] = d[p + 1]; c[i * 3 + 2] = d[p + 2]; }
   }
   return { m, c, w, h };
-}
-// the cell rect a keyed slice occupies in a boxW×boxH grid at its imgXf placement. sx/sy=1 → aspect-preserving
-// contain; the artist scales/slides from there. NO stretch-to-fill, NO aspect refit — a smaller slice leaves
-// empty margins (the "10×10 in 20×20" case). Shared by the carve mask and the full-res projection.
-// sliceRect / sliceBase / xfFromRect / dragHandle / autoSpans / axisMaps / GEOAX / geoRange all come from
-// slice-geom.js — the DOM-free, unit-tested source of this math (slice-geom.test.mjs). Do NOT re-implement any
-// of it here: three shipped bugs (swapped front/back overlay flips, the Layers-sized cube, dead scale-up on the
-// pinned axis) were all placement arithmetic that nothing measured.
-// PLACE a keyed slice onto a boxW×boxH cell grid at the artist's imgXf — the no-gridStretch, no-normalize carve
-// mask. Draws the slice at `sliceRect` (crisp/nearest), empty cells stay empty. Emits mask m + color c per cell,
-// box-sized, so `side/width/top` and all color code index it EXACTLY like gridStretch's output. `elev` flips z.
-function placeSample(keyed, xf, boxW, boxH, elev) {
-  boxW = Math.max(1, boxW | 0); boxH = Math.max(1, boxH | 0);
-  const r = sliceRect(keyed.width, keyed.height, boxW, boxH, xf);
-  const cv = document.createElement('canvas'); cv.width = boxW; cv.height = boxH;
-  const ctx = cv.getContext('2d', { willReadFrequently: true });
-  // ALPHA COMES FROM THE ORIGINAL SLICE (owner 2026-08-04). `keyed` is the keyedCropped cutout of the source
-  // image; the mask below must read ITS alpha, never a display projection's. The overlays draw the same slice
-  // at globalAlpha 0.42/0.82 for legibility, so make it explicit here that this canvas is opaque-compositing:
-  // globalAlpha pinned to 1 and 'copy' so nothing from a previous state can dilute the alpha we then threshold.
-  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'copy';
-  ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, r.px, r.py, r.pw, r.ph);   // PLACE, never fill
-  const d = ctx.getImageData(0, 0, boxW, boxH).data, m = new Uint8Array(boxW * boxH), c = new Uint8Array(boxW * boxH * 3);
-  for (let rr = 0; rr < boxH; rr++) for (let a = 0; a < boxW; a++) {
-    const row = elev ? (boxH - 1 - rr) : rr, i = row * boxW + a, p = (rr * boxW + a) * 4;
-    if (d[p + 3] > INK_A) { m[i] = 1; c[i * 3] = d[p]; c[i * 3 + 1] = d[p + 1]; c[i * 3 + 2] = d[p + 2]; }
-  }
-  return { m, c, w: boxW, h: boxH };
 }
 
 // ── MagicaVoxel .vox → a native voxel model { nx, ny, nz, data } (data: nx*ny*nz*4 rgba, a>0 = filled).
@@ -347,19 +306,32 @@ function exportVox() {
 // the three world-axis spans [lo,hi) the carve reads — spanX/spanY = footprint length/width, spanZ =
 // height. The geometry step will let the user override these; keeping the math here verbatim means auto
 // placement is byte-identical to before. Every downstream mask derives bw/bh/Hv/ox/oy/z0 from the spans.
-// SOLID BLOCK (owner 2026-08-03): "if the carve were made to a solid block the block would never need to be
-// bigger in any dimension than the longest side .. use the base layers and turret layers to define a starting
-// cube." A space carve only ever REMOVES material, so the source block is a CUBE of side = this part's Layers
-// (bodyLayers / turretLayers) and the three views carve it down. No aspect fitting here — the views do the
-// shaping. Replaces the old "top = master scale" normalization, which produced silly slabs (a 64x64 footprint
-// under a 28-high box) for units that are really tanks/trucks/planes.
-// (the cube math itself lives in slice-geom.js, proven by slice-geom.test.mjs)
-const autoSpansFor = (foot, layers, reach) => autoSpans(foot, layers, reach);
+function autoSpans(topC, sideC, frontC, foot, layers, reach) {
+  let s, bw, bh, ox, oy;
+  if (topC) {                                            // footprint from the top (aspect-preserving)
+    const availW = Math.max(8, foot - reach);            // leave room up-front for the barrel
+    s = Math.min(availW / topC.width, foot / topC.height);
+    bw = Math.max(1, Math.round(topC.width * s)); bh = Math.max(1, Math.round(topC.height * s));
+    ox = Math.floor((availW - bw) / 2); oy = Math.floor((foot - bh) / 2);   // body sits toward the rear
+  } else {                                               // no top: length from side, width from front
+    const SL = sideC ? sideC.width : foot, FW = frontC ? frontC.width : Math.round(foot * 0.5);
+    s = Math.min(foot / SL, foot / Math.max(1, FW));
+    bw = Math.max(1, Math.round(SL * s)); bh = Math.max(1, Math.round(FW * s));
+    ox = Math.floor((foot - bw) / 2); oy = Math.floor((foot - bh) / 2);
+  }
+  // HEIGHT: prefer the side under the top's length scale, so the side keeps its own proportions.
+  const Hraw = (topC && sideC) ? sideC.height * (bw / sideC.width)
+    : frontC ? frontC.height * (bh / frontC.width)
+    : sideC ? sideC.height * (bw / sideC.width)
+    : layers * 0.66;
+  const Hv = Math.min(layers, Math.max(1, Math.round(Hraw)));
+  return { spanX: { lo: ox, hi: ox + bw }, spanY: { lo: oy, hi: oy + bh }, spanZ: { lo: 0, hi: Hv }, Hraw };
+}
 // the spans the carve uses: auto placement (autoSpans) unless the artist has manually reconciled this
 // part in the geometry step, in which case use the saved spans, clamped to the grid (lo<hi, hi≤foot/≤layers).
 function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
   const g = geomState[partId];
-  if (!g || g.auto || !g.spanX) return autoSpansFor(foot, layers, reach);
+  if (!g || g.auto || !g.spanX) return autoSpans(topC, sideC, frontC, foot, layers, reach);
   // INVARIANT: footOf/gridLayersOf make the grid ⊇ geometry, so this clamp should be a no-op. If it ever fires,
   // the grid is smaller than the geometry (only possible at the hard 128 ceiling) — make that LOUD, never silent.
   const span = (s, cap) => {
@@ -451,14 +423,9 @@ function buildVolume(partId, foot, layers) {
   // side's height maps PROPORTIONALLY (a long-barrel side doesn't get stretched vertically to fill layers).
   const tol = keyTolState[partId], pol = polyState[partId], pk = pickState[partId];
   const xf = imgXf[partId] || {};   // SF2 per-side alignment (scale/offset) folded into the carve
-  // keyed cutouts (the slices) — placed onto the box grid by placeSample; xf'd copies feed autoSpans footprint sizing
-  const topKeyed = src.top ? keyedCropped(src.top, tol.top, pol.top, pk.top) : null;
-  const sideKeyed = src.side ? keyedCropped(src.side, tol.side, pol.side, pk.side) : null;
-  const frontKeyed = src.front ? keyedCropped(src.front, tol.front, pol.front, pk.front) : (src.back ? keyedCropped(src.back, tol.back, pol.back, pk.back) : null);
-  const backKeyed = src.back ? keyedCropped(src.back, tol.back, pol.back, pk.back) : null;
-  const topC = topKeyed ? xfCanvas(topKeyed, xf.top) : null;
-  const sideC = sideKeyed ? xfCanvas(sideKeyed, xf.side) : null;
-  const frontC = frontKeyed ? xfCanvas(frontKeyed, src.front ? xf.front : xf.back) : null;
+  const topC = src.top ? xfCanvas(keyedCropped(src.top, tol.top, pol.top, pk.top), xf.top) : null;
+  const sideC = src.side ? xfCanvas(keyedCropped(src.side, tol.side, pol.side, pk.side), xf.side) : null;
+  const frontC = src.front ? xfCanvas(keyedCropped(src.front, tol.front, pol.front, pk.front), xf.front) : (src.back ? xfCanvas(keyedCropped(src.back, tol.back, pol.back, pk.back), xf.back) : null);
   const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
   // procedural barrel reserves a FORWARD margin so the body shrinks back and the tube protrudes past it
   const reach = (partId === 'turret' && state.barrelLen > 0) ? state.barrelLen : 0;
@@ -470,16 +437,15 @@ function buildVolume(partId, foot, layers) {
   const ox = sp.spanX.lo, bw = sp.spanX.hi - sp.spanX.lo;
   const oy = sp.spanY.lo, bh = sp.spanY.hi - sp.spanY.lo;
   const z0 = sp.spanZ.lo, Hv = sp.spanZ.hi - sp.spanZ.lo, Hraw = sp.Hraw;
-  // TOP footprint + colour — PLACED at the artist's imgXf inside the box (no stretch-to-fill)
-  // same rule as placeSample: the footprint's alpha is the ORIGINAL slice's, never a projection's
-  if (topKeyed) { const r = sliceRect(topKeyed.width, topKeyed.height, bw, bh, xf.top); tx.globalAlpha = 1; tx.imageSmoothingEnabled = false; tx.drawImage(topKeyed, ox + r.px, oy + r.py, r.pw, r.ph); }
+  if (Hraw > layers + 0.5 && !suppressSquashWarn) console.warn(`[stack-forge] ${partId}: normalized height ${Math.round(Hraw)} > Layers ${layers} — the profile is being squashed; raise the ${partId} Layers slider`);
+  if (topC) tx.drawImage(topC, ox, oy, bw, bh);                    // footprint + colour from the top
   else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
-  const top = (x, y) => cd[(y * foot + x) * 4 + 3] > INK_A;   // same ink test as the elevation masks
-  // side/front/back masks — PLACED (placeSample), not stretched. Empty cells stay empty → natural margins.
-  const sideG = sideKeyed ? placeSample(sideKeyed, xf.side, bw, Hv, true) : null;    // length × height
-  const frontG = frontKeyed ? placeSample(frontKeyed, src.front ? xf.front : xf.back, bh, Hv, true) : null; // width × height
-  const backG = backKeyed ? placeSample(backKeyed, xf.back, bh, Hv, true) : null;    // colour-only −x walls
+  const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
+  const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to the common Hv)
+  const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
+  const backC = src.back ? xfCanvas(keyedCropped(src.back, tol.back, pol.back, pk.back), xf.back) : null; // colour-only: paints the −x walls (xf.back → matches the box's Back projection)
+  const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
   const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= z0 && z < z0 + Hv && !!sideG.m[(z - z0) * bw + (x - ox)]) : (z >= z0 && z < z0 + Hv);
   const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv && !!frontG.m[(z - z0) * bh + (y - oy)]) : (z >= z0 && z < z0 + Hv);
   const flat = !sideG && !frontG;
@@ -493,10 +459,10 @@ function buildVolume(partId, foot, layers) {
     const bz = clamp(Math.round(state.barrelElev / 100 * (Hv - 1)), 0, layers - 1);
     inBarrel = (x, y, z) => x >= bx0 && x <= bx1 && (y - cy) * (y - cy) + (z - bz) * (z - bz) <= r * r;
     let R = 0, G = 0, B = 0, c = 0;                                  // barrel tint = darkened mean body colour
-    for (let i = 0; i < N; i++) { const p = i * 4; if (cd[p + 3] > INK_A) { R += cd[p]; G += cd[p + 1]; B += cd[p + 2]; c++; } }
+    for (let i = 0; i < N; i++) { const p = i * 4; if (cd[p + 3] > 20) { R += cd[p]; G += cd[p + 1]; B += cd[p + 2]; c++; } }
     const bt = c ? [R / c * 0.72 | 0, G / c * 0.72 | 0, B / c * 0.72 | 0] : [82, 84, 92];
     for (let x = Math.max(0, bx0); x <= bx1; x++) for (let y = Math.max(0, Math.ceil(cy - r)); y <= Math.min(foot - 1, Math.floor(cy + r)); y++) {
-      const p = (y * foot + x) * 4; if (cd[p + 3] <= INK_A) { cd[p] = bt[0]; cd[p + 1] = bt[1]; cd[p + 2] = bt[2]; cd[p + 3] = 255; }
+      const p = (y * foot + x) * 4; if (cd[p + 3] < 20) { cd[p] = bt[0]; cd[p + 1] = bt[1]; cd[p + 2] = bt[2]; cd[p + 3] = 255; }
     }
   }
   const filled = inBarrel ? (x, y, z) => bodyFilled(x, y, z) || inBarrel(x, y, z) : bodyFilled;
@@ -532,130 +498,18 @@ function effPlace(part) {
   const foot = footOf(part), layers = (part === 'turret' ? state.turretLayers : state.bodyLayers);
   return { ox: 0, oy: 0, bw: foot, bh: foot, z0: 0, Hv: layers };
 }
-// ── THE PIPELINE (owner 2026-08-04): "a create geometry button that fires off the carve and projection.
-// Then I need to be able to edit geo, then reproject, then paint."
-//   ⬛ Create Geometry → carveModel(): CARVE the block down with the views, then PROJECT the views onto it,
-//                        then FREEZE the result. Nothing else re-carves — adjusting a slice or a slider can
-//                        never silently rebuild the geometry under your edits.
-//   edit geo           → voxEdit add/remove, layered on the frozen model
-//   🖼 Reproject        → re-run ONLY the projection over the CURRENT (frozen + edited) geometry
-//   paint              → voxEdit colours, which always win over the projection
-const frozen = { body: null, turret: null };   // { foot, layers, fill, vcol, cd, views, sp, dbg }
-// the space-carved + projected model BEFORE manual edits. Called by Create Geometry; every other consumer
-// reads the FROZEN copy via buildModelRaw below.
-function carveModel(partId, foot, layers) {
+// the space-carved model BEFORE manual edits (buildVolume is not cached — callers that only need the
+// base, like the live slice editor, cache this and layer edits on cheaply).
+function buildModelRaw(partId, foot, layers) {
   const v = buildVolume(partId, foot, layers), N = foot * foot;
   if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };  // .vox → already voxels
-  const vcol = projectViews(v.filled, foot, layers, v.cd, v.views);
-  return { vcol, filled: v.filled, cd: v.cd, views: v.views, sp: v.sp, dbg: v.dbg };
-}
-// ── PROJECTION PHASE, standalone so ⬛ Create Geometry and 🖼 Reproject run the IDENTICAL code. Takes a
-// FINISHED geometry (`filled`) and paints every view onto the surface voxels it can see. Reproject passes the
-// edited geometry, so colours follow voxels you added or removed.
-//   +z exposed → TOP view          (the footprint colour)
-//   +y exposed → SIDE view         · −y exposed → SIDE view MIRRORED (the two flanks are mirror images, so
-//                                    the unit's front stays at the +x end when you orbit to either side)
-//   +x exposed → FRONT view        · −x exposed → BACK view, or the FRONT mirrored when no back was drawn
-// Interior voxels (no exposed face) fall back to the top's column colour.
-function projectViews(filled, foot, layers, cd, V) {
-  const N = foot * foot, vcol = new Uint8Array(layers * N * 3);
-  if (!cd) return vcol;
-  // Precedence is top → side → front/back so a top-surface voxel keeps its top colour; buildFaces still
-  // resolves each FACE independently, so this only decides the single per-voxel colour that the .vox export,
-  // the grid slice editor and the palette see — those used to be top-only.
-  const F = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && filled(x, y, z);
-  const smp = (g, ix, z, mirror) => {
-    if (!g || !g.m || ix < 0 || ix >= g.w || z < 0 || z >= g.h) return null;
-    const i = z * g.w + (mirror ? g.w - 1 - ix : ix);
-    return g.m[i] ? [g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]] : null;
-  };
-  const vox = (V && V.ox) || 0, voy = (V && V.oy) || 0, vz0 = (V && V.z0) || 0;
-  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-    if (!filled(x, y, z)) continue;
-    const i = y * foot + x, p = i * 4, zz = z - vz0;
-    const topCol = cd[p + 3] > INK_A ? [cd[p], cd[p + 1], cd[p + 2]] : null;
-    let col = null;
-    if (!F(x, y, z + 1)) col = topCol;                                              // +z → top view
-    if (!col && V) {
-      if (!F(x, y + 1, z)) col = smp(V.side, x - vox, zz, false);                   // +y → side
-      if (!col && !F(x, y - 1, z)) col = smp(V.side, x - vox, zz, true);            // −y → side MIRRORED
-      if (!col && !F(x + 1, y, z)) col = smp(V.front, y - voy, zz, false);          // +x → front
-      if (!col && !F(x - 1, y, z)) col = V.back ? smp(V.back, y - voy, zz, false)   // −x → back, else front mirrored
-        : smp(V.front, y - voy, zz, true);
-    }
-    if (!col) col = topCol;                                                          // interior / unpainted
-    if (!col) continue;
-    const c = (z * N + i) * 3; vcol[c] = col[0]; vcol[c + 1] = col[1]; vcol[c + 2] = col[2];
+  const cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
+  for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+    const i = y * foot + x, p = i * 4; if (cd[p + 3] < 20) continue;
+    const r = cd[p], g = cd[p + 1], b = cd[p + 2];
+    for (let z = 0; z < layers; z++) if (filled(x, y, z)) { const c = (z * N + i) * 3; vcol[c] = r; vcol[c + 1] = g; vcol[c + 2] = b; }
   }
-  return vcol;
-}
-// Every consumer reads the FROZEN model. Until ⬛ Create Geometry has been pressed for this part (or after the
-// grid size changes underneath it) we fall back to a live carve, so nothing regresses for an existing project.
-function buildModelRaw(partId, foot, layers) {
-  const f = frozen[partId];
-  // A frozen model that gets SKIPPED because the caller computed a different grid is exactly the bug that made
-  // Create Geometry look dead: the freeze is keyed on footOf/gridLayersOf, so any caller using the raw
-  // state.foot/state.bodyLayers silently fell through to a live carve. Never let that pass quietly again.
-  if (f && (f.foot !== foot || f.layers !== layers) && !buildModelRaw._warned) {
-    buildModelRaw._warned = true;
-    console.error(`[stack-forge] ${partId}: frozen geometry is ${f.foot}×${f.foot}×${f.layers} but a caller asked for ${foot}×${foot}×${layers} — the frozen model is being IGNORED. Callers must use footOf(part)/gridLayersOf(part).`);
-  }
-  if (f && f.foot === foot && f.layers === layers) {
-    const N = foot * foot;
-    return { vcol: f.vcol, cd: f.cd, views: f.views, sp: f.sp, dbg: f.dbg,
-      filled: (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && !!f.fill[z * N + y * foot + x] };
-  }
-  return carveModel(partId, foot, layers);
-}
-// ⬛ CREATE GEOMETRY — the one explicit trigger: carve, project, freeze. Adjust slices all you like beforehand;
-// nothing is built until you press it, and once frozen nothing rebuilds it but another press.
-function createGeometry(partId) {
-  const foot = footOf(partId), layers = gridLayersOf(partId), N = foot * foot;
-  frozen[partId] = null;                                   // carve fresh, never from the frozen copy
-  const m = carveModel(partId, foot, layers);
-  const fill = new Uint8Array(layers * N);
-  let n = 0;
-  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++)
-    if (m.filled(x, y, z)) { fill[z * N + y * foot + x] = 1; n++; }
-  // GROUND IT. Slices are centred on the face by design, so a profile shorter than the cube carves a model
-  // hanging in mid-air (measured: wide side art floats 22 voxels up in a 64 cube — that is the "looks like
-  // garbage" rotation). Units stand on terrain, so drop the finished voxels to z=0. Colours ride along.
-  // The view masks are indexed (z − views.z0), so z0 shifts by the same amount or a later Reproject would
-  // sample the wrong mask rows for the moved voxels. The BOX (sp) does not move — the model moved inside it.
-  const dropped = groundVoxels(fill, m.vcol, foot, layers);
-  if (dropped && m.views) m.views.z0 = (m.views.z0 || 0) - dropped;
-  frozen[partId] = { foot, layers, fill, vcol: m.vcol, cd: m.cd, views: m.views, sp: m.sp, dbg: m.dbg, dropped };
-  gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave();
-  const bb = modelBBox(buildModel(partId, foot, layers).filled, foot, layers);
-  const dim = bb.x1 < 0 ? 'EMPTY' : `${bb.x1 - bb.x0 + 1}×${bb.y1 - bb.y0 + 1}×${bb.z1 - bb.z0 + 1}`;
-  // PER-VIEW COVERAGE — the carve is an intersection, so ONE empty mask empties the whole result. Report each
-  // view's ink so an empty carve names its cause instead of just saying "nothing happened".
-  const V = m.views, cov = (g) => { if (!g || !g.m) return 'none'; let k = 0; for (let i = 0; i < g.m.length; i++) if (g.m[i]) k++; return `${k}/${g.m.length}`; };
-  let topInk = 0; if (m.cd) for (let i = 0; i < N; i++) if (m.cd[i * 4 + 3] > INK_A) topInk++;
-  const report = `top ${topInk}/${N} · side ${cov(V && V.side)} · front ${cov(V && V.front)} · back ${cov(V && V.back)}`;
-  console.info(`[stack-forge] ${partId}: created geometry — ${n} voxels, ${dim} in a ${foot}×${foot}×${layers} grid${dropped ? `, dropped ${dropped} to the ground` : ''}   [slice ink: ${report}]`);
-  const sd = $('stageDims'), gd = $('gridDims');
-  const line = n ? `created ${n} vox · ${dim} · grid ${foot}×${foot}×${layers}` : `Create Geometry: EMPTY — ${report}`;
-  if (sd) { sd.textContent = line; sd.style.color = n ? '#8fa7bd' : '#e0625f'; }
-  if (gd) { gd.textContent = line; gd.style.color = n ? '#8fa7bd' : '#e0625f'; }
-  if (!n) alert(`Create Geometry produced NO voxels.\n\nThe carve intersects every supplied view, so one empty slice empties the result.\nSlice ink: ${report}\n\n"none" = that view has no image. "0/N" = the image keyed to nothing — raise its cutout tolerance.`);
-  else if (n < layers * N * 0.002) console.warn(`[stack-forge] ${partId}: only ${n} voxels in a ${foot}×${foot}×${layers} grid — the cube is Layers-sized (${Math.min(foot, layers)}³), so raise Base layers or press ⬛ Cube if the model looks tiny.`);
-  return n;
-}
-// 🖼 REPROJECT — re-run ONLY the projection over the CURRENT geometry (frozen + your add/erase edits), so
-// colours follow voxels you added or removed. Geometry is untouched; painted voxels still win downstream.
-function reprojectGeometry(partId) {
-  const f = frozen[partId];
-  if (!f) { alert('Reproject: press ⬛ Create Geometry first.'); return; }
-  const { foot, layers } = f, N = foot * foot, ed = voxEdit[partId];
-  const filled = (x, y, z) => {
-    if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) return false;
-    const e = ed && ed.get(z * N + y * foot + x);
-    return e !== undefined ? e !== 'del' : !!f.fill[z * N + y * foot + x];
-  };
-  f.vcol = projectViews(filled, foot, layers, f.cd, f.views);
-  gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave();
-  console.info(`[stack-forge] ${partId}: reprojected views onto the current geometry`);
+  return { vcol, filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };
 }
 // layer the voxEdit overlay onto a raw model (clone vcol so buildVolume's arrays are never mutated).
 function applyVoxEdits(m, partId, foot, layers) {
@@ -933,21 +787,16 @@ function drawDimBox(ctx, meta, el, az, part) {
   const PX = (X, Y) => cx + S * (X * ca - Y * sa);
   const PY = (X, Y, Z) => groundY + S * ((X * sa + Y * ca) * se - Z * h * ce);
   const P = (X, Y, Z) => ({ x: PX(X - cx0, Y - cy0), y: PY(X - cx0, Y - cy0, Z) });   // world voxel coords → screen
-  // Stage 2: project the SAME keyed cutout the carve consumes (sliceCanvas), NOT the raw photo — so the orbit
-  // box face, the grid overlay, and the carved voxels all show one slice (exposes any keyed-silhouette gap).
-  // faces project the FULL-RES slice into its placement SUB-rect (below), so the box shows exactly what the
-  // carve places — margins empty, no stretch, and never the low-res mask.
+  const raw = imgs[part] || {}, xfp = imgXf[part] || {};
+  const view = { top: xfCanvas(raw.top, xfp.top), side: xfCanvas(raw.side, xfp.side), front: xfCanvas(raw.front, xfp.front), back: xfCanvas(raw.back, xfp.back) };   // per-side alignment
 
   // affine image map: image rect → the face parallelogram (o = img(0,0), u = img(w,0), v = img(0,h))
-  const projImg = (img, o, u, v) => projectSliceAffine(ctx, img, o, u, v, 0.82);
-  // project the full-res keyed slice into its placement sub-parallelogram of a face (A origin, B=A+length, C=A+height)
-  const projPlaced = (view, A, B, C, boxW, boxH) => {
-    const src = imgs[part]; if (!src || !src[view]) return;
-    const keyed = keyedCropped(src[view], keyTolState[part][view], polyState[part][view], pickState[part][view]);
-    const r = sliceRect(keyed.width, keyed.height, boxW, boxH, (imgXf[part] || {})[view]);
-    const u = { x: B.x - A.x, y: B.y - A.y }, v = { x: C.x - A.x, y: C.y - A.y };
-    const o = { x: A.x + (r.px / boxW) * u.x + (r.py / boxH) * v.x, y: A.y + (r.px / boxW) * u.y + (r.py / boxH) * v.y };
-    projImg(keyed, o, { x: o.x + (r.pw / boxW) * u.x, y: o.y + (r.pw / boxW) * u.y }, { x: o.x + (r.ph / boxH) * v.x, y: o.y + (r.ph / boxH) * v.y });
+  const projImg = (img, o, u, v) => {
+    if (!img) return; const w = img.width || img.naturalWidth, hi = img.height || img.naturalHeight; if (!w || !hi) return;
+    ctx.save(); ctx.globalAlpha = 0.82;
+    ctx.setTransform((u.x - o.x) / w, (u.y - o.y) / w, (v.x - o.x) / hi, (v.y - o.y) / hi, o.x, o.y);
+    ctx.drawImage(img, 0, 0, w, hi);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.restore();
   };
   // per-cell gridlines across a face defined by corner A and full edges to B (u) and C (v), nu×nv cells
   const faceGrid = (A, B, C, nu, nv) => {
@@ -968,16 +817,16 @@ function drawDimBox(ctx, meta, el, az, part) {
   const nL = pl.bw, nW = pl.bh, nH = pl.Hv, tl = (v) => (v / VOX_PER_TILE).toFixed(2);
   // FACES (image projected onto the FULL face, then gridlines + label). Corner order = (A origin, B=A+u, C=A+v).
   // TOP (Z=zt): img x→X (length), y→Y (width)
-  { const A = P(x0, y0, zt), B = P(x1, y0, zt), C = P(x0, y1, zt); projPlaced('top', A, B, C, nL, nW); faceGrid(A, B, C, nL, nW); label(A, B, C, 'TOP  L' + tl(nL) + '×W' + tl(nW) + ' t'); }
+  { const A = P(x0, y0, zt), B = P(x1, y0, zt), C = P(x0, y1, zt); projImg(view.top, A, B, C); faceGrid(A, B, C, nL, nW); label(A, B, C, 'TOP  L' + tl(nL) + '×W' + tl(nW) + ' t'); }
   // +X FRONT: img x→Y (width), y→down(Z height)
-  if (showFront) { const A = P(x1, y0, zt), B = P(x1, y1, zt), C = P(x1, y0, zb); projPlaced('front', A, B, C, nW, nH); faceGrid(A, B, C, nW, nH); label(A, B, C, 'FRONT  H' + tl(nH) + ' t'); }
+  if (showFront) { const A = P(x1, y0, zt), B = P(x1, y1, zt), C = P(x1, y0, zb); projImg(view.front, A, B, C); faceGrid(A, B, C, nW, nH); label(A, B, C, 'FRONT  H' + tl(nH) + ' t'); }
   // −X BACK (mirrored)
-  if (showBack) { const A = P(x0, y1, zt), B = P(x0, y0, zt), C = P(x0, y1, zb); projPlaced('back', A, B, C, nW, nH); faceGrid(A, B, C, nW, nH); label(A, B, C, 'BACK'); }
+  if (showBack) { const A = P(x0, y1, zt), B = P(x0, y0, zt), C = P(x0, y1, zb); projImg(view.back, A, B, C); faceGrid(A, B, C, nW, nH); label(A, B, C, 'BACK'); }
   // SIDE = the visible ±Y wall. Both walls put the unit's FRONT at the +X (x1) end, so they read as
   // natural mirror images when you orbit around (owner: the left side was reversed vs top/front — it
   // must mirror the right). img x→X (length, back→front = x0→x1), y→down(Z height).
-  if (showPlusY) { const A = P(x0, y1, zt), B = P(x1, y1, zt), C = P(x0, y1, zb); projPlaced('side', A, B, C, nL, nH); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
-  else if (showMinusY) { const A = P(x0, y0, zt), B = P(x1, y0, zt), C = P(x0, y0, zb); projPlaced('side', A, B, C, nL, nH); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
+  if (showPlusY) { const A = P(x0, y1, zt), B = P(x1, y1, zt), C = P(x0, y1, zb); projImg(view.side, A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
+  else if (showMinusY) { const A = P(x0, y0, zt), B = P(x1, y0, zt), C = P(x0, y0, zb); projImg(view.side, A, B, C); faceGrid(A, B, C, nL, nH); label(A, B, C, 'SIDE  L' + tl(nL) + '×H' + tl(nH) + ' t'); }
 
   // wireframe = the unit's bounding box (placement)
   const c = [P(x0, y0, zb), P(x1, y0, zb), P(x1, y1, zb), P(x0, y1, zb), P(x0, y0, zt), P(x1, y0, zt), P(x1, y1, zt), P(x0, y1, zt)];
@@ -1300,22 +1149,6 @@ function xfCanvas(im, xf) {
   g.translate(w / 2 + (xf.ox || 0) * w, h / 2 + (xf.oy || 0) * h); g.scale(xf.sx || 1, xf.sy || 1); g.drawImage(im, -w / 2, -h / 2);
   return c;
 }
-// sliceCanvas(part, view): the EXACT per-face canvas the carve consumes — the keyed cutout of the source slice
-// with the per-side align transform (imgXf) applied. ONE source shared by the carve (buildVolume) and both
-// camera overlays (drawDimBox + grid geometry overlay) so all three show the same slice. Null if no source.
-function sliceCanvas(part, view) {
-  const src = imgs[part]; if (!src || !src[view]) return null;
-  return xfCanvas(keyedCropped(src[view], keyTolState[part][view], polyState[part][view], pickState[part][view]), (imgXf[part] || {})[view]);
-}
-// projectSliceAffine: affine-map an image rect onto a face parallelogram (o=img(0,0), u=img(w,0), v=img(0,h)).
-// Lifted from drawDimBox's projImg so both cameras project slices through one path (default alpha 0.82).
-function projectSliceAffine(ctx, img, o, u, v, alpha) {
-  if (!img) return; const w = img.width || img.naturalWidth, hi = img.height || img.naturalHeight; if (!w || !hi) return;
-  ctx.save(); ctx.globalAlpha = (alpha == null ? 0.82 : alpha);
-  ctx.setTransform((u.x - o.x) / w, (u.y - o.y) / w, (v.x - o.x) / hi, (v.y - o.y) / hi, o.x, o.y);
-  ctx.drawImage(img, 0, 0, w, hi);
-  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.restore();
-}
 // per-slot flip: keep the raw source + H/V flags so flips compose from the original (no quality drift)
 const mkViews = (v) => ({ top: v(), side: v(), front: v(), back: v() });
 const srcImg = { body: mkViews(() => null), turret: mkViews(() => null) };
@@ -1438,8 +1271,13 @@ let gridOrient = true;                                    // orientation indicat
 // geometry box axis mapping: for each grid view, which world-axis span each in-plane axis (col,row) reads
 // and whether the grid coord is reversed vs the axis value. cap: x/y=foot, z=layers. Used by both the
 // geom overlay draw and the drag editing so they stay in lock-step.
-// GEOAX + spanKey come from slice-geom.js, where slice-geom.test.mjs cross-checks them against axisMaps'
-// toVox — the check that would have caught the swapped front/back flips before they shipped.
+const GEOAX = {
+  top:   { col: { axis: 'x', flip: false }, row: { axis: 'y', flip: false } },
+  side:  { col: { axis: 'x', flip: false }, row: { axis: 'z', flip: true } },
+  front: { col: { axis: 'y', flip: false }, row: { axis: 'z', flip: true } },
+  back:  { col: { axis: 'y', flip: true },  row: { axis: 'z', flip: true } },
+};
+const spanKey = { x: 'spanX', y: 'spanY', z: 'spanZ' };
 const gridPart = () => (state.part === 'turret' ? 'turret' : 'body');
 const gridLayersOf = (part) => effLayers(part === 'turret' ? state.turretLayers : state.bodyLayers, geomExtentZ(part));
 // LAYER 0 = raycast "surface": the target voxel at a grid cell is the FIRST filled voxel along the view's
@@ -1555,7 +1393,16 @@ function renderGridView() {
   // Every view is a SLICE perpendicular to a depth axis; the Layer slider walks slices along it, so
   // add/erase editing works in all four. Top→z (from the top), Side→y, Front/Back→x. toVox maps an
   // in-plane cell (col,row) + slice index to a voxel (x,y,z).
-  const AX = axisMaps(foot, layers);   // slice-geom.js — proven bijective by slice-geom.test.mjs
+  const AX = {
+    top:   { cols: foot, rows: foot,   depth: layers, axis: 'z', toVox: (c, r, s) => [c, r, layers - 1 - s] },
+    side:  { cols: foot, rows: layers, depth: foot,   axis: 'y', toVox: (c, r, s) => [c, s, layers - 1 - r] },
+    front: { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [foot - 1 - s, foot - 1 - c, layers - 1 - r] },  // +x FRONT: raycast from +x, col→y so grid LEFT = model left (matches the orbit)
+    back:  { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [s, c, layers - 1 - r] },                        // −x BACK: raycast from x=0, opposite-side col→y
+    // ¾ ANGLE (decor): a DIAGONAL slice along the (1,1) camera ray. col → the in-plane diagonal h = x−y
+    // (constant along a ray), CENTRED so the facing is foot-wide like Front/Side (matches the same-size source
+    // art); depth s walks from the +x+y CORNER inward, so the first hit is the surface the camera sees.
+    angle: { cols: foot, rows: layers, depth: foot, axis: 'diag', toVox: (c, r, s) => { const h = c - (foot >> 1), xs = Math.min(foot - 1, foot - 1 + h), x = xs - s; return [x, x - h, layers - 1 - r]; } },
+  };
   const ax = AX[gridView] || AX.top, cols = ax.cols, rows = ax.rows, depth = ax.depth;
   gridLayer = clamp(gridLayer, 0, depth);   // 0 = surface projection (non-layer); 1..depth = real slices 0..depth-1
   const slice = gridLayer;
@@ -1698,7 +1545,7 @@ function renderGridView() {
   // the ACTIVE slice — palette-correct in Paint mode, flat grey in Geometry mode (shape, not colour)
   for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
     const col = cellAt(cx, cy); if (!col) continue;
-    ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;   // Stage 2: true color in Geometry mode too, so the grid reads as the same object as orbit/paint
+    ctx.fillStyle = geomActive ? '#68788a' : `rgb(${col[0]},${col[1]},${col[2]})`;
     ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
   }
   // a REAL grid: cell lines across the WHOLE area (occupied + empty) + a crisp outer frame
@@ -1806,34 +1653,16 @@ function renderGridView() {
     // the other views in lock-step. spans come from base.sp (auto today; the user's saved override once
     // they drag). n: the box's two in-plane axes read GEOAX[view].col/row.
     const g = GEOAX[gridView], capOf = (a) => (a === 'z' ? layers : foot);
-    // Stage 1: the box reads effPlace — the SAME single placement the orbit dim box reads (boxPlace pending
-    // edits, else the carve's spans) — so the grid box and the orbit box track together at every instant.
-    const _pl = effPlace(part);
-    const bsp = { spanX: { lo: _pl.ox, hi: _pl.ox + _pl.bw }, spanY: { lo: _pl.oy, hi: _pl.oy + _pl.bh }, spanZ: { lo: _pl.z0 || 0, hi: (_pl.z0 || 0) + _pl.Hv } };
-    const rng = (info) => geoRange(info, bsp, foot, layers);   // slice-geom.js
+    // box reads live geomState when the part is manually reconciled (so it moves during a drag without a
+    // full re-carve every frame); otherwise the auto spans the carve just used.
+    const bsp = (geomState[part] && geomState[part].spanX) ? geomState[part] : base.sp;
+    const rng = (info) => { const s = bsp[spanKey[info.axis]], cap = capOf(info.axis); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
     const cR = rng(g.col), rR = rng(g.row);
     const bx = ox + cR.lo * cell, by = oy + rR.lo * cellV, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cellV;
-    // draw the FULL-RES slice into its placement SUB-rect of the box (same placement the carve uses) — no fill,
-    // empty margins, crisp. cell↔px: bw2/boxW, bh2/boxH.
-    const gkeyed = imgs[part][gridView] ? keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]) : null;
-    if (gkeyed) {
-      const boxW = cR.hi - cR.lo, boxH = rR.hi - rR.lo, pr = sliceRect(gkeyed.width, gkeyed.height, boxW, boxH, (imgXf[part] || {})[gridView]);
-      const cpx = bw2 / boxW, cpy = bh2 / boxH;
-      ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false;   // no blur: the overlay shows the cells the carve reads
-      ctx.drawImage(gkeyed, bx + pr.px * cpx, by + pr.py * cpy, pr.pw * cpx, pr.ph * cpy); ctx.globalAlpha = 1;
-      // ── SLICE HANDLES (owner's original design): drag an EDGE to stretch that one axis, a CORNER to scale
-      // both. Amber, to read as a different object from the cyan box handles. Recorded in BOTH screen px (hit
-      // testing) and box-cell units (the drag converts back to imgXf sx/sy/ox/oy through sliceBase).
-      const sx0 = bx + pr.px * cpx, sy0 = by + pr.py * cpy, sw0 = pr.pw * cpx, sh0 = pr.ph * cpy;
-      gridGeom.slice = { x: sx0, y: sy0, w: sw0, h: sh0, pxCell: pr.px, pyCell: pr.py, pwCell: pr.pw, phCell: pr.ph,
-        kw: gkeyed.width, kh: gkeyed.height, boxW, boxH, bx, by, cpx, cpy, view: gridView, part };
-      ctx.strokeStyle = 'rgba(242,200,105,.85)'; ctx.lineWidth = 1; ctx.setLineDash([3, 2]);
-      ctx.strokeRect(sx0 + .5, sy0 + .5, sw0 - 1, sh0 - 1); ctx.setLineDash([]);
-      ctx.fillStyle = '#f2c869';
-      for (const [hx, hy] of [[sx0, sy0], [sx0 + sw0, sy0], [sx0, sy0 + sh0], [sx0 + sw0, sy0 + sh0],          // corners
-                              [sx0 + sw0 / 2, sy0], [sx0 + sw0 / 2, sy0 + sh0], [sx0, sy0 + sh0 / 2], [sx0 + sw0, sy0 + sh0 / 2]])  // edges
-        ctx.fillRect(hx - 4, hy - 4, 8, 8);
-    }
+    // apply the SAME per-side scale/align (xf) the carve uses, or the geometry overlay (raw image) won't match
+    // the paint voxels (transformed) once a side is aligned — owner: "geometry and paint do not match".
+    const keyed = imgs[part][gridView] ? xfCanvas(keyedCropped(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]), (imgXf[part] || {})[gridView]) : null;
+    if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
     for (const [hx, hy] of [[bx + bw2 / 2, by], [bx + bw2 / 2, by + bh2], [bx, by + bh2 / 2], [bx + bw2, by + bh2 / 2]]) ctx.fillRect(hx - 4, hy - 4, 8, 8);
@@ -1881,12 +1710,8 @@ function rebuildSlices() {
   if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
   state.baked = null; voxSig = ''; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
   bodyMountZ = bodyTopLayer(state.foot, state.bodyLayers);   // turret mounts on the body's actual top
-  // GRID MUST MATCH THE FREEZE. footOf/gridLayersOf are the EFFECTIVE grid (they grow past the stored
-  // slider when the geometry needs it). createGeometry freezes the model keyed on exactly those, so building
-  // faces on the raw state.foot/state.bodyLayers made every consumer miss the frozen model and silently fall
-  // back to a live carve — which is why Create Geometry appeared to do nothing at all.
-  bodyFaces = buildFaces('body', footOf('body'), gridLayersOf('body'));
-  turretFaces = buildFaces('turret', footOf('turret'), gridLayersOf('turret'));   // SF3: turret's own footprint
+  bodyFaces = buildFaces('body', state.foot, state.bodyLayers);
+  turretFaces = buildFaces('turret', footOf('turret'), state.turretLayers);   // SF3: turret's own footprint
   // canvases sized to the worst case at any azimuth: footprint diagonal + offsets + the full stack height
   const foot = state.foot, h = state.zScale;
   voxBounds = { R: Math.ceil(foot * 0.71 + Math.abs(state.turretDx) + foot * Math.abs(state.turretPivot) / 100) + 2,
@@ -2058,90 +1883,29 @@ if ($('boxWid')) $('boxWid').oninput = (e) => boxEdit('bh', +e.target.value);
 if ($('boxHt')) $('boxHt').oninput = (e) => boxEdit('Hv', +e.target.value);
 if ($('boxOx')) $('boxOx').oninput = (e) => boxEdit('ox', +e.target.value);
 if ($('boxOy')) $('boxOy').oninput = (e) => boxEdit('oy', +e.target.value);
-// commitBoxPlace(part): commit the pending Subject-box placement into the carve. GROWS the grid to fit
-// (Resolution + layers) so geomSpans never clamps — the grid-fit invariant — then writes the explicit spans.
-// The SINGLE commit path, shared by the Generate button and (Stage 1) the grid box-drag release.
-function commitBoxPlace(part) {
-  const p = boxPlace[part] || effPlace(part);
-  // GROW the grid to hold the box the owner sized (raise Resolution + layers) so the carve never clamps; only
-  // the RES_MAX ceiling can still clamp. Growing foot enlarges the on-board unit (voxels/tile constant).
+if ($('boxGen')) $('boxGen').onclick = () => {   // commit the pending placement into the carve (overrides autoSpans)
+  const part = boxPart(), p = boxPlace[part] || effPlace(part);
+  // The carve grid is foot×foot×layers; explicit spans past it get CLAMPED, which chops the model (owner:
+  // "the carve clamps are the problem" — box looks perfect, grid chopped in the back). So GROW the grid to hold
+  // the box the owner sized: raise Resolution (foot) to the nearest step that fits the footprint, and raise
+  // layers to fit the height. Only the hard 128 ceiling can still clamp. Growing foot enlarges the on-board
+  // unit (voxels/tile is constant) — adjust overall size via Unit-size after if needed.
+  const res = [32, 48, 64, 96, 128];
   const footNeed = Math.max(p.ox + p.bw, p.oy + p.bh);
-  const newFoot = clamp(Math.ceil(footNeed / 4) * 4, 16, RES_MAX);   // continuous slider: next step-4 grid
+  const newFoot = res.find((r) => r >= footNeed) || 128;
   if (part === 'turret') { if (newFoot > (state.turretFoot || state.foot)) { state.turretFoot = newFoot; if ($('turretRes')) $('turretRes').value = newFoot; } }
   else if (newFoot > state.foot) { state.foot = newFoot; if ($('res')) $('res').value = newFoot; }
   syncSizeUI();
   const layersNeed = (p.z0 || 0) + p.Hv, lid = part === 'turret' ? 'turretLayers' : 'bodyLayers';
-  if (layersNeed > state[lid]) { const el = $(lid); if (el && +el.max < layersNeed) el.max = String(Math.min(RES_MAX, layersNeed)); setLayers(part === 'turret' ? 'turret' : 'body', Math.min(RES_MAX, layersNeed)); }
+  if (layersNeed > state[lid]) { const el = $(lid); if (el && +el.max < layersNeed) el.max = String(Math.min(128, layersNeed)); setLayers(part === 'turret' ? 'turret' : 'body', Math.min(128, layersNeed)); }
   const foot = footOf(part), layers = state[lid];   // grown grid — spans now fit without clamping (except the 128 ceiling)
   geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
     spanX: { lo: p.ox, hi: Math.min(foot, p.ox + p.bw) }, spanY: { lo: p.oy, hi: Math.min(foot, p.oy + p.bh) }, spanZ: { lo: p.z0 || 0, hi: Math.min(layers, (p.z0 || 0) + p.Hv) } };
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
-}
-// ⬛ Create Geometry: commit the pending box placement, then CARVE + PROJECT + FREEZE in one explicit step.
-if ($('boxGen')) $('boxGen').onclick = () => { const p = boxPart(); commitBoxPlace(p); createGeometry(p); };
-if ($('boxReproject')) $('boxReproject').onclick = () => reprojectGeometry(boxPart());
-// ── ⇲ TRIM TO FIT (owner 2026-08-03): "when the carve is done ... shrink the cube size to dimensions + N cells
-// on each length, this will give a little space for adding polish." Shrinks the CUBE (the build volume / spans),
-// NOT the grid — changing foot would move in-game world scale (unitTiles) and invalidate every voxEdit key,
-// which is indexed z*foot² + y*foot + x.
-//
-// The catch: slices contain-fit the box (sliceRect), so shrinking the box alone would RESCALE the model with it,
-// and trimming twice would drift (shrink → refit → shrink…). So we compensate imgXf per view: scale by
-// base/base' and reposition to hold the same ABSOLUTE cells. The carve then reproduces the SAME voxels inside
-// the smaller cube, which makes a second Trim a no-op instead of a runaway.
-state.trimPad = 5;
-function trimToFit(part) {
-  const foot = footOf(part), layers = gridLayersOf(part);
-  const m = buildModel(part, foot, layers), bb = modelBBox(m.filled, foot, layers);
-  if (bb.x1 < 0) { alert('Trim: nothing carved yet — load art and Generate first.'); return; }
-  const sp = lastSpans[part];
-  if (!sp) { alert('Trim: no carve spans yet — press ⬇ Generate first.'); return; }
-  const pad = Math.max(0, state.trimPad | 0);
-  const oldX = sp.spanX.lo, oldW = sp.spanX.hi - sp.spanX.lo;
-  const oldY = sp.spanY.lo, oldH = sp.spanY.hi - sp.spanY.lo;
-  const oldZ = sp.spanZ.lo, oldV = sp.spanZ.hi - sp.spanZ.lo;
-  // the trimmed cube: carved bbox grown by the polish margin, clamped to the grid
-  const nx0 = clamp(bb.x0 - pad, 0, foot - 1), nx1 = clamp(bb.x1 + 1 + pad, nx0 + 1, foot);
-  const ny0 = clamp(bb.y0 - pad, 0, foot - 1), ny1 = clamp(bb.y1 + 1 + pad, ny0 + 1, foot);
-  const nz0 = clamp(bb.z0 - pad, 0, layers - 1), nz1 = clamp(bb.z1 + 1 + pad, nz0 + 1, layers);
-  const nW = nx1 - nx0, nH = ny1 - ny0, nV = nz1 - nz0;
-  // hold each slice's content at the same absolute cells inside the new box. u = horizontal (always centred),
-  // v = vertical (elevations are floor-anchored, the top view is centred) — mirroring sliceRect exactly.
-  const adjust = (view, W, H, W2, H2, loU, loU2, loV, loV2) => {
-    const srcIm = imgs[part] && imgs[part][view]; if (!srcIm) return;
-    const keyed = keyedCropped(srcIm, keyTolState[part][view], polyState[part][view], pickState[part][view]);
-    const kw = keyed.width || 1, kh = keyed.height || 1, xf = imgXf[part][view] || { sx: 1, sy: 1, ox: 0, oy: 0 };
-    const base = Math.min(W / kw, H / kh), base2 = Math.min(W2 / kw, H2 / kh);
-    if (!(base > 0) || !(base2 > 0)) return;
-    const sx = xf.sx || 1, sy = xf.sy || 1, pw = kw * base * sx, ph = kh * base * sy;   // content size is PRESERVED
-    const px = (W - pw) / 2 + (xf.ox || 0) * W;                                        // u: centred + offset
-    const ox2 = (loU + px - loU2 - (W2 - pw) / 2) / W2;
-    const py = (H - ph) / 2 + (xf.oy || 0) * H;                                       // v: centred, like sliceRect
-    const oy2 = (loV + py - loV2 - (H2 - ph) / 2) / H2;
-    imgXf[part][view] = { sx: sx * (base / base2), sy: sy * (base / base2), ox: ox2, oy: oy2 };
-  };
-  adjust('top',   oldW, oldH, nW, nH, oldX, nx0, oldY, ny0);   // top: x→X, y→Y, both centred
-  adjust('side',  oldW, oldV, nW, nV, oldX, nx0, oldZ, nz0);    // side: x→X, y→Z (floor)
-  adjust('front', oldH, oldV, nH, nV, oldY, ny0, oldZ, nz0);    // front: x→Y, y→Z (floor)
-  adjust('back',  oldH, oldV, nH, nV, oldY, ny0, oldZ, nz0);    // back: colour-only, same box as front
-  geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
-    spanX: { lo: nx0, hi: nx1 }, spanY: { lo: ny0, hi: ny1 }, spanZ: { lo: nz0, hi: nz1 } };
-  boxPlace[part] = null; gridModel = null; xfSyncSliders(); rebuildSlices(); scheduleAutosave(); boxSyncSliders();
-  console.info(`[stack-forge] ${part}: trimmed cube ${oldW}×${oldH}×${oldV} → ${nW}×${nH}×${nV} (model ${bb.x1 - bb.x0 + 1}×${bb.y1 - bb.y0 + 1}×${bb.z1 - bb.z0 + 1} + ${pad} each side)`);
-}
-if ($('boxTrim')) $('boxTrim').onclick = () => trimToFit(boxPart());
-if ($('trimPad')) $('trimPad').oninput = (e) => { state.trimPad = +e.target.value; if ($('trimPadV')) $('trimPadV').textContent = state.trimPad + ' cells'; };
-if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit (box follows the aligned slices, TOP master)
+};
+if ($('boxAuto')) $('boxAuto').onclick = () => {   // back to auto-fit
   const part = boxPart(); geomState[part] = { auto: true, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top' };
   boxPlace[part] = null; gridModel = null; rebuildSlices(); scheduleAutosave(); boxSyncSliders();
-};
-// Stage 3: manual Length/Width/Height are an ADVANCED override — collapsed by default so per-slice align is the
-// primary sizing control (no two fighting size systems). Toggle reveals the manual span sliders.
-if ($('boxManualToggle')) $('boxManualToggle').onclick = () => {
-  const r = $('boxManualRow'); if (!r) return;
-  const show = r.style.display === 'none';
-  r.style.display = show ? '' : 'none';
-  $('boxManualToggle').textContent = '⚙ Manual box size ' + (show ? '▾' : '▸');
 };
 
 // SF2 per-side ALIGNMENT: select a side, then high-res scale/align sliders stretch & nudge that image.
@@ -2151,20 +1915,7 @@ function xfSyncSliders() {
   const set = (id, v) => { const el = $(id); if (el) el.value = String(v); const lv = $(id + 'V'); if (lv) lv.textContent = (+v).toFixed(3); };
   set('xfSx', xf.sx); set('xfSy', xf.sy); set('xfOx', xf.ox); set('xfOy', xf.oy);
 }
-if ($('boxSideSeg')) $('boxSideSeg').onclick = (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  boxSide = b.dataset.v;
-  [...$('boxSideSeg').children].forEach((c) => c.classList.toggle('on', c === b));
-  // Stage 4: switch the Grid View to the same facing so the selector, grid, and orbit all show one face.
-  if (['top', 'side', 'front', 'back'].includes(boxSide)) { gridView = boxSide; gridLayer = 0; const gs = $('gridViewSeg'); if (gs) [...gs.children].forEach((c) => c.classList.toggle('on', c.dataset.v === boxSide)); }
-  // Point the orbit camera STRAIGHT AT the face you're aligning so the selector, the primary view, and the
-  // Length/Width/Height + Scale/Align controls all correspond (owner: selecting 'side' was showing 'front', and
-  // Width did nothing because Y was edge-on). az/el follow drawDimBox's own face-visibility rule — showFront at
-  // az 90 (+X), the ±Y SIDE wall at az 0, BACK (−X) at az 270, TOP looking down — so the box's face LABEL agrees.
-  const CAM = { top: { az: 0, el: 85 }, side: { az: 0, el: 18 }, front: { az: 90, el: 18 }, back: { az: 270, el: 18 } }[boxSide];
-  if (CAM) { state.az = CAM.az; state.el = CAM.el; syncInputs(); voxSig = ''; renderGridView(); }
-  xfSyncSliders();
-};
+if ($('boxSideSeg')) $('boxSideSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; boxSide = b.dataset.v; [...$('boxSideSeg').children].forEach((c) => c.classList.toggle('on', c === b)); xfSyncSliders(); };
 function xfEdit(field, val, live) {
   imgXf[boxPart()][boxSide][field] = val;
   const lv = $({ sx: 'xfSxV', sy: 'xfSyV', ox: 'xfOxV', oy: 'xfOyV' }[field]); if (lv) lv.textContent = val.toFixed(3);
@@ -2175,50 +1926,33 @@ if ($('xfSy')) { $('xfSy').oninput = (e) => xfEdit('sy', +e.target.value, true);
 if ($('xfOx')) { $('xfOx').oninput = (e) => xfEdit('ox', +e.target.value, true); $('xfOx').onchange = (e) => xfEdit('ox', +e.target.value, false); }
 if ($('xfOy')) { $('xfOy').oninput = (e) => xfEdit('oy', +e.target.value, true); $('xfOy').onchange = (e) => xfEdit('oy', +e.target.value, false); }
 if ($('xfReset')) $('xfReset').onclick = () => { imgXf[boxPart()][boxSide] = { sx: 1, sy: 1, ox: 0, oy: 0 }; xfSyncSliders(); gridModel = null; rebuildSlices(); scheduleAutosave(); };
-// ⊡ Normalize side (REQUEST ONLY): stretch this side's slice to FILL the box. The carve never calls this — it
-// places your slice exactly as you set it; this button is the one-shot fill, on demand.
-if ($('boxNormalize')) $('boxNormalize').onclick = () => {
-  const part = boxPart(), view = boxSide, src = imgs[part]; if (!src || !src[view]) return;
-  const keyed = keyedCropped(src[view], keyTolState[part][view], polyState[part][view], pickState[part][view]);
-  const pl = effPlace(part), kw = keyed.width || 1, kh = keyed.height || 1;
-  const [boxW, boxH] = ({ top: [pl.bw, pl.bh], side: [pl.bw, pl.Hv], front: [pl.bh, pl.Hv], back: [pl.bh, pl.Hv] }[view]) || [pl.bw, pl.Hv];
-  const base = Math.min(boxW / kw, boxH / kh) || 1;   // placeSample's contain base; sx/sy above it fill the box
-  imgXf[part][view] = { sx: (boxW / kw) / base, sy: (boxH / kh) / base, ox: 0, oy: 0 };
-  xfSyncSliders(); gridModel = null; rebuildSlices(); scheduleAutosave();
-};
 $('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
-// ⬛ Cube: snap the GRID to Base layers so the grid matches the carve's cube exactly. The carve already starts
-// from a Layers-sized cube (autoSpans), so this just removes the leftover grid margin around it. Resolution is
-// a continuous slider now, so no nearest-step rounding is needed — foot = layers, exactly.
+// ⬛ Cube: make the build volume a true voxel cube driven by the HEIGHT you set — footprint (length×width) snaps
+// to match Base layers (owner: "if the height is 64, set base to 64×64"). Footprint is a discrete Resolution, so
+// height snaps to the nearest one and both axes end equal. On-screen height is still scaled by Cube height (zScale).
 if ($('bodyCube')) $('bodyCube').onclick = () => {
-  const target = clamp(state.bodyLayers | 0, 16, RES_MAX);
-  state.foot = target;                                             // grid = cube side (no wasted margin)
+  const res = [32, 48, 64, 96, 128];
+  const target = res.reduce((a, b) => Math.abs(b - state.bodyLayers) <= Math.abs(a - state.bodyLayers) ? b : a);
+  state.foot = target; if ($('res')) $('res').value = target;      // footprint = height (nearest Resolution)
   setLayers('body', target);                                       // exact cube: layers = foot = target
   syncSizeUI(); rebuildSlices();
 };
 $('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
-// Resolution is a fine SLIDER now (16..96 step 4 — the old 32/48/64/96 dropdown jumped far too coarsely).
-// Live label while dragging; re-carve only on release, same as Unit size.
-$('res').oninput = (e) => { const f = +e.target.value; if ($('resTiles')) $('resTiles').textContent = f + ' · ' + (f / VOX_PER_TILE).toFixed(2) + ' t'; };
-$('res').onchange = (e) => { state.foot = clamp(+e.target.value, 16, RES_MAX); syncSizeUI(); rebuildSlices(); };
+$('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); rebuildSlices(); };
 $('turretRes').onchange = (e) => { state.turretFoot = +e.target.value; syncSizeUI(); rebuildSlices(); };   // SF3
 // fine world-size control (the VOX_PER_TILE contract): tiles → foot voxels, layers scale along
 function syncSizeUI() {
-  // a project saved before the RES_MAX cap can carry foot > 96. Clamp it HERE rather than let state.foot and the
-  // slider disagree silently (the next slider touch would snap the unit smaller with no warning) — and say so.
-  if (state.foot > RES_MAX) { console.warn(`[stack-forge] Resolution ${state.foot} exceeds the ${RES_MAX} cap — clamped. This unit is now ${(RES_MAX / VOX_PER_TILE).toFixed(2)} tiles on the board, not ${(state.foot / VOX_PER_TILE).toFixed(2)}.`); state.foot = RES_MAX; }
   const t = unitTiles(state.foot);
   $('uSize').value = Math.round(t * 100); $('uSizeV').textContent = t.toFixed(2) + ' t';
-  $('res').value = state.foot;            // continuous slider — every value is representable
-  if ($('resTiles')) $('resTiles').textContent = state.foot + ' · ' + t.toFixed(2) + ' t';
+  $('res').value = [32, 48, 64, 96, 128].includes(state.foot) ? state.foot : '';
   if ($('turretRes')) {   // SF3: turret footprint readout, in tiles, vs the base
     const tf = state.turretFoot || state.foot;
-    $('turretRes').value = [16, 24, 32, 48, 64, 96].includes(tf) ? tf : '';
+    $('turretRes').value = [16, 24, 32, 48, 64, 96, 128].includes(tf) ? tf : '';
     if ($('turretResTiles')) $('turretResTiles').textContent = tf === state.foot ? '= base' : (tf / VOX_PER_TILE).toFixed(2) + ' t';
   }
 }
 function setUnitSize(tiles) {
-  const newFoot = clamp(Math.round(tiles * VOX_PER_TILE), 16, RES_MAX);
+  const newFoot = clamp(Math.round(tiles * VOX_PER_TILE), 16, 256);
   if (newFoot === state.foot) return;
   const k = newFoot / state.foot;
   state.foot = newFoot;
@@ -2234,8 +1968,7 @@ function fitToVox() {
   let mx = 0;
   for (const kk of ['body', 'turret']) { const v = voxPart[kk]; if (v) mx = Math.max(mx, v.nx, v.ny); }
   if (!mx) return;
-  state.foot = clamp(Math.ceil(mx / 4) * 4, 16, RES_MAX);   // continuous slider: snap up to the next step-4 grid
-  $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96].includes(_tf) ? _tf : ''; }
+  const res = [32, 48, 64, 96, 128]; state.foot = res.find((r) => r >= mx) || 128; $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; }
   if (voxPart.body) setLayers('body', clamp(voxPart.body.nz, 4, 40));
   if (voxPart.turret) setLayers('turret', clamp(voxPart.turret.nz, 4, 40));
 }
@@ -2291,8 +2024,6 @@ $('gridViewSeg').onclick = (e) => {
   if (b.id === 'gridAlignBtn') { gridAlign = !gridAlign; b.classList.toggle('on', gridAlign); renderGridView(); return; }   // ⊞ Align: toggle the dual-projection overlay (keeps the selection)
   gridView = b.dataset.v; gridLayer = 0; gridAlign = false; gridLasso = null; lassoMode = false;   // picking a single facing exits Align + the lasso; the voxel selection PERSISTS across facings (paint faces without reselecting)
   gridZoom = 1; gridPanX = 0; gridPanY = 0;   // fresh facing → reset the scroll-wheel zoom
-  // Stage 4: the grid facing IS the align side — keep the box-side selector + Scale/Align sliders on this face.
-  if (['top', 'side', 'front', 'back'].includes(gridView)) { boxSide = gridView; const ss = $('boxSideSeg'); if (ss) [...ss.children].forEach((c) => c.classList.toggle('on', c.dataset.v === boxSide)); if (typeof xfSyncSliders === 'function') xfSyncSliders(); }
   const ab = $('gridAlignBtn'); if (ab) ab.classList.remove('on');
   [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c === b && c.id !== 'gridAlignBtn')); renderGridView();
 };   // views have different col/row dims — a selection can't carry over
@@ -2648,9 +2379,10 @@ document.addEventListener('keydown', (e) => {
   // in lock-step. On first edit we snapshot the current auto spans and flip auto→false. The uncolored
   // carve re-runs on pointer-up (heavy); the box + silhouette track live off geomState.
   const capOf = (a, foot, layers) => (a === 'z' ? layers : foot);
-  const ensureBoxPlace = () => {                                    // Stage 1: seed the pending boxPlace from the current placement so the drag edits the ONE store
-    const part = gridGeom.part;
-    if (!boxPlace[part]) boxPlace[part] = { ...effPlace(part) };
+  const ensureGeomSpans = () => {                                   // freeze current placement into geomState, editable
+    const part = gridGeom.part, gs = geomState[part];
+    if (!gs.spanX && gridModel && gridModel.sp) { gs.spanX = { ...gridModel.sp.spanX }; gs.spanY = { ...gridModel.sp.spanY }; gs.spanZ = { ...gridModel.sp.spanZ }; }
+    gs.auto = false;
   };
   const ptCell = (e) => { const r = cv.getBoundingClientRect(); return { px: (e.clientX - r.left) * (cv.width / r.width), py: (e.clientY - r.top) * (cv.height / r.height) }; };
   const geomHit = (e) => {
@@ -2665,50 +2397,15 @@ document.addEventListener('keydown', (e) => {
     if (px > g.bx && px < g.bx + g.bw && py > g.by && py < g.by + g.bh) return 'move';
     return null;
   };
-  // ── SLICE HANDLES: scale the SLICE (imgXf), not the box. Edge handle → that axis only; corner → both.
-  // The opposite edge/corner stays pinned, so a drag reads as a stretch rather than a re-centre.
-  const sliceHit = (e) => {
-    const s = gridGeom && gridGeom.slice; if (!s) return null;
-    const { px, py } = ptCell(e), T = 6;
-    const L = s.x, R = s.x + s.w, TT = s.y, B = s.y + s.h;
-    if (px < L - T || px > R + T || py < TT - T || py > B + T) return null;
-    const nL = Math.abs(px - L) <= T, nR = Math.abs(px - R) <= T;
-    const nT = Math.abs(py - TT) <= T, nB = Math.abs(py - B) <= T;
-    if (nT && nL) return 'TL'; if (nT && nR) return 'TR';
-    if (nB && nL) return 'BL'; if (nB && nR) return 'BR';
-    if (nL) return 'L'; if (nR) return 'R'; if (nT) return 'T'; if (nB) return 'B';
-    return null;                                                   // interior → fall through to the box drag
-  };
-  let sliceDrag = null;                                            // { mode, px0, py0, pw0, ph0 } in BOX-CELL units
-  const sliceMove = (e) => {
-    const s = gridGeom && gridGeom.slice; if (!s || !sliceDrag) return;
-    const { px, py } = ptCell(e);
-    const u = (px - s.bx) / s.cpx, v = (py - s.by) / s.cpy;        // pointer in box-cell units
-    const r0 = { px: sliceDrag.px0, py: sliceDrag.py0, pw: sliceDrag.pw0, ph: sliceDrag.ph0 };
-    const nr = dragHandle(sliceDrag.mode, r0, u, v);                // slice-geom.js: pins the opposite edge
-    imgXf[s.part][s.view] = xfFromRect(s.kw, s.kh, s.boxW, s.boxH, nr);   // exact inverse of sliceRect
-    xfSyncSliders(); voxSig = ''; renderGridView();                // sliders + orbit box track the drag live
-  };
   let geomDrag = null;                                             // { mode, gc0, gr0, cR0, rR0 }
-  // Stage 1: the drag reads/writes the SAME placement store the sliders + orbit use (boxPlace via effPlace),
-  // not geomState directly — so the orbit box tracks the drag live and release commits through commitBoxPlace.
-  const plSpans = (part) => { const pl = effPlace(part); return { spanX: { lo: pl.ox, hi: pl.ox + pl.bw }, spanY: { lo: pl.oy, hi: pl.oy + pl.bh }, spanZ: { lo: pl.z0 || 0, hi: (pl.z0 || 0) + pl.Hv } }; };
   const gridRectFromSpans = (g) => {
-    const sp = plSpans(gridGeom.part);
-    const rng = (info) => geoRange(info, sp, g.foot, g.layers);   // slice-geom.js
+    const gs = geomState[gridGeom.part];
+    const rng = (info) => { const s = gs[spanKey[info.axis]], cap = capOf(info.axis, g.foot, g.layers); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
     return { cR: rng(g.col), rR: rng(g.row) };
   };
   const spansFromGridRect = (g, cR, rR) => {
-    const part = gridGeom.part; if (!boxPlace[part]) boxPlace[part] = { ...effPlace(part) };
-    const bp = boxPlace[part];
-    const put = (info, lo, hi) => {
-      const cap = capOf(info.axis, g.foot, g.layers);
-      lo = clamp(Math.round(lo), 0, cap - 1); hi = clamp(Math.round(hi), lo + 1, cap);
-      const s = info.flip ? { lo: cap - hi, hi: cap - lo } : { lo, hi };
-      if (info.axis === 'x') { bp.ox = s.lo; bp.bw = s.hi - s.lo; }
-      else if (info.axis === 'y') { bp.oy = s.lo; bp.bh = s.hi - s.lo; }
-      else { bp.z0 = s.lo; bp.Hv = s.hi - s.lo; }
-    };
+    const gs = geomState[gridGeom.part];
+    const put = (info, lo, hi) => { const cap = capOf(info.axis, g.foot, g.layers); lo = clamp(Math.round(lo), 0, cap - 1); hi = clamp(Math.round(hi), lo + 1, cap); gs[spanKey[info.axis]] = info.flip ? { lo: cap - hi, hi: cap - lo } : { lo, hi }; };
     put(g.col, cR.lo, cR.hi); put(g.row, rR.lo, rR.hi);
   };
   const geomMove = (e) => {
@@ -2725,21 +2422,12 @@ document.addEventListener('keydown', (e) => {
     else if (geomDrag.mode === 'T') rR.lo = gr;
     else if (geomDrag.mode === 'B') rR.hi = gr;
     spansFromGridRect(g, cR, rR);
-    voxSig = '';                                                  // Stage 1: orbit dim box reads effPlace → it tracks the drag live too
-    renderGridView();                                             // grid box + silhouette track live; carve re-runs on release
+    renderGridView();                                              // box + silhouette track live; carve re-runs on release
   };
   cv.addEventListener('pointerdown', (e) => {
-    if (gridGeom && gridGeom.slice) {                              // Geometry mode: SLICE handles win over the box
-      const sm = sliceHit(e);
-      if (sm) {
-        const s = gridGeom.slice;
-        sliceDrag = { mode: sm, px0: s.pxCell, py0: s.pyCell, pw0: s.pwCell, ph0: s.phCell };
-        dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
-      }
-    }
     if (gridGeom && gridGeom.geom) {                               // Geometry mode: box drag
       const mode = geomHit(e); if (!mode) return;
-      ensureBoxPlace();
+      ensureGeomSpans();
       const g = gridGeom.geom, { px, py } = ptCell(e), r = gridRectFromSpans(g);
       geomDrag = { mode, gc0: (px - g.ox) / g.cell, gr0: (py - g.oy) / g.cellV, cR0: r.cR, rR0: r.rR };
       dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
@@ -2771,8 +2459,7 @@ document.addEventListener('keydown', (e) => {
     if (editAt(e, erase)) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
   });
   cv.addEventListener('pointermove', (e) => {
-    if (sliceDrag) sliceMove(e);
-    else if (geomDrag) geomMove(e);
+    if (geomDrag) geomMove(e);
     else if (addBoxing) { const c = cellOf(e); if (c) { addBoxing.c1 = c.cx; addBoxing.r1 = c.cy; gridAddBox = addBoxing; renderGridView(); } }
     else if (boxing) { const c = cellOf(e); if (c) { boxing.c1 = c.cx; boxing.r1 = c.cy; gridBoxSel = boxing; renderGridView(); } }
     else if (painting) editAt(e, gridTool === 'erase' || gridTool === 'box' || gridTool === 'add' || (e.buttons & 2));   // right-drag mid-stroke still erases
@@ -2788,14 +2475,7 @@ document.addEventListener('keydown', (e) => {
       gridSelView = gridView; gridSelVox = buildSelVox();   // freeze to voxels so the selection persists across facings
       boxing = null; gridBoxSel = null; renderGridView();
     }
-    if (sliceDrag) {                                              // a SLICE handle drag only moved imgXf — no box commit
-      sliceDrag = null; dirty = false;
-      gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave(); return;
-    }
-    const wasGeom = !!geomDrag;                                   // Stage 1: a geom box-drag commits through the ONE grow-grid path (grid-fit safe)
-    painting = false; geomDrag = null;
-    if (wasGeom) { dirty = false; commitBoxPlace(gridGeom.part); }
-    else if (dirty) { dirty = false; gridModel = null; rebuildSlices(); scheduleAutosave(); }  // full re-carve on release
+    painting = false; geomDrag = null; if (dirty) { dirty = false; gridModel = null; rebuildSlices(); scheduleAutosave(); }  // full re-carve on release
   };
   cv.addEventListener('pointerup', finish);
   cv.addEventListener('pointercancel', finish);
@@ -3463,7 +3143,7 @@ $('setCam').onclick = () => {
 
 // ── BAKE ──
 function doBake() {
-  const foot = footOf('body'), bL = gridLayersOf('body'), tL = gridLayersOf('turret'), sp = layerSp(state.el), B = state.bakeScale;   // effective grid — must match the freeze
+  const foot = state.foot, bL = state.bodyLayers, tL = state.turretLayers, sp = layerSp(state.el), B = state.bakeScale;
   const pivotPx = foot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
   const g = geom(foot, Math.max(bL, tL), sp, pivotPx);   // shared texture sized for the taller stack; both bottom-align at BASEY
   const t0 = performance.now();
@@ -3638,7 +3318,7 @@ function loadDecorForEdit(id) {
 }
 function bakeDecor() {
   if (!bodyFaces) { alert('Decor: author the prop as the BODY first (load Top / Side / Front in step 1), then Bake decor.'); return; }
-  const foot = footOf('body'), bL = gridLayersOf('body'), sp = layerSp(state.el), B = state.bakeScale;   // effective grid — must match the freeze
+  const foot = state.foot, bL = state.bodyLayers, sp = layerSp(state.el), B = state.bakeScale;
   const g = geom(foot, bL, sp, 0);                                     // body-only, centred pivot
   const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, smooth: false, sharp: 0, g, pivotFrac: 0.5, el: state.el, scale: B });
   const filled = buildModel('body', foot, bL).filled;
@@ -3786,7 +3466,7 @@ function syncAllControls() {
   set('pal', state.paletteN, state.paletteN || 'full');
   set('palN', state.paletteN, state.paletteN || 'full');
   set('sharp', Math.round(state.sharp * 100), state.sharp.toFixed(2)); set('bakeScale', state.bakeScale, state.bakeScale + '×');
-  $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96].includes(_tf) ? _tf : ''; } $('smooth').checked = state.smooth; $('spin').checked = state.spin;
+  $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; } $('smooth').checked = state.smooth; $('spin').checked = state.spin;
   if ($('decRevolve')) $('decRevolve').checked = state.decorRevolve !== false;
   if ($('decProc')) $('decProc').checked = !!state.decorProc;
   if ($('decProcRow')) $('decProcRow').style.display = state.decorProc ? '' : 'none';
@@ -4042,7 +3722,7 @@ function selectUnit(id) {
     state.cls = p.class; state.foot = p.footprint[0];
     state.bodyLayers = (bp && bp.layers) || p.footprint[2]; state.turretLayers = (tp && tp.layers) || p.footprint[2];
     if (p.light) { state.lightAz = p.light.azimuth; $('lightAz').value = state.lightAz; $('lightAzV').textContent = state.lightAz + '°'; }
-    $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96].includes(_tf) ? _tf : ''; }
+    $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; }
     $('bodyLayers').value = state.bodyLayers; $('bodyLayersV').textContent = state.bodyLayers;
     $('turretLayers').value = state.turretLayers; $('turretLayersV').textContent = state.turretLayers;
     [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));

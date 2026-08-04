@@ -209,29 +209,20 @@
       <div class="row"><label>Barrel z</label><input type="range" id="belev" min="0" max="100" value="55"><span class="val" id="belevV">55</span></div>
       <div class="row"><label>Auto-spin</label><input type="checkbox" id="spin"><span class="note" style="margin:0">demo smooth turret</span></div>
       <div class="row"><label>▦ Dim box</label><input type="checkbox" id="dimBox"><span class="note" style="margin:0">unit box + gridlines + view projections (base/turret via part)</span></div>
-      <!-- THE PRIMARY ACTION — always visible. It used to live inside #boxSizeRow, which is hidden until the
-           "Dim box" checkbox is ticked, so the main verb of the tool was undiscoverable. -->
-      <div class="row" style="gap:6px;flex-wrap:wrap;margin:4px 0 2px"><button id="boxGen" style="width:auto;padding:7px 14px;margin:0;font-weight:600" title="Carve the block down with your slices, then project the slices onto it, then FREEZE the result. Nothing rebuilds the geometry until you press this again — so you can edit, reproject and paint without it moving under you.">⬛ Create Geometry</button><button class="ghost" id="boxReproject" style="width:auto;padding:7px 11px;margin:0" title="Re-run only the PROJECTION over the current geometry, including voxels you have added or erased. Geometry is untouched; painted voxels still win.">🖼 Reproject</button></div>
-      <div class="note" style="margin:-1px 0 3px"><b>Carve → edit → reproject → paint.</b> The block is a cube sized by <b>Base layers</b> (Turret layers for the turret); your slices carve it down. Nothing rebuilds the geometry until you press Create Geometry again.</div>
       <div id="boxSizeRow" style="display:none;border-left:2px solid var(--line);padding-left:8px;margin:2px 0 2px 4px">
-        <div class="note" style="margin:0 0 4px">Align each SIDE's slice (scale + slide) to place it on the cube, then press ⬛ Create Geometry above. The carve places your slice exactly where you put it — it never normalizes on its own. (Part = base/turret.)</div>
-        <div class="row" style="margin:0 0 5px"><button class="ghost" id="boxManualToggle" style="width:auto;padding:4px 9px;margin:0;font-size:10.5px" title="Manual box dimensions — advanced override. Normally the box follows the aligned slices; use this only to set exact spans by hand.">⚙ Manual box size ▸</button></div>
-        <div id="boxManualRow" style="display:none">
-          <div class="row"><label>Length ↔</label><input type="range" id="boxLen" min="1" max="128" value="32"><span class="val" id="boxLenV">32</span></div>
-          <div class="row"><label>Width ↕</label><input type="range" id="boxWid" min="1" max="128" value="32"><span class="val" id="boxWidV">32</span></div>
-          <div class="row"><label>Height ⤒</label><input type="range" id="boxHt" min="1" max="128" value="16"><span class="val" id="boxHtV">16</span></div>
-          <div class="row"><label>Shift fwd/back</label><input type="range" id="boxOx" min="0" max="127" value="0"><span class="val" id="boxOxV">0</span></div>
-          <div class="row"><label>Shift left/right</label><input type="range" id="boxOy" min="0" max="127" value="0"><span class="val" id="boxOyV">0</span></div>
-        </div>
+        <div class="note" style="margin:0 0 4px">SF2 — size &amp; place the images in the box, then Generate. (Part = base/turret.)</div>
+        <div class="row"><label>Length ↔</label><input type="range" id="boxLen" min="1" max="128" value="32"><span class="val" id="boxLenV">32</span></div>
+        <div class="row"><label>Width ↕</label><input type="range" id="boxWid" min="1" max="128" value="32"><span class="val" id="boxWidV">32</span></div>
+        <div class="row"><label>Height ⤒</label><input type="range" id="boxHt" min="1" max="128" value="16"><span class="val" id="boxHtV">16</span></div>
+        <div class="row"><label>Shift fwd/back</label><input type="range" id="boxOx" min="0" max="127" value="0"><span class="val" id="boxOxV">0</span></div>
+        <div class="row"><label>Shift left/right</label><input type="range" id="boxOy" min="0" max="127" value="0"><span class="val" id="boxOyV">0</span></div>
         <div class="note" style="margin:8px 0 3px">Align a SIDE — stretch &amp; nudge that reference image to fit the box:</div>
         <div class="row"><label>Side</label><div class="seg" id="boxSideSeg" style="flex:1"><button data-v="top" class="on">Top</button><button data-v="side">Side</button><button data-v="front">Front</button><button data-v="back">Back</button></div></div>
         <div class="row"><label>Scale X</label><input type="range" id="xfSx" min="0.25" max="4" step="0.0005" value="1"><span class="val" id="xfSxV">1.000</span></div>
         <div class="row"><label>Scale Y</label><input type="range" id="xfSy" min="0.25" max="4" step="0.0005" value="1"><span class="val" id="xfSyV">1.000</span></div>
         <div class="row"><label>Align X</label><input type="range" id="xfOx" min="-2" max="2" step="0.0005" value="0"><span class="val" id="xfOxV">0.000</span></div>
         <div class="row"><label>Align Y</label><input type="range" id="xfOy" min="-2" max="2" step="0.0005" value="0"><span class="val" id="xfOyV">0.000</span></div>
-        <div class="row" style="gap:6px;flex-wrap:wrap"><button class="ghost" id="boxTrim" style="width:auto;padding:6px 10px;margin:0" title="Shrink the cube to the carved model plus the polish margin on every side. The model itself does not change — per-slice align is compensated so the same voxels land in the smaller box.">⇲ Trim to fit</button><button class="ghost" id="boxNormalize" style="width:auto;padding:6px 10px;margin:0" title="Request-only: stretch THIS side's slice to fill the box. The carve never does this on its own — it places your slice exactly as you set it.">⊡ Normalize side</button><button class="ghost" id="boxAuto" style="width:auto;padding:6px 12px;margin:0">Auto-fit</button><button class="ghost" id="xfReset" style="width:auto;padding:6px 12px;margin:0" title="Reset THIS slice's projection — back to the contain-fit, centred in the face (scale 1, no offset).">↺ Reset slice</button></div>
-        <div class="row"><label>Polish margin</label><input type="range" id="trimPad" min="0" max="16" step="1" value="5"><span class="val" id="trimPadV">5 cells</span></div>
-        <div class="note" style="margin:-2px 0 2px">Empty cells Trim leaves on every side of the carved model — room to add polish voxels. 0 = tight to the model.</div>
+        <div class="row" style="gap:6px"><button id="boxGen" style="width:auto;padding:6px 12px;margin:0">⬇ Generate geometry</button><button class="ghost" id="boxAuto" style="width:auto;padding:6px 12px;margin:0">Auto-fit</button><button class="ghost" id="xfReset" style="width:auto;padding:6px 12px;margin:0">Reset side</button></div>
       </div>
       <button class="ghost" id="setCam" style="margin-top:4px">Set camera for bake</button>
       <div class="note" id="camState">Camera not set — orbit to a look, then Set.</div>
@@ -261,13 +252,13 @@
       <h2>1 · Unit + parts</h2>
       <div class="row"><label>Unit id</label><input type="text" id="uid" value="abrams" placeholder="unit id"></div>
       <div class="row"><label>Class</label><div class="seg" id="clsSeg"><button data-c="ground" class="on">Ground</button><button data-c="air">Air</button><button data-c="structure">Structure</button><button data-c="decor">Decor</button></div></div>
-      <div class="row"><label>Base layers</label><input type="range" id="bodyLayers" min="4" max="96" value="16"><span class="val" id="bodyLayersV">16</span><button class="ghost" id="bodyCube" style="width:auto;padding:4px 7px;margin:0 0 0 5px;font-size:10.5px" title="Snap Resolution to Base layers → a true voxel cube (foot³). The carve already starts from a Layers-sized cube; this makes the grid match it exactly.">⬛ Cube</button></div>
+      <div class="row"><label>Resolution</label><select id="res" style="flex:1;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px"><option>32</option><option>48</option><option selected>64</option><option>96</option><option>128</option></select><span class="note" style="margin:0" id="resTiles">= 2 tiles</span></div>
+      <div class="row"><label>Unit size</label><input type="range" id="uSize" min="50" max="500" step="5" value="200"><span class="val" id="uSizeV">2.00 t</span></div>
+      <div class="note" style="margin:-2px 0 2px">Fine world-size control on the same voxel grid: 1 tile = 32 voxels, always. A
+        20% bigger unit gets 20% more voxels (layers scale along) — voxel size on the board never changes.</div>
+      <div class="row"><label>Base layers</label><input type="range" id="bodyLayers" min="4" max="128" value="16"><span class="val" id="bodyLayersV">16</span><button class="ghost" id="bodyCube" style="width:auto;padding:4px 7px;margin:0 0 0 5px;font-size:10.5px" title="Snap Base layers to the Resolution (length) → a true voxel cube (foot³). On-screen height is then scaled by Cube height (zScale).">⬛ Cube</button></div>
       <div class="row"><label>Turret layers</label><input type="range" id="turretLayers" min="3" max="40" value="12"><span class="val" id="turretLayersV">12</span></div>
-      <div class="row"><label>Turret res</label><select id="turretRes" style="flex:1;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px"><option>16</option><option>24</option><option>32</option><option>48</option><option selected>64</option><option>96</option></select><span class="note" style="margin:0" id="turretResTiles">= base</span></div>
-      <div class="row"><label>Resolution</label><input type="range" id="res" min="16" max="96" step="4" value="64"><span class="val" id="resTiles">64 · 2.00 t</span></div>
-      <div class="row"><label>Unit size</label><input type="range" id="uSize" min="50" max="300" step="5" value="200"><span class="val" id="uSizeV">2.00 t</span></div>
-      <div class="note" style="margin:-2px 0 2px">Resolution is the voxel GRID (world scale: 1 tile = 32 voxels, always) — it sits under Layers because
-        <b>Layers drives the model</b>: the carve starts from a Layers-sized cube. Resolution is the ceiling that cube can't exceed. Steps of 4 (0.125 t).</div>
+      <div class="row"><label>Turret res</label><select id="turretRes" style="flex:1;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px"><option>16</option><option>24</option><option>32</option><option>48</option><option selected>64</option><option>96</option><option>128</option></select><span class="note" style="margin:0" id="turretResTiles">= base</span></div>
       <div class="row"><label>Cube height</label><input type="range" id="zScale" min="50" max="300" value="180"><span class="val" id="zScaleV">1.80×</span></div>
       <div class="note" style="margin:-2px 0 2px">Stack height per part (a turret is usually shorter than the hull). Footprint px = Resolution. Cube height stretches each voxel vertically — <b>1.00×</b> = true cubes, higher reads chunkier. Higher = crisper/taller, bigger sheet + VRAM.</div>
       <div class="row"><label>Voxel .vox</label>
@@ -506,7 +497,6 @@
   </div>
 </div>
 <script src="grid-fit.js"></script>
-<script src="slice-geom.js"></script>
 <script src="stack-forge.js"></script>
 </body>
 </html>
