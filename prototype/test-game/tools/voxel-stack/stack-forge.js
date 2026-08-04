@@ -180,18 +180,31 @@ function keyedCropped(img, tol, poly, picks) {
   cv.getContext('2d').drawImage(k, x0, y0, cw, ch, 0, 0, cw, ch);
   return cv;
 }
-// stretch a (keyed, cropped) content canvas to w×h → alpha mask (m) + RGB samples (c) so elevation views
-// both CARVE the volume and PAINT the cube walls they depict; `elev` flips rows (z-up).
-function gridStretch(canvas, w, h, elev) {
-  h = Math.max(1, h);
-  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const ctx = cv.getContext('2d', { willReadFrequently: true });
-  ctx.imageSmoothingEnabled = false;                               // ALPHA IS BINARY: opaque or clear, never averaged
-  ctx.drawImage(canvas, 0, 0, w, h);
-  const d = ctx.getImageData(0, 0, w, h).data, m = new Uint8Array(w * h), c = new Uint8Array(w * h * 3);
-  for (let r = 0; r < h; r++) for (let a = 0; a < w; a++) {
-    const row = elev ? (h - 1 - r) : r, i = row * w + a, p = (r * w + a) * 4;
-    if (d[p + 3] > 40) { m[i] = 1; c[i * 3] = d[p]; c[i * 3 + 1] = d[p + 1]; c[i * 3 + 2] = d[p + 2]; }
+// sliceMask — read the ORIGINAL slice directly onto a w×h box face. For each face cell, sample the ONE
+// source pixel at that cell's centre: opaque -> geo, clear -> no geo. Nothing else. No canvas rescale, no
+// interpolation, no averaging, no crop, no aspect refit, no normalize. `elev` flips rows so image-down = z-up.
+// (Replaces sliceMask, which rescaled through drawImage and let the browser invent in-between alpha.)
+function sliceMask(canvas, w, h, elev) {
+  w = Math.max(1, w | 0); h = Math.max(1, h | 0);
+  const sw = Math.max(1, canvas.width), sh = Math.max(1, canvas.height);
+  const sd = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, sw, sh).data;
+  const m = new Uint8Array(w * h), c = new Uint8Array(w * h * 3);
+  for (let r = 0; r < h; r++) {
+    const y0 = Math.min(sh - 1, (r * sh / h) | 0), y1 = Math.max(y0 + 1, Math.min(sh, Math.ceil((r + 1) * sh / h)));
+    for (let a = 0; a < w; a++) {
+      const x0 = Math.min(sw - 1, (a * sw / w) | 0), x1 = Math.max(x0 + 1, Math.min(sw, Math.ceil((a + 1) * sw / w)));
+      // COVERAGE, not interpolation: count how much of the source area this cell covers is OPAQUE, and take
+      // the majority. Never averages alpha into an in-between value, never drops a thin feature the way a
+      // single centre sample would, and never dilates the silhouette the way "any opaque" would.
+      let opaque = 0, total = 0, R = 0, G = 0, B = 0;
+      for (let sy = y0; sy < y1; sy++) for (let sx = x0; sx < x1; sx++) {
+        const p = (sy * sw + sx) * 4; total++;
+        if (sd[p + 3] > 40) { opaque++; R += sd[p]; G += sd[p + 1]; B += sd[p + 2]; }
+      }
+      if (opaque * 2 < total) continue;                            // majority clear → no geo
+      const i = (elev ? (h - 1 - r) : r) * w + a;                  // elev: image-down → z-up
+      m[i] = 1; c[i * 3] = R / opaque; c[i * 3 + 1] = G / opaque; c[i * 3 + 2] = B / opaque;
+    }
   }
   return { m, c, w, h };
 }
@@ -382,7 +395,7 @@ function buildDecorVolume(partId, foot, layers) {
   const Hv = Math.max(1, layers);                              // decor uses the full Base-layers height (trees are tall)
   const pw = Math.max(2, Math.round(front.width / front.height * Hv));   // canopy diameter from the art aspect
   const cx = (foot - 1) / 2, cy = (foot - 1) / 2, half = (pw - 1) / 2;
-  const fG = gridStretch(front, pw, Hv, true), sG = gridStretch(side, pw, Hv, true), aG = angle ? gridStretch(angle, pw, Hv, true) : null;
+  const fG = sliceMask(front, pw, Hv, true), sG = sliceMask(side, pw, Hv, true), aG = angle ? sliceMask(angle, pw, Hv, true) : null;
   const halfW = (g) => { const arr = new Float32Array(Hv); for (let z = 0; z < Hv; z++) { let rm = -1; for (let a = 0; a < pw; a++) if (g.m[z * pw + a]) { const dd = Math.abs(a - half); if (dd > rm) rm = dd; } arr[z] = rm + 0.5; } return arr; };
   const rF = halfW(fG), rS = halfW(sG), rA = aG ? halfW(aG) : null;   // per-height half-widths (front↔y-axis, side↔x-axis, angle↔45°)
   const HALF = Math.SQRT1_2;   // the ¾ view is a DIAGONAL slab: keep where |(dx−dy)/√2| ≤ its half-width
@@ -444,10 +457,10 @@ function buildVolume(partId, foot, layers) {
   else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
   const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
-  const sideG = sideC ? gridStretch(sideC, bw, Hv, true) : null;    // length × height (normalized to the common Hv)
-  const frontG = frontC ? gridStretch(frontC, bh, Hv, true) : null; // width × height
+  const sideG = sideC ? sliceMask(sideC, bw, Hv, true) : null;    // length × height 
+  const frontG = frontC ? sliceMask(frontC, bh, Hv, true) : null; // width × height
   const backC = src.back ? xfCanvas(keyedCanvas(src.back, tol.back, pol.back, pk.back), xf.back) : null; // colour-only: paints the −x walls
-  const backG = backC ? gridStretch(backC, bh, Hv, true) : null;
+  const backG = backC ? sliceMask(backC, bh, Hv, true) : null;
   const side = (x, z) => sideG ? (x >= ox && x < ox + bw && z >= z0 && z < z0 + Hv && !!sideG.m[(z - z0) * bw + (x - ox)]) : (z >= z0 && z < z0 + Hv);
   const width = (y, z) => frontG ? (y >= oy && y < oy + bh && z >= z0 && z < z0 + Hv && !!frontG.m[(z - z0) * bh + (y - oy)]) : (z >= z0 && z < z0 + Hv);
   const flat = !sideG && !frontG;
@@ -3880,5 +3893,5 @@ syncInputs(); renderManifest(); layout(); update(); updateGamePreview(); initFac
     if (p) { await loadProject(p); $('projState').textContent = `Restored "${p.id}" from autosave.`; }
   } catch (e) { /* no stored session */ }
 })();
-window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, buildModel, buildFaces, renderParts, drawScene, keyedCropped, gridStretch, parseVox, voxPart, fitToVox, collectVox, writeVox, exportVox, setGSpin, resizePreview, setZoom, keyTolState, polyState, openKeyModal, snapshotProject, loadProject,
+window.__sf = { imgs, state, rebuildSlices, setView, toggleFlip, pickFor, buildVolume, buildModel, buildFaces, renderParts, drawScene, keyedCropped, sliceMask, parseVox, voxPart, fitToVox, collectVox, writeVox, exportVox, setGSpin, resizePreview, setZoom, keyTolState, polyState, openKeyModal, snapshotProject, loadProject,
   gdbg: () => ({ baked: !!state.baked, gbaked: !!gBodyBaked, gvis: gBodyBaked && gBodyBaked.visible, gkids: gUnit.children.length }) };   // debug/test hook
