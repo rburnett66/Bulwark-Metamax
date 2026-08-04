@@ -1359,8 +1359,11 @@ let gridOrient = true;                                    // orientation indicat
 const GEOAX = {
   top:   { col: { axis: 'x', flip: false }, row: { axis: 'y', flip: false } },
   side:  { col: { axis: 'x', flip: false }, row: { axis: 'z', flip: true } },
-  front: { col: { axis: 'y', flip: false }, row: { axis: 'z', flip: true } },
-  back:  { col: { axis: 'y', flip: true },  row: { axis: 'z', flip: true } },
+  // front/back col flips MUST match AX.toVox, which maps front col→(foot-1-c) [flipped] and back col→c [not].
+  // These two were swapped: the Geometry box for FRONT was drawn at the BACK's columns and vice versa, so the
+  // box and the projected slice landed at the opposite end of the grid from the voxels they describe.
+  front: { col: { axis: 'y', flip: true },  row: { axis: 'z', flip: true } },
+  back:  { col: { axis: 'y', flip: false }, row: { axis: 'z', flip: true } },
 };
 const spanKey = { x: 'spanX', y: 'spanY', z: 'spanZ' };
 const gridPart = () => (state.part === 'turret' ? 'turret' : 'body');
