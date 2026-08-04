@@ -13,6 +13,10 @@
  */
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+// INK: the ONE alpha threshold deciding "this pixel is subject". Every consumer in the carve path must use
+// it. The footprint used to test >20 while the elevation masks tested >40, so a slice at alpha 30 was solid
+// to one and empty to the other — the views disagreed about where the silhouette ended.
+const INK_A = 40;
 const lerp = (a, b, t) => a + (b - a) * t;
 // screen px per layer at 1 px/voxel: a voxel is a real cube (zScale stretches it) seen at the camera tilt
 const layerSp = (elDeg) => state.zScale * Math.cos(clamp(elDeg, 0, 90) * Math.PI / 180);
@@ -144,11 +148,14 @@ function keyBackground(data, w, h, tol, picks) {
   while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1); }
   for (let p = 0; p < N; p++) {
     if (vis[p]) { data[p * 4 + 3] = 0; continue; }                   // flooded background → transparent
-    const ni = nearInfo(p), d = ni[0];                             // feather AA pixels touching removed bg
-    if (d < soft && okChroma(p, ni[1])) {                           // …but never feather a saturated subject edge
+    // HARD EDGE: an anti-aliased pixel touching removed background goes FULLY transparent. No ramp — alpha
+    // is binary, opaque or clear. The old graded band left pixels at alpha 107/164/188, which then read as
+    // ink to one threshold and clear to another.
+    const ni = nearInfo(p), d = ni[0];
+    if (d < soft && okChroma(p, ni[1])) {                           // …but never eat a saturated subject edge
       const x = p % w, y = (p / w) | 0;
       if ((x > 0 && vis[p - 1]) || (x < w - 1 && vis[p + 1]) || (y > 0 && vis[p - w]) || (y < h - 1 && vis[p + w]))
-        data[p * 4 + 3] = d < hard ? 0 : Math.min(data[p * 4 + 3], Math.round((d - hard) / span * 255));
+        data[p * 4 + 3] = 0;
     }
   }
 }
@@ -174,7 +181,7 @@ function keyedCanvas(img, tol, polys, picks) {
 function keyedCropped(img, tol, poly, picks) {
   const k = keyedCanvas(img, tol, poly, picks), d = k.getContext('2d').getImageData(0, 0, k.width, k.height).data;
   let x0 = k.width, y0 = k.height, x1 = -1, y1 = -1;
-  for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+  for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > INK_A) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
   if (x1 < x0) return k;
   const cw = x1 - x0 + 1, ch = y1 - y0 + 1, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   cv.getContext('2d').drawImage(k, x0, y0, cw, ch, 0, 0, cw, ch);
@@ -199,7 +206,7 @@ function sliceMask(canvas, w, h, elev) {
       let opaque = 0, total = 0, R = 0, G = 0, B = 0;
       for (let sy = y0; sy < y1; sy++) for (let sx = x0; sx < x1; sx++) {
         const p = (sy * sw + sx) * 4; total++;
-        if (sd[p + 3] > 40) { opaque++; R += sd[p]; G += sd[p + 1]; B += sd[p + 2]; }
+        if (sd[p + 3] > INK_A) { opaque++; R += sd[p]; G += sd[p + 1]; B += sd[p + 2]; }
       }
       if (opaque * 2 < total) continue;                            // majority clear → no geo
       const i = (elev ? (h - 1 - r) : r) * w + a;                  // elev: image-down → z-up
@@ -431,7 +438,7 @@ function buildVolume(partId, foot, layers) {
     (partId === 'turret' ? drawTurret : drawBody)(cx, hx, foot);
     const cd = cx.getImageData(0, 0, foot, foot).data, hd = hx.getImageData(0, 0, foot, foot).data;
     const H = new Float32Array(N);
-    for (let i = 0; i < N; i++) H[i] = cd[i * 4 + 3] > 20 ? (hd[i * 4] / 255) * layers : 0;
+    for (let i = 0; i < N; i++) H[i] = cd[i * 4 + 3] > INK_A ? (hd[i * 4] / 255) * layers : 0;
     return { cd, H, filled: (x, y, z) => z < H[y * foot + x] };
   }
   // crop every view to its content, then register by a COMMON scale taken from the top's fit — so the
@@ -456,7 +463,7 @@ function buildVolume(partId, foot, layers) {
   if (topC) { tx.imageSmoothingEnabled = false; tx.drawImage(topC, ox, oy, bw, bh); }   // footprint + colour; alpha stays binary
   else { tx.fillStyle = '#9a8c66'; tx.fillRect(ox, oy, bw, bh); }  // no top → plain box from side/front spans
   const cd = tx.getImageData(0, 0, foot, foot).data;
-  const top = (x, y) => cd[(y * foot + x) * 4 + 3] > 20;
+  const top = (x, y) => cd[(y * foot + x) * 4 + 3] > INK_A;   // same ink test as sliceMask
   const sideG = sideC ? sliceMask(sideC, bw, Hv, true) : null;    // length × height 
   const frontG = frontC ? sliceMask(frontC, bh, Hv, true) : null; // width × height
   const backC = src.back ? xfCanvas(keyedCanvas(src.back, tol.back, pol.back, pk.back), xf.back) : null; // colour-only: paints the −x walls
@@ -474,10 +481,10 @@ function buildVolume(partId, foot, layers) {
     const bz = clamp(Math.round(state.barrelElev / 100 * (Hv - 1)), 0, layers - 1);
     inBarrel = (x, y, z) => x >= bx0 && x <= bx1 && (y - cy) * (y - cy) + (z - bz) * (z - bz) <= r * r;
     let R = 0, G = 0, B = 0, c = 0;                                  // barrel tint = darkened mean body colour
-    for (let i = 0; i < N; i++) { const p = i * 4; if (cd[p + 3] > 20) { R += cd[p]; G += cd[p + 1]; B += cd[p + 2]; c++; } }
+    for (let i = 0; i < N; i++) { const p = i * 4; if (cd[p + 3] > INK_A) { R += cd[p]; G += cd[p + 1]; B += cd[p + 2]; c++; } }
     const bt = c ? [R / c * 0.72 | 0, G / c * 0.72 | 0, B / c * 0.72 | 0] : [82, 84, 92];
     for (let x = Math.max(0, bx0); x <= bx1; x++) for (let y = Math.max(0, Math.ceil(cy - r)); y <= Math.min(foot - 1, Math.floor(cy + r)); y++) {
-      const p = (y * foot + x) * 4; if (cd[p + 3] < 20) { cd[p] = bt[0]; cd[p + 1] = bt[1]; cd[p + 2] = bt[2]; cd[p + 3] = 255; }
+      const p = (y * foot + x) * 4; if (cd[p + 3] <= INK_A) { cd[p] = bt[0]; cd[p + 1] = bt[1]; cd[p + 2] = bt[2]; cd[p + 3] = 255; }
     }
   }
   const filled = inBarrel ? (x, y, z) => bodyFilled(x, y, z) || inBarrel(x, y, z) : bodyFilled;
@@ -520,7 +527,7 @@ function buildModelRaw(partId, foot, layers) {
   if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg };  // .vox → already voxels
   const cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-    const i = y * foot + x, p = i * 4; if (cd[p + 3] < 20) continue;
+    const i = y * foot + x, p = i * 4; if (cd[p + 3] <= INK_A) continue;
     const r = cd[p], g = cd[p + 1], b = cd[p + 2];
     for (let z = 0; z < layers; z++) if (filled(x, y, z)) { const c = (z * N + i) * 3; vcol[c] = r; vcol[c + 1] = g; vcol[c + 2] = b; }
   }
@@ -1161,6 +1168,7 @@ function xfCanvas(im, xf) {
   if (!im || !xf || (xf.sx === 1 && xf.sy === 1 && xf.ox === 0 && xf.oy === 0)) return im;
   const w = im.width || im.naturalWidth, h = im.height || im.naturalHeight; if (!w || !h) return im;
   const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;                                   // alpha stays binary when a slice is nudged
   g.translate(w / 2 + (xf.ox || 0) * w, h / 2 + (xf.oy || 0) * h); g.scale(xf.sx || 1, xf.sy || 1); g.drawImage(im, -w / 2, -h / 2);
   return c;
 }
@@ -1289,8 +1297,10 @@ let gridOrient = true;                                    // orientation indicat
 const GEOAX = {
   top:   { col: { axis: 'x', flip: false }, row: { axis: 'y', flip: false } },
   side:  { col: { axis: 'x', flip: false }, row: { axis: 'z', flip: true } },
-  front: { col: { axis: 'y', flip: false }, row: { axis: 'z', flip: true } },
-  back:  { col: { axis: 'y', flip: true },  row: { axis: 'z', flip: true } },
+  // MUST match AX.toVox: front maps col -> (foot-1-c) [reversed], back maps col -> c [not]. These two were
+  // swapped, so the Geometry box for front/back was drawn at the opposite end of the grid from its voxels.
+  front: { col: { axis: 'y', flip: true },  row: { axis: 'z', flip: true } },
+  back:  { col: { axis: 'y', flip: false }, row: { axis: 'z', flip: true } },
 };
 const spanKey = { x: 'spanX', y: 'spanY', z: 'spanZ' };
 const gridPart = () => (state.part === 'turret' ? 'turret' : 'body');
