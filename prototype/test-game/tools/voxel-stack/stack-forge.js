@@ -1720,6 +1720,21 @@ function renderGridView() {
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
     for (const [hx, hy] of [[bx + bw2 / 2, by], [bx + bw2 / 2, by + bh2], [bx, by + bh2 / 2], [bx + bw2, by + bh2 / 2]]) ctx.fillRect(hx - 4, hy - 4, 8, 8);
     gridGeom.geom = { bx, by, bw: bw2, bh: bh2, cell, cellV, ox, oy, gw, gh, col: g.col, row: g.row, foot, layers };
+    // ── SLICE ADJUSTERS: amber handles ON THE PROJECTION. Dragging one scales the slice drawn on this
+    // face — side handles change its WIDTH (imgXf.sx), top/bottom its HEIGHT (sy), corners both. They sit
+    // inset from the cyan BOX handles so the two are never confused and never overlap on hit-test.
+    if (keyed) {
+      const xfc = (imgXf[part] || {})[gridView] || { sx: 1, sy: 1 };
+      const iw = bw2 * (xfc.sx || 1), ih = bh2 * (xfc.sy || 1);          // the projection's on-screen size
+      const cxm = bx + bw2 / 2, cym = by + bh2 / 2;
+      const sL = cxm - iw / 2, sR = cxm + iw / 2, sT = cym - ih / 2, sB = cym + ih / 2;
+      gridGeom.slice = { cx: cxm, cy: cym, halfW: iw / 2, halfH: ih / 2, view: gridView, part };
+      ctx.strokeStyle = 'rgba(242,200,105,.9)'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+      ctx.strokeRect(sL + .5, sT + .5, iw - 1, ih - 1); ctx.setLineDash([]);
+      ctx.fillStyle = '#f2c869';
+      for (const [hx, hy] of [[sL, cym], [sR, cym], [cxm, sT], [cxm, sB], [sL, sT], [sR, sT], [sL, sB], [sR, sB]])
+        ctx.fillRect(hx - 4, hy - 4, 8, 8);
+    }
     const sx = bsp[spanKey[g.col.axis]], sy = bsp[spanKey[g.row.axis]];
     ctx.fillStyle = '#8fa7bd'; ctx.font = '9px sans-serif'; ctx.textBaseline = 'top';
     ctx.fillText(`${g.col.axis.toUpperCase()} ${sx.lo}–${sx.hi} · ${g.row.axis.toUpperCase()} ${sy.lo}–${sy.hi}${geomState[part].auto ? '  (auto)' : ''}`, ox + 3, oy + 3);
@@ -2461,6 +2476,29 @@ document.addEventListener('keydown', (e) => {
     if (px > g.bx && px < g.bx + g.bw && py > g.by && py < g.by + g.bh) return 'move';
     return null;
   };
+  // SLICE handle drag: scales the projection about its centre. W from the horizontal distance to the
+  // centre, H from the vertical — so the edge you grab follows the cursor and the opposite edge mirrors.
+  let sliceDrag = null;
+  const sliceHit = (e) => {
+    const s2 = gridGeom && gridGeom.slice; if (!s2) return null;
+    const { px, py } = ptCell(e), T = 7;
+    const dx = Math.abs(Math.abs(px - s2.cx) - s2.halfW), dy = Math.abs(Math.abs(py - s2.cy) - s2.halfH);
+    const onW = dx <= T && Math.abs(py - s2.cy) <= s2.halfH + T;
+    const onH = dy <= T && Math.abs(px - s2.cx) <= s2.halfW + T;
+    if (onW && onH) return 'wh';
+    if (onW) return 'w';
+    if (onH) return 'h';
+    return null;
+  };
+  const sliceMove = (e) => {
+    const s2 = gridGeom && gridGeom.slice; if (!s2 || !sliceDrag) return;
+    const { px, py } = ptCell(e), xf = imgXf[s2.part][s2.view];
+    if (sliceDrag.mode.includes('w') && sliceDrag.halfW > 0)
+      xf.sx = clamp(sliceDrag.sx0 * (Math.max(2, Math.abs(px - s2.cx)) / sliceDrag.halfW), 0.05, 8);
+    if (sliceDrag.mode.includes('h') && sliceDrag.halfH > 0)
+      xf.sy = clamp(sliceDrag.sy0 * (Math.max(2, Math.abs(py - s2.cy)) / sliceDrag.halfH), 0.05, 8);
+    xfSyncSliders(); voxSig = ''; renderGridView();
+  };
   let geomDrag = null;                                             // { mode, gc0, gr0, cR0, rR0 }
   const gridRectFromSpans = (g) => {
     const gs = geomState[gridGeom.part];
@@ -2505,6 +2543,14 @@ document.addEventListener('keydown', (e) => {
     renderGridView();                                              // box + silhouette track live; carve re-runs on release
   };
   cv.addEventListener('pointerdown', (e) => {
+    if (gridGeom && gridGeom.slice) {                              // Geometry mode: SLICE handles win
+      const sm = sliceHit(e);
+      if (sm) {
+        const s2 = gridGeom.slice, xf = imgXf[s2.part][s2.view] || { sx: 1, sy: 1 };
+        sliceDrag = { mode: sm, sx0: xf.sx || 1, sy0: xf.sy || 1, halfW: s2.halfW, halfH: s2.halfH };
+        dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+      }
+    }
     if (gridGeom && gridGeom.geom) {                               // Geometry mode: box drag
       const mode = geomHit(e); if (!mode) return;
       ensureGeomSpans();
@@ -2539,7 +2585,8 @@ document.addEventListener('keydown', (e) => {
     if (editAt(e, erase)) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
   });
   cv.addEventListener('pointermove', (e) => {
-    if (geomDrag) geomMove(e);
+    if (sliceDrag) sliceMove(e);
+    else if (geomDrag) geomMove(e);
     else if (addBoxing) { const c = cellOf(e); if (c) { addBoxing.c1 = c.cx; addBoxing.r1 = c.cy; gridAddBox = addBoxing; renderGridView(); } }
     else if (boxing) { const c = cellOf(e); if (c) { boxing.c1 = c.cx; boxing.r1 = c.cy; gridBoxSel = boxing; renderGridView(); } }
     else if (painting) editAt(e, gridTool === 'erase' || gridTool === 'box' || gridTool === 'add' || (e.buttons & 2));   // right-drag mid-stroke still erases
@@ -2555,6 +2602,7 @@ document.addEventListener('keydown', (e) => {
       gridSelView = gridView; gridSelVox = buildSelVox();   // freeze to voxels so the selection persists across facings
       boxing = null; gridBoxSel = null; renderGridView();
     }
+    if (sliceDrag) { sliceDrag = null; dirty = false; gridModel = null; recarve(); renderGridView(); scheduleAutosave(); return; }
     painting = false; geomDrag = null; if (dirty) { dirty = false; gridModel = null; refreshModel(); scheduleAutosave(); }  // full re-carve on release
   };
   cv.addEventListener('pointerup', finish);
