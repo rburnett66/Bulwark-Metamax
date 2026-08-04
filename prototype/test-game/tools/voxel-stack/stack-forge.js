@@ -562,7 +562,13 @@ function applyVoxEdits(m, partId, foot, layers) {
   };
   return { vcol: vc, filled: editedFilled, cd: null, views: m.views, dbg: m.dbg };
 }
-function buildModel(partId, foot, layers) { return applyVoxEdits(buildModelRaw(partId, foot, layers), partId, foot, layers); }
+// THE CARVE IS THE MODEL. The voxEdit overlay is commented out, not deleted — the edit tools, undo and
+// persistence all still exist and still record, they simply no longer alter the carved result. Restore by
+// putting the applyVoxEdits call back.
+function buildModel(partId, foot, layers) {
+  return buildModelRaw(partId, foot, layers);
+  // return applyVoxEdits(buildModelRaw(partId, foot, layers), partId, foot, layers);
+}
 
 // median-cut → n representative colours. Flattens camo/gradients (and rich .vox palettes) into a small,
 // contrasting set of flat cube colours so the block structure reads clean instead of noisy.
