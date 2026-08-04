@@ -17,6 +17,9 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // it. The footprint used to test >20 while the elevation masks tested >40, so a slice at alpha 30 was solid
 // to one and empty to the other — the views disagreed about where the silhouette ended.
 const INK_A = 40;
+// WHICH SLICES CUT. Owner: "carve top, then carve side, then carve front" — each button carves
+// cumulatively up to and including its own slice, so every stage can be checked before the next.
+const carveCuts = { top: true, side: false, front: false };
 // ── TRACE: instruments the REAL carve path so every step reports its own voxel/pixel count. Armed by
 // ⬛ Regenerate geometry; null otherwise, so the cost is one null check per step.
 let TRACE = null;
@@ -464,9 +467,11 @@ function buildVolume(partId, foot, layers) {
       if (VOL[k] && !g.m[idx(x, y, z)]) VOL[k] = 0;                // not covered by opacity → cut it away
     }
   };
-  cut(topG, (x, y) => (y - oy) * bw + (x - ox));                  // TOP ONLY, for now
+  if (carveCuts.top)   cut(topG,   (x, y)     => (y - oy) * bw + (x - ox));   // TOP masks (x,y)
+  if (carveCuts.side)  cut(sideG,  (x, _y, z) => (z - z0) * bw + (x - ox));   // SIDE masks (x,z)
+  if (carveCuts.front) cut(frontG, (_x, y, z) => (z - z0) * bh + (y - oy));   // FRONT masks (y,z)
   T('after CUT by top', countVol(VOL), topG ? 'top slice applied' : 'no top slice — nothing cut here');
-  if (!topG) {   // no top slice: the footprint falls back to the flat fill drawn into cd above
+  if (!topG && carveCuts.top) {   // no top slice: footprint falls back to the flat fill drawn into cd
     for (let z = z0; z < z0 + Hv; z++) for (let y = oy; y < oy + bh; y++) for (let x = ox; x < ox + bw; x++) {
       const k = z * N + y * foot + x;
       if (VOL[k] && cd[(y * foot + x) * 4 + 3] <= INK_A) VOL[k] = 0;
@@ -2092,51 +2097,28 @@ if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
   for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); ed.set(z * N + y * g.foot + x, 'del'); }
   gridModel = null; renderGridView(); refreshModel(); scheduleAutosave();
 };
-// ⬛ REGENERATE GEOMETRY — re-run the carve on demand and SAY what it produced. Reports the voxel count and
-// bounding box, and names the state that is riding on top of the carve, since that state persists across
-// reloads and is what makes a correct carve still look wrong.
-if ($('gridRegen')) $('gridRegen').onclick = () => {
+// ── CARVE TOP / SIDE / FRONT. Each button runs the whole carve (clear -> fill solid -> cut) with the
+// cuts enabled cumulatively up to its own slice, so each stage is checkable on its own before the next.
+function runCarve(upTo, label) {
+  carveCuts.top   = true;
+  carveCuts.side  = upTo === 'side' || upTo === 'front';
+  carveCuts.front = upTo === 'front';
   const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part);
   gridModel = null; TRACE = []; recarve(); const steps = TRACE; TRACE = null; renderGridView();
-  for (const st of steps) console.info(`    ${String(st.n).padStart(8)}  ${st.label}${st.extra ? '   — ' + st.extra : ''}`);
-  const m = buildModel(part, foot, layers), N = foot * foot;
+  const m = buildModel(part, foot, layers);
   let n = 0; for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (m.filled(x, y, z)) n++;
   const bb = modelBBox(m.filled, foot, layers);
   const dim = bb.x1 < 0 ? 'EMPTY' : `${bb.x1 - bb.x0 + 1}×${bb.y1 - bb.y0 + 1}×${bb.z1 - bb.z0 + 1}`;
-  const g = geomState[part], box = (g && !g.auto && g.spanX) ? 'MANUAL' : 'full grid';
-  const ed = voxEdit[part].size, xf = imgXf[part], pol = polyState[part], pk = pickState[part];
-  const moved = ['top', 'side', 'front', 'back'].filter((v) => xf[v] && (xf[v].sx !== 1 || xf[v].sy !== 1 || xf[v].ox !== 0 || xf[v].oy !== 0));
-  const cutPoly = ['top', 'side', 'front', 'back'].filter((v) => pol[v] && pol[v].length);
-  const picked = ['top', 'side', 'front', 'back'].filter((v) => pk[v] && pk[v].length);
-  const riders = [ed ? `${ed} voxel edits` : null, box === 'MANUAL' ? 'manual box' : null,
-    moved.length ? `aligned: ${moved.join('/')}` : null, cutPoly.length ? `poly cuts: ${cutPoly.join('/')}` : null,
-    picked.length ? `key picks: ${picked.join('/')}` : null].filter(Boolean);
-  const msg = `${n} voxels · ${dim} · grid ${foot}×${foot}×${layers} · box ${box}` + (riders.length ? `  ⚠ ${riders.join(' · ')}` : '  (clean)');
-  const gd = $('gridDims'); if (gd) { gd.textContent = msg; gd.style.color = n ? (riders.length ? '#f2c869' : '#8fa7bd') : '#e0625f'; }
-  console.info('[stack-forge] regenerate — ' + msg);
-};
-// ↺ RESET AUTHORING STATE — clears every persisted layer that rides on top of the carve, in one press.
-// Six things are serialised by snapshotProject and restored by loadProject, and each one changes what you
-// see: voxel edits (applied AFTER the carve), a manual box, per-slice align, polygon cuts, eyedropper key
-// picks, and per-view cutout tolerance. Your loaded slice IMAGES are untouched — only the state on top.
-if ($('gridResetAll')) $('gridResetAll').onclick = () => {
-  const n = voxEdit.body.size + voxEdit.turret.size;
-  if (!confirm(`Reset all authoring state?
-
-Clears ${n} voxel edit(s), the box, per-slice align, polygon cuts, key picks and cutout tolerance for BOTH parts.
-
-Your loaded slice images are kept.`)) return;
-  pushUndo();
-  for (const part of ['body', 'turret']) {
-    voxEdit[part].clear();
-    geomState[part] = { auto: true, bottomFrom: 'top' };
-    imgXf[part] = mkXf();
-    for (const v of ['top', 'side', 'front', 'back']) { polyState[part][v] = null; pickState[part][v] = []; keyTolState[part][v] = 75; }
-  }
-  gridModel = null; carveCache.body = null; carveCache.turret = null;
-  xfSyncSliders(); boxSyncSliders(); recarve(); renderGridView(); scheduleAutosave();
-  console.info('[stack-forge] authoring state reset — edits, box, align, polys, picks and tolerance cleared');
-};
+  const on = ['top', carveCuts.side ? 'side' : null, carveCuts.front ? 'front' : null].filter(Boolean).join(' + ');
+  const gd = $('gridDims');
+  if (gd) { gd.textContent = `${label} → ${n} voxels · ${dim} · grid ${foot}×${foot}×${layers} · cuts: ${on}`;
+            gd.style.color = n ? '#8fa7bd' : '#e0625f'; }
+  console.info(`[stack-forge] ${label} — cuts: ${on} → ${n} voxels, ${dim}`);
+  for (const st of steps) console.info(`    ${String(st.n).padStart(8)}  ${st.label}${st.extra ? '   — ' + st.extra : ''}`);
+}
+if ($('carveTop'))   $('carveTop').onclick   = () => runCarve('top',   'CARVE TOP');
+if ($('carveSide'))  $('carveSide').onclick  = () => runCarve('side',  'CARVE TOP + SIDE');
+if ($('carveFront')) $('carveFront').onclick = () => runCarve('front', 'CARVE TOP + SIDE + FRONT');
 if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; refreshModel(); scheduleAutosave();
 };
