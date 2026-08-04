@@ -209,17 +209,10 @@ function gridStretch(canvas, w, h, elev) {
 // the cell rect a keyed slice occupies in a boxW×boxH grid at its imgXf placement. sx/sy=1 → aspect-preserving
 // contain; the artist scales/slides from there. NO stretch-to-fill, NO aspect refit — a smaller slice leaves
 // empty margins (the "10×10 in 20×20" case). Shared by the carve mask and the full-res projection.
-// ORIGINAL DESIGN (owner 2026-08-04): "the slice should be presented in the middle of the face". Every slice
-// — top and elevations alike — lands CENTRED at the contain-fit; the artist moves and stretches it from there
-// with the on-slice handles. (An earlier revision floor-anchored the elevations; that was not the design.)
-function sliceRect(kw, kh, boxW, boxH, xf) {
-  const base = Math.min(boxW / (kw || 1), boxH / (kh || 1)), sx = (xf && xf.sx) || 1, sy = (xf && xf.sy) || 1;
-  const pw = (kw || 1) * base * sx, ph = (kh || 1) * base * sy;
-  return { px: (boxW - pw) / 2 + ((xf && xf.ox) || 0) * boxW, py: (boxH - ph) / 2 + ((xf && xf.oy) || 0) * boxH, pw, ph };
-}
-// the contain-fit scale a slice is measured against — sx/sy of 1 means exactly this. Handles convert a dragged
-// pixel size back into sx/sy through it, so the sliders and the handles stay one number.
-const sliceBase = (kw, kh, boxW, boxH) => Math.min(boxW / (kw || 1), boxH / (kh || 1));
+// sliceRect / sliceBase / xfFromRect / dragHandle / autoSpans / axisMaps / GEOAX / geoRange all come from
+// slice-geom.js — the DOM-free, unit-tested source of this math (slice-geom.test.mjs). Do NOT re-implement any
+// of it here: three shipped bugs (swapped front/back overlay flips, the Layers-sized cube, dead scale-up on the
+// pinned axis) were all placement arithmetic that nothing measured.
 // PLACE a keyed slice onto a boxW×boxH cell grid at the artist's imgXf — the no-gridStretch, no-normalize carve
 // mask. Draws the slice at `sliceRect` (crisp/nearest), empty cells stay empty. Emits mask m + color c per cell,
 // box-sized, so `side/width/top` and all color code index it EXACTLY like gridStretch's output. `elev` flips z.
@@ -360,17 +353,13 @@ function exportVox() {
 // (bodyLayers / turretLayers) and the three views carve it down. No aspect fitting here — the views do the
 // shaping. Replaces the old "top = master scale" normalization, which produced silly slabs (a 64x64 footprint
 // under a 28-high box) for units that are really tanks/trucks/planes.
-function autoSpans(topC, sideC, frontC, foot, layers, reach) {
-  const L = Math.max(1, Math.min(foot, layers | 0));     // cube side; the grid (foot) is the hard ceiling
-  // centre the cube, but keep the barrel's forward margin so a procedural tube still has room to protrude
-  const ox = clamp(Math.floor((foot - L - reach) / 2), 0, foot - L), oy = Math.floor((foot - L) / 2);
-  return { spanX: { lo: ox, hi: ox + L }, spanY: { lo: oy, hi: oy + L }, spanZ: { lo: 0, hi: L }, Hraw: L };
-}
+// (the cube math itself lives in slice-geom.js, proven by slice-geom.test.mjs)
+const autoSpansFor = (foot, layers, reach) => autoSpans(foot, layers, reach);
 // the spans the carve uses: auto placement (autoSpans) unless the artist has manually reconciled this
 // part in the geometry step, in which case use the saved spans, clamped to the grid (lo<hi, hi≤foot/≤layers).
 function geomSpans(partId, topC, sideC, frontC, foot, layers, reach) {
   const g = geomState[partId];
-  if (!g || g.auto || !g.spanX) return autoSpans(topC, sideC, frontC, foot, layers, reach);
+  if (!g || g.auto || !g.spanX) return autoSpansFor(foot, layers, reach);
   // INVARIANT: footOf/gridLayersOf make the grid ⊇ geometry, so this clamp should be a no-op. If it ever fires,
   // the grid is smaller than the geometry (only possible at the hard 128 ceiling) — make that LOUD, never silent.
   const span = (s, cap) => {
@@ -621,7 +610,14 @@ function createGeometry(partId) {
   let n = 0;
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++)
     if (m.filled(x, y, z)) { fill[z * N + y * foot + x] = 1; n++; }
-  frozen[partId] = { foot, layers, fill, vcol: m.vcol, cd: m.cd, views: m.views, sp: m.sp, dbg: m.dbg };
+  // GROUND IT. Slices are centred on the face by design, so a profile shorter than the cube carves a model
+  // hanging in mid-air (measured: wide side art floats 22 voxels up in a 64 cube — that is the "looks like
+  // garbage" rotation). Units stand on terrain, so drop the finished voxels to z=0. Colours ride along.
+  // The view masks are indexed (z − views.z0), so z0 shifts by the same amount or a later Reproject would
+  // sample the wrong mask rows for the moved voxels. The BOX (sp) does not move — the model moved inside it.
+  const dropped = groundVoxels(fill, m.vcol, foot, layers);
+  if (dropped && m.views) m.views.z0 = (m.views.z0 || 0) - dropped;
+  frozen[partId] = { foot, layers, fill, vcol: m.vcol, cd: m.cd, views: m.views, sp: m.sp, dbg: m.dbg, dropped };
   gridModel = null; rebuildSlices(); renderGridView(); scheduleAutosave();
   const bb = modelBBox(buildModel(partId, foot, layers).filled, foot, layers);
   const dim = bb.x1 < 0 ? 'EMPTY' : `${bb.x1 - bb.x0 + 1}×${bb.y1 - bb.y0 + 1}×${bb.z1 - bb.z0 + 1}`;
@@ -630,7 +626,7 @@ function createGeometry(partId) {
   const V = m.views, cov = (g) => { if (!g || !g.m) return 'none'; let k = 0; for (let i = 0; i < g.m.length; i++) if (g.m[i]) k++; return `${k}/${g.m.length}`; };
   let topInk = 0; if (m.cd) for (let i = 0; i < N; i++) if (m.cd[i * 4 + 3] > INK_A) topInk++;
   const report = `top ${topInk}/${N} · side ${cov(V && V.side)} · front ${cov(V && V.front)} · back ${cov(V && V.back)}`;
-  console.info(`[stack-forge] ${partId}: created geometry — ${n} voxels, ${dim} in a ${foot}×${foot}×${layers} grid   [slice ink: ${report}]`);
+  console.info(`[stack-forge] ${partId}: created geometry — ${n} voxels, ${dim} in a ${foot}×${foot}×${layers} grid${dropped ? `, dropped ${dropped} to the ground` : ''}   [slice ink: ${report}]`);
   const sd = $('stageDims'), gd = $('gridDims');
   const line = n ? `created ${n} vox · ${dim} · grid ${foot}×${foot}×${layers}` : `Create Geometry: EMPTY — ${report}`;
   if (sd) { sd.textContent = line; sd.style.color = n ? '#8fa7bd' : '#e0625f'; }
@@ -1435,16 +1431,8 @@ let gridOrient = true;                                    // orientation indicat
 // geometry box axis mapping: for each grid view, which world-axis span each in-plane axis (col,row) reads
 // and whether the grid coord is reversed vs the axis value. cap: x/y=foot, z=layers. Used by both the
 // geom overlay draw and the drag editing so they stay in lock-step.
-const GEOAX = {
-  top:   { col: { axis: 'x', flip: false }, row: { axis: 'y', flip: false } },
-  side:  { col: { axis: 'x', flip: false }, row: { axis: 'z', flip: true } },
-  // front/back col flips MUST match AX.toVox, which maps front col→(foot-1-c) [flipped] and back col→c [not].
-  // These two were swapped: the Geometry box for FRONT was drawn at the BACK's columns and vice versa, so the
-  // box and the projected slice landed at the opposite end of the grid from the voxels they describe.
-  front: { col: { axis: 'y', flip: true },  row: { axis: 'z', flip: true } },
-  back:  { col: { axis: 'y', flip: false }, row: { axis: 'z', flip: true } },
-};
-const spanKey = { x: 'spanX', y: 'spanY', z: 'spanZ' };
+// GEOAX + spanKey come from slice-geom.js, where slice-geom.test.mjs cross-checks them against axisMaps'
+// toVox — the check that would have caught the swapped front/back flips before they shipped.
 const gridPart = () => (state.part === 'turret' ? 'turret' : 'body');
 const gridLayersOf = (part) => effLayers(part === 'turret' ? state.turretLayers : state.bodyLayers, geomExtentZ(part));
 // LAYER 0 = raycast "surface": the target voxel at a grid cell is the FIRST filled voxel along the view's
@@ -1560,16 +1548,7 @@ function renderGridView() {
   // Every view is a SLICE perpendicular to a depth axis; the Layer slider walks slices along it, so
   // add/erase editing works in all four. Top→z (from the top), Side→y, Front/Back→x. toVox maps an
   // in-plane cell (col,row) + slice index to a voxel (x,y,z).
-  const AX = {
-    top:   { cols: foot, rows: foot,   depth: layers, axis: 'z', toVox: (c, r, s) => [c, r, layers - 1 - s] },
-    side:  { cols: foot, rows: layers, depth: foot,   axis: 'y', toVox: (c, r, s) => [c, s, layers - 1 - r] },
-    front: { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [foot - 1 - s, foot - 1 - c, layers - 1 - r] },  // +x FRONT: raycast from +x, col→y so grid LEFT = model left (matches the orbit)
-    back:  { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [s, c, layers - 1 - r] },                        // −x BACK: raycast from x=0, opposite-side col→y
-    // ¾ ANGLE (decor): a DIAGONAL slice along the (1,1) camera ray. col → the in-plane diagonal h = x−y
-    // (constant along a ray), CENTRED so the facing is foot-wide like Front/Side (matches the same-size source
-    // art); depth s walks from the +x+y CORNER inward, so the first hit is the surface the camera sees.
-    angle: { cols: foot, rows: layers, depth: foot, axis: 'diag', toVox: (c, r, s) => { const h = c - (foot >> 1), xs = Math.min(foot - 1, foot - 1 + h), x = xs - s; return [x, x - h, layers - 1 - r]; } },
-  };
+  const AX = axisMaps(foot, layers);   // slice-geom.js — proven bijective by slice-geom.test.mjs
   const ax = AX[gridView] || AX.top, cols = ax.cols, rows = ax.rows, depth = ax.depth;
   gridLayer = clamp(gridLayer, 0, depth);   // 0 = surface projection (non-layer); 1..depth = real slices 0..depth-1
   const slice = gridLayer;
@@ -1824,7 +1803,7 @@ function renderGridView() {
     // edits, else the carve's spans) — so the grid box and the orbit box track together at every instant.
     const _pl = effPlace(part);
     const bsp = { spanX: { lo: _pl.ox, hi: _pl.ox + _pl.bw }, spanY: { lo: _pl.oy, hi: _pl.oy + _pl.bh }, spanZ: { lo: _pl.z0 || 0, hi: (_pl.z0 || 0) + _pl.Hv } };
-    const rng = (info) => { const s = bsp[spanKey[info.axis]], cap = capOf(info.axis); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
+    const rng = (info) => geoRange(info, bsp, foot, layers);   // slice-geom.js
     const cR = rng(g.col), rR = rng(g.row);
     const bx = ox + cR.lo * cell, by = oy + rR.lo * cellV, bw2 = (cR.hi - cR.lo) * cell, bh2 = (rR.hi - rR.lo) * cellV;
     // draw the FULL-RES slice into its placement SUB-rect of the box (same placement the carve uses) — no fill,
@@ -2694,17 +2673,9 @@ document.addEventListener('keydown', (e) => {
     const s = gridGeom && gridGeom.slice; if (!s || !sliceDrag) return;
     const { px, py } = ptCell(e);
     const u = (px - s.bx) / s.cpx, v = (py - s.by) / s.cpy;        // pointer in box-cell units
-    const { mode, px0, py0, pw0, ph0 } = sliceDrag;
-    let nx = px0, ny = py0, nw = pw0, nh = ph0;
-    if (mode.includes('L')) { const right = px0 + pw0; nx = Math.min(u, right - 0.5); nw = right - nx; }
-    if (mode.includes('R')) { nw = Math.max(0.5, u - px0); }
-    if (mode.includes('T')) { const bot = py0 + ph0; ny = Math.min(v, bot - 0.5); nh = bot - ny; }
-    if (mode.includes('B')) { nh = Math.max(0.5, v - py0); }
-    const base = sliceBase(s.kw, s.kh, s.boxW, s.boxH); if (!(base > 0)) return;
-    imgXf[s.part][s.view] = {                                      // px/pw → sx/ox exactly as sliceRect reads them
-      sx: nw / (s.kw * base), sy: nh / (s.kh * base),
-      ox: (nx - (s.boxW - nw) / 2) / s.boxW, oy: (ny - (s.boxH - nh) / 2) / s.boxH,
-    };
+    const r0 = { px: sliceDrag.px0, py: sliceDrag.py0, pw: sliceDrag.pw0, ph: sliceDrag.ph0 };
+    const nr = dragHandle(sliceDrag.mode, r0, u, v);                // slice-geom.js: pins the opposite edge
+    imgXf[s.part][s.view] = xfFromRect(s.kw, s.kh, s.boxW, s.boxH, nr);   // exact inverse of sliceRect
     xfSyncSliders(); voxSig = ''; renderGridView();                // sliders + orbit box track the drag live
   };
   let geomDrag = null;                                             // { mode, gc0, gr0, cR0, rR0 }
@@ -2713,7 +2684,7 @@ document.addEventListener('keydown', (e) => {
   const plSpans = (part) => { const pl = effPlace(part); return { spanX: { lo: pl.ox, hi: pl.ox + pl.bw }, spanY: { lo: pl.oy, hi: pl.oy + pl.bh }, spanZ: { lo: pl.z0 || 0, hi: (pl.z0 || 0) + pl.Hv } }; };
   const gridRectFromSpans = (g) => {
     const sp = plSpans(gridGeom.part);
-    const rng = (info) => { const s = sp[spanKey[info.axis]], cap = capOf(info.axis, g.foot, g.layers); return info.flip ? { lo: cap - s.hi, hi: cap - s.lo } : { lo: s.lo, hi: s.hi }; };
+    const rng = (info) => geoRange(info, sp, g.foot, g.layers);   // slice-geom.js
     return { cR: rng(g.col), rR: rng(g.row) };
   };
   const spansFromGridRect = (g, cR, rR) => {
