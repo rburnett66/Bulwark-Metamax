@@ -143,7 +143,7 @@ function keyBackground(data, w, h, tol, picks) {
   // (dark-green leaves touching white). Relative to the seed, so a coloured background still keys.
   const okChroma = (p, bi) => (satC(data[p * 4], data[p * 4 + 1], data[p * 4 + 2]) - seedSat[bi]) <= SAT_GUARD;
   const N = w * h, vis = new Uint8Array(N), st = [];
-  const hard = tol * 0.8;                                            // HARD edge only — no feather band (owner 2026-08-03)
+  const soft = tol * 1.75;                                           // AA-halo band: REMOVED outright, never ramped
   const push = (x, y) => { if (x < 0 || x >= w || y < 0 || y >= h) return; const p = y * w + x; if (vis[p]) return; const ni = nearInfo(p); if (ni[0] < tol && okChroma(p, ni[1])) { vis[p] = 1; st.push(p); } };
   for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }        // seed the whole border
   for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
@@ -151,11 +151,14 @@ function keyBackground(data, w, h, tol, picks) {
   while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1); }
   for (let p = 0; p < N; p++) {
     if (vis[p]) { data[p * 4 + 3] = 0; continue; }                   // flooded background → transparent
-    // HARD EDGE: a near-background pixel touching removed background goes fully transparent. Alpha stays
-    // BINARY — no graded feather band. Partial alpha is what let the views disagree about where the
-    // silhouette ends (see INK_A); a voxel is in or out, so the cutout should be too.
+    // HARD EDGE: the anti-aliased halo — a pixel within `soft` of the background AND touching removed
+    // background — goes FULLY transparent. Alpha stays BINARY; partial alpha is what let the views disagree
+    // about where the silhouette ends (see INK_A), so a voxel is in or out and the cutout should be too.
+    // NOTE: the cut must stay at `soft`, the full width of the old ramp. Narrowing it to `hard` leaves the
+    // halo at full alpha, and that ring of near-background pixels carves into solid noise voxels.
+    // Adjacency to the flood keeps this to a ONE-pixel ring, so it eats the AA edge and nothing more.
     const ni = nearInfo(p), d = ni[0];
-    if (d < hard && okChroma(p, ni[1])) {                           // …but never eat a saturated subject edge
+    if (d < soft && okChroma(p, ni[1])) {                           // …but never eat a saturated subject edge
       const x = p % w, y = (p / w) | 0;
       if ((x > 0 && vis[p - 1]) || (x < w - 1 && vis[p + 1]) || (y > 0 && vis[p - w]) || (y < h - 1 && vis[p + w]))
         data[p * 4 + 3] = 0;
