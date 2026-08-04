@@ -20,6 +20,7 @@ const WORLD_SCALE = 3, BODY_FRAMES = 16, TURRET_FRAMES = 64, MANIFEST_KEY = 'bul
 // THE world-scale contract (mirrors src/render/voxel/pack.js): 32 voxels = 1 tile for EVERY unit.
 // Bigger unit ⇒ higher Resolution, never a bigger stretch — voxel density is constant on the board.
 const VOX_PER_TILE = 32;
+const RES_MAX = 96;              // grid ceiling (owner 2026-08-03: "cap max size to 96 cells for now")
 const unitTiles = (foot) => foot / VOX_PER_TILE;
 // COLLISION footprint: mirrors the game (loader.VOXEL_UNIT_SCALE 0.5) with a small pad so the body touches
 // just before it collides. Half-width in TILES = tiles · 0.5 · 1.2 / 2 = tiles · 0.3. Shown as a ring in the
@@ -1940,15 +1941,14 @@ if ($('boxOy')) $('boxOy').oninput = (e) => boxEdit('oy', +e.target.value);
 function commitBoxPlace(part) {
   const p = boxPlace[part] || effPlace(part);
   // GROW the grid to hold the box the owner sized (raise Resolution + layers) so the carve never clamps; only
-  // the hard 128 ceiling can still clamp. Growing foot enlarges the on-board unit (voxels/tile constant).
-  const res = [32, 48, 64, 96, 128];
+  // the RES_MAX ceiling can still clamp. Growing foot enlarges the on-board unit (voxels/tile constant).
   const footNeed = Math.max(p.ox + p.bw, p.oy + p.bh);
-  const newFoot = res.find((r) => r >= footNeed) || 128;
+  const newFoot = clamp(Math.ceil(footNeed / 4) * 4, 16, RES_MAX);   // continuous slider: next step-4 grid
   if (part === 'turret') { if (newFoot > (state.turretFoot || state.foot)) { state.turretFoot = newFoot; if ($('turretRes')) $('turretRes').value = newFoot; } }
   else if (newFoot > state.foot) { state.foot = newFoot; if ($('res')) $('res').value = newFoot; }
   syncSizeUI();
   const layersNeed = (p.z0 || 0) + p.Hv, lid = part === 'turret' ? 'turretLayers' : 'bodyLayers';
-  if (layersNeed > state[lid]) { const el = $(lid); if (el && +el.max < layersNeed) el.max = String(Math.min(128, layersNeed)); setLayers(part === 'turret' ? 'turret' : 'body', Math.min(128, layersNeed)); }
+  if (layersNeed > state[lid]) { const el = $(lid); if (el && +el.max < layersNeed) el.max = String(Math.min(RES_MAX, layersNeed)); setLayers(part === 'turret' ? 'turret' : 'body', Math.min(RES_MAX, layersNeed)); }
   const foot = footOf(part), layers = state[lid];   // grown grid — spans now fit without clamping (except the 128 ceiling)
   geomState[part] = { auto: false, bottomFrom: (geomState[part] && geomState[part].bottomFrom) || 'top',
     spanX: { lo: p.ox, hi: Math.min(foot, p.ox + p.bw) }, spanY: { lo: p.oy, hi: Math.min(foot, p.oy + p.bh) }, spanZ: { lo: p.z0 || 0, hi: Math.min(layers, (p.z0 || 0) + p.Hv) } };
@@ -2011,32 +2011,38 @@ if ($('boxNormalize')) $('boxNormalize').onclick = () => {
   xfSyncSliders(); gridModel = null; rebuildSlices(); scheduleAutosave();
 };
 $('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; rebuildSlices(); };
-// ⬛ Cube: make the build volume a true voxel cube driven by the HEIGHT you set — footprint (length×width) snaps
-// to match Base layers (owner: "if the height is 64, set base to 64×64"). Footprint is a discrete Resolution, so
-// height snaps to the nearest one and both axes end equal. On-screen height is still scaled by Cube height (zScale).
+// ⬛ Cube: snap the GRID to Base layers so the grid matches the carve's cube exactly. The carve already starts
+// from a Layers-sized cube (autoSpans), so this just removes the leftover grid margin around it. Resolution is
+// a continuous slider now, so no nearest-step rounding is needed — foot = layers, exactly.
 if ($('bodyCube')) $('bodyCube').onclick = () => {
-  const res = [32, 48, 64, 96, 128];
-  const target = res.reduce((a, b) => Math.abs(b - state.bodyLayers) <= Math.abs(a - state.bodyLayers) ? b : a);
-  state.foot = target; if ($('res')) $('res').value = target;      // footprint = height (nearest Resolution)
+  const target = clamp(state.bodyLayers | 0, 16, RES_MAX);
+  state.foot = target;                                             // grid = cube side (no wasted margin)
   setLayers('body', target);                                       // exact cube: layers = foot = target
   syncSizeUI(); rebuildSlices();
 };
 $('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; rebuildSlices(); };
-$('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); rebuildSlices(); };
+// Resolution is a fine SLIDER now (16..96 step 4 — the old 32/48/64/96 dropdown jumped far too coarsely).
+// Live label while dragging; re-carve only on release, same as Unit size.
+$('res').oninput = (e) => { const f = +e.target.value; if ($('resTiles')) $('resTiles').textContent = f + ' · ' + (f / VOX_PER_TILE).toFixed(2) + ' t'; };
+$('res').onchange = (e) => { state.foot = clamp(+e.target.value, 16, RES_MAX); syncSizeUI(); rebuildSlices(); };
 $('turretRes').onchange = (e) => { state.turretFoot = +e.target.value; syncSizeUI(); rebuildSlices(); };   // SF3
 // fine world-size control (the VOX_PER_TILE contract): tiles → foot voxels, layers scale along
 function syncSizeUI() {
+  // a project saved before the RES_MAX cap can carry foot > 96. Clamp it HERE rather than let state.foot and the
+  // slider disagree silently (the next slider touch would snap the unit smaller with no warning) — and say so.
+  if (state.foot > RES_MAX) { console.warn(`[stack-forge] Resolution ${state.foot} exceeds the ${RES_MAX} cap — clamped. This unit is now ${(RES_MAX / VOX_PER_TILE).toFixed(2)} tiles on the board, not ${(state.foot / VOX_PER_TILE).toFixed(2)}.`); state.foot = RES_MAX; }
   const t = unitTiles(state.foot);
   $('uSize').value = Math.round(t * 100); $('uSizeV').textContent = t.toFixed(2) + ' t';
-  $('res').value = [32, 48, 64, 96, 128].includes(state.foot) ? state.foot : '';
+  $('res').value = state.foot;            // continuous slider — every value is representable
+  if ($('resTiles')) $('resTiles').textContent = state.foot + ' · ' + t.toFixed(2) + ' t';
   if ($('turretRes')) {   // SF3: turret footprint readout, in tiles, vs the base
     const tf = state.turretFoot || state.foot;
-    $('turretRes').value = [16, 24, 32, 48, 64, 96, 128].includes(tf) ? tf : '';
+    $('turretRes').value = [16, 24, 32, 48, 64, 96].includes(tf) ? tf : '';
     if ($('turretResTiles')) $('turretResTiles').textContent = tf === state.foot ? '= base' : (tf / VOX_PER_TILE).toFixed(2) + ' t';
   }
 }
 function setUnitSize(tiles) {
-  const newFoot = clamp(Math.round(tiles * VOX_PER_TILE), 16, 256);
+  const newFoot = clamp(Math.round(tiles * VOX_PER_TILE), 16, RES_MAX);
   if (newFoot === state.foot) return;
   const k = newFoot / state.foot;
   state.foot = newFoot;
@@ -2052,7 +2058,8 @@ function fitToVox() {
   let mx = 0;
   for (const kk of ['body', 'turret']) { const v = voxPart[kk]; if (v) mx = Math.max(mx, v.nx, v.ny); }
   if (!mx) return;
-  const res = [32, 48, 64, 96, 128]; state.foot = res.find((r) => r >= mx) || 128; $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; }
+  state.foot = clamp(Math.ceil(mx / 4) * 4, 16, RES_MAX);   // continuous slider: snap up to the next step-4 grid
+  $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96].includes(_tf) ? _tf : ''; }
   if (voxPart.body) setLayers('body', clamp(voxPart.body.nz, 4, 40));
   if (voxPart.turret) setLayers('turret', clamp(voxPart.turret.nz, 4, 40));
 }
@@ -3566,7 +3573,7 @@ function syncAllControls() {
   set('pal', state.paletteN, state.paletteN || 'full');
   set('palN', state.paletteN, state.paletteN || 'full');
   set('sharp', Math.round(state.sharp * 100), state.sharp.toFixed(2)); set('bakeScale', state.bakeScale, state.bakeScale + '×');
-  $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; } $('smooth').checked = state.smooth; $('spin').checked = state.spin;
+  $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96].includes(_tf) ? _tf : ''; } $('smooth').checked = state.smooth; $('spin').checked = state.spin;
   if ($('decRevolve')) $('decRevolve').checked = state.decorRevolve !== false;
   if ($('decProc')) $('decProc').checked = !!state.decorProc;
   if ($('decProcRow')) $('decProcRow').style.display = state.decorProc ? '' : 'none';
@@ -3822,7 +3829,7 @@ function selectUnit(id) {
     state.cls = p.class; state.foot = p.footprint[0];
     state.bodyLayers = (bp && bp.layers) || p.footprint[2]; state.turretLayers = (tp && tp.layers) || p.footprint[2];
     if (p.light) { state.lightAz = p.light.azimuth; $('lightAz').value = state.lightAz; $('lightAzV').textContent = state.lightAz + '°'; }
-    $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; }
+    $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96].includes(_tf) ? _tf : ''; }
     $('bodyLayers').value = state.bodyLayers; $('bodyLayersV').textContent = state.bodyLayers;
     $('turretLayers').value = state.turretLayers; $('turretLayersV').textContent = state.turretLayers;
     [...$('clsSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.c === state.cls));
