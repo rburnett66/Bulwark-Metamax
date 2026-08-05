@@ -275,7 +275,7 @@ function buildVoxVolume(vm, foot, layers) {
     }
   }
   const filled = (x, y, z) => (x >= 0 && x < foot && y >= 0 && y < foot && z >= 0 && z < layers) ? !!fill[z * N + y * foot + x] : false;
-  return { filled, vcol, cd: null, dbg: { vox: [nx, ny, nz], bw, bh, Hh } };
+  return { VOL: fill, filled, vcol, cd: null, dbg: { vox: [nx, ny, nz], bw, bh, Hh } };   // VOL: edits reach an imported .vox
 }
 
 // ── .vox writer: turn our carved/imported data back into a real MagicaVoxel object (round-trips to any
@@ -379,7 +379,7 @@ function buildProceduralTree(foot, layers) {
     disc(z, r, canopyCol);
   }
   const filled = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && !!fill[z * N + y * foot + x];
-  return { vcol, filled, views: null, sp: null, dbg: { proc: true } };
+  return { VOL: fill, vcol, filled, views: null, sp: null, dbg: { proc: true } };   // VOL: edits reach a procedural tree
 }
 function buildVolume(partId, foot, layers) {
   if (voxPart[partId]) return buildVoxVolume(voxPart[partId], foot, layers);   // imported .vox → use it directly
@@ -395,7 +395,11 @@ function buildVolume(partId, foot, layers) {
     const cd = cx.getImageData(0, 0, foot, foot).data, hd = hx.getImageData(0, 0, foot, foot).data;
     const H = new Float32Array(N);
     for (let i = 0; i < N; i++) H[i] = cd[i * 4 + 3] > INK_A ? (hd[i * 4] / 255) * layers : 0;
-    return { cd, H, filled: (x, y, z) => z < H[y * foot + x] };
+    // materialise the height field into a real VOL — every model source must be VOL-backed, or `filled`
+    // is a closure the editor cannot write to and DEL silently does nothing on this part.
+    const pv = new Uint8Array(layers * N);
+    for (let z = 0; z < layers; z++) for (let i = 0; i < N; i++) if (z < H[i]) pv[z * N + i] = 1;
+    return { VOL: pv, cd, H, filled: (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && !!pv[z * N + y * foot + x] };
   }
   // crop every view to its content, then register by a COMMON scale taken from the top's fit — so the
   // side's height maps PROPORTIONALLY (a long-barrel side doesn't get stretched vertically to fill layers).
@@ -494,7 +498,11 @@ function buildVolume(partId, foot, layers) {
       const p = (y * foot + x) * 4; if (cd[p + 3] <= INK_A) { cd[p] = bt[0]; cd[p + 1] = bt[1]; cd[p + 2] = bt[2]; cd[p + 3] = 255; }
     }
   }
-  const filled = inBarrel ? (x, y, z) => bodyFilled(x, y, z) || inBarrel(x, y, z) : bodyFilled;
+  // OR the barrel INTO VOL. Composing it into `filled` made barrel voxels procedural — on screen but
+  // absent from VOL, so VOL[k]=0 could never remove one. Now every visible voxel is a VOL voxel.
+  if (inBarrel) for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++)
+    if (!VOL[z * N + y * foot + x] && inBarrel(x, y, z)) VOL[z * N + y * foot + x] = 1;
+  const filled = bodyFilled;
   const H = new Float32Array(N);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     let h = 0; for (let z = layers - 1; z >= 0; z--) if (filled(x, y, z)) { h = z + 1; break; }
