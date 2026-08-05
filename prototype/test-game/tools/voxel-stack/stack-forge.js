@@ -2863,6 +2863,13 @@ function toggleFlip(part, view, axis) {
   // ORIGINAL side of the image: the picture flipped and the cutout did not follow it.
   const picks = pickState[part][view];
   if (picks) for (const q of picks) if (q && q.pt) mirror(q.pt);
+  // THE SLICE'S PLACEMENT MUST MIRROR TOO. xfCanvas centres the slice at fraction (0.5 + ox) of the box
+  // face, so mirroring the face maps f → 1−f and ox must become −ox. Without this the picture flipped
+  // inside a cut-out that stayed put: art mirrored, the region it carves did not follow it. Most visible
+  // on a turret, where the slice adjusters have usually pushed ox off zero. Scale is unsigned — a mirror
+  // does not change how big the slice is, only which side of centre it sits on.
+  const xf = (imgXf[part] || {})[view];
+  if (xf) { if (dispAxis === 'h') xf.ox = -(xf.ox || 0); else xf.oy = -(xf.oy || 0); }
   // A flip on a CARVING view (top/side/front) re-mirrors the carve, but grid-view voxel edits are stored at
   // ABSOLUTE coordinates and don't move with it — old edits then linger as duplicated / misplaced voxels
   // (owner 2026-07-20: "view flip → geometry duplication"). Offer to recarve this part (reset its edits) so
