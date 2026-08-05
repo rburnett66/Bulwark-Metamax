@@ -1416,11 +1416,11 @@ function renderGridView() {
   }
   const base = gridModel, ed = voxEdit[part], V = base.views;
   updateDims(part, foot, layers, base);   // x/y/z readout in the grid header + primary view; flags clamped axes
-  const filled = (x, y, z) => {
-    if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) return false;
-    const e = ed.get(z * N + y * foot + x);
-    return e !== undefined ? e !== 'del' : base.filled(x, y, z);
-  };
+  // ONE MODEL. This used to layer voxEdit on top of base.filled — its own inline copy of applyVoxEdits.
+  // When the overlay was disabled in buildModel, this copy was missed, so the GRID hid voxels that the 3D
+  // view still drew: stale 'del' entries blanked geometry here and nowhere else. Read the carve, only.
+  const filled = (x, y, z) => (x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers)
+    && base.filled(x, y, z);
   // FACE COLOUR: sample the SAME source the 3D render paints for the face this view shows — Top faces
   // from the top-down colour, Side/Front/Back walls from the side/front/back source art — so once
   // quant+tuner run below the grid matches in-game (buildFaces), not a flat top-projection. Painted
