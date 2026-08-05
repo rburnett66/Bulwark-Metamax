@@ -10,10 +10,26 @@ object you are looking at.
 3. **Shift = select.** Holding shift turns hover into selection. Clicking adds the voxel to a selection
    set; clicking a selected voxel removes it. The selection stays highlighted on screen and accumulates —
    the artist keeps adding and unselecting until the set is right.
-4. **DELETE** removes the selected voxels — clears them in `VOL`. Adding a voxel is the same operation in reverse.
+4. **DELETE** removes the selected voxels wherever they were selected — clears them in `VOL`. Adding a voxel is the same operation in reverse.
 5. **ESC** puts them back.
 
 Selection is a set of voxel keys, not a rect and not a slice. It persists while the camera orbits.
+
+## ONE selection, shared by both views
+
+There is a **single selection set** — `Set` of `z*foot*foot + y*foot + x` — and both views read and write
+that same set. Not one per view, not a main-view set mirrored into a grid-view set.
+
+- Selecting in the **main view** (shift + click on a raycast voxel) puts the key in the set.
+- Selecting in the **grid view** puts the same key in the same set.
+- Either view unselects by clicking a selected voxel again.
+- Both views re-render the highlight from the set, so they are **always in sync** — there is nothing to
+  reconcile, because there is only one thing.
+- **DEL** removes whatever is in the set, whichever view has focus. **ESC** puts it back.
+
+The old tool had `gridSel` (a rect), `gridSelVox` (a voxel set) and `gridSelView` (which facing drew the
+rect) and had to keep them agreeing. Do not rebuild that: a rect and a facing are drawing details, not
+state. Store the voxel keys; derive any outline from them when drawing.
 
 ## What this replaces
 
