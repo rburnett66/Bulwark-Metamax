@@ -31,6 +31,27 @@ The old tool had `gridSel` (a rect), `gridSelVox` (a voxel set) and `gridSelView
 rect) and had to keep them agreeing. Do not rebuild that: a rect and a facing are drawing details, not
 state. Store the voxel keys; derive any outline from them when drawing.
 
+## Grid view: Paint mode selects by layer
+
+Paint mode shows the model with **no slice overlays** — just the voxels — and the Layer slider chooses
+what you are looking at:
+
+- **Layer 0 = the whole face.** For the current facing, each cell shows the FIRST filled voxel along that
+  facing's depth axis — the surface you would see looking at the model from there.
+- **Layer 1..n = one real slice** at that depth, so you can reach inside the model.
+
+Clicking or dragging in the grid puts those voxels into the shared selection set, and **they light up on
+the main 3D view immediately** — same set, both views, nothing to reconcile. That is the point: the grid
+is the precise way to pick voxels (a whole face, or one layer deep), and the 3D view is where you confirm
+you picked the right ones before acting.
+
+Then **DEL** removes them and **ESC** puts them back — the same two keys as a main-view selection,
+because it is the same selection.
+
+This is expected to be the fastest way to add or remove geometry: pick a layer, rubber-band a region,
+check it in 3D, delete. Adding works the same way — the selection names voxels, and adding writes
+`VOL[k] = 1` instead of `0`.
+
 ## What this replaces
 
 The 2D grid paint/erase tools, the marquee, the layer walk, and the `voxEdit` overlay applied after the
