@@ -2205,7 +2205,7 @@ function deleteCurrentLayer() {
   console.info(`[stack-forge] deleted ${keys.length} voxels (${g.slice === 0 ? 'surface' : 'layer ' + g.slice}) — ESC to undo`);
   return true;
 }
-if ($('gridDeleteBtn')) $('gridDeleteBtn').onclick = () => deleteCurrentLayer();
+if ($('gridDeleteBtn')) $('gridDeleteBtn').onclick = () => doDelete();   // identical to DEL
 if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; refreshModel(); scheduleAutosave();
 };
@@ -2272,22 +2272,20 @@ function gridUndo() { if (!undoStack.length) return; redoStack.push(snapVoxEdit(
 function gridRedo() { if (!redoStack.length) return; undoStack.push(snapVoxEdit()); applyVoxSnap(redoStack.pop()); }
 
 function deleteSelection() {
-  const g = gridGeom; if (!gridSelVox || !g || !g.toVox || gridSelVox.part !== g.part) return false;
-  const ed = voxEdit[g.part], N = g.foot * g.foot;
-  const cutThrough = g.slice === 0;   // Layer 0 = surface projection → a delete cuts the ENTIRE column (all depth) through
-  const baseFilled = (gridModel && gridModel.filled) || (() => false);
-  const isFilled = (x, y, z) => { const o = ed.get(z * N + y * g.foot + x); return o !== undefined ? o !== 'del' : baseFilled(x, y, z); };
-  // filled, SELECTED voxels reachable in the current facing (the slice, or the whole column on Layer 0)
-  const targets = [];
-  for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
-    if (cutThrough) { for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s), k = z * N + y * g.foot + x; if (gridSelVox.set.has(k) && isFilled(x, y, z)) targets.push(k); } }
-    else { const [x, y, z] = g.toVox(cx, cy, g.slice - 1), k = z * N + y * g.foot + x; if (gridSelVox.set.has(k) && isFilled(x, y, z)) targets.push(k); }
-  }
-  if (!targets.length) return false;
-  if (cutThrough && !confirm('Delete on Layer 0 (surface) cuts ALL THE WAY THROUGH the selected objects — front to back. Continue?')) return false;
-  pushUndo();
-  for (const k of targets) ed.set(k, 'del');
-  gridModel = null; refreshModel(); scheduleAutosave(); return true;
+  const g = gridGeom; if (!g || !gridSelVox || gridSelVox.part !== g.part || !gridSelVox.set.size) return false;
+  const V = liveVOL(g.part);
+  if (!V) { console.warn('[stack-forge] delete: no carved volume — press a Carve button first'); return false; }
+  let n = 0; for (const k of gridSelVox.set) if (V[k]) n++;
+  if (!n) return false;
+  pushVol(g.part);                                     // snapshot BEFORE the write — ESC restores it
+  for (const k of gridSelVox.set) V[k] = 0;            // VOL IS THE MODEL: a delete is a plain write
+  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
+  console.info(`[stack-forge] deleted ${n} selected voxels — ESC to undo`);
+  return true;
+}
+// ONE delete, used by the button and by the DEL key. A selection wins; with none, the current layer goes.
+function doDelete() {
+  return (gridSelVox && gridSelVox.set && gridSelVox.set.size) ? deleteSelection() : deleteCurrentLayer();
 }
 // FILL the selection with the current paint colour — recolours EVERY existing voxel in it (on Layer 0, that's
 // every facing surface voxel; on a real layer, every filled slice voxel). Never adds voxels.
@@ -2451,7 +2449,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape' && gridLasso) { gridLasso = null; renderGridView(); }   // …then clears a finished lasso
   else if (e.key === 'Escape' && (gridSel || gridSelVox)) { gridSel = null; gridSelVox = null; gridSelView = null; renderGridView(); }
   else if (e.key === 'Escape') { volUndo(); e.preventDefault(); }    // …then ESC UNDOES the last delete
-  else if (e.key === 'Delete' || e.key === 'Backspace') { if (deleteCurrentLayer()) e.preventDefault(); }
+  else if (e.key === 'Delete' || e.key === 'Backspace') { if (doDelete()) e.preventDefault(); }   // DEL is the shortcut for the Delete button
   else if ((e.key === 'Enter' || e.key === 'f' || e.key === 'F') && gridSelVox) { if (fillSelection()) e.preventDefault(); }
 });
 (() => {
