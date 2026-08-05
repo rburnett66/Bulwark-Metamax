@@ -2071,7 +2071,7 @@ function forceDecorBodyOnly() {
 }
 
 // ── grid-view panel: mode (paint vs geometry) + face selector + z-slice walker ──
-if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; gridSel = null; gridSelVox = null; gridSelView = null; [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; if (gridMode !== 'geom') gridLayer = 0;   /* PAINT opens on the whole surface projection (layer 0), never wherever Geometry was left */ gridSel = null; gridSelVox = null; gridSelView = null; [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
 if ($('gridResetGeo')) $('gridResetGeo').onclick = () => { const part = gridPart(); geomState[part] = { auto: true, bottomFrom: geomState[part].bottomFrom || 'top' }; gridModel = null; recarve(); scheduleAutosave(); };
 $('gridViewSeg').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
