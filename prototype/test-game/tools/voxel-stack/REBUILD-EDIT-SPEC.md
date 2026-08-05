@@ -38,7 +38,11 @@ what you are looking at:
 
 - **Layer 0 = the whole face.** For the current facing, each cell shows the FIRST filled voxel along that
   facing's depth axis — the surface you would see looking at the model from there.
-- **Layer 1..n = one real slice** at that depth, so you can reach inside the model.
+- **Layer 1..N = one real slice** at that depth, so you can reach inside the model.
+
+  INVARIANT: for N layers the slider runs **0..N** — N+1 positions, because position 0 is the surface
+  projection and is not a layer. Position `i` shows layer `i`, and the readout must say `i`, not the
+  internal array index `i-1`. Labelling the index made 28 layers read as 0..27.
 
 Clicking or dragging in the grid puts those voxels into the shared selection set, and **they light up on
 the main 3D view immediately** — same set, both views, nothing to reconcile. That is the point: the grid

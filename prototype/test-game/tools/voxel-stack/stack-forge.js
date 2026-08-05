@@ -1485,7 +1485,9 @@ function renderGridView() {
     }
   }
   const ls = $('gridLayer'); if (ls) ls.max = String(depth);   // +1 for the surface projection at position 0
-  const lv = $('gridLayerV'); if (lv) lv.textContent = slice === 0 ? 'surface ▲' : `${ax.axis} ${slice - 1}`;
+  // LABEL THE SLIDER POSITION, not the internal index. 0 is the whole surface projection; 1..N are the
+  // N individual layers. Printing slice-1 made 28 layers read as 0..27.
+  const lv = $('gridLayerV'); if (lv) lv.textContent = slice === 0 ? 'surface ▲' : `${ax.axis} ${slice} / ${depth}`;
 
   // palette-correct colour: exactly what the 3D render bakes — raw voxel → paletteN reduction → tuner.
   // quant reads an overlay-aware colour buffer so painted voxels join the palette (cheap copy, no re-carve).
