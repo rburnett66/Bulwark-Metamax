@@ -2756,7 +2756,14 @@ function toggleFlip(part, view, axis) {
   const rot = rotState[part][view] || 0, swap = !!(rot % 180);
   const W = swap ? im.height : im.width, H = swap ? im.width : im.height;
   const dispAxis = swap ? (axis === 'h' ? 'v' : 'h') : axis;
-  if (polys) for (const q of polys) for (const p of q.pts) { if (dispAxis === 'h') p[0] = W - 1 - p[0]; else p[1] = H - 1 - p[1]; }
+  const mirror = (pt) => { if (dispAxis === 'h') pt[0] = W - 1 - pt[0]; else pt[1] = H - 1 - pt[1]; };
+  if (polys) for (const q of polys) for (const pt of q.pts) mirror(pt);
+  // The eyedropper picks carry a POINT as well as a colour — pt seeds an interior region the border
+  // flood cannot reach (keyBackground:seedPts). Those points live in the same DISPLAY space as the
+  // polys, so a flip must mirror them too. Mirroring only the polys left the picks seeding the
+  // ORIGINAL side of the image: the picture flipped and the cutout did not follow it.
+  const picks = pickState[part][view];
+  if (picks) for (const q of picks) if (q && q.pt) mirror(q.pt);
   // A flip on a CARVING view (top/side/front) re-mirrors the carve, but grid-view voxel edits are stored at
   // ABSOLUTE coordinates and don't move with it — old edits then linger as duplicated / misplaced voxels
   // (owner 2026-07-20: "view flip → geometry duplication"). Offer to recarve this part (reset its edits) so
