@@ -2856,6 +2856,7 @@ function toggleFlip(part, view, axis) {
   const W = swap ? im.height : im.width, H = swap ? im.width : im.height;
   const dispAxis = swap ? (axis === 'h' ? 'v' : 'h') : axis;
   const mirror = (pt) => { if (dispAxis === 'h') pt[0] = W - 1 - pt[0]; else pt[1] = H - 1 - pt[1]; };
+  const p0 = (polys && polys[0] && polys[0].pts[0]) ? JSON.stringify(polys[0].pts[0]) : 'none';   // diag, see below
   if (polys) for (const q of polys) for (const pt of q.pts) mirror(pt);
   // The eyedropper picks carry a POINT as well as a colour — pt seeds an interior region the border
   // flood cannot reach (keyBackground:seedPts). Those points live in the same DISPLAY space as the
@@ -2870,6 +2871,13 @@ function toggleFlip(part, view, axis) {
   // does not change how big the slice is, only which side of centre it sits on.
   const xf = (imgXf[part] || {})[view];
   if (xf) { if (dispAxis === 'h') xf.ox = -(xf.ox || 0); else xf.oy = -(xf.oy || 0); }
+  // TEMPORARY DIAGNOSTIC (owner: "flip moves the image, not the polygon cutout"). Running toggleFlip
+  // headlessly shows the polys DO mirror, so this reports what actually happens in the browser: how many
+  // shapes exist, and the first vertex before → after. If npoly=0 the shape is not in polyState at all
+  // (the cutout is the chroma key, not a polygon); if x does not change, something is restoring it.
+  console.info('[flip]', part, view, 'axis', axis, '→disp', dispAxis, 'W', W, 'H', H,
+    '| polys', polys ? polys.length : 0, polys && polys[0] ? `pt0 ${p0} → ${JSON.stringify(polys[0].pts[0])}` : '',
+    '| picks', picks ? picks.length : 0, '| ox', xf ? xf.ox : 'n/a');
   // A flip on a CARVING view (top/side/front) re-mirrors the carve, but grid-view voxel edits are stored at
   // ABSOLUTE coordinates and don't move with it — old edits then linger as duplicated / misplaced voxels
   // (owner 2026-07-20: "view flip → geometry duplication"). Offer to recarve this part (reset its edits) so
