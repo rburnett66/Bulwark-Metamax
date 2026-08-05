@@ -867,6 +867,9 @@ function buildSelVox(surfaceOnly) {
 }
 // The PERSISTENT selection as voxels (survives facing/layer switches), keyed for the 3D outline + masking.
 function gridSelSet() { return gridSelVox; }
+// Can this grid be selected in? Only needs a real facing (a cell↔voxel map) — NOT `editable`, which is off
+// in Geometry mode for the slice adjusters. Selecting mutates nothing, so no edit gate applies to it.
+function selectableGrid() { const g = gridGeom; return !!(g && g.toVox && g.cols > 0 && g.rows > 0 && g.depth > 0); }
 // What this cell shows of the selection in the CURRENT facing: 2 = the voxel this layer addresses is
 // selected, 1 = something DEEPER in this column is. Tier 1 is the whole point — it is how a selection
 // made in the top view stays visible from the side, where you trim it.
@@ -1731,16 +1734,6 @@ function renderGridView() {
   }
   // SELECTION: highlight the SELECTED voxels visible in THIS facing (they persist across facings so a Layer-0
   // object pick can be painted on every face), plus the exact dashed rect only in the facing it was drawn in.
-  if (gridSelVox && gridSelVox.part === part) {
-    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
-      const s = selCellState(gridGeom, cx, cy); if (!s) continue;
-      ctx.fillStyle = s === 2 ? 'rgba(95,224,255,.34)' : 'rgba(95,224,255,.13)';   // deeper-in-column reads faint
-      ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
-    }
-    if (gridSel && gridSelView === gridView) drawMarquee(gridSel, '#5fe0ff', null);
-  }
-  if (selBoxing) drawMarquee(selBoxing, selBoxing.mode === 'trim' ? '#ff5f5f' : '#5fe0ff',
-    selBoxing.mode === 'trim' ? 'rgba(255,95,95,.16)' : 'rgba(95,224,255,.10)');   // CTRL band is RED: trims the selection
   if (gridBoxSel) drawMarquee(gridBoxSel, '#e0625f', null);               // marquee being dragged
   if (gridAddBox) drawMarquee(gridAddBox, '#5fe07a', 'rgba(95,224,122,.14)');   // ➕ Add surface-extrude patch
   if (gridLasso && gridLasso.length) {                                    // ◇ Angle lasso outline (cell points)
@@ -1822,6 +1815,22 @@ function renderGridView() {
     ctx.strokeStyle = 'rgba(120,160,200,.6)'; ctx.lineWidth = 1; ctx.strokeRect(mmx + .5, mmy + .5, mw - 1, mw - 1);
     ctx.fillStyle = '#8fa7bd'; ctx.font = '8px sans-serif'; ctx.textBaseline = 'alphabetic'; ctx.fillText('top ref', mmx, mmy - 4);
   }
+  // ── SELECTION, DRAWN LAST ───────────────────────────────────────────────────────────────────────
+  // It must be the TOPMOST thing in the grid. It used to draw before the Geometry overlay, so switching
+  // to a facing that has one buried the highlight under a 0.42-alpha slice image and the selection
+  // looked like it had been cleared on every perspective change. Nothing may paint over it.
+  ctx.globalAlpha = 1;
+  if (gridSelVox && gridSelVox.part === part) {
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+      const s = selCellState(gridGeom, cx, cy); if (!s) continue;
+      ctx.fillStyle = s === 2 ? 'rgba(95,224,255,.38)' : 'rgba(95,224,255,.15)';   // deeper-in-column reads faint
+      ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
+      if (s === 2) { ctx.strokeStyle = 'rgba(120,240,255,.85)'; ctx.lineWidth = 1; ctx.strokeRect(ox + cx * cell + .5, oy + cy * cellV + .5, cell - 1, cellV - 1); }
+    }
+    if (gridSel && gridSelView === gridView) drawMarquee(gridSel, '#5fe0ff', null);
+  }
+  if (selBoxing) drawMarquee(selBoxing, selBoxing.mode === 'trim' ? '#ff5f5f' : '#5fe0ff',
+    selBoxing.mode === 'trim' ? 'rgba(255,95,95,.18)' : 'rgba(95,224,255,.12)');   // CTRL band is RED: trims the selection
 }
 
 // PERSIST the derived effective grid (footOf/gridLayersOf already guarantee grid ⊇ geometry for every reader;
@@ -2133,7 +2142,7 @@ function forceDecorBodyOnly() {
 }
 
 // ── grid-view panel: mode (paint vs geometry) + face selector + z-slice walker ──
-if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; if (gridMode !== 'geom') gridLayer = 0;   /* PAINT opens on the whole surface projection (layer 0), never wherever Geometry was left */ gridSel = null; gridSelVox = null; gridSelView = null; [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
+if ($('gridModeSeg')) $('gridModeSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; gridMode = b.dataset.m; if (gridMode !== 'geom') gridLayer = 0;   /* PAINT opens on the whole surface projection (layer 0), never wherever Geometry was left */ gridSel = null; gridSelView = null;   /* the dashed rect is per-facing; the voxel SET survives a mode switch so you can keep editing it */ [...$('gridModeSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
 if ($('gridResetGeo')) $('gridResetGeo').onclick = () => { const part = gridPart(); geomState[part] = { auto: true, bottomFrom: geomState[part].bottomFrom || 'top' }; gridModel = null; recarve(); scheduleAutosave(); };
 $('gridViewSeg').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
@@ -2674,6 +2683,18 @@ document.addEventListener('keydown', (e) => {
     renderGridView();                                              // box + silhouette track live; carve re-runs on release
   };
   cv.addEventListener('pointerdown', (e) => {
+    // SHIFT / CTRL band — FIRST, ahead of the slice handles, the geometry box and every tool. Selecting
+    // mutates nothing, so no edit gate applies to it and it must work in every mode, facing and layer.
+    // (It sat after the geometry-box branch, whose `if (!mode) return` swallowed the click, so Geometry
+    // mode could neither make nor trim a selection.) A held modifier means "select", never "drag".
+    //   SHIFT = ADD to the shared set (cyan). A single-cell SHIFT click TOGGLES — that is how you
+    //           deselect one voxel. Dragging again adds; it never replaces.
+    //   CTRL  = TRIM the set (red). Removes keys from the SELECTION only; carve geometry is untouched.
+    if ((e.shiftKey || e.ctrlKey || e.metaKey) && e.button !== 2 && selectableGrid()) {
+      const c = cellOf(e); if (!c) return;
+      selBoxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy, mode: (e.ctrlKey || e.metaKey) ? 'trim' : 'add' };
+      renderGridView(); cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+    }
     if (gridGeom && gridGeom.slice) {                              // Geometry mode: SLICE handles win
       const sm = sliceHit(e);
       if (sm) {
@@ -2697,15 +2718,6 @@ document.addEventListener('keydown', (e) => {
       if (gridLasso.length >= 3 && Math.hypot(gridLasso[0].c - c.cx, gridLasso[0].r - c.cy) < 1.6) { lassoMode = false; if ($('gridLassoBtn')) $('gridLassoBtn').classList.remove('on'); }
       else gridLasso.push({ c: c.cx, r: c.cy });
       renderGridView(); e.preventDefault(); return;
-    }
-    // SHIFT / CTRL band — ahead of every tool, so selecting works whatever tool is armed.
-    //   SHIFT = ADD to the shared selection (cyan). Dragging again adds; it never replaces.
-    //   CTRL  = TRIM the selection (red). It only ever removes keys from the SET — carve geometry is
-    //           untouched, so you can select from one facing and cut the selection back from another.
-    if ((e.shiftKey || e.ctrlKey || e.metaKey) && e.button !== 2) {
-      const c = cellOf(e); if (!c) return;
-      selBoxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy, mode: (e.ctrlKey || e.metaKey) ? 'trim' : 'add' };
-      renderGridView(); cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
     }
     // DELETE with a SELECTION active → delete the selected voxels on the CURRENT layer (Layer 0 cuts the whole
     // column through, after a confirm). Deliberately one layer at a time: walk the Layer slider and delete again;
@@ -2736,10 +2748,14 @@ document.addEventListener('keydown', (e) => {
   const finish = () => {
     if (selBoxing) {                                               // release a SHIFT/CTRL band → update the shared selection
       const g = gridGeom, band = selBoxing; selBoxing = null;
-      if (g && g.editable) {
-        const n = band.mode === 'trim' ? selTrimRect(g, band) : selAddRect(g, band);
+      if (selectableGrid()) {
+        // a single-cell SHIFT click TOGGLES — that is how you deselect one voxel without the CTRL band
+        const single = band.mode === 'add' && band.c0 === band.c1 && band.r0 === band.r1;
+        const n = band.mode === 'trim' ? selTrimRect(g, band)
+                : single && selCellState(g, band.c0, band.r0) === 2 ? -selTrimRect(g, band)
+                : selAddRect(g, band);
         gridSel = null; gridSelView = null;                        // the dashed rect belonged to a single facing; the SET is the state
-        console.info(`[stack-forge] ${band.mode === 'trim' ? 'trimmed' : 'selected'} ${n} voxel(s) — selection now ${gridSelVox ? gridSelVox.set.size : 0}`);
+        console.info(`[stack-forge] ${n < 0 ? 'deselected ' + -n : (band.mode === 'trim' ? 'trimmed ' : 'selected ') + n} voxel(s) — selection now ${gridSelVox ? gridSelVox.set.size : 0}`);
       }
       voxSig = ''; renderGridView(); return;                       // voxSig reset so the 3D view re-outlines
     }
