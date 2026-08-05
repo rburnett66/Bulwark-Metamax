@@ -3839,6 +3839,11 @@ function syncAllControls() {
 }
 async function loadProject(p) {
   bulkLoad = true;
+  // THE OUTGOING UNIT'S GEOMETRY MUST GO WITH IT. carveCache holds VOL — the model itself — and
+  // buildModelRaw returns the cached entry whenever foot/layers match, so a new unit of the same
+  // dimensions inherited the previous unit's voxels. Undo/selection/palette were already discarded
+  // here; the volume was not, because it only became the model when the voxEdit overlay was retired.
+  carveCache.body = null; carveCache.turret = null; gridModel = null;
   undoStack.length = 0; redoStack.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // undo history + selection belong to the OUTGOING unit — never let them apply to this one
   try {
     $('uid').value = p.id || 'unit'; activeUnitId = (p.id || 'unit');   // anchor the WIP key to the restored project
@@ -4057,6 +4062,11 @@ function selectUnit(id) {
   try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }
   resetPalette();                                        // per-unit palette — clear it (a WIP re-applies its own via loadProject)
   setBackSlotLabel('Back');                              // units use the Back slot as the rear view again
+  // THE OUTGOING UNIT'S GEOMETRY MUST GO WITH IT. carveCache holds VOL — the model itself — and
+  // buildModelRaw returns the cached entry whenever foot/layers match, so a new unit of the same
+  // dimensions inherited the previous unit's voxels. Undo/selection/palette were already discarded
+  // here; the volume was not, because it only became the model when the voxEdit overlay was retired.
+  carveCache.body = null; carveCache.turret = null; gridModel = null;
   undoStack.length = 0; redoStack.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
   loadingUnit = true;
   $('uid').value = id; activeUnitId = id;                 // anchor the WIP key to the unit being loaded
