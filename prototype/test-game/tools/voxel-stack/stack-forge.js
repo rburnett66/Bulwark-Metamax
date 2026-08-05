@@ -730,11 +730,12 @@ function buildFaces(partId, foot, layers) {
   const wallCol = (x, y, z, n) => {
     if (!V) return null;
     const zz = z - (V.z0 || 0);                          // masks are Hv tall from z0; index into them from z0
-    // ONE side sheet paints BOTH ±y faces, so exactly one must be mirrored. Which one is NOT settled:
-    // flipping this to n===3 (to match the grid's `side` facing, which samples UNMIRRORED and raycasts
-    // from y=0) did not fix the owner's report, so the fault is upstream of this choice — suspect the
-    // side sheet's assumed viewing side, which also mirrors the CARVE in x via sliceMask's (x-ox) index.
-    if (n >= 3) return pick(V.side, x - V.ox, zz, n === 4);
+    // ONE side sheet paints BOTH ±y faces, so exactly one must be mirrored — the FAR one. The side view
+    // raycasts from y=0, and y=0 is the model's LEFT (see the ORI derivation), so the sheet depicts the
+    // LEFT flank: n=4 (−y) takes it UNMIRRORED and n=3 (+y, RIGHT) takes the mirror. Mirroring n===4
+    // reversed the very flank the art was drawn on — owner: "the projection on the true left is
+    // backwards, it should be a mirror of the right side".
+    if (n >= 3) return pick(V.side, x - V.ox, zz, n === 3);
     if (n === 2 && V.back) return pick(V.back, y - V.oy, zz, false);
     return pick(V.front, y - V.oy, zz, n === 2);
   };
@@ -1511,7 +1512,7 @@ function renderGridView() {
   const AX = {
     top:   { cols: foot, rows: foot,   depth: layers, axis: 'z', toVox: (c, r, s) => [c, r, layers - 1 - s] },
     side:  { cols: foot, rows: layers, depth: foot,   axis: 'y', toVox: (c, r, s) => [c, s, layers - 1 - r] },
-    front: { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [foot - 1 - s, foot - 1 - c, layers - 1 - r] },  // +x FRONT: raycast from +x, col→y so grid LEFT = model left (matches the orbit)
+    front: { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [foot - 1 - s, foot - 1 - c, layers - 1 - r] },  // +x FRONT: raycast from +x, col→y reversed so grid LEFT = the model's RIGHT flank (you are facing its nose)
     back:  { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [s, c, layers - 1 - r] },                        // −x BACK: raycast from x=0, opposite-side col→y
     // ¾ ANGLE (decor): a DIAGONAL slice along the (1,1) camera ray. col → the in-plane diagonal h = x−y
     // (constant along a ray), CENTRED so the facing is foot-wide like Front/Side (matches the same-size source
@@ -1680,14 +1681,20 @@ function renderGridView() {
   // ORIENTATION INDICATOR (2026-07-21): label each edge with the WORLD direction it faces, read straight
   // from the same `ax.toVox` mapping the grid edits use — so the TOP/SIDE (and base-vs-turret) orientation
   // is explicit and any disagreement with the 3D orbit is immediately visible. World axes: x=+FRONT/−BACK,
-  // y=+LEFT(foot-1)/−RIGHT(0), z=UP. The four maps agree front=+x, so all views share it; base and turret
+  // y=−LEFT(0)/+RIGHT(foot−1), z=UP. The four maps agree front=+x, so all views share it; base and turret
   // use the SAME map, so this reads the same for both parts.
+  //
+  // THE HANDEDNESS, DERIVED (owner 2026-08-05: "the left side of top is labeled as right"). AX.top maps
+  // col→x and row→y, and canvas rows grow DOWNWARD, so +x is screen-right and +y is screen-DOWN — a plain
+  // map view with the nose pointing "east". Looking DOWN at a vehicle heading east, its LEFT flank faces
+  // "north" = UP the screen = y=0. So y=0 is LEFT and y=foot−1 is RIGHT. This comment previously asserted
+  // the opposite, and EVERY row below was written from that claim — so all of them were reversed.
   if (gridOrient) {
     const ORI = {
-      top:   { t: 'RIGHT', b: 'LEFT',  l: 'BACK',  r: 'FRONT', note: 'TOP · looking down (−Z)' },
-      side:  { t: 'UP',    b: 'DOWN',  l: 'BACK',  r: 'FRONT', note: 'SIDE · viewed from the RIGHT (−Y)' },
-      front: { t: 'UP',    b: 'DOWN',  l: 'LEFT',  r: 'RIGHT', note: 'FRONT · viewed from +X' },
-      back:  { t: 'UP',    b: 'DOWN',  l: 'RIGHT', r: 'LEFT',  note: 'BACK · viewed from −X' },
+      top:   { t: 'LEFT',  b: 'RIGHT', l: 'BACK',  r: 'FRONT', note: 'TOP · looking down (−Z)' },
+      side:  { t: 'UP',    b: 'DOWN',  l: 'BACK',  r: 'FRONT', note: 'SIDE · viewed from the LEFT (−Y)' },
+      front: { t: 'UP',    b: 'DOWN',  l: 'RIGHT', r: 'LEFT',  note: 'FRONT · viewed from +X' },   // head-on: its left is on YOUR right
+      back:  { t: 'UP',    b: 'DOWN',  l: 'LEFT',  r: 'RIGHT', note: 'BACK · viewed from −X' },    // behind it: its left is on YOUR left
       angle: { t: 'UP',    b: 'DOWN',  l: 'LEFT',  r: 'RIGHT', note: '¾ ANGLE · diagonal slice along the +X+Y camera ray' },
     }[gridView];
     if (ORI) {
@@ -1711,13 +1718,16 @@ function renderGridView() {
     ctx.save(); ctx.translate(ccx, ccy);
     ctx.strokeStyle = 'rgba(120,200,255,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
     ctx.rotate(a);
-    const dirs = [['F', 0, -1, 'rgba(242,200,105,.95)'], ['R', 1, 0, 'rgba(140,210,255,.85)'], ['B', 0, 1, 'rgba(140,210,255,.85)'], ['L', -1, 0, 'rgba(140,210,255,.85)']];
+    // FRONT points screen-RIGHT, not up: renderParts is PX = cx + S*(X*ca − Y*sa), so at az=0 the +X
+    // (FRONT) axis runs along screen +x and +Y (RIGHT) runs screen-DOWN. Drawing F at (0,−1) put the rose
+    // a quarter turn out of step with the model — owner: "the base is 90 clockwise of the compass".
+    const dirs = [['F', 1, 0, 'rgba(242,200,105,.95)'], ['R', 0, 1, 'rgba(140,210,255,.85)'], ['B', -1, 0, 'rgba(140,210,255,.85)'], ['L', 0, -1, 'rgba(140,210,255,.85)']];
     ctx.font = 'bold 10px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 1.5;
     for (const [lab, dx, dy, col] of dirs) {
       ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(dx * R * 0.5, dy * R * 0.5); ctx.lineTo(dx * R * 0.86, dy * R * 0.86); ctx.stroke();
       ctx.save(); ctx.translate(dx * (R + 8), dy * (R + 8)); ctx.rotate(-a); ctx.fillStyle = col; ctx.fillText(lab, 0, 0); ctx.restore();   // keep labels upright
     }
-    ctx.fillStyle = 'rgba(242,200,105,.95)'; ctx.beginPath(); ctx.moveTo(0, -R * 0.86); ctx.lineTo(-3.5, -R * 0.55); ctx.lineTo(3.5, -R * 0.55); ctx.closePath(); ctx.fill();   // front arrowhead
+    ctx.fillStyle = 'rgba(242,200,105,.95)'; ctx.beginPath(); ctx.moveTo(R * 0.86, 0); ctx.lineTo(R * 0.55, -3.5); ctx.lineTo(R * 0.55, 3.5); ctx.closePath(); ctx.fill();   // front arrowhead → +X (screen right)
     ctx.restore();
   }
 
@@ -2384,8 +2394,8 @@ function gridDiag() {
     const zz = z - z0;
     if (!F(x + 1, y, z)) { grp.fx[0]++; if (V && hit(V.front, y - oy, zz, false)) grp.fx[1]++; }         // +x front (barrel tips)
     if (!F(x - 1, y, z)) { grp.bx[0]++; if (V && (V.back ? hit(V.back, y - oy, zz, false) : hit(V.front, y - oy, zz, true))) grp.bx[1]++; }
-    if (!F(x, y + 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, false)) grp.sy[1]++; }         // must track wallCol's ±y flags
-    if (!F(x, y - 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, true)) grp.sy[1]++; }
+    if (!F(x, y + 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, true)) grp.sy[1]++; }          // +y RIGHT = the far flank → mirrored
+    if (!F(x, y - 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, false)) grp.sy[1]++; }         // −y LEFT  = the flank the art depicts
   }
   const artDim = (g) => (g && g.m) ? `${g.w}x${g.h}` : '—none';
   const pct = (a) => a[0] ? `${a[1]}/${a[0]} (${Math.round(100 * a[1] / a[0])}% art, ${a[0] - a[1]} fall back to voxel colour)` : 'none';
