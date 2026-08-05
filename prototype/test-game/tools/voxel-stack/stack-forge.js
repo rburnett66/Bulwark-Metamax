@@ -730,12 +730,15 @@ function buildFaces(partId, foot, layers) {
   const wallCol = (x, y, z, n) => {
     if (!V) return null;
     const zz = z - (V.z0 || 0);                          // masks are Hv tall from z0; index into them from z0
-    // ONE side sheet paints BOTH ±y faces, so exactly one must be mirrored — the FAR one. The side view
-    // raycasts from y=0, and y=0 is the model's LEFT (see the ORI derivation), so the sheet depicts the
-    // LEFT flank: n=4 (−y) takes it UNMIRRORED and n=3 (+y, RIGHT) takes the mirror. Mirroring n===4
-    // reversed the very flank the art was drawn on — owner: "the projection on the true left is
-    // backwards, it should be a mirror of the right side".
-    if (n >= 3) return pick(V.side, x - V.ox, zz, n === 3);
+    // NEITHER ±y face is mirrored, and that is what makes them mirrors of each other.
+    // `pick` indexes the sheet by WORLD x, so sampling both flanks with the same ix lays the art along
+    // +x on both — nose-at-large-x on each side. The orbit supplies the mirror for free: at az=0 the
+    // camera sits at +Y and +x runs screen-right; orbit round to the −y flank and +x runs screen-LEFT,
+    // so that flank is seen reversed exactly as a real object would be.
+    // Applying g.w−1−ix DOUBLE-mirrors whichever face carries it, which is why setting the flag on n===4
+    // made the LEFT flank read backwards and setting it on n===3 flipped the RIGHT one. The flag was
+    // never the choice — the mirror belongs to the camera, not the sampler.
+    if (n >= 3) return pick(V.side, x - V.ox, zz, false);
     if (n === 2 && V.back) return pick(V.back, y - V.oy, zz, false);
     return pick(V.front, y - V.oy, zz, n === 2);
   };
@@ -2394,8 +2397,8 @@ function gridDiag() {
     const zz = z - z0;
     if (!F(x + 1, y, z)) { grp.fx[0]++; if (V && hit(V.front, y - oy, zz, false)) grp.fx[1]++; }         // +x front (barrel tips)
     if (!F(x - 1, y, z)) { grp.bx[0]++; if (V && (V.back ? hit(V.back, y - oy, zz, false) : hit(V.front, y - oy, zz, true))) grp.bx[1]++; }
-    if (!F(x, y + 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, true)) grp.sy[1]++; }          // +y RIGHT = the far flank → mirrored
-    if (!F(x, y - 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, false)) grp.sy[1]++; }         // −y LEFT  = the flank the art depicts
+    if (!F(x, y + 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, false)) grp.sy[1]++; }         // both flanks sample by world x;
+    if (!F(x, y - 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, false)) grp.sy[1]++; }         // the camera supplies the mirror
   }
   const artDim = (g) => (g && g.m) ? `${g.w}x${g.h}` : '—none';
   const pct = (a) => a[0] ? `${a[1]}/${a[0]} (${Math.round(100 * a[1] / a[0])}% art, ${a[0] - a[1]} fall back to voxel colour)` : 'none';
