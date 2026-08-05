@@ -810,27 +810,73 @@ function renderParts(ctx, S, cx, groundY, el, parts) {
 // Build the voxel set for the CURRENT marquee rect in the current facing/slice (Layer 0 = whole column
 // through depth = "select the objects"). Called on commit to freeze the selection into voxels so it can
 // then persist across facing switches.
+// ── THE SHARED SELECTION ─────────────────────────────────────────────────────────────────────────
+// ONE set of voxel keys that EVERY view shows. The grid draws it projected along whatever facing is on
+// screen; the 3D view outlines it in cyan. That is what makes "select from the top, then trim it back
+// from the side" work — there is one selection, not one per view, so there is nothing to reconcile.
+let selEpoch = 0;                                         // bumped on every change so the 3D view redraws
+function selEnsure(part) {
+  if (!gridSelVox || gridSelVox.part !== part) gridSelVox = { part, set: new Set() };
+  return gridSelVox;
+}
+const rectBounds = (g, c0, r0, c1, r1) => ({
+  a0: Math.max(0, Math.min(c0, c1)), a1: Math.min(g.cols - 1, Math.max(c0, c1)),
+  b0: Math.max(0, Math.min(r0, r1)), b1: Math.min(g.rows - 1, Math.max(r0, r1)),
+});
+// The voxels a grid rect covers. Layer 0 = the whole depth COLUMN, so a top-view band grabs the solid
+// object and you can then carve it back from another facing; layer i = that one slice. Only FILLED
+// voxels are ever selected — a selection names geometry, never empty space.
+function rectVox(g, c0, r0, c1, r1) {
+  const foot = g.foot, N = foot * foot, out = [], { a0, a1, b0, b1 } = rectBounds(g, c0, r0, c1, r1);
+  for (let cy = b0; cy <= b1; cy++) for (let cx = a0; cx <= a1; cx++) {
+    if (g.slice === 0) {
+      for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s); if (gridFilledAt(g, x, y, z)) out.push(z * N + y * foot + x); }
+    } else { const [x, y, z] = g.toVox(cx, cy, g.slice - 1); if (gridFilledAt(g, x, y, z)) out.push(z * N + y * foot + x); }
+  }
+  return out;
+}
+function selAddRect(g, r) {
+  const sel = selEnsure(g.part); let n = 0;
+  for (const k of rectVox(g, r.c0, r.r0, r.c1, r.r1)) { if (!sel.set.has(k)) n++; sel.set.add(k); }
+  selEpoch++; return n;
+}
+// CTRL band: trim the SELECTION only. It never touches VOL — unselected carve voxels are not its business.
+function selTrimRect(g, r) {
+  if (!gridSelVox || gridSelVox.part !== g.part) return 0;
+  const foot = g.foot, N = foot * foot, S = gridSelVox.set, { a0, a1, b0, b1 } = rectBounds(g, r.c0, r.r0, r.c1, r.r1);
+  let n = 0;
+  const drop = (x, y, z) => { if (S.delete(z * N + y * foot + x)) n++; };
+  for (let cy = b0; cy <= b1; cy++) for (let cx = a0; cx <= a1; cx++) {
+    if (g.slice === 0) { for (let s = 0; s < g.depth; s++) { const v = g.toVox(cx, cy, s); drop(v[0], v[1], v[2]); } }
+    else { const v = g.toVox(cx, cy, g.slice - 1); drop(v[0], v[1], v[2]); }
+  }
+  selEpoch++; return n;
+}
 function buildSelVox(surfaceOnly) {
   if (!gridSel || !gridGeom) return null;
   const g = gridGeom, foot = g.foot, N = foot * foot, set = new Set();
-  const c0 = Math.min(gridSel.c0, gridSel.c1), c1 = Math.max(gridSel.c0, gridSel.c1), r0 = Math.min(gridSel.r0, gridSel.r1), r1 = Math.max(gridSel.r0, gridSel.r1);
-  // Layer 0 marquee = select the WHOLE column through depth ("select the objects", for cross-facing painting).
-  // surfaceOnly (Select layer) stays on the visible surface — else a full-rect Layer-0 selection on the Top
-  // view would grab the entire model (every z in every column). Real layers always stay limited to their slice.
-  const through = !surfaceOnly && g.slice === 0;
-  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
-    if (through) { for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s); set.add(z * N + y * foot + x); } }
-    else { const [x, y, z] = gridTargetVox(g, cx, cy); set.add(z * N + y * foot + x); }
-  }
+  if (surfaceOnly) {                                      // "Select layer" stays on the visible surface — else a
+    const { a0, a1, b0, b1 } = rectBounds(g, gridSel.c0, gridSel.r0, gridSel.c1, gridSel.r1);   // full-rect Layer-0
+    for (let cy = b0; cy <= b1; cy++) for (let cx = a0; cx <= a1; cx++) {                       // pick on Top would
+      const [x, y, z] = gridTargetVox(g, cx, cy);                                               // grab the whole model
+      if (gridFilledAt(g, x, y, z)) set.add(z * N + y * foot + x);
+    }
+  } else for (const k of rectVox(g, gridSel.c0, gridSel.r0, gridSel.c1, gridSel.r1)) set.add(k);
+  selEpoch++;
   return { part: g.part, set };
 }
 // The PERSISTENT selection as voxels (survives facing/layer switches), keyed for the 3D outline + masking.
 function gridSelSet() { return gridSelVox; }
-// Is the voxel this cell would edit in the current facing/slice part of the persistent selection?
-function gridCellSelected(g, cx, cy) {
-  if (!gridSelVox || !g || gridSelVox.part !== g.part) return false;
-  const [x, y, z] = gridTargetVox(g, cx, cy);
-  return gridSelVox.set.has(z * g.foot * g.foot + y * g.foot + x);
+// What this cell shows of the selection in the CURRENT facing: 2 = the voxel this layer addresses is
+// selected, 1 = something DEEPER in this column is. Tier 1 is the whole point — it is how a selection
+// made in the top view stays visible from the side, where you trim it.
+function selCellState(g, cx, cy) {
+  if (!gridSelVox || !g || gridSelVox.part !== g.part || !gridSelVox.set.size) return 0;
+  const foot = g.foot, N = foot * foot, S = gridSelVox.set;
+  const t = gridTargetVox(g, cx, cy);
+  if (S.has(t[2] * N + t[1] * foot + t[0])) return 2;
+  for (let s = 0; s < g.depth; s++) { const [x, y, z] = g.toVox(cx, cy, s); if (S.has(z * N + y * foot + x)) return 1; }
+  return 0;
 }
 // assemble the current unit (body + mounted turret, honouring the part filter) and render it into a canvas
 function drawScene(meta, el, bodyAz, turretAz) {
@@ -1318,6 +1364,7 @@ let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn
 let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
 let gridAlign = false;                                   // ⊞ Align T/S: carved TOP projection stacked above SIDE, length-aligned (read-only, Pass 1)
 let gridBoxSel = null;                                    // transient marquee being dragged {c0,r0,c1,r1} in grid cells
+let selBoxing = null;                                     // SHIFT (add, cyan) / CTRL (trim, red) selection band being dragged
 let gridAddBox = null;                                    // ➕ Add: transient rubber-band that extrudes the surface patch on release
 let gridLasso = null, lassoMode = false;                 // Story 5: ◇ Angle lasso — freeform outline (cell points) for the visual-hull carve
 let gridSel = null;                                       // last marquee rect (in gridSelView's facing) — for the dashed outline in that one view
@@ -1342,10 +1389,12 @@ const gridLayersOf = (part) => (part === 'turret' ? state.turretLayers : state.b
 // LAYER 0 = raycast "surface": the target voxel at a grid cell is the FIRST filled voxel along the view's
 // depth axis (what a ray straight into the model would hit), so painting Layer 0 recolours the FACING
 // surface and it shows in the 3D view. Deeper layers address their exact depth slice as before.
+// ONE `filled`, sourced from VOL — the same model `layerKeys`/`deleteSelection` cut. It used to consult
+// voxEdit first, so the tool AIMED with the overlay and CUT with VOL: any stale 'del' made a click pass
+// through a visible voxel and hit the one behind it.
 function gridFilledAt(g, x, y, z) {
   if (x < 0 || y < 0 || z < 0 || x >= g.foot || y >= g.foot || z >= g.layers) return false;
-  const o = voxEdit[g.part].get(z * g.foot * g.foot + y * g.foot + x);
-  return o !== undefined ? o !== 'del' : (gridModel && gridModel.filled ? gridModel.filled(x, y, z) : false);
+  return !!(gridModel && gridModel.filled && gridModel.filled(x, y, z));
 }
 function gridTargetVox(g, cx, cy) {
   if (g.slice === 0) {                                        // LAYER 0 = the non-layer SURFACE projection
@@ -1683,10 +1732,15 @@ function renderGridView() {
   // SELECTION: highlight the SELECTED voxels visible in THIS facing (they persist across facings so a Layer-0
   // object pick can be painted on every face), plus the exact dashed rect only in the facing it was drawn in.
   if (gridSelVox && gridSelVox.part === part) {
-    ctx.fillStyle = 'rgba(95,224,255,.16)';
-    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) if (gridCellSelected(gridGeom, cx, cy)) ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+      const s = selCellState(gridGeom, cx, cy); if (!s) continue;
+      ctx.fillStyle = s === 2 ? 'rgba(95,224,255,.34)' : 'rgba(95,224,255,.13)';   // deeper-in-column reads faint
+      ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
+    }
     if (gridSel && gridSelView === gridView) drawMarquee(gridSel, '#5fe0ff', null);
   }
+  if (selBoxing) drawMarquee(selBoxing, selBoxing.mode === 'trim' ? '#ff5f5f' : '#5fe0ff',
+    selBoxing.mode === 'trim' ? 'rgba(255,95,95,.16)' : 'rgba(95,224,255,.10)');   // CTRL band is RED: trims the selection
   if (gridBoxSel) drawMarquee(gridBoxSel, '#e0625f', null);               // marquee being dragged
   if (gridAddBox) drawMarquee(gridAddBox, '#5fe07a', 'rgba(95,224,122,.14)');   // ➕ Add surface-extrude patch
   if (gridLasso && gridLasso.length) {                                    // ◇ Angle lasso outline (cell points)
@@ -1830,7 +1884,7 @@ function update() {
   // only re-render the cube scene when something it depends on actually changed
   const sig = state.az.toFixed(1) + '|' + state.el.toFixed(1) + '|' + state.taim.toFixed(1) + '|' + state.turretDx + '|' +
     state.turretPivot + '|' + state.mountZ + '|' + state.part + '|' + state.lightAz + '|' + state.lightK + '|' + state.zScale +
-    '|' + (gridSelVox ? gridSelVox.set.size + ':' + gridSelVox.part + ':' + gridView + ':' + gridLayer : 'x') +   // re-render on selection change
+    '|' + (gridSelVox ? selEpoch + ':' + gridSelVox.part + ':' + gridView + ':' + gridLayer : 'x') +   // selEpoch, not set.size: trading one selected voxel for another must still redraw
     '|dim' + (state.showDimBox ? state.foot + ':' + footOf('turret') + ':' + state.bodyLayers + ':' + state.turretLayers : '0');   // SF1 dim box (+SF3 turret foot)
   if (sig !== voxSig) { voxSig = sig; drawScene(voxMeta, state.el, azR, azR + taimR); voxTex.baseTexture.update(); }
 }
@@ -2644,6 +2698,15 @@ document.addEventListener('keydown', (e) => {
       else gridLasso.push({ c: c.cx, r: c.cy });
       renderGridView(); e.preventDefault(); return;
     }
+    // SHIFT / CTRL band — ahead of every tool, so selecting works whatever tool is armed.
+    //   SHIFT = ADD to the shared selection (cyan). Dragging again adds; it never replaces.
+    //   CTRL  = TRIM the selection (red). It only ever removes keys from the SET — carve geometry is
+    //           untouched, so you can select from one facing and cut the selection back from another.
+    if ((e.shiftKey || e.ctrlKey || e.metaKey) && e.button !== 2) {
+      const c = cellOf(e); if (!c) return;
+      selBoxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy, mode: (e.ctrlKey || e.metaKey) ? 'trim' : 'add' };
+      renderGridView(); cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+    }
     // DELETE with a SELECTION active → delete the selected voxels on the CURRENT layer (Layer 0 cuts the whole
     // column through, after a confirm). Deliberately one layer at a time: walk the Layer slider and delete again;
     // an already-empty layer just no-ops (no stuck loop). Right-click still freehand-deletes within the selection.
@@ -2664,12 +2727,22 @@ document.addEventListener('keydown', (e) => {
   });
   cv.addEventListener('pointermove', (e) => {
     if (sliceDrag) sliceMove(e);
+    else if (selBoxing) { const c = cellOf(e); if (c) { selBoxing.c1 = c.cx; selBoxing.r1 = c.cy; renderGridView(); } }
     else if (geomDrag) geomMove(e);
     else if (addBoxing) { const c = cellOf(e); if (c) { addBoxing.c1 = c.cx; addBoxing.r1 = c.cy; gridAddBox = addBoxing; renderGridView(); } }
     else if (boxing) { const c = cellOf(e); if (c) { boxing.c1 = c.cx; boxing.r1 = c.cy; gridBoxSel = boxing; renderGridView(); } }
     else if (painting) editAt(e, gridTool === 'erase' || gridTool === 'box' || gridTool === 'add' || (e.buttons & 2));   // right-drag mid-stroke still erases
   });
   const finish = () => {
+    if (selBoxing) {                                               // release a SHIFT/CTRL band → update the shared selection
+      const g = gridGeom, band = selBoxing; selBoxing = null;
+      if (g && g.editable) {
+        const n = band.mode === 'trim' ? selTrimRect(g, band) : selAddRect(g, band);
+        gridSel = null; gridSelView = null;                        // the dashed rect belonged to a single facing; the SET is the state
+        console.info(`[stack-forge] ${band.mode === 'trim' ? 'trimmed' : 'selected'} ${n} voxel(s) — selection now ${gridSelVox ? gridSelVox.set.size : 0}`);
+      }
+      voxSig = ''; renderGridView(); return;                       // voxSig reset so the 3D view re-outlines
+    }
     if (addBoxing) {                                               // ➕ Add: release → extrude the surface patch in the paint colour
       const before = snapVoxEdit();
       if (commitAddBox()) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; }
