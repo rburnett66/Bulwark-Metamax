@@ -1921,7 +1921,26 @@ refreshModel();
 // refreshModel() rebuild faces from the CACHED carve + your voxel edits, then redraw. Paint, erase,
 //                undo, palette, lighting — none of these can change geometry, so none re-carve.
 // refreshView()  redraw from the faces already built. Camera only.
-function recarve() { carveCache.body = null; carveCache.turret = null; refreshModel(); }
+function recarve() { carveCache.body = null; carveCache.turret = null; volDirty.body = false; volDirty.turret = false; refreshModel(); }
+// Put a saved volume back after a carve has rebuilt VOL. Dims must match exactly — the keys are absolute
+// z*foot²+y*foot+x, so replaying a 32-grid volume into a 64-grid model would scatter it. A mismatch
+// discards rather than mis-indexes, and says so.
+function restoreVol(p) {
+  if (!p || !p.vol) return;
+  for (const part of ['body', 'turret']) {
+    const s = p.vol[part]; if (!s || !s.edited) continue;
+    const c = carveCache[part], V = c && c.m && c.m.VOL;
+    if (!V) continue;
+    if (s.foot !== c.foot || s.layers !== c.layers || !s.b64) {
+      console.warn(`[stack-forge] ${part}: saved volume was ${s.foot}×${s.layers}, this carve is ${c.foot}×${c.layers} — hand edits discarded rather than mis-indexed`);
+      continue;
+    }
+    const u = u8FromB64(s.b64);
+    if (u.length !== V.length) { console.warn(`[stack-forge] ${part}: saved volume length mismatch — discarded`); continue; }
+    V.set(u); volDirty[part] = true;
+  }
+  gridModel = null; refreshModel();
+}
 function refreshView() { voxSig = ''; renderGridView(); }
 
 function update() {
@@ -2276,8 +2295,12 @@ function liveVOL(part) {
   const hit = carveCache[part];
   return hit && hit.m ? hit.m.VOL : null;
 }
+// Has this part's VOL been hand-edited since its last carve? Set here because pushVol runs before every
+// edit; cleared by recarve, which is the one operation that legitimately throws hand work away.
+const volDirty = { body: false, turret: false };
 function pushVol(part) {
   const V = liveVOL(part); if (!V) return;
+  volDirty[part] = true;
   volHistory.push({ part, snap: V.slice() });
   if (volHistory.length > 60) volHistory.shift();
 }
@@ -3810,8 +3833,17 @@ function snapshotProject(idOverride) {
     const m = voxPart[part];
     vox[part] = m ? { nx: m.nx, ny: m.ny, nz: m.nz, b64: voxB64[part] || (voxB64[part] = b64FromU8(m.data)) } : null;
   }
+  // THE CARVED VOLUME. VOL is the model now, and it was serialised nowhere — so every voxel deleted in
+  // a session was lost on reload while the save reported success. Stored like the .vox blob: one byte
+  // per voxel, base64, stamped with the dims it was carved at so a resize can reject it instead of
+  // mis-indexing. Only saved when it DIFFERS from a plain re-carve, so untouched units stay small.
+  const vol = {};
+  for (const part of ['body', 'turret']) {
+    const c = carveCache[part], V = c && c.m && c.m.VOL;
+    vol[part] = V ? { foot: c.foot, layers: c.layers, edited: !!volDirty[part], b64: b64FromU8(V) } : null;
+  }
   const st = { ...state }; delete st.baked; delete st.decorBaked;   // baked textures are PIXI objects — never serialise them into the WIP
-  return { format: 'stackforge-project', version: 2, id: (idOverride || $('uid').value || 'unit').trim(),
+  return { format: 'stackforge-project', version: 2, id: (idOverride || $('uid').value || 'unit').trim(), vol,
     state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, picks: pickState, images, vox,
     palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop],
     voxEdit: { body: [...voxEdit.body], turret: [...voxEdit.turret] },
@@ -3880,7 +3912,7 @@ async function loadProject(p) {
       }
     }
   } finally { bulkLoad = false; }
-  syncAllControls(); recarve(); drawLight(); renderRoster();
+  syncAllControls(); recarve(); restoreVol(p); drawLight(); renderRoster();   // recarve rebuilds VOL from the art, THEN the saved hand edits go back on top
 }
 let autosaveTimer = 0;
 // a project is worth persisting only if it has real editable content — source art, an imported .vox,
@@ -3890,6 +3922,7 @@ let autosaveTimer = 0;
 function projectHasContent(p) {
   for (const part of ['body', 'turret']) {
     if (p.vox && p.vox[part]) return true;
+    if (p.vol && p.vol[part] && p.vol[part].edited) return true;   // hand-carved geometry IS content — a delete-only session scored 0 here and was discarded as an empty shell
     if (p.voxEdit && p.voxEdit[part] && p.voxEdit[part].length) return true;
     if (p.images && p.images[part]) for (const v of VIEWS) if (p.images[part][v]) return true;
   }
