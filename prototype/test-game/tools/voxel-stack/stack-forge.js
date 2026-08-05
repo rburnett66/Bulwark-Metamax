@@ -537,6 +537,17 @@ function effPlace(part) {
 }
 // raise ONE axis of the grid so a dragged box fits. z -> Layers, x/y -> Resolution (snapped UP to the
 // slider's step-4 ladder, which only ever makes room). Never shrinks.
+// Raising Layers must carry a FULL-HEIGHT z span up with it. Once the geometry box is dragged,
+// geomState[part] holds EXPLICIT spans and auto goes false -- the carve then reads spanZ, not the
+// slider, so a turret frozen at 0..8 stayed 8 voxels tall no matter how far Layers was pushed and
+// the extra grid was simply empty air above it. Only extends a span that reached the OLD ceiling,
+// so a deliberately shortened turret keeps its height.
+function growSpanZ(part, wasLayers) {
+  const g = geomState[part];
+  if (!g || g.auto || !g.spanZ) return;
+  if (g.spanZ.hi >= wasLayers && state[part === 'turret' ? 'turretLayers' : 'bodyLayers'] > wasLayers)
+    g.spanZ = { lo: g.spanZ.lo, hi: state[part === 'turret' ? 'turretLayers' : 'bodyLayers'] };
+}
 function growAxis(part, axis, want) {
   const isT = part === 'turret';
   if (axis === 'z') {
@@ -2120,7 +2131,7 @@ if ($('xfSy')) { $('xfSy').oninput = (e) => xfEdit('sy', +e.target.value, true);
 if ($('xfOx')) { $('xfOx').oninput = (e) => xfEdit('ox', +e.target.value, true); $('xfOx').onchange = (e) => xfEdit('ox', +e.target.value, false); }
 if ($('xfOy')) { $('xfOy').oninput = (e) => xfEdit('oy', +e.target.value, true); $('xfOy').onchange = (e) => xfEdit('oy', +e.target.value, false); }
 if ($('xfReset')) $('xfReset').onclick = () => { imgXf[boxPart()][boxSide] = { sx: 1, sy: 1, ox: 0, oy: 0 }; xfSyncSliders(); gridModel = null; recarve(); scheduleAutosave(); };
-$('bodyLayers').oninput = (e) => { state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; recarve(); };
+$('bodyLayers').oninput = (e) => { const was = state.bodyLayers; state.bodyLayers = +e.target.value; $('bodyLayersV').textContent = state.bodyLayers; growSpanZ('body', was); recarve(); };
 // ⬛ Cube: make the build volume a true voxel cube driven by the HEIGHT you set — footprint (length×width) snaps
 // to match Base layers (owner: "if the height is 64, set base to 64×64"). Footprint is a discrete Resolution, so
 // height snaps to the nearest one and both axes end equal. On-screen height is still scaled by Cube height (zScale).
@@ -2131,7 +2142,7 @@ if ($('bodyCube')) $('bodyCube').onclick = () => {
   setLayers('body', target);                                       // exact cube: layers = foot = target
   syncSizeUI(); recarve();
 };
-$('turretLayers').oninput = (e) => { state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; recarve(); };
+$('turretLayers').oninput = (e) => { const was = state.turretLayers; state.turretLayers = +e.target.value; $('turretLayersV').textContent = state.turretLayers; growSpanZ('turret', was); recarve(); };
 $('res').onchange = (e) => { state.foot = +e.target.value; syncSizeUI(); recarve(); };
 $('turretRes').onchange = (e) => { state.turretFoot = +e.target.value; syncSizeUI(); recarve(); };   // SF3
 // fine world-size control (the VOX_PER_TILE contract): tiles → foot voxels, layers scale along
@@ -2150,21 +2161,26 @@ function setUnitSize(tiles) {
   if (newFoot === state.foot) return;
   const k = newFoot / state.foot;
   state.foot = newFoot;
-  setLayers('body', clamp(Math.round(state.bodyLayers * k), 4, 40));      // keep the proportions
-  setLayers('turret', clamp(Math.round(state.turretLayers * k), 3, 40));
+  setLayers('body', clamp(Math.round(state.bodyLayers * k), 4, MAX_LAYERS));      // keep the proportions
+  setLayers('turret', clamp(Math.round(state.turretLayers * k), 3, MAX_LAYERS));
   syncSizeUI(); recarve();
 }
 $('uSize').oninput = (e) => { $('uSizeV').textContent = (+e.target.value / 100).toFixed(2) + ' t'; };
 $('uSize').onchange = (e) => setUnitSize(+e.target.value / 100);          // re-carve on release
 // ── .vox import: bring a ready-made voxel model in as the base/turret (skips the carve) ──
+// ONE ceiling for every layer count. The Base slider already allowed 128 while the Turret slider and
+// all three clamps below stopped at 40, so a turret could never exceed a third of a full-height body
+// and a tall imported .vox was silently truncated. setLayers does not clamp -- it writes to the input,
+// so the slider's max attribute was the real cap and the JS clamps only compounded it.
+const MAX_LAYERS = 128;
 const setLayers = (which, v) => { const id = which === 'body' ? 'bodyLayers' : 'turretLayers'; state[id] = v; $(id).value = v; $(id + 'V').textContent = v; };
 function fitToVox() {
   let mx = 0;
   for (const kk of ['body', 'turret']) { const v = voxPart[kk]; if (v) mx = Math.max(mx, v.nx, v.ny); }
   if (!mx) return;
   const res = [32, 48, 64, 96, 128]; state.foot = res.find((r) => r >= mx) || 128; $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; }
-  if (voxPart.body) setLayers('body', clamp(voxPart.body.nz, 4, 40));
-  if (voxPart.turret) setLayers('turret', clamp(voxPart.turret.nz, 4, 40));
+  if (voxPart.body) setLayers('body', clamp(voxPart.body.nz, 4, MAX_LAYERS));
+  if (voxPart.turret) setLayers('turret', clamp(voxPart.turret.nz, 4, MAX_LAYERS));
 }
 function importVox(part, file) {
   const rd = new FileReader();
