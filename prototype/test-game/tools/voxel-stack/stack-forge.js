@@ -1684,7 +1684,11 @@ function renderGridView() {
   const cellV = Math.max(1, Math.round(cell * zsc));                      // voxel HEIGHT in px for this view (zScale-scaled: <1 squashes, >1 stretches)
   const gw = cell * cols, gh = cellV * rows;
   const ox = Math.floor((W - gw) / 2) + gridPanX, oy = Math.floor((H - gh) / 2) + gridPanY;
-  const geomActive = gridMode === 'geom' && V && base.sp && GEOAX[gridView];  // reconcile overlay (image-carved only)
+  // The sizing box needs SPANS and an axis map — not side/front/back art. Requiring `V` meant a part
+  // with only a top slice (or no wall art yet) drew no box at all, so the cyan handles did not exist and
+  // there was nothing to drag: owner "the blue handles do not respond". The slice image it overlays is
+  // already drawn behind `if (keyed)`, so it simply renders as a bare box when there is no art.
+  const geomActive = gridMode === 'geom' && base.sp && GEOAX[gridView];
   gridGeom = { cell, cellV, zsc, ox, oy, cols, rows, depth, slice, toVox: ax.toVox, foot, layers, part, editable: !geomActive };
   ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, W, H);
   // faint checker so the empty grid still reads as a grid at any zoom
