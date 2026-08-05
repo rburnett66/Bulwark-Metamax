@@ -730,11 +730,11 @@ function buildFaces(partId, foot, layers) {
   const wallCol = (x, y, z, n) => {
     if (!V) return null;
     const zz = z - (V.z0 || 0);                          // masks are Hv tall from z0; index into them from z0
-    // ONE side sheet paints BOTH ±y faces, so exactly one must be mirrored — and it is the FAR one.
-    // The grid's `side` facing raycasts from y=0 (AX.side depth → y), so the face the artist actually
-    // drew is −y (n=4), which the grid samples UNMIRRORED. Mirroring n===4 here flipped that very face
-    // and left the opposite one unflipped: one side of the model read correct, the other reversed.
-    if (n >= 3) return pick(V.side, x - V.ox, zz, n === 3);
+    // ONE side sheet paints BOTH ±y faces, so exactly one must be mirrored. Which one is NOT settled:
+    // flipping this to n===3 (to match the grid's `side` facing, which samples UNMIRRORED and raycasts
+    // from y=0) did not fix the owner's report, so the fault is upstream of this choice — suspect the
+    // side sheet's assumed viewing side, which also mirrors the CARVE in x via sliceMask's (x-ox) index.
+    if (n >= 3) return pick(V.side, x - V.ox, zz, n === 4);
     if (n === 2 && V.back) return pick(V.back, y - V.oy, zz, false);
     return pick(V.front, y - V.oy, zz, n === 2);
   };
@@ -2384,8 +2384,8 @@ function gridDiag() {
     const zz = z - z0;
     if (!F(x + 1, y, z)) { grp.fx[0]++; if (V && hit(V.front, y - oy, zz, false)) grp.fx[1]++; }         // +x front (barrel tips)
     if (!F(x - 1, y, z)) { grp.bx[0]++; if (V && (V.back ? hit(V.back, y - oy, zz, false) : hit(V.front, y - oy, zz, true))) grp.bx[1]++; }
-    if (!F(x, y + 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, true)) grp.sy[1]++; }          // +y = the FAR side → mirrored
-    if (!F(x, y - 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, false)) grp.sy[1]++; }         // −y = the face the art was drawn on
+    if (!F(x, y + 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, false)) grp.sy[1]++; }         // must track wallCol's ±y flags
+    if (!F(x, y - 1, z)) { grp.sy[0]++; if (V && hit(V.side, x - ox, zz, true)) grp.sy[1]++; }
   }
   const artDim = (g) => (g && g.m) ? `${g.w}x${g.h}` : '—none';
   const pct = (a) => a[0] ? `${a[1]}/${a[0]} (${Math.round(100 * a[1] / a[0])}% art, ${a[0] - a[1]} fall back to voxel colour)` : 'none';
