@@ -10,7 +10,7 @@ object you are looking at.
 3. **Shift = select.** Holding shift turns hover into selection. Clicking adds the voxel to a selection
    set; clicking a selected voxel removes it. The selection stays highlighted on screen and accumulates —
    the artist keeps adding and unselecting until the set is right.
-4. **DELETE** removes the selected voxels.
+4. **DELETE** removes the selected voxels — clears them in `VOL`. Adding a voxel is the same operation in reverse.
 5. **ESC** puts them back.
 
 Selection is a set of voxel keys, not a rect and not a slice. It persists while the camera orbits.
@@ -43,11 +43,24 @@ Two viable picking strategies:
 
 Start with the face hit-test; it answers "which voxel am I pointing at" with the geometry already built.
 
-**Deleting must act on the carved volume**, not through an overlay layered on top of it. The carve is the
-model — see `CARVE-PIPELINE.md`. Concretely: keep the carved `VOL` (a `Uint8Array`) as the live model,
-have DELETE clear those indices in it, and rebuild faces from it. ESC restores from a snapshot of `VOL`
-taken before the delete. A re-carve (the Carve buttons) rebuilds `VOL` from the slices and discards edits,
-which is correct and predictable.
+**EDITS GO STRAIGHT INTO THE CARVED VOLUME.** There is no edit layer. `VOL` (a `Uint8Array`, one byte per
+voxel) is the model, and editing writes to it:
+
+```
+delete voxel  ->  VOL[k] = 0
+add voxel     ->  VOL[k] = 1        (colour written to the same index in vcol)
+```
+
+That is the whole mechanism. None of `voxEdit`'s complexity comes back — no overlay applied after the
+carve, no `'del'` sentinel distinct from "absent", no second store to keep in sync, no key remapping when
+the grid resizes, no ordering rules about which layer wins, and nothing about edits in the project file.
+After an edit, `VOL` is simply the model; rebuild faces from it and draw.
+
+- **ESC / undo** = restore a snapshot of `VOL` taken before the operation. One array copy, no diffing.
+- **A re-carve** (the Carve buttons) rebuilds `VOL` from the slices and discards edits. That is correct
+  and predictable: carving is how you start over.
+- **Saving** writes `VOL`. There is no separate edit record to serialise, so a reload cannot resurrect
+  edits onto a fresh carve — the failure that made a correct carve look broken all day.
 
 **Highlighting.** Hover and selection are render state, not model state — they must not enter `VOL`, the
 pack, or the project file. Draw them as a tint/outline pass over the affected faces after the normal face
