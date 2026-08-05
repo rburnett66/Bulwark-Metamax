@@ -49,8 +49,19 @@ the main 3D view immediately** — same set, both views, nothing to reconcile. T
 is the precise way to pick voxels (a whole face, or one layer deep), and the 3D view is where you confirm
 you picked the right ones before acting.
 
-Then **DEL** removes them and **ESC** puts them back — the same two keys as a main-view selection,
-because it is the same selection.
+### Mouse in the grid: drag to select
+
+- **SHIFT + drag** — rubber-band select. Every voxel the box covers, at the current layer (or across the
+  facing at layer 0), goes into the shared selection set. Drawn in the normal selection highlight.
+  Dragging again ADDS to the set; it does not replace it.
+- **CTRL + drag** — the same rubber band, drawn **RED**: a *delete* selection. The voxels it covers are
+  the ones to be removed.
+
+Both build on the same shared set — the colour says what the selection is FOR, not where it lives. A
+plain drag with no modifier does not select; it is left free for the tool in use.
+
+Then **DEL** removes the selected voxels and **ESC** puts them back — the same two keys as a main-view
+selection, because it is the same selection.
 
 This is expected to be the fastest way to add or remove geometry: pick a layer, rubber-band a region,
 check it in 3D, delete. Adding works the same way — the selection names voxels, and adding writes
