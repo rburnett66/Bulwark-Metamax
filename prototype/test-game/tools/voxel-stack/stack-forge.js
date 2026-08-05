@@ -900,6 +900,27 @@ function drawScene(meta, el, bodyAz, turretAz) {
     gx: state.turretDx * Math.cos(bodyAz), gy: state.turretDx * Math.sin(bodyAz),
     pivotFrac: 0.5 + state.turretPivot / 100, sel: sel && sel.part === 'turret' ? sel.set : null });
   renderParts(ctx, meta.S, meta.cx, meta.groundY, el, parts);
+  // ORIENTATION MARKERS IN THE MAIN VIEW (owner 2026-08-05: "we have a matrix of conditions — turret,
+  // base, left, right"). The grid view already labels its edges from its own toVox map; the orbit had
+  // nothing, so which flank you are looking at was inferred rather than read. Projects the four world
+  // extremities through the SAME transform renderParts uses, so it cannot drift from what was drawn.
+  // World: x=+FRONT/−BACK, y=−LEFT(0)/+RIGHT(foot−1), z=UP. Shares the Grid View ⊹ toggle.
+  if (gridOrient) {
+    const eR = el * Math.PI / 180, se = Math.sin(eR), ce = Math.cos(eR), h = state.zScale;
+    const foot = state.foot, layers = state.bodyLayers, S = meta.S;
+    const ca = Math.cos(bodyAz), sa = Math.sin(bodyAz), cx0 = foot / 2, cy0 = foot / 2;
+    const PX = (X, Y) => meta.cx + S * ((X - cx0) * ca - (Y - cy0) * sa);
+    const PY = (X, Y, Z) => meta.groundY + S * (((X - cx0) * sa + (Y - cy0) * ca) * se - Z * h * ce);
+    const zc = layers / 2, m = foot * 0.72;                        // push the tags clear of the silhouette
+    const marks = [['FRONT', foot / 2 + m, foot / 2, '#f2c869'], ['BACK', foot / 2 - m, foot / 2, '#7f9bb3'],
+                   ['LEFT',  foot / 2, foot / 2 - m, '#5fe0ff'],   ['RIGHT', foot / 2, foot / 2 + m, '#ff8fb0']];
+    ctx.font = 'bold 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const [lab, X, Y, col] of marks) {
+      const px = PX(X, Y), py = PY(X, Y, zc);
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(6,11,18,.9)'; ctx.strokeText(lab, px, py);
+      ctx.fillStyle = col; ctx.fillText(lab, px, py);
+    }
+  }
   if (state.showDimBox) drawDimBox(ctx, meta, el, bodyAz, state.part === 'turret' ? 'turret' : 'body');
 }
 
@@ -2290,7 +2311,7 @@ if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; refreshModel(); scheduleAutosave();
 };
 if ($('gridGuides')) $('gridGuides').onchange = (e) => { gridGuides = e.target.checked; renderGridView(); };
-if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.checked; renderGridView(); };
+if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.checked; voxSig = ''; renderGridView(); };   // voxSig: the markers live in the MAIN view too
 // MIRROR one half of the current view onto the other, folding across the GRID CENTRE LINE (the ✛ guide),
 // NOT the model's content centre — so each half lands symmetric about the centreline (owner: centre the
 // model to the guide, then mirror). View-relative via gridGeom.toVox: 'col' folds the vertical centreline
