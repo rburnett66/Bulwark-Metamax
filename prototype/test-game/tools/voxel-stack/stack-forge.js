@@ -311,7 +311,7 @@ function collectVox(partId, foot, layers, zOff, xOff) {
 }
 // export the current model (body + turret assembled, or the active part) as a .vox download
 function exportVox() {
-  const foot = state.foot, mount = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
+  const foot = state.foot, mount = mountZOf(state.bodyLayers);
   let cells = [];
   if (state.part !== 'turret') cells = cells.concat(collectVox('body', foot, state.bodyLayers, 0, 0));
   if (state.part !== 'body') {                                     // SF3: center the (smaller) turret in the base grid
@@ -892,7 +892,7 @@ function selCellState(g, cx, cy) {
 // assemble the current unit (body + mounted turret, honouring the part filter) and render it into a canvas
 function drawScene(meta, el, bodyAz, turretAz) {
   const ctx = meta.ctx; ctx.clearRect(0, 0, meta.W, meta.Hp);
-  const mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
+  const mountDz = mountZOf(state.bodyLayers);
   const sel = gridSelSet();
   const parts = [];
   if (state.part !== 'turret') parts.push({ faces: bodyFaces, az: bodyAz, sel: sel && sel.part === 'body' ? sel.set : null });
@@ -1147,7 +1147,7 @@ function drawCurrentThumb(ctx, xLeft, groundY, T) {
   const H2 = Math.max(4, Math.ceil((state.bodyLayers + state.turretLayers + 2) * h * S + foot * S * 0.5) + 4);
   const tc = document.createElement('canvas'); tc.width = W2; tc.height = H2;
   const tctx = tc.getContext('2d'); tctx.lineWidth = 0.4; tctx.lineJoin = 'round';
-  const mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
+  const mountDz = mountZOf(state.bodyLayers);
   const parts = [{ faces: bodyFaces, az: 0 }];
   if (turretFaces) parts.push({ faces: turretFaces, az: 0, zOff: mountDz, gx: state.turretDx, gy: 0, pivotFrac: 0.5 + state.turretPivot / 100 });
   renderParts(tctx, S, W2 / 2, H2 - 2, state.el, parts);
@@ -1331,6 +1331,12 @@ function rotCanvas(im, rot) {                                                 //
   g.translate(c.width / 2, c.height / 2); g.rotate(rot * Math.PI / 180); g.drawImage(im, -sw / 2, -sh / 2);
   return c;
 }
+// Turret mount height. The ceiling used to be the BODY's layer count, so once the turret sat on the
+// body's top (bodyMountZ) the slider had only bodyLayers−bodyMountZ of travel left and went dead —
+// with the usual 16-layer body topping out at 8, the "hard cap at 8" the owner hit. A turret is allowed
+// to sit ABOVE the hull (mast, pedestal), so the ceiling is now body+turret layers, which is exactly
+// what voxBounds.HT already sizes the baked canvas for — so nothing can be raised out of frame.
+function mountZOf(bodyLayers) { return clamp(bodyMountZ + state.mountZ, 0, bodyLayers + state.turretLayers); }
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
   decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30,   // decor on-map scale + procedural-tree params (Stories 6,7)
@@ -1917,7 +1923,7 @@ function refreshView() { voxSig = ''; renderGridView(); }
 function update() {
   const sp = layerSp(state.el), se = Math.sin(state.el * Math.PI / 180);
   const azR = state.az * Math.PI / 180, taimR = state.taim * Math.PI / 180;
-  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
+  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = mountZOf(state.bodyLayers);
   const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR) * se;   // mount offset, foreshortened
   if (state.baked) {
     voxSpr.visible = false; voxShadow.visible = false;
@@ -1951,7 +1957,7 @@ function updateGamePreview() {
     gCollision.beginFill(0x5fe0ff, 0.07); gCollision.drawCircle(gAnchor.x, cyGround, rr); gCollision.endFill();
     gCollision.lineStyle(1.5, 0x5fe0ff, 0.85); gCollision.drawCircle(gAnchor.x, cyGround, rr); gCollision.lineStyle(0);
   }
-  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = clamp(bodyMountZ + state.mountZ, 0, state.bodyLayers);
+  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = mountZOf(state.bodyLayers);
   const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR) * se, r = 0.75;
   // faint contact blob only — the silhouette shadow carries the read for the live cube render
   gShadow.clear(); gShadow.beginFill(0x000000, state.baked ? 0.26 : 0.10);
@@ -3531,7 +3537,7 @@ function buildPack() {
   const b = state.baked, id = ($('uid').value || 'unit').trim(), B = b.scale || 1;
   const ba = packAtlas(b.body), ta = packAtlas(b.turret);
   const bsa = b.bodyShadow ? packAtlas(b.bodyShadow) : null, tsa = b.turretShadow ? packAtlas(b.turretShadow) : null;   // S1 shadow atlases
-  const pivot = [Math.round(b.g.CX * B), Math.round(b.g.BASEY * B)], mountDz = clamp(bodyMountZ + state.mountZ, 0, b.bodyLayers);
+  const pivot = [Math.round(b.g.CX * B), Math.round(b.g.BASEY * B)], mountDz = mountZOf(b.bodyLayers);   // SAME rule as the preview, or the pack ships a different mount height than you set
   const totalH = Math.max(b.bodyLayers, mountDz + b.turretLayers);
   const pack = {
     id, class: state.cls, footprint: [b.foot, b.foot, totalH],
