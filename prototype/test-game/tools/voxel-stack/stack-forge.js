@@ -1460,15 +1460,18 @@ function renderGridView() {
   const slice = gridLayer;
   const geomMode = gridMode === 'geom';
   const lr = $('gridLayerRow'); if (lr) lr.style.display = '';    // layer slider useful in both modes
-  const tr = $('gridToolRow'); if (tr) tr.style.display = geomMode ? 'none' : '';   // paint tools hidden in Geometry
+  // Both control rows show in BOTH modes (owner: 'replicate the bottom controls onto both geometry and
+  // paint'). The modes differ only in what is DRAWN and what the POINTER does — Geometry draws the slice
+  // overlays and its handles take the drag; Paint hides them and the pointer edits voxels.
+  const tr = $('gridToolRow'); if (tr) tr.style.display = '';
   if ($('gridAngleBtn')) $('gridAngleBtn').style.display = editingDecor ? '' : 'none';   // ¾ Angle facing is decor-only — show it whenever editing decor
   if ($('gridLassoBtn')) { $('gridLassoBtn').style.display = gridView === 'angle' ? '' : 'none'; $('gridLassoBtn').classList.toggle('on', lassoMode && gridView === 'angle'); }   // lasso is Angle-only
   if ($('gridReproj')) { const a = gridView === 'angle'; $('gridReproj').textContent = a ? '◇ Carve to outline' : '🖼 Re-project'; $('gridReproj').title = a ? 'Select the shape to KEEP, then this marks voxels outside the ¾ outline for deletion — press Delete to remove them.' : "Re-project this facing's source image onto the surface."; }
-  const gr2 = $('gridGeoRow'); if (gr2) gr2.style.display = geomMode ? '' : 'none'; // geometry controls shown in Geometry
+  const gr2 = $('gridGeoRow'); if (gr2) gr2.style.display = '';
   // inline PAINT PALETTE — the model's colours as swatches, shown only in Paint mode (no need to open the Palette window)
   const gpal = $('gridPalette');
   if (gpal) {
-    const showPal = !geomMode && (gridTool === 'paint' || gridTool === 'add');   // Add uses the paint colour too
+    const showPal = gridTool === 'paint' || gridTool === 'add';   // Add uses the paint colour too
     gpal.style.display = showPal ? 'flex' : 'none';
     const psig = part + ':' + foot + ':' + layers + ':' + (base.palette ? base.palette.length : 0);
     if (showPal && gpal.dataset.sig !== psig) {
@@ -2147,7 +2150,7 @@ if ($('carveFront')) $('carveFront').onclick = () => runCarve('front', 'CARVE TO
 // Delete the voxels this facing/layer is showing, when there is no selection. Layer 0 is the surface
 // raycast, so it removes the facing skin; a real layer removes that slice.
 function deleteCurrentLayer() {
-  const g = gridGeom; if (!g || !g.editable) return false;
+  const g = gridGeom; if (!g || !g.toVox) return false;   // button op: works in Geometry mode too
   const ed = voxEdit[g.part], N = g.foot * g.foot; let n = 0;
   const before = snapVoxEdit();
   for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
@@ -2227,7 +2230,7 @@ function gridUndo() { if (!undoStack.length) return; redoStack.push(snapVoxEdit(
 function gridRedo() { if (!redoStack.length) return; undoStack.push(snapVoxEdit()); applyVoxSnap(redoStack.pop()); }
 
 function deleteSelection() {
-  const g = gridGeom; if (!gridSelVox || !g || !g.editable || gridSelVox.part !== g.part) return false;
+  const g = gridGeom; if (!gridSelVox || !g || !g.toVox || gridSelVox.part !== g.part) return false;
   const ed = voxEdit[g.part], N = g.foot * g.foot;
   const cutThrough = g.slice === 0;   // Layer 0 = surface projection → a delete cuts the ENTIRE column (all depth) through
   const baseFilled = (gridModel && gridModel.filled) || (() => false);
