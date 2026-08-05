@@ -585,11 +585,10 @@ function applyVoxEdits(m, partId, foot, layers) {
   };
   return { vcol: vc, filled: editedFilled, cd: null, views: m.views, dbg: m.dbg };
 }
-// The carve produces the model; voxEdit is then layered on top of it. It was disabled while the carve
-// was being fixed in isolation — re-enabled now that deleting geometry is wanted, since a delete IS a
-// voxEdit. Everything the artist removes lives here, never in the carve.
+// THE CARVE IS THE MODEL. voxEdit is OFF and stays off — nothing is layered on top of the carve.
+// Deleting geometry must act on the carved volume itself, not through an overlay.
 function buildModel(partId, foot, layers) {
-  return applyVoxEdits(buildModelRaw(partId, foot, layers), partId, foot, layers);
+  return buildModelRaw(partId, foot, layers);
 }
 
 // median-cut → n representative colours. Flattens camo/gradients (and rich .vox palettes) into a small,
