@@ -27,7 +27,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # Render-tier + pack contract: a Tier C unit whose wave data can exceed MAX_LIVE_3D fails the build.
       - run: node --test prototype/test-game/src/data/renderTiers.test.mjs prototype/test-game/src/render/voxel/pack.test.mjs
+      # Stack Forge cores. carve.js and select.js are the code the tool actually runs; audit.test.mjs
+      # fails on dead code, on a handler bound to a missing element, on the cores not being loaded, and
+      # on the front facing disagreeing with itself. Passing locally was never a gate -- this is.
+      - run: node --test prototype/test-game/tools/voxel-stack/carve.test.mjs prototype/test-game/tools/voxel-stack/select.test.mjs prototype/test-game/tools/voxel-stack/audit.test.mjs
   deploy:
     needs: test
     runs-on: ubuntu-latest

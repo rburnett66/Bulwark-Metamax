@@ -560,6 +560,12 @@ function setPlace(part, p) {
 const carveCache = { body: null, turret: null };   // { foot, layers, m } — cleared only by recarve()
 function buildModelRaw(partId, foot, layers) {
   const hit = carveCache[partId];
+  // NOT keyed on carveEpoch, deliberately. carveEpoch++ lives in refreshModel(), which runs after EVERY
+  // edit -- so keying on it would miss the cache after every delete, re-carve from source, hand back a
+  // fresh VOL, and destroy the edit that just triggered it. The cache is invalidated EXPLICITLY by
+  // recarve(), which nulls both entries; that is the mechanism, and it is why edits survive.
+  // Closing the manual-invariant hole means moving the epoch bump to recarve() first, which also feeds
+  // bodyExtentTiles' signature where 'the model changed' is the correct meaning. Not a one-line change.
   if (hit && hit.foot === foot && hit.layers === layers) return hit.m;
   const m = carveRaw(partId, foot, layers);
   carveCache[partId] = { foot, layers, m };
