@@ -1419,7 +1419,7 @@ const GEOAX = {
   side:  { col: { axis: 'x', flip: false }, row: { axis: 'z', flip: true } },
   // MUST match AX.toVox: front maps col -> (foot-1-c) [reversed], back maps col -> c [not]. These two were
   // swapped, so the Geometry box for front/back was drawn at the opposite end of the grid from its voxels.
-  front: { col: { axis: 'y', flip: true },  row: { axis: 'z', flip: true } },
+  front: { col: { axis: 'y', flip: false }, row: { axis: 'z', flip: true } },   // matches AX.front: elevation art is left-on-left
   back:  { col: { axis: 'y', flip: false }, row: { axis: 'z', flip: true } },
 };
 const spanKey = { x: 'spanX', y: 'spanY', z: 'spanZ' };
@@ -1543,7 +1543,7 @@ function renderGridView() {
   const AX = {
     top:   { cols: foot, rows: foot,   depth: layers, axis: 'z', toVox: (c, r, s) => [c, r, layers - 1 - s] },
     side:  { cols: foot, rows: layers, depth: foot,   axis: 'y', toVox: (c, r, s) => [c, s, layers - 1 - r] },
-    front: { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [foot - 1 - s, foot - 1 - c, layers - 1 - r] },  // +x FRONT: raycast from +x, col→y reversed so grid LEFT = the model's RIGHT flank (you are facing its nose)
+    front: { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [foot - 1 - s, c, layers - 1 - r] },  // +x FRONT: raycast from +x, col→y DIRECT — the Front slot holds a third-angle elevation drawn left-on-left, so image col 0 is the model's LEFT (y=0), matching the carve's (y - oy) index
     back:  { cols: foot, rows: layers, depth: foot,   axis: 'x', toVox: (c, r, s) => [s, c, layers - 1 - r] },                        // −x BACK: raycast from x=0, opposite-side col→y
     // ¾ ANGLE (decor): a DIAGONAL slice along the (1,1) camera ray. col → the in-plane diagonal h = x−y
     // (constant along a ray), CENTRED so the facing is foot-wide like Front/Side (matches the same-size source
@@ -1728,7 +1728,7 @@ function renderGridView() {
     const ORI = {
       top:   { t: 'LEFT',  b: 'RIGHT', l: 'BACK',  r: 'FRONT', note: 'TOP · looking down (−Z)' },
       side:  { t: 'UP',    b: 'DOWN',  l: 'BACK',  r: 'FRONT', note: 'SIDE · viewed from the LEFT (−Y)' },
-      front: { t: 'UP',    b: 'DOWN',  l: 'RIGHT', r: 'LEFT',  note: 'FRONT · viewed from +X' },   // head-on: its left is on YOUR right
+      front: { t: 'UP',    b: 'DOWN',  l: 'LEFT',  r: 'RIGHT', note: 'FRONT · +X elevation' },   // a drawn elevation, not a head-on camera: left-on-left, as authored
       back:  { t: 'UP',    b: 'DOWN',  l: 'LEFT',  r: 'RIGHT', note: 'BACK · viewed from −X' },    // behind it: its left is on YOUR left
       angle: { t: 'UP',    b: 'DOWN',  l: 'LEFT',  r: 'RIGHT', note: '¾ ANGLE · diagonal slice along the +X+Y camera ray' },
     }[gridView];
