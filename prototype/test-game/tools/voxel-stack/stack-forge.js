@@ -4112,6 +4112,16 @@ function clearSourceArt() {
       if (pick) { pick.classList.remove('set'); updateFlipBtns(pick); const cvs = pick.querySelector('canvas'); if (cvs) cvs.getContext('2d').clearRect(0, 0, cvs.width, cvs.height); }
     }
   }
+  // EVERYTHING per-unit, not just the art. These four kept the OUTGOING unit's settings alive because
+  // nothing on the incoming path necessarily overwrites them: a frozen geomState span silently pinned
+  // the new unit's height (the '8'), imgXf offset its slices, carveCache held the old voxels, and the
+  // undo stack could restore the previous unit's geometry into this one.
+  imgXf.body = mkXf(); imgXf.turret = mkXf();
+  geomState.body = { auto: true, bottomFrom: 'top' }; geomState.turret = { auto: true, bottomFrom: 'top' };
+  carveCache.body = null; carveCache.turret = null;
+  volHistory.length = 0; volDirty.body = false; volDirty.turret = false;
+  voxEdit.body.clear(); voxEdit.turret.clear();
+  gridSel = null; gridSelVox = null; gridSelView = null;
   gridModel = null;
 }
 function selectUnit(id) {
@@ -4146,9 +4156,12 @@ function selectUnit(id) {
   drawLight();
   // a WIP project restores full editable source (loadProject rebuilds); otherwise DROP the previous
   // unit's source so it stops rendering, then show the saved pack's baked model in the orbit.
+  // CLEAR FIRST, ALWAYS. This used to run only when there was NO WIP, so switching to a unit that HAD
+  // one left every store the project file does not carry showing the previous unit -- you could not tell
+  // whether you were looking at new work or the last unit's. loadProject then restores what it owns.
+  clearSourceArt();
   idb.get('proj:' + id).then((p) => {
     if (p) return loadProject(p).then(() => { $('projState').textContent = `Loaded "${id}" — continue editing.`; });
-    clearSourceArt();
     if (m[id]) return loadPackPreview(m[id]).then(() => {
       gridModel = null; renderGridView();                           // reflect the cleared source (baked shows in orbit)
       $('projState').textContent = `Loaded "${id}" baked pack — orbit/in-game show the baked model; no editable source on this browser.`;
