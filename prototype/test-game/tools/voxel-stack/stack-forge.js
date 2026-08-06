@@ -4093,6 +4093,7 @@ async function doAutosave() {
     const t = new Date().toLocaleTimeString();
     $('projState').textContent = `Autosaved ${decorId ? 'decor ' : ''}"${p.id}" · ${t}`;
     wipDirty = false;
+    if (!wipIds.has(p.id)) { wipIds.add(p.id); renderRoster(); }   // first save of a unit → its card appears now, not on the next reload
     setWipStatus(`✓ saved ${t}`, 'saved');
   } catch (e) { wipDirty = true; setWipStatus('⚠ save failed', 'dirty'); }
 }
@@ -4154,9 +4155,20 @@ if (typeof ToolHead !== 'undefined') ToolHead.mount({
 });
 // One writer for the header status, so it cannot drift the way the eleven scattered status strings did.
 function headStatus(text, kind) { if (typeof ToolHead !== 'undefined') ToolHead.status(text, kind); }
+// Ids that have an editable WIP in IndexedDB. Kept as a plain Set because renderRoster is synchronous;
+// refreshed whenever the set can have changed, never read straight from idb mid-render.
+const wipIds = new Set();
+async function refreshWipIds() {
+  try {
+    const keys = (await idb.keys()) || [];
+    wipIds.clear();
+    for (const k of keys) if (typeof k === 'string' && k.startsWith('proj:')) wipIds.add(k.slice(5));
+  } catch (e) { /* no store yet — the roster simply shows packs only */ }
+}
 async function initFactions() {
   try { filesIndex = (await (await fetch('../../content/units/index.json')).json()).factions || []; } catch (e) { filesIndex = []; }
-  await loadShipped();                                            // so "supplied ✓" + Load reflect deployed art
+  await loadShipped();
+  await refreshWipIds();                                          // so the first roster already shows carved-but-unbaked units                                            // so "supplied ✓" + Load reflect deployed art
   $('faction').innerHTML = FACTIONS.map((f) => `<option>${f}</option>`).join('');
   $('faction').onchange = () => loadFaction($('faction').value);
   // REMEMBER THE FACTION. It always reopened on FACTIONS[0], so work resumed under the wrong faction
@@ -4215,8 +4227,12 @@ function renderRoster() {
   // though the save had failed. Anything supplied/saved the roster does not name is appended here, so
   // your own units show up beside the designed ones.
   const named = new Set(roster.map((u) => u.id));
-  const extras = Object.keys(supplied).filter((id) => !named.has(id)).sort()
-    .map((id) => ({ id, role: decorSet ? 'prop' : 'saved' }));
+  // A unit exists if it has a PACK **or** a WIP. The decor roster already unions decor:* from
+  // IndexedDB; the unit roster only read the manifest, so a unit carved but not yet baked had no card —
+  // and a card-click on that empty-looking slot opened Save and overwrote the WIP.
+  const wip = [...wipIds].filter((id) => !named.has(id) && !supplied[id]);
+  const extras = [...Object.keys(supplied).filter((id) => !named.has(id)), ...wip].sort()
+    .map((id) => ({ id, role: decorSet ? 'prop' : (supplied[id] ? 'saved' : 'WIP'), wip: !supplied[id] }));
   for (const u of [...roster, ...extras]) {
     const has = !!supplied[u.id]; if (has) n++;
     const selId = decorSet ? editingDecor : $('uid').value;
@@ -4233,7 +4249,7 @@ function renderRoster() {
   }
   $('setState').innerHTML = `<b>${curFaction}</b> — <span class="lock">${n}/${roster.length}</span> ${decorSet ? 'decor' : 'supplied'}`;
 }
-$('addUnit').onclick = () => {
+$('addUnit').onclick = async () => {
   if (isDecorSet()) {                                              // Terrain set: start a FRESH decor prop on a clean editor
     const id = (prompt('New decor id:', 'decor-' + (roster.length + 1)) || '').trim();
     if (!id) return;
@@ -4254,7 +4270,7 @@ $('addUnit').onclick = () => {
   const p = prefixFor(curFaction || 'UNI'), id = (prompt('New unit id:', `${p}-U${roster.length + 1}`) || '').trim();
   if (!id) return;
   if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
-  renderRoster(); selectUnit(id);
+  renderRoster(); await selectUnit(id);
 };
 // wipe the current unit's source art/vox + per-view cutout state so switching to a pack-only unit
 // doesn't keep re-carving and displaying the PREVIOUS unit (the "still looking at Base" bug).
@@ -4280,14 +4296,26 @@ function clearSourceArt() {
   gridSel = null; gridSelVox = null; gridSelView = null;
   gridModel = null;
 }
-function selectUnit(id, skipSave) {
+async function selectUnit(id, skipSave) {
   // SAFETY: flush the OUTGOING unit under ITS OWN id first (so its last edits aren't lost or misfiled),
   // cancel any click-armed autosave, and block autosaves until the incoming unit finishes loading — the
   // async load must own the slot, or a stale-model autosave overwrites the unit you're switching to.
   clearTimeout(autosaveTimer);
   if (skipSave) editingDecor = null;   // ⏭ Skip: discard the outgoing unit's unsaved work by not flushing it
   else if (editingDecor) { try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) idb.put('decor:' + editingDecor, dout); } catch (e) { /* flush decor */ } editingDecor = null; }   // leaving decor editing for a unit
-  if (!skipSave && wipDirty) try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }   // clean WIP → nothing to write; snapshotProject now serialises a per-voxel VOL blob, so this is not a free call
+  // AUTO-SAVE THE OUTGOING UNIT. Switching units is not a decision point about saving -- the work goes
+  // back where it came from, every time. skipSave remains for the explicit discard path only, and a clean
+  // WIP still writes nothing because snapshotProject serialises a per-voxel VOL blob.
+  if (!skipSave && wipDirty && activeUnitId && activeUnitId !== id) {
+    try {
+      const out = snapshotProject(activeUnitId);
+      if (out && projectHasContent(out)) { await idb.put('proj:' + out.id, out); wipIds.add(out.id); wipDirty = false; }
+    } catch (e) { return saveFailed('AUTOSAVE ON SWITCH FAILED', `Could not save "${activeUnitId}" before opening "${id}".
+
+${(e && e.message) || e}
+
+The switch was cancelled so nothing is lost.`); }
+  }
   resetPalette();                                        // per-unit palette — clear it (a WIP re-applies its own via loadProject)
   setBackSlotLabel('Back');                              // units use the Back slot as the rear view again
   // THE OUTGOING UNIT'S GEOMETRY MUST GO WITH IT. carveCache holds VOL — the model itself — and
@@ -4496,7 +4524,7 @@ async function openLoadModal() {
     const b = document.createElement('button');
     b.className = 'ghost loadRow'; b.style.flex = '1';
     b.innerHTML = `<span class="lid">${id}</span><span class="ltag">${wip.has(id) ? '✎ project' : ''}${wip.has(id) && packed.has(id) ? ' · ' : ''}${packed.has(id) ? '📦 pack' : ''}</span>`;
-    b.onclick = () => { $('loadModal').hidden = true; doAutosave(); selectUnit(id); };   // flush WIP before it's replaced
+    b.onclick = async () => { $('loadModal').hidden = true; await selectUnit(id); };   // selectUnit auto-saves the outgoing unit itself
     row.appendChild(b);
     if (wip.has(id)) {                                                 // delete the WIP project (falls back to the pack, or gone)
       const del = document.createElement('button'); del.className = 'ghost'; del.textContent = '🗑'; del.title = 'Delete this browser WIP project';
@@ -4561,12 +4589,12 @@ ${(e && e.message) || e}`); }
   doAutosave();
   return r;
 }
-$('saveAsLoad').onclick = () => { $('saveAsModal').hidden = true; if (wipDirty) doAutosave(); selectUnit(saveAsId); };   // load it; only re-save when there is unsaved work
+$('saveAsLoad').onclick = async () => { $('saveAsModal').hidden = true; await selectUnit(saveAsId); };   // selectUnit auto-saves the outgoing unit itself
 // SAFETY: overwriting an EXISTING saved unit needs an explicit yes — clicking a roster card to *select* it
 // must never silently replace it with the current model (owner data-loss report).
 // Skip = switch WITHOUT saving: no flush of the outgoing unit, clear, then load. Cancel just closes the
 // modal and leaves you where you are. Load still flushes first (doAutosave) -- that is the difference.
-$('saveAsSkip').onclick = () => { $('saveAsModal').hidden = true; selectUnit(saveAsId, true); };
+$('saveAsSkip').onclick = async () => { $('saveAsModal').hidden = true; await selectUnit(saveAsId, true); };   // the ONE explicit discard path
 const closeSaveAs = () => { $('saveAsModal').hidden = true; saveAsId = null; };
 $('saveAsCancel').onclick = closeSaveAs;
 document.addEventListener('keydown', (e) => {                      // ESC closes it too — Cancel must never be the only way out
