@@ -3646,7 +3646,7 @@ ${detail}`;
   alert(msg);
   return { ok: false, kind, detail };
 }
-function doSaveUnit() {
+async function doSaveUnit() {
   // FAIL LOUD. Both of this function's failure paths used to `return` bare, and quickSave printed
   // 'Saved …' regardless — a failed save reported success, which is how a unit went missing for a day.
   if (!state.baked) return saveFailed('NO BAKE', 'The model is not baked. Press Bake, then Save.');
@@ -3656,13 +3656,28 @@ function doSaveUnit() {
   activeUnitId = built.pack.id;                           // an explicit save under this id is a deliberate rename → follow it
   const m = loadManifest();
   m.config = { camera: built.pack.camera, light: built.pack.light };   // shared game-wide config
-  m.units = m.units || {}; m.units[built.pack.id] = built;
+  // ATLASES DO NOT GO IN localStorage. They are ~1.4 MB of base64 per unit and were 99.9% of every
+  // manifest entry — three units reached 4.2 M chars and the write started throwing. localStorage now
+  // holds the ~800-char DESCRIPTOR; the pixels live in IndexedDB (a separate, far larger budget) and
+  // ship to disk as real PNGs.
+  // Same for an embedded Tier C model: 742K chars of base64 for ONE unit. localStorage keeps the
+  // dimensions so the descriptor stays meaningful; the voxels go to IndexedDB and ship as their own file.
+  let lean = built.pack;
+  if (lean.model && lean.model.b64) lean = Object.assign({}, lean, { model: { nx: lean.model.nx, ny: lean.model.ny, nz: lean.model.nz } });
+  m.units = m.units || {}; m.units[built.pack.id] = { pack: lean };
+  try {
+    await idb.put('atlas:' + built.pack.id, built.atlases);
+    await idb.put('model:' + built.pack.id, (built.pack.model && built.pack.model.b64) ? built.pack.model : null);
+  }
+  catch (e) { return saveFailed('ATLAS STORE FAILED', `Could not store the sprite atlases for "${built.pack.id}".
+
+${(e && e.message) || e}`); }
   const json = JSON.stringify(m);
   // SIZE IS THE REAL DEFECT, so state it every save instead of waiting for the write to throw.
   // 99.9-100% of every entry is base64 PNG; the descriptor is ~1KB. Three units already reach 4.2M
   // chars, and localStorage is the wrong home for that — see SAVE-ARCHITECTURE-PLAN.md steps 2-3.
-  const bulk = (e) => Object.values((e && e.atlases) || {}).reduce((n, u) => n + u.length, 0)
-    + ((((e && e.pack) || {}).model || {}).b64 || '').length;
+  const bulk = (e) => JSON.stringify(e || {}).length
+    ;
   const ids = Object.keys(m.units || {});
   const heavy = ids.map((k) => [k, bulk(m.units[k])]).sort((x, y) => y[1] - x[1]);
   console.info(`[stack-forge] manifest ${json.length.toLocaleString()} chars across ${ids.length} unit(s) — `
@@ -3693,7 +3708,7 @@ Use 🚀 Ship manifest to write it to disk, then clear the browser copy.` +
   renderScaleChart();    // the new unit joins the side-view scale chart
   return { ok: true, id: built.pack.id, chars: json.length, valid: v.ok };
 }
-$('saveUnit').onclick = doSaveUnit;
+$('saveUnit').onclick = () => { doSaveUnit(); };
 
 // ── downloads ──
 const dl = (name, url) => { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); };
@@ -3727,7 +3742,7 @@ $('shipManifest').onclick = async () => {
     let files = 0, bytes = 0;
     const lean = { config: m.config, units: {} };
     for (const id of ids) {
-      const e = m.units[id], atl = e.atlases || {};
+      const e = m.units[id], atl = e.atlases || (await idb.get('atlas:' + id).catch(() => null)) || {};
       for (const pt of (e.pack.parts || [])) {                      // atlas + optional shadow, per part
         for (const [key, name] of [[pt.id, pt.atlas], [pt.id + '.shadow', pt.shadowAtlas]]) {
           const url = atl[key]; if (!url || !name) continue;
@@ -3739,6 +3754,10 @@ $('shipManifest').onclick = async () => {
       // unit. Write it as its own JSON and leave a `src` behind; loader.js hydrates it before
       // buildLive3D reads pack.model. Non-Tier-C units never have one.
       let pack = e.pack;
+      if (pack.model && !pack.model.b64) {                            // voxels live in IndexedDB now
+        const stored = await idb.get('model:' + id).catch(() => null);
+        if (stored && stored.b64) pack = Object.assign({}, pack, { model: stored });
+      }
       if (pack.model && pack.model.b64) {
         const rel = 'model/' + id + '.json';
         const d = await shipFile('content/units/' + rel, { data: pack.model });
@@ -4275,10 +4294,14 @@ function selectUnit(id, skipSave) {
 // rebuild the baked preview straight from a saved pack's atlases — "load asset pack and continue"
 async function loadPackPreview(entry) {
   const p = entry.pack, B = p.renderScale || 1;
+  // Atlases live in IndexedDB now (localStorage holds the descriptor only). Tolerate old entries that
+  // still carry them inline so a manifest saved before this change still previews.
+  const atlases = entry.atlases || (await idb.get('atlas:' + p.id).catch(() => null)) || null;
+  if (!atlases) { console.warn('[stack-forge] no atlases stored for', p.id, '— nothing to preview'); return; }
   const mk = async (partId) => {
     const part = (p.parts || []).find((q) => q.id === partId);
-    if (!part || !entry.atlases || !entry.atlases[partId]) return null;
-    const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = entry.atlases[partId]; });
+    if (!part || !atlases[partId]) return null;
+    const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = atlases[partId]; });
     const base = PIXI.BaseTexture.from(img);
     const n = part.kind === 'directional' ? part.facings : part.angles, cols = part.cols || Math.ceil(Math.sqrt(n));
     const frames = [];
@@ -4381,14 +4404,14 @@ if ($('loadDiag')) $('loadDiag').onclick = diagnoseLoad;
 $('loadModal').addEventListener('click', (e) => { if (e.target === $('loadModal')) $('loadModal').hidden = true; });
 // Reports what ACTUALLY happened. It used to print 'Saved …' and paint the card selected before knowing
 // whether doSaveUnit had written anything, so a quota failure or an unbaked model looked like success.
-function quickSave(id, as3D) {
+async function quickSave(id, as3D) {
   $('uid').value = id;
   $('embedModel').checked = !!as3D;
   try { doBake(); }
   catch (e) { return saveFailed('BAKE THREW', `Baking "${id}" failed.
 
 ${(e && e.message) || e}`); }
-  const r = doSaveUnit();
+  const r = await doSaveUnit();
   if (!r || !r.ok) return r;                                   // saveFailed already shouted; do NOT claim success
   document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
   $('projState').textContent = `Saved "${id}" as ${as3D ? '3D (editable model + baked)' : 'sprites only'}`
@@ -4400,8 +4423,8 @@ $('saveAsLoad').onclick = () => { $('saveAsModal').hidden = true; if (wipDirty) 
 // SAFETY: overwriting an EXISTING saved unit needs an explicit yes — clicking a roster card to *select* it
 // must never silently replace it with the current model (owner data-loss report).
 const confirmOverwrite = () => !suppliedUnits()[saveAsId] || confirm(`Overwrite the saved unit “${saveAsId}” with the current model?\n\nThe saved version is replaced. To open that unit instead, use “📂 Load this unit”.`);
-$('saveAsSprites').onclick = () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; quickSave(saveAsId, false); };
-$('saveAs3D').onclick = () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; quickSave(saveAsId, true); };
+$('saveAsSprites').onclick = async () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; await quickSave(saveAsId, false); };
+$('saveAs3D').onclick = async () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; await quickSave(saveAsId, true); };
 // Skip = switch WITHOUT saving: no flush of the outgoing unit, clear, then load. Cancel just closes the
 // modal and leaves you where you are. Load still flushes first (doAutosave) -- that is the difference.
 $('saveAsSkip').onclick = () => { $('saveAsModal').hidden = true; selectUnit(saveAsId, true); };
