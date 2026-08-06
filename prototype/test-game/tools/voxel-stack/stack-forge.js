@@ -32,7 +32,6 @@ const T = (label, n, extra) => { if (TRACE) TRACE.push({ label, n, extra: extra 
 const countOpaque = (cv) => { if (!cv) return -1; const d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, cv.width, cv.height).data; let k = 0; for (let i = 0; i < cv.width * cv.height; i++) if (d[i * 4 + 3] > INK_A) k++; return k; };
 const countMask = (g) => { if (!g) return -1; let k = 0; for (let i = 0; i < g.m.length; i++) if (g.m[i]) k++; return k; };
 const countVol = (V) => { let k = 0; for (let i = 0; i < V.length; i++) if (V[i]) k++; return k; };
-const lerp = (a, b, t) => a + (b - a) * t;
 // screen px per layer at 1 px/voxel: a voxel is a real cube (zScale stretches it) seen at the camera tilt
 const layerSp = (elDeg) => state.zScale * Math.cos(clamp(elDeg, 0, 90) * Math.PI / 180);
 const WORLD_SCALE = 3, BODY_FRAMES = 16, TURRET_FRAMES = 64, MANIFEST_KEY = 'bulwark:stackforge';
@@ -44,7 +43,6 @@ const unitTiles = (foot) => foot / VOX_PER_TILE;
 // just before it collides. Half-width in TILES = tiles · 0.5 · 1.2 / 2 = tiles · 0.3. Shown as a ring in the
 // in-game preview and shipped as pack.collision so the sim's unit radius matches the tank on screen.
 const GAME_UNIT_SCALE = 0.5, COLLISION_PAD = 1.2;
-const collisionTilesFor = (foot) => unitTiles(foot) * GAME_UNIT_SCALE * COLLISION_PAD / 2;
 // collision from the ACTUAL filled body extent, NOT the footprint resolution (which includes padding) — so
 // the ring + shipped pack.collision match the VISIBLE tank, not the oversized bounding box. Cached per model.
 let _collCache = { sig: '', tiles: 0 };
@@ -579,18 +577,6 @@ function carveRaw(partId, foot, layers) {
   return { vcol, filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg, VOL: v.VOL };
 }
 // layer the voxEdit overlay onto a raw model (clone vcol so buildVolume's arrays are never mutated).
-function applyVoxEdits(m, partId, foot, layers) {
-  const ed = voxEdit[partId]; if (!ed || !ed.size) return m;
-  const N = foot * foot, vc = m.vcol.slice();
-  for (const [k, val] of ed) if (val !== 'del') { const c = k * 3; vc[c] = val[0]; vc[c + 1] = val[1]; vc[c + 2] = val[2]; }
-  const base = m.filled;
-  const editedFilled = (x, y, z) => {
-    if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) return false;
-    const e = ed.get(z * N + y * foot + x);
-    return e !== undefined ? e !== 'del' : base(x, y, z);
-  };
-  return { vcol: vc, filled: editedFilled, cd: null, views: m.views, dbg: m.dbg };
-}
 // THE CARVE IS THE MODEL. voxEdit is OFF and stays off — nothing is layered on top of the carve.
 // Deleting geometry must act on the carved volume itself, not through an overlay.
 function buildModel(partId, foot, layers) {
@@ -1512,7 +1498,7 @@ function renderGridView() {
   }
   const base = gridModel, ed = voxEdit[part], V = base.views;
   updateDims(part, foot, layers, base);   // x/y/z readout in the grid header + primary view; flags clamped axes
-  // ONE MODEL. This used to layer voxEdit on top of base.filled — its own inline copy of applyVoxEdits.
+  // ONE MODEL: base.filled is the carve, read directly.
   // When the overlay was disabled in buildModel, this copy was missed, so the GRID hid voxels that the 3D
   // view still drew: stale 'del' entries blanked geometry here and nowhere else. Read the carve, only.
   const filled = (x, y, z) => (x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers)
@@ -1924,7 +1910,6 @@ refreshModel();
 // recarve()      source images -> masks -> clear/fill/cut. The ONLY thing that runs buildVolume.
 // refreshModel() rebuild faces from the CACHED carve + your voxel edits, then redraw. Paint, erase,
 //                undo, palette, lighting — none of these can change geometry, so none re-carve.
-// refreshView()  redraw from the faces already built. Camera only.
 function recarve() { carveCache.body = null; carveCache.turret = null; volDirty.body = false; volDirty.turret = false; refreshModel(); }
 // Put a saved volume back after a carve has rebuilt VOL. Dims must match exactly — the keys are absolute
 // z*foot²+y*foot+x, so replaying a 32-grid volume into a 64-grid model would scatter it. A mismatch
@@ -1945,8 +1930,6 @@ function restoreVol(p) {
   }
   gridModel = null; refreshModel();
 }
-function refreshView() { voxSig = ''; renderGridView(); }
-
 function update() {
   const se = Math.sin(state.el * Math.PI / 180);
   const azR = state.az * Math.PI / 180, taimR = state.taim * Math.PI / 180;
@@ -3835,7 +3818,6 @@ function bakeDecor() {
   const shadow = bakeShadowCache(app.renderer, filled, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bakeElOf(), scale: B, foot, layers: bL });
   state.decorBaked = { frame, shadow, g, sp, foot, layers: bL, scale: B };
   $('decorBakeState').innerHTML = `<span class="lock">✓ Decor baked · 1 frame + cast shadow · ${g.RTW * B}×${g.RTH * B}</span>`;
-  if ($('saveDecor')) $('saveDecor').disabled = false;
 }
 function buildDecorPack() {
   const b = state.decorBaked, id = (($('did') && $('did').value) || 'decor').trim(), B = b.scale || 1;
@@ -3858,21 +3840,6 @@ function buildDecorPack() {
   const atlases = { decor: fa.canvas.toDataURL('image/png') };
   if (sa) atlases['decor.shadow'] = sa.canvas.toDataURL('image/png');
   return { pack, atlases };
-}
-function doSaveDecor() {
-  if (!state.decorBaked) bakeDecor();                              // AUTO-BAKE: a reload clears the baked textures, so Save bakes on demand
-  if (!state.decorBaked) { alert('Save decor: author the prop as the body (Front / Side) first — there is nothing to bake yet.'); return; }
-  const built = buildDecorPack();
-  const m = loadDecorManifest();
-  m.config = { camera: built.pack.camera, light: built.pack.light };
-  m.decor = m.decor || {}; m.decor[built.pack.id] = built;
-  try { localStorage.setItem(DECOR_MANIFEST_KEY, JSON.stringify(m)); } catch (e) { alert('Save decor FAILED (localStorage full). Use 🚀 Ship decor to write it to disk instead.'); return; }
-  editingDecor = built.pack.id;                                    // now editing this decor → WIP isolates to decor:
-  try { idb.put('decor:' + built.pack.id, snapshotProject(built.pack.id)); } catch (e) { /* WIP is best-effort */ }
-  $('decorSaveState').innerHTML = `<span class="lock">Saved decor "${built.pack.id}" ✓</span>`;
-  if ($('decorPackJson')) $('decorPackJson').textContent = JSON.stringify(built.pack, null, 2);
-  renderDecorManifest();
-  if (isDecorSet()) loadFaction(DECOR_SET);                        // refresh the Terrain roster with the new/updated prop
 }
 // Ship the decor STRAIGHT TO DISK — the decor atlas is too big for localStorage (the units manifest fills
 // it), so we never rely on the localStorage manifest here. Bake if needed, build the pack fresh, MERGE it
@@ -3909,8 +3876,6 @@ function renderDecorManifestFromDisk(man) {   // show the shipped list even when
 // ONE CLICK = shipDecor: bake if needed → build the pack → write it to the LOCAL repo file. No localStorage.
 if ($('decorSaveShip')) $('decorSaveShip').onclick = shipDecor;
 if ($('bakeDecor')) $('bakeDecor').onclick = bakeDecor;
-if ($('saveDecor')) $('saveDecor').onclick = doSaveDecor;
-if ($('shipDecor')) $('shipDecor').onclick = shipDecor;
 if ($('decDensity')) $('decDensity').oninput = () => { $('decDensityV').textContent = $('decDensity').value; };
 // Stories 6 & 7 — procedural-tree params + on-map scale
 const decRebuild = () => { gridModel = null; recarve(); renderGridView(); };
@@ -4136,8 +4101,6 @@ if (typeof ToolHead !== 'undefined') ToolHead.mount({
   ],
   status: 'no unit loaded',
 });
-// One writer for the header status, so it cannot drift the way the eleven scattered status strings did.
-function headStatus(text, kind) { if (typeof ToolHead !== 'undefined') ToolHead.status(text, kind); }
 // Ids that have an editable WIP in IndexedDB. Kept as a plain Set because renderRoster is synchronous;
 // refreshed whenever the set can have changed, never read straight from idb mid-render.
 const wipIds = new Set();
