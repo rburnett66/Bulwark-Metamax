@@ -3945,10 +3945,15 @@ function projectHasContent(p) {
   }
   return false;
 }
+// Is there unsaved work? Set wherever the WIP is marked dirty, cleared on a successful save. Lets a
+// LOAD skip a redundant re-write of a unit that was saved seconds ago -- with a per-voxel VOL blob now
+// in every snapshot that write is no longer free, and it made 'load another unit' feel like a re-save.
+let wipDirty = false;
 function setWipStatus(txt, kind) { const el = $('wipStatus'); if (!el) return; el.textContent = txt; el.style.color = kind === 'saved' ? '#57d98a' : kind === 'dirty' ? '#e0b060' : 'var(--muted)'; }
 function scheduleAutosave() {
   if (bulkLoad || loadingUnit) return;                    // never arm a save while a unit is loading (would key the OLD model to the NEW slot)
   clearTimeout(autosaveTimer); autosaveTimer = setTimeout(doAutosave, 500);
+  wipDirty = true;
   setWipStatus('● unsaved…', 'dirty');
 }
 async function doAutosave() {
@@ -3962,8 +3967,9 @@ async function doAutosave() {
     else { await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id); }
     const t = new Date().toLocaleTimeString();
     $('projState').textContent = `Autosaved ${decorId ? 'decor ' : ''}"${p.id}" · ${t}`;
+    wipDirty = false;
     setWipStatus(`✓ saved ${t}`, 'saved');
-  } catch (e) { setWipStatus('⚠ save failed', 'dirty'); }
+  } catch (e) { wipDirty = true; setWipStatus('⚠ save failed', 'dirty'); }
 }
 if ($('wipSaveNow')) $('wipSaveNow').onclick = () => doAutosave();
 document.addEventListener('input', scheduleAutosave, true);
@@ -4131,7 +4137,7 @@ function selectUnit(id, skipSave) {
   clearTimeout(autosaveTimer);
   if (skipSave) editingDecor = null;   // ⏭ Skip: discard the outgoing unit's unsaved work by not flushing it
   else if (editingDecor) { try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) idb.put('decor:' + editingDecor, dout); } catch (e) { /* flush decor */ } editingDecor = null; }   // leaving decor editing for a unit
-  if (!skipSave) try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }
+  if (!skipSave && wipDirty) try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }   // clean WIP → nothing to write; snapshotProject now serialises a per-voxel VOL blob, so this is not a free call
   resetPalette();                                        // per-unit palette — clear it (a WIP re-applies its own via loadProject)
   setBackSlotLabel('Back');                              // units use the Back slot as the rear view again
   // THE OUTGOING UNIT'S GEOMETRY MUST GO WITH IT. carveCache holds VOL — the model itself — and
@@ -4289,7 +4295,7 @@ function quickSave(id, as3D) {
   $('projState').textContent = `Saved "${id}" as ${as3D ? '3D (live model + baked fallback)' : 'baked sprites'} — reload the game to see it.`;
   doAutosave();                                         // park the working project under this id too
 }
-$('saveAsLoad').onclick = () => { $('saveAsModal').hidden = true; doAutosave(); selectUnit(saveAsId); };   // actually load it
+$('saveAsLoad').onclick = () => { $('saveAsModal').hidden = true; if (wipDirty) doAutosave(); selectUnit(saveAsId); };   // load it; only re-save when there is unsaved work
 // SAFETY: overwriting an EXISTING saved unit needs an explicit yes — clicking a roster card to *select* it
 // must never silently replace it with the current model (owner data-loss report).
 const confirmOverwrite = () => !suppliedUnits()[saveAsId] || confirm(`Overwrite the saved unit “${saveAsId}” with the current model?\n\nThe saved version is replaced. To open that unit instead, use “📂 Load this unit”.`);
