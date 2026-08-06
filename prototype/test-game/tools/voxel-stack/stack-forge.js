@@ -448,8 +448,6 @@ function buildVolume(partId, foot, layers) {
     const p = ((oy + y) * foot + (ox + x)) * 4;
     cd[p] = topG.c[i * 3]; cd[p + 1] = topG.c[i * 3 + 1]; cd[p + 2] = topG.c[i * 3 + 2]; cd[p + 3] = 255;
   }
-  const top = topG ? (x, y) => x >= ox && x < ox + bw && y >= oy && y < oy + bh && !!topG.m[(y - oy) * bw + (x - ox)]
-    : (x, y) => cd[(y * foot + x) * 4 + 3] > INK_A;
   const sideG = sideC ? sliceMask(sideC, bw, Hv, true) : null;    // length × height 
   const frontG = frontC ? sliceMask(frontC, bh, Hv, true) : null; // width × height
   const backC = src.back ? xfCanvas(keyedCanvas(src.back, tol.back, pol.back, pk.back), xf.back) : null; // colour-only: paints the −x walls
@@ -2385,24 +2383,6 @@ if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.c
 // model to the guide, then mirror). View-relative via gridGeom.toVox: 'col' folds the vertical centreline
 // (visual left↔right), 'row' folds the horizontal centreline (visual top↔bottom). srcLow copies the low
 // half (left/top) onto the high half (right/bottom); !srcLow does the reverse.
-function mirrorGrid(axis, srcLow) {
-  const g = gridGeom; if (!g) return; pushUndo();
-  const part = g.part, foot = g.foot, N = foot * foot, { cols, rows, depth, toVox } = g;
-  const m = buildModel(part, foot, g.layers), ed = voxEdit[part];
-  const isCol = axis === 'col', c2 = (isCol ? cols : rows) - 1;      // 2×centre of the GRID (mirror index = c2 − a)
-  for (let s = 0; s < depth; s++) for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
-    const a = isCol ? c : r;
-    if (srcLow ? (a * 2 <= c2) : (a * 2 >= c2)) continue;            // write only the TARGET half
-    const sc = isCol ? (c2 - c) : c, sr = isCol ? r : (c2 - r);
-    const [tx, ty, tz] = toVox(c, r, s), k = tz * N + ty * foot + tx;
-    if (sc >= 0 && sc < cols && sr >= 0 && sr < rows) {
-      const [sx, sy, sz] = toVox(sc, sr, s);
-      if (m.filled(sx, sy, sz)) { const cc = (sz * N + sy * foot + sx) * 3; ed.set(k, [m.vcol[cc], m.vcol[cc + 1], m.vcol[cc + 2]]); }
-      else ed.set(k, 'del');
-    } else ed.set(k, 'del');
-  }
-  gridModel = null; refreshModel(); scheduleAutosave();
-}
 // WORLD-axis mirror (owner: the old view-relative mirror folded the screen axis, so 'L-R' in the top/side
 // view mirrored FRONT↔BACK instead of left↔right). These fold a fixed WORLD axis regardless of facing —
 // matching the compass: left↔right = Y, front↔back = X — so a mirror always means what its label says.
@@ -2635,17 +2615,7 @@ document.addEventListener('keydown', (e) => {
   // the Palette window). Explicit colour beats guessing, and it round-trips through the reducer/tuner.
   const gridPaintRGB = () => { const h = ($('gridPaintCol') && $('gridPaintCol').value) || '#8fa7bd'; return [parseInt(h.slice(1, 3), 16) || 0, parseInt(h.slice(3, 5), 16) || 0, parseInt(h.slice(5, 7), 16) || 0]; };
   // (kept for reference/eyedrop) colour of the nearest existing voxel along the current view's depth axis
-  const sampleColor = (cx, cy) => {
-    const g = gridGeom, gm = gridModel; if (!g || !gm) return [150, 150, 150];
-    const N = gm.foot * gm.foot, ed = voxEdit[g.part];
-    const isFilled = (x, y, z) => { if (x < 0 || y < 0 || z < 0 || x >= gm.foot || y >= gm.foot || z >= gm.layers) return false; const o = ed.get(z * N + y * gm.foot + x); return o !== undefined ? o !== 'del' : gm.filled(x, y, z); };
-    const colOf = (x, y, z) => { const o = ed.get(z * N + y * gm.foot + x); if (Array.isArray(o)) return o; const c = (z * N + y * gm.foot + x) * 3; return [gm.vcol[c], gm.vcol[c + 1], gm.vcol[c + 2]]; };
-    for (let d = 1; d < g.depth; d++) for (const s of [g.slice - d, g.slice + d]) {
-      if (s < 0 || s >= g.depth) continue;
-      const [x, y, z] = g.toVox(cx, cy, s); if (isFilled(x, y, z)) return colOf(x, y, z);
-    }
-    return [150, 150, 150];
-  };
+  ;
   const editAt = (e, erase) => {
     const g = gridGeom; if (!g || !g.editable) return false;
     const r = cv.getBoundingClientRect();
