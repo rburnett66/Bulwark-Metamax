@@ -1349,7 +1349,7 @@ function rotCanvas(im, rot) {                                                 //
 // to sit ABOVE the hull (mast, pedestal), so the ceiling is now body+turret layers, which is exactly
 // what voxBounds.HT already sizes the baked canvas for — so nothing can be raised out of frame.
 function mountZOf(bodyLayers) { return clamp(bodyMountZ + state.mountZ, 0, bodyLayers + state.turretLayers); }
-const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
+const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, bakeEl: 45, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
   decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30,   // decor on-map scale + procedural-tree params (Stories 6,7)
   showDimBox: false,   // SF1: the 3D dimension box + per-face view-image projections overlay
@@ -2200,6 +2200,12 @@ $('lightAz').oninput = (e) => { state.lightAz = +e.target.value; $('lightAzV').t
 $('lightK').oninput = (e) => { state.lightK = +e.target.value; $('lightKV').textContent = state.lightK; refreshModel(); };
 // #pal handler is defined with #palN below (setPaletteN keeps both sliders in lock-step)
 $('zScale').oninput = (e) => { state.zScale = +e.target.value / 100; $('zScaleV').textContent = state.zScale.toFixed(2) + '×'; refreshModel(); };
+$('bakeEl').oninput = (e) => {                                     // bake tilt — does NOT invalidate the
+  state.bakeEl = +e.target.value;                                  // orbit view, but it DOES stale the bake
+  $('bakeElV').textContent = state.bakeEl + '°';
+  state.baked = null; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
+  $('bakeState').innerHTML = '<span style="color:#e0b060">tilt changed — re-bake before saving</span>';
+};
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
 $('partSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; if (editingDecor && b.dataset.p !== 'body') return; state.part = b.dataset.p; gridSel = null; gridSelVox = null; gridSelView = null; [...$('partSeg').children].forEach((c) => c.classList.toggle('on', c === b)); renderGridView(); };
 // relabel the body's back slot ("Back" ⇄ "Angle ¾") everywhere it appears — the view drop slot AND the
@@ -3548,17 +3554,21 @@ $('setCam').onclick = () => {
 
 // ── BAKE ──
 function doBake() {
-  const foot = state.foot, bL = state.bodyLayers, tL = state.turretLayers, sp = layerSp(state.el), B = state.bakeScale;
+  // BAKE TILT. The sprites bake at their OWN elevation (default 45°) so the orbit camera can be moved
+  // freely while inspecting without changing what ships. layerSp/pack.camera follow the bake, not the
+  // preview, or the shipped sprite would not match the elevation recorded beside it.
+  const bEl = (state.bakeEl == null ? state.el : state.bakeEl);
+  const foot = state.foot, bL = state.bodyLayers, tL = state.turretLayers, sp = layerSp(bEl), B = state.bakeScale;
   const pivotPx = foot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
   const g = geom(foot, Math.max(bL, tL), sp, pivotPx);   // shared texture sized for the taller stack; both bottom-align at BASEY
   const t0 = performance.now();
-  const body = bakeAngleCache(app.renderer, bodyFaces, { frames: BODY_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B });
-  const turret = bakeAngleCache(app.renderer, turretFaces, { frames: TURRET_FRAMES, g, pivotFrac, el: state.el, scale: B });
+  const body = bakeAngleCache(app.renderer, bodyFaces, { frames: BODY_FRAMES, g, pivotFrac: 0.5, el: bEl, scale: B });
+  const turret = bakeAngleCache(app.renderer, turretFaces, { frames: TURRET_FRAMES, g, pivotFrac, el: bEl, scale: B });
   // S1: cast-shadow shape atlas, from the filled volume (aligned 1:1 with the frame atlases)
   const bodyFilled = buildModel('body', foot, bL).filled, turretFilled = buildModel('turret', footOf('turret'), tL).filled;
-  const bodyShadow = bakeShadowCache(app.renderer, bodyFilled, { frames: BODY_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B, foot, layers: bL });
-  const turretShadow = bakeShadowCache(app.renderer, turretFilled, { frames: TURRET_FRAMES, g, pivotFrac, el: state.el, scale: B, foot: footOf('turret'), layers: tL });
-  state.baked = { body, turret, bodyShadow, turretShadow, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, bodyLayers: bL, turretLayers: tL, scale: B };
+  const bodyShadow = bakeShadowCache(app.renderer, bodyFilled, { frames: BODY_FRAMES, g, pivotFrac: 0.5, el: bEl, scale: B, foot, layers: bL });
+  const turretShadow = bakeShadowCache(app.renderer, turretFilled, { frames: TURRET_FRAMES, g, pivotFrac, el: bEl, scale: B, foot: footOf('turret'), layers: tL });
+  state.baked = { body, turret, bodyShadow, turretShadow, bodyFrames: BODY_FRAMES, turretFrames: TURRET_FRAMES, g, sp, foot, bodyLayers: bL, turretLayers: tL, scale: B , el: bEl };
   const mkBaked = (tex, parent) => { const s = new PIXI.Sprite(tex);       // frames are B px/voxel → shrink to world size
     s.anchor.set(g.CX / g.RTW, g.BASEY / g.RTH); s.scale.set(1 / B); parent.addChild(s); return s; };
   bodyBaked = mkBaked(body[0], rig); turretBaked = mkBaked(turret[0], rig);
@@ -3586,7 +3596,7 @@ function buildPack() {
   const pack = {
     id, class: state.cls, footprint: [b.foot, b.foot, totalH],
     scale: { voxPerTile: VOX_PER_TILE, tiles: unitTiles(b.foot) },   // the world-size contract
-    camera: { azimuth: state.az | 0, elevation: state.el | 0 }, layerSpacing: Math.round(b.sp * 100) / 100,
+    camera: { azimuth: state.az | 0, elevation: (b.el != null ? b.el : state.el) | 0 }, layerSpacing: Math.round(b.sp * 100) / 100,   // the BAKE tilt, or the sprite and its recorded elevation disagree
     voxel: { height: state.zScale },
     renderScale: B,                                    // atlas px per voxel — draw frames at 1/renderScale
     light: { azimuth: state.lightAz, contrast: state.lightK },
@@ -3847,9 +3857,9 @@ function bakeDecor() {
   if (!bodyFaces) { alert('Decor: author the prop as the BODY first (load Top / Side / Front in step 1), then Bake decor.'); return; }
   const foot = state.foot, bL = state.bodyLayers, sp = layerSp(state.el), B = state.bakeScale;
   const g = geom(foot, bL, sp, 0);                                     // body-only, centred pivot
-  const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B });
+  const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bEl, scale: B });
   const filled = buildModel('body', foot, bL).filled;
-  const shadow = bakeShadowCache(app.renderer, filled, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: state.el, scale: B, foot, layers: bL });
+  const shadow = bakeShadowCache(app.renderer, filled, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bEl, scale: B, foot, layers: bL });
   state.decorBaked = { frame, shadow, g, sp, foot, layers: bL, scale: B };
   $('decorBakeState').innerHTML = `<span class="lock">✓ Decor baked · 1 frame + cast shadow · ${g.RTW * B}×${g.RTH * B}</span>`;
   if ($('saveDecor')) $('saveDecor').disabled = false;
@@ -4001,6 +4011,7 @@ function syncAllControls() {
   set('pal', state.paletteN, state.paletteN || 'full');
   set('palN', state.paletteN, state.paletteN || 'full');
   set('bakeScale', state.bakeScale, state.bakeScale + '×');
+  set('bakeEl', state.bakeEl == null ? 45 : state.bakeEl, (state.bakeEl == null ? 45 : state.bakeEl) + '°');   // bake tilt survives a project load
   $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; } $('spin').checked = state.spin;
   if ($('decProc')) $('decProc').checked = !!state.decorProc;
   if ($('decProcRow')) $('decProcRow').style.display = state.decorProc ? '' : 'none';
@@ -4122,6 +4133,7 @@ $('projLoad').addEventListener('change', (e) => {
 // prop for editing (never save), and everything routes through the isolated decor flow — no unit collision.
 const DECOR_SET = '🌿 Terrain (decor)';
 const isDecorSet = () => curFaction === DECOR_SET;
+const FACTION_KEY = 'bulwark:sf:lastFaction';   // the set you were last working in
 const FACTIONS = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water', 'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies (Chem)', 'System', DECOR_SET];
 const ROLES = ['Skirmisher', 'Support', 'Bruiser', 'Siege', 'Juggernaut', 'Harasser', 'Striker', 'Guided AA'];
 const prefixFor = (name) => (name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'UNI');
@@ -4139,7 +4151,13 @@ async function initFactions() {
   await loadShipped();                                            // so "supplied ✓" + Load reflect deployed art
   $('faction').innerHTML = FACTIONS.map((f) => `<option>${f}</option>`).join('');
   $('faction').onchange = () => loadFaction($('faction').value);
-  loadFaction(FACTIONS[0]);
+  // REMEMBER THE FACTION. It always reopened on FACTIONS[0], so work resumed under the wrong faction
+  // while the geometry restored correctly — you would edit a unit and only later notice the faction was
+  // wrong. Restored from the last one actually opened; an unknown/removed name falls back to the first.
+  let want = FACTIONS[0];
+  try { const last = localStorage.getItem(FACTION_KEY); if (last && FACTIONS.includes(last)) want = last; } catch (e) { /* private mode */ }
+  $('faction').value = want;
+  loadFaction(want);
 }
 function fileForFaction(name) {
   const norm = (s) => s.toLowerCase().replace(/[^a-z]/g, ''), key = norm(name).slice(0, 5);
@@ -4151,6 +4169,8 @@ async function loadFaction(name) {
     editingDecor = null;
   }
   curFaction = name; roster = [];
+  try { localStorage.setItem(FACTION_KEY, name); } catch (e) { /* private mode */ }   // survive a reload
+  if ($('faction') && $('faction').value !== name) $('faction').value = name;
   if (name === DECOR_SET) {                                        // Terrain set = decor mode (body-only + revolve + decor: autosave)
     // roster = every decor the browser knows: baked (manifest) + IN-PROGRESS WIP (IndexedDB decor:*)
     const dm = loadDecorManifest().decor || {}, ids = new Set(Object.keys(dm));
