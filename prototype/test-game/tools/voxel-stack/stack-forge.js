@@ -2598,6 +2598,12 @@ if ($('gridReproj')) $('gridReproj').onclick = () => reprojectSurface();
 if ($('gridLassoBtn')) $('gridLassoBtn').onclick = () => { lassoMode = !lassoMode; if (lassoMode) gridLasso = []; else if (gridLasso && gridLasso.length < 3) gridLasso = null; $('gridLassoBtn').classList.toggle('on', lassoMode); renderGridView(); };
 // ESC clears the selection; Delete erases it; Enter/F fills it; Ctrl+Z / Ctrl+Y undo/redo
 document.addEventListener('keydown', (e) => {
+  // NOTHING DESTRUCTIVE REACHES THE MODEL FROM BEHIND A DIALOG. The old guard exempted only INPUT and
+  // TEXTAREA and checked one modal by name, so DEL destroyed geometry behind the Save dialog and ESC —
+  // whose terminal fallback was volUndo() — silently reverted an edit instead of closing the dialog.
+  // ESC no longer mutates anything anywhere; undo is Ctrl+Z.
+  if (document.querySelector('[id$="Modal"]:not([hidden])')) return;
+  if (e.target && e.target.closest && e.target.closest('input, select, textarea, button')) return;
   if (!$('keyModal') || !$('keyModal').hidden) return;               // don't fight the cutout modal's own ESC
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { volUndo(); e.preventDefault(); return; }   // same undo as ESC
@@ -2605,7 +2611,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && lassoMode) { lassoMode = false; if (gridLasso && gridLasso.length) gridLasso.pop(); if (gridLasso && !gridLasso.length) gridLasso = null; renderGridView(); }   // ESC backs out of the lasso first
   else if (e.key === 'Escape' && gridLasso) { gridLasso = null; renderGridView(); }   // …then clears a finished lasso
   else if (e.key === 'Escape' && (gridSel || gridSelVox)) { gridSel = null; gridSelVox = null; gridSelView = null; renderGridView(); }
-  else if (e.key === 'Escape') { volUndo(); e.preventDefault(); }    // …then ESC UNDOES the last delete
+  // ESC NEVER MUTATES. It used to fall through to volUndo(), so dismissing a dialog silently reverted an
+  // edit — and because ESC is overloaded four ways, the mutation was the terminal case nobody expected.
+  // Undo is Ctrl+Z, and only Ctrl+Z.
   else if (e.key === 'Delete' || e.key === 'Backspace') { if (doDelete()) e.preventDefault(); }   // DEL is the shortcut for the Delete button
   else if ((e.key === 'Enter' || e.key === 'f' || e.key === 'F') && gridSelVox) { if (fillSelection()) e.preventDefault(); }
 });
@@ -4368,10 +4376,16 @@ let saveAsId = null;
 //   Save geometry — the editable unit (voxels + slices) and a descriptor, so the CARD EXISTS. No bake.
 //   Save all      — bake, then geometry + sprite sheets + manifest in one action.
 const UNIT_FACTIONS = FACTIONS.filter((f) => f !== 'System' && f !== DECOR_SET);   // the 9 real unit factions
-const svPathFor = (fac) => {
-  const file = fileForFaction(fac);
-  return file ? 'content/units/' + file : `content/units/ (no faction file yet for "${fac}")`;
+// PRINT WHAT IS ACTUALLY WRITTEN. This used to name content/units/<faction>.units.json — a file the tool
+// only ever READS. fileForFaction has exactly two callers: building the roster, and this line. Naming a
+// destination nothing writes is worse than naming none, because it is confidently wrong.
+const svDests = (id, all) => {
+  const d = [`proj:${id || '<id>'} (IndexedDB — voxels + slices)`, `bulwark:stackforge (descriptor)`];
+  if (all) d.push(`atlas:${id || '<id>'} (IndexedDB — sprite sheets)`);
+  return d;
 };
+const svShipDests = (id) => [`content/units/voxel/${id || '<id>'}.{body,turret}.png`, 'content/units/voxel-units.json'];
+
 function openSaveModal(id) {
   const sel = $('svFaction');
   sel.innerHTML = UNIT_FACTIONS.map((f) => `<option${f === curFaction ? ' selected' : ''}>${f}</option>`).join('');
@@ -4381,7 +4395,9 @@ function openSaveModal(id) {
 }
 function svSyncPath() {
   const id = ($('svId').value || '').trim(), fac = $('svFaction').value;
-  $('svPath').textContent = `${svPathFor(fac)}  ·  content/units/voxel/${id || '<id>'}.{body,turret}.png`;
+  $('svPath').innerHTML = `Save writes → ${svDests(id, true).join('  ·  ')}`
+    + `<br>Then <b>🚀 Ship</b> writes → ${svShipDests(id).join('  ·  ')}`
+    + `<br><span style="opacity:.7">Faction ${fac} tags the card; the tool does not write a per-faction file.</span>`;
   const clash = !!suppliedUnits()[id];
   $('svWarn').hidden = !clash;
   if (clash) $('svWarn').innerHTML = `⚠ <b>${id}</b> already exists — saving REPLACES it.`;
@@ -4419,7 +4435,7 @@ Its sprites and geometry are overwritten with the model currently in the editor.
   if (!r || !r.ok) return r;                                      // quickSave already shouted
   if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
   renderRoster();
-  $('projState').innerHTML = ($('projState').textContent || '') + `  ·  🚀 Ship to write ${svPathFor($('svFaction').value)}.`;
+  $('projState').innerHTML = ($('projState').textContent || '') + `  ·  🚀 Ship to write ${svShipDests(id).join(' + ')}.`;
 };
 // Clicking a card OPENS. It never saves — that lived here as a 'recommended' overwrite button and
 // destroyed a unit the owner meant to open. An EMPTY slot has nothing to open, so it goes straight to
