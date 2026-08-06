@@ -4054,7 +4054,14 @@ function renderRoster() {
   const decorSet = isDecorSet();
   const grid = $('unitGrid'), supplied = decorSet ? (loadDecorManifest().decor || {}) : suppliedUnits();
   grid.innerHTML = ''; let n = 0;
-  for (const u of roster) {
+  // THE ROSTER IS NOT THE WHOLE SET. This walked the fixed `roster` list only, so a unit baked and saved
+  // under an id that is not on it got a manifest entry, an atlas and a WIP -- and no card. It looked as
+  // though the save had failed. Anything supplied/saved the roster does not name is appended here, so
+  // your own units show up beside the designed ones.
+  const named = new Set(roster.map((u) => u.id));
+  const extras = Object.keys(supplied).filter((id) => !named.has(id)).sort()
+    .map((id) => ({ id, role: decorSet ? 'prop' : 'saved' }));
+  for (const u of [...roster, ...extras]) {
     const has = !!supplied[u.id]; if (has) n++;
     const selId = decorSet ? editingDecor : $('uid').value;
     const card = document.createElement('div'); card.className = 'ucard' + (u.id === selId ? ' sel' : ''); card.dataset.uid = u.id;
