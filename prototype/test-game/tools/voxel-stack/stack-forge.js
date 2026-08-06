@@ -3735,12 +3735,21 @@ const shipFile = async (path, payload) => {
   return d;
 };
 $('shipManifest').onclick = async () => {
+  // MERGE, NEVER REPLACE. Ship used to write loadManifest() wholesale, replacing the committed file with
+  // whatever THIS browser held. A browser with 3 units silently deleted the other 4 from a 6-unit file --
+  // GND-HeavyTanks among them. Read disk first and merge over it: shipping can only ADD or UPDATE.
   const m = loadManifest(), ids = Object.keys(m.units || {});
+  let onDisk = { units: {} };
+  try {
+    const r = await fetch('../../content/units/voxel-units.json', { cache: 'no-store' });
+    if (r.ok) onDisk = await r.json();
+  } catch (e) { console.warn('[stack-forge] could not read the shipped manifest — treating it as empty:', e.message); }
+  const kept = Object.keys(onDisk.units || {}).filter((k) => !ids.includes(k));
   if (!ids.length) { $('projState').textContent = 'Nothing to ship — the units manifest is empty.'; return; }
   $('projState').textContent = `Shipping ${ids.length} unit(s)…`;
   try {
     let files = 0, bytes = 0;
-    const lean = { config: m.config, units: {} };
+    const lean = { config: m.config || onDisk.config, units: Object.assign({}, onDisk.units) };   // start from disk
     for (const id of ids) {
       const e = m.units[id], atl = e.atlases || (await idb.get('atlas:' + id).catch(() => null)) || {};
       for (const pt of (e.pack.parts || [])) {                      // atlas + optional shadow, per part
@@ -3768,7 +3777,8 @@ $('shipManifest').onclick = async () => {
     }
     const d = await shipFile('content/units/voxel-units.json', { data: lean });
     const before = JSON.stringify(m).length, after = JSON.stringify(lean).length;
-    $('projState').innerHTML = `🚀 Shipped <b>${ids.length}</b> unit(s): ${files} PNG(s)`
+    if (kept.length) console.info(`[stack-forge] kept ${kept.length} unit(s) already on disk: ${kept.join(', ')}`);
+    $('projState').innerHTML = `🚀 Shipped <b>${ids.length}</b> unit(s)` + (kept.length ? `, kept <b>${kept.length}</b> already on disk` : '') + `: ${files} PNG(s)`
       + ` (${(bytes / 1048576).toFixed(2)} MB) → content/units/voxel/, manifest ${after.toLocaleString()} chars`
       + ` (was ${before.toLocaleString()}, ${(100 - 100 * after / before).toFixed(1)}% smaller) — commit to deploy.`;
     console.info(`[stack-forge] shipped ${files} atlas file(s), manifest ${before.toLocaleString()} → ${after.toLocaleString()} chars`);
@@ -4391,14 +4401,13 @@ Its sprites and geometry are overwritten with the model currently in the editor.
   renderRoster();
   $('projState').innerHTML = ($('projState').textContent || '') + `  ·  🚀 Ship to write ${svPathFor($('svFaction').value)}.`;
 };
+// Clicking a card OPENS. It never saves — that lived here as a 'recommended' overwrite button and
+// destroyed a unit the owner meant to open. An EMPTY slot has nothing to open, so it goes straight to
+// the Save modal with the id prefilled, which is the only place a save can now begin.
 function onCardClick(id) {
   saveAsId = id;
-  const exists = !!suppliedUnits()[id];
-  if ($('saveAsTitle2')) $('saveAsTitle2').textContent = (exists ? 'Open — ' : 'New unit — ') + id;
-  if ($('saveAsTitle3')) $('saveAsTitle3').textContent = id;
-  $('saveAsWarn').hidden = !exists;                                // only a real unit can be overwritten
-  $('saveAsLoad').hidden = !exists;                                // nothing to open in an empty slot
-  $('saveAsSkip').hidden = !exists;
+  if (!suppliedUnits()[id]) { openSaveModal(id); return; }
+  $('saveAsTitle2').textContent = 'Open — ' + id;
   $('saveAsModal').hidden = false;
 }
 async function openLoadModal() {
@@ -4487,13 +4496,6 @@ ${(e && e.message) || e}`); }
 $('saveAsLoad').onclick = () => { $('saveAsModal').hidden = true; if (wipDirty) doAutosave(); selectUnit(saveAsId); };   // load it; only re-save when there is unsaved work
 // SAFETY: overwriting an EXISTING saved unit needs an explicit yes — clicking a roster card to *select* it
 // must never silently replace it with the current model (owner data-loss report).
-const confirmOverwrite = () => !suppliedUnits()[saveAsId] || confirm(`REPLACE the saved unit "${saveAsId}"?
-
-Its sprites and geometry are overwritten with the model currently in the editor, and the old version is gone.
-
-To open "${saveAsId}" instead, Cancel and use the Open button.`);
-$('saveAsSprites').onclick = async () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; await quickSave(saveAsId, false); };
-$('saveAs3D').onclick = async () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; await quickSave(saveAsId, true); };
 // Skip = switch WITHOUT saving: no flush of the outgoing unit, clear, then load. Cancel just closes the
 // modal and leaves you where you are. Load still flushes first (doAutosave) -- that is the difference.
 $('saveAsSkip').onclick = () => { $('saveAsModal').hidden = true; selectUnit(saveAsId, true); };
