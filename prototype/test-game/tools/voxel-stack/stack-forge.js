@@ -1956,18 +1956,15 @@ function restoreVol(p) {
 function refreshView() { voxSig = ''; renderGridView(); }
 
 function update() {
-  const sp = layerSp(state.el), se = Math.sin(state.el * Math.PI / 180);
+  const se = Math.sin(state.el * Math.PI / 180);
   const azR = state.az * Math.PI / 180, taimR = state.taim * Math.PI / 180;
-  const showB = state.part !== 'turret', showT = state.part !== 'body', mountDz = mountZOf(state.bodyLayers);
-  const ox = state.turretDx * Math.cos(azR), oy = state.turretDx * Math.sin(azR) * se;   // mount offset, foreshortened
-  if (state.baked) {
-    voxSpr.visible = false; voxShadow.visible = false;
-    const bb = bucketOf(azR, state.baked.bodyFrames), tb = bucketOf(azR + taimR, state.baked.turretFrames);
-    bodyBaked.texture = state.baked.body[bb]; bodyBaked.visible = showB; bodyBaked.position.set(0, state.baseY);
-    turretBaked.texture = state.baked.turret[tb]; turretBaked.visible = showT;
-    turretBaked.position.set(ox, state.baseY - mountDz * sp + oy);
-    return;
-  }
+  const showB = state.part !== 'turret', showT = state.part !== 'body';
+
+  // THE MAIN WINDOW IS THE GEOMETRY VIEW, ALWAYS. It used to silently become a baked-sprite viewer the
+  // moment a bake existed — and the geometry branch turned voxSpr ON without ever turning the baked
+  // sprites OFF, so after bake-then-edit BOTH drew and the model appeared over the sprites. Baked frames
+  // now live in their own preview modal; nothing here is implicit. (Owner 2026-08-06.)
+  bodyBaked.visible = false; turretBaked.visible = false;
   voxSpr.visible = true; voxShadow.visible = true;
   // only re-render the cube scene when something it depends on actually changed
   const sig = state.az.toFixed(1) + '|' + state.el.toFixed(1) + '|' + state.taim.toFixed(1) + '|' + state.turretDx + '|' +
@@ -4424,6 +4421,38 @@ Its sprites and geometry are overwritten with the model currently in the editor.
 // Clicking a card OPENS. It never saves — that lived here as a 'recommended' overwrite button and
 // destroyed a unit the owner meant to open. An EMPTY slot has nothing to open, so it goes straight to
 // the Save modal with the id prefilled, which is the only place a save can now begin.
+// ── BAKED SPRITE PREVIEW ─────────────────────────────────────────────────────────────────────────
+// The main window is the geometry editor and stays that way. The frames that actually SHIP are shown
+// here, laid out as the atlas grid, so 'what did I bake' is an explicit question with an explicit
+// answer instead of a hidden mode that silently replaced the model.
+let spPart = 'body';
+function spDraw() {
+  const cv = $('spCanvas'), g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+  const b = state.baked;
+  if (!b) { cv.width = 320; cv.height = 60; g.fillStyle = '#8fa7bd'; g.font = '12px system-ui'; g.fillText('Nothing baked yet — press Bake.', 10, 34); return; }
+  const frames = spPart === 'turret' ? b.turret : b.body;
+  const n = frames.length, cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
+  const z = (+$('spZoom').value || 100) / 100;
+  const cw = Math.max(1, Math.round(b.g.RTW * z)), ch = Math.max(1, Math.round(b.g.RTH * z));
+  cv.width = cols * cw; cv.height = rows * ch;
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#060b12'; g.fillRect(0, 0, cv.width, cv.height);
+  for (let i = 0; i < n; i++) {
+    let src = null;
+    try { src = app.renderer.extract.canvas(frames[i]); } catch (e) { /* texture gone */ }
+    const x = (i % cols) * cw, y = ((i / cols) | 0) * ch;
+    if (src) g.drawImage(src, x, y, cw, ch);
+    g.strokeStyle = 'rgba(120,200,255,.18)'; g.strokeRect(x + .5, y + .5, cw - 1, ch - 1);
+  }
+  $('spMeta').textContent = `${n} frame(s) · cell ${b.g.RTW}×${b.g.RTH} · grid ${cols}×${rows}`
+    + ` · baked at ${b.el != null ? b.el : state.el}° tilt, ${b.scale}× — these are the pixels that ship.`;
+}
+$('spOpen').onclick = () => { $('spTitle').textContent = ($('uid').value || 'unit').trim(); $('spriteModal').hidden = false; spDraw(); };
+$('spClose').onclick = () => { $('spriteModal').hidden = true; };
+$('spriteModal').addEventListener('click', (e) => { if (e.target === $('spriteModal')) $('spriteModal').hidden = true; });
+$('spZoom').oninput = (e) => { $('spZoomV').textContent = e.target.value + '%'; spDraw(); };
+$('spPartSeg').onclick = (e) => { const b2 = e.target.closest('button'); if (!b2) return; spPart = b2.dataset.p;
+  [...$('spPartSeg').children].forEach((c) => c.classList.toggle('on', c === b2)); spDraw(); };
 function onCardClick(id) {
   saveAsId = id;
   if (!suppliedUnits()[id]) { openSaveModal(id); return; }

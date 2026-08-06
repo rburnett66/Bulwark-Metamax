@@ -134,8 +134,8 @@
     .loadRow { display:flex; align-items:center; gap:8px; width:100%; text-align:left; margin-top:6px; }
     .loadRow .lid { flex:1; font-weight:600; }
     .loadRow .ltag { font-size:10px; color:var(--muted); }
-    #saveModal, #saveAsModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
-    #saveModal[hidden], #saveAsModal[hidden] { display:none; }
+    #spriteModal, #saveModal, #saveAsModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
+    #spriteModal[hidden], #saveModal[hidden], #saveAsModal[hidden] { display:none; }
     #saveAsBox { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; width:380px; max-width:92vw; box-shadow:0 18px 60px rgba(0,0,0,.6); }
     #saveAsBox h2 { font-size:11px; letter-spacing:.18em; color:var(--muted); margin:0 0 6px; text-transform:uppercase; }
     #saveAsBox h2 span { color:var(--gold); }
@@ -300,6 +300,7 @@
 
     <div class="grp">
       <h2>4 · Bake (smooth / sharpen)</h2>
+      <div class="row"><button class="ghost" id="spOpen" style="flex:1" title="Preview the baked sprite sheet — the frames that actually ship">🎞 Preview baked sprites…</button></div>
       <div class="row"><label>Bake tilt</label><input type="range" id="bakeEl" min="0" max="90" value="45" title="Camera elevation the SPRITES are baked at. Independent of the orbit Elevation, so you can look around without changing what ships."><span class="val" id="bakeElV">45°</span></div>
       <div class="row"><label>Bake res</label><input type="range" id="bakeScale" min="1" max="4" step="1" value="2"><span class="val" id="bakeScaleV">2×</span></div>
       <div class="row"><label>Smooth (2×)</label><input type="checkbox" id="smooth" checked><span class="note" style="margin:0">supersample AA</span></div>
@@ -457,6 +458,16 @@
       <button class="ghost" id="loadCancel" style="width:auto;padding:6px 12px;margin:0">Cancel</button>
     </div>
     <div class="note" id="loadDiagNote" style="margin:6px 0 0"></div>
+  </div>
+</div>
+<div id="spriteModal" hidden>
+  <div id="spriteBox" style="background:#0b131d;border:1px solid #24384f;border-radius:8px;padding:14px;max-width:94vw;max-height:92vh;overflow:auto">
+    <h2 style="margin:0 0 6px">Baked sprites — <span id="spTitle"></span></h2>
+    <div class="note" id="spMeta" style="margin:0 0 10px"></div>
+    <div class="row" style="margin:0 0 8px"><label>Part</label><div class="seg" id="spPartSeg"><button data-p="body" class="on">Base</button><button data-p="turret">Turret</button></div>
+      <label style="margin-left:12px">Zoom</label><input type="range" id="spZoom" min="25" max="300" value="100" style="width:120px"><span class="val" id="spZoomV">100%</span></div>
+    <canvas id="spCanvas" style="background:#060b12;border:1px solid #1c2c40;max-width:100%;image-rendering:pixelated"></canvas>
+    <button class="ghost" id="spClose" style="margin-top:10px">Close</button>
   </div>
 </div>
 <div id="saveModal" hidden>
