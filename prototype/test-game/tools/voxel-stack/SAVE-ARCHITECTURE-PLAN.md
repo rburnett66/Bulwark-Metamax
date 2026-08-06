@@ -2,6 +2,112 @@
 
 Owner's direction, 2026-08-06. One faction at a time, one unit at a time.
 
+---
+
+# START HERE — how to pick this up in a new session
+
+## 0. Root the session in THIS repo (hard rule)
+
+Open a terminal **in the repo root** and start there. Never `cd` in from another project.
+
+```powershell
+cd C:\Users\hottd\Documents\Metamax\Bulwark-Metamax
+claude
+```
+
+Rooting elsewhere means this repo's `CLAUDE.md`, `.claude/settings.json` +
+`.claude/settings.local.json` (permissions, incl. `git push`) and project memory **never load** — the
+permission classifier then blocks pushes and a routine deploy becomes a fire. If you find yourself
+mis-rooted, STOP and relaunch inside the repo; do not work around it by `cd`-ing, editing permission
+config, or embedding a PAT.
+
+(To keep the current terminal and just drop context, `/clear` works and stays correctly rooted.
+`claude -c` resumes the last session; `claude --resume` picks one.)
+
+## 1. Warm up on MetaMax — tickets BEFORE development
+
+Bulwark is tracked as **Bulwark MM (project 16)** on the owner's MetaMax platform. **No dev without a
+ticket.** This applies in THIS repo, not just the platform repo.
+
+1. Make sure the backend is up — the `metamax-reality` MCP server needs it:
+   ```powershell
+   cd C:\Users\hottd\Documents\Metamax\metamax-ux-test\backend
+   uvicorn server:app --port 8000
+   ```
+   It needs `METAMAX_MCP_TOKEN`; the owner mints one with
+   `python backend/scripts/mint_mcp_token.py`. **Note :8000 is uvicorn — the forge is served on :9000.**
+2. `session_start` → orient. `list_projects` for the current set (never trust a hardcoded roster).
+3. `list_workstreams` for project 16 → find or create the epic for this work, then a story per plan step.
+   Keep statuses current **while** working, not after.
+4. `graph_overview` / `does_exist` / `impact_of` before building or changing shared code — the reality
+   graph answers structural questions faster than grep.
+5. `post_document` this plan to the board (the repo copy stays canonical).
+6. Stamp commits `closes [MM-<work_item_id>]` so reconcile advances the tickets.
+
+If MetaMax is offline, say so and ask the owner whether to proceed without tickets — they have waived it
+before, but it is their call, not an assumption.
+
+## 2. Re-orient on the code (this machine crashes mid-work)
+
+```powershell
+git fetch; git status -sb; git log --oneline -8; git worktree list
+git log --oneline -5 origin/main
+```
+
+## 3. Serve the tool — and get the root right
+
+```powershell
+python serve_prototype.py prototype/test-game/harness.html      # Stack Forge  → http://127.0.0.1:9000
+```
+
+**Serve `harness.html`, not `stack-forge.html`.** `serve_prototype.py` roots the server at the HTML
+file's own directory, so opening `stack-forge.html` directly roots it inside `tools/voxel-stack/` and
+`../../content/units/voxel-units.json` **404s** — silently swallowed, leaving `shippedUnits` empty and
+every faction reduced to generic `U1…U8` slots. Ports 9000–9049 are scanned; uvicorn holds 8000.
+**Always diff the served file against the working tree before believing a "no change" report.**
+
+## 4. Verify like this, not with `node --check`
+
+`node --check` proves a file parses and nothing else. It has passed on genuinely broken builds here.
+
+```powershell
+node --test prototype/test-game/src/data/renderTiers.test.mjs prototype/test-game/src/render/voxel/pack.test.mjs
+```
+Those two are the CI gates on the Pages deploy — keep both green. For forge maths, extract the shipped
+function and prove it headlessly before wiring it (see `carve.test.mjs`, `select.test.mjs`).
+
+## 5. State as of 2026-08-06
+
+Branch **`feat/forge-save-architecture`** (off `feat/voxel-decor`, which is merged to `main`).
+
+- **DONE — step 1, fail loud.** `doSaveUnit` returns `{ok,…}`; `saveFailed()` shouts via console, a red
+  state line and a blocking dialog; `quickSave` wraps `doBake` and reports only after checking `r.ok`.
+- **DONE — size reporting.** Every save logs the manifest size + per-unit bulk, warns past 1.5M chars,
+  and warns when a save embeds voxel geometry.
+- **NEXT — step 3**, the atlas split. Biggest win (4.2 MB → a few KB) and **zero game-side risk**.
+- Not started: steps 2, 4, 5, 6.
+
+**Bootstrap prompt for a fresh session:**
+
+> Continue the Stack Forge save-architecture rebuild on branch `feat/forge-save-architecture`. Read
+> `prototype/test-game/tools/voxel-stack/SAVE-ARCHITECTURE-PLAN.md` first — measurements, six steps, and
+> the game-code scope are all in it. Step 1 and the size reporting are done. Start at **step 3**: move
+> sprite atlases out of the manifest into real PNGs. `loader.js:50` already resolves
+> `atlasBase + pt.atlas`, so this needs zero game changes.
+
+## 6. Open questions for the owner
+
+- Where should atlas PNGs live? `loader.js:32` currently expects `content/units/voxel/`.
+- The dev-preview path (`loader.js:36`) passes `atlasBase = null` — that single `null` is what forced
+  base64 into localStorage. Give it a base, or have the preview read atlases from IndexedDB?
+- Still open from the previous branch: **the orbit projection is mirrored in X** (camera at +Y by the
+  painter sort, culling and depth, yet +X drawn screen-right). Fixing it mirrors every baked sprite, so
+  everything needs re-baking — owner's call. It also reverses the bake's rotation sense, so
+  `zeroFacing: '+x'` is quietly wrong.
+- Also open: the turret faces right in the slice view but backwards in the model view.
+
+---
+
 ## The problem, measured
 
 `content/units/voxel-units.json` = **4,223,752 bytes for three units**. 99.9–100% of every entry is
