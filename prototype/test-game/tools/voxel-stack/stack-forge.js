@@ -3633,19 +3633,47 @@ function renderManifest() {
     ? ids.map((id) => `<div class="u"><b>${id}</b><span>${m.units[id].pack.class} · ${m.units[id].pack.footprint.join('×')}</span></div>`).join('')
     : 'No units saved yet.';
 }
+// A save that fails must be impossible to miss: it shouts in the console, writes the prominent state
+// line, AND blocks with a dialog. No hidden notes — the muted `saveState` note was the only signal and
+// it was routinely overwritten by a success message from quickSave a moment later.
+function saveFailed(kind, detail) {
+  const msg = `SAVE FAILED — ${kind}
+
+${detail}`;
+  console.error('[stack-forge] ' + msg);
+  $('saveState').innerHTML = `<b style="color:#ff6b6b">✗ SAVE FAILED — ${kind}</b>`;
+  if ($('projState')) $('projState').innerHTML = `<b style="color:#ff6b6b">✗ NOT SAVED — ${kind}</b>`;
+  alert(msg);
+  return { ok: false, kind, detail };
+}
 function doSaveUnit() {
-  if (!state.baked) return; const built = buildPack(); const v = validatePack(built.pack);
+  // FAIL LOUD. Both of this function's failure paths used to `return` bare, and quickSave printed
+  // 'Saved …' regardless — a failed save reported success, which is how a unit went missing for a day.
+  if (!state.baked) return saveFailed('NO BAKE', 'The model is not baked. Press Bake, then Save.');
+  let built, v;
+  try { built = buildPack(); v = validatePack(built.pack); }
+  catch (e) { return saveFailed('BAKE/PACK FAILED', (e && e.message) || String(e)); }
   activeUnitId = built.pack.id;                           // an explicit save under this id is a deliberate rename → follow it
   const m = loadManifest();
   m.config = { camera: built.pack.camera, light: built.pack.light };   // shared game-wide config
   m.units = m.units || {}; m.units[built.pack.id] = built;
-  try { localStorage.setItem(MANIFEST_KEY, JSON.stringify(m)); } catch (e) { $('saveState').textContent = 'Save failed (storage full — use Download).'; return; }
+  const json = JSON.stringify(m);
+  try { localStorage.setItem(MANIFEST_KEY, json); }
+  catch (e) { return saveFailed('STORAGE FULL',
+    `The units manifest is ${json.length.toLocaleString()} characters and will not fit in localStorage.` +
+    `
+
+Use 🚀 Ship manifest to write it to disk, then clear the browser copy.` +
+    `
+
+(${(e && e.name) || e})`); }
   lastPack = built;
   $('saveState').innerHTML = v.ok ? `<span class="lock">Saved "${built.pack.id}" ✓ (schema-valid)</span>` : 'Saved, but INVALID: ' + v.errors.join('; ');
   $('packJson').textContent = JSON.stringify(built.pack, null, 2);
   renderManifest();
   renderRoster();        // flip this unit's card to "supplied ✓"
   renderScaleChart();    // the new unit joins the side-view scale chart
+  return { ok: true, id: built.pack.id, chars: json.length, valid: v.ok };
 }
 $('saveUnit').onclick = doSaveUnit;
 
@@ -4286,14 +4314,22 @@ async function diagnoseLoad() {
 }
 if ($('loadDiag')) $('loadDiag').onclick = diagnoseLoad;
 $('loadModal').addEventListener('click', (e) => { if (e.target === $('loadModal')) $('loadModal').hidden = true; });
+// Reports what ACTUALLY happened. It used to print 'Saved …' and paint the card selected before knowing
+// whether doSaveUnit had written anything, so a quota failure or an unbaked model looked like success.
 function quickSave(id, as3D) {
   $('uid').value = id;
-  $('embedModel').checked = !!as3D;                     // 3D embeds the editable model; sprites explicitly does not
-  doBake();                                             // current camera + bake settings
-  doSaveUnit();                                         // pack → manifest, card flips to ✓
+  $('embedModel').checked = !!as3D;
+  try { doBake(); }
+  catch (e) { return saveFailed('BAKE THREW', `Baking "${id}" failed.
+
+${(e && e.message) || e}`); }
+  const r = doSaveUnit();
+  if (!r || !r.ok) return r;                                   // saveFailed already shouted; do NOT claim success
   document.querySelectorAll('.ucard').forEach((c) => c.classList.toggle('sel', c.dataset.uid === id));
-  $('projState').textContent = `Saved "${id}" as ${as3D ? '3D (live model + baked fallback)' : 'baked sprites'} — reload the game to see it.`;
-  doAutosave();                                         // park the working project under this id too
+  $('projState').textContent = `Saved "${id}" as ${as3D ? '3D (editable model + baked)' : 'sprites only'}`
+    + ` — ${r.chars.toLocaleString()} chars in the manifest. Reload the game to see it.`;
+  doAutosave();
+  return r;
 }
 $('saveAsLoad').onclick = () => { $('saveAsModal').hidden = true; if (wipDirty) doAutosave(); selectUnit(saveAsId); };   // load it; only re-save when there is unsaved work
 // SAFETY: overwriting an EXISTING saved unit needs an explicit yes — clicking a roster card to *select* it

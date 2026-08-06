@@ -40,6 +40,37 @@ path. Non-Tier-C units never write one — enforced, not optional.
 
 Net: the faction manifest goes from ~4.2 MB to a few KB. localStorage stops being a payload store.
 
+## Two different things are called "layers" — only one goes
+
+- **`state.bodyLayers` / `state.turretLayers`** — voxel height in the editor. **STAYS.** This is the
+  slider, the z span, the grid depth.
+- **`units[id].layers{base,weapon,head}`** — the old STACKED-SPRITE composite, superseded by voxels +
+  sprite sheets. **REMOVED.** Its only reader is `src/harness/bench.js` (the authoring bench), never the
+  game runtime — so removing it is tool-side only.
+
+## How much game code changes: almost none
+
+**Atlases — ZERO game changes.** `loader.js:32` already calls the shipped path with
+`atlasBase = 'content/units/voxel/'`, and `:50` resolves:
+```js
+const src = (entry.atlases && entry.atlases[pt.id]) || (atlasBase ? atlasBase + pt.atlas : null);
+```
+Inline base64 is merely the FIRST branch of a fallback that has always existed. Stop inlining, write real
+PNGs to `content/units/voxel/`, and the loader picks them up untouched. Same for shadows (`:64`) and
+decor (`:108`). The only reason inline exists at all: `loader.js:36` passes `atlasBase = null` for the
+localStorage manifest — the dev-preview path with no files on disk. That single `null` is what forced
+megabytes of base64 into localStorage.
+
+**Geometry — ONE game change.** `live3d.js:66` reads the model inline:
+```js
+if (!pack || !pack.model || !pack.model.b64) return null;
+```
+Model-by-path means `live3d.js` (or the loader, hydrating ahead of it) must accept `model.src` and fetch
+it. That is the ONLY game-side edit in this plan, and it affects Tier C units only.
+
+**Consequence: step 3 is safely incremental.** Atlases can move to files today with zero game risk and
+the manifest drops from 4.2 MB to a few KB immediately. Geometry-by-path follows separately.
+
 ## Work plan
 
 ### 1 — Fail loud (do first; everything else depends on trusting saves)
