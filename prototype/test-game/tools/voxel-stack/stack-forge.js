@@ -1349,6 +1349,9 @@ function rotCanvas(im, rot) {                                                 //
 // to sit ABOVE the hull (mast, pedestal), so the ceiling is now body+turret layers, which is exactly
 // what voxBounds.HT already sizes the baked canvas for — so nothing can be raised out of frame.
 function mountZOf(bodyLayers) { return clamp(bodyMountZ + state.mountZ, 0, bodyLayers + state.turretLayers); }
+// The tilt the SPRITES bake at. Module scope on purpose: units and decor both bake, and a const local
+// to doBake left bakeDecor throwing ReferenceError on every call.
+const bakeElOf = () => (state.bakeEl == null ? state.el : state.bakeEl);
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, bakeEl: 45, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
   barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
   decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30,   // decor on-map scale + procedural-tree params (Stories 6,7)
@@ -3554,7 +3557,7 @@ function doBake() {
   // BAKE TILT. The sprites bake at their OWN elevation (default 45°) so the orbit camera can be moved
   // freely while inspecting without changing what ships. layerSp/pack.camera follow the bake, not the
   // preview, or the shipped sprite would not match the elevation recorded beside it.
-  const bEl = (state.bakeEl == null ? state.el : state.bakeEl);
+  const bEl = bakeElOf();
   const foot = state.foot, bL = state.bodyLayers, tL = state.turretLayers, sp = layerSp(bEl), B = state.bakeScale;
   const pivotPx = foot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
   const g = geom(foot, Math.max(bL, tL), sp, pivotPx);   // shared texture sized for the taller stack; both bottom-align at BASEY
@@ -3854,9 +3857,9 @@ function bakeDecor() {
   if (!bodyFaces) { alert('Decor: author the prop as the BODY first (load Top / Side / Front in step 1), then Bake decor.'); return; }
   const foot = state.foot, bL = state.bodyLayers, sp = layerSp(state.el), B = state.bakeScale;
   const g = geom(foot, bL, sp, 0);                                     // body-only, centred pivot
-  const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bEl, scale: B });
+  const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bakeElOf(), scale: B });
   const filled = buildModel('body', foot, bL).filled;
-  const shadow = bakeShadowCache(app.renderer, filled, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bEl, scale: B, foot, layers: bL });
+  const shadow = bakeShadowCache(app.renderer, filled, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bakeElOf(), scale: B, foot, layers: bL });
   state.decorBaked = { frame, shadow, g, sp, foot, layers: bL, scale: B };
   $('decorBakeState').innerHTML = `<span class="lock">✓ Decor baked · 1 frame + cast shadow · ${g.RTW * B}×${g.RTH * B}</span>`;
   if ($('saveDecor')) $('saveDecor').disabled = false;
