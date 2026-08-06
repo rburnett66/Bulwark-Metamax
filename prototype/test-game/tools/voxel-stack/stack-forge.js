@@ -19,7 +19,12 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const INK_A = 40;
 // WHICH SLICES CUT. Owner: "carve top, then carve side, then carve front" — each button carves
 // cumulatively up to and including its own slice, so every stage can be checked before the next.
-const carveCuts = { top: true, side: false, front: false };
+// WHICH SLICES CUT. Defaulted to TOP ONLY and was persisted nowhere, so every load — and every one of
+// the ~20 recarve() call sites — rebuilt the model as the top silhouette extruded through the full box
+// height, with the side and front art contributing nothing. Owner's rule 4 is 'their COLLISIONS carve
+// the block'; that was opt-in, and it reset on reload. carve.js (the TESTED core) already defaulted to
+// all three, so the tested carve and the shipped carve disagreed and no test could see it.
+const carveCuts = { top: true, side: true, front: true };
 // ── TRACE: instruments the REAL carve path so every step reports its own voxel/pixel count. Armed by
 // ⬛ Regenerate geometry; null otherwise, so the cost is one null check per step.
 let TRACE = null;
@@ -4002,7 +4007,7 @@ function snapshotProject(idOverride) {
   const st = { ...state }; delete st.baked; delete st.decorBaked;   // baked textures are PIXI objects — never serialise them into the WIP
   return { format: 'stackforge-project', version: 2, id: (idOverride || $('uid').value || 'unit').trim(), vol,
     state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, picks: pickState, images, vox,
-    palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop],
+    palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop], carveCuts: { ...carveCuts },   // which slices cut — reset to top-only on every load until now
     voxEdit: { body: [...voxEdit.body], turret: [...voxEdit.turret] },
     geom: { body: { ...geomState.body }, turret: { ...geomState.turret } },
     imgXf: { body: JSON.parse(JSON.stringify(imgXf.body)), turret: JSON.parse(JSON.stringify(imgXf.turret)) } };   // SF2 per-side alignment
@@ -4070,6 +4075,8 @@ async function loadProject(p) {
       }
     }
   } finally { bulkLoad = false; }
+  // restore which slices cut BEFORE recarving, or the reload silently reverts to the default set
+  if (p.carveCuts) Object.assign(carveCuts, p.carveCuts);
   syncAllControls(); recarve(); restoreVol(p); drawLight(); renderRoster();   // recarve rebuilds VOL from the art, THEN the saved hand edits go back on top
 }
 let autosaveTimer = 0;
