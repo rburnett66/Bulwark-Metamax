@@ -537,16 +537,17 @@ function effPlace(part) {
 }
 // raise ONE axis of the grid so a dragged box fits. z -> Layers, x/y -> Resolution (snapped UP to the
 // slider's step-4 ladder, which only ever makes room). Never shrinks.
-// Raising Layers must carry a FULL-HEIGHT z span up with it. Once the geometry box is dragged,
-// geomState[part] holds EXPLICIT spans and auto goes false -- the carve then reads spanZ, not the
-// slider, so a turret frozen at 0..8 stayed 8 voxels tall no matter how far Layers was pushed and
-// the extra grid was simply empty air above it. Only extends a span that reached the OLD ceiling,
-// so a deliberately shortened turret keeps its height.
+// LAYERS OWNS HEIGHT. Once the geometry box is dragged, geomState[part] holds an EXPLICIT spanZ and
+// auto goes false -- from then on the carve reads that span, not the slider. A turret frozen at 0..8
+// stayed 8 voxels tall however far Layers was pushed, and the extra grid was empty air above it.
+// Raising Layers now takes the span's ceiling with it unconditionally: an earlier version only did
+// so when the span already reached the old ceiling, which is precisely what kept the owner's turret
+// pinned at 8. Lowering Layers clamps the span down so it can never point past the grid.
 function growSpanZ(part, wasLayers) {
-  const g = geomState[part];
-  if (!g || g.auto || !g.spanZ) return;
-  if (g.spanZ.hi >= wasLayers && state[part === 'turret' ? 'turretLayers' : 'bodyLayers'] > wasLayers)
-    g.spanZ = { lo: g.spanZ.lo, hi: state[part === 'turret' ? 'turretLayers' : 'bodyLayers'] };
+  const g = geomState[part]; if (!g || g.auto || !g.spanZ) return;
+  const now = state[part === 'turret' ? 'turretLayers' : 'bodyLayers'];
+  const lo = Math.min(g.spanZ.lo, Math.max(0, now - 1));
+  g.spanZ = { lo, hi: now };
 }
 function growAxis(part, axis, want) {
   const isT = part === 'turret';
