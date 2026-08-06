@@ -207,35 +207,18 @@ function keyedCropped(img, tol, poly, picks) {
 // source pixel at that cell's centre: opaque -> geo, clear -> no geo. Nothing else. No canvas rescale, no
 // interpolation, no averaging, no crop, no aspect refit, no normalize. `elev` flips rows so image-down = z-up.
 // (Replaces sliceMask, which rescaled through drawImage and let the browser invent in-between alpha.)
+// ONE RESAMPLER. The body of this function used to be a second, independent copy of carve.js's
+// sliceMask -- the tested one, which stack-forge.html never loaded. Two implementations of the same
+// maths is how the grid and the carve came to disagree on 414 of 1728 cells. It now delegates, so
+// carve.test.mjs is a real gate on the code the browser runs.
+// Verified behaviour-preserving before switching: 24 cases across four source sizes, three target
+// sizes and both elev modes -- zero differing cells in either the mask or the colour buffer.
 function sliceMask(canvas, w, h, elev) {
-  w = Math.max(1, w | 0); h = Math.max(1, h | 0);
   const sw = Math.max(1, canvas.width), sh = Math.max(1, canvas.height);
-  const sd = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, sw, sh).data;
-  const m = new Uint8Array(w * h), c = new Uint8Array(w * h * 3);
-  for (let r = 0; r < h; r++) {
-    const y0 = Math.min(sh - 1, (r * sh / h) | 0), y1 = Math.max(y0 + 1, Math.min(sh, Math.ceil((r + 1) * sh / h)));
-    for (let a = 0; a < w; a++) {
-      const x0 = Math.min(sw - 1, (a * sw / w) | 0), x1 = Math.max(x0 + 1, Math.min(sw, Math.ceil((a + 1) * sw / w)));
-      // COVERAGE, not interpolation: count how much of the source area this cell covers is OPAQUE, and take
-      // the majority. Never averages alpha into an in-between value, never drops a thin feature the way a
-      // single centre sample would, and never dilates the silhouette the way "any opaque" would.
-      let opaque = 0, total = 0, R = 0, G = 0, B = 0;
-      for (let sy = y0; sy < y1; sy++) for (let sx = x0; sx < x1; sx++) {
-        const p = (sy * sw + sx) * 4; total++;
-        if (sd[p + 3] > INK_A) { opaque++; R += sd[p]; G += sd[p + 1]; B += sd[p + 2]; }
-      }
-      if (opaque * 2 < total) continue;                            // majority clear → no geo
-      const i = (elev ? (h - 1 - r) : r) * w + a;                  // elev: image-down → z-up
-      m[i] = 1; c[i * 3] = R / opaque; c[i * 3 + 1] = G / opaque; c[i * 3 + 2] = B / opaque;
-    }
-  }
-  return { m, c, w, h };
+  const img = canvas.data ? canvas                                  // already an ImageData-shaped buffer
+    : { width: sw, height: sh, data: canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, sw, sh).data };
+  return globalThis.sliceMaskCore(img, w, h, elev);
 }
-
-// ── MagicaVoxel .vox → a native voxel model { nx, ny, nz, data } (data: nx*ny*nz*4 rgba, a>0 = filled).
-// A .vox IS a stack of coloured cubes, so it skips the photo carve entirely — exact geometry + per-voxel
-// colour, fed straight into the same neutral-model → light → rotate/capture pipeline. First model only. ──
-const DEFAULT_VOX_PALETTE = (() => { const a = new Uint8Array(256 * 4); for (let i = 0; i < 256; i++) { a[i * 4] = a[i * 4 + 1] = a[i * 4 + 2] = Math.min(255, 48 + i * 3 / 4 | 0); a[i * 4 + 3] = 255; } return a; })();
 function parseVox(buf) {
   const dv = new DataView(buf); let p = 0;
   const u32 = () => { const v = dv.getUint32(p, true); p += 4; return v; };

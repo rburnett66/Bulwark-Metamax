@@ -139,5 +139,8 @@
     return n;
   }
 
-  return { INK_A, clamp, sliceMask, fullBox, carve, bounds, interiorHoles };
+  // sliceMaskCore is the SAME function under a name a host page cannot shadow: stack-forge.js declares
+  // its own top-level `function sliceMask`, and a hoisted declaration overwrites the global this module
+  // assigns. The alias is what that page delegates to.
+  return { INK_A, clamp, sliceMask, sliceMaskCore: sliceMask, fullBox, carve, bounds, interiorHoles };
 });
