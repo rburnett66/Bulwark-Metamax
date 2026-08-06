@@ -4138,6 +4138,22 @@ const suppliedUnits = () => ({ ...shippedUnits, ...(loadManifest().units || {}) 
 async function loadShipped() {
   try { const d = await (await fetch('../../content/units/voxel-units.json')).json(); shippedUnits = d.units || {}; } catch (e) { shippedUnits = {}; }
 }
+// THE TOOL HEADER. Every Bulwark page wears the same one: which tool you are in, a link to every other
+// tool, the file actions in a single strip, and one status slot. Before this the page's only heading was
+// <h1>UNIT SET</h1> -- a panel title -- and there was no way to reach another tool except by editing the
+// URL. The file actions here are DECLARED, not laid out: the header owns the presentation.
+if (typeof ToolHead !== 'undefined') ToolHead.mount({
+  tool: 'stack-forge',
+  actions: [
+    { label: '💾 Save…',  title: 'Name the unit and faction, then save geometry or everything', on: () => openSaveModal() },
+    { label: '📂 Open…',  title: 'Load a saved unit or a project file', ghost: true, on: () => { const b = $('loadUnit'); if (b) b.click(); } },
+    { label: '🚀 Ship',   title: 'Write sprite PNGs + the manifest into content/ — then commit to deploy', ghost: true, on: () => { const b = $('shipManifest'); if (b) b.click(); } },
+    { label: '🎞 Sprites', title: 'Preview the baked sprite sheet — the frames that actually ship', ghost: true, on: () => { const b = $('spOpen'); if (b) b.click(); } },
+  ],
+  status: 'no unit loaded',
+});
+// One writer for the header status, so it cannot drift the way the eleven scattered status strings did.
+function headStatus(text, kind) { if (typeof ToolHead !== 'undefined') ToolHead.status(text, kind); }
 async function initFactions() {
   try { filesIndex = (await (await fetch('../../content/units/index.json')).json()).factions || []; } catch (e) { filesIndex = []; }
   await loadShipped();                                            // so "supplied ✓" + Load reflect deployed art
