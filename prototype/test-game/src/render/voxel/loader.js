@@ -45,6 +45,17 @@ async function addManifest(store, manifest, atlasBase) {
       const entry = manifest.units[id], pack = entry.pack || entry;   // tolerate bare-pack manifests
       const v = validatePack(pack);
       if (!v.ok) { console.warn('[voxel] pack', id, 'invalid:', v.errors.join('; ')); continue; }
+      // TIER C GEOMETRY BY PATH. A live-3D pack used to inline its whole voxel model as base64 in the
+      // manifest -- 742,744 chars for ONE unit, ~99% of the shipped file. It now ships as its own
+      // content/units/model/<id>.json and is hydrated here, so buildLive3D still just reads pack.model.
+      // Only Tier C units carry one at all; everything else renders from the sprite atlases.
+      if (pack.model && pack.model.src && !pack.model.b64 && atlasBase) {
+        try {
+          const mr = await fetch(atlasBase.replace(/voxel\/$/, '') + pack.model.src, { cache: 'no-store' });
+          if (mr.ok) Object.assign(pack.model, await mr.json());
+          else console.warn('[voxel] pack', id, 'model', pack.model.src, '->', mr.status, '(falls back to baked sprites)');
+        } catch (e) { console.warn('[voxel] pack', id, 'model fetch failed:', e.message, '(falls back to baked sprites)'); }
+      }
       const parts = {};
       for (const pt of pack.parts) {
         const src = (entry.atlases && entry.atlases[pt.id]) || (atlasBase ? atlasBase + pt.atlas : null);

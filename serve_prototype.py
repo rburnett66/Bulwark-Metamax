@@ -14,6 +14,7 @@ Ctrl+C to stop.
 import datetime
 import functools
 import http.server
+import base64
 import json
 import os
 import socket
@@ -93,12 +94,27 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             rel = str(req.get("path", "")).replace("\\", "/").lstrip("/")
             # whitelist: only json under content/ — never a path escape, never code
             norm = os.path.normpath(rel).replace("\\", "/")
-            if norm != rel or not rel.startswith("content/") or not rel.endswith(".json") or ".." in rel:
-                raise ValueError(f"path not allowed: {rel!r} (must be content/**.json)")
+            # .json carries `data` (an object); .png carries `b64` (a bare-or-data-URL base64 image).
+            # PNGs are allowed so sprite atlases can live on disk instead of being inlined as base64 in
+            # the units manifest -- three units of inline atlases reached 4.2 MB, past the localStorage
+            # ceiling. Still whitelisted to content/**, still no path escape, still never code.
+            is_png = rel.endswith(".png")
+            if norm != rel or not rel.startswith("content/") or ".." in rel or not (rel.endswith(".json") or is_png):
+                raise ValueError(f"path not allowed: {rel!r} (must be content/**.json or content/**.png)")
             dest = os.path.join(directory, *rel.split("/"))
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            with open(dest, "w", encoding="utf-8") as f:
-                json.dump(req.get("data"), f, indent=None, separators=(",", ":"))
+            if is_png:
+                raw = str(req.get("b64", ""))
+                if raw.startswith("data:"):
+                    raw = raw.split(",", 1)[-1]
+                blob = base64.b64decode(raw + "=" * (-len(raw) % 4))
+                if blob[:8] != bytes.fromhex("89504e470d0a1a0a"):   # PNG magic
+                    raise ValueError("payload is not a PNG")
+                with open(dest, "wb") as f:
+                    f.write(blob)
+            else:
+                with open(dest, "w", encoding="utf-8") as f:
+                    json.dump(req.get("data"), f, indent=None, separators=(",", ":"))
             body = json.dumps({"ok": True, "path": rel, "bytes": os.path.getsize(dest)}).encode()
             self.send_response(200)
         except Exception as e:  # noqa: BLE001 — report the reason to the tool UI

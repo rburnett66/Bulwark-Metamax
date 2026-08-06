@@ -3707,15 +3707,62 @@ $('dlManifest').onclick = () => dl('units.json', 'data:application/json,' + enco
 // ONE-CLICK ship (owner 2026-07-16): write the live manifest straight to the repo ship path through
 // the dev server's /__ship — the deployed game reads content/units/voxel-units.json, and forgetting
 // this export was why deployed showed no voxel units. Static site: POST fails → graceful message.
+// SHIP = write real files. Sprite atlases go to disk as PNGs under content/units/voxel/ and the manifest
+// ships as DESCRIPTORS ONLY (~1KB/unit instead of ~1.4MB). loader.js:50 already resolves
+// `entry.atlases[pt.id] || atlasBase + pt.atlas` and :32 passes atlasBase='content/units/voxel/' for the
+// shipped file, so this needs ZERO game changes — inline base64 was only ever the first branch of a
+// fallback that has always existed. Measured before: 3 units = 4,223,752 chars, 99.9% of it base64.
+const shipFile = async (path, payload) => {
+  const r = await fetch('/__ship', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ path }, payload)) });
+  const d = await r.json().catch(() => ({ ok: false, error: 'not a dev server' }));
+  if (!d.ok) throw new Error(`${path}: ${d.error || 'unknown'}`);
+  return d;
+};
 $('shipManifest').onclick = async () => {
+  const m = loadManifest(), ids = Object.keys(m.units || {});
+  if (!ids.length) { $('projState').textContent = 'Nothing to ship — the units manifest is empty.'; return; }
+  $('projState').textContent = `Shipping ${ids.length} unit(s)…`;
   try {
-    const r = await fetch('/__ship', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: 'content/units/voxel-units.json', data: loadManifest() }) });
-    const d = await r.json().catch(() => ({ ok: false, error: 'not a dev server' }));
-    $('projState').textContent = d.ok
-      ? `🚀 Shipped ${Object.keys(loadManifest().units || {}).length} unit(s) → content/units/voxel-units.json — commit to deploy.`
-      : `Ship failed: ${d.error || 'unknown'} (deployed site? use Download units.json instead)`;
-  } catch (e) { $('projState').textContent = 'Ship failed: ' + e.message; }
+    let files = 0, bytes = 0;
+    const lean = { config: m.config, units: {} };
+    for (const id of ids) {
+      const e = m.units[id], atl = e.atlases || {};
+      for (const pt of (e.pack.parts || [])) {                      // atlas + optional shadow, per part
+        for (const [key, name] of [[pt.id, pt.atlas], [pt.id + '.shadow', pt.shadowAtlas]]) {
+          const url = atl[key]; if (!url || !name) continue;
+          const d = await shipFile('content/units/voxel/' + name, { b64: url });
+          files++; bytes += d.bytes || 0;
+        }
+      }
+      // GEOMETRY BY PATH. A Tier C model is ~742K chars of base64 — 99% of the shipped file for one
+      // unit. Write it as its own JSON and leave a `src` behind; loader.js hydrates it before
+      // buildLive3D reads pack.model. Non-Tier-C units never have one.
+      let pack = e.pack;
+      if (pack.model && pack.model.b64) {
+        const rel = 'model/' + id + '.json';
+        const d = await shipFile('content/units/' + rel, { data: pack.model });
+        files++; bytes += d.bytes || 0;
+        pack = Object.assign({}, pack, { model: { nx: pack.model.nx, ny: pack.model.ny, nz: pack.model.nz, src: rel } });
+      }
+      lean.units[id] = { pack };                                      // descriptor only — no inline base64
+    }
+    const d = await shipFile('content/units/voxel-units.json', { data: lean });
+    const before = JSON.stringify(m).length, after = JSON.stringify(lean).length;
+    $('projState').innerHTML = `🚀 Shipped <b>${ids.length}</b> unit(s): ${files} PNG(s)`
+      + ` (${(bytes / 1048576).toFixed(2)} MB) → content/units/voxel/, manifest ${after.toLocaleString()} chars`
+      + ` (was ${before.toLocaleString()}, ${(100 - 100 * after / before).toFixed(1)}% smaller) — commit to deploy.`;
+    console.info(`[stack-forge] shipped ${files} atlas file(s), manifest ${before.toLocaleString()} → ${after.toLocaleString()} chars`);
+  } catch (e) {
+    const msg = `SHIP FAILED
+
+${(e && e.message) || e}
+
+On the deployed static site there is no POST endpoint — use Download units.json instead.`;
+    console.error('[stack-forge] ' + msg);
+    $('projState').innerHTML = `<b style="color:#ff6b6b">✗ SHIP FAILED — ${(e && e.message) || e}</b>`;
+    alert(msg);
+  }
 };
 
 // ── DECOR (Stage 1): author a static prop as the BODY (Top/Side/Front), bake ONE frame + one real cast
