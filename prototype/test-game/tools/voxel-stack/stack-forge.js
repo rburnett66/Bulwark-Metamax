@@ -4328,12 +4328,18 @@ async function loadPackPreview(entry) {
 // unit" (sprites or 3D). It never loads (that clobbered work in progress); loading an existing unit
 // goes through the 📂 Load button, which lists every unit with a WIP project or a saved pack. ──
 let saveAsId = null;
+// Clicking a roster card used to be ALWAYS A SAVE: the modal was titled 'Save unit' and its primary,
+// '(recommended)' button overwrote the clicked unit with whatever was in the editor. Clicking a unit to
+// OPEN it therefore destroyed it (owner 2026-08-06: 'my tank unit is now screwed up'). Opening is now the
+// default and overwriting is a deliberate, separately-labelled action.
 function onCardClick(id) {
   saveAsId = id;
-  $('saveAsTitle').textContent = id;
-  const exists = !!suppliedUnits()[id];                            // has art (saved locally or shipped) → loadable
-  $('saveAsWarn').hidden = !exists;
-  $('saveAsLoad').hidden = !exists;                                // offer Load when there's something to load
+  const exists = !!suppliedUnits()[id];
+  if ($('saveAsTitle2')) $('saveAsTitle2').textContent = (exists ? 'Open — ' : 'New unit — ') + id;
+  if ($('saveAsTitle3')) $('saveAsTitle3').textContent = id;
+  $('saveAsWarn').hidden = !exists;                                // only a real unit can be overwritten
+  $('saveAsLoad').hidden = !exists;                                // nothing to open in an empty slot
+  $('saveAsSkip').hidden = !exists;
   $('saveAsModal').hidden = false;
 }
 async function openLoadModal() {
@@ -4422,14 +4428,22 @@ ${(e && e.message) || e}`); }
 $('saveAsLoad').onclick = () => { $('saveAsModal').hidden = true; if (wipDirty) doAutosave(); selectUnit(saveAsId); };   // load it; only re-save when there is unsaved work
 // SAFETY: overwriting an EXISTING saved unit needs an explicit yes — clicking a roster card to *select* it
 // must never silently replace it with the current model (owner data-loss report).
-const confirmOverwrite = () => !suppliedUnits()[saveAsId] || confirm(`Overwrite the saved unit “${saveAsId}” with the current model?\n\nThe saved version is replaced. To open that unit instead, use “📂 Load this unit”.`);
+const confirmOverwrite = () => !suppliedUnits()[saveAsId] || confirm(`REPLACE the saved unit "${saveAsId}"?
+
+Its sprites and geometry are overwritten with the model currently in the editor, and the old version is gone.
+
+To open "${saveAsId}" instead, Cancel and use the Open button.`);
 $('saveAsSprites').onclick = async () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; await quickSave(saveAsId, false); };
 $('saveAs3D').onclick = async () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; await quickSave(saveAsId, true); };
 // Skip = switch WITHOUT saving: no flush of the outgoing unit, clear, then load. Cancel just closes the
 // modal and leaves you where you are. Load still flushes first (doAutosave) -- that is the difference.
 $('saveAsSkip').onclick = () => { $('saveAsModal').hidden = true; selectUnit(saveAsId, true); };
-$('saveAsCancel').onclick = () => { $('saveAsModal').hidden = true; };
-$('saveAsModal').addEventListener('click', (e) => { if (e.target === $('saveAsModal')) $('saveAsModal').hidden = true; });
+const closeSaveAs = () => { $('saveAsModal').hidden = true; saveAsId = null; };
+$('saveAsCancel').onclick = closeSaveAs;
+document.addEventListener('keydown', (e) => {                      // ESC closes it too — Cancel must never be the only way out
+  if (e.key === 'Escape' && !$('saveAsModal').hidden) { closeSaveAs(); e.stopPropagation(); }
+}, true);
+$('saveAsModal').addEventListener('click', (e) => { if (e.target === $('saveAsModal')) closeSaveAs(); });
 
 syncInputs(); renderManifest(); layout(); update(); updateGamePreview(); initFactions();
 (async () => {                                                     // resume the last working session
