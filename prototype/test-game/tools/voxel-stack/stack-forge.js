@@ -1855,7 +1855,10 @@ function renderGridView() {
       const ccx = bx + bw2 * (0.5 + (xfc.ox || 0)), ccy = by + bh2 * (0.5 + (xfc.oy || 0));
       const hw = bw2 * (xfc.sx || 1) / 2, hh = bh2 * (xfc.sy || 1) / 2;
       const L = ccx - hw, R = ccx + hw, T = ccy - hh, B = ccy + hh;
-      gridGeom.slice = { bx, by, bw: bw2, bh: bh2, L, R, T, B, view: gridView, part };
+      // NOT `slice` — that key already holds the LAYER INDEX (set above). Overwriting it with this box
+      // made every `g.slice - 1` reader compute NaN: painting on any layer >= 1 threw, and the SHIFT/CTRL
+      // selection band silently selected nothing in Geometry mode.
+      gridGeom.sliceBox = { bx, by, bw: bw2, bh: bh2, L, R, T, B, view: gridView, part };
       ctx.strokeStyle = 'rgba(242,200,105,.9)'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
       ctx.strokeRect(L + .5, T + .5, R - L - 1, B - T - 1); ctx.setLineDash([]);
       ctx.fillStyle = '#f2c869';
@@ -2178,6 +2181,10 @@ $('uSize').onchange = (e) => setUnitSize(+e.target.value / 100);          // re-
 // all three clamps below stopped at 40, so a turret could never exceed a third of a full-height body
 // and a tall imported .vox was silently truncated. setLayers does not clamp -- it writes to the input,
 // so the slider's max attribute was the real cap and the JS clamps only compounded it.
+// The footprint ceiling, the twin of MAX_LAYERS. Both call sites below read RES_MAX and NOTHING
+// declared it, so every geometry-box drag threw ReferenceError on pointermove -- before renderGridView,
+// so the cyan box never moved and no span was ever written.
+const RES_MAX = 128;
 const MAX_LAYERS = 128;
 const setLayers = (which, v) => { const id = which === 'body' ? 'bodyLayers' : 'turretLayers'; state[id] = v; $(id).value = v; $(id + 'V').textContent = v; };
 function fitToVox() {
@@ -2712,7 +2719,7 @@ document.addEventListener('keydown', (e) => {
   // does not move, and the width floor matches the sx clamp so the two can never fight.
   let sliceDrag = null;
   const sliceHit = (e) => {
-    const q = gridGeom && gridGeom.slice; if (!q) return null;
+    const q = gridGeom && gridGeom.sliceBox; if (!q) return null;
     const { px, py } = ptCell(e), T = 7;
     if (px < q.L - T || px > q.R + T || py < q.T - T || py > q.B + T) return null;
     const nL = Math.abs(px - q.L) <= T, nR = Math.abs(px - q.R) <= T;
@@ -2723,7 +2730,7 @@ document.addEventListener('keydown', (e) => {
     return 'move';
   };
   const sliceMove = (e) => {
-    const q = gridGeom && gridGeom.slice; if (!q || !sliceDrag) return;
+    const q = gridGeom && gridGeom.sliceBox; if (!q || !sliceDrag) return;
     const { px, py } = ptCell(e), xf = imgXf[q.part][q.view], d = sliceDrag;
     if (d.mode === 'move') {
       xf.ox = clamp(d.ox0 + (px - d.px0) / q.bw, -2, 2);
@@ -2766,7 +2773,7 @@ document.addEventListener('keydown', (e) => {
       let sp = info.flip ? { lo: capOld - Math.round(hi), hi: capOld - Math.round(lo) }
                          : { lo: Math.round(lo), hi: Math.round(hi) };
       if (sp.hi < sp.lo) sp = { lo: sp.hi, hi: sp.lo };
-      const capNew = clamp(Math.max(capOld, sp.hi, 1), 1, RES_MAX);
+      const capNew = clamp(Math.max(capOld, sp.hi, 1), 1, info.axis === 'z' ? MAX_LAYERS : RES_MAX);   // per-axis ceiling
       if (capNew > capOld) growAxis(gridGeom.part, info.axis, capNew);
       const lo2 = clamp(sp.lo, 0, capNew - 1), hi2 = clamp(sp.hi, lo2 + 1, capNew);
       gs[spanKey[info.axis]] = { lo: lo2, hi: hi2 };
@@ -2802,10 +2809,10 @@ document.addEventListener('keydown', (e) => {
       selBoxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy, mode: (e.ctrlKey || e.metaKey) ? 'trim' : 'add' };
       renderGridView(); cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
     }
-    if (gridGeom && gridGeom.slice) {                              // Geometry mode: SLICE handles win
+    if (gridGeom && gridGeom.sliceBox) {                           // Geometry mode: SLICE handles win
       const sm = sliceHit(e);
       if (sm) {
-        const q = gridGeom.slice, xf = imgXf[q.part][q.view] || { sx: 1, sy: 1, ox: 0, oy: 0 };
+        const q = gridGeom.sliceBox, xf = imgXf[q.part][q.view] || { sx: 1, sy: 1, ox: 0, oy: 0 };
         const { px, py } = ptCell(e);
         sliceDrag = { mode: sm, L: q.L, R: q.R, T: q.T, B: q.B, ox0: xf.ox || 0, oy0: xf.oy || 0, px0: px, py0: py };
         dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
