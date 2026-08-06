@@ -3708,7 +3708,7 @@ Use 🚀 Ship manifest to write it to disk, then clear the browser copy.` +
   renderScaleChart();    // the new unit joins the side-view scale chart
   return { ok: true, id: built.pack.id, chars: json.length, valid: v.ok };
 }
-$('saveUnit').onclick = () => { doSaveUnit(); };
+$('saveUnit').onclick = () => openSaveModal();   // the Save button opens the SAVE MODAL — id, faction, destination, then a deliberate choice
 
 // ── downloads ──
 const dl = (name, url) => { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); };
@@ -4332,6 +4332,65 @@ let saveAsId = null;
 // '(recommended)' button overwrote the clicked unit with whatever was in the editor. Clicking a unit to
 // OPEN it therefore destroyed it (owner 2026-08-06: 'my tank unit is now screwed up'). Opening is now the
 // default and overwriting is a deliberate, separately-labelled action.
+// ── THE SAVE MODAL ───────────────────────────────────────────────────────────────────────────────
+// One dialog, one id, one faction, and two honest buttons. It states the repo paths it writes so
+// 'I saved' names a location instead of one of four invisible stores.
+//   Save geometry — the editable unit (voxels + slices) and a descriptor, so the CARD EXISTS. No bake.
+//   Save all      — bake, then geometry + sprite sheets + manifest in one action.
+const UNIT_FACTIONS = FACTIONS.filter((f) => f !== 'System' && f !== DECOR_SET);   // the 9 real unit factions
+const svPathFor = (fac) => {
+  const file = fileForFaction(fac);
+  return file ? 'content/units/' + file : `content/units/ (no faction file yet for "${fac}")`;
+};
+function openSaveModal(id) {
+  const sel = $('svFaction');
+  sel.innerHTML = UNIT_FACTIONS.map((f) => `<option${f === curFaction ? ' selected' : ''}>${f}</option>`).join('');
+  $('svId').value = (id || $('uid').value || '').trim();
+  svSyncPath();
+  $('saveModal').hidden = false;
+}
+function svSyncPath() {
+  const id = ($('svId').value || '').trim(), fac = $('svFaction').value;
+  $('svPath').textContent = `${svPathFor(fac)}  ·  content/units/voxel/${id || '<id>'}.{body,turret}.png`;
+  const clash = !!suppliedUnits()[id];
+  $('svWarn').hidden = !clash;
+  if (clash) $('svWarn').innerHTML = `⚠ <b>${id}</b> already exists — saving REPLACES it.`;
+}
+const closeSave = () => { $('saveModal').hidden = true; };
+$('svId').oninput = svSyncPath;
+$('svFaction').onchange = svSyncPath;
+$('svCancel').onclick = closeSave;
+$('saveModal').addEventListener('click', (e) => { if (e.target === $('saveModal')) closeSave(); });
+// GEOMETRY ONLY: no bake, no sprites. Writes the editable unit and a descriptor stub so a card appears
+// immediately — you can carve a unit over several sessions without ever baking it.
+$('svGeom').onclick = async () => {
+  const id = ($('svId').value || '').trim();
+  if (!id) return saveFailed('NO ID', 'Give the unit an id before saving.');
+  $('uid').value = id; activeUnitId = id;
+  try {
+    await doAutosave();                                           // proj:<id> — voxels, slices, cutouts
+    const m = loadManifest(); m.units = m.units || {};
+    if (!m.units[id]) m.units[id] = { pack: { id, class: state.cls, footprint: [state.foot, state.foot, state.bodyLayers], geometryOnly: true } };
+    localStorage.setItem(MANIFEST_KEY, JSON.stringify(m));
+    if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
+    closeSave(); renderRoster();
+    $('projState').innerHTML = `🧊 Geometry saved for <b>${id}</b> → proj:${id} (IndexedDB). Card created. Not baked — use <b>Save all</b> to ship sprites.`;
+  } catch (e) { return saveFailed('GEOMETRY SAVE FAILED', (e && e.message) || String(e)); }
+};
+// EVERYTHING: bake, geometry, sprite sheets, manifest.
+$('svAll').onclick = async () => {
+  const id = ($('svId').value || '').trim();
+  if (!id) return saveFailed('NO ID', 'Give the unit an id before saving.');
+  if (suppliedUnits()[id] && !confirm(`REPLACE the saved unit "${id}"?
+
+Its sprites and geometry are overwritten with the model currently in the editor.`)) return;
+  closeSave();
+  const r = await quickSave(id, !!$('embedModel').checked);       // bakes, writes atlases + manifest
+  if (!r || !r.ok) return r;                                      // quickSave already shouted
+  if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
+  renderRoster();
+  $('projState').innerHTML = ($('projState').textContent || '') + `  ·  🚀 Ship to write ${svPathFor($('svFaction').value)}.`;
+};
 function onCardClick(id) {
   saveAsId = id;
   const exists = !!suppliedUnits()[id];

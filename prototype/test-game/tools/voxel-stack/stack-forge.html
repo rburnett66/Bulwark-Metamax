@@ -134,8 +134,8 @@
     .loadRow { display:flex; align-items:center; gap:8px; width:100%; text-align:left; margin-top:6px; }
     .loadRow .lid { flex:1; font-weight:600; }
     .loadRow .ltag { font-size:10px; color:var(--muted); }
-    #saveAsModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
-    #saveAsModal[hidden] { display:none; }
+    #saveModal, #saveAsModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
+    #saveModal[hidden], #saveAsModal[hidden] { display:none; }
     #saveAsBox { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; width:380px; max-width:92vw; box-shadow:0 18px 60px rgba(0,0,0,.6); }
     #saveAsBox h2 { font-size:11px; letter-spacing:.18em; color:var(--muted); margin:0 0 6px; text-transform:uppercase; }
     #saveAsBox h2 span { color:var(--gold); }
@@ -456,6 +456,18 @@
       <button class="ghost" id="loadCancel" style="width:auto;padding:6px 12px;margin:0">Cancel</button>
     </div>
     <div class="note" id="loadDiagNote" style="margin:6px 0 0"></div>
+  </div>
+</div>
+<div id="saveModal" hidden>
+  <div id="saveAsBox">
+    <h2>Save unit</h2>
+    <div class="row"><label>Unit id</label><input type="text" id="svId" style="flex:1"></div>
+    <div class="row"><label>Faction</label><select id="svFaction" style="flex:1"></select></div>
+    <div class="note" style="margin:8px 0 4px">Saves to <code id="svPath" style="color:#8fd0ff"></code></div>
+    <div class="note" id="svWarn" style="margin:0 0 10px;color:#e0975f" hidden></div>
+    <button id="svGeom" style="margin:0 0 6px;background:#1d3a2a;border:1px solid #2f6f4a">🧊 Save geometry — voxels + slices, creates the card</button>
+    <button id="svAll" style="margin:0 0 10px">🚀 Save all — bake, geometry, sprite sheets, manifest</button>
+    <button class="ghost" id="svCancel">Cancel</button>
   </div>
 </div>
 <div id="saveAsModal" hidden>
