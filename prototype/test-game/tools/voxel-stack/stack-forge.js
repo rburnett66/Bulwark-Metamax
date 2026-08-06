@@ -4124,13 +4124,14 @@ function clearSourceArt() {
   gridSel = null; gridSelVox = null; gridSelView = null;
   gridModel = null;
 }
-function selectUnit(id) {
+function selectUnit(id, skipSave) {
   // SAFETY: flush the OUTGOING unit under ITS OWN id first (so its last edits aren't lost or misfiled),
   // cancel any click-armed autosave, and block autosaves until the incoming unit finishes loading — the
   // async load must own the slot, or a stale-model autosave overwrites the unit you're switching to.
   clearTimeout(autosaveTimer);
-  if (editingDecor) { try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) idb.put('decor:' + editingDecor, dout); } catch (e) { /* flush decor */ } editingDecor = null; }   // leaving decor editing for a unit
-  try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }
+  if (skipSave) editingDecor = null;   // ⏭ Skip: discard the outgoing unit's unsaved work by not flushing it
+  else if (editingDecor) { try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) idb.put('decor:' + editingDecor, dout); } catch (e) { /* flush decor */ } editingDecor = null; }   // leaving decor editing for a unit
+  if (!skipSave) try { const out = snapshotProject(activeUnitId); if (out && out.id !== id && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* best-effort flush */ }
   resetPalette();                                        // per-unit palette — clear it (a WIP re-applies its own via loadProject)
   setBackSlotLabel('Back');                              // units use the Back slot as the rear view again
   // THE OUTGOING UNIT'S GEOMETRY MUST GO WITH IT. carveCache holds VOL — the model itself — and
@@ -4294,6 +4295,9 @@ $('saveAsLoad').onclick = () => { $('saveAsModal').hidden = true; doAutosave(); 
 const confirmOverwrite = () => !suppliedUnits()[saveAsId] || confirm(`Overwrite the saved unit “${saveAsId}” with the current model?\n\nThe saved version is replaced. To open that unit instead, use “📂 Load this unit”.`);
 $('saveAsSprites').onclick = () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; quickSave(saveAsId, false); };
 $('saveAs3D').onclick = () => { if (!confirmOverwrite()) return; $('saveAsModal').hidden = true; quickSave(saveAsId, true); };
+// Skip = switch WITHOUT saving: no flush of the outgoing unit, clear, then load. Cancel just closes the
+// modal and leaves you where you are. Load still flushes first (doAutosave) -- that is the difference.
+$('saveAsSkip').onclick = () => { $('saveAsModal').hidden = true; selectUnit(saveAsId, true); };
 $('saveAsCancel').onclick = () => { $('saveAsModal').hidden = true; };
 $('saveAsModal').addEventListener('click', (e) => { if (e.target === $('saveAsModal')) $('saveAsModal').hidden = true; });
 
