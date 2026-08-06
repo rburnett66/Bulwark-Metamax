@@ -3658,6 +3658,24 @@ function doSaveUnit() {
   m.config = { camera: built.pack.camera, light: built.pack.light };   // shared game-wide config
   m.units = m.units || {}; m.units[built.pack.id] = built;
   const json = JSON.stringify(m);
+  // SIZE IS THE REAL DEFECT, so state it every save instead of waiting for the write to throw.
+  // 99.9-100% of every entry is base64 PNG; the descriptor is ~1KB. Three units already reach 4.2M
+  // chars, and localStorage is the wrong home for that — see SAVE-ARCHITECTURE-PLAN.md steps 2-3.
+  const bulk = (e) => Object.values((e && e.atlases) || {}).reduce((n, u) => n + u.length, 0)
+    + ((((e && e.pack) || {}).model || {}).b64 || '').length;
+  const ids = Object.keys(m.units || {});
+  const heavy = ids.map((k) => [k, bulk(m.units[k])]).sort((x, y) => y[1] - x[1]);
+  console.info(`[stack-forge] manifest ${json.length.toLocaleString()} chars across ${ids.length} unit(s) — `
+    + heavy.map(([k, n]) => `${k} ${(n / 1024).toFixed(0)}KB`).join(', '));
+  const embedded = (((built.pack || {}).model || {}).b64 || '').length;
+  if (embedded) console.warn(`[stack-forge] "${built.pack.id}" embeds ${embedded.toLocaleString()} chars of voxel`
+    + ` geometry (Save as 3D). Only Tier C units are rendered as live voxels in-game — for every other unit`
+    + ` this is dead weight in the manifest.`);
+  if (json.length > 1_500_000) {
+    const mb = (json.length / 1048576).toFixed(2);
+    console.warn(`[stack-forge] manifest is ${mb}M chars — approaching the localStorage ceiling. Ship it.`);
+    $('saveState').innerHTML = `<b style="color:#e0975f">⚠ manifest ${mb}M chars — Ship it to disk soon</b>`;
+  }
   try { localStorage.setItem(MANIFEST_KEY, json); }
   catch (e) { return saveFailed('STORAGE FULL',
     `The units manifest is ${json.length.toLocaleString()} characters and will not fit in localStorage.` +
