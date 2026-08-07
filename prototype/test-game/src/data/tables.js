@@ -726,8 +726,11 @@ export const UNITS = Object.freeze({
 // ---------------------------------------------------------------------------
 // Structures sheet — slice defenses. T2/T3 follow the assumption multipliers:
 // HP x1.6/x2.4 · DPS x1.55/x2.3 · cumulative value x2.5/x5.
-// canTargetDomains encodes the weapon-domain rule (anti-ground never hits
-// Flyer; Floater counts as Ground; anti-air hits Flyer only).
+// canTargetDomains encodes the weapon-domain rule. TARGETING HAS TWO CATEGORIES:
+// Air (= Flyer) and Ground (= EVERYTHING else — Walker, Floater, Swimmer). The
+// domain field is a MOVEMENT concept; naming any ground domain here means
+// "hits ground". Anti-ground never hits Flyer; anti-air hits Flyer only.
+// See combat.js isAirDomain/domainsAllow — that is the single rule.
 // ---------------------------------------------------------------------------
 export const STRUCTURES = Object.freeze({
   'STR-Cannon': Object.freeze({

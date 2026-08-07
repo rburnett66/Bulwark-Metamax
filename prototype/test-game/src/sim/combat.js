@@ -40,36 +40,69 @@ const TIE_EPSILON_CELLS = 1e-4;
 /* -------------------------------------------------------------------------- */
 
 /**
- * Weapon-domain rule:
- *  - anti-air ('Air' or 'Both') hits Flyer
- *  - anti-ground ('Ground' or 'Both') hits Walker and Floater (Floater counts as Ground)
- *  - anti-ground NEVER hits Flyer; anti-air-only never hits ground domains
+ * TARGETING HAS EXACTLY TWO CATEGORIES: Air and Ground.
+ *
+ *   Air    = Flyer
+ *   Ground = EVERYTHING ELSE (Walker, Floater, Swimmer, and any future domain)
+ *
+ * A unit's `domain` is a MOVEMENT concept, not a targeting one. It picks the
+ * lane and the pathfinder — Walkers walk, Floaters and Swimmers traverse water,
+ * Flyers fly — and nothing else. Swimmers are ground units with a speed
+ * modifier over water; a cannon shoots one exactly as it shoots a tank. Only
+ * ALTITUDE changes what a weapon can reach.
+ *
+ * The test is written as "is it Air?" rather than as a list of the ground
+ * domains ON PURPOSE. Two separate ground enumerations used to live here — one
+ * for units, one for structures — and they drifted: Swimmer fell through to
+ * Ground for units (hittable) but was absent from the structure list (immune to
+ * every ground tower). A new ground-ish domain must not be able to reintroduce
+ * that split.
+ *
+ * @param {string} targetDomain
+ * @returns {boolean} true when the domain is in the AIR targeting category
+ */
+function isAirDomain(targetDomain) {
+  return targetDomain === 'Flyer';
+}
+
+/**
+ * Weapon-domain rule for UNITS, which declare a single weapon category.
+ * See isAirDomain above for the two-category rule this implements.
  *
  * @param {'Ground'|'Air'|'Both'} canTarget
- * @param {'Walker'|'Floater'|'Flyer'} targetDomain
+ * @param {'Walker'|'Floater'|'Swimmer'|'Flyer'} targetDomain movement domain
  * @returns {boolean}
  */
 export function canHitDomain(canTarget, targetDomain) {
-  if (targetDomain === 'Flyer') {
+  if (isAirDomain(targetDomain)) {
     return canTarget === 'Air' || canTarget === 'Both';
   }
-  // Walker and Floater are both "Ground" for weapon purposes.
   return canTarget === 'Ground' || canTarget === 'Both';
 }
 
 /**
- * Structure variant: structures declare canTargetDomains as a list which may
- * contain either concrete domains ('Walker','Floater','Flyer') or the weapon
- * categories ('Ground','Air','Both').
+ * Structure variant, implementing the SAME two-category rule as canHitDomain.
+ *
+ * Structures declare canTargetDomains as a list whose entries may be weapon
+ * categories ('Ground','Air','Both') or concrete movement domains ('Walker',
+ * 'Floater','Swimmer','Flyer'). Every entry collapses to one of the two
+ * targeting categories: naming ANY ground domain means "this weapon hits
+ * ground", naming Flyer means "this weapon hits air". The roster's
+ * ['Walker','Floater'] on the cannon has always MEANT "ground" — spelling out
+ * the ground domains is what let Swimmer go missing.
+ *
+ * @param {string[]} domainList structure canTargetDomains
+ * @param {string} targetDomain movement domain of the candidate
+ * @returns {boolean}
  */
 function domainsAllow(domainList, targetDomain) {
-  if (!domainList || domainList.length === 0) return false;
+  if (!domainList || domainList.length === 0) return false;   // walls/moats/bays have no weapon
+  const wantAir = isAirDomain(targetDomain);
   for (let i = 0; i < domainList.length; i++) {
     const d = domainList[i];
-    if (d === targetDomain) return true;
-    if ((d === 'Ground' || d === 'Both') &&
-        (targetDomain === 'Walker' || targetDomain === 'Floater')) return true;
-    if ((d === 'Air' || d === 'Both') && targetDomain === 'Flyer') return true;
+    if (d === 'Both') return true;
+    const entryIsAir = (d === 'Air') || isAirDomain(d);
+    if (entryIsAir === wantAir) return true;
   }
   return false;
 }
