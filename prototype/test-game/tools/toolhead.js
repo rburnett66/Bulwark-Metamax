@@ -29,7 +29,10 @@
 
   // The tool registry. `at` is repo-relative from prototype/test-game/, resolved per page below.
   const TOOLS = [
-    { id: 'index',       name: 'Game',          at: 'index.html',                      glyph: '🎮' },
+    // The GAME is deliberately not in this list and carries no header. index.html is the shipped
+    // vertical slice — the mobile link — not a dev surface, and a tool nav bar over it is wrong for
+    // every player who opens it. Tools link OUT to the game; the game does not link back.
+    { id: 'game',        name: 'Play',          at: 'index.html',                      glyph: '🎮', external: true },
     { id: 'stack-forge', name: 'Stack Forge',   at: 'tools/voxel-stack/stack-forge.html', glyph: '🧊' },
     { id: 'harness',     name: 'State Harness', at: 'harness.html',                    glyph: '🔧' },
     { id: 'terrain',     name: 'Terrain Forge', at: 'terrain.html',                    glyph: '🌿' },
