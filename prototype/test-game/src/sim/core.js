@@ -2,7 +2,7 @@ import { ASSUMPTIONS, WAVES, MAP, getUnitDef, getStructureDef, BONUS_NERFS } fro
 import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath, findRoute, getFlyerPath, getWaterPath } from './pathfinding.js';
 import { createUnit, createBase, createStructure } from './entities.js';
-import { acquireTarget, applyDamage, stepCombat, inBaseReach, BASE_TARGET_ID } from './combat.js';
+import { acquireTarget, applyDamage, stepCombat, inBaseReach } from './combat.js';
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
 import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
 import { initWaves, startNextWave, stepWaves } from './waves.js';
@@ -584,16 +584,15 @@ export function stepMovement(state, dt) {
     if (isAttacker && !engaged) {
       // Base-targeters (and structure hunters with nothing left to siege)
       // attack the base once within weapon reach.
-      // BASE_TARGET_ID (-1) is NOT a structure target. acquireTarget hands a
-      // structure hunter the base sentinel when it has no structure left in
-      // reach; treating that as "has a structure target" made the unit skip this
-      // damage branch while stepCombat also skips the base (it is owned here),
-      // so the unit sat at the keep dealing nothing at all. Latent before the
-      // reach reconciliation — acquireTarget's old centre-distance fallback
-      // returned null at footprint range — and live the moment both sides
-      // started using inBaseReach.
+      // A structure target is a target that IS A STRUCTURE. acquireTarget also
+      // answers with BASE_TARGET_ID (-1) when nothing is left to siege, and now
+      // with a soft-defender UNIT id; treating either as "has a structure
+      // target" made the unit skip this damage branch while stepCombat also
+      // skips the base (it is owned here), so it sat at the keep dealing
+      // nothing. targetId was refreshed by the structure-hunter block above, so
+      // a live-structure membership test is exact.
       const hasStructTarget = unit.targetsBase === false &&
-        unit.targetId != null && unit.targetId !== BASE_TARGET_ID;
+        unit.targetId != null && state.structures.has(unit.targetId);
       if (!hasStructTarget) {
         // combat.inBaseReach is THE reach rule — footprint-measured with a floor,
         // shared with acquireTarget so the two can't disagree in one tick. This

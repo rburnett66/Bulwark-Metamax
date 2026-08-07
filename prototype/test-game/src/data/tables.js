@@ -52,6 +52,32 @@ export const DAMAGE_TYPES = Object.freeze({
 });
 
 // ---------------------------------------------------------------------------
+// OPPORTUNISTIC SOFT-DEFENDER ENGAGEMENT
+//
+// Which ATTACKER shapes may fire on the defender's SOFT units — repair troops
+// and harvesters — when one is already inside their weapon range. Strictly
+// opportunistic: it never changes pathing, never pursues, and never outranks
+// the base or a structure. combat.acquireTarget only reaches the soft-defender
+// scan once nothing higher-priority is in reach.
+//
+// Keyed on `shape`, the typed field every unit def carries (entities.createUnit
+// stamps the result onto the entity as the boolean `engagesSoftDefenders`, so
+// combat.js tests a flag and never a name). There is no per-unit data field for
+// this yet; adding one is a 73-row table migration, so this is the explicit
+// allowlist the design called for. Promote it to a per-unit def field if a
+// faction ever needs to differ from its shape.
+//
+// Troops (Skirmisher) and Copters (Harasser) are the anti-personnel roles, and
+// their short ranges (2.4-3.1 and 4.8-6.3 cells) keep this genuinely
+// opportunistic. Artillery and the Heavy Bomber are deliberately EXCLUDED:
+// at 9.5-12.5 cells they would pick harvesters off from across the map.
+// ---------------------------------------------------------------------------
+export const SOFT_DEFENDER_HUNTERS = Object.freeze({
+  Troops: true,
+  Copters: true
+});
+
+// ---------------------------------------------------------------------------
 // Units sheet — Ground/Powder slice roster (workbook rows verbatim) plus the
 // GND-Floaters row derived per the model rules:
 //   Troops archetype budget (HP20/DPS30/Rng10/Spd25/Util15) x Ground faction

@@ -354,6 +354,22 @@ export function stepStructures(state, dt) {
     pathDirty = true;   // any removed structure re-opens cells → walkers can reroute through them
   }
 
+  // A repair troop can now be KILLED en route — attackers engage soft defenders
+  // opportunistically. The loop below only ever sees LIVE troops, so a killed
+  // one would leave its structure's repairPending latched true forever and that
+  // structure could never be repaired again. Release any flag with no live troop
+  // behind it. Deterministic: a set membership test, no ordering dependence.
+  let anyRepairTroop = false;
+  const repairing = new Set();
+  for (const u of state.units.values()) {
+    if (!u.isRepairTroop || u.hp <= 0) continue;
+    anyRepairTroop = true;
+    repairing.add(u.repairTargetId);
+  }
+  for (const s of state.structures.values()) {
+    if (s.repairPending && !(anyRepairTroop && repairing.has(s.id))) s.repairPending = false;
+  }
+
   // Repair troops: march to structure, then heal it over time.
   for (const u of Array.from(state.units.values())) {
     if (!u.isRepairTroop) continue;

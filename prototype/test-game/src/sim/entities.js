@@ -1,4 +1,4 @@
-import { ASSUMPTIONS, getUnitDef, getStructureDef } from '../data/tables.js';
+import { ASSUMPTIONS, getUnitDef, getStructureDef, SOFT_DEFENDER_HUNTERS } from '../data/tables.js';
 
 /**
  * Deterministic monotonically increasing entity id counter.
@@ -82,6 +82,10 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
     aoeRadius: def.aoeRadius || 0,
     radarDetect: !!def.radarDetect,
     seesGround: !!def.seesGround,
+    // May this attacker opportunistically fire on soft defenders (repair troops,
+    // harvesters) already inside its weapon range? Resolved from data here so
+    // combat.js tests a typed boolean instead of a shape/role name.
+    engagesSoftDefenders: !!SOFT_DEFENDER_HUNTERS[def.shape],
     costT1: def.cost[0],
     path: [],
     pathIdx: 0,

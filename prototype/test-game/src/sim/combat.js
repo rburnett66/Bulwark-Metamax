@@ -189,6 +189,66 @@ function structureIsTargetable(s) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Soft defenders                                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * SOFT DEFENDERS: the defender's non-combat units — repair troops dispatched by
+ * structures.requestRepair, and harvesters from harvest.spawnHarvester. Both are
+ * flagged on the entity at creation; neither carries dps.
+ *
+ * NOTE: `unit.kind` is `def.shape` ('Troops', 'Trucks', ...), never 'repair' —
+ * the `unit.kind === 'repair'` guard in stepCombat has never matched anything.
+ * isRepairTroop is the real flag.
+ *
+ * @param {object} u candidate unit
+ * @returns {boolean}
+ */
+function isSoftDefender(u) {
+  return u.isHarvester === true || u.isRepairTroop === true;
+}
+
+/**
+ * OPPORTUNISTIC soft-defender acquisition — the LOWEST-priority thing an
+ * attacker will shoot. Called only after the base and every structure have
+ * already been ruled out, so it can never pull an assault off the keep.
+ *
+ * Strictly "already in weapon range": this returns a target, and nothing else.
+ * It does not touch pathing, does not pursue, and does not mark the unit as
+ * diverted — stepMovement keeps marching the unit exactly as before, and it
+ * fires on the way past. "Nearest defender wins" would turn every wave into a
+ * skirmish, so it is deliberately NOT that.
+ *
+ * Eligibility is the entity's `engagesSoftDefenders` boolean, resolved from
+ * data.SOFT_DEFENDER_HUNTERS at createUnit time.
+ *
+ * @param {object} state SimState
+ * @param {object} shooter attacking unit
+ * @param {number} range2 squared weapon range
+ * @param {number} slack2 tie window for this shooter
+ * @returns {number|null} entity id, or null
+ */
+function acquireSoftDefender(state, shooter, range2, slack2) {
+  if (!shooter.engagesSoftDefenders) return null;
+  let bestId = null;
+  let bestD2 = Infinity;
+  for (const u of state.units.values()) {
+    if (u.hp <= 0) continue;
+    if (u.side !== 'defender') continue;
+    if (!isSoftDefender(u)) continue;
+    if (!canHitDomain(shooter.canTarget, u.domain)) continue;
+    if (!canSee(shooter, u)) continue;
+    const d2 = dist2Between(shooter.pos, u.pos);
+    if (d2 > range2) continue;
+    if (beatsBest(d2, u.id, bestD2, bestId, slack2)) {
+      if (d2 < bestD2) bestD2 = d2;
+      bestId = u.id;
+    }
+  }
+  return bestId;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Base reach — ONE definition                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -296,7 +356,9 @@ export function acquireTarget(state, shooter) {
       if (state.base && state.base.hp > 0 && inBaseReach(state, shooter)) {
         return BASE_TARGET_ID;
       }
-      return null;
+      // Nothing higher-priority in reach: take a soft defender if one is already
+      // in weapon range (opportunistic — see acquireSoftDefender).
+      return acquireSoftDefender(state, shooter, range2, slack2);
     }
     // Structure hunters (Artillery) AND juggernauts: nearest live structure in range.
     let bestId = null;
@@ -315,7 +377,7 @@ export function acquireTarget(state, shooter) {
     if (state.base && state.base.hp > 0 && inBaseReach(state, shooter)) {
       return BASE_TARGET_ID;
     }
-    return null;
+    return acquireSoftDefender(state, shooter, range2, slack2);
   }
 
   // Defender-side troop (deployed via deployTroop): engages attacker units.
@@ -436,7 +498,11 @@ export function stepCombat(state, dt) {
   for (const unit of state.units.values()) {
     if (unit.hp <= 0) continue;
     if (!unit.dps || unit.dps <= 0) continue;
-    if (unit.kind === 'repair') continue; // repair troops never fight
+    // Repair troops never fight. This guard read `unit.kind === 'repair'`, which
+    // never matched: kind is def.shape ('Troops'), and structures.js flags the
+    // troop with isRepairTroop. It only ever "worked" because repair troops are
+    // given dps 0 and the check above already skipped them.
+    if (unit.isRepairTroop) continue;
 
     // Re-validate a sticky target, otherwise re-acquire deterministically.
     let tid = unit.targetId;
