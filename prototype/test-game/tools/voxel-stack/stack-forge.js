@@ -48,10 +48,12 @@ const GAME_UNIT_SCALE = 0.5, COLLISION_PAD = 1.2;
 let _collCache = { sig: '', tiles: 0 };
 let carveEpoch = 0;      // bumped on every re-carve; part of the collision cache key so new art can't return a stale radius
 function bodyExtentTiles() {
-  // hash the edits (key + del/fill flag), not just the count — erase-then-repaint keeps size constant but
-  // changes the extent, so a size-only signature would return a stale (too-small) collision radius.
-  let h = 0; for (const [k, v] of voxEdit.body) h = (h * 31 + k + (v === 'del' ? 1 : 2)) | 0;
-  const foot = state.foot, layers = state.bodyLayers, sig = carveEpoch + ':' + foot + ':' + layers + ':' + voxEdit.body.size + ':' + h;
+  // GEOMETRY LIVES IN VOL, so this keys on carveEpoch alone. It used to hash voxEdit — the count plus a
+  // per-entry del/fill flag — to catch an erase-then-repaint that leaves the size unchanged. voxEdit no
+  // longer describes geometry at all (zero 'del' writers remain), so that hash could only go stale in the
+  // one direction that matters: an edit that changes the extent without touching the overlay.
+  // carveEpoch is bumped by refreshModel(), which EVERY geometry edit calls, so it covers all of them.
+  const foot = state.foot, layers = state.bodyLayers, sig = carveEpoch + ':' + foot + ':' + layers;
   if (_collCache.sig === sig) return _collCache.tiles;
   let ex = foot;
   try {
