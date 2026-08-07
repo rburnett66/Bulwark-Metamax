@@ -34,7 +34,21 @@ const countMask = (g) => { if (!g) return -1; let k = 0; for (let i = 0; i < g.m
 const countVol = (V) => { let k = 0; for (let i = 0; i < V.length; i++) if (V[i]) k++; return k; };
 // screen px per layer at 1 px/voxel: a voxel is a real cube (zScale stretches it) seen at the camera tilt
 const layerSp = (elDeg) => state.zScale * Math.cos(clamp(elDeg, 0, 90) * Math.PI / 180);
-const WORLD_SCALE = 3, BODY_FRAMES = 16, TURRET_FRAMES = 64, MANIFEST_KEY = 'bulwark:stackforge';
+// BODY_FRAMES 16 -> 32 (owner 2026-08-07): 22.5° steps were visibly chunky as a hull turned; 11.25° is
+// half that. NOTHING downstream hardcodes the count — packAtlas derives cols from ceil(sqrt(n)),
+// angleBucket(heading, n) takes any n, pack.js only requires facings > 0, and the loader reads `facings`
+// off the PACK. So this is opt-in per unit: already-baked units keep rendering at whatever count their
+// pack records, and pick up 32 only when re-baked. Nothing shipped changes until you choose to.
+//
+// COST, measured across the 7 shipped packs: total atlas pixels 29.5M -> 36.9M (1.25x, ~113 -> ~141 MB
+// VRAM at 4 B/px). Only a quarter more because the 64-angle turrets already dominate the budget.
+// Note this spends VRAM and DOWNLOAD, which the recent save-architecture work did NOT improve — that
+// moved atlases out of the localStorage quota into IndexedDB/disk, which is a different budget.
+//
+// WATCH GND-Artillery. Its turret atlas is ALREADY 2592x2816, past WebGL's guaranteed 2048
+// MAX_TEXTURE_SIZE floor (most real devices do 4096+, so this is a risk, not a live break). At 32 its
+// body atlas reaches 1944x2112 and crosses that floor too. Every other unit stays well under.
+const WORLD_SCALE = 3, BODY_FRAMES = 32, TURRET_FRAMES = 64, MANIFEST_KEY = 'bulwark:stackforge';
 // THE world-scale contract (mirrors src/render/voxel/pack.js): 32 voxels = 1 tile for EVERY unit.
 // Bigger unit ⇒ higher Resolution, never a bigger stretch — voxel density is constant on the board.
 const VOX_PER_TILE = 32;

@@ -47,6 +47,11 @@ jobs:
       # that relationship and was RED in the repo for weeks -- it asserted a magnitude ("radius > 1")
       # that a balance retune was always free to change, and it sat in no gate, so nothing reported it.
       - run: node --test prototype/test-game/src/render/unitart-scale.test.mjs
+      # ATLAS DIMENSIONS of the real shipped packs. An atlas past the device MAX_TEXTURE_SIZE does not
+      # throw -- WebGL refuses the upload and the unit renders as nothing, on that device only, so a
+      # desktop never sees it. Live since body frames went 16 -> 32: atlas area scales with frame count.
+      # This is also the first CI test that reads content/ at all.
+      - run: node --test prototype/test-game/src/render/voxel/atlasSize.test.mjs
   deploy:
     needs: test
     runs-on: ubuntu-latest
