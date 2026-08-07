@@ -3716,16 +3716,27 @@ $('shipManifest').onclick = async () => {
   // whatever THIS browser held. A browser with 3 units silently deleted the other 4 from a 6-unit file --
   // GND-HeavyTanks among them. Read disk first and merge over it: shipping can only ADD or UPDATE.
   const m = loadManifest(), ids = Object.keys(m.units || {});
+  // AN UNREADABLE DISK MANIFEST ABORTS THE SHIP. The merge below only protects on-disk units when this
+  // read SUCCEEDS — a network error or malformed JSON left onDisk empty, and the write then went ahead and
+  // deleted every unit this browser did not know about. That is the exact failure that lost four units.
+  // A 404 is different and safe: nothing has been shipped yet, so there is nothing to lose.
   let onDisk = { units: {} };
   try {
     const r = await fetch('../../content/units/voxel-units.json', { cache: 'no-store' });
     if (r.ok) onDisk = await r.json();
-  } catch (e) { console.warn('[stack-forge] could not read the shipped manifest — treating it as empty:', e.message); }
+    else if (r.status !== 404) return saveFailed('SHIP ABORTED — CANNOT READ DISK',
+      `content/units/voxel-units.json returned ${r.status}. Shipping would overwrite it with only the `
+      + `${ids.length} unit(s) this browser holds, deleting anything else on disk. Nothing was written.`);
+  } catch (e) {
+    return saveFailed('SHIP ABORTED — CANNOT READ DISK',
+      `Could not read content/units/voxel-units.json — ${(e && e.message) || e}. Shipping would overwrite `
+      + `it with only the ${ids.length} unit(s) this browser holds. Nothing was written.`);
+  }
   const kept = Object.keys(onDisk.units || {}).filter((k) => !ids.includes(k));
   if (!ids.length) { $('projState').textContent = 'Nothing to ship — the units manifest is empty.'; return; }
   $('projState').textContent = `Shipping ${ids.length} unit(s)…`;
   try {
-    let files = 0, bytes = 0;
+    let files = 0, bytes = 0; const skipped = [];   // units whose local copy is not shippable — disk wins
     const lean = { config: m.config || onDisk.config, units: Object.assign({}, onDisk.units) };   // start from disk
     for (const id of ids) {
       const e = m.units[id], atl = e.atlases || (await idb.get('atlas:' + id).catch(() => null)) || {};
@@ -3749,6 +3760,17 @@ $('shipManifest').onclick = async () => {
         const d = await shipFile('content/units/' + rel, { data: pack.model });
         files++; bytes += d.bytes || 0;
         pack = Object.assign({}, pack, { model: { nx: pack.model.nx, ny: pack.model.ny, nz: pack.model.nz, src: rel } });
+      }
+      // AN INVALID DESCRIPTOR MUST NOT REPLACE A GOOD ONE. "Save geometry" writes a stub — id, class,
+      // footprint, geometryOnly — with no camera, no layerSpacing and no parts. It fails validatePack, so
+      // loader.js drops the unit and it vanishes from the game. Shipping that over an already-shipped unit
+      // therefore DESTROYS it. Keep what is on disk instead, and say which and why.
+      const v2 = validatePack(pack);
+      if (!v2.ok) {
+        if (onDisk.units && onDisk.units[id]) { skipped.push(`${id} (${v2.errors.join('; ')})`); continue; }
+        return saveFailed('SHIP ABORTED — INVALID DESCRIPTOR',
+          `"${id}" is not a shippable pack: ${v2.errors.join('; ')}. Bake and save it before shipping. `
+          + 'Nothing was written.');
       }
       lean.units[id] = { pack };                                      // descriptor only — no inline base64
     }
