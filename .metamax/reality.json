@@ -1,0 +1,25 @@
+{
+  "_": "Which commit the MetaMax Reality graph is tied to. Written by the reality-ingest job; read by anyone who needs to know whether the graph can be trusted, WITHOUT a live backend.",
+  "project_id": 16,
+  "project": "Bulwark MM",
+  "graph_head": "4b648313936cd21ed1498bd09cbd54b60636d072",
+  "ingested_at": "2026-07-25T18:17:19Z",
+  "totals": { "nodes": 1490, "edges": 1134 },
+  "_contract": [
+    "graph_head is the commit the ingest READ, not the commit that wrote this file.",
+    "The ingest's own pin commit therefore sits one ahead of graph_head. A reader comparing",
+    "graph_head to HEAD must allow that one commit, or freshness never reads clean and any",
+    "regen prompt fires forever.",
+    "Staleness = commits between graph_head and HEAD, excluding the pin commit itself.",
+    "Regen order is: push main -> TEST on main remote -> regen. Regenerating before the test",
+    "bakes an unvalidated state into the graph, and MetaMax can only test against main remote.",
+    "A declined regen stores nothing. The gap is derivable from this file and from the MCP's",
+    "freshness block, so the next session recomputes it rather than reading a flag that rots."
+  ],
+  "_known_issue": "devtool_jobs.py records that a stale job row can SILENTLY block every subsequent reality-graph run for a project. If a regen appears to do nothing and this file does not move, check for an uncleared job before assuming the ingest is healthy.",
+  "_stale_as_of_writing": {
+    "head_at_last_check": "f8f4832",
+    "commits_behind": 39,
+    "note": "Not regenerated during the 2026-08-06/07 Stack Forge work. The graph predates the save-architecture rebuild, the carve.js wiring, the undo unification and every fix in epics AAA/AAD, so impact_of and does_exist are leads for that code, not facts."
+  }
+}
