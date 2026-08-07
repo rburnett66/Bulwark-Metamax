@@ -52,6 +52,10 @@ jobs:
       # desktop never sees it. Live since body frames went 16 -> 32: atlas area scales with frame count.
       # This is also the first CI test that reads content/ at all.
       - run: node --test prototype/test-game/src/render/voxel/atlasSize.test.mjs
+      # THE FACTION REGISTRY, checked against tables.js, content/units/ and voicepacks.json rather than
+      # against itself. A wrong prefix here would be worse than the guessing it replaces, because it
+      # would look authoritative. Six of nine prefixes were wrong before this existed.
+      - run: node --test prototype/test-game/src/data/factions.test.mjs
   deploy:
     needs: test
     runs-on: ubuntu-latest
