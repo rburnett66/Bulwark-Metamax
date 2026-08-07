@@ -152,7 +152,7 @@ test('stack-forge.js completes module scope without throwing', () => {
   const sandbox = makeSandbox();
   vm.createContext(sandbox);
   // load order must match stack-forge.html: the cores first, then the header, then the tool
-  for (const f of ['carve.js', 'select.js', 'palette.js', '../toolhead.js']) {
+  for (const f of ['../../src/data/factions.js', 'carve.js', 'select.js', 'palette.js', '../toolhead.js']) {
     vm.runInContext(readFileSync(DIR + f, 'utf8'), sandbox, { filename: f });
   }
   let err = null;
@@ -188,7 +188,7 @@ test('THE SHADOW IS REAL, and the *Core aliases survive it', () => {
   // believing it doesn't) AND that the aliases the tool actually calls come through untouched.
   const sandbox = makeSandbox();
   vm.createContext(sandbox);
-  for (const f of ['carve.js', 'select.js', 'palette.js', '../toolhead.js']) {
+  for (const f of ['../../src/data/factions.js', 'carve.js', 'select.js', 'palette.js', '../toolhead.js']) {
     vm.runInContext(readFileSync(DIR + f, 'utf8'), sandbox, { filename: f });
   }
   const before = { medianCut: sandbox.medianCut, rgb2hsv: sandbox.rgb2hsv };

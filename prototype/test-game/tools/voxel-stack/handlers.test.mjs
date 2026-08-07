@@ -123,7 +123,7 @@ function makeSandbox() {
 function boot() {
   const sb = makeSandbox();
   vm.createContext(sb);
-  for (const f of ['carve.js', 'select.js', 'palette.js', '../toolhead.js', 'stack-forge.js']) {
+  for (const f of ['../../src/data/factions.js', 'carve.js', 'select.js', 'palette.js', '../toolhead.js', 'stack-forge.js']) {
     vm.runInContext(readFileSync(DIR + f, 'utf8'), sb, { filename: f });
   }
   for (const a of sb.__pixiApps || []) a.ticker._runFrameOne();

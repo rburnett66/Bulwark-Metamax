@@ -70,6 +70,7 @@ test('the tested cores are actually loaded by the page', () => {
   assert.match(html, /<script src="carve\.js">/, 'stack-forge.html must load carve.js');
   assert.match(html, /<script src="select\.js">/, 'stack-forge.html must load select.js');
   assert.match(html, /<script src="palette\.js">/, 'stack-forge.html must load palette.js');
+  assert.match(html, /<script src="\.\.\/\.\.\/src\/data\/factions\.js">/, 'stack-forge.html must load the faction registry');
   const iCarve = html.indexOf('carve.js'), iMain = html.indexOf('stack-forge.js"');
   assert.ok(iCarve < iMain, 'carve.js must load BEFORE stack-forge.js');
 });

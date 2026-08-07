@@ -4778,10 +4778,17 @@ $('projLoad').addEventListener('change', (e) => {
 const DECOR_SET = '🌿 Terrain (decor)';
 const isDecorSet = () => curFaction === DECOR_SET;
 const FACTION_KEY = 'bulwark:sf:lastFaction';   // the set you were last working in
-const FACTIONS = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water', 'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies (Chem)', 'System', DECOR_SET];
+// THE REGISTRY IS THE LIST. This was a hand-typed array that had to stay in step with tables.js,
+// menu.js and voice.js by hand — see src/data/factions.js for what that cost.
+const FAC = BulwarkFactions;
+const FACTIONS = [...FAC.NAMES, FAC.SYSTEM.name, DECOR_SET];
 const ROLES = ['Skirmisher', 'Support', 'Bruiser', 'Siege', 'Juggernaut', 'Harasser', 'Striker', 'Guided AA'];
-const prefixFor = (name) => (name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'UNI');
-let filesIndex = [], curFaction = null, roster = [];
+// prefixFor GUESSED the id prefix as name.slice(0,3).toUpperCase() and was wrong for SIX of the nine
+// factions — GRO/GND, HIG/HTC, WAT/WTR, SPA/SPC, DAR/DRK, GRE/GRN. Every unit the owner created in those
+// six got an id the game could never resolve; the orphan SPA-U3 pack is exactly that. It is a LOOKUP now,
+// and returns null rather than inventing a prefix for a faction that has none.
+const prefixFor = (name) => { const f = FAC.find(name); return f ? f.prefix : null; };
+let filesIndex = [], curFaction = null, roster = [], noArtNote = '';   // noArtNote: why a roster is empty, shown instead of invented slots
 // SHIPPED units (the deployed manifest with baked art) are pulled in so the roster/Load list surface
 // units that exist in the game but were never saved in THIS browser — otherwise a fresh browser shows
 // every slot as "needs art" and nothing loads. A localStorage-saved unit of the same id wins.
@@ -4828,9 +4835,14 @@ async function initFactions() {
   $('faction').value = want;
   loadFaction(want);
 }
+// Exactly one file, or explicitly none. This normalised the name, truncated it to FIVE characters and
+// took the first substring hit in filesIndex — so 'System' matched three files and stopped at the first,
+// leaving system-flak.units.json and system-base.units.json unreachable from the tool entirely (5 units
+// nobody could author), and 'Air' truncated to "air" would match any future file containing it anywhere.
+// A faction with no authored art now returns null and is REPORTED, instead of silently resolving to
+// somebody else's file — which is how Artillery came to display Ground/Powder units.
 function fileForFaction(name) {
-  const norm = (s) => s.toLowerCase().replace(/[^a-z]/g, ''), key = norm(name).slice(0, 5);
-  return filesIndex.find((f) => norm(f).includes(key));
+  return FAC.fileOf(name);
 }
 async function loadFaction(name) {
   // LEAVING THE TERRAIN SET FOR UNITS. This flushed the decor and cleared editingDecor but left the decor's
@@ -4857,7 +4869,7 @@ async function loadFaction(name) {
     wipDirty = false;                                              // the decor is saved; the editor is empty. Nothing is pending.
     recarve();
   }
-  curFaction = name; roster = [];
+  curFaction = name; roster = []; noArtNote = '';
   try { localStorage.setItem(FACTION_KEY, name); } catch (e) { /* private mode */ }   // survive a reload
   if ($('faction') && $('faction').value !== name) $('faction').value = name;
   if (name === DECOR_SET) {                                        // Terrain set = decor mode (body-only + revolve + decor: autosave)
@@ -4884,7 +4896,19 @@ async function loadFaction(name) {
     try { const d = await (await fetch('../../content/units/' + file)).json(); const u = d.units || {};
       for (const id of Object.keys(u)) roster.push({ id, role: u[id].role || '', shape: u[id].shape || '' }); } catch (e) { /* fall through to slots */ }
   }
-  if (!roster.length) { const p = prefixFor(name); roster = ROLES.map((r, i) => ({ id: `${p}-U${i + 1}`, role: r, shape: r })); }
+  // NO ART FILE -> SAY SO. This fabricated eight slots named <PREFIX>-U1..U8 from a prefix that was wrong
+  // for six of nine factions, and assigned the SAME string to role AND shape — every real unit has them
+  // differ (role is what a unit DOES, shape is what it IS), so the fabricated rosters were malformed on
+  // both axes. Six of nine factions hit this path, so most of what the tool showed was invented.
+  // Now: an honest empty state. The roster stays empty and says why. (It cannot fall back to the unit
+  // table — tables.js is an ES module and this tool is a classic script, so UNITS is not reachable here.
+  // Whether those factions get real content files is GGG-4's decision, not something to paper over.)
+  if (!roster.length) {
+    const p = prefixFor(name);
+    noArtNote = p
+      ? `${name} — no authored art file yet. New units here will be ${p}-*.`
+      : `${name} is not a known faction.`;
+  }
   renderRoster();
 }
 function renderRoster() {
@@ -4916,7 +4940,9 @@ function renderRoster() {
     card.onclick = decorSet ? () => loadDecorForEdit(u.id) : () => onCardClick(u.id);
     grid.appendChild(card);
   }
-  $('setState').innerHTML = `<b>${curFaction}</b> — <span class="lock">${n}/${roster.length}</span> ${decorSet ? 'decor' : 'supplied'}`;
+  $('setState').innerHTML = noArtNote
+    ? `<b>${curFaction}</b> — <span style="color:var(--muted)">${noArtNote}</span>`
+    : `<b>${curFaction}</b> — <span class="lock">${n}/${roster.length}</span> ${decorSet ? 'decor' : 'supplied'}`;
 }
 $('addUnit').onclick = async () => {
   if (isDecorSet()) {                                              // Terrain set: start a FRESH decor prop on a clean editor
@@ -4936,7 +4962,13 @@ $('addUnit').onclick = async () => {
     $('projState').textContent = `New decor "${id}" — load Top/Side/Front art as the body, set the 🌿 Decor panel, then Bake + Save.`;
     return;
   }
-  const p = prefixFor(curFaction || 'UNI'), id = (prompt('New unit id:', `${p}-U${roster.length + 1}`) || '').trim();
+  // A NEW UNIT GETS THE FACTION'S REAL PREFIX. This used to seed the prompt from prefixFor's guess, so a
+  // Space Tech unit was proposed as SPA-* while every Space Tech unit is SPC-* — the orphan SPA-U3 pack
+  // is one that got accepted. If the faction is unknown there is no honest default, so refuse rather
+  // than propose something that cannot resolve.
+  const p = prefixFor(curFaction);
+  if (!p) { alert(`"${curFaction}" is not a known faction — cannot generate a unit id.`); return; }
+  const id = (prompt('New unit id:', `${p}-U${roster.length + 1}`) || '').trim();
   if (!id) return;
   if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
   renderRoster(); await selectUnit(id);
