@@ -33,6 +33,10 @@ jobs:
       # fails on dead code, on a handler bound to a missing element, on the cores not being loaded, and
       # on the front facing disagreeing with itself. Passing locally was never a gate -- this is.
       - run: node --test prototype/test-game/tools/voxel-stack/carve.test.mjs prototype/test-game/tools/voxel-stack/select.test.mjs prototype/test-game/tools/voxel-stack/audit.test.mjs
+      # palette.js decides which colours survive a reduction to 2/4/8/16/32/48. Its own header made a
+      # claim that was false -- a 1-voxel stray could take a slot in a 4-colour palette -- so these
+      # tests assert the claims, and the suite is mutation-checked rather than merely green.
+      - run: node --test prototype/test-game/tools/voxel-stack/palette.test.mjs
       # BOOT GATE. The suites above exercise pure functions; node --check only proves the file parses.
       # Neither runs module scope -- which is where five separate dead-on-arrival ships came from: an
       # out-of-scope binding, a TDZ read, and a null deref on frame one. This runs the real boot path
