@@ -288,6 +288,144 @@ test('paletteOptions offers every advertised size', () => {
 test('an empty model degrades quietly instead of throwing', () => {
   assert.deepEqual(P.extractPalette(new Uint8Array(0), 0, null), []);
   assert.deepEqual(P.reducePalette([], 8), []);
+  assert.deepEqual(P.spreadPalette([], 8), []);
+  assert.deepEqual(P.bestPalette([], 8), []);
   assert.deepEqual(P.medianCut([], 4), []);
   assert.equal(P.paletteStats([], []).meanErr, 0);
+  assert.equal(P.paletteRms([], []), 0);
+});
+
+// ── luminance spread, and the real-art failure that forced it ─────────────────────────────────────
+// THE BUG THIS SECTION EXISTS FOR. reducePalette's header claimed "at n=2 you get the dominant tone plus
+// its strongest contrast, never two adjacent greys", the claim tests above passed, and the claim was
+// still FALSE on real art — because every fixture above has clean, separable colour clusters, which is
+// precisely the condition that makes coverage+variety work. A continuous-tone photo carve has none.
+// Reproduced synthetically here so it runs without loading a 550 KB content file; the numbers in
+// palette.js's spreadPalette comment are from the shipped SPA-U3 body itself.
+
+/** a photo-carve-shaped model: a continuous neutral ramp, most of its mass bunched in the mid-highs */
+function tonalRamp() {
+  const pairs = [];
+  for (let v = 24; v <= 207; v += 3) {
+    // population curve peaks around 160 and thins toward the shadows — a lit hull photographed, not a
+    // flat-shaded sprite. This is what defeats the variety pass: the dark end exists but is never popular.
+    const w = Math.max(1, Math.round(300 * Math.exp(-((v - 160) ** 2) / (2 * 28 * 28))));
+    pairs.push([[v, v + 1, v + 3], w]);
+  }
+  return P.extractPalette(model(pairs).vcol, pairs.reduce((s, [, k]) => s + k, 0), null);
+}
+
+const lumsOf = (pal) => pal.map((c) => P.lum(...c));
+const rangeOf = (entries) => {
+  const ls = entries.map((e) => P.lum(...e.rgb));
+  const lo = Math.min(...ls), hi = Math.max(...ls);
+  return { lo, hi, avail: hi - lo };
+};
+
+test('THE BUG: coverage+variety abandons the dark half of a continuous-tone model', () => {
+  // Not a claim about spreadPalette — a claim about what reducePalette DOES here, so that if someone
+  // ever fixes reducePalette this test tells them the reason for spreadPalette has changed.
+  // Measured on the shipped SPA-U3 body: reducePalette n=2 returns nothing darker than luminance 168
+  // against a model floor of 24. This fixture reproduces that shape: darkest slot in the TOP HALF.
+  const entries = tonalRamp(), { lo, avail } = rangeOf(entries);
+  const darkest = Math.min(...lumsOf(P.reducePalette(entries, 2)));
+  assert.ok(darkest > lo + avail * 0.5,
+    `reducePalette n=2 now reaches down to ${darkest.toFixed(0)} (floor ${lo.toFixed(0)}) — spreadPalette may no longer be needed`);
+});
+
+test('spreadPalette reaches the tones coverage+variety cannot', () => {
+  const entries = tonalRamp(), { lo, avail } = rangeOf(entries);
+  // The small sizes are where the bug bites, and the fix must be visible there specifically.
+  for (const n of [2, 4]) {
+    const dSpread = Math.min(...lumsOf(P.spreadPalette(entries, n)));
+    const dCover = Math.min(...lumsOf(P.reducePalette(entries, n)));
+    assert.ok(dSpread < dCover - avail * 0.15,
+      `n=${n}: spread's darkest is ${dSpread.toFixed(0)}, coverage's is ${dCover.toFixed(0)} — no material gain`);
+    assert.ok(dSpread < lo + avail * 0.5, `n=${n}: spread's darkest ${dSpread.toFixed(0)} is still in the top half`);
+  }
+});
+
+test('spreadPalette spends its whole budget across the range, at every size', () => {
+  // The ceiling is arithmetic, not aspiration: `want` band MEANS over a uniform model can span at most
+  // (want-1)/want of the range, because each mean sits inside its own band. Asserting "covers 100%"
+  // would be asserting something impossible; this asserts it gets most of the way to what IS possible.
+  const entries = tonalRamp(), { avail } = rangeOf(entries);
+  for (const n of P.SIZES) {
+    const pal = P.spreadPalette(entries, n);
+    const got = lumsOf(pal), span = Math.max(...got) - Math.min(...got);
+    const ideal = avail * (n - 1) / n;
+    assert.ok(span > ideal * 0.6, `n=${n}: spread ${span.toFixed(0)} of a possible ${ideal.toFixed(0)}`);
+  }
+});
+
+test('spreadPalette returns EXACTLY the requested size when the model has the colours', () => {
+  const entries = tonalRamp();
+  for (const n of P.SIZES) assert.equal(P.spreadPalette(entries, n).length, n, `n=${n}`);
+});
+
+test('spreadPalette never invents a colour outside the model\'s gamut', () => {
+  const entries = tonalRamp();
+  const ls = entries.map((e) => P.lum(...e.rgb));
+  const lo = Math.min(...ls) - 1, hi = Math.max(...ls) + 1;
+  for (const c of P.spreadPalette(entries, 8)) {
+    const l = P.lum(...c);
+    assert.ok(l >= lo && l <= hi, `${JSON.stringify(c)} sits outside the model's own luminance range`);
+  }
+});
+
+test('THE RULE: bestPalette takes whichever reduction actually fits the model better', () => {
+  // The whole point of bestPalette is that it needs no model classification. Prove it BOTH ways on the
+  // two models that pull in opposite directions.
+  const tonal = tonalRamp();
+  assert.ok(P.paletteRms(tonal, P.bestPalette(tonal, 2)) < P.paletteRms(tonal, P.reducePalette(tonal, 2)),
+    'on a continuous-tone model bestPalette must beat coverage alone — that is the case spreadPalette exists for');
+  // and the symptom, not just the score: the dark end comes back
+  assert.ok(Math.min(...lumsOf(P.bestPalette(tonal, 2))) < Math.min(...lumsOf(P.reducePalette(tonal, 2))),
+    'bestPalette n=2 must reach darker than coverage alone');
+
+  // …and the hue model where equal-luminance banding would merge two distinct hues into one band.
+  const hues = P.extractPalette(model([
+    [[17, 238, 0], 140], [[221, 17, 119], 20], [[136, 17, 85], 40], [[102, 204, 204], 160], [[85, 204, 136], 100],
+  ]).vcol, 460, null);
+  const pick = P.bestPalette(hues, 3);
+  assert.ok(P.paletteRms(hues, pick) <= P.paletteRms(hues, P.spreadPalette(hues, 3)),
+    'on a hue-separated model bestPalette must decline the spread');
+  assert.ok(pick.some((c) => c.join() === '136,17,85'),
+    `bestPalette broke the population-tie claim reducePalette is pinned on — ${JSON.stringify(pick)}`);
+});
+
+test('bestPalette is never worse than either reduction alone, at any size', () => {
+  for (const entries of [tonalRamp(), P.extractPalette(model([
+    [[116, 120, 126], 250], [[124, 128, 134], 250], [RED, 100], [[30, 60, 200], 80], [[255, 0, 255], 1],
+  ]).vcol, 681, null)]) {
+    for (const n of P.SIZES) {
+      const b = P.paletteRms(entries, P.bestPalette(entries, n));
+      assert.ok(b <= P.paletteRms(entries, P.reducePalette(entries, n)) + 1e-9, `n=${n}: worse than reducePalette`);
+      assert.ok(b <= P.paletteRms(entries, P.spreadPalette(entries, n)) + 1e-9, `n=${n}: worse than spreadPalette`);
+    }
+  }
+});
+
+test('paletteOptions reports which reduction won, and what the model had to offer', () => {
+  const opts = P.paletteOptions(tonalRamp());
+  for (const o of opts) {
+    assert.ok(o.via === 'spread' || o.via === 'coverage', `unknown via ${o.via}`);
+    assert.ok(o.rms >= 0 && Number.isFinite(o.rms));
+    assert.ok(o.lumAvail > 100, 'lumAvail must be the MODEL\'s range, not the palette\'s');
+    assert.ok(o.stats.lumSpread <= o.lumAvail + 1e-6, 'a palette cannot spread wider than the model it came from');
+  }
+  assert.equal(opts[0].via, 'spread', 'a continuous-tone model at n=2 must be answered by the spread');
+});
+
+// ── the shadow trap ───────────────────────────────────────────────────────────────────────────────
+test('the *Core aliases exist, because bare globals can be shadowed by the tool', () => {
+  // stack-forge.js is a classic script that declares its OWN top-level `function medianCut` and
+  // `function rgb2hsv`. Those hoist over globalThis and silently replace palette.js's versions. The
+  // tool must call the *Core names; this asserts they are there to call.
+  for (const k of ['extractPalette', 'reducePalette', 'spreadPalette', 'bestPalette', 'paletteRms',
+    'paletteOptions', 'paletteStats', 'applyPalette', 'nearest', 'medianCut', 'rgb2hsv', 'lum', 'dist2']) {
+    assert.equal(typeof P[k + 'Core'], 'function', `missing alias ${k}Core`);
+    assert.equal(P[k + 'Core'], P[k], `${k}Core must BE ${k}, not a copy that can drift`);
+  }
+  assert.deepEqual(P.PALETTE_SIZES, P.SIZES);
 });

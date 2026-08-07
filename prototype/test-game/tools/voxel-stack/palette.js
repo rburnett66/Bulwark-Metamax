@@ -154,6 +154,90 @@
     return chosen;
   }
 
+    // ── LUMINANCE SPREAD — the other half of the answer ─────────────────────────────────────────────
+  /**
+   * reducePalette optimises COVERAGE + VARIETY. That is right for art with separable colour clusters and
+   * structurally WRONG for a continuous-tone photo carve, which is most of what this tool ingests.
+   *
+   * MEASURED on the shipped SPA-U3 body (content/units/model/SPA-U3.json — 33,968 filled voxels, 904
+   * distinct colours, top colour 1.5% coverage, 98.2% of voxels neutral, luminance range 24..207):
+   *     reducePalette n=2 -> #a3a9ae and #babfc5.  Two adjacent greys, 22 luminance apart out of 183
+   *                          available; 15.3% of the model more than 60 units from its palette colour;
+   *                          the entire dark under-hull gone.
+   *     reducePalette n=4 -> still confined to the top third of the range, 10.3% badly wrong.
+   * The cause is structural, not a tuning miss. When almost everything is neutral the DISTANCE term
+   * collapses (there is no far-away hue to reach for) while the population weight keeps its full range,
+   * so the variety pass never walks out to the tonal extremes. No exponent fixes that.
+   *
+   * So: slice the model's ACTUAL luminance range into `want` equal bands and take each band's
+   * population-weighted mean. Full tonal coverage by construction — the darkest band is represented
+   * because it is a band, not because it won a contest. Empty bands cost nothing: the budget they leave
+   * goes to the SAME variety pass reducePalette uses, so a hue sharing a luminance band with the hull
+   * can still claim a leftover slot.
+   */
+  function spreadPalette(entries, want) {
+    if (!entries.length || want < 1) return [];
+    if (entries.length <= want) return entries.map((e) => e.rgb.slice());
+    const ls = entries.map((e) => lum(e.rgb[0], e.rgb[1], e.rgb[2]));
+    const lo = Math.min(...ls), hi = Math.max(...ls), span = hi - lo || 1;
+    const bands = Array.from({ length: want }, () => []);
+    entries.forEach((e, i) => bands[Math.min(want - 1, Math.floor(((ls[i] - lo) / span) * want))].push(e));
+    const chosen = [];
+    for (const b of bands) {
+      if (!b.length) continue;                            // an empty band is a gap in the model, not a slot to waste
+      let r = 0, g = 0, bl = 0, n = 0;
+      for (const e of b) { r += e.rgb[0] * e.n; g += e.rgb[1] * e.n; bl += e.rgb[2] * e.n; n += e.n; }
+      chosen.push([Math.round(r / n), Math.round(g / n), Math.round(bl / n)]);
+    }
+    const pool = entries.slice();                         // leftover budget → the variety pass, verbatim
+    while (chosen.length < want) {
+      let best = null, bestScore = -1;
+      for (const e of pool) {
+        let near = Infinity;
+        for (const c of chosen) { const d = dist2(e.rgb, c); if (d < near) near = d; }
+        const score = near * Math.log2(1 + e.n);
+        if (score > bestScore) { bestScore = score; best = e; }
+      }
+      if (!best || bestScore <= 0) break;
+      chosen.push(best.rgb.slice());
+      pool.splice(pool.indexOf(best), 1);
+    }
+    chosen.sort((a, b) => lum(a[0], a[1], a[2]) - lum(b[0], b[1], b[2]));
+    return chosen;
+  }
+
+  /** population-weighted ROOT-MEAN-SQUARE error of a palette over a model */
+  function paletteRms(entries, palette) {
+    let s = 0, t = 0;
+    for (const e of entries) { s += dist2(e.rgb, nearest(e.rgb, palette)) * e.n; t += e.n; }
+    return t ? Math.sqrt(s / t) : 0;
+  }
+
+  /**
+   * THE ONE A TOOL SHOULD CALL. Runs both reductions and keeps whichever covers the model better, by
+   * population-weighted RMS error. RMS and not mean, because the failure being guarded against is a
+   * whole REGION of the model landing far from every palette colour, and RMS is the standard metric that
+   * punishes that. No threshold, no "is this a photo carve?" classification, nothing to tune.
+   *
+   * MEASURED (rms, lower is better; the last column is what this returns):
+   *     9 greys + red stripe   n=2   reduce 22.1   spread 14.7   -> spread  (both keep the stripe)
+   *     pure grey ramp         n=2   reduce 88.0   spread 56.8   -> spread
+   *     stray magenta pixel    n=4   reduce 13.0   spread 10.3   -> spread  (neither takes the stray)
+   *     5 hues, population tie n=3   reduce 47.6   spread 59.9   -> REDUCE
+   *     SPA-U3 photo carve     n=2   reduce 59.9   spread 33.8   -> spread
+   *     SPA-U3 photo carve     n=8   reduce 12.4   spread 10.8   -> spread
+   * Note row 4: equal-luminance banding merges two distinct hues that happen to share a band, and the
+   * rule declines it WITHOUT being told to — that case is one of the claims palette.test.mjs pins.
+   * Ties go to reducePalette, the one those claims are written against.
+   */
+  function bestPalette(entries, want) {
+    const cover = reducePalette(entries, want);
+    const spread = spreadPalette(entries, want);
+    if (!spread.length) return cover;
+    if (!cover.length) return spread;
+    return paletteRms(entries, spread) < paletteRms(entries, cover) ? spread : cover;
+  }
+
   /** nearest palette colour, luminance-weighted */
   function nearest(rgb, palette) {
     let bi = 0, bd = Infinity;
@@ -179,11 +263,22 @@
     };
   }
 
-  /** every offered size, each with its palette and stats — what the modal shows */
+  /**
+   * Every offered size, each with its palette and stats — what the modal shows. Drives off bestPalette,
+   * so the sizes the artist is offered are the best of both reductions and 2 / 4 are honest offers rather
+   * than two adjacent greys. `via` says which reduction won, so the modal can show its working.
+   * `lumAvail` is the model's own luminance range, which is what `stats.lumSpread` should be read against
+   * — a spread of 22 means nothing until you know 183 was on the table.
+   */
   function paletteOptions(entries, sizes) {
+    const ls = entries.map((e) => lum(e.rgb[0], e.rgb[1], e.rgb[2]));
+    const lumAvail = ls.length ? Math.max(...ls) - Math.min(...ls) : 0;
     return (sizes || SIZES).map((n) => {
-      const pal = reducePalette(entries, n);
-      return { n, palette: pal, stats: paletteStats(entries, pal) };
+      const cover = reducePalette(entries, n), spread = spreadPalette(entries, n);
+      const useSpread = spread.length && (!cover.length || paletteRms(entries, spread) < paletteRms(entries, cover));
+      const pal = useSpread ? spread : cover;
+      return { n, palette: pal, via: useSpread ? 'spread' : 'coverage', lumAvail,
+        rms: paletteRms(entries, pal), stats: paletteStats(entries, pal) };
     });
   }
 
@@ -204,5 +299,23 @@
     return changed;
   }
 
-  return { SIZES, lum, rgb2hsv, dist2, extractPalette, medianCut, reducePalette, nearest, paletteStats, paletteOptions, applyPalette };
+  const api = { SIZES, lum, rgb2hsv, dist2, extractPalette, medianCut, reducePalette, spreadPalette,
+    bestPalette, paletteRms, nearest, paletteStats, paletteOptions, applyPalette };
+
+  // ── SHADOW-PROOF ALIASES — READ THIS BEFORE CALLING ANY BARE NAME ABOVE ─────────────────────────
+  // In the browser this file does `Object.assign(globalThis, api)` and THEN stack-forge.js loads as a
+  // classic script. Its top-level `function medianCut` and `function rgb2hsv` declarations create
+  // globals of the same name, which OVERWRITE these two. Any tool code calling the bare name gets the
+  // tool's version — a population-blind median cut and a different hsv — with no error and no warning.
+  // Verified: stack-forge.js declares medianCut (:671) and rgb2hsv (:3422); the other names are clear
+  // TODAY, which is exactly the kind of fact that stops being true the next time someone adds a helper.
+  //
+  // carve.js already dodges this with `sliceMaskCore`. Same trick, applied to the whole surface: the
+  // *Core names cannot be shadowed by accident, because nothing else in the codebase is called that.
+  // STACK-FORGE CALLS ONLY THE *Core NAMES. boot.test.mjs asserts they survive.
+  for (const k of ['extractPalette', 'reducePalette', 'spreadPalette', 'bestPalette', 'paletteRms',
+    'paletteOptions', 'paletteStats', 'applyPalette', 'nearest', 'medianCut', 'rgb2hsv', 'lum', 'dist2']) api[k + 'Core'] = api[k];
+  api.PALETTE_SIZES = SIZES;
+
+  return api;
 });
