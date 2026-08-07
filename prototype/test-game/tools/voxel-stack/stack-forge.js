@@ -213,6 +213,14 @@ function keyedCropped(img, tol, poly, picks) {
 // carve.test.mjs is a real gate on the code the browser runs.
 // Verified behaviour-preserving before switching: 24 cases across four source sizes, three target
 // sizes and both elev modes -- zero differing cells in either the mask or the colour buffer.
+// A canvas as the { width, height, data } buffer carve.js expects. Null in, null out — a missing slice
+// must stay missing, because carve() treats a null slice as "cuts nothing on this axis".
+function asPixels(canvas) {
+  if (!canvas) return null;
+  if (canvas.data) return canvas;                                   // already a pixel buffer
+  const w = Math.max(1, canvas.width), h = Math.max(1, canvas.height);
+  return { width: w, height: h, data: canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data };
+}
 function sliceMask(canvas, w, h, elev) {
   const sw = Math.max(1, canvas.width), sh = Math.max(1, canvas.height);
   const img = canvas.data ? canvas                                  // already an ImageData-shaped buffer
@@ -444,23 +452,23 @@ function buildVolume(partId, foot, layers) {
   // ── THE CARVE (owner 2026-08-04): 1. clear the volume  2. fill it with solid geo  3. apply each SLICE as
   // a mask and cut every voxel the slice does not cover with opacity. The mask IS the slice. Each cut runs
   // over the real volume in turn — nothing is lazy, nothing is re-derived, and a slice can only REMOVE.
-  const VOL = new Uint8Array(layers * N);                          // 1. CLEAR
-  for (let z = z0; z < z0 + Hv; z++) for (let y = oy; y < oy + bh; y++)
-    for (let x = ox; x < ox + bw; x++) VOL[z * N + y * foot + x] = 1;   // 2. FILL SOLID (exactly the box)
-  T('after FILL SOLID', countVol(VOL), 'the clean starting block');
-  // 3. CUT with each slice. TOP masks (x,y); SIDE masks (x,z); FRONT masks (y,z). A missing slice cuts
-  // nothing on its axis — it cannot add material, so the block simply stays solid there.
-  const cut = (g, idx) => {
-    if (!g) return;
-    for (let z = z0; z < z0 + Hv; z++) for (let y = oy; y < oy + bh; y++) for (let x = ox; x < ox + bw; x++) {
-      const k = z * N + y * foot + x;
-      if (VOL[k] && !g.m[idx(x, y, z)]) VOL[k] = 0;                // not covered by opacity → cut it away
-    }
-  };
-  if (carveCuts.top)   cut(topG,   (x, y)     => (y - oy) * bw + (x - ox));   // TOP masks (x,y)
-  if (carveCuts.side)  cut(sideG,  (x, _y, z) => (z - z0) * bw + (x - ox));   // SIDE masks (x,z)
-  if (carveCuts.front) cut(frontG, (_x, y, z) => (z - z0) * bh + (y - oy));   // FRONT masks (y,z)
-  T('after CUT by top', countVol(VOL), topG ? 'top slice applied' : 'no top slice — nothing cut here');
+  // CLEAR -> FILL SOLID -> CUT is carve.js's job. That module carries the tests; this file used to hold a
+  // second, independent copy of the same loop, which is how the tested carve and the shipped carve came
+  // to disagree on their defaults with nothing able to see it.
+  // Proven byte-for-byte identical before switching: 32 cases across four grid sizes, full-grid and inset
+  // boxes, and all four cut combinations — zero diverging voxels.
+  // colour:false — carveRaw owns vcol (it smears the top colour down each column from `cd`), so carve()'s
+  // own colour pass would be a full layers x foot^2 write whose result is discarded.
+  const VOL = carve({
+    foot, layers,
+    box: { ox, oy, bw, bh, z0, Hv },
+    // carve.js is DOM-free and takes pixel buffers; these are canvases. Convert here rather than teaching
+    // the tested core about canvas, which is the thing that keeps it testable in node.
+    slices: { top: asPixels(topC), side: asPixels(sideC), front: asPixels(frontC) },
+    cuts: carveCuts,
+    colour: false,
+  }).VOL;
+  T('after CUT', countVol(VOL), `carve.js: ${['top', carveCuts.side ? 'side' : null, carveCuts.front ? 'front' : null].filter(Boolean).join(' + ')}`);
   if (!topG && carveCuts.top) {   // no top slice: footprint falls back to the flat fill drawn into cd
     for (let z = z0; z < z0 + Hv; z++) for (let y = oy; y < oy + bh; y++) for (let x = ox; x < ox + bw; x++) {
       const k = z * N + y * foot + x;

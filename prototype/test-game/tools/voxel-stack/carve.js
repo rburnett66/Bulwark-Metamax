@@ -102,8 +102,11 @@
 
     // COLOUR: the top slice colours each column; a voxel with no top ink keeps 0 and the renderer's
     // wall-colour pass fills it from the elevation that depicts its face.
-    const vcol = new Uint8Array(layers * N * 3);
-    if (topG) for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+    // opts.colour === false skips this entirely. The Stack Forge host owns vcol (carveRaw smears the top
+    // colour down each column from its own `cd` buffer), so for that caller this is a full
+    // layers x foot^2 write whose result is discarded on every carve.
+    const vcol = new Uint8Array(opts.colour === false ? 0 : layers * N * 3);
+    if (opts.colour !== false && topG) for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
       const i = y * bw + x; if (!topG.m[i]) continue;
       const R = topG.c[i * 3], G = topG.c[i * 3 + 1], B = topG.c[i * 3 + 2];
       for (let z = 0; z < layers; z++) {
