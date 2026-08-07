@@ -43,6 +43,10 @@ jobs:
       # against a stubbed DOM/PIXI and drives one ticker frame, so those faults fail here, not on the
       # owner's screen.
       - run: node --test prototype/test-game/tools/voxel-stack/boot.test.mjs
+      # ART IS SIZED TO MATCH COLLISION (sprite = collision x 4/3), not the reverse. This test guards
+      # that relationship and was RED in the repo for weeks -- it asserted a magnitude ("radius > 1")
+      # that a balance retune was always free to change, and it sat in no gate, so nothing reported it.
+      - run: node --test prototype/test-game/src/render/unitart-scale.test.mjs
   deploy:
     needs: test
     runs-on: ubuntu-latest

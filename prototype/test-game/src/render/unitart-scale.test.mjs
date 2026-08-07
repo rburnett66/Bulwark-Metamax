@@ -27,9 +27,17 @@ const stack = buildUnitSprite(art, 'ART-Tanks', tile, radius);
 assert.ok(stack, 'stack built');
 const [base, weapon, head] = stack.children;
 
-// Sprite = collision × 4/3: sim radii are the collision half-widths, 25% inside the art —
-// separation/spawn spacing use collision, the render draws the sprite box
-assert.ok(radius > 1, 'sprite-scaled footprint (Tanks collision ~1.08 cells)');
+// ART IS SIZED TO MATCH COLLISION, never the reverse (owner). Sim radii are the collision
+// half-widths and the sprite is drawn at collision × 4/3 — 25% padding, so bodies visually
+// overlap slightly before they actually collide. Separation and spawn spacing use collision.
+//
+// This assertion used to read `radius > 1` with the note "Tanks collision ~1.08 cells". The owner
+// HALVED every radius on 2026-07-20 (see the comment on unitRadius in src/sim/entities.js — the old
+// ~0.9-1.1 values drew a ~2-tile collision circle and jammed units in 1-tile gaps). Tanks became
+// 0.46 and this test went red and STAYED red, because it is in no CI gate — it asserted a magnitude
+// that balance was always free to change. It now asserts the RELATIONSHIP, which is the actual
+// contract and survives retuning.
+assert.ok(radius > 0 && radius < 1, `collision half-width is sub-tile (Tanks = ${radius})`);
 assert.ok(Math.abs(SPRITE_OVER_COLLISION - 4 / 3) < 1e-9, 'sprite/collision ratio is 4/3');
 const targetW = tile * 2 * radius * SPRITE_OVER_COLLISION;
 assert.ok(Math.abs(base.scale.x * TEXW - targetW) < 1e-9, 'base width == collision diameter × 4/3, exactly');
