@@ -4062,21 +4062,40 @@ function scheduleAutosave() {
   wipDirty = true;
   setWipStatus('● unsaved…', 'dirty');
 }
+// THE STORE THAT HOLDS THE CARVING, AND THE LAST SAVE PATH THAT LIED. It returned void on three
+// different outcomes — skipped, nothing-to-save, wrote — and its catch swallowed the exception behind a
+// muted "⚠ save failed" label, discarding the reason. Callers could not tell success from failure, so
+// "Save geometry" printed "card created" whether the geometry had been written or not.
+// Now: every outcome is a result object, and a real failure goes through saveFailed like every other save.
 async function doAutosave() {
-  if (bulkLoad || loadingUnit) { return; }                // in-flight load owns the slot — don't write over it
+  if (bulkLoad || loadingUnit) return { ok: false, kind: 'SKIPPED', detail: 'a load is in flight' };
   clearTimeout(autosaveTimer);
+  const decorId = editingDecor;                            // editing a DECOR → isolate the WIP to the decor: namespace
+  let p;
   try {
-    const decorId = editingDecor;                          // editing a DECOR → isolate the WIP to the decor: namespace
-    const p = snapshotProject(decorId || activeUnitId);    // key off the loaded unit/decor, not the mutable id box
-    if (!projectHasContent(p)) { setWipStatus('— nothing to save', 'muted'); return; }   // don't clobber a real WIP with an empty snapshot
+    p = snapshotProject(decorId || activeUnitId);          // key off the loaded unit/decor, not the mutable id box
+  } catch (e) {
+    wipDirty = true;
+    return saveFailed('SNAPSHOT FAILED', `Could not capture "${decorId || activeUnitId}" — ${(e && e.message) || e}`);
+  }
+  // NOT an error, and NOT a save: a distinct outcome, so a caller cannot report a write that never happened.
+  if (!projectHasContent(p)) { setWipStatus('— nothing to save', 'muted'); return { ok: false, kind: 'EMPTY', id: p.id }; }
+  try {
     if (decorId) { await idb.put('decor:' + decorId, p); localStorage.setItem('bulwark:sf:lastDecor', decorId); }
     else { await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id); }
-    const t = new Date().toLocaleTimeString();
-    $('projState').textContent = `Autosaved ${decorId ? 'decor ' : ''}"${p.id}" · ${t}`;
-    wipDirty = false;
-    if (!wipIds.has(p.id)) { wipIds.add(p.id); renderRoster(); }   // first save of a unit → its card appears now, not on the next reload
-    setWipStatus(`✓ saved ${t}`, 'saved');
-  } catch (e) { wipDirty = true; setWipStatus('⚠ save failed', 'dirty'); }
+  } catch (e) {
+    wipDirty = true;                                       // still unsaved — the next trigger must try again
+    setWipStatus('⚠ save failed', 'dirty');
+    return saveFailed('AUTOSAVE FAILED', `Could not write ${decorId ? 'decor:' + decorId : 'proj:' + p.id}`
+      + ` to IndexedDB — ${(e && e.name) || ''} ${(e && e.message) || e}. Your work is still in the editor;`
+      + ` fix the cause and save again before switching units.`);
+  }
+  const t = new Date().toLocaleTimeString();
+  $('projState').textContent = `Autosaved ${decorId ? 'decor ' : ''}"${p.id}" · ${t}`;
+  wipDirty = false;
+  if (!wipIds.has(p.id)) { wipIds.add(p.id); renderRoster(); }   // first save of a unit → its card appears now, not on the next reload
+  setWipStatus(`✓ saved ${t}`, 'saved');
+  return { ok: true, id: p.id, decor: !!decorId };
 }
 if ($('wipSaveNow')) $('wipSaveNow').onclick = () => doAutosave();
 document.addEventListener('input', scheduleAutosave, true);
@@ -4441,7 +4460,15 @@ $('svGeom').onclick = async () => {
   if (!id) return saveFailed('NO ID', 'Give the unit an id before saving.');
   $('uid').value = id; activeUnitId = id;
   try {
-    await doAutosave();                                           // proj:<id> — voxels, slices, cutouts
+    // REPORT WHAT ACTUALLY HAPPENED. This awaited the autosave and then claimed "Card created" regardless
+    // of the outcome — descriptor written, geometry not.
+    const r = await doAutosave();                                 // proj:<id> — voxels, slices, cutouts
+    if (!r || !r.ok) {
+      if (r && r.kind === 'EMPTY') return saveFailed('NOTHING TO SAVE',
+        `"${id}" has no geometry, slices or imported model yet, so there is nothing to write. Load art or`
+        + ` carve something first — no card was created.`);
+      return r;                                                   // AUTOSAVE FAILED / SNAPSHOT FAILED already shouted
+    }
     const m = loadManifest(); m.units = m.units || {};
     if (!m.units[id]) m.units[id] = { pack: { id, class: state.cls, footprint: [state.foot, state.foot, state.bodyLayers], geometryOnly: true } };
     localStorage.setItem(MANIFEST_KEY, JSON.stringify(m));
