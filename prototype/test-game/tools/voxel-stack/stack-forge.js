@@ -592,7 +592,10 @@ function carveSig(partId, foot, layers) {
   const xf = (imgXf[partId] || {}), g = geomState[partId] || {}, sp = (a) => (a ? `${a.lo},${a.hi}` : '-');
   let s = `${foot}:${layers}:${carveCuts.top}${carveCuts.side}${carveCuts.front}`;
   s += `|g${g.auto ? 'A' : ''}${sp(g.spanX)}/${sp(g.spanY)}/${sp(g.spanZ)}:${g.bottomFrom || ''}`;
-  for (const v of VIEWS) {
+  // NOT the VIEWS const — that is declared at :2974, and refreshModel() runs at module scope well before
+  // it, so reaching for it here threw "Cannot access 'VIEWS' before initialization" on load. A literal has
+  // no temporal dead zone. If a fifth view is ever added, this list is the one to update with it.
+  for (const v of ['top', 'side', 'front', 'back']) {
     const x = xf[v] || {};
     s += `|${v}${imgs[partId] && imgs[partId][v] ? 1 : 0}`
       + `:${x.sx || 1},${x.sy || 1},${x.ox || 0},${x.oy || 0}`
