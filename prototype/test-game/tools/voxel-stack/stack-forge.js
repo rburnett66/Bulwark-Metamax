@@ -609,6 +609,19 @@ function carveSig(partId, foot, layers) {
   if (partId === 'body' && state.decorProc) s += `|d${state.decorTrunkH},${state.decorTrunkR},${state.decorCanopyR},${state.decorCanopyBase}`;
   return s;
 }
+// THE ONLY function that writes colour. Every tool goes through it, so 'who changed this voxel's colour'
+// has one answer. It writes the model — m.vcol — and marks the voxel PAINTed so the wall-art pass leaves
+// it alone. Returns false when there is no model or the voxel is empty; a colour on empty space is a lie.
+function setVox(part, k, rgb) {
+  const m = carveCache[part] && carveCache[part].m;
+  if (!m || !m.vcol || !m.PAINT) return false;
+  const V = liveVOL(part);
+  if (V && !V[k]) return false;                                   // never colour a voxel that is not there
+  m.vcol[k * 3] = rgb[0]; m.vcol[k * 3 + 1] = rgb[1]; m.vcol[k * 3 + 2] = rgb[2];
+  m.PAINT[k] = 1;
+  return true;
+}
+const livePAINT = (part) => { const h = carveCache[part]; return h && h.m ? h.m.PAINT : null; };
 function buildModelRaw(partId, foot, layers) {
   const hit = carveCache[partId], sig = carveSig(partId, foot, layers);
   if (hit && hit.foot === foot && hit.layers === layers && hit.sig === sig) return hit.m;
@@ -616,16 +629,21 @@ function buildModelRaw(partId, foot, layers) {
   carveCache[partId] = { foot, layers, m, sig };
   return m;
 }
+// PAINT: one byte per voxel beside VOL and vcol. 1 = the artist chose this colour and it is
+// AUTHORITATIVE; 0 = carve-derived and re-derivable. Without it, 'make paint write vcol' regresses to
+// nothing, because wallCol wins over vcol unconditionally on every non-top face — the flag is what tells
+// the renderer to leave a painted voxel alone. A recarve rebuilds vcol from the art and then re-lays the
+// PAINTed voxels on top, exactly as restoreVol already does for geometry.
 function carveRaw(partId, foot, layers) {
   const v = buildVolume(partId, foot, layers), N = foot * foot;
-  if (v.vcol) return { vcol: v.vcol, filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg, VOL: v.VOL };  // .vox → already voxels
+  if (v.vcol) return { vcol: v.vcol, PAINT: new Uint8Array(layers * N), filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg, VOL: v.VOL };  // .vox → already voxels
   const cd = v.cd, filled = v.filled, vcol = new Uint8Array(layers * N * 3);
   for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     const i = y * foot + x, p = i * 4; if (cd[p + 3] <= INK_A) continue;
     const r = cd[p], g = cd[p + 1], b = cd[p + 2];
     for (let z = 0; z < layers; z++) if (filled(x, y, z)) { const c = (z * N + i) * 3; vcol[c] = r; vcol[c + 1] = g; vcol[c + 2] = b; }
   }
-  return { vcol, filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg, VOL: v.VOL };
+  return { vcol, PAINT: new Uint8Array(layers * N), filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg, VOL: v.VOL };
 }
 // layer the voxEdit overlay onto a raw model (clone vcol so buildVolume's arrays are never mutated).
 // THE CARVE IS THE MODEL. voxEdit is OFF and stays off — nothing is layered on top of the carve.
@@ -752,7 +770,10 @@ function buildQuantiser(cd, vcol, filled, foot, layers, n, views) {
 // n: 0 = top, 1 = +x, 2 = −x, 3 = +y, 4 = −y (grid space, y = image-down).
 function buildFaces(partId, foot, layers) {
   const { filled, vcol, views: V } = buildModel(partId, foot, layers), N = foot * foot; // unified voxel model
-  const ed = voxEdit[partId];                                                            // explicit paints override wall art
+  // The painted flag comes from the MODEL now. It used to be read from voxEdit while the COLOUR was read
+  // from vcol — two different stores — so the flag fired and the colour did not: painting a voxel red
+  // suppressed its wall art and then fell back to the flat column colour. Measured, in 3D and in the bake.
+  const PAINT = (m && m.PAINT) || null;
   const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, V);   // palette cleanup (incl. wall art)
   // wall colour comes from the elevation view that DEPICTS that wall: side view → ±y walls (far side
   // mirrored), front view → +x wall, back view → −x wall (mirrored front when no back was drawn).
@@ -781,7 +802,7 @@ function buildFaces(partId, foot, layers) {
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     if (!filled(x, y, z)) continue;
     const c = (z * N + y * foot + x) * 3;
-    const painted = ed && Array.isArray(ed.get(c / 3));   // a voxel the artist painted in Grid View: its colour is authoritative
+    const painted = !!(PAINT && PAINT[c / 3]);            // artist colour is authoritative — skip the wall-art pass, keep vcol
     const add = (n) => {
       const w = (n === 0 || painted) ? null : wallCol(x, y, z, n);   // painted → use the voxel colour so in-game matches the grid
       let r = w ? w[0] : vcol[c], g = w ? w[1] : vcol[c + 1], b = w ? w[2] : vcol[c + 2];
@@ -1586,7 +1607,7 @@ function renderGridView() {
     return g.m[i] ? [g.c[i * 3], g.c[i * 3 + 1], g.c[i * 3 + 2]] : null;
   };
   const rawCol = (x, y, z) => {
-    const e = ed.get(z * N + y * foot + x); if (Array.isArray(e)) return e;
+    // colour comes from the model; the overlay it used to consult is no longer written
     if (V) {
       let w = null; const zz = z - (V.z0 || 0);                                     // masks are Hv tall from z0
       if (gridView === 'side') w = pickWall(V.side, x - V.ox, zz, false);           // ±y wall ← side art
@@ -1646,9 +1667,10 @@ function renderGridView() {
 
   // palette-correct colour: exactly what the 3D render bakes — raw voxel → paletteN reduction → tuner.
   // quant reads an overlay-aware colour buffer so painted voxels join the palette (cheap copy, no re-carve).
-  let qvcol = base.vcol;
-  if (ed.size) { qvcol = base.vcol.slice(); for (const [k, val] of ed) if (val !== 'del') { const c = k * 3; qvcol[c] = val[0]; qvcol[c + 1] = val[1]; qvcol[c + 2] = val[2]; } }
-  const quant = buildQuantiser(null, qvcol, filled, foot, layers, state.paletteN, V);
+  // ONE quantiser input. This used to merge the voxEdit overlay into a copy of vcol while buildFaces
+  // quantised raw vcol — different histograms, so the median cut moved and the grid and the 3D view
+  // binned even UNPAINTED voxels differently. Measured: 7 of 7 unpainted voxels disagreed at paletteN 3.
+  const quant = buildQuantiser(null, base.vcol, filled, foot, layers, state.paletteN, V);
   const colAt = (x, y, z) => {
     let [r, g, b] = rawCol(x, y, z);
     if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
@@ -2403,7 +2425,12 @@ function pushVol(part) {
   // Capture BOTH stores. Geometry lives in VOL and colour still lives in voxEdit until setVox/PAINT land
   // (AAC), so a snapshot of VOL alone would make every colour edit silently un-undoable the moment the
   // second stack was retired. One entry, both stores, one Ctrl+Z.
-  volHistory.push({ part, snap: V.slice(), ed: snapVoxEdit() });
+  // COLOUR IS IN THE SNAPSHOT. The moment a tool writes vcol via setVox, a VOL-only entry stops capturing
+  // it and paint becomes un-undoable — a regression introduced by the colour foundation and fixed only
+  // here, which is why the two land together.
+  const vc = carveCache[part] && carveCache[part].m, P = livePAINT(part);
+  volHistory.push({ part, snap: V.slice(), ed: snapVoxEdit(),
+    vcol: vc && vc.vcol ? vc.vcol.slice() : null, paint: P ? P.slice() : null });
   if (volHistory.length > 60) volHistory.shift();
 }
 // ONE HISTORY, AND THE KEYS ARE INVERSES. Undo used to pop volHistory while REDO drove a second, separate
@@ -2413,7 +2440,11 @@ function pushVol(part) {
 const volRedo = [];
 function volApply(h) {
   const V = liveVOL(h.part); if (!V) return null;
-  const cur = { part: h.part, snap: V.slice(), ed: snapVoxEdit() };   // what we are about to overwrite
+  const mm = carveCache[h.part] && carveCache[h.part].m, PP = livePAINT(h.part);
+  const cur = { part: h.part, snap: V.slice(), ed: snapVoxEdit(),
+    vcol: mm && mm.vcol ? mm.vcol.slice() : null, paint: PP ? PP.slice() : null };   // what we are about to overwrite
+  if (h.vcol && mm && mm.vcol) mm.vcol.set(h.vcol);
+  if (h.paint && PP) PP.set(h.paint);
   V.set(h.snap);
   if (h.ed) for (const part of ['body', 'turret']) {                  // colour half, until AAC retires it
     voxEdit[part].clear();
@@ -2496,7 +2527,7 @@ function mirrorWorld(axis, srcSecond) {
     if (m.filled(sx, sy, sz)) {
       const cc = (sz * N + sy * foot + sx) * 3;
       if (V) { V[k] = 1; if (vc) { vc[k * 3] = m.vcol[cc]; vc[k * 3 + 1] = m.vcol[cc + 1]; vc[k * 3 + 2] = m.vcol[cc + 2]; } }
-      ed.set(k, [m.vcol[cc], m.vcol[cc + 1], m.vcol[cc + 2]]);
+      setVox(part, k, [m.vcol[cc], m.vcol[cc + 1], m.vcol[cc + 2]]);
       n++;
     } else if (V && V[k]) { V[k] = 0; n++; }
   }
@@ -2542,7 +2573,7 @@ function fillSelection() {
   for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy), k = z * N + y * g.foot + x; if (gridSelVox.set.has(k) && gridFilledAt(g, x, y, z)) { pending.push(k); n++; } }
   if (!n) return false;
   pushVol(gridPart());
-  for (const k of pending) ed.set(k, rgb);
+  for (const k of pending) setVox(part, k, rgb);
   gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); return true;
 }
 if ($('gridFill')) $('gridFill').onclick = () => fillSelection();
@@ -2630,7 +2661,7 @@ function reprojectSurface() {
       const c = k * 3; pend.push([k, snap(vcol[c], vcol[c + 1], vcol[c + 2])]);
     }
     if (!pend.length) { alert('Re-project: no surface' + (useSelT ? ' in the selection.' : '.')); return false; }
-    pushVol(gridPart()); for (const [k, col] of pend) ed.set(k, col);
+    pushVol(gridPart()); for (const [k, col] of pend) setVox(gridPart(), k, col);
     gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); return true;
   }
   const V = gridModel && gridModel.views;
@@ -2678,7 +2709,7 @@ function reprojectSurface() {
   }
   if (!pending.length) { alert('Re-project: no colours sampled from the image.'); return false; }
   pushVol(gridPart());
-  for (const [k, col] of pending) ed.set(k, col);
+  for (const [k, col] of pending) setVox(gridPart(), k, col);
   gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
   return true;
 }
@@ -2732,7 +2763,9 @@ document.addEventListener('keydown', (e) => {
     }
     // paint: RECOLOUR a filled voxel, or (on a real layer) add one where empty. Layer 0 = surface → recolour
     // the facing voxel ONLY, never spawn a new voxel on an empty column.
-    else { if (g.slice === 0 && !curFilled) return false; ed.set(k, gridPaintRGB()); }
+    else { if (g.slice === 0 && !curFilled) return false;
+      if (!strokeVol) { pushVol(g.part); strokeVol = true; }   // ONE undo entry per stroke
+      setVox(g.part, k, gridPaintRGB()); }
     renderGridView();                                                // live repaint (overlay is layered on the cached carve)
     return true;
   };
@@ -2757,7 +2790,7 @@ document.addEventListener('keydown', (e) => {
     if (!V) return false;
     V[k] = 1;
     if (m && m.vcol) { m.vcol[k * 3] = rgb[0]; m.vcol[k * 3 + 1] = rgb[1]; m.vcol[k * 3 + 2] = rgb[2]; }
-    ed.set(k, rgb.slice());                                          // colour overlay stays until setVox/PAINT (AAC)
+    setVox(g.part, k, rgb.slice());                                  // the spawned voxel owns its colour
     return true;
   };
   const commitAddBox = () => {
@@ -3507,7 +3540,7 @@ function remapModelToWorking() {
       const c = (z * N + y * foot + x) * 3;
       let [r, g, b] = quant(m.vcol[c], m.vcol[c + 1], m.vcol[c + 2]);
       const t = palMap.get((r << 16) | (g << 8) | b); if (t) [r, g, b] = t;   // apply the colour tune too
-      ed.set(z * N + y * foot + x, [r, g, b]); touched++;
+      if (setVox(part, z * N + y * foot + x, [r, g, b])) touched++;
     }
   }
   gridModel = null; refreshModel(); scheduleAutosave();
