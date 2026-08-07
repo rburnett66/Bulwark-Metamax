@@ -111,7 +111,10 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [440, 704, 1056], dps: [45, 69.75, 103.5],
-    range: 3.75, speed: 0.736, vision: 4.5,
+    range: 3.75, speed: 0.736,
+    // seeded from a measured body extent; authoritative here now, not in the pack
+    radius: 0.572,
+    vision: 4.5,
     power: 103.2, cost: [309.6, 774, 1548]
   }),
   'GND-Artillery': Object.freeze({
@@ -120,7 +123,10 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [165, 264, 396], dps: [60, 93, 138],
-    range: 10, speed: 0.368, vision: 4,
+    range: 10, speed: 0.368,
+    // coarse by design — seeded from the old art-derived estimate; tune here, not in the bake
+    radius: 0.5,
+    vision: 4,
     power: 101.1, cost: [303.3, 758.25, 1516.5]
   }),
   'GND-HeavyTanks': Object.freeze({
@@ -129,7 +135,10 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [605, 968, 1452], dps: [37.5, 58.125, 86.25],
-    range: 3, speed: 0.368, vision: 4.3,
+    range: 3, speed: 0.368,
+    // coarse by design — seeded from the old art-derived estimate; tune here, not in the bake
+    radius: 0.4,
+    vision: 4.3,
     power: 105.1, cost: [315.3, 788.25, 1576.5]
   }),
   'GND-Copters': Object.freeze({
@@ -690,7 +699,10 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
     hp: [205, 328, 492], dps: [14.7, 22.785, 33.81],
-    range: 1.1875, speed: 3.36, vision: 6,
+    range: 1.1875, speed: 3.36,
+    // coarse by design — seeded from the old art-derived estimate; tune here, not in the bake
+    radius: 0.188,
+    vision: 6,
     power: 97.05, cost: [291.15, 727.875, 1455.75]
   }),
   'GRN-Tanks': Object.freeze({
@@ -699,7 +711,10 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
     hp: [328, 524.8, 787.2], dps: [44.1, 68.355, 101.43],
-    range: 3.5625, speed: 0.84, vision: 4.5,
+    range: 3.5625, speed: 0.84,
+    // coarse by design — seeded from the old art-derived estimate; tune here, not in the bake
+    radius: 0.388,
+    vision: 4.5,
     power: 91.95, cost: [275.85, 689.625, 1379.25]
   }),
   'GRN-Artillery': Object.freeze({

@@ -191,20 +191,13 @@ export function boot(mountEl, seed) {
     if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
     {
       const sv = loadSave();
-      // collision radii from the loaded voxel packs so a unit's footprint matches the tank on screen
-      // (option 2: ~1.2× the rendered half-width). Derived from scale.tiles → works on existing packs.
-      const voxelRadii = {};
-      const va = renderer && renderer.voxelArt;
-      if (va && va.units) for (const id of Object.keys(va.units)) {
-        const p = va.units[id].pack || {};
-        const tiles = (p.scale && p.scale.tiles) || (((p.footprint && p.footprint[0]) || 32) / 32);
-        // Prefer the pack's baked collision (measured from the real body extent in Stack Forge). Otherwise
-        // ESTIMATE from the footprint — the drawn body is ~⅔ of the padded footprint, so scale down so
-        // collision isn't oversized. Re-bake a unit to replace this estimate with the exact value.
-        voxelRadii[id] = (p.collision != null) ? p.collision : tiles * VOXEL_UNIT_SCALE * 0.4;
-      }
+      // COLLISION RADII ARE NOT DERIVED FROM ART. They used to be built here from the loaded voxel packs
+      // (baked `collision`, else an estimate from the footprint) and handed to the sim as `voxelRadii`.
+      // That made a browser tool the author of a simulation input, and serializeLog never carried the
+      // value, so replays rebuilt with different radii and diverged. Radius now lives on the unit def in
+      // src/data/tables.js and is read by entities.js — sim data, owned by the sim, carried by the log.
       const simInit = { waves: currentWaves, map: currentMap, carry: pendingCarry,
-        harvesterLevel: sv.harvesterLevel || 1, voxelRadii,
+        harvesterLevel: sv.harvesterLevel || 1,
         // classic board AND forge maps stay all-open — the campaign tier-unlock shop (Amendment B2)
         // has no UI yet, so gating forge playtests made upgrades silently impossible (owner 2026-07-16)
         structTiers: currentMapId && !(currentMap && currentMap.fromForge) ? sv.structTiers : null,

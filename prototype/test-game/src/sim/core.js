@@ -308,7 +308,6 @@ export function createSim(seed, opts) {
     structTiers: options.structTiers || { cannon: BONUS_NERFS.startTierCap, flak: BONUS_NERFS.startTierCap, wall: BONUS_NERFS.startTierCap },
     // per-unit collision radii derived from the voxel pack footprint (unitId → half-width tiles). Lets a
     // unit's collision match the tank you SEE instead of the shape-table default. null → unitRadius(def).
-    voxelRadii: options.voxelRadii || null,
     _resultEmitted: false
   };
 

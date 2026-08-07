@@ -70,9 +70,19 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
     dps: dps,
     range: def.range,
     speed: def.speed,
-    // physical footprint (cell units) — units can't overlap. Prefer the voxel-pack-derived radius (matches
-    // the tank on screen); fall back to the shape table for non-voxel / headless units.
-    radius: (state.voxelRadii && state.voxelRadii[def.artKey || unitId]) || unitRadius(def),
+    // Physical footprint in cell units — units cannot overlap, and this drives separation, pathfinding,
+    // spawn spacing and contact. It is SIM DATA and it is read from the unit def.
+    //
+    // It used to be read from state.voxelRadii, which main.js built from the loaded VOXEL PACKS: the
+    // pack's baked `collision` if present, otherwise an ESTIMATE of footprint x 0.5 x 0.4. That made an
+    // art tool the author of a simulation input — a cosmetic re-bake in a browser changed separation and
+    // pathing — and four of the five units with packs were running the estimate, diverging from this
+    // table by -55% to +24%. Worse, serializeLog never carried voxelRadii, so a replay rebuilt with
+    // DIFFERENT radii than the battle it was replaying and silently diverged.
+    // Values were seeded from what that path produced, so ownership moved without balance moving.
+    // Collision is intentionally COARSE at this stage (owner) — art is sized to match the radius, not
+    // the other way round, so these are tuned in tables.js and never inferred from a pack again.
+    radius: (def.radius != null) ? def.radius : unitRadius(def),
     vision: def.vision,
     damageType: def.damageType,
     armorClass: def.armorClass,
