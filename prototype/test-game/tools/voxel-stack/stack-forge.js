@@ -533,12 +533,13 @@ function buildVolume(partId, foot, layers) {
 // Unified voxel model for every consumer: always per-voxel colour (vcol), whether the part came from a
 // .vox (already per-voxel) or the photo carve (per-column cd, materialised here). So there's ONE model —
 // a stack of coloured cubes — and no cd/vcol branching downstream. Returns { vcol, filled, dbg }.
-// per-part manual voxel edits from the grid slice editor: key = z*N + y*foot + x →
-//   'del'   the voxel is force-removed (even if the source carved it)
-//   [r,g,b] the voxel is force-added/painted with this raw colour
-// Applied at the tail of buildModel so the orbit preview, side chart, bake, in-game inset, Tier C
-// embed and .vox export all see the same edited model (owner 2026-07-17).
-const voxEdit = { body: new Map(), turret: new Map() };
+//
+// `voxEdit` USED TO LIVE HERE and is GONE (2026-08-07). It was a per-part Map of key → 'del' | [r,g,b]
+// that nothing read: buildModel stopped layering it on when VOL became the model, so its geometry half
+// was already dead, and its colour half was superseded by setVox writing m.vcol + m.PAINT directly.
+// It kept ONE live writer to the very end — the Remap → Bake button — which is why that button reported
+// "baked N voxels" and changed nothing at all. There is no store here now; VOL is the geometry, vcol is
+// the colour and PAINT says who chose it. If you are tempted to add a fourth, add its reader first.
 // GEOMETRY reconciliation state (owner 2026-07-18): per-part placement of the source views on the
 // target grid, as three shared world-axis spans. `auto:true` = follow autoSpans (legacy); the geometry
 // step flips it to false and stores explicit spanX/spanY/spanZ {lo,hi}. `bottomFrom` = where the −z
@@ -635,7 +636,6 @@ function setVox(part, k, rgb) {
   m.PAINT[k] = 1;
   return true;
 }
-const livePAINT = (part) => { const h = carveCache[part]; return h && h.m ? h.m.PAINT : null; };
 function buildModelRaw(partId, foot, layers) {
   const hit = carveCache[partId], sig = carveSig(partId, foot, layers);
   if (hit && hit.foot === foot && hit.layers === layers && hit.sig === sig) return hit.m;
@@ -659,9 +659,9 @@ function carveRaw(partId, foot, layers) {
   }
   return { vcol, PAINT: new Uint8Array(layers * N), filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg, VOL: v.VOL };
 }
-// layer the voxEdit overlay onto a raw model (clone vcol so buildVolume's arrays are never mutated).
-// THE CARVE IS THE MODEL. voxEdit is OFF and stays off — nothing is layered on top of the carve.
-// Deleting geometry must act on the carved volume itself, not through an overlay.
+// THE CARVE IS THE MODEL. Nothing is layered on top of it: every edit tool writes VOL / vcol / PAINT in
+// place, so buildModel is buildModelRaw. Kept as a name because ~20 call sites read as "the model", and
+// collapsing them would churn a lot of unrelated code for no behaviour change.
 function buildModel(partId, foot, layers) {
   return buildModelRaw(partId, foot, layers);
 }
@@ -1408,6 +1408,25 @@ function resetPalette() {
   if ($('pal')) { $('pal').value = 0; if ($('palV')) $('palV').textContent = 'full'; }
   if ($('palN')) { $('palN').value = 0; if ($('palNV')) $('palNV').textContent = 'full'; }
 }
+// THE PAINT COLOUR, in one place. Brush, Fill, Add-extrude and the palette window all read this; it used
+// to be parsed from the hex input inline at four call sites, one of which had already drifted.
+function paintRGB() {
+  const h = ($('gridPaintCol') && $('gridPaintCol').value) || '#8fa7bd';
+  return [parseInt(h.slice(1, 3), 16) || 0, parseInt(h.slice(3, 5), 16) || 0, parseInt(h.slice(5, 7), 16) || 0];
+}
+// …and the one place that SETS it, so the big swatch button beside it always shows the truth.
+function setPaintRGB(rgb) {
+  const el = $('gridPaintCol'); if (!el) return;
+  el.value = hexOf(rgb);
+  syncPaintSwatch();
+}
+function syncPaintSwatch() {
+  const sw = $('paintSwatch'); if (!sw) return;
+  const hex = ($('gridPaintCol') && $('gridPaintCol').value) || '#8fa7bd';
+  sw.style.background = hex;
+  sw.title = `Paint colour ${hex} — click to open the picker`;
+  const lab = $('paintSwatchHex'); if (lab) lab.textContent = hex.toUpperCase();
+}
 let bulkLoad = false;                                                         // true while restoring a project
 let loadingUnit = false;                                                      // true from selectUnit() until its async load resolves — blocks autosave clobbering the new slot
 // the STABLE key the WIP autosaves under — set only by an explicit load/save/new, NOT by the free-text
@@ -1617,7 +1636,7 @@ function renderGridView() {
   const ctx = cv.getContext('2d');
   const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part), N = foot * foot;
   selCheckDims(part, foot, layers);   // drop a selection whose absolute keys no longer address this grid
-  // cache the RAW (pre-edit) carve; voxEdit is layered on cheaply below so live painting never re-carves.
+  // cache the carve; the edit tools write it in place, so live painting never re-carves.
   if (!gridModel || gridModel.part !== part || gridModel.foot !== foot || gridModel.layers !== layers) {
     const m = buildModelRaw(part, foot, layers);
     gridModel = { part, foot, layers, vcol: m.vcol, filled: m.filled, views: m.views, sp: m.sp, palette: modelPalette(m, foot, layers), palSig: state.paletteN + ':' + palEpoch, bbox: modelBBox(m.filled, foot, layers) };
@@ -1625,7 +1644,7 @@ function renderGridView() {
     const sig = state.paletteN + ':' + palEpoch;                     // reduce/tune changed → refresh the paint strip only
     if (gridModel.palSig !== sig) { gridModel.palette = modelPalette(gridModel, foot, layers); gridModel.palSig = sig; }
   }
-  const base = gridModel, ed = voxEdit[part], V = base.views;
+  const base = gridModel, V = base.views;
   updateDims(part, foot, layers, base);   // x/y/z readout in the grid header + primary view; flags clamped axes
   // ONE MODEL: base.filled is the carve, read directly.
   // When the overlay was disabled in buildModel, this copy was missed, so the GRID hid voxels that the 3D
@@ -1690,7 +1709,7 @@ function renderGridView() {
         const b = document.createElement('button');
         b.style.cssText = 'width:18px;height:18px;padding:0;margin:0;border:1px solid #2a3a4a;border-radius:3px;cursor:pointer;background:' + cssOf(c);
         b.title = hexOf(c);
-        b.onclick = () => { const gp = $('gridPaintCol'); if (gp) gp.value = hexOf(c); };
+        b.onclick = () => setPaintRGB(c);   // one setter, so the big swatch follows the strip
         gpal.appendChild(b);
       }
     }
@@ -2416,8 +2435,8 @@ $('gridCanvas').addEventListener('wheel', (e) => {
 }, { passive: false });
 // ── SLICE EDITOR (owner 2026-07-17): on the Top view, click/drag to add or erase voxels in the
 // current z-layer. Erase removes even source-carved voxels; paint adds using that column's own
-// colour (grey for a fresh column — recolour later in the palette window). Edits land in voxEdit and
-// flow through buildModel, so the orbit preview, side chart, bake and exports all follow. Full model
+// colour (grey for a fresh column — recolour later in the palette window). Edits land in VOL / vcol /
+// PAINT, so the orbit preview, side chart, bake and exports all follow. Full model
 // rebuild is deferred to pointer-up so painting stays responsive; the grid itself repaints live.
 if ($('gridToolSeg')) $('gridToolSeg').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
@@ -2465,38 +2484,51 @@ function liveVOL(part) {
 // Has this part's VOL been hand-edited since its last carve? Set here because pushVol runs before every
 // edit; cleared by recarve, which is the one operation that legitimately throws hand work away.
 const volDirty = { body: false, turret: false };
-function pushVol(part) {
-  const V = liveVOL(part); if (!V) return;
-  volDirty[part] = true;
+// ONE ENTRY IS A LIST OF PART SNAPSHOTS, and it captures ALL THREE arrays a part owns: VOL (geometry),
+// vcol (colour) and PAINT (who chose that colour). A VOL-only entry made every paint stroke silently
+// un-undoable the moment setVox started writing vcol, which is why colour is in here.
+//
+// WHY A LIST. Entries used to be a single { part, ... }, so a whole-unit operation — the palette remap
+// writes body AND turret — pushed one snapshot of the active part and mutated both. Ctrl+Z then restored
+// half the model and left the other half remapped, with no way back. An operation declares every part it
+// is about to touch and gets exactly ONE entry covering all of them.
+function volSnapPart(part) {
+  const V = liveVOL(part); if (!V) return null;
+  const m = carveCache[part] && carveCache[part].m;
+  return { part, snap: V.slice(),
+    vcol: m && m.vcol ? m.vcol.slice() : null, paint: m && m.PAINT ? m.PAINT.slice() : null };
+}
+// SNAPSHOT THE ARRAYS YOU ARE ABOUT TO MUTATE. buildModel can replace carveCache[part].m via the sig
+// path, so anything that builds must build FIRST and push SECOND — otherwise the snapshot is of a
+// different array than the one the edit then writes, and the undo restores nothing (the mirrorWorld bug).
+function pushVolParts(parts) {
+  const entry = [];
+  for (const p of parts) { const s = volSnapPart(p); if (s) { entry.push(s); volDirty[p] = true; } }
+  if (!entry.length) return;
   volRedo.length = 0;                                  // a fresh edit forks the timeline — nothing left to redo
-  // Capture BOTH stores. Geometry lives in VOL and colour still lives in voxEdit until setVox/PAINT land
-  // (AAC), so a snapshot of VOL alone would make every colour edit silently un-undoable the moment the
-  // second stack was retired. One entry, both stores, one Ctrl+Z.
-  // COLOUR IS IN THE SNAPSHOT. The moment a tool writes vcol via setVox, a VOL-only entry stops capturing
-  // it and paint becomes un-undoable — a regression introduced by the colour foundation and fixed only
-  // here, which is why the two land together.
-  const vc = carveCache[part] && carveCache[part].m, P = livePAINT(part);
-  volHistory.push({ part, snap: V.slice(), ed: snapVoxEdit(),
-    vcol: vc && vc.vcol ? vc.vcol.slice() : null, paint: P ? P.slice() : null });
+  volHistory.push(entry);
   if (volHistory.length > 60) volHistory.shift();
 }
+function pushVol(part) { pushVolParts([part]); }
+// every part a whole-unit operation (palette remap, bake) rewrites — one Ctrl+Z puts the unit back
+function pushVolAll() { pushVolParts(['body', 'turret']); }
 // ONE HISTORY, AND THE KEYS ARE INVERSES. Undo used to pop volHistory while REDO drove a second, separate
 // stack of voxEdit snapshots — so Ctrl+Z and Ctrl+Y were not inverses of each other, and the toolbar
 // button undid a third thing while its tooltip claimed Ctrl+Z. Undo now captures the state it is about to
 // replace, so redo has something true to restore.
 const volRedo = [];
 function volApply(h) {
-  const V = liveVOL(h.part); if (!V) return null;
-  const mm = carveCache[h.part] && carveCache[h.part].m, PP = livePAINT(h.part);
-  const cur = { part: h.part, snap: V.slice(), ed: snapVoxEdit(),
-    vcol: mm && mm.vcol ? mm.vcol.slice() : null, paint: PP ? PP.slice() : null };   // what we are about to overwrite
-  if (h.vcol && mm && mm.vcol) mm.vcol.set(h.vcol);
-  if (h.paint && PP) PP.set(h.paint);
-  V.set(h.snap);
-  if (h.ed) for (const part of ['body', 'turret']) {                  // colour half, until AAC retires it
-    voxEdit[part].clear();
-    for (const [k, v] of h.ed[part]) voxEdit[part].set(k, v);
+  const cur = [];                                                    // what we are about to overwrite
+  for (const e of h) {
+    const V = liveVOL(e.part); if (!V) continue;
+    const m = carveCache[e.part] && carveCache[e.part].m;
+    if (V.length !== e.snap.length) continue;                        // dims changed under the history — skip rather than mis-index
+    cur.push(volSnapPart(e.part));
+    if (e.vcol && m && m.vcol && m.vcol.length === e.vcol.length) m.vcol.set(e.vcol);
+    if (e.paint && m && m.PAINT && m.PAINT.length === e.paint.length) m.PAINT.set(e.paint);
+    V.set(e.snap);
   }
+  if (!cur.length) return null;
   gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
   return cur;
 }
@@ -2541,8 +2573,18 @@ function deleteCurrentLayer() {
   return true;
 }
 if ($('gridDeleteBtn')) $('gridDeleteBtn').onclick = () => doDelete();   // identical to DEL
+// RESET EDITS = back to the carve, for real. It used to clear voxEdit — a store nothing read — so the
+// button cleared nothing while the Palette window's blurb promised "Reset edits restores the source".
+// Dropping this part's carve cache is what actually restores it: buildModelRaw re-derives VOL, vcol and a
+// zeroed PAINT from the source art on the next build. Snapshot first, so Ctrl+Z brings the work back.
 if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
-  pushVol(gridPart()); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; refreshModel(); scheduleAutosave();
+  const part = gridPart();
+  if (!carveCache[part]) { console.warn('[stack-forge] reset edits: nothing carved yet'); return; }
+  if (!confirm(`Reset the ${part} to its carve?\n\nEvery hand-deleted / added voxel and every painted colour on this part goes back to what the source art carves. Ctrl+Z undoes it.`)) return;
+  pushVol(part);                       // captures VOL + vcol + PAINT before they are thrown away
+  carveCache[part] = null;             // → next buildModelRaw re-carves from the art
+  volDirty[part] = false;
+  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
 };
 if ($('gridGuides')) $('gridGuides').onchange = (e) => { gridGuides = e.target.checked; renderGridView(); };
 if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.checked; voxSig = ''; renderGridView(); };   // voxSig: the markers live in the MAIN view too
@@ -2560,7 +2602,7 @@ function mirrorWorld(axis, srcSecond) {
   // here and again after buildModel — so the first Ctrl+Z appeared to do nothing. Worse, buildModel can
   // replace carveCache[part].m via the sig path, so the earlier snapshot could be of a DIFFERENT array
   // than the V captured below. Build first, then snapshot, then mutate.
-  const m = buildModel(part, foot, layers), ed = voxEdit[part];
+  const m = buildModel(part, foot, layers);
   const V = liveVOL(part), vc = m && m.vcol;
   pushVol(part);
   let n = 0;
@@ -2571,9 +2613,8 @@ function mirrorWorld(axis, srcSecond) {
     if (srcSecond ? (a * 2 <= c2) : (a * 2 >= c2)) continue;   // write only the TARGET half
     const sa = c2 - a, sx = axis === 'x' ? sa : x, sy = axis === 'y' ? sa : y, sz = axis === 'z' ? sa : z;
     const k = z * N + y * foot + x;
-    // GEOMETRY GOES TO VOL. Both branches wrote voxEdit — a store the model does not read — so mirroring
-    // changed nothing at all, in either view. The colour write stays on voxEdit until setVox/PAINT exist
-    // (AAC), because vcol alone is overwritten by wallCol on every non-top face.
+    // GEOMETRY GOES TO VOL, COLOUR GOES THROUGH setVox. Both branches used to write voxEdit — a store the
+    // model does not read — so mirroring changed nothing at all, in either view.
     if (m.filled(sx, sy, sz)) {
       const cc = (sz * N + sy * foot + sx) * 3;
       if (V) { V[k] = 1; if (vc) { vc[k * 3] = m.vcol[cc]; vc[k * 3 + 1] = m.vcol[cc + 1]; vc[k * 3 + 2] = m.vcol[cc + 2]; } }
@@ -2594,9 +2635,6 @@ if ($('gridRedoBtn')) $('gridRedoBtn').onclick = () => volRedoStep();
 if ($('gridSelLayer')) $('gridSelLayer').onclick = () => { const g = gridGeom; if (!g) return; gridSel = { c0: 0, r0: 0, c1: g.cols - 1, r1: g.rows - 1 }; gridSelView = gridView; gridSelVox = buildSelVox(true); renderGridView(); };
 // delete EVERY voxel in the active selection (the surface voxels on Layer 0, or the slice voxels on a real
 // layer). Shared by Delete/Backspace and by pressing Erase while a selection is active.
-// ── UNDO / REDO for grid voxel edits (paint/erase strokes + bulk ops). Snapshots the voxEdit layer. ──
-const snapVoxEdit = () => ({ body: new Map(voxEdit.body), turret: new Map(voxEdit.turret) });
-
 function deleteSelection() {
   const g = gridGeom; if (!g || !gridSelVox || gridSelVox.part !== g.part || !gridSelVox.set.size) return false;
   const V = liveVOL(g.part);
@@ -2617,7 +2655,7 @@ function doDelete() {
 // every facing surface voxel; on a real layer, every filled slice voxel). Never adds voxels.
 function fillSelection() {
   const g = gridGeom; if (!gridSelVox || !g || !g.editable || gridSelVox.part !== g.part) return false;
-  const ed = voxEdit[g.part], N = g.foot * g.foot, rgb = (() => { const h = $('gridPaintCol').value; return [parseInt(h.slice(1, 3), 16) || 0, parseInt(h.slice(3, 5), 16) || 0, parseInt(h.slice(5, 7), 16) || 0]; })();
+  const N = g.foot * g.foot, rgb = paintRGB();
   let n = 0; const pending = [];
   // recolour the SELECTED voxels whose face this facing shows (the surface voxel per cell)
   for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy), k = z * N + y * g.foot + x; if (gridSelVox.set.has(k) && gridFilledAt(g, x, y, z)) { pending.push(k); n++; } }
@@ -2671,7 +2709,7 @@ if ($('gridDiag')) $('gridDiag').onclick = () => gridDiag();
 // separate flip to confirm.
 function reprojectSurface() {
   const g = gridGeom; if (!g || !g.editable) { alert('Re-project: switch to a paint facing (Top / Front / Side / Back).'); return false; }
-  const N = g.foot * g.foot, ed = voxEdit[g.part];
+  const N = g.foot * g.foot;
   const pal = (gridModel && gridModel.palette) || [];
   const snap = (r, gg, b) => { if (!pal.length) return [r, gg, b]; let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - gg) * (p[1] - gg) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } } return pal[bi]; };
   const useSelT = gridSelVox && gridSelVox.part === g.part;
@@ -2789,9 +2827,6 @@ document.addEventListener('keydown', (e) => {
 });
 (() => {
   const cv = $('gridCanvas'); if (!cv) return;
-  // the paint colour: the swatch chosen in the grid tool row (also settable by clicking a swatch in
-  // the Palette window). Explicit colour beats guessing, and it round-trips through the reducer/tuner.
-  const gridPaintRGB = () => { const h = ($('gridPaintCol') && $('gridPaintCol').value) || '#8fa7bd'; return [parseInt(h.slice(1, 3), 16) || 0, parseInt(h.slice(3, 5), 16) || 0, parseInt(h.slice(5, 7), 16) || 0]; };
   let strokeVol = false;   // has THIS stroke already snapshotted VOL? reset on pointerdown
   const editAt = (e, erase) => {
     const g = gridGeom; if (!g || !g.editable) return false;
@@ -2799,11 +2834,11 @@ document.addEventListener('keydown', (e) => {
     const px = (e.clientX - r.left) * (cv.width / r.width), py = (e.clientY - r.top) * (cv.height / r.height);
     const cx = Math.floor((px - g.ox) / g.cell), cy = Math.floor((py - g.oy) / g.cellV);
     if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows) return false;
-    const [x, y, z] = gridTargetVox(g, cx, cy), N = g.foot * g.foot, k = z * N + y * g.foot + x, ed = voxEdit[g.part];
+    const [x, y, z] = gridTargetVox(g, cx, cy), N = g.foot * g.foot, k = z * N + y * g.foot + x;
     // a selection MASKS editing to the SELECTED VOXELS (not a view rect): pick objects once in Layer 0, then
     // paint their front/side/back faces across facings — corner voxels paint from any view — without reselecting.
     if (gridSelVox && gridSelVox.part === g.part && !gridSelVox.set.has(k)) return false;
-    const curFilled = gridFilledAt(g, x, y, z);        // VOL, never the overlay — see below
+    const curFilled = gridFilledAt(g, x, y, z);        // VOL, the model — never an overlay
     if (erase) {
       // ERASE WRITES THE MODEL. It used to write voxEdit 'del', which nothing reads, so nothing
       // disappeared — and because curFilled was read back from that same overlay, the first no-op
@@ -2812,18 +2847,25 @@ document.addEventListener('keydown', (e) => {
       if (!strokeVol) { pushVol(g.part); strokeVol = true; }   // ONE undo entry per stroke, not per voxel
       V[k] = 0; return true;
     }
-    // paint: RECOLOUR a filled voxel, or (on a real layer) add one where empty. Layer 0 = surface → recolour
-    // the facing voxel ONLY, never spawn a new voxel on an empty column.
-    else { if (g.slice === 0 && !curFilled) return false;
-      if (!strokeVol) { pushVol(g.part); strokeVol = true; }   // ONE undo entry per stroke
-      setVox(g.part, k, gridPaintRGB()); }
-    renderGridView();                                                // live repaint (overlay is layered on the cached carve)
+    // BRUSH: recolour a filled voxel, or — on a real layer — spawn one where the cell is empty. Layer 0 is
+    // the surface raycast, so there it only ever recolours the facing voxel; spawning there would put a
+    // voxel at an arbitrary depth in an empty column.
+    else {
+      if (!curFilled) {
+        if (g.slice === 0) return false;
+        const V = liveVOL(g.part); if (!V) return false;
+        if (!strokeVol) { pushVol(g.part); strokeVol = true; }
+        V[k] = 1;                                     // geometry first: setVox refuses to colour empty space,
+      } else if (!strokeVol) { pushVol(g.part); strokeVol = true; }   // which is why the add branch never painted
+      setVox(g.part, k, paintRGB());
+    }
+    renderGridView();                                                // live repaint off the cached carve
     return true;
   };
   // ➕ Add = SURFACE EXTRUDE. Rubber-band a patch of the surface, drag, release → each column in the patch grows
   // one voxel toward the camera (mirror of Delete peeling it), in the current paint colour. On a real Layer slice
   // it just fills that slice's empty cells. Returns true if it added anything.
-  const extrudeAddCell = (g, cx, cy, ed, rgb) => {
+  const extrudeAddCell = (g, cx, cy, rgb) => {
     let x, y, z;
     if (g.slice === 0) {
       let s0 = -1;
@@ -2837,10 +2879,9 @@ document.addEventListener('keydown', (e) => {
     // ADD WRITES THE MODEL. It used to set voxEdit only, so the voxel never appeared anywhere. The colour
     // is seeded into vcol at the same time or the new voxel ships BLACK — the carve fills vcol only where
     // the carve itself filled, and nothing else writes it for a spawned cell.
-    const V = liveVOL(g.part), m = gridModel;
+    const V = liveVOL(g.part);
     if (!V) return false;
-    V[k] = 1;
-    if (m && m.vcol) { m.vcol[k * 3] = rgb[0]; m.vcol[k * 3 + 1] = rgb[1]; m.vcol[k * 3 + 2] = rgb[2]; }
+    V[k] = 1;                                                        // geometry first — setVox refuses to colour empty space
     setVox(g.part, k, rgb.slice());                                  // the spawned voxel owns its colour
     return true;
   };
@@ -2848,9 +2889,9 @@ document.addEventListener('keydown', (e) => {
     const g = gridGeom, b = gridAddBox; if (!g || !b) return;
     const c0 = clamp(Math.min(b.c0, b.c1), 0, g.cols - 1), c1 = clamp(Math.max(b.c0, b.c1), 0, g.cols - 1);
     const r0 = clamp(Math.min(b.r0, b.r1), 0, g.rows - 1), r1 = clamp(Math.max(b.r0, b.r1), 0, g.rows - 1);
-    const ed = voxEdit[g.part], rgb = gridPaintRGB(); let any = false;
+    const rgb = paintRGB(); let any = false;
     if (liveVOL(g.part)) pushVol(g.part);                            // ONE undo entry for the whole patch
-    for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) if (extrudeAddCell(g, cx, cy, ed, rgb)) any = true;
+    for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) if (extrudeAddCell(g, cx, cy, rgb)) any = true;
     if (any) { gridModel = null; refreshModel(); scheduleAutosave(); }
     return any;
   };
@@ -3156,9 +3197,12 @@ function toggleFlip(part, view, axis) {
   // ABSOLUTE coordinates and don't move with it — old edits then linger as duplicated / misplaced voxels
   // (owner 2026-07-20: "view flip → geometry duplication"). Offer to recarve this part (reset its edits) so
   // the grid view stays 100% consistent with the new carve. Back is colour-only → never touches geometry.
-  if (view !== 'back' && voxEdit[part] && voxEdit[part].size &&
-      confirm(`Flip re-carves the ${part}. Its grid-view voxel edits are pinned to the old carve and will show as duplicated voxels.\n\nOK = recarve (clear this part's edits, back to 100% consistent)\nCancel = keep edits (they may not line up)`)) {
-    pushVol(gridPart()); voxEdit[part].clear(); gridModel = null;
+  // The dirty flag is the honest test now. It used to ask `voxEdit[part].size` — a store nothing wrote to
+  // any more — so the warning had stopped firing on the very edits it exists to protect. And it snapshotted
+  // gridPart(), not `part`, so flipping the inactive part's art pushed an undo entry for the wrong one.
+  if (view !== 'back' && volDirty[part] &&
+      confirm(`Flip re-carves the ${part}. Its hand edits (deleted/added voxels, painted colour) are pinned to the OLD carve and will not line up.\n\nOK = recarve this part (discard those edits — Ctrl+Z brings them back)\nCancel = keep them (they may not line up)`)) {
+    pushVol(part); carveCache[part] = null; volDirty[part] = false; gridModel = null;
   }
   renderView(pickFor(part, view));
 }
@@ -3578,12 +3622,17 @@ if ($('palToKept')) $('palToKept').onclick = () => {
 function remapModelToWorking() {
   const n = state.paletteN || palKeep.size;
   if (!n) { $('palState').textContent = 'Consolidate first — set a Palette size or 📌 Keep colours — then remap.'; return; }
-  const kRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
-  pushVol(gridPart());                                                     // remap rewrites every voxel — make it a single undoable step
+  // BUILD BOTH PARTS FIRST, then snapshot, then mutate. buildModel can replace carveCache[part].m, so a
+  // snapshot taken before the build can be of a different array than the one setVox goes on to write —
+  // the same shape that made the mirror's undo a no-op. And it is pushVolAll, not pushVol(gridPart()):
+  // this rewrites body AND turret, so a one-part entry left half the unit un-undoable.
+  const built = ['body', 'turret'].map((part) => ({ part, foot: footOf(part),
+    layers: part === 'body' ? state.bodyLayers : state.turretLayers }))
+    .map((p) => ({ ...p, m: buildModel(p.part, p.foot, p.layers) }));
+  pushVolAll();                                                            // ONE undoable step for the whole remap
   let touched = 0;
-  for (const part of ['body', 'turret']) {
-    const foot = footOf(part), layers = part === 'body' ? state.bodyLayers : state.turretLayers, N = foot * foot;
-    const m = buildModel(part, foot, layers), ed = voxEdit[part];
+  for (const { part, foot, layers, m } of built) {
+    const N = foot * foot;
     const quant = buildQuantiser(null, m.vcol, m.filled, foot, layers, n, m.views);
     if (!quant) continue;
     for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
@@ -4206,7 +4255,6 @@ function snapshotProject(idOverride) {
   return { format: 'stackforge-project', version: 2, id: (idOverride || $('uid').value || 'unit').trim(), vol,
     state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, picks: pickState, images, vox,
     palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop], carveCuts: { ...carveCuts },   // which slices cut — reset to top-only on every load until now
-    voxEdit: { body: [...voxEdit.body], turret: [...voxEdit.turret] },
     geom: { body: { ...geomState.body }, turret: { ...geomState.turret } },
     imgXf: { body: JSON.parse(JSON.stringify(imgXf.body)), turret: JSON.parse(JSON.stringify(imgXf.turret)) } };   // SF2 per-side alignment
 }
@@ -4249,8 +4297,9 @@ async function loadProject(p) {
     palMap.clear(); if (p.palMap) for (const [k, c] of p.palMap) palMap.set(k, c);
     palKeep.clear(); if (p.palKeep) for (const k of p.palKeep) palKeep.add(k);
     palDrop.clear(); if (p.palDrop) for (const k of p.palDrop) palDrop.add(k);
-    voxEdit.body.clear(); voxEdit.turret.clear();
-    if (p.voxEdit) { for (const [k, v] of p.voxEdit.body || []) voxEdit.body.set(k, v); for (const [k, v] of p.voxEdit.turret || []) voxEdit.turret.set(k, v); }
+    // p.voxEdit (v1/v2 projects) is deliberately NOT restored: the store it fed was never read by the
+    // model, so replaying it would restore nothing and cost a Map per part. The colour those projects
+    // meant to carry is in p.vol[part].vcol/.paint, which restoreVol puts back.
     for (const part of ['body', 'turret']) geomState[part] = (p.geom && p.geom[part]) ? { ...p.geom[part] } : { auto: true, bottomFrom: 'top' };  // v1 projects → auto (identical to before)
     for (const part of ['body', 'turret']) imgXf[part] = (p.imgXf && p.imgXf[part]) ? p.imgXf[part] : mkXf();   // SF2 per-side alignment
     for (const part of ['body', 'turret']) {
@@ -4287,7 +4336,6 @@ function projectHasContent(p) {
     if (p.vox && p.vox[part]) return true;
     if (p.vol && p.vol[part] && p.vol[part].edited) return true;   // hand-carved geometry IS content — a delete-only session scored 0 here and was discarded as an empty shell
     if (p.vol && p.vol[part] && p.vol[part].paint) return true;    // …and so is PAINT. A colour-only session scored 0 for exactly the same reason and was thrown away as an empty shell.
-    if (p.voxEdit && p.voxEdit[part] && p.voxEdit[part].length) return true;
     if (p.images && p.images[part]) for (const v of VIEWS) if (p.images[part][v]) return true;
   }
   return false;
@@ -4550,8 +4598,7 @@ function clearSourceArt() {
   imgXf.body = mkXf(); imgXf.turret = mkXf();
   geomState.body = { auto: true, bottomFrom: 'top' }; geomState.turret = { auto: true, bottomFrom: 'top' };
   carveCache.body = null; carveCache.turret = null;
-  volHistory.length = 0; volDirty.body = false; volDirty.turret = false;
-  voxEdit.body.clear(); voxEdit.turret.clear();
+  volHistory.length = 0; volRedo.length = 0; volDirty.body = false; volDirty.turret = false;
   gridSel = null; gridSelVox = null; gridSelView = null;
   gridModel = null;
 }
