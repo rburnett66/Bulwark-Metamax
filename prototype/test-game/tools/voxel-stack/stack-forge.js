@@ -4532,7 +4532,20 @@ function onCardClick(id) {
   $('saveAsTitle2').textContent = 'Open — ' + id;
   $('saveAsModal').hidden = false;
 }
+// Load is FACTION-FIRST: pick the faction by name, then the unit within it. The dropdown lives in the
+// modal because that is where you are choosing what to open — it defaulted to the left rail's selection
+// and there was no way to reach another faction's units without leaving the dialog first.
+// It opens on the LAST faction you worked in (bulwark:sf:lastFaction), not always the first entry.
 async function openLoadModal() {
+  const sel = $('loadFaction');
+  if (sel && !sel.dataset.wired) {
+    sel.dataset.wired = '1';
+    sel.onchange = async () => { await loadFaction(sel.value); await openLoadModal(); };   // rebuilds `roster`, then relists
+  }
+  if (sel) {
+    sel.innerHTML = UNIT_FACTIONS.map((f) => `<option${f === curFaction ? ' selected' : ''}>${f}</option>`).join('');
+    if (curFaction && UNIT_FACTIONS.includes(curFaction)) sel.value = curFaction;
+  }
   const m = suppliedUnits();
   let projIds = [];
   try { projIds = ((await idb.keys()) || []).filter((k) => typeof k === 'string' && k.startsWith('proj:')).map((k) => k.slice(5)); } catch (e) { /* no store */ }
@@ -4544,7 +4557,7 @@ async function openLoadModal() {
     return ra >= 0 ? ra - rb : a.localeCompare(b);
   });
   const list = $('loadList'); list.innerHTML = '';
-  if (!ids.length) list.innerHTML = '<div class="note">Nothing saved yet — bake a unit and click its slot to save one.</div>';
+  if (!ids.length) list.innerHTML = `<div class="note">Nothing saved yet in <b>${curFaction || 'this faction'}</b> — pick another faction above, or bake a unit and save it.</div>`;
   for (const id of ids) {
     const row = document.createElement('div'); row.className = 'row'; row.style.gap = '4px';
     const b = document.createElement('button');
