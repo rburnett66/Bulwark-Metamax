@@ -2327,14 +2327,39 @@ const volDirty = { body: false, turret: false };
 function pushVol(part) {
   const V = liveVOL(part); if (!V) return;
   volDirty[part] = true;
-  volHistory.push({ part, snap: V.slice() });
+  volRedo.length = 0;                                  // a fresh edit forks the timeline — nothing left to redo
+  // Capture BOTH stores. Geometry lives in VOL and colour still lives in voxEdit until setVox/PAINT land
+  // (AAC), so a snapshot of VOL alone would make every colour edit silently un-undoable the moment the
+  // second stack was retired. One entry, both stores, one Ctrl+Z.
+  volHistory.push({ part, snap: V.slice(), ed: snapVoxEdit() });
   if (volHistory.length > 60) volHistory.shift();
+}
+// ONE HISTORY, AND THE KEYS ARE INVERSES. Undo used to pop volHistory while REDO drove a second, separate
+// stack of voxEdit snapshots — so Ctrl+Z and Ctrl+Y were not inverses of each other, and the toolbar
+// button undid a third thing while its tooltip claimed Ctrl+Z. Undo now captures the state it is about to
+// replace, so redo has something true to restore.
+const volRedo = [];
+function volApply(h) {
+  const V = liveVOL(h.part); if (!V) return null;
+  const cur = { part: h.part, snap: V.slice(), ed: snapVoxEdit() };   // what we are about to overwrite
+  V.set(h.snap);
+  if (h.ed) for (const part of ['body', 'turret']) {                  // colour half, until AAC retires it
+    voxEdit[part].clear();
+    for (const [k, v] of h.ed[part]) voxEdit[part].set(k, v);
+  }
+  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
+  return cur;
 }
 function volUndo() {
   const h = volHistory.pop(); if (!h) return false;
-  const V = liveVOL(h.part); if (!V) return false;
-  V.set(h.snap);
-  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
+  const cur = volApply(h); if (!cur) return false;
+  volRedo.push(cur); if (volRedo.length > 60) volRedo.shift();
+  return true;
+}
+function volRedoStep() {
+  const h = volRedo.pop(); if (!h) return false;
+  const cur = volApply(h); if (!cur) return false;
+  volHistory.push(cur); if (volHistory.length > 60) volHistory.shift();
   return true;
 }
 // the voxels the current facing/layer is showing (layer 0 = the surface raycast)
@@ -2367,7 +2392,7 @@ function deleteCurrentLayer() {
 }
 if ($('gridDeleteBtn')) $('gridDeleteBtn').onclick = () => doDelete();   // identical to DEL
 if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
-  pushUndo(); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; refreshModel(); scheduleAutosave();
+  pushVol(gridPart()); voxEdit.body.clear(); voxEdit.turret.clear(); gridModel = null; refreshModel(); scheduleAutosave();
 };
 if ($('gridGuides')) $('gridGuides').onchange = (e) => { gridGuides = e.target.checked; renderGridView(); };
 if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.checked; voxSig = ''; renderGridView(); };   // voxSig: the markers live in the MAIN view too
@@ -2381,7 +2406,7 @@ if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.c
 // matching the compass: left↔right = Y, front↔back = X — so a mirror always means what its label says.
 function mirrorWorld(axis, srcSecond) {
   const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part), N = foot * foot;
-  pushUndo();
+  pushVol(gridPart());
   const m = buildModel(part, foot, layers), ed = voxEdit[part];
   const V = liveVOL(part), vc = m && m.vcol;
   if (V) pushVol(part);                                        // one undo entry for the whole mirror
@@ -2410,19 +2435,14 @@ if ($('gridMirrorLR')) $('gridMirrorLR').onclick = () => mirrorWorld('y', false)
 if ($('gridMirrorRL')) $('gridMirrorRL').onclick = () => mirrorWorld('y', true);
 if ($('gridMirrorTB')) $('gridMirrorTB').onclick = () => mirrorWorld('x', false);   // front↔back (world X)
 if ($('gridMirrorBT')) $('gridMirrorBT').onclick = () => mirrorWorld('x', true);
-if ($('gridUndoBtn')) $('gridUndoBtn').onclick = () => gridUndo();
-if ($('gridRedoBtn')) $('gridRedoBtn').onclick = () => gridRedo();
+if ($('gridUndoBtn')) $('gridUndoBtn').onclick = () => volUndo();   // same stack as Ctrl+Z, as the tooltip claims
+if ($('gridRedoBtn')) $('gridRedoBtn').onclick = () => volRedoStep();
 // select every cell on the current layer (a whole-layer selection to paint/erase within)
 if ($('gridSelLayer')) $('gridSelLayer').onclick = () => { const g = gridGeom; if (!g) return; gridSel = { c0: 0, r0: 0, c1: g.cols - 1, r1: g.rows - 1 }; gridSelView = gridView; gridSelVox = buildSelVox(true); renderGridView(); };
 // delete EVERY voxel in the active selection (the surface voxels on Layer 0, or the slice voxels on a real
 // layer). Shared by Delete/Backspace and by pressing Erase while a selection is active.
 // ── UNDO / REDO for grid voxel edits (paint/erase strokes + bulk ops). Snapshots the voxEdit layer. ──
-let undoStack = [], redoStack = [];
 const snapVoxEdit = () => ({ body: new Map(voxEdit.body), turret: new Map(voxEdit.turret) });
-function pushUndo() { undoStack.push(snapVoxEdit()); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; }
-function applyVoxSnap(s) { for (const part of ['body', 'turret']) { voxEdit[part].clear(); for (const [k, v] of s[part]) voxEdit[part].set(k, v); } gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); }
-function gridUndo() { if (!undoStack.length) return; redoStack.push(snapVoxEdit()); applyVoxSnap(undoStack.pop()); }
-function gridRedo() { if (!redoStack.length) return; undoStack.push(snapVoxEdit()); applyVoxSnap(redoStack.pop()); }
 
 function deleteSelection() {
   const g = gridGeom; if (!g || !gridSelVox || gridSelVox.part !== g.part || !gridSelVox.set.size) return false;
@@ -2449,7 +2469,7 @@ function fillSelection() {
   // recolour the SELECTED voxels whose face this facing shows (the surface voxel per cell)
   for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy), k = z * N + y * g.foot + x; if (gridSelVox.set.has(k) && gridFilledAt(g, x, y, z)) { pending.push(k); n++; } }
   if (!n) return false;
-  pushUndo();
+  pushVol(gridPart());
   for (const k of pending) ed.set(k, rgb);
   gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); return true;
 }
@@ -2538,7 +2558,7 @@ function reprojectSurface() {
       const c = k * 3; pend.push([k, snap(vcol[c], vcol[c + 1], vcol[c + 2])]);
     }
     if (!pend.length) { alert('Re-project: no surface' + (useSelT ? ' in the selection.' : '.')); return false; }
-    pushUndo(); for (const [k, col] of pend) ed.set(k, col);
+    pushVol(gridPart()); for (const [k, col] of pend) ed.set(k, col);
     gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); return true;
   }
   const V = gridModel && gridModel.views;
@@ -2585,7 +2605,7 @@ function reprojectSurface() {
     const col = sampleArt(ix, iy); if (col) pending.push([k, snap(col[0], col[1], col[2])]);
   }
   if (!pending.length) { alert('Re-project: no colours sampled from the image.'); return false; }
-  pushUndo();
+  pushVol(gridPart());
   for (const [k, col] of pending) ed.set(k, col);
   gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
   return true;
@@ -2603,7 +2623,7 @@ document.addEventListener('keydown', (e) => {
   if (!$('keyModal') || !$('keyModal').hidden) return;               // don't fight the cutout modal's own ESC
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { volUndo(); e.preventDefault(); return; }   // same undo as ESC
-  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { gridRedo(); e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { volRedoStep(); e.preventDefault(); return; }   // true inverse of Ctrl+Z
   if (e.key === 'Escape' && lassoMode) { lassoMode = false; if (gridLasso && gridLasso.length) gridLasso.pop(); if (gridLasso && !gridLasso.length) gridLasso = null; renderGridView(); }   // ESC backs out of the lasso first
   else if (e.key === 'Escape' && gridLasso) { gridLasso = null; renderGridView(); }   // …then clears a finished lasso
   else if (e.key === 'Escape' && (gridSel || gridSelVox)) { gridSel = null; gridSelVox = null; gridSelView = null; renderGridView(); }
@@ -2838,8 +2858,7 @@ document.addEventListener('keydown', (e) => {
     }
     strokeVol = false;                                             // new stroke → one fresh VOL snapshot
     const erase = gridTool === 'erase' || gridTool === 'box' || gridTool === 'add' || e.button === 2;   // right-drag (or right-click in Add) erases
-    const before = snapVoxEdit();                                  // capture BEFORE the stroke for one undo entry
-    if (editAt(e, erase)) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
+    if (editAt(e, erase)) { painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }   // editAt/strokeVol already took ONE snapshot for this stroke
   });
   cv.addEventListener('pointermove', (e) => {
     if (sliceDrag) sliceMove(e);
@@ -2864,8 +2883,7 @@ document.addEventListener('keydown', (e) => {
       voxSig = ''; renderGridView(); return;                       // voxSig reset so the 3D view re-outlines
     }
     if (addBoxing) {                                               // ➕ Add: release → extrude the surface patch in the paint colour
-      const before = snapVoxEdit();
-      if (commitAddBox()) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; }
+      commitAddBox();                                            // takes its own single snapshot for the patch
       addBoxing = null; gridAddBox = null; renderGridView();
     }
     if (boxing) {                                                  // release the marquee → PERSISTENT selection (stays until ESC)
@@ -2984,7 +3002,7 @@ function toggleFlip(part, view, axis) {
   // the grid view stays 100% consistent with the new carve. Back is colour-only → never touches geometry.
   if (view !== 'back' && voxEdit[part] && voxEdit[part].size &&
       confirm(`Flip re-carves the ${part}. Its grid-view voxel edits are pinned to the old carve and will show as duplicated voxels.\n\nOK = recarve (clear this part's edits, back to 100% consistent)\nCancel = keep edits (they may not line up)`)) {
-    pushUndo(); voxEdit[part].clear(); gridModel = null;
+    pushVol(gridPart()); voxEdit[part].clear(); gridModel = null;
   }
   renderView(pickFor(part, view));
 }
@@ -3404,7 +3422,7 @@ function remapModelToWorking() {
   const n = state.paletteN || palKeep.size;
   if (!n) { $('palState').textContent = 'Consolidate first — set a Palette size or 📌 Keep colours — then remap.'; return; }
   const kRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
-  pushUndo();                                                     // remap rewrites every voxel — make it a single undoable step
+  pushVol(gridPart());                                                     // remap rewrites every voxel — make it a single undoable step
   let touched = 0;
   for (const part of ['body', 'turret']) {
     const foot = footOf(part), layers = part === 'body' ? state.bodyLayers : state.turretLayers, N = foot * foot;
@@ -3519,7 +3537,7 @@ $('remapAllDown').onclick = () => { rmTargets = rmSrcKeys.map(rmUnpack); rmAssig
 $('remapAdvanced').onclick = () => { $('remapModal').hidden = true; openPalAdvanced(); };
 $('remapBake').onclick = () => {
   if (!rmAssign.size) { $('remapState').textContent = 'drag a top colour onto a bottom slot first'; return; }
-  pushUndo();
+  pushVol(gridPart());
   let touched = 0;
   for (const part of ['body', 'turret']) {
     const foot = footOf(part), layers = part === 'body' ? state.bodyLayers : state.turretLayers, N = foot * foot;
@@ -4044,7 +4062,7 @@ async function loadProject(p) {
   // dimensions inherited the previous unit's voxels. Undo/selection/palette were already discarded
   // here; the volume was not, because it only became the model when the voxEdit overlay was retired.
   carveCache.body = null; carveCache.turret = null; gridModel = null;
-  undoStack.length = 0; redoStack.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // undo history + selection belong to the OUTGOING unit — never let them apply to this one
+  volHistory.length = 0; volRedo.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // undo history + selection belong to the OUTGOING unit — never let them apply to this one
   try {
     $('uid').value = p.id || 'unit'; activeUnitId = (p.id || 'unit');   // anchor the WIP key to the restored project
     Object.assign(state, p.state || {}); state.baked = null;
@@ -4384,7 +4402,7 @@ The switch was cancelled so nothing is lost.`); }
   // dimensions inherited the previous unit's voxels. Undo/selection/palette were already discarded
   // here; the volume was not, because it only became the model when the voxEdit overlay was retired.
   carveCache.body = null; carveCache.turret = null; gridModel = null;
-  undoStack.length = 0; redoStack.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
+  volHistory.length = 0; volRedo.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
   loadingUnit = true;
   $('uid').value = id; activeUnitId = id;                 // anchor the WIP key to the unit being loaded
   const m = suppliedUnits();
