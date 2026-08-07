@@ -266,6 +266,7 @@ function buildVoxVolume(vm, foot, layers) {
       for (let x = 0; x < foot; x++) {
         const mx = Math.floor((x - offx) / sxy); if (mx < 0 || mx >= nx) continue;
         const di = ((mz * ny + my) * nx + mx) * 4;
+        // NOT INK_A, deliberately: an imported .vox has no anti-aliased edge, so any alpha is a real voxel
         if (data[di + 3] > 0) { const oi = z * N + y * foot + x; fill[oi] = 1; vcol[oi * 3] = data[di]; vcol[oi * 3 + 1] = data[di + 1]; vcol[oi * 3 + 2] = data[di + 2]; }
       }
     }
@@ -982,6 +983,7 @@ function drawDimBox(ctx, meta, el, az, part) {
   const projImg = (img, o, u, v) => {
     if (!img) return; const w = img.width || img.naturalWidth, hi = img.height || img.naturalHeight; if (!w || !hi) return;
     ctx.save(); ctx.globalAlpha = 0.82;
+    ctx.imageSmoothingEnabled = false;   // alpha is BINARY in the carve; bilinear here invents in-between edges the carve never sees
     ctx.setTransform((u.x - o.x) / w, (u.y - o.y) / w, (v.x - o.x) / hi, (v.y - o.y) / hi, o.x, o.y);
     ctx.drawImage(img, 0, 0, w, hi);
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.restore();
@@ -1879,7 +1881,22 @@ function renderGridView() {
     // apply the SAME per-side scale/align (xf) the carve uses, or the geometry overlay (raw image) won't match
     // the paint voxels (transformed) once a side is aligned — owner: "geometry and paint do not match".
     const keyed = imgs[part][gridView] ? xfCanvas(keyedCanvas(imgs[part][gridView], keyTolState[part][gridView], polyState[part][gridView], pickState[part][gridView]), (imgXf[part] || {})[gridView]) : null;   // UNCROPPED: match the carve
-    if (keyed) { ctx.globalAlpha = 0.42; ctx.imageSmoothingEnabled = false; ctx.drawImage(keyed, bx, by, bw2, bh2); ctx.globalAlpha = 1; }
+    // DRAW THE MASK, NOT THE IMAGE. Blitting `keyed` resampled it with NEAREST, while the carve resamples
+    // with sliceMask's majority coverage — so the overlay could show a feature the carve deletes. Measured:
+    // a 1px antenna in a 200px slice at box 32 draws 1 cell here and survives 0 cells in the carve. You
+    // were aligning against a picture that lied. Filling the mask's own cells makes them agree by
+    // construction rather than by two algorithms happening to match.
+    if (keyed) {
+      const cols2 = Math.max(1, cR.hi - cR.lo), rows2 = Math.max(1, rR.hi - rR.lo);
+      const mk = sliceMask(keyed, cols2, rows2, false);              // the exact cells the carve would keep
+      ctx.globalAlpha = 0.42;
+      for (let r = 0; r < rows2; r++) for (let c = 0; c < cols2; c++) {
+        const i = r * cols2 + c; if (!mk.m[i]) continue;
+        ctx.fillStyle = `rgb(${mk.c[i * 3]},${mk.c[i * 3 + 1]},${mk.c[i * 3 + 2]})`;
+        ctx.fillRect(bx + c * cell, by + r * cellV, Math.ceil(cell), Math.ceil(cellV));
+      }
+      ctx.globalAlpha = 1;
+    }
     ctx.strokeStyle = '#48d0e0'; ctx.lineWidth = 2; ctx.strokeRect(bx + 0.5, by + 0.5, bw2 - 1, bh2 - 1);
     ctx.fillStyle = '#48d0e0';                                       // edge-midpoint handles
     for (const [hx, hy] of [[bx + bw2 / 2, by], [bx + bw2 / 2, by + bh2], [bx, by + bh2 / 2], [bx + bw2, by + bh2 / 2]]) ctx.fillRect(hx - 4, hy - 4, 8, 8);
@@ -3130,7 +3147,7 @@ function renderKeyPreview() {
   g.clearRect(0, 0, cv.width, cv.height);
   g.drawImage(keyedCanvas(im, +$('keyTol').value, workPolys, workPicks), keyPanX, keyPanY, regionW, regionH, 0, 0, cv.width, cv.height);
   const d = g.getImageData(0, 0, cv.width, cv.height).data, w = cv.width, hh = cv.height;   // outline overlay
-  const solid = (x, y) => x >= 0 && x < w && y >= 0 && y < hh && d[(y * w + x) * 4 + 3] > 40;
+  const solid = (x, y) => x >= 0 && x < w && y >= 0 && y < hh && d[(y * w + x) * 4 + 3] > INK_A;   // was a literal 40 — correct only until INK_A moved
   g.fillStyle = '#ff4fd8';
   for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++)
     if (solid(x, y) && (!solid(x - 1, y) || !solid(x + 1, y) || !solid(x, y - 1) || !solid(x, y + 1))) g.fillRect(x, y, 1, 1);
@@ -3165,7 +3182,8 @@ $('keyCanvas').addEventListener('click', (e) => {
   const x = (e.clientX - r.left) * css / sx + keyPanX, y = (e.clientY - r.top) * css / sx + keyPanY;
   if (pickMode) {                                                  // 🎯 eyedropper: sample the RAW source colour + seed point
     const ix = Math.max(0, Math.min(keyOrig.width - 1, x | 0)), iy = Math.max(0, Math.min(keyOrig.height - 1, y | 0)), o = (iy * keyOrig.width + ix) * 4;
-    if (keyOrig.data[o + 3] > 20) { workPicks.push({ col: [keyOrig.data[o], keyOrig.data[o + 1], keyOrig.data[o + 2]], pt: [ix, iy] }); renderKeyPreview(); }
+    // was >20 — half the carve's threshold, so it sampled edge pixels the carve treats as clear
+    if (keyOrig.data[o + 3] > INK_A) { workPicks.push({ col: [keyOrig.data[o], keyOrig.data[o + 1], keyOrig.data[o + 2]], pt: [ix, iy] }); renderKeyPreview(); }
     return;
   }
   if (workPoly.length >= 3) {                                      // close by clicking the first point…
