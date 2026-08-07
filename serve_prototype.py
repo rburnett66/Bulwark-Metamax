@@ -88,6 +88,18 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.split("?")[0] != "/__ship":
             self.send_error(404)
             return
+        # LOOPBACK ONLY. With --lan the bind is 0.0.0.0, which made /__ship writable by anything on the
+        # Wi-Fi. The path whitelist prevents escaping content/**, not overwriting what is inside it — so a
+        # phone on the same network could replace any unit manifest or sprite. Authoring is local-only.
+        peer = (self.client_address[0] if self.client_address else "")
+        if peer not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            body = json.dumps({"ok": False, "error": f"/__ship is loopback-only (peer {peer})"}).encode()
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         try:
             n = int(self.headers.get("Content-Length", 0))
             req = json.loads(self.rfile.read(n))
@@ -103,18 +115,35 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
                 raise ValueError(f"path not allowed: {rel!r} (must be content/**.json or content/**.png)")
             dest = os.path.join(directory, *rel.split("/"))
             os.makedirs(os.path.dirname(dest), exist_ok=True)
+            # ATOMIC. Writing in place truncates the destination if anything fails mid-write — and one of
+            # these destinations, content/units/voxel-units.json, carries EVERY unit. Write a temp file
+            # beside it and os.replace() (atomic on NTFS), keeping the previous version as .bak. Given how
+            # many ways content has been lost, the .bak is the cheapest recoverability available.
+            tmp = dest + ".tmp"
             if is_png:
                 raw = str(req.get("b64", ""))
+                if not raw:
+                    raise ValueError("png request has no b64 payload")
                 if raw.startswith("data:"):
                     raw = raw.split(",", 1)[-1]
                 blob = base64.b64decode(raw + "=" * (-len(raw) % 4))
                 if blob[:8] != bytes.fromhex("89504e470d0a1a0a"):   # PNG magic
                     raise ValueError("payload is not a PNG")
-                with open(dest, "wb") as f:
+                with open(tmp, "wb") as f:
                     f.write(blob)
             else:
-                with open(dest, "w", encoding="utf-8") as f:
+                # A missing `data` used to write literal null AND return ok:true — a malformed request
+                # blanked the manifest and told the tool it had worked.
+                if "data" not in req or req.get("data") is None:
+                    raise ValueError("json request has no data payload — refusing to blank the file")
+                with open(tmp, "w", encoding="utf-8") as f:
                     json.dump(req.get("data"), f, indent=None, separators=(",", ":"))
+            if os.path.exists(dest):
+                try:
+                    os.replace(dest, dest + ".bak")
+                except OSError:
+                    pass                                            # a missing .bak must never block the write
+            os.replace(tmp, dest)
             body = json.dumps({"ok": True, "path": rel, "bytes": os.path.getsize(dest)}).encode()
             self.send_response(200)
         except Exception as e:  # noqa: BLE001 — report the reason to the tool UI
