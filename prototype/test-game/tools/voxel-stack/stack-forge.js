@@ -244,7 +244,21 @@ function parseVox(buf) {
     p = next;
   }
   if (!models.length || !models[0].size) throw new Error('no voxel models');
-  const m = models[0], [nx, ny, nz] = m.size, pal = rgba || DEFAULT_VOX_PALETTE, data = new Uint8Array(nx * ny * nz * 4);
+  // MagicaVoxel OMITS the RGBA chunk when a model uses the stock palette, so `rgba` is null for a large
+  // share of real .vox files. This read an undeclared DEFAULT_VOX_PALETTE and every such import died with
+  // "DEFAULT_VOX_PALETTE is not defined". The stock palette is a fixed 256-entry table; rather than inline
+  // 1KB of it for a fallback, synthesise a stable ramp so the import SUCCEEDS and the model is visible and
+  // recolourable, instead of failing outright. Colours will not match MagicaVoxel's default swatches — that
+  // is the deliberate trade, and it beats refusing the file.
+  const m = models[0], [nx, ny, nz] = m.size;
+  const pal = rgba || (() => {
+    const p = new Uint8Array(256 * 4);
+    for (let i = 0; i < 256; i++) {
+      p[i * 4] = (i * 37) & 255; p[i * 4 + 1] = (i * 91) & 255; p[i * 4 + 2] = (i * 53) & 255; p[i * 4 + 3] = 255;
+    }
+    return p;
+  })();
+  const data = new Uint8Array(nx * ny * nz * 4);
   for (let i = 0; i < m.count; i++) {
     const x = m.vox[i * 4], y = m.vox[i * 4 + 1], z = m.vox[i * 4 + 2], c = m.vox[i * 4 + 3], pi = ((c - 1) & 255) * 4;
     const di = ((z * ny + y) * nx + x) * 4;
@@ -2036,16 +2050,28 @@ function recarve() { carveCache.body = null; carveCache.turret = null; volDirty.
 function restoreVol(p) {
   if (!p || !p.vol) return;
   for (const part of ['body', 'turret']) {
-    const s = p.vol[part]; if (!s || !s.edited) continue;
+    const s = p.vol[part]; if (!s) continue;
     const c = carveCache[part], V = c && c.m && c.m.VOL;
     if (!V) continue;
-    if (s.foot !== c.foot || s.layers !== c.layers || !s.b64) {
+    if (s.foot !== c.foot || s.layers !== c.layers) {
       console.warn(`[stack-forge] ${part}: saved volume was ${s.foot}×${s.layers}, this carve is ${c.foot}×${c.layers} — hand edits discarded rather than mis-indexed`);
       continue;
     }
-    const u = u8FromB64(s.b64);
-    if (u.length !== V.length) { console.warn(`[stack-forge] ${part}: saved volume length mismatch — discarded`); continue; }
-    V.set(u); volDirty[part] = true;
+    if (s.edited && s.b64) {
+      const u = u8FromB64(s.b64);
+      if (u.length !== V.length) { console.warn(`[stack-forge] ${part}: saved volume length mismatch — discarded`); continue; }
+      V.set(u); volDirty[part] = true;
+    }
+    // COLOUR RESTORES INDEPENDENTLY OF GEOMETRY. Gating this on s.edited would drop the paint of anyone
+    // who coloured a unit without also carving it by hand — the commonest way to lose work here, and the
+    // reason the check below tests `paint`, not `edited`. vcol without PAINT is meaningless: PAINT is what
+    // marks a voxel as artist-chosen, so a restore missing it would let the next re-carve overwrite the lot.
+    if (s.paint && s.vcol && c.m.PAINT && c.m.vcol) {
+      const P = u8FromB64(s.paint), C = u8FromB64(s.vcol);
+      if (P.length !== c.m.PAINT.length || C.length !== c.m.vcol.length) {
+        console.warn(`[stack-forge] ${part}: saved colour length mismatch — paint discarded rather than mis-indexed`);
+      } else { c.m.PAINT.set(P); c.m.vcol.set(C); }
+    }
   }
   gridModel = null; refreshModel();
 }
@@ -2574,7 +2600,8 @@ function fillSelection() {
   // recolour the SELECTED voxels whose face this facing shows (the surface voxel per cell)
   for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy), k = z * N + y * g.foot + x; if (gridSelVox.set.has(k) && gridFilledAt(g, x, y, z)) { pending.push(k); n++; } }
   if (!n) return false;
-  pushVol(gridPart());
+  const part = gridPart();                      // was unbound — Fill threw a ReferenceError AFTER pushVol,
+  pushVol(part);                                // leaving a phantom undo entry and no fill, silently.
   for (const k of pending) setVox(part, k, rgb);
   gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); return true;
 }
@@ -4137,10 +4164,21 @@ function snapshotProject(idOverride) {
   // a session was lost on reload while the save reported success. Stored like the .vox blob: one byte
   // per voxel, base64, stamped with the dims it was carved at so a resize can reject it instead of
   // mis-indexing. Only saved when it DIFFERS from a plain re-carve, so untouched units stay small.
+  // COLOUR RIDES WITH THE GEOMETRY. vcol + PAINT were serialised NOWHERE, so every Paint stroke, Fill,
+  // Mirror-colour and palette Remap survived only until the next reload or unit switch, while the save
+  // reported success — the same defect this VOL block was written to fix, reintroduced one store over
+  // when setVox/PAINT replaced the voxEdit colour half. PAINT is the flag that says "the artist chose
+  // this"; without it a reload cannot tell authored colour from carve-derived colour, so both must go.
+  // Only worth storing when something is actually painted: PAINT is one byte per voxel and compresses
+  // to nothing, but vcol is three, and an untouched unit should not carry a megabyte of re-derivable art.
   const vol = {};
   for (const part of ['body', 'turret']) {
     const c = carveCache[part], V = c && c.m && c.m.VOL;
-    vol[part] = V ? { foot: c.foot, layers: c.layers, edited: !!volDirty[part], b64: b64FromU8(V) } : null;
+    if (!V) { vol[part] = null; continue; }
+    const P = c.m.PAINT, painted = P ? P.some((b) => b) : false;
+    vol[part] = { foot: c.foot, layers: c.layers, edited: !!volDirty[part], b64: b64FromU8(V),
+      paint: painted ? b64FromU8(P) : null,
+      vcol: painted && c.m.vcol ? b64FromU8(c.m.vcol) : null };
   }
   const st = { ...state }; delete st.baked; delete st.decorBaked;   // baked textures are PIXI objects — never serialise them into the WIP
   return { format: 'stackforge-project', version: 2, id: (idOverride || $('uid').value || 'unit').trim(), vol,
@@ -4226,6 +4264,7 @@ function projectHasContent(p) {
   for (const part of ['body', 'turret']) {
     if (p.vox && p.vox[part]) return true;
     if (p.vol && p.vol[part] && p.vol[part].edited) return true;   // hand-carved geometry IS content — a delete-only session scored 0 here and was discarded as an empty shell
+    if (p.vol && p.vol[part] && p.vol[part].paint) return true;    // …and so is PAINT. A colour-only session scored 0 for exactly the same reason and was thrown away as an empty shell.
     if (p.voxEdit && p.voxEdit[part] && p.voxEdit[part].length) return true;
     if (p.images && p.images[part]) for (const v of VIEWS) if (p.images[part][v]) return true;
   }
