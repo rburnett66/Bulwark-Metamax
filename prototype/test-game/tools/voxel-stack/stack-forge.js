@@ -481,9 +481,19 @@ function buildVolume(partId, foot, layers) {
   // procedural barrel: a real round tube along +X, placed relative to the body box, ORed into the volume
   let inBarrel = null;
   if (reach && topC) {
-    const cy = oy + bh / 2, r = Math.max(0.5, state.barrelRad);
-    const bx0 = ox + Math.round(bw * 0.35), bx1 = Math.min(foot - 1, ox + bw + reach);   // from inside the body to the tip
-    const bz = clamp(Math.round(state.barrelElev / 100 * (Hv - 1)), 0, layers - 1);
+    // THREE FIXES, all measured:
+    // 1. LENGTH WAS INERT. bx1 was min(foot-1, ox+bw+reach); autoSpans makes ox=0 and bw=foot, so
+    //    ox+bw+reach >= foot for every reach and the min() pinned bx1 at foot-1. The tube was x[22..63]
+    //    at barrelLen 1, 8, 24 and 48 alike — the slider was an on/off switch. The tube now ENDS at the
+    //    box front and runs BACK by the length, so the slider controls length within the grid.
+    // 2. HALF A VOXEL OFF-CENTRE. oy + bh/2 is the extent centre; the footprint's voxel centre is
+    //    (bh-1)/2. At bh=64 r=4 the tube covered y[28..36] — nine rows centred on 32, not 31.5.
+    // 3. HEIGHT IGNORED z0. bz was Hv-relative but measured from absolute z=0, so a box lifted off the
+    //    ground put the barrel axis below it.
+    const cy = oy + (bh - 1) / 2, r = Math.max(0.5, state.barrelRad);
+    const bx1 = Math.min(foot - 1, ox + bw - 1);                                   // the tip, at the box front
+    const bx0 = Math.max(ox, bx1 - Math.max(1, reach) + 1);                        // …running back by Barrel len
+    const bz = z0 + clamp(Math.round(state.barrelElev / 100 * (Hv - 1)), 0, Hv - 1);
     inBarrel = (x, y, z) => x >= bx0 && x <= bx1 && (y - cy) * (y - cy) + (z - bz) * (z - bz) <= r * r;
     let R = 0, G = 0, B = 0, c = 0;                                  // barrel tint = darkened mean body colour
     for (let i = 0; i < N; i++) { const p = i * 4; if (cd[p + 3] > INK_A) { R += cd[p]; G += cd[p + 1]; B += cd[p + 2]; c++; } }
