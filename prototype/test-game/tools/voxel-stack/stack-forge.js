@@ -769,11 +769,13 @@ function buildQuantiser(cd, vcol, filled, foot, layers, n, views) {
 // rotated face normal, so the world light stays fixed while the object turns under it.
 // n: 0 = top, 1 = +x, 2 = −x, 3 = +y, 4 = −y (grid space, y = image-down).
 function buildFaces(partId, foot, layers) {
-  const { filled, vcol, views: V } = buildModel(partId, foot, layers), N = foot * foot; // unified voxel model
+  const model = buildModel(partId, foot, layers), N = foot * foot;   // unified voxel model
+  const { filled, vcol, views: V } = model;
   // The painted flag comes from the MODEL now. It used to be read from voxEdit while the COLOUR was read
   // from vcol — two different stores — so the flag fired and the colour did not: painting a voxel red
   // suppressed its wall art and then fell back to the flat column colour. Measured, in 3D and in the bake.
-  const PAINT = (m && m.PAINT) || null;
+  // PAINT and vcol MUST come from the same object, or this reintroduces exactly that split.
+  const PAINT = model.PAINT || null;
   const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, V);   // palette cleanup (incl. wall art)
   // wall colour comes from the elevation view that DEPICTS that wall: side view → ±y walls (far side
   // mirrored), front view → +x wall, back view → −x wall (mirrored front when no back was drawn).
