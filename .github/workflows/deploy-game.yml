@@ -33,6 +33,12 @@ jobs:
       # fails on dead code, on a handler bound to a missing element, on the cores not being loaded, and
       # on the front facing disagreeing with itself. Passing locally was never a gate -- this is.
       - run: node --test prototype/test-game/tools/voxel-stack/carve.test.mjs prototype/test-game/tools/voxel-stack/select.test.mjs prototype/test-game/tools/voxel-stack/audit.test.mjs
+      # BOOT GATE. The suites above exercise pure functions; node --check only proves the file parses.
+      # Neither runs module scope -- which is where five separate dead-on-arrival ships came from: an
+      # out-of-scope binding, a TDZ read, and a null deref on frame one. This runs the real boot path
+      # against a stubbed DOM/PIXI and drives one ticker frame, so those faults fail here, not on the
+      # owner's screen.
+      - run: node --test prototype/test-game/tools/voxel-stack/boot.test.mjs
   deploy:
     needs: test
     runs-on: ubuntu-latest
