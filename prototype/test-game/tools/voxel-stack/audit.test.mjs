@@ -65,9 +65,11 @@ test('every element the JS reaches for exists in the HTML', () => {
 });
 
 test('the tested cores are actually loaded by the page', () => {
-  // carve.js and select.js carry 19 tests. If the page does not load them, those tests guard nothing.
+  // carve.js, select.js and palette.js carry the tested cores. If the page does not load them, those
+  // tests guard nothing — palette.js in particular was written, committed and left unloaded for a week.
   assert.match(html, /<script src="carve\.js">/, 'stack-forge.html must load carve.js');
   assert.match(html, /<script src="select\.js">/, 'stack-forge.html must load select.js');
+  assert.match(html, /<script src="palette\.js">/, 'stack-forge.html must load palette.js');
   const iCarve = html.indexOf('carve.js'), iMain = html.indexOf('stack-forge.js"');
   assert.ok(iCarve < iMain, 'carve.js must load BEFORE stack-forge.js');
 });

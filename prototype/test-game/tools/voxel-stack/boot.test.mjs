@@ -152,7 +152,7 @@ test('stack-forge.js completes module scope without throwing', () => {
   const sandbox = makeSandbox();
   vm.createContext(sandbox);
   // load order must match stack-forge.html: the cores first, then the header, then the tool
-  for (const f of ['carve.js', 'select.js', '../toolhead.js']) {
+  for (const f of ['carve.js', 'select.js', 'palette.js', '../toolhead.js']) {
     vm.runInContext(readFileSync(DIR + f, 'utf8'), sandbox, { filename: f });
   }
   let err = null;
@@ -174,4 +174,8 @@ test('the tested cores expose what the tool delegates to', () => {
   assert.equal(typeof sandbox.sliceMaskCore, 'function', 'carve.js must export sliceMaskCore');
   assert.equal(typeof sandbox.carve, 'function', 'carve.js must export carve');
   assert.equal(typeof sandbox.rectToKeys, 'function', 'select.js must export rectToKeys');
+  vm.runInContext(readFileSync(DIR + 'palette.js', 'utf8'), sandbox, { filename: 'palette.js' });
+  assert.equal(typeof sandbox.reducePalette, 'function', 'palette.js must export reducePalette');
+  assert.equal(typeof sandbox.paletteOptions, 'function', 'palette.js must export paletteOptions');
+  assert.equal(typeof sandbox.applyPalette, 'function', 'palette.js must export applyPalette');
 });

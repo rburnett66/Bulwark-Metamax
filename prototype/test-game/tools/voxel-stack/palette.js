@@ -115,11 +115,31 @@
     if (entries.length <= want) return entries.map((e) => e.rgb.slice());
     const nCover = Math.max(1, Math.ceil(want / 2));
     const chosen = medianCut(entries, nCover).map((e) => e.rgb.slice());
+
+    // RARITY FLOOR — the variety pass only, and only when it can be afforded.
+    //
+    // The population weight below CANNOT hold off a stray on its own, and the comment here used to claim
+    // it could. Measured on a 681-voxel model (500 hull, 100 red, 80 blue, 1 magenta): the log2 term
+    // spans about 9x from the rarest colour to the most common, while the distance term spans over 120x.
+    // So one magenta voxel scored 49882 against the hull's 3527 and took a slot in a FOUR colour
+    // palette. That is an anti-aliased edge or a stray click costing the artist a quarter of their
+    // budget, and no amount of tuning the exponent fixes it — distance simply dominates.
+    //
+    // So rarity is a gate, not a weight. A colour below the floor cannot CLAIM a slot; it is still
+    // mapped to its nearest chosen colour, so nothing is lost from the image, only from the shortlist.
+    // The floor relaxes as the budget grows -- at 48 colours rare detail is worth a slot, at 4 it is
+    // not -- and is dropped entirely when it would starve the budget, so a model made ONLY of rare
+    // colours (every voxel a different shade) still fills its palette instead of returning short.
+    const total = entries.reduce((s, e) => s + e.n, 0);
+    const floor = total / (Math.max(1, want) * 40);
+    const common = entries.filter((e) => e.n >= floor);
+    let pool = common.length >= want ? common : entries;
+
     // VARIETY: repeatedly take the entry furthest from everything already chosen, weighted by how many
-    // voxels it represents so a single stray pixel cannot win a slot.
+    // voxels it represents so ties between equally-distant colours go to the better-represented one.
     while (chosen.length < want) {
       let best = null, bestScore = -1;
-      for (const e of entries) {
+      for (const e of pool) {
         let near = Infinity;
         for (const c of chosen) { const d = dist2(e.rgb, c); if (d < near) near = d; }
         const score = near * Math.log2(1 + e.n);
@@ -127,7 +147,7 @@
       }
       if (!best || bestScore <= 0) break;                 // everything is already represented exactly
       chosen.push(best.rgb.slice());
-      entries = entries.filter((e) => e !== best);
+      pool = pool.filter((e) => e !== best);
     }
     // stable, readable order: dark → light
     chosen.sort((a, b) => lum(a[0], a[1], a[2]) - lum(b[0], b[1], b[2]));
