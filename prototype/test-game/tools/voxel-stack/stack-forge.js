@@ -883,10 +883,13 @@ function selCellState(g, cx, cy) {
 function drawScene(meta, el, bodyAz, turretAz) {
   const ctx = meta.ctx; ctx.clearRect(0, 0, meta.W, meta.Hp);
   const mountDz = mountZOf(state.bodyLayers);
+  // Drop the whole unit so its LOWEST FILLED VOXEL sits on the ground line. The turret moves with the
+  // body by the same amount, or lowering the hull would leave the turret hanging where it was.
+  const floorZ = bodyFloorZ;
   const sel = gridSelSet();
   const parts = [];
-  if (state.part !== 'turret') parts.push({ faces: bodyFaces, az: bodyAz, sel: sel && sel.part === 'body' ? sel.set : null });
-  if (state.part !== 'body') parts.push({ faces: turretFaces, az: turretAz, zOff: mountDz,
+  if (state.part !== 'turret') parts.push({ faces: bodyFaces, az: bodyAz, zOff: -floorZ, sel: sel && sel.part === 'body' ? sel.set : null });
+  if (state.part !== 'body') parts.push({ faces: turretFaces, az: turretAz, zOff: mountDz - floorZ,
     gx: state.turretDx * Math.cos(bodyAz), gy: state.turretDx * Math.sin(bodyAz),
     pivotFrac: 0.5 + state.turretPivot / 100, sel: sel && sel.part === 'turret' ? sel.set : null });
   renderParts(ctx, meta.S, meta.cx, meta.groundY, el, parts);
@@ -1377,12 +1380,23 @@ function buildOrbitTarget(S) {
 }
 const voxPart = { body: null, turret: null };   // imported MagicaVoxel models (override the photo carve per part)
 let bodyMountZ = 9;                              // layer just above the body's top → where the turret sits
+let bodyFloorZ = 0;                              // lowest FILLED layer — the unit's ride height, measured not assumed
 
 // highest filled layer of the BODY (+1) → the layer the turret should sit ON, not inside
 function bodyTopLayer(foot, layers) {
   const { filled } = buildVolume('body', foot, layers);
   for (let z = layers - 1; z >= 0; z--) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (filled(x, y, z)) return z + 1;
   return 0;
+}
+// RIDE HEIGHT IS THE LOWEST FILLED VOXEL, not grid z=0. renderParts puts Z=0 on the ground line, so a
+// carve that leaves empty layers under the hull — which happens whenever the side/front art does not
+// reach the bottom of the box — renders the unit FLOATING by exactly that many layers. Measured here and
+// applied as a render offset, so the model's own footprint decides where it sits.
+function partFloorZ(partId, foot, layers) {
+  const m = buildModel(partId, foot, layers);
+  if (!m || !m.filled) return 0;
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (m.filled(x, y, z)) return z;
+  return 0;                                                  // empty model — nothing to sit on the ground
 }
 
 // (re)build the voxel models + the cube-render canvases — the orbit/camera-set preview and the inset
@@ -1887,6 +1901,7 @@ function refreshModel() {
   if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
   state.baked = null; voxSig = ''; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
   bodyMountZ = bodyTopLayer(state.foot, state.bodyLayers);   // turret mounts on the body's actual top
+  bodyFloorZ = partFloorZ('body', state.foot, state.bodyLayers);   // …and the hull sits on its own lowest voxel
   bodyFaces = buildFaces('body', state.foot, state.bodyLayers);
   turretFaces = buildFaces('turret', footOf('turret'), state.turretLayers);   // SF3: turret's own footprint
   // canvases sized to the worst case at any azimuth: footprint diagonal + offsets + the full stack height
