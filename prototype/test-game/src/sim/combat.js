@@ -17,6 +17,24 @@ const BASE_TARGET_ID = -1;
 /** Duration (seconds) of the frost chill status applied on hit. */
 const CHILL_DURATION = 1.0;
 
+/**
+ * Distance-tie window, in CELL units (1 cell = one map grid cell; unit collision
+ * radii run 0.38-0.50 cells and speeds 0.39-4.0 cells/s).
+ *
+ * Two candidates whose distance from the shooter differs by LESS than this count
+ * as equidistant, and the documented lowest-entity-id rule decides between them.
+ * An explicit window is required: acquisition ranks with float arithmetic, so
+ * genuinely-equidistant entities almost never compare exactly equal and an
+ * equality-based tie-break is dead code.
+ *
+ * 1e-4 cells is ~2 orders of magnitude below the smallest movement the sim can
+ * produce in one tick (slowest unit 0.39 cells/s x FIXED_DT = ~1.3e-2 cells) and
+ * ~8 orders above float64 noise in the squared comparison (~1e-12 absolute at
+ * board scale). It therefore separates "the same distance" from "genuinely
+ * closer" without ever masking real geometry.
+ */
+const TIE_EPSILON_CELLS = 1e-4;
+
 /* -------------------------------------------------------------------------- */
 /*  Domain legality                                                           */
 /* -------------------------------------------------------------------------- */
@@ -81,10 +99,54 @@ function canSee(shooter, target) {
 /*  Target acquisition                                                        */
 /* -------------------------------------------------------------------------- */
 
-function distBetween(a, b) {
+/**
+ * SQUARED distance. Every range test and every nearest-target comparison in this
+ * module runs in squared space: the per-candidate Math.sqrt bought nothing but
+ * rounding, and it was that rounding which destroyed the distance ties the
+ * lowest-id rule is supposed to arbitrate. Callers compare against range*range.
+ */
+function dist2Between(a, b) {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
-  return Math.sqrt(dx * dx + dy * dy);
+  return dx * dx + dy * dy;
+}
+
+/**
+ * Width of the TIE_EPSILON_CELLS window expressed in SQUARED space, for a weapon
+ * of `range`. Squared differences are not linear in distance:
+ *
+ *   d1^2 - d2^2 = (d1 - d2) * (d1 + d2)
+ *
+ * so a fixed window in cells maps to a window in squared space that scales with
+ * (d1 + d2). Both candidates have already passed the range test, so
+ * d1 + d2 <= 2 * range; using that bound keeps the window from ever being
+ * NARROWER than TIE_EPSILON_CELLS. At close quarters it is somewhat wider (at
+ * d = 0.5 with range 6 it spans ~1.2e-3 cells) — still a thousandth of a cell,
+ * far below anything the sim can express, and it only widens the id rule's reach.
+ */
+function tieSlack2(range) {
+  return 2 * range * TIE_EPSILON_CELLS;
+}
+
+/**
+ * Nearest-wins-with-id-tiebreak accumulator, shared by all three acquisition
+ * branches so they cannot drift apart again.
+ *
+ * Returns true when the candidate should displace the incumbent: strictly nearer
+ * (by more than the tie window), or equidistant within the window AND carrying a
+ * lower entity id.
+ *
+ * @param {number} d2      candidate squared distance
+ * @param {number} id      candidate entity id
+ * @param {number} bestD2  incumbent squared distance (Infinity when none)
+ * @param {number|null} bestId incumbent entity id (null when none)
+ * @param {number} slack2  tieSlack2(range) for this shooter
+ * @returns {boolean}
+ */
+function beatsBest(d2, id, bestD2, bestId, slack2) {
+  if (bestId === null) return true;
+  if (d2 < bestD2 - slack2) return true;                  // genuinely closer
+  return d2 <= bestD2 + slack2 && id < bestId;            // tied -> lowest id
 }
 
 function structureIsTargetable(s) {
@@ -95,9 +157,11 @@ function structureIsTargetable(s) {
 
 /**
  * Deterministic nearest-in-range legal target for a unit or completed tower.
- * Ties are broken by the lowest entity id. Iteration order over the entity
- * Maps is insertion order (== ascending id order) which, combined with the
- * strict comparison below, makes acquisition fully deterministic.
+ * Ties are broken by the lowest entity id — see TIE_EPSILON_CELLS for what
+ * counts as a tie, and beatsBest() for the comparison every branch shares.
+ * Iteration order over the entity Maps is insertion order (== ascending id
+ * order), so acquisition is fully deterministic; the id rule is what makes it
+ * deterministic in the documented WAY rather than by accident of Map order.
  *
  * Returns the target entity id, BASE_TARGET_ID (-1) for the player base,
  * or null when no legal target is in range.
@@ -113,17 +177,19 @@ export function acquireTarget(state, shooter) {
     try { def = getStructureDef(shooter.structId); } catch (e) { return null; }
     const range = def.range;
     if (!range || range <= 0) return null;
+    const range2 = range * range;
+    const slack2 = tieSlack2(range);
     let bestId = null;
-    let bestD = Infinity;
+    let bestD2 = Infinity;
     for (const u of state.units.values()) {
       if (u.hp <= 0) continue;
       if (u.side !== 'attacker') continue;
       if (!domainsAllow(def.canTargetDomains, u.domain)) continue;
       if (!canSee(shooter, u)) continue;
-      const d = distBetween(shooter.pos, u.pos);
-      if (d > range) continue;
-      if (d < bestD || (d === bestD && (bestId === null || u.id < bestId))) {
-        bestD = d;
+      const d2 = dist2Between(shooter.pos, u.pos);
+      if (d2 > range2) continue;
+      if (beatsBest(d2, u.id, bestD2, bestId, slack2)) {
+        if (d2 < bestD2) bestD2 = d2;   // keep the SMALLEST distance so the tie window cannot creep outward
         bestId = u.id;
       }
     }
@@ -133,6 +199,8 @@ export function acquireTarget(state, shooter) {
   // ---- Unit shooter ---------------------------------------------------------
   const range = shooter.range;
   if (!range || range <= 0) return null;
+  const range2 = range * range;
+  const slack2 = tieSlack2(range);
 
   if (shooter.side === 'attacker') {
     // #4: JUGGERNAUTS shoot defences they pass while still advancing on the base — so unlike basic attackers
@@ -142,27 +210,27 @@ export function acquireTarget(state, shooter) {
     if (shooter.targetsBase && !isJugg) {
       // Basic attackers ignore towers entirely; they only attack the base.
       if (state.base && state.base.hp > 0 &&
-          distBetween(shooter.pos, state.base.pos) <= range) {
+          dist2Between(shooter.pos, state.base.pos) <= range2) {
         return BASE_TARGET_ID;
       }
       return null;
     }
     // Structure hunters (Artillery) AND juggernauts: nearest live structure in range.
     let bestId = null;
-    let bestD = Infinity;
+    let bestD2 = Infinity;
     for (const s of state.structures.values()) {
       if (!structureIsTargetable(s)) continue;
-      const d = distBetween(shooter.pos, s.pos);
-      if (d > range) continue;
-      if (d < bestD || (d === bestD && (bestId === null || s.id < bestId))) {
-        bestD = d;
+      const d2 = dist2Between(shooter.pos, s.pos);
+      if (d2 > range2) continue;
+      if (beatsBest(d2, s.id, bestD2, bestId, slack2)) {
+        if (d2 < bestD2) bestD2 = d2;
         bestId = s.id;
       }
     }
     if (bestId !== null) return bestId;
     // No structure in reach: fall back to the base so siege never idles at it.
     if (state.base && state.base.hp > 0 &&
-        distBetween(shooter.pos, state.base.pos) <= range) {
+        dist2Between(shooter.pos, state.base.pos) <= range2) {
       return BASE_TARGET_ID;
     }
     return null;
@@ -170,16 +238,16 @@ export function acquireTarget(state, shooter) {
 
   // Defender-side troop (deployed via deployTroop): engages attacker units.
   let bestId = null;
-  let bestD = Infinity;
+  let bestD2 = Infinity;
   for (const u of state.units.values()) {
     if (u.hp <= 0) continue;
     if (u.side !== 'attacker') continue;
     if (!canHitDomain(shooter.canTarget, u.domain)) continue;
     if (!canSee(shooter, u)) continue;
-    const d = distBetween(shooter.pos, u.pos);
-    if (d > range) continue;
-    if (d < bestD || (d === bestD && (bestId === null || u.id < bestId))) {
-      bestD = d;
+    const d2 = dist2Between(shooter.pos, u.pos);
+    if (d2 > range2) continue;
+    if (beatsBest(d2, u.id, bestD2, bestId, slack2)) {
+      if (d2 < bestD2) bestD2 = d2;
       bestId = u.id;
     }
   }
@@ -294,12 +362,12 @@ export function stepCombat(state, dt) {
     if (tid !== null && tid !== undefined) {
       if (tid === BASE_TARGET_ID) {
         target = (state.base && state.base.hp > 0 &&
-                  distBetween(unit.pos, state.base.pos) <= unit.range)
+                  dist2Between(unit.pos, state.base.pos) <= unit.range * unit.range)
           ? state.base : null;
       } else {
         const cand = state.units.get(tid) || state.structures.get(tid);
         if (cand && cand.hp > 0 &&
-            distBetween(unit.pos, cand.pos) <= unit.range &&
+            dist2Between(unit.pos, cand.pos) <= unit.range * unit.range &&
             (cand.structId !== undefined
               ? structureIsTargetable(cand)
               : canHitDomain(unit.canTarget, cand.domain))) {
@@ -358,7 +426,7 @@ export function stepCombat(state, dt) {
       const cand = state.units.get(tid);
       if (cand && cand.hp > 0 && cand.side === 'attacker' &&
           domainsAllow(def.canTargetDomains, cand.domain) &&
-          distBetween(s.pos, cand.pos) <= def.range) {
+          dist2Between(s.pos, cand.pos) <= def.range * def.range) {
         target = cand;
       }
     }
