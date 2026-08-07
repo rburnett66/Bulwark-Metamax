@@ -1945,7 +1945,13 @@ function update() {
   // moment a bake existed — and the geometry branch turned voxSpr ON without ever turning the baked
   // sprites OFF, so after bake-then-edit BOTH drew and the model appeared over the sprites. Baked frames
   // now live in their own preview modal; nothing here is implicit. (Owner 2026-08-06.)
-  bodyBaked.visible = false; turretBaked.visible = false;
+  // GUARDED: bodyBaked/turretBaked are null until a bake creates them, and refreshModel() destroys and
+  // nulls them again on every edit. The old code only touched them inside `if (state.baked)`, where they
+  // were guaranteed to exist; hoisting them out of that branch threw on every frame before a bake and
+  // killed the whole render loop — which is why the 3D unit disappeared.
+  if (!voxSpr || !voxShadow || !voxMeta || !voxTex) return;   // orbit target not built yet, or mid-rebuild
+  if (bodyBaked) bodyBaked.visible = false;
+  if (turretBaked) turretBaked.visible = false;
   voxSpr.visible = true; voxShadow.visible = true;
   // only re-render the cube scene when something it depends on actually changed
   const sig = state.az.toFixed(1) + '|' + state.el.toFixed(1) + '|' + state.taim.toFixed(1) + '|' + state.turretDx + '|' +
