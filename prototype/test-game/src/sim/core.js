@@ -2,7 +2,7 @@ import { ASSUMPTIONS, WAVES, MAP, getUnitDef, getStructureDef, BONUS_NERFS } fro
 import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath, findRoute, getFlyerPath, getWaterPath } from './pathfinding.js';
 import { createUnit, createBase, createStructure } from './entities.js';
-import { acquireTarget, applyDamage, stepCombat } from './combat.js';
+import { acquireTarget, applyDamage, stepCombat, inBaseReach, BASE_TARGET_ID } from './combat.js';
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
 import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
 import { initWaves, startNextWave, stepWaves } from './waves.js';
@@ -99,15 +99,12 @@ function baseTargetFor(state, unit) {
   if (unit._baseSlotIdx == null) unit._baseSlotIdx = unit.id % slots.length;
   return slots[unit._baseSlotIdx];
 }
-// Distance from a unit to the NEAREST base footprint cell (not the centre) — so a unit standing at its ring slot
-// still registers as "in reach" to attack.
-function distToBaseFootprint(state, unit) {
-  const b = state.base;
-  const cells = (b.cells && b.cells.length) ? b.cells : [b.pos];
-  let best = Infinity;
-  for (const c of cells) { const d = dist(unit.pos, c); if (d < best) best = d; }
-  return best;
-}
+// "In reach of the base" is defined ONCE, in combat.inBaseReach (imported above):
+// nearest base FOOTPRINT cell, floored, so a unit standing at its ring slot
+// registers. This module used to carry a second, subtly different answer
+// (distToBaseFootprint + an inline floor) while acquireTarget carried a third
+// (centre distance, no floor) — a unit at the footprint edge damaged the base
+// with targetId null. Do not reintroduce a local copy.
 
 function assignRoutePath(state, unit) {
   seedRoute(state);
@@ -587,12 +584,21 @@ export function stepMovement(state, dt) {
     if (isAttacker && !engaged) {
       // Base-targeters (and structure hunters with nothing left to siege)
       // attack the base once within weapon reach.
-      const hasStructTarget = unit.targetsBase === false && unit.targetId != null;
+      // BASE_TARGET_ID (-1) is NOT a structure target. acquireTarget hands a
+      // structure hunter the base sentinel when it has no structure left in
+      // reach; treating that as "has a structure target" made the unit skip this
+      // damage branch while stepCombat also skips the base (it is owned here),
+      // so the unit sat at the keep dealing nothing at all. Latent before the
+      // reach reconciliation — acquireTarget's old centre-distance fallback
+      // returned null at footprint range — and live the moment both sides
+      // started using inBaseReach.
+      const hasStructTarget = unit.targetsBase === false &&
+        unit.targetId != null && unit.targetId !== BASE_TARGET_ID;
       if (!hasStructTarget) {
-        // Reach measured to the nearest base FOOTPRINT cell (not the centre), so a unit standing at its ring
-        // slot attacks — and the mob spreads AROUND the base instead of all cramming to the centre point.
-        const reach = Math.max(unit.range || 0.5, 1.4);
-        if (distToBaseFootprint(state, unit) <= reach) {
+        // combat.inBaseReach is THE reach rule — footprint-measured with a floor,
+        // shared with acquireTarget so the two can't disagree in one tick. This
+        // site still OWNS the damage; stepCombat skips the base to avoid doubling it.
+        if (inBaseReach(state, unit)) {
           unit.state = 'attacking';
           applyDamage(state, unit.id, base, unit.dps, unit.damageType, dt);
           engaged = true;
@@ -745,9 +751,9 @@ export function stepMovement(state, dt) {
     if (!path || unit.pathIdx >= path.length) {
       if (isAttacker) {
         // Not yet in reach of the base (walls may have shifted things):
-        // deterministically re-path toward the base by domain.
-        const reach = Math.max(unit.range || 0.5, 1.4);
-        if (distToBaseFootprint(state, unit) > reach) {
+        // deterministically re-path toward the base by domain. Same reach rule
+        // as the engage check above — combat.inBaseReach.
+        if (!inBaseReach(state, unit)) {
           if (unit.domain === 'Walker') {
             // INITIAL path → hand out a route round-robin (spreads traffic across the shared list); a mid-field
             // re-path (already had a route) heads for this unit's own base SLOT so the mob rings the base.

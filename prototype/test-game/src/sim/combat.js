@@ -11,8 +11,8 @@ import { grantKillIncome } from './economy.js';
 import { emitEvent } from './core.js';
 import { bonusDamageMult } from './bonuses.js';
 
-/** Sentinel target id used internally for the player base (base has no entity id). */
-const BASE_TARGET_ID = -1;
+/** Sentinel target id for the player base (the base has no entity id). */
+export const BASE_TARGET_ID = -1;
 
 /** Duration (seconds) of the frost chill status applied on hit. */
 const CHILL_DURATION = 1.0;
@@ -188,6 +188,55 @@ function structureIsTargetable(s) {
     s.lifecycle !== 'Placing';
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Base reach — ONE definition                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Minimum reach against the base, in CELL units, regardless of weapon range.
+ *
+ * Short-range units (WTR-Trucks is 1.225) would otherwise have to press inside
+ * the keep's footprint ring to register, and the separation/contact passes stop
+ * them getting there — they stall at the wall doing nothing. The floor is set
+ * just above one cell so a unit standing in the ring slot adjacent to a
+ * footprint cell always engages.
+ */
+const BASE_REACH_FLOOR = 1.4;
+
+/** Reach used for a unit that carries no weapon range at all (cell units). */
+const BASE_REACH_DEFAULT_RANGE = 0.5;
+
+/**
+ * THE definition of "this attacker is in reach of the base". stepMovement (which
+ * applies the damage) and acquireTarget (which reports the target) both call
+ * this, so they can no longer give different answers in the same tick — a unit
+ * at the footprint edge used to be damaging the base while acquireTarget
+ * returned null, leaving targetId null mid-attack.
+ *
+ * Measured to the nearest base FOOTPRINT cell, not the centre: the keep is 3x3,
+ * and footprint measurement is what lets the mob spread AROUND it instead of all
+ * cramming toward one point. Floored at BASE_REACH_FLOOR so short-range units
+ * do not stall. Squared throughout, consistent with the rest of this module.
+ *
+ * NOTE: this answers reachability only. stepMovement owns the actual base
+ * damage; stepCombat deliberately skips the base so it is not applied twice.
+ *
+ * @param {object} state SimState
+ * @param {object} unit attacking unit
+ * @returns {boolean}
+ */
+export function inBaseReach(state, unit) {
+  const b = state && state.base;
+  if (!b || !unit) return false;
+  const reach = Math.max(unit.range || BASE_REACH_DEFAULT_RANGE, BASE_REACH_FLOOR);
+  const reach2 = reach * reach;
+  const cells = (b.cells && b.cells.length) ? b.cells : [b.pos];
+  for (let i = 0; i < cells.length; i++) {
+    if (dist2Between(unit.pos, cells[i]) <= reach2) return true;
+  }
+  return false;
+}
+
 /**
  * Deterministic nearest-in-range legal target for a unit or completed tower.
  * Ties are broken by the lowest entity id — see TIE_EPSILON_CELLS for what
@@ -242,8 +291,9 @@ export function acquireTarget(state, shooter) {
     const isJugg = shooter.role === 'Juggernaut';
     if (shooter.targetsBase && !isJugg) {
       // Basic attackers ignore towers entirely; they only attack the base.
-      if (state.base && state.base.hp > 0 &&
-          dist2Between(shooter.pos, state.base.pos) <= range2) {
+      // inBaseReach is THE reach rule — the same one stepMovement uses to apply
+      // the damage, so targetId can no longer be null while the base is being hit.
+      if (state.base && state.base.hp > 0 && inBaseReach(state, shooter)) {
         return BASE_TARGET_ID;
       }
       return null;
@@ -262,8 +312,7 @@ export function acquireTarget(state, shooter) {
     }
     if (bestId !== null) return bestId;
     // No structure in reach: fall back to the base so siege never idles at it.
-    if (state.base && state.base.hp > 0 &&
-        dist2Between(shooter.pos, state.base.pos) <= range2) {
+    if (state.base && state.base.hp > 0 && inBaseReach(state, shooter)) {
       return BASE_TARGET_ID;
     }
     return null;
@@ -394,8 +443,9 @@ export function stepCombat(state, dt) {
     let target = null;
     if (tid !== null && tid !== undefined) {
       if (tid === BASE_TARGET_ID) {
-        target = (state.base && state.base.hp > 0 &&
-                  dist2Between(unit.pos, state.base.pos) <= unit.range * unit.range)
+        // Same reach rule as acquisition and as stepMovement's damage — a sticky
+        // base target must not be dropped a tick before the damage stops.
+        target = (state.base && state.base.hp > 0 && inBaseReach(state, unit))
           ? state.base : null;
       } else {
         const cand = state.units.get(tid) || state.structures.get(tid);
