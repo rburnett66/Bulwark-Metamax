@@ -4163,9 +4163,29 @@ function fileForFaction(name) {
   return filesIndex.find((f) => norm(f).includes(key));
 }
 async function loadFaction(name) {
-  if (name !== DECOR_SET && editingDecor) {                        // leaving the Terrain set for units → flush + exit decor editing
-    try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) idb.put('decor:' + editingDecor, dout); } catch (e) { /* flush */ }
+  // LEAVING THE TERRAIN SET FOR UNITS. This flushed the decor and cleared editingDecor but left the decor's
+  // art, VOL and geometry loaded in the editor, and never re-anchored activeUnitId. The next click anywhere
+  // scheduled an autosave, which — with editingDecor now null — snapshotted the DECOR still in the editor
+  // and wrote it to proj:<activeUnitId>, destroying that unit's WIP. One dropdown change from the Tree-1
+  // wipe, running backwards. The fix is to leave nothing of the decor behind.
+  //
+  // Decor lives under System today and will eventually be authored per faction for maps, so this boundary
+  // is going to carry more traffic, not less — it has to be clean before that lands.
+  if (name !== DECOR_SET && editingDecor) {
+    const leaving = editingDecor;
+    try {
+      const dout = snapshotProject(leaving);
+      if (projectHasContent(dout)) await idb.put('decor:' + leaving, dout);   // AWAITED: a fire-and-forget put can resolve after the unit loads and clobber it
+    } catch (e) {
+      return saveFailed('DECOR SAVE FAILED', `Could not save the prop "${leaving}" before leaving the Terrain set. `
+        + `${(e && e.message) || e} — the switch was cancelled so nothing is lost.`);
+    }
     editingDecor = null;
+    clearSourceArt();                                              // the decor's art, VOL, spans and selection go with it
+    state.decorBaked = null; gridModel = null; state.part = 'body';
+    activeUnitId = null;                                           // nothing is open yet — an autosave now has no unit to misfile into
+    wipDirty = false;                                              // the decor is saved; the editor is empty. Nothing is pending.
+    recarve();
   }
   curFaction = name; roster = [];
   try { localStorage.setItem(FACTION_KEY, name); } catch (e) { /* private mode */ }   // survive a reload
