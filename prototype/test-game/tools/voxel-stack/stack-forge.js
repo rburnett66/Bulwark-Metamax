@@ -2264,11 +2264,9 @@ if ($('gridToolSeg')) $('gridToolSeg').onclick = (e) => {
   // cuts the whole column through with a confirm. The tool also stays selected for freehand delete afterward.
   if (gridTool === 'erase' && gridSelVox) deleteSelection();
 };
-if ($('gridClearLayer')) $('gridClearLayer').onclick = () => {
-  const g = gridGeom; if (!g) return; pushUndo(); const ed = voxEdit[g.part], N = g.foot * g.foot;
-  for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) { const [x, y, z] = gridTargetVox(g, cx, cy); ed.set(z * N + y * g.foot + x, 'del'); }
-  gridModel = null; renderGridView(); refreshModel(); scheduleAutosave();
-};
+// Clear layer IS deleteCurrentLayer: same cells, same intent. It wrote voxEdit 'del' -- a store the model
+// does not read -- so it removed nothing, while deleteCurrentLayer beside it did the job correctly.
+if ($('gridClearLayer')) $('gridClearLayer').onclick = () => { deleteCurrentLayer(); };
 // ── CARVE TOP / SIDE / FRONT. Each button runs the whole carve (clear -> fill solid -> cut) with the
 // cuts enabled cumulatively up to its own slice, so each stage is checkable on its own before the next.
 function runCarve(upTo, label) {
@@ -2586,8 +2584,7 @@ document.addEventListener('keydown', (e) => {
   // the paint colour: the swatch chosen in the grid tool row (also settable by clicking a swatch in
   // the Palette window). Explicit colour beats guessing, and it round-trips through the reducer/tuner.
   const gridPaintRGB = () => { const h = ($('gridPaintCol') && $('gridPaintCol').value) || '#8fa7bd'; return [parseInt(h.slice(1, 3), 16) || 0, parseInt(h.slice(3, 5), 16) || 0, parseInt(h.slice(5, 7), 16) || 0]; };
-  // (kept for reference/eyedrop) colour of the nearest existing voxel along the current view's depth axis
-  ;
+  let strokeVol = false;   // has THIS stroke already snapshotted VOL? reset on pointerdown
   const editAt = (e, erase) => {
     const g = gridGeom; if (!g || !g.editable) return false;
     const r = cv.getBoundingClientRect();
@@ -2598,8 +2595,15 @@ document.addEventListener('keydown', (e) => {
     // a selection MASKS editing to the SELECTED VOXELS (not a view rect): pick objects once in Layer 0, then
     // paint their front/side/back faces across facings — corner voxels paint from any view — without reselecting.
     if (gridSelVox && gridSelVox.part === g.part && !gridSelVox.set.has(k)) return false;
-    const ov = ed.get(k), curFilled = ov !== undefined ? ov !== 'del' : gridModel.filled(x, y, z);
-    if (erase) { if (!curFilled) return false; ed.set(k, 'del'); }   // nothing to remove here
+    const curFilled = gridFilledAt(g, x, y, z);        // VOL, never the overlay — see below
+    if (erase) {
+      // ERASE WRITES THE MODEL. It used to write voxEdit 'del', which nothing reads, so nothing
+      // disappeared — and because curFilled was read back from that same overlay, the first no-op
+      // latched and every retry on the voxel returned false. Same path deleteSelection uses.
+      const V = liveVOL(g.part); if (!V || !V[k]) return false;
+      if (!strokeVol) { pushVol(g.part); strokeVol = true; }   // ONE undo entry per stroke, not per voxel
+      V[k] = 0; return true;
+    }
     // paint: RECOLOUR a filled voxel, or (on a real layer) add one where empty. Layer 0 = surface → recolour
     // the facing voxel ONLY, never spawn a new voxel on an empty column.
     else { if (g.slice === 0 && !curFilled) return false; ed.set(k, gridPaintRGB()); }
@@ -2618,7 +2622,7 @@ document.addEventListener('keydown', (e) => {
       [x, y, z] = g.toVox(cx, cy, s0 > 0 ? s0 - 1 : g.depth - 1);    // one step toward camera; empty column seeds at the ground plane
     } else [x, y, z] = g.toVox(cx, cy, g.slice - 1);
     const N = g.foot * g.foot, k = z * N + y * g.foot + x;
-    const ov = ed.get(k), curFilled = ov !== undefined ? ov !== 'del' : gridModel.filled(x, y, z);
+    const curFilled = gridFilledAt(g, x, y, z);                       // VOL, never the overlay
     if (curFilled) return false;                                     // only spawn on EMPTY cells
     ed.set(k, rgb.slice()); return true;
   };
@@ -2789,6 +2793,7 @@ document.addEventListener('keydown', (e) => {
       addBoxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy }; gridAddBox = addBoxing; renderGridView();
       cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
     }
+    strokeVol = false;                                             // new stroke → one fresh VOL snapshot
     const erase = gridTool === 'erase' || gridTool === 'box' || gridTool === 'add' || e.button === 2;   // right-drag (or right-click in Add) erases
     const before = snapVoxEdit();                                  // capture BEFORE the stroke for one undo entry
     if (editAt(e, erase)) { undoStack.push(before); if (undoStack.length > 60) undoStack.shift(); redoStack.length = 0; painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
