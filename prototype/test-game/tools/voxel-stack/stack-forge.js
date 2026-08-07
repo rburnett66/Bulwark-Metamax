@@ -560,17 +560,38 @@ function setPlace(part, p) {
 // the space-carved model BEFORE manual edits (buildVolume is not cached — callers that only need the
 // base, like the live slice editor, cache this and layer edits on cheaply).
 const carveCache = { body: null, turret: null };   // { foot, layers, m } — cleared only by recarve()
+// THE CARVE'S INPUTS, as a string. The cache is keyed on this so it cannot go stale by omission.
+//
+// Why not a counter: recarve() NULLS both cache entries, so a generation number bumped only by recarve()
+// changes at exactly the moments the cache is already empty — it would add nothing. And it cannot be
+// carveEpoch, which refreshModel() bumps after EVERY edit: keying on that would miss after every delete,
+// re-carve from source, and destroy the edit that triggered it.
+//
+// The hole is a control that mutates a carve INPUT and forgets recarve(). Only the inputs close it.
+// Deliberately excluded: anything a hand edit changes. VOL and vcol are OUTPUTS the artist then edits in
+// place — including them would rebuild the model on every delete and wipe the work.
+function carveSig(partId, foot, layers) {
+  const xf = (imgXf[partId] || {}), g = geomState[partId] || {}, sp = (a) => (a ? `${a.lo},${a.hi}` : '-');
+  let s = `${foot}:${layers}:${carveCuts.top}${carveCuts.side}${carveCuts.front}`;
+  s += `|g${g.auto ? 'A' : ''}${sp(g.spanX)}/${sp(g.spanY)}/${sp(g.spanZ)}:${g.bottomFrom || ''}`;
+  for (const v of VIEWS) {
+    const x = xf[v] || {};
+    s += `|${v}${imgs[partId] && imgs[partId][v] ? 1 : 0}`
+      + `:${x.sx || 1},${x.sy || 1},${x.ox || 0},${x.oy || 0}`
+      + `:${(keyTolState[partId] || {})[v]}`
+      + `:${((polyState[partId] || {})[v] || []).length}`
+      + `:${((pickState[partId] || {})[v] || []).length}`;
+  }
+  if (partId === 'turret') s += `|b${state.barrelLen},${state.barrelRad},${state.barrelElev}`;
+  s += `|v${voxPart[partId] ? voxPart[partId].nz : '-'}`;
+  if (partId === 'body' && state.decorProc) s += `|d${state.decorTrunkH},${state.decorTrunkR},${state.decorCanopyR},${state.decorCanopyBase}`;
+  return s;
+}
 function buildModelRaw(partId, foot, layers) {
-  const hit = carveCache[partId];
-  // NOT keyed on carveEpoch, deliberately. carveEpoch++ lives in refreshModel(), which runs after EVERY
-  // edit -- so keying on it would miss the cache after every delete, re-carve from source, hand back a
-  // fresh VOL, and destroy the edit that just triggered it. The cache is invalidated EXPLICITLY by
-  // recarve(), which nulls both entries; that is the mechanism, and it is why edits survive.
-  // Closing the manual-invariant hole means moving the epoch bump to recarve() first, which also feeds
-  // bodyExtentTiles' signature where 'the model changed' is the correct meaning. Not a one-line change.
-  if (hit && hit.foot === foot && hit.layers === layers) return hit.m;
+  const hit = carveCache[partId], sig = carveSig(partId, foot, layers);
+  if (hit && hit.foot === foot && hit.layers === layers && hit.sig === sig) return hit.m;
   const m = carveRaw(partId, foot, layers);
-  carveCache[partId] = { foot, layers, m };
+  carveCache[partId] = { foot, layers, m, sig };
   return m;
 }
 function carveRaw(partId, foot, layers) {
