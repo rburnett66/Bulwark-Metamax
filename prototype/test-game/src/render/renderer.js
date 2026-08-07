@@ -1354,7 +1354,13 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       // smoothly from the baked angle cache. Pure texture swaps on retained sprites — no container
       // rotation (the facing IS the frame), so the mount math matches the Forge preview exactly.
       if (renderer.voxelArt && hasVoxel(renderer.voxelArt, artId)) {
-        const tier = (getUnitDef(artId) || {}).render_tier || 'A';
+        // getUnitDef THROWS on an unknown id (tables.js:1110), so the `|| {}` this used to rely on was
+        // dead code and this call — inside the per-unit draw loop — could kill a frame outright. The
+        // trigger is any unit whose artId has a voxel pack but no stats entry, which the shipped
+        // manifest already contains (`abrams`, `SPA-U3`); inert only because nothing spawns as them.
+        // Guarded the same way the identical call at :688 already is.
+        let _def = null; try { _def = getUnitDef(artId); } catch (e) { _def = null; }
+        const tier = (_def || {}).render_tier || 'A';
         let spr = renderer.unitSprites.get(u.id);
         if (spr && !spr.__vox && !spr.__live3d) {   // was authored art before the pack loaded — rebuild
           if (spr.parent) spr.parent.removeChild(spr);

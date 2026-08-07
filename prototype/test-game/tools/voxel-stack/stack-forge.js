@@ -895,9 +895,27 @@ function renderParts(ctx, S, cx, groundY, el, parts) {
 // screen; the 3D view outlines it in cyan. That is what makes "select from the top, then trim it back
 // from the side" work — there is one selection, not one per view, so there is nothing to reconcile.
 let selEpoch = 0;                                         // bumped on every change so the 3D view redraws
+// A selection is only meaningful at the dims it was made at: its keys are ABSOLUTE (z*foot² + y*foot + x),
+// so the same key addresses a different voxel the moment foot or layers changes. The dims are stamped here
+// and checked by selCheckDims below — the same guard restoreVol already applies to a saved volume
+// (:2042, "discarded rather than mis-indexed"), which the selection never got.
 function selEnsure(part) {
-  if (!gridSelVox || gridSelVox.part !== part) gridSelVox = { part, set: new Set() };
+  const foot = footOf(part), layers = gridLayersOf(part);
+  if (!gridSelVox || gridSelVox.part !== part) gridSelVox = { part, foot, layers, set: new Set() };
   return gridSelVox;
+}
+// Called once per grid build, so every one of the ~15 `gridSelVox.part !== g.part` checks downstream stays
+// correct WITHOUT being touched: a stale selection is gone before any of them run. Clearing rather than
+// remapping is deliberate — a remap across a resize has no well-defined answer (voxels the new grid has no
+// room for would have to be dropped silently), and losing a selection is cheap next to scattering deletes
+// through unrelated voxels, which is what happened before this existed.
+function selCheckDims(part, foot, layers) {
+  if (!gridSelVox) return;
+  if (gridSelVox.foot === undefined) { gridSelVox.foot = foot; gridSelVox.layers = layers; return; }  // pre-stamp selection
+  if (gridSelVox.foot !== foot || gridSelVox.layers !== layers) {
+    console.info(`[stack-forge] selection cleared — it was made at ${gridSelVox.foot}×${gridSelVox.layers}, the grid is now ${foot}×${layers}`);
+    gridSelVox = null; gridSel = null; gridSelView = null; selEpoch++;
+  }
 }
 const rectBounds = (g, c0, r0, c1, r1) => ({
   a0: Math.max(0, Math.min(c0, c1)), a1: Math.min(g.cols - 1, Math.max(c0, c1)),
@@ -943,7 +961,7 @@ function buildSelVox(surfaceOnly) {
     }
   } else for (const k of rectVox(g, gridSel.c0, gridSel.r0, gridSel.c1, gridSel.r1)) set.add(k);
   selEpoch++;
-  return { part: g.part, set };
+  return { part: g.part, foot: g.foot, layers: g.layers, set };   // dims stamped — see selCheckDims
 }
 // The PERSISTENT selection as voxels (survives facing/layer switches), keyed for the 3D outline + masking.
 function gridSelSet() { return gridSelVox; }
@@ -1598,6 +1616,7 @@ function renderGridView() {
   const cv = $('gridCanvas'); if (!cv) return;
   const ctx = cv.getContext('2d');
   const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part), N = foot * foot;
+  selCheckDims(part, foot, layers);   // drop a selection whose absolute keys no longer address this grid
   // cache the RAW (pre-edit) carve; voxEdit is layered on cheaply below so live painting never re-carves.
   if (!gridModel || gridModel.part !== part || gridModel.foot !== foot || gridModel.layers !== layers) {
     const m = buildModelRaw(part, foot, layers);
@@ -2537,10 +2556,13 @@ if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.c
 // matching the compass: left↔right = Y, front↔back = X — so a mirror always means what its label says.
 function mirrorWorld(axis, srcSecond) {
   const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part), N = foot * foot;
-  pushVol(gridPart());
+  // ONE undo entry, and it must snapshot the array the mirror then mutates. This pushed TWICE — once
+  // here and again after buildModel — so the first Ctrl+Z appeared to do nothing. Worse, buildModel can
+  // replace carveCache[part].m via the sig path, so the earlier snapshot could be of a DIFFERENT array
+  // than the V captured below. Build first, then snapshot, then mutate.
   const m = buildModel(part, foot, layers), ed = voxEdit[part];
   const V = liveVOL(part), vc = m && m.vcol;
-  if (V) pushVol(part);                                        // one undo entry for the whole mirror
+  pushVol(part);
   let n = 0;
   const cap = (axis === 'z') ? layers : foot, c2 = cap - 1;
   const coord = (x, y, z) => (axis === 'x' ? x : axis === 'y' ? y : z);
@@ -2673,7 +2695,7 @@ function reprojectSurface() {
       if (!keep(col, row)) outside.add(z * N + y * foot + x);
     }
     if (!outside.size) { alert('Angle carve: every voxel is inside the outline — nothing to remove.'); return false; }
-    gridSelVox = { part: g.part, set: outside }; gridSelView = gridView;   // select the OUTSIDE voxels; Delete removes them
+    gridSelVox = { part: g.part, foot: g.foot, layers: g.layers, set: outside }; gridSelView = gridView;   // select the OUTSIDE voxels; Delete removes them
     renderGridView();
     return true;
   }
