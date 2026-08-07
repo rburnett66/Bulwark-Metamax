@@ -1431,7 +1431,11 @@ let bodyFloorZ = 0;                              // lowest FILLED layer — the 
 
 // highest filled layer of the BODY (+1) → the layer the turret should sit ON, not inside
 function bodyTopLayer(foot, layers) {
-  const { filled } = buildVolume('body', foot, layers);
+  // buildModel, NOT buildVolume. Calling buildVolume direct bypassed carveCache, so every refreshModel
+  // ran a FULL keyed-image carve of the body whose only surviving output is one integer — and worse, a
+  // fresh buildVolume has its own VOL, so hand edits were invisible here: shaving the top off the hull
+  // did not lower bodyMountZ and the turret kept mounting at the pre-edit height.
+  const { filled } = buildModel('body', foot, layers);
   for (let z = layers - 1; z >= 0; z--) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (filled(x, y, z)) return z + 1;
   return 0;
 }
@@ -3963,12 +3967,16 @@ function loadDecorForEdit(id) {
 }
 function bakeDecor() {
   if (!bodyFaces) { alert('Decor: author the prop as the BODY first (load Top / Side / Front in step 1), then Bake decor.'); return; }
-  const foot = state.foot, bL = state.bodyLayers, sp = layerSp(state.el), B = state.bakeScale;
+  // Frame and render at the SAME tilt. sp came from the ORBIT elevation while the frames rendered at
+  // bakeElOf(), so with the orbit steeper than the bake tilt the render texture was shorter than the
+  // model and the crown was clipped in the shipped sprite. doBake fixed this for units; decor was missed.
+  const bEl = bakeElOf();
+  const foot = state.foot, bL = state.bodyLayers, sp = layerSp(bEl), B = state.bakeScale;
   const g = geom(foot, bL, sp, 0);                                     // body-only, centred pivot
-  const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bakeElOf(), scale: B });
+  const frame = bakeAngleCache(app.renderer, bodyFaces, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bEl, scale: B });
   const filled = buildModel('body', foot, bL).filled;
-  const shadow = bakeShadowCache(app.renderer, filled, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bakeElOf(), scale: B, foot, layers: bL });
-  state.decorBaked = { frame, shadow, g, sp, foot, layers: bL, scale: B };
+  const shadow = bakeShadowCache(app.renderer, filled, { frames: DECOR_FRAMES, g, pivotFrac: 0.5, el: bEl, scale: B, foot, layers: bL });
+  state.decorBaked = { frame, shadow, g, sp, foot, layers: bL, scale: B, el: bEl };   // the tilt these pixels were drawn at
   $('decorBakeState').innerHTML = `<span class="lock">✓ Decor baked · 1 frame + cast shadow · ${g.RTW * B}×${g.RTH * B}</span>`;
 }
 function buildDecorPack() {
@@ -3978,7 +3986,7 @@ function buildDecorPack() {
   const pack = {
     id, type: 'decor', class: 'decor', footprint: [b.foot, b.foot, b.layers],
     scale: { voxPerTile: VOX_PER_TILE, tiles: unitTiles(b.foot) },
-    camera: { azimuth: 0, elevation: state.el | 0 }, layerSpacing: Math.round(b.sp * 100) / 100,
+    camera: { azimuth: 0, elevation: (b.el != null ? b.el : state.el) | 0 }, layerSpacing: Math.round(b.sp * 100) / 100,   // the BAKE tilt, matching the pixels
     voxel: { height: state.zScale }, renderScale: B,
     light: { azimuth: state.lightAz, contrast: state.lightK },
     parts: [
