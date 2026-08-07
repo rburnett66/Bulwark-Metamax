@@ -2381,6 +2381,9 @@ function mirrorWorld(axis, srcSecond) {
   const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part), N = foot * foot;
   pushUndo();
   const m = buildModel(part, foot, layers), ed = voxEdit[part];
+  const V = liveVOL(part), vc = m && m.vcol;
+  if (V) pushVol(part);                                        // one undo entry for the whole mirror
+  let n = 0;
   const cap = (axis === 'z') ? layers : foot, c2 = cap - 1;
   const coord = (x, y, z) => (axis === 'x' ? x : axis === 'y' ? y : z);
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
@@ -2388,10 +2391,18 @@ function mirrorWorld(axis, srcSecond) {
     if (srcSecond ? (a * 2 <= c2) : (a * 2 >= c2)) continue;   // write only the TARGET half
     const sa = c2 - a, sx = axis === 'x' ? sa : x, sy = axis === 'y' ? sa : y, sz = axis === 'z' ? sa : z;
     const k = z * N + y * foot + x;
-    if (m.filled(sx, sy, sz)) { const cc = (sz * N + sy * foot + sx) * 3; ed.set(k, [m.vcol[cc], m.vcol[cc + 1], m.vcol[cc + 2]]); }
-    else ed.set(k, 'del');
+    // GEOMETRY GOES TO VOL. Both branches wrote voxEdit — a store the model does not read — so mirroring
+    // changed nothing at all, in either view. The colour write stays on voxEdit until setVox/PAINT exist
+    // (AAC), because vcol alone is overwritten by wallCol on every non-top face.
+    if (m.filled(sx, sy, sz)) {
+      const cc = (sz * N + sy * foot + sx) * 3;
+      if (V) { V[k] = 1; if (vc) { vc[k * 3] = m.vcol[cc]; vc[k * 3 + 1] = m.vcol[cc + 1]; vc[k * 3 + 2] = m.vcol[cc + 2]; } }
+      ed.set(k, [m.vcol[cc], m.vcol[cc + 1], m.vcol[cc + 2]]);
+      n++;
+    } else if (V && V[k]) { V[k] = 0; n++; }
   }
   gridModel = null; refreshModel(); scheduleAutosave();
+  console.info(`[stack-forge] mirrored ${n} voxel(s) on ${axis} — Ctrl+Z to undo`);
 }
 if ($('gridMirrorLR')) $('gridMirrorLR').onclick = () => mirrorWorld('y', false);   // left↔right (world Y) — bilateral symmetry
 if ($('gridMirrorRL')) $('gridMirrorRL').onclick = () => mirrorWorld('y', true);
@@ -2645,13 +2656,22 @@ document.addEventListener('keydown', (e) => {
     const N = g.foot * g.foot, k = z * N + y * g.foot + x;
     const curFilled = gridFilledAt(g, x, y, z);                       // VOL, never the overlay
     if (curFilled) return false;                                     // only spawn on EMPTY cells
-    ed.set(k, rgb.slice()); return true;
+    // ADD WRITES THE MODEL. It used to set voxEdit only, so the voxel never appeared anywhere. The colour
+    // is seeded into vcol at the same time or the new voxel ships BLACK — the carve fills vcol only where
+    // the carve itself filled, and nothing else writes it for a spawned cell.
+    const V = liveVOL(g.part), m = gridModel;
+    if (!V) return false;
+    V[k] = 1;
+    if (m && m.vcol) { m.vcol[k * 3] = rgb[0]; m.vcol[k * 3 + 1] = rgb[1]; m.vcol[k * 3 + 2] = rgb[2]; }
+    ed.set(k, rgb.slice());                                          // colour overlay stays until setVox/PAINT (AAC)
+    return true;
   };
   const commitAddBox = () => {
     const g = gridGeom, b = gridAddBox; if (!g || !b) return;
     const c0 = clamp(Math.min(b.c0, b.c1), 0, g.cols - 1), c1 = clamp(Math.max(b.c0, b.c1), 0, g.cols - 1);
     const r0 = clamp(Math.min(b.r0, b.r1), 0, g.rows - 1), r1 = clamp(Math.max(b.r0, b.r1), 0, g.rows - 1);
     const ed = voxEdit[g.part], rgb = gridPaintRGB(); let any = false;
+    if (liveVOL(g.part)) pushVol(g.part);                            // ONE undo entry for the whole patch
     for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) if (extrudeAddCell(g, cx, cy, ed, rgb)) any = true;
     if (any) { gridModel = null; refreshModel(); scheduleAutosave(); }
     return any;
