@@ -134,6 +134,17 @@
     statusEl.textContent = opts.status || '';
     bar.appendChild(statusEl);
 
+    // One favicon for every tool, from the shared header — otherwise each page 404s on /favicon.ico and
+    // fills its console with noise that hides real errors. Inline SVG, so no extra request.
+    if (!document.querySelector('link[rel~="icon"]')) {
+      const ico = document.createElement('link');
+      ico.rel = 'icon';
+      ico.href = 'data:image/svg+xml,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">'
+        + '<rect width="16" height="16" rx="3" fill="#0b1622"/>'
+        + '<path d="M8 2.5 13 5.2v5.6L8 13.5 3 10.8V5.2z" fill="none" stroke="#f2c869" stroke-width="1.4"/></svg>');
+      document.head.appendChild(ico);
+    }
     document.body.insertBefore(bar, document.body.firstChild);
 
     // MAKE ROOM, DO NOT SHOVE. Several pages size their root to the full viewport (#app { height:100vh }).

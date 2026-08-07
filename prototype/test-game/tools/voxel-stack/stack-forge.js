@@ -195,7 +195,7 @@ function keyedCanvas(img, tol, polys, picks) {
 // keyed + CROPPED to the content bounding box — so empty margins and the raw image aspect ratio don't
 // distort registration (a long-barrel side view maps its CONTENT, not the whole rectangle).
 function keyedCropped(img, tol, poly, picks) {
-  const k = keyedCanvas(img, tol, poly, picks), d = k.getContext('2d').getImageData(0, 0, k.width, k.height).data;
+  const k = keyedCanvas(img, tol, poly, picks), d = k.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, k.width, k.height).data;
   let x0 = k.width, y0 = k.height, x1 = -1, y1 = -1;
   for (let yy = 0; yy < k.height; yy++) for (let xx = 0; xx < k.width; xx++) if (d[(yy * k.width + xx) * 4 + 3] > INK_A) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
   if (x1 < x0) return k;
@@ -414,7 +414,7 @@ function buildVolume(partId, foot, layers) {
   const topC = src.top ? xfCanvas(keyedCanvas(src.top, tol.top, pol.top, pk.top), xf.top) : null;      // UNCROPPED: keeps position + size
   const sideC = src.side ? xfCanvas(keyedCanvas(src.side, tol.side, pol.side, pk.side), xf.side) : null;
   const frontC = src.front ? xfCanvas(keyedCanvas(src.front, tol.front, pol.front, pk.front), xf.front) : (src.back ? xfCanvas(keyedCanvas(src.back, tol.back, pol.back, pk.back), xf.back) : null);
-  const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d');
+  const tc = document.createElement('canvas'); tc.width = tc.height = foot; const tx = tc.getContext('2d', { willReadFrequently: true });
   // procedural barrel reserves a FORWARD margin so the body shrinks back and the tube protrudes past it
   const reach = (partId === 'turret' && state.barrelLen > 0) ? state.barrelLen : 0;
   // GEOMETRY: placement comes from three shared world-axis spans (auto today via autoSpans; the geometry
@@ -1321,7 +1321,10 @@ const imgXf = { body: mkXf(), turret: mkXf() };
 function xfCanvas(im, xf) {
   if (!im || !xf || (xf.sx === 1 && xf.sy === 1 && xf.ox === 0 && xf.oy === 0)) return im;
   const w = im.width || im.naturalWidth, h = im.height || im.naturalHeight; if (!w || !h) return im;
-  const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  // willReadFrequently HERE, not at the read site: asPixels/sliceMask read this canvas back on every carve,
+  // and a later getContext('2d', {...}) returns the context that already exists and silently ignores the flag.
+  const g = c.getContext('2d', { willReadFrequently: true });
   g.imageSmoothingEnabled = false;                                   // alpha stays binary when a slice is nudged
   g.translate(w / 2 + (xf.ox || 0) * w, h / 2 + (xf.oy || 0) * h); g.scale(xf.sx || 1, xf.sy || 1); g.drawImage(im, -w / 2, -h / 2);
   return c;
