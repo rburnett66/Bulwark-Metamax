@@ -636,6 +636,20 @@ function setVox(part, k, rgb) {
   m.PAINT[k] = 1;
   return true;
 }
+// COPY a voxel's colour onto another, INCLUDING whether it was authored. Mirroring must not invent
+// authorship: setVox marks PAINT, and PAINT permanently takes a voxel off the wall-art pass in
+// buildFaces — so mirroring a hull whose flank detail comes from the side sheet FLATTENED the mirrored
+// half to its bare column colour. Bilateral symmetry is the commonest operation on a tank, so that was
+// most of the model, every time. Authored stays authored; carve-derived stays derived and keeps its art.
+function copyVoxColour(part, k, srcK) {
+  const m = carveCache[part] && carveCache[part].m;
+  if (!m || !m.vcol) return false;
+  const V = liveVOL(part);
+  if (V && !V[k]) return false;                                   // same rule as setVox: no colour on empty space
+  m.vcol[k * 3] = m.vcol[srcK * 3]; m.vcol[k * 3 + 1] = m.vcol[srcK * 3 + 1]; m.vcol[k * 3 + 2] = m.vcol[srcK * 3 + 2];
+  if (m.PAINT) m.PAINT[k] = m.PAINT[srcK];
+  return true;
+}
 function buildModelRaw(partId, foot, layers) {
   const hit = carveCache[partId], sig = carveSig(partId, foot, layers);
   if (hit && hit.foot === foot && hit.layers === layers && hit.sig === sig) return hit.m;
@@ -782,7 +796,10 @@ function buildQuantiser(cd, vcol, filled, foot, layers, n, views) {
 // draws. Palette cleanup is baked into the face colour; LIGHTING IS NOT — it's applied per-frame from the
 // rotated face normal, so the world light stays fixed while the object turns under it.
 // n: 0 = top, 1 = +x, 2 = −x, 3 = +y, 4 = −y (grid space, y = image-down).
-function buildFaces(partId, foot, layers) {
+// `raw` (default false) skips the palette reduction and the colour tune, returning the face colours the
+// wall-art pass produced. The palette window needs exactly that: it is CHOOSING a reduction, so feeding
+// it colours that a previous reduction already binned would have it quantise a quantised model.
+function buildFaces(partId, foot, layers, raw) {
   const model = buildModel(partId, foot, layers), N = foot * foot;   // unified voxel model
   const { filled, vcol, views: V } = model;
   // The painted flag comes from the MODEL now. It used to be read from voxEdit while the COLOUR was read
@@ -790,7 +807,7 @@ function buildFaces(partId, foot, layers) {
   // suppressed its wall art and then fell back to the flat column colour. Measured, in 3D and in the bake.
   // PAINT and vcol MUST come from the same object, or this reintroduces exactly that split.
   const PAINT = model.PAINT || null;
-  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, V);   // palette cleanup (incl. wall art)
+  const quant = raw ? null : buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, V);   // palette cleanup (incl. wall art)
   // wall colour comes from the elevation view that DEPICTS that wall: side view → ±y walls (far side
   // mirrored), front view → +x wall, back view → −x wall (mirrored front when no back was drawn).
   // Top view keeps colouring the tops. Fallback everywhere = the voxel's column colour.
@@ -823,7 +840,7 @@ function buildFaces(partId, foot, layers) {
       const w = (n === 0 || painted) ? null : wallCol(x, y, z, n);   // painted → use the voxel colour so in-game matches the grid
       let r = w ? w[0] : vcol[c], g = w ? w[1] : vcol[c + 1], b = w ? w[2] : vcol[c + 2];
       if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
-      const k = (r << 16) | (g << 8) | b, t = palMap.get(k);          // artist colour tune (palette tuner)
+      const k = (r << 16) | (g << 8) | b, t = raw ? null : palMap.get(k);   // artist colour tune (palette tuner)
       if (t) { r = t[0]; g = t[1]; b = t[2]; }
       faces.push({ x, y, z, n, r, g, b, k, d: 0 });                   // k = pre-tune key, the tuner's handle
     };
@@ -1532,7 +1549,12 @@ function partFloorZ(partId, foot, layers) {
 // independent of the zScale cube-height stretch used by the 3D render.
 let gridView = 'top', gridLayer = 0, gridModel = null;   // gridModel: cached buildModel, invalidated by recarve
 let gridZoom = 1, gridPanX = 0, gridPanY = 0;            // scroll-wheel zoom of the grid editor (cursor-anchored)
-let gridTool = 'erase', gridGeom = null;                 // gridGeom: last-drawn cell layout, so pointer edits map back to voxels
+// THE FOUR PAINT TOOLS, plus the two geometry ones. Opens on ▢ Select, because every other tool reads
+// better once you have chosen what you are working on — and Select is the only one that cannot damage
+// anything. It used to open on 🗑 Delete.
+let gridTool = 'box', gridGeom = null;                   // gridGeom: last-drawn cell layout, so pointer edits map back to voxels
+// live ✥ Move drag: { part, dc, dr } in grid cells. Draw-only — the model is written once, on release.
+let moveGhost = null;
 let gridMode = 'paint';                                  // 'paint' = per-voxel slice editing · 'geom' = reconcile view spans
 let gridAlign = false;                                   // ⊞ Align T/S: carved TOP projection stacked above SIDE, length-aligned (read-only, Pass 1)
 let gridBoxSel = null;                                    // transient marquee being dragged {c0,r0,c1,r1} in grid cells
@@ -1825,7 +1847,10 @@ function renderGridView() {
   // there was nothing to drag: owner "the blue handles do not respond". The slice image it overlays is
   // already drawn behind `if (keyed)`, so it simply renders as a bare box when there is no art.
   const geomActive = gridMode === 'geom' && base.sp && GEOAX[gridView];
-  gridGeom = { cell, cellV, zsc, ox, oy, cols, rows, depth, slice, toVox: ax.toVox, foot, layers, part, editable: !geomActive };
+  // colAt rides along so the pointer tools can match on WHAT IS DRAWN. Flood fill comparing raw vcol
+  // would refuse to spread across a face whose colour comes from the side sheet — visibly one patch,
+  // two different numbers. gridGeom is already the render→pointer handoff; this is what it is for.
+  gridGeom = { cell, cellV, zsc, ox, oy, cols, rows, depth, slice, toVox: ax.toVox, foot, layers, part, editable: !geomActive, colAt };
   ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, W, H);
   // faint checker so the empty grid still reads as a grid at any zoom
   if (cell >= 4) { ctx.fillStyle = 'rgba(255,255,255,.025)';
@@ -2023,8 +2048,12 @@ function renderGridView() {
   // looked like it had been cleared on every perspective change. Nothing may paint over it.
   ctx.globalAlpha = 1;
   if (gridSelVox && gridSelVox.part === part) {
+    // ✥ MOVE GHOST. While a move drag is live the selection is drawn shifted by the drag, so you can see
+    // where the voxels will land before you let go. Nothing has moved yet — the model is written once,
+    // on release, so the whole drag is ONE undo entry.
+    const gh = moveGhost && moveGhost.part === part ? moveGhost : null;
     for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
-      const s = selCellState(gridGeom, cx, cy); if (!s) continue;
+      const s = selCellState(gridGeom, gh ? cx - gh.dc : cx, gh ? cy - gh.dr : cy); if (!s) continue;
       ctx.fillStyle = s === 2 ? 'rgba(95,224,255,.38)' : 'rgba(95,224,255,.15)';   // deeper-in-column reads faint
       ctx.fillRect(ox + cx * cell, oy + cy * cellV, cell, cellV);
       if (s === 2) { ctx.strokeStyle = 'rgba(120,240,255,.85)'; ctx.lineWidth = 1; ctx.strokeRect(ox + cx * cell + .5, oy + cy * cellV + .5, cell - 1, cellV - 1); }
@@ -2443,9 +2472,10 @@ if ($('gridToolSeg')) $('gridToolSeg').onclick = (e) => {
   gridTool = b.dataset.t;
   [...$('gridToolSeg').children].forEach((c) => c.classList.toggle('on', c === b));
   renderGridView();   // sets gridGeom for the current view/layer first
-  // Clicking 🗑 Delete with an active selection deletes it right away (like Fill acts on the selection) — Layer 0
-  // cuts the whole column through with a confirm. The tool also stays selected for freehand delete afterward.
+  // Picking a tool that ACTS ON A SELECTION acts immediately when one is live — you already said what you
+  // meant by selecting it. Both stay selected afterwards for freehand use.
   if (gridTool === 'erase' && gridSelVox) deleteSelection();
+  if (gridTool === 'fill' && gridSelVox) fillSelection();
 };
 // Clear layer IS deleteCurrentLayer: same cells, same intent. It wrote voxEdit 'del' -- a store the model
 // does not read -- so it removed nothing, while deleteCurrentLayer beside it did the job correctly.
@@ -2603,7 +2633,7 @@ function mirrorWorld(axis, srcSecond) {
   // replace carveCache[part].m via the sig path, so the earlier snapshot could be of a DIFFERENT array
   // than the V captured below. Build first, then snapshot, then mutate.
   const m = buildModel(part, foot, layers);
-  const V = liveVOL(part), vc = m && m.vcol;
+  const V = liveVOL(part);
   pushVol(part);
   let n = 0;
   const cap = (axis === 'z') ? layers : foot, c2 = cap - 1;
@@ -2616,10 +2646,10 @@ function mirrorWorld(axis, srcSecond) {
     // GEOMETRY GOES TO VOL, COLOUR GOES THROUGH setVox. Both branches used to write voxEdit — a store the
     // model does not read — so mirroring changed nothing at all, in either view.
     if (m.filled(sx, sy, sz)) {
-      const cc = (sz * N + sy * foot + sx) * 3;
-      if (V) { V[k] = 1; if (vc) { vc[k * 3] = m.vcol[cc]; vc[k * 3 + 1] = m.vcol[cc + 1]; vc[k * 3 + 2] = m.vcol[cc + 2]; } }
-      setVox(part, k, [m.vcol[cc], m.vcol[cc + 1], m.vcol[cc + 2]]);
-      n++;
+      if (!V) continue;
+      V[k] = 1;                                                // geometry first, then the colour it carries
+      copyVoxColour(part, k, sz * N + sy * foot + sx);         // NOT setVox — see copyVoxColour: marking the
+      n++;                                                     // mirrored half PAINTed flattened its side art
     } else if (V && V[k]) { V[k] = 0; n++; }
   }
   gridModel = null; refreshModel(); scheduleAutosave();
@@ -2665,7 +2695,89 @@ function fillSelection() {
   for (const k of pending) setVox(part, k, rgb);
   gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); return true;
 }
+// 🪣 FILL with NO selection = a paint bucket: flood the contiguous patch of like-coloured surface under
+// the cursor, on this facing. Matching is on the DRAWN colour (gridGeom.colAt), not raw vcol, because a
+// face coloured by the side sheet and its neighbour are visibly one patch and numerically two.
+// TOL is generous on purpose: a photo carve has no flat areas, and a bucket that stops at every
+// anti-aliased shade is a bucket nobody uses.
+const FILL_TOL2 = 34 * 34;
+function floodFillAt(cx0, cy0) {
+  const g = gridGeom; if (!g || !g.editable || !g.colAt) return false;
+  const N = g.foot * g.foot, rgb = paintRGB(), part = g.part;
+  const cellVox = (c, r) => { const v = gridTargetVox(g, c, r); return gridFilledAt(g, v[0], v[1], v[2]) ? v : null; };
+  const seed = cellVox(cx0, cy0); if (!seed) return false;
+  const seedCol = g.colAt(seed[0], seed[1], seed[2]);
+  const near = (c) => { const dr = c[0] - seedCol[0], dg = c[1] - seedCol[1], db = c[2] - seedCol[2]; return dr * dr + dg * dg + db * db <= FILL_TOL2; };
+  const seen = new Set([cy0 * g.cols + cx0]), stack = [[cx0, cy0]], keys = [];
+  while (stack.length) {
+    const [cx, cy] = stack.pop();
+    const v = cellVox(cx, cy); if (!v) continue;
+    if (!near(g.colAt(v[0], v[1], v[2]))) continue;
+    keys.push(v[2] * N + v[1] * g.foot + v[0]);
+    for (const [nx, ny] of [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]]) {
+      if (nx < 0 || ny < 0 || nx >= g.cols || ny >= g.rows) continue;
+      const id = ny * g.cols + nx; if (seen.has(id)) continue;
+      seen.add(id); stack.push([nx, ny]);
+    }
+  }
+  if (!keys.length) return false;
+  pushVol(part);                                 // ONE entry for the whole flood
+  let n = 0; for (const k of keys) if (setVox(part, k, rgb)) n++;
+  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
+  console.info(`[stack-forge] filled ${n} voxel(s) from the patch under the cursor`);
+  return n > 0;
+}
+// ONE fill, used by the 🪣 tool, the 🪣 button and Enter/F. A selection wins; with none, flood the patch.
+function doFill(cx, cy) {
+  if (gridSelVox && gridSelVox.set && gridSelVox.set.size) return fillSelection();
+  return (cx == null) ? false : floodFillAt(cx, cy);
+}
 if ($('gridFill')) $('gridFill').onclick = () => fillSelection();
+
+// ── ✥ MOVE ────────────────────────────────────────────────────────────────────────────────────────
+// Translate the selected voxels — geometry AND colour AND their authored flag — by a whole-voxel delta.
+// The delta comes from the facing itself (toVox at two cells, differenced), so a drag right in the Side
+// view moves along world x and the same drag in Front moves along world y, without this knowing which.
+// Voxels pushed off the grid are DROPPED, deliberately: silently clamping them would pile the edge of a
+// moved shape into a wall, and there is no correct place to put them.
+function moveSelectionCells(dc, dr) {
+  const g = gridGeom; if (!g || !g.toVox || !gridSelVox || gridSelVox.part !== g.part || !gridSelVox.set.size) return 0;
+  if (!dc && !dr) return 0;
+  const a = g.toVox(0, 0, 0), b = g.toVox(dc, dr, 0);
+  const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+  if (!dx && !dy && !dz) return 0;
+  const part = g.part, foot = g.foot, layers = g.layers, N = foot * foot;
+  const V = liveVOL(part), m = carveCache[part] && carveCache[part].m;
+  if (!V || !m || !m.vcol) return 0;
+  // READ THE WHOLE PAYLOAD FIRST. Source and destination overlap on almost every drag, so clearing as
+  // you go eats the voxels you have not copied yet.
+  const payload = [];
+  for (const k of gridSelVox.set) {
+    if (!V[k]) continue;
+    const x = k % foot, y = ((k / foot) | 0) % foot, z = (k / N) | 0;
+    const nx = x + dx, ny = y + dy, nz = z + dz;
+    if (nx < 0 || ny < 0 || nz < 0 || nx >= foot || ny >= foot || nz >= layers) continue;   // off the grid → dropped
+    payload.push({ from: k, to: nz * N + ny * foot + nx, rgb: [m.vcol[k * 3], m.vcol[k * 3 + 1], m.vcol[k * 3 + 2]],
+      paint: m.PAINT ? m.PAINT[k] : 0 });
+  }
+  if (!payload.length) return 0;
+  pushVol(part);                                 // ONE entry for the whole drag
+  for (const k of gridSelVox.set) V[k] = 0;      // clear the ORIGINAL footprint, including anything dropped
+  const landed = new Set();
+  for (const p of payload) {
+    V[p.to] = 1;
+    m.vcol[p.to * 3] = p.rgb[0]; m.vcol[p.to * 3 + 1] = p.rgb[1]; m.vcol[p.to * 3 + 2] = p.rgb[2];
+    if (m.PAINT) m.PAINT[p.to] = p.paint;        // authored stays authored; carve-derived stays derived
+    landed.add(p.to);
+  }
+  const dropped = gridSelVox.set.size - payload.length;
+  gridSelVox = { part, foot, layers, set: landed };   // the selection travels with the voxels
+  gridSel = null; gridSelView = null; selEpoch++;
+  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
+  console.info(`[stack-forge] moved ${payload.length} voxel(s) by (${dx},${dy},${dz})`
+    + (dropped > 0 ? ` — ${dropped} pushed off the grid and dropped` : '') + ' — Ctrl+Z to undo');
+  return payload.length;
+}
 // ── DIAGNOSTIC: report how the source view art (V) maps onto this part's exposed faces, so a misaligned
 // image (e.g. front tips reading black in-game) is visible as a coverage gap, not guesswork. Read-only.
 function gridDiag() {
@@ -2823,7 +2935,7 @@ document.addEventListener('keydown', (e) => {
   // edit — and because ESC is overloaded four ways, the mutation was the terminal case nobody expected.
   // Undo is Ctrl+Z, and only Ctrl+Z.
   else if (e.key === 'Delete' || e.key === 'Backspace') { if (doDelete()) e.preventDefault(); }   // DEL is the shortcut for the Delete button
-  else if ((e.key === 'Enter' || e.key === 'f' || e.key === 'F') && gridSelVox) { if (fillSelection()) e.preventDefault(); }
+  else if ((e.key === 'Enter' || e.key === 'f' || e.key === 'F') && gridSelVox) { if (doFill(null, null)) e.preventDefault(); }
 });
 (() => {
   const cv = $('gridCanvas'); if (!cv) return;
@@ -2896,6 +3008,7 @@ document.addEventListener('keydown', (e) => {
     return any;
   };
   let painting = false, dirty = false, boxing = null, addBoxing = null;   // addBoxing: the ➕ Add surface-extrude rubber-band
+  let moveDrag = null;                                                   // ✥ Move: { c0, r0 } — the cell the drag started on
   const cellOf = (e) => { const g = gridGeom; if (!g) return null; const { px, py } = ptCell(e); return { cx: clamp(Math.floor((px - g.ox) / g.cell), 0, g.cols - 1), cy: clamp(Math.floor((py - g.oy) / g.cellV), 0, g.rows - 1) }; };
   // ── GEOMETRY drag (owner 2026-07-18): in Geometry mode, drag the box edges to stretch a dimension or
   // the interior to move it. Edits write the shared world-axis spans in geomState, so linked views move
@@ -3043,7 +3156,18 @@ document.addEventListener('keydown', (e) => {
     // column through, after a confirm). Deliberately one layer at a time: walk the Layer slider and delete again;
     // an already-empty layer just no-ops (no stuck loop). Right-click still freehand-deletes within the selection.
     if (gridTool === 'erase' && gridSelVox && e.button !== 2) { deleteSelection(); e.preventDefault(); return; }
-    if (gridTool === 'box' && e.button !== 2) {                    // Box⌫: rubber-band a region to delete
+    if (gridTool === 'fill' && e.button !== 2) {                   // 🪣 Fill: the selection if there is one, else the patch under the cursor
+      const c = cellOf(e); doFill(c ? c.cx : null, c ? c.cy : null); e.preventDefault(); return;
+    }
+    if (gridTool === 'move' && e.button !== 2) {                   // ✥ Move: drag the selection; the model is written on release
+      if (!gridSelVox || gridSelVox.part !== gridGeom.part || !gridSelVox.set.size) {
+        console.warn('[stack-forge] move: select some voxels first (▢ Select, or SHIFT-drag)'); return;
+      }
+      const c = cellOf(e); if (!c) return;
+      moveDrag = { c0: c.cx, r0: c.cy }; moveGhost = { part: gridGeom.part, dc: 0, dr: 0 };
+      cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
+    }
+    if (gridTool === 'box' && e.button !== 2) {                    // ▢ Select: rubber-band a persistent selection
       const c = cellOf(e); if (!c) return;
       boxing = { c0: c.cx, r0: c.cy, c1: c.cx, r1: c.cy }; gridBoxSel = boxing; renderGridView();
       cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
@@ -3054,18 +3178,27 @@ document.addEventListener('keydown', (e) => {
       cv.setPointerCapture(e.pointerId); e.preventDefault(); return;
     }
     strokeVol = false;                                             // new stroke → one fresh VOL snapshot
-    const erase = gridTool === 'erase' || gridTool === 'box' || gridTool === 'add' || e.button === 2;   // right-drag (or right-click in Add) erases
+    // Only 🖌 Brush and 🗑 Delete reach here — Select / Move / Fill / Add all returned above. The old
+    // expression still tested for 'box' and 'add', which had been unreachable since they grew their own
+    // branches; keeping dead alternatives in a boolean is how the next tool ends up silently erasing.
+    const erase = gridTool === 'erase' || e.button === 2;           // right-drag erases whatever the tool is
     if (editAt(e, erase)) { painting = true; dirty = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); }   // editAt/strokeVol already took ONE snapshot for this stroke
   });
   cv.addEventListener('pointermove', (e) => {
     if (sliceDrag) sliceMove(e);
+    else if (moveDrag) { const c = cellOf(e); if (c && moveGhost) { moveGhost.dc = c.cx - moveDrag.c0; moveGhost.dr = c.cy - moveDrag.r0; renderGridView(); } }
     else if (selBoxing) { const c = cellOf(e); if (c) { selBoxing.c1 = c.cx; selBoxing.r1 = c.cy; renderGridView(); } }
     else if (geomDrag) geomMove(e);
     else if (addBoxing) { const c = cellOf(e); if (c) { addBoxing.c1 = c.cx; addBoxing.r1 = c.cy; gridAddBox = addBoxing; renderGridView(); } }
     else if (boxing) { const c = cellOf(e); if (c) { boxing.c1 = c.cx; boxing.r1 = c.cy; gridBoxSel = boxing; renderGridView(); } }
-    else if (painting) editAt(e, gridTool === 'erase' || gridTool === 'box' || gridTool === 'add' || (e.buttons & 2));   // right-drag mid-stroke still erases
+    else if (painting) editAt(e, gridTool === 'erase' || !!(e.buttons & 2));   // right-drag mid-stroke still erases
   });
   const finish = () => {
+    if (moveDrag) {                                                // ✥ Move: ONE write, ONE undo entry, on release
+      const g = moveGhost; moveDrag = null; moveGhost = null;
+      if (g && (g.dc || g.dr)) moveSelectionCells(g.dc, g.dr); else renderGridView();
+      return;
+    }
     if (selBoxing) {                                               // release a SHIFT/CTRL band → update the shared selection
       const g = gridGeom, band = selBoxing; selBoxing = null;
       if (selectableGrid()) {
@@ -3635,16 +3768,22 @@ function remapModelToWorking() {
     const N = foot * foot;
     const quant = buildQuantiser(null, m.vcol, m.filled, foot, layers, n, m.views);
     if (!quant) continue;
+    // SOURCE FROM THE RENDERED FACE, NOT RAW vcol. This read m.vcol — the top-down column colour — and
+    // wrote nearest(vcol) to every filled voxel with PAINT=1, which takes them all off the wall-art pass
+    // for good. So "consolidate the palette" quietly deleted every side, front and back sheet in the
+    // unit, model-wide, while advertising itself as reversible.
+    const rendered = renderedVoxColours(part, foot, layers);
     for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
       if (!m.filled(x, y, z)) continue;
-      const c = (z * N + y * foot + x) * 3;
-      let [r, g, b] = quant(m.vcol[c], m.vcol[c + 1], m.vcol[c + 2]);
+      const k = z * N + y * foot + x, c = k * 3;
+      const src = rendered.get(k) || [m.vcol[c], m.vcol[c + 1], m.vcol[c + 2]];
+      let [r, g, b] = quant(src[0], src[1], src[2]);
       const t = palMap.get((r << 16) | (g << 8) | b); if (t) [r, g, b] = t;   // apply the colour tune too
-      if (setVox(part, z * N + y * foot + x, [r, g, b])) touched++;
+      if (setVox(part, k, [r, g, b])) touched++;
     }
   }
   gridModel = null; refreshModel(); scheduleAutosave();
-  $('palState').textContent = `Remapped ${touched} voxel(s) to the working palette. Source preserved — Reset edits restores it.`;
+  $('palState').textContent = `Remapped ${touched} voxel(s) to the working palette (sourced from the rendered faces, so side/front art is kept). "Reset edits" restores the carve.`;
 }
 if ($('palRemap')) $('palRemap').onclick = remapModelToWorking;
 // palette SIZE + reduction — shared by the side-panel slider (#pal) and the floating window (#palN),
@@ -3687,77 +3826,286 @@ if ($('palShowAll')) $('palShowAll').onchange = (e) => { palShowAll = e.target.c
 function openPalAdvanced() { $('palN').value = state.paletteN; $('palNV').textContent = state.paletteN || 'full'; palBuildSwatches(); $('palModal').hidden = false; }
 $('palClose').onclick = () => { $('palModal').hidden = true; };
 
-// ── SF4: explicit two-row palette remap. TOP = the model's current per-voxel colours; BOTTOM = keep/
-// eliminate slots. Drag a top colour onto an EMPTY slot to keep it there; onto a FILLED slot to make
-// that top colour BECOME the slot's colour (eliminate). Bake hard-copies the assignment into every
-// voxel (voxEdit), so the palette is fixed per voxel and the result paints/exports solidly. ──
-let rmSrcKeys = [];              // distinct current colours (packed ints), most-used first
-let rmTargets = [];             // bottom slots: {r,g,b} or null (equal count to rmSrcKeys)
-let rmAssign = new Map();       // sourceKey → slotIndex
-let rmDragKey = null;
-const rmUnpack = (k) => ({ r: (k >> 16) & 255, g: (k >> 8) & 255, b: k & 255 });
-const rmHex = (k) => '#' + (k & 0xffffff).toString(16).padStart(6, '0');
-function rmCurrentColors() {
+// ── THE PALETTE WINDOW ────────────────────────────────────────────────────────────────────────────
+// Replaces SF4's two-row drag-and-drop remap, whose ⬇ Bake wrote voxEdit[part].set(...) — a store with
+// no readers — and then reported "baked N voxels → M colours". It changed nothing, ever, and said so
+// confidently. Nothing of it is kept; the explicit per-colour work it was reaching for is the working
+// palette below, and the Advanced… window still has the pin/eliminate/tune surface.
+//
+// WHAT THIS IS. Six reductions of the model's own colours — 2 / 4 / 8 / 16 / 32 / 48 — each shown with
+// what it costs, and a sample that redraws a top and a side view in the candidate palette BEFORE
+// anything is written. Every reduction comes from palette.js via its *Core aliases (see the shadow note
+// there); there is no quantiser in this block, which is the whole point of the exercise.
+
+// ── WHAT COLOUR IS THIS VOXEL, REALLY? ────────────────────────────────────────────────────────────
+// A voxel holds ONE vcol but shows up to FIVE faces, and on a photo-carved unit the faces are what you
+// see: buildFaces paints the ±y flanks from the side sheet and the ±x ends from the front/back sheets,
+// while vcol only ever holds the top-down column colour. So a palette built from vcol — or a remap that
+// writes nearest(vcol) — throws away every side and front sheet in the unit.
+//
+// Flattening is lossy by definition (one voxel, one colour, up to five faces), so the rule has to be
+// stated rather than stumbled into: take the colour MOST of the voxel's exposed faces show, and break a
+// tie toward a WALL face over the top face. Preferring the wall can only preserve art and never invent
+// it, because the top face's colour IS vcol, which is the fallback everywhere else anyway.
+function renderedVoxColours(partId, foot, layers) {
+  const built = buildFaces(partId, foot, layers, true);              // raw: before the reducer and the tuner
+  const N = foot * foot, byVox = new Map();
+  for (const f of built.faces) {
+    const k = f.z * N + f.y * foot + f.x;
+    let tally = byVox.get(k); if (!tally) { tally = new Map(); byVox.set(k, tally); }
+    const ck = (f.r << 16) | (f.g << 8) | f.b, e = tally.get(ck);
+    if (e) { e.n++; if (f.n > 0) e.wall = true; }
+    else tally.set(ck, { rgb: [f.r, f.g, f.b], n: 1, wall: f.n > 0 });
+  }
+  const out = new Map();
+  for (const [k, tally] of byVox) {
+    let best = null;
+    // insertion order is face order (top, +x, −x, +y, −y), so this is deterministic run to run
+    for (const e of tally.values()) if (!best || e.n > best.n || (e.n === best.n && e.wall && !best.wall)) best = e;
+    if (best) out.set(k, best.rgb);
+  }
+  return out;
+}
+
+let palEntries = [];                          // the unit's rendered colours, population-weighted
+// voxel key → its rendered colour, per part. STAMPED WITH THE DIMS IT WAS BUILT AT: the keys are
+// absolute (z*foot²+y*foot+x), so if Layers or Resolution moves while the window is open the same key
+// addresses a different voxel. Same guard restoreVol and selCheckDims already apply.
+const palVoxCols = { body: null, turret: null };
+let palVoxDims = { body: null, turret: null };
+const palColsFor = (part, foot, layers) => {
+  const d = palVoxDims[part];
+  return (d && d.foot === foot && d.layers === layers) ? palVoxCols[part] : null;
+};
+let palOpts = [];                             // paletteOptionsCore() output — one per offered size
+let palPickN = 0;                             // which size is selected
+let palWork = [];                             // the WORKING palette: the selection, hand-editable
+let palWorkBase = [];                         // what the reduction chose, so a slot can be reverted
+let palWorkSel = -1;
+
+// Both parts, one histogram: the palette is a property of the UNIT, and applying it to only the part
+// that happens to be on screen is how a turret ends up on a different palette from its hull.
+function palGatherEntries() {
+  palVoxCols.body = null; palVoxCols.turret = null; palVoxDims = { body: null, turret: null };
   const tally = new Map();
-  const add = (part, layers) => { for (const c of collectVox(part, footOf(part), layers, 0, 0)) { const k = (c.r << 16) | (c.g << 8) | c.b; tally.set(k, (tally.get(k) || 0) + 1); } };
-  add('body', state.bodyLayers); add('turret', state.turretLayers);
-  return [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
-}
-function rmRender() {
-  const top = $('remapTop'), bot = $('remapBottom'); if (!top || !bot) return;
-  top.innerHTML = ''; bot.innerHTML = '';
-  rmSrcKeys.forEach((k) => {
-    const d = document.createElement('div'); d.className = 'rmSw' + (rmAssign.has(k) ? ' assigned' : '');
-    d.style.background = rmHex(k); d.draggable = true; d.dataset.key = k; d.title = rmHex(k);
-    if (rmAssign.has(k)) { const t = document.createElement('span'); t.className = 'tag'; t.textContent = '→' + (rmAssign.get(k) + 1); d.appendChild(t); }
-    d.addEventListener('dragstart', () => { rmDragKey = k; });
-    top.appendChild(d);
-  });
-  if (rmTargets.length !== rmSrcKeys.length) rmTargets = rmSrcKeys.map((_, i) => rmTargets[i] || null);
-  rmTargets.forEach((t, i) => {
-    const s = document.createElement('div'); s.className = 'rmSlot' + (t ? ' filled' : '');
-    if (t) s.style.background = 'rgb(' + t.r + ',' + t.g + ',' + t.b + ')';
-    const n = document.createElement('span'); n.className = 'n'; n.textContent = i + 1; s.appendChild(n);
-    s.addEventListener('dragover', (e) => { e.preventDefault(); s.classList.add('over'); });
-    s.addEventListener('dragleave', () => s.classList.remove('over'));
-    s.addEventListener('drop', (e) => { e.preventDefault(); s.classList.remove('over'); rmDrop(i); });
-    bot.appendChild(s);
-  });
-  $('remapState').textContent = rmTargets.filter(Boolean).length + ' kept · ' + rmAssign.size + '/' + rmSrcKeys.length + ' mapped';
-}
-function rmDrop(slot) {
-  if (rmDragKey == null) return; const k = rmDragKey; rmDragKey = null;
-  if (!rmTargets[slot]) rmTargets[slot] = rmUnpack(k);   // empty slot → keep this colour here
-  rmAssign.set(k, slot);                                  // this source now maps to that slot's colour
-  rmRender();
-}
-function openRemap() {
-  rmSrcKeys = rmCurrentColors();
-  if (rmTargets.length !== rmSrcKeys.length) { rmTargets = rmSrcKeys.map(() => null); rmAssign.clear(); }
-  rmRender(); $('remapModal').hidden = false;
-}
-$('openPal').onclick = openRemap;   // SF4: the 🎨 button now opens the explicit remap (old tuner via Advanced)
-$('remapClose').onclick = () => { $('remapModal').hidden = true; };
-$('remapReset').onclick = () => { rmTargets = rmSrcKeys.map(() => null); rmAssign.clear(); rmRender(); };
-$('remapAllDown').onclick = () => { rmTargets = rmSrcKeys.map(rmUnpack); rmAssign = new Map(rmSrcKeys.map((k, i) => [k, i])); rmRender(); };
-$('remapAdvanced').onclick = () => { $('remapModal').hidden = true; openPalAdvanced(); };
-$('remapBake').onclick = () => {
-  if (!rmAssign.size) { $('remapState').textContent = 'drag a top colour onto a bottom slot first'; return; }
-  pushVol(gridPart());
-  let touched = 0;
   for (const part of ['body', 'turret']) {
-    const foot = footOf(part), layers = part === 'body' ? state.bodyLayers : state.turretLayers, N = foot * foot;
-    for (const c of collectVox(part, foot, layers, 0, 0)) {
-      const slot = rmAssign.get((c.r << 16) | (c.g << 8) | c.b);
-      if (slot == null || !rmTargets[slot]) continue;
-      const t = rmTargets[slot]; voxEdit[part].set(c.z * N + c.y * foot + c.x, [t.r, t.g, t.b]); touched++;
+    const foot = footOf(part), layers = part === 'body' ? state.bodyLayers : state.turretLayers;
+    if (!carveCache[part]) continue;
+    // renderedVoxColours goes through buildModel, which can REPLACE carveCache[part].m via the sig path.
+    // So it runs first and `m` is read after it — reading `m` first left a stale array whose vcol was
+    // not the one the faces were built from.
+    const cols = renderedVoxColours(part, foot, layers);
+    const m = carveCache[part] && carveCache[part].m;
+    if (!m || !m.vcol || !m.filled) continue;
+    palVoxCols[part] = cols; palVoxDims[part] = { foot, layers };
+    const N = foot * foot;
+    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      if (!m.filled(x, y, z)) continue;
+      const k = z * N + y * foot + x, o = k * 3;
+      const c = cols.get(k) || [m.vcol[o], m.vcol[o + 1], m.vcol[o + 2]];   // no exposed face → interior voxel
+      if (!c[0] && !c[1] && !c[2]) continue;                                // unwritten is not a colour anyone chose
+      const ck = (c[0] << 16) | (c[1] << 8) | c[2], e = tally.get(ck);
+      if (e) e.n++; else tally.set(ck, { rgb: [c[0], c[1], c[2]], n: 1 });
     }
   }
-  gridModel = null; refreshModel(); scheduleAutosave();
-  rmSrcKeys = rmCurrentColors(); rmRender();   // reflect the now-consolidated model
-  $('remapState').textContent = 'baked ' + touched + ' voxels → ' + rmTargets.filter(Boolean).length + ' colours';
+  palEntries = [...tally.values()].sort((a, b) => b.n - a.n
+    || a.rgb[0] - b.rgb[0] || a.rgb[1] - b.rgb[1] || a.rgb[2] - b.rgb[2]);
+  return palEntries;
+}
+
+function palBuildOptions() {
+  palGatherEntries();
+  palOpts = palEntries.length ? paletteOptionsCore(palEntries, PALETTE_SIZES) : [];
+  const note = $('palSourceNote');
+  if (note) {
+    const tot = palEntries.reduce((s, e) => s + e.n, 0);
+    note.textContent = palEntries.length
+      ? `${tot} voxels · ${palEntries.length} distinct rendered colours · the model spans ${(palOpts[0] ? palOpts[0].lumAvail : 0).toFixed(0)} of 255 in luminance`
+      : 'Nothing carved yet — load source art and press a Carve button first.';
+  }
+  // Default to 8. Measured on the shipped SPA-U3 body, 8 is the first size where no part of the model is
+  // badly wrong; 2 and 4 are offered and honest, but they are a stylistic choice, not a safe default.
+  const keep = palOpts.some((o) => o.n === palPickN) ? palPickN
+    : ((palOpts.find((o) => o.n === 8) || palOpts[0] || {}).n || 0);
+  if (keep) palChoose(keep);
+  else { palWork = []; palWorkBase = []; palWorkSel = -1; palRenderOptions(); palRenderWork(); palDrawPreview(); }
+}
+
+function palChoose(n) {
+  const o = palOpts.find((q) => q.n === n); if (!o) return;
+  palPickN = n;
+  palWorkBase = o.palette.map((c) => c.slice());
+  palWork = o.palette.map((c) => c.slice());
+  palWorkSel = -1;
+  palRenderOptions(); palRenderWork(); palDrawPreview();
+  if ($('paletteState')) $('paletteState').textContent =
+    `${palWork.length} colours · ${o.via === 'spread' ? 'tonal spread' : 'coverage + variety'} won on fit (rms ${o.rms.toFixed(1)})`;
+}
+
+function palRenderOptions() {
+  const box = $('palOptions'); if (!box) return;
+  box.innerHTML = '';
+  for (const o of palOpts) {
+    const st = o.stats;
+    // lumSpread is meaningless on its own — 22 is a disaster on a model spanning 183 and fine on one
+    // spanning 30. It is always shown against what the model actually had to offer.
+    const pct = o.lumAvail ? (100 * st.lumSpread / o.lumAvail) : 100;
+    const flat = pct < 55;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'palOpt' + (o.n === palPickN ? ' sel' : '');
+    b.innerHTML = `<div class="n">${o.palette.length} colour${o.palette.length === 1 ? '' : 's'}`
+      + `<small>${o.via === 'spread' ? 'tonal' : 'coverage'}</small></div>`
+      + `<div class="sw">${o.palette.map((c) => `<i style="background:${cssOf(c)}"></i>`).join('')}</div>`
+      + `<div class="st">avg err <b>${st.meanErr.toFixed(1)}</b> · worst <b>${st.worstErr.toFixed(0)}</b><br>`
+      + `tone <b class="${flat ? 'warn' : ''}">${st.lumSpread.toFixed(0)}</b>/${o.lumAvail.toFixed(0)}`
+      + `${flat ? ' ⚠ flat' : ''} · ${st.hueCount} hue${st.hueCount === 1 ? '' : 's'}</div>`;
+    b.title = `${o.n} colours — mean error ${st.meanErr.toFixed(2)}, worst ${st.worstErr.toFixed(1)}, rms ${o.rms.toFixed(2)}.`
+      + ` Chosen by ${o.via === 'spread' ? 'equal-luminance banding' : 'coverage + variety'}, which fit this model better.`;
+    b.onclick = () => palChoose(o.n);
+    box.appendChild(b);
+  }
+}
+
+function palRenderWork() {
+  const box = $('palWorkSwatches'); if (!box) return;
+  box.innerHTML = '';
+  palWork.forEach((c, i) => {
+    const edited = palWorkBase[i] && c.join() !== palWorkBase[i].join();
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'palWs' + (i === palWorkSel ? ' sel' : '') + (edited ? ' edited' : '');
+    b.style.background = cssOf(c);
+    b.title = `${hexOf(c)} — click to select this slot and load it as the paint colour`;
+    b.onclick = () => { palWorkSel = i; setPaintRGB(c); palRenderWork(); };
+    box.appendChild(b);
+  });
+  palSyncSlot();
+}
+function palSyncSlot() {
+  const row = $('palSlotRow'); if (!row) return;
+  const has = palWorkSel >= 0 && palWorkSel < palWork.length;
+  row.hidden = !has;
+  if (!has) return;
+  const hex = hexOf(palWork[palWorkSel]);
+  $('palSlotN').textContent = String(palWorkSel + 1);
+  $('palSlotCol').value = hex;
+  $('palSlotHex').textContent = hex.toUpperCase();
+}
+
+// ── THE SAMPLE WINDOW ─────────────────────────────────────────────────────────────────────────────
+// The load-bearing half of the request: a palette picker without a live preview is guesswork with extra
+// steps. Two orthographic projections of the part on screen — one as the model is, one as it would be —
+// drawn from the SAME per-voxel colour Apply will write, so the comparison is the actual result and not
+// an impression of it.
+const PAL_PREV_AX = {
+  top:  (foot, layers) => ({ cols: foot, rows: foot,   depth: layers, at: (c, r, s) => [c, r, layers - 1 - s] }),
+  side: (foot, layers) => ({ cols: foot, rows: layers, depth: foot,   at: (c, r, s) => [c, s, layers - 1 - r] }),
 };
-makeDraggable('remapModal', 'remapDrag');
+function palDrawProjection(cvId, part, which, palette) {
+  const cv = $(cvId); if (!cv) return;
+  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0a121c'; ctx.fillRect(0, 0, W, H);
+  const m = carveCache[part] && carveCache[part].m; if (!m || !m.vcol || !m.filled) return;
+  const foot = footOf(part), layers = part === 'body' ? state.bodyLayers : state.turretLayers, N = foot * foot;
+  const ax = PAL_PREV_AX[which](foot, layers);
+  const cell = Math.max(1, Math.floor(Math.min(W / ax.cols, H / ax.rows)));
+  const ox = Math.floor((W - cell * ax.cols) / 2), oy = Math.floor((H - cell * ax.rows) / 2);
+  const cols = palColsFor(part, foot, layers);
+  for (let r = 0; r < ax.rows; r++) for (let c = 0; c < ax.cols; c++) {
+    let col = null;
+    for (let s = 0; s < ax.depth; s++) {                              // first voxel the ray hits = the surface
+      const [x, y, z] = ax.at(c, r, s);
+      if (x < 0 || y < 0 || z < 0 || x >= foot || y >= foot || z >= layers) continue;
+      if (!m.filled(x, y, z)) continue;
+      const k = z * N + y * foot + x, o = k * 3;
+      col = (cols && cols.get(k)) || [m.vcol[o], m.vcol[o + 1], m.vcol[o + 2]];
+      break;
+    }
+    if (!col) continue;
+    if (palette && palette.length) col = nearestCore(col, palette);
+    ctx.fillStyle = cssOf(col);
+    ctx.fillRect(ox + c * cell, oy + r * cell, cell, cell);
+  }
+}
+function palDrawPreview() {
+  const part = gridPart();
+  const lbl = $('palPrevPart'); if (lbl) lbl.textContent = part;
+  palDrawProjection('palPrevTopNow', part, 'top', null);
+  palDrawProjection('palPrevTopNew', part, 'top', palWork);
+  palDrawProjection('palPrevSideNow', part, 'side', null);
+  palDrawProjection('palPrevSideNew', part, 'side', palWork);
+}
+
+// ── APPLY ─────────────────────────────────────────────────────────────────────────────────────────
+// Through setVox, one voxel at a time — NOT applyPalette(), which writes vcol directly and cannot set
+// PAINT. PAINT is what marks a colour as the artist's, and without it the next re-carve overwrites the
+// lot. This is also why the palette is derived from the rendered face colour above: the write is
+// permanent for the wall-art pass, so it had better be sourced from what the wall was showing.
+function palApplyToModel() {
+  if (!palWork.length) { $('paletteState').textContent = 'Pick a palette size first.'; return; }
+  // BUILD BOTH PARTS FIRST, THEN SNAPSHOT, THEN MUTATE. buildModel can swap carveCache[part].m, so a
+  // snapshot taken before the build can be of a different array than the one setVox goes on to write.
+  const built = ['body', 'turret'].map((part) => ({ part, foot: footOf(part),
+    layers: part === 'body' ? state.bodyLayers : state.turretLayers }))
+    .map((p) => ({ ...p, m: buildModel(p.part, p.foot, p.layers) }));
+  pushVolAll();                                                      // ONE entry, both parts, one Ctrl+Z
+  let touched = 0;
+  for (const { part, foot, layers, m } of built) {
+    if (!m || !m.vcol || !m.filled) continue;
+    const N = foot * foot, cols = palColsFor(part, foot, layers);
+    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      if (!m.filled(x, y, z)) continue;
+      const k = z * N + y * foot + x, o = k * 3;
+      const src = (cols && cols.get(k)) || [m.vcol[o], m.vcol[o + 1], m.vcol[o + 2]];
+      if (setVox(part, k, nearestCore(src, palWork))) touched++;
+    }
+  }
+  // WYSIWYG. The live reducer would otherwise re-bin the palette that was just baked in, so the model
+  // would not be the palette on the screen. The slider is still there to turn back on.
+  const hadN = state.paletteN;
+  if (hadN) setPaletteN(0);
+  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
+  palBuildOptions();                                                 // the model IS the palette now — re-read
+  $('paletteState').textContent = `Applied ${palWork.length} colours to ${touched} voxel(s) across body + turret.`
+    + (hadN ? ' Working palette size reset to full so the model shows exactly these colours.' : '')
+    + ' Ctrl+Z undoes the whole thing in one step.';
+}
+
+function openPaletteWindow() {
+  palBuildOptions();
+  $('paletteModal').hidden = false;
+}
+$('openPal').onclick = openPaletteWindow;
+$('paletteClose').onclick = () => { $('paletteModal').hidden = true; };
+$('palRefresh').onclick = () => palBuildOptions();
+$('paletteAdvanced').onclick = () => { $('paletteModal').hidden = true; openPalAdvanced(); };
+$('palApply').onclick = palApplyToModel;
+$('palSlotCol').oninput = (e) => {
+  if (palWorkSel < 0 || palWorkSel >= palWork.length) return;
+  const h = e.target.value;
+  palWork[palWorkSel] = [parseInt(h.slice(1, 3), 16) || 0, parseInt(h.slice(3, 5), 16) || 0, parseInt(h.slice(5, 7), 16) || 0];
+  setPaintRGB(palWork[palWorkSel]);
+  palRenderWork(); palDrawPreview();
+};
+$('palSlotReset').onclick = () => {
+  if (palWorkSel < 0 || !palWorkBase[palWorkSel]) return;
+  palWork[palWorkSel] = palWorkBase[palWorkSel].slice();
+  palRenderWork(); palDrawPreview();
+};
+makeDraggable('paletteModal', 'paletteDrag');
+
+// ── the Photoshop-style paint swatch ──────────────────────────────────────────────────────────────
+// A big swatch showing the live paint colour; clicking it opens the platform picker. The <input
+// type=color> is still the model — it is just no longer the thing you aim at, because a 24×20 native
+// control next to six tool buttons is not a colour button, it is a rounding error.
+if ($('paintSwatch')) $('paintSwatch').onclick = () => {
+  const el = $('gridPaintCol'); if (!el) return;
+  if (typeof el.showPicker === 'function') { try { el.showPicker(); return; } catch (err) { /* not allowed here — fall through */ } }
+  el.click();
+};
+if ($('gridPaintCol')) $('gridPaintCol').oninput = () => syncPaintSwatch();
+syncPaintSwatch();
 
 let pasteTarget = null;
 document.querySelectorAll('.vpick').forEach((pick) => {

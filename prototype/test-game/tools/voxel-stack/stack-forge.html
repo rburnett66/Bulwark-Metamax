@@ -112,20 +112,37 @@
     .palSw.dropped::before { content:'🚫'; position:absolute; top:-9px; left:-5px; font-size:11px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.8); }
     .palSw.dropped { opacity:.4; }
     #palSV, #palHue { border:1px solid var(--line); border-radius:6px; cursor:crosshair; touch-action:none; }
-    #remapModal { position:absolute; left:300px; top:12px; width:760px; min-width:420px; min-height:300px; max-height:calc(100% - 24px); z-index:21;
+    /* ── PALETTE WINDOW: pick a size, see it before you commit ────────────────────────────────── */
+    #paletteModal { position:absolute; left:280px; top:12px; width:860px; min-width:520px; min-height:360px; max-height:calc(100% - 24px); z-index:21;
       display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; resize:both; box-shadow:0 18px 60px rgba(0,0,0,.6); }
-    #remapModal[hidden] { display:none; }
-    #remapDrag { font-size:10px; letter-spacing:.2em; color:var(--muted); margin:0; padding:11px 14px 8px; text-transform:uppercase; cursor:move; flex:0 0 auto; }
-    #remapBox { overflow:auto; flex:1 1 auto; min-height:0; }
-    #remapTop, #remapBottom { gap:10px !important; min-height:78px !important; }
-    .rmSw { width:90px; height:78px; border:3px solid var(--line); border-radius:8px; cursor:grab; position:relative; }
-    .rmSw[draggable=true]:active { cursor:grabbing; }
-    .rmSw.assigned { opacity:.35; }                                   /* a top colour that's been mapped */
-    .rmSw .tag { position:absolute; bottom:-8px; right:-5px; font-size:15px; font-weight:700; color:var(--gold); background:var(--panel); border-radius:4px; padding:0 4px; }
-    .rmSlot { width:90px; height:78px; border:3px dashed var(--line); border-radius:8px; position:relative; }
-    .rmSlot.filled { border-style:solid; }
-    .rmSlot.over { border-color:var(--gold); box-shadow:0 0 0 3px rgba(242,200,105,.4); }
-    .rmSlot .n { position:absolute; top:-9px; left:-3px; font-size:13px; color:var(--muted); }
+    #paletteModal[hidden] { display:none; }
+    #paletteDrag { font-size:10px; letter-spacing:.2em; color:var(--muted); margin:0; padding:11px 14px 8px; text-transform:uppercase; cursor:move; flex:0 0 auto; }
+    #paletteBox { padding:0 14px 12px; overflow:auto; flex:1 1 auto; min-height:0; }
+    #palOptions { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:7px; margin:6px 0 10px; }
+    .palOpt { text-align:left; padding:7px 9px; border:2px solid var(--line); border-radius:8px; background:#0d1420; cursor:pointer; width:auto; margin:0; color:inherit; }
+    .palOpt:hover { border-color:#3d5670; }
+    .palOpt.sel { border-color:var(--gold); box-shadow:0 0 0 2px rgba(242,200,105,.3); }
+    .palOpt .n { font-weight:700; font-size:12.5px; letter-spacing:.02em; }
+    .palOpt .n small { font-weight:400; color:var(--muted); font-size:9.5px; margin-left:5px; letter-spacing:.06em; text-transform:uppercase; }
+    .palOpt .sw { display:flex; flex-wrap:wrap; gap:2px; margin:5px 0 4px; }
+    .palOpt .sw i { width:11px; height:11px; border-radius:2px; display:block; box-shadow:inset 0 0 0 1px rgba(0,0,0,.35); }
+    .palOpt .st { font-size:9.5px; color:var(--muted); font-family:ui-monospace,monospace; line-height:1.5; }
+    .palOpt .st b { color:#8fa7bd; font-weight:600; }
+    .palOpt .st .warn { color:#e0b060; }
+    #palPreview { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin:2px 0 10px; }
+    #palPreview figure { margin:0; }
+    #palPreview figcaption { font-size:9px; color:var(--muted); margin:0 0 3px; text-transform:uppercase; letter-spacing:.09em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #palPreview canvas { width:100%; height:auto; aspect-ratio:1/1; image-rendering:pixelated; background:#0a121c; border:1px solid var(--line); border-radius:5px; display:block; }
+    #palPreview figure.new figcaption { color:var(--gold); }
+    #palWorkSwatches { display:flex; flex-wrap:wrap; gap:5px; margin:5px 0 8px; }
+    .palWs { width:34px; height:28px; border:2px solid var(--line); border-radius:5px; cursor:pointer; padding:0; margin:0; position:relative; }
+    .palWs.sel { border-color:var(--gold); box-shadow:0 0 0 2px rgba(242,200,105,.35); }
+    .palWs.edited::after { content:'●'; position:absolute; top:-7px; right:-3px; color:#57d98a; font-size:10px; }
+    /* the Photoshop-style paint swatch in the grid tool row */
+    #paintSwatch { width:30px; height:26px; padding:0; margin:0; flex:0 0 auto; border:2px solid #2a3a4a; border-radius:5px; cursor:pointer;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.5); }
+    #paintSwatch:hover { border-color:var(--gold); }
+    #paintSwatchHex { font-size:9.5px; font-family:ui-monospace,monospace; color:var(--muted); flex:0 0 auto; }
     .palChip { width:40px; height:24px; border:1px solid var(--line); border-radius:5px; display:inline-block; vertical-align:middle; }
     #loadModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
     #loadModal[hidden] { display:none; }
@@ -170,8 +187,10 @@
       <canvas id="gridCanvas" width="204" height="204" style="flex:1;min-height:0;width:100%;image-rendering:pixelated;background:#0a121c;border:1px solid var(--line);border-radius:6px;display:block;box-sizing:border-box;cursor:crosshair;touch-action:none"></canvas>
       <div class="row" id="gridLayerRow" style="margin-top:6px;gap:5px;flex:0 0 auto"><label style="flex:0 0 auto;font-size:11px">Layer</label><input type="range" id="gridLayer" min="0" max="0" value="0" style="flex:1"><span class="val" id="gridLayerV" style="flex:0 0 48px">top</span></div>
       <div class="row" id="gridToolRow" style="margin-top:5px;gap:5px;flex:0 0 auto;align-items:center;flex-wrap:wrap">
-        <div class="seg" id="gridToolSeg" style="flex:0 0 auto"><button data-t="erase" class="on" title="Delete voxels on the CURRENT layer. With a selection active, deletes the selected voxels (one layer at a time — walk the Layer slider). Layer 0 cuts the whole column through the object (confirms first).">🗑 Delete</button><button data-t="add" title="Add voxels by SURFACE EXTRUDE: drag a box over a patch of the surface, release, and it grows one voxel toward the camera in the current paint colour — then select another patch and drag again. On a Layer slice it fills that slice's cells instead. Right-drag deletes.">➕ Add</button><button data-t="paint">Paint</button><button data-t="box" title="Drag a box to make a selection that STAYS until ESC — Delete/Paint then only affect inside it">▢ Select</button></div>
-        <label style="flex:0 0 auto;font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer" title="Paint color — click a swatch below, or a swatch in the Palette window">🖌<input type="color" id="gridPaintCol" value="#8fa7bd" style="width:24px;height:20px;padding:0;border:1px solid var(--line);border-radius:4px;background:none;cursor:pointer"></label>
+        <div class="seg" id="gridToolSeg" style="flex:0 0 auto"><button data-t="box" class="on" title="SELECTION. Drag a box to select the voxels under it; the selection persists across facings and layers until ESC. SHIFT-drag adds to it anywhere, CTRL-drag trims it.">▢ Select</button><button data-t="move" title="MOVE. With a selection active, drag it across the grid — the selected voxels and their colours move with you, in this facing's plane. One undo step per drag.">✥ Move</button><button data-t="paint" title="BRUSH. Paint one voxel at a time in the current colour. On Layer 0 it recolours the surface voxel you click; on a real layer it also spawns a voxel where the cell is empty. Right-drag erases.">🖌 Brush</button><button data-t="fill" title="FILL. Click to flood the current selection with the paint colour. With no selection, floods the contiguous same-coloured patch under the cursor on this facing.">🪣 Fill</button><button data-t="erase" title="Delete voxels on the CURRENT layer. With a selection active, deletes the selected voxels (one layer at a time — walk the Layer slider). Layer 0 cuts the whole column through the object (confirms first).">🗑 Delete</button><button data-t="add" title="Add voxels by SURFACE EXTRUDE: drag a box over a patch of the surface, release, and it grows one voxel toward the camera in the current paint colour. On a Layer slice it fills that slice's cells instead. Right-drag deletes.">➕ Add</button></div>
+        <button type="button" id="paintSwatch" title="Paint colour — click to open the picker"></button>
+        <span id="paintSwatchHex">#8FA7BD</span>
+        <input type="color" id="gridPaintCol" value="#8fa7bd" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" aria-hidden="true">
         <div id="gridPalette" style="display:none;flex-wrap:wrap;gap:3px;flex:1 1 100%;margin-top:1px" title="This model's colours — click to load as the paint colour"></div>
         <button class="ghost" id="gridUndoBtn" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Undo the last edit (Ctrl+Z) — up to 60 steps. Redo with Ctrl+Y.">↶ Undo</button>
         <button class="ghost" id="gridRedoBtn" style="width:auto;padding:5px 9px;margin:0;font-size:10.5px" title="Redo (Ctrl+Y)">↷ Redo</button>
@@ -290,7 +309,7 @@
       <h2>3 · Lighting + colour</h2>
       <div class="row"><label>Light az</label><input type="range" id="lightAz" min="0" max="359" value="135"><span class="val" id="lightAzV">135°</span></div>
       <div class="row"><label>Contrast</label><input type="range" id="lightK" min="0" max="100" value="55"><span class="val" id="lightKV">55</span></div>
-      <div class="row"><label>Palette</label><input type="range" id="pal" min="0" max="32" value="0"><span class="val" id="palV">full</span></div>
+      <div class="row"><label>Palette</label><input type="range" id="pal" min="0" max="48" value="0" title="Live palette reduction (0 = full colour). The Palette window offers the same range as discrete, measured options."><span class="val" id="palV">full</span></div>
       <div class="note" style="margin:-2px 0 4px">Palette quantises the cube colours to N flat, contrasting shades (0 = full colour) — cleans camo/gradient noise so the block structure reads clean. Try <b>6–12</b>.</div>
       <button class="ghost" id="openPal">🎨 Tune colors…</button>
       <div class="note" style="margin:2px 0 4px">See every colour the model uses, pick one, and re-tint it on a colour diagram (hue + saturation/brightness). Edits follow the unit into the bake, the game, and project saves.</div>
@@ -399,7 +418,7 @@
   <h2 id="palDrag">Palette · consolidate SOURCE → WORKING — drag header · ⤢ corner to resize</h2>
   <div id="palBox">
     <div class="note" style="margin:0 0 6px">These are the model's <b>SOURCE</b> colours (from the original art). Reduce / keep / merge to a <b>WORKING</b> set, then <b>⬇ Remap model</b> to bake it in. Source is never lost — <b>Reset edits</b> restores it.</div>
-    <div class="row" style="gap:6px;margin:0 0 8px"><label style="flex:0 0 auto;font-size:11px">Working size</label><input type="range" id="palN" min="0" max="32" value="0" style="flex:1"><span class="val" id="palNV" style="flex:0 0 42px">full</span></div>
+    <div class="row" style="gap:6px;margin:0 0 8px"><label style="flex:0 0 auto;font-size:11px">Working size</label><input type="range" id="palN" min="0" max="48" value="0" style="flex:1"><span class="val" id="palNV" style="flex:0 0 42px">full</span></div>
     <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin:0 0 8px;cursor:pointer" title="Show every distinct SOURCE colour individually (no family grouping) so you can pin exact colours"><input type="checkbox" id="palShowAll">Show full source palette (pin exact shades)</label>
     <div id="palSwatches"></div>
     <div id="palPick" hidden>
@@ -428,21 +447,33 @@
     </div>
   </div>
 </div>
-<div id="remapModal" hidden>
-  <h2 id="remapDrag">Palette remap — drag a top colour onto a bottom slot · drag header to move</h2>
-  <div id="remapBox" style="padding:12px 14px">
-    <div class="note" style="margin:0 0 6px">TOP = the model's current colours. Drag each onto an <b>empty</b> bottom slot to KEEP it, or onto a <b>filled</b> bottom colour to ELIMINATE it (that colour becomes the one you dropped onto). Then <b>Bake</b> to hard-copy the new palette into every voxel.</div>
-    <div class="note" style="margin:8px 0 3px;font-weight:600">Current palette</div>
-    <div id="remapTop" style="display:flex;flex-wrap:wrap;gap:4px;min-height:26px"></div>
-    <div class="note" style="margin:12px 0 3px;font-weight:600">New palette (drop targets)</div>
-    <div id="remapBottom" style="display:flex;flex-wrap:wrap;gap:4px;min-height:26px"></div>
-    <div class="row" style="gap:6px;margin-top:12px">
-      <button id="remapBake" style="width:auto;padding:7px 14px;margin:0" title="Hard-copy the assigned colours into every voxel">⬇ Bake remap into model</button>
-      <button class="ghost" id="remapAllDown" style="width:auto;padding:6px 12px;margin:0" title="Copy every current colour straight down (identity start)">Copy all down</button>
-      <button class="ghost" id="remapReset" style="width:auto;padding:6px 12px;margin:0">↺ Clear</button>
-      <button class="ghost" id="remapAdvanced" style="width:auto;padding:6px 12px;margin:0" title="Old nearest-match consolidate tool">Advanced…</button>
-      <span class="note" id="remapState" style="margin:0;flex:1"></span>
-      <button class="ghost" id="remapClose" style="width:auto;padding:6px 14px;margin:0">Done</button>
+<div id="paletteModal" hidden>
+  <h2 id="paletteDrag">Palette — pick a size, see it before you commit · drag header · ⤢ corner to resize</h2>
+  <div id="paletteBox">
+    <div class="note" style="margin:0 0 4px">Each option reduces the model's <b>rendered</b> colours — including the side / front / back art, not just the top-down column colour. Pick one, check the sample, then <b>Apply</b>. Applying writes every voxel of <b>both parts</b> and is a single Ctrl+Z.</div>
+    <div class="note" id="palSourceNote" style="margin:0 0 6px;color:var(--muted)"></div>
+    <div id="palOptions"></div>
+    <div class="note" style="margin:0 0 4px;font-weight:600">Sample — <span id="palPrevPart">body</span> · left of each pair is the model now, right is the same view with the chosen palette</div>
+    <div id="palPreview">
+      <figure><figcaption>Top · now</figcaption><canvas id="palPrevTopNow" width="160" height="160"></canvas></figure>
+      <figure class="new"><figcaption>Top · new</figcaption><canvas id="palPrevTopNew" width="160" height="160"></canvas></figure>
+      <figure><figcaption>Side · now</figcaption><canvas id="palPrevSideNow" width="160" height="160"></canvas></figure>
+      <figure class="new"><figcaption>Side · new</figcaption><canvas id="palPrevSideNew" width="160" height="160"></canvas></figure>
+    </div>
+    <div class="note" style="margin:0 0 2px;font-weight:600">Working palette — click a swatch to load it as the paint colour and edit it</div>
+    <div id="palWorkSwatches"></div>
+    <div class="row" id="palSlotRow" hidden style="gap:8px;margin:0 0 8px;align-items:center">
+      <label style="flex:0 0 auto;font-size:11px">Slot <b id="palSlotN"></b></label>
+      <input type="color" id="palSlotCol" style="width:34px;height:24px;padding:0;border:1px solid var(--line);border-radius:4px;background:none;cursor:pointer">
+      <span class="note" id="palSlotHex" style="margin:0;font-family:ui-monospace,monospace"></span>
+      <button class="ghost" id="palSlotReset" style="width:auto;padding:5px 11px;margin:0;font-size:10.5px" title="Put this slot back to what the reduction chose">↺ Revert slot</button>
+    </div>
+    <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+      <button id="palApply" style="width:auto;padding:7px 14px;margin:0" title="Write the working palette into every voxel of both parts. One undo step.">⬇ Apply to model</button>
+      <button class="ghost" id="palRefresh" style="width:auto;padding:6px 12px;margin:0" title="Re-read the model's colours and rebuild every option">↻ Re-read model</button>
+      <button class="ghost" id="paletteAdvanced" style="width:auto;padding:6px 12px;margin:0" title="The older per-colour tuner: pin, eliminate and hand-tune individual source colours">Advanced…</button>
+      <span class="note" id="paletteState" style="margin:0;flex:1"></span>
+      <button class="ghost" id="paletteClose" style="width:auto;padding:6px 14px;margin:0">Done</button>
     </div>
   </div>
 </div>
