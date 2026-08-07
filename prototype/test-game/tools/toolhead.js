@@ -38,13 +38,20 @@
     { id: 'comm',        name: 'Comms',         at: 'comm.html',                       glyph: '📡' },
   ];
 
-  // How deep is this page below prototype/test-game/? Derived from the URL, never hardcoded, so a tool
-  // that moves directory does not silently get dead nav links.
+  // Where is the site root, relative to THIS page?
+  // Derived from this script's own URL, not from the pathname. The previous version looked for a
+  // "test-game" segment in location.pathname — but serve_prototype.py roots the server AT
+  // prototype/test-game, so that segment never appears in the URL, every page resolved to './', and on
+  // a nested tool every nav link pointed inside tools/voxel-stack/ and 404'd.
+  // toolhead.js always lives at <root>/tools/toolhead.js, so stripping that suffix from its own src
+  // gives the root no matter how the server is rooted or how deep the page sits.
+  const SELF = (document.currentScript && document.currentScript.src) || '';
   function prefix() {
-    const parts = location.pathname.split('/').filter(Boolean);
-    const i = parts.lastIndexOf('test-game');
-    const depth = i < 0 ? 0 : parts.length - i - 2;      // -1 for the file itself, -1 for test-game
-    return depth > 0 ? '../'.repeat(depth) : './';
+    if (SELF) {
+      const root = SELF.replace(/tools\/toolhead\.js(\?.*)?$/, '');
+      if (root !== SELF) return root;                    // absolute URL — immune to page depth entirely
+    }
+    return './';                                         // last resort: same directory
   }
 
   const CSS = `
@@ -128,6 +135,29 @@
     bar.appendChild(statusEl);
 
     document.body.insertBefore(bar, document.body.firstChild);
+
+    // MAKE ROOM, DO NOT SHOVE. Several pages size their root to the full viewport (#app { height:100vh }).
+    // Inserting a header above that pushes the whole app DOWN by the header's height and the bottom
+    // overflows off-screen — which is how the main 3D view disappeared and left only the grid.
+    // So: measure the bar, then shrink any full-height direct child of body by exactly that much.
+    const shrink = () => {
+      const h = bar.offsetHeight;
+      if (!h) return;
+      document.documentElement.style.setProperty('--th-h', h + 'px');
+      for (const el of document.body.children) {
+        if (el === bar || !(el instanceof HTMLElement)) continue;
+        const cs = getComputedStyle(el);
+        if (cs.position === 'fixed' || cs.position === 'absolute') continue;   // overlays own their own box
+        // only touch elements that actually ask for the whole viewport
+        if (/100vh|100dvh/.test(el.style.height) || Math.abs(el.getBoundingClientRect().height - window.innerHeight) < 2
+            || cs.height === window.innerHeight + 'px') {
+          el.style.height = `calc(100vh - ${h}px)`;
+        }
+      }
+    };
+    shrink();
+    requestAnimationFrame(shrink);                        // again after layout settles (fonts, wrapped nav)
+    window.addEventListener('resize', shrink);
     return bar;
   }
 
