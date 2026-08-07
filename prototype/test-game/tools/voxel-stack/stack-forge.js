@@ -1946,9 +1946,15 @@ function refreshModel() {
   bodyFaces = buildFaces('body', state.foot, state.bodyLayers);
   turretFaces = buildFaces('turret', footOf('turret'), state.turretLayers);   // SF3: turret's own footprint
   // canvases sized to the worst case at any azimuth: footprint diagonal + offsets + the full stack height
-  const foot = state.foot, h = state.zScale;
+  // Same defect as the bake frame, and worse because it hides it: R was computed from the BODY footprint,
+  // so a turret with a larger footprint clipped in the ORBIT too — you could not see the damage the bake
+  // was doing. Measured at body 64 / turret 96 / 25% pivot: R was 64 where 95 is needed.
+  // HT likewise: mountZOf clamps the mount to bodyLayers + turretLayers, so the top of the stack can
+  // reach bodyLayers + 2*turretLayers while this budgeted bodyLayers + turretLayers + 4.
+  const foot = Math.max(state.foot, footOf('turret')), h = state.zScale;
+  const topZ = Math.max(state.bodyLayers, mountZOf(state.bodyLayers) + state.turretLayers);
   voxBounds = { R: Math.ceil(foot * 0.71 + Math.abs(state.turretDx) + foot * Math.abs(state.turretPivot) / 100) + 2,
-    HT: Math.ceil((state.bodyLayers + state.turretLayers + 4) * h) };
+    HT: Math.ceil((topZ + 4) * h) };
   buildOrbitTarget(orbitS());
   if (gVoxSpr) { gVoxSpr.destroy(); gVoxShadow.destroy(); gVoxTex.destroy(true); }
   gVoxMeta = mkTarget(INSET_S, voxBounds.R, voxBounds.HT);
@@ -3626,8 +3632,15 @@ function doBake() {
   // preview, or the shipped sprite would not match the elevation recorded beside it.
   const bEl = bakeElOf();
   const foot = state.foot, bL = state.bodyLayers, tL = state.turretLayers, sp = layerSp(bEl), B = state.bakeScale;
-  const pivotPx = foot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
-  const g = geom(foot, Math.max(bL, tL), sp, pivotPx);   // shared texture sized for the taller stack; both bottom-align at BASEY
+  // FRAME THE LARGER FOOTPRINT, NOT THE BODY'S. geom() was called with state.foot while renderParts
+  // centres each part on its OWN F.foot — and SF3 gives the turret an independent footprint (the res
+  // dropdown offers up to 128 against a body as small as 32). Measured at body 64 / turret 96 / 25%
+  // pivot: the frame gave 62.0px of half-width where the turret needs 86.5 — 24.5px sheared off each
+  // side of the baked sprite. The pivot padding was wrong for the same reason: computed from the body's
+  // foot while renderParts shifts by the turret's.
+  const gFoot = Math.max(foot, footOf('turret'));
+  const pivotPx = gFoot * state.turretPivot / 100, pivotFrac = 0.5 + state.turretPivot / 100;
+  const g = geom(gFoot, Math.max(bL, tL), sp, pivotPx);   // shared texture sized for the taller stack; both bottom-align at BASEY
   const t0 = performance.now();
   const body = bakeAngleCache(app.renderer, bodyFaces, { frames: BODY_FRAMES, g, pivotFrac: 0.5, el: bEl, scale: B });
   const turret = bakeAngleCache(app.renderer, turretFaces, { frames: TURRET_FRAMES, g, pivotFrac, el: bEl, scale: B });
