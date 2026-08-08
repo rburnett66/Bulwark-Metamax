@@ -3,6 +3,7 @@ import { hasArt, buildUnitSprite } from './unitArt.js';
 import { hasVoxel, buildVoxelUnit, updateVoxelUnit, buildDecorSprite } from './voxel/loader.js';
 import { buildLive3D, updateLive3D } from './voxel/live3d.js';
 import { createProjectilePool } from './projectiles.js';
+import { shotFxFor, showsWreckFire } from './unitFx.js';
 import { layerLean } from '../harness/camera.js';
 import { SPRITE_OVER_COLLISION } from '../harness/parts.js';
 import { TERRAIN_COLOR, TERRAIN_NAME } from '../terrain/terrainGen.js';
@@ -157,7 +158,10 @@ const FACTION_COLORS = {
 };
 function unitColor(u) {
   if ((u.side || 'attacker') === 'attacker' && u.faction && FACTION_COLORS[u.faction] != null) return FACTION_COLORS[u.faction];
-  return SIDE_COLORS[u.side || u.kind || 'attacker'] != null ? SIDE_COLORS[u.side || u.kind || 'attacker'] : 0xffffff;
+  // SIDE_COLORS is keyed by side. The `|| u.kind` that used to sit here was unreachable (side is always
+  // set by createUnit) and, worse, `kind` on a unit was a copy of the display string `shape` — so the
+  // fallback would have looked up 'Troops' in a table of sides. DDD-7 deleted the laundered field.
+  return SIDE_COLORS[u.side || 'attacker'] != null ? SIDE_COLORS[u.side || 'attacker'] : 0xffffff;
 }
 
 function cellKey(x, y) { return x + ',' + y; }
@@ -594,7 +598,9 @@ export function spawnSparks(renderer, x, y, count) {
 // ── COSMETIC COMBAT FX (owner): shells/tracers fly to their targets (damage stays hitscan —
 // pure presentation), damaged tanks/turrets burn at random offsets, damaged flyers throw small
 // welding-style sparks. All render-side (Math.random legal); the sim is untouched.
-const RANGED_SHAPES = { 'Tanks': 1, 'Heavy Tanks': 1, 'Artillery': 1, 'Planes': 1, 'Copters': 1, 'Missiles': 1 };
+// DDD-9: what a unit fires and whether it burns are read off the unit def (render/unitFx.js), not
+// matched against a set of display names. The RANGED_SHAPES table that used to live here decided
+// whether a unit drew shots AT ALL, so a rename in tables.js silenced six shapes' weapons outright.
 const BURN_COLORS = [0xffd27a, 0xff9a3d, 0xff6a2a];
 function emitCombatFx(renderer, state) {
   const t = renderer.tile;
@@ -705,14 +711,14 @@ function emitCombatFx(renderer, state) {
         }
         lm.set(u.id, { x: p.x, y: p.y });
       }
-      if (RANGED_SHAPES[d.shape] && (d.range || 0) > 1.6 && u.targetId != null) {
+      const shotKind = shotFxFor(d);   // 'shell' | 'tracer' | null — a WEAPON property on the def
+      if (shotKind && u.targetId != null) {
         const tp = targetPos(u.targetId);
         if (tp) {
           const lp = cellToLocal(renderer, tp.x, tp.y);
-          const grounded = d.shape === 'Tanks' || d.shape === 'Heavy Tanks' || d.shape === 'Artillery';
           const ufx = pfx && pfx[u.unitId];
           fire('u' + u.id, { x: p.x, y: p.y - lift }, { x: lp.x, y: lp.y - (tp.air ? t * 1.05 : 0) },
-            (ufx && ufx.kind) || (grounded ? 'shell' : 'tracer'), (ufx && ufx.cadence) || 0.6, (ufx && ufx.speed) || 15,
+            (ufx && ufx.kind) || shotKind, (ufx && ufx.cadence) || 0.6, (ufx && ufx.speed) || 15,
             (ufx && ufx.color !== undefined) ? ufx.color : (u.side === 'attacker' ? 0xff9a70 : 0xbfe8ff),
             (ufx && ufx.burst) || 1, ufx && ufx.size, ufx && ufx.streakLen, ufx && ufx.streakWid);
         }
@@ -721,7 +727,7 @@ function emitCombatFx(renderer, state) {
       if (hpFrac < 0.5) {
         if (isFlyer) {
           if (Math.random() < dt * 2.0) spawnSparks(renderer, p.x + (Math.random() * 2 - 1) * t * 0.2, p.y - lift, 1);
-        } else if (d.shape === 'Tanks' || d.shape === 'Heavy Tanks' || d.shape === 'Artillery') {
+        } else if (showsWreckFire(d)) {   // chassis property on the def, not a shape name
           if (Math.random() < dt * 2.0) burn(p.x, p.y, t * 0.25, t * 0.09);
         }
       }
@@ -1394,10 +1400,11 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
           const heading = spr.__heading || 0;
           spr.__facing = heading + UNIT_FACING_OFFSET;   // cargo/debug readers expect the sprite convention
           // turret AIM: live combat target > (#6) the BASE for small tanks (keep the objective in the crosshairs
-          // while they drive, whatever way they move) > relax to the heading. Juggernauts keep the default so
-          // their turret tracks the defences they pass (#4).
+          // while they drive, whatever way they move) > relax to the heading. A unit that engages structures
+          // while advancing keeps the default so its turret tracks the defences it passes (#4) — DDD-9: that
+          // was `u.role !== 'Juggernaut'`, the same display string combat.js was dispatching on.
           let aim = heading;
-          if (u.domain === 'Walker' && u.role !== 'Juggernaut' && state.base && state.base.pos) aim = Math.atan2(state.base.pos.y - u.pos.y, state.base.pos.x - u.pos.x);
+          if (u.domain === 'Walker' && !u.engagesStructuresWhileAdvancing && state.base && state.base.pos) aim = Math.atan2(state.base.pos.y - u.pos.y, state.base.pos.x - u.pos.x);
           const tid = u.targetId;
           if (tid !== null && tid !== undefined) {
             const tgt = (tid === -1) ? (state.base || null)

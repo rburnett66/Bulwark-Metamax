@@ -792,7 +792,10 @@ export function updateHud(hud, state, ui) {
         ['Dock', u.homePos ? (u.homePos.x + ',' + u.homePos.y) : '—'],
       ];
     } else {
-      hud.uname.textContent = (u.faction ? u.faction + ' ' : '') + (u.kind || u.unitId || 'Unit') + (u.tier > 1 ? '  T' + u.tier : '');
+      // u.shape is the unit's DISPLAY name — this readout is the only thing entitled to read it.
+      // (It was called `u.kind` until DDD-7; `kind` on a STRUCTURE means 'antiGround'/'antiAir', and
+      // the collision let bonuses.js quietly branch on a label meant for this label.)
+      hud.uname.textContent = (u.faction ? u.faction + ' ' : '') + (u.shape || u.unitId || 'Unit') + (u.tier > 1 ? '  T' + u.tier : '');
       hud.usub.textContent = [u.role, u.domain, u.side].filter(Boolean).join(' · ');
       rows = [
         ['HP', Math.max(0, Math.ceil(u.hp)) + ' / ' + Math.ceil(u.maxHp)],

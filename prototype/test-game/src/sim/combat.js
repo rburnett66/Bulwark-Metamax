@@ -197,9 +197,10 @@ function structureIsTargetable(s) {
  * structures.requestRepair, and harvesters from harvest.spawnHarvester. Both are
  * flagged on the entity at creation; neither carries dps.
  *
- * NOTE: `unit.kind` is `def.shape` ('Troops', 'Trucks', ...), never 'repair' —
- * the `unit.kind === 'repair'` guard in stepCombat has never matched anything.
- * isRepairTroop is the real flag.
+ * isRepairTroop / isHarvester are the real flags, and always were. A dead
+ * `unit.kind === 'repair'` guard used to stand in for them in stepCombat; it
+ * could never match, because `kind` was a laundered copy of the DISPLAY string
+ * `def.shape` ('Troops', 'Trucks', ...). DDD-7 removed the laundering.
  *
  * @param {object} u candidate unit
  * @returns {boolean}
@@ -345,11 +346,16 @@ export function acquireTarget(state, shooter) {
   const slack2 = tieSlack2(range);
 
   if (shooter.side === 'attacker') {
-    // #4: JUGGERNAUTS shoot defences they pass while still advancing on the base — so unlike basic attackers
-    // (which ignore towers), they target the nearest structure in range like siege, falling back to the base.
-    // core.js only ever STOPS (engages) a base-targeter at the base, so a juggernaut keeps moving while it fires.
-    const isJugg = shooter.role === 'Juggernaut';
-    if (shooter.targetsBase && !isJugg) {
+    // #4: FIRE ON THE MOVE — an attacker with engagesStructuresWhileAdvancing shoots defences it passes
+    // while still advancing on the base, so unlike basic attackers (which ignore towers) it targets the
+    // nearest structure in range like siege, falling back to the base. core.js only ever STOPS (engages)
+    // a base-targeter at the base, so such a unit keeps moving while it fires.
+    //
+    // DDD-7: this read `shooter.role === 'Juggernaut'`. Role is a DISPLAY string — renaming the role in
+    // tables.js would have turned nine units back into ordinary tower-ignoring attackers with no other
+    // symptom. It is a capability, declared per unit, and createUnit stamps it onto the entity.
+    const advancesWhileFiring = shooter.engagesStructuresWhileAdvancing === true;
+    if (shooter.targetsBase && !advancesWhileFiring) {
       // Basic attackers ignore towers entirely; they only attack the base.
       // inBaseReach is THE reach rule — the same one stepMovement uses to apply
       // the damage, so targetId can no longer be null while the base is being hit.
@@ -360,7 +366,7 @@ export function acquireTarget(state, shooter) {
       // in weapon range (opportunistic — see acquireSoftDefender).
       return acquireSoftDefender(state, shooter, range2, slack2);
     }
-    // Structure hunters (Artillery) AND juggernauts: nearest live structure in range.
+    // Structure hunters (siege) AND fire-on-the-move attackers: nearest live structure in range.
     let bestId = null;
     let bestD2 = Infinity;
     for (const s of state.structures.values()) {
@@ -498,10 +504,9 @@ export function stepCombat(state, dt) {
   for (const unit of state.units.values()) {
     if (unit.hp <= 0) continue;
     if (!unit.dps || unit.dps <= 0) continue;
-    // Repair troops never fight. This guard read `unit.kind === 'repair'`, which
-    // never matched: kind is def.shape ('Troops'), and structures.js flags the
-    // troop with isRepairTroop. It only ever "worked" because repair troops are
-    // given dps 0 and the check above already skipped them.
+    // Repair troops never fight. This guard read `unit.kind === 'repair'`, which never matched: `kind`
+    // was a copy of def.shape ('Troops'), and structures.js flags the troop with isRepairTroop. It only
+    // ever "worked" because repair troops are given dps 0 and the check above already skipped them.
     if (unit.isRepairTroop) continue;
 
     // Re-validate a sticky target, otherwise re-acquire deterministically.

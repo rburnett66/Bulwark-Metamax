@@ -1,4 +1,4 @@
-import { ASSUMPTIONS, getUnitDef, getStructureDef, SOFT_DEFENDER_HUNTERS } from '../data/tables.js';
+import { ASSUMPTIONS, getUnitDef, getStructureDef } from '../data/tables.js';
 
 /**
  * Deterministic monotonically increasing entity id counter.
@@ -26,23 +26,33 @@ export function nextEntityId(state) {
  * @param {'attacker'|'defender'} side owning side
  * @returns {object} Unit
  */
-// Physical footprint per shape (cell units; a tile = 1). COLLISION = 75% OF THE SPRITE: the render
-// draws units at radius × SPRITE_OVER_COLLISION (harness/parts.js, 4/3), so these radii are the
-// collision half-widths — 25% inside the art, since frames carry padding and a touch of visual
-// overlap before bodies collide reads natural. Separation/spawn spacing use these numbers.
+// Physical footprint (cell units; a tile = 1). COLLISION = 75% OF THE SPRITE: the render draws units
+// at radius × SPRITE_OVER_COLLISION (harness/parts.js, 4/3), so these radii are the collision
+// half-widths — 25% inside the art, since frames carry padding and a touch of visual overlap before
+// bodies collide reads natural. Separation/spawn spacing use these numbers.
 // Owner 2026-07-20: HALVED from the old (~0.9–1.1) values — units render ~1 tile on the board, so the
 // old radii drew a ~2-tile collision circle and jammed units in the 1-tile gaps between cliff/rock
 // blocks (stuck + facing oscillation). These give a ~1-tile collision that fits single-file passages.
+export const DEFAULT_UNIT_RADIUS = 0.42;
+
+/**
+ * Collision half-width for a unit def, in cell units.
+ *
+ * DDD-7: this used to `switch (def.shape)` — a DISPLAY string. Renaming a shape in tables.js silently
+ * dropped every unit of that shape to the `default: 0.42` arm, which is a different collision circle,
+ * a different separation field and a different path through a 1-tile gap. Radius is now an explicit
+ * field on every unit def (see the capability block in tables.js) and this function only reads it.
+ *
+ * DEFAULT_UNIT_RADIUS is the floor for a def that declares nothing — never reached by shipped content:
+ * data/unitCapabilities.test.mjs fails the build if any unit omits `radius`, so a new unit cannot
+ * silently collapse to it the way a renamed one used to.
+ *
+ * @param {object} def unit def from tables.UNITS / SYSTEM_UNITS
+ * @returns {number} collision half-width in cells
+ */
 export function unitRadius(def) {
-  switch (def && def.shape) {
-    case 'Troops': return 0.38;
-    case 'Trucks': return 0.42;
-    case 'Artillery': return 0.42;
-    case 'Tanks': return 0.46;
-    case 'Heavy Tanks': return 0.50;
-    case 'Copters': case 'Planes': case 'Missiles': return 0.42;
-    default: return 0.42;
-  }
+  const r = def && def.radius;
+  return (typeof r === 'number' && isFinite(r) && r > 0) ? r : DEFAULT_UNIT_RADIUS;
 }
 
 export function createUnit(state, unitId, tier, pos, lane, side) {
@@ -56,7 +66,12 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
   const unit = {
     id: nextEntityId(state),
     unitId: unitId,
-    kind: def.shape,
+    // DISPLAY ONLY — the HUD's unit label. These two used to be load-bearing: `shape` was copied into
+    // a field called `kind` (which on a STRUCTURE means 'antiGround'/'antiAir' — a completely different
+    // namespace), and bonuses.js then tested that laundered value for the string 'Troops'. Grepping
+    // `.shape` could not find it. Nothing may branch on either of these; every behaviour that used to
+    // is now one of the capability fields below. See src/sim/nameIndependence.test.mjs.
+    shape: def.shape,
     role: def.role,
     faction: def.faction,
     domain: def.domain, // 'Walker' | 'Floater' | 'Flyer'
@@ -82,7 +97,7 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
     // Values were seeded from what that path produced, so ownership moved without balance moving.
     // Collision is intentionally COARSE at this stage (owner) — art is sized to match the radius, not
     // the other way round, so these are tuned in tables.js and never inferred from a pack again.
-    radius: (def.radius != null) ? def.radius : unitRadius(def),
+    radius: unitRadius(def),
     vision: def.vision,
     damageType: def.damageType,
     armorClass: def.armorClass,
@@ -92,10 +107,15 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
     aoeRadius: def.aoeRadius || 0,
     radarDetect: !!def.radarDetect,
     seesGround: !!def.seesGround,
-    // May this attacker opportunistically fire on soft defenders (repair troops,
-    // harvesters) already inside its weapon range? Resolved from data here so
-    // combat.js tests a typed boolean instead of a shape/role name.
-    engagesSoftDefenders: !!SOFT_DEFENDER_HUNTERS[def.shape],
+    // ---- CAPABILITIES (DDD-7/9) — copied straight off the def, never inferred from a name.
+    // May this attacker opportunistically fire on soft defenders (repair troops, harvesters)
+    // already inside its weapon range? (combat.acquireSoftDefender)
+    engagesSoftDefenders: def.engagesSoftDefenders === true,
+    // The juggernaut rule: shoot the defences you pass, and keep marching while you do.
+    // (combat.acquireTarget; the renderer also relaxes the turret's base-lock on it.)
+    engagesStructuresWhileAdvancing: def.engagesStructuresWhileAdvancing === true,
+    // The class the '+10% damage vs troops' wave bonus buffs. (bonuses.bonusDamageMult)
+    isInfantry: def.isInfantry === true,
     costT1: def.cost[0],
     path: [],
     pathIdx: 0,

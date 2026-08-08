@@ -36,14 +36,28 @@ test('the units that had art-derived radii keep exactly the radius they had', ()
   }
 });
 
-test('a unit with an explicit radius uses it; one without falls back to the shape table', () => {
+test('every unit declares its own radius — there is no shape table left to fall back to', () => {
+  // DDD-7: unitRadius used to `switch (def.shape)`, so a def with no radius inherited one from its
+  // DISPLAY name and a rename dropped it to the 0.42 default arm. All 73 rows are explicit now, and
+  // unitRadius reads the field. DEFAULT_UNIT_RADIUS survives only as a floor for a def that declares
+  // nothing — unitCapabilities.test.mjs fails the build before any shipped unit can reach it.
   const withR = createUnit({}, 'GND-Tanks', 1, { x: 0, y: 0 }, 0, 'attacker');
   assert.equal(withR.radius, 0.572);
 
-  const id = Object.keys(UNITS).find((k) => UNITS[k].radius == null);
-  assert.ok(id, 'expected at least one unit without an explicit radius');
-  const withoutR = createUnit({}, id, 1, { x: 0, y: 0 }, 0, 'attacker');
-  assert.equal(withoutR.radius, unitRadius(UNITS[id]));
+  const missing = Object.keys(UNITS).filter((k) => typeof UNITS[k].radius !== 'number');
+  assert.deepEqual(missing, [], 'every unit must carry an explicit numeric radius');
+
+  for (const id of Object.keys(UNITS)) {
+    assert.equal(unitRadius(UNITS[id]), UNITS[id].radius, `${id}: unitRadius must return the def's field`);
+  }
+});
+
+test('radius survives a rename of shape and role — the thing DDD-7 exists to stop', () => {
+  // Fails on the old switch: with `shape` renamed, Troops/Tanks/Heavy Tanks all collapsed to 0.42.
+  for (const id of Object.keys(UNITS)) {
+    const renamed = { ...UNITS[id], shape: 'Assault Platform', role: 'Vanguard' };
+    assert.equal(unitRadius(renamed), UNITS[id].radius, `${id} radius moved when its labels changed`);
+  }
 });
 
 test('NOTHING outside the unit def can set a radius — the art pipeline is cut out', () => {

@@ -9,7 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MAP, UNITS, SOFT_DEFENDER_HUNTERS } from '../data/tables.js';
+import { MAP, UNITS } from '../data/tables.js';
 import { createSim, stepSim, FIXED_DT } from './core.js';
 import { createUnit } from './entities.js';
 import { acquireTarget, BASE_TARGET_ID } from './combat.js';
@@ -49,12 +49,16 @@ function addRepairTroop(state, pos, repairTargetId) {
 /* 0. The allowlist is data, and it is typed                           */
 /* ------------------------------------------------------------------ */
 
-test('EEE-2: the hunter allowlist is keyed on the typed shape field', () => {
-  const shapes = new Set(Object.values(UNITS).map((d) => d.shape));
-  for (const k of Object.keys(SOFT_DEFENDER_HUNTERS)) {
-    assert.ok(shapes.has(k), `allowlist key "${k}" must be a real unit shape`);
+// DDD-7 moved the allowlist off a shape-keyed table in tables.js and onto the unit def itself, so
+// these two now assert the per-unit field rather than a name lookup. Some unit may still engage.
+test('EEE-2: the capability is declared per unit, and someone has it', () => {
+  const ids = Object.keys(UNITS);
+  for (const id of ids) {
+    assert.equal(typeof UNITS[id].engagesSoftDefenders, 'boolean',
+      `${id} must declare engagesSoftDefenders explicitly`);
   }
-  assert.ok(Object.keys(SOFT_DEFENDER_HUNTERS).length > 0, 'at least one shape may engage');
+  assert.ok(ids.some((id) => UNITS[id].engagesSoftDefenders), 'at least one unit may engage');
+  assert.ok(ids.some((id) => !UNITS[id].engagesSoftDefenders), 'and at least one may not');
 });
 
 test('EEE-2: createUnit stamps the capability onto the entity as a boolean', () => {
@@ -62,13 +66,13 @@ test('EEE-2: createUnit stamps the capability onto the entity as a boolean', () 
   for (const id of Object.keys(UNITS)) {
     const u = createUnit(s, id, 1, FAR, 'ground', 'attacker');
     assert.equal(typeof u.engagesSoftDefenders, 'boolean', `${id} must carry the flag`);
-    assert.equal(u.engagesSoftDefenders, !!SOFT_DEFENDER_HUNTERS[UNITS[id].shape], id);
+    assert.equal(u.engagesSoftDefenders, UNITS[id].engagesSoftDefenders === true, id);
   }
 });
 
-/** A unit id of an allowlisted shape, and one of a non-allowlisted shape. */
-const HUNTER = Object.keys(UNITS).find((k) => SOFT_DEFENDER_HUNTERS[UNITS[k].shape] && UNITS[k].canTarget !== 'Air');
-const NON_HUNTER = Object.keys(UNITS).find((k) => !SOFT_DEFENDER_HUNTERS[UNITS[k].shape] && UNITS[k].targets === 'Base');
+/** A unit that may engage soft defenders, and one that may not. */
+const HUNTER = Object.keys(UNITS).find((k) => UNITS[k].engagesSoftDefenders && UNITS[k].canTarget !== 'Air');
+const NON_HUNTER = Object.keys(UNITS).find((k) => !UNITS[k].engagesSoftDefenders && UNITS[k].targets === 'Base');
 
 /* ------------------------------------------------------------------ */
 /* 1. An allowlisted attacker engages a soft defender in range         */

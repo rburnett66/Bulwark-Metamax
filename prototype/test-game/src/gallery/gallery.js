@@ -22,17 +22,22 @@ import {
 } from './calc.js';
 import { runGauntlet, runGauntletMatrix, runFactionSweep, runFiringLine, GAUNTLET_DEFENSES } from './lane.js';
 import { PROJ_FX_LS_KEY, mergeProjFx, normalizeFxEntry, serializeFxEntry } from '../render/projFx.js';
+import { shotFxFor } from '../render/unitFx.js';
 
 const $ = (id) => document.getElementById(id);
 
 /* ── renderer.js cosmetic defaults (emitCombatFx) — the gallery starts every
       pick at exactly what the game fires, then lets you tune from there ── */
 const SHOT_SIZE = { shell: 0.022, flak: 0.03, tracer: 0.0075 };
-const GROUNDED_SHAPES = { 'Tanks': 1, 'Heavy Tanks': 1, 'Artillery': 1 };
 function gameFxDefaults(shooter) {
   if (shooter.structId === 'STR-Cannon') return { kind: 'shell', color: 0xffd080, speed: 13, cadence: 0.55, burst: 4 };
   if (shooter.structId === 'STR-Flak') return { kind: 'flak', color: 0x9fd4ff, speed: 18, cadence: 0.35, burst: 1 };
-  const kind = GROUNDED_SHAPES[shooter.shape] ? 'shell' : 'tracer';
+  // DDD-9: this was a fourth private copy of the renderer's `shape === 'Tanks' || …` triple — the tool
+  // claiming to show "exactly what the game fires" while deciding it from a display name on its own.
+  // Both now read the def's projectileFx through the one shared reader. A unit that fires nothing
+  // (infantry, trucks) still previews as a tracer, because the gallery is a weapon workbench and has
+  // to draw SOMETHING; only the battle map honours null.
+  const kind = shotFxFor(shooter) || 'tracer';
   return { kind, color: 0xff9a70, speed: 15, cadence: 0.6, burst: 1 };   // attacker-side unit tracers/shells
 }
 

@@ -2,9 +2,9 @@
  * prototype/test-game/src/harness/parts.js  [state-harness sh-m1.s2]
  *
  * PORTABLE unit PART-STACK definitions — the visual base/weapon/head for a unit, as pure PIXI.Graphics draw
- * specs the harness feeds to buildPartStack. Keyed by the unit's `shape` so units are DROPPABLE: pick any unit
- * and it renders (unknown shapes fall back to a generic chassis). No textures / no art pipeline — draw fns paint
- * primitives so a unit renders offline. The render DRIVES these from readouts (drive.js):
+ * specs the harness feeds to buildPartStack. Keyed by the unit's `artClass` so units are DROPPABLE: pick any
+ * unit and it renders (an unrecognised class falls back to a generic chassis). No textures / no art pipeline —
+ * draw fns paint primitives so a unit renders offline. The render DRIVES these from readouts (drive.js):
  *   base   <- health     (chassis)
  *   weapon <- aim         (turret + barrel; rotation = aimAngle)
  *   head   <- awareness   (sensor)
@@ -20,37 +20,45 @@ export const LAYER_FIT = { base: 46, weapon: 30, head: 18 };
 // reads natural). entities.unitRadius holds the COLLISION half-width; render multiplies by this.
 export const SPRITE_OVER_COLLISION = 4 / 3;
 
-// Palette per broad unit class (generic-safe fallback). Kept data-only so new factions/shapes just add a row.
+// DDD-9: both tables below were keyed on `def.shape` — the string the game DISPLAYS. Renaming
+// 'Heavy Tanks' to 'Assault Tank' in tables.js dropped nine units to `_default`/the default arm, so a
+// pure label edit changed the placeholder art AND the authoring silhouette they are scaled against.
+// They key on `def.artClass` now: a stable id that is never shown to a player and carries no
+// behaviour — it exists so cosmetics can be looked up without a name being load-bearing.
+
+// Palette per broad unit class (generic-safe fallback). Kept data-only so new factions/classes just add a row.
 const PALETTES = {
-  Troops:        { body: 0x6f8f3f, trim: 0x9bd15a, barrel: 0x2f3d1e, sensor: 0x7fd6e0 },
-  Trucks:        { body: 0x8a7b45, trim: 0xd4b45f, barrel: 0x3a3120, sensor: 0x7fd6e0 },
-  Tanks:         { body: 0x556070, trim: 0x8fa2b8, barrel: 0x2a3038, sensor: 0xff9a5f },
-  Artillery:     { body: 0x6b5560, trim: 0xb98aa2, barrel: 0x342630, sensor: 0xff7fa0 },
-  'Heavy Tanks': { body: 0x445866, trim: 0x7f9fb0, barrel: 0x222c34, sensor: 0xff9a5f },
-  Floaters:      { body: 0x3f6f8f, trim: 0x5abed1, barrel: 0x1e343d, sensor: 0x9affd6 },
-  Copters:       { body: 0x5f5f7a, trim: 0x9a9ad1, barrel: 0x26263a, sensor: 0xd6d6ff },
-  Planes:        { body: 0x6a6a55, trim: 0xc9c98a, barrel: 0x30301e, sensor: 0xffffd6 },
-  Missiles:      { body: 0x7a4545, trim: 0xd45f5f, barrel: 0x3a2020, sensor: 0xffd6d6 },
-  _default:      { body: 0x5a6470, trim: 0x9aa6b4, barrel: 0x2a3038, sensor: 0x7fd6e0 },
+  infantry:   { body: 0x6f8f3f, trim: 0x9bd15a, barrel: 0x2f3d1e, sensor: 0x7fd6e0 },
+  truck:      { body: 0x8a7b45, trim: 0xd4b45f, barrel: 0x3a3120, sensor: 0x7fd6e0 },
+  tank:       { body: 0x556070, trim: 0x8fa2b8, barrel: 0x2a3038, sensor: 0xff9a5f },
+  artillery:  { body: 0x6b5560, trim: 0xb98aa2, barrel: 0x342630, sensor: 0xff7fa0 },
+  heavyTank:  { body: 0x445866, trim: 0x7f9fb0, barrel: 0x222c34, sensor: 0xff9a5f },
+  floater:    { body: 0x3f6f8f, trim: 0x5abed1, barrel: 0x1e343d, sensor: 0x9affd6 },
+  copter:     { body: 0x5f5f7a, trim: 0x9a9ad1, barrel: 0x26263a, sensor: 0xd6d6ff },
+  plane:      { body: 0x6a6a55, trim: 0xc9c98a, barrel: 0x30301e, sensor: 0xffffd6 },
+  missile:    { body: 0x7a4545, trim: 0xd45f5f, barrel: 0x3a2020, sensor: 0xffd6d6 },
+  // 'heavyBomber' has no row on purpose: the Tier C bomber has always drawn the generic chassis here,
+  // because its real art is a live 3D voxel model, not a part stack.
+  _default:   { body: 0x5a6470, trim: 0x9aa6b4, barrel: 0x2a3038, sensor: 0x7fd6e0 },
 };
 
-function paletteFor(def) { return PALETTES[def && def.shape] || PALETTES._default; }
+function paletteFor(def) { return PALETTES[def && def.artClass] || PALETTES._default; }
 
 // Rough silhouette size per class (walker default). Kept modest; the bench scales the whole stack up.
 // EXPORTED because it defines what "unit-sized" means in authoring space: art normalised to LAYER_FIT.base
 // (46) replaces a chassis this wide, so the GAME must render art at footprint × (46 / dims.w) to read at
 // the same presence as the bench (unitArt.js).
 export function dimsFor(def) {
-  switch (def && def.shape) {
-    case 'Heavy Tanks': return { w: 34, h: 24 };
-    case 'Tanks':       return { w: 30, h: 20 };
-    case 'Artillery':   return { w: 30, h: 18 };
-    case 'Trucks':      return { w: 28, h: 18 };
-    case 'Troops':      return { w: 24, h: 16 };
-    case 'Copters':
-    case 'Planes':
-    case 'Floaters':    return { w: 26, h: 16 };
-    default:            return { w: 28, h: 18 };
+  switch (def && def.artClass) {
+    case 'heavyTank': return { w: 34, h: 24 };
+    case 'tank':      return { w: 30, h: 20 };
+    case 'artillery': return { w: 30, h: 18 };
+    case 'truck':     return { w: 28, h: 18 };
+    case 'infantry':  return { w: 24, h: 16 };
+    case 'copter':
+    case 'plane':
+    case 'floater':   return { w: 26, h: 16 };
+    default:          return { w: 28, h: 18 };
   }
 }
 

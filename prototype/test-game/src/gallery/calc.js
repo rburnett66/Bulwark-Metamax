@@ -57,6 +57,7 @@ export function unitShooter(unitId, tier, edits = {}) {
   const t = clampTier(tier);
   return Object.assign({
     unitId, tier: t, shape: def.shape, range: def.range,
+    projectileFx: def.projectileFx,   // what the game actually fires (DDD-9) — `shape` here is a LABEL
     dps: def.dps[t - 1], damageType: def.damageType,
     aoeRadius: def.aoeRadius || 0, canTarget: def.canTarget,
     hp: def.hp[t - 1], speed: def.speed,   // survivability knobs — the gauntlet tunes these too

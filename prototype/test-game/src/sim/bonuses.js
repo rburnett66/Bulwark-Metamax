@@ -136,13 +136,26 @@ export function applyBonus(state, bonusId) {
 /*  Read helpers (consumed by combat.js / core.js / harvest.js / mines.js)    */
 /* -------------------------------------------------------------------------- */
 
-/** Persistent defender-damage multiplier vs a target (air/ground stack with troops). */
+/**
+ * Persistent defender-damage multiplier vs a target (air/ground stack with troops).
+ *
+ * DDD-7/9: the troops arm read `target.kind === 'Troops' || target.shape === 'Troops'`. Both halves
+ * were wrong in different ways. `kind` was createUnit's laundered copy of the DISPLAY string
+ * `def.shape`, so renaming the shape silently switched the '+10% vs troops' bonus off for the units it
+ * exists to counter — and `target.shape` was dead code, because no entity ever carried a `shape` field
+ * at all. It is now the def's explicit `isInfantry` flag, stamped onto the entity by createUnit.
+ *
+ * Why a dedicated flag and not `armorClass === 'Organic'`: the roster does not line those up. Greenies
+ * put Organic on their tanks, trucks, artillery and heavy tanks, and Arcane put Energy on their troops
+ * — so armour would both buff nine vehicles this bonus was never meant to touch and miss the infantry
+ * of two factions. Infantry is its own class, so it is its own field.
+ */
 export function bonusDamageMult(state, target) {
   const b = state.bonuses && state.bonuses.dmg;
   if (!b || !target) return 1;
   let m = 1;
   if (target.domain === 'Flyer') m += b.air; else m += b.ground;
-  if (target.kind === 'Troops' || target.shape === 'Troops') m += b.troops;
+  if (target.isInfantry === true) m += b.troops;
   return m;
 }
 
