@@ -99,19 +99,7 @@
     #sheetBox button.on { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:#d9a441; }
     .slotBtn { font-size:11px !important; padding:5px 0 !important; }
     .slotBtn.assigned { border-color:#57d98a !important; color:#57d98a !important; }
-    #palModal { position:absolute; left:490px; top:12px; width:472px; min-width:320px; min-height:230px; max-height:calc(100% - 24px); z-index:20;
       display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; resize:both; box-shadow:0 18px 60px rgba(0,0,0,.6); }
-    #palModal[hidden] { display:none; }
-    #palDrag { font-size:10px; letter-spacing:.2em; color:var(--muted); margin:0; padding:11px 14px 8px; text-transform:uppercase; cursor:move; flex:0 0 auto; }
-    #palBox { padding:0 14px 12px; overflow:auto; flex:1 1 auto; min-height:0; }
-    #palSwatches { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
-    .palSw { width:44px; height:34px; border:2px solid var(--line); border-radius:6px; cursor:pointer; padding:0; position:relative; }
-    .palSw.sel { border-color:var(--gold); box-shadow:0 0 0 2px rgba(242,200,105,.35); }
-    .palSw.edited::after { content:'●'; position:absolute; top:-6px; right:-2px; color:#57d98a; font-size:10px; }
-    .palSw.pinned::before { content:'📌'; position:absolute; top:-9px; left:-5px; font-size:11px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.8); }
-    .palSw.dropped::before { content:'🚫'; position:absolute; top:-9px; left:-5px; font-size:11px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.8); }
-    .palSw.dropped { opacity:.4; }
-    #palSV, #palHue { border:1px solid var(--line); border-radius:6px; cursor:crosshair; touch-action:none; }
     /* ── PALETTE WINDOW: pick a size, see it before you commit ────────────────────────────────── */
     #paletteModal { position:absolute; left:280px; top:12px; width:860px; min-width:520px; min-height:360px; max-height:calc(100% - 24px); z-index:21;
       display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; resize:both; box-shadow:0 18px 60px rgba(0,0,0,.6); }
@@ -143,7 +131,6 @@
       box-shadow:inset 0 0 0 1px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.5); }
     #paintSwatch:hover { border-color:var(--gold); }
     #paintSwatchHex { font-size:9.5px; font-family:ui-monospace,monospace; color:var(--muted); flex:0 0 auto; }
-    .palChip { width:40px; height:24px; border:1px solid var(--line); border-radius:5px; display:inline-block; vertical-align:middle; }
     #loadModal { position:fixed; inset:0; background:rgba(4,8,12,.72); z-index:50; display:flex; align-items:center; justify-content:center; }
     #loadModal[hidden] { display:none; }
     #loadBox { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; width:420px; max-width:92vw; max-height:88vh; overflow:auto; box-shadow:0 18px 60px rgba(0,0,0,.6); }
@@ -313,10 +300,8 @@
       <h2>3 · Lighting + colour</h2>
       <div class="row"><label>Light az</label><input type="range" id="lightAz" min="0" max="359" value="135"><span class="val" id="lightAzV">135°</span></div>
       <div class="row"><label>Contrast</label><input type="range" id="lightK" min="0" max="100" value="55"><span class="val" id="lightKV">55</span></div>
-      <div class="row"><label>Palette</label><input type="range" id="pal" min="0" max="48" value="0" title="Live palette reduction (0 = full colour). The Palette window offers the same range as discrete, measured options."><span class="val" id="palV">full</span></div>
-      <div class="note" style="margin:-2px 0 4px">Palette quantises the cube colours to N flat, contrasting shades (0 = full colour) — cleans camo/gradient noise so the block structure reads clean. Try <b>6–12</b>.</div>
-      <button class="ghost" id="openPal">🎨 Tune colors…</button>
-      <div class="note" style="margin:2px 0 4px">See every colour the model uses, pick one, and re-tint it on a colour diagram (hue + saturation/brightness). Edits follow the unit into the bake, the game, and project saves.</div>
+      <button class="ghost" id="openPal">🎨 Palette…</button>
+      <div class="note" style="margin:2px 0 4px">Pick a palette size, see it on the model before you commit, then <b>Apply</b> — which PAINTS it into the model. There is no live "palette" slider any more: what the model holds is what you see, what bakes and what ships.</div>
       <div class="note">One global light for the whole game — it's stored in the units manifest and every unit
         bakes with it, so packs stay consistent with each other and the board. 135° = top-left (the game default).</div>
     </div>
@@ -418,39 +403,6 @@
     <button class="ghost" id="sheetClose">Done</button>
   </div>
 </div>
-<div id="palModal" hidden>
-  <h2 id="palDrag">Palette · consolidate SOURCE → WORKING — drag header · ⤢ corner to resize</h2>
-  <div id="palBox">
-    <div class="note" style="margin:0 0 6px">These are the model's <b>SOURCE</b> colours (from the original art). Reduce / keep / merge to a <b>WORKING</b> set, then <b>⬇ Remap model</b> to bake it in. Source is never lost — <b>Reset edits</b> restores it.</div>
-    <div class="row" style="gap:6px;margin:0 0 8px"><label style="flex:0 0 auto;font-size:11px">Working size</label><input type="range" id="palN" min="0" max="48" value="0" style="flex:1"><span class="val" id="palNV" style="flex:0 0 42px">full</span></div>
-    <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin:0 0 8px;cursor:pointer" title="Show every distinct SOURCE colour individually (no family grouping) so you can pin exact colours"><input type="checkbox" id="palShowAll">Show full source palette (pin exact shades)</label>
-    <div id="palSwatches"></div>
-    <div id="palPick" hidden>
-      <div class="row" style="gap:10px;align-items:flex-start">
-        <canvas id="palSV" width="240" height="170"></canvas>
-        <canvas id="palHue" width="26" height="170"></canvas>
-        <div style="flex:1;min-width:150px">
-          <div class="note" style="margin:0 0 4px">was <span class="palChip" id="palWas"></span> → now <span class="palChip" id="palNow"></span> <span id="palHex" style="color:var(--muted)"></span></div>
-          <div class="note" id="palInfo" style="margin:0 0 8px"></div>
-          <div class="row" style="gap:6px;margin:0 0 6px;flex-wrap:wrap">
-            <button class="ghost" id="palKeepBtn" style="width:auto;padding:6px 12px;margin:0">📌 Keep this color</button>
-            <button class="ghost" id="palDropBtn" style="width:auto;padding:6px 12px;margin:0">🚫 Eliminate this color</button>
-            <button class="ghost" id="palMergeBtn" style="width:auto;padding:6px 12px;margin:0" title="Collapse all shades in this swatch into the single picked colour">🔗 Merge to 1 color</button>
-          </div>
-          <button class="ghost" id="palResetOne" style="width:auto;padding:6px 12px">↺ Reset this color</button>
-        </div>
-      </div>
-    </div>
-    <div class="row" style="gap:6px;margin-top:8px">
-      <button id="palRemap" style="width:auto;padding:7px 14px;margin:0" title="Consolidate: bake the WORKING palette into the model — every voxel is written to its nearest working colour, so all sides match. Source stays intact (Reset edits restores it).">⬇ Remap model to working palette</button>
-      <button class="ghost" id="palToKept" style="width:auto;padding:7px 14px;margin:0" title="Set the working palette to exactly your pinned colours (live preview) — then Remap to bake it in">🎯 Working = my kept colors</button>
-      <button class="ghost" id="palResetAll" style="width:auto;padding:6px 12px;margin:0">↺ Reset all</button>
-      <button class="ghost" id="palClearKeep" style="width:auto;padding:6px 12px;margin:0">Clear keep/drop</button>
-      <span class="note" id="palState" style="margin:0;flex:1"></span>
-      <button class="ghost" id="palClose" style="width:auto;padding:6px 14px;margin:0">Done</button>
-    </div>
-  </div>
-</div>
 <div id="paletteModal" hidden>
   <h2 id="paletteDrag">Palette — pick a size, see it before you commit · drag header · ⤢ corner to resize</h2>
   <div id="paletteBox">
@@ -475,7 +427,6 @@
     <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
       <button id="palApply" style="width:auto;padding:7px 14px;margin:0" title="Write the working palette into every voxel of both parts. One undo step.">⬇ Apply to model</button>
       <button class="ghost" id="palRefresh" style="width:auto;padding:6px 12px;margin:0" title="Re-read the model's colours and rebuild every option">↻ Re-read model</button>
-      <button class="ghost" id="paletteAdvanced" style="width:auto;padding:6px 12px;margin:0" title="The older per-colour tuner: pin, eliminate and hand-tune individual source colours">Advanced…</button>
       <span class="note" id="paletteState" style="margin:0;flex:1"></span>
       <button class="ghost" id="paletteClose" style="width:auto;padding:6px 14px;margin:0">Done</button>
     </div>

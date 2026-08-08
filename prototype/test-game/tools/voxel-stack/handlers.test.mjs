@@ -334,11 +334,186 @@ test('every button on the palette window runs without throwing, and the slot edi
   t.click('palSlotReset');
   assert.deepEqual(t.json('palWork[0]'), t.json('palWorkBase[0]'), 'revert must restore what the reduction chose');
   t.click('palRefresh');
-  t.click('paletteAdvanced');
   t.click('paletteClose');
   t.click('paintSwatch');
   t.click('gridUndoBtn');
   t.click('gridRedoBtn');
+});
+
+// ── FFF-8: THE PALETTE IS MODEL DATA, NOT A RENDER FILTER ────────────────────────────────────────
+// buildFaces, collectVox and the grid each used to build a quantiser from state.paletteN and re-bin EVERY
+// voxel on EVERY draw, then push the result through the palMap tuner. So the hex an artist picked was
+// replaced between the model and the screen, and the model — which is what ships — never held the colour
+// they saw. These pin the property that replaced it.
+
+/**
+ * Give the sandbox a REAL keyed source slice, so the slice half of the palette can be measured.
+ *
+ * The generic canvas stub hands back a zeroed ImageData on every call, which is right for "does it draw
+ * without throwing" and useless here: keyedCanvas would key an empty image and slicePaletteEntries would
+ * honestly report no colours. So canvases get a persistent pixel buffer that drawImage fills from the
+ * image and getImageData/putImageData round-trip through — enough for the real keyBackground to run.
+ *
+ * The art is a white field with two solid blocks. White floods from the border and is keyed out; the two
+ * blocks are 425 apart from it in Manhattan distance against a tolerance of 75, so they survive — which is
+ * the point: what reaches the palette is what survives KEYING, not every pixel in the file.
+ */
+const SLICE_A = [7, 222, 111], SLICE_B = [200, 20, 10];
+function installSliceArt(t, part = 'body', view = 'top', W = 32, H = 32) {
+  t.run(`(() => {
+    const base = document.createElement.bind(document);
+    if (!document.__canvasPatched) {
+      document.__canvasPatched = true;
+      document.createElement = (tag) => {
+        const el = base(tag);
+        if (String(tag).toLowerCase() !== 'canvas') return el;
+        let buf = null;
+        const ensure = () => { const n = Math.max(4, (el.width | 0) * (el.height | 0) * 4);
+          if (!buf || buf.length !== n) buf = new Uint8ClampedArray(n); return buf; };
+        const real = { drawImage: (im) => { const b = ensure(); if (im && im.__px) b.set(im.__px.subarray(0, b.length)); },
+          getImageData: () => ({ data: ensure(), width: el.width, height: el.height }),
+          putImageData: (id) => { const b = ensure(); if (id && id.data !== b) b.set(id.data.subarray(0, b.length)); } };
+        el.getContext = () => new Proxy(real, { get: (o, k) => (k in o ? o[k] : typeof k === 'symbol' ? undefined : () => undefined),
+          set: (o, k, v) => { o[k] = v; return true; } });
+        return el;
+      };
+    }
+    const W = ${W}, H = ${H}, px = new Uint8ClampedArray(W * H * 4);
+    for (let i = 0; i < W * H; i++) { px[i*4] = 255; px[i*4+1] = 255; px[i*4+2] = 255; px[i*4+3] = 255; }
+    const block = (x0, y0, c) => { for (let y = y0; y < y0 + 10; y++) for (let x = x0; x < x0 + 10; x++) {
+      const p = (y * W + x) * 4; px[p] = c[0]; px[p+1] = c[1]; px[p+2] = c[2]; px[p+3] = 255; } };
+    block(5, 5, ${JSON.stringify(SLICE_A)}); block(5, 18, ${JSON.stringify(SLICE_B)});
+    imgs['${part}']['${view}'] = { width: W, height: H, __px: px };
+    // adding art moves the carve signature; re-stamp so the fixture model stands (the carve is not what
+    // is under test here — the palette's SOURCE is)
+    for (const p of ['body', 'turret']) if (carveCache[p]) carveCache[p].sig = carveSig(p, carveCache[p].foot, carveCache[p].layers);
+  })()`);
+}
+
+test('FFF-8: the full palette is read from the KEYED SLICES, not from the carved model', () => {
+  // MUTATION: point sliceTally at the raw image instead of keyedCanvas -> white joins the palette and the
+  // background this tool spent a whole modal removing gets a slot in a 4-colour reduction.
+  const t = boot();
+  installSliceArt(t);
+  const got = t.json(`slicePaletteEntries().map((e) => e.rgb)`);
+  assert.deepEqual(got.map((c) => c.join()).sort(), [SLICE_A.join(), SLICE_B.join()].sort(),
+    'exactly the two colours that survive keying — the white field must be gone');
+  assert.ok(t.json(`slicePaletteEntries().map((e) => e.n)`).every((n) => n > 0), 'each colour carries its population');
+});
+
+test('FFF-8 END TO END: the colour on screen == the colour in the model == the colour that bakes', () => {
+  // The claim, on a unit with a REDUCED palette, measured through all three consumers at once:
+  //   buildFaces  = what the 3D view and the bake draw
+  //   collectVox  = what the .vox export and the Tier C model embed emit
+  //   m.vcol      = what is saved
+  // MUTATION: put `if (quant) {…}` back into buildFaces -> faceVsModel goes non-zero and this fails.
+  const t = boot();
+  t.click('openPal');
+  t.run('palChoose(4)');
+  t.click('palApply');
+  const r = t.json(`(() => {
+    const foot = 16, layers = 8, N = foot * foot, m = carveCache.body.m;
+    const F = buildFaces('body', foot, layers);
+    const cells = collectVox('body', foot, layers, 0, 0);
+    const pal = new Set(palWork.map((c) => (c[0] << 16) | (c[1] << 8) | c[2]));
+    let faceVsModel = 0, exportVsModel = 0, faceOffPalette = 0;
+    for (const f of F.faces) {
+      const o = (f.z * N + f.y * foot + f.x) * 3;
+      if (f.r !== m.vcol[o] || f.g !== m.vcol[o + 1] || f.b !== m.vcol[o + 2]) faceVsModel++;
+      if (!pal.has((f.r << 16) | (f.g << 8) | f.b)) faceOffPalette++;
+    }
+    for (const c of cells) {
+      const o = (c.z * N + c.y * foot + c.x) * 3;
+      if (c.r !== m.vcol[o] || c.g !== m.vcol[o + 1] || c.b !== m.vcol[o + 2]) exportVsModel++;
+    }
+    return { faces: F.faces.length, cells: cells.length, faceVsModel, exportVsModel, faceOffPalette };
+  })()`);
+  assert.ok(r.faces > 0 && r.cells > 0, 'test setup: there must be something to measure');
+  assert.equal(r.faceVsModel, 0, `${r.faceVsModel}/${r.faces} drawn faces do not match the model's own colour`);
+  assert.equal(r.exportVsModel, 0, `${r.exportVsModel}/${r.cells} exported voxels do not match the model's own colour`);
+  assert.equal(r.faceOffPalette, 0, 'every drawn face must be one of the palette colours the artist chose');
+
+  // and the GRID agrees — it used to build a SECOND quantiser over a different histogram
+  const grid = t.json(`(() => {
+    renderGridView();
+    const foot = 16, layers = 8, N = foot * foot, m = carveCache.body.m;
+    let off = 0, seen = 0;
+    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      if (!m.filled(x, y, z)) continue;
+      const c = gridGeom.colAt(x, y, z), o = (z * N + y * foot + x) * 3; seen++;
+      if (c[0] !== m.vcol[o] || c[1] !== m.vcol[o + 1] || c[2] !== m.vcol[o + 2]) off++;
+    }
+    return { seen, off };
+  })()`);
+  assert.ok(grid.seen > 0);
+  assert.equal(grid.off, 0, `${grid.off}/${grid.seen} grid cells disagree with the model`);
+});
+
+test('FFF-8: the draw-time filter and its four stores are GONE, not merely unused', () => {
+  // A store nothing reads is this tool's most expensive recurring bug. These four had readers — on every
+  // draw — which is worse: they silently overrode the model. Named individually so a partial revert cannot
+  // pass. MUTATION: re-declare any one of them -> this fails and names it.
+  const t = boot();
+  for (const name of ['buildQuantiser', 'buildPalette', 'weightedMedianCut', 'palMap', 'palKeep', 'palDrop',
+    'setPaletteN', 'remapModelToWorking', 'palEpoch']) {
+    assert.equal(t.run(`typeof ${name}`), 'undefined', `${name} is a piece of the render-time palette filter`);
+  }
+  assert.equal(t.run(`state.paletteN === undefined`), true, 'state.paletteN must not exist');
+  assert.equal(t.run(`JSON.stringify(snapshotProject()).includes('palMap')`), false,
+    'a saved project must not carry filter state beside a model that does not contain its result');
+  // buildFaces has no `raw` mode left, because there is no reduction for `raw` to skip
+  assert.equal(t.run(`buildFaces.length`), 3, 'buildFaces takes (partId, foot, layers) — nothing else');
+});
+
+test('FFF-8: the model palette comes from the MODEL, the full palette from the SLICES', () => {
+  // Two palettes, two sources, and the split is the point. The inline paint strip describes what the model
+  // HOLDS; the Palette window offers what the ART makes available. modelPalette used to fold the wall
+  // sheets in, which made it neither.
+  // MUTATION: fold V.side back into modelPalette -> the strip claims a colour vcol does not contain.
+  const t = boot();
+  t.run(`(() => {
+    const foot = 16, layers = 8, w = foot, h = layers;
+    const m = new Uint8Array(w * h).fill(1), c = new Uint8Array(w * h * 3);
+    for (let i = 0; i < w * h; i++) { c[i*3] = 7; c[i*3+1] = 222; c[i*3+2] = 111; }   // a colour ONLY the side sheet has
+    carveCache.body.m.views = { side: { w, h, m, c }, front: null, back: null, ox: 0, oy: 0, z0: 0 };
+    gridModel = null; renderGridView();
+  })()`);
+  const WALL = (7 << 16) | (222 << 8) | 111;
+  const strip = t.json('gridModel.palette.map((c) => (c[0]<<16)|(c[1]<<8)|c[2])');
+  assert.ok(strip.length > 0, 'test setup: the strip must have something in it');
+  assert.ok(!strip.includes(WALL), 'the MODEL palette must not name a colour that is only in a slice sheet');
+  const vcolHas = t.run(`(() => { const m = carveCache.body.m, s = new Set();
+    for (let i = 0; i < m.PAINT.length; i++) s.add((m.vcol[i*3]<<16)|(m.vcol[i*3+1]<<8)|m.vcol[i*3+2]);
+    return ${JSON.stringify(strip)}.every((k) => s.has(k)); })()`);
+  assert.equal(vcolHas, true, 'every colour in the strip must be one vcol actually holds');
+  // …and the same colour IS offered by the palette window, because it reaches the screen from a slice
+  t.click('openPal');
+  assert.ok(t.json('palEntries.map((e) => (e.rgb[0]<<16)|(e.rgb[1]<<8)|e.rgb[2])').includes(WALL),
+    'the full palette must offer a colour the slices put on the model');
+});
+
+test('FFF-8: applying a palette does not narrow what the palette window can offer next time', () => {
+  // THE REASON THE FULL PALETTE COMES FROM THE SLICES. Reduce the model to 2 colours and the model has 2
+  // colours — so a window that re-read the MODEL could then only ever offer 2, and every later reduction
+  // would be a reduction of a reduction. The slices do not move when the model does.
+  // MUTATION: drop the slicePaletteEntries merge from palGatherEntries -> after is 2 and this fails.
+  const t = boot();
+  installSliceArt(t);
+  t.click('openPal');
+  const before = t.run('palEntries.length');
+  assert.ok(before > 4, 'test setup: the unit must start with more colours than the budget');
+  t.run('palChoose(2)');
+  t.click('palApply');
+  assert.ok(t.distinct() <= 2, 'test setup: the apply must actually have reduced the model');
+  t.click('palRefresh');                                             // re-read the source
+  const after = t.run('palEntries.length');
+  assert.ok(after > 2, `the pool collapsed to the model (${after}) — the source must stay the source`);
+  const keys = t.json('palEntries.map((e) => e.rgb.join())');
+  for (const c of [SLICE_A, SLICE_B]) {
+    assert.ok(keys.includes(c.join()), `${c} is in the art, so it must still be on offer after an Apply`);
+  }
+  assert.ok(t.run('palOpts.find((o) => o.n === 8).palette.length') > 2,
+    'and a bigger size must still be a real offer, not two greys wearing eight hats');
 });
 
 test('every paint tool can render its grid', () => {

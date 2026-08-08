@@ -319,16 +319,16 @@ function writeVox(nx, ny, nz, voxels, palette) {
   for (let i = 0; i < 256; i++) { const c = palette[i] || [0, 0, 0]; dv.setUint8(p++, c[0]); dv.setUint8(p++, c[1]); dv.setUint8(p++, c[2]); dv.setUint8(p++, 255); }
   return buf;
 }
-// gather a part's filled voxels (palette cleanup applied) as {x,y,z,r,g,b}, offset into place
+// gather a part's filled voxels as {x,y,z,r,g,b}, offset into place.
+// THE MODEL'S COLOUR, VERBATIM. This used to run a live quantiser + the palMap tuner over every voxel on
+// the way out, so the .vox export and the Tier C model embed shipped colours that were never stored on the
+// model — the artist's hex was replaced downstream, silently. Palette work is PAINT now (it writes vcol
+// through setVox), so there is nothing left to apply here: what the model holds is what ships.
 function collectVox(partId, foot, layers, zOff, xOff) {
-  const { filled, vcol, views } = buildModel(partId, foot, layers), N = foot * foot;
-  const quant = buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, views), out = [];
+  const { filled, vcol } = buildModel(partId, foot, layers), N = foot * foot, out = [];
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
     if (!filled(x, y, z)) continue;
-    const c = (z * N + y * foot + x) * 3; let r = vcol[c], g = vcol[c + 1], b = vcol[c + 2];
-    if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
-    const t = palMap.get((r << 16) | (g << 8) | b);                  // colour tune follows .vox + Tier C exports
-    if (t) { r = t[0]; g = t[1]; b = t[2]; }
+    const c = (z * N + y * foot + x) * 3, r = vcol[c], g = vcol[c + 1], b = vcol[c + 2];
     const X = x + xOff, Z = z + zOff; if (X < 0 || X > 255 || Z < 0 || Z > 255) continue;
     out.push({ x: X, y, z: Z, r, g, b });
   }
@@ -694,8 +694,12 @@ function buildModel(partId, foot, layers) {
   return buildModelRaw(partId, foot, layers);
 }
 
-// median-cut → n representative colours. Flattens camo/gradients (and rich .vox palettes) into a small,
-// contrasting set of flat cube colours so the block structure reads clean instead of noisy.
+// median-cut → n representative colours.
+// THE ONLY SURVIVOR OF THE OLD REDUCER BLOCK, and it is not a render filter: the .vox FILE FORMAT caps its
+// RGBA chunk at 256 entries, so exportVox has to fold a richer model down to fit. It never touches what is
+// drawn or what is stored. buildPalette / weightedMedianCut / chromaOf / buildQuantiser all fed the
+// draw-time filter and are gone (FFF-8). NOTE: this declaration shadows palette.js's `medianCut` global —
+// see the *Core note at the bottom of palette.js; every call into palette.js goes through a *Core alias.
 function medianCut(colors, n) {
   if (!colors.length) return [[128, 128, 128]];
   let boxes = [colors.slice()];
@@ -717,103 +721,18 @@ function medianCut(colors, n) {
   }
   return boxes.map((b) => { let r = 0, g = 0, bl = 0; for (const c of b) { r += c[0]; g += c[1]; bl += c[2]; } const m = b.length || 1; return [Math.round(r / m), Math.round(g / m), Math.round(bl / m)]; });
 }
-// ── HUE-FAMILY PALETTE REDUCER (owner 2026-07-17) ─────────────────────────────────────────────────
-// Plain median-cut is population-blind: a hull that is mostly grey/brown has a huge low-hue mass, so
-// every split lands back in it and sparse accents (a washed-out blue window, a gold stripe) get
-// averaged away — "reduce and you get nothing but grey/brown." Instead we bucket EVERY colour by hue
-// (only near-perfect grey goes to one neutral bucket), guarantee each hue family present at least one
-// palette slot, then split the remaining budget across families by population. A lone washed accent
-// can never be out-voted by the grey/brown mass. Pinned colours are always kept on top of that.
-const chromaOf = (r, g, b) => Math.max(r, g, b) - Math.min(r, g, b);
-function weightedMedianCut(entries, n) {
-  if (!entries.length || n <= 0) return [];
-  let boxes = [entries.slice()];
-  const rangeOf = (b) => { let mn = [255, 255, 255], mx = [0, 0, 0]; for (const e of b) for (let ch = 0; ch < 3; ch++) { const v = e.rgb[ch]; if (v < mn[ch]) mn[ch] = v; if (v > mx[ch]) mx[ch] = v; } return [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]]; };
-  while (boxes.length < n) {
-    let bi = -1, best = -1;
-    for (let i = 0; i < boxes.length; i++) { if (boxes[i].length < 2) continue; const rg = rangeOf(boxes[i]); const m = Math.max(rg[0], rg[1], rg[2]); if (m > best) { best = m; bi = i; } }
-    if (bi < 0) break;
-    const box = boxes[bi], rg = rangeOf(box), ch = rg[1] > rg[0] ? (rg[2] > rg[1] ? 2 : 1) : (rg[2] > rg[0] ? 2 : 0);
-    box.sort((a, b) => a.rgb[ch] - b.rgb[ch]);
-    const total = box.reduce((s, e) => s + e.c, 0); let acc = 0, mid = 1;
-    for (let i = 0; i < box.length; i++) { acc += box[i].c; if (acc >= total / 2) { mid = Math.max(1, Math.min(box.length - 1, i + 1)); break; } }
-    boxes.splice(bi, 1, box.slice(0, mid), box.slice(mid));
-  }
-  return boxes.map((b) => { let r = 0, g = 0, bl = 0, w = 0; for (const e of b) { r += e.rgb[0] * e.c; g += e.rgb[1] * e.c; bl += e.rgb[2] * e.c; w += e.c; } w = w || 1; return [Math.round(r / w), Math.round(g / w), Math.round(bl / w)]; });
-}
-function buildPalette(counts, n, pins, drops) {
-  const nearAny = (rgb, list, d2) => (list || []).some((p) => (p[0] - rgb[0]) ** 2 + (p[1] - rgb[1]) ** 2 + (p[2] - rgb[2]) ** 2 < d2);
-  const NEUTRAL_CH = 16;                                             // only near-perfect grey is "neutral"
-  const bucketOf = (rgb) => chromaOf(...rgb) < NEUTRAL_CH ? 'n' : 'h' + (Math.round(rgb2hsv(...rgb)[0] / 15) % 24);
-  let entries = [...counts.entries()].map(([k, c]) => ({ rgb: [(k >> 16) & 255, (k >> 8) & 255, k & 255], c }));
-  // ELIMINATE: a dropped colour removes its WHOLE hue family (e.g. eliminate one grey → all greys go);
-  // those voxels remap to the nearest surviving colour in the quantiser. (Guard: never drop everything.)
-  if (drops && drops.length) {
-    const dropB = new Set(drops.map(bucketOf));
-    const kept = entries.filter((e) => !dropB.has(bucketOf(e.rgb)));
-    if (kept.length) entries = kept;
-  }
-  const seeds = (pins || []).map((p) => p.slice());
-  if (entries.length + seeds.length <= n) {                          // budget covers every survivor → keep them all
-    for (const e of entries) if (!nearAny(e.rgb, seeds, 1)) seeds.push(e.rgb);
-    return seeds.slice(0, n);
-  }
-  let budget = n - seeds.length;
-  if (budget <= 0) return seeds.slice(0, n);
-  const fams = new Map();                                            // hue bucket (or 'n' = grey) → members + population
-  for (const e of entries) {
-    const key = bucketOf(e.rgb);
-    let f = fams.get(key); if (!f) { f = { items: [], pop: 0 }; fams.set(key, f); }
-    f.items.push(e); f.pop += e.c;
-  }
-  const famKeys = [...fams.keys()], fl = [...fams.values()];
-  // a family the artist already PINNED a colour in is already represented — don't mint a base slot for it,
-  // so pinning one black/grey no longer forces the reducer to add extra greys on top of it.
-  const pinnedFams = new Set(seeds.map((s) => bucketOf(s)));
-  const order = fl.map((_, i) => i).sort((a, b) => fl[b].pop - fl[a].pop);
-  const alloc = fl.map(() => 0);
-  let left = budget;
-  for (const i of order) { if (left <= 0) break; if (pinnedFams.has(famKeys[i])) continue; alloc[i] = 1; left--; }   // 1 slot per UNPINNED family
-  const active = order.filter((i) => alloc[i] > 0), totalPop = active.reduce((s, i) => s + fl[i].pop, 0) || 1;
-  const rema = active.map((i) => ({ i, w: fl[i].pop / totalPop * left })); let used = 0;
-  for (const r of rema) { const add = Math.floor(r.w); alloc[r.i] += add; used += add; }   // proportional to population
-  rema.sort((a, b) => (b.w % 1) - (a.w % 1));
-  for (let k = 0; k < left - used && k < rema.length; k++) alloc[rema[k].i]++;   // largest-remainder for the leftovers
-  for (let i = 0; i < fl.length; i++) if (alloc[i] > 0) for (const c of weightedMedianCut(fl[i].items, alloc[i])) seeds.push(c);
-  return seeds.slice(0, n);
-}
-// build a colour→palette quantiser over a part's filled voxels (null when Palette is off / full colour)
-// `views` (side/front/back source art) is folded in so colours that only appear on a WALL — a blue
-// window, a gold stripe painted only in the side sheet — are palette candidates too, instead of being
-// quantised away against a top-only palette. buildFaces and the grid pass the same views → they agree.
-function buildQuantiser(cd, vcol, filled, foot, layers, n, views) {
-  if (!n) return null;
-  const N = foot * foot, counts = new Map();
-  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-    if (!filled(x, y, z)) continue;
-    let r, g, b; if (vcol) { const c = (z * N + y * foot + x) * 3; r = vcol[c]; g = vcol[c + 1]; b = vcol[c + 2]; } else { const p = (y * foot + x) * 4; r = cd[p]; g = cd[p + 1]; b = cd[p + 2]; }
-    const key = (r << 16) | (g << 8) | b; counts.set(key, (counts.get(key) || 0) + 1);
-  }
-  if (views) for (const g of [views.side, views.front, views.back]) if (g && g.m) {
-    for (let i = 0; i < g.w * g.h; i++) if (g.m[i]) { const key = (g.c[i * 3] << 16) | (g.c[i * 3 + 1] << 8) | g.c[i * 3 + 2]; counts.set(key, (counts.get(key) || 0) + 1); }
-  }
-  const kRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
-  const pal = buildPalette(counts, n, [...palKeep].map(kRGB), [...palDrop].map(kRGB)), cache = new Map();
-  return (r, g, b) => {
-    const key = (r << 16) | (g << 8) | b; let v = cache.get(key); if (v !== undefined) return v;
-    let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - g) * (p[1] - g) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } }
-    v = pal[bi]; cache.set(key, v); return v;
-  };
-}
-
 // ── CUBE STACK: the unified voxel model reduced to its EXPOSED cube faces — the only thing the renderer
-// draws. Palette cleanup is baked into the face colour; LIGHTING IS NOT — it's applied per-frame from the
+// draws. THE FACE COLOUR IS THE MODEL'S COLOUR. LIGHTING IS NOT baked in — it's applied per-frame from the
 // rotated face normal, so the world light stays fixed while the object turns under it.
 // n: 0 = top, 1 = +x, 2 = −x, 3 = +y, 4 = −y (grid space, y = image-down).
-// `raw` (default false) skips the palette reduction and the colour tune, returning the face colours the
-// wall-art pass produced. The palette window needs exactly that: it is CHOOSING a reduction, so feeding
-// it colours that a previous reduction already binned would have it quantise a quantised model.
-function buildFaces(partId, foot, layers, raw) {
+//
+// NO PALETTE FILTER RUNS HERE (FFF-8). This used to build a quantiser from state.paletteN and re-bin EVERY
+// voxel on EVERY draw, then push the result through the palMap tuner — so the hex an artist picked was
+// replaced between the model and the screen, and the model (which is what ships) never held the colour
+// they saw. Palette work is paint now: it writes vcol through setVox and is saved with the model. The
+// only thing that still decides a face's colour is whether the voxel is PAINTed (vcol wins) or
+// carve-derived (the slice sheet that depicts that wall wins) — see wallCol below.
+function buildFaces(partId, foot, layers) {
   const model = buildModel(partId, foot, layers), N = foot * foot;   // unified voxel model
   const { filled, vcol, views: V } = model;
   // The painted flag comes from the MODEL now. It used to be read from voxEdit while the COLOUR was read
@@ -821,7 +740,6 @@ function buildFaces(partId, foot, layers, raw) {
   // suppressed its wall art and then fell back to the flat column colour. Measured, in 3D and in the bake.
   // PAINT and vcol MUST come from the same object, or this reintroduces exactly that split.
   const PAINT = model.PAINT || null;
-  const quant = raw ? null : buildQuantiser(null, vcol, filled, foot, layers, state.paletteN, V);   // palette cleanup (incl. wall art)
   // wall colour comes from the elevation view that DEPICTS that wall: side view → ±y walls (far side
   // mirrored), front view → +x wall, back view → −x wall (mirrored front when no back was drawn).
   // Top view keeps colouring the tops. Fallback everywhere = the voxel's column colour.
@@ -852,11 +770,8 @@ function buildFaces(partId, foot, layers, raw) {
     const painted = !!(PAINT && PAINT[c / 3]);            // artist colour is authoritative — skip the wall-art pass, keep vcol
     const add = (n) => {
       const w = (n === 0 || painted) ? null : wallCol(x, y, z, n);   // painted → use the voxel colour so in-game matches the grid
-      let r = w ? w[0] : vcol[c], g = w ? w[1] : vcol[c + 1], b = w ? w[2] : vcol[c + 2];
-      if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
-      const k = (r << 16) | (g << 8) | b, t = raw ? null : palMap.get(k);   // artist colour tune (palette tuner)
-      if (t) { r = t[0]; g = t[1]; b = t[2]; }
-      faces.push({ x, y, z, n, r, g, b, k, d: 0 });                   // k = pre-tune key, the tuner's handle
+      const r = w ? w[0] : vcol[c], g = w ? w[1] : vcol[c + 1], b = w ? w[2] : vcol[c + 2];
+      faces.push({ x, y, z, n, r, g, b, k: (r << 16) | (g << 8) | b, d: 0 });
     };
     if (!filled(x, y, z + 1)) add(0);
     if (!filled(x + 1, y, z)) add(1);
@@ -1427,18 +1342,11 @@ const polyState = { body: mkViews(() => null), turret: mkViews(() => null) }; //
 const pickState = { body: mkViews(() => []), turret: mkViews(() => []) };     // per-image eyedropper "touch to remove" colours: [{col:[r,g,b], pt:[x,y]}]
 const imgURLCache = { body: mkViews(() => null), turret: mkViews(() => null) }; // PNG data-URL cache (project saves)
 const voxB64 = { body: null, turret: null };                                  // base64 cache of imported .vox data
-const palMap = new Map();                    // palette tuner: pre-tune colour key → replacement [r,g,b]
-let palEpoch = 0;                            // bumps on any palette reduce/tune → paint strip recomputes
-const palKeep = new Set();                   // palette reducer: colour keys the artist pinned to survive reduction
-const palDrop = new Set();                    // palette reducer: colour keys the artist marked to eliminate (remap away)
-// palette tuning (reduce count + tune map + keep/drop) is a PER-UNIT property — clear it on every unit/decor
-// load so one model's palette never bleeds into the next. Callers reset AFTER flushing the outgoing unit, so
-// its saved palette is preserved; a loaded WIP re-applies its own palette right after via loadProject.
-function resetPalette() {
-  palMap.clear(); palKeep.clear(); palDrop.clear(); state.paletteN = 0; palEpoch++;
-  if ($('pal')) { $('pal').value = 0; if ($('palV')) $('palV').textContent = 'full'; }
-  if ($('palN')) { $('palN').value = 0; if ($('palNV')) $('palNV').textContent = 'full'; }
-}
+// NO PER-UNIT PALETTE STATE LIVES HERE ANY MORE (FFF-8). palMap (the colour tuner), palKeep / palDrop
+// (the reducer's pins) and state.paletteN were four stores that existed only to steer a draw-time filter,
+// and resetPalette() existed only to stop one unit's filter bleeding into the next. A palette is applied
+// as paint now — it is IN vcol, it travels with the model, and a unit switch carries it because the model
+// carries it. There is nothing left to clear.
 // THE PAINT COLOUR, in one place. Brush, Fill, Add-extrude and the palette window all read this; it used
 // to be parsed from the hex input inline at four call sites, one of which had already drifted.
 function paintRGB() {
@@ -1488,7 +1396,7 @@ function mountZOf(bodyLayers) { return clamp(bodyMountZ + state.mountZ, 0, bodyL
 // to doBake left bakeDecor throwing ReferenceError on every call.
 const bakeElOf = () => (state.bakeEl == null ? state.el : state.bakeEl);
 const state = { foot: 64, bodyLayers: 16, turretLayers: 12, az: 0, el: 30, bakeEl: 45, taim: 0, turretDx: 0, turretPivot: 0, mountZ: 0, spin: false, part: 'both',
-  barrelLen: 0, barrelRad: 4, barrelElev: 55, paletteN: 0, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
+  barrelLen: 0, barrelRad: 4, barrelElev: 55, lightAz: 135, lightK: 55, zScale: 1.8, zoom: WORLD_SCALE, bakeScale: 2, cls: 'ground', baseY: 24, baked: null,
   decorScale: 1, decorProc: false, decorTrunkH: 30, decorTrunkR: 3, decorCanopy: 'cone', decorCanopyR: 14, decorCanopyBase: 30,   // decor on-map scale + procedural-tree params (Stories 6,7)
   showDimBox: false,   // SF1: the 3D dimension box + per-face view-image projections overlay
   turretFoot: 64 };    // SF3: turret footprint (voxels), INDEPENDENT of base foot — a turret can be smaller than the hull
@@ -1611,9 +1519,17 @@ function gridTargetVox(g, cx, cy) {
   }
   return g.toVox(cx, cy, g.slice - 1);                        // layers 1..depth address real slices 0..depth-1
 }
-// the inline paint palette = the ACTUAL displayed palette. Folds in the SAME reduction (state.paletteN) +
-// colour tune (palMap) the render applies, so reducing/tuning in 🎨 Tune colors is reflected here — most-
-// used first. Full colours when the palette is at full; a safety cap only for huge full-colour photo carves.
+// THE MODEL'S PALETTE, DERIVED FROM THE MODEL (owner: "Models palette should be derived from model").
+// Every distinct colour vcol actually holds on a filled voxel, most-used first. This is the inline paint
+// strip, and it is also what Re-project snaps to — so both now name colours the model can be proved to
+// contain, instead of colours a draw-time reducer was about to invent.
+//
+// TWO THINGS IT NO LONGER DOES. (1) It folded in state.paletteN / palMap, so it competed with the
+// quantiser it was trying to describe. Both are gone. (2) It folded in the WALL sheets (side/front/back
+// source art), which are NOT the model — they are the slices. Colours that only live in the slice art are
+// still reachable, from the Palette window, which builds the FULL palette from exactly those slices
+// (slicePaletteEntries). Model palette from the model; full palette from the slices.
+// The 512 cap is a safety valve for a full-colour photo carve, not a reduction — it never changes a voxel.
 function modelPalette(m, foot, layers) {
   const N = foot * foot, counts = new Map();
   for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
@@ -1621,23 +1537,8 @@ function modelPalette(m, foot, layers) {
     const c = (z * N + y * foot + x) * 3, k = (m.vcol[c] << 16) | (m.vcol[c + 1] << 8) | m.vcol[c + 2];
     counts.set(k, (counts.get(k) || 0) + 1);
   }
-  // fold in the WALL colours (side/front/back art) so the strip is the WHOLE model's palette, not just the
-  // top faces — this is why colours seem to "change per side" at full colour: each face uses its own sheet.
-  const V = m.views;
-  if (V) for (const gg of [V.side, V.front, V.back]) if (gg && gg.m) {
-    for (let i = 0; i < gg.w * gg.h; i++) if (gg.m[i]) { const k = (gg.c[i * 3] << 16) | (gg.c[i * 3 + 1] << 8) | gg.c[i * 3 + 2]; counts.set(k, (counts.get(k) || 0) + 1); }
-  }
-  const kRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
-  const tuned = (c) => { const t = palMap.get((c[0] << 16) | (c[1] << 8) | c[2]); return t || c; };
-  let list;
-  if (state.paletteN > 0) {                                          // the ONE simplified palette every face snaps to
-    list = buildPalette(counts, state.paletteN, [...palKeep].map(kRGB), [...palDrop].map(kRGB)).map(tuned);
-  } else {                                                           // full colour: every distinct colour, most-used first
-    list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 512).map(([k]) => tuned(kRGB(k)));
-  }
-  const seen = new Set(), out = [];                                  // dedupe (tune can collapse colours together)
-  for (const c of list) { const k = (c[0] << 16) | (c[1] << 8) | c[2]; if (!seen.has(k)) { seen.add(k); out.push(c); } }
-  return out;
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, 512)
+    .map(([k]) => [(k >> 16) & 255, (k >> 8) & 255, k & 255]);
 }
 // x/y/z DIMENSION readout — the model's carved voxel bounding box vs the grid it lives in, so clamping is
 // visible: an axis whose model extent hits the grid edge AND whose intended span (geomState) runs past the
@@ -1675,11 +1576,11 @@ function renderGridView() {
   // cache the carve; the edit tools write it in place, so live painting never re-carves.
   if (!gridModel || gridModel.part !== part || gridModel.foot !== foot || gridModel.layers !== layers) {
     const m = buildModelRaw(part, foot, layers);
-    gridModel = { part, foot, layers, vcol: m.vcol, filled: m.filled, views: m.views, sp: m.sp, palette: modelPalette(m, foot, layers), palSig: state.paletteN + ':' + palEpoch, bbox: modelBBox(m.filled, foot, layers) };
-  } else {
-    const sig = state.paletteN + ':' + palEpoch;                     // reduce/tune changed → refresh the paint strip only
-    if (gridModel.palSig !== sig) { gridModel.palette = modelPalette(gridModel, foot, layers); gridModel.palSig = sig; }
+    gridModel = { part, foot, layers, vcol: m.vcol, filled: m.filled, views: m.views, sp: m.sp, palette: modelPalette(m, foot, layers), bbox: modelBBox(m.filled, foot, layers) };
   }
+  // NO palSig BRANCH. It existed to refresh the strip when the draw-time reducer/tuner moved; both are
+  // gone, and every write to the model already nulls gridModel (refreshModel), so the strip is rebuilt
+  // from the model whenever the model changes and at no other time.
   const base = gridModel, V = base.views;
   updateDims(part, foot, layers, base);   // x/y/z readout in the grid header + primary view; flags clamped axes
   // ONE MODEL: base.filled is the carve, read directly.
@@ -1755,17 +1656,11 @@ function renderGridView() {
   // N individual layers. Printing slice-1 made 28 layers read as 0..27.
   const lv = $('gridLayerV'); if (lv) lv.textContent = slice === 0 ? 'surface ▲' : `${ax.axis} ${slice} / ${depth}`;
 
-  // palette-correct colour: exactly what the 3D render bakes — raw voxel → paletteN reduction → tuner.
-  // quant reads an overlay-aware colour buffer so painted voxels join the palette (cheap copy, no re-carve).
-  // ONE quantiser input. This used to merge the voxEdit overlay into a copy of vcol while buildFaces
-  // quantised raw vcol — different histograms, so the median cut moved and the grid and the 3D view
-  // binned even UNPAINTED voxels differently. Measured: 7 of 7 unpainted voxels disagreed at paletteN 3.
-  const quant = buildQuantiser(null, base.vcol, filled, foot, layers, state.paletteN, V);
-  const colAt = (x, y, z) => {
-    let [r, g, b] = rawCol(x, y, z);
-    if (quant) { const q = quant(r, g, b); r = q[0]; g = q[1]; b = q[2]; }
-    const t = palMap.get((r << 16) | (g << 8) | b); return t || [r, g, b];
-  };
+  // THE GRID CELL IS THE FACE COLOUR, exactly as buildFaces computes it: the wall sheet for a carve-derived
+  // voxel, vcol for a painted one. There is no reducer and no tuner between here and the model any more
+  // (FFF-8), which is what makes "the grid, the 3D view and the bake agree" a property rather than a hope —
+  // the two used to build SEPARATE quantisers over different histograms and disagree on unpainted voxels.
+  const colAt = (x, y, z) => rawCol(x, y, z);
   // ── ALIGN mode (owner 2026-07-20): third-angle projection of the CARVED model. TOP (X×Y) above SIDE (X×Z)
   //    share the length axis X (vertical seam → X aligns down the left column); FRONT (Y×Z) sits to the RIGHT
   //    of SIDE and shares the height axis Z (horizontal seam → Z aligns across the bottom row). Top↔Front share
@@ -3259,7 +3154,6 @@ function makeDraggable(panelId, handleId) {
   h.addEventListener('pointerup', () => { drag = false; });
 }
 makeDraggable('gridPanel', 'gridDrag');
-makeDraggable('palModal', 'palDrag');
 makeDraggable('scalePanel', 'scaleDrag');
 // the Scale chart grows as tall as it needs (renderScaleChart sets its height) and the panel scrolls;
 // keep its buffer width matched to the panel so it stays crisp and re-lays out on resize.
@@ -3605,241 +3499,10 @@ $('shapeCircle').onclick = () => { sheetShape = 'circle'; $('shapeCircle').class
 $('sheetClose').onclick = () => { $('sheetModal').hidden = true; };
 $('sheetModal').addEventListener('click', (e) => { if (e.target === $('sheetModal')) $('sheetModal').hidden = true; });
 
-// ── PALETTE TUNER (owner 2026-07-16): every colour the model uses as a swatch strip; pick one and
-// re-tint it on a hue strip + saturation/brightness square. Small palettes edit exactly; big
-// full-colour models are grouped by median-cut and the whole group shifts by the same hue/sat/value
-// delta so shading variation survives. Edits live in palMap, applied inside buildFaces/collectVox —
-// so orbit preview, in-game inset, bake, Tier C model embeds and .vox exports all agree.
-function rgb2hsv(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-  let h = 0;
-  if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
-  return [h, mx ? d / mx : 0, mx];
-}
-function hsv2rgb(h, s, v) {
-  h = ((h % 360) + 360) % 360;
-  const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
-  let r = 0, g = 0, b = 0;
-  if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
-  else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
-  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
-}
-const keyRGB = (k) => [(k >> 16) & 255, (k >> 8) & 255, k & 255];
+// Colour helpers shared across the tool. rgb2hsv / hsv2rgb / keyRGB went with the tuner that was their
+// only caller (FFF-8); these two are read by the paint swatch, the inline strip and the Palette window.
 const cssOf = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const hexOf = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
-let palSwList = [], palSel = null, palH = 0, palS = 0, palVv = 1, palPending = false, palShowAll = false;
-function palRebuild() {                                            // throttle: one model re-carve per frame
-  palEpoch++;                                                      // palette changed → paint strip refreshes
-  if (palPending) return;
-  palPending = true;
-  requestAnimationFrame(() => { palPending = false; refreshModel(); scheduleAutosave(); });
-}
-const palCur = (k) => palMap.get(k) || keyRGB(k);
-function palSwatchCol(sw, orig) {                                  // count-weighted average of member colours
-  let r = 0, g = 0, b = 0, n = 0;
-  for (const [k, c] of sw.members) { const m = orig ? keyRGB(k) : palCur(k); r += m[0] * c; g += m[1] * c; b += m[2] * c; n += c; }
-  return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
-}
-function palBuildSwatches() {
-  const tally = new Map();
-  for (const F of [bodyFaces, turretFaces]) if (F) for (const f of F.faces) tally.set(f.k, (tally.get(f.k) || 0) + 1);
-  const entries = [...tally.entries()];
-  let groups;
-  if (palShowAll || entries.length <= 28) groups = entries.map((e) => ({ members: [e] }));   // one swatch per exact colour → pin individuals
-  else {                                                           // full-colour model → group into 18 families
-    const cents = medianCut(entries.map(([k]) => keyRGB(k)), 18);
-    groups = cents.map(() => ({ members: [] }));
-    for (const [k, c] of entries) {
-      const col = keyRGB(k); let bi = 0, bd = 1e9;
-      for (let i = 0; i < cents.length; i++) { const p = cents[i], d = (p[0] - col[0]) ** 2 + (p[1] - col[1]) ** 2 + (p[2] - col[2]) ** 2; if (d < bd) { bd = d; bi = i; } }
-      groups[bi].members.push([k, c]);
-    }
-    groups = groups.filter((g) => g.members.length);
-  }
-  const weight = (sw) => sw.members.reduce((n, [, c]) => n + c, 0);
-  groups.sort((a, b) => weight(b) - weight(a));
-  palSwList = groups; palSel = null; $('palPick').hidden = true;
-  const box = $('palSwatches'); box.innerHTML = '';
-  groups.forEach((sw, i) => {
-    const b = document.createElement('button');
-    b.className = 'palSw'; b.dataset.i = i;
-    b.style.background = cssOf(palSwatchCol(sw));
-    b.title = `${weight(sw)} faces · ${sw.members.length} colour(s)`;
-    if (sw.members.some(([k]) => palMap.has(k))) b.classList.add('edited');
-    if (swatchPinned(palSwatchCol(sw))) b.classList.add('pinned');
-    if (swatchDropped(palSwatchCol(sw))) b.classList.add('dropped');
-    b.onclick = () => palSelect(i);
-    box.appendChild(b);
-  });
-  $('palState').textContent = `${entries.length} distinct colour(s)` +
-    (!palShowAll && entries.length > 28 ? ' — grouped into families; a family shifts together. Tick “Show every colour” to pin exact shades.' : '.') +
-    (palMap.size ? ` ${palMap.size} tuned.` : '');
-}
-function palSelect(i) {
-  palSel = palSwList[i];
-  document.querySelectorAll('.palSw').forEach((b) => b.classList.toggle('sel', +b.dataset.i === i));
-  const cur = palSwatchCol(palSel);
-  const gp = $('gridPaintCol'); if (gp) gp.value = hexOf(cur);        // selecting a swatch loads it as the grid paint colour
-  [palH, palS, palVv] = rgb2hsv(cur[0], cur[1], cur[2]);
-  $('palPick').hidden = false;
-  $('palInfo').textContent = palSel.members.length === 1 ? 'Exact colour — replaced outright.' :
-    `${palSel.members.length} shades move together (same hue/brightness shift).`;
-  palDrawPickers(); palSyncChips(); updateKeepBtn();
-}
-function palSyncChips() {
-  const cur = palSwatchCol(palSel);
-  $('palWas').style.background = cssOf(palSwatchCol(palSel, true));
-  $('palNow').style.background = cssOf(cur);
-  $('palHex').textContent = hexOf(cur);
-}
-function palDrawPickers() {
-  const hc = $('palHue'), hg = hc.getContext('2d');
-  const grad = hg.createLinearGradient(0, 0, 0, hc.height);
-  for (let i = 0; i <= 6; i++) grad.addColorStop(i / 6, cssOf(hsv2rgb(i * 60, 1, 1)));
-  hg.fillStyle = grad; hg.fillRect(0, 0, hc.width, hc.height);
-  const hy = palH / 360 * hc.height;
-  hg.strokeStyle = '#fff'; hg.lineWidth = 2; hg.strokeRect(0.5, hy - 2, hc.width - 1, 4);
-  const sc = $('palSV'), sg = sc.getContext('2d'), W = sc.width, H = sc.height;
-  sg.fillStyle = cssOf(hsv2rgb(palH, 1, 1)); sg.fillRect(0, 0, W, H);
-  let g2 = sg.createLinearGradient(0, 0, W, 0); g2.addColorStop(0, 'rgba(255,255,255,1)'); g2.addColorStop(1, 'rgba(255,255,255,0)');
-  sg.fillStyle = g2; sg.fillRect(0, 0, W, H);
-  g2 = sg.createLinearGradient(0, 0, 0, H); g2.addColorStop(0, 'rgba(0,0,0,0)'); g2.addColorStop(1, 'rgba(0,0,0,1)');
-  sg.fillStyle = g2; sg.fillRect(0, 0, W, H);
-  const mx = palS * W, my = (1 - palVv) * H;
-  sg.beginPath(); sg.arc(mx, my, 6, 0, 7); sg.strokeStyle = palVv > 0.55 ? '#000' : '#fff'; sg.lineWidth = 2; sg.stroke();
-}
-function palApply() {                                              // push picker HSV into palMap for the swatch
-  if (!palSel) return;
-  const target = hsv2rgb(palH, palS, palVv);
-  if (palSel.members.length === 1) palMap.set(palSel.members[0][0], target);
-  else {
-    const cur = palSwatchCol(palSel), [ch, cs, cv] = rgb2hsv(cur[0], cur[1], cur[2]);
-    const dh = palH - ch, sr = cs > 0.02 ? palS / cs : null, vr = cv > 0.02 ? palVv / cv : null;
-    for (const [k] of palSel.members) {
-      let [h, s, v] = rgb2hsv(...palCur(k));
-      h = (h + dh + 360) % 360;
-      s = clamp(sr === null ? palS : s * sr, 0, 1);
-      v = clamp(vr === null ? palVv : v * vr, 0, 1);
-      palMap.set(k, hsv2rgb(h, s, v));
-    }
-  }
-  const btn = document.querySelector('.palSw.sel');
-  if (btn) { btn.style.background = cssOf(palSwatchCol(palSel)); btn.classList.add('edited'); }
-  palSyncChips(); palDrawPickers(); palRebuild();
-}
-function palPickerDrag(cv, apply) {
-  let on = false;
-  const at = (e) => { const r = cv.getBoundingClientRect(); return [clamp((e.clientX - r.left) / r.width, 0, 1), clamp((e.clientY - r.top) / r.height, 0, 1)]; };
-  cv.addEventListener('pointerdown', (e) => { on = true; cv.setPointerCapture(e.pointerId); apply(...at(e)); });
-  cv.addEventListener('pointermove', (e) => { if (on) apply(...at(e)); });
-  cv.addEventListener('pointerup', () => { on = false; });
-}
-palPickerDrag($('palHue'), (x, y) => { palH = y * 360; palApply(); });
-palPickerDrag($('palSV'), (x, y) => { palS = x; palVv = 1 - y; palApply(); });
-$('palResetOne').onclick = () => {
-  if (!palSel) return;
-  for (const [k] of palSel.members) palMap.delete(k);
-  const cur = palSwatchCol(palSel); [palH, palS, palVv] = rgb2hsv(cur[0], cur[1], cur[2]);
-  const btn = document.querySelector('.palSw.sel');
-  if (btn) { btn.style.background = cssOf(cur); btn.classList.remove('edited'); }
-  palSyncChips(); palDrawPickers(); palRebuild();
-};
-$('palResetAll').onclick = () => { palMap.clear(); palBuildSwatches(); palRebuild(); };
-// MERGE the selected family's shades into ONE colour (all members → the picked colour, not a proportional shift)
-if ($('palMergeBtn')) $('palMergeBtn').onclick = () => {
-  if (!palSel) return;
-  const target = hsv2rgb(palH, palS, palVv);
-  for (const [k] of palSel.members) palMap.set(k, target);
-  const btn = document.querySelector('.palSw.sel');
-  if (btn) { btn.style.background = cssOf(palSwatchCol(palSel)); btn.classList.add('edited'); }
-  palSyncChips(); palDrawPickers(); palRebuild();
-};
-// REPAINT to my picks: make the palette EXACTLY the kept colours so every voxel snaps to its nearest one.
-if ($('palToKept')) $('palToKept').onclick = () => {
-  if (!palKeep.size) { $('palState').textContent = 'Pin the colours you want first (📌 Keep), then repaint.'; return; }
-  setPaletteN(palKeep.size);   // budget == #pins → buildPalette returns exactly the pinned set → quantiser snaps to it
-  if ($('palNV')) $('palNV').textContent = String(palKeep.size);
-  if ($('palN')) $('palN').value = String(palKeep.size);
-};
-// CONSOLIDATE → REMAP: commit the working palette into the MODEL. Every voxel is snapped to its nearest
-// working colour and WRITTEN as a voxel edit, so the model's own stored colours become the working palette
-// (consistent across all sides — no more per-face source bleed). The SOURCE is untouched: it's the raw
-// carve + your source sheets underneath, and "Reset edits" restores it exactly.
-function remapModelToWorking() {
-  const n = state.paletteN || palKeep.size;
-  if (!n) { $('palState').textContent = 'Consolidate first — set a Palette size or 📌 Keep colours — then remap.'; return; }
-  // BUILD BOTH PARTS FIRST, then snapshot, then mutate. buildModel can replace carveCache[part].m, so a
-  // snapshot taken before the build can be of a different array than the one setVox goes on to write —
-  // the same shape that made the mirror's undo a no-op. And it is pushVolAll, not pushVol(gridPart()):
-  // this rewrites body AND turret, so a one-part entry left half the unit un-undoable.
-  const built = ['body', 'turret'].map((part) => ({ part, foot: footOf(part),
-    layers: part === 'body' ? state.bodyLayers : state.turretLayers }))
-    .map((p) => ({ ...p, m: buildModel(p.part, p.foot, p.layers) }));
-  pushVolAll();                                                            // ONE undoable step for the whole remap
-  let touched = 0;
-  for (const { part, foot, layers, m } of built) {
-    const N = foot * foot;
-    const quant = buildQuantiser(null, m.vcol, m.filled, foot, layers, n, m.views);
-    if (!quant) continue;
-    // SOURCE FROM THE RENDERED FACE, NOT RAW vcol. This read m.vcol — the top-down column colour — and
-    // wrote nearest(vcol) to every filled voxel with PAINT=1, which takes them all off the wall-art pass
-    // for good. So "consolidate the palette" quietly deleted every side, front and back sheet in the
-    // unit, model-wide, while advertising itself as reversible.
-    const rendered = renderedVoxColours(part, foot, layers);
-    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
-      if (!m.filled(x, y, z)) continue;
-      const k = z * N + y * foot + x, c = k * 3;
-      const src = rendered.get(k) || [m.vcol[c], m.vcol[c + 1], m.vcol[c + 2]];
-      let [r, g, b] = quant(src[0], src[1], src[2]);
-      const t = palMap.get((r << 16) | (g << 8) | b); if (t) [r, g, b] = t;   // apply the colour tune too
-      if (setVox(part, k, [r, g, b])) touched++;
-    }
-  }
-  gridModel = null; refreshModel(); scheduleAutosave();
-  $('palState').textContent = `Remapped ${touched} voxel(s) to the working palette (sourced from the rendered faces, so side/front art is kept). "Reset edits" restores the carve.`;
-}
-if ($('palRemap')) $('palRemap').onclick = remapModelToWorking;
-// palette SIZE + reduction — shared by the side-panel slider (#pal) and the floating window (#palN),
-// both kept in lock-step. Re-carves the model, then refreshes the swatch strip if the window is open.
-function palReduceRefresh() { palEpoch++; refreshModel(); if (!$('palModal').hidden) palBuildSwatches(); scheduleAutosave(); }
-function setPaletteN(v) {
-  state.paletteN = v;
-  $('pal').value = v; $('palV').textContent = v || 'full';
-  $('palN').value = v; $('palNV').textContent = v || 'full';
-  palReduceRefresh();
-}
-$('pal').oninput = (e) => setPaletteN(+e.target.value);
-$('palN').oninput = (e) => setPaletteN(+e.target.value);
-// KEEP a colour (always in the reduced palette) or ELIMINATE it (dropped, voxels remap to nearest
-// survivor). The two are mutually exclusive; both toggle on the selected swatch.
-const keyOf = (c) => (c[0] << 16) | (c[1] << 8) | c[2];
-const nearIn = (set, c) => { for (const k of set) { const p = keyRGB(k); if ((p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2 < 24 * 24) return k; } return null; };
-function swatchPinned(c) { return nearIn(palKeep, c); }
-function swatchDropped(c) { return nearIn(palDrop, c); }
-function updateKeepBtn() {
-  if (!palSel) return;
-  const c = palSwatchCol(palSel), pinned = swatchPinned(c) != null, dropped = swatchDropped(c) != null;
-  const kb = $('palKeepBtn'); if (kb) { kb.textContent = pinned ? '📌 Kept — click to release' : '📌 Keep this color'; kb.classList.toggle('on', pinned); }
-  const db = $('palDropBtn'); if (db) { db.textContent = dropped ? '🚫 Eliminated — click to restore' : '🚫 Eliminate this color'; db.classList.toggle('on', dropped); }
-}
-$('palKeepBtn').onclick = () => {
-  if (!palSel) return;
-  const c = palSwatchCol(palSel), existing = swatchPinned(c);
-  if (existing != null) palKeep.delete(existing); else { palKeep.add(keyOf(c)); const d = swatchDropped(c); if (d != null) palDrop.delete(d); }
-  updateKeepBtn(); palReduceRefresh();
-};
-$('palDropBtn').onclick = () => {
-  if (!palSel) return;
-  const c = palSwatchCol(palSel), existing = swatchDropped(c);
-  if (existing != null) palDrop.delete(existing); else { palDrop.add(keyOf(c)); const k = swatchPinned(c); if (k != null) palKeep.delete(k); }
-  updateKeepBtn(); palReduceRefresh();
-};
-$('palClearKeep').onclick = () => { palKeep.clear(); palDrop.clear(); palReduceRefresh(); updateKeepBtn(); };
-if ($('palShowAll')) $('palShowAll').onchange = (e) => { palShowAll = e.target.checked; palBuildSwatches(); };
-function openPalAdvanced() { $('palN').value = state.paletteN; $('palNV').textContent = state.paletteN || 'full'; palBuildSwatches(); $('palModal').hidden = false; }
-$('palClose').onclick = () => { $('palModal').hidden = true; };
-
 // ── THE PALETTE WINDOW ────────────────────────────────────────────────────────────────────────────
 // Replaces SF4's two-row drag-and-drop remap, whose ⬇ Bake wrote voxEdit[part].set(...) — a store with
 // no readers — and then reported "baked N voxels → M colours". It changed nothing, ever, and said so
@@ -3881,7 +3544,55 @@ function renderedVoxColours(partId, foot, layers) {
   return out;
 }
 
-let palEntries = [];                          // the unit's rendered colours, population-weighted
+// ── THE FULL PALETTE COMES FROM THE SLICES ───────────────────────────────────────────────────────
+// Owner: "The source is always safe .. original slices." / "Full palette is derived from slices."
+//
+// WHY IT CANNOT COME FROM THE MODEL. The model is what palette work WRITES. Apply a 4-colour palette and
+// the model contains four colours — so a window that re-read the model could then only ever offer four,
+// and the second reduction would be a reduction of a reduction. The slices do not move when the model
+// does. That is the whole property: the pool of colours you may choose from is what the ART makes
+// available, before anything was reduced, and it is still all there after ten applies.
+//
+// KEYED, exactly as the carve keys them (keyedCanvas + the same tol / polygon / eyedropper state), so a
+// background this tool has already knocked out can never claim a palette slot. NOT xf-transformed:
+// alignment decides where art sits on the box, not which colours it contains.
+//
+// SAMPLED ON A STRIDE. A source photo is megapixels and this runs on every window open; the histogram is
+// a proportion, so a uniform deterministic sample preserves it. Cached per (part, view) against the image
+// identity and its keying state, because keyedCanvas is the expensive part.
+const SLICE_PAL_SAMPLES = 60000;              // per view — enough to be stable, cheap enough to be instant
+const slicePalCache = { body: mkViews(() => null), turret: mkViews(() => null) };
+function sliceTally(part, view) {
+  const img = imgs[part][view];
+  if (!img) return null;
+  const tol = keyTolState[part][view], polys = polyState[part][view] || [], picks = pickState[part][view] || [];
+  const sig = `${tol}:${polys.length}:${picks.length}`;
+  const hit = slicePalCache[part][view];
+  if (hit && hit.img === img && hit.sig === sig) return hit.tally;
+  const cv = keyedCanvas(img, tol, polys, picks);
+  const d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, cv.width, cv.height).data;
+  const N = cv.width * cv.height, step = Math.max(1, Math.floor(N / SLICE_PAL_SAMPLES));
+  const tally = new Map();
+  for (let i = 0; i < N; i += step) {
+    const p = i * 4; if (d[p + 3] <= INK_A) continue;               // keyed-out background is not a colour
+    const k = (d[p] << 16) | (d[p + 1] << 8) | d[p + 2];
+    tally.set(k, (tally.get(k) || 0) + 1);
+  }
+  slicePalCache[part][view] = { img, sig, tally };
+  return tally;
+}
+/** every colour the source art offers, both parts, all four views — {rgb, n} by sampled pixel count */
+function slicePaletteEntries() {
+  const tally = new Map();
+  for (const part of ['body', 'turret']) for (const v of VIEWS) {
+    const t = sliceTally(part, v); if (!t) continue;
+    for (const [k, n] of t) tally.set(k, (tally.get(k) || 0) + n);
+  }
+  return [...tally.entries()].map(([k, n]) => ({ rgb: [(k >> 16) & 255, (k >> 8) & 255, k & 255], n }));
+}
+
+let palEntries = [];                          // the pool the reductions are chosen from: slices ∪ model
+let palSliceN = 0, palModelN = 0;             // how many distinct colours each source contributed
 // voxel key → its rendered colour, per part. STAMPED WITH THE DIMS IT WAS BUILT AT: the keys are
 // absolute (z*foot²+y*foot+x), so if Layers or Resolution moves while the window is open the same key
 // addresses a different voxel. Same guard restoreVol and selCheckDims already apply.
@@ -3899,6 +3610,11 @@ let palWorkSel = -1;
 
 // Both parts, one histogram: the palette is a property of the UNIT, and applying it to only the part
 // that happens to be on screen is how a turret ends up on a different palette from its hull.
+//
+// THE MODEL HALF of the pool. It is still needed alongside the slices for two reasons that are not
+// stylistic: a .vox import and a procedural decor tree have NO slices at all, and a hand-painted voxel
+// holds a hex the artist typed that no source sheet contains. Dropping either would make colours the unit
+// genuinely uses unreachable from the palette that claims to describe it.
 function palGatherEntries() {
   palVoxCols.body = null; palVoxCols.turret = null; palVoxDims = { body: null, turret: null };
   const tally = new Map();
@@ -3922,6 +3638,23 @@ function palGatherEntries() {
       if (e) e.n++; else tally.set(ck, { rgb: [c[0], c[1], c[2]], n: 1 });
     }
   }
+  // ── MERGE: the slices are the source, the model is what is on the box. Both, at EQUAL total weight.
+  // Not for balance's sake — because the two are counted in different units. A slice tally counts sampled
+  // PIXELS (tens of thousands per sheet) and the model counts VOXELS (up to 196k at 64³). Added raw,
+  // whichever happens to be bigger decides the reduction and the other might as well not be there.
+  // Normalising the slice mass to the model's makes the pool "half what the art offers, half what the
+  // model shows", which is a stated rule instead of an accident of grid resolution.
+  const modelMass = [...tally.values()].reduce((s, e) => s + e.n, 0);
+  palModelN = tally.size;
+  const slices = slicePaletteEntries();
+  palSliceN = slices.length;
+  const sliceMass = slices.reduce((s, e) => s + e.n, 0);
+  const scale = (sliceMass && modelMass) ? modelMass / sliceMass : 1;
+  for (const e of slices) {
+    const ck = (e.rgb[0] << 16) | (e.rgb[1] << 8) | e.rgb[2], hit = tally.get(ck);
+    const w = Math.max(1, Math.round(e.n * scale));
+    if (hit) hit.n += w; else tally.set(ck, { rgb: e.rgb.slice(), n: w });
+  }
   palEntries = [...tally.values()].sort((a, b) => b.n - a.n
     || a.rgb[0] - b.rgb[0] || a.rgb[1] - b.rgb[1] || a.rgb[2] - b.rgb[2]);
   return palEntries;
@@ -3932,10 +3665,11 @@ function palBuildOptions() {
   palOpts = palEntries.length ? paletteOptionsCore(palEntries, PALETTE_SIZES) : [];
   const note = $('palSourceNote');
   if (note) {
-    const tot = palEntries.reduce((s, e) => s + e.n, 0);
     note.textContent = palEntries.length
-      ? `${tot} voxels · ${palEntries.length} distinct rendered colours · the model spans ${(palOpts[0] ? palOpts[0].lumAvail : 0).toFixed(0)} of 255 in luminance`
-      : 'Nothing carved yet — load source art and press a Carve button first.';
+      ? `${palEntries.length} colours available — ${palSliceN} from the source slices, ${palModelN} on the model`
+        + ` · spanning ${(palOpts[0] ? palOpts[0].lumAvail : 0).toFixed(0)} of 255 in luminance.`
+        + ' The slices are the safe source: the full palette stays this wide however many times you Apply.'
+      : 'Nothing to read yet — load source art and press a Carve button first.';
   }
   // Default to 8. Measured on the shipped SPA-U3 body, 8 is the first size where no part of the model is
   // badly wrong; 2 and 4 are offered and honest, but they are a stylistic choice, not a safe default.
@@ -4075,15 +3809,15 @@ function palApplyToModel() {
       if (setVox(part, k, nearestCore(src, palWork))) touched++;
     }
   }
-  // WYSIWYG. The live reducer would otherwise re-bin the palette that was just baked in, so the model
-  // would not be the palette on the screen. The slider is still there to turn back on.
-  const hadN = state.paletteN;
-  if (hadN) setPaletteN(0);
+  // The `if (state.paletteN) setPaletteN(0)` mitigation that used to sit here (40e6bea) is GONE. It
+  // existed only because a live reducer would otherwise re-bin the palette that had just been written into
+  // the model — a workaround for the filter, not a feature. With the filter deleted the model simply shows
+  // what it holds, so there is nothing to switch off.
   gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
-  palBuildOptions();                                                 // the model IS the palette now — re-read
-  $('paletteState').textContent = `Applied ${palWork.length} colours to ${touched} voxel(s) across body + turret.`
-    + (hadN ? ' Working palette size reset to full so the model shows exactly these colours.' : '')
-    + ' Ctrl+Z undoes the whole thing in one step.';
+  palBuildOptions();                                                 // re-read the source (slices) + the model
+  $('paletteState').textContent = `Applied ${palWork.length} colours to ${touched} voxel(s) across body + turret. `
+    + 'The model now HOLDS these colours — they are what the grid draws, what the 3D view draws and what bakes. '
+    + 'Ctrl+Z undoes the whole thing in one step.';
 }
 
 function openPaletteWindow() {
@@ -4093,7 +3827,6 @@ function openPaletteWindow() {
 $('openPal').onclick = openPaletteWindow;
 $('paletteClose').onclick = () => { $('paletteModal').hidden = true; };
 $('palRefresh').onclick = () => palBuildOptions();
-$('paletteAdvanced').onclick = () => { $('paletteModal').hidden = true; openPalAdvanced(); };
 $('palApply').onclick = palApplyToModel;
 $('palSlotCol').oninput = (e) => {
   if (palWorkSel < 0 || palWorkSel >= palWork.length) return;
@@ -4468,7 +4201,6 @@ function loadDecorForEdit(id) {
     else { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); }
   } catch (e) { /* best-effort flush */ }
   editingDecor = id;
-  resetPalette();                                                  // per-decor palette (a WIP re-applies its own via loadProject)
   const entry = (loadDecorManifest().decor || {})[id];
   if ($('did')) $('did').value = id;
   if (entry && entry.pack) setDecorFields(entry.pack.decor);
@@ -4616,7 +4348,9 @@ function snapshotProject(idOverride) {
   const st = { ...state }; delete st.baked; delete st.decorBaked;   // baked textures are PIXI objects — never serialise them into the WIP
   return { format: 'stackforge-project', version: 2, id: (idOverride || $('uid').value || 'unit').trim(), vol,
     state: st, flips: flipState, rots: rotState, keyTol: keyTolState, polys: polyState, picks: pickState, images, vox,
-    palMap: [...palMap.entries()], palKeep: [...palKeep], palDrop: [...palDrop], carveCuts: { ...carveCuts },   // which slices cut — reset to top-only on every load until now
+    carveCuts: { ...carveCuts },   // which slices cut — reset to top-only on every load until now
+    // NO palMap / palKeep / palDrop / paletteN. They were the draw-time filter's state, saved beside a
+    // model that did not contain the colours they produced. The palette lives in vol[].vcol now.
     geom: { body: { ...geomState.body }, turret: { ...geomState.turret } },
     imgXf: { body: JSON.parse(JSON.stringify(imgXf.body)), turret: JSON.parse(JSON.stringify(imgXf.turret)) } };   // SF2 per-side alignment
 }
@@ -4629,8 +4363,6 @@ function syncAllControls() {
   set('bodyLayers', state.bodyLayers, '' + state.bodyLayers); set('turretLayers', state.turretLayers, '' + state.turretLayers);
   set('zScale', Math.round(state.zScale * 100), state.zScale.toFixed(2) + '×');
   set('lightAz', state.lightAz, state.lightAz + '°'); set('lightK', state.lightK, '' + state.lightK);
-  set('pal', state.paletteN, state.paletteN || 'full');
-  set('palN', state.paletteN, state.paletteN || 'full');
   set('bakeScale', state.bakeScale, state.bakeScale + '×');
   set('bakeEl', state.bakeEl == null ? 45 : state.bakeEl, (state.bakeEl == null ? 45 : state.bakeEl) + '°');   // bake tilt survives a project load
   $('res').value = state.foot; if ($('turretRes')) { const _tf = state.turretFoot || state.foot; $('turretRes').value = [16,24,32,48,64,96,128].includes(_tf) ? _tf : ''; } $('spin').checked = state.spin;
@@ -4656,9 +4388,10 @@ async function loadProject(p) {
     $('uid').value = p.id || 'unit'; activeUnitId = (p.id || 'unit');   // anchor the WIP key to the restored project
     Object.assign(state, p.state || {}); state.baked = null;
     if (!(p.state && p.state.turretFoot)) state.turretFoot = state.foot;   // SF3: pre-turret-res projects → turret matches base
-    palMap.clear(); if (p.palMap) for (const [k, c] of p.palMap) palMap.set(k, c);
-    palKeep.clear(); if (p.palKeep) for (const k of p.palKeep) palKeep.add(k);
-    palDrop.clear(); if (p.palDrop) for (const k of p.palDrop) palDrop.add(k);
+    delete state.paletteN;                    // a v1/v2 project may carry it; nothing reads it (FFF-8)
+    // p.palMap / p.palKeep / p.palDrop are deliberately NOT restored, for the same reason p.voxEdit is
+    // not: they fed a filter that no longer exists. A project saved before FFF-8 renders at the colours
+    // its MODEL holds, which is the colour contract now — press Apply in the Palette window to re-reduce.
     // p.voxEdit (v1/v2 projects) is deliberately NOT restored: the store it fed was never read by the
     // model, so replaying it would restore nothing and cost a Map per part. The colour those projects
     // meant to carry is in p.vol[part].vcol/.paint, which restoreVol puts back.
@@ -4903,7 +4636,6 @@ async function loadFaction(name) {
       const lastDecor = (() => { try { return localStorage.getItem('bulwark:sf:lastDecor'); } catch (e) { return null; } })();
       if (lastDecor && ids.has(lastDecor)) { renderRoster(); loadDecorForEdit(lastDecor); return; }   // reopen your last prop
       editingDecor = (($('did') && $('did').value) || 'decor').trim();   // else a clean new slate
-      resetPalette();
       clearSourceArt(); state.decorBaked = null; gridModel = null;
       state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }
       recarve();
@@ -5024,7 +4756,6 @@ $('addUnit').onclick = async () => {
     } catch (e) { /* best-effort */ }
     editingDecor = id; if ($('did')) $('did').value = id;
     state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }   // decor tends tall — raise height
-    resetPalette();
     clearSourceArt(); state.decorBaked = null; gridModel = null; state.part = 'body'; recarve(); forceDecorBodyOnly();   // clean slate, body-only
     if (!roster.some((u) => u.id === id)) roster.push({ id, role: 'decor', shape: '🌿', decor: true });
     renderRoster();
@@ -5085,7 +4816,6 @@ ${(e && e.message) || e}
 
 The switch was cancelled so nothing is lost.`); }
   }
-  resetPalette();                                        // per-unit palette — clear it (a WIP re-applies its own via loadProject)
   setBackSlotLabel('Back');                              // units use the Back slot as the rear view again
   // THE OUTGOING UNIT'S GEOMETRY MUST GO WITH IT. carveCache holds VOL — the model itself — and
   // buildModelRaw returns the cached entry whenever foot/layers match, so a new unit of the same
