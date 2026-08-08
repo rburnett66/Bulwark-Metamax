@@ -50,7 +50,10 @@ function makeSandbox() {
     removeAttribute() {}, getAttribute: () => null, focus() {}, blur() {}, click() {},
     querySelector: () => null, querySelectorAll: () => [], closest: () => null,
     getBoundingClientRect: () => ({ left: 0, top: 0, right: 100, bottom: 100, width: 100, height: 100 }),
-    getContext: () => ctx, toDataURL: () => 'data:,', toBlob() {},
+    getContext: () => ctx, toBlob() {},
+    // THE MIME IS HONOURED. A stub that hands back the same data URL whatever it is asked for cannot
+    // tell what a card was actually encoded as from what it was named.
+    toDataURL: (m) => 'data:' + (m || 'image/png') + ';base64,iVBORw0KGgo=',
     width: 160, height: 160, clientWidth: 160, clientHeight: 160, offsetHeight: 30,
     value: '', textContent: '', innerHTML: '', innerText: '', checked: false, disabled: false, hidden: true,
     max: '128', min: '0', step: '1', selectedIndex: 0,
@@ -200,9 +203,29 @@ function imageStub(ok, size) {
 function boot(opts = {}) {
   const sb = makeSandbox();
   if (opts.fetch) sb.fetch = opts.fetch;
+  // BBB-1: thumbResolve asks whether a repo file EXISTS with a HEAD instead of decoding it — a 152×112
+  // thumbnail must not cost a 1296×1408 decode. The stub that has always answered "is this file in the
+  // repo" is `opts.images`, so it answers both questions here. Two oracles would let a test arrange an
+  // atlas that decodes but does not exist, which is not a state the repo can be in.
+  const inRepo = opts.images === true ? () => true : (opts.images || (() => false));
+  const under = sb.fetch;
+  const headed = [];                       // every existence question, kept apart from contentFetch's GETs
+  sb.fetch = (url, init) => {
+    if (!init || String(init.method || '').toUpperCase() !== 'HEAD') return under(url, init);
+    const ok = !!inRepo(String(url));
+    headed.push(String(url));
+    return Promise.resolve({ ok, status: ok ? 200 : 404, json: () => Promise.resolve({}) });
+  };
   let idb = null;
   if (opts.idb) { idb = idbStub(opts.idb === true ? {} : opts.idb); sb.indexedDB = idb.api; }
-  if (opts.images) sb.Image = imageStub(opts.images === true ? () => true : opts.images, opts.imageSize);
+  // EVERY URL THAT WAS DECODED, in order. BBB-1's whole claim is about which pictures the grid pulls
+  // into memory, and "the card is right" cannot prove it — a card drawn from the atlas and a card drawn
+  // from the 256×256 artifact look the same and cost 7MB and 256KB. So the decodes are counted.
+  const decoded = [];
+  if (opts.images) {
+    const Base = imageStub(opts.images === true ? () => true : opts.images, opts.imageSize);
+    sb.Image = class extends Base { set src(v) { decoded.push(String(v)); super.src = v; } get src() { return super.src; } };
+  }
   vm.createContext(sb);
   for (const f of ['../../src/data/factions.js', 'carve.js', 'select.js', 'palette.js', '../toolhead.js', 'stack-forge.js']) {
     vm.runInContext(readFileSync(DIR + f, 'utf8'), sb, { filename: f });
@@ -237,7 +260,7 @@ function boot(opts = {}) {
   // through this instead.
   const json = (code) => JSON.parse(vm.runInContext(`JSON.stringify(${code})`, sb));
   return {
-    run, json, sb, idb,
+    run, json, sb, idb, decoded, headed,
     click: (id) => run(`document.getElementById('${id}').onclick()`),
     filled: () => run(`(() => { let n = 0; for (const b of liveVOL('body')) if (b) n++; return n; })()`),
     painted: () => run(`(() => { let n = 0; for (const b of carveCache.body.m.PAINT) if (b) n++; return n; })()`),
@@ -840,7 +863,7 @@ function captureCards(t) {
             : o[k]),
           set: (o, k, v) => { o[k] = v; return true; },
         });
-        const cv = { width: 0, height: 0, __ops: ops, __texts: texts, getContext: () => ctx, toDataURL: () => 'data:image/png;base64,iVBORw0KGgo=' };
+        const cv = { width: 0, height: 0, __ops: ops, __texts: texts, getContext: () => ctx, toDataURL: (m) => 'data:' + (m || 'image/png') + ';base64,iVBORw0KGgo=' };
         const badge = { textContent: '', className: '' };
         // AAA-7: the ⤢ full-size affordance is its OWN child. The stub used to hand back the canvas for
         // every selector but '.badge', so querySelector('.zoom').onclick = f silently decorated the
@@ -848,7 +871,7 @@ function captureCards(t) {
         const zoom = { className: 'zoom', onclick: null };
         return { dataset: {}, className: '', innerHTML: '', style: {}, onclick: null, appendChild() {},
                  width: 0, height: 0, __ops: ops, __texts: texts, __badge: badge, __cv: cv, __zoom: zoom,
-                 getContext: () => ctx, toDataURL: () => 'data:image/png;base64,iVBORw0KGgo=',
+                 getContext: () => ctx, toDataURL: (m) => 'data:' + (m || 'image/png') + ';base64,iVBORw0KGgo=',
                  querySelector: (sel) => (sel === '.badge' ? badge : sel === '.zoom' ? zoom : cv),
                  classList: { add() {}, remove() {}, toggle() {}, contains: () => false } };
       };
@@ -1379,7 +1402,7 @@ test('DDD-6: the card image is written to the REPO, under card/ and never under 
   assert.equal(res.ok, true, 'with a dev server the image is written');
   assert.equal(res.path, 'content/units/card/GND-Tanks.png');
   assert.deepEqual(net.shipped.map((s) => s.path), ['content/units/card/GND-Tanks.png']);
-  assert.ok(net.shipped[0].png, 'it is written as a PNG, not as JSON');
+  assert.ok(net.shipped[0].png, 'it is written as image bytes, not as JSON');
   assert.ok(t.run(`(loadManifest().units || {})['GND-Tanks'].cardSig`), 'and it stamps WHAT it depicts');
 });
 
@@ -1555,7 +1578,7 @@ test('DDD-5: removal clears EVERY store the unit occupies, and reports each one'
     'content/units/voxel/GND-Gone.body.png', 'content/units/voxel/GND-Gone.body.shadow.png',
     'content/units/voxel/GND-Gone.turret.png', 'content/units/voxel/GND-Gone.turret.shadow.png',
     'content/units/model/GND-Gone.json', 'content/units/card/GND-Gone.png',
-  ], 'every file the ship path wrote, by the name the pack gives it');
+  ], 'every file the ship path wrote — in every format it has ever written the card in');
   // 6 — the shipped manifest, rewritten WITHOUT it and with everything else intact
   const wrote = net.shipped.filter((s) => s.path === 'content/units/voxel-units.json');
   assert.equal(wrote.length, 1, 'voxel-units.json is rewritten exactly once');
@@ -1997,7 +2020,7 @@ test('AAA-7: only the model rung is a FILE, and the viewer says which it is look
   const src = t.run(`document.getElementById('cardSrc').innerHTML`);
   assert.match(src, /Composited from the source slices/, 'it says where the picture came from');
   assert.match(src, /no <code>content\/units\/card\/SYS-Cannon\.png<\/code> in the repo/,
-    'and that there is no card artifact on disk for this unit');
+    'and that there is no card artifact on disk for this unit — named in the format a save would write');
   assert.doesNotMatch(src, /the file in the repo/);
   // …and it is still a full card: caption and all, so the roster reads the same for every rung
   assert.deepEqual(t.json(`thumbCache.get('unit:SYS-Cannon').cv.__texts`).slice(0, 1), ['SYS-Cannon']);
@@ -2028,4 +2051,138 @@ test('AAA-7: the roster does not resolve or read more per render than it did', a
   // and opening the viewer reuses the cached artifact rather than resolving a second one
   t.run(`openCardView('GND-Tanks', false)`); await settle();
   assert.equal(t.idb.gets(), reads, 'the full-size view is the SAME canvas — it costs no resolve at all');
+});
+
+// ── BBB-1: THE CARD GRID STOPS DECODING ATLASES ───────────────────────────────────────────────────
+// The fault: thumbResolve answered "is the art in the repo" by DECODING the art. A 152×112 thumbnail
+// therefore cost a full atlas decode — GND-Artillery's body sheet is 1296×1408, 7.0MB of bitmap, to fill
+// a box of 17k pixels. MEASURED in headless Chrome over a nine-faction tour of a 90-unit catalog:
+// 341MB decoded, Chrome private bytes 683MB -> 905MB; the same tour with the atlas fetches blocked went
+// 673MB -> 673MB, flat. Dropping the entire thumbCache at the end gave back 3MB of the 222.
+//
+// So the tests below assert the DECODES, not just the pictures. A card drawn from the atlas and a card
+// drawn from the 256×256 artifact are indistinguishable on screen and differ by 27× in memory; an
+// assertion that only looks at the picture cannot tell the fix from the bug.
+//
+// Every test here was mutation-checked — the change reverted, the gate confirmed red on that test alone.
+
+test('BBB-1: a baked unit draws its CARD FILE and never decodes the atlas', async () => {
+  // MUTATION: put the atlas rung back in front (decode `atl.url` first and return on success) -> the
+  // atlas is decoded again and `decoded` contains it. That is the bug, restored.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks']) });
+  const ATLAS = '../../content/units/voxel/GND-Tanks.body.png', CARD = '../../content/units/card/GND-Tanks.png';
+  const t = boot({ fetch: net.fetch, idb: true,
+    images: (s) => s === ATLAS || s === CARD,           // BOTH are in the repo — the atlas must still not be read
+    imageSize: (s) => (s === CARD ? [256, 256] : null) });
+  await settle();
+  t.run(`shippedUnits = ${JSON.stringify({ 'GND-Tanks': packOf('GND-Tanks') })};`);
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+
+  const c = cards()[0];
+  assert.equal(c.thumb, 'baked', 'the atlas IS in the repo, so the state is unchanged — baked');
+  assert.match(c.badge, /baked/);
+  assert.ok(t.decoded.includes(CARD), 'the picture came from the 256×256 card artifact');
+  assert.ok(!t.decoded.includes(ATLAS),
+    'and the multi-megabyte atlas was NEVER decoded — that is the entire fix');
+  // …and the state was still decided from the repo, by asking instead of by decoding
+  assert.ok(t.headed.includes(ATLAS), 'the atlas was asked about with a HEAD — no body, no pixels');
+  assert.equal(t.json(`thumbCache.get('unit:GND-Tanks').file`), 'content/units/card/GND-Tanks.png',
+    'and the card knows which file it is showing');
+});
+
+test('BBB-1: existence is a HEAD — a unit whose atlas is NOT in the repo still reads "missing"', async () => {
+  // The five states survive. `missing` is the one that used to be produced by a failed decode, so it is
+  // the one most at risk from replacing the decode with a question.
+  // MUTATION: treat a failed HEAD as `baked` -> a unit whose art is not in the repo claims it is, which
+  // is the exact pairing (green badge, absent art) DDD-6 was written to kill.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks']) });
+  const t = boot({ fetch: net.fetch, idb: true, images: () => false });     // nothing is in the repo
+  await settle();
+  t.run(`shippedUnits = ${JSON.stringify({ 'GND-Tanks': packOf('GND-Tanks') })};`);
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  assert.equal(cards()[0].thumb, 'missing', 'named by the pack, absent from the repo');
+  assert.match(cards()[0].badge, /art missing/);
+  assert.ok(t.headed.some((u) => u.endsWith('GND-Tanks.body.png')), 'it asked about the atlas with a HEAD');
+  assert.ok(!t.decoded.includes('../../content/units/voxel/GND-Tanks.body.png'),
+    'and it did not decode a file it had already been told was not there');
+});
+
+test('BBB-1: the atlas rung SURVIVES for a unit baked before card images existed', async () => {
+  // Demoted, not deleted. A unit whose atlas is in the repo and which has no card file must still show
+  // its unit — otherwise the fix trades a memory problem for six blank cards.
+  // MUTATION: delete the thumbAtlasCard fallback -> such a unit falls to `missing` with no picture.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks']) });
+  const ATLAS = '../../content/units/voxel/GND-Tanks.body.png';
+  const t = boot({ fetch: net.fetch, idb: true, images: (s) => s === ATLAS });   // atlas yes, card file no
+  await settle();
+  t.run(`shippedUnits = ${JSON.stringify({ 'GND-Tanks': packOf('GND-Tanks') })};`);
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  assert.equal(cards()[0].thumb, 'baked');
+  assert.ok(t.decoded.includes(ATLAS), 'with no card file, the atlas is still the picture');
+  // and it is STILL one frame, not the contact sheet — the demotion must not lose DDD-6's fix
+  const blit = t.json(`thumbCache.get('unit:GND-Tanks').cv.__ops.find(o => o[0] === 'drawImage')`);
+  assert.deepEqual(blit.slice(1, 5), [0, 0, 216, 266], 'frame 0 at the pack cell, exactly as before');
+  // …and it asked for the card file first. The order IS the fix; without it the atlas is the default again.
+  assert.ok(t.decoded.indexOf('../../content/units/card/GND-Tanks.png') < t.decoded.indexOf(ATLAS),
+    'the cheap source is tried FIRST, and the expensive one only when it is not there');
+});
+
+test('BBB-1: thumbCache is BOUNDED, and never evicts a card that is on screen', async () => {
+  // It was a plain Map, invalidated by id and evicted by nothing: a nine-faction tour of a 90-unit
+  // catalog ended holding every card it had ever drawn (23.8MB measured). Bounded by BYTES, so the free
+  // entries (`empty`, and a `missing` with nothing to draw) never evict a picture.
+  // MUTATION: thumbCache.set(key, res) in thumbWant instead of thumbStore -> nothing is ever evicted.
+  // MUTATION: drop the `pinned` set -> the LRU evicts a card the next renderRoster is about to redraw.
+  const t = boot({ fetch: contentFetch({}).fetch, images: true, imageSize: () => [256, 256] });
+  await settle();
+  const cap = t.run(`THUMB_CACHE_BYTES`);
+  const per = t.run(`CARD_PX * CARD_PX * 4`);
+  const room = Math.floor(cap / per);
+  assert.ok(room >= 36,
+    `the bound (${room} cards) must clear the biggest roster the tool draws (18), or the LRU thrashes inside one screen`);
+
+  // THROUGH THE REAL PATH FIRST. Calling thumbStore by hand only proves thumbStore evicts; it says
+  // nothing about whether the resolver ever reaches it, and thumbWant wrote straight into the Map for the
+  // whole life of this cache. So the bound is proved where cards are actually cached — one thumbWant per
+  // unit, resolved, exactly as a faction tour does it.
+  t.run(`(() => { thumbLive = []; cardView = null; thumbCache.clear();
+    for (let i = 0; i < ${room + 10}; i++) {
+      const id = 'GND-R' + i;
+      thumbWant('unit:' + id, id, false, { pack: { id, footprint: [64, 64, 40],
+        parts: [{ id: 'body', atlas: id + '.body.png', cell: [216, 266], cols: 4, layers: 35 }] } });
+    } })()`);
+  for (let i = 0; i < 40; i++) await settle();
+  const viaResolve = t.run(`[...thumbCache.values()].reduce((a, v) => a + (v && v.cv ? v.cv.width * v.cv.height * 4 : 0), 0)`);
+  assert.ok(t.run(`thumbCache.size`) > 0, 'test setup: the resolves actually cached something');
+  assert.ok(viaResolve <= cap,
+    `resolving ${room + 10} cards must leave the cache inside its bound — held ${viaResolve} of ${cap}`);
+
+  t.run(`(() => { thumbLive = []; cardView = null; thumbCache.clear();
+    for (let i = 0; i < ${room + 12}; i++) {
+      const cv = document.createElement('canvas'); cv.width = CARD_PX; cv.height = CARD_PX;
+      thumbStore('unit:F' + i, { state: 'baked', cv, sig: 's' + i });
+    } })()`);
+  const held = t.run(`[...thumbCache.values()].reduce((a, v) => a + (v && v.cv ? v.cv.width * v.cv.height * 4 : 0), 0)`);
+  assert.ok(held <= cap, `held ${held} must be inside the ${cap}-byte bound`);
+  assert.ok(!t.run(`thumbCache.has('unit:F0')`), 'the OLDEST went first — this is an LRU, not a random drop');
+  assert.ok(t.run(`thumbCache.has('unit:F${room + 11}')`), 'and the newest is still there');
+  // FREE ENTRIES ARE NOT WHAT THE BOUND IS ABOUT: a stateless entry costs nothing and re-deciding it
+  // costs a store read, so it must not be evicted to make room.
+  t.run(`thumbStore('unit:Empty', { state: 'empty', cv: null, sig: 'empty' })`);
+  t.run(`(() => { for (let i = 0; i < 8; i++) {
+    const cv = document.createElement('canvas'); cv.width = CARD_PX; cv.height = CARD_PX;
+    thumbStore('unit:G' + i, { state: 'baked', cv, sig: 'g' + i }); } })()`);
+  assert.ok(t.run(`thumbCache.has('unit:Empty')`), 'an entry with no canvas is never evicted for space');
+  // …AND A CARD ON SCREEN IS PINNED. Evicting one blanks a card the user is looking at and immediately
+  // re-resolves it, which is the thrash this bound exists to avoid wearing a different hat.
+  t.run(`(() => { thumbLive = [{ key: 'unit:Pinned', card: null, u: {}, decorSet: false }];
+    const cv = document.createElement('canvas'); cv.width = CARD_PX; cv.height = CARD_PX;
+    thumbStore('unit:Pinned', { state: 'baked', cv, sig: 'p' });
+    for (let i = 0; i < ${room + 4}; i++) {
+      const c2 = document.createElement('canvas'); c2.width = CARD_PX; c2.height = CARD_PX;
+      thumbStore('unit:H' + i, { state: 'baked', cv: c2, sig: 'h' + i }); } })()`);
+  assert.ok(t.run(`thumbCache.has('unit:Pinned')`), 'a card that is ON SCREEN survives a full turnover of the bound');
 });

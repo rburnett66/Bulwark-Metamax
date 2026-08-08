@@ -5044,6 +5044,10 @@ const UNIT_ATLAS_BASE = '../../content/units/voxel/';
 // defect as a store nothing reads, pointing the other way.
 const UNIT_CARD_BASE = '../../content/units/card/';
 const CARD_SHIP_DIR = 'content/units/card/';
+// EVERY FORMAT A CARD HAS BEEN WRITTEN IN, in read order. One entry today, and a LIST anyway: the
+// resolver, the save path and the removal path must all agree on that set, and three literals kept in
+// step by hand is how an orphaned picture gets left in the repo after its unit is gone.
+const CARD_READ_EXT = ['.png'];
 // The ship-side spelling of UNIT_ATLAS_BASE. Removal has to name exactly the files the ship wrote, so
 // the folder is a constant both halves read rather than a literal each of them repeats.
 const UNIT_SHIP_DIR = 'content/units/voxel/';
@@ -5064,6 +5068,13 @@ const THUMB_STATES = {
 // old 68KB, so a full nine-faction 90-unit tour holds ~23MB of canvas. Paid deliberately: the grid and
 // the full-size view then read the SAME pixels (one scaled, one 1:1), so they cannot disagree, and
 // opening a card is instant instead of a second async resolve that might land on newer state.
+//
+// BBB-1: …AND IT IS BOUNDED NOW. It was a plain Map, invalidated by id and evicted by nothing, so a
+// nine-faction tour of a 90-unit catalog ended holding every card it had ever drawn. MEASURED: 23.8MB of
+// canvas at 95 cards — which is real, and is also NOT what crashed the tab (dropping the whole cache
+// mid-tour returned 3MB of 222; the other 219 was atlas decode, see thumbResolve). So this bound is
+// hygiene with a number on it, not the fix, and it is written down that way so the next person does not
+// go looking for a saving here that was never in it.
 const thumbCache = new Map();
 const thumbBusy = new Map();             // key -> true while a resolve is in flight (never two for one card)
 const thumbEpoch = new Map();            // key -> generation, bumped on invalidate so an in-flight resolve cannot write back stale art
@@ -5080,6 +5091,50 @@ function thumbInvalidate(id) {
     const hit = thumbCache.get(key); if (hit) hit.dirty = true;
   }
 }
+// ── THE BOUND ─────────────────────────────────────────────────────────────────────────────────────
+// BY BYTES, NOT BY COUNT. Only entries that hold a canvas cost anything; `empty`, and a `missing` with
+// nothing to draw, are a state string and a signature. Counting those against the bound would evict a
+// picture to make room for the memory of not having one — and re-deciding an empty card costs a store
+// read, so the free entries are also the ones least worth throwing away.
+//
+// 16MB = 64 cards at CARD_PX². The number is chosen against the two ways a bound goes wrong:
+//   too small  — the LRU thrashes INSIDE one screen. The biggest roster the tool draws today is 18
+//                cards (Ground / Powder: 8 designed + its extras); a bound under that would evict a card
+//                the very next renderRoster is about to redraw, so every render re-resolves everything
+//                and the "cache" makes the tool slower and hits the network harder than none at all.
+//                64 is 3.5× the biggest roster — the current faction can never evict itself.
+//   too large  — it is not a bound. 90 cards is 23.8MB, so anything at or above that is decoration.
+// So: below the whole catalog, far above any one screen. Evicting costs one re-resolve — now a ~9KB
+// card fetch and a 256×256 decode, since thumbResolve no longer reaches for the atlas.
+const THUMB_CACHE_BYTES = 16 * 1024 * 1024;
+const thumbBytesOf = (res) => (res && res.cv ? res.cv.width * res.cv.height * 4 : 0);
+/** Move a key to the young end. Map iterates in insertion order, so re-inserting IS the LRU touch. */
+function thumbTouch(key) {
+  const hit = thumbCache.get(key);
+  if (hit) { thumbCache.delete(key); thumbCache.set(key, hit); }
+  return hit;
+}
+/** THE ONE WRITE into thumbCache, so a caller cannot add a canvas without paying the bound. Evicts from
+ *  the old end until the total fits — but never a card that is ON SCREEN or open in the full-size view:
+ *  dropping one of those would blank a card the user is looking at and immediately re-resolve it, which
+ *  is the thrash above wearing a different hat. */
+function thumbStore(key, res) {
+  thumbCache.delete(key);
+  thumbCache.set(key, res);
+  const pinned = new Set(thumbLive.map((L) => L.key));
+  if (cardView) pinned.add(cardView.key);
+  pinned.add(key);
+  let total = 0;
+  for (const v of thumbCache.values()) total += thumbBytesOf(v);
+  if (total <= THUMB_CACHE_BYTES) return;
+  for (const k of [...thumbCache.keys()]) {
+    if (total <= THUMB_CACHE_BYTES) break;
+    if (pinned.has(k)) continue;
+    const b = thumbBytesOf(thumbCache.get(k));
+    if (!b) continue;                                  // free entries are not what the bound is about
+    thumbCache.delete(k); total -= b;
+  }
+}
 function thumbPump() {
   while (thumbRunning < THUMB_POOL && thumbQueue.length) {
     const job = thumbQueue.shift(); thumbRunning++;
@@ -5088,6 +5143,42 @@ function thumbPump() {
 }
 /** decode a URL into an <img>, or null. A 404/corrupt file rejects — im.onerror used to be unhandled. */
 const thumbImage = (url) => loadImgURL(url).then((im) => im, () => null);
+/** IS IT IN THE REPO — asked without decoding it. A HEAD is ~200 bytes on the wire and zero pixels; the
+ *  same question asked with `new Image()` costs the whole atlas (see thumbResolve). A network failure is
+ *  reported as absent, which is what the old unhandled im.onerror silently meant too. */
+const thumbHead = (url) => (String(url).startsWith('data:')
+  ? Promise.resolve(true)                              // an inline atlas is already here; there is nothing to ask
+  : fetch(url, { method: 'HEAD', cache: 'no-store' }).then((r) => !!r.ok, () => false));
+/** ── DECODE SMALL, OR DO NOT DECODE ───────────────────────────────────────────────────────────────
+ *  Decode ONE ATLAS FRAME straight to the size the card draws it at, and release it the moment it is
+ *  blitted. `new Image()` cannot do either: it decodes the whole sheet and then hands the lifetime of
+ *  that bitmap to the GC and to Chrome's own image cache.
+ *
+ *  MEASURED, 95 atlas loads (the six shipped body sheets, cache-busted so each is a distinct resource,
+ *  which is what a 90-unit catalog is), Chrome private bytes across all processes after a forced GC:
+ *      new Image()                                        337MB decoded ->  279MB still held
+ *      createImageBitmap(blob) + .close()                 337MB decoded ->  279MB still held
+ *      createImageBitmap(blob, cell, {resize}) + .close()  16MB decoded ->   15MB still held
+ *  So `.close()` on its own buys NOTHING — the release everyone reaches for first is not the lever. The
+ *  lever is never materialising the full sheet: crop and resize during the decode. 18× less held.
+ *
+ *  It degrades, it does not fail: no createImageBitmap, a resize option the browser ignores, a blob that
+ *  will not decode — any of those falls back to the <img>, which is exactly today's behaviour. */
+async function thumbFrameBitmap(url, cell, dw, dh) {
+  if (typeof createImageBitmap !== 'function' || typeof fetch !== 'function') return null;
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r || !r.ok || typeof r.blob !== 'function') return null;
+    const blob = await r.blob();
+    const opt = { resizeWidth: Math.max(1, Math.round(dw)), resizeHeight: Math.max(1, Math.round(dh)), resizeQuality: 'pixelated' };
+    // 'pixelated', not 'high'. These are voxel sprites drawn with imageSmoothingEnabled = false
+    // everywhere else in this file; a smoothed downscale would make the card the one place the art is
+    // blurred, and the card is meant to be a picture OF the sprite.
+    return cell && cell.length >= 2
+      ? await createImageBitmap(blob, 0, 0, cell[0], cell[1], opt)
+      : await createImageBitmap(blob, opt);
+  } catch (e) { return null; }
+}
 /** the atlas source named for this card, and the cell to cut frame 0 out of. */
 function thumbAtlasOf(id, decorSet, entry) {
   const part = decorSet ? 'decor' : 'body';
@@ -5183,6 +5274,13 @@ function drawCardBand(g, name, dims) {
   }
   g.restore();
 }
+/** WHERE A sw×sh PICTURE LANDS in the card's picture region, letterboxed with a 4px margin. Extracted so
+ *  the two ways a frame reaches a card — scaled by drawImage, or scaled during the decode — cannot land it
+ *  in two different places. No clamp at 1: a small frame is upscaled to fill the card, as it always was. */
+function cardFit(sw, sh) {
+  const s = Math.min((CARD_PX - 8) / sw, (CARD_ART - 8) / sh), w = sw * s, h = sh * s;
+  return { s, w, h, x: (CARD_PX - w) / 2, y: (CARD_ART - h) / 2 };
+}
 /** an image fitted, letterboxed, into the PICTURE REGION of a fresh 256×256 card, with its caption band
  *  composited underneath. srcRect cuts one atlas frame. `label` may be null for a picture with no caption. */
 function cardCanvasOf(im, srcRect, label) {
@@ -5191,11 +5289,11 @@ function cardCanvasOf(im, srcRect, label) {
   g.fillStyle = CARD_BG; g.fillRect(0, 0, CARD_PX, CARD_PX);     // opaque, so the file reads outside the tool
   if (im) {
     const sw = srcRect ? srcRect[0] : (im.width || im.naturalWidth || 1), sh = srcRect ? srcRect[1] : (im.height || im.naturalHeight || 1);
-    const s = Math.min((CARD_PX - 8) / sw, (CARD_ART - 8) / sh), w = sw * s, h = sh * s;
+    const f = cardFit(sw, sh);
     g.imageSmoothingEnabled = false;
     // FRAME 0, NOT THE SHEET. The old draw was drawImage(im, 0, 0, 76, 56) — the whole 4×4 (or 8-cell)
     // atlas squeezed into the thumbnail, so a card that DID find its atlas showed a contact sheet.
-    g.drawImage(im, 0, 0, sw, sh, (CARD_PX - w) / 2, (CARD_ART - h) / 2, w, h);
+    g.drawImage(im, 0, 0, sw, sh, f.x, f.y, f.w, f.h);
   }
   if (label) drawCardBand(g, label.name, label.dims);
   return cv;
@@ -5213,6 +5311,41 @@ function cardCanvasFromFile(im, label) {
   g.imageSmoothingEnabled = false; g.drawImage(im, 0, 0);
   return cv;
 }
+/** THE SAVED CARD ARTIFACT, if the repo has one. Tries every format a card has ever been written in,
+ *  newest first, so adding one later cannot silently blank the cards already on disk. { cv, file } or null.
+ *  `file` is the SHIP-side path, because that is what paintCardView quotes back to the artist. */
+async function thumbCardFile(id, label) {
+  for (const ext of CARD_READ_EXT) {
+    const im = await thumbImage(UNIT_CARD_BASE + id + ext);
+    if (!im) continue;
+    return { cv: cardCanvasFromFile(im, label || null), file: CARD_SHIP_DIR + id + ext, ext };
+  }
+  return null;
+}
+/** THE ATLAS RUNG — now the fallback, and now decoded small. Cuts frame 0 straight to the size the card
+ *  draws it at (thumbFrameBitmap), blits it, and closes the bitmap. Falls back to the old whole-sheet
+ *  <img> decode when the browser cannot do that, so this can only be cheaper, never absent. */
+async function thumbAtlasCard(atl, label) {
+  const cell = atl.cell;
+  if (cell && cell.length >= 2) {
+    const f = cardFit(cell[0], cell[1]);
+    const bm = await thumbFrameBitmap(atl.url, cell, f.w, f.h);
+    if (bm) {
+      const cv = document.createElement('canvas'); cv.width = CARD_PX; cv.height = CARD_PX;
+      const g = cv.getContext('2d');
+      if (g) {
+        g.fillStyle = CARD_BG; g.fillRect(0, 0, CARD_PX, CARD_PX);
+        g.imageSmoothingEnabled = false;
+        g.drawImage(bm, Math.round(f.x), Math.round(f.y));
+        if (label) drawCardBand(g, label.name, label.dims);
+      }
+      if (bm.close) bm.close();
+      return g ? cv : null;
+    }
+  }
+  const im = await thumbImage(atl.url);
+  return im ? cardCanvasOf(im, cell, label) : null;
+}
 /** a slice, flipped/rotated as the artist set it and keyed the way the carve keys it, as a card canvas. */
 function thumbSliceCanvas(im, sl, label) {
   // Flip then rotate, matching renderView's display-space convention — a card that shows a unit upside
@@ -5222,14 +5355,42 @@ function thumbSliceCanvas(im, sl, label) {
   const orient = sl.rot ? rotCanvas(flipped, sl.rot) : flipped;
   return cardCanvasOf(keyedCanvas(orient, sl.tol, sl.polys, sl.picks, THUMB_KEY_PX), null, label);
 }
+// ── BBB-1: THE STATE IS ONE QUESTION, THE PICTURE IS ANOTHER ──────────────────────────────────────
+// This function used to answer both with the same act: it DECODED the baked atlas, and whether that
+// decode succeeded was simultaneously "is the art in the repo" and "what does the card show". That is
+// why a 152×112 thumbnail cost a 1296×1408 decode — the tool was asking a yes/no question by
+// materialising 7MB of pixels, ninety times.
+//
+// MEASURED, headless Chrome, a nine-faction tour of a 90-unit catalog (95 cards):
+//     341MB decoded, Chrome private bytes 683MB -> 905MB.
+//     Blocking JUST the atlas fetches and touring again: 673MB -> 673MB. Flat. Every megabyte of that
+//     growth was this decode; none of it was PIXI, the DOM, the roster or the live view.
+// Dropping the ENTIRE thumbCache at the end of the tour returned 3MB of the 222 — so the cache size, and
+// the 256KB-per-card the standard card artifact costs, are not where the memory was. This was.
+//
+// Split in two, cheapest question first:
+//   IS IT IN THE REPO   a HEAD. No pixels. Decides baked / missing exactly as before.
+//   WHAT DOES IT SHOW   content/units/card/<id>.png — a 256×256 artifact, purpose-built, already the
+//                       right shape for the box. The atlas is now the FALLBACK for a unit baked before
+//                       card images existed, and when it is reached it is cropped and resized during the
+//                       decode rather than materialised whole (thumbFrameBitmap).
+//
+// The five states and `stale` are untouched. `stale` still rides on `model` alone: for a baked unit the
+// repo atlas is the authority and no freshness claim was ever made about it, so routing that unit's
+// PICTURE through the card file must not start making one.
 /** Resolve one card, once. Reads content/ for art and IndexedDB only for the artist's working state. */
 async function thumbResolve(id, decorSet, entry, prev) {
   const atl = thumbAtlasOf(id, decorSet, entry);
   if (atl.url) {
-    const im = await thumbImage(atl.url);
-    if (im) return { state: 'baked', dims: cardDimsPack(entry),
-      cv: cardCanvasOf(im, atl.cell, { name: id, dims: cardDimsPack(entry) }),
-      sig: 'atlas|' + atl.url.slice(0, 96) + '|' + atl.url.length };
+    const dims = cardDimsPack(entry);
+    // The two questions are independent, so they go out together — the card file must not wait on the HEAD.
+    const [inRepo, card] = await Promise.all([thumbHead(atl.url), decorSet ? null : thumbCardFile(id, { name: id, dims })]);
+    if (inRepo) {
+      if (card && card.cv) return { state: 'baked', dims, cv: card.cv, file: card.file,
+        sig: 'baked|card|' + card.file + '|' + atl.url.length };
+      const cv = await thumbAtlasCard(atl, { name: id, dims });
+      if (cv) return { state: 'baked', dims, cv, sig: 'atlas|' + atl.url.slice(0, 96) + '|' + atl.url.length };
+    }
     // NAMED AND NOT THERE. This is the state that used to be indistinguishable from "never baked":
     // im.onerror was unhandled, so a missing or corrupt atlas silently left the placeholder while the
     // badge still claimed the unit was supplied. It is also the ordinary state of a unit baked in this
@@ -5239,7 +5400,10 @@ async function thumbResolve(id, decorSet, entry, prev) {
     // whatever else it has. Being unable to see a unit is the problem being fixed; a card that shows the
     // unit AND says its art is not in the repo tells the truth twice, and the frame stops it reading as
     // a healthy card.
-    const fb = await thumbFallback(id, decorSet, prev);
+    // `card` was already fetched above, so it is handed down rather than asked for a second time — a unit
+    // baked in this browser and not yet shipped is the state the tool spends most of its time in, and
+    // paying two round trips for one file on the busiest path would be a poor trade for tidier code.
+    const fb = await thumbFallback(id, decorSet, prev, card);
     return { state: 'missing', cv: fb ? fb.cv : null, fbSig: fb ? fb.sig : null, dims: fb ? fb.dims : cardDimsPack(entry),
       sig: 'missing|' + atl.url.length + '|' + (fb ? fb.sig : '-') };
   }
@@ -5247,8 +5411,9 @@ async function thumbResolve(id, decorSet, entry, prev) {
   return fb || { state: 'empty', cv: null, sig: 'empty', dims: '' };
 }
 /** Everything below the baked atlas: the saved card image, then the source slices. Shared, because a
- *  unit whose atlas is missing from the repo needs the same picture as one that never had an atlas. */
-async function thumbFallback(id, decorSet, prev) {
+ *  unit whose atlas is missing from the repo needs the same picture as one that never had an atlas.
+ *  `card` is thumbCardFile's answer when the caller has already asked; `undefined` means "not asked". */
+async function thumbFallback(id, decorSet, prev, card) {
   const p = await idb.get((decorSet ? 'decor:' : 'proj:') + id).catch(() => null);
   if (!p) return null;
   const label = { name: id, dims: cardDimsProject(p) };
@@ -5259,13 +5424,13 @@ async function thumbFallback(id, decorSet, prev) {
   // data" is "VOL has filled voxels", which is the model the tool actually saves and ships.
   const msig = decorSet ? '' : modelSigOf(p);
   if (msig) {
-    const im = await thumbImage(UNIT_CARD_BASE + id + '.png');
-    if (im) {
+    const got = card === undefined ? await thumbCardFile(id, label) : card;
+    if (got && got.cv) {
       // FRESH ONLY IF IT DEPICTS THIS MODEL. cardSig is stamped beside the descriptor when the image is
       // written; a card image whose model has moved on is shown, and marked, never passed off as current.
       const stamped = ((loadManifest().units || {})[id] || {}).cardSig || null;
-      return { state: 'model', cv: cardCanvasFromFile(im, label), sig: 'card|' + msig,
-        stale: stamped !== msig, dims: label.dims, file: UNIT_CARD_BASE + id + '.png' };
+      return { state: 'model', cv: got.cv, sig: 'card|' + got.ext + '|' + msig,
+        stale: stamped !== msig, dims: label.dims, file: got.file };
     }
     // vox but no card image in the repo — /__ship needs the dev server, so this is the normal state on
     // the deployed site. Fall through to the slices rather than show nothing.
@@ -5334,7 +5499,7 @@ function thumbWant(key, id, decorSet, entry) {
     .then((res) => {
       thumbBusy.delete(key);
       if (thumbEpochOf(key) !== gen) return;      // invalidated while in flight — do not cache what is already stale
-      thumbCache.set(key, res);
+      thumbStore(key, res);                       // …and through the bound, never straight into the Map
       for (const L of thumbLive) if (L.key === key) thumbPaint(L.card, res, L.u, L.decorSet);
       if (cardView && cardView.key === key) paintCardView(res);   // the full-size view is a late-resolving card too
     }));
@@ -5350,7 +5515,7 @@ function openCardView(id, decorSet) {
   const key = thumbKey(id, decorSet);
   cardView = { key, id, decorSet, zoom: (cardView && cardView.zoom) || 1 };
   $('cardModal').hidden = false;
-  const hit = thumbCache.get(key);
+  const hit = thumbTouch(key);                                   // opening a card is the strongest "keep this" there is
   paintCardView(hit || { state: 'pending', cv: null });
   // An empty slot never resolves during renderRoster (it is decided from wipIds without touching the
   // store), so opening one has to ask for the real answer rather than show a permanent "…".
@@ -5368,11 +5533,13 @@ function paintCardView(res) {
   // WHERE THIS PICTURE COMES FROM, said plainly. Only the `model` rung is a file this tool writes; every
   // other rung is composited here and now. A caption band makes any picture look like a saved card, so
   // the one line that distinguishes an artifact on disk from a preview of one has to be present.
+  // …and it names the file it ACTUALLY read, rather than rebuilding a path from a hardcoded extension.
+  // A path you can copy that is wrong is the same class of lie as a stale caption.
   $('cardSrc').innerHTML = res.file
-    ? `From <code style="color:#8fd0ff">${CARD_SHIP_DIR}${id}.png</code> — the file in the repo.`
+    ? `From <code style="color:#8fd0ff">${res.file}</code> — the file in the repo.`
       + (res.stale ? ` <b style="color:#e0b060">It no longer depicts the saved model. Save the unit to rewrite it.</b>` : '')
     : `<span style="opacity:.75">Composited from the ${res.state === 'baked' ? 'baked atlas' : res.state === 'source' ? 'source slices' : 'card state'}`
-      + ` — no <code>${CARD_SHIP_DIR}${id}.png</code> in the repo. Save the unit with the dev server running to write one.</span>`;
+      + ` — no <code>${CARD_SHIP_DIR}${id}${CARD_READ_EXT[0]}</code> in the repo. Save the unit with the dev server running to write one.</span>`;
   const cvs = $('cardCanvas'); if (!cvs) return;
   cvs.width = CARD_PX; cvs.height = CARD_PX;
   cvs.style.width = (CARD_PX * cardView.zoom) + 'px'; cvs.style.height = (CARD_PX * cardView.zoom) + 'px';
@@ -5452,7 +5619,7 @@ function renderRoster() {
     // the picture came from a field that is no longer there, so the two said different things forever.
     const key = thumbKey(u.id, decorSet);
     live.push({ key, card, u, decorSet });
-    const hit = thumbCache.get(key);
+    const hit = thumbTouch(key);                                 // drawn = used: this is the LRU's only recency signal
     if (hit) thumbPaint(card, hit, u, decorSet);
     // AN EMPTY SLOT IS DECIDED WITHOUT TOUCHING THE STORE. No manifest entry and no WIP means there is
     // nothing anywhere to draw — which is most of a designed roster — so those cards cost one fill and
@@ -6046,7 +6213,11 @@ function removalPlan(id, origin) {
   // No pack names its atlases (geometry-only, or nothing saved at all) — fall back to the convention the
   // ship path uses. Attempting a file that is not there is reported as "not present", never as a removal.
   if (!named) for (const part of ['body', 'turret']) push(`${UNIT_SHIP_DIR}${id}.${part}.png`);
-  push(CARD_SHIP_DIR + id + '.png');                          // the card picture — every saved unit has one
+  // THE CARD PICTURE, IN EVERY FORMAT IT HAS EVER BEEN WRITTEN IN. Removal names exactly what the
+  // resolver reads, from the same constant, so a format added on one side cannot be forgotten on the
+  // other — a unit gone from every store with its picture still in the repo is the failure DDD-5
+  // enumerated six places to avoid.
+  for (const ext of CARD_READ_EXT) push(CARD_SHIP_DIR + id + ext);
   return {
     id, files,
     designed: origin ? origin.designed : false,
