@@ -51,8 +51,9 @@ function makeSandbox() {
     querySelector: () => null, querySelectorAll: () => [], closest: () => null,
     getBoundingClientRect: () => ({ left: 0, top: 0, right: 100, bottom: 100, width: 100, height: 100 }),
     getContext: () => ctx, toBlob() {},
-    // THE MIME IS HONOURED. A stub that hands back the same data URL whatever it is asked for cannot
-    // tell what a card was actually encoded as from what it was named.
+    // THE MIME IS HONOURED. A stub that returns the same data URL whatever it is asked for
+    // cannot tell 'the card is encoded as a JPEG' from 'the card is named .jpg', and saveCardImage
+    // deliberately names the file after the encoding it actually got back.
     toDataURL: (m) => 'data:' + (m || 'image/png') + ';base64,iVBORw0KGgo=',
     width: 160, height: 160, clientWidth: 160, clientHeight: 160, offsetHeight: 30,
     value: '', textContent: '', innerHTML: '', innerText: '', checked: false, disabled: false, hidden: true,
@@ -1400,8 +1401,8 @@ test('DDD-6: the card image is written to the REPO, under card/ and never under 
   await settle();
   const res = t.json('window.__r');
   assert.equal(res.ok, true, 'with a dev server the image is written');
-  assert.equal(res.path, 'content/units/card/GND-Tanks.png');
-  assert.deepEqual(net.shipped.map((s) => s.path), ['content/units/card/GND-Tanks.png']);
+  assert.equal(res.path, 'content/units/card/GND-Tanks.jpg', 'BBB-1: the card is a JPEG now');
+  assert.deepEqual(net.shipped.map((s) => s.path), ['content/units/card/GND-Tanks.jpg']);
   assert.ok(net.shipped[0].png, 'it is written as image bytes, not as JSON');
   assert.ok(t.run(`(loadManifest().units || {})['GND-Tanks'].cardSig`), 'and it stamps WHAT it depicts');
 });
@@ -1577,7 +1578,10 @@ test('DDD-5: removal clears EVERY store the unit occupies, and reports each one'
   assert.deepEqual(net.unshipped.map((u) => u.path), [
     'content/units/voxel/GND-Gone.body.png', 'content/units/voxel/GND-Gone.body.shadow.png',
     'content/units/voxel/GND-Gone.turret.png', 'content/units/voxel/GND-Gone.turret.shadow.png',
-    'content/units/model/GND-Gone.json', 'content/units/card/GND-Gone.png',
+    // BBB-1: the card is written as .jpg now and used to be written as .png, so removal names BOTH.
+    // Naming only the current format would leave every pre-BBB-1 card in the repo after its unit was
+    // removed from all six of its other homes — an orphan of exactly the kind DDD-5 exists to prevent.
+    'content/units/model/GND-Gone.json', 'content/units/card/GND-Gone.jpg', 'content/units/card/GND-Gone.png',
   ], 'every file the ship path wrote — in every format it has ever written the card in');
   // 6 — the shipped manifest, rewritten WITHOUT it and with everything else intact
   const wrote = net.shipped.filter((s) => s.path === 'content/units/voxel-units.json');
@@ -2019,7 +2023,7 @@ test('AAA-7: only the model rung is a FILE, and the viewer says which it is look
   t.run(`openCardView('SYS-Cannon', false)`); await settle();
   const src = t.run(`document.getElementById('cardSrc').innerHTML`);
   assert.match(src, /Composited from the source slices/, 'it says where the picture came from');
-  assert.match(src, /no <code>content\/units\/card\/SYS-Cannon\.png<\/code> in the repo/,
+  assert.match(src, /no <code>content\/units\/card\/SYS-Cannon\.jpg<\/code> in the repo/,
     'and that there is no card artifact on disk for this unit — named in the format a save would write');
   assert.doesNotMatch(src, /the file in the repo/);
   // …and it is still a full card: caption and all, so the roster reads the same for every rung
@@ -2070,7 +2074,7 @@ test('BBB-1: a baked unit draws its CARD FILE and never decodes the atlas', asyn
   // MUTATION: put the atlas rung back in front (decode `atl.url` first and return on success) -> the
   // atlas is decoded again and `decoded` contains it. That is the bug, restored.
   const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks']) });
-  const ATLAS = '../../content/units/voxel/GND-Tanks.body.png', CARD = '../../content/units/card/GND-Tanks.png';
+  const ATLAS = '../../content/units/voxel/GND-Tanks.body.png', CARD = '../../content/units/card/GND-Tanks.jpg';
   const t = boot({ fetch: net.fetch, idb: true,
     images: (s) => s === ATLAS || s === CARD,           // BOTH are in the repo — the atlas must still not be read
     imageSize: (s) => (s === CARD ? [256, 256] : null) });
@@ -2087,7 +2091,7 @@ test('BBB-1: a baked unit draws its CARD FILE and never decodes the atlas', asyn
     'and the multi-megabyte atlas was NEVER decoded — that is the entire fix');
   // …and the state was still decided from the repo, by asking instead of by decoding
   assert.ok(t.headed.includes(ATLAS), 'the atlas was asked about with a HEAD — no body, no pixels');
-  assert.equal(t.json(`thumbCache.get('unit:GND-Tanks').file`), 'content/units/card/GND-Tanks.png',
+  assert.equal(t.json(`thumbCache.get('unit:GND-Tanks').file`), 'content/units/card/GND-Tanks.jpg',
     'and the card knows which file it is showing');
 });
 
@@ -2126,8 +2130,51 @@ test('BBB-1: the atlas rung SURVIVES for a unit baked before card images existed
   const blit = t.json(`thumbCache.get('unit:GND-Tanks').cv.__ops.find(o => o[0] === 'drawImage')`);
   assert.deepEqual(blit.slice(1, 5), [0, 0, 216, 266], 'frame 0 at the pack cell, exactly as before');
   // …and it asked for the card file first. The order IS the fix; without it the atlas is the default again.
-  assert.ok(t.decoded.indexOf('../../content/units/card/GND-Tanks.png') < t.decoded.indexOf(ATLAS),
+  assert.ok(t.decoded.indexOf('../../content/units/card/GND-Tanks.jpg') < t.decoded.indexOf(ATLAS),
     'the cheap source is tried FIRST, and the expensive one only when it is not there');
+});
+
+test('BBB-1: a card written before the JPEG switch still resolves', async () => {
+  // The JPEG is the new WRITE format, not a demand that the repo be rewritten. A .png card authored under
+  // AAA-7 must keep working, or the change silently blanks every card already on disk.
+  // MUTATION: drop '.png' from CARD_READ_EXT -> every pre-BBB-1 card falls through to the slices.
+  const net = contentFetch({});
+  const CARD = '../../content/units/card/GND-Wip.png';
+  const t = boot({ fetch: net.fetch, images: (s) => s === CARD, imageSize: () => [256, 256],
+    idb: { 'proj:GND-Wip': wipProject('GND-Wip') } });
+  await settle();
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  const c = cards().find((x) => x.id === 'GND-Wip');
+  // 'model stale', not 'model': nothing stamped a cardSig in THIS browser, so no freshness claim can be
+  // made about the file — which is exactly what the state said before BBB-1 too.
+  assert.match(c.thumb, /^model/, 'the legacy PNG card is still the picture');
+  assert.equal(t.json(`thumbCache.get('unit:GND-Wip').file`), 'content/units/card/GND-Wip.png',
+    'and it is reported under the name it actually has, not the name the writer would use now');
+  // the .jpg is tried first and 404s — one wasted request, which is the whole cost of supporting both
+  assert.ok(t.decoded.indexOf('../../content/units/card/GND-Wip.jpg') < t.decoded.indexOf(CARD));
+});
+
+test('BBB-1: the card is written as a JPEG, and the stale PNG beside it is removed', async () => {
+  // Owner: "the cards can be compressed jpg images." This buys REPO SIZE — 13.9KB -> 5.2KB per card,
+  // measured, so 1.2MB -> 0.46MB across a 90-unit catalog — and NO memory at all: a 256×256 bitmap is
+  // 256KB of backing store whatever the file it came from.
+  // MUTATION: keep toDataURL('image/png') -> the path reverts to .jpg-only-by-name and this fails on the
+  // shipped path. MUTATION: drop the sibling unship -> the superseded .png is orphaned in the repo.
+  const net = contentFetch({}, { ship: true, onDisk: ['content/units/card/GND-Tanks.png'] });
+  const t = boot({ fetch: net.fetch, idb: true, images: () => false });
+  await settle();
+  captureCards(t);   // its canvases report pixels — the sandbox cannot rasterise, and cropToCard reads them back
+  t.run(`state.foot = 16; state.bodyLayers = 8; volDirty.body = true; recarve();`);
+  const r = await awaitIn(t, `saveCardImage('GND-Tanks', null)`);
+  assert.equal(r.ok, true, 'the card was written: ' + JSON.stringify(plain(r)));
+  assert.equal(r.path, 'content/units/card/GND-Tanks.jpg', 'as a .jpg');
+  assert.deepEqual(net.shipped.map((s) => s.path), ['content/units/card/GND-Tanks.jpg']);
+  assert.equal(t.run(`CARD_MIME`), 'image/jpeg', 'and the encoder was actually asked for a JPEG');
+  assert.equal(t.run(`CARD_JPEG_Q`), 0.9);
+  // ONE CARD PER UNIT: the pre-BBB-1 .png is taken out of the repo rather than left to rot beside it
+  assert.deepEqual(net.unshipped.map((u) => u.path), ['content/units/card/GND-Tanks.png'],
+    'the superseded PNG is removed — a file nothing reads and nothing updates is the pollution DDD-5 fought');
 });
 
 test('BBB-1: thumbCache is BOUNDED, and never evicts a card that is on screen', async () => {

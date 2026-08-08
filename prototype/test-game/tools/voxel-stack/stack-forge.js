@@ -4289,9 +4289,15 @@ async function saveCardImage(id, p) {
     // cannot ship a caption for one model over a render of another.
     const cv = cropToCard(t.cv, { name: id, dims: cardDimsLive() });
     if (!cv) return { ok: false, kind: 'NOTHING DRAWN', detail: 'the model rendered empty' };
-    url = cv.toDataURL('image/png');
+    // BBB-1: JPEG. cropToCard fills CARD_BG across the whole square before it draws, so the card has no
+    // alpha to lose — see CARD_MIME for what this does and does not buy.
+    url = cv.toDataURL(CARD_MIME, CARD_JPEG_Q);
+    // A CANVAS THAT CANNOT ENCODE THE FORMAT SILENTLY GIVES YOU A PNG, and toDataURL says so in the
+    // prefix. Shipping that under a .jpg name would put a PNG on disk with the wrong extension, and
+    // /__ship's magic-byte check would reject it as "payload is not a JPEG" — a confusing report of a
+    // real problem. Name the file after what was actually encoded.
   } catch (e) { return { ok: false, kind: 'RENDER FAILED', detail: (e && e.message) || String(e) }; }
-  const path = CARD_SHIP_DIR + id + '.png';
+  const path = CARD_SHIP_DIR + id + (url.startsWith('data:image/jpeg') ? '.jpg' : '.png');
   try {
     // /__ship IS THE ONLY WRITE PATH and it needs the dev server. Opened from GitHub Pages there is no
     // POST endpoint, so this fails — and the card then falls back to the unit's slices for that session
@@ -4305,6 +4311,16 @@ async function saveCardImage(id, p) {
       m.units[id] = Object.assign({}, m.units[id], { cardSig: sig });
       localStorage.setItem(MANIFEST_KEY, JSON.stringify(m));
     } catch (e) { /* a full manifest costs freshness, not the image */ }
+    // ONE CARD PER UNIT, NOT ONE PER FORMAT. Writing <id>.jpg beside an existing <id>.png would leave the
+    // PNG in the repo forever: the resolver prefers the JPEG, so the PNG becomes a file nothing reads and
+    // nothing updates — a picture of a unit as it was, sitting next to the unit, which is exactly the
+    // "data pollution" removal was built for. Best effort: a failure here costs a stale sibling, never the
+    // card that was just written, so it can only report, never throw.
+    for (const ext of CARD_READ_EXT) {
+      const sib = CARD_SHIP_DIR + id + ext;
+      if (sib === path) continue;
+      try { await unshipFile(sib); } catch (e) { /* no dev server, or it was not there */ }
+    }
     thumbInvalidate(id);
     return { ok: true, path, bytes: d.bytes || 0 };
   } catch (e) {
@@ -5044,10 +5060,42 @@ const UNIT_ATLAS_BASE = '../../content/units/voxel/';
 // defect as a store nothing reads, pointing the other way.
 const UNIT_CARD_BASE = '../../content/units/card/';
 const CARD_SHIP_DIR = 'content/units/card/';
-// EVERY FORMAT A CARD HAS BEEN WRITTEN IN, in read order. One entry today, and a LIST anyway: the
-// resolver, the save path and the removal path must all agree on that set, and three literals kept in
-// step by hand is how an orphaned picture gets left in the repo after its unit is gone.
-const CARD_READ_EXT = ['.png'];
+// ── BBB-1: THE CARD FILE IS A JPEG ────────────────────────────────────────────────────────────────
+// Owner: "the cards can be compressed jpg images." It buys REPO AND DOWNLOAD size, and the honest size
+// of that win is smaller than it sounds. MEASURED on a real card (GND-Artillery frame 0, letterboxed on
+// CARD_BG, caption band composited): 13.9KB as PNG, 5.2KB as JPEG q0.9. Across a 90-unit catalog that is
+// 0.46MB in the repo instead of 1.2MB — worth having, not transformative.
+//
+// IT BUYS NO MEMORY AT ALL, and nothing here should be read as claiming otherwise: a decoded 256×256
+// bitmap is 256KB of backing store whatever the file it came from. The memory fix is the rung ORDER
+// below — not decoding a 1296×1408 atlas to fill a 152×112 box — and it would be worth exactly as much
+// if the card stayed a PNG.
+//
+// ALPHA. JPEG has none. The card was already opaque before this change and did not become opaque for it:
+// cropToCard, cardCanvasOf and drawCardBand each fill CARD_BG across the full square before drawing,
+// because a transparent PNG with pale text is invisible in a file browser (AAA-7). CHECKED, not assumed —
+// the minimum alpha over a whole rendered card is 255. Nothing downstream
+// reads a card's alpha — nothing downstream reads a card at all. content/units/card/ is named by this
+// file and by its tests, and by nothing in the game: not loader.js, not a pack's parts[], not the atlas
+// gate. It is a picture of a unit for a person to look at.
+const CARD_MIME = 'image/jpeg';
+// 0.9, chosen by measuring the thing that actually breaks. A card is flat voxel art on a near-black field
+// with 11.5px MONOSPACE dimensions in the caption band, and small pale text on a dark ground is where JPEG
+// fails first — so the band was measured on its own, not averaged into the picture that surrounds it.
+// Worst channel error, whole card / caption band alone, and the size:
+//     q0.80   4.1KB   max 49 / 36
+//     q0.85   4.6KB   max 38 / 38
+//     q0.90   5.2KB   max 23 / 20     <- the band's error roughly halves here, for 0.6KB
+//     q0.95   6.5KB   max 23 / 17
+// 0.9 is where the caption stops ringing; below it the digits visibly fringe, above it the file grows 25%
+// to buy another 3/255. Across a 90-unit catalog the 0.85 -> 0.9 step costs 54KB total, which is not a
+// trade worth making against a caption you have to squint at — the caption is the reason AAA-7 made the
+// card an artifact instead of a thumbnail.
+const CARD_JPEG_Q = 0.9;
+// READ BOTH. Cards written before this change are .png and must keep resolving — the JPEG is the new
+// WRITE format, not a demand that the repo be rewritten. Order is write-format-first: one 404 for a
+// legacy card, none for a current one.
+const CARD_READ_EXT = ['.jpg', '.png'];
 // The ship-side spelling of UNIT_ATLAS_BASE. Removal has to name exactly the files the ship wrote, so
 // the folder is a constant both halves read rather than a literal each of them repeats.
 const UNIT_SHIP_DIR = 'content/units/voxel/';
@@ -5311,8 +5359,8 @@ function cardCanvasFromFile(im, label) {
   g.imageSmoothingEnabled = false; g.drawImage(im, 0, 0);
   return cv;
 }
-/** THE SAVED CARD ARTIFACT, if the repo has one. Tries every format a card has ever been written in,
- *  newest first, so adding one later cannot silently blank the cards already on disk. { cv, file } or null.
+/** THE SAVED CARD ARTIFACT, if the repo has one. Tries the JPEG this tool writes, then the PNG it used
+ *  to — a card authored before BBB-1 must not disappear. Returns { cv, file } or null.
  *  `file` is the SHIP-side path, because that is what paintCardView quotes back to the artist. */
 async function thumbCardFile(id, label) {
   for (const ext of CARD_READ_EXT) {
@@ -5370,7 +5418,7 @@ function thumbSliceCanvas(im, sl, label) {
 //
 // Split in two, cheapest question first:
 //   IS IT IN THE REPO   a HEAD. No pixels. Decides baked / missing exactly as before.
-//   WHAT DOES IT SHOW   content/units/card/<id>.png — a 256×256 artifact, purpose-built, already the
+//   WHAT DOES IT SHOW   content/units/card/<id>.jpg|png — a 256×256 artifact, purpose-built, already the
 //                       right shape for the box. The atlas is now the FALLBACK for a unit baked before
 //                       card images existed, and when it is reached it is cropped and resized during the
 //                       decode rather than materialised whole (thumbFrameBitmap).
@@ -5533,8 +5581,8 @@ function paintCardView(res) {
   // WHERE THIS PICTURE COMES FROM, said plainly. Only the `model` rung is a file this tool writes; every
   // other rung is composited here and now. A caption band makes any picture look like a saved card, so
   // the one line that distinguishes an artifact on disk from a preview of one has to be present.
-  // …and it names the file it ACTUALLY read, rather than rebuilding a path from a hardcoded extension.
-  // A path you can copy that is wrong is the same class of lie as a stale caption.
+  // …and it names the file it ACTUALLY read. This said `.png` as a literal while the resolver had just
+  // read a `.jpg`, which is the same class of lie as a stale caption: a path you can copy that is wrong.
   $('cardSrc').innerHTML = res.file
     ? `From <code style="color:#8fd0ff">${res.file}</code> — the file in the repo.`
       + (res.stale ? ` <b style="color:#e0b060">It no longer depicts the saved model. Save the unit to rewrite it.</b>` : '')
@@ -6213,10 +6261,10 @@ function removalPlan(id, origin) {
   // No pack names its atlases (geometry-only, or nothing saved at all) — fall back to the convention the
   // ship path uses. Attempting a file that is not there is reported as "not present", never as a removal.
   if (!named) for (const part of ['body', 'turret']) push(`${UNIT_SHIP_DIR}${id}.${part}.png`);
-  // THE CARD PICTURE, IN EVERY FORMAT IT HAS EVER BEEN WRITTEN IN. Removal names exactly what the
-  // resolver reads, from the same constant, so a format added on one side cannot be forgotten on the
-  // other — a unit gone from every store with its picture still in the repo is the failure DDD-5
-  // enumerated six places to avoid.
+  // THE CARD PICTURE, IN EVERY FORMAT IT HAS EVER BEEN WRITTEN IN. Naming only '.png' here would orphan
+  // the '.jpg' cards this tool writes now — the unit would be gone from every store and its picture would
+  // still be in the repo, which is the failure DDD-5 enumerated six places to avoid. Removal names what
+  // the resolver reads, from the same constant, so the two cannot drift.
   for (const ext of CARD_READ_EXT) push(CARD_SHIP_DIR + id + ext);
   return {
     id, files,
