@@ -20,7 +20,7 @@
       }
     },
     "GND-Trucks": {
-      "shape": "Trucks",
+      "shape": "Scout",
       "role": "Support",
       "layers": {
         "base": {
@@ -41,7 +41,7 @@
       }
     },
     "GND-Tanks": {
-      "shape": "Tanks",
+      "shape": "Assault Tank",
       "role": "Bruiser",
       "layers": {
         "base": {
@@ -83,7 +83,7 @@
       }
     },
     "GND-HeavyTanks": {
-      "shape": "Heavy Tanks",
+      "shape": "Heavy Tank",
       "role": "Juggernaut",
       "layers": {
         "base": {
@@ -104,7 +104,7 @@
       }
     },
     "GND-Copters": {
-      "shape": "Copters",
+      "shape": "Gunship",
       "role": "Harasser",
       "layers": {
         "base": {
@@ -121,7 +121,7 @@
       }
     },
     "GND-Planes": {
-      "shape": "Planes",
+      "shape": "Fighter",
       "role": "Striker",
       "layers": {
         "base": {
@@ -138,7 +138,7 @@
       }
     },
     "GND-Missiles": {
-      "shape": "Missiles",
+      "shape": "Missile Flyer",
       "role": "Guided AA",
       "layers": {
         "base": {

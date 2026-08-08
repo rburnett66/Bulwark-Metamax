@@ -21,7 +21,7 @@
     },
     "SYS-Harvester": {
       "role": "Harvester",
-      "shape": "Trucks",
+      "shape": "Scout",
       "rotation": 180,
       "layers": {
         "base": {

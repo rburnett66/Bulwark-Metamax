@@ -28,7 +28,7 @@
       }
     },
     "GRN-Trucks": {
-      "shape": "Trucks",
+      "shape": "Scout",
       "role": "Support",
       "rotation": 0,
       "layers": {
@@ -53,7 +53,7 @@
       }
     },
     "GRN-Tanks": {
-      "shape": "Tanks",
+      "shape": "Assault Tank",
       "role": "Bruiser",
       "rotation": 0,
       "layers": {
@@ -103,7 +103,7 @@
       }
     },
     "GRN-HeavyTanks": {
-      "shape": "Heavy Tanks",
+      "shape": "Heavy Tank",
       "role": "Juggernaut",
       "rotation": 0,
       "layers": {
@@ -128,7 +128,7 @@
       }
     },
     "GRN-Copters": {
-      "shape": "Copters",
+      "shape": "Gunship",
       "role": "Harasser",
       "rotation": 30,
       "layers": {
@@ -153,7 +153,7 @@
       }
     },
     "GRN-Planes": {
-      "shape": "Planes",
+      "shape": "Fighter",
       "role": "Striker",
       "rotation": 0,
       "layers": {
@@ -178,7 +178,7 @@
       }
     },
     "GRN-Missiles": {
-      "shape": "Missiles",
+      "shape": "Missile Flyer",
       "role": "Guided AA",
       "rotation": 0,
       "layers": {
