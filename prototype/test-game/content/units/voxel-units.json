@@ -1,1 +1,526 @@
-{"config":{"camera":{"azimuth":1,"elevation":37},"light":{"azimuth":179,"contrast":55}},"units":{"abrams":{"pack":{"id":"abrams","class":"ground","footprint":[64,64,8],"camera":{"azimuth":0,"elevation":69},"layerSpacing":2,"light":{"azimuth":93,"contrast":84},"parts":[{"id":"body","kind":"directional","facings":16,"atlas":"abrams.body.png","cell":[122,136],"cols":4,"pivot":[61,75],"zeroFacing":"+x"},{"id":"turret","kind":"stack","angles":64,"atlas":"abrams.turret.png","cell":[122,136],"cols":8,"pivot":[61,75],"mount":[-6,0,4]}],"shadow":{"kind":"ellipse","rx":32,"ry":14,"alt":0},"stats":{"speed":90,"turnRate":3,"turretRate":4}}},"SPA-U3":{"pack":{"id":"SPA-U3","class":"ground","footprint":[64,64,35],"scale":{"voxPerTile":32,"tiles":2},"camera":{"azimuth":46,"elevation":66},"layerSpacing":0.44,"voxel":{"height":1.12},"renderScale":2,"light":{"azimuth":179,"contrast":55},"parts":[{"id":"body","kind":"directional","facings":16,"atlas":"SPA-U3.body.png","cell":[216,242],"cols":4,"pivot":[108,134],"layers":28,"zeroFacing":"+x","shadowAtlas":"SPA-U3.body.shadow.png","shadowCell":[216,242],"shadowCols":4},{"id":"turret","kind":"stack","angles":64,"atlas":"SPA-U3.turret.png","cell":[216,242],"cols":8,"pivot":[108,134],"layers":8,"mount":[-12,0,27],"shadowAtlas":"SPA-U3.turret.shadow.png","shadowCell":[216,242],"shadowCols":8}],"shadow":{"kind":"baked","elevation":55,"dir":[0.7071067811865476,0.7071067811865476],"alt":0},"stats":{"speed":90,"turnRate":3,"turretRate":4},"collision":0.572,"model":{"nx":64,"ny":64,"nz":34,"src":"model/SPA-U3.json"}}},"GND-Tanks":{"pack":{"id":"GND-Tanks","class":"ground","footprint":[64,64,35],"scale":{"voxPerTile":32,"tiles":2},"camera":{"azimuth":1,"elevation":37},"layerSpacing":0.88,"voxel":{"height":1.12},"renderScale":2,"light":{"azimuth":179,"contrast":55},"parts":[{"id":"body","kind":"directional","facings":16,"atlas":"GND-Tanks.body.png","cell":[216,266],"cols":4,"pivot":[108,158],"layers":28,"zeroFacing":"+x","shadowAtlas":"GND-Tanks.body.shadow.png","shadowCell":[216,266],"shadowCols":4},{"id":"turret","kind":"stack","angles":64,"atlas":"GND-Tanks.turret.png","cell":[216,266],"cols":8,"pivot":[108,158],"layers":8,"mount":[-12,0,27],"shadowAtlas":"GND-Tanks.turret.shadow.png","shadowCell":[216,266],"shadowCols":8}],"shadow":{"kind":"baked","elevation":55,"dir":[0.7071067811865476,0.7071067811865476],"alt":0},"stats":{"speed":90,"turnRate":3,"turretRate":4},"collision":0.572}},"GND-HeavyTanks":{"pack":{"id":"GND-HeavyTanks","class":"ground","footprint":[64,64,24],"scale":{"voxPerTile":32,"tiles":2},"camera":{"azimuth":0,"elevation":30},"layerSpacing":0.92,"voxel":{"height":1.06},"renderScale":2,"light":{"azimuth":135,"contrast":100},"parts":[{"id":"body","kind":"directional","facings":16,"atlas":"GND-HeavyTanks.body.png","cell":[222,246],"cols":4,"pivot":[111,135],"layers":12,"zeroFacing":"+x"},{"id":"turret","kind":"stack","angles":64,"atlas":"GND-HeavyTanks.turret.png","cell":[222,246],"cols":8,"pivot":[111,135],"layers":12,"mount":[0,0,12]}],"shadow":{"kind":"ellipse","rx":32,"ry":14,"alt":0},"stats":{"speed":90,"turnRate":3,"turretRate":4}}},"GND-Artillery":{"pack":{"id":"GND-Artillery","class":"ground","footprint":[80,80,28],"scale":{"voxPerTile":32,"tiles":2.5},"camera":{"azimuth":0,"elevation":30},"layerSpacing":0.92,"voxel":{"height":1.06},"renderScale":2,"light":{"azimuth":135,"contrast":100},"parts":[{"id":"body","kind":"directional","facings":16,"atlas":"GND-Artillery.body.png","cell":[324,352],"cols":4,"pivot":[162,190],"layers":15,"zeroFacing":"+x"},{"id":"turret","kind":"stack","angles":64,"atlas":"GND-Artillery.turret.png","cell":[324,352],"cols":8,"pivot":[162,190],"layers":13,"mount":[-21,0,15]}],"shadow":{"kind":"ellipse","rx":40,"ry":18,"alt":0},"stats":{"speed":90,"turnRate":3,"turretRate":4}}},"GRN-Trucks":{"pack":{"id":"GRN-Trucks","class":"ground","footprint":[30,30,9],"scale":{"voxPerTile":32,"tiles":0.9375},"camera":{"azimuth":0,"elevation":30},"layerSpacing":2.24,"voxel":{"height":2.59},"renderScale":2,"light":{"azimuth":135,"contrast":14},"parts":[{"id":"body","kind":"directional","facings":16,"atlas":"GRN-Trucks.body.png","cell":[114,142],"cols":4,"pivot":[57,85],"layers":6,"zeroFacing":"+x"},{"id":"turret","kind":"stack","angles":64,"atlas":"GRN-Trucks.turret.png","cell":[114,142],"cols":8,"pivot":[57,85],"layers":3,"mount":[0,0,6]}],"shadow":{"kind":"ellipse","rx":15,"ry":7,"alt":0},"stats":{"speed":90,"turnRate":3,"turretRate":4}}},"GRN-Tanks":{"pack":{"id":"GRN-Tanks","class":"ground","footprint":[62,62,17],"scale":{"voxPerTile":32,"tiles":1.9375},"camera":{"azimuth":0,"elevation":30},"layerSpacing":1.8,"voxel":{"height":2.08},"renderScale":2,"light":{"azimuth":135,"contrast":14},"parts":[{"id":"body","kind":"directional","facings":16,"atlas":"GRN-Tanks.body.png","cell":[216,268],"cols":4,"pivot":[108,160],"layers":14,"zeroFacing":"+x"},{"id":"turret","kind":"stack","angles":64,"atlas":"GRN-Tanks.turret.png","cell":[216,268],"cols":8,"pivot":[108,160],"layers":3,"mount":[0,0,14]}],"shadow":{"kind":"ellipse","rx":31,"ry":14,"alt":0},"stats":{"speed":90,"turnRate":3,"turretRate":4}}}}}
+{
+  "config": {
+    "camera": {
+      "azimuth": 1,
+      "elevation": 37
+    },
+    "light": {
+      "azimuth": 179,
+      "contrast": 55
+    }
+  },
+  "units": {
+    "SPA-U3": {
+      "pack": {
+        "id": "SPA-U3",
+        "class": "ground",
+        "footprint": [
+          64,
+          64,
+          35
+        ],
+        "scale": {
+          "voxPerTile": 32,
+          "tiles": 2
+        },
+        "camera": {
+          "azimuth": 46,
+          "elevation": 66
+        },
+        "layerSpacing": 0.44,
+        "voxel": {
+          "height": 1.12
+        },
+        "renderScale": 2,
+        "light": {
+          "azimuth": 179,
+          "contrast": 55
+        },
+        "parts": [
+          {
+            "id": "body",
+            "kind": "directional",
+            "facings": 16,
+            "atlas": "SPA-U3.body.png",
+            "cell": [
+              216,
+              242
+            ],
+            "cols": 4,
+            "pivot": [
+              108,
+              134
+            ],
+            "layers": 28,
+            "zeroFacing": "+x",
+            "shadowAtlas": "SPA-U3.body.shadow.png",
+            "shadowCell": [
+              216,
+              242
+            ],
+            "shadowCols": 4
+          },
+          {
+            "id": "turret",
+            "kind": "stack",
+            "angles": 64,
+            "atlas": "SPA-U3.turret.png",
+            "cell": [
+              216,
+              242
+            ],
+            "cols": 8,
+            "pivot": [
+              108,
+              134
+            ],
+            "layers": 8,
+            "mount": [
+              -12,
+              0,
+              27
+            ],
+            "shadowAtlas": "SPA-U3.turret.shadow.png",
+            "shadowCell": [
+              216,
+              242
+            ],
+            "shadowCols": 8
+          }
+        ],
+        "shadow": {
+          "kind": "baked",
+          "elevation": 55,
+          "dir": [
+            0.7071067811865476,
+            0.7071067811865476
+          ],
+          "alt": 0
+        },
+        "stats": {
+          "speed": 90,
+          "turnRate": 3,
+          "turretRate": 4
+        },
+        "collision": 0.572,
+        "model": {
+          "nx": 64,
+          "ny": 64,
+          "nz": 34,
+          "src": "model/SPA-U3.json"
+        }
+      }
+    },
+    "GND-Tanks": {
+      "pack": {
+        "id": "GND-Tanks",
+        "class": "ground",
+        "footprint": [
+          64,
+          64,
+          35
+        ],
+        "scale": {
+          "voxPerTile": 32,
+          "tiles": 2
+        },
+        "camera": {
+          "azimuth": 1,
+          "elevation": 37
+        },
+        "layerSpacing": 0.88,
+        "voxel": {
+          "height": 1.12
+        },
+        "renderScale": 2,
+        "light": {
+          "azimuth": 179,
+          "contrast": 55
+        },
+        "parts": [
+          {
+            "id": "body",
+            "kind": "directional",
+            "facings": 16,
+            "atlas": "GND-Tanks.body.png",
+            "cell": [
+              216,
+              266
+            ],
+            "cols": 4,
+            "pivot": [
+              108,
+              158
+            ],
+            "layers": 28,
+            "zeroFacing": "+x",
+            "shadowAtlas": "GND-Tanks.body.shadow.png",
+            "shadowCell": [
+              216,
+              266
+            ],
+            "shadowCols": 4
+          },
+          {
+            "id": "turret",
+            "kind": "stack",
+            "angles": 64,
+            "atlas": "GND-Tanks.turret.png",
+            "cell": [
+              216,
+              266
+            ],
+            "cols": 8,
+            "pivot": [
+              108,
+              158
+            ],
+            "layers": 8,
+            "mount": [
+              -12,
+              0,
+              27
+            ],
+            "shadowAtlas": "GND-Tanks.turret.shadow.png",
+            "shadowCell": [
+              216,
+              266
+            ],
+            "shadowCols": 8
+          }
+        ],
+        "shadow": {
+          "kind": "baked",
+          "elevation": 55,
+          "dir": [
+            0.7071067811865476,
+            0.7071067811865476
+          ],
+          "alt": 0
+        },
+        "stats": {
+          "speed": 90,
+          "turnRate": 3,
+          "turretRate": 4
+        },
+        "collision": 0.572
+      }
+    },
+    "GND-HeavyTanks": {
+      "pack": {
+        "id": "GND-HeavyTanks",
+        "class": "ground",
+        "footprint": [
+          64,
+          64,
+          24
+        ],
+        "scale": {
+          "voxPerTile": 32,
+          "tiles": 2
+        },
+        "camera": {
+          "azimuth": 0,
+          "elevation": 30
+        },
+        "layerSpacing": 0.92,
+        "voxel": {
+          "height": 1.06
+        },
+        "renderScale": 2,
+        "light": {
+          "azimuth": 135,
+          "contrast": 100
+        },
+        "parts": [
+          {
+            "id": "body",
+            "kind": "directional",
+            "facings": 16,
+            "atlas": "GND-HeavyTanks.body.png",
+            "cell": [
+              222,
+              246
+            ],
+            "cols": 4,
+            "pivot": [
+              111,
+              135
+            ],
+            "layers": 12,
+            "zeroFacing": "+x"
+          },
+          {
+            "id": "turret",
+            "kind": "stack",
+            "angles": 64,
+            "atlas": "GND-HeavyTanks.turret.png",
+            "cell": [
+              222,
+              246
+            ],
+            "cols": 8,
+            "pivot": [
+              111,
+              135
+            ],
+            "layers": 12,
+            "mount": [
+              0,
+              0,
+              12
+            ]
+          }
+        ],
+        "shadow": {
+          "kind": "ellipse",
+          "rx": 32,
+          "ry": 14,
+          "alt": 0
+        },
+        "stats": {
+          "speed": 90,
+          "turnRate": 3,
+          "turretRate": 4
+        }
+      }
+    },
+    "GND-Artillery": {
+      "pack": {
+        "id": "GND-Artillery",
+        "class": "ground",
+        "footprint": [
+          80,
+          80,
+          28
+        ],
+        "scale": {
+          "voxPerTile": 32,
+          "tiles": 2.5
+        },
+        "camera": {
+          "azimuth": 0,
+          "elevation": 30
+        },
+        "layerSpacing": 0.92,
+        "voxel": {
+          "height": 1.06
+        },
+        "renderScale": 2,
+        "light": {
+          "azimuth": 135,
+          "contrast": 100
+        },
+        "parts": [
+          {
+            "id": "body",
+            "kind": "directional",
+            "facings": 16,
+            "atlas": "GND-Artillery.body.png",
+            "cell": [
+              324,
+              352
+            ],
+            "cols": 4,
+            "pivot": [
+              162,
+              190
+            ],
+            "layers": 15,
+            "zeroFacing": "+x"
+          },
+          {
+            "id": "turret",
+            "kind": "stack",
+            "angles": 64,
+            "atlas": "GND-Artillery.turret.png",
+            "cell": [
+              324,
+              352
+            ],
+            "cols": 8,
+            "pivot": [
+              162,
+              190
+            ],
+            "layers": 13,
+            "mount": [
+              -21,
+              0,
+              15
+            ]
+          }
+        ],
+        "shadow": {
+          "kind": "ellipse",
+          "rx": 40,
+          "ry": 18,
+          "alt": 0
+        },
+        "stats": {
+          "speed": 90,
+          "turnRate": 3,
+          "turretRate": 4
+        }
+      }
+    },
+    "GRN-Trucks": {
+      "pack": {
+        "id": "GRN-Trucks",
+        "class": "ground",
+        "footprint": [
+          30,
+          30,
+          9
+        ],
+        "scale": {
+          "voxPerTile": 32,
+          "tiles": 0.9375
+        },
+        "camera": {
+          "azimuth": 0,
+          "elevation": 30
+        },
+        "layerSpacing": 2.24,
+        "voxel": {
+          "height": 2.59
+        },
+        "renderScale": 2,
+        "light": {
+          "azimuth": 135,
+          "contrast": 14
+        },
+        "parts": [
+          {
+            "id": "body",
+            "kind": "directional",
+            "facings": 16,
+            "atlas": "GRN-Trucks.body.png",
+            "cell": [
+              114,
+              142
+            ],
+            "cols": 4,
+            "pivot": [
+              57,
+              85
+            ],
+            "layers": 6,
+            "zeroFacing": "+x"
+          },
+          {
+            "id": "turret",
+            "kind": "stack",
+            "angles": 64,
+            "atlas": "GRN-Trucks.turret.png",
+            "cell": [
+              114,
+              142
+            ],
+            "cols": 8,
+            "pivot": [
+              57,
+              85
+            ],
+            "layers": 3,
+            "mount": [
+              0,
+              0,
+              6
+            ]
+          }
+        ],
+        "shadow": {
+          "kind": "ellipse",
+          "rx": 15,
+          "ry": 7,
+          "alt": 0
+        },
+        "stats": {
+          "speed": 90,
+          "turnRate": 3,
+          "turretRate": 4
+        }
+      }
+    },
+    "GRN-Tanks": {
+      "pack": {
+        "id": "GRN-Tanks",
+        "class": "ground",
+        "footprint": [
+          62,
+          62,
+          17
+        ],
+        "scale": {
+          "voxPerTile": 32,
+          "tiles": 1.9375
+        },
+        "camera": {
+          "azimuth": 0,
+          "elevation": 30
+        },
+        "layerSpacing": 1.8,
+        "voxel": {
+          "height": 2.08
+        },
+        "renderScale": 2,
+        "light": {
+          "azimuth": 135,
+          "contrast": 14
+        },
+        "parts": [
+          {
+            "id": "body",
+            "kind": "directional",
+            "facings": 16,
+            "atlas": "GRN-Tanks.body.png",
+            "cell": [
+              216,
+              268
+            ],
+            "cols": 4,
+            "pivot": [
+              108,
+              160
+            ],
+            "layers": 14,
+            "zeroFacing": "+x"
+          },
+          {
+            "id": "turret",
+            "kind": "stack",
+            "angles": 64,
+            "atlas": "GRN-Tanks.turret.png",
+            "cell": [
+              216,
+              268
+            ],
+            "cols": 8,
+            "pivot": [
+              108,
+              160
+            ],
+            "layers": 3,
+            "mount": [
+              0,
+              0,
+              14
+            ]
+          }
+        ],
+        "shadow": {
+          "kind": "ellipse",
+          "rx": 31,
+          "ry": 14,
+          "alt": 0
+        },
+        "stats": {
+          "speed": 90,
+          "turnRate": 3,
+          "turretRate": 4
+        }
+      }
+    }
+  }
+}
