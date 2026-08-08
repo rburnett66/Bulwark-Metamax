@@ -140,15 +140,61 @@ function makeSandbox() {
 }
 
 /**
+ * A REAL IndexedDB, in memory, honouring the request/transaction event model idb() actually drives:
+ * open() returns a request whose onsuccess fires LATER (handlers are assigned after the call returns),
+ * a transaction's oncomplete fires after the store call, and the value comes off `request.result`.
+ *
+ * Opt-in, because the default stub deliberately never settles and several tests below depend on that —
+ * "assert on what happens BEFORE the first await" is the only way they can catch what they catch.
+ * `__idbGets` counts reads so a test can prove the card cache is not re-reading the store per render.
+ */
+function idbStub(seed) {
+  const data = new Map(Object.entries(seed || {}));
+  let gets = 0;
+  const later = (fn) => Promise.resolve().then(fn);
+  const store = {
+    put: (v, k) => { data.set(String(k), v); return {}; },
+    get: (k) => { gets++; return { result: data.get(String(k)) }; },
+    delete: (k) => { data.delete(String(k)); return {}; },
+    getAllKeys: () => ({ result: [...data.keys()] }),
+  };
+  const db = {
+    createObjectStore() {},
+    transaction: () => { const tx = { objectStore: () => store }; later(() => tx.oncomplete && tx.oncomplete()); return tx; },
+  };
+  return {
+    data, gets: () => gets,
+    api: { open: () => { const q = { result: db }; later(() => { if (q.onupgradeneeded) q.onupgradeneeded(); if (q.onsuccess) q.onsuccess(); }); return q; } },
+  };
+}
+
+/**
+ * An Image that actually resolves. `ok(src)` decides load vs error, so a test can serve
+ * content/units/voxel/<id>.body.png and 404 everything else — which is the whole point of the card
+ * chain: art comes from the repo, and a named-but-absent file must be DISTINGUISHABLE from no art.
+ */
+function imageStub(ok) {
+  return class {
+    constructor() { this.width = 64; this.height = 48; this.naturalWidth = 64; this.naturalHeight = 48; }
+    set src(v) { this._src = v; Promise.resolve().then(() => { if (ok(String(v))) { if (this.onload) this.onload(); } else if (this.onerror) this.onerror(new Error('404 ' + v)); }); }
+    get src() { return this._src; }
+  };
+}
+
+/**
  * boot the tool and hand it a model: a 16×16×8 hull ramp with one red accent stripe
  *
  * `opts.fetch` replaces the sandbox's 404-everything fetch BEFORE module scope runs, which is the only
  * window there is: initFactions() fires at the bottom of stack-forge.js and its fetches are in flight
  * before boot() returns. The faction tests need to both RECORD what was asked for and serve real content.
+ * `opts.idb` / `opts.images` do the same for the two stubs above, for the same reason.
  */
 function boot(opts = {}) {
   const sb = makeSandbox();
   if (opts.fetch) sb.fetch = opts.fetch;
+  let idb = null;
+  if (opts.idb) { idb = idbStub(opts.idb === true ? {} : opts.idb); sb.indexedDB = idb.api; }
+  if (opts.images) sb.Image = imageStub(opts.images === true ? () => true : opts.images);
   vm.createContext(sb);
   for (const f of ['../../src/data/factions.js', 'carve.js', 'select.js', 'palette.js', '../toolhead.js', 'stack-forge.js']) {
     vm.runInContext(readFileSync(DIR + f, 'utf8'), sb, { filename: f });
@@ -183,7 +229,7 @@ function boot(opts = {}) {
   // through this instead.
   const json = (code) => JSON.parse(vm.runInContext(`JSON.stringify(${code})`, sb));
   return {
-    run, json, sb,
+    run, json, sb, idb,
     click: (id) => run(`document.getElementById('${id}').onclick()`),
     filled: () => run(`(() => { let n = 0; for (const b of liveVOL('body')) if (b) n++; return n; })()`),
     painted: () => run(`(() => { let n = 0; for (const b of carveCache.body.m.PAINT) if (b) n++; return n; })()`),
@@ -702,30 +748,51 @@ test('FFF-2: a Carve button IS the explicit ask, and is one undo step for the wh
 // Every test below was mutation-checked against the code it protects — the fix reverted, the gate
 // confirmed red on that test and only that test. The mutations are named in each test.
 
-/** a fetch that RECORDS every url and serves canned bodies; anything unlisted 404s like the real thing */
-function contentFetch(bodies = {}) {
-  const seen = [];
-  const fetch = (url) => {
+/** a fetch that RECORDS every url and serves canned bodies; anything unlisted 404s like the real thing.
+ *  POSTs to /__ship are recorded as { path, png } and answered like the dev server, so a test can assert
+ *  WHERE a write landed — `shipped` is empty when there is no server, which is the deployed case. */
+function contentFetch(bodies = {}, opts = {}) {
+  const seen = [], shipped = [];
+  const fetch = (url, init) => {
     const u = String(url);
+    if (u === '/__ship') {
+      if (!opts.ship) return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ ok: false, error: 'not a dev server' }) });
+      const req = JSON.parse(init.body);
+      shipped.push({ path: req.path, png: !!req.b64, bytes: (req.b64 || '').length });
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, path: req.path, bytes: (req.b64 || JSON.stringify(req.data || '')).length }) });
+    }
     seen.push(u);
     const hit = Object.keys(bodies).find((k) => u.endsWith(k));
     return Promise.resolve(hit
       ? { ok: true, status: 200, json: () => Promise.resolve(bodies[hit]) }
       : { ok: false, status: 404, json: () => Promise.resolve({}) });
   };
-  return { fetch, seen, asked: (name) => seen.some((u) => u.endsWith(name)) };
+  return { fetch, seen, shipped, asked: (name) => seen.some((u) => u.endsWith(name)) };
 }
 const unitsDoc = (faction, ids) => ({ faction, units: Object.fromEntries(ids.map((id) => [id, { role: 'r', shape: 's' }])) });
 /** let the sandbox's in-flight promise chains (initFactions -> loadShipped -> loadFaction) settle */
 const settle = async () => { for (let i = 0; i < 12; i++) await new Promise((r) => setTimeout(r, 0)); };
 
-/** make renderRoster's DOM survive the stub, and collect the cards it draws */
+/**
+ * make renderRoster's DOM survive the stub, and collect the cards it draws
+ *
+ * The cards are kept as LIVE ELEMENTS, not as a snapshot taken at appendChild. A thumbnail resolves
+ * asynchronously and repaints its own card afterwards (that is the design — renderRoster must not block
+ * on IndexedDB or an image decode), so a snapshot of innerHTML at append time would record the pending
+ * state forever and every card assertion would be about the placeholder.
+ *
+ * Canvas contexts RECORD their calls and still delegate to the sandbox 2d stub, so a test can ask what
+ * was actually drawn — "the card got an image" is a drawImage with the right source rect, not a state
+ * flag. getImageData reports a drawn block in the middle: the stub cannot rasterise, and cropToCard /
+ * keyBackground both read pixels back, so a canvas that reports nothing anywhere would make every
+ * pixel-reading path fail for a reason the code under test is not responsible for.
+ */
 function captureCards(t) {
   t.run(`
     (() => {
       const grid = document.getElementById('unitGrid');
       grid.__cards = [];
-      grid.appendChild = (c) => { grid.__cards.push({ id: c.dataset.uid, html: c.innerHTML }); };
+      grid.appendChild = (c) => { grid.__cards.push(c); };
       // renderRoster empties the grid before it draws; the collector has to empty with it, or every
       // faction you visit keeps the cards of the one before and a bucketing bug looks like a pass.
       let _html = '';
@@ -734,15 +801,35 @@ function captureCards(t) {
         set: (v) => { _html = v; if (v === '') grid.__cards.length = 0; },
         configurable: true,
       });
+      const mk = document.createElement.bind(document);      // the ORIGINAL — its 2d stub is the one we wrap
       document.createElement = () => {
-        const cv = { width: 0, height: 0, getContext: () => new Proxy({}, { get: () => () => undefined }) };
+        const ops = [], raw = mk().getContext('2d');
+        raw.getImageData = (x, y, w, h) => {
+          const d = new Uint8ClampedArray(Math.max(4, w * h * 4));
+          for (let yy = h >> 2; yy < h - (h >> 2); yy++) for (let xx = w >> 2; xx < w - (w >> 2); xx++) {
+            const i = (yy * w + xx) * 4; d[i] = 120; d[i + 1] = 130; d[i + 2] = 140; d[i + 3] = 255;
+          }
+          return { data: d, width: w, height: h };
+        };
+        const ctx = new Proxy(raw, {
+          get: (o, k) => (typeof k === 'string' && typeof o[k] === 'function'
+            ? (...a) => { ops.push([k].concat(a.filter((x) => typeof x === 'number'))); return o[k].apply(o, a); }
+            : o[k]),
+          set: (o, k, v) => { o[k] = v; return true; },
+        });
+        const cv = { width: 0, height: 0, __ops: ops, getContext: () => ctx, toDataURL: () => 'data:image/png;base64,iVBORw0KGgo=' };
+        const badge = { textContent: '', className: '' };
         return { dataset: {}, className: '', innerHTML: '', style: {}, onclick: null, appendChild() {},
-                 querySelector: () => cv,
+                 width: 0, height: 0, __ops: ops, __badge: badge, __cv: cv,
+                 getContext: () => ctx, toDataURL: () => 'data:image/png;base64,iVBORw0KGgo=',
+                 querySelector: (sel) => (sel === '.badge' ? badge : cv),
                  classList: { add() {}, remove() {}, toggle() {}, contains: () => false } };
       };
     })();
   `);
-  return () => t.json(`document.getElementById('unitGrid').__cards`);
+  return () => t.json(`document.getElementById('unitGrid').__cards.map(c => ({
+    id: c.dataset.uid, html: c.innerHTML, thumb: c.dataset.thumb || null,
+    badge: c.__badge.textContent, badgeCls: c.__badge.className, ops: c.__cv.__ops }))`);
 }
 
 test('GGG-6: opening System reads ALL THREE of its files, not the first one', async () => {
@@ -1001,4 +1088,322 @@ test('ROUND TRIP: a new unit in EVERY faction gets an id that resolves back to t
            document.getElementById('addUnit').onclick();`);
     assert.deepEqual(t.json('roster.map(u => u.id)'), [], `${f} has no prefix and must not fabricate an id`);
   }
+});
+
+// ── DDD-6: THE CARDS SHOW THE UNIT ────────────────────────────────────────────────────────────────
+// "Testing is very difficult without being able to see what is done" — every card was a grey box, so
+// the unit set was a wall of identical slots. The card drew `supplied[id].atlases.body`, an INLINE
+// data-URL atlas on the manifest entry; atlases left localStorage for IndexedDB and the shipped manifest
+// is descriptors-only, so that field is absent on essentially every entry and every card fell through to
+// the placeholder — while the badge went on saying "✓ supplied".
+//
+// Art lives in the REPO (owner 2026-08-07), so the chain is: the baked atlas in content/units/voxel/,
+// then a card image rendered from the voxel model and written to content/units/card/, then the source
+// slices, then honestly nothing. IndexedDB is read only for the artist's working state, never as the
+// home of art.
+//
+// Every test here was mutation-checked — the fix reverted, the gate confirmed red on that test alone.
+
+/** one VOL blob as the project serialises it. btoa/atob are identity in the sandbox, so a "b64" here is
+ *  a raw byte string — which is exactly what b64FromU8 produces under the same stubs. */
+function volBlob(foot, layers, fill) {
+  const N = foot * foot; let s = '';
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) s += String.fromCharCode(fill(x, y, z) ? 1 : 0);
+  return { foot, layers, edited: true, b64: s, paint: null, vcol: null };
+}
+const emptyViews = () => ({ top: null, side: null, front: null, back: null });
+/** a saved WIP project, the way snapshotProject writes one */
+function wipProject(id, o = {}) {
+  return { format: 'stackforge-project', version: 2, id,
+    vol: { body: 'vol' in o ? o.vol : volBlob(4, 2, (x, y, z) => z === 0 || x < 2), turret: null },
+    state: { foot: 4, bodyLayers: 2, turretLayers: 1, zScale: 1.8, lightAz: 135, lightK: 55, bakeEl: 45 },
+    images: { body: Object.assign(emptyViews(), o.images || {}), turret: emptyViews() },
+    flips: { body: {}, turret: {} }, rots: { body: {}, turret: {} }, keyTol: { body: {}, turret: {} },
+    polys: { body: {}, turret: {} }, picks: { body: {}, turret: {} },
+    vox: { body: null, turret: null } };
+}
+const packOf = (id) => ({ pack: { id, parts: [
+  { id: 'body', atlas: id + '.body.png', cell: [216, 266], cols: 4 },
+  { id: 'turret', atlas: id + '.turret.png', cell: [216, 266], cols: 8 } ] } });
+const opOf = (card, name) => (card.ops || []).find((o) => o[0] === name) || null;
+
+test('DDD-6: a BAKED unit card shows frame 0 of the atlas IN THE REPO', async () => {
+  // MUTATION: restore `supplied[u.id].atlases.body` as the only source -> the descriptor carries no
+  // inline atlas, so the card falls through to the placeholder and thumb reads 'empty'. That is the bug.
+  // MUTATION: drawImage(im, 0, 0, W, H) instead of the cell rect -> the source rect is the whole sheet
+  // and the card shows a 4x4 contact sheet of tiny units. Caught by the source-rect assertion.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks']) });
+  const t = boot({ fetch: net.fetch, idb: true, images: (s) => s === '../../content/units/voxel/GND-Tanks.body.png' });
+  await settle();
+  t.run(`shippedUnits = ${JSON.stringify({ 'GND-Tanks': packOf('GND-Tanks') })};`);
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+
+  const c = cards()[0];
+  assert.equal(c.id, 'GND-Tanks');
+  assert.equal(c.thumb, 'baked', 'the atlas is in the repo, so the card is baked — not a grey placeholder');
+  assert.match(c.badge, /baked/);
+  assert.equal(c.badgeCls, 'badge ok', 'the badge is DERIVED from what the picture resolved');
+  assert.ok(opOf(c, 'drawImage'), 'the card canvas must actually receive an image');
+
+  const cell = t.json(`thumbCache.get('unit:GND-Tanks').cv.__ops.find(o => o[0] === 'drawImage')`);
+  assert.deepEqual(cell.slice(1, 5), [0, 0, 216, 266],
+    'ONE FRAME: the source rect must be the pack cell at (0,0), not the whole atlas grid');
+});
+
+test('DDD-6: a unit with vox data shows the CARD IMAGE saved from it, and staleness is visible', async () => {
+  // The owner's rule: "if a unit has vox data then bake and save an image rendered from the vox".
+  // MUTATION: drop the card-image branch from thumbResolve -> the unit falls to its slices (or to
+  // 'empty' when it has none) and a carved unit still cannot be told apart at a glance.
+  const net = contentFetch({});
+  const t = boot({ fetch: net.fetch, images: (s) => s === '../../content/units/card/GND-Wip.png',
+    idb: { 'proj:GND-Wip': wipProject('GND-Wip') } });
+  await settle();
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+
+  const c = cards().find((x) => x.id === 'GND-Wip');
+  assert.ok(c, 'a unit with only a WIP still gets a card');
+  assert.equal(c.thumb, 'model stale', 'shown from the saved card image — and marked, because no cardSig says it depicts THIS model');
+  assert.match(c.badge, /stale/, 'a card image that may be out of date must say so, not pass for current');
+  assert.ok(opOf(c, 'drawImage'), 'the card canvas gets the image');
+
+  // stamp the signature the image was written with -> the same card is now fresh, and says nothing extra
+  t.run(`(async () => {
+    const p = await idb.get('proj:GND-Wip');
+    const m = loadManifest(); m.units = m.units || {};
+    m.units['GND-Wip'] = { cardSig: modelSigOf(p) };
+    localStorage.setItem(MANIFEST_KEY, JSON.stringify(m));
+    thumbInvalidate('GND-Wip');
+  })()`);
+  await settle();
+  t.run(`renderRoster()`); await settle();
+  const fresh = cards().find((x) => x.id === 'GND-Wip');
+  assert.equal(fresh.thumb, 'model', 'a card image that depicts the saved model is fresh');
+  assert.doesNotMatch(fresh.badge, /stale/);
+});
+
+test('DDD-6: a CARVED-but-never-baked unit with no card image falls back to its slices', async () => {
+  // The bigger half of the owner's problem: a unit being worked on has no atlas anywhere — not in the
+  // repo, not in a database — so without this it can never have a thumbnail at all.
+  // MUTATION: drop the slice branch -> thumb reads 'empty' and a unit with art loaded looks unauthored.
+  const net = contentFetch({});
+  const t = boot({ fetch: net.fetch, images: (s) => s.startsWith('data:'),   // the slice decodes; the repo has nothing
+    idb: { 'proj:GND-Slices': wipProject('GND-Slices', { vol: null, images: { top: 'data:image/png;base64,TOP' } }) } });
+  await settle();
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+
+  const c = cards().find((x) => x.id === 'GND-Slices');
+  assert.equal(c.thumb, 'source');
+  assert.match(c.badge, /slices/);
+  assert.equal(c.badgeCls, 'badge wip');
+  assert.ok(opOf(c, 'drawImage'), 'the card canvas gets the keyed slice');
+});
+
+test('DDD-6: the BASE TOP slice wins, and the fallback order is fixed', async () => {
+  // "Can be the top down slice image... If base top does not have a slice use any other existing slice."
+  // MUTATION: iterate views before parts, or start at 'side' -> the wrong slice is chosen and this fails.
+  const t = boot({ fetch: contentFetch({}).fetch, idb: true });
+  await settle();
+  const pick = (imgs, turret) => t.json(`thumbSliceOf(${JSON.stringify({
+    images: { body: Object.assign({ top: null, side: null, front: null, back: null }, imgs),
+              turret: Object.assign({ top: null, side: null, front: null, back: null }, turret || {}) } })})`);
+  assert.equal(pick({ top: 'T', side: 'S', front: 'F' }).view, 'top', 'body top is the first choice');
+  assert.deepEqual([pick({ side: 'S', front: 'F' }).part, pick({ side: 'S', front: 'F' }).view], ['body', 'side']);
+  assert.deepEqual([pick({ back: 'B' }).part, pick({ back: 'B' }).view], ['body', 'back']);
+  assert.deepEqual([pick({}, { side: 'TS' }).part, pick({}, { side: 'TS' }).view], ['turret', 'side']);
+  // THE ORDER IS PARTS-OUTER, VIEWS-INNER. Iterating views outer instead passes every assertion above
+  // and still picks the wrong slice here: the BODY's last view must beat the turret's first, because
+  // "any other existing slice" means any other slice OF THE UNIT before any slice of its turret.
+  assert.deepEqual([pick({ back: 'B' }, { top: 'TT' }).part, pick({ back: 'B' }, { top: 'TT' }).view], ['body', 'back'],
+    'the turret is searched only after EVERY body view, not view by view');
+  assert.equal(t.run(`thumbSliceOf({ images: { body: {}, turret: {} } })`), null, 'no slice anywhere is null, not a guess');
+});
+
+test('DDD-6: an atlas the repo does not have must NOT look like "never baked"', async () => {
+  // im.onerror was unhandled, so a missing or corrupt atlas silently left the placeholder while the
+  // badge went on reading "supplied" — the picture and the badge saying different things forever.
+  // MUTATION: return { state: 'empty' } instead of 'missing' -> a broken unit is indistinguishable from
+  // an unauthored slot, which is the state this ticket exists to separate.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks', 'GND-Ghost']) });
+  const t = boot({ fetch: net.fetch, idb: true, images: () => false });      // nothing loads
+  await settle();
+  t.run(`shippedUnits = ${JSON.stringify({ 'GND-Tanks': packOf('GND-Tanks') })};`);
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+
+  const broken = cards().find((x) => x.id === 'GND-Tanks'), blank = cards().find((x) => x.id === 'GND-Ghost');
+  assert.equal(broken.thumb, 'missing', 'named in the manifest, not in the repo');
+  assert.equal(broken.badgeCls, 'badge err');
+  assert.equal(blank.thumb, 'empty', 'nothing was ever authored here');
+  assert.notEqual(broken.thumb, blank.thumb, 'the two must not be the same card');
+  assert.notEqual(broken.badge, blank.badge, 'nor say the same thing');
+});
+
+test('DDD-6: a unit whose atlas is not in the repo still SHOWS the unit', async () => {
+  // This is the ordinary state of a unit baked in this browser and not yet shipped — the atlas is real,
+  // it is just not in the repository. Being unable to see it is the whole problem being fixed, so the
+  // card shows the unit from its slices AND keeps saying the art is not in the repo.
+  // MUTATION: `return { state: 'missing', cv: null }` without the fallback -> the picture is a red box
+  // and a unit the artist can see everywhere else is invisible on its own card.
+  // System, not FACTIONS[0]: boot renders the first faction's roster before the test can install
+  // shippedUnits, and a card resolved then is cached — so the manifest entry would arrive too late.
+  const net = contentFetch({ 'system.units.json': unitsDoc('System', ['SYS-Cannon']) });
+  const t = boot({ fetch: net.fetch, images: (s) => s.startsWith('data:'),   // the slice decodes, the repo atlas 404s
+    idb: { 'proj:SYS-Cannon': wipProject('SYS-Cannon', { images: { top: 'data:image/png;base64,TOP' } }) } });
+  await settle();
+  t.run(`shippedUnits = ${JSON.stringify({ 'SYS-Cannon': packOf('SYS-Cannon') })};`);
+  const cards = captureCards(t);
+  t.run(`loadFaction('System')`); await settle();
+
+  const c = cards()[0];
+  assert.equal(c.thumb, 'missing', 'the state still says the art is not in the repo');
+  assert.equal(c.badgeCls, 'badge err');
+  assert.ok(opOf(c, 'drawImage'), 'and the card still shows the unit');
+  assert.ok(opOf(c, 'strokeRect'), 'behind a warning frame, so it cannot read as a healthy card');
+});
+
+test('DDD-6: renderRoster is called constantly and must not re-read the store', async () => {
+  // renderRoster runs on nearly every state change. A per-render IndexedDB read per card would put a
+  // multi-megabyte structured clone on the path of every click.
+  // MUTATION: drop the thumbCache lookup (always thumbWant) -> reads climb with every render.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks']) });
+  const t = boot({ fetch: net.fetch, images: (s) => s.startsWith('data:'),
+    idb: { 'proj:GND-Tanks': wipProject('GND-Tanks', { images: { top: 'data:,T' } }) } });
+  await settle();
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  assert.equal(cards()[0].thumb, 'source');
+
+  // SETTLE BETWEEN RENDERS. In a tight loop only one resolve can ever be in flight (thumbBusy blocks
+  // the rest), so a cacheless build would still read once and the count would look fine. Each render
+  // has to be a genuinely independent opportunity to go back to the store.
+  const after = t.idb.gets();
+  for (let i = 0; i < 8; i++) { t.run(`renderRoster()`); await settle(); }
+  assert.equal(t.idb.gets(), after, 'eight more renders, ZERO more reads — the thumbnail is cached per id');
+  assert.equal(cards()[0].thumb, 'source', 'and the card still shows its picture');
+
+  // …and a card that IS out of date, rendered twice before the refresh lands, is read ONCE. renderRoster
+  // really does run twice in a tick — doAutosave calls it and so does the click handler that armed the
+  // autosave. MUTATION: drop the thumbBusy guard -> two reads for one card.
+  t.run(`thumbInvalidate('GND-Tanks'); renderRoster(); renderRoster();`);
+  await settle();
+  assert.equal(t.idb.gets(), after + 1, 'a dirtied card rendered twice in one tick resolves ONCE');
+});
+
+test('DDD-6: an unauthored slot is decided WITHOUT touching the store', async () => {
+  // A designed roster is mostly empty slots. Queueing a project read for each one would make opening a
+  // faction cost a store round-trip per card for cards that can never have a picture.
+  // MUTATION: drop the `!has && !wipIds.has(id)` short-circuit -> every empty slot queues a read.
+  // The served faction is deliberately NOT the one boot opens (FACTIONS[0]) — boot renders that roster
+  // before the test can take a baseline, so a count taken afterwards would already include its reads
+  // and the mutation would hide inside them.
+  const net = contentFetch({ 'system.units.json': unitsDoc('System', ['SYS-A', 'SYS-B', 'SYS-C']) });
+  const t = boot({ fetch: net.fetch, idb: true, images: () => false });
+  await settle();
+  assert.equal(t.idb.gets(), 0, 'test setup: the faction boot opened has no units, so nothing has been read');
+  const cards = captureCards(t);
+  t.run(`loadFaction('System')`); await settle();
+  assert.deepEqual(cards().map((c) => c.thumb), ['empty', 'empty', 'empty']);
+  assert.equal(t.idb.gets(), 0, 'three empty slots, ZERO reads — an empty slot is decided from wipIds alone');
+});
+
+test('DDD-6: the card image is written to the REPO, under card/ and never under voxel/', async () => {
+  // Art belongs in the repository, not in a database. content/units/card/<id>.png is a CARD artifact:
+  // it must not land in content/units/voxel/ where the game and pack.test.mjs would meet it.
+  // MUTATION: point CARD_SHIP_DIR at content/units/voxel/ -> the path assertion fails.
+  const net = contentFetch({}, { ship: true });
+  const t = boot({ fetch: net.fetch, idb: true });
+  await settle();
+  captureCards(t);   // its canvases report pixels — the sandbox cannot rasterise, and cropToCard reads them back
+  t.run(`state.foot = 16; state.bodyLayers = 8; volDirty.body = true; recarve();`);
+  assert.ok(t.run('!!bodyFaces'), 'test setup: there is a model in the editor');
+
+  t.run(`(async () => { window.__r = await saveCardImage('GND-Tanks', null); })();`);
+  await settle();
+  const res = t.json('window.__r');
+  assert.equal(res.ok, true, 'with a dev server the image is written');
+  assert.equal(res.path, 'content/units/card/GND-Tanks.png');
+  assert.deepEqual(net.shipped.map((s) => s.path), ['content/units/card/GND-Tanks.png']);
+  assert.ok(net.shipped[0].png, 'it is written as a PNG, not as JSON');
+  assert.ok(t.run(`(loadManifest().units || {})['GND-Tanks'].cardSig`), 'and it stamps WHAT it depicts');
+});
+
+test('DDD-6: with no dev server the card image is NOT claimed to be saved', async () => {
+  // /__ship is the only write path and the deployed site has no POST endpoint. Reporting a write that
+  // did not happen is how content goes missing quietly.
+  // MUTATION: swallow the shipFile rejection and return { ok: true } -> this fails.
+  const net = contentFetch({});                                  // no ship endpoint
+  const t = boot({ fetch: net.fetch, idb: true });
+  await settle();
+  captureCards(t);
+  t.run(`state.foot = 16; state.bodyLayers = 8; volDirty.body = true; recarve();
+         (async () => { window.__r = await saveCardImage('GND-Tanks', null); })();`);
+  await settle();
+  const res = t.json('window.__r');
+  assert.equal(res.ok, false);
+  assert.equal(res.kind, 'NOT WRITTEN');
+  assert.match(t.run(`cardImageNote(window.__r)`), /NOT written/i, 'and the save event says so');
+  assert.equal(t.run(`((loadManifest().units || {})['GND-Tanks'] || {}).cardSig || ''`), '',
+    'nothing was written, so nothing may be stamped as depicting it');
+});
+
+test('DDD-6: "Save all" on genuinely empty work WARNS instead of saving nothing', async () => {
+  // "If no slice image exists warn the user there is nothing to save during a save event." Save geometry
+  // already refused (doAutosave reports EMPTY); Save all went straight to doBake, baked an empty volume
+  // and reported a successful save of nothing.
+  // MUTATION: remove the svContentGate call from svAll -> quickSave runs and the manifest gains an entry.
+  const t = boot({ fetch: contentFetch({}).fetch, idb: true });
+  await settle();
+  t.run(`carveCache.body = null; carveCache.turret = null; volDirty.body = false; volDirty.turret = false;`);
+  const before = t.json('Object.keys(loadManifest().units || {})');
+  t.run(`openSaveModal('GND-Empty'); document.getElementById('svId').value = 'GND-Empty';
+         document.getElementById('svAll').onclick();`);
+  await settle();
+  assert.match(t.run(`document.getElementById('saveState').innerHTML`), /NOTHING TO SAVE/);
+  assert.deepEqual(t.json('Object.keys(loadManifest().units || {})'), before, 'and nothing was written');
+});
+
+test('DDD-6: the "nothing to save" warning must not fire on vox, carved geometry or paint', async () => {
+  // A unit can legitimately have NO slices and still be real work. The gate is projectHasContent —
+  // the same test the autosave uses, not a second copy of the rule beside it.
+  // MUTATION: gate on `p.images` alone -> a hand-carved or imported unit is refused, which is worse
+  // than the bug being fixed.
+  const t = boot({ fetch: contentFetch({}).fetch, idb: true });
+  await settle();
+  const gate = () => t.json(`(() => { const g = svContentGate('GND-Tanks'); return { ok: g.ok }; })()`);
+
+  t.run(`volDirty.body = false; volDirty.turret = false; carveCache.body.m.PAINT.fill(0);`);
+  assert.equal(gate().ok, false, 'a bare carve from art that is not loaded has nothing to write');
+
+  t.run(`volDirty.body = true;`);                                 // hand-carved geometry
+  assert.equal(gate().ok, true, 'hand-carved geometry is content, with or without slices');
+
+  t.run(`volDirty.body = false; carveCache.body.m.PAINT[0] = 1;`);   // paint only
+  assert.equal(gate().ok, true, 'paint is content');
+
+  t.run(`carveCache.body.m.PAINT.fill(0); voxPart.body = { nx: 2, ny: 2, nz: 2, data: new Uint8Array(32) }; voxB64.body = 'x';`);
+  assert.equal(gate().ok, true, 'an imported .vox is content');
+});
+
+test('DDD-6: a shipped decor prop is not labelled WIP over its own baked art', async () => {
+  // The decor roster unioned the SHIPPED ids in but read `supplied` from localStorage alone, so a prop
+  // that is baked, shipped and in the repo showed "WIP" over its atlas — the badge and the picture
+  // disagreeing, one store over from the bug this ticket names.
+  // MUTATION: `supplied = loadDecorManifest().decor || {}` -> the prop reads WIP and this fails.
+  const net = contentFetch({ 'voxel-decor.json': { decor: { 'pine-tree-1': { pack: { id: 'pine-tree-1',
+    parts: [{ id: 'decor', atlas: 'pine-tree-1.decor.png', cell: [244, 394], cols: 1 }] },
+    atlases: { decor: 'data:image/png;base64,PINE' } } } } });
+  const t = boot({ fetch: net.fetch, idb: true, images: (s) => s.startsWith('data:') });
+  await settle();
+  const cards = captureCards(t);
+  t.run(`loadFaction(DECOR_SET)`); await settle();
+
+  const c = cards().find((x) => x.id === 'pine-tree-1');
+  assert.ok(c, 'the shipped prop has a card');
+  assert.equal(c.thumb, 'baked', 'its atlas ships inline in content/decor/voxel-decor.json — that is the repo');
+  assert.equal(c.badgeCls, 'badge ok');
+  const cell = t.json(`thumbCache.get('decor:pine-tree-1').cv.__ops.find(o => o[0] === 'drawImage')`);
+  assert.deepEqual(cell.slice(1, 5), [0, 0, 244, 394], 'one frame of the decor atlas');
 });

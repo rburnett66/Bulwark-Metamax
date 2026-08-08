@@ -192,11 +192,23 @@ function keyBackground(data, w, h, tol, picks) {
 // raster an image at native size and knock out its background → a canvas with clean alpha. Optional polygon
 // shapes ({ pts:[[x,y]…], cut }) then edit the result: KEEP shapes union into the subject (everything outside
 // all keeps is removed), CUT shapes punch holes. Keying runs FIRST (the flood needs the real image borders).
-function keyedCanvas(img, tol, polys, picks) {
-  const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
-  const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+// `maxPx` (optional) keys a DOWNSCALED copy instead of the native raster. Keying is a border flood fill
+// over every pixel, so a 2000x2000 reference photo is 4M pixels of work — right once for the editor,
+// ruinous forty times over for roster card thumbnails. At maxPx=152 that is ~17k pixels, ~250x less, and
+// it is the same algorithm on the same seeds: the card shows what the carve keys, not the background the
+// artist keyed out. Polygon shapes and eyedropper points are in SOURCE coordinates, so they scale with
+// the raster — otherwise a downscaled key would cut in the wrong place.
+// Omit it and nothing changes: every existing caller keys at native size.
+function keyedCanvas(img, tol, polys, picks, maxPx) {
+  const iw = img.width, ih = img.height;
+  const s = (maxPx && Math.max(iw, ih) > maxPx) ? maxPx / Math.max(iw, ih) : 1;
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(iw * s)); cv.height = Math.max(1, Math.round(ih * s));
+  const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, cv.width, cv.height);
+  if (s !== 1 && picks && picks.length) picks = picks.map((p) => (p.pt ? { col: p.col, pt: [p.pt[0] * s, p.pt[1] * s] } : p));
   const id = g.getImageData(0, 0, cv.width, cv.height); keyBackground(id.data, cv.width, cv.height, tol, picks); g.putImageData(id, 0, 0);
   if (polys && polys.length) {
+    if (s !== 1) polys = polys.map((q) => ({ cut: q.cut, pts: q.pts.map((p) => [p[0] * s, p[1] * s]) }));
     const trace = (list) => { g.beginPath();
       for (const q of list) { g.moveTo(q.pts[0][0], q.pts[0][1]); for (let i = 1; i < q.pts.length; i++) g.lineTo(q.pts[i][0], q.pts[i][1]); g.closePath(); } g.fill(); };
     const keeps = polys.filter((q) => !q.cut && q.pts.length >= 3), cuts = polys.filter((q) => q.cut && q.pts.length >= 3);
@@ -863,10 +875,17 @@ function buildFaces(partId, foot, layers) {
 // what turns the model from layers of 2D into a solid object. Orbit view, in-game inset and the bake all
 // draw through here, so the preview IS the shipped pixels.
 // part: { faces, az, gx?, gy?, zOff?, pivotFrac? } — gx/gy = ground-plane offset, zOff in layers.
-function renderParts(ctx, S, cx, groundY, el, parts) {
-  const eR = el * Math.PI / 180, se = Math.sin(eR), ce = Math.cos(eR), h = state.zScale;
-  const la = state.lightAz * Math.PI / 180, Lx = Math.cos(la), Ly = -Math.sin(la);
-  const k = clamp(state.lightK / 100, 0, 1), WALL = 0.52, RANGE = 0.46;
+//
+// `env` (optional) supplies { zScale, lightAz, lightK } for a model that is NOT the one in the editor —
+// a card thumbnail draws another unit's saved project, and that project has its own voxel height and
+// light. Reading those off `state` would either render it wrong or force a caller to mutate `state` and
+// put it back, and a half-restored `state` is exactly how the live view gets corrupted. Omit it and
+// nothing changes: every existing caller draws the live model at the live settings.
+function renderParts(ctx, S, cx, groundY, el, parts, env) {
+  const E = env || state;
+  const eR = el * Math.PI / 180, se = Math.sin(eR), ce = Math.cos(eR), h = E.zScale;
+  const la = E.lightAz * Math.PI / 180, Lx = Math.cos(la), Ly = -Math.sin(la);
+  const k = clamp(E.lightK / 100, 0, 1), WALL = 0.52, RANGE = 0.46;
   for (const P of parts) {
     const F = P.faces; if (!F) continue;
     const ca = Math.cos(P.az), sa = Math.sin(P.az);
@@ -1001,19 +1020,29 @@ function selCellState(g, cx, cy) {
   return 0;
 }
 // assemble the current unit (body + mounted turret, honouring the part filter) and render it into a canvas
-function drawScene(meta, el, bodyAz, turretAz) {
+//
+// `opts.card` = render the UNIT and nothing else: both parts regardless of the part filter, and none of
+// the editor's overlays (the cyan selection outline, the FRONT/BACK/LEFT/RIGHT orientation tags, the
+// dimension box). The card image is an artifact written to the repo and looked at later, so a selection
+// the artist happened to have live, or a part filter they happened to be on, must not be baked into it.
+// Same scene assembly either way — mount height, ride height, turret pivot — so a card cannot drift from
+// what the orbit shows. Pass a target from mkTarget(), never voxMeta: this must not draw on the canvas
+// the live view is showing.
+function drawScene(meta, el, bodyAz, turretAz, opts) {
+  const card = !!(opts && opts.card);
   const ctx = meta.ctx; ctx.clearRect(0, 0, meta.W, meta.Hp);
   const mountDz = mountZOf(state.bodyLayers);
   // Drop the whole unit so its LOWEST FILLED VOXEL sits on the ground line. The turret moves with the
   // body by the same amount, or lowering the hull would leave the turret hanging where it was.
   const floorZ = bodyFloorZ;
-  const sel = gridSelSet();
+  const sel = card ? null : gridSelSet();
   const parts = [];
-  if (state.part !== 'turret') parts.push({ faces: bodyFaces, az: bodyAz, zOff: -floorZ, sel: sel && sel.part === 'body' ? sel.set : null });
-  if (state.part !== 'body') parts.push({ faces: turretFaces, az: turretAz, zOff: mountDz - floorZ,
+  if (card || state.part !== 'turret') parts.push({ faces: bodyFaces, az: bodyAz, zOff: -floorZ, sel: sel && sel.part === 'body' ? sel.set : null });
+  if (card || state.part !== 'body') parts.push({ faces: turretFaces, az: turretAz, zOff: mountDz - floorZ,
     gx: state.turretDx * Math.cos(bodyAz), gy: state.turretDx * Math.sin(bodyAz),
     pivotFrac: 0.5 + state.turretPivot / 100, sel: sel && sel.part === 'turret' ? sel.set : null });
   renderParts(ctx, meta.S, meta.cx, meta.groundY, el, parts);
+  if (card) return;
   // ORIENTATION MARKERS IN THE MAIN VIEW (owner 2026-08-05: "we have a matrix of conditions — turret,
   // base, left, right"). The grid view already labels its edges from its own toVox map; the orbit had
   // nothing, so which flank you are looking at was inferred rather than read. Projects the four world
@@ -4177,6 +4206,7 @@ Use 🚀 Ship manifest to write it to disk, then clear the browser copy.` +
   $('saveState').innerHTML = v.ok ? `<span class="lock">Saved "${built.pack.id}" ✓ (schema-valid)</span>` : 'Saved, but INVALID: ' + v.errors.join('; ');
   $('packJson').textContent = JSON.stringify(built.pack, null, 2);
   renderManifest();
+  thumbInvalidate(built.pack.id);
   renderRoster();        // flip this unit's card to "supplied ✓"
   renderScaleChart();    // the new unit joins the side-view scale chart
   return { ok: true, id: built.pack.id, chars: json.length, valid: v.ok };
@@ -4207,6 +4237,80 @@ const shipFile = async (path, payload) => {
   if (!d.ok) throw new Error(`${path}: ${d.error || 'unknown'}`);
   return d;
 };
+// ── THE CARD IMAGE (DDD-6) ────────────────────────────────────────────────────────────────────────
+// "If a unit has vox data then bake and save an image rendered from the vox" (owner 2026-08-07). ONE
+// frame of the model, at the bake tilt and facing 0 so it reads the way the atlas frame it stands in for
+// would, cropped to the unit and written to the REPO — art belongs in the repository, not in a database.
+//
+// It is deliberately NOT under content/units/voxel/ and is never named by a pack's parts[]: the game
+// never loads it, so it cannot reach loader.js, pack.test.mjs or the atlas-size gate. It is a picture of
+// a unit for a person to look at.
+//
+// Rendered through drawScene — ONE scene — into a throwaway target from mkTarget(). bakeAngleCache
+// renders N frames into PIXI render textures and is far too heavy for this; and passing a fresh target
+// rather than voxMeta is what keeps the live orbit canvas untouched.
+/** crop a rendered target to its drawn pixels and fit that into a W×H card canvas. */
+function cropToCard(src, W, H) {
+  const g0 = src.getContext('2d', { willReadFrequently: true });
+  const d = g0.getImageData(0, 0, src.width, src.height).data;
+  let x0 = src.width, y0 = src.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < src.height; y++) for (let x = 0; x < src.width; x++) {
+    if (d[(y * src.width + x) * 4 + 3] <= 8) continue;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (x1 < x0) return null;                                        // nothing was drawn — an empty model
+  const sw = x1 - x0 + 1, sh = y1 - y0 + 1;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'); if (!g) return null;
+  const s = Math.min((W - 4) / sw, (H - 4) / sh), w = sw * s, h = sh * s;
+  g.drawImage(src, x0, y0, sw, sh, (W - w) / 2, (H - h) / 2, w, h);
+  return cv;
+}
+/** Bake the card image for the unit CURRENTLY IN THE EDITOR and write it to the repo.
+ *  `p` is the project snapshot the save just wrote, so the signature describes exactly what was saved.
+ *  Returns a result object — never throws, and never claims a write that did not happen. */
+async function saveCardImage(id, p) {
+  let sig = '';
+  try { sig = modelSigOf(p || snapshotProject(id)); } catch (e) { return { ok: false, kind: 'SIG FAILED', detail: (e && e.message) || String(e) }; }
+  if (!sig) return { ok: false, kind: 'NO VOX', detail: 'the model has no filled voxels — the card falls back to the slices' };
+  if (!bodyFaces) return { ok: false, kind: 'NO MODEL', detail: 'nothing is built in the editor' };
+  let url;
+  try {
+    const t = mkTarget(2, voxBounds.R, voxBounds.HT);             // 2 px per voxel, then downscaled into the card
+    drawScene(t, bakeElOf(), 0, 0, { card: true });               // both parts, no selection / orientation tags / dim box
+    const cv = cropToCard(t.cv, THUMB_W, THUMB_H);
+    if (!cv) return { ok: false, kind: 'NOTHING DRAWN', detail: 'the model rendered empty' };
+    url = cv.toDataURL('image/png');
+  } catch (e) { return { ok: false, kind: 'RENDER FAILED', detail: (e && e.message) || String(e) }; }
+  const path = CARD_SHIP_DIR + id + '.png';
+  try {
+    // /__ship IS THE ONLY WRITE PATH and it needs the dev server. Opened from GitHub Pages there is no
+    // POST endpoint, so this fails — and the card then falls back to the unit's slices for that session
+    // rather than pretending an image was saved.
+    const d = await shipFile(path, { b64: url });
+    // STAMP WHAT IT DEPICTS. cardSig lives beside the descriptor in the browser manifest, is read by
+    // exactly one consumer (thumbResolve) and is NOT shipped: freshness is a claim only the browser that
+    // wrote the image can make. Where it is unknown the card says "model" and claims nothing further.
+    try {
+      const m = loadManifest(); m.units = m.units || {};
+      m.units[id] = Object.assign({}, m.units[id], { cardSig: sig });
+      localStorage.setItem(MANIFEST_KEY, JSON.stringify(m));
+    } catch (e) { /* a full manifest costs freshness, not the image */ }
+    thumbInvalidate(id);
+    return { ok: true, path, bytes: d.bytes || 0 };
+  } catch (e) {
+    thumbInvalidate(id);
+    return { ok: false, kind: 'NOT WRITTEN', detail: (e && e.message) || String(e) };
+  }
+}
+// SAY WHAT HAPPENED TO THE PICTURE. A write that could not happen must be visible, not silent — the
+// deployed site has no /__ship, and "the card looks wrong" is otherwise unexplainable from the UI.
+function cardImageNote(r) {
+  if (r && r.ok) return `🖼 Card image → <b>${r.path}</b> (${(r.bytes / 1024).toFixed(0)}KB) — commit it with the unit.`;
+  if (r && r.kind === 'NO VOX') return `<span style="opacity:.7">🖼 No voxels yet — the card shows the source slices.</span>`;
+  return `<span style="color:#e0975f">⚠ Card image NOT written (${(r && r.kind) || 'unknown'}) — the card falls back to the slices.`
+    + ` /__ship needs the local dev server (python serve_prototype.py).</span>`;
+}
 $('shipManifest').onclick = async () => {
   // MERGE, NEVER REPLACE. Ship used to write loadManifest() wholesale, replacing the committed file with
   // whatever THIS browser held. A browser with 3 units silently deleted the other 4 from a 6-unit file --
@@ -4271,6 +4375,8 @@ $('shipManifest').onclick = async () => {
       lean.units[id] = { pack };                                      // descriptor only — no inline base64
     }
     const d = await shipFile('content/units/voxel-units.json', { data: lean });
+    for (const id of ids) thumbInvalidate(id);                    // the atlases are IN THE REPO now — the cards can show them
+    renderRoster();
     const before = JSON.stringify(m).length, after = JSON.stringify(lean).length;
     if (kept.length) console.info(`[stack-forge] kept ${kept.length} unit(s) already on disk: ${kept.join(', ')}`);
     $('projState').innerHTML = `🚀 Shipped <b>${ids.length}</b> unit(s)` + (kept.length ? `, kept <b>${kept.length}</b> already on disk` : '') + `: ${files} PNG(s)`
@@ -4608,9 +4714,17 @@ async function doAutosave() {
   const t = new Date().toLocaleTimeString();
   $('projState').textContent = `Autosaved ${decorId ? 'decor ' : ''}"${p.id}" · ${t}`;
   wipDirty = false;
-  if (!wipIds.has(p.id)) { wipIds.add(p.id); renderRoster(); }   // first save of a unit → its card appears now, not on the next reload
+  // THE CARD IS NOW OUT OF DATE. Marked dirty, not redrawn: an autosave fires 500ms after any input and
+  // rebuilding a thumbnail on every keystroke is exactly the cost this cache exists to avoid. The card
+  // refreshes on the next roster render — switching units, changing faction, saving — which is when
+  // anyone is actually looking at it. (Marked, not deleted, so an edit that did not touch the slice the
+  // card is drawn from revives the decoded canvas instead of re-keying it — see thumbResolve.)
+  thumbInvalidate(p.id);
+  const first = !(decorId ? decorWipIds : wipIds).has(p.id);
+  (decorId ? decorWipIds : wipIds).add(p.id);
+  if (first) renderRoster();                                     // first save of a unit → its card appears now, not on the next reload
   setWipStatus(`✓ saved ${t}`, 'saved');
-  return { ok: true, id: p.id, decor: !!decorId };
+  return { ok: true, id: p.id, decor: !!decorId, p };
 }
 if ($('wipSaveNow')) $('wipSaveNow').onclick = () => doAutosave();
 document.addEventListener('input', scheduleAutosave, true);
@@ -4675,6 +4789,12 @@ let curFaction = null, roster = [], noArtNote = '';   // noArtNote: why a roster
 // every slot as "needs art" and nothing loads. A localStorage-saved unit of the same id wins.
 let shippedUnits = {};
 const suppliedUnits = () => ({ ...shippedUnits, ...(loadManifest().units || {}) });
+// …and the same for decor. The decor roster unioned the SHIPPED ids in but drew `supplied` from
+// localStorage alone, so every prop that exists only on disk — which is all of them, the decor atlas is
+// far too big for localStorage — showed "● WIP" over art that is baked, shipped and in the repo. That is
+// exactly the badge-disagrees-with-the-picture failure this ticket is about, one store over.
+let shippedDecor = {};
+const suppliedDecor = () => ({ ...shippedDecor, ...(loadDecorManifest().decor || {}) });
 async function loadShipped() {
   try { const d = await (await fetch('../../content/units/voxel-units.json')).json(); shippedUnits = d.units || {}; } catch (e) { shippedUnits = {}; }
 }
@@ -4692,14 +4812,20 @@ if (typeof ToolHead !== 'undefined') ToolHead.mount({
   ],
   status: 'no unit loaded',
 });
-// Ids that have an editable WIP in IndexedDB. Kept as a plain Set because renderRoster is synchronous;
-// refreshed whenever the set can have changed, never read straight from idb mid-render.
-const wipIds = new Set();
+// Ids that have an editable WIP in IndexedDB. Kept as plain Sets because renderRoster is synchronous;
+// refreshed whenever the set can have changed, never read straight from idb mid-render. The card path
+// reads these to decide, WITHOUT touching IndexedDB, that a slot is genuinely empty — which is most of
+// a roster, and is what keeps renderRoster from queueing a project read per designed-but-unauthored slot.
+const wipIds = new Set(), decorWipIds = new Set();
 async function refreshWipIds() {
   try {
     const keys = (await idb.keys()) || [];
-    wipIds.clear();
-    for (const k of keys) if (typeof k === 'string' && k.startsWith('proj:')) wipIds.add(k.slice(5));
+    wipIds.clear(); decorWipIds.clear();
+    for (const k of keys) {
+      if (typeof k !== 'string') continue;
+      if (k.startsWith('proj:')) wipIds.add(k.slice(5));
+      else if (k.startsWith('decor:')) decorWipIds.add(k.slice(6));
+    }
   } catch (e) { /* no store yet — the roster simply shows packs only */ }
 }
 async function initFactions() {
@@ -4757,9 +4883,10 @@ async function loadFaction(name) {
   if ($('faction') && $('faction').value !== name) $('faction').value = name;
   if (name === DECOR_SET) {                                        // Terrain set = decor mode (body-only + revolve + decor: autosave)
     // roster = every decor the browser knows: baked (manifest) + IN-PROGRESS WIP (IndexedDB decor:*)
-    const dm = loadDecorManifest().decor || {}, ids = new Set(Object.keys(dm));
-    try { const r = await fetch('../../content/decor/voxel-decor.json', { cache: 'no-store' }); if (r.ok) { const sh = await r.json(); for (const id of Object.keys((sh && sh.decor) || {})) ids.add(id); } } catch (e) { /* shipped file (disk truth, since localStorage may be full) */ }
-    try { const keys = (await idb.keys()) || []; for (const k of keys) if (typeof k === 'string' && k.startsWith('decor:')) ids.add(k.slice(6)); } catch (e) { /* no store */ }
+    try { const r = await fetch('../../content/decor/voxel-decor.json', { cache: 'no-store' }); if (r.ok) { const sh = await r.json(); shippedDecor = (sh && sh.decor) || {}; } } catch (e) { /* shipped file (disk truth, since localStorage may be full) */ }
+    const dm = suppliedDecor(), ids = new Set(Object.keys(dm));
+    await refreshWipIds();                                        // decorWipIds — so a prop with only a WIP is still a card, and an empty slot is still decided without a read
+    for (const id of decorWipIds) ids.add(id);
     roster = [...ids].map((id) => ({ id, role: dm[id] ? 'baked' : 'WIP', shape: '🌿', decor: true, wip: !dm[id] }));
     if (!editingDecor) {                                          // arriving fresh from a unit
       clearTimeout(autosaveTimer);
@@ -4816,9 +4943,251 @@ async function loadFaction(name) {
   }
   renderRoster();
 }
+// ── CARD THUMBNAILS (DDD-6) ───────────────────────────────────────────────────────────────────────
+// Every card was a grey box, so the unit set read as a wall of identical slots with no way to tell a
+// finished unit from an empty one without clicking it. The cause: the card drew
+// `supplied[id].atlases.body` — an INLINE data-URL atlas on the manifest entry. Atlases left
+// localStorage for IndexedDB (three units of inline base64 reached 4.2M chars and the write started
+// throwing) and the shipped manifest is descriptors-only, so that field is absent on essentially every
+// entry today and every card fell through to the placeholder. It also stretched the WHOLE atlas grid
+// into the thumbnail when it did find one, so a card showed sixteen tiny units rather than one.
+//
+// ART LIVES IN THE REPO, NOT IN A DATABASE (owner 2026-08-07). So a card resolves its picture from
+// content/**, and IndexedDB is consulted only for the artist's WORKING state (the slices and the voxel
+// model of a unit that has no art yet) — never as the home of art. The chain, in priority order:
+//
+//   1  content/units/voxel/<id>.body.png   the baked atlas, frame 0        -> baked
+//      (decor: the atlas embedded in content/decor/voxel-decor.json — still the repo, just inline)
+//   2  content/units/card/<id>.png         a card image rendered from the  -> model
+//      voxel model and written to the repo at save time (see saveCardImage)
+//   3  the BASE (body) TOP slice, keyed                                    -> source
+//   4  any other slice: body side, front, back, then turret top, side,     -> source
+//      front, back — first that exists wins
+//   5  nothing authored                                                    -> empty
+//
+// and one failure state that must never be mistaken for "never authored":
+//   *  the manifest names an atlas that is NOT in the repo                 -> missing
+//
+// A card's BADGE is derived from the state its thumbnail actually resolved, so the two cannot disagree.
+// The old badge read "✓ supplied" off the manifest while the picture was a grey box, and a corrupt
+// atlas (im.onerror was unhandled) left exactly that pairing permanently.
+const THUMB_W = 152, THUMB_H = 112;      // 2× the CSS box (76×56) — the grid upscales the canvas
+const THUMB_KEY_PX = 152;                // slices are keyed at CARD size, not photo size (see keyedCanvas)
+const THUMB_POOL = 3;                    // concurrent resolves — enough to hide latency, few enough to leave the main thread alone
+const UNIT_ATLAS_BASE = '../../content/units/voxel/';
+// The card image is a UNIT artifact only. Decor ships its atlas inline in content/decor/voxel-decor.json
+// the moment it is shipped, so a decor prop is either baked (and shows its atlas) or unshipped (and shows
+// its slices) — there is no window a card image would fill, and a read path nothing writes is the same
+// defect as a store nothing reads, pointing the other way.
+const UNIT_CARD_BASE = '../../content/units/card/';
+const CARD_SHIP_DIR = 'content/units/card/';
+// The one place a card's outcomes are spelled. `stale` rides on `model` as a modifier — a card image is
+// derived from a model the artist keeps editing, and a three-edits-ago picture that looks current is a
+// worse lie than a grey box.
+const THUMB_STATES = {
+  baked:   { badge: '✓ baked',       cls: 'ok'  },
+  model:   { badge: '◆ model',       cls: 'mdl' },
+  source:  { badge: '● slices',      cls: 'wip' },
+  empty:   { badge: 'needs art',     cls: 'no'  },
+  missing: { badge: '⚠ art missing', cls: 'err' },
+  pending: { badge: '…',             cls: 'no'  },
+};
+// key -> { state, cv, sig, dirty }. Session memory only. A thumbnail is DERIVED — it must not become a
+// persisted store, and the one thing that IS written (the card image) goes to the repo, not here.
+// ~68KB per entry at 152×112; a full nine-faction tour is a few MB.
+const thumbCache = new Map();
+const thumbBusy = new Map();             // key -> true while a resolve is in flight (never two for one card)
+const thumbEpoch = new Map();            // key -> generation, bumped on invalidate so an in-flight resolve cannot write back stale art
+let thumbLive = [];                      // the cards on screen right now, so a late resolve can find its card
+const thumbQueue = []; let thumbRunning = 0;
+const thumbKey = (id, decorSet) => (decorSet ? 'decor:' : 'unit:') + id;
+const thumbEpochOf = (key) => thumbEpoch.get(key) || 0;
+// STALE, NOT DELETED. Invalidation keeps the entry so the next resolve can compare signatures and revive
+// the already-decoded canvas when the art did not actually change — most autosaves change geometry, not
+// the slice the card is drawn from, and re-keying an image for nothing is the expensive half.
+function thumbInvalidate(id) {
+  for (const key of [thumbKey(id, false), thumbKey(id, true)]) {
+    thumbEpoch.set(key, thumbEpochOf(key) + 1);
+    const hit = thumbCache.get(key); if (hit) hit.dirty = true;
+  }
+}
+function thumbPump() {
+  while (thumbRunning < THUMB_POOL && thumbQueue.length) {
+    const job = thumbQueue.shift(); thumbRunning++;
+    Promise.resolve().then(job).then(() => { thumbRunning--; thumbPump(); }, () => { thumbRunning--; thumbPump(); });
+  }
+}
+/** decode a URL into an <img>, or null. A 404/corrupt file rejects — im.onerror used to be unhandled. */
+const thumbImage = (url) => loadImgURL(url).then((im) => im, () => null);
+/** the atlas source named for this card, and the cell to cut frame 0 out of. */
+function thumbAtlasOf(id, decorSet, entry) {
+  const part = decorSet ? 'decor' : 'body';
+  const pack = entry && (entry.pack || entry);
+  const pt = pack && pack.parts && pack.parts.find ? pack.parts.find((q) => q.id === part) : null;
+  const inline = entry && entry.atlases ? entry.atlases[part] : null;
+  const url = inline || (pt && pt.atlas && !decorSet ? UNIT_ATLAS_BASE + pt.atlas : null);
+  return { url, cell: pt && pt.cell ? pt.cell : null };
+}
+/** WHAT THE MODEL IS, as a short string. Changes whenever a voxel, its colour or its authorship does —
+ *  so it can decide whether a saved card image still depicts the saved model. '' = no voxels at all. */
+function modelSigOf(p) {
+  let out = '', any = false;
+  const hs = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return (h >>> 0).toString(36); };
+  for (const part of ['body', 'turret']) {
+    const v = p && p.vol && p.vol[part];
+    if (!v || !v.b64) { out += '|-'; continue; }
+    let A = null; try { A = u8FromB64(v.b64); } catch (e) { out += '|?'; continue; }
+    let n = 0; for (let i = 0; i < A.length; i++) if (A[i]) n++;
+    if (n) any = true;
+    out += '|' + v.foot + 'x' + v.layers + ':' + n + ':' + hs(v.b64) + (v.vcol ? ':' + hs(v.vcol) : '') + (v.paint ? ':' + hs(v.paint) : '');
+  }
+  return any ? out : '';
+}
+/** the first slice this project actually has, in a fixed order: body top first (the owner's rule), then
+ *  the rest of the body, then the turret. Returns the raw source URL plus everything needed to key it. */
+const THUMB_SLICES = [];
+for (const part of ['body', 'turret']) for (const view of ['top', 'side', 'front', 'back']) THUMB_SLICES.push([part, view]);
+function thumbSliceOf(p) {
+  for (const [part, view] of THUMB_SLICES) {
+    const url = p && p.images && p.images[part] ? p.images[part][view] : null;
+    if (!url) continue;
+    return { part, view, url,
+      flip: (p.flips && p.flips[part] && p.flips[part][view]) || { h: false, v: false },
+      rot: (p.rots && p.rots[part] && p.rots[part][view]) || 0,
+      tol: (p.keyTol && p.keyTol[part] && p.keyTol[part][view]) || 75,
+      polys: (p.polys && p.polys[part] && p.polys[part][view]) || null,
+      picks: (p.picks && p.picks[part] && p.picks[part][view]) || [] };
+  }
+  return null;
+}
+/** an image fitted, letterboxed, into a fresh THUMB_W×THUMB_H canvas. srcRect cuts one atlas frame. */
+function thumbCanvasOf(im, srcRect) {
+  const cv = document.createElement('canvas'); cv.width = THUMB_W; cv.height = THUMB_H;
+  const g = cv.getContext('2d'); if (!g) return null;
+  const sw = srcRect ? srcRect[0] : (im.width || im.naturalWidth || 1), sh = srcRect ? srcRect[1] : (im.height || im.naturalHeight || 1);
+  const s = Math.min(THUMB_W / sw, THUMB_H / sh), w = sw * s, h = sh * s;
+  g.imageSmoothingEnabled = false;
+  // FRAME 0, NOT THE SHEET. The old draw was drawImage(im, 0, 0, 76, 56) — the whole 4×4 (or 8-cell)
+  // atlas squeezed into the thumbnail, so a card that DID find its atlas showed a contact sheet.
+  g.drawImage(im, 0, 0, sw, sh, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h);
+  return cv;
+}
+/** a slice, flipped/rotated as the artist set it and keyed the way the carve keys it, as a card canvas. */
+function thumbSliceCanvas(im, sl) {
+  // Flip then rotate, matching renderView's display-space convention — a card that shows a unit upside
+  // down because the artist flipped the slice is not showing the unit.
+  const swap = !!(sl.rot % 180), fh = swap ? sl.flip.v : sl.flip.h, fv = swap ? sl.flip.h : sl.flip.v;
+  const flipped = (sl.flip.h || sl.flip.v) ? flipCanvas(im, fh, fv) : im;
+  const orient = sl.rot ? rotCanvas(flipped, sl.rot) : flipped;
+  return thumbCanvasOf(keyedCanvas(orient, sl.tol, sl.polys, sl.picks, THUMB_KEY_PX), null);
+}
+/** Resolve one card, once. Reads content/ for art and IndexedDB only for the artist's working state. */
+async function thumbResolve(id, decorSet, entry, prev) {
+  const atl = thumbAtlasOf(id, decorSet, entry);
+  if (atl.url) {
+    const im = await thumbImage(atl.url);
+    if (im) return { state: 'baked', cv: thumbCanvasOf(im, atl.cell), sig: 'atlas|' + atl.url.slice(0, 96) + '|' + atl.url.length };
+    // NAMED AND NOT THERE. This is the state that used to be indistinguishable from "never baked":
+    // im.onerror was unhandled, so a missing or corrupt atlas silently left the placeholder while the
+    // badge still claimed the unit was supplied. It is also the ordinary state of a unit baked in this
+    // browser and not yet shipped — the atlas is real, it is just not in the repo.
+    //
+    // So: keep the STATE (red badge, red frame, "art missing"), and still show the unit's picture from
+    // whatever else it has. Being unable to see a unit is the problem being fixed; a card that shows the
+    // unit AND says its art is not in the repo tells the truth twice, and the frame stops it reading as
+    // a healthy card.
+    const fb = await thumbFallback(id, decorSet, prev);
+    return { state: 'missing', cv: fb ? fb.cv : null, fbSig: fb ? fb.sig : null,
+      sig: 'missing|' + atl.url.length + '|' + (fb ? fb.sig : '-') };
+  }
+  const fb = await thumbFallback(id, decorSet, prev);
+  return fb || { state: 'empty', cv: null, sig: 'empty' };
+}
+/** Everything below the baked atlas: the saved card image, then the source slices. Shared, because a
+ *  unit whose atlas is missing from the repo needs the same picture as one that never had an atlas. */
+async function thumbFallback(id, decorSet, prev) {
+  const p = await idb.get((decorSet ? 'decor:' : 'proj:') + id).catch(() => null);
+  if (!p) return null;
+  // 2 — THE VOXEL MODEL. "If a unit has vox data then bake and save an image rendered from the vox"
+  // (owner 2026-08-07). Read literally: the image is produced ONCE and written to the repo, not
+  // re-rendered per roster draw. `vol` covers both kinds of vox data — an imported .vox is materialised
+  // into VOL on load ("VOL: edits reach an imported .vox") and a carve writes VOL directly — so "has vox
+  // data" is "VOL has filled voxels", which is the model the tool actually saves and ships.
+  const msig = decorSet ? '' : modelSigOf(p);
+  if (msig) {
+    const im = await thumbImage(UNIT_CARD_BASE + id + '.png');
+    if (im) {
+      // FRESH ONLY IF IT DEPICTS THIS MODEL. cardSig is stamped beside the descriptor when the image is
+      // written; a card image whose model has moved on is shown, and marked, never passed off as current.
+      const stamped = ((loadManifest().units || {})[id] || {}).cardSig || null;
+      return { state: 'model', cv: thumbCanvasOf(im, null), sig: 'card|' + msig, stale: stamped !== msig };
+    }
+    // vox but no card image in the repo — /__ship needs the dev server, so this is the normal state on
+    // the deployed site. Fall through to the slices rather than show nothing.
+  }
+  const sl = thumbSliceOf(p);
+  if (!sl) return null;
+  const sig = 'slice|' + sl.part + '.' + sl.view + '|' + sl.url.length + '|' + sl.flip.h + sl.flip.v + '|' + sl.rot
+    + '|' + sl.tol + '|' + (sl.polys ? JSON.stringify(sl.polys).length : 0) + '|' + sl.picks.length;
+  // THE SIGNATURE EARNS ITS KEEP HERE. An autosave fires 500ms after any input and invalidates the card,
+  // but most edits are geometry — the slice is untouched. Reviving the decoded, keyed canvas costs a
+  // string compare instead of an image decode plus a flood fill.
+  // `fbSig` is what the FALLBACK last produced. A 'missing' card's own sig also names the atlas that
+  // would not load, so comparing against that would never match and would re-key the slice on every
+  // refresh — the one case where the revive is most wanted, because that card is refreshed the most.
+  if (prev && prev.cv && (prev.fbSig || prev.sig) === sig) return { state: 'source', cv: prev.cv, sig };
+  const im = await thumbImage(sl.url);
+  if (!im) return { state: 'missing', cv: null, sig };
+  return { state: 'source', cv: thumbSliceCanvas(im, sl), sig };
+}
+/** paint a resolved (or pending) state onto a card: picture, badge and the card's own state marker. */
+function thumbPaint(card, res, u, decorSet) {
+  const spec = THUMB_STATES[res.state] || THUMB_STATES.empty;
+  card.dataset.thumb = res.state + (res.stale ? ' stale' : '');
+  const b = card.querySelector ? card.querySelector('.badge') : null;
+  if (b) { b.textContent = spec.badge + (res.stale ? ' ⟳ stale' : ''); b.className = 'badge ' + spec.cls; }
+  const cvs = card.querySelector ? card.querySelector('canvas') : null;
+  const g = cvs && cvs.getContext ? cvs.getContext('2d') : null;
+  if (!g) return;
+  g.clearRect(0, 0, THUMB_W, THUMB_H);
+  if (res.cv) { g.drawImage(res.cv, 0, 0, THUMB_W, THUMB_H); }
+  else {
+    g.fillStyle = res.state === 'missing' ? '#2a1420' : '#132234'; g.fillRect(0, 0, THUMB_W, THUMB_H);
+    g.fillStyle = res.state === 'missing' ? '#ff6b6b' : '#3c5670';
+    g.font = '18px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(res.state === 'missing' ? '⚠' : (u.shape || u.role || '?'), THUMB_W / 2, THUMB_H / 2);
+  }
+  // The failure and the staleness are drawn ON the picture, not only beside it — a badge can be missed
+  // at 8.5px, and "this looks current but is not" is the one failure a thumbnail makes worse.
+  if (res.state === 'missing' || res.stale) {
+    g.strokeStyle = res.state === 'missing' ? '#ff6b6b' : '#e0b060';
+    g.lineWidth = 4; g.strokeRect(2, 2, THUMB_W - 4, THUMB_H - 4);
+  }
+}
+/** queue a resolve for a card that has no cached thumbnail (or whose cache went dirty).
+ *  There is NO `if (prev && !prev.dirty) return` here. It looks like the obvious guard and it was
+ *  unreachable: renderRoster only calls this when the cache MISSED or when the entry is dirty, so the
+ *  condition can never be true. Mutation testing found it — a dead guard is the same defect as a store
+ *  nothing reads, and leaving one in makes the cache look protected in a place it is not.
+ *  `thumbBusy` is the guard that is real: it stops two renders in the same tick queueing the same card. */
+function thumbWant(key, id, decorSet, entry) {
+  if (thumbBusy.get(key)) return;
+  const prev = thumbCache.get(key);
+  const gen = thumbEpochOf(key);
+  thumbBusy.set(key, true);
+  thumbQueue.push(() => thumbResolve(id, decorSet, entry, prev)
+    .catch(() => ({ state: 'missing', cv: null, sig: 'threw' }))
+    .then((res) => {
+      thumbBusy.delete(key);
+      if (thumbEpochOf(key) !== gen) return;      // invalidated while in flight — do not cache what is already stale
+      thumbCache.set(key, res);
+      for (const L of thumbLive) if (L.key === key) thumbPaint(L.card, res, L.u, L.decorSet);
+    }));
+  thumbPump();
+}
 function renderRoster() {
   const decorSet = isDecorSet(), unassignedSet = isUnassignedSet();
-  const grid = $('unitGrid'), supplied = decorSet ? (loadDecorManifest().decor || {}) : suppliedUnits();
+  const grid = $('unitGrid'), supplied = decorSet ? suppliedDecor() : suppliedUnits();
   grid.innerHTML = ''; let n = 0;
   // THE ROSTER IS NOT THE WHOLE SET. This walked the fixed `roster` list only, so a unit baked and saved
   // under an id that is not on it got a manifest entry, an atlas and a WIP -- and no card. It looked as
@@ -4847,11 +5216,11 @@ function renderRoster() {
     .filter(belongsHere).sort()
     .map((id) => ({ id, role: decorSet ? 'prop' : (supplied[id] ? 'saved' : 'WIP'), wip: !supplied[id] }));
   const cards = [...roster, ...extras];
+  const live = [];
   for (const u of cards) {
     const has = !!supplied[u.id]; if (has) n++;
     const selId = decorSet ? editingDecor : $('uid').value;
     const card = document.createElement('div'); card.className = 'ucard' + (u.id === selId ? ' sel' : ''); card.dataset.uid = u.id;
-    const atlas = has && supplied[u.id].atlases ? (decorSet ? supplied[u.id].atlases.decor : supplied[u.id].atlases.body) : null;
     // STRIP ONLY A PREFIX THAT IS REAL. This was `.replace(/^[A-Za-z]+-/, '')` — it stripped anything
     // hyphen-shaped, so the orphan `SPA-U3` displayed as "U3" and read exactly like a healthy unit whose
     // faction was implied by the panel it sat in. A card now loses its prefix only when that prefix
@@ -4859,14 +5228,23 @@ function renderRoster() {
     // it cannot resolve to a unit def. (Decor always shows its full id — it matches the Unit Id field.)
     const fac = FAC.factionOfUnitId(u.id);
     const name = (decorSet || !fac) ? u.id : u.id.slice(fac.prefix.length + 1);
-    const badge = decorSet ? (has ? '✓ baked' : '● WIP') : (has ? '✓ supplied' : 'needs art');   // decor WIP is real saved work, not "needs art"
-    card.innerHTML = `<canvas width="76" height="56"></canvas><div class="un">${name}</div><div class="ur">${u.role || '—'}</div><div class="badge ${has ? 'ok' : 'no'}">${badge}</div>`;
-    const g = card.querySelector('canvas').getContext('2d');
-    if (atlas) { const im = new Image(); im.onload = () => { g.clearRect(0, 0, 76, 56); g.drawImage(im, 0, 0, 76, 56); }; im.src = atlas; }
-    else { g.fillStyle = '#132234'; g.fillRect(0, 0, 76, 56); g.fillStyle = '#3c5670'; g.font = '9px sans-serif'; g.textAlign = 'center'; g.fillText(u.shape || u.role || '?', 38, 32); }
+    card.innerHTML = `<canvas width="${THUMB_W}" height="${THUMB_H}"></canvas><div class="un">${name}</div><div class="ur">${u.role || '—'}</div><div class="badge no"></div>`;
+    // THE BADGE IS DERIVED FROM THE PICTURE. It used to be read off the manifest ("✓ supplied") while
+    // the picture came from a field that is no longer there, so the two said different things forever.
+    const key = thumbKey(u.id, decorSet);
+    live.push({ key, card, u, decorSet });
+    const hit = thumbCache.get(key);
+    if (hit) thumbPaint(card, hit, u, decorSet);
+    // AN EMPTY SLOT IS DECIDED WITHOUT TOUCHING THE STORE. No manifest entry and no WIP means there is
+    // nothing anywhere to draw — which is most of a designed roster — so those cards cost one fill and
+    // never queue a project read.
+    else if (!has && !(decorSet ? decorWipIds : wipIds).has(u.id)) thumbPaint(card, { state: 'empty' }, u, decorSet);
+    else { thumbPaint(card, { state: 'pending' }, u, decorSet); thumbWant(key, u.id, decorSet, supplied[u.id]); }
+    if (hit && hit.dirty) thumbWant(key, u.id, decorSet, supplied[u.id]);   // shown from cache, refreshed behind it
     card.onclick = decorSet ? () => loadDecorForEdit(u.id) : () => onCardClick(u.id);
     grid.appendChild(card);
   }
+  thumbLive = live;                                            // a late resolve repaints its own card, never the whole grid
   // THE NOTE AND THE COUNT ARE BOTH TRUE AT ONCE. The note used to REPLACE the count, so a faction with
   // no art file but units you had saved yourself showed cards and a line insisting there was nothing —
   // and the count's denominator was `roster.length`, which excludes extras, so a faction with two
@@ -5051,6 +5429,10 @@ const UNIT_FACTIONS = FACTIONS.filter((f) => !isPseudoSet(f));
 const svDests = (id, all) => {
   const d = [`proj:${id || '<id>'} (IndexedDB — voxels + slices)`, `bulwark:stackforge (descriptor)`];
   if (all) d.push(`atlas:${id || '<id>'} (IndexedDB — sprite sheets)`);
+  // The card image is written to the REPO by both save buttons, so the dialog names it. A dialog that
+  // states its destinations and then writes somewhere it did not name is the defect this list was
+  // introduced to end.
+  d.push(`${CARD_SHIP_DIR}${id || '<id>'}.png (repo — the card picture)`);
   return d;
 };
 const svShipDests = (id) => [`content/units/voxel/${id || '<id>'}.{body,turret}.png`, 'content/units/voxel-units.json'];
@@ -5156,8 +5538,12 @@ $('svGeom').onclick = async () => {
     if (!m.units[id]) m.units[id] = { pack: { id, class: state.cls, footprint: [state.foot, state.foot, state.bodyLayers], geometryOnly: true } };
     localStorage.setItem(MANIFEST_KEY, JSON.stringify(m));
     if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
+    // THE CARD PICTURE IS PART OF SAVING. A geometry save is exactly the case the owner is blocked on —
+    // a unit with a model and no bake — so this is where its picture gets made and written to the repo.
+    const img = await saveCardImage(id, r.p);
     closeSave(); renderRoster();
-    $('projState').innerHTML = `🧊 Geometry saved for <b>${id}</b> → proj:${id} (IndexedDB). Card created. Not baked — use <b>Save all</b> to ship sprites.`;
+    $('projState').innerHTML = `🧊 Geometry saved for <b>${id}</b> → proj:${id} (IndexedDB). Card created. Not baked — use <b>Save all</b> to ship sprites.`
+      + `<br>${cardImageNote(img)}`;
   } catch (e) { return saveFailed('GEOMETRY SAVE FAILED', (e && e.message) || String(e)); }
 };
 // EVERYTHING: bake, geometry, sprite sheets, manifest.
@@ -5165,6 +5551,12 @@ $('svAll').onclick = async () => {
   const id = ($('svId').value || '').trim();
   if (!id) return saveFailed('NO ID', 'Give the unit an id before saving.');
   const blocked = svBlockedByFaction(); if (blocked) return blocked;   // refuse BEFORE anything is baked
+  // NOTHING TO SAVE IS A WARNING, NOT A SILENT SUCCESS (owner 2026-08-07). "Save geometry" already
+  // refused an empty unit — doAutosave reports EMPTY and svGeom shouts — but "Save all" went straight
+  // to doBake, baked an empty volume, wrote a manifest entry and reported a successful save of nothing.
+  // The test for "empty" is projectHasContent, unchanged and NOT reimplemented here: a unit with no
+  // slices but an imported .vox, hand-carved geometry or paint is real work and is not blocked.
+  const gate = svContentGate(id); if (!gate.ok) return gate.fail;
   if (suppliedUnits()[id] && !confirm(`REPLACE the saved unit "${id}"?
 
 Its sprites and geometry are overwritten with the model currently in the editor.`)) return;
@@ -5172,9 +5564,23 @@ Its sprites and geometry are overwritten with the model currently in the editor.
   const r = await quickSave(id, !!$('embedModel').checked);       // bakes, writes atlases + manifest
   if (!r || !r.ok) return r;                                      // quickSave already shouted
   if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
+  const img = await saveCardImage(id, gate.p);
   renderRoster();
-  $('projState').innerHTML = ($('projState').textContent || '') + `  ·  🚀 Ship to write ${svShipDests(id).join(' + ')}.`;
+  $('projState').innerHTML = ($('projState').textContent || '') + `  ·  🚀 Ship to write ${svShipDests(id).join(' + ')}.`
+    + `<br>${cardImageNote(img)}`;
 };
+/** The one gate both save buttons can ask "is there anything here at all?". Snapshots ONCE and hands the
+ *  snapshot back so the caller does not serialise a per-voxel VOL blob twice for one save. */
+function svContentGate(id) {
+  let p;
+  try { p = snapshotProject(id); }
+  catch (e) { return { ok: true, p: null }; }                     // let the real save path report a snapshot failure in its own words
+  if (projectHasContent(p)) return { ok: true, p };
+  return { ok: false, p, fail: saveFailed('NOTHING TO SAVE',
+    `"${id}" has no slice art, no imported .vox, no carved geometry and no paint — there is nothing to `
+    + `write, so nothing was saved.\n\nLoad a Top / Side / Front slice into the BODY (or import a .vox), `
+    + `then save.`) };
+}
 // Clicking a card OPENS. It never saves — that lived here as a 'recommended' overwrite button and
 // destroyed a unit the owner meant to open. An EMPTY slot has nothing to open, so it goes straight to
 // the Save modal with the id prefilled, which is the only place a save can now begin.
@@ -5258,7 +5664,7 @@ async function openLoadModal() {
     if (wip.has(id)) {                                                 // delete the WIP project (falls back to the pack, or gone)
       const del = document.createElement('button'); del.className = 'ghost'; del.textContent = '🗑'; del.title = 'Delete this browser WIP project';
       del.style.cssText = 'width:auto;padding:6px 9px;margin:0;flex:0 0 auto';
-      del.onclick = async (e) => { e.stopPropagation(); if (!confirm(`Delete the work-in-progress project for "${id}"? (Its saved pack, if any, stays.)`)) return; await idb.del('proj:' + id); if (activeUnitId === id) localStorage.removeItem('bulwark:sf:last'); openLoadModal(); };
+      del.onclick = async (e) => { e.stopPropagation(); if (!confirm(`Delete the work-in-progress project for "${id}"? (Its saved pack, if any, stays.)`)) return; await idb.del('proj:' + id); wipIds.delete(id); thumbInvalidate(id); if (activeUnitId === id) localStorage.removeItem('bulwark:sf:last'); openLoadModal(); };
       row.appendChild(del);
     }
     list.appendChild(row);
