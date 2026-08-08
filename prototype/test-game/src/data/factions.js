@@ -41,21 +41,27 @@
    *   key      stable machine id — safe in filenames, URLs and object keys
    *   prefix   the id prefix its units actually use in tables.js (GND-Tanks, SPC-Planes…)
    *   name     display name, and the value in each unit def's `faction` field
-   *   file     content/units/<file>.units.json — null when no art file has been authored yet
+   *   files    EVERY content/units/<f>.units.json holding this faction's art. Empty when none is authored.
    *   voice    key into content/dialog/voicepacks.json and voice.js FACTIONS
    *   ordinal  1-based, matching the workbook faction id menu.js indexes by
+   *
+   * `files` IS A LIST BECAUSE THE CONTENT IS A LIST (GGG-6). This was a single `file`, and System has
+   * three — system.units.json (6 units), system-flak (3), system-base (2). One-file-per-faction was an
+   * assumption the content already contradicted, so the tool reached the first and SYS-Flak*, SYS-Base
+   * and SYS-Harvester — five units — were unauthorable. The game has always loaded all three, via
+   * content/units/index.json. Reality was right and the model was wrong; the model moved.
    */
   const FACTIONS = Object.freeze([
-    { key: 'ground',   prefix: 'GND', name: 'Ground / Powder', file: 'ground-powder',  voice: 'ground',    ordinal: 1 },
-    { key: 'air',      prefix: 'AIR', name: 'Air',             file: null,             voice: 'air',       ordinal: 2 },
-    { key: 'hightech', prefix: 'HTC', name: 'High Tech',       file: null,             voice: 'hightech',  ordinal: 3 },
-    { key: 'artillery',prefix: 'ART', name: 'Artillery',       file: null,             voice: 'artillery', ordinal: 4 },
-    { key: 'water',    prefix: 'WTR', name: 'Water',           file: null,             voice: 'water',     ordinal: 5 },
-    { key: 'arcane',   prefix: 'ARC', name: 'Arcane / Energy', file: null,             voice: 'arcane',    ordinal: 6 },
-    { key: 'space',    prefix: 'SPC', name: 'Space Tech',      file: null,             voice: 'space',     ordinal: 7 },
-    { key: 'dark',     prefix: 'DRK', name: 'Dark Energy',     file: null,             voice: 'dark',      ordinal: 8 },
-    { key: 'greenies', prefix: 'GRN', name: 'Greenies (Chem)', file: 'greenies-chem-', voice: 'greenies',  ordinal: 9 },
-  ].map(Object.freeze));
+    { key: 'ground',   prefix: 'GND', name: 'Ground / Powder', files: ['ground-powder'],  voice: 'ground',    ordinal: 1 },
+    { key: 'air',      prefix: 'AIR', name: 'Air',             files: [],                 voice: 'air',       ordinal: 2 },
+    { key: 'hightech', prefix: 'HTC', name: 'High Tech',       files: [],                 voice: 'hightech',  ordinal: 3 },
+    { key: 'artillery',prefix: 'ART', name: 'Artillery',       files: [],                 voice: 'artillery', ordinal: 4 },
+    { key: 'water',    prefix: 'WTR', name: 'Water',           files: [],                 voice: 'water',     ordinal: 5 },
+    { key: 'arcane',   prefix: 'ARC', name: 'Arcane / Energy', files: [],                 voice: 'arcane',    ordinal: 6 },
+    { key: 'space',    prefix: 'SPC', name: 'Space Tech',      files: [],                 voice: 'space',     ordinal: 7 },
+    { key: 'dark',     prefix: 'DRK', name: 'Dark Energy',     files: [],                 voice: 'dark',      ordinal: 8 },
+    { key: 'greenies', prefix: 'GRN', name: 'Greenies (Chem)', files: ['greenies-chem-'], voice: 'greenies',  ordinal: 9 },
+  ].map((f) => Object.freeze({ ...f, files: Object.freeze(f.files) })));
 
   // ARTILLERY HAS NO FILE ON PURPOSE. content/units/artillery.units.json exists but declares
   // faction "Ground / Powder" and contains only GND-* ids — its NAME contradicts its CONTENTS, and
@@ -68,7 +74,13 @@
    * pack or ordinal — it is the base, harvester, walls and towers. Kept separate rather than bolted into
    * the list above so `FACTIONS` can be trusted to mean "the nine the player picks between".
    */
-  const SYSTEM = Object.freeze({ key: 'system', prefix: 'SYS', name: 'System', file: 'system', voice: null, ordinal: null });
+  const SYSTEM = Object.freeze({
+    key: 'system', prefix: 'SYS', name: 'System', voice: null, ordinal: null,
+    // ALL THREE. content/units/index.json has always listed all three and the game loads all three;
+    // only the tool was reading one. Order matches index.json, and unitArt.js merges by id last-wins,
+    // so keep it — the ids are disjoint today but the order is the tie-break if they ever are not.
+    files: Object.freeze(['system', 'system-flak', 'system-base']),
+  });
 
   const ALL = Object.freeze([...FACTIONS, SYSTEM]);
 
@@ -86,10 +98,17 @@
     return i < 0 ? null : (BY_PREFIX.get(unitId.slice(0, i)) || null);
   }
 
-  /** content/units/<file>.units.json for a faction, or null when none is authored. */
-  function fileOf(faction) {
-    const f = typeof faction === 'string' ? (BY_NAME.get(faction) || BY_KEY.get(faction)) : faction;
-    return f && f.file ? `${f.file}.units.json` : null;
+  /**
+   * EVERY content/units/*.units.json holding this faction's art, in declaration order. `[]` when the
+   * faction has no authored art, and `[]` for anything unrecognised.
+   *
+   * THIS RETURNS A LIST, NOT A FILE, and that is the fix for GGG-6. Its predecessor `fileOf` returned
+   * one string, which forced every caller to believe a faction has at most one file — the same belief
+   * that made system-flak and system-base unreachable. A caller that takes [0] has reintroduced the bug.
+   */
+  function filesOf(faction) {
+    const f = find(faction);
+    return f && f.files ? f.files.map((n) => `${n}.units.json`) : [];
   }
 
   /** Lookup by any spelling — display name, key or prefix. The one entry point callers should need. */
@@ -102,7 +121,7 @@
   return {
     FACTIONS, SYSTEM, ALL,
     BY_KEY, BY_PREFIX, BY_NAME, BY_VOICE,
-    find, fileOf, factionOfUnitId,
+    find, filesOf, factionOfUnitId,
     NAMES: Object.freeze(FACTIONS.map((f) => f.name)),   // drop-in for the old FACTION_NAMES, same order
   };
 });

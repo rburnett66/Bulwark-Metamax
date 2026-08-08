@@ -4776,19 +4776,36 @@ $('projLoad').addEventListener('change', (e) => {
 // The Terrain set is a decor-only pseudo-faction: its roster comes from the DECOR manifest, cards LOAD a
 // prop for editing (never save), and everything routes through the isolated decor flow — no unit collision.
 const DECOR_SET = '🌿 Terrain (decor)';
+// ⚠ UNASSIGNED is the home for ids whose prefix resolves to NO faction — `abrams`, the orphan `SPA-U3`.
+// They used to appear under all nine factions at once (see renderRoster), which read as "this unit is in
+// multiple factions" when the truth is that it is in none. They need exactly one place to be, and they
+// must still be somewhere: content that is orphaned AND invisible is how orphans survive for months.
+const UNASSIGNED_SET = '⚠ Unassigned';
 const isDecorSet = () => curFaction === DECOR_SET;
+const isUnassignedSet = () => curFaction === UNASSIGNED_SET;
+// The two pseudo-sets are TOOL modes, not factions: neither has a prefix, a voice or a place in the
+// game's faction list, so neither belongs in factions.js. `isPseudoSet` is the one test for "this entry
+// in the dropdown is not a real faction" — every filter below reads it instead of comparing strings.
+const isPseudoSet = (name) => name === DECOR_SET || name === UNASSIGNED_SET;
 const FACTION_KEY = 'bulwark:sf:lastFaction';   // the set you were last working in
 // THE REGISTRY IS THE LIST. This was a hand-typed array that had to stay in step with tables.js,
 // menu.js and voice.js by hand — see src/data/factions.js for what that cost.
 const FAC = BulwarkFactions;
-const FACTIONS = [...FAC.NAMES, FAC.SYSTEM.name, DECOR_SET];
+// FAC.ALL is the nine playable factions plus System, in that order — so this no longer names 'System'
+// as a literal. It did (`[...FAC.NAMES, FAC.SYSTEM.name, …]`, and again in UNIT_FACTIONS), which is the
+// exact habit the registry exists to end: a display name spelled by hand in a second place.
+const FACTIONS = [...FAC.ALL.map((f) => f.name), DECOR_SET, UNASSIGNED_SET];
 const ROLES = ['Skirmisher', 'Support', 'Bruiser', 'Siege', 'Juggernaut', 'Harasser', 'Striker', 'Guided AA'];
 // prefixFor GUESSED the id prefix as name.slice(0,3).toUpperCase() and was wrong for SIX of the nine
 // factions — GRO/GND, HIG/HTC, WAT/WTR, SPA/SPC, DAR/DRK, GRE/GRN. Every unit the owner created in those
 // six got an id the game could never resolve; the orphan SPA-U3 pack is exactly that. It is a LOOKUP now,
 // and returns null rather than inventing a prefix for a faction that has none.
 const prefixFor = (name) => { const f = FAC.find(name); return f ? f.prefix : null; };
-let filesIndex = [], curFaction = null, roster = [], noArtNote = '';   // noArtNote: why a roster is empty, shown instead of invented slots
+// `filesIndex` used to live here: initFactions fetched content/units/index.json into it on every boot and
+// NOTHING ever read it. It was the input to the old substring-matching fileForFaction; once that became a
+// registry lookup the fetch was pure ceremony. Deleted rather than left as a store with no readers — that
+// is the same shape as the voxEdit bug the handler gate was built for.
+let curFaction = null, roster = [], noArtNote = '';   // noArtNote: why a roster is empty, shown instead of invented slots
 // SHIPPED units (the deployed manifest with baked art) are pulled in so the roster/Load list surface
 // units that exist in the game but were never saved in THIS browser — otherwise a fresh browser shows
 // every slot as "needs art" and nothing loads. A localStorage-saved unit of the same id wins.
@@ -4822,7 +4839,6 @@ async function refreshWipIds() {
   } catch (e) { /* no store yet — the roster simply shows packs only */ }
 }
 async function initFactions() {
-  try { filesIndex = (await (await fetch('../../content/units/index.json')).json()).factions || []; } catch (e) { filesIndex = []; }
   await loadShipped();
   await refreshWipIds();                                          // so the first roster already shows carved-but-unbaked units                                            // so "supplied ✓" + Load reflect deployed art
   $('faction').innerHTML = FACTIONS.map((f) => `<option>${f}</option>`).join('');
@@ -4835,14 +4851,17 @@ async function initFactions() {
   $('faction').value = want;
   loadFaction(want);
 }
-// Exactly one file, or explicitly none. This normalised the name, truncated it to FIVE characters and
-// took the first substring hit in filesIndex — so 'System' matched three files and stopped at the first,
-// leaving system-flak.units.json and system-base.units.json unreachable from the tool entirely (5 units
-// nobody could author), and 'Air' truncated to "air" would match any future file containing it anywhere.
-// A faction with no authored art now returns null and is REPORTED, instead of silently resolving to
-// somebody else's file — which is how Artillery came to display Ground/Powder units.
-function fileForFaction(name) {
-  return FAC.fileOf(name);
+// EVERY file the faction has, not the first one that matched. Two bugs died here. The original
+// normalised the name, truncated it to FIVE characters and took the first substring hit in the content
+// index — so 'System' matched three files and stopped at the first, and 'Air' truncated to "air" would
+// match any future file containing it anywhere. GGG-2 replaced that with a registry lookup, but the
+// registry still modelled ONE file per faction, so system-flak.units.json and system-base.units.json
+// stayed unreachable and SYS-Flak/-2/-3, SYS-Base and SYS-Harvester remained unauthorable (GGG-6).
+// The registry now declares a LIST and this returns all of it; a faction with no authored art returns
+// [] and is REPORTED, instead of silently resolving to somebody else's file — which is how Artillery
+// came to display Ground/Powder units.
+function filesForFaction(name) {
+  return FAC.filesOf(name);
 }
 async function loadFaction(name) {
   // LEAVING THE TERRAIN SET FOR UNITS. This flushed the decor and cleared editingDecor but left the decor's
@@ -4891,10 +4910,24 @@ async function loadFaction(name) {
     }
     renderRoster(); forceDecorBodyOnly(); return;
   }
-  const file = fileForFaction(name);
-  if (file) {
-    try { const d = await (await fetch('../../content/units/' + file)).json(); const u = d.units || {};
-      for (const id of Object.keys(u)) roster.push({ id, role: u[id].role || '', shape: u[id].shape || '' }); } catch (e) { /* fall through to slots */ }
+  if (name === UNASSIGNED_SET) {                                   // no file, no prefix — renderRoster fills it from the orphans
+    noArtNote = 'Ids whose prefix matches no faction. They resolve to no unit def, so the game can never '
+      + 'spawn them. Rename one to a real <prefix>-<name> (see the Save dialog) or delete it.';
+    renderRoster(); return;
+  }
+  // EVERY FILE, UNIONED. This read one file; System has three, so five units were unauthorable (GGG-6).
+  const files = filesForFaction(name);
+  const failed = [];
+  for (const f of files) {
+    try {
+      const r = await fetch('../../content/units/' + f);
+      if (!r || !r.ok) { failed.push(f); continue; }               // a 404 is a FAILURE, not an absence
+      const u = (await r.json()).units || {};
+      for (const id of Object.keys(u)) {
+        if (roster.some((x) => x.id === id)) continue;             // ids are disjoint today; last-wins if they ever are not
+        roster.push({ id, role: u[id].role || '', shape: u[id].shape || '' });
+      }
+    } catch (e) { failed.push(f); }
   }
   // NO ART FILE -> SAY SO. This fabricated eight slots named <PREFIX>-U1..U8 from a prefix that was wrong
   // for six of nine factions, and assigned the SAME string to role AND shape — every real unit has them
@@ -4903,7 +4936,16 @@ async function loadFaction(name) {
   // Now: an honest empty state. The roster stays empty and says why. (It cannot fall back to the unit
   // table — tables.js is an ES module and this tool is a classic script, so UNITS is not reachable here.
   // Whether those factions get real content files is GGG-4's decision, not something to paper over.)
-  if (!roster.length) {
+  //
+  // "DECLARED BUT DID NOT LOAD" IS NOT "NOT AUTHORED". The old catch swallowed a failed fetch and fell
+  // into the empty-state branch, so opening the tool from file://, offline, or against a half-deployed
+  // content/ told you Ground / Powder had "no authored art file yet" — pointing at content that does not
+  // exist while the real file sat on disk. A load failure now names the files that failed.
+  if (failed.length) {
+    noArtNote = `${name} — could not load ${failed.join(', ')}. `
+      + `${roster.length ? 'Some units are missing from this list.' : 'Its units cannot be listed.'} `
+      + `The file is DECLARED, so this is a load failure, not missing art — check the server and reload.`;
+  } else if (!roster.length) {
     const p = prefixFor(name);
     noArtNote = p
       ? `${name} — no authored art file yet. New units here will be ${p}-*.`
@@ -4912,7 +4954,7 @@ async function loadFaction(name) {
   renderRoster();
 }
 function renderRoster() {
-  const decorSet = isDecorSet();
+  const decorSet = isDecorSet(), unassignedSet = isUnassignedSet();
   const grid = $('unitGrid'), supplied = decorSet ? (loadDecorManifest().decor || {}) : suppliedUnits();
   grid.innerHTML = ''; let n = 0;
   // THE ROSTER IS NOT THE WHOLE SET. This walked the fixed `roster` list only, so a unit baked and saved
@@ -4920,18 +4962,40 @@ function renderRoster() {
   // though the save had failed. Anything supplied/saved the roster does not name is appended here, so
   // your own units show up beside the designed ones.
   const named = new Set(roster.map((u) => u.id));
+  // …BUT AN EXTRA BELONGS TO EXACTLY ONE SET. `supplied` is the WHOLE manifest, so every id the current
+  // faction's roster did not name appeared under EVERY faction. That is what the owner saw as "`abrams`
+  // seems to appear in multiple factions": it is in none of them. It is factionless, and the roster was
+  // showing factionless ids nine times over — `SPA-U3` too.
+  //
+  // The fix is BUCKETING, not filtering. Each extra goes under the faction its own prefix resolves to;
+  // anything with no recognised prefix goes to ⚠ Unassigned and nowhere else. Dropping them instead
+  // would hide orphans, and invisible orphaned content is already its own problem (FFF-7) — the whole
+  // reason extras exist is that a saved unit with no card looks like a failed save.
+  const belongsHere = (id) => {
+    if (decorSet) return true;                                     // the decor roster is already id-complete
+    const f = FAC.factionOfUnitId(id);
+    return unassignedSet ? !f : (!!f && f.name === curFaction);
+  };
   // A unit exists if it has a PACK **or** a WIP. The decor roster already unions decor:* from
   // IndexedDB; the unit roster only read the manifest, so a unit carved but not yet baked had no card —
   // and a card-click on that empty-looking slot opened Save and overwrote the WIP.
   const wip = [...wipIds].filter((id) => !named.has(id) && !supplied[id]);
-  const extras = [...Object.keys(supplied).filter((id) => !named.has(id)), ...wip].sort()
+  const extras = [...Object.keys(supplied).filter((id) => !named.has(id)), ...wip]
+    .filter(belongsHere).sort()
     .map((id) => ({ id, role: decorSet ? 'prop' : (supplied[id] ? 'saved' : 'WIP'), wip: !supplied[id] }));
-  for (const u of [...roster, ...extras]) {
+  const cards = [...roster, ...extras];
+  for (const u of cards) {
     const has = !!supplied[u.id]; if (has) n++;
     const selId = decorSet ? editingDecor : $('uid').value;
     const card = document.createElement('div'); card.className = 'ucard' + (u.id === selId ? ' sel' : ''); card.dataset.uid = u.id;
     const atlas = has && supplied[u.id].atlases ? (decorSet ? supplied[u.id].atlases.decor : supplied[u.id].atlases.body) : null;
-    const name = decorSet ? u.id : u.id.replace(/^[A-Za-z]+-/, '');   // decor shows its FULL id (matches the Unit Id field); units drop the faction prefix
+    // STRIP ONLY A PREFIX THAT IS REAL. This was `.replace(/^[A-Za-z]+-/, '')` — it stripped anything
+    // hyphen-shaped, so the orphan `SPA-U3` displayed as "U3" and read exactly like a healthy unit whose
+    // faction was implied by the panel it sat in. A card now loses its prefix only when that prefix
+    // resolves to a faction; an unrecognised id is shown IN FULL, which is the only on-card signal that
+    // it cannot resolve to a unit def. (Decor always shows its full id — it matches the Unit Id field.)
+    const fac = FAC.factionOfUnitId(u.id);
+    const name = (decorSet || !fac) ? u.id : u.id.slice(fac.prefix.length + 1);
     const badge = decorSet ? (has ? '✓ baked' : '● WIP') : (has ? '✓ supplied' : 'needs art');   // decor WIP is real saved work, not "needs art"
     card.innerHTML = `<canvas width="76" height="56"></canvas><div class="un">${name}</div><div class="ur">${u.role || '—'}</div><div class="badge ${has ? 'ok' : 'no'}">${badge}</div>`;
     const g = card.querySelector('canvas').getContext('2d');
@@ -4940,9 +5004,14 @@ function renderRoster() {
     card.onclick = decorSet ? () => loadDecorForEdit(u.id) : () => onCardClick(u.id);
     grid.appendChild(card);
   }
-  $('setState').innerHTML = noArtNote
-    ? `<b>${curFaction}</b> — <span style="color:var(--muted)">${noArtNote}</span>`
-    : `<b>${curFaction}</b> — <span class="lock">${n}/${roster.length}</span> ${decorSet ? 'decor' : 'supplied'}`;
+  // THE NOTE AND THE COUNT ARE BOTH TRUE AT ONCE. The note used to REPLACE the count, so a faction with
+  // no art file but units you had saved yourself showed cards and a line insisting there was nothing —
+  // and the count's denominator was `roster.length`, which excludes extras, so a faction with two
+  // designed units and two of your own read "4/2 supplied". Denominator is every card drawn; the note,
+  // when there is one, is appended rather than substituted.
+  const count = `<span class="lock">${n}/${cards.length}</span> ${decorSet ? 'decor' : 'supplied'}`;
+  $('setState').innerHTML = `<b>${curFaction}</b> — ${count}`
+    + (noArtNote ? `<br><span style="color:var(--muted)">${noArtNote}</span>` : '');
 }
 $('addUnit').onclick = async () => {
   if (isDecorSet()) {                                              // Terrain set: start a FRESH decor prop on a clean editor
@@ -5103,7 +5172,13 @@ let saveAsId = null;
 // 'I saved' names a location instead of one of four invisible stores.
 //   Save geometry — the editable unit (voxels + slices) and a descriptor, so the CARD EXISTS. No bake.
 //   Save all      — bake, then geometry + sprite sheets + manifest in one action.
-const UNIT_FACTIONS = FACTIONS.filter((f) => f !== 'System' && f !== DECOR_SET);   // the 9 real unit factions
+// EVERY SET THAT HAS A REAL PREFIX — the nine playable factions AND System. This excluded System by
+// spelling its display name as a literal, which was both a duplicate of the registry and wrong: SYS-*
+// units are real, authorable, and reachable from the left rail. Select System there and open this dialog
+// and NO option matched, so the <select> fell back to option[0] and the dialog silently claimed you were
+// saving a Ground / Powder unit. The Load modal had it worse — its dropdown then RE-LOADS whatever it
+// displays, so there was no way back to System from inside the dialog at all.
+const UNIT_FACTIONS = FACTIONS.filter((f) => !isPseudoSet(f));
 // PRINT WHAT IS ACTUALLY WRITTEN. This used to name content/units/<faction>.units.json — a file the tool
 // only ever READS. fileForFaction has exactly two callers: building the roster, and this line. Naming a
 // destination nothing writes is worse than naming none, because it is confidently wrong.
@@ -5114,9 +5189,51 @@ const svDests = (id, all) => {
 };
 const svShipDests = (id) => [`content/units/voxel/${id || '<id>'}.{body,turret}.png`, 'content/units/voxel-units.json'];
 
+// THE FACTION IS THE ID'S PREFIX — there is nowhere else for it to live. This tool writes proj:<id>,
+// bulwark:stackforge, atlas:<id>, content/units/voxel/<id>.{body,turret}.png and one shared
+// voxel-units.json; NOT ONE of those is per-faction. So this dialog's dropdown had nothing to write to,
+// and it wrote nothing — neither save button has ever read $('svFaction'). The note under it said
+// "Faction <X> tags the card", and it tagged nothing: the card is pushed onto whatever roster you happen
+// to be standing in. A control that does nothing while claiming otherwise is worse than no control, and
+// this one sits on the last gate before an id is committed.
+//
+// IT IS THAT GATE NOW. GGG-2 fixed the id PROPOSED by "+ Add unit" — but that prompt is editable and
+// this field is free text, so a Space Tech unit could still be saved as SPA-U3 simply by typing it. The
+// orphan the whole registry was built to prevent was still reachable through the primary save path.
+// Choosing a faction rewrites the id's prefix, and a mismatch now blocks the save outright.
+
+/** the id with its prefix replaced by that faction's: `SPA-U3` + Space Tech -> `SPC-U3`, `abrams` -> `SPC-abrams` */
+function svRePrefix(id, facName) {
+  const f = FAC.find(facName);
+  if (!f) return id;
+  const cur = FAC.factionOfUnitId(id);
+  // strip a REAL prefix by length; otherwise strip a prefix-SHAPED head (that is what SPA- is) so the
+  // repair for an orphan is its stem under the right prefix, not the whole broken id carried along.
+  const stem = cur ? id.slice(cur.prefix.length + 1) : id.replace(/^[A-Za-z]{2,5}-/, '');
+  return `${f.prefix}-${stem}`;
+}
+/** null when the id agrees with the chosen faction; otherwise WHY it does not, and what to use instead. */
+function svMismatch() {
+  const id = ($('svId').value || '').trim(), f = FAC.find($('svFaction').value);
+  if (!id || !f) return null;
+  const got = FAC.factionOfUnitId(id);
+  if (got && got.prefix === f.prefix) return null;
+  return got
+    ? `<b>${id}</b> is a ${got.name} id (<b>${got.prefix}-*</b>) but this dialog says <b>${f.name}</b>.`
+      + ` Select ${got.name} above, or save it as <b>${svRePrefix(id, f.name)}</b>.`
+    : `<b>${id}</b> carries no known faction prefix, so it can never resolve to a unit def — this is`
+      + ` exactly how SPA-U3 and abrams happened. ${f.name} units are <b>${f.prefix}-*</b>:`
+      + ` use <b>${svRePrefix(id, f.name)}</b>.`;
+}
 function openSaveModal(id) {
   const sel = $('svFaction');
-  sel.innerHTML = UNIT_FACTIONS.map((f) => `<option${f === curFaction ? ' selected' : ''}>${f}</option>`).join('');
+  // OPEN ON THE ID'S OWN FACTION, not on whatever panel you are standing in. Those differ precisely when
+  // something is wrong — the Load modal can put a SYS-* unit in the editor while the rail says Air — and
+  // in that case the id is the fact and the panel is not.
+  const want = (FAC.factionOfUnitId((id || $('uid').value || '').trim()) || {}).name
+    || (UNIT_FACTIONS.includes(curFaction) ? curFaction : UNIT_FACTIONS[0]);
+  sel.innerHTML = UNIT_FACTIONS.map((f) => `<option${f === want ? ' selected' : ''}>${f}</option>`).join('');
+  sel.value = want;
   $('svId').value = (id || $('uid').value || '').trim();
   svSyncPath();
   $('saveModal').hidden = false;
@@ -5125,14 +5242,31 @@ function svSyncPath() {
   const id = ($('svId').value || '').trim(), fac = $('svFaction').value;
   $('svPath').innerHTML = `Save writes → ${svDests(id, true).join('  ·  ')}`
     + `<br>Then <b>🚀 Ship</b> writes → ${svShipDests(id).join('  ·  ')}`
-    + `<br><span style="opacity:.7">Faction ${fac} tags the card; the tool does not write a per-faction file.</span>`;
-  const clash = !!suppliedUnits()[id];
-  $('svWarn').hidden = !clash;
-  if (clash) $('svWarn').innerHTML = `⚠ <b>${id}</b> already exists — saving REPLACES it.`;
+    + `<br><span style="opacity:.7">The tool writes no per-faction file — <b>${fac}</b> is carried by the`
+    + ` id's <b>${(FAC.find(fac) || {}).prefix || '?'}-</b> prefix, and that is the only thing the game reads.</span>`;
+  const bad = svMismatch(), clash = !!suppliedUnits()[id];
+  $('svWarn').hidden = !(bad || clash);
+  $('svWarn').innerHTML = [
+    bad ? `⛔ ${bad}` : '',
+    clash ? `⚠ <b>${id}</b> already exists — saving REPLACES it.` : '',
+  ].filter(Boolean).join('<br>');
+}
+/** the one place both save buttons check the id before anything is written. */
+function svBlockedByFaction() {
+  const bad = svMismatch();
+  if (!bad) return null;
+  return saveFailed('WRONG FACTION PREFIX', bad.replace(/<\/?b>/g, '')
+    + '\n\nNothing was written. Change the Faction dropdown (it rewrites the prefix for you) or edit the id.');
 }
 const closeSave = () => { $('saveModal').hidden = true; };
 $('svId').oninput = svSyncPath;
-$('svFaction').onchange = svSyncPath;
+// CHANGING THE FACTION REWRITES THE PREFIX. That is what makes this dropdown a control rather than a
+// label, and it is the one-click repair for an orphan: open SPA-U3, pick Space Tech, get SPC-U3.
+$('svFaction').onchange = () => {
+  const id = ($('svId').value || '').trim();
+  if (id) $('svId').value = svRePrefix(id, $('svFaction').value);
+  svSyncPath();
+};
 $('svCancel').onclick = closeSave;
 $('saveModal').addEventListener('click', (e) => { if (e.target === $('saveModal')) closeSave(); });
 // GEOMETRY ONLY: no bake, no sprites. Writes the editable unit and a descriptor stub so a card appears
@@ -5140,6 +5274,7 @@ $('saveModal').addEventListener('click', (e) => { if (e.target === $('saveModal'
 $('svGeom').onclick = async () => {
   const id = ($('svId').value || '').trim();
   if (!id) return saveFailed('NO ID', 'Give the unit an id before saving.');
+  const blocked = svBlockedByFaction(); if (blocked) return blocked;   // refuse BEFORE a card or a WIP exists
   $('uid').value = id; activeUnitId = id;
   try {
     // REPORT WHAT ACTUALLY HAPPENED. This awaited the autosave and then claimed "Card created" regardless
@@ -5163,6 +5298,7 @@ $('svGeom').onclick = async () => {
 $('svAll').onclick = async () => {
   const id = ($('svId').value || '').trim();
   if (!id) return saveFailed('NO ID', 'Give the unit an id before saving.');
+  const blocked = svBlockedByFaction(); if (blocked) return blocked;   // refuse BEFORE anything is baked
   if (suppliedUnits()[id] && !confirm(`REPLACE the saved unit "${id}"?
 
 Its sprites and geometry are overwritten with the model currently in the editor.`)) return;
@@ -5225,8 +5361,14 @@ async function openLoadModal() {
     sel.onchange = async () => { await loadFaction(sel.value); await openLoadModal(); };   // rebuilds `roster`, then relists
   }
   if (sel) {
-    sel.innerHTML = UNIT_FACTIONS.map((f) => `<option${f === curFaction ? ' selected' : ''}>${f}</option>`).join('');
-    if (curFaction && UNIT_FACTIONS.includes(curFaction)) sel.value = curFaction;
+    // IT MUST OFFER THE SET YOU ARE ACTUALLY IN, pseudo-sets included. UNIT_FACTIONS holds only real
+    // factions, so standing in 🌿 Terrain or ⚠ Unassigned left no option selected and the <select> fell
+    // back to option[0]: the dialog said "Ground / Powder" while listing something else entirely. This
+    // dropdown RE-LOADS whatever it displays, so that lie was one interaction away from becoming true —
+    // and there was no way back to the set you came from without closing the dialog.
+    const opts = (!curFaction || UNIT_FACTIONS.includes(curFaction)) ? UNIT_FACTIONS : [curFaction, ...UNIT_FACTIONS];
+    sel.innerHTML = opts.map((f) => `<option${f === curFaction ? ' selected' : ''}>${f}</option>`).join('');
+    if (curFaction) sel.value = curFaction;
   }
   const m = suppliedUnits();
   let projIds = [];

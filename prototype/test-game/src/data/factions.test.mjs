@@ -10,7 +10,7 @@
 //   - artillery.units.json declaring one faction and containing another's ids
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { UNITS, SYSTEM_UNITS } from './tables.js';
 
@@ -78,9 +78,9 @@ test('ORDER is preserved — menu.js indexes this list by a numeric workbook id'
 
 test('every declared content file exists on disk', () => {
   for (const f of F.ALL) {
-    if (!f.file) continue;
-    const rel = `units/${f.file}.units.json`;
-    assert.ok(existsSync(new URL(rel, CONTENT)), `${f.name} declares ${rel}, which does not exist`);
+    for (const rel of F.filesOf(f)) {
+      assert.ok(existsSync(new URL(`units/${rel}`, CONTENT)), `${f.name} declares ${rel}, which does not exist`);
+    }
   }
 });
 
@@ -88,15 +88,62 @@ test('a declared content file agrees with the faction that claims it', () => {
   // artillery.units.json declares faction "Ground / Powder" and holds GND-* ids. This is the check that
   // catches that class — a file whose name says one thing and whose contents say another.
   for (const f of F.ALL) {
-    if (!f.file) continue;
-    const doc = JSON.parse(readFileSync(new URL(`units/${f.file}.units.json`, CONTENT), 'utf8'));
-    assert.equal(doc.faction, f.name,
-      `${f.file}.units.json declares faction "${doc.faction}" but the registry assigns it to "${f.name}"`);
-    for (const id of Object.keys(doc.units || {})) {
-      assert.equal(id.slice(0, id.indexOf('-')), f.prefix,
-        `${f.file}.units.json contains ${id}, which is not a ${f.prefix}-* unit`);
+    for (const rel of F.filesOf(f)) {
+      const doc = JSON.parse(readFileSync(new URL(`units/${rel}`, CONTENT), 'utf8'));
+      assert.equal(doc.faction, f.name,
+        `${rel} declares faction "${doc.faction}" but the registry assigns it to "${f.name}"`);
+      for (const id of Object.keys(doc.units || {})) {
+        assert.equal(id.slice(0, id.indexOf('-')), f.prefix,
+          `${rel} contains ${id}, which is not a ${f.prefix}-* unit`);
+      }
     }
   }
+});
+
+test('GGG-6: no authored unit art is unreachable through the registry', () => {
+  // THE GAP THAT MOTIVATED `files`. content/units/ holds SYS-* art in THREE files. A registry with one
+  // `file` per faction reached system.units.json only, so SYS-Flak/-2/-3, SYS-Base and SYS-Harvester —
+  // five authored units — could not be opened in the Stack Forge at all.
+  //
+  // This does not assert the registry against itself: it reads every *.units.json on disk, buckets the
+  // ids by the prefix they ACTUALLY carry, and demands the registry reach all of them. Drop any file
+  // from any faction's `files` and this fails naming the units that went dark.
+  const onDisk = new Map();                                       // prefix -> Set(id)
+  for (const name of readdirSync(new URL('units/', CONTENT))) {
+    if (!name.endsWith('.units.json')) continue;
+    const doc = JSON.parse(readFileSync(new URL(`units/${name}`, CONTENT), 'utf8'));
+    for (const id of Object.keys(doc.units || {})) {
+      const p = id.slice(0, id.indexOf('-'));
+      if (!onDisk.has(p)) onDisk.set(p, new Set());
+      onDisk.get(p).add(id);
+    }
+  }
+  assert.ok(onDisk.get('SYS').size > 6, 'test setup: SYS art must span more than the one original file');
+
+  for (const [prefix, ids] of onDisk) {
+    const f = F.BY_PREFIX.get(prefix);
+    assert.ok(f, `content/units/ holds ${prefix}-* art but no faction declares that prefix`);
+    const reachable = new Set();
+    for (const rel of F.filesOf(f)) {
+      const doc = JSON.parse(readFileSync(new URL(`units/${rel}`, CONTENT), 'utf8'));
+      for (const id of Object.keys(doc.units || {})) reachable.add(id);
+    }
+    const missing = [...ids].filter((id) => !reachable.has(id)).sort();
+    assert.deepEqual(missing, [],
+      `${f.name} has authored art the registry cannot reach: ${missing.join(', ')}`);
+  }
+});
+
+test('filesOf returns EVERY file, and callers cannot get away with taking the first', () => {
+  assert.deepEqual(F.filesOf('System'),
+    ['system.units.json', 'system-flak.units.json', 'system-base.units.json']);
+  assert.deepEqual(F.filesOf('Ground / Powder'), ['ground-powder.units.json']);
+  assert.deepEqual(F.filesOf('Artillery'), [], 'Artillery has no valid art file yet — see GGG-4');
+  assert.deepEqual(F.filesOf('Air'), []);
+  assert.deepEqual(F.filesOf('nonsense'), [], 'unrecognised must be empty, never undefined');
+  assert.deepEqual(F.filesOf(null), []);
+  // lookup by any spelling, same as find()
+  assert.deepEqual(F.filesOf('SYS'), F.filesOf('system'));
 });
 
 test('every voice key resolves in voicepacks.json', () => {
@@ -120,8 +167,6 @@ test('lookup works by every spelling, and factionOfUnitId reads a real id', () =
   assert.equal(F.factionOfUnitId('SPA-U3'), null, 'SPA is not a real prefix — that is the bug');
   assert.equal(F.factionOfUnitId('abrams'), null, 'no prefix at all');
 
-  assert.equal(F.fileOf('Ground / Powder'), 'ground-powder.units.json');
-  assert.equal(F.fileOf('Artillery'), null, 'Artillery has no valid art file yet — see GGG-4');
 });
 
 test('every unit id in tables.js resolves to a faction', () => {
