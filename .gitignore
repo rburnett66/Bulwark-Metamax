@@ -3,3 +3,7 @@
 prototype/_artcache/
 __pycache__/
 *.pyc
+
+# serve_prototype.py's recovery copies: /__ship keeps the previous version of every file it writes,
+# and /__unship moves a removed file here instead of unlinking it. They are local undo, never content.
+*.bak

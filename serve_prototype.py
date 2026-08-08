@@ -79,41 +79,68 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def _reply(self, code, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _loopback_only(self, endpoint):
+        """LOOPBACK ONLY. With --lan the bind is 0.0.0.0, which made /__ship writable by anything on the
+        Wi-Fi. The path whitelist prevents escaping content/**, not overwriting what is inside it — so a
+        phone on the same network could replace any unit manifest or sprite. Authoring is local-only.
+        Shared by every mutating endpoint so the two can never drift apart — /__unship DELETES content,
+        so it needs this rail at least as much as the write path does."""
+        peer = (self.client_address[0] if self.client_address else "")
+        if peer in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            return True
+        self._reply(403, {"ok": False, "error": f"{endpoint} is loopback-only (peer {peer})"})
+        return False
+
+    @staticmethod
+    def _content_path(req):
+        """The ONE path whitelist, shared by write and delete: a relative path under content/, no escape,
+        .json or .png only, never code. Returns (rel, abs_dest, is_png) or raises ValueError."""
+        rel = str(req.get("path", "")).replace("\\", "/").lstrip("/")
+        norm = os.path.normpath(rel).replace("\\", "/")
+        # .json carries `data` (an object); .png carries `b64` (a bare-or-data-URL base64 image).
+        # PNGs are allowed so sprite atlases can live on disk instead of being inlined as base64 in
+        # the units manifest -- three units of inline atlases reached 4.2 MB, past the localStorage
+        # ceiling. Still whitelisted to content/**, still no path escape, still never code.
+        is_png = rel.endswith(".png")
+        if norm != rel or not rel.startswith("content/") or ".." in rel or not (rel.endswith(".json") or is_png):
+            raise ValueError(f"path not allowed: {rel!r} (must be content/**.json or content/**.png)")
+        return rel, os.path.join(directory, *rel.split("/")), is_png
+
+    # Files that carry EVERY unit / every prop. Removing one unit means rewriting these with its entry
+    # gone (that goes through /__ship, which is atomic and keeps a .bak); DELETING one would take the
+    # whole roster with it. A delete endpoint that can do that is one typo away from wiping the content
+    # set, so it simply cannot address them.
+    _UNDELETABLE = ("content/units/voxel-units.json", "content/decor/voxel-decor.json")
+
     def do_POST(self):
         # /__ship — the tools' one-click "Ship to repo": writes authored content (Terrain Forge maps,
         # Stack Forge units manifest) into the SERVED tree's content/ folder so the dev-hot-loop
         # localStorage state and the committed ship files can't silently diverge (owner 2026-07-16:
         # the deployed game fell back to the generator map because no export was ever committed).
+        # /__unship — the same door, opening the other way: REMOVE one authored file (Stack Forge's
+        # "remove unit"). Same loopback rail, same path whitelist, and it never unlinks — see below.
         # Local dev only — the deployed static site has no POST, so the tools degrade gracefully.
-        if self.path.split("?")[0] != "/__ship":
+        route = self.path.split("?")[0]
+        if route == "/__unship":
+            self.do_UNSHIP()
+            return
+        if route != "/__ship":
             self.send_error(404)
             return
-        # LOOPBACK ONLY. With --lan the bind is 0.0.0.0, which made /__ship writable by anything on the
-        # Wi-Fi. The path whitelist prevents escaping content/**, not overwriting what is inside it — so a
-        # phone on the same network could replace any unit manifest or sprite. Authoring is local-only.
-        peer = (self.client_address[0] if self.client_address else "")
-        if peer not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
-            body = json.dumps({"ok": False, "error": f"/__ship is loopback-only (peer {peer})"}).encode()
-            self.send_response(403)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+        if not self._loopback_only("/__ship"):
             return
         try:
             n = int(self.headers.get("Content-Length", 0))
             req = json.loads(self.rfile.read(n))
-            rel = str(req.get("path", "")).replace("\\", "/").lstrip("/")
-            # whitelist: only json under content/ — never a path escape, never code
-            norm = os.path.normpath(rel).replace("\\", "/")
-            # .json carries `data` (an object); .png carries `b64` (a bare-or-data-URL base64 image).
-            # PNGs are allowed so sprite atlases can live on disk instead of being inlined as base64 in
-            # the units manifest -- three units of inline atlases reached 4.2 MB, past the localStorage
-            # ceiling. Still whitelisted to content/**, still no path escape, still never code.
-            is_png = rel.endswith(".png")
-            if norm != rel or not rel.startswith("content/") or ".." in rel or not (rel.endswith(".json") or is_png):
-                raise ValueError(f"path not allowed: {rel!r} (must be content/**.json or content/**.png)")
-            dest = os.path.join(directory, *rel.split("/"))
+            rel, dest, is_png = self._content_path(req)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             # ATOMIC. Writing in place truncates the destination if anything fails mid-write — and one of
             # these destinations, content/units/voxel-units.json, carries EVERY unit. Write a temp file
@@ -144,15 +171,43 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
                 except OSError:
                     pass                                            # a missing .bak must never block the write
             os.replace(tmp, dest)
-            body = json.dumps({"ok": True, "path": rel, "bytes": os.path.getsize(dest)}).encode()
-            self.send_response(200)
+            self._reply(200, {"ok": True, "path": rel, "bytes": os.path.getsize(dest)})
         except Exception as e:  # noqa: BLE001 — report the reason to the tool UI
-            body = json.dumps({"ok": False, "error": str(e)}).encode()
-            self.send_response(400)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+            self._reply(400, {"ok": False, "error": str(e)})
+
+    def do_UNSHIP(self):
+        """Remove ONE authored file from content/**. Strictly more dangerous than a write, so it carries
+        every rail the write path has and two more of its own:
+
+          * loopback only, and the SAME path whitelist (content/**, .json or .png, no traversal) — both
+            shared with /__ship as single functions, so a fix to one can never miss the other.
+          * it REFUSES the shared manifests (_UNDELETABLE): one unit is removed by rewriting those files
+            without its entry, never by deleting them.
+          * it NEVER unlinks. The file is moved to <path>.bak — the same recovery the atomic write path
+            already leaves behind — so a mistaken removal of the owner's authored art is `mv` away from
+            being undone. Directories are never touched.
+
+        A file that is already gone is ok:true / existed:false, not an error: removal is made of several
+        deletes and has to be safely repeatable after a partial failure."""
+        if not self._loopback_only("/__unship"):
+            return
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+            req = json.loads(self.rfile.read(n))
+            rel, dest, _ = self._content_path(req)
+            if rel in self._UNDELETABLE:
+                raise ValueError(f"{rel} carries the WHOLE set — remove one entry by shipping the file "
+                                 f"without it, not by deleting the file")
+            if os.path.isdir(dest):
+                raise ValueError(f"{rel} is a directory")
+            if not os.path.exists(dest):
+                self._reply(200, {"ok": True, "path": rel, "existed": False, "trash": None})
+                return
+            trash = dest + ".bak"
+            os.replace(dest, trash)                     # MOVED, never unlinked — recoverable on disk
+            self._reply(200, {"ok": True, "path": rel, "existed": True, "trash": rel + ".bak"})
+        except Exception as e:  # noqa: BLE001 — report the reason to the tool UI
+            self._reply(400, {"ok": False, "error": str(e)})
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, must-revalidate")
