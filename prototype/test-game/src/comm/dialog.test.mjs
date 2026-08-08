@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { challengeCall, winCall, defeatCall, fallbackCall, classifyOutcome } from './dialog.js';
-import { FACTION_KEY_BY_NAME } from './voice.js';
+import { voiceKeyOf } from './voice.js';
 import { factionsInRoster } from '../data/tables.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -59,6 +59,6 @@ assert.ok(fin.sub.indexOf('CONCESSION') >= 0 && fin.sub.indexOf('PE') >= 0, 'fin
 // unknown faction (mixed finale) degrades to null, not a throw
 assert.strictEqual(challengeCall(packs, 'Combined forces', 10, 7, 1), null);
 assert.strictEqual(fallbackCall('Combined forces', 10, 7), null);
-assert.ok(!FACTION_KEY_BY_NAME['Combined forces'], 'finale has no single-faction voice');
+assert.ok(!voiceKeyOf('Combined forces'), 'finale has no single-faction voice');
 
 console.log('dialog.test OK — 81 packs valid, all moments resolve deterministically for 9/9 factions');

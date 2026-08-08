@@ -13,10 +13,23 @@ import { MAPDATA } from '../../content/maps/mapdata.js';
 import { loadSave, TIER_COSTS } from '../save/save.js';
 import { setChannelVolume } from '../comm/voice.js';
 import { buildTechTree } from './techtree.js';
+// The faction registry (GGG-3). Side-effect import + global namespace: factions.js is a classic
+// script with no ES exports, so a named import is a SyntaxError. See voice.js for the full note.
+import '../data/factions.js';
+const REG = globalThis.BulwarkFactions;
 
-// workbook Faction_ID (1-9) -> the game's faction names, roster order (owner can re-map)
-export const FACTION_NAMES = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water',
-  'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies (Chem)'];
+/**
+ * The faction a workbook Faction_ID refers to. This USED to be `FACTION_NAMES[fid - 1]` against a
+ * hardcoded array, and that is the sharpest edge in this whole area (GGG-3): the ids come from
+ * MAPDATA, whose own `Faction_Name` column is the placeholder 'Faction_01'…'Faction_09', so the
+ * array position WAS the only thing binding a workbook row to a real faction. Reorder the list and
+ * every faction card, tech tree and rival silently renames itself, with nothing to catch it.
+ *
+ * So this is a LOOKUP on the registry's declared `ordinal`, not an index into whatever order the
+ * registry happens to be written in. The dependency is now explicit and one-directional: `ordinal`
+ * is the workbook's id, stated as data. Returns null for an unknown id instead of undefined-ing.
+ */
+const factionByOrdinal = (fid) => REG.factionOfOrdinal(fid);   // registry owns this — see factions.js
 const TECH_BADGES = [
   { icon: '⚔', label: 'T1 UNIT', keyAt: 'T1 Unit @' },            // crossed swords
   { icon: '⛨', label: 'T2 STRUCTURE', keyAt: 'T2 Structure @' },  // shield
@@ -220,7 +233,8 @@ export function createMenu(mountEl, cbs) {
     fgrid.textContent = '';
     for (const row of MAPDATA.factions) {
       const fid = row.Faction_ID;
-      const name = FACTION_NAMES[fid - 1] || row.Faction_Name;
+      const fac = factionByOrdinal(fid);
+      const name = (fac && fac.name) || row.Faction_Name;   // row.Faction_Name is 'Faction_0N' — a last resort
       const rec = (s.factionRecords || {})[name] || {};
       const tech = MAPDATA.techTree.find((t) => t.Faction === row.Faction_Name) || {};
       const tier = (s.tech || {})[name] || 0;
@@ -228,7 +242,8 @@ export function createMenu(mountEl, cbs) {
       const card = el(doc, 'div', 'bwm-fcard');
       card.appendChild(el(doc, 'div', 'fnm', name.toUpperCase()));
       card.appendChild(el(doc, 'div', 'fprof', (row.Profile || '') +
-        '  Premium: ' + row.Premium_Resource + '. Rival: ' + (FACTION_NAMES[(row.Rival_Faction || 0) - 1] || '—') + '.'));
+        '  Premium: ' + row.Premium_Resource + '. Rival: ' +
+        ((factionByOrdinal(row.Rival_Faction) || {}).name || '—') + '.'));
       const st = el(doc, 'div', 'fstats');
       const mapsWon = rec.mapsWon ? Object.keys(rec.mapsWon).length : 0;
       const avg = rec.starRuns ? Math.round((rec.starSum / rec.starRuns) * 10) / 10 : null;
@@ -384,8 +399,11 @@ export function createMenu(mountEl, cbs) {
     const sel = el(doc, 'select');
     sel.style.cssText = 'flex:1;background:#0c0e12;color:#e6ecf3;border:1px solid #2e3846;border-radius:5px;padding:6px 8px;font-size:12px';
     const optMix = el(doc, 'option'); optMix.value = ''; optMix.textContent = 'Rotation (mixed)'; sel.appendChild(optMix);
-    for (const n of FACTION_NAMES) { const o = el(doc, 'option'); o.value = n; o.textContent = n; sel.appendChild(o); }
-    sel.value = (loadSave().enemyFaction) || 'Ground / Powder';
+    for (const n of REG.NAMES) { const o = el(doc, 'option'); o.value = n; o.textContent = n; sel.appendChild(o); }
+    // The default enemy is the GROUND faction — named by its stable key, so the display name is
+    // still spelled in exactly one place (main.js DEFAULT_FACTION resolves the same way).
+    const DEFAULT_ENEMY = REG.find('ground').name;
+    sel.value = (loadSave().enemyFaction) || DEFAULT_ENEMY;
     sel.addEventListener('change', () => {
       const f = sel.value || null;
       try { const sv = loadSave(); sv.enemyFaction = f || null; localStorage.setItem('bulwark:save', JSON.stringify(sv)); } catch (e) { /* */ }
@@ -393,8 +411,8 @@ export function createMenu(mountEl, cbs) {
     });
     const rst = el(doc, 'button', 'bwm-btn'); rst.style.cssText = 'width:auto;padding:6px 12px;flex:0 0 auto';
     rst.appendChild(el(doc, 'span', null, 'RESET'));
-    rst.title = 'Back to Ground / Powder';
-    rst.addEventListener('click', () => { sel.value = 'Ground / Powder'; sel.dispatchEvent(new Event('change')); });
+    rst.title = 'Back to ' + DEFAULT_ENEMY;
+    rst.addEventListener('click', () => { sel.value = DEFAULT_ENEMY; sel.dispatchEvent(new Event('change')); });
     row.appendChild(sel); row.appendChild(rst);
     setBox.appendChild(row);
   }

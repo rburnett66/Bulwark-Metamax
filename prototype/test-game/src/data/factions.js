@@ -90,6 +90,22 @@
     return m;
   };
   const BY_KEY = by('key'), BY_PREFIX = by('prefix'), BY_NAME = by('name'), BY_VOICE = by('voice');
+  const BY_ORDINAL = by('ordinal');
+
+  /**
+   * The faction a workbook Faction_ID refers to. NOT an index into this list.
+   *
+   * MAPDATA's own Faction_Name column is the placeholder 'Faction_01'...'Faction_09', so array
+   * POSITION was the only thing binding a workbook row to a real faction — and it was also the
+   * fallback that would have rendered "FACTION_03" on a card. Two consumers had grown an identical
+   * three-line copy of this; it belongs here.
+   *
+   * Returns null for an unknown id rather than undefined, so `Rival_Faction: 'none'` — a truthy
+   * STRING that used to reach an array as ['none' - 1] and yield undefined — resolves cleanly.
+   */
+  function factionOfOrdinal(fid) {
+    return BY_ORDINAL.get(fid) || null;
+  }
 
   /** The faction a unit id belongs to, from its prefix. `GND-Tanks` -> ground. null if unrecognised. */
   function factionOfUnitId(unitId) {
@@ -120,7 +136,8 @@
 
   return {
     FACTIONS, SYSTEM, ALL,
-    BY_KEY, BY_PREFIX, BY_NAME, BY_VOICE,
+    BY_KEY, BY_PREFIX, BY_NAME, BY_VOICE, BY_ORDINAL,
+    factionOfOrdinal,
     find, filesOf, factionOfUnitId,
     NAMES: Object.freeze(FACTIONS.map((f) => f.name)),   // drop-in for the old FACTION_NAMES, same order
   };

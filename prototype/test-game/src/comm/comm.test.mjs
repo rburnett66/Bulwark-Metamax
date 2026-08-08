@@ -2,7 +2,7 @@
  *  Run: node src/comm/comm.test.mjs */
 import assert from 'node:assert';
 import {
-  FACTIONS, ORDER, VGAIN, STATIC, ICONS, FACTION_KEY_BY_NAME,
+  FACTIONS, ORDER, VGAIN, STATIC, ICONS, voiceKeyOf,
   hash, countSyllables, buildBeats, utterDuration, paramsFor,
 } from './voice.js';
 import { factionsInRoster } from '../data/tables.js';
@@ -68,7 +68,7 @@ for (const k of ORDER) {
 
 // the game's full roster maps onto voice keys — every wave announcement can speak
 for (const name of factionsInRoster()) {
-  const key = FACTION_KEY_BY_NAME[name];
+  const key = voiceKeyOf(name);
   assert.ok(key, `tables.js faction "${name}" maps to a voice key`);
   assert.ok(FACTIONS[key], `mapped key ${key} exists`);
 }

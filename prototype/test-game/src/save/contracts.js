@@ -17,9 +17,16 @@
  */
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { updateSave } from './save.js';
+// Faction registry (GGG-3). This file carried a FOURTH copy of the faction-name array — the same
+// nine strings as menu.js, indexed the same unsafe way, and nobody imported the copy it exported.
+// Side-effect import + global namespace: factions.js is a classic script (see comm/voice.js).
+import '../data/factions.js';
+const REG = globalThis.BulwarkFactions;
 
-export const FACTION_NAMES = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water',
-  'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies (Chem)'];
+/** Workbook Faction_ID -> faction record, by DECLARED ordinal. See menu.js for why this is a lookup
+ *  and not `FACTION_NAMES[fid - 1]`: MAPDATA's own Faction_Name column is 'Faction_01'…'Faction_09',
+ *  so array position was the only thing tying a workbook row to a real faction. */
+const factionByOrdinal = (fid) => REG.factionOfOrdinal(fid);   // registry owns this — see factions.js
 
 /** The 9-step alignment axis, absolute good (+4) to dark evil (−4). */
 export const ALIGN_SCORE = { AG: 4, PG: 3, G: 2, CG: 1, N: 0, CE: -1, E: -2, PE: -3, DE: -4 };
@@ -49,11 +56,15 @@ export function buildOffer(mapId, map, voicePacks, save) {
   const questNodes = (map.resources || []).filter((r) => r.role === 'quest');
   if (!questNodes.length) return null;
   const giverId = row.Quest_Giver_Faction;
-  const giver = FACTION_NAMES[giverId - 1];
+  const giverFac = factionByOrdinal(giverId);
+  const giver = giverFac && giverFac.name;
   const frow = factionRow(giverId);
-  const rival = frow && frow.Rival_Faction ? FACTION_NAMES[frow.Rival_Faction - 1] : null;
-  const cast = voicePacks && voicePacks.factions && voicePacks.factions[giver]
-    ? voicePacks.factions[giver].characters : null;
+  const rival = frow && frow.Rival_Faction ? (factionByOrdinal(frow.Rival_Faction) || {}).name || null : null;
+  // voicepacks.json is keyed by VOICE KEY ('ground'), not display name ('Ground / Powder'). This
+  // read `voicePacks.factions[giver]` with the display name, so it never matched and EVERY contract
+  // offer shipped with `character: null` — no quest-giver face, name or line in the contract modal.
+  const packFac = giverFac && voicePacks && voicePacks.factions ? voicePacks.factions[giverFac.voice] : null;
+  const cast = packFac ? packFac.characters : null;
   const offered = Object.values((save && save.maps) || {}).filter((m) => m.contract).length;
   const character = cast && cast.length ? cast[(mapId * 3 + offered) % cast.length] : null;
   const gainMax = LOYALTY_PER_NODE * questNodes.length;

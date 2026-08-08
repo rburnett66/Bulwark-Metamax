@@ -7,7 +7,11 @@ import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/con
 import { showContractModal } from './render/contractModal.js';
 import { showWaveIntel, showBonusPicker, showHowToPlay } from './render/gameDialog.js';
 import { getBonusDef } from './data/tables.js';
-import { createMenu, FACTION_NAMES } from './menu/menu.js';
+import { createMenu } from './menu/menu.js';
+// Faction registry (GGG-3) — menu.js no longer re-exports a FACTION_NAMES array. Side-effect import
+// + global namespace: factions.js is a classic script with no ES exports (see voice.js).
+import './data/factions.js';
+const REG = globalThis.BulwarkFactions;
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
@@ -70,7 +74,7 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   // DEFAULTS (owner, 2026-07-13): Map 1 (campaign) as the boot board, Ground/Powder as the boot
   // faction, and the game opens on the wave-1 TAP TO START overlay — load, tap anywhere, fight.
-  const DEFAULT_FACTION = 'Ground / Powder';
+  const DEFAULT_FACTION = REG.find('ground').name;   // by stable key — the name is spelled once, in the registry
   const DEFAULT_MAP_ID = 1;
   let currentWaves = makeWaves(DEFAULT_FACTION);   // active enemy schedule (test picker can change it)
   let currentMap = MAP;       // classic board, or a generated ring-campaign map (Map picker)
@@ -535,7 +539,16 @@ export function boot(mountEl, seed) {
     const fm = /[?&]faction=([^&]+)/.exec(q);
     if (fm) {
       const q2 = decodeURIComponent(fm[1]).toLowerCase();
-      devFaction = FACTION_NAMES.find((n) => n.toLowerCase().includes(q2)) || null;   // fuzzy
+      // DELIBERATELY FUZZY, and staying that way. This is a URL playtest convenience, not a data
+      // path: ?faction=powder, =air, =greenies are meant to work without typing 'Ground / Powder'.
+      // The registry's exact find() is wrong here — it would reject every shorthand above. Names
+      // come from the registry now, so the substring is matched against the one real roster; the
+      // looseness is in the MATCH, not in the LIST. First match wins if a query is ambiguous.
+      // Substring over display names first ('powder', 'air', 'greenies'), then an exact registry
+      // hit so the machine spellings work too — key ('hightech') or prefix, which is upper-case.
+      devFaction = REG.NAMES.find((n) => n.toLowerCase().includes(q2))
+        || (REG.find(q2) || REG.find(q2.toUpperCase()) || {}).name
+        || null;
       if (devFaction) currentTestFaction = devFaction;
     }
   } catch (e) { /* file:// quirks */ }

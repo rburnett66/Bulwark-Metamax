@@ -17,7 +17,7 @@
  * All picks are seeded (hash of faction:wave:seed — §11 determinism), so a replay hears the
  * exact same calls. Pure functions over the packs object; fetch lives in loadVoicePacks().
  */
-import { FACTION_KEY_BY_NAME, FACTIONS, hash } from './voice.js';
+import { voiceKeyOf, FACTIONS, hash } from './voice.js';
 
 /* §9 outcome thresholds — tunable table, not hardcode */
 export const OUTCOME_DEFAULTS = { efficientHp: 0.8, closeHp: 0.3 };
@@ -44,7 +44,7 @@ export function classifyOutcome(baseHpPct, structuresLost, t) {
 }
 
 function castOf(packs, factionName) {
-  const key = FACTION_KEY_BY_NAME[factionName];
+  const key = voiceKeyOf(factionName);
   const fac = key && packs && packs.factions[key];
   return fac ? { key, chars: fac.characters } : null;
 }
@@ -104,10 +104,15 @@ export function defeatCall(packs, factionName, seed) {
  *  kind 'reward' — match END, only when the STAR BONUS applied (a 5-star wave this battle):
  *                  the envoy grants the reward. Good-leaning cast pick, deterministic by seed. */
 export function tipsCall(packs, factionName, seed, kind) {
-  const f = packs && packs.factions && packs.factions[factionName];
-  if (!f || !f.characters || !f.characters.length) return null;
-  const goodish = f.characters.filter((c) => ['AG', 'PG', 'G', 'CG', 'N'].includes(c.align));
-  const cast = goodish.length ? goodish : f.characters;
+  // WAS `packs.factions[factionName]` — indexing a pack keyed by VOICE KEY ('ground') with a DISPLAY
+  // NAME ('Ground / Powder'). It never matched, so tipsCall returned null for every caller and the
+  // FIELD TIP and STAR BONUS transmissions never played in the shipped game. Both call sites in
+  // main.js pass a display name (runContract.giver, lastWaveFaction), as do all the other *Call
+  // functions here — this was the only one that skipped the mapping. Go through castOf like the rest.
+  const fac = castOf(packs, factionName);
+  if (!fac || !fac.chars || !fac.chars.length) return null;
+  const goodish = fac.chars.filter((c) => ['AG', 'PG', 'G', 'CG', 'N'].includes(c.align));
+  const cast = goodish.length ? goodish : fac.chars;
   const ch = cast[Math.abs(seed | 0) % cast.length];
   const phrase = (ch.phrases || [])[Math.abs((seed | 0) >> 2) % Math.max(1, (ch.phrases || []).length)] || '';
   const flavor = phrase ? ' “' + phrase + '”' : '';
@@ -122,7 +127,7 @@ export function tipsCall(packs, factionName, seed, kind) {
 }
 
 export function fallbackCall(factionName, wave, seed) {
-  const key = FACTION_KEY_BY_NAME[factionName];
+  const key = voiceKeyOf(factionName);
   const f = key && FACTIONS[key];
   if (!f) return null;
   const c = f.cast[hash(factionName + ':' + (wave || 0) + ':' + (seed || 0)) % f.cast.length];

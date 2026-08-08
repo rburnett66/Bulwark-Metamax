@@ -11,7 +11,20 @@
  * Pure/testable (no DOM, no audio): hash, countSyllables, buildBeats, utterDuration.
  * Audio (lazy AudioContext, safe to import headless): initAudio, playUtterance, startStatic,
  * playSweep, playDrop, setVolume.
+ *
+ * THIS FILE OWNS TIMBRE, NOT IDENTITY (GGG-3). It used to declare all three: the acoustic profile
+ * per faction, the display NAME of each faction, and a hand-written FACTION_KEY_BY_NAME mapping
+ * display names to voice keys. The last two were a fourth independent copy of the faction list.
+ * They now come from src/data/factions.js — the registry — and only pitch/formants/wave/reverb/
+ * static/gain/cast, which the registry has no opinion about, are still declared here.
+ *
+ * IMPORTING THE REGISTRY. factions.js is a CLASSIC script (it has to be — the Stack Forge cannot
+ * import an ES module), so it has NO ES exports. `import { NAMES } from '../data/factions.js'` is a
+ * SyntaxError under node and fails to link in the browser. The one form that works in both is a
+ * SIDE-EFFECT import plus the global namespace it installs, which is what this is.
  */
+import '../data/factions.js';
+const REG = globalThis.BulwarkFactions;
 
 /* ---------- faction icons + portrait (inline SVG) ---------- */
 export const ICONS = {
@@ -27,9 +40,11 @@ export const ICONS = {
 };
 export const PORTRAIT = '<svg viewBox="0 0 100 100"><circle cx="50" cy="36" r="17"/><path d="M22 94c0-17 12-27 28-27s28 10 28 27z"/></svg>';
 
-/* ---------- §7.5 faction voice profiles + comm skins + sample cast ---------- */
-export const FACTIONS = {
-  ground: { name: 'Ground / Powder', trope: 'Nationalistic', color: '#c9962f',
+/* ---------- §7.5 faction voice profiles + comm skins + sample cast ----------
+   TIMBRE ONLY — keyed by the registry's `voice` key. No display names here: `name` is merged in
+   from the registry below, so there is exactly one place a faction is spelled. */
+const TIMBRE = {
+  ground: { trope: 'Nationalistic', color: '#c9962f',
     pitchM: 110, pitchF: 175, wave: 'sawtooth', f1: 700, f2: 1100, rate: 5.0, noise: 0.15, reverb: 0.15,
     drive: 0.35, ringmod: 0, detune: 0, octave: false, lowpass: 6000, attack: 0.012, sustain: 0.18, overlap: 0.10,
     cast: [
@@ -37,7 +52,7 @@ export const FACTIONS = {
       { n: 'General Kord Stahl', a: 'E', g: 'male', intent: 'statement', line: 'Step onto my field and become a grave that means something.' },
       { n: 'Sergeant "Bricks" Malloy', a: 'CG', g: 'male', intent: 'exclaim', line: 'You touch my lads and I get real interested, real quick!' },
     ] },
-  air: { name: 'Air', trope: 'Manga', color: '#48c7e6',
+  air: { trope: 'Manga', color: '#48c7e6',
     pitchM: 165, pitchF: 245, wave: 'triangle', f1: 500, f2: 2200, rate: 7.0, noise: 0.05, reverb: 0.10,
     drive: 0.05, ringmod: 0, detune: 6, octave: false, lowpass: 9000, attack: 0.015, sustain: 0.25, overlap: 0.20,
     cast: [
@@ -45,7 +60,7 @@ export const FACTIONS = {
       { n: 'Renegade "Viper" Ryu', a: 'CE', g: 'male', intent: 'exclaim', line: "Come on up, little snack — the sky belongs to whoever's fastest!" },
       { n: 'Ace Jun "Halo" Sato', a: 'PG', g: 'male', intent: 'statement', line: "If you're taking my sky, you'd better cover the pilot next to you." },
     ] },
-  hightech: { name: 'High Tech', trope: 'Capitalist', color: '#8fb6ff',
+  hightech: { trope: 'Capitalist', color: '#8fb6ff',
     pitchM: 130, pitchF: 200, wave: 'square', f1: 400, f2: 1800, rate: 6.0, noise: 0.03, reverb: 0.12,
     drive: 0.0, ringmod: 0, detune: 0, octave: false, lowpass: 7000, bitcrush: true, attack: 0.008, sustain: 0.12, overlap: 0.05,
     cast: [
@@ -53,7 +68,7 @@ export const FACTIONS = {
       { n: 'Hacker "Null" (Priya Nair)', a: 'CG', g: 'female', intent: 'statement', line: "Adrian's got a floor of lawyers looking for me, and here I am playing with you. Try to keep up." },
       { n: 'COO Marcus Thorne', a: 'E', g: 'male', intent: 'statement', line: 'Growth is not negotiable. You are the kind of drag I optimize away.' },
     ] },
-  artillery: { name: 'Artillery', trope: 'Military', color: '#d9a441',
+  artillery: { trope: 'Military', color: '#d9a441',
     pitchM: 85, pitchF: 150, wave: 'square', f1: 600, f2: 900, rate: 3.5, noise: 0.20, reverb: 0.25,
     drive: 0.25, ringmod: 0, detune: 0, octave: false, lowpass: 3400, sub: true, attack: 0.012, sustain: 0.10, overlap: 0.10,
     cast: [
@@ -61,7 +76,7 @@ export const FACTIONS = {
       { n: 'Chaplain-Gunner Ruth Bellamy', a: 'AG', g: 'female', intent: 'statement', line: 'Step onto my map, target. I will pray over your coordinates before I fire on them.' },
       { n: 'Grand-Bombardier Seline Voss', a: 'PE', g: 'female', intent: 'statement', line: 'You have raised yourself too high. Symmetry requires a crater of equal depth.' },
     ] },
-  water: { name: 'Water', trope: 'Sea-tribe Fantasy', color: '#33c3b0',
+  water: { trope: 'Sea-tribe Fantasy', color: '#33c3b0',
     pitchM: 120, pitchF: 190, wave: 'sine', f1: 450, f2: 1000, rate: 4.5, noise: 0.10, reverb: 0.55,
     drive: 0.0, ringmod: 0, detune: 9, octave: false, lowpass: 2600, attack: 0.05, sustain: 0.50, overlap: 0.45,
     cast: [
@@ -69,7 +84,7 @@ export const FACTIONS = {
       { n: 'Tide-Priestess Marena', a: 'AG', g: 'female', intent: 'statement', line: 'You stand where the water decides, landwalker. Kneel, and let the tide read you.' },
       { n: 'Chieftain Coral of the Reef-Born', a: 'PG', g: 'female', intent: 'exclaim', line: 'Strike his guns from the tide! The shoal will sing your name!' },
     ] },
-  arcane: { name: 'Arcane / Energy', trope: 'Theocracy', color: '#d7b24a',
+  arcane: { trope: 'Theocracy', color: '#d7b24a',
     pitchM: 140, pitchF: 210, wave: 'sine', f1: 500, f2: 1500, rate: 4.0, noise: 0.05, reverb: 0.75,
     drive: 0.0, ringmod: 0, detune: 0, octave: true, lowpass: 6000, attack: 0.06, sustain: 0.55, overlap: 0.50,
     cast: [
@@ -77,7 +92,7 @@ export const FACTIONS = {
       { n: 'Hierophant Aurelia', a: 'AG', g: 'female', intent: 'statement', line: 'You come to the altar unbelieving. Hold still while the Light finds you.' },
       { n: 'Inquisitor Mordane', a: 'E', g: 'male', intent: 'statement', line: 'You are doubt made flesh. Confess, or combust.' },
     ] },
-  space: { name: 'Space Tech', trope: 'Sci-Fi Federation', color: '#7fd8ff',
+  space: { trope: 'Sci-Fi Federation', color: '#7fd8ff',
     pitchM: 120, pitchF: 195, wave: 'square', f1: 400, f2: 2000, rate: 6.0, noise: 0.08, reverb: 0.20,
     drive: 0.0, ringmod: 170, detune: 0, octave: false, lowpass: 8000, attack: 0.010, sustain: 0.20, overlap: 0.10,
     cast: [
@@ -85,7 +100,7 @@ export const FACTIONS = {
       { n: 'Admiral Sarn', a: 'E', g: 'male', intent: 'statement', line: 'You are an ungoverned variable. Submit to the order, or be corrected out of it.' },
       { n: 'Envoy Lyra-9', a: 'AG', g: 'female', intent: 'statement', line: 'I come under open signal. Lower your guns, and I will lower mine last.' },
     ] },
-  dark: { name: 'Dark Energy', trope: 'Cult / Movement', color: '#d1495b',
+  dark: { trope: 'Cult / Movement', color: '#d1495b',
     pitchM: 75, pitchF: 140, wave: 'sawtooth', f1: 550, f2: 800, rate: 3.0, noise: 0.30, reverb: 0.62,
     drive: 0.35, ringmod: 0, detune: 5, octave: false, lowpass: 2200, sub: true, attack: 0.04, sustain: 0.45, overlap: 0.40,
     cast: [
@@ -93,7 +108,7 @@ export const FACTIONS = {
       { n: 'The Hollow Prophet', a: 'DE', g: 'neutral', intent: 'trail', line: 'Set down your name with your walls. Nothing that ends here will have been you…' },
       { n: 'Sister Maren', a: 'PG', g: 'female', intent: 'statement', line: 'Yield, and I will shelter you myself. Do not make me choose.' },
     ] },
-  greenies: { name: 'Greenies (Chem)', trope: 'Socialist Hive', color: '#8fd14f',
+  greenies: { trope: 'Socialist Hive', color: '#8fd14f',
     pitchM: 200, pitchF: 280, wave: 'square', f1: 600, f2: 2600, rate: 9.0, noise: 0.25, reverb: 0.15,
     drive: 0.1, ringmod: 0, detune: 14, octave: false, lowpass: 9000, swarm: true, attack: 0.006, sustain: 0.05, overlap: 0.05,
     cast: [
@@ -102,14 +117,31 @@ export const FACTIONS = {
       { n: 'Blight-Agitator Sear', a: 'CE', g: 'male', intent: 'exclaim', line: "Breathe it in, breathe it in! We'll be so equal!" },
     ] },
 };
-export const ORDER = ['ground', 'air', 'hightech', 'artillery', 'water', 'arcane', 'space', 'dark', 'greenies'];
+/**
+ * The public voice table: TIMBRE above + the display `name` the registry declares. Built by walking
+ * the REGISTRY, not TIMBRE, so the registry decides which factions exist and what each is called —
+ * add a faction there and the missing timbre shows up as an empty profile the comm test rejects,
+ * rather than as a faction the comm screen silently cannot speak.
+ */
+export const FACTIONS = Object.freeze(Object.fromEntries(
+  REG.FACTIONS.map((f) => [f.voice, Object.freeze({ ...TIMBRE[f.voice], name: f.name })]),
+));
 
-/* The game's tables.js faction names -> comm voice keys (1:1 with the 9-faction roster). */
-export const FACTION_KEY_BY_NAME = {
-  'Ground / Powder': 'ground', 'Air': 'air', 'High Tech': 'hightech', 'Artillery': 'artillery',
-  'Water': 'water', 'Arcane / Energy': 'arcane', 'Space Tech': 'space', 'Dark Energy': 'dark',
-  'Greenies (Chem)': 'greenies',
-};
+/* Roster order for the comm screen's faction grid — the registry's order, which is the workbook's. */
+export const ORDER = Object.freeze(REG.FACTIONS.map((f) => f.voice));
+
+/**
+ * Display name -> voice key. WAS a hand-maintained 9-entry object (FACTION_KEY_BY_NAME), which is
+ * exactly the duplication the registry exists to end. Now a lookup, and a FUNCTION rather than a map
+ * so callers cannot iterate it and mistake it for the roster.
+ *
+ * Returns null for anything unrecognised — 'Combined forces' (the finale's pseudo-faction) has no
+ * single voice, and dialog.js relies on getting null for it.
+ */
+export function voiceKeyOf(factionName) {
+  const f = REG.find(factionName);
+  return f && f.voice ? f.voice : null;
+}
 
 /* per-faction loudness normalization (perceptual gain on the voice bus).
    Harsh/low timbres (square/saw + sub) carry more energy → trimmed below 1;
