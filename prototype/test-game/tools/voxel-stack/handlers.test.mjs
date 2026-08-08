@@ -2233,3 +2233,54 @@ test('BBB-1: thumbCache is BOUNDED, and never evicts a card that is on screen', 
       thumbStore('unit:H' + i, { state: 'baked', cv: c2, sig: 'h' + i }); } })()`);
   assert.ok(t.run(`thumbCache.has('unit:Pinned')`), 'a card that is ON SCREEN survives a full turnover of the bound');
 });
+
+// ── THE LEAK THAT CRASHED CHROME ──────────────────────────────────────────────────────────────────
+// A bake is 192 PIXI.RenderTextures (32 body + 64 turret + 32 body-shadow + 64 turret-shadow), and
+// `state.baked = null` orphaned every one of them. The SPRITES were destroyed; the TEXTURES were not,
+// and PIXI has no finaliser. refreshModel() runs after EVERY edit, so one bake plus one slider nudge
+// leaked 38 MB on a small unit and 84 MB on GND-Artillery. A handful of iterations killed the browser.
+//
+// These assert the RELEASE, not a byte count — the sandbox has no GPU. If they go red, the leak is back.
+test('a dropped bake DESTROYS its render textures, not just its sprites', () => {
+  const t = boot();
+  const n = t.run(`
+    (() => {
+      const seen = [];
+      const rt = (tag) => ({ destroy(hard) { seen.push(tag + ':' + hard); } });
+      state.baked = { body: [rt('b0'), rt('b1')], turret: [rt('t0')],
+                      bodyShadow: [rt('bs0')], turretShadow: [rt('ts0')] };
+      releaseBaked(state.baked);
+      return seen.join(',');
+    })()
+  `);
+  assert.equal(n, 'b0:true,b1:true,t0:true,bs0:true,ts0:true',
+    'every render texture must be destroyed, and with destroy(TRUE) — without the flag the GPU allocation survives');
+});
+
+test('refreshModel releases the bake it is about to drop', () => {
+  // The site that actually mattered: refreshModel runs after every edit.
+  const t = boot();
+  const out = t.run(`
+    (() => {
+      let n = 0;
+      const rt = () => ({ destroy() { n++; } });
+      state.baked = { body: [rt(), rt()], turret: [rt()] };
+      refreshModel();
+      return n + '|' + (state.baked === null);
+    })()
+  `);
+  assert.equal(out, '3|true', 'refreshModel must destroy the textures before nulling state.baked');
+});
+
+test('releaseBaked survives a throwing texture and a null bake', () => {
+  // One bad entry must not strand the rest — a half-released bake leaks as badly as no release.
+  const t = boot();
+  const out = t.run(`
+    (() => {
+      releaseBaked(null); releaseBaked(undefined);
+      const seen = [];
+      releaseBaked({ body: [{ destroy() { throw new Error('gone'); } }, { destroy() { seen.push('after'); } }] });
+      return seen.join(',');
+    })()
+  `);
+  assert.equal(out, 'after', 'a throwing texture must not abort the sweep');});
