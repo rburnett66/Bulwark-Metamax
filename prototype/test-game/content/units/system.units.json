@@ -59,7 +59,7 @@
       }
     },
     "SYS-Cannon-2": {
-      "role": "Cannon T2",
+      "role": "Cannon Tower T2",
       "shape": "Structure",
       "layers": {
         "base": {
@@ -76,7 +76,7 @@
       }
     },
     "SYS-Cannon-3": {
-      "role": "Cannon T3",
+      "role": "Cannon Tower T3",
       "shape": "Structure",
       "layers": {
         "base": {

@@ -20,7 +20,7 @@
       }
     },
     "SYS-Flak-2": {
-      "role": "Flak T2",
+      "role": "Flak Tower T2",
       "shape": "Structure",
       "layers": {
         "base": {
@@ -37,7 +37,7 @@
       }
     },
     "SYS-Flak-3": {
-      "role": "Flak T3",
+      "role": "Flak Tower T3",
       "shape": "Structure",
       "layers": {
         "base": {
