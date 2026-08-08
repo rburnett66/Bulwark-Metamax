@@ -607,17 +607,28 @@ function setPlace(part, p) {
 }
 // the space-carved model BEFORE manual edits (buildVolume is not cached — callers that only need the
 // base, like the live slice editor, cache this and layer edits on cheaply).
-const carveCache = { body: null, turret: null };   // { foot, layers, m } — cleared only by recarve()
-// THE CARVE'S INPUTS, as a string. The cache is keyed on this so it cannot go stale by omission.
+// DOES THIS PART'S MODEL CONTAIN HAND WORK? Set by pushVolParts, which runs before EVERY edit (geometry
+// and colour alike), and by restoreVol when a saved model comes back off disk. Cleared ONLY by an explicit
+// discard — a Carve button, "Reset edits", a new unit. It used to be cleared by recarve(), which ~20
+// unrelated controls called, so the flag that protects the artist's work was reset by the very events it
+// exists to survive. This is declared HERE, beside carveCache, because buildModelRaw reads it and
+// refreshModel() runs at module scope long before the undo block below.
+const volDirty = { body: false, turret: false };
+// carveCache holds THE MODEL — VOL, vcol and PAINT — which is the artifact that gets saved. The name is
+// a leftover from when it really was a cache of the slices; it is kept because ~40 sites read it and
+// renaming would bury the change that matters. What changed (FFF-2) is who may empty it: an explicit
+// re-carve, or a unit switch. Not a slider, and not a render frame.
+const carveCache = { body: null, turret: null };   // { foot, layers, m, sig } — emptied only on the artist's say-so
+// THE CARVE'S INPUTS, as a string. NOT a licence to rebuild — buildModelRaw compares against it to know
+// the model is STALE relative to its slices, and stale is a thing to REPORT, not to resolve by throwing
+// the model away. It must still be complete, because an input missing from here is an input whose change
+// goes unreported.
 //
-// Why not a counter: recarve() NULLS both cache entries, so a generation number bumped only by recarve()
-// changes at exactly the moments the cache is already empty — it would add nothing. And it cannot be
-// carveEpoch, which refreshModel() bumps after EVERY edit: keying on that would miss after every delete,
-// re-carve from source, and destroy the edit that triggered it.
+// Why not a counter: it would have to be bumped by every writer, which is the same completeness problem
+// with an extra place to forget. And it cannot be carveEpoch, which refreshModel() bumps after EVERY edit
+// — a model would read as stale against its own slices the moment it was painted.
 //
-// The hole is a control that mutates a carve INPUT and forgets recarve(). Only the inputs close it.
-// Deliberately excluded: anything a hand edit changes. VOL and vcol are OUTPUTS the artist then edits in
-// place — including them would rebuild the model on every delete and wipe the work.
+// Deliberately excluded: anything a hand edit changes. VOL, vcol and PAINT are the model, not its inputs.
 function carveSig(partId, foot, layers) {
   const xf = (imgXf[partId] || {}), g = geomState[partId] || {}, sp = (a) => (a ? `${a.lo},${a.hi}` : '-');
   let s = `${foot}:${layers}:${carveCuts.top}${carveCuts.side}${carveCuts.front}`;
@@ -664,18 +675,82 @@ function copyVoxColour(part, k, srcK) {
   if (m.PAINT) m.PAINT[k] = m.PAINT[srcK];
   return true;
 }
+// RE-FIT, NOT RE-DERIVE. The grid moved under a model that has hand work in it, so its arrays are the
+// wrong LENGTH — but the work in them is not wrong, and re-carving is precisely the thing this refuses to
+// do behind the artist's back. Every voxel is copied by its (x, y, z) COORDINATE into arrays of the new
+// shape: a grow keeps everything and adds empty space, a shrink drops what no longer fits and says so.
+// `views` (the slice sheets projected onto the OLD box) is carried over — pick() bounds-checks, so where
+// it still lines up the wall art still paints and where it does not the voxel falls back to vcol. To get
+// the box itself re-derived at the new size, press a Carve button; that is the explicit ask.
+function refitModel(m, oldFoot, oldLayers, foot, layers) {
+  const oN = oldFoot * oldFoot, N = foot * foot;
+  const VOL = new Uint8Array(layers * N), vcol = new Uint8Array(layers * N * 3), PAINT = new Uint8Array(layers * N);
+  let kept = 0, lost = 0;
+  for (let z = 0; z < oldLayers; z++) for (let y = 0; y < oldFoot; y++) for (let x = 0; x < oldFoot; x++) {
+    if (!m.filled(x, y, z)) continue;
+    if (z >= layers || y >= foot || x >= foot) { lost++; continue; }
+    const ok = z * oN + y * oldFoot + x, k = z * N + y * foot + x;
+    VOL[k] = 1; kept++;
+    if (m.vcol) { vcol[k * 3] = m.vcol[ok * 3]; vcol[k * 3 + 1] = m.vcol[ok * 3 + 1]; vcol[k * 3 + 2] = m.vcol[ok * 3 + 2]; }
+    if (m.PAINT) PAINT[k] = m.PAINT[ok];
+  }
+  if (lost) console.warn(`[stack-forge] grid shrank ${oldFoot}×${oldLayers} → ${foot}×${layers}: ${lost} voxel(s) fell outside it and were dropped (Ctrl+Z, or raise the size back)`);
+  else console.info(`[stack-forge] grid ${oldFoot}×${oldLayers} → ${foot}×${layers}: ${kept} hand-edited voxel(s) re-fitted, NOT re-carved`);
+  const filled = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < foot && y < foot && z < layers && !!VOL[z * N + y * foot + x];
+  return { ...m, VOL, vcol, PAINT, filled };
+}
+// THE MODEL IS THE SAVED ARTIFACT, NOT A CACHE OF THE SLICES (FFF-2). Owner: "The model derives from
+// slice art. Edits for color and geo go into the model!!" / "The cache is only for undo, and the cache
+// does not get saved. The model geo and coloring persist get saved."
+//
+// This used to read: the signature moved, so throw the model away and carve a new one. Any change to a
+// carve INPUT moves the signature, so a Layers drag (per drag-pixel), a Resolution change, a slice nudge,
+// a flip, a Geometry-box slider — and, worst, an ORBIT FRAME, via updateGamePreview → bodyExtentTiles →
+// buildModel — silently destroyed hand work nobody asked to lose. Six paths, one cause; guarding six call
+// sites would have left the seventh.
+//
+// THE RULE: a carve happens when the USER ASKS (a Carve button, Reset edits, a new unit). carveSig keeps
+// its legitimate job — knowing the model is STALE relative to its slices — and that is now SURFACED
+// (carveStale, shown in the grid header) instead of silently resolved by destroying the model.
+const carveStale = { body: false, turret: false };   // model no longer matches its slices — offer, don't act
 function buildModelRaw(partId, foot, layers) {
   const hit = carveCache[partId], sig = carveSig(partId, foot, layers);
-  if (hit && hit.foot === foot && hit.layers === layers && hit.sig === sig) return hit.m;
+  if (hit) {
+    if (hit.sig === sig && hit.foot === foot && hit.layers === layers) { carveStale[partId] = false; return hit.m; }
+    if (volDirty[partId]) {                            // hand work lives here — the slices do not get to overwrite it
+      if (hit.foot !== foot || hit.layers !== layers) {
+        hit.m = refitModel(hit.m, hit.foot, hit.layers, foot, layers);
+        hit.foot = foot; hit.layers = layers;
+      }
+      // hit.sig deliberately KEEPS the signature of the carve this model came from, so staleness is
+      // re-derived on every call instead of being latched: put the input back where it was and the flag
+      // clears itself. (A dims change takes one extra call to settle, because the refit has to run in
+      // reverse first — hit.foot/hit.layers move, hit.sig does not.)
+      carveStale[partId] = true;
+      return hit.m;
+    }
+  }
   const m = carveRaw(partId, foot, layers);
   carveCache[partId] = { foot, layers, m, sig };
+  carveStale[partId] = false;
   return m;
 }
 // PAINT: one byte per voxel beside VOL and vcol. 1 = the artist chose this colour and it is
-// AUTHORITATIVE; 0 = carve-derived and re-derivable. Without it, 'make paint write vcol' regresses to
-// nothing, because wallCol wins over vcol unconditionally on every non-top face — the flag is what tells
-// the renderer to leave a painted voxel alone. A recarve rebuilds vcol from the art and then re-lays the
-// PAINTed voxels on top, exactly as restoreVol already does for geometry.
+// AUTHORITATIVE; 0 = carve-derived, and the slice sheet that depicts that wall may colour it.
+//
+// WHY IT SURVIVED FFF-2. Its ORIGINAL purpose — letting a re-carve rebuild vcol from the art and then
+// re-lay the artist's colour on top — is indeed gone: a re-carve is an explicit "start over from the
+// source" now, and starting over means starting over. But it was never only that, and it has three live
+// readers today:
+//   1. buildFaces — the wall-art override. Without it, wallCol beats vcol unconditionally on every
+//      non-top face, so painting a voxel red would suppress its side art and fall back to the flat column
+//      colour. This is the load-bearing one, and after FFF-8 it is the ONLY thing between the model's
+//      colour and the screen.
+//   2. snapshotProject — "is there authored colour worth serialising here", which decides whether vcol
+//      goes to disk at all.
+//   3. restoreVol — putting it back, so a reloaded unit keeps its authorship.
+// Deleting it would take the first with it. It stays, with its meaning restated: PAINT means the model's
+// colour wins here, not "re-lay me after the next carve".
 function carveRaw(partId, foot, layers) {
   const v = buildVolume(partId, foot, layers), N = foot * foot;
   if (v.vcol) return { vcol: v.vcol, PAINT: new Uint8Array(layers * N), filled: v.filled, cd: null, views: v.views, sp: v.sp, dbg: v.dbg, VOL: v.VOL };  // .vox → already voxels
@@ -1568,6 +1643,26 @@ function updateDims(part, foot, layers, base) {
   if (gd) { gd.textContent = txt + (anyCl ? '  — CLAMPED' : ''); gd.style.color = anyCl ? '#e0625f' : '#8fa7bd'; }
   if (sd) { sd.textContent = txt + (anyCl ? '  — CLAMPED, raise Resolution' : ''); sd.style.color = anyCl ? '#e0625f' : '#8fa7bd'; sd.style.borderColor = anyCl ? '#e0625f' : 'var(--line)'; }
 }
+// ── THE OFFER (FFF-2) ─────────────────────────────────────────────────────────────────────────────
+// carveSig's legitimate job is knowing the model is STALE relative to its slices. Its ILLEGITIMATE job —
+// the one that cost six paths' worth of hand work — was resolving that by silently re-carving. So it is
+// surfaced here instead: the artist is TOLD, and decides. "Keep" is not a no-op UI nicety either — it
+// dismisses the row for the signature that raised it, so an input the artist has already answered for
+// does not nag on every redraw.
+let carveStaleAck = { body: null, turret: null };
+function renderCarveStale(part) {
+  const row = $('carveStaleRow'); if (!row) return;
+  const sig = carveCache[part] ? carveSig(part, footOf(part), gridLayersOf(part)) : null;
+  const show = !!carveStale[part] && carveStaleAck[part] !== sig;
+  row.hidden = !show;
+  if (!show) return;
+  const msg = $('carveStaleMsg');
+  if (msg) msg.textContent = `The ${part}'s source slices have changed since it was carved. Its hand edits are kept — nothing has been re-carved.`;
+  const go = $('carveStaleGo');
+  if (go) go.onclick = () => { recarveFromSource(part); refreshModel(); renderGridView(); scheduleAutosave(); };
+  const keep = $('carveStaleKeep');
+  if (keep) keep.onclick = () => { carveStaleAck[part] = sig; row.hidden = true; };
+}
 function renderGridView() {
   const cv = $('gridCanvas'); if (!cv) return;
   const ctx = cv.getContext('2d');
@@ -1583,6 +1678,7 @@ function renderGridView() {
   // from the model whenever the model changes and at no other time.
   const base = gridModel, V = base.views;
   updateDims(part, foot, layers, base);   // x/y/z readout in the grid header + primary view; flags clamped axes
+  renderCarveStale(part);                 // FFF-2: "these slices no longer match this model" — an offer, never an act
   // ONE MODEL: base.filled is the carve, read directly.
   // When the overlay was disabled in buildModel, this copy was missed, so the GRID hid voxels that the 3D
   // view still drew: stale 'del' entries blanked geometry here and nowhere else. Read the carve, only.
@@ -2016,10 +2112,31 @@ function refreshModel() {
 refreshModel();
 
 // ── THE THREE LEVELS (owner 2026-08-04: "maybe calling rebuild slices from 42 locations is the bug").
-// recarve()      source images -> masks -> clear/fill/cut. The ONLY thing that runs buildVolume.
-// refreshModel() rebuild faces from the CACHED carve + your voxel edits, then redraw. Paint, erase,
-//                undo, palette, lighting — none of these can change geometry, so none re-carve.
-function recarve() { carveCache.body = null; carveCache.turret = null; volDirty.body = false; volDirty.turret = false; refreshModel(); }
+// recarveFromSource(parts)  THE EXPLICIT ASK. Discards hand work and derives from the slices. Undoable.
+//                           Callers: the Carve buttons, "Reset edits", a confirmed flip, the stale offer.
+// recarve()      a carve INPUT changed. Re-derives a part with no hand work; leaves one that has it alone
+//                (buildModelRaw flags it stale instead). ~20 callers, none of which may destroy anything.
+// refreshModel() rebuild faces from the model, then redraw. Paint, erase, undo, lighting — none of these
+//                can change geometry, so none re-carve.
+// recarve() means "a carve INPUT changed", and that is ALL it means. It re-derives from the slices for a
+// part with no hand work — the normal authoring flow, where dragging Layers should make the box taller —
+// and leaves a part that HAS hand work alone; buildModelRaw flags that part stale instead. It used to null
+// both caches and clear volDirty unconditionally, which is how ~20 unrelated controls (and one render
+// frame) could throw a carve away. Clearing volDirty is now exclusively an explicit discard's business.
+function recarve() {
+  for (const p of ['body', 'turret']) if (!volDirty[p]) carveCache[p] = null;
+  refreshModel();
+}
+// THE EXPLICIT ASK: throw this part's hand work away and derive it from the slices again. Undoable — the
+// snapshot is taken first, so Ctrl+Z brings the work back. This is the ONLY way a model with hand work in
+// it gets replaced by a carve, and every caller is a button the artist pressed.
+function recarveFromSource(parts) {
+  const list = Array.isArray(parts) ? parts : [parts];
+  const live = list.filter((p) => carveCache[p]);
+  if (live.length) pushVolParts(live);          // ONE undo entry covering every part being discarded
+  for (const p of list) { carveCache[p] = null; volDirty[p] = false; carveStale[p] = false; }
+  gridModel = null;                             // (pushVolParts sets volDirty; clearing after is deliberate)
+}
 // Put a saved volume back after a carve has rebuilt VOL. Dims must match exactly — the keys are absolute
 // z*foot²+y*foot+x, so replaying a 32-grid volume into a 64-grid model would scatter it. A mismatch
 // discards rather than mis-indexes, and says so.
@@ -2046,8 +2163,13 @@ function restoreVol(p) {
       const P = u8FromB64(s.paint), C = u8FromB64(s.vcol);
       if (P.length !== c.m.PAINT.length || C.length !== c.m.vcol.length) {
         console.warn(`[stack-forge] ${part}: saved colour length mismatch — paint discarded rather than mis-indexed`);
-      } else { c.m.PAINT.set(P); c.m.vcol.set(C); }
+      } else { c.m.PAINT.set(P); c.m.vcol.set(C); volDirty[part] = true; }
     }
+    // volDirty IS WHAT PROTECTS A RESTORED MODEL (FFF-2). It is what tells buildModelRaw this part holds
+    // work the slices cannot reproduce, so no later carve-input change may re-derive over it. Setting it
+    // only in the `s.edited` branch above meant a unit that was painted but never hand-carved came back
+    // off disk unprotected — and the first Layers nudge threw the paint away, which is precisely the
+    // "coloured but not carved" case the comment above already had to be written for once.
   }
   gridModel = null; refreshModel();
 }
@@ -2396,7 +2518,11 @@ function runCarve(upTo, label) {
   carveCuts.side  = upTo === 'side' || upTo === 'front';
   carveCuts.front = upTo === 'front';
   const part = gridPart(), foot = footOf(part), layers = gridLayersOf(part);
-  gridModel = null; TRACE = []; recarve(); const steps = TRACE; TRACE = null; renderGridView();
+  // THE EXPLICIT ASK. A Carve button is the artist saying "derive this from the slices again", so it — and
+  // only it, plus Reset edits and a flip the artist confirmed — may replace hand work. Both parts, because
+  // carveCuts is a whole-unit setting and both carve from it; one Ctrl+Z puts the whole unit back.
+  recarveFromSource(['body', 'turret']);
+  TRACE = []; recarve(); const steps = TRACE; TRACE = null; renderGridView();
   const m = buildModel(part, foot, layers);
   let n = 0; for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (m.filled(x, y, z)) n++;
   const bb = modelBBox(m.filled, foot, layers);
@@ -2420,9 +2546,6 @@ function liveVOL(part) {
   const hit = carveCache[part];
   return hit && hit.m ? hit.m.VOL : null;
 }
-// Has this part's VOL been hand-edited since its last carve? Set here because pushVol runs before every
-// edit; cleared by recarve, which is the one operation that legitimately throws hand work away.
-const volDirty = { body: false, turret: false };
 // ONE ENTRY IS A LIST OF PART SNAPSHOTS, and it captures ALL THREE arrays a part owns: VOL (geometry),
 // vcol (colour) and PAINT (who chose that colour). A VOL-only entry made every paint stroke silently
 // un-undoable the moment setVox started writing vcol, which is why colour is in here.
@@ -2440,13 +2563,19 @@ function volSnapPart(part) {
 // SNAPSHOT THE ARRAYS YOU ARE ABOUT TO MUTATE. buildModel can replace carveCache[part].m via the sig
 // path, so anything that builds must build FIRST and push SECOND — otherwise the snapshot is of a
 // different array than the one the edit then writes, and the undo restores nothing (the mirrorWorld bug).
+// ONE LEVEL (owner 2026-08-07: "give me one level of undo for paint and geo" / "Do not make this overly
+// complex"). It was 60 deep, and the depth is where both of its bugs lived: volApply's length guard (a
+// history entry outliving the dims it was taken at) and the mirror's double push. One slot cannot outlive
+// anything, and the undo/redo pair is still a true inverse. The cache is undo ONLY and is never saved —
+// what persists is the model, which already carries every edit these snapshots restore.
+const MAX_UNDO = 1;
 function pushVolParts(parts) {
   const entry = [];
   for (const p of parts) { const s = volSnapPart(p); if (s) { entry.push(s); volDirty[p] = true; } }
   if (!entry.length) return;
   volRedo.length = 0;                                  // a fresh edit forks the timeline — nothing left to redo
   volHistory.push(entry);
-  if (volHistory.length > 60) volHistory.shift();
+  while (volHistory.length > MAX_UNDO) volHistory.shift();
 }
 function pushVol(part) { pushVolParts([part]); }
 // every part a whole-unit operation (palette remap, bake) rewrites — one Ctrl+Z puts the unit back
@@ -2474,13 +2603,13 @@ function volApply(h) {
 function volUndo() {
   const h = volHistory.pop(); if (!h) return false;
   const cur = volApply(h); if (!cur) return false;
-  volRedo.push(cur); if (volRedo.length > 60) volRedo.shift();
+  volRedo.push(cur); while (volRedo.length > MAX_UNDO) volRedo.shift();
   return true;
 }
 function volRedoStep() {
   const h = volRedo.pop(); if (!h) return false;
   const cur = volApply(h); if (!cur) return false;
-  volHistory.push(cur); if (volHistory.length > 60) volHistory.shift();
+  volHistory.push(cur); while (volHistory.length > MAX_UNDO) volHistory.shift();
   return true;
 }
 // the voxels the current facing/layer is showing (layer 0 = the surface raycast)
@@ -2520,10 +2649,8 @@ if ($('gridResetEdits')) $('gridResetEdits').onclick = () => {
   const part = gridPart();
   if (!carveCache[part]) { console.warn('[stack-forge] reset edits: nothing carved yet'); return; }
   if (!confirm(`Reset the ${part} to its carve?\n\nEvery hand-deleted / added voxel and every painted colour on this part goes back to what the source art carves. Ctrl+Z undoes it.`)) return;
-  pushVol(part);                       // captures VOL + vcol + PAINT before they are thrown away
-  carveCache[part] = null;             // → next buildModelRaw re-carves from the art
-  volDirty[part] = false;
-  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
+  recarveFromSource(part);             // snapshots first, then drops the cache → buildModelRaw re-derives
+  refreshModel(); renderGridView(); scheduleAutosave();
 };
 if ($('gridGuides')) $('gridGuides').onchange = (e) => { gridGuides = e.target.checked; renderGridView(); };
 if ($('gridOrient')) $('gridOrient').onchange = (e) => { gridOrient = e.target.checked; voxSig = ''; renderGridView(); };   // voxSig: the markers live in the MAIN view too
@@ -3243,7 +3370,7 @@ function toggleFlip(part, view, axis) {
   // gridPart(), not `part`, so flipping the inactive part's art pushed an undo entry for the wrong one.
   if (view !== 'back' && volDirty[part] &&
       confirm(`Flip re-carves the ${part}. Its hand edits (deleted/added voxels, painted colour) are pinned to the OLD carve and will not line up.\n\nOK = recarve this part (discard those edits — Ctrl+Z brings them back)\nCancel = keep them (they may not line up)`)) {
-    pushVol(part); carveCache[part] = null; volDirty[part] = false; gridModel = null;
+    recarveFromSource(part);
   }
   renderView(pickFor(part, view));
 }
@@ -4383,6 +4510,10 @@ async function loadProject(p) {
   // dimensions inherited the previous unit's voxels. Undo/selection/palette were already discarded
   // here; the volume was not, because it only became the model when the voxEdit overlay was retired.
   carveCache.body = null; carveCache.turret = null; gridModel = null;
+  // volDirty travels with the model it describes. Left true across a unit switch it would tell
+  // buildModelRaw the INCOMING unit has hand work to protect, and its first carve would never run.
+  volDirty.body = false; volDirty.turret = false; carveStale.body = false; carveStale.turret = false;
+  carveStaleAck = { body: null, turret: null };
   volHistory.length = 0; volRedo.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // undo history + selection belong to the OUTGOING unit — never let them apply to this one
   try {
     $('uid').value = p.id || 'unit'; activeUnitId = (p.id || 'unit');   // anchor the WIP key to the restored project
@@ -4792,6 +4923,7 @@ function clearSourceArt() {
   imgXf.body = mkXf(); imgXf.turret = mkXf();
   geomState.body = { auto: true, bottomFrom: 'top' }; geomState.turret = { auto: true, bottomFrom: 'top' };
   carveCache.body = null; carveCache.turret = null;
+  carveStale.body = false; carveStale.turret = false; carveStaleAck = { body: null, turret: null };
   volHistory.length = 0; volRedo.length = 0; volDirty.body = false; volDirty.turret = false;
   gridSel = null; gridSelVox = null; gridSelView = null;
   gridModel = null;
@@ -4822,6 +4954,10 @@ The switch was cancelled so nothing is lost.`); }
   // dimensions inherited the previous unit's voxels. Undo/selection/palette were already discarded
   // here; the volume was not, because it only became the model when the voxEdit overlay was retired.
   carveCache.body = null; carveCache.turret = null; gridModel = null;
+  // volDirty travels with the model it describes. Left true across a unit switch it would tell
+  // buildModelRaw the INCOMING unit has hand work to protect, and its first carve would never run.
+  volDirty.body = false; volDirty.turret = false; carveStale.body = false; carveStale.turret = false;
+  carveStaleAck = { body: null, turret: null };
   volHistory.length = 0; volRedo.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
   loadingUnit = true;
   $('uid').value = id; activeUnitId = id;                 // anchor the WIP key to the unit being loaded
