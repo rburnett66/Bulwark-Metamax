@@ -27,41 +27,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      # Render-tier + pack contract: a Tier C unit whose wave data can exceed MAX_LIVE_3D fails the build.
-      - run: node --test prototype/test-game/src/data/renderTiers.test.mjs prototype/test-game/src/render/voxel/pack.test.mjs
-      # Stack Forge cores. carve.js and select.js are the code the tool actually runs; audit.test.mjs
-      # fails on dead code, on a handler bound to a missing element, on the cores not being loaded, and
-      # on the front facing disagreeing with itself. Passing locally was never a gate -- this is.
-      - run: node --test prototype/test-game/tools/voxel-stack/carve.test.mjs prototype/test-game/tools/voxel-stack/select.test.mjs prototype/test-game/tools/voxel-stack/audit.test.mjs
-      # palette.js decides which colours survive a reduction to 2/4/8/16/32/48. Its own header made a
-      # claim that was false -- a 1-voxel stray could take a slot in a 4-colour palette -- so these
-      # tests assert the claims, and the suite is mutation-checked rather than merely green.
-      - run: node --test prototype/test-game/tools/voxel-stack/palette.test.mjs
-      # BOOT GATE. The suites above exercise pure functions; node --check only proves the file parses.
-      # Neither runs module scope -- which is where five separate dead-on-arrival ships came from: an
-      # out-of-scope binding, a TDZ read, and a null deref on frame one. This runs the real boot path
-      # against a stubbed DOM/PIXI and drives one ticker frame, so those faults fail here, not on the
-      # owner's screen.
-      - run: node --test prototype/test-game/tools/voxel-stack/boot.test.mjs
-      # HANDLER GATE. boot.test.mjs proves module scope runs; it cannot see inside a click handler, and a
-      # handler can be completely broken WITHOUT throwing (Remap -> Bake reported success and wrote to a
-      # store nothing read). This file measures the MODEL either side of each handler and is mutation-
-      # checked. Its header has called itself a gate since it was written -- it was in no CI job until
-      # now, so nothing it protects was actually protected, including the faction/save-id checks.
-      - run: node --test prototype/test-game/tools/voxel-stack/handlers.test.mjs
-      # ART IS SIZED TO MATCH COLLISION (sprite = collision x 4/3), not the reverse. This test guards
-      # that relationship and was RED in the repo for weeks -- it asserted a magnitude ("radius > 1")
-      # that a balance retune was always free to change, and it sat in no gate, so nothing reported it.
-      - run: node --test prototype/test-game/src/render/unitart-scale.test.mjs
-      # ATLAS DIMENSIONS of the real shipped packs. An atlas past the device MAX_TEXTURE_SIZE does not
-      # throw -- WebGL refuses the upload and the unit renders as nothing, on that device only, so a
-      # desktop never sees it. Live since body frames went 16 -> 32: atlas area scales with frame count.
-      # This is also the first CI test that reads content/ at all.
-      - run: node --test prototype/test-game/src/render/voxel/atlasSize.test.mjs
-      # THE FACTION REGISTRY, checked against tables.js, content/units/ and voicepacks.json rather than
-      # against itself. A wrong prefix here would be worse than the guessing it replaces, because it
-      # would look authoritative. Six of nine prefixes were wrong before this existed.
-      - run: node --test prototype/test-game/src/data/factions.test.mjs
+      # EVERY TEST FILE, ENUMERATED AT RUN TIME.
+      #
+      # This used to be a hand-maintained list of individual suites, and it fell behind badly: 49 test
+      # files existed on disk and 11 were gated. The ENTIRE simulation -- combat, waves, harvest, mapgen,
+      # replay, separation, contact -- ran on nobody's machine but the author's. Two suites were found
+      # red in the repo, one of them for weeks (unitart-scale asserted a magnitude a balance retune had
+      # long since changed), and handlers.test.mjs called itself "HANDLER GATE" in its own header while
+      # being in no job at all.
+      #
+      # A list you have to remember to append to is a list that rots. `find` cannot forget: a new
+      # *.test.mjs is gated the moment it lands, which is the only property that actually holds.
+      #
+      # Not `node --test <dir>` -- that fails to discover these files. Not a `**` glob -- that needs
+      # shopt -s globstar and would silently under-match here rather than erroring.
+      #
+      # The contracts this protects, unchanged: a unit without an explicit render_tier, or a Tier C unit
+      # whose wave data can exceed MAX_LIVE_3D, still fails the build before it ships.
+      - run: node --test $(find prototype/test-game/src prototype/test-game/tools -name '*.test.mjs' | sort)
   deploy:
     needs: test
     runs-on: ubuntu-latest
