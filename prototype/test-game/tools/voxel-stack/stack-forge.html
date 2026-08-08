@@ -40,7 +40,18 @@
     .ucard .un { font-size:10px; margin-top:4px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .ucard .ur { font-size:9px; color:var(--muted); }
     .ucard .badge { font-size:8.5px; letter-spacing:.02em; }
+    /* DDD-6: one colour per card STATE, and the badge is derived from what the thumbnail actually
+       resolved — baked art in the repo (green) · a card image rendered from the voxel model (cyan) ·
+       source slices only (amber) · nothing authored (grey) · art named but not in the repo (red).
+       A failed load must never be able to look like "never authored", so it gets its own colour AND
+       its own card border rather than falling back to the empty placeholder. */
     .ucard .badge.ok { color:#57d98a; } .ucard .badge.no { color:#6b7c90; }
+    .ucard .badge.mdl { color:#5fe0ff; } .ucard .badge.wip { color:#e0b060; } .ucard .badge.err { color:#ff6b6b; }
+    .ucard[data-thumb^="model"]  { border-color:#1f4a5c; }
+    .ucard[data-thumb^="source"] { border-color:#4a3d22; }
+    .ucard[data-thumb^="empty"]  { opacity:.72; }
+    .ucard[data-thumb^="missing"]{ border-color:#5a2630; background:#180e14; }
+    .ucard[data-thumb$="stale"]  { border-color:#e0b060; }
     h1 { font-size:15px; letter-spacing:.14em; margin:0 0 2px; }
     .sub { font-size:11px; color:var(--muted); margin-bottom:2px; line-height:1.45; }
     .grp { border:1px solid var(--line); border-radius:8px; padding:9px 11px; margin-bottom:9px; }
