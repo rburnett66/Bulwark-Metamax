@@ -99,20 +99,42 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         self._reply(403, {"ok": False, "error": f"{endpoint} is loopback-only (peer {peer})"})
         return False
 
+    # The image formats /__ship will write, each with the magic bytes a payload MUST start with. This is
+    # the check that makes the extension a claim the server verifies rather than one it takes on trust:
+    # without it `path` decides the name on disk and `b64` decides the contents, independently, and a
+    # loopback POST could put arbitrary bytes under a .png name. JPEG earns the same rigour as PNG did --
+    # SOI marker, then the JFIF/Exif/raw APPn byte, which is every JPEG a canvas will produce.
+    #   PNG   89 50 4E 47 0D 0A 1A 0A   the 8-byte signature
+    #   JPEG  FF D8 FF                  SOI + the first marker's FF
+    _IMAGE_MAGIC = {
+        ".png": bytes.fromhex("89504e470d0a1a0a"),
+        ".jpg": bytes.fromhex("ffd8ff"),
+    }
+
     @staticmethod
     def _content_path(req):
         """The ONE path whitelist, shared by write and delete: a relative path under content/, no escape,
-        .json or .png only, never code. Returns (rel, abs_dest, is_png) or raises ValueError."""
+        .json or an allowed image extension only, never code.
+        Returns (rel, abs_dest, magic) -- magic is None for .json, else the required leading bytes."""
         rel = str(req.get("path", "")).replace("\\", "/").lstrip("/")
         norm = os.path.normpath(rel).replace("\\", "/")
-        # .json carries `data` (an object); .png carries `b64` (a bare-or-data-URL base64 image).
+        # .json carries `data` (an object); an image carries `b64` (a bare-or-data-URL base64 image).
         # PNGs are allowed so sprite atlases can live on disk instead of being inlined as base64 in
         # the units manifest -- three units of inline atlases reached 4.2 MB, past the localStorage
-        # ceiling. Still whitelisted to content/**, still no path escape, still never code.
-        is_png = rel.endswith(".png")
-        if norm != rel or not rel.startswith("content/") or ".." in rel or not (rel.endswith(".json") or is_png):
-            raise ValueError(f"path not allowed: {rel!r} (must be content/**.json or content/**.png)")
-        return rel, os.path.join(directory, *rel.split("/")), is_png
+        # ceiling. JPEG joined them for the unit CARDS (BBB-1): a measured 256x256 card is 13.9 KB as
+        # PNG and 5.2 KB as JPEG q0.9, and a 90-unit catalog is one such file per unit.
+        # Still whitelisted to content/**, still no path escape, still never code.
+        # EXACTLY these spellings, case included. Lower-casing before the lookup would widen the
+        # whitelist the PNG check never widened: it would accept `card/X.JPG`, write it under that name,
+        # and the resolver -- which asks for `<id>.jpg` -- would never find it again on any filesystem
+        # that tells the two apart. One spelling per format, and `.jpeg` is not one of them.
+        ext = os.path.splitext(rel)[1]
+        magic = _NoCacheHandler._IMAGE_MAGIC.get(ext)
+        allowed = sorted(_NoCacheHandler._IMAGE_MAGIC) + [".json"]
+        if norm != rel or not rel.startswith("content/") or ".." in rel or ext not in allowed:
+            raise ValueError(f"path not allowed: {rel!r} "
+                             f"(must be content/** with one of {', '.join(allowed)})")
+        return rel, os.path.join(directory, *rel.split("/")), magic
 
     # Files that carry EVERY unit / every prop. Removing one unit means rewriting these with its entry
     # gone (that goes through /__ship, which is atomic and keeps a .bak); DELETING one would take the
@@ -140,22 +162,27 @@ class _NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length", 0))
             req = json.loads(self.rfile.read(n))
-            rel, dest, is_png = self._content_path(req)
+            rel, dest, magic = self._content_path(req)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             # ATOMIC. Writing in place truncates the destination if anything fails mid-write — and one of
             # these destinations, content/units/voxel-units.json, carries EVERY unit. Write a temp file
             # beside it and os.replace() (atomic on NTFS), keeping the previous version as .bak. Given how
             # many ways content has been lost, the .bak is the cheapest recoverability available.
             tmp = dest + ".tmp"
-            if is_png:
+            if magic:
+                ext = os.path.splitext(rel)[1]
                 raw = str(req.get("b64", ""))
                 if not raw:
-                    raise ValueError("png request has no b64 payload")
+                    raise ValueError(f"{ext} request has no b64 payload")
                 if raw.startswith("data:"):
                     raw = raw.split(",", 1)[-1]
                 blob = base64.b64decode(raw + "=" * (-len(raw) % 4))
-                if blob[:8] != bytes.fromhex("89504e470d0a1a0a"):   # PNG magic
-                    raise ValueError("payload is not a PNG")
+                # THE EXTENSION IS CHECKED AGAINST THE BYTES, per format. A canvas that cannot encode the
+                # requested mime type quietly hands back a PNG data URL, so this is not a theoretical
+                # mismatch -- it is the exact way a .jpg on disk would end up holding PNG bytes.
+                if blob[:len(magic)] != magic:
+                    raise ValueError(f"payload is not a {ext} image "
+                                     f"(starts {blob[:4].hex() or '<empty>'})")
                 with open(tmp, "wb") as f:
                     f.write(blob)
             else:
