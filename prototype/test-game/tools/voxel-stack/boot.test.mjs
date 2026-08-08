@@ -182,10 +182,15 @@ test('the tested cores expose what the tool delegates to', () => {
 
 test('THE SHADOW IS REAL, and the *Core aliases survive it', () => {
   // palette.js does Object.assign(globalThis, api). stack-forge.js is a classic script whose top-level
-  // `function medianCut` / `function rgb2hsv` declarations hoist over globalThis and REPLACE two of
-  // those exports — silently, with no error, so any tool code calling the bare name gets the tool's
-  // population-blind version instead. This asserts the hazard exists (so nobody "cleans up" the aliases
-  // believing it doesn't) AND that the aliases the tool actually calls come through untouched.
+  // `function medianCut` declaration hoists over globalThis and REPLACES that export — silently, with no
+  // error, so any tool code calling the bare name gets the tool's population-blind version instead. This
+  // asserts the hazard exists (so nobody "cleans up" the aliases believing it doesn't) AND that the
+  // aliases the tool actually calls come through untouched.
+  //
+  // rgb2hsv IS NO LONGER SHADOWED, and that is deliberate (FFF-8): the tool's own rgb2hsv/hsv2rgb existed
+  // only for the palette TUNER — the hue/sat/value re-tint that wrote palMap, a draw-time filter — and both
+  // went with it. The assertion is kept as a POSITIVE one rather than deleted, because "palette.js's
+  // rgb2hsv is the one in scope" is exactly the fact a future helper would silently break.
   const sandbox = makeSandbox();
   vm.createContext(sandbox);
   for (const f of ['../../src/data/factions.js', 'carve.js', 'select.js', 'palette.js', '../toolhead.js']) {
@@ -196,8 +201,9 @@ test('THE SHADOW IS REAL, and the *Core aliases survive it', () => {
 
   assert.notEqual(sandbox.medianCut, before.medianCut,
     'stack-forge.js no longer shadows medianCut — if that is deliberate, delete this test and say why');
-  assert.notEqual(sandbox.rgb2hsv, before.rgb2hsv, 'stack-forge.js no longer shadows rgb2hsv');
   assert.equal(sandbox.medianCutCore, before.medianCut, 'medianCutCore must still be palette.js\'s');
+  assert.equal(sandbox.rgb2hsv, before.rgb2hsv,
+    'stack-forge.js has re-declared rgb2hsv — it shadows palette.js\'s, so call rgb2hsvCore instead');
   assert.equal(sandbox.rgb2hsvCore, before.rgb2hsv, 'rgb2hsvCore must still be palette.js\'s');
 
   for (const k of ['extractPalette', 'reducePalette', 'spreadPalette', 'bestPalette', 'paletteRms',

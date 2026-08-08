@@ -234,9 +234,8 @@ test('applying a palette is EXACTLY one undo entry, and it restores colour and P
   t.click('openPal');
   const before = t.distinct();
   t.run('palChoose(4)');
-  const depth = t.run('volHistory.length');
   t.click('palApply');
-  assert.equal(t.run('volHistory.length') - depth, 1, 'apply must push exactly ONE entry');
+  assert.equal(t.run('volHistory.length'), 1, 'apply must be exactly ONE undo step');
   const after = t.distinct();
   t.run('volUndo()');
   assert.equal(t.distinct(), before, 'undo must restore every colour');
@@ -259,29 +258,41 @@ test('an undo entry covers EVERY part the operation touched, not just the active
   }
 });
 
-test('fill, flood fill and move each write the model and each push exactly one undo entry', () => {
+test('fill, flood fill and move each write the model and each is exactly ONE undo step', () => {
+  // MEASURED AS A ROUND TRIP, not as a push count. The history is one level deep now (FFF-2), so counting
+  // entries proves nothing: a second push would evict the first and the length would still read 1. Undoing
+  // back to the EXACT pre-operation state is the claim, and it is the one that fails if an operation
+  // pushes twice — one undo would land on the intermediate state instead.
   const t = boot();
+  const shot = () => t.run(`(() => { const m = carveCache.body.m;
+    return [...m.VOL].join(',') + '|' + [...m.vcol].join(',') + '|' + [...m.PAINT].join(','); })()`);
+  const step = (label, before, run) => {
+    run();
+    assert.equal(t.run('volHistory.length'), 1, `${label}: one undo step`);
+    assert.notEqual(shot(), before, `${label}: must actually change the model`);
+    const after = shot();
+    t.run('volUndo()');
+    assert.equal(shot(), before, `${label}: ONE undo must land exactly on the pre-operation model`);
+    t.run('volRedoStep()');
+    assert.equal(shot(), after, `${label}: redo must be the true inverse`);
+  };
+
   t.run(`renderGridView(); gridSel = { c0: 4, r0: 4, c1: 11, r1: 11 }; gridSelView = gridView; gridSelVox = buildSelVox(true);`);
   assert.ok(t.run('gridSelVox.set.size') > 0, 'test setup: something must be selected');
 
   t.run(`document.getElementById('gridPaintCol').value = '#00ff88'`);
-  let d = t.run('volHistory.length');
-  assert.equal(t.run('fillSelection()'), true, 'fill must report doing something');
-  assert.equal(t.run('volHistory.length') - d, 1, 'fill: exactly one undo entry');
+  step('fill', shot(), () => assert.equal(t.run('fillSelection()'), true, 'fill must report doing something'));
   assert.equal(t.countRGB(0, 255, 136), t.run('gridSelVox.set.size'), 'fill must recolour every selected voxel');
 
-  d = t.run('volHistory.length');
-  const n = t.run('moveSelectionCells(2, 1)');
-  assert.ok(n > 0, 'move must move something');
-  assert.equal(t.run('volHistory.length') - d, 1, 'move: exactly one undo entry');
+  let n = 0;
+  step('move', shot(), () => { n = t.run('moveSelectionCells(2, 1)'); assert.ok(n > 0, 'move must move something'); });
   assert.equal(t.run('gridSelVox.set.size'), n, 'the selection must travel with the voxels');
   t.run('volUndo()');
 
   t.run(`gridSelVox = null; gridSel = null; gridSelView = null; renderGridView();
          document.getElementById('gridPaintCol').value = '#ff00ff';`);
-  d = t.run('volHistory.length');
-  assert.equal(t.run('floodFillAt(6, 6)'), true, 'flood fill with no selection must fill the patch under the cursor');
-  assert.equal(t.run('volHistory.length') - d, 1, 'flood fill: exactly one undo entry');
+  step('flood fill', shot(), () => assert.equal(t.run('floodFillAt(6, 6)'), true,
+    'flood fill with no selection must fill the patch under the cursor'));
   assert.ok(t.countRGB(255, 0, 255) > 0, 'flood fill must actually write colour');
 });
 
@@ -334,11 +345,186 @@ test('every button on the palette window runs without throwing, and the slot edi
   t.click('palSlotReset');
   assert.deepEqual(t.json('palWork[0]'), t.json('palWorkBase[0]'), 'revert must restore what the reduction chose');
   t.click('palRefresh');
-  t.click('paletteAdvanced');
   t.click('paletteClose');
   t.click('paintSwatch');
   t.click('gridUndoBtn');
   t.click('gridRedoBtn');
+});
+
+// ── FFF-8: THE PALETTE IS MODEL DATA, NOT A RENDER FILTER ────────────────────────────────────────
+// buildFaces, collectVox and the grid each used to build a quantiser from state.paletteN and re-bin EVERY
+// voxel on EVERY draw, then push the result through the palMap tuner. So the hex an artist picked was
+// replaced between the model and the screen, and the model — which is what ships — never held the colour
+// they saw. These pin the property that replaced it.
+
+/**
+ * Give the sandbox a REAL keyed source slice, so the slice half of the palette can be measured.
+ *
+ * The generic canvas stub hands back a zeroed ImageData on every call, which is right for "does it draw
+ * without throwing" and useless here: keyedCanvas would key an empty image and slicePaletteEntries would
+ * honestly report no colours. So canvases get a persistent pixel buffer that drawImage fills from the
+ * image and getImageData/putImageData round-trip through — enough for the real keyBackground to run.
+ *
+ * The art is a white field with two solid blocks. White floods from the border and is keyed out; the two
+ * blocks are 425 apart from it in Manhattan distance against a tolerance of 75, so they survive — which is
+ * the point: what reaches the palette is what survives KEYING, not every pixel in the file.
+ */
+const SLICE_A = [7, 222, 111], SLICE_B = [200, 20, 10];
+function installSliceArt(t, part = 'body', view = 'top', W = 32, H = 32) {
+  t.run(`(() => {
+    const base = document.createElement.bind(document);
+    if (!document.__canvasPatched) {
+      document.__canvasPatched = true;
+      document.createElement = (tag) => {
+        const el = base(tag);
+        if (String(tag).toLowerCase() !== 'canvas') return el;
+        let buf = null;
+        const ensure = () => { const n = Math.max(4, (el.width | 0) * (el.height | 0) * 4);
+          if (!buf || buf.length !== n) buf = new Uint8ClampedArray(n); return buf; };
+        const real = { drawImage: (im) => { const b = ensure(); if (im && im.__px) b.set(im.__px.subarray(0, b.length)); },
+          getImageData: () => ({ data: ensure(), width: el.width, height: el.height }),
+          putImageData: (id) => { const b = ensure(); if (id && id.data !== b) b.set(id.data.subarray(0, b.length)); } };
+        el.getContext = () => new Proxy(real, { get: (o, k) => (k in o ? o[k] : typeof k === 'symbol' ? undefined : () => undefined),
+          set: (o, k, v) => { o[k] = v; return true; } });
+        return el;
+      };
+    }
+    const W = ${W}, H = ${H}, px = new Uint8ClampedArray(W * H * 4);
+    for (let i = 0; i < W * H; i++) { px[i*4] = 255; px[i*4+1] = 255; px[i*4+2] = 255; px[i*4+3] = 255; }
+    const block = (x0, y0, c) => { for (let y = y0; y < y0 + 10; y++) for (let x = x0; x < x0 + 10; x++) {
+      const p = (y * W + x) * 4; px[p] = c[0]; px[p+1] = c[1]; px[p+2] = c[2]; px[p+3] = 255; } };
+    block(5, 5, ${JSON.stringify(SLICE_A)}); block(5, 18, ${JSON.stringify(SLICE_B)});
+    imgs['${part}']['${view}'] = { width: W, height: H, __px: px };
+    // adding art moves the carve signature; re-stamp so the fixture model stands (the carve is not what
+    // is under test here — the palette's SOURCE is)
+    for (const p of ['body', 'turret']) if (carveCache[p]) carveCache[p].sig = carveSig(p, carveCache[p].foot, carveCache[p].layers);
+  })()`);
+}
+
+test('FFF-8: the full palette is read from the KEYED SLICES, not from the carved model', () => {
+  // MUTATION: point sliceTally at the raw image instead of keyedCanvas -> white joins the palette and the
+  // background this tool spent a whole modal removing gets a slot in a 4-colour reduction.
+  const t = boot();
+  installSliceArt(t);
+  const got = t.json(`slicePaletteEntries().map((e) => e.rgb)`);
+  assert.deepEqual(got.map((c) => c.join()).sort(), [SLICE_A.join(), SLICE_B.join()].sort(),
+    'exactly the two colours that survive keying — the white field must be gone');
+  assert.ok(t.json(`slicePaletteEntries().map((e) => e.n)`).every((n) => n > 0), 'each colour carries its population');
+});
+
+test('FFF-8 END TO END: the colour on screen == the colour in the model == the colour that bakes', () => {
+  // The claim, on a unit with a REDUCED palette, measured through all three consumers at once:
+  //   buildFaces  = what the 3D view and the bake draw
+  //   collectVox  = what the .vox export and the Tier C model embed emit
+  //   m.vcol      = what is saved
+  // MUTATION: put `if (quant) {…}` back into buildFaces -> faceVsModel goes non-zero and this fails.
+  const t = boot();
+  t.click('openPal');
+  t.run('palChoose(4)');
+  t.click('palApply');
+  const r = t.json(`(() => {
+    const foot = 16, layers = 8, N = foot * foot, m = carveCache.body.m;
+    const F = buildFaces('body', foot, layers);
+    const cells = collectVox('body', foot, layers, 0, 0);
+    const pal = new Set(palWork.map((c) => (c[0] << 16) | (c[1] << 8) | c[2]));
+    let faceVsModel = 0, exportVsModel = 0, faceOffPalette = 0;
+    for (const f of F.faces) {
+      const o = (f.z * N + f.y * foot + f.x) * 3;
+      if (f.r !== m.vcol[o] || f.g !== m.vcol[o + 1] || f.b !== m.vcol[o + 2]) faceVsModel++;
+      if (!pal.has((f.r << 16) | (f.g << 8) | f.b)) faceOffPalette++;
+    }
+    for (const c of cells) {
+      const o = (c.z * N + c.y * foot + c.x) * 3;
+      if (c.r !== m.vcol[o] || c.g !== m.vcol[o + 1] || c.b !== m.vcol[o + 2]) exportVsModel++;
+    }
+    return { faces: F.faces.length, cells: cells.length, faceVsModel, exportVsModel, faceOffPalette };
+  })()`);
+  assert.ok(r.faces > 0 && r.cells > 0, 'test setup: there must be something to measure');
+  assert.equal(r.faceVsModel, 0, `${r.faceVsModel}/${r.faces} drawn faces do not match the model's own colour`);
+  assert.equal(r.exportVsModel, 0, `${r.exportVsModel}/${r.cells} exported voxels do not match the model's own colour`);
+  assert.equal(r.faceOffPalette, 0, 'every drawn face must be one of the palette colours the artist chose');
+
+  // and the GRID agrees — it used to build a SECOND quantiser over a different histogram
+  const grid = t.json(`(() => {
+    renderGridView();
+    const foot = 16, layers = 8, N = foot * foot, m = carveCache.body.m;
+    let off = 0, seen = 0;
+    for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) {
+      if (!m.filled(x, y, z)) continue;
+      const c = gridGeom.colAt(x, y, z), o = (z * N + y * foot + x) * 3; seen++;
+      if (c[0] !== m.vcol[o] || c[1] !== m.vcol[o + 1] || c[2] !== m.vcol[o + 2]) off++;
+    }
+    return { seen, off };
+  })()`);
+  assert.ok(grid.seen > 0);
+  assert.equal(grid.off, 0, `${grid.off}/${grid.seen} grid cells disagree with the model`);
+});
+
+test('FFF-8: the draw-time filter and its four stores are GONE, not merely unused', () => {
+  // A store nothing reads is this tool's most expensive recurring bug. These four had readers — on every
+  // draw — which is worse: they silently overrode the model. Named individually so a partial revert cannot
+  // pass. MUTATION: re-declare any one of them -> this fails and names it.
+  const t = boot();
+  for (const name of ['buildQuantiser', 'buildPalette', 'weightedMedianCut', 'palMap', 'palKeep', 'palDrop',
+    'setPaletteN', 'remapModelToWorking', 'palEpoch']) {
+    assert.equal(t.run(`typeof ${name}`), 'undefined', `${name} is a piece of the render-time palette filter`);
+  }
+  assert.equal(t.run(`state.paletteN === undefined`), true, 'state.paletteN must not exist');
+  assert.equal(t.run(`JSON.stringify(snapshotProject()).includes('palMap')`), false,
+    'a saved project must not carry filter state beside a model that does not contain its result');
+  // buildFaces has no `raw` mode left, because there is no reduction for `raw` to skip
+  assert.equal(t.run(`buildFaces.length`), 3, 'buildFaces takes (partId, foot, layers) — nothing else');
+});
+
+test('FFF-8: the model palette comes from the MODEL, the full palette from the SLICES', () => {
+  // Two palettes, two sources, and the split is the point. The inline paint strip describes what the model
+  // HOLDS; the Palette window offers what the ART makes available. modelPalette used to fold the wall
+  // sheets in, which made it neither.
+  // MUTATION: fold V.side back into modelPalette -> the strip claims a colour vcol does not contain.
+  const t = boot();
+  t.run(`(() => {
+    const foot = 16, layers = 8, w = foot, h = layers;
+    const m = new Uint8Array(w * h).fill(1), c = new Uint8Array(w * h * 3);
+    for (let i = 0; i < w * h; i++) { c[i*3] = 7; c[i*3+1] = 222; c[i*3+2] = 111; }   // a colour ONLY the side sheet has
+    carveCache.body.m.views = { side: { w, h, m, c }, front: null, back: null, ox: 0, oy: 0, z0: 0 };
+    gridModel = null; renderGridView();
+  })()`);
+  const WALL = (7 << 16) | (222 << 8) | 111;
+  const strip = t.json('gridModel.palette.map((c) => (c[0]<<16)|(c[1]<<8)|c[2])');
+  assert.ok(strip.length > 0, 'test setup: the strip must have something in it');
+  assert.ok(!strip.includes(WALL), 'the MODEL palette must not name a colour that is only in a slice sheet');
+  const vcolHas = t.run(`(() => { const m = carveCache.body.m, s = new Set();
+    for (let i = 0; i < m.PAINT.length; i++) s.add((m.vcol[i*3]<<16)|(m.vcol[i*3+1]<<8)|m.vcol[i*3+2]);
+    return ${JSON.stringify(strip)}.every((k) => s.has(k)); })()`);
+  assert.equal(vcolHas, true, 'every colour in the strip must be one vcol actually holds');
+  // …and the same colour IS offered by the palette window, because it reaches the screen from a slice
+  t.click('openPal');
+  assert.ok(t.json('palEntries.map((e) => (e.rgb[0]<<16)|(e.rgb[1]<<8)|e.rgb[2])').includes(WALL),
+    'the full palette must offer a colour the slices put on the model');
+});
+
+test('FFF-8: applying a palette does not narrow what the palette window can offer next time', () => {
+  // THE REASON THE FULL PALETTE COMES FROM THE SLICES. Reduce the model to 2 colours and the model has 2
+  // colours — so a window that re-read the MODEL could then only ever offer 2, and every later reduction
+  // would be a reduction of a reduction. The slices do not move when the model does.
+  // MUTATION: drop the slicePaletteEntries merge from palGatherEntries -> after is 2 and this fails.
+  const t = boot();
+  installSliceArt(t);
+  t.click('openPal');
+  const before = t.run('palEntries.length');
+  assert.ok(before > 4, 'test setup: the unit must start with more colours than the budget');
+  t.run('palChoose(2)');
+  t.click('palApply');
+  assert.ok(t.distinct() <= 2, 'test setup: the apply must actually have reduced the model');
+  t.click('palRefresh');                                             // re-read the source
+  const after = t.run('palEntries.length');
+  assert.ok(after > 2, `the pool collapsed to the model (${after}) — the source must stay the source`);
+  const keys = t.json('palEntries.map((e) => e.rgb.join())');
+  for (const c of [SLICE_A, SLICE_B]) {
+    assert.ok(keys.includes(c.join()), `${c} is in the art, so it must still be on offer after an Apply`);
+  }
+  assert.ok(t.run('palOpts.find((o) => o.n === 8).palette.length') > 2,
+    'and a bigger size must still be a real offer, not two greys wearing eight hats');
 });
 
 test('every paint tool can render its grid', () => {
@@ -353,6 +539,157 @@ test('every paint tool can render its grid', () => {
     t.run(`gridView = '${view}'; renderGridView();`);
     assert.ok(t.run('!!gridGeom.colAt'), `${view}: gridGeom must carry colAt for the flood fill to match on`);
   }
+});
+
+// ── FFF-2: THE MODEL IS THE SAVED ARTIFACT, NOT A CACHE OF THE SLICES ────────────────────────────
+// buildModelRaw treated the model as a cache it could throw away: any change to a carve INPUT moved
+// carveSig, and the next buildModel silently re-derived from the slices. Six paths reached that, and one
+// of them was a RENDER FRAME. The fix is not six guards; it is that a carve happens when the user asks.
+
+/** put BOTH kinds of hand work into the body: a deleted voxel (geo) and a painted one (colour) */
+function seedHandWork(t) {
+  t.run(`(() => {
+    pushVol('body');                                   // one undo step covering both edits below
+    liveVOL('body')[2 * 256 + 6 * 16 + 6] = 0;         // GEO: punch a hole the slices would fill back in
+    setVox('body', 2 * 256 + 8 * 16 + 8, [255, 0, 255]);   // COLOUR: a hex no carve would ever produce
+  })()`);
+}
+/** read the model back BY COORDINATE — the keys move when foot changes, the work does not */
+const handWork = (t) => t.json(`(() => {
+  const part = 'body', foot = footOf(part), layers = gridLayersOf(part);
+  const m = buildModel(part, foot, layers), N = foot * foot;
+  let n = 0;
+  for (let z = 0; z < layers; z++) for (let y = 0; y < foot; y++) for (let x = 0; x < foot; x++) if (m.filled(x, y, z)) n++;
+  const k = (2 * N + 8 * foot + 8) * 3;
+  return { filled: n, holeKept: !m.filled(6, 6, 2), paint: [m.vcol[k], m.vcol[k + 1], m.vcol[k + 2]].join(),
+           dirty: volDirty.body, stale: carveStale.body };
+})()`);
+
+test('FFF-2: EVERY carve input can move without destroying the model', () => {
+  // The six paths from the report, each fired the way the tool fires it. Every one of them silently
+  // re-derived from the slices before this change.
+  // MUTATION: restore `if (hit && dims && hit.sig === sig) return hit.m; const m = carveRaw(...)` in
+  // buildModelRaw -> all six fail at once, which is the point: one cause, not six.
+  const paths = {
+    '(a) Layers slider, per drag-pixel':
+      `document.getElementById('bodyLayers').oninput({ target: { value: 12 } });`,
+    '(b) Resolution':
+      `document.getElementById('res').onchange({ target: { value: 32 } });`,
+    '(b) unit size in tiles':
+      `setUnitSize(1.5);`,
+    '(b) Cube':
+      `document.getElementById('bodyCube').onclick();`,
+    '(c) slice alignment drag (imgXf), on release':
+      `xfEdit('ox', 0.25, false);`,
+    '(d) renderView / flip / cutout-Apply — the unconditional recarve()':
+      `recarve();`,
+    '(e) Geometry box slider — mutates geomState and never calls recarve() at all':
+      `boxEdit('Hv', 4);`,
+    '(f) a RENDER FRAME: updateGamePreview -> bodyExtentTiles -> buildModel':
+      `bodyExtentTiles();`,
+  };
+  for (const [label, code] of Object.entries(paths)) {
+    const t = boot();
+    seedHandWork(t);
+    const before = handWork(t);
+    assert.equal(before.holeKept, true, 'test setup: the geo edit is in the model');
+    assert.equal(before.paint, '255,0,255', 'test setup: the colour edit is in the model');
+    t.run(code);
+    const after = handWork(t);
+    assert.equal(after.holeKept, true, `${label}: the deleted voxel came back — the carve was re-run`);
+    assert.equal(after.paint, '255,0,255', `${label}: the painted colour was overwritten by the carve`);
+    assert.equal(after.filled, before.filled, `${label}: the volume changed size behind the artist`);
+    assert.equal(after.dirty, true, `${label}: volDirty must still describe a model that still has hand work`);
+  }
+});
+
+test('FFF-2: volDirty can never remain true across a rebuild, so autosave cannot stamp a lost carve', () => {
+  // Path (e) committed the loss to disk: boxEdit moved geomState without calling recarve(), so volDirty
+  // stayed true while the next buildModel handed back a freshly re-derived volume — and autosave wrote it
+  // out as `edited: true`, reporting success over work that was gone. The invariant is structural now: a
+  // rebuild only happens when volDirty is false.
+  // MUTATION: make buildModelRaw re-carve regardless of volDirty -> the first assertion fails.
+  const t = boot();
+  seedHandWork(t);
+  t.run(`boxEdit('Hv', 4); document.getElementById('bodyLayers').oninput({ target: { value: 12 } });`);
+  const now = handWork(t);
+  assert.equal(now.paint, '255,0,255', 'the model survived, so `edited: true` is the truth');
+  assert.equal(now.dirty, true, 'and volDirty still describes a model that still has hand work in it');
+  // and after an EXPLICIT re-carve the flag is down, so the fresh volume is not claimed as hand work
+  t.run(`recarveFromSource('body'); buildModel('body', footOf('body'), gridLayersOf('body'));`);
+  assert.equal(t.run('volDirty.body'), false, 'an explicit re-carve must clear the flag it just satisfied');
+  assert.equal(t.json(`(snapshotProject().vol.body || {}).edited`), false,
+    'and the saved volume must not claim to be edited');
+});
+
+test('FFF-2: a stale model is OFFERED a re-carve, never given one', () => {
+  // carveSig keeps its real job — knowing the model no longer matches its slices — and loses the one that
+  // cost the work. MUTATION: drop `carveStale[partId] = true` -> the row never appears and a stale model
+  // is silently stale, which is how this went unnoticed for so long.
+  const t = boot();
+  seedHandWork(t);
+  t.run(`renderGridView();`);
+  assert.equal(t.run(`document.getElementById('carveStaleRow').hidden`), true, 'nothing stale yet');
+  t.run(`boxEdit('Hv', 4); renderGridView();`);
+  assert.equal(t.run('carveStale.body'), true, 'the signature moved, so the model IS stale');
+  assert.equal(t.run(`document.getElementById('carveStaleRow').hidden`), false, 'and the artist must be told');
+  assert.match(t.run(`document.getElementById('carveStaleMsg').textContent`), /hand edits are kept/);
+
+  // "Keep" dismisses it for THAT signature — an answered question must not be asked on every redraw
+  t.run(`document.getElementById('carveStaleKeep').onclick(); renderGridView();`);
+  assert.equal(t.run(`document.getElementById('carveStaleRow').hidden`), true, 'Keep must settle it');
+  assert.equal(t.json(`(() => { const m = buildModel('body', footOf('body'), gridLayersOf('body'));
+    return !m.filled(6, 6, 2); })()`), true, 'Keep keeps the model, obviously');
+
+  // …and "Re-carve" is the explicit ask: it discards, and ONE Ctrl+Z brings the work back.
+  // The magenta is the signal — no carve of any source art produces #ff00ff, so if it is gone the model
+  // was re-derived, and (6,6,2) is not a witness because a fresh carve need not fill it either.
+  t.run(`boxEdit('Hv', 5); renderGridView(); document.getElementById('carveStaleGo').onclick();`);
+  assert.equal(handWork(t).paint === '255,0,255', false, 'Re-carve must actually re-derive from the slices');
+  assert.equal(t.run('volDirty.body'), false, 'and the model it produced is not hand work');
+  t.run('volUndo()');
+  const back = handWork(t);
+  assert.equal(back.paint, '255,0,255', 'one undo must bring the painted colour back');
+  assert.equal(back.holeKept, true, 'and the geometry edit with it');
+});
+
+test('FFF-2: with NOTHING to protect, a carve input still re-carves — the normal flow is intact', () => {
+  // The counterpart, and the reason the rule is "hand work", not "never re-carve". Dragging Layers on a
+  // fresh carve SHOULD make the box taller; refusing that would trade one broken tool for another.
+  // MUTATION: make buildModelRaw always keep the cache -> the model never follows the slider again.
+  // BOTH kinds of path, because they reach buildModelRaw differently: one calls recarve() (which drops the
+  // cache for a clean part) and one — the Geometry box — never calls it at all and relies on the signature.
+  // MUTATION B: `if (hit) return hit.m;` ahead of the carve -> the boxEdit case fails while the slider case
+  // still passes, which is exactly why both are here.
+  // the accent stripe is the witness: only the test fixture has it, no carve of this (art-less) unit
+  // produces it, so its disappearance means the model was re-derived
+  for (const [label, code] of Object.entries({
+    'Layers slider (through recarve)': `document.getElementById('bodyLayers').oninput({ target: { value: 20 } });`,
+    'Geometry box (through the signature alone)': `boxEdit('Hv', 4);`,
+  })) {
+    const t = boot();
+    assert.equal(t.run('volDirty.body'), false, 'test setup: no hand work');
+    assert.ok(t.countRGB(210, 40, 45) > 0, 'test setup: the fixture model is loaded');
+    t.run(code + ` buildModel('body', footOf('body'), gridLayersOf('body'));`);
+    assert.equal(t.countRGB(210, 40, 45), 0, `${label}: a clean model must follow its carve inputs`);
+    assert.equal(t.run('volDirty.body'), false, `${label}: a re-derived model is not hand work`);
+    assert.equal(t.run('carveStale.body'), false, `${label}: nor is it stale — it was just carved`);
+  }
+});
+
+test('FFF-2: a Carve button IS the explicit ask, and is one undo step for the whole unit', () => {
+  // MUTATION: route runCarve back through plain recarve() -> the hand work survives the press, which
+  // sounds safe and means the artist has no way to start over from the source at all.
+  const t = boot();
+  seedHandWork(t);
+  t.run(`(() => { pushVol('turret'); const V = liveVOL('turret'); V[0] = 1; })()`);
+  assert.equal(t.run('volDirty.body && volDirty.turret'), true, 'test setup: both parts have hand work');
+  t.click('carveTop');
+  assert.equal(t.run('volDirty.body'), false, 'a Carve button discards — that is what it is for');
+  assert.equal(t.run('volDirty.turret'), false, 'both parts, because carveCuts is a whole-unit setting');
+  assert.equal(t.run('volHistory.length'), 1, 'and it is ONE undo step, not one per part');
+  assert.deepEqual(t.json('volHistory[0].map((e) => e.part).slice().sort()'), ['body', 'turret'],
+    'covering every part it discarded — a one-part entry leaves half the unit un-undoable');
 });
 
 // ── FACTIONS ─────────────────────────────────────────────────────────────────────────────────────

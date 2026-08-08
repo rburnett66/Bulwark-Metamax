@@ -6,6 +6,13 @@ on:
   push:
     branches: [main]
     paths: ['prototype/test-game/**', '.github/workflows/deploy-game.yml']
+  # TESTS MUST RUN ON THE PR, NOT AFTER THE MERGE. This workflow used to trigger on push-to-main only,
+  # so a pull request had NO checks at all -- the suite ran once the change was already on main, which is
+  # exactly too late to block it. Opening PR #19 with a green tick and zero checks is what surfaced it.
+  # No `paths:` filter here on purpose: a PR that touches only the workflow, or only content, should
+  # still be gated, and a skipped required check blocks a merge rather than passing it.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -47,6 +54,10 @@ jobs:
       - run: node --test $(find prototype/test-game/src prototype/test-game/tools -name '*.test.mjs' | sort)
   deploy:
     needs: test
+    # PUBLISH ONLY FROM main. Without this a pull_request run would push a PR branch to Pages and
+    # overwrite the live game with unreviewed work -- the tests would gate the merge while the deploy
+    # had already shipped it.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
