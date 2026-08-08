@@ -2102,11 +2102,35 @@ function renderGridView() {
 // this writes it back into state + the UI so export, the sliders, and the Resolution dropdown all agree). It
 // only ever grows to fit the geometry — a unit longer than it is tall keeps its length; 128 voxels is the hard
 // ceiling. This is the single reconciliation point, called at the top of every carve (recarve).
+// A BAKE IS GPU MEMORY, AND DROPPING THE REFERENCE DOES NOT FREE IT.
+// bakeAngleCache/bakeShadowCache each return an ARRAY of PIXI.RenderTexture — 32 body + 64 turret + 32
+// body-shadow + 64 turret-shadow = 192 textures per bake. `state.baked = null` orphaned every one of
+// them: the sprites were destroyed, the textures were not, and PIXI has no finaliser. refreshModel()
+// runs after EVERY edit, so a single bake followed by a single slider nudge leaked the lot — 38 MB on a
+// small unit, 84 MB on GND-Artillery — and the browser died after a handful of iterations.
+//
+// This is the fix for that. It is also why BODY_FRAMES 16 -> 32 made the crash arrive sooner: the leak
+// per bake grew with the frame count (160 -> 192 textures), which is exactly the wrong thing to scale.
+//
+// destroy(true) releases the base texture as well as the wrapper; without the flag the GPU allocation
+// survives. Wrapped per texture so one bad entry cannot abort the sweep and strand the rest.
+function releaseBaked(b) {
+  if (!b) return;
+  let n = 0;
+  for (const key of ['body', 'turret', 'bodyShadow', 'turretShadow', 'frame', 'shadow']) {
+    const v = b[key];
+    if (!v) continue;
+    for (const rt of (Array.isArray(v) ? v : [v])) {
+      if (rt && typeof rt.destroy === 'function') { try { rt.destroy(true); n++; } catch (e) { /* already gone */ } }
+    }
+  }
+  return n;
+}
 function refreshModel() {
   carveEpoch++;                                       // invalidate anything cached against the previous carve
   if (bodyBaked) { bodyBaked.destroy(); bodyBaked = null; } if (turretBaked) { turretBaked.destroy(); turretBaked = null; }
   if (gBodyBaked) { gBodyBaked.destroy(); gBodyBaked = null; } if (gTurretBaked) { gTurretBaked.destroy(); gTurretBaked = null; }
-  state.baked = null; voxSig = ''; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
+  releaseBaked(state.baked); state.baked = null; voxSig = ''; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
   bodyMountZ = bodyTopLayer(state.foot, state.bodyLayers);   // turret mounts on the body's actual top
   bodyFloorZ = partFloorZ('body', state.foot, state.bodyLayers);   // …and the hull sits on its own lowest voxel
   bodyFaces = buildFaces('body', state.foot, state.bodyLayers);
@@ -2457,7 +2481,7 @@ $('zScale').oninput = (e) => { state.zScale = +e.target.value / 100; $('zScaleV'
 $('bakeEl').oninput = (e) => {                                     // bake tilt — does NOT invalidate the
   state.bakeEl = +e.target.value;                                  // orbit view, but it DOES stale the bake
   $('bakeElV').textContent = state.bakeEl + '°';
-  state.baked = null; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
+  releaseBaked(state.baked); state.baked = null; $('saveUnit').disabled = true; $('dlSheet').disabled = true;
   $('bakeState').innerHTML = '<span style="color:#e0b060">tilt changed — re-bake before saving</span>';
 };
 $('bakeScale').oninput = (e) => { state.bakeScale = +e.target.value; $('bakeScaleV').textContent = state.bakeScale + '×'; };
@@ -4646,7 +4670,7 @@ async function loadProject(p) {
   try {
     $('uid').value = p.id || 'unit'; activeUnitId = (p.id || 'unit');   // anchor the WIP key to the restored project
     unTombstone('proj:' + activeUnitId);        // loading a project IS the deliberate ask for this id to exist
-    Object.assign(state, p.state || {}); state.baked = null;
+    releaseBaked(state.baked); Object.assign(state, p.state || {}); state.baked = null;
     if (!(p.state && p.state.turretFoot)) state.turretFoot = state.foot;   // SF3: pre-turret-res projects → turret matches base
     delete state.paletteN;                    // a v1/v2 project may carry it; nothing reads it (FFF-8)
     // p.palMap / p.palKeep / p.palDrop are deliberately NOT restored, for the same reason p.voxEdit is
@@ -4911,7 +4935,7 @@ async function loadFaction(name) {
     }
     editingDecor = null;
     clearSourceArt();                                              // the decor's art, VOL, spans and selection go with it
-    state.decorBaked = null; gridModel = null; state.part = 'body';
+    releaseBaked(state.decorBaked); state.decorBaked = null; gridModel = null; state.part = 'body';
     activeUnitId = null;                                           // nothing is open yet — an autosave now has no unit to misfile into
     wipDirty = false;                                              // the decor is saved; the editor is empty. Nothing is pending.
     recarve();
@@ -4932,7 +4956,7 @@ async function loadFaction(name) {
       const lastDecor = (() => { try { return localStorage.getItem('bulwark:sf:lastDecor'); } catch (e) { return null; } })();
       if (lastDecor && ids.has(lastDecor)) { renderRoster(); loadDecorForEdit(lastDecor); return; }   // reopen your last prop
       editingDecor = (($('did') && $('did').value) || 'decor').trim();   // else a clean new slate
-      clearSourceArt(); state.decorBaked = null; gridModel = null;
+      clearSourceArt(); releaseBaked(state.decorBaked); state.decorBaked = null; gridModel = null;
       state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }
       recarve();
     }
@@ -5302,7 +5326,7 @@ $('addUnit').onclick = async () => {
     } catch (e) { /* best-effort */ }
     editingDecor = id; if ($('did')) $('did').value = id;
     state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }   // decor tends tall — raise height
-    clearSourceArt(); state.decorBaked = null; gridModel = null; state.part = 'body'; recarve(); forceDecorBodyOnly();   // clean slate, body-only
+    clearSourceArt(); releaseBaked(state.decorBaked); state.decorBaked = null; gridModel = null; state.part = 'body'; recarve(); forceDecorBodyOnly();   // clean slate, body-only
     if (!roster.some((u) => u.id === id)) roster.push({ id, role: 'decor', shape: '🌿', decor: true });
     renderRoster();
     $('projState').textContent = `New decor "${id}" — load Top/Side/Front art as the body, set the 🌿 Decor panel, then Bake + Save.`;
