@@ -4250,8 +4250,11 @@ const shipFile = async (path, payload) => {
 // Rendered through drawScene — ONE scene — into a throwaway target from mkTarget(). bakeAngleCache
 // renders N frames into PIXI render textures and is far too heavy for this; and passing a fresh target
 // rather than voxMeta is what keeps the live orbit canvas untouched.
-/** crop a rendered target to its drawn pixels and fit that into a W×H card canvas. */
-function cropToCard(src, W, H) {
+/** AAA-7: crop a rendered target to its drawn pixels and lay that into the PICTURE REGION of a standard
+ *  CARD_PX square, with `label`'s id and dimensions composited into the caption band underneath.
+ *  The size is FIXED, not derived from the roster's CSS box — a card on disk must not change shape
+ *  because a grid did. The background is opaque so the file reads on its own, outside this tool. */
+function cropToCard(src, label) {
   const g0 = src.getContext('2d', { willReadFrequently: true });
   const d = g0.getImageData(0, 0, src.width, src.height).data;
   let x0 = src.width, y0 = src.height, x1 = -1, y1 = -1;
@@ -4261,10 +4264,12 @@ function cropToCard(src, W, H) {
   }
   if (x1 < x0) return null;                                        // nothing was drawn — an empty model
   const sw = x1 - x0 + 1, sh = y1 - y0 + 1;
-  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const cv = document.createElement('canvas'); cv.width = CARD_PX; cv.height = CARD_PX;
   const g = cv.getContext('2d'); if (!g) return null;
-  const s = Math.min((W - 4) / sw, (H - 4) / sh), w = sw * s, h = sh * s;
-  g.drawImage(src, x0, y0, sw, sh, (W - w) / 2, (H - h) / 2, w, h);
+  g.fillStyle = CARD_BG; g.fillRect(0, 0, CARD_PX, CARD_PX);
+  const s = Math.min((CARD_PX - 8) / sw, (CARD_ART - 8) / sh), w = sw * s, h = sh * s;
+  g.drawImage(src, x0, y0, sw, sh, (CARD_PX - w) / 2, (CARD_ART - h) / 2, w, h);
+  drawCardBand(g, label && label.name, label && label.dims);
   return cv;
 }
 /** Bake the card image for the unit CURRENTLY IN THE EDITOR and write it to the repo.
@@ -4279,7 +4284,10 @@ async function saveCardImage(id, p) {
   try {
     const t = mkTarget(2, voxBounds.R, voxBounds.HT);             // 2 px per voxel, then downscaled into the card
     drawScene(t, bakeElOf(), 0, 0, { card: true });               // both parts, no selection / orientation tags / dim box
-    const cv = cropToCard(t.cv, THUMB_W, THUMB_H);
+    // THE CAPTION DESCRIBES WHAT THE PICTURE IS OF. Both come from the LIVE editor model in the same
+    // breath — the picture from drawScene, the dimensions from the same grid it just drew — so the file
+    // cannot ship a caption for one model over a render of another.
+    const cv = cropToCard(t.cv, { name: id, dims: cardDimsLive() });
     if (!cv) return { ok: false, kind: 'NOTHING DRAWN', detail: 'the model rendered empty' };
     url = cv.toDataURL('image/png');
   } catch (e) { return { ok: false, kind: 'RENDER FAILED', detail: (e && e.message) || String(e) }; }
@@ -4307,7 +4315,8 @@ async function saveCardImage(id, p) {
 // SAY WHAT HAPPENED TO THE PICTURE. A write that could not happen must be visible, not silent — the
 // deployed site has no /__ship, and "the card looks wrong" is otherwise unexplainable from the UI.
 function cardImageNote(r) {
-  if (r && r.ok) return `🖼 Card image → <b>${r.path}</b> (${(r.bytes / 1024).toFixed(0)}KB) — commit it with the unit.`;
+  if (r && r.ok) return `🖼 Card image → <b>${r.path}</b> · ${CARD_PX}×${CARD_PX}, captioned <code>${cardDimsLive()}</code>`
+    + ` (${(r.bytes / 1024).toFixed(0)}KB) — commit it with the unit.`;
   if (r && r.kind === 'NO VOX') return `<span style="opacity:.7">🖼 No voxels yet — the card shows the source slices.</span>`;
   return `<span style="color:#e0975f">⚠ Card image NOT written (${(r && r.kind) || 'unknown'}) — the card falls back to the slices.`
     + ` /__ship needs the local dev server (python serve_prototype.py).</span>`;
@@ -5009,8 +5018,24 @@ async function loadFaction(name) {
 // A card's BADGE is derived from the state its thumbnail actually resolved, so the two cannot disagree.
 // The old badge read "✓ supplied" off the manifest while the picture was a grey box, and a corrupt
 // atlas (im.onerror was unhandled) left exactly that pairing permanently.
-const THUMB_W = 152, THUMB_H = 112;      // 2× the CSS box (76×56) — the grid upscales the canvas
-const THUMB_KEY_PX = 152;                // slices are keyed at CARD size, not photo size (see keyedCanvas)
+// ── AAA-7: THE CARD IS A STANDARD 256×256 ARTIFACT ────────────────────────────────────────────────
+// The saved picture used to be THUMB_W×THUMB_H — a size derived from a CSS grid box. That makes the file
+// a by-product of a layout: change the roster and every card on disk is the wrong size. It is now a fixed
+// square that anything can rely on, and it CARRIES ITS OWN CAPTION: the unit id and its dimensions are
+// composited into the PNG, not laid over it in HTML. An HTML overlay produces a picture that means
+// nothing the moment it leaves the roster — in a file browser, in a PR diff, pasted into a message.
+//
+// GEOMETRY. The square is split once and the split is a contract, because the grid crops on it:
+//     [0 .. CARD_ART)      the picture
+//     [CARD_ART .. 256)    the caption band: id, then dimensions
+// The grid draws ONLY the picture region (text sized for 256 is an unreadable smudge at a third of it),
+// the full-size view draws the whole square. ONE artifact, two crops — not two renders to keep in step.
+const CARD_PX = 256;                     // the standard card artifact: square, fixed, never derived from a layout
+const CARD_BAND = 44;                    // the caption band, reserved at the bottom
+const CARD_ART = CARD_PX - CARD_BAND;    // 212 — the picture region, and the aspect the roster box carries
+const CARD_BG = '#0a121c';               // OPAQUE. A transparent PNG with pale text is invisible in a file browser.
+const THUMB_W = 152, THUMB_H = 126;      // the roster canvas: the ART REGION's aspect (256:212), scaled down
+const THUMB_KEY_PX = CARD_ART;           // slices are keyed at CARD size, not photo size (see keyedCanvas)
 const THUMB_POOL = 3;                    // concurrent resolves — enough to hide latency, few enough to leave the main thread alone
 const UNIT_ATLAS_BASE = '../../content/units/voxel/';
 // The card image is a UNIT artifact only. Decor ships its atlas inline in content/decor/voxel-decor.json
@@ -5035,7 +5060,10 @@ const THUMB_STATES = {
 };
 // key -> { state, cv, sig, dirty }. Session memory only. A thumbnail is DERIVED — it must not become a
 // persisted store, and the one thing that IS written (the card image) goes to the repo, not here.
-// ~68KB per entry at 152×112; a full nine-faction tour is a few MB.
+// AAA-7: an entry is now the 256×256 ARTIFACT, not a grid-sized thumbnail — 256KB per card against the
+// old 68KB, so a full nine-faction 90-unit tour holds ~23MB of canvas. Paid deliberately: the grid and
+// the full-size view then read the SAME pixels (one scaled, one 1:1), so they cannot disagree, and
+// opening a card is instant instead of a second async resolve that might land on newer state.
 const thumbCache = new Map();
 const thumbBusy = new Map();             // key -> true while a resolve is in flight (never two for one card)
 const thumbEpoch = new Map();            // key -> generation, bumped on invalidate so an in-flight resolve cannot write back stale art
@@ -5101,33 +5129,107 @@ function thumbSliceOf(p) {
   }
   return null;
 }
-/** an image fitted, letterboxed, into a fresh THUMB_W×THUMB_H canvas. srcRect cuts one atlas frame. */
-function thumbCanvasOf(im, srcRect) {
-  const cv = document.createElement('canvas'); cv.width = THUMB_W; cv.height = THUMB_H;
+// WHICH DIMENSIONS (AAA-7). Two candidates: the voxel footprint the artist manipulates directly with the
+// Resolution and Base-layers sliders, and `scale.tiles` — the size ON THE BOARD, which is what decides
+// whether a unit reads correctly beside its neighbours. The card carries BOTH, because they are the two
+// halves of the load-bearing world-scale contract (VOX_PER_TILE voxels = 1 tile): a card reading
+// "64×64×35 vox · 2 tiles" makes that contract visible, and "96×96×40 vox · 2 tiles" would be a broken
+// unit you could see at a glance. Either number alone hides the other.
+//
+// The height is the BODY grid's layer count, not the pack's footprint[2]: footprint[2] folds in the
+// turret mount offset, which is a render bound the tool derives, not a size the artist sets. Every source
+// below (live editor, saved project, shipped pack) can name the body grid, so one rule covers all of them
+// and two cards of the same unit cannot quote different numbers.
+const cardDimsText = (foot, layers) => {
+  if (!foot || !layers) return '';
+  const t = foot / VOX_PER_TILE;
+  return `${foot}×${foot}×${layers} vox · ${+t.toFixed(2)} tile${t === 1 ? '' : 's'}`;
+};
+/** the dimensions of the model IN THE EDITOR — the same model drawScene is about to draw for the card. */
+const cardDimsLive = () => cardDimsText(footOf('body'), state.bodyLayers);
+/** the dimensions a saved project describes. The carved VOL is preferred over the slider state: it is
+ *  what the picture is actually of, and a resize that has not been re-carved would otherwise be quoted. */
+const cardDimsProject = (p) => {
+  const v = p && p.vol && p.vol.body;
+  if (v && v.foot && v.layers) return cardDimsText(v.foot, v.layers);
+  const s = p && p.state;
+  return s ? cardDimsText(s.foot, s.bodyLayers) : '';
+};
+/** the dimensions a shipped pack declares. */
+const cardDimsPack = (entry) => {
+  const pack = entry && (entry.pack || entry); if (!pack || !pack.footprint) return '';
+  const body = pack.parts && pack.parts.find ? pack.parts.find((q) => q.id === 'body') : null;
+  return cardDimsText(pack.footprint[0], (body && body.layers) || pack.footprint[2]);
+};
+/** THE CAPTION, drawn into the artifact. One function, so the band a card SAVES and the band the viewer
+ *  composites for a card that has no file cannot say things in different shapes. */
+function drawCardBand(g, name, dims) {
+  g.save();
+  g.fillStyle = CARD_BG; g.fillRect(0, CARD_ART, CARD_PX, CARD_BAND);
+  g.fillStyle = '#1c2c40'; g.fillRect(0, CARD_ART, CARD_PX, 1);
+  g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  // THE FULL ID, not the roster's prefix-stripped display name: the file has to identify its unit when
+  // nothing around it does. Shrink to fit rather than clip — a truncated id names the wrong unit.
+  let px = 17;
+  g.fillStyle = '#e6eef6';
+  if (name) {
+    for (; px > 9; px--) { g.font = `600 ${px}px "Segoe UI",system-ui,sans-serif`; if (g.measureText(name).width <= CARD_PX - 16) break; }
+    g.font = `600 ${px}px "Segoe UI",system-ui,sans-serif`;
+    g.fillText(name, CARD_PX / 2, CARD_ART + 19);
+  }
+  if (dims) {
+    g.fillStyle = '#8fa7bd'; g.font = '11.5px ui-monospace,SFMono-Regular,Menlo,monospace';
+    g.fillText(dims, CARD_PX / 2, CARD_ART + 35);
+  }
+  g.restore();
+}
+/** an image fitted, letterboxed, into the PICTURE REGION of a fresh 256×256 card, with its caption band
+ *  composited underneath. srcRect cuts one atlas frame. `label` may be null for a picture with no caption. */
+function cardCanvasOf(im, srcRect, label) {
+  const cv = document.createElement('canvas'); cv.width = CARD_PX; cv.height = CARD_PX;
   const g = cv.getContext('2d'); if (!g) return null;
-  const sw = srcRect ? srcRect[0] : (im.width || im.naturalWidth || 1), sh = srcRect ? srcRect[1] : (im.height || im.naturalHeight || 1);
-  const s = Math.min(THUMB_W / sw, THUMB_H / sh), w = sw * s, h = sh * s;
-  g.imageSmoothingEnabled = false;
-  // FRAME 0, NOT THE SHEET. The old draw was drawImage(im, 0, 0, 76, 56) — the whole 4×4 (or 8-cell)
-  // atlas squeezed into the thumbnail, so a card that DID find its atlas showed a contact sheet.
-  g.drawImage(im, 0, 0, sw, sh, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h);
+  g.fillStyle = CARD_BG; g.fillRect(0, 0, CARD_PX, CARD_PX);     // opaque, so the file reads outside the tool
+  if (im) {
+    const sw = srcRect ? srcRect[0] : (im.width || im.naturalWidth || 1), sh = srcRect ? srcRect[1] : (im.height || im.naturalHeight || 1);
+    const s = Math.min((CARD_PX - 8) / sw, (CARD_ART - 8) / sh), w = sw * s, h = sh * s;
+    g.imageSmoothingEnabled = false;
+    // FRAME 0, NOT THE SHEET. The old draw was drawImage(im, 0, 0, 76, 56) — the whole 4×4 (or 8-cell)
+    // atlas squeezed into the thumbnail, so a card that DID find its atlas showed a contact sheet.
+    g.drawImage(im, 0, 0, sw, sh, (CARD_PX - w) / 2, (CARD_ART - h) / 2, w, h);
+  }
+  if (label) drawCardBand(g, label.name, label.dims);
+  return cv;
+}
+/** A SAVED CARD FILE, shown as itself. When the PNG on disk already IS a 256×256 artifact its band is
+ *  part of the file, so it is blitted 1:1 and NOT re-captioned — re-captioning would paint today's id and
+ *  dimensions over a picture that may be three edits old, which is the exact lie `⟳ stale` exists to
+ *  prevent. Anything that is not 256×256 (a card written before AAA-7) is treated as a bare picture. */
+function cardCanvasFromFile(im, label) {
+  const w = im.naturalWidth || im.width || 0, h = im.naturalHeight || im.height || 0;
+  if (w !== CARD_PX || h !== CARD_PX) return cardCanvasOf(im, null, label);
+  const cv = document.createElement('canvas'); cv.width = CARD_PX; cv.height = CARD_PX;
+  const g = cv.getContext('2d'); if (!g) return null;
+  g.fillStyle = CARD_BG; g.fillRect(0, 0, CARD_PX, CARD_PX);
+  g.imageSmoothingEnabled = false; g.drawImage(im, 0, 0);
   return cv;
 }
 /** a slice, flipped/rotated as the artist set it and keyed the way the carve keys it, as a card canvas. */
-function thumbSliceCanvas(im, sl) {
+function thumbSliceCanvas(im, sl, label) {
   // Flip then rotate, matching renderView's display-space convention — a card that shows a unit upside
   // down because the artist flipped the slice is not showing the unit.
   const swap = !!(sl.rot % 180), fh = swap ? sl.flip.v : sl.flip.h, fv = swap ? sl.flip.h : sl.flip.v;
   const flipped = (sl.flip.h || sl.flip.v) ? flipCanvas(im, fh, fv) : im;
   const orient = sl.rot ? rotCanvas(flipped, sl.rot) : flipped;
-  return thumbCanvasOf(keyedCanvas(orient, sl.tol, sl.polys, sl.picks, THUMB_KEY_PX), null);
+  return cardCanvasOf(keyedCanvas(orient, sl.tol, sl.polys, sl.picks, THUMB_KEY_PX), null, label);
 }
 /** Resolve one card, once. Reads content/ for art and IndexedDB only for the artist's working state. */
 async function thumbResolve(id, decorSet, entry, prev) {
   const atl = thumbAtlasOf(id, decorSet, entry);
   if (atl.url) {
     const im = await thumbImage(atl.url);
-    if (im) return { state: 'baked', cv: thumbCanvasOf(im, atl.cell), sig: 'atlas|' + atl.url.slice(0, 96) + '|' + atl.url.length };
+    if (im) return { state: 'baked', dims: cardDimsPack(entry),
+      cv: cardCanvasOf(im, atl.cell, { name: id, dims: cardDimsPack(entry) }),
+      sig: 'atlas|' + atl.url.slice(0, 96) + '|' + atl.url.length };
     // NAMED AND NOT THERE. This is the state that used to be indistinguishable from "never baked":
     // im.onerror was unhandled, so a missing or corrupt atlas silently left the placeholder while the
     // badge still claimed the unit was supplied. It is also the ordinary state of a unit baked in this
@@ -5138,17 +5240,18 @@ async function thumbResolve(id, decorSet, entry, prev) {
     // unit AND says its art is not in the repo tells the truth twice, and the frame stops it reading as
     // a healthy card.
     const fb = await thumbFallback(id, decorSet, prev);
-    return { state: 'missing', cv: fb ? fb.cv : null, fbSig: fb ? fb.sig : null,
+    return { state: 'missing', cv: fb ? fb.cv : null, fbSig: fb ? fb.sig : null, dims: fb ? fb.dims : cardDimsPack(entry),
       sig: 'missing|' + atl.url.length + '|' + (fb ? fb.sig : '-') };
   }
   const fb = await thumbFallback(id, decorSet, prev);
-  return fb || { state: 'empty', cv: null, sig: 'empty' };
+  return fb || { state: 'empty', cv: null, sig: 'empty', dims: '' };
 }
 /** Everything below the baked atlas: the saved card image, then the source slices. Shared, because a
  *  unit whose atlas is missing from the repo needs the same picture as one that never had an atlas. */
 async function thumbFallback(id, decorSet, prev) {
   const p = await idb.get((decorSet ? 'decor:' : 'proj:') + id).catch(() => null);
   if (!p) return null;
+  const label = { name: id, dims: cardDimsProject(p) };
   // 2 — THE VOXEL MODEL. "If a unit has vox data then bake and save an image rendered from the vox"
   // (owner 2026-08-07). Read literally: the image is produced ONCE and written to the repo, not
   // re-rendered per roster draw. `vol` covers both kinds of vox data — an imported .vox is materialised
@@ -5161,25 +5264,31 @@ async function thumbFallback(id, decorSet, prev) {
       // FRESH ONLY IF IT DEPICTS THIS MODEL. cardSig is stamped beside the descriptor when the image is
       // written; a card image whose model has moved on is shown, and marked, never passed off as current.
       const stamped = ((loadManifest().units || {})[id] || {}).cardSig || null;
-      return { state: 'model', cv: thumbCanvasOf(im, null), sig: 'card|' + msig, stale: stamped !== msig };
+      return { state: 'model', cv: cardCanvasFromFile(im, label), sig: 'card|' + msig,
+        stale: stamped !== msig, dims: label.dims, file: UNIT_CARD_BASE + id + '.png' };
     }
     // vox but no card image in the repo — /__ship needs the dev server, so this is the normal state on
     // the deployed site. Fall through to the slices rather than show nothing.
   }
   const sl = thumbSliceOf(p);
   if (!sl) return null;
+  // AAA-7: the CAPTION is part of the canvas now, so it is part of the signature. Without it a resize
+  // would revive a picture captioned with the old dimensions — the revive would be caching a lie, and a
+  // wrong caption on a right picture is the failure mode this whole ticket is about. It costs a re-key
+  // only when foot/layers actually move, which is exactly when the carve is being redone anyway.
   const sig = 'slice|' + sl.part + '.' + sl.view + '|' + sl.url.length + '|' + sl.flip.h + sl.flip.v + '|' + sl.rot
-    + '|' + sl.tol + '|' + (sl.polys ? JSON.stringify(sl.polys).length : 0) + '|' + sl.picks.length;
+    + '|' + sl.tol + '|' + (sl.polys ? JSON.stringify(sl.polys).length : 0) + '|' + sl.picks.length
+    + '|' + label.dims;
   // THE SIGNATURE EARNS ITS KEEP HERE. An autosave fires 500ms after any input and invalidates the card,
   // but most edits are geometry — the slice is untouched. Reviving the decoded, keyed canvas costs a
   // string compare instead of an image decode plus a flood fill.
   // `fbSig` is what the FALLBACK last produced. A 'missing' card's own sig also names the atlas that
   // would not load, so comparing against that would never match and would re-key the slice on every
   // refresh — the one case where the revive is most wanted, because that card is refreshed the most.
-  if (prev && prev.cv && (prev.fbSig || prev.sig) === sig) return { state: 'source', cv: prev.cv, sig };
+  if (prev && prev.cv && (prev.fbSig || prev.sig) === sig) return { state: 'source', cv: prev.cv, sig, dims: label.dims };
   const im = await thumbImage(sl.url);
-  if (!im) return { state: 'missing', cv: null, sig };
-  return { state: 'source', cv: thumbSliceCanvas(im, sl), sig };
+  if (!im) return { state: 'missing', cv: null, sig, dims: label.dims };
+  return { state: 'source', cv: thumbSliceCanvas(im, sl, label), sig, dims: label.dims };
 }
 /** paint a resolved (or pending) state onto a card: picture, badge and the card's own state marker. */
 function thumbPaint(card, res, u, decorSet) {
@@ -5191,7 +5300,11 @@ function thumbPaint(card, res, u, decorSet) {
   const g = cvs && cvs.getContext ? cvs.getContext('2d') : null;
   if (!g) return;
   g.clearRect(0, 0, THUMB_W, THUMB_H);
-  if (res.cv) { g.drawImage(res.cv, 0, 0, THUMB_W, THUMB_H); }
+  // THE PICTURE REGION ONLY. The cached canvas is the whole 256×256 artifact, caption included; at a
+  // third of that size the caption is an illegible smear that eats a fifth of the picture, so the grid
+  // cuts [0, CARD_ART) and the text lives where it is readable — the saved file and the full-size view.
+  // The card's own <div class="un"> already names it in real, selectable HTML at grid size.
+  if (res.cv) { g.drawImage(res.cv, 0, 0, CARD_PX, CARD_ART, 0, 0, THUMB_W, THUMB_H); }
   else {
     g.fillStyle = res.state === 'missing' ? '#2a1420' : '#132234'; g.fillRect(0, 0, THUMB_W, THUMB_H);
     g.fillStyle = res.state === 'missing' ? '#ff6b6b' : '#3c5670';
@@ -5223,9 +5336,74 @@ function thumbWant(key, id, decorSet, entry) {
       if (thumbEpochOf(key) !== gen) return;      // invalidated while in flight — do not cache what is already stale
       thumbCache.set(key, res);
       for (const L of thumbLive) if (L.key === key) thumbPaint(L.card, res, L.u, L.decorSet);
+      if (cardView && cardView.key === key) paintCardView(res);   // the full-size view is a late-resolving card too
     }));
   thumbPump();
 }
+// ── AAA-7: THE CARD AT FULL SIZE ──────────────────────────────────────────────────────────────────
+// The roster shows the artifact scaled to a ~97px column; this shows the same cached 256×256 at its own
+// pixels, caption band and all. It is deliberately NOT a re-render: the grid and this view read the same
+// canvas, so a card cannot look like one thing in the roster and another when you open it.
+let cardView = null;                     // { key, id, decorSet, zoom } while the viewer is open
+const CARD_VIEW_ZOOMS = [1, 2, 3];
+function openCardView(id, decorSet) {
+  const key = thumbKey(id, decorSet);
+  cardView = { key, id, decorSet, zoom: (cardView && cardView.zoom) || 1 };
+  $('cardModal').hidden = false;
+  const hit = thumbCache.get(key);
+  paintCardView(hit || { state: 'pending', cv: null });
+  // An empty slot never resolves during renderRoster (it is decided from wipIds without touching the
+  // store), so opening one has to ask for the real answer rather than show a permanent "…".
+  if (!hit || hit.dirty) thumbWant(key, id, decorSet, (decorSet ? suppliedDecor() : suppliedUnits())[id]);
+}
+function paintCardView(res) {
+  if (!cardView || $('cardModal').hidden) return;
+  const spec = THUMB_STATES[res.state] || THUMB_STATES.empty;
+  const id = cardView.id;
+  $('cardTitle').textContent = id;
+  const dims = res.dims || '';
+  $('cardMeta').innerHTML = `<span class="${'badge ' + spec.cls}">${spec.badge}${res.stale ? ' ⟳ stale' : ''}</span>`
+    + (dims ? ` · <span style="font-family:ui-monospace,monospace">${dims}</span>` : '')
+    + ` · <span style="font-family:ui-monospace,monospace">${CARD_PX}×${CARD_PX}</span>`;
+  // WHERE THIS PICTURE COMES FROM, said plainly. Only the `model` rung is a file this tool writes; every
+  // other rung is composited here and now. A caption band makes any picture look like a saved card, so
+  // the one line that distinguishes an artifact on disk from a preview of one has to be present.
+  $('cardSrc').innerHTML = res.file
+    ? `From <code style="color:#8fd0ff">${CARD_SHIP_DIR}${id}.png</code> — the file in the repo.`
+      + (res.stale ? ` <b style="color:#e0b060">It no longer depicts the saved model. Save the unit to rewrite it.</b>` : '')
+    : `<span style="opacity:.75">Composited from the ${res.state === 'baked' ? 'baked atlas' : res.state === 'source' ? 'source slices' : 'card state'}`
+      + ` — no <code>${CARD_SHIP_DIR}${id}.png</code> in the repo. Save the unit with the dev server running to write one.</span>`;
+  const cvs = $('cardCanvas'); if (!cvs) return;
+  cvs.width = CARD_PX; cvs.height = CARD_PX;
+  cvs.style.width = (CARD_PX * cardView.zoom) + 'px'; cvs.style.height = (CARD_PX * cardView.zoom) + 'px';
+  const g = cvs.getContext ? cvs.getContext('2d') : null; if (!g) return;
+  g.clearRect(0, 0, CARD_PX, CARD_PX);
+  g.fillStyle = CARD_BG; g.fillRect(0, 0, CARD_PX, CARD_PX);
+  g.imageSmoothingEnabled = false;
+  if (res.cv) g.drawImage(res.cv, 0, 0);
+  else {
+    g.fillStyle = res.state === 'missing' ? '#2a1420' : '#132234'; g.fillRect(0, 0, CARD_PX, CARD_ART);
+    g.fillStyle = res.state === 'missing' ? '#ff6b6b' : '#3c5670';
+    g.font = '46px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(res.state === 'missing' ? '⚠' : res.state === 'pending' ? '…' : '?', CARD_PX / 2, CARD_ART / 2);
+    drawCardBand(g, id, res.dims || '');
+  }
+  // The same two markings the roster draws, at the size they are actually readable. A 256×256 with a
+  // name baked into it is MORE convincing when it is wrong, so `stale` has to survive the enlargement.
+  if (res.state === 'missing' || res.stale) {
+    g.strokeStyle = res.state === 'missing' ? '#ff6b6b' : '#e0b060';
+    g.lineWidth = 4; g.strokeRect(2, 2, CARD_PX - 4, CARD_PX - 4);
+  }
+}
+$('cardClose').onclick = () => { $('cardModal').hidden = true; cardView = null; };
+$('cardModal').onclick = (e) => { if (e.target === $('cardModal')) { $('cardModal').hidden = true; cardView = null; } };
+$('cardZoomSeg').onclick = (e) => {
+  const b = e.target.closest ? e.target.closest('button') : null; if (!b || !cardView) return;
+  const z = +b.dataset.z; if (!CARD_VIEW_ZOOMS.includes(z)) return;
+  cardView.zoom = z;
+  [...$('cardZoomSeg').children].forEach((c) => c.classList.toggle('on', c === b));
+  paintCardView(thumbCache.get(cardView.key) || { state: 'pending', cv: null });
+};
 function renderRoster() {
   const decorSet = isDecorSet();
   const grid = $('unitGrid'), supplied = decorSet ? suppliedDecor() : suppliedUnits();
@@ -5265,7 +5443,11 @@ function renderRoster() {
     // it cannot resolve to a unit def. (Decor always shows its full id — it matches the Unit Id field.)
     const fac = FAC.factionOfUnitId(u.id);
     const name = (decorSet || !fac) ? u.id : u.id.slice(fac.prefix.length + 1);
-    card.innerHTML = `<canvas width="${THUMB_W}" height="${THUMB_H}"></canvas><div class="un">${name}</div><div class="ur">${u.role || '—'}</div><div class="badge no"></div>`;
+    // AAA-7: the ⤢ is a SEPARATE target. Hanging the full-size view off the card's own click would have
+    // taken the gesture that opens (or saves) a unit — the thing the roster is mostly used for — and made
+    // "look at it bigger" cost a dialog dismissal every time.
+    card.innerHTML = `<canvas width="${THUMB_W}" height="${THUMB_H}"></canvas><button class="zoom" title="View the 256×256 card at full size">⤢</button>`
+      + `<div class="un">${name}</div><div class="ur">${u.role || '—'}</div><div class="badge no"></div>`;
     // THE BADGE IS DERIVED FROM THE PICTURE. It used to be read off the manifest ("✓ supplied") while
     // the picture came from a field that is no longer there, so the two said different things forever.
     const key = thumbKey(u.id, decorSet);
@@ -5279,6 +5461,8 @@ function renderRoster() {
     else { thumbPaint(card, { state: 'pending' }, u, decorSet); thumbWant(key, u.id, decorSet, supplied[u.id]); }
     if (hit && hit.dirty) thumbWant(key, u.id, decorSet, supplied[u.id]);   // shown from cache, refreshed behind it
     card.onclick = decorSet ? () => loadDecorForEdit(u.id) : () => onCardClick(u.id);
+    const zb = card.querySelector ? card.querySelector('.zoom') : null;
+    if (zb) zb.onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation(); openCardView(u.id, decorSet); };
     grid.appendChild(card);
   }
   thumbLive = live;                                            // a late resolve repaints its own card, never the whole grid

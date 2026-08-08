@@ -173,10 +173,18 @@ function idbStub(seed) {
  * content/units/voxel/<id>.body.png and 404 everything else — which is the whole point of the card
  * chain: art comes from the repo, and a named-but-absent file must be DISTINGUISHABLE from no art.
  */
-function imageStub(ok) {
+function imageStub(ok, size) {
   return class {
     constructor() { this.width = 64; this.height = 48; this.naturalWidth = 64; this.naturalHeight = 48; }
-    set src(v) { this._src = v; Promise.resolve().then(() => { if (ok(String(v))) { if (this.onload) this.onload(); } else if (this.onerror) this.onerror(new Error('404 ' + v)); }); }
+    set src(v) {
+      this._src = v;
+      // AAA-7: a decoded image has a SIZE, and the card chain now branches on it — a 256×256 file is a
+      // finished artifact whose caption is its own, anything else is a bare picture to be captioned.
+      // A stub that reports one size for every URL cannot tell those two paths apart.
+      const d = size ? size(String(v)) : null;
+      if (d) { this.width = this.naturalWidth = d[0]; this.height = this.naturalHeight = d[1]; }
+      Promise.resolve().then(() => { if (ok(String(v))) { if (this.onload) this.onload(); } else if (this.onerror) this.onerror(new Error('404 ' + v)); });
+    }
     get src() { return this._src; }
   };
 }
@@ -194,7 +202,7 @@ function boot(opts = {}) {
   if (opts.fetch) sb.fetch = opts.fetch;
   let idb = null;
   if (opts.idb) { idb = idbStub(opts.idb === true ? {} : opts.idb); sb.indexedDB = idb.api; }
-  if (opts.images) sb.Image = imageStub(opts.images === true ? () => true : opts.images);
+  if (opts.images) sb.Image = imageStub(opts.images === true ? () => true : opts.images, opts.imageSize);
   vm.createContext(sb);
   for (const f of ['../../src/data/factions.js', 'carve.js', 'select.js', 'palette.js', '../toolhead.js', 'stack-forge.js']) {
     vm.runInContext(readFileSync(DIR + f, 'utf8'), sb, { filename: f });
@@ -815,7 +823,7 @@ function captureCards(t) {
       });
       const mk = document.createElement.bind(document);      // the ORIGINAL — its 2d stub is the one we wrap
       document.createElement = () => {
-        const ops = [], raw = mk().getContext('2d');
+        const ops = [], texts = [], raw = mk().getContext('2d');
         raw.getImageData = (x, y, w, h) => {
           const d = new Uint8ClampedArray(Math.max(4, w * h * 4));
           for (let yy = h >> 2; yy < h - (h >> 2); yy++) for (let xx = w >> 2; xx < w - (w >> 2); xx++) {
@@ -823,25 +831,56 @@ function captureCards(t) {
           }
           return { data: d, width: w, height: h };
         };
+        // AAA-7: the STRINGS matter now — a card carries its id and dimensions as pixels, so "the caption
+        // is in the file" is a fillText with the right text, not merely a fillText.
         const ctx = new Proxy(raw, {
           get: (o, k) => (typeof k === 'string' && typeof o[k] === 'function'
-            ? (...a) => { ops.push([k].concat(a.filter((x) => typeof x === 'number'))); return o[k].apply(o, a); }
+            ? (...a) => { ops.push([k].concat(a.filter((x) => typeof x === 'number')));
+                          if (k === 'fillText') texts.push(String(a[0])); return o[k].apply(o, a); }
             : o[k]),
           set: (o, k, v) => { o[k] = v; return true; },
         });
-        const cv = { width: 0, height: 0, __ops: ops, getContext: () => ctx, toDataURL: () => 'data:image/png;base64,iVBORw0KGgo=' };
+        const cv = { width: 0, height: 0, __ops: ops, __texts: texts, getContext: () => ctx, toDataURL: () => 'data:image/png;base64,iVBORw0KGgo=' };
         const badge = { textContent: '', className: '' };
+        // AAA-7: the ⤢ full-size affordance is its OWN child. The stub used to hand back the canvas for
+        // every selector but '.badge', so querySelector('.zoom').onclick = f silently decorated the
+        // canvas and a test could never tell the affordance apart from the card's own click.
+        const zoom = { className: 'zoom', onclick: null };
         return { dataset: {}, className: '', innerHTML: '', style: {}, onclick: null, appendChild() {},
-                 width: 0, height: 0, __ops: ops, __badge: badge, __cv: cv,
+                 width: 0, height: 0, __ops: ops, __texts: texts, __badge: badge, __cv: cv, __zoom: zoom,
                  getContext: () => ctx, toDataURL: () => 'data:image/png;base64,iVBORw0KGgo=',
-                 querySelector: (sel) => (sel === '.badge' ? badge : cv),
+                 querySelector: (sel) => (sel === '.badge' ? badge : sel === '.zoom' ? zoom : cv),
                  classList: { add() {}, remove() {}, toggle() {}, contains: () => false } };
       };
     })();
   `);
   return () => t.json(`document.getElementById('unitGrid').__cards.map(c => ({
     id: c.dataset.uid, html: c.innerHTML, thumb: c.dataset.thumb || null,
-    badge: c.__badge.textContent, badgeCls: c.__badge.className, ops: c.__cv.__ops }))`);
+    badge: c.__badge.textContent, badgeCls: c.__badge.className, ops: c.__cv.__ops,
+    zoom: !!c.__zoom.onclick }))`);
+}
+
+/**
+ * record what an HTML-declared canvas is asked to draw (the roster's canvases come from
+ * document.createElement and are covered by captureCards; #cardCanvas comes from the id registry).
+ */
+function captureCanvas(t, id) {
+  const q = JSON.stringify(id);
+  t.run(`(() => {
+    const el = document.getElementById(${q});
+    const ops = [], texts = [], raw = el.getContext('2d');
+    el.__ops = ops; el.__texts = texts;
+    const ctx = new Proxy(raw, {
+      get: (o, k) => (typeof k === 'string' && typeof o[k] === 'function'
+        ? (...a) => { ops.push([k].concat(a.filter((x) => typeof x === 'number')));
+                      if (k === 'fillText') texts.push(String(a[0])); return o[k].apply(o, a); }
+        : o[k]),
+      set: (o, k, v) => { o[k] = v; return true; },
+    });
+    el.getContext = () => ctx;
+  })()`);
+  return () => t.json(`(() => { const e = document.getElementById(${q});
+    return { ops: e.__ops, texts: e.__texts, w: e.width, h: e.height, css: e.style.width || '' }; })()`);
 }
 
 test('GGG-6: opening System reads ALL THREE of its files, not the first one', async () => {
@@ -1134,9 +1173,11 @@ function wipProject(id, o = {}) {
     polys: { body: {}, turret: {} }, picks: { body: {}, turret: {} },
     vox: { body: null, turret: null } };
 }
-const packOf = (id) => ({ pack: { id, parts: [
-  { id: 'body', atlas: id + '.body.png', cell: [216, 266], cols: 4 },
-  { id: 'turret', atlas: id + '.turret.png', cell: [216, 266], cols: 8 } ] } });
+// footprint/scale are what a real buildPack writes, and AAA-7's caption reads them — a fixture without
+// them made the card quote no dimensions at all, which is a fixture bug that looks like a code bug.
+const packOf = (id) => ({ pack: { id, footprint: [64, 64, 40], scale: { voxPerTile: 32, tiles: 2 }, parts: [
+  { id: 'body', atlas: id + '.body.png', cell: [216, 266], cols: 4, layers: 35 },
+  { id: 'turret', atlas: id + '.turret.png', cell: [216, 266], cols: 8, layers: 12 } ] } });
 const opOf = (card, name) => (card.ops || []).find((o) => o[0] === name) || null;
 
 test('DDD-6: a BAKED unit card shows frame 0 of the atlas IN THE REPO', async () => {
@@ -1696,4 +1737,295 @@ test('DDD-5: the Remove dialog lists exactly what the ROSTER lists, and refuses 
   assert.deepEqual(rows(), [], 'decor is not offered here');
   assert.match(t.run(`document.getElementById('rmIntro').innerHTML`), /not removable here/);
   assert.match(t.run(`document.getElementById('rmIntro').innerHTML`), /voxel-decor\.json/, 'and it says why');
+});
+
+// ── AAA-7: THE CARD IS A STANDARD 256×256 ARTIFACT, AND IT CARRIES ITS OWN CAPTION ────────────────
+// "I use that feature to monitor and test other features." The roster is an INSTRUMENT — it is how the
+// owner checks whether anything else works — so the card had to stop being a by-product of a CSS box:
+//   · the saved picture was THUMB_W×THUMB_H, a size derived from the grid. Change the grid and every
+//     card already on disk is the wrong shape.
+//   · nothing on the picture said what it was of. Out of the roster — in a file browser, a PR diff, a
+//     pasted message — it was an anonymous grey lump.
+//   · and the grid drew a 152×112 canvas into a ~97×56 CSS box, so every unit was stretched ~1.3×
+//     horizontally. A grid used to JUDGE proportions was misreporting them.
+// Each test below was mutation-checked: the fix reverted, the gate confirmed red on that test alone.
+
+test('AAA-7: the saved card is a 256×256 artifact carrying the unit id and its dimensions AS PIXELS', () => {
+  // MUTATION: `cv.width = W; cv.height = H` (a size handed in by the caller) -> the 256 assertions fail.
+  // MUTATION: drop the drawCardBand call -> the picture is anonymous the moment it leaves the roster,
+  // which is the whole reason the text is composited IN rather than laid over it in HTML.
+  const t = boot();
+  captureCards(t);                     // its canvases record their draw calls AND their text
+  t.run(`(() => {
+    const s = document.createElement('canvas'); s.width = 64; s.height = 64;
+    window.__card = cropToCard(s, { name: 'GND-Tanks', dims: '64×64×35 vox · 2 tiles' });
+  })()`);
+  const c = t.json(`({ w: window.__card.width, h: window.__card.height, texts: window.__card.__texts, ops: window.__card.__ops })`);
+  assert.equal(c.w, 256, 'a fixed square, not a size derived from the roster box');
+  assert.equal(c.h, 256);
+  assert.deepEqual(c.texts, ['GND-Tanks', '64×64×35 vox · 2 tiles'], 'the id and the dimensions are IN the file');
+  // OPAQUE. A transparent PNG with pale text is invisible on a file browser's white background — the
+  // one place this artifact exists to be readable.
+  assert.ok(c.ops.some((o) => o[0] === 'fillRect' && o[3] === 256 && o[4] === 256),
+    'the square is filled before anything is drawn on it');
+});
+
+test('AAA-7: the file is captioned with the unit it just drew, from the model in the editor', async () => {
+  // The picture comes from drawScene over the live model; the caption must come from that same model in
+  // the same breath, or a card can ship a name and a size that belong to something else.
+  // MUTATION: `cropToCard(t.cv, null)` -> no label reaches the artifact and this fails.
+  // MUTATION: caption from the roster's display name (prefix stripped) -> "Tanks" identifies nothing.
+  const net = contentFetch({}, { ship: true });
+  const t = boot({ fetch: net.fetch, idb: true });
+  captureCards(t);
+  t.run(`window.__label = null; const _crop = cropToCard;
+         cropToCard = (src, label) => { window.__label = label; return _crop(src, label); };
+         state.foot = 16; state.bodyLayers = 8; volDirty.body = true; recarve();`);
+  t.run(`(async () => { window.__r = await saveCardImage('GND-Tanks', null); })();`);
+  await settle();
+  assert.equal(t.json('window.__r').ok, true, 'test setup: the image was written');
+  const label = t.json('window.__label');
+  assert.equal(label.name, 'GND-Tanks', 'the FULL id — the file has to identify its unit with nothing around it');
+  assert.equal(label.dims, t.run('cardDimsLive()'), 'and the dimensions of the model that was just drawn');
+  assert.match(label.dims, /^16×16×8 vox · 0\.5 tiles$/);
+});
+
+test('AAA-7: the dimension line names BOTH the voxel grid and the size on the board', () => {
+  // WHICH DIMENSIONS — recorded here because it was a real choice. The voxel footprint is what the
+  // artist manipulates (Resolution / Base layers). `scale.tiles` is what decides whether a unit reads
+  // correctly beside its neighbours. They are the two halves of the load-bearing world-scale contract
+  // (VOX_PER_TILE voxels = 1 tile), so the card carries both: a card reading "96×96×40 vox · 2 tiles"
+  // is a broken unit you can see at a glance, and either number alone hides that.
+  // MUTATION: drop the tiles half -> a 90-unit catalogue can no longer be judged for on-board scale.
+  // MUTATION: drop the vox half -> the contract is invisible and a scale bug looks like a healthy card.
+  const t = boot();
+  assert.equal(t.run(`cardDimsText(64, 35)`), '64×64×35 vox · 2 tiles');
+  assert.equal(t.run(`cardDimsText(32, 12)`), '32×32×12 vox · 1 tile', 'one tile is singular');
+  assert.equal(t.run(`cardDimsText(16, 8)`), '16×16×8 vox · 0.5 tiles');
+  assert.equal(t.run(`cardDimsText(0, 8)`), '', 'no model, no claim about its size');
+  assert.equal(t.run(`cardDimsText(64, 0)`), '');
+  // and the tiles half really is derived from the contract, not a stored number that could drift
+  assert.equal(t.run(`cardDimsText(VOX_PER_TILE * 3, 4).split('· ')[1]`), '3 tiles');
+});
+
+test('AAA-7: a card quotes the dimensions of the model it PICTURES, not the sliders', async () => {
+  // The sliders can be moved without re-carving — that is the whole point of FFF-2's "a carve happens
+  // when the USER ASKS". So the caption reads the carved volume, which is what the picture is of.
+  // MUTATION: read p.state.foot/bodyLayers first -> the card claims 16×16×8 over a 4×4×2 picture.
+  // System, not FACTIONS[0]: boot resolves the first faction's roster before captureCards can wrap
+  // document.createElement, and a card resolved then holds a canvas that records nothing.
+  const p = wipProject('SYS-Dims', { images: { top: 'data:image/png;base64,TOP' } });
+  p.state.foot = 16; p.state.bodyLayers = 8;                    // sliders moved…   (VOL is still 4×4×2)
+  const t = boot({ fetch: contentFetch({ 'system.units.json': unitsDoc('System', []) }).fetch,
+    images: (s) => s.startsWith('data:'), idb: { 'proj:SYS-Dims': p } });
+  await settle();
+  const cards = captureCards(t);
+  t.run(`loadFaction('System')`); await settle();
+  assert.equal(cards().find((c) => c.id === 'SYS-Dims').thumb, 'source', 'test setup: it resolved from its slice');
+  assert.match(t.run(`thumbCache.get('unit:SYS-Dims').dims`), /^4×4×2 vox/,
+    'the caption describes the carved volume the picture shows');
+  assert.deepEqual(t.json(`thumbCache.get('unit:SYS-Dims').cv.__texts`),
+    ['SYS-Dims', t.run(`thumbCache.get('unit:SYS-Dims').dims`)]);
+  // AND THE CAPTION IS PART OF THE SIGNATURE. Without it a resize would revive the cached canvas and
+  // serve the OLD dimensions over the new picture — the revive would be caching a lie.
+  assert.match(t.run(`thumbCache.get('unit:SYS-Dims').sig`), /4×4×2/);
+});
+
+test('AAA-7: the roster shows the picture and crops the caption OFF', async () => {
+  // Text sized for 256 is an illegible smear at a third of it, and it would eat a fifth of the picture.
+  // So there is still ONE artifact — the grid takes [0, CARD_ART), the full-size view takes all of it.
+  // MUTATION: drawImage(res.cv, 0, 0, THUMB_W, THUMB_H) (no source rect) -> the roster squeezes the
+  // caption band into every card and this fails on the source rect.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks']) });
+  const t = boot({ fetch: net.fetch, idb: true, images: (s) => s === '../../content/units/voxel/GND-Tanks.body.png' });
+  await settle();
+  t.run(`shippedUnits = ${JSON.stringify({ 'GND-Tanks': packOf('GND-Tanks') })};`);
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  const blit = opOf(cards()[0], 'drawImage');
+  assert.deepEqual(blit.slice(1, 5), [0, 0, 256, 212], 'the roster cuts the PICTURE REGION out of the artifact');
+  assert.deepEqual(blit.slice(5), [0, 0, 152, 126], 'and scales it into the roster canvas');
+  // the card still names its unit at grid size — in real, selectable HTML, where 10px text is readable
+  assert.match(cards()[0].html, /class="un">Tanks</);
+});
+
+test('AAA-7: the roster box carries the artifact aspect, so the picture is not stretched', () => {
+  // THE DISTORTION THIS REPLACED: `.ucard canvas { width:100%; height:56px }` against a 152×112 canvas
+  // in a ~97px column — every unit in the roster was ~1.3× too wide. An instrument for judging shape
+  // must not reshape what it shows.
+  // MUTATION: put `height:56px` back -> the CSS assertions fail.
+  const t = boot();
+  const css = readFileSync(DIR + 'stack-forge.html', 'utf8').match(/\.ucard canvas \{([^}]*)\}/)[1];
+  assert.match(css, /aspect-ratio:\s*256\/212/, 'the box is the shape of the artifact picture region');
+  assert.doesNotMatch(css, /height:\s*\d/, 'a fixed pixel height against a full-width canvas IS the stretch');
+  const w = t.run('THUMB_W'), h = t.run('THUMB_H'), px = t.run('CARD_PX'), art = t.run('CARD_ART');
+  assert.ok(Math.abs(w / h - px / art) < 0.01, `the roster canvas ${w}×${h} must match the picture region ${px}×${art}`);
+  assert.equal(px, 256);
+  assert.equal(t.run('CARD_PX - CARD_ART'), t.run('CARD_BAND'));
+});
+
+test('AAA-7: the zoom affordance opens the card full size and does NOT take the card own click', async () => {
+  // The roster's click opens (or saves) a unit — the gesture it has always had, and the one the owner
+  // uses most. Hanging the viewer off it would have cost a dialog dismissal every time.
+  // MUTATION: `card.onclick = () => openCardView(...)` -> saveAsModal never opens and this fails.
+  // MUTATION: drop e.stopPropagation() -> in a browser BOTH fire; the sandbox records the intent.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks']) });
+  const t = boot({ fetch: net.fetch, idb: true, images: (s) => s === '../../content/units/voxel/GND-Tanks.body.png' });
+  await settle();
+  t.run(`shippedUnits = ${JSON.stringify({ 'GND-Tanks': packOf('GND-Tanks') })};`);
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  assert.equal(cards()[0].zoom, true, 'every card gets the affordance');
+  assert.match(cards()[0].html, /class="zoom"/);
+
+  t.run(`window.__stopped = false;
+         document.getElementById('unitGrid').__cards[0].__zoom.onclick({ stopPropagation: () => { window.__stopped = true; } });`);
+  assert.equal(t.run('window.__stopped'), true, 'the click is stopped at the button — the card underneath must not also fire');
+  assert.equal(t.run(`document.getElementById('cardModal').hidden`), false, 'the full-size view opens');
+  assert.equal(t.run(`document.getElementById('saveAsModal').hidden`), true, 'and the Open dialog did NOT');
+  assert.equal(t.run(`document.getElementById('saveModal').hidden`), true);
+
+  // the card's OWN click still does what it always did
+  t.run(`document.getElementById('unitGrid').__cards[0].onclick()`);
+  assert.equal(t.run(`document.getElementById('saveAsModal').hidden`), false);
+});
+
+test('AAA-7: the full-size view shows the WHOLE square, caption included, at 1:1', async () => {
+  // The grid and this view read the SAME cached canvas — one scaled, one not — so a card cannot look
+  // like one thing in the roster and another when you open it.
+  // MUTATION: re-resolve into a fresh canvas here -> two renders to keep in step, and the source-rect
+  // assertion (a full blit, no crop) is what catches a viewer that crops like the grid does.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks']) });
+  const t = boot({ fetch: net.fetch, idb: true, images: (s) => s === '../../content/units/voxel/GND-Tanks.body.png' });
+  await settle();
+  t.run(`shippedUnits = ${JSON.stringify({ 'GND-Tanks': packOf('GND-Tanks') })};`);
+  captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  const view = captureCanvas(t, 'cardCanvas');
+  t.run(`openCardView('GND-Tanks', false)`); await settle();
+
+  const v = view();
+  assert.equal(v.w, 256);
+  assert.equal(v.h, 256, 'the artifact at its own pixels');
+  assert.equal(v.css, '256px', '1x by default — full size is the file own size, not a fit-to-window guess');
+  const blit = v.ops.filter((o) => o[0] === 'drawImage').pop();
+  assert.deepEqual(blit, ['drawImage', 0, 0], 'the WHOLE square, caption band and all — no crop');
+  assert.match(t.run(`document.getElementById('cardTitle').textContent`), /GND-Tanks/);
+  assert.match(t.run(`document.getElementById('cardMeta').innerHTML`), /256×256/);
+  assert.match(t.run(`document.getElementById('cardMeta').innerHTML`), /vox · /, 'and its dimensions');
+
+  // zoom is a display scale on the SAME 256 pixels, never a bigger render
+  t.run(`document.getElementById('cardZoomSeg').onclick({ target: { closest: () => ({ dataset: { z: '3' } }) } })`);
+  const z = view();
+  assert.equal(z.css, '768px');
+  assert.equal(z.w, 256, 'the artifact does not grow — the view does');
+});
+
+test('AAA-7: a 256×256 file is shown as ITSELF and never re-captioned', async () => {
+  // A saved card carries the id and dimensions it was written with. Painting today's caption over it
+  // would put a fresh-looking name and size on a picture that may be three edits old — the exact lie
+  // `⟳ stale` exists to prevent, made more convincing.
+  // MUTATION: always go through cardCanvasOf -> the caption is repainted and __texts is not empty.
+  const t = boot({ fetch: contentFetch({ 'system.units.json': unitsDoc('System', []) }).fetch,
+    images: (s) => s === '../../content/units/card/SYS-Wip.png',
+    imageSize: (s) => (s.indexOf('/card/') >= 0 ? [256, 256] : null),
+    idb: { 'proj:SYS-Wip': wipProject('SYS-Wip') } });
+  await settle();
+  const cards = captureCards(t);
+  t.run(`loadFaction('System')`); await settle();
+  assert.equal(cards().find((c) => c.id === 'SYS-Wip').thumb, 'model stale');
+  assert.deepEqual(t.json(`thumbCache.get('unit:SYS-Wip').cv.__texts`), [],
+    'the file already carries its caption — nothing is painted over it');
+  const blit = t.json(`thumbCache.get('unit:SYS-Wip').cv.__ops.filter(o => o[0] === 'drawImage').pop()`);
+  assert.deepEqual(blit, ['drawImage', 0, 0], 'blitted 1:1, exactly the bytes on disk');
+});
+
+test('AAA-7: a card image written BEFORE the standard is captioned, not trusted as an artifact', async () => {
+  // The other half of the branch above. Anything that is not 256×256 is a bare picture from an older
+  // save, so it is fitted into the picture region and given a caption like any other rung.
+  // MUTATION: treat every file as a finished artifact -> a 152×112 picture is stretched into a 256
+  // square and the roster reports sizes that were never true.
+  const t = boot({ fetch: contentFetch({ 'system.units.json': unitsDoc('System', []) }).fetch,
+    images: (s) => s === '../../content/units/card/SYS-Wip.png',
+    imageSize: () => [152, 112],                                  // the pre-AAA-7 card size
+    idb: { 'proj:SYS-Wip': wipProject('SYS-Wip') } });
+  await settle();
+  const cards = captureCards(t);
+  t.run(`loadFaction('System')`); await settle();
+  assert.equal(cards().find((c) => c.id === 'SYS-Wip').thumb, 'model stale');
+  assert.deepEqual(t.json(`thumbCache.get('unit:SYS-Wip').cv.__texts`),
+    ['SYS-Wip', t.run(`thumbCache.get('unit:SYS-Wip').dims`)], 'an old file gets a caption');
+  const blit = t.json(`thumbCache.get('unit:SYS-Wip').cv.__ops.filter(o => o[0] === 'drawImage').pop()`);
+  assert.deepEqual(blit.slice(1, 5), [0, 0, 152, 112], 'fitted from its OWN size, not assumed to be 256');
+});
+
+test('AAA-7: staleness survives the enlargement', async () => {
+  // A 256×256 with a name baked into it is MORE convincing when it is wrong, not less. Every signal the
+  // roster draws has to reach the size the owner actually looks at.
+  // MUTATION: drop the stale branch from paintCardView -> the biggest, most convincing view of the card
+  // is the one place that does not say it is out of date.
+  const t = boot({ fetch: contentFetch({}).fetch,
+    images: (s) => s === '../../content/units/card/GND-Wip.png',
+    imageSize: () => [256, 256],
+    idb: { 'proj:GND-Wip': wipProject('GND-Wip') } });
+  await settle();
+  captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  const view = captureCanvas(t, 'cardCanvas');
+  t.run(`openCardView('GND-Wip', false)`); await settle();
+  assert.match(t.run(`document.getElementById('cardMeta').innerHTML`), /stale/, 'the badge says it');
+  assert.match(t.run(`document.getElementById('cardSrc').innerHTML`), /no longer depicts/, 'in words, too');
+  assert.ok(view().ops.some((o) => o[0] === 'strokeRect' && o[3] === 252),
+    'and the warning frame is drawn ON the picture, at full size');
+});
+
+test('AAA-7: only the model rung is a FILE, and the viewer says which it is looking at', async () => {
+  // WHAT ABOUT THE OTHER RUNGS — recorded because it was a choice, not an oversight. Every rung gets a
+  // 256×256 with a caption, because the id and the size are worth knowing whatever the picture came
+  // from. Only `model` is written to content/units/card/. So a caption alone would make a preview
+  // indistinguishable from an artifact on disk, and one line has to separate them.
+  // MUTATION: report the file path for every state -> a slices-only unit claims a card that is not there,
+  // which is precisely how content goes missing quietly.
+  const net = contentFetch({ 'system.units.json': unitsDoc('System', ['SYS-Cannon']) });
+  const t = boot({ fetch: net.fetch, images: (s) => s.startsWith('data:'),
+    idb: { 'proj:SYS-Cannon': wipProject('SYS-Cannon', { vol: null, images: { top: 'data:image/png;base64,TOP' } }) } });
+  await settle();
+  captureCards(t);
+  t.run(`loadFaction('System')`); await settle();
+  const view = captureCanvas(t, 'cardCanvas');
+  t.run(`openCardView('SYS-Cannon', false)`); await settle();
+  const src = t.run(`document.getElementById('cardSrc').innerHTML`);
+  assert.match(src, /Composited from the source slices/, 'it says where the picture came from');
+  assert.match(src, /no <code>content\/units\/card\/SYS-Cannon\.png<\/code> in the repo/,
+    'and that there is no card artifact on disk for this unit');
+  assert.doesNotMatch(src, /the file in the repo/);
+  // …and it is still a full card: caption and all, so the roster reads the same for every rung
+  assert.deepEqual(t.json(`thumbCache.get('unit:SYS-Cannon').cv.__texts`).slice(0, 1), ['SYS-Cannon']);
+  assert.equal(view().w, 256);
+});
+
+test('AAA-7: the roster does not resolve or read more per render than it did', async () => {
+  // renderRoster runs on nearly every state change and a faction can hold dozens of cards. A bigger
+  // canvas is more raster work; it must not also become more WORK — the cache-with-signature behaviour
+  // and the bounded background resolve are what keep the roster off the click path.
+  // MUTATION: drop the thumbCache lookup, or resolve a second canvas for the viewer -> reads/resolves
+  // climb with every render and this fails.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Tanks']) });
+  const t = boot({ fetch: net.fetch, images: (s) => s.startsWith('data:'),
+    idb: { 'proj:GND-Tanks': wipProject('GND-Tanks', { images: { top: 'data:,T' } }) } });
+  await settle();
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  const reads = t.idb.gets();
+  for (let i = 0; i < 8; i++) { t.run(`renderRoster()`); await settle(); }
+  assert.equal(t.idb.gets(), reads, 'eight more renders, ZERO more reads');
+  // ONE blit per card per render — the crop is a source rect on the same drawImage, not a second pass
+  // renderRoster builds fresh card elements every time, so this is the LAST render's canvas: exactly one
+  // blit. The caption crop is a source rect on that same drawImage, not a second compositing pass.
+  const ops = cards()[0].ops.filter((o) => o[0] === 'drawImage');
+  assert.equal(ops.length, 1, 'one blit per card per render — the picture is never composited twice');
+  assert.deepEqual(ops[0].slice(1, 5), [0, 0, 256, 212]);
+  // and opening the viewer reuses the cached artifact rather than resolving a second one
+  t.run(`openCardView('GND-Tanks', false)`); await settle();
+  assert.equal(t.idb.gets(), reads, 'the full-size view is the SAME canvas — it costs no resolve at all');
 });
