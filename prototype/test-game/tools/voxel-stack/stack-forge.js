@@ -4156,6 +4156,7 @@ async function doSaveUnit() {
   try { built = buildPack(); v = validatePack(built.pack); }
   catch (e) { return saveFailed('BAKE/PACK FAILED', (e && e.message) || String(e)); }
   activeUnitId = built.pack.id;                           // an explicit save under this id is a deliberate rename → follow it
+  unTombstone('proj:' + built.pack.id);                   // …and it un-deletes the id: this is the deliberate ask
   const m = loadManifest();
   m.config = { camera: built.pack.camera, light: built.pack.light };   // shared game-wide config
   // ATLASES DO NOT GO IN localStorage. They are ~1.4 MB of base64 per unit and were 99.9% of every
@@ -4343,7 +4344,7 @@ $('shipManifest').onclick = async () => {
       for (const pt of (e.pack.parts || [])) {                      // atlas + optional shadow, per part
         for (const [key, name] of [[pt.id, pt.atlas], [pt.id + '.shadow', pt.shadowAtlas]]) {
           const url = atl[key]; if (!url || !name) continue;
-          const d = await shipFile('content/units/voxel/' + name, { b64: url });
+          const d = await shipFile(UNIT_SHIP_DIR + name, { b64: url });
           files++; bytes += d.bytes || 0;
         }
       }
@@ -4430,10 +4431,11 @@ function setDecorFields(d) {                                        // restore t
 function loadDecorForEdit(id) {
   clearTimeout(autosaveTimer);
   try {
-    if (editingDecor) { const out = snapshotProject(editingDecor); if (projectHasContent(out)) idb.put('decor:' + editingDecor, out); }
-    else { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); }
+    if (editingDecor) { const out = snapshotProject(editingDecor); if (projectHasContent(out)) putProject('decor:' + editingDecor, out); }
+    else { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) putProject('proj:' + out.id, out); }
   } catch (e) { /* best-effort flush */ }
   editingDecor = id;
+  unTombstone('decor:' + id);                             // opening a prop is the deliberate ask for it to exist
   const entry = (loadDecorManifest().decor || {})[id];
   if ($('did')) $('did').value = id;
   if (entry && entry.pack) setDecorFields(entry.pack.decor);
@@ -4499,7 +4501,7 @@ async function shipDecor() {
     if (d.ok) {
       $('decorSaveState').innerHTML = `<span class="lock">🚀 Shipped "${built.pack.id}" (${Object.keys(man.decor).length} decor total) → content/decor/voxel-decor.json ✓</span>`;
       editingDecor = built.pack.id;
-      try { idb.put('decor:' + built.pack.id, snapshotProject(built.pack.id)); } catch (e) { /* WIP best-effort */ }
+      try { unTombstone('decor:' + built.pack.id); putProject('decor:' + built.pack.id, snapshotProject(built.pack.id)); } catch (e) { /* WIP best-effort */ }
       if ($('decorPackJson')) $('decorPackJson').textContent = JSON.stringify(built.pack, null, 2);
       renderDecorManifestFromDisk(man);
       if (isDecorSet()) loadFaction(DECOR_SET);
@@ -4541,6 +4543,26 @@ const idb = (() => {
   return { put: (k, v) => op('readwrite', (s) => s.put(v, k)), get: (k) => op('readonly', (s) => s.get(k)),
     del: (k) => op('readwrite', (s) => s.delete(k)), keys: () => op('readonly', (s) => s.getAllKeys()) };
 })();
+// ── DELETE BEATS AUTOSAVE ─────────────────────────────────────────────────────────────────────────
+// A delete used to be a coin flip. `document.addEventListener('click', scheduleAutosave, true)` is
+// CAPTURE phase, so it fires on the very click that runs the delete — arming doAutosave 500ms out with
+// the deleted unit still loaded in the editor. Whether the unit came back depended on whether that timer
+// landed before or after the store round-trip. Cancelling the timer is not enough on its own either: the
+// timer can already be overdue while confirm() blocks, and it then fires during the delete's own awaits.
+//
+// So a deleted key is TOMBSTONED, and every path that writes a project checks the tombstone. The delete
+// is authoritative until the id is deliberately re-anchored — opened, loaded or explicitly saved — which
+// is the only signal that says "I mean this id to exist again". Re-creating a removed unit under the same
+// id therefore still works; nothing else can resurrect it.
+const deletedKeys = new Set();
+/** the id is wanted again: opened, loaded, or explicitly saved under. Removes the tombstone, if any. */
+function unTombstone(key) { deletedKeys.delete(key); }
+/** THE ONE WRITE for a WIP project. Every flush path routes through here, so a background save cannot
+ *  quietly undo a delete from a code path that predates it. Resolves false when the write was refused. */
+function putProject(key, p) {
+  if (deletedKeys.has(key)) { console.warn('[stack-forge] refused to write ' + key + ' — it was deleted'); return Promise.resolve(false); }
+  return Promise.resolve(idb.put(key, p)).then(() => true);
+}
 const b64FromU8 = (a) => { let s = ''; for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };
 const u8FromB64 = (s) => { const bin = atob(s), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; };
 const loadImgURL = (url) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
@@ -4623,6 +4645,7 @@ async function loadProject(p) {
   volHistory.length = 0; volRedo.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // undo history + selection belong to the OUTGOING unit — never let them apply to this one
   try {
     $('uid').value = p.id || 'unit'; activeUnitId = (p.id || 'unit');   // anchor the WIP key to the restored project
+    unTombstone('proj:' + activeUnitId);        // loading a project IS the deliberate ask for this id to exist
     Object.assign(state, p.state || {}); state.baked = null;
     if (!(p.state && p.state.turretFoot)) state.turretFoot = state.foot;   // SF3: pre-turret-res projects → turret matches base
     delete state.paletteN;                    // a v1/v2 project may carry it; nothing reads it (FFF-8)
@@ -4699,11 +4722,17 @@ async function doAutosave() {
     wipDirty = true;
     return saveFailed('SNAPSHOT FAILED', `Could not capture "${decorId || activeUnitId}" — ${(e && e.message) || e}`);
   }
+  // THE DELETE WINS, AND IT IS CHECKED FIRST. This is the click-armed timer landing while a removal is
+  // still in flight, with the removed unit's model still in the editor — the resurrection this fix is
+  // about. Ahead of the content test on purpose: a deleted key must not be written whatever it holds.
+  // A distinct outcome, never a silent skip — a caller that thinks it saved must be able to see it did not.
+  const wipKey = (decorId ? 'decor:' + decorId : 'proj:' + p.id);
+  if (deletedKeys.has(wipKey)) { wipDirty = false; setWipStatus('— removed', 'muted'); return { ok: false, kind: 'DELETED', id: p.id, key: wipKey }; }
   // NOT an error, and NOT a save: a distinct outcome, so a caller cannot report a write that never happened.
   if (!projectHasContent(p)) { setWipStatus('— nothing to save', 'muted'); return { ok: false, kind: 'EMPTY', id: p.id }; }
   try {
-    if (decorId) { await idb.put('decor:' + decorId, p); localStorage.setItem('bulwark:sf:lastDecor', decorId); }
-    else { await idb.put('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id); }
+    if (decorId) { await putProject('decor:' + decorId, p); localStorage.setItem('bulwark:sf:lastDecor', decorId); }
+    else { await putProject('proj:' + p.id, p); localStorage.setItem('bulwark:sf:last', p.id); }
   } catch (e) {
     wipDirty = true;                                       // still unsaved — the next trigger must try again
     setWipStatus('⚠ save failed', 'dirty');
@@ -4760,11 +4789,20 @@ const DECOR_SET = '🌿 Terrain (decor)';
 // must still be somewhere: content that is orphaned AND invisible is how orphans survive for months.
 const UNASSIGNED_SET = '⚠ Unassigned';
 const isDecorSet = () => curFaction === DECOR_SET;
-const isUnassignedSet = () => curFaction === UNASSIGNED_SET;
+// (isUnassignedSet lived here. Its one caller was renderRoster's bucketing test, which is now the shared
+//  idBelongsToSet below — a one-line alias with no callers is the same dead store this file keeps deleting.)
 // The two pseudo-sets are TOOL modes, not factions: neither has a prefix, a voice or a place in the
 // game's faction list, so neither belongs in factions.js. `isPseudoSet` is the one test for "this entry
 // in the dropdown is not a real faction" — every filter below reads it instead of comparing strings.
 const isPseudoSet = (name) => name === DECOR_SET || name === UNASSIGNED_SET;
+// THE ONE BUCKETING RULE: which set an id's card belongs to. renderRoster and the Remove dialog both read
+// it, because a Remove dialog that disagreed with the roster would either offer units you cannot see or
+// hide ones you can — and this rule is already the fix for "abrams appears in every faction at once".
+function idBelongsToSet(id, setName) {
+  if (setName === DECOR_SET) return true;                          // the decor roster is already id-complete
+  const f = FAC.factionOfUnitId(id);
+  return setName === UNASSIGNED_SET ? !f : (!!f && f.name === setName);
+}
 const FACTION_KEY = 'bulwark:sf:lastFaction';   // the set you were last working in
 // THE REGISTRY IS THE LIST. This was a hand-typed array that had to stay in step with tables.js,
 // menu.js and voice.js by hand — see src/data/factions.js for what that cost.
@@ -4866,7 +4904,7 @@ async function loadFaction(name) {
     const leaving = editingDecor;
     try {
       const dout = snapshotProject(leaving);
-      if (projectHasContent(dout)) await idb.put('decor:' + leaving, dout);   // AWAITED: a fire-and-forget put can resolve after the unit loads and clobber it
+      if (projectHasContent(dout)) await putProject('decor:' + leaving, dout);   // AWAITED: a fire-and-forget put can resolve after the unit loads and clobber it
     } catch (e) {
       return saveFailed('DECOR SAVE FAILED', `Could not save the prop "${leaving}" before leaving the Terrain set. `
         + `${(e && e.message) || e} — the switch was cancelled so nothing is lost.`);
@@ -4890,7 +4928,7 @@ async function loadFaction(name) {
     roster = [...ids].map((id) => ({ id, role: dm[id] ? 'baked' : 'WIP', shape: '🌿', decor: true, wip: !dm[id] }));
     if (!editingDecor) {                                          // arriving fresh from a unit
       clearTimeout(autosaveTimer);
-      try { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); } catch (e) { /* flush unit */ }
+      try { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) putProject('proj:' + out.id, out); } catch (e) { /* flush unit */ }
       const lastDecor = (() => { try { return localStorage.getItem('bulwark:sf:lastDecor'); } catch (e) { return null; } })();
       if (lastDecor && ids.has(lastDecor)) { renderRoster(); loadDecorForEdit(lastDecor); return; }   // reopen your last prop
       editingDecor = (($('did') && $('did').value) || 'decor').trim();   // else a clean new slate
@@ -4981,6 +5019,9 @@ const UNIT_ATLAS_BASE = '../../content/units/voxel/';
 // defect as a store nothing reads, pointing the other way.
 const UNIT_CARD_BASE = '../../content/units/card/';
 const CARD_SHIP_DIR = 'content/units/card/';
+// The ship-side spelling of UNIT_ATLAS_BASE. Removal has to name exactly the files the ship wrote, so
+// the folder is a constant both halves read rather than a literal each of them repeats.
+const UNIT_SHIP_DIR = 'content/units/voxel/';
 // The one place a card's outcomes are spelled. `stale` rides on `model` as a modifier — a card image is
 // derived from a model the artist keeps editing, and a three-edits-ago picture that looks current is a
 // worse lie than a grey box.
@@ -5186,7 +5227,7 @@ function thumbWant(key, id, decorSet, entry) {
   thumbPump();
 }
 function renderRoster() {
-  const decorSet = isDecorSet(), unassignedSet = isUnassignedSet();
+  const decorSet = isDecorSet();
   const grid = $('unitGrid'), supplied = decorSet ? suppliedDecor() : suppliedUnits();
   grid.innerHTML = ''; let n = 0;
   // THE ROSTER IS NOT THE WHOLE SET. This walked the fixed `roster` list only, so a unit baked and saved
@@ -5203,11 +5244,7 @@ function renderRoster() {
   // anything with no recognised prefix goes to ⚠ Unassigned and nowhere else. Dropping them instead
   // would hide orphans, and invisible orphaned content is already its own problem (FFF-7) — the whole
   // reason extras exist is that a saved unit with no card looks like a failed save.
-  const belongsHere = (id) => {
-    if (decorSet) return true;                                     // the decor roster is already id-complete
-    const f = FAC.factionOfUnitId(id);
-    return unassignedSet ? !f : (!!f && f.name === curFaction);
-  };
+  const belongsHere = (id) => idBelongsToSet(id, curFaction);
   // A unit exists if it has a PACK **or** a WIP. The decor roster already unions decor:* from
   // IndexedDB; the unit roster only read the manifest, so a unit carved but not yet baked had no card —
   // and a card-click on that empty-looking slot opened Save and overwrote the WIP.
@@ -5260,8 +5297,8 @@ $('addUnit').onclick = async () => {
     if (!id) return;
     clearTimeout(autosaveTimer);
     try {                                                          // flush whatever we were on under its own namespace first
-      if (editingDecor) { const out = snapshotProject(editingDecor); if (projectHasContent(out)) idb.put('decor:' + editingDecor, out); }
-      else { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) idb.put('proj:' + out.id, out); }
+      if (editingDecor) { const out = snapshotProject(editingDecor); if (projectHasContent(out)) putProject('decor:' + editingDecor, out); }
+      else { const out = snapshotProject(activeUnitId); if (out && projectHasContent(out)) putProject('proj:' + out.id, out); }
     } catch (e) { /* best-effort */ }
     editingDecor = id; if ($('did')) $('did').value = id;
     state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }   // decor tends tall — raise height
@@ -5312,14 +5349,14 @@ async function selectUnit(id, skipSave) {
   // async load must own the slot, or a stale-model autosave overwrites the unit you're switching to.
   clearTimeout(autosaveTimer);
   if (skipSave) editingDecor = null;   // ⏭ Skip: discard the outgoing unit's unsaved work by not flushing it
-  else if (editingDecor) { try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) idb.put('decor:' + editingDecor, dout); } catch (e) { /* flush decor */ } editingDecor = null; }   // leaving decor editing for a unit
+  else if (editingDecor) { try { const dout = snapshotProject(editingDecor); if (projectHasContent(dout)) putProject('decor:' + editingDecor, dout); } catch (e) { /* flush decor */ } editingDecor = null; }   // leaving decor editing for a unit
   // AUTO-SAVE THE OUTGOING UNIT. Switching units is not a decision point about saving -- the work goes
   // back where it came from, every time. skipSave remains for the explicit discard path only, and a clean
   // WIP still writes nothing because snapshotProject serialises a per-voxel VOL blob.
   if (!skipSave && wipDirty && activeUnitId && activeUnitId !== id) {
     try {
       const out = snapshotProject(activeUnitId);
-      if (out && projectHasContent(out)) { await idb.put('proj:' + out.id, out); wipIds.add(out.id); wipDirty = false; }
+      if (out && projectHasContent(out) && await putProject('proj:' + out.id, out)) { wipIds.add(out.id); wipDirty = false; }
     } catch (e) { return saveFailed('AUTOSAVE ON SWITCH FAILED', `Could not save "${activeUnitId}" before opening "${id}".
 
 ${(e && e.message) || e}
@@ -5339,6 +5376,7 @@ The switch was cancelled so nothing is lost.`); }
   volHistory.length = 0; volRedo.length = 0; gridSel = null; gridSelVox = null; gridSelView = null;   // discard the outgoing unit's undo history + selection before the switch (non-WIP packs skip loadProject)
   loadingUnit = true;
   $('uid').value = id; activeUnitId = id;                 // anchor the WIP key to the unit being loaded
+  unTombstone('proj:' + id);                              // OPENING it is the deliberate ask — a removed id can be re-authored
   const m = suppliedUnits();
   if (m[id]) {
     const p = m[id].pack, bp = (p.parts || []).find((q) => q.id === 'body'), tp = (p.parts || []).find((q) => q.id === 'turret');
@@ -5524,6 +5562,7 @@ $('svGeom').onclick = async () => {
   if (!id) return saveFailed('NO ID', 'Give the unit an id before saving.');
   const blocked = svBlockedByFaction(); if (blocked) return blocked;   // refuse BEFORE a card or a WIP exists
   $('uid').value = id; activeUnitId = id;
+  unTombstone('proj:' + id);                                      // an explicit save IS the ask — a removed id can be re-created
   try {
     // REPORT WHAT ACTUALLY HAPPENED. This awaited the autosave and then claimed "Card created" regardless
     // of the outcome — descriptor written, geometry not.
@@ -5664,7 +5703,36 @@ async function openLoadModal() {
     if (wip.has(id)) {                                                 // delete the WIP project (falls back to the pack, or gone)
       const del = document.createElement('button'); del.className = 'ghost'; del.textContent = '🗑'; del.title = 'Delete this browser WIP project';
       del.style.cssText = 'width:auto;padding:6px 9px;margin:0;flex:0 0 auto';
-      del.onclick = async (e) => { e.stopPropagation(); if (!confirm(`Delete the work-in-progress project for "${id}"? (Its saved pack, if any, stays.)`)) return; await idb.del('proj:' + id); wipIds.delete(id); thumbInvalidate(id); if (activeUnitId === id) localStorage.removeItem('bulwark:sf:last'); openLoadModal(); };
+      // THE NARROW DELETE: discard THIS BROWSER's edits and fall back to the shipped pack. It is not a
+      // removal — the pack, the repo art and the descriptor all stay — and the confirmation now says which
+      // of the two you are getting. It also used to be a coin flip: the capture-phase click listener armed
+      // doAutosave on this very click, and 500ms later the still-loaded model was written straight back to
+      // proj:<id>. Tombstone first, cancel the timer, and leave the editor somewhere defined.
+      del.onclick = async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Discard the work-in-progress project for "${id}"?
+
+`
+          + `Only proj:${id} (IndexedDB — this browser's voxels, slices and cutouts) is deleted.`
+          + ` The saved pack, the repo art and the descriptor all stay, so the unit itself remains.`
+          + `
+
+This CANNOT be undone. To remove the unit and everything it occupies, use`
+          + ` 🗑 Remove… under the unit set.`)) return;
+        clearTimeout(autosaveTimer);
+        deletedKeys.add('proj:' + id);                                 // …so the armed autosave cannot write it back
+        const open = (activeUnitId === id);
+        try { await idb.del('proj:' + id); }
+        catch (err) { deletedKeys.delete('proj:' + id); alert(`Could not delete proj:${id} — ${(err && err.message) || err}. Nothing was removed.`); return; }
+        wipIds.delete(id); thumbInvalidate(id); thumbCache.delete(thumbKey(id, false));
+        if (open) {
+          wipDirty = false;
+          try { if (localStorage.getItem('bulwark:sf:last') === id) localStorage.removeItem('bulwark:sf:last'); } catch (err) { /* private mode */ }
+          if (suppliedUnits()[id]) await selectUnit(id);               // re-open on the PACK — a deliberate ask, so the tombstone lifts
+          else { clearSourceArt(); activeUnitId = null; $('uid').value = ''; lastPack = null; recarve(); setWipStatus('— discarded', 'muted'); }
+        }
+        openLoadModal();
+      };
       row.appendChild(del);
     }
     list.appendChild(row);
@@ -5707,6 +5775,319 @@ async function diagnoseLoad() {
 }
 if ($('loadDiag')) $('loadDiag').onclick = diagnoseLoad;
 $('loadModal').addEventListener('click', (e) => { if (e.target === $('loadModal')) $('loadModal').hidden = true; });
+
+// ── REMOVING A UNIT (DDD-5) ───────────────────────────────────────────────────────────────────────
+// "We need the ability to remove units — we have data pollution" (owner, twice). There was no removal
+// path anywhere in the tool: `idb.del` had exactly ONE caller — the WIP row in the Load dialog — and
+// every id ever mistyped, experimented with or abandoned lived forever across four stores and the repo.
+//
+// A unit occupies SIX places, and a removal that misses one leaves a card behind and looks broken:
+//   IndexedDB      proj:<id>   the editable project — voxels, slices, cutouts
+//                  atlas:<id>  the baked sprite sheets
+//                  model:<id>  the Tier C voxel geometry
+//   localStorage   bulwark:stackforge — the descriptor; plus the bulwark:sf:last pointer
+//   the repo       content/units/voxel/<id>.{body,turret}[.shadow].png
+//                  content/units/card/<id>.png · content/units/model/<id>.json
+//                  and the unit's entry inside content/units/voxel-units.json
+//
+// A DESIGNED UNIT IS REFUSED, EXPLICITLY AND IN PART. An id named by a content/units/*.units.json is a
+// DESIGN — hand-written repo content this tool only ever READS. Deleting it client-side would be undone
+// by the next load from source, so removal strips every authored ARTIFACT and KEEPS the design slot: the
+// card comes back reading "needs art", which is the truth about that unit. The confirmation says so
+// before you agree to it, and says that removing the design itself is a repo edit. A refusal with a
+// stated reason beats a delete that silently does not stick.
+//
+// AND IT CANNOT BE RESURRECTED BY THE AUTOSAVE. See deletedKeys / putProject above — the click that runs
+// a removal also arms doAutosave (capture phase), and without the tombstone that timer would write the
+// removed unit straight back 500ms later. That fix comes first because without it a broken removal and a
+// resurrected one look identical.
+
+/** POST a delete to the dev server. Mirrors shipFile: the ONLY removal path for repo art, it needs the
+ *  local dev server, and it throws with the reason rather than reporting a removal that did not happen. */
+const unshipFile = async (path) => {
+  const r = await fetch('/__unship', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }) });
+  const d = await r.json().catch(() => ({ ok: false, error: 'not a dev server' }));
+  if (!d.ok) throw new Error(`${path}: ${d.error || 'unknown'}`);
+  return d;
+};
+
+// A *.units.json, read once per session. `null` means the file could not be read — which is NOT the same
+// claim as "it does not name this unit", and the difference decides whether the card disappears.
+const designedFileCache = new Map();
+async function designedIdsIn(file) {
+  if (designedFileCache.has(file)) return designedFileCache.get(file);
+  let ids = null;
+  try {
+    const r = await fetch('../../content/units/' + file, { cache: 'no-store' });
+    if (r.ok) ids = new Set(Object.keys(((await r.json()) || {}).units || {}));
+  } catch (e) { ids = null; }
+  designedFileCache.set(file, ids);
+  return ids;
+}
+/** Is this id a DESIGN? -> { designed: true | false | null, file }. `null` is "could not tell", and it is
+ *  reported as such: telling the owner a slot will vanish when it will come back is the lie to avoid. */
+async function designedOrigin(id) {
+  const f = FAC.factionOfUnitId(id);
+  if (!f) return { designed: false, file: null };            // no known prefix — no design file can name it
+  for (const file of FAC.filesOf(f.name)) {
+    const ids = await designedIdsIn(file);
+    if (ids === null) return { designed: null, file };
+    if (ids.has(id)) return { designed: true, file };
+  }
+  return { designed: false, file: null };
+}
+
+/** Everything `id` occupies, right now, as concrete targets. Synchronous: it reads only what the tool
+ *  already knows (the manifest, the shipped units, wipIds), so the confirmation can enumerate without a
+ *  round trip. Repo file NAMES come from the unit's own pack where there is one — atlas and shadow
+ *  filenames are authored, not guessable — and from the convention where there is not. */
+function removalPlan(id, origin) {
+  const local = (loadManifest().units || {})[id] || null;
+  const shipped = shippedUnits[id] || null;
+  const files = [];
+  const push = (f) => { if (f && !files.includes(f)) files.push(f); };
+  // BOTH PACKS, NOT THE FIRST ONE. The local descriptor can be a "Save geometry" stub — id, class,
+  // footprint, geometryOnly, NO parts — while the shipped pack is the one that names the real files.
+  // Preferring either alone leaves the other's atlases and shadow sheets behind in the repo.
+  let named = false;
+  for (const e of [local, shipped]) {
+    const pack = e && e.pack; if (!pack) continue;
+    for (const pt of (pack.parts || [])) {
+      if (pt.atlas) { push(UNIT_SHIP_DIR + pt.atlas); named = true; }
+      if (pt.shadowAtlas) push(UNIT_SHIP_DIR + pt.shadowAtlas);
+    }
+    if (pack.model) push('content/units/' + (pack.model.src || `model/${id}.json`));
+  }
+  // No pack names its atlases (geometry-only, or nothing saved at all) — fall back to the convention the
+  // ship path uses. Attempting a file that is not there is reported as "not present", never as a removal.
+  if (!named) for (const part of ['body', 'turret']) push(`${UNIT_SHIP_DIR}${id}.${part}.png`);
+  push(CARD_SHIP_DIR + id + '.png');                          // the card picture — every saved unit has one
+  return {
+    id, files,
+    designed: origin ? origin.designed : false,
+    designedFile: origin ? origin.file : null,
+    wip: wipIds.has(id), local: !!local, shipped: !!shipped,
+    stores: [
+      `proj:${id}   (IndexedDB — the editable project: voxels, slices, cutouts)${wipIds.has(id) ? '' : ' — none'}`,
+      `atlas:${id}  (IndexedDB — the baked sprite sheets)`,
+      `model:${id}  (IndexedDB — Tier C voxel geometry)`,
+      `${MANIFEST_KEY}   (localStorage — the descriptor)${local ? '' : ' — none'}`,
+    ],
+  };
+}
+
+/** THE CONFIRMATION. It names every unit, enumerates every store and file, and states plainly what can
+ *  and cannot be undone — the browser stores cannot, the repo files land in .bak and can. */
+function removalConfirmText(plans) {
+  const L = [];
+  L.push(plans.length === 1 ? `REMOVE THE UNIT "${plans[0].id}"?` : `REMOVE ${plans.length} UNITS?`);
+  L.push('');
+  L.push('This permanently destroys authored work.');
+  L.push('• The browser stores (IndexedDB, localStorage) CANNOT BE UNDONE.');
+  L.push('• Repo files are MOVED to <path>.bak by the dev server, so those are recoverable on disk.');
+  for (const p of plans) {
+    L.push('');
+    L.push(`── ${p.id} ──`);
+    for (const s of p.stores) L.push('   ' + s);
+    for (const f of p.files) L.push('   ' + f + '   (repo — if present)');
+    if (p.shipped) L.push('   content/units/voxel-units.json — its entry (the file is rewritten without it)');
+    if (p.designed === true) {
+      L.push(`   KEPT: the DESIGN in content/units/${p.designedFile}.`);
+      L.push(`         "${p.id}" is a designed unit, so its slot stays on the roster and goes back to`);
+      L.push('         reading "needs art". Removing the design is a repo edit — this tool only reads');
+      L.push('         that file, so deleting the slot here would not stick.');
+    } else if (p.designed === null) {
+      L.push(`   ⚠ content/units/${p.designedFile} could not be read, so whether "${p.id}" is a DESIGN is`);
+      L.push('     unknown. If it is, its empty slot will come back on the next load. Its art goes either way.');
+    }
+  }
+  L.push('');
+  L.push('Continue?');
+  return L.join('\n');
+}
+
+/** Remove ONE unit and report per-store. Never throws; every target is its own step with its own outcome,
+ *  because "it said removed" over a half-removed unit is exactly the class of lie this tool keeps fixing
+ *  (the save path once printed "card created" whether or not the write succeeded). */
+async function removeUnit(id, plan) {
+  plan = plan || removalPlan(id, null);
+  const steps = [];
+  const step = (store, ok, detail) => steps.push({ store, ok, detail });
+  // 1 — TOMBSTONE BEFORE THE FIRST AWAIT. The click that got here already armed doAutosave in the capture
+  // phase; clearing the timer is necessary and not sufficient (it can be overdue while confirm() blocks,
+  // and then fires inside the awaits below). The tombstone is what actually makes the delete authoritative.
+  clearTimeout(autosaveTimer);
+  deletedKeys.add('proj:' + id);
+  // 2 — THE SHIPPED MANIFEST IS THE GATE, and it goes first. A removal that leaves the unit's entry in
+  // content/units/voxel-units.json is a removal that comes back on the next reload — so if it cannot be
+  // rewritten, nothing is touched at all. Same rail as Ship's: an unreadable disk manifest aborts, because
+  // rewriting from a failed read is how four units were once deleted.
+  if (plan.shipped) {
+    let onDisk = null;
+    try {
+      const r = await fetch('../../content/units/voxel-units.json', { cache: 'no-store' });
+      if (r.ok) onDisk = await r.json();
+      else if (r.status !== 404) throw new Error('HTTP ' + r.status);
+    } catch (e) {
+      deletedKeys.delete('proj:' + id);
+      step('content/units/voxel-units.json', false, `could not read it — ${(e && e.message) || e}.`
+        + ` Rewriting it without "${id}" would risk every other unit on disk. NOTHING was removed.`);
+      return { id, ok: false, aborted: true, steps, plan };
+    }
+    if (onDisk && onDisk.units && onDisk.units[id]) {
+      const lean = { config: onDisk.config, units: Object.assign({}, onDisk.units) };
+      delete lean.units[id];
+      try {
+        await shipFile('content/units/voxel-units.json', { data: lean });
+        step('content/units/voxel-units.json', true, `entry removed — ${Object.keys(lean.units).length} unit(s) still on disk`);
+      } catch (e) {
+        deletedKeys.delete('proj:' + id);
+        step('content/units/voxel-units.json', false, `${(e && e.message) || e}. NOTHING was removed —`
+          + ' a unit still named by the shipped manifest reappears on the next load.');
+        return { id, ok: false, aborted: true, steps, plan };
+      }
+    } else step('content/units/voxel-units.json', true, 'no entry on disk');
+  }
+  // 3 — the repo art. Each file is its own outcome; "not present" is a success, so a removal is safe to
+  // repeat after a partial failure.
+  for (const f of plan.files) {
+    try { const d = await unshipFile(f); step(f, true, d.existed ? `moved to ${d.trash}` : 'not present'); }
+    catch (e) { step(f, false, (e && e.message) || String(e)); }
+  }
+  // 4 — the browser stores. This is the half that cannot be undone.
+  for (const k of ['proj:' + id, 'atlas:' + id, 'model:' + id]) {
+    try { await idb.del(k); step(k, true, 'deleted'); }
+    catch (e) { step(k, false, (e && e.message) || String(e)); }
+  }
+  try {
+    const m = loadManifest();
+    const had = !!(m.units && m.units[id]);
+    if (had) { delete m.units[id]; localStorage.setItem(MANIFEST_KEY, JSON.stringify(m)); }
+    if (localStorage.getItem('bulwark:sf:last') === id) localStorage.removeItem('bulwark:sf:last');
+    step(MANIFEST_KEY, true, had ? 'descriptor removed' : 'no descriptor');
+  } catch (e) { step(MANIFEST_KEY, false, (e && e.message) || String(e)); }
+  // 5 — everything the tool holds IN MEMORY. Missing these is how a removed unit keeps its card until
+  // the next reload, which reads as a failed delete.
+  delete shippedUnits[id];
+  wipIds.delete(id);
+  thumbInvalidate(id);                                          // bump the epoch: an in-flight resolve cannot write back
+  thumbCache.delete(thumbKey(id, false));                       // …and drop the picture, so the card is decided fresh
+  if (plan.designed !== true) {                                 // a DESIGN keeps its slot — that is the refusal, stated
+    const i = roster.findIndex((u) => u.id === id);
+    if (i >= 0) roster.splice(i, 1);
+  }
+  // 6 — THE EDITOR MUST LAND SOMEWHERE DEFINED. Removing the unit you are looking at used to leave its
+  // model, its id and its dirty flag exactly where they were, which is half of why the autosave put it
+  // back. Now the editor is emptied and anchored to nothing; the tombstone survives, so nothing can
+  // re-create the id until it is deliberately opened or saved again.
+  if (activeUnitId === id || ($('uid').value || '').trim() === id) {
+    wipDirty = false;
+    clearSourceArt();
+    activeUnitId = null; $('uid').value = ''; lastPack = null;
+    recarve();                                                  // refreshModel() drops the baked sprites and state.baked
+    setWipStatus('— removed', 'muted');
+    $('bakeState').innerHTML = `<span style="color:var(--muted)">Removed "${id}" — the editor is empty.</span>`;
+  }
+  return { id, ok: steps.every((s) => s.ok), aborted: false, steps, plan };
+}
+
+/** the per-store outcome of a run, as the dialog shows it. A partial failure is never a colour change. */
+function removalReportHTML(results) {
+  return results.map((r) => {
+    const head = r.aborted ? `<b style="color:#ff6b6b">✗ ${r.id} — ABORTED, nothing removed</b>`
+      : r.ok ? `<b style="color:#57d98a">✓ ${r.id} — removed</b>`
+      : `<b style="color:#ff6b6b">⚠ ${r.id} — PARTIALLY removed</b>`;
+    return `<div style="margin:6px 0">${head}` + r.steps.map((s) =>
+      `<div style="margin-left:14px;color:${s.ok ? 'var(--muted)' : '#ff6b6b'}">${s.ok ? '✓' : '✗'} ${s.store} — ${s.detail}</div>`).join('') + '</div>';
+  }).join('');
+}
+
+/** Confirm, then remove, then REPORT. The one entry point; the dialog and any future caller share it. */
+async function removeUnits(ids) {
+  const list = [...new Set((ids || []).filter(Boolean))];
+  if (!list.length) return { ok: false, kind: 'NOTHING SELECTED', results: [], plans: [] };
+  const plans = [];
+  for (const id of list) plans.push(removalPlan(id, await designedOrigin(id)));
+  if (!confirm(removalConfirmText(plans))) return { ok: false, kind: 'CANCELLED', results: [], plans };
+  const results = [];
+  for (const p of plans) results.push(await removeUnit(p.id, p));
+  renderManifest(); renderRoster(); renderScaleChart();
+  const bad = results.filter((r) => !r.ok);
+  const html = removalReportHTML(results);
+  if ($('rmState')) $('rmState').innerHTML = html;
+  $('projState').innerHTML = bad.length
+    ? `<b style="color:#ff6b6b">✗ REMOVE INCOMPLETE — ${bad.length} of ${results.length} unit(s)</b><br>${html}`
+    : `🗑 Removed <b>${results.length}</b> unit(s). Repo files were moved to <b>.bak</b>; commit the deletions to deploy.<br>${html}`;
+  // A PARTIAL FAILURE IS LOUD. The precedent is the save path that printed "card created" whether or not
+  // the write happened: a removal that half-worked and looked green is the same defect, and worse, because
+  // the leftovers are the data pollution this feature exists to clear.
+  if (bad.length) {
+    const msg = `REMOVE INCOMPLETE — ${bad.length} of ${results.length} unit(s) were not fully removed.\n\n`
+      + bad.map((r) => `${r.id}:\n` + r.steps.filter((s) => !s.ok).map((s) => `  ✗ ${s.store} — ${s.detail}`).join('\n')).join('\n\n')
+      + '\n\nWhat DID get removed is listed in the dialog. Repo files need the local dev server'
+      + ' (python serve_prototype.py). Fix the cause and remove again — removal is safe to repeat.';
+    console.error('[stack-forge] ' + msg);
+    alert(msg);
+  } else console.info(`[stack-forge] removed ${results.length} unit(s): ${results.map((r) => r.id).join(', ')}`);
+  return { ok: !bad.length, results, plans };
+}
+
+// ── the Remove dialog ─────────────────────────────────────────────────────────────────────────────
+// Multi-select, because "clean up old data" means volume — but the confirmation still enumerates every
+// unit and every target, one by one. Decor is deliberately NOT offered here: a prop lives inline inside
+// content/decor/voxel-decor.json under a different key, and a half-understood removal of the owner's
+// props is worse than no button. Saying so is the honest answer.
+function rmSelectedIds() {
+  const boxes = $('rmList').querySelectorAll ? $('rmList').querySelectorAll('input') : [];
+  return [...boxes].filter((b) => b.checked).map((b) => b.dataset.uid);
+}
+function openRemoveModal() {
+  const list = $('rmList'); list.innerHTML = '';
+  if ($('rmState')) $('rmState').innerHTML = '';
+  if (isDecorSet()) {
+    $('rmIntro').innerHTML = '<b style="color:#e0975f">Decor is not removable here.</b> A prop lives inline inside'
+      + ' <b>content/decor/voxel-decor.json</b>, not as its own files, so removing one is a different operation'
+      + ' from removing a unit. Pick a faction to remove units.';
+    $('removeModal').hidden = false;
+    return;
+  }
+  const supplied = suppliedUnits();
+  const ids = [...new Set([...roster.map((u) => u.id), ...Object.keys(supplied), ...wipIds])]
+    .filter((id) => supplied[id] || wipIds.has(id))               // only ids that actually occupy something
+    .filter((id) => idBelongsToSet(id, curFaction))               // the SAME bucketing rule the roster uses
+    .sort();
+  $('rmIntro').innerHTML = ids.length
+    ? `<b>${curFaction}</b> — ${ids.length} unit(s) with something saved. Tick what to remove, then confirm.`
+      + ' Empty design slots are not listed: they occupy nothing.'
+    : `<b>${curFaction}</b> — nothing here occupies any store, so there is nothing to remove.`;
+  for (const id of ids) {
+    const row = document.createElement('div'); row.className = 'rmRow';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.dataset.uid = id; cb.style.flex = '0 0 auto';
+    const name = document.createElement('div'); name.className = 'rmId'; name.textContent = id;
+    const what = document.createElement('div'); what.className = 'rmWhat';
+    const plan = removalPlan(id, null);
+    what.innerHTML = [
+      plan.wip ? 'WIP project' : '', plan.local ? 'descriptor' : '', plan.shipped ? '<b>shipped pack</b>' : '',
+    ].filter(Boolean).join(' · ') + `<br>${plan.files.length} repo file(s): ${plan.files.map((f) => f.replace('content/units/', '')).join(', ')}`;
+    row.appendChild(cb); row.appendChild(name); row.appendChild(what);
+    list.appendChild(row);
+  }
+  $('removeModal').hidden = false;
+}
+if ($('rmOpen')) $('rmOpen').onclick = openRemoveModal;
+if ($('rmCancel')) $('rmCancel').onclick = () => { $('removeModal').hidden = true; };
+if ($('rmAll')) $('rmAll').onclick = () => { for (const b of ($('rmList').querySelectorAll ? $('rmList').querySelectorAll('input') : [])) b.checked = true; };
+if ($('rmNone')) $('rmNone').onclick = () => { for (const b of ($('rmList').querySelectorAll ? $('rmList').querySelectorAll('input') : [])) b.checked = false; };
+if ($('rmGo')) $('rmGo').onclick = async () => {
+  const ids = rmSelectedIds();
+  if (!ids.length) { $('rmState').innerHTML = '<span style="color:#e0975f">Nothing ticked — select at least one unit.</span>'; return; }
+  const r = await removeUnits(ids);
+  if (r.kind === 'CANCELLED') { $('rmState').innerHTML = '<span style="color:var(--muted)">Cancelled — nothing was removed.</span>'; return; }
+  openRemoveModal();                                             // relist: what is gone is gone, what failed is still there
+  if ($('rmState')) $('rmState').innerHTML = removalReportHTML(r.results);
+};
+$('removeModal').addEventListener('click', (e) => { if (e.target === $('removeModal')) $('removeModal').hidden = true; });
 // Reports what ACTUALLY happened. It used to print 'Saved …' and paint the card selected before knowing
 // whether doSaveUnit had written anything, so a quota failure or an unbaked model looked like success.
 async function quickSave(id, as3D) {

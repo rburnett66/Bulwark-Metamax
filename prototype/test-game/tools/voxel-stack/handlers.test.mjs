@@ -750,16 +750,28 @@ test('FFF-2: a Carve button IS the explicit ask, and is one undo step for the wh
 
 /** a fetch that RECORDS every url and serves canned bodies; anything unlisted 404s like the real thing.
  *  POSTs to /__ship are recorded as { path, png } and answered like the dev server, so a test can assert
- *  WHERE a write landed — `shipped` is empty when there is no server, which is the deployed case. */
+ *  WHERE a write landed — `shipped` is empty when there is no server, which is the deployed case.
+ *  POSTs to /__unship are recorded the same way in `unshipped`, and answer with the real endpoint's
+ *  shape ({ existed, trash }): a path listed in `opts.onDisk` was there and moved to .bak, anything else
+ *  was already absent. `opts.ship` gates BOTH, because both are the same dev server. */
 function contentFetch(bodies = {}, opts = {}) {
-  const seen = [], shipped = [];
+  const seen = [], shipped = [], unshipped = [];
+  const onDisk = new Set(opts.onDisk || []);
+  const noServer = () => Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ ok: false, error: 'not a dev server' }) });
   const fetch = (url, init) => {
     const u = String(url);
     if (u === '/__ship') {
-      if (!opts.ship) return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ ok: false, error: 'not a dev server' }) });
+      if (!opts.ship) return noServer();
       const req = JSON.parse(init.body);
-      shipped.push({ path: req.path, png: !!req.b64, bytes: (req.b64 || '').length });
+      shipped.push({ path: req.path, png: !!req.b64, bytes: (req.b64 || '').length, data: req.data });
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, path: req.path, bytes: (req.b64 || JSON.stringify(req.data || '')).length }) });
+    }
+    if (u === '/__unship') {
+      if (!opts.ship) return noServer();
+      const req = JSON.parse(init.body);
+      const existed = onDisk.delete(req.path);
+      unshipped.push({ path: req.path, existed });
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, path: req.path, existed, trash: existed ? req.path + '.bak' : null }) });
     }
     seen.push(u);
     const hit = Object.keys(bodies).find((k) => u.endsWith(k));
@@ -767,7 +779,7 @@ function contentFetch(bodies = {}, opts = {}) {
       ? { ok: true, status: 200, json: () => Promise.resolve(bodies[hit]) }
       : { ok: false, status: 404, json: () => Promise.resolve({}) });
   };
-  return { fetch, seen, shipped, asked: (name) => seen.some((u) => u.endsWith(name)) };
+  return { fetch, seen, shipped, unshipped, asked: (name) => seen.some((u) => u.endsWith(name)) };
 }
 const unitsDoc = (faction, ids) => ({ faction, units: Object.fromEntries(ids.map((id) => [id, { role: 'r', shape: 's' }])) });
 /** let the sandbox's in-flight promise chains (initFactions -> loadShipped -> loadFaction) settle */
@@ -1406,4 +1418,282 @@ test('DDD-6: a shipped decor prop is not labelled WIP over its own baked art', a
   assert.equal(c.badgeCls, 'badge ok');
   const cell = t.json(`thumbCache.get('decor:pine-tree-1').cv.__ops.find(o => o[0] === 'drawImage')`);
   assert.deepEqual(cell.slice(1, 5), [0, 0, 244, 394], 'one frame of the decor atlas');
+});
+
+// ── DDD-5: REMOVING A UNIT ────────────────────────────────────────────────────────────────────────
+// Two tickets. story_msiphf0f_u first, because without it a delete is a coin flip and a broken removal
+// is indistinguishable from a resurrected one: the click that runs a delete ALSO arms doAutosave
+// (document.addEventListener('click', scheduleAutosave, true) is capture phase), and 500ms later the
+// still-loaded model was written straight back to proj:<id>.
+// Then story_msjap1g7_1g: a unit occupies six places and a removal that misses one leaves a card behind.
+// Every test here was mutation-checked — the fix reverted, the gate confirmed red on that test alone.
+
+/** a pack the way a SHIPPED unit carries one: both parts, both shadow atlases, and a Tier C model by
+ *  path. Removal must name these files from the pack, not guess them from the id. */
+const fullPack = (id) => ({ pack: { id, class: 'tank', footprint: [16, 16, 8],
+  parts: [
+    { id: 'body', atlas: `${id}.body.png`, shadowAtlas: `${id}.body.shadow.png`, cell: [216, 266], cols: 4 },
+    { id: 'turret', atlas: `${id}.turret.png`, shadowAtlas: `${id}.turret.shadow.png`, cell: [216, 266], cols: 8 },
+  ],
+  model: { nx: 4, ny: 4, nz: 2, src: `model/${id}.json` } } });
+/** run an expression that returns a promise IN the sandbox and await it out here */
+const awaitIn = (t, expr) => { t.run(`window.__p = (${expr});`); return t.sb.__p; };
+const plain = (v) => JSON.parse(JSON.stringify(v));
+
+test('DDD-5 THE BLOCKER: an autosave landing mid-removal cannot resurrect the unit', async () => {
+  // story_msiphf0f_u. The armed timer fires at a yield point INSIDE the removal — after proj:<id> has
+  // been deleted, while the model, the id and the dirty flag are all still in the editor. Injected here
+  // on the resolution of that very delete, which is exactly where the browser's overdue timer lands.
+  // MUTATION: drop the `deletedKeys.has(wipKey)` guard from doAutosave -> the autosave writes
+  // proj:GND-Ghost straight back after the delete and the unit is alive again. That is the whole bug.
+  const net = contentFetch({}, { ship: true });
+  const t = boot({ fetch: net.fetch, idb: { 'proj:GND-Ghost': wipProject('GND-Ghost') } });
+  await settle();
+  t.run(`activeUnitId = 'GND-Ghost'; document.getElementById('uid').value = 'GND-Ghost';
+         volDirty.body = true; wipIds.add('GND-Ghost'); scheduleAutosave();`);
+  assert.ok(t.idb.data.has('proj:GND-Ghost'), 'setup: the WIP is in the store');
+  assert.ok(t.run('projectHasContent(snapshotProject(activeUnitId))'), 'setup: the editor holds real work to write back');
+  t.run(`(() => { const _del = idb.del; idb.del = (k) => Promise.resolve(_del(k))
+    .then((r) => { if (k === 'proj:GND-Ghost') window.__late = doAutosave(); return r; }); })();`);
+
+  const rm = await awaitIn(t, `removeUnits(['GND-Ghost'])`);
+  const late = await t.sb.__late;
+  assert.equal(late.kind, 'DELETED', 'the autosave must REPORT that it refused, not silently skip');
+  assert.equal(late.ok, false);
+  assert.ok(!t.idb.data.has('proj:GND-Ghost'), 'a deleted unit stays deleted across an autosave tick');
+  assert.equal(rm.ok, true, 'and the removal itself succeeded');
+  assert.equal(t.run('wipDirty'), false, 'nothing is left pending for a unit that no longer exists');
+});
+
+test('DDD-5: the tombstone lifts when the id is deliberately re-authored', async () => {
+  // A tombstone that never lifts would make a removed id permanently unsaveable — you could not fix a
+  // mistyped unit by removing it and re-creating it under the same name.
+  // MUTATION: drop unTombstone from selectUnit / svGeom / doSaveUnit -> the re-save is refused as DELETED.
+  const net = contentFetch({}, { ship: true });
+  const t = boot({ fetch: net.fetch, idb: { 'proj:GND-Ghost': wipProject('GND-Ghost') } });
+  await settle();
+  t.run(`activeUnitId = 'GND-Ghost'; document.getElementById('uid').value = 'GND-Ghost'; volDirty.body = true; wipIds.add('GND-Ghost');`);
+  await awaitIn(t, `removeUnits(['GND-Ghost'])`);
+  assert.ok(t.run(`deletedKeys.has('proj:GND-Ghost')`), 'removed ids stay tombstoned');
+  t.run(`activeUnitId = 'GND-Ghost'; document.getElementById('uid').value = 'GND-Ghost'; volDirty.body = true;`);
+  assert.equal((await awaitIn(t, `doAutosave()`)).kind, 'DELETED', 'a stray autosave still cannot bring it back');
+
+  // …but SAVING it is the deliberate ask, and that must work.
+  t.run(`document.getElementById('svId').value = 'GND-Ghost'; volDirty.body = true;`);
+  await awaitIn(t, `document.getElementById('svGeom').onclick()`);
+  assert.ok(!t.run(`deletedKeys.has('proj:GND-Ghost')`), 'an explicit save lifts the tombstone');
+  assert.ok(t.idb.data.has('proj:GND-Ghost'), 'and the unit exists again — a removal is a delete, not a ban');
+});
+
+test('DDD-5: removal clears EVERY store the unit occupies, and reports each one', async () => {
+  // The six places a unit lives. MUTATION: drop any one of them (skip atlas:, skip the descriptor, skip
+  // the card png, skip the voxel-units.json rewrite) -> the matching assertion fails.
+  const disk = { config: { camera: { azimuth: 0 } }, units: { 'GND-Gone': fullPack('GND-Gone'), 'GND-Keep': fullPack('GND-Keep') } };
+  const net = contentFetch({ 'voxel-units.json': disk, 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Keep']) },
+    { ship: true, onDisk: ['content/units/voxel/GND-Gone.body.png', 'content/units/card/GND-Gone.png'] });
+  const t = boot({ fetch: net.fetch, images: () => false, idb: {
+    'proj:GND-Gone': wipProject('GND-Gone'), 'atlas:GND-Gone': { body: 'B' }, 'model:GND-Gone': { b64: 'M' },
+    'proj:GND-Keep': wipProject('GND-Keep'), 'atlas:GND-Keep': { body: 'B' } } });
+  await settle();
+  t.run(`(() => { const m = loadManifest(); m.units = m.units || {};
+    m.units['GND-Gone'] = { pack: { id: 'GND-Gone' }, cardSig: 'sig' };
+    localStorage.setItem(MANIFEST_KEY, JSON.stringify(m)); localStorage.setItem('bulwark:sf:last', 'GND-Gone'); })()`);
+  assert.ok(t.run(`!!shippedUnits['GND-Gone']`), 'setup: the unit is on disk');
+
+  const r = await awaitIn(t, `removeUnits(['GND-Gone'])`);
+  assert.equal(r.ok, true, 'every step succeeded: ' + JSON.stringify(plain(r.results[0].steps).filter((s) => !s.ok)));
+
+  // 1-3 — IndexedDB
+  for (const k of ['proj:GND-Gone', 'atlas:GND-Gone', 'model:GND-Gone']) assert.ok(!t.idb.data.has(k), k + ' must be gone');
+  assert.ok(t.idb.data.has('proj:GND-Keep') && t.idb.data.has('atlas:GND-Keep'), 'and NOTHING of the unit beside it');
+  // 4 — localStorage
+  assert.deepEqual(t.json('Object.keys(loadManifest().units || {})'), [], 'the descriptor is gone');
+  assert.equal(t.run(`localStorage.getItem('bulwark:sf:last')`), null, 'and the pointer that would reopen it');
+  // 5 — the repo files, named from the unit's OWN pack (shadow atlases and the model path included)
+  assert.deepEqual(net.unshipped.map((u) => u.path), [
+    'content/units/voxel/GND-Gone.body.png', 'content/units/voxel/GND-Gone.body.shadow.png',
+    'content/units/voxel/GND-Gone.turret.png', 'content/units/voxel/GND-Gone.turret.shadow.png',
+    'content/units/model/GND-Gone.json', 'content/units/card/GND-Gone.png',
+  ], 'every file the ship path wrote, by the name the pack gives it');
+  // 6 — the shipped manifest, rewritten WITHOUT it and with everything else intact
+  const wrote = net.shipped.filter((s) => s.path === 'content/units/voxel-units.json');
+  assert.equal(wrote.length, 1, 'voxel-units.json is rewritten exactly once');
+  assert.deepEqual(Object.keys(wrote[0].data.units), ['GND-Keep'], 'the OTHER unit on disk survives');
+  assert.deepEqual(wrote[0].data.config, disk.config, 'and so does the shared config');
+  assert.ok(!net.unshipped.some((u) => u.path.endsWith('voxel-units.json')), 'the shared manifest is REWRITTEN, never deleted');
+  assert.ok(t.run(`!shippedUnits['GND-Gone']`), 'and the tool stops believing it exists');
+
+  // every step is reported, and a file that was not on disk says so rather than claiming a removal
+  const steps = plain(r.results[0].steps);
+  assert.ok(steps.every((s) => s.ok && s.detail), 'each step carries an outcome AND a reason');
+  assert.match(steps.find((s) => s.store === 'content/units/voxel/GND-Gone.body.png').detail, /moved to .*\.bak/);
+  assert.match(steps.find((s) => s.store === 'content/units/voxel/GND-Gone.turret.png').detail, /not present/);
+});
+
+test('DDD-5: a DESIGNED unit keeps its design slot, and the confirmation says so', async () => {
+  // An id named by a shipped content/units/*.units.json is a DESIGN this tool only reads. Deleting it
+  // client-side would be undone by the next load from source, so removal strips the art and REFUSES the
+  // design — out loud, in the confirmation, before anything is written.
+  // MUTATION: drop the `plan.designed !== true` guard -> the slot is spliced out of the roster and comes
+  // back on the next loadFaction, which is a delete that silently does not stick.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Design']) }, { ship: true });
+  const t = boot({ fetch: net.fetch, images: () => false,
+    idb: { 'proj:GND-Design': wipProject('GND-Design'), 'proj:GND-Mine': wipProject('GND-Mine') } });
+  await settle();
+  const said = []; t.sb.confirm = (m) => { said.push(String(m)); return true; };
+
+  await awaitIn(t, `removeUnits(['GND-Design'])`);
+  assert.match(said[0], /KEPT: the DESIGN in content\/units\/ground-powder\.units\.json/);
+  assert.match(said[0], /needs art/, 'it must say what the slot becomes, not just that it stays');
+  assert.match(said[0], /repo edit/, 'and where the design actually lives');
+  assert.deepEqual(t.json('roster.map(u => u.id)'), ['GND-Design'], 'the DESIGN slot stays on the roster');
+  assert.ok(!t.idb.data.has('proj:GND-Design'), 'its authored art is gone all the same');
+
+  await awaitIn(t, `removeUnits(['GND-Mine'])`);
+  assert.doesNotMatch(said[1], /KEPT: the DESIGN/, 'a unit no design file names is not a design');
+  assert.deepEqual(t.json('roster.map(u => u.id)'), ['GND-Design'], 'and it leaves the roster entirely');
+});
+
+test('DDD-5: the confirmation NAMES the unit and enumerates every store and file', async () => {
+  // "Confirm, naming the unit and listing what will be removed" + "state whether it can be undone".
+  // MUTATION: shorten the text to "Remove N units?" -> every assertion below fails.
+  const disk = { units: { 'GND-Gone': fullPack('GND-Gone') } };
+  const net = contentFetch({ 'voxel-units.json': disk, 'ground-powder.units.json': unitsDoc('Ground / Powder', []) }, { ship: true });
+  const t = boot({ fetch: net.fetch, images: () => false, idb: { 'proj:GND-Gone': wipProject('GND-Gone') } });
+  await settle();
+  const said = []; t.sb.confirm = (m) => { said.push(String(m)); return false; };   // CANCEL
+
+  const r = await awaitIn(t, `removeUnits(['GND-Gone'])`);
+  assert.equal(r.kind, 'CANCELLED');
+  const msg = said[0];
+  assert.match(msg, /REMOVE THE UNIT "GND-Gone"\?/, 'it names the unit');
+  for (const target of ['proj:GND-Gone', 'atlas:GND-Gone', 'model:GND-Gone', 'bulwark:stackforge',
+    'content/units/voxel/GND-Gone.body.png', 'content/units/voxel/GND-Gone.body.shadow.png',
+    'content/units/model/GND-Gone.json', 'content/units/card/GND-Gone.png',
+    'content/units/voxel-units.json']) assert.ok(msg.includes(target), 'it must list ' + target);
+  assert.match(msg, /CANNOT BE UNDONE/, 'it states that the browser stores are unrecoverable');
+  assert.match(msg, /\.bak/, 'and that the repo half is recoverable, so the claim is not a blanket one');
+  // CANCEL MEANS NOTHING HAPPENED — not "nothing much".
+  assert.ok(t.idb.data.has('proj:GND-Gone'), 'cancel leaves the WIP');
+  assert.deepEqual(net.unshipped, [], 'cancel deletes no repo file');
+  assert.deepEqual(net.shipped, [], 'cancel rewrites no manifest');
+  assert.ok(!t.run(`deletedKeys.has('proj:GND-Gone')`), 'and it does not tombstone what it did not remove');
+});
+
+test('DDD-5: a removal that cannot finish is LOUD, and says which store failed', async () => {
+  // The precedent is the save path that printed "card created" whether or not the write succeeded. With
+  // no dev server the repo half cannot happen at all, and that must not read as a clean removal.
+  // MUTATION: return { ok: true } from removeUnits regardless of the steps -> nothing shouts.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', []) });   // NO ship endpoint
+  const t = boot({ fetch: net.fetch, images: () => false, idb: { 'proj:GND-Gone': wipProject('GND-Gone') } });
+  await settle();
+  const yelled = []; t.sb.alert = (m) => yelled.push(String(m));
+
+  const r = await awaitIn(t, `removeUnits(['GND-Gone'])`);
+  assert.equal(r.ok, false, 'a partial removal is not a success');
+  const steps = plain(r.results[0].steps);
+  assert.ok(steps.some((s) => !s.ok && /card\/GND-Gone\.png/.test(s.store)), 'the repo steps failed');
+  assert.ok(steps.some((s) => s.ok && s.store === 'proj:GND-Gone'), 'and the ones that worked are still reported as working');
+  assert.equal(yelled.length, 1, 'a partial failure blocks with a dialog — it cannot be missed');
+  assert.match(yelled[0], /REMOVE INCOMPLETE/);
+  assert.match(yelled[0], /serve_prototype\.py/, 'and names the cause: /__unship needs the dev server');
+  assert.match(t.run(`document.getElementById('projState').innerHTML`), /REMOVE INCOMPLETE/);
+});
+
+test('DDD-5: an unreadable shipped manifest ABORTS the removal, touching nothing', async () => {
+  // The same rail Ship has: rewriting content/units/voxel-units.json from a failed read once deleted four
+  // units. A removal that could not rewrite it would also come back on the next reload.
+  // MUTATION: treat a failed read as `onDisk = {}` -> the file is rewritten with only what this browser
+  // knows and every other unit on disk is deleted.
+  const disk = { units: { 'GND-Gone': fullPack('GND-Gone'), 'GND-Keep': fullPack('GND-Keep') } };
+  const net = contentFetch({ 'voxel-units.json': disk, 'ground-powder.units.json': unitsDoc('Ground / Powder', []) }, { ship: true });
+  const t = boot({ fetch: net.fetch, images: () => false, idb: { 'proj:GND-Gone': wipProject('GND-Gone') } });
+  await settle();
+  assert.ok(t.run(`!!shippedUnits['GND-Gone']`), 'setup: it is on disk');
+  const base = net.fetch;
+  t.sb.fetch = (u, init) => (String(u).endsWith('voxel-units.json')
+    ? Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }) : base(u, init));
+
+  const r = await awaitIn(t, `removeUnits(['GND-Gone'])`);
+  assert.equal(r.ok, false);
+  assert.equal(r.results[0].aborted, true);
+  assert.match(plain(r.results[0].steps)[0].detail, /NOTHING was removed/);
+  assert.ok(t.idb.data.has('proj:GND-Gone'), 'the WIP is untouched');
+  assert.deepEqual(net.unshipped, [], 'no repo file was deleted');
+  assert.deepEqual(net.shipped, [], 'and the manifest was never rewritten');
+  assert.ok(!t.run(`deletedKeys.has('proj:GND-Gone')`), 'the tombstone is lifted — an aborted removal is not a removal');
+});
+
+test('DDD-5: a removed unit loses its CARD, and a design slot goes back to empty — never a red card', async () => {
+  // The card resolver has a `missing` state for "the manifest names an atlas that is not in the repo".
+  // A half-removed unit lands there permanently. A fully removed one must disappear; a design slot must
+  // read `empty`, which is the truth about it.
+  // MUTATION: skip `delete shippedUnits[id]` -> the card survives, naming an atlas that is now gone, and
+  // resolves to 'missing' forever.
+  const disk = { units: { 'GND-Gone': fullPack('GND-Gone'), 'GND-Design': fullPack('GND-Design') } };
+  const net = contentFetch({ 'voxel-units.json': disk, 'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Design']) },
+    { ship: true });
+  const t = boot({ fetch: net.fetch, images: () => false, idb: true });
+  await settle();
+  const cards = captureCards(t);
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  assert.deepEqual(cards().map((c) => c.id).sort(), ['GND-Design', 'GND-Gone']);
+
+  await awaitIn(t, `removeUnits(['GND-Gone', 'GND-Design'])`);
+  await settle();
+  const after = cards();
+  assert.deepEqual(after.map((c) => c.id), ['GND-Design'], 'the undesigned unit is gone from the grid entirely');
+  assert.equal(after[0].thumb, 'empty', 'and the DESIGN slot reads "needs art", not a permanent red card');
+  assert.equal(after[0].badgeCls, 'badge no');
+});
+
+test('DDD-5: removing the unit that is OPEN leaves the editor in a defined state', async () => {
+  // It used to leave the model, the id and the dirty flag exactly where they were — which is half of why
+  // the autosave put the unit back.
+  // MUTATION: drop step 6 -> activeUnitId still names a unit that no longer exists and the next save
+  // re-creates it under that id.
+  const net = contentFetch({ 'ground-powder.units.json': unitsDoc('Ground / Powder', []) }, { ship: true });
+  const t = boot({ fetch: net.fetch, images: () => false, idb: { 'proj:GND-Open': wipProject('GND-Open') } });
+  await settle();
+  t.run(`activeUnitId = 'GND-Open'; document.getElementById('uid').value = 'GND-Open'; volDirty.body = true;
+         wipIds.add('GND-Open'); scheduleAutosave();`);
+  assert.ok(t.filled() > 0, 'setup: there is a model on screen');
+
+  await awaitIn(t, `removeUnits(['GND-Open'])`);
+  assert.equal(t.run('activeUnitId'), null, 'the editor is anchored to nothing');
+  assert.equal(t.run(`document.getElementById('uid').value`), '', 'and shows no id');
+  assert.equal(t.run('wipDirty'), false, 'nothing is pending');
+  assert.equal(t.run('state.baked'), null, 'the baked preview of a unit that no longer exists is dropped');
+  assert.equal(t.filled(), 0, 'and so is its geometry');
+});
+
+test('DDD-5: the Remove dialog lists exactly what the ROSTER lists, and refuses decor', async () => {
+  // MUTATION: replace idBelongsToSet in openRemoveModal with `true` -> the dialog offers every faction's
+  // units under one faction, which is the "abrams appears everywhere" bug pointed at a delete button.
+  const disk = { units: { 'GND-Gone': fullPack('GND-Gone'), 'SYS-Other': fullPack('SYS-Other') } };
+  const net = contentFetch({ 'voxel-units.json': disk,
+    'ground-powder.units.json': unitsDoc('Ground / Powder', ['GND-Design', 'GND-Empty']) }, { ship: true });
+  const t = boot({ fetch: net.fetch, images: () => false, idb: { 'proj:GND-Design': wipProject('GND-Design') } });
+  await settle();
+  t.run(`loadFaction('Ground / Powder')`); await settle();
+  // the row collector: rmList keeps what openRemoveModal appends, and each row remembers its checkbox
+  t.run(`(() => { const l = document.getElementById('rmList'); l.__rows = [];
+    l.appendChild = (r) => { l.__rows.push(r); }; l.querySelectorAll = () => l.__rows.map((r) => r.__cb);
+    let _h = ''; Object.defineProperty(l, 'innerHTML', { configurable: true, get: () => _h,
+      set: (v) => { _h = v; if (v === '') l.__rows.length = 0; } });
+    const mk = document.createElement.bind(document);
+    document.createElement = (tag) => { const e = mk(tag);
+      e.appendChild = (c) => { if (c && c.dataset && c.dataset.uid) { e.__uid = c.dataset.uid; e.__cb = c; } };
+      return e; }; })()`);
+  const rows = () => t.json(`document.getElementById('rmList').__rows.map((r) => r.__uid)`);
+
+  t.run(`openRemoveModal()`);
+  assert.deepEqual(rows(), ['GND-Design', 'GND-Gone'],
+    'only ids of THIS faction that actually occupy something — no empty design slots, no SYS-Other');
+  assert.equal(t.run(`document.getElementById('removeModal').hidden`), false);
+
+  t.run(`curFaction = DECOR_SET; openRemoveModal()`);
+  assert.deepEqual(rows(), [], 'decor is not offered here');
+  assert.match(t.run(`document.getElementById('rmIntro').innerHTML`), /not removable here/);
+  assert.match(t.run(`document.getElementById('rmIntro').innerHTML`), /voxel-decor\.json/, 'and it says why');
 });
