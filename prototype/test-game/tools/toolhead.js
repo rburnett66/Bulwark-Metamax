@@ -63,12 +63,21 @@
     font:12px/1.4 system-ui,sans-serif;color:#c8d8e8}
   .th-mark{font-weight:700;letter-spacing:.5px;color:#f2c869;white-space:nowrap}
   .th-tool{font-weight:600;color:#fff;white-space:nowrap}
-  .th-nav{display:flex;gap:2px;margin-left:6px;flex-wrap:wrap}
+  /* THE ACTIONS NEVER WRAP; THE NAV YIELDS INSTEAD. Both strips used to carry flex-wrap:wrap, so the
+     first thing to run out of room was the action strip — Save/Open/Ship/Sprites broke into a vertical
+     stack and doubled the header's height. Actions are a fixed, short, per-tool set and read as a
+     toolbar only on one line; the nav is 7 uniform links and degrades gracefully by scrolling. So the
+     nav gets min-width:0 (without it a flex item refuses to shrink below its content) and scrolls,
+     while the actions are pinned to one row. */
+  .th-nav{display:flex;gap:2px;margin-left:6px;flex-wrap:nowrap;min-width:0;overflow-x:auto;
+    scrollbar-width:none}
+  .th-nav::-webkit-scrollbar{display:none}
   .th-nav a{display:inline-block;padding:4px 9px;border-radius:5px;text-decoration:none;
-    color:#8fa7bd;border:1px solid transparent;white-space:nowrap}
+    color:#8fa7bd;border:1px solid transparent;white-space:nowrap;flex:0 0 auto}
   .th-nav a:hover{background:#16273a;color:#dbe8f5}
   .th-nav a.on{background:#16354d;color:#8fd0ff;border-color:#2f6f9f;cursor:default}
-  .th-acts{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  .th-acts{display:flex;gap:6px;margin-left:auto;flex-wrap:nowrap;flex:0 0 auto}
+  .th-acts button{white-space:nowrap}
   .th-acts button{padding:5px 11px;border-radius:5px;border:1px solid #2f6f4a;background:#1d3a2a;
     color:#dbe8f5;font:inherit;cursor:pointer}
   .th-acts button:hover{background:#244a35}
