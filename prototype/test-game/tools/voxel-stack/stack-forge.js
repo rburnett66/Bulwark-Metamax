@@ -1532,6 +1532,13 @@ function buildOrbitTarget(S) {
   if (voxSpr) { voxSpr.destroy(); voxShadow.destroy(); voxTex.destroy(true); }
   voxMeta = mkTarget(S, voxBounds.R, voxBounds.HT);
   voxTex = PIXI.Texture.from(voxMeta.cv);
+  // NEAREST, like every other texture in this tool. PIXI defaults to LINEAR, and this one was never set —
+  // which is why the 3D model read soft while the slice beside it stayed crisp. The sprite is drawn at
+  // supersample density S and displayed at scale 1/S (see orbitS), so a LINEAR minify bilinearly blended
+  // every voxel edge on the way down. It also explains why the blur EASED WHEN ZOOMED IN: orbitS tracks
+  // the zoom, so a higher S left more detail to survive the blend — the filter was always the cause, the
+  // zoom only masked it.
+  voxTex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
   // silhouette shadow: the model's own render (un-flipped — high camera), squashed + sheared off the sun
   const la0 = state.lightAz * Math.PI / 180;
   voxShadow = new PIXI.Sprite(voxTex);
@@ -2149,6 +2156,7 @@ function refreshModel() {
   if (gVoxSpr) { gVoxSpr.destroy(); gVoxShadow.destroy(); gVoxTex.destroy(true); }
   gVoxMeta = mkTarget(INSET_S, voxBounds.R, voxBounds.HT);
   gVoxTex = PIXI.Texture.from(gVoxMeta.cv);
+  gVoxTex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;   // same default-LINEAR miss as voxTex, inset view
   const laI = state.lightAz * Math.PI / 180;
   gVoxShadow = new PIXI.Sprite(gVoxTex);
   gVoxShadow.anchor.set(0.5, gVoxMeta.groundY / gVoxMeta.Hp);
@@ -5843,6 +5851,7 @@ async function loadPackPreview(entry) {
     if (!part || !atlases[partId]) return null;
     const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = atlases[partId]; });
     const base = PIXI.BaseTexture.from(img);
+    base.scaleMode = PIXI.SCALE_MODES.NEAREST;   // sprite-sheet preview: the frames that actually ship, unsmoothed
     const n = part.kind === 'directional' ? part.facings : part.angles, cols = part.cols || Math.ceil(Math.sqrt(n));
     const frames = [];
     for (let i = 0; i < n; i++) frames.push(new PIXI.Texture(base,

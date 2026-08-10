@@ -127,7 +127,16 @@
        error ate 100% - 24px of height at the bottom. --th-h is the measured header height that
        ToolHead.mount() publishes on documentElement for exactly this; the fallback keeps the modal
        usable if the page is ever opened without the shared header. */
-    #paletteModal { position:absolute; left:280px; top:calc(var(--th-h, 0px) + 12px); width:860px; min-width:520px; min-height:360px; max-height:calc(100% - var(--th-h, 0px) - 24px); z-index:21;
+    /* SIZED TO THE VIEWPORT, like #keyBox and #sheetBox above — this modal was the one that hardcoded
+       its box. left:280px + width:860px demands 1140px before anything is visible, and the fixed width
+       ran off the right edge on a narrower window, so part of the panel was simply unreachable. Width
+       now shrinks to fit, and left backs off toward the 12px gutter rather than pushing the panel off
+       screen. min-width drops to 320px so the shrink can actually happen (a 520px floor re-creates the
+       overflow it was meant to prevent). Height is measured from the viewport minus the header, so the
+       ⤢-resize and the drag handle both stay reachable; #paletteBox already scrolls internally. */
+    #paletteModal { position:absolute; left:max(12px, min(280px, calc(100vw - 872px))); top:calc(var(--th-h, 0px) + 12px);
+      width:min(860px, calc(100vw - 24px)); min-width:min(320px, calc(100vw - 24px)); min-height:360px;
+      max-height:calc(100vh - var(--th-h, 0px) - 24px); z-index:21;
       display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; resize:both; box-shadow:0 18px 60px rgba(0,0,0,.6); }
     #paletteModal[hidden] { display:none; }
     #paletteDrag { font-size:10px; letter-spacing:.2em; color:var(--muted); margin:0; padding:11px 14px 8px; text-transform:uppercase; cursor:move; flex:0 0 auto; }
