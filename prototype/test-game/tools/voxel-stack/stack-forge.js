@@ -5724,8 +5724,13 @@ function renderRoster() {
 }
 $('addUnit').onclick = async () => {
   if (isDecorSet()) {                                              // Terrain set: start a FRESH decor prop on a clean editor
-    const id = (prompt('New decor id:', 'decor-' + (roster.length + 1)) || '').trim();
+    const id = (prompt('New decor id:', freeDecorId()) || '').trim();
     if (!id) return;
+    // Same guard as the unit path: never let "new" quietly become "reopen and overwrite".
+    if (roster.some((u) => u.id === id)) {
+      alert(`"${id}" already exists.\n\nPick a different id, or open it from the roster on the left — "+ Add unit" will not overwrite it.`);
+      return;
+    }
     clearTimeout(autosaveTimer);
     try {                                                          // flush whatever we were on under its own namespace first
       if (editingDecor) { const out = snapshotProject(editingDecor); if (projectHasContent(out)) putProject('decor:' + editingDecor, out); }
@@ -5734,7 +5739,7 @@ $('addUnit').onclick = async () => {
     editingDecor = id; if ($('did')) $('did').value = id;
     state.bodyLayers = 64; if ($('bodyLayers')) { $('bodyLayers').value = 64; $('bodyLayersV').textContent = 64; }   // decor tends tall — raise height
     clearSourceArt(); releaseBaked(state.decorBaked); state.decorBaked = null; gridModel = null; state.part = 'body'; recarve(); forceDecorBodyOnly();   // clean slate, body-only
-    if (!roster.some((u) => u.id === id)) roster.push({ id, role: 'decor', shape: '🌿', decor: true });
+    roster.push({ id, role: 'decor', shape: '🌿', decor: true });   // unconditional: the guard above already refused duplicates
     renderRoster();
     $('projState').textContent = `New decor "${id}" — load Top/Side/Front art as the body, set the 🌿 Decor panel, then Bake + Save.`;
     return;
@@ -5745,11 +5750,46 @@ $('addUnit').onclick = async () => {
   // than propose something that cannot resolve.
   const p = prefixFor(curFaction);
   if (!p) { alert(`"${curFaction}" is not a known faction — cannot generate a unit id.`); return; }
-  const id = (prompt('New unit id:', `${p}-U${roster.length + 1}`) || '').trim();
+  const id = (prompt('New unit id:', freeUnitId(p)) || '').trim();
   if (!id) return;
-  if (!roster.some((u) => u.id === id)) roster.push({ id, role: '', shape: '' });
+  // A COLLISION IS NOT A SILENT "OPEN IT". This used to read
+  //     if (!roster.some(u => u.id === id)) roster.push(...);
+  //     renderRoster(); await selectUnit(id);
+  // so an id that already existed skipped the push and then loaded THAT unit into the editor. You asked
+  // to create a unit and were handed someone else's, unwarned — and the autosave-on-switch path then
+  // wrote your new work back over the original under proj:<id>. That is the reported corruption, and the
+  // tool was doing exactly what it was told. Opening an existing unit is what the roster is for.
+  if (roster.some((u) => u.id === id)) {
+    alert(`"${id}" already exists.\n\nPick a different id, or open the existing unit from the roster on the left — "+ Add unit" will not overwrite it.`);
+    return;
+  }
+  roster.push({ id, role: '', shape: '' });
   renderRoster(); await selectUnit(id);
 };
+/**
+ * The next genuinely FREE `<prefix>-U<n>`, found by scanning the roster rather than counting it.
+ * `roster.length + 1` was only ever right while ids were a dense 1..N run, and remove-a-unit (DDD-5)
+ * shipped in PR #21 — delete GND-U3 from GND-U1..GND-U5 and length drops to 4, so the next add proposed
+ * GND-U5, which exists. Non-sequential ids (GND-abrams) and designed-but-unauthored slots get there
+ * without any delete. Scanning cannot collide by construction, so the proposal is always safe to accept.
+ */
+function freeUnitId(prefix) {
+  const taken = new Set(roster.map((u) => u.id));
+  for (let n = 1; n <= roster.length + 1000; n++) {
+    const id = `${prefix}-U${n}`;
+    if (!taken.has(id)) return id;
+  }
+  return `${prefix}-U${Date.now()}`;                               // unreachable in practice; never propose a dup
+}
+/** the decor equivalent — same reasoning, same failure mode without it */
+function freeDecorId() {
+  const taken = new Set(roster.map((u) => u.id));
+  for (let n = 1; n <= roster.length + 1000; n++) {
+    const id = 'decor-' + n;
+    if (!taken.has(id)) return id;
+  }
+  return 'decor-' + Date.now();
+}
 // wipe the current unit's source art/vox + per-view cutout state so switching to a pack-only unit
 // doesn't keep re-carving and displaying the PREVIOUS unit (the "still looking at Base" bug).
 function clearSourceArt() {
