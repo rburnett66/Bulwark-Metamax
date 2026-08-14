@@ -58,25 +58,41 @@
   }
 
   const CSS = `
-  .th-bar{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;
+  /* ONE ROW, ALWAYS. nowrap is the flex default, but it is stated here because the whole header's
+     height contract depends on it and on nothing inside being allowed to wrap either — see .th-nav
+     and .th-acts below. The bar reported as "4x taller than it should be" was four wrapped rows of
+     action buttons. */
+  .th-bar{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;flex-wrap:nowrap;
     padding:6px 12px;background:linear-gradient(#101c29,#0b141d);border-bottom:1px solid #24384f;
     font:12px/1.4 system-ui,sans-serif;color:#c8d8e8}
   .th-mark{font-weight:700;letter-spacing:.5px;color:#f2c869;white-space:nowrap}
   .th-tool{font-weight:600;color:#fff;white-space:nowrap}
-  .th-nav{display:flex;gap:2px;margin-left:6px;flex-wrap:wrap}
+  /* THE ACTIONS NEVER WRAP; THE NAV YIELDS INSTEAD. Both strips used to carry flex-wrap:wrap, so the
+     first thing to run out of room was the action strip — Save/Open/Ship/Sprites broke into a vertical
+     stack and doubled the header's height. Actions are a fixed, short, per-tool set and read as a
+     toolbar only on one line; the nav is 7 uniform links and degrades gracefully by scrolling. So the
+     nav gets min-width:0 (without it a flex item refuses to shrink below its content) and scrolls,
+     while the actions are pinned to one row. */
+  .th-nav{display:flex;gap:2px;margin-left:6px;flex-wrap:nowrap;min-width:0;overflow-x:auto;
+    scrollbar-width:none}
+  .th-nav::-webkit-scrollbar{display:none}
   .th-nav a{display:inline-block;padding:4px 9px;border-radius:5px;text-decoration:none;
-    color:#8fa7bd;border:1px solid transparent;white-space:nowrap}
+    color:#8fa7bd;border:1px solid transparent;white-space:nowrap;flex:0 0 auto}
   .th-nav a:hover{background:#16273a;color:#dbe8f5}
   .th-nav a.on{background:#16354d;color:#8fd0ff;border-color:#2f6f9f;cursor:default}
-  .th-acts{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  .th-acts{display:flex;gap:6px;margin-left:auto;flex-wrap:nowrap;flex:0 0 auto}
   .th-acts button{padding:5px 11px;border-radius:5px;border:1px solid #2f6f4a;background:#1d3a2a;
-    color:#dbe8f5;font:inherit;cursor:pointer}
+    color:#dbe8f5;font:inherit;cursor:pointer;white-space:nowrap}
   .th-acts button:hover{background:#244a35}
   .th-acts button[disabled]{opacity:.45;cursor:not-allowed}
   .th-acts button.th-ghost{background:#16273a;border-color:#2f4a66}
   .th-acts button.th-ghost:hover{background:#1e3a49}
+  /* min-width:0 + flex-shrink is what lets the ellipsis actually happen. A flex item defaults to
+     min-width:auto, so a nowrap string refuses to shrink below its full text width and pushes the row
+     wider instead of truncating — with everything else pinned to one line, that pushed the actions off
+     the right edge. */
   .th-status{margin-left:10px;color:#7f9bb3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-    max-width:38vw;font-variant-numeric:tabular-nums}
+    max-width:38vw;min-width:0;flex:0 1 auto;font-variant-numeric:tabular-nums}
   @media (max-width:900px){.th-nav a span{display:none}.th-status{display:none}}
   `;
 
