@@ -2916,8 +2916,17 @@ if ($('gridDiag')) $('gridDiag').onclick = () => gridDiag();
 // real paint, so it shows in-game. Masked to the active selection when there is one. Preserves the art's own
 // axis convention (across-axis + height→up), so it fixes offset/scale — if it comes out mirrored, that's a
 // separate flip to confirm.
-function reprojectSurface() {
-  const g = gridGeom; if (!g || !g.editable) { alert('Re-project: switch to a paint facing (Top / Front / Side / Back).'); return false; }
+/**
+ * @param {object} [opts]
+ *   noUndo  skip the history push — the caller owns one entry for a multi-facing sweep
+ *   quiet   a facing with no art is a SKIP, not an error: return false without an alert
+ * Called bare it behaves exactly as before.
+ */
+function reprojectSurface(opts) {
+  opts = opts || {};
+  const noUndo = !!opts.noUndo;
+  const say = (m) => { if (!opts.quiet) alert(m); return false; };
+  const g = gridGeom; if (!g || !g.editable) return say('Re-project: switch to a paint facing (Top / Front / Side / Back).');
   const N = g.foot * g.foot;
   const pal = (gridModel && gridModel.palette) || [];
   const snap = (r, gg, b) => { if (!pal.length) return [r, gg, b]; let bi = 0, bd = 1e9; for (let i = 0; i < pal.length; i++) { const p = pal[i], d = (p[0] - r) * (p[0] - r) + (p[1] - gg) * (p[1] - gg) + (p[2] - b) * (p[2] - b); if (d < bd) { bd = d; bi = i; } } return pal[bi]; };
@@ -2950,7 +2959,7 @@ function reprojectSurface() {
   // per-voxel front+side average). In both cases the source IS the carved vcol: re-project = restore it onto
   // the first face the ray hits, on ANY facing.
   if (gridView === 'top' || !(gridModel && gridModel.views)) {
-    const vcol = gridModel && gridModel.vcol; if (!vcol) { alert('Re-project: no carved colour to project.'); return false; }
+    const vcol = gridModel && gridModel.vcol; if (!vcol) return say('Re-project: no carved colour to project.');
     const pend = [];
     for (let cy = 0; cy < g.rows; cy++) for (let cx = 0; cx < g.cols; cx++) {
       const v = firstHit1(cx, cy); if (!v) continue;   // first filled voxel the ray hits in this column
@@ -2958,17 +2967,18 @@ function reprojectSurface() {
       if (useSelT && !gridSelVox.set.has(k)) continue;
       const c = k * 3; pend.push([k, snap(vcol[c], vcol[c + 1], vcol[c + 2])]);
     }
-    if (!pend.length) { alert('Re-project: no surface' + (useSelT ? ' in the selection.' : '.')); return false; }
-    pushVol(gridPart()); for (const [k, col] of pend) setVox(gridPart(), k, col);
+    if (!pend.length) return say('Re-project: no surface' + (useSelT ? ' in the selection.' : '.'));
+    if (!noUndo) pushVol(gridPart());
+    for (const [k, col] of pend) setVox(gridPart(), k, col);
     gridModel = null; refreshModel(); renderGridView(); scheduleAutosave(); return true;
   }
   const V = gridModel && gridModel.views;
   const src = gridView === 'side' ? (V && V.side) : gridView === 'front' ? (V && V.front) : gridView === 'back' ? (V && (V.back || V.front)) : null;
-  if (!src || !src.m) { alert('Re-project: no source image for this facing (Top has none).'); return false; }
+  if (!src || !src.m) return say('Re-project: no source image for this facing (Top has none).');
   // source image content bbox — the drawn pixels only
   let iX0 = 1e9, iX1 = -1, iY0 = 1e9, iY1 = -1;
   for (let iy = 0; iy < src.h; iy++) for (let ix = 0; ix < src.w; ix++) if (src.m[iy * src.w + ix]) { if (ix < iX0) iX0 = ix; if (ix > iX1) iX1 = ix; if (iy < iY0) iY0 = iy; if (iy > iY1) iY1 = iy; }
-  if (iX1 < 0) { alert('Re-project: the source image is empty.'); return false; }
+  if (iX1 < 0) return say('Re-project: the source image is empty.');
   // gather this facing's surface voxels + the model silhouette bbox in the two in-plane WORLD axes (across, z)
   const colAxis = gridView === 'side' ? 'x' : 'y';     // side → world x across; front/back → world y across
   const useSel = gridSelVox && gridSelVox.part === g.part;
@@ -2990,7 +3000,7 @@ function reprojectSurface() {
       surf.push([k, cv, z]);
     }
   }
-  if (!surf.length) { alert('Re-project: no target surface' + (useSel ? ' within the selection.' : '.')); return false; }
+  if (!surf.length) return say('Re-project: no target surface' + (useSel ? ' within the selection.' : '.'));
   const sampleArt = (ix, iy) => {                     // nearest drawn pixel within a small radius (silhouettes have gaps)
     for (let rad = 0; rad <= 2; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
       const px = ix + dx, py = iy + dy; if (px < 0 || py < 0 || px >= src.w || py >= src.h) continue;
@@ -3005,13 +3015,59 @@ function reprojectSurface() {
     const iy = Math.round(iY0 + ((z - r0) / rSpan) * (iY1 - iY0));   // image row 0 = z0 (bottom) → higher z = higher row (matches art)
     const col = sampleArt(ix, iy); if (col) pending.push([k, snap(col[0], col[1], col[2])]);
   }
-  if (!pending.length) { alert('Re-project: no colours sampled from the image.'); return false; }
-  pushVol(gridPart());
+  if (!pending.length) return say('Re-project: no colours sampled from the image.');
+  if (!noUndo) pushVol(gridPart());
   for (const [k, col] of pending) setVox(gridPart(), k, col);
   gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
   return true;
 }
 if ($('gridReproj')) $('gridReproj').onclick = () => reprojectSurface();
+/**
+ * Re-project EVERY facing in one pass, as ONE undo step — the action that makes the .vox export match
+ * what the orbit view shows.
+ *
+ * WHY IT FIXES THE EXPORT. buildFaces colours a voxel's WALL faces from the side/front/back art
+ * (wallCol) and only its top from the stored colour. A .vox holds one colour per VOXEL, so on export
+ * all of that wall art collapses to the column colour underneath — the export could never match the
+ * screen. Re-project writes through setVox, which sets the PAINT flag, and buildFaces treats painted
+ * voxels as authoritative and skips the wall-art pass. So once all four facings are projected, the 3D
+ * view and the export read the SAME store. The model becomes WYSIWYG.
+ *
+ * ORDER IS TOP → FRONT → BACK → SIDE, and it is load-bearing. A voxel on an edge is the first hit from
+ * more than one direction, and it can only hold one colour, so the last writer wins. Side runs last
+ * because the flanks are the biggest readable surface on these units; running Top last would flatten
+ * them with roof colour.
+ *
+ * Only first-hit voxels are ever touched — that is reprojectSurface's own rayHits (near face always,
+ * plus the far face on Side, because one side sheet feeds both ±y walls). Interior voxels are never
+ * written by any of this.
+ */
+function reprojectAllFacings() {
+  if (!(gridModel && gridModel.views) && gridView !== 'top') { /* decor/vox-only: the top path handles it */ }
+  const part = gridPart();
+  const prevView = gridView, prevLayer = gridLayer;
+  const ORDER = ['top', 'front', 'back', 'side'];
+  // ONE history entry for the whole sweep. reprojectSurface would otherwise push per facing and leave
+  // Ctrl+Z undoing a quarter of the operation, which is worse than not having the button.
+  pushVol(part);
+  const done = [], skipped = [];
+  for (const v of ORDER) {
+    gridView = v; gridLayer = 0; gridAlign = false;
+    renderGridView();                              // gridGeom is a side effect of the draw — rebuild it for this facing
+    if (reprojectSurface({ noUndo: true, quiet: true })) done.push(v);
+    else skipped.push(v);                          // no art for this facing: a skip, not a failure
+  }
+  gridView = prevView; gridLayer = prevLayer;
+  [...$('gridViewSeg').children].forEach((c) => c.classList.toggle('on', c.dataset.v === prevView));
+  gridModel = null; refreshModel(); renderGridView(); scheduleAutosave();
+  const msg = done.length
+    ? `Re-projected ${done.join(', ')}${skipped.length ? ` · skipped ${skipped.join(', ')} (no art)` : ''} — one Ctrl+Z undoes all of it.`
+    : 'Re-project all: no facing had art to project.';
+  if ($('projState')) $('projState').textContent = msg;
+  if (!done.length) alert(msg);
+  return done.length > 0;
+}
+if ($('gridReprojAll')) $('gridReprojAll').onclick = () => reprojectAllFacings();
 if ($('gridLassoBtn')) $('gridLassoBtn').onclick = () => { lassoMode = !lassoMode; if (lassoMode) gridLasso = []; else if (gridLasso && gridLasso.length < 3) gridLasso = null; $('gridLassoBtn').classList.toggle('on', lassoMode); renderGridView(); };
 // ESC clears the selection; Delete erases it; Enter/F fills it; Ctrl+Z / Ctrl+Y undo/redo
 document.addEventListener('keydown', (e) => {
