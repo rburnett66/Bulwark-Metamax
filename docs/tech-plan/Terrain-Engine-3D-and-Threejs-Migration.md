@@ -1,6 +1,8 @@
-# TECH PLAN — Bulwark Terrain Engine + three.js Renderer Migration (v2.2)
+# TECH PLAN — Bulwark Terrain Engine + three.js Renderer Migration (v2.2.1)
 
 **Provenance.** Owner sentences are quoted and marked **owner**; everything else is **agent-proposed**. v2.2 written 2026-10-14 by the repo-rooted CLI session (Claude Code, Opus 5.5) from v2.1, the code design handoff (`docs/dev/Terrain-Engine-3D-Code-Design.md` rev 2) and the repo at `main` @ `31b62eb`. Epic `epic_mv77hbbc_1`. **The repo copy is canonical**: `docs/tech-plan/Terrain-Engine-3D-and-Threejs-Migration.md` on branch `feat/terrain3d-port`; this MetaMax document mirrors it.
+
+v2.2.1 (2026-10-14) RESOLVES Q18 and adds goal 26. **owner**: "sprites as fallback is only a temporary feature. The goal is a complete conversion to 3D since 3D hardware on mobile seems to be able to accomodate the load." Sprite units exist only as a stop-gap and leave with Pixi in T7; nothing new is built on them.
 
 v2.2 (2026-10-14) MAKES 3D MODELS THE UNIT TECHNOLOGY. **owner**, 2026-10-14: "Design is changing to 3D models." Goal 15's "units stay sprites" is retired (§0.1 goal 15, new goal 25); T5 is un-deferred. Adds: the port layout and integration rules (§6.12), the modules this plan touches (§13), stories keyed to board ids (§8), the three.js version decision (§6.6), and two corrections found by reading the repo (§0.4.6 — the sim ALREADY emits damage and kill events; §0.4.7 — the tools and the baked level are now in the repo). Also in the repo now: the prototype tools and the baked powder-map-1 level (`[MM-story_mv87jtfa_3]`), and the art-style doc at `docs/dev/Neon-Voxel-Art-Style.md` (now a Dependencies row).
 
@@ -39,7 +41,8 @@ Owner request: a new terrain engine for Bulwark, and migrate the renderer from P
 22. (v2.0) THE ENGINE IS REAL 3D: a tilted 3D camera, lit 3D geometry for everything that stands on the ground, and real shadows. Matching the old flat 2D look is NOT a goal.
 23. (v2.1) IMPACTS AFFECT THE WORLD: sparks bounce off armour and hit the ground; destroyed tanks lose their turrets and burn.
 24. (v2.1) UNITS LOOK METALLIC, via a material shader.
-25. (v2.2) UNITS ARE 3D MODELS. **owner** 2026-10-14: "Design is changing to 3D models." The four approved part-list models (tank, buggy, beetle, jet — **owner**: "All of them are perfect") are the first set: instanced, LOD, planar shadows (§6.3). Whether sprites survive as a Low-tier fallback is open (Q18).
+25. (v2.2) UNITS ARE 3D MODELS. **owner** 2026-10-14: "Design is changing to 3D models." The four approved part-list models (tank, buggy, beetle, jet — **owner**: "All of them are perfect") are the first set: instanced, LOD, planar shadows (§6.3). (v2.2.1) Sprites are a TEMPORARY fallback only (goal 26).
+26. (v2.2.1) COMPLETE CONVERSION TO 3D. **owner** 2026-10-14: "The goal is a complete conversion to 3D since 3D hardware on mobile seems to be able to accomodate the load." The end state has no sprite units, no Pixi and no flat-bake path. Any sprite fallback is temporary and is removed in T7; the Low tier is a lighter 3D tier (LOD, no live shadows, fewer effects), not a sprite tier. T1's device measurements confirm the load; they do not reopen the decision.
 
 ### 0.2 Terms
 - MAP — the ground: the terrain-forge grid of cells (terrain codes, blocking, obstructions).
@@ -138,7 +141,7 @@ Lit 3D geometry, instanced per kind (wall, tower); cast and receive shadows. Pla
 - ONE three.js directional light = the sun (prototype: `sun.js` azimuth 135°, elevation 45°; final numbers per Q14).
 - Lighting balance: ambient 0.6 + sun so a flat sunlit ground shows its baked colour exactly; ground in shadow is 0.6 of it.
 - STATIC shadows: one shadow map from every static caster, hard-edged (`BasicShadowMap`, matching the voxel look). `shadowMap.autoUpdate = false`: rendered once at load and again only when a structure changes. This is baked-equivalent cost (goal 7) with exact agreement between geometry and shadow. Always on, every tier; map size 4096 / 2048 / 1024 by tier.
-- (v2.2) LIVE shadows for 3D units: a planar projection of the unit's LOD instances along the sun onto Y = 0 (`w −= L · (w.y / L.y)`), black × alpha, stencil-once; exact silhouettes, no per-frame shadow map. Off on the Low tier (goal 20). The sprite-era bullet below applies only if Q18 keeps sprites.
+- (v2.2) LIVE shadows for 3D units: a planar projection of the unit's LOD instances along the sun onto Y = 0 (`w −= L · (w.y / L.y)`), black × alpha, stencil-once; exact silhouettes, no per-frame shadow map. Off on the Low tier (goal 20). The sprite-era bullet below applies only while the temporary sprite fallback exists (goal 26).
 - (sprite era) LIVE shadows: each unit part's baked shadow atlas laid flat on the ground (stretched by 1 / sin 37° along the view so it projects to the shape it was drawn as). Stencil-once so overlaps never double-darken. Off on the Low tier (goal 20).
 - Known gaps: units no longer darken inside tree shadows (the shadow map is not sampled by unit sprites); a unit sprite shadow can stack on top of a shadow-map shadow. Fix in T4: sample the shadow map in the sprite shader (one texture lookup per sprite).
 
@@ -159,7 +162,7 @@ Ground tiles (lit, receive shadows, no depth write) → field decals → (v2.1) 
 - LOD drops detail parts (flag `d`) and tiny parts and caps cylinders at 6 sides; automatic above camera distance 22.
 - The sim unit → model key mapping is a DATA table (the roster is far larger than four models); an unmapped unit falls back to its chassis' nearest model, and a test lists every fallback — nothing is silently drawn as nothing.
 - Production models move to `content/units/model/*.model.json` and are authored in the Stack Forge (story UMP).
-- Sprite-era design, kept for the Q18 fallback decision: camera-facing billboards anchored at their ground contact point, sized by `buildVoxelUnit`'s rule; the depth buffer sorts them against 3D geometry. Turret anchor = contact point + the `mount` ground offset rotated by heading, lifted along the camera's up axis by `mount.z` × `layerSpacing`. One draw call per part regardless of count. (Prototype since v2.0: instanced 3D unit models with LOD and planar shadows run alongside sprites; the T5 decision is pending — see the code design handoff §4.11.)
+- Sprite-era design, kept ONLY as the temporary fallback until T7 (goal 26): camera-facing billboards anchored at their ground contact point, sized by `buildVoxelUnit`'s rule; the depth buffer sorts them against 3D geometry. Turret anchor = contact point + the `mount` ground offset rotated by heading, lifted along the camera's up axis by `mount.z` × `layerSpacing`. One draw call per part regardless of count. (Prototype since v2.0: instanced 3D unit models with LOD and planar shadows run alongside sprites; the T5 decision is pending — see the code design handoff §4.11.)
 
 ### 6.4 Effects
 Additive billboards from one glow texture; projectiles instanced and flying at height. No post-processing by default (v1.8 §6.4 unchanged). v2.1: world-impact effects in §6.10.
@@ -270,7 +273,7 @@ Order follows the board's `depends_on`; the ids are the `[MM-<id>]` to stamp.
 | LPS Low-poly base, walls, towers, crystals | `story_mv87jzov_9` | replaces the boxes (code design §8.3) |
 | SUR Surroundings layer | `story_mv87k0nt_a` | the off-map world authored in the Terrain Forge, not random per seed |
 | T6 Tool parity | `story_mv77hwq7_8` | Harness, Gallery, Terrain Forge on the shared view; "Bake level" in the Terrain Forge |
-| T7 Remove Pixi | `story_mv77i09b_9` | after parity |
+| T7 Remove Pixi | `story_mv77i09b_9` | after parity; (v2.2.1) also removes the temporary sprite unit fallback — the end state is fully 3D (goal 26) |
 | W Water | `story_mv7bccaa_g` | later phase |
 
 Proposed, not yet on the board (agent): **three.js upgrade r128 → current**, after T3 (light units, colour management, multisample target — §6.6).
@@ -288,7 +291,7 @@ As v1.8, plus:
 ## 10. Risks
 As v1.8, plus:
 - Shadow-map resolution on phones: 2048 over a 64 × 32 map is about 32 texels per cell; hard edges may shimmer at full zoom. Mitigation: fit the shadow camera to the revealed ring (it is static between rings) and re-render on ring growth.
-- ~~Sprites in a perspective view~~ (v2.2: moot with 3D units; applies again only if Q18 keeps sprites as a tier).
+- ~~Sprites in a perspective view~~ (v2.2: moot with 3D units; v2.2.1: sprites are temporary, so this risk ends with T7).
 - Tree and rock models do not exist yet; procedural placeholders stand in until Stack Forge exports meshes.
 - (v2.1) Particle overdraw on phones: smoke and fire are large soft quads; a big wave of kills stacks many on the same pixels. Mitigation: Low-tier caps, smaller smoke, fewer burning wrecks.
 - (v2.1) The metal look is a two-colour sky/ground reflection, not an environment map; it reads at battle distance but not in a close-up showroom.
@@ -300,14 +303,13 @@ As v1.8, plus:
 As v1.8. View-DD (`docs/dev/View-DD.md`): camera section → a tilted 3D perspective camera at 37° over a flat play plane, real lit geometry, a static shadow map and (v2.2) 3D unit models with planar shadows — replacing the Pixi 2.5D painter's order, free player rotation and the shared Pixi projection. (v2.1) View-DD's effects section: world-impact effects and wrecks. Engine-DD (`docs/dev/Engine-DD.md`): (v2.2) the impact events already in the sim output (§0.4.6) become a documented renderer contract; unit fields gain a model key. The art-style rules and palettes live in `docs/dev/Neon-Voxel-Art-Style.md` (v1.3, now in the repo).
 
 ## 12. Owner questions
-Resolved: Q1–Q13 as listed in v1.8. (v2.2) Unit render tech: 3D models (**owner** 2026-10-14).
+Resolved: Q1–Q13 as listed in v1.8. (v2.2) Unit render tech: 3D models (**owner** 2026-10-14). (v2.2.1) Q18: sprites are a temporary fallback only; the goal is a complete conversion to 3D (**owner** 2026-10-14, goal 26).
 Still open:
 - Q8b Off-route painted path cells: dirt clearings or grass?
 - Q14 Which single sun (azimuth, elevation) becomes the standard? With 3D units only the decor sprite packs still need a re-bake.
 - Q15 (v2.1) Effects on the Low tier: keep wrecks and turret blow-offs and thin the particles, or drop burning wrecks on phones?
 - Q16 (v2.1) Wreck lifetime (prototype: burn 7–10 s, sink 6 s later) and whether replays must show identical debris.
 - Q17 (v2.1) Metal per material only, or per faction / unit type (e.g. rusty raiders vs polished corp)?
-- Q18 (v2.2) Do sprites survive as the Low-tier unit fallback, or go with Pixi in T7?
 - Q19 (v2.2) Default world style for the game: low-poly organic (**owner**: "the best yet") with a palette per level?
 
 ## 13. Modules this plan touches (for check_plan)
