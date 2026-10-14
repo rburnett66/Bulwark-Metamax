@@ -27,7 +27,10 @@ export function sunIntensity(dir, ambient = AMBIENT) {
 }
 
 /**
- * Build the lights into `scene`. Returns { ambient, sun, invalidateShadows() }.
+ * Build the lights into `scene`. Returns { ambient, hemi, sun, dir, setWorld(light), invalidateShadows() }.
+ * The hemisphere light starts OFF (the baked-ground balance above); setWorld(WORLD_LIGHT[key]) applies a
+ * low-poly world's sky colour, ambient, hemisphere and sun tint (LP [MM-story_mv87jxp2_7]) — never the sun's
+ * direction, which stays this one sun.
  * `shadowSize` comes from the quality tier (4096 / 2048 / 1024).
  */
 export function createLights(THREE, renderer, scene, cols, rows, shadowSize = 2048) {
@@ -43,7 +46,8 @@ export function createLights(THREE, renderer, scene, cols, rows, shadowSize = 20
   Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 220 });
   sun.shadow.bias = SHADOW_BIAS;
   sun.shadow.camera.updateProjectionMatrix();   // required: without it three keeps its default ±5 extents
-  scene.add(ambient, sun, sun.target);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 0);
+  scene.add(ambient, hemi, sun, sun.target);
 
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.BasicShadowMap;   // hard edges: the voxel language, and the cheapest
@@ -51,7 +55,14 @@ export function createLights(THREE, renderer, scene, cols, rows, shadowSize = 20
   renderer.shadowMap.needsUpdate = true;
 
   return {
-    ambient, sun, dir,
+    ambient, hemi, sun, dir,
+    setWorld(w) {
+      if (!w) return;
+      renderer.setClearColor(w.clear, 1);
+      ambient.color.setHex(0xffffff); ambient.intensity = w.ambient;
+      hemi.color.setHex(w.hemi[0]); hemi.groundColor.setHex(w.hemi[1]); hemi.intensity = w.hemi[2];
+      sun.color.setHex(w.sun[0]); sun.intensity = sunIntensity(dir) * w.sun[1];
+    },
     invalidateShadows() { renderer.shadowMap.needsUpdate = true; },
   };
 }

@@ -84,7 +84,9 @@ export function boot(mountEl, seed) {
       render3dMod = render3dMod || await import('./render3d/index.js');
       if (mySeq !== mount3dSeq) return;
       if (renderer3d) { render3dMod.destroyRenderer(renderer3d); renderer3d = null; }
-      const r = await render3dMod.createRenderer3D(mountEl, map, { slug });
+      // ?world=<palette> previews a low-poly world; ?ground=baked keeps the baked-texture ground (LP).
+      const q = new URLSearchParams(window.location.search);
+      const r = await render3dMod.createRenderer3D(mountEl, map, { slug, world: q.get('world') || undefined, ground: q.get('ground') || undefined });
       if (mySeq !== mount3dSeq) { render3dMod.destroyRenderer(r); return; }
       renderer3d = r;
       console.log('[render3d]', r.status, slug || '(no baked level)', r.problems.join('; '));
