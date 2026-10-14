@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import * as THREE from '../../../vendor/three.module.js';
 import { UNIT_MODELS } from './models.js';
 import { createPrims, track } from './prims.js';
-import { lodDef, partSize, LOD_MAX_CYL_SEG } from './lod.js';
+import { lodDef, partSize, LOD_MAX_CYL_SEG, isDetail } from './lod.js';
 import { mergeModelGroups, UNIT_COLORS } from './models3d.js';
 import { MODEL_KEYS, ART_CLASS_MODELS, resolveUnitModel } from './modelKeys.js';
 import { buildUnitViews, createModelResolver, targetPos, HOVER_HEIGHT } from './unitViews.js';
@@ -22,8 +22,10 @@ const GAME = path.resolve(HERE, '../../..');
 const sumTris = (groups) => Object.values(groups).reduce((a, g) => a + g.tris, 0);
 
 // ── geometry ──────────────────────────────────────────────────────────────────────────────────────
-// Golden numbers = the prototype's measured UNITTRIS (code design §6.2): a change here is a model change.
-const GOLDEN = { tank: [3362, 1272], buggy: [1260, 680], beetle: [2748, 1492], jet: [994, 602] };
+// Golden numbers: FULL = the prototype's measured UNITTRIS (code design §6.2). LOD re-measured 2026-10-14 after
+// [MM-story_mv8iu7l4_d] — the prototype's LOD (1272 / 680 / 1492 / 602) had dropped every extruded part.
+// A change here is a model change.
+const GOLDEN = { tank: [3362, 1534], buggy: [1260, 760], beetle: [2748, 1724], jet: [994, 698] };
 
 test('the four approved models build to their golden triangle counts, full and LOD', () => {
   assert.deepEqual([...MODEL_KEYS].sort(), Object.keys(GOLDEN).sort());
@@ -68,6 +70,19 @@ test('LOD drops detail and sub-threshold parts, keeps glow strips, caps cylinder
   assert.equal(lod.parts.find((p) => p.t === 'cyl').seg, LOD_MAX_CYL_SEG);
   assert.equal(def.parts[4].seg, 12, 'the source definition is not mutated');
   assert.equal(partSize({ t: 'cyl', r: [0.1, 0.4], l: 2 }), 0.8);
+});
+
+test('REGRESSION: the LOD keeps every extruded / lofted / ellipsoid part — `d: [from, to]` is a depth, not the detail flag', () => {
+  for (const [key, def] of Object.entries(UNIT_MODELS)) {
+    const kept = new Set(lodDef(def).parts.map((p) => JSON.stringify({ ...p, seg: undefined })));
+    const lost = def.parts.filter((p) => ['ext', 'loft', 'ell'].includes(p.t) && !kept.has(JSON.stringify({ ...p, seg: undefined })));
+    assert.deepEqual(lost.map((p) => `${p.t}/${p.m}`), [], `${key} keeps its silhouette at far zoom`);
+  }
+  assert.equal(isDetail({ t: 'ext', d: [0.4, 0.6] }), false, 'an extrusion depth range is not the detail flag');
+  assert.equal(isDetail({ t: 'box', d: 1 }), true);
+  assert.equal(isDetail({ t: 'cyl', d: 0 }), false, 'd: 0 (glow hubs) is kept');
+  // the four models actually have extruded parts, so this test can fail
+  assert.ok(Object.values(UNIT_MODELS).every((d) => d.parts.some((p) => p.t === 'ext')));
 });
 
 // ── roster → model ────────────────────────────────────────────────────────────────────────────────
