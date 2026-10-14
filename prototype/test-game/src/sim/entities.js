@@ -119,6 +119,10 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
     costT1: def.cost[0],
     path: [],
     pathIdx: 0,
+    // ORIGIN (T0b [MM-story_mv7axdnv_f]): where a WAVE attacker came from — { wave, lane, point } — set by
+    // waves.js at spawn; null for every other unit (defenders, harvesters, repair troops, tools). Output only:
+    // nothing in the sim reads it, and hashState does not hash it (replay hashes are unchanged).
+    origin: null,
     targetId: null,
     cooldown: 0,
     slowUntil: 0,
