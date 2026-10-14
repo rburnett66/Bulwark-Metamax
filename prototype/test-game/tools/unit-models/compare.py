@@ -1,4 +1,5 @@
-import asyncio, sys, base64, io, json, os, pathlib
+import asyncio, sys, base64, io, json, os, pathlib, threading, functools
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw
 from playwright.async_api import async_playwright
@@ -10,10 +11,17 @@ async def main():
         b=await p.chromium.launch(args=['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
         pg=await b.new_page(); logs=[]
         pg.on('console', lambda m: logs.append(m.text)); pg.on('pageerror', lambda e: logs.append('ERR '+str(e)))
-        await pg.goto(pathlib.Path(os.path.abspath('src/compare.html')).as_uri()); await pg.wait_for_timeout(500)
+        # compare.html is an ES module page (it imports the game's src/render3d/units/) — modules do not load
+        # over file://, so serve prototype/test-game on an ephemeral local port for the duration of the run.
+        root = os.path.abspath('../..')
+        srv = ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(SimpleHTTPRequestHandler, directory=root))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        await pg.goto(f'http://127.0.0.1:{srv.server_address[1]}/tools/unit-models/src/compare.html')
+        await pg.wait_for_function('window.ready === true', timeout=15000)
         res=await pg.evaluate('([u,s]) => renderViews(u,s)', [unit, sizes])
         for l in logs: print(l)
         await b.close()
+        srv.shutdown()
     tiles=[]
     for v in VIEWS:
         r=Image.open(f'ref/{ref}_{v}.png').convert('RGB')
