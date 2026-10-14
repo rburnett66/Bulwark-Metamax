@@ -119,6 +119,9 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       const sh = new THREE.InstancedMesh(L.geo, shMat, cap);
       sh.instanceMatrix = imLod.instanceMatrix;
       for (const m of [imLod, imFull, sh]) { m.count = 0; m.frustumCulled = false; scene.add(m); }
+      // units RECEIVE the static shadow map (T4): they darken under trees and plateaus. They don't CAST into
+      // it — they move, and the map renders only on static changes; their own shadows are the planar ones.
+      imLod.receiveShadow = imFull.receiveShadow = true;
       imLod.renderOrder = imFull.renderOrder = 3;
       sh.renderOrder = 2;
       T.groups[gname] = { imFull, imLod, sh, pivot: full[gname].pivot };
