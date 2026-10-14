@@ -39,9 +39,10 @@ export function targetPos(state, map, targetId) {
 
 /**
  * Build the draw list. `headings` is a heading.js tracker (presentation state, swept of dead ids here).
- * Returns [{ id, model, scale, x, y, z, heading, aim }] in world units.
+ * `dt` (seconds since the last frame) eases hull + turret toward their goals at capped turn rates; omit it
+ * to snap. Returns [{ id, model, scale, x, y, z, heading, aim }] in world units — DRAWN angles.
  */
-export function buildUnitViews(state, map, headings, resolve) {
+export function buildUnitViews(state, map, headings, resolve, dt) {
   const out = [];
   if (!state || !state.units) return out;
   const live = new Set();
@@ -49,9 +50,9 @@ export function buildUnitViews(state, map, headings, resolve) {
     if (!u || !u.pos) continue;
     live.add(u.id);
     const r = resolve(u.unitId);
-    const heading = headings.update(u.id, u.pos.x, u.pos.y);
+    const goal = headings.update(u.id, u.pos.x, u.pos.y);
     const tp = targetPos(state, map, u.targetId);
-    const aim = tp ? Math.atan2(tp.y - u.pos.y, tp.x - u.pos.x) : heading;
+    const { heading, aim } = headings.turn(u.id, goal, tp ? Math.atan2(tp.y - u.pos.y, tp.x - u.pos.x) : goal, dt);
     out.push({
       id: u.id, model: r.model, scale: r.scale,
       x: cellToWorld(u.pos.x), z: cellToWorld(u.pos.y), y: u.altitude > 0 ? HOVER_HEIGHT : 0,

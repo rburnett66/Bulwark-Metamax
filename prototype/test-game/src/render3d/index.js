@@ -236,7 +236,7 @@ export function renderFrame(r, state, ui, events, dt) {
   // Live units: the 3D models (T5). Live planar shadows on every tier for now; the tier table (quality.js)
   // turns them off on Low when it lands.
   if (state && state.units) {
-    const views = buildUnitViews(state, r.map, r.headings, r.resolveModel);
+    const views = buildUnitViews(state, r.map, r.headings, r.resolveModel, Math.min(0.1, Math.max(0, dt || 0)));   // smooth turning; clamped so a stalled frame can't swing a whole turn at once
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, true);
   }
 
