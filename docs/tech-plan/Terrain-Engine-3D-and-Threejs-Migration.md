@@ -1,6 +1,8 @@
-# TECH PLAN — Bulwark Terrain Engine + three.js Renderer Migration (v2.2.1)
+# TECH PLAN — Bulwark Terrain Engine + three.js Renderer Migration (v2.2.2)
 
-**Provenance.** Owner sentences are quoted and marked **owner**; everything else is **agent-proposed**. v2.2 written 2026-10-14 by the repo-rooted CLI session (Claude Code, Opus 5.5) from v2.1, the code design handoff (`docs/dev/Terrain-Engine-3D-Code-Design.md` rev 2) and the repo at `main` @ `31b62eb`. Epic `epic_mv77hbbc_1`. **The repo copy is canonical**: `docs/tech-plan/Terrain-Engine-3D-and-Threejs-Migration.md` on branch `feat/terrain3d-port`; this MetaMax document mirrors it.
+**Provenance.** Owner sentences are quoted and marked **owner**; everything else is **agent-proposed**. v2.2 written 2026-10-14 by the repo-rooted CLI session (Claude Code, Opus 5.5) from v2.1, the code design handoff (`docs/dev/Terrain-Engine-3D-Code-Design.md` rev 2) and the repo at `main` @ `31b62eb`. Epic `epic_mv77hbbc_1`. **The repo copy is canonical**: `docs/tech-plan/Terrain-Engine-3D-and-Threejs-Migration.md` on `main`; this MetaMax document mirrors it.
+
+v2.2.2 (2026-10-14) ORDER, AUTHORITY, AND WHAT COMES NEXT. **owner**: "Keep working in the proper order. The new design material is authoritative over previous work. We are still lacking new units which I will keep working on and we now have assigned terrain and planets for each of the 9 existing factions. Planets will come immediately after the 3D refactor is complete." So: (1) stories are worked in board dependency order (§8); (2) where a ticket written before 2026-10-14 disagrees with this plan, the code design or the art-style doc, the newer material wins and the ticket is amended; (3) new unit MODELS are the owner's lane, so agents port and wire but do not author them; (4) the next epic after this one is PLANETS (§14). T0's audit (`docs/dev/Terrain-3D-Ground-Truth.md`) resolves Q14 under goal 26 (§12) and finds that only ONE level can render in 3D today (§0.4.8).
 
 v2.2.1 (2026-10-14) RESOLVES Q18 and adds goal 26. **owner**: "sprites as fallback is only a temporary feature. The goal is a complete conversion to 3D since 3D hardware on mobile seems to be able to accomodate the load." Sprite units exist only as a stop-gap and leave with Pixi in T7; nothing new is built on them.
 
@@ -70,12 +72,14 @@ Terraced heightfield for the play surface; water as lower geometry; in-battle ro
    - Terrain bake terrain self-shadow: elevation 25°.
    - `pine-tree-1` decor pack: light 135°, baked shadow elevation 55°, bake camera elevation 21°.
    - `GND-Tanks` and the unit pack config: light azimuth 179°, bake camera elevation 37°.
-   v2.0 removes most of this problem: terrain, plateaus, rocks, trees and structures are now lit and shadowed by ONE three.js directional light (prototype: `sun.js` 135° / 45°). Only the unit sprite packs still carry baked light (179°) and must be re-baked to the standard sun (Q14).
+   v2.0 removes most of this problem: terrain, plateaus, rocks, trees and structures are now lit and shadowed by ONE three.js directional light (prototype: `sun.js` 135° / 45°). Only the unit sprite packs still carry baked light (179°) and must be re-baked to the standard sun (Q14). (v2.2.2: RESOLVED — units are 3D, sprites are temporary, nothing is re-baked; T0 audit §3.)
 3. PX_PER_CELL = 80. The existing bake (sub 5 × 16 px) produces 5120 × 2560 for a 64 × 32 map. That exceeds the 4096 texture limit common on older phones, so tiling is required, not optional.
 4. Water is IMPASSABLE in the sim today (`buildNavGrid`: "Water blocks walkers"; `buildTerrainMap` puts code-6 cells in `waterCells`). Story W changes that.
 5. The sim's walkable grid comes from `bakedBlocking` (the bake's domain-warped outline), not the raw forge `blocking` mask: `main.js` calls `buildTerrainMap(forge, id, { seed: 0, bakeTune })`. The renderer, roads and path lines must use the map the sim builds, never the raw forge mask.
 6. (v2.2) THE SIM ALREADY EMITS IMPACT EVENTS — v2.1 §6.10 assumed it did not. `src/sim/combat.js` emits `damage {tick, sourceId, targetId, targetKind, amount, damageType, killed, pos}` and `kill {tick, entityId, unitId, side, lane, income, radius, pos}`; `src/sim/core.js` emits `kill` for units that reach the base; `main.js` already batches them into `pendingEvents` and hands them to `renderFrame(renderer, sim, ui, events, dt)`. So the renderer takes travel direction from the SOURCE's position in the same state and heading/aim from its own last-frame cache per entity id. A sim change is needed only if that proves insufficient (e.g. the source died the same tick) — and then only as extra OUTPUT fields, checked against the replay hashes.
 7. (v2.2) THE PROTOTYPE IS IN THE REPO. `prototype/test-game/tools/terrain3d-proto/` (bake, build, headless test) and `tools/unit-models/` (part-list builder, the four models, viewer, ortho-sheet compare). `bake3d.mjs` writes the renderer's inputs to `content/maps/baked/<mapId>/` (committed); the local bake of powder-map-1 is byte-identical to the cloud one. Dev-only deps (`three@0.128.0`, `@napi-rs/canvas`) are in the root `package.json`; the game ships none of them.
+8. (v2.2.2) ONLY ONE LEVEL CAN RENDER IN 3D TODAY. `content/maps/forge/` holds one level, `powder-map-1`. Every other playable map is built by `buildCampaignMap` from the workbook and carries no terrain codes, so it can't be baked and has no obstructions to raise. Goal 26 therefore needs every playable level authored in the Terrain Forge with a committed bake. That is content work owned by PLANETS (§14), with T6's "Bake level" making the bake part of saving. Until then the port is built and verified on `powder-map-1`. (T0 audit §11.)
+9. (v2.2.2) `src/terrain/terrainRuntime.js` (`TerrainRenderer`, `bootTerrain`) is DEAD CODE: imported by nothing. The live Pixi terrain is `renderer.js` `bakeDigicamGround` with `bakeTerrainTiles` as fallback; both go in T7, `terrainRuntime.js` can go any time. (T0 audit §2.)
 
 ## 1. What exists today (measured at 31b62eb)
 - Renderer: `src/render/renderer.js` (Pixi 7) — `createRenderer`, `renderFrame`, `cellToLocal` (square grid), `bakeTerrainTiles`, `bakeDigicamGround`, sprite effects `spawnGlow` / `glowTexture` / `updateGlows`, `spawnFlame`, `spawnFireClump`.
@@ -83,7 +87,7 @@ Terraced heightfield for the play surface; water as lower geometry; in-battle ro
 - Map: `content/maps/forge/powder-map-1.json` (terrain-forge v2): 64 × 32 `terrain` codes, `blocking`, 8 `waveWindows`, `spawnsByWave` (48 ground spawns across 8 waves), 89 `resources`, 83 `decor` pines, `base`.
 - Terrain codes (`terrainGen.js` `TERRAIN_NAME`): 0 grass, 1 dirt, 2 brush, 3 rocks, 4 trees, 5 cliff, 6 water, 7 tree-border, 8 rock-border, 9 cliff-border. In powder-map-1 the blocking mask equals exactly codes 3, 4, 5, 6, 9; codes 7 and 8 are walkable fringes.
 - Decor: `content/decor/voxel-decor.json` — one type, `pine-tree-1`, as a sprite atlas only. No 3D model exists for any tree or rock; only `content/units/model/SPA-U3.json` carries an embedded voxel model.
-- Units: `content/units/voxel-units.json` + `content/units/voxel/*.png` — e.g. `GND-Tanks`: 16 body facings, 64 turret angles, baked body and turret shadow atlases; sized by `buildVoxelUnit` (`tiles` × `VOXEL_UNIT_SCALE` 0.5). (v2.2) 3D models: `tools/unit-models/src/models.js` (tris full / LOD: tank 3,362 / 1,272; buggy 1,260 / 680; beetle 2,748 / 1,492; jet 994 / 602), built by `tools/unit-models/src/prims.js`.
+- Units: `content/units/voxel-units.json` + `content/units/voxel/*.png` — e.g. `GND-Tanks`: 16 body facings, 64 turret angles, baked body and turret shadow atlases; sized by `buildVoxelUnit` (`tiles` × `VOXEL_UNIT_SCALE` 0.5). (v2.2) 3D models: `src/render3d/units/models.js` (tris full / LOD: tank 3,362 / 1,272; buggy 1,260 / 680; beetle 2,748 / 1,492; jet 994 / 602), built by `src/render3d/units/prims.js` (moved from `tools/unit-models/src/` by T5; the tools build from them).
 - Pathing: `src/sim/pathfinding.js` — `buildNavGrid`, `findRoute`, `findWalkerPath`, all pure. `src/sim/core.js` `seedRoute` seeds up to 4 alternates per spawn; `baseAttackSlots` assigns ring slots around the 3 × 3 base.
 - Placement: `validatePlacement` (`sim/structures.js`), `refreshHoverValidity` (`input/input.js`).
 - Unit origin: `createUnit(state, unitId, tier, pos, lane, side)` — no origin yet (T0b).
@@ -138,12 +142,12 @@ Unchanged: on cells the sim blocks, 3 rocks → rock; 4 trees → tree; 5 cliff 
 Lit 3D geometry, instanced per kind (wall, tower); cast and receive shadows. Placing or removing a structure re-renders the static shadow map once.
 
 ## 5. Shadows — one model (v2.0)
-- ONE three.js directional light = the sun (prototype: `sun.js` azimuth 135°, elevation 45°; final numbers per Q14).
+- ONE three.js directional light = the sun: `sun.js` azimuth 135°, elevation 45° — the standard (v2.2.2, Q14 resolved; T0 audit §3).
 - Lighting balance: ambient 0.6 + sun so a flat sunlit ground shows its baked colour exactly; ground in shadow is 0.6 of it.
 - STATIC shadows: one shadow map from every static caster, hard-edged (`BasicShadowMap`, matching the voxel look). `shadowMap.autoUpdate = false`: rendered once at load and again only when a structure changes. This is baked-equivalent cost (goal 7) with exact agreement between geometry and shadow. Always on, every tier; map size 4096 / 2048 / 1024 by tier.
 - (v2.2) LIVE shadows for 3D units: a planar projection of the unit's LOD instances along the sun onto Y = 0 (`w −= L · (w.y / L.y)`), black × alpha, stencil-once; exact silhouettes, no per-frame shadow map. Off on the Low tier (goal 20). The sprite-era bullet below applies only while the temporary sprite fallback exists (goal 26).
 - (sprite era) LIVE shadows: each unit part's baked shadow atlas laid flat on the ground (stretched by 1 / sin 37° along the view so it projects to the shape it was drawn as). Stencil-once so overlaps never double-darken. Off on the Low tier (goal 20).
-- Known gaps: units no longer darken inside tree shadows (the shadow map is not sampled by unit sprites); a unit sprite shadow can stack on top of a shadow-map shadow. Fix in T4: sample the shadow map in the sprite shader (one texture lookup per sprite).
+- Known gaps: units no longer darken inside tree shadows (the shadow map is not sampled by unit sprites); a unit sprite shadow can stack on top of a shadow-map shadow. Fix in T4: sample the shadow map in the sprite shader (one texture lookup per sprite). (v2.2.2: units are 3D, so T4 makes the unit material RECEIVE the static shadow map instead; the sprite fix is not built.)
 
 ## 6. Renderer (three.js)
 
@@ -253,19 +257,19 @@ Integration rules:
 ## 8. Plan — stories on epic `epic_mv77hbbc_1`
 Order follows the board's `depends_on`; the ids are the `[MM-<id>]` to stamp.
 
-| story | id | v2.2 state / what remains |
+| story | id | state (v2.2.2) / what remains |
 |---|---|---|
-| T0 Ground truth | `story_mv77hfa8_2` | reconcile the sun (Q14) — with 3D units only the decor packs still carry baked light; confirm `bakedBlocking` feeds renderer + roads; water passability for W |
-| T0b Unit origin in the sim | `story_mv7axdnv_f` | not started; needed by T3b path lines |
+| T0 Ground truth | `story_mv77hfa8_2` | (v2.2.2) audited 2026-10-14: `docs/dev/Terrain-3D-Ground-Truth.md` |
+| T0b Unit origin in the sim | `story_mv7axdnv_f` | not started; needed by T3b path lines. (v2.2.2) There is no authored spawn id: origin is DEFINED as `{ wave, lane, point }` (T0 audit §9) |
 | T1 Spike | `story_mv77himr_3` | prototype done (tools now in the repo); remaining: iPhone 12 / Pixel 6 / desktop GPU fps, frame time, memory per tier, with 400 3D units (LOD) and the FX demo; owner go/no-go |
 | T2 Ground plane | `story_mv77hmbe_4` | prototyped; the port is `ground/baked.js` |
 | T2b Worn roads | `story_mv79mfwu_c` | prototyped in `bake3d.mjs`; the bake still has to move into the Terrain Forge "Bake level" (T6) |
-| **T3a Land tools + baked level** | `story_mv87jtfa_3` | **done 2026-10-14** — tools, `content/maps/baked/powder-map-1/`, root dev deps |
-| **TP This plan, v2.2** | `story_mv87juej_4` | this document |
-| T3 Renderer port behind `?renderer=three` | `story_mv77hppn_5` | facade + camera + lighting + baked ground first (§6.12), then units, overlays, placement; DoD amended 2026-10-14: 3D units, not sprites |
+| **T3a Land tools + baked level** | `story_mv87jtfa_3` | **deployed 2026-10-14** (PR #28) — tools, `content/maps/baked/powder-map-1/`, root dev deps |
+| **TP This plan** | `story_mv87juej_4` | **deployed 2026-10-14** (PR #28); revised since by T0 |
+| T3 Renderer port behind `?renderer=three` | `story_mv77hppn_5` | in progress — T3.1 skeleton `task_mv883c5d_b` **deployed** (PR #28); remaining: placement under the 3D view, overlays, tiers; DoD amended 2026-10-14: 3D units, not sprites |
 | T3b Expected-path overlay | `story_mv79mi1o_d` | prototyped; needs T0b |
-| T4 Obstructions + shadows | `story_mv77hsxk_6` | prototyped (voxel + low-poly, static shadow map, planar unit shadows) |
-| T5 Unit render tech — 3D models | `story_mv77hv5d_7` | **decided 2026-10-14: 3D part-list models**; port `units/models3d.js` + LOD + planar shadows; model-key mapping table for the full roster |
+| T4 Obstructions + shadows | `story_mv77hsxk_6` | prototyped; (v2.2.2) scope amended by T0: plateaus / rocks / trees as real 3D from forge data, 3D units receive the static shadow map, low-poly look by default; devices → T1, palettes → LP |
+| T5 Unit render tech — 3D models | `story_mv77hv5d_7` | **deployed 2026-10-14** (PR #29): 3D part-list models, LOD + planar shadows, model-key table (7 stand-in classes listed) |
 | UMP Unit model pipeline in the Stack Forge | `story_mv87jypv_8` | models as `content/units/model/*.model.json`; one shared `prims.js`; author / preview / LOD flags in the forge |
 | MAT Metal unit material | `story_mv87jwol_6` | §6.11; UMETAL as data beside the model JSON |
 | FX World-impact effects | `story_mv87jvnb_5` | §6.10 — consumes the EXISTING `damage` / `kill` events (§0.4.6); a sim change only if the derivation fails; Low-tier caps; wreck eviction |
@@ -303,10 +307,9 @@ As v1.8, plus:
 As v1.8. View-DD (`docs/dev/View-DD.md`): camera section → a tilted 3D perspective camera at 37° over a flat play plane, real lit geometry, a static shadow map and (v2.2) 3D unit models with planar shadows — replacing the Pixi 2.5D painter's order, free player rotation and the shared Pixi projection. (v2.1) View-DD's effects section: world-impact effects and wrecks. Engine-DD (`docs/dev/Engine-DD.md`): (v2.2) the impact events already in the sim output (§0.4.6) become a documented renderer contract; unit fields gain a model key. The art-style rules and palettes live in `docs/dev/Neon-Voxel-Art-Style.md` (v1.3, now in the repo).
 
 ## 12. Owner questions
-Resolved: Q1–Q13 as listed in v1.8. (v2.2) Unit render tech: 3D models (**owner** 2026-10-14). (v2.2.1) Q18: sprites are a temporary fallback only; the goal is a complete conversion to 3D (**owner** 2026-10-14, goal 26).
+Resolved: Q1–Q13 as listed in v1.8. (v2.2) Unit render tech: 3D models (**owner** 2026-10-14). (v2.2.1) Q18: sprites are a temporary fallback only; the goal is a complete conversion to 3D (**owner** 2026-10-14, goal 26). (v2.2.2) Q14: the one sun is `sun.js` 135° / 45°; under goal 26 nothing needs a re-bake (T0 audit §3).
 Still open:
 - Q8b Off-route painted path cells: dirt clearings or grass?
-- Q14 Which single sun (azimuth, elevation) becomes the standard? With 3D units only the decor sprite packs still need a re-bake.
 - Q15 (v2.1) Effects on the Low tier: keep wrecks and turret blow-offs and thin the particles, or drop burning wrecks on phones?
 - Q16 (v2.1) Wreck lifetime (prototype: burn 7–10 s, sink 6 s later) and whether replays must show identical debris.
 - Q17 (v2.1) Metal per material only, or per faction / unit type (e.g. rusty raiders vs polished corp)?
@@ -317,6 +320,9 @@ Still open:
 - Changed: `prototype/test-game/src/main.js` (renderer selection under `?renderer=three`), `prototype/test-game/src/render/sun.js` (the single sun), `prototype/test-game/tools/voxel-stack/**` (UMP), `prototype/test-game/terrain.html` + `prototype/test-game/src/terrain/**` (T6 "Bake level", SUR), `prototype/test-game/src/sim/core.js` + `prototype/test-game/src/sim/waves.js` (T0b origin only).
 - Read, never changed by the renderer: `prototype/test-game/src/sim/pathfinding.js`, `prototype/test-game/src/sim/mapgen.js`, `prototype/test-game/src/sim/structures.js`, `prototype/test-game/src/sim/combat.js`, `prototype/test-game/src/terrain/terrainBake.js`.
 - Removed (T7): the Pixi path in `prototype/test-game/src/render/renderer.js`, `prototype/test-game/vendor/pixi.min.js`.
+
+## 14. Next: PLANETS (v2.2.2)
+**owner** 2026-10-14: "we now have assigned terrain and planets for each of the 9 existing factions. Planets will come immediately after the 3D refactor is complete." A separate epic, started when this one closes. What this plan hands it: the 3D renderer, the bake pipeline, and the requirement in §0.4.8 that every playable level be a Terrain Forge level with a committed bake. The owner's faction terrain and planet assignments are not yet in the repo or on the board; that material defines the epic.
 
 ## Dependencies
 | relation | plan | what it holds that this plan does not restate |
