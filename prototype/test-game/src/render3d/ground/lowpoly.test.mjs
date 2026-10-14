@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createCanvas, loadImage } from '@napi-rs/canvas';
+import zlib from 'node:zlib';
 
 import * as THREE from '../../../vendor/three.module.js';
 import { LOWPAL, WORLD_LIGHT, PALETTE_KEYS, DEFAULT_WORLD, resolveWorld } from '../styles/lowpoly-palettes.js';
@@ -20,11 +20,42 @@ const FORGE = JSON.parse(fs.readFileSync(path.join(GAME, 'content/maps/forge/pow
 const MAP = buildTerrainMap(FORGE, 1, { seed: 0, bakeTune: {} });   // exactly what main.js builds
 const BLOCKED = new Set(MAP.blockedCells.map((c) => c.y * MAP.cols + c.x));
 
+// CI runs bare node (no npm install), so decode the committed road mask with node:zlib only: an 8-bit,
+// non-interlaced RGBA / RGB / grey PNG — what bake3d.mjs writes.
+function decodePng(buf) {
+  let o = 8, W = 0, H = 0, type = 0;
+  const idat = [];
+  while (o < buf.length) {
+    const len = buf.readUInt32BE(o), kind = buf.toString('ascii', o + 4, o + 8), body = buf.subarray(o + 8, o + 8 + len);
+    if (kind === 'IHDR') {
+      W = body.readUInt32BE(0); H = body.readUInt32BE(4); type = body[9];
+      assert.equal(body[8], 8, 'road mask is 8-bit'); assert.equal(body[12], 0, 'road mask is not interlaced');
+    } else if (kind === 'IDAT') idat.push(body);
+    else if (kind === 'IEND') break;
+    o += 12 + len;
+  }
+  const bpp = { 0: 1, 2: 3, 4: 2, 6: 4 }[type], raw = zlib.inflateSync(Buffer.concat(idat)), stride = W * bpp;
+  const px = Buffer.alloc(H * stride);
+  for (let y = 0; y < H; y++) {
+    const f = raw[y * (stride + 1)], src = y * (stride + 1) + 1, row = y * stride;
+    for (let x = 0; x < stride; x++) {
+      const a = x >= bpp ? px[row + x - bpp] : 0, b = y ? px[row - stride + x] : 0, c = x >= bpp && y ? px[row - stride + x - bpp] : 0;
+      const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+      const pred = f === 1 ? a : f === 2 ? b : f === 3 ? (a + b) >> 1 : f === 4 ? (pa <= pb && pa <= pc ? a : pb <= pc ? b : c) : 0;
+      px[row + x] = (raw[src + x] + pred) & 255;
+    }
+  }
+  const data = new Uint8ClampedArray(W * H * 4);
+  for (let i = 0; i < W * H; i++) {
+    const s = i * bpp;
+    if (bpp >= 3) { data[i * 4] = px[s]; data[i * 4 + 1] = px[s + 1]; data[i * 4 + 2] = px[s + 2]; }
+    else data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = px[s];
+    data[i * 4 + 3] = bpp === 4 ? px[s + 3] : bpp === 2 ? px[s + 1] : 255;
+  }
+  return { width: W, height: H, data };
+}
 async function roadMask() {
-  const img = await loadImage(fs.readFileSync(path.join(GAME, 'content/maps/baked/powder-map-1/road_mask.png')));
-  const cv = createCanvas(img.width, img.height), ctx = cv.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-  return { width: img.width, height: img.height, data: ctx.getImageData(0, 0, img.width, img.height).data };
+  return decodePng(fs.readFileSync(path.join(GAME, 'content/maps/baked/powder-map-1/road_mask.png')));
 }
 const near = (a, b, eps = 1e-6) => a.every((v, i) => Math.abs(v - b[i]) < eps);
 
