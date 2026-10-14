@@ -50,6 +50,18 @@ function stagedGroundPos(map, ring, seq) {
   return p;
 }
 
+/**
+ * Which painted spawn point a wave unit came from (T0b [MM-story_mv7axdnv_f], T0 audit §9): the index into
+ * the wave's authored point list for its lane, exactly as spawnPointForLane cycles it (seq % length).
+ * null when the lane has no painted points (workbook campaign maps, classic board). Pure; reads the map only.
+ */
+export function spawnPointIndex(map, lane, waveNumber, seq) {
+  if (!map || !map.rings || !map.rings.length) return null;
+  const ring = map.rings[Math.max(1, Math.min(waveNumber || 1, map.rings.length)) - 1];
+  const list = ring && ring.spawnList && ring.spawnList[lane];
+  return list && list.length ? (seq | 0) % list.length : null;
+}
+
 function spawnPointForLane(map, lane, waveNumber, seq) {
   // CAMPAIGN maps (mapgen.js): spawns advance outward with the ring — each wave's points sit 2 tiles
   // outside that wave's playable edge on its focus side. Classic maps keep the fixed points.
@@ -263,11 +275,13 @@ export function stepWaves(state, dt) {
     const head = w.pendingSpawns[0];
     if (heldLanes[head.lane]) break;                    // keep in-lane order; other lanes drained already
     let headPos = spawnPointForLane(map, head.lane, w.current, head.seq | 0);
+    let headPoint = spawnPointIndex(map, head.lane, w.current, head.seq | 0);   // T0b origin.point
     // ground waves STAGE across the safe border (campaign maps): each unit gets its own spot in
     // the band, deterministic by seq — the column enters the map as a front, not a single file
     if (head.lane === 'ground' && map.rings && map.playArea) {
       const ring = map.rings[Math.max(1, Math.min(w.current, map.rings.length)) - 1];
-      headPos = stagedGroundPos(map, ring, head.seq | 0) || headPos;
+      const staged = stagedGroundPos(map, ring, head.seq | 0);
+      if (staged) { headPos = staged; headPoint = null; }   // staged spot is not a painted point
     }
     // ground only: water/air spawns spread laterally, so their base point being covered is normal
     if (head.lane === 'ground' && spawnBlocked(state, headPos, head.unitId)) {
@@ -333,6 +347,9 @@ export function stepWaves(state, dt) {
       spawn.lane,
       'attacker'
     );
+    // ORIGIN (T0b): which wave, lane and painted point this attacker came from. Output only — set after
+    // createUnit so no spawn-time logic can read it; path lines (T3b) key on it.
+    if (unit) unit.origin = { wave: w.current, lane: spawn.lane, point: headPoint };
     // Ensure the unit is registered in the sim (createUnit may or may not
     // insert; Map.set is idempotent either way).
     if (unit && state.units && !state.units.has(unit.id)) {
@@ -346,6 +363,7 @@ export function stepWaves(state, dt) {
       lane: spawn.lane,
       wave: w.current,
       pos: { x: pos.x, y: pos.y },
+      origin: unit ? unit.origin : null,   // T0b: { wave, lane, point } — the key path lines group by
     });
   }
 
