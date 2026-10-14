@@ -69,6 +69,31 @@ export function boot(mountEl, seed) {
   canvas.style.height = 'auto';
   mountEl.appendChild(canvas);
 
+  // ?renderer=three — the three.js battle view (plan v2.2 §6.12, T3.1 skeleton [MM-task_mv883c5d_b]).
+  // OPT-IN: without the flag nothing below runs and neither render3d/ nor three.js is ever fetched. With
+  // it, the 3D view covers the board and the Pixi canvas stays mounted but hidden — the HUD, sim and
+  // input wiring are untouched. Placement under the 3D view is a later T3 task.
+  const USE_3D = (() => { try { return new URLSearchParams(window.location.search).get('renderer') === 'three'; } catch (e) { return false; } })();
+  let renderer3d = null;
+  let render3dMod = null;
+  let mount3dSeq = 0;
+  if (USE_3D) canvas.style.visibility = 'hidden';
+  async function mount3D(map, slug) {
+    const mySeq = ++mount3dSeq;
+    try {
+      render3dMod = render3dMod || await import('./render3d/index.js');
+      if (mySeq !== mount3dSeq) return;
+      if (renderer3d) { render3dMod.destroyRenderer(renderer3d); renderer3d = null; }
+      const r = await render3dMod.createRenderer3D(mountEl, map, { slug });
+      if (mySeq !== mount3dSeq) { render3dMod.destroyRenderer(r); return; }
+      renderer3d = r;
+      console.log('[render3d]', r.status, slug || '(no baked level)', r.problems.join('; '));
+    } catch (e) {
+      console.error('[render3d] failed to start', e);
+      flashMessage(hud, `3D view failed to start — ${(e && e.message) || e}`);
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Session state (sim + log + ui). Re-created on restart / replay.
   // ---------------------------------------------------------------------
@@ -269,7 +294,7 @@ export function boot(mountEl, seed) {
   async function selectMap(mapId) {
     const mySeq = ++mapSelectSeq;
     const id = mapId | 0;
-    let nextMap, nextWaves;
+    let nextMap, nextWaves, nextSlug = null;   // nextSlug: the baked 3D level for a forge map (?renderer=three)
     try {
       if (!id) {
         nextMap = MAP;
@@ -288,6 +313,7 @@ export function boot(mountEl, seed) {
           let bakeTune = {};
           try { const t = JSON.parse(localStorage.getItem('tf.bake.v1')); if (t && typeof t === 'object') bakeTune = t; } catch (_) { /* default tune */ }
           m = buildTerrainMap(forge, id, { seed: 0, bakeTune });
+          nextSlug = `${forgeFileSlug(forgeSlotFaction(currentTestFaction || DEFAULT_FACTION))}-map-${id}`;
         } else {
           let overrides = null;
           try {
@@ -325,6 +351,7 @@ export function boot(mountEl, seed) {
     if (art) renderer.unitArt = art;
     if (vox) renderer.voxelArt = vox;
     if (dec) renderer.decorArt = dec;
+    if (USE_3D) void mount3D(currentMap, nextSlug);
     restart(currentSeed);
     flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
 
@@ -838,6 +865,7 @@ export function boot(mountEl, seed) {
     // harvester/base interaction hints (owner): input sets ui.pendingHint, we flash it once
     if (ui && ui.pendingHint) { flashMessage(hud, ui.pendingHint.text); ui.pendingHint = null; }
     renderFrame(renderer, sim, ui, pendingEvents, dtMs / 1000);   // pass REAL frame time so FX track sim time
+    if (renderer3d) render3dMod.renderFrame(renderer3d, sim, ui, pendingEvents, dtMs / 1000);
     updateHud(hud, sim, ui);
     pendingEvents = [];
   });

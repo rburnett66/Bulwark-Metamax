@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#fff">
+<script src="../../../../../node_modules/three/build/three.min.js"></script><script src="prims.js"></script><script src="models.js"></script>
+<script>
+const MATC = { hull: 0xc4c8cd, hull2: 0xa6acb3, panel: 0xadb3ba, dark: 0x4a4f56, black: 0x22252a, track: 0x2e3135, metal: 0x7b828a, glass: 0x1c2533, glow: 0x46f2ff, glowB: 0x4aa8ff, amber: 0xffb340 };
+const cache = {};
+function mats(k) { if (cache[k]) return cache[k]; const glow = /^glow|amber/.test(k);
+  return cache[k] = glow ? new THREE.MeshBasicMaterial({ color: MATC[k] }) : new THREE.MeshLambertMaterial({ color: MATC[k] ?? 0xff00ff }); }
+window.renderViews = function (unit, sizes) {
+  const def = UNIT_MODELS[unit]; const out = {};
+  const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setClearColor(0xffffff, 1);
+  const scene = new THREE.Scene(); scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+  const L = new THREE.DirectionalLight(0xffffff, 0.6); scene.add(L);
+  const { group } = Prims.buildModel(def, mats); scene.add(group); group.updateMatrixWorld(true);
+  const V = def.views;
+  const conf = {
+    front: { dir: [1, 0, 0], up: [0, 1, 0] }, rear: { dir: [-1, 0, 0], up: [0, 1, 0] },
+    side: { dir: V.side === 'right' ? [0, 0, 1] : [0, 0, -1], up: [0, 1, 0] },
+    top: { dir: [0, 1, 0], up: V.top === 'down' ? [-1, 0, 0] : V.top === 'up' ? [1, 0, 0] : [0, 0, -1] },
+  };
+  for (const [name, [w, h]] of Object.entries(sizes)) {
+    const c = conf[name]; const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -50, 50);
+    cam.position.set(...c.dir).multiplyScalar(10); cam.up.set(...c.up); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(); 
+    L.position.copy(cam.position).add(new THREE.Vector3(0, 6, 0)).add(new THREE.Vector3(-3, 0, -3));
+    const inv = cam.matrixWorldInverse, v = new THREE.Vector3(); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    group.traverse((o) => { if (!o.isMesh) return; const p = o.geometry.attributes.position; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld).applyMatrix4(inv); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); } });
+    let bw = x1 - x0, bh = y1 - y0; const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const asp = w / h; if (bw / bh > asp) bh = bw / asp; else bw = bh * asp;
+    Object.assign(cam, { left: cx - bw / 2, right: cx + bw / 2, top: cy + bh / 2, bottom: cy - bh / 2 }); cam.updateProjectionMatrix();
+    r.setSize(w, h); r.render(scene, cam); out[name] = { png: r.domElement.toDataURL('image/png'), aspect: (x1 - x0) / (y1 - y0) };
+  }
+  return out;
+};
+window.ready = true;
+</script></body></html>
