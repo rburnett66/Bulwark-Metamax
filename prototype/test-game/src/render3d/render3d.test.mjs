@@ -10,7 +10,7 @@ import path from 'node:path';
 import { CAMERA, cellToWorld, worldToCell, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, rayToGround } from './camera.js';
 import { AMBIENT, sunDirection, sunIntensity } from './lighting.js';
 import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
-import { createHeadingTracker } from './heading.js';
+import { createHeadingTracker, angleDelta, turnToward, HULL_TURN, TURRET_TURN } from './heading.js';
 import { SUN } from '../render/sun.js';
 import { buildTerrainMap } from '../sim/mapgen.js';
 
@@ -117,10 +117,39 @@ test('heading follows motion (atan2(dy, dx)), holds still when parked, forgets d
   assert.ok(close(h.update(1, 1, 1), Math.PI / 2));          // south (+y)
   assert.ok(close(h.update(1, 1, 1), Math.PI / 2), 'no motion → keeps the last heading');
   assert.ok(close(h.update(1, 1 + 1e-6, 1), Math.PI / 2), 'sub-threshold jitter is ignored');
+  for (let i = 0; i < 20; i++) h.update(1, 1 + (i % 2 ? 0.15 : 0), 1 + (i % 2 ? -0.12 : 0));   // a sim flip-flop (0.15 cells / tick)
+  assert.ok(close(h.update(1, 1, 1), Math.PI / 2), 'shuffling in place never turns the unit');
+  for (let i = 1; i <= 8; i++) h.update(1, 1 + Math.ceil(i / 2) * 0.1, 1 + Math.floor(i / 2) * 0.1);   // grid stair-steps east/south
+  assert.ok(Math.abs(h.update(1, 1.4, 1.4) - Math.PI / 4) < 0.5, 'stair-steps read as the diagonal, not 0° / 90° flips');
   h.update(2, 5, 5);
   h.sweep(new Set([2]));
   assert.equal(h.size, 1);
   assert.equal(h.update(1, 9, 9, 0.25), 0.25, 'a forgotten id starts fresh');
+});
+
+test('SMOOTH TURNING: hull + turret ease toward their goals at a capped rate, the shortest way round', () => {
+  const deg = (d) => (d * Math.PI) / 180;
+  assert.ok(close(angleDelta(deg(170), deg(-170)), deg(20)), 'across ±180° the short way');
+  assert.ok(close(angleDelta(deg(-170), deg(170)), deg(-20)));
+  assert.ok(close(turnToward(0, deg(90), deg(30)), deg(30)), 'capped');
+  assert.equal(turnToward(0, deg(10), deg(30)), deg(10), 'arrives exactly, no overshoot');
+
+  const h = createHeadingTracker(), dt = 1 / 60;
+  h.update(1, 0, 0);
+  h.update(1, 1, 0);                                         // first real direction: east
+  let v = h.turn(1, 0, 0, dt);
+  assert.equal(v.heading, 0, 'the first heading snaps — no spin on spawn');
+  h.update(1, 1, 1);                                         // path corner: goal jumps to south (+90°)
+  v = h.turn(1, Math.PI / 2, Math.PI, dt);                   // and the target switches to due west
+  assert.ok(close(v.heading, HULL_TURN * dt), `hull turned one frame's worth: ${v.heading}`);
+  assert.ok(close(Math.abs(v.aim), TURRET_TURN * dt), 'turret slews independently, at its own rate');
+  for (let i = 0; i < 60; i++) v = h.turn(1, Math.PI / 2, Math.PI, dt);
+  assert.ok(close(v.heading, Math.PI / 2) && close(Math.abs(angleDelta(v.aim, Math.PI)), 0), 'both arrive within a second');
+  let prev = v.heading, maxStep = 0;
+  for (let i = 0; i < 90; i++) { v = h.turn(1, -Math.PI / 2, -Math.PI / 2, dt); maxStep = Math.max(maxStep, Math.abs(angleDelta(prev, v.heading))); prev = v.heading; }
+  assert.ok(maxStep <= HULL_TURN * dt + 1e-12, `no frame turns more than the cap (max ${maxStep})`);
+  assert.deepEqual(h.turn(1, 1, 2), { heading: 1, aim: 2 }, 'no dt → snap (single frames, tests)');
+  assert.deepEqual(h.turn(99, 1, 2, dt), { heading: 1, aim: 2 }, 'unknown id → goals as given');
 });
 
 // ── the default path stays untouched ─────────────────────────────────────────────────────────────
