@@ -5,6 +5,8 @@
  * with a static shadow map; base + structures as placeholder primitives (markers.js) until T4 / LPS.
  * T5 [MM-story_mv77hv5d_7]: units are the 3D part-list models (units/models3d.js) with LOD + planar
  * shadows, chosen per sim unit by units/modelKeys.js. Later T3 tasks add placement, overlays and FX.
+ * T4 [MM-story_mv77hsxk_6]: plateaus, rocks and trees as low-poly 3D geometry from the SIM's map
+ * (obstructions/), casting into the static shadow map; units receive it.
  *
  * READ-ONLY: it reads the sim state handed to renderFrame and never writes to it.
  * The default game never loads this module or three.js — main.js imports it dynamically under the flag.
@@ -21,6 +23,7 @@ import { createHeadingTracker } from './heading.js';
 import { buildBakedGround } from './ground/baked.js';
 import { createMarkers } from './markers.js';
 import { createUnits3D } from './units/models3d.js';
+import { buildLowPolyObstructions } from './obstructions/lowpoly.js';
 import { buildUnitViews, createModelResolver } from './units/unitViews.js';
 
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
@@ -96,9 +99,14 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const markers = createMarkers(THREE, scene);
   const units3d = createUnits3D(THREE, scene, { sunDir: lights.dir });
   markers.setBase(map.base);
+  // Obstructions come from the sim's own map (terrain codes + bakedBlocking + authored decor), not from the
+  // baked level — so they match what the units actually path around. Workbook maps have no terrain codes
+  // (T0 audit §11) and get none.
+  const obstructions = map.terrain ? buildLowPolyObstructions(THREE, map) : null;
+  if (obstructions) scene.add(obstructions.group);
 
   const r = {
-    THREE, renderer, scene, camera, lights, markers, units3d, host, banner, map,
+    THREE, renderer, scene, camera, lights, markers, units3d, obstructions, host, banner, map,
     cam: createCameraState(map),
     headings: createHeadingTracker(),
     resolveModel: createModelResolver(),
