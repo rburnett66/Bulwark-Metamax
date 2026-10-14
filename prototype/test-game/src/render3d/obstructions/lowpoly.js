@@ -4,19 +4,16 @@
  *
  * Turns placement.js's plan into TWO merged, vertex-coloured, flat-shaded meshes — all rocks (plateau boulder
  * piles, boulders, stones) and all trees — one draw call each. Both cast into and receive the static shadow
- * map. Colours come from a world palette; MEADOW is the default. The full palette set (11 worlds) and the
- * low-poly ground are story LP [MM-story_mv87jxp2_7]; the off-map world is SUR [MM-story_mv87k0nt_a].
+ * map. Colours come from a world palette (styles/lowpoly-palettes.js, LP); MEADOW is the default. The off-map
+ * world is SUR [MM-story_mv87k0nt_a].
  *
  * THREE is injected (no import) — see render3d/index.js.
  */
 import { planObstructions, rng } from './placement.js';
+import { LOWPAL } from '../styles/lowpoly-palettes.js';
 
-/** The prototype's Meadow palette — the subset obstructions use. LP will hold all eleven. */
-export const MEADOW = Object.freeze({
-  rock: ['#7f83d8', '#8a8ae2', '#7479cc', '#9194e6'], rockB: '#a3a6cf', pebble: '#b2b4d8',
-  canopy: ['#e07a62', '#e8906e', '#d96b5c', '#eea07c', '#e07a62'], rare: '#d8e0ea',
-  pine: ['#3f9a8a', '#2f8a7c', '#4fae94', '#3a8f78'], trunk: '#3b4fc4',
-});
+/** The default world palette (all eleven live in styles/lowpoly-palettes.js — LP [MM-story_mv87jxp2_7]). */
+export const MEADOW = LOWPAL.meadow;
 
 /** Faceted rock: an icosphere with hashed per-vertex displacement (shared vertices move together). */
 function blob(THREE, detail, seed, amt) {

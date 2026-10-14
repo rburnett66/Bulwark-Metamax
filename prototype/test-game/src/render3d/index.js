@@ -9,12 +9,16 @@
  * (obstructions/), casting into the static shadow map; units receive it.
  * T3b [MM-story_mv79mi1o_d]: expected-path lines from each live wave origin's spawn point to the base, on the
  * sim's own nav grid (overlays/).
+ * LP [MM-story_mv87jxp2_7]: the low-poly organic ground (ground/lowpoly.js) is the default ground; a world
+ * palette + its lighting (styles/lowpoly-palettes.js) recolours ground, tufts, rocks and trees. World: ?world=
+ * (preview) → the map's `world` → Meadow. ?ground=baked keeps the previous baked-texture ground.
  *
  * READ-ONLY: it reads the sim state handed to renderFrame and never writes to it.
  * The default game never loads this module or three.js — main.js imports it dynamically under the flag.
  *
  * Surface (mirrors the Pixi renderer's, so main.js can swap it):
- *   const r = await createRenderer3D(mountEl, map, { slug, baseUrl })
+ *   const r = await createRenderer3D(mountEl, map, { slug, baseUrl, world, ground })
+ *   setWorld(r, key)     — rebuild ground + obstructions in another world palette (same geometry)
  *   renderFrame(r, state, ui, events, dt)
  *   destroyRenderer(r)
  */
@@ -23,6 +27,8 @@ import { createLights } from './lighting.js';
 import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
 import { createHeadingTracker } from './heading.js';
 import { buildBakedGround } from './ground/baked.js';
+import { buildLowPolyGround } from './ground/lowpoly.js';
+import { LOWPAL, WORLD_LIGHT, resolveWorld } from './styles/lowpoly-palettes.js';
 import { createMarkers } from './markers.js';
 import { createUnits3D } from './units/models3d.js';
 import { buildLowPolyObstructions } from './obstructions/lowpoly.js';
@@ -103,16 +109,11 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const markers = createMarkers(THREE, scene);
   const units3d = createUnits3D(THREE, scene, { sunDir: lights.dir });
   markers.setBase(map.base);
-  // Obstructions come from the sim's own map (terrain codes + bakedBlocking + authored decor), not from the
-  // baked level — so they match what the units actually path around. Workbook maps have no terrain codes
-  // (T0 audit §11) and get none.
-  const obstructions = map.terrain ? buildLowPolyObstructions(THREE, map) : null;
-  if (obstructions) scene.add(obstructions.group);
   const pathLines = createPathLines();
   const pathLinesView = createPathLinesView(THREE, scene);
 
   const r = {
-    THREE, renderer, scene, camera, lights, markers, units3d, obstructions, pathLines, pathLinesView, host, banner, map,
+    THREE, renderer, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, host, banner, map,
     clock: 0,
     cam: createCameraState(map),
     headings: createHeadingTracker(),
@@ -122,10 +123,15 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     problems: [],
     stats: { calls: 0, triangles: 0, units: 0, lines: 0 },
     destroyed: false,
+    world: null,
+    lowpoly: opts.ground !== 'baked' && !!map.terrain,   // workbook maps have no terrain codes (T0 audit §11)
+    roadMask: null,
   };
   attachCameraInput(canvas, r);
 
-  // The baked ground: content/maps/baked/<slug>/. Missing or stale → say so on screen.
+  // The baked level: content/maps/baked/<slug>/ — checked against the sim's map; its road mask paints the
+  // low-poly roads; its tiles are the ground only under ?ground=baked. Missing or stale → say so on screen.
+  let level = null;
   if (!slug) {
     r.status = 'no-level';
     banner.show('3D view: this map has no baked level (only Terrain Forge maps are baked) — run tools/terrain3d-proto/bake3d.mjs');
@@ -134,11 +140,17 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     try {
       const res = await fetch(dir + 'level.json');
       if (!res.ok) throw new Error(`no baked level at ${dir} (HTTP ${res.status})`);
-      const level = await res.json();
+      level = await res.json();
       const check = checkLevelAgainstMap(level, map);
       r.problems = check.problems;
       if (r.destroyed) return r;
-      scene.add(await buildBakedGround(THREE, renderer, dir, level));
+      if (r.lowpoly) {
+        r.roadMask = await loadRoadMask(dir + 'road_mask.png').catch((e) => { console.warn('[render3d] no road mask:', e.message); return null; });
+      } else {
+        r.ground = { group: await buildBakedGround(THREE, renderer, dir, level) };
+        scene.add(r.ground.group);
+      }
+      if (r.destroyed) return r;
       lights.invalidateShadows();
       r.status = check.ok ? 'ready' : 'stale';
       if (!check.ok) banner.show(`3D view: baked level ${slug} does not match this map — ${check.problems.join('; ')}`);
@@ -149,7 +161,52 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
       console.error('[render3d]', e);
     }
   }
+  // Obstructions (and the low-poly ground) come from the sim's own map (terrain codes + bakedBlocking +
+  // authored decor), not from the baked level — so they match what the units actually path around.
+  setWorld(r, opts.world || map.world || (level && level.world));
   return r;
+}
+
+/** Decode the level's road mask PNG into { width, height, data } (RGBA bytes). */
+async function loadRoadMask(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  const bmp = await createImageBitmap(await res.blob());
+  const cv = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(bmp.width, bmp.height) : Object.assign(document.createElement('canvas'), { width: bmp.width, height: bmp.height });
+  const ctx = cv.getContext('2d');
+  ctx.drawImage(bmp, 0, 0);
+  const { data } = ctx.getImageData(0, 0, bmp.width, bmp.height);
+  if (bmp.close) bmp.close();
+  return { width: bmp.width, height: bmp.height, data };
+}
+
+function disposeGroup(scene, group) {
+  if (!group) return;
+  scene.remove(group);
+  group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+}
+
+/**
+ * Switch the world palette: rebuilds the low-poly ground and the obstructions in `key`'s colours (same
+ * seed → same geometry) and applies its lighting. Unknown keys fall back to Meadow. Returns the key used.
+ */
+export function setWorld(r, key) {
+  if (!r || r.destroyed) return null;
+  const { THREE, scene, map } = r;
+  const world = resolveWorld(key);
+  const palette = LOWPAL[world];
+  if (r.obstructions) disposeGroup(scene, r.obstructions.group);
+  r.obstructions = map.terrain ? buildLowPolyObstructions(THREE, map, palette) : null;
+  if (r.obstructions) scene.add(r.obstructions.group);
+  if (r.lowpoly) {
+    if (r.ground) disposeGroup(scene, r.ground.group);
+    r.ground = buildLowPolyGround(THREE, map, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron });
+    scene.add(r.ground.group);
+    r.lights.setWorld(WORLD_LIGHT[world]);
+  }
+  r.world = world;
+  r.lights.invalidateShadows();
+  return world;
 }
 
 function resize(r) {
