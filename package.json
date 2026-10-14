@@ -1,0 +1,9 @@
+{
+  "name": "bulwark-metamax-tools",
+  "private": true,
+  "description": "Dev-only dependencies for the offline tools (3D terrain bake, prototype build, unit-model viewer). The game itself has no build step and ships none of these.",
+  "devDependencies": {
+    "@napi-rs/canvas": "0.1.100",
+    "three": "0.128.0"
+  }
+}

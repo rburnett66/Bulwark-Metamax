@@ -7,3 +7,13 @@ __pycache__/
 # serve_prototype.py's recovery copies: /__ship keeps the previous version of every file it writes,
 # and /__unship moves a removed file here instead of unlinking it. They are local undo, never content.
 *.bak
+
+# Dev-only tool dependencies (root package.json). The game has no build step and ships none of this.
+node_modules/
+# 3D terrain prototype + unit-model tools: built pages and screenshots are reproducible, never content.
+# What the renderer loads is baked to prototype/test-game/content/maps/baked/ and IS committed.
+prototype/test-game/tools/terrain3d-proto/dist/
+prototype/test-game/tools/terrain3d-proto/out3d/
+prototype/test-game/tools/unit-models/dist/
+prototype/test-game/tools/unit-models/shot_*.png
+prototype/test-game/tools/unit-models/cmp_*.png

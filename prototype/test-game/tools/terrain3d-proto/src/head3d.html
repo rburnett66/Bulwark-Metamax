@@ -1,0 +1,146 @@
+<title>Bulwark Terrain Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: full-bleed 3D battle viewport; instrument HUD top-left, battle controls docked bottom.
+   Single dark look on purpose — it is a game view, judged against the game's own art. */
+:root {
+  --bg: #0f1412;          /* behind the map */
+  --panel: rgba(16, 22, 20, 0.86);
+  --panel-line: rgba(196, 214, 190, 0.16);
+  --fg: #e6ebe3;
+  --muted: #9aa69a;
+  --accent: #6fd3c8;      /* path-line family hue: the one bright note in the chrome */
+  --good: #7fd36f;
+  --bad: #f07a5f;
+  --gold: #e3b94e;        /* economy gold — reserved, path lines never use it */
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--fg); overflow: hidden; font-family: var(--font-display); }
+#stage { position: fixed; inset: 0; touch-action: none; }
+#stage canvas { display: block; width: 100%; height: 100%; }
+.hud {
+  position: fixed; left: 12px; top: calc(12px + env(safe-area-inset-top, 0px));
+  background: var(--panel); border: 1px solid var(--panel-line); border-radius: 6px;
+  padding: 10px 12px; min-width: 0; max-width: min(320px, calc(100vw - 24px));
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.hud h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: 0.02em; text-wrap: balance; }
+.hud .sub { margin: 2px 0 8px; color: var(--muted); font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; }
+.stats { display: grid; grid-template-columns: auto auto; gap: 2px 14px; font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.stats dt { color: var(--muted); }
+.stats dd { margin: 0; text-align: right; }
+.stats dd.ok { color: var(--good); } .stats dd.warn { color: var(--gold); } .stats dd.bad { color: var(--bad); }
+.hud details { margin-top: 8px; border-top: 1px solid var(--panel-line); padding-top: 6px; }
+.hud summary { cursor: pointer; color: var(--muted); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 14px; }
+.row label { display: flex; gap: 6px; align-items: center; }
+select, button {
+  font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: 0.03em;
+  color: var(--fg); background: rgba(255,255,255,0.06); border: 1px solid var(--panel-line);
+  border-radius: 4px; padding: 6px 10px; cursor: pointer; min-height: 34px;
+}
+button:hover, select:hover { background: rgba(255,255,255,0.12); }
+button:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[aria-pressed="true"] { background: rgba(111, 211, 200, 0.22); border-color: var(--accent); }
+.dock {
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.dock > .group {
+  pointer-events: auto; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  background: var(--panel); border: 1px solid var(--panel-line); border-radius: 6px; padding: 6px 8px;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.group .lbl { color: var(--muted); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 4px; }
+.gold { font-family: var(--font-mono); color: var(--gold); font-variant-numeric: tabular-nums; font-size: 14px; padding: 0 4px; }
+#toast {
+  position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  background: var(--panel); border: 1px solid var(--bad); color: var(--fg); border-radius: 6px;
+  padding: 8px 14px; font-size: 16px; font-weight: 600; letter-spacing: 0.02em; max-width: calc(100vw - 32px); text-align: center;
+}
+#loading { position: fixed; inset: 0; display: grid; place-items: center; font-size: 20px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.note { color: var(--muted); font-size: 13px; line-height: 1.35; margin-top: 6px; max-width: 34ch; }
+@media (max-width: 560px) {
+  .hud { padding: 8px 10px; }
+  .hud h1 { font-size: 16px; }
+  .hud .sub { display: none; }
+  .stats { font-size: 11px; }
+  .stats .opt, .stats [data-opt] { display: none; }
+  .hud details { display: none; }
+  .group .lbl { display: none; }
+  .dock { gap: 6px; left: 8px; right: 8px; }
+  .dock > .group { padding: 4px 6px; gap: 4px; }
+  select, button { font-size: 14px; padding: 5px 8px; min-height: 32px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div id="stage" aria-label="Battle view"></div>
+<div id="loading">Loading terrain…</div>
+
+<section class="hud" aria-label="Engine stats">
+  <h1>Bulwark Terrain Engine</h1>
+  <p class="sub">three.js · real 3D · powder map 1</p>
+  <dl class="stats">
+    <dt>Frame</dt><dd id="sFps">–</dd>
+    <dt class="opt">Render</dt><dd data-opt id="sMs">–</dd>
+    <dt>Draw calls</dt><dd id="sCalls">–</dd>
+    <dt class="opt">Triangles</dt><dd data-opt id="sTris">–</dd>
+    <dt>Units</dt><dd id="sUnits">0</dd>
+    <dt class="opt">Projectiles</dt><dd data-opt id="sProj">0</dd>
+    <dt>Path lines</dt><dd id="sLines">0</dd>
+    <dt>Tier</dt><dd id="sTier">–</dd>
+    <dt>Phase</dt><dd id="sPhase">–</dd>
+    <dt>Style</dt><dd id="sStyle">–</dd>
+    <dt>Units as</dt><dd id="sUnitMode">3D models</dd>
+  </dl>
+  <details id="opts">
+    <summary>Quality</summary>
+    <div class="row">
+      <label for="tierSel">Tier</label>
+      <select id="tierSel">
+        <option value="auto">Auto</option>
+        <option value="high">High</option>
+        <option value="standard">Standard</option>
+        <option value="low">Low</option>
+      </select>
+    </div>
+    <div class="row"><label><input type="checkbox" id="liveShadows" checked> Live shadows</label></div>
+    <div class="row"><label><input type="checkbox" id="bloomChk" checked> Bloom (glow pass)</label></div>
+    <div class="row"><label><input type="checkbox" id="metalChk" checked> Metal units</label></div>
+    <p class="note">Styles: Neon voxel, Synthwave dusk, Ember and Hologram are presets of one shader (data only). Neon voxel: dark block faces, glowing block edges, a cell grid on the ground, glowing roads and water, outlined units, and a cheap glow pass (Low tier skips it). Daylight is the same scene lit by the sun. Lit 3D plateaus, rocks and trees under one light. Static shadows render once into a shadow map; unit shadows are live. Ground and roads are one baked image per level. Units are the real GND-Tanks sprite pack, facing the camera.</p>
+  </details>
+</section>
+
+<div class="dock">
+  <div class="group" role="group" aria-label="Waves">
+    <span class="lbl">Wave</span>
+    <select id="waveSel" aria-label="Wave"></select>
+    <button id="startWave" type="button">Start wave</button>
+    <button id="stress" type="button" title="150 units, 300 projectiles, 50 effects">Stress test</button>
+    <button id="maxUnits" type="button" title="Flood to the 400-unit cap">400 units</button>
+    <button id="detonate" type="button" title="Line up six units at the view centre, rake them with fire, then destroy them">FX demo</button>
+  </div>
+  <div class="group" role="group" aria-label="Build">
+    <span class="lbl">Build</span>
+    <button id="mWall" type="button" aria-pressed="false">Wall</button>
+    <button id="mTower" type="button" aria-pressed="false">Tower</button>
+    <button id="clearS" type="button">Clear</button>
+    <span class="gold" id="gold">300 g</span>
+  </div>
+  <div class="group" role="group" aria-label="View">
+    <select id="unitSel" aria-label="Unit rendering"><option value="3d">3D units · auto LOD</option><option value="3d-full">3D · full detail</option><option value="3d-lod">3D · LOD only</option><option value="sprite">Sprite units</option></select>
+    <select id="styleSel" aria-label="Art style"><optgroup label="Low-poly worlds"><option value="lowpoly">Meadow</option><option value="lp_autumn">Autumn</option><option value="lp_winter">Winter</option><option value="lp_canyon">Canyon</option><option value="lp_tropical">Tropical</option><option value="lp_sakura">Sakura</option><option value="lp_dusk">Dusk</option><option value="lp_volcanic">Volcanic</option><option value="lp_alien">Alien</option><option value="lp_highlands">Highlands</option><option value="lp_savanna">Savanna</option></optgroup><optgroup label="Voxel"><option value="neon">Neon voxel</option><option value="synth">Synthwave dusk</option><option value="ember">Ember</option><option value="holo">Hologram</option><option value="day">Daylight</option></optgroup></select>
+    <button id="fit" type="button">Fit wave</button>
+    <button id="orbit" type="button" aria-pressed="false" title="Camera rotation is only allowed outside the battle">Orbit</button>
+  </div>
+</div>
+<div id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
