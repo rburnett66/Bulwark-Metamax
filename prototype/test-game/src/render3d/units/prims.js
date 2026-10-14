@@ -1,8 +1,16 @@
+// src/render3d/units/prims.js — the part-list model builder (plan v2.2.1 §6.3; code design §6.1). ONE source:
+// the game imports it as an ES module; the offline tools (unit-models viewer/compare, terrain3d prototype)
+// inline it as a classic script via tools/unit-models/classic.mjs, which strips import/export.
+// THREE is injected (createPrims(THREE)) so nothing here imports three.js — node --test can load track() and
+// the model data without WebGL. [MM-story_mv77hv5d_7]
+//
 // Primitive model builder: a unit is a list of simple parts (box, cylinder, extruded profile, loft, ellipsoid),
 // each with a material key. Parts are merged per material into a few meshes (body + turret group), flat-shaded.
 // Axes: X forward (nose), Y up, Z right. 1 model unit ≈ 1/4 of the hull length (models are ~4 units long).
-(function (root) {
-  const D2R = Math.PI / 180;
+const D2R = Math.PI / 180;
+
+/** The THREE-dependent half: geometry for each primitive, and buildModel(def, mats). */
+export function createPrims(THREE) {
 
   function flat(g) {                       // non-indexed + per-face normals → faceted look
     const n = g.index ? g.toNonIndexed() : g;
@@ -128,30 +136,30 @@
     }
     return { group: root, groups, tris };
   }
+  return { buildModel, geomOf, track };
+}
 
-  // ── Helpers to author parts ─────────────────────────────────────────────────────────────────────────
-  // Track loop (side profile with a hole), road wheels, optional glowing hubs.
-  function track(o) {
-    const { x0, x1, h, z, w, t = 0.09, rr = h * 0.5, wheels = 6, wr = h * 0.33, wy = wr + 0.02, hub = 'metal', glowHub = false } = o;
-    const arc = (cx, cy, r, a0, a1, n) => { const out = []; for (let i = 0; i <= n; i++) { const a = (a0 + (a1 - a0) * i / n) * D2R; out.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } return out; };
-    const outer = [...arc(x1 - rr, rr, rr, -90, 90, 4), ...arc(x0 + rr, rr, rr, 90, 270, 4)];
-    const inner = [...arc(x1 - rr, rr, rr - t, -90, 90, 4), ...arc(x0 + rr, rr, rr - t, 90, 270, 4)];
-    const parts = [{ t: 'ext', ax: 'z', poly: outer, holes: [inner], d: [z - w / 2, z + w / 2], m: 'track', mir: o.mir !== false }];
-    // inner filler (dark) so the loop doesn't read hollow
-    parts.push({ t: 'ext', ax: 'z', poly: inner, d: [z - w / 2 + 0.06, z + w / 2 - 0.06], m: 'black', mir: o.mir !== false });
-    const span = (x1 - x0) - 2 * rr + 2 * wr * 0.9;
-    for (let i = 0; i < wheels; i++) {
-      const x = x0 + rr - wr * 0.9 + (wheels === 1 ? 0 : span * i / (wheels - 1)) + (o.wheelShift || 0);
-      parts.push({ t: 'cyl', ax: 'z', r: wr, l: w + 0.04, seg: 10, p: [x, wy, z], m: 'dark', mir: o.mir !== false });
-      parts.push({ t: 'cyl', ax: 'z', r: wr * 0.45, l: w + 0.08, seg: 8, p: [x, wy, z], m: glowHub ? 'glow' : hub, mir: o.mir !== false, d: glowHub ? 0 : 1 });
-    }
-    // sprocket + idler
-    parts.push({ t: 'cyl', ax: 'z', r: rr - t * 1.1, l: w + 0.03, seg: 12, p: [x0 + rr, rr, z], m: 'dark', mir: o.mir !== false });
-    parts.push({ t: 'cyl', ax: 'z', r: rr - t * 1.6, l: w + 0.03, seg: 10, p: [x1 - rr, rr, z], m: 'dark', mir: o.mir !== false });
-    // tread cleats on the bottom run
-    const nC = Math.round((x1 - x0) / 0.16);
-    for (let i = 0; i < nC; i++) parts.push({ t: 'box', s: [0.05, 0.03, w + 0.02], p: [x0 + rr * 0.6 + (x1 - x0 - rr * 1.2) * i / (nC - 1), 0.015, z], m: 'black', mir: o.mir !== false, d: 1 });   // d: detail — dropped by LOD
-    return parts;
+// ── Helpers to author parts ─────────────────────────────────────────────────────────────────────────
+// Track loop (side profile with a hole), road wheels, optional glowing hubs.
+export function track(o) {
+  const { x0, x1, h, z, w, t = 0.09, rr = h * 0.5, wheels = 6, wr = h * 0.33, wy = wr + 0.02, hub = 'metal', glowHub = false } = o;
+  const arc = (cx, cy, r, a0, a1, n) => { const out = []; for (let i = 0; i <= n; i++) { const a = (a0 + (a1 - a0) * i / n) * D2R; out.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } return out; };
+  const outer = [...arc(x1 - rr, rr, rr, -90, 90, 4), ...arc(x0 + rr, rr, rr, 90, 270, 4)];
+  const inner = [...arc(x1 - rr, rr, rr - t, -90, 90, 4), ...arc(x0 + rr, rr, rr - t, 90, 270, 4)];
+  const parts = [{ t: 'ext', ax: 'z', poly: outer, holes: [inner], d: [z - w / 2, z + w / 2], m: 'track', mir: o.mir !== false }];
+  // inner filler (dark) so the loop doesn't read hollow
+  parts.push({ t: 'ext', ax: 'z', poly: inner, d: [z - w / 2 + 0.06, z + w / 2 - 0.06], m: 'black', mir: o.mir !== false });
+  const span = (x1 - x0) - 2 * rr + 2 * wr * 0.9;
+  for (let i = 0; i < wheels; i++) {
+    const x = x0 + rr - wr * 0.9 + (wheels === 1 ? 0 : span * i / (wheels - 1)) + (o.wheelShift || 0);
+    parts.push({ t: 'cyl', ax: 'z', r: wr, l: w + 0.04, seg: 10, p: [x, wy, z], m: 'dark', mir: o.mir !== false });
+    parts.push({ t: 'cyl', ax: 'z', r: wr * 0.45, l: w + 0.08, seg: 8, p: [x, wy, z], m: glowHub ? 'glow' : hub, mir: o.mir !== false, d: glowHub ? 0 : 1 });
   }
-  root.Prims = { buildModel, track, geomOf };
-})(typeof window !== 'undefined' ? window : globalThis);
+  // sprocket + idler
+  parts.push({ t: 'cyl', ax: 'z', r: rr - t * 1.1, l: w + 0.03, seg: 12, p: [x0 + rr, rr, z], m: 'dark', mir: o.mir !== false });
+  parts.push({ t: 'cyl', ax: 'z', r: rr - t * 1.6, l: w + 0.03, seg: 10, p: [x1 - rr, rr, z], m: 'dark', mir: o.mir !== false });
+  // tread cleats on the bottom run
+  const nC = Math.round((x1 - x0) / 0.16);
+  for (let i = 0; i < nC; i++) parts.push({ t: 'box', s: [0.05, 0.03, w + 0.02], p: [x0 + rr * 0.6 + (x1 - x0 - rr * 1.2) * i / (nC - 1), 0.015, z], m: 'black', mir: o.mir !== false, d: 1 });   // d: detail — dropped by LOD
+  return parts;
+}

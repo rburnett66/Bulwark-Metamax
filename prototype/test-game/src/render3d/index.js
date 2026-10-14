@@ -2,8 +2,9 @@
  * src/render3d/index.js — the three.js battle view, behind ?renderer=three (plan v2.2 §6.12).
  *
  * T3.1 SKELETON [MM-task_mv883c5d_b]: baked ground, the battle camera (pan + zoom; yaw locked), one sun
- * with a static shadow map, and the live battle as placeholder primitives (markers.js). Later T3 tasks
- * add placement under this view, overlays and FX; T4 the obstructions; T5 the 3D unit models.
+ * with a static shadow map; base + structures as placeholder primitives (markers.js) until T4 / LPS.
+ * T5 [MM-story_mv77hv5d_7]: units are the 3D part-list models (units/models3d.js) with LOD + planar
+ * shadows, chosen per sim unit by units/modelKeys.js. Later T3 tasks add placement, overlays and FX.
  *
  * READ-ONLY: it reads the sim state handed to renderFrame and never writes to it.
  * The default game never loads this module or three.js — main.js imports it dynamically under the flag.
@@ -19,6 +20,8 @@ import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
 import { createHeadingTracker } from './heading.js';
 import { buildBakedGround } from './ground/baked.js';
 import { createMarkers } from './markers.js';
+import { createUnits3D } from './units/models3d.js';
+import { buildUnitViews, createModelResolver } from './units/unitViews.js';
 
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
 
@@ -91,12 +94,14 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const camera = new THREE.PerspectiveCamera(CAMERA.fovDeg, 1, CAMERA.near, CAMERA.far);
   const lights = createLights(THREE, renderer, scene, map.cols, map.rows, opts.shadowSize || 2048);
   const markers = createMarkers(THREE, scene);
+  const units3d = createUnits3D(THREE, scene, { sunDir: lights.dir });
   markers.setBase(map.base);
 
   const r = {
-    THREE, renderer, scene, camera, lights, markers, host, banner, map,
+    THREE, renderer, scene, camera, lights, markers, units3d, host, banner, map,
     cam: createCameraState(map),
     headings: createHeadingTracker(),
+    resolveModel: createModelResolver(),
     listeners: [],
     status: 'loading',
     problems: [],
@@ -156,17 +161,11 @@ export function renderFrame(r, state, ui, events, dt) {
     if (r.markers.setStructures(Array.from(state.structures.values()))) r.lights.invalidateShadows();
   }
 
-  // Live units (placeholder primitives until T5)
+  // Live units: the 3D models (T5). Live planar shadows on every tier for now; the tier table (quality.js)
+  // turns them off on Low when it lands.
   if (state && state.units) {
-    const live = new Set();
-    const list = [];
-    for (const u of state.units.values()) {
-      if (!u || !u.pos) continue;
-      live.add(u.id);
-      list.push({ x: u.pos.x, y: u.pos.y, side: u.side, heading: r.headings.update(u.id, u.pos.x, u.pos.y) });
-    }
-    r.headings.sweep(live);
-    r.stats.units = r.markers.setUnits(list);
+    const views = buildUnitViews(state, r.map, r.headings, r.resolveModel);
+    r.stats.units = r.units3d.setUnits(views, r.cam.dist, true);
   }
 
   r.renderer.info.reset();
@@ -181,6 +180,7 @@ export function destroyRenderer(r) {
   const canvas = r.renderer.domElement;
   for (const [type, fn, opts] of r.listeners) canvas.removeEventListener(type, fn, opts);
   r.markers.dispose();
+  r.units3d.dispose();
   r.scene.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }

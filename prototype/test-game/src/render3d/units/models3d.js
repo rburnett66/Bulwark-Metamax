@@ -1,0 +1,186 @@
+/**
+ * src/render3d/units/models3d.js — live 3D units (plan v2.2.1 §6.3; code design §4.11). [MM-story_mv77hv5d_7]
+ *
+ * Each model type is merged into ONE vertex-coloured geometry per group (body, turret) and drawn as an
+ * InstancedMesh — one draw call per type × group, whatever the count. Two variants per group: full detail and
+ * LOD (lod.js), sharing ONE instance-matrix buffer, so switching is a count change, not a rebuild. Glow parts
+ * are unlit through a per-vertex flag. Shadows: the LOD instances projected flat onto Y = 0 along the sun —
+ * exact silhouettes, stencil-once so overlaps never double-darken, no per-frame shadow-map pass.
+ *
+ * Material is a plain lit one here; the metal look is its own story (MAT, [MM-story_mv87jwol_6]) and will
+ * replace unitMaterial() without touching the geometry or the instancing.
+ *
+ * THREE is injected (no import) — see render3d/index.js.
+ */
+import { createPrims } from './prims.js';
+import { UNIT_MODELS } from './models.js';
+import { MODEL_KEYS, UNIT_SCALE } from './modelKeys.js';
+import { lodDef, LOD_DISTANCE } from './lod.js';
+
+/** Studio palette per material key (code design §4.11 UCOL). */
+export const UNIT_COLORS = Object.freeze({
+  hull: 0xc4c8cd, hull2: 0xa6acb3, panel: 0xadb3ba, dark: 0x4a4f56, black: 0x22252a, track: 0x2e3135,
+  metal: 0x7b828a, glass: 0x1c2533, glow: 0x46f2ff, glowB: 0x4aa8ff, amber: 0xffb340,
+});
+const isGlowKey = (k) => /^glow|amber/.test(k);
+const DEFAULT_CAP = 600;
+export const HOVER_HEIGHT = 1.1;   // cells — flyers fly at this height (code design §4.11)
+
+/**
+ * Merge a built model's groups into one geometry per group: { [group]: { geo, pivot, tris } }.
+ * Exported for tests (tri counts) — needs THREE but no WebGL.
+ */
+export function mergeModelGroups(THREE, def, prims = createPrims(THREE)) {
+  const dummy = new THREE.MeshBasicMaterial();
+  const built = prims.buildModel(def, () => dummy);
+  const out = {};
+  const c = new THREE.Color();
+  for (const [gname, G] of Object.entries(built.groups)) {
+    const pos = [], nor = [], col = [], emi = [];
+    for (const mesh of G.children) {
+      const k = mesh.userData.mat;
+      c.setHex(UNIT_COLORS[k] ?? 0xff00ff);   // magenta = a material key with no colour — visible on purpose
+      const e = isGlowKey(k) ? 1 : 0;
+      const P = mesh.geometry.attributes.position.array, N = mesh.geometry.attributes.normal.array;
+      for (let i = 0; i < P.length; i += 3) {
+        pos.push(P[i], P[i + 1], P[i + 2]); nor.push(N[i], N[i + 1], N[i + 2]);
+        col.push(c.r, c.g, c.b); emi.push(e);
+      }
+      mesh.geometry.dispose();
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.setAttribute('aEmit', new THREE.Float32BufferAttribute(emi, 1));
+    const piv = (def.pivots && def.pivots[gname]) || [0, 0, 0];
+    out[gname] = { geo, pivot: new THREE.Vector3(piv[0], piv[1], piv[2]), tris: pos.length / 9 };
+  }
+  dummy.dispose();
+  return out;
+}
+
+function unitMaterial(THREE) {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aEmit; varying float vEmit;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvEmit = aEmit;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vEmit;')
+      .replace('#include <dithering_fragment>', 'gl_FragColor.rgb = mix(gl_FragColor.rgb, vColor, vEmit);\n#include <dithering_fragment>');
+  };
+  m.customProgramCacheKey = () => 'unit3d-lambert';
+  return m;
+}
+
+function shadowMaterial(THREE, sunDir, alpha) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uSunDir: { value: new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z) }, alpha: { value: alpha } },
+    vertexShader: `uniform vec3 uSunDir;
+      void main() {
+        vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        w.xyz -= uSunDir * (w.y / uSunDir.y);
+        w.y = 0.03;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: 'uniform float alpha; void main() { gl_FragColor = vec4(0.0, 0.0, 0.0, alpha); }',
+    transparent: true, depthWrite: false,
+    stencilWrite: true, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc,
+    stencilZPass: THREE.ReplaceStencilOp, stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp,
+  });
+}
+
+/**
+ * Build every model's instanced meshes into `scene`.
+ *   const units = createUnits3D(THREE, scene, { sunDir })
+ *   units.setUnits([{ model, x, y, z, heading, aim, scale }], camDist, liveShadows)   // world units
+ */
+export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = DEFAULT_CAP } = {}) {
+  const prims = createPrims(THREE);
+  const mat = unitMaterial(THREE);
+  const shMat = shadowMaterial(THREE, sunDir, shadowAlpha);
+  const types = {};
+  const tris = {};
+  const owned = [];
+
+  for (const key of MODEL_KEYS) {
+    const def = UNIT_MODELS[key];
+    const full = mergeModelGroups(THREE, def, prims);
+    const lod = mergeModelGroups(THREE, lodDef(def), prims);
+    const T = { def, groups: {} };
+    tris[key] = { full: 0, lod: 0 };
+    for (const gname of Object.keys(full)) {
+      const L = lod[gname] || full[gname];
+      const imLod = new THREE.InstancedMesh(L.geo, mat, cap);
+      imLod.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      const imFull = new THREE.InstancedMesh(full[gname].geo, mat, cap);
+      imFull.instanceMatrix = imLod.instanceMatrix;          // one matrix buffer feeds full, LOD and the shadow
+      const sh = new THREE.InstancedMesh(L.geo, shMat, cap);
+      sh.instanceMatrix = imLod.instanceMatrix;
+      for (const m of [imLod, imFull, sh]) { m.count = 0; m.frustumCulled = false; scene.add(m); }
+      imLod.renderOrder = imFull.renderOrder = 3;
+      sh.renderOrder = 2;
+      T.groups[gname] = { imFull, imLod, sh, pivot: full[gname].pivot };
+      tris[key].full += full[gname].tris;
+      tris[key].lod += L.tris;
+      owned.push(full[gname].geo);
+      if (L !== full[gname]) owned.push(L.geo);
+    }
+    types[key] = T;
+  }
+
+  const m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), mp = new THREE.Matrix4();
+  const q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const yAxis = new THREE.Vector3(0, 1, 0);
+  const counts = {};
+  let usingLod = false;
+
+  return {
+    tris,
+    get usingLod() { return usingLod; },
+    /** Returns how many units were drawn (capped per model at `cap`). */
+    setUnits(list, camDist, liveShadows) {
+      for (const key of MODEL_KEYS) counts[key] = 0;
+      let drawn = 0;
+      for (const u of list) {
+        const T = types[u.model];
+        if (!T) continue;
+        const i = counts[u.model];
+        if (i >= cap) continue;
+        counts[u.model] = i + 1;
+        drawn++;
+        const k = UNIT_SCALE * (u.scale || 1);
+        q.setFromAxisAngle(yAxis, -u.heading);
+        m1.compose(v.set(u.x, u.y || 0, u.z), q, s.set(k, k, k));
+        for (const [gname, G] of Object.entries(T.groups)) {
+          if (gname === 'turret') {
+            q.setFromAxisAngle(yAxis, -((u.aim ?? u.heading) - u.heading));
+            m2.compose(G.pivot, q, one).premultiply(m1);
+          } else {
+            m2.copy(m1).multiply(mp.makeTranslation(G.pivot.x, G.pivot.y, G.pivot.z));
+          }
+          G.imLod.setMatrixAt(i, m2);
+        }
+      }
+      usingLod = camDist > LOD_DISTANCE;
+      for (const key of MODEL_KEYS) {
+        const n = counts[key];
+        for (const G of Object.values(types[key].groups)) {
+          G.imLod.count = usingLod ? n : 0;
+          G.imFull.count = usingLod ? 0 : n;
+          G.sh.count = liveShadows ? n : 0;
+          G.imLod.instanceMatrix.needsUpdate = true;
+        }
+      }
+      return drawn;
+    },
+    dispose() {
+      for (const T of Object.values(types)) for (const G of Object.values(T.groups)) {
+        for (const m of [G.imFull, G.imLod, G.sh]) scene.remove(m);
+      }
+      for (const g of owned) g.dispose();
+      mat.dispose(); shMat.dispose();
+    },
+  };
+}
