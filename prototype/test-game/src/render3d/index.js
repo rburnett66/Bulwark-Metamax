@@ -7,6 +7,8 @@
  * shadows, chosen per sim unit by units/modelKeys.js. Later T3 tasks add placement, overlays and FX.
  * T4 [MM-story_mv77hsxk_6]: plateaus, rocks and trees as low-poly 3D geometry from the SIM's map
  * (obstructions/), casting into the static shadow map; units receive it.
+ * T3b [MM-story_mv79mi1o_d]: expected-path lines from each live wave origin's spawn point to the base, on the
+ * sim's own nav grid (overlays/).
  *
  * READ-ONLY: it reads the sim state handed to renderFrame and never writes to it.
  * The default game never loads this module or three.js — main.js imports it dynamically under the flag.
@@ -24,6 +26,8 @@ import { buildBakedGround } from './ground/baked.js';
 import { createMarkers } from './markers.js';
 import { createUnits3D } from './units/models3d.js';
 import { buildLowPolyObstructions } from './obstructions/lowpoly.js';
+import { createPathLines } from './overlays/pathLinesModel.js';
+import { createPathLinesView } from './overlays/pathLines.js';
 import { buildUnitViews, createModelResolver } from './units/unitViews.js';
 
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
@@ -104,16 +108,19 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   // (T0 audit §11) and get none.
   const obstructions = map.terrain ? buildLowPolyObstructions(THREE, map) : null;
   if (obstructions) scene.add(obstructions.group);
+  const pathLines = createPathLines();
+  const pathLinesView = createPathLinesView(THREE, scene);
 
   const r = {
-    THREE, renderer, scene, camera, lights, markers, units3d, obstructions, host, banner, map,
+    THREE, renderer, scene, camera, lights, markers, units3d, obstructions, pathLines, pathLinesView, host, banner, map,
+    clock: 0,
     cam: createCameraState(map),
     headings: createHeadingTracker(),
     resolveModel: createModelResolver(),
     listeners: [],
     status: 'loading',
     problems: [],
-    stats: { calls: 0, triangles: 0, units: 0 },
+    stats: { calls: 0, triangles: 0, units: 0, lines: 0 },
     destroyed: false,
   };
   attachCameraInput(canvas, r);
@@ -176,6 +183,13 @@ export function renderFrame(r, state, ui, events, dt) {
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, true);
   }
 
+  // Expected-path lines (T3b): which origins are live, their routes on the sim's current grid, fades.
+  r.clock += Math.max(0, dt || 0);
+  if (state) {
+    const { geometryDirty } = r.pathLines.update(state, r.map, dt || 0);
+    r.stats.lines = r.pathLinesView.sync(r.pathLines.lines, geometryDirty, r.clock);
+  }
+
   r.renderer.info.reset();
   r.renderer.render(r.scene, r.camera);
   r.stats.calls = r.renderer.info.render.calls;
@@ -189,6 +203,7 @@ export function destroyRenderer(r) {
   for (const [type, fn, opts] of r.listeners) canvas.removeEventListener(type, fn, opts);
   r.markers.dispose();
   r.units3d.dispose();
+  r.pathLinesView.dispose();
   r.scene.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
