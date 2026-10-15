@@ -30,8 +30,13 @@
  * instanced additive call. opts.projFx / opts.projScale (getters) carry the authored shot looks + map damping.
  * FX [MM-story_mv87jvnb_5]: world-impact effects — sparks off armour, booms, burning wrecks, turrets blown off —
  * from the sim's damage / kill events (fx/impacts.js model, fx/impactsView.js draw). Tier budget: r.impacts.setCaps().
+ * T3.4 [MM-task_mv9s9o5d_3]: the ring fog (overlays/fog.js) veils everything outside the current wave window with
+ * a thin outline and flashes a ring as it opens. Camera rules: in battle pan + zoom only and a leftover yaw eases
+ * back to 0 when the wave starts; outside it, right-drag or a two-finger twist turns the view.
  */
-import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen } from './camera.js';
+import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX } from './camera.js';
+import { createFogTracker } from './overlays/fogModel.js';
+import { createFogView } from './overlays/fog.js';
 import { createPlacementGhost } from './overlays/placement.js';
 import { createLights } from './lighting.js';
 import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
@@ -40,6 +45,7 @@ import { buildBakedGround } from './ground/baked.js';
 import { buildLowPolyGround } from './ground/lowpoly.js';
 import { LOWPAL, WORLD_LIGHT, resolveWorld } from './styles/lowpoly-palettes.js';
 import { createMarkers } from './markers.js';
+import { createLowPolyStructures } from './structures/lowpoly.js';
 import { createUnits3D } from './units/models3d.js';
 import { buildLowPolyObstructions } from './obstructions/lowpoly.js';
 import { createPathLines } from './overlays/pathLinesModel.js';
@@ -73,12 +79,16 @@ function attachCameraInput(el, r) {
   const pointers = new Map();
   let pinch0 = null;
   const on = (type, fn, opts) => { el.addEventListener(type, fn, opts); r.listeners.push([type, fn, opts]); };
+  const twoFinger = () => {
+    const [a, b] = [...pointers.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), ang: Math.atan2(b.y - a.y, b.x - a.x) };
+  };
   on('pointerdown', (e) => {
     el.setPointerCapture(e.pointerId);
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, turn: e.button === 2 });
     if (pointers.size === 2) {
-      const [a, b] = [...pointers.values()];
-      pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: r.cam.dist };
+      const t = twoFinger();
+      pinch0 = { d: t.d, dist: r.cam.dist, ang: t.ang };
     }
   });
   on('pointermove', (e) => {
@@ -87,11 +97,15 @@ function attachCameraInput(el, r) {
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     if (pointers.size === 1) {
-      panByPixels(r.cam, dx, dy, el.clientHeight);
+      // right-drag turns the view outside the battle; in battle (or a left/touch drag) it pans
+      if (!(p.turn && twistBy(r.cam, dx * YAW_PER_PX, r.inBattle))) panByPixels(r.cam, dx, dy, el.clientHeight);
     } else if (pointers.size === 2 && pinch0) {
-      const [a, b] = [...pointers.values()];
-      const d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (d > 0) r.cam.dist = pinch0.dist * (pinch0.d / d);
+      const t = twoFinger();
+      if (t.d > 0) r.cam.dist = pinch0.dist * (pinch0.d / t.d);
+      // two-finger twist: the ground turns with the fingers (yaw + = the world turns clockwise on screen);
+      // outside the battle only — in battle the twist is dropped, not stored up
+      twistBy(r.cam, wrapYaw(t.ang - pinch0.ang), r.inBattle);
+      pinch0.ang = t.ang;
     }
   });
   const up = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch0 = null; };
@@ -121,7 +135,9 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(CAMERA.fovDeg, 1, CAMERA.near, CAMERA.far);
   const lights = createLights(THREE, renderer, scene, map.cols, map.rows, opts.shadowSize || 2048);
-  const markers = createMarkers(THREE, scene);
+  const lowpoly = opts.ground !== 'baked' && !!map.terrain;   // workbook maps have no terrain codes (T0 audit §11)
+  // LPS [MM-story_mv87jzov_9]: low-poly base / walls / towers / crystals on the low-poly ground; boxes under ?ground=baked
+  const markers = lowpoly ? createLowPolyStructures(THREE, scene) : createMarkers(THREE, scene);
   const units3d = createUnits3D(THREE, scene, { sunDir: lights.dir });
   markers.setBase(map.base);
   const pathLines = createPathLines();
@@ -131,9 +147,10 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const fxView = createCombatFxView(THREE, scene, fx.caps.maxShots + fx.caps.maxFlashes);
   const impacts = createImpacts({ seed: (map.seed | 0) || 1 });
   const impactsView = createImpactsView(THREE, scene, { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
+  const fogView = createFogView(THREE, scene, map);
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, host, banner, map,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map,
     clock: 0,
     cam: createCameraState(map),
     headings: createHeadingTracker(),
@@ -147,7 +164,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     getProjScale: typeof opts.projScale === 'function' ? opts.projScale : () => opts.projScale || 1,
     destroyed: false,
     world: null,
-    lowpoly: opts.ground !== 'baked' && !!map.terrain,   // workbook maps have no terrain codes (T0 audit §11)
+    lowpoly,
     roadMask: null,
   };
   attachCameraInput(canvas, r);
@@ -226,6 +243,7 @@ export function setWorld(r, key) {
     r.ground = buildLowPolyGround(THREE, map, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron });
     scene.add(r.ground.group);
     r.lights.setWorld(WORLD_LIGHT[world]);
+    if (r.markers.setWorld) r.markers.setWorld(palette);
   }
   r.world = world;
   r.lights.invalidateShadows();
@@ -245,7 +263,9 @@ export function renderFrame(r, state, ui, events, dt) {
   if (!r || r.destroyed) return;
   resize(r);
 
-  // Camera
+  // Camera: battle rules first (no yaw in battle; ease a leftover yaw back to 0 when the wave starts)
+  r.inBattle = !!(state && state.waves && state.waves.active);
+  stepYaw(r.cam, r.inBattle, dt);
   clampCamera(r.cam, r.map.cols, r.map.rows);
   const pose = cameraPose(r.cam);
   r.camera.position.set(pose.position.x, pose.position.y, pose.position.z);
@@ -255,6 +275,7 @@ export function renderFrame(r, state, ui, events, dt) {
   if (state && state.structures) {
     if (r.markers.setStructures(Array.from(state.structures.values()))) r.lights.invalidateShadows();
   }
+  if (state && r.markers.setResources && r.markers.setResources(state)) r.lights.invalidateShadows();   // LPS crystal fields
 
   // Live units: the 3D models (T5). Live planar shadows on every tier for now; the tier table (quality.js)
   // turns them off on Low when it lands.
@@ -279,6 +300,8 @@ export function renderFrame(r, state, ui, events, dt) {
   r.impacts.update(state, r.map, events, dt, views, { resolve: r.resolveModel });
   r.stats.impacts = r.impactsView.sync(r.impacts, true);
   if (r.impacts.shake > 0) { r.camera.position.x += Math.sin(r.clock * 61) * r.impacts.shake * 0.5; r.camera.position.z += Math.cos(r.clock * 47) * r.impacts.shake * 0.5; }
+  // Ring fog (T3.4): veil outside the current wave window
+  r.fogView.sync(r.fog.update(state, r.map, dt));
 
   r.ghost.sync(ui);
 
@@ -323,6 +346,7 @@ export function destroyRenderer(r) {
   r.ghost.dispose();
   r.fxView.dispose();
   r.impactsView.dispose();
+  r.fogView.dispose();
   r.scene.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }

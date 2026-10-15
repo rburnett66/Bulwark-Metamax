@@ -1,6 +1,7 @@
 /**
- * src/render3d/markers.js — PLACEHOLDER geometry for the base and structures as simple lit primitives,
- * until the low-poly base / walls / towers (LPS, [MM-story_mv87jzov_9]) and T4 obstructions replace them.
+ * src/render3d/markers.js — PLACEHOLDER geometry for the base and structures as simple lit primitives.
+ * Since LPS [MM-story_mv87jzov_9] this is only the ?ground=baked style: on the low-poly ground index.js uses
+ * structures/lowpoly.js (low-poly base, walls, towers and crystal fields) instead.
  * Units left this file with T5: they are the 3D models in units/models3d.js. Both cast into the static
  * shadow map.
  *
