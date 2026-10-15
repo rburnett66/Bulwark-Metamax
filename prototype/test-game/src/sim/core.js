@@ -1,6 +1,6 @@
 import { ASSUMPTIONS, WAVES, MAP, getUnitDef, getStructureDef, BONUS_NERFS } from '../data/tables.js';
 import { createRng } from './rng.js';
-import { buildNavGrid, findWalkerPath, findRoute, getFlyerPath, getWaterPath } from './pathfinding.js';
+import { buildNavGrid, findWalkerPath, findRoute, getFlyerPath, getWaterPath, lineClear } from './pathfinding.js';
 import { createUnit, createBase, createStructure } from './entities.js';
 import { acquireTarget, applyDamage, stepCombat, inBaseReach } from './combat.js';
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
@@ -112,7 +112,17 @@ function assignRoutePath(state, unit) {
   const idx = state.routeCursor % state.routes.length;
   state.routeCursor += 1;
   unit.routeIdx = idx;
-  return state.routes[idx].slice();   // clone — the unit advances its own pathIdx, never mutating the shared route
+  const route = state.routes[idx].slice();   // clone — the unit advances its own pathIdx, never mutating the shared route
+  // Shared routes are string-pulled from map.spawnGround, but a unit can spawn at ANY painted point. From
+  // elsewhere, route[0] may sit behind a wall: the unit then drove into it, the terrain clamp put it back,
+  // and it flip-flopped forever (and the bounce read as "progress" to the stuck detector, so it never
+  // re-pathed). Walk to route[0] first whenever the straight line there isn't clear.
+  const cell = roundCell(unit.pos);
+  if (route.length && !lineClear(state.navGrid, cell, route[0])) {
+    const lead = findWalkerPath(state.navGrid, cell, route[0]);
+    if (lead && lead.length) return lead.concat(route.slice(1));   // lead ends AT route[0]
+  }
+  return route;
 }
 function sameRoute(a, b) {
   if (!a || !b || a.length !== b.length) return false;
