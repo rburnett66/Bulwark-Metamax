@@ -35,6 +35,7 @@ import { buildBakedGround } from './ground/baked.js';
 import { buildLowPolyGround } from './ground/lowpoly.js';
 import { LOWPAL, WORLD_LIGHT, resolveWorld } from './styles/lowpoly-palettes.js';
 import { createMarkers } from './markers.js';
+import { createLowPolyStructures } from './structures/lowpoly.js';
 import { createUnits3D } from './units/models3d.js';
 import { buildLowPolyObstructions } from './obstructions/lowpoly.js';
 import { createPathLines } from './overlays/pathLinesModel.js';
@@ -111,7 +112,9 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(CAMERA.fovDeg, 1, CAMERA.near, CAMERA.far);
   const lights = createLights(THREE, renderer, scene, map.cols, map.rows, opts.shadowSize || 2048);
-  const markers = createMarkers(THREE, scene);
+  const lowpoly = opts.ground !== 'baked' && !!map.terrain;   // workbook maps have no terrain codes (T0 audit §11)
+  // LPS [MM-story_mv87jzov_9]: low-poly base / walls / towers / crystals on the low-poly ground; boxes under ?ground=baked
+  const markers = lowpoly ? createLowPolyStructures(THREE, scene) : createMarkers(THREE, scene);
   const units3d = createUnits3D(THREE, scene, { sunDir: lights.dir });
   markers.setBase(map.base);
   const pathLines = createPathLines();
@@ -130,7 +133,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     stats: { calls: 0, triangles: 0, units: 0, lines: 0 },
     destroyed: false,
     world: null,
-    lowpoly: opts.ground !== 'baked' && !!map.terrain,   // workbook maps have no terrain codes (T0 audit §11)
+    lowpoly,
     roadMask: null,
   };
   attachCameraInput(canvas, r);
@@ -209,6 +212,7 @@ export function setWorld(r, key) {
     r.ground = buildLowPolyGround(THREE, map, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron });
     scene.add(r.ground.group);
     r.lights.setWorld(WORLD_LIGHT[world]);
+    if (r.markers.setWorld) r.markers.setWorld(palette);
   }
   r.world = world;
   r.lights.invalidateShadows();
@@ -238,6 +242,7 @@ export function renderFrame(r, state, ui, events, dt) {
   if (state && state.structures) {
     if (r.markers.setStructures(Array.from(state.structures.values()))) r.lights.invalidateShadows();
   }
+  if (state && r.markers.setResources && r.markers.setResources(state)) r.lights.invalidateShadows();   // LPS crystal fields
 
   // Live units: the 3D models (T5). Live planar shadows on every tier for now; the tier table (quality.js)
   // turns them off on Low when it lands.
