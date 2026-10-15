@@ -7,7 +7,8 @@
  * World: X = column (east), Z = row (south), Y = up; 1 world unit = 1 cell; play surface = plane Y = 0.
  * A sim position (cells) maps to world (x + 0.5, z + 0.5) — the same cell-centre convention as Pixi's
  * cellToLocal. The camera looks at a ground target from `dist` away, pitched down PITCH, turned by `yaw`
- * (0 = looking north). During the battle yaw stays 0: the skeleton exposes pan and zoom only.
+ * (0 = looking north). During the battle yaw stays 0 (pan + zoom only); outside it the view turns freely —
+ * stepYaw / twistBy below hold that rule [MM-task_mv9s9o5d_3].
  */
 
 export const CAMERA = Object.freeze({
@@ -70,12 +71,49 @@ export function panByPixels(cam, dx, dy, viewportH) {
   const perPx = (2 * cam.dist * Math.tan((CAMERA.fovDeg * RAD) / 2)) / viewportH;
   const gx = -dx * perPx;
   const gz = (-dy * perPx) / Math.sin(CAMERA.pitchDeg * RAD);
-  // rotate the screen-space move by yaw (0 in battle, kept for the out-of-battle orbit later)
+  // rotate the screen-space move by yaw (0 in battle; free outside it)
   const s = Math.sin(cam.yaw), c = Math.cos(cam.yaw);
   cam.tx += gx * c + gz * s;
   cam.tz += -gx * s + gz * c;
   return cam;
 }
+
+/** Yaw wrapped into (-π, π]. */
+export function wrapYaw(a) {
+  const t = 2 * Math.PI;
+  a = ((a % t) + t) % t;
+  return a > Math.PI ? a - t : a;
+}
+
+/** Yaw ease rate when a wave starts (1/s): ~95 % of the way back in 0.5 s. */
+export const YAW_EASE = 6;
+/** …and never slower than this (rad/s), so it reaches exactly 0. */
+export const YAW_MIN_SPEED = 0.6;
+
+/**
+ * Battle camera rules (plan §6.1, user rule 18): during the battle the camera pans and zooms but never
+ * rotates — a twist is refused, and a yaw left over from the build phase eases back to 0 (the short way
+ * round). Outside the battle, twists turn freely. Mutates and returns `cam`.
+ */
+export function stepYaw(cam, inBattle, dt) {
+  if (!inBattle || cam.yaw === 0) return cam;
+  const t = Math.max(0, dt || 0);
+  const y = wrapYaw(cam.yaw);
+  // exponential ease, with a floor speed so the tail lands in finite time instead of creeping
+  const step = Math.max(Math.abs(y) * (1 - Math.exp(-YAW_EASE * t)), YAW_MIN_SPEED * t);
+  cam.yaw = Math.abs(y) <= step ? 0 : y - Math.sign(y) * step;
+  return cam;
+}
+
+/** Turn the camera by `d` radians — only outside the battle. Returns true when it turned. */
+export function twistBy(cam, d, inBattle) {
+  if (inBattle || !Number.isFinite(d) || d === 0) return false;
+  cam.yaw = wrapYaw(cam.yaw + d);
+  return true;
+}
+
+/** Right-drag: radians of yaw per screen pixel (a full drag across a 1280 px view ≈ 1 turn). */
+export const YAW_PER_PX = (2 * Math.PI) / 1280;
 
 /** Zoom by a factor (> 1 = out). */
 export function zoomBy(cam, factor) {
