@@ -87,6 +87,7 @@ function refreshHoverValidity(handle) {
 }
 
 function pointerEventToCell(handle, ev) {
+  if (handle.pick) return handle.pick(ev, handle.ui);   // ?renderer=three: ray-picked through the 3D camera
   const rect = handle.canvas.getBoundingClientRect();
   // Map into LOGICAL board pixels (cols×tile), never canvas.width: with native-DPI rendering
   // (resolution × autoDensity) canvas.width is the PHYSICAL buffer — dividing by it scaled every
@@ -296,13 +297,24 @@ function onKeyDown(handle, ev) {
   }
 }
 
-export function createInput(canvas, renderer, getState, submit, ui) {
+// A press that moves less than this (px) and lifts within TAP_MS is a TAP; anything else is a camera drag.
+const TAP_SLOP = 8;
+const TAP_MS = 500;
+
+/**
+ * opts (the 3D view, ?renderer=three):
+ *   pick(ev, ui) → cell | null — replaces the Pixi canvas → cell mapping.
+ *   tapToAct — the canvas also pans/pinches, so act on a TAP's release instead of every press: a drag or
+ *              a pinch never selects, builds or deploys. Right-click still cancels on press.
+ */
+export function createInput(canvas, renderer, getState, submit, ui, opts = {}) {
   const handle = {
     canvas,
     renderer,
     getState,
     submit,
     ui,
+    pick: opts.pick || null,
     buildOrder: buildOrder(),
     listeners: [],
     destroyed: false,
@@ -326,7 +338,28 @@ export function createInput(canvas, renderer, getState, submit, ui) {
 
   add(canvas, 'pointermove', moveFn);
   add(canvas, 'pointerleave', leaveFn);
-  add(canvas, 'pointerdown', downFn);
+  if (opts.tapToAct) {
+    const presses = new Map();   // pointerId → { x, y, t }
+    let multi = false;           // a second finger joined: this gesture is a pinch, never a tap
+    add(canvas, 'pointerdown', (ev) => {
+      if (ev.button !== undefined && ev.button !== 0) { downFn(ev); return; }   // right-click cancel stays on press
+      presses.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, t: ev.timeStamp });
+      if (presses.size > 1) multi = true;
+    });
+    const release = (ev, cancelled) => {
+      const p = presses.get(ev.pointerId);
+      presses.delete(ev.pointerId);
+      const wasMulti = multi;
+      if (presses.size === 0) multi = false;
+      if (!p || cancelled || wasMulti) return;
+      if (Math.hypot(ev.clientX - p.x, ev.clientY - p.y) > TAP_SLOP || ev.timeStamp - p.t > TAP_MS) return;
+      downFn(ev);
+    };
+    add(canvas, 'pointerup', (ev) => release(ev, false));
+    add(canvas, 'pointercancel', (ev) => release(ev, true));
+  } else {
+    add(canvas, 'pointerdown', downFn);
+  }
   add(canvas, 'contextmenu', ctxFn);
   add(window, 'keydown', keyFn);
 

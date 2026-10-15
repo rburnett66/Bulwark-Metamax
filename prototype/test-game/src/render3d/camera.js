@@ -89,3 +89,54 @@ export function rayToGround(origin, dir) {
   const t = -origin.y / dir.y;
   return { x: origin.x + dir.x * t, z: origin.z + dir.z * t };
 }
+
+/**
+ * The camera ray through normalised device coords (ndcX, ndcY in -1..1, +Y up) — the same ray
+ * THREE.Raycaster.setFromCamera builds for a PerspectiveCamera that lookAt()s cameraPose(cam) with up = +Y.
+ */
+function cameraBasis(cam) {
+  const { position: o, target: t } = cameraPose(cam);
+  let fx = t.x - o.x, fy = t.y - o.y, fz = t.z - o.z;
+  const fl = Math.hypot(fx, fy, fz); fx /= fl; fy /= fl; fz /= fl;
+  // right = forward × up(0,1,0); camUp = right × forward
+  let rx = -fz, rz = fx;
+  const rl = Math.hypot(rx, rz); rx /= rl; rz /= rl;
+  return {
+    o, f: { x: fx, y: fy, z: fz }, r: { x: rx, y: 0, z: rz },
+    u: { x: -rz * fy, y: rz * fx - rx * fz, z: rx * fy },
+    th: Math.tan((CAMERA.fovDeg * RAD) / 2),
+  };
+}
+
+export function pickRay(cam, aspect, ndcX, ndcY) {
+  const { o, f, r, u, th } = cameraBasis(cam);
+  const sx = ndcX * th * aspect, sy = ndcY * th;
+  return { origin: o, dir: { x: f.x + r.x * sx + u.x * sy, y: f.y + u.y * sy, z: f.z + r.z * sx + u.z * sy } };
+}
+
+/**
+ * Viewport pixel (px, py from the top-left of a w × h view) → the sim cell under it, or null when the ray
+ * misses the ground or lands off the map. `lift` (cells) moves the pick that far up-screen — touch builds
+ * aim 1.4 cells above the finger so the ghost isn't hidden under it (plan §6.9).
+ */
+export function screenToGroundCell(cam, w, h, px, py, cols, rows, lift = 0) {
+  if (!(w > 0 && h > 0)) return null;
+  const { origin, dir } = pickRay(cam, w / h, (px / w) * 2 - 1, 1 - (py / h) * 2);
+  const g = rayToGround(origin, dir);
+  if (!g) return null;
+  const x = g.x - Math.sin(cam.yaw) * lift, z = g.z - Math.cos(cam.yaw) * lift;   // up-screen on the ground
+  const c = worldToCell(x, z);
+  if (c.x < 0 || c.y < 0 || c.x >= cols || c.y >= rows) return null;
+  return c;
+}
+
+/** Sim cell centre → viewport pixel (inverse of screenToGroundCell for a point on the ground). */
+export function groundCellToScreen(cam, w, h, cell) {
+  const { o, f, r, u, th } = cameraBasis(cam);
+  const vx = cellToWorld(cell.x) - o.x, vy = -o.y, vz = cellToWorld(cell.y) - o.z;
+  const depth = vx * f.x + vy * f.y + vz * f.z;
+  if (!(depth > 1e-6)) return null;   // behind the camera
+  const ndcX = (vx * r.x + vz * r.z) / depth / (th * (w / h));
+  const ndcY = (vx * u.x + vy * u.y + vz * u.z) / depth / th;
+  return { x: (ndcX + 1) * 0.5 * w, y: (1 - ndcY) * 0.5 * h };
+}
