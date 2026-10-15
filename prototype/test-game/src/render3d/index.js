@@ -28,8 +28,13 @@
  * T3.3 [MM-task_mv9s9mza_2]: projectiles fly at height and arrive as hit flashes; muzzle, kill, destroyed, mine and
  * base-cannon flashes — fx/combatFxModel.js decides them from state + events, fx/combatFx.js draws them in one
  * instanced additive call. opts.projFx / opts.projScale (getters) carry the authored shot looks + map damping.
+ * T3.4 [MM-task_mv9s9o5d_3]: the ring fog (overlays/fog.js) veils everything outside the current wave window with
+ * a thin outline and flashes a ring as it opens. Camera rules: in battle pan + zoom only and a leftover yaw eases
+ * back to 0 when the wave starts; outside it, right-drag or a two-finger twist turns the view.
  */
-import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen } from './camera.js';
+import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX } from './camera.js';
+import { createFogTracker } from './overlays/fogModel.js';
+import { createFogView } from './overlays/fog.js';
 import { createPlacementGhost } from './overlays/placement.js';
 import { createLights } from './lighting.js';
 import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
@@ -69,12 +74,16 @@ function attachCameraInput(el, r) {
   const pointers = new Map();
   let pinch0 = null;
   const on = (type, fn, opts) => { el.addEventListener(type, fn, opts); r.listeners.push([type, fn, opts]); };
+  const twoFinger = () => {
+    const [a, b] = [...pointers.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), ang: Math.atan2(b.y - a.y, b.x - a.x) };
+  };
   on('pointerdown', (e) => {
     el.setPointerCapture(e.pointerId);
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, turn: e.button === 2 });
     if (pointers.size === 2) {
-      const [a, b] = [...pointers.values()];
-      pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: r.cam.dist };
+      const t = twoFinger();
+      pinch0 = { d: t.d, dist: r.cam.dist, ang: t.ang };
     }
   });
   on('pointermove', (e) => {
@@ -83,11 +92,15 @@ function attachCameraInput(el, r) {
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     if (pointers.size === 1) {
-      panByPixels(r.cam, dx, dy, el.clientHeight);
+      // right-drag turns the view outside the battle; in battle (or a left/touch drag) it pans
+      if (!(p.turn && twistBy(r.cam, dx * YAW_PER_PX, r.inBattle))) panByPixels(r.cam, dx, dy, el.clientHeight);
     } else if (pointers.size === 2 && pinch0) {
-      const [a, b] = [...pointers.values()];
-      const d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (d > 0) r.cam.dist = pinch0.dist * (pinch0.d / d);
+      const t = twoFinger();
+      if (t.d > 0) r.cam.dist = pinch0.dist * (pinch0.d / t.d);
+      // two-finger twist: the ground turns with the fingers (yaw + = the world turns clockwise on screen);
+      // outside the battle only — in battle the twist is dropped, not stored up
+      twistBy(r.cam, wrapYaw(t.ang - pinch0.ang), r.inBattle);
+      pinch0.ang = t.ang;
     }
   });
   const up = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch0 = null; };
@@ -125,9 +138,10 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const ghost = createPlacementGhost(THREE, scene);
   const fx = createCombatFx({ seed: (map.seed | 0) || 1 });
   const fxView = createCombatFxView(THREE, scene, fx.caps.maxShots + fx.caps.maxFlashes);
+  const fogView = createFogView(THREE, scene, map);
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, host, banner, map,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map,
     clock: 0,
     cam: createCameraState(map),
     headings: createHeadingTracker(),
@@ -239,7 +253,9 @@ export function renderFrame(r, state, ui, events, dt) {
   if (!r || r.destroyed) return;
   resize(r);
 
-  // Camera
+  // Camera: battle rules first (no yaw in battle; ease a leftover yaw back to 0 when the wave starts)
+  r.inBattle = !!(state && state.waves && state.waves.active);
+  stepYaw(r.cam, r.inBattle, dt);
   clampCamera(r.cam, r.map.cols, r.map.rows);
   const pose = cameraPose(r.cam);
   r.camera.position.set(pose.position.x, pose.position.y, pose.position.z);
@@ -269,6 +285,8 @@ export function renderFrame(r, state, ui, events, dt) {
   r.fxOpts.projScale = r.getProjScale();
   r.fx.update(state, r.map, events, dt, r.fxOpts);
   r.stats.fx = r.fxView.sync(r.fx);
+  // Ring fog (T3.4): veil outside the current wave window
+  r.fogView.sync(r.fog.update(state, r.map, dt));
 
   r.ghost.sync(ui);
 
@@ -312,6 +330,7 @@ export function destroyRenderer(r) {
   r.pathLinesView.dispose();
   r.ghost.dispose();
   r.fxView.dispose();
+  r.fogView.dispose();
   r.scene.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
