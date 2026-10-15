@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulwark — Unit Art</title>
+<style>
+  /* Terrain Forge chrome (same tokens as terrain.html): ink background, panel, gold accent. */
+  :root { --ink:#0c0e12; --panel:#161b22; --panel2:#1a1f28; --line:#28303b; --text:#e6ecf3; --muted:#8fa0b3; --gold:#d9a441;
+    --ok:#7fd36f; --warn:#e3b94e; --cool:#6fb8d3; --bad:#f07a5f; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--ink); color:var(--text); font-family:"Segoe UI",system-ui,sans-serif; font-size:13px; }
+  #app { display:grid; grid-template-columns:220px minmax(0,1fr) minmax(0,560px); height:calc(100vh - var(--toolhead, 0px)); }
+  aside, main, section { min-width:0; min-height:0; overflow-y:auto; }
+  aside { background:var(--panel); border-right:1px solid var(--line); padding:14px 12px; }
+  main { padding:14px 16px; }
+  section#detail { background:var(--panel); border-left:1px solid var(--line); padding:14px 16px; }
+  h1 { font-size:15px; letter-spacing:.16em; margin:0 0 2px; }
+  h2 { font-size:10px; letter-spacing:.22em; color:var(--muted); margin:14px 0 8px; text-transform:uppercase; font-weight:600; }
+  .sub { font-size:11px; color:var(--muted); margin-bottom:12px; line-height:1.45; }
+  button, select, textarea { font:inherit; color:var(--text); }
+  button { background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:7px 10px; cursor:pointer; }
+  button:hover { border-color:#3a4554; }
+  button.gold { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border:none; font-weight:700; letter-spacing:.06em; }
+  button:focus-visible, select:focus-visible, textarea:focus-visible, .slot:focus-visible, .card:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+  select, textarea { background:var(--ink); border:1px solid var(--line); border-radius:5px; padding:5px 7px; }
+  /* faction rail */
+  .fac { display:grid; grid-template-columns:1fr auto; gap:6px; align-items:center; width:100%; text-align:left; margin-bottom:4px; padding:8px 10px; }
+  .fac[aria-pressed="true"] { border-color:var(--gold); background:#221d12; }
+  .fac .n { font-variant-numeric:tabular-nums; font-size:11px; color:var(--muted); }
+  .fac .bar { grid-column:1 / -1; height:3px; border-radius:2px; background:#232a34; overflow:hidden; }
+  .fac .bar i { display:block; height:100%; background:var(--gold); }
+  /* unit grid */
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+  .toolbar .grow { flex:1; }
+  .legend { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:11px; color:var(--muted); }
+  .legend span { display:inline-flex; gap:5px; align-items:center; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:10px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px; cursor:pointer; display:grid; gap:6px; align-content:start; position:relative; }
+  .card[aria-current="true"] { border-color:var(--gold); }
+  .card.drop { border-color:var(--cool); background:#122028; }
+  .card .thumb { aspect-ratio:16/10; border-radius:5px; background:#0a0c10 center/contain no-repeat; border:1px solid var(--line); display:grid; place-items:center; color:#3c4654; font-size:11px; }
+  .card .id { font-weight:700; letter-spacing:.04em; font-size:12px; }
+  .card .meta { font-size:11px; color:var(--muted); }
+  .dots { display:flex; gap:3px; }
+  .dots i { width:9px; height:9px; border-radius:2px; background:#232a34; }
+  .dots i.on { background:var(--gold); }
+  .chip { font-size:10px; letter-spacing:.06em; text-transform:uppercase; padding:2px 7px; border-radius:10px; border:1px solid currentColor; justify-self:start; }
+  .st-needs { color:var(--muted); } .st-partial { color:var(--warn); } .st-ready { color:var(--cool); } .st-modeled { color:var(--ok); } .st-approved { color:var(--gold); }
+  /* detail */
+  .empty { color:var(--muted); line-height:1.6; }
+  .dhead { display:grid; grid-template-columns:1fr auto; gap:4px 10px; align-items:start; }
+  .dhead .id { font-size:20px; font-weight:700; letter-spacing:.06em; }
+  .dhead .meta { color:var(--muted); font-size:12px; grid-column:1 / -1; }
+  .board { display:grid; grid-template-columns:62px repeat(4, minmax(0,1fr)); gap:6px; align-items:stretch; }
+  .board .hd { font-size:10px; letter-spacing:.16em; color:var(--muted); text-transform:uppercase; text-align:center; align-self:end; }
+  .board .rh { font-size:10px; letter-spacing:.12em; color:var(--muted); text-transform:uppercase; align-self:center; line-height:1.3; }
+  .board .rh b { color:var(--text); display:block; font-size:11px; letter-spacing:.08em; }
+  .slot { aspect-ratio:4/3; border:1px dashed #3a4554; border-radius:6px; background:#0a0c10 center/contain no-repeat; position:relative; cursor:pointer; display:grid; place-items:center; color:#4a5666; font-size:18px; }
+  .slot.req { border-color:#5a5232; }
+  .slot.has { border-style:solid; border-color:var(--line); color:transparent; }
+  .slot.over { border-color:var(--cool); background-color:#122028; }
+  .slot.unsaved::after { content:"not saved"; position:absolute; left:4px; bottom:3px; font-size:9px; color:var(--bad); letter-spacing:.06em; }
+  .slot .x { position:absolute; top:3px; right:3px; width:20px; height:20px; padding:0; border-radius:4px; font-size:12px; line-height:1; display:none; background:#000a; }
+  .slot.has:hover .x, .slot.has:focus-within .x { display:block; }
+  .sheet { aspect-ratio:auto; min-height:120px; grid-column:2 / -1; }
+  .row2 { display:grid; grid-template-columns:auto 1fr auto 1fr; gap:6px 10px; align-items:center; margin-top:10px; font-size:12px; }
+  .row2 label { color:var(--muted); }
+  textarea { width:100%; min-height:70px; resize:vertical; margin-top:6px; }
+  .note { font-size:11px; color:var(--muted); line-height:1.5; margin-top:8px; }
+  .banner { display:none; margin:0 0 10px; padding:8px 10px; border-radius:6px; border:1px solid var(--bad); color:var(--text); background:#2a1612; font-size:12px; }
+  .banner.on { display:flex; gap:10px; align-items:center; }
+  .banner .grow { flex:1; }
+  /* review sheet + lightbox */
+  .review { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; margin-top:8px; }
+  .review figure { margin:0; background:#fff; border-radius:6px; padding:6px; display:grid; gap:4px; }
+  .review img { width:100%; height:150px; object-fit:contain; }
+  .review figcaption { color:#333; font-size:10px; letter-spacing:.14em; text-transform:uppercase; }
+  #lb { position:fixed; inset:0; background:#000d; z-index:100; display:none; grid-template-rows:auto 1fr auto; padding:16px; gap:10px; }
+  #lb.on { display:grid; }
+  #lb .bar { display:flex; gap:10px; align-items:center; }
+  #lb .bar .grow { flex:1; }
+  #lb .stage { min-height:0; display:grid; place-items:center; background:repeating-conic-gradient(#20252d 0% 25%, #191d24 0% 50%) 50% / 24px 24px; border-radius:8px; }
+  #lb img { max-width:100%; max-height:100%; }
+  #toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--panel); border:1px solid var(--gold); border-radius:6px; padding:8px 14px; display:none; z-index:120; }
+  @media (max-width:1100px) { #app { grid-template-columns:180px minmax(0,1fr); } section#detail { grid-column:1 / -1; border-left:none; border-top:1px solid var(--line); } #app { height:auto; } }
+  @media (max-width:640px) { #app { grid-template-columns:minmax(0,1fr); } aside { border-right:none; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside aria-label="Factions">
+    <h1>UNIT ART</h1>
+    <div class="sub">Reference art for every unit in the roster. Drop images into a unit's slots; they are written to <code>content/units/refs/</code> and modelled from there.</div>
+    <div id="facs"></div>
+  </aside>
+  <main>
+    <div class="banner" id="banner"><span class="grow" id="bannerText"></span><button id="retry" type="button">Retry save</button></div>
+    <div class="toolbar">
+      <select id="filter" aria-label="Show units">
+        <option value="all">All units</option><option value="needs">Needs art</option><option value="partial">Partial art</option>
+        <option value="ready">Ready to model</option><option value="modeled">Modelled</option><option value="approved">Approved</option>
+      </select>
+      <span class="grow"></span>
+      <div class="legend"><span><span class="chip st-needs">needs art</span></span><span><span class="chip st-partial">partial</span></span><span><span class="chip st-ready">ready</span></span><span><span class="chip st-modeled">modelled</span></span><span><span class="chip st-approved">approved</span></span></div>
+    </div>
+    <div class="grid" id="grid"></div>
+    <p class="note">Drop several files on a card at once: names containing <b>top / side / front / rear (back)</b> and <b>base (chassis, hull) / turret (weapon, gun) / head (radar, dish, sensor)</b> are sorted into the right slots. Anything else goes to the sheet slot.</p>
+  </main>
+  <section id="detail" aria-label="Selected unit"><p class="empty">Pick a unit to see its art slots.<br>Each unit has a <b>whole-unit</b> row (top, side, front, rear — side and top are needed to model it), optional rows for its <b>base</b>, <b>turret</b> and <b>head</b> on their own, and a slot for a combined <b>sheet</b>.</p></section>
+</div>
+<div id="lb" role="dialog" aria-modal="true" aria-label="Art review">
+  <div class="bar"><b id="lbTitle"></b><span class="grow"></span><span class="note" id="lbMeta" style="margin:0"></span><button id="lbPrev" type="button">◀ Prev</button><button id="lbNext" type="button">Next ▶</button><button id="lbClose" type="button">Close</button></div>
+  <div class="stage"><img id="lbImg" alt=""></div>
+  <div class="note" id="lbPath" style="margin:0"></div>
+</div>
+<div id="toast" role="status"></div>
+<input type="file" id="pick" accept="image/png,image/jpeg,image/webp" hidden multiple>
+
+<script type="module">
+import { UNITS, SYSTEM_UNITS } from './src/data/tables.js';
+
+// ── Data ────────────────────────────────────────────────────────────────────────────────────────────
+// The roster is the game's own unit table; this page only adds reference art + modelling status to it.
+// Manifest (committed): content/units/refs/index.json
+//   { version, units: { <unitId>: { slots: { '<part>-<view>': {file,w,h,name,at} }, facing:{side,top}, notes, status, model } } }
+// Images (committed):   content/units/refs/<unitId>/<part>-<view>.png|jpg
+const ROOT = 'content/units/refs';
+const PARTS = [['whole', 'Whole unit'], ['base', 'Base', 'chassis'], ['weapon', 'Turret', 'weapon'], ['head', 'Head', 'radar']];
+const VIEWS = ['top', 'side', 'front', 'rear'];
+const REQUIRED = ['whole-side', 'whole-top'];
+const STATUS = { needs: 'Needs art', partial: 'Partial', ready: 'Ready to model', modeled: 'Modelled', approved: 'Approved' };
+const ROSTER = { ...UNITS, ...SYSTEM_UNITS };
+const FACTION_ORDER = ['Ground / Powder', 'Air', 'High Tech', 'Artillery', 'Water', 'Arcane / Energy', 'Space Tech', 'Dark Energy', 'Greenies (Chem)', 'System'];
+const $ = (id) => document.getElementById(id);
+let M = { version: 1, units: {} };
+let faction = FACTION_ORDER[0], current = null, pending = new Map();   // pending: path -> {b64} not yet on disk
+const mem = new Map();                                                // path -> dataURL for images added this session
+
+const U = (id) => (M.units[id] = M.units[id] || { slots: {}, facing: { side: 'left', top: 'up' }, notes: '', status: null });
+function autoStatus(id) {
+  const u = M.units[id]; if (!u) return 'needs';
+  if (u.status === 'modeled' || u.status === 'approved') return u.status;
+  const n = Object.keys(u.slots).length; if (!n) return 'needs';
+  return (REQUIRED.every((k) => u.slots[k]) || u.slots['whole-sheet']) ? 'ready' : 'partial';
+}
+const src = (s) => (s && (mem.get(s.file) || s.file + '?v=' + encodeURIComponent(s.at || '')));
+const unitsOf = (f) => Object.keys(ROSTER).filter((id) => ROSTER[id].faction === f).sort((a, b) => order(a) - order(b) || a.localeCompare(b));
+const ROLE_ORDER = ['Troops', 'Scout', 'Walker', 'Assault Tank', 'Artillery', 'Heavy Tank', 'Gunship', 'Fighter', 'Missile Flyer', 'Bomber', 'Structure'];
+const order = (id) => { const i = ROLE_ORDER.indexOf(ROSTER[id].shape || ROSTER[id].domain); return i < 0 ? 99 : i; };
+
+// ── Persistence through the dev server's /__ship (loopback only; atomic; keeps .bak) ─────────────────
+async function ship(body) {
+  const r = await fetch('/__ship', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({ ok: false, error: 'This page is not running on the local dev server (serve_prototype.py).' }));
+  if (!d.ok) throw new Error(d.error || 'save failed');
+}
+let saveT = 0;
+function saveManifest() { clearTimeout(saveT); saveT = setTimeout(flush, 350); }
+async function flush() {
+  try {
+    for (const [path, b64] of pending) { await ship({ path, b64 }); pending.delete(path); }
+    await ship({ path: ROOT + '/index.json', data: M });
+    banner(''); renderDetail();
+  } catch (e) { banner(`Not saved to the repo: ${e.message} Images stay in this tab until saved.`); }
+}
+function banner(t) { $('banner').classList.toggle('on', !!t); $('bannerText').textContent = t; }
+$('retry').addEventListener('click', flush);
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(el._t); el._t = setTimeout(() => (el.style.display = 'none'), 2200); }
+
+// ── Image intake: downscale to ≤1600 px, PNG if it has transparency, else JPEG ──────────────────────
+async function intake(file) {
+  const url = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('not an image')); i.src = url; });
+  const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight)), w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const x = cv.getContext('2d'); x.drawImage(img, 0, 0, w, h);
+  const px = x.getImageData(0, 0, w, h).data; let alpha = false; for (let i = 3; i < px.length; i += 16) if (px[i] < 250) { alpha = true; break; }
+  const data = alpha ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.9);
+  return { data, ext: alpha ? 'png' : 'jpg', w, h, name: file.name };
+}
+async function put(id, key, file) {
+  const im = await intake(file), path = `${ROOT}/${id}/${key}.${im.ext}`;
+  const u = U(id); u.slots[key] = { file: path, w: im.w, h: im.h, name: im.name, at: new Date().toISOString() };
+  mem.set(path, im.data); pending.set(path, im.data);
+  if (u.status === 'needs' || u.status == null) u.status = null;
+  saveManifest(); render();
+}
+function remove(id, key) {
+  const u = U(id); const s = u.slots[key]; if (!s) return;
+  delete u.slots[key]; pending.delete(s.file); saveManifest(); render(); toast(`Removed ${key} (the file stays in the repo as history)`);
+}
+// filename → slot: "tiger-base-top.png" → base-top, "tiger back.png" → whole-rear, "sheet_tank.jpg" → whole-sheet
+function guessSlot(name, u) {
+  const n = name.toLowerCase();
+  const part = /base|chassis|hull/.test(n) ? 'base' : /turret|weapon|gun|barrel/.test(n) ? 'weapon' : /head|radar|dish|sensor|antenna/.test(n) ? 'head' : 'whole';
+  const view = /top|plan/.test(n) ? 'top' : /side|profile/.test(n) ? 'side' : /front/.test(n) ? 'front' : /rear|back/.test(n) ? 'rear' : null;
+  if (view) return `${part}-${view}`;
+  if (part === 'whole') return 'whole-sheet';
+  return VIEWS.map((v) => `${part}-${v}`).find((k) => !u.slots[k]) || `${part}-top`;
+}
+async function dropMany(id, files) {
+  const list = [...files].filter((f) => /^image\//.test(f.type)); if (!list.length) return;
+  const u = U(id), placed = [];
+  for (const f of list) { const k = guessSlot(f.name, u); await put(id, k, f); placed.push(k); }
+  toast(`${id}: ${placed.join(', ')}`);
+}
+
+// ── Render ──────────────────────────────────────────────────────────────────────────────────────────
+function render() { renderFacs(); renderGrid(); renderDetail(); }
+function renderFacs() {
+  $('facs').innerHTML = '';
+  for (const f of FACTION_ORDER) {
+    const ids = unitsOf(f); if (!ids.length) continue;
+    const done = ids.filter((id) => ['ready', 'modeled', 'approved'].includes(autoStatus(id))).length;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'fac'; b.setAttribute('aria-pressed', String(f === faction));
+    b.innerHTML = `<span></span><span class="n">${done}/${ids.length}</span><span class="bar"><i style="width:${(done / ids.length) * 100}%"></i></span>`;
+    b.firstChild.textContent = f;
+    b.onclick = () => { faction = f; current = null; render(); };
+    $('facs').appendChild(b);
+  }
+}
+function thumbOf(u) { if (!u) return null; for (const k of ['whole-side', 'whole-sheet', 'whole-top', 'whole-front', ...Object.keys(u.slots)]) if (u.slots[k]) return u.slots[k]; return null; }
+function renderGrid() {
+  const g = $('grid'); g.innerHTML = ''; const flt = $('filter').value;
+  for (const id of unitsOf(faction)) {
+    const d = ROSTER[id], u = M.units[id], st = autoStatus(id); if (flt !== 'all' && flt !== st) continue;
+    const c = document.createElement('div'); c.className = 'card'; c.tabIndex = 0; c.setAttribute('role', 'button'); c.setAttribute('aria-current', String(id === current));
+    const t = thumbOf(u), filled = VIEWS.map((v) => !!(u && u.slots['whole-' + v]));
+    c.innerHTML = `<div class="thumb"${t ? ` style="background-image:url('${src(t)}')"` : ''}>${t ? '' : 'drop art here'}</div>
+      <div class="id"></div><div class="meta"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center"><span class="dots" title="Whole-unit views: top, side, front, rear">${filled.map((f) => `<i class="${f ? 'on' : ''}"></i>`).join('')}</span><span class="chip st-${st}">${STATUS[st]}</span></div>`;
+    c.querySelector('.id').textContent = id; c.querySelector('.meta').textContent = `${d.role || d.name || ''} · ${d.shape || d.domain || ''}`;
+    c.onclick = () => { current = id; render(); };
+    c.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); c.click(); } };
+    c.ondragover = (e) => { e.preventDefault(); c.classList.add('drop'); };
+    c.ondragleave = () => c.classList.remove('drop');
+    c.ondrop = (e) => { e.preventDefault(); c.classList.remove('drop'); current = id; dropMany(id, e.dataTransfer.files); };
+    g.appendChild(c);
+  }
+  if (!g.children.length) g.innerHTML = '<p class="empty">No units match this filter.</p>';
+}
+let pickTarget = null;
+function slotEl(id, key, cls = '') {
+  const u = U(id), s = u.slots[key], el = document.createElement('div');
+  el.className = `slot ${cls} ${s ? 'has' : ''} ${REQUIRED.includes(key) ? 'req' : ''} ${s && pending.has(s.file) ? 'unsaved' : ''}`; el.tabIndex = 0;
+  el.setAttribute('role', 'button'); el.setAttribute('aria-label', `${key}${s ? ' — ' + s.name : ' — empty, drop or paste an image'}`);
+  if (s) el.style.backgroundImage = `url('${src(s)}')`; else el.textContent = '+';
+  el.title = s ? `${s.name} · ${s.w}×${s.h}` : (REQUIRED.includes(key) ? 'Needed to model this unit' : 'Optional');
+  el.onclick = () => { if (s) openLb(id, key); else { pickTarget = [id, key]; $('pick').click(); } };
+  el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } if ((e.key === 'Delete' || e.key === 'Backspace') && s) remove(id, key); };
+  el.onfocus = () => { pasteTarget = [id, key]; };
+  el.ondragover = (e) => { e.preventDefault(); el.classList.add('over'); };
+  el.ondragleave = () => el.classList.remove('over');
+  el.ondrop = (e) => { e.preventDefault(); e.stopPropagation(); el.classList.remove('over'); const f = [...e.dataTransfer.files].find((x) => /^image\//.test(x.type)); if (f) put(id, key, f); };
+  if (s) { const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', `Remove ${key}`); x.onclick = (e) => { e.stopPropagation(); remove(id, key); }; el.appendChild(x); }
+  return el;
+}
+let pasteTarget = null;
+$('pick').addEventListener('change', (e) => { const fs = e.target.files; if (pickTarget && fs.length) { if (fs.length === 1) put(pickTarget[0], pickTarget[1], fs[0]); else dropMany(pickTarget[0], fs); } e.target.value = ''; });
+document.addEventListener('paste', (e) => { if (!pasteTarget) return; const f = [...(e.clipboardData && e.clipboardData.files || [])].find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); put(pasteTarget[0], pasteTarget[1], f); } });
+
+function renderDetail() {
+  const D = $('detail'); if (!current) return;
+  const id = current, d = ROSTER[id], u = U(id), st = autoStatus(id);
+  D.innerHTML = `<div class="dhead"><div class="id"></div><span class="chip st-${st}">${STATUS[st]}</span><div class="meta"></div></div>
+    <h2>Art slots</h2><div class="board" id="board"></div>
+    <div class="row2">
+      <label for="fSide">Side view: nose points</label><select id="fSide"><option value="left">Left</option><option value="right">Right</option></select>
+      <label for="fTop">Top view: nose points</label><select id="fTop"><option value="up">Up</option><option value="down">Down</option><option value="left">Left</option><option value="right">Right</option></select>
+      <label for="fStatus">Status</label><select id="fStatus"><option value="">Automatic</option><option value="modeled">Modelled</option><option value="approved">Approved</option></select>
+      <label>Model</label><span id="fModel" class="note" style="margin:0"></span>
+    </div>
+    <h2>Notes for the modeller</h2><textarea id="fNotes" placeholder="Anything the views do not show: which parts glow, what the head does, real-world reference, faction colours…"></textarea>
+    <h2>Review</h2><div class="review" id="review"></div>
+    <p class="note">Side and top are needed to build the model; front and rear make it accurate. Click an image to review it full size. Drop a file on a slot, click a slot to pick one, or select a slot and paste. Delete removes the selected image.</p>`;
+  D.querySelector('.id').textContent = id;
+  D.querySelector('.meta').textContent = `${d.faction} · ${d.role || d.name || ''} · ${d.shape || d.domain || ''}${d.domain && d.shape ? ' · ' + d.domain : ''}`;
+  const B = D.querySelector('#board');
+  B.insertAdjacentHTML('beforeend', '<span></span>' + VIEWS.map((v) => `<span class="hd">${v}</span>`).join(''));
+  for (const [p, label, hint] of PARTS) {
+    B.insertAdjacentHTML('beforeend', `<span class="rh"><b>${label}</b>${hint || ''}</span>`);
+    for (const v of VIEWS) B.appendChild(slotEl(id, `${p}-${v}`));
+  }
+  B.insertAdjacentHTML('beforeend', '<span class="rh"><b>Sheet</b>all views</span>');
+  B.appendChild(slotEl(id, 'whole-sheet', 'sheet'));
+  $('fSide').value = u.facing.side; $('fTop').value = u.facing.top; $('fStatus').value = u.status === 'modeled' || u.status === 'approved' ? u.status : ''; $('fNotes').value = u.notes || '';
+  $('fModel').textContent = u.model ? u.model : 'not built yet';
+  $('fSide').onchange = (e) => { u.facing.side = e.target.value; saveManifest(); };
+  $('fTop').onchange = (e) => { u.facing.top = e.target.value; saveManifest(); };
+  $('fStatus').onchange = (e) => { u.status = e.target.value || null; saveManifest(); renderFacs(); renderGrid(); renderDetail(); };
+  $('fNotes').oninput = (e) => { u.notes = e.target.value; saveManifest(); };
+  const R = D.querySelector('#review'), keys = Object.keys(u.slots).sort((a, b) => slotOrder(a) - slotOrder(b));
+  if (!keys.length) R.innerHTML = '<p class="empty" style="grid-column:1/-1">No art yet.</p>';
+  for (const k of keys) { const f = document.createElement('figure'); f.innerHTML = `<img alt=""><figcaption></figcaption>`; f.querySelector('img').src = src(u.slots[k]); f.querySelector('img').alt = `${id} ${k}`; f.querySelector('figcaption').textContent = k.replace('-', ' · '); f.onclick = () => openLb(id, k); f.style.cursor = 'zoom-in'; R.appendChild(f); }
+}
+const slotOrder = (k) => { const [p, v] = k.split('-'); return PARTS.findIndex((x) => x[0] === p) * 10 + (v === 'sheet' ? 9 : VIEWS.indexOf(v)); };
+
+// ── Lightbox review ─────────────────────────────────────────────────────────────────────────────────
+let lb = null;
+function openLb(id, key) { lb = { id, keys: Object.keys(U(id).slots).sort((a, b) => slotOrder(a) - slotOrder(b)) }; lb.i = lb.keys.indexOf(key); showLb(); $('lb').classList.add('on'); $('lbClose').focus(); }
+function showLb() { const s = U(lb.id).slots[lb.keys[lb.i]]; $('lbImg').src = src(s); $('lbTitle').textContent = `${lb.id} · ${lb.keys[lb.i].replace('-', ' · ')}`; $('lbMeta').textContent = `${s.w}×${s.h} · from ${s.name}`; $('lbPath').textContent = s.file; }
+$('lbPrev').onclick = () => { lb.i = (lb.i + lb.keys.length - 1) % lb.keys.length; showLb(); };
+$('lbNext').onclick = () => { lb.i = (lb.i + 1) % lb.keys.length; showLb(); };
+$('lbClose').onclick = () => $('lb').classList.remove('on');
+document.addEventListener('keydown', (e) => { if (!$('lb').classList.contains('on')) return; if (e.key === 'Escape') $('lbClose').click(); if (e.key === 'ArrowLeft') $('lbPrev').click(); if (e.key === 'ArrowRight') $('lbNext').click(); });
+$('filter').addEventListener('change', renderGrid);
+
+// ── Boot: load the committed manifest (works on the static site too; saving needs the dev server) ───
+try { const r = await fetch(ROOT + '/index.json', { cache: 'no-store' }); if (r.ok) M = await r.json(); } catch (e) { /* first run: empty manifest */ }
+M.units = M.units || {};
+const hash = decodeURIComponent(location.hash.slice(1)); if (ROSTER[hash]) { current = hash; faction = ROSTER[hash].faction; }
+render();
+</script>
+<script src="tools/toolhead.js"></script>
+<script>if (typeof ToolHead !== "undefined") ToolHead.mount({ tool: "unitart" });</script>
+</body>
+</html>
