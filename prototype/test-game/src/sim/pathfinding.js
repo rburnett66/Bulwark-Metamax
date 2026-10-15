@@ -174,31 +174,38 @@ export function findWalkerPath(navGrid, from, to, avoid, wideOnly) {
   return smoothPath(path, passable, cols, rows, wide);
 }
 
+/** Walkable straight line between two CELLS: the supercover line a->b may only touch passable cells, and a
+ *  diagonal step also needs both orthogonal cells open (no corner clip). Exported for callers that hand a
+ *  unit a path built from somewhere else (assignRoutePath) and must check it can actually walk to path[0]. */
+export function lineClear(navGrid, a, b) {
+  return cellLineClear(a, b, navGrid.passable, navGrid.cols, navGrid.rows, null);
+}
+function cellLineClear(a, b, passable, cols, rows, wide) {
+  const ok = (i) => passable[i] && (!wide || wide[i]);   // a straightened line may only cross traversable cells
+  let x0 = a.x, y0 = a.y; const x1 = b.x, y1 = b.y;
+  const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx - dy;
+  for (;;) {
+    if (!(x0 >= 0 && x0 < cols && y0 >= 0 && y0 < rows && ok(y0 * cols + x0))) return false;
+    if (x0 === x1 && y0 === y1) return true;
+    const e2 = 2 * err;
+    let moved = false;
+    if (e2 > -dy) { err -= dy; x0 += sx; moved = true; }
+    if (e2 < dx) { err += dx; y0 += sy; moved = true; }
+    // when the step is diagonal, also require the two orthogonal cells open (no corner clip)
+    if (moved && e2 > -dy && e2 < dx) {
+      if (!(ok(y0 * cols + (x0 - sx)) && ok((y0 - sy) * cols + x0))) return false;
+    }
+  }
+}
+
 /** STRING-PULL (owner: drive diagonally, no zig-zag): drop any waypoint the unit can skip because
  *  it has clear line-of-sight to the NEXT one (a straight walkable line). Stair-steps collapse into
  *  straight diagonals. Corner clearance holds because the LOS test walks the supercover cells. */
 function smoothPath(path, passable, cols, rows, wide) {
   if (!path || path.length <= 2) return path;
-  const ok = (i) => passable[i] && (!wide || wide[i]);   // a straightened line may only cross traversable cells
-  const clear = (a, b) => {
-    // supercover line a->b: every cell the segment touches must be passable (goal included is fine)
-    let x0 = a.x, y0 = a.y; const x1 = b.x, y1 = b.y;
-    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
-    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-    let err = dx - dy;
-    for (;;) {
-      if (!(x0 >= 0 && x0 < cols && y0 >= 0 && y0 < rows && ok(y0 * cols + x0))) return false;
-      if (x0 === x1 && y0 === y1) return true;
-      const e2 = 2 * err;
-      let moved = false;
-      if (e2 > -dy) { err -= dy; x0 += sx; moved = true; }
-      if (e2 < dx) { err += dx; y0 += sy; moved = true; }
-      // when the step is diagonal, also require the two orthogonal cells open (no corner clip)
-      if (moved && e2 > -dy && e2 < dx) {
-        if (!(ok(y0 * cols + (x0 - sx)) && ok((y0 - sy) * cols + x0))) return false;
-      }
-    }
-  };
+  const clear = (a, b) => cellLineClear(a, b, passable, cols, rows, wide);
   const out = [path[0]];
   let anchor = 0;
   for (let i = 1; i < path.length; i++) {
