@@ -25,6 +25,9 @@
  *   r.canvas             — the element input.js binds to (createInput(..., { pick, tapToAct: true }))
  * T3.2 [MM-task_mv9s9lvj_1]: input acts through these (tap = act, drag = pan), and the placement ghost
  * (overlays/placement.js) shows the armed build tool green/red from ui.hoverValid.
+ * T3.3 [MM-task_mv9s9mza_2]: projectiles fly at height and arrive as hit flashes; muzzle, kill, destroyed, mine and
+ * base-cannon flashes — fx/combatFxModel.js decides them from state + events, fx/combatFx.js draws them in one
+ * instanced additive call. opts.projFx / opts.projScale (getters) carry the authored shot looks + map damping.
  * T3.4 [MM-task_mv9s9o5d_3]: the ring fog (overlays/fog.js) veils everything outside the current wave window with
  * a thin outline and flashes a ring as it opens. Camera rules: in battle pan + zoom only and a leftover yaw eases
  * back to 0 when the wave starts; outside it, right-drag or a two-finger twist turns the view.
@@ -45,6 +48,9 @@ import { buildLowPolyObstructions } from './obstructions/lowpoly.js';
 import { createPathLines } from './overlays/pathLinesModel.js';
 import { createPathLinesView } from './overlays/pathLines.js';
 import { buildUnitViews, createModelResolver } from './units/unitViews.js';
+import { createCombatFx } from './fx/combatFxModel.js';
+import { createCombatFxView } from './fx/combatFx.js';
+import { getUnitDef } from '../data/tables.js';
 
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
 
@@ -130,10 +136,12 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const pathLines = createPathLines();
   const pathLinesView = createPathLinesView(THREE, scene);
   const ghost = createPlacementGhost(THREE, scene);
+  const fx = createCombatFx({ seed: (map.seed | 0) || 1 });
+  const fxView = createCombatFxView(THREE, scene, fx.caps.maxShots + fx.caps.maxFlashes);
   const fogView = createFogView(THREE, scene, map);
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, ghost, fog: createFogTracker(), fogView, inBattle: false, host, banner, map,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map,
     clock: 0,
     cam: createCameraState(map),
     headings: createHeadingTracker(),
@@ -141,7 +149,10 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     listeners: [],
     status: 'loading',
     problems: [],
-    stats: { calls: 0, triangles: 0, units: 0, lines: 0 },
+    stats: { calls: 0, triangles: 0, units: 0, lines: 0, fx: 0 },
+    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1 },
+    getProjFx: typeof opts.projFx === 'function' ? opts.projFx : () => opts.projFx || null,
+    getProjScale: typeof opts.projScale === 'function' ? opts.projScale : () => opts.projScale || 1,
     destroyed: false,
     world: null,
     lowpoly: opts.ground !== 'baked' && !!map.terrain,   // workbook maps have no terrain codes (T0 audit §11)
@@ -269,6 +280,11 @@ export function renderFrame(r, state, ui, events, dt) {
     r.stats.lines = r.pathLinesView.sync(r.pathLines.lines, geometryDirty, r.clock);
   }
 
+  // Combat FX (T3.3): shots + flashes from state + this frame's events.
+  r.fxOpts.projFx = r.getProjFx();
+  r.fxOpts.projScale = r.getProjScale();
+  r.fx.update(state, r.map, events, dt, r.fxOpts);
+  r.stats.fx = r.fxView.sync(r.fx);
   // Ring fog (T3.4): veil outside the current wave window
   r.fogView.sync(r.fog.update(state, r.map, dt));
 
@@ -313,6 +329,7 @@ export function destroyRenderer(r) {
   r.units3d.dispose();
   r.pathLinesView.dispose();
   r.ghost.dispose();
+  r.fxView.dispose();
   r.fogView.dispose();
   r.scene.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
