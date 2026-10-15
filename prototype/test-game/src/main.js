@@ -86,7 +86,8 @@ export function boot(mountEl, seed) {
       if (renderer3d) { render3dMod.destroyRenderer(renderer3d); renderer3d = null; }
       // ?world=<palette> previews a low-poly world; ?ground=baked keeps the baked-texture ground (LP).
       const q = new URLSearchParams(window.location.search);
-      const r = await render3dMod.createRenderer3D(mountEl, map, { slug, world: q.get('world') || undefined, ground: q.get('ground') || undefined });
+      const r = await render3dMod.createRenderer3D(mountEl, map, { slug, world: q.get('world') || undefined, ground: q.get('ground') || undefined,
+        projFx: () => renderer.projFx, projScale: () => renderer.projScale });
       if (mySeq !== mount3dSeq) { render3dMod.destroyRenderer(r); return; }
       renderer3d = r;
       rebindInput();   // the input was bound to the old (or no) 3D canvas — move it onto this one
