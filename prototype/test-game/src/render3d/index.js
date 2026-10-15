@@ -23,6 +23,8 @@
  *   destroyRenderer(r)
  *   eventToCell(r, ev, ui) / screenToCell(r, px, py) / cellToScreen(r, cell)   — picking (T3.2)
  *   r.canvas             — the element input.js binds to (createInput(..., { pick, tapToAct: true }))
+ *   r.quality            — { key, source, choice, auto } the tier in use (T3.5 quality.js); opts.qualityChoice /
+ *                          opts.qualityQuery pick it (Settings / ?quality=), else auto
  * T3.2 [MM-task_mv9s9lvj_1]: input acts through these (tap = act, drag = pan), and the placement ghost
  * (overlays/placement.js) shows the armed build tool green/red from ui.hoverValid.
  * T3.3 [MM-task_mv9s9mza_2]: projectiles fly at height and arrive as hit flashes; muzzle, kill, destroyed, mine and
@@ -34,13 +36,14 @@
  */
 import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX } from './camera.js';
 import { createFogTracker } from './overlays/fogModel.js';
+import { resolveTier, probeEnv, pixelRatioFor } from './quality.js';
 import { createFogView } from './overlays/fog.js';
 import { createPlacementGhost } from './overlays/placement.js';
 import { createLights } from './lighting.js';
 import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
 import { createHeadingTracker } from './heading.js';
 import { buildBakedGround } from './ground/baked.js';
-import { buildLowPolyGround } from './ground/lowpoly.js';
+import { buildLowPolyGround, GRID as GROUND_GRID } from './ground/lowpoly.js';
 import { LOWPAL, WORLD_LIGHT, resolveWorld } from './styles/lowpoly-palettes.js';
 import { createMarkers } from './markers.js';
 import { createLowPolyStructures } from './structures/lowpoly.js';
@@ -122,7 +125,10 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const banner = makeBanner(mountEl);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  // Quality tier (T3.5): ?quality= → the player's Settings choice → auto from this device + GPU
+  const quality = resolveTier({ query: opts.qualityQuery, stored: opts.qualityChoice, env: probeEnv(window, renderer.getContext()) });
+  const tier = quality.tier;
+  renderer.setPixelRatio(pixelRatioFor(tier, window.devicePixelRatio || 1));
   renderer.setClearColor(0x0f1412, 1);
   const canvas = renderer.domElement;
   Object.assign(canvas.style, { display: 'block', width: '100%', height: '100%', maxWidth: 'none', maxHeight: 'none', margin: '0' });
@@ -130,7 +136,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(CAMERA.fovDeg, 1, CAMERA.near, CAMERA.far);
-  const lights = createLights(THREE, renderer, scene, map.cols, map.rows, opts.shadowSize || 2048);
+  const lights = createLights(THREE, renderer, scene, map.cols, map.rows, tier.shadowSize);
   const lowpoly = opts.ground !== 'baked' && !!map.terrain;   // workbook maps have no terrain codes (T0 audit §11)
   // LPS [MM-story_mv87jzov_9]: low-poly base / walls / towers / crystals on the low-poly ground; boxes under ?ground=baked
   const markers = lowpoly ? createLowPolyStructures(THREE, scene) : createMarkers(THREE, scene);
@@ -139,12 +145,13 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const pathLines = createPathLines();
   const pathLinesView = createPathLinesView(THREE, scene);
   const ghost = createPlacementGhost(THREE, scene);
-  const fx = createCombatFx({ seed: (map.seed | 0) || 1 });
+  const fx = createCombatFx({ seed: (map.seed | 0) || 1, caps: tier.effects });
   const fxView = createCombatFxView(THREE, scene, fx.caps.maxShots + fx.caps.maxFlashes);
   const fogView = createFogView(THREE, scene, map);
 
   const r = {
     THREE, renderer, canvas, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map,
+    quality, tier,
     clock: 0,
     cam: createCameraState(map),
     headings: createHeadingTracker(),
@@ -181,7 +188,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
       if (r.lowpoly) {
         r.roadMask = await loadRoadMask(dir + 'road_mask.png').catch((e) => { console.warn('[render3d] no road mask:', e.message); return null; });
       } else {
-        r.ground = { group: await buildBakedGround(THREE, renderer, dir, level) };
+        r.ground = { group: await buildBakedGround(THREE, renderer, dir, level, { scale: r.tier.groundRes }) };
         scene.add(r.ground.group);
       }
       if (r.destroyed) return r;
@@ -234,7 +241,7 @@ export function setWorld(r, key) {
   if (r.obstructions) scene.add(r.obstructions.group);
   if (r.lowpoly) {
     if (r.ground) disposeGroup(scene, r.ground.group);
-    r.ground = buildLowPolyGround(THREE, map, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron });
+    r.ground = buildLowPolyGround(THREE, map, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts });
     scene.add(r.ground.group);
     r.lights.setWorld(WORLD_LIGHT[world]);
     if (r.markers.setWorld) r.markers.setWorld(palette);
@@ -271,11 +278,10 @@ export function renderFrame(r, state, ui, events, dt) {
   }
   if (state && r.markers.setResources && r.markers.setResources(state)) r.lights.invalidateShadows();   // LPS crystal fields
 
-  // Live units: the 3D models (T5). Live planar shadows on every tier for now; the tier table (quality.js)
-  // turns them off on Low when it lands.
+  // Live units: the 3D models (T5). Live planar shadows per the quality tier (off on Low — T3.5).
   if (state && state.units) {
     const views = buildUnitViews(state, r.map, r.headings, r.resolveModel, Math.min(0.1, Math.max(0, dt || 0)));   // smooth turning; clamped so a stalled frame can't swing a whole turn at once
-    r.stats.units = r.units3d.setUnits(views, r.cam.dist, true);
+    r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows);
   }
 
   // Expected-path lines (T3b): which origins are live, their routes on the sim's current grid, fades.

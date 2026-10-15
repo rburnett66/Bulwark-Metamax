@@ -8,9 +8,16 @@
  * THREE is passed in (no import) — see index.js.
  */
 
-function loadTexture(THREE, loader, url, maxAniso) {
+function loadTexture(THREE, loader, url, maxAniso, scale = 1) {
   return new Promise((resolve, reject) => {
     loader.load(url, (t) => {
+      if (scale < 1 && t.image && typeof document !== 'undefined') {
+        // Low tier (T3.5): half-resolution ground — resample the tile once, keep the smaller copy only
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(t.image.width * scale)); c.height = Math.max(1, Math.round(t.image.height * scale));
+        c.getContext('2d').drawImage(t.image, 0, 0, c.width, c.height);
+        t.image = c;
+      }
       t.generateMipmaps = false;              // tiles are drawn near 1:1 at battle zoom; mips cost memory
       t.minFilter = THREE.LinearFilter;
       t.magFilter = THREE.NearestFilter;      // keep the digicam blocks crisp up close
@@ -21,12 +28,12 @@ function loadTexture(THREE, loader, url, maxAniso) {
 }
 
 /** Build the ground group. Rejects (never resolves to an empty plane) if any tile fails. */
-export async function buildBakedGround(THREE, renderer, baseUrl, level) {
+export async function buildBakedGround(THREE, renderer, baseUrl, level, { scale = 1 } = {}) {
   const group = new THREE.Group();
   group.name = 'ground';
   const loader = new THREE.TextureLoader();
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
-  const textures = await Promise.all(level.tiles.map((t) => loadTexture(THREE, loader, baseUrl + t.name, maxAniso)));
+  const textures = await Promise.all(level.tiles.map((t) => loadTexture(THREE, loader, baseUrl + t.name, maxAniso, scale)));
   level.tiles.forEach((t, i) => {
     const g = new THREE.PlaneGeometry(t.w, t.h);
     g.rotateX(-Math.PI / 2);
