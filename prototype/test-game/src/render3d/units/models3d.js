@@ -7,8 +7,8 @@
  * are unlit through a per-vertex flag. Shadows: the LOD instances projected flat onto Y = 0 along the sun —
  * exact silhouettes, stencil-once so overlaps never double-darken, no per-frame shadow-map pass.
  *
- * Material is a plain lit one here; the metal look is its own story (MAT, [MM-story_mv87jwol_6]) and will
- * replace unitMaterial() without touching the geometry or the instancing.
+ * Material: the metal look (material.js, MAT [MM-story_mv87jwol_6]) — per-vertex metalness/roughness from
+ * metal.js, a sky/ground reflection and a fresnel edge; setMetal(0) gives back the flat look.
  *
  * THREE is injected (no import) — see render3d/index.js.
  */
@@ -16,13 +16,14 @@ import { createPrims } from './prims.js';
 import { UNIT_MODELS } from './models.js';
 import { MODEL_KEYS, UNIT_SCALE } from './modelKeys.js';
 import { lodDef, LOD_DISTANCE } from './lod.js';
+import { metalFor, isGlowKey } from './metal.js';
+import { createUnitMaterial } from './material.js';
 
 /** Studio palette per material key (code design §4.11 UCOL). */
 export const UNIT_COLORS = Object.freeze({
   hull: 0xc4c8cd, hull2: 0xa6acb3, panel: 0xadb3ba, dark: 0x4a4f56, black: 0x22252a, track: 0x2e3135,
   metal: 0x7b828a, glass: 0x1c2533, glow: 0x46f2ff, glowB: 0x4aa8ff, amber: 0xffb340,
 });
-const isGlowKey = (k) => /^glow|amber/.test(k);
 const DEFAULT_CAP = 600;
 export const HOVER_HEIGHT = 1.1;   // cells — flyers fly at this height (code design §4.11)
 
@@ -30,21 +31,22 @@ export const HOVER_HEIGHT = 1.1;   // cells — flyers fly at this height (code 
  * Merge a built model's groups into one geometry per group: { [group]: { geo, pivot, tris } }.
  * Exported for tests (tri counts) — needs THREE but no WebGL.
  */
-export function mergeModelGroups(THREE, def, prims = createPrims(THREE)) {
+export function mergeModelGroups(THREE, def, prims = createPrims(THREE), modelKey = def && def.ref) {
   const dummy = new THREE.MeshBasicMaterial();
   const built = prims.buildModel(def, () => dummy);
   const out = {};
   const c = new THREE.Color();
   for (const [gname, G] of Object.entries(built.groups)) {
-    const pos = [], nor = [], col = [], emi = [];
+    const pos = [], nor = [], col = [], emi = [], mr = [];
     for (const mesh of G.children) {
       const k = mesh.userData.mat;
       c.setHex(UNIT_COLORS[k] ?? 0xff00ff);   // magenta = a material key with no colour — visible on purpose
       const e = isGlowKey(k) ? 1 : 0;
+      const [mtl, rgh] = metalFor(k, modelKey);   // MAT: per-part metalness / roughness
       const P = mesh.geometry.attributes.position.array, N = mesh.geometry.attributes.normal.array;
       for (let i = 0; i < P.length; i += 3) {
         pos.push(P[i], P[i + 1], P[i + 2]); nor.push(N[i], N[i + 1], N[i + 2]);
-        col.push(c.r, c.g, c.b); emi.push(e);
+        col.push(c.r, c.g, c.b); emi.push(e); mr.push(mtl, rgh);
       }
       mesh.geometry.dispose();
     }
@@ -53,25 +55,12 @@ export function mergeModelGroups(THREE, def, prims = createPrims(THREE)) {
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     geo.setAttribute('aEmit', new THREE.Float32BufferAttribute(emi, 1));
+    geo.setAttribute('aMR', new THREE.Float32BufferAttribute(mr, 2));
     const piv = (def.pivots && def.pivots[gname]) || [0, 0, 0];
     out[gname] = { geo, pivot: new THREE.Vector3(piv[0], piv[1], piv[2]), tris: pos.length / 9 };
   }
   dummy.dispose();
   return out;
-}
-
-function unitMaterial(THREE) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
-  m.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aEmit; varying float vEmit;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvEmit = aEmit;');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vEmit;')
-      .replace('#include <dithering_fragment>', 'gl_FragColor.rgb = mix(gl_FragColor.rgb, vColor, vEmit);\n#include <dithering_fragment>');
-  };
-  m.customProgramCacheKey = () => 'unit3d-lambert';
-  return m;
 }
 
 function shadowMaterial(THREE, sunDir, alpha) {
@@ -98,7 +87,8 @@ function shadowMaterial(THREE, sunDir, alpha) {
  */
 export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = DEFAULT_CAP } = {}) {
   const prims = createPrims(THREE);
-  const mat = unitMaterial(THREE);
+  const metal = createUnitMaterial(THREE);
+  const mat = metal.material;
   const shMat = shadowMaterial(THREE, sunDir, shadowAlpha);
   const types = {};
   const tris = {};
@@ -106,8 +96,8 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
 
   for (const key of MODEL_KEYS) {
     const def = UNIT_MODELS[key];
-    const full = mergeModelGroups(THREE, def, prims);
-    const lod = mergeModelGroups(THREE, lodDef(def), prims);
+    const full = mergeModelGroups(THREE, def, prims, key);
+    const lod = mergeModelGroups(THREE, lodDef(def), prims, key);
     const T = { def, groups: {} };
     tris[key] = { full: 0, lod: 0 };
     for (const gname of Object.keys(full)) {
@@ -141,6 +131,9 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
 
   return {
     tris,
+    material: metal,
+    /** MAT: 1 = metal (default), 0 = the previous flat look. */
+    setMetal(k) { metal.setMetal(k); },
     get usingLod() { return usingLod; },
     /** Returns how many units were drawn (capped per model at `cap`). */
     setUnits(list, camDist, liveShadows) {
