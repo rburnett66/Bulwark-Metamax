@@ -71,8 +71,8 @@ export function boot(mountEl, seed) {
 
   // ?renderer=three — the three.js battle view (plan v2.2 §6.12, T3.1 skeleton [MM-task_mv883c5d_b]).
   // OPT-IN: without the flag nothing below runs and neither render3d/ nor three.js is ever fetched. With
-  // it, the 3D view covers the board and the Pixi canvas stays mounted but hidden — the HUD, sim and
-  // input wiring are untouched. Placement under the 3D view is a later T3 task.
+  // it, the 3D view covers the board and the Pixi canvas stays mounted but hidden; the HUD and sim are
+  // untouched. Input binds to the 3D canvas once it is up (makeInput — T3.2 [MM-task_mv9s9lvj_1]).
   const USE_3D = (() => { try { return new URLSearchParams(window.location.search).get('renderer') === 'three'; } catch (e) { return false; } })();
   let renderer3d = null;
   let render3dMod = null;
@@ -89,6 +89,7 @@ export function boot(mountEl, seed) {
       const r = await render3dMod.createRenderer3D(mountEl, map, { slug, world: q.get('world') || undefined, ground: q.get('ground') || undefined });
       if (mySeq !== mount3dSeq) { render3dMod.destroyRenderer(r); return; }
       renderer3d = r;
+      rebindInput();   // the input was bound to the old (or no) 3D canvas — move it onto this one
       console.log('[render3d]', r.status, slug || '(no baked level)', r.problems.join('; '));
     } catch (e) {
       console.error('[render3d] failed to start', e);
@@ -185,6 +186,20 @@ export function boot(mountEl, seed) {
   let accumulator = 0;        // fixed-timestep accumulator (seconds)
   let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame
   let inputHandle = null;
+  // Input binds to the LIVE view: the Pixi canvas by default; under ?renderer=three the 3D canvas, picking
+  // through its camera and acting only on a tap (a drag there pans the camera).
+  function makeInput() {
+    if (renderer3d) {
+      return createInput(renderer3d.canvas, renderer, () => sim, submit, ui,
+        { pick: (ev, u) => render3dMod.eventToCell(renderer3d, ev, u), tapToAct: true });
+    }
+    return createInput(canvas, renderer, () => sim, submit, ui);
+  }
+  function rebindInput() {
+    if (!inputHandle) return;   // no session yet — the boot path creates it
+    destroyInput(inputHandle);
+    inputHandle = makeInput();
+  }
   let pendingCarry = null;   // campaign carry (gold + defenses) applied by restart() until the map changes by hand
   let runContract = null;    // the ACCEPTED quest contract for the current map run (judged at match end)
 
@@ -246,7 +261,7 @@ export function boot(mountEl, seed) {
     if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
     accumulator = 0;
     pendingEvents = [];
-    inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
+    inputHandle = makeInput();
     if (hud && hud.hideResult) hud.hideResult();
     resetCommTracking();
     preDialogFaction = null;
@@ -421,7 +436,7 @@ export function boot(mountEl, seed) {
     ended = false;
     accumulator = 0;
     pendingEvents = [];
-    inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
+    inputHandle = makeInput();
     if (hud && hud.hideResult) hud.hideResult();
     resetCommTracking();
     flashMessage(hud, 'replay playback started');
@@ -547,7 +562,7 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   // Input
   // ---------------------------------------------------------------------
-  inputHandle = createInput(canvas, renderer, () => sim, submit, ui);
+  inputHandle = makeInput();
 
   // boot = a fresh board on the DEFAULT MAP: selectMap rebuilds sim+renderer for map 1 and its
   // restart() opens the wave-1 tap-to-start overlay

@@ -21,8 +21,13 @@
  *   setWorld(r, key)     — rebuild ground + obstructions in another world palette (same geometry)
  *   renderFrame(r, state, ui, events, dt)
  *   destroyRenderer(r)
+ *   eventToCell(r, ev, ui) / screenToCell(r, px, py) / cellToScreen(r, cell)   — picking (T3.2)
+ *   r.canvas             — the element input.js binds to (createInput(..., { pick, tapToAct: true }))
+ * T3.2 [MM-task_mv9s9lvj_1]: input acts through these (tap = act, drag = pan), and the placement ghost
+ * (overlays/placement.js) shows the armed build tool green/red from ui.hoverValid.
  */
-import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy } from './camera.js';
+import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen } from './camera.js';
+import { createPlacementGhost } from './overlays/placement.js';
 import { createLights } from './lighting.js';
 import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
 import { createHeadingTracker } from './heading.js';
@@ -111,9 +116,10 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   markers.setBase(map.base);
   const pathLines = createPathLines();
   const pathLinesView = createPathLinesView(THREE, scene);
+  const ghost = createPlacementGhost(THREE, scene);
 
   const r = {
-    THREE, renderer, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, host, banner, map,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, ghost, host, banner, map,
     clock: 0,
     cam: createCameraState(map),
     headings: createHeadingTracker(),
@@ -247,10 +253,36 @@ export function renderFrame(r, state, ui, events, dt) {
     r.stats.lines = r.pathLinesView.sync(r.pathLines.lines, geometryDirty, r.clock);
   }
 
+  r.ghost.sync(ui);
+
   r.renderer.info.reset();
   r.renderer.render(r.scene, r.camera);
   r.stats.calls = r.renderer.info.render.calls;
   r.stats.triangles = r.renderer.info.render.triangles;
+}
+
+/** Viewport pixel (from the canvas' top-left, CSS px) → sim cell, or null off the map. */
+export function screenToCell(r, px, py, lift = 0) {
+  if (!r || r.destroyed) return null;
+  const w = r.canvas.clientWidth, h = r.canvas.clientHeight;
+  return screenToGroundCell(clampCamera(r.cam, r.map.cols, r.map.rows), w, h, px, py, r.map.cols, r.map.rows, lift);
+}
+
+/** Touch builds aim this far (cells) above the finger so the ghost isn't hidden under it (plan §6.9). */
+const TOUCH_LIFT = 1.4;
+
+/** A pointer event → the sim cell under it (input.js `pick`). Lifts only for a touch with a build tool armed. */
+export function eventToCell(r, ev, ui) {
+  if (!r || r.destroyed) return null;
+  const rect = r.canvas.getBoundingClientRect();
+  const lift = (ev.pointerType === 'touch' && ui && ui.buildSelection) ? TOUCH_LIFT : 0;
+  return screenToCell(r, ev.clientX - rect.left, ev.clientY - rect.top, lift);
+}
+
+/** Sim cell centre → canvas pixel (CSS px), or null behind the camera. */
+export function cellToScreen(r, cell) {
+  if (!r || r.destroyed) return null;
+  return groundCellToScreen(r.cam, r.canvas.clientWidth, r.canvas.clientHeight, cell);
 }
 
 export function destroyRenderer(r) {
@@ -261,6 +293,7 @@ export function destroyRenderer(r) {
   r.markers.dispose();
   r.units3d.dispose();
   r.pathLinesView.dispose();
+  r.ghost.dispose();
   r.scene.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
