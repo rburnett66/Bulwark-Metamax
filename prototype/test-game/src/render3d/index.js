@@ -35,6 +35,11 @@
  * T3.4 [MM-task_mv9s9o5d_3]: the ring fog (overlays/fog.js) veils everything outside the current wave window with
  * a thin outline and flashes a ring as it opens. Camera rules: in battle pan + zoom only and a leftover yaw eases
  * back to 0 when the wave starts; outside it, right-drag or a two-finger twist turns the view.
+ * LC [MM-epic_mvbkrvnz_2]: the base is the player's LANDING CRAFT (craft/craft3d.js; opts.craft = faction or craft
+ * key, default the neutral craft). On load it flies in, lands, opens its hatches and the sim's harvesters drive
+ * down the ramps to their docks (craft/landing.js; opts.landing === false parks it). The roof weapon follows the
+ * base cannon's aim. Resource fields are the battle planet's own resource models (resources/; opts.planet =
+ * faction key of the homeworld), falling back to the crystal shards when no planet is known.
  */
 import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX } from './camera.js';
 import { createFogTracker } from './overlays/fogModel.js';
@@ -58,6 +63,9 @@ import { createCombatFx } from './fx/combatFxModel.js';
 import { createCombatFxView } from './fx/combatFx.js';
 import { createImpacts } from './fx/impacts.js';
 import { createImpactsView } from './fx/impactsView.js';
+import { createCraft3D } from './craft/craft3d.js';
+import { createLanding, landedPose, harvesterOnRamp } from './craft/landing.js';
+import { createResources3D } from './resources/resources3d.js';
 import { getUnitDef } from '../data/tables.js';
 
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
@@ -146,6 +154,19 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const markers = lowpoly ? createLowPolyStructures(THREE, scene) : createMarkers(THREE, scene);
   const units3d = createUnits3D(THREE, scene, { sunDir: lights.dir });
   markers.setBase(map.base);
+  // LC: the landing craft is the base; it lands on load unless opts.landing === false
+  let craft = null, landing = null;
+  if (map.base && opts.craft !== false) {
+    craft = createCraft3D(THREE, scene, opts.craft || 'system', { tier });
+    craft.place(map.base);
+    if (markers.setBaseVisible) markers.setBaseVisible(false);
+    landing = opts.landing === false ? null : createLanding({ fromDeg: opts.landingFrom != null ? opts.landingFrom : 180 });
+    craft.apply(landing ? landing.pose() : landedPose());
+    if (landing && opts.landingHeld) craft.setVisible(false);   // waits off-stage until startLanding
+    if (!landing) craft.setCastShadow(true);
+  }
+  // LC-RES: planet resource models (replace the crystal shards when the planet is known)
+  const resources = lowpoly && opts.planet ? createResources3D(THREE, scene, opts.planet) : null;
   const pathLines = createPathLines();
   const pathLinesView = createPathLinesView(THREE, scene);
   const ghost = createPlacementGhost(THREE, scene);
@@ -156,7 +177,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const fogView = createFogView(THREE, scene, map);
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -252,6 +273,7 @@ export function setWorld(r, key) {
     r.lights.setWorld(WORLD_LIGHT[world]);
     if (r.markers.setWorld) r.markers.setWorld(palette);
   }
+  if (r.craft) r.craft.setEnv({ sky: WORLD_LIGHT[world].hemi[0], ground: WORLD_LIGHT[world].apron });
   r.world = world;
   r.lights.invalidateShadows();
   return world;
@@ -282,12 +304,26 @@ export function renderFrame(r, state, ui, events, dt) {
   if (state && state.structures) {
     if (r.markers.setStructures(Array.from(state.structures.values()))) r.lights.invalidateShadows();
   }
-  if (state && r.markers.setResources && r.markers.setResources(state)) r.lights.invalidateShadows();   // LPS crystal fields
+  if (r.resources) { if (state && r.resources.setResources(state)) r.lights.invalidateShadows(); }   // LC-RES planet resources
+  else if (state && r.markers.setResources && r.markers.setResources(state)) r.lights.invalidateShadows();   // LPS crystal fields
+
+  // LC: the landing sequence, then the roof weapon follows the base cannon's aim
+  if (r.craft) {
+    if (r.landing && !r.landing.done && !r.landingHeld) {
+      for (const ev of r.landing.step(dt)) if (ev.type === 'touchdown') { r.craft.setCastShadow(true); r.lights.invalidateShadows(); }
+      r.craft.apply(r.landing.pose());
+    }
+    const c = state && state.base && state.base.cannon, b = r.map.base;
+    const aim = c && c.aimPos && b ? Math.atan2(-(c.aimPos.y - b.y), c.aimPos.x - b.x) : null;
+    r.craft.aim(aim, dt);
+    r.craft.scan(r.clock);
+  }
 
   // Live units: the 3D models (T5). Live planar shadows per the quality tier (off on Low — T3.5).
   let views = null;
   if (state && state.units) {
     views = buildUnitViews(state, r.map, r.headings, r.resolveModel, Math.min(0.1, Math.max(0, dt || 0)));   // smooth turning; clamped so a stalled frame can't swing a whole turn at once
+    if (r.landing && r.craft && !r.landingHandedOff) views = landingHarvesters(r, state, views);
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows);
   }
 
@@ -315,6 +351,59 @@ export function renderFrame(r, state, ui, events, dt) {
   r.renderer.render(r.scene, r.camera);
   r.stats.calls = r.renderer.info.render.calls;
   r.stats.triangles = r.renderer.info.render.triangles;
+}
+
+/**
+ * LC: while the craft lands, the sim's harvesters are aboard (hidden), then drive down the ramps and ease onto
+ * their real positions. Presentation only — the sim's units are never touched. Side: a harvester docked north of
+ * the base leaves by the −Z hatch, south by +Z (the craft lands nose east); east/west docks pick by x.
+ */
+const HAND_OFF = 0.7;   // fraction of the deploy spent on the ramp; the rest eases onto the sim position
+export function landingHarvesters(r, state, views) {
+  const P = r.landing.pose();
+  if (r.landing.done) { r.landingHandedOff = true; return views; }
+  const b = r.map.base, out = [];
+  const yaw = r.craft.model.rotation.y;
+  for (const v of views) {
+    const u = state.units.get(v.id);
+    if (!u || !u.isHarvester) { out.push(v); continue; }
+    if (P.harv < 0) continue;   // still aboard
+    const home = u.homePos || u.pos;
+    const side = home.y !== b.y ? Math.sign(home.y - b.y) : (home.x >= b.x ? 1 : -1);
+    const q = harvesterOnRamp(r.craft.def, Math.min(1, P.harv / HAND_OFF));
+    const w = r.craft.toWorld({ x: 0, y: q.y, z: side * q.z });
+    if (P.harv > HAND_OFF) {
+      const f = (P.harv - HAND_OFF) / (1 - HAND_OFF), s = f * f * (3 - 2 * f);
+      w.x += (v.x - w.x) * s; w.y += (v.y - w.y) * s; w.z += (v.z - w.z) * s;
+    }
+    const heading = Math.atan2(side * Math.cos(yaw), side * Math.sin(yaw));   // outward through the hatch
+    out.push(Object.assign({}, v, { x: w.x, y: w.y, z: w.z, heading, aim: heading }));
+  }
+  return out;
+}
+
+/** Re-arm the landing: back to the start of the approach, held off-stage until startLanding (a fresh board). */
+export function armLanding(r, opts = {}) {
+  if (!r || !r.craft || !r.landing) return;
+  r.landing = createLanding({ fromDeg: opts.fromDeg != null ? opts.fromDeg : 180 });
+  r.landingHeld = true; r.landingHandedOff = false;
+  r.craft.setCastShadow(false); r.craft.apply(r.landing.pose()); r.craft.setVisible(false);
+  r.lights.invalidateShadows();
+}
+/** Release a held landing — the craft flies in now (the dialogs are closed and the field is on screen). */
+export function startLanding(r) {
+  if (!r || !r.craft || !r.landing || !r.landingHeld) return;
+  r.landingHeld = false; r.craft.setVisible(true);
+}
+
+/** Jump the landing to its end (a tap-to-skip, or a test). */
+export function skipLanding(r) {
+  if (!r || !r.landing || !r.craft) return;
+  r.landing.skip();
+  r.landingHeld = false; r.craft.setVisible(true);
+  r.craft.apply(r.landing.pose());
+  r.craft.setCastShadow(true);
+  r.lights.invalidateShadows();
 }
 
 /** Viewport pixel (from the canvas' top-left, CSS px) → sim cell, or null off the map. */
@@ -347,6 +436,8 @@ export function destroyRenderer(r) {
   const canvas = r.renderer.domElement;
   for (const [type, fn, opts] of r.listeners) canvas.removeEventListener(type, fn, opts);
   r.markers.dispose();
+  if (r.craft) r.craft.dispose();
+  if (r.resources) r.resources.dispose();
   r.units3d.dispose();
   r.pathLinesView.dispose();
   r.ghost.dispose();

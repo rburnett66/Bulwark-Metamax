@@ -36,6 +36,8 @@ export function createMarkers(THREE, scene) {
   let structSig = '';
 
   return {
+    /** LC: the landing craft draws the base on the 3D view; this hides the placeholder. */
+    setBaseVisible(v) { base.visible = !!v; },
     setBase(b) {
       base.visible = !!b;
       if (b) base.position.set(cellToWorld(b.x), 0, cellToWorld(b.y));

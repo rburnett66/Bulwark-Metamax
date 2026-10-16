@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bulwark Landing Craft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root { --bg: #eef0f2; --panel: #ffffff; --ink: #14181d; --mute: #5d6670; --line: #d5dae0; --accent: #e8731c; --chip: #f3f5f7; --stage: #dfe3e7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0b0e10; --panel: #13181b; --ink: #e6ecef; --mute: #8b979e; --line: #243037; --accent: #ff9a4a; --chip: #182026; --stage: #0f1416; } }
+:root[data-theme="dark"] { --bg: #0b0e10; --panel: #13181b; --ink: #e6ecef; --mute: #8b979e; --line: #243037; --accent: #ff9a4a; --chip: #182026; --stage: #0f1416; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.45 "JetBrains Mono", ui-monospace, monospace; }
+.app { display: grid; grid-template-columns: 330px 1fr; height: 100vh; height: 100dvh; }
+aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 16px 16px 28px; }
+h1 { font: 700 26px/1 "Barlow Condensed", sans-serif; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 2px; }
+.sub { color: var(--mute); font-size: 11px; margin-bottom: 14px; }
+h2 { font: 600 12px/1 "Barlow Condensed", sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); margin: 18px 0 8px; }
+.crafts { display: grid; gap: 4px; }
+.craft { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--chip); cursor: pointer; text-align: left; color: inherit; font: inherit; }
+.craft[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.sw { width: 26px; height: 26px; border-radius: 4px; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border: 1px solid rgba(0,0,0,.15); }
+.craft b { display: block; font: 600 15px/1.1 "Barlow Condensed", sans-serif; }
+.craft small { color: var(--mute); font-size: 10.5px; }
+.craft .wt { font-size: 10px; color: var(--mute); text-align: right; max-width: 90px; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg button, .btn { padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--chip); color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 500; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.info { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--chip); }
+.info .nm { font: 700 20px/1.05 "Barlow Condensed", sans-serif; }
+.info .fc { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin: 3px 0 6px; }
+.info p { margin: 0; color: var(--mute); font-size: 11.5px; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 8px 0 0; font-size: 11.5px; }
+dt { color: var(--mute); } dd { margin: 0; }
+select { font: inherit; padding: 5px; border-radius: 5px; border: 1px solid var(--line); background: var(--chip); color: inherit; }
+label.ck { display: flex; gap: 6px; align-items: center; font-size: 12px; cursor: pointer; }
+.stagewrap { position: relative; background: var(--stage); min-height: 0; }
+#stage { position: absolute; inset: 0; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#labels { position: absolute; inset: 0; pointer-events: none; }
+.vlabel { position: absolute; font: 600 12px "Barlow Condensed", sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+.hud { position: absolute; left: 12px; bottom: 12px; right: 12px; display: flex; gap: 10px; align-items: center; pointer-events: none; }
+.phase { background: rgba(10,12,14,.72); color: #fff; padding: 6px 10px; border-radius: 5px; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; }
+.bar { flex: 1; height: 4px; background: rgba(0,0,0,.18); border-radius: 2px; overflow: hidden; max-width: 340px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+@media (max-width: 760px) { .app { grid-template-columns: 1fr; grid-template-rows: 56vh 1fr; } .stagewrap { order: -1; } aside { border-right: 0; border-top: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>Landing Craft</h1>
+    <div class="sub">Bulwark · the 3 × 3 base · runs the game's own render3d/craft modules</div>
+    <div class="info" id="info"></div>
+    <h2>Landing sequence</h2>
+    <div class="row"><button class="btn primary" id="play">▶ Fly in, land, deploy</button><div class="seg" id="pose"></div></div>
+    <div class="row" style="margin-top:8px">
+      <label class="ck">From <select id="from"><option value="180">West</option><option value="90">North</option><option value="0">East</option><option value="270">South</option><option value="135">North-west</option></select></label>
+      <label class="ck"><input type="checkbox" id="slow"> Half speed</label>
+      <label class="ck"><input type="checkbox" id="loop" checked> Loop</label>
+    </div>
+    <h2>View</h2>
+    <div class="seg" id="views"></div>
+    <h2>World</h2>
+    <div class="row"><select id="world"></select>
+      <label class="ck"><input type="checkbox" id="cells" checked> 3 × 3 cells</label>
+      <label class="ck"><input type="checkbox" id="metal" checked> Metal</label></div>
+    <h2>Craft</h2>
+    <div class="crafts" id="crafts"></div>
+  </aside>
+  <div class="stagewrap">
+    <div id="stage"></div><div id="labels"></div>
+    <div class="hud"><div class="phase" id="phase">Landed</div><div class="bar"><i id="prog"></i></div></div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>/*__BUNDLE__*/</script>
+<script>
+const $ = (id) => document.getElementById(id);
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const hemi = new THREE.HemisphereLight(0xffffff, 0x888888, 0.5), amb = new THREE.AmbientLight(0xffffff, 0.16);
+const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0006;
+Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 0.5, far: 40 });
+sun.position.set(-5, 8, -4); scene.add(hemi, amb, sun, sun.target);
+
+const LOWPAL = LC.LOWPAL, WL = LC.WORLD_LIGHT;
+let worldKey = 'meadow', craftKey = 'lc_neutral', viewMode = 'orbit', fromDeg = 180;
+let ground, grid, cells, craft = null, harv = [];
+const HARV_COLORS = { hull: 0xe9ebee, hull2: 0xc5cbd2, panel: 0xadb3ba, dark: 0x4a4f56, black: 0x22252a, track: 0x2e3135, metal: 0x7b828a, glass: 0x1c2533, glow: 0x46f2ff, glowB: 0x4aa8ff, amber: 0xffb340 };
+const HARV_SCALE = 0.27 * 0.9;   // modelKeys: SYS-Harvester → buggy at 0.9 × UNIT_SCALE
+
+function buildWorld() {
+  for (const o of [ground, grid, cells]) if (o) scene.remove(o);
+  const L = WL[worldKey];
+  renderer.setClearColor(L.clear, 1);
+  hemi.color.setHex(L.hemi[0]); hemi.groundColor.setHex(L.hemi[1]); hemi.intensity = L.hemi[2];
+  amb.intensity = L.ambient; sun.color.setHex(L.sun[0]); sun.intensity = L.sun[1];
+  ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: L.apron }));
+  ground.receiveShadow = true; ground.position.y = -0.001;
+  grid = new THREE.GridHelper(60, 60, 0x000000, 0x000000); grid.material.transparent = true; grid.material.opacity = 0.12; grid.position.y = 0.005;
+  const v = []; for (let i = 0; i <= 3; i++) { const a = -1.5 + i; v.push(-1.5, 0.01, a, 1.5, 0.01, a, a, 0.01, -1.5, a, 0.01, 1.5); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+  cells = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xff8a2a })); cells.visible = $('cells').checked;
+  scene.add(ground, grid, cells);
+  scene.fog = new THREE.Fog(L.clear, 40, 120);
+  if (craft) craft.setEnv({ sky: L.hemi[0], ground: L.apron });
+}
+function buildCraft() {
+  if (craft) craft.dispose();
+  for (const h of harv) scene.remove(h.g);
+  const L = WL[worldKey];
+  craft = LC.createCraft3D(THREE, scene, craftKey, { env: { sky: L.hemi[0], ground: L.apron } });
+  craft.place({ x: -0.5, y: -0.5 });
+  craft.setMetal($('metal').checked ? 1 : 0);
+  craft.setCastShadow(true);
+  const prims = LC.createPrims(THREE), cache = {};
+  const mats = (k) => cache[k] || (cache[k] = /^glow|amber/.test(k) ? new THREE.MeshBasicMaterial({ color: HARV_COLORS[k] || 0x46f2ff }) : new THREE.MeshLambertMaterial({ color: HARV_COLORS[k] || 0xff00ff }));
+  harv = [-1, 1].map((side) => { const b = prims.buildModel(LC.UNIT_MODELS.buggy, mats); const g = new THREE.Group(); b.group.scale.setScalar(HARV_SCALE); b.group.traverse((o) => { if (o.isMesh) o.castShadow = true; }); g.add(b.group); g.visible = false; scene.add(g); return { g, side }; });
+  showInfo();
+  setPose(pose);
+}
+function showInfo() {
+  const d = craft.def, sw = (k) => `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:3px;background:${d.palette[k]}"></span>`;
+  $('info').innerHTML = `<div class="nm">${d.name}</div><div class="fc">${d.factionName} · ${d.weaponType}</div><p>${d.blurb}</p>
+    <dl><dt>Faction key</dt><dd>${d.faction}</dd><dt>Footprint</dt><dd>3 × 3 cells</dd><dt>Triangles</dt><dd>${Math.round(craft.tris).toLocaleString()}</dd>
+    <dt>Groups</dt><dd>${Object.keys(craft.groups).join(' · ')}</dd><dt>Livery</dt><dd>${['hull', 'hull2', 'accent', 'stripe', 'glow'].map(sw).join('')}</dd></dl>`;
+}
+// harvesters follow the same rule as render3d/index.js landingHarvesters: ramp, then onto the dock 2 cells out
+function placeHarvesters(P) {
+  const yaw = craft.model.rotation.y;
+  for (const h of harv) {
+    if (P.harv < 0) { h.g.visible = false; continue; }
+    h.g.visible = true;
+    const q = LC.harvesterOnRamp(craft.def, Math.min(1, P.harv / 0.7));
+    const w = craft.toWorld({ x: 0, y: q.y, z: h.side * q.z });
+    if (P.harv > 0.7) { const f = (P.harv - 0.7) / 0.3, s = f * f * (3 - 2 * f); w.z += (h.side * 2 - w.z) * s; w.x += (0 - w.x) * s; w.y += (0 - w.y) * s; }
+    h.g.position.set(w.x, w.y, w.z);
+    h.g.rotation.y = -Math.atan2(h.side * Math.cos(yaw), h.side * Math.sin(yaw));
+  }
+}
+let pose = 'landed', seqT = -1;
+function poseState(k) {
+  if (k === 'flight') return LC.landingPose(LC.phaseStart('descent'), { fromDeg });
+  if (k === 'landed') return LC.landingPose(LC.phaseStart('hatches'), { fromDeg });
+  return LC.landedPose({ fromDeg });
+}
+function setPose(k) { pose = k; seqT = -1; const P = poseState(k); craft.apply(P); placeHarvesters(P); $('phase').textContent = k === 'flight' ? 'Hovering · gear up' : k === 'landed' ? 'Landed · hatches shut' : 'Landed · deployed'; $('prog').style.width = '0'; }
+
+// cameras
+const persp = new THREE.PerspectiveCamera(35, 1, 0.1, 400), orbit = { yaw: 0.8, pitch: 0.42, dist: 9, auto: true };
+function placeOrbit(follow) {
+  const t = new THREE.Vector3(follow ? follow.x * 0.5 : 0, 0.6 + (follow ? follow.y * 0.5 : 0), follow ? follow.z * 0.5 : 0);
+  persp.fov = 35; persp.position.set(t.x + Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * orbit.dist, t.y + Math.sin(orbit.pitch) * orbit.dist, t.z + Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * orbit.dist);
+  persp.lookAt(t); persp.updateProjectionMatrix();
+}
+function placeBattle() { const d = 22 * (orbit.dist / 9), p = 37 * Math.PI / 180; persp.fov = 30; persp.position.set(0, Math.sin(p) * d, Math.cos(p) * d); persp.lookAt(0, 0, 0); persp.updateProjectionMatrix(); }
+const ORTHO = [{ name: 'Front', dir: [1, 0, 0], up: [0, 1, 0] }, { name: 'Side', dir: [0, 0, 1], up: [0, 1, 0] }, { name: 'Top', dir: [0, 1, 0], up: [1, 0, 0] }, { name: 'Rear', dir: [-1, 0, 0], up: [0, 1, 0] }];
+const ocam = new THREE.OrthographicCamera(-1, 1, 1, -1, -50, 50);
+function fitOrtho(v, w, h) {
+  ocam.position.set(...v.dir).multiplyScalar(10); ocam.up.set(...v.up); ocam.lookAt(0, 0, 0); ocam.updateMatrixWorld();
+  const box = new THREE.Box3().setFromObject(craft.model), inv = ocam.matrixWorldInverse; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const a of [box.min.x, box.max.x]) for (const b of [box.min.y, box.max.y]) for (const c of [box.min.z, box.max.z]) { const p = new THREE.Vector3(a, b, c).applyMatrix4(inv); x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  let bw = (x1 - x0) * 1.1, bh = (y1 - y0) * 1.1; const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2; if (bw / bh > w / h) bh = bw / (w / h); else bw = bh * (w / h);
+  Object.assign(ocam, { left: cx - bw / 2, right: cx + bw / 2, top: cy + bh / 2, bottom: cy - bh / 2 }); ocam.updateProjectionMatrix();
+}
+
+// controls
+function seg(el, items, cur, on) { el.innerHTML = ''; for (const [k, label] of items) { const b = document.createElement('button'); b.textContent = label; b.setAttribute('aria-pressed', k === cur); b.onclick = () => { [...el.children].forEach((c) => c.setAttribute('aria-pressed', c === b)); on(k); }; el.appendChild(b); } }
+seg($('pose'), [['flight', 'Hover'], ['landed', 'Landed'], ['open', 'Deployed']], pose, setPose);
+seg($('views'), [['orbit', 'Orbit'], ['battle', 'Battle cam'], ['ortho', 'Ortho 4-up']], viewMode, (k) => { viewMode = k; layoutLabels(); if (k === 'ortho') setPose('landed'); });
+for (const k of Object.keys(WL)) { const o = document.createElement('option'); o.value = k; o.textContent = k[0].toUpperCase() + k.slice(1); $('world').appendChild(o); }
+$('world').onchange = (e) => { worldKey = e.target.value; buildWorld(); };
+$('cells').onchange = (e) => { cells.visible = e.target.checked; };
+$('metal').onchange = (e) => craft.setMetal(e.target.checked ? 1 : 0);
+$('from').onchange = (e) => { fromDeg = +e.target.value; if (seqT < 0) setPose(pose); };
+$('play').onclick = () => { if (viewMode === 'ortho') { viewMode = 'orbit'; seg($('views'), [['orbit', 'Orbit'], ['battle', 'Battle cam'], ['ortho', 'Ortho 4-up']], viewMode, (k) => { viewMode = k; layoutLabels(); }); layoutLabels(); } seqT = 0; craft.setCastShadow(false); [...$('pose').children].forEach((c) => c.setAttribute('aria-pressed', false)); };
+for (const k of LC.LANDING_CRAFT_ORDER) {
+  const d = LC.LANDING_CRAFT[k], b = document.createElement('button'); b.className = 'craft'; b.setAttribute('aria-pressed', k === craftKey);
+  b.innerHTML = `<span class="sw">${['hull', 'accent', 'stripe', 'glow'].map((c) => `<i style="background:${d.palette[c]}"></i>`).join('')}</span><span><b>${d.name}</b><small>${d.factionName}</small></span><span class="wt">${d.weaponType}</span>`;
+  b.onclick = () => { [...$('crafts').children].forEach((c) => c.setAttribute('aria-pressed', c === b)); craftKey = k; buildCraft(); };
+  $('crafts').appendChild(b);
+}
+let drag = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY }; orbit.auto = false; renderer.domElement.setPointerCapture(e.pointerId); });
+renderer.domElement.addEventListener('pointermove', (e) => { if (!drag) return; orbit.yaw -= (e.clientX - drag.x) * 0.008; orbit.pitch = Math.max(0.05, Math.min(1.45, orbit.pitch + (e.clientY - drag.y) * 0.006)); drag = { x: e.clientX, y: e.clientY }; });
+renderer.domElement.addEventListener('pointerup', () => { drag = null; });
+renderer.domElement.addEventListener('wheel', (e) => { e.preventDefault(); orbit.dist = Math.max(4, Math.min(30, orbit.dist * (1 + Math.sign(e.deltaY) * 0.08))); }, { passive: false });
+function size() { return [stage.clientWidth || 1, stage.clientHeight || 1]; }
+function resize() { const [w, h] = size(); renderer.setSize(w, h, false); persp.aspect = w / h; layoutLabels(); }
+function layoutLabels() { const L = $('labels'); L.innerHTML = ''; if (viewMode !== 'ortho') return; const [w, h] = size(); ORTHO.forEach((v, i) => { const d = document.createElement('div'); d.className = 'vlabel'; d.textContent = v.name; d.style.left = ((i % 2) * w / 2 + 10) + 'px'; d.style.top = ((i < 2 ? 0 : h / 2) + 10) + 'px'; L.appendChild(d); }); }
+window.addEventListener('resize', resize);
+
+let last = performance.now(), clock = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; clock += dt;
+  let P = null;
+  if (seqT >= 0) {
+    const was = seqT; seqT += dt * ($('slow').checked ? 0.5 : 1);
+    if (was < LC.phaseStart('touchdown') && seqT >= LC.phaseStart('touchdown')) craft.setCastShadow(true);
+    if (seqT > LC.TOTAL + 1.5) { if ($('loop').checked) { seqT = 0; craft.setCastShadow(false); } else { seqT = -1; pose = 'open'; } }
+    if (seqT >= 0) { P = LC.landingPose(seqT, { fromDeg }); craft.apply(P); placeHarvesters(P); const ph = LC.phaseAt(seqT); $('phase').textContent = ph.label; $('prog').style.width = Math.min(100, seqT / LC.TOTAL * 100) + '%'; }
+  }
+  const frozen = viewMode === 'ortho';
+  craft.aim(null, frozen ? 0 : dt); if (frozen && craft.groups.weapon) craft.groups.weapon.rotation.y = 0;
+  craft.scan(frozen ? 0 : clock);
+  if (orbit.auto && viewMode === 'orbit') orbit.yaw += dt * 0.18;
+  const [w, h] = size();
+  if (viewMode === 'ortho') {
+    const hw = Math.floor(w / 2), hh = Math.floor(h / 2); ground.visible = grid.visible = cells.visible = false; renderer.setScissorTest(true);
+    ORTHO.forEach((v, i) => { const x = (i % 2) * hw, y = i < 2 ? hh : 0; fitOrtho(v, hw, hh); renderer.setViewport(x, y, hw, hh); renderer.setScissor(x, y, hw, hh); renderer.render(scene, ocam); });
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h); ground.visible = grid.visible = true; cells.visible = $('cells').checked;
+  } else {
+    if (viewMode === 'battle') placeBattle(); else placeOrbit(P && seqT < LC.phaseStart('touchdown') ? new THREE.Vector3().setFromMatrixPosition(craft.model.matrixWorld) : null);
+    renderer.render(scene, persp);
+  }
+  requestAnimationFrame(frame);
+}
+window.__lc = { set(k, p, v, w) { if (k) craftKey = k; if (w) worldKey = w; if (v) { viewMode = v; layoutLabels(); } orbit.auto = false; buildWorld(); buildCraft(); if (p) setPose(p); }, seq(t) { seqT = -1; const P = LC.landingPose(t, { fromDeg }); craft.apply(P); placeHarvesters(P); }, orbit };
+buildWorld(); buildCraft(); resize(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
