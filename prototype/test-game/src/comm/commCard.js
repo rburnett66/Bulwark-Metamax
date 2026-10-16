@@ -190,7 +190,9 @@ export function createComm(doc) {
    *  { factionKey, name, sub, line, gender, intent, voiceSeed, challenge? }. Fire-and-forget.
    *  Mirrors comm.html runCall S1→S7 beat for beat. */
   async function showCall(d) {
-    if (!d || !FACTIONS[d.factionKey]) return;
+    // An unspeakable spec shows nothing — but callers may be awaiting waitForClose(), so release
+    // them rather than leave the pre-battle sequence waiting on a card that never opened.
+    if (!d || !FACTIONS[d.factionKey]) { _resolveClosed(); return; }
     const my = ++token;
     const live = () => token === my;
     stopAudio();

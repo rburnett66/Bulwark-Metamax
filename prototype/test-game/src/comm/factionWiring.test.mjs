@@ -51,6 +51,11 @@ test('EVERY comm call resolves the faction the same way — the display name the
     assert.ok(defeatCall(packs, name, 7), `defeatCall went silent for "${name}"`);
     assert.ok(tipsCall(packs, name, 7, 'tip'), `tipsCall went silent for "${name}"`);
     assert.ok(tipsCall(packs, name, 7, 'reward'), `tipsCall (reward) went silent for "${name}"`);
+    // ...and every one carries a factionKey the comm card can voice (it drops the rest silently)
+    for (const c of [challengeCall(packs, name, 1, 7, 1), winCall(packs, name, 1, 7, 'efficient', false),
+      defeatCall(packs, name, 7), tipsCall(packs, name, 7, 'tip'), tipsCall(packs, name, 7, 'reward')]) {
+      assert.ok(FACTIONS[c.factionKey], `a call for "${name}" has no speakable factionKey`);
+    }
   }
 });
 
@@ -63,6 +68,8 @@ test('a tip is spoken by someone from THAT faction, with a real authored line', 
       assert.ok(cast.includes(call.name),
         `${kind} for "${f.name}" is spoken by ${call.name}, who is not in that faction's cast`);
       assert.ok(call.line && call.line.length > 20, `${kind} line for "${f.name}" is empty`);
+      // the comm card refuses a spec whose factionKey it cannot voice — and main.js awaits its close
+      assert.ok(FACTIONS[call.factionKey], `${kind} for "${f.name}" has no speakable factionKey`);
     }
   }
 });

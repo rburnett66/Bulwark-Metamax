@@ -119,7 +119,10 @@ export function tipsCall(packs, factionName, seed, kind) {
   const line = kind === 'reward'
     ? 'Five stars, commander — the bonus is yours. ' + (ch.motivation || '') + flavor
     : 'The contract stands. The crystals we spoke of lie beyond the front — push out when the ring opens, and haul at least four of every five.' + flavor;
+  // factionKey + sub: the comm card drops any spec without a known factionKey, and main.js awaits
+  // the close of this call — so a keyless tip was silently skipped AND hung TAP TO START.
   return {
+    factionKey: fac.key, factionName, sub: factionName + ' · ' + ch.align,
     name: ch.name, faction: factionName, gender: ch.gender,
     line, intent: 'statement', voiceSeed: (seed | 0) ^ (kind === 'reward' ? 0x7e11 : 0x5157),
     label: kind === 'reward' ? 'STAR BONUS' : 'FIELD TIP',
