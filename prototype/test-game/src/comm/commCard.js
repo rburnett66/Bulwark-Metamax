@@ -87,6 +87,20 @@ canvas.bw-comm-static.on{opacity:.85}
 .bw-comm-mute{position:fixed;right:14px;bottom:88px;z-index:61;width:30px;height:26px;border-radius:6px;
   border:1px solid #26333f;background:#0b1119;color:#8ea0b0;cursor:pointer;font-size:13px;line-height:1}
 .bw-comm-mute:hover{border-color:#3fb6c8;color:#dbe7f0}
+/* PHONE LANDSCAPE [MM-story_mvalr59j_13]: at ~390px tall the card (bottom:120px) clipped off the top
+   and covered most of the board. Sit it just above the corner buttons (fullscreen / settings), cap
+   its height below the HUD bar, tighten the type, and park the mute toggle beside those buttons. */
+@media (max-height:500px){
+  .bw-comm{bottom:56px;right:10px;width:min(430px,52vw);max-height:calc(100vh - 110px)}
+  .bw-comm-head{padding:5px 10px}
+  .bw-comm-name{font-size:12.5px}
+  .bw-comm-body{grid-template-columns:30% 1fr;min-height:0;flex:1 1 auto}
+  .bw-comm-right{overflow:hidden}
+  .bw-comm-meta{min-height:0;padding:4px 9px;line-height:1.5;font-size:8.5px}
+  .bw-comm-text{padding:6px 10px;font-size:11.5px;line-height:1.42;overflow-y:auto}
+  .bw-comm-foot{padding:4px 10px;min-height:22px}
+  .bw-comm-mute{bottom:10px;right:100px;width:34px;height:34px}
+}
 `;
 
 function reducedMotion() {

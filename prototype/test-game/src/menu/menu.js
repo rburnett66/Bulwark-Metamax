@@ -80,7 +80,6 @@ const CSS = `
 .bwm-fcard .fplanet { display:flex; flex-direction:column; align-items:center; margin:-4px 0 8px; }
 .bwm-fcard .fplanet img { width:112px; height:112px; display:block; }
 .bwm-fcard .fplanet span { margin-top:2px; font-size:10px; letter-spacing:.22em; color:#8fa0b3; }
-@media (max-height:500px) { .bwm-fcard .fplanet img { width:72px; height:72px; } }
 .bwm-fcard .fnm { font-size:15px; font-weight:800; letter-spacing:.1em; }
 .bwm-fcard .fprof { margin-top:6px; font-size:11px; color:#8fa0b3; line-height:1.45; min-height:30px; }
 .bwm-fcard .fstats { display:flex; gap:14px; margin-top:10px; font-size:10px; letter-spacing:.12em; color:#8fa0b3; }
@@ -135,6 +134,35 @@ const CSS = `
   .bwm-main { flex-direction:column; justify-content:center; gap:18px; padding:0 20px; }
   .bwm-hero { text-align:center; }
   .bwm-menu { margin:0; width:min(420px,92vw); padding:0; }
+}
+/* PHONE LANDSCAPE (owner: Bulwark is a landscape game) [MM-story_mvalr59j_13]. A phone held
+   sideways is ~390px tall: the full-size header + 8-button menu column overflowed it, and because
+   the column is centred the overflow went ABOVE the top edge too, leaving PLAY unreachable. Tighten
+   the chrome, and let the column scroll instead of overflowing. Buttons stay >=34px (A11Y-INPUT-2). */
+@media (max-height:500px) {
+  .bwm-top { padding:8px 20px; gap:10px; }
+  .bwm-crest { width:30px; height:30px; font-size:14px; }
+  .bwm-word { font-size:17px; }
+  .bwm-tag { display:none; }
+  .bwm-foot { display:none; }
+  .bwm-main { gap:24px; padding:0 clamp(16px,4vw,40px); }
+  .bwm-kicker { margin-bottom:10px; padding:4px 10px; font-size:10px; }
+  .bwm-title { font-size:clamp(30px,11vh,52px); }
+  .bwm-sub { margin-top:8px; font-size:12px; line-height:1.45; }
+  .bwm-menu { max-height:100%; overflow-y:auto; gap:6px; padding:6px 4px 10px; }
+  .bwm-btn { padding:9px 14px; font-size:13px; min-height:36px; }
+  .bwm-maps { padding:4px 20px 12px; }
+  .bwm-maps-head { margin:2px 2px 8px; }
+  .bwm-maps-head h2 { font-size:14px; letter-spacing:.24em; }
+  .bwm-fgrid { grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; }
+  .bwm-fcard { padding:10px 12px; }
+  .bwm-fcard .fplanet { margin:-2px 0 4px; }
+  .bwm-fcard .fplanet img { width:56px; height:56px; }
+  .bwm-fcard .fnm { font-size:13px; }
+  .bwm-fcard .fprof { min-height:0; font-size:10.5px; }
+  .bwm-badges { margin-top:8px; }
+  .bwm-badge { width:34px; height:34px; font-size:16px; }
+  .bwm-grid { gap:10px; }
 }
 `;
 
