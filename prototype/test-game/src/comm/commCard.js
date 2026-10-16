@@ -191,6 +191,8 @@ export function createComm(doc) {
    *  factionKey may be a registry faction or a CONTACT (voice.js speakerOf). Fire-and-forget.
    *  Mirrors comm.html runCall S1→S7 beat for beat. */
   async function showCall(d) {
+    // An unspeakable spec shows nothing — but callers may be awaiting waitForClose(), so release
+    // them rather than leave the pre-battle sequence waiting on a card that never opened.
     if (!d || !speakerOf(d.factionKey)) { _resolveClosed(); return; }
     const my = ++token;
     const live = () => token === my;
