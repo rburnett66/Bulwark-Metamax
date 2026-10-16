@@ -17,7 +17,7 @@
  * All picks are seeded (hash of faction:wave:seed — §11 determinism), so a replay hears the
  * exact same calls. Pure functions over the packs object; fetch lives in loadVoicePacks().
  */
-import { voiceKeyOf, FACTIONS, hash } from './voice.js';
+import { voiceKeyOf, FACTIONS, CONTACTS, hash } from './voice.js';
 
 /* §9 outcome thresholds — tunable table, not hardcode */
 export const OUTCOME_DEFAULTS = { efficientHp: 0.8, closeHp: 0.3 };
@@ -135,4 +135,44 @@ export function fallbackCall(factionName, wave, seed) {
     factionKey: key, factionName, name: c.n, sub: f.name + ' · ' + c.a,
     gender: c.g, intent: c.intent, line: c.line, voiceSeed: hash(c.n),
   };
+}
+
+/* ── the Unknown Contact [MM-story_mvajkyq5_z] ─────────────────────────────────────────────────
+   Not one of the 81: a CONTACT speaker (voice.js CONTACTS.unknown) whose lines are authored in
+   docs/16 Bulwark MM/design/Unknown-Contact-Dialog.md and generated into content/dialog/contact.json
+   by tools/extract_contact.py. It calls once the harvester settles into survey orbit, asking for the
+   planet's rare + epic resources off the manifest. */
+
+/** Fetch the contact's lines. Never throws — null means the contact stays silent. */
+export async function loadContact() {
+  try {
+    const r = await fetch('content/dialog/contact.json');
+    if (!r.ok) return null;
+    const data = await r.json();
+    return (data && data.speaker && data.favour) ? data : null;
+  } catch (e) {
+    console.warn('[dialog] contact.json unavailable — the contact stays silent:', e && e.message);
+    return null;
+  }
+}
+
+function contactSpec(contact, entry, chip) {
+  if (!contact || !entry) return null;
+  const sp = contact.speaker;
+  return {
+    factionKey: 'unknown', factionName: CONTACTS.unknown.name,
+    name: sp.name, sub: sp.sub, gender: sp.gender || 'neutral',
+    intent: entry.intent || 'statement', line: entry.line,
+    voiceSeed: hash(sp.name), chip,
+  };
+}
+
+/** The favour the contact asks on a homeworld (keyed by faction key — the planet's key). */
+export function contactCall(contact, planetKey) {
+  return contactSpec(contact, contact && contact.favour && contact.favour[planetKey], '◇ FAVOUR ASKED');
+}
+
+/** The contact's reply once the player answers: kind 'accept' | 'decline'. */
+export function contactReply(contact, kind) {
+  return contactSpec(contact, contact && contact.replies && contact.replies[kind], null);
 }

@@ -18,7 +18,7 @@
  * - prefers-reduced-motion: no static/flash/glyph noise, shortened beats (tool's body.rm).
  */
 import {
-  FACTIONS, ICONS, PORTRAIT, hash,
+  speakerOf, ICONS, PORTRAIT, hash,
   initAudio, audioReady, paramsFor, playUtterance, startStatic, playSweep, playDrop, utterDuration,
 } from './voice.js';
 
@@ -133,13 +133,13 @@ function staticNoise(cv, on) {
   cv._raf = requestAnimationFrame(() => staticNoise(cv, cv.classList.contains('on')));
 }
 
-function cardHTML(d) {
+function cardHTML(d, f) {
   return '' +
     '<div class="bw-comm-head"><span class="bw-comm-ic"></span>' +
     '<div style="min-width:0"><div class="bw-comm-name"></div><div class="bw-comm-sub"></div></div>' +
     '<div class="bw-comm-bars"><i></i><i></i><i></i><i></i><i></i></div></div>' +
     '<div class="bw-comm-body">' +
-    '<div class="bw-comm-portrait">' + PORTRAIT +
+    '<div class="bw-comm-portrait">' + (f.portrait || PORTRAIT) +
     '<img alt="" src="' + PORTRAIT_DIR + portraitSlug(d.name) + '.png" onerror="this.remove()">' +
     '<div class="bw-comm-pscan"></div><div class="bw-comm-veil"></div></div>' +
     '<div class="bw-comm-right"><div class="bw-comm-meta"></div><div class="bw-comm-text"></div>' +
@@ -187,21 +187,22 @@ export function createComm(doc) {
   card.addEventListener('click', () => { token++; stopAudio(); card.className = 'bw-comm'; _resolveClosed(); });
 
   /** Run one transmission from a call spec (dialog.js):
-   *  { factionKey, name, sub, line, gender, intent, voiceSeed, challenge? }. Fire-and-forget.
+   *  { factionKey, name, sub, line, gender, intent, voiceSeed, challenge?, chip?, hold? }.
+   *  factionKey may be a registry faction or a CONTACT (voice.js speakerOf). Fire-and-forget.
    *  Mirrors comm.html runCall S1→S7 beat for beat. */
   async function showCall(d) {
-    if (!d || !FACTIONS[d.factionKey]) return;
+    if (!d || !speakerOf(d.factionKey)) { _resolveClosed(); return; }
     const my = ++token;
     const live = () => token === my;
     stopAudio();
 
-    const key = d.factionKey, f = FACTIONS[key];
+    const key = d.factionKey, f = speakerOf(key);
     if (!muted) initAudio();                            // always follows a user gesture, so autoplay-safe
     const rm = reducedMotion();
 
     card.style.setProperty('--accent', f.color);
     card.className = 'bw-comm show';
-    card.innerHTML = cardHTML(d);
+    card.innerHTML = cardHTML(d, f);
     const ic = card.querySelector('.bw-comm-ic'), nm = card.querySelector('.bw-comm-name'),
       sub = card.querySelector('.bw-comm-sub'), meta = card.querySelector('.bw-comm-meta'),
       txt = card.querySelector('.bw-comm-text'), veil = card.querySelector('.bw-comm-veil'),
@@ -249,7 +250,8 @@ export function createComm(doc) {
     await typeText(txt, d.line, utter.duration * 1000, live);
     if (!live()) return;
     portrait.classList.remove('speaking');
-    if (d.challenge) qchip.classList.add('on');
+    if (d.chip) qchip.textContent = d.chip;   // e.g. the contact's '◇ FAVOUR ASKED'
+    if (d.challenge || d.chip) qchip.classList.add('on');
     await delay(rm ? 150 : 420); if (!live()) return;
     // HOLD: a between-wave interlude keeps the speaker ON SCREEN after the line lands — the card
     // skips its sign-off and stays up until dismiss() runs the fade. The token still guards

@@ -175,11 +175,11 @@
    in-battle comm cards (src/comm/commCard.js), so tuning stays in one place.
    Doc map: FACTIONS = §7.5 · buildBeats/synth = §7.3–7.4 · runCall = §3 · dual = §6.3
    ============================================================ */
-import { FACTIONS, ORDER, ICONS, PORTRAIT, hash,
+import { FACTIONS, ORDER, CONTACTS, speakerOf, ICONS, PORTRAIT, hash,
          initAudio, audioReady, setVolume, paramsFor,
          playUtterance, utterDuration, startStatic, playSweep, playDrop } from './src/comm/voice.js';
 import { portraitSlug } from './src/comm/commCard.js';   // same portrait convention as the battle card
-import { loadVoicePacks } from './src/comm/dialog.js';    // full 81-character roster (same packs the game speaks)
+import { loadVoicePacks, loadContact } from './src/comm/dialog.js';    // full 81-character roster (same packs the game speaks) + the Unknown Contact
 
 /* ---------- UI state ---------- */
 var stage=document.getElementById("stage"), idle=document.getElementById("idle");
@@ -193,7 +193,8 @@ var cur="ground", curGender="female", busy=false;
    line selectable; falls back to the built-in 3-sample cast if voicepacks.json is unavailable ── */
 var LINE_LABELS=[["m0","M0 · Challenge"],["winEfficient","Win — efficient"],["winClose","Win — close shave"],["defeat","Your defeat"],["reward","Reward"]];
 var CAST={};
-function buildCast(packs){
+var SPEAKERS=ORDER.concat(Object.keys(CONTACTS));   // the 9 factions, then contacts (the Unknown Contact)
+function buildCast(packs,contact){
   ORDER.forEach(function(k){
     var fac=packs&&packs.factions&&packs.factions[k];
     if(fac){
@@ -206,19 +207,25 @@ function buildCast(packs){
       CAST[k]=FACTIONS[k].cast.map(function(c){return {n:c.n,a:c.a,g:c.g,lines:[{label:"Sample line",line:c.line,intent:c.intent}]};});
     }
   });
+  // the Unknown Contact: one speaker, a favour line per homeworld + its replies (content/dialog/contact.json)
+  CAST.unknown=contact
+    ? [{n:contact.speaker.name,a:"??",g:contact.speaker.gender,lines:
+        Object.keys(contact.favour).map(function(k){return {label:"Favour · "+(FACTIONS[k]?FACTIONS[k].name:k),line:contact.favour[k].line,intent:contact.favour[k].intent};})
+        .concat(Object.keys(contact.replies).map(function(k){return {label:"Reply · "+k,line:contact.replies[k].line,intent:contact.replies[k].intent};}))}]
+    : CONTACTS.unknown.cast.map(function(c){return {n:c.n,a:c.a,g:c.g,lines:[{label:"Sample line",line:c.line,intent:c.intent}]};});
 }
 function curChar(){ return CAST[cur][charSel.value|0]; }
 function curLine(){ var c=curChar(); return c.lines[lineSel.value|0]||c.lines[0]; }
 
 function buildFacGrid(){
-  ORDER.forEach(function(k){
-    var f=FACTIONS[k]; var b=document.createElement("button"); b.className="fac"; b.style.setProperty("--fc",f.color);
+  SPEAKERS.forEach(function(k){
+    var f=speakerOf(k); var b=document.createElement("button"); b.className="fac"; b.style.setProperty("--fc",f.color);
     b.innerHTML='<span style="color:'+f.color+'">'+ICONS[k]+'</span><span>'+f.name.split(" / ")[0].split(" (")[0]+'</span>';
     b.onclick=function(){selectFaction(k);}; b.dataset.k=k; facGrid.appendChild(b);
   });
 }
 function selectFaction(k){
-  cur=k; var f=FACTIONS[k];
+  cur=k; var f=speakerOf(k);
   [].forEach.call(facGrid.children,function(c){c.classList.toggle("sel",c.dataset.k===k);});
   document.documentElement.style.setProperty("--accent",f.color);
   charSel.innerHTML=""; CAST[k].forEach(function(c,i){var o=document.createElement("option");o.value=i;o.textContent=c.a+" · "+c.n;charSel.appendChild(o);});
@@ -230,7 +237,7 @@ function loadChar(){
   lineSel.value=0;
   setGender(c.g); intentSel.value=curLine().intent;
   // reset sliders to faction defaults
-  var f=FACTIONS[cur]; pitch.value=0; rate.value=1; noise.value=f.noise; rev.value=f.reverb;
+  var f=speakerOf(cur); pitch.value=0; rate.value=1; noise.value=f.noise; rev.value=f.reverb;
   atk.value=(f.attack!=null?f.attack:0.012); sus.value=(f.sustain!=null?f.sustain:0); ovl.value=(f.overlap!=null?f.overlap:0);
   syncRangeLabels();
 }
@@ -262,11 +269,11 @@ function paramsForUI(k){
 function delay(ms){return new Promise(function(r){setTimeout(r,ms);});}
 function rm(){return rmChk.checked;}
 
-function cardHTML(callNo){
+function cardHTML(callNo,f){
   return ''+
    '<div class="c-head"><span class="c-ic"></span><div><div class="c-name"></div><div class="c-sub"></div></div>'+
      '<div class="c-bars"><i></i><i></i><i></i><i></i><i></i></div></div>'+
-   '<div class="c-body"><div class="c-portrait"><div class="p-scan"></div>'+PORTRAIT+'<div class="p-veil"></div></div>'+
+   '<div class="c-body"><div class="c-portrait"><div class="p-scan"></div>'+((f&&f.portrait)||PORTRAIT)+'<div class="p-veil"></div></div>'+
      '<div class="c-right"><div class="c-meta"></div><div class="c-text"></div>'+
        '<div class="c-foot"><span class="callno"></span><span class="foot-l"></span><span class="qchip">◇ QUEST OFFER</span><span class="endstamp">— END —</span></div>'+
      '</div></div>'+
@@ -296,8 +303,8 @@ function typeText(el,text,durMs){
 }
 
 async function runCall(card,d,callNo){
-  var f=FACTIONS[d.faction], p=d.params;
-  card.innerHTML=cardHTML(callNo);
+  var f=speakerOf(d.faction), p=d.params;
+  card.innerHTML=cardHTML(callNo,f);
   card.style.setProperty("--accent",f.color);
   card.className="card "+(d.pos)+" show";
   if(callNo) card.querySelector(".callno").textContent=callNo;
@@ -388,7 +395,7 @@ dualBtn.onclick=receiveDual;
 
 /* init — load the full roster first (same file the game reads), then boot the UI */
 buildFacGrid();
-buildCast(await loadVoicePacks());
+buildCast(await loadVoicePacks(), await loadContact());
 selectFaction("ground"); syncRangeLabels();
 </script>
 <script src="tools/toolhead.js"></script>
