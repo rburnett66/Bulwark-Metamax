@@ -37,8 +37,11 @@ export const ICONS = {
   space: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><ellipse cx="12" cy="12" rx="11" ry="4.2" transform="rotate(-25 12 12)"/></svg>',
   dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 2l9 10-9 10-9-10z"/><path d="M12 2v20M7 8l5 3 5-3"/></svg>',
   greenies: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="7" r="3"/><circle cx="7" cy="15" r="3"/><circle cx="17" cy="15" r="3"/><path d="M12 10v2M9.5 13l-1 1M14.5 13l1 1" stroke-linecap="round"/></svg>',
+  unknown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 3a8 8 0 018 8v2M12 3a8 8 0 00-8 8v2"/><path d="M8 15.5a4 4 0 008 0M9.5 11.5h.01M14.5 11.5h.01"/><path d="M4 19l2.5-2M20 19l-2.5-2"/></svg>',
 };
 export const PORTRAIT = '<svg viewBox="0 0 100 100"><circle cx="50" cy="36" r="17"/><path d="M22 94c0-17 12-27 28-27s28 10 28 27z"/></svg>';
+/* the Unknown Contact's hooded silhouette — no face to show, by design */
+export const HOOD_PORTRAIT = '<svg viewBox="0 0 100 120"><path d="M50 4C28 4 16 24 16 48c0 12 3 21 8 28C10 84 2 98 0 120h100c-2-22-10-36-24-44 5-7 8-16 8-28C84 24 72 4 50 4Z"/><path d="M50 24c-12 0-20 11-20 25 0 13 8 24 20 29 12-5 20-16 20-29 0-14-8-25-20-25Z" fill="#05080c" opacity=".92"/></svg>';
 
 /* ---------- §7.5 faction voice profiles + comm skins + sample cast ----------
    TIMBRE ONLY — keyed by the registry's `voice` key. No display names here: `name` is merged in
@@ -123,9 +126,29 @@ const TIMBRE = {
  * add a faction there and the missing timbre shows up as an empty profile the comm test rejects,
  * rather than as a faction the comm screen silently cannot speak.
  */
+/**
+ * CONTACTS — speakers who are NOT factions [MM-story_mvajkyq5_z]. They ride the same comm card and
+ * voice engine but are not in the registry, so they never appear in ORDER, the roster, or the wave
+ * builder. speakerOf() resolves a key to a faction OR a contact; the comm card and paramsFor use it.
+ *
+ * unknown — the Unknown Contact who calls in survey orbit to ask a favour (content/dialog/contact.json).
+ *   Dry and close (low reverb), low register, a slow ring-mod warble so it never resolves into a person.
+ */
+export const CONTACTS = Object.freeze({
+  unknown: Object.freeze({ name: 'Unregistered', trope: 'Fixer', color: '#b48cff', portrait: HOOD_PORTRAIT,
+    pitchM: 92, pitchF: 150, wave: 'triangle', f1: 480, f2: 1300, rate: 4.2, noise: 0.12, reverb: 0.06,
+    drive: 0.15, ringmod: 38, detune: 3, octave: false, lowpass: 3800, attack: 0.02, sustain: 0.32, overlap: 0.22,
+    cast: [
+      { n: 'Unknown Contact', a: '??', g: 'neutral', intent: 'statement', line: "Harvester. Don't close the channel. I pay better than your charter ever will." },
+    ] }),
+});
+
 export const FACTIONS = Object.freeze(Object.fromEntries(
   REG.FACTIONS.map((f) => [f.voice, Object.freeze({ ...TIMBRE[f.voice], name: f.name })]),
 ));
+
+/** A comm speaker by key — a registry faction or a CONTACT. Null for anything else. */
+export function speakerOf(key) { return FACTIONS[key] || CONTACTS[key] || null; }
 
 /* Roster order for the comm screen's faction grid — the registry's order, which is the workbook's. */
 export const ORDER = Object.freeze(REG.FACTIONS.map((f) => f.voice));
@@ -147,7 +170,7 @@ export function voiceKeyOf(factionName) {
    Harsh/low timbres (square/saw + sub) carry more energy → trimmed below 1;
    soft timbres (sine/triangle) carry less → boosted above 1, so all land at similar loudness. */
 export const VGAIN = { ground: 0.85, air: 1.15, hightech: 0.85, artillery: 0.50, water: 1.35,
-  arcane: 1.30, space: 0.80, dark: 0.60, greenies: 0.72 };
+  arcane: 1.30, space: 0.80, dark: 0.60, greenies: 0.72, unknown: 1.1 };
 export const REVERB_MULT = 1.5;   /* global voice-reverb boost (+50%) */
 
 /* per-faction "channel static" bed — the carrier each voice rides in on */
@@ -161,6 +184,7 @@ export const STATIC = {
   space: { type: 'highpass', freq: 4200, q: 0.8, level: 0.042, trem: 9.0, tremDepth: 0.8 },
   dark: { type: 'lowpass', freq: 300, q: 1.0, level: 0.080, trem: 0.5, tremDepth: 0.85, rev: 0.4 },
   greenies: { type: 'bandpass', freq: 4200, q: 0.8, level: 0.050, trem: 13.0, tremDepth: 0.5 },
+  unknown: { type: 'bandpass', freq: 1400, q: 1.4, level: 0.040, trem: 4.0, tremDepth: 0.6 },   // encrypted-link dropout
 };
 
 /* ---------- pure helpers (unit-tested in comm.test.mjs) ---------- */
@@ -211,7 +235,7 @@ export function utterDuration(line, p, intent) {
 }
 /* Faction profile with the tool's slider overrides applied (all optional). */
 export function paramsFor(key, over) {
-  const f = FACTIONS[key], p = {};
+  const f = speakerOf(key), p = {};
   for (const k in f) p[k] = f[k];
   over = over || {};
   p.rate = f.rate * (over.rateMult != null ? over.rateMult : 1);
