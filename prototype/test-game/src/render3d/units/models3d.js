@@ -63,7 +63,8 @@ export function mergeModelGroups(THREE, def, prims = createPrims(THREE), modelKe
   return out;
 }
 
-function shadowMaterial(THREE, sunDir, alpha) {
+/** Planar-shadow material (shared by live units and FX wrecks, which reuse their instance matrices). */
+export function shadowMaterial(THREE, sunDir, alpha) {
   return new THREE.ShaderMaterial({
     uniforms: { uSunDir: { value: new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z) }, alpha: { value: alpha } },
     vertexShader: `uniform vec3 uSunDir;
@@ -114,7 +115,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       imLod.receiveShadow = imFull.receiveShadow = true;
       imLod.renderOrder = imFull.renderOrder = 3;
       sh.renderOrder = 2;
-      T.groups[gname] = { imFull, imLod, sh, pivot: full[gname].pivot };
+      T.groups[gname] = { imFull, imLod, sh, pivot: full[gname].pivot, lodGeo: L.geo };
       tris[key].full += full[gname].tris;
       tris[key].lod += L.tris;
       owned.push(full[gname].geo);
@@ -135,6 +136,15 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
     /** MAT: 1 = metal (default), 0 = the previous flat look. */
     setMetal(k) { metal.setMetal(k); },
     get usingLod() { return usingLod; },
+    /** Each model's LOD geometry + pivot per group — FX wrecks are drawn from the unit's own geometry. */
+    lodGroups() {
+      const out = {};
+      for (const [key, T] of Object.entries(types)) {
+        out[key] = {};
+        for (const [g, G] of Object.entries(T.groups)) out[key][g] = { geo: G.lodGeo, pivot: G.pivot };
+      }
+      return out;
+    },
     /** Returns how many units were drawn (capped per model at `cap`). */
     setUnits(list, camDist, liveShadows) {
       for (const key of MODEL_KEYS) counts[key] = 0;
