@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bulwark Landing Craft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root { --bg: #eef0f2; --panel: #ffffff; --ink: #14181d; --mute: #5d6670; --line: #d5dae0; --accent: #e8731c; --chip: #f3f5f7; --stage: #dfe3e7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0b0e10; --panel: #13181b; --ink: #e6ecef; --mute: #8b979e; --line: #243037; --accent: #ff9a4a; --chip: #182026; --stage: #0f1416; } }
+:root[data-theme="dark"] { --bg: #0b0e10; --panel: #13181b; --ink: #e6ecef; --mute: #8b979e; --line: #243037; --accent: #ff9a4a; --chip: #182026; --stage: #0f1416; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.45 "JetBrains Mono", ui-monospace, monospace; }
+.app { display: grid; grid-template-columns: 330px 1fr; height: 100vh; height: 100dvh; }
+aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 16px 16px 28px; }
+h1 { font: 700 26px/1 "Barlow Condensed", sans-serif; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 2px; }
+.sub { color: var(--mute); font-size: 11px; margin-bottom: 14px; }
+h2 { font: 600 12px/1 "Barlow Condensed", sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); margin: 18px 0 8px; }
+.crafts { display: grid; grid-template-columns: 1fr; gap: 4px; }
+.craft { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--chip); cursor: pointer; text-align: left; color: inherit; font: inherit; }
+.craft[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.sw { width: 26px; height: 26px; border-radius: 4px; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border: 1px solid rgba(0,0,0,.15); }
+.sw i { display: block; }
+.craft b { display: block; font: 600 15px/1.1 "Barlow Condensed", sans-serif; letter-spacing: .02em; }
+.craft small { color: var(--mute); font-size: 10.5px; }
+.craft .wt { font-size: 10px; color: var(--mute); text-align: right; max-width: 90px; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg button, .btn { padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--chip); color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 500; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.info { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--chip); }
+.info .nm { font: 700 20px/1.05 "Barlow Condensed", sans-serif; }
+.info .fc { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin: 3px 0 6px; }
+.info p { margin: 0; color: var(--mute); font-size: 11.5px; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 8px 0 0; font-size: 11.5px; }
+dt { color: var(--mute); } dd { margin: 0; }
+.stagewrap { position: relative; background: var(--stage); min-height: 0; }
+#stage { position: absolute; inset: 0; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#labels { position: absolute; inset: 0; pointer-events: none; }
+.vlabel { position: absolute; font: 600 12px "Barlow Condensed", sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+.hud { position: absolute; left: 12px; bottom: 12px; right: 12px; display: flex; gap: 10px; align-items: center; pointer-events: none; }
+.phase { pointer-events: none; background: rgba(10,12,14,.72); color: #fff; padding: 6px 10px; border-radius: 5px; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; }
+.bar { flex: 1; height: 4px; background: rgba(0,0,0,.18); border-radius: 2px; overflow: hidden; max-width: 340px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+.legend { font-size: 11px; color: var(--mute); }
+.legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+label.ck { display: flex; gap: 6px; align-items: center; font-size: 12px; cursor: pointer; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 56vh 1fr; }
+  .stagewrap { order: -1; }
+  aside { border-right: 0; border-top: 1px solid var(--line); }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>Landing Craft</h1>
+    <div class="sub">Bulwark · 3 × 3 cell base craft · part-list models</div>
+    <div class="info" id="info"></div>
+    <h2>Sequence</h2>
+    <div class="row">
+      <button class="btn primary" id="play">▶ Fly in, land, deploy</button>
+      <div class="seg" id="pose"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label class="ck"><input type="checkbox" id="slow"> Half speed</label>
+      <label class="ck"><input type="checkbox" id="loop" checked> Loop</label>
+    </div>
+    <h2>View</h2>
+    <div class="seg" id="views"></div>
+    <h2>Look</h2>
+    <div class="seg" id="styles"></div>
+    <div class="row" style="margin-top:8px">
+      <label class="ck"><input type="checkbox" id="lod"> Far LOD</label>
+      <label class="ck"><input type="checkbox" id="cells" checked> 3 × 3 cells</label>
+      <label class="ck"><input type="checkbox" id="shieldfx" checked> Shield dome</label>
+    </div>
+    <h2>Craft</h2>
+    <div class="crafts" id="crafts"></div>
+  </aside>
+  <div class="stagewrap">
+    <div id="stage"></div>
+    <div id="labels"></div>
+    <div class="hud"><div class="phase" id="phase">Landed</div><div class="bar"><i id="prog"></i></div></div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>/*__PRIMS__*/</script>
+<script>/*__UNITS__*/</script>
+<script>/*__CRAFT__*/</script>
+<script>
+const $ = (id) => document.getElementById(id);
+const D2R = Math.PI / 180;
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const hemi = new THREE.HemisphereLight(0xc4d8ff, 0x86b88f, 0.5); scene.add(hemi);
+const amb = new THREE.AmbientLight(0xffffff, 0.16); scene.add(amb);
+const sun = new THREE.DirectionalLight(0xfff0d8, 1.0); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.bias = -0.0006; scene.add(sun, sun.target);
+
+// ── looks (Meadow = the game's low-poly default world; studio = the unit viewer's grey set) ─────────────
+const STY = {
+  meadow: { label: 'Meadow (game)', bg: 0x6f90d4, ground: 0x58b865, grid: 0x45a862, hemi: [0xc4d8ff, 0x86b88f, 0.5], amb: 0.16, sun: [0xfff0d8, 1.05], metal: 1, envSky: 0xc4d8ff, envGround: 0x5cbf6c, fog: [0x6f90d4, 90, 260] },
+  studio: { label: 'Studio metal', bg: 0xdfe3e7, ground: 0xc9ced3, grid: 0xb3bac1, hemi: [0xffffff, 0xb0b4b8, 0.45], amb: 0.25, sun: [0xffffff, 0.85], metal: 1, envSky: 0xe8eef6, envGround: 0x8a9096 },
+  flat: { label: 'Studio flat', bg: 0xdfe3e7, ground: 0xc9ced3, grid: 0xb3bac1, hemi: [0xffffff, 0xb0b4b8, 0.45], amb: 0.25, sun: [0xffffff, 0.85], metal: 0 },
+  dusk: { label: 'Dusk', bg: 0x2a2450, ground: 0x4a4a8a, grid: 0x6a5aa8, hemi: [0xffb88a, 0x3a3a7a, 0.55], amb: 0.18, sun: [0xff9a5c, 0.9], metal: 1, envSky: 0xff9a5c, envGround: 0x3a3a7a, fog: [0x2a2450, 80, 240] },
+};
+const UMETAL = { hull: [0.55, 0.45], hull2: [0.6, 0.4], panel: [0.6, 0.4], dark: [0.7, 0.35], black: [0.4, 0.6], track: [0.3, 0.75], metal: [0.95, 0.2], glass: [1.0, 0.05],
+  accent: [0.35, 0.45], stripe: [0.15, 0.6], trim: [0.4, 0.45], gun: [0.6, 0.45], gun2: [0.55, 0.5], gunD: [0.7, 0.4], hazard: [0.1, 0.7], chrome: [0.95, 0.15], bone: [0.15, 0.6], brass: [0.85, 0.3] };
+const SYS_PAL = { hull: '#e9ebee', hull2: '#c5cbd2', panel: '#adb3ba', dark: '#4a4f56', black: '#22252a', track: '#2e3135', metal: '#7b828a', glass: '#1c2533',
+  gun: '#50555c', gun2: '#646a72', gunD: '#34383d', accent: '#d0462c', hazard: '#e2a224', chrome: '#c4c8ce', bone: '#e8e3d8', brass: '#b8862e',
+  glow: '#46f2ff', glowB: '#4aa8ff', amber: '#ffb340', glowR: '#ff5a3a', glowE: '#5ab4ff' };
+const isGlow = (k) => /^glow|amber/.test(k || '');
+function metalMaterial(col, mr, S) {
+  const m = new THREE.MeshPhongMaterial({ color: col });
+  const U = { uMR: { value: new THREE.Vector2(...mr) }, uEnvSky: { value: new THREE.Color(S.envSky) }, uEnvGround: { value: new THREE.Color(S.envGround) } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, U);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec2 uMR; uniform vec3 uEnvSky; uniform vec3 uEnvGround;')
+      .replace('#include <lights_phong_fragment>', `#include <lights_phong_fragment>
+float mtl = uMR.x, rgh = uMR.y; vec3 baseCol = diffuseColor.rgb;
+material.diffuseColor = diffuseColor.rgb * (1.0 - mtl * 0.72);
+material.specularColor = mix(vec3(0.05), diffuseColor.rgb * 1.6 + 0.15, mtl);
+material.specularShininess = mix(6.0, 110.0, 1.0 - rgh);`)
+      .replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;',
+        `vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;
+{ vec3 Vv = normalize(vViewPosition); vec3 Rv = reflect(-Vv, normal); vec3 Rw = (vec4(Rv, 0.0) * viewMatrix).xyz;
+  float hz = smoothstep(-0.12, 0.18, Rw.y);
+  vec3 env = mix(uEnvGround * 0.3, uEnvSky * (0.75 + 0.35 * smoothstep(0.6, 0.0, Rw.y)), hz);
+  float fr = pow(1.0 - clamp(dot(normal, Vv), 0.0, 1.0), 4.0);
+  outgoingLight += env * (mix(vec3(0.03), baseCol, mtl) * (0.75 - 0.6 * rgh) + fr * (0.3 - 0.22 * rgh)); }`);
+  };
+  m.customProgramCacheKey = () => 'metal' + mr.join(',');
+  return m;
+}
+function makeMats(pal, S) {
+  const cache = {};
+  const fn = (k) => {
+    if (cache[k]) return cache[k];
+    const hex = pal[k] || (isGlow(k) ? pal.glow : null);
+    const col = new THREE.Color(hex || '#ff00ff');
+    if (isGlow(k)) { const m = new THREE.MeshBasicMaterial({ color: col.clone() }); m.userData.base = col; return cache[k] = m; }
+    if (S.metal) return cache[k] = metalMaterial(col, UMETAL[k] || [0.5, 0.5], S);
+    return cache[k] = new THREE.MeshLambertMaterial({ color: col });
+  };
+  fn.cache = cache; return fn;
+}
+// far LOD — same rules as src/render3d/units/lod.js
+const isSil = (p) => p.t === 'ext' || p.t === 'loft' || p.t === 'ell';
+const mid = (a) => a.slice().sort((x, y) => x - y)[1];
+const pSize = (p) => p.t === 'box' ? mid(p.s) : p.t === 'cyl' ? mid([(Array.isArray(p.r) ? Math.max(...p.r) : p.r) * 2, (Array.isArray(p.r) ? Math.max(...p.r) : p.r) * 2, p.l]) : Infinity;
+const lodDef = (def) => ({ ...def, parts: def.parts.filter((p) => isSil(p) || (!(p.d === 1 || p.d === true) && pSize(p) >= (isGlow(p.m) ? 0.05 : 0.12))).map((p) => p.t === 'cyl' ? { ...p, seg: Math.min(p.seg || 8, 6) } : p) });
+
+// ── scene state ──────────────────────────────────────────────────────────────────────────────────────
+let styleKey = 'meadow', viewMode = 'orbit', craftKey = 'lc_neutral', pose = 'landed', useLod = false;
+let ground, grid, cellsLines, craft = null, harvs = [], shieldDome = null, plumes = [], dust = null;
+function buildGround() {
+  for (const o of [ground, grid, cellsLines]) if (o) scene.remove(o);
+  const S = STY[styleKey];
+  ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: S.ground }));
+  ground.receiveShadow = true; ground.position.y = -0.001;
+  grid = new THREE.GridHelper(400, 100, S.grid, S.grid); grid.material.transparent = true; grid.material.opacity = 0.45; grid.position.y = 0.01;
+  // the 3 × 3 footprint
+  const g = new THREE.BufferGeometry(), v = [];
+  for (let i = 0; i <= 3; i++) { const a = -6 + i * 4; v.push(-6, 0.03, a, 6, 0.03, a, a, 0.03, -6, a, 0.03, 6); }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+  cellsLines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xff8a2a }));
+  cellsLines.visible = $('cells').checked;
+  scene.add(ground, grid, cellsLines);
+  scene.fog = S.fog ? new THREE.Fog(S.fog[0], S.fog[1], S.fog[2]) : null;
+}
+
+function collectJets(def) {     // lift jets (down) and rear nozzles (back) from the glowE parts
+  const out = [];
+  for (const p of def.parts) {
+    if (p.m !== 'glowE' || p.t !== 'cyl') continue;
+    const r = Array.isArray(p.r) ? p.r[0] : p.r, list = [p.p]; if (p.mir) list.push([p.p[0], p.p[1], -p.p[2]]);
+    for (const q of list) out.push({ p: q, r, dir: p.ax === 'x' ? 'back' : 'down' });
+  }
+  return out;
+}
+const plumeMat = (hex) => new THREE.MeshBasicMaterial({ color: new THREE.Color(hex), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+
+function buildCraft() {
+  if (craft) scene.remove(craft.root);
+  for (const h of harvs) scene.remove(h.outer);
+  if (shieldDome) scene.remove(shieldDome);
+  if (dust) scene.remove(dust);
+  const S = STY[styleKey], def0 = LANDING_CRAFT[craftKey], def = useLod ? lodDef(def0) : def0;
+  const mats = makeMats(def.palette, S);
+  const built = Prims.buildModel(def, mats);
+  const root = new THREE.Group(); root.add(built.group); scene.add(root);
+  const G = built.groups;
+  // exhaust plumes
+  plumes = [];
+  const pm = plumeMat(def.palette.glowE || def.palette.glow);
+  for (const j of collectJets(def0)) {
+    const len = j.dir === 'down' ? 2.6 : 3.2;
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(j.r * 0.95, len, 12, 1, true), pm.clone());
+    cone.geometry.translate(0, -len / 2, 0);
+    const holder = new THREE.Group(); holder.position.set(j.p[0], j.p[1], j.p[2]);
+    if (j.dir === 'back') holder.rotation.z = -Math.PI / 2;
+    holder.add(cone); built.group.add(holder);
+    plumes.push({ mesh: cone, dir: j.dir });
+  }
+  craft = { root, model: built.group, G, def: def0, mats, tris: built.tris, phase: Math.random() * 6 };
+  // harvesters (SYS-Harvester from the unit roster, studio palette)
+  harvs = [];
+  const hm = makeMats(SYS_PAL, S);
+  for (const s of [1, -1]) {
+    const b = Prims.buildModel(UNIT_MODELS.sys_harvester, hm);
+    const outer = new THREE.Group(), inner = new THREE.Group(); inner.add(b.group); outer.add(inner);
+    outer.rotation.y = s > 0 ? -Math.PI / 2 : Math.PI / 2;
+    outer.visible = false; scene.add(outer);
+    harvs.push({ s, outer, inner, head: b.groups.head });
+  }
+  // shield dome (shield crafts)
+  if (/shield/.test(def0.weaponType)) {
+    shieldDome = new THREE.Mesh(new THREE.SphereGeometry(10.5, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(def0.palette.glow), transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    scene.add(shieldDome);
+  } else shieldDome = null;
+  // touchdown dust ring
+  dust = new THREE.Mesh(new THREE.RingGeometry(5, 9, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xd8c8a0, transparent: true, opacity: 0, depthWrite: false }));
+  dust.position.y = 0.05; scene.add(dust);
+  setStats(def0, built.tris, def0 === def ? Prims.buildModel(lodDef(def0), makeMats(def0.palette, STY.flat)).tris : built.tris);
+  applyPose(poseState(pose === 'flight' ? 'flight' : pose === 'open' ? 'open' : 'landed'));
+}
+
+function setStats(def, tris, lodTris) {
+  const parts = def.parts.reduce((a, p) => a + (p.mir ? 2 : 1), 0);
+  let calls = 0; craft.model.traverse((o) => { if (o.isMesh && !o.geometry.type.startsWith('Cone')) calls++; });
+  const sw = (k) => `<i style="background:${def.palette[k]}"></i>`;
+  $('info').innerHTML = `<div class="nm">${def.name}</div><div class="fc">${def.factionName} · ${def.weaponType}</div><p>${def.blurb}</p>
+    <dl><dt>Roster id</dt><dd>${def.unit} <span style="color:var(--mute)">(proposed)</span></dd><dt>Footprint</dt><dd>3 × 3 cells · 12 × 12 units</dd>
+    <dt>Parts</dt><dd>${parts}</dd><dt>Triangles</dt><dd>${tris.toLocaleString()} · LOD ${lodTris.toLocaleString()}</dd><dt>Draw calls</dt><dd>${calls} (per material × group)</dd>
+    <dt>Groups</dt><dd>base · weapon · head · gear · doorR · doorL</dd>
+    <dt>Palette</dt><dd class="legend">${['hull', 'hull2', 'accent', 'stripe', 'glow'].map((k) => `<span style="background:${def.palette[k]}"></span>`).join('')}</dd></dl>`;
+}
+
+// ── poses and the landing sequence ───────────────────────────────────────────────────────────────────
+// A pose: craft position / pitch, gear (0 stowed .. 1 down), doors (0 shut .. 1 open), thrust (lift, rear), harvesters (0..1 progress).
+function poseState(k) {
+  if (k === 'flight') return { x: 0, y: 7, pitch: 0, roll: 0, gear: 0, doors: 0, lift: 1, rear: 0.5, harv: -1, dust: 0, shield: 0 };
+  if (k === 'open') return { x: 0, y: 0, pitch: 0, roll: 0, gear: 1, doors: 1, lift: 0, rear: 0, harv: 0.55, dust: 0, shield: 1 };
+  return { x: 0, y: 0, pitch: 0, roll: 0, gear: 1, doors: 0, lift: 0, rear: 0, harv: -1, dust: 0, shield: 0 };
+}
+const ease = (t) => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
+const outQ = (t) => { t = Math.max(0, Math.min(1, t)); return 1 - (1 - t) * (1 - t) * (1 - t); };
+const SEQ = [            // [end time s, label]
+  [4.2, 'Approach'], [7.4, 'Descent · gear down'], [8.4, 'Touchdown'], [9.8, 'Hatches open'], [14.6, 'Harvesters deploy'], [16.5, 'Collecting'],
+];
+const SEQ_T = SEQ[SEQ.length - 1][0];
+function seqState(t) {
+  const st = { x: 0, y: 0, pitch: 0, roll: 0, gear: 1, doors: 0, lift: 0, rear: 0, harv: -1, dust: 0, shield: 0 };
+  if (t < 4.2) { const k = outQ(t / 4.2); st.x = -70 * (1 - k); st.y = 8 + 18 * (1 - k); st.pitch = 10 * Math.sin(Math.min(1, t / 4.2) * Math.PI) * (t > 2 ? 1 : 0.4) - 4 * (1 - k);
+    st.gear = 0; st.rear = 1 - k * 0.6; st.lift = 0.3 + 0.7 * k; }
+  else if (t < 7.4) { const k = ease((t - 4.2) / 3.2); st.y = 8 * (1 - k); st.gear = ease((t - 5.2) / 1.6); st.lift = 1; st.rear = 0.4 * (1 - k); st.dust = k; st.roll = Math.sin(t * 3) * 0.6 * (1 - k); }
+  else if (t < 8.4) { const k = (t - 7.4); st.y = Math.max(0, Math.sin(k * Math.PI) * 0.08); st.lift = 1 - k; st.dust = 1 - k * 0.5; }
+  else if (t < 9.8) { st.doors = ease((t - 8.4) / 1.3); st.dust = Math.max(0, 0.5 - (t - 8.4)); st.shield = ease((t - 8.4) / 1.2); }
+  else { st.doors = 1; st.shield = 1; st.harv = Math.min(1, (t - 9.8) / 6.2); }
+  return st;
+}
+const RAMP_SLOPE = () => { const a = (craft.def.anim.doorR.open - 90) * D2R; return a; };
+function harvPos(k) {        // k 0..1 → distance outward along the side, y on the ramp, pitch
+  const def = craft.def, piv = def.pivots.doorR, zf = piv[2], y0 = piv[1], L = 3.0;
+  const a = (def.anim.doorR.open - 90) * D2R;          // ramp angle below horizontal
+  const zEnd = zf + L * Math.cos(a), z = 2.4 + k * 15;
+  let y = 0, pitch = 0;
+  if (z < zf) y = y0;
+  else if (z < zEnd) { y = y0 - (z - zf) * Math.tan(a); pitch = -a; }
+  return { z, y: Math.max(0, y), pitch };
+}
+function applyPose(st) {
+  if (!craft) return;
+  craft.root.position.set(st.x, st.y, 0);
+  craft.root.rotation.set(st.roll * D2R, 0, st.pitch * D2R);
+  const G = craft.G, A = craft.def.anim;
+  if (G.gear) G.gear.position.y = A.gear.retract * (1 - st.gear);
+  if (G.doorR) G.doorR.rotation.x = A.doorR.open * D2R * st.doors;
+  if (G.doorL) G.doorL.rotation.x = A.doorL.open * D2R * st.doors;
+  // engine glow + plumes
+  const mE = craft.mats.cache.glowE;
+  const thrust = Math.max(st.lift, st.rear);
+  if (mE) mE.color.copy(mE.userData.base).multiplyScalar(0.35 + 0.65 * thrust);
+  for (const p of plumes) { const v = p.dir === 'down' ? st.lift : st.rear; p.mesh.visible = v > 0.02; p.mesh.scale.set(1, 0.3 + v, 1); p.mesh.material.opacity = 0.5 * v; }
+  if (dust) { dust.material.opacity = 0.35 * st.dust; const s = 0.7 + st.dust * 0.6; dust.scale.set(s, 1, s); }
+  if (shieldDome) { shieldDome.material.opacity = $('shieldfx').checked ? 0.13 * st.shield : 0; shieldDome.scale.setScalar(0.2 + 0.8 * ease(st.shield)); }
+  for (const h of harvs) {
+    if (st.harv < 0) { h.outer.visible = false; continue; }
+    const q = harvPos(st.harv); h.outer.visible = true;
+    h.outer.position.set(0, q.y, h.s * q.z); h.inner.rotation.z = q.pitch;
+  }
+}
+
+// ── cameras ──────────────────────────────────────────────────────────────────────────────────────────
+const persp = new THREE.PerspectiveCamera(35, 1, 0.5, 2000);
+const orbit = { yaw: -0.85, pitch: 0.38, dist: 34, auto: true };
+function placeOrbit(follow) {
+  const t = new THREE.Vector3(follow ? follow.x * 0.6 : 0, 2.6 + (follow ? follow.y * 0.6 : 0), 0);
+  persp.fov = 35;
+  persp.position.set(t.x + Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * orbit.dist, t.y + Math.sin(orbit.pitch) * orbit.dist, t.z + Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * orbit.dist);
+  persp.lookAt(t); persp.updateProjectionMatrix();
+}
+function placeBattle() {         // the game's battle camera: FOV 30°, pitched 37°, yaw 0 (north); 1 cell = 4 units
+  persp.fov = 30; const d = 13 * 4 * (orbit.dist / 34), p = 37 * D2R;
+  persp.position.set(0, Math.sin(p) * d, Math.cos(p) * d); persp.lookAt(0, 0, 0); persp.updateProjectionMatrix();
+}
+const ORTHO = [{ name: 'Front', dir: [1, 0, 0], up: [0, 1, 0] }, { name: 'Side', dir: [0, 0, 1], up: [0, 1, 0] }, { name: 'Top', dir: [0, 1, 0], up: [1, 0, 0] }, { name: 'Rear', dir: [-1, 0, 0], up: [0, 1, 0] }];
+const ocam = new THREE.OrthographicCamera(-1, 1, 1, -1, -100, 100);
+function fitOrtho(v, w, h) {
+  ocam.position.set(...v.dir).multiplyScalar(30); ocam.up.set(...v.up); ocam.lookAt(0, 0, 0); ocam.updateMatrixWorld();
+  const box = new THREE.Box3().setFromObject(craft.root), inv = ocam.matrixWorldInverse;
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const cx of [box.min.x, box.max.x]) for (const cy of [box.min.y, box.max.y]) for (const cz of [box.min.z, box.max.z]) {
+    const p = new THREE.Vector3(cx, cy, cz).applyMatrix4(inv); x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+  }
+  let bw = (x1 - x0) * 1.1, bh = (y1 - y0) * 1.1; const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, asp = w / h;
+  if (bw / bh > asp) bh = bw / asp; else bw = bh * asp;
+  Object.assign(ocam, { left: cx - bw / 2, right: cx + bw / 2, top: cy + bh / 2, bottom: cy - bh / 2 }); ocam.updateProjectionMatrix();
+}
+
+// ── controls ─────────────────────────────────────────────────────────────────────────────────────────
+function seg(el, items, cur, on) {
+  el.innerHTML = '';
+  for (const [k, label] of items) {
+    const b = document.createElement('button'); b.textContent = label; b.setAttribute('aria-pressed', k === cur);
+    b.onclick = () => { [...el.children].forEach((c) => c.setAttribute('aria-pressed', c === b)); on(k); }; el.appendChild(b);
+  }
+}
+let seqT = -1;
+function setPose(k) { pose = k; seqT = -1; applyPose(poseState(k)); $('phase').textContent = k === 'flight' ? 'Hovering · gear up' : k === 'open' ? 'Landed · deployed' : 'Landed'; $('prog').style.width = '0'; }
+seg($('pose'), [['flight', 'Flight'], ['landed', 'Landed'], ['open', 'Deployed']], pose, setPose);
+seg($('views'), [['orbit', 'Orbit'], ['battle', 'Battle cam'], ['ortho', 'Ortho 4-up']], viewMode, (k) => { viewMode = k; layoutLabels(); if (k === 'ortho') setPose('landed'); });
+seg($('styles'), Object.entries(STY).map(([k, s]) => [k, s.label]), styleKey, (k) => { styleKey = k; rebuild(); });
+$('lod').onchange = (e) => { useLod = e.target.checked; buildCraft(); };
+$('cells').onchange = (e) => { cellsLines.visible = e.target.checked; };
+$('shieldfx').onchange = () => { if (seqT < 0) applyPose(poseState(pose)); };
+$('play').onclick = () => { if (viewMode === 'ortho') { viewMode = 'orbit'; seg($('views'), [['orbit', 'Orbit'], ['battle', 'Battle cam'], ['ortho', 'Ortho 4-up']], viewMode, (k) => { viewMode = k; layoutLabels(); }); layoutLabels(); } seqT = 0; [...$('pose').children].forEach((c) => c.setAttribute('aria-pressed', false)); };
+const list = $('crafts');
+for (const k of LANDING_CRAFT_ORDER) {
+  const d = LANDING_CRAFT[k], b = document.createElement('button'); b.className = 'craft'; b.setAttribute('aria-pressed', k === craftKey);
+  b.innerHTML = `<span class="sw"><i style="background:${d.palette.hull}"></i><i style="background:${d.palette.accent}"></i><i style="background:${d.palette.stripe}"></i><i style="background:${d.palette.glow}"></i></span>
+    <span><b>${d.name}</b><small>${d.factionName}</small></span><span class="wt">${d.weaponType}</span>`;
+  b.onclick = () => { [...list.children].forEach((c) => c.setAttribute('aria-pressed', c === b)); craftKey = k; buildCraft(); };
+  list.appendChild(b);
+}
+// orbit drag / pinch / wheel
+let drag = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY }; orbit.auto = false; renderer.domElement.setPointerCapture(e.pointerId); });
+renderer.domElement.addEventListener('pointermove', (e) => { if (!drag) return; orbit.yaw -= (e.clientX - drag.x) * 0.008; orbit.pitch = Math.max(0.05, Math.min(1.45, orbit.pitch + (e.clientY - drag.y) * 0.006)); drag = { x: e.clientX, y: e.clientY }; });
+renderer.domElement.addEventListener('pointerup', () => { drag = null; });
+renderer.domElement.addEventListener('wheel', (e) => { e.preventDefault(); orbit.dist = Math.max(14, Math.min(90, orbit.dist * (1 + Math.sign(e.deltaY) * 0.08))); }, { passive: false });
+
+function rebuild() {
+  buildGround();
+  const S = STY[styleKey];
+  renderer.setClearColor(S.bg, 1);
+  hemi.color.setHex(S.hemi[0]); hemi.groundColor.setHex(S.hemi[1]); hemi.intensity = S.hemi[2];
+  amb.intensity = S.amb; sun.color.setHex(S.sun[0]); sun.intensity = S.sun[1];
+  sun.position.set(-14, 22, -12); Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, far: 80 }); sun.shadow.camera.updateProjectionMatrix();
+  buildCraft();
+}
+function size() { return [stage.clientWidth || 1, stage.clientHeight || 1]; }
+function resize() { const [w, h] = size(); renderer.setSize(w, h, false); persp.aspect = w / h; layoutLabels(); }
+function layoutLabels() {
+  const L = $('labels'); L.innerHTML = ''; if (viewMode !== 'ortho') return;
+  const [w, h] = size();
+  ORTHO.forEach((v, i) => { const d = document.createElement('div'); d.className = 'vlabel'; d.textContent = v.name; d.style.left = ((i % 2) * w / 2 + 10) + 'px'; d.style.top = ((i < 2 ? 0 : h / 2) + 10) + 'px'; L.appendChild(d); });
+}
+window.addEventListener('resize', resize);
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  let st = null;
+  if (seqT >= 0) {
+    seqT += dt * ($('slow').checked ? 0.5 : 1);
+    if (seqT > SEQ_T) { if ($('loop').checked) seqT = 0; else { seqT = -1; pose = 'open'; } }
+    if (seqT >= 0) {
+      st = seqState(seqT); applyPose(st);
+      const ph = SEQ.find(([e]) => seqT <= e) || SEQ[SEQ.length - 1]; $('phase').textContent = ph[1]; $('prog').style.width = (seqT / SEQ_T * 100) + '%';
+    }
+  }
+  if (craft) {
+    const G = craft.G, H = craft.def.head || {};
+    const frozen = viewMode === 'ortho';
+    if (G.weapon) G.weapon.rotation.y = frozen ? 0 : Math.sin(now / 1700 + craft.phase) * 0.8;
+    if (G.head) G.head.rotation[H.axis || 'y'] = frozen ? 0 : H.mode === 'spin' ? (now / 1000) * (H.speed || 2) : Math.sin(now / 800 + craft.phase) * 0.9;
+    for (const h of harvs) if (h.head) h.head.rotation.x = (now / 1000) * 7;
+  }
+  if (orbit.auto && viewMode === 'orbit') orbit.yaw += dt * 0.18;
+  const [w, h] = size();
+  if (viewMode === 'ortho') {
+    const hw = Math.floor(w / 2), hh = Math.floor(h / 2);
+    grid.visible = ground.visible = false; cellsLines.visible = false;
+    renderer.setScissorTest(true);
+    ORTHO.forEach((v, i) => { const x = (i % 2) * hw, y = i < 2 ? hh : 0; fitOrtho(v, hw, hh); renderer.setViewport(x, y, hw, hh); renderer.setScissor(x, y, hw, hh); renderer.render(scene, ocam); });
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h);
+    grid.visible = ground.visible = true; cellsLines.visible = $('cells').checked;
+  } else {
+    if (viewMode === 'battle') placeBattle(); else placeOrbit(st && seqT < 7.4 ? craft.root.position : null);
+    renderer.render(scene, persp);
+  }
+  requestAnimationFrame(frame);
+}
+window.__lc = { set(k, p, v, s) { if (k) { craftKey = k; } if (s) styleKey = s; if (v) { viewMode = v; layoutLabels(); } orbit.auto = false; rebuild(); if (p) setPose(p); },
+  seq(t) { seqT = -1; applyPose(seqState(t)); }, orbit };
+rebuild(); resize(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
