@@ -1,0 +1,276 @@
+<title>Bulwark Planets</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an orbital viewer. One big globe you can spin, its dossier beside it, the seven worlds in a row below.
+   Single deliberate dark look (deep space), matching the game's HUD chrome. */
+:root {
+  --void: #07090c;          /* space */
+  --panel: rgba(18, 24, 22, 0.78);
+  --line: rgba(196, 214, 190, 0.16);
+  --fg: #e6ebe3;
+  --muted: #95a196;
+  --accent: #6fd3c8;        /* the HUD's one bright note */
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { background: var(--void); color: var(--fg); }
+body { font-family: var(--body); font-size: 15px; line-height: 1.45; }
+#space, #gl { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#space { z-index: 0; } #gl { z-index: 2; }
+.wrap { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 22px 40px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 28px; letter-spacing: 0.06em; text-transform: uppercase; margin: 0; text-wrap: balance; }
+.kicker { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: center; margin-top: 10px; }
+.stage { position: relative; aspect-ratio: 1 / 1; max-width: 100%; width: 100%; cursor: grab; touch-action: none; }
+.stage:active { cursor: grabbing; }
+.stage .hint { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; }
+.dossier { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px 20px; min-width: 0;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; gap: 14px; }
+.dossier .fac { font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--hue, var(--accent)); margin-bottom: -8px; }
+.dossier .why { color: var(--muted); font-size: 14px; }
+.dossier .type { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hue, var(--accent)); }
+.dossier h2 { font-family: var(--display); font-weight: 700; font-size: 54px; line-height: 0.95; letter-spacing: 0.04em; text-transform: uppercase; margin: 0; }
+.dossier p { margin: 0; color: #c9d2c7; max-width: 46ch; }
+.lush { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.lush i { height: 6px; border-radius: 3px; background: linear-gradient(90deg, #b08058, #e2c478 40%, #5cc05a); position: relative; }
+.lush b { position: absolute; top: -4px; width: 4px; height: 14px; margin-left: -2px; border-radius: 2px; background: var(--fg); transition: left 0.5s ease; }
+dl.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 16px; margin: 0; font-size: 14px; }
+dl.facts dt { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; padding-top: 2px; }
+dl.facts dd { margin: 0; min-width: 0; }
+.sw { display: inline-flex; gap: 6px; align-items: center; margin-right: 12px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.sw span { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); }
+.row { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
+.pick { appearance: none; background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--fg); padding: 6px 4px 10px; cursor: pointer;
+  display: grid; gap: 4px; justify-items: center; align-content: start; font: inherit; }
+.pick:hover { background: rgba(255, 255, 255, 0.04); }
+.pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pick[aria-pressed="true"] { border-color: var(--line); background: var(--panel); }
+.pick .g { width: 100%; aspect-ratio: 1 / 1; max-width: 100%; }
+.pick .n { font-family: var(--display); font-weight: 600; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; }
+.pick .t { text-align: center; font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.note { margin-top: 18px; font-size: 13px; color: var(--muted); max-width: 70ch; }
+@media (max-width: 820px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .stage { max-width: 520px; margin: 0 auto; }
+  .row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dossier h2 { font-size: 42px; }
+}
+@media (max-width: 420px) { .row { gap: 4px; } .pick .n { font-size: 14px; } }
+@media (prefers-reduced-motion: reduce) { .lush b { transition: none; } }
+</style>
+
+<canvas id="space" aria-hidden="true"></canvas>
+<div class="wrap">
+  <header>
+    <h1>Bulwark · Planets</h1>
+    <span class="kicker">9 factions · 9 homeworlds · atmosphere + foliage sets · same shaders as the terrain engine</span>
+  </header>
+  <section class="hero">
+    <div class="stage g" id="stage" data-planet="pl_verdance" aria-label="Rotating planet, drag to spin">
+      <span class="hint">drag to spin</span>
+    </div>
+    <article class="dossier" aria-live="polite">
+      <div class="type" id="dType">–</div>
+      <div class="fac" id="dFac"></div>
+      <h2 id="dName">–</h2>
+      <p id="dBlurb"></p>
+      <p class="why" id="dWhy"></p>
+      <div class="lush"><span>Barren</span><i><b id="dLush"></b></i><span>Lush</span></div>
+      <dl class="facts">
+        <dt>Faction</dt><dd id="dFaction"></dd>
+        <dt>Signature</dt><dd id="dDmg"></dd>
+        <dt>Beats</dt><dd id="dBeats"></dd>
+        <dt>Air</dt><dd id="dAir"></dd>
+        <dt>Trees</dt><dd id="dTrees"></dd>
+        <dt>Ground</dt><dd id="dGround"></dd>
+        <dt>Rocks</dt><dd id="dRocks"></dd>
+        <dt>Airborne</dt><dd id="dParticles"></dd>
+      </dl>
+    </article>
+  </section>
+  <nav class="row" id="row" aria-label="Choose a planet"></nav>
+  <p class="note">Faction table from the design; the planet for each faction, the planet names and the blurbs are proposals for the story. Each globe is drawn live: continents from noise on the sphere, oceans or lava seas, ice caps, a drifting cloud shell, and an atmosphere rim in the planet's haze colour, brightest on the day side.</p>
+</div>
+<canvas id="gl" aria-hidden="true"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+const $ = (id) => document.getElementById(id);
+const PLANETS = {
+  pl_verdance: { ui: '#9cc8f0', name: 'Verdance', type: 'Lush homeworld', blurb: 'Lush homeworld. Broadleaf forests, flowering scrub, blue sky and drifting cloud.', lush: 1,
+    faction: { n: 1, name: 'Ground / Powder', trope: 'Nationalistic', beats: 'Greenies', dmg: 'Kinetic', identity: 'Infantry & armor; flags & honor' },
+    why: 'Green fields and farmland worth planting a flag on: the homeland the infantry and armor fight for.',
+    haze: '#a8c4ec', sun: '#fff4e0', trees: 'Green canopy trees, pines, flowering bushes', ground: 'Grass and wildflowers', rocks: 'Grey boulders', particles: 'Pollen',
+    globe: { water: 0.5, polar: 0.12, land: ['#3e9a44', '#6cc85a', '#c8b07a', '#e8ecf0'], ocean: ['#1e5aa8', '#3a8ad8'], dry: '#b8a070', cloud: 0.55 } },
+  pl_florael: { ui: '#f0b0d8', name: 'Florael', type: 'Blooming garden', blurb: 'Blooming garden world. Blossom canopies, flower meadows, a rose-lavender sky.', lush: 1,
+    faction: { n: 2, name: 'Air', trope: 'Manga aces', beats: 'Ground / Powder', dmg: 'Kinetic', identity: 'Air superiority; weak on ground' },
+    why: 'Blossom skies and petals on the wind: the anime-ace world, best seen from the cockpit.',
+    haze: '#e6c6e6', sun: '#fff0f4', trees: 'Pink blossom trees, flowering bushes', ground: 'Dense flower meadows', rocks: 'Lilac boulders', particles: 'Petals',
+    globe: { water: 0.42, polar: 0.08, land: ['#6cc08a', '#f0a0c8', '#f6e0d0', '#ffffff'], ocean: ['#5a6ad8', '#8aa0f0'], dry: '#e0c0a8', cloud: 0.45 } },
+  pl_ochre: { ui: '#f0d090', name: 'Ochre', type: 'Arid desert', blurb: 'Arid desert world. Cacti, flat-top acacias and sandstone hoodoos under a high white sun.', lush: 0.3,
+    faction: { n: 3, name: 'High Tech', trope: 'Mega-corp', beats: 'Air', dmg: 'Electric', identity: 'Precision, shields, expensive' },
+    why: 'A high white sun over open desert: solar wealth for the mega-corp, and long clear sightlines for precision weapons.',
+    haze: '#f0d8a8', sun: '#fff4d0', trees: 'Cacti, flat-top acacias, dead snags', ground: 'Dry scrub, pebbles, rare flowers', rocks: 'Sandstone hoodoos', particles: 'Light dust',
+    globe: { water: 0.12, polar: 0.03, land: ['#c0824e', '#e2c478', '#f6e2b0', '#ffffff'], ocean: ['#2a8aa8', '#5ac0c8'], dry: '#d0905a', cloud: 0.2 } },
+  pl_kessra: { ui: '#e8a878', name: 'Kessra', type: 'Barren dust', blurb: 'Barren dust world. Spike trees, bleached snags and layered mesas under an ochre haze.', lush: 0.1,
+    faction: { n: 4, name: 'Artillery', trope: 'Siege military', beats: 'High Tech', dmg: 'Concussion', identity: 'Range & arc; poor up close' },
+    why: 'A shelled-out wasteland of mesas and dust: ridgelines for the guns, nothing left standing in between.',
+    haze: '#c89a70', sun: '#ffe0b8', trees: 'Spike trees, bleached dead snags', ground: 'Dry twigs and pebbles', rocks: 'Layered mesas', particles: 'Blowing dust',
+    globe: { water: 0.16, polar: 0.05, land: ['#9a6646', '#b08058', '#d8b07e', '#e8dcc8'], ocean: ['#5a3a2a', '#7a5038'], dry: '#c89a6a', cloud: 0.15 } },
+  pl_rime: { ui: '#cfe6f8', name: 'Rime', type: 'Frozen', blurb: 'Frozen world. Snow-laden pines, ice spires, a thin pale atmosphere and falling snow.', lush: 0.3,
+    faction: { n: 5, name: 'Water', trope: 'Sea tribes', beats: 'Artillery', dmg: 'Frost', identity: 'Swimmers/floaters; coastal' },
+    why: 'Frozen seas and ice coasts: the sea tribes fish, swim and strike with frost.',
+    haze: '#cfe0f0', sun: '#fff8f0', trees: 'Snow-capped pines, ice spires, dead stumps', ground: 'Ice shards, pebbles, sparse grass', rocks: 'Snow-capped ice shards', particles: 'Snow',
+    globe: { water: 0.25, polar: 0.55, land: ['#2f5a5a', '#c8d8e6', '#eef4fa', '#ffffff'], ocean: ['#2a4a78', '#5a86b8'], dry: '#b8c8d8', cloud: 0.5 } },
+  pl_cinder: { ui: '#ff9a5a', name: 'Cinder', type: 'Volcanic ash', blurb: 'Volcanic ash world. Charred spike trees, basalt columns, lava flows, falling ash.', lush: 0,
+    faction: { n: 6, name: 'Arcane / Energy', trope: 'Theocracy', beats: 'Water', dmg: 'Fire', identity: 'Energy weapons; no ammo economy' },
+    why: 'A world of living fire: the theocracy draws its energy from the lava and worships the flame.',
+    haze: '#5a3a34', sun: '#ffb08a', trees: 'Charred spike trees with ember tips', ground: 'Ash, pebbles, scorched twigs', rocks: 'Basalt columns, lava', particles: 'Ash and embers',
+    globe: { water: 0.18, polar: 0.0, land: ['#2a2424', '#4a4040', '#6a5a50', '#8a7a70'], ocean: ['#ff5a10', '#ffb030'], dry: '#3a3030', cloud: 0.35, lava: 1 } },
+  pl_lumen: { ui: '#bfe6ff', name: 'Lumen', type: 'Airless moon', blurb: 'Airless moon. Grey regolith, craters, crystal fields and needle spires under a black sky; nothing hides here.', lush: 0,
+    faction: { n: 7, name: 'Space Tech', trope: 'Sci-Fi federation', beats: 'Arcane / Energy', dmg: 'Electric', identity: 'Orbital tech; strong vision; ignores some fog' },
+    why: 'No air, no haze: the clearest sightlines in the system, a natural home for an orbital federation that sees everything.',
+    haze: '#1c2236', sun: '#ffffff', trees: 'Needle spires, glowing crystal clusters', ground: 'Regolith pebbles, small craters, crystal shards', rocks: 'Grey shards', particles: 'None: no atmosphere',
+    globe: { water: 0.28, polar: 0.0, land: ['#7a7e86', '#9a9ea6', '#b4b8be', '#d0d2d6'], ocean: ['#3e424a', '#5a5e66'], dry: '#868a92', cloud: 0.0, craters: 1 } },
+  pl_xenthe: { ui: '#b8a0ff', name: 'Xenthe', type: 'Fungal alien', blurb: 'Fungal alien world. Glowing mushroom forests, crystal spires, spores in a violet haze.', lush: 0.95,
+    faction: { n: 8, name: 'Dark Energy', trope: 'Cult', beats: 'Space Tech', dmg: 'Poison', identity: 'DoT, corruption, night-strong' },
+    why: 'A violet twilight world that glows in the dark: corruption grows here, and the cult is strongest at night.',
+    haze: '#7a6ac8', sun: '#e8fff0', trees: 'Glowing mushroom trees, crystal spires', ground: 'Glowing sprouts, alien flowers', rocks: 'Magenta crystal clusters', particles: 'Glowing spores',
+    globe: { water: 0.4, polar: 0.06, land: ['#1a8a94', '#2ec0a8', '#c84ad8', '#f0e8ff'], ocean: ['#4aa020', '#9ae850'], dry: '#7a2e8a', cloud: 0.35 } },
+  pl_vexmire: { ui: '#d0e860', name: 'Vexmire', type: 'Toxic hive swamp', blurb: 'Toxic hive swamp. Swollen spore pods, hive mounds, acid pools and drifting chem clouds.', lush: 0.7,
+    faction: { n: 9, name: 'Greenies (Chem)', trope: 'Hive collective', beats: 'Dark Energy', dmg: 'Poison', identity: 'Swarms, chem clouds, area denial' },
+    why: 'A living chemical swamp: the hive breeds in its pods, and its clouds are the Greenies\' own area denial.',
+    haze: '#a8b860', sun: '#f0ffc8', trees: 'Spore pods, hive mounds, rotting snags', ground: 'Sickly grass, glowing toxic blisters', rocks: 'Moss-green boulders', particles: 'Chem clouds',
+    globe: { water: 0.38, polar: 0.0, land: ['#5e7a3a', '#8aa040', '#c8c848', '#d8d898'], ocean: ['#78a018', '#c8f030'], dry: '#6a5a38', cloud: 0.6 } },
+};
+const KEYS = Object.keys(PLANETS);
+
+/*__GNOISE__*/
+const VS = `varying vec3 vN; varying vec3 vP; varying vec3 vV; void main() { vN = normalize(normalMatrix * normal); vP = position; vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`;
+const SURF = `uniform vec3 uOcean[2]; uniform vec3 uLand[4]; uniform vec3 uDry; uniform float uWater, uPolar, uLush, uLava, uSeed; uniform vec3 uSun; uniform vec3 uHaze; uniform float uCrater;
+  varying vec3 vN; varying vec3 vP; varying vec3 vV; ${GNOISE}
+  void main() {
+    vec3 p = normalize(vP) * 2.1 + uSeed;
+    float h = fbm(p), bio = fbm(p * 1.7 + 5.3), lat = abs(normalize(vP).y);
+    vec3 c;
+    if (h < uWater) { c = mix(uOcean[0], uOcean[1], smoothstep(uWater - 0.12, uWater, h)); if (uLava > 0.5) c *= 1.0 + 0.6 * gn(p * 9.0); }
+    else { float e = (h - uWater) / max(1.0 - uWater, 0.01);
+      c = e < 0.45 ? mix(uLand[0], uLand[1], e / 0.45) : e < 0.8 ? mix(uLand[1], uLand[2], (e - 0.45) / 0.35) : mix(uLand[2], uLand[3], (e - 0.8) / 0.2);
+      c = mix(c, uDry, smoothstep(0.55, 0.75, bio) * (1.0 - uLush) * 0.9 + smoothstep(0.62, 0.8, bio) * 0.25); }
+    if (uCrater > 0.5) { vec3 q = normalize(vP) * 7.0 + uSeed; vec3 ci = floor(q); float dmin = 9.0;
+      for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) for (int k = -1; k <= 1; k++) { vec3 o = ci + vec3(float(i), float(j), float(k)); vec3 cpt = o + vec3(gh(o), gh(o + 3.1), gh(o + 7.7)); dmin = min(dmin, length(q - cpt) / (0.25 + 0.5 * gh(o + 1.3))); }
+      c *= 0.78 + 0.22 * smoothstep(0.55, 0.85, dmin) + 0.18 * (1.0 - smoothstep(0.85, 1.0, dmin)) * step(0.85, dmin); }
+    float cap = smoothstep(1.0 - uPolar - 0.04, 1.0 - uPolar + 0.04, lat + (gn(p * 4.0) - 0.5) * 0.12);
+    c = mix(c, vec3(0.93, 0.96, 1.0), cap * step(0.001, uPolar));
+    float nl = dot(normalize(vN), uSun), day = smoothstep(-0.15, 0.35, nl);
+    vec3 col = c * (0.06 + 1.05 * max(nl, 0.0));
+    if (uLava > 0.5 && h < uWater) col += uOcean[0] * 0.6 * (1.0 - day);
+    float rim = pow(1.0 - max(dot(normalize(vN), vV), 0.0), 2.5);
+    col = mix(col, uHaze * (0.25 + day), rim * 0.75);
+    gl_FragColor = vec4(col, 1.0);
+  }`;
+const CLOUD = `uniform float uCloud, uT, uSeed; uniform vec3 uSun; varying vec3 vN; varying vec3 vP; varying vec3 vV; ${GNOISE}
+  void main() { vec3 p = normalize(vP) * 3.2 + vec3(uT * 0.05, 0.0, uSeed);
+    float c = smoothstep(1.0 - uCloud * 0.55, 1.0 - uCloud * 0.55 + 0.18, fbm(p) + 0.18);
+    float nl = max(dot(normalize(vN), uSun), 0.0); gl_FragColor = vec4(vec3(0.95) * (0.08 + nl), c * 0.85); }`;
+const ATMO = `uniform vec3 uHaze; uniform vec3 uSun; varying vec3 vN; varying vec3 vV;
+  void main() { float f = pow(clamp(-dot(normalize(vN), vV) * 1.9, 0.0, 1.0), 2.2) * 1.15;   // 0 at the shell edge, full at the planet's limb
+    float day = smoothstep(-0.4, 0.5, dot(normalize(vN), uSun));
+    gl_FragColor = vec4(uHaze * f * (0.25 + day), 1.0); }`;
+
+const canvas = $('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); renderer.setScissorTest(true); renderer.setClearColor(0x000000, 0);
+const camera = new THREE.PerspectiveCamera(26, 1, 0.1, 20); camera.position.set(0, 0, 6.0);
+const geo = new THREE.SphereGeometry(1, 96, 64), geoS = new THREE.SphereGeometry(1, 48, 32);
+const SUN = new THREE.Vector3(-0.62, 0.32, 0.72).normalize();
+function makeWorld(key, big) {
+  const pl = PLANETS[key], g = pl.globe;
+  const U = { uOcean: { value: g.ocean.map((c) => new THREE.Color(c)) }, uLand: { value: g.land.map((c) => new THREE.Color(c)) }, uDry: { value: new THREE.Color(g.dry) },
+    uWater: { value: 0.32 + g.water * 0.3 - (g.water === 0 ? 0.5 : 0) }, uPolar: { value: g.polar }, uLush: { value: pl.lush }, uLava: { value: g.lava ? 1 : 0 },
+    uSeed: { value: KEYS.indexOf(key) * 3.7 }, uSun: { value: SUN }, uHaze: { value: new THREE.Color(pl.haze) }, uCloud: { value: g.cloud }, uT: { value: 0 }, uCrater: { value: g.craters ? 1 : 0 } };
+  const G = big ? geo : geoS, scene = new THREE.Scene();
+  const planet = new THREE.Mesh(G, new THREE.ShaderMaterial({ uniforms: U, vertexShader: VS, fragmentShader: SURF }));
+  const clouds = new THREE.Mesh(G, new THREE.ShaderMaterial({ uniforms: U, vertexShader: VS, fragmentShader: CLOUD, transparent: true, depthWrite: false }));
+  const atmo = new THREE.Mesh(G, new THREE.ShaderMaterial({ uniforms: U, vertexShader: VS, fragmentShader: ATMO, transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending }));
+  clouds.scale.setScalar(1.015); atmo.scale.setScalar(1.16);
+  const tilt = new THREE.Group(); tilt.rotation.z = 0.35; tilt.add(planet, clouds); scene.add(tilt, atmo);
+  return { scene, planet, clouds, U, spin: KEYS.indexOf(key) * 0.9 };
+}
+const small = Object.fromEntries(KEYS.map((k) => [k, makeWorld(k, false)]));
+const bigs = {};   // big globe per planet, built on first view
+let current = 'pl_verdance', drag = null, vel = 0.12, extra = 0;
+
+// row of planets
+const row = $('row');
+for (const k of KEYS) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'pick'; b.dataset.k = k; b.setAttribute('aria-pressed', String(k === current));
+  b.innerHTML = `<div class="g" data-planet="${k}"></div><span class="n">${PLANETS[k].name}</span><span class="t">${PLANETS[k].faction.n} · ${PLANETS[k].faction.name}</span>`;
+  b.addEventListener('click', () => select(k)); row.appendChild(b);
+}
+function select(k) {
+  current = k; const pl = PLANETS[k];
+  document.querySelectorAll('.pick').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === k)));
+  $('stage').dataset.planet = k;
+  const f = pl.faction;
+  $('dFac').textContent = `Faction ${f.n} · ${f.name}`; $('dWhy').textContent = pl.why;
+  $('dFaction').textContent = `${f.trope}. ${f.identity}`; $('dDmg').textContent = f.dmg + ' damage';
+  const beat = KEYS.find((k) => PLANETS[k].faction.name === f.beats); $('dBeats').textContent = beat ? `${f.beats} (${PLANETS[beat].name})` : f.beats;
+  $('dType').textContent = pl.type; $('dName').textContent = pl.name; $('dBlurb').textContent = pl.blurb;
+  $('dLush').style.left = Math.round(pl.lush * 100) + '%';
+  $('dAir').innerHTML = `<span class="sw"><span style="background:${pl.haze}"></span>haze ${pl.haze}</span><span class="sw"><span style="background:${pl.sun}"></span>sunlight ${pl.sun}</span>`;
+  $('dTrees').textContent = pl.trees; $('dGround').textContent = pl.ground; $('dRocks').textContent = pl.rocks; $('dParticles').textContent = pl.particles;
+  document.querySelector('.dossier').style.setProperty('--hue', pl.ui);
+  try { history.replaceState(null, '', '#' + k.slice(3)); } catch (e) {}
+}
+const fromHash = 'pl_' + (location.hash || '').slice(1); select(PLANETS[fromHash] ? fromHash : current);
+
+// drag to spin the big globe
+const stage = $('stage');
+stage.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, t: performance.now() }; stage.setPointerCapture(e.pointerId); });
+stage.addEventListener('pointermove', (e) => { if (!drag) return; const dx = e.clientX - drag.x, now = performance.now(); extra += dx * 0.01; vel = 0.12 + (dx * 0.01) / Math.max(0.016, (now - drag.t) / 1000) * 0.15; drag = { x: e.clientX, t: now }; });
+stage.addEventListener('pointerup', () => { drag = null; });
+stage.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') extra -= 0.3; if (e.key === 'ArrowRight') extra += 0.3; });
+stage.tabIndex = 0;
+
+// starfield (static, 2D)
+function stars() {
+  const c = $('space'), d = Math.min(devicePixelRatio || 1, 2), w = innerWidth, h = innerHeight; c.width = w * d; c.height = h * d;
+  const x = c.getContext('2d'); x.scale(d, d); x.fillStyle = '#07090c'; x.fillRect(0, 0, w, h);
+  let s = 7; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < (w * h) / 2400; i++) { const a = 0.15 + r() * 0.7, z = r() < 0.06 ? 1.6 : 0.8; x.fillStyle = `rgba(${200 + r() * 55 | 0},${210 + r() * 45 | 0},255,${a})`; x.fillRect(r() * w, r() * h, z, z); }
+}
+stars(); addEventListener('resize', stars);
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  if (canvas.width !== Math.round(W * renderer.getPixelRatio()) || canvas.height !== Math.round(H * renderer.getPixelRatio())) renderer.setSize(W, H, false);
+  renderer.setScissor(0, 0, W, H); renderer.setViewport(0, 0, W, H); renderer.clear();
+  if (!drag) vel += (0.12 - vel) * Math.min(1, dt * 1.5);
+  const sp = reduce ? 0 : 1;
+  for (const el of document.querySelectorAll('[data-planet]')) {
+    const r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > H || r.right < 0 || r.left > W || r.width < 4) continue;
+    const big = el.id === 'stage', k = el.dataset.planet;
+    const w = big ? (bigs[k] || (bigs[k] = makeWorld(k, true))) : small[k];
+    if (big) { w.planet.rotation.y = w.spin + extra; w.spin += dt * vel * sp; }
+    else { w.spin += dt * 0.12 * sp; w.planet.rotation.y = w.spin; }
+    w.clouds.rotation.y = w.planet.rotation.y * 1.2; w.U.uT.value += dt * sp;
+    const s = Math.min(r.width, r.height), x = r.left + (r.width - s) / 2, y = H - r.bottom + (r.height - s) / 2;
+    renderer.setViewport(x, y, s, s); renderer.setScissor(x, y, s, s); camera.aspect = 1; camera.updateProjectionMatrix();
+    renderer.render(w.scene, camera);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
