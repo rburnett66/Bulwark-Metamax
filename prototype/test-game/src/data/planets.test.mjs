@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { PLANETS, planetImage } from './planets.js';
+import { PLANETS, RESOURCE_TIERS, planetImage } from './planets.js';
 import '../data/factions.js';
 const REG = globalThis.BulwarkFactions;
 
@@ -41,4 +41,17 @@ test('every planet image is committed: a 256² PNG with transparency', () => {
     assert.equal(buf[25], 6, `${rel} is RGBA`);
   }
   assert.equal(planetImage('nope'), null);
+});
+
+test('every planet has four named resources: common and uncommon for the player, rare and epic for the associate', () => {
+  const tiers = ['common', 'uncommon', 'rare', 'epic'];
+  assert.deepEqual(Object.keys(RESOURCE_TIERS), tiers);
+  assert.equal(RESOURCE_TIERS.uncommon.value, RESOURCE_TIERS.common.value * 2, 'uncommon is worth double');
+  assert.deepEqual(tiers.map((t) => RESOURCE_TIERS[t].forAssociate), [false, false, true, true]);
+  const all = [];
+  for (const [k, p] of Object.entries(PLANETS)) {
+    assert.deepEqual(Object.keys(p.resources), tiers, k);
+    for (const t of tiers) { assert.ok(p.resources[t].name && p.resources[t].note, `${k}.${t}`); all.push(p.resources[t].name); }
+  }
+  assert.equal(new Set(all).size, 36, 'all 36 resource names are unique');
 });
