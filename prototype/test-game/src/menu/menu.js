@@ -17,6 +17,7 @@ import { buildTechTree } from './techtree.js';
 // script with no ES exports, so a named import is a SyntaxError. See voice.js for the full note.
 import '../data/factions.js';
 const REG = globalThis.BulwarkFactions;
+import { PLANETS, planetImage } from '../data/planets.js';
 
 /**
  * The faction a workbook Faction_ID refers to. This USED to be `FACTION_NAMES[fid - 1]` against a
@@ -76,6 +77,10 @@ const CSS = `
 .bwm-fcard { background:#1a1f28; border:1px solid #2e3846; padding:14px 16px; cursor:pointer;
   transition:border-color .12s, transform .12s; }
 .bwm-fcard:hover { border-color:#d9a441; transform:translateY(-2px); }
+.bwm-fcard .fplanet { display:flex; flex-direction:column; align-items:center; margin:-4px 0 8px; }
+.bwm-fcard .fplanet img { width:112px; height:112px; display:block; }
+.bwm-fcard .fplanet span { margin-top:2px; font-size:10px; letter-spacing:.22em; color:#8fa0b3; }
+@media (max-height:500px) { .bwm-fcard .fplanet img { width:72px; height:72px; } }
 .bwm-fcard .fnm { font-size:15px; font-weight:800; letter-spacing:.1em; }
 .bwm-fcard .fprof { margin-top:6px; font-size:11px; color:#8fa0b3; line-height:1.45; min-height:30px; }
 .bwm-fcard .fstats { display:flex; gap:14px; margin-top:10px; font-size:10px; letter-spacing:.12em; color:#8fa0b3; }
@@ -240,6 +245,18 @@ export function createMenu(mountEl, cbs) {
       const tier = (s.tech || {})[name] || 0;
       const loyalty = (s.loyalty || {})[name] || 0;
       const card = el(doc, 'div', 'bwm-fcard');
+      // The faction's homeworld above its name (data/planets.js; baked by tools/planets/bake.html)
+      const planet = fac && PLANETS[fac.key];
+      if (planet) {
+        const pw = el(doc, 'div', 'fplanet');
+        const img = el(doc, 'img');
+        img.src = planetImage(fac.key); img.alt = planet.name; img.title = planet.name + ' — ' + planet.type + '. ' + planet.blurb;
+        img.loading = 'lazy'; img.decoding = 'async';
+        img.addEventListener('error', () => { img.style.display = 'none'; });
+        pw.appendChild(img);
+        pw.appendChild(el(doc, 'span', null, planet.name.toUpperCase()));
+        card.appendChild(pw);
+      }
       card.appendChild(el(doc, 'div', 'fnm', name.toUpperCase()));
       card.appendChild(el(doc, 'div', 'fprof', (row.Profile || '') +
         '  Premium: ' + row.Premium_Resource + '. Rival: ' +
