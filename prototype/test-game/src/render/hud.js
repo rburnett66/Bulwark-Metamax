@@ -614,6 +614,24 @@ export function createHud(mountEl, callbacks) {
   hud.minimap = minimap;
   hud._mmNext = 0;
 
+  // A select added to SETTINGS by a module that owns the setting (e.g. the 3D view's quality tier, T3.5
+  // [MM-task_mv9s9p7h_4]). Re-adding the same key replaces the options. Returns the <select>.
+  hud.addSetting = (key, title, options, value, onChange) => {
+    let sel = sessionPanel.querySelector('select[data-setting="' + key + '"]');
+    if (!sel) {
+      sel = el(doc, 'select', 'bw-faction');
+      sel.setAttribute('data-setting', key);
+      sel.addEventListener('change', () => { if (sel._onChange) sel._onChange(sel.value); });
+      sessionPanel.appendChild(sel);
+    }
+    sel.title = title;
+    while (sel.firstChild) sel.removeChild(sel.firstChild);
+    for (const o of options) { const op = el(doc, 'option', null, o.label); op.value = o.value; sel.appendChild(op); }
+    sel.value = value;
+    sel._onChange = onChange;
+    return sel;
+  };
+
   return hud;
 }
 

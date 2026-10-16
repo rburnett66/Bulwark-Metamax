@@ -98,15 +98,15 @@ export function createGroundColour(map, palette, roadAt = () => 0) {
  * The ground triangles. Returns { position, normal, color } (Float32Arrays, non-indexed, 3 verts per
  * triangle, wound to face UP) and `triangles`.
  */
-export function buildGroundArrays(map, palette, roadAt = () => 0) {
+export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID) {
   const { cols, rows } = map;
   const colAt = createGroundColour(map, palette, roadAt);
-  const NX = Math.round(cols / GRID), NZ = Math.round(rows / GRID);
+  const NX = Math.round(cols / grid), NZ = Math.round(rows / grid);
   const vx = new Float64Array((NX + 1) * (NZ + 1)), vz = new Float64Array((NX + 1) * (NZ + 1));
   for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) {
     const edge = i === 0 || j === 0 || i === NX || j === NZ, k = j * (NX + 1) + i;
-    vx[k] = i * GRID + (edge ? 0 : (h2(i, j) - 0.5) * GRID * JITTER);
-    vz[k] = j * GRID + (edge ? 0 : (h2(j + 0.37, i + 1.7) - 0.5) * GRID * JITTER);
+    vx[k] = i * grid + (edge ? 0 : (h2(i, j) - 0.5) * grid * JITTER);
+    vz[k] = j * grid + (edge ? 0 : (h2(j + 0.37, i + 1.7) - 0.5) * grid * JITTER);
   }
   const tris = NX * NZ * 2;
   const position = new Float32Array(tris * 9), normal = new Float32Array(tris * 9), color = new Float32Array(tris * 9);
@@ -159,11 +159,12 @@ export function planTufts(map, palette, roadAt = () => 0, colAt = createGroundCo
 
 /**
  * Build the ground group for `map` with `palette` (a LOWPAL entry) and an optional road mask
- * ({ width, height, data }). `apron` = the off-map colour. Returns { group, stats }.
+ * ({ width, height, data }). `apron` = the off-map colour. `grid` (vertex spacing) and `tufts` are the quality
+ * tier's ground resolution (render3d/quality.js — Low builds a 1-cell grid without tufts). Returns { group, stats }.
  */
-export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron = 0x5cbf6c } = {}) {
+export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron = 0x5cbf6c, grid = GRID, tufts: withTufts = true } = {}) {
   const roadAt = roadSampler(roadMask, map.cols, map.rows);
-  const G = buildGroundArrays(map, palette, roadAt);
+  const G = buildGroundArrays(map, palette, roadAt, grid);
   const group = new THREE.Group();
   group.name = 'ground';
 
@@ -178,7 +179,7 @@ export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron
   group.add(ground);
 
   // Grass tufts: 3-sided open cones, merged; normals forced up so blades light like the grass they grow from.
-  const plan = planTufts(map, palette, roadAt, G.colAt);
+  const plan = withTufts ? planTufts(map, palette, roadAt, G.colAt) : [];   // Low tier: no tufts (T3.5)
   // three's open cone emits two triangles per side, one of them zero-area at the tip: keep only the real ones
   const blade = new THREE.ConeGeometry(1, 1, 3, 1, true).toNonIndexed();
   const bp = [], src = blade.attributes.position.array;

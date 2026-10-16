@@ -77,6 +77,7 @@ export function boot(mountEl, seed) {
   let renderer3d = null;
   let render3dMod = null;
   let mount3dSeq = 0;
+  let last3D = null;   // the map + slug the 3D view was last mounted for (a quality change remounts it)
   if (USE_3D) canvas.style.visibility = 'hidden';
   async function mount3D(map, slug) {
     const mySeq = ++mount3dSeq;
@@ -86,12 +87,23 @@ export function boot(mountEl, seed) {
       if (renderer3d) { render3dMod.destroyRenderer(renderer3d); renderer3d = null; }
       // ?world=<palette> previews a low-poly world; ?ground=baked keeps the baked-texture ground (LP).
       const q = new URLSearchParams(window.location.search);
+      last3D = { map, slug };
+      const quality = await import('./render3d/quality.js');
+      let storage = null;
+      try { storage = window.localStorage; } catch (e) { storage = null; }
       const r = await render3dMod.createRenderer3D(mountEl, map, { slug, world: q.get('world') || undefined, ground: q.get('ground') || undefined,
-        projFx: () => renderer.projFx, projScale: () => renderer.projScale });
+        projFx: () => renderer.projFx, projScale: () => renderer.projScale,
+        qualityQuery: q.get('quality'), qualityChoice: quality.loadChoice(storage) });
       if (mySeq !== mount3dSeq) { render3dMod.destroyRenderer(r); return; }
       renderer3d = r;
       rebindInput();   // the input was bound to the old (or no) 3D canvas — move it onto this one
-      console.log('[render3d]', r.status, slug || '(no baked level)', r.problems.join('; '));
+      console.log('[render3d]', r.status, slug || '(no baked level)', r.problems.join('; '), '· quality', r.quality.key, `(${r.quality.source})`);
+      // SETTINGS → 3D quality (T3.5 [MM-task_mv9s9p7h_4]): Auto or a fixed tier, saved on this device; a change
+      // rebuilds the 3D view at the new tier (the sim keeps running — the view is read-only on it)
+      hud.addSetting('quality3d', '3D view quality — saved on this device', quality.settingsOptions(r.quality.auto), r.quality.choice, (v) => {
+        quality.saveChoice(storage, v);
+        if (last3D) void mount3D(last3D.map, last3D.slug);
+      });
     } catch (e) {
       console.error('[render3d] failed to start', e);
       flashMessage(hud, `3D view failed to start — ${(e && e.message) || e}`);
