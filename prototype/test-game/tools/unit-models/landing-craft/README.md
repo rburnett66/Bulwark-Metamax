@@ -29,7 +29,7 @@ out of the hatches in the sequence).
 | 2 | `lc_air` | **Skylark Carrier** | Air (Florael) | anti-aircraft missiles — twin 4-cell pods | bar radar (spins) | white, sky blue, racing red; long bubble canopy, streamlined nacelle pods, swept fins, canted tail fins |
 | 3 | `lc_hightech` | **Sterling Vault** | High Tech (Ochre) | shield — three-prong projector | sensor hoop (spins) | graphite wedge monolith, gold spine and trim, white light-lines, hex pods, corporate diamond |
 | 4 | `lc_artillery` | **Siegeworks Emplacement** | Artillery (Kessra) | mortar — four tubes | bar radar (sweeps) | khaki + olive, black/yellow hazard skirts, sandbag roof, ammo crates, splayed stabilizer legs |
-| 5 | `lc_water` | **Tideborn Ark** (v2) | Water (Rime) | rocket launcher — harpoon rack | radar dish (sweeps) | ONE nautilus-shell hull over the whole 3 × 3: teal, pearl growth ribs, keel, dorsal and stern fins, coral-crowned blisters in place of pods |
+| 5 | `lc_water` | **Tideborn Ark** (v3) | Water (Rime) | rocket launcher — harpoon rack | radar dish (sweeps) | ONE nautilus-shell hull over the whole 3 × 3 (pearl growth ribs, keel, fins, coral-crowned blisters), fitted out steampunk: brass-ribbed wheelhouse with a glass bathysphere nose (the cockpit), bow salon window, amber portholes, steam pipes, rivets, gauges, vent cowls, stern drive shrouds |
 | 6 | `lc_arcane` | **Sanctum of the Flame** (v2) | Arcane / Energy (Cinder) | shield — halo spire | twin halos + flame orb (spin) | ONE cruciform basilica on an undercroft: nave bow-to-stern, transept gables are the resource portals, crimson hipped aisle roof all round, bonded corner turrets and flying buttresses, crossing tower under the halo spire |
 | 7 | `lc_space` | **Lumen Survey Lander** | Space Tech (Lumen) | cannon — twin-rail coil railgun | large survey dish (sweeps) | federation white + navy, cyan ring-lights, capsule hull, drum pods, sensor masts |
 | 8 | `lc_dark` | **Hollow Choir** | Dark Energy (Xenthe) | mortar — corruption tubes (glowing mouths) | eye on a stalk (sweeps) | obsidian + violet, magenta seams, spiked ridge and pods |
@@ -37,6 +37,7 @@ out of the hatches in the sequence).
 
 **v2 (2026-10-16, owner):** Tideborn and Sanctum reworked from modules into one unified, sculpted hull each — exact same
 footprint, hatch, gear and weapon positions. The other eight keep the modular build.
+**v3 (owner):** Tideborn needed a clear cockpit and windows — added the steampunk bridge, portholes and brass fittings (new palette keys `brass`, `amber` interior glow).
 
 Every one of the six requested weapon types is used; four are used twice (cannon, shield, mortar, rocket launcher).
 **The weapon is a one-line choice per craft** (`weapon: wMortar(roof)` etc. in `models.js`) — the kit builds any weapon
@@ -125,7 +126,7 @@ One instance per level, so cost is small. Draw calls = material keys × groups (
 | Sterling Vault | 2,838 | 2,158 | | Hollow Choir | 3,692 | 2,892 |
 | Siegeworks | 3,764 | 2,844 | | Brood Hive | 4,680 | 3,872 |
 
-(v2 — 2026-10-16: Tideborn Ark 5,536 / LOD 4,448; Sanctum 4,808 / LOD 3,876. Rows above for those two are v1.)
+(2026-10-16: Tideborn Ark v3 10,500 tris — v2 was 5,536; Sanctum 4,808 / LOD 3,876. Rows above for those two are v1.)
 
 ## 6. Port to the game (work for the repo session)
 

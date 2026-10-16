@@ -619,7 +619,7 @@
     });
   }
 
-  // 5 · WATER — "Tideborn Ark" (v2, one hull). Sea-tribe teal with coral and pearl. A single nautilus-shell hull
+  // 5 · WATER — "Tideborn Ark" (v3: one hull + steampunk bridge, portholes, brass fittings). Sea-tribe teal with coral and pearl. A single nautilus-shell hull
   //     covers the whole 3 × 3: flat flanks for the hatches, the shell swelling to a ridge, pearl growth ribs across
   //     the back, a keel and dorsal fin. The corner defense pods are now blisters grown out of the shell.
   {
@@ -640,6 +640,18 @@
     const at = (x) => { let i = 0; while (i < ST.length - 2 && x > ST[i + 1][0]) i++; const A = ST[i], B = ST[i + 1], t = (x - A[0]) / (B[0] - A[0]); return A.map((v, j) => v + (B[j] - v) * t); };
     const rib = (x, w = 0.16, grow = 0.05) => { const a = at(x - w / 2), b = at(x + w / 2);
       return { t: 'loft', ax: 'x', secs: [[x - w / 2, shellSec(a[1] + grow, a[2] - 0.02, a[3], a[4] + grow)], [x + w / 2, shellSec(b[1] + grow, b[2] - 0.02, b[3], b[4] + grow)]], m: 'stripe' }; };
+    // wheelhouse stations: [x, half-width, centre y, half-height] — its lower half is buried in the shell
+    const WH = [[2.5, 0.9, 4.5, 0.55], [2.95, 1.3, 4.72, 0.95], [4.3, 1.26, 4.62, 0.9], [5.05, 0.86, 4.28, 0.62], [5.2, 0.45, 4.1, 0.34]];
+    const whAt = (x) => { let i = 0; while (i < WH.length - 2 && x > WH[i + 1][0]) i++; const A = WH[i], B = WH[i + 1], t = (x - A[0]) / (B[0] - A[0]); return A.map((v, j) => v + (B[j] - v) * t); };
+    const whBand = (x, w = 0.07) => { const [, hw, cy, hh] = whAt(x), [, hw2, cy2, hh2] = whAt(x + w);
+      return { t: 'loft', ax: 'x', secs: [[x, esec(0, hw + 0.06, cy, hh + 0.06, 14, 0.85)], [x + w, esec(0, hw2 + 0.06, cy2, hh2 + 0.06, 14, 0.85)]], m: 'brass' }; };
+    // pipe along the +Z flank through [x, y] points, standing just off the hull; ring of boxes in the YZ plane
+    const pipe = (pts, w) => [
+      ...pts.slice(1).map((q, i) => strut([pts[i][0], pts[i][1], at(pts[i][0])[1] + 0.12], [q[0], q[1], at(q[0])[1] + 0.12], w, w, 'brass', { mir: true })),
+      ...pts.map(([x, y]) => ({ t: 'cyl', ax: 'x', r: w * 0.95, l: 0.12, seg: 8, p: [x, y, at(x)[1] + 0.12], m: 'dark', mir: true, d: 1 })),
+    ];
+    const ringX = (x, cy, cz, r, n = 14) => Array.from({ length: n }, (_, i) => { const a = (i + 0.5) / n * 360;
+      return { t: 'box', s: [0.32, 0.09, 2 * r * Math.tan(Math.PI / n) * 1.04], p: [x, cy + Math.cos(a * D) * r, cz + Math.sin(a * D) * r], r3: [a, 0, 0], m: 'brass', mir: true }; });
     const parts = [
       { t: 'loft', ax: 'x', secs: ST.map(([x, hw, y0, ys, yt]) => [x, shellSec(hw, y0, ys, yt)]), m: 'hull' },
       // pearl growth ribs, closer together toward the bow and stern like a shell's growth lines
@@ -647,11 +659,51 @@
       // keel + belly plate
       { t: 'ext', ax: 'z', poly: [[-5.3, 1.05], [5.0, 1.05], [5.95, 1.6], [5.0, 0.85], [-4.6, 0.85]], d: [-0.16, 0.16], m: 'accent' },
       { t: 'box', s: [9.0, 0.06, 6.0], p: [-0.3, 0.98, 0], m: 'hull2' },
-      // bow: lamp, two great eyes ringed in coral
-      { t: 'ell', s: [0.32, 0.26, 0.4], seg: 10, p: [5.95, 2.2, 0], m: 'glow' },
-      { t: 'ell', s: [0.55, 0.34, 0.42], seg: 12, p: [5.12, 2.95, 1.25], r3: [0, 18, -24], m: 'glass', mir: true },
-      { t: 'ell', s: [0.6, 0.38, 0.46], seg: 12, p: [5.08, 2.93, 1.27], r3: [0, 18, -24], m: 'accent', mir: true, d: 1 },
-      ...[0.45, 0.9, 1.35].map((z) => ({ t: 'box', s: [0.05, 0.05, 0.3], p: [5.82, 1.8, z], m: 'glow', mir: true, d: 1 })),
+      // ── STEAMPUNK BRIDGE: brass-ribbed wheelhouse with a glass bathysphere nose (the cockpit) ──
+      { t: 'loft', ax: 'x', secs: WH.map(([x, hw, cy, hh]) => [x, esec(0, hw, cy, hh, 14, 0.85)]), m: 'hull2' },
+      { t: 'loft', ax: 'x', secs: [3.95, 4.3, 4.7, 5.0, 5.13].map((x) => { const [, hw, cy, hh] = whAt(x); return [x, esec(0, hw + 0.025, cy, hh + 0.025, 14, 0.85)]; }), m: 'glass' },
+      ...[3.95, 4.35, 4.72, 5.02].map((x) => whBand(x)),
+      { t: 'box', s: [1.3, 0.05, 0.1], p: [4.45, 5.42, 0], r3: [0, 0, -20], m: 'brass' },
+      { t: 'box', s: [1.0, 0.05, 0.1], p: [4.45, 5.08, 1.02], r3: [-45, 0, -20], m: 'brass', mir: true, d: 1 },
+      { t: 'box', s: [1.2, 0.08, 2.0], p: [3.25, 5.64, 0], m: 'brass' },
+      ...Array.from({ length: 7 }, (_, i) => ({ t: 'cyl', ax: 'z', r: 0.04, l: 0.03, seg: 6, p: [2.95 + i * 0.13, 4.62, 1.34], m: 'brass', mir: true, d: 1 })),
+      // searchlight + periscope on the wheelhouse roof
+      { t: 'cyl', r: 0.12, l: 0.3, seg: 8, p: [3.0, 5.8, 0.55], m: 'brass' },
+      { t: 'cyl', ax: 'x', r: [0.22, 0.17], l: 0.36, seg: 10, p: [3.1, 6.07, 0.55], m: 'brass' },
+      { t: 'cyl', ax: 'x', r: 0.16, l: 0.03, seg: 10, p: [3.29, 6.07, 0.55], m: 'amber' },
+      { t: 'cyl', r: 0.05, l: 0.75, seg: 6, p: [3.0, 6.0, -0.5], m: 'metal' },
+      { t: 'box', s: [0.26, 0.12, 0.12], p: [3.08, 6.39, -0.5], m: 'brass' },
+      // bow observation window: brass-rimmed porthole with spokes and bolts (Nautilus salon)
+      { t: 'cyl', ax: 'x', r: 0.66, l: 0.12, seg: 16, p: [5.9, 2.15, 0], r3: [0, 0, -14], m: 'brass' },
+      { t: 'cyl', ax: 'x', r: 0.54, l: 0.04, seg: 16, p: [5.97, 2.15, 0], r3: [0, 0, -14], m: 'amber' },
+      ...[0, 30, 60, 90, 120, 150].map((a) => ({ t: 'box', s: [0.04, 1.08, 0.05], p: [5.99, 2.15, 0], r3: [a, 0, -14], m: 'brass' })),
+      { t: 'cyl', ax: 'x', r: 0.13, l: 0.06, seg: 10, p: [6.0, 2.15, 0], r3: [0, 0, -14], m: 'brass' },
+      ...Array.from({ length: 12 }, (_, i) => { const a = i * 30 * D; return { t: 'cyl', ax: 'x', r: 0.035, l: 0.04, seg: 6, p: [5.97, 2.15 + Math.cos(a) * 0.6, Math.sin(a) * 0.6], m: 'dark', d: 1 }; }),
+      // portholes along the flanks (amber, lit from inside)
+      ...[-4.7, -3.95, -3.2, 2.95, 3.7].flatMap((x) => { const z = at(x)[1]; return [
+        { t: 'cyl', ax: 'z', r: 0.3, l: 0.08, seg: 12, p: [x, 3.05, z + 0.02], m: 'brass', mir: true },
+        { t: 'cyl', ax: 'z', r: 0.21, l: 0.06, seg: 12, p: [x, 3.05, z + 0.05], m: 'amber', mir: true },
+        { t: 'box', s: [0.02, 0.42, 0.05], p: [x, 3.05, z + 0.07], m: 'brass', mir: true, d: 1 },
+      ]; }),
+      // brass steam pipes along both flanks, with joints
+      ...pipe([[-5.35, 3.8], [-4.5, 3.8], [-2.55, 3.8]], 0.12), ...pipe([[2.55, 3.55], [4.1, 3.5], [5.05, 2.95]], 0.12),
+      ...pipe([[-2.55, 3.8], [-2.55, 1.55]], 0.11), ...pipe([[2.55, 3.55], [2.55, 1.55]], 0.11),
+      // rivet rows along the waterline
+      ...[[-5.1, -2.6], [2.6, 5.0]].flatMap(([a, b]) => Array.from({ length: 12 }, (_, i) => { const x = a + (b - a) * i / 11; return { t: 'cyl', ax: 'z', r: 0.045, l: 0.04, seg: 6, p: [x, 1.6, at(x)[1] + 0.01], m: 'brass', mir: true, d: 1 }; })),
+      // pressure gauges either side of each hatch
+      ...[-2.22, 2.22].flatMap((x) => [
+        { t: 'cyl', ax: 'z', r: 0.2, l: 0.05, seg: 12, p: [x, 3.35, 6.03], m: 'brass', mir: true },
+        { t: 'cyl', ax: 'z', r: 0.16, l: 0.03, seg: 12, p: [x, 3.35, 6.06], m: 'stripe', mir: true },
+        { t: 'box', s: [0.025, 0.14, 0.02], p: [x + 0.03, 3.39, 6.08], r3: [0, 0, -35], m: 'dark', mir: true, d: 1 },
+      ]),
+      // ventilator cowls behind the launcher
+      ...[[-3.0, 1.75]].flatMap(([x, z]) => [
+        { t: 'cyl', r: 0.15, l: 0.85, seg: 8, p: [x, 4.85, z], m: 'brass', mir: true },
+        { t: 'cyl', ax: 'x', r: [0.34, 0.22], l: 0.42, seg: 10, p: [x + 0.12, 5.38, z], r3: [0, 0, 12], m: 'brass', mir: true },
+        { t: 'cyl', ax: 'x', r: 0.27, l: 0.02, seg: 10, p: [x + 0.34, 5.43, z], r3: [0, 0, 12], m: 'black', mir: true },
+      ]),
+      // stern drive shrouds: brass rings and vanes around the centre engines
+      ...ringX(-5.98, 2.35, 0.85, 0.66), ...[0, 90].map((a) => ({ t: 'box', s: [0.06, 1.3, 0.05], p: [-5.98, 2.35, 0.85], r3: [a, 0, 0], m: 'brass', mir: true })),
       // dorsal fin with pearl rays
       { t: 'ext', ax: 'z', poly: [[-5.55, 3.9], [-2.6, 4.45], [-3.9, 6.15], [-5.0, 5.85]], d: [-0.09, 0.09], m: 'accent' },
       ...[-4.75, -4.25, -3.75].map((x, i) => ({ t: 'box', s: [0.06, 1.35 - i * 0.22, 0.2], p: [x, 4.95 - i * 0.02, 0], r3: [0, 0, 24], m: 'stripe', d: 1 })),
@@ -683,10 +735,10 @@
     const W = wRockets(roof, { body: 'stripe', nose: 'accent' });
     craft('lc_water', {
       name: 'Tideborn Ark', faction: 'water', factionName: 'Water', unit: 'WTR-LandingCraft', weaponType: 'rocket launcher',
-      blurb: 'A sea-tribe ark grown as one nautilus shell: teal hull, pearl growth ribs, keel and dorsal fin, coral-crowned blisters. Harpoon rockets ride an open rack.',
-      palette: { hull: '#2f7d86', hull2: '#25646c', panel: '#3a909a', accent: '#e07a52', stripe: '#efe4c8', trim: '#e07a52', glow: '#5ff0e0', glowE: '#5ae8ff' },
+      blurb: 'A sea-tribe ark grown as one nautilus shell and fitted out in brass: ribbed wheelhouse with a glass bathysphere nose, a bow salon window, amber portholes, steam pipes and vent cowls. Harpoon rockets ride an open rack.',
+      palette: { hull: '#2f7d86', hull2: '#25646c', panel: '#3a909a', accent: '#e07a52', stripe: '#efe4c8', trim: '#e07a52', brass: '#e2b24c', glass: '#2c6170', glow: '#5ff0e0', glowE: '#5ae8ff', amber: '#ffbf5a' },
       roofY: roof, parts, weapon: W, headParts: hDish(W.head, 0.32, 0.3), headMode: { mode: 'sweep' },
-      hatch: hatches({ panel: 'hull2', inset: 'panel', bars: 'accent', plate: 'stripe' }),
+      hatch: hatches({ panel: 'hull2', inset: 'panel', bars: 'brass', plate: 'brass', frame: 'brass' }),
     });
   }
 
