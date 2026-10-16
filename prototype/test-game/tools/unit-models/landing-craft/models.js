@@ -619,92 +619,148 @@
     });
   }
 
-  // 5 · WATER — "Tideborn Ark". Sea-tribe teal with coral and pearl: a keeled shell hull, scallop-shell pods with
-  //     ribs, dorsal fin, coral spines; a harpoon-rocket rack.
+  // 5 · WATER — "Tideborn Ark" (v2, one hull). Sea-tribe teal with coral and pearl. A single nautilus-shell hull
+  //     covers the whole 3 × 3: flat flanks for the hatches, the shell swelling to a ridge, pearl growth ribs across
+  //     the back, a keel and dorsal fin. The corner defense pods are now blisters grown out of the shell.
   {
-    const roof = 4.15;
-    const shellPod = (cx, r, hy) => [
-      { t: 'ell', s: [r, hy, r], seg: 12, half: true, p: [cx, 1.45, 4.0], m: 'hull', mir: true },
-      { t: 'cyl', r: [r, r * 0.86], l: 0.4, seg: 12, p: [cx, 1.25, 4.0], m: 'hull2', mir: true },
-      ...[0.3, 0.58, 0.82].flatMap((f) => hoop(cx, 1.45 + hy * f, 4.0, r * Math.sqrt(1 - f * f) + 0.02, 16, 0.06, 0.09, 'stripe', { mir: true, d: f > 0.7 ? 1 : 0 })),
-      { t: 'cyl', r: r + 0.04, l: 0.12, seg: 12, p: [cx, 1.5, 4.0], m: 'accent', mir: true },
-    ];
+    const roof = 4.75;
+    // shell cross-section (17 pts): flat bottom, vertical flank to ys, superelliptic shoulder up to the ridge yt
+    const shellSec = (hw, y0, ys, yt, cb = 0.45, k = 5, sq = 0.7) => {
+      const P = [[-hw + cb, y0], [hw - cb, y0], [hw, y0 + cb], [hw, ys]];
+      const arc = (i) => { const a = i / (k + 1) * Math.PI / 2; return [hw * Math.pow(Math.cos(a), sq), ys + (yt - ys) * Math.pow(Math.sin(a), sq)]; };
+      for (let i = 1; i <= k; i++) P.push(arc(i));
+      P.push([0, yt]);
+      for (let i = k; i >= 1; i--) { const [u, v] = arc(i); P.push([-u, v]); }
+      P.push([-hw, ys], [-hw, y0 + cb]);
+      return P;
+    };
+    // hull stations along X: [x, half-width, bottom, flank top, ridge]
+    const ST = [[-5.97, 4.3, 1.25, 2.5, 3.4], [-5.55, 5.45, 1.05, 3.35, 4.2], [-4.4, 5.95, 1.0, 4.05, 4.55], [-2.3, 6.0, 1.0, 4.3, 4.62],
+      [2.3, 6.0, 1.0, 4.3, 4.62], [4.3, 5.8, 1.0, 3.65, 4.4], [5.4, 4.85, 1.05, 2.85, 3.65], [5.97, 3.1, 1.25, 2.1, 2.7]];
+    const at = (x) => { let i = 0; while (i < ST.length - 2 && x > ST[i + 1][0]) i++; const A = ST[i], B = ST[i + 1], t = (x - A[0]) / (B[0] - A[0]); return A.map((v, j) => v + (B[j] - v) * t); };
+    const rib = (x, w = 0.16, grow = 0.05) => { const a = at(x - w / 2), b = at(x + w / 2);
+      return { t: 'loft', ax: 'x', secs: [[x - w / 2, shellSec(a[1] + grow, a[2] - 0.02, a[3], a[4] + grow)], [x + w / 2, shellSec(b[1] + grow, b[2] - 0.02, b[3], b[4] + grow)]], m: 'stripe' }; };
     const parts = [
-      { t: 'loft', ax: 'x', secs: [[-5.5, esec(0, 1.5, 2.6, 1.2, 12, 0.8)], [-4.8, esec(0, 2.3, 2.6, 1.6, 12, 0.7)], [1.6, esec(0, 2.35, 2.6, 1.55, 12, 0.7)], [4.6, esec(0, 1.8, 2.3, 1.1, 12, 0.8)], [5.95, esec(0, 0.5, 2.0, 0.4, 12)]], m: 'hull' },
-      // keel
-      { t: 'ext', ax: 'z', poly: [[-4.8, 1.2], [4.5, 1.2], [5.6, 1.6], [4.6, 0.95], [-4.0, 0.95]], d: [-0.15, 0.15], m: 'accent' },
-      // bow lamp + eye windows
-      { t: 'ell', s: [0.3, 0.22, 0.3], seg: 10, p: [5.8, 2.05, 0], m: 'glow' },
-      ...[0.9].flatMap((z) => [{ t: 'ell', s: [0.55, 0.3, 0.25], seg: 10, p: [3.9, 3.0, z], r3: [0, 0, -18], m: 'glass', mir: true },
-        { t: 'ell', s: [0.6, 0.34, 0.24], seg: 10, p: [3.88, 2.98, z * 1.04], r3: [0, 0, -18], m: 'accent', mir: true, d: 1 }]),
-      // dorsal fin + pearl crest
-      { t: 'ext', ax: 'z', poly: [[-5.2, 4.0], [-2.3, 4.0], [-3.9, 5.7], [-4.9, 5.4]], d: [-0.08, 0.08], m: 'accent' },
-      ...[-4.6, -4.1, -3.6].map((x, i) => ({ t: 'box', s: [0.06, 1.2 - i * 0.25, 0.18], p: [x, 4.6 - i * 0.05, 0], r3: [0, 0, 22], m: 'stripe', d: 1 })),
+      { t: 'loft', ax: 'x', secs: ST.map(([x, hw, y0, ys, yt]) => [x, shellSec(hw, y0, ys, yt)]), m: 'hull' },
+      // pearl growth ribs, closer together toward the bow and stern like a shell's growth lines
+      ...[-5.2, -4.3, -3.4, -2.42, 2.42, 3.35, 4.2, 4.95].map((x) => rib(x)),
+      // keel + belly plate
+      { t: 'ext', ax: 'z', poly: [[-5.3, 1.05], [5.0, 1.05], [5.95, 1.6], [5.0, 0.85], [-4.6, 0.85]], d: [-0.16, 0.16], m: 'accent' },
+      { t: 'box', s: [9.0, 0.06, 6.0], p: [-0.3, 0.98, 0], m: 'hull2' },
+      // bow: lamp, two great eyes ringed in coral
+      { t: 'ell', s: [0.32, 0.26, 0.4], seg: 10, p: [5.95, 2.2, 0], m: 'glow' },
+      { t: 'ell', s: [0.55, 0.34, 0.42], seg: 12, p: [5.12, 2.95, 1.25], r3: [0, 18, -24], m: 'glass', mir: true },
+      { t: 'ell', s: [0.6, 0.38, 0.46], seg: 12, p: [5.08, 2.93, 1.27], r3: [0, 18, -24], m: 'accent', mir: true, d: 1 },
+      ...[0.45, 0.9, 1.35].map((z) => ({ t: 'box', s: [0.05, 0.05, 0.3], p: [5.82, 1.8, z], m: 'glow', mir: true, d: 1 })),
+      // dorsal fin with pearl rays
+      { t: 'ext', ax: 'z', poly: [[-5.55, 3.9], [-2.6, 4.45], [-3.9, 6.15], [-5.0, 5.85]], d: [-0.09, 0.09], m: 'accent' },
+      ...[-4.75, -4.25, -3.75].map((x, i) => ({ t: 'box', s: [0.06, 1.35 - i * 0.22, 0.2], p: [x, 4.95 - i * 0.02, 0], r3: [0, 0, 24], m: 'stripe', d: 1 })),
+      // swept stern fins
+      { t: 'ext', ax: 'y', poly: [[-4.1, 5.0], [-3.1, 5.25], [-5.0, 6.15], [-5.8, 6.05]], d: [2.25, 2.37], m: 'accent', mir: true },
+      // roof: shell plinth for the launcher
+      { t: 'cyl', r: [1.45, 1.7], l: 0.42, seg: 12, p: [0, roof - 0.21, 0], m: 'hull2' },
+      { t: 'cyl', r: 1.72, l: 0.1, seg: 12, p: [0, roof - 0.38, 0], m: 'accent' },
       ...bearing(roof),
-      // scale bands along the hull
-      ...[-3.0, -1.6, 0.2, 1.8].map((x) => ({ t: 'loft', ax: 'x', secs: [[x, esec(0, 2.37, 2.6, 1.57, 12, 0.7)], [x + 0.18, esec(0, 2.37, 2.6, 1.57, 12, 0.7)]], m: 'hull2', d: 1 })),
-      ...nozzle(-5.45, 2.4, 0.75, 0.5, 0.4, { mir: true, collar: 'accent' }),
-      ...modBox({ m: 'hull2', ct: 0.9, y1: 4.05 }),
-      ...[-1.2, 0, 1.2].map((x) => ({ t: 'cyl', r: [0.02, 0.14], l: 0.6, seg: 6, p: [x, 4.3, 4.6], m: 'accent', mir: true, d: 1 })),
-      ...shellPod(4.0, 1.75, 2.1), ...shellPod(-3.8, 1.6, 1.9),
-      // coral spines on the pods
-      ...[[4.0, 3.6, 4.0, 0], [4.6, 3.1, 4.9, -22], [3.3, 3.1, 4.9, 22], [-3.8, 3.35, 4.0, 0]].map(([x, y, z, a]) => ({ t: 'cyl', r: [0.02, 0.16], l: 0.9, seg: 6, p: [x, y, z], r3: [a, 0, 0], m: 'accent', mir: true })),
-      { t: 'cyl', ax: 'x', r: 0.5, l: 0.12, seg: 12, p: [5.6, 2.1, 4.0], m: 'accent', mir: true },
-      { t: 'cyl', ax: 'x', r: 0.3, l: 0.04, seg: 12, p: [5.67, 2.1, 4.0], m: 'glow', mir: true },
-      ...nozzle(-5.25, 2.0, 4.0, 0.46, 0.5, { mir: true, collar: 'accent' }),
-      ...liftJet(4.0, 4.0, 1.07), ...liftJet(-3.8, 4.0, 1.07, 0.5),
+      // coral spines along the shoulders, over the hatches
+      ...[-1.3, 0, 1.3].map((x, i) => ({ t: 'cyl', r: [0.02, 0.17], l: 0.8 + (i === 1 ? 0.35 : 0), seg: 6, p: [x, 4.75, 5.15], r3: [-28, 0, i === 1 ? 0 : -x * 14], m: 'accent', mir: true })),
+      // bioluminescent spots along the flanks
+      ...[-5.0, -3.8, 3.8, 4.8].map((x) => ({ t: 'ell', s: [0.14, 0.14, 0.06], seg: 8, p: [x, 2.6, at(x)[1] + 0.01], m: 'glow', mir: true, d: 1 })),
+      // front defense blisters grown from the shell: harpoon guns, coral crown
+      { t: 'ell', s: [1.05, 0.62, 1.05], seg: 12, p: [4.1, 4.05, 4.0], m: 'hull2', mir: true },
+      { t: 'cyl', r: 1.07, l: 0.1, seg: 12, p: [4.1, 4.05, 4.0], m: 'accent', mir: true },
+      ...[0.24, -0.24].map((dz) => ({ t: 'cyl', ax: 'x', r: 0.085, l: 1.3, seg: 8, p: [5.05, 4.2, 4.0 + dz], m: 'dark', mir: true })),
+      ...[0.24, -0.24].map((dz) => ({ t: 'cyl', ax: 'x', r: [0.02, 0.1], l: 0.3, seg: 6, p: [5.85, 4.2, 4.0 + dz], m: 'stripe', mir: true })),
+      ...[[4.1, 4.75, 4.0, 0, 0], [3.6, 4.55, 4.55, -25, 15], [4.6, 4.55, 4.55, -25, -15]].map(([x, y, z, a, b]) => ({ t: 'cyl', r: [0.02, 0.15], l: 0.75, seg: 6, p: [x, y, z], r3: [a, 0, b], m: 'accent', mir: true })),
+      // rear blisters over the stern engines
+      { t: 'ell', s: [0.85, 0.5, 0.85], seg: 12, p: [-4.0, 3.95, 4.0], m: 'hull2', mir: true },
+      { t: 'cyl', r: [0.02, 0.14], l: 0.7, seg: 6, p: [-4.0, 4.5, 4.0], m: 'accent', mir: true },
+      // engines: two in the stern centre, one under each rear blister
+      ...nozzle(-5.75, 2.35, 0.85, 0.5, 0.35, { mir: true, collar: 'accent' }),
+      ...nozzle(-5.45, 2.2, 4.0, 0.42, 0.4, { mir: true, collar: 'accent' }),
+      ...liftJet(4.0, 4.0, 1.02), ...liftJet(-3.8, 4.0, 1.02, 0.5),
       ...gearLeg(4.0, 4.0, { top: 1.3, padM: 'accent' }), ...gearLeg(-3.8, 4.0, { top: 1.3, padM: 'accent' }),
     ];
     const W = wRockets(roof, { body: 'stripe', nose: 'accent' });
     craft('lc_water', {
       name: 'Tideborn Ark', faction: 'water', factionName: 'Water', unit: 'WTR-LandingCraft', weaponType: 'rocket launcher',
-      blurb: 'A sea-tribe ark: keeled teal shell, scallop pods ribbed in pearl, coral spines and a dorsal fin. Harpoon rockets ride an open rack.',
+      blurb: 'A sea-tribe ark grown as one nautilus shell: teal hull, pearl growth ribs, keel and dorsal fin, coral-crowned blisters. Harpoon rockets ride an open rack.',
       palette: { hull: '#2f7d86', hull2: '#25646c', panel: '#3a909a', accent: '#e07a52', stripe: '#efe4c8', trim: '#e07a52', glow: '#5ff0e0', glowE: '#5ae8ff' },
       roofY: roof, parts, weapon: W, headParts: hDish(W.head, 0.32, 0.3), headMode: { mode: 'sweep' },
       hatch: hatches({ panel: 'hull2', inset: 'panel', bars: 'accent', plate: 'stripe' }),
     });
   }
 
-  // 6 · ARCANE / ENERGY — "Sanctum of the Flame". Ivory and gold with crimson, a peaked nave roof with
-  //     buttress fins, spired corner towers with stained-glass windows; a halo spire shield.
+  // 6 · ARCANE / ENERGY — "Sanctum of the Flame" (v2, one cathedral). Ivory and gold with crimson. A single
+  //     cruciform basilica on one undercroft: the nave runs bow to stern, the transept crosses the middle row and
+  //     its gable ends ARE the resource portals, aisles with a crimson hipped roof wrap all round, corner turrets
+  //     and flying buttresses are bonded into the walls; the halo spire rises from the crossing tower.
   {
-    const roof = 4.8;
-    const tower = (cx, r, y1, sp) => [
-      { t: 'loft', ax: 'y', secs: [[1.1, ngon(cx, 4.0, r * 0.82, 8, 22.5)], [1.5, ngon(cx, 4.0, r, 8, 22.5)], [y1, ngon(cx, 4.0, r, 8, 22.5)], [y1 + 0.15, ngon(cx, 4.0, r * 1.06, 8, 22.5)], [y1 + 0.3, ngon(cx, 4.0, r * 0.7, 8, 22.5)], [y1 + sp, ngon(cx, 4.0, 0.05, 8, 22.5)]], m: 'hull', mir: true },
-      { t: 'loft', ax: 'y', secs: [[y1, ngon(cx, 4.0, r + 0.05, 8, 22.5)], [y1 + 0.15, ngon(cx, 4.0, r * 1.1, 8, 22.5)]], m: 'accent', mir: true },
-      ...[0, 90, 180, 270].map((a) => ({ t: 'ext', ax: 'z', poly: [[-0.22, 2.0], [0.22, 2.0], [0.22, 2.6], [0, 2.85], [-0.22, 2.6]], d: [-0.03, 0.03], p: [cx + Math.cos(a * D) * r * 0.93, 0, 4.0 - Math.sin(a * D) * r * 0.93], r3: [0, a + 90, 0], m: 'glow', mir: true })),
-      { t: 'ell', s: [0.12, 0.12, 0.12], seg: 8, p: [cx, y1 + sp + 0.08, 4.0], m: 'glow', mir: true },
+    const roof = 5.1;
+    const turret = (cx, cz, r, top, sp) => [
+      { t: 'loft', ax: 'y', secs: [[2.0, ngon(cx, cz, r, 8, 22.5)], [top, ngon(cx, cz, r, 8, 22.5)], [top + 0.12, ngon(cx, cz, r * 1.12, 8, 22.5)], [top + 0.26, ngon(cx, cz, r * 0.78, 8, 22.5)], [top + sp, ngon(cx, cz, 0.04, 8, 22.5)]], m: 'hull', mir: true },
+      { t: 'loft', ax: 'y', secs: [[top, ngon(cx, cz, r + 0.04, 8, 22.5)], [top + 0.12, ngon(cx, cz, r * 1.16, 8, 22.5)]], m: 'accent', mir: true },
+      ...[0, 90].map((a) => ({ t: 'ext', ax: 'z', poly: [[-0.17, 2.55], [0.17, 2.55], [0.17, 3.15], [0, 3.38], [-0.17, 3.15]], d: [-0.03, 0.03],
+        p: [cx + Math.cos(a * D) * r * 0.93, 0, cz + Math.sin(a * D) * r * 0.93], r3: [0, 90 - a, 0], m: 'glow', mir: true })),
+      { t: 'ell', s: [0.11, 0.11, 0.11], seg: 8, p: [cx, top + sp + 0.07, cz], m: 'glow', mir: true },
     ];
+    // a lancet window: x-facing (on an X wall) or z-facing (on a Z wall)
+    const lancetZ = (x, z, w = 0.2) => ({ t: 'ext', ax: 'z', poly: [[x - w, 2.3], [x + w, 2.3], [x + w, 2.75], [x, 2.98], [x - w, 2.75]], d: [z, z + 0.03], m: 'glow', mir: true });
+    const lancetX = (x, z, w = 0.2) => ({ t: 'ext', ax: 'x', poly: [[z - w, 2.3], [z + w, 2.3], [z + w, 2.75], [z, 2.98], [z - w, 2.75]], d: x > 0 ? [x, x + 0.03] : [x - 0.03, x], m: 'glow', mir: true });
+    const flyer = (x) => [
+      { t: 'box', s: [0.38, 1.85, 0.38], p: [x, 2.95, 5.5], m: 'hull2', mir: true },
+      { t: 'cyl', r: [0.02, 0.2], l: 0.65, seg: 8, p: [x, 4.2, 5.5], m: 'accent', mir: true },
+      strut([x, 3.7, 5.4], [x, 4.15, 2.3], 0.16, 0.24, 'hull2', { mir: true }),
+    ];
+    const roofPlane = (cx, cy, cz, len, wid, rx, rz, m = 'stripe') => ({ t: 'box', s: [len, 0.07, wid], p: [cx, cy, cz], r3: [rx, 0, rz], m });
     const parts = [
-      { t: 'loft', ax: 'x', secs: [[-5.4, arch(0, 2.1, 1.05, 3.6, 0.8)], [-5.0, arch(0, 2.3, 1.0, 3.75, 0.95)], [2.3, arch(0, 2.3, 1.0, 3.75, 0.95)], [4.5, arch(0, 2.0, 1.0, 2.9, 0.6)], [5.95, arch(0, 1.2, 1.15, 1.9, 0.25)]], m: 'hull' },
-      // gold ridge + great rose window at the bow
-      { t: 'box', s: [7.4, 0.1, 0.24], p: [-1.35, 4.72, 0], m: 'accent' },
-      { t: 'cyl', ax: 'x', r: 0.62, l: 0.08, seg: 12, p: [4.75, 2.5, 0], r3: [0, 0, -22], m: 'accent' },
-      { t: 'cyl', ax: 'x', r: 0.5, l: 0.06, seg: 12, p: [4.79, 2.5, 0], r3: [0, 0, -22], m: 'glow' },
-      ...[0, 45, 90, 135].map((a) => ({ t: 'box', s: [0.03, 1.0, 0.06], p: [4.83, 2.5, 0], r3: [a, 0, -22], m: 'accent', d: 1 })),
-      // nave windows (stained glass) + buttresses
-      ...[2.6, 3.6].map((x) => ({ t: 'ext', ax: 'z', poly: [[x - 0.22, 2.0], [x + 0.22, 2.0], [x + 0.22, 2.7], [x, 2.95], [x - 0.22, 2.7]], d: [2.3, 2.33], m: 'glow', mir: true })),
+      // undercroft: one plinth under the whole craft, chamfered corners, gold cornice
+      { t: 'loft', ax: 'y', secs: [[0.95, octP(0, 0, 5.75, 5.75, 1.7)], [1.15, octP(0, 0, 5.95, 5.95, 1.76)], [1.9, octP(0, 0, 5.95, 5.95, 1.76)], [2.08, octP(0, 0, 5.7, 5.7, 1.68)]], m: 'hull2' },
+      { t: 'loft', ax: 'y', secs: [[1.84, octP(0, 0, 6.0, 6.0, 1.78)], [1.96, octP(0, 0, 6.0, 6.0, 1.78)]], m: 'accent' },
+      ...[-4.4, -3.0, -1.6, 1.6, 3.0, 4.4].map((x) => ({ t: 'box', s: [0.5, 0.42, 0.04], p: [x, 1.45, 5.96], m: 'dark', mir: true, d: 1 })),
+      // aisle walls all round + crimson hipped aisle roof
+      { t: 'loft', ax: 'y', secs: [[2.0, octP(0, 0, 5.6, 5.6, 1.65)], [3.05, octP(0, 0, 5.6, 5.6, 1.65)]], m: 'hull' },
+      { t: 'loft', ax: 'y', secs: [[3.0, octP(0, 0, 5.78, 5.78, 1.72)], [3.1, octP(0, 0, 5.78, 5.78, 1.72)], [3.9, octP(0, 0, 3.4, 3.4, 0.95)]], m: 'stripe' },
+      { t: 'loft', ax: 'y', secs: [[2.98, octP(0, 0, 5.8, 5.8, 1.73)], [3.06, octP(0, 0, 5.8, 5.8, 1.73)]], m: 'accent' },
+      // nave, bow to stern, with a proper west front at the bow
+      { t: 'loft', ax: 'x', secs: [[-5.55, arch(0, 2.3, 1.0, 4.1, 0.9)], [5.45, arch(0, 2.3, 1.0, 4.1, 0.9)], [5.78, arch(0, 2.1, 1.0, 3.95, 0.82)]], m: 'hull' },
+      roofPlane(-0.05, 4.6, 1.38, 11.0, 2.06, 26.6, 0), roofPlane(-0.05, 4.6, -1.38, 11.0, 2.06, -26.6, 0),
+      { t: 'box', s: [11.2, 0.1, 0.22], p: [0, 5.04, 0], m: 'accent' },
+      // transept across the middle row; its gables at Z = ±6 carry the resource portals
+      { t: 'loft', ax: 'z', secs: [[-6.0, arch(0, 2.0, 1.0, 4.3, 0.75)], [6.0, arch(0, 2.0, 1.0, 4.3, 0.75)]], m: 'hull' },
+      roofPlane(1.23, 4.72, 0, 1.78, 12.08, 0, -25.7), roofPlane(-1.23, 4.72, 0, 1.78, 12.08, 0, 25.7),
+      ...[1, -1].map((s) => ({ t: 'box', s: [1.9, 0.1, 0.14], p: [s * 1.2, 4.72, 6.03], r3: [0, 0, -s * 25.7], m: 'accent', mir: true })),
+      { t: 'cyl', r: [0.02, 0.16], l: 0.6, seg: 8, p: [0, 5.35, 6.0], m: 'accent', mir: true },
+      { t: 'ell', s: [0.36, 0.36, 0.05], seg: 12, p: [0, 4.62, 6.02], m: 'glow', mir: true },
+      // west front: rose window, gold tracery, lancet "cockpit" glass, flanking pinnacles
+      { t: 'cyl', ax: 'x', r: 0.72, l: 0.08, seg: 14, p: [5.8, 3.35, 0], m: 'accent' },
+      { t: 'cyl', ax: 'x', r: 0.6, l: 0.06, seg: 14, p: [5.83, 3.35, 0], m: 'glow' },
+      ...[0, 45, 90, 135].map((a) => ({ t: 'box', s: [0.03, 1.2, 0.07], p: [5.87, 3.35, 0], r3: [a, 0, 0], m: 'accent', d: 1 })),
+      { t: 'ext', ax: 'x', poly: [[-0.55, 1.4], [0.55, 1.4], [0.55, 2.15], [0, 2.5], [-0.55, 2.15]], d: [5.78, 5.83], m: 'glass' },
+      { t: 'ext', ax: 'x', poly: [[-0.68, 1.3], [0.68, 1.3], [0.68, 2.2], [0, 2.62], [-0.68, 2.2]], d: [5.77, 5.8], m: 'accent' },
+      ...[1].map((z) => ({ t: 'box', s: [0.32, 3.4, 0.32], p: [5.72, 2.75, z * 2.25], m: 'hull2', mir: true })),
+      { t: 'cyl', r: [0.02, 0.22], l: 1.0, seg: 8, p: [5.72, 4.95, 2.25], m: 'accent', mir: true },
+      // crossing tower (the weapon's plinth) with lancets and a gold band
+      { t: 'loft', ax: 'y', secs: [[4.3, ngon(0, 0, 1.6, 8, 22.5)], [roof - 0.12, ngon(0, 0, 1.5, 8, 22.5)], [roof, ngon(0, 0, 1.42, 8, 22.5)]], m: 'hull2' },
+      { t: 'loft', ax: 'y', secs: [[roof - 0.24, ngon(0, 0, 1.54, 8, 22.5)], [roof - 0.12, ngon(0, 0, 1.53, 8, 22.5)]], m: 'accent' },
+      ...[45, 135, 225, 315].map((a) => ({ t: 'box', s: [0.04, 0.42, 0.2], p: [Math.cos(a * D) * 1.53, 4.72, -Math.sin(a * D) * 1.53], r3: [0, a, 0], m: 'glow' })),
       ...bearing(roof, 1.15),
-      { t: 'box', s: [3.0, 0.5, 2.6], p: [0, roof - 0.25, 0], m: 'hull2' },
-      { t: 'box', s: [3.04, 0.08, 2.64], p: [0, roof - 0.04, 0], m: 'accent' },
-      // rear: censers (engines) in gold collars
-      { t: 'box', s: [0.2, 2.0, 3.0], p: [-5.45, 2.4, 0], m: 'stripe' },
-      ...nozzle(-5.55, 1.8, 0.7, 0.42, 0.4, { mir: true, collar: 'accent', m: 'accent' }),
-      // side chapels (hatch modules) with flying buttresses
-      ...modBox({ m: 'hull2', ct: 0.3, y1: 4.15 }),
-      { t: 'loft', ax: 'x', secs: [[-1.98, arch(4.0, 1.95, 4.0, 4.15, 0.55)], [1.98, arch(4.0, 1.95, 4.0, 4.15, 0.55)]], m: 'stripe', mir: true },
-      ...[-1.98, 1.98].map((x) => ({ t: 'ext', ax: 'x', poly: [[2.3, 4.3], [2.3, 3.6], [3.6, 4.2], [3.6, 4.4]], d: [x - 0.08, x + 0.08], m: 'accent', mir: true })),
-      ...tower(4.0, 1.55, 3.3, 1.7), ...tower(-3.8, 1.4, 3.1, 1.3),
-      ...nozzle(-5.1, 1.9, 4.0, 0.42, 0.55, { mir: true, collar: 'accent', m: 'accent' }),
-      { t: 'box', s: [0.2, 0.42, 0.42], p: [5.5, 2.0, 4.0], m: 'accent', mir: true },
-      { t: 'cyl', ax: 'x', r: 0.12, l: 0.06, seg: 8, p: [5.62, 2.0, 4.0], m: 'glow', mir: true },
-      ...liftJet(4.0, 4.0, 1.07, 0.5), ...liftJet(-3.8, 4.0, 1.07, 0.45),
+      // corner turrets bonded into the aisle walls
+      ...turret(4.25, 4.25, 0.85, 3.85, 1.65), ...turret(-4.1, 4.1, 0.8, 3.7, 1.35),
+      // flying buttresses from the aisle wall to the nave, and lancet windows between them
+      ...flyer(-3.0), ...flyer(3.0),
+      ...[-4.3, -2.35, 2.35, 3.65].map((x) => lancetZ(x, 5.6)),
+      ...[3.0].flatMap((z) => [lancetX(5.6, z), lancetX(-5.6, z)]),
+      // stern: censer engines set in the apse wall
+      ...nozzle(-5.55, 2.55, 3.05, 0.4, 0.4, { mir: true, collar: 'accent', m: 'accent' }),
+      ...nozzle(-5.5, 2.0, 0.85, 0.45, 0.45, { mir: true, collar: 'accent', m: 'accent' }),
+      { t: 'ell', s: [0.42, 0.42, 0.05], seg: 12, p: [-5.57, 3.35, 0], m: 'glow' },
+      ...liftJet(4.0, 4.0, 0.98, 0.5), ...liftJet(-3.8, 4.0, 0.98, 0.45),
       ...gearLeg(4.0, 4.0, { top: 1.3, padM: 'accent' }), ...gearLeg(-3.8, 4.0, { top: 1.3, padM: 'accent' }),
     ];
     const W = wShield(roof, { style: 'halo' });
     craft('lc_arcane', {
       name: 'Sanctum of the Flame', faction: 'arcane', factionName: 'Arcane / Energy', unit: 'ARC-LandingCraft', weaponType: 'shield',
-      blurb: 'A flying chapel in ivory and gold: peaked nave, spired towers lit with stained flame, and a halo spire that wards the landing site.',
+      blurb: 'A flying basilica in ivory and gold: one cruciform cathedral whose transept gables open as the resource portals, crimson aisle roofs, bonded turrets and buttresses, and a halo spire over the crossing.',
       palette: { hull: '#ece4d2', hull2: '#d6cab0', panel: '#e2d8c2', accent: '#c9a040', stripe: '#8e1d27', trim: '#8e1d27', glow: '#ffb84a', glowE: '#ffcf6a' },
       roofY: roof, parts, weapon: W, headParts: [], headMode: { mode: 'spin', speed: 0.9 },
       hatch: hatches({ panel: 'hull2', inset: 'stripe', bars: 'accent', plate: 'accent' }),

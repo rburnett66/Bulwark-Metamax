@@ -29,11 +29,14 @@ out of the hatches in the sequence).
 | 2 | `lc_air` | **Skylark Carrier** | Air (Florael) | anti-aircraft missiles — twin 4-cell pods | bar radar (spins) | white, sky blue, racing red; long bubble canopy, streamlined nacelle pods, swept fins, canted tail fins |
 | 3 | `lc_hightech` | **Sterling Vault** | High Tech (Ochre) | shield — three-prong projector | sensor hoop (spins) | graphite wedge monolith, gold spine and trim, white light-lines, hex pods, corporate diamond |
 | 4 | `lc_artillery` | **Siegeworks Emplacement** | Artillery (Kessra) | mortar — four tubes | bar radar (sweeps) | khaki + olive, black/yellow hazard skirts, sandbag roof, ammo crates, splayed stabilizer legs |
-| 5 | `lc_water` | **Tideborn Ark** | Water (Rime) | rocket launcher — harpoon rack | radar dish (sweeps) | teal keeled shell hull, coral + pearl, scallop pods with hoop ribs, coral spines, dorsal fin |
-| 6 | `lc_arcane` | **Sanctum of the Flame** | Arcane / Energy (Cinder) | shield — halo spire | twin halos + flame orb (spin) | ivory + gold + crimson; peaked nave, rose window, spired towers with stained-flame windows, buttresses |
+| 5 | `lc_water` | **Tideborn Ark** (v2) | Water (Rime) | rocket launcher — harpoon rack | radar dish (sweeps) | ONE nautilus-shell hull over the whole 3 × 3: teal, pearl growth ribs, keel, dorsal and stern fins, coral-crowned blisters in place of pods |
+| 6 | `lc_arcane` | **Sanctum of the Flame** (v2) | Arcane / Energy (Cinder) | shield — halo spire | twin halos + flame orb (spin) | ONE cruciform basilica on an undercroft: nave bow-to-stern, transept gables are the resource portals, crimson hipped aisle roof all round, bonded corner turrets and flying buttresses, crossing tower under the halo spire |
 | 7 | `lc_space` | **Lumen Survey Lander** | Space Tech (Lumen) | cannon — twin-rail coil railgun | large survey dish (sweeps) | federation white + navy, cyan ring-lights, capsule hull, drum pods, sensor masts |
 | 8 | `lc_dark` | **Hollow Choir** | Dark Energy (Xenthe) | mortar — corruption tubes (glowing mouths) | eye on a stalk (sweeps) | obsidian + violet, magenta seams, spiked ridge and pods |
 | 9 | `lc_greenies` | **Brood Hive** | Greenies / Chem (Vexmire) | rocket launcher — spore rockets | spore pod (spins) | swamp green + toxic yellow, segmented organic hull, hex brood pods, glowing chem tanks, compound eyes |
+
+**v2 (2026-10-16, owner):** Tideborn and Sanctum reworked from modules into one unified, sculpted hull each — exact same
+footprint, hatch, gear and weapon positions. The other eight keep the modular build.
 
 Every one of the six requested weapon types is used; four are used twice (cannon, shield, mortar, rocket launcher).
 **The weapon is a one-line choice per craft** (`weapon: wMortar(roof)` etc. in `models.js`) — the kit builds any weapon
@@ -121,6 +124,8 @@ One instance per level, so cost is small. Draw calls = material keys × groups (
 | Skylark | 3,768 | 2,780 | | Lumen | 4,416 | 2,628 |
 | Sterling Vault | 2,838 | 2,158 | | Hollow Choir | 3,692 | 2,892 |
 | Siegeworks | 3,764 | 2,844 | | Brood Hive | 4,680 | 3,872 |
+
+(v2 — 2026-10-16: Tideborn Ark 5,536 / LOD 4,448; Sanctum 4,808 / LOD 3,876. Rows above for those two are v1.)
 
 ## 6. Port to the game (work for the repo session)
 
