@@ -769,6 +769,13 @@ export function boot(mountEl, seed) {
   // deterministically from (faction, wave, seed) so replays hear the same calls.
   // ---------------------------------------------------------------------
   const comm = createComm(document);
+  // Jumping back to the menu ends all dialog; leaving it lets the speakers talk again [MM-task_mvcs0s2v_15]
+  {
+    const open = menu.open.bind(menu), close = menu.close.bind(menu);
+    menu.open = (screen) => { comm.hush(); open(screen); };
+    menu.close = () => { comm.unhush(); close(); };
+    if (menu.isOpen()) comm.hush();   // booted onto the menu
+  }
   let voicePacks = null;
   loadVoicePacks().then((p) => {
     voicePacks = p;
@@ -1025,5 +1032,8 @@ export function boot(mountEl, seed) {
     get ui() { return ui; },
     /** Debug / headless tests: the 3D view (null under the 2D fallback). */
     get view3d() { return renderer3d; },
+    /** Debug / headless tests: the menu and the comm card. */
+    get menu() { return menu; },
+    get comm() { return comm; },
   };
 }

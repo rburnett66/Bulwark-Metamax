@@ -207,7 +207,7 @@ export function createComm(doc) {
   async function showCall(d) {
     // An unspeakable spec shows nothing — but callers may be awaiting waitForClose(), so release
     // them rather than leave the pre-battle sequence waiting on a card that never opened.
-    if (!d || !speakerOf(d.factionKey)) { _resolveClosed(); return; }
+    if (!d || !speakerOf(d.factionKey) || hushed) { _resolveClosed(); return; }   // hushed: the menu is up — nobody talks
     const my = ++token;
     const live = () => token === my;
     stopAudio();
@@ -288,7 +288,8 @@ export function createComm(doc) {
     const rm = reducedMotion();
     // S7 sign-off
     card.classList.add('signoff');
-    footl.textContent = '';
+    const footl = card.querySelector('.bw-comm-foot-l');   // was the caller's local: a ReferenceError on every sign-off
+    if (footl) { footl.textContent = ''; footl.classList.remove('bw-tapclose'); }
     if (!muted) playDrop();
     if (bed) bed.stop();
     if (liveAudio && liveAudio.bed === bed) liveAudio.bed = null;
@@ -297,6 +298,19 @@ export function createComm(doc) {
     await delay(rm ? 400 : 1400); if (!live()) return;
     card.className = 'bw-comm';
   }
+
+  // HUSH (owner 2026-10-17: "after going to the menu you can still hear characters talking. All dialog should be
+  // ended when player jumps back to menu"): cut the running call's voice + static at once, hide the card, drop any
+  // held speaker, and refuse new calls until unhush() — so a call queued behind an await can't start under the menu.
+  // Waiters on waitForClose() are released so no sequence is left hanging. [MM-task_mvcs0s2v_15]
+  let hushed = false;
+  function hush() {
+    hushed = true;
+    token++; stopAudio(); _held = null;
+    card.className = 'bw-comm';
+    _resolveClosed();
+  }
+  function unhush() { hushed = false; }
 
   let _held = null;
   /** Fade out a HELD card (no-op when nothing is held or a newer call took the card over). */
@@ -319,6 +333,9 @@ export function createComm(doc) {
   return {
     showCall,
     dismiss,
+    hush,
+    unhush,
+    get hushed() { return hushed; },
     waitForClose,
     get muted() { return muted; },
     destroy() { token++; stopAudio(); card.remove(); muteBtn.remove(); style.remove(); },
