@@ -60,3 +60,27 @@ test('every homeworld names a 3D world palette that exists [MM-task_mvbzgc9n_12]
   const { LOWPAL } = await import('../render3d/styles/lowpoly-palettes.js');
   for (const [k, p] of Object.entries(PLANETS)) assert.ok(LOWPAL[p.palette], `${k}: ${p.palette}`);
 });
+
+test('every homeworld carries its survey: ui colour, sunlight, terrain notes, faction lore with a real rival [MM-story_mvcnxgt8_13]', () => {
+  const hex = /^#[0-9a-f]{6}$/i;
+  for (const [k, p] of Object.entries(PLANETS)) {
+    assert.match(p.ui, hex, k); assert.match(p.sun, hex, k);
+    for (const f of ['trees', 'ground', 'rocks', 'airborne']) assert.ok(p.survey && p.survey[f], `${k}: survey.${f}`);
+    for (const f of ['trope', 'identity', 'dmg']) assert.ok(p.faction && p.faction[f], `${k}: faction.${f}`);
+    assert.ok(PLANETS[p.faction.beats] && p.faction.beats !== k, `${k}: beats a real other faction`);
+  }
+});
+
+test('the live globe builds for every homeworld (shared with the PNG bake) [MM-story_mvcnxgt8_13]', async () => {
+  const THREE = await import('../../vendor/three.module.js');
+  const { makeGlobe, GLOBE_KEYS } = await import('../render3d/planet/globe.js');
+  assert.deepEqual(GLOBE_KEYS, Object.keys(PLANETS));
+  const geo = new THREE.SphereGeometry(1, 8, 6);
+  for (const k of GLOBE_KEYS) {
+    const g = makeGlobe(THREE, k, { geo });
+    assert.equal(g.root.children.length, 2, k);
+    const y0 = g.planet.rotation.y; g.spin(1, 0.5);
+    assert.ok(Math.abs(g.planet.rotation.y - y0 - 0.5) < 1e-9, `${k} spins`);
+    g.dispose();
+  }
+});

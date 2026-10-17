@@ -706,6 +706,9 @@ export function boot(mountEl, seed) {
   }
   const menu = createMenu(mountEl, {
     onPlayMap: (id) => { menu.close(); void selectMap(id); },
+    // the Main Menu's planet + craft panel [MM-story_mvcnxgt8_13]: the enemy whose homeworld is next, the player's craft
+    currentFaction: () => currentTestFaction || DEFAULT_FACTION,
+    playerCraft: () => { try { return new URLSearchParams(window.location.search).get('craft') || 'system'; } catch (e) { return 'system'; } },
     onSelectFaction: (f) => {
       // Choosing/resetting the enemy is a FRESH battle (owner: reset includes wave + economy +
       // structures): set the faction, drop the carried gold/defenses, rebuild the schedule and
