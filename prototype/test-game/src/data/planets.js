@@ -6,6 +6,8 @@
  * `globe` drives the planet shader in tools/planets/bake.html, which renders content/planets/<key>.png — the
  * image the FACTIONS screen shows. Re-bake after changing a globe (see that page).
  *
+ * `ui` / `sun` / `survey` / `faction` feed the menu's PLANET SURVEY screen (menu/planetSurvey.js) — from the "Bulwark
+ * Planets" page; `faction.beats` is a faction key. [MM-story_mvcnxgt8_13]
  * `palette` is the battle view's low-poly world (ground colours + light) for a battle on that planet — the enemy
  * faction's homeworld [MM-task_mvbzgc9n_12]; ?world=<key> still previews any palette.
  *
@@ -13,6 +15,9 @@
  */
 export const PLANETS = Object.freeze({
   ground: {
+    ui: '#9cc8f0', sun: '#fff4e0',   // label colour on dark UI; sunlight
+    survey: { trees: 'Green canopy trees, pines, flowering bushes', ground: 'Grass and wildflowers', rocks: 'Grey boulders', airborne: 'Pollen' },
+    faction: { trope: 'Nationalistic', identity: 'Infantry & armor; flags & honor', dmg: 'Kinetic', beats: 'greenies' },
     palette: 'meadow',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Verdance', type: 'Lush homeworld', lush: 1, haze: '#a8c4ec',
     blurb: 'Green fields and farmland worth planting a flag on: the homeland the infantry and armor fight for.',
@@ -23,6 +28,9 @@ export const PLANETS = Object.freeze({
       epic: { name: 'Elder Bloom', note: 'A flower that opens once a century, deep in the oldest grove.' } },
   },
   air: {
+    ui: '#f0b0d8', sun: '#fff0f4',   // label colour on dark UI; sunlight
+    survey: { trees: 'Pink blossom trees, flowering bushes', ground: 'Dense flower meadows', rocks: 'Lilac boulders', airborne: 'Petals' },
+    faction: { trope: 'Manga aces', identity: 'Air superiority; weak on ground', dmg: 'Kinetic', beats: 'ground' },
     palette: 'sakura',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Florael', type: 'Blooming garden', lush: 1, haze: '#e6c6e6',
     blurb: 'Blossom skies and petals on the wind: the anime-ace world, best seen from the cockpit.',
@@ -33,6 +41,9 @@ export const PLANETS = Object.freeze({
       epic: { name: 'Choir Lily', note: 'A lily that sings in chords. Hearing one is said to change you.' } },
   },
   hightech: {
+    ui: '#f0d090', sun: '#fff4d0',   // label colour on dark UI; sunlight
+    survey: { trees: 'Cacti, flat-top acacias, dead snags', ground: 'Dry scrub, pebbles, rare flowers', rocks: 'Sandstone hoodoos', airborne: 'Light dust' },
+    faction: { trope: 'Mega-corp', identity: 'Precision, shields, expensive', dmg: 'Electric', beats: 'air' },
     palette: 'savanna',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Ochre', type: 'Arid desert', lush: 0.3, haze: '#f0d8a8',
     blurb: 'A high white sun over open desert: solar wealth for the mega-corp, and long clear sightlines for precision weapons.',
@@ -43,6 +54,9 @@ export const PLANETS = Object.freeze({
       epic: { name: 'Solar Pearl', note: 'Lightning-fused glass that holds a captured noon inside it.' } },
   },
   artillery: {
+    ui: '#e8a878', sun: '#ffe0b8',   // label colour on dark UI; sunlight
+    survey: { trees: 'Spike trees, bleached dead snags', ground: 'Dry twigs and pebbles', rocks: 'Layered mesas', airborne: 'Blowing dust' },
+    faction: { trope: 'Siege military', identity: 'Range & arc; poor up close', dmg: 'Concussion', beats: 'hightech' },
     palette: 'canyon',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Kessra', type: 'Barren dust', lush: 0.1, haze: '#c89a70',
     blurb: 'A shelled-out wasteland of mesas and dust: ridgelines for the guns, nothing left standing in between.',
@@ -53,6 +67,9 @@ export const PLANETS = Object.freeze({
       epic: { name: 'Dreadnought Core', note: 'The still-warm reactor of a war machine buried under the dust.' } },
   },
   water: {
+    ui: '#cfe6f8', sun: '#fff8f0',   // label colour on dark UI; sunlight
+    survey: { trees: 'Snow-capped pines, ice spires, dead stumps', ground: 'Ice shards, pebbles, sparse grass', rocks: 'Snow-capped ice shards', airborne: 'Snow' },
+    faction: { trope: 'Sea tribes', identity: 'Swimmers/floaters; coastal', dmg: 'Frost', beats: 'artillery' },
     palette: 'winter',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Rime', type: 'Frozen', lush: 0.3, haze: '#cfe0f0',
     blurb: 'Frozen seas and ice coasts: the sea tribes fish, swim and strike with frost.',
@@ -63,6 +80,9 @@ export const PLANETS = Object.freeze({
       epic: { name: 'Leviathan Scale', note: 'A scale shed by something enormous that moves beneath the ice.' } },
   },
   arcane: {
+    ui: '#ff9a5a', sun: '#ffb08a',   // label colour on dark UI; sunlight
+    survey: { trees: 'Charred spike trees with ember tips', ground: 'Ash, pebbles, scorched twigs', rocks: 'Basalt columns, lava', airborne: 'Ash and embers' },
+    faction: { trope: 'Theocracy', identity: 'Energy weapons; no ammo economy', dmg: 'Fire', beats: 'water' },
     palette: 'volcanic',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Cinder', type: 'Volcanic ash', lush: 0, haze: '#5a3a34',
     blurb: 'A world of living fire: the theocracy draws its energy from the lava and worships the flame.',
@@ -73,6 +93,9 @@ export const PLANETS = Object.freeze({
       epic: { name: 'Heartflame', note: "A living ember from the planet's core. The faithful call it holy." } },
   },
   space: {
+    ui: '#bfe6ff', sun: '#ffffff',   // label colour on dark UI; sunlight
+    survey: { trees: 'Needle spires, glowing crystal clusters', ground: 'Regolith pebbles, small craters, crystal shards', rocks: 'Grey shards', airborne: 'None: no atmosphere' },
+    faction: { trope: 'Sci-Fi federation', identity: 'Orbital tech; strong vision; ignores some fog', dmg: 'Electric', beats: 'arcane' },
     palette: 'highlands',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Lumen', type: 'Airless moon', lush: 0, haze: '#1c2236',
     blurb: 'No air, no haze: the clearest sightlines in the system, a natural home for an orbital federation that sees everything.',
@@ -83,6 +106,9 @@ export const PLANETS = Object.freeze({
       epic: { name: 'Void Lens', note: 'A flawless crystal lens formed in vacuum. It shows more than light.' } },
   },
   dark: {
+    ui: '#b8a0ff', sun: '#e8fff0',   // label colour on dark UI; sunlight
+    survey: { trees: 'Glowing mushroom trees, crystal spires', ground: 'Glowing sprouts, alien flowers', rocks: 'Magenta crystal clusters', airborne: 'Glowing spores' },
+    faction: { trope: 'Cult', identity: 'DoT, corruption, night-strong', dmg: 'Poison', beats: 'space' },
     palette: 'alien',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Xenthe', type: 'Fungal alien', lush: 0.95, haze: '#7a6ac8',
     blurb: 'A violet twilight world that glows in the dark: corruption grows here, and the cult is strongest at night.',
@@ -93,6 +119,9 @@ export const PLANETS = Object.freeze({
       epic: { name: 'Mycelial Heart', note: "The pulsing knot at the centre of the world's fungal network." } },
   },
   greenies: {
+    ui: '#d0e860', sun: '#f0ffc8',   // label colour on dark UI; sunlight
+    survey: { trees: 'Spore pods, hive mounds, rotting snags', ground: 'Sickly grass, glowing toxic blisters', rocks: 'Moss-green boulders', airborne: 'Chem clouds' },
+    faction: { trope: 'Hive collective', identity: 'Swarms, chem clouds, area denial', dmg: 'Poison', beats: 'dark' },
     palette: 'tropical',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Vexmire', type: 'Toxic hive swamp', lush: 0.7, haze: '#a8b860',
     blurb: 'A living chemical swamp: the hive breeds in its pods, and its clouds are the Greenies\' own area denial.',
