@@ -142,9 +142,12 @@ function round2(v) {
  *
  * @param {string} unitId
  * @param {number} seed
+ * @param {{towers?:{antiGround?:string, antiAir?:string}}} [opts] optional harness-tower override
+ *        (default: first antiGround/antiAir in STRUCTURES = Cannon/Flak) — lets a NEW tower be
+ *        measured on the exact same board and seed set as the incumbents.
  * @returns {{avgDps:number, duration:number, kills:number}}
  */
-export function runBalanceBattle(unitId, seed) {
+export function runBalanceBattle(unitId, seed, opts) {
   const unitDef = getUnitDef(unitId); // throws on unknown id
 
   // Empty wave table: the harness drives its own single-unit spawn.
@@ -154,7 +157,7 @@ export function runBalanceBattle(unitId, seed) {
   const harnessRng = createRng(((seed >>> 0) ^ 0x5f356495) >>> 0);
 
   // --- Fixed defender layout: AG, AA, AG, AA on the first hard-point slots.
-  const towers = pickHarnessTowers();
+  const towers = Object.assign(pickHarnessTowers(), (opts && opts.towers) || {});
   const wanted = [
     towers.antiGround,
     towers.antiAir,
@@ -251,15 +254,16 @@ export function runBalanceBattle(unitId, seed) {
  *
  * @param {string} unitId
  * @param {number} [battles=100]
+ * @param {object} [opts] passed through to runBalanceBattle (harness-tower override)
  * @returns {{unitId:string, avgDps:number, price:number, stddev:number}}
  */
-export function computeUnitPrice(unitId, battles) {
+export function computeUnitPrice(unitId, battles, opts) {
   const n = Math.max(1, (battles === undefined || battles === null) ? 100 : (battles | 0));
   const samples = new Array(n);
 
   for (let i = 0; i < n; i++) {
     const seed = (SEED_BASE + i * SEED_STRIDE) >>> 0;
-    samples[i] = runBalanceBattle(unitId, seed).avgDps;
+    samples[i] = runBalanceBattle(unitId, seed, opts).avgDps;
   }
 
   let sum = 0;

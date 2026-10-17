@@ -53,6 +53,7 @@ import { buildBakedGround } from './ground/baked.js';
 import { buildLowPolyGround, GRID as GROUND_GRID } from './ground/lowpoly.js';
 import { renderMapFor } from './ground/synthTerrain.js';
 import { LOWPAL, WORLD_LIGHT, resolveWorld } from './styles/lowpoly-palettes.js';
+import { PLANETS } from '../data/planets.js';
 import { createMarkers } from './markers.js';
 import { createLowPolyStructures } from './structures/lowpoly.js';
 import { createSystemStructures, SYSTEM_KINDS } from './structures/system3d.js';
@@ -63,13 +64,16 @@ import { createPathLinesView } from './overlays/pathLines.js';
 import { buildUnitViews, createModelResolver } from './units/unitViews.js';
 import { createCombatFx } from './fx/combatFxModel.js';
 import { createCombatFxView } from './fx/combatFx.js';
-import { createImpacts } from './fx/impacts.js';
+import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createImpactsView } from './fx/impactsView.js';
 import { createCraft3D } from './craft/craft3d.js';
 import { createLanding, landedPose, harvesterOnRamp } from './craft/landing.js';
 import { introCamera } from './craft/introCamera.js';
-import { createCannonFx, createCannonFxView } from './fx/cannonFx.js';
+import { createCannonFx, createCannonFxView, baseStyleFor } from './fx/cannonFx.js';
 import { planCoverage, createCoverageView } from './overlays/coverage.js';
+import { createHealthBarView } from './overlays/healthBars.js';
+import { createGoldPopups, createGoldPopupView } from './overlays/goldPopups.js';
+import { createUnloads, createUnloadView } from './overlays/unloadFx.js';
 import { createResources3D } from './resources/resources3d.js';
 import { getUnitDef, getStructureDef } from '../data/tables.js';
 
@@ -186,11 +190,15 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const impacts = createImpacts({ seed: (map.seed | 0) || 1 });
   const impactsView = createImpactsView(THREE, scene, { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
   const fogView = createFogView(THREE, scene, map);
-  const cannonFx = createCannonFx({ seed: (map.seed | 0) || 1 }), cannonFxView = createCannonFxView(THREE, scene);   // the base super-cannon
+  const baseStyle = baseStyleFor(craft && craft.def && craft.def.weaponType);   // each base fires its own weapon's look
+  const cannonFx = createCannonFx({ seed: (map.seed | 0) || 1, style: baseStyle }), cannonFxView = createCannonFxView(THREE, scene, { style: baseStyle });   // the base super-cannon
   const coverageView = createCoverageView(THREE, scene);   // selection range + defensive coverage
+  const healthBars = createHealthBarView(THREE, scene);      // units, damaged towers, the base once hit
+  const gold = createGoldPopups(), goldView = createGoldPopupView(host);   // "$N" per kill / delivery
+  const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -200,7 +208,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     status: 'loading',
     problems: [],
     stats: { calls: 0, triangles: 0, units: 0, lines: 0, fx: 0, impacts: null },
-    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1 },
+    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1, trail: null, boom: null, fire: null, muzzle: null },
     getProjFx: typeof opts.projFx === 'function' ? opts.projFx : () => opts.projFx || null,
     getProjScale: typeof opts.projScale === 'function' ? opts.projScale : () => opts.projScale || 1,
     destroyed: false,
@@ -208,6 +216,91 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     lowpoly,
     roadMask: null,
   };
+  // missiles / rockets leave smoke and exhaust through the world-impact particles; rocket hits boom on the ground
+  // [MM-task_mvbyf6t8_z]. Launch effects + motor flames [MM-task_mvbz1121_11]:
+  //   cannon / flak — muzzle flash (combat FX) + a barrel EXHAUST: a hot tongue and a gunsmoke jet out along the
+  //     barrel that stops dead and hangs, side jets from the cannon's muzzle brake, a few sparks;
+  //   rocket — a STARTER PLUME: backblast out of the nozzle end, a smoke bloom around the rack, dust kicked off the
+  //     ground; in flight a big ragged ORANGE solid-fuel tongue that sheds embers and puffy brown-grey smoke while
+  //     the motor burns (first ~55% of the lob), then a dim coasting glow with a thinning wisp;
+  //   missile — an ignition puff at the tube; in flight a SMALL tight white-hot flame (steady, no embers) and a long
+  //     thin pale contrail — a guided motor, clean where the rocket is dirty.
+  let trailSeed = 1;
+  const jit = () => { trailSeed = (trailSeed * 16807) % 2147483647; return trailSeed / 2147483647 - 0.5; };
+  r.fxOpts.trail = (kind, x, y, z, k = 1, dx = 0, dy = 0, dz = 0, t = 1) => {
+    const I = r.impacts;
+    if (kind === 'burst') {
+      for (let i = 0; i < 10; i++) { const a = i * 0.628 + jit(); I.emit(FXK.SPARK, x, y, z, Math.cos(a) * 3.2 * k, jit() * 2.5, Math.sin(a) * 3.2 * k, 0.35, 0.022); }
+      I.emit(FXK.SMOKE, x, y, z, 0, 0.15, 0, 1.1, 0.14 * k, 0.6, 0.6);
+      I.emit(FXK.FLASH, x, y, z, 0, 0, 0, 0.12, 0.55 * k);
+      return;
+    }
+    if (kind === 'missile') {
+      I.emit(FXK.FLASH, x, y, z, -dx * 0.6, -dy * 0.6, -dz * 0.6, 0.04, 0.09 * k);                          // white-hot core
+      I.emit(FXK.FIRE, x - dx * 0.04, y - dy * 0.04, z - dz * 0.04, -dx * 2.2, -dy * 2.2, -dz * 2.2, 0.06, 0.06 * k, -0.5);   // short tight flame
+      I.emit(FXK.SMOKE, x - dx * 0.08, y - dy * 0.08, z - dz * 0.08, jit() * 0.06, 0.05 + jit() * 0.04, jit() * 0.06, 1.25, 0.04 * k, 0.55, 0.8);   // thin pale contrail
+      return;
+    }
+    if (kind === 'rocket') {
+      const burning = t < 0.55;   // the motor burns out just past the top of the lob (t = flight fraction)
+      if (burning) {
+        for (let i = 0; i < 2; i++) {                                                                       // ragged orange tongue, stretched back
+          const b = 2.5 + 2.5 * (jit() + 0.5);
+          I.emit(FXK.FIRE, x - dx * 0.05 * i, y - dy * 0.05 * i, z - dz * 0.05 * i, -dx * b + jit() * 0.6, -dy * b + jit() * 0.6, -dz * b + jit() * 0.6, 0.1 + jit() * 0.04, 0.11 * k, -0.2);
+        }
+        if (jit() > 0.1) I.emit(FXK.EMBER, x, y, z, -dx * 1.5 + jit() * 1.2, -dy * 1.5 + jit(), -dz * 1.5 + jit() * 1.2, 0.45, 0.025);   // sheds burning bits
+        I.emit(FXK.SMOKE, x - dx * 0.12, y - dy * 0.12, z - dz * 0.12, jit() * 0.25, 0.15 + jit() * 0.1, jit() * 0.25, 1.4, 0.09 * k, 0.75, 0.4);   // puffy brown-grey
+      } else {
+        I.emit(FXK.FIRE, x, y, z, -dx * 0.8, -dy * 0.8, -dz * 0.8, 0.05, 0.05 * k, -0.4);                     // coasting: a dim glow
+        if (jit() > 0) I.emit(FXK.SMOKE, x, y, z, jit() * 0.1, 0.08, jit() * 0.1, 0.8, 0.035 * k, 0.4, 0.5);
+      }
+      return;
+    }
+    I.emit(FXK.SMOKE, x, y, z, jit() * 0.15, 0.12 + jit() * 0.1, jit() * 0.15, 0.7, 0.045 * k, 0.32, 0.75);
+    I.emit(FXK.FIRE, x, y, z, 0, 0, 0, 0.09, 0.07 * k, -0.4);
+  };
+  // launch effects at the modelled firing point (m: x,y,z tip · dx,dy,dz barrel axis · bx,by,bz breech / nozzle)
+  r.fxOpts.fire = (kind, m, look) => {
+    const I = r.impacts, dx = m.dx, dy = m.dy, dz = m.dz;
+    const sx = -dz, sz = dx, sl = Math.hypot(sx, sz) || 1;                                                   // barrel's side axis
+    if (kind === 'shell' || kind === 'flak' || kind === 'tracer') {
+      const k = kind === 'shell' ? 1 : kind === 'flak' ? 0.75 : 0.4;
+      for (let i = 0; i < 3; i++) {                                                                          // hot tongue
+        const v = 3 + i * 1.6;
+        I.emit(FXK.FIRE, m.x, m.y, m.z, dx * v + jit() * 0.4, dy * v + jit() * 0.4, dz * v + jit() * 0.4, 0.07, (0.13 - i * 0.025) * k, -0.3);
+      }
+      I.emit(FXK.FLASH, m.x + dx * 0.05, m.y + dy * 0.05, m.z + dz * 0.05, 0, 0, 0, 0.05, 0.3 * k);
+      for (let i = 0, c = Math.round(6 * k) + 1; i < c; i++) {                                               // gunsmoke jet: out fast, stops, hangs
+        const v = 2 + 4.5 * (jit() + 0.5);
+        I.emit(FXK.SMOKE, m.x, m.y, m.z, dx * v + jit() * 0.5, dy * v + 0.2 + jit() * 0.4, dz * v + jit() * 0.5, 0.9 + jit() * 0.4, 0.08 * k, 0.9, 0.48, 0, 6);
+      }
+      if (m.brake) for (const s of [1, -1]) {                                                               // muzzle-brake side jets
+        const bx = m.x - dx * m.brake, by = m.y - dy * m.brake, bz = m.z - dz * m.brake;
+        for (let i = 0; i < 2; i++) I.emit(FXK.SMOKE, bx, by, bz, (sx / sl) * s * (2.4 + i) + dx * 0.6, 0.25, (sz / sl) * s * (2.4 + i) + dz * 0.6, 0.7, 0.06, 0.8, 0.5, 0, 6);
+        I.emit(FXK.FIRE, bx, by, bz, (sx / sl) * s * 2.2, 0, (sz / sl) * s * 2.2, 0.05, 0.06, -0.3);
+      }
+      for (let i = 0; i < 3 * k; i++) I.emit(FXK.SPARK, m.x, m.y, m.z, dx * 5 + jit() * 1.5, dy * 5 + jit() * 1.5 + 0.5, dz * 5 + jit() * 1.5, 0.18, 0.016);
+      return;
+    }
+    if (kind === 'rocket') {                                                                                 // starter plume
+      for (let i = 0; i < 4; i++) I.emit(FXK.FIRE, m.bx, m.by, m.bz, -dx * (3 + i) + jit() * 0.8, -dy * (3 + i) + jit() * 0.5, -dz * (3 + i) + jit() * 0.8, 0.12, 0.14, -0.2);
+      for (let i = 0; i < 12; i++) {                                                                         // backblast + bloom
+        const v = 1.2 + 3 * (jit() + 0.5);
+        I.emit(FXK.SMOKE, m.bx, m.by, m.bz, -dx * v + jit() * 1.4, -dy * v * 0.5 + 0.3 + jit() * 0.3, -dz * v + jit() * 1.4, 1.6 + jit() * 0.6, 0.14, 1.1, 0.5, 0, 2.5);
+      }
+      for (let i = 0; i < 6; i++) { const a = i * 1.047 + jit(); I.emit(FXK.DUST, m.bx, 0.05, m.bz, Math.cos(a) * 1.6, 0.6 + jit() * 0.3, Math.sin(a) * 1.6, 0.6, 0.05); }   // ground kick
+      I.emit(FXK.SMOKE, m.bx, 0.08, m.bz, 0, 0.2, 0, 1.6, 0.12, 0.9, 0.62, 1);
+      I.emit(FXK.FLASH, m.bx, m.by, m.bz, 0, 0, 0, 0.08, 0.45);
+      return;
+    }
+    if (kind === 'missile') {                                                                                // ignition: a pop of white smoke out of the tube's back
+      for (let i = 0; i < 4; i++) I.emit(FXK.SMOKE, m.bx, m.by, m.bz, -dx * (1.5 + i * 0.6) + jit() * 0.5, 0.2 + jit() * 0.3, -dz * (1.5 + i * 0.6) + jit() * 0.5, 1.1, 0.06, 0.9, 0.8, 0, 3);
+      I.emit(FXK.SMOKE, m.x, m.y, m.z, dx * 1.2, 0.15, dz * 1.2, 0.8, 0.05, 0.8, 0.85, 0, 3);
+      I.emit(FXK.FIRE, m.x, m.y, m.z, dx * 2, dy * 2, dz * 2, 0.06, 0.09, -0.3);
+    }
+  };
+  r.fxOpts.muzzle = (id, n) => (r.system ? r.system.muzzle(id, n) : null);
+  r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
   attachCameraInput(canvas, r);
 
   // The baked level: content/maps/baked/<slug>/ — checked against the sim's map; its road mask paints the
@@ -243,7 +336,10 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   }
   // Obstructions (and the low-poly ground) come from the sim's own map (terrain codes + bakedBlocking +
   // authored decor), not from the baked level — so they match what the units actually path around.
-  setWorld(r, opts.world || map.world || (level && level.world));
+  // world palette: ?world= preview → an authored palette on the map / level → the battle planet's (the enemy
+  // faction's homeworld, data/planets.js) → Meadow [MM-task_mvbzgc9n_12]
+  const named = (w) => (typeof w === 'string' && w ? w : null);
+  setWorld(r, named(opts.world) || named(map.world) || named(level && level.world) || (opts.planet && PLANETS[opts.planet] && PLANETS[opts.planet].palette) || null);
   return r;
 }
 
@@ -370,6 +466,11 @@ export function renderFrame(r, state, ui, events, dt) {
   r.coverageView.sync(planCoverage(state, ui, getStructureDef), dt);
   r.stats.fx = r.fxView.sync(r.fx);
   r.impacts.update(state, r.map, events, dt, views, { resolve: r.resolveModel });
+  // health bars + "$N" pop-ups (overlays/) [MM-task_mvbry87f_q] [MM-task_mvbyf6t8_z]
+  r.healthBars.update(state, views, dt, { baseCell: r.map.base });
+  r.gold.feed(events, r.map); r.gold.step(Math.max(0, Math.min(0.1, dt || 0)));
+  r.unloads.feed(events, state); r.unloads.step(Math.max(0, Math.min(0.1, dt || 0)), state);
+  r.unloadView.sync(r.unloads, Math.max(0, Math.min(0.1, dt || 0)), r.impacts, FXK, r.map.base);
   r.stats.impacts = r.impactsView.sync(r.impacts, true);
   if (r.impacts.shake > 0) { r.camera.position.x += Math.sin(r.clock * 61) * r.impacts.shake * 0.5; r.camera.position.z += Math.cos(r.clock * 47) * r.impacts.shake * 0.5; }
   if (r.cannonFx.shake > 0) { const k = r.cannonFx.shake; r.camera.position.x += Math.sin(r.clock * 67) * k; r.camera.position.y += Math.sin(r.clock * 83 + 0.7) * k * 0.5; r.camera.position.z += Math.cos(r.clock * 53) * k; }   // cannon touchdown
@@ -381,6 +482,7 @@ export function renderFrame(r, state, ui, events, dt) {
 
   r.renderer.info.reset();
   r.renderer.render(r.scene, r.camera);
+  r.goldView.sync(r.gold, r.camera, r._w || 1, r._h || 1, r.THREE);   // DOM labels follow the final (shaken) camera
   r.stats.calls = r.renderer.info.render.calls;
   r.stats.triangles = r.renderer.info.render.triangles;
 }
@@ -481,7 +583,7 @@ export function destroyRenderer(r) {
   r.pathLinesView.dispose();
   r.ghost.dispose();
   r.fxView.dispose();
-  r.cannonFxView.dispose(); r.coverageView.dispose();
+  r.cannonFxView.dispose(); r.coverageView.dispose(); r.healthBars.dispose(); r.goldView.dispose(); r.unloadView.dispose();
   r.impactsView.dispose();
   r.fogView.dispose();
   r.scene.traverse((o) => {

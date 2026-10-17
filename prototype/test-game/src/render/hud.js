@@ -324,7 +324,7 @@ export function createHud(mountEl, callbacks) {
   paletteRow.appendChild(harvBtn);
   palette.appendChild(paletteRow);
   root.appendChild(palette);
-  // NB: the 1-4 / Esc build HOTKEYS are handled in input/input.js (which also refreshes the placement ghost);
+  // NB: the 1-9 / Esc build HOTKEYS are handled in input/input.js (which also refreshes the placement ghost);
   // the palette buttons just mirror that via toggleBuild(). Don't add a second key handler here — two handlers
   // double-toggle and cancel each other out (press = select then immediately deselect).
 
@@ -798,6 +798,7 @@ export function updateHud(hud, state, ui) {
       const HARVEST_STATE = {
         harvestIdle: 'docked — awaiting orders', harvestGo: 'driving to the field',
         harvestPull: 'harvesting', harvestReturn: 'hauling home',
+        harvestUnload: 'unloading at the base',
       };
       hud.uname.textContent = 'Harvester';
       hud.usub.textContent = 'resource hauler · click a crystal field to send it';

@@ -2,7 +2,9 @@ import { STRUCTURES } from '../data/tables.js';
 import { validatePlacement } from '../sim/structures.js';
 import { screenToCell } from '../render/renderer.js';
 
-const BUILD_KEYS = ['1', '2', '3', '4', '5'];   // 5 = Harvestor
+// Number keys map onto the BUILD PALETTE order (hud.js structOrder) so each key matches its button badge:
+// 1 Cannon, 2 Flak, 3 Wall, 4 Mine, 5 Rockets, 6 Missile. The Harvestor is bought at the base, not placed.
+const BUILD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
 export function createUiState() {
   return {
@@ -17,8 +19,9 @@ export function createUiState() {
 }
 
 function buildOrder() {
-  // Deterministic ordered list of structure ids for 1-4 shortcuts.
-  return Object.keys(STRUCTURES);
+  // Deterministic ordered list of structure ids for the number-key shortcuts — the SAME filter as the
+  // HUD palette (hud.js structOrder), so key N always selects the button badged N.
+  return Object.keys(STRUCTURES).filter((id) => STRUCTURES[id].kind !== 'harvestorBay');
 }
 
 function findUnitAtCell(state, cell) {

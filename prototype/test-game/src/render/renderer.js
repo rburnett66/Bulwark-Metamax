@@ -673,12 +673,17 @@ function emitCombatFx(renderer, state) {
           const ty = lp.y - (tp.air ? t * 1.05 : 0);
           // owner 2026-07-16: tower defense reads as a SPRAY of bullets — 4-round jittered burst
           const tfx = pfx && pfx[st.structId];
+          // a def-level `cadence` (STR-Rockets / STR-Missile: render-only volley interval) means ONE
+          // heavy round per volley instead of the cannon's 4-round spray; authored projFx still wins
+          let sdef = null;
+          try { sdef = getStructureDef(st.structId); } catch (e) { sdef = null; }
+          const dCad = sdef && sdef.cadence;
           if (st.kind === 'antiGround') fire('s' + st.id, c, { x: lp.x, y: ty },
-            (tfx && tfx.kind) || 'shell', (tfx && tfx.cadence) || 0.55, (tfx && tfx.speed) || 13,
-            (tfx && tfx.color !== undefined) ? tfx.color : 0xffd080, (tfx && tfx.burst) || 4, tfx && tfx.size,
+            (tfx && tfx.kind) || 'shell', (tfx && tfx.cadence) || dCad || 0.55, (tfx && tfx.speed) || (dCad ? 9 : 13),
+            (tfx && tfx.color !== undefined) ? tfx.color : 0xffd080, (tfx && tfx.burst) || (dCad ? 1 : 4), tfx && tfx.size,
             tfx && tfx.streakLen, tfx && tfx.streakWid);
           else fire('s' + st.id, c, { x: lp.x, y: ty },
-            (tfx && tfx.kind) || 'flak', (tfx && tfx.cadence) || 0.35, (tfx && tfx.speed) || 18,
+            (tfx && tfx.kind) || 'flak', (tfx && tfx.cadence) || dCad || 0.35, (tfx && tfx.speed) || 18,
             (tfx && tfx.color !== undefined) ? tfx.color : 0x9fd4ff, (tfx && tfx.burst) || 1, tfx && tfx.size,
             tfx && tfx.streakLen, tfx && tfx.streakWid);
         }

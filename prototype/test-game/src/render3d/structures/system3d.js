@@ -23,7 +23,10 @@ import { lifecycleLook, yawToward } from './models.js';
 
 /** Sim structure kind → System model. Kinds not listed stay with structures/lowpoly.js. */
 export const SYSTEM_KINDS = Object.freeze({ antiGround: 'sys_cannon', antiAir: 'sys_flak', wall: 'sys_wall' });
-export const SYSTEM_CAP = Object.freeze({ sys_cannon: 200, sys_flak: 200, sys_wall: 1200 });
+/** Tower types with their own model (the new towers share a kind with cannon / flak). */
+export const SYSTEM_STRUCTS = Object.freeze({ 'STR-Rockets': 'sys_rockets', 'STR-Missile': 'sys_missile' });
+export const SYSTEM_CAP = Object.freeze({ sys_cannon: 200, sys_flak: 200, sys_wall: 1200, sys_rockets: 120, sys_missile: 120 });
+const modelOf = (s) => SYSTEM_STRUCTS[s.structId] || SYSTEM_KINDS[s.kind];
 const TURN = 5;   // rad/s a turret slews at
 
 /** Merge a System def into one vertex-coloured geometry per group: { body, weapon?, head? } → { geo, pivot, tris }. */
@@ -61,13 +64,13 @@ export function mergeSystemModel(THREE, def, prims = createPrims(THREE)) {
  */
 export function planSystem(list, base = null) {
   const items = [], sig = [];
-  const live = (list || []).filter((s) => s && s.lifecycle !== 'Destroyed' && SYSTEM_KINDS[s.kind]);
+  const live = (list || []).filter((s) => s && s.lifecycle !== 'Destroyed' && modelOf(s));
   const cellOf = (s) => { const c = s.cell || s.pos; return { x: Math.floor(c.x), y: Math.floor(c.y) }; };
   const walls = new Set(live.filter((s) => s.kind === 'wall').map((s) => { const c = cellOf(s); return `${c.x},${c.y}`; }));
   const bx = base ? base.x + 0.5 : null, bz = base ? base.y + 0.5 : null;
   for (const s of live) {
     const c = cellOf(s), w = (s.footprint && s.footprint.w) || 1, h = (s.footprint && s.footprint.h) || 1;
-    const x = c.x + w / 2, z = c.y + h / 2, look = lifecycleLook(s), model = SYSTEM_KINDS[s.kind];
+    const x = c.x + w / 2, z = c.y + h / 2, look = lifecycleLook(s), model = modelOf(s);
     sig.push(`${s.id}:${s.kind}@${c.x},${c.y}:${look.key}`);
     if (model === 'sys_wall') {
       const ns = walls.has(`${c.x},${c.y - 1}`) || walls.has(`${c.x},${c.y + 1}`), ew = walls.has(`${c.x - 1},${c.y}`) || walls.has(`${c.x + 1},${c.y}`);
@@ -79,6 +82,29 @@ export function planSystem(list, base = null) {
     items.push({ id: s.id, model, x, z, ry, sy: look.sy, tint: look.tint, aim: true });
   }
   return { items, sig: sig.join('|') };
+}
+
+/**
+ * Where a System tower's i-th firing point is in the world (pure) — the barrel / rail tip the round leaves from,
+ * following the turret's yaw. it: a planSystem item { model, x, z, ry, sy }; wy: the turret's world yaw.
+ * → { x, y, z, dx, dy, dz, bx, by, bz, brake, n } (unit direction out of the barrel; b* = the breech / nozzle end),
+ * or null for a model without firing points. [MM-task_mvbz1121_11]
+ */
+export function muzzlePoint(it, wy, i = 0) {
+  const def = it && SYSTEM_MODELS[it.model], list = def && def.muzzles;
+  if (!list || !list.length) return null;
+  const m = list[((i % list.length) + list.length) % list.length];
+  const pv = (def.pivots && def.pivots.weapon) || [0, 0, 0], k = SYSTEM_SCALE[it.model] || 0.25, sy = it.sy == null ? 1 : it.sy;
+  const local = wy - it.ry, cl = Math.cos(local), sl = Math.sin(local), cr = Math.cos(it.ry), sr = Math.sin(it.ry);
+  // model space: turn about the weapon pivot (three.js Ry: x' = x·c + z·s, z' = −x·s + z·c) …
+  const tx = (p) => { const x = p[0] - pv[0], z = p[2] - pv[2]; return [pv[0] + x * cl + z * sl, p[1], pv[2] - x * sl + z * cl]; };
+  // … then scale and place the root (cell centre, base yaw)
+  const place = (q) => { const x = q[0] * k, z = q[2] * k; return [it.x + x * cr + z * sr, q[1] * k * sy, it.z - x * sr + z * cr]; };
+  const tip = place(tx(m.p));
+  const d = m.d || [1, 0, 0], dl = Math.hypot(d[0], d[1], d[2]) || 1, a = wy;
+  const dx = (d[0] * Math.cos(a) + d[2] * Math.sin(a)) / dl, dy = d[1] / dl, dz = (-d[0] * Math.sin(a) + d[2] * Math.cos(a)) / dl;
+  const back = (m.back || 0) * k;
+  return { x: tip[0], y: tip[1], z: tip[2], dx, dy, dz, bx: tip[0] - dx * back, by: tip[1] - dy * back * sy, bz: tip[2] - dz * back, brake: (m.brake || 0) * k, n: list.length };
 }
 
 export function createSystemStructures(THREE, scene, { env } = {}) {
@@ -102,6 +128,7 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
   const M = new THREE.Matrix4(), Mp = new THREE.Matrix4(), Mr = new THREE.Matrix4(), Ms = new THREE.Matrix4(), col = new THREE.Color();
   let base = null, sig = null, lastList = [], items = [], clock = 0;
   const yaw = new Map();   // structure id → current turret yaw (radians, world)
+  const byItem = new Map();   // structure id → its aiming instance (firing points)
 
   // root transform of an instance: cell centre, yaw, cell scale (+ the lifecycle rise)
   function rootMatrix(it, ry, out) {
@@ -152,6 +179,7 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       const plan = planSystem(lastList, base);
       if (plan.sig === sig) return false;
       sig = plan.sig; items = plan.items;
+      byItem.clear(); for (const it of items) if (it.aim) byItem.set(it.id, it);
       const ids = new Set(items.map((i) => i.id));
       for (const id of [...yaw.keys()]) if (!ids.has(id)) yaw.delete(id);
       writeBodies(); writeMoving();
@@ -166,12 +194,18 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       for (const it of items) {
         if (!it.aim) continue;
         const s = byId.get(it.id), u = s && s.targetId != null && state && state.units ? state.units.get(s.targetId) : null;
-        const want = u && u.pos ? yawToward(u.pos.x - it.x, u.pos.y - it.z) : it.ry;
+        const want = u && u.pos ? yawToward(u.pos.x + 0.5 - it.x, u.pos.y + 0.5 - it.z) : it.ry;
         const cur = yaw.has(it.id) ? yaw.get(it.id) : it.ry;
         let d = ((want - cur) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
         yaw.set(it.id, cur + Math.max(-step, Math.min(step, d)));
       }
       writeMoving();
+    },
+    /** The world firing point i of a tower (by structure id) at its turret's current yaw, or null. See muzzlePoint. */
+    muzzle(id, i = 0) {
+      const it = byItem.get(id);
+      if (!it) return null;
+      return muzzlePoint(it, yaw.has(id) ? yaw.get(id) : it.ry, i);
     },
     /** Point the metal reflection at the world's sky / ground. */
     setEnv(e) { if (e) mat.setEnv(e); },

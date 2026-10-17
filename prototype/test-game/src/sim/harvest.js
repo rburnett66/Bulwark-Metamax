@@ -10,7 +10,7 @@
 // The harvester is driven HERE (marchAlong on its own nav path, like repair troops) — stepMovement,
 // separation, and the contact clamp all skip it, so the economy loop never tangles with the crowd sim.
 import { MAPDATA } from '../../content/maps/mapdata.js';
-import { BONUS_NERFS } from '../data/tables.js';
+import { BONUS_NERFS, HARVESTER_UNLOAD_TIME } from '../data/tables.js';
 import { createUnit } from './entities.js';
 import { buildNavGrid, findWalkerPath } from './pathfinding.js';
 import { emitEvent } from './core.js';
@@ -250,10 +250,16 @@ export function cmdHarvest(state, cmd) {
     u = idle[0] || fleet.slice().sort(byDist)[0];
   }
   u.fieldId = node.fieldId;
-  // route to the clicked cell unless another truck already claimed it — then the nearest free cell
-  const target = (node.remaining > 0 && !reservedNodes(state, u).has(node.id)) ? node : nextFieldTarget(state, u);
-  if (target) routeTo(state, u, target);
-  else u.state = 'harvestIdle';
+  if (u.state === 'harvestUnload') {
+    // UNLOADING trucks finish the 3 s unload first (the load is already coming off) — the new
+    // field is remembered and the truck heads there the moment the deposit lands.
+    u.harvestNodeId = null;
+  } else {
+    // route to the clicked cell unless another truck already claimed it — then the nearest free cell
+    const target = (node.remaining > 0 && !reservedNodes(state, u).has(node.id)) ? node : nextFieldTarget(state, u);
+    if (target) routeTo(state, u, target);
+    else u.state = 'harvestIdle';
+  }
   emitEvent(state, { type: 'harvestOrder', tick: state.tick, nodeId: node.id, fieldId: node.fieldId, unitId: u.id, pos: { x: node.x, y: node.y } });
   return { ok: true, reason: '' };
 }
@@ -431,39 +437,80 @@ function stepOneHarvester(state, u, dt) {
     }
   } else if (u.state === 'harvestReturn') {
     if (marchAlong(u, dt)) {
-      // DEPOSIT (owner color economy): EVERY haul pays gold — blue/yellow are the economy crystals,
-      // red/green additionally count up the header QUEST objectives.
-      if (u.cargo > 0) {
-        const gold = Math.floor(u.cargoValue * (u.yieldMult || 1));
-        if (gold > 0) {
-          if (state.economy) state.economy.money = (state.economy.money || 0) + gold;
-          if (u.cargoRole === 'premium') state.mapScore.goldFromPremium += gold;
-          else state.mapScore.goldFromPrimary += gold;
-        }
-        if (u.cargoColor === 'red' || u.cargoColor === 'green') {
-          const n = Math.floor(u.cargo);
-          state.mapScore.questUnits += n;
-          if (u.cargoColor === 'red') state.mapScore.questRed += n; else state.mapScore.questGreen += n;
-        }
-        emitEvent(state, { type: 'deposit', tick: state.tick, gold, units: Math.floor(u.cargo), role: u.cargoRole || 'primary', color: u.cargoColor || 'blue', fieldId: u.fieldId, pos: { x: u.pos.x, y: u.pos.y } });
-        u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null;
-      }
-      // still mid-job (came home full)? head back out — to the assigned field, or if it was
-      // stripped while hauling, to the nearest field of the SAME resource (owner 2026-07-17)
-      let next = u.fieldId ? nextFieldTarget(state, u) : null;
-      if (!next && u.fieldId) {
-        const hop = nextSameResourceField(state, u);
-        if (hop) {
-          u.fieldId = hop.fieldId; next = hop;
-          emitEvent(state, { type: 'harvestOrder', tick: state.tick, nodeId: hop.id, fieldId: hop.fieldId, unitId: u.id, pos: { x: hop.x, y: hop.y } });
-        }
-      }
-      if (next) routeTo(state, u, next);
-      else {
-        u.fieldId = null;
-        u.harvestNodeId = null;
-        u.state = 'harvestIdle';
-      }
+      if (u.cargo > 0) beginUnload(state, u, dt);   // docked with a load — hold for the unload timer
+      else leaveDock(state, u);                      // empty-handed return: straight back out
     }
+  } else if (u.state === 'harvestUnload') {
+    // UNLOAD (owner 2026-10-16): the truck holds at the dock for HARVESTER_UNLOAD_TIME. A destroyed
+    // base can't receive the load → abort, nothing credited. (A truck killed mid-unload simply
+    // drops out of aliveHarvesters — its cargo was never credited.)
+    if (!state.base || !(state.base.hp > 0)) {
+      emitEvent(state, { type: 'unloadCancel', tick: state.tick, id: u.id, pos: { x: u.pos.x, y: u.pos.y } });
+      u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null;
+      u.unloadTicks = 0;
+      u.fieldId = null; u.harvestNodeId = null;
+      u.state = 'harvestIdle';
+      return;
+    }
+    u.unloadTicks -= 1;
+    if (u.unloadTicks > 0) return;
+    u.unloadTicks = 0;
+    creditDeposit(state, u);
+    leaveDock(state, u);
+  }
+}
+
+/** Gold a load is worth on delivery (yield applied, floored) — the value unloadStart promises and
+ *  the deposit credits. */
+function cargoGold(u) {
+  return Math.floor(u.cargoValue * (u.yieldMult || 1));
+}
+
+/** Truck reached the dock with cargo: start the deterministic, TICK-counted unload timer. */
+function beginUnload(state, u, dt) {
+  u.state = 'harvestUnload';
+  u.path = []; u.pathIdx = 0;
+  u.unloadTicks = Math.max(1, Math.round(HARVESTER_UNLOAD_TIME / Math.max(dt, 1e-6)));
+  emitEvent(state, {
+    type: 'unloadStart', tick: state.tick, id: u.id, pos: { x: u.pos.x, y: u.pos.y },
+    dur: HARVESTER_UNLOAD_TIME, color: u.cargoColor || 'blue', gold: cargoGold(u),
+  });
+}
+
+/** DEPOSIT (owner color economy): EVERY haul pays gold — blue/yellow are the economy crystals,
+ *  red/green additionally count up the header QUEST objectives. Runs when the unload completes. */
+function creditDeposit(state, u) {
+  if (!(u.cargo > 0)) return;
+  const gold = cargoGold(u);
+  if (gold > 0) {
+    if (state.economy) state.economy.money = (state.economy.money || 0) + gold;
+    if (u.cargoRole === 'premium') state.mapScore.goldFromPremium += gold;
+    else state.mapScore.goldFromPrimary += gold;
+  }
+  if (u.cargoColor === 'red' || u.cargoColor === 'green') {
+    const n = Math.floor(u.cargo);
+    state.mapScore.questUnits += n;
+    if (u.cargoColor === 'red') state.mapScore.questRed += n; else state.mapScore.questGreen += n;
+  }
+  emitEvent(state, { type: 'deposit', tick: state.tick, gold, units: Math.floor(u.cargo), role: u.cargoRole || 'primary', color: u.cargoColor || 'blue', fieldId: u.fieldId, pos: { x: u.pos.x, y: u.pos.y } });
+  u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null;
+}
+
+/** Done at the dock: still mid-job? head back out — to the assigned field, or if it was stripped
+ *  while hauling, to the nearest field of the SAME resource (owner 2026-07-17); else rest. */
+function leaveDock(state, u) {
+  let next = u.fieldId ? nextFieldTarget(state, u) : null;
+  if (!next && u.fieldId) {
+    const hop = nextSameResourceField(state, u);
+    if (hop) {
+      u.fieldId = hop.fieldId; next = hop;
+      emitEvent(state, { type: 'harvestOrder', tick: state.tick, nodeId: hop.id, fieldId: hop.fieldId, unitId: u.id, pos: { x: hop.x, y: hop.y } });
+    }
+  }
+  if (next) routeTo(state, u, next);
+  else {
+    u.fieldId = null;
+    u.harvestNodeId = null;
+    u.state = 'harvestIdle';
   }
 }

@@ -566,6 +566,8 @@ export function stepCombat(state, dt) {
   }
 
   // ---- Completed towers fire --------------------------------------------------
+  // Tower fire is CONTINUOUS dps * dt (no shot/cadence model in the sim). A def's `cadence` is a
+  // render-only volley interval; its `aoeRadius` drives the STRUCTURE SPLASH block below.
   for (const s of state.structures.values()) {
     if (s.lifecycle !== 'Complete' && s.lifecycle !== 'Damaged') continue;
     let def;
@@ -599,6 +601,21 @@ export function stepCombat(state, dt) {
     if (res.killed) {
       s.targetId = null;
       deadUnitIds.push(target.id);
+    }
+    // STRUCTURE SPLASH — mirrors the unit SPLASH block above, data-driven by the def's aoeRadius
+    // (STR-Rockets). Every OTHER live attacker the tower's weapon may legally hit (same domain rule
+    // as acquisition) within aoeRadius of the primary target takes the same continuous dps (wave
+    // bonus applied per victim). Deterministic: units Map iteration is ascending-id insertion order.
+    const aoe = def.aoeRadius || 0;
+    if (aoe > 0 && target.pos) {
+      const px = target.pos.x, py = target.pos.y, r2 = aoe * aoe;
+      for (const other of state.units.values()) {
+        if (other === target || other.hp <= 0 || other.side !== 'attacker') continue;
+        if (!domainsAllow(def.canTargetDomains, other.domain)) continue;
+        const ox = other.pos.x - px, oy = other.pos.y - py;
+        if (ox * ox + oy * oy > r2) continue;
+        if (applyDamage(state, s.id, other, dps * bonusDamageMult(state, other), def.damageType, dt).killed) deadUnitIds.push(other.id);
+      }
     }
   }
 

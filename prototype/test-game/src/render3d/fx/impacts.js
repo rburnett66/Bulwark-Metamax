@@ -109,12 +109,12 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
 
   const n = (base) => Math.max(0, Math.round(base * limits.density));
 
-  function emit(kind, x, y, z, vx, vy, vz, life, size, grow = 0, shade = 0, dusty = 0) {
+  function emit(kind, x, y, z, vx, vy, vz, life, size, grow = 0, shade = 0, dusty = 0, drag = 0) {
     if (isAdditive(kind)) { if (nAdd >= limits.additive) return; nAdd++; }
     else { if (nSmoke >= limits.smoke) return; nSmoke++; }
     const p = freeP.pop() || {};
     p.kind = kind; p.x = x; p.y = y; p.z = z; p.vx = vx; p.vy = vy; p.vz = vz;
-    p.t = 0; p.life = life; p.size = size; p.grow = grow; p.shade = shade; p.dusty = dusty; p.bounces = 0; p.fl = 1;
+    p.t = 0; p.life = life; p.size = size; p.grow = grow; p.shade = shade; p.dusty = dusty; p.drag = drag; p.bounces = 0; p.fl = 1;
     particles.push(p);
   }
 
@@ -244,6 +244,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
         p.x += (p.vx + W.x * 0.3) * dt; p.y += p.vy * dt; p.z += (p.vz + W.z * 0.3) * dt;
         p.fl = 0.85 + 0.3 * rand();
       } else if (p.kind === K.SMOKE) {
+        if (p.drag) { const q = Math.max(0, 1 - p.drag * dt); p.vx *= q; p.vy *= q; p.vz *= q; }   // a muzzle blast: fast out, stops dead
         p.vx += (W.x - p.vx) * dt * 0.6; p.vz += (W.z - p.vz) * dt * 0.6; p.vy *= 1 - 0.3 * dt;
         p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       }
@@ -465,7 +466,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     clear,
     // recipes, exposed for tests and debugging
     fxHit, fxGround, fxExplode, boom, burn,
-    /** Raw emitter for other FX modules (the cannon shell's trail): emit(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty). */
+    /** Raw emitter for other FX modules (the cannon shell's trail): emit(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty, drag). */
     emit,
   };
 }

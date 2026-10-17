@@ -55,3 +55,8 @@ test('every planet has four named resources: common and uncommon for the player,
   }
   assert.equal(new Set(all).size, 36, 'all 36 resource names are unique');
 });
+
+test('every homeworld names a 3D world palette that exists [MM-task_mvbzgc9n_12]', async () => {
+  const { LOWPAL } = await import('../render3d/styles/lowpoly-palettes.js');
+  for (const [k, p] of Object.entries(PLANETS)) assert.ok(LOWPAL[p.palette], `${k}: ${p.palette}`);
+});

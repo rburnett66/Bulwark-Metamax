@@ -368,8 +368,14 @@ export function boot(mountEl, seed) {
   // committed content/maps/forge/<faction>-map-<n>.json (the SHIP path, survives browser wipes and
   // deploys to Pages) → null, which falls back to the OLD workbook generator (testing only — all
   // future map development happens in the forge).
-  async function loadForgeMap(mapId) {
-    const fac = forgeSlotFaction(currentTestFaction || DEFAULT_FACTION);
+  // TEMP PLAYTEST MIRROR (owner 2026-10-16: "temporarily copy all the Powder map data to the other factions so we
+  // can play test on each planet") [MM-task_mvbzgc9n_12]: a faction with no forge map for a slot plays POWDER's map
+  // for that slot (your local Powder slot first, then the committed file) — on its own planet, palette, resources
+  // and waves. A faction's own map always wins, so authoring one retires the mirror for that slot. Remove this
+  // (set to null) once every faction has its maps.
+  const TEMP_MIRROR_FACTION = 'Powder';
+  let forgeSource = null;   // the forge slot faction the last loaded map actually came from
+  async function loadForgeSlot(fac, mapId) {
     try {
       const all = JSON.parse(localStorage.getItem('bulwark:maps') || '{}');
       const hit = all[`${fac} · map ${mapId}`];
@@ -380,6 +386,15 @@ export function boot(mountEl, seed) {
       if (r.ok) return await r.json();
     } catch (e) { /* no committed map for this faction+slot */ }
     return null;
+  }
+  async function loadForgeMap(mapId) {
+    const fac = forgeSlotFaction(currentTestFaction || DEFAULT_FACTION);
+    forgeSource = fac;
+    const own = await loadForgeSlot(fac, mapId);
+    if (own || !TEMP_MIRROR_FACTION || fac === TEMP_MIRROR_FACTION) return own;
+    const mirrored = await loadForgeSlot(TEMP_MIRROR_FACTION, mapId);
+    if (mirrored) { forgeSource = TEMP_MIRROR_FACTION; console.info(`[maps] ${fac} has no map ${mapId} yet — playing ${TEMP_MIRROR_FACTION}'s (temporary playtest mirror)`); }
+    return mirrored;
   }
 
   let mapSelectSeq = 0;   // guards against overlapping selectMap() calls: only the newest may install a board
@@ -405,7 +420,7 @@ export function boot(mountEl, seed) {
           let bakeTune = {};
           try { const t = JSON.parse(localStorage.getItem('tf.bake.v1')); if (t && typeof t === 'object') bakeTune = t; } catch (_) { /* default tune */ }
           m = buildTerrainMap(forge, id, { seed: 0, bakeTune });
-          nextSlug = `${forgeFileSlug(forgeSlotFaction(currentTestFaction || DEFAULT_FACTION))}-map-${id}`;
+          nextSlug = `${forgeFileSlug(forgeSource || forgeSlotFaction(currentTestFaction || DEFAULT_FACTION))}-map-${id}`;   // a mirrored map uses its source's bake
         } else {
           let overrides = null;
           try {
@@ -697,6 +712,9 @@ export function boot(mountEl, seed) {
       // restart from wave 1 with a full base and starting economy.
       currentTestFaction = f || DEFAULT_FACTION;
       pendingCarry = null; runContract = null;
+      // maps are faction-owned and the planet is the enemy's homeworld: a campaign map reloads for the new enemy
+      // (its map — or the temporary Powder mirror — its planet palette and resources) [MM-task_mvbzgc9n_12]
+      if (currentMapId) { void selectMap(currentMapId); return; }
       currentWaves = currentMapId ? buildCampaignWaves(currentMap, currentTestFaction)
         : (currentTestFaction ? makeWaves(currentTestFaction) : WAVES);
       restart(currentSeed);

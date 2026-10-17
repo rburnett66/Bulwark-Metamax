@@ -295,3 +295,101 @@ console.log('harvest.test OK — docks+cap, explicit orders, all colors pay gold
   }
   assert(!overlap, 'two working trucks never claim the same node (reservation holds)');
 }
+
+// ── UNLOAD DELAY (owner 2026-10-16): a truck home with cargo holds at the dock for
+//    HARVESTER_UNLOAD_TIME (3 s); gold is credited only when the unload completes. ──
+{
+  const { HARVESTER_UNLOAD_TIME } = await import('../data/tables.js');
+  assert.equal(HARVESTER_UNLOAD_TIME, 3, 'unload time is data (tables.js), 3 s');
+  const DT = 1 / 30;
+  // drive a truck until it docks with a load; returns { s, hv, start (the unloadStart event) }
+  function untilUnload(seed) {
+    const { s } = fresh(seed);
+    s.waves.current = 8;
+    const node = s.resourceNodes.filter((n) => n.role === 'primary').sort((a, b) => b.units - a.units)[0];
+    applyCommand(s, { type: 'harvest', nodeId: node.id });
+    const hv = s.units.get(s.harvesterId);
+    let start = null;
+    for (let i = 0; i < 30 * 240 && !start; i++) {
+      for (const e of stepSim(s, DT)) {
+        assert(e.type !== 'deposit' || start, 'no deposit may land before its unloadStart');
+        if (e.type === 'unloadStart') start = e;
+      }
+    }
+    assert(start, 'the truck docked with a load and began unloading');
+    return { s, hv, start };
+  }
+
+  // happy path: no credit before 3 s, credit at 3 s, event order + shape, the truck waits
+  {
+    const { s, hv, start } = untilUnload(5);
+    assert.equal(start.id, hv.id, 'unloadStart names the harvester');
+    assert.equal(start.dur, 3, 'unloadStart carries the duration');
+    assert(start.gold > 0 && typeof start.color === 'string' && start.pos, 'unloadStart carries gold, colour, pos');
+    assert.equal(hv.state, 'harvestUnload', 'truck is in the unload state');
+    const money0 = s.economy.money, prim0 = s.mapScore.goldFromPrimary;
+    const dock = { x: hv.pos.x, y: hv.pos.y };
+    const ticks = Math.round(3 / DT);   // 90
+    let deposit = null, depositAt = -1;
+    for (let i = 1; i <= ticks && !deposit; i++) {
+      for (const e of stepSim(s, DT)) if (e.type === 'deposit') { deposit = e; depositAt = i; }
+      if (!deposit) {
+        assert.equal(s.economy.money, money0, `no gold credited mid-unload (tick ${i})`);
+        assert.equal(s.mapScore.goldFromPrimary, prim0, 'no map score mid-unload');
+        assert.equal(hv.state, 'harvestUnload', 'truck stays docked while unloading');
+        assert(Math.hypot(hv.pos.x - dock.x, hv.pos.y - dock.y) < 1e-9, 'truck does not move while unloading');
+      }
+    }
+    assert(deposit, 'deposit landed when the unload finished');
+    assert.equal(depositAt, ticks, 'deposit lands exactly 3.0 s (90 ticks) after unloadStart');
+    assert.equal(deposit.tick - start.tick, ticks, 'event ticks are 3 s apart (unloadStart -> deposit)');
+    assert.equal(deposit.gold, start.gold, 'deposit credits exactly the gold unloadStart promised');
+    assert.equal(s.economy.money, money0 + deposit.gold, 'gold credited at the end of the unload');
+    for (const k of ['gold', 'units', 'role', 'color', 'fieldId', 'pos']) assert(k in deposit, 'deposit keeps field ' + k);
+    assert.equal(hv.cargo, 0, 'cargo emptied on deposit');
+    assert.notEqual(hv.state, 'harvestUnload', 'truck leaves the dock after the deposit');
+  }
+
+  // truck destroyed mid-unload: nothing is credited
+  {
+    const { s, hv } = untilUnload(5);
+    const money0 = s.economy.money;
+    for (let i = 0; i < 30; i++) stepSim(s, DT);
+    hv.hp = 0;
+    let dep = 0;
+    for (let i = 0; i < 30 * 5; i++) for (const e of stepSim(s, DT)) if (e.type === 'deposit') dep++;
+    assert.equal(dep, 0, 'a dead truck never deposits');
+    assert.equal(s.economy.money, money0, 'no gold from a truck killed mid-unload');
+  }
+
+  // base destroyed mid-unload: unload cancelled, nothing credited
+  {
+    const { s, hv } = untilUnload(5);
+    const money0 = s.economy.money;
+    for (let i = 0; i < 30; i++) stepSim(s, DT);
+    s.base.hp = 0;
+    let dep = 0;
+    for (let i = 0; i < 30 * 5; i++) for (const e of stepSim(s, DT)) if (e.type === 'deposit') dep++;
+    assert.equal(dep, 0, 'no deposit into a destroyed base');
+    assert.equal(s.economy.money, money0, 'no gold credited after the base falls');
+    assert.notEqual(hv.state, 'harvestUnload', 'unload aborted');
+  }
+
+  // an order given mid-unload waits for the deposit, then the truck heads to the new field
+  {
+    const { s, hv, start } = untilUnload(5);
+    const other = s.resourceNodes.find((n) => n.remaining > 0 && n.fieldId !== hv.fieldId);
+    const r = applyCommand(s, { type: 'harvest', nodeId: other.id, harvesterId: hv.id });
+    assert(r.ok && hv.state === 'harvestUnload', 'order accepted; truck keeps unloading');
+    let dep = null;
+    for (let i = 0; i < 95 && !dep; i++) for (const e of stepSim(s, DT)) if (e.type === 'deposit') dep = e;
+    assert(dep && dep.gold === start.gold, 'the load still lands');
+    assert(hv.state === 'harvestGo' && hv.fieldId === other.fieldId, 'then it drives to the newly ordered field');
+  }
+
+  // determinism: two identical runs produce the same unload/deposit timeline
+  {
+    const a = untilUnload(9), b = untilUnload(9);
+    assert.deepEqual(a.start, b.start, 'unloadStart identical across identical runs');
+  }
+}
