@@ -449,6 +449,13 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
       aimYaw += Math.max(-1, Math.min(1, d)) * Math.min(1, (dt || 0) * 3);
       groups.weapon.rotation.y = aimYaw;
     },
+    /** World position (cells) of the roof gun's muzzle — where the base cannon's shell leaves. [MM-task_mvbvpyer_x] */
+    muzzleWorld() {
+      const g = groups.weapon || model;
+      root.updateMatrixWorld(true);
+      const v = new THREE.Vector3(2.4, 0.35, 0).applyMatrix4(g.matrixWorld);
+      return { x: v.x, y: v.y, z: v.z };
+    },
     /** Sweep or spin the head (seconds of clock). */
     scan(t) {
       if (!groups.head) return;
