@@ -51,9 +51,11 @@ import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
 import { createHeadingTracker } from './heading.js';
 import { buildBakedGround } from './ground/baked.js';
 import { buildLowPolyGround, GRID as GROUND_GRID } from './ground/lowpoly.js';
+import { renderMapFor } from './ground/synthTerrain.js';
 import { LOWPAL, WORLD_LIGHT, resolveWorld } from './styles/lowpoly-palettes.js';
 import { createMarkers } from './markers.js';
 import { createLowPolyStructures } from './structures/lowpoly.js';
+import { createSystemStructures, SYSTEM_KINDS } from './structures/system3d.js';
 import { createUnits3D } from './units/models3d.js';
 import { buildLowPolyObstructions } from './obstructions/lowpoly.js';
 import { createPathLines } from './overlays/pathLinesModel.js';
@@ -65,6 +67,7 @@ import { createImpacts } from './fx/impacts.js';
 import { createImpactsView } from './fx/impactsView.js';
 import { createCraft3D } from './craft/craft3d.js';
 import { createLanding, landedPose, harvesterOnRamp } from './craft/landing.js';
+import { introCamera } from './craft/introCamera.js';
 import { createResources3D } from './resources/resources3d.js';
 import { getUnitDef } from '../data/tables.js';
 
@@ -149,11 +152,17 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(CAMERA.fovDeg, 1, CAMERA.near, CAMERA.far);
   const lights = createLights(THREE, renderer, scene, map.cols, map.rows, tier.shadowSize);
-  const lowpoly = opts.ground !== 'baked' && !!map.terrain;   // workbook maps have no terrain codes (T0 audit §11)
+  // every map gets the low-poly ground: forge maps from their terrain codes, the rest from codes derived from their own
+  // layout (ground/synthTerrain.js — workbook maps carry none, T0 audit §11) [MM-story_mvbr0oo5_n]
+  const groundMap = renderMapFor(map);
+  const lowpoly = opts.ground !== 'baked' || !slug;
   // LPS [MM-story_mv87jzov_9]: low-poly base / walls / towers / crystals on the low-poly ground; boxes under ?ground=baked
   const markers = lowpoly ? createLowPolyStructures(THREE, scene) : createMarkers(THREE, scene);
   const units3d = createUnits3D(THREE, scene, { sunDir: lights.dir });
   markers.setBase(map.base);
+  // SYS [MM-story_mvbr0qfb_o]: the player's cannon / anti-air / wall draw as the System models (owner sheet)
+  const system = lowpoly ? createSystemStructures(THREE, scene) : null;
+  if (system) system.setBase(map.base);
   // LC: the landing craft is the base; it lands on load unless opts.landing === false
   let craft = null, landing = null;
   if (map.base && opts.craft !== false) {
@@ -177,7 +186,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const fogView = createFogView(THREE, scene, map);
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -201,8 +210,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   // low-poly roads; its tiles are the ground only under ?ground=baked. Missing or stale → say so on screen.
   let level = null;
   if (!slug) {
-    r.status = 'no-level';
-    banner.show('3D view: this map has no baked level (only Terrain Forge maps are baked) — run tools/terrain3d-proto/bake3d.mjs');
+    r.status = 'ready';   // no baked level (not a forge map): the ground comes from the map itself — nothing missing
   } else {
     const dir = baseUrl + bakedLevelDir(slug);
     try {
@@ -264,16 +272,18 @@ export function setWorld(r, key) {
   const world = resolveWorld(key);
   const palette = LOWPAL[world];
   if (r.obstructions) disposeGroup(scene, r.obstructions.group);
-  r.obstructions = map.terrain ? buildLowPolyObstructions(THREE, map, palette) : null;
+  const gm = r.groundMap || map;
+  r.obstructions = buildLowPolyObstructions(THREE, gm, palette);
   if (r.obstructions) scene.add(r.obstructions.group);
   if (r.lowpoly) {
     if (r.ground) disposeGroup(scene, r.ground.group);
-    r.ground = buildLowPolyGround(THREE, map, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts });
+    r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts });
     scene.add(r.ground.group);
     r.lights.setWorld(WORLD_LIGHT[world]);
     if (r.markers.setWorld) r.markers.setWorld(palette);
   }
   if (r.craft) r.craft.setEnv({ sky: WORLD_LIGHT[world].hemi[0], ground: WORLD_LIGHT[world].apron });
+  if (r.system) r.system.setEnv({ sky: WORLD_LIGHT[world].hemi[0], ground: WORLD_LIGHT[world].apron });
   r.world = world;
   r.lights.invalidateShadows();
   return world;
@@ -296,14 +306,22 @@ export function renderFrame(r, state, ui, events, dt) {
   r.inBattle = !!(state && state.waves && state.waves.active);
   stepYaw(r.cam, r.inBattle, dt);
   clampCamera(r.cam, r.map.cols, r.map.rows);
-  const pose = cameraPose(r.cam);
+  // LC: while the craft lands the view frames it, then eases back to the player's camera (craft/introCamera.js)
+  const landingLive = r.craft && r.landing && !r.landing.done && !r.landingHeld;
+  r.viewCam = landingLive ? introCamera(r.landing.pose(), r.cam, r.map.base) : null;   // picking uses what is on screen
+  const pose = cameraPose(r.viewCam || r.cam);
   r.camera.position.set(pose.position.x, pose.position.y, pose.position.z);
   r.camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
 
   // Static set: structures (re-render the shadow map only when it changed)
   if (state && state.structures) {
-    if (r.markers.setStructures(Array.from(state.structures.values()))) r.lights.invalidateShadows();
+    const all = Array.from(state.structures.values());
+    // System towers / walls draw through system3d; the rest (bays, fallback blocks) stay with the markers
+    const sysChanged = r.system ? r.system.setStructures(all) : false;
+    const markersChanged = r.markers.setStructures(r.system ? all.filter((s) => !SYSTEM_KINDS[s.kind]) : all);
+    if (sysChanged || markersChanged) r.lights.invalidateShadows();
   }
+  if (r.system) r.system.update(dt, state);
   if (r.resources) { if (state && r.resources.setResources(state)) r.lights.invalidateShadows(); }   // LC-RES planet resources
   else if (state && r.markers.setResources && r.markers.setResources(state)) r.lights.invalidateShadows();   // LPS crystal fields
 
@@ -399,6 +417,12 @@ export function startLanding(r) {
   r.landingHeld = false; r.craft.setVisible(true);
 }
 
+/** The landing's current phase key ('approach' … 'deploy', 'done'), or null without one. */
+export function landingPhase(r) {
+  if (!r || !r.landing) return null;
+  return r.landing.done ? 'done' : r.landing.pose().phase;
+}
+
 /** Jump the landing to its end (a tap-to-skip, or a test). */
 export function skipLanding(r) {
   if (!r || !r.landing || !r.craft) return;
@@ -413,7 +437,7 @@ export function skipLanding(r) {
 export function screenToCell(r, px, py, lift = 0) {
   if (!r || r.destroyed) return null;
   const w = r.canvas.clientWidth, h = r.canvas.clientHeight;
-  return screenToGroundCell(clampCamera(r.cam, r.map.cols, r.map.rows), w, h, px, py, r.map.cols, r.map.rows, lift);
+  return screenToGroundCell(r.viewCam || clampCamera(r.cam, r.map.cols, r.map.rows), w, h, px, py, r.map.cols, r.map.rows, lift);
 }
 
 /** Touch builds aim this far (cells) above the finger so the ghost isn't hidden under it (plan §6.9). */
@@ -430,7 +454,7 @@ export function eventToCell(r, ev, ui) {
 /** Sim cell centre → canvas pixel (CSS px), or null behind the camera. */
 export function cellToScreen(r, cell) {
   if (!r || r.destroyed) return null;
-  return groundCellToScreen(r.cam, r.canvas.clientWidth, r.canvas.clientHeight, cell);
+  return groundCellToScreen(r.viewCam || r.cam, r.canvas.clientWidth, r.canvas.clientHeight, cell);
 }
 
 export function destroyRenderer(r) {
@@ -439,6 +463,7 @@ export function destroyRenderer(r) {
   const canvas = r.renderer.domElement;
   for (const [type, fn, opts] of r.listeners) canvas.removeEventListener(type, fn, opts);
   r.markers.dispose();
+  if (r.system) r.system.dispose();
   if (r.craft) r.craft.dispose();
   if (r.resources) r.resources.dispose();
   r.units3d.dispose();

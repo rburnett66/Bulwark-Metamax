@@ -1,6 +1,6 @@
 # Landing Craft, Landing Sequence and Resource Models — design
 
-**Version:** 1.2 (2026-10-16) — v1.1 adds §3.4 landing polish; v1.2 moves the previewers into the Terrain Forge (§7) · epic **LC** [MM-epic_mvbkrvnz_2] · stories [MM-story_mvbk1hf3_1] (craft),
+**Version:** 1.3 (2026-10-16) — v1.1 §3.4 landing polish; v1.2 previewers in the Terrain Forge (§7); v1.3 3D is the default view, the landing opens level 1, intro camera, System towers + walls · epic **LC** [MM-epic_mvbkrvnz_2] · stories [MM-story_mvbk1hf3_1] (craft),
 [MM-story_mvbks05m_4] (landing sequence), [MM-story_mvbks25v_5] (resources)
 
 **Owner request (2026-10-16):** landing craft that occupy a 3 × 3 space, fly into the map and land before
@@ -10,7 +10,7 @@ models. Then: "These are great, add them to the game repo and write up a design 
 package so the ships can fly into the scene and land before deploying the resource gathering vehicles. We also need
 3d models for all the collectible resources in the game."
 
-Everything here runs under `?renderer=three` (the three.js battle view). The Pixi view is unchanged.
+Everything here runs in the three.js battle view — the game's default view since 2026-10-16 (`?renderer=pixi` keeps the old 2D view, which has none of it).
 
 ---
 
@@ -129,6 +129,12 @@ hatches always meet the docks.
 
 - `createRenderer3D(…, { craft, landing, landingHeld, landingFrom, planet })`. The craft replaces the placeholder base
   mesh (`markers.setBaseVisible(false)`; towers still aim from the base cell).
+- **Level 1 opens with it** [MM-story_mvbqui1g_m]: on map 1 the craft lands BEFORE the contract, wave intel and the
+  speaker (`playOpeningLanding` in `main.js`); the intro runs once it is down. A tap anywhere skips it. Other levels keep
+  the dialog-first order below.
+- **Intro camera** (`craft/introCamera.js`): while any landing plays, the view frames the base — a push-in from 17 to 11
+  cells, leaning toward the craft on its approach — then eases back to the player's camera from the hatches to the end of
+  the deploy. Picking follows the on-screen camera. A remount mid-battle (quality change) parks the craft.
 - **When it plays:** `main.js` creates the renderer with `landingHeld: true`; the craft waits off-stage.
   `releaseLanding()` → `startLanding(r)` fires when the match-start dialogs close (TAP TO START appears), when there is
   no opening dialog, or at the latest when the first wave starts. A fresh board (restart, new map) calls

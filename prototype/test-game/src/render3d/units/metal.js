@@ -28,6 +28,13 @@ export const UMETAL = Object.freeze({
   stripe: [0.15, 0.6],
   trim: [0.4, 0.45],
   brass: [0.85, 0.3],
+  // System towers and walls (structures/systemModels.js) [MM-story_mvbr0qfb_o]
+  gun: [0.4, 0.45],
+  gun2: [0.35, 0.5],
+  gunD: [0.5, 0.4],
+  hazard: [0.1, 0.7],
+  chrome: [0.95, 0.15],
+  bone: [0.15, 0.6],
 });
 
 /** Keys drawn unlit (emissive): no metal, no lighting — they carry the glow read. */
