@@ -54,13 +54,23 @@
   /* MAP TOOLS — one bar ABOVE the map (owner: the floating buttons stuck out and blocked menus) */
   #mapTools { position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
     padding:6px 8px; margin:0 0 6px; background:#10161df2; border:1px solid var(--line); border-radius:6px; }
+  /* PREVIEW MODES — the 3D previewers (landing craft, resources) live beside the map editor [MM-story_mvbpfb1b_k] */
+  #stage { position:relative; }
+  #modeSeg { display:flex; gap:4px; margin:8px 0 2px; }
+  #modeSeg button { width:auto; flex:1 1 0; margin:0; padding:7px 0; font-size:12px; letter-spacing:.06em; background:#1a1f28; color:var(--muted); border:1px solid var(--line); }
+  #modeSeg button.on { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:var(--gold); }
+  .pvStage { position:absolute; inset:0; display:none; background:#0a0c10; }
+  .pvPanel { flex:1; min-height:0; overflow-y:auto; margin-top:10px; padding-right:4px; display:none; }
+  .pvLoading { color:var(--muted); font-size:12px; padding:20px; }
+  body.preview #mapTools, body.preview #cv, body.preview #cols { display:none !important; }
+  body.preview #side { width:380px; }
   #mapTools .cluster { display:inline-flex; align-items:center; gap:6px; background:rgba(0,0,0,.25);
     border:1px solid var(--line); border-radius:6px; padding:3px 8px; }
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="stage"><div id="mapTools"><button id="fitScreen" class="ghost" style="width:auto;padding:5px 12px;margin:0">⛶ Fit to screen</button><div class="cluster"><span style="font-size:12px;opacity:.8">Zoom</span><input type="range" id="zoom" min="4" max="64" value="12" style="width:96px"><span class="val" id="zoomV" style="min-width:56px">auto</span><button id="zoom1" class="ghost" style="width:auto;padding:2px 9px;margin:0">1:1 game</button></div><label class="cluster" style="cursor:pointer;padding:5px 10px"><input type="checkbox" id="bakedView">🏔️ Baked view</label></div><canvas id="cv"></canvas></div>
+  <div id="stage"><div id="mapTools"><button id="fitScreen" class="ghost" style="width:auto;padding:5px 12px;margin:0">⛶ Fit to screen</button><div class="cluster"><span style="font-size:12px;opacity:.8">Zoom</span><input type="range" id="zoom" min="4" max="64" value="12" style="width:96px"><span class="val" id="zoomV" style="min-width:56px">auto</span><button id="zoom1" class="ghost" style="width:auto;padding:2px 9px;margin:0">1:1 game</button></div><label class="cluster" style="cursor:pointer;padding:5px 10px"><input type="checkbox" id="bakedView">🏔️ Baked view</label></div><canvas id="cv"></canvas><div class="pvStage" id="pvStage-craft"></div><div class="pvStage" id="pvStage-res"></div></div>
   <div id="side">
     <div id="sideHead">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
@@ -70,8 +80,11 @@
           <button id="playtest" style="width:auto;padding:6px 14px;margin:0;white-space:nowrap">▶ Playtest</button>
         </div>
       </div>
-      <div class="sub">Stage 1 — algorithmic feature map. Tuning on the left; map commands on the right.</div>
+      <div class="sub" id="modeSub">Stage 1 — algorithmic feature map. Tuning on the left; map commands on the right.</div>
+      <div id="modeSeg"><button data-mode="map" class="on">🗺 Map</button><button data-mode="craft">🚀 Landing craft</button><button data-mode="res">💎 Resources</button></div>
     </div>
+    <div class="pvPanel" id="pvPanel-craft"></div>
+    <div class="pvPanel" id="pvPanel-res"></div>
     <div id="cols">
 
       <div class="col" id="colA">
@@ -958,6 +971,57 @@ renderStackEditor();
   btn.addEventListener('click', () => { localStorage.removeItem(KEY); location.reload(); });
   document.body.appendChild(btn);
 })();
+</script>
+<script type="module">
+// PREVIEW MODES [MM-story_mvbpfb1b_k] — 🚀 Landing craft and 💎 Resources run the game's own render3d modules in a
+// three.js view that takes the map's place; the tuning columns give way to the preview's controls. three.js and the
+// previewers load on first use, so the map editor pays nothing for them. Map mode stops the 3D loop. ?preview=craft|res
+// opens straight into one.
+const SUB = {
+  map: 'Stage 1 — algorithmic feature map. Tuning on the left; map commands on the right.',
+  craft: 'Landing craft — the ten 3 × 3 bases and their full landing sequence, as the game draws them.',
+  res: 'Resources — every collectible model, 9 homeworlds × 4 tiers, as the game draws them.',
+};
+const LOAD = {
+  craft: async (THREE, stage, panel) => (await import('./src/terrain/preview/craftPreview.js')).mountCraftPreview(THREE, { stage, panel }),
+  res: async (THREE, stage, panel) => (await import('./src/terrain/preview/resourcePreview.js')).mountResourcePreview(THREE, { stage, panel }),
+};
+const mounted = {};
+let three = null, cur = 'map';
+async function setMode(m) {
+  if (!SUB[m]) m = 'map';
+  cur = m;
+  for (const b of document.querySelectorAll('#modeSeg button')) b.classList.toggle('on', b.dataset.mode === m);
+  document.getElementById('modeSub').textContent = SUB[m];
+  document.body.classList.toggle('preview', m !== 'map');
+  for (const k of Object.keys(LOAD)) {
+    document.getElementById('pvStage-' + k).style.display = k === m ? 'block' : 'none';
+    document.getElementById('pvPanel-' + k).style.display = k === m ? 'block' : 'none';
+    if (k !== m && mounted[k]) mounted[k].stop();
+  }
+  const u = new URL(location.href);
+  if (m === 'map') u.searchParams.delete('preview'); else u.searchParams.set('preview', m);
+  history.replaceState(null, '', u);
+  if (m === 'map') { window.dispatchEvent(new Event('resize')); return; }
+  if (!mounted[m]) {
+    const panel = document.getElementById('pvPanel-' + m), stage = document.getElementById('pvStage-' + m);
+    panel.innerHTML = '<div class="pvLoading">Loading the 3D previewer…</div>';
+    try {
+      three = three || await import('./vendor/three.module.js');
+      panel.innerHTML = '';
+      mounted[m] = await LOAD[m](three, stage, panel);
+    } catch (e) {
+      panel.innerHTML = '<div class="pvLoading">Could not start the 3D previewer: ' + (e && e.message || e) + '</div>';
+      console.error('[terrain-forge preview]', e);
+      return;
+    }
+  }
+  if (cur === m) mounted[m].start();
+}
+for (const b of document.querySelectorAll('#modeSeg button')) b.addEventListener('click', () => setMode(b.dataset.mode));
+window.__forgePreview = { setMode, get mounted() { return mounted; } };
+const q = new URLSearchParams(location.search).get('preview');
+if (q) setMode(q);
 </script>
 <script src="tools/toolhead.js"></script>
 <script>if (typeof ToolHead !== "undefined") ToolHead.mount({ tool: "terrain" });</script>

@@ -76,6 +76,7 @@ export function boot(mountEl, seed) {
   const USE_3D = (() => { try { return new URLSearchParams(window.location.search).get('renderer') === 'three'; } catch (e) { return false; } })();
   let renderer3d = null;
   let render3dMod = null;
+  let landingReleased = false;   // LC: the landing craft flies in once the field is on screen (releaseLanding)
   let mount3dSeq = 0;
   let last3D = null;   // the map + slug the 3D view was last mounted for (a quality change remounts it)
   if (USE_3D) canvas.style.visibility = 'hidden';
@@ -91,7 +92,13 @@ export function boot(mountEl, seed) {
       const quality = await import('./render3d/quality.js');
       let storage = null;
       try { storage = window.localStorage; } catch (e) { storage = null; }
+      // LC [MM-epic_mvbkrvnz_2]: the base is the player's landing craft (?craft=<faction|craft key>, default the
+      // neutral craft until the player's own faction is chosen in the shell); ?landing=0 parks it without the
+      // fly-in. The battle's planet is the ENEMY faction's homeworld (maps are faction-owned) → its resources.
+      const enemy = REG && REG.find(currentTestFaction || DEFAULT_FACTION);
       const r = await render3dMod.createRenderer3D(mountEl, map, { slug, world: q.get('world') || undefined, ground: q.get('ground') || undefined,
+        craft: q.get('craft') || 'system', landing: q.get('landing') !== '0', landingHeld: !landingReleased,
+        planet: q.get('planet') || (enemy && enemy.key) || null,
         projFx: () => renderer.projFx, projScale: () => renderer.projScale,
         qualityQuery: q.get('quality'), qualityChoice: quality.loadChoice(storage) });
       if (mySeq !== mount3dSeq) { render3dMod.destroyRenderer(r); return; }
@@ -272,6 +279,9 @@ export function boot(mountEl, seed) {
     ended = false;
     interlude = true;                                // every fresh board opens on the tap-to-start overlay
     if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
+    // LC: a fresh board re-arms the landing craft; it flies in once the opening dialogs close
+    landingReleased = false;
+    if (renderer3d && render3dMod && render3dMod.armLanding) render3dMod.armLanding(renderer3d);
     accumulator = 0;
     pendingEvents = [];
     inputHandle = makeInput();
@@ -284,7 +294,14 @@ export function boot(mountEl, seed) {
   }
   let suppressPreDialog = false;
 
+  // LC [MM-story_mvbks05m_4]: the landing craft waits until the field is on screen — when the match-start dialogs
+  // close (TAP TO START shows), or at the latest when the first wave starts.
+  function releaseLanding() {
+    landingReleased = true;
+    if (renderer3d && render3dMod && render3dMod.startLanding) render3dMod.startLanding(renderer3d);
+  }
   function endInterlude() {
+    releaseLanding();
     if (!interlude) return;
     interlude = false;
     accumulator = 0;                      // no time-jump on resume
@@ -710,6 +727,7 @@ export function boot(mountEl, seed) {
     const faction = (next && next.faction) || null;
     void (async () => {
       if (clearCall) await comm.showCall(clearCall);        // M2 runs fully (auto sign-off)
+      if (!faction && idx === 0) releaseLanding();          // no opening dialog → the field is already on screen
       if (!interlude || mode !== 'play' || !faction) return;
       preDialogFaction = faction;
       // ── OWNER DIALOG TIMING (2026-07-16) ──────────────────────────────────────────────
@@ -734,6 +752,7 @@ export function boot(mountEl, seed) {
             if (!interlude || mode !== 'play') return;
           }
         }
+        releaseLanding();                                    // dialogs closed: the craft flies in while the player looks
         await new Promise((r) => setTimeout(r, 1000));
         if (interlude && mode === 'play' && hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
       } else {

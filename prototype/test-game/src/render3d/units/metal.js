@@ -23,6 +23,11 @@ export const UMETAL = Object.freeze({
   track: [0.3, 0.75],
   metal: [0.95, 0.2],
   glass: [1.0, 0.05],
+  // livery keys used by the landing craft (craft/models.js) [MM-story_mvbk1hf3_1]
+  accent: [0.35, 0.45],
+  stripe: [0.15, 0.6],
+  trim: [0.4, 0.45],
+  brass: [0.85, 0.3],
 });
 
 /** Keys drawn unlit (emissive): no metal, no lighting — they carry the glow read. */

@@ -50,7 +50,7 @@ export function createLowPolyStructures(THREE, scene, palette = LOWPAL.meadow) {
   const meshes = {};
   let base = null;
   const tmp = new THREE.Object3D(), col = new THREE.Color();
-  let baseCell = null, structSig = null, crystalSig = null, lastList = [];
+  let baseCell = null, structSig = null, crystalSig = null, lastList = [], baseHidden = false;
 
   function buildModels(pal) {
     const struct = pal.struct || LOWPAL.meadow.struct;
@@ -87,9 +87,11 @@ export function createLowPolyStructures(THREE, scene, palette = LOWPAL.meadow) {
 
   const api = {
     meshes, get base() { return base; },
+    /** LC [MM-story_mvbk1hf3_1]: the landing craft draws the base; hide this mesh (towers still aim from baseCell). */
+    setBaseVisible(v) { baseHidden = !v; base.visible = !!baseCell && !baseHidden; },
     setBase(b) {
       baseCell = b ? { x: b.x, y: b.y } : null;
-      base.visible = !!b;
+      base.visible = !!b && !baseHidden;
       if (b) base.position.set(b.x + 0.5, 0, b.y + 0.5);
       structSig = null;   // towers aim away from the base
     },
