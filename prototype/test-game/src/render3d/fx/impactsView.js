@@ -73,11 +73,18 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
         switch (p.kind) {
           case K.SPARK: {
             const sp = Math.hypot(p.vx, p.vy, p.vz), hot = Math.max(0, 1 - u * 1.6);
+            if (p.shade === 1) {   // repair spark (fx/repairFx.js): leaves blue-white, cools through to orange [MM-task_mvcrs0q1_14]
+              const c = Math.min(1, Math.max(0, (u - 0.12) / 0.5)), k = c * c * (3 - 2 * c);
+              add.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, p.size, Math.min(0.16, sp * 0.03), 0.45 + 0.55 * k, 0.78 - 0.26 * k, 1 - 0.85 * k, f * (1 - 0.25 * k));
+              break;
+            }
             add.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, p.size, Math.min(0.22, sp * 0.035), 1, 0.55 + 0.45 * hot, 0.15 + 0.6 * hot * hot, f);
             break;
           }
           case K.EMBER: add.push(p.x, p.y, p.z, 0, 0, 0, p.size * p.fl, 0, 1, 0.5, 0.15, f); break;
-          case K.FLASH: add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, 1, 0.92, 0.7, f * f); break;
+          case K.FLASH: if (p.shade === 1) add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, 0.55, 0.8, 1, f * f);   // repair arc: blue
+            else add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, 1, 0.92, 0.7, f * f);
+            break;
           case K.FIRE: {
             const sz = p.size * Math.max(0.15, 1 + p.grow * u);
             add.push(p.x, p.y, p.z, 0, 0, 0, sz, 0, 1, 0.75 - 0.45 * u, 0.3 - 0.28 * u, f * 0.9 * p.fl);
