@@ -65,6 +65,7 @@ import { buildUnitViews, createModelResolver } from './units/unitViews.js';
 import { createCombatFx } from './fx/combatFxModel.js';
 import { createCombatFxView } from './fx/combatFx.js';
 import { createImpacts, K as FXK } from './fx/impacts.js';
+import { createRepairFx } from './fx/repairFx.js';
 import { createImpactsView } from './fx/impactsView.js';
 import { createCraft3D } from './craft/craft3d.js';
 import { createLanding, landedPose, harvesterOnRamp } from './craft/landing.js';
@@ -198,7 +199,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(),
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -469,6 +470,7 @@ export function renderFrame(r, state, ui, events, dt) {
   // health bars + "$N" pop-ups (overlays/) [MM-task_mvbry87f_q] [MM-task_mvbyf6t8_z]
   r.healthBars.update(state, views, dt, { baseCell: r.map.base });
   r.gold.feed(events, r.map); r.gold.step(Math.max(0, Math.min(0.1, dt || 0)));
+  r.repairFx.step(dt, state, events, r.impacts.emit, FXK);   // welding sparks on structures under repair [MM-task_mvcrs0q1_14]
   r.unloads.feed(events, state); r.unloads.step(Math.max(0, Math.min(0.1, dt || 0)), state);
   r.unloadView.sync(r.unloads, Math.max(0, Math.min(0.1, dt || 0)), r.impacts, FXK, r.map.base);
   r.stats.impacts = r.impactsView.sync(r.impacts, true);
