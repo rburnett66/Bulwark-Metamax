@@ -292,3 +292,14 @@ test('binder set pieces: touchdown fires the shockwave + camera shake, hatches v
   assert.ok(!c.root.children.some((o) => o.visible && o.material && o.material.uniforms && o.material.uniforms.uColor && o.material.uniforms.uColor.value.getHex() === 0x1a1410), 'clearFx wipes the scorch');
   c.dispose();
 });
+
+test('intro camera: framed close on the base while landing, handed back to the player by the end', async () => {
+  const { introCamera, INTRO } = await import('./introCamera.js');
+  const cam = { tx: 40, tz: 20, dist: 26, yaw: 0 }, base = { x: 31, y: 15 };
+  const start = introCamera(landingPose(0), cam, base), td = introCamera(landingPose(phaseStart('touchdown')), cam, base);
+  assert.ok(Math.abs(start.dist - INTRO.far) < 1e-6 && Math.abs(td.dist - INTRO.near) < 1e-6, 'push-in from far to near');
+  assert.ok(Math.hypot(td.tx - 31.5, td.tz - 15.5) < 1e-6, 'settled on the landing spot at touchdown');
+  assert.ok(start.tx < 31.5, 'leans toward the craft coming in from the west');
+  const end = introCamera(landingPose(TOTAL), cam, base);
+  assert.deepEqual([end.tx, end.tz, end.dist], [40, 20, 26], 'the player\'s camera by the end');
+});

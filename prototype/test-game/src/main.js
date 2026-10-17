@@ -69,23 +69,42 @@ export function boot(mountEl, seed) {
   canvas.style.height = 'auto';
   mountEl.appendChild(canvas);
 
-  // ?renderer=three — the three.js battle view (plan v2.2 §6.12, T3.1 skeleton [MM-task_mv883c5d_b]).
-  // OPT-IN: without the flag nothing below runs and neither render3d/ nor three.js is ever fetched. With
-  // it, the 3D view covers the board and the Pixi canvas stays mounted but hidden; the HUD and sim are
-  // untouched. Input binds to the 3D canvas once it is up (makeInput — T3.2 [MM-task_mv9s9lvj_1]).
-  const USE_3D = (() => { try { return new URLSearchParams(window.location.search).get('renderer') === 'three'; } catch (e) { return false; } })();
+  // The three.js battle view (plan v2.2 §6.12, T3.1 [MM-task_mv883c5d_b]). render3d/ and three.js are imported
+  // dynamically; the 3D view covers the board and the Pixi canvas stays mounted but hidden (and draws nothing);
+  // the HUD and sim are untouched. Input binds to the 3D canvas once it is up (makeInput — T3.2 [MM-task_mv9s9lvj_1]).
+  // 3D BY DEFAULT [MM-story_mvbqugeo_l] (owner 2026-10-16: "the full game should be using the 3d"): the three.js view
+  // is the game's view. ?renderer=pixi (or =2d) keeps the old 2D view, and the game falls back to it on its own when
+  // this device can't run WebGL or the 3D view fails to start / keeps throwing (fallbackTo2D) — never a dead screen.
+  // T7 deletes Pixi once nothing needs the fallback.
+  const RENDERER_Q = (() => { try { return (new URLSearchParams(window.location.search).get('renderer') || '').toLowerCase(); } catch (e) { return ''; } })();
+  const hasWebGL = () => { try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl'))); } catch (e) { return false; } };
+  let USE_3D = RENDERER_Q !== 'pixi' && RENDERER_Q !== '2d' && hasWebGL();
   let renderer3d = null;
   let render3dMod = null;
   let landingReleased = false;   // LC: the landing craft flies in once the field is on screen (releaseLanding)
   let mount3dSeq = 0;
   let last3D = null;   // the map + slug the 3D view was last mounted for (a quality change remounts it)
-  if (USE_3D) canvas.style.visibility = 'hidden';
+  if (USE_3D) { canvas.style.visibility = 'hidden'; app.stage.renderable = false; }   // the hidden 2D board draws nothing
+  let frameErrors3d = 0;
+  // The 3D view could not start or keeps failing: drop back to the 2D board so the game stays playable.
+  function fallbackTo2D(reason) {
+    if (!USE_3D) return;
+    console.error('[render3d] falling back to the 2D view:', reason);
+    USE_3D = false;
+    mount3dSeq++;                                         // cancel any mount in flight
+    if (renderer3d && render3dMod) { try { render3dMod.destroyRenderer(renderer3d); } catch (e) { /* already gone */ } }
+    renderer3d = null;
+    canvas.style.visibility = ''; app.stage.renderable = true;
+    rebindInput();
+    flashMessage(hud, '3D view unavailable — playing in 2D');
+  }
   async function mount3D(map, slug) {
     const mySeq = ++mount3dSeq;
     try {
+      // drop the old view at once — it must not draw the NEW board while this one builds
+      if (renderer3d && render3dMod) { render3dMod.destroyRenderer(renderer3d); renderer3d = null; rebindInput(); }
       render3dMod = render3dMod || await import('./render3d/index.js');
       if (mySeq !== mount3dSeq) return;
-      if (renderer3d) { render3dMod.destroyRenderer(renderer3d); renderer3d = null; }
       // ?world=<palette> previews a low-poly world; ?ground=baked keeps the baked-texture ground (LP).
       const q = new URLSearchParams(window.location.search);
       last3D = { map, slug };
@@ -97,7 +116,7 @@ export function boot(mountEl, seed) {
       // fly-in. The battle's planet is the ENEMY faction's homeworld (maps are faction-owned) → its resources.
       const enemy = REG && REG.find(currentTestFaction || DEFAULT_FACTION);
       const r = await render3dMod.createRenderer3D(mountEl, map, { slug, world: q.get('world') || undefined, ground: q.get('ground') || undefined,
-        craft: q.get('craft') || 'system', landing: q.get('landing') !== '0', landingHeld: !landingReleased,
+        craft: q.get('craft') || 'system', landing: q.get('landing') !== '0' && interlude, landingHeld: !landingReleased,   // a remount mid-battle (quality change) parks the craft instead of replaying the landing
         planet: q.get('planet') || (enemy && enemy.key) || null,
         projFx: () => renderer.projFx, projScale: () => renderer.projScale,
         qualityQuery: q.get('quality'), qualityChoice: quality.loadChoice(storage) });
@@ -113,7 +132,7 @@ export function boot(mountEl, seed) {
       });
     } catch (e) {
       console.error('[render3d] failed to start', e);
-      flashMessage(hud, `3D view failed to start — ${(e && e.message) || e}`);
+      fallbackTo2D((e && e.message) || e);
     }
   }
 
@@ -300,6 +319,32 @@ export function boot(mountEl, seed) {
     landingReleased = true;
     if (renderer3d && render3dMod && render3dMod.startLanding) render3dMod.startLanding(renderer3d);
   }
+  // The landing as the level's opening: release it, then wait until it is over — the harvesters are out and the camera
+  // is back with the player (or it is skipped, or the 3D view isn't running). A tap anywhere skips it.
+  let openingLandingPending = false;
+  function playOpeningLanding() {
+    return new Promise((resolve) => {
+      if (!USE_3D) { resolve(); return; }
+      const t0 = performance.now();
+      let done = false;
+      const finish = () => { if (done) return; done = true; mountEl.removeEventListener('pointerdown', skip, true); resolve(); };
+      const skip = () => { if (renderer3d && render3dMod && render3dMod.skipLanding) render3dMod.skipLanding(renderer3d); finish(); };
+      mountEl.addEventListener('pointerdown', skip, true);
+      if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
+      const poll = () => {
+        if (done) return;
+        if (!interlude || mode !== 'play' || !USE_3D) { finish(); return; }
+        if (renderer3d) {
+          releaseLanding();
+          const L = renderer3d.landing;
+          if (!L || L.done) { finish(); return; }
+        }
+        else if (performance.now() - t0 > 20000) { finish(); return; }   // the 3D view never came up — don't hold the level
+        setTimeout(poll, 120);
+      };
+      poll();
+    });
+  }
   function endInterlude() {
     releaseLanding();
     if (!interlude) return;
@@ -432,6 +477,18 @@ export function boot(mountEl, seed) {
         showPreview();
       }
     };
+    // LEVEL 1 OPENS WITH THE LANDING [MM-story_mvbqui1g_m]: on map 1 (3D view) the craft lands before the contract,
+    // the wave intel and the speaker — then the normal intro runs. A tap skips the landing.
+    const openThenIntro = () => {
+      if (currentMapId !== 1 || !USE_3D) { runIntro(); return; }
+      suppressPreDialog = true; comm.dismiss();
+      void playOpeningLanding().then(() => {
+        if (mySeq !== mapSelectSeq) return;                 // the player moved on to another map meanwhile
+        suppressPreDialog = false;
+        runIntro();
+        if (!suppressPreDialog && voicePacks && interlude && mode === 'play') playPreBattleDialog(null);   // no contract: the speaker now
+      });
+    };
     // HOW TO PLAY (owner): the onboarding brief shows ONCE, before the first map dialog — then the
     // normal contract/wave-intel flow proceeds. localStorage-gated so returning players skip it.
     let htpSeen = false;
@@ -441,10 +498,10 @@ export function boot(mountEl, seed) {
       showHowToPlay(mountEl, () => {
         try { localStorage.setItem('bulwark:howToPlaySeen', '1'); } catch (e) { /* storage blocked */ }
         suppressPreDialog = false;
-        runIntro();
+        openThenIntro();
       });
     } else {
-      runIntro();
+      openThenIntro();
     }
   }
 
@@ -727,6 +784,15 @@ export function boot(mountEl, seed) {
     const faction = (next && next.faction) || null;
     void (async () => {
       if (clearCall) await comm.showCall(clearCall);        // M2 runs fully (auto sign-off)
+      // LEVEL 1 OPENS WITH THE LANDING [MM-story_mvbqui1g_m]: the craft flies in, lands and deploys BEFORE the
+      // opening dialog — the level's first beat is the base arriving. Other levels keep the dialog-first order.
+      if (idx === 0 && currentMapId === 1 && !clearCall) {
+        if (openingLandingPending) return;                  // another call is already waiting on it — that one continues
+        openingLandingPending = true;
+        try { await playOpeningLanding(); } finally { openingLandingPending = false; }
+        if (suppressPreDialog) return;                      // a contract / intro owns the screen; it calls back in
+      }
+      if (!interlude || mode !== 'play') return;
       if (!faction && idx === 0) releaseLanding();          // no opening dialog → the field is already on screen
       if (!interlude || mode !== 'play' || !faction) return;
       preDialogFaction = faction;
@@ -913,8 +979,13 @@ export function boot(mountEl, seed) {
     if (inputHandle && inputHandle.refreshHover) inputHandle.refreshHover();
     // harvester/base interaction hints (owner): input sets ui.pendingHint, we flash it once
     if (ui && ui.pendingHint) { flashMessage(hud, ui.pendingHint.text); ui.pendingHint = null; }
-    renderFrame(renderer, sim, ui, pendingEvents, dtMs / 1000);   // pass REAL frame time so FX track sim time
-    if (renderer3d) render3dMod.renderFrame(renderer3d, sim, ui, pendingEvents, dtMs / 1000);
+    if (!USE_3D) renderFrame(renderer, sim, ui, pendingEvents, dtMs / 1000);   // pass REAL frame time so FX track sim time
+    if (renderer3d) {
+      // a throw here would stop the Pixi ticker that drives the whole game loop — contain it, and give up on 3D
+      // if it keeps happening
+      try { render3dMod.renderFrame(renderer3d, sim, ui, pendingEvents, dtMs / 1000); frameErrors3d = 0; }
+      catch (e) { console.error('[render3d] frame failed', e); if (++frameErrors3d >= 30) fallbackTo2D((e && e.message) || e); }
+    }
     updateHud(hud, sim, ui);
     pendingEvents = [];
   });
@@ -927,5 +998,9 @@ export function boot(mountEl, seed) {
     get log() { return log; },
     restart,
     playReplay,
+    /** Debug / headless tests: send a sim command as the player would (same validation and logging). */
+    submit: (cmd) => submit(cmd),
+    /** Debug / headless tests: the 3D view (null under the 2D fallback). */
+    get view3d() { return renderer3d; },
   };
 }

@@ -205,4 +205,88 @@ const oct = (yb, ym, ys, yt, wb, wm, ws, wt) => [[-wb, yb], [wb, yb], [wm, ym], 
   M.jet = { name: 'FS-217 striker', ref: 'jet', parts, pivots: {}, hover: 1.4, views: { side: 'left', top: 'up' } };
 }
 
+
+// ══ KING TIGER (GND-HeavyTanks) — ported from the unit-model prototype (tools/unit-models/next, branch
+// feat/unit-art-refs) [MM-story_mvbqugeo_l]. The prototype's three layers (base / weapon / head) fold into the game's
+// two (body / turret): the radar head rides the turret as part of it until models3d.js learns a head group.
+{
+  // ── HEAD kits: sensor heads that ride on the weapon and scan (all parts in group 'head'; pivot = mast foot)
+  function radarDish({ x, y, z, mast = 0.2, r = 0.26, tilt = 22 }) {
+    const top = y + mast;
+    return [
+      { t: 'cyl', ax: 'y', r: 0.07, l: 0.05, seg: 8, p: [x, y + 0.025, z], m: 'dark', g: 'head' },              // turntable
+      { t: 'cyl', ax: 'y', r: 0.03, l: mast, seg: 6, p: [x, y + mast / 2, z], m: 'metal', g: 'head' },            // mast
+      { t: 'box', s: [0.08, 0.06, 0.16], p: [x, top, z], m: 'dark', g: 'head' },                                   // yoke
+      { t: 'cyl', ax: 'x', r: [r, r * 0.3], l: r * 0.42, seg: 12, p: [x + 0.06, top + 0.04, z], r3: [0, 0, tilt], m: 'hull2', g: 'head' },   // dish
+      { t: 'cyl', ax: 'x', r: r * 0.86, l: 0.012, seg: 12, p: [x + 0.06 + r * 0.21 * Math.cos(tilt * Math.PI / 180), top + 0.04 + r * 0.21 * Math.sin(tilt * Math.PI / 180), z], r3: [0, 0, tilt], m: 'dark', g: 'head' },   // dish face
+      { t: 'cyl', ax: 'x', r: 0.016, l: r * 0.9, seg: 5, p: [x + 0.06 + r * 0.55 * Math.cos(tilt * Math.PI / 180), top + 0.04 + r * 0.55 * Math.sin(tilt * Math.PI / 180), z], r3: [0, 0, tilt], m: 'metal', g: 'head' },   // feed arm
+      { t: 'cyl', ax: 'x', r: 0.03, l: 0.03, seg: 8, p: [x + 0.06 + r * 1.0 * Math.cos(tilt * Math.PI / 180), top + 0.04 + r * 1.0 * Math.sin(tilt * Math.PI / 180), z], r3: [0, 0, tilt], m: 'glow', g: 'head' },  // feed horn
+      { t: 'box', s: [0.1, 0.08, 0.1], p: [x - 0.1, top - 0.02, z], m: 'hull', g: 'head' },                          // counterweight
+    ];
+  }
+  function barRadar({ x, y, z, mast = 0.16, w = 0.56 }) {
+    const top = y + mast;
+    return [
+      { t: 'cyl', ax: 'y', r: 0.06, l: 0.04, seg: 8, p: [x, y + 0.02, z], m: 'dark', g: 'head' },
+      { t: 'cyl', ax: 'y', r: 0.025, l: mast, seg: 6, p: [x, y + mast / 2, z], m: 'metal', g: 'head' },
+      { t: 'box', s: [0.07, 0.11, w], p: [x, top + 0.04, z], r3: [0, 0, -12], m: 'hull2', g: 'head' },              // antenna bar, tipped up
+      { t: 'box', s: [0.01, 0.06, w * 0.9], p: [x + 0.04, top + 0.05, z], r3: [0, 0, -12], m: 'glowB', g: 'head' },  // emitter strip
+    ];
+  }
+
+  // ── HEAVY TANK "King Tiger" (GND-HeavyTanks) — from the repo's tiger-*.png ortho set (side, top, front, rear; base and turret split).
+  // Side view: hull 620 px = 4.7 units → 0.0076 u/px; deck 1.21, turret roof 1.82, fender line 0.61; gun tip 4.9.
+  {
+    const TUR = [[-1.42, -0.6], [-1.2, -0.68], [-0.3, -0.75], [0.72, -0.6], [0.98, -0.38], [0.98, 0.38], [0.72, 0.6], [-0.3, 0.75], [-1.2, 0.68], [-1.42, 0.6]];
+    const TUR_TOP = TUR.map(([x, z]) => [x > 0.35 ? 0.35 + (x - 0.35) * 0.55 : x, z * 0.84]);
+    const HS = (x, zb, zt, yb, yt) => [x, [[-zb, yb], [zb, yb], [zt, yt], [-zt, yt]]];
+    const parts = [
+      ...track({ x0: -2.22, x1: 2.2, h: 0.64, z: 0.97, w: 0.52, wheels: 9, wr: 0.27, rr: 0.32 }),
+      // lower hull between the tracks
+      { t: 'ext', ax: 'z', poly: [[-2.2, 0.32], [-2.28, 0.62], [2.32, 0.62], [2.12, 0.32]], d: [-0.72, 0.72], m: 'hull2' },
+      // upper hull: lofted along X — sloped sides, flat deck, long glacis down to the nose
+      { t: 'loft', ax: 'x', secs: [HS(-2.34, 1.2, 1.04, 0.6, 1.17), HS(-2.24, 1.24, 1.1, 0.6, 1.21), HS(1.58, 1.24, 1.1, 0.6, 1.21), HS(2.36, 1.2, 1.12, 0.6, 0.68)], m: 'hull' },
+      // fenders front + rear
+      { t: 'box', s: [0.32, 0.03, 0.5], p: [2.28, 0.64, 0.98], r3: [0, 0, -18], m: 'hull2', mir: true },
+      // deck: engine grilles, twin fans, hatches, tools
+      { t: 'box', s: [0.75, 0.025, 0.38], p: [-1.55, 1.215, 0], m: 'dark' },
+      { t: 'cyl', ax: 'y', r: 0.21, l: 0.03, seg: 12, p: [-1.7, 1.215, 0.62], m: 'dark', mir: true },
+      { t: 'cyl', ax: 'y', r: 0.12, l: 0.035, seg: 10, p: [-1.7, 1.22, 0.62], m: 'black', mir: true },
+      { t: 'cyl', ax: 'y', r: 0.16, l: 0.04, seg: 10, p: [1.2, 1.2, 0.52], r3: [0, 0, -18], m: 'hull2', mir: true },
+      { t: 'box', s: [1.6, 0.03, 0.05], p: [-0.2, 1.17, 1.12], m: 'metal', mir: true },
+      { t: 'box', s: [0.05, 0.08, 0.2], p: [2.3, 0.73, 0.82], m: 'dark', mir: true },                             // tow lugs
+      { t: 'cyl', ax: 'x', r: 0.05, l: 0.06, seg: 8, p: [2.03, 0.98, -0.78], r3: [0, 0, -40], m: 'glowB' },        // headlight
+      { t: 'cyl', ax: 'x', r: 0.04, l: 0.04, seg: 8, p: [2.07, 0.96, 0.32], r3: [0, 0, -40], m: 'dark' },         // hull MG
+      // rear plate: exhaust stacks + stowage box
+      { t: 'cyl', ax: 'y', r: 0.07, l: 0.32, seg: 8, p: [-2.37, 0.98, 0.36], m: 'dark', mir: true },
+      { t: 'cyl', ax: 'y', r: 0.05, l: 0.04, seg: 8, p: [-2.37, 1.15, 0.36], m: 'amber', mir: true },
+      { t: 'box', s: [0.12, 0.2, 0.34], p: [-2.38, 0.78, -0.72], m: 'hull2' },
+      // ── WEAPON: long hexagonal turret, bell mantlet, 8.8 cm gun with muzzle brake
+      { t: 'loft', ax: 'y', secs: [[1.21, TUR], [1.82, TUR_TOP]], m: 'hull', g: 'weapon' },
+      { t: 'cyl', ax: 'x', r: [0.17, 0.28], l: 0.4, seg: 12, p: [1.14, 1.48, 0], m: 'hull2', g: 'weapon' },
+      { t: 'cyl', ax: 'x', r: 0.115, l: 0.55, seg: 10, p: [1.6, 1.48, 0], m: 'hull', g: 'weapon' },
+      { t: 'cyl', ax: 'x', r: 0.075, l: 3.0, seg: 8, p: [3.3, 1.48, 0], m: 'metal', g: 'weapon' },
+      { t: 'cyl', ax: 'x', r: 0.115, l: 0.3, seg: 10, p: [4.74, 1.48, 0], m: 'dark', g: 'weapon' },
+      { t: 'box', s: [0.12, 0.05, 0.25], p: [4.74, 1.48, 0], m: 'black', g: 'weapon' },
+      { t: 'cyl', ax: 'x', r: 0.05, l: 0.02, seg: 8, p: [4.9, 1.48, 0], m: 'glow', g: 'weapon' },
+      // cupola + loader hatch + periscope
+      { t: 'cyl', ax: 'y', r: 0.21, l: 0.13, seg: 12, p: [-0.62, 1.88, -0.36], m: 'hull2', g: 'weapon' },
+      { t: 'cyl', ax: 'y', r: 0.16, l: 0.04, seg: 12, p: [-0.62, 1.96, -0.36], m: 'dark', g: 'weapon' },
+      { t: 'cyl', ax: 'y', r: 0.15, l: 0.04, seg: 10, p: [-0.2, 1.83, 0.3], m: 'hull2', g: 'weapon' },
+      { t: 'box', s: [0.1, 0.06, 0.06], p: [0.3, 1.84, -0.18], m: 'dark', g: 'weapon' },
+      // spare track links hung on the turret sides (the reference's signature detail)
+      ...[-0.75, -0.42, 0.25].map((x) => ({ t: 'box', s: [0.28, 0.17, 0.04], p: [x, 1.5, 0.705 - (x > 0 ? 0.04 : 0)], r3: [0, x > 0 ? -12 : 0, -10], m: 'track', g: 'weapon', mir: true })),
+      { t: 'box', s: [0.04, 0.08, 0.5], p: [-1.43, 1.52, 0], m: 'dark', g: 'weapon' },                          // rear hatch
+    ];
+    parts.push(...radarDish({ x: -1.1, y: 1.82, z: 0.32, mast: 0.22, r: 0.27 }));
+    M.tiger = { name: 'King Tiger heavy tank', unit: 'GND-HeavyTanks', ref: 'tiger', parts, pivots: { weapon: [-0.17, 1.21, 0], head: [-1.1, 1.82, 0.32] }, head: { mode: 'sweep' },
+      views: { side: 'right', top: 'left' } };
+  }
+
+  const toGame = (def) => Object.assign({}, def, {
+    parts: def.parts.map((q) => (q.g === 'weapon' || q.g === 'head' ? Object.assign({}, q, { g: 'turret' }) : q)),
+    pivots: { turret: def.pivots.weapon },
+  });
+  M.tiger = toGame(M.tiger);
+}
 export const UNIT_MODELS = M;

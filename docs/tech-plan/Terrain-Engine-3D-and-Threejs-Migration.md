@@ -224,11 +224,12 @@ Target: `prototype/test-game/src/render3d/`, plain ES modules, no build step —
 | `src/render3d/quality.js` | §4.19 | tiers |
 
 Integration rules:
-- SELECTED BY `?renderer=three`. Pixi stays the default until parity; T7 removes it. `main.js` picks the module at boot; nothing else in the game imports `render3d/` (T6 brings the tools over).
+- (2026-10-16, **owner**: "the full game should be using the 3d") THE 3D VIEW IS THE DEFAULT. `?renderer=pixi` (or `=2d`) keeps the 2D view; the game falls back to it automatically when the device has no WebGL, when the 3D view fails to start, or when its frame keeps throwing (30 frames) — never a dead screen. The hidden Pixi stage no longer draws. Every map gets 3D ground (maps without forge terrain derive codes from their own layout — `ground/synthTerrain.js`). Remaining 2D-only feedback is tracked in story_mvbry2p7_p; T7 removes Pixi after it. [MM-story_mvbqugeo_l]
+- (superseded) SELECTED BY `?renderer=three`. Pixi stays the default until parity; T7 removes it. `main.js` picks the module at boot; nothing else in the game imports `render3d/` (T6 brings the tools over).
 - READ-ONLY. The renderer reads the sim state and the event list it is handed and never writes to the sim (Architecture: presentation never affects replay).
 - NO COPIES. Pathfinding is `src/sim/pathfinding.js`; the map is the one the sim builds (`buildTerrainMap` → `bakedBlocking`); placement validity is `sim/structures.js` `validatePlacement`, and its reasons are the UX copy. The prototype's inlined pathfinder, data-URIs and unit mover (code design §4.15) never enter the game.
 - CONTENT IS COMMITTED. A map without `content/maps/baked/<mapId>/` cannot render under `?renderer=three`; the renderer says so on screen rather than drawing an empty plane.
-- THE DEFAULT PATH IS UNTOUCHED. `index.html` keeps loading only Pixi; `render3d/` and three.js are imported dynamically under the flag, so the default build's bytes and boot do not change.
+- (superseded 2026-10-16) THE DEFAULT PATH IS UNTOUCHED. `index.html` keeps loading only Pixi; `render3d/` and three.js are imported dynamically under the flag, so the default build's bytes and boot do not change.
 - TESTABLE WITHOUT A GPU. Pure helpers (camera maths, cell ↔ world, tier table, model-key mapping, LOD part filter) live in modules that import no three.js and are covered by `node --test` — CI has neither three.js nor WebGL.
 
 ## 7. Performance

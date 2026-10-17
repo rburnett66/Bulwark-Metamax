@@ -74,6 +74,6 @@ test('live units use the metal material (per-pixel Phong), still receive shadows
   for (const o of lit) { assert.ok(o.material.isMeshPhongMaterial); assert.ok(o.receiveShadow); }
   units.setMetal(0);
   assert.equal(units.material.uniforms.uMetalK.value, 0);
-  assert.deepEqual(units.tris, { tank: { full: 3362, lod: 1534 }, buggy: { full: 1260, lod: 760 }, beetle: { full: 2748, lod: 1724 }, jet: { full: 994, lod: 698 } },
+  assert.deepEqual(units.tris, { tank: { full: 3362, lod: 1534 }, buggy: { full: 1260, lod: 760 }, beetle: { full: 2748, lod: 1724 }, jet: { full: 994, lod: 698 }, tiger: { full: 3660, lod: 1520 } },
     'geometry unchanged by the material swap');
 });
