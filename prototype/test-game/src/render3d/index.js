@@ -207,7 +207,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     status: 'loading',
     problems: [],
     stats: { calls: 0, triangles: 0, units: 0, lines: 0, fx: 0, impacts: null },
-    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1, trail: null, boom: null },
+    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1, trail: null, boom: null, fire: null, muzzle: null },
     getProjFx: typeof opts.projFx === 'function' ? opts.projFx : () => opts.projFx || null,
     getProjScale: typeof opts.projScale === 'function' ? opts.projScale : () => opts.projScale || 1,
     destroyed: false,
@@ -216,10 +216,17 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     roadMask: null,
   };
   // missiles / rockets leave smoke and exhaust through the world-impact particles; rocket hits boom on the ground
-  // [MM-task_mvbyf6t8_z]
+  // [MM-task_mvbyf6t8_z]. Launch effects + motor flames [MM-task_mvbz1121_11]:
+  //   cannon / flak — muzzle flash (combat FX) + a barrel EXHAUST: a hot tongue and a gunsmoke jet out along the
+  //     barrel that stops dead and hangs, side jets from the cannon's muzzle brake, a few sparks;
+  //   rocket — a STARTER PLUME: backblast out of the nozzle end, a smoke bloom around the rack, dust kicked off the
+  //     ground; in flight a big ragged ORANGE solid-fuel tongue that sheds embers and puffy brown-grey smoke while
+  //     the motor burns (first ~55% of the lob), then a dim coasting glow with a thinning wisp;
+  //   missile — an ignition puff at the tube; in flight a SMALL tight white-hot flame (steady, no embers) and a long
+  //     thin pale contrail — a guided motor, clean where the rocket is dirty.
   let trailSeed = 1;
   const jit = () => { trailSeed = (trailSeed * 16807) % 2147483647; return trailSeed / 2147483647 - 0.5; };
-  r.fxOpts.trail = (kind, x, y, z, k = 1) => {
+  r.fxOpts.trail = (kind, x, y, z, k = 1, dx = 0, dy = 0, dz = 0, t = 1) => {
     const I = r.impacts;
     if (kind === 'burst') {
       for (let i = 0; i < 10; i++) { const a = i * 0.628 + jit(); I.emit(FXK.SPARK, x, y, z, Math.cos(a) * 3.2 * k, jit() * 2.5, Math.sin(a) * 3.2 * k, 0.35, 0.022); }
@@ -227,9 +234,71 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
       I.emit(FXK.FLASH, x, y, z, 0, 0, 0, 0.12, 0.55 * k);
       return;
     }
-    I.emit(FXK.SMOKE, x, y, z, jit() * 0.15, 0.12 + jit() * 0.1, jit() * 0.15, kind === 'rocket' ? 0.9 : 0.7, 0.045 * k, 0.32, 0.75);
+    if (kind === 'missile') {
+      I.emit(FXK.FLASH, x, y, z, -dx * 0.6, -dy * 0.6, -dz * 0.6, 0.04, 0.09 * k);                          // white-hot core
+      I.emit(FXK.FIRE, x - dx * 0.04, y - dy * 0.04, z - dz * 0.04, -dx * 2.2, -dy * 2.2, -dz * 2.2, 0.06, 0.06 * k, -0.5);   // short tight flame
+      I.emit(FXK.SMOKE, x - dx * 0.08, y - dy * 0.08, z - dz * 0.08, jit() * 0.06, 0.05 + jit() * 0.04, jit() * 0.06, 1.25, 0.04 * k, 0.55, 0.8);   // thin pale contrail
+      return;
+    }
+    if (kind === 'rocket') {
+      const burning = t < 0.55;   // the motor burns out just past the top of the lob (t = flight fraction)
+      if (burning) {
+        for (let i = 0; i < 2; i++) {                                                                       // ragged orange tongue, stretched back
+          const b = 2.5 + 2.5 * (jit() + 0.5);
+          I.emit(FXK.FIRE, x - dx * 0.05 * i, y - dy * 0.05 * i, z - dz * 0.05 * i, -dx * b + jit() * 0.6, -dy * b + jit() * 0.6, -dz * b + jit() * 0.6, 0.1 + jit() * 0.04, 0.11 * k, -0.2);
+        }
+        if (jit() > 0.1) I.emit(FXK.EMBER, x, y, z, -dx * 1.5 + jit() * 1.2, -dy * 1.5 + jit(), -dz * 1.5 + jit() * 1.2, 0.45, 0.025);   // sheds burning bits
+        I.emit(FXK.SMOKE, x - dx * 0.12, y - dy * 0.12, z - dz * 0.12, jit() * 0.25, 0.15 + jit() * 0.1, jit() * 0.25, 1.4, 0.09 * k, 0.75, 0.4);   // puffy brown-grey
+      } else {
+        I.emit(FXK.FIRE, x, y, z, -dx * 0.8, -dy * 0.8, -dz * 0.8, 0.05, 0.05 * k, -0.4);                     // coasting: a dim glow
+        if (jit() > 0) I.emit(FXK.SMOKE, x, y, z, jit() * 0.1, 0.08, jit() * 0.1, 0.8, 0.035 * k, 0.4, 0.5);
+      }
+      return;
+    }
+    I.emit(FXK.SMOKE, x, y, z, jit() * 0.15, 0.12 + jit() * 0.1, jit() * 0.15, 0.7, 0.045 * k, 0.32, 0.75);
     I.emit(FXK.FIRE, x, y, z, 0, 0, 0, 0.09, 0.07 * k, -0.4);
   };
+  // launch effects at the modelled firing point (m: x,y,z tip · dx,dy,dz barrel axis · bx,by,bz breech / nozzle)
+  r.fxOpts.fire = (kind, m, look) => {
+    const I = r.impacts, dx = m.dx, dy = m.dy, dz = m.dz;
+    const sx = -dz, sz = dx, sl = Math.hypot(sx, sz) || 1;                                                   // barrel's side axis
+    if (kind === 'shell' || kind === 'flak' || kind === 'tracer') {
+      const k = kind === 'shell' ? 1 : kind === 'flak' ? 0.75 : 0.4;
+      for (let i = 0; i < 3; i++) {                                                                          // hot tongue
+        const v = 3 + i * 1.6;
+        I.emit(FXK.FIRE, m.x, m.y, m.z, dx * v + jit() * 0.4, dy * v + jit() * 0.4, dz * v + jit() * 0.4, 0.07, (0.13 - i * 0.025) * k, -0.3);
+      }
+      I.emit(FXK.FLASH, m.x + dx * 0.05, m.y + dy * 0.05, m.z + dz * 0.05, 0, 0, 0, 0.05, 0.3 * k);
+      for (let i = 0, c = Math.round(6 * k) + 1; i < c; i++) {                                               // gunsmoke jet: out fast, stops, hangs
+        const v = 2 + 4.5 * (jit() + 0.5);
+        I.emit(FXK.SMOKE, m.x, m.y, m.z, dx * v + jit() * 0.5, dy * v + 0.2 + jit() * 0.4, dz * v + jit() * 0.5, 0.9 + jit() * 0.4, 0.08 * k, 0.9, 0.48, 0, 6);
+      }
+      if (m.brake) for (const s of [1, -1]) {                                                               // muzzle-brake side jets
+        const bx = m.x - dx * m.brake, by = m.y - dy * m.brake, bz = m.z - dz * m.brake;
+        for (let i = 0; i < 2; i++) I.emit(FXK.SMOKE, bx, by, bz, (sx / sl) * s * (2.4 + i) + dx * 0.6, 0.25, (sz / sl) * s * (2.4 + i) + dz * 0.6, 0.7, 0.06, 0.8, 0.5, 0, 6);
+        I.emit(FXK.FIRE, bx, by, bz, (sx / sl) * s * 2.2, 0, (sz / sl) * s * 2.2, 0.05, 0.06, -0.3);
+      }
+      for (let i = 0; i < 3 * k; i++) I.emit(FXK.SPARK, m.x, m.y, m.z, dx * 5 + jit() * 1.5, dy * 5 + jit() * 1.5 + 0.5, dz * 5 + jit() * 1.5, 0.18, 0.016);
+      return;
+    }
+    if (kind === 'rocket') {                                                                                 // starter plume
+      for (let i = 0; i < 4; i++) I.emit(FXK.FIRE, m.bx, m.by, m.bz, -dx * (3 + i) + jit() * 0.8, -dy * (3 + i) + jit() * 0.5, -dz * (3 + i) + jit() * 0.8, 0.12, 0.14, -0.2);
+      for (let i = 0; i < 12; i++) {                                                                         // backblast + bloom
+        const v = 1.2 + 3 * (jit() + 0.5);
+        I.emit(FXK.SMOKE, m.bx, m.by, m.bz, -dx * v + jit() * 1.4, -dy * v * 0.5 + 0.3 + jit() * 0.3, -dz * v + jit() * 1.4, 1.6 + jit() * 0.6, 0.14, 1.1, 0.5, 0, 2.5);
+      }
+      for (let i = 0; i < 6; i++) { const a = i * 1.047 + jit(); I.emit(FXK.DUST, m.bx, 0.05, m.bz, Math.cos(a) * 1.6, 0.6 + jit() * 0.3, Math.sin(a) * 1.6, 0.6, 0.05); }   // ground kick
+      I.emit(FXK.SMOKE, m.bx, 0.08, m.bz, 0, 0.2, 0, 1.6, 0.12, 0.9, 0.62, 1);
+      I.emit(FXK.FLASH, m.bx, m.by, m.bz, 0, 0, 0, 0.08, 0.45);
+      return;
+    }
+    if (kind === 'missile') {                                                                                // ignition: a pop of white smoke out of the tube's back
+      for (let i = 0; i < 4; i++) I.emit(FXK.SMOKE, m.bx, m.by, m.bz, -dx * (1.5 + i * 0.6) + jit() * 0.5, 0.2 + jit() * 0.3, -dz * (1.5 + i * 0.6) + jit() * 0.5, 1.1, 0.06, 0.9, 0.8, 0, 3);
+      I.emit(FXK.SMOKE, m.x, m.y, m.z, dx * 1.2, 0.15, dz * 1.2, 0.8, 0.05, 0.8, 0.85, 0, 3);
+      I.emit(FXK.FIRE, m.x, m.y, m.z, dx * 2, dy * 2, dz * 2, 0.06, 0.09, -0.3);
+    }
+  };
+  r.fxOpts.muzzle = (id, n) => (r.system ? r.system.muzzle(id, n) : null);
   r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
   attachCameraInput(canvas, r);
 

@@ -51,6 +51,8 @@ export const SHOT_LOOK = Object.freeze({   // Pixi at ~35 px/cell: shell dot 12 
 /** Homing + arc flight (cells, s): missiles climb off the rail, then turn onto the target; rockets lob. */
 export const FLIGHT = Object.freeze({ turn: 7.5, accel: 16, maxSpeed: 19, climb: 2.2, rocketApex: 0.9, rocketApexPerCell: 0.12, hitR: 0.22 });
 const BURST_GAP = 0.07;      // s between burst rounds (sim clock)
+/** A turret holds fire until its barrel is this close (radians, in yaw) to the target — the round leaves along it. */
+export const ON_TARGET = Object.freeze({ shell: 0.35, flak: 0.35, tracer: 0.5, missile: 0.9, rocket: 0.6 });
 const BURST_SPREAD = 0.16;   // cells of impact jitter for burst rounds
 
 /** Flash looks: diameter (cells), life (s), colour. Sized like the Pixi glows they stand in for. */
@@ -113,7 +115,10 @@ function eventPos(ev, map) {
  * createCombatFx({ seed, caps }) → { shots, flashes, update(state, map, events, dt, opts), clear() }
  *   shots   — [{ x, y, z, dx, dy, dz, size, len, color }]   live rounds; (dx,dy,dz) = unit flight direction
  *   flashes — [{ x, y, z, size, color, alpha }]             live glows (alpha already faded)
- * opts: { getDef(unitId) → def, projFx: { id: entry }, projScale } — all optional.
+ * opts: { getDef(unitId) → def, projFx: { id: entry }, projScale,
+ *         muzzle(structId, n) → modelled firing point { x, y, z, dx, dy, dz, bx, by, bz, brake } (System turrets),
+ *         fire(kind, firingPoint, look) — launch effects (barrel exhaust, rocket plume, missile ignition),
+ *         trail(kind, x, y, z, k, dx, dy, dz, t) — in-flight motor flame + smoke (t: missile s aloft, rocket flight 0..1), boom(x, z, k) } — all optional.
  * Records are pooled: steady-state flight allocates nothing.
  */
 export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
@@ -135,11 +140,16 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     flashes.push(f);
   }
 
+  /**
+   * from: the firing point — { x, y, z } and, when it comes off a modelled barrel (opts.muzzle), its barrel axis
+   * (dx, dy, dz) and breech / nozzle end (bx, by, bz). Fires opts.fire(kind, from, look) for the launch effects.
+   */
   function launch(from, to, look, tid = null) {
     if (shots.length >= limits.maxShots) return;
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
     const dist = Math.hypot(dx, dy, dz);
     if (dist < 1e-4) return;
+    const hasAxis = from.dx !== undefined;
     const s = freeShots.pop() || {};
     s.x = from.x; s.y = from.y; s.z = from.z;
     s.tx = to.x; s.ty = to.y; s.tz = to.z;
@@ -150,26 +160,49 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     if (s.kind === 'missile') {
       // off the rail: up and slightly out, then the seeker takes over
       const h = Math.hypot(dx, dz) || 1, side = (rand() - 0.5) * 1.4;
-      s.vx = (dx / h) * 2.5 - (dz / h) * side; s.vy = FLIGHT.climb + rand() * 0.8; s.vz = (dz / h) * 2.5 + (dx / h) * side;
+      if (hasAxis) {   // out of the tube along its axis, then the climb and the seeker
+        s.vx = from.dx * 4 - (dz / h) * side * 0.5; s.vy = from.dy * 4 + FLIGHT.climb * 0.5 + rand() * 0.5; s.vz = from.dz * 4 + (dx / h) * side * 0.5;
+      } else { s.vx = (dx / h) * 2.5 - (dz / h) * side; s.vy = FLIGHT.climb + rand() * 0.8; s.vz = (dz / h) * 2.5 + (dx / h) * side; }
       s.spd = Math.hypot(s.vx, s.vy, s.vz);
     } else if (s.kind === 'rocket') {
       s.fx = from.x; s.fy = from.y; s.fz = from.z; s.dur = Math.max(0.35, dist / look.speed); s.apex = FLIGHT.rocketApex + FLIGHT.rocketApexPerCell * dist;
     }
     shots.push(s);
     launched++;
-    flash(from.x, from.y, from.z, FLASH.muzzle, look.color, Math.min(1.6, look.size / SHOT_LOOK.shell.size));
+    // the flash sits just proud of the muzzle face so the barrel doesn't swallow it
+    const fo = hasAxis ? 0.06 : 0;
+    flash(from.x + (from.dx || 0) * fo, from.y + (from.dy || 0) * fo, from.z + (from.dz || 0) * fo, FLASH.muzzle, look.color, Math.min(1.6, look.size / SHOT_LOOK.shell.size) * (s.kind === 'missile' || s.kind === 'rocket' ? 0.7 : 1));
+    const onFire = ctx.opts && ctx.opts.fire;
+    if (onFire) {
+      const ax = hasAxis ? from : { x: from.x, y: from.y, z: from.z, dx: s.dx, dy: s.dy, dz: s.dz, bx: from.x - s.dx * 0.3, by: from.y - s.dy * 0.3, bz: from.z - s.dz * 0.3, brake: 0 };
+      onFire(s.kind, ax, look);
+    }
   }
 
-  /** One shooter's turn: fire when its cadence allows, as a burst of `burst` rounds. */
-  function fire(key, now, from, to, look, burst, cadence, tid = null) {
+  /**
+   * One shooter's turn: fire when its cadence allows, as a burst of `burst` rounds. muz(n) → the n-th firing point
+   * of a modelled turret (or null): rounds cycle its barrels / rails across volleys, each leaves from its own tip,
+   * and a turret still slewing holds fire until its barrel is on target.
+   */
+  const roundNo = new Map();   // shooter key → rounds fired (which barrel is next)
+  function fire(key, now, from, to, look, burst, cadence, tid = null, muz = null) {
     if (now < (clock.get(key) || 0)) return;
+    let n0 = roundNo.get(key) || 0;
+    if (muz) {
+      const m = muz(n0);
+      if (m) {
+        const hx = to.x - m.x, hz = to.z - m.z, hl = Math.hypot(hx, hz), al = Math.hypot(m.dx, m.dz);
+        if (hl > 0.3 && al > 1e-3 && (hx * m.dx + hz * m.dz) / (hl * al) < Math.cos(ON_TARGET[look.kind] || 0.5)) return;   // still turning
+      }
+    }
     clock.set(key, now + cadence * (0.85 + rand() * 0.3));
+    roundNo.set(key, n0 + burst);
     const gap = look.kind === 'missile' || look.kind === 'rocket' ? 0.12 : BURST_GAP;
     for (let k = 0; k < burst; k++) {
       const j = burst > 1 ? (look.kind === 'rocket' ? 0.45 : BURST_SPREAD) : 0;
       const aim = { x: to.x + (rand() * 2 - 1) * j, y: to.y, z: to.z + (rand() * 2 - 1) * j };
-      if (k === 0) launch(from, aim, look, tid);
-      else queue.push({ at: now + k * gap, from: { x: from.x, y: from.y, z: from.z }, to: aim, look, tid });
+      if (k === 0) launch((muz && muz(n0)) || from, aim, look, tid);
+      else queue.push({ at: now + k * gap, from: { x: from.x, y: from.y, z: from.z }, to: aim, look, tid, muz, n: n0 + k });
     }
   }
 
@@ -190,12 +223,13 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     const pfx = opts.projFx || null;
     const scale = opts.projScale || 1;
     const getDef = opts.getDef || null;
+    const muzzleOf = opts.muzzle || null;   // (structure id, n) → modelled firing point, from the System turrets
 
     // burst rounds that have come due
     for (let i = queue.length - 1; i >= 0; i--) {
       const q = queue[i];
       if (now < q.at) continue;
-      launch(q.from, q.to, q.look, q.tid);
+      launch((q.muz && q.muz(q.n)) || q.from, q.to, q.look, q.tid);   // a queued round leaves from its own barrel, wherever the turret now points
       queue[i] = queue[queue.length - 1]; queue.pop();
     }
 
@@ -213,7 +247,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         const hx = to.x - cx, hz = to.z - cz, hl = Math.hypot(hx, hz) || 1;
         const from = { x: cx + (hx / hl) * MUZZLE.barrel, y: MUZZLE[st.kind] || MUZZLE.structure, z: cz + (hz / hl) * MUZZLE.barrel };
         const e = pfx && pfx[st.structId];
-        fire('s' + st.id, now, from, to, lookFor(e, base, base.kind, base.color, scale, base.big), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence, st.targetId);
+        const muz = muzzleOf ? (n) => muzzleOf(st.id, n) : null;
+        fire('s' + st.id, now, from, to, lookFor(e, base, base.kind, base.color, scale, base.big), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence, st.targetId, muz);
       }
     }
 
@@ -290,7 +325,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         s.dx = vx / vl; s.dy = vy / vl; s.dz = vz / vl;
         s.vx = s.dx * s.spd; s.vy = s.dy * s.spd; s.vz = s.dz * s.spd;
         s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
-        if (trail) trail('missile', s.x - s.dx * 0.12, s.y - s.dy * 0.12, s.z - s.dz * 0.12, s.big ? 1.3 : 1);
+        if (trail) trail('missile', s.x - s.dx * 0.12, s.y - s.dy * 0.12, s.z - s.dz * 0.12, s.big ? 1.3 : 1, s.dx, s.dy, s.dz, s.t);
         continue;
       }
       if (s.kind === 'rocket') {
@@ -301,7 +336,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         const ddx = nx - s.x, ddy = ny - s.y, ddz = nz - s.z, dl = Math.hypot(ddx, ddy, ddz);
         if (dl > 1e-5) { s.dx = ddx / dl; s.dy = ddy / dl; s.dz = ddz / dl; }
         s.x = nx; s.y = ny; s.z = nz;
-        if (trail) trail('rocket', s.x - s.dx * 0.1, s.y - s.dy * 0.1, s.z - s.dz * 0.1, 1);
+        if (trail) trail('rocket', s.x - s.dx * 0.1, s.y - s.dy * 0.1, s.z - s.dz * 0.1, 1, s.dx, s.dy, s.dz, u);   // u: flight fraction
         if (u >= 1) {
           flash(s.tx, s.ty, s.tz, FLASH.rocketHit);
           if (boomAt) boomAt(s.tx, s.tz, 0.55);   // the AOE reads: a small ground explosion per rocket
@@ -339,7 +374,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
   function clear() {
     while (shots.length) freeShots.push(shots.pop());
     while (flashes.length) freeFlashes.push(flashes.pop());
-    queue.length = 0; blasts.length = 0; clock.clear();
+    queue.length = 0; blasts.length = 0; clock.clear(); roundNo.clear();
   }
 
   return {

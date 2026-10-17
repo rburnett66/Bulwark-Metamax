@@ -96,6 +96,8 @@ const M = {};
     }
     M.sys_cannon = { name: 'Cannon tower', unit: 'SYS-Cannon', ref: 'sys_cannon', parts,
       pivots: { weapon: T, head: [-0.85, 1.72, -0.3] },
+      // firing point: the muzzle-brake face at the end of the elevated barrel; `brake` = the brake's side ports
+      muzzles: [{ p: along(P, EL, 3.72), d: [Math.cos(EL * D), Math.sin(EL * D), 0], back: 1.4, brake: 0.22 }],
       head: { mode: 'sweep' },
       views: { side: 'right', top: 'up' } };
   }
@@ -141,6 +143,8 @@ const M = {};
     for (const q of parts) if (q.g || q.p[1] > 0.8) q.p = [q.p[0], q.p[1] - 0.3, q.p[2]];
     for (const q of parts) if (!q.g && q.s && q.s[1] === 0.95) { q.s = [0.36, 0.72, 0.36]; q.p = [q.p[0], 0.38, q.p[2]]; q.r3 = [-18, 0, q.p[0] > 0 ? 18 : -18]; }
     M.sys_flak = { name: 'Anti-air (flak) tower', unit: 'SYS-Flak', ref: 'sys_flak', parts, pivots: { weapon: [0, 1.0, 0], head: [-0.3, 1.62, 0] }, head: { mode: 'sweep' },
+      // the twin barrels' amber tips (after the −0.3 drop above); they fire alternately
+      muzzles: [0.17, -0.17].map((z) => ({ p: [2.61, 1.36, z], d: [1, 0, 0], back: 1.1 })),
       views: { side: 'right', top: 'up' } };
   }
 
@@ -291,7 +295,10 @@ const M = {};
       { t: 'box', s: [2.0, 0.12, 0.95], p: [C0[0] - n[0] * 0.02, C0[1] - n[1] * 0.02, 0], r3: [0, 0, A], m: 'gunD', g: 'weapon' },
       ...rocket(0.26, -0.24), ...rocket(0.26, 0.24), ...rocket(0.68, -0.24), ...rocket(0.68, 0.24),
     ];
-    M.sys_rockets = { name: 'Rocket launcher', unit: 'SYS-Rockets', ref: 'sys_rockets', parts, pivots: { weapon: [0, 1.25, 0] }, views: { side: 'right', top: 'up' } };
+    // firing points: each rocket's nose, rippled corner to corner; `back` reaches the nozzle (for the launch plume)
+    const nose = (h, z) => ({ p: [C0[0] + n[0] * h + u[0] * 2.06, C0[1] + n[1] * h + u[1] * 2.06, z], d: [u[0], u[1], 0], back: 3.52 });
+    M.sys_rockets = { name: 'Rocket launcher', unit: 'SYS-Rockets', ref: 'sys_rockets', parts, pivots: { weapon: [0, 1.25, 0] }, views: { side: 'right', top: 'up' },
+      muzzles: [nose(0.68, -0.24), nose(0.26, 0.24), nose(0.68, 0.24), nose(0.26, -0.24)] };
   }
 
   // ── SYS-Missile (Missile Tower, anti-air) [MM-story_mvbyf8gq_10]: armoured drum on a cross foot, a yawing launcher
@@ -321,7 +328,12 @@ const M = {};
       { t: 'box', s: [0.08, 0.5, 0.7], p: [-0.3, 1.95, 0], m: 'bone', g: 'head' },
       ...Array.from({ length: 6 }, (_, i) => ({ t: 'box', s: [0.02, 0.42, 0.03], p: [-0.25, 1.95, -0.28 + i * 0.11], m: 'gunD', g: 'head' })),
     ];
-    M.sys_missile = { name: 'Missile tower', unit: 'SYS-Missile', ref: 'sys_missile', parts, pivots: { weapon: [0, 1.1, 0], head: [-0.3, 1.3, 0] }, head: { mode: 'sweep' } };
+    // firing points: the eight tube mouths (red tips), alternating pods; `back` reaches the pod's rear face
+    const c18 = Math.cos(18 * D), s18 = Math.sin(18 * D);
+    const tube = (z, dy, dz) => ({ p: [0.92 + 0.1 * c18, 1.97 + dy + 0.1 * s18, z + dz], d: [c18, s18, 0], back: 1.25 });
+    const order = [[0.15, -0.15], [0.15, 0.15], [-0.15, -0.15], [-0.15, 0.15]];
+    M.sys_missile = { name: 'Missile tower', unit: 'SYS-Missile', ref: 'sys_missile', parts, pivots: { weapon: [0, 1.1, 0], head: [-0.3, 1.3, 0] }, head: { mode: 'sweep' },
+      muzzles: order.flatMap(([dy, dz]) => [tube(0.82, dy, dz), tube(-0.82, dy, -dz)]) };
   }
 
 export const SYSTEM_MODELS = M;
