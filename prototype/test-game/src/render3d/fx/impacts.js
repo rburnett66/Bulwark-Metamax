@@ -96,7 +96,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
   let rand = prng(seed);
   const rnd = (a, b) => a + rand() * (b - a);
   const limits = { ...DEFAULT_IMPACT_CAPS, ...caps };
-  const particles = [], scorches = [], glows = [], chunks = [], wrecks = [];
+  const particles = [], scorches = [], glows = [], chunks = [], wrecks = [], spots = [];
   const freeP = [];
   let nAdd = 0, nSmoke = 0;
   let shake = 0;
@@ -318,8 +318,26 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     }
   }
 
+  /**
+   * A patch of ground left burning (the base cannon's AOE fires): flames + a smoke column for `secs`, dying down
+   * over the last third. [MM-task_mvbvpyer_x]
+   */
+  function burn(x, z, k = 0.5, secs = 4) {
+    if (spots.length >= 64) spots.shift();
+    spots.push({ x, z, k, t: 0, life: secs, group: 'body' });
+  }
+  function stepSpots(dt) {
+    for (let i = spots.length - 1; i >= 0; i--) {
+      const s = spots[i];
+      s.t += dt;
+      if (s.t >= s.life) { spots.splice(i, 1); continue; }
+      const fade = Math.min(1, 3 * (1 - s.t / s.life));
+      fxBurn(s, s.k * fade, dt);
+    }
+  }
   function step(dt) {
     if (dt <= 0) return;
+    stepSpots(dt);
     stepParticles(dt);
     stepChunks(dt);
     stepWrecks(dt);
@@ -413,7 +431,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
   function clear() {
     for (const p of particles) freeP.push(p);
     particles.length = 0; nAdd = 0; nSmoke = 0;
-    scorches.length = 0; glows.length = 0; chunks.length = 0; wrecks.length = 0;
+    scorches.length = 0; glows.length = 0; chunks.length = 0; wrecks.length = 0; spots.length = 0;
     seen.clear(); hitClock.clear(); prev.clear(); cur.clear();
     shake = 0;
   }
@@ -446,6 +464,8 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     },
     clear,
     // recipes, exposed for tests and debugging
-    fxHit, fxGround, fxExplode, boom,
+    fxHit, fxGround, fxExplode, boom, burn,
+    /** Raw emitter for other FX modules (the cannon shell's trail): emit(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty). */
+    emit,
   };
 }

@@ -1000,6 +1000,8 @@ export function boot(mountEl, seed) {
     playReplay,
     /** Debug / headless tests: send a sim command as the player would (same validation and logging). */
     submit: (cmd) => submit(cmd),
+    /** Debug / headless tests: the UI state (selection, build tool). */
+    get ui() { return ui; },
     /** Debug / headless tests: the 3D view (null under the 2D fallback). */
     get view3d() { return renderer3d; },
   };

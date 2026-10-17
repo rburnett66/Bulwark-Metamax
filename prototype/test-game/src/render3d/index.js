@@ -68,8 +68,10 @@ import { createImpactsView } from './fx/impactsView.js';
 import { createCraft3D } from './craft/craft3d.js';
 import { createLanding, landedPose, harvesterOnRamp } from './craft/landing.js';
 import { introCamera } from './craft/introCamera.js';
+import { createCannonFx, createCannonFxView } from './fx/cannonFx.js';
+import { planCoverage, createCoverageView } from './overlays/coverage.js';
 import { createResources3D } from './resources/resources3d.js';
-import { getUnitDef } from '../data/tables.js';
+import { getUnitDef, getStructureDef } from '../data/tables.js';
 
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
 
@@ -184,9 +186,11 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const impacts = createImpacts({ seed: (map.seed | 0) || 1 });
   const impactsView = createImpactsView(THREE, scene, { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
   const fogView = createFogView(THREE, scene, map);
+  const cannonFx = createCannonFx({ seed: (map.seed | 0) || 1 }), cannonFxView = createCannonFxView(THREE, scene);   // the base super-cannon
+  const coverageView = createCoverageView(THREE, scene);   // selection range + defensive coverage
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -358,10 +362,17 @@ export function renderFrame(r, state, ui, events, dt) {
   r.fxOpts.projFx = r.getProjFx();
   r.fxOpts.projScale = r.getProjScale();
   r.fx.update(state, r.map, events, dt, r.fxOpts);
+  // the base super-cannon: reticle, shell from the roof gun, touchdown blast (fx/cannonFx.js) [MM-task_mvbvpyer_x]
+  r.cannonFx.onEvents(events, r.craft ? () => r.craft.muzzleWorld() : null);
+  r.cannonFx.step(dt, r.impacts);
+  r.cannonFxView.sync(r.cannonFx, dt);
+  // selection range + coverage map (overlays/coverage.js) [MM-task_mvbry998_r]
+  r.coverageView.sync(planCoverage(state, ui, getStructureDef), dt);
   r.stats.fx = r.fxView.sync(r.fx);
   r.impacts.update(state, r.map, events, dt, views, { resolve: r.resolveModel });
   r.stats.impacts = r.impactsView.sync(r.impacts, true);
   if (r.impacts.shake > 0) { r.camera.position.x += Math.sin(r.clock * 61) * r.impacts.shake * 0.5; r.camera.position.z += Math.cos(r.clock * 47) * r.impacts.shake * 0.5; }
+  if (r.cannonFx.shake > 0) { const k = r.cannonFx.shake; r.camera.position.x += Math.sin(r.clock * 67) * k; r.camera.position.y += Math.sin(r.clock * 83 + 0.7) * k * 0.5; r.camera.position.z += Math.cos(r.clock * 53) * k; }   // cannon touchdown
   if (r.craft && r.craft.shake > 0) { const k = r.craft.shake; r.camera.position.x += Math.sin(r.clock * 73) * k; r.camera.position.y += Math.sin(r.clock * 91 + 1.3) * k * 0.6; r.camera.position.z += Math.cos(r.clock * 59) * k; }   // LC: touchdown thump
   // Ring fog (T3.4): veil outside the current wave window
   r.fogView.sync(r.fog.update(state, r.map, dt));
@@ -470,6 +481,7 @@ export function destroyRenderer(r) {
   r.pathLinesView.dispose();
   r.ghost.dispose();
   r.fxView.dispose();
+  r.cannonFxView.dispose(); r.coverageView.dispose();
   r.impactsView.dispose();
   r.fogView.dispose();
   r.scene.traverse((o) => {
