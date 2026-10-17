@@ -32,6 +32,11 @@ const SHOT_SIZE = { shell: 0.022, flak: 0.03, tracer: 0.0075 };
 function gameFxDefaults(shooter) {
   if (shooter.structId === 'STR-Cannon') return { kind: 'shell', color: 0xffd080, speed: 13, cadence: 0.55, burst: 4 };
   if (shooter.structId === 'STR-Flak') return { kind: 'flak', color: 0x9fd4ff, speed: 18, cadence: 0.35, burst: 1 };
+  // towers with a def-level render cadence (STR-Rockets / STR-Missile) — mirrors renderer.js emitCombatFx
+  const sdef = shooter.structId !== undefined ? STRUCTURES[shooter.structId] : null;
+  if (sdef && sdef.cadence) return sdef.kind === 'antiAir'
+    ? { kind: 'flak', color: 0x9fd4ff, speed: 18, cadence: sdef.cadence, burst: 1 }
+    : { kind: 'shell', color: 0xffd080, speed: 9, cadence: sdef.cadence, burst: 1 };
   // DDD-9: this was a fourth private copy of the renderer's `shape === 'Tanks' || …` triple — the tool
   // claiming to show "exactly what the game fires" while deciding it from a display name on its own.
   // Both now read the def's projectileFx through the one shared reader. A unit that fires nothing

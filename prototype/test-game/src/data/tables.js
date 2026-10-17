@@ -787,7 +787,7 @@ export const UNITS = Object.freeze({
     domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
-    hp: [360, 576, 864], dps: [50.4, 78.12, 115.92],
+    hp: [360, 576, 864], dps: [30, 46.5, 69],
     range: 3.75, speed: 0.816, vision: 4.5,
     power: 99.8, cost: [299.4, 748.5, 1497]
   }),
@@ -993,6 +993,35 @@ export const STRUCTURES = Object.freeze({
     buildTime: 0, upgradeTime: 0, sellTime: 0,
     footprint: Object.freeze({ w: 1, h: 1 }),
     triggerRadius: 0.45, blastRadius: 0.5, droneSpeed: 6, cap: 8
+  }),
+  // ROCKETS + MISSILES (owner 2026-10-16). Appended AFTER the mine so the existing palette hotkeys
+  // (1 Cannon, 2 Flak, 3 Wall, 4 Mine) don't move — these take 5 and 6. They share their kind's
+  // campaign tier group (antiGround -> 'cannon', antiAir -> 'flak') and kind-targeted heal bonuses.
+  //
+  // FIRE MODEL: tower damage is CONTINUOUS dps in the sim (combat.js applies dps*dt every tick).
+  // `cadence` (seconds between volleys) is a RENDER hint only — it tells the renderer how often to
+  // draw a launch, so "one big rocket every 2s" reads right; per-volley damage = dps * cadence.
+  // `aoeRadius` (cells) IS sim-side: every tick the tower also hits other enemy units its weapon can
+  // legally reach within aoeRadius of the primary target (structure SPLASH, combat.js).
+  'STR-Rockets': Object.freeze({
+    name: 'Rocket Tower', kind: 'antiGround',
+    armorClass: 'Structure', damageType: 'Kinetic',
+    canTargetDomains: ['Walker', 'Floater'],
+    hp: [360, 576, 864], dps: [30, 46.5, 69],
+    range: 5, cost: [300, 750, 1500],
+    buildTime: 3, upgradeTime: 4, sellTime: 1.5,
+    footprint: Object.freeze({ w: 1, h: 1 }),
+    aoeRadius: 1.2, cadence: 2.0
+  }),
+  'STR-Missile': Object.freeze({
+    name: 'Missile Tower', kind: 'antiAir',
+    armorClass: 'Structure', damageType: 'Kinetic',
+    canTargetDomains: ['Flyer'],
+    hp: [260, 416, 624], dps: [34, 52.7, 78.2],
+    range: 8, cost: [300, 750, 1500],
+    buildTime: 3, upgradeTime: 4, sellTime: 1.5,
+    footprint: Object.freeze({ w: 1, h: 1 }),
+    cadence: 1.6
   }),
   'STR-Harvestor': Object.freeze({
     // A PURCHASE, not a defense: place it on open ground and after the build time it converts into
@@ -1246,7 +1275,7 @@ export const SYSTEM_UNITS = Object.freeze({
   'SYS-Flak': Object.freeze({
     name: 'Flak Tower', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Flak Tower',
     armorClass: 'Structure', damageType: 'Kinetic', targets: 'Air',
-    hp: [360, 576, 864], dps: [40, 62, 92], range: 5.5, speed: 0, power: 0, cost: [300, 750, 1500]
+    hp: [360, 576, 864], dps: [30, 46.5, 69], range: 5.5, speed: 0, power: 0, cost: [300, 750, 1500]
   }),
   'SYS-Wall': Object.freeze({
     name: 'Wall', kind: 'structure', faction: 'System', domain: 'Structure', render_tier: 'A', role: 'Wall',
@@ -1312,6 +1341,10 @@ export const BONUS_NERFS = Object.freeze({
   baseCannonPowerMult: 0.50,    // base super-cannon damage −50% (bonus 14)
   startTierCap: 2,              // turrets AND walls start capped at T2 (bonuses 15/16 unlock T3)
 });
+// HARVESTER UNLOAD (owner 2026-10-16): a truck arriving home with cargo stays DOCKED this long while
+// the load comes off; gold is credited (the 'deposit' event) only when the timer completes. Seconds,
+// converted to whole sim ticks in harvest.js (deterministic — no wall clock).
+export const HARVESTER_UNLOAD_TIME = 3.0;
 export const BONUSES = Object.freeze([
   Object.freeze({ id: 'dmg_air',      label: '+10% damage vs air',      kind: 'dmgMod',    target: 'air',    mag: 0.10 }),
   Object.freeze({ id: 'dmg_ground',   label: '+10% damage vs ground',   kind: 'dmgMod',    target: 'ground', mag: 0.10 }),

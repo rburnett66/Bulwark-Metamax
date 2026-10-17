@@ -43,6 +43,8 @@ export const GAUNTLET_DEFENSES = Object.freeze([
   Object.freeze({ key: 'flak1', structId: 'STR-Flak', tier: 1, label: 'Flak T1' }),
   Object.freeze({ key: 'flak2', structId: 'STR-Flak', tier: 2, label: 'Flak T2' }),
   Object.freeze({ key: 'flak3', structId: 'STR-Flak', tier: 3, label: 'Flak T3' }),
+  Object.freeze({ key: 'rockets1', structId: 'STR-Rockets', tier: 1, label: 'Rockets T1' }),
+  Object.freeze({ key: 'missile1', structId: 'STR-Missile', tier: 1, label: 'Missile T1' }),
   Object.freeze({ key: 'mine', mine: true, label: 'Land mine (M0)' }),
 ]);
 
