@@ -19,7 +19,38 @@ import { K } from './impacts.js';
 const prng = (seed) => { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 export const CANNON_FX = Object.freeze({ apex: 1.6, apexPerCell: 0.32, fires: [10, 20], boom: 1.7, shake: 0.32, muzzleY: 0.9 });
 
-export function createCannonFx({ seed = 1 } = {}) {
+/**
+ * Each base fires its own weapon (owner 2026-10-16: "the weapon system is different for different bases players
+ * can unlock"). The craft's roof weapon picks the LOOK of the base's heavy shot; the sim's damage, radius and timing
+ * are the same for all — every style lands its main blast exactly at the sim's impact time.
+ *   shell  — one heavy shell on a high arc (cannon)          rail   — a flat, fast cyan slug (railgun)
+ *   mortar — one shell on a steep lob                        rockets — a staggered salvo of 6 rockets, spread
+ *   missiles — 4 missiles weaving in on curving paths        gatling — a stream of tracers raking the area
+ *   energy — a violet energy orb (shield crafts)
+ */
+export const BASE_STYLES = Object.freeze({
+  shell: { n: 1, apexK: 1, color: 0xfff2c0, halo: 0xff9a30, size: 1 },
+  rail: { n: 1, apexK: 0.25, color: 0xd8fbff, halo: 0x46e0ff, size: 0.8 },
+  mortar: { n: 1, apexK: 2.1, color: 0xfff2c0, halo: 0xff9a30, size: 1.1 },
+  rockets: { n: 6, apexK: 0.7, color: 0xfff0d0, halo: 0xff7a30, size: 0.6, spread: 0.6, stagger: 0.07 },
+  missiles: { n: 4, apexK: 0.9, color: 0xffffff, halo: 0x9fd4ff, size: 0.55, spread: 0.45, stagger: 0.1, weave: 1.2 },
+  gatling: { n: 14, apexK: 0.08, color: 0xffe6a0, halo: 0xffb050, size: 0.35, spread: 0.8, stagger: 0.05, fast: 1 },
+  energy: { n: 1, apexK: 0.6, color: 0xf2e0ff, halo: 0xb070ff, size: 1.2 },
+});
+/** Craft weaponType (craft/models.js) → base shot style. */
+export function baseStyleFor(weaponType = '') {
+  const w = String(weaponType).toLowerCase();
+  if (w.includes('railgun')) return 'rail';
+  if (w.includes('rocket')) return 'rockets';
+  if (w.includes('missile')) return 'missiles';
+  if (w.includes('mortar')) return 'mortar';
+  if (w.includes('troop') || w.includes('gun ')) return 'gatling';
+  if (w.includes('shield')) return 'energy';
+  return 'shell';
+}
+
+export function createCannonFx({ seed = 1, style = 'shell' } = {}) {
+  const S = BASE_STYLES[style] || BASE_STYLES.shell;
   const rand = prng(seed);
   const rnd = (a, b) => a + rand() * (b - a);
   const reticles = [], shells = [], landed = [];
@@ -36,8 +67,16 @@ export function createCannonFx({ seed = 1 } = {}) {
         } else if (ev.type === 'cannonShot' && ev.from && ev.to) {
           const m = (muzzle && muzzle()) || { x: cellToWorld(ev.from.x), y: CANNON_FX.muzzleY, z: cellToWorld(ev.from.y) };
           const tx = cellToWorld(ev.to.x), tz = cellToWorld(ev.to.y), d = Math.hypot(tx - m.x, tz - m.z);
-          shells.push({ fx: m.x, fy: m.y, fz: m.z, tx, tz, t: 0, dur: ev.dur || 1.6, r: ev.radius || 2.5, apex: CANNON_FX.apex + CANNON_FX.apexPerCell * d,
-            x: m.x, y: m.y, z: m.z, vx: 0, vy: 0, vz: 0 });
+          const dur = ev.dur || 1.6, r = ev.radius || 2.5;
+          for (let k = 0; k < S.n; k++) {
+            // the MAIN round (k = 0) lands exactly at the sim's impact; salvo rounds launch staggered, spread over the disk
+            const main = k === 0, start = main ? 0 : k * (S.stagger || 0);
+            const a = rand() * Math.PI * 2, rr = main ? 0 : Math.sqrt(rand()) * r * (S.spread || 0);
+            shells.push({ fx: m.x + (main ? 0 : (rand() - 0.5) * 0.25), fy: m.y, fz: m.z + (main ? 0 : (rand() - 0.5) * 0.25),
+              tx: tx + Math.cos(a) * rr, tz: tz + Math.sin(a) * rr, t: -start, dur: main ? dur : Math.max(0.25, dur - start + (rand() - 0.5) * 0.2),
+              r, main, apex: (CANNON_FX.apex + CANNON_FX.apexPerCell * d) * S.apexK * (main ? 1 : 0.8 + rand() * 0.4),
+              weave: S.weave ? (rand() - 0.5) * 2 * S.weave : 0, x: m.x, y: m.y, z: m.z, vx: 0, vy: 0, vz: 0, live: main });
+          }
         }
       }
     },
@@ -48,8 +87,12 @@ export function createCannonFx({ seed = 1 } = {}) {
       for (let i = shells.length - 1; i >= 0; i--) {
         const s = shells[i];
         s.t += dt;
+        if (s.t < 0) continue;                        // a salvo round still waiting on its rail
+        s.live = true;
         const u = Math.min(1, s.t / s.dur);
-        const nx = s.fx + (s.tx - s.fx) * u, nz = s.fz + (s.tz - s.fz) * u, ny = s.fy * (1 - u) + s.apex * 4 * u * (1 - u);
+        // missiles weave: a sideways sine across the path that dies out at the target
+        const px = -(s.tz - s.fz), pz = s.tx - s.fx, pl = Math.hypot(px, pz) || 1, wv = s.weave * Math.sin(u * Math.PI);
+        const nx = s.fx + (s.tx - s.fx) * u + (px / pl) * wv, nz = s.fz + (s.tz - s.fz) * u + (pz / pl) * wv, ny = s.fy * (1 - u) + s.apex * 4 * u * (1 - u);
         if (dt > 0) { s.vx = (nx - s.x) / dt; s.vy = (ny - s.y) / dt; s.vz = (nz - s.z) / dt; }
         s.x = nx; s.y = ny; s.z = nz;
         if (impacts && impacts.emit && dt > 0) {   // fire and smoke streaming off the shell
@@ -58,6 +101,10 @@ export function createCannonFx({ seed = 1 } = {}) {
         }
         if (u < 1) continue;
         shells.splice(i, 1);
+        if (!s.main) {                                // a salvo round: its own small hit; the main round carries the AOE
+          if (impacts) { if (S.fast) { if (impacts.fxGround) impacts.fxGround(s.tx, s.tz); } else impacts.boom(s.tx, s.tz, 0.5, false); }
+          continue;
+        }
         landed.push({ x: s.tx, z: s.tz, r: s.r });
         if (impacts) {
           impacts.boom(s.tx, s.tz, CANNON_FX.boom * (s.r / 2.5), true);
@@ -77,11 +124,13 @@ export function createCannonFx({ seed = 1 } = {}) {
       shake = Math.max(0, shake - dt * 0.9);
     },
     clear() { reticles.length = 0; shells.length = 0; landed.length = 0; shake = 0; },
+    style: S,
   };
 }
 
 /** Draws reticles (ground decals: fill + ring + cross, pulsing) and shells (glowing core + halo + ground shadow). */
-export function createCannonFxView(THREE, scene, { cap = 4 } = {}) {
+export function createCannonFxView(THREE, scene, { cap = 16, style = 'shell' } = {}) {
+  const ST = BASE_STYLES[style] || BASE_STYLES.shell;
   const group = new THREE.Group(); group.name = 'cannon-fx'; scene.add(group);
   const retMat = () => new THREE.ShaderMaterial({
     uniforms: { uT: { value: 0 }, uA: { value: 1 } },
@@ -106,12 +155,12 @@ export function createCannonFxView(THREE, scene, { cap = 4 } = {}) {
     m.position.y = 0.05; m.renderOrder = 6; m.visible = false; group.add(m); return m;
   });
   const coreG = new THREE.SphereGeometry(1, 10, 8), haloG = new THREE.SphereGeometry(1, 10, 8), shadowG = new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2);
-  const coreM = new THREE.MeshBasicMaterial({ color: 0xfff2c0 });
-  const haloM = new THREE.MeshBasicMaterial({ color: 0xff9a30, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false });
+  const coreM = new THREE.MeshBasicMaterial({ color: ST.color });
+  const haloM = new THREE.MeshBasicMaterial({ color: ST.halo, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
   const shadowM = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
   const shells = Array.from({ length: cap }, () => {
     const core = new THREE.Mesh(coreG, coreM), halo = new THREE.Mesh(haloG, haloM), shadow = new THREE.Mesh(shadowG, shadowM);
-    core.scale.setScalar(0.11); halo.scale.setScalar(0.26); halo.renderOrder = 7; shadow.renderOrder = 5;
+    core.scale.setScalar(0.11 * ST.size); halo.scale.setScalar(0.26 * ST.size); halo.renderOrder = 7; shadow.renderOrder = 5;
     core.visible = halo.visible = shadow.visible = false; group.add(core, halo, shadow); return { core, halo, shadow };
   });
   let clock = 0;
@@ -126,12 +175,13 @@ export function createCannonFxView(THREE, scene, { cap = 4 } = {}) {
         m.material.uniforms.uT.value = clock + i * 0.37;
         m.material.uniforms.uA.value = Math.min(1, r.t * 4);
       });
+      const live = model.shells.filter((q) => q.live);
       shells.forEach((v, i) => {
-        const s = model.shells[i];
+        const s = live[i];
         v.core.visible = v.halo.visible = v.shadow.visible = !!s;
         if (!s) return;
         v.core.position.set(s.x, s.y, s.z); v.halo.position.set(s.x, s.y, s.z);
-        v.halo.scale.setScalar(0.24 + 0.05 * Math.sin(clock * 40 + i));
+        v.halo.scale.setScalar((0.24 + 0.05 * Math.sin(clock * 40 + i)) * ST.size);
         v.shadow.position.set(s.x, 0.04, s.z);
         const h = Math.max(0, s.y); v.shadow.scale.setScalar(0.14 + h * 0.05); v.shadow.material.opacity = Math.max(0.08, 0.4 - h * 0.05);
       });

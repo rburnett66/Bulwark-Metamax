@@ -28,3 +28,25 @@ test('aim shows a reticle at the blast radius; the shell arcs from the muzzle an
   assert.equal(fx.reticles.length, 0, 'the reticle goes with the shell');
   assert.ok(fx.shake > 0, 'a camera thump');
 });
+
+test('each base fires its own weapon look; the main round always lands at the sim impact time', async () => {
+  const { baseStyleFor, BASE_STYLES } = await import('./cannonFx.js');
+  assert.equal(baseStyleFor('rocket launcher'), 'rockets');
+  assert.equal(baseStyleFor('anti-aircraft missiles'), 'missiles');
+  assert.equal(baseStyleFor('mortar'), 'mortar');
+  assert.equal(baseStyleFor('cannon (railgun)'), 'rail');
+  assert.equal(baseStyleFor('anti-troop gun'), 'gatling');
+  assert.equal(baseStyleFor('shield'), 'energy');
+  assert.equal(baseStyleFor('cannon'), 'shell');
+  for (const style of Object.keys(BASE_STYLES)) {
+    const fx = createCannonFx({ seed: 3, style });
+    const booms = [];
+    const impacts = { boom: (x, z, k, f) => booms.push({ k, f, t }), burn: () => {}, emit: () => {}, fxGround: () => {} };
+    fx.onEvents([{ type: 'cannonShot', from: { x: 10, y: 8 }, to: { x: 20, y: 8 }, dur: 1.6, radius: 2.5 }], null);
+    assert.equal(fx.shells.length, BASE_STYLES[style].n, `${style}: rounds`);
+    var t = 0, mainAt = null;
+    for (; t < 2.4; t += 1 / 60) { fx.step(1 / 60, impacts); if (mainAt === null && booms.some((b) => b.f)) mainAt = t; }
+    assert.ok(mainAt !== null && Math.abs(mainAt - 1.6) < 0.05, `${style}: main blast at the sim impact (${mainAt && mainAt.toFixed(2)})`);
+    assert.equal(fx.shells.length, 0, `${style}: all rounds landed`);
+  }
+});

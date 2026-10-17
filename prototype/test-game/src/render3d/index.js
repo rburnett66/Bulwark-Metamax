@@ -63,13 +63,16 @@ import { createPathLinesView } from './overlays/pathLines.js';
 import { buildUnitViews, createModelResolver } from './units/unitViews.js';
 import { createCombatFx } from './fx/combatFxModel.js';
 import { createCombatFxView } from './fx/combatFx.js';
-import { createImpacts } from './fx/impacts.js';
+import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createImpactsView } from './fx/impactsView.js';
 import { createCraft3D } from './craft/craft3d.js';
 import { createLanding, landedPose, harvesterOnRamp } from './craft/landing.js';
 import { introCamera } from './craft/introCamera.js';
-import { createCannonFx, createCannonFxView } from './fx/cannonFx.js';
+import { createCannonFx, createCannonFxView, baseStyleFor } from './fx/cannonFx.js';
 import { planCoverage, createCoverageView } from './overlays/coverage.js';
+import { createHealthBarView } from './overlays/healthBars.js';
+import { createGoldPopups, createGoldPopupView } from './overlays/goldPopups.js';
+import { createUnloads, createUnloadView } from './overlays/unloadFx.js';
 import { createResources3D } from './resources/resources3d.js';
 import { getUnitDef, getStructureDef } from '../data/tables.js';
 
@@ -186,11 +189,15 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const impacts = createImpacts({ seed: (map.seed | 0) || 1 });
   const impactsView = createImpactsView(THREE, scene, { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
   const fogView = createFogView(THREE, scene, map);
-  const cannonFx = createCannonFx({ seed: (map.seed | 0) || 1 }), cannonFxView = createCannonFxView(THREE, scene);   // the base super-cannon
+  const baseStyle = baseStyleFor(craft && craft.def && craft.def.weaponType);   // each base fires its own weapon's look
+  const cannonFx = createCannonFx({ seed: (map.seed | 0) || 1, style: baseStyle }), cannonFxView = createCannonFxView(THREE, scene, { style: baseStyle });   // the base super-cannon
   const coverageView = createCoverageView(THREE, scene);   // selection range + defensive coverage
+  const healthBars = createHealthBarView(THREE, scene);      // units, damaged towers, the base once hit
+  const gold = createGoldPopups(), goldView = createGoldPopupView(host);   // "$N" per kill / delivery
+  const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -200,7 +207,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     status: 'loading',
     problems: [],
     stats: { calls: 0, triangles: 0, units: 0, lines: 0, fx: 0, impacts: null },
-    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1 },
+    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1, trail: null, boom: null },
     getProjFx: typeof opts.projFx === 'function' ? opts.projFx : () => opts.projFx || null,
     getProjScale: typeof opts.projScale === 'function' ? opts.projScale : () => opts.projScale || 1,
     destroyed: false,
@@ -208,6 +215,22 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     lowpoly,
     roadMask: null,
   };
+  // missiles / rockets leave smoke and exhaust through the world-impact particles; rocket hits boom on the ground
+  // [MM-task_mvbyf6t8_z]
+  let trailSeed = 1;
+  const jit = () => { trailSeed = (trailSeed * 16807) % 2147483647; return trailSeed / 2147483647 - 0.5; };
+  r.fxOpts.trail = (kind, x, y, z, k = 1) => {
+    const I = r.impacts;
+    if (kind === 'burst') {
+      for (let i = 0; i < 10; i++) { const a = i * 0.628 + jit(); I.emit(FXK.SPARK, x, y, z, Math.cos(a) * 3.2 * k, jit() * 2.5, Math.sin(a) * 3.2 * k, 0.35, 0.022); }
+      I.emit(FXK.SMOKE, x, y, z, 0, 0.15, 0, 1.1, 0.14 * k, 0.6, 0.6);
+      I.emit(FXK.FLASH, x, y, z, 0, 0, 0, 0.12, 0.55 * k);
+      return;
+    }
+    I.emit(FXK.SMOKE, x, y, z, jit() * 0.15, 0.12 + jit() * 0.1, jit() * 0.15, kind === 'rocket' ? 0.9 : 0.7, 0.045 * k, 0.32, 0.75);
+    I.emit(FXK.FIRE, x, y, z, 0, 0, 0, 0.09, 0.07 * k, -0.4);
+  };
+  r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
   attachCameraInput(canvas, r);
 
   // The baked level: content/maps/baked/<slug>/ — checked against the sim's map; its road mask paints the
@@ -370,6 +393,11 @@ export function renderFrame(r, state, ui, events, dt) {
   r.coverageView.sync(planCoverage(state, ui, getStructureDef), dt);
   r.stats.fx = r.fxView.sync(r.fx);
   r.impacts.update(state, r.map, events, dt, views, { resolve: r.resolveModel });
+  // health bars + "$N" pop-ups (overlays/) [MM-task_mvbry87f_q] [MM-task_mvbyf6t8_z]
+  r.healthBars.update(state, views, dt, { baseCell: r.map.base });
+  r.gold.feed(events, r.map); r.gold.step(Math.max(0, Math.min(0.1, dt || 0)));
+  r.unloads.feed(events, state); r.unloads.step(Math.max(0, Math.min(0.1, dt || 0)), state);
+  r.unloadView.sync(r.unloads, Math.max(0, Math.min(0.1, dt || 0)), r.impacts, FXK, r.map.base);
   r.stats.impacts = r.impactsView.sync(r.impacts, true);
   if (r.impacts.shake > 0) { r.camera.position.x += Math.sin(r.clock * 61) * r.impacts.shake * 0.5; r.camera.position.z += Math.cos(r.clock * 47) * r.impacts.shake * 0.5; }
   if (r.cannonFx.shake > 0) { const k = r.cannonFx.shake; r.camera.position.x += Math.sin(r.clock * 67) * k; r.camera.position.y += Math.sin(r.clock * 83 + 0.7) * k * 0.5; r.camera.position.z += Math.cos(r.clock * 53) * k; }   // cannon touchdown
@@ -381,6 +409,7 @@ export function renderFrame(r, state, ui, events, dt) {
 
   r.renderer.info.reset();
   r.renderer.render(r.scene, r.camera);
+  r.goldView.sync(r.gold, r.camera, r._w || 1, r._h || 1, r.THREE);   // DOM labels follow the final (shaken) camera
   r.stats.calls = r.renderer.info.render.calls;
   r.stats.triangles = r.renderer.info.render.triangles;
 }
@@ -481,7 +510,7 @@ export function destroyRenderer(r) {
   r.pathLinesView.dispose();
   r.ghost.dispose();
   r.fxView.dispose();
-  r.cannonFxView.dispose(); r.coverageView.dispose();
+  r.cannonFxView.dispose(); r.coverageView.dispose(); r.healthBars.dispose(); r.goldView.dispose(); r.unloadView.dispose();
   r.impactsView.dispose();
   r.fogView.dispose();
   r.scene.traverse((o) => {

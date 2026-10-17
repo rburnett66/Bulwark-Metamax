@@ -34,18 +34,19 @@ function run(fx, st, secs, step = 1 / 60, events = []) {
   }
 }
 
-test('an anti-ground tower fires its 4-round burst from tower height at the target', () => {
+test('an anti-ground tower fires its burst from its barrel tip at the target', () => {
   const fx = createCombatFx();
   const st = world({ units: [tank()], structures: [tower()] });
   fx.update(st, MAP, [], 1 / 60, { getDef });
   assert.equal(fx.shots.length, 1, 'first round leaves at once');
   const s = fx.shots[0];
-  assert.equal(s.y, MUZZLE.structure);
+  assert.equal(s.y, MUZZLE.antiGround);
+  assert.ok(s.x > 4.5 + MUZZLE.barrel - 1e-9 - 0.01, 'leaves the barrel tip, toward the target');
   assert.equal(s.color, RECIPES.antiGround.color);
   assert.ok(s.dx > 0.99, 'flies east toward the tank');
   run(fx, st, 0.25);
-  // 4 rounds launched in all; the first may already have landed (6 cells at 13 cells/s ≈ 0.46 s — not yet)
-  assert.equal(fx.shots.length, 4);
+  // the whole burst launched; the first may already have landed
+  assert.ok(fx.launched === RECIPES.antiGround.burst, `burst of ${RECIPES.antiGround.burst}`);
   for (const r of fx.shots) assert.ok(Math.abs(r.tz - 4.5) <= 0.16 + 1e-9 && Math.abs(r.tx - 10.5) <= 0.16 + 1e-9, 'jitter within the spread');
 });
 
@@ -69,24 +70,39 @@ test('shots fly at recipe speed and arrive as a hit flash at the target height',
   assert.ok(hits.every((f) => f.y === AIM.ground));
 });
 
-test('flak climbs to a plane and bursts there', () => {
+test('anti-air fires homing missiles that climb off the rail, chase a moving flyer and airburst on it', () => {
   const fx = createCombatFx();
-  const st = world({
-    units: [{ id: 7, unitId: 'jet', domain: 'Flyer', altitude: 1, pos: { x: 6, y: 4 } }],
-    structures: [tower({ kind: 'antiAir', targetId: 7 })],
-  });
-  fx.update(st, MAP, [], 0, { getDef });
+  const jet = { id: 7, unitId: 'jet', domain: 'Flyer', altitude: 1, hp: 50, pos: { x: 6, y: 4 } };
+  const st = world({ units: [jet], structures: [tower({ kind: 'antiAir', targetId: 7 })] });
+  const trails = [];
+  const opts = { getDef, trail: (k) => trails.push(k) };
+  fx.update(st, MAP, [], 0, opts);
   const s = fx.shots[0];
-  assert.equal(s.kind, 'flak');
-  assert.ok(s.dy > 0, 'climbing');
-  assert.equal(s.ty, HOVER_HEIGHT);
+  assert.equal(s.kind, 'missile');
+  assert.ok(s.vy > 0, 'climbing off the rail');
   st.structures.get(100).targetId = null;
-  let burst = false;
-  for (let i = 0; i < 30; i++) {
-    fx.update(st, MAP, [], 1 / 60, { getDef });
-    burst = burst || fx.flashes.some((f) => f.color === FLASH.flak.color && f.y === HOVER_HEIGHT);
+  let burst = null;
+  for (let i = 0; i < 120 && !burst; i++) {
+    jet.pos.y += 0.03;                                       // the target is moving
+    fx.update(st, MAP, [], 1 / 60, opts);
+    burst = fx.flashes.find((f) => f.color === FLASH.airburst.color) || null;
   }
-  assert.ok(burst);
+  assert.ok(burst, 'it catches the target');
+  assert.ok(Math.abs(burst.z - (jet.pos.y + 0.5)) < 0.4, `bursts on the moving target (z ${burst.z.toFixed(2)} vs ${(jet.pos.y + 0.5).toFixed(2)})`);
+  assert.ok(Math.abs(burst.y - HOVER_HEIGHT) < 0.01);
+  assert.ok(trails.filter((k) => k === 'missile').length > 5, 'a smoke trail');
+});
+
+test('a rocket tower lobs a salvo; each rocket lands with a small ground explosion', () => {
+  const fx = createCombatFx();
+  const booms = [];
+  const st = world({ units: [tank()], structures: [tower({ structId: 'STR-Rockets' })] });
+  const opts = { getDef, boom: (x, z, k) => booms.push({ x, z, k }), trail: () => {} };
+  let peak = 0;
+  for (let i = 0; i < 120; i++) { st.time = (st.time || 0) + 1 / 60; fx.update(st, MAP, [], 1 / 60, opts); for (const r of fx.shots) if (r.kind === 'rocket') peak = Math.max(peak, r.y); }
+  assert.ok(peak > 1, `arcs (${peak.toFixed(2)})`);
+  assert.ok(booms.length >= 2, `salvo lands (${booms.length})`);
+  for (const b of booms) assert.ok(Math.abs(b.x - 10.5) < 0.6, 'around the target');
 });
 
 test('cadence: no second volley before the shooter is ready', () => {

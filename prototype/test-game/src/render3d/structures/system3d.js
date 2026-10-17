@@ -23,7 +23,10 @@ import { lifecycleLook, yawToward } from './models.js';
 
 /** Sim structure kind → System model. Kinds not listed stay with structures/lowpoly.js. */
 export const SYSTEM_KINDS = Object.freeze({ antiGround: 'sys_cannon', antiAir: 'sys_flak', wall: 'sys_wall' });
-export const SYSTEM_CAP = Object.freeze({ sys_cannon: 200, sys_flak: 200, sys_wall: 1200 });
+/** Tower types with their own model (the new towers share a kind with cannon / flak). */
+export const SYSTEM_STRUCTS = Object.freeze({ 'STR-Rockets': 'sys_rockets', 'STR-Missile': 'sys_missile' });
+export const SYSTEM_CAP = Object.freeze({ sys_cannon: 200, sys_flak: 200, sys_wall: 1200, sys_rockets: 120, sys_missile: 120 });
+const modelOf = (s) => SYSTEM_STRUCTS[s.structId] || SYSTEM_KINDS[s.kind];
 const TURN = 5;   // rad/s a turret slews at
 
 /** Merge a System def into one vertex-coloured geometry per group: { body, weapon?, head? } → { geo, pivot, tris }. */
@@ -61,13 +64,13 @@ export function mergeSystemModel(THREE, def, prims = createPrims(THREE)) {
  */
 export function planSystem(list, base = null) {
   const items = [], sig = [];
-  const live = (list || []).filter((s) => s && s.lifecycle !== 'Destroyed' && SYSTEM_KINDS[s.kind]);
+  const live = (list || []).filter((s) => s && s.lifecycle !== 'Destroyed' && modelOf(s));
   const cellOf = (s) => { const c = s.cell || s.pos; return { x: Math.floor(c.x), y: Math.floor(c.y) }; };
   const walls = new Set(live.filter((s) => s.kind === 'wall').map((s) => { const c = cellOf(s); return `${c.x},${c.y}`; }));
   const bx = base ? base.x + 0.5 : null, bz = base ? base.y + 0.5 : null;
   for (const s of live) {
     const c = cellOf(s), w = (s.footprint && s.footprint.w) || 1, h = (s.footprint && s.footprint.h) || 1;
-    const x = c.x + w / 2, z = c.y + h / 2, look = lifecycleLook(s), model = SYSTEM_KINDS[s.kind];
+    const x = c.x + w / 2, z = c.y + h / 2, look = lifecycleLook(s), model = modelOf(s);
     sig.push(`${s.id}:${s.kind}@${c.x},${c.y}:${look.key}`);
     if (model === 'sys_wall') {
       const ns = walls.has(`${c.x},${c.y - 1}`) || walls.has(`${c.x},${c.y + 1}`), ew = walls.has(`${c.x - 1},${c.y}`) || walls.has(`${c.x + 1},${c.y}`);

@@ -21,7 +21,7 @@ import { BASE_TARGET_ID } from '../../sim/combat.js';
 import { shotFxFor } from '../../render/unitFx.js';
 
 /** Heights (cells) a shot leaves from and arrives at. Structures are 1-cell blocks (markers.js). */
-export const MUZZLE = Object.freeze({ ground: 0.35, structure: 0.85 });
+export const MUZZLE = Object.freeze({ ground: 0.35, structure: 0.85, antiGround: 0.6, antiAir: 0.5, barrel: 0.42 });
 export const AIM = Object.freeze({ ground: 0.3, structure: 0.5, base: 0.6 });
 
 /**
@@ -29,15 +29,26 @@ export const AIM = Object.freeze({ ground: 0.3, structure: 0.5, base: 0.6 });
  * its streak length in cells — the 3D equivalents of the Pixi SHOT_SIZE dot + 48 px streak.
  */
 export const RECIPES = Object.freeze({
-  antiGround: Object.freeze({ kind: 'shell', cadence: 0.55, speed: 13, color: 0xffd080, burst: 4 }),
-  antiAir: Object.freeze({ kind: 'flak', cadence: 0.35, speed: 18, color: 0x9fd4ff, burst: 1 }),
-  unit: Object.freeze({ cadence: 0.6, speed: 15, attacker: 0xff9a70, defender: 0xbfe8ff, burst: 1 }),
+  // [MM-task_mvbyf6t8_z] tightened: faster, smaller hot rounds that leave the barrel tip; anti-air fires HOMING
+  // MISSILES (visual — the sim's damage and cadence are unchanged); rocket towers fire arcing AOE salvos
+  antiGround: Object.freeze({ kind: 'shell', cadence: 0.55, speed: 21, color: 0xffd080, burst: 3 }),
+  antiAir: Object.freeze({ kind: 'missile', cadence: 0.6, speed: 9, color: 0xbfe6ff, burst: 2 }),
+  unit: Object.freeze({ cadence: 0.6, speed: 22, attacker: 0xff9a70, defender: 0xbfe8ff, burst: 1 }),
+});
+/** Per tower type overrides of the kind recipe (the new towers). */
+export const STRUCT_RECIPES = Object.freeze({
+  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: 1.4, speed: 8, color: 0xffb070, burst: 4 }),
+  'STR-Missile': Object.freeze({ kind: 'missile', cadence: 1.1, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
 });
 export const SHOT_LOOK = Object.freeze({   // Pixi at ~35 px/cell: shell dot 12 px + 33 px streak, flak 17 px, tracer 4 px + 11 px
-  shell: Object.freeze({ size: 0.36, len: 0.95 }),
-  flak: Object.freeze({ size: 0.48, len: 0.7 }),
-  tracer: Object.freeze({ size: 0.14, len: 0.35 }),
+  shell: Object.freeze({ size: 0.24, len: 0.62 }),
+  flak: Object.freeze({ size: 0.4, len: 0.55 }),
+  tracer: Object.freeze({ size: 0.11, len: 0.42 }),
+  missile: Object.freeze({ size: 0.2, len: 0.32 }),
+  rocket: Object.freeze({ size: 0.24, len: 0.4 }),
 });
+/** Homing + arc flight (cells, s): missiles climb off the rail, then turn onto the target; rockets lob. */
+export const FLIGHT = Object.freeze({ turn: 7.5, accel: 16, maxSpeed: 19, climb: 2.2, rocketApex: 0.9, rocketApexPerCell: 0.12, hitR: 0.22 });
 const BURST_GAP = 0.07;      // s between burst rounds (sim clock)
 const BURST_SPREAD = 0.16;   // cells of impact jitter for burst rounds
 
@@ -52,6 +63,8 @@ export const FLASH = Object.freeze({
   cannonMuzzle: Object.freeze({ size: 1.2, ttl: 0.25, color: 0xfff0b0 }),
   cannonBlast: Object.freeze({ size: 5.0, ttl: 0.5, color: 0xffb060 }),
   deposit: Object.freeze({ size: 1.7, ttl: 0.35, color: 0xffd76a }),
+  airburst: Object.freeze({ size: 1.3, ttl: 0.24, color: 0xcfe8ff }),
+  rocketHit: Object.freeze({ size: 1.5, ttl: 0.3, color: 0xffb060 }),
 });
 const DEPOSIT_COLORS = Object.freeze({ blue: 0x58a6ff, yellow: 0xffd76a, red: 0xff6a6a, green: 0x7be08a });
 
@@ -121,7 +134,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     flashes.push(f);
   }
 
-  function launch(from, to, look) {
+  function launch(from, to, look, tid = null) {
     if (shots.length >= limits.maxShots) return;
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
     const dist = Math.hypot(dx, dy, dz);
@@ -132,28 +145,38 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     s.dx = dx / dist; s.dy = dy / dist; s.dz = dz / dist;
     s.left = dist; s.speed = look.speed;
     s.kind = look.kind; s.size = look.size; s.len = look.len; s.color = look.color;
+    s.tid = tid; s.t = 0; s.big = look.big || 0;
+    if (s.kind === 'missile') {
+      // off the rail: up and slightly out, then the seeker takes over
+      const h = Math.hypot(dx, dz) || 1, side = (rand() - 0.5) * 1.4;
+      s.vx = (dx / h) * 2.5 - (dz / h) * side; s.vy = FLIGHT.climb + rand() * 0.8; s.vz = (dz / h) * 2.5 + (dx / h) * side;
+      s.spd = Math.hypot(s.vx, s.vy, s.vz);
+    } else if (s.kind === 'rocket') {
+      s.fx = from.x; s.fy = from.y; s.fz = from.z; s.dur = Math.max(0.35, dist / look.speed); s.apex = FLIGHT.rocketApex + FLIGHT.rocketApexPerCell * dist;
+    }
     shots.push(s);
     launched++;
     flash(from.x, from.y, from.z, FLASH.muzzle, look.color, Math.min(1.6, look.size / SHOT_LOOK.shell.size));
   }
 
   /** One shooter's turn: fire when its cadence allows, as a burst of `burst` rounds. */
-  function fire(key, now, from, to, look, burst, cadence) {
+  function fire(key, now, from, to, look, burst, cadence, tid = null) {
     if (now < (clock.get(key) || 0)) return;
     clock.set(key, now + cadence * (0.85 + rand() * 0.3));
+    const gap = look.kind === 'missile' || look.kind === 'rocket' ? 0.12 : BURST_GAP;
     for (let k = 0; k < burst; k++) {
-      const j = burst > 1 ? BURST_SPREAD : 0;
+      const j = burst > 1 ? (look.kind === 'rocket' ? 0.45 : BURST_SPREAD) : 0;
       const aim = { x: to.x + (rand() * 2 - 1) * j, y: to.y, z: to.z + (rand() * 2 - 1) * j };
-      if (k === 0) launch(from, aim, look);
-      else queue.push({ at: now + k * BURST_GAP, from: { x: from.x, y: from.y, z: from.z }, to: aim, look });
+      if (k === 0) launch(from, aim, look, tid);
+      else queue.push({ at: now + k * gap, from: { x: from.x, y: from.y, z: from.z }, to: aim, look, tid });
     }
   }
 
-  function lookFor(entry, base, kind, color, scale) {
+  function lookFor(entry, base, kind, color, scale, big = 0) {
     const k = (entry && entry.kind) || kind;
     const L = SHOT_LOOK[k] || SHOT_LOOK.tracer;
     return {
-      kind: k,
+      kind: k, big: big || 0,
       speed: (entry && entry.speed) || base.speed,
       color: entry && entry.color !== undefined ? entry.color : color,
       size: L.size * ((entry && entry.size) || 1) * scale,
@@ -171,7 +194,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     for (let i = queue.length - 1; i >= 0; i--) {
       const q = queue[i];
       if (now < q.at) continue;
-      launch(q.from, q.to, q.look);
+      launch(q.from, q.to, q.look, q.tid);
       queue[i] = queue[queue.length - 1]; queue.pop();
     }
 
@@ -179,14 +202,17 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       for (const st of state.structures.values()) {
         if (!st || !st.pos || st.targetId === null || st.targetId === undefined) continue;
         if (st.lifecycle !== 'Complete' && st.lifecycle !== 'Damaged') continue;
-        const base = RECIPES[st.kind];
+        const base = STRUCT_RECIPES[st.structId] || RECIPES[st.kind];
         if (!base) continue;
         const to = aimPoint(state, map, st.targetId);
         if (!to) continue;
         const fp = st.footprint || {};
-        const from = { x: cellToWorld(st.pos.x + ((fp.w || 1) - 1) / 2), y: MUZZLE.structure, z: cellToWorld(st.pos.y + ((fp.h || 1) - 1) / 2) };
+        const cx = cellToWorld(st.pos.x + ((fp.w || 1) - 1) / 2), cz = cellToWorld(st.pos.y + ((fp.h || 1) - 1) / 2);
+        // the round leaves the barrel tip (System turrets turn to the target), not the tower's centre
+        const hx = to.x - cx, hz = to.z - cz, hl = Math.hypot(hx, hz) || 1;
+        const from = { x: cx + (hx / hl) * MUZZLE.barrel, y: MUZZLE[st.kind] || MUZZLE.structure, z: cz + (hz / hl) * MUZZLE.barrel };
         const e = pfx && pfx[st.structId];
-        fire('s' + st.id, now, from, to, lookFor(e, base, base.kind, base.color, scale), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence);
+        fire('s' + st.id, now, from, to, lookFor(e, base, base.kind, base.color, scale, base.big), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence, st.targetId);
       }
     }
 
@@ -236,14 +262,57 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     blasts.push({ left: ev.dur || 1.6, x: cellToWorld(ev.to.x), z: cellToWorld(ev.to.y), scale: (ev.radius || 2.5) / 2.5 });
   }
 
+  let ctx = { state: null, map: null, opts: {} };
+  const retire = (i, s) => { shots[i] = shots[shots.length - 1]; shots.pop(); freeShots.push(s); };
   function advance(dt) {
+    const trail = ctx.opts.trail || null, boomAt = ctx.opts.boom || null;
     for (let i = shots.length - 1; i >= 0; i--) {
       const s = shots[i];
+      if (s.kind === 'missile') {
+        // seeker: re-aim at the target's live position, turn the velocity toward it, accelerate
+        const tp = s.tid !== null && ctx.state ? aimPoint(ctx.state, ctx.map, s.tid) : null;
+        if (tp) { s.tx = tp.x; s.ty = tp.y; s.tz = tp.z; }
+        s.t += dt;
+        let ex = s.tx - s.x, ey = s.ty - s.y, ez = s.tz - s.z;
+        const d = Math.hypot(ex, ey, ez);
+        if (d < FLIGHT.hitR + s.spd * dt || s.t > 3) {
+          flash(s.tx, s.ty, s.tz, FLASH.airburst, null, s.big ? 1.5 : 1);
+          if (trail) trail('burst', s.tx, s.ty, s.tz, s.big ? 1.4 : 1);
+          retire(i, s); continue;
+        }
+        s.spd = Math.min(FLIGHT.maxSpeed * (s.big ? 1.1 : 1), s.spd + FLIGHT.accel * dt);
+        ex /= d; ey /= d; ez /= d;
+        const turn = Math.min(1, FLIGHT.turn * dt * (0.4 + Math.min(1, s.t * 2.5)));   // lazy off the rail, then locks on
+        let vx = s.vx / (Math.hypot(s.vx, s.vy, s.vz) || 1), vy = s.vy / (Math.hypot(s.vx, s.vy, s.vz) || 1), vz = s.vz / (Math.hypot(s.vx, s.vy, s.vz) || 1);
+        vx += (ex - vx) * turn; vy += (ey - vy) * turn; vz += (ez - vz) * turn;
+        const vl = Math.hypot(vx, vy, vz) || 1;
+        s.dx = vx / vl; s.dy = vy / vl; s.dz = vz / vl;
+        s.vx = s.dx * s.spd; s.vy = s.dy * s.spd; s.vz = s.dz * s.spd;
+        s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
+        if (trail) trail('missile', s.x - s.dx * 0.12, s.y - s.dy * 0.12, s.z - s.dz * 0.12, s.big ? 1.3 : 1);
+        continue;
+      }
+      if (s.kind === 'rocket') {
+        // a lob: ground point lerps, a sine lifts it; the streak follows the arc's tangent
+        s.t += dt;
+        const u = Math.min(1, s.t / s.dur);
+        const nx = s.fx + (s.tx - s.fx) * u, nz = s.fz + (s.tz - s.fz) * u, ny = s.fy + (s.ty - s.fy) * u + s.apex * 4 * u * (1 - u);
+        const ddx = nx - s.x, ddy = ny - s.y, ddz = nz - s.z, dl = Math.hypot(ddx, ddy, ddz);
+        if (dl > 1e-5) { s.dx = ddx / dl; s.dy = ddy / dl; s.dz = ddz / dl; }
+        s.x = nx; s.y = ny; s.z = nz;
+        if (trail) trail('rocket', s.x - s.dx * 0.1, s.y - s.dy * 0.1, s.z - s.dz * 0.1, 1);
+        if (u >= 1) {
+          flash(s.tx, s.ty, s.tz, FLASH.rocketHit);
+          if (boomAt) boomAt(s.tx, s.tz, 0.55);   // the AOE reads: a small ground explosion per rocket
+          retire(i, s);
+        }
+        continue;
+      }
       const step = s.speed * dt;
       if (step >= s.left) {
         if (s.kind === 'flak') flash(s.tx, s.ty, s.tz, FLASH.flak);
         else flash(s.tx, s.ty, s.tz, FLASH.hit, null, Math.min(1.6, s.size / SHOT_LOOK.shell.size));
-        shots[i] = shots[shots.length - 1]; shots.pop(); freeShots.push(s);
+        retire(i, s);
         continue;
       }
       s.left -= step;
@@ -285,6 +354,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       if (now < lastTime) clear();   // restart / map change: the sim clock went back
       lastTime = now;
       const d = Math.min(0.1, Math.max(0, dt || 0));
+      ctx = { state, map, opts };
       advance(d);
       if (events) for (const ev of events) onEvent(ev, map);
       emitShots(state, map, opts);
