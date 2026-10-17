@@ -1,6 +1,6 @@
 # Landing Craft, Landing Sequence and Resource Models — design
 
-**Version:** 1.1 (2026-10-16) — v1.1 adds §3.4 landing polish (flare, thruster wash, set pieces) · epic **LC** [MM-epic_mvbkrvnz_2] · stories [MM-story_mvbk1hf3_1] (craft),
+**Version:** 1.2 (2026-10-16) — v1.1 adds §3.4 landing polish; v1.2 moves the previewers into the Terrain Forge (§7) · epic **LC** [MM-epic_mvbkrvnz_2] · stories [MM-story_mvbk1hf3_1] (craft),
 [MM-story_mvbks05m_4] (landing sequence), [MM-story_mvbks25v_5] (resources)
 
 **Owner request (2026-10-16):** landing craft that occupy a 3 × 3 space, fly into the map and land before
@@ -236,7 +236,9 @@ is known or under `?ground=baked`).
 | `src/render3d/units/metal.js` | metal/roughness for the livery keys |
 | `src/render3d/markers.js`, `structures/lowpoly.js` | `setBaseVisible` |
 | `src/main.js` | renderer options; `releaseLanding` in the dialog flow |
-| `tools/landing-craft/` | review pages built from the modules above (§7) |
+| `src/terrain/preview/` | the previewers (craft, resources, shared UI) — Terrain Forge preview modes (§7) |
+| `terrain.html` | 🗺 Map · 🚀 Landing craft · 💎 Resources mode switch |
+| `tools/landing-craft/` | standalone builds of the previewers (§7) |
 
 ## 6. Tests
 
@@ -260,16 +262,29 @@ v1.1 adds: thruster wash (ground effect, billow, debris, seeded, Low caps), flar
 
 The full game suite (347 tests) and both deploy gates stay green.
 
-## 7. Review tools (standalone — open outside Claude)
+## 7. Previewers — in the Terrain Forge (and standalone)
 
-`python prototype/test-game/tools/landing-craft/build.py` writes, from the game's own modules (no copies):
+Owner (2026-10-16): "all these previewers should be built into the terrain forge tool". [MM-story_mvbpfb1b_k]
 
-- `dist/landing-craft.html` — the ten crafts: the landing sequence (with approach bearing), Hover / Landed / Deployed
-  poses, orbit / battle camera / ortho 4-up, any of the eleven world palettes, metal on/off, the harvesters on the ramps.
-- `dist/resources.html` — the 36 resources: all at once (columns = homeworlds, rows = tiers) or one planet on a
-  turntable, with the drain slider and role rings.
+**Terrain Forge** (`terrain.html`) has a mode switch under its title: **🗺 Map · 🚀 Landing craft · 💎 Resources**.
+A preview mode swaps the map canvas for a three.js view and the tuning columns for the preview's controls; 🗺 Map
+puts the editor back exactly as it was and stops the 3D loop. three.js and the previewers load on first use, so the
+map editor pays nothing for them. `terrain.html?preview=craft` / `?preview=res` opens straight into one.
 
-`--offline` inlines three.js from the root `node_modules`.
+- **🚀 Landing craft** — the ten crafts: the full landing sequence (approach bearing, half speed, loop), Hover / Landed
+  / Deployed poses, orbit / battle camera / ortho 4-up, any of the eleven world palettes, 3 × 3 cells, metal on/off,
+  the harvesters on the ramps; drag to orbit, wheel to zoom.
+- **💎 Resources** — the 36 resources: all at once (columns = homeworlds, rows = tiers) or one homeworld on a
+  turntable, the drain slider, role rings, and the tier ← Forge resource-paint legend (🔵 common, 🟡 uncommon,
+  🔴 rare, 🟢 epic).
+
+One copy of the code: `src/terrain/preview/craftPreview.js` and `resourcePreview.js` (`mount…Preview(THREE, { stage,
+panel })` → `start · stop · dispose · debug`), with `previewUi.js` for the shared controls, stage and loop (colours via
+`--pv-*` variables, Forge dark by default).
+
+**Standalone** (review outside the dev server): `python prototype/test-game/tools/landing-craft/build.py` bundles the
+same modules into `dist/landing-craft.html` and `dist/resources.html` (`--offline` inlines three.js from the root
+`node_modules`).
 
 ## 8. Open — owner decisions
 

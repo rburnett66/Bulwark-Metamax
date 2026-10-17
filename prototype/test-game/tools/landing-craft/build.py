@@ -1,4 +1,6 @@
-# Builds the two standalone review pages from the GAME's own modules (no copies):
+# Builds the two standalone review pages from the GAME's own modules (no copies). The previewers themselves live in
+# the Terrain Forge (terrain.html → 🚀 Landing craft / 💎 Resources); these pages mount the same modules for review
+# outside the dev server:
 #   dist/landing-craft.html — the ten crafts + the landing sequence (render3d/craft/*)
 #   dist/resources.html     — the 36 planet resource models (render3d/resources/*)
 # Open either file in any browser (three.js r128 loads from cdnjs; --offline inlines a local copy).
@@ -13,10 +15,12 @@ src = lambda *p: os.path.join(GAME, 'src', *p)
 CRAFT = [src('render3d', 'units', 'metal.js'), src('render3d', 'units', 'material.js'), src('render3d', 'units', 'prims.js'),
          src('render3d', 'units', 'models.js'), src('render3d', 'obstructions', 'placement.js'), src('render3d', 'ground', 'lowpoly.js'),
          src('render3d', 'styles', 'lowpoly-palettes.js'),
-         src('render3d', 'craft', 'models.js'), src('render3d', 'craft', 'landing.js'), src('render3d', 'craft', 'landingFx.js'), src('render3d', 'craft', 'craft3d.js')]
+         src('render3d', 'craft', 'models.js'), src('render3d', 'craft', 'landing.js'), src('render3d', 'craft', 'landingFx.js'), src('render3d', 'craft', 'craft3d.js'),
+         src('terrain', 'preview', 'previewUi.js'), src('terrain', 'preview', 'craftPreview.js')]
 RES = [src('render3d', 'units', 'metal.js'), src('render3d', 'units', 'prims.js'), src('data', 'planets.js'),
        src('render3d', 'obstructions', 'placement.js'), src('render3d', 'ground', 'lowpoly.js'), src('render3d', 'structures', 'models.js'),
-       src('render3d', 'styles', 'lowpoly-palettes.js'), src('render3d', 'resources', 'models.js'), src('render3d', 'resources', 'resources3d.js')]
+       src('render3d', 'styles', 'lowpoly-palettes.js'), src('render3d', 'resources', 'models.js'), src('render3d', 'resources', 'resources3d.js'),
+       src('terrain', 'preview', 'previewUi.js'), src('terrain', 'preview', 'resourcePreview.js')]
 
 CDN = '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>'
 os.makedirs(os.path.join(HERE, 'dist'), exist_ok=True)
