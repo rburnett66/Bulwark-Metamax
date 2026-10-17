@@ -53,6 +53,7 @@ import { buildBakedGround } from './ground/baked.js';
 import { buildLowPolyGround, GRID as GROUND_GRID } from './ground/lowpoly.js';
 import { renderMapFor } from './ground/synthTerrain.js';
 import { LOWPAL, WORLD_LIGHT, resolveWorld } from './styles/lowpoly-palettes.js';
+import { PLANETS } from '../data/planets.js';
 import { createMarkers } from './markers.js';
 import { createLowPolyStructures } from './structures/lowpoly.js';
 import { createSystemStructures, SYSTEM_KINDS } from './structures/system3d.js';
@@ -335,7 +336,10 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   }
   // Obstructions (and the low-poly ground) come from the sim's own map (terrain codes + bakedBlocking +
   // authored decor), not from the baked level — so they match what the units actually path around.
-  setWorld(r, opts.world || map.world || (level && level.world));
+  // world palette: ?world= preview → an authored palette on the map / level → the battle planet's (the enemy
+  // faction's homeworld, data/planets.js) → Meadow [MM-task_mvbzgc9n_12]
+  const named = (w) => (typeof w === 'string' && w ? w : null);
+  setWorld(r, named(opts.world) || named(map.world) || named(level && level.world) || (opts.planet && PLANETS[opts.planet] && PLANETS[opts.planet].palette) || null);
   return r;
 }
 
