@@ -181,7 +181,7 @@ $('world').onchange = (e) => { worldKey = e.target.value; buildWorld(); };
 $('cells').onchange = (e) => { cells.visible = e.target.checked; };
 $('metal').onchange = (e) => craft.setMetal(e.target.checked ? 1 : 0);
 $('from').onchange = (e) => { fromDeg = +e.target.value; if (seqT < 0) setPose(pose); };
-$('play').onclick = () => { if (viewMode === 'ortho') { viewMode = 'orbit'; seg($('views'), [['orbit', 'Orbit'], ['battle', 'Battle cam'], ['ortho', 'Ortho 4-up']], viewMode, (k) => { viewMode = k; layoutLabels(); }); layoutLabels(); } seqT = 0; craft.setCastShadow(false); [...$('pose').children].forEach((c) => c.setAttribute('aria-pressed', false)); };
+$('play').onclick = () => { craft.clearFx(); if (viewMode === 'ortho') { viewMode = 'orbit'; seg($('views'), [['orbit', 'Orbit'], ['battle', 'Battle cam'], ['ortho', 'Ortho 4-up']], viewMode, (k) => { viewMode = k; layoutLabels(); }); layoutLabels(); } seqT = 0; craft.setCastShadow(false); [...$('pose').children].forEach((c) => c.setAttribute('aria-pressed', false)); };
 for (const k of LC.LANDING_CRAFT_ORDER) {
   const d = LC.LANDING_CRAFT[k], b = document.createElement('button'); b.className = 'craft'; b.setAttribute('aria-pressed', k === craftKey);
   b.innerHTML = `<span class="sw">${['hull', 'accent', 'stripe', 'glow'].map((c) => `<i style="background:${d.palette[c]}"></i>`).join('')}</span><span><b>${d.name}</b><small>${d.factionName}</small></span><span class="wt">${d.weaponType}</span>`;
@@ -205,9 +205,10 @@ function frame(now) {
   if (seqT >= 0) {
     const was = seqT; seqT += dt * ($('slow').checked ? 0.5 : 1);
     if (was < LC.phaseStart('touchdown') && seqT >= LC.phaseStart('touchdown')) craft.setCastShadow(true);
-    if (seqT > LC.TOTAL + 1.5) { if ($('loop').checked) { seqT = 0; craft.setCastShadow(false); } else { seqT = -1; pose = 'open'; } }
-    if (seqT >= 0) { P = LC.landingPose(seqT, { fromDeg }); craft.apply(P); placeHarvesters(P); const ph = LC.phaseAt(seqT); $('phase').textContent = ph.label; $('prog').style.width = Math.min(100, seqT / LC.TOTAL * 100) + '%'; }
+    if (seqT > LC.TOTAL + 1.5) { if ($('loop').checked) { seqT = 0; craft.setCastShadow(false); craft.clearFx(); } else { seqT = -1; pose = 'open'; } }
+    if (seqT >= 0) { P = LC.landingPose(seqT, { fromDeg }); craft.apply(P); craft.update(dt * ($('slow').checked ? 0.5 : 1), P); placeHarvesters(P); const ph = LC.phaseAt(seqT); $('phase').textContent = ph.label; $('prog').style.width = Math.min(100, seqT / LC.TOTAL * 100) + '%'; }
   }
+  if (!P && craft.fxCount) craft.update(dt, null);
   const frozen = viewMode === 'ortho';
   craft.aim(null, frozen ? 0 : dt); if (frozen && craft.groups.weapon) craft.groups.weapon.rotation.y = 0;
   craft.scan(frozen ? 0 : clock);
@@ -219,11 +220,13 @@ function frame(now) {
     renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h); ground.visible = grid.visible = true; cells.visible = $('cells').checked;
   } else {
     if (viewMode === 'battle') placeBattle(); else placeOrbit(P && seqT < LC.phaseStart('touchdown') ? new THREE.Vector3().setFromMatrixPosition(craft.model.matrixWorld) : null);
+    const sk = craft.shake;   // touchdown thump (cells)
+    if (sk > 0) { persp.position.x += Math.sin(clock * 73) * sk; persp.position.y += Math.sin(clock * 91 + 1.3) * sk * 0.6; persp.position.z += Math.cos(clock * 59) * sk; }
     renderer.render(scene, persp);
   }
   requestAnimationFrame(frame);
 }
-window.__lc = { set(k, p, v, w) { if (k) craftKey = k; if (w) worldKey = w; if (v) { viewMode = v; layoutLabels(); } orbit.auto = false; buildWorld(); buildCraft(); if (p) setPose(p); }, seq(t) { seqT = -1; const P = LC.landingPose(t, { fromDeg }); craft.apply(P); placeHarvesters(P); }, orbit };
+window.__lc = { set(k, p, v, w) { if (k) craftKey = k; if (w) worldKey = w; if (v) { viewMode = v; layoutLabels(); } orbit.auto = false; buildWorld(); buildCraft(); if (p) setPose(p); }, seq(t) { seqT = -1; craft.clearFx(); for (let u = 0; u <= t; u += 1 / 30) { const Q = LC.landingPose(u, { fromDeg }); craft.apply(Q); craft.update(1 / 30, Q); } const P = LC.landingPose(t, { fromDeg }); craft.apply(P); placeHarvesters(P); }, orbit };
 buildWorld(); buildCraft(); resize(); requestAnimationFrame(frame);
 </script>
 </body>

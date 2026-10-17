@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import * as THREE from '../../../vendor/three.module.js';
 import '../../data/factions.js';
 import { LANDING_CRAFT, LANDING_CRAFT_ORDER, FACTION_CRAFT, craftFor, CRAFT_SCALE } from './models.js';
-import { PHASES, TOTAL, EVENTS, phaseAt, landingPose, landedPose, createLanding, rampOf, harvesterOnRamp } from './landing.js';
+import { PHASES, TOTAL, EVENTS, phaseAt, phaseStart, landingPose, landedPose, createLanding, rampOf, harvesterOnRamp } from './landing.js';
 import { mergeCraftGroups, jetsOf, createCraft3D } from './craft3d.js';
 import { isGlowKey, UMETAL } from '../units/metal.js';
 
@@ -80,7 +80,7 @@ test('timeline: phases in order, events fire once each in order whatever the ste
   }
   const L = createLanding();
   L.step(1);
-  assert.deepEqual(L.skip().map((e) => e.type), ['gearDown', 'touchdown', 'hatchesOpen', 'deployStart', 'done']);
+  assert.deepEqual(L.skip().map((e) => e.type), ['gearDown', 'touchdown', 'hatchesOpen', 'rampsDown', 'deployStart', 'done']);
   assert.equal(phaseAt(TOTAL + 1).key, 'done');
 });
 
@@ -178,4 +178,117 @@ test('hand-off: harvesters stay aboard, drive down their hatch ramp, and end exa
   out = landingHarvesters(r, state, views);
   assert.equal(out, views, 'after the landing the sim views pass straight through');
   craft.dispose();
+});
+
+test('thruster wash: ground effect, smoke rolls outward and fades, debris arcs, lands, bounces once and goes', async () => {
+  const { createLandingFx, washStrength, GROUND_EFFECT, CAPS } = await import('./landingFx.js');
+  assert.equal(washStrength(1, GROUND_EFFECT + 1), 0, 'no wash from high up');
+  assert.equal(washStrength(0, 0), 0, 'no wash without thrust');
+  assert.ok(washStrength(1, 0) > washStrength(1, 6) && washStrength(1, 6) > 0, 'stronger nearer the ground');
+  const run = () => {
+    const fx = createLandingFx({ seed: 3 });
+    const em = [{ x: 4, z: 4, strength: 1, cx: 0, cz: 0 }];
+    let maxDebrisY = 0, outward = true;
+    for (let i = 0; i < 90; i++) {
+      fx.step(1 / 30, em);
+      for (const d of fx.debris) { maxDebrisY = Math.max(maxDebrisY, d.y); assert.ok(d.y >= 0, 'debris never sinks below the ground'); }
+    }
+    for (const p of fx.smoke) if (p.age > 0.3 && Math.hypot(p.x - 4, p.z - 4) < 0.5) outward = false;
+    assert.ok(fx.smoke.length > 20 && fx.smoke.length <= CAPS.smoke, `smoke billows (${fx.smoke.length})`);
+    assert.ok(fx.debris.length > 3 && fx.debris.length <= CAPS.debris, `debris kicked (${fx.debris.length})`);
+    assert.ok(maxDebrisY > 0.3, 'debris is thrown up, not slid');
+    assert.ok(outward, 'smoke rolls away from the jet');
+    const sig = fx.smoke.map((p) => p.x.toFixed(3)).join();
+    for (let i = 0; i < 300; i++) fx.step(1 / 30, []);
+    assert.equal(fx.smoke.length + fx.debris.length, 0, 'everything dies out once the wash stops');
+    return sig;
+  };
+  assert.equal(run(), run(), 'seeded: the same billow every time');
+  const low = createLandingFx({ seed: 3, scale: 0.4 });
+  for (let i = 0; i < 200; i++) low.step(1 / 30, [{ x: 0, z: 0, strength: 1 }, { x: 4, z: 0, strength: 1 }, { x: 0, z: 4, strength: 1 }, { x: 4, z: 4, strength: 1 }]);
+  assert.ok(low.smoke.length <= low.caps.smoke && low.caps.smoke < CAPS.smoke, 'the Low tier is capped lower');
+});
+
+test('flare: nose-down cruise, hard lean-back that carries forward drift into the descent, level by touchdown', () => {
+  const at = (t) => landingPose(t);
+  assert.ok(at(1).pitch < -3, 'cruising nose-down');
+  const flare = at(phaseStart('descent'));
+  assert.ok(flare.pitch > 14, `leaning back to brake (${flare.pitch.toFixed(1)}°)`);
+  assert.ok(Math.hypot(flare.x, flare.z) > 3, 'still short of the spot — momentum carries it in');
+  let overshoot = 0;
+  for (let t = phaseStart('descent'); t < phaseStart('touchdown'); t += 0.05) overshoot = Math.min(overshoot, at(t).pitch);
+  assert.ok(overshoot < -1, `rocks forward as it levels (${overshoot.toFixed(1)}°)`);
+  const td = at(phaseStart('touchdown'));
+  assert.ok(Math.abs(td.pitch) < 0.5 && Math.hypot(td.x, td.z) < 1e-6, 'level and on the spot at touchdown');
+  // continuity across the approach → descent boundary
+  const a = at(phaseStart('descent') - 1e-4), b = at(phaseStart('descent') + 1e-4);
+  assert.ok(Math.abs(a.pitch - b.pitch) < 0.2 && Math.hypot(a.x - b.x, a.z - b.z) < 0.01 && Math.abs(a.y - b.y) < 0.01, 'no jump at the flare');
+});
+
+test('touchdown + hatches: lands with weight, suspension dips and settles with the feet planted, doors fall and bounce once', async () => {
+  const { suspension, doorOpen, IMPACT } = await import('./landing.js');
+  const td = phaseStart('touchdown');
+  const before = landingPose(td - 0.05), contact = landingPose(td - 1e-4);
+  assert.ok((before.y - contact.y) / 0.05 > 0.4, 'still sinking when it touches (no crane stop)');
+  let dip = 0;
+  for (let s = 0; s < 1; s += 0.01) { const P = landingPose(td + s); dip = Math.min(dip, P.y); assert.ok(Math.abs(P.squash + P.y) < 1e-9, 'gear rides the dip — feet stay on the ground'); }
+  assert.ok(dip < -0.2 && dip > -IMPACT.dip, `suspension dips (${dip.toFixed(2)})`);
+  assert.ok(Math.abs(suspension(1.0)) < 0.01, 'settled by the end of touchdown');
+  let last = 0;
+  for (let s = 0; s < IMPACT.doorFall; s += 0.01) { const d = doorOpen(s); assert.ok(d >= last - 1e-9, 'doors only open while falling'); last = d; }
+  let low = 1;
+  for (let s = IMPACT.doorFall; s < 1.4; s += 0.005) low = Math.min(low, doorOpen(s));
+  assert.ok(low < 0.99 && low > 1 - IMPACT.doorBounce - 1e-9, `the ramp bounces off the ground (${low.toFixed(3)})`);
+  assert.ok(doorOpen(1.4) > 0.995, 'and comes to rest open');
+  assert.ok(EVENTS.find((e) => e.type === 'rampsDown').at === phaseStart('hatches') + IMPACT.doorFall, 'rampsDown fires when the ramps hit');
+  const ld = landedPose();
+  assert.deepEqual([ld.squash, ld.nav], [0, 0], 'parked: no squash, nav lights off');
+  assert.ok(landingPose(1).nav === 1 && landingPose(1).heat === 1, 'nav lights + hot engines in flight');
+  assert.ok(landingPose(phaseStart('hatches') + 1).heat < landingPose(td + 0.5).heat, 'engines cool after the cut');
+});
+
+test('set pieces: shockwave, contrail, vents, wisps, ramp slaps — capped, seeded, and they die out', async () => {
+  const { createLandingFx } = await import('./landingFx.js');
+  const run = () => {
+    const fx = createLandingFx({ seed: 5 });
+    fx.burst(0, 0, 1);
+    const ring = fx.smoke.length;
+    assert.ok(ring > 40 && fx.debris.length > 10, `touchdown shockwave (${ring} puffs, ${fx.debris.length} chunks)`);
+    for (const p of fx.smoke) assert.ok(Math.hypot(p.vx, p.vz) > 10, 'the ring races outward');
+    for (let i = 0; i < 20; i++) fx.trail(0, 10, 0, -1, 0, 0);
+    for (let i = 0; i < 10; i++) { fx.vent(0, 2, 6, 0, 1); fx.wisp(2, 1, 2); }
+    fx.slap(0, 9, 0, 1);
+    const vapour = fx.smoke.filter((p) => p.white > 0.5);
+    assert.ok(vapour.length >= 40, 'vents, wisps and contrails are white vapour');
+    assert.ok(fx.smoke.filter((p) => p.white === 1).every((p) => p.vy > 1), 'vents burst upward');
+    for (let i = 0; i < 400; i++) fx.step(1 / 30, []);
+    assert.equal(fx.smoke.length + fx.debris.length, 0, 'all set pieces clear');
+    return ring;
+  };
+  assert.equal(run(), run(), 'seeded');
+  const fx = createLandingFx({ seed: 1 });
+  for (let i = 0; i < 40; i++) fx.burst(0, 0, 1);
+  assert.ok(fx.smoke.length <= fx.caps.smoke && fx.debris.length <= fx.caps.debris, 'bursts respect the caps');
+});
+
+test('binder set pieces: touchdown fires the shockwave + camera shake, hatches vent, ramps slap; clearFx resets', () => {
+  const scene = new THREE.Scene();
+  const c = createCraft3D(THREE, scene, 'lc_neutral');
+  const L = createLanding();
+  let shook = 0, burstJump = 0, prev = 0;
+  while (!L.done) {
+    const t0 = L.t; L.step(1 / 30); const P = L.pose(); c.apply(P); c.update(1 / 30, P);
+    const n = c.fxCount;
+    if (t0 < phaseStart('touchdown') && L.t >= phaseStart('touchdown')) { burstJump = n - prev; shook = c.shake; }
+    prev = n;
+  }
+  assert.ok(burstJump > 30, `touchdown shockwave spawns at once (+${burstJump})`);
+  assert.ok(shook > 0, 'touchdown shakes the camera');
+  assert.equal(c.shake, 0, 'the shake has died out by the end');
+  assert.ok(c.root.children.some((o) => o.visible && o.material && o.material.uniforms && o.material.uniforms.uColor && o.material.uniforms.uOpacity.value > 0.05 && o.material.uniforms.uColor.value.getHex() === 0x1a1410), 'scorch marks left under the jets');
+  for (let i = 0; i < 300; i++) c.update(1 / 30, null);
+  assert.equal(c.fxCount, 0, 'everything settles');
+  c.clearFx();
+  assert.ok(!c.root.children.some((o) => o.visible && o.material && o.material.uniforms && o.material.uniforms.uColor && o.material.uniforms.uColor.value.getHex() === 0x1a1410), 'clearFx wipes the scorch');
+  c.dispose();
 });

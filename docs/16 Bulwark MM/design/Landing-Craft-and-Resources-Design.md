@@ -1,6 +1,6 @@
 # Landing Craft, Landing Sequence and Resource Models — design
 
-**Version:** 1.0 (2026-10-16) · epic **LC** [MM-epic_mvbkrvnz_2] · stories [MM-story_mvbk1hf3_1] (craft),
+**Version:** 1.1 (2026-10-16) — v1.1 adds §3.4 landing polish (flare, thruster wash, set pieces) · epic **LC** [MM-epic_mvbkrvnz_2] · stories [MM-story_mvbk1hf3_1] (craft),
 [MM-story_mvbks05m_4] (landing sequence), [MM-story_mvbks25v_5] (resources)
 
 **Owner request (2026-10-16):** landing craft that occupy a 3 × 3 space, fly into the map and land before
@@ -108,17 +108,18 @@ Two modules, split so the whole choreography is testable without WebGL:
 
 | phase | seconds | what happens |
 |---|---|---|
-| approach | 0 – 4.2 | flies in nose-first from 70 units (17.5 cells) out and 26 up, braking with a nose-up flare; gear stowed; rear engines full, lift jets spooling; a soft blob shadow tracks it |
-| descent | 4.2 – 7.4 | vertical descent from 8 units on the lift jets; yaws onto the landing heading if it came in from another bearing; gear comes down 5.2 – 6.8 s; slight roll; dust ring grows |
-| touchdown | 7.4 – 8.4 | settle bounce; lift jets cut; the craft starts casting into the static shadow map |
-| hatches | 8.4 – 9.8 | both doors rotate outward into ramps; shield crafts raise their dome |
+| approach | 0 – 4.2 | cruises in nose-down (−6°) from 70 units (17.5 cells) out and 26 up, leaving contrails; from 55 % it **flares** — leans back 17° to turn the lift jets against its momentum; gear stowed; nav lights on |
+| descent | 4.2 – 7.4 | arrives still drifting 5 units short and bleeds it off over 1.9 s as the lean-back eases, rocks 3.5° nose-forward as it levels; sinks from 8 units, still moving at contact; gear down 5.2 – 6.8 s; the wash hits the ground under 13 units — smoke billow, kicked debris, glow pools, scorch |
+| touchdown | 7.4 – 8.4 | **shockwave** ring + burst, camera thump; the hull dips into its suspension and springs back (gear planted), rocks nose-down once; lift jets cut, nozzles cool through orange and steam |
+| hatches | 8.4 – 9.8 | seams vent pressurised air; the doors unlatch, fall under their own weight, slap down as ramps (dust at the lip, small thump) and bounce once; shield crafts raise their dome; nav lights fade |
 | deploy | 9.8 – 14.0 | harvesters drive down the ramps (70 %), then ease onto their sim positions (30 %) |
 
-Events (fired once each, in order, whatever the frame step): `gearDown`, `touchdown`, `hatchesOpen`, `deployStart`,
-`done`. Durations live in `PHASES`; everything else derives from them.
+Events (fired once each, in order, whatever the frame step): `gearDown`, `touchdown`, `hatchesOpen`, `rampsDown`,
+`deployStart`, `done`. Durations live in `PHASES`; everything else derives from them.
 
-**Pose** — `{ phase, label, x, y, z, yaw, pitch, roll, gear, doors, lift, rear, dust, shield, shadow, harv }` in
-model units around the landing spot; `yaw` uses three's rotation.y (nose along (cos yaw, 0, −sin yaw)); `harv` is
+**Pose** — `{ phase, label, t, x, y, z, yaw, pitch, roll, gear, squash, doors, lift, rear, dust, shield, shadow, harv,
+nav, heat }` in model units around the landing spot; `squash` = suspension travel (the gear's counter-offset);
+`nav` = navigation lights 0…1; `heat` = engine heat 0…1; `yaw` uses three's rotation.y (nose along (cos yaw, 0, −sin yaw)); `harv` is
 the harvester progress 0…1, or −1 while they are still aboard.
 
 **Approach bearing** — `opts.fromDeg` (180 = from the west, the default); the craft always lands nose east, so the
@@ -141,7 +142,9 @@ hatches always meet the docks.
 - **Shadows** — airborne the craft does **not** cast into the static shadow map (that would re-render it every frame);
   a blob shadow follows it instead. On `touchdown` it starts casting and the map re-renders once.
 - **World** — the metal finish reflects the world palette's sky and apron (`setWorld` → `craft.setEnv`).
-- **Low tier** — no exhaust plumes; everything else is the same (one instance).
+- **Low tier** — no exhaust plumes, flares, glow pools or contrails; wash particles at 40 %; everything else the same.
+- **Camera** — `r.craft.shake` (cells) is added to the camera beside the combat-impact shake: a thump at touchdown,
+  a tap when the ramps land.
 
 URL flags: `?craft=<faction key | craft key>` (default `system` → the neutral craft until the shell stores the
 player's faction), `?landing=0` parks it, `?planet=<faction key>` overrides the resource planet.
@@ -149,8 +152,32 @@ player's faction), `?landing=0` parks it, `?planet=<faction key>` overrides the 
 ### 3.3 Cost
 
 One instance per level: each group merges to one Mesh (plus one engine-glow Mesh where it has engines) — 9–10
-meshes per craft; 6–9 exhaust plumes (hidden once landed); blob shadow, dust ring and shield dome are one quad or
-dome each. So ≈ 20 draw calls in flight, ≈ 11–13 landed. 2,800–10,500 triangles (Tideborn v3 is the heaviest).
+meshes per craft. In flight: per jet a core + sheath + flare (6–9 jets), 4 nav sprites, 4 glow pools + 4 scorch
+decals, blob, dust haze, ring, smoke (one instanced draw, ≤ 520) and debris (one instanced draw, ≤ 110) — ≈ 50 small
+draws for the ~14 s of the landing, when no battle is running. Landed and settled: ≈ 15 (plumes, pools, nav, ring
+hidden; particles at 0). No dynamic lights are added (a point light would recompile every lit material and cost
+every fragment for the whole match); the jets' light is faked with additive glow pools, flares and jet-lit smoke.
+
+### 3.4 Landing polish — it plays with no battle running, so it gets the full treatment
+
+Pure parts in `landing.js` (`FLARE`, `IMPACT`, `suspension(s)`, `doorOpen(s)`) and `landingFx.js` (particles); drawing
+in `craft3d.js`. Everything is seeded (`mulberry32` + a deterministic value-noise `noise3` / `turb`), so a level
+replays the same landing; nothing touches the sim.
+
+| beat | what | how |
+|---|---|---|
+| momentum | nose-down cruise, 17° lean-back flare, forward drift carried into the descent, forward overshoot as it levels, contact with 30 % of descent speed left | `FLARE`, `IMPACT.carry` |
+| thrusters | per jet a white-hot tapering **core** and a wider, fainter **sheath** of expanding gas: hot at the nozzle, cooling to the craft's engine colour, soft silhouette, shock bands scrolling away; a nozzle **flare** sprite; each plume breathes on its own noise (length, width, wobble) and **squashes against the ground** instead of passing through it; engine glow shimmers, then cools through orange after the cut | `plumeMaterial`, `noise3` |
+| ground effect | wash strength = thrust × (1 − h/13)²; additive **glow pools** under each lift jet; **scorch marks** that build up while the jets are close and stay after landing | `washStrength`, `softDisc` |
+| smoke billow | puffs biased away from the hull, gusting per jet; ride a turbulence field (more as they slow), grow and fade unevenly, lumpy rotating outlines, sun-lit crown, **lit orange by the jet** while young | `createLandingFx`, smoke shader |
+| debris | mostly grit with the odd clod (size skewed small), irregular proportions, tumbling on three axes, buffeted by the wash, 1–2 bounces, comes in kicks not a stream; larger pieces puff dust where they land | `spawnDebris` |
+| contrails | pale vapour streaming from the rear nozzles while cruising | `fx.trail` |
+| touchdown | **shockwave**: a fast ring of dust + debris burst and an expanding ground ring; **camera thump**; suspension dip 0.55 → spring (ω 11, damping 4.6) with the gear planted; one nose-down rock | `fx.burst`, `suspension` |
+| cooling | white **steam wisps** curl off the hot nozzles after the cut | `fx.wisp`, pose `heat` |
+| hatches | **pressure vents** burst from the door seams; doors unlatch, fall (accelerating), slap down — **ramp dust** and a small tap — and bounce 5 % once | `fx.vent`, `doorOpen`, `fx.slap`, event `rampsDown` |
+| lights | red port / green starboard pulsing, white strobes nose + tail double-flashing; fade after the hatches open | nav sprites, pose `nav` |
+
+Tuning lives in `FLARE`, `IMPACT`, `CAPS`, the rates at the top of `landingFx.js`, and the spawn helpers.
 
 ## 4. Resource models — every collectible
 
@@ -200,8 +227,9 @@ is known or under `?ground=baked`).
 | path | what |
 |---|---|
 | `src/render3d/craft/models.js` | the ten crafts + the build kit (gear, hatches, engines, six weapons, five heads); `FACTION_CRAFT`, `craftFor`, `CRAFT_SCALE` |
-| `src/render3d/craft/landing.js` | the sequence (pure) |
-| `src/render3d/craft/craft3d.js` | the binder (three.js injected) |
+| `src/render3d/craft/landing.js` | the sequence (pure): phases, events, flare, suspension, door fall |
+| `src/render3d/craft/landingFx.js` | the landing particles (pure, seeded): thruster wash smoke + debris, shockwave, contrails, vents, wisps, ramp dust; `noise3` / `turb` |
+| `src/render3d/craft/craft3d.js` | the binder (three.js injected): model, plume / decal / smoke shaders, nav lights, set-piece triggers, camera shake |
 | `src/render3d/resources/models.js` | the 36 resource models, `tierOf`, `planResources` |
 | `src/render3d/resources/resources3d.js` | instanced resource fields |
 | `src/render3d/index.js` | craft + landing + resources wiring; `armLanding`, `startLanding`, `skipLanding`, `landingHarvesters` |
@@ -211,6 +239,9 @@ is known or under `?ground=baked`).
 | `tools/landing-craft/` | review pages built from the modules above (§7) |
 
 ## 6. Tests
+
+v1.1 adds: thruster wash (ground effect, billow, debris, seeded, Low caps), flare, touchdown + hatches (contact speed, suspension with planted gear, door fall + bounce, `rampsDown`), set pieces (shockwave, vapour kinds, caps, die-out), binder set pieces (shockwave + shake fired by the timeline, scorch, `clearFx`).
+
 
 `node --test prototype/test-game/src/render3d/craft/craft.test.mjs prototype/test-game/src/render3d/resources/resources.test.mjs`
 (vendored three.js for geometry; no WebGL):

@@ -311,8 +311,10 @@ export function renderFrame(r, state, ui, events, dt) {
   if (r.craft) {
     if (r.landing && !r.landing.done && !r.landingHeld) {
       for (const ev of r.landing.step(dt)) if (ev.type === 'touchdown') { r.craft.setCastShadow(true); r.lights.invalidateShadows(); }
-      r.craft.apply(r.landing.pose());
-    }
+      const P = r.landing.pose();
+      r.craft.apply(P);
+      r.craft.update(dt, P);   // thruster wash: smoke billow + kicked debris
+    } else if (r.craft.fxCount) r.craft.update(dt, null);   // let the billow die out
     const c = state && state.base && state.base.cannon, b = r.map.base;
     const aim = c && c.aimPos && b ? Math.atan2(-(c.aimPos.y - b.y), c.aimPos.x - b.x) : null;
     r.craft.aim(aim, dt);
@@ -342,6 +344,7 @@ export function renderFrame(r, state, ui, events, dt) {
   r.impacts.update(state, r.map, events, dt, views, { resolve: r.resolveModel });
   r.stats.impacts = r.impactsView.sync(r.impacts, true);
   if (r.impacts.shake > 0) { r.camera.position.x += Math.sin(r.clock * 61) * r.impacts.shake * 0.5; r.camera.position.z += Math.cos(r.clock * 47) * r.impacts.shake * 0.5; }
+  if (r.craft && r.craft.shake > 0) { const k = r.craft.shake; r.camera.position.x += Math.sin(r.clock * 73) * k; r.camera.position.y += Math.sin(r.clock * 91 + 1.3) * k * 0.6; r.camera.position.z += Math.cos(r.clock * 59) * k; }   // LC: touchdown thump
   // Ring fog (T3.4): veil outside the current wave window
   r.fogView.sync(r.fog.update(state, r.map, dt));
 
@@ -387,7 +390,7 @@ export function armLanding(r, opts = {}) {
   if (!r || !r.craft || !r.landing) return;
   r.landing = createLanding({ fromDeg: opts.fromDeg != null ? opts.fromDeg : 180 });
   r.landingHeld = true; r.landingHandedOff = false;
-  r.craft.setCastShadow(false); r.craft.apply(r.landing.pose()); r.craft.setVisible(false);
+  r.craft.setCastShadow(false); r.craft.apply(r.landing.pose()); r.craft.setVisible(false); r.craft.clearFx();
   r.lights.invalidateShadows();
 }
 /** Release a held landing — the craft flies in now (the dialogs are closed and the field is on screen). */
@@ -400,7 +403,7 @@ export function startLanding(r) {
 export function skipLanding(r) {
   if (!r || !r.landing || !r.craft) return;
   r.landing.skip();
-  r.landingHeld = false; r.craft.setVisible(true);
+  r.landingHeld = false; r.craft.setVisible(true); r.craft.clearFx();
   r.craft.apply(r.landing.pose());
   r.craft.setCastShadow(true);
   r.lights.invalidateShadows();
