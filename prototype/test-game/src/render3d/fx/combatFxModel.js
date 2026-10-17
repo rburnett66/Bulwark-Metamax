@@ -37,8 +37,9 @@ export const RECIPES = Object.freeze({
 });
 /** Per tower type overrides of the kind recipe (the new towers). */
 export const STRUCT_RECIPES = Object.freeze({
-  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: 1.4, speed: 8, color: 0xffb070, burst: 4 }),
-  'STR-Missile': Object.freeze({ kind: 'missile', cadence: 1.1, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
+  // cadence = the tower def's `cadence` (tables.js): one drawn volley per sim volley (dps × cadence)
+  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: 2.0, speed: 8, color: 0xffb070, burst: 4 }),
+  'STR-Missile': Object.freeze({ kind: 'missile', cadence: 1.6, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
 });
 export const SHOT_LOOK = Object.freeze({   // Pixi at ~35 px/cell: shell dot 12 px + 33 px streak, flak 17 px, tracer 4 px + 11 px
   shell: Object.freeze({ size: 0.24, len: 0.62 }),

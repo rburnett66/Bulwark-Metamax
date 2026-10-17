@@ -26,6 +26,8 @@ export function createUnloads() {
           if (!p) continue;
           for (let i = live.length - 1; i >= 0; i--) if (live[i].id === ev.id) live.splice(i, 1);
           live.push({ id: ev.id, x: cellToWorld(p.x), z: cellToWorld(p.y), t: 0, dur: ev.dur || 3, color: COLORS[ev.color] || COLORS.blue, done: 0 });
+        } else if (ev.type === 'unloadCancel') {                       // the base fell: the load is lost
+          for (let i = live.length - 1; i >= 0; i--) if (live[i].id === ev.id) live.splice(i, 1);
         } else if (ev.type === 'deposit') {
           const u = live.find((q) => q.id === (ev.id ?? ev.harvesterId)) || live.find((q) => q.t >= q.dur - 0.25);
           if (u) { u.t = u.dur; u.done = 0.0001; }

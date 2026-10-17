@@ -124,10 +124,10 @@ test('firing line mortal mode: fragile runner dies inside the line', () => {
   assert.ok(r.traveled > 0 && r.traveled < 70, 'died mid-lane at ' + r.traveled + ' tiles');
 });
 
-test('matrix covers the owner set: none + cannon x3 + flak x3 + mine', () => {
+test('matrix covers the owner set: none + cannon x3 + flak x3 + rockets + missile + mine', () => {
   const rows = runGauntletMatrix('GND-Troops', 1);
-  assert.equal(rows.length, 8);
+  assert.equal(rows.length, 10);
   assert.deepEqual(rows.map((r) => r.defense),
-    ['none', 'cannon1', 'cannon2', 'cannon3', 'flak1', 'flak2', 'flak3', 'mine']);
+    ['none', 'cannon1', 'cannon2', 'cannon3', 'flak1', 'flak2', 'flak3', 'rockets1', 'missile1', 'mine']);
   for (const r of rows) assert.ok(r.outcome === 'reached' || r.outcome === 'died', r.defense + ': ' + r.outcome);
 });
