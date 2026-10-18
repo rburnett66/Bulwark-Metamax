@@ -424,7 +424,10 @@ export function boot(mountEl, seed) {
           let bakeTune = {};
           try { const t = JSON.parse(localStorage.getItem('tf.bake.v1')); if (t && typeof t === 'object') bakeTune = t; } catch (_) { /* default tune */ }
           m = buildTerrainMap(forge, id, { seed: 0, bakeTune });
-          nextSlug = `${forgeFileSlug(forgeSource || forgeSlotFaction(currentTestFaction || DEFAULT_FACTION))}-map-${id}`;   // a mirrored map uses its source's bake
+          // a mirrored map uses its source's bake; a committed PLAYTEST COPY (tools/maps/copy-faction-maps.mjs) names its
+          // source in _copiedFrom and borrows that bake's road mask [MM-task_mvd8b1mg_o]
+          nextSlug = (typeof forge._copiedFrom === 'string' && /^[a-z-]+-map-\d+$/.test(forge._copiedFrom)) ? forge._copiedFrom
+            : `${forgeFileSlug(forgeSource || forgeSlotFaction(currentTestFaction || DEFAULT_FACTION))}-map-${id}`;
         } else {
           let overrides = null;
           try {
@@ -462,7 +465,10 @@ export function boot(mountEl, seed) {
     if (art) renderer.unitArt = art;
     if (vox) renderer.voxelArt = vox;
     if (dec) renderer.decorArt = dec;
-    if (USE_3D) void mount3D(currentMap, nextSlug);
+    // the 3D view builds when the board is actually played: a board selected UNDER the menu (boot, a faction pick) skips
+    // it — the menu hides it anyway, and Play selects the map again. Two heavy builds back to back (faction pick, then
+    // the map card) left phones with no 3D view at all for a long while. [MM-task_mvd8b1mg_o]
+    if (USE_3D && !(menu && menu.isOpen())) void mount3D(currentMap, nextSlug);
     clearIntroOverlays();   // a previous board's contract / wave-intel / how-to-play card never carries over [MM-task_mvd6cfh8_n]
     // [MM-story_mvamfcnp_14] one dialog at a time: the intro below runs the speaker last, so the board
     // must not start it on its own (it used to speak behind the contract and the wave intel)
