@@ -79,6 +79,7 @@ import { createGoldPopups, createGoldPopupView } from './overlays/goldPopups.js'
 import { createUnloads, createUnloadView } from './overlays/unloadFx.js';
 import { createResources3D } from './resources/resources3d.js';
 import { getUnitDef, getStructureDef } from '../data/tables.js';
+import { emitMuzzleSmoke } from './fx/muzzleSmoke.js';
 
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
 
@@ -290,12 +291,8 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
         I.emit(FXK.SMOKE, bx, by, bz, (sx / sl) * sd * 1.4 + dx * 0.3, 0.12, (sz / sl) * sd * 1.4 + dz * 0.3, 1.6, 0.045, 0.9, 0.62, 0, 2.2);
       }
       for (let i = 0; i < 3 * k; i++) I.emit(FXK.SPARK, m.x, m.y, m.z, dx * 5 + jit() * 1.5, dy * 5 + jit() * 1.5 + 0.5, dz * 5 + jit() * 1.5, 0.18, 0.016);
-      // 2 · forward puff — out ahead of the tip, slowing, swelling, clearing over ~3 s
-      for (let i = 0, c = Math.max(3, Math.round(9 * k)); i < c; i++) {
-        const v = 0.6 + 1.2 * (jit() + 0.5);
-        I.emit(FXK.SMOKE, m.x + dx * 0.05, m.y + dy * 0.05, m.z + dz * 0.05, dx * v + jit() * 0.3, dy * v + 0.12 + jit() * 0.12, dz * v + jit() * 0.3,
-          2.6 + (jit() + 0.5) * 1.0, 0.095 * k, 1.1, 0.84, 0, 1.5);
-      }
+      // 2 · forward puff — born tip-sized, pushed a little way out, then swells and clears (fx/muzzleSmoke.js)
+      emitMuzzleSmoke(I.emit, FXK.SMOKE, m, k, jit);
       // 3 · shockwave ring on the ground, and 4 · the dust it lifts (separate: the ring is crisp and fast, the puffs soft and slow)
       if (m.gx !== undefined && kind !== 'tracer') {
         const gr = m.gr || 0.3;
