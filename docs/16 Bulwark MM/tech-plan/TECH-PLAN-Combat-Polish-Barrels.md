@@ -69,7 +69,7 @@ So slowing the cannon changes only how it looks. Damage per second stays the sam
   so the two views can't drift apart.
 - **Proposed cannon:** 1.5 s cadence, burst 2 (now 0.55 s, burst 3), about a third as many rounds. Damage is
   unchanged because the sim is continuous.
-- **Owner check:** tune the number on device. It's one data edit.
+- **Owner approved 1.5 s (2026-10-18).** It can still be tuned on device with one data edit.
 
 ### 2.2 The barrel rig (shared by every gun)
 Introduce one convention: an optional **`barrel` group with a trunnion pivot** under the turning group.
@@ -114,7 +114,17 @@ A new `src/render3d/fx/buildFx.js`, the same shape as `repairFx.js`:
 - **Quality:** the count scales with the quality tier (Low = about a quarter).
 - The same hook is the home for upgrade dust later (the `upgrade` phases already exist in the sim).
 
-### 2.5 Fix the aiming gap
+### 2.5 Cannon recoil (owner-approved 2026-10-18: cannons only)
+- **Which barrels recoil:** cannon-type barrels only, meaning the cannon tower, the tank and Tiger/King Tiger
+  main guns, and the base super-cannon.
+- **Which don't:** guns (flak, machine guns, the buggy's energy gun), missiles and rockets.
+- **Motion:** on each shot the barrel slides back along its tilted axis, about 18% of its length in roughly
+  0.06 s, then eases forward over roughly 0.35 s. On twin barrels only the barrel that fired moves.
+- **How:** an offset along the barrel's local axis applied after the pitch in the barrel matrix. The firing
+  point is taken before the recoil, so the flash stays at the tip.
+- A per-model `recoil` field (length fraction; 0 = none) keeps it data-driven. Only the cannon-type models set it.
+
+### 2.6 Fix the aiming gap
 Towers aim at structure and base targets as well as units. This is a prerequisite for correct pitch, so the
 barrel doesn't aim at nothing.
 
@@ -131,6 +141,7 @@ barrel doesn't aim at nothing.
    Depends on 2.
 6. **Base super-cannon pitch:** the craft cannon tilts to the `cannonFx` launch angle. Depends on 2.
 7. **Build-site dirt puffs:** `buildFx.js`. Independent, can go first.
+8. **Cannon recoil:** cannon tower, tank/Tiger main guns and base super-cannon only. Depends on 3, 5, 6.
 
 ## 4. Tests
 - `firingPoints.test.mjs` asserts the cannon tip at a fixed 8° and **will change**. It becomes "the tip follows
@@ -139,12 +150,13 @@ barrel doesn't aim at nothing.
   while Building, burst on start/complete, none when Complete, tier scaling).
 - Extend `units3d.test.mjs` (barrel group + pivot per gun unit), `system3d.test.mjs` (four groups),
   `combatFx.test.mjs` (cannon cadence read from tables; lobbed shell arrives on target).
+- Recoil: a cannon barrel is displaced back after a shot and returns to rest; flak, rocket, missile and buggy
+  barrels never move; the firing point is unaffected.
 - Keep `renderTiers.test.mjs` and `pack.test.mjs` green. The full suite runs locally before every push (no
   GitHub CI).
 
 ## 5. Out of scope / follow-ups
-- **Barrel recoil:** a short slide back along the tilted barrel axis on each shot. It fits naturally once the
-  barrel group exists. The voxel-era "BBB Barrel polish" epic described recoil for the old sprite pipeline;
-  if wanted, a 3D recoil story should be filed under this epic instead.
+- **Recoil on guns, missiles and rockets:** excluded by the owner (2026-10-18). The voxel-era "BBB Barrel
+  polish" epic's recoil story is for the old sprite pipeline; CP-8 is its 3D replacement.
 - **Sim-side fire rate or projectiles:** not proposed. Damage stays continuous.
 - **Audio:** not part of this plan.
