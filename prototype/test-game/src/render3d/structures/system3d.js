@@ -191,7 +191,7 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       return true;
     },
     /** Turn turrets toward their targets and sweep the optics. Every frame; never touches the shadow map. */
-    update(dt, state) {
+    update(dt, state, drawn) {   // drawn: Map unit id → drawn pose (planes on attack runs) [MM-story_mvee9r08_e]
       clock += dt || 0;
       if (!items.length) return;
       const byId = new Map(lastList.map((s) => [s.id, s]));
@@ -199,7 +199,8 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       for (const it of items) {
         if (!it.aim) continue;
         const s = byId.get(it.id), u = s && s.targetId != null && state && state.units ? state.units.get(s.targetId) : null;
-        const want = u && u.pos ? yawToward(u.pos.x + 0.5 - it.x, u.pos.y + 0.5 - it.z) : it.ry;
+        const dp = drawn && s && drawn.get(s.targetId);
+        const want = dp ? yawToward(dp.x - it.x, dp.z - it.z) : u && u.pos ? yawToward(u.pos.x + 0.5 - it.x, u.pos.y + 0.5 - it.z) : it.ry;
         const cur = yaw.has(it.id) ? yaw.get(it.id) : it.ry;
         let d = ((want - cur) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
         yaw.set(it.id, cur + Math.max(-step, Math.min(step, d)));
