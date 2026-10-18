@@ -24,6 +24,7 @@ import { pitchFor, apexFor } from '../fx/elevation.js';
 import { AIM } from '../fx/combatFxModel.js';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
+import { createRecoil } from '../fx/recoil.js';
 
 /** Sim structure kind → System model. Kinds not listed stay with structures/lowpoly.js. */
 export const SYSTEM_KINDS = Object.freeze({ antiGround: 'sys_cannon', antiAir: 'sys_flak', wall: 'sys_wall' });
@@ -181,6 +182,7 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
   let base = null, sig = null, lastList = [], items = [], clock = 0;
   const yaw = new Map();   // structure id → current turret yaw (radians, world)
   const pitch = new Map();   // structure id → current barrel pitch (radians) [MM-story_mvedxxo7_7]
+  const recoil = createRecoil();   // cannon barrels slide back on each shell [MM-story_mvee15ja_b]
   const pitchOf = (it) => { const b = SYSTEM_MODELS[it.model].barrel; return pitch.has(it.id) ? pitch.get(it.id) : b ? b.rest * DEG : 0; };
   const byItem = new Map();   // structure id → its aiming instance (firing points)
 
@@ -226,7 +228,9 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       }
       if (K.meshes.barrel) {   // the barrel rides the turret and pitches about its trunnion: W · T(pb − pw) · Rz(pitch − authored)
         const pb = K.parts.barrel.pivot, bar = SYSTEM_MODELS[it.model].barrel, el = bar ? pitchOf(it) - bar.authored * DEG : 0;
+        const back = recoil.offset(it.id, 0, SYSTEM_MODELS[it.model].recoil || 0);   // along the pitched axis, after the pitch
         const B = W.clone().multiply(Mp.makeTranslation(pb[0] - pw[0], pb[1] - pw[1], pb[2] - pw[2])).multiply(Mr.makeRotationZ(el));
+        if (back) B.multiply(Mp.makeTranslation(-back, 0, 0));
         K.meshes.barrel.setMatrixAt(it.slot, B);
       }
     }
@@ -252,6 +256,7 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
     /** Turn turrets toward their targets and sweep the optics. Every frame; never touches the shadow map. */
     update(dt, state, drawn) {   // drawn: Map unit id → drawn pose (planes on attack runs) [MM-story_mvee9r08_e]
       clock += dt || 0;
+      recoil.step(dt);
       if (!items.length) return;
       const byId = new Map(lastList.map((s) => [s.id, s]));
       const step = TURN * Math.min(0.1, Math.max(0, dt || 0));
@@ -274,6 +279,10 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       }
       writeMoving();
     },
+    /** A round left firing point n of tower `id`: a cannon barrel kicks back (models with `recoil` only). */
+    kick(id, n = 0) { const it = byItem.get(id); if (it && SYSTEM_MODELS[it.model].recoil) recoil.kick(id, 0); },
+    /** How far (model units) tower `id`'s barrel is back right now. */
+    recoilOf(id) { const it = byItem.get(id); return it ? recoil.offset(id, 0, SYSTEM_MODELS[it.model].recoil || 0) : 0; },
     /** Current barrel pitch (radians) of a tower, or null without a barrel. */
     pitch(id) { const it = byItem.get(id); return it && SYSTEM_MODELS[it.model].barrel ? pitchOf(it) : null; },
     /** The world firing point i of a tower (by structure id) at its turret's current yaw and barrel pitch, or null. See muzzlePoint. */

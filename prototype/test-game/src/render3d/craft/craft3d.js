@@ -28,6 +28,7 @@ import { metalFor, isGlowKey } from '../units/metal.js';
 import { craftFor, CRAFT_SCALE } from './models.js';
 import { createLandingFx, washStrength, noise3 } from './landingFx.js';
 import { EVENTS, rampOf } from './landing.js';
+import { createRecoil } from '../fx/recoil.js';
 
 const D2R = Math.PI / 180;
 const ENGINE = 'glowE';
@@ -103,11 +104,15 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
   const meshes = [];
   for (const [g, P] of Object.entries(parts)) {
     const G = new THREE.Group(); G.name = g;
+    // the gun's meshes sit on an inner slide, so recoil moves them along the PITCHED axis while the group's own
+    // matrix (muzzleWorld) stays put [MM-story_mvee15ja_b]
+    const host = g === 'barrel' ? (G.userData.slide = new THREE.Group()) : G;
+    if (host !== G) G.add(host);
     for (const [geo, m] of [[P.lit, mat.material], [P.engine, engineMat]]) {
       if (!geo) continue;
       const mesh = new THREE.Mesh(geo, m);
       mesh.castShadow = false; mesh.receiveShadow = true;
-      G.add(mesh); meshes.push(mesh);
+      host.add(mesh); meshes.push(mesh);
     }
     groups[g] = G;
   }
@@ -241,6 +246,7 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
   let fxClock = 0, thrust0 = 0, heat0 = 0, prevT = -1, shake = 0, ventT = 0;
   const carry = { trail: 0, wisp: 0 };
   let aimYaw = 0, castShadow = false, idle = 0;
+  const gunRecoil = createRecoil();   // the roof shell gun's slide-back [MM-story_mvee15ja_b]
   /** a model-space point → root space (the craft's current pose) */
   const toRoot = (x, y, z) => fxV.set(x, y, z).applyMatrix4(model.matrix);
 
@@ -456,7 +462,13 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
       const D = Math.PI / 180, want = pitch == null ? 0 : Math.max(lim.min * D, Math.min(lim.max * D, pitch));
       const step = lim.rate * Math.max(0, Math.min(0.1, dt || 0));
       B.rotation.z += Math.max(-step, Math.min(step, want - B.rotation.z));
+      gunRecoil.step(dt);
+      if (B.userData.slide) B.userData.slide.position.x = -gunRecoil.offset('gun', 0, def.recoil || 0);
     },
+    /** The base cannon fired: the shell gun kicks back (not the railgun). [MM-story_mvee15ja_b] */
+    kick() { if (def.recoil) gunRecoil.kick('gun', 0); },
+    /** How far (model units) the gun is back right now. */
+    get recoilBack() { return groups.barrel && groups.barrel.userData.slide ? -groups.barrel.userData.slide.position.x : 0; },
     /** Current gun pitch (radians), 0 without a pitching gun. */
     get pitch() { return groups.barrel ? groups.barrel.rotation.z : 0; },
     /** World position (cells) of the roof gun's muzzle — where the base cannon's shell leaves. [MM-task_mvbvpyer_x] */

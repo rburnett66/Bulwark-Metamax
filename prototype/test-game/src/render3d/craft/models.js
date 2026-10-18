@@ -134,7 +134,7 @@ function wCannon(Y, o = {}) {
     bs.push({ t: 'cyl', ax: 'x', r: 0.18, l: 0.38, seg: 10, p: [x0 + len - 0.12, by, z], m: 'dark' });
     bs.push({ t: 'box', s: [0.06, 0.12, 0.42], p: [x0 + len - 0.1, by, z], m: 'black', d: 1 });
   }
-  return { parts: [...G('weapon', ps), ...G('barrel', bs)], head: [-0.85, Y + 1.08, 0.42], barrel: [x0 - 0.2, by, 0], muzzle: [x0 + len + 0.02, by, 0] };
+  return { parts: [...G('weapon', ps), ...G('barrel', bs)], head: [-0.85, Y + 1.08, 0.42], barrel: [x0 - 0.2, by, 0], muzzle: [x0 + len + 0.02, by, 0], recoil: o.rail ? 0 : len * 0.18 };
 }
 
 function wGatling(Y, o = {}) {
@@ -351,7 +351,7 @@ function craft(key, o) {
     parts,
     pivots: Object.assign({ weapon: [0, o.roofY, 0], head: o.headPivot || W.head, gear: [0, 0, 0] }, bar, H.pivots),
     // a pitching gun: its muzzle (model point, level) and limits [MM-story_mvedy2wj_a]
-    ...(o.weapon.barrel ? { muzzle: scalePt(o.weapon.muzzle, k, O), barrel: { min: 0, max: 60, rate: 1.2 } } : {}),
+    ...(o.weapon.barrel ? { muzzle: scalePt(o.weapon.muzzle, k, O), barrel: { min: 0, max: 60, rate: 1.2 }, recoil: (o.weapon.recoil || 0) * k } : {}),   // recoil: the shell gun only, not the railgun [MM-story_mvee15ja_b]
     head: o.headMode || { mode: 'sweep' },
     anim: { gear: { axis: 'y', retract: 1.15 }, doorR: { axis: 'x', open: H.open }, doorL: { axis: 'x', open: -H.open },
       hover: 9, approach: o.approach || 'side' },

@@ -98,6 +98,7 @@ const M = {};
       pivots: { weapon: T, head: [-0.85, 1.72, -0.3], barrel: P },
       // the barrel pitches about the trunnion to the shell's launch slope (render3d/fx/elevation.js) [MM-story_mvedxxo7_7]
       barrel: { authored: EL, rest: EL, min: -5, max: 45, rate: 1.6, aim: 'shell' },
+      recoil: 0.65,   // model units the barrel slides back on each shell (≈18% of it) — cannons only [MM-story_mvee15ja_b]
       // firing point: the muzzle-brake face at the end of the barrel (authored at EL); `brake` = the brake's side ports
       muzzles: [{ p: along(P, EL, 3.72), d: [Math.cos(EL * D), Math.sin(EL * D), 0], back: 1.4, brake: 0.22 }],
       head: { mode: 'sweep' },

@@ -41,7 +41,8 @@ test('groups and pivots: tank and buggy have a turret group on their pivot; beet
     const g = mergeModelGroups(THREE, UNIT_MODELS[key]);
     const hasTurret = !!(UNIT_MODELS[key].pivots && UNIT_MODELS[key].pivots.turret);
     const hasBarrel = !!(UNIT_MODELS[key].pivots && UNIT_MODELS[key].pivots.barrel);   // the gun pitches on its own group [MM-story_mvedy16u_9]
-    assert.deepEqual(Object.keys(g).sort(), hasTurret ? (hasBarrel ? ['barrel', 'body', 'turret'] : ['body', 'turret']) : ['body'], key);
+    const guns = Object.keys(UNIT_MODELS[key].pivots || {}).filter((n) => n.startsWith('barrel'));   // the twin tank has barrel + barrel2
+    assert.deepEqual(Object.keys(g).sort(), hasTurret ? [...(hasBarrel ? guns : []), 'body', 'turret'].sort() : ['body'], key);
     if (hasTurret) assert.deepEqual(g.turret.pivot.toArray(), UNIT_MODELS[key].pivots.turret, `${key} turret pivot`);
     for (const G of Object.values(g)) {
       for (const a of ['position', 'normal', 'color', 'aEmit']) assert.ok(G.geo.getAttribute(a), `${key} has ${a}`);

@@ -62,10 +62,18 @@ const M = {};
     { t: 'cyl', ax: 'x', r: 0.035, l: 0.42, seg: 6, p: [-0.5, 2.0, 0.78], m: 'dark', g: 'turret', mir: true },
     { t: 'cyl', ax: 'y', r: 0.012, l: 0.32, seg: 4, p: [-1.05, 2.34, 0.64], m: 'dark', g: 'turret', mir: true },
   ];
-  M.tank = { name: 'Twin-barrel MBT', ref: 'tank', parts, pivots: { turret: [-0.35, 1.22, 0], barrel: [0.85, 1.47, 0] },
+  // each gun is its own group (barrel / barrel2) so only the one that fired recoils [MM-story_mvee15ja_b]
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const q = parts[i];
+    if (q.g !== 'barrel' || !q.mir) continue;
+    const a = Object.assign({}, q); delete a.mir;
+    parts.splice(i, 1, a, Object.assign({}, a, { p: [a.p[0], a.p[1], -a.p[2]], g: 'barrel2' }));
+  }
+  M.tank = { name: 'Twin-barrel MBT', ref: 'tank', parts, pivots: { turret: [-0.35, 1.22, 0], barrel: [0.85, 1.47, 0], barrel2: [0.85, 1.47, 0] },
     // the twin guns pitch about the mantlet trunnion; shots leave the muzzle sleeves, alternately [MM-story_mvedy16u_9]
     barrel: { rest: 0, min: -8, max: 25, rate: 1.2 },
-    muzzles: [0.34, -0.34].map((z) => ({ p: [1.915, 1.47, z], d: [1, 0, 0], back: 0.95 })),
+    recoil: 0.2,   // model units each main gun slides back when it fires — cannons only [MM-story_mvee15ja_b]
+    muzzles: [[0.34, 'barrel'], [-0.34, 'barrel2']].map(([z, g]) => ({ p: [1.915, 1.47, z], d: [1, 0, 0], back: 0.95, g })),
     views: { side: 'right', top: 'down' } };
 }
 
@@ -287,6 +295,7 @@ const oct = (yb, ym, ys, yt, wb, wm, ws, wt) => [[-wb, yb], [wb, yb], [wm, ym], 
     M.tiger = { name: 'King Tiger heavy tank', unit: 'GND-HeavyTanks', ref: 'tiger', parts, pivots: { weapon: [-0.17, 1.21, 0], head: [-1.1, 1.82, 0.32], barrel: [0.95, 1.48, 0] }, head: { mode: 'sweep' },
       // the 8.8 cm gun pitches about the mantlet; shots leave the muzzle brake [MM-story_mvedy16u_9]
       barrel: { rest: 0, min: -8, max: 20, rate: 0.9 },
+      recoil: 0.65,   // the 8.8 cm gun's slide-back [MM-story_mvee15ja_b]
       muzzles: [{ p: [4.91, 1.48, 0], d: [1, 0, 0], back: 1.9 }],
       views: { side: 'right', top: 'left' } };
   }

@@ -153,12 +153,12 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       const out = {};
       for (const [key, T] of Object.entries(types)) {
         out[key] = {};
-        for (const [g, G] of Object.entries(T.groups)) if (g !== 'barrel') out[key][g] = { geo: G.lodGeo, pivot: G.pivot };
-        // a wreck's turret keeps its gun: the barrel (level) folded into the turret geometry
-        const TG = T.groups.turret, BG = T.groups.barrel;
-        if (TG && BG) {
-          const geo = mergeOffset(THREE, TG.lodGeo, BG.lodGeo, BG.pivot.clone().sub(TG.pivot));
-          owned.push(geo);
+        for (const [g, G] of Object.entries(T.groups)) if (!g.startsWith('barrel')) out[key][g] = { geo: G.lodGeo, pivot: G.pivot };
+        // a wreck's turret keeps its guns: the barrels (level) folded into the turret geometry
+        const TG = T.groups.turret;
+        if (TG) {
+          let geo = TG.lodGeo;
+          for (const [g, BG] of Object.entries(T.groups)) if (g.startsWith('barrel')) { geo = mergeOffset(THREE, geo, BG.lodGeo, BG.pivot.clone().sub(TG.pivot)); owned.push(geo); }
           out[key].turret = { geo, pivot: TG.pivot };
         }
       }
@@ -183,8 +183,10 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
         if (TG) mt.compose(TG.pivot, q.setFromAxisAngle(yAxis, -((u.aim ?? u.heading) - u.heading)), one).premultiply(m1);
         for (const [gname, G] of Object.entries(T.groups)) {
           if (gname === 'turret') m2.copy(mt);
-          else if (gname === 'barrel' && TG) {   // rides the turret, pitched about its trunnion [MM-story_mvedy16u_9]
+          else if (gname.startsWith('barrel') && TG) {   // rides the turret, pitched about its trunnion [MM-story_mvedy16u_9]
             m2.copy(mt).multiply(mp.makeTranslation(G.pivot.x - TG.pivot.x, G.pivot.y - TG.pivot.y, G.pivot.z - TG.pivot.z)).multiply(mr.makeRotationZ(u.pitch || 0));
+            const back = u.recoil && u.recoil[gname];   // a main gun's slide-back, along its pitched axis [MM-story_mvee15ja_b]
+            if (back) m2.multiply(mp.makeTranslation(-back, 0, 0));
           } else {
             m2.copy(m1).multiply(mp.makeTranslation(G.pivot.x, G.pivot.y, G.pivot.z));
           }

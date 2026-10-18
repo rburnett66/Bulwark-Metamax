@@ -15,6 +15,7 @@ import { UNIT_MODELS } from './models.js';
 import { UNIT_SCALE } from './modelKeys.js';
 import { pitchFor } from '../fx/elevation.js';
 import { aimPoint } from '../fx/combatFxModel.js';
+import { createRecoil } from '../fx/recoil.js';
 
 const DEG = Math.PI / 180;
 
@@ -51,15 +52,16 @@ export function unitPitchFor(bar, m, to) {
 }
 
 /**
- * createUnitBarrels() → { update(views, state, map, drawn, dt), muzzle(id, n), pitch(id) }
+ * createUnitBarrels() → { update(views, state, map, drawn, dt), muzzle(id, n), pitch(id), kick(id, n) }
  *   update sets view.pitch on every view whose model has a barrel; muzzle(id, n) is the n-th firing point of that unit
  *   as last drawn (combatFxModel opts.unitMuzzle).
  */
 export function createUnitBarrels() {
-  const pitch = new Map(), byId = new Map();
+  const pitch = new Map(), byId = new Map(), recoil = createRecoil();
   return {
     update(views, state, map, drawn, dt) {
       const dts = Math.min(0.1, Math.max(0, dt || 0));
+      recoil.step(dt);
       byId.clear();
       const seen = new Set();
       for (const v of views || []) {
@@ -74,10 +76,22 @@ export function createUnitBarrels() {
         const ps = bar.rate * dts * (m ? 1 : 0.5);
         const p = pc + Math.max(-ps, Math.min(ps, want - pc));
         pitch.set(v.id, p); v.pitch = p;
+        if (def.recoil) {   // main guns slide back after a shot: { group: model units } [MM-story_mvee15ja_b]
+          let r = null;
+          for (const mz of def.muzzles || []) { const g = mz.g || 'barrel', o = recoil.offset(v.id, g, def.recoil); if (o) (r = r || {})[g] = o; }
+          v.recoil = r;
+        }
       }
       for (const id of [...pitch.keys()]) if (!seen.has(id)) pitch.delete(id);
     },
     muzzle(id, n = 0) { const v = byId.get(id); return v ? unitMuzzle(v, n, pitch.get(id) || 0) : null; },
     pitch(id) { return pitch.has(id) ? pitch.get(id) : null; },
+    /** A round left firing point n of unit `id`: that gun kicks back (models with `recoil` only). */
+    kick(id, n = 0) {
+      const v = byId.get(id), def = v && UNIT_MODELS[v.model];
+      if (!def || !def.recoil || !def.muzzles) return;
+      const mz = def.muzzles[((n % def.muzzles.length) + def.muzzles.length) % def.muzzles.length];
+      recoil.kick(id, mz.g || 'barrel');
+    },
   };
 }

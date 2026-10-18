@@ -174,7 +174,7 @@ function spawn(key, x, z, yaw) {
     o.add(ls);
   });
   // the gun's own `barrel` group (it pitches in the game) rides the turret here
-  if (built.groups.barrel && built.groups.turret) { const b = built.groups.barrel; b.position.sub(built.groups.turret.position); built.groups.turret.add(b); }
+  for (const [gn, b] of Object.entries(built.groups)) if (gn.startsWith('barrel') && built.groups.turret) { b.position.sub(built.groups.turret.position); built.groups.turret.add(b); }
   root.position.set(x, def.hover || 0, z); root.rotation.y = yaw || 0;
   scene.add(root);
   const u = { root, turret: built.groups.turret || null, def, tris: built.tris, phase: Math.random() * 6 };

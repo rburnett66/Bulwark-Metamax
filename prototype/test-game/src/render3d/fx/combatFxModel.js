@@ -213,6 +213,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
    * and a turret still slewing holds fire until its barrel is on target.
    */
   const roundNo = new Map();   // shooter key → rounds fired (which barrel is next)
+  // a round left modelled barrel n of shooter `key` ('s'+structure id / 'u'+unit id): opts.kick drives the recoil [MM-story_mvee15ja_b]
+  const kickOf = (key, n) => { const k = ctx.opts && ctx.opts.kick; if (k) k(key, n); };
   function fire(key, now, from, to, look, burst, cadence, tid = null, muz = null) {
     if (now < (clock.get(key) || 0)) return;
     let n0 = roundNo.get(key) || 0;
@@ -230,8 +232,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     for (let k = 0; k < burst; k++) {
       const j = burst > 1 ? (look.kind === 'rocket' ? 0.45 : BURST_SPREAD) : 0;
       const aim = { x: to.x + (rand() * 2 - 1) * j, y: to.y, z: to.z + (rand() * 2 - 1) * j };
-      if (k === 0) launch((muz && muz(n0)) || from, aim, look, tid);
-      else queue.push({ at: now + k * gap, from: { x: from.x, y: from.y, z: from.z }, to: aim, look, tid, muz, n: n0 + k });
+      if (k === 0) { launch((muz && muz(n0)) || from, aim, look, tid); if (muz) kickOf(key, n0); }
+      else queue.push({ at: now + k * gap, from: { x: from.x, y: from.y, z: from.z }, to: aim, look, tid, muz, n: n0 + k, key });
     }
   }
 
@@ -261,6 +263,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       const q = queue[i];
       if (now < q.at) continue;
       launch((q.muz && q.muz(q.n)) || q.from, q.to, q.look, q.tid);   // a queued round leaves from its own barrel, wherever the turret now points
+      if (q.muz) kickOf(q.key, q.n);
       queue[i] = queue[queue.length - 1]; queue.pop();
     }
 

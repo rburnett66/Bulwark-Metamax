@@ -331,6 +331,8 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   };
   r.fxOpts.muzzle = (id, n) => (r.system ? r.system.muzzle(id, n) : null);
   r.fxOpts.unitMuzzle = (id, n) => r.unitBarrels.muzzle(id, n);
+  // a round left a modelled barrel: cannon barrels (tower, tank, Tiger) kick back; guns, missiles, rockets never [MM-story_mvee15ja_b]
+  r.fxOpts.kick = (key, n) => { const raw = key.slice(1), id = Number.isNaN(Number(raw)) ? raw : Number(raw); if (key[0] === 's') { if (r.system) r.system.kick(id, n); } else r.unitBarrels.kick(id, n); };
   r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
   attachCameraInput(canvas, r);
   // point-light flashes (experiment): count by tier, ?flashlights=N overrides [MM-task_mvd2lrig_k]
@@ -518,6 +520,7 @@ export function renderFrame(r, state, ui, events, dt) {
   if (r.flashLights) { r.flashLights.update(Math.max(0, Math.min(0.1, dt || 0))); r.flashLights.fromFlashes(r.fx.flashes); }   // point-light flashes (experiment)
   // the base super-cannon: reticle, shell from the roof gun, touchdown blast (fx/cannonFx.js) [MM-task_mvbvpyer_x]
   r.cannonFx.onEvents(events, r.craft ? () => r.craft.muzzleWorld() : null);
+  if (r.craft && r.craft.kick && events && events.some((e) => e && e.type === 'cannonShot')) r.craft.kick();   // the roof gun recoils [MM-story_mvee15ja_b]
   r.cannonFx.step(dt, r.impacts);
   r.cannonFxView.sync(r.cannonFx, dt);
   // selection range + coverage map (overlays/coverage.js) [MM-task_mvbry998_r]
