@@ -178,9 +178,9 @@ the camera (`index.js:102-139`), so the ghost can't be steered with the finger. 
   deals continuous `dps × dt` (`src/sim/core.js:603-611`; structure hunters `:585-587`).
 - **Render:** the 3D view draws the unit at its sim position (`unitViews.js:58`), so a plane parks in mid-air.
 
-**Two ways to do it (owner decision):**
+**Two ways to do it. Owner picked A, the render-only flight path (2026-10-18):**
 
-| | A. Render-only flight path (recommended) | B. Sim attack runs |
+| | A. Render-only flight path (**chosen**) | B. Sim attack runs |
 |---|---|---|
 | What moves | the drawn plane flies a pass-and-turn loop around its sim position | the sim unit itself flies the loop |
 | Damage / balance | unchanged (still continuous) | changes plane DPS and how long planes sit inside tower range; `balanceSim` needs re-baselining |
@@ -235,7 +235,7 @@ barrel doesn't aim at nothing.
 8. **Cannon recoil:** cannon tower, tank/Tiger main guns and base super-cannon only. Depends on 3, 5, 6.
 9. **Cannon gunsmoke:** tip-sized, pushed out, expands and clears. Delivered (PR #64) with 1.
 10. **Mobile tower placement:** offset slot up-left of the finger, drag steers it, release builds. Independent.
-11. **Plane attack runs:** pass-and-turn loops for planes; drones and copters hover. Plan A unless the owner picks B.
+11. **Plane attack runs:** pass-and-turn loops for planes; drones and copters hover. Plan A (owner's choice).
 
 ## 4. Tests
 - `firingPoints.test.mjs` asserts the cannon tip at a fixed 8° and **will change**. It becomes "the tip follows
