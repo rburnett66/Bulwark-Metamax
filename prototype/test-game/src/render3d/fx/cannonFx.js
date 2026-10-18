@@ -49,6 +49,20 @@ export function baseStyleFor(weaponType = '') {
   return 'shell';
 }
 
+/** Apex (world units) of the base cannon's main round over horizontal distance d — the roof gun pitches to it. */
+export function baseApex(d, S = BASE_STYLES.shell) {
+  return (CANNON_FX.apex + CANNON_FX.apexPerCell * d) * S.apexK;
+}
+
+/**
+ * Launch pitch (radians) of the base cannon's main round from muzzle m to ground point (tx, tz): the shell flies
+ * y = fy·(1 − u) + apex·4u(1 − u), so the slope at u = 0 is (4·apex − fy) / d. [MM-story_mvedy2wj_a]
+ */
+export function baseLaunchPitch(m, tx, tz, S = BASE_STYLES.shell) {
+  const d = Math.hypot(tx - m.x, tz - m.z);
+  return Math.atan2(4 * baseApex(d, S) - m.y, Math.max(1e-6, d));
+}
+
 export function createCannonFx({ seed = 1, style = 'shell' } = {}) {
   const S = BASE_STYLES[style] || BASE_STYLES.shell;
   const rand = prng(seed);
@@ -74,7 +88,7 @@ export function createCannonFx({ seed = 1, style = 'shell' } = {}) {
             const a = rand() * Math.PI * 2, rr = main ? 0 : Math.sqrt(rand()) * r * (S.spread || 0);
             shells.push({ fx: m.x + (main ? 0 : (rand() - 0.5) * 0.25), fy: m.y, fz: m.z + (main ? 0 : (rand() - 0.5) * 0.25),
               tx: tx + Math.cos(a) * rr, tz: tz + Math.sin(a) * rr, t: -start, dur: main ? dur : Math.max(0.25, dur - start + (rand() - 0.5) * 0.2),
-              r, main, apex: (CANNON_FX.apex + CANNON_FX.apexPerCell * d) * S.apexK * (main ? 1 : 0.8 + rand() * 0.4),
+              r, main, apex: baseApex(d, S) * (main ? 1 : 0.8 + rand() * 0.4),
               weave: S.weave ? (rand() - 0.5) * 2 * S.weave : 0, x: m.x, y: m.y, z: m.z, vx: 0, vy: 0, vz: 0, live: main });
           }
         }

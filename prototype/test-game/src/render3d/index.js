@@ -41,7 +41,7 @@
  * base cannon's aim. Resource fields are the battle planet's own resource models (resources/; opts.planet =
  * faction key of the homeworld), falling back to the crystal shards when no planet is known.
  */
-import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX, touchSlotPoint } from './camera.js';
+import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX, touchSlotPoint, cellToWorld } from './camera.js';
 import { createFogTracker } from './overlays/fogModel.js';
 import { resolveTier, probeEnv, pixelRatioFor } from './quality.js';
 import { createFogView } from './overlays/fog.js';
@@ -77,7 +77,7 @@ import { createImpactsView } from './fx/impactsView.js';
 import { createCraft3D } from './craft/craft3d.js';
 import { createLanding, landedPose, harvesterOnRamp } from './craft/landing.js';
 import { introCamera } from './craft/introCamera.js';
-import { createCannonFx, createCannonFxView, baseStyleFor } from './fx/cannonFx.js';
+import { createCannonFx, createCannonFxView, baseStyleFor, baseLaunchPitch, BASE_STYLES } from './fx/cannonFx.js';
 import { planCoverage, createCoverageView } from './overlays/coverage.js';
 import { createHealthBarView } from './overlays/healthBars.js';
 import { createGoldPopups, createGoldPopupView } from './overlays/goldPopups.js';
@@ -209,7 +209,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), flashLights: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), flashLights: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -476,6 +476,8 @@ export function renderFrame(r, state, ui, events, dt) {
     const c = state && state.base && state.base.cannon, b = r.map.base;
     const aim = c && c.aimPos && b ? Math.atan2(-(c.aimPos.y - b.y), c.aimPos.x - b.x) : null;
     r.craft.aim(aim, dt);
+    // the roof gun pitches to the base cannon's launch slope, from its own muzzle to the aim point [MM-story_mvedy2wj_a]
+    if (r.craft.elevate) r.craft.elevate(c && c.aimPos ? baseLaunchPitch(r.craft.muzzleWorld(), cellToWorld(c.aimPos.x), cellToWorld(c.aimPos.y), BASE_STYLES[r.baseStyle] || BASE_STYLES.shell) : null, dt);
     r.craft.scan(r.clock);
   }
 

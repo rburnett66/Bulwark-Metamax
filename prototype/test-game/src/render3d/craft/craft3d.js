@@ -114,7 +114,7 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
   // hierarchy: head rides on the weapon; everything else on the model
   for (const [g, G] of Object.entries(groups)) {
     const piv = parts[g].pivot;
-    if (g === 'head' && groups.weapon) {
+    if ((g === 'head' || g === 'barrel') && groups.weapon) {   // head and gun ride the weapon
       const w = parts.weapon.pivot;
       G.position.set(piv[0] - w[0], piv[1] - w[1], piv[2] - w[2]);
       groups.weapon.add(G);
@@ -449,10 +449,25 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
       aimYaw += Math.max(-1, Math.min(1, d)) * Math.min(1, (dt || 0) * 3);
       groups.weapon.rotation.y = aimYaw;
     },
+    /** Pitch the roof gun toward `pitch` (radians, + = up; null = level) at the model's rate. [MM-story_mvedy2wj_a] */
+    elevate(pitch, dt) {
+      const B = groups.barrel, lim = def.barrel;
+      if (!B || !lim) return;
+      const D = Math.PI / 180, want = pitch == null ? 0 : Math.max(lim.min * D, Math.min(lim.max * D, pitch));
+      const step = lim.rate * Math.max(0, Math.min(0.1, dt || 0));
+      B.rotation.z += Math.max(-step, Math.min(step, want - B.rotation.z));
+    },
+    /** Current gun pitch (radians), 0 without a pitching gun. */
+    get pitch() { return groups.barrel ? groups.barrel.rotation.z : 0; },
     /** World position (cells) of the roof gun's muzzle — where the base cannon's shell leaves. [MM-task_mvbvpyer_x] */
     muzzleWorld() {
-      const g = groups.weapon || model;
       root.updateMatrixWorld(true);
+      if (groups.barrel && def.muzzle) {   // the tip of the (pitched) gun
+        const p = def.muzzle, b = parts.barrel.pivot;
+        const v = new THREE.Vector3(p[0] - b[0], p[1] - b[1], p[2] - b[2]).applyMatrix4(groups.barrel.matrixWorld);
+        return { x: v.x, y: v.y, z: v.z };
+      }
+      const g = groups.weapon || model;
       const v = new THREE.Vector3(2.4, 0.35, 0).applyMatrix4(g.matrixWorld);
       return { x: v.x, y: v.y, z: v.z };
     },
