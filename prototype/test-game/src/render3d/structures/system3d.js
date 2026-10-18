@@ -104,7 +104,8 @@ export function muzzlePoint(it, wy, i = 0) {
   const d = m.d || [1, 0, 0], dl = Math.hypot(d[0], d[1], d[2]) || 1, a = wy;
   const dx = (d[0] * Math.cos(a) + d[2] * Math.sin(a)) / dl, dy = d[1] / dl, dz = (-d[0] * Math.sin(a) + d[2] * Math.cos(a)) / dl;
   const back = (m.back || 0) * k;
-  return { x: tip[0], y: tip[1], z: tip[2], dx, dy, dz, bx: tip[0] - dx * back, by: tip[1] - dy * back * sy, bz: tip[2] - dz * back, brake: (m.brake || 0) * k, n: list.length };
+  return { x: tip[0], y: tip[1], z: tip[2], dx, dy, dz, bx: tip[0] - dx * back, by: tip[1] - dy * back * sy, bz: tip[2] - dz * back, brake: (m.brake || 0) * k, n: list.length,
+    gx: it.x, gz: it.z, gr: 0.42 };   // the tower's foot on the ground (the firing shockwave starts here)
 }
 
 export function createSystemStructures(THREE, scene, { env } = {}) {
@@ -151,7 +152,11 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       K.meshes.body.instanceMatrix.needsUpdate = true;
     }
   }
-  // turrets + heads: base transform · pivot · own rotation · −pivot (head rides on the weapon's pivot)
+  // turrets + heads. prims.buildModel leaves each group's geometry RELATIVE TO ITS PIVOT (the group node carries the
+  // pivot), so the instance matrix is base · T(pivot) · own rotation — no −pivot. (It used to append −pivot too,
+  // which drew every turret, barrel and optic a pivot-height LOW, a third of a cell under the authored model and
+  // under the firing points — owner: "they appear to be floating". [MM-task_mvd1yej4_g])
+  // The head rides on the weapon: base · T(pw) · Rw · T(ph − pw) · Rh.
   function writeMoving() {
     for (const it of items) {
       const K = kinds[it.model];
@@ -159,11 +164,11 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       const wy = yaw.has(it.id) ? yaw.get(it.id) : it.ry;
       const R = rootMatrix(it, it.ry, M);
       const pw = K.parts.weapon.pivot, local = wy - it.ry;
-      const W = R.clone().multiply(Mp.makeTranslation(pw[0], pw[1], pw[2])).multiply(Mr.makeRotationY(local)).multiply(Ms.makeTranslation(-pw[0], -pw[1], -pw[2]));
+      const W = R.clone().multiply(Mp.makeTranslation(pw[0], pw[1], pw[2])).multiply(Mr.makeRotationY(local));
       K.meshes.weapon.setMatrixAt(it.slot, W);
       if (K.meshes.head) {
         const ph = K.parts.head.pivot, sweep = Math.sin(clock * 1.25 + it.slot * 0.9) * 0.9;
-        const H = W.clone().multiply(Mp.makeTranslation(ph[0], ph[1], ph[2])).multiply(Mr.makeRotationY(sweep)).multiply(Ms.makeTranslation(-ph[0], -ph[1], -ph[2]));
+        const H = W.clone().multiply(Mp.makeTranslation(ph[0] - pw[0], ph[1] - pw[1], ph[2] - pw[2])).multiply(Mr.makeRotationY(sweep));
         K.meshes.head.setMatrixAt(it.slot, H);
       }
     }

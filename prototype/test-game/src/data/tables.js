@@ -1011,7 +1011,7 @@ export const STRUCTURES = Object.freeze({
     range: 5, cost: [300, 750, 1500],
     buildTime: 3, upgradeTime: 4, sellTime: 1.5,
     footprint: Object.freeze({ w: 1, h: 1 }),
-    aoeRadius: 1.2, cadence: 2.0
+    aoeRadius: 1.2, cadence: 3.0   // owner 2026-10-17: slower salvos (render hint; dps unchanged) [MM-task_mvd1yej4_g]
   }),
   'STR-Missile': Object.freeze({
     name: 'Missile Tower', kind: 'antiAir',
