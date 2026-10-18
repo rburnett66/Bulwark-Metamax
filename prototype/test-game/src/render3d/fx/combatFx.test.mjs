@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as THREE from '../../../vendor/three.module.js';
-import { createCombatFx, RECIPES, SHOT_LOOK, FLASH, MUZZLE, AIM, FLIGHT } from './combatFxModel.js';
+import { createCombatFx, RECIPES, STRUCT_RECIPES, SHOT_LOOK, FLASH, MUZZLE, AIM, FLIGHT } from './combatFxModel.js';
+import { STRUCTURES } from '../../data/tables.js';
 import { createCombatFxView } from './combatFx.js';
 import { glowPixels, glowAlpha, GLOW_SIZE } from './glowTexture.js';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
@@ -114,6 +115,18 @@ test('cadence: no second volley before the shooter is ready', () => {
   assert.equal(fx.launched, 2);
   run(fx, st, 2);
   assert.ok(fx.launched >= 5 && fx.launched <= 6, `launched ${fx.launched} in 3 s`);
+});
+
+test('cannon tower: cadence + burst come from tables.js — 2-round volleys every ~1.5 s [MM-story_mvedxogl_4]', () => {
+  assert.equal(STRUCT_RECIPES['STR-Cannon'].cadence, STRUCTURES['STR-Cannon'].cadence);
+  assert.equal(STRUCT_RECIPES['STR-Cannon'].burst, STRUCTURES['STR-Cannon'].burst);
+  assert.equal(STRUCTURES['STR-Cannon'].cadence, 1.5);
+  assert.equal(STRUCTURES['STR-Cannon'].burst, 2);
+  const fx = createCombatFx();
+  const st = world({ units: [tank({ targetId: 0, pos: { x: 8, y: 4 } })], structures: [tower({ structId: 'STR-Cannon' })] });
+  run(fx, st, 4.2);
+  // volleys at ~0, ~1.5, ~3.0 s (±15 %) of 2 rounds → 6 (5–7 allowing a burst straddling the window)
+  assert.ok(fx.launched >= 4 && fx.launched <= 7, `launched ${fx.launched} in 4.2 s (was ~20 at 0.55 s × 3)`);
 });
 
 test('who fires: armed units only, never harvesters, never at a dead or missing target', () => {
