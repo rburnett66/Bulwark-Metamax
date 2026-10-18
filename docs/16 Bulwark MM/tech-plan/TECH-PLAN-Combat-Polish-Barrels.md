@@ -5,7 +5,8 @@ Owner asks (2026-10-18): (1) the cannon tower should fire more slowly; (2) rebui
 base defence so the barrel tilts up and down to match the shot's trajectory; (3) dirt puffs around the
 base of a structure while it is being built. Added the same day: (4) cannon gunsmoke that starts tip-sized, is
 pushed a little way out, then expands and clears; (5) on mobile, tower placement uses a virtual-joystick
-offset so the finger never covers the slot, and the tower builds when the finger lifts.
+offset so the finger never covers the slot, and the tower builds when the finger lifts; (6) attacking planes
+never stop: they make attack runs, overfly, circle back and attack again, while drones and copters may hover.
 
 Items 1–4 are **render-side** changes to the 3D view. The sim stays as it is, with no gameplay or balance
 change, and the replay contract holds (no `Date.now()` / `Math.random()` in the tick path; the FX use their
@@ -168,7 +169,53 @@ the camera (`index.js:102-139`), so the ghost can't be steered with the finger. 
   - Release over the palette cancels.
   - Mouse click still places under the cursor.
 
-### 2.8 Fix the aiming gap
+### 2.9 Planes fly attack runs; drones and copters hover (CP-11)
+**Today** (verified):
+- **Air units:** each faction has Copters, Planes and Missiles (a drone), plus `AIR-HeavyBomber`.
+- **Classification:** only `artClass` tells them apart (`copter`, `plane`, `missile`, `heavyBomber`;
+  `src/data/tables.js`). In 3D all four use the same `jet` model at different scales (`units/modelKeys.js:18-25`).
+- **Stopping:** in the sim, a flyer that reaches weapon range switches to `'attacking'`, stops moving and
+  deals continuous `dps × dt` (`src/sim/core.js:603-611`; structure hunters `:585-587`).
+- **Render:** the 3D view draws the unit at its sim position (`unitViews.js:58`), so a plane parks in mid-air.
+
+**Two ways to do it (owner decision):**
+
+| | A. Render-only flight path (recommended) | B. Sim attack runs |
+|---|---|---|
+| What moves | the drawn plane flies a pass-and-turn loop around its sim position | the sim unit itself flies the loop |
+| Damage / balance | unchanged (still continuous) | changes plane DPS and how long planes sit inside tower range; `balanceSim` needs re-baselining |
+| Replays | unaffected | the state hash changes; saved replay logs are invalidated |
+| Effort | 3–5 pts | 8+ pts plus a balance pass |
+
+**Plan A, in detail:**
+- **Flight path:** a new pure module, `src/render3d/units/flightPath.js`, gives each attacking plane a
+  deterministic loop (phase seeded from unit id; time from the render clock):
+  - an inbound strafing run toward the target;
+  - an overfly past it;
+  - a climbing banked turn;
+  - then back around for the next run.
+  - Radius and speed scale with the unit's speed and range.
+- **Fly-in:** planes still fly in along their sim path. The loop starts when the sim says `'attacking'`, and
+  blends in from the current position so there is no jump.
+- **Heading and bank:** come from the loop's tangent (bank into the turn), not from `heading.js`.
+- **Firing:** the plane's shots are drawn only during the inbound run, so it reads as attack runs. The damage
+  model doesn't change.
+- **Everything follows the drawn plane:** the same offset (keyed by unit id) feeds AA missile homing
+  (`combatFxModel.js aimPoint`), the shot origin, tower turret aim, health bars, wrecks and dust. AA fire
+  chases the plane you see.
+- **Which units:** a data flag in `tables.js` decides who flies runs, `attackPattern: 'strafe'` on Planes and
+  `AIR-HeavyBomber`. Copters and Missiles (drones) have no flag and keep hovering at their attack position.
+  Balance is data; nothing checks `artClass` in code.
+- **Tests:**
+  - A plane view is never stationary while attacking.
+  - The loop is continuous (no jumps) and stays within a radius.
+  - Copter and drone views stay put.
+  - AA homing aims at the drawn position.
+  - Shots are drawn only on the inbound run.
+- **Follow-up (not in this story):** copters and drones still use the jet model. Giving them their own
+  rotor/drone models would make the hover read better.
+
+### 2.10 Fix the aiming gap
 Towers aim at structure and base targets as well as units. This is a prerequisite for correct pitch, so the
 barrel doesn't aim at nothing.
 
@@ -188,6 +235,7 @@ barrel doesn't aim at nothing.
 8. **Cannon recoil:** cannon tower, tank/Tiger main guns and base super-cannon only. Depends on 3, 5, 6.
 9. **Cannon gunsmoke:** tip-sized, pushed out, expands and clears. Delivered (PR #64) with 1.
 10. **Mobile tower placement:** offset slot up-left of the finger, drag steers it, release builds. Independent.
+11. **Plane attack runs:** pass-and-turn loops for planes; drones and copters hover. Plan A unless the owner picks B.
 
 ## 4. Tests
 - `firingPoints.test.mjs` asserts the cannon tip at a fixed 8° and **will change**. It becomes "the tip follows
