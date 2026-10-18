@@ -67,6 +67,7 @@ import { createCombatFx } from './fx/combatFxModel.js';
 import { createCombatFxView } from './fx/combatFx.js';
 import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createRepairFx } from './fx/repairFx.js';
+import { createBuildFx } from './fx/buildFx.js';
 import { createDustTrails } from './fx/dustTrail.js';
 import { createFlashLights, FLASH_LIGHTS } from './fx/flashLights.js';
 import { createImpactsView } from './fx/impactsView.js';
@@ -204,7 +205,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), dust: createDustTrails(), flashLights: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), dust: createDustTrails(), flashLights: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -511,6 +512,7 @@ export function renderFrame(r, state, ui, events, dt) {
   r.healthBars.update(state, views, dt, { baseCell: r.map.base });
   r.gold.feed(events, r.map); r.gold.step(Math.max(0, Math.min(0.1, dt || 0)));
   r.repairFx.step(dt, state, events, r.impacts.emit, FXK);   // welding sparks on structures under repair [MM-task_mvcrs0q1_14]
+  r.buildFx.step(dt, state, events, r.impacts.emit, FXK, r.impacts.ring, r.tier.key);   // dirt puffs round build sites [MM-story_mvedxrmi_6]
   r.unloads.feed(events, state); r.unloads.step(Math.max(0, Math.min(0.1, dt || 0)), state);
   r.unloadView.sync(r.unloads, Math.max(0, Math.min(0.1, dt || 0)), r.impacts, FXK, r.map.base);
   r.stats.impacts = r.impactsView.sync(r.impacts, true);
