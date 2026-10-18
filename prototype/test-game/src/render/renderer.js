@@ -677,10 +677,10 @@ function emitCombatFx(renderer, state) {
           // heavy round per volley instead of the cannon's 4-round spray; authored projFx still wins
           let sdef = null;
           try { sdef = getStructureDef(st.structId); } catch (e) { sdef = null; }
-          const dCad = sdef && sdef.cadence;
+          const dCad = sdef && sdef.cadence, dBurst = sdef && sdef.burst;   // a def burst (the cannon) keeps the shell look
           if (st.kind === 'antiGround') fire('s' + st.id, c, { x: lp.x, y: ty },
-            (tfx && tfx.kind) || 'shell', (tfx && tfx.cadence) || dCad || 0.55, (tfx && tfx.speed) || (dCad ? 9 : 13),
-            (tfx && tfx.color !== undefined) ? tfx.color : 0xffd080, (tfx && tfx.burst) || (dCad ? 1 : 4), tfx && tfx.size,
+            (tfx && tfx.kind) || 'shell', (tfx && tfx.cadence) || dCad || 0.55, (tfx && tfx.speed) || (dCad && !dBurst ? 9 : 13),
+            (tfx && tfx.color !== undefined) ? tfx.color : 0xffd080, (tfx && tfx.burst) || dBurst || (dCad ? 1 : 4), tfx && tfx.size,
             tfx && tfx.streakLen, tfx && tfx.streakWid);
           else fire('s' + st.id, c, { x: lp.x, y: ty },
             (tfx && tfx.kind) || 'flak', (tfx && tfx.cadence) || dCad || 0.35, (tfx && tfx.speed) || 18,

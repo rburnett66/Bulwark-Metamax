@@ -19,6 +19,7 @@ import { cellToWorld } from '../camera.js';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
 import { shotFxFor } from '../../render/unitFx.js';
+import { STRUCTURES } from '../../data/tables.js';
 
 /** Heights (cells) a shot leaves from and arrives at. Structures are 1-cell blocks (markers.js). */
 export const MUZZLE = Object.freeze({ ground: 0.35, structure: 0.85, antiGround: 0.6, antiAir: 0.5, barrel: 0.42 });
@@ -37,9 +38,11 @@ export const RECIPES = Object.freeze({
 });
 /** Per tower type overrides of the kind recipe (the new towers). */
 export const STRUCT_RECIPES = Object.freeze({
-  // cadence = the tower def's `cadence` (tables.js): one drawn volley per sim volley (dps × cadence)
-  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: 3.0, speed: 8, color: 0xffb070, burst: 4 }),
-  'STR-Missile': Object.freeze({ kind: 'missile', cadence: 1.6, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
+  // cadence (and the cannon's burst) = the tower def's fields in tables.js — read, never copied, so a retune is
+  // one data edit and the 3D and Pixi views can't drift apart [MM-story_mvedxogl_4]
+  'STR-Cannon': Object.freeze({ kind: 'shell', cadence: STRUCTURES['STR-Cannon'].cadence, speed: 21, color: 0xffd080, burst: STRUCTURES['STR-Cannon'].burst }),
+  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: STRUCTURES['STR-Rockets'].cadence, speed: 8, color: 0xffb070, burst: 4 }),
+  'STR-Missile': Object.freeze({ kind: 'missile', cadence: STRUCTURES['STR-Missile'].cadence, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
 });
 export const SHOT_LOOK = Object.freeze({   // Pixi at ~35 px/cell: shell dot 12 px + 33 px streak, flak 17 px, tracer 4 px + 11 px
   shell: Object.freeze({ size: 0.24, len: 0.62 }),
