@@ -108,3 +108,20 @@ test('Low\'s effect budget caps the combat FX', () => {
   fx.update(st, { cols: 32, rows: 32 }, evs, 0, {});
   assert.equal(fx.flashes.length, 40);
 });
+
+// [MM-task_mveeqkyi_h] the Low tier really carries — and the renderer really uses — the reduced impact budget.
+test('Low tier: world-impact particles are capped at LOW_IMPACT_CAPS, not the desktop budget', async () => {
+  const { TIERS } = await import('./quality.js');
+  const { createImpacts, DEFAULT_IMPACT_CAPS, LOW_IMPACT_CAPS, K } = await import('./fx/impacts.js');
+  assert.equal(TIERS.low.impactCaps, LOW_IMPACT_CAPS);
+  assert.equal(TIERS.high.impactCaps, DEFAULT_IMPACT_CAPS);
+  assert.equal(TIERS.standard.impactCaps, DEFAULT_IMPACT_CAPS);
+  const low = createImpacts({ caps: TIERS.low.impactCaps }), high = createImpacts({ caps: TIERS.high.impactCaps });
+  for (const imp of [low, high]) for (let i = 0; i < 3000; i++) imp.emit(K.SMOKE, 0, 0, 0, 0, 0, 0, 5, 0.1);
+  assert.equal(low.counts.smoke, LOW_IMPACT_CAPS.smoke);
+  assert.equal(high.counts.smoke, DEFAULT_IMPACT_CAPS.smoke);
+  // the renderer passes the tier's budget when it creates the impacts model (the line that was missing)
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('./index.js', import.meta.url), 'utf8');
+  assert.match(src, /createImpacts\(\{[^}]*caps:\s*tier\.impactCaps/);
+});
