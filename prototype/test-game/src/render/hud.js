@@ -19,6 +19,9 @@ const CSS = `
   .bw-wave { font-size:11px; white-space:nowrap; }
   .bw-topbar .bw-btn { padding:3px 6px; font-size:11px; white-space:nowrap; }
 }
+@media (max-height: 500px) {   /* phone held sideways: touch targets ≥34px (A11Y-INPUT-2) [MM-story_mvamfcnp_14] */
+  .bw-topbar .bw-btn { min-height:34px; padding:6px 12px; }
+}
 .bw-faction { pointer-events:auto; background:#141b22; color:#e8e8e8; border:1px solid #26313c; border-radius:4px;
   padding:3px 6px; font:inherit; font-size:12px; cursor:pointer; }
 .bw-hpwrap { display:flex; align-items:center; gap:6px; }

@@ -297,7 +297,8 @@ export function boot(mountEl, seed) {
     activeReplayLog = null;
     ended = false;
     interlude = true;                                // every fresh board opens on the tap-to-start overlay
-    if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
+    // selectMap's intro (how to play → landing → contract → wave intel → speaker) shows the prompt at its end
+    if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(!suppressPreDialog, 'TAP TO START');
     // LC: a fresh board re-arms the landing craft; it flies in once the opening dialogs close
     landingReleased = false;
     if (renderer3d && render3dMod && render3dMod.armLanding) render3dMod.armLanding(renderer3d);
@@ -459,19 +460,31 @@ export function boot(mountEl, seed) {
     if (vox) renderer.voxelArt = vox;
     if (dec) renderer.decorArt = dec;
     if (USE_3D) void mount3D(currentMap, nextSlug);
+    // [MM-story_mvamfcnp_14] one dialog at a time: the intro below runs the speaker last, so the board
+    // must not start it on its own (it used to speak behind the contract and the wave intel)
+    suppressPreDialog = true; comm.dismiss();
     restart(currentSeed);
-    // the map banner waits for the landing too (owner 2026-10-17) — see openThenIntro
+    // the map banner waits for the landing too (owner 2026-10-17) — see afterLanding
     const announceMap = () => flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
 
     // ── QUEST CONTRACT offer (owner design): a character from the map's quest-giver faction
     // makes the pitch before the first tap. Skipped when the map seeds no quest fields (maps
     // 1-2) or the map's contract is already FULFILLED.
     runContract = null;
-    suppressPreDialog = false;
     // WB2 — WAVE INTEL: after the contract dialog resolves (or immediately when there's none),
     // brief the FIRST wave's unit types (no counts; new units flagged). Per-wave intel for later
     // waves fires from the interlude below.
-    const showPreview = () => { const info = waveIntel(currentWaves[0], 1); if (info) showWaveIntel(mountEl, info, null); };
+    // ...then the speaker. The intro's last step — the only place the match-start dialog begins.
+    const speakNow = () => {
+      if (mySeq !== mapSelectSeq) return;                 // the player moved on to another map meanwhile
+      suppressPreDialog = false;
+      if (voicePacks) playPreBattleDialog(null);
+      else if (interlude && mode === 'play' && hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
+    };
+    const showPreview = () => {
+      const info = waveIntel(currentWaves[0], 1);
+      if (info) showWaveIntel(mountEl, info, speakNow); else speakNow();
+    };
     const runIntro = () => {
       if (currentMapId) {
         const sv = loadSave();
@@ -480,11 +493,9 @@ export function boot(mountEl, seed) {
         if (offer) {
           // OWNER ordering: the CONTRACT MODAL resolves first, THEN the primary speaks — the
           // start tip only exists when the answer is yes, so the dialog must wait for the answer.
-          suppressPreDialog = true;
-          comm.dismiss();
           showContractModal(mountEl, offer, {
-            onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); showPreview(); },
-            onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); suppressPreDialog = false; if (voicePacks) playPreBattleDialog(null); showPreview(); },
+            onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); showPreview(); },
+            onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); showPreview(); },
           });
         } else {
           showPreview();
@@ -495,21 +506,16 @@ export function boot(mountEl, seed) {
     };
     // EVERY LEVEL OPENS WITH THE LANDING [MM-story_mvbqui1g_m; owner 2026-10-17 "at the start of the game we need to
     // watch the landing craft complete touchdown animation before showing map or character dialog" MM-task_mvd2lq2j_j]:
-    // in the 3D view the craft flies in and touches down FIRST; only then the map banner, the how-to-play brief (first
-    // run), the contract, the wave intel and the speaker. A tap skips the landing.
+    // in the 3D view the craft flies in and touches down FIRST; then the map banner, the how-to-play brief (first run),
+    // the contract, the wave intel and — last, via speakNow — the speaker [MM-story_mvamfcnp_14]. The speaker stays
+    // suppressed the whole time (set above). A tap skips the landing.
     const afterLanding = (next) => {
       if (!USE_3D) { announceMap(); next(); return; }
-      suppressPreDialog = true; comm.dismiss();
       void playOpeningLanding().then(() => {
         if (mySeq !== mapSelectSeq) return;                 // the player moved on to another map meanwhile
         announceMap();
         next();
       });
-    };
-    const openThenIntro = () => {
-      suppressPreDialog = false;
-      runIntro();
-      if (USE_3D && !suppressPreDialog && voicePacks && interlude && mode === 'play') playPreBattleDialog(null);   // no contract: the speaker now
     };
     // HOW TO PLAY (owner): the onboarding brief shows ONCE, before the first map dialog — then the
     // normal contract/wave-intel flow proceeds. localStorage-gated so returning players skip it.
@@ -517,13 +523,12 @@ export function boot(mountEl, seed) {
     try { htpSeen = localStorage.getItem('bulwark:howToPlaySeen') === '1'; } catch (e) { /* storage blocked */ }
     afterLanding(() => {
       if (!htpSeen) {
-        suppressPreDialog = true; comm.dismiss();
         showHowToPlay(mountEl, () => {
           try { localStorage.setItem('bulwark:howToPlaySeen', '1'); } catch (e) { /* storage blocked */ }
-          openThenIntro();
+          runIntro();
         });
       } else {
-        openThenIntro();
+        runIntro();
       }
     });
   }
@@ -788,8 +793,9 @@ export function boot(mountEl, seed) {
   loadVoicePacks().then((p) => {
     voicePacks = p;
     if (p) console.log('[dialog] voice packs loaded:', Object.keys(p.factions).length, 'factions');
-    // boot lands on the tap-to-start interlude before the packs resolve — deliver wave 1's challenge now
-    if (interlude && mode === 'play' && !preDialogFaction) playPreBattleDialog(null);
+    // boot lands on the tap-to-start interlude before the packs resolve — deliver wave 1's challenge now,
+    // unless a map intro still owns the screen (it calls the speaker itself when it ends) [MM-story_mvamfcnp_14]
+    if (interlude && mode === 'play' && !preDialogFaction && !suppressPreDialog) playPreBattleDialog(null);
   });
   const factionVisits = {};      // faction -> waves seen (test-mode rotation, dialog.js)
   let lastWaveFaction = null;    // wave 'clear' / match-end events carry no faction — remember it
@@ -829,7 +835,10 @@ export function boot(mountEl, seed) {
         if (suppressPreDialog) return;                      // a contract / intro owns the screen; it calls back in
       }
       if (!interlude || mode !== 'play') return;
-      if (!faction && idx === 0) releaseLanding();          // no opening dialog → the field is already on screen
+      if (!faction && idx === 0) {                          // no opening dialog → the field is already on screen
+        releaseLanding();
+        if (interlude && mode === 'play' && hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
+      }
       if (!interlude || mode !== 'play' || !faction) return;
       preDialogFaction = faction;
       // ── OWNER DIALOG TIMING (2026-07-16) ──────────────────────────────────────────────
