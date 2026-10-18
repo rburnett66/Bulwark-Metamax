@@ -49,11 +49,11 @@ const M = {};
     { t: 'box', s: [0.5, 0.17, 0.03], p: [0.47, 1.58, 0.93], r3: [0, 38, 0], m: 'dark', g: 'turret', mir: true },
     { t: 'box', s: [0.03, 0.14, 0.32], p: [-1.63, 1.58, 0.55], m: 'dark', g: 'turret', mir: true },
     // twin guns: hex mantlets with glowing rings, barrels with muzzle sleeves
-    { t: 'cyl', ax: 'x', r: 0.21, l: 0.32, seg: 6, p: [0.98, 1.47, 0.34], m: 'hull2', g: 'turret', mir: true },
-    { t: 'cyl', ax: 'x', r: 0.14, l: 0.03, seg: 12, p: [1.15, 1.47, 0.34], m: 'glow', g: 'turret', mir: true },
-    { t: 'cyl', ax: 'x', r: 0.07, l: 0.78, seg: 8, p: [1.52, 1.47, 0.34], m: 'metal', g: 'turret', mir: true },
-    { t: 'cyl', ax: 'x', r: 0.095, l: 0.34, seg: 8, p: [1.73, 1.47, 0.34], m: 'dark', g: 'turret', mir: true },
-    { t: 'cyl', ax: 'x', r: 0.055, l: 0.02, seg: 10, p: [1.905, 1.47, 0.34], m: 'glow', g: 'turret', mir: true },
+    { t: 'cyl', ax: 'x', r: 0.21, l: 0.32, seg: 6, p: [0.98, 1.47, 0.34], m: 'hull2', g: 'barrel', mir: true },
+    { t: 'cyl', ax: 'x', r: 0.14, l: 0.03, seg: 12, p: [1.15, 1.47, 0.34], m: 'glow', g: 'barrel', mir: true },
+    { t: 'cyl', ax: 'x', r: 0.07, l: 0.78, seg: 8, p: [1.52, 1.47, 0.34], m: 'metal', g: 'barrel', mir: true },
+    { t: 'cyl', ax: 'x', r: 0.095, l: 0.34, seg: 8, p: [1.73, 1.47, 0.34], m: 'dark', g: 'barrel', mir: true },
+    { t: 'cyl', ax: 'x', r: 0.055, l: 0.02, seg: 10, p: [1.905, 1.47, 0.34], m: 'glow', g: 'barrel', mir: true },
     // sensor pods with three lenses, small guns, antennas
     { t: 'cyl', ax: 'y', r: 0.08, l: 0.14, seg: 8, p: [-0.95, 1.9, 0.56], m: 'dark', g: 'turret', mir: true },
     { t: 'box', s: [0.42, 0.24, 0.4], p: [-0.95, 2.06, 0.56], m: 'hull', g: 'turret', mir: true },
@@ -62,7 +62,10 @@ const M = {};
     { t: 'cyl', ax: 'x', r: 0.035, l: 0.42, seg: 6, p: [-0.5, 2.0, 0.78], m: 'dark', g: 'turret', mir: true },
     { t: 'cyl', ax: 'y', r: 0.012, l: 0.32, seg: 4, p: [-1.05, 2.34, 0.64], m: 'dark', g: 'turret', mir: true },
   ];
-  M.tank = { name: 'Twin-barrel MBT', ref: 'tank', parts, pivots: { turret: [-0.35, 1.22, 0] },
+  M.tank = { name: 'Twin-barrel MBT', ref: 'tank', parts, pivots: { turret: [-0.35, 1.22, 0], barrel: [0.85, 1.47, 0] },
+    // the twin guns pitch about the mantlet trunnion; shots leave the muzzle sleeves, alternately [MM-story_mvedy16u_9]
+    barrel: { rest: 0, min: -8, max: 25, rate: 1.2 },
+    muzzles: [0.34, -0.34].map((z) => ({ p: [1.915, 1.47, z], d: [1, 0, 0], back: 0.95 })),
     views: { side: 'right', top: 'down' } };
 }
 
@@ -114,11 +117,13 @@ const oct = (yb, ym, ys, yt, wb, wm, ws, wt) => [[-wb, yb], [wb, yb], [wm, ym], 
     { t: 'box', s: [0.2, 0.1, 0.2], p: [-0.88, 2.11, 0], m: 'dark', g: 'turret' },
     { t: 'cyl', ax: 'x', r: 0.12, l: 0.06, seg: 12, p: [-0.54, 1.97, 0], m: 'black', g: 'turret' },
     { t: 'cyl', ax: 'x', r: 0.06, l: 0.02, seg: 10, p: [-0.505, 1.97, 0], m: 'glowB', g: 'turret' },
-    { t: 'cyl', ax: 'x', r: 0.05, l: 0.2, seg: 8, p: [-0.42, 1.9, 0], m: 'metal', g: 'turret' },
-    { t: 'cyl', ax: 'x', r: 0.04, l: 0.34, seg: 8, p: [-0.15, 1.9, 0], m: 'glow', g: 'turret' },
-    { t: 'cyl', ax: 'x', r: 0.055, l: 0.1, seg: 8, p: [0.06, 1.9, 0], m: 'metal', g: 'turret' },
+    { t: 'cyl', ax: 'x', r: 0.05, l: 0.2, seg: 8, p: [-0.42, 1.9, 0], m: 'metal', g: 'barrel' },
+    { t: 'cyl', ax: 'x', r: 0.04, l: 0.34, seg: 8, p: [-0.15, 1.9, 0], m: 'glow', g: 'barrel' },
+    { t: 'cyl', ax: 'x', r: 0.055, l: 0.1, seg: 8, p: [0.06, 1.9, 0], m: 'metal', g: 'barrel' },
   ];
-  M.buggy = { name: 'SR-07 scout', ref: 'buggy', parts, pivots: { turret: [-0.85, 1.69, 0] }, views: { side: 'right', top: 'down' } };
+  M.buggy = { name: 'SR-07 scout', ref: 'buggy', parts, pivots: { turret: [-0.85, 1.69, 0], barrel: [-0.55, 1.9, 0] },
+    barrel: { rest: 0, min: -8, max: 35, rate: 1.6 },   // [MM-story_mvedy16u_9]
+    muzzles: [{ p: [0.115, 1.9, 0], d: [1, 0, 0], back: 0.65 }], views: { side: 'right', top: 'down' } };
 }
 
 // ── BEETLE "Stag tracker" ─────────────────────────────────────────────────────────────────────────────
@@ -263,12 +268,12 @@ const oct = (yb, ym, ys, yt, wb, wm, ws, wt) => [[-wb, yb], [wb, yb], [wm, ym], 
       { t: 'box', s: [0.12, 0.2, 0.34], p: [-2.38, 0.78, -0.72], m: 'hull2' },
       // ── WEAPON: long hexagonal turret, bell mantlet, 8.8 cm gun with muzzle brake
       { t: 'loft', ax: 'y', secs: [[1.21, TUR], [1.82, TUR_TOP]], m: 'hull', g: 'weapon' },
-      { t: 'cyl', ax: 'x', r: [0.17, 0.28], l: 0.4, seg: 12, p: [1.14, 1.48, 0], m: 'hull2', g: 'weapon' },
-      { t: 'cyl', ax: 'x', r: 0.115, l: 0.55, seg: 10, p: [1.6, 1.48, 0], m: 'hull', g: 'weapon' },
-      { t: 'cyl', ax: 'x', r: 0.075, l: 3.0, seg: 8, p: [3.3, 1.48, 0], m: 'metal', g: 'weapon' },
-      { t: 'cyl', ax: 'x', r: 0.115, l: 0.3, seg: 10, p: [4.74, 1.48, 0], m: 'dark', g: 'weapon' },
-      { t: 'box', s: [0.12, 0.05, 0.25], p: [4.74, 1.48, 0], m: 'black', g: 'weapon' },
-      { t: 'cyl', ax: 'x', r: 0.05, l: 0.02, seg: 8, p: [4.9, 1.48, 0], m: 'glow', g: 'weapon' },
+      { t: 'cyl', ax: 'x', r: [0.17, 0.28], l: 0.4, seg: 12, p: [1.14, 1.48, 0], m: 'hull2', g: 'barrel' },
+      { t: 'cyl', ax: 'x', r: 0.115, l: 0.55, seg: 10, p: [1.6, 1.48, 0], m: 'hull', g: 'barrel' },
+      { t: 'cyl', ax: 'x', r: 0.075, l: 3.0, seg: 8, p: [3.3, 1.48, 0], m: 'metal', g: 'barrel' },
+      { t: 'cyl', ax: 'x', r: 0.115, l: 0.3, seg: 10, p: [4.74, 1.48, 0], m: 'dark', g: 'barrel' },
+      { t: 'box', s: [0.12, 0.05, 0.25], p: [4.74, 1.48, 0], m: 'black', g: 'barrel' },
+      { t: 'cyl', ax: 'x', r: 0.05, l: 0.02, seg: 8, p: [4.9, 1.48, 0], m: 'glow', g: 'barrel' },
       // cupola + loader hatch + periscope
       { t: 'cyl', ax: 'y', r: 0.21, l: 0.13, seg: 12, p: [-0.62, 1.88, -0.36], m: 'hull2', g: 'weapon' },
       { t: 'cyl', ax: 'y', r: 0.16, l: 0.04, seg: 12, p: [-0.62, 1.96, -0.36], m: 'dark', g: 'weapon' },
@@ -279,13 +284,16 @@ const oct = (yb, ym, ys, yt, wb, wm, ws, wt) => [[-wb, yb], [wb, yb], [wm, ym], 
       { t: 'box', s: [0.04, 0.08, 0.5], p: [-1.43, 1.52, 0], m: 'dark', g: 'weapon' },                          // rear hatch
     ];
     parts.push(...radarDish({ x: -1.1, y: 1.82, z: 0.32, mast: 0.22, r: 0.27 }));
-    M.tiger = { name: 'King Tiger heavy tank', unit: 'GND-HeavyTanks', ref: 'tiger', parts, pivots: { weapon: [-0.17, 1.21, 0], head: [-1.1, 1.82, 0.32] }, head: { mode: 'sweep' },
+    M.tiger = { name: 'King Tiger heavy tank', unit: 'GND-HeavyTanks', ref: 'tiger', parts, pivots: { weapon: [-0.17, 1.21, 0], head: [-1.1, 1.82, 0.32], barrel: [0.95, 1.48, 0] }, head: { mode: 'sweep' },
+      // the 8.8 cm gun pitches about the mantlet; shots leave the muzzle brake [MM-story_mvedy16u_9]
+      barrel: { rest: 0, min: -8, max: 20, rate: 0.9 },
+      muzzles: [{ p: [4.91, 1.48, 0], d: [1, 0, 0], back: 1.9 }],
       views: { side: 'right', top: 'left' } };
   }
 
   const toGame = (def) => Object.assign({}, def, {
     parts: def.parts.map((q) => (q.g === 'weapon' || q.g === 'head' ? Object.assign({}, q, { g: 'turret' }) : q)),
-    pivots: { turret: def.pivots.weapon },
+    pivots: def.pivots.barrel ? { turret: def.pivots.weapon, barrel: def.pivots.barrel } : { turret: def.pivots.weapon },
   });
   M.tiger = toGame(M.tiger);
 }

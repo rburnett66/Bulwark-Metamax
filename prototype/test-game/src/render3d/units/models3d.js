@@ -63,6 +63,18 @@ export function mergeModelGroups(THREE, def, prims = createPrims(THREE), modelKe
   return out;
 }
 
+/** One geometry from a and b, b shifted by `off` (non-indexed, same attributes). */
+export function mergeOffset(THREE, a, b, off) {
+  const geo = new THREE.BufferGeometry();
+  for (const [name, A] of Object.entries(a.attributes)) {
+    const B = b.attributes[name], n = A.itemSize, arr = new Float32Array(A.array.length + B.array.length);
+    arr.set(A.array, 0); arr.set(B.array, A.array.length);
+    if (name === 'position') for (let i = A.array.length; i < arr.length; i += 3) { arr[i] += off.x; arr[i + 1] += off.y; arr[i + 2] += off.z; }
+    geo.setAttribute(name, new THREE.Float32BufferAttribute(arr, n));
+  }
+  return geo;
+}
+
 /** Planar-shadow material (shared by live units and FX wrecks, which reuse their instance matrices). */
 export function shadowMaterial(THREE, sunDir, alpha) {
   return new THREE.ShaderMaterial({
@@ -124,7 +136,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
     types[key] = T;
   }
 
-  const m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), mp = new THREE.Matrix4();
+  const m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), mp = new THREE.Matrix4(), mt = new THREE.Matrix4(), mr = new THREE.Matrix4();
   const q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
   const yAxis = new THREE.Vector3(0, 1, 0), xAxis = new THREE.Vector3(1, 0, 0), qBank = new THREE.Quaternion();
   const counts = {};
@@ -141,7 +153,14 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       const out = {};
       for (const [key, T] of Object.entries(types)) {
         out[key] = {};
-        for (const [g, G] of Object.entries(T.groups)) out[key][g] = { geo: G.lodGeo, pivot: G.pivot };
+        for (const [g, G] of Object.entries(T.groups)) if (g !== 'barrel') out[key][g] = { geo: G.lodGeo, pivot: G.pivot };
+        // a wreck's turret keeps its gun: the barrel (level) folded into the turret geometry
+        const TG = T.groups.turret, BG = T.groups.barrel;
+        if (TG && BG) {
+          const geo = mergeOffset(THREE, TG.lodGeo, BG.lodGeo, BG.pivot.clone().sub(TG.pivot));
+          owned.push(geo);
+          out[key].turret = { geo, pivot: TG.pivot };
+        }
       }
       return out;
     },
@@ -160,10 +179,12 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
         q.setFromAxisAngle(yAxis, -u.heading);
         if (u.bank) q.multiply(qBank.setFromAxisAngle(xAxis, u.bank));   // a plane banking through a turn (flightPath.js)
         m1.compose(v.set(u.x, u.y || 0, u.z), q, s.set(k, k, k));
+        const TG = T.groups.turret;
+        if (TG) mt.compose(TG.pivot, q.setFromAxisAngle(yAxis, -((u.aim ?? u.heading) - u.heading)), one).premultiply(m1);
         for (const [gname, G] of Object.entries(T.groups)) {
-          if (gname === 'turret') {
-            q.setFromAxisAngle(yAxis, -((u.aim ?? u.heading) - u.heading));
-            m2.compose(G.pivot, q, one).premultiply(m1);
+          if (gname === 'turret') m2.copy(mt);
+          else if (gname === 'barrel' && TG) {   // rides the turret, pitched about its trunnion [MM-story_mvedy16u_9]
+            m2.copy(mt).multiply(mp.makeTranslation(G.pivot.x - TG.pivot.x, G.pivot.y - TG.pivot.y, G.pivot.z - TG.pivot.z)).multiply(mr.makeRotationZ(u.pitch || 0));
           } else {
             m2.copy(m1).multiply(mp.makeTranslation(G.pivot.x, G.pivot.y, G.pivot.z));
           }

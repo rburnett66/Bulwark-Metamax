@@ -173,6 +173,8 @@ function spawn(key, x, z, yaw) {
     const ls = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: S.edges, transparent: true, opacity: o.userData.mat === 'dark' || o.userData.mat === 'black' || o.userData.mat === 'track' ? 0.45 : 0.95 }));
     o.add(ls);
   });
+  // the gun's own `barrel` group (it pitches in the game) rides the turret here
+  if (built.groups.barrel && built.groups.turret) { const b = built.groups.barrel; b.position.sub(built.groups.turret.position); built.groups.turret.add(b); }
   root.position.set(x, def.hover || 0, z); root.rotation.y = yaw || 0;
   scene.add(root);
   const u = { root, turret: built.groups.turret || null, def, tris: built.tris, phase: Math.random() * 6 };

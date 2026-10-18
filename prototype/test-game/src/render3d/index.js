@@ -69,6 +69,7 @@ import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createRepairFx } from './fx/repairFx.js';
 import { createFlightPaths } from './units/flightPath.js';
 import { buildHeightField, createAirLift } from './obstructions/heightField.js';
+import { createUnitBarrels } from './units/unitBarrels.js';
 import { createBuildFx } from './fx/buildFx.js';
 import { createDustTrails } from './fx/dustTrail.js';
 import { createFlashLights, FLASH_LIGHTS } from './fx/flashLights.js';
@@ -208,7 +209,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), heightField: null, dust: createDustTrails(), flashLights: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), flashLights: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -329,6 +330,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     }
   };
   r.fxOpts.muzzle = (id, n) => (r.system ? r.system.muzzle(id, n) : null);
+  r.fxOpts.unitMuzzle = (id, n) => r.unitBarrels.muzzle(id, n);
   r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
   attachCameraInput(canvas, r);
   // point-light flashes (experiment): count by tier, ?flashlights=N overrides [MM-task_mvd2lrig_k]
@@ -483,7 +485,7 @@ export function renderFrame(r, state, ui, events, dt) {
   // Live units: the 3D models (T5). Live planar shadows per the quality tier (off on Low — T3.5).
   let views = null;
   if (state && state.units) {
-    views = buildUnitViews(state, r.map, r.headings, r.resolveModel, Math.min(0.1, Math.max(0, dt || 0)));   // smooth turning; clamped so a stalled frame can't swing a whole turn at once
+    views = buildUnitViews(state, r.map, r.headings, r.resolveModel, Math.min(0.1, Math.max(0, dt || 0)), r.airLift.drawn);   // smooth turning; clamped so a stalled frame can't swing a whole turn at once
     if (r.landing && r.craft && !r.landingHandedOff) views = landingHarvesters(r, state, views);
     // attacking planes fly attack runs around their target instead of parking (render-only) [MM-story_mvee9r08_e]
     r.flight.update(state, r.map, views, dt);
@@ -496,6 +498,7 @@ export function renderFrame(r, state, ui, events, dt) {
     r.fxOpts.hidden = c.hidden;
     r.stats.contacts = r.contactsView.sync(c.reticles, r.clock);
     r.dust.step(dt, views, r.impacts.emit, FXK);   // light dust behind moving ground vehicles [MM-task_mvd2loid_i]
+    r.unitBarrels.update(views, state, r.map, r.airLift.drawn, dt);   // unit guns pitch to the shot; their tips are firing points [MM-story_mvedy16u_9]
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows);
   }
 

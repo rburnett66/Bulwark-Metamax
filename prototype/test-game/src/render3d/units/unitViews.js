@@ -42,7 +42,7 @@ export function targetPos(state, map, targetId) {
  * `dt` (seconds since the last frame) eases hull + turret toward their goals at capped turn rates; omit it
  * to snap. Returns [{ id, model, scale, x, y, z, heading, aim }] in world units — DRAWN angles.
  */
-export function buildUnitViews(state, map, headings, resolve, dt) {
+export function buildUnitViews(state, map, headings, resolve, dt, drawn = null) {
   const out = [];
   if (!state || !state.units) return out;
   const live = new Set();
@@ -51,7 +51,9 @@ export function buildUnitViews(state, map, headings, resolve, dt) {
     live.add(u.id);
     const r = resolve(u.unitId);
     const goal = headings.update(u.id, u.pos.x, u.pos.y);
-    const tp = targetPos(state, map, u.targetId);
+    // a plane on an attack run is aimed at where it is DRAWN (flightPath.js), so turrets track the drawn plane
+    const dp = drawn && u.targetId != null ? drawn.get(u.targetId) : null;
+    const tp = dp ? { x: dp.x - 0.5, y: dp.z - 0.5 } : targetPos(state, map, u.targetId);
     const { heading, aim } = headings.turn(u.id, goal, tp ? Math.atan2(tp.y - u.pos.y, tp.x - u.pos.x) : goal, dt);
     out.push({
       id: u.id, model: r.model, scale: r.scale,

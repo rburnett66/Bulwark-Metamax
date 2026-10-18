@@ -254,6 +254,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     const scale = opts.projScale || 1;
     const getDef = opts.getDef || null;
     const muzzleOf = opts.muzzle || null;   // (structure id, n) → modelled firing point, from the System turrets
+    const unitMuzzleOf = opts.unitMuzzle || null;   // (unit id, n) → a unit gun's firing point (units/unitBarrels.js) [MM-story_mvedy16u_9]
 
     // burst rounds that have come due
     for (let i = queue.length - 1; i >= 0; i--) {
@@ -300,7 +301,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         if (!flyer) { from.gx = from.x; from.gz = from.z; from.gr = 0.22; }   // a tank's tracks — its firing shockwave starts here
         const e = pfx && pfx[u.unitId];
         const color = u.side === 'attacker' ? base.attacker : base.defender;
-        fire('u' + u.id, now, from, to, lookFor(e, base, kind, color, scale), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence);
+        const umuz = unitMuzzleOf && !run ? (n) => unitMuzzleOf(u.id, n) : null;
+        fire('u' + u.id, now, from, to, lookFor(e, base, kind, color, scale), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence, null, umuz);
       }
     }
   }
