@@ -128,7 +128,7 @@ function eventPos(ev, map) {
  *   shots   — [{ x, y, z, dx, dy, dz, size, len, color }]   live rounds; (dx,dy,dz) = unit flight direction
  *   flashes — [{ x, y, z, size, color, alpha }]             live glows (alpha already faded)
  * opts: { getDef(unitId) → def, projFx: { id: entry }, projScale, hidden: Set of unit ids that draw no shots (hidden contacts),
- *         flight: Map unit id → drawn pose of planes on attack runs (aim at / fire from where they are drawn),
+ *         flight: Map unit id → drawn { x, y, z, strafe, inbound } of flyers (aim at / fire from where they are drawn),
  *         muzzle(structId, n) → modelled firing point { x, y, z, dx, dy, dz, bx, by, bz, brake } (System turrets),
  *         fire(kind, firingPoint, look) — launch effects (barrel exhaust, rocket plume, missile ignition),
  *         trail(kind, x, y, z, k, dx, dy, dz, t) — in-flight motor flame + smoke (t: missile s aloft, rocket flight 0..1), boom(x, z, k) } — all optional.
@@ -279,7 +279,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         if (!to) continue;
         const flyer = u.domain === 'Flyer' || u.altitude > 0;
         const run = opts.flight && opts.flight.get(u.id);
-        if (run && !run.inbound) continue;   // a strafing plane fires on its inbound run only [MM-story_mvee9r08_e]
+        if (run && run.strafe && !run.inbound) continue;   // a strafing plane fires on its inbound run only [MM-story_mvee9r08_e]
         const from = run ? { x: run.x, y: run.y, z: run.z } : { x: cellToWorld(u.pos.x), y: flyer ? HOVER_HEIGHT : MUZZLE.ground, z: cellToWorld(u.pos.y) };
         if (!flyer) { from.gx = from.x; from.gz = from.z; from.gr = 0.22; }   // a tank's tracks — its firing shockwave starts here
         const e = pfx && pfx[u.unitId];

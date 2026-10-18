@@ -92,7 +92,7 @@ test('AA and tower aim follow the DRAWN plane; a strafing plane fires only on it
     const fx = createCombatFx();
     const s = world(flyer({ targetId: BASE_TARGET_ID }));
     s.time = 0;
-    const flight = new Map([[1, { x: 16, y: 1.0, z: 12.5, inbound }]]);
+    const flight = new Map([[1, { x: 16, y: 1.0, z: 12.5, strafe: true, inbound }]]);
     for (let i = 0; i < 60; i++) { fx.update(s, { cols: 40, rows: 24, base: { x: 20, y: 12 } }, [], 1 / 60, { getDef: () => ({ projectileFx: 'tracer' }), flight }); s.time += 1 / 60; }
     return fx.launched;
   };

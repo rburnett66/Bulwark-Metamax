@@ -68,6 +68,7 @@ import { createCombatFxView } from './fx/combatFx.js';
 import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createRepairFx } from './fx/repairFx.js';
 import { createFlightPaths } from './units/flightPath.js';
+import { buildHeightField, createAirLift } from './obstructions/heightField.js';
 import { createBuildFx } from './fx/buildFx.js';
 import { createDustTrails } from './fx/dustTrail.js';
 import { createFlashLights, FLASH_LIGHTS } from './fx/flashLights.js';
@@ -207,7 +208,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), dust: createDustTrails(), flashLights: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), heightField: null, dust: createDustTrails(), flashLights: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -409,6 +410,8 @@ export function setWorld(r, key) {
   const gm = r.groundMap || map;
   r.obstructions = buildLowPolyObstructions(THREE, gm, palette);
   if (r.obstructions) scene.add(r.obstructions.group);
+  // per-cell obstruction tops — aircraft fly over them [MM-story_mvegnpxf_i]
+  r.heightField = r.obstructions ? buildHeightField(r.obstructions.group.children, gm.cols, gm.rows) : null;
   if (r.lowpoly) {
     if (r.ground) disposeGroup(scene, r.ground.group);
     r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts });
@@ -456,7 +459,7 @@ export function renderFrame(r, state, ui, events, dt) {
     const markersChanged = r.markers.setStructures(r.system ? all.filter((s) => !SYSTEM_KINDS[s.kind]) : all);
     if (sysChanged || markersChanged) r.lights.invalidateShadows();
   }
-  if (r.system) r.system.update(dt, state, r.flight.poses);   // turrets track planes where they are drawn (last frame's poses)
+  if (r.system) r.system.update(dt, state, r.airLift.drawn);   // turrets track planes where they are drawn (last frame's poses)
   if (r.resources) { if (state && r.resources.setResources(state)) r.lights.invalidateShadows(); }   // LC-RES planet resources
   else if (state && r.markers.setResources && r.markers.setResources(state)) r.lights.invalidateShadows();   // LPS crystal fields
 
@@ -484,7 +487,9 @@ export function renderFrame(r, state, ui, events, dt) {
     if (r.landing && r.craft && !r.landingHandedOff) views = landingHarvesters(r, state, views);
     // attacking planes fly attack runs around their target instead of parking (render-only) [MM-story_mvee9r08_e]
     r.flight.update(state, r.map, views, dt);
-    r.fxOpts.flight = r.flight.poses;
+    // aircraft clear plateaus, rocks and trees; `drawn` is where every flyer is drawn (aim + shots read it) [MM-story_mvegnpxf_i]
+    r.airLift.update(state, views, r.heightField, r.flight.poses, dt);
+    r.fxOpts.flight = r.airLift.drawn;
     // enemies outside the play area are red reticles, not models: no model, bar, dust or muzzle fx [MM-story_mveehs1r_f]
     const c = r.contacts.update(state, views, fogFrame.win && fogFrame.win.rect, dt);
     views = c.views;
