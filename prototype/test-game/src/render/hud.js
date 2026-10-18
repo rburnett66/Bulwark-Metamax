@@ -1,6 +1,7 @@
 import { STRUCTURES, ASSUMPTIONS, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
+import { fogWindow, insideWindow } from '../render3d/overlays/fogModel.js';
 
 const STYLE_ID = 'bw-hud-style';
 
@@ -686,8 +687,13 @@ export function createHud(mountEl, callbacks) {
   return hud;
 }
 
+/** A minimap blip's colour: flyers white, everything else red — and every contact red outside the play area. */
+export function minimapDotColor(u, winRect) {
+  return (u.domain === 'Flyer' && insideWindow(winRect, u.pos)) ? '#ffffff' : '#ff4040';
+}
+
 /** MINIMAP radar draw (owner spec): ONLY the base — centered — enemy GROUND units as red dots,
- *  AIR units as white dots. No terrain/structures/resources/friendlies in v1. Base-centered
+ *  AIR units as white dots (red outside the play area, where the type is hidden). No terrain/structures/resources/friendlies in v1. Base-centered
  *  framing at 2px/cell; off-window blips clamp to the radar edge. */
 function drawMinimap(cv, state) {
   const g = cv.getContext('2d');
@@ -697,9 +703,11 @@ function drawMinimap(cv, state) {
   const bx = state.base.pos.x, by = state.base.pos.y;
   const px = (x) => Math.max(1, Math.min(W - 3, (W / 2) + (x - bx) * S));
   const py = (y) => Math.max(1, Math.min(H - 3, (H / 2) + (y - by) * S));
+  // outside the play area every contact is the same red dot — the type is hidden (owner 2026-10-18) [MM-story_mveehs1r_f]
+  const win = fogWindow(state, state.map);
   for (const u of state.units.values()) {
     if (!u || u.hp <= 0 || u.side !== 'attacker') continue;
-    g.fillStyle = (u.domain === 'Flyer') ? '#ffffff' : '#ff4040';
+    g.fillStyle = minimapDotColor(u, win && win.rect);
     g.fillRect(px(u.pos.x), py(u.pos.y), 2, 2);
   }
   g.fillStyle = '#69c0ff';                     // the base — the radar's fixed center

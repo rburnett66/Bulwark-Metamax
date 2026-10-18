@@ -7,8 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import * as THREE from '../../../vendor/three.module.js';
-import { fogWindow, createFogTracker, REVEAL_FLASH_S } from './fogModel.js';
-import { createFogView } from './fog.js';
+import { fogWindow, createFogTracker, REVEAL_FLASH_S, insideWindow } from './fogModel.js';
+import { createFogView, fogAlpha, FOG_MARGIN } from './fog.js';
 import { stepYaw, twistBy, wrapYaw, cameraPose, screenToGroundCell, groundCellToScreen } from '../camera.js';
 import { buildTerrainMap, buildCampaignMap } from '../../sim/mapgen.js';
 
@@ -89,12 +89,35 @@ test('the fog view: one mesh over the scene (no depth test), under the ghost; hi
   assert.deepEqual(u.uRect.value.toArray(), [10, 8, 21, 17], 'inclusive cells → cell edges');
   assert.equal(u.uFlash.value, 0);
   v.sync({ win: { rect: rings[1].rect, gated: false }, flash: { prev: rings[0].rect, cur: rings[1].rect, alpha: 0.5 } });
-  assert.ok(u.uFlash.value > 0 && u.uDim.value < 0.38);
+  assert.ok(u.uFlash.value > 0);
+  assert.equal(u.uMargin.value, FOG_MARGIN);
+  assert.equal(u.uLine, undefined, 'no hard outline (vignette, owner 2026-10-18)');
   // the quad reaches past the horizon at the farthest zoom
   m.geometry.computeBoundingBox();
   assert.ok(m.geometry.boundingBox.min.x < -150 && m.geometry.boundingBox.max.z > 24 + 150);
   v.dispose();
   assert.equal(scene.children.length, 0);
+});
+
+test('vignette: clear at the window edge, darkening smoothly to fully dark 5 cells out, dark beyond [MM-story_mveehs1r_f]', () => {
+  assert.equal(FOG_MARGIN, 5);
+  assert.equal(fogAlpha(-3), 0, 'inside the play area: clear');
+  assert.equal(fogAlpha(0), 0, 'at the edge: clear (no hard line)');
+  let prev = 0;
+  for (let d = 0.25; d <= FOG_MARGIN; d += 0.25) { const a = fogAlpha(d); assert.ok(a > prev, `monotonic at ${d}`); prev = a; }
+  assert.ok(fogAlpha(1) < 0.15, 'the first cell out is still mostly visible');
+  assert.ok(fogAlpha(4) > 0.85, 'nearly dark a cell before the margin');
+  assert.equal(fogAlpha(FOG_MARGIN), 1);
+  assert.equal(fogAlpha(FOG_MARGIN + 3), 1, 'past the margin the map is dark');
+});
+
+test('insideWindow: cell positions against an inclusive window', () => {
+  const r = { x0: 10, y0: 8, x1: 20, y1: 16 };
+  assert.equal(insideWindow(r, { x: 10, y: 8 }), true);
+  assert.equal(insideWindow(r, { x: 20, y: 16 }), true);
+  assert.equal(insideWindow(r, { x: 9.4, y: 10 }), false);
+  assert.equal(insideWindow(r, { x: 15, y: 17 }), false);
+  assert.equal(insideWindow(null, { x: 99, y: 99 }), true, 'no window: everything is in play');
 });
 
 // ── camera rules ───────────────────────────────────────────────────────────────────────────────

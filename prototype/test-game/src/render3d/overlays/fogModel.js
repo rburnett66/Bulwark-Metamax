@@ -52,6 +52,16 @@ export function fogWindow(state, map) {
 export const REVEAL_FLASH_S = 0.9;
 
 /**
+ * Is a unit at sim cell position `pos` ({x, y}, cell index, centre at +0.5) inside the window `rect` (inclusive
+ * cells)? The test the hidden-contact markers and the minimap share. [MM-story_mveehs1r_f]
+ */
+export function insideWindow(rect, pos) {
+  if (!rect || !pos) return true;
+  const x = pos.x + 0.5, y = pos.y + 0.5;
+  return x >= rect.x0 && x <= rect.x1 + 1 && y >= rect.y0 && y <= rect.y1 + 1;
+}
+
+/**
  * Follows the window frame to frame. When it GROWS (a new ring opens) it reports the band that just opened
  * as a reveal flash fading over REVEAL_FLASH_S — the visible beat the Pixi view gives a ring growth.
  * update(state, map, dt) → { win, flash: { prev, cur, alpha } | null }
