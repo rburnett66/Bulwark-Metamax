@@ -51,7 +51,13 @@ const CSS = `
 .bw-palette { position:absolute; left:6px; top:56px; display:flex; flex-direction:column; gap:4px; }
 .bw-palette .bw-title { font-size:11px; color:#9ab; margin-bottom:2px; }
 .bw-palette-row { display:flex; flex-direction:column; gap:4px; }
-.bw-buildbtn { display:flex; flex-direction:column; align-items:center; gap:1px; width:52px; padding:5px 3px 3px; }
+.bw-buildbtn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; width:52px; padding:5px 3px 3px; }
+/* REACTIVE LEFT RAIL [MM-task_mvd3mpby_l]: layoutLeftRail() sizes the buttons to the height available (--bb-h, --bb-icon)
+   and falls back to two columns when even the smallest size won't fit — every build option always stays on screen */
+.bw-palette.bw-fit .bw-buildbtn { height:var(--bb-h, 52px); width:var(--bb-w, 52px); padding:2px 3px; }
+.bw-palette.bw-fit .bw-bicon svg { width:var(--bb-icon, 26px); height:var(--bb-icon, 26px); }
+.bw-palette.bw-fit .bw-cost { font-size:var(--bb-cost, 10px); line-height:1; }
+.bw-palette.bw-fit.bw-2col .bw-palette-row { display:grid; grid-template-columns:repeat(2, var(--bb-w, 52px)); }
 .bw-bicon { position:relative; display:block; line-height:0; }
 .bw-bkey { position:absolute; top:-4px; left:-7px; font-size:9px; color:#ffe58a; }
 .bw-buildbtn .bw-cost { color:#ffd76a; font-size:10px; }
@@ -327,6 +333,45 @@ export function createHud(mountEl, callbacks) {
   paletteRow.appendChild(harvBtn);
   palette.appendChild(paletteRow);
   root.appendChild(palette);
+  // ---- REACTIVE LEFT RAIL [MM-task_mvd3mpby_l] (owner 2026-10-17: "make left nav reactive so it always fits on screen
+  // and move the minimap to never sit over the left nav"). The rail runs from under the top bar to the screen's bottom
+  // edge; its buttons take whatever height that leaves (52 px down to 30 px, icon and cost scaling with them), and if
+  // even 30 px won't fit it reflows into two columns. The minimap is then parked just right of the rail.
+  function layoutLeftRail() {
+    const view = doc.defaultView;
+    if (!view || !palette.isConnected) return;
+    const btns = paletteRow.children.length;
+    if (!btns) return;
+    palette.classList.add('bw-fit');
+    const top = palette.getBoundingClientRect().top;
+    const safeB = 6;
+    const avail = view.innerHeight - top - safeB;
+    const chrome = 12 + 4 + (palette.firstChild ? palette.firstChild.getBoundingClientRect().height + 2 : 14);   // padding + title
+    const GAP = 4, MAX = 52, MIN = 30;
+    let cols = 1, h = (avail - chrome - GAP * (btns - 1)) / btns;
+    if (h < MIN) { cols = 2; const rows = Math.ceil(btns / 2); h = (avail - chrome - GAP * (rows - 1)) / rows; }
+    h = Math.max(MIN - 4, Math.min(MAX, Math.floor(h)));
+    const w = view.innerWidth <= 900 ? Math.min(44, Math.max(36, h)) : Math.min(52, Math.max(40, h));
+    palette.classList.toggle('bw-2col', cols === 2);
+    palette.style.setProperty('--bb-h', h + 'px');
+    palette.style.setProperty('--bb-w', w + 'px');
+    palette.style.setProperty('--bb-icon', Math.round(Math.max(16, Math.min(26, h - 16))) + 'px');
+    palette.style.setProperty('--bb-cost', (h < 38 ? 9 : 10) + 'px');
+    palette.querySelector('.bw-palette-row').style.gap = GAP + 'px';
+    // the minimap sits beside the rail, never over it
+    if (railMinimap) railMinimap.style.left = Math.round(palette.getBoundingClientRect().right + 8) + 'px';
+  }
+  let railMinimap = null;   // set once the minimap exists (below)
+  {
+    const view = doc.defaultView;
+    if (view) {
+      const relayout = () => view.requestAnimationFrame(layoutLeftRail);
+      view.addEventListener('resize', relayout);
+      view.addEventListener('orientationchange', relayout);
+      if (view.visualViewport) view.visualViewport.addEventListener('resize', relayout);
+      relayout();
+    }
+  }
   // NB: the 1-9 / Esc build HOTKEYS are handled in input/input.js (which also refreshes the placement ghost);
   // the palette buttons just mirror that via toggleBuild(). Don't add a second key handler here — two handlers
   // double-toggle and cancel each other out (press = select then immediately deselect).
@@ -615,6 +660,9 @@ export function createHud(mountEl, callbacks) {
   minimap.width = 128; minimap.height = 64;
   root.appendChild(minimap);
   hud.minimap = minimap;
+  railMinimap = minimap;
+  hud.layoutLeftRail = layoutLeftRail;
+  if (doc.defaultView) doc.defaultView.requestAnimationFrame(layoutLeftRail);   // park it beside the rail
   hud._mmNext = 0;
 
   // A select added to SETTINGS by a module that owns the setting (e.g. the 3D view's quality tier, T3.5
