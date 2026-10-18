@@ -3,16 +3,12 @@
 # Play URL: https://rburnett66.github.io/Bulwark-Metamax/
 name: Deploy game to Pages
 on:
+  # DEPLOY ONLY. Owner rule (2026-10-18): no CI on GitHub — Actions minutes are billed. Tests run LOCALLY before
+  # every push (.githooks/pre-push; `npm test`); this workflow only publishes main to Pages. There is deliberately
+  # no pull_request trigger and no test job. [MM-task_mvds0iae_p]
   push:
     branches: [main]
     paths: ['prototype/test-game/**', '.github/workflows/deploy-game.yml']
-  # TESTS MUST RUN ON THE PR, NOT AFTER THE MERGE. This workflow used to trigger on push-to-main only,
-  # so a pull request had NO checks at all -- the suite ran once the change was already on main, which is
-  # exactly too late to block it. Opening PR #19 with a green tick and zero checks is what surfaced it.
-  # No `paths:` filter here on purpose: a PR that touches only the workflow, or only content, should
-  # still be gated, and a skipped required check blocks a merge rather than passing it.
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -25,39 +21,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    # Data-contract gates (rendering-tiers spec §5): a Tier C unit whose wave data can exceed
-    # MAX_LIVE_3D, or a unit without an explicit render_tier, fails the build before it ships.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      # EVERY TEST FILE, ENUMERATED AT RUN TIME.
-      #
-      # This used to be a hand-maintained list of individual suites, and it fell behind badly: 49 test
-      # files existed on disk and 11 were gated. The ENTIRE simulation -- combat, waves, harvest, mapgen,
-      # replay, separation, contact -- ran on nobody's machine but the author's. Two suites were found
-      # red in the repo, one of them for weeks (unitart-scale asserted a magnitude a balance retune had
-      # long since changed), and handlers.test.mjs called itself "HANDLER GATE" in its own header while
-      # being in no job at all.
-      #
-      # A list you have to remember to append to is a list that rots. `find` cannot forget: a new
-      # *.test.mjs is gated the moment it lands, which is the only property that actually holds.
-      #
-      # Not `node --test <dir>` -- that fails to discover these files. Not a `**` glob -- that needs
-      # shopt -s globstar and would silently under-match here rather than erroring.
-      #
-      # The contracts this protects, unchanged: a unit without an explicit render_tier, or a Tier C unit
-      # whose wave data can exceed MAX_LIVE_3D, still fails the build before it ships.
-      - run: node --test $(find prototype/test-game/src prototype/test-game/tools -name '*.test.mjs' | sort)
   deploy:
-    needs: test
-    # PUBLISH ONLY FROM main. Without this a pull_request run would push a PR branch to Pages and
-    # overwrite the live game with unreviewed work -- the tests would gate the merge while the deploy
-    # had already shipped it.
-    if: github.event_name != 'pull_request'
+    # PUBLISH ONLY FROM main (push or a manual run); the suite has already passed locally before the push.
     runs-on: ubuntu-latest
     environment:
       name: github-pages

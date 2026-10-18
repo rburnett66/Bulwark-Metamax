@@ -5,5 +5,9 @@
   "devDependencies": {
     "@napi-rs/canvas": "0.1.100",
     "three": "0.128.0"
+  },
+  "scripts": {
+    "test": "node --test $(find prototype/test-game/src prototype/test-game/tools -name '*.test.mjs' | sort)",
+    "hooks": "git config core.hooksPath .githooks"
   }
 }

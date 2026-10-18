@@ -1,0 +1,13 @@
+#!/bin/sh
+# Local CI (owner rule: no CI on GitHub — Actions minutes are billed). Runs the whole test-game suite before any
+# push; a red suite stops the push. Enable once per clone:   git config core.hooksPath .githooks
+# Skip in an emergency with:  git push --no-verify
+echo "pre-push: running the test-game suite locally…"
+node --test $(find prototype/test-game/src prototype/test-game/tools -name '*.test.mjs' | sort) > /tmp/bulwark-prepush.log 2>&1
+status=$?
+grep -E "^# (tests|pass|fail)" /tmp/bulwark-prepush.log
+if [ $status -ne 0 ]; then
+  grep -E "^not ok" /tmp/bulwark-prepush.log | head -20
+  echo "pre-push: tests failed — push stopped (full log: /tmp/bulwark-prepush.log)"
+  exit 1
+fi

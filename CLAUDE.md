@@ -23,7 +23,7 @@ Bulwark splits cleanly into a runtime half and an authoring half. Two focused su
 
 ## Load-bearing contracts — don't break these
 
-- **Render-tier deploy gate.** Every unit needs an explicit `render_tier` in `src/data/renderTiers.js`; a Tier C unit whose wave data can exceed `MAX_LIVE_3D` **fails the build**. `renderTiers.test.mjs` + `src/render/voxel/pack.test.mjs` are the two CI gates on the Pages deploy — keep both green.
+- **Render-tier deploy gate.** Every unit needs an explicit `render_tier` in `src/data/renderTiers.js`; a Tier C unit whose wave data can exceed `MAX_LIVE_3D` **fails the build**. `renderTiers.test.mjs` + `src/render/voxel/pack.test.mjs` are the two deploy gates — keep both green (they run in the local suite).
 - **Replay determinism.** The sim is replay-driven. Never put `Date.now()`/`Math.random()` in the tick path — draw randomness from the seeded `src/sim/rng.js`, or you break `replay.js` and `balanceSim.js`.
 - **Scale & light.** Voxel units and decor bake to a shared scale + lighting model so units, decor, and terrain read consistently in-game. Preserve on-map scale and the sun/shading contract (`src/render/sun.js`; see `docs/16 Bulwark MM/design/Unit-Shading-Design.md`, `Shading-Epics.md`).
 - **Content must be committed to ship.** The game fetches content at runtime (e.g. `content/decor/voxel-decor.json`, maps carry `decor[]` groves). These are data files, not code — a code-only deploy renders nothing. Commit `content/**` with the feature. (This gap once shipped decor with no groves.)
@@ -36,9 +36,16 @@ Bulwark splits cleanly into a runtime half and an authoring half. Two focused su
 - The forges are browser tools (no headless UI test). Preview by serving locally:
   `python serve_prototype.py prototype/test-game/harness.html` (Stack Forge) · `.../terrain.html` (Terrain Forge) · `.../index.html` (the game).
 
+## CI — local only
+
+**No CI on GitHub** (owner rule, 2026-10-18: Actions minutes are billed). The whole suite runs locally:
+`npm test` (from the repo root), and automatically before every push via the pre-push hook — enable it once
+per clone with `git config core.hooksPath .githooks` (or `npm run hooks`). Agents run the suite before every
+push and never wait on, re-run or trigger GitHub checks. The GitHub workflow only publishes main to Pages.
+
 ## Deploy
 
-- Pipeline: `.github/workflows/deploy-game.yml`. A push to **`main`** touching `prototype/test-game/**` runs the gate, then publishes to GitHub Pages → **https://rburnett66.github.io/Bulwark-Metamax/** (the mobile link). Only `prototype/test-game/**` ships.
+- Pipeline: `.github/workflows/deploy-game.yml`. A push to **`main`** touching `prototype/test-game/**` publishes to GitHub Pages (no tests on GitHub — they ran locally before the push) → **https://rburnett66.github.io/Bulwark-Metamax/** (the mobile link). Only `prototype/test-game/**` ships.
 - **Don't push or deploy unless explicitly asked.** Hand back a clean, tested branch.
 
 ## Session start
