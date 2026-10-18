@@ -1,4 +1,4 @@
-# TECH PLAN — Bulwark 3D Combat Polish (v1.0)
+# TECH PLAN — Bulwark 3D Combat Polish (v1.1)
 
 **Provenance.** Owner sentences are quoted and marked **owner**; everything else is **agent-proposed**. Written
 2026-10-18 by the repo-rooted cloud session (Claude Code, Opus 5.5) from the owner's requests that day, the
@@ -12,6 +12,12 @@ technical plans and a folder they should be place[d] in." It replaces the draft
 baseline it builds on now lives in its own document, `docs/dev/Battle-3D-DD.md`, so this plan cites that document
 (as **DD §n**) instead of restating the code. **owner**: "It might be good to create a complete design doc
 snapshot of the current threejs battle system. Then begin the development … Work from this new tech plan."
+
+v1.1 (2026-10-18) records the barrel chain as built on one branch, `feat/barrels` (CP-2 … CP-6, CP-8), and adds
+CP-13 (aircraft clear terrain). **owner**: "keep building c 2,3,4,5,6,7" (CP-7 had already merged, so this meant
+CP-2 … CP-6) and "also check plane elevation against the height of the plateaus, rocks, trees". The cannon apex
+became quadratic (§3.1), the tank's twin guns became two groups so only the one that fired recoils (§5), and the
+barrel chain ships as one PR because each step builds on the one before (§11).
 
 Owner request: polish the 3D battle (fire rate, barrels, smoke, construction, placement on mobile, aircraft and fog).
 
@@ -34,6 +40,7 @@ Owner request: polish the 3D battle (fire rate, barrels, smoke, construction, pl
 7. **owner**: "draw the map 5 cells beyond the actual focus play area, but I want a darkened fog and all units
    outside of the play area should be indicated with red reticle to hide what unit type they are." **owner**:
    "Darkened area similar to a vignette effect."
+8. **owner**: "also check plane elevation against the height of the plateaus, rocks, trees." (added v1.1)
 
 ### 0.2 Decisions taken (owner answers, 2026-10-18)
 - **D1 Cannon pace:** 2-round volleys every 1.5 s. **owner**: "Yes." (to "Is 1.5 s per volley the right pace?")
@@ -57,7 +64,7 @@ Owner request: polish the 3D battle (fire rate, barrels, smoke, construction, pl
 1. **The sim has no fire rate.** Tower damage is continuous `dps × dt` (`sim/combat.js:569-599`). Cadence is a
    render hint, so goals 1 and 4 change visuals only, never balance (DD §6.1).
 2. **Towers never aim at structures or the base.** `system3d.update` resolves only unit targets (DD §5.3). Pitch
-   needs a real target, so this gap is fixed first (CP-4).
+   needs a real target, so this gap is fixed first (CP-4; fixed on `feat/barrels`, v1.1).
 3. **Low tier never reduces world-impact particles.** `LOW_IMPACT_CAPS` is unused (DD §3.2). This is outside this
    plan's goals but filed on the epic as `[MM-task_mveeqkyi_h]`, because the new dust and smoke add to the same
    budget.
@@ -96,6 +103,10 @@ See **DD** (`docs/dev/Battle-3D-DD.md`, snapshot at `main` @ `a21a6e3`). The par
   cannon's. That gives its barrel a visible reason to rise with range.
 - **One function serves both** the flight path and the barrel angle, so they cannot disagree.
 - Rocket racks and missile pods tilt to their launch angle instead of the fixed 28° and 18°.
+- **As built (v1.1):** `pitchFor(from, to, apex)` and `apexFor(kind, d)` with `LOB` as data. The cannon's apex is
+  **quadratic**, `0.035·d²`, so its launch slope `(dy + 4·apex)/d` rises with range (nearly flat at 1–2 cells, about
+  30° at its 4.5-cell reach). A linear apex with a constant term did the opposite: the slope `4·base/d` fell with
+  range. Rockets keep `0.9 + 0.12·d`. The STR-Cannon recipe has `lob: 1, speed: 13`.
 
 ### 3.2 The barrel rig — shared convention
 - **Convention:** an optional **`barrel` group with a trunnion pivot** under the yawing group.
@@ -118,6 +129,19 @@ See **DD** (`docs/dev/Battle-3D-DD.md`, snapshot at `main` @ `a21a6e3`). The par
   - Beetle and jet have no gun and are unchanged.
 - **CP-6 Base super-cannon:** the craft's `wCannon` barrels pitch to the `cannonFx` launch angle. `muzzleWorld()`
   follows the tilted group.
+- **As built (v1.1):**
+  - **Towers:** each model's `barrel` data holds `authored` (the angle the parts are drawn at), `rest`, `min`, `max`,
+    `rate` and `aim` (`shell` | `rocket` | `straight` | `missile`); `pivots.barrel` is the trunnion. The barrel
+    pitches by `pitch − authored`, so the rocket rack and missile pods kept their authored 28° and 18° geometry.
+    Pitch is aimed from the current firing point, the same point the round leaves, so barrel and flight agree.
+    `towerTarget()` resolves drawn flyers, units, structures and the base (CP-4).
+  - **Fire gate:** `muzzlePoint` reports `pmin`/`pmax`/`aim`; `combatFxModel` holds fire until the pitch is within
+    `ON_PITCH` of `wantPitch()` (clamped to the limits, so an out-of-range target can't stall a barrel).
+  - **Units:** `units/unitBarrels.js` slews `view.pitch` (straight shots) and serves `opts.unitMuzzle`; unit turrets
+    aim at the drawn plane on an attack run. Wreck turrets keep their guns (barrels folded into the turret
+    geometry).
+  - **Base:** `cannonFx.baseLaunchPitch()` is the main round's own arc slope, from the gun's muzzle to the aim point;
+    the gun is clamped 0–60°. The railgun's rails pitch too.
 
 ## 4. Construction dust (goal 3) — CP-7, **built (PR pending)**
 - New `render3d/fx/buildFx.js`, the same shape as `repairFx.js`.
@@ -137,6 +161,10 @@ See **DD** (`docs/dev/Battle-3D-DD.md`, snapshot at `main` @ `a21a6e3`). The par
 - **How:** an offset along the barrel's local axis, after the pitch. The firing point is taken before the recoil,
   so the flash stays at the tip.
 - **Data:** a per-model `recoil` field (length fraction; 0 = none) keeps it data-driven.
+- **As built (v1.1):** `fx/recoil.js` (kick 0.06 s, run-out 0.35 s). `recoil` is a distance in model units
+  (cannon tower 0.65, tank 0.2 per gun, Tiger 0.65, base shell gun 18% of its length; the railgun 0).
+  `combatFxModel` calls `opts.kick(shooterKey, n)` for every round off a modelled barrel. The tank's twin guns are
+  two groups (`barrel`, `barrel2`), so only the gun that fired moves. The base gun kicks on each `cannonShot`.
 
 ## 6. Gunsmoke (goal 4) — CP-9, **delivered PR #64**
 - New `render3d/fx/muzzleSmoke.js` replaces the inline forward puff.
@@ -177,6 +205,14 @@ Touch only; mouse is unchanged.
 - **Follow-up:** copters and drones still use the jet model; their own rotor/drone models would make the hover read
   better.
 
+### 8.1 Aircraft clear terrain — CP-13 (goal 8)
+- **Problem:** flyers were drawn at a fixed `HOVER_HEIGHT` 1.1, while rocks reach about 2.4 and trees about 2.1, so
+  planes and copters flew through them.
+- **Built:** `obstructions/heightField.js` builds a per-cell top height from the obstruction meshes when the world
+  is set. `createAirLift()` eases every flyer's drawn height (up 2.4/s, down 0.9/s) to at least the 3×3-cell maximum
+  plus 0.45. Its `drawn` map feeds `fxOpts.flight`, the System turrets and the unit barrels, so aim, shots, homing
+  and health bars follow the lifted plane. Render-only.
+
 ## 9. Fog margin and hidden contacts (goal 7, decision D4) — CP-12
 Only where the fog is active; maps without windows are unchanged.
 - **Vignette:** the fog shader goes from a flat tint to a smoothstep on distance outside the play area. It is clear at
@@ -202,23 +238,26 @@ Only where the fog is active; maps without windows are unchanged.
 
 | story | id | state (v1.0) / what remains |
 |---|---|---|
-| CP-0 DD snapshot + this plan | `story_mveenh2y_g` | in progress: `docs/dev/Battle-3D-DD.md` written; this plan |
+| CP-0 DD snapshot + this plan | `story_mveenh2y_g` | DD and plan v1.0 merged (#66); v1.1 on `feat/barrels` |
 | CP-1 Cannon cadence as data | `story_mvedxogl_4` | **delivered** (PR #64) |
-| CP-2 Elevation solver + lobbed cannon shell | `story_mvedxq1v_5` | not started |
-| CP-3 Barrels on System towers | `story_mvedxxo7_7` | needs CP-2 |
-| CP-4 Towers aim at structures and base | `story_mvedxzco_8` | not started; land with or before CP-3 |
-| CP-5 Barrels + firing points on gun units | `story_mvedy16u_9` | needs CP-2 |
-| CP-6 Base super-cannon pitch | `story_mvedy2wj_a` | needs CP-2 |
-| CP-7 Build-site dirt puffs | `story_mvedxrmi_6` | **built**, PR pending owner approval |
-| CP-8 Cannon recoil (cannons only) | `story_mvee15ja_b` | needs CP-3, CP-5, CP-6 |
+| CP-2 Elevation solver + lobbed cannon shell | `story_mvedxq1v_5` | **built** on `feat/barrels` |
+| CP-3 Barrels on System towers | `story_mvedxxo7_7` | **built** on `feat/barrels` |
+| CP-4 Towers aim at structures and base | `story_mvedxzco_8` | **built** on `feat/barrels` (with CP-3) |
+| CP-5 Barrels + firing points on gun units | `story_mvedy16u_9` | **built** on `feat/barrels` |
+| CP-6 Base super-cannon pitch | `story_mvedy2wj_a` | **built** on `feat/barrels` |
+| CP-7 Build-site dirt puffs | `story_mvedxrmi_6` | **delivered** (PR #67) |
+| CP-8 Cannon recoil (cannons only) | `story_mvee15ja_b` | **built** on `feat/barrels` |
 | CP-9 Cannon gunsmoke | `story_mvee3vj5_c` | **delivered** (PR #64) |
-| CP-10 Mobile placement: offset slot, release to build | `story_mvee80a0_d` | not started; independent |
-| CP-11 Plane attack runs (render-only) | `story_mvee9r08_e` | not started; independent |
-| CP-12 Fog vignette + hidden contacts | `story_mveehs1r_f` | not started; independent |
+| CP-10 Mobile placement: offset slot, release to build | `story_mvee80a0_d` | **delivered** (PRs #68–#71) |
+| CP-11 Plane attack runs (render-only) | `story_mvee9r08_e` | **delivered** (PRs #68–#71) |
+| CP-12 Fog vignette + hidden contacts | `story_mveehs1r_f` | **delivered** (PRs #68–#71) |
+| CP-13 Aircraft clear plateaus, rocks, trees | `story_mvegnpxf_i` | **built** on `feat/barrels` |
 | BUG Low tier impact caps | `task_mveeqkyi_h` | not started; independent |
 
 **Order:** independent stories first (CP-12, CP-10, CP-11, the bug), then the barrel chain CP-2 → CP-4/CP-3 → CP-5
-→ CP-6 → CP-8. One branch and PR per story, merged only on owner approval.
+→ CP-6 → CP-8. One branch and PR per story, merged only on owner approval — except the barrel chain, which v1.1
+builds as one branch (`feat/barrels`, one commit per story, each stamped `closes [MM-…]`) and one PR, since every
+step changes the files the step before it changed (the stacked PRs #68–#71 showed the cost of splitting such work).
 
 **Overlapping epic** (planning rule `overlapping-epics-one-initiative`): the Terrain-Engine epic
 (`epic_mv77hbbc_1`, created 2026-10-13, last updated 2026-10-17) is still open and overlaps this plan at the **file**
@@ -238,14 +277,20 @@ level. Board read 2026-10-18:
 
 ## 12. Tests
 - CP-2: `elevation.test.mjs` (straight vs lobbed, monotonic with range, clamped); the lobbed shell lands on target.
-- CP-3: `firingPoints.test.mjs` changes from a fixed 8° to "the tip follows the pitch" (a far target gives a higher
-  tip; depression on high ground). `system3d.test.mjs` checks four groups.
-- CP-4: `system3d` aims at a structure target.
-- CP-5: `units3d.test.mjs` checks barrel group, pivot and firing points per gun unit.
-- CP-6: `cannonFx` checks the barrel pitch equals the shell's launch slope.
+- CP-3 (as built): `structures/barrels.test.mjs` — every armed tower has a barrel group and limits; at rest the tip is
+  the authored one (so `firingPoints.test.mjs` stands unchanged); pitched, tip and axis follow; a farther cannon
+  target wants a higher pitch; the drawn barrel and the firing point pitch together; the fx gate holds a flat
+  barrel and fires once elevated.
+- CP-4: the same file — `towerTarget` resolves units, drawn flyers, structures and the base; a tower turns to a
+  structure target.
+- CP-5: `units/unitBarrels.test.mjs` — barrel group, pivot, limits and muzzles per gun unit; the tip follows the
+  turret, not the hull; a tank looks up at a hovering target and settles level; wreck turrets keep their guns.
+- CP-6: `craft/baseGun.test.mjs` — the launch pitch equals the shell arc's slope at the muzzle; `elevate` slews,
+  clamps and settles; `muzzleWorld` rises with the gun.
+- CP-13: `obstructions/heightField.test.mjs` — clearance over obstruction tops, eased climb and descent.
 - CP-7: `buildFx.test.mjs` (done).
-- CP-8: a cannon barrel recoils and returns; flak, rocket, missile and buggy barrels never move; the firing point is
-  unaffected.
+- CP-8: `fx/recoil.test.mjs` — a cannon barrel recoils and returns; flak, rocket, missile, buggy and railgun barrels
+  never move; only the tank gun that fired moves; the firing point is unaffected.
 - CP-9: `muzzleSmoke.test.mjs` (done).
 - CP-10: `picking.test.mjs`:
   - Up-left offset.
