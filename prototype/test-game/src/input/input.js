@@ -15,6 +15,7 @@ export function createUiState() {
     selectedUnitId: null,      // s5: a selected unit (enemy/defender) whose attack range is shown
     showFieldRings: false,     // white rings on the harvester's assigned field — debug aid, off by default
     pendingHint: null,         // {text, atBase} — set by input, consumed + flashed by the main ticker
+    placingPointer: null,      // touch placement: the finger steering the build slot (the camera won't pan with it)
   };
 }
 
@@ -342,18 +343,36 @@ export function createInput(canvas, renderer, getState, submit, ui, opts = {}) {
   add(canvas, 'pointermove', moveFn);
   add(canvas, 'pointerleave', leaveFn);
   if (opts.tapToAct) {
-    const presses = new Map();   // pointerId → { x, y, t }
+    const presses = new Map();   // pointerId → { x, y, t, placing }
     let multi = false;           // a second finger joined: this gesture is a pinch, never a tap
+    // TOUCH PLACEMENT (owner 2026-10-18, "virtual joystick") [MM-story_mvee80a0_d]: with a tower armed, the first
+    // finger STEERS the build slot — the pick (render3d eventToCell) sits up and left of the fingertip — the camera
+    // does not pan with it, and lifting the finger builds there if the slot is valid. A second finger, a cancelled
+    // pointer, or lifting over the HUD (slid back onto the build palette) builds nothing. Mouse play is unchanged.
+    const onCanvas = (ev) => {
+      if (typeof document === 'undefined' || !document.elementFromPoint) return true;
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      return !el || el === canvas || (typeof canvas.contains === 'function' && canvas.contains(el));
+    };
     add(canvas, 'pointerdown', (ev) => {
       if (ev.button !== undefined && ev.button !== 0) { downFn(ev); return; }   // right-click cancel stays on press
-      presses.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, t: ev.timeStamp });
-      if (presses.size > 1) multi = true;
+      const placing = ev.pointerType === 'touch' && !!ui.buildSelection && presses.size === 0;
+      presses.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, t: ev.timeStamp, placing });
+      if (placing) { ui.placingPointer = ev.pointerId; moveFn(ev); }
+      if (presses.size > 1) { multi = true; ui.placingPointer = null; }   // a pinch: the camera takes over, nothing builds
     });
     const release = (ev, cancelled) => {
       const p = presses.get(ev.pointerId);
       presses.delete(ev.pointerId);
       const wasMulti = multi;
       if (presses.size === 0) multi = false;
+      if (p && p.placing) {
+        if (ui.placingPointer === ev.pointerId) ui.placingPointer = null;
+        if (cancelled || wasMulti || !onCanvas(ev) || !ui.buildSelection) return;
+        moveFn(ev);                          // the slot under the finger's final position
+        if (ui.hoverValid) downFn(ev);       // build on release — only on a valid (green) slot
+        return;
+      }
       if (!p || cancelled || wasMulti) return;
       if (Math.hypot(ev.clientX - p.x, ev.clientY - p.y) > TAP_SLOP || ev.timeStamp - p.t > TAP_MS) return;
       downFn(ev);

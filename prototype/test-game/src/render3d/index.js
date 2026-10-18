@@ -41,7 +41,7 @@
  * base cannon's aim. Resource fields are the battle planet's own resource models (resources/; opts.planet =
  * faction key of the homeworld), falling back to the crystal shards when no planet is known.
  */
-import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX } from './camera.js';
+import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX, touchSlotPoint } from './camera.js';
 import { createFogTracker } from './overlays/fogModel.js';
 import { resolveTier, probeEnv, pixelRatioFor } from './quality.js';
 import { createFogView } from './overlays/fog.js';
@@ -121,6 +121,7 @@ function attachCameraInput(el, r) {
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     if (pointers.size === 1) {
+      if (r.ui && r.ui.placingPointer === e.pointerId) return;   // this finger steers the build slot, not the camera [MM-story_mvee80a0_d]
       // right-drag turns the view outside the battle; in battle (or a left/touch drag) it pans
       if (!(p.turn && twistBy(r.cam, dx * YAW_PER_PX, r.inBattle))) panByPixels(r.cam, dx, dy, el.clientHeight);
     } else if (pointers.size === 2 && pinch0) {
@@ -429,6 +430,7 @@ function resize(r) {
 
 export function renderFrame(r, state, ui, events, dt) {
   if (!r || r.destroyed) return;
+  r.ui = ui;   // the camera's pan listener reads ui.placingPointer (touch placement claims a finger)
   resize(r);
 
   // Camera: battle rules first (no yaw in battle; ease a leftover yaw back to 0 when the wave starts)
@@ -585,15 +587,16 @@ export function screenToCell(r, px, py, lift = 0) {
   return screenToGroundCell(r.viewCam || clampCamera(r.cam, r.map.cols, r.map.rows), w, h, px, py, r.map.cols, r.map.rows, lift);
 }
 
-/** Touch builds aim this far (cells) above the finger so the ghost isn't hidden under it (plan §6.9). */
-const TOUCH_LIFT = 1.4;
-
-/** A pointer event → the sim cell under it (input.js `pick`). Lifts only for a touch with a build tool armed. */
+/**
+ * A pointer event → the sim cell under it (input.js `pick`). For a touch with a build tool armed the cell is
+ * picked at the offset build slot, up and left of the finger (camera.js touchSlotPoint) [MM-story_mvee80a0_d].
+ */
 export function eventToCell(r, ev, ui) {
   if (!r || r.destroyed) return null;
   const rect = r.canvas.getBoundingClientRect();
-  const lift = (ev.pointerType === 'touch' && ui && ui.buildSelection) ? TOUCH_LIFT : 0;
-  return screenToCell(r, ev.clientX - rect.left, ev.clientY - rect.top, lift);
+  let px = ev.clientX - rect.left, py = ev.clientY - rect.top;
+  if (ev.pointerType === 'touch' && ui && ui.buildSelection) ({ x: px, y: py } = touchSlotPoint(px, py, rect.width, rect.height));
+  return screenToCell(r, px, py, 0);
 }
 
 /** Sim cell centre → canvas pixel (CSS px), or null behind the camera. */
