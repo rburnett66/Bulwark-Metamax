@@ -398,6 +398,9 @@ export function boot(mountEl, seed) {
     return mirrored;
   }
 
+  // Intro overlays (contract offer, wave intel, how to play, bonus picker) are DOM cards on mountEl; a new board or the
+  // menu clears any that are still up [MM-task_mvd6cfh8_n]
+  function clearIntroOverlays() { for (const v of mountEl.querySelectorAll('.bwc-veil, .bwd-veil')) v.remove(); }
   let mapSelectSeq = 0;   // guards against overlapping selectMap() calls: only the newest may install a board
   async function selectMap(mapId) {
     const mySeq = ++mapSelectSeq;
@@ -460,6 +463,7 @@ export function boot(mountEl, seed) {
     if (vox) renderer.voxelArt = vox;
     if (dec) renderer.decorArt = dec;
     if (USE_3D) void mount3D(currentMap, nextSlug);
+    clearIntroOverlays();   // a previous board's contract / wave-intel / how-to-play card never carries over [MM-task_mvd6cfh8_n]
     // [MM-story_mvamfcnp_14] one dialog at a time: the intro below runs the speaker last, so the board
     // must not start it on its own (it used to speak behind the contract and the wave intel)
     suppressPreDialog = true; comm.dismiss();
@@ -510,6 +514,10 @@ export function boot(mountEl, seed) {
     // the contract, the wave intel and — last, via speakNow — the speaker [MM-story_mvamfcnp_14]. The speaker stays
     // suppressed the whole time (set above). A tap skips the landing.
     const afterLanding = (next) => {
+      // [MM-task_mvd6cfh8_n] a board selected UNDER the menu (boot, or a faction pick) runs no intro: no landing wait, no
+      // banner, no contract — pressing Play selects the map again and that run owns the intro. (The boot board's
+      // contract card used to open behind the menu and then sit over the real landing.)
+      if (menu.isOpen()) return;
       if (!USE_3D) { announceMap(); next(); return; }
       void playOpeningLanding().then(() => {
         if (mySeq !== mapSelectSeq) return;                 // the player moved on to another map meanwhile
@@ -785,7 +793,7 @@ export function boot(mountEl, seed) {
   // Jumping back to the menu ends all dialog; leaving it lets the speakers talk again [MM-task_mvcs0s2v_15]
   {
     const open = menu.open.bind(menu), close = menu.close.bind(menu);
-    menu.open = (screen) => { comm.hush(); open(screen); };
+    menu.open = (screen) => { comm.hush(); clearIntroOverlays(); open(screen); };
     menu.close = () => { comm.unhush(); close(); };
     if (menu.isOpen()) comm.hush();   // booted onto the menu
   }
