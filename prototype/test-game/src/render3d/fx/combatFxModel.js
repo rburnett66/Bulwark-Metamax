@@ -20,6 +20,7 @@ import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
 import { shotFxFor } from '../../render/unitFx.js';
 import { STRUCTURES } from '../../data/tables.js';
+import { apexFor } from './elevation.js';
 
 /** Heights (cells) a shot leaves from and arrives at. Structures are 1-cell blocks (markers.js). */
 export const MUZZLE = Object.freeze({ ground: 0.35, structure: 0.85, antiGround: 0.6, antiAir: 0.5, barrel: 0.42 });
@@ -40,7 +41,8 @@ export const RECIPES = Object.freeze({
 export const STRUCT_RECIPES = Object.freeze({
   // cadence (and the cannon's burst) = the tower def's fields in tables.js — read, never copied, so a retune is
   // one data edit and the 3D and Pixi views can't drift apart [MM-story_mvedxogl_4]
-  'STR-Cannon': Object.freeze({ kind: 'shell', cadence: STRUCTURES['STR-Cannon'].cadence, speed: 21, color: 0xffd080, burst: STRUCTURES['STR-Cannon'].burst }),
+  // the cannon LOBS its shells (fx/elevation.js) so its barrel rises with range [MM-story_mvedxq1v_5]; speed = horizontal
+  'STR-Cannon': Object.freeze({ kind: 'shell', lob: 1, cadence: STRUCTURES['STR-Cannon'].cadence, speed: 13, color: 0xffd080, burst: STRUCTURES['STR-Cannon'].burst }),
   'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: STRUCTURES['STR-Rockets'].cadence, speed: 8, color: 0xffb070, burst: 4 }),
   'STR-Missile': Object.freeze({ kind: 'missile', cadence: STRUCTURES['STR-Missile'].cadence, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
 });
@@ -169,7 +171,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     s.dx = dx / dist; s.dy = dy / dist; s.dz = dz / dist;
     s.left = dist; s.speed = look.speed;
     s.kind = look.kind; s.size = look.size; s.len = look.len; s.color = look.color;
-    s.tid = tid; s.t = 0; s.big = look.big || 0; s.dPrev = undefined;
+    s.tid = tid; s.t = 0; s.big = look.big || 0; s.dPrev = undefined; s.lob = 0;
     if (s.kind === 'missile') {
       // off the rail: up and slightly out, then the seeker takes over
       const h = Math.hypot(dx, dz) || 1, side = (rand() - 0.5) * 1.4;
@@ -178,7 +180,10 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       } else { s.vx = (dx / h) * 2.5 - (dz / h) * side; s.vy = FLIGHT.climb + rand() * 0.8; s.vz = (dz / h) * 2.5 + (dx / h) * side; }
       s.spd = Math.hypot(s.vx, s.vy, s.vz);
     } else if (s.kind === 'rocket') {
-      s.fx = from.x; s.fy = from.y; s.fz = from.z; s.dur = Math.max(0.35, dist / look.speed); s.apex = FLIGHT.rocketApex + FLIGHT.rocketApexPerCell * dist;
+      s.fx = from.x; s.fy = from.y; s.fz = from.z; s.dur = Math.max(0.35, dist / look.speed); s.apex = apexFor('rocket', dist);
+    } else if (look.lob) {   // a lobbed shell: the same parabola as the barrel's pitch (elevation.js) [MM-story_mvedxq1v_5]
+      const h = Math.hypot(dx, dz);
+      s.lob = 1; s.fx = from.x; s.fy = from.y; s.fz = from.z; s.dur = Math.max(0.25, h / look.speed); s.apex = apexFor(s.kind, h);
     }
     shots.push(s);
     launched++;
@@ -229,6 +234,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       color: entry && entry.color !== undefined ? entry.color : color,
       size: L.size * ((entry && entry.size) || 1) * scale,
       len: L.len * ((entry && entry.streakLen) || 1) * scale,
+      lob: (entry && entry.lob !== undefined ? entry.lob : base.lob) || 0,
     };
   }
 
@@ -350,7 +356,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         if (trail) trail('missile', s.x - s.dx * 0.12, s.y - s.dy * 0.12, s.z - s.dz * 0.12, s.big ? 1.3 : 1, s.dx, s.dy, s.dz, s.t);
         continue;
       }
-      if (s.kind === 'rocket') {
+      if (s.kind === 'rocket' || s.lob) {
         // a lob: ground point lerps, a sine lifts it; the streak follows the arc's tangent
         s.t += dt;
         const u = Math.min(1, s.t / s.dur);
@@ -358,6 +364,10 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         const ddx = nx - s.x, ddy = ny - s.y, ddz = nz - s.z, dl = Math.hypot(ddx, ddy, ddz);
         if (dl > 1e-5) { s.dx = ddx / dl; s.dy = ddy / dl; s.dz = ddz / dl; }
         s.x = nx; s.y = ny; s.z = nz;
+        if (s.lob) {   // a lobbed shell: lands with the shell's hit flash
+          if (u >= 1) { flash(s.tx, s.ty, s.tz, FLASH.hit, null, Math.min(1.6, s.size / SHOT_LOOK.shell.size)); retire(i, s); }
+          continue;
+        }
         if (trail) trail('rocket', s.x - s.dx * 0.1, s.y - s.dy * 0.1, s.z - s.dz * 0.1, 1, s.dx, s.dy, s.dz, u);   // u: flight fraction
         if (u >= 1) {
           flash(s.tx, s.ty, s.tz, FLASH.rocketHit);
