@@ -20,6 +20,10 @@ import { createUnitMaterial } from '../units/material.js';
 import { metalFor, isGlowKey } from '../units/metal.js';
 import { SYSTEM_MODELS, SYSTEM_COLORS, SYSTEM_SCALE } from './systemModels.js';
 import { lifecycleLook, yawToward } from './models.js';
+import { pitchFor, apexFor } from '../fx/elevation.js';
+import { AIM } from '../fx/combatFxModel.js';
+import { HOVER_HEIGHT } from '../units/unitViews.js';
+import { BASE_TARGET_ID } from '../../sim/combat.js';
 
 /** Sim structure kind → System model. Kinds not listed stay with structures/lowpoly.js. */
 export const SYSTEM_KINDS = Object.freeze({ antiGround: 'sys_cannon', antiAir: 'sys_flak', wall: 'sys_wall' });
@@ -28,6 +32,44 @@ export const SYSTEM_STRUCTS = Object.freeze({ 'STR-Rockets': 'sys_rockets', 'STR
 export const SYSTEM_CAP = Object.freeze({ sys_cannon: 200, sys_flak: 200, sys_wall: 1200, sys_rockets: 120, sys_missile: 120 });
 const modelOf = (s) => SYSTEM_STRUCTS[s.structId] || SYSTEM_KINDS[s.kind];
 const TURN = 5;   // rad/s a turret slews at
+const DEG = Math.PI / 180;
+
+/**
+ * Where a tower's target is in the world (pure): a drawn flyer pose, a unit, a structure or the base — or null.
+ * Towers aim at structure and base targets as well as units [MM-story_mvedxzco_8]. Heights match the shots'
+ * (combatFxModel AIM / HOVER_HEIGHT) so the barrel pitch and the flight agree.
+ */
+export function towerTarget(state, s, drawn) {
+  if (!s || s.targetId == null) return null;
+  const tid = s.targetId, dp = drawn && drawn.get(tid);
+  if (dp) return { x: dp.x, y: dp.y == null ? HOVER_HEIGHT : dp.y, z: dp.z };
+  if (!state) return null;
+  if (tid === BASE_TARGET_ID) {
+    const b = state.base && state.base.pos;
+    return b ? { x: b.x + 0.5, y: AIM.base, z: b.y + 0.5 } : null;
+  }
+  const u = state.units && state.units.get(tid);
+  if (u && u.pos && !(u.hp <= 0)) return { x: u.pos.x + 0.5, y: u.domain === 'Flyer' || u.altitude > 0 ? HOVER_HEIGHT : AIM.ground, z: u.pos.y + 0.5 };
+  const t = state.structures && state.structures.get(tid);
+  if (t && t.pos && t.lifecycle !== 'Destroyed') {
+    const fp = t.footprint || {};
+    return { x: t.pos.x + (fp.w || 1) / 2, y: AIM.structure, z: t.pos.y + (fp.h || 1) / 2 };
+  }
+  return null;
+}
+
+/**
+ * The pitch (radians, + = up) a barrel wants for a target, from its firing point m, per the model's `barrel.aim`:
+ * the same launch slope the round flies (elevation.js), clamped to the barrel's limits. [MM-story_mvedxxo7_7]
+ */
+export function barrelPitchFor(bar, m, to) {
+  const h = Math.hypot(to.x - m.x, to.z - m.z), d3 = Math.hypot(h, to.y - m.y);
+  let p;
+  if (bar.aim === 'shell') p = pitchFor(m, to, apexFor('shell', h));
+  else if (bar.aim === 'rocket') p = pitchFor(m, to, apexFor('rocket', d3));
+  else p = pitchFor(m, to, 0);
+  return Math.max(bar.min * DEG, Math.min(bar.max * DEG, p));
+}
 
 /** Merge a System def into one vertex-coloured geometry per group: { body, weapon?, head? } → { geo, pivot, tris }. */
 export function mergeSystemModel(THREE, def, prims = createPrims(THREE)) {
@@ -90,22 +132,31 @@ export function planSystem(list, base = null) {
  * → { x, y, z, dx, dy, dz, bx, by, bz, brake, n } (unit direction out of the barrel; b* = the breech / nozzle end),
  * or null for a model without firing points. [MM-task_mvbz1121_11]
  */
-export function muzzlePoint(it, wy, i = 0) {
+export function muzzlePoint(it, wy, i = 0, pitch) {
   const def = it && SYSTEM_MODELS[it.model], list = def && def.muzzles;
   if (!list || !list.length) return null;
   const m = list[((i % list.length) + list.length) % list.length];
   const pv = (def.pivots && def.pivots.weapon) || [0, 0, 0], k = SYSTEM_SCALE[it.model] || 0.25, sy = it.sy == null ? 1 : it.sy;
   const local = wy - it.ry, cl = Math.cos(local), sl = Math.sin(local), cr = Math.cos(it.ry), sr = Math.sin(it.ry);
+  // a pitching barrel: tilt the tip and axis about the trunnion (model Rz) by the pitch past the authored angle
+  const bar = def.barrel, pb = bar && def.pivots && def.pivots.barrel;
+  const del = bar && pb ? (pitch == null ? bar.rest * DEG : pitch) - bar.authored * DEG : 0;
+  const ce = Math.cos(del), se = Math.sin(del);
+  const tilt = (p) => { if (!del) return p; const x = p[0] - pb[0], y = p[1] - pb[1]; return [pb[0] + x * ce - y * se, pb[1] + x * se + y * ce, p[2]]; };
   // model space: turn about the weapon pivot (three.js Ry: x' = x·c + z·s, z' = −x·s + z·c) …
   const tx = (p) => { const x = p[0] - pv[0], z = p[2] - pv[2]; return [pv[0] + x * cl + z * sl, p[1], pv[2] - x * sl + z * cl]; };
   // … then scale and place the root (cell centre, base yaw)
   const place = (q) => { const x = q[0] * k, z = q[2] * k; return [it.x + x * cr + z * sr, q[1] * k * sy, it.z - x * sr + z * cr]; };
-  const tip = place(tx(m.p));
-  const d = m.d || [1, 0, 0], dl = Math.hypot(d[0], d[1], d[2]) || 1, a = wy;
+  const tip = place(tx(tilt(m.p)));
+  const d0 = m.d || [1, 0, 0], d = del ? [d0[0] * ce - d0[1] * se, d0[0] * se + d0[1] * ce, d0[2]] : d0;
+  const dl = Math.hypot(d[0], d[1], d[2]) || 1, a = wy;
   const dx = (d[0] * Math.cos(a) + d[2] * Math.sin(a)) / dl, dy = d[1] / dl, dz = (-d[0] * Math.sin(a) + d[2] * Math.cos(a)) / dl;
   const back = (m.back || 0) * k;
-  return { x: tip[0], y: tip[1], z: tip[2], dx, dy, dz, bx: tip[0] - dx * back, by: tip[1] - dy * back * sy, bz: tip[2] - dz * back, brake: (m.brake || 0) * k, n: list.length,
+  const out = { x: tip[0], y: tip[1], z: tip[2], dx, dy, dz, bx: tip[0] - dx * back, by: tip[1] - dy * back * sy, bz: tip[2] - dz * back, brake: (m.brake || 0) * k, n: list.length,
     gx: it.x, gz: it.z, gr: 0.42 };   // the tower's foot on the ground (the firing shockwave starts here)
+  // a pitching barrel reports its limits and aim rule, so the fire gate can wait for the pitch too (combatFxModel)
+  if (bar && pb) { out.pmin = bar.min * DEG; out.pmax = bar.max * DEG; out.aim = bar.aim; }
+  return out;
 }
 
 export function createSystemStructures(THREE, scene, { env } = {}) {
@@ -129,6 +180,8 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
   const M = new THREE.Matrix4(), Mp = new THREE.Matrix4(), Mr = new THREE.Matrix4(), Ms = new THREE.Matrix4(), col = new THREE.Color();
   let base = null, sig = null, lastList = [], items = [], clock = 0;
   const yaw = new Map();   // structure id → current turret yaw (radians, world)
+  const pitch = new Map();   // structure id → current barrel pitch (radians) [MM-story_mvedxxo7_7]
+  const pitchOf = (it) => { const b = SYSTEM_MODELS[it.model].barrel; return pitch.has(it.id) ? pitch.get(it.id) : b ? b.rest * DEG : 0; };
   const byItem = new Map();   // structure id → its aiming instance (firing points)
 
   // root transform of an instance: cell centre, yaw, cell scale (+ the lifecycle rise)
@@ -171,8 +224,13 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
         const H = W.clone().multiply(Mp.makeTranslation(ph[0] - pw[0], ph[1] - pw[1], ph[2] - pw[2])).multiply(Mr.makeRotationY(sweep));
         K.meshes.head.setMatrixAt(it.slot, H);
       }
+      if (K.meshes.barrel) {   // the barrel rides the turret and pitches about its trunnion: W · T(pb − pw) · Rz(pitch − authored)
+        const pb = K.parts.barrel.pivot, bar = SYSTEM_MODELS[it.model].barrel, el = bar ? pitchOf(it) - bar.authored * DEG : 0;
+        const B = W.clone().multiply(Mp.makeTranslation(pb[0] - pw[0], pb[1] - pw[1], pb[2] - pw[2])).multiply(Mr.makeRotationZ(el));
+        K.meshes.barrel.setMatrixAt(it.slot, B);
+      }
     }
-    for (const K of Object.values(kinds)) { if (K.meshes.weapon) K.meshes.weapon.instanceMatrix.needsUpdate = true; if (K.meshes.head) K.meshes.head.instanceMatrix.needsUpdate = true; }
+    for (const K of Object.values(kinds)) for (const g of ['weapon', 'head', 'barrel']) if (K.meshes[g]) K.meshes[g].instanceMatrix.needsUpdate = true;
   }
 
   const api = {
@@ -187,6 +245,7 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       byItem.clear(); for (const it of items) if (it.aim) byItem.set(it.id, it);
       const ids = new Set(items.map((i) => i.id));
       for (const id of [...yaw.keys()]) if (!ids.has(id)) yaw.delete(id);
+      for (const id of [...pitch.keys()]) if (!ids.has(id)) pitch.delete(id);
       writeBodies(); writeMoving();
       return true;
     },
@@ -196,22 +255,32 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       if (!items.length) return;
       const byId = new Map(lastList.map((s) => [s.id, s]));
       const step = TURN * Math.min(0.1, Math.max(0, dt || 0));
+      const dts = Math.min(0.1, Math.max(0, dt || 0));
       for (const it of items) {
         if (!it.aim) continue;
-        const s = byId.get(it.id), u = s && s.targetId != null && state && state.units ? state.units.get(s.targetId) : null;
-        const dp = drawn && s && drawn.get(s.targetId);
-        const want = dp ? yawToward(dp.x - it.x, dp.z - it.z) : u && u.pos ? yawToward(u.pos.x + 0.5 - it.x, u.pos.y + 0.5 - it.z) : it.ry;
+        const s = byId.get(it.id), to = towerTarget(state, s, drawn);
+        const want = to ? yawToward(to.x - it.x, to.z - it.z) : it.ry;
         const cur = yaw.has(it.id) ? yaw.get(it.id) : it.ry;
         let d = ((want - cur) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
-        yaw.set(it.id, cur + Math.max(-step, Math.min(step, d)));
+        const wy = cur + Math.max(-step, Math.min(step, d));
+        yaw.set(it.id, wy);
+        // pitch: toward the launch slope from the current firing point; idle → ease back to rest
+        const bar = SYSTEM_MODELS[it.model].barrel;
+        if (!bar) continue;
+        const pc = pitchOf(it), m = to && muzzlePoint(it, wy, 0, pc);
+        const pw = m ? barrelPitchFor(bar, m, to) : bar.rest * DEG;
+        const ps = bar.rate * dts * (m ? 1 : 0.5);
+        pitch.set(it.id, pc + Math.max(-ps, Math.min(ps, pw - pc)));
       }
       writeMoving();
     },
-    /** The world firing point i of a tower (by structure id) at its turret's current yaw, or null. See muzzlePoint. */
+    /** Current barrel pitch (radians) of a tower, or null without a barrel. */
+    pitch(id) { const it = byItem.get(id); return it && SYSTEM_MODELS[it.model].barrel ? pitchOf(it) : null; },
+    /** The world firing point i of a tower (by structure id) at its turret's current yaw and barrel pitch, or null. See muzzlePoint. */
     muzzle(id, i = 0) {
       const it = byItem.get(id);
       if (!it) return null;
-      return muzzlePoint(it, yaw.has(id) ? yaw.get(id) : it.ry, i);
+      return muzzlePoint(it, yaw.has(id) ? yaw.get(id) : it.ry, i, pitchOf(it));
     },
     /** Point the metal reflection at the world's sky / ground. */
     setEnv(e) { if (e) mat.setEnv(e); },

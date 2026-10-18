@@ -20,7 +20,7 @@ import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
 import { shotFxFor } from '../../render/unitFx.js';
 import { STRUCTURES } from '../../data/tables.js';
-import { apexFor } from './elevation.js';
+import { apexFor, pitchFor } from './elevation.js';
 
 /** Heights (cells) a shot leaves from and arrives at. Structures are 1-cell blocks (markers.js). */
 export const MUZZLE = Object.freeze({ ground: 0.35, structure: 0.85, antiGround: 0.6, antiAir: 0.5, barrel: 0.42 });
@@ -62,6 +62,15 @@ export const FLIGHT = Object.freeze({ turn: 7.5, accel: 16, maxSpeed: 19, climb:
 const BURST_GAP = 0.07;      // s between burst rounds (sim clock)
 /** A turret holds fire until its barrel is this close (radians, in yaw) to the target — the round leaves along it. */
 export const ON_TARGET = Object.freeze({ shell: 0.35, flak: 0.35, tracer: 0.5, missile: 0.9, rocket: 0.6 });
+/** …and how close (radians) a PITCHING barrel's elevation must be to the launch slope [MM-story_mvedxxo7_7]. */
+export const ON_PITCH = Object.freeze({ shell: 0.12, flak: 0.15, tracer: 0.2, missile: 0.5, rocket: 0.2 });
+
+/** The launch pitch a modelled barrel m (with pmin/pmax/aim from system3d.muzzlePoint) needs for target `to`. */
+export function wantPitch(m, to) {
+  const h = Math.hypot(to.x - m.x, to.z - m.z), d3 = Math.hypot(h, to.y - m.y);
+  const apex = m.aim === 'shell' ? apexFor('shell', h) : m.aim === 'rocket' ? apexFor('rocket', d3) : 0;
+  return Math.max(m.pmin, Math.min(m.pmax, pitchFor(m, to, apex)));
+}
 const BURST_SPREAD = 0.16;   // cells of impact jitter for burst rounds
 
 /** Flash looks: diameter (cells), life (s), colour. Sized like the Pixi glows they stand in for. */
@@ -212,6 +221,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       if (m) {
         const hx = to.x - m.x, hz = to.z - m.z, hl = Math.hypot(hx, hz), al = Math.hypot(m.dx, m.dz);
         if (hl > 0.3 && al > 1e-3 && (hx * m.dx + hz * m.dz) / (hl * al) < Math.cos(ON_TARGET[look.kind] || 0.5)) return;   // still turning
+        if (m.pmin !== undefined && hl > 0.3 && Math.abs(Math.asin(Math.max(-1, Math.min(1, m.dy))) - wantPitch(m, to)) > (ON_PITCH[look.kind] || 0.2)) return;   // still elevating
       }
     }
     clock.set(key, now + cadence * (0.85 + rand() * 0.3));
