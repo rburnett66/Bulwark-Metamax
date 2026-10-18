@@ -1,11 +1,13 @@
-# Tech Plan — 3D Combat Polish: cannon cadence, elevating barrels, build-site dust
+# Tech Plan — 3D Combat Polish: cannon cadence, elevating barrels, build-site dust, mobile placement
 
 Status: draft for owner review · 2026-10-18 · Bulwark MM (project 16)
 Owner asks (2026-10-18): (1) the cannon tower should fire more slowly; (2) rebuild every tower, tank and
 base defence so the barrel tilts up and down to match the shot's trajectory; (3) dirt puffs around the
-base of a structure while it is being built.
+base of a structure while it is being built. Added the same day: (4) cannon gunsmoke that starts tip-sized, is
+pushed a little way out, then expands and clears; (5) on mobile, tower placement uses a virtual-joystick
+offset so the finger never covers the slot, and the tower builds when the finger lifts.
 
-All three are **render-side** changes to the 3D view. The sim stays as it is, with no gameplay or balance
+Items 1–4 are **render-side** changes to the 3D view. The sim stays as it is, with no gameplay or balance
 change, and the replay contract holds (no `Date.now()` / `Math.random()` in the tick path; the FX use their
 own seeded PRNGs as today).
 
@@ -124,7 +126,49 @@ A new `src/render3d/fx/buildFx.js`, the same shape as `repairFx.js`:
   point is taken before the recoil, so the flash stays at the tip.
 - A per-model `recoil` field (length fraction; 0 = none) keeps it data-driven. Only the cannon-type models set it.
 
-### 2.6 Fix the aiming gap
+### 2.6 Cannon gunsmoke (CP-9 — delivered in PR #64)
+- `src/render3d/fx/muzzleSmoke.js` replaces the inline forward puff in `fxOpts.fire`.
+- Each puff is born no wider than the barrel tip (0.05 vs the tip's ~0.12) and leaves along the barrel at
+  1.2–2.2 with drag 3.2, so it stalls about half a cell out. It then grows to about 8× as it fades over ~2 s.
+- Five puffs per shell instead of nine. All values are named constants for tuning.
+
+### 2.7 Mobile tower placement: offset slot, build on release (CP-10)
+**Today** (verified): on touch, placing a tower is a tap that builds on release. `eventToCell` aims a fixed
+1.4 cells straight up-screen (`TOUCH_LIFT`, `src/render3d/index.js:589-597`). A one-finger drag always pans
+the camera (`index.js:102-139`), so the ghost can't be steered with the finger. Taps are classified in
+`src/input/input.js:344-362`.
+
+**New behaviour, touch only (mouse unchanged):**
+- **Touch down with a tower armed:** the placement ghost appears **up and to the left of the finger**, a fixed
+  screen offset of about 56 px left and 72 px up (CSS px), so the fingertip never covers it. The offset is in
+  screen space, so it stays the same at every zoom level. It replaces the straight-up `TOUCH_LIFT`.
+- **Drag:** the ghost follows the finger at that offset, like a virtual joystick. While a tower is armed, a
+  one-finger drag **moves the ghost and does not pan the camera**. Two fingers still pinch, zoom and pan.
+- **Release:** builds on the ghost's cell if it is valid (green), and the tool stays armed for the next tower,
+  as today. Releasing on an invalid (red) cell builds nothing.
+- **Cancel:** slide back onto the build palette and release, put a second finger down, or tap the palette
+  button again. Escape and right-click still cancel on desktop.
+- **Screen edges:** near the top or left edge, the slot point is clamped inside the view so it stays
+  reachable. Panning the camera when the slot reaches the edge is a possible follow-up, not in this story.
+
+**How:**
+- `eventToCell` picks at `(clientX − ox, clientY − oy)` through `screenToGroundCell` instead of shifting the
+  ground hit by a lift.
+- `input.js` gains a touch "placing" press: armed + touch → no tap slop, and the place command is sent on
+  pointerup at the current ghost cell.
+- The camera's pan listener skips a pointer that input has claimed for placing. Input sets a flag on the
+  pointerId, and the camera checks it before panning.
+
+**Tests** (`src/render3d/picking.test.mjs`):
+- Update the touch-lift test to up-and-left.
+- New tests:
+  - An armed touch drag does not pan, and release places at the offset cell.
+  - Release on an invalid cell places nothing.
+  - A second finger cancels.
+  - Release over the palette cancels.
+  - Mouse click still places under the cursor.
+
+### 2.8 Fix the aiming gap
 Towers aim at structure and base targets as well as units. This is a prerequisite for correct pitch, so the
 barrel doesn't aim at nothing.
 
@@ -142,6 +186,8 @@ barrel doesn't aim at nothing.
 6. **Base super-cannon pitch:** the craft cannon tilts to the `cannonFx` launch angle. Depends on 2.
 7. **Build-site dirt puffs:** `buildFx.js`. Independent, can go first.
 8. **Cannon recoil:** cannon tower, tank/Tiger main guns and base super-cannon only. Depends on 3, 5, 6.
+9. **Cannon gunsmoke:** tip-sized, pushed out, expands and clears. Delivered (PR #64) with 1.
+10. **Mobile tower placement:** offset slot up-left of the finger, drag steers it, release builds. Independent.
 
 ## 4. Tests
 - `firingPoints.test.mjs` asserts the cannon tip at a fixed 8° and **will change**. It becomes "the tip follows
