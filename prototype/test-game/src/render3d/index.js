@@ -66,6 +66,7 @@ import { createCombatFx } from './fx/combatFxModel.js';
 import { createCombatFxView } from './fx/combatFx.js';
 import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createRepairFx } from './fx/repairFx.js';
+import { createFlightPaths } from './units/flightPath.js';
 import { createDustTrails } from './fx/dustTrail.js';
 import { createFlashLights, FLASH_LIGHTS } from './fx/flashLights.js';
 import { createImpactsView } from './fx/impactsView.js';
@@ -202,7 +203,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), dust: createDustTrails(), flashLights: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), flight: createFlightPaths(), dust: createDustTrails(), flashLights: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -450,7 +451,7 @@ export function renderFrame(r, state, ui, events, dt) {
     const markersChanged = r.markers.setStructures(r.system ? all.filter((s) => !SYSTEM_KINDS[s.kind]) : all);
     if (sysChanged || markersChanged) r.lights.invalidateShadows();
   }
-  if (r.system) r.system.update(dt, state);
+  if (r.system) r.system.update(dt, state, r.flight.poses);   // turrets track planes where they are drawn (last frame's poses)
   if (r.resources) { if (state && r.resources.setResources(state)) r.lights.invalidateShadows(); }   // LC-RES planet resources
   else if (state && r.markers.setResources && r.markers.setResources(state)) r.lights.invalidateShadows();   // LPS crystal fields
 
@@ -473,6 +474,9 @@ export function renderFrame(r, state, ui, events, dt) {
   if (state && state.units) {
     views = buildUnitViews(state, r.map, r.headings, r.resolveModel, Math.min(0.1, Math.max(0, dt || 0)));   // smooth turning; clamped so a stalled frame can't swing a whole turn at once
     if (r.landing && r.craft && !r.landingHandedOff) views = landingHarvesters(r, state, views);
+    // attacking planes fly attack runs around their target instead of parking (render-only) [MM-story_mvee9r08_e]
+    r.flight.update(state, r.map, views, dt);
+    r.fxOpts.flight = r.flight.poses;
     r.dust.step(dt, views, r.impacts.emit, FXK);   // light dust behind moving ground vehicles [MM-task_mvd2loid_i]
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows);
   }

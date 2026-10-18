@@ -93,9 +93,14 @@ function prng(seed) {
   };
 }
 
-/** Where a target is in world space, or null when it is gone. */
-export function aimPoint(state, map, tid) {
+/**
+ * Where a target is in world space, or null when it is gone. `drawn` (optional Map id → {x,y,z}) overrides a unit's
+ * sim position with where it is DRAWN — a plane flying an attack run (units/flightPath.js) [MM-story_mvee9r08_e].
+ */
+export function aimPoint(state, map, tid, drawn) {
   if (tid === null || tid === undefined) return null;
+  const dp = drawn && drawn.get(tid);
+  if (dp) return { x: dp.x, y: dp.y, z: dp.z };
   if (tid === BASE_TARGET_ID) {
     const b = (state.base && state.base.pos) || (map && map.base);
     return b ? { x: cellToWorld(b.x), y: AIM.base, z: cellToWorld(b.y) } : null;
@@ -123,6 +128,7 @@ function eventPos(ev, map) {
  *   shots   — [{ x, y, z, dx, dy, dz, size, len, color }]   live rounds; (dx,dy,dz) = unit flight direction
  *   flashes — [{ x, y, z, size, color, alpha }]             live glows (alpha already faded)
  * opts: { getDef(unitId) → def, projFx: { id: entry }, projScale,
+ *         flight: Map unit id → drawn pose of planes on attack runs (aim at / fire from where they are drawn),
  *         muzzle(structId, n) → modelled firing point { x, y, z, dx, dy, dz, bx, by, bz, brake } (System turrets),
  *         fire(kind, firingPoint, look) — launch effects (barrel exhaust, rocket plume, missile ignition),
  *         trail(kind, x, y, z, k, dx, dy, dz, t) — in-flight motor flame + smoke (t: missile s aloft, rocket flight 0..1), boom(x, z, k) } — all optional.
@@ -247,7 +253,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         if (st.lifecycle !== 'Complete' && st.lifecycle !== 'Damaged') continue;
         const base = STRUCT_RECIPES[st.structId] || RECIPES[st.kind];
         if (!base) continue;
-        const to = aimPoint(state, map, st.targetId);
+        const to = aimPoint(state, map, st.targetId, opts.flight);
         if (!to) continue;
         const fp = st.footprint || {};
         const cx = cellToWorld(st.pos.x + ((fp.w || 1) - 1) / 2), cz = cellToWorld(st.pos.y + ((fp.h || 1) - 1) / 2);
@@ -268,10 +274,12 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         try { def = getDef(u.unitId); } catch (e) { def = null; }
         const kind = shotFxFor(def);
         if (!kind) continue;
-        const to = aimPoint(state, map, u.targetId);
+        const to = aimPoint(state, map, u.targetId, opts.flight);
         if (!to) continue;
         const flyer = u.domain === 'Flyer' || u.altitude > 0;
-        const from = { x: cellToWorld(u.pos.x), y: flyer ? HOVER_HEIGHT : MUZZLE.ground, z: cellToWorld(u.pos.y) };
+        const run = opts.flight && opts.flight.get(u.id);
+        if (run && !run.inbound) continue;   // a strafing plane fires on its inbound run only [MM-story_mvee9r08_e]
+        const from = run ? { x: run.x, y: run.y, z: run.z } : { x: cellToWorld(u.pos.x), y: flyer ? HOVER_HEIGHT : MUZZLE.ground, z: cellToWorld(u.pos.y) };
         if (!flyer) { from.gx = from.x; from.gz = from.z; from.gr = 0.22; }   // a tank's tracks — its firing shockwave starts here
         const e = pfx && pfx[u.unitId];
         const color = u.side === 'attacker' ? base.attacker : base.defender;
@@ -315,7 +323,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       const s = shots[i];
       if (s.kind === 'missile') {
         // seeker: re-aim at the target's live position, turn the velocity toward it, accelerate
-        const tp = s.tid !== null && ctx.state ? aimPoint(ctx.state, ctx.map, s.tid) : null;
+        const tp = s.tid !== null && ctx.state ? aimPoint(ctx.state, ctx.map, s.tid, ctx.opts.flight) : null;   // homes on the DRAWN plane
         if (tp) { s.tx = tp.x; s.ty = tp.y; s.tz = tp.z; }
         s.t += dt;
         let ex = s.tx - s.x, ey = s.ty - s.y, ez = s.tz - s.z;

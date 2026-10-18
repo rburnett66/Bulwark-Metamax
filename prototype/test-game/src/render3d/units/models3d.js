@@ -126,7 +126,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
 
   const m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), mp = new THREE.Matrix4();
   const q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
-  const yAxis = new THREE.Vector3(0, 1, 0);
+  const yAxis = new THREE.Vector3(0, 1, 0), xAxis = new THREE.Vector3(1, 0, 0), qBank = new THREE.Quaternion();
   const counts = {};
   let usingLod = false;
 
@@ -158,6 +158,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
         drawn++;
         const k = UNIT_SCALE * (u.scale || 1);
         q.setFromAxisAngle(yAxis, -u.heading);
+        if (u.bank) q.multiply(qBank.setFromAxisAngle(xAxis, u.bank));   // a plane banking through a turn (flightPath.js)
         m1.compose(v.set(u.x, u.y || 0, u.z), q, s.set(k, k, k));
         for (const [gname, G] of Object.entries(T.groups)) {
           if (gname === 'turret') {

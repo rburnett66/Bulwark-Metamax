@@ -196,7 +196,7 @@ export const UNITS = Object.freeze({
   }),
   'GND-Planes': Object.freeze({
     faction: 'Ground / Powder', shape: 'Fighter', role: 'Striker',
-    radius: 0.42, artClass: 'plane', projectileFx: 'tracer', burnsWhenDamaged: false,
+    radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
@@ -284,7 +284,7 @@ export const UNITS = Object.freeze({
   }),
   'AIR-Planes': Object.freeze({
     faction: 'Air', shape: 'Fighter', role: 'Striker',
-    radius: 0.42, artClass: 'plane', projectileFx: 'tracer', burnsWhenDamaged: false,
+    radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
@@ -309,7 +309,7 @@ export const UNITS = Object.freeze({
   // spawn + data validation hard-cap simultaneous instances at MAX_LIVE_3D. Big, slow, event-tier.
   'AIR-HeavyBomber': Object.freeze({
     faction: 'Air', shape: 'Bomber', role: 'Siege',
-    radius: 0.42, artClass: 'heavyBomber', projectileFx: null, burnsWhenDamaged: false,
+    radius: 0.42, artClass: 'heavyBomber', attackPattern: 'strafe', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'C', armorClass: 'Aircraft', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2.5,
@@ -386,7 +386,7 @@ export const UNITS = Object.freeze({
   }),
   'HTC-Planes': Object.freeze({
     faction: 'High Tech', shape: 'Fighter', role: 'Striker',
-    radius: 0.42, artClass: 'plane', projectileFx: 'tracer', burnsWhenDamaged: false,
+    radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
@@ -474,7 +474,7 @@ export const UNITS = Object.freeze({
   }),
   'ART-Planes': Object.freeze({
     faction: 'Artillery', shape: 'Fighter', role: 'Striker',
-    radius: 0.42, artClass: 'plane', projectileFx: 'tracer', burnsWhenDamaged: false,
+    radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
@@ -562,7 +562,7 @@ export const UNITS = Object.freeze({
   }),
   'WTR-Planes': Object.freeze({
     faction: 'Water', shape: 'Fighter', role: 'Striker',
-    radius: 0.42, artClass: 'plane', projectileFx: 'tracer', burnsWhenDamaged: false,
+    radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Frost',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
@@ -650,7 +650,7 @@ export const UNITS = Object.freeze({
   }),
   'ARC-Planes': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Fighter', role: 'Striker',
-    radius: 0.42, artClass: 'plane', projectileFx: 'tracer', burnsWhenDamaged: false,
+    radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Fire',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
@@ -738,7 +738,7 @@ export const UNITS = Object.freeze({
   }),
   'SPC-Planes': Object.freeze({
     faction: 'Space Tech', shape: 'Fighter', role: 'Striker',
-    radius: 0.42, artClass: 'plane', projectileFx: 'tracer', burnsWhenDamaged: false,
+    radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
@@ -826,7 +826,7 @@ export const UNITS = Object.freeze({
   }),
   'DRK-Planes': Object.freeze({
     faction: 'Dark Energy', shape: 'Fighter', role: 'Striker',
-    radius: 0.42, artClass: 'plane', projectileFx: 'tracer', burnsWhenDamaged: false,
+    radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
@@ -920,7 +920,7 @@ export const UNITS = Object.freeze({
   }),
   'GRN-Planes': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Fighter', role: 'Striker',
-    radius: 0.42, artClass: 'plane', projectileFx: 'tracer', burnsWhenDamaged: false,
+    radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
