@@ -8,8 +8,8 @@ pushed a little way out, then expands and clears; (5) on mobile, tower placement
 offset so the finger never covers the slot, and the tower builds when the finger lifts; (6) attacking planes
 never stop: they make attack runs, overfly, circle back and attack again, while drones and copters may hover.
 
-Items 1–4 are **render-side** changes to the 3D view. The sim stays as it is, with no gameplay or balance
-change, and the replay contract holds (no `Date.now()` / `Math.random()` in the tick path; the FX use their
+Every item is a client-side change (3D rendering, or touch input for item 5). The sim stays as it is, with
+no gameplay or balance change, and the replay contract holds (no `Date.now()` / `Math.random()` in the tick path; the FX use their
 own seeded PRNGs as today).
 
 ## Dependencies
@@ -73,6 +73,7 @@ So slowing the cannon changes only how it looks. Damage per second stays the sam
 - **Proposed cannon:** 1.5 s cadence, burst 2 (now 0.55 s, burst 3), about a third as many rounds. Damage is
   unchanged because the sim is continuous.
 - **Owner approved 1.5 s (2026-10-18).** It can still be tuned on device with one data edit.
+- **Delivered in PR #64 for the cannon only.** Flak keeps its AA-missile recipe, so it gets no data fields yet.
 
 ### 2.2 The barrel rig (shared by every gun)
 Introduce one convention: an optional **`barrel` group with a trunnion pivot** under the turning group.
@@ -169,7 +170,7 @@ the camera (`index.js:102-139`), so the ghost can't be steered with the finger. 
   - Release over the palette cancels.
   - Mouse click still places under the cursor.
 
-### 2.9 Planes fly attack runs; drones and copters hover (CP-11)
+### 2.8 Planes fly attack runs; drones and copters hover (CP-11)
 **Today** (verified):
 - **Air units:** each faction has Copters, Planes and Missiles (a drone), plus `AIR-HeavyBomber`.
 - **Classification:** only `artClass` tells them apart (`copter`, `plane`, `missile`, `heavyBomber`;
@@ -215,14 +216,14 @@ the camera (`index.js:102-139`), so the ghost can't be steered with the finger. 
 - **Follow-up (not in this story):** copters and drones still use the jet model. Giving them their own
   rotor/drone models would make the hover read better.
 
-### 2.10 Fix the aiming gap
+### 2.9 Fix the aiming gap
 Towers aim at structure and base targets as well as units. This is a prerequisite for correct pitch, so the
 barrel doesn't aim at nothing.
 
 ## 3. Work breakdown (MetaMax stories, in order)
 
-1. **Cannon cadence as data, slower:** `tables.js` cadence/burst for Cannon and Flak; recipes import them;
-   Pixi reads the same.
+1. **Cannon cadence as data, slower:** `tables.js` cadence/burst for the Cannon; recipes import them; Pixi
+   reads the same. Delivered (PR #64).
 2. **Elevation solver:** `elevation.js` plus the cannon's lobbed shell; flight path and pitch share one
    function; tests.
 3. **Barrel rig on system towers:** barrel group + trunnion in merge, instancing and `writeMoving`; tilted
