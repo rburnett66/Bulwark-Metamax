@@ -38,7 +38,7 @@ export const RECIPES = Object.freeze({
 /** Per tower type overrides of the kind recipe (the new towers). */
 export const STRUCT_RECIPES = Object.freeze({
   // cadence = the tower def's `cadence` (tables.js): one drawn volley per sim volley (dps × cadence)
-  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: 2.0, speed: 8, color: 0xffb070, burst: 4 }),
+  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: 3.0, speed: 8, color: 0xffb070, burst: 4 }),
   'STR-Missile': Object.freeze({ kind: 'missile', cadence: 1.6, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
 });
 export const SHOT_LOOK = Object.freeze({   // Pixi at ~35 px/cell: shell dot 12 px + 33 px streak, flak 17 px, tracer 4 px + 11 px
@@ -49,7 +49,11 @@ export const SHOT_LOOK = Object.freeze({   // Pixi at ~35 px/cell: shell dot 12 
   rocket: Object.freeze({ size: 0.24, len: 0.4 }),
 });
 /** Homing + arc flight (cells, s): missiles climb off the rail, then turn onto the target; rockets lob. */
-export const FLIGHT = Object.freeze({ turn: 7.5, accel: 16, maxSpeed: 19, climb: 2.2, rocketApex: 0.9, rocketApexPerCell: 0.12, hitR: 0.22 });
+export const FLIGHT = Object.freeze({ turn: 7.5, accel: 16, maxSpeed: 19, climb: 2.2, rocketApex: 0.9, rocketApexPerCell: 0.12, hitR: 0.22,
+  // [MM-task_mvd2ln2i_h] owner: missiles "end up circling the planes" — the seeker's turn rate now TIGHTENS the longer it
+  // flies and the closer it gets (turn × (1 + turnGrow·t) × close-in boost, capped), and a PROXIMITY FUSE bursts it
+  // within `fuse` of the plane, or at its closest pass if it starts to open the range, or after `maxT` s.
+  turnGrow: 3, turnMax: 60, closeBoost: 2.5, fuse: 0.42, missFuse: 1.3, maxT: 2.6 });
 const BURST_GAP = 0.07;      // s between burst rounds (sim clock)
 /** A turret holds fire until its barrel is this close (radians, in yaw) to the target — the round leaves along it. */
 export const ON_TARGET = Object.freeze({ shell: 0.35, flak: 0.35, tracer: 0.5, missile: 0.9, rocket: 0.6 });
@@ -156,7 +160,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     s.dx = dx / dist; s.dy = dy / dist; s.dz = dz / dist;
     s.left = dist; s.speed = look.speed;
     s.kind = look.kind; s.size = look.size; s.len = look.len; s.color = look.color;
-    s.tid = tid; s.t = 0; s.big = look.big || 0;
+    s.tid = tid; s.t = 0; s.big = look.big || 0; s.dPrev = undefined;
     if (s.kind === 'missile') {
       // off the rail: up and slightly out, then the seeker takes over
       const h = Math.hypot(dx, dz) || 1, side = (rand() - 0.5) * 1.4;
@@ -174,7 +178,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     flash(from.x + (from.dx || 0) * fo, from.y + (from.dy || 0) * fo, from.z + (from.dz || 0) * fo, FLASH.muzzle, look.color, Math.min(1.6, look.size / SHOT_LOOK.shell.size) * (s.kind === 'missile' || s.kind === 'rocket' ? 0.7 : 1));
     const onFire = ctx.opts && ctx.opts.fire;
     if (onFire) {
-      const ax = hasAxis ? from : { x: from.x, y: from.y, z: from.z, dx: s.dx, dy: s.dy, dz: s.dz, bx: from.x - s.dx * 0.3, by: from.y - s.dy * 0.3, bz: from.z - s.dz * 0.3, brake: 0 };
+      const ax = hasAxis ? from : { x: from.x, y: from.y, z: from.z, dx: s.dx, dy: s.dy, dz: s.dz, bx: from.x - s.dx * 0.3, by: from.y - s.dy * 0.3, bz: from.z - s.dz * 0.3, brake: 0,
+        gx: from.gx, gz: from.gz, gr: from.gr };
       onFire(s.kind, ax, look);
     }
   }
@@ -197,7 +202,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     }
     clock.set(key, now + cadence * (0.85 + rand() * 0.3));
     roundNo.set(key, n0 + burst);
-    const gap = look.kind === 'missile' || look.kind === 'rocket' ? 0.12 : BURST_GAP;
+    const gap = look.kind === 'rocket' ? 0.24 : look.kind === 'missile' ? 0.12 : BURST_GAP;   // rockets ripple slower [MM-task_mvd1yej4_g]
     for (let k = 0; k < burst; k++) {
       const j = burst > 1 ? (look.kind === 'rocket' ? 0.45 : BURST_SPREAD) : 0;
       const aim = { x: to.x + (rand() * 2 - 1) * j, y: to.y, z: to.z + (rand() * 2 - 1) * j };
@@ -264,6 +269,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         if (!to) continue;
         const flyer = u.domain === 'Flyer' || u.altitude > 0;
         const from = { x: cellToWorld(u.pos.x), y: flyer ? HOVER_HEIGHT : MUZZLE.ground, z: cellToWorld(u.pos.y) };
+        if (!flyer) { from.gx = from.x; from.gz = from.z; from.gr = 0.22; }   // a tank's tracks — its firing shockwave starts here
         const e = pfx && pfx[u.unitId];
         const color = u.side === 'attacker' ? base.attacker : base.defender;
         fire('u' + u.id, now, from, to, lookFor(e, base, kind, color, scale), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence);
@@ -311,14 +317,18 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         s.t += dt;
         let ex = s.tx - s.x, ey = s.ty - s.y, ez = s.tz - s.z;
         const d = Math.hypot(ex, ey, ez);
-        if (d < FLIGHT.hitR + s.spd * dt || s.t > 3) {
-          flash(s.tx, s.ty, s.tz, FLASH.airburst, null, s.big ? 1.5 : 1);
-          if (trail) trail('burst', s.tx, s.ty, s.tz, s.big ? 1.4 : 1);
+        const opening = s.dPrev !== undefined && d > s.dPrev && d < FLIGHT.missFuse;   // it just passed its closest point
+        if (d < FLIGHT.fuse + s.spd * dt || opening || s.t > FLIGHT.maxT) {
+          // proximity burst AT THE MISSILE (beside the plane), not on the plane's centre
+          flash(s.x, s.y, s.z, FLASH.airburst, null, s.big ? 1.5 : 1);
+          if (trail) trail('burst', s.x, s.y, s.z, s.big ? 1.4 : 1);
           retire(i, s); continue;
         }
+        s.dPrev = d;
         s.spd = Math.min(FLIGHT.maxSpeed * (s.big ? 1.1 : 1), s.spd + FLIGHT.accel * dt);
         ex /= d; ey /= d; ez /= d;
-        const turn = Math.min(1, FLIGHT.turn * dt * (0.4 + Math.min(1, s.t * 2.5)));   // lazy off the rail, then locks on
+        const rate = Math.min(FLIGHT.turnMax, FLIGHT.turn * (1 + FLIGHT.turnGrow * s.t) * (d < 2 ? 1 + FLIGHT.closeBoost * (1 - d / 2) : 1));
+        const turn = Math.min(1, rate * dt * (0.4 + Math.min(1, s.t * 2.5)));   // lazy off the rail, then locks on — tighter every moment
         let vx = s.vx / (Math.hypot(s.vx, s.vy, s.vz) || 1), vy = s.vy / (Math.hypot(s.vx, s.vy, s.vz) || 1), vz = s.vz / (Math.hypot(s.vx, s.vy, s.vz) || 1);
         vx += (ex - vx) * turn; vy += (ey - vy) * turn; vz += (ez - vz) * turn;
         const vl = Math.hypot(vx, vy, vz) || 1;

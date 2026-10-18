@@ -460,7 +460,8 @@ export function boot(mountEl, seed) {
     if (dec) renderer.decorArt = dec;
     if (USE_3D) void mount3D(currentMap, nextSlug);
     restart(currentSeed);
-    flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
+    // the map banner waits for the landing too (owner 2026-10-17) — see openThenIntro
+    const announceMap = () => flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
 
     // ── QUEST CONTRACT offer (owner design): a character from the map's quest-giver faction
     // makes the pitch before the first tap. Skipped when the map seeds no quest fields (maps
@@ -492,32 +493,39 @@ export function boot(mountEl, seed) {
         showPreview();
       }
     };
-    // LEVEL 1 OPENS WITH THE LANDING [MM-story_mvbqui1g_m]: on map 1 (3D view) the craft lands before the contract,
-    // the wave intel and the speaker — then the normal intro runs. A tap skips the landing.
-    const openThenIntro = () => {
-      if (currentMapId !== 1 || !USE_3D) { runIntro(); return; }
+    // EVERY LEVEL OPENS WITH THE LANDING [MM-story_mvbqui1g_m; owner 2026-10-17 "at the start of the game we need to
+    // watch the landing craft complete touchdown animation before showing map or character dialog" MM-task_mvd2lq2j_j]:
+    // in the 3D view the craft flies in and touches down FIRST; only then the map banner, the how-to-play brief (first
+    // run), the contract, the wave intel and the speaker. A tap skips the landing.
+    const afterLanding = (next) => {
+      if (!USE_3D) { announceMap(); next(); return; }
       suppressPreDialog = true; comm.dismiss();
       void playOpeningLanding().then(() => {
         if (mySeq !== mapSelectSeq) return;                 // the player moved on to another map meanwhile
-        suppressPreDialog = false;
-        runIntro();
-        if (!suppressPreDialog && voicePacks && interlude && mode === 'play') playPreBattleDialog(null);   // no contract: the speaker now
+        announceMap();
+        next();
       });
+    };
+    const openThenIntro = () => {
+      suppressPreDialog = false;
+      runIntro();
+      if (USE_3D && !suppressPreDialog && voicePacks && interlude && mode === 'play') playPreBattleDialog(null);   // no contract: the speaker now
     };
     // HOW TO PLAY (owner): the onboarding brief shows ONCE, before the first map dialog — then the
     // normal contract/wave-intel flow proceeds. localStorage-gated so returning players skip it.
     let htpSeen = false;
     try { htpSeen = localStorage.getItem('bulwark:howToPlaySeen') === '1'; } catch (e) { /* storage blocked */ }
-    if (!htpSeen) {
-      suppressPreDialog = true; comm.dismiss();
-      showHowToPlay(mountEl, () => {
-        try { localStorage.setItem('bulwark:howToPlaySeen', '1'); } catch (e) { /* storage blocked */ }
-        suppressPreDialog = false;
+    afterLanding(() => {
+      if (!htpSeen) {
+        suppressPreDialog = true; comm.dismiss();
+        showHowToPlay(mountEl, () => {
+          try { localStorage.setItem('bulwark:howToPlaySeen', '1'); } catch (e) { /* storage blocked */ }
+          openThenIntro();
+        });
+      } else {
         openThenIntro();
-      });
-    } else {
-      openThenIntro();
-    }
+      }
+    });
   }
 
   function playReplay(replayLog) {
@@ -814,7 +822,7 @@ export function boot(mountEl, seed) {
       if (clearCall) await comm.showCall(clearCall);        // M2 runs fully (auto sign-off)
       // LEVEL 1 OPENS WITH THE LANDING [MM-story_mvbqui1g_m]: the craft flies in, lands and deploys BEFORE the
       // opening dialog — the level's first beat is the base arriving. Other levels keep the dialog-first order.
-      if (idx === 0 && currentMapId === 1 && !clearCall) {
+      if (idx === 0 && !clearCall) {   // every level: the landing first (was map 1 only) [MM-task_mvd2lq2j_j]
         if (openingLandingPending) return;                  // another call is already waiting on it — that one continues
         openingLandingPending = true;
         try { await playOpeningLanding(); } finally { openingLandingPending = false; }

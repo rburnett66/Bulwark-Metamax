@@ -468,5 +468,8 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     fxHit, fxGround, fxExplode, boom, burn,
     /** Raw emitter for other FX modules (the cannon shell's trail): emit(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty, drag). */
     emit,
+    /** An expanding ground ring (additive decal): radius r → r1 over life, colour [r,g,b], peak alpha a. The cannon's
+     *  firing shockwave [MM-task_mvd1yej4_g]. */
+    ring(x, z, r, r1, life, col, a) { decal(D.RING, x, z, r, life, col, a, r1); },
   };
 }

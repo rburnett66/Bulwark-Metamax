@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as THREE from '../../../vendor/three.module.js';
-import { createCombatFx, RECIPES, SHOT_LOOK, FLASH, MUZZLE, AIM } from './combatFxModel.js';
+import { createCombatFx, RECIPES, SHOT_LOOK, FLASH, MUZZLE, AIM, FLIGHT } from './combatFxModel.js';
 import { createCombatFxView } from './combatFx.js';
 import { glowPixels, glowAlpha, GLOW_SIZE } from './glowTexture.js';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
@@ -88,8 +88,9 @@ test('anti-air fires homing missiles that climb off the rail, chase a moving fly
     burst = fx.flashes.find((f) => f.color === FLASH.airburst.color) || null;
   }
   assert.ok(burst, 'it catches the target');
-  assert.ok(Math.abs(burst.z - (jet.pos.y + 0.5)) < 0.4, `bursts on the moving target (z ${burst.z.toFixed(2)} vs ${(jet.pos.y + 0.5).toFixed(2)})`);
-  assert.ok(Math.abs(burst.y - HOVER_HEIGHT) < 0.01);
+  // proximity fuse [MM-task_mvd2ln2i_h]: the burst is BESIDE the plane, within fuse range — not on its centre
+  const miss = Math.hypot(burst.x - (jet.pos.x + 0.5), burst.y - HOVER_HEIGHT, burst.z - (jet.pos.y + 0.5));
+  assert.ok(miss < FLIGHT.fuse + 0.45, `bursts near the moving target (${miss.toFixed(2)} cells off)`);
   assert.ok(trails.filter((k) => k === 'missile').length > 5, 'a smoke trail');
 });
 
@@ -272,4 +273,21 @@ test('the view: ONE instanced mesh, additive, no depth write; sync fills shots t
   assert.equal(view.mesh.visible, false);
   view.dispose();
   assert.equal(scene.children.length, 0);
+});
+
+test('AA missiles never orbit: a fast crossing plane is caught (or the fuse fires) inside maxT [MM-task_mvd2ln2i_h]', () => {
+  for (let seed = 1; seed <= 12; seed++) {
+    const fx = createCombatFx({ seed });
+    const jet = { id: 7, unitId: 'jet', domain: 'Flyer', altitude: 1, hp: 50, pos: { x: 7, y: 1 } };
+    const st = world({ units: [jet], structures: [tower({ kind: 'antiAir', targetId: 7 })] });
+    fx.update(st, MAP, [], 0, { getDef, trail: () => {} });
+    st.structures.get(100).targetId = null;
+    const born = fx.launched;
+    let t = 0;
+    while (fx.shots.some((q) => q.kind === 'missile') && t < 4) {
+      jet.pos.y += 4 / 60; jet.pos.x += 1.5 / 60;   // crossing fast
+      fx.update(st, MAP, [], 1 / 60, { getDef, trail: () => {} }); t += 1 / 60;
+    }
+    assert.ok(born >= 1 && t <= FLIGHT.maxT + 0.3, `seed ${seed}: missile alive ${t.toFixed(2)} s`);
+  }
 });

@@ -66,6 +66,8 @@ import { createCombatFx } from './fx/combatFxModel.js';
 import { createCombatFxView } from './fx/combatFx.js';
 import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createRepairFx } from './fx/repairFx.js';
+import { createDustTrails } from './fx/dustTrail.js';
+import { createFlashLights, FLASH_LIGHTS } from './fx/flashLights.js';
 import { createImpactsView } from './fx/impactsView.js';
 import { createCraft3D } from './craft/craft3d.js';
 import { createLanding, landedPose, harvesterOnRamp } from './craft/landing.js';
@@ -199,7 +201,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(),
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), dust: createDustTrails(), flashLights: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -230,10 +232,12 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const jit = () => { trailSeed = (trailSeed * 16807) % 2147483647; return trailSeed / 2147483647 - 0.5; };
   r.fxOpts.trail = (kind, x, y, z, k = 1, dx = 0, dy = 0, dz = 0, t = 1) => {
     const I = r.impacts;
-    if (kind === 'burst') {
-      for (let i = 0; i < 10; i++) { const a = i * 0.628 + jit(); I.emit(FXK.SPARK, x, y, z, Math.cos(a) * 3.2 * k, jit() * 2.5, Math.sin(a) * 3.2 * k, 0.35, 0.022); }
-      I.emit(FXK.SMOKE, x, y, z, 0, 0.15, 0, 1.1, 0.14 * k, 0.6, 0.6);
-      I.emit(FXK.FLASH, x, y, z, 0, 0, 0, 0.12, 0.55 * k);
+    if (kind === 'burst') {   // AA missile proximity burst: a hot flash and a puff of BLACK smoke that hangs [MM-task_mvd2ln2i_h]
+      I.emit(FXK.FLASH, x, y, z, 0, 0, 0, 0.1, 0.5 * k);
+      for (let i = 0; i < 2; i++) I.emit(FXK.FIRE, x + jit() * 0.08, y + jit() * 0.08, z + jit() * 0.08, jit() * 0.6, jit() * 0.6, jit() * 0.6, 0.14, 0.16 * k, 0.6);
+      for (let i = 0; i < 6; i++) { const a = i * 1.047 + jit(); I.emit(FXK.SPARK, x, y, z, Math.cos(a) * 2.6 * k, jit() * 2, Math.sin(a) * 2.6 * k, 0.3, 0.018); }
+      for (let i = 0; i < 6; i++) I.emit(FXK.SMOKE, x + jit() * 0.12, y + jit() * 0.1, z + jit() * 0.12, jit() * 0.5, 0.06 + jit() * 0.2, jit() * 0.5,
+        1.8 + (jit() + 0.5) * 0.9, 0.09 * k, 0.9, 0.09, 0, 2.2);   // flak-black, swelling and slowly thinning
       return;
     }
     if (kind === 'missile') {
@@ -250,10 +254,10 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
           I.emit(FXK.FIRE, x - dx * 0.05 * i, y - dy * 0.05 * i, z - dz * 0.05 * i, -dx * b + jit() * 0.6, -dy * b + jit() * 0.6, -dz * b + jit() * 0.6, 0.1 + jit() * 0.04, 0.11 * k, -0.2);
         }
         if (jit() > 0.1) I.emit(FXK.EMBER, x, y, z, -dx * 1.5 + jit() * 1.2, -dy * 1.5 + jit(), -dz * 1.5 + jit() * 1.2, 0.45, 0.025);   // sheds burning bits
-        I.emit(FXK.SMOKE, x - dx * 0.12, y - dy * 0.12, z - dz * 0.12, jit() * 0.25, 0.15 + jit() * 0.1, jit() * 0.25, 1.4, 0.09 * k, 0.75, 0.4);   // puffy brown-grey
+        for (let j = 0; j < 2; j++) I.emit(FXK.SMOKE, x - dx * (0.12 + j * 0.08), y - dy * (0.12 + j * 0.08), z - dz * (0.12 + j * 0.08), jit() * 0.25, 0.15 + jit() * 0.1, jit() * 0.25, 1.6, 0.09 * k, 0.8, 0.4);   // puffy brown-grey — doubled (owner 2026-10-17)
       } else {
         I.emit(FXK.FIRE, x, y, z, -dx * 0.8, -dy * 0.8, -dz * 0.8, 0.05, 0.05 * k, -0.4);                     // coasting: a dim glow
-        if (jit() > 0) I.emit(FXK.SMOKE, x, y, z, jit() * 0.1, 0.08, jit() * 0.1, 0.8, 0.035 * k, 0.4, 0.5);
+        I.emit(FXK.SMOKE, x, y, z, jit() * 0.1, 0.08, jit() * 0.1, 1.0, 0.04 * k, 0.45, 0.5);
       }
       return;
     }
@@ -265,32 +269,53 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     const I = r.impacts, dx = m.dx, dy = m.dy, dz = m.dz;
     const sx = -dz, sz = dx, sl = Math.hypot(sx, sz) || 1;                                                   // barrel's side axis
     if (kind === 'shell' || kind === 'flak' || kind === 'tracer') {
-      const k = kind === 'shell' ? 1 : kind === 'flak' ? 0.75 : 0.4;
-      for (let i = 0; i < 3; i++) {                                                                          // hot tongue
+      // CANNON SHOT [MM-task_mvd1yej4_g] — four separate beats:
+      //  1 MUZZLE FLASH: a white-hot core on the tip plus a short forward cone of flash, a fire tongue, side petals
+      //    out of the muzzle brake, a few sparks;
+      //  2 FORWARD PUFF: a ball of gunsmoke pushed out ahead of the barrel that drifts on, swells and slowly clears;
+      //  3 SHOCKWAVE: a pale ring snapping outward on the ground from the gun's foot;
+      //  4 LIFTED DUST: puffs the shockwave kicks up off the ground — they rise behind the ring and settle.
+      const k = kind === 'shell' ? 1 : kind === 'flak' ? 0.75 : 0.35;
+      // 1 · muzzle flash
+      I.emit(FXK.FLASH, m.x + dx * 0.04, m.y + dy * 0.04, m.z + dz * 0.04, 0, 0, 0, 0.06, 0.44 * k);
+      for (let i = 1; i <= 3; i++) I.emit(FXK.FLASH, m.x + dx * 0.1 * i, m.y + dy * 0.1 * i, m.z + dz * 0.1 * i, dx * 2, dy * 2, dz * 2, 0.05, (0.34 - i * 0.07) * k);
+      for (let i = 0; i < 3; i++) {
         const v = 3 + i * 1.6;
         I.emit(FXK.FIRE, m.x, m.y, m.z, dx * v + jit() * 0.4, dy * v + jit() * 0.4, dz * v + jit() * 0.4, 0.07, (0.13 - i * 0.025) * k, -0.3);
       }
-      I.emit(FXK.FLASH, m.x + dx * 0.05, m.y + dy * 0.05, m.z + dz * 0.05, 0, 0, 0, 0.05, 0.3 * k);
-      for (let i = 0, c = Math.round(6 * k) + 1; i < c; i++) {                                               // gunsmoke jet: out fast, stops, hangs
-        const v = 2 + 4.5 * (jit() + 0.5);
-        I.emit(FXK.SMOKE, m.x, m.y, m.z, dx * v + jit() * 0.5, dy * v + 0.2 + jit() * 0.4, dz * v + jit() * 0.5, 0.9 + jit() * 0.4, 0.08 * k, 0.9, 0.48, 0, 6);
-      }
-      if (m.brake) for (const s of [1, -1]) {                                                               // muzzle-brake side jets
+      if (m.brake) for (const sd of [1, -1]) {                                                              // brake petals + side puffs
         const bx = m.x - dx * m.brake, by = m.y - dy * m.brake, bz = m.z - dz * m.brake;
-        for (let i = 0; i < 2; i++) I.emit(FXK.SMOKE, bx, by, bz, (sx / sl) * s * (2.4 + i) + dx * 0.6, 0.25, (sz / sl) * s * (2.4 + i) + dz * 0.6, 0.7, 0.06, 0.8, 0.5, 0, 6);
-        I.emit(FXK.FIRE, bx, by, bz, (sx / sl) * s * 2.2, 0, (sz / sl) * s * 2.2, 0.05, 0.06, -0.3);
+        I.emit(FXK.FLASH, bx + (sx / sl) * sd * 0.06, by, bz + (sz / sl) * sd * 0.06, (sx / sl) * sd * 1.5, 0, (sz / sl) * sd * 1.5, 0.045, 0.16);
+        I.emit(FXK.FIRE, bx, by, bz, (sx / sl) * sd * 2.2, 0, (sz / sl) * sd * 2.2, 0.05, 0.06, -0.3);
+        I.emit(FXK.SMOKE, bx, by, bz, (sx / sl) * sd * 1.4 + dx * 0.3, 0.12, (sz / sl) * sd * 1.4 + dz * 0.3, 1.6, 0.045, 0.9, 0.62, 0, 2.2);
       }
       for (let i = 0; i < 3 * k; i++) I.emit(FXK.SPARK, m.x, m.y, m.z, dx * 5 + jit() * 1.5, dy * 5 + jit() * 1.5 + 0.5, dz * 5 + jit() * 1.5, 0.18, 0.016);
+      // 2 · forward puff — out ahead of the tip, slowing, swelling, clearing over ~3 s
+      for (let i = 0, c = Math.max(3, Math.round(9 * k)); i < c; i++) {
+        const v = 0.6 + 1.2 * (jit() + 0.5);
+        I.emit(FXK.SMOKE, m.x + dx * 0.05, m.y + dy * 0.05, m.z + dz * 0.05, dx * v + jit() * 0.3, dy * v + 0.12 + jit() * 0.12, dz * v + jit() * 0.3,
+          2.6 + (jit() + 0.5) * 1.0, 0.095 * k, 1.1, 0.84, 0, 1.5);
+      }
+      // 3 · shockwave ring on the ground, and 4 · the dust it lifts (separate: the ring is crisp and fast, the puffs soft and slow)
+      if (m.gx !== undefined && kind !== 'tracer') {
+        const gr = m.gr || 0.3;
+        I.ring(m.gx, m.gz, gr * 0.6, gr + 0.95 * k, 0.32, [0.96, 0.92, 0.84], 0.5 * k);
+        for (let i = 0, c = Math.round(12 * k); i < c; i++) {
+          const a = (i / c) * Math.PI * 2 + jit() * 0.4, ca = Math.cos(a), sa = Math.sin(a), v = 1.3 + (jit() + 0.5) * 0.8;
+          I.emit(FXK.SMOKE, m.gx + ca * gr, 0.05, m.gz + sa * gr, ca * v, 0.22 + (jit() + 0.5) * 0.18, sa * v,
+            1.3 + (jit() + 0.5) * 0.7, 0.075 * k, 1.0, 0.58, 1, 2.4);
+        }
+      }
       return;
     }
     if (kind === 'rocket') {                                                                                 // starter plume
       for (let i = 0; i < 4; i++) I.emit(FXK.FIRE, m.bx, m.by, m.bz, -dx * (3 + i) + jit() * 0.8, -dy * (3 + i) + jit() * 0.5, -dz * (3 + i) + jit() * 0.8, 0.12, 0.14, -0.2);
-      for (let i = 0; i < 12; i++) {                                                                         // backblast + bloom
+      for (let i = 0; i < 24; i++) {                                                                         // backblast + bloom (doubled, owner 2026-10-17)
         const v = 1.2 + 3 * (jit() + 0.5);
         I.emit(FXK.SMOKE, m.bx, m.by, m.bz, -dx * v + jit() * 1.4, -dy * v * 0.5 + 0.3 + jit() * 0.3, -dz * v + jit() * 1.4, 1.6 + jit() * 0.6, 0.14, 1.1, 0.5, 0, 2.5);
       }
       for (let i = 0; i < 6; i++) { const a = i * 1.047 + jit(); I.emit(FXK.DUST, m.bx, 0.05, m.bz, Math.cos(a) * 1.6, 0.6 + jit() * 0.3, Math.sin(a) * 1.6, 0.6, 0.05); }   // ground kick
-      I.emit(FXK.SMOKE, m.bx, 0.08, m.bz, 0, 0.2, 0, 1.6, 0.12, 0.9, 0.62, 1);
+      for (let i = 0; i < 2; i++) I.emit(FXK.SMOKE, m.bx + jit() * 0.2, 0.08, m.bz + jit() * 0.2, jit() * 0.3, 0.2, jit() * 0.3, 2.0, 0.12, 0.9, 0.62, 1);
       I.emit(FXK.FLASH, m.bx, m.by, m.bz, 0, 0, 0, 0.08, 0.45);
       return;
     }
@@ -303,6 +328,12 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   r.fxOpts.muzzle = (id, n) => (r.system ? r.system.muzzle(id, n) : null);
   r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
   attachCameraInput(canvas, r);
+  // point-light flashes (experiment): count by tier, ?flashlights=N overrides [MM-task_mvd2lrig_k]
+  {
+    let n = FLASH_LIGHTS[tier.key] ?? 0;
+    try { const q = new URLSearchParams(window.location.search).get('flashlights'); if (q !== null && q !== '') n = Math.max(0, Math.min(8, q | 0)); } catch (e) { /* no window */ }
+    r.flashLights = n > 0 ? createFlashLights(THREE, scene, n) : null;
+  }
 
   // The baked level: content/maps/baked/<slug>/ — checked against the sim's map; its road mask paints the
   // low-poly roads; its tiles are the ground only under ?ground=baked. Missing or stale → say so on screen.
@@ -445,6 +476,7 @@ export function renderFrame(r, state, ui, events, dt) {
   if (state && state.units) {
     views = buildUnitViews(state, r.map, r.headings, r.resolveModel, Math.min(0.1, Math.max(0, dt || 0)));   // smooth turning; clamped so a stalled frame can't swing a whole turn at once
     if (r.landing && r.craft && !r.landingHandedOff) views = landingHarvesters(r, state, views);
+    r.dust.step(dt, views, r.impacts.emit, FXK);   // light dust behind moving ground vehicles [MM-task_mvd2loid_i]
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows);
   }
 
@@ -459,6 +491,7 @@ export function renderFrame(r, state, ui, events, dt) {
   r.fxOpts.projFx = r.getProjFx();
   r.fxOpts.projScale = r.getProjScale();
   r.fx.update(state, r.map, events, dt, r.fxOpts);
+  if (r.flashLights) { r.flashLights.update(Math.max(0, Math.min(0.1, dt || 0))); r.flashLights.fromFlashes(r.fx.flashes); }   // point-light flashes (experiment)
   // the base super-cannon: reticle, shell from the roof gun, touchdown blast (fx/cannonFx.js) [MM-task_mvbvpyer_x]
   r.cannonFx.onEvents(events, r.craft ? () => r.craft.muzzleWorld() : null);
   r.cannonFx.step(dt, r.impacts);
@@ -579,6 +612,7 @@ export function destroyRenderer(r) {
   for (const [type, fn, opts] of r.listeners) canvas.removeEventListener(type, fn, opts);
   r.markers.dispose();
   if (r.system) r.system.dispose();
+  if (r.flashLights) r.flashLights.dispose();
   if (r.craft) r.craft.dispose();
   if (r.resources) r.resources.dispose();
   r.units3d.dispose();
