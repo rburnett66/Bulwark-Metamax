@@ -45,6 +45,7 @@ import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy
 import { createFogTracker } from './overlays/fogModel.js';
 import { resolveTier, probeEnv, pixelRatioFor } from './quality.js';
 import { createFogView } from './overlays/fog.js';
+import { createContacts, createContactsView } from './overlays/contacts.js';
 import { createPlacementGhost } from './overlays/placement.js';
 import { createLights } from './lighting.js';
 import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
@@ -195,6 +196,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const impacts = createImpacts({ seed: (map.seed | 0) || 1 });
   const impactsView = createImpactsView(THREE, scene, { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
   const fogView = createFogView(THREE, scene, map);
+  const contactsView = createContactsView(THREE, scene);   // hidden contacts: red reticles outside the play area [MM-story_mveehs1r_f]
   const baseStyle = baseStyleFor(craft && craft.def && craft.def.weaponType);   // each base fires its own weapon's look
   const cannonFx = createCannonFx({ seed: (map.seed | 0) || 1, style: baseStyle }), cannonFxView = createCannonFxView(THREE, scene, { style: baseStyle });   // the base super-cannon
   const coverageView = createCoverageView(THREE, scene);   // selection range + defensive coverage
@@ -203,7 +205,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), dust: createDustTrails(), flashLights: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), dust: createDustTrails(), flashLights: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -469,11 +471,19 @@ export function renderFrame(r, state, ui, events, dt) {
     r.craft.scan(r.clock);
   }
 
+  // The play area (fog window) for this frame: the vignette (drawn later) and the hidden contacts (below) agree.
+  const fogFrame = r.fog.update(state, r.map, dt);
+
   // Live units: the 3D models (T5). Live planar shadows per the quality tier (off on Low — T3.5).
   let views = null;
   if (state && state.units) {
     views = buildUnitViews(state, r.map, r.headings, r.resolveModel, Math.min(0.1, Math.max(0, dt || 0)));   // smooth turning; clamped so a stalled frame can't swing a whole turn at once
     if (r.landing && r.craft && !r.landingHandedOff) views = landingHarvesters(r, state, views);
+    // enemies outside the play area are red reticles, not models: no model, bar, dust or muzzle fx [MM-story_mveehs1r_f]
+    const c = r.contacts.update(state, views, fogFrame.win && fogFrame.win.rect, dt);
+    views = c.views;
+    r.fxOpts.hidden = c.hidden;
+    r.stats.contacts = r.contactsView.sync(c.reticles, r.clock);
     r.dust.step(dt, views, r.impacts.emit, FXK);   // light dust behind moving ground vehicles [MM-task_mvd2loid_i]
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows);
   }
@@ -510,7 +520,7 @@ export function renderFrame(r, state, ui, events, dt) {
   if (r.cannonFx.shake > 0) { const k = r.cannonFx.shake; r.camera.position.x += Math.sin(r.clock * 67) * k; r.camera.position.y += Math.sin(r.clock * 83 + 0.7) * k * 0.5; r.camera.position.z += Math.cos(r.clock * 53) * k; }   // cannon touchdown
   if (r.craft && r.craft.shake > 0) { const k = r.craft.shake; r.camera.position.x += Math.sin(r.clock * 73) * k; r.camera.position.y += Math.sin(r.clock * 91 + 1.3) * k * 0.6; r.camera.position.z += Math.cos(r.clock * 59) * k; }   // LC: touchdown thump
   // Ring fog (T3.4): veil outside the current wave window
-  r.fogView.sync(r.fog.update(state, r.map, dt));
+  r.fogView.sync(fogFrame);
 
   r.ghost.sync(ui);
 
@@ -620,7 +630,7 @@ export function destroyRenderer(r) {
   r.fxView.dispose();
   r.cannonFxView.dispose(); r.coverageView.dispose(); r.healthBars.dispose(); r.goldView.dispose(); r.unloadView.dispose();
   r.impactsView.dispose();
-  r.fogView.dispose();
+  r.fogView.dispose(); r.contactsView.dispose();
   r.scene.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }

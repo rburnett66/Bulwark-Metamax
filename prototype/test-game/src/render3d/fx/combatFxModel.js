@@ -122,7 +122,7 @@ function eventPos(ev, map) {
  * createCombatFx({ seed, caps }) → { shots, flashes, update(state, map, events, dt, opts), clear() }
  *   shots   — [{ x, y, z, dx, dy, dz, size, len, color }]   live rounds; (dx,dy,dz) = unit flight direction
  *   flashes — [{ x, y, z, size, color, alpha }]             live glows (alpha already faded)
- * opts: { getDef(unitId) → def, projFx: { id: entry }, projScale,
+ * opts: { getDef(unitId) → def, projFx: { id: entry }, projScale, hidden: Set of unit ids that draw no shots (hidden contacts),
  *         muzzle(structId, n) → modelled firing point { x, y, z, dx, dy, dz, bx, by, bz, brake } (System turrets),
  *         fire(kind, firingPoint, look) — launch effects (barrel exhaust, rocket plume, missile ignition),
  *         trail(kind, x, y, z, k, dx, dy, dz, t) — in-flight motor flame + smoke (t: missile s aloft, rocket flight 0..1), boom(x, z, k) } — all optional.
@@ -264,6 +264,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       const base = RECIPES.unit;
       for (const u of state.units.values()) {
         if (!u || !u.pos || u.hp <= 0 || u.isHarvester || u.targetId === null || u.targetId === undefined) continue;
+        if (opts.hidden && opts.hidden.has(u.id)) continue;   // a hidden contact (outside the play area) shows no muzzle fx [MM-story_mveehs1r_f]
         let def = null;
         try { def = getDef(u.unitId); } catch (e) { def = null; }
         const kind = shotFxFor(def);
