@@ -1,4 +1,4 @@
-# Tech Plan — 3D Combat Polish: cannon cadence, elevating barrels, build-site dust, mobile placement
+# Tech Plan — 3D Combat Polish: cannon, barrels, build dust, mobile placement, attack runs, fog margin
 
 Status: owner decisions recorded 2026-10-18 · Bulwark MM (project 16)
 Owner asks (2026-10-18): (1) the cannon tower should fire more slowly; (2) rebuild every tower, tank and
@@ -6,7 +6,9 @@ base defence so the barrel tilts up and down to match the shot's trajectory; (3)
 base of a structure while it is being built. Added the same day: (4) cannon gunsmoke that starts tip-sized, is
 pushed a little way out, then expands and clears; (5) on mobile, tower placement uses a virtual-joystick
 offset so the finger never covers the slot, and the tower builds when the finger lifts; (6) attacking planes
-never stop: they make attack runs, overfly, circle back and attack again, while drones and copters may hover.
+never stop: they make attack runs, overfly, circle back and attack again, while drones and copters may hover;
+(7) the map is drawn 5 cells past the play area under a vignette-style darkening, and every unit outside the
+play area shows only as a red reticle that hides its type.
 
 Every item is a client-side change (3D rendering, or touch input for item 5). The sim stays as it is, with
 no gameplay or balance change, and the replay contract holds (no `Date.now()` / `Math.random()` in the tick path; the FX use their
@@ -216,7 +218,50 @@ the camera (`index.js:102-139`), so the ghost can't be steered with the finger. 
 - **Follow-up (not in this story):** copters and drones still use the jet model. Giving them their own
   rotor/drone models would make the hover read better.
 
-### 2.9 Fix the aiming gap
+### 2.9 Fog margin and hidden contacts (CP-12)
+**Today** (verified):
+- **The play area is the fog window.** `fogWindow` (`src/render3d/overlays/fogModel.js:24-50`) takes it from the
+  map's per-wave windows: forge maps' `waveWindows` (defaults in `content/maps/wave-windows.js`, wave 1 is 24×16
+  of a 64×32 world) or campaign `rings`. Maps without windows have no fog.
+- **The fog** (`overlays/fog.js`) darkens everything outside the window by a flat 0.34–0.38 and draws a cyan
+  outline.
+- **Nothing is hidden.** Terrain, decor and units are drawn to the full map edge (`ground/lowpoly.js:102-104`,
+  `obstructions/placement.js`). Units outside the window show their real models, health bars and dust.
+- **The minimap** (`render/hud.js:692-709`) colours flyers white and everything else red, which gives the type
+  away.
+- **The camera** can pan 2 cells past the map (`camera.js:22, 47-52`).
+
+**New behaviour** (only where the fog is active; maps without windows are unchanged):
+- **Vignette margin.** The fog shader changes from a flat tint to a vignette over the 5 cells outside the window:
+  - Clear at the window edge, darkening smoothly to near-black at 5 cells out (a smoothstep on distance to
+    the window rect).
+  - Everything beyond that band is fully dark, so the map visibly ends 5 cells past the play area.
+  - No hard line: the cyan outline goes. The reveal flash when the window grows stays, so a new wave still
+    reads.
+  - The darkness curve and the 5-cell width are named constants.
+- **Hidden contacts.** `buildUnitViews` (`units/unitViews.js:45-64`) tests each enemy unit against the window.
+  Outside it, the unit is drawn as a **red reticle** instead of its model:
+  - Same size and colour for every type. Flyers get the same ground reticle as walkers, so type, size and
+    altitude are all hidden.
+  - The reticle reuses the pulsing red decal shader from the base cannon's target marker (`fx/cannonFx.js`).
+  - Health bars, dust trails and the unit's own muzzle effects are suppressed for hidden contacts.
+  - When a contact crosses into the window, the reticle fades out and the model fades in over about 0.25 s.
+  - Player units are never hidden.
+- **Minimap:** attackers outside the window are drawn as plain red dots (no white for flyers).
+- **Render-only:** the sim, targeting and damage are unchanged.
+
+**Tests:**
+- `fog.test.mjs`: darkness rises monotonically from 0 at the window edge to near-black at 5 cells, and is
+  fully dark beyond.
+- New `contacts.test.mjs`:
+  - A unit outside the window gets a reticle and no model, health bar or dust.
+  - Flyer and walker reticles are identical.
+  - A unit inside is drawn normally.
+  - Crossing the window cross-fades.
+  - Maps without fog hide nothing.
+- Minimap colour test for hidden attackers.
+
+### 2.10 Fix the aiming gap
 Towers aim at structure and base targets as well as units. This is a prerequisite for correct pitch, so the
 barrel doesn't aim at nothing.
 
@@ -237,6 +282,8 @@ barrel doesn't aim at nothing.
 9. **Cannon gunsmoke:** tip-sized, pushed out, expands and clears. Delivered (PR #64) with 1.
 10. **Mobile tower placement:** offset slot up-left of the finger, drag steers it, release builds. Independent.
 11. **Plane attack runs:** pass-and-turn loops for planes; drones and copters hover. Plan A (owner's choice).
+12. **Fog margin and hidden contacts:** vignette over 5 cells past the play area; outside units as red
+    reticles; minimap all-red outside. Independent.
 
 ## 4. Tests
 - `firingPoints.test.mjs` asserts the cannon tip at a fixed 8° and **will change**. It becomes "the tip follows
