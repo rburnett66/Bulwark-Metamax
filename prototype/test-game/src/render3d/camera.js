@@ -178,3 +178,14 @@ export function groundCellToScreen(cam, w, h, cell) {
   const ndcY = (vx * u.x + vy * u.y + vz * u.z) / depth / th;
   return { x: (ndcX + 1) * 0.5 * w, y: (1 - ndcY) * 0.5 * h };
 }
+
+/**
+ * Touch placement: the build slot sits UP AND LEFT of the fingertip so the finger never covers it (owner
+ * 2026-10-18, "virtual joystick"). A fixed screen offset (CSS px) — the same at every zoom — clamped inside the
+ * view so the slot stays reachable near the top / left edge. [MM-story_mvee80a0_d]
+ */
+export const TOUCH_OFFSET = Object.freeze({ x: -56, y: -72, edge: 12 });
+export function touchSlotPoint(px, py, w, h, o = TOUCH_OFFSET) {
+  const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  return { x: cl(px + o.x, o.edge, Math.max(o.edge, w - o.edge)), y: cl(py + o.y, o.edge, Math.max(o.edge, h - o.edge)) };
+}
