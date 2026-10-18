@@ -1,6 +1,6 @@
 # Tech Plan — 3D Combat Polish: cannon cadence, elevating barrels, build-site dust, mobile placement
 
-Status: draft for owner review · 2026-10-18 · Bulwark MM (project 16)
+Status: owner decisions recorded 2026-10-18 · Bulwark MM (project 16)
 Owner asks (2026-10-18): (1) the cannon tower should fire more slowly; (2) rebuild every tower, tank and
 base defence so the barrel tilts up and down to match the shot's trajectory; (3) dirt puffs around the
 base of a structure while it is being built. Added the same day: (4) cannon gunsmoke that starts tip-sized, is
