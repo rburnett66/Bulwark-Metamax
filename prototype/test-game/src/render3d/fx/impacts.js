@@ -109,12 +109,14 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
 
   const n = (base) => Math.max(0, Math.round(base * limits.density));
 
+  let seedSeq = 0;
   function emit(kind, x, y, z, vx, vy, vz, life, size, grow = 0, shade = 0, dusty = 0, drag = 0) {
     if (isAdditive(kind)) { if (nAdd >= limits.additive) return; nAdd++; }
     else { if (nSmoke >= limits.smoke) return; nSmoke++; }
     const p = freeP.pop() || {};
     p.kind = kind; p.x = x; p.y = y; p.z = z; p.vx = vx; p.vy = vy; p.vz = vz;
     p.t = 0; p.life = life; p.size = size; p.grow = grow; p.shade = shade; p.dusty = dusty; p.drag = drag; p.bounces = 0; p.fl = 1;
+    p.sd = (seedSeq = (seedSeq + 0.6180339887) % 1);   // a flame's flipbook start frame (fx/fireAtlas.js) [MM-task_mvfqzjkm_7]
     particles.push(p);
   }
 

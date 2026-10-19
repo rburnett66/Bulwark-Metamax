@@ -1,0 +1,8 @@
+{
+  "_comment": "Fire flipbook [MM-task_mvfqzjkm_7]: the owner's flame sheet (owner-owned art, 2026-10-19), 6x6 separate flame variants keyed to black (fire-atlas.png, 384 px, frames in reading order from the top-left). Each fire picks its own variant and flickers to the next at fps; scale sizes the flames to the particles. Set cols/rows to 0 to fall back to the procedural flames in src/render3d/fx/fireAtlas.js.",
+  "cols": 6,
+  "rows": 6,
+  "frames": 36,
+  "fps": 8,
+  "scale": 2.5
+}
