@@ -73,3 +73,17 @@ test('createFireAtlas: the stand-in texture, and no network in node', () => {
   assert.equal(a.texture.image.width, W);
   assert.equal(a.frames, N);
 });
+
+test('the owner\'s sheet ships: manifest and PNG agree, flames keyed to black [MM-task_mvfqzjkm_7]', async () => {
+  const fs = await import('node:fs');
+  const { sheetAtlas } = await import('./fireAtlas.js');
+  const m = JSON.parse(fs.readFileSync(new URL('../../../content/fx/fire-atlas.json', import.meta.url), 'utf8'));
+  assert.ok(m.cols > 0 && m.rows > 0, 'a sheet is committed');
+  const png = fs.readFileSync(new URL('../../../content/fx/fire-atlas.png', import.meta.url));
+  assert.equal(png.toString('ascii', 1, 4), 'PNG');
+  const w = png.readUInt32BE(16), h = png.readUInt32BE(20);
+  assert.equal(w % m.cols, 0, 'whole-pixel columns'); assert.equal(h % m.rows, 0, 'whole-pixel rows');
+  const a = sheetAtlas(new THREE.Texture(), m);
+  assert.ok(a.frames === m.cols * m.rows && a.topDown && a.source === 'sheet');
+  assert.ok(a.fps < FIRE_ATLAS.fps, 'separate variants flicker slower than an animation plays');
+});

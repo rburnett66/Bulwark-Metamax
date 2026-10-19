@@ -9,7 +9,7 @@
  * costs nothing extra. Each particle starts on its own frame and plays forward, so neighbours never flicker in step.
  *
  * Two sources, one layout (cols × rows frames):
- *   1. the OWNER'S SHEET, when content/fx/fire-atlas.png + content/fx/fire-atlas.json ({ cols, rows, frames }) are
+ *   1. the OWNER'S SHEET, when content/fx/fire-atlas.png + content/fx/fire-atlas.json ({ cols, rows, frames, fps, scale }) are
  *      committed — frames in reading order from the TOP-LEFT, flames on black (additive: black is transparent);
  *   2. otherwise a PROCEDURAL stand-in built here (fireAtlasPixels): 4 × 4 looping frames of a licking flame, white-hot
  *      at the root cooling through yellow and orange to a red, ragged tip. Pure + seeded (no Math.random).
@@ -18,7 +18,8 @@
  */
 export const FIRE_ATLAS = Object.freeze({
   cols: 4, rows: 4, cell: 64,      // the procedural stand-in: 16 frames of 64 px → one 256² texture
-  fps: 26,                         // frames per second a flame plays at
+  fps: 26,                         // frames per second the stand-in plays at (a looping animation)
+  scale: 2.4,                      // stand-in flame size × the particle size (its flame fills little of its frame)
   url: 'content/fx/fire-atlas.png', meta: 'content/fx/fire-atlas.json',
 });
 
@@ -78,18 +79,26 @@ export function createFireAtlas(THREE, { load = typeof window !== 'undefined' &&
   const A = FIRE_ATLAS;
   const tex = new THREE.DataTexture(fireAtlasPixels(A), A.cols * A.cell, A.rows * A.cell, THREE.RGBAFormat);
   tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
-  const atlas = { texture: tex, cols: A.cols, rows: A.rows, frames: A.cols * A.rows, topDown: false, source: 'procedural' };
+  const atlas = { texture: tex, cols: A.cols, rows: A.rows, frames: A.cols * A.rows, fps: A.fps, scale: A.scale, topDown: false, source: 'procedural' };
   if (load) {
     fetch(A.meta).then((r) => (r.ok ? r.json() : null)).then((m) => {
       if (!m || !(m.cols > 0) || !(m.rows > 0)) return;   // no sheet committed: keep the stand-in
       new THREE.TextureLoader().load(A.url, (t) => {
-        t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
-        Object.assign(atlas, { texture: t, cols: m.cols, rows: m.rows, frames: m.frames || m.cols * m.rows, topDown: true, source: 'sheet' });
+        t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false;   // 6×64 px: not a power of two
+        Object.assign(atlas, sheetAtlas(t, m));
         if (onSwap) onSwap(atlas);
       }, undefined, (e) => console.warn('[fire] fire-atlas.png failed to load — keeping the procedural flames', e));
     }).catch((e) => console.info('[fire] no fire sheet loaded — procedural flames', e && e.message));
   }
   return atlas;
+}
+
+/**
+ * The atlas record for a loaded sheet + its manifest { cols, rows, frames?, fps?, scale? }: a sheet of separate flame
+ * VARIANTS (not one animation) flickers between them at a slower `fps`; `scale` sizes its flames to the particles.
+ */
+export function sheetAtlas(texture, m) {
+  return { texture, cols: m.cols, rows: m.rows, frames: m.frames || m.cols * m.rows, fps: m.fps || 8, scale: m.scale || 1.6, topDown: true, source: 'sheet' };
 }
 
 /** The frame (0..frames−1) a flame shows `age` seconds into its life, starting on its own seed-picked frame (pure). */

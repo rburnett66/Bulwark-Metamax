@@ -215,10 +215,10 @@ export function createFBatch(THREE, scene, cap, atlas, renderOrder) {
     F[i] = frame;
     return true;
   };
-  b.frames = atlas.frames;
+  b.frames = atlas.frames; b.fps = atlas.fps || 26; b.scale = atlas.scale || 1;
   b.setAtlas = (A) => {
     mat.uniforms.uAtlas.value = A.texture; mat.uniforms.uGrid.value.set(A.cols, A.rows); mat.uniforms.uTopDown.value = A.topDown ? 1 : 0;
-    b.frames = A.frames;
+    b.frames = A.frames; b.fps = A.fps || 26; b.scale = A.scale || 1;
   };
   return b;
 }

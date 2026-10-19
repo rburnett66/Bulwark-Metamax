@@ -15,16 +15,15 @@
  * Sparks run white-hot → orange → red with age, their streak length from speed. THREE is passed in.
  */
 import { createPBatch, createDBatch, createFBatch } from './particles.js';
-import { createFireAtlas, fireFrame, FIRE_ATLAS } from './fireAtlas.js';
+import { createFireAtlas, fireFrame } from './fireAtlas.js';
 import { K, D, DEFAULT_IMPACT_CAPS, SINK_DEPTH } from './impacts.js';
 import { createUnitMaterial } from '../units/material.js';
 import { shadowMaterial } from '../units/models3d.js';
 
 export const CHAR = Object.freeze([0.42, 0.38, 0.35]);   // charred hull tint (code design §4.11b)
 export const WRECK_METAL = 0.1;                           // burnt metal: almost no reflection
-/** A flame sprite is drawn this much bigger than the glow dot it replaces (the frame's flame fills less of its quad),
- *  at this brightness. [MM-task_mvfqzjkm_7] */
-export const FIRE_SPRITE = Object.freeze({ scale: 2.4, gain: 0.85 });
+/** Flame sprite brightness; the size comes with the atlas (atlas.scale) [MM-task_mvfqzjkm_7]. */
+export const FIRE_SPRITE = Object.freeze({ gain: 0.85 });
 
 /**
  * createImpactsView(THREE, scene, { lodGroups, sunDir, caps })
@@ -94,8 +93,8 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
             else add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, 1, 0.92, 0.7, f * f);
             break;
           case K.FIRE: {   // a flipbook flame on its own frame; tinted from hot to ember-red as it ages [MM-task_mvfqzjkm_7]
-            const sz = p.size * Math.max(0.15, 1 + p.grow * u) * FIRE_SPRITE.scale;
-            fire.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, sz, 0, 1, 0.92 - 0.3 * u, 0.85 - 0.45 * u, f * FIRE_SPRITE.gain * p.fl, fireFrame(p.sd, p.t, fire.frames, FIRE_ATLAS.fps));
+            const sz = p.size * Math.max(0.15, 1 + p.grow * u) * fire.scale;
+            fire.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, sz, 0, 1, 0.92 - 0.3 * u, 0.85 - 0.45 * u, f * FIRE_SPRITE.gain * p.fl, fireFrame(p.sd, p.t, fire.frames, fire.fps));
             break;
           }
           case K.SMOKE: {
