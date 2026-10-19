@@ -1,0 +1,6 @@
+{
+  "_comment": "Fire flipbook [MM-task_mvfqzjkm_7]. cols/rows 0 = no sheet yet: the game draws its procedural flames (src/render3d/fx/fireAtlas.js). To ship the owner's sheet: put it at content/fx/fire-atlas.png (flames on black, frames in reading order from the top-left) and set cols, rows and frames here.",
+  "cols": 0,
+  "rows": 0,
+  "frames": 0
+}

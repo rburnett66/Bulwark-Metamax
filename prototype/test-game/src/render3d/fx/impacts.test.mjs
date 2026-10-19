@@ -284,13 +284,13 @@ test('a restart (sim clock back) clears everything', () => {
   assert.equal(fx.particles.length + fx.wrecks.length + fx.chunks.length + fx.scorches.length + fx.glows.length, 0);
 });
 
-test('the view: bounded batches — 4 particle/decal draws + chunks + one wreck mesh (and shadow) per model part', () => {
+test('the view: bounded batches — 5 particle/flame/decal draws [MM-task_mvfqzjkm_7] + chunks + one wreck mesh (and shadow) per model part', () => {
   const scene = new THREE.Scene();
   const units = createUnits3D(THREE, scene, { sunDir: { x: -0.5, y: 0.7, z: -0.5 } });
   const before = scene.children.length;
   const view = createImpactsView(THREE, scene, { lodGroups: units.lodGroups() });
   const parts = Object.values(units.lodGroups()).reduce((a, g) => a + Object.keys(g).length, 0);
-  assert.equal(scene.children.length - before, 5 + parts * 2);
+  assert.equal(scene.children.length - before, 6 + parts * 2);   // + the flame flipbook batch
   const fx = createImpacts();
   // empty → nothing visible (no draw calls)
   view.sync(fx);
@@ -302,7 +302,7 @@ test('the view: bounded batches — 4 particle/decal draws + chunks + one wreck 
   assert.equal(r.wrecks, 2);
   assert.equal(r.chunks, fx.chunks.length);
   const vis = scene.children.slice(before).filter((o) => o.visible);
-  assert.equal(vis.length, 5 + 2 * 2, 'particles ×2, decals ×2, chunks, tank body + turret wrecks and their shadows');
+  assert.equal(vis.length, 6 + 2 * 2, 'particles ×2, flames, decals ×2, chunks, tank body + turret wrecks and their shadows');
   assert.ok(vis.every((o) => !o.material.depthWrite || o.isInstancedMesh), 'effect batches never write depth');
   assert.equal(view.add.mesh.material.blending, THREE.AdditiveBlending);
   assert.equal(view.wreckMesh.tank.body.sh.instanceMatrix, view.wreckMesh.tank.body.im.instanceMatrix, 'shadow shares the wreck matrices');

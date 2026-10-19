@@ -160,3 +160,65 @@ export function createDBatch(THREE, scene, cap, additive, renderOrder) {
   };
   return b;
 }
+
+const FVERT = /* glsl */`
+attribute vec3 iPos; attribute vec3 iVel; attribute vec2 iSize; attribute vec4 iCol; attribute float iFrame;
+uniform vec2 uGrid; uniform float uTopDown;
+varying vec2 vUv; varying vec4 vCol;
+void main() {
+  vec4 c = modelViewMatrix * vec4(iPos, 1.0);
+  vec3 vv = (modelViewMatrix * vec4(iVel, 0.0)).xyz;
+  float sp = length(vv.xy);
+  vec2 up = normalize((modelViewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xy + vec2(0.0, 1e-4));
+  // a flame's tip trails along its motion — a rising flame stands up, an exhaust or muzzle tongue streams out
+  vec2 dir = normalize(mix(up, sp > 1e-4 ? vv.xy / sp : up, smoothstep(0.4, 1.4, sp)) + vec2(0.0, 1e-5));
+  vec2 nrm = vec2(dir.y, -dir.x);
+  vec2 q = position.xy;                         // -1..1
+  float along = iSize.x + iSize.y;
+  c.xy += nrm * q.x * iSize.x + dir * (q.y + 0.55) * along;   // the root sits on the particle, the tip rises off it
+  float f = mod(floor(iFrame + 0.5), uGrid.x * uGrid.y);
+  float col = mod(f, uGrid.x), row = floor(f / uGrid.x);
+  if (uTopDown > 0.5) row = uGrid.y - 1.0 - row;              // a PNG sheet reads top-left first (texture v is up)
+  vUv = (vec2(col, row) + (q * 0.5 + 0.5)) / uGrid;
+  vCol = iCol;
+  gl_Position = projectionMatrix * c;
+}`;
+
+const FFRAG = /* glsl */`
+uniform sampler2D uAtlas; varying vec2 vUv; varying vec4 vCol;
+void main() {
+  vec4 t = texture2D(uAtlas, vUv);
+  vec3 c = t.rgb * vCol.rgb * vCol.a;
+  if (max(c.r, max(c.g, c.b)) < 0.004) discard;
+  gl_FragColor = vec4(c, 1.0);                   // additive: black is transparent, so a sheet on black just works
+}`;
+
+/**
+ * Flame flipbook batch (fx/fireAtlas.js) [MM-task_mvfqzjkm_7]: additive, one draw call. push(x, y, z, vx, vy, vz,
+ * width, stretch, r, g, b, a, frame). setAtlas(atlas) swaps the sheet (the owner's PNG replacing the stand-in).
+ */
+export function createFBatch(THREE, scene, cap, atlas, renderOrder) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uAtlas: { value: atlas.texture }, uGrid: { value: new THREE.Vector2(atlas.cols, atlas.rows) }, uTopDown: { value: atlas.topDown ? 1 : 0 } },
+    vertexShader: FVERT, fragmentShader: FFRAG, transparent: true, depthWrite: false, depthTest: true,
+    blending: THREE.AdditiveBlending,
+  });
+  const b = makeBatch(THREE, scene, cap, [['iPos', 3], ['iVel', 3], ['iSize', 2], ['iCol', 4], ['iFrame', 1]], [0, 1, 2, 0, 2, 3], mat, renderOrder);
+  const P = b.a.iPos.array, V = b.a.iVel.array, S = b.a.iSize.array, C = b.a.iCol.array, F = b.a.iFrame.array;
+  b.push = (x, y, z, vx, vy, vz, w, len, r, g, bl, al, frame) => {
+    const i = b.slot();
+    if (i < 0) return false;
+    P[i * 3] = x; P[i * 3 + 1] = y; P[i * 3 + 2] = z;
+    V[i * 3] = vx; V[i * 3 + 1] = vy; V[i * 3 + 2] = vz;
+    S[i * 2] = w; S[i * 2 + 1] = len;
+    C[i * 4] = r; C[i * 4 + 1] = g; C[i * 4 + 2] = bl; C[i * 4 + 3] = al;
+    F[i] = frame;
+    return true;
+  };
+  b.frames = atlas.frames;
+  b.setAtlas = (A) => {
+    mat.uniforms.uAtlas.value = A.texture; mat.uniforms.uGrid.value.set(A.cols, A.rows); mat.uniforms.uTopDown.value = A.topDown ? 1 : 0;
+    b.frames = A.frames;
+  };
+  return b;
+}
