@@ -31,7 +31,7 @@ export const CONTACT = Object.freeze({
 export function createContacts() {
   const mem = new Map();   // id → { ret: reticle alpha 0..1, grow: model scale-in progress 0..1 }
   return {
-    update(state, views, rect, dt) {
+    update(state, views, rect, dt, drawn = null) {
       const step = Math.max(0, Math.min(0.1, dt || 0));
       const hidden = new Set(), reticles = [];
       const units = state && state.units;
@@ -39,7 +39,11 @@ export function createContacts() {
         if (!u || u.side !== 'attacker' || !u.pos) continue;
         let m = mem.get(u.id);
         if (u.hp <= 0) { mem.delete(u.id); continue; }
-        if (rect && !insideWindow(rect, u.pos)) {
+        // a flyer is judged — and its reticle placed — where it is DRAWN (its attack run, off its sim cell): a plane out
+        // over the clouds is a reticle there, not a model [MM-task_mvfnb9jd_e]
+        const d = drawn && drawn.get(u.id), air = d && !d.ground;
+        const at = air ? { x: d.x - 0.5, y: d.z - 0.5 } : u.pos;
+        if (rect && !insideWindow(rect, at)) {
           if (!m) { m = { ret: 1, grow: 0 }; mem.set(u.id, m); }
           m.ret = 1; m.grow = 0;
           hidden.add(u.id);
@@ -48,7 +52,7 @@ export function createContacts() {
           m.grow = Math.min(1, m.grow + step / CONTACT.growIn);
           if (m.ret <= 0 && m.grow >= 1) { mem.delete(u.id); continue; }
         } else continue;
-        if (m.ret > 0) reticles.push({ id: u.id, x: cellToWorld(u.pos.x), z: cellToWorld(u.pos.y), alpha: m.ret, phase: (u.id * 0.6180339) % 1 * Math.PI * 2 });
+        if (m.ret > 0) reticles.push({ id: u.id, x: cellToWorld(at.x), z: cellToWorld(at.y), alpha: m.ret, phase: (u.id * 0.6180339) % 1 * Math.PI * 2 });
       }
       for (const id of [...mem.keys()]) if (!units || !units.has(id)) mem.delete(id);
       let out = views;

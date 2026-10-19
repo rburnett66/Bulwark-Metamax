@@ -179,3 +179,14 @@ test('cloud edge: clear in the play area, a soft billowy rim just outside, dark 
   let seam = 0; for (let y = 0; y < 32; y++) seam = Math.max(seam, Math.abs(px[(y * 32) * 4] - px[(y * 32 + 31) * 4]));
   assert.ok(seam < 40, `no seam (${seam})`);
 });
+
+test('the bank\'s far edge moves out by the flight height\'s parallax so planes over the play area stay clear [MM-task_mvfnb9jd_e]', async () => {
+  const { farShift, flightParallax } = await import('./fog.js');
+  const p = flightParallax(2.9, 37);
+  assert.ok(p > 3.7 && p < 4.0, `≈3.85 cells at the default flight floor (${p.toFixed(2)})`);
+  const r = farShift({ x: 10, y: 10, z: 30, w: 25 }, 4, 0);   // battle camera: looking north (−z)
+  assert.deepEqual([r.x, r.y, r.z, r.w], [10, 6, 30, 25], 'only the north edge moves out');
+  const t = farShift({ x: 10, y: 10, z: 30, w: 25 }, 4, Math.PI / 2);   // turned: looking west (−x)
+  assert.ok(Math.abs(t.x - 6) < 1e-9 && Math.abs(t.y - 10) < 1e-9 && Math.abs(t.w - 25) < 1e-9, 'the west edge moves');
+  assert.equal(flightParallax(0, 37), 0);
+});

@@ -101,3 +101,18 @@ test('minimap: flyers white inside the play area, every contact red outside it',
   assert.equal(minimapDotColor({ ...jet, pos: { x: 2, y: 2 } }, RECT), '#ff4040', 'outside: type hidden');
   assert.equal(minimapDotColor(jet, null), '#ffffff', 'no fog window: as before');
 });
+
+test('a plane is judged where it is DRAWN: out over the clouds → a reticle there; its sim cell inside does not save it [MM-task_mvfnb9jd_e]', async () => {
+  const { createContacts } = await import('./contacts.js');
+  const c = createContacts();
+  const rect = { x0: 10, y0: 10, x1: 20, y1: 20 };
+  const st = { units: new Map([[1, { id: 1, side: 'attacker', hp: 5, pos: { x: 15, y: 15 } }], [2, { id: 2, side: 'attacker', hp: 5, pos: { x: 15, y: 15 } }]]) };
+  const views = [{ id: 1, x: 15.5, y: 3, z: 15.5 }, { id: 2, x: 15.5, y: 0, z: 15.5 }];
+  const drawn = new Map([[1, { x: 15.5, y: 3, z: 5.5 }], [2, { x: 15.5, y: 0.3, z: 5.5, ground: true }]]);   // plane 1 flies out north; 2 is a ground unit
+  const out = c.update(st, views, rect, 0.016, drawn);
+  assert.ok(out.hidden.has(1), 'the plane over the clouds is a contact');
+  assert.ok(!out.hidden.has(2), 'a ground unit is still judged by its cell');
+  const r1 = out.reticles.find((r) => r.id === 1);
+  assert.ok(r1 && Math.abs(r1.z - 5.5) < 1e-9, 'its reticle is where it flies');
+  assert.equal(out.views.find((v) => v.id === 1), undefined, 'no model');
+});

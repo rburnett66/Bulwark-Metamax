@@ -44,7 +44,7 @@
 import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX, touchSlotPoint, cellToWorld, fitCameraToRect, clearBox } from './camera.js';
 import { createFogTracker, fogWindow, newAreaFocus } from './overlays/fogModel.js';
 import { resolveTier, probeEnv, pixelRatioFor } from './quality.js';
-import { createFogView } from './overlays/fog.js';
+import { createFogView, flightParallax } from './overlays/fog.js';
 import { createContacts, createContactsView } from './overlays/contacts.js';
 import { createPlacementGhost } from './overlays/placement.js';
 import { createLights } from './lighting.js';
@@ -591,7 +591,7 @@ export function renderFrame(r, state, ui, events, dt) {
     r.airLift.update(state, views, r.heightField, r.flight.poses, dt, r.flightFloor || 0);
     r.fxOpts.flight = r.airLift.drawn;
     // enemies outside the play area are red reticles, not models: no model, bar, dust or muzzle fx [MM-story_mveehs1r_f]
-    const c = r.contacts.update(state, views, fogFrame.win && fogFrame.win.rect, dt);
+    const c = r.contacts.update(state, views, fogFrame.win && fogFrame.win.rect, dt, r.airLift.drawn);
     views = c.views;
     r.fxOpts.hidden = c.hidden;
     r.stats.contacts = r.contactsView.sync(c.reticles, r.clock);
@@ -634,7 +634,7 @@ export function renderFrame(r, state, ui, events, dt) {
   if (r.cannonFx.shake > 0) { const k = r.cannonFx.shake; r.camera.position.x += Math.sin(r.clock * 67) * k; r.camera.position.y += Math.sin(r.clock * 83 + 0.7) * k * 0.5; r.camera.position.z += Math.cos(r.clock * 53) * k; }   // cannon touchdown
   if (r.craft && r.craft.shake > 0) { const k = r.craft.shake; r.camera.position.x += Math.sin(r.clock * 73) * k; r.camera.position.y += Math.sin(r.clock * 91 + 1.3) * k * 0.6; r.camera.position.z += Math.cos(r.clock * 59) * k; }   // LC: touchdown thump
   // Ring fog (T3.4): veil outside the current wave window
-  r.fogView.sync(fogFrame, r.clock);
+  r.fogView.sync(fogFrame, r.clock, { dist: flightParallax(r.flightFloor || 0, CAMERA.pitchDeg), yaw: r.cam.yaw });   // planes stay clear of the bank [MM-task_mvfnb9jd_e]
 
   r.ghost.sync(ui);
 
