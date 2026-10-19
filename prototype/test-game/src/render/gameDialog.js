@@ -112,7 +112,7 @@ const BONUS_ICONS = {
  */
 export function showBonusPicker(mountEl, offer, getBonus, onPick, owned) {
   const { doc, veil, card } = veilCard(mountEl);
-  card.innerHTML = '<div class="bwd-kicker">WAVE CLEARED</div><div class="bwd-title">Choose a bonus</div>';
+  card.innerHTML = '<div class="bwd-kicker">WAVE CLEARED · REWARD</div><div class="bwd-title">Choose your reward</div>';
   const wrap = doc.createElement('div'); wrap.className = 'bwd-cards';
   for (const id of offer || []) {
     const def = getBonus(id); if (!def) continue;

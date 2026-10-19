@@ -1,4 +1,4 @@
-# TECH PLAN — Bulwark 3D Combat Polish (v1.1)
+# TECH PLAN — Bulwark 3D Combat Polish (v1.2)
 
 **Provenance.** Owner sentences are quoted and marked **owner**; everything else is **agent-proposed**. Written
 2026-10-18 by the repo-rooted cloud session (Claude Code, Opus 5.5) from the owner's requests that day, the
@@ -18,6 +18,14 @@ CP-13 (aircraft clear terrain). **owner**: "keep building c 2,3,4,5,6,7" (CP-7 h
 CP-2 … CP-6) and "also check plane elevation against the height of the plateaus, rocks, trees". The cannon apex
 became quadratic (§3.1), the tank's twin guns became two groups so only the one that fired recoils (§5), and the
 barrel chain ships as one PR because each step builds on the one before (§11).
+
+v1.2 (2026-10-18) records the owner's later polish asks as stories CP-14 … CP-19 (§11): the copter and drone models
+from the owner's sheets, fake light flashes replacing point lights (**owner**: "The old system had an effective fake
+flash .. to preserve performance"), the rocket tower's slower salvos and doubled range with burning targets, vehicle
+steering (**owner**: "vehicles should never turn and move, it looks like sliding"), lime health bars, and the
+wave-end sequence (**owner**: "the dialog message should hold for 2 seconds … Show Wave Cleared Reward message, then
+… character dialog messages should be 2x bigger in the middle of the screen"; "position the camera over the new map
+area, but don't go to new map area until after wave cleared reward is selected").
 
 Owner request: polish the 3D battle (fire rate, barrels, smoke, construction, placement on mobile, aircraft and fog).
 
@@ -253,6 +261,13 @@ Only where the fog is active; maps without windows are unchanged.
 | CP-12 Fog vignette + hidden contacts | `story_mveehs1r_f` | **delivered** (PRs #68–#71) |
 | CP-13 Aircraft clear plateaus, rocks, trees | `story_mvegnpxf_i` | **built** on `feat/barrels` |
 | BUG Low tier impact caps | `task_mveeqkyi_h` | not started; independent |
+| CP-14 Copter + drone models (owner sheets) | `story_mvehe3sy_j` | **delivered** (PR #73) |
+| CP-15 Fake light flashes (no point lights) | `story_mvehp8ca_l` | **delivered** (PR #74) |
+| CP-16 Rocket tower: 12 s salvos, range 10, burning targets | `story_mvehp5rq_k` | **delivered** (PR #74) |
+| BUG Rocket rack too upright to read its yaw | `task_mvejw9k0_m` | **delivered** (PR #75) |
+| CP-17 Ground vehicles steer, pivot for sharp turns | `story_mvekcu8r_n` | **delivered** (PR #76) |
+| CP-18 Health bars lime on charcoal | `task_mvempq5t_p` | built on `feat/wave-end-flow` |
+| CP-19 Wave-end sequence: 2 s settle → reward → camera to the new area → centred 2× dialogs | `story_mvempsla_q` | built on `feat/wave-end-flow` |
 
 **Order:** independent stories first (CP-12, CP-10, CP-11, the bug), then the barrel chain CP-2 → CP-4/CP-3 → CP-5
 → CP-6 → CP-8. One branch and PR per story, merged only on owner approval — except the barrel chain, which v1.1

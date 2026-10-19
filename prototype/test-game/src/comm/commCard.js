@@ -77,6 +77,12 @@ const CSS = `
 .bw-comm.signoff .bw-comm-end{opacity:1}
 .bw-comm-qchip{border:1px solid #d8a13a;color:#f0c675;border-radius:6px;padding:2px 8px;font-size:8.5px;letter-spacing:1px;opacity:0;transition:.3s}
 .bw-comm-qchip.on{opacity:1}
+/* CENTRE STAGE [MM-story_mvempsla_q]: between-wave character dialogs sit mid-screen at 2× (owner 2026-10-18: "character
+   dialog messages should be 2x bigger in the middle of the screen"). The card keeps its layout; JS scales it by
+   min(2, what fits) about its centre. */
+.bw-comm-name,.bw-comm-sub{min-height:1.3em}
+.bw-comm-foot-l{white-space:nowrap}   /* the header never grows when the name / sub type in */
+.bw-comm.center{right:auto;bottom:auto;left:50%;top:50%;transform-origin:50% 50%;z-index:83;max-height:none}
 canvas.bw-comm-static{position:absolute;inset:0;width:100%;height:100%;opacity:0;transition:opacity .1s;
   pointer-events:none;mix-blend-mode:screen;z-index:4}
 canvas.bw-comm-static.on{opacity:.85}
@@ -108,6 +114,28 @@ function reducedMotion() {
   catch (e) { return false; }
 }
 function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+/** Pin `el` to the size its full `text` needs, then empty it — so typing never grows the card. */
+export function presize(el, text) {
+  if (!el) return 0;
+  el.style.minHeight = '';
+  el.textContent = String(text == null ? '' : text);
+  const h = el.scrollHeight || el.offsetHeight || 0;
+  if (h > 0) el.style.minHeight = h + 'px';
+  el.textContent = '';
+  return h;
+}
+
+/** Centre-stage scale: 2×, or less when 2× would not fit the viewport (94% wide, 88% tall). */
+export const CENTER_SCALE = 2;
+export function centerScale(card, vw, vh) {
+  const W = vw || (typeof window !== 'undefined' ? window.innerWidth : 0), H = vh || (typeof window !== 'undefined' ? window.innerHeight : 0);
+  const w = card ? card.offsetWidth : 0, h = card ? card.offsetHeight : 0;
+  let k = CENTER_SCALE;
+  if (w > 0 && W > 0) k = Math.min(k, (W * 0.94) / w);
+  if (h > 0 && H > 0) k = Math.min(k, (H * 0.88) / h);
+  return Math.max(0.6, k);
+}
 
 /* type text over durMs with signal-glyph noise at the caret (tool's typeText; skips under reduced motion) */
 function typeText(el, text, durMs, isLive) {
@@ -217,8 +245,9 @@ export function createComm(doc) {
     const rm = reducedMotion();
 
     card.style.setProperty('--accent', f.color);
-    card.className = 'bw-comm show';
+    card.className = 'bw-comm show' + (d.center ? ' center' : '');
     card.innerHTML = cardHTML(d, f);
+    card.style.transform = '';
     const ic = card.querySelector('.bw-comm-ic'), nm = card.querySelector('.bw-comm-name'),
       sub = card.querySelector('.bw-comm-sub'), meta = card.querySelector('.bw-comm-meta'),
       txt = card.querySelector('.bw-comm-text'), veil = card.querySelector('.bw-comm-veil'),
@@ -226,6 +255,13 @@ export function createComm(doc) {
       cv = card.querySelector('canvas.bw-comm-static'), footl = card.querySelector('.bw-comm-foot-l'),
       qchip = card.querySelector('.bw-comm-qchip');
     veil.style.opacity = 1;
+    // SIZED FOR THE WHOLE LINE UP FRONT (owner 2026-10-18: "make sure dialog window are big enough for text so they dont
+    // have to grow while text is typing"): lay the full line (and name) out once, pin the boxes to that size, clear.
+    presize(nm, d.name); presize(txt, d.line);
+    if (d.center) {
+      const k = centerScale(card);
+      card.style.transform = 'translate(-50%,-50%) scale(' + k.toFixed(3) + ')';
+    }
 
     // channel static bed for this faction — rides under the whole transmission
     const bed = (!muted && audioReady()) ? startStatic(key, 1) : null;

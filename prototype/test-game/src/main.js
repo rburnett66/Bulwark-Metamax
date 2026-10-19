@@ -200,6 +200,7 @@ export function boot(mountEl, seed) {
   let activeReplayLog = null; // log being played back (for final hash check)
   let ended = false;          // sim.result reached; stop stepping
   let interlude = false;      // between-wave FREEZE: dialog speaker held on screen, sim/time/regrowth
+  let waveEndSeq = 0;   // bumps cancel a waiting wave-end sequence [MM-story_mvempsla_q]
                               // all paused until the player taps START NEXT WAVE (play mode only)
   let seenUnitTypes = new Set();   // WB2 intel: unit types deployed so far THIS battle → flags NEW units
 
@@ -350,6 +351,8 @@ export function boot(mountEl, seed) {
     releaseLanding();
     if (!interlude) return;
     interlude = false;
+    waveEndSeq++;                         // a wave-end sequence still waiting gives up
+    if (renderer3d && render3dMod && render3dMod.holdPlayArea) render3dMod.holdPlayArea(renderer3d, false);
     accumulator = 0;                      // no time-jump on resume
     hud.setNextWavePrompt(false);
     comm.dismiss();                       // the held speaker signs off
@@ -827,18 +830,27 @@ export function boot(mountEl, seed) {
     structuresLostThisWave = 0;
     const call = challengeCall(voicePacks, faction, wave, currentSeed, factionVisits[faction])
       || fallbackCall(faction, wave, currentSeed);
-    return comm.showCall(hold ? { ...call, hold: true } : call);
+    return comm.showCall(hold ? { ...call, hold: true, center: true } : call);   // held = interlude: centre stage, 2× [MM-story_mvempsla_q]
   }
 
   // ── PRE-BATTLE dialog sequence (owner: ALL dialog before the battle) ──
   // Runs inside the frozen interlude: the cleared wave's commentary plays through, THEN the
   // UPCOMING wave's challenge — whose speaker HOLDS on screen until the tap starts the fight.
   let preDialogFaction = null;   // challenge already delivered pre-battle → skip it at wave start
+  // the OPTIONAL secondary dialog (a tip from the contract giver — only while a contract is live), held + centre stage
+  async function playOptionalTip(idx) {
+    if (!runContract || !voicePacks) return;
+    const tip = tipsCall(voicePacks, runContract.giver, (currentSeed | 0) + idx, 'tip');
+    if (!tip) return;
+    const closed2 = comm.waitForClose();
+    await comm.showCall(Object.assign({}, tip, { hold: true, center: true }));
+    await closed2;
+  }
   function playPreBattleDialog(clearCall) {
     const idx = sim.waves ? sim.waves.current : 0;          // next wave = table index `current`
     const next = (currentWaves && currentWaves[idx]) || null;
     const faction = (next && next.faction) || null;
-    void (async () => {
+    return (async () => {
       if (clearCall) await comm.showCall(clearCall);        // M2 runs fully (auto sign-off)
       // LEVEL 1 OPENS WITH THE LANDING [MM-story_mvbqui1g_m]: the craft flies in, lands and deploys BEFORE the
       // opening dialog — the level's first beat is the base arriving. Other levels keep the dialog-first order.
@@ -868,25 +880,52 @@ export function boot(mountEl, seed) {
       if (idx === 0) {
         // MATCH START: optional secondary tip (contract accepted), 1s beat, explicit TAP TO START
         // (the build phase before wave 1 stays player-paced).
-        if (runContract && voicePacks) {
-          const tip = tipsCall(voicePacks, runContract.giver, (currentSeed | 0) + idx, 'tip');
-          if (tip) {
-            const closed2 = comm.waitForClose();
-            await comm.showCall(Object.assign({}, tip, { hold: true }));
-            await closed2;
-            if (!interlude || mode !== 'play') return;
-          }
-        }
+        await playOptionalTip(idx);
+        if (!interlude || mode !== 'play') return;
         releaseLanding();                                    // dialogs closed: the craft flies in while the player looks
         await new Promise((r) => setTimeout(r, 1000));
         if (interlude && mode === 'play' && hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
       } else {
-        // BETWEEN WAVES: the close WAS the continue — a 1s beat, then start the next wave (its
-        // incoming-wave banner shows on wave start). No tap-to-start prompt.
+        // BETWEEN WAVES (owner 2026-10-18): primary closed → the OPTIONAL dialog the same way (centre, 2×) → the
+        // next-wave intel (its TO THE WALLS button is the continue) → a 1s beat → the next wave starts.
+        await playOptionalTip(idx);
+        if (!interlude || mode !== 'play') return;
+        const info = waveIntel(currentWaves && currentWaves[idx], idx + 1);
+        if (info) await new Promise((res) => showWaveIntel(mountEl, info, res));
+        if (!interlude || mode !== 'play') return;
         await new Promise((r) => setTimeout(r, 1000));
         if (interlude && mode === 'play') endInterlude();
       }
     })();
+  }
+  // ── WAVE-END SEQUENCE (owner 2026-10-18) [MM-story_mvempsla_q] ───────────────────────────────────────────────
+  // 1. hold WAVE_END.settleMs so the battle's effects settle (booms, smoke, wrecks — the render runs on);
+  // 2. WAVE CLEARED reward (the bonus picker), when the sim offered one;
+  // 3. after the pick: the new map area opens and the camera glides over it;
+  // 4. the next faction's character dialog, centre stage at 2× (held; its close is the continue);
+  // 5. the optional dialog (contract tip) the same way, then the next-wave intel, a 1s beat, and the wave starts.
+  const WAVE_END = Object.freeze({ settleMs: 2000, afterCameraMs: 300 });
+  async function runWaveEnd() {
+    const my = ++waveEndSeq;
+    const live = () => my === waveEndSeq && interlude && mode === 'play';
+    if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
+    await new Promise((r) => setTimeout(r, WAVE_END.settleMs));
+    if (!live()) return;
+    if (sim.bonuses && sim.bonuses.offer && sim.bonuses.offer.length) {
+      // WB5 — the sim rolled a 3-of-16 offer at this clear; the pick submits chooseBonus (replay-logged)
+      await new Promise((res) => showBonusPicker(mountEl, sim.bonuses.offer, getBonusDef, (bonusId) => {
+        const r = submit({ type: 'chooseBonus', bonusId });
+        const d = getBonusDef(bonusId);
+        flashMessage(hud, (r && r.ok) ? ('Bonus: ' + (d ? d.label : bonusId)) : ('Bonus failed: ' + ((r && r.reason) || '')));
+        res();
+      }, sim.bonuses.owned));
+      if (!live()) return;
+    }
+    let glide = 0;
+    if (renderer3d && render3dMod && render3dMod.focusPlayArea) glide = render3dMod.focusPlayArea(renderer3d, sim) || 0;
+    if (glide > 0) await new Promise((r) => setTimeout(r, glide * 1000 + WAVE_END.afterCameraMs));
+    if (!live()) return;
+    await playPreBattleDialog(null);    // character dialog → optional dialog → intel → start
   }
   function commOutcome() {
     const hpPct = (sim.base && sim.base.maxHp) ? Math.max(0, sim.base.hp) / sim.base.maxHp : 1;
@@ -935,24 +974,9 @@ export function boot(mountEl, seed) {
             if (evs[i].type === 'wave' && evs[i].phase === 'clear' && evs[i].wave < evs[i].total) {
               if (mode === 'play') {
                 interlude = true;
-                playPreBattleDialog(null);      // the next faction's challenge; close = continue
-                // NEXT-WAVE INTEL: brief the upcoming wave's unit types (new ones flagged). Chained
-                // AFTER the bonus pick so the two dialogs never stack. clearedWave (1-based) indexes
-                // the next wave: currentWaves[clearedWave] == wave (clearedWave+1).
-                const clearedWave = evs[i].wave;   // 1-based; next wave = clearedWave + 1, index clearedWave
-                const showNextIntel = () => { const info = waveIntel(currentWaves[clearedWave], clearedWave + 1); if (info) showWaveIntel(mountEl, info, null); };
-                // WB5 — BONUS PICKER: the sim rolled a 3-of-16 offer at this clear (sim.bonuses.offer).
-                // The pick submits chooseBonus (replay-logged); no pick before the next wave = forfeit.
-                if (sim.bonuses && sim.bonuses.offer && sim.bonuses.offer.length) {
-                  showBonusPicker(mountEl, sim.bonuses.offer, getBonusDef, (bonusId) => {
-                    const res = submit({ type: 'chooseBonus', bonusId });
-                    const d = getBonusDef(bonusId);
-                    flashMessage(hud, (res && res.ok) ? ('Bonus: ' + (d ? d.label : bonusId)) : ('Bonus failed: ' + ((res && res.reason) || '')));
-                    showNextIntel();
-                  }, sim.bonuses.owned);
-                } else {
-                  showNextIntel();
-                }
+                // the play area holds where it was until the reward is picked (camera + reveal follow the pick)
+                if (renderer3d && render3dMod && render3dMod.holdPlayArea) render3dMod.holdPlayArea(renderer3d, true);
+                void runWaveEnd();
               } else if (lastWaveFaction) {
                 comm.showCall(winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false));
               }

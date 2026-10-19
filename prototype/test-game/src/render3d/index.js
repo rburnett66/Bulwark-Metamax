@@ -42,7 +42,7 @@
  * faction key of the homeworld), falling back to the crystal shards when no planet is known.
  */
 import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX, touchSlotPoint, cellToWorld } from './camera.js';
-import { createFogTracker } from './overlays/fogModel.js';
+import { createFogTracker, fogWindow, newAreaFocus } from './overlays/fogModel.js';
 import { resolveTier, probeEnv, pixelRatioFor } from './quality.js';
 import { createFogView } from './overlays/fog.js';
 import { createContacts, createContactsView } from './overlays/contacts.js';
@@ -437,6 +437,35 @@ function resize(r) {
   r.camera.updateProjectionMatrix();
 }
 
+/** Camera glide: ease the camera target to (gx, gz) over its duration (smoothstep). */
+export const CAM_GLIDE_S = 1.2;
+function stepCamGlide(r, dt) {
+  const g = r.camGlide;
+  g.t = Math.min(g.dur, g.t + Math.max(0, Math.min(0.1, dt || 0)));
+  const u = g.t / g.dur, k = u * u * (3 - 2 * u);
+  r.cam.tx = g.fx + (g.gx - g.fx) * k; r.cam.tz = g.fz + (g.gz - g.fz) * k;
+  if (g.t >= g.dur) r.camGlide = null;
+}
+
+/**
+ * Wave-end sequence hooks [MM-story_mvempsla_q] — owner 2026-10-18: "position the camera over the new map area, but
+ * don't go to new map area until after wave cleared reward is selected".
+ *   holdPlayArea(r, true)  — at the clear: the play area (fog window) stays where it was;
+ *   focusPlayArea(r, state) — after the reward pick: release it (it grows, with its reveal flash) and glide the camera
+ *                             over the band that just opened. Returns the glide time (s), 0 when nothing moved.
+ */
+export function holdPlayArea(r, on) { if (r && r.fog && r.fog.hold) r.fog.hold(on); }
+export function focusPlayArea(r, state) {
+  if (!r || !r.fog) return 0;
+  const prev = r.fog.rect;
+  if (r.fog.hold) r.fog.hold(false);
+  const win = fogWindow(state, r.map);
+  const f = win ? newAreaFocus(prev, win.rect) : null;
+  if (!f) return 0;
+  r.camGlide = { fx: r.cam.tx, fz: r.cam.tz, gx: f.x, gz: f.z, t: 0, dur: CAM_GLIDE_S };
+  return CAM_GLIDE_S;
+}
+
 export function renderFrame(r, state, ui, events, dt) {
   if (!r || r.destroyed) return;
   r.ui = ui;   // the camera's pan listener reads ui.placingPointer (touch placement claims a finger)
@@ -445,6 +474,7 @@ export function renderFrame(r, state, ui, events, dt) {
   // Camera: battle rules first (no yaw in battle; ease a leftover yaw back to 0 when the wave starts)
   r.inBattle = !!(state && state.waves && state.waves.active);
   stepYaw(r.cam, r.inBattle, dt);
+  if (r.camGlide) stepCamGlide(r, dt);   // the camera easing over a newly opened map area [MM-story_mvempsla_q]
   clampCamera(r.cam, r.map.cols, r.map.rows);
   // LC: while the craft lands the view frames it, then eases back to the player's camera (craft/introCamera.js)
   const landingLive = r.craft && r.landing && !r.landing.done && !r.landingHeld;
