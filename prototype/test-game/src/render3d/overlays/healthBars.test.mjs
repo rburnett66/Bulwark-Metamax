@@ -82,3 +82,15 @@ test('3D bars keep a minimum on-screen size: the vertex shader scales them up wh
   v.update({ units: new Map(), structures: new Map() }, [], 0.016, { viewH: 1080 });
   assert.equal(m.uniforms.uViewH.value, 1080);
 });
+
+test('hit states stay on palette: dim-lime damage chunk, pale-lime flash — no cream, no white-out [MM-task_mvfq883b_3]', async () => {
+  const { BAR_COLORS, createHealthBarView } = await import('./healthBars.js');
+  const THREE = await import('../../../vendor/three.module.js');
+  const [cr, cg, cb] = BAR_COLORS.chunk;
+  assert.ok(cg > cr && cg > cb && cg < BAR_COLORS.fill[1], 'the chunk is a dimmer lime than the fill');
+  const [fr, fg, fb] = BAR_COLORS.flash;
+  assert.ok(fg >= fr && fr > fb + 0.15, 'the flash is a lime tint, not white');
+  const fs = createHealthBarView(THREE, new THREE.Scene()).mesh.material.fragmentShader;
+  assert.ok(!fs.includes('vec3(1.000, 0.960, 0.820)'), 'no cream chunk');
+  assert.ok(!/mix\(col, vec3\(1\.0\)/.test(fs), 'no flash to white');
+});

@@ -27,10 +27,13 @@ export const BUILD_FX = Object.freeze({
   out: [0.25, 0.6],     // outward drift speed
   up: [0.12, 0.32],     // lift
   drag: 1.8,
-  shade: 0.55,          // with dusty = 1 → earthy brown
+  shade: 0.55,          // with dusty → earthy brown
+  // owner 2026-10-19: "construction dust needs to be more opaque 50%" — passed as the particle's `dusty` value, which
+  // the smoke batch reads as an opacity multiplier on its dust alpha (impactsView) [MM-task_mvfqfakd_6]
+  opacity: 1.5,
   start: 28,            // puffs in the break-ground burst (construction and upgrade start)
   settle: 20,           // puffs in the settling burst (construction and upgrade complete)
-  ring: Object.freeze({ grow: 1.1, life: 0.5, col: Object.freeze([0.78, 0.66, 0.5]), a: 0.6 }),
+  ring: Object.freeze({ grow: 1.1, life: 0.5, col: Object.freeze([0.78, 0.66, 0.5]), a: 0.9 }),   // ×1.5 with the puffs
 });
 /** Lifecycles that raise dust, and the build-event phases that burst it. */
 const DUSTY = new Set(['Building', 'Upgrading']);
@@ -69,7 +72,7 @@ export function createBuildFx({ seed = 23 } = {}) {
     const out = lerp(BUILD_FX.out) * k, side = (rnd() - 0.5) * 0.6;
     emit(K.SMOKE, p.x, 0.06, p.z,
       (p.nx - p.nz * side) * out, lerp(BUILD_FX.up), (p.nz + p.nx * side) * out,
-      lerp(BUILD_FX.life), lerp(BUILD_FX.size), BUILD_FX.grow, BUILD_FX.shade, 1, BUILD_FX.drag);
+      lerp(BUILD_FX.life), lerp(BUILD_FX.size), BUILD_FX.grow, BUILD_FX.shade, BUILD_FX.opacity, BUILD_FX.drag);
   }
 
   function burst(emit, K, b, n, k) {

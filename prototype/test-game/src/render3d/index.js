@@ -66,6 +66,7 @@ import { buildUnitViews, createModelResolver } from './units/unitViews.js';
 import { createCombatFx } from './fx/combatFxModel.js';
 import { createCombatFxView } from './fx/combatFx.js';
 import { createRocketShots } from './fx/rocketShots.js';
+import { createFlakShots } from './fx/flakShots.js';
 import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createRepairFx } from './fx/repairFx.js';
 import { createFlightPaths } from './units/flightPath.js';
@@ -202,7 +203,9 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const fxView = createCombatFxView(THREE, scene, fx.caps.maxShots + fx.caps.maxFlashes);
   // rocket-tower rounds fly as the firing tower's tier of rocket, not a glow streak [MM-task_mvf0kzw4_l]
   const rocketShots = createRocketShots(THREE, scene);
+  const flakShots = createFlakShots(THREE, scene);   // flak rounds: small black balls [MM-task_mvfqb2gm_4]
   fxView.skipRockets = true;
+  fxView.skipFlak = true; fxView.skipMissiles = true;   // black balls / half-size rockets, not glow dots [MM-task_mvfqb2gm_4] [MM-task_mvfqb454_5]
   const impacts = createImpacts({ seed: (map.seed | 0) || 1, caps: tier.impactCaps });   // the tier's particle budget [MM-task_mveeqkyi_h]
   const impactsView = createImpactsView(THREE, scene, { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
   const fogView = createFogView(THREE, scene, map, { detail: !!tier.cloudDetail });   // phones: the rough cloud path [MM-story_mvfk3el9_b]
@@ -225,8 +228,8 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     status: 'loading',
     problems: [],
     stats: { calls: 0, triangles: 0, units: 0, lines: 0, fx: 0, impacts: null },
-    rocketShots,
-    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1, trail: null, boom: null, fire: null, muzzle: null, rocketTail: rocketShots.tail },
+    rocketShots, flakShots,
+    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1, trail: null, boom: null, fire: null, muzzle: null, rocketTail: rocketShots.tail, missileTail: rocketShots.missileTail },
     getProjFx: typeof opts.projFx === 'function' ? opts.projFx : () => opts.projFx || null,
     getProjScale: typeof opts.projScale === 'function' ? opts.projScale : () => opts.projScale || 1,
     destroyed: false,
@@ -255,10 +258,18 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
         1.8 + (jit() + 0.5) * 0.9, 0.09 * k, 0.9, 0.09, 0, 2.2);   // flak-black, swelling and slowly thinning
       return;
     }
-    if (kind === 'missile') {
-      I.emit(FXK.FLASH, x, y, z, -dx * 0.6, -dy * 0.6, -dz * 0.6, 0.04, 0.09 * k);                          // white-hot core
-      I.emit(FXK.FIRE, x - dx * 0.04, y - dy * 0.04, z - dz * 0.04, -dx * 2.2, -dy * 2.2, -dz * 2.2, 0.06, 0.06 * k, -0.5);   // short tight flame
-      I.emit(FXK.SMOKE, x - dx * 0.08, y - dy * 0.08, z - dz * 0.08, jit() * 0.06, 0.05 + jit() * 0.04, jit() * 0.06, 1.25, 0.04 * k, 0.55, 0.8);   // thin pale contrail
+    if (kind === 'flak') {   // a flak round bursts: a quick small pop and a puff of BLACK smoke that hangs [MM-task_mvfqb2gm_4]
+      I.emit(FXK.FIRE, x, y, z, 0, 0, 0, 0.08, 0.08 * k, 0.4);
+      for (let i = 0; i < 5; i++) I.emit(FXK.SMOKE, x + jit() * 0.1, y + jit() * 0.08, z + jit() * 0.1, jit() * 0.45, 0.05 + jit() * 0.15, jit() * 0.45,
+        1.5 + (jit() + 0.5) * 0.7, 0.085 * k, 0.92, 0.07, 0, 2.2);   // flak-black, swelling and slowly thinning
+      return;
+    }
+    if (kind === 'missile') {   // a half-size rocket: an ORANGE motor flame out of the nozzle, a little grey smoke [MM-task_mvfqb454_5]
+      for (let i = 0; i < 2; i++) {
+        const b = 1.6 + 1.6 * (jit() + 0.5);
+        I.emit(FXK.FIRE, x - dx * 0.03 * i, y - dy * 0.03 * i, z - dz * 0.03 * i, -dx * b + jit() * 0.3, -dy * b + jit() * 0.3, -dz * b + jit() * 0.3, 0.08 + jit() * 0.03, 0.065 * k, -0.2);
+      }
+      I.emit(FXK.SMOKE, x - dx * 0.08, y - dy * 0.08, z - dz * 0.08, jit() * 0.08, 0.06 + jit() * 0.04, jit() * 0.08, 1.1, 0.045 * k, 0.6, 0.5);
       return;
     }
     if (kind === 'rocket') {
@@ -622,6 +633,7 @@ export function renderFrame(r, state, ui, events, dt) {
   r.coverageView.sync(planCoverage(state, ui, getStructureDef), dt);
   r.stats.fx = r.fxView.sync(r.fx);
   r.stats.rockets = r.rocketShots.sync(r.fx);
+  r.stats.flak = r.flakShots.sync(r.fx);
   r.impacts.update(state, r.map, events, dt, views, { resolve: r.resolveModel });
   // health bars + "$N" pop-ups (overlays/) [MM-task_mvbry87f_q] [MM-task_mvbyf6t8_z]
   r.healthBars.update(state, views, dt, { baseCell: r.map.base, viewH: r._h || 0 });
@@ -743,7 +755,7 @@ export function destroyRenderer(r) {
   r.pathLinesView.dispose();
   r.ghost.dispose();
   r.fxView.dispose();
-  r.rocketShots.dispose();
+  r.rocketShots.dispose(); r.flakShots.dispose();
   r.cannonFxView.dispose(); r.coverageView.dispose(); r.healthBars.dispose(); r.goldView.dispose(); r.unloadView.dispose();
   r.impactsView.dispose();
   r.fogView.dispose(); r.contactsView.dispose();

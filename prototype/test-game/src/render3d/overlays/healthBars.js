@@ -9,9 +9,9 @@
  * How it moves:
  *   - it fades + grows in over 0.15 s when the first hit lands (never pops), and fades out when the owner is healed
  *     back to full or dies;
- *   - the fill eases to the new value fast (0.08 s), while a pale DAMAGE CHUNK — the health just lost — holds for
+ *   - the fill eases to the new value fast (0.08 s), while a dim-lime DAMAGE CHUNK — the health just lost — holds for
  *     0.35 s and then drains, so every hit reads as a bite out of the bar;
- *   - each hit flashes the bar white for a moment and gives it a small vertical kick;
+ *   - each hit brightens the bar toward pale lime for a moment and gives it a small vertical kick (was white);
  *   - lime green on a charcoal-grey track (owner 2026-10-18; was a green → amber → red ramp); quarter ticks show
  *     scale; a dark rim keeps it legible on any ground.
  * planBars is pure (state + unit views + memory → bar list); createHealthBarView draws all of them in ONE
@@ -25,7 +25,10 @@ export const BAR_COLORS = Object.freeze({   // the game-wide palette (render/hpC
   fill: hpRgb(HP_COLORS.fill),  // lime green — the health left, at every fraction
   track: hpRgb(HP_COLORS.track),// charcoal grey — the health gone
   rim: hpRgb(HP_COLORS.rim),    // dark charcoal frame
-  chunk: [1.0, 0.96, 0.82],     // the bite just taken (drains away)
+  // the bite just taken (drains away) — a DIM LIME, not cream: enemies are hit constantly, so their bars live in this
+  // state and read off-palette when it was cream (owner 2026-10-19 "enemy units are still wrong") [MM-task_mvfq883b_3]
+  chunk: [0.34, 0.52, 0.15],
+  flash: [0.82, 1.0, 0.55],     // a hit brightens the bar toward pale lime — never a white-out
 });
 const glv = (c) => 'vec3(' + c.map((v) => v.toFixed(3)).join(', ') + ')';
 
@@ -126,7 +129,7 @@ export function createHealthBarView(THREE, scene, { cap = 700 } = {}) {
           else col = ${glv(BAR_COLORS.track)};                     // empty: charcoal grey
           float tick = abs(fract(u * 4.0 + 0.5) - 0.5);           // quarter ticks
           if (tick < 0.012 && u > 0.02 && u < 0.98) col *= 0.55;
-          col = mix(col, vec3(1.0), vVal.w * 0.75);               // hit flash
+          col = mix(col, ${glv(BAR_COLORS.flash)}, vVal.w * 0.5);    // hit flash: pale lime, stays on palette [MM-task_mvfq883b_3]
         }
         gl_FragColor = vec4(col, a * vVal.z);
       }`,

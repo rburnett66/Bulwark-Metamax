@@ -56,8 +56,10 @@ export function grassDetailTextures(G = GRASS) {
   const at = (x, y) => H[wrap(y) * N + wrap(x)];
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const i = y * N + x, h = H[i];
-    // normal from the wrapped height gradient (tangent space: +x right, +y down the texture → flip y for GL)
-    const sx = (at(x - 1, y) - at(x + 1, y)) * G.bump, sy = (at(x, y + 1) - at(x, y - 1)) * G.bump;
+    // normal from the wrapped height gradient, leaning DOWN-slope on both axes: (−∂h/∂u, −∂h/∂v, 1). The DataTexture is
+    // not flipped (row = v = +world Z), so there is no GL y flip — the old flip lit relief from the mirrored sun
+    // (owner 2026-10-19 "not oriented to the correct light source angle") [MM-task_mvfq860y_2]
+    const sx = (at(x - 1, y) - at(x + 1, y)) * G.bump, sy = (at(x, y - 1) - at(x, y + 1)) * G.bump;
     const l = Math.hypot(sx, sy, 1);
     normal[i * 4] = Math.round(((sx / l) * 0.5 + 0.5) * 255);
     normal[i * 4 + 1] = Math.round(((sy / l) * 0.5 + 0.5) * 255);
@@ -133,7 +135,7 @@ export function sandDetailTextures(S = SAND) {
   const at = (x, y) => H[((y % N + N) % N) * N + ((x % N + N) % N)];
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const i = y * N + x;
-    const sx = (at(x - 1, y) - at(x + 1, y)) * S.bump, sy = (at(x, y + 1) - at(x, y - 1)) * S.bump, l = Math.hypot(sx, sy, 1);
+    const sx = (at(x - 1, y) - at(x + 1, y)) * S.bump, sy = (at(x, y - 1) - at(x, y + 1)) * S.bump, l = Math.hypot(sx, sy, 1);   // down-slope on both axes, as the grass [MM-task_mvfq860y_2]
     normal[i * 4] = Math.round(((sx / l) * 0.5 + 0.5) * 255);
     normal[i * 4 + 1] = Math.round(((sy / l) * 0.5 + 0.5) * 255);
     normal[i * 4 + 2] = Math.round(((1 / l) * 0.5 + 0.5) * 255);

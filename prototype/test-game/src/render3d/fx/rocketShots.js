@@ -15,6 +15,9 @@ import { rocketShotModel, SYSTEM_SCALE } from '../structures/systemModels.js';
 import { mergeSystemModel } from '../structures/system3d.js';
 
 export const ROCKET_SHOT_SCALE = SYSTEM_SCALE.sys_rockets;   // the rack's model-unit → cell scale
+/** Owner 2026-10-19: "the missles should be .5 sized rockets with orange flames in the back" — a missile-tower round is
+ * the firing tower's tier rocket at half the rack scale, nose first along its seeker path [MM-task_mvfqb454_5]. */
+export const MISSILE_SHOT_SCALE = ROCKET_SHOT_SCALE * 0.5;
 
 /** Instance matrix elements (column-major, 16) for a rocket whose nose is at p heading along unit d, at scale k (pure). */
 export function rocketMatrix(p, d, k, out = new Array(16)) {
@@ -48,16 +51,17 @@ export function createRocketShots(THREE, scene, { cap = 96, env } = {}) {
   const M = new THREE.Matrix4(), e = new Array(16);
   /** The length (cells) behind the nose where the motor flame starts. */
   const tail = tiers[1].def.length * ROCKET_SHOT_SCALE;
+  const missileTail = tiers[1].def.length * MISSILE_SHOT_SCALE;
   return {
-    group, tiers, tail,
-    /** Copy the model's rocket rounds into the per-tier meshes. Returns how many were drawn. */
+    group, tiers, tail, missileTail,
+    /** Copy the model's rocket (and missile) rounds into the per-tier meshes. Returns how many were drawn. */
     sync(model) {
       const n = { 1: 0, 2: 0, 3: 0 };
       for (const s of (model && model.shots) || []) {
-        if (s.kind !== 'rocket') continue;
+        if (s.kind !== 'rocket' && s.kind !== 'missile') continue;
         const t = Math.max(1, Math.min(3, s.tier | 0 || 1)), T = tiers[t];
         if (n[t] >= cap) continue;
-        T.mesh.setMatrixAt(n[t]++, M.fromArray(rocketMatrix(s, { x: s.dx, y: s.dy, z: s.dz }, ROCKET_SHOT_SCALE, e)));
+        T.mesh.setMatrixAt(n[t]++, M.fromArray(rocketMatrix(s, { x: s.dx, y: s.dy, z: s.dz }, s.kind === 'missile' ? MISSILE_SHOT_SCALE : ROCKET_SHOT_SCALE, e)));
       }
       let all = 0;
       for (const t of [1, 2, 3]) {
