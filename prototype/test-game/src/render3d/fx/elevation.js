@@ -17,7 +17,9 @@
 // with a constant term would do the opposite: the slope 4·base/d falls with range.)
 export const LOB = Object.freeze({
   shell: Object.freeze({ base: 0, perCell: 0, perCell2: 0.035 }),     // the cannon tower: under the base cannon's lob
-  rocket: Object.freeze({ base: 0.9, perCell: 0.12, perCell2: 0 }),   // rocket salvos (unchanged from FLIGHT.rocketApex)
+  // rocket salvos: apex ≈ a fifth of the distance, so the launch slope stays ~40–45° at every range and the rack never
+  // stands near-vertical (a vertical rack turning about its own axis reads as not rotating) [MM-task_mvejw9k0_m]
+  rocket: Object.freeze({ base: 0.25, perCell: 0.2, perCell2: 0 }),
 });
 
 export function apexFor(kind, d) {

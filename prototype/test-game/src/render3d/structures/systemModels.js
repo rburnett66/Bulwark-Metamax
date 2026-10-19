@@ -304,7 +304,7 @@ const M = {};
     const nose = (h, z) => ({ p: [C0[0] + n[0] * h + u[0] * 2.06, C0[1] + n[1] * h + u[1] * 2.06, z], d: [u[0], u[1], 0], back: 3.52 });
     M.sys_rockets = { name: 'Rocket launcher', unit: 'SYS-Rockets', ref: 'sys_rockets', parts, pivots: { weapon: [0, 1.25, 0], barrel: [0, 1.4, 0] }, views: { side: 'right', top: 'up' },
       // the rack tilts about its axle to the salvo's launch slope (authored at A) [MM-story_mvedxxo7_7]
-      barrel: { authored: A, rest: A, min: 10, max: 65, rate: 1.2, aim: 'rocket' },
+      barrel: { authored: A, rest: A, min: 10, max: 50, rate: 1.2, aim: 'rocket' },   // ≤ 50° so its yaw reads [MM-task_mvejw9k0_m]
       muzzles: [nose(0.68, -0.24), nose(0.26, 0.24), nose(0.68, 0.24), nose(0.26, -0.24)] };
   }
 

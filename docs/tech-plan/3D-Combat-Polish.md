@@ -106,7 +106,7 @@ See **DD** (`docs/dev/Battle-3D-DD.md`, snapshot at `main` @ `a21a6e3`). The par
 - **As built (v1.1):** `pitchFor(from, to, apex)` and `apexFor(kind, d)` with `LOB` as data. The cannon's apex is
   **quadratic**, `0.035·d²`, so its launch slope `(dy + 4·apex)/d` rises with range (nearly flat at 1–2 cells, about
   30° at its 4.5-cell reach). A linear apex with a constant term did the opposite: the slope `4·base/d` fell with
-  range. Rockets keep `0.9 + 0.12·d`. The STR-Cannon recipe has `lob: 1, speed: 13`.
+  range. Rockets use `0.25 + 0.2·d` (bug fix `task_mvejw9k0_m`: the old `0.9 + 0.12·d` stood the rack at 47–65° up close, where its yaw no longer read; now about 40–48°, capped at 50°). The STR-Cannon recipe has `lob: 1, speed: 13`.
 
 ### 3.2 The barrel rig — shared convention
 - **Convention:** an optional **`barrel` group with a trunnion pivot** under the yawing group.

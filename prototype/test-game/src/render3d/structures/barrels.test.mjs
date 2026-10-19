@@ -99,3 +99,19 @@ test('fx gate: a pitching barrel holds fire until its elevation is on the launch
   for (let i = 0; i < 120; i++) { st.time += 1 / 60; fx.update(st, {}, [], 1 / 60, opts); }
   assert.ok(fired.length >= 1, 'elevated: fires');
 });
+
+test('rocket rack: stays under 50° at every range, so its turn toward the target reads [MM-task_mvejw9k0_m]', () => {
+  for (const [dx, dz] of [[1.5, 0], [0, 3], [-5, 0], [0, -8], [7, 7]]) {
+    const sys = createSystemStructures(THREE, new THREE.Scene());
+    sys.setBase({ x: 0, y: 0 });
+    sys.setStructures([{ id: 1, kind: 'antiGround', structId: 'STR-Rockets', cell: { x: 20, y: 20 }, lifecycle: 'Complete', hp: 10, maxHp: 10, targetId: 9 }]);
+    const st = { units: new Map([[9, { pos: { x: 20 + dx, y: 20 + dz }, hp: 5 }]]) };
+    for (let i = 0; i < 90; i++) sys.update(1 / 30, st);
+    const p = sys.pitch(1);
+    assert.ok(p <= 50 * D + 1e-9 && p >= 30 * D, `pitch ${(p / D).toFixed(1)}° at (${dx},${dz})`);
+    const M = new THREE.Matrix4(); sys.kinds.sys_rockets.meshes.barrel.getMatrixAt(0, M);
+    const ax = new THREE.Vector3(1, 0, 0).transformDirection(M), h = Math.hypot(ax.x, ax.z);
+    assert.ok(h > 0.6 && (ax.x * dx + ax.z * dz) / (h * Math.hypot(dx, dz)) > 0.97, `the rack points at the target (${dx},${dz})`);
+    sys.dispose();
+  }
+});
