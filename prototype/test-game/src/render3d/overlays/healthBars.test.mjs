@@ -35,3 +35,16 @@ test('towers show bars only while damaged; the base keeps its bar once hit', () 
   bars = run(state, null, mem, 2, opts);
   assert.deepEqual(bars.map((b) => b.kind), [2], 'repaired tower drops its bar; the base keeps its bar');
 });
+
+test('colours: lime-green fill on a charcoal-grey track, no amber/red ramp [MM-task_mvempq5t_p]', async () => {
+  const { BAR_COLORS, createHealthBarView } = await import('./healthBars.js');
+  const THREE = await import('../../../vendor/three.module.js');
+  const [r, g, b] = BAR_COLORS.fill;
+  assert.ok(g > 0.85 && r > 0.4 && r < 0.7 && b < 0.3, 'lime green');
+  const t = BAR_COLORS.track;
+  assert.ok(Math.max(...t) - Math.min(...t) < 0.05 && t[0] > 0.12 && t[0] < 0.3, 'charcoal grey');
+  const v = createHealthBarView(THREE, new THREE.Scene());
+  const fs = v.mesh.material.fragmentShader;
+  assert.ok(fs.includes('vec3(0.550, 0.950, 0.180)') && fs.includes('vec3(0.200, 0.210, 0.230)'), 'shader uses the palette');
+  assert.ok(!fs.includes('0.95, 0.78, 0.2') && !fs.includes('0.92, 0.22, 0.16'), 'no amber / red');
+});

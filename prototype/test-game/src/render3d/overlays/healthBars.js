@@ -12,12 +12,21 @@
  *   - the fill eases to the new value fast (0.08 s), while a pale DAMAGE CHUNK — the health just lost — holds for
  *     0.35 s and then drains, so every hit reads as a bite out of the bar;
  *   - each hit flashes the bar white for a moment and gives it a small vertical kick;
- *   - the colour runs green → amber → red with the fraction; quarter ticks show scale; a dark rim keeps it legible
- *     on any ground.
+ *   - lime green on a charcoal-grey track (owner 2026-10-18; was a green → amber → red ramp); quarter ticks show
+ *     scale; a dark rim keeps it legible on any ground.
  * planBars is pure (state + unit views + memory → bar list); createHealthBarView draws all of them in ONE
  * camera-facing instanced draw.
  */
 import { cellToWorld } from '../camera.js';
+
+/** Owner 2026-10-18: "health bars should lime green against charcoal grey" [MM-task_mvempq5t_p]. RGB 0..1. */
+export const BAR_COLORS = Object.freeze({
+  fill: [0.55, 0.95, 0.18],     // lime green — the health left, at every fraction
+  track: [0.2, 0.21, 0.23],     // charcoal grey — the health gone
+  rim: [0.08, 0.085, 0.095],    // dark charcoal frame
+  chunk: [1.0, 0.96, 0.82],     // the bite just taken (drains away)
+});
+const glv = (c) => 'vec3(' + c.map((v) => v.toFixed(3)).join(', ') + ')';
 
 export const BARS = Object.freeze({
   unitW: 0.62, unitH: 0.075, structW: 0.8, structH: 0.085, baseW: 2.4, baseH: 0.14,
@@ -96,18 +105,16 @@ export function createHealthBarView(THREE, scene, { cap = 700 } = {}) {
         float rim = 0.016 + 0.008 * step(1.5, vKind);
         vec2 inner = vec2(rim, rim);
         bool inside = px.x > inner.x && px.x < vSize.x - inner.x && px.y > inner.y && px.y < vSize.y - inner.y;
-        vec3 col = vec3(0.04, 0.05, 0.06);                      // rim
+        vec3 col = ${glv(BAR_COLORS.rim)};                      // rim
         float a = 0.9;
         if (inside) {
           float u = (px.x - inner.x) / (vSize.x - 2.0 * inner.x);
           float f = vVal.x, ch = vVal.y;
-          vec3 hp = f > 0.6 ? mix(vec3(0.95, 0.78, 0.2), vec3(0.3, 0.88, 0.36), (f - 0.6) / 0.4)
-                  : f > 0.3 ? mix(vec3(0.95, 0.3, 0.18), vec3(0.95, 0.78, 0.2), (f - 0.3) / 0.3)
-                  : vec3(0.92, 0.22, 0.16);
+          vec3 hp = ${glv(BAR_COLORS.fill)};                  // lime green at every fraction
           float v = (px.y - inner.y) / (vSize.y - 2.0 * inner.y);
           if (u <= f) col = hp * (0.82 + 0.3 * v);              // fill, lit from above
-          else if (u <= ch) col = vec3(1.0, 0.93, 0.78);         // the bite just taken
-          else col = vec3(0.12, 0.13, 0.15);                     // empty
+          else if (u <= ch) col = ${glv(BAR_COLORS.chunk)};         // the bite just taken
+          else col = ${glv(BAR_COLORS.track)};                     // empty: charcoal grey
           float tick = abs(fract(u * 4.0 + 0.5) - 0.5);           // quarter ticks
           if (tick < 0.012 && u > 0.02 && u < 0.98) col *= 0.55;
           col = mix(col, vec3(1.0), vVal.w * 0.75);               // hit flash

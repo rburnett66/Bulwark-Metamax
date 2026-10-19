@@ -52,6 +52,23 @@ export function fogWindow(state, map) {
 export const REVEAL_FLASH_S = 0.9;
 
 /**
+ * Where to point the camera when the play area grows from `prev` to `cur` (inclusive cell rects): the centroid of the
+ * band that just opened (the NEW map area), or the centre of `cur` when nothing was open before / nothing grew.
+ * → { x, z } world. Pure. [MM-story_mvempsla_q]
+ */
+export function newAreaFocus(prev, cur) {
+  if (!cur) return null;
+  const A = (r) => (r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1);
+  const C = (r) => ({ x: (r.x0 + r.x1 + 1) / 2, z: (r.y0 + r.y1 + 1) / 2 });
+  const cc = C(cur), ac = A(cur);
+  if (!prev) return cc;
+  const ap = A(prev), band = ac - ap;
+  if (band <= 0) return cc;
+  const cp = C(prev);
+  return { x: (cc.x * ac - cp.x * ap) / band, z: (cc.z * ac - cp.z * ap) / band };
+}
+
+/**
  * Is a unit at sim cell position `pos` ({x, y}, cell index, centre at +0.5) inside the window `rect` (inclusive
  * cells)? The test the hidden-contact markers and the minimap share. [MM-story_mveehs1r_f]
  */
@@ -67,12 +84,21 @@ export function insideWindow(rect, pos) {
  * update(state, map, dt) → { win, flash: { prev, cur, alpha } | null }
  */
 export function createFogTracker() {
-  let last = null, flash = null;
+  let last = null, flash = null, held = false, heldWin = null;
   const contains = (a, b) => a.x0 <= b.x0 && a.y0 <= b.y0 && a.x1 >= b.x1 && a.y1 >= b.y1;
   const same = (a, b) => a.x0 === b.x0 && a.y0 === b.y0 && a.x1 === b.x1 && a.y1 === b.y1;
   return {
+    /**
+     * HOLD the play area where it is (owner 2026-10-18: "don't go to new map area until after wave cleared reward is
+     * selected") — the window stays put while held; releasing lets it grow (with its reveal flash). [MM-story_mvempsla_q]
+     */
+    hold(on) { held = !!on; if (!held) heldWin = null; },
+    get held() { return held; },
+    /** The window currently drawn (null = whole board). */
+    get rect() { return last ? { ...last } : null; },
     update(state, map, dt) {
-      const win = fogWindow(state, map);
+      let win = fogWindow(state, map);
+      if (held) { if (!heldWin) heldWin = last ? { rect: { ...last }, gated: !!(win && win.gated), wave: win ? win.wave : 0 } : win; win = heldWin; }
       if (win && last && !same(win.rect, last) && contains(win.rect, last)) flash = { prev: last, cur: win.rect, age: 0 };
       last = win ? win.rect : null;
       if (flash) {
