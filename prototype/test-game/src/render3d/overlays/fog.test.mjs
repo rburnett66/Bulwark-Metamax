@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import * as THREE from '../../../vendor/three.module.js';
 import { fogWindow, createFogTracker, REVEAL_FLASH_S, insideWindow } from './fogModel.js';
-import { createFogView, fogAlpha, FOG_MARGIN } from './fog.js';
+import { createFogView, fogAlpha, FOG_MARGIN, CLOUD, cloudBias, cloudDark, cloudNoisePixels } from './fog.js';
 import { stepYaw, twistBy, wrapYaw, cameraPose, screenToGroundCell, groundCellToScreen } from '../camera.js';
 import { buildTerrainMap, buildCampaignMap } from '../../sim/mapgen.js';
 
@@ -74,7 +74,7 @@ test('reveal flash: a growing ring flashes the opened band, then fades out', () 
   assert.equal(tr.update(st, null, 0.1).flash, null);
 });
 
-test('the fog view: one mesh over the scene (no depth test), under the ghost; hidden without a window', () => {
+test('the fog view: one mesh over the scene (no depth test), under the ghost; clouds ring the map when the board is open', () => {
   const scene = new THREE.Scene();
   const v = createFogView(THREE, scene, campaign);
   assert.equal(scene.children.length, 1);
@@ -82,15 +82,18 @@ test('the fog view: one mesh over the scene (no depth test), under the ghost; hi
   assert.equal(m.material.depthTest, false);
   assert.equal(m.material.depthWrite, false);
   assert.ok(m.renderOrder > 5 && m.renderOrder < 10, 'after combat FX (5), before the placement ghost (10)');
-  assert.equal(v.sync({ win: null }), false);
-  assert.equal(m.visible, false);
+  // the whole board open: the cloud bank rings the MAP edge (owner 2026-10-19) [MM-story_mvfk3el9_b]
+  assert.equal(v.sync({ win: null }, 3), true);
+  assert.equal(m.visible, true);
+  assert.deepEqual(m.material.uniforms.uRect.value.toArray(), [0, 0, campaign.cols, campaign.rows]);
+  assert.equal(m.material.uniforms.uTime.value, 3, 'the drift clock');
   assert.equal(v.sync({ win: { rect: rings[0].rect, gated: true }, flash: null }), true);
   const u = m.material.uniforms;
   assert.deepEqual(u.uRect.value.toArray(), [10, 8, 21, 17], 'inclusive cells → cell edges');
   assert.equal(u.uFlash.value, 0);
   v.sync({ win: { rect: rings[1].rect, gated: false }, flash: { prev: rings[0].rect, cur: rings[1].rect, alpha: 0.5 } });
   assert.ok(u.uFlash.value > 0);
-  assert.equal(u.uMargin.value, FOG_MARGIN);
+  assert.ok(u.uNoise.value && u.uCloud.value.x === CLOUD.full, 'cloud noise + band');
   assert.equal(u.uLine, undefined, 'no hard outline (vignette, owner 2026-10-18)');
   // the quad reaches past the horizon at the farthest zoom
   m.geometry.computeBoundingBox();
@@ -155,4 +158,20 @@ test('picking still inverts under any out-of-battle yaw', () => {
     const pose = cameraPose(cam);
     assert.ok(Math.abs(Math.hypot(pose.position.x - 16, pose.position.z - 12) - 40 * Math.cos(37 * Math.PI / 180)) < 1e-9);
   }
+});
+
+test('cloud band: wisps at the window edge thicken to full cover, then sink into the dark veil far out [MM-story_mvfk3el9_b]', () => {
+  assert.equal(cloudBias(-1), -1, 'none inside the play area');
+  assert.ok(cloudBias(0) < -0.4 && cloudBias(CLOUD.full) > 0.5, 'edge → full');
+  for (let d = 0; d < CLOUD.full; d += 0.5) assert.ok(cloudBias(d + 0.5) >= cloudBias(d), 'monotonic');
+  assert.equal(cloudDark(CLOUD.dark - 0.1), 0);
+  assert.equal(cloudDark(CLOUD.black + 1), 1);
+  assert.ok(CLOUD.full < CLOUD.dark && CLOUD.dark < CLOUD.black);
+  const px = cloudNoisePixels(32, 7), px2 = cloudNoisePixels(32, 7);
+  assert.deepEqual(px, px2, 'deterministic');
+  let lo = 255, hi = 0; for (let i = 0; i < px.length; i += 4) { lo = Math.min(lo, px[i]); hi = Math.max(hi, px[i]); }
+  assert.ok(hi - lo > 80, `contrast ${lo}..${hi}`);
+  // tileable: the left and right columns join (no seam)
+  let seam = 0; for (let y = 0; y < 32; y++) seam = Math.max(seam, Math.abs(px[(y * 32) * 4] - px[(y * 32 + 31) * 4]));
+  assert.ok(seam < 40, `no seam (${seam})`);
 });

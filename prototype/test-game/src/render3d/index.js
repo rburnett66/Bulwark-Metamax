@@ -612,7 +612,7 @@ export function renderFrame(r, state, ui, events, dt) {
   if (r.cannonFx.shake > 0) { const k = r.cannonFx.shake; r.camera.position.x += Math.sin(r.clock * 67) * k; r.camera.position.y += Math.sin(r.clock * 83 + 0.7) * k * 0.5; r.camera.position.z += Math.cos(r.clock * 53) * k; }   // cannon touchdown
   if (r.craft && r.craft.shake > 0) { const k = r.craft.shake; r.camera.position.x += Math.sin(r.clock * 73) * k; r.camera.position.y += Math.sin(r.clock * 91 + 1.3) * k * 0.6; r.camera.position.z += Math.cos(r.clock * 59) * k; }   // LC: touchdown thump
   // Ring fog (T3.4): veil outside the current wave window
-  r.fogView.sync(fogFrame);
+  r.fogView.sync(fogFrame, r.clock);
 
   r.ghost.sync(ui);
 
