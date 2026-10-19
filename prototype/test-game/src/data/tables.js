@@ -1009,10 +1009,12 @@ export const STRUCTURES = Object.freeze({
     armorClass: 'Structure', damageType: 'Kinetic',
     canTargetDomains: ['Walker', 'Floater'],
     hp: [360, 576, 864], dps: [30, 46.5, 69],
-    range: 5, cost: [300, 750, 1500],
+    range: 10, cost: [300, 750, 1500],   // owner 2026-10-18: double the range (was 5) [MM-story_mvehp5rq_k]
     buildTime: 3, upgradeTime: 4, sellTime: 1.5,
     footprint: Object.freeze({ w: 1, h: 1 }),
-    aoeRadius: 1.2, cadence: 3.0   // owner 2026-10-17: slower salvos (render hint; dps unchanged) [MM-task_mvd1yej4_g]
+    // owner 2026-10-18: salvos 4× slower (was 3 s; render hint — dps unchanged, owner: "Keep DPS, visual only"); a unit
+    // a salvo hits burns until the next one, so the continuous damage reads [MM-story_mvehp5rq_k]
+    aoeRadius: 1.2, cadence: 12.0
   }),
   'STR-Missile': Object.freeze({
     name: 'Missile Tower', kind: 'antiAir',

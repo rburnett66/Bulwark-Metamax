@@ -43,7 +43,8 @@ export const STRUCT_RECIPES = Object.freeze({
   // one data edit and the 3D and Pixi views can't drift apart [MM-story_mvedxogl_4]
   // the cannon LOBS its shells (fx/elevation.js) so its barrel rises with range [MM-story_mvedxq1v_5]; speed = horizontal
   'STR-Cannon': Object.freeze({ kind: 'shell', lob: 1, cadence: STRUCTURES['STR-Cannon'].cadence, speed: 13, color: 0xffd080, burst: STRUCTURES['STR-Cannon'].burst }),
-  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: STRUCTURES['STR-Rockets'].cadence, speed: 8, color: 0xffb070, burst: 4 }),
+  // burn: a unit the salvo hits burns this long — until the next salvo — so the sim's continuous dps reads [MM-story_mvehp5rq_k]
+  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: STRUCTURES['STR-Rockets'].cadence, speed: 8, color: 0xffb070, burst: 4, burn: STRUCTURES['STR-Rockets'].cadence * 1.1 }),
   'STR-Missile': Object.freeze({ kind: 'missile', cadence: STRUCTURES['STR-Missile'].cadence, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
 });
 export const SHOT_LOOK = Object.freeze({   // Pixi at ~35 px/cell: shell dot 12 px + 33 px streak, flak 17 px, tracer 4 px + 11 px
@@ -180,7 +181,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     s.dx = dx / dist; s.dy = dy / dist; s.dz = dz / dist;
     s.left = dist; s.speed = look.speed;
     s.kind = look.kind; s.size = look.size; s.len = look.len; s.color = look.color;
-    s.tid = tid; s.t = 0; s.big = look.big || 0; s.dPrev = undefined; s.lob = 0;
+    s.tid = tid; s.t = 0; s.big = look.big || 0; s.dPrev = undefined; s.lob = 0; s.burn = look.burn || 0;
     if (s.kind === 'missile') {
       // off the rail: up and slightly out, then the seeker takes over
       const h = Math.hypot(dx, dz) || 1, side = (rand() - 0.5) * 1.4;
@@ -247,6 +248,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       size: L.size * ((entry && entry.size) || 1) * scale,
       len: L.len * ((entry && entry.streakLen) || 1) * scale,
       lob: (entry && entry.lob !== undefined ? entry.lob : base.lob) || 0,
+      burn: base.burn || 0,
     };
   }
 
@@ -387,6 +389,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         if (u >= 1) {
           flash(s.tx, s.ty, s.tz, FLASH.rocketHit);
           if (boomAt) boomAt(s.tx, s.tz, 0.55);   // the AOE reads: a small ground explosion per rocket
+          if (s.burn && s.tid !== null && ctx.opts.ignite) ctx.opts.ignite(s.tid, s.burn);   // the target burns until the next salvo
           retire(i, s);
         }
         continue;
