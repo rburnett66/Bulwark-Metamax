@@ -341,6 +341,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   // a round left a modelled barrel: cannon barrels (tower, tank, Tiger) kick back; guns, missiles, rockets never [MM-story_mvee15ja_b]
   r.fxOpts.kick = (key, n) => { const raw = key.slice(1), id = Number.isNaN(Number(raw)) ? raw : Number(raw); if (key[0] === 's') { if (r.system) r.system.kick(id, n); } else r.unitBarrels.kick(id, n); };
   r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
+  r.fxOpts.groundFire = (x, z, rr, secs) => r.impacts.groundFire(x, z, rr, secs);   // a rocket salvo's splash circle burns [MM-task_mvfjbh78_7]
   r.fxOpts.ignite = (id, secs) => r.impacts.ignite(id, secs);   // rocket-hit units burn until the next salvo [MM-story_mvehp5rq_k]
   attachCameraInput(canvas, r);
   // fake light flashes: a ground glow under every combat flash — no point lights (owner: the old fake flash was

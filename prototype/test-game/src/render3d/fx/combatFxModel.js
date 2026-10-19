@@ -44,7 +44,11 @@ export const STRUCT_RECIPES = Object.freeze({
   // the cannon LOBS its shells (fx/elevation.js) so its barrel rises with range [MM-story_mvedxq1v_5]; speed = horizontal
   'STR-Cannon': Object.freeze({ kind: 'shell', lob: 1, cadence: STRUCTURES['STR-Cannon'].cadence, speed: 13, color: 0xffd080, burst: STRUCTURES['STR-Cannon'].burst }),
   // burn: a unit the salvo hits burns this long — until the next salvo — so the sim's continuous dps reads [MM-story_mvehp5rq_k]
-  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: STRUCTURES['STR-Rockets'].cadence, speed: 8, color: 0xffb070, burst: 4, burn: STRUCTURES['STR-Rockets'].cadence * 1.1 }),
+  // owner 2026-10-19: "tier 1 should fire 1, tier 2 should fire 2 and tier 3 should fire 4. each tier should leave the
+  // ground burning for aoe damage" + "the visual should map to the damage area" — burstByTier (render hint; dps is
+  // the sim's) and `aoe`, the sim splash radius the salvo's ground fire covers [MM-task_mvfjbh78_7]
+  'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: STRUCTURES['STR-Rockets'].cadence, speed: 8, color: 0xffb070, burst: 4,
+    burstByTier: Object.freeze([1, 2, 4]), aoe: STRUCTURES['STR-Rockets'].aoeRadius, burn: STRUCTURES['STR-Rockets'].cadence * 1.1 }),
   'STR-Missile': Object.freeze({ kind: 'missile', cadence: STRUCTURES['STR-Missile'].cadence, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
 });
 export const SHOT_LOOK = Object.freeze({   // Pixi at ~35 px/cell: shell dot 12 px + 33 px streak, flak 17 px, tracer 4 px + 11 px
@@ -169,7 +173,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
    * from: the firing point — { x, y, z } and, when it comes off a modelled barrel (opts.muzzle), its barrel axis
    * (dx, dy, dz) and breech / nozzle end (bx, by, bz). Fires opts.fire(kind, from, look) for the launch effects.
    */
-  function launch(from, to, look, tid = null) {
+  function launch(from, to, look, tid = null, field = null) {
     if (shots.length >= limits.maxShots) return;
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
     const dist = Math.hypot(dx, dy, dz);
@@ -182,7 +186,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     s.left = dist; s.speed = look.speed;
     s.kind = look.kind; s.size = look.size; s.len = look.len; s.color = look.color;
     s.tid = tid; s.t = 0; s.big = look.big || 0; s.dPrev = undefined; s.lob = 0; s.burn = look.burn || 0;
-    s.tier = look.tier || 0;   // the firing tower's upgrade tier: a rocket draws as that tier's rocket (fx/rocketShots.js) [MM-task_mvf0kzw4_l]
+    s.tier = look.tier || 0;
+    s.field = field;   // the salvo's ground fire: { x, z, r } on this round's hit (the first round of a rocket salvo)   // the firing tower's upgrade tier: a rocket draws as that tier's rocket (fx/rocketShots.js) [MM-task_mvf0kzw4_l]
     if (s.kind === 'missile') {
       // off the rail: up and slightly out, then the seeker takes over
       const h = Math.hypot(dx, dz) || 1, side = (rand() - 0.5) * 1.4;
@@ -233,8 +238,11 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     const gap = look.kind === 'rocket' ? 0.24 : look.kind === 'missile' ? 0.12 : BURST_GAP;   // rockets ripple slower [MM-task_mvd1yej4_g]
     for (let k = 0; k < burst; k++) {
       const j = burst > 1 ? (look.kind === 'rocket' ? 0.45 : BURST_SPREAD) : 0;
-      const aim = { x: to.x + (rand() * 2 - 1) * j, y: to.y, z: to.z + (rand() * 2 - 1) * j };
-      if (k === 0) { launch((muz && muz(n0)) || from, aim, look, tid); if (muz) kickOf(key, n0); }
+      // a salvo's first rocket flies at the target itself and lights the ground fire there: the fire covers the sim's
+      // splash circle around that point [MM-task_mvfjbh78_7]
+      const lead = k === 0 && look.aoe > 0;
+      const aim = lead ? { x: to.x, y: to.y, z: to.z } : { x: to.x + (rand() * 2 - 1) * j, y: to.y, z: to.z + (rand() * 2 - 1) * j };
+      if (k === 0) { launch((muz && muz(n0)) || from, aim, look, tid, lead ? { x: to.x, z: to.z, r: look.aoe } : null); if (muz) kickOf(key, n0); }
       else queue.push({ at: now + k * gap, from: { x: from.x, y: from.y, z: from.z }, to: aim, look, tid, muz, n: n0 + k, key });
     }
   }
@@ -250,6 +258,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       len: L.len * ((entry && entry.streakLen) || 1) * scale,
       lob: (entry && entry.lob !== undefined ? entry.lob : base.lob) || 0,
       burn: base.burn || 0,
+      aoe: base.aoe || 0,
     };
   }
 
@@ -287,7 +296,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         const muz = muzzleOf ? (n) => muzzleOf(st.id, n) : null;
         const look = lookFor(e, base, base.kind, base.color, scale, base.big);
         look.tier = st.tier || 1;
-        fire('s' + st.id, now, from, to, look, (e && e.burst) || base.burst, (e && e.cadence) || base.cadence, st.targetId, muz);
+        const burst = base.burstByTier ? base.burstByTier[Math.max(1, Math.min(base.burstByTier.length, look.tier)) - 1] : ((e && e.burst) || base.burst);
+        fire('s' + st.id, now, from, to, look, burst, (e && e.cadence) || base.cadence, st.targetId, muz);
       }
     }
 
@@ -394,6 +404,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
           flash(s.tx, s.ty, s.tz, FLASH.rocketHit);
           if (boomAt) boomAt(s.tx, s.tz, 0.55);   // the AOE reads: a small ground explosion per rocket
           if (s.burn && s.tid !== null && ctx.opts.ignite) ctx.opts.ignite(s.tid, s.burn);   // the target burns until the next salvo
+          if (s.field && ctx.opts.groundFire) ctx.opts.groundFire(s.field.x, s.field.z, s.field.r, s.burn || 4);   // …and so does the splash circle
           retire(i, s);
         }
         continue;
