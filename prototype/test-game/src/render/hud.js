@@ -26,8 +26,8 @@ const CSS = `
 .bw-faction { pointer-events:auto; background:#141b22; color:#e8e8e8; border:1px solid #26313c; border-radius:4px;
   padding:3px 6px; font:inherit; font-size:12px; cursor:pointer; }
 .bw-hpwrap { display:flex; align-items:center; gap:6px; }
-.bw-hpbar { width:160px; height:14px; background:#2a1616; border:1px solid #713; position:relative; }
-.bw-hpfill { height:100%; background:#d33; width:100%; transition:width 0.15s linear; }
+.bw-hpbar { width:160px; height:14px; background:#34373c; border:1px solid #141619; position:relative; }
+.bw-hpfill { height:100%; background:#8cf22e; width:100%; transition:width 0.15s linear; }   /* render/hpColors.js [MM-task_mvfmy1k5_c] */
 .bw-hptext { font-size:11px; min-width:86px; }
 .bw-money { position:relative; font-size:15px; color:#ffd76a; font-weight:bold; min-width:110px; }
 .bw-delta { position:absolute; left:100%; top:0; margin-left:6px; font-size:12px; font-weight:bold;
@@ -67,8 +67,8 @@ const CSS = `
 .bw-key { font-weight:800; color:#ffe58a; }   /* bold keyboard-shortcut glyph on build + action buttons */
 .bw-selpanel { position:absolute; right:6px; top:56px; width:200px; font-size:12px; display:none; flex-direction:column; gap:4px; }
 .bw-selpanel .bw-sname { font-size:13px; font-weight:bold; color:#bfe0ff; }
-.bw-selpanel .bw-shpbar { width:100%; height:10px; background:#222; border:1px solid #555; }
-.bw-selpanel .bw-shpfill { height:100%; background:#4c4; }
+.bw-selpanel .bw-shpbar { width:100%; height:10px; background:#34373c; border:1px solid #141619; }
+.bw-selpanel .bw-shpfill { height:100%; background:#8cf22e; }
 .bw-selrow { display:flex; gap:4px; }
 .bw-unitpanel { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); min-width:290px; max-width:460px;
   background:rgba(9,14,20,0.94); border:1px solid #2c3e50; border-radius:7px; padding:8px 14px; display:none;
@@ -78,8 +78,8 @@ const CSS = `
   color:#9ec4d8; font:inherit; font-size:10px; letter-spacing:1px; padding:2px 8px; cursor:pointer; pointer-events:auto; }
 .bw-udeselect:hover { background:#22303e; color:#e7f6ff; }
 .bw-unitpanel .bw-usub { color:#8fb0c4; font-size:11px; margin-bottom:5px; text-transform:capitalize; }
-.bw-unitpanel .bw-uhp { height:6px; background:#1c2630; border-radius:3px; overflow:hidden; margin-bottom:6px; }
-.bw-unitpanel .bw-uhpfill { height:100%; background:#5c5; transition:width .1s; }
+.bw-unitpanel .bw-uhp { height:8px; background:#34373c; border:1px solid #141619; border-radius:3px; overflow:hidden; margin-bottom:6px; }
+.bw-unitpanel .bw-uhpfill { height:100%; background:#8cf22e; transition:width .1s; }
 .bw-unitpanel .bw-ustats { display:grid; grid-template-columns:1fr 1fr; gap:2px 18px; }
 .bw-unitpanel .bw-ustat { display:flex; justify-content:space-between; border-bottom:1px solid #182430; padding:1px 0; }
 .bw-unitpanel .bw-ustat .k { color:#7f9fb2; }
@@ -849,7 +849,6 @@ export function updateHud(hud, state, ui) {
     const fmt = (n) => (typeof n === 'number' ? String(Math.round(n * 10) / 10) : (n == null ? '—' : String(n)));
     const frac = u.maxHp > 0 ? Math.max(0, Math.min(1, u.hp / u.maxHp)) : 0;
     hud.uhpfill.style.width = (frac * 100).toFixed(0) + '%';
-    hud.uhpfill.style.background = frac > 0.5 ? '#5c5' : (frac > 0.25 ? '#dd5' : '#e55');
     let rows;
     if (u.isHarvester) {
       // the HARVESTER is its own thing — a resource hauler, not a Ground/Powder truck. Its panel
