@@ -72,7 +72,7 @@ import { buildHeightField, createAirLift } from './obstructions/heightField.js';
 import { createUnitBarrels } from './units/unitBarrels.js';
 import { createBuildFx } from './fx/buildFx.js';
 import { createDustTrails } from './fx/dustTrail.js';
-import { createFlashLights, FLASH_LIGHTS } from './fx/flashLights.js';
+import { createFlashGlows } from './fx/flashLights.js';
 import { createImpactsView } from './fx/impactsView.js';
 import { createCraft3D } from './craft/craft3d.js';
 import { createLanding, landedPose, harvesterOnRamp } from './craft/landing.js';
@@ -209,7 +209,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), flashLights: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), flashGlows: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -334,13 +334,11 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   // a round left a modelled barrel: cannon barrels (tower, tank, Tiger) kick back; guns, missiles, rockets never [MM-story_mvee15ja_b]
   r.fxOpts.kick = (key, n) => { const raw = key.slice(1), id = Number.isNaN(Number(raw)) ? raw : Number(raw); if (key[0] === 's') { if (r.system) r.system.kick(id, n); } else r.unitBarrels.kick(id, n); };
   r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
+  r.fxOpts.ignite = (id, secs) => r.impacts.ignite(id, secs);   // rocket-hit units burn until the next salvo [MM-story_mvehp5rq_k]
   attachCameraInput(canvas, r);
-  // point-light flashes (experiment): count by tier, ?flashlights=N overrides [MM-task_mvd2lrig_k]
-  {
-    let n = FLASH_LIGHTS[tier.key] ?? 0;
-    try { const q = new URLSearchParams(window.location.search).get('flashlights'); if (q !== null && q !== '') n = Math.max(0, Math.min(8, q | 0)); } catch (e) { /* no window */ }
-    r.flashLights = n > 0 ? createFlashLights(THREE, scene, n) : null;
-  }
+  // fake light flashes: a ground glow under every combat flash — no point lights (owner: the old fake flash was
+  // "effective … to preserve performance") [MM-story_mvehp8ca_l]
+  r.flashGlows = createFlashGlows(r.impacts);
 
   // The baked level: content/maps/baked/<slug>/ — checked against the sim's map; its road mask paints the
   // low-poly roads; its tiles are the ground only under ?ground=baked. Missing or stale → say so on screen.
@@ -517,7 +515,7 @@ export function renderFrame(r, state, ui, events, dt) {
   r.fxOpts.projFx = r.getProjFx();
   r.fxOpts.projScale = r.getProjScale();
   r.fx.update(state, r.map, events, dt, r.fxOpts);
-  if (r.flashLights) { r.flashLights.update(Math.max(0, Math.min(0.1, dt || 0))); r.flashLights.fromFlashes(r.fx.flashes); }   // point-light flashes (experiment)
+  if (r.flashGlows) r.flashGlows.fromFlashes(r.fx.flashes);   // fake light flashes on the ground [MM-story_mvehp8ca_l]
   // the base super-cannon: reticle, shell from the roof gun, touchdown blast (fx/cannonFx.js) [MM-task_mvbvpyer_x]
   r.cannonFx.onEvents(events, r.craft ? () => r.craft.muzzleWorld() : null);
   if (r.craft && r.craft.kick && events && events.some((e) => e && e.type === 'cannonShot')) r.craft.kick();   // the roof gun recoils [MM-story_mvee15ja_b]
@@ -641,7 +639,6 @@ export function destroyRenderer(r) {
   for (const [type, fn, opts] of r.listeners) canvas.removeEventListener(type, fn, opts);
   r.markers.dispose();
   if (r.system) r.system.dispose();
-  if (r.flashLights) r.flashLights.dispose();
   if (r.craft) r.craft.dispose();
   if (r.resources) r.resources.dispose();
   r.units3d.dispose();

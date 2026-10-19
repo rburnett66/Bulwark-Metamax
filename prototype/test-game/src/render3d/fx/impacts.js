@@ -336,6 +336,29 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
       fxBurn(s, s.k * fade, dt);
     }
   }
+  /**
+   * A UNIT set burning (rocket salvo hit): flames + smoke ride its drawn position for `secs`, the last third dying
+   * down; a re-hit refreshes it. Ends early when the unit dies or leaves. [MM-story_mvehp5rq_k]
+   */
+  const burningUnits = new Map();   // unit id → { t, life, k }
+  function ignite(id, secs = 4, k = 0.45) {
+    const b = burningUnits.get(id);
+    if (b) { b.t = 0; b.life = Math.max(b.life, secs); return; }
+    if (burningUnits.size >= 64) burningUnits.delete(burningUnits.keys().next().value);
+    burningUnits.set(id, { t: 0, life: secs, k });
+  }
+  const tmpBurn = { x: 0, z: 0, group: 'body' };
+  function stepBurningUnits(state, dt) {
+    for (const [id, b] of burningUnits) {
+      b.t += dt;
+      const u = state && state.units && state.units.get(id);
+      if (b.t >= b.life || !u || !(u.hp > 0)) { burningUnits.delete(id); continue; }
+      const v = cur.get(id);
+      if (!v) continue;                                    // not drawn this frame (hidden contact): no flames
+      tmpBurn.x = v.x; tmpBurn.z = v.z;
+      fxBurn(tmpBurn, b.k * Math.min(1, 3 * (1 - b.t / b.life)), dt);
+    }
+  }
   function step(dt) {
     if (dt <= 0) return;
     stepSpots(dt);
@@ -433,7 +456,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     for (const p of particles) freeP.push(p);
     particles.length = 0; nAdd = 0; nSmoke = 0;
     scorches.length = 0; glows.length = 0; chunks.length = 0; wrecks.length = 0; spots.length = 0;
-    seen.clear(); hitClock.clear(); prev.clear(); cur.clear();
+    seen.clear(); hitClock.clear(); prev.clear(); cur.clear(); burningUnits.clear();
     shake = 0;
   }
 
@@ -460,12 +483,17 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
         const t = prev; prev = cur; cur = t; cur.clear();
         for (const v of views) cur.set(v.id, v);
       }
+      stepBurningUnits(state, Math.min(0.1, Math.max(0, dt || 0)));
       if (events) for (const ev of events) onEvent(ev, state, tick, opts);
       prune(tick);
     },
     clear,
     // recipes, exposed for tests and debugging
-    fxHit, fxGround, fxExplode, boom, burn,
+    fxHit, fxGround, fxExplode, boom, burn, ignite,
+    /** A fake light flash: a warm additive glow on the ground (fx/flashLights.js) [MM-story_mvehp8ca_l]. col = [r, g, b] 0..1. */
+    glowAt(x, z, r, life, col, a) { decal(D.POOL, x, z, r, life, col, a); },
+    /** Units burning now (ids), for tests. */
+    get burningUnits() { return [...burningUnits.keys()]; },
     /** Raw emitter for other FX modules (the cannon shell's trail): emit(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty, drag). */
     emit,
     /** An expanding ground ring (additive decal): radius r → r1 over life, colour [r,g,b], peak alpha a. The cannon's
