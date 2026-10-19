@@ -19,6 +19,7 @@ export const CAMERA = Object.freeze({
   minDist: 10,
   maxDist: 95,
   startDist: 46,
+  fitMaxDist: 140, // the pre-match framing may stand back this far (a phone held upright) [MM-task_mveuiw7u_e]
   margin: 2,       // how far past the map edge the target may pan, in cells
 });
 
@@ -44,8 +45,8 @@ export function createCameraState(map) {
 }
 
 /** Keep the target near the map and the distance inside its limits. Mutates and returns `cam`. */
-export function clampCamera(cam, cols, rows) {
-  cam.dist = Math.max(CAMERA.minDist, Math.min(CAMERA.maxDist, cam.dist));
+export function clampCamera(cam, cols, rows, maxDist = CAMERA.maxDist) {
+  cam.dist = Math.max(CAMERA.minDist, Math.min(Math.max(CAMERA.maxDist, maxDist || 0), cam.dist));
   cam.tx = Math.max(-CAMERA.margin, Math.min(cols + CAMERA.margin, cam.tx));
   cam.tz = Math.max(-CAMERA.margin, Math.min(rows + CAMERA.margin, cam.tz));
   return cam;
@@ -188,4 +189,60 @@ export const TOUCH_OFFSET = Object.freeze({ x: -56, y: -72, edge: 12 });
 export function touchSlotPoint(px, py, w, h, o = TOUCH_OFFSET) {
   const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   return { x: cl(px + o.x, o.edge, Math.max(o.edge, w - o.edge)), y: cl(py + o.y, o.edge, Math.max(o.edge, h - o.edge)) };
+}
+
+/**
+ * Pre-match framing [MM-task_mveuiw7u_e] — owner 2026-10-18: "the map camera is not properly positioned before the
+ * match .. probably needs to be calculated for every aspect ratio". The fixed start distance framed a 16:9 desktop and
+ * cropped a phone held upright (or left a wide screen half empty).
+ *
+ * FIT: how much of the viewport (NDC half-extents) the play area may fill — a little short of the edges so the HUD's top
+ * bar and the bottom build tray don't sit on its border.
+ */
+export const FIT = Object.freeze({ x: 0.92, y: 0.8 });
+
+/** World point on the ground → NDC (x right, y up, -1..1) for `cam` at `aspect`; null when behind the camera. */
+export function groundToNdc(cam, aspect, x, z) {
+  const { o, f, r, u, th } = cameraBasis(cam);
+  const vx = x - o.x, vy = -o.y, vz = z - o.z;
+  const depth = vx * f.x + vy * f.y + vz * f.z;
+  if (!(depth > 1e-6)) return null;
+  return { x: (vx * r.x + vz * r.z) / depth / (th * aspect), y: (vx * u.x + vy * u.y + vz * u.z) / depth / th };
+}
+
+/**
+ * Frame a ground rectangle { x0, z0, x1, z1 } (world units) at viewport `aspect` (w / h): the closest distance (inside
+ * minDist..fitMaxDist — past the zoom-out limit when a tall phone needs it) at which all four corners land inside FIT, with the target slid along the view so the near and far
+ * edges sit symmetrically (perspective makes the near edge bigger, so the centre is not the balanced target). Keeps
+ * the current yaw. Mutates and returns `cam`. Pure — no three.js.
+ */
+export function fitCameraToRect(cam, rect, aspect, fit = FIT) {
+  if (!rect || !(aspect > 0)) return cam;
+  const cx = (rect.x0 + rect.x1) / 2, cz = (rect.z0 + rect.z1) / 2;
+  const corners = [[rect.x0, rect.z0], [rect.x1, rect.z0], [rect.x0, rect.z1], [rect.x1, rect.z1]];
+  const fx = Math.sin(cam.yaw), fz = Math.cos(cam.yaw);   // ground direction from the target back toward the camera
+  const probe = (dist, s) => {                            // s = slide of the target along the view (toward the camera +)
+    const c = { tx: cx + fx * s, tz: cz + fz * s, dist, yaw: cam.yaw };
+    let top = -Infinity, bot = Infinity, side = 0;
+    for (const [x, z] of corners) {
+      const p = groundToNdc(c, aspect, x, z);
+      if (!p) return { ok: false, top: Infinity, bot: -Infinity };
+      top = Math.max(top, p.y); bot = Math.min(bot, p.y); side = Math.max(side, Math.abs(p.x));
+    }
+    return { ok: top <= fit.y && bot >= -fit.y && side <= fit.x, top, bot };
+  };
+  const balance = (dist) => {                              // slide until the top and bottom margins match
+    let lo = -Math.hypot(rect.x1 - rect.x0, rect.z1 - rect.z0), hi = -lo;
+    for (let i = 0; i < 40; i++) {
+      const m = (lo + hi) / 2, p = probe(dist, m);
+      if (p.top + p.bot > 0) hi = m; else lo = m;           // content sits high → slide the target away from the camera
+    }
+    return (lo + hi) / 2;
+  };
+  let lo = CAMERA.minDist, hi = CAMERA.fitMaxDist;
+  if (probe(lo, balance(lo)).ok) hi = lo;
+  else for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (probe(m, balance(m)).ok) hi = m; else lo = m; }
+  const s = balance(hi);
+  cam.dist = hi; cam.tx = cx + fx * s; cam.tz = cz + fz * s;
+  return cam;
 }

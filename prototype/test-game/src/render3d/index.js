@@ -41,7 +41,7 @@
  * base cannon's aim. Resource fields are the battle planet's own resource models (resources/; opts.planet =
  * faction key of the homeworld), falling back to the crystal shards when no planet is known.
  */
-import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX, touchSlotPoint, cellToWorld } from './camera.js';
+import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX, touchSlotPoint, cellToWorld, fitCameraToRect } from './camera.js';
 import { createFogTracker, fogWindow, newAreaFocus } from './overlays/fogModel.js';
 import { resolveTier, probeEnv, pixelRatioFor } from './quality.js';
 import { createFogView } from './overlays/fog.js';
@@ -129,9 +129,11 @@ function attachCameraInput(el, r) {
       if (r.ui && r.ui.placingPointer === e.pointerId) return;   // this finger steers the build slot, not the camera [MM-story_mvee80a0_d]
       // right-drag turns the view outside the battle; in battle (or a left/touch drag) it pans
       if (!(p.turn && twistBy(r.cam, dx * YAW_PER_PX, r.inBattle))) panByPixels(r.cam, dx, dy, el.clientHeight);
+      if (dx || dy) r.userMoved = true;   // the player has the camera now: stop the pre-match auto-framing [MM-task_mveuiw7u_e]
     } else if (pointers.size === 2 && pinch0) {
       const t = twoFinger();
       if (t.d > 0) r.cam.dist = pinch0.dist * (pinch0.d / t.d);
+      r.userMoved = true;
       // two-finger twist: the ground turns with the fingers (yaw + = the world turns clockwise on screen);
       // outside the battle only — in battle the twist is dropped, not stored up
       twistBy(r.cam, wrapYaw(t.ang - pinch0.ang), r.inBattle);
@@ -141,7 +143,7 @@ function attachCameraInput(el, r) {
   const up = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch0 = null; };
   on('pointerup', up);
   on('pointercancel', up);
-  on('wheel', (e) => { e.preventDefault(); zoomBy(r.cam, Math.exp(e.deltaY * 0.001)); }, { passive: false });
+  on('wheel', (e) => { e.preventDefault(); zoomBy(r.cam, Math.exp(e.deltaY * 0.001)); r.userMoved = true; }, { passive: false });
 }
 
 export async function createRenderer3D(mountEl, map, opts = {}) {
@@ -449,6 +451,25 @@ function craftTop(r) {
   } catch (e) { return 0; }
 }
 
+/**
+ * Pre-match framing [MM-task_mveuiw7u_e]: before the first wave, and until the player pans / zooms / turns, the camera
+ * frames the play area (the fog window, else the whole map) for THIS viewport's aspect ratio — refitted whenever the
+ * viewport or the window changes (a phone rotated, a window resized). Pure maths in camera.js fitCameraToRect.
+ */
+function framePreMatch(r, state) {
+  if (r.userMoved || r.inBattle || !r._w || !r._h) return;
+  if (state && state.waves && (state.waves.current | 0) > 0) return;
+  const win = fogWindow(state, r.map), m = r.map;
+  const rect = win && win.rect
+    ? { x0: win.rect.x0, z0: win.rect.y0, x1: win.rect.x1 + 1, z1: win.rect.y1 + 1 }   // inclusive cells → world edges
+    : { x0: 0, z0: 0, x1: m.cols, z1: m.rows };
+  const key = r._w + 'x' + r._h + ':' + rect.x0 + ',' + rect.z0 + ',' + rect.x1 + ',' + rect.z1 + ':' + r.cam.yaw.toFixed(3);
+  if (key === r._fitKey) return;
+  r._fitKey = key;
+  fitCameraToRect(r.cam, rect, r._w / r._h);
+  r.camMaxDist = Math.max(CAMERA.maxDist, r.cam.dist);   // a tall phone may need to stand further back than the zoom-out limit
+}
+
 /** Camera glide: ease the camera target to (gx, gz) over its duration (smoothstep). */
 export const CAM_GLIDE_S = 1.2;
 function stepCamGlide(r, dt) {
@@ -486,8 +507,9 @@ export function renderFrame(r, state, ui, events, dt) {
   // Camera: battle rules first (no yaw in battle; ease a leftover yaw back to 0 when the wave starts)
   r.inBattle = !!(state && state.waves && state.waves.active);
   stepYaw(r.cam, r.inBattle, dt);
+  framePreMatch(r, state);
   if (r.camGlide) stepCamGlide(r, dt);   // the camera easing over a newly opened map area [MM-story_mvempsla_q]
-  clampCamera(r.cam, r.map.cols, r.map.rows);
+  clampCamera(r.cam, r.map.cols, r.map.rows, r.camMaxDist);
   // LC: while the craft lands the view frames it, then eases back to the player's camera (craft/introCamera.js)
   const landingLive = r.craft && r.landing && !r.landing.done && !r.landingHeld;
   r.viewCam = landingLive ? introCamera(r.landing.pose(), r.cam, r.map.base) : null;   // picking uses what is on screen
@@ -653,7 +675,7 @@ export function skipLanding(r) {
 export function screenToCell(r, px, py, lift = 0) {
   if (!r || r.destroyed) return null;
   const w = r.canvas.clientWidth, h = r.canvas.clientHeight;
-  return screenToGroundCell(r.viewCam || clampCamera(r.cam, r.map.cols, r.map.rows), w, h, px, py, r.map.cols, r.map.rows, lift);
+  return screenToGroundCell(r.viewCam || clampCamera(r.cam, r.map.cols, r.map.rows, r.camMaxDist), w, h, px, py, r.map.cols, r.map.rows, lift);
 }
 
 /**
