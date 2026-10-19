@@ -51,6 +51,10 @@ export const STRUCT_RECIPES = Object.freeze({
   // the sim's) and `aoe`, the sim splash radius the salvo's ground fire covers [MM-task_mvfjbh78_7]
   'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: STRUCTURES['STR-Rockets'].cadence, speed: 8, color: 0xffb070, burst: 4,
     burstByTier: Object.freeze([1, 2, 4]), aoe: STRUCTURES['STR-Rockets'].aoeRadius, burn: STRUCTURES['STR-Rockets'].cadence * 1.1 }),
+  // owner 2026-10-19: "the flack tower projectile should be small black round balls that explode in black puffs" +
+  // "the flak also should not track, it should go fast then explode" — straight, fast, unguided rounds that burst at the
+  // aim point (it used to fall back to the antiAir homing-missile recipe) [MM-task_mvfqb2gm_4]
+  'STR-Flak': Object.freeze({ kind: 'flak', cadence: 0.6, speed: 26, color: 0x151515, burst: 2 }),
   'STR-Missile': Object.freeze({ kind: 'missile', cadence: STRUCTURES['STR-Missile'].cadence, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
 });
 export const SHOT_LOOK = Object.freeze({   // Pixi at ~35 px/cell: shell dot 12 px + 33 px streak, flak 17 px, tracer 4 px + 11 px
@@ -84,7 +88,7 @@ const BURST_SPREAD = 0.16;   // cells of impact jitter for burst rounds
 export const FLASH = Object.freeze({
   muzzle: Object.freeze({ size: 0.5, ttl: 0.08, color: 0xfff0b0 }),
   hit: Object.freeze({ size: 0.7, ttl: 0.15, color: 0xffe6a0 }),
-  flak: Object.freeze({ size: 1.1, ttl: 0.22, color: 0xbfe0ff }),
+  flak: Object.freeze({ size: 0.55, ttl: 0.1, color: 0xffb060 }),   // a quick small orange pop; the black puff is the burst [MM-task_mvfqb2gm_4]
   kill: Object.freeze({ size: 1.8, ttl: 0.3, color: 0xffc070 }),
   destroyed: Object.freeze({ size: 4.4, ttl: 0.5, color: 0xffc070 }),
   mine: Object.freeze({ size: 2.0, ttl: 0.35, color: 0xffc070 }),
@@ -386,7 +390,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         s.dx = vx / vl; s.dy = vy / vl; s.dz = vz / vl;
         s.vx = s.dx * s.spd; s.vy = s.dy * s.spd; s.vz = s.dz * s.spd;
         s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
-        if (trail) trail('missile', s.x - s.dx * 0.12, s.y - s.dy * 0.12, s.z - s.dz * 0.12, s.big ? 1.3 : 1, s.dx, s.dy, s.dz, s.t);
+        const mt = ctx.opts.missileTail || 0.12;   // the flame leaves the nozzle of the half-size rocket it is drawn as [MM-task_mvfqb454_5]
+        if (trail) trail('missile', s.x - s.dx * mt, s.y - s.dy * mt, s.z - s.dz * mt, s.big ? 1.3 : 1, s.dx, s.dy, s.dz, s.t);
         continue;
       }
       if (s.kind === 'rocket' || s.lob) {
@@ -414,7 +419,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       }
       const step = s.speed * dt;
       if (step >= s.left) {
-        if (s.kind === 'flak') flash(s.tx, s.ty, s.tz, FLASH.flak);
+        if (s.kind === 'flak') { flash(s.tx, s.ty, s.tz, FLASH.flak); if (trail) trail('flak', s.tx, s.ty, s.tz, 1); }   // bursts into a black puff [MM-task_mvfqb2gm_4]
         else flash(s.tx, s.ty, s.tz, FLASH.hit, null, Math.min(1.6, s.size / SHOT_LOOK.shell.size));
         retire(i, s);
         continue;
