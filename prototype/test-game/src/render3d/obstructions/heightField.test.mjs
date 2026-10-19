@@ -67,5 +67,7 @@ test('ground units are never lifted', () => {
   const st = { units: new Map([[2, { id: 2, altitude: 0, domain: 'Ground', hp: 5 }]]) };
   const v = { id: 2, x: 10.5, y: 0, z: 10.5 };
   lift.update(st, [v], field, null, 0.1);
-  assert.equal(v.y, 0); assert.equal(lift.drawn.size, 0);
+  assert.equal(v.y, 0);
+  const d = lift.drawn.get(2);   // listed only as a drawn GROUND pose (aim follows the driven unit) [MM-story_mvekcu8r_n]
+  assert.ok(d && d.ground && d.x === 10.5 && d.y < 0.5 && !d.strafe);
 });

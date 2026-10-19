@@ -23,6 +23,19 @@ export const HULL_TURN = (240 * Math.PI) / 180;     // rad/s — a vehicle swing
 export const TURRET_TURN = (300 * Math.PI) / 180;   // rad/s — turrets slew a little faster than hulls
 const TAU = Math.PI * 2;
 
+/**
+ * DRIVING — steer, never slide [MM-story_mvekcu8r_n]. Owner 2026-10-18: "vehicles should never turn and move, it looks
+ * like sliding" / "units can steering with moderate direction changes but not 180 degree turn arounds".
+ * A ground unit's DRAWN position chases its sim position, always moving the way its hull points:
+ *   · within STEER of the way to go, it drives and steers (slowing as the angle grows: speed × cos);
+ *   · past STEER (a sharp corner, a turn-around) it stops and pivots on the spot until within ALIGN, then drives;
+ *   · inside DEAD of the sim position it holds still (a unit shuffling in place doesn't spin);
+ *   · beyond SNAP (spawn, teleport, a long stall) it jumps there.
+ * Chase speed = GAIN × distance, capped at VMAX cells/s, so it settles a fraction of a cell behind a moving unit and
+ * catches up after a pivot. Render-only; shots aim at the drawn position.
+ */
+export const DRIVE = Object.freeze({ steer: (50 * Math.PI) / 180, align: (12 * Math.PI) / 180, dead: 0.2, stop: 0.03, gain: 6, vmax: 8, snap: 4 });
+
 /** Signed shortest angle from a to b, in (−π, π]. */
 export function angleDelta(a, b) {
   let d = (b - a) % TAU;
@@ -56,13 +69,42 @@ export function createHeadingTracker() {
      * Ease the drawn hull + turret of `id` toward their goals over `dt` seconds. Returns { heading, aim }
      * (radians, drawn). dt omitted / non-finite → snap to the goals (tests, single frames).
      */
-    turn(id, goalHull, goalAim, dt) {
+    turn(id, goalHull, goalAim, dt, driven = false) {
       const e = last.get(id);
       if (!e) return { heading: goalHull, aim: goalAim };
       const snap = !(dt >= 0 && Number.isFinite(dt));
-      e.hull = e.hull === null || snap ? goalHull : turnToward(e.hull, goalHull, HULL_TURN * dt);
+      if (!driven) e.hull = e.hull === null || snap ? goalHull : turnToward(e.hull, goalHull, HULL_TURN * dt);   // a driven hull is steered by drive()
       e.aim = e.aim === null || snap ? goalAim : turnToward(e.aim, goalAim, TURRET_TURN * dt);
       return { heading: e.hull, aim: e.aim };
+    },
+    /**
+     * Drive the drawn position of ground unit `id` toward its sim position (x, y cells) over `dt` s. Returns
+     * { x, y, heading } — the DRAWN position (cells) and hull (radians). See DRIVE. Updates the hull itself, so call
+     * it instead of update()/turn()'s hull for driven units; turn() still eases the turret.
+     */
+    drive(id, x, y, dt, D = DRIVE) {
+      let e = last.get(id);
+      if (!e) { e = { x, y, heading: 0, moved: false, hull: null, aim: null }; last.set(id, e); }
+      if (e.px === undefined || !(dt >= 0 && Number.isFinite(dt))) { e.px = x; e.py = y; e.moving = false; }
+      const dx = x - e.px, dy = y - e.py, dist = Math.hypot(dx, dy);
+      if (dist > D.snap) { e.px = x; e.py = y; e.moving = false; return { x, y, heading: e.hull === null ? e.heading : e.hull }; }
+      if (!e.moving && dist > D.dead) e.moving = true;
+      if (e.moving && dist < D.stop) e.moving = false;
+      if (e.hull === null) e.hull = e.moved ? e.heading : (dist > 1e-6 ? Math.atan2(dy, dx) : e.heading);
+      if (e.moving) {
+        const want = Math.atan2(dy, dx);
+        e.heading = want; e.moved = true;
+        e.hull = turnToward(e.hull, want, HULL_TURN * dt);
+        const off = Math.abs(angleDelta(e.hull, want));
+        if (off > D.steer) e.pivot = true;              // too sharp to steer: stop and turn on the spot
+        else if (off < D.align) e.pivot = false;
+        if (!e.pivot) {
+          const v = Math.min(D.vmax, D.gain * dist) * Math.cos(off), step = Math.min(dist, v * dt);
+          e.px += Math.cos(e.hull) * step; e.py += Math.sin(e.hull) * step;   // along the hull — never sideways
+        }
+      }
+      e.x = e.px; e.y = e.py;   // the motion anchor follows the drawn unit
+      return { x: e.px, y: e.py, heading: e.hull };
     },
     /** Forget every id not in `liveIds` (a Set). */
     sweep(liveIds) {

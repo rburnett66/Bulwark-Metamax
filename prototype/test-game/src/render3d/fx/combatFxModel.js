@@ -300,9 +300,9 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         const to = aimPoint(state, map, u.targetId, opts.flight);
         if (!to) continue;
         const flyer = u.domain === 'Flyer' || u.altitude > 0;
-        const run = opts.flight && opts.flight.get(u.id);
+        const pose = opts.flight && opts.flight.get(u.id), run = pose && !pose.ground ? pose : null;   // ground poses only steer aim [MM-story_mvekcu8r_n]
         if (run && run.strafe && !run.inbound) continue;   // a strafing plane fires on its inbound run only [MM-story_mvee9r08_e]
-        const from = run ? { x: run.x, y: run.y, z: run.z } : { x: cellToWorld(u.pos.x), y: flyer ? HOVER_HEIGHT : MUZZLE.ground, z: cellToWorld(u.pos.y) };
+        const from = run ? { x: run.x, y: run.y, z: run.z } : { x: pose ? pose.x : cellToWorld(u.pos.x), y: flyer ? HOVER_HEIGHT : MUZZLE.ground, z: pose ? pose.z : cellToWorld(u.pos.y) };
         if (!flyer) { from.gx = from.x; from.gz = from.z; from.gr = 0.22; }   // a tank's tracks — its firing shockwave starts here
         const e = pfx && pfx[u.unitId];
         const color = u.side === 'attacker' ? base.attacker : base.defender;
