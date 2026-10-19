@@ -7,6 +7,7 @@
  *   <div data-globe="water" data-spin="drag">   a homeworld globe (data-spin="drag": the player can spin it)
  *   <div data-craft="system">                   a landing craft on a slow turntable (FACTION_CRAFT key or lc_*)
  *   <div data-res="water:rare">                 a resource model (planet : tier) turning on a plinth
+ *   <div data-galaxy data-target data-mode>      the 3D galaxy and the planet ⇄ galaxy fly (galaxyStage.js) [MM-story_mvftq5q8_l]
  * Change the attribute and the next frame draws the new subject. Hidden elements cost nothing; the loop stops while
  * the menu is closed (stop()) or the tab is hidden. If WebGL is unavailable createMenuStage returns null and the
  * menu keeps its baked planet PNGs (each globe element carries one as a fallback <img>).
@@ -18,6 +19,7 @@ import { createCraft3D } from '../render3d/craft/craft3d.js';
 import { landingPose, phaseStart } from '../render3d/craft/landing.js';
 import { resourceModel } from '../render3d/resources/models.js';
 import { mergeResourceModel } from '../render3d/resources/resources3d.js';
+import { createGalaxyStage } from './galaxyStage.js';
 
 const SPIN = 0.12;          // rad/s a globe turns on its own
 const TURN = 0.35;          // rad/s the craft / resource turntables
@@ -104,6 +106,19 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
   const endDrag = (e) => { const el = e.target.closest && e.target.closest('[data-spin="drag"]'), s = el && spin.get(el); if (s) s.drag = null; };
   root.addEventListener('pointerup', endDrag); root.addEventListener('pointercancel', endDrag);
 
+  // ── the galaxy (built on first sight); a click in galaxy view picks a system
+  let galaxy = null;
+  let downAt = null;
+  root.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('[data-galaxy]')) downAt = { x: e.clientX, y: e.clientY }; });
+  root.addEventListener('pointerup', (e) => {
+    const el = e.target.closest && e.target.closest('[data-galaxy]');
+    if (!el || !galaxy || !downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 8) { downAt = null; return; }
+    downAt = null;
+    const lab = e.target.closest('[data-sys]');
+    const r = el.getBoundingClientRect(), key = lab ? lab.dataset.sys : galaxy.pick(e.clientX - r.left, e.clientY - r.top, r.width, r.height);
+    if (key) el.dispatchEvent(new CustomEvent('bwm-galaxy-pick', { detail: { key } }));
+  });
+
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let raf = 0, last = 0, running = false;
   function frame(now) {
@@ -118,12 +133,24 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
     const draw = (el, scene, cam) => {
       const r = el.getBoundingClientRect();
       if (r.width < 4 || r.height < 4 || r.bottom < cr.top || r.top > cr.bottom || r.right < cr.left || r.left > cr.right) return false;
+      // clip to a scrolling panel the element sits in (the dossier's resource tiles scroll under the campaign box)
+      const sc = el.closest('[data-clip]'), c = sc ? sc.getBoundingClientRect() : r;
+      const L = Math.max(r.left, c.left), T = Math.max(r.top, c.top), R = Math.min(r.right, c.right), B = Math.min(r.bottom, c.bottom);
+      if (R - L < 1 || B - T < 1) return false;
       const x = r.left - cr.left, y = cr.bottom - r.bottom;
-      renderer.setViewport(x, y, r.width, r.height); renderer.setScissor(x, y, r.width, r.height);
+      renderer.setViewport(x, y, r.width, r.height); renderer.setScissor(L - cr.left, cr.bottom - B, R - L, B - T);
       cam.aspect = r.width / r.height; cam.updateProjectionMatrix();
       renderer.render(scene, cam);
       return true;
     };
+    // the galaxy first: it fills a large area, and each render clears its own rectangle [MM-story_mvftq5q8_l]
+    const ge = root.querySelector('[data-galaxy]');
+    if (ge && ge.offsetParent) {
+      if (!galaxy) galaxy = createGalaxyStage(THREE, makeGlobe);
+      const r = ge.getBoundingClientRect();
+      const gcam2 = galaxy.update(dt, ge, r.width, r.height, pr, reduce);
+      drawGalaxy(ge, galaxy.scene, gcam2);
+    }
     const seen = new Set();
     for (const el of root.querySelectorAll('[data-globe]')) {
       if (!el.offsetParent) continue;
@@ -157,6 +184,14 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
     }
     raf = requestAnimationFrame(frame);
   }
+  // the galaxy camera carries its own view offset; draw it without touching its projection
+  function drawGalaxy(el, scene, cam) {
+    const cr = canvas.getBoundingClientRect(), r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return;
+    const x = r.left - cr.left, y = cr.bottom - r.bottom;
+    renderer.setViewport(x, y, r.width, r.height); renderer.setScissor(x, y, r.width, r.height);
+    renderer.render(scene, cam);
+  }
   const onVis = () => { if (document.hidden) api.stop(); else if (wanted) api.start(); };
   document.addEventListener('visibilitychange', onVis);
   let wanted = false;
@@ -174,6 +209,7 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
     dispose() {
       api.pause(); document.removeEventListener('visibilitychange', onVis);
       for (const w of globes.values()) w.g.dispose();
+      if (galaxy) galaxy.dispose();
       if (craft) craft.dispose();
       sphere.dispose(); litMat.dispose(); glowMat.dispose(); plinthGeo.dispose(); plinthMat.dispose();
       renderer.dispose(); canvas.remove(); root.classList.remove('bwm-live');
