@@ -138,6 +138,23 @@ function cloudNoise(THREE) {
   return noiseTex;
 }
 
+/**
+ * PLANES vs THE BANK [MM-task_mvfnb9jd_e] — owner 2026-10-19: "shift cloud fog a little so planes are visible at the top
+ * of the map". The veil is drawn over the GROUND point under each pixel, and a plane at height h is seen against
+ * ground h / tan(pitch) farther from the camera — so near the far edge a plane over the play area sat on clouds. The
+ * window edges facing away from the camera move out by that distance (split by the camera's yaw). Mutates `r`
+ * (Vector4-like x0, z0, x1, z1) and returns it.
+ */
+export function farShift(r, dist, yaw = 0) {
+  if (!(dist > 0)) return r;
+  const ax = -Math.sin(yaw), az = -Math.cos(yaw);   // ground direction pointing away from the camera
+  if (ax < 0) r.x -= dist * -ax; else r.z += dist * ax;
+  if (az < 0) r.y -= dist * -az; else r.w += dist * az;
+  return r;
+}
+/** Ground distance a flyer at height h is displaced by, seen at camera pitch (degrees). */
+export const flightParallax = (h, pitchDeg) => (h > 0 ? h / Math.tan((pitchDeg * Math.PI) / 180) : 0);
+
 export function createFogView(THREE, scene, map, { detail = true } = {}) {
   const geo = new THREE.PlaneGeometry(map.cols + EXTENT * 2, map.rows + EXTENT * 2);
   geo.rotateX(-Math.PI / 2);
@@ -169,12 +186,13 @@ export function createFogView(THREE, scene, map, { detail = true } = {}) {
      * Show the fogTracker's frame ({ win, flash }) at clock `t` (s, for the drift). The cloud bank rings the play window,
      * or — with the whole board open (win null) — the map's own edge. Returns true (always drawn).
      */
-    sync(frame, t = 0) {
+    sync(frame, t = 0, far = null) {
       const win = frame && frame.win;
       mesh.visible = true;
       u.uTime.value = t || 0;
       if (win) toWorld(u.uRect.value, win.rect);
       else u.uRect.value.set(0, 0, map.cols, map.rows);   // the open board: clouds past its edge [MM-story_mvfk3el9_b]
+      if (far) farShift(u.uRect.value, far.dist, far.yaw);   // planes over the play area stay clear of the bank [MM-task_mvfnb9jd_e]
       if (!win) { u.uFlash.value = 0; return true; }
       if (frame.flash) { toWorld(u.uPrev.value, frame.flash.prev); u.uFlash.value = 0.45 * frame.flash.alpha; }
       else u.uFlash.value = 0;
