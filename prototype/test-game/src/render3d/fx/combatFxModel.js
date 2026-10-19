@@ -182,6 +182,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     s.left = dist; s.speed = look.speed;
     s.kind = look.kind; s.size = look.size; s.len = look.len; s.color = look.color;
     s.tid = tid; s.t = 0; s.big = look.big || 0; s.dPrev = undefined; s.lob = 0; s.burn = look.burn || 0;
+    s.tier = look.tier || 0;   // the firing tower's upgrade tier: a rocket draws as that tier's rocket (fx/rocketShots.js) [MM-task_mvf0kzw4_l]
     if (s.kind === 'missile') {
       // off the rail: up and slightly out, then the seeker takes over
       const h = Math.hypot(dx, dz) || 1, side = (rand() - 0.5) * 1.4;
@@ -284,7 +285,9 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         const from = { x: cx + (hx / hl) * MUZZLE.barrel, y: MUZZLE[st.kind] || MUZZLE.structure, z: cz + (hz / hl) * MUZZLE.barrel };
         const e = pfx && pfx[st.structId];
         const muz = muzzleOf ? (n) => muzzleOf(st.id, n) : null;
-        fire('s' + st.id, now, from, to, lookFor(e, base, base.kind, base.color, scale, base.big), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence, st.targetId, muz);
+        const look = lookFor(e, base, base.kind, base.color, scale, base.big);
+        look.tier = st.tier || 1;
+        fire('s' + st.id, now, from, to, look, (e && e.burst) || base.burst, (e && e.cadence) || base.cadence, st.targetId, muz);
       }
     }
 
@@ -385,7 +388,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
           if (u >= 1) { flash(s.tx, s.ty, s.tz, FLASH.hit, null, Math.min(1.6, s.size / SHOT_LOOK.shell.size)); retire(i, s); }
           continue;
         }
-        if (trail) trail('rocket', s.x - s.dx * 0.1, s.y - s.dy * 0.1, s.z - s.dz * 0.1, 1, s.dx, s.dy, s.dz, u);   // u: flight fraction
+        const nz0 = (ctx.opts.rocketTail || 0.1);   // the motor flame leaves the nozzle: a modelled rocket's length behind its nose
+        if (trail) trail('rocket', s.x - s.dx * nz0, s.y - s.dy * nz0, s.z - s.dz * nz0, 1, s.dx, s.dy, s.dz, u);   // u: flight fraction
         if (u >= 1) {
           flash(s.tx, s.ty, s.tz, FLASH.rocketHit);
           if (boomAt) boomAt(s.tx, s.tz, 0.55);   // the AOE reads: a small ground explosion per rocket

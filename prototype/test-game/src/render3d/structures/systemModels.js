@@ -309,6 +309,7 @@ const M = {};
       // the rack tilts about its axle to the salvo's launch slope (authored at A) [MM-story_mvedxxo7_7]
       barrel: { authored: A, rest: A, min: 10, max: 50, rate: 1.2, aim: 'rocket' },   // ≤ 50° so its yaw reads [MM-task_mvejw9k0_m]
       muzzles: [nose(0.68, -0.24), nose(0.26, 0.24), nose(0.68, 0.24), nose(0.26, -0.24)],
+      shot: { rk: rk(0.26, -0.24) },   // the rocket the tower's projectile is modelled on (every tier carries it) [MM-task_mvf0kzw4_l]
       // owner 2026-10-19: "2 rockets on 1, 3 on level 2, and 4 on level 3" — the lower pair first, then the upper left
       tiers: { rockets: { 1: [rk(0.26, -0.24), rk(0.26, 0.24)], 2: [rk(0.26, -0.24), rk(0.26, 0.24), rk(0.68, -0.24)] },
         // owner 2026-10-19: fins grow with the level — first asked 2× / 3×, then "let's try 1x, 1.5x, and 2x" [MM-task_mveyuv9m_k]
@@ -406,6 +407,25 @@ export function tierModel(def, tier) {
   });
   return Object.assign({}, def, { parts, muzzles, accent: TIER_ACCENT[t], tier: t, base: def.ref,
     recoil: def.recoil ? def.recoil * (root == null ? 1 : k) : def.recoil });
+}
+
+/**
+ * The rocket tower's PROJECTILE [MM-task_mvf0kzw4_l] — owner 2026-10-19: "The projectile for the rocket launcher should be
+ * a rocket based on the tier of the tower". One rack rocket of that tier's model (its accent tip, its fin size),
+ * re-based so the NOSE TIP is the origin and the rocket points down +x (the flight direction). Same model units and
+ * scale as the rack, so the round that leaves the tube is the rocket that sat in it. → { parts, accent, length, pivots }.
+ */
+export function rocketShotModel(tier) {
+  const def = M[tierModelKey('sys_rockets', tier)], base = M.sys_rockets, key = base.shot.rk;
+  const tip = base.muzzles.find((m) => m.rk === key), A = base.barrel.authored, c = Math.cos(A * D), sn = Math.sin(A * D);
+  const parts = def.parts.filter((q) => q.rk === key).map((q) => {
+    const vx = q.p[0] - tip.p[0], vy = q.p[1] - tip.p[1];
+    const r = q.r3 || [0, 0, 0];   // prims applies X, then Z, then Y: with no Y turn, −A on Z turns the whole part back onto +x
+    const out = Object.assign({}, q, { p: [vx * c + vy * sn, -vx * sn + vy * c, q.p[2] - tip.p[2]], r3: [r[0], r[1], r[2] - A] });
+    delete out.g;
+    return out;
+  });
+  return { name: `rocket shot t${clampTier(tier)}`, parts, pivots: {}, accent: def.accent, length: tip.back, tier: clampTier(tier) };
 }
 
 const SCALE = { sys_cannon: 0.3, sys_flak: 0.32, sys_wall: 0.26, sys_harvester: 0.25, sys_mg: 0.3, sys_rockets: 0.3, sys_missile: 0.3 };
