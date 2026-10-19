@@ -153,7 +153,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       const out = {};
       for (const [key, T] of Object.entries(types)) {
         out[key] = {};
-        for (const [g, G] of Object.entries(T.groups)) if (!g.startsWith('barrel')) out[key][g] = { geo: G.lodGeo, pivot: G.pivot };
+        for (const [g, G] of Object.entries(T.groups)) if (!g.startsWith('barrel') && !g.startsWith('spin')) out[key][g] = { geo: G.lodGeo, pivot: G.pivot };   // rotors are not wrecked
         // a wreck's turret keeps its guns: the barrels (level) folded into the turret geometry
         const TG = T.groups.turret;
         if (TG) {
@@ -165,7 +165,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       return out;
     },
     /** Returns how many units were drawn (capped per model at `cap`). */
-    setUnits(list, camDist, liveShadows) {
+    setUnits(list, camDist, liveShadows, t = 0) {   // t: render clock (s) — rotors and fans spin on it
       for (const key of MODEL_KEYS) counts[key] = 0;
       let drawn = 0;
       for (const u of list) {
@@ -183,6 +183,10 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
         if (TG) mt.compose(TG.pivot, q.setFromAxisAngle(yAxis, -((u.aim ?? u.heading) - u.heading)), one).premultiply(m1);
         for (const [gname, G] of Object.entries(T.groups)) {
           if (gname === 'turret') m2.copy(mt);
+          else if (gname.startsWith('spin')) {   // a rotor / fan turning about its own axis (def.spin) [MM-story_mvehe3sy_j]
+            const S = (T.def.spin && T.def.spin[gname]) || { axis: 'y', speed: 20 }, a = (t * S.speed + (u.id || 0) * 1.7) % (Math.PI * 2);
+            m2.copy(m1).multiply(mp.makeTranslation(G.pivot.x, G.pivot.y, G.pivot.z)).multiply(S.axis === 'z' ? mr.makeRotationZ(a) : S.axis === 'x' ? mr.makeRotationX(a) : mr.makeRotationY(a));
+          }
           else if (gname.startsWith('barrel') && TG) {   // rides the turret, pitched about its trunnion [MM-story_mvedy16u_9]
             m2.copy(mt).multiply(mp.makeTranslation(G.pivot.x - TG.pivot.x, G.pivot.y - TG.pivot.y, G.pivot.z - TG.pivot.z)).multiply(mr.makeRotationZ(u.pitch || 0));
             const back = u.recoil && u.recoil[gname];   // a main gun's slide-back, along its pitched axis [MM-story_mvee15ja_b]

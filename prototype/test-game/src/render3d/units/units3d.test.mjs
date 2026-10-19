@@ -25,7 +25,7 @@ const sumTris = (groups) => Object.values(groups).reduce((a, g) => a + g.tris, 0
 // Golden numbers: FULL = the prototype's measured UNITTRIS (code design §6.2). LOD re-measured 2026-10-14 after
 // [MM-story_mv8iu7l4_d] — the prototype's LOD (1272 / 680 / 1492 / 602) had dropped every extruded part.
 // A change here is a model change.
-const GOLDEN = { tank: [3362, 1534], buggy: [1260, 760], beetle: [2748, 1724], jet: [994, 698], tiger: [3660, 1520] };
+const GOLDEN = { tank: [3362, 1534], buggy: [1260, 760], beetle: [2748, 1724], jet: [994, 698], tiger: [3660, 1520], copter: [1720, 920], drone: [1708, 1496] };   // copter + drone: owner sheets 2026-10-18 [MM-story_mvehe3sy_j]
 
 test('the approved models build to their golden triangle counts, full and LOD', () => {
   assert.deepEqual([...MODEL_KEYS].sort(), Object.keys(GOLDEN).sort());
@@ -42,7 +42,9 @@ test('groups and pivots: tank and buggy have a turret group on their pivot; beet
     const hasTurret = !!(UNIT_MODELS[key].pivots && UNIT_MODELS[key].pivots.turret);
     const hasBarrel = !!(UNIT_MODELS[key].pivots && UNIT_MODELS[key].pivots.barrel);   // the gun pitches on its own group [MM-story_mvedy16u_9]
     const guns = Object.keys(UNIT_MODELS[key].pivots || {}).filter((n) => n.startsWith('barrel'));   // the twin tank has barrel + barrel2
-    assert.deepEqual(Object.keys(g).sort(), hasTurret ? [...(hasBarrel ? guns : []), 'body', 'turret'].sort() : ['body'], key);
+    const spins = Object.keys(UNIT_MODELS[key].pivots || {}).filter((n) => n.startsWith('spin'));   // rotors and fans [MM-story_mvehe3sy_j]
+    assert.deepEqual(Object.keys(g).sort(), [...(hasTurret ? [...(hasBarrel ? guns : []), 'turret'] : []), ...spins, 'body'].sort(), key);
+    for (const n of spins) assert.ok(UNIT_MODELS[key].spin[n], `${key}: ${n} has a spin axis/speed`);
     if (hasTurret) assert.deepEqual(g.turret.pivot.toArray(), UNIT_MODELS[key].pivots.turret, `${key} turret pivot`);
     for (const G of Object.values(g)) {
       for (const a of ['position', 'normal', 'color', 'aEmit']) assert.ok(G.geo.getAttribute(a), `${key} has ${a}`);
@@ -106,7 +108,7 @@ test('every mobile unit in the roster resolves to one of the four models — non
 test('STAND-INS are listed, not silent: exactly these classes borrow another class\'s model', () => {
   const standIns = Object.entries(ART_CLASS_MODELS).filter(([, e]) => !e.exact).map(([c, e]) => `${c}→${e.model}`).sort();
   // Shrinks as the Stack Forge model pipeline (UMP) authors each class's own model. Update deliberately.
-  assert.deepEqual(standIns, ['artillery→tank', 'copter→jet', 'heavyBomber→jet', 'infantry→beetle', 'missile→jet', 'truck→buggy']);
+  assert.deepEqual(standIns, ['artillery→tank', 'heavyBomber→jet', 'infantry→beetle', 'truck→buggy']);   // copter + drone have their own models [MM-story_mvehe3sy_j]
   const used = new Set(MOBILE.map(([, d]) => d.artClass));
   for (const c of Object.keys(ART_CLASS_MODELS)) assert.ok(used.has(c), `ART_CLASS_MODELS.${c} is used by the roster`);
   assert.equal(resolveUnitModel('SYS-Harvester', ROSTER['SYS-Harvester']).via, 'unitId');

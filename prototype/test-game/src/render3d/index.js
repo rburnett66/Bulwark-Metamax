@@ -503,7 +503,7 @@ export function renderFrame(r, state, ui, events, dt) {
     r.stats.contacts = r.contactsView.sync(c.reticles, r.clock);
     r.dust.step(dt, views, r.impacts.emit, FXK);   // light dust behind moving ground vehicles [MM-task_mvd2loid_i]
     r.unitBarrels.update(views, state, r.map, r.airLift.drawn, dt);   // unit guns pitch to the shot; their tips are firing points [MM-story_mvedy16u_9]
-    r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows);
+    r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows, r.clock);
   }
 
   // Expected-path lines (T3b): which origins are live, their routes on the sim's current grid, fades.

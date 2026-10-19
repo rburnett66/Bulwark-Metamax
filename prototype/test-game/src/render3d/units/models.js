@@ -306,4 +306,110 @@ const oct = (yb, ym, ys, yt, wb, wm, ws, wt) => [[-wb, yb], [wb, yb], [wm, ym], 
   });
   M.tiger = toGame(M.tiger);
 }
+// ── shared bits for the rotorcraft: a ring of short boxes (a duct or rotor rim) about a vertical axis ────────────
+const D_R = Math.PI / 180;
+const ringY = (c, r, n, w, h, m, g, extra = {}) => Array.from({ length: n }, (_, i) => {
+  const a = i / n * Math.PI * 2;
+  return Object.assign({ t: 'box', s: [2 * Math.PI * r / n * 1.08, h, w], p: [c[0] + Math.cos(a) * r, c[1], c[2] + Math.sin(a) * r], r3: [0, -(a / D_R + 90), 0], m }, g ? { g } : {}, extra);
+});
+// a flat blade from the hub at c, length L, at yaw a (degrees) about Y
+const bladeY = (c, L, a, w, h, m, g) => ({ t: 'box', s: [L, h, w], p: [c[0] + Math.cos(a * D_R) * L / 2, c[1], c[2] - Math.sin(a * D_R) * L / 2], r3: [0, a, 0], m, g });
+
+// ── COPTER "RAH-66X" stealth attack helicopter (owner sheet 2026-10-18) [MM-story_mvehe3sy_j] ─────────────────────
+//    13.6 m long → 4 model units. Faceted fuselage with a tandem canopy, twin engine fairings, stub wings carrying two
+//    missile pods a side, chin sensor turret + cannon, swept fin with a fenestron. The enclosed 4-blade main rotor
+//    (rim + blades, group `spin`) and the fenestron fan (`spin2`) turn in the battle view.
+{
+  const oct = (yb, yt, w) => { const h = yt - yb; return [[w * 0.55, yb], [w, yb + 0.3 * h], [w * 0.8, yt - 0.18 * h], [w * 0.35, yt], [-w * 0.35, yt], [-w * 0.8, yt - 0.18 * h], [-w, yb + 0.3 * h], [-w * 0.55, yb]]; };
+  const can = (yb, yt, w) => [[-w, yb], [w, yb], [w * 0.75, yb + 0.75 * (yt - yb)], [w * 0.3, yt], [-w * 0.3, yt], [-w * 0.75, yb + 0.75 * (yt - yb)]];
+  const HUB = [0.05, 1.04, 0], FAN = [-1.78, 0.74, 0];
+  const parts = [
+    // fuselage: chisel nose → cockpit → engine bay → thin boom
+    { t: 'loft', ax: 'x', secs: [
+      [2.0, oct(0.4, 0.44, 0.02)], [1.75, oct(0.28, 0.58, 0.14)], [1.35, oct(0.2, 0.72, 0.26)], [0.8, oct(0.18, 0.8, 0.32)],
+      [0.1, oct(0.2, 0.84, 0.34)], [-0.45, oct(0.3, 0.76, 0.24)], [-0.9, oct(0.44, 0.66, 0.1)], [-1.6, oct(0.5, 0.62, 0.07)], [-1.98, oct(0.52, 0.6, 0.04)]], m: 'hull' },
+    // tandem canopy: gunner forward, pilot aft (raised)
+    { t: 'loft', ax: 'x', secs: [[1.62, can(0.55, 0.58, 0.05)], [1.4, can(0.62, 0.74, 0.18)], [1.05, can(0.68, 0.8, 0.2)], [0.95, can(0.7, 0.78, 0.15)]], m: 'glass' },
+    { t: 'loft', ax: 'x', secs: [[0.98, can(0.74, 0.78, 0.08)], [0.8, can(0.76, 0.9, 0.2)], [0.45, can(0.8, 0.92, 0.2)], [0.3, can(0.8, 0.84, 0.1)]], m: 'glass' },
+    { t: 'box', s: [0.04, 0.12, 0.38], p: [0.97, 0.78, 0], m: 'dark' },                                   // canopy frame
+    // spine fairing to the mast, panel lines
+    { t: 'loft', ax: 'x', secs: [[0.35, oct(0.8, 0.84, 0.14)], [0.1, oct(0.82, 0.96, 0.2)], [-0.3, oct(0.8, 0.92, 0.16)], [-0.6, oct(0.74, 0.78, 0.06)]], m: 'hull2' },
+    { t: 'box', s: [1.6, 0.012, 0.012], p: [0.3, 0.52, 0.335], m: 'dark', mir: true, d: 1 },
+    // engine fairings either side of the spine, dark intakes, exhausts
+    { t: 'cyl', ax: 'x', r: [0.11, 0.13], l: 0.7, seg: 8, p: [-0.1, 0.74, 0.3], m: 'hull2', mir: true },
+    { t: 'cyl', ax: 'x', r: 0.09, l: 0.03, seg: 8, p: [0.26, 0.74, 0.3], m: 'black', mir: true },
+    { t: 'box', s: [0.1, 0.08, 0.12], p: [-0.5, 0.74, 0.3], m: 'dark', mir: true },
+    // stub wings + missile pods (two a side), amber seeker tips
+    { t: 'ext', ax: 'y', poly: [[0.25, 0.3], [0.12, 1.02], [-0.18, 1.02], [-0.32, 0.3]], d: [0.44, 0.48], m: 'hull2', mir: true },
+    ...[0.62, 0.9].flatMap((z) => [
+      { t: 'box', s: [0.06, 0.08, 0.05], p: [-0.04, 0.39, z], m: 'dark', mir: true },
+      { t: 'cyl', ax: 'x', r: 0.075, l: 0.62, seg: 8, p: [-0.02, 0.29, z], m: 'dark', mir: true },
+      { t: 'cyl', ax: 'x', r: 0.08, l: 0.04, seg: 8, p: [0.3, 0.29, z], m: 'hull2', mir: true },
+      { t: 'cyl', ax: 'x', r: [0.02, 0.06], l: 0.06, seg: 8, p: [0.35, 0.29, z], m: 'amber', mir: true },
+    ]),
+    // chin: multi-spectral sensor ball + 3-barrel cannon
+    { t: 'ell', s: [0.12, 0.1, 0.12], seg: 10, p: [1.5, 0.2, 0], m: 'dark' },
+    { t: 'cyl', ax: 'x', r: 0.045, l: 0.03, seg: 8, p: [1.61, 0.2, 0], m: 'glowB' },
+    { t: 'box', s: [0.16, 0.08, 0.1], p: [1.15, 0.17, 0], m: 'dark' },
+    { t: 'cyl', ax: 'x', r: 0.025, l: 0.62, seg: 6, p: [1.5, 0.15, 0], m: 'metal' },
+    // tail: swept fin with the fenestron shroud, small tailplanes, tail light
+    { t: 'ext', ax: 'z', poly: [[-1.55, 0.58], [-1.95, 0.58], [-2.12, 1.22], [-1.98, 1.22]], d: [-0.035, 0.035], m: 'hull2' },
+    { t: 'cyl', ax: 'z', r: 0.2, l: 0.09, seg: 14, p: FAN, m: 'dark' },
+    { t: 'ext', ax: 'y', poly: [[-1.42, 0.04], [-1.58, 0.42], [-1.72, 0.42], [-1.66, 0.04]], d: [0.55, 0.58], m: 'hull2', mir: true },
+    { t: 'box', s: [0.04, 0.04, 0.04], p: [-2.0, 1.2, 0], m: 'amber' },
+    // rotor mast + hub (fixed)
+    { t: 'cyl', ax: 'y', r: 0.07, l: 0.12, seg: 8, p: [HUB[0], 0.98, 0], m: 'dark' },
+    // MAIN ROTOR (spins): 4 blades to an enclosing rim, hub cap
+    { t: 'cyl', ax: 'y', r: 0.12, l: 0.07, seg: 10, p: HUB, m: 'hull2', g: 'spin' },
+    ...[0, 90, 180, 270].map((a) => bladeY(HUB, 1.62, a, 0.11, 0.02, 'dark', 'spin')),
+    ...ringY(HUB, 1.62, 28, 0.06, 0.045, 'hull2', 'spin'),
+    // FENESTRON FAN (spins about the tail axis)
+    ...[0, 45, 90, 135].map((a) => ({ t: 'box', s: [0.34, 0.03, 0.11], p: FAN, r3: [0, 0, a], m: 'metal', g: 'spin2' })),
+    { t: 'cyl', ax: 'z', r: 0.045, l: 0.13, seg: 8, p: FAN, m: 'hull', g: 'spin2' },
+  ];
+  M.copter = { name: 'RAH-66X stealth attack helicopter', ref: 'copter', parts, pivots: { spin: HUB, spin2: FAN }, hover: 1,
+    spin: { spin: { axis: 'y', speed: 22 }, spin2: { axis: 'z', speed: 40 } },
+    views: { side: 'right', top: 'up' } };
+}
+
+// ── DRONE "MX-4" compact recon drone (owner sheet 2026-10-18) [MM-story_mvehe3sy_j] ─────────────────────────────
+//    Faceted low-observable body, four composite arms to ducted 2-blade fans (`spin`…`spin4`, they turn), a gimbal
+//    EO/IR camera under the nose, four skids.
+{
+  const hex = (yb, yt, w) => { const h = yt - yb; return [[w * 0.6, yb], [w, yb + 0.35 * h], [w * 0.85, yt - 0.15 * h], [w * 0.45, yt], [-w * 0.45, yt], [-w * 0.85, yt - 0.15 * h], [-w, yb + 0.35 * h], [-w * 0.6, yb]]; };
+  const F = 1.2, FY = 0.95, R = 0.5;
+  const fans = [[F, F], [F, -F], [-F, F], [-F, -F]];
+  const parts = [
+    { t: 'loft', ax: 'x', secs: [[1.1, hex(0.66, 0.92, 0.28)], [0.85, hex(0.56, 1.06, 0.62)], [-0.75, hex(0.56, 1.06, 0.62)], [-1.05, hex(0.64, 0.96, 0.34)]], m: 'hull' },
+    { t: 'ext', ax: 'y', poly: [[0.3, 0], [0.18, 0.22], [-0.18, 0.22], [-0.3, 0], [-0.18, -0.22], [0.18, -0.22]], d: [1.055, 1.075], m: 'hull2' },   // payload hatch
+    { t: 'box', s: [0.3, 0.015, 0.22], p: [0, 1.075, 0], m: 'dark', d: 1 },
+    { t: 'box', s: [0.03, 0.06, 0.16], p: [1.08, 0.8, 0], m: 'glowB' },                                 // nose sensor strip
+    { t: 'box', s: [0.12, 0.08, 0.02], p: [0.2, 0.86, 0.62], m: 'dark', mir: true, d: 1 },               // side vents
+    // gimbal camera under the nose
+    { t: 'box', s: [0.3, 0.1, 0.3], p: [0.55, 0.52, 0], m: 'dark' },
+    { t: 'ell', s: [0.2, 0.2, 0.2], seg: 12, p: [0.6, 0.34, 0], m: 'hull2' },
+    { t: 'cyl', ax: 'x', r: 0.1, l: 0.06, seg: 12, p: [0.78, 0.34, 0], m: 'black' },
+    { t: 'cyl', ax: 'x', r: 0.05, l: 0.02, seg: 10, p: [0.81, 0.34, 0], m: 'glass' },
+    ...fans.flatMap(([x, z], i) => {
+      const c = [x, FY, z], g = i ? 'spin' + (i + 1) : 'spin', ax0 = Math.sign(x) * 0.45, az0 = Math.sign(z) * 0.4;
+      const L = Math.hypot(x - ax0, z - az0) - R + 0.05, yaw = -Math.atan2(z - az0, x - ax0) / D_R;
+      const mx = ax0 + (x - ax0) * (L / 2) / Math.hypot(x - ax0, z - az0), mz = az0 + (z - az0) * (L / 2) / Math.hypot(x - ax0, z - az0);
+      return [
+        { t: 'box', s: [L, 0.1, 0.14], p: [mx, FY - 0.02, mz], r3: [0, yaw, 0], m: 'hull2' },          // composite arm
+        ...ringY(c, R, 18, 0.07, 0.16, 'hull'),                                                        // duct
+        { t: 'cyl', ax: 'y', r: 0.08, l: 0.22, seg: 8, p: [x, FY - 0.12, z], m: 'dark' },               // motor pod
+        { t: 'box', s: [0.08, 0.26, 0.08], p: [x, FY - 0.32, z], m: 'dark' },                          // skid leg
+        { t: 'box', s: [0.3, 0.04, 0.12], p: [x, FY - 0.46, z], m: 'dark' },                           // skid foot
+        // fan (spins): two blades + spinner
+        { t: 'cyl', ax: 'y', r: 0.06, l: 0.06, seg: 8, p: [x, FY + 0.02, z], m: 'hull2', g },
+        bladeY([x, FY + 0.02, z], R - 0.06, 15, 0.12, 0.015, 'dark', g),
+        bladeY([x, FY + 0.02, z], R - 0.06, 195, 0.12, 0.015, 'dark', g),
+      ];
+    }),
+  ];
+  const pivots = {}, spin = {};
+  fans.forEach(([x, z], i) => { const g = i ? 'spin' + (i + 1) : 'spin'; pivots[g] = [x, FY + 0.02, z]; spin[g] = { axis: 'y', speed: (i === 0 || i === 3 ? 1 : -1) * 45 }; });
+  M.drone = { name: 'MX-4 recon drone', ref: 'drone', parts, pivots, hover: 1, spin, views: { side: 'right', top: 'up' } };
+}
+
 export const UNIT_MODELS = M;
