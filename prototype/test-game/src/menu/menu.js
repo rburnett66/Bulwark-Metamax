@@ -24,6 +24,7 @@ import { PLANETS, planetImage } from '../data/planets.js';
 import { LANDING_CRAFT, craftFor } from '../render3d/craft/models.js';
 import { CRYSTAL } from '../render3d/styles/lowpoly-palettes.js';
 import { campaignOptions, defaultCampaign } from './campaignPick.js';
+import { SYSTEM_KEYS } from '../data/galaxy.js';
 // the live globes / craft / resource models load with three.js on first open (menuStage.js); until then (and with
 // no WebGL) the baked planet PNGs stand in
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
@@ -98,6 +99,22 @@ const CSS = `
 .bwm-globe[data-spin="drag"] { cursor:grab; }
 .bwm-globe > img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
 .bwm-live .bwm-globe > img { visibility:hidden; }
+/* MAIN: the GALAXY layer — the main screen zooms out from the planet to the 9 systems [MM-story_mvftq5q8_l] */
+.bwm-main { position:relative; }
+.bwm-menu > * { position:relative; z-index:7; }   /* buttons over the 3D canvas; the column itself stays unpositioned (phone craft card) */
+.bwm-galaxy { position:absolute; inset:0; display:none; z-index:7; touch-action:none; cursor:default; }   /* above the 3D canvas (transparent DOM): labels stay on top */
+.bwm-root.galaxy .bwm-galaxy { display:block; }
+.bwm-root.galaxy .bwm-hero.planet .bwm-htext, .bwm-root.galaxy .bwm-hero.planet .bwm-next { opacity:0; transition:opacity .4s; }
+.bwm-galaxy [data-sys] { position:absolute; left:0; top:0; margin:12px 0 0 12px; padding:3px 8px; font-size:11px; font-weight:800; letter-spacing:.22em;
+  color:var(--hue,#cfe3f0); background:rgba(10,13,18,.72); border:1px solid rgba(46,56,70,.9); white-space:nowrap; cursor:pointer; opacity:0;
+  transition:border-color .12s, background .12s; z-index:7; }
+.bwm-galaxy [data-sys]:hover { border-color:var(--hue,#d9a441); }
+.bwm-galaxy [data-sys].on { border-color:#f2c869; background:rgba(40,32,14,.85); color:#f2c869; }
+.bwm-zoom { position:absolute; z-index:8; right:calc(min(72vh, 36vw) / 2); top:4%; transform:translateX(50%); width:auto !important;
+  padding:7px 14px !important; font-size:11px !important; letter-spacing:.24em !important; gap:8px; }
+.bwm-root.galaxy .bwm-zoom { right:auto; left:clamp(24px,6vw,90px); top:10px; transform:none; }
+.bwm-ghint { position:absolute; z-index:8; left:clamp(24px,6vw,90px); bottom:10px; font-size:10px; letter-spacing:.24em; color:#8fa0b3; display:none; pointer-events:none; }
+.bwm-root.galaxy .bwm-ghint { display:block; }
 /* MAIN: the next planet, live */
 .bwm-hero.planet { position:relative; flex:1; max-width:none; display:flex; align-items:center; justify-content:flex-end; min-height:0; height:100%; }
 .bwm-hero.planet .bwm-globe { height:min(72vh, 36vw); max-height:100%; }
@@ -225,6 +242,8 @@ const CSS = `
   .bwm-hero.planet .bwm-title { font-size:clamp(24px,9vh,40px); }
   .bwm-hero.planet .bwm-sub { display:none; }
   .bwm-craft { padding:6px 8px; gap:8px; margin-top:2px; position:absolute; left:16px; bottom:8px; width:230px; z-index:7; }
+  .bwm-ghint { display:none !important; }
+  .bwm-root.galaxy .bwm-craft { display:none; }   /* the galaxy needs the corner on a phone */
   .bwm-hero.planet .bwm-next { display:none; }
   .bwm-acts { margin-top:8px; }
   .bwm-acts .bwm-btn { padding:8px 12px; }
@@ -300,6 +319,64 @@ export function createMenu(mountEl, cbs) {
   const heroNext = el(doc, 'div', 'bwm-next');
   hero.appendChild(heroNext);
   main.appendChild(hero);
+  // ── the GALAXY: zoom out from the planet to the nine systems (menuStage → galaxyStage.js) [MM-story_mvftq5q8_l]
+  //    Default is always the planet; wheel / pinch / the button fly out and back; clicking a system makes it the target.
+  const galaxy = el(doc, 'div', 'bwm-galaxy');
+  galaxy.dataset.galaxy = ''; galaxy.dataset.mode = 'planet';
+  galaxy.setAttribute('aria-label', 'Galaxy — click a solar system to target its planet');
+  for (const key of SYSTEM_KEYS) {
+    const lab = el(doc, 'span', null, (PLANETS[key].name || key).toUpperCase());
+    lab.dataset.sys = key; lab.style.setProperty('--hue', PLANETS[key].ui || '#cfe3f0');
+    const f = REG.find(key); lab.title = PLANETS[key].name + (f ? ' — ' + f.name : '');
+    galaxy.appendChild(lab);
+  }
+  main.appendChild(galaxy);
+  const zoomBtn = el(doc, 'button', 'bwm-btn bwm-zoom');
+  zoomBtn.appendChild(el(doc, 'span', null, '◎ GALAXY'));
+  zoomBtn.addEventListener('click', () => (galaxyOn() ? zoomIn() : zoomOut()));
+  hero.appendChild(zoomBtn);
+  const ghint = el(doc, 'div', 'bwm-ghint', 'CLICK A SYSTEM TO TARGET IT · SCROLL IN FOR THE PLANET');
+  main.appendChild(ghint);
+  const galaxyOn = () => galaxy.dataset.mode === 'galaxy';
+  function zoomOut() {
+    if (!stage || galaxyOn()) return;
+    const mr = main.getBoundingClientRect(), gr = heroGlobe.getBoundingClientRect();
+    galaxy.dataset.gx = String(gr.left + gr.width / 2 - mr.left); galaxy.dataset.gy = String(gr.top + gr.height / 2 - mr.top); galaxy.dataset.gh = String(gr.height);
+    galaxy.dataset.target = heroGlobe.dataset.globe || targetKey();
+    galaxy.dataset.cx = String(Math.max(160, (menu.getBoundingClientRect().left - mr.left) / 2));   // centre the spiral beside the buttons
+    galaxy.dataset.mode = 'galaxy';
+    heroGlobe.removeAttribute('data-globe');            // the galaxy's own globe takes over in the same spot
+    root.classList.add('galaxy');
+    zoomBtn.firstChild.textContent = '◉ PLANET';
+  }
+  function zoomIn() { if (galaxyOn()) { galaxy.dataset.mode = 'planet'; zoomBtn.firstChild.textContent = '◎ GALAXY'; } }
+  function landPlanet() {                               // the fly back landed: the live globe returns
+    galaxy.dataset.mode = 'planet';
+    root.classList.remove('galaxy');
+    setGlobe(heroGlobe, galaxy.dataset.target || targetKey());
+    zoomBtn.firstChild.textContent = '◎ GALAXY';
+  }
+  galaxy.addEventListener('bwm-galaxy-arrive', landPlanet);
+  galaxy.addEventListener('bwm-galaxy-pick', (e) => {
+    const key = e.detail && e.detail.key; if (!key || !PLANETS[key]) return;
+    setTarget(key);
+    galaxy.dataset.target = key;
+    refreshHeroTarget();
+    zoomIn();                                           // fly in to the newly targeted planet
+  });
+  // wheel / pinch on the main screen's picture
+  const onWheel = (e) => { if (current !== 'main') return; if (e.deltaY > 4) zoomOut(); else if (e.deltaY < -4) zoomIn(); };
+  hero.addEventListener('wheel', onWheel, { passive: true }); galaxy.addEventListener('wheel', onWheel, { passive: true });
+  const pts = new Map(); let pinch0 = 0;
+  const pd = (e) => { pts.set(e.pointerId, [e.clientX, e.clientY]); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } };
+  const pm = (e) => {
+    if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size !== 2 || !pinch0) return;
+    const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    if (d < pinch0 * 0.75) { zoomOut(); pinch0 = 0; } else if (d > pinch0 * 1.33) { zoomIn(); pinch0 = 0; }
+  };
+  const pu = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch0 = 0; };
+  for (const t of [hero, galaxy]) { t.addEventListener('pointerdown', pd); t.addEventListener('pointermove', pm); t.addEventListener('pointerup', pu); t.addEventListener('pointercancel', pu); }
 
   const menu = el(doc, 'div', 'bwm-menu');
   const mkBtn = (label, hint, cls, onClick) => {
@@ -650,13 +727,11 @@ export function createMenu(mountEl, cbs) {
     if (screen === 'techtree') techTree.refresh();
     if (screen === 'main') {
       const s = loadSave();
-      // the hero = the target planet (always the default view); the primary button surveys it
-      const f = REG.find(targetKey()) || REG.find('ground'), P = PLANETS[f.key];
-      setGlobe(heroGlobe, f.key);
-      continueBtn.firstChild.textContent = P ? 'SURVEY · ' + P.name.toUpperCase() : 'SURVEY';
-      continueBtn.lastChild.textContent = 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);
-      heroNext.innerHTML = P ? 'NEXT PLANET · <b>' + P.name.toUpperCase() + '</b>' : '';
-      hero.style.setProperty('--hue', (P && P.ui) || '#f2c869');
+      // the hero = the target planet, and the planet view is ALWAYS the default on open [MM-story_mvftq5q8_l]
+      galaxy.dataset.mode = 'planet'; root.classList.remove('galaxy'); zoomBtn.firstChild.textContent = '◎ GALAXY';
+      refreshHeroTarget();
+      setGlobe(heroGlobe, targetKey());
+      zoomBtn.style.display = stageFailed ? 'none' : '';
       // the player's landing craft
       const ck = (cbs.playerCraft && cbs.playerCraft()) || 'system', cd = craftFor(ck) || LANDING_CRAFT.lc_neutral;
       craftView.dataset.craft = ck;
@@ -665,6 +740,15 @@ export function createMenu(mountEl, cbs) {
       craftText.appendChild(el(doc, 'div', 'cn', cd.name));
       craftText.appendChild(el(doc, 'div', 'cw', cd.factionName + ' · ' + cd.weaponType));
     }
+  }
+
+  // the main screen's target-planet labels (primary button, NEXT PLANET line, accent colour)
+  function refreshHeroTarget() {
+    const s = loadSave(), f = REG.find(targetKey()) || REG.find('ground'), P = PLANETS[f.key];
+    continueBtn.firstChild.textContent = P ? 'SURVEY · ' + P.name.toUpperCase() : 'SURVEY';
+    continueBtn.lastChild.textContent = 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);
+    heroNext.innerHTML = P ? 'NEXT PLANET · <b>' + P.name.toUpperCase() + '</b>' : '';
+    hero.style.setProperty('--hue', (P && P.ui) || '#f2c869');
   }
 
   mountEl.appendChild(root);
