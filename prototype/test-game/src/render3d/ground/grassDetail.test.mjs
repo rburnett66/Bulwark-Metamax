@@ -53,3 +53,29 @@ test('High / Standard draw it with the patched Phong material; Low keeps the Lam
   assert.ok(off.group.getObjectByName('ground-lowpoly').material.isMeshLambertMaterial);
   assert.equal(GRASS.size & (GRASS.size - 1), 0, 'power-of-two texture (mipmaps)');
 });
+
+test('sand / dirt detail: tileable ripples + pebbles; a mask on dirt and sand only; wired into the ground material [MM-task_mvfn5gxu_d]', async () => {
+  const { SAND, sandDetailTextures, createGrassGroundMaterial } = await import('./grassDetail.js');
+  const t = sandDetailTextures({ ...SAND, size: 64 }), t2 = sandDetailTextures({ ...SAND, size: 64 });
+  assert.deepEqual(t.normal, t2.normal, 'deterministic');
+  const N = 64; let seam = 0, inner = 0, tilt = 0;
+  for (let y = 0; y < N; y++) {
+    seam += Math.abs(t.height[y * N] - t.height[y * N + N - 1]);          // across the wrap
+    inner += Math.abs(t.height[y * N + 31] - t.height[y * N + 32]);       // an ordinary neighbour pair
+  }
+  for (let i = 0; i < N * N; i++) tilt = Math.max(tilt, Math.abs(t.normal[i * 4] - 128));
+  assert.ok(seam < inner * 2 + 1, `tiles left-right: wrap step ${(seam / N).toFixed(2)} vs neighbour ${(inner / N).toFixed(2)}`);
+  assert.ok(tilt > 30, 'the normal map has real relief');
+  // the mask: high on the dirt / sand field, zero on open grass
+  const map = { cols: 40, rows: 30, seed: 7, terrain: new Array(1200).fill(0), blockedCells: [], waterCells: [], buildableCells: [] };
+  const G = buildGroundArrays(map, LOWPAL.meadow, () => 0, 1, { grass: true });
+  assert.ok(G.aSand && G.aSand.length === G.aGrass.length, 'a sand value per vertex');
+  let both = 0;
+  for (let i = 0; i < G.aSand.length; i++) if (G.aSand[i] > 0.5 && G.aGrass[i] > 0.5) both++;
+  assert.ok(both / G.aSand.length < 0.02, 'sand and grass detail do not stack');
+  const m = createGrassGroundMaterial(THREE);
+  const sh = { uniforms: {}, vertexShader: '#include <common>\n#include <begin_vertex>', fragmentShader: '#include <common>\n#include <color_fragment>\n#include <normal_fragment_maps>' };
+  m.onBeforeCompile(sh);
+  assert.ok(sh.uniforms.uSandNrm && sh.uniforms.uSandAlb, 'sand textures bound');
+  assert.ok(sh.vertexShader.includes('attribute float aSand') && sh.fragmentShader.includes('uSandNrm'), 'sand in the shader');
+});
