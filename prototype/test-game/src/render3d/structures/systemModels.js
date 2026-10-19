@@ -284,8 +284,8 @@ const M = {};
         { t: 'cyl', ax: 'x', r: 0.2, l: 2.8, seg: 12, p: c, r3: [0, 0, A], m: 'bone', g: 'barrel' },
         { t: 'cyl', ax: 'x', r: [0.02, 0.2], l: 0.66, seg: 12, p: at(1.73), r3: [0, 0, A], m: 'accent', g: 'barrel' },
         { t: 'cyl', ax: 'x', r: 0.205, l: 0.07, seg: 12, p: at(0.5), r3: [0, 0, A], m: 'gun2', g: 'barrel' },
-        { t: 'box', s: [0.42, 0.025, 0.6], p: at(-1.22), r3: [0, 0, A], m: 'bone', g: 'barrel' },
-        { t: 'box', s: [0.42, 0.025, 0.6], p: at(-1.22), r3: [90, 0, A], m: 'bone', g: 'barrel' },
+        { t: 'box', s: [0.42, 0.025, 0.6], p: at(-1.22), r3: [0, 0, A], m: 'bone', g: 'barrel', fin: 1 },
+        { t: 'box', s: [0.42, 0.025, 0.6], p: at(-1.22), r3: [90, 0, A], m: 'bone', g: 'barrel', fin: 1 },
         { t: 'cyl', ax: 'x', r: [0.15, 0.12], l: 0.14, seg: 8, p: at(-1.45), r3: [0, 0, A], m: 'dark', g: 'barrel' },
       ].map((q) => Object.assign(q, { rk: rk(h, z) }));
     };
@@ -310,7 +310,9 @@ const M = {};
       barrel: { authored: A, rest: A, min: 10, max: 50, rate: 1.2, aim: 'rocket' },   // ≤ 50° so its yaw reads [MM-task_mvejw9k0_m]
       muzzles: [nose(0.68, -0.24), nose(0.26, 0.24), nose(0.68, 0.24), nose(0.26, -0.24)],
       // owner 2026-10-19: "2 rockets on 1, 3 on level 2, and 4 on level 3" — the lower pair first, then the upper left
-      tiers: { rockets: { 1: [rk(0.26, -0.24), rk(0.26, 0.24)], 2: [rk(0.26, -0.24), rk(0.26, 0.24), rk(0.68, -0.24)] } } };
+      tiers: { rockets: { 1: [rk(0.26, -0.24), rk(0.26, 0.24)], 2: [rk(0.26, -0.24), rk(0.26, 0.24), rk(0.68, -0.24)] },
+        // owner 2026-10-19: fins grow with the level — first asked 2× / 3×, then "let's try 1x, 1.5x, and 2x" [MM-task_mveyuv9m_k]
+        fins: { 1: 1, 2: 1.5, 3: 2 } } };
   }
 
   // ── SYS-Missile (Missile Tower, anti-air) [MM-story_mvbyf8gq_10]: armoured drum on a cross foot, a yawing launcher
@@ -359,7 +361,8 @@ const M = {};
  * Every upgradable weapon tower gets three derived models, `<model>_t1..3`: its `accent` parts in the tier colour; a
  * model with `tiers.tube` (the gun barrels: cannon, flak) has everything past that point on the barrel axis shortened
  * to TIER_BARREL of its length — tubes, sleeves, brake — with the firing points and the recoil following; a model with
- * `tiers.rockets` carries only the rockets (parts AND firing points) listed for that tier. Tier 3 keeps full length.
+ * `tiers.rockets` carries only the rockets (parts AND firing points) listed for that tier, and `tiers.fins` scales the
+ * parts tagged `fin` (chord + span, trailing edge fixed) by that tier's factor. Tier 3 keeps full barrel length.
  */
 export const TIER_ACCENT = Object.freeze({ 1: 0x44b84a, 2: 0x2f7fe6, 3: 0xe3ad2a });
 export const TIER_BARREL = Object.freeze({ 1: 0.5, 2: 0.75, 3: 1 });
@@ -380,9 +383,16 @@ export function tierModel(def, tier) {
     return [p[0] + (nd - d) * ux, p[1] + (nd - d) * uy, p[2]];
   };
   const axial = (q) => q.t === 'cyl' && q.ax === 'x' && Math.abs(((q.r3 && q.r3[2]) || 0) - (def.barrel ? def.barrel.authored : 0)) < 1e-9 && !(q.r3 && (q.r3[0] || q.r3[1]));
+  const fk = T.fins ? T.fins[t] || 1 : 1;
+  // a fin grows in chord and span (not thickness) by fk, its trailing edge fixed: slide it forward along the rocket axis
+  const fin = (q) => {
+    const sh = ((fk - 1) * q.s[0]) / 2;
+    return Object.assign({}, q, { s: [q.s[0] * fk, q.s[1], q.s[2] * fk], p: [q.p[0] + sh * ux, q.p[1] + sh * uy, q.p[2]] });
+  };
   const parts = [];
-  for (const q of def.parts) {
-    if (keep && q.rk && !keep.has(q.rk)) continue;
+  for (const q0 of def.parts) {
+    if (keep && q0.rk && !keep.has(q0.rk)) continue;
+    const q = q0.fin && fk !== 1 ? fin(q0) : q0;
     if (root == null || k === 1 || q.g !== 'barrel') { parts.push(q); continue; }
     if (axial(q)) {                                      // a tube along the axis: map both ends, so a tube across the root shortens only past it
       const vx = q.p[0] - P[0], vy = q.p[1] - P[1], d = vx * ux + vy * uy, a0 = f(d - q.l / 2), a1 = f(d + q.l / 2), nd = (a0 + a1) / 2;
