@@ -68,7 +68,7 @@ import { createCombatFxView } from './fx/combatFx.js';
 import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createRepairFx } from './fx/repairFx.js';
 import { createFlightPaths } from './units/flightPath.js';
-import { buildHeightField, createAirLift } from './obstructions/heightField.js';
+import { buildHeightField, createAirLift, flightFloor } from './obstructions/heightField.js';
 import { createUnitBarrels } from './units/unitBarrels.js';
 import { createBuildFx } from './fx/buildFx.js';
 import { createDustTrails } from './fx/dustTrail.js';
@@ -414,6 +414,7 @@ export function setWorld(r, key) {
   if (r.obstructions) scene.add(r.obstructions.group);
   // per-cell obstruction tops — aircraft fly over them [MM-story_mvegnpxf_i]
   r.heightField = r.obstructions ? buildHeightField(r.obstructions.group.children, gm.cols, gm.rows) : null;
+  r.flightFloor = flightFloor(r.heightField, [craftTop(r)]);   // the minimum flight level [MM-task_mvesj7tg_b]
   if (r.lowpoly) {
     if (r.ground) disposeGroup(scene, r.ground.group);
     r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts, grassDetail: !!r.tier.grassDetail });
@@ -435,6 +436,17 @@ function resize(r) {
   r.renderer.setSize(w, h, false);
   r.camera.aspect = w / h;
   r.camera.updateProjectionMatrix();
+}
+
+/** How tall the base's landing craft stands (world units, top above its root), measured from its model; 0 without one. */
+function craftTop(r) {
+  if (!r || !r.craft || !r.craft.model || !r.THREE) return 0;
+  try {
+    r.craft.model.updateWorldMatrix(true, true);
+    const b = new r.THREE.Box3().setFromObject(r.craft.model);
+    const lift = r.craft.root ? r.craft.root.position.y : 0;   // mid-landing the craft is up in the air: measure from its feet
+    return Number.isFinite(b.max.y) ? Math.max(0, b.max.y - lift) : 0;
+  } catch (e) { return 0; }
 }
 
 /** Camera glide: ease the camera target to (gx, gz) over its duration (smoothstep). */
@@ -522,7 +534,7 @@ export function renderFrame(r, state, ui, events, dt) {
     // attacking planes fly attack runs around their target instead of parking (render-only) [MM-story_mvee9r08_e]
     r.flight.update(state, r.map, views, dt);
     // aircraft clear plateaus, rocks and trees; `drawn` is where every flyer is drawn (aim + shots read it) [MM-story_mvegnpxf_i]
-    r.airLift.update(state, views, r.heightField, r.flight.poses, dt);
+    r.airLift.update(state, views, r.heightField, r.flight.poses, dt, r.flightFloor || 0);
     r.fxOpts.flight = r.airLift.drawn;
     // enemies outside the play area are red reticles, not models: no model, bar, dust or muzzle fx [MM-story_mveehs1r_f]
     const c = r.contacts.update(state, views, fogFrame.win && fogFrame.win.rect, dt);

@@ -71,3 +71,19 @@ test('ground units are never lifted', () => {
   const d = lift.drawn.get(2);   // listed only as a drawn GROUND pose (aim follows the driven unit) [MM-story_mvekcu8r_n]
   assert.ok(d && d.ground && d.x === 10.5 && d.y < 0.5 && !d.strafe);
 });
+
+test('minimum flight level: above the tallest obstruction and the base craft, never below the floor min [MM-task_mvesj7tg_b]', async () => {
+  const { flightFloor, FLIGHT_FLOOR, createAirLift } = await import('./heightField.js');
+  const f = { cols: 4, rows: 4, top: new Float32Array(16), max: 2.37 };
+  assert.ok(Math.abs(flightFloor(f, [1.7]) - (2.37 + FLIGHT_FLOOR.margin)) < 1e-9, 'tallest rock + margin');
+  assert.ok(Math.abs(flightFloor(f, [3.0]) - (3.0 + FLIGHT_FLOOR.margin)) < 1e-9, 'a taller base craft wins');
+  assert.equal(flightFloor(null, []), FLIGHT_FLOOR.min, 'an empty map still has a floor');
+  assert.equal(flightFloor({ max: 20 }, []), FLIGHT_FLOOR.max, 'capped');
+  // a plane over the MIDDLE of a plateau (no vertices nearby → no per-cell clearance) still flies above the floor
+  const lift = createAirLift(), floor = flightFloor(f, []);
+  const st = { units: new Map([[1, { id: 1, domain: 'Flyer', altitude: 1, hp: 5 }]]) };
+  const v = { id: 1, x: 2.5, y: 0.92, z: 2.5 };   // an attack-run dip
+  lift.update(st, [v], f, null, 1 / 60, floor);
+  assert.ok(v.y >= floor - 1e-9, `drawn at ${v.y.toFixed(2)} ≥ floor ${floor.toFixed(2)}`);
+  for (let i = 0; i < 120; i++) { v.y = 0.92; lift.update(st, [v], f, null, 1 / 60, floor); assert.ok(v.y >= floor - 1e-9); }
+});
