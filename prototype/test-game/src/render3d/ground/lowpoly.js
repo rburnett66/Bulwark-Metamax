@@ -22,6 +22,7 @@
  * THREE is injected (no import) — see render3d/index.js. Everything above buildLowPolyGround is pure.
  */
 import { rng } from '../obstructions/placement.js';
+import { GRASS, createGrassGroundMaterial } from './grassDetail.js';
 
 export const GRID = 0.5;          // vertex spacing, in cells
 export const JITTER = 0.42;       // interior vertex jitter, × GRID (±21%)
@@ -77,7 +78,7 @@ export function createGroundColour(map, palette, roadAt = () => 0) {
     return (A[z0 * cols + x0] * (1 - fx) + A[z0 * cols + x1] * fx) * (1 - fz) + (A[z1 * cols + x0] * (1 - fx) + A[z1 * cols + x1] * fx) * fz;
   };
   const P = Object.fromEntries(Object.entries(palette.ground).map(([k, v]) => [k, hexRGB(v)]));
-  return (x, z) => {
+  const colAt = (x, z) => {
     const n = vnoise(x * 0.085, z * 0.085) * 0.65 + vnoise(x * 0.21 + 9, z * 0.21 + 3) * 0.35;
     let c = n < 0.5 ? lerp3(P.teal, P.grass, (n - 0.2) / 0.3) : lerp3(P.grass, P.lime, (n - 0.5) / 0.3);   // rolling light bands
     const fb = field(F.b, x, z), ft = field(F.t, x, z), fd = field(F.d, x, z), fw = field(F.w, x, z);
@@ -92,13 +93,27 @@ export function createGroundColour(map, palette, roadAt = () => 0) {
     if (fw > 0.28) c = fw > 0.62 ? lerp3(P.waterL, P.waterD, (fw - 0.62) / 0.3) : fw > 0.48 ? P.foam.slice() : P.shore.slice();
     return c;
   };
+  /**
+   * grassAt(x, z) → 0..1: where the normal-mapped grass shows [MM-story_mven9dp1_r] — open grass only (brush, forest
+   * floor, dirt, rock, stone, water and roads all push it out), in soft noise-shaped patches covering roughly half
+   * the meadow.
+   */
+  colAt.grassAt = (x, z) => {
+    const notGrass = field(F.b, x, z) * 0.8 + field(F.t, x, z) * 1.6 + field(F.d, x, z) * 2.2 + field(F.w, x, z) * 3
+      + (field(F.r, x, z) + field(F.c, x, z)) * 2 + field(F.s, x, z) * 1.5 + roadAt(x, z) * 4;
+    const open = Math.max(0, Math.min(1, 1 - notGrass));
+    const n = vnoise(x * 0.07 + 31.7, z * 0.07 + 17.3) * 0.7 + vnoise(x * 0.19 + 5.1, z * 0.19 + 9.4) * 0.3;
+    const patch = Math.max(0, Math.min(1, (n - 0.42) / 0.16));
+    return open * patch * patch * (3 - 2 * patch);
+  };
+  return colAt;
 }
 
 /**
  * The ground triangles. Returns { position, normal, color } (Float32Arrays, non-indexed, 3 verts per
  * triangle, wound to face UP) and `triangles`.
  */
-export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID) {
+export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID, { grass = false, tile = GRASS.tileCells } = {}) {
   const { cols, rows } = map;
   const colAt = createGroundColour(map, palette, roadAt);
   const NX = Math.round(cols / grid), NZ = Math.round(rows / grid);
@@ -110,6 +125,10 @@ export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID) {
   }
   const tris = NX * NZ * 2;
   const position = new Float32Array(tris * 9), normal = new Float32Array(tris * 9), color = new Float32Array(tris * 9);
+  // the grass detail (High / Standard): a smooth per-VERTEX mask (patch edges blend across facets) + world-space uv
+  const mask = grass ? new Float32Array((NX + 1) * (NZ + 1)) : null;
+  if (mask) for (let k = 0; k < mask.length; k++) mask[k] = colAt.grassAt(vx[k], vz[k]);
+  const aGrass = grass ? new Float32Array(tris * 3) : null, aGUv = grass ? new Float32Array(tris * 6) : null;
   let o = 0;
   const tri = (a, b, c) => {
     const cx = (vx[a] + vx[b] + vx[c]) / 3, cz = (vz[a] + vz[b] + vz[c]) / 3;
@@ -119,6 +138,7 @@ export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID) {
       position[o] = vx[v]; position[o + 1] = 0; position[o + 2] = vz[v];
       normal[o] = nx / nl; normal[o + 1] = 1 / nl; normal[o + 2] = nz / nl;
       color[o] = cc[0] * k; color[o + 1] = cc[1] * k; color[o + 2] = cc[2] * k;
+      if (aGrass) { const q = o / 3; aGrass[q] = mask[v]; aGUv[q * 2] = vx[v] / tile; aGUv[q * 2 + 1] = vz[v] / tile; }
       o += 3;
     }
   };
@@ -127,7 +147,7 @@ export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID) {
     const a = VI(i, j), b = VI(i + 1, j), c = VI(i + 1, j + 1), d = VI(i, j + 1);
     if (h2(i * 0.7, j * 1.3) < 0.5) { tri(a, b, c); tri(a, c, d); } else { tri(a, b, d); tri(b, c, d); }
   }
-  return { position, normal, color, triangles: tris, colAt };
+  return { position, normal, color, triangles: tris, colAt, aGrass, aGUv };
 }
 
 /**
@@ -162,9 +182,9 @@ export function planTufts(map, palette, roadAt = () => 0, colAt = createGroundCo
  * ({ width, height, data }). `apron` = the off-map colour. `grid` (vertex spacing) and `tufts` are the quality
  * tier's ground resolution (render3d/quality.js — Low builds a 1-cell grid without tufts). Returns { group, stats }.
  */
-export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron = 0x5cbf6c, grid = GRID, tufts: withTufts = true } = {}) {
+export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron = 0x5cbf6c, grid = GRID, tufts: withTufts = true, grassDetail = false } = {}) {
   const roadAt = roadSampler(roadMask, map.cols, map.rows);
-  const G = buildGroundArrays(map, palette, roadAt, grid);
+  const G = buildGroundArrays(map, palette, roadAt, grid, { grass: grassDetail });
   const group = new THREE.Group();
   group.name = 'ground';
 
@@ -172,7 +192,11 @@ export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron
   g.setAttribute('position', new THREE.BufferAttribute(G.position, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(G.normal, 3));
   g.setAttribute('color', new THREE.BufferAttribute(G.color, 3));
-  const ground = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, depthWrite: false }));
+  if (G.aGrass) {   // normal-mapped grass patches (High / Standard) [MM-story_mven9dp1_r]
+    g.setAttribute('aGrass', new THREE.BufferAttribute(G.aGrass, 1));
+    g.setAttribute('aGUv', new THREE.BufferAttribute(G.aGUv, 2));
+  }
+  const ground = new THREE.Mesh(g, G.aGrass ? createGrassGroundMaterial(THREE) : new THREE.MeshLambertMaterial({ vertexColors: true, depthWrite: false }));
   ground.name = 'ground-lowpoly';
   ground.receiveShadow = true;
   ground.renderOrder = 0;
@@ -224,5 +248,5 @@ export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron
   apronMesh.renderOrder = -1;
   group.add(apronMesh);
 
-  return { group, stats: { triangles: G.triangles, tufts: plan.length, bladeTriangles: (pos.length / 9) | 0 } };
+  return { group, stats: { triangles: G.triangles, tufts: plan.length, bladeTriangles: (pos.length / 9) | 0, grassCover: G.aGrass ? G.aGrass.reduce((a, b) => a + b, 0) / G.aGrass.length : 0 } };
 }
