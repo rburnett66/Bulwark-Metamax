@@ -20,7 +20,7 @@ test('while Building: dusty puffs on the footprint edge, low and drifting outwar
   for (let i = 0; i < 60; i++) fx.step(1 / 60, world('Building', 0), [], emit, K);
   assert.ok(Math.abs(out.length - BUILD_FX.rate) <= 1, `~${BUILD_FX.rate}/s (${out.length})`);
   for (const p of out) {
-    assert.equal(p.kind, K.SMOKE); assert.equal(p.dusty, 1); assert.ok(p.drag > 0);
+    assert.equal(p.kind, K.SMOKE); assert.equal(p.dusty, BUILD_FX.opacity); assert.ok(p.drag > 0);
     const dx = p.x - 4.5, dz = p.z - 4.5;
     assert.ok(Math.abs(Math.max(Math.abs(dx), Math.abs(dz)) - 0.5) < 1e-9, 'on the footprint edge');
     assert.ok(p.y < 0.2, 'at ground level');
@@ -81,4 +81,11 @@ test('dust is twice as obvious, and upgrades raise it too [MM-task_mvfjymwc_a]',
   out.length = 0;
   fx.step(0, st, [{ type: 'build', tick: 3, id: 7, phase: 'upgradeComplete' }], emit, K);
   assert.equal(out.length, BUILD_FX.settle, 'upgrade complete settles');
+});
+
+test('construction dust is 50% more opaque than other dust, and the ring with it [MM-task_mvfqfakd_6]', async () => {
+  assert.equal(BUILD_FX.opacity, 1.5);
+  assert.ok(Math.abs(BUILD_FX.ring.a - 0.9) < 1e-9, 'ring alpha 0.6 × 1.5');
+  const src = (await import('node:fs')).readFileSync(new URL('./impactsView.js', import.meta.url), 'utf8');
+  assert.ok(src.includes('0.45 * Math.max(1, p.dusty)'), 'the smoke batch scales dust alpha by the dusty value');
 });

@@ -91,7 +91,7 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
             break;
           }
           case K.SMOKE: {
-            const sz = p.size * (1 + (p.grow || 0.8) * u * 3), c = p.shade || 0.25, a = Math.min(1, u * 6) * f * (p.dusty ? 0.45 : 0.55);
+            const sz = p.size * (1 + (p.grow || 0.8) * u * 3), c = p.shade || 0.25, a = Math.min(1, u * 6) * f * (p.dusty ? Math.min(1, 0.45 * Math.max(1, p.dusty)) : 0.55);   // dusty > 1 = more opaque dust (build sites ×1.5)
             smoke.push(p.x, p.y, p.z, 0, 0, 0, sz, 0, c * (p.dusty ? 1.5 : 1), c * (p.dusty ? 1.3 : 1), c * (p.dusty ? 1.1 : 1.05), a);
             break;
           }
