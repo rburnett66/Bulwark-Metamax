@@ -214,9 +214,9 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
 
   /** Continuous emitters of one burning wreck: flames, a smoke column on the wind, the odd ember. */
   function fxBurn(w, k, dt) {
-    const x = w.x, z = w.z, y = w.group === 'turret' ? 0.12 : 0.22;
+    const x = w.x, z = w.z, y = w.group === 'turret' ? 0.12 : w.group === 'ground' ? 0.04 : 0.22, sm = w.smoke == null ? 1 : w.smoke;
     for (let c = Math.floor(26 * k * limits.density * dt + rand()); c > 0; c--) emit(K.FIRE, x + rnd(-0.12, 0.12) * k, y + rnd(0.02, 0.15), z + rnd(-0.12, 0.12) * k, rnd(-0.15, 0.15), rnd(0.6, 1.3), rnd(-0.15, 0.15), rnd(0.35, 0.6), rnd(0.1, 0.2) * Math.max(0.6, k), -0.15);
-    for (let c = Math.floor(7 * k * limits.density * dt + rand()); c > 0; c--) emit(K.SMOKE, x + rnd(-0.1, 0.1), y + 0.25, z + rnd(-0.1, 0.1), rnd(-0.1, 0.1), rnd(0.5, 0.9), rnd(-0.1, 0.1), rnd(2.4, 3.6), rnd(0.15, 0.22), 0.9, 0.22);
+    for (let c = Math.floor(7 * k * sm * limits.density * dt + rand()); c > 0; c--) emit(K.SMOKE, x + rnd(-0.1, 0.1), y + 0.25, z + rnd(-0.1, 0.1), rnd(-0.1, 0.1), rnd(0.5, 0.9), rnd(-0.1, 0.1), rnd(2.4, 3.6), rnd(0.15, 0.22), 0.9, 0.22);
     if (rand() < dt * 3 * k * limits.density) emit(K.EMBER, x, y + 0.2, z, rnd(-0.4, 0.4), rnd(1.2, 2.2), rnd(-0.4, 0.4), rnd(1.0, 1.8), 0.012);
   }
 
@@ -337,6 +337,41 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     }
   }
   /**
+   * GROUND FIRE (rocket salvo) [MM-task_mvfjbh78_7] — owner 2026-10-19: "each tier should leave the ground burning for aoe
+   * damage" + "the visual should map to the damage area of the rockets". A burning disc of radius `r` (the sim's
+   * splash radius) at (x, z) for `secs`: a scorch and a warm glow the size of the circle, low flames filling it and a
+   * ring of them along its edge, so the area that takes splash damage reads at a glance. Render-only; the last third
+   * dies down. Older fields give way past FIELD_CAP.
+   */
+  const fields = [];
+  const FIELD_CAP = 12, FIELD_STEP = 0.45;   // flames roughly every FIELD_STEP cells around each ring
+  function groundFire(x, z, r = 1.2, secs = 6) {
+    if (!(r > 0)) return null;
+    while (fields.length >= FIELD_CAP) fields.shift();
+    const rot = rand() * Math.PI * 2, flames = [{ x, z, group: 'ground', smoke: 0.6, k: 0.42 }];
+    for (const [f, k] of [[0.5, 0.32], [0.92, 0.26]]) {
+      const n = Math.max(3, Math.round((2 * Math.PI * r * f) / FIELD_STEP));
+      for (let i = 0; i < n; i++) {
+        const a = rot + (i / n) * Math.PI * 2 + (f > 0.6 ? Math.PI / n : 0);
+        flames.push({ x: x + Math.cos(a) * r * f, z: z + Math.sin(a) * r * f, group: 'ground', smoke: 0.2, k });
+      }
+    }
+    decal(D.SCORCH, x, z, r, secs + 2, [0.06, 0.045, 0.035], 0.6);
+    decal(D.POOL, x, z, r, secs, [1.0, 0.45, 0.12], 0.32);
+    const fld = { x, z, r, t: 0, life: secs, flames };
+    fields.push(fld);
+    return fld;
+  }
+  function stepFields(dt) {
+    for (let i = fields.length - 1; i >= 0; i--) {
+      const f = fields[i];
+      f.t += dt;
+      if (f.t >= f.life) { fields.splice(i, 1); continue; }
+      const fade = Math.min(1, 3 * (1 - f.t / f.life));
+      for (const fl of f.flames) fxBurn(fl, fl.k * fade, dt);
+    }
+  }
+  /**
    * A UNIT set burning (rocket salvo hit): flames + smoke ride its drawn position for `secs`, the last third dying
    * down; a re-hit refreshes it. Ends early when the unit dies or leaves. [MM-story_mvehp5rq_k]
    */
@@ -362,6 +397,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
   function step(dt) {
     if (dt <= 0) return;
     stepSpots(dt);
+    stepFields(dt);
     stepParticles(dt);
     stepChunks(dt);
     stepWrecks(dt);
@@ -460,7 +496,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
   function clear() {
     for (const p of particles) freeP.push(p);
     particles.length = 0; nAdd = 0; nSmoke = 0;
-    scorches.length = 0; glows.length = 0; chunks.length = 0; wrecks.length = 0; spots.length = 0;
+    scorches.length = 0; glows.length = 0; chunks.length = 0; wrecks.length = 0; spots.length = 0; fields.length = 0;
     seen.clear(); hitClock.clear(); prev.clear(); cur.clear(); burningUnits.clear();
     shake = 0;
   }
@@ -494,7 +530,9 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     },
     clear,
     // recipes, exposed for tests and debugging
-    fxHit, fxGround, fxExplode, boom, burn, ignite,
+    fxHit, fxGround, fxExplode, boom, burn, ignite, groundFire,
+    /** Ground-fire fields burning now ({ x, z, r, t, life, flames }), for tests. */
+    get fields() { return fields; },
     /** A fake light flash: a warm additive glow on the ground (fx/flashLights.js) [MM-story_mvehp8ca_l]. col = [r, g, b] 0..1. */
     glowAt(x, z, r, life, col, a) { decal(D.POOL, x, z, r, life, col, a); },
     /** Units burning now (ids), for tests. */

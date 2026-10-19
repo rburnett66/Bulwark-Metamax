@@ -43,7 +43,7 @@ test('a rocket tower\'s rounds carry its tier and draw in that tier\'s mesh', ()
   });
   for (const tier of [1, 2, 3]) {
     const f = createCombatFx(), s = st(tier);
-    for (let i = 0; i < 30; i++) { s.time += 1 / 30; f.update(s, {}, [], 1 / 30, { getDef: () => null }); }
+    for (let i = 0; i < 9; i++) { s.time += 1 / 30; f.update(s, {}, [], 1 / 30, { getDef: () => null }); }   // the first rocket is aloft
     const rockets = f.shots.filter((x) => x.kind === 'rocket');
     assert.ok(rockets.length > 0 && rockets.every((x) => x.tier === tier), `tier ${tier} rounds`);
     view.sync(f);

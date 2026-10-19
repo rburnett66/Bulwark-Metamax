@@ -98,7 +98,7 @@ test('anti-air fires homing missiles that climb off the rail, chase a moving fly
 test('a rocket tower lobs a salvo; each rocket lands with a small ground explosion', () => {
   const fx = createCombatFx();
   const booms = [];
-  const st = world({ units: [tank()], structures: [tower({ structId: 'STR-Rockets' })] });
+  const st = world({ units: [tank()], structures: [tower({ structId: 'STR-Rockets', tier: 3 })] });   // tier 3: a 4-rocket salvo [MM-task_mvfjbh78_7]
   const opts = { getDef, boom: (x, z, k) => booms.push({ x, z, k }), trail: () => {} };
   let peak = 0;
   for (let i = 0; i < 120; i++) { st.time = (st.time || 0) + 1 / 60; fx.update(st, MAP, [], 1 / 60, opts); for (const r of fx.shots) if (r.kind === 'rocket') peak = Math.max(peak, r.y); }
