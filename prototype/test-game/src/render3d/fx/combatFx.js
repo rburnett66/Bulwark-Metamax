@@ -86,12 +86,15 @@ export function createCombatFxView(THREE, scene, capacity = 600) {
   const c = new THREE.Color();
   return {
     mesh,
+    /** true when rocket rounds are drawn as models (fx/rocketShots.js) instead of glow streaks. */
+    skipRockets: false,
     /** Copy the model's live shots + flashes into the instance buffers. Returns the instance count. */
     sync(model) {
       let n = 0;
       const P = pos.array, D = dir.array, S = size.array, C = col.array;
       for (const s of model.shots) {
         if (n >= capacity) break;
+        if (this.skipRockets && s.kind === 'rocket') continue;   // drawn as 3D rockets (fx/rocketShots.js) [MM-task_mvf0kzw4_l]
         P[n * 3] = s.x; P[n * 3 + 1] = s.y; P[n * 3 + 2] = s.z;
         D[n * 3] = s.dx; D[n * 3 + 1] = s.dy; D[n * 3 + 2] = s.dz;
         S[n * 2] = s.size; S[n * 2 + 1] = s.len;

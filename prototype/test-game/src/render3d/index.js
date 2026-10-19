@@ -65,6 +65,7 @@ import { createPathLinesView } from './overlays/pathLines.js';
 import { buildUnitViews, createModelResolver } from './units/unitViews.js';
 import { createCombatFx } from './fx/combatFxModel.js';
 import { createCombatFxView } from './fx/combatFx.js';
+import { createRocketShots } from './fx/rocketShots.js';
 import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createRepairFx } from './fx/repairFx.js';
 import { createFlightPaths } from './units/flightPath.js';
@@ -199,6 +200,9 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const ghost = createPlacementGhost(THREE, scene);
   const fx = createCombatFx({ seed: (map.seed | 0) || 1, caps: tier.effects });
   const fxView = createCombatFxView(THREE, scene, fx.caps.maxShots + fx.caps.maxFlashes);
+  // rocket-tower rounds fly as the firing tower's tier of rocket, not a glow streak [MM-task_mvf0kzw4_l]
+  const rocketShots = createRocketShots(THREE, scene);
+  fxView.skipRockets = true;
   const impacts = createImpacts({ seed: (map.seed | 0) || 1, caps: tier.impactCaps });   // the tier's particle budget [MM-task_mveeqkyi_h]
   const impactsView = createImpactsView(THREE, scene, { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
   const fogView = createFogView(THREE, scene, map);
@@ -221,7 +225,8 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     status: 'loading',
     problems: [],
     stats: { calls: 0, triangles: 0, units: 0, lines: 0, fx: 0, impacts: null },
-    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1, trail: null, boom: null, fire: null, muzzle: null },
+    rocketShots,
+    fxOpts: { getDef: getUnitDef, projFx: null, projScale: 1, trail: null, boom: null, fire: null, muzzle: null, rocketTail: rocketShots.tail },
     getProjFx: typeof opts.projFx === 'function' ? opts.projFx : () => opts.projFx || null,
     getProjScale: typeof opts.projScale === 'function' ? opts.projScale : () => opts.projScale || 1,
     destroyed: false,
@@ -426,6 +431,7 @@ export function setWorld(r, key) {
   }
   if (r.craft) r.craft.setEnv({ sky: WORLD_LIGHT[world].hemi[0], ground: WORLD_LIGHT[world].apron });
   if (r.system) r.system.setEnv({ sky: WORLD_LIGHT[world].hemi[0], ground: WORLD_LIGHT[world].apron });
+  if (r.rocketShots) r.rocketShots.setEnv({ sky: WORLD_LIGHT[world].hemi[0], ground: WORLD_LIGHT[world].apron });
   r.world = world;
   r.lights.invalidateShadows();
   return world;
@@ -592,6 +598,7 @@ export function renderFrame(r, state, ui, events, dt) {
   // selection range + coverage map (overlays/coverage.js) [MM-task_mvbry998_r]
   r.coverageView.sync(planCoverage(state, ui, getStructureDef), dt);
   r.stats.fx = r.fxView.sync(r.fx);
+  r.stats.rockets = r.rocketShots.sync(r.fx);
   r.impacts.update(state, r.map, events, dt, views, { resolve: r.resolveModel });
   // health bars + "$N" pop-ups (overlays/) [MM-task_mvbry87f_q] [MM-task_mvbyf6t8_z]
   r.healthBars.update(state, views, dt, { baseCell: r.map.base });
@@ -713,6 +720,7 @@ export function destroyRenderer(r) {
   r.pathLinesView.dispose();
   r.ghost.dispose();
   r.fxView.dispose();
+  r.rocketShots.dispose();
   r.cannonFxView.dispose(); r.coverageView.dispose(); r.healthBars.dispose(); r.goldView.dispose(); r.unloadView.dispose();
   r.impactsView.dispose();
   r.fogView.dispose(); r.contactsView.dispose();
