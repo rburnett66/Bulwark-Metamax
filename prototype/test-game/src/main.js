@@ -22,6 +22,20 @@ import { createComm } from './comm/commCard.js';
 import { setChannelVolume } from './comm/voice.js';
 import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, tipsCall, classifyOutcome } from './comm/dialog.js';
 
+/**
+ * CSS px the HUD covers on each side of the game view — the top bar across the top, the build tray down the left.
+ * The 3D view frames the pre-match play area in what is left (render3d/camera.js clearBox) [MM-task_mvewfno7_g].
+ */
+function hudInsets(mountEl) {
+  if (!mountEl || !mountEl.getBoundingClientRect) return null;
+  const m = mountEl.getBoundingClientRect(), out = { top: 0, left: 0, right: 0, bottom: 0 };
+  const vis = (el) => el && el.offsetWidth > 0 && el.offsetHeight > 0 && getComputedStyle(el).display !== 'none';
+  const bar = mountEl.querySelector('.bw-topbar'), tray = mountEl.querySelector('.bw-palette');
+  if (vis(bar)) out.top = Math.max(0, bar.getBoundingClientRect().bottom - m.top);
+  if (vis(tray)) out.left = Math.max(0, tray.getBoundingClientRect().right - m.left);
+  return out;
+}
+
 function parseSeedFromUrl() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -119,7 +133,8 @@ export function boot(mountEl, seed) {
         craft: q.get('craft') || 'system', landing: q.get('landing') !== '0' && interlude, landingHeld: !landingReleased,   // a remount mid-battle (quality change) parks the craft instead of replaying the landing
         planet: q.get('planet') || (enemy && enemy.key) || null,
         projFx: () => renderer.projFx, projScale: () => renderer.projScale,
-        qualityQuery: q.get('quality'), qualityChoice: quality.loadChoice(storage) });
+        qualityQuery: q.get('quality'), qualityChoice: quality.loadChoice(storage),
+        viewInsets: () => hudInsets(mountEl) });   // the pre-match camera frames the play area clear of the HUD [MM-task_mvewfno7_g]
       if (mySeq !== mount3dSeq) { render3dMod.destroyRenderer(r); return; }
       renderer3d = r;
       rebindInput();   // the input was bound to the old (or no) 3D canvas — move it onto this one
