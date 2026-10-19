@@ -28,12 +28,13 @@ export const BUILD_FX = Object.freeze({
   up: [0.12, 0.32],     // lift
   drag: 1.8,
   shade: 0.55,          // with dusty → earthy brown
-  // owner 2026-10-19: "construction dust needs to be more opaque 50%" — passed as the particle's `dusty` value, which
-  // the smoke batch reads as an opacity multiplier on its dust alpha (impactsView) [MM-task_mvfqfakd_6]
-  opacity: 1.5,
+  // owner 2026-10-19: "construction dust needs to be more opaque 50%" [MM-task_mvfqfakd_6], then once more "needs to
+  // be more opaque" [MM-task_mvfr56vi_8] — passed as the particle's `dusty` value, which the smoke batch reads as an
+  // opacity multiplier on its 0.45 dust alpha (impactsView): 2.2 → the batch's full alpha (was 1.5 → 0.675)
+  opacity: 2.2,
   start: 28,            // puffs in the break-ground burst (construction and upgrade start)
   settle: 20,           // puffs in the settling burst (construction and upgrade complete)
-  ring: Object.freeze({ grow: 1.1, life: 0.5, col: Object.freeze([0.78, 0.66, 0.5]), a: 0.9 }),   // ×1.5 with the puffs
+  ring: Object.freeze({ grow: 1.1, life: 0.5, col: Object.freeze([0.78, 0.66, 0.5]), a: 1.0 }),   // full strength with the puffs
 });
 /** Lifecycles that raise dust, and the build-event phases that burst it. */
 const DUSTY = new Set(['Building', 'Upgrading']);

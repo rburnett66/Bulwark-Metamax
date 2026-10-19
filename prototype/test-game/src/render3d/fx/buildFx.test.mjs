@@ -83,9 +83,9 @@ test('dust is twice as obvious, and upgrades raise it too [MM-task_mvfjymwc_a]',
   assert.equal(out.length, BUILD_FX.settle, 'upgrade complete settles');
 });
 
-test('construction dust is 50% more opaque than other dust, and the ring with it [MM-task_mvfqfakd_6]', async () => {
-  assert.equal(BUILD_FX.opacity, 1.5);
-  assert.ok(Math.abs(BUILD_FX.ring.a - 0.9) < 1e-9, 'ring alpha 0.6 × 1.5');
+test('construction dust draws at full dust alpha, and the ring with it [MM-task_mvfqfakd_6] [MM-task_mvfr56vi_8]', async () => {
+  assert.ok(0.45 * BUILD_FX.opacity >= 0.99, 'puffs reach the dust batch\'s full alpha (other dust stays at 0.45)');
+  assert.equal(BUILD_FX.ring.a, 1, 'ring at full strength');
   const src = (await import('node:fs')).readFileSync(new URL('./impactsView.js', import.meta.url), 'utf8');
   assert.ok(src.includes('0.45 * Math.max(1, p.dusty)'), 'the smoke batch scales dust alpha by the dusty value');
 });
