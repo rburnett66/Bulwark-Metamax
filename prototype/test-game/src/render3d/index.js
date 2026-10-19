@@ -416,7 +416,7 @@ export function setWorld(r, key) {
   r.heightField = r.obstructions ? buildHeightField(r.obstructions.group.children, gm.cols, gm.rows) : null;
   if (r.lowpoly) {
     if (r.ground) disposeGroup(scene, r.ground.group);
-    r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts });
+    r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts, grassDetail: !!r.tier.grassDetail });
     scene.add(r.ground.group);
     r.lights.setWorld(WORLD_LIGHT[world]);
     if (r.markers.setWorld) r.markers.setWorld(palette);
