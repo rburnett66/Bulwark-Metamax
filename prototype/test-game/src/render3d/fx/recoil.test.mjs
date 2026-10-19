@@ -53,7 +53,7 @@ test('cannon tower: the drawn barrel slides back along its axis, the firing poin
   sys.setBase({ x: 6, y: 5 });
   sys.setStructures([{ id: 1, kind: 'antiGround', structId: 'STR-Cannon', cell: { x: 10, y: 5 }, lifecycle: 'Complete', hp: 10, maxHp: 10, targetId: null }]);
   sys.update(1 / 60, {});
-  const B = sys.kinds.sys_cannon.meshes.barrel, a = new THREE.Matrix4(), b = new THREE.Matrix4();
+  const B = sys.kinds.sys_cannon_t1.meshes.barrel, a = new THREE.Matrix4(), b = new THREE.Matrix4();
   B.getMatrixAt(0, a); const m0 = sys.muzzle(1, 0);
   sys.kick(1, 0); sys.update(RECOIL.kick, {});
   B.getMatrixAt(0, b); const m1 = sys.muzzle(1, 0);

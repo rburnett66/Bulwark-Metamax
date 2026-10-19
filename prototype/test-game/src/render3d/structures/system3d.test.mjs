@@ -23,8 +23,8 @@ test('plan: cannon / anti-air / wall become System instances; walls join along t
   const S = (id, kind, x, y, extra = {}) => ({ id, kind, cell: { x, y }, lifecycle: 'Complete', hp: 10, maxHp: 10, ...extra });
   const list = [S(1, 'antiGround', 10, 5), S(2, 'antiAir', 2, 5), S(3, 'wall', 4, 4), S(4, 'wall', 5, 4), S(5, 'wall', 5, 5), S(6, 'harvestorBay', 7, 7), S(7, 'wall', 20, 20, { lifecycle: 'Destroyed' })];
   const { items } = planSystem(list, { x: 6, y: 5 });
-  assert.equal(items.filter((i) => i.model === 'sys_cannon').length, 1);
-  assert.equal(items.filter((i) => i.model === 'sys_flak').length, 1);
+  assert.equal(items.filter((i) => i.model === 'sys_cannon_t1').length, 1);
+  assert.equal(items.filter((i) => i.model === 'sys_flak_t1').length, 1);
   assert.ok(!items.some((i) => i.id === 6), 'bays stay with the low-poly set');
   assert.ok(!items.some((i) => i.id === 7), 'destroyed walls vanish');
   const w4 = items.filter((i) => i.id === 4);
@@ -42,7 +42,7 @@ test('binder: instances placed, turret turns toward its target, shadow-map signa
   const tower = { id: 1, kind: 'antiGround', cell: { x: 10, y: 5 }, lifecycle: 'Complete', hp: 10, maxHp: 10, targetId: 9 };
   assert.equal(sys.setStructures([tower]), true);
   assert.equal(sys.setStructures([tower]), false, 'same set → no shadow re-render');
-  const K = sys.kinds.sys_cannon;
+  const K = sys.kinds.sys_cannon_t1;
   assert.equal(K.meshes.body.count, 1);
   const state = { units: new Map([[9, { pos: { x: 10.5, y: 12 } }]]) };   // target due south
   const before = new THREE.Matrix4(); K.meshes.weapon.getMatrixAt(0, before);

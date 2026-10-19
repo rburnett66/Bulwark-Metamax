@@ -18,7 +18,7 @@
 import { createPrims } from '../units/prims.js';
 import { createUnitMaterial } from '../units/material.js';
 import { metalFor, isGlowKey } from '../units/metal.js';
-import { SYSTEM_MODELS, SYSTEM_COLORS, SYSTEM_SCALE } from './systemModels.js';
+import { SYSTEM_MODELS, SYSTEM_COLORS, SYSTEM_SCALE, TIERED_MODELS, tierModelKey } from './systemModels.js';
 import { lifecycleLook, yawToward } from './models.js';
 import { pitchFor, apexFor } from '../fx/elevation.js';
 import { AIM } from '../fx/combatFxModel.js';
@@ -30,8 +30,12 @@ import { createRecoil } from '../fx/recoil.js';
 export const SYSTEM_KINDS = Object.freeze({ antiGround: 'sys_cannon', antiAir: 'sys_flak', wall: 'sys_wall' });
 /** Tower types with their own model (the new towers share a kind with cannon / flak). */
 export const SYSTEM_STRUCTS = Object.freeze({ 'STR-Rockets': 'sys_rockets', 'STR-Missile': 'sys_missile' });
-export const SYSTEM_CAP = Object.freeze({ sys_cannon: 200, sys_flak: 200, sys_wall: 1200, sys_rockets: 120, sys_missile: 120 });
-const modelOf = (s) => SYSTEM_STRUCTS[s.structId] || SYSTEM_KINDS[s.kind];
+/** Instance caps per drawn model. The upgradable weapon towers draw as one model per tier (`<model>_t1..3`,
+ *  systemModels.js tierModel) — accent colour, barrel length, rocket count [MM-story_mvey3eah_j]. */
+const BASE_CAP = { sys_cannon: 200, sys_flak: 200, sys_wall: 1200, sys_rockets: 120, sys_missile: 120 };
+export const SYSTEM_CAP = Object.freeze(Object.fromEntries(Object.entries(BASE_CAP).flatMap(([m, c]) =>
+  TIERED_MODELS.includes(m) ? [1, 2, 3].map((t) => [tierModelKey(m, t), c]) : [[m, c]])));
+const modelOf = (s) => { const m = SYSTEM_STRUCTS[s.structId] || SYSTEM_KINDS[s.kind]; return m ? tierModelKey(m, s.tier) : m; };
 const TURN = 5;   // rad/s a turret slews at
 const DEG = Math.PI / 180;
 
@@ -81,7 +85,7 @@ export function mergeSystemModel(THREE, def, prims = createPrims(THREE)) {
     const pos = [], nor = [], col = [], emi = [], mr = [];
     for (const mesh of G.children) {
       const k = mesh.userData.mat;
-      c.setHex(SYSTEM_COLORS[k] ?? 0xff00ff);   // magenta = a key with no colour — visible on purpose
+      c.setHex(k === 'accent' && def.accent != null ? def.accent : (SYSTEM_COLORS[k] ?? 0xff00ff));   // tier accent; magenta = a key with no colour — visible on purpose
       const e = isGlowKey(k) ? 1 : 0, [m, r] = metalFor(k);
       const P = mesh.geometry.attributes.position.array, N = mesh.geometry.attributes.normal.array;
       for (let i = 0; i < P.length; i += 3) { pos.push(P[i], P[i + 1], P[i + 2]); nor.push(N[i], N[i + 1], N[i + 2]); col.push(c.r, c.g, c.b); emi.push(e); mr.push(m, r); }
@@ -114,7 +118,7 @@ export function planSystem(list, base = null) {
   for (const s of live) {
     const c = cellOf(s), w = (s.footprint && s.footprint.w) || 1, h = (s.footprint && s.footprint.h) || 1;
     const x = c.x + w / 2, z = c.y + h / 2, look = lifecycleLook(s), model = modelOf(s);
-    sig.push(`${s.id}:${s.kind}@${c.x},${c.y}:${look.key}`);
+    sig.push(`${s.id}:${model}@${c.x},${c.y}:${look.key}`);   // the model carries the tier: an upgrade swaps it
     if (model === 'sys_wall') {
       const ns = walls.has(`${c.x},${c.y - 1}`) || walls.has(`${c.x},${c.y + 1}`), ew = walls.has(`${c.x - 1},${c.y}`) || walls.has(`${c.x + 1},${c.y}`);
       if (ns || !ew) items.push({ id: s.id, model, x, z, ry: 0, sy: look.sy, tint: look.tint, aim: false });

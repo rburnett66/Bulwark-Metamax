@@ -99,6 +99,7 @@ const M = {};
       // the barrel pitches about the trunnion to the shell's launch slope (render3d/fx/elevation.js) [MM-story_mvedxxo7_7]
       barrel: { authored: EL, rest: EL, min: -5, max: 45, rate: 1.6, aim: 'shell' },
       recoil: 0.65,   // model units the barrel slides back on each shell (≈18% of it) — cannons only [MM-story_mvee15ja_b]
+      tiers: { tube: 0.75 },   // the barrel tube starts this far along the axis from the trunnion (tiers shorten what is past it)
       // firing point: the muzzle-brake face at the end of the barrel (authored at EL); `brake` = the brake's side ports
       muzzles: [{ p: along(P, EL, 3.72), d: [Math.cos(EL * D), Math.sin(EL * D), 0], back: 1.4, brake: 0.22 }],
       head: { mode: 'sweep' },
@@ -148,6 +149,7 @@ const M = {};
     M.sys_flak = { name: 'Anti-air (flak) tower', unit: 'SYS-Flak', ref: 'sys_flak', parts, pivots: { weapon: [0, 1.0, 0], head: [-0.3, 1.62, 0], barrel: [0.8, 1.36, 0] }, head: { mode: 'sweep' },
       // twin barrels pitch straight at the target — up at aircraft [MM-story_mvedxxo7_7]
       barrel: { authored: 0, rest: 10, min: -5, max: 75, rate: 2.2, aim: 'straight' },
+      tiers: { tube: 0.47 },   // the twin tubes start at the brass breech's face
       // the twin barrels' amber tips (after the −0.3 drop above); they fire alternately
       muzzles: [0.17, -0.17].map((z) => ({ p: [2.61, 1.36, z], d: [1, 0, 0], back: 1.1 })),
       views: { side: 'right', top: 'up' } };
@@ -275,6 +277,7 @@ const M = {};
   // ── SYS-Rockets: domed pedestal on a cross foot, cradle with a 2×2 rack of rockets (white bodies, red noses)
   {
     const C0 = [0.0, 1.62, 0], A = 28, u = [Math.cos(A * D), Math.sin(A * D)], n = [-Math.sin(A * D), Math.cos(A * D)];
+    const rk = (h, z) => `${h},${z}`;   // which rocket a part / firing point belongs to (tier variants drop some) [MM-story_mvey3eah_j]
     const rocket = (h, z) => {
       const c = [C0[0] + n[0] * h, C0[1] + n[1] * h, z], at = (d) => [c[0] + u[0] * d, c[1] + u[1] * d, z];
       return [
@@ -284,7 +287,7 @@ const M = {};
         { t: 'box', s: [0.42, 0.025, 0.6], p: at(-1.22), r3: [0, 0, A], m: 'bone', g: 'barrel' },
         { t: 'box', s: [0.42, 0.025, 0.6], p: at(-1.22), r3: [90, 0, A], m: 'bone', g: 'barrel' },
         { t: 'cyl', ax: 'x', r: [0.15, 0.12], l: 0.14, seg: 8, p: at(-1.45), r3: [0, 0, A], m: 'dark', g: 'barrel' },
-      ];
+      ].map((q) => Object.assign(q, { rk: rk(h, z) }));
     };
     const parts = [
       { t: 'box', s: [2.7, 0.08, 0.42], p: [0, 0.04, 0], m: 'gunD' },
@@ -301,11 +304,13 @@ const M = {};
       ...rocket(0.26, -0.24), ...rocket(0.26, 0.24), ...rocket(0.68, -0.24), ...rocket(0.68, 0.24),
     ];
     // firing points: each rocket's nose, rippled corner to corner; `back` reaches the nozzle (for the launch plume)
-    const nose = (h, z) => ({ p: [C0[0] + n[0] * h + u[0] * 2.06, C0[1] + n[1] * h + u[1] * 2.06, z], d: [u[0], u[1], 0], back: 3.52 });
+    const nose = (h, z) => ({ p: [C0[0] + n[0] * h + u[0] * 2.06, C0[1] + n[1] * h + u[1] * 2.06, z], d: [u[0], u[1], 0], back: 3.52, rk: rk(h, z) });
     M.sys_rockets = { name: 'Rocket launcher', unit: 'SYS-Rockets', ref: 'sys_rockets', parts, pivots: { weapon: [0, 1.25, 0], barrel: [0, 1.4, 0] }, views: { side: 'right', top: 'up' },
       // the rack tilts about its axle to the salvo's launch slope (authored at A) [MM-story_mvedxxo7_7]
       barrel: { authored: A, rest: A, min: 10, max: 50, rate: 1.2, aim: 'rocket' },   // ≤ 50° so its yaw reads [MM-task_mvejw9k0_m]
-      muzzles: [nose(0.68, -0.24), nose(0.26, 0.24), nose(0.68, 0.24), nose(0.26, -0.24)] };
+      muzzles: [nose(0.68, -0.24), nose(0.26, 0.24), nose(0.68, 0.24), nose(0.26, -0.24)],
+      // owner 2026-10-19: "2 rockets on 1, 3 on level 2, and 4 on level 3" — the lower pair first, then the upper left
+      tiers: { rockets: { 1: [rk(0.26, -0.24), rk(0.26, 0.24)], 2: [rk(0.26, -0.24), rk(0.26, 0.24), rk(0.68, -0.24)] } } };
   }
 
   // ── SYS-Missile (Missile Tower, anti-air) [MM-story_mvbyf8gq_10]: armoured drum on a cross foot, a yawing launcher
@@ -345,6 +350,57 @@ const M = {};
       muzzles: order.flatMap(([dy, dz]) => [tube(0.82, dy, dz), tube(-0.82, dy, -dz)]) };
   }
 
+/**
+ * TIER LOOKS [MM-story_mvey3eah_j] — owner 2026-10-19: "differentiate cannon tower 1,2,3 — accent color green for 1,
+ * blue for 2, and gold for 3. On the cannon the barrel should also be 50% length for 1, 75% for 2, and full (current)
+ * length for 3. Apply this to each weapon system that has upgrades right now." + "For the rocket launcher have 2
+ * rockets on 1, 3 on level 2, and 4 on level 3."
+ *
+ * Every upgradable weapon tower gets three derived models, `<model>_t1..3`: its `accent` parts in the tier colour; a
+ * model with `tiers.tube` (the gun barrels: cannon, flak) has everything past that point on the barrel axis shortened
+ * to TIER_BARREL of its length — tubes, sleeves, brake — with the firing points and the recoil following; a model with
+ * `tiers.rockets` carries only the rockets (parts AND firing points) listed for that tier. Tier 3 keeps full length.
+ */
+export const TIER_ACCENT = Object.freeze({ 1: 0x44b84a, 2: 0x2f7fe6, 3: 0xe3ad2a });
+export const TIER_BARREL = Object.freeze({ 1: 0.5, 2: 0.75, 3: 1 });
+export const TIERED_MODELS = Object.freeze(['sys_cannon', 'sys_flak', 'sys_rockets', 'sys_missile']);
+export const clampTier = (t) => Math.max(1, Math.min(3, Math.round(Number(t) || 1)));
+/** The model key a tower of `tier` draws with: `<model>_t<tier>` for the tiered weapon towers, else the model itself. */
+export function tierModelKey(model, tier) { return TIERED_MODELS.includes(model) ? `${model}_t${clampTier(tier)}` : model; }
+
+/** Derive a tier's model from a base def (pure; the base is not touched). */
+export function tierModel(def, tier) {
+  const t = clampTier(tier), k = TIER_BARREL[t], T = def.tiers || {};
+  const keep = T.rockets && T.rockets[t] ? new Set(T.rockets[t]) : null;
+  const P = (def.pivots && def.pivots.barrel) || [0, 0, 0], a = ((def.barrel && def.barrel.authored) || 0) * D;
+  const ux = Math.cos(a), uy = Math.sin(a), root = T.tube;
+  const f = (d) => (root == null || k === 1 || d <= root ? d : root + (d - root) * k);   // distance along the barrel axis
+  const slide = (p) => {                                 // a point on the barrel axis frame: move it along the axis by f
+    const vx = p[0] - P[0], vy = p[1] - P[1], d = vx * ux + vy * uy, nd = f(d);
+    return [p[0] + (nd - d) * ux, p[1] + (nd - d) * uy, p[2]];
+  };
+  const axial = (q) => q.t === 'cyl' && q.ax === 'x' && Math.abs(((q.r3 && q.r3[2]) || 0) - (def.barrel ? def.barrel.authored : 0)) < 1e-9 && !(q.r3 && (q.r3[0] || q.r3[1]));
+  const parts = [];
+  for (const q of def.parts) {
+    if (keep && q.rk && !keep.has(q.rk)) continue;
+    if (root == null || k === 1 || q.g !== 'barrel') { parts.push(q); continue; }
+    if (axial(q)) {                                      // a tube along the axis: map both ends, so a tube across the root shortens only past it
+      const vx = q.p[0] - P[0], vy = q.p[1] - P[1], d = vx * ux + vy * uy, a0 = f(d - q.l / 2), a1 = f(d + q.l / 2), nd = (a0 + a1) / 2;
+      parts.push(Object.assign({}, q, { p: [q.p[0] + (nd - d) * ux, q.p[1] + (nd - d) * uy, q.p[2]], l: a1 - a0 }));
+    } else parts.push(Object.assign({}, q, { p: slide(q.p) }));
+  }
+  const muzzles = (def.muzzles || []).filter((m) => !keep || !m.rk || keep.has(m.rk)).map((m) => {
+    if (root == null || k === 1) return m;
+    const p = slide(m.p), cut = Math.hypot(m.p[0] - p[0], m.p[1] - p[1]);
+    return Object.assign({}, m, { p, back: Math.max(0.1, (m.back || 0) - cut) });
+  });
+  return Object.assign({}, def, { parts, muzzles, accent: TIER_ACCENT[t], tier: t, base: def.ref,
+    recoil: def.recoil ? def.recoil * (root == null ? 1 : k) : def.recoil });
+}
+
+const SCALE = { sys_cannon: 0.3, sys_flak: 0.32, sys_wall: 0.26, sys_harvester: 0.25, sys_mg: 0.3, sys_rockets: 0.3, sys_missile: 0.3 };
+for (const m of TIERED_MODELS) for (const t of [1, 2, 3]) { M[tierModelKey(m, t)] = tierModel(M[m], t); SCALE[tierModelKey(m, t)] = SCALE[m]; }
+
 export const SYSTEM_MODELS = M;
 /** Model unit → cell, per model: towers read a little larger than their 1-cell slot's units; a wall segment spans its cell. */
-export const SYSTEM_SCALE = Object.freeze({ sys_cannon: 0.3, sys_flak: 0.32, sys_wall: 0.26, sys_harvester: 0.25, sys_mg: 0.3, sys_rockets: 0.3, sys_missile: 0.3 });
+export const SYSTEM_SCALE = Object.freeze(SCALE);
