@@ -623,7 +623,7 @@ export function renderFrame(r, state, ui, events, dt) {
   r.stats.rockets = r.rocketShots.sync(r.fx);
   r.impacts.update(state, r.map, events, dt, views, { resolve: r.resolveModel });
   // health bars + "$N" pop-ups (overlays/) [MM-task_mvbry87f_q] [MM-task_mvbyf6t8_z]
-  r.healthBars.update(state, views, dt, { baseCell: r.map.base });
+  r.healthBars.update(state, views, dt, { baseCell: r.map.base, viewH: r._h || 0 });
   r.gold.feed(events, r.map); r.gold.step(Math.max(0, Math.min(0.1, dt || 0)));
   r.repairFx.step(dt, state, events, r.impacts.emit, FXK);   // welding sparks on structures under repair [MM-task_mvcrs0q1_14]
   r.buildFx.step(dt, state, events, r.impacts.emit, FXK, r.impacts.ring, r.tier.key);   // dirt puffs round build sites [MM-story_mvedxrmi_6]

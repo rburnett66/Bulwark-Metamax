@@ -1,4 +1,5 @@
 import { getStructureDef, getUnitDef } from '../data/tables.js';
+import { HP_COLORS } from './hpColors.js';
 import { hasArt, buildUnitSprite } from './unitArt.js';
 import { hasVoxel, buildVoxelUnit, updateVoxelUnit, buildDecorSprite } from './voxel/loader.js';
 import { buildLive3D, updateLive3D } from './voxel/live3d.js';
@@ -211,16 +212,19 @@ function drawDashedCircle(g, cx, cy, radius, color, alpha, width) {
   g.lineStyle(0);
 }
 
+// lime on charcoal inside a dark rim, like every health bar (render/hpColors.js) [MM-task_mvfmy1k5_c]
 function drawHpBar(g, cx, topY, w, frac, backAlpha) {
   const f = Math.max(0, Math.min(1, frac));
-  const h = 4;
+  const h = 5;
   g.lineStyle(0);
-  g.beginFill(0x000000, backAlpha == null ? 0.6 : backAlpha);
+  g.beginFill(HP_COLORS.rim, backAlpha == null ? 0.95 : Math.max(0.85, backAlpha));
   g.drawRect(cx - w / 2, topY, w, h);
   g.endFill();
-  const col = f > 0.6 ? 0x4ad04a : (f > 0.3 ? 0xe0c040 : 0xe04040);
-  g.beginFill(col, 0.95);
-  g.drawRect(cx - w / 2 + 0.5, topY + 0.5, (w - 1) * f, h - 1);
+  g.beginFill(HP_COLORS.track, 1);
+  g.drawRect(cx - w / 2 + 1, topY + 1, w - 2, h - 2);
+  g.endFill();
+  g.beginFill(HP_COLORS.fill, 1);
+  g.drawRect(cx - w / 2 + 1, topY + 1, (w - 2) * f, h - 2);
   g.endFill();
 }
 

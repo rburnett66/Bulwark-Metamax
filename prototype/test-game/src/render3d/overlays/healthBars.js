@@ -17,19 +17,21 @@
  * planBars is pure (state + unit views + memory → bar list); createHealthBarView draws all of them in ONE
  * camera-facing instanced draw.
  */
+import { HP_COLORS, hpRgb } from '../../render/hpColors.js';
 import { cellToWorld } from '../camera.js';
 
 /** Owner 2026-10-18: "health bars should lime green against charcoal grey" [MM-task_mvempq5t_p]. RGB 0..1. */
-export const BAR_COLORS = Object.freeze({
-  fill: [0.55, 0.95, 0.18],     // lime green — the health left, at every fraction
-  track: [0.2, 0.21, 0.23],     // charcoal grey — the health gone
-  rim: [0.08, 0.085, 0.095],    // dark charcoal frame
+export const BAR_COLORS = Object.freeze({   // the game-wide palette (render/hpColors.js) [MM-task_mvfmy1k5_c]
+  fill: hpRgb(HP_COLORS.fill),  // lime green — the health left, at every fraction
+  track: hpRgb(HP_COLORS.track),// charcoal grey — the health gone
+  rim: hpRgb(HP_COLORS.rim),    // dark charcoal frame
   chunk: [1.0, 0.96, 0.82],     // the bite just taken (drains away)
 });
 const glv = (c) => 'vec3(' + c.map((v) => v.toFixed(3)).join(', ') + ')';
 
 export const BARS = Object.freeze({
-  unitW: 0.62, unitH: 0.075, structW: 0.8, structH: 0.085, baseW: 2.4, baseH: 0.14,
+  unitW: 0.7, unitH: 0.095, structW: 0.9, structH: 0.11, baseW: 2.4, baseH: 0.17,
+  minPx: Object.freeze([7, 8, 10]),   // never thinner than this on screen (unit, structure, base) — readable zoomed out [MM-task_mvfmy1k5_c]
   fadeIn: 0.15, fadeOut: 0.35, ease: 0.08, chunkHold: 0.35, chunkDrain: 0.55, flash: 0.12,
 });
 
@@ -91,22 +93,29 @@ export function createHealthBarView(THREE, scene, { cap = 700 } = {}) {
   const iKind = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
   for (const [n, a] of [['iPos', iPos], ['iSize', iSize], ['iVal', iVal], ['iKind', iKind]]) { a.setUsage(THREE.DynamicDrawUsage); geo.setAttribute(n, a); }
   const mat = new THREE.ShaderMaterial({
+    uniforms: { uViewH: { value: 720 }, uMinPx: { value: new THREE.Vector3(BARS.minPx[0], BARS.minPx[1], BARS.minPx[2]) } },
     vertexShader: `attribute vec3 iPos; attribute vec2 iSize; attribute vec4 iVal; attribute float iKind;
+      uniform float uViewH; uniform vec3 uMinPx;
       varying vec2 vUv; varying vec4 vVal; varying vec2 vSize; varying float vKind;
       void main() {
-        vUv = uv; vVal = iVal; vSize = iSize; vKind = iKind;
         vec4 c = modelViewMatrix * vec4(iPos, 1.0);
-        c.xy += position.xy * iSize;            // camera-facing, world-sized
+        // world-sized, but never thinner than uMinPx on screen: zoomed out, the bar grows to stay readable
+        float pxPerUnit = projectionMatrix[1][1] * 0.5 * uViewH / max(0.001, -c.z);
+        float want = iKind < 0.5 ? uMinPx.x : (iKind < 1.5 ? uMinPx.y : uMinPx.z);
+        float k = clamp(want / max(1e-4, iSize.y * pxPerUnit), 1.0, 2.5);   // capped so a crowd's bars don't merge
+        vec2 size = iSize * k;
+        vUv = uv; vVal = iVal; vSize = size; vKind = iKind;
+        c.xy += position.xy * size;             // camera-facing
         gl_Position = projectionMatrix * c;
       }`,
     fragmentShader: `varying vec2 vUv; varying vec4 vVal; varying vec2 vSize; varying float vKind;
       void main() {
         vec2 px = vUv * vSize;                                  // position in world units
-        float rim = 0.016 + 0.008 * step(1.5, vKind);
+        float rim = max(0.016 + 0.008 * step(1.5, vKind), vSize.y * 0.16);   // a rim that scales with the bar
         vec2 inner = vec2(rim, rim);
         bool inside = px.x > inner.x && px.x < vSize.x - inner.x && px.y > inner.y && px.y < vSize.y - inner.y;
         vec3 col = ${glv(BAR_COLORS.rim)};                      // rim
-        float a = 0.9;
+        float a = 1.0;
         if (inside) {
           float u = (px.x - inner.x) / (vSize.x - 2.0 * inner.x);
           float f = vVal.x, ch = vVal.y;
@@ -132,6 +141,7 @@ export function createHealthBarView(THREE, scene, { cap = 700 } = {}) {
     /** Plan + draw this frame. Returns the bar count. */
     update(state, views, dt, opts) {
       const bars = planBars(state, views, mem, Math.max(0, Math.min(0.1, dt || 0)), opts);
+      if (opts && opts.viewH > 0) mat.uniforms.uViewH.value = opts.viewH;   // for the minimum on-screen size
       const n = Math.min(cap, bars.length);
       for (let i = 0; i < n; i++) {
         const b = bars[i];
