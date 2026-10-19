@@ -75,12 +75,12 @@ test('binder: a tower draws as its tier model and an upgrade swaps it (and re-re
   sys.dispose();
 });
 
-test('rocket fins: level 2 twice and level 3 three times level 1 (chord and span), trailing edge in place [MM-task_mveyuv9m_k]', () => {
+test('rocket fins: level 2 1.5× and level 3 2× level 1 (chord and span), trailing edge in place [MM-task_mveyuv9m_k]', () => {
   const A = SYSTEM_MODELS.sys_rockets.barrel.authored * D, u = [Math.cos(A), Math.sin(A)];
   const fins = (t) => SYSTEM_MODELS[tierModelKey('sys_rockets', t)].parts.filter((q) => q.fin);
   const f1 = fins(1);
   assert.ok(f1.length === 4, 'two cross fins on each of 2 rockets');
-  for (const [t, k] of [[2, 2], [3, 3]]) {
+  for (const [t, k] of [[2, 1.5], [3, 2]]) {
     for (const q of fins(t)) {
       const b = SYSTEM_MODELS.sys_rockets.parts.find((p) => p.fin && p.rk === q.rk && p.r3[0] === q.r3[0]);
       assert.ok(Math.abs(q.s[0] - b.s[0] * k) < 1e-12 && Math.abs(q.s[2] - b.s[2] * k) < 1e-12 && q.s[1] === b.s[1], `t${t}: ${k}× chord + span, same thickness`);

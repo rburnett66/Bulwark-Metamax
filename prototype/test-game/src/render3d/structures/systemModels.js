@@ -311,8 +311,8 @@ const M = {};
       muzzles: [nose(0.68, -0.24), nose(0.26, 0.24), nose(0.68, 0.24), nose(0.26, -0.24)],
       // owner 2026-10-19: "2 rockets on 1, 3 on level 2, and 4 on level 3" — the lower pair first, then the upper left
       tiers: { rockets: { 1: [rk(0.26, -0.24), rk(0.26, 0.24)], 2: [rk(0.26, -0.24), rk(0.26, 0.24), rk(0.68, -0.24)] },
-        // owner 2026-10-19: "double the size of the fins on level 2 and triple the size for level 3 compared to level 1" [MM-task_mveyuv9m_k]
-        fins: { 1: 1, 2: 2, 3: 3 } } };
+        // owner 2026-10-19: fins grow with the level — first asked 2× / 3×, then "let's try 1x, 1.5x, and 2x" [MM-task_mveyuv9m_k]
+        fins: { 1: 1, 2: 1.5, 3: 2 } } };
   }
 
   // ── SYS-Missile (Missile Tower, anti-air) [MM-story_mvbyf8gq_10]: armoured drum on a cross foot, a yawing launcher
