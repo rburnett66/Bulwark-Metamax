@@ -43,6 +43,20 @@ export function airClearance(field, x, z, clear = AIR_CLEARANCE) {
   return h > 0 ? h + clear : 0;
 }
 
+/**
+ * MINIMUM FLIGHT LEVEL [MM-task_mvesj7tg_b] — owner 2026-10-18: "The planes are still flying too low .. the fly through
+ * things .. there needs to be a minimum flight level". The per-cell clearance above only sees obstruction VERTICES, so
+ * the middle of a big plateau reads as empty ground, and it knows nothing of the base craft or the towers. The floor
+ * is one height for the whole map: the tallest obstruction, the base craft and any extra tops, plus FLIGHT_FLOOR.margin,
+ * never below FLIGHT_FLOOR.min. No flyer — cruising, hovering or on an attack run — is drawn below it.
+ */
+export const FLIGHT_FLOOR = Object.freeze({ min: 1.6, margin: 0.55, max: 4.5 });
+export function flightFloor(field, extraTops = [], F = FLIGHT_FLOOR) {
+  let top = field && field.max > 0 ? field.max : 0;
+  for (const t of extraTops) if (t > top) top = t;
+  return Math.min(F.max, Math.max(F.min, top > 0 ? top + F.margin : F.min));
+}
+
 /** Aim height of a drawn ground unit (= combatFxModel AIM.ground). */
 export const GROUND_AIM_Y = 0.3;
 export const AIR_LIFT = Object.freeze({ up: 2.4, down: 0.9 });   // world units / s the drawn altitude may climb / sink
@@ -58,7 +72,7 @@ export function createAirLift() {
   const ys = new Map();   // id → eased drawn height
   return {
     drawn,
-    update(state, views, field, poses, dt) {
+    update(state, views, field, poses, dt, floor = 0) {   // floor: the map's minimum flight level (flightFloor)
       const step = Math.max(0, Math.min(0.1, dt || 0));
       drawn.clear();
       if (!state || !state.units || !views) return drawn;
@@ -71,11 +85,11 @@ export function createAirLift() {
           continue;
         }
         live.add(v.id);
-        const want = Math.max(v.y || 0, airClearance(field, v.x, v.z));
+        const want = Math.max(v.y || 0, floor, airClearance(field, v.x, v.z));
         let y = ys.has(v.id) ? ys.get(v.id) : want;
         y += Math.max(-AIR_LIFT.down * step, Math.min(AIR_LIFT.up * step, want - y));
         // never below the obstruction even mid-ease: a ridge the plane is already over wins outright
-        y = Math.max(y, airClearance(field, v.x, v.z));
+        y = Math.max(y, floor, airClearance(field, v.x, v.z));   // never below the floor, even mid-ease
         ys.set(v.id, y);
         v.y = y;
         const p = poses && poses.get(v.id);
