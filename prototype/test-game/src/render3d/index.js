@@ -205,7 +205,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   fxView.skipRockets = true;
   const impacts = createImpacts({ seed: (map.seed | 0) || 1, caps: tier.impactCaps });   // the tier's particle budget [MM-task_mveeqkyi_h]
   const impactsView = createImpactsView(THREE, scene, { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
-  const fogView = createFogView(THREE, scene, map);
+  const fogView = createFogView(THREE, scene, map, { detail: !!tier.cloudDetail });   // phones: the rough cloud path [MM-story_mvfk3el9_b]
   const contactsView = createContactsView(THREE, scene);   // hidden contacts: red reticles outside the play area [MM-story_mveehs1r_f]
   const baseStyle = baseStyleFor(craft && craft.def && craft.def.weaponType);   // each base fires its own weapon's look
   const cannonFx = createCannonFx({ seed: (map.seed | 0) || 1, style: baseStyle }), cannonFxView = createCannonFxView(THREE, scene, { style: baseStyle });   // the base super-cannon
@@ -634,7 +634,7 @@ export function renderFrame(r, state, ui, events, dt) {
   if (r.cannonFx.shake > 0) { const k = r.cannonFx.shake; r.camera.position.x += Math.sin(r.clock * 67) * k; r.camera.position.y += Math.sin(r.clock * 83 + 0.7) * k * 0.5; r.camera.position.z += Math.cos(r.clock * 53) * k; }   // cannon touchdown
   if (r.craft && r.craft.shake > 0) { const k = r.craft.shake; r.camera.position.x += Math.sin(r.clock * 73) * k; r.camera.position.y += Math.sin(r.clock * 91 + 1.3) * k * 0.6; r.camera.position.z += Math.cos(r.clock * 59) * k; }   // LC: touchdown thump
   // Ring fog (T3.4): veil outside the current wave window
-  r.fogView.sync(fogFrame);
+  r.fogView.sync(fogFrame, r.clock);
 
   r.ghost.sync(ui);
 
