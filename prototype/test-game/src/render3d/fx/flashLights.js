@@ -1,58 +1,45 @@
 /**
- * src/render3d/fx/flashLights.js — EXPERIMENT: real point lights flashed on explosions and gunfire. [MM-task_mvd2lrig_k]
+ * src/render3d/fx/flashLights.js — FAKE light flashes: a short additive glow on the ground under every combat flash.
+ * [MM-story_mvehp8ca_l] (replaces the point-light experiment of [MM-task_mvd2lrig_k])
  *
- * Owner 2026-10-17: "we should experiment with point light flashed on explosions and firing". A small fixed pool of
- * THREE.PointLights lives in the scene at zero intensity (a fixed count, so no shader recompiles); each new combat
- * flash (muzzle, hit, kill, airburst, rocket hit, structure destroyed, base-cannon blast) pulses the light that is
- * dimmest right now: a hard attack and a fast falloff, sized and coloured by the flash. The units' Phong metal lights
- * per pixel; the low-poly ground (Lambert, per vertex) takes it as a soft glow.
- *
- * Budget by quality tier: high 4 lights, standard 2, low 0 (off). ?flashlights=N overrides (0 turns it off) — the
- * point of the experiment is to compare.
+ * Owner 2026-10-18: "The old system had an effective fake flash .. to preserve performance". The experiment kept a pool
+ * of THREE.PointLights in the scene; even at zero intensity every one of them adds per-pixel lighting work to every lit
+ * fragment — the cost a phone feels. Instead each NEW combat flash (muzzle, hit, kill, airburst, rocket hit, structure
+ * destroyed, base-cannon blast) lays a warm POOL decal in the world-impacts additive batch: no lights, no new draw
+ * call, no shader change. It reads as the flash lighting the ground: sized and coloured by the flash, gone in about
+ * its own lifetime, weaker the higher the flash is off the ground (a flak airburst barely touches it).
  */
-export const FLASH_LIGHTS = Object.freeze({ high: 4, standard: 2, low: 0 });
 
-/** How a flash of diameter `size` (cells) lights the scene: { intensity, distance, life }. Pure. */
-export function lightFor(size, ttl) {
-  return { intensity: Math.min(5.5, 0.9 + size * 0.95), distance: Math.min(6, 1.1 + size * 0.95), life: Math.max(0.06, (ttl || 0.1) * 1.4) };
+/** Smallest flash (diameter, cells) that lays a glow — tiny tracer pops don't. */
+export const FAKE_FLASH = Object.freeze({ minSize: 0.3, radiusK: 0.75, maxRadius: 3.2, lifeK: 2.2, minLife: 0.12, alpha: 0.75, fadeHeight: 3 });
+
+/** The glow a flash of diameter `size` (cells), lifetime `ttl` (s) at height `y` lays: { r, life, a } — or null. Pure. */
+export function glowFor(size, ttl, y = 0, F = FAKE_FLASH) {
+  if (!(size >= F.minSize)) return null;
+  const a = F.alpha * Math.max(0, 1 - Math.max(0, y) / F.fadeHeight) * Math.min(1, 0.45 + size * 0.25);
+  if (a <= 0.02) return null;
+  return { r: Math.min(F.maxRadius, size * F.radiusK), life: Math.max(F.minLife, (ttl || 0.1) * F.lifeK), a };
 }
 
-export function createFlashLights(THREE, scene, count) {
-  const pool = [];
-  for (let i = 0; i < count; i++) {
-    const L = new THREE.PointLight(0xffffff, 0, 2, 2);
-    L.castShadow = false; L.name = 'flash-light-' + i;
-    scene.add(L);
-    pool.push({ L, peak: 0, t: 0, life: 1 });
-  }
+const hexRGB = (h) => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
+
+/**
+ * createFlashGlows(impacts) → { fromFlashes(flashes) }: lays a glow (impacts.glowAt) for each flash with age 0 —
+ * call once per frame after the combat fx update.
+ */
+export function createFlashGlows(impacts) {
   return {
-    count,
-    /** Pulse a light at (x, y, z). */
-    pulse(x, y, z, color, intensity, distance, life) {
-      if (!pool.length) return;
-      let best = pool[0];
-      for (const p of pool) if (p.L.intensity < best.L.intensity) best = p;
-      if (best.L.intensity > intensity) return;   // everything brighter already — this one isn't worth a light
-      best.L.position.set(x, y + 0.25, z); best.L.color.setHex(color); best.L.distance = distance;
-      best.peak = intensity; best.t = 0; best.life = life; best.L.intensity = intensity;
-    },
-    /** Light the frame's NEW combat flashes (combatFxModel flashes with age 0). */
     fromFlashes(flashes) {
-      if (!pool.length || !flashes) return;
+      if (!flashes || !impacts || !impacts.glowAt) return 0;
+      let n = 0;
       for (const f of flashes) {
-        if (f.age !== 0 || f.size0 < 0.3) continue;
-        const l = lightFor(f.size0, f.ttl);
-        this.pulse(f.x, f.y, f.z, f.color, l.intensity, l.distance, l.life);
+        if (f.age !== 0) continue;
+        const g = glowFor(f.size0, f.ttl, f.y);
+        if (!g) continue;
+        impacts.glowAt(f.x, f.z, g.r, g.life, hexRGB(f.color == null ? 0xffd090 : f.color), g.a);
+        n++;
       }
+      return n;
     },
-    update(dt) {
-      for (const p of pool) {
-        if (p.L.intensity <= 0) continue;
-        p.t += dt;
-        const u = p.t / p.life;
-        p.L.intensity = u >= 1 ? 0 : p.peak * Math.pow(1 - u, 2.2);
-      }
-    },
-    dispose() { for (const p of pool) scene.remove(p.L); pool.length = 0; },
   };
 }

@@ -21,14 +21,17 @@ test('a moving tank kicks up dust behind it; a stopped tank and a jet emit nothi
   assert.equal(out.length, 0, 'stopped: no dust');
 });
 
-test('flash lights: bigger flashes light brighter and wider; a pool reuses its dimmest light [MM-task_mvd2lrig_k]', async () => {
-  const { lightFor, createFlashLights } = await import('./flashLights.js');
-  const THREE = await import('../../../vendor/three.module.js');
-  const a = lightFor(0.5, 0.08), b = lightFor(4.4, 0.5);
-  assert.ok(b.intensity > a.intensity && b.distance > a.distance && b.life > a.life);
-  const scene = new THREE.Scene(), fl = createFlashLights(THREE, scene, 2);
-  fl.fromFlashes([{ age: 0, size0: 4.4, ttl: 0.5, x: 1, y: 0.3, z: 1, color: 0xffc070 }, { age: 0, size0: 0.5, ttl: 0.08, x: 2, y: 0.3, z: 2, color: 0xfff0b0 }, { age: 0.1, size0: 2, ttl: 0.2, x: 0, y: 0, z: 0, color: 0 }]);
-  const lit = scene.children.filter((o) => o.isPointLight && o.intensity > 0);
-  assert.equal(lit.length, 2, 'both new flashes lit, the old one ignored');
-  fl.update(1); assert.ok(scene.children.every((o) => !o.isPointLight || o.intensity === 0), 'decayed out');
+test('fake flashes: bigger flashes glow wider and longer; high airbursts barely touch the ground; no point lights [MM-story_mvehp8ca_l]', async () => {
+  const { glowFor, createFlashGlows } = await import('./flashLights.js');
+  const a = glowFor(0.5, 0.08, 0.4), b = glowFor(4.4, 0.5, 0.3);
+  assert.ok(b.r > a.r && b.life > a.life && b.a >= a.a);
+  assert.equal(glowFor(0.2, 0.1, 0), null, 'tiny pops lay nothing');
+  assert.ok(!glowFor(1.3, 0.24, 3.5) || glowFor(1.3, 0.24, 3.5).a < glowFor(1.3, 0.24, 0.3).a, 'height fades it');
+  const laid = [];
+  const fg = createFlashGlows({ glowAt: (x, z, r, life, col, al) => laid.push({ x, z, r, col }) });
+  fg.fromFlashes([{ age: 0, size0: 4.4, ttl: 0.5, x: 1, y: 0.3, z: 1, color: 0xffc070 }, { age: 0, size0: 0.5, ttl: 0.08, x: 2, y: 0.3, z: 2, color: 0xfff0b0 }, { age: 0.1, size0: 2, ttl: 0.2, x: 0, y: 0, z: 0, color: 0 }]);
+  assert.equal(laid.length, 2, 'both new flashes glow, the old one ignored');
+  assert.ok(Math.abs(laid[0].col[0] - 1) < 1e-9 && laid[0].col[2] < 0.5, 'warm colour from the flash');
+  const src = (await import('node:fs')).readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.ok(!/PointLight|createFlashLights/.test(src), 'the battle view creates no point lights');
 });

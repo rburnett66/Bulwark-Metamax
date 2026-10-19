@@ -490,6 +490,8 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     clear,
     // recipes, exposed for tests and debugging
     fxHit, fxGround, fxExplode, boom, burn, ignite,
+    /** A fake light flash: a warm additive glow on the ground (fx/flashLights.js) [MM-story_mvehp8ca_l]. col = [r, g, b] 0..1. */
+    glowAt(x, z, r, life, col, a) { decal(D.POOL, x, z, r, life, col, a); },
     /** Units burning now (ids), for tests. */
     get burningUnits() { return [...burningUnits.keys()]; },
     /** Raw emitter for other FX modules (the cannon shell's trail): emit(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty, drag). */
