@@ -960,7 +960,7 @@ export const STRUCTURES = Object.freeze({
     range: 4.5, cost: [300, 750, 1500],
     buildTime: 3, upgradeTime: 4, sellTime: 1.5,
     footprint: Object.freeze({ w: 1, h: 1 }),
-    cadence: 1.5, burst: 2   // owner 2026-10-18: slower, heavier-looking volleys (render hint; dps unchanged) [MM-story_mvedxogl_4]
+    cadence: 1.5, burst: 1   // owner 2026-10-18 slower, heavier [MM-story_mvedxogl_4]; 2026-10-19 "make sure they fire one shot, not multiple" [MM-task_mvfpbbtp_1] (render hint; dps unchanged)
   }),
   'STR-Flak': Object.freeze({
     name: 'Flak Tower', kind: 'antiAir',

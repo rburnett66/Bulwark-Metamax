@@ -24,7 +24,7 @@ import { pitchFor, apexFor } from '../fx/elevation.js';
 import { AIM } from '../fx/combatFxModel.js';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
-import { createRecoil } from '../fx/recoil.js';
+import { createRecoil, bodyKick, kickMatrix, BODY_KICK } from '../fx/recoil.js';
 
 /** Sim structure kind → System model. Kinds not listed stay with structures/lowpoly.js. */
 export const SYSTEM_KINDS = Object.freeze({ antiGround: 'sys_cannon', antiAir: 'sys_flak', wall: 'sys_wall' });
@@ -38,6 +38,7 @@ export const SYSTEM_CAP = Object.freeze(Object.fromEntries(Object.entries(BASE_C
 const modelOf = (s) => { const m = SYSTEM_STRUCTS[s.structId] || SYSTEM_KINDS[s.kind]; return m ? tierModelKey(m, s.tier) : m; };
 const TURN = 5;   // rad/s a turret slews at
 const DEG = Math.PI / 180;
+const TOWER_REAR = 0.4;   // cells from a tower's centre to the rear edge it rocks on [MM-task_mvfpbbtp_1]
 
 /**
  * Where a tower's target is in the world (pure): a drawn flyer pose, a unit, a structure or the base — or null.
@@ -189,6 +190,14 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
   const recoil = createRecoil();   // cannon barrels slide back on each shell [MM-story_mvee15ja_b]
   const pitchOf = (it) => { const b = SYSTEM_MODELS[it.model].barrel; return pitch.has(it.id) ? pitch.get(it.id) : b ? b.rest * DEG : 0; };
   const byItem = new Map();   // structure id → its aiming instance (firing points)
+  // the whole cannon tower rocks back on each shell — shove, front up, drop, slide back [MM-task_mvfpbbtp_1]
+  const Mk = new THREE.Matrix4();
+  function kickOf(it, wy) {
+    if (!SYSTEM_MODELS[it.model].recoil) return null;
+    const f = bodyKick(recoil.since(it.id, 'body'));
+    if (!f.back && !f.lift) return null;
+    return Mk.fromArray(kickMatrix(it.x, 0, it.z, Math.cos(wy), -Math.sin(wy), f.back * BODY_KICK.back, f.lift * BODY_KICK.lift * DEG, TOWER_REAR));
+  }
 
   // root transform of an instance: cell centre, yaw, cell scale (+ the lifecycle rise)
   function rootMatrix(it, ry, out) {
@@ -217,11 +226,16 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
   // under the firing points — owner: "they appear to be floating". [MM-task_mvd1yej4_g])
   // The head rides on the weapon: base · T(pw) · Rw · T(ph − pw) · Rh.
   function writeMoving() {
+    const bodyDirty = new Set();
     for (const it of items) {
       const K = kinds[it.model];
       if (it.slot == null || !K.meshes.weapon) continue;
       const wy = yaw.has(it.id) ? yaw.get(it.id) : it.ry;
+      const kick = kickOf(it, wy);
       const R = rootMatrix(it, it.ry, M);
+      if (kick) R.premultiply(kick);
+      if (kick || it.kicked) { K.meshes.body.setMatrixAt(it.slot, R); bodyDirty.add(K); }   // one clean write once it settles
+      it.kicked = !!kick;
       const pw = K.parts.weapon.pivot, local = wy - it.ry;
       const W = R.clone().multiply(Mp.makeTranslation(pw[0], pw[1], pw[2])).multiply(Mr.makeRotationY(local));
       K.meshes.weapon.setMatrixAt(it.slot, W);
@@ -239,6 +253,7 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       }
     }
     for (const K of Object.values(kinds)) for (const g of ['weapon', 'head', 'barrel']) if (K.meshes[g]) K.meshes[g].instanceMatrix.needsUpdate = true;
+    for (const K of bodyDirty) K.meshes.body.instanceMatrix.needsUpdate = true;
   }
 
   const api = {
@@ -284,7 +299,9 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       writeMoving();
     },
     /** A round left firing point n of tower `id`: a cannon barrel kicks back (models with `recoil` only). */
-    kick(id, n = 0) { const it = byItem.get(id); if (it && SYSTEM_MODELS[it.model].recoil) recoil.kick(id, 0); },
+    kick(id, n = 0) { const it = byItem.get(id); if (it && SYSTEM_MODELS[it.model].recoil) { recoil.kick(id, 0); recoil.kick(id, 'body'); } },
+    /** The tower's whole-body fire kick right now: { back, lift } fractions (0 at rest) [MM-task_mvfpbbtp_1]. */
+    kickOf(id) { const it = byItem.get(id); return it && SYSTEM_MODELS[it.model].recoil ? bodyKick(recoil.since(id, 'body')) : { back: 0, lift: 0 }; },
     /** How far (model units) tower `id`'s barrel is back right now. */
     recoilOf(id) { const it = byItem.get(id); return it ? recoil.offset(id, 0, SYSTEM_MODELS[it.model].recoil || 0) : 0; },
     /** Current barrel pitch (radians) of a tower, or null without a barrel. */

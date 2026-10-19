@@ -18,6 +18,9 @@ import { MODEL_KEYS, UNIT_SCALE } from './modelKeys.js';
 import { lodDef, LOD_DISTANCE } from './lod.js';
 import { metalFor, isGlowKey } from './metal.js';
 import { createUnitMaterial } from './material.js';
+import { kickMatrix, BODY_KICK } from '../fx/recoil.js';
+
+const KICK_REAR = 1.5;   // model units from a tank's centre to the rear edge it rears up on [MM-task_mvfpbbtp_1]
 
 /** Studio palette per material key (code design §4.11 UCOL). */
 export const UNIT_COLORS = Object.freeze({
@@ -136,7 +139,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
     types[key] = T;
   }
 
-  const m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), mp = new THREE.Matrix4(), mt = new THREE.Matrix4(), mr = new THREE.Matrix4();
+  const mk = new THREE.Matrix4(), m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), mp = new THREE.Matrix4(), mt = new THREE.Matrix4(), mr = new THREE.Matrix4();
   const q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
   const yAxis = new THREE.Vector3(0, 1, 0), xAxis = new THREE.Vector3(1, 0, 0), qBank = new THREE.Quaternion();
   const counts = {};
@@ -179,6 +182,10 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
         q.setFromAxisAngle(yAxis, -u.heading);
         if (u.bank) q.multiply(qBank.setFromAxisAngle(xAxis, u.bank));   // a plane banking through a turn (flightPath.js)
         m1.compose(v.set(u.x, u.y || 0, u.z), q, s.set(k, k, k));
+        if (u.kick) {   // fire kick: the whole tank shoved back off its gun, front up on its rear edge [MM-task_mvfpbbtp_1]
+          const a = u.aim ?? u.heading;
+          m1.premultiply(mk.fromArray(kickMatrix(u.x, u.y || 0, u.z, Math.cos(a), Math.sin(a), u.kick.back * BODY_KICK.back, u.kick.lift * BODY_KICK.lift * Math.PI / 180, KICK_REAR * k)));
+        }
         const TG = T.groups.turret;
         if (TG) mt.compose(TG.pivot, q.setFromAxisAngle(yAxis, -((u.aim ?? u.heading) - u.heading)), one).premultiply(m1);
         for (const [gname, G] of Object.entries(T.groups)) {
