@@ -79,3 +79,21 @@ test('sand / dirt detail: tileable ripples + pebbles; a mask on dirt and sand on
   assert.ok(sh.uniforms.uSandNrm && sh.uniforms.uSandAlb, 'sand textures bound');
   assert.ok(sh.vertexShader.includes('attribute float aSand') && sh.fragmentShader.includes('uSandNrm'), 'sand in the shader');
 });
+
+// [MM-task_mvfq860y_2] owner 2026-10-19: "the bump map or normal map shader is not oriented to the correct light source
+// angle". The textures are NOT flipped (DataTexture flipY false): texel row = v = +world Z (lowpoly aGUv = z / tile), so a
+// normal must lean DOWN-slope on both axes — n.x ∝ −∂h/∂u and n.y ∝ −∂h/∂v — or relief lights from the mirrored sun.
+test('grass and sand normals lean down-slope on BOTH texture axes (lit from the real sun, not its mirror)', async () => {
+  const { sandDetailTextures } = await import('./grassDetail.js');
+  for (const [name, t] of [['grass', grassDetailTextures()], ['sand', sandDetailTextures()]]) {
+    const N = t.size, H = t.height, w = (v) => ((v % N) + N) % N, at = (x, y) => H[w(y) * N + w(x)];
+    let cu = 0, cv = 0;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const i = (y * N + x) * 4;
+      cu += (t.normal[i] - 127.5) * (at(x - 1, y) - at(x + 1, y));       // −∂h/∂u
+      cv += (t.normal[i + 1] - 127.5) * (at(x, y - 1) - at(x, y + 1));   // −∂h/∂v
+    }
+    assert.ok(cu > 0, `${name}: x leans down-slope`);
+    assert.ok(cv > 0, `${name}: y leans down-slope (was flipped)`);
+  }
+});
