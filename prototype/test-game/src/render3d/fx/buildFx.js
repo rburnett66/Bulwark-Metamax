@@ -7,6 +7,7 @@
  *   · WHILE BUILDING — a structure with lifecycle 'Building' kicks up dusty puffs at random points on its footprint
  *     edge, low and drifting outward; the rate eases off as `progress` approaches 1;
  *   · SETTLE — phase 'complete': one last soft burst as the dust settles.
+ *   · UPGRADES raise the same dust: lifecycle 'Upgrading' puffs, 'upgradeStart' / 'upgradeComplete' burst [MM-task_mvfjymwc_a].
  * Counts scale with the quality tier (Low ≈ a quarter of High).
  *
  * Read-only on the sim; its own seeded PRNG (never Math.random); render-only. Pure: no three.js — it emits into the
@@ -14,20 +15,26 @@
  */
 import { cellToWorld } from '../camera.js';
 
+// Owner 2026-10-19: "construction dust needs to be twice as obvious on construction and on upgrades" — twice the puffs,
+// ~1.4× their size (≈ twice the area each), a stronger break-ground ring; and upgrades now raise the same dust
+// (they had none) [MM-task_mvfjymwc_a]
 export const BUILD_FX = Object.freeze({
-  rate: 12,             // puffs / s around a 1×1 footprint at progress 0 (× perimeter for bigger footprints)
+  rate: 24,             // puffs / s around a 1×1 footprint at progress 0 (× perimeter for bigger footprints)
   ease: 0.75,           // the rate falls by this share as progress → 1
-  size: [0.07, 0.12],   // birth size, world units
-  grow: 1.0,
-  life: [1.0, 1.7],
+  size: [0.1, 0.17],    // birth size, world units
+  grow: 1.2,
+  life: [1.1, 1.9],
   out: [0.25, 0.6],     // outward drift speed
   up: [0.12, 0.32],     // lift
   drag: 1.8,
   shade: 0.55,          // with dusty = 1 → earthy brown
-  start: 14,            // puffs in the break-ground burst
-  settle: 10,           // puffs in the settling burst
-  ring: Object.freeze({ grow: 0.9, life: 0.4, col: Object.freeze([0.78, 0.66, 0.5]), a: 0.35 }),
+  start: 28,            // puffs in the break-ground burst (construction and upgrade start)
+  settle: 20,           // puffs in the settling burst (construction and upgrade complete)
+  ring: Object.freeze({ grow: 1.1, life: 0.5, col: Object.freeze([0.78, 0.66, 0.5]), a: 0.6 }),
 });
+/** Lifecycles that raise dust, and the build-event phases that burst it. */
+const DUSTY = new Set(['Building', 'Upgrading']);
+const START = new Set(['start', 'upgradeStart']), SETTLE = new Set(['complete', 'upgradeComplete']);
 
 /** Puff-count multiplier per quality tier key. */
 export const BUILD_TIER = Object.freeze({ high: 1, standard: 0.7, low: 0.25 });
@@ -80,7 +87,7 @@ export function createBuildFx({ seed = 23 } = {}) {
       let n = 0;
       const live = new Set();
       if (state.structures) for (const s of state.structures.values()) {
-        if (s.lifecycle !== 'Building' || !s.pos) continue;
+        if (!DUSTY.has(s.lifecycle) || !s.pos) continue;
         live.add(s.id);
         const b = box(s), perim = (b.hw + b.hh) / 1;   // 1 for a 1×1
         const prog = Math.max(0, Math.min(1, s.progress || 0));
@@ -91,14 +98,14 @@ export function createBuildFx({ seed = 23 } = {}) {
       }
       for (const id of [...acc.keys()]) if (!live.has(id)) acc.delete(id);
       if (events && state.structures) for (const ev of events) {
-        if (ev.type !== 'build' || (ev.phase !== 'start' && ev.phase !== 'complete')) continue;
+        if (ev.type !== 'build' || !(START.has(ev.phase) || SETTLE.has(ev.phase))) continue;
         const key = `${ev.tick}:${ev.id}:${ev.phase}`;
         if (seen.has(key)) continue;
         seen.set(key, ev.tick || 0);
         const s = state.structures.get(ev.id) || (ev.pos ? { pos: ev.pos, footprint: null } : null);
         if (!s || !s.pos) continue;
         const b = box(s);
-        if (ev.phase === 'start') {
+        if (START.has(ev.phase)) {
           if (ring) ring(b.cx, b.cz, Math.max(b.hw, b.hh) * 0.8, Math.max(b.hw, b.hh) + BUILD_FX.ring.grow, BUILD_FX.ring.life, BUILD_FX.ring.col, BUILD_FX.ring.a);
           const c = Math.max(2, Math.round(BUILD_FX.start * q)); burst(emit, K, b, c, 1.6); n += c;
         } else {

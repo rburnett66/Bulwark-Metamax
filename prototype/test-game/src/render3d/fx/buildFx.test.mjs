@@ -65,3 +65,20 @@ test('quality tiers scale the dust; a 2×2 footprint puffs more than a 1×1', ()
   assert.ok(Math.abs(lo.out.length - hi.out.length * BUILD_TIER.low) <= 2, `${lo.out.length} vs ${hi.out.length}`);
   assert.ok(big.out.length > hi.out.length * 1.5);
 });
+
+test('dust is twice as obvious, and upgrades raise it too [MM-task_mvfjymwc_a]', () => {
+  assert.ok(BUILD_FX.rate >= 24 && BUILD_FX.start >= 28 && BUILD_FX.settle >= 20, 'twice the puffs');
+  assert.ok(BUILD_FX.size[0] >= 0.1 && BUILD_FX.ring.a >= 0.6, 'bigger puffs, a stronger ring');
+  const fx = createBuildFx(), out = [];
+  const emit = (...a) => out.push(a), K = { SMOKE: 1 };
+  const s = { id: 7, lifecycle: 'Upgrading', progress: 0, pos: { x: 3, y: 3 }, footprint: { w: 1, h: 1 } };
+  const st = { tick: 1, structures: new Map([[7, s]]) };
+  for (let i = 0; i < 10; i++) fx.step(0.1, st, [], emit, K);
+  assert.ok(out.length >= BUILD_FX.rate * 0.8, `upgrading puffs (${out.length})`);
+  out.length = 0;
+  fx.step(0, st, [{ type: 'build', tick: 2, id: 7, phase: 'upgradeStart' }], emit, K);
+  assert.equal(out.length, BUILD_FX.start, 'upgrade start bursts');
+  out.length = 0;
+  fx.step(0, st, [{ type: 'build', tick: 3, id: 7, phase: 'upgradeComplete' }], emit, K);
+  assert.equal(out.length, BUILD_FX.settle, 'upgrade complete settles');
+});
