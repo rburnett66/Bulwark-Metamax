@@ -458,35 +458,49 @@ function craftTop(r) {
 }
 
 /**
- * Pre-match framing [MM-task_mveuiw7u_e] [MM-task_mvewfno7_g]: before the first wave, and until the player pans / zooms /
- * turns, the camera frames the play area (the fog window, else the whole map) for THIS viewport's aspect ratio, inside
- * the part of the screen the HUD leaves clear (opts.viewInsets → { top, left, right, bottom } CSS px) — refitted
- * whenever the viewport, the HUD or the window changes. Pure maths in camera.js fitCameraToRect / clearBox.
+ * Auto-framing [MM-task_mveuiw7u_e] [MM-task_mvewfno7_g] [MM-task_mvfjtyqh_8]: until the player pans / zooms / turns, the
+ * camera frames the WHOLE play area (the fog window as the player sees it — held at a wave's end until the reward is
+ * picked — else the whole map) for THIS viewport's aspect, inside the part of the screen the HUD leaves clear
+ * (opts.viewInsets → { top, left, right, bottom } CSS px). It refits whenever the viewport, the HUD or the window
+ * changes — before the match AND during it (owner 2026-10-19, a 2.6:1 window mid-match: "cameras not centering at
+ * this resolution"). focusPlayArea glides to the same framing after a reward pick and re-arms it. Pure maths in
+ * camera.js fitCameraToRect / clearBox.
  */
-function framePreMatch(r, state) {
-  if (r.userMoved || r.inBattle || !r._w || !r._h) return;
-  if (state && state.waves && (state.waves.current | 0) > 0) return;
-  const win = fogWindow(state, r.map), m = r.map;
-  const rect = win && win.rect
-    ? { x0: win.rect.x0, z0: win.rect.y0, x1: win.rect.x1 + 1, z1: win.rect.y1 + 1 }   // inclusive cells → world edges
+function playRect(r, state) {
+  const shown = r.fog && r.fog.rect;   // what the fog shows (respects the wave-end hold); first frame: the sim's window
+  const w = shown || (() => { const f = fogWindow(state, r.map); return f && f.rect; })();
+  const m = r.map;
+  return w ? { x0: w.x0, z0: w.y0, x1: w.x1 + 1, z1: w.y1 + 1 }   // inclusive cells → world edges
     : { x0: 0, z0: 0, x1: m.cols, z1: m.rows };
+}
+function viewInsetsOf(r) {
   let ins = null;
   try { ins = r.viewInsets ? r.viewInsets() : null; } catch (e) { ins = null; }
-  ins = ins || {};
+  return ins || {};
+}
+/** The camera that frames `rect` for the current viewport and HUD (yaw kept). */
+function framedCamera(r, rect, ins) {
+  return fitCameraToRect({ tx: r.cam.tx, tz: r.cam.tz, dist: r.cam.dist, yaw: r.cam.yaw }, rect, r._w / r._h, clearBox(r._w, r._h, ins));
+}
+function autoFrame(r, state) {
+  if (r.userMoved || r.camGlide || !r._w || !r._h) return;
+  const rect = playRect(r, state), ins = viewInsetsOf(r);
   const iv = [ins.top, ins.left, ins.right, ins.bottom].map((v) => Math.round(v || 0));
   const key = r._w + 'x' + r._h + ':' + rect.x0 + ',' + rect.z0 + ',' + rect.x1 + ',' + rect.z1 + ':' + r.cam.yaw.toFixed(3) + ':' + iv.join(',');
   if (key === r._fitKey) return;
   r._fitKey = key;
-  fitCameraToRect(r.cam, rect, r._w / r._h, clearBox(r._w, r._h, ins));
+  const c = framedCamera(r, rect, ins);
+  r.cam.tx = c.tx; r.cam.tz = c.tz; r.cam.dist = c.dist;
 }
 
-/** Camera glide: ease the camera target to (gx, gz) over its duration (smoothstep). */
+/** Camera glide: ease the camera target to (gx, gz) — and the distance to gd, when given — over its duration (smoothstep). */
 export const CAM_GLIDE_S = 1.2;
 function stepCamGlide(r, dt) {
   const g = r.camGlide;
   g.t = Math.min(g.dur, g.t + Math.max(0, Math.min(0.1, dt || 0)));
   const u = g.t / g.dur, k = u * u * (3 - 2 * u);
   r.cam.tx = g.fx + (g.gx - g.fx) * k; r.cam.tz = g.fz + (g.gz - g.fz) * k;
+  if (g.gd != null) r.cam.dist = g.fd + (g.gd - g.fd) * k;
   if (g.t >= g.dur) r.camGlide = null;
 }
 
@@ -505,7 +519,14 @@ export function focusPlayArea(r, state) {
   const win = fogWindow(state, r.map);
   const f = win ? newAreaFocus(prev, win.rect) : null;
   if (!f) return 0;
-  r.camGlide = { fx: r.cam.tx, fz: r.cam.tz, gx: f.x, gz: f.z, t: 0, dur: CAM_GLIDE_S };
+  // frame the WHOLE new play area for this screen (target + zoom), not just the band's middle at the old zoom — on a
+  // wide screen that left the camera over the dark margin [MM-task_mvfjtyqh_8]; the player gets auto-framing back
+  if (r._w && r._h) {
+    const rect = { x0: win.rect.x0, z0: win.rect.y0, x1: win.rect.x1 + 1, z1: win.rect.y1 + 1 };
+    const c = framedCamera(r, rect, viewInsetsOf(r));
+    r.camGlide = { fx: r.cam.tx, fz: r.cam.tz, fd: r.cam.dist, gx: c.tx, gz: c.tz, gd: c.dist, t: 0, dur: CAM_GLIDE_S };
+  } else r.camGlide = { fx: r.cam.tx, fz: r.cam.tz, gx: f.x, gz: f.z, t: 0, dur: CAM_GLIDE_S };
+  r.userMoved = false;
   return CAM_GLIDE_S;
 }
 
@@ -517,7 +538,7 @@ export function renderFrame(r, state, ui, events, dt) {
   // Camera: battle rules first (no yaw in battle; ease a leftover yaw back to 0 when the wave starts)
   r.inBattle = !!(state && state.waves && state.waves.active);
   stepYaw(r.cam, r.inBattle, dt);
-  framePreMatch(r, state);
+  autoFrame(r, state);
   if (r.camGlide) stepCamGlide(r, dt);   // the camera easing over a newly opened map area [MM-story_mvempsla_q]
   clampCamera(r.cam, r.map.cols, r.map.rows);
   // LC: while the craft lands the view frames it, then eases back to the player's camera (craft/introCamera.js)
