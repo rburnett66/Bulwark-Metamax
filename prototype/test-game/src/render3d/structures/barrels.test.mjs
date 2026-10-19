@@ -71,7 +71,7 @@ test('binder: a tower turns to a STRUCTURE target and its barrel climbs for a fa
   assert.ok(p > rest + 5 * D, `barrel up for the lob (${(p / D).toFixed(1)}°)`);
   assert.ok(Math.abs(Math.asin(m.dy) - p) < 1e-6, 'firing point follows the pitch');
   assert.ok(Math.abs(p - wantPitch(m, { x: 10.5, y: 0.5, z: 9.5 })) < 0.12, 'on the launch slope the fx gate wants');
-  const B = sys.kinds.sys_cannon.meshes.barrel, mat = new THREE.Matrix4(); B.getMatrixAt(0, mat);
+  const B = sys.kinds.sys_cannon_t1.meshes.barrel, mat = new THREE.Matrix4(); B.getMatrixAt(0, mat);
   const ax = new THREE.Vector3(1, 0, 0).transformDirection(mat);
   assert.ok(Math.abs(Math.asin(ax.y) - (p - SYSTEM_MODELS.sys_cannon.barrel.authored * D)) < 0.02, 'the drawn barrel pitches by the same amount');
   tower.targetId = null; sys.setStructures([{ ...tower }]);
@@ -109,7 +109,7 @@ test('rocket rack: stays under 50° at every range, so its turn toward the targe
     for (let i = 0; i < 90; i++) sys.update(1 / 30, st);
     const p = sys.pitch(1);
     assert.ok(p <= 50 * D + 1e-9 && p >= 30 * D, `pitch ${(p / D).toFixed(1)}° at (${dx},${dz})`);
-    const M = new THREE.Matrix4(); sys.kinds.sys_rockets.meshes.barrel.getMatrixAt(0, M);
+    const M = new THREE.Matrix4(); sys.kinds.sys_rockets_t1.meshes.barrel.getMatrixAt(0, M);
     const ax = new THREE.Vector3(1, 0, 0).transformDirection(M), h = Math.hypot(ax.x, ax.z);
     assert.ok(h > 0.6 && (ax.x * dx + ax.z * dz) / (h * Math.hypot(dx, dz)) > 0.97, `the rack points at the target (${dx},${dz})`);
     sys.dispose();
