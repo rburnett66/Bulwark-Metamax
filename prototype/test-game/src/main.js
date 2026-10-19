@@ -1033,10 +1033,11 @@ export function boot(mountEl, seed) {
               ? winCall(voicePacks, lastWaveFaction, sim.waves ? sim.waves.current : 0, currentSeed, commOutcome(), true)
               : defeatCall(voicePacks, lastWaveFaction, currentSeed);
             setTimeout(async () => {
-              await comm.showCall(call);
+              // centre stage like every other held dialog (owner 2026-10-18) [MM-task_mveuityu_d]
+              await comm.showCall({ ...call, hold: true, center: true });
               if (sim.result === 'win' && fiveStar && voicePacks) {
                 const grant = tipsCall(voicePacks, rewardFaction, (currentSeed ^ 0x51ab), 'reward');
-                if (grant) comm.showCall(grant);
+                if (grant) comm.showCall({ ...grant, hold: true, center: true });
               }
             }, 1500);
           }

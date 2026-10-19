@@ -126,15 +126,22 @@ export function presize(el, text) {
   return h;
 }
 
-/** Centre-stage scale: 2×, or less when 2× would not fit the viewport (94% wide, 88% tall). */
+/**
+ * Centre-stage scale: 2×, or less when 2× would not fit the viewport (94% wide, 88% tall). On a phone-sized viewport
+ * (shorter side under PHONE_EDGE px) it is a further 10% smaller — owner 2026-10-18: "the dialog messages are about
+ * 10% too big on mobile". [MM-task_mveuityu_d]
+ */
 export const CENTER_SCALE = 2;
+export const PHONE_EDGE = 600;
+export const PHONE_SHRINK = 0.9;
 export function centerScale(card, vw, vh) {
   const W = vw || (typeof window !== 'undefined' ? window.innerWidth : 0), H = vh || (typeof window !== 'undefined' ? window.innerHeight : 0);
   const w = card ? card.offsetWidth : 0, h = card ? card.offsetHeight : 0;
   let k = CENTER_SCALE;
   if (w > 0 && W > 0) k = Math.min(k, (W * 0.94) / w);
   if (h > 0 && H > 0) k = Math.min(k, (H * 0.88) / h);
-  return Math.max(0.6, k);
+  if (W > 0 && H > 0 && Math.min(W, H) < PHONE_EDGE) k *= PHONE_SHRINK;
+  return Math.max(0.6 * PHONE_SHRINK, k);
 }
 
 /* type text over durMs with signal-glyph noise at the caret (tool's typeText; skips under reduced motion) */
