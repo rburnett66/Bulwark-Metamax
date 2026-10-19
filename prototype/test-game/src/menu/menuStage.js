@@ -118,8 +118,12 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
     const draw = (el, scene, cam) => {
       const r = el.getBoundingClientRect();
       if (r.width < 4 || r.height < 4 || r.bottom < cr.top || r.top > cr.bottom || r.right < cr.left || r.left > cr.right) return false;
+      // clip to a scrolling panel the element sits in (the dossier's resource tiles scroll under the campaign box)
+      const sc = el.closest('[data-clip]'), c = sc ? sc.getBoundingClientRect() : r;
+      const L = Math.max(r.left, c.left), T = Math.max(r.top, c.top), R = Math.min(r.right, c.right), B = Math.min(r.bottom, c.bottom);
+      if (R - L < 1 || B - T < 1) return false;
       const x = r.left - cr.left, y = cr.bottom - r.bottom;
-      renderer.setViewport(x, y, r.width, r.height); renderer.setScissor(x, y, r.width, r.height);
+      renderer.setViewport(x, y, r.width, r.height); renderer.setScissor(L - cr.left, cr.bottom - B, R - L, B - T);
       cam.aspect = r.width / r.height; cam.updateProjectionMatrix();
       renderer.render(scene, cam);
       return true;

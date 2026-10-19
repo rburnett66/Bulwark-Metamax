@@ -2,8 +2,11 @@
  * src/menu/menu.js — the MAIN MENU, ported from the Claude Design proof (Design-Proof MENU).
  *
  * Same runtime as the game: a DOM overlay above the canvas (the HUD pattern), carrying the
- * proof's design language — gold on ink, panel lines, crest, letterspaced wordmark. Two screens
- * in this slice: MAIN (title + actions) and MAPS (the 9-map campaign select bound to the save).
+ * proof's design language — gold on ink, panel lines, crest, letterspaced wordmark. Two screens carry the
+ * campaign: MAIN (the current planet, zoomable out to the 3D galaxy) and SURVEY (the 9 planets / factions, the
+ * planet dossier and the campaign drop-down) — owner 2026-10-19: "Main Menu, Survey … Short path player goes from
+ * Main Menu to Survey directly to gameplay on the target campaign" [MM-epic_mvftpzrk_j]. The old FACTIONS and MAPS
+ * screens are gone; side screens (harvester, tech, settings) are unchanged.
  *
  * The menu READS the save (locks, best scores) and never touches the sim; starting a map goes
  * through the same selectMap() the settings picker uses. Dev loop: ?map=N boots straight into a
@@ -20,6 +23,7 @@ const REG = globalThis.BulwarkFactions;
 import { PLANETS, planetImage } from '../data/planets.js';
 import { LANDING_CRAFT, craftFor } from '../render3d/craft/models.js';
 import { CRYSTAL } from '../render3d/styles/lowpoly-palettes.js';
+import { campaignOptions, defaultCampaign } from './campaignPick.js';
 // the live globes / craft / resource models load with three.js on first open (menuStage.js); until then (and with
 // no WebGL) the baked planet PNGs stand in
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
@@ -79,22 +83,10 @@ const CSS = `
 .bwm-btn.primary .hint { color:rgba(12,14,18,.62); font-weight:600; }
 .bwm-btn:disabled { opacity:.38; cursor:default; }
 .bwm-btn:disabled:hover { border-color:#2e3846; background:#1a1f28; }
-/* FACTIONS screen */
-.bwm-fgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px; }
-.bwm-fcard { background:#1a1f28; border:1px solid #2e3846; padding:14px 16px; cursor:pointer;
-  transition:border-color .12s, transform .12s; }
-.bwm-fcard:hover { border-color:#d9a441; transform:translateY(-2px); }
-.bwm-fcard .fplanet { display:flex; flex-direction:column; align-items:center; margin:-4px 0 8px; }
-.bwm-fcard .fplanet img { width:112px; height:112px; display:block; }
-.bwm-fcard .fplanet span { margin-top:2px; font-size:10px; letter-spacing:.22em; color:#8fa0b3; }
-.bwm-fcard .fnm { font-size:15px; font-weight:800; letter-spacing:.1em; }
-.bwm-fcard .fprof { margin-top:6px; font-size:11px; color:#8fa0b3; line-height:1.45; min-height:30px; }
-.bwm-fcard .fstats { display:flex; gap:14px; margin-top:10px; font-size:10px; letter-spacing:.12em; color:#8fa0b3; }
-.bwm-fcard .fstats b { color:#e6ecf3; }
-.bwm-fcard .fstats .stars { color:#f2c869; }
-.bwm-badges { display:flex; gap:10px; margin-top:12px; }
-.bwm-badge { width:38px; height:38px; display:flex; align-items:center; justify-content:center;
-  font-size:19px; border:1px solid #2e3846; background:#14181f; color:#3a4350; cursor:help; }
+/* SURVEY rail: the 9 planets / factions (was the FACTIONS screen) [MM-story_mvftq4h6_k] */
+.bwm-badges { display:flex; gap:8px; }
+.bwm-badge { width:28px; height:28px; display:flex; align-items:center; justify-content:center;
+  font-size:15px; border:1px solid #2e3846; background:#14181f; color:#3a4350; cursor:help; }
 .bwm-badge.lit { color:#0c0e12; background:linear-gradient(160deg,#f2c869,#d9a441);
   border-color:#f2c869; box-shadow:0 0 12px rgba(217,164,65,.35); }
 /* LIVE 3D (menuStage.js): one canvas over the menu draws into the [data-globe] / [data-craft] / [data-res] boxes */
@@ -120,8 +112,26 @@ const CSS = `
 .bwm-craft .cn { font-size:14px; font-weight:800; letter-spacing:.08em; margin-top:3px; }
 .bwm-craft .cw { font-size:10.5px; color:#8fa0b3; margin-top:3px; line-height:1.4; }
 /* PLANET SURVEY (a faction picked on FACTIONS) */
-.bwm-survey { flex:1; display:none; min-height:0; padding:4px clamp(16px,3vw,48px) 18px; gap:clamp(12px,2.5vw,36px);
-  grid-template-columns:minmax(0,1.05fr) minmax(0,1fr); grid-template-rows:minmax(0,1fr); align-items:center; }
+.bwm-survey { flex:1; display:none; min-height:0; padding:4px clamp(16px,2.5vw,40px) 18px; gap:clamp(10px,2vw,28px);
+  grid-template-columns:minmax(170px,230px) minmax(0,1fr) minmax(0,1fr); grid-template-rows:minmax(0,1fr); align-items:center; }
+.bwm-rail { align-self:stretch; display:flex; flex-direction:column; gap:6px; min-height:0; overflow-y:auto; padding:2px 4px 2px 0; }
+.bwm-rail .rh { font-size:10px; letter-spacing:.3em; color:#d9a441; margin:2px 0 4px; }
+.bwm-pl { display:grid; grid-template-columns:40px minmax(0,1fr); gap:2px 10px; align-items:center; text-align:left; width:100%;
+  background:rgba(20,24,31,.78); border:1px solid #2e3846; border-left:3px solid transparent; color:#e6ecf3; padding:6px 8px; cursor:pointer;
+  font:inherit; transition:border-color .12s, background .12s; }
+.bwm-pl:hover { border-color:#3e4a5a; background:rgba(28,34,43,.9); }
+.bwm-pl.on { border-color:var(--hue,#d9a441); border-left-color:var(--hue,#d9a441); background:rgba(30,36,46,.95); }
+.bwm-pl img { grid-row:span 2; width:40px; height:40px; display:block; }
+.bwm-pl .pn { font-size:12.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--hue,#e6ecf3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bwm-pl .pf { font-size:10px; color:#8fa0b3; letter-spacing:.06em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bwm-pl .pf b { color:#e6ecf3; font-weight:700; }
+.bwm-pl .pf .st { color:#f2c869; }
+.bwm-camp { margin-top:12px; padding:10px 12px; background:#14181f; border:1px solid #2e3846; border-left:3px solid var(--hue,#d9a441); flex:0 0 auto; }
+.bwm-camp label { display:block; font-size:10px; letter-spacing:.3em; color:#d9a441; margin-bottom:6px; }
+.bwm-camp select { width:100%; background:#1a1f28; color:#e6ecf3; border:1px solid #3e4a5a; padding:9px 10px; font:inherit; font-size:14px;
+  font-weight:700; letter-spacing:.06em; cursor:pointer; }
+.bwm-camp select:focus { outline:1px solid #d9a441; }
+.bwm-camp .cd { margin-top:6px; font-size:11px; color:#8fa0b3; line-height:1.45; }
 .bwm-survey .stagecol { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:0; height:100%; }
 .bwm-survey .stagecol .bwm-globe { width:min(100%, 66vh); }
 .bwm-survey .hint { font-size:10px; letter-spacing:.24em; color:#5c6a7a; margin-top:4px; }
@@ -153,6 +163,11 @@ const CSS = `
 .bwm-acts .bwm-btn { width:auto; flex:1 1 auto; justify-content:center; gap:10px; }
 @media (max-width:760px) {
   .bwm-survey { grid-template-columns:minmax(0,1fr); align-items:start; overflow-y:auto; }
+  .bwm-rail { flex-direction:row; overflow-x:auto; overflow-y:hidden; align-self:auto; }
+  .bwm-rail .rh { display:none; }
+  .bwm-pl { flex:0 0 auto; width:auto; grid-template-columns:32px auto; }
+  .bwm-pl img { width:32px; height:32px; }
+  .bwm-pl .pf { display:none; }
   .bwm-survey .stagecol { height:auto; }
   .bwm-survey .stagecol .bwm-globe { width:min(78vw, 360px); }
   .bwm-hero.planet { flex:0 0 auto; height:auto; }
@@ -181,22 +196,6 @@ const CSS = `
 .bwm-maps-head { display:flex; align-items:baseline; gap:16px; margin:6px 2px 14px; }
 .bwm-maps-head h2 { font-size:20px; letter-spacing:.3em; font-weight:800; }
 .bwm-maps-head .back { margin-left:auto; }
-.bwm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; }
-.bwm-card { position:relative; background:#1a1f28; border:1px solid #2e3846; padding:14px 16px;
-  cursor:pointer; transition:border-color .12s, transform .12s; }
-.bwm-card:hover { border-color:#d9a441; transform:translateY(-2px); }
-.bwm-card.locked { opacity:.45; cursor:default; }
-.bwm-card.locked:hover { border-color:#2e3846; transform:none; }
-.bwm-card .nm { font-size:15px; font-weight:800; letter-spacing:.12em; }
-.bwm-card .sz { font-size:11px; color:#8fa0b3; margin-top:2px; }
-.bwm-card .res { display:inline-block; margin-top:8px; font-size:10px; letter-spacing:.18em;
-  color:#d9a441; border:1px solid #2e3846; padding:3px 8px; }
-.bwm-card .note { margin-top:8px; font-size:11px; color:#8fa0b3; line-height:1.45; min-height:32px; }
-.bwm-card .meta { display:flex; justify-content:space-between; margin-top:10px; font-size:10px;
-  letter-spacing:.12em; color:#8fa0b3; }
-.bwm-card .best { color:#f2c869; }
-.bwm-card .lock { position:absolute; top:10px; right:12px; font-size:14px; color:#8fa0b3; }
-.bwm-card .done { position:absolute; top:10px; right:12px; font-size:12px; color:#57a057; letter-spacing:.1em; }
 .bwm-foot { padding:10px 30px 16px; font-size:10px; letter-spacing:.2em; color:#5c6a7a; }
 @media (max-width:760px) {
   .bwm-main { flex-direction:column; justify-content:center; gap:18px; padding:0 20px; }
@@ -222,15 +221,6 @@ const CSS = `
   .bwm-maps { padding:4px 20px 12px; }
   .bwm-maps-head { margin:2px 2px 8px; }
   .bwm-maps-head h2 { font-size:14px; letter-spacing:.24em; }
-  .bwm-fgrid { grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; }
-  .bwm-fcard { padding:10px 12px; }
-  .bwm-fcard .fplanet { margin:-2px 0 4px; }
-  .bwm-fcard .fplanet img { width:56px; height:56px; }
-  .bwm-fcard .fnm { font-size:13px; }
-  .bwm-fcard .fprof { min-height:0; font-size:10.5px; }
-  .bwm-badges { margin-top:8px; }
-  .bwm-badge { width:34px; height:34px; font-size:16px; }
-  .bwm-grid { gap:10px; }
   .bwm-hero.planet .bwm-globe { height:min(82vh, 44vw); }
   .bwm-hero.planet .bwm-title { font-size:clamp(24px,9vh,40px); }
   .bwm-hero.planet .bwm-sub { display:none; }
@@ -240,7 +230,13 @@ const CSS = `
   .bwm-acts .bwm-btn { padding:8px 12px; }
   .bwm-craft .cv { flex-basis:84px; height:56px; }
   .bwm-craft .cw { display:none; }
-  .bwm-survey { padding:2px 16px 8px; gap:14px; }
+  .bwm-survey { padding:2px 16px 8px; gap:12px; grid-template-columns:minmax(132px,170px) minmax(0,.8fr) minmax(0,1fr); }
+  .bwm-pl { grid-template-columns:28px minmax(0,1fr); padding:4px 6px; }
+  .bwm-pl img { width:28px; height:28px; grid-row:auto; }
+  .bwm-pl .pf { display:none; }
+  .bwm-camp { margin-top:6px; padding:6px 8px; }
+  .bwm-camp select { padding:6px 8px; font-size:12px; }
+  .bwm-camp .cd { display:none; }
   .bwm-survey .stagecol .bwm-globe { width:min(100%, 70vh); }
   .bwm-survey .hint { display:none; }
   .bwm-doss { padding:10px 12px; }
@@ -295,7 +291,7 @@ export function createMenu(mountEl, cbs) {
   const heroGlobe = globeBox('ground', true);
   hero.appendChild(heroGlobe);
   const htext = el(doc, 'div', 'bwm-htext');
-  htext.appendChild(el(doc, 'div', 'bwm-kicker', 'CAMPAIGN — 9 MAPS'));
+  htext.appendChild(el(doc, 'div', 'bwm-kicker', 'CAMPAIGN — 9 PLANETS'));
   const title = el(doc, 'div', 'bwm-title'); title.innerHTML = 'HOLD THE<br><span>BULWARK</span>';
   htext.appendChild(title);
   htext.appendChild(el(doc, 'div', 'bwm-sub',
@@ -314,11 +310,8 @@ export function createMenu(mountEl, cbs) {
     menu.appendChild(b);
     return b;
   };
-  const continueBtn = mkBtn('CONTINUE', ' ', 'primary', () => {
-    const s = loadSave();
-    if (cbs.onPlayMap) cbs.onPlayMap(Math.min(9, s.unlockedThrough));
-  });
-  mkBtn('FACTIONS', 'campaign — choose your enemy', null, () => show('factions'));
+  // the short path: MAIN → SURVEY (the target planet, its highest unlocked campaign preselected) → battle
+  const continueBtn = mkBtn('SURVEY', ' ', 'primary', () => openSurvey(targetKey()));
   mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
   mkBtn('TECH TREE', 'research upgrades', null, () => show('techtree'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
@@ -338,91 +331,50 @@ export function createMenu(mountEl, cbs) {
   main.appendChild(menu);
   root.appendChild(main);
 
-  // ── MAPS screen ──
-  const maps = el(doc, 'div', 'bwm-maps');
-  maps.style.display = 'none';
-  const mh = el(doc, 'div', 'bwm-maps-head');
-  mh.appendChild(el(doc, 'h2', null, 'CAMPAIGN'));
-  const back = el(doc, 'button', 'bwm-btn back'); back.style.width = 'auto'; back.style.padding = '8px 18px';
-  back.appendChild(el(doc, 'span', null, '← MENU'));
-  back.addEventListener('click', () => show('main'));
-  mh.appendChild(back);
-  maps.appendChild(mh);
-  const grid = el(doc, 'div', 'bwm-grid');
-  maps.appendChild(grid);
-  root.appendChild(maps);
-
-  // ── FACTIONS screen (choose who to battle; per-faction campaign record + tech badges) ──
-  const factions = el(doc, 'div', 'bwm-maps');
-  factions.style.display = 'none';
-  const fh = el(doc, 'div', 'bwm-maps-head');
-  fh.appendChild(el(doc, 'h2', null, 'FACTIONS'));
-  const fback = el(doc, 'button', 'bwm-btn back'); fback.style.width = 'auto'; fback.style.padding = '8px 18px';
-  fback.appendChild(el(doc, 'span', null, '← MENU'));
-  fback.addEventListener('click', () => show('main'));
-  fh.appendChild(fback);
-  factions.appendChild(fh);
-  const fgrid = el(doc, 'div', 'bwm-fgrid');
-  factions.appendChild(fgrid);
-  root.appendChild(factions);
-
-  function refreshFactions() {
+  // the TARGET planet: the saved enemy faction's homeworld (or the galaxy pick on the main menu)
+  function targetKey() {
     const s = loadSave();
-    const al = s.alignment || 0;
-    fh.firstChild.textContent = 'FACTIONS — ALIGNMENT ' + (al > 0 ? '+' : '') + al + ' ' +
-      (al >= 4 ? 'GOOD' : al <= -4 ? 'EVIL' : 'NEUTRAL');
-    fgrid.textContent = '';
-    for (const row of MAPDATA.factions) {
-      const fid = row.Faction_ID;
-      const fac = factionByOrdinal(fid);
-      const name = (fac && fac.name) || row.Faction_Name;   // row.Faction_Name is 'Faction_0N' — a last resort
-      const rec = (s.factionRecords || {})[name] || {};
-      const tech = MAPDATA.techTree.find((t) => t.Faction === row.Faction_Name) || {};
-      const tier = (s.tech || {})[name] || 0;
-      const loyalty = (s.loyalty || {})[name] || 0;
-      const card = el(doc, 'div', 'bwm-fcard');
-      // The faction's homeworld above its name (data/planets.js; baked by tools/planets/bake.html)
-      const planet = fac && PLANETS[fac.key];
-      if (planet) {
-        const pw = el(doc, 'div', 'fplanet');
-        const img = el(doc, 'img');
-        img.src = planetImage(fac.key); img.alt = planet.name; img.title = planet.name + ' — ' + planet.type + '. ' + planet.blurb;
-        img.loading = 'lazy'; img.decoding = 'async';
-        img.addEventListener('error', () => { img.style.display = 'none'; });
-        pw.appendChild(img);
-        pw.appendChild(el(doc, 'span', null, planet.name.toUpperCase()));
-        card.appendChild(pw);
-      }
-      card.appendChild(el(doc, 'div', 'fnm', name.toUpperCase()));
-      card.appendChild(el(doc, 'div', 'fprof', (row.Profile || '') +
-        '  Premium: ' + row.Premium_Resource + '. Rival: ' +
-        ((factionByOrdinal(row.Rival_Faction) || {}).name || '—') + '.'));
-      const st = el(doc, 'div', 'fstats');
-      const mapsWon = rec.mapsWon ? Object.keys(rec.mapsWon).length : 0;
-      const avg = rec.starRuns ? Math.round((rec.starSum / rec.starRuns) * 10) / 10 : null;
-      st.innerHTML = 'MAPS <b>' + mapsWon + '/9</b>' +
-        '<span class="stars">★ ' + (avg != null ? avg.toFixed(1) : '—') + '</span>' +
-        'LOYALTY <b>' + loyalty + '</b>';
-      card.appendChild(st);
-      const badges = el(doc, 'div', 'bwm-badges');
-      TECH_BADGES.forEach((b, i) => {
-        const lit = tier >= i + 1;
-        const at = tech[b.keyAt];
-        const bd = el(doc, 'span', 'bwm-badge' + (lit ? ' lit' : ''), b.icon);
-        bd.title = b.label + (lit ? ' — UNLOCKED' : ' — unlocks at ' + at + ' cumulative loyalty (you have ' + loyalty + ')');
-        badges.appendChild(bd);
-      });
-      card.appendChild(badges);
-      card.addEventListener('click', () => openSurvey(fac ? fac.key : null, name));
-      fgrid.appendChild(card);
-    }
+    const enemy = (cbs.currentFaction && cbs.currentFaction()) || s.enemyFaction || REG.find('ground').name;
+    const f = REG.find(enemy) || REG.find('ground');
+    return f.key;
   }
-
-  let chosenFaction = null;
+  function setTarget(key) {
+    const f = REG.find(key); if (!f) return;
+    try { const s = loadSave(); s.enemyFaction = f.name; localStorage.setItem('bulwark:save', JSON.stringify(s)); } catch (e) { /* */ }
+    if (cbs.onSelectFaction) cbs.onSelectFaction(f.name);
+  }
 
   // ── PLANET SURVEY (a faction picked): its homeworld live, the dossier, the four resources; confirming sets the
   //    enemy and goes to the campaign maps [MM-story_mvcnxgt8_13]
   const survey = el(doc, 'div', 'bwm-survey');
+  // the 9 planets / factions (was the FACTIONS screen): pick one to survey it [MM-story_mvftq4h6_k]
+  const rail = el(doc, 'nav', 'bwm-rail'); rail.setAttribute('aria-label', 'Planets');
+  survey.appendChild(rail);
+  function refreshRail(selKey) {
+    const s = loadSave();
+    rail.textContent = '';
+    rail.appendChild(el(doc, 'div', 'rh', 'PLANETS'));
+    for (const key of Object.keys(PLANETS)) {
+      const P = PLANETS[key], fac = REG.find(key); if (!fac) continue;
+      const rec = (s.factionRecords || {})[fac.name] || {};
+      const won = rec.mapsWon ? Object.keys(rec.mapsWon).length : 0;
+      const avg = rec.starRuns ? (rec.starSum / rec.starRuns).toFixed(1) : '—';
+      const b = el(doc, 'button', 'bwm-pl' + (key === selKey ? ' on' : ''));
+      b.style.setProperty('--hue', P.ui || '#f2c869');
+      b.setAttribute('aria-pressed', key === selKey ? 'true' : 'false');
+      b.title = P.name + ' — ' + fac.name + ': ' + P.blurb;
+      const img = el(doc, 'img'); img.alt = ''; img.src = planetImage(key) || ''; img.loading = 'lazy'; img.addEventListener('error', () => { img.style.visibility = 'hidden'; });
+      b.appendChild(img);
+      b.appendChild(el(doc, 'span', 'pn', P.name));
+      const pf = el(doc, 'span', 'pf'); pf.innerHTML = '';
+      pf.appendChild(doc.createTextNode(fac.name + ' · '));
+      pf.appendChild(el(doc, 'b', null, won + '/9'));
+      pf.appendChild(el(doc, 'span', 'st', '  ★ ' + avg));
+      b.appendChild(pf);
+      b.addEventListener('click', () => openSurvey(key));
+      rail.appendChild(b);
+    }
+  }
   const sCol = el(doc, 'div', 'stagecol');
   const sGlobe = globeBox('ground', true);
   sCol.appendChild(sGlobe);
@@ -440,12 +392,14 @@ export function createMenu(mountEl, cbs) {
   prevB.addEventListener('click', () => step(-1));
   nextB.addEventListener('click', () => step(1));
   function step(d) {
-    const i = KEYS.indexOf(surveyKey), k = KEYS[(i + d + KEYS.length) % KEYS.length], f = REG.find(k);
-    openSurvey(k, f ? f.name : k);
+    const i = KEYS.indexOf(surveyKey), k = KEYS[(i + d + KEYS.length) % KEYS.length];
+    openSurvey(k);
   }
-  function openSurvey(key, name) {
-    if (!key || !PLANETS[key]) { if (cbs.onSelectFaction) cbs.onSelectFaction(name); chosenFaction = name; show('maps'); return; }
+  function openSurvey(key) {
+    if (!key || !PLANETS[key]) key = targetKey();
+    const name = (REG.find(key) || {}).name || key;
     surveyKey = key; surveyName = name;
+    refreshRail(key);
     const P = PLANETS[key], F = P.faction || {}, fac = REG.find(key);
     const beats = F.beats && REG.find(F.beats), beatsPl = F.beats && PLANETS[F.beats];
     setGlobe(sGlobe, key);
@@ -453,7 +407,7 @@ export function createMenu(mountEl, cbs) {
     sGlobe.style.setProperty('--hue', P.ui || '#f2c869');
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const sv = P.survey || {};
-    doss.innerHTML = `<div class="db"><div class="ty">PLANET SURVEY · ${esc(P.type)}</div>
+    doss.innerHTML = `<div class="db" data-clip><div class="ty">PLANET SURVEY · ${esc(P.type)}</div>
       <div class="fa">Faction ${fac ? fac.ordinal : ''} · ${esc(name)}</div>
       <h2>${esc(P.name)}</h2>
       <p>${esc(P.blurb)}</p>
@@ -465,9 +419,11 @@ export function createMenu(mountEl, cbs) {
         <dt>Air</dt><dd><span class="sw"><span style="background:${esc(P.haze)}"></span>haze</span><span class="sw"><span style="background:${esc(P.sun || '#fff')}"></span>sunlight</span></dd>
         <dt>Trees</dt><dd>${esc(sv.trees)}</dd><dt>Ground</dt><dd>${esc(sv.ground)}</dd>
         <dt>Rocks</dt><dd>${esc(sv.rocks)}</dd><dt>Airborne</dt><dd>${esc(sv.airborne)}</dd>
+        <dt>Tech</dt><dd class="bwm-badges"></dd>
       </dl>
       <div class="bwm-res-h">RESOURCES ON ${esc(P.name.toUpperCase())}</div>
       <div class="bwm-res"></div></div>
+      <div class="bwm-camp"><label for="bwm-camp-sel">CAMPAIGN</label><select id="bwm-camp-sel"></select><div class="cd"></div></div>
       <div class="bwm-acts"></div>`;
     const res = doss.querySelector('.bwm-res');
     for (const tier of ['common', 'uncommon', 'rare', 'epic']) {
@@ -479,16 +435,32 @@ export function createMenu(mountEl, cbs) {
       tx.appendChild(el(doc, 'div', 'rn', r.name)); tx.appendChild(el(doc, 'div', 'rr', role)); tx.appendChild(el(doc, 'div', 'rx', r.note));
       t.appendChild(v); t.appendChild(tx); res.appendChild(t);
     }
+    // the faction's tech badges (they were on the FACTIONS cards): lit once the loyalty threshold is reached
+    {
+      const sv = loadSave(), loyalty = (sv.loyalty || {})[name] || 0, tier = (sv.tech || {})[name] || 0;
+      const row = fac && MAPDATA.factions.find((r) => r.Faction_ID === fac.ordinal);
+      const tech = (row && MAPDATA.techTree.find((t) => t.Faction === row.Faction_Name)) || {};
+      const box = doss.querySelector('.bwm-facts .bwm-badges');
+      TECH_BADGES.forEach((b, i) => {
+        const lit = tier >= i + 1, bd = el(doc, 'span', 'bwm-badge' + (lit ? ' lit' : ''), b.icon);
+        bd.title = b.label + (lit ? ' — UNLOCKED' : ' — unlocks at ' + tech[b.keyAt] + ' cumulative loyalty (you have ' + loyalty + ')');
+        box.appendChild(bd);
+      });
+    }
+    // the campaign drop-down: the unlocked maps, the highest preselected; locked ones listed but disabled
+    const sv0 = loadSave(), opts = campaignOptions(sv0, MAPDATA.maps), sel = doss.querySelector('#bwm-camp-sel'), cd = doss.querySelector('.bwm-camp .cd');
+    for (const o of opts) { const op = el(doc, 'option', null, o.label); op.value = String(o.id); op.disabled = o.locked; sel.appendChild(op); }
+    sel.value = String(defaultCampaign(sv0, MAPDATA.maps.length));
+    const detail = () => { const o = opts.find((x) => String(x.id) === sel.value); cd.textContent = o ? o.detail : ''; };
+    sel.addEventListener('change', detail); detail();
     const acts = doss.querySelector('.bwm-acts');
     const go = el(doc, 'button', 'bwm-btn primary'); go.appendChild(el(doc, 'span', null, 'BATTLE ON ' + P.name.toUpperCase())); go.appendChild(el(doc, 'span', null, '→'));
     go.addEventListener('click', () => {
-      try { const s = loadSave(); s.enemyFaction = name; localStorage.setItem('bulwark:save', JSON.stringify(s)); } catch (e) { /* */ }
-      if (cbs.onSelectFaction) cbs.onSelectFaction(name);
-      chosenFaction = name;
-      show('maps');
+      setTarget(key);
+      if (cbs.onPlayMap) cbs.onPlayMap(Number(sel.value) || defaultCampaign(loadSave(), MAPDATA.maps.length));
     });
-    const bk = el(doc, 'button', 'bwm-btn'); bk.appendChild(el(doc, 'span', null, '← FACTIONS'));
-    bk.addEventListener('click', () => show('factions'));
+    const bk = el(doc, 'button', 'bwm-btn'); bk.appendChild(el(doc, 'span', null, '← MENU'));
+    bk.addEventListener('click', () => show('main'));
     acts.appendChild(go); acts.appendChild(bk);
     show('survey');
   }
@@ -661,41 +633,10 @@ export function createMenu(mountEl, cbs) {
 
   root.appendChild(el(doc, 'div', 'bwm-foot', 'BULWARK — TEST BUILD'));
 
-  function fmtPar(sec) {
-    const m = Math.round(sec / 60);
-    return '~' + m + ' MIN';
-  }
-
-  function refreshMaps() {
-    const s = loadSave();
-    grid.textContent = '';
-    for (const row of MAPDATA.maps) {
-      const id = row.Map_ID;
-      const rec = s.maps[id] || {};
-      const locked = id > s.unlockedThrough;
-      const card = el(doc, 'div', 'bwm-card' + (locked ? ' locked' : ''));
-      card.appendChild(el(doc, 'div', 'nm', row.Map_Name.replace('_', ' ')));
-      card.appendChild(el(doc, 'div', 'sz', row.Full_W + ' × ' + row.Full_H +
-        (row.Has_Water ? '  ·  WATER' : '') + '  ·  DIFF ' + row.Difficulty.toFixed(2)));
-      card.appendChild(el(doc, 'span', 'res', String(row.Primary_Resource).toUpperCase()));
-      card.appendChild(el(doc, 'div', 'note', locked ? 'Reach a ★ 3.0 average on the previous map.' : (row.Notes || '')));
-      const meta = el(doc, 'div', 'meta');
-      meta.appendChild(el(doc, 'span', null, fmtPar(row.Par_Time_Sec)));
-      meta.appendChild(el(doc, 'span', 'best',
-        (rec.avg != null ? '★ ' + rec.avg.toFixed(1) + '  ' : '') +
-        (rec.bestScore != null ? 'BEST ' + rec.bestScore : '')));
-      card.appendChild(meta);
-      if (locked) card.appendChild(el(doc, 'span', 'lock', '🔒'));
-      else if (rec.beaten) card.appendChild(el(doc, 'span', 'done', '✓ WON'));
-      if (!locked) card.addEventListener('click', () => { if (cbs.onPlayMap) cbs.onPlayMap(id); });
-      grid.appendChild(card);
-    }
-  }
-
   function show(screen) {
+    // the retired screens open the Survey on the target planet (post-battle "main menu" used to open 'maps')
+    if (screen === 'maps' || screen === 'factions') { openSurvey(targetKey()); return; }
     main.style.display = screen === 'main' ? 'flex' : 'none';
-    maps.style.display = screen === 'maps' ? 'block' : 'none';
-    factions.style.display = screen === 'factions' ? 'block' : 'none';
     harv.style.display = screen === 'harvester' ? 'block' : 'none';
     tech.style.display = screen === 'tech' ? 'block' : 'none';
     techTree.root.style.display = screen === 'techtree' ? 'block' : 'none';
@@ -704,23 +645,16 @@ export function createMenu(mountEl, cbs) {
     root.classList.toggle('space', screen === 'main' || screen === 'survey');
     current = screen;
     syncStage();
-    if (screen === 'factions') refreshFactions();
     if (screen === 'harvester') refreshHarvester();
     if (screen === 'tech') refreshTech();
     if (screen === 'techtree') techTree.refresh();
-    if (screen === 'maps') {
-      mh.firstChild.textContent = chosenFaction ? 'CAMPAIGN — VS ' + chosenFaction.toUpperCase() : 'CAMPAIGN';
-      refreshMaps();
-    }
     if (screen === 'main') {
       const s = loadSave();
-      const started = s.unlockedThrough > 1 || Object.keys(s.maps).length > 0;
-      continueBtn.firstChild.textContent = started ? 'CONTINUE — MAP ' + Math.min(9, s.unlockedThrough) : 'PLAY';
-      // the next planet = the current enemy's homeworld
-      const enemy = (cbs.currentFaction && cbs.currentFaction()) || s.enemyFaction || REG.find('ground').name;
-      const f = REG.find(enemy) || REG.find('ground'), P = PLANETS[f.key];
+      // the hero = the target planet (always the default view); the primary button surveys it
+      const f = REG.find(targetKey()) || REG.find('ground'), P = PLANETS[f.key];
       setGlobe(heroGlobe, f.key);
-      continueBtn.lastChild.textContent = P ? 'vs ' + f.name + ' · ' + P.name : '';
+      continueBtn.firstChild.textContent = P ? 'SURVEY · ' + P.name.toUpperCase() : 'SURVEY';
+      continueBtn.lastChild.textContent = 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);
       heroNext.innerHTML = P ? 'NEXT PLANET · <b>' + P.name.toUpperCase() + '</b>' : '';
       hero.style.setProperty('--hue', (P && P.ui) || '#f2c869');
       // the player's landing craft
@@ -760,11 +694,15 @@ export function createMenu(mountEl, cbs) {
 
   const api = {
     root,
-    open(screen) { root.style.display = 'flex'; show(screen || 'main'); },
+    open(screen) {
+      root.style.display = 'flex';
+      // 'survey' (and the retired 'maps' / 'factions') open the Survey on the target planet [MM-story_mvftq4h6_k]
+      if (screen === 'survey' || screen === 'maps' || screen === 'factions') openSurvey(targetKey()); else show(screen || 'main');
+    },
     close() { root.style.display = 'none'; syncStage(); },
     isOpen() { return root.style.display !== 'none'; },
     /** test hook: open a faction's survey by key */
-    survey(key) { const f = REG.find(key); root.style.display = 'flex'; openSurvey(key, f ? f.name : key); },
+    survey(key) { root.style.display = 'flex'; openSurvey(key); },
   };
   show('main');
   return api;

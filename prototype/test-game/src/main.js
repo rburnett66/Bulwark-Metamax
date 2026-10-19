@@ -603,7 +603,7 @@ export function boot(mountEl, seed) {
     },
     onNextWave: () => { endInterlude(); },
     onDeselect: () => { ui.selectedUnitId = null; ui.selectedStructureId = null; },
-    onMainMenu: () => { if (hud && hud.hideResult) hud.hideResult(); menu.open('maps'); },
+    onMainMenu: () => { if (hud && hud.hideResult) hud.hideResult(); menu.open('survey'); },   // back to the Survey: next campaign one click away [MM-story_mvftq4h6_k]
     onNextMap: () => {
       if (!(currentMapId > 0 && currentMapId < 9)) return;
       // MAP TRANSITION (owner 2026-07-16): a NEW map is a clean tactical slate — structures are
