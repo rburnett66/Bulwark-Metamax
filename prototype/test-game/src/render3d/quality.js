@@ -18,16 +18,16 @@ import { DEFAULT_IMPACT_CAPS, LOW_IMPACT_CAPS } from './fx/impacts.js';
 export const TIERS = Object.freeze({
   high: Object.freeze({
     key: 'high', label: 'High', dprCap: 2, shadowSize: 4096, liveShadows: true,
-    groundRes: 1, tufts: true, grassDetail: true, effects: Object.freeze({ maxShots: 400, maxFlashes: 200 }), impactCaps: DEFAULT_IMPACT_CAPS,
+    groundRes: 1, tufts: true, grassDetail: true, cloudDetail: true, effects: Object.freeze({ maxShots: 400, maxFlashes: 200 }), impactCaps: DEFAULT_IMPACT_CAPS,
   }),
   standard: Object.freeze({
     key: 'standard', label: 'Standard', dprCap: 2, shadowSize: 2048, liveShadows: true,
-    groundRes: 1, tufts: true, grassDetail: true, effects: Object.freeze({ maxShots: 400, maxFlashes: 200 }), impactCaps: DEFAULT_IMPACT_CAPS,
+    groundRes: 1, tufts: true, grassDetail: true, cloudDetail: false, effects: Object.freeze({ maxShots: 400, maxFlashes: 200 }), impactCaps: DEFAULT_IMPACT_CAPS,
   }),
   low: Object.freeze({
     // effect cap 120 = everything the combat FX layer may have alive at once (shots + flashes)
     key: 'low', label: 'Low', dprCap: 1.5, shadowSize: 1024, liveShadows: false,
-    groundRes: 0.5, tufts: false, grassDetail: false, effects: Object.freeze({ maxShots: 80, maxFlashes: 40 }), impactCaps: LOW_IMPACT_CAPS,
+    groundRes: 0.5, tufts: false, grassDetail: false, cloudDetail: false, effects: Object.freeze({ maxShots: 80, maxFlashes: 40 }), impactCaps: LOW_IMPACT_CAPS,
   }),
 });
 export const TIER_KEYS = Object.freeze(['high', 'standard', 'low']);

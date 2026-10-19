@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import * as THREE from '../../../vendor/three.module.js';
 import { fogWindow, createFogTracker, REVEAL_FLASH_S, insideWindow } from './fogModel.js';
-import { createFogView, fogAlpha, FOG_MARGIN, CLOUD, cloudBias, cloudDark, cloudNoisePixels } from './fog.js';
+import { createFogView, fogAlpha, FOG_MARGIN, CLOUD, cloudAlpha, cloudDark, cloudNoisePixels } from './fog.js';
 import { stepYaw, twistBy, wrapYaw, cameraPose, screenToGroundCell, groundCellToScreen } from '../camera.js';
 import { buildTerrainMap, buildCampaignMap } from '../../sim/mapgen.js';
 
@@ -93,7 +93,10 @@ test('the fog view: one mesh over the scene (no depth test), under the ghost; cl
   assert.equal(u.uFlash.value, 0);
   v.sync({ win: { rect: rings[1].rect, gated: false }, flash: { prev: rings[0].rect, cur: rings[1].rect, alpha: 0.5 } });
   assert.ok(u.uFlash.value > 0);
-  assert.ok(u.uNoise.value && u.uCloud.value.x === CLOUD.full, 'cloud noise + band');
+  assert.ok(u.uNoise.value && u.uCloud.value.x === CLOUD.edge, 'cloud noise + edge');
+  assert.equal(m.material.defines.CLOUD_DETAIL, 1, 'desktop detail by default');
+  const rough = createFogView(THREE, new THREE.Scene(), campaign, { detail: false });
+  assert.equal(rough.mesh.material.defines.CLOUD_DETAIL, undefined, 'phones: the rough path (one texture read)');
   assert.equal(u.uLine, undefined, 'no hard outline (vignette, owner 2026-10-18)');
   // the quad reaches past the horizon at the farthest zoom
   m.geometry.computeBoundingBox();
@@ -160,18 +163,19 @@ test('picking still inverts under any out-of-battle yaw', () => {
   }
 });
 
-test('cloud band: wisps at the window edge thicken to full cover, then sink into the dark veil far out [MM-story_mvfk3el9_b]', () => {
-  assert.equal(cloudBias(-1), -1, 'none inside the play area');
-  assert.ok(cloudBias(0) < -0.4 && cloudBias(CLOUD.full) > 0.5, 'edge → full');
-  for (let d = 0; d < CLOUD.full; d += 0.5) assert.ok(cloudBias(d + 0.5) >= cloudBias(d), 'monotonic');
+test('cloud edge: clear in the play area, a soft billowy rim just outside, dark far out [MM-story_mvfk3el9_b]', () => {
+  assert.equal(cloudAlpha(0, 0.5), 0, 'the window edge stays clear');
+  assert.equal(cloudAlpha(CLOUD.edge + CLOUD.soft, 0.5), 1, 'full cloud past the rim');
+  assert.ok(cloudAlpha(CLOUD.edge + CLOUD.soft * 0.5, 0.5) > 0.2 && cloudAlpha(CLOUD.edge + CLOUD.soft * 0.5, 0.5) < 0.8, 'soft, not a hard line');
+  assert.ok(cloudAlpha(CLOUD.edge + 0.5, 0.9) > cloudAlpha(CLOUD.edge + 0.5, 0.1), 'billows push the rim in and out');
+  for (let d = 0; d < 6; d += 0.5) assert.ok(cloudAlpha(d + 0.5) >= cloudAlpha(d), 'monotonic out');
   assert.equal(cloudDark(CLOUD.dark - 0.1), 0);
   assert.equal(cloudDark(CLOUD.black + 1), 1);
-  assert.ok(CLOUD.full < CLOUD.dark && CLOUD.dark < CLOUD.black);
+  assert.ok(CLOUD.edge + CLOUD.soft < CLOUD.dark && CLOUD.dark < CLOUD.black);
   const px = cloudNoisePixels(32, 7), px2 = cloudNoisePixels(32, 7);
   assert.deepEqual(px, px2, 'deterministic');
   let lo = 255, hi = 0; for (let i = 0; i < px.length; i += 4) { lo = Math.min(lo, px[i]); hi = Math.max(hi, px[i]); }
   assert.ok(hi - lo > 80, `contrast ${lo}..${hi}`);
-  // tileable: the left and right columns join (no seam)
   let seam = 0; for (let y = 0; y < 32; y++) seam = Math.max(seam, Math.abs(px[(y * 32) * 4] - px[(y * 32 + 31) * 4]));
   assert.ok(seam < 40, `no seam (${seam})`);
 });

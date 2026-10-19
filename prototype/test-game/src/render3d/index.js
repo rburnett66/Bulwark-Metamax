@@ -205,7 +205,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   fxView.skipRockets = true;
   const impacts = createImpacts({ seed: (map.seed | 0) || 1, caps: tier.impactCaps });   // the tier's particle budget [MM-task_mveeqkyi_h]
   const impactsView = createImpactsView(THREE, scene, { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
-  const fogView = createFogView(THREE, scene, map);
+  const fogView = createFogView(THREE, scene, map, { detail: !!tier.cloudDetail });   // phones: the rough cloud path [MM-story_mvfk3el9_b]
   const contactsView = createContactsView(THREE, scene);   // hidden contacts: red reticles outside the play area [MM-story_mveehs1r_f]
   const baseStyle = baseStyleFor(craft && craft.def && craft.def.weaponType);   // each base fires its own weapon's look
   const cannonFx = createCannonFx({ seed: (map.seed | 0) || 1, style: baseStyle }), cannonFxView = createCannonFxView(THREE, scene, { style: baseStyle });   // the base super-cannon

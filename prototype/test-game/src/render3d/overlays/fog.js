@@ -25,29 +25,34 @@ const VEIL = 0x020304, FLASH = 0x9fe8ff;
 const EXTENT = 400;   // cells past the map on every side — beyond the horizon at the farthest zoom
 
 /**
- * CLOUD FOG [MM-story_mvfk3el9_b] — owner 2026-10-19: "a cheap cloud shader … a dimensional fog of war instead of the
- * black", "the black area is fine but the clouds should fill in the sides", "in the biggest view there should still be
- * a cloud effect on the edges". Past the play area a bank of drifting, sun-lit cloud thickens from scattered wisps at
- * the window edge to full cover by CLOUD.full cells out; past CLOUD.dark the bank fades into the dark veil. With the
- * whole board open the bank rings the MAP edge instead, so the world never ends in bare clear colour.
+ * CLOUD FOG [MM-story_mvfk3el9_b] — owner 2026-10-19: "a cheap cloud shader … instead of the black", "the clouds should
+ * fill in the sides", "in the biggest view there should still be a cloud effect on the edges", then (after the first
+ * look): "we don't need twisting, or deepness, just enough for edges .. but high performance for pc and mobile. Mobile
+ * could use rougher math for speed".
  *
- * CHEAP: still ONE quad, one draw call; a 128² tileable value-noise texture (built once, fbm baked in) sampled at two
- * drifting scales, plus one offset tap toward the sun for the lit / shadowed sides — four texture reads a pixel.
+ * So: a soft CLOUD EDGE around the play area — a billowy, noise-broken rim a little way outside the window, soft white
+ * cloud past it, sinking into the dark veil far out (ragged, not a box). With the whole board open it rings the map.
+ *
+ * COST: one quad, one draw call, pixels inside the play area discarded first. Per cloud pixel the DETAIL path (High
+ * tier, desktops) reads the noise texture twice; the ROUGH path (Standard / Low, what phones get) once, with no extra
+ * octave — a compile-time switch, so the cheap path carries no branch.
  */
 export const CLOUD = Object.freeze({
-  full: 5.0,     // cells outside the window where the cover is complete
-  dark: 8.0,     // cells out where the bank starts sinking into the veil (ragged by the noise)…
-  black: 14,     // …and is fully dark
-  scale: 0.085,  // noise cycles per cell (big billows)
-  drift: Object.freeze([0.18, 0.07]),   // cells / s the bank drifts
-  lit: Object.freeze([0.86, 0.89, 0.94]), shade: Object.freeze([0.36, 0.41, 0.52]),
+  edge: 1.2,     // cells outside the window where the cloud rim sits (on average)
+  wave: 2.4,     // how far the noise pushes the rim in / out (cells) — the billows
+  soft: 1.6,     // the rim's soft fade-in width (cells)
+  dark: 9.0,     // cells out where the bank starts sinking into the veil (ragged by the noise)…
+  black: 15,     // …and is fully dark
+  scale: 0.07,   // noise cycles per cell (big, soft billows)
+  drift: Object.freeze([0.12, 0.05]),   // cells / s
+  lit: Object.freeze([0.9, 0.92, 0.96]), shade: Object.freeze([0.62, 0.67, 0.76]),
   noise: 128,
 });
-/** JS twin of the shader's cloud cover bias at d cells outside the window (tests): −0.45 at the edge → +0.55 at full. */
-export function cloudBias(d, C = CLOUD) {
-  if (d < -0.25) return -1;   // inside the play area: no cloud
-  const t = Math.max(0, Math.min(1, d / C.full));
-  return -0.45 + t * t * (3 - 2 * t);
+/** JS twin of the shader's cloud alpha at d cells outside the window for a noise value n (0..1): the soft rim (tests). */
+export function cloudAlpha(d, n = 0.5, C = CLOUD) {
+  const e = d - C.edge - (0.5 - n) * C.wave;
+  const t = Math.max(0, Math.min(1, e / C.soft));
+  return t * t * (3 - 2 * t);
 }
 /** JS twin of the veil share at d (0 → 1 between CLOUD.dark and CLOUD.black). */
 export function cloudDark(d, C = CLOUD) {
@@ -90,35 +95,32 @@ uniform vec4 uRect;     // world x0, z0, x1, z1 (cell edges) — the play window
 uniform vec4 uPrev;     // the window before the last growth
 uniform float uFlash, uTime;
 uniform vec3 uVeil, uFlashCol, uLit, uShade;
-uniform vec2 uDrift, uSun;   // drift (cells/s); the sun's ground direction (for the lit side)
-uniform vec4 uCloud;    // full, dark, black, scale
+uniform vec2 uDrift;
+uniform vec4 uCloud;    // edge, wave, soft, scale
+uniform vec2 uFar;      // dark, black
 uniform sampler2D uNoise;
 varying vec2 vXZ;
 float inside(vec4 r, vec2 p) { return step(r.x, p.x) * step(p.x, r.z) * step(r.y, p.y) * step(p.y, r.w); }
-float clouds(vec2 p) {
-  vec2 q = p * uCloud.w;
-  return texture2D(uNoise, q + uDrift * uCloud.w * uTime).r * 0.65 + texture2D(uNoise, q * 2.3 - uDrift.yx * uCloud.w * uTime * 1.7 + 0.37).r * 0.35;
-}
 void main() {
-  // signed distance (cells) from the window edge: > 0 outside
   vec2 d2 = max(uRect.xy - vXZ, vXZ - uRect.zw);
-  float d = max(d2.x, d2.y);
+  float d = max(d2.x, d2.y);                       // cells outside the window (< 0 inside)
   float flash = uFlash * inside(uRect, vXZ) * (1.0 - inside(uPrev, vXZ));
-  if (d < -0.25 && flash < 0.002) discard;
-  // cloud cover: noise above a threshold that falls as we go out (wisps at the edge → full bank)
-  float t = clamp(d / uCloud.x, 0.0, 1.0);
-  float bias = d < -0.25 ? -1.0 : -0.45 + t * t * (3.0 - 2.0 * t);
-  float n = clouds(vXZ);
-  float cover = smoothstep(0.36, 0.66, n + bias);
-  // lit / shadowed: compare with a tap toward the sun — denser toward the sun = this side faces away
-  float ns = clouds(vXZ + uSun * 1.6);
-  float lit = clamp(0.55 + (n - ns) * 4.0, 0.0, 1.0);
-  vec3 cloud = mix(uShade, uLit, lit) * (0.82 + 0.18 * smoothstep(0.4, 0.8, n));   // thicker billows catch more light
-  // far out: the bank sinks into the dark veil
-  float k = clamp((d - uCloud.y + (n - 0.5) * 6.0) / (uCloud.z - uCloud.y), 0.0, 1.0);   // a ragged far edge, not a box
+  if (d < 0.0 && flash < 0.002) discard;           // the play area costs nothing
+  vec2 q = vXZ * uCloud.w + uDrift * uCloud.w * uTime;
+  float n = texture2D(uNoise, q).r;
+#ifdef CLOUD_DETAIL
+  n = n * 0.7 + texture2D(uNoise, q * 2.7 + 0.31).r * 0.3;   // a finer billow on desktops
+#endif
+  // the soft rim: the edge sits uCloud.x out, pushed in / out by the noise; fades in over uCloud.z cells
+  float e = clamp((d - uCloud.x - (0.5 - n) * uCloud.y) / uCloud.z, 0.0, 1.0);
+  float a = e * e * (3.0 - 2.0 * e);
+  // shading: billow crowns lit, the thin rim a little shadowed (no extra taps)
+  vec3 col = mix(uShade, uLit, clamp(n * 1.3 - 0.15 + e * 0.25, 0.0, 1.0));
+  // far out: the bank sinks into the dark veil along a ragged line
+  float k = clamp((d - uFar.x + (n - 0.5) * 6.0) / (uFar.y - uFar.x), 0.0, 1.0);
   float far = k * k * (3.0 - 2.0 * k);
-  vec3 col = mix(cloud, uVeil, far);
-  float a = max(cover * 0.94, far);
+  col = mix(col, uVeil, far);
+  a = max(a * 0.96, far);
   col = mix(col, uFlashCol, flash / max(a + flash, 1e-4));
   a = a + flash * (1.0 - a);
   if (a < 0.002) discard;
@@ -136,7 +138,7 @@ function cloudNoise(THREE) {
   return noiseTex;
 }
 
-export function createFogView(THREE, scene, map) {
+export function createFogView(THREE, scene, map, { detail = true } = {}) {
   const geo = new THREE.PlaneGeometry(map.cols + EXTENT * 2, map.rows + EXTENT * 2);
   geo.rotateX(-Math.PI / 2);
   geo.translate(map.cols / 2, 0, map.rows / 2);
@@ -146,12 +148,12 @@ export function createFogView(THREE, scene, map) {
     uVeil: { value: new THREE.Color(VEIL) }, uFlashCol: { value: new THREE.Color(FLASH) },
     uLit: { value: new THREE.Color().fromArray(CLOUD.lit) }, uShade: { value: new THREE.Color().fromArray(CLOUD.shade) },
     uDrift: { value: new THREE.Vector2(CLOUD.drift[0], CLOUD.drift[1]) },
-    uSun: { value: new THREE.Vector2(-0.707, -0.707) },   // the sun is north-west (render/sun.js): its ground direction
-    uCloud: { value: new THREE.Vector4(CLOUD.full, CLOUD.dark, CLOUD.black, CLOUD.scale) },
+    uCloud: { value: new THREE.Vector4(CLOUD.edge, CLOUD.wave, CLOUD.soft, CLOUD.scale) },
+    uFar: { value: new THREE.Vector2(CLOUD.dark, CLOUD.black) },
     uNoise: { value: cloudNoise(THREE) },
   };
   const mat = new THREE.ShaderMaterial({
-    uniforms: u, vertexShader: VERT, fragmentShader: FRAG,
+    uniforms: u, vertexShader: VERT, fragmentShader: FRAG, defines: detail ? { CLOUD_DETAIL: 1 } : {},
     transparent: true, depthTest: false, depthWrite: false,
   });
   const mesh = new THREE.Mesh(geo, mat);
