@@ -50,14 +50,19 @@ export function buildUnitViews(state, map, headings, resolve, dt, drawn = null) 
     if (!u || !u.pos) continue;
     live.add(u.id);
     const r = resolve(u.unitId);
-    const goal = headings.update(u.id, u.pos.x, u.pos.y);
-    // a plane on an attack run is aimed at where it is DRAWN (flightPath.js), so turrets track the drawn plane
+    // ground units DRIVE: the drawn unit chases the sim one along its hull — steers through moderate bends, pivots on
+    // the spot for sharp ones, never slides sideways (heading.js drive) [MM-story_mvekcu8r_n]. Flyers keep the sim spot.
+    const ground = !(u.altitude > 0) && u.domain !== 'Flyer' && headings.drive;
+    const d = ground ? headings.drive(u.id, u.pos.x, u.pos.y, dt) : null;
+    const px = d ? d.x : u.pos.x, py = d ? d.y : u.pos.y;
+    const goal = d ? d.heading : headings.update(u.id, u.pos.x, u.pos.y);
+    // a plane on an attack run (or a driven ground unit) is aimed at where it is DRAWN, so turrets track the drawn unit
     const dp = drawn && u.targetId != null ? drawn.get(u.targetId) : null;
     const tp = dp ? { x: dp.x - 0.5, y: dp.z - 0.5 } : targetPos(state, map, u.targetId);
-    const { heading, aim } = headings.turn(u.id, goal, tp ? Math.atan2(tp.y - u.pos.y, tp.x - u.pos.x) : goal, dt);
+    const { heading, aim } = headings.turn(u.id, goal, tp ? Math.atan2(tp.y - py, tp.x - px) : goal, dt, !!d);
     out.push({
       id: u.id, model: r.model, scale: r.scale,
-      x: cellToWorld(u.pos.x), z: cellToWorld(u.pos.y), y: u.altitude > 0 ? HOVER_HEIGHT : 0,
+      x: cellToWorld(px), z: cellToWorld(py), y: u.altitude > 0 ? HOVER_HEIGHT : 0,
       heading, aim,
     });
   }

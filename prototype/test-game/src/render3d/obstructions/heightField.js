@@ -43,6 +43,8 @@ export function airClearance(field, x, z, clear = AIR_CLEARANCE) {
   return h > 0 ? h + clear : 0;
 }
 
+/** Aim height of a drawn ground unit (= combatFxModel AIM.ground). */
+export const GROUND_AIM_Y = 0.3;
 export const AIR_LIFT = Object.freeze({ up: 2.4, down: 0.9 });   // world units / s the drawn altitude may climb / sink
 
 /**
@@ -63,7 +65,11 @@ export function createAirLift() {
       const live = new Set();
       for (const v of views) {
         const u = state.units.get(v.id);
-        if (!u || !(u.altitude > 0 || u.domain === 'Flyer')) continue;
+        if (!u) continue;
+        if (!(u.altitude > 0 || u.domain === 'Flyer')) {   // a ground unit: where it is DRAWN (it drives — heading.js), so aim + shots track it [MM-story_mvekcu8r_n]
+          drawn.set(v.id, { x: v.x, y: GROUND_AIM_Y, z: v.z, strafe: false, inbound: false, ground: true });
+          continue;
+        }
         live.add(v.id);
         const want = Math.max(v.y || 0, airClearance(field, v.x, v.z));
         let y = ys.has(v.id) ? ys.get(v.id) : want;
