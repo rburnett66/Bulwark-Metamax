@@ -89,14 +89,17 @@ const M = {};
       { t: 'cyl', ax: 'x', r: 0.05, l: 0.03, seg: 8, p: [-0.615, 2.14, -0.34], m: 'glowR', g: 'head' },
       { t: 'cyl', ax: 'x', r: 0.03, l: 0.03, seg: 8, p: [-0.615, 2.08, -0.26], m: 'glow', g: 'head' },
     ];
-    const EL = 8;                          // barrel elevation, degrees (fixed: the turret layer only yaws)
+    const EL = 8;                          // barrel elevation the parts are AUTHORED at, degrees; the `barrel` group pitches from here
     for (const q of parts) if (q.el) {
       const dx = q.p[0] - P[0], dy = q.p[1] - P[1], c = Math.cos(EL * D), sn = Math.sin(EL * D);
-      q.p = [P[0] + dx * c - dy * sn, P[1] + dx * sn + dy * c, q.p[2]]; q.r3 = [0, 0, EL]; delete q.el;
+      q.p = [P[0] + dx * c - dy * sn, P[1] + dx * sn + dy * c, q.p[2]]; q.r3 = [0, 0, EL]; delete q.el; q.g = 'barrel';
     }
     M.sys_cannon = { name: 'Cannon tower', unit: 'SYS-Cannon', ref: 'sys_cannon', parts,
-      pivots: { weapon: T, head: [-0.85, 1.72, -0.3] },
-      // firing point: the muzzle-brake face at the end of the elevated barrel; `brake` = the brake's side ports
+      pivots: { weapon: T, head: [-0.85, 1.72, -0.3], barrel: P },
+      // the barrel pitches about the trunnion to the shell's launch slope (render3d/fx/elevation.js) [MM-story_mvedxxo7_7]
+      barrel: { authored: EL, rest: EL, min: -5, max: 45, rate: 1.6, aim: 'shell' },
+      recoil: 0.65,   // model units the barrel slides back on each shell (≈18% of it) — cannons only [MM-story_mvee15ja_b]
+      // firing point: the muzzle-brake face at the end of the barrel (authored at EL); `brake` = the brake's side ports
       muzzles: [{ p: along(P, EL, 3.72), d: [Math.cos(EL * D), Math.sin(EL * D), 0], back: 1.4, brake: 0.22 }],
       head: { mode: 'sweep' },
       views: { side: 'right', top: 'up' } };
@@ -118,10 +121,10 @@ const M = {};
       ...[-0.35, 0.05, 0.45].map((x) => ({ t: 'box', s: [0.08, 0.62, 0.9], p: [x, 1.62, 0], m: 'gunD', g: 'weapon' })),
       { t: 'box', s: [0.9, 0.05, 0.02], p: [0.1, 1.8, 0.44], m: 'accent', g: 'weapon', mir: true },
       ...[-0.17, 0.17].flatMap((z) => [
-        { t: 'cyl', ax: 'x', r: 0.15, l: 0.5, seg: 10, p: [1.02, 1.66, z], m: 'brass', g: 'weapon' },
-        { t: 'cyl', ax: 'x', r: 0.085, l: 1.4, seg: 8, p: [1.85, 1.66, z], m: 'dark', g: 'weapon' },
-        { t: 'cyl', ax: 'x', r: 0.12, l: 0.16, seg: 8, p: [2.5, 1.66, z], m: 'gunD', g: 'weapon' },
-        { t: 'cyl', ax: 'x', r: 0.06, l: 0.02, seg: 8, p: [2.59, 1.66, z], m: 'amber', g: 'weapon' },
+        { t: 'cyl', ax: 'x', r: 0.15, l: 0.5, seg: 10, p: [1.02, 1.66, z], m: 'brass', g: 'barrel' },
+        { t: 'cyl', ax: 'x', r: 0.085, l: 1.4, seg: 8, p: [1.85, 1.66, z], m: 'dark', g: 'barrel' },
+        { t: 'cyl', ax: 'x', r: 0.12, l: 0.16, seg: 8, p: [2.5, 1.66, z], m: 'gunD', g: 'barrel' },
+        { t: 'cyl', ax: 'x', r: 0.06, l: 0.02, seg: 8, p: [2.59, 1.66, z], m: 'amber', g: 'barrel' },
       ]),
       // HEAD: mast, cross arm, comb array (left) and target screen (right) — sweeps; scaled ×1.6 about the mast foot to match the sheet
       ...scaleAbout([-0.3, 1.92, 0], 1.6, [
@@ -142,7 +145,9 @@ const M = {};
       const o = [-0.3, 0, 0]; parts[i] = Object.assign({}, q, { p: [o[0] + (q.p[2] - o[2]), q.p[1], o[2] + (q.p[0] - o[0])], s: q.s && [q.s[2], q.s[1], q.s[0]] }); }
     for (const q of parts) if (q.g || q.p[1] > 0.8) q.p = [q.p[0], q.p[1] - 0.3, q.p[2]];
     for (const q of parts) if (!q.g && q.s && q.s[1] === 0.95) { q.s = [0.36, 0.72, 0.36]; q.p = [q.p[0], 0.38, q.p[2]]; q.r3 = [-18, 0, q.p[0] > 0 ? 18 : -18]; }
-    M.sys_flak = { name: 'Anti-air (flak) tower', unit: 'SYS-Flak', ref: 'sys_flak', parts, pivots: { weapon: [0, 1.0, 0], head: [-0.3, 1.62, 0] }, head: { mode: 'sweep' },
+    M.sys_flak = { name: 'Anti-air (flak) tower', unit: 'SYS-Flak', ref: 'sys_flak', parts, pivots: { weapon: [0, 1.0, 0], head: [-0.3, 1.62, 0], barrel: [0.8, 1.36, 0] }, head: { mode: 'sweep' },
+      // twin barrels pitch straight at the target — up at aircraft [MM-story_mvedxxo7_7]
+      barrel: { authored: 0, rest: 10, min: -5, max: 75, rate: 2.2, aim: 'straight' },
       // the twin barrels' amber tips (after the −0.3 drop above); they fire alternately
       muzzles: [0.17, -0.17].map((z) => ({ p: [2.61, 1.36, z], d: [1, 0, 0], back: 1.1 })),
       views: { side: 'right', top: 'up' } };
@@ -273,12 +278,12 @@ const M = {};
     const rocket = (h, z) => {
       const c = [C0[0] + n[0] * h, C0[1] + n[1] * h, z], at = (d) => [c[0] + u[0] * d, c[1] + u[1] * d, z];
       return [
-        { t: 'cyl', ax: 'x', r: 0.2, l: 2.8, seg: 12, p: c, r3: [0, 0, A], m: 'bone', g: 'weapon' },
-        { t: 'cyl', ax: 'x', r: [0.02, 0.2], l: 0.66, seg: 12, p: at(1.73), r3: [0, 0, A], m: 'accent', g: 'weapon' },
-        { t: 'cyl', ax: 'x', r: 0.205, l: 0.07, seg: 12, p: at(0.5), r3: [0, 0, A], m: 'gun2', g: 'weapon' },
-        { t: 'box', s: [0.42, 0.025, 0.6], p: at(-1.22), r3: [0, 0, A], m: 'bone', g: 'weapon' },
-        { t: 'box', s: [0.42, 0.025, 0.6], p: at(-1.22), r3: [90, 0, A], m: 'bone', g: 'weapon' },
-        { t: 'cyl', ax: 'x', r: [0.15, 0.12], l: 0.14, seg: 8, p: at(-1.45), r3: [0, 0, A], m: 'dark', g: 'weapon' },
+        { t: 'cyl', ax: 'x', r: 0.2, l: 2.8, seg: 12, p: c, r3: [0, 0, A], m: 'bone', g: 'barrel' },
+        { t: 'cyl', ax: 'x', r: [0.02, 0.2], l: 0.66, seg: 12, p: at(1.73), r3: [0, 0, A], m: 'accent', g: 'barrel' },
+        { t: 'cyl', ax: 'x', r: 0.205, l: 0.07, seg: 12, p: at(0.5), r3: [0, 0, A], m: 'gun2', g: 'barrel' },
+        { t: 'box', s: [0.42, 0.025, 0.6], p: at(-1.22), r3: [0, 0, A], m: 'bone', g: 'barrel' },
+        { t: 'box', s: [0.42, 0.025, 0.6], p: at(-1.22), r3: [90, 0, A], m: 'bone', g: 'barrel' },
+        { t: 'cyl', ax: 'x', r: [0.15, 0.12], l: 0.14, seg: 8, p: at(-1.45), r3: [0, 0, A], m: 'dark', g: 'barrel' },
       ];
     };
     const parts = [
@@ -292,12 +297,14 @@ const M = {};
       // WEAPON: yoke + cradle + rockets
       { t: 'box', s: [0.45, 0.55, 0.08], p: [0, 1.25, 0.34], m: 'gun', g: 'weapon', mir: true },
       { t: 'cyl', ax: 'z', r: 0.12, l: 0.8, seg: 8, p: [0, 1.4, 0], m: 'dark', g: 'weapon' },
-      { t: 'box', s: [2.0, 0.12, 0.95], p: [C0[0] - n[0] * 0.02, C0[1] - n[1] * 0.02, 0], r3: [0, 0, A], m: 'gunD', g: 'weapon' },
+      { t: 'box', s: [2.0, 0.12, 0.95], p: [C0[0] - n[0] * 0.02, C0[1] - n[1] * 0.02, 0], r3: [0, 0, A], m: 'gunD', g: 'barrel' },
       ...rocket(0.26, -0.24), ...rocket(0.26, 0.24), ...rocket(0.68, -0.24), ...rocket(0.68, 0.24),
     ];
     // firing points: each rocket's nose, rippled corner to corner; `back` reaches the nozzle (for the launch plume)
     const nose = (h, z) => ({ p: [C0[0] + n[0] * h + u[0] * 2.06, C0[1] + n[1] * h + u[1] * 2.06, z], d: [u[0], u[1], 0], back: 3.52 });
-    M.sys_rockets = { name: 'Rocket launcher', unit: 'SYS-Rockets', ref: 'sys_rockets', parts, pivots: { weapon: [0, 1.25, 0] }, views: { side: 'right', top: 'up' },
+    M.sys_rockets = { name: 'Rocket launcher', unit: 'SYS-Rockets', ref: 'sys_rockets', parts, pivots: { weapon: [0, 1.25, 0], barrel: [0, 1.4, 0] }, views: { side: 'right', top: 'up' },
+      // the rack tilts about its axle to the salvo's launch slope (authored at A) [MM-story_mvedxxo7_7]
+      barrel: { authored: A, rest: A, min: 10, max: 65, rate: 1.2, aim: 'rocket' },
       muzzles: [nose(0.68, -0.24), nose(0.26, 0.24), nose(0.68, 0.24), nose(0.26, -0.24)] };
   }
 
@@ -305,13 +312,13 @@ const M = {};
   //    with two 2×2 missile pods (white bodies, red tips) either side of a search radar that sweeps.
   {
     const pod = (z) => [
-      { t: 'box', s: [1.15, 0.62, 0.62], p: [0.15, 1.72, z], r3: [0, 0, 18], m: 'gun', g: 'weapon' },
-      { t: 'box', s: [0.06, 0.66, 0.66], p: [0.72, 1.9, z], r3: [0, 0, 18], m: 'gunD', g: 'weapon' },
+      { t: 'box', s: [1.15, 0.62, 0.62], p: [0.15, 1.72, z], r3: [0, 0, 18], m: 'gun', g: 'barrel' },
+      { t: 'box', s: [0.06, 0.66, 0.66], p: [0.72, 1.9, z], r3: [0, 0, 18], m: 'gunD', g: 'barrel' },
       ...[[-0.15, -0.15], [-0.15, 0.15], [0.15, -0.15], [0.15, 0.15]].flatMap(([dy, dz]) => [
-        { t: 'cyl', ax: 'x', r: 0.1, l: 0.12, seg: 10, p: [0.78, 1.92 + dy, z + dz], r3: [0, 0, 18], m: 'bone', g: 'weapon' },
-        { t: 'cyl', ax: 'x', r: [0.015, 0.1], l: 0.2, seg: 10, p: [0.92, 1.97 + dy, z + dz], r3: [0, 0, 18], m: 'accent', g: 'weapon' },
+        { t: 'cyl', ax: 'x', r: 0.1, l: 0.12, seg: 10, p: [0.78, 1.92 + dy, z + dz], r3: [0, 0, 18], m: 'bone', g: 'barrel' },
+        { t: 'cyl', ax: 'x', r: [0.015, 0.1], l: 0.2, seg: 10, p: [0.92, 1.97 + dy, z + dz], r3: [0, 0, 18], m: 'accent', g: 'barrel' },
       ]),
-      { t: 'box', s: [1.0, 0.04, 0.02], p: [0.1, 1.6, z + (z > 0 ? 0.32 : -0.32)], r3: [0, 0, 18], m: 'accent', g: 'weapon' },
+      { t: 'box', s: [1.0, 0.04, 0.02], p: [0.1, 1.6, z + (z > 0 ? 0.32 : -0.32)], r3: [0, 0, 18], m: 'accent', g: 'barrel' },
     ];
     const parts = [
       { t: 'box', s: [2.6, 0.08, 0.42], p: [0, 0.04, 0], m: 'gunD' },
@@ -332,7 +339,9 @@ const M = {};
     const c18 = Math.cos(18 * D), s18 = Math.sin(18 * D);
     const tube = (z, dy, dz) => ({ p: [0.92 + 0.1 * c18, 1.97 + dy + 0.1 * s18, z + dz], d: [c18, s18, 0], back: 1.25 });
     const order = [[0.15, -0.15], [0.15, 0.15], [-0.15, -0.15], [-0.15, 0.15]];
-    M.sys_missile = { name: 'Missile tower', unit: 'SYS-Missile', ref: 'sys_missile', parts, pivots: { weapon: [0, 1.1, 0], head: [-0.3, 1.3, 0] }, head: { mode: 'sweep' },
+    M.sys_missile = { name: 'Missile tower', unit: 'SYS-Missile', ref: 'sys_missile', parts, pivots: { weapon: [0, 1.1, 0], head: [-0.3, 1.3, 0], barrel: [0, 1.6, 0] }, head: { mode: 'sweep' },
+      // the pods tilt toward the target, never below a launch rail's climb (authored at 18°) [MM-story_mvedxxo7_7]
+      barrel: { authored: 18, rest: 18, min: 12, max: 60, rate: 1.4, aim: 'missile' },
       muzzles: order.flatMap(([dy, dz]) => [tube(0.82, dy, dz), tube(-0.82, dy, -dz)]) };
   }
 

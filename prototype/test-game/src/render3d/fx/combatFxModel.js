@@ -20,6 +20,7 @@ import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
 import { shotFxFor } from '../../render/unitFx.js';
 import { STRUCTURES } from '../../data/tables.js';
+import { apexFor, pitchFor } from './elevation.js';
 
 /** Heights (cells) a shot leaves from and arrives at. Structures are 1-cell blocks (markers.js). */
 export const MUZZLE = Object.freeze({ ground: 0.35, structure: 0.85, antiGround: 0.6, antiAir: 0.5, barrel: 0.42 });
@@ -40,7 +41,8 @@ export const RECIPES = Object.freeze({
 export const STRUCT_RECIPES = Object.freeze({
   // cadence (and the cannon's burst) = the tower def's fields in tables.js — read, never copied, so a retune is
   // one data edit and the 3D and Pixi views can't drift apart [MM-story_mvedxogl_4]
-  'STR-Cannon': Object.freeze({ kind: 'shell', cadence: STRUCTURES['STR-Cannon'].cadence, speed: 21, color: 0xffd080, burst: STRUCTURES['STR-Cannon'].burst }),
+  // the cannon LOBS its shells (fx/elevation.js) so its barrel rises with range [MM-story_mvedxq1v_5]; speed = horizontal
+  'STR-Cannon': Object.freeze({ kind: 'shell', lob: 1, cadence: STRUCTURES['STR-Cannon'].cadence, speed: 13, color: 0xffd080, burst: STRUCTURES['STR-Cannon'].burst }),
   'STR-Rockets': Object.freeze({ kind: 'rocket', cadence: STRUCTURES['STR-Rockets'].cadence, speed: 8, color: 0xffb070, burst: 4 }),
   'STR-Missile': Object.freeze({ kind: 'missile', cadence: STRUCTURES['STR-Missile'].cadence, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
 });
@@ -60,6 +62,15 @@ export const FLIGHT = Object.freeze({ turn: 7.5, accel: 16, maxSpeed: 19, climb:
 const BURST_GAP = 0.07;      // s between burst rounds (sim clock)
 /** A turret holds fire until its barrel is this close (radians, in yaw) to the target — the round leaves along it. */
 export const ON_TARGET = Object.freeze({ shell: 0.35, flak: 0.35, tracer: 0.5, missile: 0.9, rocket: 0.6 });
+/** …and how close (radians) a PITCHING barrel's elevation must be to the launch slope [MM-story_mvedxxo7_7]. */
+export const ON_PITCH = Object.freeze({ shell: 0.12, flak: 0.15, tracer: 0.2, missile: 0.5, rocket: 0.2 });
+
+/** The launch pitch a modelled barrel m (with pmin/pmax/aim from system3d.muzzlePoint) needs for target `to`. */
+export function wantPitch(m, to) {
+  const h = Math.hypot(to.x - m.x, to.z - m.z), d3 = Math.hypot(h, to.y - m.y);
+  const apex = m.aim === 'shell' ? apexFor('shell', h) : m.aim === 'rocket' ? apexFor('rocket', d3) : 0;
+  return Math.max(m.pmin, Math.min(m.pmax, pitchFor(m, to, apex)));
+}
 const BURST_SPREAD = 0.16;   // cells of impact jitter for burst rounds
 
 /** Flash looks: diameter (cells), life (s), colour. Sized like the Pixi glows they stand in for. */
@@ -128,7 +139,7 @@ function eventPos(ev, map) {
  *   shots   — [{ x, y, z, dx, dy, dz, size, len, color }]   live rounds; (dx,dy,dz) = unit flight direction
  *   flashes — [{ x, y, z, size, color, alpha }]             live glows (alpha already faded)
  * opts: { getDef(unitId) → def, projFx: { id: entry }, projScale, hidden: Set of unit ids that draw no shots (hidden contacts),
- *         flight: Map unit id → drawn pose of planes on attack runs (aim at / fire from where they are drawn),
+ *         flight: Map unit id → drawn { x, y, z, strafe, inbound } of flyers (aim at / fire from where they are drawn),
  *         muzzle(structId, n) → modelled firing point { x, y, z, dx, dy, dz, bx, by, bz, brake } (System turrets),
  *         fire(kind, firingPoint, look) — launch effects (barrel exhaust, rocket plume, missile ignition),
  *         trail(kind, x, y, z, k, dx, dy, dz, t) — in-flight motor flame + smoke (t: missile s aloft, rocket flight 0..1), boom(x, z, k) } — all optional.
@@ -169,7 +180,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     s.dx = dx / dist; s.dy = dy / dist; s.dz = dz / dist;
     s.left = dist; s.speed = look.speed;
     s.kind = look.kind; s.size = look.size; s.len = look.len; s.color = look.color;
-    s.tid = tid; s.t = 0; s.big = look.big || 0; s.dPrev = undefined;
+    s.tid = tid; s.t = 0; s.big = look.big || 0; s.dPrev = undefined; s.lob = 0;
     if (s.kind === 'missile') {
       // off the rail: up and slightly out, then the seeker takes over
       const h = Math.hypot(dx, dz) || 1, side = (rand() - 0.5) * 1.4;
@@ -178,7 +189,10 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       } else { s.vx = (dx / h) * 2.5 - (dz / h) * side; s.vy = FLIGHT.climb + rand() * 0.8; s.vz = (dz / h) * 2.5 + (dx / h) * side; }
       s.spd = Math.hypot(s.vx, s.vy, s.vz);
     } else if (s.kind === 'rocket') {
-      s.fx = from.x; s.fy = from.y; s.fz = from.z; s.dur = Math.max(0.35, dist / look.speed); s.apex = FLIGHT.rocketApex + FLIGHT.rocketApexPerCell * dist;
+      s.fx = from.x; s.fy = from.y; s.fz = from.z; s.dur = Math.max(0.35, dist / look.speed); s.apex = apexFor('rocket', dist);
+    } else if (look.lob) {   // a lobbed shell: the same parabola as the barrel's pitch (elevation.js) [MM-story_mvedxq1v_5]
+      const h = Math.hypot(dx, dz);
+      s.lob = 1; s.fx = from.x; s.fy = from.y; s.fz = from.z; s.dur = Math.max(0.25, h / look.speed); s.apex = apexFor(s.kind, h);
     }
     shots.push(s);
     launched++;
@@ -199,6 +213,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
    * and a turret still slewing holds fire until its barrel is on target.
    */
   const roundNo = new Map();   // shooter key → rounds fired (which barrel is next)
+  // a round left modelled barrel n of shooter `key` ('s'+structure id / 'u'+unit id): opts.kick drives the recoil [MM-story_mvee15ja_b]
+  const kickOf = (key, n) => { const k = ctx.opts && ctx.opts.kick; if (k) k(key, n); };
   function fire(key, now, from, to, look, burst, cadence, tid = null, muz = null) {
     if (now < (clock.get(key) || 0)) return;
     let n0 = roundNo.get(key) || 0;
@@ -207,6 +223,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       if (m) {
         const hx = to.x - m.x, hz = to.z - m.z, hl = Math.hypot(hx, hz), al = Math.hypot(m.dx, m.dz);
         if (hl > 0.3 && al > 1e-3 && (hx * m.dx + hz * m.dz) / (hl * al) < Math.cos(ON_TARGET[look.kind] || 0.5)) return;   // still turning
+        if (m.pmin !== undefined && hl > 0.3 && Math.abs(Math.asin(Math.max(-1, Math.min(1, m.dy))) - wantPitch(m, to)) > (ON_PITCH[look.kind] || 0.2)) return;   // still elevating
       }
     }
     clock.set(key, now + cadence * (0.85 + rand() * 0.3));
@@ -215,8 +232,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     for (let k = 0; k < burst; k++) {
       const j = burst > 1 ? (look.kind === 'rocket' ? 0.45 : BURST_SPREAD) : 0;
       const aim = { x: to.x + (rand() * 2 - 1) * j, y: to.y, z: to.z + (rand() * 2 - 1) * j };
-      if (k === 0) launch((muz && muz(n0)) || from, aim, look, tid);
-      else queue.push({ at: now + k * gap, from: { x: from.x, y: from.y, z: from.z }, to: aim, look, tid, muz, n: n0 + k });
+      if (k === 0) { launch((muz && muz(n0)) || from, aim, look, tid); if (muz) kickOf(key, n0); }
+      else queue.push({ at: now + k * gap, from: { x: from.x, y: from.y, z: from.z }, to: aim, look, tid, muz, n: n0 + k, key });
     }
   }
 
@@ -229,6 +246,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       color: entry && entry.color !== undefined ? entry.color : color,
       size: L.size * ((entry && entry.size) || 1) * scale,
       len: L.len * ((entry && entry.streakLen) || 1) * scale,
+      lob: (entry && entry.lob !== undefined ? entry.lob : base.lob) || 0,
     };
   }
 
@@ -238,12 +256,14 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
     const scale = opts.projScale || 1;
     const getDef = opts.getDef || null;
     const muzzleOf = opts.muzzle || null;   // (structure id, n) → modelled firing point, from the System turrets
+    const unitMuzzleOf = opts.unitMuzzle || null;   // (unit id, n) → a unit gun's firing point (units/unitBarrels.js) [MM-story_mvedy16u_9]
 
     // burst rounds that have come due
     for (let i = queue.length - 1; i >= 0; i--) {
       const q = queue[i];
       if (now < q.at) continue;
       launch((q.muz && q.muz(q.n)) || q.from, q.to, q.look, q.tid);   // a queued round leaves from its own barrel, wherever the turret now points
+      if (q.muz) kickOf(q.key, q.n);
       queue[i] = queue[queue.length - 1]; queue.pop();
     }
 
@@ -279,12 +299,13 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         if (!to) continue;
         const flyer = u.domain === 'Flyer' || u.altitude > 0;
         const run = opts.flight && opts.flight.get(u.id);
-        if (run && !run.inbound) continue;   // a strafing plane fires on its inbound run only [MM-story_mvee9r08_e]
+        if (run && run.strafe && !run.inbound) continue;   // a strafing plane fires on its inbound run only [MM-story_mvee9r08_e]
         const from = run ? { x: run.x, y: run.y, z: run.z } : { x: cellToWorld(u.pos.x), y: flyer ? HOVER_HEIGHT : MUZZLE.ground, z: cellToWorld(u.pos.y) };
         if (!flyer) { from.gx = from.x; from.gz = from.z; from.gr = 0.22; }   // a tank's tracks — its firing shockwave starts here
         const e = pfx && pfx[u.unitId];
         const color = u.side === 'attacker' ? base.attacker : base.defender;
-        fire('u' + u.id, now, from, to, lookFor(e, base, kind, color, scale), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence);
+        const umuz = unitMuzzleOf && !run ? (n) => unitMuzzleOf(u.id, n) : null;
+        fire('u' + u.id, now, from, to, lookFor(e, base, kind, color, scale), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence, null, umuz);
       }
     }
   }
@@ -350,7 +371,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         if (trail) trail('missile', s.x - s.dx * 0.12, s.y - s.dy * 0.12, s.z - s.dz * 0.12, s.big ? 1.3 : 1, s.dx, s.dy, s.dz, s.t);
         continue;
       }
-      if (s.kind === 'rocket') {
+      if (s.kind === 'rocket' || s.lob) {
         // a lob: ground point lerps, a sine lifts it; the streak follows the arc's tangent
         s.t += dt;
         const u = Math.min(1, s.t / s.dur);
@@ -358,6 +379,10 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         const ddx = nx - s.x, ddy = ny - s.y, ddz = nz - s.z, dl = Math.hypot(ddx, ddy, ddz);
         if (dl > 1e-5) { s.dx = ddx / dl; s.dy = ddy / dl; s.dz = ddz / dl; }
         s.x = nx; s.y = ny; s.z = nz;
+        if (s.lob) {   // a lobbed shell: lands with the shell's hit flash
+          if (u >= 1) { flash(s.tx, s.ty, s.tz, FLASH.hit, null, Math.min(1.6, s.size / SHOT_LOOK.shell.size)); retire(i, s); }
+          continue;
+        }
         if (trail) trail('rocket', s.x - s.dx * 0.1, s.y - s.dy * 0.1, s.z - s.dz * 0.1, 1, s.dx, s.dy, s.dz, u);   // u: flight fraction
         if (u >= 1) {
           flash(s.tx, s.ty, s.tz, FLASH.rocketHit);

@@ -28,6 +28,7 @@ import { metalFor, isGlowKey } from '../units/metal.js';
 import { craftFor, CRAFT_SCALE } from './models.js';
 import { createLandingFx, washStrength, noise3 } from './landingFx.js';
 import { EVENTS, rampOf } from './landing.js';
+import { createRecoil } from '../fx/recoil.js';
 
 const D2R = Math.PI / 180;
 const ENGINE = 'glowE';
@@ -103,18 +104,22 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
   const meshes = [];
   for (const [g, P] of Object.entries(parts)) {
     const G = new THREE.Group(); G.name = g;
+    // the gun's meshes sit on an inner slide, so recoil moves them along the PITCHED axis while the group's own
+    // matrix (muzzleWorld) stays put [MM-story_mvee15ja_b]
+    const host = g === 'barrel' ? (G.userData.slide = new THREE.Group()) : G;
+    if (host !== G) G.add(host);
     for (const [geo, m] of [[P.lit, mat.material], [P.engine, engineMat]]) {
       if (!geo) continue;
       const mesh = new THREE.Mesh(geo, m);
       mesh.castShadow = false; mesh.receiveShadow = true;
-      G.add(mesh); meshes.push(mesh);
+      host.add(mesh); meshes.push(mesh);
     }
     groups[g] = G;
   }
   // hierarchy: head rides on the weapon; everything else on the model
   for (const [g, G] of Object.entries(groups)) {
     const piv = parts[g].pivot;
-    if (g === 'head' && groups.weapon) {
+    if ((g === 'head' || g === 'barrel') && groups.weapon) {   // head and gun ride the weapon
       const w = parts.weapon.pivot;
       G.position.set(piv[0] - w[0], piv[1] - w[1], piv[2] - w[2]);
       groups.weapon.add(G);
@@ -241,6 +246,7 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
   let fxClock = 0, thrust0 = 0, heat0 = 0, prevT = -1, shake = 0, ventT = 0;
   const carry = { trail: 0, wisp: 0 };
   let aimYaw = 0, castShadow = false, idle = 0;
+  const gunRecoil = createRecoil();   // the roof shell gun's slide-back [MM-story_mvee15ja_b]
   /** a model-space point → root space (the craft's current pose) */
   const toRoot = (x, y, z) => fxV.set(x, y, z).applyMatrix4(model.matrix);
 
@@ -449,10 +455,31 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
       aimYaw += Math.max(-1, Math.min(1, d)) * Math.min(1, (dt || 0) * 3);
       groups.weapon.rotation.y = aimYaw;
     },
+    /** Pitch the roof gun toward `pitch` (radians, + = up; null = level) at the model's rate. [MM-story_mvedy2wj_a] */
+    elevate(pitch, dt) {
+      const B = groups.barrel, lim = def.barrel;
+      if (!B || !lim) return;
+      const D = Math.PI / 180, want = pitch == null ? 0 : Math.max(lim.min * D, Math.min(lim.max * D, pitch));
+      const step = lim.rate * Math.max(0, Math.min(0.1, dt || 0));
+      B.rotation.z += Math.max(-step, Math.min(step, want - B.rotation.z));
+      gunRecoil.step(dt);
+      if (B.userData.slide) B.userData.slide.position.x = -gunRecoil.offset('gun', 0, def.recoil || 0);
+    },
+    /** The base cannon fired: the shell gun kicks back (not the railgun). [MM-story_mvee15ja_b] */
+    kick() { if (def.recoil) gunRecoil.kick('gun', 0); },
+    /** How far (model units) the gun is back right now. */
+    get recoilBack() { return groups.barrel && groups.barrel.userData.slide ? -groups.barrel.userData.slide.position.x : 0; },
+    /** Current gun pitch (radians), 0 without a pitching gun. */
+    get pitch() { return groups.barrel ? groups.barrel.rotation.z : 0; },
     /** World position (cells) of the roof gun's muzzle — where the base cannon's shell leaves. [MM-task_mvbvpyer_x] */
     muzzleWorld() {
-      const g = groups.weapon || model;
       root.updateMatrixWorld(true);
+      if (groups.barrel && def.muzzle) {   // the tip of the (pitched) gun
+        const p = def.muzzle, b = parts.barrel.pivot;
+        const v = new THREE.Vector3(p[0] - b[0], p[1] - b[1], p[2] - b[2]).applyMatrix4(groups.barrel.matrixWorld);
+        return { x: v.x, y: v.y, z: v.z };
+      }
+      const g = groups.weapon || model;
       const v = new THREE.Vector3(2.4, 0.35, 0).applyMatrix4(g.matrixWorld);
       return { x: v.x, y: v.y, z: v.z };
     },

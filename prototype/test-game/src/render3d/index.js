@@ -41,7 +41,7 @@
  * base cannon's aim. Resource fields are the battle planet's own resource models (resources/; opts.planet =
  * faction key of the homeworld), falling back to the crystal shards when no planet is known.
  */
-import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX, touchSlotPoint } from './camera.js';
+import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX, touchSlotPoint, cellToWorld } from './camera.js';
 import { createFogTracker } from './overlays/fogModel.js';
 import { resolveTier, probeEnv, pixelRatioFor } from './quality.js';
 import { createFogView } from './overlays/fog.js';
@@ -68,6 +68,8 @@ import { createCombatFxView } from './fx/combatFx.js';
 import { createImpacts, K as FXK } from './fx/impacts.js';
 import { createRepairFx } from './fx/repairFx.js';
 import { createFlightPaths } from './units/flightPath.js';
+import { buildHeightField, createAirLift } from './obstructions/heightField.js';
+import { createUnitBarrels } from './units/unitBarrels.js';
 import { createBuildFx } from './fx/buildFx.js';
 import { createDustTrails } from './fx/dustTrail.js';
 import { createFlashLights, FLASH_LIGHTS } from './fx/flashLights.js';
@@ -75,7 +77,7 @@ import { createImpactsView } from './fx/impactsView.js';
 import { createCraft3D } from './craft/craft3d.js';
 import { createLanding, landedPose, harvesterOnRamp } from './craft/landing.js';
 import { introCamera } from './craft/introCamera.js';
-import { createCannonFx, createCannonFxView, baseStyleFor } from './fx/cannonFx.js';
+import { createCannonFx, createCannonFxView, baseStyleFor, baseLaunchPitch, BASE_STYLES } from './fx/cannonFx.js';
 import { planCoverage, createCoverageView } from './overlays/coverage.js';
 import { createHealthBarView } from './overlays/healthBars.js';
 import { createGoldPopups, createGoldPopupView } from './overlays/goldPopups.js';
@@ -207,7 +209,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), dust: createDustTrails(), flashLights: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), flashLights: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map),
@@ -328,6 +330,9 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     }
   };
   r.fxOpts.muzzle = (id, n) => (r.system ? r.system.muzzle(id, n) : null);
+  r.fxOpts.unitMuzzle = (id, n) => r.unitBarrels.muzzle(id, n);
+  // a round left a modelled barrel: cannon barrels (tower, tank, Tiger) kick back; guns, missiles, rockets never [MM-story_mvee15ja_b]
+  r.fxOpts.kick = (key, n) => { const raw = key.slice(1), id = Number.isNaN(Number(raw)) ? raw : Number(raw); if (key[0] === 's') { if (r.system) r.system.kick(id, n); } else r.unitBarrels.kick(id, n); };
   r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
   attachCameraInput(canvas, r);
   // point-light flashes (experiment): count by tier, ?flashlights=N overrides [MM-task_mvd2lrig_k]
@@ -409,6 +414,8 @@ export function setWorld(r, key) {
   const gm = r.groundMap || map;
   r.obstructions = buildLowPolyObstructions(THREE, gm, palette);
   if (r.obstructions) scene.add(r.obstructions.group);
+  // per-cell obstruction tops — aircraft fly over them [MM-story_mvegnpxf_i]
+  r.heightField = r.obstructions ? buildHeightField(r.obstructions.group.children, gm.cols, gm.rows) : null;
   if (r.lowpoly) {
     if (r.ground) disposeGroup(scene, r.ground.group);
     r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts });
@@ -456,7 +463,7 @@ export function renderFrame(r, state, ui, events, dt) {
     const markersChanged = r.markers.setStructures(r.system ? all.filter((s) => !SYSTEM_KINDS[s.kind]) : all);
     if (sysChanged || markersChanged) r.lights.invalidateShadows();
   }
-  if (r.system) r.system.update(dt, state, r.flight.poses);   // turrets track planes where they are drawn (last frame's poses)
+  if (r.system) r.system.update(dt, state, r.airLift.drawn);   // turrets track planes where they are drawn (last frame's poses)
   if (r.resources) { if (state && r.resources.setResources(state)) r.lights.invalidateShadows(); }   // LC-RES planet resources
   else if (state && r.markers.setResources && r.markers.setResources(state)) r.lights.invalidateShadows();   // LPS crystal fields
 
@@ -471,6 +478,8 @@ export function renderFrame(r, state, ui, events, dt) {
     const c = state && state.base && state.base.cannon, b = r.map.base;
     const aim = c && c.aimPos && b ? Math.atan2(-(c.aimPos.y - b.y), c.aimPos.x - b.x) : null;
     r.craft.aim(aim, dt);
+    // the roof gun pitches to the base cannon's launch slope, from its own muzzle to the aim point [MM-story_mvedy2wj_a]
+    if (r.craft.elevate) r.craft.elevate(c && c.aimPos ? baseLaunchPitch(r.craft.muzzleWorld(), cellToWorld(c.aimPos.x), cellToWorld(c.aimPos.y), BASE_STYLES[r.baseStyle] || BASE_STYLES.shell) : null, dt);
     r.craft.scan(r.clock);
   }
 
@@ -480,17 +489,20 @@ export function renderFrame(r, state, ui, events, dt) {
   // Live units: the 3D models (T5). Live planar shadows per the quality tier (off on Low — T3.5).
   let views = null;
   if (state && state.units) {
-    views = buildUnitViews(state, r.map, r.headings, r.resolveModel, Math.min(0.1, Math.max(0, dt || 0)));   // smooth turning; clamped so a stalled frame can't swing a whole turn at once
+    views = buildUnitViews(state, r.map, r.headings, r.resolveModel, Math.min(0.1, Math.max(0, dt || 0)), r.airLift.drawn);   // smooth turning; clamped so a stalled frame can't swing a whole turn at once
     if (r.landing && r.craft && !r.landingHandedOff) views = landingHarvesters(r, state, views);
     // attacking planes fly attack runs around their target instead of parking (render-only) [MM-story_mvee9r08_e]
     r.flight.update(state, r.map, views, dt);
-    r.fxOpts.flight = r.flight.poses;
+    // aircraft clear plateaus, rocks and trees; `drawn` is where every flyer is drawn (aim + shots read it) [MM-story_mvegnpxf_i]
+    r.airLift.update(state, views, r.heightField, r.flight.poses, dt);
+    r.fxOpts.flight = r.airLift.drawn;
     // enemies outside the play area are red reticles, not models: no model, bar, dust or muzzle fx [MM-story_mveehs1r_f]
     const c = r.contacts.update(state, views, fogFrame.win && fogFrame.win.rect, dt);
     views = c.views;
     r.fxOpts.hidden = c.hidden;
     r.stats.contacts = r.contactsView.sync(c.reticles, r.clock);
     r.dust.step(dt, views, r.impacts.emit, FXK);   // light dust behind moving ground vehicles [MM-task_mvd2loid_i]
+    r.unitBarrels.update(views, state, r.map, r.airLift.drawn, dt);   // unit guns pitch to the shot; their tips are firing points [MM-story_mvedy16u_9]
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows);
   }
 
@@ -508,6 +520,7 @@ export function renderFrame(r, state, ui, events, dt) {
   if (r.flashLights) { r.flashLights.update(Math.max(0, Math.min(0.1, dt || 0))); r.flashLights.fromFlashes(r.fx.flashes); }   // point-light flashes (experiment)
   // the base super-cannon: reticle, shell from the roof gun, touchdown blast (fx/cannonFx.js) [MM-task_mvbvpyer_x]
   r.cannonFx.onEvents(events, r.craft ? () => r.craft.muzzleWorld() : null);
+  if (r.craft && r.craft.kick && events && events.some((e) => e && e.type === 'cannonShot')) r.craft.kick();   // the roof gun recoils [MM-story_mvee15ja_b]
   r.cannonFx.step(dt, r.impacts);
   r.cannonFxView.sync(r.cannonFx, dt);
   // selection range + coverage map (overlays/coverage.js) [MM-task_mvbry998_r]

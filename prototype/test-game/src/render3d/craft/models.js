@@ -119,20 +119,22 @@ function wCannon(Y, o = {}) {
     ...[0, 1, 2].map((i) => ({ t: 'box', s: [0.04, 0.05, 1.1], p: [-1.77, Y + 0.42 - i * 0.08 + 0.3, 0], m: 'dark', d: 1 })),
     { t: 'box', s: [0.5, 0.06, 0.4], p: [-0.5, Y + 1.1, -0.3], m: 'hull2', d: 1 },
   ];
+  // the gun itself pitches about the mantlet (group `barrel`) to the base cannon's launch slope [MM-story_mvedy2wj_a]
+  const bs = [];
   if (o.rail) {
-    ps.push({ t: 'box', s: [len, 0.12, 0.14], p: [x0 + len / 2, by + 0.2, 0], m: 'hull2' });
-    ps.push({ t: 'box', s: [len, 0.12, 0.14], p: [x0 + len / 2, by - 0.2, 0], m: 'hull2' });
-    ps.push({ t: 'box', s: [len * 0.96, 0.06, 0.07], p: [x0 + len / 2, by, 0], m: 'glow' });
-    for (let i = 0; i < 5; i++) ps.push({ t: 'box', s: [0.14, 0.62, 0.36], p: [x0 + 0.35 + i * (len - 0.6) / 4, by, 0], m: i % 2 ? 'accent' : 'dark' });
-    ps.push({ t: 'box', s: [0.1, 0.56, 0.3], p: [x0 + len, by, 0], m: 'dark' });
+    bs.push({ t: 'box', s: [len, 0.12, 0.14], p: [x0 + len / 2, by + 0.2, 0], m: 'hull2' });
+    bs.push({ t: 'box', s: [len, 0.12, 0.14], p: [x0 + len / 2, by - 0.2, 0], m: 'hull2' });
+    bs.push({ t: 'box', s: [len * 0.96, 0.06, 0.07], p: [x0 + len / 2, by, 0], m: 'glow' });
+    for (let i = 0; i < 5; i++) bs.push({ t: 'box', s: [0.14, 0.62, 0.36], p: [x0 + 0.35 + i * (len - 0.6) / 4, by, 0], m: i % 2 ? 'accent' : 'dark' });
+    bs.push({ t: 'box', s: [0.1, 0.56, 0.3], p: [x0 + len, by, 0], m: 'dark' });
   } else for (const z of bz) {
-    ps.push({ t: 'cyl', ax: 'x', r: [0.11, 0.13], l: len, seg: 10, p: [x0 + len / 2, by, z], m: 'metal' });
-    ps.push({ t: 'cyl', ax: 'x', r: 0.19, l: 0.95, seg: 10, p: [x0 + 0.65, by, z], m: 'hull2' });
-    ps.push({ t: 'cyl', ax: 'x', r: 0.2, l: 0.06, seg: 10, p: [x0 + 1.15, by, z], m: 'accent' });
-    ps.push({ t: 'cyl', ax: 'x', r: 0.18, l: 0.38, seg: 10, p: [x0 + len - 0.12, by, z], m: 'dark' });
-    ps.push({ t: 'box', s: [0.06, 0.12, 0.42], p: [x0 + len - 0.1, by, z], m: 'black', d: 1 });
+    bs.push({ t: 'cyl', ax: 'x', r: [0.11, 0.13], l: len, seg: 10, p: [x0 + len / 2, by, z], m: 'metal' });
+    bs.push({ t: 'cyl', ax: 'x', r: 0.19, l: 0.95, seg: 10, p: [x0 + 0.65, by, z], m: 'hull2' });
+    bs.push({ t: 'cyl', ax: 'x', r: 0.2, l: 0.06, seg: 10, p: [x0 + 1.15, by, z], m: 'accent' });
+    bs.push({ t: 'cyl', ax: 'x', r: 0.18, l: 0.38, seg: 10, p: [x0 + len - 0.12, by, z], m: 'dark' });
+    bs.push({ t: 'box', s: [0.06, 0.12, 0.42], p: [x0 + len - 0.1, by, z], m: 'black', d: 1 });
   }
-  return { parts: G('weapon', ps), head: [-0.85, Y + 1.08, 0.42] };
+  return { parts: [...G('weapon', ps), ...G('barrel', bs)], head: [-0.85, Y + 1.08, 0.42], barrel: [x0 - 0.2, by, 0], muzzle: [x0 + len + 0.02, by, 0], recoil: o.rail ? 0 : len * 0.18 };
 }
 
 function wGatling(Y, o = {}) {
@@ -340,13 +342,16 @@ const SHARED_PAL = { dark: '#3e434a', black: '#16181c', metal: '#7b828a', glass:
 function craft(key, o) {
   const H = o.hatch, k = o.wScale || 1.35, O = [0, o.roofY, 0];
   const W = Object.assign({}, o.weapon, { parts: scaleParts(o.weapon.parts, k, O), head: scalePt(o.weapon.head, k, O) });
+  const bar = o.weapon.barrel ? { barrel: scalePt(o.weapon.barrel, k, O) } : {};
   const parts = [...o.parts, ...H.parts, ...W.parts, ...scaleParts(o.headParts || [], k, O)];
   const def = {
     key, name: o.name, faction: o.faction, factionName: o.factionName, weaponType: o.weaponType, blurb: o.blurb,
     footprint: [3, 3], unit: o.unit,
     palette: Object.assign({}, SHARED_PAL, o.palette),
     parts,
-    pivots: Object.assign({ weapon: [0, o.roofY, 0], head: o.headPivot || W.head, gear: [0, 0, 0] }, H.pivots),
+    pivots: Object.assign({ weapon: [0, o.roofY, 0], head: o.headPivot || W.head, gear: [0, 0, 0] }, bar, H.pivots),
+    // a pitching gun: its muzzle (model point, level) and limits [MM-story_mvedy2wj_a]
+    ...(o.weapon.barrel ? { muzzle: scalePt(o.weapon.muzzle, k, O), barrel: { min: 0, max: 60, rate: 1.2 }, recoil: (o.weapon.recoil || 0) * k } : {}),   // recoil: the shell gun only, not the railgun [MM-story_mvee15ja_b]
     head: o.headMode || { mode: 'sweep' },
     anim: { gear: { axis: 'y', retract: 1.15 }, doorR: { axis: 'x', open: H.open }, doorL: { axis: 'x', open: -H.open },
       hover: 9, approach: o.approach || 'side' },
