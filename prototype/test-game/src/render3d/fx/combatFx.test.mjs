@@ -117,16 +117,16 @@ test('cadence: no second volley before the shooter is ready', () => {
   assert.ok(fx.launched >= 5 && fx.launched <= 6, `launched ${fx.launched} in 3 s`);
 });
 
-test('cannon tower: cadence + burst come from tables.js — 2-round volleys every ~1.5 s [MM-story_mvedxogl_4]', () => {
+test('cannon tower: cadence + burst come from tables.js — ONE round every ~1.5 s [MM-story_mvedxogl_4] [MM-task_mvfpbbtp_1]', () => {
   assert.equal(STRUCT_RECIPES['STR-Cannon'].cadence, STRUCTURES['STR-Cannon'].cadence);
   assert.equal(STRUCT_RECIPES['STR-Cannon'].burst, STRUCTURES['STR-Cannon'].burst);
   assert.equal(STRUCTURES['STR-Cannon'].cadence, 1.5);
-  assert.equal(STRUCTURES['STR-Cannon'].burst, 2);
+  assert.equal(STRUCTURES['STR-Cannon'].burst, 1);   // owner 2026-10-19: "make sure they fire one shot, not multiple"
   const fx = createCombatFx();
   const st = world({ units: [tank({ targetId: 0, pos: { x: 8, y: 4 } })], structures: [tower({ structId: 'STR-Cannon' })] });
   run(fx, st, 4.2);
-  // volleys at ~0, ~1.5, ~3.0 s (±15 %) of 2 rounds → 6 (5–7 allowing a burst straddling the window)
-  assert.ok(fx.launched >= 4 && fx.launched <= 7, `launched ${fx.launched} in 4.2 s (was ~20 at 0.55 s × 3)`);
+  // single shots at ~0, ~1.5, ~3.0 s (±15 %) → 3 (2–4 allowing for the jitter at the window edges)
+  assert.ok(fx.launched >= 2 && fx.launched <= 4, `launched ${fx.launched} in 4.2 s (was 2-round volleys)`);
 });
 
 test('who fires: armed units only, never harvesters, never at a dead or missing target', () => {

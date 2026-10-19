@@ -35,7 +35,9 @@ export const RECIPES = Object.freeze({
   // MISSILES (visual — the sim's damage and cadence are unchanged); rocket towers fire arcing AOE salvos
   antiGround: Object.freeze({ kind: 'shell', cadence: 0.55, speed: 21, color: 0xffd080, burst: 3 }),
   antiAir: Object.freeze({ kind: 'missile', cadence: 0.6, speed: 9, color: 0xbfe6ff, burst: 2 }),
-  unit: Object.freeze({ cadence: 0.6, speed: 22, attacker: 0xff9a70, defender: 0xbfe8ff, burst: 1 }),
+  // heavyCadence: a unit with a recoiling main gun (tank, King Tiger) fires ONE heavy round this often, so each shot
+  // reads as a single shot with its body kick, not a stream (owner 2026-10-19) [MM-task_mvfpbbtp_1]
+  unit: Object.freeze({ cadence: 0.6, heavyCadence: 1.5, speed: 22, attacker: 0xff9a70, defender: 0xbfe8ff, burst: 1 }),
 });
 /** Per tower type overrides of the kind recipe (the new towers). */
 export const STRUCT_RECIPES = Object.freeze({
@@ -320,7 +322,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         const e = pfx && pfx[u.unitId];
         const color = u.side === 'attacker' ? base.attacker : base.defender;
         const umuz = unitMuzzleOf && !run ? (n) => unitMuzzleOf(u.id, n) : null;
-        fire('u' + u.id, now, from, to, lookFor(e, base, kind, color, scale), (e && e.burst) || base.burst, (e && e.cadence) || base.cadence, null, umuz);
+        const heavy = !run && opts.unitHeavy && opts.unitHeavy(u.id);   // a cannon-armed tank: one round per shot [MM-task_mvfpbbtp_1]
+        fire('u' + u.id, now, from, to, lookFor(e, base, kind, color, scale), heavy ? 1 : (e && e.burst) || base.burst, (e && e.cadence) || (heavy ? base.heavyCadence : base.cadence), null, umuz);
       }
     }
   }

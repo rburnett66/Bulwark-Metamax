@@ -15,7 +15,7 @@ import { UNIT_MODELS } from './models.js';
 import { UNIT_SCALE } from './modelKeys.js';
 import { pitchFor } from '../fx/elevation.js';
 import { aimPoint } from '../fx/combatFxModel.js';
-import { createRecoil } from '../fx/recoil.js';
+import { createRecoil, bodyKick } from '../fx/recoil.js';
 
 const DEG = Math.PI / 180;
 
@@ -80,18 +80,24 @@ export function createUnitBarrels() {
           let r = null;
           for (const mz of def.muzzles || []) { const g = mz.g || 'barrel', o = recoil.offset(v.id, g, def.recoil); if (o) (r = r || {})[g] = o; }
           v.recoil = r;
+          // and the whole tank rocks back — shove, front up, drop, slide back [MM-task_mvfpbbtp_1]
+          const f = bodyKick(recoil.since(v.id, 'body'));
+          v.kick = f.back || f.lift ? f : null;
         }
       }
       for (const id of [...pitch.keys()]) if (!seen.has(id)) pitch.delete(id);
     },
     muzzle(id, n = 0) { const v = byId.get(id); return v ? unitMuzzle(v, n, pitch.get(id) || 0) : null; },
     pitch(id) { return pitch.has(id) ? pitch.get(id) : null; },
+    /** True for a unit whose main gun recoils (tank, King Tiger): it fires single heavy rounds [MM-task_mvfpbbtp_1]. */
+    heavy(id) { const v = byId.get(id), def = v && UNIT_MODELS[v.model]; return !!(def && def.recoil); },
     /** A round left firing point n of unit `id`: that gun kicks back (models with `recoil` only). */
     kick(id, n = 0) {
       const v = byId.get(id), def = v && UNIT_MODELS[v.model];
       if (!def || !def.recoil || !def.muzzles) return;
       const mz = def.muzzles[((n % def.muzzles.length) + def.muzzles.length) % def.muzzles.length];
       recoil.kick(id, mz.g || 'barrel');
+      recoil.kick(id, 'body');
     },
   };
 }
