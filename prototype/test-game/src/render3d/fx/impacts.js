@@ -404,7 +404,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     const last = hitClock.get(pair);
     if (last !== undefined && tick - last < HIT_GAP_TICKS && tick >= last) return;
     hitClock.set(pair, tick);
-    const x = cellToWorld(ev.pos.x), z = cellToWorld(ev.pos.y);
+    let x = cellToWorld(ev.pos.x), z = cellToWorld(ev.pos.y);
     const src = sourcePos(state, ev.sourceId);
     if (!src) { fxGround(x, z); return; }                        // sourceless AOE (base cannon, mines): the ground takes it
     let y = AIM.ground * 0.8;
@@ -414,7 +414,12 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
       const t = state.units && state.units.get(ev.targetId);
       const v = cur.get(ev.targetId) || prev.get(ev.targetId);
       const hover = (t && (t.altitude > 0 || t.domain === 'Flyer')) || (v && v.y > 0.05);
-      if (hover) y = HOVER_HEIGHT + 0.24;
+      if (hover) {
+        // Planes are drawn on their flight path at the flight floor, not over their sim cell: the spark goes where the
+        // plane is DRAWN (this frame's view), so it sits on the airframe. [MM-task_mveuiry6_c]
+        if (v) { x = v.x; z = v.z; y = (v.y || HOVER_HEIGHT) + 0.24 * (v.scale || 1); }
+        else y = HOVER_HEIGHT + 0.24;
+      }
     }
     fxHit(x, z, x - src.x, z - src.z, y);
   }

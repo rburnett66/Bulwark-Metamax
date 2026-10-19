@@ -37,4 +37,8 @@ test('comm card: the text box is pinned to the full line before typing; centre s
   assert.equal(centerScale({ offsetWidth: 430, offsetHeight: 260 }, 1920, 1080), 2, 'desktop: 2×');
   const k = centerScale({ offsetWidth: 430, offsetHeight: 260 }, 844, 390);
   assert.ok(k < 2 && k * 260 <= 390 * 0.88 + 1e-9, `phone landscape fits (${k.toFixed(2)})`);
+  assert.ok(Math.abs(k - (390 * 0.88 / 260) * 0.9) < 1e-9, 'phone: 10% under the fit [MM-task_mveuityu_d]');
+  const port = centerScale({ offsetWidth: 430, offsetHeight: 260 }, 390, 844);
+  assert.ok(Math.abs(port - (390 * 0.94 / 430) * 0.9) < 1e-9, `phone portrait: 10% under the fit (${port.toFixed(2)})`);
+  assert.equal(centerScale({ offsetWidth: 430, offsetHeight: 260 }, 1024, 768), 2, 'tablet: unchanged');
 });

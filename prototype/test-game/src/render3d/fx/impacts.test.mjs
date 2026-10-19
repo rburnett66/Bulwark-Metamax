@@ -64,6 +64,20 @@ test('hit on a flyer sparks at flying height; structure / base targets at their 
   }
 });
 
+test('a hit on a plane sparks where the plane is DRAWN (flight path + floor), not over its sim cell [MM-task_mveuiry6_c]', () => {
+  const fx = createImpacts();
+  const st = world({ tick: 5, units: [{ id: 1, unitId: 'bomber', domain: 'Flyer', altitude: 1, pos: { x: 10, y: 4 } }], structures: [tower] });
+  const drawn = { id: 1, model: 'bomber', scale: 1, x: 12.3, y: 2.9, z: 6.1, heading: 0, aim: 0 };   // off its cell, at the floor
+  fx.update(st, MAP, [dmg()], 0, [drawn]);
+  assert.equal(fx.stats.hits, 1);
+  const sp = fx.particles.filter((p) => p.kind === K.SPARK);
+  assert.ok(sp.length > 0);
+  for (const p of sp) {
+    assert.ok(Math.hypot(p.x - 12.3, p.z - 6.1) < 0.6, `spark at (${p.x.toFixed(2)},${p.z.toFixed(2)}) on the airframe`);
+    assert.ok(Math.abs(p.y - (2.9 + 0.24)) < 0.3, `spark height ${p.y.toFixed(2)} at the drawn altitude`);
+  }
+});
+
 test('hits are throttled per (source, target) — the sim deals damage every tick', () => {
   const fx = createImpacts();
   const st = world({ tick: 5, units: [{ id: 1, unitId: 'tank', pos: { x: 10, y: 4 } }], structures: [tower] });
