@@ -106,6 +106,16 @@ export function createGroundColour(map, palette, roadAt = () => 0) {
     const patch = Math.max(0, Math.min(1, (n - 0.42) / 0.16));
     return open * patch * patch * (3 - 2 * patch);
   };
+  /**
+   * sandAt(x, z) → 0..1: where the sand / dirt detail shows [MM-task_mvfn5gxu_d] — the dirt / sand field (the same
+   * threshold the colour uses), never on roads or water.
+   */
+  colAt.sandAt = (x, z) => {
+    const fd = field(F.d, x, z);
+    const s = Math.max(0, Math.min(1, (fd - 0.3) / 0.22));
+    const keep = Math.max(0, 1 - roadAt(x, z) * 3 - Math.max(0, field(F.w, x, z) - 0.2) * 4);
+    return s * s * (3 - 2 * s) * keep;
+  };
   return colAt;
 }
 
@@ -128,7 +138,10 @@ export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID, {
   // the grass detail (High / Standard): a smooth per-VERTEX mask (patch edges blend across facets) + world-space uv
   const mask = grass ? new Float32Array((NX + 1) * (NZ + 1)) : null;
   if (mask) for (let k = 0; k < mask.length; k++) mask[k] = colAt.grassAt(vx[k], vz[k]);
+  const smask = grass ? new Float32Array((NX + 1) * (NZ + 1)) : null;   // the sand / dirt detail rides the same switch [MM-task_mvfn5gxu_d]
+  if (smask) for (let k = 0; k < smask.length; k++) smask[k] = colAt.sandAt(vx[k], vz[k]);
   const aGrass = grass ? new Float32Array(tris * 3) : null, aGUv = grass ? new Float32Array(tris * 6) : null;
+  const aSand = grass ? new Float32Array(tris * 3) : null;
   let o = 0;
   const tri = (a, b, c) => {
     const cx = (vx[a] + vx[b] + vx[c]) / 3, cz = (vz[a] + vz[b] + vz[c]) / 3;
@@ -138,7 +151,7 @@ export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID, {
       position[o] = vx[v]; position[o + 1] = 0; position[o + 2] = vz[v];
       normal[o] = nx / nl; normal[o + 1] = 1 / nl; normal[o + 2] = nz / nl;
       color[o] = cc[0] * k; color[o + 1] = cc[1] * k; color[o + 2] = cc[2] * k;
-      if (aGrass) { const q = o / 3; aGrass[q] = mask[v]; aGUv[q * 2] = vx[v] / tile; aGUv[q * 2 + 1] = vz[v] / tile; }
+      if (aGrass) { const q = o / 3; aGrass[q] = mask[v]; aSand[q] = smask[v]; aGUv[q * 2] = vx[v] / tile; aGUv[q * 2 + 1] = vz[v] / tile; }
       o += 3;
     }
   };
@@ -147,7 +160,7 @@ export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID, {
     const a = VI(i, j), b = VI(i + 1, j), c = VI(i + 1, j + 1), d = VI(i, j + 1);
     if (h2(i * 0.7, j * 1.3) < 0.5) { tri(a, b, c); tri(a, c, d); } else { tri(a, b, d); tri(b, c, d); }
   }
-  return { position, normal, color, triangles: tris, colAt, aGrass, aGUv };
+  return { position, normal, color, triangles: tris, colAt, aGrass, aGUv, aSand };
 }
 
 /**
@@ -195,6 +208,7 @@ export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron
   if (G.aGrass) {   // normal-mapped grass patches (High / Standard) [MM-story_mven9dp1_r]
     g.setAttribute('aGrass', new THREE.BufferAttribute(G.aGrass, 1));
     g.setAttribute('aGUv', new THREE.BufferAttribute(G.aGUv, 2));
+    g.setAttribute('aSand', new THREE.BufferAttribute(G.aSand, 1));   // sand / dirt detail [MM-task_mvfn5gxu_d]
   }
   const ground = new THREE.Mesh(g, G.aGrass ? createGrassGroundMaterial(THREE) : new THREE.MeshLambertMaterial({ vertexColors: true, depthWrite: false }));
   ground.name = 'ground-lowpoly';
