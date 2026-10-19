@@ -80,11 +80,11 @@ test('eleven worlds, each with every colour the ground, tufts, rocks and trees r
   assert.equal(MEADOW, LOWPAL.meadow, 'obstructions use the same palette object');
 });
 
-test('the approved Meadow numbers are the prototype\'s', () => {
-  assert.equal(LOWPAL.meadow.ground.grass, '#5fca6e');
-  assert.equal(LOWPAL.meadow.ground.road, '#f0dfb0');
-  assert.deepEqual(LOWPAL.meadow.rock, ['#7f83d8', '#8a8ae2', '#7479cc', '#9194e6']);
-  assert.deepEqual(WORLD_LIGHT.meadow, { clear: 0x6f90d4, apron: 0x5cbf6c, ambient: 0.16, hemi: [0xc4d8ff, 0x86b88f, 0.5], sun: [0xfff0d8, 1.05] });
+test('the Meadow numbers (retuned to the owner\'s 2026-10-18 reference)', () => {
+  assert.equal(LOWPAL.meadow.ground.grass, '#52a636');   // retuned to the owner's reference [MM-task_mvenabc8_s]
+  assert.equal(LOWPAL.meadow.ground.road, '#e2cfa8');
+  assert.deepEqual(LOWPAL.meadow.rock, ['#5558d4', '#5f62de', '#4c50c6', '#6a6de6']);
+  assert.deepEqual(WORLD_LIGHT.meadow, { clear: 0xd8b888, apron: 0x3f8e2e, ambient: 0.13, hemi: [0xffe4bc, 0x4e7a34, 0.48], sun: [0xffdcaa, 1.28] });
 });
 
 test('the ground grid covers the whole map, flat at Y = 0, every triangle facing UP (no back faces from above)', () => {

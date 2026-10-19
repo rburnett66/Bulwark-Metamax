@@ -17,12 +17,15 @@
  */
 
 export const LOWPAL = Object.freeze({
-  meadow: { rock: ['#7f83d8', '#8a8ae2', '#7479cc', '#9194e6'], rockB: '#a3a6cf', pebble: '#b2b4d8', tuft: '#4fbf5a',
-    ground: { lime: '#9bdc5c', grass: '#5fca6e', teal: '#2f9c86', brush: '#49b46e', forest: '#2f8f72', stone: '#b6c69a', lilac: '#a3a3d6',
-      sand: '#e2c88e', dirt: '#d2b27c', road: '#f0dfb0', roadEdge: '#d9c08a', shore: '#ead79c', foam: '#b4e4f2', waterL: '#6fb6f2', waterD: '#3f7fe0' },
-    canopy: ['#e07a62', '#e8906e', '#d96b5c', '#eea07c', '#e07a62'], rare: '#d8e0ea', pine: ['#3f9a8a', '#2f8a7c', '#4fae94', '#3a8f78'], trunk: '#3b4fc4',
-    hills: ['#5cc86a', '#74d46c', '#4cb87a', '#86dc6a'],
-    struct: { stone: '#e4dccb', stoneDark: '#b7ae9c', roof: '#e07a62', trim: '#3b4fc4', metal: '#5e6688', wood: '#b98a5a' } },
+  // meadow retuned toward the owner's reference (2026-10-18, "shift the pallet to more like this") [MM-task_mvenabc8_s]:
+  // rich saturated turf (deep green → yellow-green, no teal), tan sandy paths, deep cobalt water inside an icy shore,
+  // deeper blue-violet rock, red-orange canopies on cobalt trunks. Was the prototype's pastel meadow.
+  meadow: { rock: ['#5558d4', '#5f62de', '#4c50c6', '#6a6de6'], rockB: '#7376d8', pebble: '#8a8ed6', tuft: '#4a9e2c',
+    ground: { lime: '#8fbe3c', grass: '#52a636', teal: '#2f7d2c', brush: '#3f9230', forest: '#2a6a2c', stone: '#a8ae84', lilac: '#7c7ccc',
+      sand: '#d8c39e', dirt: '#c9ad80', road: '#e2cfa8', roadEdge: '#c8ae84', shore: '#bfe6f6', foam: '#9fd2f4', waterL: '#3a86ec', waterD: '#1d4fc4' },
+    canopy: ['#d4553c', '#e06a46', '#c84a3a', '#e8804e', '#d4553c'], rare: '#d8e0ea', pine: ['#2f7a5a', '#26684e', '#3a8a66', '#2e7458'], trunk: '#2a3ec2',
+    hills: ['#4fa232', '#64b23c', '#3f922e', '#78bc44'],
+    struct: { stone: '#e4dccb', stoneDark: '#b7ae9c', roof: '#d4553c', trim: '#2a3ec2', metal: '#5e6688', wood: '#b98a5a' } },
   autumn: { rock: ['#8d7f78', '#9a8b80', '#7f726c', '#a39388'], rockB: '#a89a8e', pebble: '#b8aa9c', tuft: '#c9a24a',
     ground: { lime: '#e0c25a', grass: '#b8a64a', teal: '#7f8a4a', brush: '#a8904a', forest: '#7a5a3a', stone: '#b8aa8a', lilac: '#a3968c',
       sand: '#e8c890', dirt: '#c89a64', road: '#f2dcb0', roadEdge: '#d4b07a', shore: '#e8d29a', foam: '#c8e2ea', waterL: '#6aa8d8', waterD: '#3a6ab0' },
@@ -93,7 +96,7 @@ export const LOWPAL = Object.freeze({
 export const CRYSTAL = Object.freeze({ blue: '#5aa8f0', yellow: '#f2c84a', red: '#e85050', green: '#52c070' });
 
 export const WORLD_LIGHT = Object.freeze({
-  meadow: { clear: 0x6f90d4, apron: 0x5cbf6c, ambient: 0.16, hemi: [0xc4d8ff, 0x86b88f, 0.5], sun: [0xfff0d8, 1.05] },
+  meadow: { clear: 0xd8b888, apron: 0x3f8e2e, ambient: 0.13, hemi: [0xffe4bc, 0x4e7a34, 0.48], sun: [0xffdcaa, 1.28] },   // golden low sun, warm haze [MM-task_mvenabc8_s]
   autumn: { clear: 0xd8a070, apron: 0xc8a64a, ambient: 0.16, hemi: [0xffe0b0, 0x8a6a3a, 0.5], sun: [0xffc890, 1.1] },
   winter: { clear: 0xb8cce4, apron: 0xeef4fa, ambient: 0.1, hemi: [0xe8f2ff, 0xb0c0d0, 0.55], sun: [0xfff6ec, 0.9] },
   canyon: { clear: 0x8ac0e8, apron: 0xe8b880, ambient: 0.16, hemi: [0xd8ecff, 0xc88a5a, 0.5], sun: [0xfff0d0, 1.15] },
