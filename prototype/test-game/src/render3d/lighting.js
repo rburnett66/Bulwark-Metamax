@@ -13,7 +13,15 @@
 import { SUN } from '../render/sun.js';
 
 export const AMBIENT = 0.6;
-export const SHADOW_BIAS = -0.0006;
+/**
+ * Shadow offsets [MM-task_mveuiyia_f] — owner 2026-10-18: "rocks also have a wierd shadow artifact at the base where
+ * light is seeping through". The old depth bias (-0.0006 of a 1..220 depth range ≈ 0.13 world units) pushed every
+ * shadow that far off its caster: a lit sliver between a rock's foot and its shadow ("peter-panning"). Now a tiny depth
+ * bias plus a normal bias — the receiver is offset along its normal by about one shadow texel, which kills acne on lit
+ * faces without detaching the shadow from where the caster meets the ground.
+ */
+export const SHADOW_BIAS = -0.00005;
+export const SHADOW_NORMAL_BIAS = 0.02;
 
 /** Unit vector pointing TOWARD the sun, in world space. */
 export function sunDirection(azimuthDeg = SUN.azimuthDeg, elevationDeg = SUN.elevationDeg) {
@@ -45,6 +53,7 @@ export function createLights(THREE, renderer, scene, cols, rows, shadowSize = 20
   const ext = Math.ceil(Math.hypot(cols, rows) / 2) + 6;
   Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 220 });
   sun.shadow.bias = SHADOW_BIAS;
+  sun.shadow.normalBias = SHADOW_NORMAL_BIAS;
   sun.shadow.camera.updateProjectionMatrix();   // required: without it three keeps its default ±5 extents
   const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 0);
   scene.add(ambient, hemi, sun, sun.target);
