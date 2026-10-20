@@ -8,8 +8,9 @@
  *       is made 200 px taller than the screen (html.fs-swipe), so one upward swipe collapses the bar; the body is pinned
  *       as a fixed full-screen frame, so nothing ever scrolls the document back and the bar stays gone. A "Swipe up to go
  *       full screen" overlay shows while the bar is visible, with PLAY ANYWAY.
- *   Android / touch browsers ('card') — a "Play full screen / Play in a window" card at boot; its tap is the user
- *       gesture requestFullscreen() + screen.orientation.lock('landscape') need.
+ *   Android / touch browsers ('card') — a TAP TO START screen at boot; its tap is the user gesture
+ *       requestFullscreen() + screen.orientation.lock('landscape') need ("Play in a window" skips it).
+ *   Both show as a START SCREEN (title splash) over the game in the same page — see startView() below.
  *   Home Screen app / desktop ('none') — already chromeless (manifest "display": "fullscreen"), or a desktop browser that
  *       keeps the HUD's ⛶ button: nothing shown.
  *
@@ -45,7 +46,25 @@ html.fs-swipe body.playing :is(button, [data-action], a, label) { touch-action:n
 .fs-veil { position:fixed; inset:0; z-index:2147483600; display:grid; place-items:center; background:rgba(4,7,11,.86);
   font-family:"Segoe UI",system-ui,sans-serif; color:#e6ecf3; text-align:center; padding:24px; box-sizing:border-box; }
 .fs-veil[hidden] { display:none; }
-#fsSwipe { touch-action:pan-y; }
+/* the START SCREEN: a title splash over the game (same page — full screen can't follow a new window) */
+.fs-start { touch-action:pan-y; background:radial-gradient(80% 70% at 30% 35%, rgba(40,60,90,.35), transparent 70%),
+  linear-gradient(160deg,#07090c 0%, #0c1016 60%, #07090c 100%); }
+.fs-crest { width:54px; height:54px; background:linear-gradient(160deg,#f2c869,#d9a441); clip-path:polygon(50% 0,100% 22%,100% 68%,50% 100%,0 68%,0 22%);
+  display:flex; align-items:center; justify-content:center; color:#0c0e12; font-weight:900; font-size:26px; box-shadow:0 0 18px rgba(217,164,65,.35); }
+.fs-word { font-size:clamp(30px,8vh,46px); font-weight:900; letter-spacing:.3em; margin-right:-.3em; }
+.fs-word b { color:#f2c869; }
+.fs-tag { font-size:10px; letter-spacing:.42em; color:#8fa0b3; margin-top:-8px; }
+.fs-swipebox { display:none; flex-direction:column; align-items:center; gap:6px; }
+.fs-start[data-view^="swipe"] .fs-swipebox { display:flex; }
+.fs-start[data-view^="swipe"] .fs-go, .fs-start[data-view^="swipe"] .fs-sub { display:none; }
+.fs-start[data-view="swipe-again"] .fs-crest, .fs-start[data-view="swipe-again"] .fs-word, .fs-start[data-view="swipe-again"] .fs-tag { display:none; }
+.fs-start[data-view="swipe-again"] { background:rgba(4,7,11,.86); }
+.fs-start[data-route="swipe"][data-view="tap"] .fs-link { display:none; }
+.fs-go { min-width:260px; min-height:54px; font-size:17px !important; letter-spacing:.24em !important; }
+.fs-sub { font-size:11px !important; letter-spacing:.2em; text-transform:uppercase; }
+.fs-link { background:none; border:0; color:#8fa0b3; font:inherit; font-size:12px; letter-spacing:.16em; text-transform:uppercase; text-decoration:underline;
+  cursor:pointer; padding:10px 14px; min-height:44px; }
+@media (max-height:420px) { .fs-card { gap:8px; } .fs-crest { width:40px; height:40px; font-size:20px; } .fs-card p { display:none; } .fs-start[data-view^="swipe"] .fs-swipebox p { display:block; } }
 .fs-card { max-width:360px; display:flex; flex-direction:column; align-items:center; gap:14px; }
 .fs-card .k { font-size:11px; letter-spacing:.42em; color:#d9a441; }
 .fs-card strong { font-size:22px; font-weight:900; letter-spacing:.08em; }
@@ -74,7 +93,7 @@ const env = () => {
 };
 
 let state = { route: 'none', why: 'not started' };
-let lvh = null, swipe = null, playAnyway = false;
+let lvh = null, playAnyway = false;
 const barPx = () => (lvh ? Math.max(0, lvh.offsetHeight - window.innerHeight) : 0);
 
 /** Scroll to the top WITHOUT bringing Safari's bar back (scroll the body frame, never the window). */
@@ -95,9 +114,37 @@ export async function goFullscreen() {
 
 function el(tag, attrs, html) { const e = document.createElement(tag); Object.assign(e, attrs || {}); if (html) e.innerHTML = html; return e; }
 
+/**
+ * The START SCREEN (owner 2026-10-19: "create a start-game window and initiate the fullscreen trick … this needs to work
+ * or hide on PC and work on iPhone and Android"). Full screen belongs to the page that asked for it — a new window would
+ * lose it on both platforms — so the start screen is a title splash over the game, in the same page:
+ *   iPhone  — while Safari's bar shows: "Swipe up to go full screen" (+ PLAY ANYWAY); the swipe itself starts the game.
+ *             If the bar comes back later (rotation, a tap on the status bar) the swipe prompt returns.
+ *   Android — TAP TO START: the tap enters full screen + locks landscape (PLAY IN A WINDOW skips it).
+ *   PC / Home Screen app / automation / ?fs=off — no start screen at all.
+ */
+export function startView(route, { started, bar, playAnyway }) {
+  if (route === 'swipe') {
+    if (playAnyway) return 'hidden';
+    if (bar > 4) return started ? 'swipe-again' : 'swipe';
+    return started ? 'hidden' : 'tap';
+  }
+  if (route === 'card') return started ? 'hidden' : 'tap';
+  return 'hidden';
+}
+
+let start = null, started = false, lastBar = 0;
 function sync() {
-  if (swipe) swipe.hidden = playAnyway || barPx() <= 4 || !!document.querySelector('dialog[open]');
-  if (info) info.textContent = `fs route: ${state.route} (${state.why})\nbar: ${barPx()}px  inner: ${window.innerHeight}  lvh: ${lvh ? lvh.offsetHeight : '?'}\nscrollY: ${Math.round(window.scrollY)}  body.playing: ${document.body.classList.contains('playing')}\nfullscreen: ${!!document.fullscreenElement}`;
+  const bar = barPx();
+  // the swipe that hides Safari's bar IS the start: the bar going from showing to gone begins the game
+  if (state.route === 'swipe' && !started && lastBar > 4 && bar <= 4) started = true;
+  lastBar = bar;
+  if (start) {
+    const v = document.querySelector('dialog[open]') ? 'hidden' : startView(state.route, { started, bar, playAnyway });
+    start.hidden = v === 'hidden';
+    start.dataset.view = v;
+  }
+  if (info) info.textContent = `fs route: ${state.route} (${state.why})\nstart: ${start ? start.dataset.view : 'none'}  started: ${started}\nbar: ${bar}px  inner: ${window.innerHeight}  lvh: ${lvh ? lvh.offsetHeight : '?'}\nscrollY: ${Math.round(window.scrollY)}  body.playing: ${document.body.classList.contains('playing')}\nfullscreen: ${!!document.fullscreenElement}`;
 }
 let info = null;
 
@@ -106,32 +153,35 @@ function mount() {
   lvh = el('div', { id: 'fsLvh' }); document.body.appendChild(lvh);
   state = fullscreenRoute(env());
   if (/[?&]fsinfo=1\b/.test(location.search)) { info = el('div', { id: 'fsInfo' }); document.body.appendChild(info); }
+  if (state.route === 'none') { sync(); return; }   // PC, Home Screen app, automation, ?fs=off: straight into the game
+
+  if (state.route === 'swipe') document.documentElement.classList.add('fs-swipe');
+  start = el('div', { id: 'fsStart', className: 'fs-veil fs-start' }, `<div class="fs-card">
+      <div class="fs-crest">B</div><div class="fs-word">BUL<b>WARK</b></div><div class="fs-tag">HOLD THE LINE</div>
+      <div class="fs-swipebox"><strong>Swipe up to go full screen</strong><p>One upward swipe hides Safari's bar for the whole game.</p>
+        <div class="fs-arrow" aria-hidden="true"></div></div>
+      <button type="button" class="fs-btn primary fs-go" id="fsGo">TAP TO START</button>
+      <p class="fs-sub">${state.route === 'card' ? 'Plays full screen, held sideways' : 'Hold your phone sideways'}</p>
+      <button type="button" class="fs-link" id="fsAlt">${state.route === 'card' ? 'Play in a window' : 'Play anyway'}</button></div>`);
+  start.dataset.route = state.route;
+  document.body.appendChild(start);
+  start.querySelector('#fsGo').addEventListener('click', () => {
+    started = true;
+    if (state.route === 'card') void goFullscreen();   // this tap is the gesture full screen needs
+    sync();
+  });
+  start.querySelector('#fsAlt').addEventListener('click', () => { started = true; if (state.route === 'swipe') playAnyway = true; sync(); });
 
   if (state.route === 'swipe') {
-    document.documentElement.classList.add('fs-swipe');
-    swipe = el('div', { id: 'fsSwipe', className: 'fs-veil' }, `<div class="fs-card">
-      <div class="k">BULWARK</div><strong>Swipe up to go full screen</strong>
-      <p>One upward swipe hides Safari's bar for the whole game.</p><div class="fs-arrow" aria-hidden="true"></div>
-      <button type="button" class="fs-btn" id="fsPlayAnyway">PLAY ANYWAY</button></div>`);
-    document.body.appendChild(swipe);
-    swipe.querySelector('#fsPlayAnyway').addEventListener('click', () => { playAnyway = true; sync(); });
     let startedOnControl = false;
     document.addEventListener('touchstart', (e) => {
       startedOnControl = !!(e.target.closest && e.target.closest('button,[data-action],a,label'));
     }, { capture: true, passive: true });
     document.addEventListener('touchmove', (e) => {
-      if (!document.body.classList.contains('playing') || (swipe && !swipe.hidden) || !e.cancelable || startedOnControl) return;
+      if (!document.body.classList.contains('playing') || (start && !start.hidden) || !e.cancelable || startedOnControl) return;
       if (e.target.closest && e.target.closest('dialog[open],input,select,textarea')) return;
       e.preventDefault();
     }, { passive: false });
-  } else if (state.route === 'card') {
-    const card = el('div', { id: 'fsCard', className: 'fs-veil' }, `<div class="fs-card">
-      <div class="k">BULWARK</div><strong>Play full screen?</strong><p>Bulwark plays best full screen, held sideways.</p>
-      <button type="button" class="fs-btn primary" id="fsGo">PLAY FULL SCREEN</button>
-      <button type="button" class="fs-btn" id="fsWindow">PLAY IN A WINDOW</button></div>`);
-    document.body.appendChild(card);
-    card.querySelector('#fsGo').addEventListener('click', () => { card.hidden = true; void goFullscreen(); });
-    card.querySelector('#fsWindow').addEventListener('click', () => { card.hidden = true; });
   }
   for (const t of ['resize', 'scroll', 'orientationchange']) window.addEventListener(t, sync, { passive: true });
   if (window.visualViewport) window.visualViewport.addEventListener('resize', sync);

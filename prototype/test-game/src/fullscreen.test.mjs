@@ -27,3 +27,26 @@ test('Android touch browsers get the full-screen card; desktop keeps its ⛶ but
   assert.equal(fullscreenRoute({ ...base, ua: ANDROID, coarse: true, canFullscreen: false }).route, 'none', 'no API');
   assert.equal(fullscreenRoute({ ...base, ua: MAC, platform: 'MacIntel' }).route, 'none', 'a real Mac is a desktop');
 });
+
+test('the start screen per platform: iPhone asks for the swipe, Android taps to start, PC never sees it', async () => {
+  const { startView } = await import('./fullscreen.js');
+  // iPhone Safari: bar showing → swipe prompt; the swipe (bar gone) starts; bar back later → prompt again; Play anyway ends it
+  assert.equal(startView('swipe', { started: false, bar: 80, playAnyway: false }), 'swipe');
+  assert.equal(startView('swipe', { started: false, bar: 0, playAnyway: false }), 'tap', 'no bar to hide (already gone): a plain start button');
+  assert.equal(startView('swipe', { started: true, bar: 0, playAnyway: false }), 'hidden');
+  assert.equal(startView('swipe', { started: true, bar: 80, playAnyway: false }), 'swipe-again');
+  assert.equal(startView('swipe', { started: true, bar: 80, playAnyway: true }), 'hidden');
+  // Android: tap to start (the tap enters full screen), then gone
+  assert.equal(startView('card', { started: false, bar: 0, playAnyway: false }), 'tap');
+  assert.equal(startView('card', { started: true, bar: 0, playAnyway: false }), 'hidden');
+  // PC / Home Screen app / automation / ?fs=off
+  assert.equal(startView('none', { started: false, bar: 0, playAnyway: false }), 'hidden');
+});
+
+test('no CSS rule other than the page-frame ones targets .fs-swipe (it is the <html> class on iPhone)', async () => {
+  const src = (await import('node:fs')).readFileSync(new URL('./fullscreen.js', import.meta.url), 'utf8');
+  const css = src.slice(src.indexOf('const CSS = `'), src.indexOf('`;', src.indexOf('const CSS = `')));
+  for (const m of css.matchAll(/(^|[\s,}])([^{}\n]*\.fs-swipe\b(?!-|box)[^{]*)\{/g)) {
+    assert.ok(/^\s*html\.fs-swipe\b/.test(m[2]), `only html.fs-swipe … may use the class: "${m[2].trim()}"`);
+  }
+});
