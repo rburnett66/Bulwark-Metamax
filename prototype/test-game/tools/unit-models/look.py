@@ -1,6 +1,6 @@
 """tools/unit-models/look.py — a model beside its concept image [MM-story_mvh8woji_1].
 
-  python3 tools/unit-models/look.py <modelKey> <ref.png> [yaw] [elev] [out.png]
+  python3 tools/unit-models/look.py <modelKey> <ref.png> [yaw] [elev] [out.png] [deploy 0..1]
 
 Renders the model the way the game lights it (src/look.html) as a three-quarter hero at yaw/elev, plus top/side/front
 orthographic views, and lays them out as: concept | hero | (top / side / front). Prints the model's size (x, y, z).
@@ -15,6 +15,7 @@ key, ref = sys.argv[1], sys.argv[2]
 yaw = float(sys.argv[3]) if len(sys.argv) > 3 else 35
 elev = float(sys.argv[4]) if len(sys.argv) > 4 else 30
 out = sys.argv[5] if len(sys.argv) > 5 else f'look_{key}.png'
+deploy = float(sys.argv[6]) if len(sys.argv) > 6 else 1   # stabilizer legs: 1 planted, 0 stowed
 
 class Quiet(SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -30,7 +31,7 @@ async def main():
         await pg.goto(f'http://127.0.0.1:{srv.server_address[1]}/tools/unit-models/src/look.html?{os.getpid()}')
         try:
             await pg.wait_for_function('window.ready === true', timeout=20000)
-            res = await pg.evaluate('([k, y, e]) => look(k, y, e, 512)', [key, yaw, elev])
+            res = await pg.evaluate('([k, y, e, d]) => look(k, y, e, 512, d)', [key, yaw, elev, deploy])
         finally:
             for l in logs: print(l)
             await b.close(); srv.shutdown()

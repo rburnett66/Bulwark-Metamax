@@ -349,7 +349,8 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   };
   r.fxOpts.muzzle = (id, n) => (r.system ? r.system.muzzle(id, n) : null);
   r.fxOpts.unitMuzzle = (id, n) => r.unitBarrels.muzzle(id, n);
-  r.fxOpts.unitHeavy = (id) => r.unitBarrels.heavy(id);   // cannon-armed tanks fire one heavy round per shot [MM-task_mvfpbbtp_1]
+  r.fxOpts.unitHeavy = (id) => r.unitBarrels.heavy(id);
+  r.fxOpts.unitReady = (id) => r.unitBarrels.ready(id);   // legged artillery fires only once its legs are planted [MM-story_mvh8woji_1]   // cannon-armed tanks fire one heavy round per shot [MM-task_mvfpbbtp_1]
   // a round left a modelled barrel: cannon barrels (tower, tank, Tiger) kick back; guns, missiles, rockets never [MM-story_mvee15ja_b]
   r.fxOpts.kick = (key, n) => { const raw = key.slice(1), id = Number.isNaN(Number(raw)) ? raw : Number(raw); if (key[0] === 's') { if (r.system) r.system.kick(id, n); } else r.unitBarrels.kick(id, n); };
   r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
