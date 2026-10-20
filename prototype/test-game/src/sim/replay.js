@@ -38,6 +38,27 @@ export function recordCommand(log, tick, cmd) {
 }
 
 /**
+ * The createSim options that reproduce a logged battle [MM-task_mvgyb5ma_1]. A serialized log carries only the
+ * rebuildable scalars (mapId, faction, carry, harvesterLevel, structTiers); the board objects (map + waves) are not
+ * JSON-safe, so the caller supplies them — rebuilt from mapId + faction, or kept from the finished game. Both the
+ * in-app playback and the headless hash check MUST build from this one function: playback used to drop
+ * harvesterLevel + structTiers (any upgraded save diverged) and the check had no board at all (it never matched).
+ * @param {object|null} init   the log's init
+ * @param {{map:object, waves:Array}} board
+ */
+export function replayOpts(init, board) {
+  const i = init || {};
+  return {
+    map: board && board.map, waves: board && board.waves,
+    carry: i.carry || null,
+    harvesterLevel: i.harvesterLevel || 1,
+    structTiers: i.structTiers || null,
+    mapId: i.mapId != null ? i.mapId : null,
+    faction: i.faction || null,
+  };
+}
+
+/**
  * Serialize a battle log to a JSON string for export.
  * @param {object} log BattleLog
  * @returns {string}
