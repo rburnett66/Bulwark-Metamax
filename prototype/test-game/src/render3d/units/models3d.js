@@ -140,7 +140,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
   }
 
   const mk = new THREE.Matrix4(), m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), mp = new THREE.Matrix4(), mt = new THREE.Matrix4(), mr = new THREE.Matrix4();
-  const q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), v2 = new THREE.Vector3();
   const yAxis = new THREE.Vector3(0, 1, 0), xAxis = new THREE.Vector3(1, 0, 0), qBank = new THREE.Quaternion();
   const counts = {};
   let usingLod = false;
@@ -193,6 +193,11 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
           else if (gname.startsWith('spin')) {   // a rotor / fan turning about its own axis (def.spin) [MM-story_mvehe3sy_j]
             const S = (T.def.spin && T.def.spin[gname]) || { axis: 'y', speed: 20 }, a = (t * S.speed + (u.id || 0) * 1.7) % (Math.PI * 2);
             m2.copy(m1).multiply(mp.makeTranslation(G.pivot.x, G.pivot.y, G.pivot.z)).multiply(S.axis === 'z' ? mr.makeRotationZ(a) : S.axis === 'x' ? mr.makeRotationX(a) : mr.makeRotationY(a));
+          }
+          else if (gname.startsWith('deploy')) {   // stabilizer legs: swing from planted (authored) to stowed about the hinge [MM-story_mvh8woji_1]
+            const D = T.def.deploy && T.def.deploy.groups && T.def.deploy.groups[gname];
+            m2.copy(m1).multiply(mp.makeTranslation(G.pivot.x, G.pivot.y, G.pivot.z));
+            if (D) m2.multiply(mr.makeRotationAxis(v2.set(D.axis[0], D.axis[1], D.axis[2]), (1 - (u.deploy ?? 1)) * D.angle * Math.PI / 180));
           }
           else if (gname.startsWith('barrel') && TG) {   // rides the turret, pitched about its trunnion [MM-story_mvedy16u_9]
             m2.copy(mt).multiply(mp.makeTranslation(G.pivot.x - TG.pivot.x, G.pivot.y - TG.pivot.y, G.pivot.z - TG.pivot.z)).multiply(mr.makeRotationZ(u.pitch || 0));

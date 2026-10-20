@@ -74,6 +74,6 @@ test('live units use the metal material (per-pixel Phong), still receive shadows
   for (const o of lit) { assert.ok(o.material.isMeshPhongMaterial); assert.ok(o.receiveShadow); }
   units.setMetal(0);
   assert.equal(units.material.uniforms.uMetalK.value, 0);
-  assert.deepEqual(units.tris, { tank: { full: 3362, lod: 1534 }, buggy: { full: 1260, lod: 760 }, beetle: { full: 2748, lod: 1724 }, jet: { full: 994, lod: 698 }, tiger: { full: 3660, lod: 1520 }, copter: { full: 1720, lod: 1000 }, drone: { full: 1708, lod: 1496 }, miner: { full: 4524, lod: 1320 } },
+  assert.deepEqual(units.tris, { tank: { full: 3362, lod: 1534 }, buggy: { full: 1260, lod: 760 }, beetle: { full: 2748, lod: 1724 }, jet: { full: 994, lod: 698 }, tiger: { full: 3660, lod: 1520 }, copter: { full: 1720, lod: 1000 }, drone: { full: 1708, lod: 1496 }, miner: { full: 4524, lod: 1320 }, air_troops: { full: 1436, lod: 1020 }, air_scout: { full: 1192, lod: 912 }, air_tank: { full: 2580, lod: 1128 }, air_artillery: { full: 3520, lod: 2048 }, air_heavy: { full: 3470, lod: 1338 }, air_gunship: { full: 1788, lod: 1492 }, air_fighter: { full: 1158, lod: 878 }, air_missile: { full: 2084, lod: 1756 }, air_bomber: { full: 1512, lod: 796 } },
     'geometry unchanged by the material swap');
 });

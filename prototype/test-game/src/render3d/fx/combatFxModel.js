@@ -326,6 +326,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         const e = pfx && pfx[u.unitId];
         const color = u.side === 'attacker' ? base.attacker : base.defender;
         const umuz = unitMuzzleOf && !run ? (n) => unitMuzzleOf(u.id, n) : null;
+        if (opts.unitReady && !opts.unitReady(u.id)) continue;   // stabilizer legs still swinging down: hold fire [MM-story_mvh8woji_1]
         const heavy = !run && opts.unitHeavy && opts.unitHeavy(u.id);   // a cannon-armed tank: one round per shot [MM-task_mvfpbbtp_1]
         fire('u' + u.id, now, from, to, lookFor(e, base, kind, color, scale), heavy ? 1 : (e && e.burst) || base.burst, (e && e.cadence) || (heavy ? base.heavyCadence : base.cadence), null, umuz);
       }

@@ -70,3 +70,31 @@ test('units3d: the drawn barrel pitches with view.pitch; a wreck turret still ca
   assert.ok(found, 'one group is drawn pitched 12°');
   u3.dispose();
 });
+
+// [MM-story_mvh8woji_1] owner 2026-10-20: "on the artillery have two legs one on each side that deploy to stabilize the
+// unit before firing" — the Air artillery's legs plant while it is stopped on a target, stow when it moves, and it holds
+// fire until they are down.
+test('Air artillery: two side legs plant before firing, stow to drive', () => {
+  const def = UNIT_MODELS.air_artillery;
+  assert.deepEqual(Object.keys(def.deploy.groups).sort(), ['deployL', 'deployR'], 'one leg per side');
+  const g = mergeModelGroups(THREE, def);
+  assert.ok(g.deployL.tris > 20 && g.deployR.tris > 20 && g.deployL.pivot.z < 0 && g.deployR.pivot.z > 0, 'left and right hinges');
+  const b = createUnitBarrels();
+  const state = { units: new Map([[1, { id: 1, pos: { x: 4, y: 4 }, hp: 5, targetId: 2 }], [2, { id: 2, pos: { x: 12, y: 4 }, hp: 5 }]]) };
+  const view = (x) => ({ id: 1, model: 'air_artillery', scale: 1, x, y: 0, z: 4.5, heading: 0, aim: 0 });
+  // driving toward the target: stowed, not ready
+  let v; for (let i = 0; i < 10; i++) { v = view(4.5 + i * 0.05); b.update([v], state, null, null, 1 / 30); }
+  assert.equal(v.deploy, 0, 'moving → legs stay stowed');
+  assert.equal(b.ready(1), false, 'and the gun holds fire');
+  // stopped on the target: the legs swing down; not ready until they are planted
+  for (let i = 0; i < 5; i++) { v = view(5); b.update([v], state, null, null, 1 / 30); }
+  assert.ok(v.deploy > 0 && v.deploy < 1 && b.ready(1) === false, 'deploying');
+  for (let i = 0; i < 40; i++) { v = view(5); b.update([v], state, null, null, 1 / 30); }
+  assert.equal(v.deploy, 1); assert.equal(b.ready(1), true, 'planted → fires');
+  // it moves again: the legs stow and it stops being ready at once
+  v = view(5.2); b.update([v], state, null, null, 1 / 30);
+  assert.ok(v.deploy < 1 && b.ready(1) === false, 'moving → stowing');
+  // units without legs are always ready
+  b.update([{ id: 3, model: 'tank', scale: 1, x: 2, y: 0, z: 2, heading: 0, aim: 0 }], state, null, null, 1 / 30);
+  assert.equal(b.ready(3), true);
+});

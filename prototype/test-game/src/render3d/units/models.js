@@ -4,6 +4,7 @@
 // Unit models built from primitives. X forward, Y up, Z right; hull ≈ 4 units long; ground at Y = 0.
 import { track } from './prims.js';
 import { SYSTEM_MODELS, SYSTEM_COLORS } from '../structures/systemModels.js';
+import { AIR_MODELS } from './air/index.js';
 
 const sec = (P, sx, sz, dx = 0, dz = 0) => P.map(([x, z]) => [x * sx + dx, z * sz + dz]);
 const M = {};
@@ -422,5 +423,8 @@ const bladeY = (c, L, a, w, h, m, g) => ({ t: 'box', s: [L, h, w], p: [c[0] + Ma
   M.miner = { name: S.name, unit: 'SYS-Harvester', ref: 'miner', parts: S.parts.map((p) => (p.g === 'head' ? { ...p, g: 'spin' } : p)),
     pivots: { spin: S.pivots.head }, spin: { spin: { axis: 'x', speed: S.head.speed || 7 } }, colors: SYSTEM_COLORS, cargo: S.cargo, views: S.views };
 }
+
+// the AIR faction's own models (air/*.js) [MM-story_mvh8woji_1]
+Object.assign(M, AIR_MODELS);
 
 export const UNIT_MODELS = M;

@@ -35,6 +35,13 @@ export const UMETAL = Object.freeze({
   hazard: [0.1, 0.7],
   chrome: [0.95, 0.15],
   bone: [0.15, 0.6],
+  // the AIR faction livery (air/palette.js): painted airframes, not bare metal [MM-story_mvh8woji_1]
+  paint: [0.15, 0.5],
+  paint2: [0.3, 0.45],
+  navy: [0.06, 0.7],   // low metal: big navy wings must stay navy, not mirror the sky
+  pink: [0.15, 0.55],
+  red: [0.2, 0.5],
+  gold: [0.85, 0.3],
 });
 
 /** Keys drawn unlit (emissive): no metal, no lighting — they carry the glow read. */

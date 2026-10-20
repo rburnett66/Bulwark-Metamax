@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Unit Look</title></head><body style="margin:0;background:#fff">
+<!--
+  tools/unit-models/src/look.html — render one unit model the way the game lights it, for side-by-side checks against a
+  concept image [MM-story_mvh8woji_1]. Driven by look.py:  window.look(key, yawDeg, elevDeg, size) → { hero, top, side, front }
+  (PNG data URLs). hero = perspective three-quarter view (yaw 0 = looking at the nose; +yaw swings the camera to the
+  model's right side); top/side/front = orthographic, framed to the model. Same builder, palette and material as the game.
+-->
+<script type="module">
+import * as THREE from '../../../vendor/three.module.js';
+import { UNIT_MODELS } from '../../../src/render3d/units/models.js';
+import { mergeModelGroups } from '../../../src/render3d/units/models3d.js';
+import { createUnitMaterial } from '../../../src/render3d/units/material.js';
+
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setClearColor(0xe4e7eb, 1);   // a light grey ground so white paint still reads
+const mat = createUnitMaterial(THREE, { env: { sky: 0xc4d8ff, ground: 0x8a8f96 } }).material || createUnitMaterial(THREE).material;
+function sceneFor(key, deploy = 1) {
+  const def = UNIT_MODELS[key]; if (!def) throw new Error('no model ' + key);
+  const s = new THREE.Scene();
+  s.add(new THREE.HemisphereLight(0xeef3ff, 0x50555e, 0.75), new THREE.AmbientLight(0xffffff, 0.25));
+  const sun = new THREE.DirectionalLight(0xfff4e6, 1.0); sun.position.set(-3, 8, 5); s.add(sun);
+  const rim = new THREE.DirectionalLight(0xbcd4ff, 0.45); rim.position.set(5, 3, -5); s.add(rim);
+  const root = new THREE.Group();
+  for (const [g, G] of Object.entries(mergeModelGroups(THREE, def))) {
+    const m = new THREE.Mesh(G.geo, mat); m.position.copy(G.pivot);
+    const D = g.startsWith('deploy') && def.deploy && def.deploy.groups[g];   // stabilizer legs at `deploy` (1 planted, 0 stowed)
+    if (D) m.quaternion.setFromAxisAngle(new THREE.Vector3(...D.axis), (1 - deploy) * D.angle * Math.PI / 180);
+    root.add(m);
+  }
+  s.add(root); root.updateMatrixWorld(true);
+  return { s, root };
+}
+function frame(cam, root, w, h, persp) {
+  const box = new THREE.Box3().setFromObject(root), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
+  if (persp) { const rad = sz.length() * 0.5; cam.position.copy(c).addScaledVector(cam.userData.dir, rad / Math.tan(cam.fov * Math.PI / 360) * 1.05); cam.lookAt(c); cam.updateMatrixWorld(); cam.userData.debug = [c.toArray(), cam.position.toArray(), rad]; return; }
+  cam.position.copy(c).addScaledVector(cam.userData.dir, 20); cam.lookAt(c); cam.updateMatrixWorld();
+  const inv = cam.matrixWorldInverse, v = new THREE.Vector3(); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const corner of [0, 1, 2, 3, 4, 5, 6, 7]) { v.set(corner & 1 ? box.max.x : box.min.x, corner & 2 ? box.max.y : box.min.y, corner & 4 ? box.max.z : box.min.z).applyMatrix4(inv); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
+  let bw = (x1 - x0) * 1.08, bh = (y1 - y0) * 1.08; const asp = w / h; if (bw / bh > asp) bh = bw / asp; else bw = bh * asp;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2; Object.assign(cam, { left: cx - bw / 2, right: cx + bw / 2, top: cy + bh / 2, bottom: cy - bh / 2 }); cam.updateProjectionMatrix();
+}
+window.look = function (key, yaw = 35, elev = 30, size = 512, deploy = 1) {
+  const { s, root } = sceneFor(key, deploy), out = {};
+  const D = Math.PI / 180, dir = new THREE.Vector3(Math.cos(elev * D) * Math.cos(yaw * D), Math.sin(elev * D), Math.cos(elev * D) * Math.sin(yaw * D));
+  const hero = new THREE.PerspectiveCamera(24, 1, 0.05, 200); hero.userData.dir = dir; frame(hero, root, size, size, true);
+  r.setSize(size, size, false); r.setPixelRatio(1); r.render(s, hero); out.hero = r.domElement.toDataURL('image/png');
+  const views = { top: [[0, 1, 0], [1, 0, 0]], side: [[0, 0, 1], [0, 1, 0]], front: [[1, 0, 0], [0, 1, 0]] };
+  for (const [name, [d, up]] of Object.entries(views)) {
+    const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100); cam.up.set(...up); cam.userData.dir = new THREE.Vector3(...d);
+    frame(cam, root, size / 2, size / 2, false); r.setSize(size / 2, size / 2, false); r.render(s, cam); out[name] = r.domElement.toDataURL('image/png');
+  }
+  const box = new THREE.Box3().setFromObject(root), sz = box.getSize(new THREE.Vector3());
+  out.debug = hero.userData.debug; out.size = [sz.x, sz.y, sz.z].map((x) => Math.round(x * 100) / 100);
+  return out;
+};
+window.ready = true;
+</script></body></html>

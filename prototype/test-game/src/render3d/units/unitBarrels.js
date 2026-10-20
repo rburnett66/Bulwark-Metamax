@@ -58,6 +58,9 @@ export function unitPitchFor(bar, m, to) {
  */
 export function createUnitBarrels() {
   const pitch = new Map(), byId = new Map(), recoil = createRecoil();
+  // STABILIZER LEGS (def.deploy, the Air artillery) [MM-story_mvh8woji_1]: 0 stowed … 1 planted. They plant while the unit
+  // has a target and has stopped, stow as soon as it moves; the gun holds fire until they are down (ready()).
+  const deploy = new Map(), lastPos = new Map();
   return {
     update(views, state, map, drawn, dt) {
       const dts = Math.min(0.1, Math.max(0, dt || 0));
@@ -70,6 +73,13 @@ export function createUnitBarrels() {
         byId.set(v.id, v); seen.add(v.id);
         const u = state && state.units && state.units.get(v.id);
         const to = u && u.targetId != null ? aimPoint(state, map, u.targetId, drawn) : null;
+        if (def.deploy) {
+          const lp = lastPos.get(v.id), moving = !!lp && Math.hypot(v.x - lp[0], v.z - lp[1]) > 1e-3;
+          lastPos.set(v.id, [v.x, v.z]);
+          const dc = deploy.has(v.id) ? deploy.get(v.id) : 0, dw = to && !moving ? 1 : 0;
+          const d = dc + Math.max(-def.deploy.rate * dts, Math.min(def.deploy.rate * dts, dw - dc));
+          deploy.set(v.id, d); v.deploy = d;
+        }
         const pc = pitch.has(v.id) ? pitch.get(v.id) : bar.rest * DEG;
         const m = to && unitMuzzle(v, 0, pc);
         const want = m ? unitPitchFor(bar, m, to) : bar.rest * DEG;
@@ -86,9 +96,12 @@ export function createUnitBarrels() {
         }
       }
       for (const id of [...pitch.keys()]) if (!seen.has(id)) pitch.delete(id);
+      for (const id of [...deploy.keys()]) if (!seen.has(id)) { deploy.delete(id); lastPos.delete(id); }
     },
     muzzle(id, n = 0) { const v = byId.get(id); return v ? unitMuzzle(v, n, pitch.get(id) || 0) : null; },
     pitch(id) { return pitch.has(id) ? pitch.get(id) : null; },
+    /** False while a unit with stabilizer legs (def.deploy) has not planted them yet: its gun holds fire. */
+    ready(id) { const v = byId.get(id), def = v && UNIT_MODELS[v.model]; return !def || !def.deploy || (deploy.get(id) || 0) >= 0.98; },
     /** True for a unit whose main gun recoils (tank, King Tiger): it fires single heavy rounds [MM-task_mvfpbbtp_1]. */
     heavy(id) { const v = byId.get(id), def = v && UNIT_MODELS[v.model]; return !!(def && def.recoil); },
     /** A round left firing point n of unit `id`: that gun kicks back (models with `recoil` only). */
