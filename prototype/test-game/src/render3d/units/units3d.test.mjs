@@ -25,7 +25,7 @@ const sumTris = (groups) => Object.values(groups).reduce((a, g) => a + g.tris, 0
 // Golden numbers: FULL = the prototype's measured UNITTRIS (code design §6.2). LOD re-measured 2026-10-14 after
 // [MM-story_mv8iu7l4_d] — the prototype's LOD (1272 / 680 / 1492 / 602) had dropped every extruded part.
 // A change here is a model change.
-const GOLDEN = { tank: [3362, 1534], buggy: [1260, 760], beetle: [2748, 1724], jet: [994, 698], tiger: [3660, 1520], copter: [1720, 920], drone: [1708, 1496] };   // copter + drone: owner sheets 2026-10-18 [MM-story_mvehe3sy_j]
+const GOLDEN = { tank: [3362, 1534], buggy: [1260, 760], beetle: [2748, 1724], jet: [994, 698], tiger: [3660, 1520], copter: [1720, 920], drone: [1708, 1496], miner: [4524, 1320] };   // copter + drone: owner sheets 2026-10-18 [MM-story_mvehe3sy_j]; miner: the System harvester [MM-story_mvg3xsca_1x]
 
 test('the approved models build to their golden triangle counts, full and LOD', () => {
   assert.deepEqual([...MODEL_KEYS].sort(), Object.keys(GOLDEN).sort());
@@ -55,8 +55,8 @@ test('groups and pivots: tank and buggy have a turret group on their pivot; beet
 
 test('every material key the models use has a colour (magenta would mean a missing one)', () => {
   const used = new Set();
-  for (const def of Object.values(UNIT_MODELS)) for (const p of def.parts) used.add(p.m || 'hull');
-  for (const k of used) assert.ok(k in UNIT_COLORS, `material key "${k}" has no colour`);
+  for (const def of Object.values(UNIT_MODELS)) for (const p of def.parts) used.add([def.colors || UNIT_COLORS, p.m || 'hull']);   // def.colors: a model in another palette (the System miner)
+  for (const [pal, k] of used) assert.ok(k in pal, `material key "${k}" has no colour`);
 });
 
 // ── LOD ───────────────────────────────────────────────────────────────────────────────────────────
@@ -138,7 +138,7 @@ test('views: cell-centre positions, flyers hover, turrets aim at unit / structur
   const by = Object.fromEntries(v.map((u) => [u.id, u]));
   assert.deepEqual([by[1].x, by[1].z, by[1].y, by[1].model], [2.5, 3.5, 0, 'tank']);
   assert.ok(Math.abs(by[1].aim - Math.PI / 2) < 1e-12, 'aims south at unit 2');
-  assert.equal(by[2].model, 'buggy');
+  assert.equal(by[2].model, 'miner');   // the harvester draws as the System miner (was the buggy stand-in) [MM-story_mvg3xsca_1x]
   assert.equal(by[2].aim, by[2].heading, 'no target → turret along the hull');
   assert.equal(by[3].y, HOVER_HEIGHT);
   assert.ok(Math.abs(by[3].aim - (-Math.PI / 2)) < 1e-12, 'aims north at the base');

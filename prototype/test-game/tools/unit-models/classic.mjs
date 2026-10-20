@@ -1,5 +1,6 @@
 // The unit-model builder as a CLASSIC script, for the offline tools that inline it into one HTML page
-// (terrain3d-proto/build3d.mjs, unit-models/build.py). The ONE source is src/render3d/units/{prims,models}.js
+// (terrain3d-proto/build3d.mjs, unit-models/build.py). The ONE source is src/render3d/units/{prims,models}.js (+ the System
+// models the harvester comes from)
 // (ES modules, THREE injected); this strips import/export and binds the globals the tool pages use:
 //   Prims        = createPrims(THREE)   (buildModel, geomOf, track)
 //   UNIT_MODELS  = the model table
@@ -17,10 +18,14 @@ export function toClassic(src) {
     .replace(/^export\s+(?=(function|const|let|class)\b)/gm, '');
 }
 
-/** { prims, models } — each a classic-script string; prims also binds `var Prims`. */
+/** { prims, models } — each a classic-script string; prims also binds `var Prims`. models.js builds the harvester from the
+ *  System miner (structures/systemModels.js), so that file rides along first, in its own scope (both declare `const M`),
+ *  binding just SYSTEM_MODELS / SYSTEM_COLORS [MM-story_mvg3xsca_1x]. */
 export function classicUnitsParts() {
   const prims = toClassic(fs.readFileSync(path.join(UNITS, 'prims.js'), 'utf8')) + '\nvar Prims = createPrims(THREE);\n';
-  const models = toClassic(fs.readFileSync(path.join(UNITS, 'models.js'), 'utf8'));
+  const system = toClassic(fs.readFileSync(path.join(UNITS, '../structures/systemModels.js'), 'utf8'));
+  const models = 'var { SYSTEM_MODELS, SYSTEM_COLORS } = (function () {\n' + system + '\nreturn { SYSTEM_MODELS, SYSTEM_COLORS };\n})();\n'
+    + toClassic(fs.readFileSync(path.join(UNITS, 'models.js'), 'utf8'));
   return { prims, models };
 }
 

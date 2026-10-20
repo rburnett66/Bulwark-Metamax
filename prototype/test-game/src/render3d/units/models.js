@@ -3,6 +3,7 @@
 // [MM-story_mv77hv5d_7]
 // Unit models built from primitives. X forward, Y up, Z right; hull ≈ 4 units long; ground at Y = 0.
 import { track } from './prims.js';
+import { SYSTEM_MODELS, SYSTEM_COLORS } from '../structures/systemModels.js';
 
 const sec = (P, sx, sz, dx = 0, dz = 0) => P.map(([x, z]) => [x * sx + dx, z * sz + dz]);
 const M = {};
@@ -410,6 +411,16 @@ const bladeY = (c, L, a, w, h, m, g) => ({ t: 'box', s: [L, h, w], p: [c[0] + Ma
   const pivots = {}, spin = {};
   fans.forEach(([x, z], i) => { const g = i ? 'spin' + (i + 1) : 'spin'; pivots[g] = [x, FY + 0.02, z]; spin[g] = { axis: 'y', speed: (i === 0 || i === 3 ? 1 : -1) * 45 }; });
   M.drone = { name: 'MX-4 recon drone', ref: 'drone', parts, pivots, hover: 1, spin, views: { side: 'right', top: 'up' } };
+}
+
+// ── the HARVESTER: the System resource miner (structures/systemModels.js sys_harvester) — the wide tracked miner with
+//    the spinning drill the landing craft's hatches were sized for; it replaces the buggy stand-in (owner 2026-10-19:
+//    "We should swap that harvester model into the game") [MM-story_mvg3xsca_1x]. Same geometry; its drill ('head' in
+//    the System model) becomes a units3d spin group, and it keeps the System palette (def.colors).
+{
+  const S = SYSTEM_MODELS.sys_harvester;
+  M.miner = { name: S.name, unit: 'SYS-Harvester', ref: 'miner', parts: S.parts.map((p) => (p.g === 'head' ? { ...p, g: 'spin' } : p)),
+    pivots: { spin: S.pivots.head }, spin: { spin: { axis: 'x', speed: S.head.speed || 7 } }, colors: SYSTEM_COLORS, cargo: S.cargo, views: S.views };
 }
 
 export const UNIT_MODELS = M;
