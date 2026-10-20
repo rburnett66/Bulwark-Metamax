@@ -533,7 +533,9 @@ export function createHud(mountEl, callbacks) {
     fsBtn.title = 'Fullscreen (Esc exits) — on iPhone use Share → Add to Home Screen instead';
     fsBtn.addEventListener('click', () => {
       if (!fsEl.requestFullscreen && !fsEl.webkitRequestFullscreen) {
-        flashMessage(hud, 'iPhone: tap Share → Add to Home Screen — launching from that icon plays fullscreen');
+        // the swipe trick (src/fullscreen.js) hides Safari's bar; the Home Screen app is the other way [MM-story_mvfxazk4_1t]
+        flashMessage(hud, fsEl.classList.contains('fs-swipe') ? 'iPhone: swipe up on the page to hide Safari\'s bar — or Share → Add to Home Screen'
+          : 'iPhone: tap Share → Add to Home Screen — launching from that icon plays fullscreen');
         return;
       }
       const fsNow = doc.fullscreenElement || doc.webkitFullscreenElement;

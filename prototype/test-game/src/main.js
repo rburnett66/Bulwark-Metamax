@@ -8,6 +8,7 @@ import { showContractModal } from './render/contractModal.js';
 import { showWaveIntel, showBonusPicker, showHowToPlay } from './render/gameDialog.js';
 import { getBonusDef } from './data/tables.js';
 import { createMenu } from './menu/menu.js';
+import { setPlaying } from './fullscreen.js';
 // Faction registry (GGG-3) — menu.js no longer re-exports a FACTION_NAMES array. Side-effect import
 // + global namespace: factions.js is a classic script with no ES exports (see voice.js).
 import './data/factions.js';
@@ -817,9 +818,11 @@ export function boot(mountEl, seed) {
   // Jumping back to the menu ends all dialog; leaving it lets the speakers talk again [MM-task_mvcs0s2v_15]
   {
     const open = menu.open.bind(menu), close = menu.close.bind(menu);
-    menu.open = (screen) => { comm.hush(); clearIntroOverlays(); open(screen); };
-    menu.close = () => { comm.unhush(); close(); };
+    // body.playing (src/fullscreen.js): while a battle is on screen, drags never scroll the page [MM-story_mvfxazk4_1t]
+    menu.open = (screen) => { comm.hush(); clearIntroOverlays(); setPlaying(false); open(screen); };
+    menu.close = () => { comm.unhush(); close(); setPlaying(true); };
     if (menu.isOpen()) comm.hush();   // booted onto the menu
+    setPlaying(!menu.isOpen());
   }
   let voicePacks = null;
   loadVoicePacks().then((p) => {
