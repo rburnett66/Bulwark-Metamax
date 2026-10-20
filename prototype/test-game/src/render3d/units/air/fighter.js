@@ -8,6 +8,11 @@ const fus = (yb, yt, w) => { const h = yt - yb, ym = yb + 0.45 * h; return [[0, 
 const can = (yb, yt, w) => [[-w, yb], [w, yb], [w * 0.7, yb + 0.7 * (yt - yb)], [0, yt], [-w * 0.7, yb + 0.7 * (yt - yb)]];
 // intake / nacelle cross-section (z, y), outboard of the spine
 const nac = (zi, zo, yb, yt) => [[zi, yb], [zo - 0.04, yb], [zo, yb + 0.06], [zo, yt - 0.06], [zo - 0.06, yt], [zi, yt]];
+// the intake mouth at fraction k of the full nacelle (owner 2026-10-20: "front inlets smaller by 50%"): it keeps its inner
+// edge on the fuselage and shrinks about its vertical centre; `belly` = the navy band's top as a fraction of the height
+const NAC = { zi: 0.2, zo: 0.6, yb: 0.28, yt: 0.66 }, BELLY = (0.4 - 0.28) / (0.66 - 0.28);
+const inlet = (k, grow = 0) => { const zo = NAC.zi + (NAC.zo - NAC.zi) * k + grow, yc = (NAC.yb + NAC.yt) / 2, h = (NAC.yt - NAC.yb) * k / 2; return [NAC.zi, zo, yc - h, yc + h]; };
+const nacK = (k, grow = 0, band = 1) => { const [zi, zo, yb, yt] = inlet(k, grow); return nac(zi, zo, yb, band < 1 ? yb + (yt - yb) * band : yt); };
 // fin built at its root then rotated outward
 const FIN = { p: [0, 0.74, 0.34], r3: [12, 0, 0] };
 // a point on the fin's plane (local x along the root, y up the fin) → model space, for parts placed on the fin
@@ -24,12 +29,13 @@ const parts = [
   { t: 'box', s: [1.7, 0.03, 0.16], p: [-0.6, 0.855, 0], m: 'navy' },
   { t: 'box', s: [1.7, 0.035, 0.03], p: [-0.6, 0.86, 0], m: 'red', d: 1 },
   // side intakes → engine nacelles (white top, navy belly), navy intake lips
+  // the mouth is half size at the front and swells back to the full nacelle by mid-fuselage
   { t: 'loft', ax: 'x', secs: [
-    [1.05, nac(0.2, 0.6, 0.28, 0.66)], [0.3, nac(0.2, 0.66, 0.26, 0.7)], [-1.2, nac(0.18, 0.62, 0.28, 0.68)], [-1.85, nac(0.16, 0.52, 0.32, 0.62)]], m: 'paint', mir: true },
+    [1.05, nacK(0.5)], [0.55, nacK(0.72)], [-0.2, nac(0.2, 0.66, 0.26, 0.7)], [-1.2, nac(0.18, 0.62, 0.28, 0.68)], [-1.85, nac(0.16, 0.52, 0.32, 0.62)]], m: 'paint', mir: true },
   { t: 'loft', ax: 'x', secs: [
-    [1.0, nac(0.2, 0.61, 0.27, 0.4)], [0.3, nac(0.2, 0.67, 0.25, 0.4)], [-1.2, nac(0.18, 0.63, 0.27, 0.4)], [-1.82, nac(0.16, 0.53, 0.31, 0.42)]], m: 'navy', mir: true },
-  { t: 'loft', ax: 'x', secs: [[1.1, nac(0.22, 0.64, 0.25, 0.69)], [1.02, nac(0.22, 0.64, 0.25, 0.69)]], m: 'navy', mir: true },
-  { t: 'box', s: [0.02, 0.3, 0.3], p: [1.11, 0.46, 0.43], m: 'black', mir: true },
+    [1.0, nacK(0.5, 0.01, BELLY + 0.04)], [0.55, nacK(0.72, 0.01, BELLY + 0.02)], [-0.2, nac(0.2, 0.67, 0.25, 0.4)], [-1.2, nac(0.18, 0.63, 0.27, 0.4)], [-1.82, nac(0.16, 0.53, 0.31, 0.42)]], m: 'navy', mir: true },
+  { t: 'loft', ax: 'x', secs: [[1.1, nacK(0.56, 0.02)], [1.02, nacK(0.56, 0.02)]], m: 'navy', mir: true },
+  { t: 'box', s: [0.02, 0.15, 0.15], p: [1.11, 0.47, 0.31], m: 'black', mir: true },
   // canards
   { t: 'ext', ax: 'y', poly: [[1.0, 0.6], [0.7, 1.05], [0.55, 1.05], [0.6, 0.62]], d: [0.6, 0.63], m: 'paint', mir: true },
   // main wings: swept, white, navy leading edge, red stripe, red tip

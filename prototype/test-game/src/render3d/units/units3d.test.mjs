@@ -26,7 +26,7 @@ const sumTris = (groups) => Object.values(groups).reduce((a, g) => a + g.tris, 0
 // [MM-story_mv8iu7l4_d] — the prototype's LOD (1272 / 680 / 1492 / 602) had dropped every extruded part.
 // A change here is a model change.
 const GOLDEN = { tank: [3362, 1534], buggy: [1260, 760], beetle: [2748, 1724], jet: [994, 698], tiger: [3660, 1520], copter: [1720, 920], drone: [1708, 1496], miner: [4524, 1320],
-  air_troops: [1436, 1020], air_scout: [1192, 912], air_tank: [2580, 1128], air_artillery: [3456, 2000], air_heavy: [3470, 1338], air_gunship: [1788, 1444], air_fighter: [1112, 832], air_missile: [2084, 1756], air_bomber: [1512, 796] };   // AIR faction models from the owner's concepts [MM-story_mvh8woji_1]   // copter + drone: owner sheets 2026-10-18 [MM-story_mvehe3sy_j]; miner: the System harvester [MM-story_mvg3xsca_1x]
+  air_troops: [1436, 1020], air_scout: [1192, 912], air_tank: [2580, 1128], air_artillery: [3456, 2000], air_heavy: [3470, 1338], air_gunship: [1788, 1444], air_fighter: [1158, 878], air_missile: [2084, 1756], air_bomber: [1512, 796] };   // AIR faction models from the owner's concepts [MM-story_mvh8woji_1]   // copter + drone: owner sheets 2026-10-18 [MM-story_mvehe3sy_j]; miner: the System harvester [MM-story_mvg3xsca_1x]
 
 test('the approved models build to their golden triangle counts, full and LOD', () => {
   assert.deepEqual([...MODEL_KEYS].sort(), Object.keys(GOLDEN).sort());
