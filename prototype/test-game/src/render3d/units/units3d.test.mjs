@@ -124,7 +124,7 @@ test('an unknown unit id still gets a visible model (flyer → jet, else tank)',
 function simState() {
   const units = new Map([
     [1, { id: 1, unitId: 'GND-Tanks', pos: { x: 2, y: 3 }, altitude: 0, targetId: 2 }],
-    [2, { id: 2, unitId: 'SYS-Harvester', pos: { x: 2, y: 6 }, altitude: 0, targetId: null }],
+    [2, { id: 2, unitId: 'GND-Trucks', artKey: 'SYS-Harvester', isHarvester: true, pos: { x: 2, y: 6 }, altitude: 0, targetId: null }],
     [3, { id: 3, unitId: 'GND-Planes', pos: { x: 9, y: 9 }, altitude: 1, targetId: BASE_TARGET_ID }],
     [4, { id: 4, unitId: 'GND-Tanks', pos: { x: 0, y: 0 }, altitude: 0, targetId: 50 }],
   ]);
@@ -138,7 +138,7 @@ test('views: cell-centre positions, flyers hover, turrets aim at unit / structur
   const by = Object.fromEntries(v.map((u) => [u.id, u]));
   assert.deepEqual([by[1].x, by[1].z, by[1].y, by[1].model], [2.5, 3.5, 0, 'tank']);
   assert.ok(Math.abs(by[1].aim - Math.PI / 2) < 1e-12, 'aims south at unit 2');
-  assert.equal(by[2].model, 'miner');   // the harvester draws as the System miner (was the buggy stand-in) [MM-story_mvg3xsca_1x]
+  assert.equal(by[2].model, 'miner');   // spawned as GND-Trucks + artKey SYS-Harvester (sim/harvest.js); the harvester draws as the System miner (was the buggy stand-in) [MM-story_mvg3xsca_1x]
   assert.equal(by[2].aim, by[2].heading, 'no target → turret along the hull');
   assert.equal(by[3].y, HOVER_HEIGHT);
   assert.ok(Math.abs(by[3].aim - (-Math.PI / 2)) < 1e-12, 'aims north at the base');

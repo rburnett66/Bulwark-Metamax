@@ -30,6 +30,10 @@ export const UNIT_ID_MODELS = Object.freeze({
   'SYS-Harvester': { model: 'miner', scale: 0.95, exact: true },   // the System resource miner (was the buggy stand-in) [MM-story_mvg3xsca_1x]
 });
 
+/** The id a live sim unit resolves its model by: its artKey when that names a model here (harvesters are spawned as
+ *  GND-Trucks with artKey SYS-Harvester), else its unitId. [MM-story_mvg3xsca_1x] */
+export const modelIdOf = (u) => (u && u.artKey && UNIT_ID_MODELS[u.artKey] ? u.artKey : u && u.unitId);
+
 /** World scale for 4 model units of hull → ≈ 1.08 cells (code design §4.11). */
 export const UNIT_SCALE = 0.27;
 

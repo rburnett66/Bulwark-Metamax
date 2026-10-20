@@ -8,7 +8,7 @@
  * Pure: no three.js, no DOM. [MM-story_mv77hv5d_7]
  */
 import { cellToWorld } from '../camera.js';
-import { resolveUnitModel } from './modelKeys.js';
+import { resolveUnitModel, modelIdOf } from './modelKeys.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
 import { getUnitDef } from '../../data/tables.js';
 
@@ -49,7 +49,7 @@ export function buildUnitViews(state, map, headings, resolve, dt, drawn = null) 
   for (const u of state.units.values()) {
     if (!u || !u.pos) continue;
     live.add(u.id);
-    const r = resolve(u.unitId);
+    const r = resolve(modelIdOf(u));   // artKey first: harvesters are GND-Trucks drawn as the System miner
     // ground units DRIVE: the drawn unit chases the sim one along its hull — steers through moderate bends, pivots on
     // the spot for sharp ones, never slides sideways (heading.js drive) [MM-story_mvekcu8r_n]. Flyers keep the sim spot.
     const ground = !(u.altitude > 0) && u.domain !== 'Flyer' && headings.drive;
