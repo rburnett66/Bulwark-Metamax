@@ -482,6 +482,7 @@ export function createMenu(mountEl, cbs) {
     if (!key || !PLANETS[key]) key = targetKey();
     const name = (REG.find(key) || {}).name || key;
     surveyKey = key; surveyName = name;
+    if (cbs.onPlanetView) cbs.onPlanetView(key);   // planet music follows the planet on screen [MM-story_mvgzp51o_8]
     refreshRail(key);
     const P = PLANETS[key], F = P.faction || {}, fac = REG.find(key);
     const beats = F.beats && REG.find(F.beats), beatsPl = F.beats && PLANETS[F.beats];
@@ -755,6 +756,7 @@ export function createMenu(mountEl, cbs) {
     continueBtn.lastChild.textContent = (P ? P.name + ' · ' : '') + 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);   // the planet stays in the hint
     heroNext.innerHTML = P ? 'NEXT PLANET · <b>' + P.name.toUpperCase() + '</b>' : '';
     hero.style.setProperty('--hue', (P && P.ui) || '#f2c869');
+    if (cbs.onPlanetView && root.style.display !== 'none') cbs.onPlanetView(f.key);   // [MM-story_mvgzp51o_8]
   }
 
   mountEl.appendChild(root);

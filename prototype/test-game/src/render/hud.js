@@ -493,7 +493,7 @@ export function createHud(mountEl, callbacks) {
   // ---- SETTINGS: volume sliders (master / dialog / game) ---------------
   // Values persist in localStorage and are applied via cbs.onVolume(channel, 0..1).
   const volPanel = el(doc, 'div', 'bw-debug bw-panel');
-  const volumes = { master: 0.8, dialog: 1, game: 1 };
+  const volumes = { master: 0.8, dialog: 1, game: 1, music: 0.7 };
   try { Object.assign(volumes, JSON.parse(localStorage.getItem('bw.volumes') || '{}')); } catch (e) { /* fresh */ }
   const mkSlider = (channel, label) => {
     const row = el(doc, 'div', 'bw-vol');
@@ -516,8 +516,9 @@ export function createHud(mountEl, callbacks) {
   volPanel.appendChild(mkSlider('master', 'Master'));
   volPanel.appendChild(mkSlider('dialog', 'Dialog'));
   volPanel.appendChild(mkSlider('game', 'Game'));
+  volPanel.appendChild(mkSlider('music', 'Music'));   // [MM-story_mvgzp51o_8]
   // hand the persisted values to the game once at boot
-  if (cbs.onVolume) for (const ch of ['master', 'dialog', 'game']) cbs.onVolume(ch, volumes[ch] ?? 1);
+  if (cbs.onVolume) for (const ch of ['master', 'dialog', 'game', 'music']) cbs.onVolume(ch, volumes[ch] ?? 1);
 
   // session tools (enemy faction, board, seed/build readouts) live in SETTINGS — they were
   // wrapping the top bar to 3+ lines on phones; the header now stays one line of live game state

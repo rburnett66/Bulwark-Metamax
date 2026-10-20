@@ -20,7 +20,8 @@ import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
 import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner } from './render/hud.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
-import { setChannelVolume } from './comm/voice.js';
+import { setChannelVolume, initAudio } from './comm/voice.js';
+import { musicPlay, musicIntensity, musicSting, musicResume } from './audio/music.js';
 import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, tipsCall, classifyOutcome } from './comm/dialog.js';
 
 /**
@@ -322,6 +323,8 @@ export function boot(mountEl, seed) {
     if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(!suppressPreDialog, 'TAP TO START');
     // LC: a fresh board re-arms the landing craft; it flies in once the opening dialogs close
     landingReleased = false;
+    let underMenu = true; try { underMenu = menu.isOpen(); } catch (e) { /* menu not built yet (boot) */ }
+    if (!underMenu) battleMusic();   // a board under the menu keeps the menu's theme
     if (renderer3d && render3dMod && render3dMod.armLanding) render3dMod.armLanding(renderer3d);
     accumulator = 0;
     pendingEvents = [];
@@ -334,6 +337,17 @@ export function boot(mountEl, seed) {
     if (voicePacks !== null && !suppressPreDialog) playPreBattleDialog(null);   // wave-1 challenge before the first tap
   }
   let suppressPreDialog = false;
+
+  // PLANET MUSIC [MM-story_mvgzp51o_8]: the battle plays the ENEMY homeworld's theme (maps are faction-owned) —
+  // build layer between waves, the battle layer on top while a wave runs, a sting at the end. Browsers only
+  // allow audio after a user gesture, so the first tap/key creates the AudioContext and starts what was asked.
+  const battlePlanet = () => { const f = REG.find(currentTestFaction || DEFAULT_FACTION); return f ? f.key : null; };
+  const battleMusic = () => musicPlay(battlePlanet(), sim && sim.waves && sim.waves.active ? 'wave' : 'build');
+  const unlockAudio = () => {
+    document.removeEventListener('pointerdown', unlockAudio, true); document.removeEventListener('keydown', unlockAudio, true);
+    initAudio(); musicResume();
+  };
+  document.addEventListener('pointerdown', unlockAudio, true); document.addEventListener('keydown', unlockAudio, true);
 
   // LC [MM-story_mvbks05m_4]: the landing craft waits until the field is on screen — when the match-start dialogs
   // close (TAP TO START shows), or at the latest when the first wave starts.
@@ -788,6 +802,7 @@ export function boot(mountEl, seed) {
     onPlayMap: (id) => { menu.close(); void selectMap(id); },
     // the Main Menu's planet + craft panel [MM-story_mvcnxgt8_13]: the enemy whose homeworld is next, the player's craft
     currentFaction: () => currentTestFaction || DEFAULT_FACTION,
+    onPlanetView: (key) => musicPlay(key, 'menu'),   // the menu plays the planet on screen; a galaxy pick crossfades [MM-story_mvgzp51o_8]
     playerCraft: () => { try { return new URLSearchParams(window.location.search).get('craft') || 'system'; } catch (e) { return 'system'; } },
     onSelectFaction: (f) => {
       // Choosing/resetting the enemy is a FRESH battle (owner: reset includes wave + economy +
@@ -854,7 +869,7 @@ export function boot(mountEl, seed) {
     const open = menu.open.bind(menu), close = menu.close.bind(menu);
     // body.playing (src/fullscreen.js): while a battle is on screen, drags never scroll the page [MM-story_mvfxazk4_1t]
     menu.open = (screen) => { comm.hush(); clearIntroOverlays(); setPlaying(false); open(screen); };
-    menu.close = () => { comm.unhush(); close(); setPlaying(true); };
+    menu.close = () => { comm.unhush(); close(); setPlaying(true); battleMusic(); };
     if (menu.isOpen()) comm.hush();   // booted onto the menu
     setPlaying(!menu.isOpen());
   }
@@ -1006,6 +1021,8 @@ export function boot(mountEl, seed) {
             if (evs[i].type === 'waveStars') {
               showStarBanner(hud, evs[i].wave, evs[i].stars);   // Story 4: stars FIRST, then the dialog beat
             }
+            if (evs[i].type === 'wave' && evs[i].phase === 'start') musicIntensity('wave');
+            if (evs[i].type === 'wave' && evs[i].phase === 'clear' && evs[i].wave < evs[i].total) musicIntensity('build');
             if (evs[i].type === 'wave' && evs[i].phase === 'start' && evs[i].faction) {
               showWaveBanner(hud, evs[i].faction);
               // the challenge already played during the interlude (pre-battle sequencing); it only
@@ -1055,6 +1072,7 @@ export function boot(mountEl, seed) {
               'expected:', activeReplayLog.finalHash,
               'match:', h === activeReplayLog.finalHash);
           }
+          musicSting(sim.result === 'win' ? 'win' : 'lose');
           // campaign advance (owner): victory offers the next, bigger map (1→9; none after 9 or on classic)
           let nextMap = null;
           if (sim.result === 'win' && currentMapId > 0 && currentMapId < 9) {

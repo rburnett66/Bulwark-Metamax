@@ -254,7 +254,10 @@ let AC = null, master = null, comp = null, convolver = null, noiseBuf = null, au
 // battle-SFX bus. Volumes are settable before the AudioContext exists (the settings panel applies
 // persisted values at boot; buses pick them up on init).
 let dialogBus = null, gameBus = null;
-const VOLS = { master: 0.8, dialog: 1, game: 1 };
+// MUSIC [MM-story_mvgzp51o_8]: its own channel (the Music slider) → a duck stage → master. Character lines duck it.
+let musicBus = null, musicDuck = null;
+const VOLS = { master: 0.8, dialog: 1, game: 1, music: 0.7 };
+export const DUCK = Object.freeze({ level: 0.35, attack: 0.15, release: 0.6 });
 
 export function setChannelVolume(channel, v) {
   const x = Math.max(0, Math.min(1, Number(v) || 0));
@@ -262,6 +265,21 @@ export function setChannelVolume(channel, v) {
   if (channel === 'master' && master) master.gain.value = x;
   if (channel === 'dialog' && dialogBus) dialogBus.gain.value = x;
   if (channel === 'game' && gameBus) gameBus.gain.value = x;
+  if (channel === 'music' && musicBus) musicBus.gain.value = x;
+}
+export function getMusicBus() { return musicBus; }
+export function getAudioCtx() { return AC; }
+export function getNoiseBuf() { return noiseBuf; }
+/** Duck the music for `sec` seconds (a character line), then ease back. Overlapping calls extend the duck. */
+let duckUntil = 0;
+export function duckMusic(sec) {
+  if (!AC || !musicDuck) return;
+  const now = AC.currentTime, end = Math.max(duckUntil, now + Math.max(0, sec || 0));
+  const g = musicDuck.gain;
+  g.cancelScheduledValues(now); g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(DUCK.level, now + DUCK.attack);
+  g.setValueAtTime(DUCK.level, end); g.linearRampToValueAtTime(1, end + DUCK.release);
+  duckUntil = end;
 }
 export function getGameBus() { return gameBus; }   // battle SFX connect here when they arrive
 
@@ -274,6 +292,8 @@ export function initAudio(volume) {
     master.connect(comp); comp.connect(AC.destination);
     dialogBus = AC.createGain(); dialogBus.gain.value = VOLS.dialog; dialogBus.connect(master);
     gameBus = AC.createGain(); gameBus.gain.value = VOLS.game; gameBus.connect(master);
+    musicDuck = AC.createGain(); musicDuck.gain.value = 1; musicDuck.connect(master);
+    musicBus = AC.createGain(); musicBus.gain.value = VOLS.music; musicBus.connect(musicDuck);
     convolver = AC.createConvolver(); convolver.buffer = makeImpulse(2.4, 3.2); convolver.connect(dialogBus);
     const len = AC.sampleRate * 1.0;
     noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
@@ -374,6 +394,7 @@ export function playUtterance(line, p, g) {
     syllable(t, b.dur, f, p, g, chain);
     t += b.dur;
   });
+  duckMusic((t - start) + 0.15);   // the line reads over the music
   return { duration: (t - start) + 0.15, stop: function () { try { chain.disconnect(); } catch (e) { /* already gone */ } } };
 }
 
