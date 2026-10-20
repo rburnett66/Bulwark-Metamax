@@ -42,6 +42,12 @@ export const UMETAL = Object.freeze({
   pink: [0.15, 0.55],
   red: [0.2, 0.5],
   gold: [0.85, 0.3],
+  // the ARTILLERY (Siege) livery (siege/palette.js): dusty paint and canvas, little shine [MM-story_mvhb6qd2_2]
+  camo: [0.2, 0.7],
+  camo2: [0.1, 0.8],
+  olive: [0.2, 0.7],
+  net: [0.02, 0.95],   // canvas netting: all but matte (every lit key carries some metal — metal.test)
+  rust: [0.45, 0.65],
 });
 
 /** Keys drawn unlit (emissive): no metal, no lighting — they carry the glow read. */
