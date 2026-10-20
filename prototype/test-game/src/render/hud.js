@@ -1,3 +1,4 @@
+import { BUILD_ICONS, buildIcon, buildIconUrl } from './buildIcons.js';
 import { STRUCTURES, ASSUMPTIONS, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
@@ -52,18 +53,22 @@ const CSS = `
 .bw-palette { position:absolute; left:6px; top:56px; display:flex; flex-direction:column; gap:4px; }
 .bw-palette .bw-title { font-size:11px; color:#9ab; margin-bottom:2px; }
 .bw-palette-row { display:flex; flex-direction:column; gap:4px; }
-.bw-buildbtn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; width:52px; padding:5px 3px 3px; }
+.bw-buildbtn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; width:76px; padding:4px 3px 3px; }
+/* BUILD ICONS [MM-story_mvg3xsca_1x]: each button = a picture of the item's own model (content/icons/build) + its name + cost */
+.bw-bimg { width:var(--bb-img, 48px); height:var(--bb-img, 48px); display:block; object-fit:contain; filter:drop-shadow(0 2px 2px rgba(0,0,0,.55)); pointer-events:none; }
+.bw-bname { font-size:var(--bb-name, 9px); font-weight:800; letter-spacing:.06em; color:#e3eaf1; line-height:1.15; white-space:nowrap; }
 /* REACTIVE LEFT RAIL [MM-task_mvd3mpby_l]: layoutLeftRail() sizes the buttons to the height available (--bb-h, --bb-icon)
    and falls back to two columns when even the smallest size won't fit — every build option always stays on screen */
 .bw-palette.bw-fit .bw-buildbtn { height:var(--bb-h, 52px); width:var(--bb-w, 52px); padding:2px 3px; }
 .bw-palette.bw-fit .bw-bicon svg { width:var(--bb-icon, 26px); height:var(--bb-icon, 26px); }
+.bw-palette.bw-fit .bw-buildbtn { padding:3px 2px 2px; }
 .bw-palette.bw-fit .bw-cost { font-size:var(--bb-cost, 10px); line-height:1; }
-.bw-palette.bw-fit.bw-2col .bw-palette-row { display:grid; grid-template-columns:repeat(2, var(--bb-w, 52px)); }
+.bw-palette.bw-fit.bw-2col .bw-palette-row { display:grid; grid-template-columns:repeat(2, var(--bb-w, 76px)); }
 .bw-bicon { position:relative; display:block; line-height:0; }
-.bw-bkey { position:absolute; top:-4px; left:-7px; font-size:9px; color:#ffe58a; }
+.bw-bkey { position:absolute; top:-2px; left:-2px; font-size:10px; font-weight:800; color:#ffe58a; text-shadow:0 1px 2px #000; }
 .bw-buildbtn .bw-cost { color:#ffd76a; font-size:10px; }
 .bw-buildbtn.bw-poor { opacity:0.45; }
-@media (max-width: 900px) { .bw-buildbtn { width:44px; } .bw-bicon svg { width:22px; height:22px; } }
+@media (max-width: 900px) { .bw-buildbtn { width:64px; } }
 .bw-key { font-weight:800; color:#ffe58a; }   /* bold keyboard-shortcut glyph on build + action buttons */
 .bw-selpanel { position:absolute; right:6px; top:56px; width:200px; font-size:12px; display:none; flex-direction:column; gap:4px; }
 .bw-selpanel .bw-sname { font-size:13px; font-weight:bold; color:#bfe0ff; }
@@ -285,7 +290,7 @@ export function createHud(mountEl, callbacks) {
   }
   root.appendChild(topbar);
 
-  // ---- build palette (ICON buttons — names live in the tooltip) -------
+  // ---- build palette (picture + name + cost buttons [MM-story_mvg3xsca_1x]; was glyph-only, names in the tooltip) ----
   // Inline SVG glyphs, tinted to the board's structure colours, replace the text labels: on a phone
   // the worded list ate a third of the screen. Hotkey badge top-left, live cost underneath.
   const STRUCT_ICONS = {
@@ -296,6 +301,16 @@ export function createHud(mountEl, callbacks) {
     harvestorBay: '<rect x="5" y="10" width="10" height="7" rx="1.5" fill="#c9a45a"/><rect x="15" y="12" width="5" height="5" rx="1" fill="#8a6a2f"/><circle cx="8" cy="18.5" r="1.8" fill="#3a3f45"/><circle cx="13" cy="18.5" r="1.8" fill="#3a3f45"/><circle cx="17.5" cy="18.5" r="1.5" fill="#3a3f45"/><path d="M7 10l2-4h4l1 4" fill="#e0c07a"/>',
     mine: '<circle cx="12" cy="14" r="4.5" fill="#7a2a2a"/><circle cx="12" cy="14" r="2" fill="#ff4040"/><path d="M12 3v4M8 5l1.5 2.5M16 5l-1.5 2.5" stroke="#9fd4ff" stroke-width="1.4" fill="none"/><circle cx="12" cy="14" r="6.5" fill="none" stroke="#e03030" stroke-width="0.8" stroke-dasharray="2 2"/>',
   };
+  // a build button's picture: the item's baked model image; the old SVG glyph if the image can't load [MM-story_mvg3xsca_1x]
+  function buildIconEl(icon, def, glyph) {
+    const wrap = el(doc, 'span', 'bw-bicon');
+    const svg = () => { wrap.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26">' + (glyph || '<rect x="6" y="6" width="12" height="12" fill="#888"/>') + '</svg>'; };
+    if (!icon) { svg(); return wrap; }
+    const img = el(doc, 'img', 'bw-bimg'); img.alt = ''; img.src = buildIconUrl(icon); img.decoding = 'async'; img.draggable = false;
+    img.addEventListener('error', () => { const k = wrap.querySelector('.bw-bkey'); svg(); if (k) wrap.appendChild(k); });
+    wrap.appendChild(img);
+    return wrap;
+  }
   const palette = el(doc, 'div', 'bw-palette bw-panel');
   palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD'));
   const paletteRow = el(doc, 'div', 'bw-palette-row');
@@ -311,11 +326,11 @@ export function createHud(mountEl, callbacks) {
     const btn = el(doc, 'button', 'bw-btn bw-buildbtn');
     const key = i + 1;                                      // 1,2,3,4...
     btn.title = (key <= 9 ? '[' + key + '] ' : '') + (def.name || structId);
-    const icon = el(doc, 'span', 'bw-bicon');
-    icon.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26">' + (STRUCT_ICONS[def.kind] || '<rect x="6" y="6" width="12" height="12" fill="#888"/>') + '</svg>';
+    const icon = buildIconEl(buildIcon(structId), def, STRUCT_ICONS[def.kind]);
     if (key <= 9) icon.appendChild(el(doc, 'b', 'bw-bkey', String(key)));
     const costSpan = el(doc, 'span', 'bw-cost', String(def.cost && def.cost[0] != null ? def.cost[0] : '?') + 'g');
     btn.appendChild(icon);
+    btn.appendChild(el(doc, 'span', 'bw-bname', (buildIcon(structId) || {}).label || String(def.name || structId).toUpperCase()));
     btn.appendChild(costSpan);
     btn.addEventListener('click', () => toggleBuild(structId));
     paletteRow.appendChild(btn);
@@ -325,10 +340,10 @@ export function createHud(mountEl, callbacks) {
   // base itself purchases the next one (free/500/750/1000, cap 4). Price refreshed by updateHud.
   const harvBtn = el(doc, 'button', 'bw-btn bw-buildbtn bw-harvbtn');
   harvBtn.title = 'Harvester — bought at the base (or tap this)';
-  const hIcon = el(doc, 'span', 'bw-bicon');
-  hIcon.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26">' + STRUCT_ICONS.harvestorBay + '</svg>';
+  const hIcon = buildIconEl(buildIcon('harvester'), null, STRUCT_ICONS.harvestorBay);
   const hCost = el(doc, 'span', 'bw-cost', '500g');
   harvBtn.appendChild(hIcon);
+  harvBtn.appendChild(el(doc, 'span', 'bw-bname', 'HARVESTER'));
   harvBtn.appendChild(hCost);
   harvBtn.addEventListener('click', () => { if (cbs.onBuyHarvesterUnit) cbs.onBuyHarvesterUnit(); });
   paletteRow.appendChild(harvBtn);
@@ -348,16 +363,18 @@ export function createHud(mountEl, callbacks) {
     const safeB = 6;
     const avail = view.innerHeight - top - safeB;
     const chrome = 12 + 4 + (palette.firstChild ? palette.firstChild.getBoundingClientRect().height + 2 : 14);   // padding + title
-    const GAP = 4, MAX = 52, MIN = 30;
+    const GAP = 4, MAX = 80, MIN = 50;   // picture + name + cost [MM-story_mvg3xsca_1x] (was 52 / 30 for a bare glyph)
     let cols = 1, h = (avail - chrome - GAP * (btns - 1)) / btns;
     if (h < MIN) { cols = 2; const rows = Math.ceil(btns / 2); h = (avail - chrome - GAP * (rows - 1)) / rows; }
     h = Math.max(MIN - 4, Math.min(MAX, Math.floor(h)));
-    const w = view.innerWidth <= 900 ? Math.min(44, Math.max(36, h)) : Math.min(52, Math.max(40, h));
+    const w = view.innerWidth <= 900 ? Math.min(66, Math.max(58, h)) : Math.min(80, Math.max(66, h));
     palette.classList.toggle('bw-2col', cols === 2);
     palette.style.setProperty('--bb-h', h + 'px');
     palette.style.setProperty('--bb-w', w + 'px');
     palette.style.setProperty('--bb-icon', Math.round(Math.max(16, Math.min(26, h - 16))) + 'px');
-    palette.style.setProperty('--bb-cost', (h < 38 ? 9 : 10) + 'px');
+    palette.style.setProperty('--bb-img', Math.round(Math.max(24, Math.min(54, h - 26))) + 'px');
+    palette.style.setProperty('--bb-name', (h < 60 ? 8 : 9) + 'px');
+    palette.style.setProperty('--bb-cost', (h < 60 ? 9 : 10) + 'px');
     palette.querySelector('.bw-palette-row').style.gap = GAP + 'px';
     // the minimap sits beside the rail, never over it
     if (railMinimap) railMinimap.style.left = Math.round(palette.getBoundingClientRect().right + 8) + 'px';

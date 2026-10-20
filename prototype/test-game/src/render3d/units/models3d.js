@@ -43,7 +43,7 @@ export function mergeModelGroups(THREE, def, prims = createPrims(THREE), modelKe
     const pos = [], nor = [], col = [], emi = [], mr = [];
     for (const mesh of G.children) {
       const k = mesh.userData.mat;
-      c.setHex(UNIT_COLORS[k] ?? 0xff00ff);   // magenta = a material key with no colour — visible on purpose
+      c.setHex(k === 'accent' && def.accent != null ? def.accent : ((def.colors || UNIT_COLORS)[k] ?? 0xff00ff));   // def.colors: a model in another palette (the System miner); magenta = a key with no colour — visible on purpose
       const e = isGlowKey(k) ? 1 : 0;
       const [mtl, rgh] = metalFor(k, modelKey);   // MAT: per-part metalness / roughness
       const P = mesh.geometry.attributes.position.array, N = mesh.geometry.attributes.normal.array;

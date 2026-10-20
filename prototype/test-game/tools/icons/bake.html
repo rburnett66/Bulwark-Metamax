@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Build Icon Bake</title>
+<!--
+  tools/icons/bake.html — the BUILD menu's icons, rendered from the game's own 3D models [MM-story_mvg3xsca_1x].
+  Owner 2026-10-19: "make icons for the menu that use stylized images of each item with the name of the item —
+  cannon, flak gun, wall, land mine, rockets, antiair, harvester".
+
+  Each icon is the item's System model (systemModels.js — the same geometry, colours and metal look as on the
+  battlefield) in a three-quarter view, lit like the menu's turntables, on a transparent background. The land mine has
+  no battlefield model (mines are hidden), so it gets a small stylized one built here.
+
+  Use: serve prototype/test-game, open tools/icons/bake.html, click an icon to download it, save it as
+  content/icons/build/<id>.png. Headless: window.bakeAll(size) → { id: dataURL } (scripts/bake-icons below).
+-->
+<style>
+  body { margin:0; padding:16px; background:#0b0e13; color:#e6ecf3; font:13px system-ui, sans-serif; }
+  .row { display:flex; flex-wrap:wrap; gap:14px; }
+  figure { margin:0; text-align:center; cursor:pointer; background:#1a1f28; border:1px solid #2e3846; padding:8px; }
+  figure img { width:128px; height:128px; display:block; }
+  figcaption { color:#8fa0b3; font-size:11px; letter-spacing:.1em; text-transform:uppercase; margin-top:4px; }
+</style>
+</head>
+<body>
+<p>Click an icon to download it; save it as <code>content/icons/build/&lt;id&gt;.png</code>.</p>
+<div class="row" id="row"></div>
+<script type="module">
+import * as THREE from '../../vendor/three.module.js';
+import { SYSTEM_MODELS } from '../../src/render3d/structures/systemModels.js';
+import { mergeSystemModel } from '../../src/render3d/structures/system3d.js';
+import { createUnitMaterial } from '../../src/render3d/units/material.js';
+import { BUILD_ICONS } from '../../src/render/buildIcons.js';
+
+const DEG = Math.PI / 180;
+
+/** A System model at its rest pose: each group at its pivot, the barrel at its rest elevation. */
+function systemModel(key, mat) {
+  const def = SYSTEM_MODELS[key], parts = mergeSystemModel(THREE, def), root = new THREE.Group();
+  for (const [g, P] of Object.entries(parts)) {
+    const m = new THREE.Mesh(P.geo, mat);
+    m.position.set(P.pivot[0], P.pivot[1], P.pivot[2]);
+    if (g === 'barrel' && def.barrel) m.rotation.z = (def.barrel.rest - def.barrel.authored) * DEG;
+    root.add(m);
+  }
+  return root;
+}
+
+/** The land mine: a squat olive disc, a domed cap, a red sensor light and three trigger prongs (stylized). */
+function mineModel() {
+  const root = new THREE.Group();
+  const lam = (c, e = 0) => new THREE.MeshPhongMaterial({ color: c, shininess: 40, specular: 0x333333, emissive: e ? c : 0x000000 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.3, 0.34, 28), lam(0x56603f)); base.position.y = 0.17;
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.16, 0.08, 8, 32), lam(0x2c3326)); rim.rotation.x = Math.PI / 2; rim.position.y = 0.34;
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.72, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), lam(0x6b7550)); cap.position.y = 0.34; cap.scale.y = 0.55;
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), lam(0xff2a2a, 1)); eye.position.y = 0.72;
+  root.add(base, rim, cap, eye);
+  for (let i = 0; i < 3; i++) {
+    const a = i * (Math.PI * 2 / 3) + 0.4, prong = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.42, 8), lam(0x9aa3ad));
+    prong.position.set(Math.cos(a) * 0.5, 0.62, Math.sin(a) * 0.5);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), lam(0xd8dde4)); tip.position.set(prong.position.x, 0.84, prong.position.z);
+    root.add(prong, tip);
+  }
+  // dashed danger ring on the ground
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2, seg = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.02, 0.07), lam(0xe03030, 1));
+    seg.position.set(Math.cos(a) * 1.62, 0.01, Math.sin(a) * 1.62); seg.rotation.y = -a + Math.PI / 2; root.add(seg);
+  }
+  return root;
+}
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setClearColor(0x000000, 0);
+const mat = createUnitMaterial(THREE, { env: { sky: 0xc4d8ff, ground: 0x4a5058 } }).material;
+
+function scene() {
+  const s = new THREE.Scene();
+  s.add(new THREE.HemisphereLight(0xdfe8ff, 0x3a3f48, 0.8), new THREE.AmbientLight(0xffffff, 0.22));
+  const sun = new THREE.DirectionalLight(0xfff2e0, 1.2); sun.position.set(-4, 8, 6); s.add(sun);
+  const rim = new THREE.DirectionalLight(0x9fc8ff, 0.6); rim.position.set(6, 3, -4); s.add(rim);
+  return s;
+}
+
+/** Render one icon → dataURL. A three-quarter view from the front-right, framed to the model's bounds. */
+function bake(icon, size) {
+  const s = scene(), obj = icon.model === 'mine' ? mineModel() : systemModel(icon.model, mat);
+  if (icon.yaw) obj.rotation.y = icon.yaw * DEG;
+  s.add(obj);
+  const box = new THREE.Box3().setFromObject(obj), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
+  const cam = new THREE.PerspectiveCamera(24, 1, 0.1, 200);
+  const dir = new THREE.Vector3(0.62, 0.55, 1).normalize(), r = Math.max(sz.x, sz.y, sz.z) * 0.62 * (icon.zoom || 1);
+  cam.position.copy(c).addScaledVector(dir, r / Math.tan(12 * DEG)); cam.lookAt(c);
+  renderer.setSize(size, size, false); renderer.setPixelRatio(1);
+  renderer.render(s, cam);
+  return renderer.domElement.toDataURL('image/png');
+}
+
+window.bakeAll = (size = 128) => Object.fromEntries(BUILD_ICONS.map((i) => [i.id, bake(i, size)]));
+const row = document.getElementById('row');
+for (const [id, url] of Object.entries(window.bakeAll(128))) {
+  const f = document.createElement('figure'), img = new Image(); img.src = url;
+  const cap = document.createElement('figcaption'); cap.textContent = (BUILD_ICONS.find((i) => i.id === id) || {}).label || id;
+  f.append(img, cap); f.onclick = () => { const a = document.createElement('a'); a.href = url; a.download = id + '.png'; a.click(); };
+  row.appendChild(f);
+}
+window.done = true;
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 /**
  * src/render3d/units/modelKeys.js — which 3D model draws which sim unit (plan v2.2.1 §6.3). DATA.
  *
- * The roster is 9 factions × 8 classes plus system units; seven models exist (tank, buggy, beetle, jet, tiger, copter, drone). The
+ * The roster is 9 factions × 8 classes plus system units; eight models exist (tank, buggy, beetle, jet, tiger, copter, drone, miner). The
  * mapping keys on the unit's `artClass` (tables.js) and says, per class, which model stands in, at what scale,
  * and whether that is the class's OWN model (`exact`) or a stand-in (`exact: false`). Stand-ins are visible
  * placeholders until the Stack Forge model pipeline (UMP, [MM-story_mv87jypv_8]) authors the rest — they are
@@ -10,7 +10,7 @@
  * Pure: no three.js. [MM-story_mv77hv5d_7]
  */
 
-export const MODEL_KEYS = Object.freeze(['tank', 'buggy', 'beetle', 'jet', 'tiger', 'copter', 'drone']);
+export const MODEL_KEYS = Object.freeze(['tank', 'buggy', 'beetle', 'jet', 'tiger', 'copter', 'drone', 'miner']);
 
 /** artClass → { model, scale, exact }. scale multiplies UNIT_SCALE (1 = a hull ≈ 1.08 cells). */
 export const ART_CLASS_MODELS = Object.freeze({
@@ -27,8 +27,12 @@ export const ART_CLASS_MODELS = Object.freeze({
 
 /** Units the sim spawns that are not combat classes (artKey/unitId → entry). */
 export const UNIT_ID_MODELS = Object.freeze({
-  'SYS-Harvester': { model: 'buggy', scale: 0.9, exact: false },
+  'SYS-Harvester': { model: 'miner', scale: 0.95, exact: true },   // the System resource miner (was the buggy stand-in) [MM-story_mvg3xsca_1x]
 });
+
+/** The id a live sim unit resolves its model by: its artKey when that names a model here (harvesters are spawned as
+ *  GND-Trucks with artKey SYS-Harvester), else its unitId. [MM-story_mvg3xsca_1x] */
+export const modelIdOf = (u) => (u && u.artKey && UNIT_ID_MODELS[u.artKey] ? u.artKey : u && u.unitId);
 
 /** World scale for 4 model units of hull → ≈ 1.08 cells (code design §4.11). */
 export const UNIT_SCALE = 0.27;
