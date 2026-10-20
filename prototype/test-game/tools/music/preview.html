@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Planet Music Preview</title>
+<!--
+  tools/music/preview.html — listen to a planet theme outside the game [MM-story_mvgzp51o_8].
+  Renders the theme (src/data/music.js) offline through the game's own instruments (src/audio/music.js) and plays it,
+  or downloads it as a WAV. Serve prototype/test-game and open tools/music/preview.html.
+  Headless: window.renderWav(key, cue) → base64 WAV (cue: build | wave | match | lose).
+-->
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; padding:24px 16px; background:#0b0e13; color:#e6ecf3; font:14px/1.45 system-ui, sans-serif; }
+  main { max-width:720px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 2px; letter-spacing:.04em; }
+  .sub { color:#8fa0b3; margin:0 0 20px; }
+  .cues { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+  .cue { background:#141922; border:1px solid #2a3442; padding:14px; }
+  .cue h2 { font-size:13px; letter-spacing:.12em; text-transform:uppercase; margin:0 0 4px; color:#f2c869; }
+  .cue p { margin:0 0 10px; color:#9fb0c2; font-size:12.5px; }
+  button { font:600 12px system-ui; letter-spacing:.08em; background:#1d2633; color:#e6ecf3; border:1px solid #3a4758; padding:8px 12px; cursor:pointer; margin-right:6px; }
+  button:hover { border-color:#f2c869; }
+  button.play { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:#f2c869; }
+  #status { margin-top:16px; color:#8fa0b3; min-height:1.4em; }
+  select { background:#1d2633; color:#e6ecf3; border:1px solid #3a4758; padding:6px; font:inherit; margin-bottom:16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Planet music preview</h1>
+  <p class="sub">The in-game theme, rendered with the game's own synth. Drop-in recordings replace it later.</p>
+  <label>Planet <select id="planet"></select></label>
+  <div class="cues" id="cues"></div>
+  <div id="status"></div>
+</main>
+<script type="module">
+import { THEMES, loopSec } from '../../src/data/music.js';
+import { renderOffline } from '../../src/audio/music.js';
+
+// each cue = what the player hears in a moment of the game
+const CUES = {
+  build: { label: 'Between waves', desc: 'The build layer: drone, bass and a marching pulse. Also the menu mix (softer).', plan: () => [{ at: 0, intensity: 'build' }], loops: 1 },
+  wave:  { label: 'Wave in progress', desc: 'Both layers: snare rudiments, toms, brass stabs and the bugle call.', plan: () => [{ at: 0, intensity: 'wave' }], loops: 1 },
+  match: { label: 'Wave starts → victory', desc: 'One loop of build, the wave layer comes in on the beat, then the victory sting.', plan: (L) => [{ at: 0, intensity: 'build' }, { at: L, intensity: 'wave' }], loops: 2, sting: 'win' },
+  lose:  { label: 'Defeat', desc: 'Half a loop of battle, then the defeat sting.', plan: () => [{ at: 0, intensity: 'wave' }], loops: 0.5, sting: 'lose' },
+};
+
+const sel = document.getElementById('planet'), status = document.getElementById('status');
+for (const [k, t] of Object.entries(THEMES)) sel.add(new Option(k + ' — "' + t.title + '"', k));
+
+async function render(key, cue) {
+  const C = CUES[cue], L = loopSec(THEMES[key]);
+  const secs = L * C.loops + (C.sting ? 4 : 0) + 0.5;
+  return renderOffline(key, C.plan(L), secs, C.sting || null);
+}
+function wav(buf) {
+  const ch = buf.numberOfChannels, len = buf.length, rate = buf.sampleRate, out = new DataView(new ArrayBuffer(44 + len * ch * 2));
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); out.setUint32(4, 36 + len * ch * 2, true); w(8, 'WAVE'); w(12, 'fmt '); out.setUint32(16, 16, true);
+  out.setUint16(20, 1, true); out.setUint16(22, ch, true); out.setUint32(24, rate, true); out.setUint32(28, rate * ch * 2, true);
+  out.setUint16(32, ch * 2, true); out.setUint16(34, 16, true); w(36, 'data'); out.setUint32(40, len * ch * 2, true);
+  const data = []; for (let c = 0; c < ch; c++) data.push(buf.getChannelData(c));
+  let o = 44; for (let i = 0; i < len; i++) for (let c = 0; c < ch; c++) { const v = Math.max(-1, Math.min(1, data[c][i])); out.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7fff, true); o += 2; }
+  return new Blob([out.buffer], { type: 'audio/wav' });
+}
+
+let live = null, liveCtx = null;
+async function playCue(cue) {
+  status.textContent = 'Rendering…';
+  const buf = await render(sel.value, cue);
+  if (live) try { live.stop(); } catch (e) { /* ended */ }
+  liveCtx = liveCtx || new AudioContext();
+  live = liveCtx.createBufferSource(); live.buffer = buf; live.connect(liveCtx.destination); live.start();
+  status.textContent = 'Playing: ' + CUES[cue].label + ' (' + buf.duration.toFixed(1) + ' s)';
+}
+async function saveCue(cue) {
+  status.textContent = 'Rendering…';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(wav(await render(sel.value, cue)));
+  a.download = sel.value + '-' + cue + '.wav'; a.click();
+  status.textContent = 'Saved ' + a.download;
+}
+const cues = document.getElementById('cues');
+for (const [id, C] of Object.entries(CUES)) {
+  const d = document.createElement('div'); d.className = 'cue';
+  d.innerHTML = '<h2>' + C.label + '</h2><p>' + C.desc + '</p>';
+  const p = document.createElement('button'); p.className = 'play'; p.textContent = '▶ PLAY'; p.onclick = () => playCue(id);
+  const s = document.createElement('button'); s.textContent = 'WAV'; s.onclick = () => saveCue(id);
+  d.append(p, s); cues.appendChild(d);
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && live) { live.stop(); status.textContent = 'Stopped'; } });
+
+window.renderWav = async (key, cue) => {
+  const b = new Uint8Array(await wav(await render(key, cue)).arrayBuffer());
+  let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+window.ready = true;
+</script>
+</body>
+</html>
