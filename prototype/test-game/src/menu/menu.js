@@ -83,6 +83,10 @@ const CSS = `
 .bwm-btn.primary:hover { filter:brightness(1.06); }
 .bwm-btn.primary .hint { color:rgba(12,14,18,.62); font-weight:600; }
 .bwm-btn:disabled { opacity:.38; cursor:default; }
+/* PLAY — the one call to action, drawn to stand out (owner 2026-10-19 option A): 2× size, black weight, gold glow [MM-task_mvg1hbnl_1u] */
+.bwm-btn.bwm-play { padding:14px 22px; box-shadow:0 0 0 1px #f2c869, 0 0 28px rgba(242,200,105,.55); }
+.bwm-btn.bwm-play > span:first-child { font-size:30px; font-weight:900; letter-spacing:.18em; line-height:1.15; text-shadow:0 1px 0 rgba(255,255,255,.35); }
+.bwm-acts .bwm-btn.bwm-play { flex:1.6 1 auto; }
 .bwm-btn:disabled:hover { border-color:#2e3846; background:#1a1f28; }
 /* SURVEY rail: the 9 planets / factions (was the FACTIONS screen) [MM-story_mvftq4h6_k] */
 .bwm-badges { display:flex; gap:8px; }
@@ -235,6 +239,8 @@ const CSS = `
   .bwm-sub { margin-top:8px; font-size:12px; line-height:1.45; }
   .bwm-menu { max-height:100%; overflow-y:auto; gap:6px; padding:6px 4px 10px; }
   .bwm-btn { padding:9px 14px; font-size:13px; min-height:36px; }
+  .bwm-btn.bwm-play { padding:8px 16px; }
+  .bwm-btn.bwm-play > span:first-child { font-size:22px; }
   .bwm-maps { padding:4px 20px 12px; }
   .bwm-maps-head { margin:2px 2px 8px; }
   .bwm-maps-head h2 { font-size:14px; letter-spacing:.24em; }
@@ -388,7 +394,7 @@ export function createMenu(mountEl, cbs) {
     return b;
   };
   // the short path: MAIN → SURVEY (the target planet, its highest unlocked campaign preselected) → battle
-  const continueBtn = mkBtn('SURVEY', ' ', 'primary', () => openSurvey(targetKey()));
+  const continueBtn = mkBtn('PLAY', ' ', 'primary bwm-play', () => openSurvey(targetKey()));   // owner 2026-10-19: reads PLAY [MM-task_mvg1hbnl_1u]
   mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
   mkBtn('TECH TREE', 'research upgrades', null, () => show('techtree'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
@@ -531,7 +537,7 @@ export function createMenu(mountEl, cbs) {
     const detail = () => { const o = opts.find((x) => String(x.id) === sel.value); cd.textContent = o ? o.detail : ''; };
     sel.addEventListener('change', detail); detail();
     const acts = doss.querySelector('.bwm-acts');
-    const go = el(doc, 'button', 'bwm-btn primary'); go.appendChild(el(doc, 'span', null, 'BATTLE ON ' + P.name.toUpperCase())); go.appendChild(el(doc, 'span', null, '→'));
+    const go = el(doc, 'button', 'bwm-btn primary bwm-play'); go.appendChild(el(doc, 'span', null, 'PLAY'));   // owner 2026-10-19: just PLAY [MM-task_mvg1hbnl_1u]
     go.addEventListener('click', () => {
       setTarget(key);
       if (cbs.onPlayMap) cbs.onPlayMap(Number(sel.value) || defaultCampaign(loadSave(), MAPDATA.maps.length));
@@ -745,8 +751,8 @@ export function createMenu(mountEl, cbs) {
   // the main screen's target-planet labels (primary button, NEXT PLANET line, accent colour)
   function refreshHeroTarget() {
     const s = loadSave(), f = REG.find(targetKey()) || REG.find('ground'), P = PLANETS[f.key];
-    continueBtn.firstChild.textContent = P ? 'SURVEY · ' + P.name.toUpperCase() : 'SURVEY';
-    continueBtn.lastChild.textContent = 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);
+    continueBtn.firstChild.textContent = 'PLAY';
+    continueBtn.lastChild.textContent = (P ? P.name + ' · ' : '') + 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);   // the planet stays in the hint
     heroNext.innerHTML = P ? 'NEXT PLANET · <b>' + P.name.toUpperCase() + '</b>' : '';
     hero.style.setProperty('--hue', (P && P.ui) || '#f2c869');
   }
