@@ -24,7 +24,15 @@ export function toClassic(src) {
 export function classicUnitsParts() {
   const prims = toClassic(fs.readFileSync(path.join(UNITS, 'prims.js'), 'utf8')) + '\nvar Prims = createPrims(THREE);\n';
   const system = toClassic(fs.readFileSync(path.join(UNITS, '../structures/systemModels.js'), 'utf8'));
+  // the AIR faction's model files (air/*.js) ride in one scope too, binding AIR_MODELS for models.js [MM-story_mvh8woji_1]
+  // each file gets its own scope (their local helpers may share names) and hands out only what it exports
+  const air = ['palette', 'troops', 'scout', 'tank', 'artillery', 'heavy', 'gunship', 'fighter', 'missile', 'bomber', 'index'].map((f) => {
+    const src = fs.readFileSync(path.join(UNITS, 'air', f + '.js'), 'utf8');
+    const names = [...src.matchAll(/^export\s+(?:const|let|function|class)\s+(\w+)/gm)].map((m) => m[1]).join(', ');
+    return 'var { ' + names + ' } = (function () {\n' + toClassic(src) + '\nreturn { ' + names + ' };\n})();';
+  }).join('\n');
   const models = 'var { SYSTEM_MODELS, SYSTEM_COLORS } = (function () {\n' + system + '\nreturn { SYSTEM_MODELS, SYSTEM_COLORS };\n})();\n'
+    + 'var { AIR_MODELS } = (function () {\n' + air + '\nreturn { AIR_MODELS };\n})();\n'
     + toClassic(fs.readFileSync(path.join(UNITS, 'models.js'), 'utf8'));
   return { prims, models };
 }

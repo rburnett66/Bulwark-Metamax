@@ -10,7 +10,9 @@
  * Pure: no three.js. [MM-story_mv77hv5d_7]
  */
 
-export const MODEL_KEYS = Object.freeze(['tank', 'buggy', 'beetle', 'jet', 'tiger', 'copter', 'drone', 'miner']);
+export const MODEL_KEYS = Object.freeze(['tank', 'buggy', 'beetle', 'jet', 'tiger', 'copter', 'drone', 'miner',
+  // the AIR faction's own models (air/*.js) [MM-story_mvh8woji_1]
+  'air_troops', 'air_scout', 'air_tank', 'air_artillery', 'air_heavy', 'air_gunship', 'air_fighter', 'air_missile', 'air_bomber']);
 
 /** artClass → { model, scale, exact }. scale multiplies UNIT_SCALE (1 = a hull ≈ 1.08 cells). */
 export const ART_CLASS_MODELS = Object.freeze({
@@ -28,6 +30,16 @@ export const ART_CLASS_MODELS = Object.freeze({
 /** Units the sim spawns that are not combat classes (artKey/unitId → entry). */
 export const UNIT_ID_MODELS = Object.freeze({
   'SYS-Harvester': { model: 'miner', scale: 0.95, exact: true },   // the System resource miner (was the buggy stand-in) [MM-story_mvg3xsca_1x]
+  // AIR faction: its own models from the owner's concept renders [MM-story_mvh8woji_1]. Scales follow the class sizes above.
+  'AIR-Troops':      { model: 'air_troops',    scale: 0.55, exact: true },
+  'AIR-Trucks':      { model: 'air_scout',     scale: 0.8,  exact: true },
+  'AIR-Tanks':       { model: 'air_tank',      scale: 1.0,  exact: true },
+  'AIR-Artillery':   { model: 'air_artillery', scale: 0.95, exact: true },
+  'AIR-HeavyTanks':  { model: 'air_heavy',     scale: 1.15, exact: true },
+  'AIR-Copters':     { model: 'air_gunship',   scale: 0.85, exact: true },
+  'AIR-Planes':      { model: 'air_fighter',   scale: 1.0,  exact: true },
+  'AIR-Missiles':    { model: 'air_missile',   scale: 0.55, exact: true },
+  'AIR-HeavyBomber': { model: 'air_bomber',    scale: 1.6,  exact: true },
 });
 
 /** The id a live sim unit resolves its model by: its artKey when that names a model here (harvesters are spawned as
