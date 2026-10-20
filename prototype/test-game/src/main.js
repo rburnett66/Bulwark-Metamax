@@ -13,7 +13,7 @@ import { setPlaying } from './fullscreen.js';
 // + global namespace: factions.js is a classic script with no ES exports (see voice.js).
 import './data/factions.js';
 const REG = globalThis.BulwarkFactions;
-import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay } from './sim/replay.js';
+import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay, replayOpts } from './sim/replay.js';
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
 import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
@@ -214,6 +214,10 @@ export function boot(mountEl, seed) {
   let replayQueue = [];       // sorted commands during replay playback
   let replayIdx = 0;
   let activeReplayLog = null; // log being played back (for final hash check)
+  // The board (map + waves objects) of the last finished game: a serialized log can't carry them, so playback reuses
+  // them while the session lives; after a reload startReplay rebuilds them from the log's mapId + faction.
+  let lastReplayBoard = null;
+  let replayBoot = false;      // selectMap is loading a board FOR a replay: no landing, no intro cards [MM-task_mvgyb5ma_1]
   let ended = false;          // sim.result reached; stop stepping
   let interlude = false;      // between-wave FREEZE: dialog speaker held on screen, sim/time/regrowth
   let waveEndSeq = 0;   // bumps cancel a waiting wave-end sequence [MM-story_mvempsla_q]
@@ -542,7 +546,7 @@ export function boot(mountEl, seed) {
       // [MM-task_mvd6cfh8_n] a board selected UNDER the menu (boot, or a faction pick) runs no intro: no landing wait, no
       // banner, no contract — pressing Play selects the map again and that run owns the intro. (The boot board's
       // contract card used to open behind the menu and then sit over the real landing.)
-      if (menu.isOpen()) return;
+      if (menu.isOpen() || replayBoot) return;   // a board loaded for a replay runs no landing and no intro cards
       if (!USE_3D) { announceMap(); next(); return; }
       void playOpeningLanding().then(() => {
         if (mySeq !== mapSelectSeq) return;                 // the player moved on to another map meanwhile
@@ -566,7 +570,7 @@ export function boot(mountEl, seed) {
     });
   }
 
-  function playReplay(replayLog) {
+  function playReplay(replayLog, opts) {
     if (!replayLog || typeof replayLog.seed !== 'number') {
       flashMessage(hud, 'invalid replay log');
       return;
@@ -577,8 +581,14 @@ export function boot(mountEl, seed) {
     if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
     currentSeed = Math.floor(replayLog.seed);
     activeReplayLog = replayLog;
-    sim = createSim(currentSeed, { waves: currentWaves, map: currentMap, carry: pendingCarry });
+    // the logged run's own init (carry, harvester level, tier unlocks) — playback used to rebuild with the live
+    // pendingCarry and default tiers/level, so any upgraded save diverged [MM-task_mvgyb5ma_1]
+    sim = createSim(currentSeed, opts || replayOpts(replayLog.init, { map: currentMap, waves: currentWaves }));
     ui = createUiState();
+    clearIntroOverlays();                            // a contract / wave-intel card never sits over a replay
+    suppressPreDialog = true; comm.dismiss();
+    landingReleased = true;
+    if (renderer3d && render3dMod && render3dMod.skipLanding) render3dMod.skipLanding(renderer3d);
     replayQueue = (replayLog.commands || []).slice().sort((a, b) => a.tick - b.tick);
     replayIdx = 0;
     ended = false;
@@ -588,6 +598,37 @@ export function boot(mountEl, seed) {
     if (hud && hud.hideResult) hud.hideResult();
     resetCommTracking();
     flashMessage(hud, 'replay playback started');
+  }
+
+  /**
+   * Replay a logged battle ON ITS OWN BOARD [MM-task_mvgyb5ma_1]. The menu's REPLAY LAST BATTLE used to select the
+   * DEFAULT map and start playback 50 ms later — before the async map load finished, whose restart() then wiped the
+   * replay, and on the wrong board, with that board's contract card over it. Now: reuse the finished game's board, or
+   * load the logged map (mapId + faction) with the intro suppressed, await it, then play — and run the headless hash
+   * check from the same createSim options as the playback.
+   */
+  async function startReplay(src) {
+    const L = typeof src === 'string' ? deserializeLog(src) : src;
+    const init = L.init || {};
+    const mapId = init.mapId | 0, faction = init.faction || null;
+    let board = lastReplayBoard && lastReplayBoard.mapId === mapId && lastReplayBoard.faction === faction ? lastReplayBoard : null;
+    if (!board) {
+      if ((currentMapId | 0) !== mapId || (currentTestFaction || null) !== faction) {
+        currentTestFaction = faction;
+        replayBoot = true;
+        try { await selectMap(mapId); } finally { replayBoot = false; }
+        if ((currentMapId | 0) !== mapId) { flashMessage(hud, 'replay: map ' + mapId + ' failed to load'); return; }
+      }
+      board = { map: currentMap, waves: currentWaves };
+    }
+    const opts = replayOpts(init, board);
+    try {
+      const check = runReplay({ ...L, init: opts });
+      console.log('[Bulwark] headless replay hash:', check.hash, 'matches:', check.matches);
+    } catch (e) {
+      console.warn('[Bulwark] headless replay check failed', e);
+    }
+    playReplay(L, opts);
   }
 
   // ---------------------------------------------------------------------
@@ -671,14 +712,7 @@ export function boot(mountEl, seed) {
         // log) and page reload. Mid-game with nothing finished yet → fall back to the current session if ended.
         const src = lastReplayLog || (ended ? serializeLog(log) : null);
         if (!src) { flashMessage(hud, 'no finished game to replay yet'); return; }
-        const cloned = deserializeLog(src);
-        try {
-          const check = runReplay(cloned);
-          console.log('[Bulwark] headless replay hash:', check.hash, 'matches:', check.matches);
-        } catch (e) {
-          console.warn('[Bulwark] headless replay check failed', e);
-        }
-        playReplay(cloned);
+        void startReplay(src).catch((e) => { console.error('[Bulwark] replay failed', e); flashMessage(hud, 'replay failed'); });
       } catch (e) {
         console.error('[Bulwark] replay failed', e);
         flashMessage(hud, 'replay failed');
@@ -782,9 +816,9 @@ export function boot(mountEl, seed) {
     },
     onReplay: () => {
       menu.close();
-      void selectMap(devMap != null ? devMap : DEFAULT_MAP_ID);
-      // replay runs off the persisted last log once the board exists
-      setTimeout(() => { if (lastReplayLog) playReplay(deserializeLog(lastReplayLog)); }, 50);   // lastReplayLog is a JSON string — playReplay wants the parsed log
+      if (!lastReplayLog) { flashMessage(hud, 'no finished game to replay yet'); return; }
+      // the battle's OWN map, loaded and awaited before playback (was: the default map + a 50 ms race) [MM-task_mvgyb5ma_1]
+      void startReplay(lastReplayLog).catch((e) => { console.error('[Bulwark] replay failed', e); flashMessage(hud, 'replay failed'); });
     },
   });
   // Defer the initial board dispatch to a microtask so the rest of this init function (comm, voicePacks,
@@ -1012,6 +1046,7 @@ export function boot(mountEl, seed) {
             // Capture this finished game so "Run Replay" can replay it (survives Restart + reload).
             try {
               lastReplayLog = serializeLog(log);
+              lastReplayBoard = { mapId: currentMapId | 0, faction: currentTestFaction || null, map: currentMap, waves: currentWaves };
               if (typeof localStorage !== 'undefined') localStorage.setItem('bulwark:lastReplay', lastReplayLog);
             } catch (e) { /* storage blocked/full */ }
           } else if (activeReplayLog && activeReplayLog.finalHash) {

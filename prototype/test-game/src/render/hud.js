@@ -930,6 +930,23 @@ export function showStarBanner(hud, wave, stars) {
   hud._starT = setTimeout(() => hud.starBanner.classList.remove('bw-show'), 2600);
 }
 
+/**
+ * The per-wave star ratings on the result card, labelled [MM-task_mvgyb74q_2]. Owner 2026-10-20 read the old line
+ * "★ 2 2 1 2 4 4 3 3 · avg 2.6" as one number ("22124433"): each wave now gets its own cell — W1…Wn over its stars —
+ * and the average says what it is out of.
+ */
+export function waveStarsHtml(starsArr) {
+  const avg = Math.round(starsArr.reduce((a, b) => a + b, 0) / starsArr.length * 10) / 10;
+  const cells = starsArr.map((n, i) =>
+    '<div style="display:flex;flex-direction:column;align-items:center;min-width:30px">' +
+      '<span style="font-size:10px;color:#8fa0b3;letter-spacing:.08em">W' + (i + 1) + '</span>' +
+      '<span style="color:#f2c869;font-weight:700">' + n + '★</span></div>').join('');
+  return '<div class="bw-rscore-line bw-rstars" style="margin-top:6px">' +
+      '<div style="font-size:10px;color:#8fa0b3;letter-spacing:.12em">WAVE STARS (OUT OF 5)</div>' +
+      '<div style="display:flex;justify-content:center;gap:6px;margin:3px 0">' + cells + '</div>' +
+      '<div style="color:#f2c869">avg ' + avg + ' / 5</div></div>';
+}
+
 export function showResult(hud, result, finalScore, nextMap, waveStars) {
   if (!hud) return;
   const win = result === 'win';
@@ -950,10 +967,7 @@ export function showResult(hud, result, finalScore, nextMap, waveStars) {
     if (fs && typeof fs.score === 'number') {
       const mm = String(fs.minutes != null ? fs.minutes : 0).padStart(2, '0');
       const ss = String(fs.seconds != null ? fs.seconds : 0).padStart(2, '0');
-      const starsHtml = starsArr
-        ? '<div class="bw-rscore-line" style="color:#f2c869;letter-spacing:2px">★ ' + starsArr.join(' ') +
-          ' · avg ' + (Math.round(starsArr.reduce((a, b) => a + b, 0) / starsArr.length * 10) / 10) + '</div>'
-        : '';
+      const starsHtml = starsArr ? waveStarsHtml(starsArr) : '';
       hud.scoreEl.innerHTML =
         '<div class="bw-rscore-total">SCORE ' + fs.score + '</div>' + starsHtml +
         '<div class="bw-rscore-line">' + (fs.kills || 0) + ' kills · ' + mm + ':' + ss +
