@@ -388,7 +388,7 @@ export function createMenu(mountEl, cbs) {
     return b;
   };
   // the short path: MAIN → SURVEY (the target planet, its highest unlocked campaign preselected) → battle
-  const continueBtn = mkBtn('SURVEY', ' ', 'primary', () => openSurvey(targetKey()));
+  const continueBtn = mkBtn('PLAY', ' ', 'primary', () => openSurvey(targetKey()));   // owner 2026-10-19: reads PLAY [MM-task_mvg1hbnl_1u]
   mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
   mkBtn('TECH TREE', 'research upgrades', null, () => show('techtree'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
@@ -531,7 +531,7 @@ export function createMenu(mountEl, cbs) {
     const detail = () => { const o = opts.find((x) => String(x.id) === sel.value); cd.textContent = o ? o.detail : ''; };
     sel.addEventListener('change', detail); detail();
     const acts = doss.querySelector('.bwm-acts');
-    const go = el(doc, 'button', 'bwm-btn primary'); go.appendChild(el(doc, 'span', null, 'BATTLE ON ' + P.name.toUpperCase())); go.appendChild(el(doc, 'span', null, '→'));
+    const go = el(doc, 'button', 'bwm-btn primary'); go.appendChild(el(doc, 'span', null, 'PLAY'));   // owner 2026-10-19: just PLAY [MM-task_mvg1hbnl_1u]
     go.addEventListener('click', () => {
       setTarget(key);
       if (cbs.onPlayMap) cbs.onPlayMap(Number(sel.value) || defaultCampaign(loadSave(), MAPDATA.maps.length));
@@ -745,8 +745,8 @@ export function createMenu(mountEl, cbs) {
   // the main screen's target-planet labels (primary button, NEXT PLANET line, accent colour)
   function refreshHeroTarget() {
     const s = loadSave(), f = REG.find(targetKey()) || REG.find('ground'), P = PLANETS[f.key];
-    continueBtn.firstChild.textContent = P ? 'SURVEY · ' + P.name.toUpperCase() : 'SURVEY';
-    continueBtn.lastChild.textContent = 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);
+    continueBtn.firstChild.textContent = 'PLAY';
+    continueBtn.lastChild.textContent = (P ? P.name + ' · ' : '') + 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);   // the planet stays in the hint
     heroNext.innerHTML = P ? 'NEXT PLANET · <b>' + P.name.toUpperCase() + '</b>' : '';
     hero.style.setProperty('--hue', (P && P.ui) || '#f2c869');
   }
