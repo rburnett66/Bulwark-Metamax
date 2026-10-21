@@ -35,10 +35,11 @@ const parts = [
   // sandbags piled on the hood
   ...[[1.6, -0.36], [1.6, 0.04], [1.6, 0.44], [1.18, -0.22], [1.18, 0.22]].map(([x, z]) => ({ t: 'ell', s: [0.22, 0.12, 0.19], seg: 6, p: [x, 1.55, z], m: 'net' })),
   // windscreen frame + roll bar (open top)
-  { t: 'box', s: [0.07, 0.52, 1.5], p: [0.62, 1.72, 0], r3: [0, 0, -12], m: 'olive' },
-  { t: 'box', s: [0.04, 0.4, 1.28], p: [0.64, 1.72, 0], r3: [0, 0, -12], m: 'glass', d: 1 },
+  // owner 2026-10-20: "the windscreen on the jeep should slope from hood back" — it rises from the hood's rear edge and leans aft
+  { t: 'box', s: [0.07, 0.66, 1.5], p: [0.55, 1.74, 0], r3: [0, 0, 38], m: 'olive' },
+  { t: 'box', s: [0.04, 0.52, 1.28], p: [0.575, 1.75, 0], r3: [0, 0, 38], m: 'glass', d: 1 },
   { t: 'box', s: [0.07, 0.64, 0.07], p: [-0.45, 1.62, 0.78], m: 'olive', mir: true },
-  { t: 'box', s: [1.1, 0.07, 0.07], p: [0.1, 1.94, 0.78], m: 'olive', mir: true },
+  { t: 'box', s: [0.8, 0.07, 0.07], p: [-0.05, 1.94, 0.78], m: 'olive', mir: true },   // roll-bar rail meets the windscreen top
   { t: 'box', s: [0.07, 0.07, 1.62], p: [-0.45, 1.94, 0], m: 'olive' },
   // seats in the open cab
   { t: 'box', s: [0.34, 0.32, 0.36], p: [0.0, 1.46, 0.38], m: 'dark', mir: true },
@@ -46,8 +47,10 @@ const parts = [
   { t: 'box', s: [0.75, 0.24, 0.02], p: [1.38, 1.16, 0.85], m: 'olive', mir: true, d: 1 },
   { t: 'box', s: [0.65, 0.28, 0.02], p: [-1.45, 1.0, 0.85], m: 'olive', mir: true, d: 1 },
   // doors with yellow stencils, olive camo patch
-  { t: 'box', s: [0.95, 0.42, 0.03], p: [0.05, 1.08, 0.85], m: 'olive', mir: true },
-  ...[-0.05, 0.12].map((x) => ({ t: 'box', s: [0.06, 0.24, 0.02], p: [x, 1.1, 0.87], m: 'hazard', mir: true })),
+  // owner 2026-10-20: "the jeep door should go a little higher" — the doors stand above the body line
+  { t: 'box', s: [0.95, 0.64, 0.03], p: [0.05, 1.19, 0.85], m: 'olive', mir: true },
+  { t: 'box', s: [0.95, 0.05, 0.06], p: [0.05, 1.5, 0.85], m: 'dark', mir: true },
+  ...[-0.05, 0.12].map((x) => ({ t: 'box', s: [0.06, 0.28, 0.02], p: [x, 1.2, 0.87], m: 'hazard', mir: true })),
   // rear bed under camo netting
   { t: 'loft', ax: 'x', m: 'net', secs: [[-0.42, netSec(0.86, 1.84, 1.24)], [-0.9, netSec(0.92, 1.92, 1.1)], [-1.55, netSec(0.92, 1.86, 1.08)], [-2.02, netSec(0.84, 1.54, 1.14)]] },
   ...[[-0.8, -0.5], [-1.3, 0.45], [-1.75, -0.22], [-1.1, -0.1]].map(([x, z]) => ({ t: 'ell', s: [0.28, 0.11, 0.22], seg: 6, p: [x, 1.9, z], m: 'olive', d: 1 })),

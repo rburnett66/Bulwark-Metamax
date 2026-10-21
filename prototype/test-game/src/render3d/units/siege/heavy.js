@@ -10,14 +10,16 @@ const TPIV = [-0.45, 1.42, 0];
 // owner 2026-10-20: "the heavy tank turret a little smaller to emphasize the body and gun" — every turret part is scaled
 // by TK about the turret ring (TC); the gun keeps its size and its trunnion sits on the smaller mantlet's front.
 const TK = 0.78, TC = [-0.45, 1.36, 0];
+// owner 2026-10-20 (follow-up): "the turret on the heavy tank should be a little wider" — side to side it keeps more width
+const TKZ = 0.92;
 const BY = TC[1] + (1.74 - TC[1]) * TK, BX = TC[0] + (0.79 - TC[0]) * TK;   // the old mantlet front, scaled
 const BPIV = [BX, BY, 0];
 function turretScale(pt) {
   if (pt.g !== 'turret') return pt;
-  const sx = (x) => TC[0] + (x - TC[0]) * TK, sy = (y) => TC[1] + (y - TC[1]) * TK, sz = (z) => z * TK;
+  const sx = (x) => TC[0] + (x - TC[0]) * TK, sy = (y) => TC[1] + (y - TC[1]) * TK, sz = (z) => z * TKZ;
   const q = { ...pt };
   if (q.p) q.p = [sx(q.p[0]), sy(q.p[1]), sz(q.p[2])];
-  if (q.s) q.s = q.s.map((v) => v * TK);
+  if (q.s) q.s = [q.s[0] * TK, q.s[1] * TK, q.s[2] * TKZ];   // box / ellipsoid sizes: x, y, z
   if (q.r != null) q.r = Array.isArray(q.r) ? q.r.map((v) => v * TK) : q.r * TK;
   if (q.l != null) q.l *= TK;
   if (q.secs) q.secs = q.secs.map(([at, pts]) => [sy(at), pts.map(([x, z]) => [sx(x), sz(z)])]);   // loft along Y: (x, z)
