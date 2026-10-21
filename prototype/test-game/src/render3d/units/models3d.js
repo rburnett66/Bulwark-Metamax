@@ -4,7 +4,8 @@
  * Each model type is merged into ONE vertex-coloured geometry per group (body, turret) and drawn as an
  * InstancedMesh — one draw call per type × group, whatever the count. Two variants per group: full detail and
  * LOD (lod.js), sharing ONE instance-matrix buffer, so switching is a count change, not a rebuild. Glow parts
- * are unlit through a per-vertex flag. Shadows: the LOD instances projected flat onto Y = 0 along the sun —
+ * are unlit through a per-vertex flag. Shadows: each model's shadow PROXY (shadow.js: a few simple primitives per
+ * group, not the LOD mesh [MM-story_mvibvqd2_7]) projected flat onto Y = 0 along the sun —
  * exact silhouettes, stencil-once so overlaps never double-darken, no per-frame shadow-map pass.
  *
  * Material: the metal look (material.js, MAT [MM-story_mv87jwol_6]) — per-vertex metalness/roughness from
@@ -16,6 +17,7 @@ import { createPrims } from './prims.js';
 import { UNIT_MODELS } from './models.js';
 import { MODEL_KEYS, UNIT_SCALE } from './modelKeys.js';
 import { lodDef, LOD_DISTANCE } from './lod.js';
+import { shadowDef } from './shadow.js';
 import { metalFor, isGlowKey } from './metal.js';
 import { createUnitMaterial } from './material.js';
 import { kickMatrix, BODY_KICK } from '../fx/recoil.js';
@@ -108,12 +110,15 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
   const shMat = shadowMaterial(THREE, sunDir, shadowAlpha);
   const types = {};
   const tris = {};
+  const shadowTris = {};   // per model: the shadow proxy's triangles (all groups) [MM-story_mvibvqd2_7]
   const owned = [];
 
   for (const key of MODEL_KEYS) {
     const def = UNIT_MODELS[key];
     const full = mergeModelGroups(THREE, def, prims, key);
     const lod = mergeModelGroups(THREE, lodDef(def), prims, key);
+    const shadow = mergeModelGroups(THREE, shadowDef(def), prims, key);
+    shadowTris[key] = Object.values(shadow).reduce((a, g) => a + g.tris, 0);
     const T = { def, groups: {} };
     tris[key] = { full: 0, lod: 0 };
     for (const gname of Object.keys(full)) {
@@ -122,15 +127,16 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       imLod.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       const imFull = new THREE.InstancedMesh(full[gname].geo, mat, cap);
       imFull.instanceMatrix = imLod.instanceMatrix;          // one matrix buffer feeds full, LOD and the shadow
-      const sh = new THREE.InstancedMesh(L.geo, shMat, cap);
-      sh.instanceMatrix = imLod.instanceMatrix;
-      for (const m of [imLod, imFull, sh]) { m.count = 0; m.frustumCulled = false; scene.add(m); }
+      // the shadow casts the group's proxy (same pivot, same instance matrices); a group with none (rotors) casts nothing
+      const SG = shadow[gname], sh = SG ? new THREE.InstancedMesh(SG.geo, shMat, cap) : null;
+      if (sh) { sh.instanceMatrix = imLod.instanceMatrix; owned.push(SG.geo); }
+      for (const m of [imLod, imFull, sh]) if (m) { m.count = 0; m.frustumCulled = false; scene.add(m); }
       // units RECEIVE the static shadow map (T4): they darken under trees and plateaus. They don't CAST into
       // it — they move, and the map renders only on static changes; their own shadows are the planar ones.
       imLod.receiveShadow = imFull.receiveShadow = true;
       imLod.renderOrder = imFull.renderOrder = 3;
-      sh.renderOrder = 2;
-      T.groups[gname] = { imFull, imLod, sh, pivot: full[gname].pivot, lodGeo: L.geo };
+      if (sh) sh.renderOrder = 2;
+      T.groups[gname] = { imFull, imLod, sh, pivot: full[gname].pivot, lodGeo: L.geo, shGeo: SG ? SG.geo : null };
       tris[key].full += full[gname].tris;
       tris[key].lod += L.tris;
       owned.push(full[gname].geo);
@@ -147,6 +153,8 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
 
   return {
     tris,
+    /** Shadow-proxy triangles per model (shadow.js) — what each live unit's planar shadow costs. */
+    shadowTris,
     material: metal,
     /** MAT: 1 = metal (default), 0 = the previous flat look. */
     setMetal(k) { metal.setMetal(k); },
@@ -156,13 +164,17 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       const out = {};
       for (const [key, T] of Object.entries(types)) {
         out[key] = {};
-        for (const [g, G] of Object.entries(T.groups)) if (!g.startsWith('barrel') && !g.startsWith('spin')) out[key][g] = { geo: G.lodGeo, pivot: G.pivot };   // rotors are not wrecked
+        for (const [g, G] of Object.entries(T.groups)) if (!g.startsWith('barrel') && !g.startsWith('spin')) out[key][g] = { geo: G.lodGeo, shGeo: G.shGeo, pivot: G.pivot };   // rotors are not wrecked
         // a wreck's turret keeps its guns: the barrels (level) folded into the turret geometry
         const TG = T.groups.turret;
         if (TG) {
-          let geo = TG.lodGeo;
-          for (const [g, BG] of Object.entries(T.groups)) if (g.startsWith('barrel')) { geo = mergeOffset(THREE, geo, BG.lodGeo, BG.pivot.clone().sub(TG.pivot)); owned.push(geo); }
-          out[key].turret = { geo, pivot: TG.pivot };
+          let geo = TG.lodGeo, shGeo = TG.shGeo;
+          for (const [g, BG] of Object.entries(T.groups)) if (g.startsWith('barrel')) {
+            const off = BG.pivot.clone().sub(TG.pivot);
+            geo = mergeOffset(THREE, geo, BG.lodGeo, off); owned.push(geo);
+            if (BG.shGeo) { shGeo = shGeo ? mergeOffset(THREE, shGeo, BG.shGeo, off) : BG.shGeo; owned.push(shGeo); }   // the wreck's turret casts its guns' shadow too
+          }
+          out[key].turret = { geo, shGeo, pivot: TG.pivot };
         }
       }
       return out;
@@ -215,7 +227,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
         for (const G of Object.values(types[key].groups)) {
           G.imLod.count = usingLod ? n : 0;
           G.imFull.count = usingLod ? 0 : n;
-          G.sh.count = liveShadows ? n : 0;
+          if (G.sh) G.sh.count = liveShadows ? n : 0;
           G.imLod.instanceMatrix.needsUpdate = true;
         }
       }
@@ -223,7 +235,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
     },
     dispose() {
       for (const T of Object.values(types)) for (const G of Object.values(T.groups)) {
-        for (const m of [G.imFull, G.imLod, G.sh]) scene.remove(m);
+        for (const m of [G.imFull, G.imLod, G.sh]) if (m) scene.remove(m);
       }
       for (const g of owned) g.dispose();
       mat.dispose(); shMat.dispose();

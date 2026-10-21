@@ -320,8 +320,18 @@ anchor = contact + mount rotated by heading × voxel size, lifted along `camUp` 
 - **`lodDef(def)`** — drops parts flagged `d` (detail: tread cleats, hubs) and parts whose middle extent is
   < 0.12 model units (glow parts < 0.05); caps cylinder segments at 6.
 - **`buildUnits3D()`** — per type, per variant (full, LOD), per group (body, turret): merge all parts into ONE
-  vertex-coloured geometry with `aEmit` and `aMR`; one `InstancedMesh` each; LOD also gets a planar-shadow
+  vertex-coloured geometry with `aEmit` and `aMR`; one `InstancedMesh` each; each group also gets a planar-shadow
   `InstancedMesh`; **all three share one `instanceMatrix` buffer**. Logs `UNITTRIS`.
+- **Shadow proxies (`shadow.js`, `shadowDef(def)`)** [MM-story_mvibvqd2_7] — the planar shadow casts a PROXY, not the
+  LOD mesh (which was ~half of all unit triangles). Derived per group from the model's parts ranked by shadow throw
+  (ground footprint + side × 1/tan(sun elevation)), skipping glow parts, rotors (`spin*`) and parts boxed inside a part
+  already chosen; each part reduced to its cheapest form (box; cylinder ≤ 6 sides, 4 for rods; ellipsoid at 6 segments;
+  extrusion ≤ 8-point outline — big rings keep an 8-point hole, tracks and small rings cast solid; loft ≤ 5 sections ×
+  ≤ 6 points). Budgets per group (`SHADOW_GROUP_BUDGET`: body 300 (+80 for flyers), turret 90, barrel 90, deploy 30),
+  `SHADOW_MAX_TRIS` 560 per model. A model may author `shadow`: an array (whole proxy) or `{ group: [parts] }` (those
+  groups only — the Arcane organ battery casts its pipe bank as one slab). Wrecks cast the same proxy (`lodGroups()`
+  returns `shGeo`). Average per unit: ~380 shadow tris vs ~1,450 LOD. Review tools: `tools/unit-models/shadows.py`
+  (old vs new silhouettes per faction), `field.py` (a faction through `createUnits3D` with live shadows).
 - **`drawUnits3D(units, liveShadows)`** — per unit: `T(x, y, z) · Ry(−heading) · S(UNIT_SCALE)`; turret
   `· T(pivot) · Ry(−(aim − heading))`; jets hover at 1.1 cells with a bob. Counts per type; LOD on when
   `U3.lodMode === 'on'` or (`'auto'` and `cam.dist > 22`).
@@ -535,8 +545,9 @@ FX cost: 4 batches + 1 chunk mesh + up to 2 instanced meshes per unit type with 
 shadows ≈ +16 draw calls at worst. The metal material adds no draw calls; its cost is per-pixel lighting on
 unit pixels (Phong instead of per-vertex Lambert).
 
-Draw calls and CPU are not the risk; GPU triangle/vertex load on iPhone 12 / Pixel 6 is (half of the 3D-unit
-triangles are planar shadows). Not yet measured on devices.
+Draw calls and CPU are not the risk; GPU triangle/vertex load on iPhone 12 / Pixel 6 is. Planar shadows were half of
+the 3D-unit triangles; since the shadow proxies (§4.11) a 267-unit field drops from ~0.77M to ~0.49M triangles
+zoomed out and from ~1.06M to ~0.78M zoomed in (faction-model averages). Not yet measured on devices.
 
 ---
 

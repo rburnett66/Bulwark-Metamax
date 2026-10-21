@@ -58,7 +58,8 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
       const im = new THREE.InstancedMesh(L.geo, wreckMat, caps.wrecks);
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       im.receiveShadow = true;
-      const sh = new THREE.InstancedMesh(L.geo, shMat, caps.wrecks);
+      // a wreck casts its unit's shadow proxy (shadow.js) [MM-story_mvibvqd2_7]; L.geo if a caller passes none
+      const sh = new THREE.InstancedMesh(L.shGeo || L.geo, shMat, caps.wrecks);
       sh.instanceMatrix = im.instanceMatrix;
       for (const m of [im, sh]) { m.count = 0; m.frustumCulled = false; m.visible = false; scene.add(m); }
       im.renderOrder = 3; sh.renderOrder = 2;

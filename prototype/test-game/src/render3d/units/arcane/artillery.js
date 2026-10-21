@@ -56,4 +56,6 @@ export const ARCANE_ARTILLERY = { name: 'Organ battery', unit: 'ARC-Artillery', 
   parts, pivots: { turret: TPIV, barrel: TRUN },
   barrel: { rest: 65, min: 40, max: 80, rate: 0.7 },
   muzzles: PIPES.filter((_, i) => i % 3 === 1).map((q) => ({ p: [-0.2 + q.L + 0.01, q.y, q.z], d: [1, 0, 0], back: 0.3, g: 'barrel' })),
+  // shadow proxy: the pipe bank casts as one slab (shadow.js) — fifteen pipes would cost more than the whole hull
+  shadow: { barrel: [{ t: 'box', s: [3.05, 0.62, 1.12], p: [1.32, 1.75, 0] }] },
   views: { side: 'left', top: 'down' } };

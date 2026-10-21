@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Unit Field</title></head><body style="margin:0;background:#000">
+<!--
+  tools/unit-models/src/field.html — a faction's units on open ground through the game's own unit renderer
+  (createUnits3D: instancing, LOD, planar shadows from the shadow proxies) [MM-story_mvibvqd2_7].
+  window.field(prefix, camDist, size) → { png, shadowTris, drawCalls, triangles }.
+-->
+<script type="module">
+import * as THREE from '../../../vendor/three.module.js';
+import { createUnits3D } from '../../../src/render3d/units/models3d.js';
+import { MODEL_KEYS } from '../../../src/render3d/units/modelKeys.js';
+import { sunDirection, sunIntensity } from '../../../src/render3d/lighting.js';
+
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, stencil: true });
+window.field = function (prefix, camDist = 18, size = 900) {
+  const s = new THREE.Scene(), sun = sunDirection();
+  s.background = new THREE.Color(0xb7ad94);
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshLambertMaterial({ color: 0xc9bea3 })); g.rotation.x = -Math.PI / 2; s.add(g);
+  s.add(new THREE.AmbientLight(0xffffff, 0.6)); const L = new THREE.DirectionalLight(0xffffff, sunIntensity(sun)); L.position.set(sun.x * 10, sun.y * 10, sun.z * 10); s.add(L);
+  const units = createUnits3D(THREE, s, { sunDir: sun });
+  const keys = MODEL_KEYS.filter((k) => k.startsWith(prefix)), list = [];
+  keys.forEach((model, i) => {
+    const col = i % 4, row = Math.floor(i / 4), def = { model, scale: 1, heading: -0.6, aim: -0.3, deploy: 1, kick: 0, bank: 0, id: i };
+    list.push({ ...def, x: (col - 1.5) * 3.4, y: 0, z: (row - 0.5) * 3.6 });
+  });
+  units.setUnits(list, camDist, true, 0.4);
+  const cam = new THREE.PerspectiveCamera(32, 16 / 10, 0.1, 300);
+  cam.position.set(-camDist * 0.35, camDist * 0.95, camDist * 0.62); cam.lookAt(0, 0, 0);
+  r.setSize(size, size * 10 / 16, false); r.setPixelRatio(1); r.info.reset(); r.render(s, cam);
+  const out = { png: r.domElement.toDataURL('image/png'), drawCalls: r.info.render.calls, triangles: r.info.render.triangles,
+    shadowTris: keys.reduce((a, k) => a + units.shadowTris[k], 0), lodTris: keys.reduce((a, k) => a + units.tris[k].lod, 0) };
+  units.dispose && units.dispose();
+  return out;
+};
+window.ready = true;
+</script></body></html>
