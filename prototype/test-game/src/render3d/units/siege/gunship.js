@@ -20,23 +20,23 @@ const blade = (c, len, a, w, t, m, g, r0 = 0.1) => {
 const net = (yc, w, l) => [[-w, yc - 0.46], [-w * 0.88, yc - 0.08 + l], [-w * 0.42, yc + 0.12], [0, yc + 0.17 + l], [w * 0.42, yc + 0.1 + l * 0.5], [w * 0.88, yc - 0.1], [w, yc - 0.46], [w * 0.78, yc - 0.42], [-w * 0.78, yc - 0.42]];
 
 const parts = [
-  // ── fuselage: bulbous nose → tall cabin → thick tapering boom ──
+  // ── fuselage: tall cabin → narrowing from mid-cabin forward to the nose (owner 2026-10-20) → thick tapering boom ──
   { t: 'loft', ax: 'x', m: 'camo', secs: [
-    [2.08, oct(0.46, 0.84, 0.24, 0.6)], [1.95, oct(0.36, 1.0, 0.42)], [1.65, oct(0.3, 1.24, 0.55)], [1.15, oct(0.26, 1.58, 0.6)],
-    [0.5, oct(0.24, 1.66, 0.64)], [-0.6, oct(0.24, 1.66, 0.64)], [-1.05, oct(0.42, 1.6, 0.52)], [-1.5, oct(0.92, 1.52, 0.26)],
+    [2.12, oct(0.48, 0.82, 0.16, 0.6)], [1.98, oct(0.38, 0.98, 0.3)], [1.72, oct(0.31, 1.2, 0.4)], [1.35, oct(0.27, 1.44, 0.48)],
+    [0.85, oct(0.25, 1.6, 0.56)], [0.3, oct(0.24, 1.66, 0.64)], [-0.6, oct(0.24, 1.66, 0.64)], [-1.05, oct(0.42, 1.6, 0.52)], [-1.5, oct(0.92, 1.52, 0.26)],
     [-2.25, oct(1.08, 1.46, 0.17)], [-2.45, oct(1.14, 1.44, 0.13)]] },
   // darker belly + olive camo blotches on the sides
   { t: 'box', s: [2.8, 0.06, 0.92], p: [0.1, 0.25, 0], m: 'olive' },
-  { t: 'box', s: [0.6, 0.38, 0.03], p: [1.05, 1.18, 0.6], r3: [0, 0, 18], m: 'olive', mir: true },
+  { t: 'box', s: [0.55, 0.34, 0.03], p: [1.0, 1.18, 0.535], r3: [0, -9, 18], m: 'olive', mir: true },
   { t: 'box', s: [0.5, 0.3, 0.03], p: [-0.85, 1.25, 0.63], r3: [0, 0, -10], m: 'olive', mir: true },
   { t: 'box', s: [0.42, 0.26, 0.03], p: [-0.3, 0.45, 0.635], r3: [0, 0, 14], m: 'olive', mir: true },
   { t: 'box', s: [0.5, 0.2, 0.03], p: [-1.6, 1.25, 0.25], r3: [0, 8, 0], m: 'olive', mir: true },
   // ── cockpit: low multi-pane glazing on the bulbous nose ──
-  { t: 'box', s: [0.42, 0.03, 0.34], p: [1.8, 1.17, 0.2], r3: [0, 0, -40], m: 'glass', mir: true },       // upper windscreens
+  { t: 'box', s: [0.42, 0.03, 0.3], p: [1.8, 1.14, 0.17], r3: [0, 0, -40], m: 'glass', mir: true },       // upper windscreens
   { t: 'box', s: [0.3, 0.03, 0.26], p: [2.02, 0.84, 0.17], r3: [0, 0, -68], m: 'glass', mir: true },      // chin windows
-  { t: 'box', s: [0.34, 0.035, 0.035], p: [1.81, 1.175, 0], r3: [0, 0, -40], m: 'olive' },                // centre frame
-  { t: 'box', s: [0.6, 0.42, 0.03], p: [1.45, 1.0, 0.61], r3: [0, 9, 0], m: 'glass', mir: true },         // side windows
-  { t: 'box', s: [0.035, 0.38, 0.035], p: [1.45, 1.0, 0.625], m: 'olive', mir: true, d: 1 },
+  { t: 'box', s: [0.34, 0.035, 0.035], p: [1.81, 1.145, 0], r3: [0, 0, -40], m: 'olive' },                // centre frame
+  { t: 'box', s: [0.56, 0.4, 0.03], p: [1.45, 1.0, 0.47], r3: [0, 12, 0], m: 'glass', mir: true },         // side windows (on the narrowing nose)
+  { t: 'box', s: [0.035, 0.36, 0.035], p: [1.45, 1.0, 0.485], m: 'olive', mir: true, d: 1 },
   { t: 'box', s: [0.14, 0.12, 0.18], p: [2.06, 0.6, 0], m: 'dark' },                                      // nose sensor
   // ── open side door (dark recess) + heavy door gun pointing out ──
   { t: 'box', s: [0.72, 0.82, 0.04], p: [0.2, 0.86, 0.63], m: 'black', mir: true },

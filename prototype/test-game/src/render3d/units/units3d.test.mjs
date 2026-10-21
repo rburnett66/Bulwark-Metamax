@@ -27,7 +27,7 @@ const sumTris = (groups) => Object.values(groups).reduce((a, g) => a + g.tris, 0
 // A change here is a model change.
 const GOLDEN = { tank: [3362, 1534], buggy: [1260, 760], beetle: [2748, 1724], jet: [994, 698], tiger: [3660, 1520], copter: [1720, 920], drone: [1708, 1496], miner: [4524, 1320],
   air_troops: [1436, 1020], air_scout: [1192, 912], air_tank: [2580, 1128], air_artillery: [3520, 2048], air_heavy: [3470, 1338], air_gunship: [1788, 1444], air_fighter: [1158, 878], air_missile: [2084, 1756], air_bomber: [1512, 796],
-  siege_troops: [2552, 1136], siege_scout: [1408, 820], siege_tank: [3376, 1876], siege_artillery: [3804, 2024], siege_heavy: [4000, 2092], siege_gunship: [2274, 1542], siege_fighter: [884, 632], siege_missile: [2360, 988] };   // ARTILLERY (Siege) faction models [MM-story_mvhb6qd2_2]   // AIR faction models from the owner's concepts [MM-story_mvh8woji_1]   // copter + drone: owner sheets 2026-10-18 [MM-story_mvehe3sy_j]; miner: the System harvester [MM-story_mvg3xsca_1x]
+  siege_troops: [2552, 1136], siege_scout: [1408, 820], siege_tank: [3376, 1876], siege_artillery: [3804, 2024], siege_heavy: [4000, 2092], siege_gunship: [2290, 1558], siege_fighter: [884, 632], siege_missile: [2360, 988] };   // ARTILLERY (Siege) faction models [MM-story_mvhb6qd2_2]   // AIR faction models from the owner's concepts [MM-story_mvh8woji_1]   // copter + drone: owner sheets 2026-10-18 [MM-story_mvehe3sy_j]; miner: the System harvester [MM-story_mvg3xsca_1x]
 
 test('the approved models build to their golden triangle counts, full and LOD', () => {
   assert.deepEqual([...MODEL_KEYS].sort(), Object.keys(GOLDEN).sort());
