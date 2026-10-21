@@ -56,6 +56,13 @@ export const UMETAL = Object.freeze({
   wood: [0.02, 0.85],
   cloth: [0.02, 0.9],
   robe: [0.02, 0.9],
+  // the SPACE TECH livery (space/palette.js): lunar-white hull, federation blue, gold foil, solar cells [MM-story_mvho2d6s_5]
+  lunar: [0.08, 0.55],   // low metal: the white hull must stay white, not mirror the sky
+  lunar2: [0.1, 0.6],
+  fed: [0.1, 0.55],
+  foil: [0.9, 0.3],
+  solar: [0.12, 0.35],
+  copper: [0.85, 0.35],
 });
 
 /** Keys drawn unlit (emissive): no metal, no lighting — they carry the glow read. */
