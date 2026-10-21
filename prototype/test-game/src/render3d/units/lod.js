@@ -3,8 +3,8 @@
  *
  * At battle zoom a unit is ~30–60 px tall, where tread cleats, lenses, antennas and panel greebles are
  * sub-pixel. The LOD drops parts flagged as detail (`d: 1`), boxes and cylinders whose MIDDLE extent is under
- * 0.12 model units (glow parts under 0.05 — they carry the read), and caps cylinders at 6 sides. Shadows always
- * use the LOD: a shadow only needs the silhouette.
+ * 0.12 model units (glow parts under 0.05 — they carry the read), and caps cylinders at 6 sides. Shadows do NOT
+ * use the LOD any more: each model casts a much cheaper shadow proxy (shadow.js) [MM-story_mvibvqd2_7].
  *
  * NEVER DROPS SILHOUETTE PARTS. In the part schema `d` means two things: the detail flag (`d: 1`) and an
  * extrusion's depth range (`d: [from, to]`). Testing `!p.d` read every extrusion's range as "detail" and the

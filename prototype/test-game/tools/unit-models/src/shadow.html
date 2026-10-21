@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Unit Shadows</title></head><body style="margin:0;background:#fff">
+<!--
+  tools/unit-models/src/shadow.html — a unit's planar ground shadow two ways, side by side, as the game casts it:
+  the LOD mesh (old) and the shadow proxy (new) [MM-story_mvibvqd2_7]. Driven by shadows.py:
+  window.shadows(key, size) → { lod, proxy, tris: { lod, proxy } } (PNG data URLs). Same sun, same planar shadow
+  material and alpha as the battle; the unit itself is drawn in its LOD form above the shadow.
+-->
+<script type="module">
+import * as THREE from '../../../vendor/three.module.js';
+import { UNIT_MODELS } from '../../../src/render3d/units/models.js';
+import { mergeModelGroups, shadowMaterial } from '../../../src/render3d/units/models3d.js';
+import { createUnitMaterial } from '../../../src/render3d/units/material.js';
+import { lodDef } from '../../../src/render3d/units/lod.js';
+import { shadowDef } from '../../../src/render3d/units/shadow.js';
+import { sunDirection } from '../../../src/render3d/lighting.js';
+
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, stencil: true }); r.setClearColor(0xc9c2b0, 1);   // sandy ground
+const mat = createUnitMaterial(THREE, { env: { sky: 0xc4d8ff, ground: 0x8a8f96 } }).material;
+const sun = sunDirection();
+const sum = (G) => Object.values(G).reduce((a, g) => a + g.tris, 0);
+
+function pose(def, g, m) {
+  m.position.copy(m.userData.pivot);
+  if (g === 'barrel' && def.barrel && def.barrel.rest) m.rotation.z = def.barrel.rest * Math.PI / 180;
+}
+function sceneFor(key, proxy) {
+  const def = UNIT_MODELS[key], s = new THREE.Scene();
+  s.add(new THREE.HemisphereLight(0xeef3ff, 0x50555e, 0.75), new THREE.AmbientLight(0xffffff, 0.25));
+  const L = new THREE.DirectionalLight(0xfff4e6, 1.0); L.position.set(sun.x, sun.y, sun.z); s.add(L);
+  const body = mergeModelGroups(THREE, lodDef(def)), shad = mergeModelGroups(THREE, proxy ? shadowDef(def) : lodDef(def));
+  const sh = shadowMaterial(THREE, sun, 0.34), root = new THREE.Group(), lift = def.hover || 0;
+  for (const [g, G] of Object.entries(body)) { const m = new THREE.Mesh(G.geo, mat); m.userData.pivot = G.pivot; pose(def, g, m); m.renderOrder = 3; root.add(m); }
+  for (const [g, G] of Object.entries(shad)) {
+    const m = new THREE.InstancedMesh(G.geo, sh, 1); m.setMatrixAt(0, new THREE.Matrix4()); m.frustumCulled = false;
+    const holder = new THREE.Group(); holder.userData.pivot = G.pivot; pose(def, g, holder); holder.add(m);
+    m.renderOrder = 2; root.add(holder);
+  }
+  root.position.y = lift; s.add(root); root.updateMatrixWorld(true);
+  // the shadow shader reads modelMatrix · instanceMatrix: bake the holder transform into the instance matrix
+  root.traverse((o) => { if (o.isInstancedMesh) { const w = o.parent.matrixWorld.clone(); o.parent.remove(o); o.setMatrixAt(0, w); o.instanceMatrix.needsUpdate = true; s.add(o); } });
+  return { s, tris: { lod: sum(lodDef ? mergeModelGroups(THREE, lodDef(def)) : {}), proxy: sum(shad) } };
+}
+window.shadows = function (key, size = 360) {
+  const out = { tris: {} };
+  for (const proxy of [false, true]) {
+    const { s, tris } = sceneFor(key, proxy);
+    s.traverse((o) => { if (o.isMesh && !o.isInstancedMesh) o.visible = false; });   // the shadow alone, seen from straight above
+    const cam = new THREE.OrthographicCamera(-5.5, 5.5, 5.5, -5.5, 0.1, 100); cam.up.set(1, 0, 0);
+    cam.position.set(0.2, 30, 1.4); cam.lookAt(0.2, 0, 1.4); cam.updateProjectionMatrix();
+    r.setSize(size, size, false); r.setPixelRatio(1); r.clear(true, true, true); r.render(s, cam);
+    out[proxy ? 'proxy' : 'lod'] = r.domElement.toDataURL('image/png');
+    out.tris[proxy ? 'proxy' : 'lod'] = proxy ? tris.proxy : tris.lod;
+  }
+  return out;
+};
+window.ready = true;
+</script></body></html>
