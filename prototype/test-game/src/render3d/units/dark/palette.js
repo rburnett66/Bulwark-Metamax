@@ -9,15 +9,17 @@
 import { circlePoly } from '../arcane/palette.js';
 
 export const DARK_COLORS = Object.freeze({
-  void: 0x2b2731,    // void-black obsidian (the main body colour)
-  obsid: 0x312b38,   // shadow-purple stone: turrets, plates
-  ash: 0x5e5668,     // twilight ash: worn edges, frames
-  bone: 0xb9adb9,    // pale bone shields and masks
-  fungus: 0x9a86a8,  // lilac fungus caps
-  tendril: 0x58307f, // purple tendrils and vines
+  // owner 2026-10-21: "the dark energy units should be purple but the metallic finish makes them look silver" — the
+  // stone is a real deep purple now, and its finish matte (metal.js), so the sky no longer silvers it
+  void: 0x2c1a3c,    // void-purple obsidian (the main body colour)
+  obsid: 0x3c2454,   // shadow-purple stone: turrets, plates
+  ash: 0x5e4878,     // twilight ash-violet: worn edges, frames
+  bone: 0xbcaec8,    // pale lilac bone shields and masks
+  fungus: 0xa88cc4,  // lilac fungus caps
+  tendril: 0x5c2c8c, // purple tendrils and vines
   glowV: 0xa65cff,   // dark-energy violet (unlit)
-  hull: 0x2b2731, hull2: 0x312b38, panel: 0x2e2934,   // aliases so shared helpers stay on palette
-  dark: 0x1e1b22, black: 0x0f0d12, track: 0x26222b, metal: 0x6a6472, glass: 0x1b1824,
+  hull: 0x2c1a3c, hull2: 0x3c2454, panel: 0x341f48,   // aliases so shared helpers stay on palette
+  dark: 0x1f1429, black: 0x110b17, track: 0x241a2e, metal: 0x5f5070, glass: 0x1a1226,
   glow: 0xa65cff, glowB: 0xc58bff, amber: 0xffb340,
 });
 
