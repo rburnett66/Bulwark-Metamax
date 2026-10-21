@@ -48,6 +48,14 @@ export const UMETAL = Object.freeze({
   olive: [0.2, 0.7],
   net: [0.02, 0.95],   // canvas netting: all but matte (every lit key carries some metal — metal.test)
   rust: [0.45, 0.65],
+  // the ARCANE / ENERGY livery (arcane/palette.js): wrought iron and worn bronze, cloth and wood [MM-story_mvhnbx8n_4]
+  iron: [0.3, 0.6],     // low metal: blackened iron must stay black, not mirror the sky
+  iron2: [0.25, 0.65],
+  bronze: [0.6, 0.45],
+  bronze2: [0.5, 0.55],
+  wood: [0.02, 0.85],
+  cloth: [0.02, 0.9],
+  robe: [0.02, 0.9],
 });
 
 /** Keys drawn unlit (emissive): no metal, no lighting — they carry the glow read. */

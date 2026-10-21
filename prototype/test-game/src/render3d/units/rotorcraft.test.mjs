@@ -15,6 +15,8 @@ test('copter and Missiles (drone) classes resolve to their own models', () => {
   // and the ARTILLERY (Siege) faction its own [MM-story_mvhb6qd2_2]
   assert.equal(resolveUnitModel('ART-Copters', { artClass: 'copter', domain: 'Flyer' }).model, 'siege_gunship');
   assert.equal(resolveUnitModel('ART-Missiles', { artClass: 'missile', domain: 'Flyer' }).model, 'siege_missile');
+  assert.equal(resolveUnitModel('ARC-Copters', { artClass: 'copter', domain: 'Flyer' }).model, 'arcane_gunship');
+  assert.equal(resolveUnitModel('ARC-Missiles', { artClass: 'missile', domain: 'Flyer' }).model, 'arcane_missile');
   assert.equal(Object.keys(UNIT_MODELS.drone.spin).length, 4, 'four ducted fans');
   assert.deepEqual(Object.keys(UNIT_MODELS.copter.spin).sort(), ['spin', 'spin2'], 'main rotor + fenestron');
 });
