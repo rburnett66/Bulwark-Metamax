@@ -35,18 +35,24 @@ function topAt(x, z) {
 const STRIPE = [[0.15, 0.62], [-0.55, 1.15], [-1.2, 1.62]];
 const stripe = { t: 'loft', ax: 'z', m: 'glowM', mir: true, secs: STRIPE.map(([x, z]) => [z, [[x + 0.07, topAt(x + 0.07, z) + 0.006], [x + 0.07, topAt(x + 0.07, z) + 0.012], [x - 0.07, topAt(x - 0.07, z) + 0.012], [x - 0.07, topAt(x - 0.07, z) + 0.006]]]) };
 
-// ── four-tube missile pod on each wing, riding the skin near the trailing edge and jutting aft past it, noses forward ──
-const POD = { x0: -2.0, x1: -0.95, y: 0.0, z: 1.3 };
-POD.y = topAt(-1.2, POD.z) + 0.17;
+// ── four-tube missile pod on each wing, FACING FORWARD (owner 2026-10-20: "the weapon pods face forward not back like
+// engines"): a launcher box riding the wing, its front face a gunmetal frame of four tube mouths with the missile noses
+// showing, a blue band, and a closed, tapered fairing at the back ──
+const POD = { x0: -1.45, x1: -0.35, y: 0.0, z: 1.25 };
+POD.y = topAt(-0.9, POD.z) + 0.17;
 const TUBES = [[0.085, 0.09], [0.085, -0.09], [-0.085, 0.09], [-0.085, -0.09]];
 const pod = [
-  { t: 'box', s: [0.7, 0.1, 0.3], p: [-1.3, POD.y - 0.15, POD.z], m: 'gun', mir: true },   // saddle on the wing
-  { t: 'box', s: [POD.x1 - POD.x0 - 0.1, 0.36, 0.4], p: [(POD.x0 + POD.x1) / 2 - 0.05, POD.y, POD.z], m: 'lunar2', mir: true },
-  { t: 'box', s: [0.5, 0.37, 0.41], p: [POD.x0 + 0.3, POD.y, POD.z], m: 'fed', mir: true },
+  { t: 'box', s: [0.8, 0.1, 0.3], p: [-0.9, POD.y - 0.15, POD.z], m: 'gun', mir: true },                                             // saddle on the wing
+  { t: 'box', s: [POD.x1 - POD.x0, 0.36, 0.4], p: [(POD.x0 + POD.x1) / 2, POD.y, POD.z], m: 'lunar2', mir: true },                  // launcher box
+  { t: 'box', s: [0.16, 0.37, 0.41], p: [POD.x1 - 0.25, POD.y, POD.z], m: 'fed', mir: true },                                        // blue band
+  { t: 'box', s: [0.05, 0.4, 0.44], p: [POD.x1 + 0.02, POD.y, POD.z], m: 'gun', mir: true },                                         // front frame
+  { t: 'loft', ax: 'x', m: 'lunar2', mir: true, secs: [                                                                              // tapered tail fairing
+    [POD.x0, [[0.2, -0.18], [0.2, 0.18], [-0.2, 0.18], [-0.2, -0.18]].map(([z, y]) => [POD.z + z, POD.y + y])],
+    [POD.x0 - 0.35, [[0.08, -0.06], [0.08, 0.08], [-0.08, 0.08], [-0.08, -0.06]].map(([z, y]) => [POD.z + z, POD.y + y])]] },
   ...TUBES.flatMap(([dy, dz]) => [
-    { t: 'cyl', ax: 'x', r: 0.075, l: POD.x1 - POD.x0, seg: 8, p: [(POD.x0 + POD.x1) / 2, POD.y + dy, POD.z + dz], m: 'gun', mir: true },
-    { t: 'cyl', ax: 'x', r: [0, 0.06], l: 0.16, seg: 8, p: [POD.x1 + 0.08, POD.y + dy, POD.z + dz], m: 'lunar', mir: true },            // missile nose
-    { t: 'cyl', ax: 'x', r: 0.05, l: 0.02, seg: 8, p: [POD.x0 - 0.005, POD.y + dy, POD.z + dz], m: 'black', mir: true },              // tube mouth aft
+    { t: 'cyl', ax: 'x', r: 0.07, l: 0.03, seg: 8, p: [POD.x1 + 0.05, POD.y + dy, POD.z + dz], m: 'black', mir: true },              // tube mouth
+    { t: 'cyl', ax: 'x', r: [0, 0.055], l: 0.14, seg: 8, p: [POD.x1 + 0.11, POD.y + dy, POD.z + dz], m: 'lunar', mir: true },         // missile nose
+    { t: 'cyl', ax: 'x', r: [0, 0.02], l: 0.04, seg: 6, p: [POD.x1 + 0.17, POD.y + dy, POD.z + dz], m: 'glowM', mir: true, d: 1 },   // seeker tip
   ]),
 ];
 
@@ -64,8 +70,8 @@ export const SPACE_FIGHTER = { name: 'Shuttle fighter', unit: 'SPC-Planes', ref:
     { t: 'loft', ax: 'z', m: 'lunar', mir: true, secs: wingWhite },
     { t: 'loft', ax: 'z', m: 'black', mir: true, secs: wingEdge },
     stripe,
-    { t: 'cyl', ax: 'y', r: 0.2, l: 0.012, seg: 12, p: [-0.75, topAt(-0.75, 1.0) + 0.006, 1.0], m: 'fed', mir: true },
-    { t: 'cyl', ax: 'y', r: 0.1, l: 0.014, seg: 10, p: [-0.75, topAt(-0.75, 1.0) + 0.008, 1.0], m: 'lunar', mir: true },
+    { t: 'cyl', ax: 'y', r: 0.16, l: 0.012, seg: 12, p: [-0.95, topAt(-0.95, 0.72) + 0.006, 0.72], m: 'fed', mir: true },
+    { t: 'cyl', ax: 'y', r: 0.08, l: 0.014, seg: 10, p: [-0.95, topAt(-0.95, 0.72) + 0.008, 0.72], m: 'lunar', mir: true },
     // tall blue fin with a white root
     { t: 'ext', ax: 'z', poly: [[-0.6, 0.9], [-1.35, 2.25], [-1.7, 2.25], [-1.75, 0.9]], d: [-0.035, 0.035], m: 'fed' },
     { t: 'ext', ax: 'z', poly: [[-0.6, 0.9], [-0.75, 1.15], [-1.75, 1.15], [-1.75, 0.9]], d: [-0.04, 0.04], m: 'lunar' },
