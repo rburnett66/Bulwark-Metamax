@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Impact FX</title></head><body style="margin:0;background:#000">
+<!--
+  tools/unit-models/src/fx.html — a unit kill and a hit through the game's impact effects (impacts.js + impactsView.js),
+  frozen `t` seconds in, for one faction prefix [MM-story_mviqruvd_2]. window.fx(prefix, t, size) → PNG data URL.
+-->
+<script type="module">
+import * as THREE from '../../../vendor/three.module.js';
+import { createImpacts } from '../../../src/render3d/fx/impacts.js';
+import { createImpactsView } from '../../../src/render3d/fx/impactsView.js';
+import { createUnits3D } from '../../../src/render3d/units/models3d.js';
+
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, stencil: true });
+window.fx = function (prefix, t = 0.3, size = 520) {
+  const s = new THREE.Scene(); s.background = new THREE.Color(0x3d4434);
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshLambertMaterial({ color: 0x6b6a52 })); g.rotation.x = -Math.PI / 2; s.add(g);
+  s.add(new THREE.AmbientLight(0xffffff, 0.7)); const L = new THREE.DirectionalLight(0xffffff, 0.8); L.position.set(-3, 8, 5); s.add(L);
+  const units = createUnits3D(THREE, s, { sunDir: { x: -0.5, y: 0.7, z: -0.5 } });
+  const view = createImpactsView(THREE, s, { lodGroups: units.lodGroups() });
+  const fx = createImpacts({ seed: 7 });
+  const uid = prefix ? prefix + '-Tanks' : 'GND-Tanks';
+  const MAP = { cols: 32, rows: 32, base: { x: 16, y: 16 } };
+  const world = (tick, units = []) => ({ tick, units: new Map(units.map((u) => [u.id, u])), structures: new Map([[100, { id: 100, pos: { x: 4, y: 4 } }]]) });
+  const tv = { id: 1, unitId: uid, model: 'tank', scale: 1, x: 10.5, y: 0, z: 4.5, heading: 0, aim: 3 };
+  const hv = { id: 2, unitId: uid, model: 'tank', scale: 1, x: 12.6, y: 0, z: 6.2, heading: 0.5, aim: 3 };
+  fx.update(world(5, [{ id: 2, unitId: uid, pos: { x: 12, y: 5 } }]), MAP, [], 1 / 60, [tv, hv]);
+  fx.update(world(6, [{ id: 2, unitId: uid, pos: { x: 12, y: 5 } }]), MAP, [
+    { type: 'kill', tick: 6, entityId: 1, unitId: uid, radius: 0.3, pos: { x: 10, y: 4 } },
+    { type: 'damage', tick: 6, sourceId: 100, targetId: 2, targetKind: 'unit', amount: 1, killed: false, pos: { x: 12, y: 5 } }], 0, [hv]);
+  for (let i = 0; i < Math.round(t * 60); i++) {
+    const tick = 7 + i, ev = i % 12 === 0 ? [{ type: 'damage', tick, sourceId: 100, targetId: 2, targetKind: 'unit', amount: 1, killed: false, pos: { x: 12, y: 5 } }] : [];
+    fx.update(world(tick, [{ id: 2, unitId: uid, pos: { x: 12, y: 5 } }]), MAP, ev, 1 / 60, [hv]);
+  }
+  units.setUnits([{ ...hv, kick: 0, deploy: 1, bank: 0 }], 10, true, 0);
+  view.sync(fx, true);
+  const cam = new THREE.PerspectiveCamera(36, 1, 0.1, 200); cam.position.set(7.6, 4.6, 10.4); cam.lookAt(11.3, 0.5, 5.2);
+  view.update && view.update(cam);
+  r.setSize(size, size, false); r.setPixelRatio(1); r.clear(); r.render(s, cam);
+  return r.domElement.toDataURL('image/png');
+};
+window.ready = true;
+</script></body></html>

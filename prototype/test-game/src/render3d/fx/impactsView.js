@@ -14,6 +14,7 @@
  *
  * Sparks run white-hot → orange → red with age, their streak length from speed. THREE is passed in.
  */
+import { tintMix, FX_MIX } from './factionFx.js';
 import { createPBatch, createDBatch, createFBatch } from './particles.js';
 import { createFireAtlas, fireFrame } from './fireAtlas.js';
 import { K, D, DEFAULT_IMPACT_CAPS, SINK_DEPTH } from './impacts.js';
@@ -76,6 +77,8 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
     /** Fill every batch from the model. Returns { particles, decals, chunks, wrecks } drawn. */
     sync(model, liveShadows = true) {
       add.begin(); smoke.begin(); fire.begin();
+      // a faction-tinted particle (impacts.js `tc`/`tw`, factionFx.js) mixes its colour toward the faction's [MM-story_mviqruvd_2]
+      const T = (p, r, g, b) => (p.tw ? [r + (p.tc[0] - r) * p.tw, g + (p.tc[1] - g) * p.tw, b + (p.tc[2] - b) * p.tw] : [r, g, b]);
       for (const p of model.particles) {
         const u = p.t / p.life, f = 1 - u;
         switch (p.kind) {
@@ -86,16 +89,18 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
               add.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, p.size, Math.min(0.16, sp * 0.03), 0.45 + 0.55 * k, 0.78 - 0.26 * k, 1 - 0.85 * k, f * (1 - 0.25 * k));
               break;
             }
-            add.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, p.size, Math.min(0.22, sp * 0.035), 1, 0.55 + 0.45 * hot, 0.15 + 0.6 * hot * hot, f);
+            const [r, g, b] = T(p, 1, 0.55 + 0.45 * hot, 0.15 + 0.6 * hot * hot);
+            add.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, p.size, Math.min(0.22, sp * 0.035), r, g, b, f);
             break;
           }
-          case K.EMBER: add.push(p.x, p.y, p.z, 0, 0, 0, p.size * p.fl, 0, 1, 0.5, 0.15, f); break;
+          case K.EMBER: { const [r, g, b] = T(p, 1, 0.5, 0.15); add.push(p.x, p.y, p.z, 0, 0, 0, p.size * p.fl, 0, r, g, b, f); break; }
           case K.FLASH: if (p.shade === 1) add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, 0.55, 0.8, 1, f * f);   // repair arc: blue
-            else add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, 1, 0.92, 0.7, f * f);
+            else { const [r, g, b] = T(p, 1, 0.92, 0.7); add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, r, g, b, f * f); }
             break;
           case K.FIRE: {   // a flipbook flame on its own frame; tinted from hot to ember-red as it ages [MM-task_mvfqzjkm_7]
             const sz = p.size * Math.max(0.15, 1 + p.grow * u) * fire.scale;
-            fire.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, sz, 0, 1, 0.92 - 0.3 * u, 0.85 - 0.45 * u, f * FIRE_SPRITE.gain * p.fl, fireFrame(p.sd, p.t, fire.frames, fire.fps));
+            const [r, g, b] = T(p, 1, 0.92 - 0.3 * u, 0.85 - 0.45 * u);
+            fire.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, sz, 0, r, g, b, f * FIRE_SPRITE.gain * p.fl, fireFrame(p.sd, p.t, fire.frames, fire.fps));
             break;
           }
           case K.SMOKE: {
@@ -123,7 +128,8 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
         for (const w of model.wrecks) {
           if (!w.rest || w.t >= w.burn) continue;
           const k = Math.min(1, (w.burn - w.t) / 2.5) * (w.group === 'turret' ? 0.5 : 1);
-          decAdd.push(w.x, 0.035, w.z, 0.9 * w.fl * Math.max(0.5, k) * (w.k || 1), 0, D.POOL, 0, 1.0, 0.45, 0.15, 0.5 * k);
+          const c = tintMix([1.0, 0.45, 0.15], w.tc, FX_MIX.wreckLight);   // a faction's wreck lights the ground in its colour
+          decAdd.push(w.x, 0.035, w.z, 0.9 * w.fl * Math.max(0.5, k) * (w.k || 1), 0, D.POOL, 0, c[0], c[1], c[2], 0.5 * k);
         }
       }
       const nD = decDark.end() + decAdd.end();
@@ -132,7 +138,8 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
       for (const c of model.chunks) {
         if (ci >= caps.chunks) break;
         e.set(c.rx, c.ry, c.rz); q.setFromEuler(e);
-        m4.compose(v.set(c.x, c.y - c.sink * c.s, c.z), q, s.setScalar(c.s * (1 - c.sink * 0.6)));
+        const k = c.s * (1 - c.sink * 0.6);   // debris plates (impacts.js debris()) are non-uniform: sx/sy/sz
+        m4.compose(v.set(c.x, c.y - c.sink * c.s, c.z), q, s.set(k * (c.sx || 1), k * (c.sy || 1), k * (c.sz || 1)));
         chunkMesh.setMatrixAt(ci++, m4);
       }
       chunkMesh.count = ci; chunkMesh.visible = ci > 0;
