@@ -11,9 +11,13 @@ const fus = (rz, ry, cy) => [[0, cy - ry], [rz * 0.9, cy - ry * 0.55], [rz, cy -
 // ── the blended wing: spanwise sections (z) of a thick-rooted airfoil; the strake runs up the nose ──
 // xl / xt = leading / trailing edge, t = thickness, yc = chord line height
 const WING = [
-  { z: 0.22, xl: 2.05, xt: -1.8, t: 0.34, yc: 0.58 },   // root, buried in the body
-  { z: 0.5, xl: 1.55, xt: -1.8, t: 0.26, yc: 0.57 },    // strake: the nose breaking out
-  { z: 0.85, xl: 0.6, xt: -1.78, t: 0.18, yc: 0.56 },   // strake meets the wing
+  // owner 2026-10-20: "the fighter body should look a bit more swooped like the photo" — the strake's leading edge is a
+  // smooth ogee from the nose into the wing (more sections, curving in plan), and the chord line dips toward the nose
+  { z: 0.22, xl: 2.2, xt: -1.8, t: 0.34, yc: 0.55 },    // root, buried in the body
+  { z: 0.36, xl: 1.95, xt: -1.8, t: 0.3, yc: 0.555 },   // the nose breaking out
+  { z: 0.5, xl: 1.55, xt: -1.8, t: 0.26, yc: 0.56 },
+  { z: 0.66, xl: 1.0, xt: -1.79, t: 0.21, yc: 0.56 },
+  { z: 0.85, xl: 0.55, xt: -1.78, t: 0.17, yc: 0.56 },  // strake meets the wing
   { z: 2.05, xl: -0.95, xt: -1.55, t: 0.05, yc: 0.55 }, // tip
 ];
 const LE = 0.16;   // black leading-edge band, measured along the chord
@@ -60,12 +64,12 @@ export const SPACE_FIGHTER = { name: 'Shuttle fighter', unit: 'SPC-Planes', ref:
   parts: [
     // thick lifting-body fuselage: broad, rounded nose → cockpit hump → spine
     { t: 'loft', ax: 'x', m: 'lunar', secs: [
-      [2.5, fus(0.04, 0.03, 0.58)], [2.25, fus(0.24, 0.15, 0.6)], [1.8, fus(0.38, 0.24, 0.62)], [1.1, fus(0.42, 0.32, 0.66)],
-      [0.2, fus(0.4, 0.34, 0.68)], [-1.0, fus(0.38, 0.3, 0.68)], [-1.8, fus(0.32, 0.26, 0.68)]] },
-    // black nose cap and black anti-glare panel ahead of the cockpit
-    { t: 'loft', ax: 'x', m: 'black', secs: [[2.53, fus(0.035, 0.025, 0.58)], [2.3, fus(0.215, 0.135, 0.6)]] },
-    { t: 'loft', ax: 'x', m: 'black', secs: [[2.28, [[0.12, 0.72], [0.0, 0.755], [-0.12, 0.72]]], [1.72, [[0.2, 0.83], [0.0, 0.865], [-0.2, 0.83]]]] },
-    { t: 'loft', ax: 'x', m: 'glass', secs: [[1.75, fus(0.1, 0.03, 0.84)], [1.45, fus(0.22, 0.09, 0.88)], [1.05, fus(0.22, 0.09, 0.92)], [0.8, fus(0.08, 0.03, 0.93)]] },
+      // a swooping spine: low drooped nose, rising in one curve to the cockpit hump, easing down to the tail
+      [2.55, fus(0.03, 0.025, 0.5)], [2.35, fus(0.17, 0.11, 0.53)], [2.05, fus(0.3, 0.19, 0.57)], [1.6, fus(0.4, 0.27, 0.63)],
+      [1.0, fus(0.43, 0.35, 0.69)], [0.3, fus(0.42, 0.38, 0.72)], [-0.6, fus(0.39, 0.33, 0.71)], [-1.3, fus(0.35, 0.28, 0.69)], [-1.85, fus(0.31, 0.25, 0.68)]] },
+    // black nose cap
+    { t: 'loft', ax: 'x', m: 'black', secs: [[2.58, fus(0.03, 0.025, 0.5)], [2.38, fus(0.165, 0.11, 0.53)]] },
+    { t: 'loft', ax: 'x', m: 'glass', secs: [[1.72, fus(0.1, 0.03, 0.86)], [1.4, fus(0.23, 0.1, 0.92)], [1.0, fus(0.23, 0.1, 0.97)], [0.72, fus(0.08, 0.03, 0.99)]] },
     // the blended double-delta wings: white skin + black leading edge
     { t: 'loft', ax: 'z', m: 'lunar', mir: true, secs: wingWhite },
     { t: 'loft', ax: 'z', m: 'black', mir: true, secs: wingEdge },
@@ -81,6 +85,6 @@ export const SPACE_FIGHTER = { name: 'Shuttle fighter', unit: 'SPC-Planes', ref:
     { t: 'cyl', ax: 'x', r: 0.2, l: 0.02, seg: 10, p: [-2.01, 0.68, 0], m: 'glowB' },
     { t: 'cyl', ax: 'x', r: [0.1, 0.12], l: 0.16, seg: 8, p: [-1.88, 0.5, 0.3], m: 'gun', mir: true },
     { t: 'cyl', ax: 'x', r: 0.08, l: 0.02, seg: 8, p: [-1.97, 0.5, 0.3], m: 'glowB', mir: true },
-    ...dish(0.2, 0.98, 0.15, 0.16, { tilt: 30, yaw: 160, mast: 0.12 }),
+    ...dish(0.2, 1.06, 0.15, 0.16, { tilt: 30, yaw: 160, mast: 0.12 }),
   ],
   pivots: {}, hover: 1.4, views: { side: 'left', top: 'up' } };
