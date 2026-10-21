@@ -1,7 +1,7 @@
 // src/render3d/units/siege/fighter.js — ART-Planes: Cannon striker (owner concept tools/unit-models/ref/siege/siege-fighter.png)
 // [MM-story_mvhb6qd2_2]. A weathered swept-wing ground-attack jet in rust and dust-tan camo, built around a very long, fat
 // gun barrel that runs out of the nose and ends in a brass muzzle band — the gun dominates the front. Dark canopy, side
-// intakes, swept wings with tan camo patches, twin canted tails. Flies like the jet (hover, no turret).
+// intakes, canards, FORWARD-swept wings with tan camo patches, twin canted tails. Flies like the jet (hover, no turret).
 import { SIEGE_COLORS } from './palette.js';
 
 const sf = (yb, yt, w) => { const h = yt - yb, ym = yb + 0.45 * h; return [[0, yb], [w * 0.75, yb + 0.15 * h], [w, ym], [w * 0.65, yt - 0.1 * h], [0, yt], [-w * 0.65, yt - 0.1 * h], [-w, ym], [-w * 0.75, yb + 0.15 * h]]; };
@@ -28,15 +28,18 @@ const sParts = [
   // side intakes
   { t: 'ext', ax: 'x', poly: [[0.36, 0.3], [0.62, 0.3], [0.62, 0.62], [0.36, 0.66]], d: [-0.45, 0.6], m: 'olive', mir: true },
   { t: 'box', s: [0.02, 0.26, 0.22], p: [0.61, 0.47, 0.49], m: 'black', mir: true },
-  // swept main wings: tan camo, rust patches, olive leading edge
-  { t: 'ext', ax: 'y', poly: [[0.25, 0.3], [-0.95, 1.95], [-1.3, 1.95], [-1.45, 0.3]], d: [0.44, 0.5], m: 'net', mir: true },
-  { t: 'ext', ax: 'y', poly: [[0.25, 0.3], [-0.95, 1.95], [-1.02, 1.95], [0.12, 0.3]], d: [0.445, 0.51], m: 'olive', mir: true },
-  { t: 'ext', ax: 'y', poly: [[-0.55, 0.9], [-0.95, 1.45], [-1.2, 1.4], [-0.95, 0.85]], d: [0.5, 0.512], m: 'rust', mir: true },
-  { t: 'box', s: [0.25, 0.012, 0.25], p: [-0.5, 0.505, 0.65], r3: [0, 25, 0], m: 'camo', mir: true, d: 1 },
-  { t: 'ext', ax: 'y', poly: [[-0.1, 0.45], [-0.45, 0.95], [-0.7, 0.9], [-0.4, 0.42]], d: [0.5, 0.512], m: 'camo', mir: true },
-  // underwing bombs
-  { t: 'cyl', ax: 'x', r: 0.07, l: 0.55, seg: 6, p: [-0.65, 0.33, 1.1], m: 'olive', mir: true, d: 1 },
-  { t: 'cyl', ax: 'x', r: [0, 0.07], l: 0.12, seg: 6, p: [-0.32, 0.33, 1.1], m: 'hazard', mir: true, d: 1 },
+  // FORWARD-swept main wings (owner 2026-10-20): roots set well aft, tips swept ahead of them (Su-47 / X-29 style) —
+  // tan camo, olive leading edge, rust and camo patches
+  { t: 'ext', ax: 'y', poly: [[-0.35, 0.3], [0.55, 1.9], [0.25, 1.95], [-1.45, 0.3]], d: [0.44, 0.5], m: 'net', mir: true },
+  { t: 'ext', ax: 'y', poly: [[-0.35, 0.3], [0.55, 1.9], [0.47, 1.93], [-0.5, 0.3]], d: [0.445, 0.51], m: 'olive', mir: true },
+  { t: 'ext', ax: 'y', poly: [[-0.05, 1.0], [0.22, 1.45], [0.02, 1.47], [-0.32, 1.0]], d: [0.5, 0.512], m: 'rust', mir: true },
+  { t: 'box', s: [0.25, 0.012, 0.25], p: [-0.75, 0.505, 0.62], r3: [0, -25, 0], m: 'camo', mir: true, d: 1 },
+  { t: 'ext', ax: 'y', poly: [[-0.6, 0.45], [-0.32, 0.95], [-0.58, 0.97], [-0.88, 0.45]], d: [0.5, 0.512], m: 'camo', mir: true },
+  // small canards ahead of the wing roots
+  { t: 'ext', ax: 'y', poly: [[0.78, 0.36], [0.56, 0.82], [0.42, 0.82], [0.5, 0.36]], d: [0.6, 0.63], m: 'net', mir: true },
+  // underwing bombs, under the swept-forward panels
+  { t: 'cyl', ax: 'x', r: 0.07, l: 0.55, seg: 6, p: [-0.3, 0.33, 1.1], m: 'olive', mir: true, d: 1 },
+  { t: 'cyl', ax: 'x', r: [0, 0.07], l: 0.12, seg: 6, p: [0.03, 0.33, 1.1], m: 'hazard', mir: true, d: 1 },
   // tailplanes
   { t: 'ext', ax: 'y', poly: [[-1.4, 0.25], [-1.85, 0.95], [-2.05, 0.95], [-1.98, 0.25]], d: [0.44, 0.48], m: 'net', mir: true },
   // twin canted fins
