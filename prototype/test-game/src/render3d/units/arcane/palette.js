@@ -153,9 +153,9 @@ export const rider = (x, y, z) => [
 export function shrineBody(y0 = 0.55) {
   const C = [0.05, y0 + 0.62, 0], RX = 1.05, RY = 1.0, RZ = 0.84;
   return [
-    // base deck under the dome
-    { t: 'box', s: [2.2, 0.22, 1.5], p: [0.0, y0 + 0.08, 0], m: 'iron2' },
-    { t: 'box', s: [2.26, 0.06, 1.56], p: [0.0, y0 + 0.2, 0], m: 'bronze2' },
+    // (owner's updated Troops concept 2026-10-20: the dome sits straight down between the tracks — no flat deck) a dark
+    // skirt closes its underside
+    { t: 'cyl', ax: 'y', r: [RX * 0.92, RX * 0.8], l: 0.3, seg: 12, p: [C[0], y0 + 0.05, 0], m: 'dark' },
     // the dome (a squashed ellipsoid, flat underside hidden in the deck)
     { t: 'ell', s: [RX, RY, RZ], seg: 14, p: C, m: 'iron' },
     // bronze ribs: fore-aft meridian, cross meridian, belt
