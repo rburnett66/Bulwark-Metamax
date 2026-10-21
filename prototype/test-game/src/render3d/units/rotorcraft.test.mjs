@@ -19,6 +19,8 @@ test('copter and Missiles (drone) classes resolve to their own models', () => {
   assert.equal(resolveUnitModel('ARC-Missiles', { artClass: 'missile', domain: 'Flyer' }).model, 'arcane_missile');
   assert.equal(resolveUnitModel('SPC-Copters', { artClass: 'copter', domain: 'Flyer' }).model, 'space_gunship');
   assert.equal(resolveUnitModel('SPC-Missiles', { artClass: 'missile', domain: 'Flyer' }).model, 'space_missile');
+  assert.equal(resolveUnitModel('DRK-Copters', { artClass: 'copter', domain: 'Flyer' }).model, 'dark_gunship');
+  assert.equal(resolveUnitModel('DRK-Missiles', { artClass: 'missile', domain: 'Flyer' }).model, 'dark_missile');
   assert.equal(Object.keys(UNIT_MODELS.drone.spin).length, 4, 'four ducted fans');
   assert.deepEqual(Object.keys(UNIT_MODELS.copter.spin).sort(), ['spin', 'spin2'], 'main rotor + fenestron');
 });
