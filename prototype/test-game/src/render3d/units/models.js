@@ -6,6 +6,7 @@ import { track } from './prims.js';
 import { SYSTEM_MODELS, SYSTEM_COLORS } from '../structures/systemModels.js';
 import { AIR_MODELS } from './air/index.js';
 import { SIEGE_MODELS } from './siege/index.js';
+import { ARCANE_MODELS } from './arcane/index.js';
 
 const sec = (P, sx, sz, dx = 0, dz = 0) => P.map(([x, z]) => [x * sx + dx, z * sz + dz]);
 const M = {};
@@ -429,5 +430,7 @@ const bladeY = (c, L, a, w, h, m, g) => ({ t: 'box', s: [L, h, w], p: [c[0] + Ma
 Object.assign(M, AIR_MODELS);
 // the ARTILLERY (Siege) faction's own models (siege/*.js) [MM-story_mvhb6qd2_2]
 Object.assign(M, SIEGE_MODELS);
+// the ARCANE / ENERGY faction's own models (arcane/*.js) [MM-story_mvhnbx8n_4]
+Object.assign(M, ARCANE_MODELS);
 
 export const UNIT_MODELS = M;

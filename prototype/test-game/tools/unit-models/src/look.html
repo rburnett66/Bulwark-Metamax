@@ -24,6 +24,8 @@ function sceneFor(key, deploy = 1) {
     const m = new THREE.Mesh(G.geo, mat); m.position.copy(G.pivot);
     const D = g.startsWith('deploy') && def.deploy && def.deploy.groups[g];   // stabilizer legs at `deploy` (1 planted, 0 stowed)
     if (D) m.quaternion.setFromAxisAngle(new THREE.Vector3(...D.axis), (1 - deploy) * D.angle * Math.PI / 180);
+    // the barrel at its resting pitch, as the game holds it (mortars and organ pipes rest raised) [MM-story_mvhnbx8n_4]
+    if (g === 'barrel' && def.barrel && def.barrel.rest) m.rotation.z = def.barrel.rest * Math.PI / 180;
     root.add(m);
   }
   s.add(root); root.updateMatrixWorld(true);
