@@ -26,13 +26,16 @@ export function classicUnitsParts() {
   const system = toClassic(fs.readFileSync(path.join(UNITS, '../structures/systemModels.js'), 'utf8'));
   // the AIR faction's model files (air/*.js) ride in one scope too, binding AIR_MODELS for models.js [MM-story_mvh8woji_1]
   // each file gets its own scope (their local helpers may share names) and hands out only what it exports
-  const air = ['palette', 'troops', 'scout', 'tank', 'artillery', 'heavy', 'gunship', 'fighter', 'missile', 'bomber', 'index'].map((f) => {
-    const src = fs.readFileSync(path.join(UNITS, 'air', f + '.js'), 'utf8');
+  // faction model folders (air/, siege/, …): palette first, index last; each file in its own scope [MM-story_mvhb6qd2_2]
+  const folder = (dir) => { const fl = fs.readdirSync(path.join(UNITS, dir)).filter((f) => f.endsWith('.js') && !/\.test\./.test(f)).map((f) => f.slice(0, -3));
+    return ['palette', ...fl.filter((f) => f !== 'palette' && f !== 'index').sort(), 'index'].map((f) => dir + '/' + f); };
+  const air = [...folder('air'), ...folder('siege')].map((f) => {
+    const src = fs.readFileSync(path.join(UNITS, f + '.js'), 'utf8');
     const names = [...src.matchAll(/^export\s+(?:const|let|function|class)\s+(\w+)/gm)].map((m) => m[1]).join(', ');
     return 'var { ' + names + ' } = (function () {\n' + toClassic(src) + '\nreturn { ' + names + ' };\n})();';
   }).join('\n');
   const models = 'var { SYSTEM_MODELS, SYSTEM_COLORS } = (function () {\n' + system + '\nreturn { SYSTEM_MODELS, SYSTEM_COLORS };\n})();\n'
-    + 'var { AIR_MODELS } = (function () {\n' + air + '\nreturn { AIR_MODELS };\n})();\n'
+    + 'var { AIR_MODELS, SIEGE_MODELS } = (function () {\n' + air + '\nreturn { AIR_MODELS, SIEGE_MODELS };\n})();\n'
     + toClassic(fs.readFileSync(path.join(UNITS, 'models.js'), 'utf8'));
   return { prims, models };
 }

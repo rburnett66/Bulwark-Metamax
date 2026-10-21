@@ -12,7 +12,9 @@
 
 export const MODEL_KEYS = Object.freeze(['tank', 'buggy', 'beetle', 'jet', 'tiger', 'copter', 'drone', 'miner',
   // the AIR faction's own models (air/*.js) [MM-story_mvh8woji_1]
-  'air_troops', 'air_scout', 'air_tank', 'air_artillery', 'air_heavy', 'air_gunship', 'air_fighter', 'air_missile', 'air_bomber']);
+  'air_troops', 'air_scout', 'air_tank', 'air_artillery', 'air_heavy', 'air_gunship', 'air_fighter', 'air_missile', 'air_bomber',
+  // the ARTILLERY (Siege) faction's own models (siege/*.js) [MM-story_mvhb6qd2_2]
+  'siege_troops', 'siege_scout', 'siege_tank', 'siege_artillery', 'siege_heavy', 'siege_gunship', 'siege_fighter', 'siege_missile']);
 
 /** artClass → { model, scale, exact }. scale multiplies UNIT_SCALE (1 = a hull ≈ 1.08 cells). */
 export const ART_CLASS_MODELS = Object.freeze({
@@ -40,6 +42,15 @@ export const UNIT_ID_MODELS = Object.freeze({
   'AIR-Planes':      { model: 'air_fighter',   scale: 1.0,  exact: true },
   'AIR-Missiles':    { model: 'air_missile',   scale: 0.55, exact: true },
   'AIR-HeavyBomber': { model: 'air_bomber',    scale: 1.6,  exact: true },
+  // ARTILLERY (Siege) faction: its own models from the owner's concept renders [MM-story_mvhb6qd2_2]
+  'ART-Troops':      { model: 'siege_troops',    scale: 0.6,  exact: true },
+  'ART-Trucks':      { model: 'siege_scout',     scale: 0.8,  exact: true },
+  'ART-Tanks':       { model: 'siege_tank',      scale: 1.0,  exact: true },
+  'ART-Artillery':   { model: 'siege_artillery', scale: 1.0,  exact: true },
+  'ART-HeavyTanks':  { model: 'siege_heavy',     scale: 1.15, exact: true },
+  'ART-Copters':     { model: 'siege_gunship',   scale: 0.85, exact: true },
+  'ART-Planes':      { model: 'siege_fighter',   scale: 1.0,  exact: true },
+  'ART-Missiles':    { model: 'siege_missile',   scale: 0.55, exact: true },
 });
 
 /** The id a live sim unit resolves its model by: its artKey when that names a model here (harvesters are spawned as
