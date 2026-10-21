@@ -16,7 +16,9 @@ export const MODEL_KEYS = Object.freeze(['tank', 'buggy', 'beetle', 'jet', 'tige
   // the ARTILLERY (Siege) faction's own models (siege/*.js) [MM-story_mvhb6qd2_2]
   'siege_troops', 'siege_scout', 'siege_tank', 'siege_artillery', 'siege_heavy', 'siege_gunship', 'siege_fighter', 'siege_missile',
   // the ARCANE / ENERGY faction's own models (arcane/*.js) [MM-story_mvhnbx8n_4]
-  'arcane_troops', 'arcane_scout', 'arcane_tank', 'arcane_artillery', 'arcane_heavy', 'arcane_gunship', 'arcane_fighter', 'arcane_missile']);
+  'arcane_troops', 'arcane_scout', 'arcane_tank', 'arcane_artillery', 'arcane_heavy', 'arcane_gunship', 'arcane_fighter', 'arcane_missile',
+  // the SPACE TECH faction's own models (space/*.js) [MM-story_mvho2d6s_5]
+  'space_troops', 'space_scout', 'space_tank', 'space_artillery', 'space_heavy', 'space_gunship', 'space_fighter', 'space_missile']);
 
 /** artClass → { model, scale, exact }. scale multiplies UNIT_SCALE (1 = a hull ≈ 1.08 cells). */
 export const ART_CLASS_MODELS = Object.freeze({
@@ -62,6 +64,15 @@ export const UNIT_ID_MODELS = Object.freeze({
   'ARC-Copters':     { model: 'arcane_gunship',  scale: 0.85, exact: true },
   'ARC-Planes':      { model: 'arcane_fighter',  scale: 1.0,  exact: true },
   'ARC-Missiles':    { model: 'arcane_missile',  scale: 0.55, exact: true },
+  // SPACE TECH: the owner's concepts (space/*.js) [MM-story_mvho2d6s_5]
+  'SPC-Troops':      { model: 'space_troops',    scale: 0.6,  exact: true },
+  'SPC-Trucks':      { model: 'space_scout',     scale: 0.8,  exact: true },
+  'SPC-Tanks':       { model: 'space_tank',      scale: 1.0,  exact: true },
+  'SPC-Artillery':   { model: 'space_artillery', scale: 1.0,  exact: true },
+  'SPC-HeavyTanks':  { model: 'space_heavy',     scale: 1.15, exact: true },
+  'SPC-Copters':     { model: 'space_gunship',   scale: 0.85, exact: true },
+  'SPC-Planes':      { model: 'space_fighter',   scale: 1.0,  exact: true },
+  'SPC-Missiles':    { model: 'space_missile',   scale: 0.55, exact: true },
 });
 
 /** The id a live sim unit resolves its model by: its artKey when that names a model here (harvesters are spawned as

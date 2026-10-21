@@ -7,6 +7,7 @@ import { SYSTEM_MODELS, SYSTEM_COLORS } from '../structures/systemModels.js';
 import { AIR_MODELS } from './air/index.js';
 import { SIEGE_MODELS } from './siege/index.js';
 import { ARCANE_MODELS } from './arcane/index.js';
+import { SPACE_MODELS } from './space/index.js';
 
 const sec = (P, sx, sz, dx = 0, dz = 0) => P.map(([x, z]) => [x * sx + dx, z * sz + dz]);
 const M = {};
@@ -432,5 +433,7 @@ Object.assign(M, AIR_MODELS);
 Object.assign(M, SIEGE_MODELS);
 // the ARCANE / ENERGY faction's own models (arcane/*.js) [MM-story_mvhnbx8n_4]
 Object.assign(M, ARCANE_MODELS);
+// the SPACE TECH faction's own models (space/*.js) [MM-story_mvho2d6s_5]
+Object.assign(M, SPACE_MODELS);
 
 export const UNIT_MODELS = M;
