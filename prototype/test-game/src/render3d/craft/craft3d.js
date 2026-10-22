@@ -492,6 +492,12 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
     /** A ramp point in WORLD units (cells): side +1 = the +Z hatch, −1 = the −Z hatch; local {z, y} from landing.js. */
     /** World y of the hull's top under world point (x, z) in the current pose; 0 where the craft isn't. Hull meshes
      *  only (no plumes, dust or shield) — corner-slot towers mount on it (structures/baseMounts.js) [MM-task_mvj0k7v3_k]. */
+    /** Scorch the hull: 0 = as built, 1 = burnt out (the Kill Camera's base blast) [MM-task_mvjng96y_b]. */
+    setChar(k) {
+      const c = Math.max(0, Math.min(1, k || 0));
+      mat.material.color.setScalar(1 - 0.68 * c);
+      api.charred = c;
+    },
     topAt(x, z) {
       root.updateMatrixWorld(true);
       const rc = new THREE.Raycaster(new THREE.Vector3(x, 100, z), new THREE.Vector3(0, -1, 0));
