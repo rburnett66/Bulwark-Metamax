@@ -94,6 +94,8 @@ import { createUnloads, createUnloadView } from './overlays/unloadFx.js';
 import { createResources3D } from './resources/resources3d.js';
 import { getUnitDef, getStructureDef } from '../data/tables.js';
 import { emitMuzzleSmoke } from './fx/muzzleSmoke.js';
+import { createBaseBlast } from './fx/baseBlast.js';
+import { killCamPose, killCamFit } from './killCamView.js';
 
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
 
@@ -230,7 +232,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, wakes: null, wakesView: null, wading: null, flashGlows: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, wakes: null, wakesView: null, wading: null, killCam: null, baseBlast: null, flashGlows: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map), viewInsets: typeof opts.viewInsets === 'function' ? opts.viewInsets : null,
@@ -580,6 +582,13 @@ export function renderFrame(r, state, ui, events, dt) {
   // LC: while the craft lands the view frames it, then eases back to the player's camera (craft/introCamera.js)
   const landingLive = r.craft && r.landing && !r.landing.done && !r.landingHeld;
   r.viewCam = landingLive ? introCamera(r.landing.pose(), r.cam, r.map.base) : null;   // picking uses what is on screen
+  if (r.killCam) {   // Kill Camera: pinned between the base and its killer [MM-task_mvjng96y_b]
+    r.killCam.t += Math.max(0, Math.min(0.1, dt || 0));
+    const kc = r.killCam, w = r._w || 16, h = r._h || 9;
+    const key = w + 'x' + h + ':' + (kc.killer ? kc.killer.x.toFixed(2) + ',' + kc.killer.y.toFixed(2) : '-');
+    if (kc.fitKey !== key) { kc.fitKey = key; kc.fit = killCamFit({ ...kc, w, h }); }
+    r.viewCam = killCamPose({ ...kc, w, h });
+  }
   const pose = cameraPose(r.viewCam || r.cam);
   r.camera.position.set(pose.position.x, pose.position.y, pose.position.z);
   r.camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
@@ -661,6 +670,10 @@ export function renderFrame(r, state, ui, events, dt) {
   r.stats.rockets = r.rocketShots.sync(r.fx);
   r.stats.flak = r.flakShots.sync(r.fx);
   r.impacts.update(state, r.map, events, dt, views, { resolve: r.resolveModel });
+  if (r.baseBlast) {   // the base explodes and burns (Kill Camera) [MM-task_mvjng96y_b]
+    r.baseBlast.step(dt, r.impacts);
+    if (r.craft && r.craft.setChar) r.craft.setChar(r.baseBlast.char);
+  }
   // health bars + "$N" pop-ups (overlays/) [MM-task_mvbry87f_q] [MM-task_mvbyf6t8_z]
   r.healthBars.update(state, views, dt, { baseCell: r.map.base, viewH: r._h || 0, mounts: r.mounts });
   r.gold.feed(events, r.map); r.gold.step(Math.max(0, Math.min(0.1, dt || 0)));
@@ -719,6 +732,7 @@ export function armLanding(r, opts = {}) {
   r.landing = createLanding({ fromDeg: opts.fromDeg != null ? opts.fromDeg : 180 });
   r.landingHeld = true; r.landingHandedOff = false;
   r.craft.setCastShadow(false); r.craft.apply(r.landing.pose()); r.craft.setVisible(false); r.craft.clearFx();
+  r.baseBlast = null; if (r.craft.setChar) r.craft.setChar(0);   // a fresh board: the base is whole again
   r.lights.invalidateShadows();
 }
 /** Release a held landing — the craft flies in now (the dialogs are closed and the field is on screen). */
@@ -735,6 +749,7 @@ export function landingPhase(r) {
 
 /** Jump the landing to its end (a tap-to-skip, or a test). */
 export function skipLanding(r) {
+  if (r && r.craft && r.craft.setChar) { r.baseBlast = null; r.craft.setChar(0); }   // a replay's base is whole again
   if (!r || !r.landing || !r.craft) return;
   r.landing.skip();
   r.landingHeld = false; r.craft.setVisible(true); r.craft.clearFx();
@@ -766,6 +781,26 @@ export function eventToCell(r, ev, ui) {
 export function cellToScreen(r, cell) {
   if (!r || r.destroyed) return null;
   return groundCellToScreen(r.viewCam || r.cam, r.canvas.clientWidth, r.canvas.clientHeight, cell);
+}
+
+/**
+ * Kill Camera [MM-story_mvjng4fq_9]. setKillCam(r, { base, killer, replay }) pins the view between the base and its
+ * killer (cells; killer may be null) and arcs round them over the `replay` seconds before the base falls; setKillCam(r, null) hands the camera back.
+ * setKillCamKiller updates where the killer is (it can die mid-replay); blowUpBase starts the base's blast and fire.
+ */
+export function setKillCam(r, kc) {
+  if (!r || r.destroyed) return;
+  if (!kc) { r.killCam = null; r.baseBlast = null; r._fitKey = null; return; }
+  r.killCam = { base: kc.base, killer: kc.killer || null, replay: kc.replay || 10, t: 0, yaw0: (r.cam && r.cam.yaw) || 0 };
+  r.baseBlast = null;
+  if (r.craft && r.craft.setChar) r.craft.setChar(0);   // the replay starts before the base fell
+  r.camGlide = null;
+}
+export function setKillCamKiller(r, killer) { if (r && r.killCam && killer) r.killCam.killer = killer; }
+export function blowUpBase(r) {
+  if (!r || r.destroyed || !r.map || !r.map.base) return;
+  const top = r.craft && r.craft.topAt ? (x, z) => r.craft.topAt(x, z) : null;
+  r.baseBlast = createBaseBlast({ x: cellToWorld(r.map.base.x), z: cellToWorld(r.map.base.y), seed: ((r.map.seed | 0) || 1) + 101, topAt: top });
 }
 
 export function destroyRenderer(r) {

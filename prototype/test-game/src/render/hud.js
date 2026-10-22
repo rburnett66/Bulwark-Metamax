@@ -124,6 +124,22 @@ const CSS = `
 .bw-wavebanner { position:absolute; left:50%; top:34%; transform:translate(-50%,-50%); text-align:center;
   pointer-events:none; opacity:0; transition:opacity .25s ease; z-index:30; white-space:nowrap; }
 .bw-wavebanner.bw-show { opacity:1; }
+.bw-killcam { position:absolute; left:0; top:0; right:0; bottom:0; z-index:150; display:none; pointer-events:auto;
+  cursor:pointer; opacity:0; transition:opacity .35s ease; }
+.bw-killcam.bw-show { display:block; }
+.bw-killcam.bw-on { opacity:1; }
+.bw-hud.bw-kc-active > *:not(.bw-killcam) { visibility:hidden !important; }   /* a clean shot: no HUD under the Kill Camera */
+.bw-killcam .bw-kc-bar { position:absolute; left:0; right:0; height:9%; background:#000; }
+.bw-killcam .bw-kc-top { top:0; } .bw-killcam .bw-kc-bot { bottom:0; }
+.bw-killcam .bw-kc-head { position:absolute; left:0; right:0; top:9%; padding-top:10px; text-align:center;
+  background:linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,0)); padding-bottom:22px; }
+.bw-killcam .bw-kc-title { font-size:42px; font-weight:900; letter-spacing:6px; color:#ff4a2e; text-transform:uppercase;
+  text-shadow:0 3px 12px #000, 0 0 28px rgba(255,70,30,.7); }
+.bw-killcam .bw-kc-sub { font-size:13px; font-weight:700; letter-spacing:4px; color:#ffd6c8; margin-top:4px;
+  text-shadow:0 2px 6px #000; }
+.bw-killcam .bw-kc-skip { position:absolute; right:16px; bottom:calc(9% + 10px); font-size:12px; letter-spacing:3px;
+  color:rgba(255,255,255,.7); text-shadow:0 1px 4px #000; }
+@media (max-width:600px) { .bw-killcam .bw-kc-title { font-size:30px; letter-spacing:4px; } }
 .bw-starbanner { position:absolute; top:34%; left:50%; transform:translate(-50%,-50%); text-align:center;
   opacity:0; transition:opacity .25s; pointer-events:none; z-index:55; }
 .bw-starbanner .stars { font-size:44px; letter-spacing:8px; color:#f2c869;
@@ -585,6 +601,17 @@ export function createHud(mountEl, callbacks) {
   waveBanner.appendChild(waveBannerSub);
   root.appendChild(waveBanner);
 
+  // ---- Kill Camera overlay: FINAL ATTACK header + letterbox; a tap skips [MM-task_mvjng96y_b] ----
+  const killCam = el(doc, 'div', 'bw-killcam');
+  killCam.appendChild(el(doc, 'div', 'bw-kc-bar bw-kc-top'));
+  killCam.appendChild(el(doc, 'div', 'bw-kc-bar bw-kc-bot'));
+  const kcHead = el(doc, 'div', 'bw-kc-head');
+  kcHead.appendChild(el(doc, 'div', 'bw-kc-title', 'Final Attack'));
+  kcHead.appendChild(el(doc, 'div', 'bw-kc-sub', 'REPLAY'));
+  killCam.appendChild(kcHead);
+  killCam.appendChild(el(doc, 'div', 'bw-kc-skip', 'TAP TO SKIP ▸'));
+  root.appendChild(killCam);
+
   // ---- replay-mode indicator --------------------------------------------
   const replayBar = el(doc, 'div', 'bw-replaybar', '');
   root.appendChild(replayBar);
@@ -664,6 +691,21 @@ export function createHud(mountEl, callbacks) {
     hideResult() {
       resultEl.classList.remove('bw-show');
       resultEl.style.display = 'none';
+    },
+    killCam,
+    /** Show / hide the Kill Camera overlay; onSkip runs on a tap while it is up. */
+    setKillCam(on, onSkip) {
+      if (on) {
+        killCam.onpointerdown = (e) => { if (e && e.stopPropagation) e.stopPropagation(); if (onSkip) onSkip(); };
+        killCam.classList.add('bw-show');
+        root.classList.add('bw-kc-active');
+        const win = doc.defaultView;
+        if (win && win.requestAnimationFrame) win.requestAnimationFrame(() => killCam.classList.add('bw-on')); else killCam.classList.add('bw-on');
+      } else {
+        killCam.onpointerdown = null;
+        killCam.classList.remove('bw-on', 'bw-show');
+        root.classList.remove('bw-kc-active');
+      }
     },
     setReplay(active, label) {
       if (!replayBar) return;

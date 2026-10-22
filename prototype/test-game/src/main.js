@@ -14,6 +14,7 @@ import { setPlaying } from './fullscreen.js';
 import './data/factions.js';
 const REG = globalThis.BulwarkFactions;
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay, replayOpts } from './sim/replay.js';
+import { createKillCamRecorder, createKillCamPlayer } from './killcam/killCam.js';
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
 import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
@@ -220,6 +221,10 @@ export function boot(mountEl, seed) {
   let lastReplayBoard = null;
   let replayBoot = false;      // selectMap is loading a board FOR a replay: no landing, no intro cards [MM-task_mvgyb5ma_1]
   let ended = false;          // sim.result reached; stop stepping
+  // Kill Camera [MM-story_mvjng4fq_9]: the recorder keeps the last seconds of the battle; at defeat the player re-runs
+  // them (3D view only) under the FINAL ATTACK header, then the base burns and the defeat screen follows
+  const killRec = createKillCamRecorder({ fixedDt: FIXED_DT });
+  let killCam = null;          // { player, onDone } while the Kill Camera runs
   let interlude = false;      // between-wave FREEZE: dialog speaker held on screen, sim/time/regrowth
   let waveEndSeq = 0;   // bumps cancel a waiting wave-end sequence [MM-story_mvempsla_q]
                               // all paused until the player taps START NEXT WAVE (play mode only)
@@ -267,6 +272,35 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   // Command submission: validates via sim core, records accepted commands.
   // ---------------------------------------------------------------------
+  /** Start the Kill Camera at a defeat. False when it can't run (2D view, nothing recorded) — show the result now. */
+  function startKillCam(onDone) {
+    if (!renderer3d || !render3dMod || !render3dMod.setKillCam) return false;
+    let plan = null;
+    try { plan = killRec.plan(sim); } catch (e) { console.warn('[killcam] no plan', e); }
+    if (!plan || !plan.base) return false;
+    const player = createKillCamPlayer(plan, { stepSim, applyCommand, FIXED_DT });
+    killCam = { player, onDone };
+    render3dMod.setKillCam(renderer3d, { base: plan.base, killer: plan.killerPos, replay: (plan.endTick - plan.start.tick) * FIXED_DT });
+    if (hud && hud.setKillCam) hud.setKillCam(true, () => endKillCam());
+    comm.dismiss();
+    return true;
+  }
+  /** Finish (or skip) the Kill Camera: hand the camera back, then the defeat screen. */
+  function endKillCam(silent) {
+    if (!killCam) return;
+    const k = killCam;
+    killCam = null;
+    if (renderer3d && render3dMod && render3dMod.setKillCam) render3dMod.setKillCam(renderer3d, null);
+    if (hud && hud.setKillCam) hud.setKillCam(false);
+    if (!silent && k.onDone) k.onDone();
+  }
+  /** A fresh battle (restart / replay): forget the old one, cancel a running Kill Camera, snapshot the start. */
+  function resetKillCam() {
+    endKillCam(true);
+    killRec.reset();
+    killRec.after(sim, null);
+  }
+
   function submit(cmd) {
     if (mode === 'replay') {
       flashMessage(hud, 'replay mode — input disabled (Restart to play)');
@@ -282,6 +316,7 @@ export function boot(mountEl, seed) {
     const res = applyCommand(sim, cmd);
     if (res.ok) {
       recordCommand(log, sim.tick, cmd);
+      killRec.command(sim.tick, cmd);
     } else if (res.reason) {
       flashMessage(hud, res.reason);
     }
@@ -318,6 +353,7 @@ export function boot(mountEl, seed) {
     replayIdx = 0;
     activeReplayLog = null;
     ended = false;
+    resetKillCam();
     interlude = true;                                // every fresh board opens on the tap-to-start overlay
     // selectMap's intro (how to play → landing → contract → wave intel → speaker) shows the prompt at its end
     if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(!suppressPreDialog, 'TAP TO START');
@@ -606,6 +642,7 @@ export function boot(mountEl, seed) {
     replayQueue = (replayLog.commands || []).slice().sort((a, b) => a.tick - b.tick);
     replayIdx = 0;
     ended = false;
+    resetKillCam();
     accumulator = 0;
     pendingEvents = [];
     inputHandle = makeInput();
@@ -1009,11 +1046,12 @@ export function boot(mountEl, seed) {
       while (accumulator >= FIXED_DT && !ended) {
         if (mode === 'replay') {
           while (replayIdx < replayQueue.length && replayQueue[replayIdx].tick <= sim.tick) {
-            applyCommand(sim, replayQueue[replayIdx].cmd);
+            if (applyCommand(sim, replayQueue[replayIdx].cmd).ok) killRec.command(sim.tick, replayQueue[replayIdx].cmd);
             replayIdx++;
           }
         }
         const evs = stepSim(sim, FIXED_DT);
+        killRec.after(sim, evs);   // Kill Camera memory — outside the tick path [MM-task_mvjng7sh_a]
         if (evs && evs.length) {
           for (let i = 0; i < evs.length; i++) {
             pendingEvents.push(evs[i]);
@@ -1072,7 +1110,6 @@ export function boot(mountEl, seed) {
               'expected:', activeReplayLog.finalHash,
               'match:', h === activeReplayLog.finalHash);
           }
-          musicSting(sim.result === 'win' ? 'win' : 'lose');
           // campaign advance (owner): victory offers the next, bigger map (1→9; none after 9 or on classic)
           let nextMap = null;
           if (sim.result === 'win' && currentMapId > 0 && currentMapId < 9) {
@@ -1085,33 +1122,42 @@ export function boot(mountEl, seed) {
           // the SECONDARY's end-of-match reward faction (captured before runContract is cleared)
           const rewardFaction = (runContract && runContract.giver) || lastWaveFaction;
           const fiveStar = Array.isArray(sim.waveStars) && sim.waveStars.some((w) => w.stars === 5);
+          let contractMsg = null;
           // judge the ACCEPTED contract from the hauled quest crystals (red + green units)
           if (runContract) {
             const hauled = sim.mapScore ? (sim.mapScore.questRed || 0) + (sim.mapScore.questGreen || 0) : 0;
             const verdict = judgeContract(runContract, hauled, sim.result === 'win');
-            flashMessage(hud, verdict.outcome === 'FULFILLED'
+            contractMsg = (verdict.outcome === 'FULFILLED'
               ? 'CONTRACT FULFILLED — +' + verdict.gain + ' ' + runContract.giver + ' loyalty' +
                 (verdict.alignShift ? (verdict.alignShift > 0 ? ' · your reputation brightens' : ' · your reputation darkens') : '')
               : 'CONTRACT BROKEN — ' + (verdict.gain >= 0 ? '+' : '') + verdict.gain + ' ' + runContract.giver + ' loyalty');
             runContract = null;
           }
-          showResult(hud, sim.result, sim.finalScore, nextMap, sim.waveStars);
-          // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
-          // wave star score (banner) -> final map score (overlay) -> PRIMARY dialog -> then, as
-          // part of the REWARD FLOW, the SECONDARY grants the star bonus (5-star wave this battle).
-          if (lastWaveFaction) {
-            const call = sim.result === 'win'
-              ? winCall(voicePacks, lastWaveFaction, sim.waves ? sim.waves.current : 0, currentSeed, commOutcome(), true)
-              : defeatCall(voicePacks, lastWaveFaction, currentSeed);
-            setTimeout(async () => {
-              // centre stage like every other held dialog (owner 2026-10-18) [MM-task_mveuityu_d]
-              await comm.showCall({ ...call, hold: true, center: true });
-              if (sim.result === 'win' && fiveStar && voicePacks) {
-                const grant = tipsCall(voicePacks, rewardFaction, (currentSeed ^ 0x51ab), 'reward');
-                if (grant) comm.showCall({ ...grant, hold: true, center: true });
-              }
-            }, 1500);
-          }
+          // what the player sees at the end — after the Kill Camera on a defeat [MM-task_mvjng96y_b]
+          const S = sim;
+          const presentResult = () => {
+            if (S !== sim) return;   // restarted during the Kill Camera
+            musicSting(S.result === 'win' ? 'win' : 'lose');
+            if (contractMsg) flashMessage(hud, contractMsg);
+            showResult(hud, S.result, S.finalScore, nextMap, S.waveStars);
+            // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
+            // wave star score (banner) -> final map score (overlay) -> PRIMARY dialog -> then, as
+            // part of the REWARD FLOW, the SECONDARY grants the star bonus (5-star wave this battle).
+            if (lastWaveFaction) {
+              const call = S.result === 'win'
+                ? winCall(voicePacks, lastWaveFaction, S.waves ? S.waves.current : 0, currentSeed, commOutcome(), true)
+                : defeatCall(voicePacks, lastWaveFaction, currentSeed);
+              setTimeout(async () => {
+                // centre stage like every other held dialog (owner 2026-10-18) [MM-task_mveuityu_d]
+                await comm.showCall({ ...call, hold: true, center: true });
+                if (S.result === 'win' && fiveStar && voicePacks) {
+                  const grant = tipsCall(voicePacks, rewardFaction, (currentSeed ^ 0x51ab), 'reward');
+                  if (grant) comm.showCall({ ...grant, hold: true, center: true });
+                }
+              }, 1500);
+            }
+          };
+          if (!(S.result === 'lose' && startKillCam(presentResult))) presentResult();
         }
       }
     }
@@ -1134,11 +1180,22 @@ export function boot(mountEl, seed) {
     if (inputHandle && inputHandle.refreshHover) inputHandle.refreshHover();
     // harvester/base interaction hints (owner): input sets ui.pendingHint, we flash it once
     if (ui && ui.pendingHint) { flashMessage(hud, ui.pendingHint.text); ui.pendingHint = null; }
+    // Kill Camera: the re-run end of the battle is what the 3D view draws while it plays [MM-task_mvjng96y_b]
+    let viewSim = sim;
+    if (killCam && !renderer3d) endKillCam();   // the 3D view went away (2D fallback): straight to the result
+    if (killCam && renderer3d) {
+      const f = killCam.player.step(dtMs / 1000);
+      pendingEvents = f.events.slice();   // the replay's own shots and kills (the live ones are already history)
+      if (f.killerPos) render3dMod.setKillCamKiller(renderer3d, f.killerPos);
+      if (f.justFell) render3dMod.blowUpBase(renderer3d);
+      viewSim = f.sim;
+      if (f.phase === 'done') endKillCam();
+    }
     if (!USE_3D) renderFrame(renderer, sim, ui, pendingEvents, dtMs / 1000);   // pass REAL frame time so FX track sim time
     if (renderer3d) {
       // a throw here would stop the Pixi ticker that drives the whole game loop — contain it, and give up on 3D
       // if it keeps happening
-      try { render3dMod.renderFrame(renderer3d, sim, ui, pendingEvents, dtMs / 1000); frameErrors3d = 0; }
+      try { render3dMod.renderFrame(renderer3d, viewSim, ui, pendingEvents, dtMs / 1000); frameErrors3d = 0; }
       catch (e) { console.error('[render3d] frame failed', e); if (++frameErrors3d >= 30) fallbackTo2D((e && e.message) || e); }
     }
     updateHud(hud, sim, ui);
