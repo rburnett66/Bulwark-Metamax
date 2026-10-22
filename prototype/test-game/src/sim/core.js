@@ -97,7 +97,10 @@ function baseAttackSlots(state) {
 function baseTargetFor(state, unit) {
   const slots = baseAttackSlots(state);
   if (unit._baseSlotIdx == null) unit._baseSlotIdx = unit.id % slots.length;
-  return slots[unit._baseSlotIdx];
+  // the ring is rebuilt whenever structures change (recomputeUnitPaths) and a tower beside the base SHRINKS it — an
+  // index taken against the old, longer ring then pointed past the end and stepMovement threw on slot.x
+  // [MM-task_mvivnkw1_a]. Wrap against the CURRENT ring on every read (still deterministic → replays hold).
+  return slots[unit._baseSlotIdx % slots.length];
 }
 // "In reach of the base" is defined ONCE, in combat.inBaseReach (imported above):
 // nearest base FOOTPRINT cell, floored, so a unit standing at its ring slot
