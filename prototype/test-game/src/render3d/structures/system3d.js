@@ -21,6 +21,7 @@ import { metalFor, isGlowKey } from '../units/metal.js';
 import { SYSTEM_MODELS, SYSTEM_COLORS, SYSTEM_SCALE, TIERED_MODELS, tierModelKey } from './systemModels.js';
 import { lifecycleLook, yawToward } from './models.js';
 import { pitchFor, apexFor } from '../fx/elevation.js';
+import { mountOf } from './baseMounts.js';
 import { AIM } from '../fx/combatFxModel.js';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
@@ -110,7 +111,7 @@ export function mergeSystemModel(THREE, def, prims = createPrims(THREE)) {
  * aim }], sig }. Towers face outward from `base` until they aim; a wall draws a segment along each axis it has a
  * wall neighbour on (a lone wall runs north–south), so lines and corners read as one curtain.
  */
-export function planSystem(list, base = null) {
+export function planSystem(list, base = null, mounts = null) {
   const items = [], sig = [];
   const live = (list || []).filter((s) => s && s.lifecycle !== 'Destroyed' && modelOf(s));
   const cellOf = (s) => { const c = s.cell || s.pos; return { x: Math.floor(c.x), y: Math.floor(c.y) }; };
@@ -119,15 +120,17 @@ export function planSystem(list, base = null) {
   for (const s of live) {
     const c = cellOf(s), w = (s.footprint && s.footprint.w) || 1, h = (s.footprint && s.footprint.h) || 1;
     const x = c.x + w / 2, z = c.y + h / 2, look = lifecycleLook(s), model = modelOf(s);
-    sig.push(`${s.id}:${model}@${c.x},${c.y}:${look.key}`);   // the model carries the tier: an upgrade swaps it
+    // a tower on one of the base's corner slots is mounted on the craft's hull (baseMounts.js) [MM-task_mvj0k7v3_k]
+    const mt = mountOf(mounts, s), y = mt ? mt.y : 0, ms = mt ? mt.s : 1;
+    sig.push(`${s.id}:${model}@${c.x},${c.y}:${look.key}${mt ? '^' + y : ''}`);   // the model carries the tier: an upgrade swaps it
     if (model === 'sys_wall') {
       const ns = walls.has(`${c.x},${c.y - 1}`) || walls.has(`${c.x},${c.y + 1}`), ew = walls.has(`${c.x - 1},${c.y}`) || walls.has(`${c.x + 1},${c.y}`);
-      if (ns || !ew) items.push({ id: s.id, model, x, z, ry: 0, sy: look.sy, tint: look.tint, aim: false });
-      if (ew) items.push({ id: s.id, model, x, z, ry: Math.PI / 2, sy: look.sy, tint: look.tint, aim: false });
+      if (ns || !ew) items.push({ id: s.id, model, x, y, z, ms, ry: 0, sy: look.sy, tint: look.tint, aim: false });
+      if (ew) items.push({ id: s.id, model, x, y, z, ms, ry: Math.PI / 2, sy: look.sy, tint: look.tint, aim: false });
       continue;
     }
     const ry = bx !== null && (x !== bx || z !== bz) ? yawToward(x - bx, z - bz) : 0;
-    items.push({ id: s.id, model, x, z, ry, sy: look.sy, tint: look.tint, aim: true });
+    items.push({ id: s.id, model, x, y, z, ms, ry, sy: look.sy, tint: look.tint, aim: true });
   }
   return { items, sig: sig.join('|') };
 }
@@ -142,7 +145,7 @@ export function muzzlePoint(it, wy, i = 0, pitch) {
   const def = it && SYSTEM_MODELS[it.model], list = def && def.muzzles;
   if (!list || !list.length) return null;
   const m = list[((i % list.length) + list.length) % list.length];
-  const pv = (def.pivots && def.pivots.weapon) || [0, 0, 0], k = SYSTEM_SCALE[it.model] || 0.25, sy = it.sy == null ? 1 : it.sy;
+  const pv = (def.pivots && def.pivots.weapon) || [0, 0, 0], k = (SYSTEM_SCALE[it.model] || 0.25) * (it.ms || 1), sy = it.sy == null ? 1 : it.sy;
   const local = wy - it.ry, cl = Math.cos(local), sl = Math.sin(local), cr = Math.cos(it.ry), sr = Math.sin(it.ry);
   // a pitching barrel: tilt the tip and axis about the trunnion (model Rz) by the pitch past the authored angle
   const bar = def.barrel, pb = bar && def.pivots && def.pivots.barrel;
@@ -152,14 +155,14 @@ export function muzzlePoint(it, wy, i = 0, pitch) {
   // model space: turn about the weapon pivot (three.js Ry: x' = x·c + z·s, z' = −x·s + z·c) …
   const tx = (p) => { const x = p[0] - pv[0], z = p[2] - pv[2]; return [pv[0] + x * cl + z * sl, p[1], pv[2] - x * sl + z * cl]; };
   // … then scale and place the root (cell centre, base yaw)
-  const place = (q) => { const x = q[0] * k, z = q[2] * k; return [it.x + x * cr + z * sr, q[1] * k * sy, it.z - x * sr + z * cr]; };
+  const place = (q) => { const x = q[0] * k, z = q[2] * k; return [it.x + x * cr + z * sr, (it.y || 0) + q[1] * k * sy, it.z - x * sr + z * cr]; };
   const tip = place(tx(tilt(m.p)));
   const d0 = m.d || [1, 0, 0], d = del ? [d0[0] * ce - d0[1] * se, d0[0] * se + d0[1] * ce, d0[2]] : d0;
   const dl = Math.hypot(d[0], d[1], d[2]) || 1, a = wy;
   const dx = (d[0] * Math.cos(a) + d[2] * Math.sin(a)) / dl, dy = d[1] / dl, dz = (-d[0] * Math.sin(a) + d[2] * Math.cos(a)) / dl;
   const back = (m.back || 0) * k;
-  const out = { x: tip[0], y: tip[1], z: tip[2], dx, dy, dz, bx: tip[0] - dx * back, by: tip[1] - dy * back * sy, bz: tip[2] - dz * back, brake: (m.brake || 0) * k, n: list.length,
-    gx: it.x, gz: it.z, gr: 0.42 };   // the tower's foot on the ground (the firing shockwave starts here)
+  const out = { x: tip[0], y: tip[1], z: tip[2], dx, dy, dz, bx: tip[0] - dx * back, by: tip[1] - dy * back * sy, bz: tip[2] - dz * back, brake: (m.brake || 0) * k, n: list.length };
+  if (!it.y) { out.gx = it.x; out.gz = it.z; out.gr = 0.42; }   // the tower's foot on the ground (the firing shockwave starts here); a hull-mounted tower has none
   // a pitching barrel reports its limits and aim rule, so the fire gate can wait for the pitch too (combatFxModel)
   if (bar && pb) { out.pmin = bar.min * DEG; out.pmax = bar.max * DEG; out.aim = bar.aim; }
   return out;
@@ -184,7 +187,7 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
     kinds[model] = { parts, meshes, cap };
   }
   const M = new THREE.Matrix4(), Mp = new THREE.Matrix4(), Mr = new THREE.Matrix4(), Ms = new THREE.Matrix4(), col = new THREE.Color();
-  let base = null, sig = null, lastList = [], items = [], clock = 0;
+  let base = null, mounts = null, sig = null, lastList = [], items = [], clock = 0;
   const yaw = new Map();   // structure id → current turret yaw (radians, world)
   const pitch = new Map();   // structure id → current barrel pitch (radians) [MM-story_mvedxxo7_7]
   const recoil = createRecoil();   // cannon barrels slide back on each shell [MM-story_mvee15ja_b]
@@ -196,13 +199,13 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
     if (!SYSTEM_MODELS[it.model].recoil) return null;
     const f = bodyKick(recoil.since(it.id, 'body'));
     if (!f.back && !f.lift) return null;
-    return Mk.fromArray(kickMatrix(it.x, 0, it.z, Math.cos(wy), -Math.sin(wy), f.back * BODY_KICK.back, f.lift * BODY_KICK.lift * DEG, TOWER_REAR));
+    return Mk.fromArray(kickMatrix(it.x, it.y || 0, it.z, Math.cos(wy), -Math.sin(wy), f.back * BODY_KICK.back, f.lift * BODY_KICK.lift * DEG, TOWER_REAR));
   }
 
   // root transform of an instance: cell centre, yaw, cell scale (+ the lifecycle rise)
   function rootMatrix(it, ry, out) {
-    const k = SYSTEM_SCALE[it.model] || 0.25;
-    return out.makeRotationY(ry).premultiply(Mp.makeTranslation(it.x, 0, it.z)).multiply(Ms.makeScale(k, k * it.sy, k));
+    const k = (SYSTEM_SCALE[it.model] || 0.25) * (it.ms || 1);
+    return out.makeRotationY(ry).premultiply(Mp.makeTranslation(it.x, it.y || 0, it.z)).multiply(Ms.makeScale(k, k * it.sy, k));
   }
   function writeBodies() {
     const n = {};
@@ -259,10 +262,12 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
   const api = {
     group, kinds,
     setBase(b) { base = b ? { x: b.x, y: b.y } : null; sig = null; },
+    /** Corner-slot mount heights (baseMounts.planMounts); towers on them redraw on the craft's hull. */
+    setMounts(m) { mounts = m || null; sig = null; if (lastList.length) api.setStructures(lastList); },
     /** Returns true when the static set changed (the caller re-renders the shadow map once). */
     setStructures(list) {
       lastList = list || [];
-      const plan = planSystem(lastList, base);
+      const plan = planSystem(lastList, base, mounts);
       if (plan.sig === sig) return false;
       sig = plan.sig; items = plan.items;
       byItem.clear(); for (const it of items) if (it.aim) byItem.set(it.id, it);
