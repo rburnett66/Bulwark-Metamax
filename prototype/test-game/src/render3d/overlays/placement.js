@@ -15,6 +15,7 @@
  *
  * THREE is passed in (no import) — see index.js.
  */
+import { mountOf } from '../structures/baseMounts.js';
 import { cellToWorld } from '../camera.js';
 import { SYSTEM_MODELS, SYSTEM_SCALE, tierModelKey } from '../structures/systemModels.js';
 import { mergeSystemModel, SYSTEM_KINDS, SYSTEM_STRUCTS } from '../structures/system3d.js';
@@ -101,7 +102,7 @@ export function createPlacementGhost(THREE, scene) {
     body.renderOrder = 10; hull.renderOrder = 11;
     const grp = new THREE.Group(); grp.add(body, hull); grp.scale.set(k, k, k); grp.visible = false;
     scene.add(grp);
-    m = { group: grp, body, hull, geo: g };
+    m = { group: grp, body, hull, geo: g, k };
     models.set(key, m);
     return m;
   }
@@ -109,7 +110,7 @@ export function createPlacementGhost(THREE, scene) {
 
   return {
     /** Show the ghost for the armed build tool at ui.hoverCell; hide it otherwise. */
-    sync(ui) {
+    sync(ui, mounts) {
       const cell = ui && ui.buildSelection && ui.hoverCell;
       const key = cell ? ghostModelKey(ui.buildSelection) : null;
       const want = key ? modelGhost(key) : null;
@@ -118,14 +119,16 @@ export function createPlacementGhost(THREE, scene) {
       group.visible = !!cell && !want;
       if (!cell) return false;
       const x = cellToWorld(cell.x), z = cellToWorld(cell.y);
+      const mt = mountOf(mounts, { pos: cell }), y = mt ? mt.y : 0;   // a base corner slot: preview the tower on the hull [MM-task_mvj0k7v3_k]
       if (want) {
         want.group.visible = true;
-        want.group.position.set(x, 0, z);
+        want.group.position.set(x, y, z);
+        want.group.scale.setScalar(want.k * (mt ? mt.s : 1));
         const c = ui.hoverValid ? OUTLINE.ok : OUTLINE.bad;
         bodyMat.color.setHex(c); hullMat.uniforms.uColor.value.setHex(c);
         return true;
       }
-      group.position.set(x, 0, z);
+      group.position.set(x, y, z);
       const c = ui.hoverValid ? OK : BAD;
       fillMat.color.setHex(c);
       edgeMat.color.setHex(c);

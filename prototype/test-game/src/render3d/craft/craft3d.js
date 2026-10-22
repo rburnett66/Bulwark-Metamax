@@ -490,6 +490,14 @@ export function createCraft3D(THREE, scene, key, opts = {}) {
       groups.head.rotation[H.axis || 'y'] = H.mode === 'spin' ? t * (H.speed || 2) : Math.sin(t * 1.25) * 0.9;
     },
     /** A ramp point in WORLD units (cells): side +1 = the +Z hatch, −1 = the −Z hatch; local {z, y} from landing.js. */
+    /** World y of the hull's top under world point (x, z) in the current pose; 0 where the craft isn't. Hull meshes
+     *  only (no plumes, dust or shield) — corner-slot towers mount on it (structures/baseMounts.js) [MM-task_mvj0k7v3_k]. */
+    topAt(x, z) {
+      root.updateMatrixWorld(true);
+      const rc = new THREE.Raycaster(new THREE.Vector3(x, 100, z), new THREE.Vector3(0, -1, 0));
+      const hit = rc.intersectObjects(meshes, false)[0];
+      return hit ? Math.max(0, hit.point.y) : 0;
+    },
     toWorld(local) {
       const v = new THREE.Vector3(local.x || 0, local.y || 0, local.z || 0);
       model.updateMatrix(); v.applyMatrix4(model.matrix); v.multiplyScalar(CRAFT_SCALE);
