@@ -51,7 +51,8 @@ import { createLights } from './lighting.js';
 import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
 import { createHeadingTracker } from './heading.js';
 import { buildBakedGround } from './ground/baked.js';
-import { buildLowPolyGround, GRID as GROUND_GRID } from './ground/lowpoly.js';
+import { buildLowPolyGround, GRID as GROUND_GRID, roadSampler } from './ground/lowpoly.js';
+import { foliageKitKey } from '../data/foliage.js';
 import { renderMapFor } from './ground/synthTerrain.js';
 import { LOWPAL, WORLD_LIGHT, resolveWorld } from './styles/lowpoly-palettes.js';
 import { PLANETS } from '../data/planets.js';
@@ -247,7 +248,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     getProjFx: typeof opts.projFx === 'function' ? opts.projFx : () => opts.projFx || null,
     getProjScale: typeof opts.projScale === 'function' ? opts.projScale : () => opts.projScale || 1,
     destroyed: false,
-    world: null,
+    world: null, planet: opts.planet || null,
     lowpoly,
     roadMask: null,
   };
@@ -455,7 +456,10 @@ export function setWorld(r, key) {
   const palette = LOWPAL[world];
   if (r.obstructions) disposeGroup(scene, r.obstructions.group);
   const gm = r.groundMap || map;
-  r.obstructions = buildLowPolyObstructions(THREE, gm, palette);
+  // the planet's prop kit — its trees, rock shapes and walkable ground cover [MM-story_mvk4auz0_n]; under ?world= with
+  // no battle planet, the kit of the planet that palette belongs to
+  const kit = foliageKitKey(r.planet, world, Object.fromEntries(Object.entries(PLANETS).map(([k, p]) => [k, p.palette])));
+  r.obstructions = buildLowPolyObstructions(THREE, gm, palette, { kit, roadAt: roadSampler(r.roadMask, gm.cols, gm.rows), plants: r.tier.tufts ? 1 : 0.5 });
   if (r.obstructions) scene.add(r.obstructions.group);
   // per-cell obstruction tops — aircraft fly over them [MM-story_mvegnpxf_i]
   r.heightField = r.obstructions ? buildHeightField(r.obstructions.group.children, gm.cols, gm.rows) : null;
