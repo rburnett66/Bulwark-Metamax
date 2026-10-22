@@ -512,6 +512,9 @@ function cmdDeployTroop(state, cmd) {
     // flyers ignore terrain; floaters approximated as direct water travel
     path = getFlyerPath(basePos, destCell);
   } else {
+    // only water units cross water (owner 2026-10-21) — the nav grid already refuses it; say why [MM-task_mvj0k5ul_j]
+    const map = state.map || {};
+    if ((map.waterCells || []).some((c) => c.x === destCell.x && c.y === destCell.y)) return { ok: false, reason: "ground troops can't go on water" };
     path = findWalkerPath(state.navGrid, roundCell(basePos), destCell);
     if (!path) return { ok: false, reason: 'blocked' };
   }

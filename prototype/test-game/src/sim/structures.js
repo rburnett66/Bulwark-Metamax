@@ -50,6 +50,19 @@ function occupiedCellSet(state) {
   return set;
 }
 
+// cell key → why nothing can be built there ('blocked by rocks or trees' | "can't build on water"), cached per map
+// object (validatePlacement runs every frame for the placement ghost). Maps are rebuilt, never edited in place.
+const GROUND_CACHE = new WeakMap();
+function groundCells(map) {
+  let g = GROUND_CACHE.get(map);
+  if (g) return g;
+  g = new Map();
+  for (const c of map.blockedCells || []) g.set(cellKey(c), 'blocked by rocks or trees');
+  for (const c of map.waterCells || []) g.set(cellKey(c), "can't build on water");
+  if (map && typeof map === 'object') GROUND_CACHE.set(map, g);
+  return g;
+}
+
 export function validatePlacement(state, structId, slotOrCell) {
   let def;
   try {
@@ -97,9 +110,16 @@ export function validatePlacement(state, structId, slotOrCell) {
     const w = Math.max(1, Math.min((state.waves && state.waves.current) || 1, map.rings.length));
     ringRect = map.rings[w - 1].rect;
   }
+  // The OBSTRUCTION GRID: the cells the pathfinder treats as impassable — rocks / trees / cliffs (map.blockedCells)
+  // and water (map.waterCells). Owner 2026-10-21: "There is supposed to be an obstruction grid that prevents placement
+  // of towers … units and towers don't go on water." Placement used to read only the named terrain above, which forge
+  // maps never carry, so every obstruction and water cell took a tower. [MM-task_mvj0k5ul_j]
+  const ground = groundCells(map);
   const cells = footprintCells(cell, def.footprint);
   for (const c of cells) {
     if (c.x < 0 || c.y < 0 || c.x >= map.cols || c.y >= map.rows) return { ok: false, reason: 'terrain' };
+    const g = ground.get(cellKey(c));
+    if (g) return { ok: false, reason: g };
     // the SAFE BORDER is approach terrain — enemies march through it, nobody builds on it
     if (map.playArea && (c.x < map.playArea.x0 || c.x > map.playArea.x1 || c.y < map.playArea.y0 || c.y > map.playArea.y1)) {
       return { ok: false, reason: 'outside the battlefield' };
