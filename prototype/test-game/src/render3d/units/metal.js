@@ -63,6 +63,13 @@ export const UMETAL = Object.freeze({
   foil: [0.9, 0.3],
   solar: [0.12, 0.35],
   copper: [0.85, 0.35],
+  // the DARK ENERGY livery (dark/palette.js): cracked obsidian, bone, fungus, tendrils [MM-story_mvifm4xj_1]
+  void: [0.04, 0.95],    // matte stone: the purple must hold, not silver under the sky (owner 2026-10-21)
+  obsid: [0.04, 0.95],
+  ash: [0.06, 0.9],
+  bone: [0.03, 0.85],
+  fungus: [0.02, 0.9],
+  tendril: [0.05, 0.85],
 });
 
 /** Keys drawn unlit (emissive): no metal, no lighting — they carry the glow read. */
