@@ -98,7 +98,7 @@ export function legalHit(shooter, target) {
  * Fire the real applyDamage at the target: one probe tick for the effectiveness
  * multiplier + effective DPS, then a full FIXED_DT loop for time-to-kill.
  * Returns { legal, mult, effDps, ttk, status } — ttk is Infinity when the
- * target can never die (multiplier 0, e.g. Poison vs Structure) or the hit is
+ * target can never die (multiplier 0, e.g. Toxic vs Structure) or the hit is
  * domain-illegal.
  */
 export function measure(shooter, target, maxSeconds = 600) {

@@ -6,7 +6,7 @@
  * balance harness (no rendering, no DOM, no randomness of its own).
  */
 
-import { EFFECTIVENESS, DAMAGE_TYPES, getStructureDef } from '../data/tables.js';
+import { EFFECTIVENESS, ROLE_EFFECTIVENESS, DAMAGE_TYPES, getStructureDef } from '../data/tables.js';
 import { grantKillIncome } from './economy.js';
 import { emitEvent } from './core.js';
 import { bonusDamageMult } from './bonuses.js';
@@ -427,8 +427,11 @@ export function applyDamage(state, sourceId, target, rawDps, damageType, dt) {
   if (!target || target.hp <= 0) return { dealt: 0, killed: false };
 
   const row = EFFECTIVENESS[damageType];
-  const mult = (row && row[target.armorClass] !== undefined)
-    ? row[target.armorClass]
+  // a role override (Toxic corrodes harvesters and repair drones) beats the armor-class row [MM-task_mvjxae69_g]
+  const role = target.isHarvester ? 'harvester' : target.isRepairTroop ? 'repairDrone' : null;
+  const byRole = role && ROLE_EFFECTIVENESS[damageType];
+  const mult = (byRole && byRole[role] !== undefined) ? byRole[role]
+    : (row && row[target.armorClass] !== undefined) ? row[target.armorClass]
     : 1;
 
   let dealt = rawDps * mult * dt;
