@@ -30,11 +30,15 @@ function board(forge, faction) {
 }
 /** Scripted defender, as a sensible player builds: anti-ground (Cannon, Rockets) close in; anti-air (Missile Tower, Flak)
  *  pushed 4–5 cells out so it can meet the missile standoff; alternating ground/air; upgrades with spare gold. */
+//  MG=add → the Machine Gun joins the cycle as a fifth tower; MG=1 → it takes two of six slots (cheap, close in).
+//  ONLY_NEW=1 → each faction's own map 1 only (skip the Powder baseline). [MM-story_mvk3kwu2_m]
 function defend(sim) {
   const b = sim.map.base;
   const ringCells = (r0, r1) => { const out = []; for (let r = r0; r <= r1; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r) out.push({ x: b.x + dx, y: b.y + dy }); return out; };
   const near = ringCells(2, 4), far = ringCells(4, 6);
-  const plan = [['STR-Cannon', near], ['STR-Missile', far], ['STR-Rockets', near], ['STR-Flak', far]];
+  const plan = process.env.MG === 'add' ? [['STR-Cannon', near], ['STR-Missile', far], ['STR-Rockets', near], ['STR-Flak', far], ['STR-MG', near]]
+    : process.env.MG ? [['STR-MG', near], ['STR-Cannon', near], ['STR-Missile', far], ['STR-MG', near], ['STR-Rockets', near], ['STR-Flak', far]]
+    : [['STR-Cannon', near], ['STR-Missile', far], ['STR-Rockets', near], ['STR-Flak', far]];
   let k = sim._defK || 0, misses = 0;
   const jitter = sim._jitter || 0;   // per-run variation: where round the base each tower type starts looking
   for (let guard = 0; guard < 24 && misses < plan.length; guard++) {
@@ -98,7 +102,7 @@ const rows = [];
 for (const fac of NAMES) {
   const s = slug(fac);
   const NEW = load(s);
-  for (const [label, forge] of [['old', OLD], ['new', NEW]]) {
+  for (const [label, forge] of (process.env.ONLY_NEW ? [['new', NEW]] : [['old', OLD], ['new', NEW]])) {
     const runs = SEEDS.map((seed) => play(forge, fac, seed, false));
     const pressure = SEEDS.map((seed) => play(forge, fac, seed, true));
     rows.push({ faction: fac, slug: s, map: label, runs, pressure });
