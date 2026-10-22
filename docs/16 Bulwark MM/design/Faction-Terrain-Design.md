@@ -354,7 +354,7 @@ Each item is phrased as the change it makes. The PLN stories own them; this doc 
    - path is recomputed like walkers' when structures change;
    - replaces the fixed `waterLane` list (`getWaterPath`) on forge maps, keeping it as a fallback for workbook maps;
    - deterministic (A* on the grid, no randomness) so replays hold, with tests for a pond shortcut taken by a water unit and refused by a walker;
-   - **needs its own ticket and a balance check**, because it changes how the Water faction plays everywhere.
+   - **its own story [MM-story_mvj70e3w_6], with a balance check**, because it changes how the Water faction plays everywhere.
 1. **Planet palettes:** add `lunar` and `toxic`; fix `canyon` water and `sakura` saturation; point Lumen and Vexmire at the new palettes (`planets.js`). Data only. → PLN-FOL
 2. **Per-planet Forge presets:** the §2.3 recipes as a preset menu in the Terrain Forge, plus a **pond-shortcut** map check for water maps: the water-unit route is meaningfully shorter than the ground route, and no pond touches the base gap. → PLN-MAP
 3. **Prop families:**
