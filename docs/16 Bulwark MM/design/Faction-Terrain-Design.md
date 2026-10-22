@@ -1,6 +1,6 @@
 # Faction Terrain Design: the nine battlefield planets
 
-**Version:** 1.1 (2026-10-21) · **Status:** proposal for owner review · v1.1: owner direction on water maps (ponds that some units path around while others path over), §2.1 and §3.5 · **Ticket:** [MM-task_mvj6goch_5] under epic PLN [MM-epic_mva2enos_7]
+**Version:** 1.2 (2026-10-22) · **Status:** proposal for owner review · v1.1: owner direction on water maps (ponds that some units path around while others path over) · v1.2: owner movement rules for water, ponds only, no rivers (§2.1) · **Ticket:** [MM-task_mvj6goch_5] under epic PLN [MM-epic_mva2enos_7]
 **Feeds:** PLN-FOL foliage sets [MM-story_mva2g4o7_n], PLN-MAP level picks its planet [MM-story_mva2g98f_p], PLN-ATM atmosphere [MM-story_mva2g1yw_m], PLN-AIR airborne particles [MM-story_mva2g6tn_o]
 **Builds on:** `Terrain-Detail-and-Complexity.md` (the terrain as built, [MM-task_mvj5n3g1_4])
 
@@ -51,32 +51,43 @@ A battle is fought on the **enemy faction's homeworld** (`planets.js`: the battl
 
 ## 2. Shared framework
 
-### 2.1 Water maps: ponds that some units path around and others path over
+### 2.1 Water maps: ponds, never rivers
 
-**Owner direction (2026-10-21):** "The most effective design for the water maps would be to include ponds that some units path around while others path over the water."
+**Owner direction (2026-10-21):**
+- "The most effective design for the water maps would be to include ponds that some units path around while others path over the water."
+- "Water units can path over ground and water without a movement bonus. Other units can also path water but so slowly it always makes sense to path around it. This is why I want to avoid rivers and stick to ponds."
 
-**The rule:**
-- **Ground units** (walkers, the player's troops, harvesters) treat water as impassable and path **around** ponds. This is unchanged.
-- **Water units** (swimmers and floaters) are **amphibious**. They cross open ground and water, cannot cross rocks, trees or cliffs, and water is their **cheap terrain**. Their path seeks the ponds, so they go **over** the water where ground units go around.
-- **Flyers** ignore terrain, as today.
+**The movement rules:**
 
-So a pond is a moat for one army and a highway for the other, the same map read two ways. That is GDD pillar 2 (terrain is a weapon) applied per domain.
+| Unit | On ground | On water | Result |
+|---|---|---|---|
+| **Water units** (swimmers, floaters) | normal | **normal**, no bonus | they take the direct line, straight over ponds |
+| **Everything else** that walks (enemy ground units, the player's troops, harvesters) | normal | **very slow**: allowed, but so costly that a detour always wins | they path around ponds |
+| **Flyers** | ignore terrain | ignore terrain | unchanged |
 
-**Who it affects:**
-- Only the Water faction fields water units (5 swimmers/floaters, 3 flyers, **no ground units**; `content/units`), and its battles are fought on Rime. **Rime is the water map.**
-- The rule lives in the sim, so it holds on every planet. Any player-deployed water unit (once Water units are unlocked) also cuts across ponds on Verdance, Florael, Xenthe and the rest.
+Rocks, trees and cliffs still block water units and ground units alike.
+
+**Why ponds, never rivers:**
+- A pond always has a way around, so a ground unit never has to wade.
+- A river that crosses the map leaves no way around. Ground units would be forced into the water at a crawl. Water would also stop being a real choice between two routes.
+- So **no planet uses crossing rivers**. Water is authored as `patches` ponds everywhere, and the Forge's `connected` mode (one big body) is not used for battle maps.
+- Because water is never a wall, it can never seal the base off from ground units.
 
 **How it plays:**
-- Water waves arrive along pond chains, fast, and slow down on the land between ponds. That land is where the player defends.
-- The player's own troops and harvesters walk the long way round.
-- Placement already refuses towers on water (#110), so defences ring the shores. Pond **gaps** become the chokepoints for water units, and pond **edges** the chokepoints for ground units.
+- A pond sits in the way of one army and not the other.
+- Water units cut straight across ponds toward the base; ground units bend around them.
+- Ponds placed **on the direct lines between the spawns and the base** make the two armies arrive by different routes, and the player has to defend both.
+- Towers still cannot be built on water (#110), so defences ring the shores. Pond **edges** funnel ground units; pond **far shores** are where water units come ashore.
+
+**Who it affects:**
+- Only the Water faction fields water units (5 swimmers/floaters, 3 flyers, **no ground units**; `content/units`). Its battles are on Rime, so **Rime is the water map**.
+- The rules live in the sim, so they hold on every planet. A player-deployed water unit cuts across ponds anywhere. Every planet's ponds (lily ponds, oases, lava pools, bog pools) slow ground units the same way.
 
 **What the sim does today:**
 - Water units follow a fixed `waterLane` waypoint list (`pathfinding.js` `getWaterPath`) and never reroute.
 - Forge maps carry no water lane, so on every forge map today (powder-map-1 and its copies) a water unit heads **straight for the base over open land**. The terrain clamp keeps it off rocks and cliffs, but it **never uses the water**. Checked 2026-10-21: a Water-faction swimmer on powder-map-1 spent all 439 ticks of its approach on land, 0 on water.
-- The amphibious pathing in §5 replaces that.
-
-**On every other planet**, with no water units in the enemy roster, code 6 is terrain for ground units: a hazard, a moat, a landmark. It can take any planetary form (sea, lava, toxic bog, crater void).
+- Ground units treat water as a hard wall (nav grid), not as slow terrain.
+- Both change with the pathing in §5.0.
 
 ### 2.2 The terrain vocabulary per planet
 
@@ -90,29 +101,29 @@ The sim has 10 codes. Each planet skins them as its own materials (what the play
 | 3 ROCKS ⛔ | grey boulders | lilac boulders | sandstone hoodoos | slag & rubble | ice shards | basalt columns | grey shards | magenta crystal clusters | moss boulders |
 | 4 TREES ⛔ | broadleaf woods & pines | pink blossom trees | cacti, acacias, dead snags | spike trees, bleached snags | snow pines, ice spires | charred spike trees, ember tips | needle spires, glowing crystals | mushroom trees | spore pods & hive mounds |
 | 5 CLIFF ⛔ | low stone ridges | mossy outcrops | sandstone ridges | layered mesas | ice shelves | basalt ridges | crater walls | crystal ridges | rotting log jams |
-| 6 WATER ⛔* | river & lakes | lily ponds | cyan oases | rust sumps | **ice-rimmed sea ponds (water units cross them)** | **lava rivers** | **deep craters / void pits** | green seas | **toxic bog pools** |
+| 6 WATER ⛔* | farm ponds | lily ponds | cyan oases | rust sumps | **ice-rimmed sea ponds (water units cross them)** | **lava pools** | **deep craters / void pits** | green seas | **toxic bog pools** |
 | 7 TREE_BORDER | wood edge (brush) | blossom edge | scrub edge | snag litter | snow drifts | ash drifts | crystal dust | moss carpet | marsh edge |
 | 8 ROCK_BORDER | stones | pebbles | pebbles | shell fragments | ice pebbles | pumice | crater ejecta | crystal shards | moss pebbles |
 | 9 CLIFF_BORDER ⛔ | ridge rubble | outcrop rubble | ridge rubble | mesa talus | shelf rubble | basalt talus | rim rubble | ridge shards | log debris |
 
-⛔ = impassable to ground units (sim `BLOCKING`). \*Water blocks walkers everywhere; amphibious water units cross it, on Rime and wherever a player deploys them (§2.1).
+⛔ = blocks movement (sim `BLOCKING`). \*Water is the exception under §2.1: water units cross it at normal speed; everything else may enter it but only at a crawl, so it paths around.
 
 ### 2.3 Forge recipes
 
 These are Terrain Forge settings per planet (`types` pct / noise 0–100, `water` mode / pct / noise). Low noise gives big smooth regions; high noise gives fine grain. They are **starting points for authoring**, not final maps. Every map is still hand-tuned and must pass the §1 guardrails.
 
 The last two columns are **measured**: `generateTerrain` was run on a 64×32 map, averaged over seeds 7, 23 and 101. Two generator behaviours shape the numbers:
-- `connected` water keeps only the largest body, so it lands at about half its nominal percentage;
+- every planet uses `patches` water (ponds), never `connected` (§2.1);
 - the edge cells of every tree, rock and cliff region turn into walkable border codes, so obstacle percentages overstate what actually blocks.
 
 | Planet | dirt | brush | rocks | trees | cliff | water (mode · pct · noise) | Impassable (measured) | of which water | Intent |
 |---|---|---|---|---|---|---|---|---|---|
-| Verdance | 22 · 30 | 14 · 45 | 5 · 60 | 24 · 30 | 3 · 50 | connected · 16 · 25 | 16.7% | 7.6% | farmland, woods, one river |
+| Verdance | 22 · 30 | 14 · 45 | 5 · 60 | 24 · 30 | 3 · 50 | patches · 10 · 45 | 19.7% | 10.1% | farmland, woods, about 9 farm ponds |
 | Florael | 8 · 30 | 22 · 55 | 6 · 55 | 16 · 45 | 2 · 50 | patches · 8 · 35 | 12.9% | 8.1% | open meadows, groves, ponds |
 | Ochre | 40 · 25 | 10 · 60 | 9 · 60 | 6 · 65 | 9 · 40 | patches · 3 · 20 | 12.6% | 3.1% | open desert, hoodoos and ridges, rare oases |
 | Kessra | 35 · 30 | 6 · 70 | 8 · 55 | 3 · 75 | 17 · 30 | patches · 2 · 20 | 19.4% | 2.1% | mesas and ridgelines, open killing ground |
 | Rime | 18 · 30 | 8 · 50 | 6 · 60 | 12 · 40 | 6 · 45 | patches · 16 · 55 | 23.8% | 16.1% | frozen coast scattered with sea ponds (about 11 ponds of 4+ cells, largest about 90) |
-| Cinder | 20 · 30 | 6 · 60 | 9 · 55 | 8 · 55 | 9 · 40 | connected · 18 · 22 | 17.9% | 9.0% | ash plain split by a lava river |
+| Cinder | 20 · 30 | 6 · 60 | 9 · 55 | 8 · 55 | 9 · 40 | patches · 10 · 45 | 19.7% | 10.1% | ash plain studded with about 9 lava pools |
 | Lumen | 30 · 40 | 4 · 70 | 12 · 55 | 6 · 65 | 7 · 50 | patches · 7 · 30 | 14.3% | 7.1% | cratered regolith, crystal spires |
 | Xenthe | 12 · 40 | 20 · 55 | 7 · 60 | 30 · 30 | 3 · 50 | patches · 9 · 35 | 20.6% | 9.1% | dense fungal groves, glowing seas |
 | Vexmire | 14 · 45 | 18 · 55 | 5 · 60 | 14 · 40 | 2 · 50 | patches · 17 · 45 | 20.5% | 17.0% | swamp of many small bog pools |
@@ -120,7 +131,7 @@ The last two columns are **measured**: `generateTerrain` was run on a 64×32 map
 
 The shape of each planet shows in where its blocking comes from:
 - **on land:** Kessra 17% (mesas) and Xenthe 12% (groves);
-- **in water:** Rime 16% (about 11 sea ponds), Vexmire 17% (bog pools) and Cinder 9% (lava);
+- **in water:** Rime 16% (about 11 sea ponds), Vexmire 17% (bog pools), Verdance and Cinder 10% (about 9 ponds each);
 - **open:** Florael and Ochre, about 13% in total.
 
 ### 2.4 Prop kits
@@ -162,12 +173,12 @@ Each planet gets one landmark that makes a map recognisable at a glance and give
 
 | Planet | Signature |
 |---|---|
-| Verdance | the river and its fords |
+| Verdance | farm ponds between fields and woods |
 | Florael | blossom groves ringing open meadows |
 | Ochre | oases on a sightline desert |
 | Kessra | mesa ridgelines over shell-scarred flats |
 | Rime | pond fields: shortcuts for water units, detours for ground |
-| Cinder | the lava river and basalt causeways |
+| Cinder | lava pools ringed by basalt columns |
 | Lumen | craters |
 | Xenthe | glowing mycelium groves |
 | Vexmire | bog pool mazes around hive mounds |
@@ -191,15 +202,15 @@ Each spec gives:
 ### 3.1 Ground / Powder: **Verdance**, the contested homeland
 
 - **Planet:** "Lush homeworld". The globe is earthlike: deep blue oceans, bright green continents, wheat-coloured plains, polar caps. Survey: green canopy trees, pines, flowering bushes; grass and wildflowers; grey boulders; pollen.
-- **Faction:** *Nationalistic, old-empire army*, infantry and armour, flags and honour ("defend the realm without staining it" / "Nations are furnaces"). Their world is the farmland an empire sends its sons to defend. It is the tutorial planet, so it is the most readable and the most "normal". Terrain says *homeland worth holding*: fields, hedgerows, a river, woods.
+- **Faction:** *Nationalistic, old-empire army*, infantry and armour, flags and honour ("defend the realm without staining it" / "Nations are furnaces"). Their world is the farmland an empire sends its sons to defend. It is the tutorial planet, so it is the most readable and the most "normal". Terrain says *homeland worth holding*: fields, hedgerows, farm ponds, woods.
 - **Ground:** about half turf with wildflowers; large low-noise **tilled fields** (dirt) laid out in broad, soft-edged blocks, crossed by cart tracks that the road bake wears into roads; hedgerows (brush) along field edges.
 - **Obstructions:** broadleaf woods in a few solid copses with pines on the higher ground. Grey boulders are rare and scattered. Low stone ridges sit at the map edges (cliff 3%).
-- **Water:** **one river** (connected water) crossing the map, with **2–3 fords** (grass gaps) that become natural chokepoints for walkers. It is the clearest use of GDD pillar 2 (terrain reroutes attackers) and teaches it on the first planet.
+- **Water:** about **9 farm ponds** (patches 10% at noise 45). Ground units bend around them, so the gaps between pond, wood and ridge become natural chokepoints. It is the clearest use of GDD pillar 2 (terrain reroutes attackers) and teaches it on the first planet.
 - **Resources:** Loam Grain (common) in the tilled fields; Heartwood Amber (uncommon) at wood edges; Rootsong Seeds and Elder Bloom (quest) on meadow far from the base.
-- **Signature:** **the river and its fords.**
+- **Signature:** **farm ponds between fields and woods.**
 - **Sky & air:** warm golden low sun (`meadow` light: "golden low sun, warm haze"), haze #a8c4ec, pollen motes.
 - **Palette:** `meadow`, keep. The 2026-10-18 retune (saturated turf, red-orange canopies on cobalt trunks) is approved.
-- **Today / needs:** drawable today (powder-map-1 is this planet). The generator's `connected` water makes a lake, not a river that crosses the map, so the river and its fords are shaped by hand in the Forge until a **river mode** exists (§5.5). Needs the **flower bush** prop family for hedgerow accents, and pollen particles (PLN-AIR).
+- **Today / needs:** drawable today (powder-map-1 is this planet). Needs the **flower bush** prop family for hedgerow accents, and pollen particles (PLN-AIR).
 
 ### 3.2 Air: **Florael**, the blooming sky garden
 
@@ -246,11 +257,11 @@ Each spec gives:
 ### 3.5 Water: **Rime**, the frozen pond coast
 
 - **Planet:** "Frozen". The globe is white ice caps over deep-blue seas with **teal-grey coasts**. Survey: snow-capped pines, ice spires, dead stumps; ice shards, pebbles, sparse grass; snow-capped ice shards; snow. "Frozen seas and ice coasts."
-- **Faction:** *Fantasy RPG sea tribes*: swimmers and floaters, coastal, Frost damage ("The deep keeps balance; so must we" / "Power sleeps below"). **Rime is the water map** (§2.1). Its ice coast is broken into a field of **sea ponds**: open water in the ice. The Water faction's amphibious units leap from pond to pond toward the base; the player's own troops and harvesters walk around them.
+- **Faction:** *Fantasy RPG sea tribes*: swimmers and floaters, coastal, Frost damage ("The deep keeps balance; so must we" / "Power sleeps below"). **Rime is the water map** (§2.1). Its ice coast is broken into a field of **sea ponds**: open water in the ice. The Water faction's units go straight across the ponds toward the base; the player's own troops and harvesters walk around them.
 
   The layout is built for that asymmetry:
-  - **pond chains** run from the spawn edges toward the base with short land gaps between them; the gaps are where water units slow down and the player defends;
-  - **detour ground** wraps around the ponds for the player's units;
+  - **ponds sit across the direct lines** from the spawn edges to the base, so the water army comes straight over them while any ground unit has to bend around;
+  - **detour ground** wraps around every pond: no pond chain closes off a route;
   - the **base sits on solid ice** with no pond touching the base gap, so the last approach is always over land.
 - **Ground:** wind-packed snow, blue **ice sheets** (dirt), tussock grass in sheltered patches.
 - **Obstructions:** **snow pines** and **ice spires** in clumps; ice shards; **ice shelves** as raised blue-white cliffs. These block **both** armies, so they shape the pond chains.
@@ -267,15 +278,15 @@ Each spec gives:
 ### 3.6 Arcane / Energy: **Cinder**, the world of living fire
 
 - **Planet:** "Volcanic ash". The globe is charcoal land with **glowing lava seas** (`lava: true`). Survey: charred spike trees with ember tips; ash, pebbles, scorched twigs; basalt columns, lava; ash and embers. "A world of living fire: the theocracy draws its energy from the lava and worships the flame."
-- **Faction:** *Fantasy theocracy*: energy weapons, no ammo economy, Fire damage ("The Light is order made merciful" / "the flame is free"). The lava is their **sacred source**, and the terrain is built around it. A lava river divides the map; **basalt causeways** (grass gaps) cross it like temple approaches. Basalt columns stand in ordered rows, a world that looks consecrated.
+- **Faction:** *Fantasy theocracy*: energy weapons, no ammo economy, Fire damage ("The Light is order made merciful" / "the flame is free"). The lava is their **sacred source**, and the terrain is built around it: **lava pools** like sacred wells, each ringed by ordered basalt columns, with ash causeways winding between them like temple approaches. A world that looks consecrated.
 - **Ground:** grey **ash flats**, black **cinder** fields (dirt), scorched twigs.
 - **Obstructions:** **hexagonal basalt columns** (rocks) in rows and clusters; basalt ridges (cliff); **charred spike trees with glowing ember tips** in sparse stands.
-- **Water:** **lava rivers** (`connected` 18%, which measures about 9% as one river), glowing orange-yellow cores fading to deep red edges (the palette already does this: waterL #ff7a1a, waterD #d0300a, foam #ffb03a). Lava blocks walkers exactly as water does.
-- **Resources:** Ash Basalt (common) on ash flats; Ember Obsidian (uncommon) near the lava; Phoenix Glass and Heartflame (quest) on islands reached by causeways.
-- **Signature:** **the lava river and its basalt causeways.**
+- **Water:** about **9 lava pools** (patches 10% at noise 45), glowing orange-yellow cores fading to deep red edges (the palette already does this: waterL #ff7a1a, waterD #d0300a, foam #ffb03a). Under §2.1 lava behaves exactly as water does.
+- **Resources:** Ash Basalt (common) on ash flats; Ember Obsidian (uncommon) near the lava; Phoenix Glass and Heartflame (quest) on the ash between pools.
+- **Signature:** **lava pools ringed by basalt columns.**
 - **Sky & air:** dark red-brown sky (`volcanic`: clear #3a2420), ember-orange sun, haze #5a3a34, **ash and drifting embers**.
 - **Palette:** `volcanic`, keep.
-- **Today / needs:** lava draws today as colour bands, but does not glow. Like Verdance, a crossing river needs hand-shaping or the **river mode** (§5.5). Needs **emissive lava**: unlit or self-lit lava triangles, a slow pulse, and an orange glow on nearby ground. Also the **basalt column** rock style, **spike tree with ember tips** (emissive tips), and ember particles. Cinder is the planet that most needs lighting help, since it is the darkest.
+- **Today / needs:** lava draws today as colour bands, but does not glow. Needs **emissive lava**: unlit or self-lit lava triangles, a slow pulse, and an orange glow on nearby ground. Also the **basalt column** rock style, **spike tree with ember tips** (emissive tips), and ember particles. Cinder is the planet that most needs lighting help, since it is the darkest.
 
 ### 3.7 Space Tech: **Lumen**, the airless survey moon
 
@@ -348,12 +359,12 @@ Each spec gives:
 
 Each item is phrased as the change it makes. The PLN stories own them; this doc is the spec they build to.
 
-0. **Amphibious water pathing (sim, first):**
-   - water units path on a water-domain nav grid where open ground and water are passable, rocks, trees and cliffs block, and water costs less than land (start at 0.4×, so a pond about 2.5× its width is worth the swim);
-   - optionally faster on water;
-   - path is recomputed like walkers' when structures change;
+0. **Water movement rules (sim, first)**, per §2.1:
+   - **water units:** open ground and water both cost 1 and move at normal speed (no bonus); rocks, trees and cliffs block;
+   - **all other walking units:** water becomes passable but very costly, for example cost ×12 and speed ×0.15 inside it, so A* always takes any real detour and a unit pushed into a pond wades out slowly instead of being stuck behind a wall;
+   - paths are recomputed when structures change, as walkers' already are;
    - replaces the fixed `waterLane` list (`getWaterPath`) on forge maps, keeping it as a fallback for workbook maps;
-   - deterministic (A* on the grid, no randomness) so replays hold, with tests for a pond shortcut taken by a water unit and refused by a walker;
+   - deterministic (A* on the grid, no randomness) so replays hold, with tests for a pond crossed by a water unit and walked around by a ground unit, plus a ground unit that is forced into a pond and wades out; the obstruction-grid test stays green (towers off water, ground units around ponds);
    - **its own story [MM-story_mvj70e3w_6], with a balance check**, because it changes how the Water faction plays everywhere.
 1. **Planet palettes:** add `lunar` and `toxic`; fix `canyon` water and `sakura` saturation; point Lumen and Vexmire at the new palettes (`planets.js`). Data only. → PLN-FOL
 2. **Per-planet Forge presets:** the §2.3 recipes as a preset menu in the Terrain Forge, plus a **pond-shortcut** map check for water maps: the water-unit route is meaningfully shorter than the ground route, and no pond touches the base gap. → PLN-MAP
@@ -365,7 +376,6 @@ Each item is phrased as the change it makes. The PLN stories own them; this doc 
    Families are chosen per planet as data (`planets.js` foliage set); placement stays the existing seeded planner, and each family keeps the current triangle budget (rocks + trees ≤ ~25k per map). → PLN-FOL
 4. **Emissive terrain:** lava (Cinder), crystals (Lumen, Xenthe), ember tips, mushroom caps, bog blisters. These are unlit vertex colours in the ground or obstruction meshes, so they add no extra draws. → PLN-FOL / PLN-ATM
 5. **Forge stamps and modes:**
-   - a **river mode** for water: a meandering band edge to edge with N fords, which the workbook generator already does for campaign maps (`mapgen.js` river). Used by Verdance (river) and Cinder (lava);
    - a crater stamp (Lumen) and a shell-scar decal (Kessra);
    - mycelium threads (Xenthe) as a ground-colour pattern.
 
@@ -379,10 +389,7 @@ Each item is phrased as the change it makes. The PLN stories own them; this doc 
 ## 6. Owner decisions
 
 1. **Signatures:** approve the nine signature features (§2.6), or swap any.
-2. **Amphibious water units** (follows the 2026-10-21 pond direction):
-   - confirm swimmers and floaters may cross open land between ponds, which they must, since ponds are not connected and the Water faction has no ground units;
-   - set the water cost or speed bonus (start at 0.4×);
-   - say whether swimmers and floaters should differ, for example swimmers faster in water and slower on land.
+2. **Water movement:** decided 2026-10-22 (§2.1): water units cross ground and water with no bonus; others wade only at a crawl; ponds only, no rivers. One remaining call: should a troop order **onto** a water cell stay refused (today: "ground troops can't go on water"), or be allowed and the troop wade there slowly?
 3. **New palettes:** approve the two new palettes (`lunar`, `toxic`) and the `canyon` / `sakura` adjustments.
 4. **Prop-family order:** first wave as in §5.3, or reprioritise by which faction maps get authored first.
 5. **Openness by faction:** Air and High Tech open, Dark and Greenies enclosed, Artillery funnelled by mesas. Approve this as the rule, or flatten the variation for balance.
