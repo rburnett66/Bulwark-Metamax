@@ -230,6 +230,6 @@ After 1–3, re-run this report's map study. Reproduce with `node tools/maps/map
 | Greenies | 0 → 0 | 0 → 0 |
 
 **What changed:**
-- The tenfold opening spike on the open maps is mostly gone. High Tech is still about 6× the Powder layout on Ochre, from its Tanks and Planes, not its artillery.
+- The tenfold opening spike on the open maps is mostly gone. High Tech is still about 6× the Powder layout on Ochre, and that is still mostly HTC-Artillery: at 9.5 it is inside Rocket range, but on open desert it reaches firing positions the bot's close-in towers don't cover.
 - Survival barely moves, because the Missile range fault [MM-task_mvjxagdi_h] still decides the first air wave.
 - Dark Energy and Greenies still cannot damage the base, so their waves still end only when their units die. Corroding harvesters and repair drones hurts the player's economy and repairs, but does not threaten the base.
