@@ -9,7 +9,7 @@
  * rides on the weapon and sweeps / spins. A tower stands on one cell = 4 model units (footprint ≈ 3–3.4).
  *
  *   sys_cannon → SYS-Cannon (antiGround)   sys_flak → SYS-Flak (antiAir)   sys_wall → SYS-Wall
- *   sys_harvester → SYS-Harvester          sys_rockets → STR-Rockets   sys_missile → STR-Missile   sys_mg → no roster id yet
+ *   sys_harvester → SYS-Harvester          sys_rockets → STR-Rockets   sys_missile → STR-Missile   sys_mg → STR-MG
  */
 import { track } from '../units/prims.js';
 
@@ -271,7 +271,12 @@ const M = {};
       ...Array.from({ length: 9 }, (_, i) => ({ t: 'box', s: [0.12, 0.05, 0.1], p: [0.1 + i * 0.02, 1.42 - i * 0.1, -0.52 - i * 0.02], r3: [0, 0, -8], m: 'brass', g: 'weapon' })),
     ];
     for (let i = 0; i < parts.length; i++) if (parts[i].g === 'weapon') parts[i] = scaleAbout([0, 1.35, 0], 1.3, [parts[i]])[0];
-    M.sys_mg = { name: 'Machine-gun turret', unit: 'SYS-MG', ref: 'sys_mg', parts, pivots: { weapon: [0, 1.35, 0] }, views: { side: 'right', top: 'up' } };
+    // firing point: the flash hider's face (authored x 2.66, y 1.82, then the ×1.3 weapon scale about the pivot) [MM-story_mvk3kwu2_m]
+    // eject: the ejection port on the gun's RIGHT (+z: facing +x with y up, right = +z; the ammo box and belt hang on the
+    // left) — brass flies up and out to the right (owner 2026-10-22: "spray brass bullet casings up and to the right")
+    M.sys_mg = { name: 'Machine-gun turret', unit: 'SYS-MG', ref: 'sys_mg', parts, pivots: { weapon: [0, 1.35, 0] }, views: { side: 'right', top: 'up' },
+      muzzles: [{ p: [3.46, 1.96, 0], d: [1, 0, 0], back: 0.4 }],
+      eject: { p: [0.33, 1.91, 0.34], d: [-0.12, 0.78, 0.62] } };
   }
 
   // ── SYS-Rockets: domed pedestal on a cross foot, cradle with a 2×2 rack of rockets (white bodies, red noses)
