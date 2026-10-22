@@ -14,7 +14,7 @@ import { setPlaying } from './fullscreen.js';
 import './data/factions.js';
 const REG = globalThis.BulwarkFactions;
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay, replayOpts } from './sim/replay.js';
-import { KILLCAM, createKillCamRecorder, createKillCamPlayer } from './killcam/killCam.js';
+import { createKillCamRecorder, createKillCamPlayer } from './killcam/killCam.js';
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
 import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
@@ -280,7 +280,7 @@ export function boot(mountEl, seed) {
     if (!plan || !plan.base) return false;
     const player = createKillCamPlayer(plan, { stepSim, applyCommand, FIXED_DT });
     killCam = { player, onDone };
-    render3dMod.setKillCam(renderer3d, { base: plan.base, killer: plan.killerPos, total: (plan.endTick - plan.start.tick) * FIXED_DT + KILLCAM.burn });
+    render3dMod.setKillCam(renderer3d, { base: plan.base, killer: plan.killerPos, replay: (plan.endTick - plan.start.tick) * FIXED_DT });
     if (hud && hud.setKillCam) hud.setKillCam(true, () => endKillCam());
     comm.dismiss();
     return true;

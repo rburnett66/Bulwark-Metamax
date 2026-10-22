@@ -784,14 +784,14 @@ export function cellToScreen(r, cell) {
 }
 
 /**
- * Kill Camera [MM-story_mvjng4fq_9]. setKillCam(r, { base, killer, total }) pins the view between the base and its
- * killer (cells; killer may be null) for a sequence of `total` seconds; setKillCam(r, null) hands the camera back.
+ * Kill Camera [MM-story_mvjng4fq_9]. setKillCam(r, { base, killer, replay }) pins the view between the base and its
+ * killer (cells; killer may be null) and arcs round them over the `replay` seconds before the base falls; setKillCam(r, null) hands the camera back.
  * setKillCamKiller updates where the killer is (it can die mid-replay); blowUpBase starts the base's blast and fire.
  */
 export function setKillCam(r, kc) {
   if (!r || r.destroyed) return;
   if (!kc) { r.killCam = null; r.baseBlast = null; r._fitKey = null; return; }
-  r.killCam = { base: kc.base, killer: kc.killer || null, total: kc.total || 15, t: 0, yaw0: (r.cam && r.cam.yaw) || 0 };
+  r.killCam = { base: kc.base, killer: kc.killer || null, replay: kc.replay || 10, t: 0, yaw0: (r.cam && r.cam.yaw) || 0 };
   r.baseBlast = null;
   if (r.craft && r.craft.setChar) r.craft.setChar(0);   // the replay starts before the base fell
   r.camGlide = null;
