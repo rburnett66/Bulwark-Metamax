@@ -28,7 +28,7 @@ export function createDustTrails({ seed = 23 } = {}) {
       let n = 0;
       const seen = new Set();
       if (views) for (const v of views) {
-        if (!DUST.models.includes(v.model) || (v.y || 0) > 0.01) continue;
+        if (!DUST.models.includes(v.model) || (v.y || 0) > 0.01 || v.wading) continue;   // no dust in the air or while wading
         seen.add(v.id);
         const L = last.get(v.id);
         if (!L) { last.set(v.id, { x: v.x, z: v.z, acc: 0 }); continue; }

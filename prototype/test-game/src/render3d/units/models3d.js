@@ -87,7 +87,7 @@ export function shadowMaterial(THREE, sunDir, alpha) {
     vertexShader: `uniform vec3 uSunDir;
       void main() {
         vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
-        w.xyz -= uSunDir * (w.y / uSunDir.y);
+        w.xyz -= uSunDir * (max(w.y, 0.0) / uSunDir.y);   // a wading hull's submerged part casts from the waterline
         w.y = 0.03;
         gl_Position = projectionMatrix * viewMatrix * w;
       }`,
