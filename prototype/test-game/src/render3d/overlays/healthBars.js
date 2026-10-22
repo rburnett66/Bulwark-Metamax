@@ -17,6 +17,7 @@
  * planBars is pure (state + unit views + memory → bar list); createHealthBarView draws all of them in ONE
  * camera-facing instanced draw.
  */
+import { mountOf } from '../structures/baseMounts.js';
 import { HP_COLORS, hpRgb } from '../../render/hpColors.js';
 import { cellToWorld } from '../camera.js';
 
@@ -75,7 +76,8 @@ export function planBars(state, views, mem, dt, opts = {}) {
   if (state.structures) for (const s of state.structures.values()) {
     if (!s.pos || !(s.maxHp > 1)) continue;
     const fp = s.footprint || { w: 1, h: 1 };
-    step('s' + s.id, s.hp, s.maxHp, s.hp > 0 && s.lifecycle !== 'Destroyed', () => ({ x: s.pos.x + fp.w / 2, y: s.kind === 'wall' ? 0.95 : 1.15, z: s.pos.y + fp.h / 2, w: BARS.structW * fp.w, h: BARS.structH, kind: 1 }));
+    const mt = mountOf(opts.mounts, s);   // a tower mounted on the base's hull carries its bar up with it [MM-task_mvj0k7v3_k]
+    step('s' + s.id, s.hp, s.maxHp, s.hp > 0 && s.lifecycle !== 'Destroyed', () => ({ x: s.pos.x + fp.w / 2, y: (mt ? mt.y : 0) + (s.kind === 'wall' ? 0.95 : 1.15) * (mt ? mt.s : 1), z: s.pos.y + fp.h / 2, w: BARS.structW * fp.w, h: BARS.structH, kind: 1 }));
   }
   // the base — once it has been hit it keeps its bar for the match
   const b = state.base, mb = opts.baseCell;
