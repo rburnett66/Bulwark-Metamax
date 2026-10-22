@@ -31,6 +31,7 @@ import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { UNIT_SCALE } from '../units/modelKeys.js';
 import { UNIT_MODELS } from '../units/models.js';
 import { AIM } from './combatFxModel.js';
+import { factionFxColor, FX_MIX, tintMix } from './factionFx.js';
 
 /** Particle kinds. Additive batch: SPARK, FIRE, FLASH, EMBER. Alpha (smoke) batch: SMOKE, DUST. */
 export const K = Object.freeze({ SPARK: 0, FIRE: 1, FLASH: 2, EMBER: 3, SMOKE: 4, DUST: 5 });
@@ -87,10 +88,15 @@ export function modelInfo(model) {
  *   particles — [{ kind, x, y, z, vx, vy, vz, t, life, size, grow, shade, dusty, fl }]
  *   scorches  — [{ kind: D.SCORCH, x, z, r, rot, seed, t, life, col, a }]   (dark)
  *   glows     — [{ kind: D.RING | D.POOL, x, z, r, r1, rot, seed, t, life, col, a }]   (additive)
- *   chunks    — [{ x, y, z, rx, ry, rz, s, t, life, sink }]
+ *   chunks    — [{ x, y, z, rx, ry, rz, s, t, life, sink, sx?, sy?, sz?, smoke?, burn? }]   (sx/sy/sz: debris plates)
  *   wrecks    — [{ seq, model, group, scale, x, y, z, yaw, pitch, roll, t, burn, falling, rest, sink, fl, phase }]
  *   shake     — camera shake amplitude (world units)
  *   update(state, map, events, dt, views, opts)  — opts.resolve(unitId) → { model, scale } for unseen units
+ *
+ * FACTION COLOUR (factionFx.js) [MM-story_mviqruvd_2]: a hit on, or the death of, a faction's unit tints its sparks,
+ * flash, embers, a touch of its fire, its shock ring and light pool toward that faction's colour, and its wreck keeps
+ * burning in it. Particles carry `tc` (the colour) and `tw` (how much); the view mixes. The tint never draws from the
+ * PRNG, so the same frames give the same effects with or without it.
  */
 export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
   let rand = prng(seed);
@@ -110,6 +116,10 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
   const n = (base) => Math.max(0, Math.round(base * limits.density));
 
   let seedSeq = 0;
+  let tint = null;   // the faction colour of the recipe running now (factionFx.js); null = the classic look
+  /** How much of the faction colour a particle of `kind` takes; sparks spread by their golden-ratio seed (no PRNG). */
+  const tintW = (kind, sd) => (kind === K.SPARK ? FX_MIX.spark0 + (FX_MIX.spark1 - FX_MIX.spark0) * ((sd * 7.31) % 1)
+    : kind === K.FLASH ? FX_MIX.flash : kind === K.EMBER ? FX_MIX.ember : kind === K.FIRE ? FX_MIX.fire : 0);
   function emit(kind, x, y, z, vx, vy, vz, life, size, grow = 0, shade = 0, dusty = 0, drag = 0) {
     if (isAdditive(kind)) { if (nAdd >= limits.additive) return; nAdd++; }
     else { if (nSmoke >= limits.smoke) return; nSmoke++; }
@@ -117,6 +127,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     p.kind = kind; p.x = x; p.y = y; p.z = z; p.vx = vx; p.vy = vy; p.vz = vz;
     p.t = 0; p.life = life; p.size = size; p.grow = grow; p.shade = shade; p.dusty = dusty; p.drag = drag; p.bounces = 0; p.fl = 1;
     p.sd = (seedSeq = (seedSeq + 0.6180339887) % 1);   // a flame's flipbook start frame (fx/fireAtlas.js) [MM-task_mvfqzjkm_7]
+    p.tc = tint; p.tw = tint ? tintW(kind, p.sd) : 0;
     particles.push(p);
   }
 
@@ -130,6 +141,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
 
   function addWreck(w) {
     if (limits.wrecks <= 0) return null;
+    if (w.tc === undefined) w.tc = tint;               // a wreck keeps burning in its faction's colour
     let same = 0;
     for (const o of wrecks) if (o.model === w.model && o.group === w.group) same++;
     // past the instance cap: evict the OLDEST of the same model + part (wrecks are kept in birth order)
@@ -178,9 +190,26 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
         wx: rnd(-12, 12), wy: rnd(-12, 12), wz: rnd(-12, 12), s: rnd(0.025, 0.055), t: 0, life: rnd(2, 3.5), rest: false, sink: 0 });
     }
     decal(D.SCORCH, x, z, rnd(0.8, 1.05) * Math.min(1.4, k), 22, [0.05, 0.04, 0.035], 0.82);
-    decal(D.RING, x, z, 0.1, 0.45, [1.0, 0.75, 0.45], 0.9, 2.2 * k);
-    decal(D.POOL, x, z, 1.6 * k, 0.6, [1.0, 0.55, 0.2], 0.9);
+    decal(D.RING, x, z, 0.1, 0.45, tintMix([1.0, 0.75, 0.45], tint, FX_MIX.ring), 0.9, 2.2 * k);
+    decal(D.POOL, x, z, 1.6 * k, 0.6, tintMix([1.0, 0.55, 0.2], tint, FX_MIX.pool), 0.9);
     shake = Math.min(0.25, shake + 0.12 * k);
+  }
+
+  /**
+   * Chunky debris from a destroyed vehicle (owner 2026-10-21: "on plane crashes and tanks and troop kills, add a few
+   * more chunky debris effects") [MM-story_mviqruvd_2]: hull plates (flat) and lumps, several times the size of a
+   * boom's bits, thrown up tumbling with the wreck's momentum (vx0, vz0), trailing smoke while they fly; some smoulder
+   * a few seconds where they land. Count scales with the unit (k) and the tier's density.
+   */
+  function debris(x, y, z, k, count, vx0 = 0, vz0 = 0) {
+    for (let i = 0, c = n(count * k); i < c && chunks.length < limits.chunks; i++) {
+      const a = rand() * 6.283, sp = rnd(1.4, 4.2), plate = rand() < 0.55;
+      chunks.push({ x: x + rnd(-0.15, 0.15), y, z: z + rnd(-0.15, 0.15), vx: vx0 + Math.cos(a) * sp, vy: rnd(3, 6.5), vz: vz0 + Math.sin(a) * sp,
+        rx: rand() * 6.283, ry: rand() * 6.283, rz: rand() * 6.283, wx: rnd(-10, 10), wy: rnd(-8, 8), wz: rnd(-10, 10),
+        s: rnd(0.08, 0.15) * Math.min(1.3, k),
+        sx: plate ? rnd(1.2, 1.9) : rnd(0.8, 1.2), sy: plate ? rnd(0.22, 0.38) : rnd(0.7, 1.1), sz: plate ? rnd(0.9, 1.4) : rnd(0.8, 1.2),
+        t: 0, life: rnd(4.5, 7), rest: false, sink: 0, smoke: true, burn: rand() < 0.4 ? rnd(1.5, 3.5) : 0, tc: tint });
+    }
   }
 
   /**
@@ -198,9 +227,11 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
         vx: Math.cos(h) * FALL_SPEED, vy: 0.4, vz: Math.sin(h) * FALL_SPEED,
         wx: rnd(-2.5, 2.5), wy: rnd(-0.6, 0.6), wz: rnd(-1.5, -0.6), burn: 0, falling: true, rest: false });
       for (let i = 0, c = n(10); i < c; i++) emit(K.FIRE, v.x, y, v.z, rnd(-1, 1), rnd(-0.2, 1), rnd(-1, 1), rnd(0.3, 0.5), rnd(0.15, 0.3));
+      debris(v.x, y, v.z, k, 2, Math.cos(h) * FALL_SPEED * 0.6, Math.sin(h) * FALL_SPEED * 0.6);   // pieces break off in the air
       return;
     }
     boom(v.x, v.z, k);
+    debris(v.x, 0.3, v.z, k, 5);
     addWreck({ model: v.model, group: 'body', scale: s, k, x: v.x, y: 0, z: v.z, yaw: -(v.heading || 0),
       pitch: rnd(-0.06, 0.06), roll: rnd(-0.08, 0.08), vx: 0, vy: 0, vz: 0, wx: 0, wy: 0, wz: 0,
       burn: rnd(7, 10), falling: false, rest: true });
@@ -216,6 +247,11 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
 
   /** Continuous emitters of one burning wreck: flames, a smoke column on the wind, the odd ember. */
   function fxBurn(w, k, dt) {
+    const was = tint; tint = w.tc || null;
+    fxBurnInner(w, k, dt);
+    tint = was;
+  }
+  function fxBurnInner(w, k, dt) {
     const x = w.x, z = w.z, y = w.group === 'turret' ? 0.12 : w.group === 'ground' ? 0.04 : 0.22, sm = w.smoke == null ? 1 : w.smoke;
     for (let c = Math.floor(26 * k * limits.density * dt + rand()); c > 0; c--) emit(K.FIRE, x + rnd(-0.12, 0.12) * k, y + rnd(0.02, 0.15), z + rnd(-0.12, 0.12) * k, rnd(-0.15, 0.15), rnd(0.6, 1.3), rnd(-0.15, 0.15), rnd(0.35, 0.6), rnd(0.1, 0.2) * Math.max(0.6, k), -0.15);
     for (let c = Math.floor(7 * k * sm * limits.density * dt + rand()); c > 0; c--) emit(K.SMOKE, x + rnd(-0.1, 0.1), y + 0.25, z + rnd(-0.1, 0.1), rnd(-0.1, 0.1), rnd(0.5, 0.9), rnd(-0.1, 0.1), rnd(2.4, 3.6), rnd(0.15, 0.22), 0.9, 0.22);
@@ -260,10 +296,21 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
       c.t += dt;
       if (c.t >= c.life) { chunks[i] = chunks[chunks.length - 1]; chunks.pop(); continue; }
       c.sink = Math.max(0, c.t - (c.life - 0.8)) / 0.8;
-      if (c.rest) continue;
+      if (c.rest) {
+        if (c.burn > 0) {                              // a smouldering piece of debris (debris())
+          c.burn -= dt;
+          const was = tint; tint = c.tc || null;
+          if (rand() < dt * 9 * limits.density) emit(K.FIRE, c.x, c.y + 0.03, c.z, rnd(-0.1, 0.1), rnd(0.4, 0.8), rnd(-0.1, 0.1), rnd(0.3, 0.5), rnd(0.06, 0.1), -0.1);
+          if (rand() < dt * 4 * limits.density) emit(K.SMOKE, c.x, c.y + 0.1, c.z, 0, rnd(0.3, 0.5), 0, rnd(1.4, 2.2), 0.07, 0.6, 0.25);
+          tint = was;
+        }
+        continue;
+      }
       c.vy -= G * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt; c.rx += c.wx * dt; c.ry += c.wy * dt; c.rz += c.wz * dt;
-      if (c.y < c.s * 0.5) {
-        c.y = c.s * 0.5; c.vy = -c.vy * 0.3; c.vx *= 0.5; c.vz *= 0.5; c.wx *= 0.5; c.wy *= 0.5; c.wz *= 0.5;
+      if (c.smoke && rand() < dt * 16 * limits.density) emit(K.SMOKE, c.x, c.y, c.z, 0, 0.15, 0, rnd(0.6, 1.0), 0.05, 0.6, 0.3);   // a flying piece trails smoke
+      const half = c.s * (c.sy || 1) * 0.5;
+      if (c.y < half) {
+        c.y = half; c.vy = -c.vy * 0.3; c.vx *= 0.5; c.vz *= 0.5; c.wx *= 0.5; c.wy *= 0.5; c.wz *= 0.5;
         if (Math.abs(c.vy) < 0.4) { c.rest = true; c.rx = Math.round(c.rx / 1.5708) * 1.5708; c.rz = Math.round(c.rz / 1.5708) * 1.5708; }
       }
     }
@@ -279,6 +326,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
       const w = wrecks[i];
       w.t += dt;
       if (w.falling) {
+        const was = tint; tint = w.tc || null;
         w.vy -= G * dt * (w.group === 'body' ? 0.55 : 1); w.x += w.vx * dt; w.y += w.vy * dt; w.z += w.vz * dt;
         w.yaw += w.wy * dt; w.pitch += w.wz * dt; w.roll += w.wx * dt;
         if (w.group === 'body') {                       // a falling flyer trails fire and smoke
@@ -289,6 +337,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
           if (w.group === 'body') {                     // the flyer hits the ground: explodes, then burns as a wreck
             settle(w); w.pitch = rnd(-0.25, -0.1); w.roll = rnd(-0.4, 0.4); w.burn = rnd(7, 10);
             boom(w.x, w.z, 1.2 * (w.k || 1), true);
+            debris(w.x, 0.25, w.z, 1.2 * (w.k || 1), 7, w.vx * 0.5, w.vz * 0.5);   // the crash scatters the airframe
           } else {                                      // the turret bounces (at most twice), then settles and burns
             w.y = 0.02; w.vy = -w.vy * 0.28; w.vx *= 0.5; w.vz *= 0.5; w.wx *= 0.4; w.wy *= 0.4; w.wz *= 0.4; w.bounces++;
             for (let j = 0, c = n(6); j < c; j++) emit(K.DUST, w.x, 0.05, w.z, rnd(-1, 1), rnd(0.8, 1.8), rnd(-1, 1), 0.6, 0.04);
@@ -299,6 +348,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
             }
           }
         }
+        tint = was;
       } else if (w.t < w.burn) {
         const k = (w.group === 'turret' ? 0.55 : 1) * Math.min(1, (w.burn - w.t) / 2.5) * (w.k || 1);
         fxBurn(w, k, dt);
@@ -459,7 +509,12 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
         else y = HOVER_HEIGHT + 0.24;
       }
     }
+    // faction colour of the unit hit (structures and the base keep the classic sparks)
+    const tu = ev.targetKind === 'unit' || ev.targetKind == null ? (state.units && state.units.get(ev.targetId)) : null;
+    const tv = cur.get(ev.targetId) || prev.get(ev.targetId);
+    tint = factionFxColor((tu && tu.unitId) || (tv && tv.unitId));
     fxHit(x, z, x - src.x, z - src.z, y);
+    tint = null;
   }
 
   function onKill(ev, tick, opts) {
@@ -474,7 +529,9 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     } else {
       v = { ...v, x: cellToWorld(ev.pos.x), z: cellToWorld(ev.pos.y) };   // the sim's death position wins
     }
+    tint = factionFxColor(ev.unitId || v.unitId);
     fxExplode(v);
+    tint = null;
   }
 
   function onEvent(ev, state, tick, opts) {

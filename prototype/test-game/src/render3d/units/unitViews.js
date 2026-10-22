@@ -61,7 +61,7 @@ export function buildUnitViews(state, map, headings, resolve, dt, drawn = null) 
     const tp = dp ? { x: dp.x - 0.5, y: dp.z - 0.5 } : targetPos(state, map, u.targetId);
     const { heading, aim } = headings.turn(u.id, goal, tp ? Math.atan2(tp.y - py, tp.x - px) : goal, dt, !!d);
     out.push({
-      id: u.id, model: r.model, scale: r.scale,
+      id: u.id, unitId: u.unitId, model: r.model, scale: r.scale,   // unitId: its faction colours its impact fx [MM-story_mviqruvd_2]
       x: cellToWorld(px), z: cellToWorld(py), y: u.altitude > 0 ? HOVER_HEIGHT : 0,
       heading, aim,
     });

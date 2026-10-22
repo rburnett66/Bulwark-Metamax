@@ -338,6 +338,14 @@ anchor = contact + mount rotated by heading × voxel size, lifted along `camUp` 
 - Heading convention: model forward is +X; `heading = atan2(dz, dx)` in the cell grid; rotation Y = −heading.
 
 ### 4.11b World-impact effects (L842–1181) — `buildFx3D`, `fxHit`, `fxGround`, `fxExplode`, `boom`, `stepFx`, `drawFx`
+
+- **Faction-coloured impacts + chunky debris** [MM-story_mviqruvd_2] — `fx/factionFx.js` gives each faction an effect colour
+  by unit-id prefix (GND keeps the classic look). A hit on / kill of that faction's unit tints its sparks (spread 0.6–1.0),
+  flash, embers, a touch of its fire, its shock ring and light pool; its wreck (and debris) keep burning in it, and the
+  wreck's light pool takes the colour. Particles carry `tc`/`tw`; the view mixes; the tint never draws from the PRNG.
+  `debris()` throws chunky hull plates and lumps (non-uniform `sx/sy/sz`, several × a boom bit) on every vehicle kill
+  (5), off a flyer as it is hit (2) and when it crashes (7); they trail smoke in flight and ~40% smoulder where they land.
+  Review: `tools/unit-models/fx.py`.
 Presentation only: reads hits and deaths, never changes the sim. CPU-simulated particles drawn by GPU-instanced
 batches. `FX = { wind (0.35, 0, −0.18), G 11, shake }`.
 

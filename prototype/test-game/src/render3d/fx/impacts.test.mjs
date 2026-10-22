@@ -13,6 +13,7 @@ import { createUnits3D } from '../units/models3d.js';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { UNIT_SCALE } from '../units/modelKeys.js';
 import { AIM } from './combatFxModel.js';
+import { FACTION_FX, FX_MIX, factionFxColor } from './factionFx.js';
 
 const MAP = { cols: 32, rows: 32, base: { x: 16, y: 16 } };
 
@@ -122,7 +123,8 @@ test('KILL (tank): boom recipe + a burning hull wreck + the turret blown off its
   assert.equal(count(fx, K.SPARK), 28);
   assert.equal(count(fx, K.SMOKE), 8);
   assert.equal(count(fx, K.FLASH), 0, 'combatFx flashes the kill');
-  assert.equal(fx.chunks.length, 6);
+  assert.equal(fx.chunks.length, 6 + 5, "the boom's 6 bits + 5 chunky debris pieces [MM-story_mviqruvd_2]");
+  assert.equal(fx.chunks.filter((c) => c.sx).length, 5, 'debris carries non-uniform plate / lump extents');
   assert.deepEqual(fx.scorches.map((d) => d.kind), [D.SCORCH]);
   assert.deepEqual(fx.glows.map((d) => d.kind).sort(), [D.RING, D.POOL].sort());
   assert.ok(fx.scorches[0].life === 22, 'scorch lasts 22 s');
@@ -311,4 +313,53 @@ test('the view: bounded batches — 5 particle/flame/decal draws [MM-task_mvfqzj
   view.dispose();
   assert.equal(scene.children.length, before);
   units.dispose();
+});
+
+// ── faction-coloured effects + chunky debris [MM-story_mviqruvd_2] ─────────────────────────────────────────────
+test('a hit on a faction unit tints its sparks toward the faction colour; the classic look stays for others', () => {
+  const hit = (unitId) => {
+    const fx = createImpacts();
+    fx.update(world({ tick: 5, structures: [tower], units: [{ id: 1, unitId, pos: { x: 10, y: 4 } }] }), MAP, [dmg()], 0, [tankView({ unitId })]);
+    return fx.particles.filter((p) => p.kind === K.SPARK);
+  };
+  const dark = hit('DRK-Tanks'), ground = hit('GND-Tanks');
+  assert.ok(dark.length > 0 && dark.every((p) => p.tc === FACTION_FX.DRK && p.tw >= FX_MIX.spark0 && p.tw <= FX_MIX.spark1), 'violet highlights');
+  assert.ok(ground.every((p) => p.tc === null && p.tw === 0), 'Ground / Powder keeps the classic sparks');
+  assert.deepEqual(dark.map((p) => [p.x, p.vx, p.vy]), ground.map((p) => [p.x, p.vx, p.vy]), 'the tint never draws from the PRNG: same sparks, new colour');
+});
+
+test('a faction kill tints the flash, ring, light pool and its wreck — which keeps burning in that colour', () => {
+  const fx = createImpacts();
+  killFrame(fx, tankView({ unitId: 'SPC-Tanks' }), [kill({ unitId: 'SPC-Tanks' })]);
+  assert.ok(fx.wrecks.length && fx.wrecks.every((w) => w.tc === FACTION_FX.SPC));
+  const ring = fx.glows.find((d) => d.kind === D.RING);
+  assert.ok(ring.col[2] > 0.6, 'the shock ring leans magenta');
+  assert.ok(fx.chunks.filter((c) => c.sx).every((c) => c.tc === FACTION_FX.SPC));
+  fx.update(world({ tick: 7 }), MAP, [], 0.5, []);
+  assert.ok(fx.particles.some((p) => p.kind === K.FIRE && p.tc === FACTION_FX.SPC), 'the wreck burns with a magenta touch');
+});
+
+test('factionFxColor maps unit ids by prefix; unknown and System ids get the classic look', () => {
+  assert.equal(factionFxColor('DRK-Tanks'), FACTION_FX.DRK);
+  assert.equal(factionFxColor('ARC-Planes'), FACTION_FX.ARC);
+  assert.equal(factionFxColor('GND-Tanks'), null);
+  assert.equal(factionFxColor('SYS-Harvester'), null);
+  assert.equal(factionFxColor(undefined), null);
+});
+
+test('debris: thrown up tumbling, lands; a flyer sheds pieces in the air, then its crash scatters the airframe', () => {
+  const fx = createImpacts();
+  killFrame(fx, tankView(), [kill()]);
+  const deb = (f) => f.chunks.filter((c) => c.sx);
+  assert.ok(deb(fx).every((c) => c.vy > 0 && c.s >= 0.08), 'thrown up, chunky');
+  for (let i = 0; i < 40; i++) fx.update(world({ tick: 7 + i }), MAP, [], 0.05, []);
+  assert.ok(deb(fx).every((c) => c.rest), 'every piece has landed after 2 s');
+  const fly = createImpacts();
+  killFrame(fly, { id: 2, model: 'jet', scale: 1, x: 10.5, y: HOVER_HEIGHT, z: 4.5, heading: 0, aim: 0 }, [kill({ entityId: 2, unitId: 'AIR-Planes' })]);
+  assert.equal(deb(fly).length, 2, 'two pieces break off in the air');
+  let most = 0;
+  for (let i = 0; i < 120 && !fly.stats.booms; i++) { fly.update(world({ tick: 7 + i }), MAP, [], 0.05, []); most = Math.max(most, deb(fly).length); }
+  most = Math.max(most, deb(fly).length);
+  assert.ok(fly.stats.booms >= 1, 'the flyer crashed');
+  assert.ok(most >= 2 + 7, `the crash scatters the airframe (${most} pieces)`);
 });
