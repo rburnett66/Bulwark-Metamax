@@ -76,6 +76,8 @@ import { createBuildFx } from './fx/buildFx.js';
 import { createDustTrails } from './fx/dustTrail.js';
 import { createTrackMarks, trackSpecs } from './fx/trackMarks.js';
 import { createTrackMarksView } from './fx/trackMarksView.js';
+import { createWakes } from './fx/wakes.js';
+import { createWakesView } from './fx/wakesView.js';
 import { UNIT_MODELS } from './units/models.js';
 import { createFlashGlows } from './fx/flashLights.js';
 import { createImpactsView } from './fx/impactsView.js';
@@ -227,7 +229,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, flashGlows: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, wakes: null, wakesView: null, flashGlows: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map), viewInsets: typeof opts.viewInsets === 'function' ? opts.viewInsets : null,
@@ -250,6 +252,10 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const waterSet = new Set((map.waterCells || []).map((c) => c.x + ',' + c.y));
   r.tracks = createTrackMarks(trackSpecs(UNIT_MODELS), { isWater: (x, z) => waterSet.has(Math.floor(x) + ',' + Math.floor(z)), cap: tier.trackCap || 1600 });
   r.tracksView = createTrackMarksView(THREE, scene, { cap: tier.trackCap || 1600 });
+  // foam wakes behind water units moving over water [MM-task_mvj9o97b_7]; the domain comes from the sim unit
+  r.wakes = createWakes({ isWater: (x, z) => waterSet.has(Math.floor(x) + ',' + Math.floor(z)), cap: tier.wakeCap || 600,
+    isWaterUnit: (v) => { const u = r.wakeState && r.wakeState.units && r.wakeState.units.get(v.id); return !!u && (u.domain === 'Swimmer' || u.domain === 'Floater'); } });
+  r.wakesView = createWakesView(THREE, scene, { cap: tier.wakeCap || 600 });
   // missiles / rockets leave smoke and exhaust through the world-impact particles; rocket hits boom on the ground
   // [MM-task_mvbyf6t8_z]. Launch effects + motor flames [MM-task_mvbz1121_11]:
   //   cannon / flak — muzzle flash (combat FX) + a barrel EXHAUST: a hot tongue and a gunsmoke jet out along the
@@ -623,6 +629,7 @@ export function renderFrame(r, state, ui, events, dt) {
     r.stats.contacts = r.contactsView.sync(c.reticles, r.clock);
     r.dust.step(dt, views, r.impacts.emit, FXK);   // light dust behind moving ground vehicles [MM-task_mvd2loid_i]
     r.tracks.step(dt, views); r.stats.trackMarks = r.tracksView.sync(r.tracks.instances());   // wheel / tread marks [MM-task_mvj0wz2d_1]
+    r.wakeState = state; r.wakes.step(dt, views); r.stats.wakes = r.wakesView.sync(r.wakes.instances());   // water-unit wakes [MM-task_mvj9o97b_7]
     r.unitBarrels.update(views, state, r.map, r.airLift.drawn, dt);   // unit guns pitch to the shot; their tips are firing points [MM-story_mvedy16u_9]
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows, r.clock);
   }
@@ -763,6 +770,7 @@ export function destroyRenderer(r) {
   const canvas = r.renderer.domElement;
   for (const [type, fn, opts] of r.listeners) canvas.removeEventListener(type, fn, opts);
   r.tracksView.dispose();
+  r.wakesView.dispose();
   r.markers.dispose();
   if (r.system) r.system.dispose();
   if (r.craft) r.craft.dispose();
