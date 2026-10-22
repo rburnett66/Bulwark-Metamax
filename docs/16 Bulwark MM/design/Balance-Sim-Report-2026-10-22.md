@@ -228,7 +228,7 @@ The owner asked on 2026-10-22: "re-run balancing with machine gun at lowest towe
 
 **What it shows**
 
-- **Water is the big change, from 0/5 to 4/5.** Water's troops and tanks are Swimmers, and the Cannon and Rocket towers cannot target Swimmers. The Machine Gun can, so for the first time the player has a cheap answer to them.
+- **Water is the big change, from 0/5 to 4/5.** Water's first waves are mostly aircraft (WTR-Copters and WTR-Planes were its top damage dealers), and its troops and tanks are Swimmers, which the Cannon and Rocket towers cannot target. The Machine Gun hits both, so close-in defence finally has a cheap answer to them.
 - **Early waves get easier almost everywhere.** In waves 1–2, base damage falls for High Tech, Artillery, Arcane and Water, because the Machine Gun shreds troops and aircraft at 150 gold.
 - **The losses after wave 2 are almost all Missile Flyers (finding 5.2).** They park outside every anti-air range. In the pressure runs, missile damage rises from about 21k to 95–107k on Powder and from 23k to 168–185k on Arcane. The Machine Gun's 5-cell range cannot reach the standoff, and any gold it takes from Missile Towers lets the standoff grind longer. The Machine Gun does not fix that finding; it needs the missile-range fix.
 - **Dark Energy:** its runs stall (a wave still alive after 240 s), so its win counts measure the stall rule, not the tower. Greenies win 5/5 in every plan.
