@@ -32,6 +32,8 @@ export const FLIGHT_RUN = Object.freeze({
   bank: 0.6,         // rad of roll through a turn
   blend: 1.0,        // s for heading, height and bank to ease into the loop
   fireLead: 0.15,    // shots stop this share of the leg before passing over the target
+  grace: 1.5,        // s a run keeps flying after the sim drops 'attacking' (it often picks it straight back up)
+  settle: 0.05,      // cells: an exiting plane is home once this close to where the sim holds it
 });
 
 /** Racetrack geometry: total length and the four segments' lengths. */
@@ -89,7 +91,8 @@ const angLerp = (a, b, t) => { const d = ((b - a) % (Math.PI * 2) + Math.PI * 3)
  */
 export function createFlightPaths({ lookup = getUnitDef } = {}) {
   const poses = new Map();
-  const mem = new Map();   // id → { t: seconds in the attack, phase: arc offset, f: inbound dir, T: target }
+  const mem = new Map();   // id → { t: seconds in the attack, s0: arc offset, f: inbound dir, T: target, idle: s since the sim let go }
+  const drawn = new Map(); // id → the pose drawn last frame (a new run or the way home starts from it, never from the sim)
   const strafes = new Map();   // unitId → bool (cached def lookup)
   let clock = 0;
   const isStrafer = (unitId) => {
@@ -112,43 +115,61 @@ export function createFlightPaths({ lookup = getUnitDef } = {}) {
       poses.clear();
       if (!state || !state.units || !views) return poses;
       const live = new Set();
+      const speedOf = (u) => { let d = null; try { d = lookup(u.unitId); } catch (e) { d = null; } return Math.max(FLIGHT_RUN.minSpeed, ((d && d.speed) || 1.5) * FLIGHT_RUN.speedK); };
+      const put = (v, pose) => { v.x = pose.x; v.z = pose.z; v.y = pose.y; v.heading = pose.heading; v.aim = pose.heading; v.bank = pose.bank;
+        drawn.set(v.id, { x: pose.x, z: pose.z, y: pose.y, heading: pose.heading, bank: pose.bank }); };
       for (const v of views) {
         const u = state.units.get(v.id);
         if (!u || u.hp <= 0 || !(u.altitude > 0 || u.domain === 'Flyer') || !isStrafer(u.unitId)) continue;
-        if (u.state !== 'attacking' || u.targetId === null || u.targetId === undefined) continue;
-        const T = targetWorld(state, map, u);
-        if (!T) continue;
-        live.add(v.id);
+        const attacking = u.state === 'attacking' && u.targetId !== null && u.targetId !== undefined;
+        const T = attacking ? targetWorld(state, map, u) : null;
         let m = mem.get(v.id);
-        if (!m || m.tid !== u.targetId) {
-          // the run comes in from where the plane is now: inbound direction = from the plane toward the target
-          let fx = T.x - v.x, fz = T.z - v.z; const d = Math.hypot(fx, fz) || 1; fx /= d; fz /= d;
-          const L = FLIGHT_RUN.halfLength;
-          // the plane is already on the inbound line (f points from it to the target): start the run exactly where it
-          // is — arc length L − d, negative when it holds farther out than the run's start (the first run is longer)
-          m = { t: 0, tid: u.targetId, fx, fz, s0: Math.min(2 * L, L - d), from: { x: v.x, z: v.z, heading: v.heading } };
-          mem.set(v.id, m);
+        const speed = speedOf(u);
+        if (T) {
+          live.add(v.id);
+          if (m && m.tid !== u.targetId) m = null;   // a new target: a new run …
+          if (!m) {
+            // … flown in from where the plane is DRAWN (mid-loop, or easing home), not where the sim holds it — the run's
+            // inbound line passes through that point, so it never jumps [MM-task_mvk3fn61_l]
+            const at = drawn.get(v.id) || { x: v.x, z: v.z, heading: v.heading, y: v.y, bank: 0 };
+            let fx = T.x - at.x, fz = T.z - at.z; const d = Math.hypot(fx, fz) || 1; fx /= d; fz /= d;
+            const L = FLIGHT_RUN.halfLength;
+            m = { t: 0, tid: u.targetId, fx, fz, s0: Math.min(2 * L, L - d), from: { heading: at.heading, y: at.y != null ? at.y : HOVER_HEIGHT, bank: at.bank || 0 }, T };
+            mem.set(v.id, m);
+          }
+          m.T = T; m.idle = 0;
+        } else if (m && m.idle + step <= FLIGHT_RUN.grace) {
+          // the sim let go of 'attacking' (a re-target, a blip): keep flying the same loop round the last target for a moment
+          live.add(v.id);
+          m.idle += step;
+        } else {
+          // the attack is over: ease home to where the sim holds the plane, at the plane's own speed
+          mem.delete(v.id);
+          const at = drawn.get(v.id);
+          if (!at) continue;
+          const dx = v.x - at.x, dz = v.z - at.z, d = Math.hypot(dx, dz);
+          if (d <= FLIGHT_RUN.settle) { drawn.delete(v.id); continue; }
+          const k = Math.min(1, (speed * step) / d);
+          const heading = d > 0.2 ? angLerp(at.heading, Math.atan2(dz, dx), Math.min(1, step * 4)) : at.heading;
+          live.add(v.id);
+          put(v, { x: at.x + dx * k, z: at.z + dz * k, y: at.y + (v.y - at.y) * Math.min(1, step * 2), heading, bank: at.bank * Math.max(0, 1 - step * 3) });
+          poses.set(v.id, { x: v.x, y: v.y, z: v.z, heading: v.heading, bank: v.bank, inbound: false });
+          continue;
         }
         m.t += step;
-        const def = (() => { try { return lookup(u.unitId); } catch (e) { return null; } })();
-        const speed = Math.max(FLIGHT_RUN.minSpeed, ((def && def.speed) || 1.5) * FLIGHT_RUN.speedK);
-        const sArc = m.s0 + m.t * speed, L = FLIGHT_RUN.halfLength;
-        const p = sArc >= 0 ? loopPose(T.x, T.z, m.fx, m.fz, sArc)
-          : { x: T.x + m.fx * (sArc - L), z: T.z + m.fz * (sArc - L), heading: Math.atan2(m.fz, m.fx), bank: 0, inbound: true, turnK: 0 };   // the long first run-in
+        const Tm = m.T, sArc = m.s0 + m.t * speed, L = FLIGHT_RUN.halfLength;
+        const p = sArc >= 0 ? loopPose(Tm.x, Tm.z, m.fx, m.fz, sArc)
+          : { x: Tm.x + m.fx * (sArc - L), z: Tm.z + m.fz * (sArc - L), heading: Math.atan2(m.fz, m.fx), bank: 0, inbound: true, turnK: 0 };   // the long first run-in
         // position follows the loop from the first frame (it starts at the plane); heading, height and bank ease in
         const b = Math.min(1, m.t / FLIGHT_RUN.blend), e = b * b * (3 - 2 * b);
         const y = HOVER_HEIGHT + FLIGHT_RUN.climb * p.turnK - (p.inbound ? FLIGHT_RUN.dive : 0);
-        v.x = p.x;
-        v.z = p.z;
-        v.y = HOVER_HEIGHT + (y - HOVER_HEIGHT) * e;
-        v.heading = angLerp(m.from.heading, p.heading, e);
-        v.aim = v.heading;
-        v.bank = p.bank * e;
-        poses.set(v.id, { x: v.x, y: v.y, z: v.z, heading: v.heading, bank: v.bank, inbound: p.inbound && e > 0.99 });
+        put(v, { x: p.x, z: p.z, y: m.from.y + (y - m.from.y) * e, heading: angLerp(m.from.heading, p.heading, e), bank: m.from.bank + (p.bank - m.from.bank) * e });
+        poses.set(v.id, { x: v.x, y: v.y, z: v.z, heading: v.heading, bank: v.bank, inbound: p.inbound && e > 0.99 && T != null });
       }
       for (const id of [...mem.keys()]) if (!live.has(id)) mem.delete(id);
+      for (const id of [...drawn.keys()]) if (!live.has(id)) drawn.delete(id);
       return poses;
     },
-    clear() { poses.clear(); mem.clear(); },
+    clear() { poses.clear(); mem.clear(); drawn.clear(); },
   };
 }
