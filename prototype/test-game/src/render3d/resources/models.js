@@ -376,7 +376,7 @@ export function planResources(nodes, wave) {
     sig.push(`${n.id}:${q}:${tier}`);
     const s = (q === 0 ? 0.4 : 0.6 + 0.4 * q) * (0.92 + (h % 17) / 100);
     byTier[tier].push({ x: n.x + 0.5, z: n.y + 0.5, ry: ((h >>> 5) % 360) * D, s, dim: q === 0 ? 0.45 : 1 });
-    rings.push({ x: n.x + 0.5, z: n.y + 0.5, color: n.color || ({ common: 'blue', uncommon: 'yellow', rare: 'red', epic: 'green' })[tier], dim: q === 0 ? 0.5 : 1 });
+    rings.push({ id: n.id, x: n.x + 0.5, z: n.y + 0.5, color: n.color || ({ common: 'blue', uncommon: 'yellow', rare: 'red', epic: 'green' })[tier], dim: q === 0 ? 0.5 : 1 });
   }
   return { byTier, rings, sig: sig.join('|') };
 }
