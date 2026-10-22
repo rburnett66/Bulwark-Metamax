@@ -19,11 +19,23 @@ Game lookup order (src/main.js `loadForgeMap`):
 Authoring loop: terrain.html → compose → **Save map to slot** (playable immediately in your
 browser) → when final, **Export slot file** and commit it here.
 
-## Playtest copies (temporary)
+## Map 1 for every faction (authored)
 
-Until each faction has its own maps, every faction ships a **copy of Powder's maps**
-(`air-map-1.json`, `water-map-1.json`, …), written by `node tools/maps/copy-faction-maps.mjs`.
-A copy carries `"_copiedFrom": "powder-map-<n>"`, which makes the game reuse Powder's baked road
-mask; the battle view draws it in the faction's own planet palette, light and resources. Re-run the
-script after editing Powder's maps. Authoring a faction's map in the Terrain Forge and exporting it
-here replaces its copy (the script never overwrites a file without `_copiedFrom`).
+Since 2026-10-22 every faction ships its **own** map 1, built from its planet's recipe in
+`docs/16 Bulwark MM/design/Faction-Terrain-Design.md` §2.3 and checked against the §1 fairness guardrails
+[MM-story_mvjw67lo_f]. Powder's map 1 is unchanged. How they were made, and how to remake or re-roll one:
+
+1. `node tools/maps/faction-maps.mjs [slug]` — search seeds for a recipe; prints the best that pass the guardrails;
+2. `python tools/maps/forge-export.py jobs.json out.json` — the real Terrain Forge (headless) renders recipe + seed and
+   exports exactly what "Export slot file" writes;
+3. write `<slug>-map-1.json` here, then bake its 3D level: `node tools/terrain3d-proto/bake3d.mjs <slug>-map-1`.
+
+`tools/maps/faction-maps.test.mjs` keeps each shipped map on its recipe, inside the guardrails, and in step with its
+baked level. Hand-tuning a map in the Forge and exporting it here is fine — the test still applies.
+
+## Playtest copies (retired for map 1)
+
+The old stopgap gave every faction a **copy of Powder's map**, written by `node tools/maps/copy-faction-maps.mjs` and
+stamped `"_copiedFrom": "powder-map-<n>"`. No copies remain. The script never overwrites a file without `_copiedFrom`,
+so running it now changes nothing. Maps 2–9 have no forge files yet: they still come from the workbook generator, or
+from a Powder slot saved in your browser (the runtime mirror, `TEMP_MIRROR_FACTION` in `src/main.js`).
