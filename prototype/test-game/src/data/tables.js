@@ -1432,6 +1432,17 @@ export function getStructureDef(structId) {
   return def;
 }
 
+// Owner, 2026-10-23: "Tower upgrades should all increase range 10%". Each upgrade step multiplies
+// the tower's reach by (1 + this), compounding: T1 ×1.00 · T2 ×1.10 · T3 ×1.21. Every tower range
+// read (sim targeting and the range rings) goes through towerRange so seen and hit always agree.
+export const TOWER_RANGE_PER_UPGRADE = 0.10;
+export function towerRange(def, tier) {
+  const r = def && typeof def.range === 'number' ? def.range : 0;
+  if (r <= 0) return 0;
+  const steps = Math.max(0, Math.floor(tier || 1) - 1);
+  return r * Math.pow(1 + TOWER_RANGE_PER_UPGRADE, steps);
+}
+
 // ---------------------------------------------------------------------------
 // Attach to the global namespace for the no-bundler build (index.html).
 // ---------------------------------------------------------------------------
