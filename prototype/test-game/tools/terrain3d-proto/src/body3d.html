@@ -437,6 +437,14 @@ const LOWPAL = {
       sand: '#c8b890', dirt: '#a8946e', road: '#d8ccaa', roadEdge: '#b8a87e', shore: '#c8c0a0', foam: '#d8e4e8', waterL: '#7a9ab0', waterD: '#4a6a84' },
     canopy: ['#5a7a4a', '#6a8a52', '#4e6a42', '#7a9a5a', '#a87a3a'], rare: '#a86aa8', pine: ['#2e4a3a', '#385646', '#263e32', '#426250'], trunk: '#4a3e36',
     hills: ['#7a9a5e', '#8aa86a', '#6a8a54', '#96b072'], cliff: ['#8a8c90', '#96989c', '#7e8084', '#a2a4a8'] },
+  // LUNAR — Lumen's barren grey moon (2026-10-23) [MM-story_mvl774l4_p]; same colours as the game's
+  // src/render3d/styles/lowpoly-palettes.js `lunar`. The game also drops grass tufts / grass texture and shades craters
+  // (`bare`, `craters`); this prototype only takes the colours.
+  lunar: { rock: ['#6e7178', '#82858c', '#5f6269', '#989ba2'], rockB: '#a4a7ae', pebble: '#b4b7be', tuft: '#8c9098',
+    ground: { lime: '#9a9ca2', grass: '#878a91', teal: '#70737b', brush: '#62666f', forest: '#575b64', stone: '#96989e', lilac: '#7a7d86',
+      sand: '#a9aaaf', dirt: '#7c7874', road: '#b3b5ba', roadEdge: '#989aa0', shore: '#a9b2be', foam: '#c9d2dc', waterL: '#4e5a70', waterD: '#2c3344' },
+    canopy: ['#6a6e78', '#7a7e88', '#5c606a', '#8a8e98', '#5ae0f0'], rare: '#9af4ff', pine: ['#5a5e68', '#646872', '#50545e', '#6e727c'], trunk: '#4a4e58',
+    hills: ['#8a8e96', '#9a9da4', '#7a7e86', '#a8abb2'], cliff: ['#6e7178', '#7c7f86', '#62656c', '#8a8d94'] },
   savanna: { rock: ['#b8704a', '#c47c54', '#a8643e', '#d08a5e'], rockB: '#c88a64', pebble: '#d4a07a', tuft: '#d8b860',
     ground: { lime: '#f0d878', grass: '#dcc062', teal: '#b8a050', brush: '#c8b05a', forest: '#9a8a48', stone: '#d0b88a', lilac: '#c09070',
       sand: '#f4dca0', dirt: '#d8a868', road: '#fcecc4', roadEdge: '#e8cc90', shore: '#eedca0', foam: '#d0eef0', waterL: '#6ab8d8', waterD: '#3a80b0' },
@@ -1561,6 +1569,9 @@ const PRESETS = {
     proj: [1, 0.85, 0.55], fx: [1, 1, 1, 0, 0], bloom: null },
   lp_highlands: { label: 'Low-poly · Highlands', neon: 0, low: 1, pal: 'highlands', clear: 0x9aa8b4, apron: 0x7a9a5e, amb: [0xffffff, 0.2], hemi: [0xd8e0e8, 0x6a7a5a, 0.6], sun: [0xf4f0e8, 0.75, 10, 38],
     fogNear: 70, fogFar: 190, ground: null, kinds: null, unitTint: [0.5, 0.5, 0.74], outline: 0x000000, fog: [0.25, 0.28, 0.3, 0.45], ring: [1.0, 1.0, 1.0, 0.7],
+    proj: [1, 0.85, 0.55], fx: [1, 1, 1, 0, 0], bloom: null },
+  lp_lunar: { label: 'Low-poly · Lunar', neon: 0, low: 1, pal: 'lunar', clear: 0x070a12, apron: 0x5f6269, amb: [0xffffff, 0.13], hemi: [0xdfe4ee, 0x484c56, 0.48], sun: [0xffffff, 1.15, 10, 38],
+    fogNear: 70, fogFar: 190, ground: null, kinds: null, unitTint: [0.5, 0.5, 0.74], outline: 0x000000, fog: [0.03, 0.04, 0.07, 0.5], ring: [0.35, 0.88, 0.94, 0.8],
     proj: [1, 0.85, 0.55], fx: [1, 1, 1, 0, 0], bloom: null },
   lp_savanna: { label: 'Low-poly · Savanna', neon: 0, low: 1, pal: 'savanna', clear: 0xf0c890, apron: 0xdcc062, amb: [0xffffff, 0.16], hemi: [0xfff0d0, 0xa88a50, 0.5], sun: [0xfff0c0, 1.2, -10, 35],
     fogNear: 70, fogFar: 190, ground: null, kinds: null, unitTint: [0.5, 0.5, 0.74], outline: 0x000000, fog: [0.4, 0.28, 0.12, 0.4], ring: [1.0, 1.0, 1.0, 0.7],

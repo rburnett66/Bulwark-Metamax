@@ -77,7 +77,7 @@ if which == 'unitzoom':
         await pg.wait_for_timeout(2000)
     asyncio.run(run(1400, 860, 'unitzoom', actions=a, wait=3000))
 if which == 'allpal':
-    keys = ['lowpoly','lp_autumn','lp_winter','lp_canyon','lp_tropical','lp_sakura','lp_dusk','lp_volcanic','lp_alien','lp_highlands','lp_savanna']
+    keys = ['lowpoly','lp_autumn','lp_winter','lp_canyon','lp_tropical','lp_sakura','lp_dusk','lp_volcanic','lp_alien','lp_highlands','lp_lunar','lp_savanna']
     async def go():
         async with async_playwright() as p:
             b = await p.chromium.launch(args=['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist'])

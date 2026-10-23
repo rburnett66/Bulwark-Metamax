@@ -155,7 +155,7 @@ Each faction's planet picks a world palette (`styles/lowpoly-palettes.js`, `data
 | Artillery | canyon |
 | Water | winter |
 | Arcane | volcanic |
-| Space Tech | highlands |
+| Space Tech | lunar (was highlands; 2026-10-23, barren grey moon, no grass) |
 | Dark Energy | alien |
 | Greenies | tropical |
 
