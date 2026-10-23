@@ -47,11 +47,15 @@ export function mergeResourceModel(THREE, def, prims = createPrims(THREE)) {
   return { lit: geo(A.lit), glow: geo(A.glow), tris };
 }
 
+import { RING, RING_VERT, RING_FRAG, phaseOf } from './pulseRing.js';
+
 export function createResources3D(THREE, scene, planet) {
   const prims = createPrims(THREE);
   const litMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
-  const ringMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.8, depthWrite: false });
+  // the field marker: a thin ring that expands and cycles (pulseRing.js) [MM-task_mvk37bu6_k]
+  const ringMat = new THREE.ShaderMaterial({ vertexShader: RING_VERT, fragmentShader: RING_FRAG, uniforms: { uTime: { value: 0 } },
+    transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const group = new THREE.Group(); group.name = 'resources-planet';
   scene.add(group);
   const tmp = new THREE.Object3D(), col = new THREE.Color();
@@ -65,7 +69,10 @@ export function createResources3D(THREE, scene, planet) {
     group.add(m);
     return m;
   };
-  const ringGeo = new THREE.RingGeometry(0.36, 0.45, 20).rotateX(-Math.PI / 2);
+  const ringGeo = new THREE.PlaneGeometry(2 * RING.r1, 2 * RING.r1).rotateX(-Math.PI / 2);
+  const ringPhase = new THREE.InstancedBufferAttribute(new Float32Array(CAP), 1);
+  const ringCol = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3);
+  ringGeo.setAttribute('aPhase', ringPhase); ringGeo.setAttribute('aColor', ringCol);
   const rings = inst(ringGeo, ringMat, 'resources-rings', false);
   rings.renderOrder = 1;
 
@@ -109,11 +116,15 @@ export function createResources3D(THREE, scene, planet) {
       for (let i = 0; i < n; i++) {
         const r = plan.rings[i];
         tmp.position.set(r.x, 0.025, r.z); tmp.rotation.set(0, 0, 0); tmp.scale.setScalar(1); tmp.updateMatrix();
-        rings.setMatrixAt(i, tmp.matrix); rings.setColorAt(i, col.copy(ringRGB[r.color] || ringRGB.blue).multiplyScalar(r.dim));
+        rings.setMatrixAt(i, tmp.matrix);
+        col.copy(ringRGB[r.color] || ringRGB.blue).multiplyScalar(r.dim);
+        ringCol.setXYZ(i, col.r, col.g, col.b); ringPhase.setX(i, phaseOf(r.id != null ? r.id : r.x + ',' + r.z));
       }
-      rings.count = n; rings.visible = n > 0; rings.instanceMatrix.needsUpdate = true; rings.instanceColor.needsUpdate = true;
+      rings.count = n; rings.visible = n > 0; rings.instanceMatrix.needsUpdate = true; ringCol.needsUpdate = true; ringPhase.needsUpdate = true;
       return true;
     },
+    /** Advance the ring pulse (seconds of render time). */
+    tick(t) { ringMat.uniforms.uTime.value = t; },
     dispose() {
       scene.remove(group);
       group.traverse((o) => { if (o.geometry) o.geometry.dispose(); });

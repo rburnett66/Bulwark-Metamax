@@ -6,7 +6,7 @@
  * balance harness (no rendering, no DOM, no randomness of its own).
  */
 
-import { EFFECTIVENESS, DAMAGE_TYPES, getStructureDef } from '../data/tables.js';
+import { EFFECTIVENESS, ROLE_EFFECTIVENESS, DAMAGE_TYPES, getStructureDef } from '../data/tables.js';
 import { grantKillIncome } from './economy.js';
 import { emitEvent } from './core.js';
 import { bonusDamageMult } from './bonuses.js';
@@ -105,6 +105,17 @@ function domainsAllow(domainList, targetDomain) {
     if (entryIsAir === wantAir) return true;
   }
   return false;
+}
+
+/**
+ * May structure def `def` hit unit `u`? Its domains must allow the unit's, and a tower restricted to light ground
+ * targets (`groundTargets: 'light'`, the Machine Gun) only hits ground / water units flagged lightGround — aircraft
+ * it hits regardless. [MM-story_mvk3kwu2_m]
+ */
+export function structCanHit(def, u) {
+  if (!domainsAllow(def.canTargetDomains, u.domain)) return false;
+  if (def.groundTargets === 'light' && !isAirDomain(u.domain) && !u.lightGround) return false;
+  return true;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -327,7 +338,7 @@ export function acquireTarget(state, shooter) {
     for (const u of state.units.values()) {
       if (u.hp <= 0) continue;
       if (u.side !== 'attacker') continue;
-      if (!domainsAllow(def.canTargetDomains, u.domain)) continue;
+      if (!structCanHit(def, u)) continue;
       if (!canSee(shooter, u)) continue;
       const d2 = dist2Between(shooter.pos, u.pos);
       if (d2 > range2) continue;
@@ -427,8 +438,11 @@ export function applyDamage(state, sourceId, target, rawDps, damageType, dt) {
   if (!target || target.hp <= 0) return { dealt: 0, killed: false };
 
   const row = EFFECTIVENESS[damageType];
-  const mult = (row && row[target.armorClass] !== undefined)
-    ? row[target.armorClass]
+  // a role override (Toxic corrodes harvesters and repair drones) beats the armor-class row [MM-task_mvjxae69_g]
+  const role = target.isHarvester ? 'harvester' : target.isRepairTroop ? 'repairDrone' : null;
+  const byRole = role && ROLE_EFFECTIVENESS[damageType];
+  const mult = (byRole && byRole[role] !== undefined) ? byRole[role]
+    : (row && row[target.armorClass] !== undefined) ? row[target.armorClass]
     : 1;
 
   let dealt = rawDps * mult * dt;
@@ -581,7 +595,7 @@ export function stepCombat(state, dt) {
     if (tid !== null && tid !== undefined && tid !== BASE_TARGET_ID) {
       const cand = state.units.get(tid);
       if (cand && cand.hp > 0 && cand.side === 'attacker' &&
-          domainsAllow(def.canTargetDomains, cand.domain) &&
+          structCanHit(def, cand) &&
           dist2Between(s.pos, cand.pos) <= def.range * def.range) {
         target = cand;
       }
@@ -611,7 +625,7 @@ export function stepCombat(state, dt) {
       const px = target.pos.x, py = target.pos.y, r2 = aoe * aoe;
       for (const other of state.units.values()) {
         if (other === target || other.hp <= 0 || other.side !== 'attacker') continue;
-        if (!domainsAllow(def.canTargetDomains, other.domain)) continue;
+        if (!structCanHit(def, other)) continue;
         const ox = other.pos.x - px, oy = other.pos.y - py;
         if (ox * ox + oy * oy > r2) continue;
         if (applyDamage(state, s.id, other, dps * bonusDamageMult(state, other), def.damageType, dt).killed) deadUnitIds.push(other.id);

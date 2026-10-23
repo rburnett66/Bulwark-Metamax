@@ -709,6 +709,18 @@ export function createMenu(mountEl, cbs) {
     row.appendChild(sl); row.appendChild(vlab);
     setBox.appendChild(row);
   }
+  // EFFECTS LAB (owner 2026-10-22): every battle effect, per faction, with live tuning [MM-story_mvk63439_o]
+  {
+    const row = el(doc, 'div', 'bwm-srow');
+    row.appendChild(el(doc, 'label', null, 'EFFECTS LAB'));
+    const go = el(doc, 'button', 'bwm-btn'); go.style.cssText = 'width:auto;padding:6px 14px;flex:0 0 auto';
+    go.appendChild(el(doc, 'span', null, 'OPEN'));
+    go.title = 'See and tune every battle effect for each faction';
+    go.addEventListener('click', () => { try { window.location.href = 'fxlab.html'; } catch (e) { /* no window (tests) */ } });
+    row.appendChild(el(doc, 'span', 'v', 'see and tune battle effects'));
+    row.appendChild(go);
+    setBox.appendChild(row);
+  }
   setBox.appendChild(el(doc, 'div', 'note', 'Audio is shared with the in-game settings gear. More options land here as they ship.'));
   const nsty = el(doc, 'style'); nsty.textContent = '.bwm-set .note{font-size:11px;color:#8fa0b3;margin-top:6px}';
   setBox.appendChild(nsty);

@@ -31,7 +31,8 @@ import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { UNIT_SCALE } from '../units/modelKeys.js';
 import { UNIT_MODELS } from '../units/models.js';
 import { AIM } from './combatFxModel.js';
-import { factionFxColor, FX_MIX, tintMix } from './factionFx.js';
+import { tintMix } from './factionFx.js';
+import { TUNE, tunedFactionColor } from './fxTune.js';   // live knobs (Effects Lab) [MM-story_mvk63439_o]
 
 /** Particle kinds. Additive batch: SPARK, FIRE, FLASH, EMBER. Alpha (smoke) batch: SMOKE, DUST. */
 export const K = Object.freeze({ SPARK: 0, FIRE: 1, FLASH: 2, EMBER: 3, SMOKE: 4, DUST: 5 });
@@ -118,9 +119,27 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
   let seedSeq = 0;
   let tint = null;   // the faction colour of the recipe running now (factionFx.js); null = the classic look
   /** How much of the faction colour a particle of `kind` takes; sparks spread by their golden-ratio seed (no PRNG). */
-  const tintW = (kind, sd) => (kind === K.SPARK ? FX_MIX.spark0 + (FX_MIX.spark1 - FX_MIX.spark0) * ((sd * 7.31) % 1)
-    : kind === K.FLASH ? FX_MIX.flash : kind === K.EMBER ? FX_MIX.ember : kind === K.FIRE ? FX_MIX.fire : 0);
+  const tintW = (kind, sd) => { const M = TUNE.mix; return kind === K.SPARK ? M.spark0 + (M.spark1 - M.spark0) * ((sd * 7.31) % 1)
+    : kind === K.FLASH ? M.flash : kind === K.EMBER ? M.ember : kind === K.FIRE ? M.fire : 0; };
+  // Effects Lab knobs [MM-story_mvk63439_o]: per-kind count / size / life multipliers. Count runs through a per-kind
+  // accumulator (no PRNG draw), so at 1 every call emits exactly once — today's stream and look are unchanged.
+  const KIND_NAME = ['spark', 'fire', 'flash', 'ember', 'smoke', 'dust'];
+  const acc = [0, 0, 0, 0, 0, 0];
   function emit(kind, x, y, z, vx, vy, vz, life, size, grow = 0, shade = 0, dusty = 0, drag = 0) {
+    const T = TUNE.impacts[KIND_NAME[kind]];
+    if (T && (T.count !== 1 || T.size !== 1 || T.life !== 1)) {
+      acc[kind] += T.count;
+      let copy = 0;
+      while (acc[kind] >= 1) {
+        acc[kind] -= 1;
+        const j = copy++ ? 0.25 : 0, q = (seedSeq * 13.7) % 1 - 0.5;   // extra copies fan out a little (deterministic)
+        emitOne(kind, x, y, z, vx * (1 + j * q), vy * (1 + j * 0.5 * q), vz * (1 - j * q), life * T.life, size * T.size, grow, shade, dusty, drag);
+      }
+      return;
+    }
+    emitOne(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty, drag);
+  }
+  function emitOne(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty, drag) {
     if (isAdditive(kind)) { if (nAdd >= limits.additive) return; nAdd++; }
     else { if (nSmoke >= limits.smoke) return; nSmoke++; }
     const p = freeP.pop() || {};
@@ -190,9 +209,9 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
         wx: rnd(-12, 12), wy: rnd(-12, 12), wz: rnd(-12, 12), s: rnd(0.025, 0.055), t: 0, life: rnd(2, 3.5), rest: false, sink: 0 });
     }
     decal(D.SCORCH, x, z, rnd(0.8, 1.05) * Math.min(1.4, k), 22, [0.05, 0.04, 0.035], 0.82);
-    decal(D.RING, x, z, 0.1, 0.45, tintMix([1.0, 0.75, 0.45], tint, FX_MIX.ring), 0.9, 2.2 * k);
-    decal(D.POOL, x, z, 1.6 * k, 0.6, tintMix([1.0, 0.55, 0.2], tint, FX_MIX.pool), 0.9);
-    shake = Math.min(0.25, shake + 0.12 * k);
+    decal(D.RING, x, z, 0.1, 0.45, tintMix([1.0, 0.75, 0.45], tint, TUNE.mix.ring), 0.9, 2.2 * k);
+    decal(D.POOL, x, z, 1.6 * k, 0.6, tintMix([1.0, 0.55, 0.2], tint, TUNE.mix.pool), 0.9);
+    shake = Math.min(0.25 * TUNE.shake, shake + 0.12 * k * TUNE.shake);
   }
 
   /**
@@ -512,7 +531,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     // faction colour of the unit hit (structures and the base keep the classic sparks)
     const tu = ev.targetKind === 'unit' || ev.targetKind == null ? (state.units && state.units.get(ev.targetId)) : null;
     const tv = cur.get(ev.targetId) || prev.get(ev.targetId);
-    tint = factionFxColor((tu && tu.unitId) || (tv && tv.unitId));
+    tint = tunedFactionColor((tu && tu.unitId) || (tv && tv.unitId));
     fxHit(x, z, x - src.x, z - src.z, y);
     tint = null;
   }
@@ -529,7 +548,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     } else {
       v = { ...v, x: cellToWorld(ev.pos.x), z: cellToWorld(ev.pos.y) };   // the sim's death position wins
     }
-    tint = factionFxColor(ev.unitId || v.unitId);
+    tint = tunedFactionColor(ev.unitId || v.unitId);
     fxExplode(v);
     tint = null;
   }
