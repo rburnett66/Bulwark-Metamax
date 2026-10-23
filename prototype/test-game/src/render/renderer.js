@@ -1,4 +1,4 @@
-import { getStructureDef, getUnitDef } from '../data/tables.js';
+import { getStructureDef, getUnitDef, towerRange } from '../data/tables.js';
 import { HP_COLORS } from './hpColors.js';
 import { hasArt, buildUnitSprite } from './unitArt.js';
 import { hasVoxel, buildVoxelUnit, updateVoxelUnit, buildDecorSprite } from './voxel/loader.js';
@@ -1929,14 +1929,14 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       let range = 0;
       try {
         const def = getStructureDef(sel.structId);
-        range = def && typeof def.range === 'number' ? def.range : 0;
+        range = towerRange(def, sel.tier);
       } catch (e) { range = 0; }
       if (range > 0 && (sel.kind === 'antiGround' || sel.kind === 'antiAir')) {
         const covColor = sel.kind === 'antiAir' ? 0x6fa0e0 : 0xe0b070;
         for (const s of state.structures.values()) {
           if (s.id === sel.id || s.kind !== sel.kind || s.lifecycle === 'Destroyed' || s.hp <= 0) continue;
           let r2 = 0;
-          try { const d2 = getStructureDef(s.structId); r2 = (d2 && d2.range) || 0; } catch (e) { continue; }
+          try { r2 = towerRange(getStructureDef(s.structId), s.tier); } catch (e) { continue; }
           if (r2 <= 0) continue;
           const sfp = s.footprint || { w: 1, h: 1 };
           gO.lineStyle(3, covColor, 0.3);   // 3× width — thin rings were near-invisible on mobile (owner)

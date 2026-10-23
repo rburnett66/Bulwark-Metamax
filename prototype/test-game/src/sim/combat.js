@@ -6,7 +6,7 @@
  * balance harness (no rendering, no DOM, no randomness of its own).
  */
 
-import { EFFECTIVENESS, ROLE_EFFECTIVENESS, DAMAGE_TYPES, getStructureDef } from '../data/tables.js';
+import { EFFECTIVENESS, ROLE_EFFECTIVENESS, DAMAGE_TYPES, getStructureDef, towerRange } from '../data/tables.js';
 import { grantKillIncome } from './economy.js';
 import { emitEvent } from './core.js';
 import { bonusDamageMult } from './bonuses.js';
@@ -337,7 +337,7 @@ export function acquireTarget(state, shooter) {
   if (shooter.structId !== undefined) {
     let def;
     try { def = getStructureDef(shooter.structId); } catch (e) { return null; }
-    const range = def.range;
+    const range = towerRange(def, shooter.tier);
     if (!range || range <= 0) return null;
     const range2 = range * range;
     const slack2 = tieSlack2(range);
@@ -631,7 +631,7 @@ export function stepCombat(state, dt) {
       const cand = state.units.get(tid);
       if (cand && cand.hp > 0 && cand.side === 'attacker' &&
           structCanHit(def, cand) &&
-          dist2Between(s.pos, cand.pos) <= def.range * def.range) {
+          dist2Between(s.pos, cand.pos) <= towerRange(def, tier) ** 2) {
         target = cand;
       }
     }

@@ -14,11 +14,13 @@
  * planCoverage is pure (state, ui, def lookup → ring list); createCoverageView draws it as ONE instanced draw.
  */
 import { cellToWorld } from '../camera.js';
+import { towerRange } from '../../data/tables.js';
 
 export const COVER_COLORS = Object.freeze({ antiGround: [0.88, 0.69, 0.44], antiAir: [0.44, 0.63, 0.88], select: [1, 1, 1], unit: [1, 0.5, 0.5], mine: [0.88, 0.19, 0.19] });
 const TOWER = new Set(['antiGround', 'antiAir']);
 
-const rangeOf = (getDef, id) => { try { const d = getDef(id); return d && typeof d.range === 'number' ? d.range : 0; } catch (e) { return 0; } };
+// a placed structure's reach at its tier — upgrades add range (tables.towerRange); build previews are tier 1
+const rangeOf = (getDef, id, tier) => { try { return towerRange(getDef(id), tier); } catch (e) { return 0; } };
 
 /**
  * → [{ x, z, r | w,h, shape: 'circle'|'square', dash, fill, color: [r,g,b], alpha, primary }]
@@ -32,7 +34,7 @@ export function planCoverage(state, ui, getDef) {
   const coverage = (kind, skipId) => {
     for (const s of structures) {
       if (s.id === skipId || s.kind !== kind || s.lifecycle === 'Destroyed' || !(s.hp > 0)) continue;
-      const r = rangeOf(getDef, s.structId);
+      const r = rangeOf(getDef, s.structId, s.tier);
       if (r <= 0) continue;
       const c = centre(s);
       out.push({ shape: 'circle', x: c.x, z: c.z, r, dash: 0, fill: 1, color: COVER_COLORS[kind], alpha: 0.42, primary: false });
@@ -40,7 +42,7 @@ export function planCoverage(state, ui, getDef) {
   };
   const sel = ui.selectedStructureId != null && state.structures ? state.structures.get(ui.selectedStructureId) : null;
   if (sel && sel.pos) {
-    const c = centre(sel), r = rangeOf(getDef, sel.structId);
+    const c = centre(sel), r = rangeOf(getDef, sel.structId, sel.tier);
     if (TOWER.has(sel.kind) && r > 0) coverage(sel.kind, sel.id);
     out.push({ shape: 'square', x: c.x, z: c.z, w: c.w, h: c.h, dash: 0, fill: 0, color: COVER_COLORS.select, alpha: 0.95, primary: true });
     if (r > 0) out.push({ shape: 'circle', x: c.x, z: c.z, r, dash: 1, fill: 0.35, color: COVER_COLORS.select, alpha: 0.85, primary: true });
