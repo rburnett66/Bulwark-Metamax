@@ -108,7 +108,7 @@ export const PLANETS = Object.freeze({
   dark: {
     ui: '#b8a0ff', sun: '#e8fff0',   // label colour on dark UI; sunlight
     survey: { trees: 'Glowing mushroom trees, crystal spires', ground: 'Glowing sprouts, alien flowers', rocks: 'Magenta crystal clusters', airborne: 'Glowing spores' },
-    faction: { trope: 'Cult', identity: 'DoT, corruption, night-strong', dmg: 'Poison', beats: 'space' },
+    faction: { trope: 'Cult', identity: 'DoT, corruption, night-strong', dmg: 'Toxic', beats: 'space' },
     palette: 'alien',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Xenthe', type: 'Fungal alien', lush: 0.95, haze: '#7a6ac8',
     blurb: 'A violet twilight world that glows in the dark: corruption grows here, and the cult is strongest at night.',
@@ -121,7 +121,7 @@ export const PLANETS = Object.freeze({
   greenies: {
     ui: '#d0e860', sun: '#f0ffc8',   // label colour on dark UI; sunlight
     survey: { trees: 'Spore pods, hive mounds, rotting snags', ground: 'Sickly grass, glowing toxic blisters', rocks: 'Moss-green boulders', airborne: 'Chem clouds' },
-    faction: { trope: 'Hive collective', identity: 'Swarms, chem clouds, area denial', dmg: 'Poison', beats: 'dark' },
+    faction: { trope: 'Hive collective', identity: 'Swarms, chem clouds, area denial', dmg: 'Toxic', beats: 'dark' },
     palette: 'tropical',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
     name: 'Vexmire', type: 'Toxic hive swamp', lush: 0.7, haze: '#a8b860',
     blurb: 'A living chemical swamp: the hive breeds in its pods, and its clouds are the Greenies\' own area denial.',

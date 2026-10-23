@@ -205,6 +205,37 @@ After 1–3, re-run this report's map study. Reproduce with `node tools/maps/map
 
 ---
 
+## 7. Addendum: after the owner's calls (2026-10-22)
+
+**Owner:**
+- "turn poison damage into toxic damage and have it corrode humans, harvesters and repair drones."
+- "trim artillery to 9.5"
+
+**Applied** [MM-task_mvjxae69_g] [MM-task_mvjxahqe_i]:
+- **Toxic replaces Poison** (status Corrode).
+  - It corrodes Organic units (humans) at 1.8×.
+  - It also corrodes the harvester truck and the repair drone at 1.8×, through a new role table (`ROLE_EFFECTIVENESS`) that combat checks before the armour class.
+  - Ordinary machines stay at 0.1×, aircraft at 0.1×, and **structures at 0×** (the base is still immune).
+- **Every Artillery unit is capped at range 9.5**, now inside the Rocket tower's 10 (ART 12.5, HTC 11.2, SPC 11, ARC 10.2, GND/DRK 10, AIR/WTR 9.8 → 9.5).
+
+**Re-run: the same study, 8 runs per map.** Waves 1–2 ground damage to the base, before → after:
+
+| Faction | New map | Old (Powder) map |
+|---|---|---|
+| High Tech | 4,176 → **1,468** | 396 → 255 |
+| Space Tech | 1,057 → **268** | 95 → 93 |
+| Artillery | 1,525 → **94** | 1,156 → 246 |
+| Arcane / Energy | 1,186 → 792 | 452 → 307 |
+| Dark Energy | 236 → 45 | 0 → 0 |
+| Greenies | 0 → 0 | 0 → 0 |
+
+**What changed:**
+- The tenfold opening spike on the open maps is mostly gone. High Tech is still about 6× the Powder layout on Ochre, and that is still mostly HTC-Artillery: at 9.5 it is inside Rocket range, but on open desert it reaches firing positions the bot's close-in towers don't cover.
+- Survival barely moves, because the Missile range fault [MM-task_mvjxagdi_h] still decides the first air wave.
+- Dark Energy and Greenies still cannot damage the base, so their waves still end only when their units die. Corroding harvesters and repair drones hurts the player's economy and repairs, but does not threaten the base.
+
+---
+
 ## 8. Addendum: the Machine Gun tower (PR #123) [MM-story_mvk3kwu2_m]
 
 The owner asked on 2026-10-22: "re-run balancing with machine gun at lowest tower pricing". The Machine Gun already costs the lowest price of any gun: 150 / 375 / 750, the same as a Mine Drone. Only the Wall is cheaper, at 100.

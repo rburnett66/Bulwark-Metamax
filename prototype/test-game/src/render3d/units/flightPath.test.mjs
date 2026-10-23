@@ -99,3 +99,36 @@ test('AA and tower aim follow the DRAWN plane; a strafing plane fires only on it
   assert.equal(shoot(false), 0, 'turning / overflying: no shots');
   assert.ok(shoot(true) > 0, 'inbound: firing');
 });
+
+// [MM-task_mvk3fn61_l] owner 2026-10-22: "when some planes do attack passes they pop location instead of circling".
+// A run that is interrupted (the sim drops 'attacking' for a moment, or the plane switches target) must never jump.
+function flyScripted(script, secs, dt = 1 / 30) {
+  const fp = createFlightPaths({ lookup });
+  const u = flyer({ id: 5 }), other = { id: 9, unitId: 'x', hp: 50, pos: { x: 26, y: 6 } };
+  const st = world(u, other);
+  let maxJump = 0, prev = null;
+  for (let t = 0; t < secs; t += dt) {
+    script(u, t);
+    const v = viewOf(u);
+    fp.update(st, null, [v], dt);
+    if (prev) maxJump = Math.max(maxJump, Math.hypot(v.x - prev.x, v.z - prev.z));
+    prev = { x: v.x, z: v.z };
+  }
+  return maxJump;
+}
+const MAX_STEP = (Math.max(FLIGHT_RUN.minSpeed, 1.84 * FLIGHT_RUN.speedK) / 30) * 1.6 + 0.02;
+
+test('no pop when the sim drops "attacking" for a moment mid-run and picks it back up', () => {
+  const j = flyScripted((u, t) => { u.state = (t > 4 && t < 4.4) || (t > 7 && t < 7.1) ? 'moving' : 'attacking'; }, 10);
+  assert.ok(j <= MAX_STEP, `max frame jump ${j.toFixed(3)} cells`);
+});
+
+test('no pop when the plane switches target mid-run', () => {
+  const j = flyScripted((u, t) => { u.targetId = t < 5 ? BASE_TARGET_ID : 9; }, 10);
+  assert.ok(j <= MAX_STEP, `max frame jump ${j.toFixed(3)} cells`);
+});
+
+test('no pop when the attack ends for good: the plane eases back to where the sim holds it', () => {
+  const j = flyScripted((u, t) => { u.state = t < 5 ? 'attacking' : 'moving'; }, 8);
+  assert.ok(j <= MAX_STEP, `max frame jump ${j.toFixed(3)} cells`);
+});

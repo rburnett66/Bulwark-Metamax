@@ -33,10 +33,20 @@ export const ASSUMPTIONS = Object.freeze({
 export const EFFECTIVENESS = Object.freeze({
   Kinetic:    Object.freeze({ Organic: 1,   Machinery: 1,   Aircraft: 1,   Structure: 1,   Energy: 1.1 }),
   Fire:       Object.freeze({ Organic: 1.3, Machinery: 0.8, Aircraft: 0.8, Structure: 1.1, Energy: 0.8 }),
-  Poison:     Object.freeze({ Organic: 1.8, Machinery: 0.1, Aircraft: 0.1, Structure: 0,   Energy: 0 }),
+  Toxic:      Object.freeze({ Organic: 1.8, Machinery: 0.1, Aircraft: 0.1, Structure: 0,   Energy: 0 }),
   Concussion: Object.freeze({ Organic: 0.4, Machinery: 1.7, Aircraft: 0.9, Structure: 1,   Energy: 0.4 }),
   Electric:   Object.freeze({ Organic: 0.5, Machinery: 1.8, Aircraft: 1.2, Structure: 0.5, Energy: 0.6 }),
   Frost:      Object.freeze({ Organic: 0.6, Machinery: 0.6, Aircraft: 0.5, Structure: 0.5, Energy: 0.9 })
+});
+
+// Role overrides: a multiplier for a damage type against a unit ROLE, consulted before the armor-class row above
+// (combat.applyDamage). Owner 2026-10-22: "turn poison damage into toxic damage and have it corrode humans,
+// harvesters and repair drones" [MM-task_mvjxae69_g]. Humans are the Organic armor class (Toxic 1.8 above); the
+// harvester truck is Machinery and the repair drone a troop, so they are named here by role. Structures stay immune.
+//   harvester   — unit.isHarvester  (harvest.js spawnHarvester)
+//   repairDrone — unit.isRepairTroop (structures.js requestRepair)
+export const ROLE_EFFECTIVENESS = Object.freeze({
+  Toxic: Object.freeze({ harvester: 1.8, repairDrone: 1.8 }),
 });
 
 // ---------------------------------------------------------------------------
@@ -45,7 +55,7 @@ export const EFFECTIVENESS = Object.freeze({
 export const DAMAGE_TYPES = Object.freeze({
   Kinetic:    Object.freeze({ status: null,       dot: false, slow: false, chain: false, slowsAir: false }),
   Fire:       Object.freeze({ status: 'Burn',     dot: true,  slow: false, chain: false, slowsAir: false }),
-  Poison:     Object.freeze({ status: 'Toxin',    dot: true,  slow: false, chain: false, slowsAir: false }),
+  Toxic:      Object.freeze({ status: 'Corrode',  dot: true,  slow: false, chain: false, slowsAir: false }),
   Concussion: Object.freeze({ status: 'Stagger',  dot: false, slow: false, chain: false, slowsAir: false }),
   Electric:   Object.freeze({ status: 'Overload', dot: false, slow: false, chain: true,  slowsAir: false }),
   Frost:      Object.freeze({ status: 'Chill',    dot: false, slow: true,  chain: false, slowsAir: false })
@@ -95,7 +105,7 @@ export const DAMAGE_TYPES = Object.freeze({
 //                                            short ranges (2.4-3.1 / 4.8-6.3 cells)
 //                                            keep it genuinely opportunistic;
 //                                            artillery and the heavy bomber are
-//                                            EXCLUDED because at 9.5-12.5 cells they
+//                                            EXCLUDED because at ~9.5 cells they
 //                                            would pick harvesters off across the
 //                                            map. (combat.acquireSoftDefender)
 //   isInfantry                      boolean  The class the '+10% damage vs troops'
@@ -179,7 +189,7 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [165, 264, 396], dps: [60, 93, 138],
-    range: 10, speed: 0.368,
+    range: 9.5, speed: 0.368,
     // coarse by design — seeded from the old art-derived estimate; tune here, not in the bake
     radius: 0.5,
     vision: 4,
@@ -273,7 +283,7 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [127.5, 204, 306], dps: [63, 97.65, 144.9],
-    range: 9.8, speed: 0.48, vision: 4,
+    range: 9.5, speed: 0.48, vision: 4,
     power: 99.95, cost: [299.85, 749.625, 1499.25]
   }),
   'AIR-HeavyTanks': Object.freeze({
@@ -375,7 +385,7 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [142.5, 228, 342], dps: [63, 97.65, 144.9],
-    range: 11.2, speed: 0.36, vision: 4,
+    range: 9.5, speed: 0.36, vision: 4,
     power: 105.55, cost: [316.65, 791.625, 1583.25]
   }),
   'HTC-HeavyTanks': Object.freeze({
@@ -463,7 +473,7 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [138, 220.8, 331.2], dps: [66, 102.3, 151.8],
-    range: 12.5, speed: 0.312, vision: 4,
+    range: 9.5, speed: 0.312, vision: 4,
     power: 111.7, cost: [335.1, 837.75, 1675.5]
   }),
   'ART-HeavyTanks': Object.freeze({
@@ -552,7 +562,7 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [168, 268.8, 403.2], dps: [57, 88.35, 131.1],
-    range: 9.8, speed: 0.392, vision: 4,
+    range: 9.5, speed: 0.392, vision: 4,
     power: 98.9, cost: [296.7, 741.75, 1483.5]
   }),
   'WTR-HeavyTanks': Object.freeze({
@@ -640,7 +650,7 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [150, 240, 360], dps: [64.8, 100.44, 149.04],
-    range: 10.2, speed: 0.368, vision: 4,
+    range: 9.5, speed: 0.368, vision: 4,
     power: 103.6, cost: [310.8, 777, 1554]
   }),
   'ARC-HeavyTanks': Object.freeze({
@@ -729,7 +739,7 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [144, 230.4, 345.6], dps: [58.8, 91.14, 135.24],
-    range: 11, speed: 0.4, vision: 4,
+    range: 9.5, speed: 0.4, vision: 4,
     power: 102.6, cost: [307.8, 769.5, 1539]
   }),
   'SPC-HeavyTanks': Object.freeze({
@@ -780,7 +790,7 @@ export const UNITS = Object.freeze({
     faction: 'Dark Energy', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
-    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Toxic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [180, 288, 432], dps: [50.4, 78.12, 115.92],
@@ -791,7 +801,7 @@ export const UNITS = Object.freeze({
     faction: 'Dark Energy', shape: 'Scout', role: 'Support',
     radius: 0.42, artClass: 'truck', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
-    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Toxic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [225, 360, 540], dps: [16.8, 26.04, 38.64],
@@ -802,7 +812,7 @@ export const UNITS = Object.freeze({
     faction: 'Dark Energy', shape: 'Assault Tank', role: 'Bruiser',
     radius: 0.46, artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
-    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Toxic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [360, 576, 864], dps: [30, 46.5, 69],
@@ -817,14 +827,14 @@ export const UNITS = Object.freeze({
     canTarget: 'Ground', targets: 'Structures', aoeRadius: 2,
     radarDetect: false, seesGround: false,
     hp: [135, 216, 324], dps: [67.2, 104.16, 154.56],
-    range: 10, speed: 0.408, vision: 4,
+    range: 9.5, speed: 0.408, vision: 4,
     power: 103.4, cost: [310.2, 775.5, 1551]
   }),
   'DRK-HeavyTanks': Object.freeze({
     faction: 'Dark Energy', shape: 'Heavy Tank', role: 'Juggernaut',
     radius: 0.5, artClass: 'heavyTank', projectileFx: 'shell', burnsWhenDamaged: true,
     engagesStructuresWhileAdvancing: true, engagesSoftDefenders: false, isInfantry: false,
-    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Toxic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
     hp: [495, 792, 1188], dps: [42, 65.1, 96.6],
@@ -835,7 +845,7 @@ export const UNITS = Object.freeze({
     faction: 'Dark Energy', shape: 'Gunship', role: 'Harasser',
     radius: 0.42, artClass: 'copter', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: false,
-    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Toxic',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
     hp: [180, 288, 432], dps: [50.4, 78.12, 115.92],
@@ -846,7 +856,7 @@ export const UNITS = Object.freeze({
     faction: 'Dark Energy', shape: 'Fighter', role: 'Striker',
     radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
-    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Toxic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [135, 216, 324], dps: [58.8, 91.14, 135.24],
@@ -857,7 +867,7 @@ export const UNITS = Object.freeze({
     faction: 'Dark Energy', shape: 'Drone', role: 'Kamikaze Drone',
     radius: 0.42, artClass: 'missile', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
-    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Toxic',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     detonate: Object.freeze({ burst: [453.6, 703.08, 1043.28], radius: DRONE.kamikaze.radius, damageType: DRONE.kamikaze.damageType }),
     radarDetect: true, seesGround: true,
@@ -869,7 +879,7 @@ export const UNITS = Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
-    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Toxic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
     hp: [164, 262.4, 393.6], dps: [44.1, 68.355, 101.43],
@@ -880,7 +890,7 @@ export const UNITS = Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Scout', role: 'Support',
     artClass: 'truck', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
-    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Toxic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
     hp: [205, 328, 492], dps: [14.7, 22.785, 33.81],
@@ -894,7 +904,7 @@ export const UNITS = Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Assault Tank', role: 'Bruiser',
     artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
-    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Toxic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
     hp: [328, 524.8, 787.2], dps: [44.1, 68.355, 101.43],
@@ -919,7 +929,7 @@ export const UNITS = Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Heavy Tank', role: 'Juggernaut',
     radius: 0.5, artClass: 'heavyTank', projectileFx: 'shell', burnsWhenDamaged: true,
     engagesStructuresWhileAdvancing: true, engagesSoftDefenders: false, isInfantry: false,
-    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Poison',
+    domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Toxic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
     hp: [451, 721.6, 1082.4], dps: [36.75, 56.9625, 84.525],
@@ -930,7 +940,7 @@ export const UNITS = Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Gunship', role: 'Harasser',
     radius: 0.42, artClass: 'copter', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: false,
-    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Toxic',
     canTarget: 'Both', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [164, 262.4, 393.6], dps: [44.1, 68.355, 101.43],
@@ -941,7 +951,7 @@ export const UNITS = Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Fighter', role: 'Striker',
     radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
-    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Toxic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: true, seesGround: true,
     hp: [123, 196.8, 295.2], dps: [51.45, 79.7475, 118.335],
@@ -952,7 +962,7 @@ export const UNITS = Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Drone', role: 'Kamikaze Drone',
     radius: 0.42, artClass: 'missile', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
-    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Poison',
+    domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Toxic',
     canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     detonate: Object.freeze({ burst: [396.9, 615.192, 912.87], radius: DRONE.kamikaze.radius, damageType: DRONE.kamikaze.damageType }),
     radarDetect: true, seesGround: true,

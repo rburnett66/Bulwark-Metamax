@@ -613,7 +613,8 @@ export function renderFrame(r, state, ui, events, dt) {
     if (sysChanged || markersChanged) r.lights.invalidateShadows();
   }
   if (r.system) r.system.update(dt, state, r.airLift.drawn);   // turrets track planes where they are drawn (last frame's poses)
-  if (r.resources) { if (state && r.resources.setResources(state)) r.lights.invalidateShadows(); }   // LC-RES planet resources
+  if (r.resources) { if (state && r.resources.setResources(state)) r.lights.invalidateShadows(); }
+  if (r.resources && r.resources.tick) r.resources.tick(r.clock || 0);   // field rings pulse [MM-task_mvk37bu6_k]   // LC-RES planet resources
   else if (state && r.markers.setResources && r.markers.setResources(state)) r.lights.invalidateShadows();   // LPS crystal fields
 
   // LC: the landing sequence, then the roof weapon follows the base cannon's aim
