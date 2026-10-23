@@ -1,6 +1,6 @@
 # Tech Tree — design
 
-**Version:** 1.1 (2026-10-22) — v1.1 regroups the tree into four divisions (§2) and adds the 3D view (§11) · epic **TT** [MM-epic_mvkg5mm7_2] · plan story [MM-story_mvkg5mpn_3]
+**Version:** 1.2 (2026-10-22) — v1.1 regroups the tree into four divisions (§2) and adds the 3D view (§11); v1.2 the data lives in `src/data/techtree.js` and the view is the menu's Tech Tree (§11) · epic **TT** [MM-epic_mvkg5mm7_2] · plan story [MM-story_mvkg5mpn_3]
 
 Repo copy is canonical: `docs/16 Bulwark MM/design/Tech-Tree-Design.md`.
 
@@ -195,7 +195,7 @@ Dropped (folded into base models or tiers): `b-def`, `b-atk`, `b-awr`, `e-hp`, `
 
 ## 11. The 3D view
 
-`prototype/test-game/techtree3d.html` [MM-story_mvkgjacw_e] draws this tree as an interactive 3D page: the four divisions as sectors round the starter base, the capstone above, every item a node with its requirement links, a detail panel (base-model bonus radar, pod weapon stats, requirements, gates, unlocks) and a sandbox bank to research items. It opens standalone in a browser (three.js from a CDN) and its data mirrors this document — change both together until `src/data/techtree.js` exists, then the page reads that.
+`prototype/test-game/techtree3d.html` [MM-story_mvkgjacw_e] draws this tree as an interactive 3D page: the four divisions as sectors round the starter base, the capstone above, every item a node with its requirement links, a detail panel (base-model bonus radar, pod weapon stats, requirements, gates, unlocks) and a sandbox bank to research items. Since v1.2 the data is `src/data/techtree.js` and the view `src/menu/technet.js`: the page is a sandbox over them (serve it — dev server or the Pages link), and the same view is the game menu's TECH TREE screen on the real save (Menu-Progression-Design §1) [MM-story_mvkhed1f_h]. Change the data in that one file.
 
 ## Dependencies
 
