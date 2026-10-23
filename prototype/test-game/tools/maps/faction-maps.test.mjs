@@ -55,3 +55,40 @@ test('every new map has a committed baked 3D level that matches what the sim bui
     assert.ok(check.ok, `${slug}: ${check.problems.join('; ')}`);
   }
 });
+
+// ── MAPS 2–9 [MM-story_mvkcdc27_t] — owner 2026-10-22: "generate maps with terrain, blockage, water and decor for all
+// factions, all maps" / "use the same large map with graduated play areas".
+import { PLANET_RECIPES, MAP_SLOTS } from './faction-maps.mjs';
+
+test('every faction ships a forge map for every campaign slot, each its planet\'s recipe with its own layout', async () => {
+  const { MAPDATA } = await import('../../content/maps/mapdata.js');
+  assert.deepEqual(MAP_SLOTS, MAPDATA.maps.map((_, i) => i + 1), 'one forge map per campaign slot');
+  const powder = read(path.join(FORGE, 'powder-map-1.json'));
+  for (const [slug, rc] of Object.entries(PLANET_RECIPES)) {
+    const seeds = new Set();
+    for (const id of MAP_SLOTS) {
+      const m = read(path.join(FORGE, `${slug}-map-${id}.json`));
+      assert.ok(!seeds.has(m.seed), `${slug}-map-${id}: a layout of its own`); seeds.add(m.seed);
+      if (id === 1) continue;
+      assert.deepEqual(m.types, rc.types, `${slug}-map-${id}: the ${rc.planet} recipe`);
+      assert.deepEqual(m.water, rc.water);
+      assert.equal(m.cols, 64); assert.equal(m.rows, 32);
+      assert.deepEqual(m.waveWindows, powder.waveWindows, 'the same large map with graduated play areas');
+      assert.deepEqual(m.base, powder.base);
+      assert.ok(m.resources.length >= 40 && m.terrain.length === 64 * 32, `${slug}-map-${id}: resources + terrain`);
+      assert.ok(m.terrain.some((t) => t === 3 || t === 4 || t === 5), `${slug}-map-${id}: rocks, trees or cliffs`);
+    }
+  }
+});
+
+test('maps 2–9 pass the §1 guardrails on the map the game builds for that slot, and have a matching baked level', () => {
+  for (const slug of Object.keys(PLANET_RECIPES)) for (const id of MAP_SLOTS.slice(1)) {
+    const name = `${slug}-map-${id}`, e = evaluate(read(path.join(FORGE, `${name}.json`)), id);
+    assert.deepEqual(passes(slug, e), [], name);
+    assert.ok(e.impPct >= 12 && e.impPct <= 24, `${name}: ${e.impPct.toFixed(1)}% impassable`);
+    const dir = path.join(BAKED, name);
+    for (const f of ['level.json', 'road_mask.png', 'routes.json']) assert.ok(fs.existsSync(path.join(dir, f)), `${name}: ${f}`);
+    const check = checkLevelAgainstMap(read(path.join(dir, 'level.json')), e.map);
+    assert.ok(check.ok, `${name}: ${check.problems.join('; ')}`);
+  }
+});

@@ -11,6 +11,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../..');   // prototype/test-game
 const MAP_ID = process.argv[2] || 'powder-map-1';
+// --no-tiles: write only what the default low-poly view loads (level.json, road_mask.png, routes.json). The ground
+// tiles (~3 MB a map) are only drawn under ?ground=baked; maps 2–9 ship without them [MM-story_mvkcdc27_t].
+const NO_TILES = process.argv.includes('--no-tiles');
+const SLOT = Number((MAP_ID.match(/-map-(\d+)$/) || [])[1]) || 1;   // the campaign slot (main.js builds map N with id N)
 // What the 3D renderer loads is CONTENT and is committed (a code-only deploy renders nothing).
 const OUT = path.join(REPO, 'content/maps/baked', MAP_ID);
 // 2D-prototype leftovers and previews are not content: they go to the gitignored scratch folder.
@@ -29,7 +33,7 @@ const { buildTerrainMap } = await imp('src/sim/mapgen.js');
 const { buildNavGrid, findRoute } = await imp('src/sim/pathfinding.js');
 
 const forge = JSON.parse(fs.readFileSync(path.join(REPO, 'content/maps/forge', MAP_ID + '.json'), 'utf8'));
-const map = buildTerrainMap(forge, 1, { seed: 0, bakeTune: {} });   // exactly what main.js does (default tune)
+const map = buildTerrainMap(forge, SLOT, { seed: 0, bakeTune: {} });   // exactly what main.js does (default tune)
 const { cols, rows } = map;
 console.log('map', cols, rows, 'base', map.base.x, map.base.y, 'blocked', map.blockedCells.length, 'water', map.waterCells.length);
 
@@ -203,7 +207,7 @@ for (const d of []) {
 // ── 4. EXPORT: full-res tiles (≤ 2048, mobile-safe) and a half-res image (Low tier) ──────────────────
 const TILE = 2048;
 const tiles = [];
-for (let ty = 0; ty < H; ty += TILE) for (let tx = 0; tx < W; tx += TILE) {
+for (let ty = 0; ty < H && !NO_TILES; ty += TILE) for (let tx = 0; tx < W; tx += TILE) {
   const tw = Math.min(TILE, W - tx), th = Math.min(TILE, H - ty);
   const c = createCanvas(tw, th); c.getContext('2d').drawImage(bake, tx, ty, tw, th, 0, 0, tw, th);
   const name = `ground_${tx / TILE}_${ty / TILE}.webp`;
@@ -211,7 +215,7 @@ for (let ty = 0; ty < H; ty += TILE) for (let tx = 0; tx < W; tx += TILE) {
   tiles.push({ name, x: tx / PX, y: ty / PX, w: tw / PX, h: th / PX });
 }
 const half = createCanvas(W / 2, H / 2); const hctx = half.getContext('2d'); hctx.imageSmoothingEnabled = false; hctx.drawImage(bake, 0, 0, W / 2, H / 2);
-fs.writeFileSync(path.join(OUT, 'ground_half.webp'), await half.encode('webp', 100));
+if (!NO_TILES) fs.writeFileSync(path.join(OUT, 'ground_half.webp'), await half.encode('webp', 100));
 fs.writeFileSync(path.join(SCRATCH, 'shadow_mask.png'), await mask.encode('png'));
 fs.writeFileSync(path.join(OUT, "routes.json"), JSON.stringify(traffic));
 { // road wear mask (SUB px per cell) for stylised renderers: R = wear 0..1, zero on cells that never wear
