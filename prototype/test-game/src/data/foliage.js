@@ -18,9 +18,9 @@
  */
 export const TREE_FAMILIES = Object.freeze(['broadleaf', 'pine', 'snowPine', 'blossom', 'spike', 'snag', 'cactus', 'acacia',
   'iceSpire', 'needleSpire', 'crystal', 'mushroom', 'sporePod', 'hive']);
-export const ROCK_STYLES = Object.freeze(['boulder', 'mossy', 'hoodoo', 'mesa', 'iceShard', 'basalt', 'shard', 'crystalRidge']);
+export const ROCK_STYLES = Object.freeze(['boulder', 'mossy', 'hoodoo', 'mesa', 'iceShard', 'basalt', 'shard', 'crystalRidge', 'moonrock']);
 export const COVER_FAMILIES = Object.freeze(['shrub', 'flowerBush', 'blossomBush', 'thornscrub', 'smallCactus', 'twigs', 'tussock',
-  'emberTwigs', 'crystalScatter', 'sprouts', 'toadstools', 'reeds']);
+  'emberTwigs', 'crystalScatter', 'sprouts', 'toadstools', 'reeds', 'rubble']);
 
 export const FOLIAGE = Object.freeze({
   // Verdance — broadleaf woods and pines, hedgerows and flowering bushes, grey boulders. (The approved look: unchanged trees.)
@@ -47,10 +47,14 @@ export const FOLIAGE = Object.freeze({
   arcane: { trees: { spike: 1 }, rocks: 'basalt',
     cover: { emberTwigs: 1 }, density: { grass: 0.05, dirt: 0.04, brush: 0.65, border: 0.5, brush2: 0.25 },
     colors: { spike: '#2a2222', ember: '#ff7a1a', twig: '#2e2626' }, glow: { spike: true } },
-  // Lumen — needle spires and cyan crystal clusters; angular shards; crystal scatter on the regolith.
-  space: { trees: { needleSpire: 0.6, crystal: 0.4 }, rocks: 'shard',
-    cover: { crystalScatter: 1 }, density: { grass: 0.06, dirt: 0.05, brush: 0.7, border: 0.55, brush2: 0.3 },
-    colors: { spire: '#8e9096', crystal: '#5ae0f0', tip: '#9af4ff' } },
+  // Lumen — a barren grey moon (owner 2026-10-23: "Different grey rocks and crystals would make more sense than grass")
+  // [MM-story_mvl774l4_p]: needle spires and cyan crystal clusters; a mixed field of grey moon rocks (rounded, angular, flat,
+  // each its own grey); grey rubble and crystal shards on the regolith — no plants at all.
+  space: { trees: { needleSpire: 0.5, crystal: 0.5 }, rocks: 'moonrock',
+    cover: { rubble: 0.6, crystalScatter: 0.4 }, density: { grass: 0.07, dirt: 0.06, brush: 0.7, border: 0.55, brush2: 0.3 },
+    colors: { spire: '#8e9096', crystal: '#5ae0f0', tip: '#9af4ff',
+      rocks: ['#62656c', '#74777e', '#888b92', '#9c9fa6', '#7a7670', '#6c6e74'],
+      rubble: ['#5e6168', '#70737a', '#84878e', '#9a9da4', '#787470'] } },
   // Xenthe — mushroom trees and magenta crystal clusters; crystal ridges; glowing sprouts and toadstools.
   dark: { trees: { mushroom: 0.75, crystal: 0.25 }, rocks: 'crystalRidge',
     cover: { sprouts: 0.5, toadstools: 0.5 }, density: { grass: 0.05, dirt: 0.05, brush: 0.5, border: 0.35, brush2: 0.2 },

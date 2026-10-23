@@ -182,6 +182,21 @@ export function drawRock(D, G, r, c) {
       }
       return;
     }
+    case 'moonrock': {   // Lumen: a mixed field of grey moon rocks — rounded, angular or flat, each its own grey [MM-story_mvl774l4_p]
+      const col = C(pickOf(kc.rocks || pal.rock, r.variant * 5 + (r.tone === 'pebble' ? 2 : 0))), kind = r.variant % 3;
+      if (course) return put('rocks', G.BLOBS[r.variant % 6], r.x, r.y, r.z, r.sx, r.sy, r.sz, r.rx, r.ry, r.rz, col, 0.07);   // ridges stay solid
+      if (small) return put('rocks', kind === 1 ? G.shard[r.variant % 3] : G.SMALL[r.variant % 3], r.x, r.y, r.z, r.sx, r.sy, r.sz, r.rx, r.ry, r.rz, col, 0.1);
+      if (kind === 0) {   // a rounded, pitted boulder with a smaller stone at its foot
+        put('rocks', G.BLOBS[r.variant % 6], r.x, r.y, r.z, r.sx, r.sy, r.sz, r.rx, r.ry, r.rz, col, 0.07);
+        return putIn('rocks', G.SMALL[(r.variant + 1) % 3], B, r.sx * 0.62, -r.y + r.sy * 0.18, r.sz * 0.3, r.sx * 0.32, r.sy * 0.3, r.sx * 0.3, 0, r.variant, 0, col.clone().multiplyScalar(1.12), 0.1);
+      }
+      if (kind === 1) {   // an angular shard leaning on a second
+        put('rocks', G.shard[r.variant % 3], r.x, r.y, r.z, r.sx, r.sy * 1.3, r.sz * 0.9, r.rx, r.ry, r.rz, col, 0.08);
+        return putIn('rocks', G.shard[(r.variant + 1) % 3], B, r.sx * 0.4, 0, -r.sz * 0.2, r.sx * 0.45, r.sy * 0.9, r.sx * 0.4, 0.2, r.variant, -0.35, col.clone().multiplyScalar(0.88), 0.1);
+      }
+      put('rocks', G.SMALL[r.variant % 3], r.x, r.y * 0.6, r.z, r.sx * 1.25, r.sy * 0.6, r.sz * 1.15, 0, r.ry, 0, col, 0.08);   // a flat slab with a chip on top
+      return putIn('rocks', G.SMALL[(r.variant + 2) % 3], B, -r.sx * 0.15, -r.y * 0.4 + r.sy * 0.55, 0, r.sx * 0.35, r.sy * 0.28, r.sx * 0.32, 0, r.variant * 2, 0, col.clone().multiplyScalar(1.15), 0.1);
+    }
     default:   // 'boulder' — Verdance / Florael: the approved faceted boulder
       return boulder(base);
   }
@@ -398,6 +413,15 @@ export function drawPlant(D, G, p, c) {
       for (let k = 0; k < 2 + (p.variant % 2); k++) {
         const a = p.ry + k * 2.4, x0 = p.x + Math.cos(a) * 0.08 * s, z0 = p.z - Math.sin(a) * 0.08 * s;
         rod('glow', G.cone6, x0, 0, z0, 0.2 + k * 0.2, a, (0.2 - k * 0.04) * s, 0.04 * s, glow.clone().multiplyScalar(0.85 + k * 0.1), 0.1);
+      }
+      return;
+    }
+    case 'rubble': {   // Lumen: a scatter of small moon stones in several greys — one stone and a few chips [MM-story_mvl774l4_p]
+      const tones = kc.rubble || pal.rock, n = 3 + (p.variant % 3);
+      for (let k = 0; k < n; k++) {
+        const a = p.ry + k * 2.39, rr = (0.04 + ((k * 0.37 + p.a) % 1) * 0.16) * s, x = p.x + Math.cos(a) * rr, z = p.z - Math.sin(a) * rr;
+        const sz = (k === 0 ? 0.1 : 0.045 + ((k + p.variant) % 3) * 0.02) * s;
+        put('plants', k === 0 ? G.SMALL[p.variant % 3] : G.octa, x, sz * 0.45, z, sz * 1.2, sz * 0.75, sz, 0.2 * k, a, 0, C(pickOf(tones, p.variant + k)), 0.1);
       }
       return;
     }

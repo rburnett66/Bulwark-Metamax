@@ -278,7 +278,7 @@ puts the editor back exactly as it was and stops the 3D loop. three.js and the p
 map editor pays nothing for them. `terrain.html?preview=craft` / `?preview=res` opens straight into one.
 
 - **🚀 Landing craft** — the ten crafts: the full landing sequence (approach bearing, half speed, loop), Hover / Landed
-  / Deployed poses, orbit / battle camera / ortho 4-up, any of the eleven world palettes, 3 × 3 cells, metal on/off,
+  / Deployed poses, orbit / battle camera / ortho 4-up, any of the twelve world palettes, 3 × 3 cells, metal on/off,
   the harvesters on the ramps; drag to orbit, wheel to zoom.
 - **💎 Resources** — the 36 resources: all at once (columns = homeworlds, rows = tiers) or one homeworld on a
   turntable, the drain slider, role rings, and the tier ← Forge resource-paint legend (🔵 common, 🟡 uncommon,

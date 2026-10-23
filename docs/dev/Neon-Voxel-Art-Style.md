@@ -106,6 +106,7 @@ Owner: "can we create 10 more color variations of the low poly world?" A palette
 | Volcanic | charcoal rock and ground, lava instead of water, glow on |
 | Alien | teal ground, magenta rock, yellow canopies, purple pines |
 | Highlands | muted greens, grey rock, heather accents, overcast |
+| Lunar | grey regolith bands, craters, mixed grey moon rocks, cyan crystals, black sky, hard white sun; no grass (Lumen, added 2026-10-23) |
 | Savanna | golden grass, olive canopies, high warm sun |
 Production: a palette per level or biome, named in the level file.
 

@@ -59,8 +59,8 @@ async function roadMask() {
 }
 const near = (a, b, eps = 1e-6) => a.every((v, i) => Math.abs(v - b[i]) < eps);
 
-test('eleven worlds, each with every colour the ground, tufts, rocks and trees read, plus its lighting', () => {
-  assert.deepEqual(PALETTE_KEYS, ['meadow', 'autumn', 'winter', 'canyon', 'tropical', 'sakura', 'dusk', 'volcanic', 'alien', 'highlands', 'savanna']);
+test('twelve worlds, each with every colour the ground, tufts, rocks and trees read, plus its lighting', () => {
+  assert.deepEqual(PALETTE_KEYS, ['meadow', 'autumn', 'winter', 'canyon', 'tropical', 'sakura', 'dusk', 'volcanic', 'alien', 'highlands', 'lunar', 'savanna']);
   const hex = /^#[0-9a-f]{6}$/;
   const GROUND = ['lime', 'grass', 'teal', 'brush', 'forest', 'stone', 'lilac', 'sand', 'dirt', 'road', 'roadEdge', 'shore', 'foam', 'waterL', 'waterD'];
   for (const k of PALETTE_KEYS) {
@@ -78,6 +78,29 @@ test('eleven worlds, each with every colour the ground, tufts, rocks and trees r
   assert.equal(resolveWorld('nope'), 'meadow');
   assert.equal(resolveWorld(undefined), 'meadow');
   assert.equal(MEADOW, LOWPAL.meadow, 'obstructions use the same palette object');
+});
+
+test('Lumen is a bare grey moon: lunar palette, grey ground, craters, no grass tufts, no grass texture [MM-story_mvl774l4_p]', async () => {
+  const { PLANETS } = await import('../../data/planets.js');
+  assert.equal(PLANETS.space.palette, 'lunar');
+  const P = LOWPAL.lunar;
+  assert.ok(P.bare && P.craters);
+  // every ground colour is a grey (no channel strays far from the others) — no green turf; only the cryo pools lean blue
+  for (const [k, v] of Object.entries(P.ground)) {
+    if (['shore', 'foam', 'waterL', 'waterD'].includes(k)) continue;
+    const [r, g, b] = hexRGB(v);
+    assert.ok(Math.max(r, g, b) - Math.min(r, g, b) < 0.07, `lunar.ground.${k} ${v} is grey`);
+    assert.ok(!(g > r + 0.02 && g > b + 0.02), `lunar.ground.${k} is not green`);
+  }
+  assert.equal(planTufts(MAP, P).length > 0, true, 'the planner itself still works');
+  const G = buildLowPolyGround(THREE, MAP, P, { tufts: true, grassDetail: true });
+  assert.equal(G.stats.tufts, 0, 'no grass blades');
+  assert.equal(G.stats.grassCover, 0, 'no grass texture anywhere');
+  // craters: the same cell with and without them differs somewhere on the map
+  const plain = createGroundColour(MAP, { ...P, craters: false }), crat = createGroundColour(MAP, P);
+  let diff = 0;
+  for (let z = 0.5; z < MAP.rows; z += 1) for (let x = 0.5; x < MAP.cols; x += 1) if (Math.abs(plain(x, z)[0] - crat(x, z)[0]) > 0.01) diff++;
+  assert.ok(diff > 20, `craters shade ${diff} cells`);
 });
 
 test('the Meadow numbers (retuned to the owner\'s 2026-10-18 reference)', () => {

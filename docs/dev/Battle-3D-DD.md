@@ -181,9 +181,10 @@ section it touches in the same PR, or note in the PR that this document is now s
 - **Low tier:** a 1-cell grid and no tufts (`index.js:409`).
 - **Variants:** `ground/baked.js` (`?ground=baked`) is one textured plane per tile with a dark apron.
   `ground/synthTerrain.js` makes terrain codes up for maps that have none.
-- **Palettes:** 11 world palettes in `styles/lowpoly-palettes.js:19-86`: meadow, autumn, winter, canyon,
-  tropical, sakura, dusk, volcanic, alien, highlands, savanna. `WORLD_LIGHT` holds the matching lighting. Each
-  faction's planet names its palette in `data/planets.js`.
+- **Palettes:** 12 world palettes in `styles/lowpoly-palettes.js`: meadow, autumn, winter, canyon,
+  tropical, sakura, dusk, volcanic, alien, highlands, lunar, savanna. `WORLD_LIGHT` holds the matching lighting. Each
+  faction's planet names its palette in `data/planets.js`. A palette may set `bare` (no grass tufts or grass texture)
+  and `craters` (crater bowls and rims shaded into the ground) — `lunar`, Lumen's barren moon, sets both.
 
 ### 4.2 Obstructions and resources
 - **Placement plan** (`obstructions/placement.js`, seed 1234):
