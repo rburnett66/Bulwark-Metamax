@@ -6,7 +6,7 @@ import { STRUCTURES, UNITS, MAP } from '../data/tables.js';
 import { createSim, stepSim, FIXED_DT } from './core.js';
 import { createUnit } from './entities.js';
 import { placeCompletedStructure } from './balanceSim.js';
-import { structCanHit } from './combat.js';
+import { structCanHit, structShapeMult } from './combat.js';
 
 const MG = STRUCTURES['STR-MG'];
 
@@ -26,12 +26,13 @@ test('lightGround marks exactly the troops and the (assault) light tanks of ever
   }
 });
 
-test('it may hit troops, light tanks and every aircraft — not heavy tanks, artillery or trucks', () => {
-  const can = (id) => structCanHit(MG, { domain: UNITS[id].domain, lightGround: UNITS[id].lightGround === true });
+test('it may hit troops, light tanks, artillery and every aircraft — not heavy tanks or trucks', () => {
+  const can = (id) => structCanHit(MG, { domain: UNITS[id].domain, lightGround: UNITS[id].lightGround === true, shape: UNITS[id].shape });
   for (const f of ['GND', 'AIR', 'HTC', 'ART', 'WTR', 'ARC', 'SPC', 'DRK', 'GRN']) {
     assert.ok(can(`${f}-Troops`), `${f}-Troops`); assert.ok(can(`${f}-Tanks`), `${f}-Tanks`);
     for (const air of ['Copters', 'Planes', 'Missiles']) assert.ok(can(`${f}-${air}`), `${f}-${air}`);
-    for (const no of ['HeavyTanks', 'Artillery', 'Trucks']) assert.ok(!can(`${f}-${no}`), `${f}-${no} shrugs it off`);
+    assert.ok(can(`${f}-Artillery`), `${f}-Artillery (owner 2026-10-23: very effective against artillery)`);
+    for (const no of ['HeavyTanks', 'Trucks']) assert.ok(!can(`${f}-${no}`), `${f}-${no} shrugs it off`);
   }
   assert.ok(can('AIR-HeavyBomber'));
   // other towers are unchanged by the light filter
@@ -59,4 +60,32 @@ test('in the sim: it shoots the troop and the plane in range and leaves the heav
   assert.ok((by.get(troop.id) || 0) > 0 || (by.get(plane.id) || 0) > 0, 'it fires at a legal target');
   const total = [...by.values()].reduce((a, b) => a + b, 0);
   assert.ok(Math.abs(total - MG.dps[0] * 30) < MG.dps[0] * 1.5, `sustains its dps (${total.toFixed(0)} in 30 s)`);
+});
+
+test('artillery in range: the MG switches to it and shreds it at ×3 damage (owner 2026-10-23)', () => {
+  const st = createSim(11, { waves: [], map: MAP });
+  if (st.base) st.base.cannon = null;
+  const slot = MAP.slots[6];
+  const tw = placeCompletedStructure(st, 'STR-MG', slot);
+  const troop = dummy(st, 'GND-Troops', slot.x + 1, slot.y, 'ground');          // nearer
+  const art = dummy(st, 'GND-Artillery', slot.x + 3, slot.y, 'ground');         // farther, still in range 5
+  const by = new Map();
+  for (let t = 0; t < 300; t++) for (const e of stepSim(st, FIXED_DT)) if (e.type === 'damage' && e.sourceId === tw.id) by.set(e.targetId, (by.get(e.targetId) || 0) + e.amount);
+  assert.ok((by.get(art.id) || 0) > 0, 'the artillery is shot');
+  assert.ok(!by.has(troop.id), 'the nearer troop waits while artillery is in range');
+  // ×3 vs artillery: the damage over 300 ticks is three times the tower's dps × the armour multiplier
+  const secs = 300 * FIXED_DT, expect = MG.dps[0] * 3 * secs;
+  assert.ok(Math.abs(by.get(art.id) - expect) / expect < 0.05, `artillery took ${by.get(art.id).toFixed(1)}, expected ≈ ${expect.toFixed(1)}`);
+  // once the artillery is gone, back to the troop
+  art.hp = 0; st.units.delete(art.id);
+  const after = new Map();
+  for (let t = 0; t < 60; t++) for (const e of stepSim(st, FIXED_DT)) if (e.type === 'damage' && e.sourceId === tw.id) after.set(e.targetId, (after.get(e.targetId) || 0) + e.amount);
+  assert.ok((after.get(troop.id) || 0) > 0, 'then it takes the troop');
+});
+
+test('other towers ignore the MG-only artillery rules', () => {
+  const art = { domain: 'Walker', lightGround: false, shape: 'Artillery' };
+  assert.equal(structShapeMult(STRUCTURES['STR-Cannon'], art), 1);
+  assert.equal(structShapeMult(MG, art), 3);
+  assert.equal(structShapeMult(MG, { shape: 'Troops' }), 1);
 });

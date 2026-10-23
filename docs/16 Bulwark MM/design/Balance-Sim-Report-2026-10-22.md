@@ -266,6 +266,13 @@ The owner asked on 2026-10-22: "re-run balancing with machine gun at lowest towe
 
 **Verdict.** At 150 gold the Machine Gun is not overpowered. It is the right early and anti-Swimmer pick, and its price can stay. Overall balance still hinges on the Missile Flyer standoff (task_mvjxagdi_h), not on the Machine Gun.
 
+**Update 2026-10-23: the Machine Gun versus artillery [MM-story_mvl9zjld_s].** Owner: "Machine guns should be very effective against artillery if in range." Until now the Machine Gun could not shoot artillery at all, because artillery is not light ground. The Machine Gun row (`tables.js` `STR-MG`) now:
+- may target the **Artillery** shape (`alsoHitsShapes`);
+- **switches** to artillery whenever one is in its range, ahead of nearer troops (`prefersShapes`);
+- deals **×3 damage** to it (`bonusVsShape`): 72 / 112 / 166 dps by tier, so a T1 gun kills a T1 artillery piece (123–168 HP) in about 2–2.5 s.
+
+Re-run of the "MG as a fifth tower" plan, every faction's own map 1, seeds 1–5, `main` vs this change: **byte-identical results.** The scripted player builds its Machine Guns close to the base, and artillery (range 9.5) stops well outside the gun's 5-cell reach, so the gun never gets a shot. Overall balance does not move. The change only matters when a gun stands forward on an artillery approach, or artillery has to march past one: exactly the "if in range" the owner asked for.
+
 ---
 
 ## 9. Addendum: Missile Flyers become Drones [MM-story_mvk7mn6z_q]

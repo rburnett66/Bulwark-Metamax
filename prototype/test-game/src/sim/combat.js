@@ -114,9 +114,17 @@ function domainsAllow(domainList, targetDomain) {
  */
 export function structCanHit(def, u) {
   if (!domainsAllow(def.canTargetDomains, u.domain)) return false;
-  if (def.groundTargets === 'light' && !isAirDomain(u.domain) && !u.lightGround) return false;
+  if (def.groundTargets === 'light' && !isAirDomain(u.domain) && !u.lightGround &&
+      !(def.alsoHitsShapes && def.alsoHitsShapes.includes(u.shape))) return false;   // + named shapes (MG → Artillery)
   return true;
 }
+
+/** A tower's damage multiplier against unit `u` by its shape (def.bonusVsShape — the MG shreds artillery). */
+export function structShapeMult(def, u) {
+  const m = def.bonusVsShape && u && def.bonusVsShape[u.shape];
+  return typeof m === 'number' ? m : 1;
+}
+const prefersShape = (def, u) => !!(def.prefersShapes && u && def.prefersShapes.includes(u.shape));
 
 /* -------------------------------------------------------------------------- */
 /*  Vision (minimal stub per GDD §vision)                                     */
@@ -335,6 +343,7 @@ export function acquireTarget(state, shooter) {
     const slack2 = tieSlack2(range);
     let bestId = null;
     let bestD2 = Infinity;
+    let prefId = null, prefD2 = Infinity;   // def.prefersShapes: the nearest preferred target in range wins outright
     for (const u of state.units.values()) {
       if (u.hp <= 0) continue;
       if (u.side !== 'attacker') continue;
@@ -342,12 +351,16 @@ export function acquireTarget(state, shooter) {
       if (!canSee(shooter, u)) continue;
       const d2 = dist2Between(shooter.pos, u.pos);
       if (d2 > range2) continue;
+      if (prefersShape(def, u) && beatsBest(d2, u.id, prefD2, prefId, slack2)) {
+        if (d2 < prefD2) prefD2 = d2;
+        prefId = u.id;
+      }
       if (beatsBest(d2, u.id, bestD2, bestId, slack2)) {
         if (d2 < bestD2) bestD2 = d2;   // keep the SMALLEST distance so the tie window cannot creep outward
         bestId = u.id;
       }
     }
-    return bestId;
+    return prefId !== null ? prefId : bestId;
   }
 
   // ---- Unit shooter ---------------------------------------------------------
@@ -622,6 +635,12 @@ export function stepCombat(state, dt) {
         target = cand;
       }
     }
+    // a tower that PREFERS a shape (the MG → Artillery) drops a lesser target the moment a preferred one is in range
+    if (target && def.prefersShapes && !prefersShape(def, target)) {
+      const pick = acquireTarget(state, s);
+      const pu = pick !== null ? state.units.get(pick) : null;
+      if (pu && prefersShape(def, pu)) target = null;
+    }
     if (!target) {
       tid = acquireTarget(state, s);
       s.targetId = tid;
@@ -633,7 +652,7 @@ export function stepCombat(state, dt) {
     }
 
     // WAVE BONUSES: +% defender damage vs air / ground / troops (bonuses 1-3), applied to TOWER fire.
-    const res = applyDamage(state, s.id, target, dps * bonusDamageMult(state, target), def.damageType, dt);
+    const res = applyDamage(state, s.id, target, dps * bonusDamageMult(state, target) * structShapeMult(def, target), def.damageType, dt);
     if (res.killed) {
       s.targetId = null;
       deadUnitIds.push(target.id);
@@ -650,7 +669,7 @@ export function stepCombat(state, dt) {
         if (!structCanHit(def, other)) continue;
         const ox = other.pos.x - px, oy = other.pos.y - py;
         if (ox * ox + oy * oy > r2) continue;
-        if (applyDamage(state, s.id, other, dps * bonusDamageMult(state, other), def.damageType, dt).killed) deadUnitIds.push(other.id);
+        if (applyDamage(state, s.id, other, dps * bonusDamageMult(state, other) * structShapeMult(def, other), def.damageType, dt).killed) deadUnitIds.push(other.id);
       }
     }
   }
