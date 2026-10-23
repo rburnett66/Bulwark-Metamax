@@ -5,6 +5,7 @@ import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, buyStructTier, resetSave } from './save/save.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
+import { questOfferDue, questClosingDue } from './comm/questBeats.js';
 import { showWaveIntel, showBonusPicker, showHowToPlay } from './render/gameDialog.js';
 import { getBonusDef } from './data/tables.js';
 import { createMenu } from './menu/menu.js';
@@ -568,25 +569,8 @@ export function boot(mountEl, seed) {
       const info = waveIntel(currentWaves[0], 1);
       if (info) showWaveIntel(mountEl, info, speakNow); else speakNow();
     };
-    const runIntro = () => {
-      if (currentMapId) {
-        const sv = loadSave();
-        const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
-        const offer = already ? null : buildOffer(currentMapId, currentMap, voicePacks, sv);
-        if (offer) {
-          // OWNER ordering: the CONTRACT MODAL resolves first, THEN the primary speaks — the
-          // start tip only exists when the answer is yes, so the dialog must wait for the answer.
-          showContractModal(mountEl, offer, {
-            onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); showPreview(); },
-            onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); showPreview(); },
-          });
-        } else {
-          showPreview();
-        }
-      } else {
-        showPreview();
-      }
-    };
+    // the quest contract no longer opens here: it is offered once, in the interlude after wave 1 [MM-story_mvk8gz1k_r]
+    const runIntro = () => { showPreview(); };
     // EVERY LEVEL OPENS WITH THE LANDING [MM-story_mvbqui1g_m; owner 2026-10-17 "at the start of the game we need to
     // watch the landing craft complete touchdown animation before showing map or character dialog" MM-task_mvd2lq2j_j]:
     // in the 3D view the craft flies in and touches down FIRST; then the map banner, the how-to-play brief (first run),
@@ -941,14 +925,21 @@ export function boot(mountEl, seed) {
   // Runs inside the frozen interlude: the cleared wave's commentary plays through, THEN the
   // UPCOMING wave's challenge — whose speaker HOLDS on screen until the tap starts the fight.
   let preDialogFaction = null;   // challenge already delivered pre-battle → skip it at wave start
-  // the OPTIONAL secondary dialog (a tip from the contract giver — only while a contract is live), held + centre stage
-  async function playOptionalTip(idx) {
-    if (!runContract || !voicePacks) return;
-    const tip = tipsCall(voicePacks, runContract.giver, (currentSeed | 0) + idx, 'tip');
-    if (!tip) return;
-    const closed2 = comm.waitForClose();
-    await comm.showCall(Object.assign({}, tip, { hold: true, center: true }));
-    await closed2;
+  // the QUEST OFFER beat [MM-story_mvk8gz1k_r] (owner 2026-10-22: "Having these pop-up on every waves feel like too
+  // much dialog. Let's have it pop up between wave 1 and 2"): the map's quest-giver pitches the contract ONCE, in the
+  // interlude before wave 2 (comm/questBeats.js). It used to open at map start and then send a FIELD TIP every wave.
+  function offerContract() {
+    return new Promise((resolve) => {
+      if (!currentMapId) { resolve(); return; }
+      const sv = loadSave();
+      const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
+      const offer = already ? null : buildOffer(currentMapId, currentMap, voicePacks, sv);
+      if (!offer) { resolve(); return; }
+      showContractModal(mountEl, offer, {
+        onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); resolve(); },
+        onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); resolve(); },
+      });
+    });
   }
   function playPreBattleDialog(clearCall) {
     const idx = sim.waves ? sim.waves.current : 0;          // next wave = table index `current`
@@ -982,17 +973,14 @@ export function boot(mountEl, seed) {
       await closed;
       if (!interlude || mode !== 'play') return;
       if (idx === 0) {
-        // MATCH START: optional secondary tip (contract accepted), 1s beat, explicit TAP TO START
-        // (the build phase before wave 1 stays player-paced).
-        await playOptionalTip(idx);
-        if (!interlude || mode !== 'play') return;
+        // MATCH START: 1s beat, explicit TAP TO START (the build phase before wave 1 stays player-paced).
         releaseLanding();                                    // dialogs closed: the craft flies in while the player looks
         await new Promise((r) => setTimeout(r, 1000));
         if (interlude && mode === 'play' && hud && hud.setNextWavePrompt) hud.setNextWavePrompt(true, 'TAP TO START');
       } else {
         // BETWEEN WAVES (owner 2026-10-18): primary closed → the OPTIONAL dialog the same way (centre, 2×) → the
         // next-wave intel (its TO THE WALLS button is the continue) → a 1s beat → the next wave starts.
-        await playOptionalTip(idx);
+        if (questOfferDue(idx)) await offerContract();     // the quest's one mid-map beat: before wave 2 only
         if (!interlude || mode !== 'play') return;
         const info = waveIntel(currentWaves && currentWaves[idx], idx + 1);
         if (info) await new Promise((res) => showWaveIntel(mountEl, info, res));
@@ -1123,6 +1111,7 @@ export function boot(mountEl, seed) {
           const rewardFaction = (runContract && runContract.giver) || lastWaveFaction;
           const fiveStar = Array.isArray(sim.waveStars) && sim.waveStars.some((w) => w.stars === 5);
           let contractMsg = null;
+          let closing = null;   // the quest-giver's closing beat after the last wave [MM-story_mvk8gz1k_r]
           // judge the ACCEPTED contract from the hauled quest crystals (red + green units)
           if (runContract) {
             const hauled = sim.mapScore ? (sim.mapScore.questRed || 0) + (sim.mapScore.questGreen || 0) : 0;
@@ -1131,6 +1120,7 @@ export function boot(mountEl, seed) {
               ? 'CONTRACT FULFILLED — +' + verdict.gain + ' ' + runContract.giver + ' loyalty' +
                 (verdict.alignShift ? (verdict.alignShift > 0 ? ' · your reputation brightens' : ' · your reputation darkens') : '')
               : 'CONTRACT BROKEN — ' + (verdict.gain >= 0 ? '+' : '') + verdict.gain + ' ' + runContract.giver + ' loyalty');
+            if (questClosingDue(runContract, sim.result)) closing = { giver: runContract.giver, outcome: verdict.outcome };
             runContract = null;
           }
           // what the player sees at the end — after the Kill Camera on a defeat [MM-task_mvjng96y_b]
@@ -1150,6 +1140,10 @@ export function boot(mountEl, seed) {
               setTimeout(async () => {
                 // centre stage like every other held dialog (owner 2026-10-18) [MM-task_mveuityu_d]
                 await comm.showCall({ ...call, hold: true, center: true });
+                if (closing && voicePacks) {   // the quest closes: the giver's verdict (copy to be tuned)
+                  const close = tipsCall(voicePacks, closing.giver, (currentSeed ^ 0x2c1d), 'closing', closing.outcome);
+                  if (close) { const shut = comm.waitForClose(); await comm.showCall({ ...close, hold: true, center: true }); await shut; }
+                }
                 if (S.result === 'win' && fiveStar && voicePacks) {
                   const grant = tipsCall(voicePacks, rewardFaction, (currentSeed ^ 0x51ab), 'reward');
                   if (grant) comm.showCall({ ...grant, hold: true, center: true });

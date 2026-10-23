@@ -259,22 +259,26 @@ const M = {};
       ...[[-1.25, -1.25], [1.25, -1.25], [-1.25, 1.25], [1.25, 1.25]].map(([x, z]) => ({ t: 'cyl', ax: 'y', r: 0.06, l: 0.04, seg: 6, p: [x, 0.16, z], m: 'metal' })),
       // WEAPON
       { t: 'box', s: [0.6, 0.35, 0.5], p: [0, 1.5, 0], m: 'gunD', g: 'weapon' },
-      { t: 'box', s: [1.25, 0.46, 0.5], p: [-0.05, 1.78, 0], m: 'gun', g: 'weapon' },
-      { t: 'box', s: [0.32, 0.3, 0.34], p: [-0.85, 1.72, 0], m: 'gunD', g: 'weapon' },
-      { t: 'box', s: [0.06, 0.2, 0.06], p: [-1.0, 1.55, 0.12], m: 'dark', g: 'weapon', mir: true },
-      { t: 'cyl', ax: 'x', r: 0.21, l: 1.35, seg: 12, p: [1.2, 1.82, 0], m: 'gunD', g: 'weapon' },
-      ...Array.from({ length: 6 }, (_, i) => [0.7 + i * 0.2]).flatMap(([x]) => [1.89, 1.75].map((y) => ({ t: 'box', s: [0.07, 0.06, 0.02], p: [x, y, 0.205], m: 'black', g: 'weapon', mir: true }))),
-      ...Array.from({ length: 6 }, (_, i) => ({ t: 'box', s: [0.07, 0.02, 0.07], p: [0.7 + i * 0.2, 2.03, 0], m: 'black', g: 'weapon' })),
-      { t: 'cyl', ax: 'x', r: 0.075, l: 0.7, seg: 8, p: [2.2, 1.82, 0], m: 'dark', g: 'weapon' },
-      { t: 'cyl', ax: 'x', r: 0.12, l: 0.22, seg: 10, p: [2.55, 1.82, 0], m: 'gunD', g: 'weapon' },
-      { t: 'box', s: [0.38, 0.36, 0.3], p: [0.05, 1.62, -0.42], m: 'gun2', g: 'weapon' },
-      ...Array.from({ length: 9 }, (_, i) => ({ t: 'box', s: [0.12, 0.05, 0.1], p: [0.1 + i * 0.02, 1.42 - i * 0.1, -0.52 - i * 0.02], r3: [0, 0, -8], m: 'brass', g: 'weapon' })),
+      { t: 'box', s: [1.25, 0.46, 0.5], p: [-0.05, 1.78, 0], m: 'gun', g: 'barrel' },
+      { t: 'box', s: [0.32, 0.3, 0.34], p: [-0.85, 1.72, 0], m: 'gunD', g: 'barrel' },
+      { t: 'box', s: [0.06, 0.2, 0.06], p: [-1.0, 1.55, 0.12], m: 'dark', g: 'barrel', mir: true },
+      { t: 'cyl', ax: 'x', r: 0.21, l: 1.35, seg: 12, p: [1.2, 1.82, 0], m: 'gunD', g: 'barrel' },
+      ...Array.from({ length: 6 }, (_, i) => [0.7 + i * 0.2]).flatMap(([x]) => [1.89, 1.75].map((y) => ({ t: 'box', s: [0.07, 0.06, 0.02], p: [x, y, 0.205], m: 'black', g: 'barrel', mir: true }))),
+      ...Array.from({ length: 6 }, (_, i) => ({ t: 'box', s: [0.07, 0.02, 0.07], p: [0.7 + i * 0.2, 2.03, 0], m: 'black', g: 'barrel' })),
+      { t: 'cyl', ax: 'x', r: 0.075, l: 0.7, seg: 8, p: [2.2, 1.82, 0], m: 'dark', g: 'barrel' },
+      { t: 'cyl', ax: 'x', r: 0.12, l: 0.22, seg: 10, p: [2.55, 1.82, 0], m: 'gunD', g: 'barrel' },
+      { t: 'box', s: [0.38, 0.36, 0.3], p: [0.05, 1.62, -0.42], m: 'gun2', g: 'barrel' },
+      ...Array.from({ length: 9 }, (_, i) => ({ t: 'box', s: [0.12, 0.05, 0.1], p: [0.1 + i * 0.02, 1.42 - i * 0.1, -0.52 - i * 0.02], r3: [0, 0, -8], m: 'brass', g: 'barrel' })),
     ];
-    for (let i = 0; i < parts.length; i++) if (parts[i].g === 'weapon') parts[i] = scaleAbout([0, 1.35, 0], 1.3, [parts[i]])[0];
+    for (let i = 0; i < parts.length; i++) if (parts[i].g === 'weapon' || parts[i].g === 'barrel') parts[i] = scaleAbout([0, 1.35, 0], 1.3, [parts[i]])[0];
     // firing point: the flash hider's face (authored x 2.66, y 1.82, then the ×1.3 weapon scale about the pivot) [MM-story_mvk3kwu2_m]
     // eject: the ejection port on the gun's RIGHT (+z: facing +x with y up, right = +z; the ammo box and belt hang on the
     // left) — brass flies up and out to the right (owner 2026-10-22: "spray brass bullet casings up and to the right")
-    M.sys_mg = { name: 'Machine-gun turret', unit: 'SYS-MG', ref: 'sys_mg', parts, pivots: { weapon: [0, 1.35, 0] }, views: { side: 'right', top: 'up' },
+    // TILT (owner 2026-10-22: "the machine guns should tilt up when shooting air units") [MM-story_mvkc1vbd_s]: the gun
+    // (receiver, jacket, barrel, ammo box and belt) is a 'barrel' group on a trunnion over the yoke and pitches toward its
+    // target — up at aircraft, level for troops — straight-line aim like the flak; the muzzle and the brass port follow it.
+    M.sys_mg = { name: 'Machine-gun turret', unit: 'SYS-MG', ref: 'sys_mg', parts, pivots: { weapon: [0, 1.35, 0], barrel: [0, 1.86, 0] }, views: { side: 'right', top: 'up' },
+      barrel: { authored: 0, rest: 0, min: -8, max: 70, rate: 3.2, aim: 'straight' },
       muzzles: [{ p: [3.46, 1.96, 0], d: [1, 0, 0], back: 0.4 }],
       eject: { p: [0.33, 1.91, 0.34], d: [-0.12, 0.78, 0.62] } };
   }
