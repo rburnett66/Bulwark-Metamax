@@ -13,9 +13,12 @@
  * battle with no menu (main.js).
  */
 import { MAPDATA } from '../../content/maps/mapdata.js';
-import { loadSave, TIER_COSTS } from '../save/save.js';
+import { loadSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars, bankOf } from '../save/save.js';
 import { setChannelVolume } from '../comm/voice.js';
-import { buildTechTree } from './techtree.js';
+import { readyIds, countOwned } from '../data/techtree.js';
+import { techCtxFromSave, createGameTechAdapter } from './techSave.js';
+import { computeBadges, seenFor } from './badges.js';
+import { createProgressWidget } from './progressWidget.js';
 // The faction registry (GGG-3). Side-effect import + global namespace: factions.js is a classic
 // script with no ES exports, so a named import is a SyntaxError. See voice.js for the full note.
 import '../data/factions.js';
@@ -307,6 +310,9 @@ export function createMenu(mountEl, cbs) {
   brand.appendChild(word);
   brand.appendChild(el(doc, 'div', 'bwm-tag', 'HOLD THE LINE'));
   top.appendChild(brand);
+  // the PROGRESSION WIDGET (Menu-Progression-Design §2): rank + XP, gold, stars, research — on every menu screen
+  const widget = createProgressWidget(doc, { onOpen: (k) => { if (k === 'gold' || k === 'research') show('techtree'); else openSurvey(targetKey()); } });
+  top.appendChild(widget.el);
   root.appendChild(top);
 
   // ── MAIN screen ──
@@ -390,13 +396,14 @@ export function createMenu(mountEl, cbs) {
     b.appendChild(el(doc, 'span', null, label));
     if (hint) b.appendChild(el(doc, 'span', 'hint', hint));
     b.addEventListener('click', onClick);
+    const dot = el(doc, 'i', 'bwm-dot'); b.appendChild(dot); b.dot = dot;   // red-dot badge (badges.js)
     menu.appendChild(b);
     return b;
   };
   // the short path: MAIN → SURVEY (the target planet, its highest unlocked campaign preselected) → battle
   const continueBtn = mkBtn('PLAY', ' ', 'primary bwm-play', () => openSurvey(targetKey()));   // owner 2026-10-19: reads PLAY [MM-task_mvg1hbnl_1u]
-  mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
-  mkBtn('TECH TREE', 'research upgrades', null, () => show('techtree'));
+  const harvBtn = mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
+  const techBtn = mkBtn('TECH TREE', 'research upgrades', null, () => show('techtree'));
   mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
   mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
   mkBtn('RESET PROGRESS', 'wipe all progress', null, () => {
@@ -404,7 +411,8 @@ export function createMenu(mountEl, cbs) {
     if (cbs.onResetCampaign) cbs.onResetCampaign();
     show('main');   // refresh the Continue label + locks
   });
-  mkBtn('SETTINGS', 'audio & options', null, () => show('settings'));   // last
+  const setBtn = mkBtn('SETTINGS', 'audio & options', null, () => show('settings'));   // last
+  const DOTS = { play: continueBtn.dot, harvester: harvBtn.dot, techtree: techBtn.dot, settings: setBtn.dot };
   // the player's landing craft (a small panel; the craft turns on a turntable)
   const craftCard = el(doc, 'div', 'bwm-craft');
   const craftView = el(doc, 'div', 'cv');
@@ -591,7 +599,7 @@ export function createMenu(mountEl, cbs) {
         buy.title = bank < up.Gold_Cost ? 'Bank gold by finishing maps (your leftover gold carries forward)' : '';
         buy.addEventListener('click', () => {
           if (cbs.onBuyHarvester) cbs.onBuyHarvester(up.Level, up.Gold_Cost);
-          refreshHarvester();
+          refreshHarvester(); refreshProgress();
         });
         row.appendChild(buy);
       }
@@ -599,65 +607,35 @@ export function createMenu(mountEl, cbs) {
     }
   }
 
-  // ── TECH screen (Amendment B2: per-type tier unlocks, bought with the gold bank) ──
-  const tech = el(doc, 'div', 'bwm-maps');
-  tech.style.display = 'none';
-  const th = el(doc, 'div', 'bwm-maps-head');
-  th.appendChild(el(doc, 'h2', null, 'TECH'));
-  const tbank = el(doc, 'span', 'bwm-bank', '');
-  th.appendChild(tbank);
-  const tback = el(doc, 'button', 'bwm-btn back'); tback.style.width = 'auto'; tback.style.padding = '8px 18px';
-  tback.appendChild(el(doc, 'span', null, '← MENU'));
-  tback.addEventListener('click', () => show('main'));
-  th.appendChild(tback);
-  tech.appendChild(th);
-  const tlist = el(doc, 'div');
-  tech.appendChild(tlist);
-  root.appendChild(tech);
-
-  const TECH_TYPES = [
-    { key: 'cannon', label: 'CANNONS', note: 'Anti-ground turret line. T4 (range) comes later.' },
-    { key: 'flak', label: 'ANTI-AIR', note: 'Flak tower line. T4 (range) comes later.' },
-    { key: 'wall', label: 'WALLS', note: 'Fortification line. T4 (extra HP) comes later.' },
-  ];
-  function refreshTech() {
-    const s = loadSave();
-    const bank = (s.carry && s.carry.gold) || 0;
-    tbank.textContent = 'BANK ' + bank + 'g';
-    tlist.textContent = '';
-    for (const tt of TECH_TYPES) {
-      const cur = (s.structTiers && s.structTiers[tt.key]) || 1;
-      const row = el(doc, 'div', 'bwm-hrow' + (cur >= 3 ? ' cur' : ''));
-      row.appendChild(el(doc, 'div', 'bwm-hlvl', 'T' + cur));
-      const st = el(doc, 'div', 'bwm-hstats');
-      st.innerHTML = '<b>' + tt.label + '</b> — battle upgrades unlocked through tier ' + cur +
-        '<br>' + tt.note;
-      row.appendChild(st);
-      if (cur < 3) {
-        const cost = TIER_COSTS[tt.key][cur - 1];
-        const buy = el(doc, 'button', 'bwm-hbuy', 'UNLOCK T' + (cur + 1) + ' — ' + cost + 'g');
-        buy.disabled = bank < cost;
-        buy.title = bank < cost ? 'Bank gold by finishing maps' : '';
-        buy.addEventListener('click', () => {
-          if (cbs.onBuyTier) cbs.onBuyTier(tt.key, cur + 1);
-          refreshTech();
-        });
-        row.appendChild(buy);
-      } else {
-        row.appendChild(el(doc, 'span', 'bwm-bank', 'MAXED (T4 soon)'));
-      }
-      tlist.appendChild(row);
-    }
+  // ── TECH TREE = the TECH NET (Menu-Progression-Design §1) [MM-story_mvkhed1f_h]: the 3D tree on the real save. It replaces
+  //    the display-only Tech Tree screen and the classic TECH tier screen. Loads three.js + the net on first open.
+  const netHost = el(doc, 'div', 'bwm-technet');
+  netHost.style.display = 'none';
+  root.appendChild(netHost);
+  const nsty0 = el(doc, 'style'); nsty0.textContent = '.bwm-technet{position:absolute;inset:0;z-index:30;background:#02050c}' +
+    '.bwm-technet .ld{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#8fa0b3;font-size:12px;letter-spacing:.4em}';
+  netHost.appendChild(nsty0);
+  let net = null, netLoading = false;
+  const factionOfPlanet = (planet) => {
+    for (const [k, P] of Object.entries(PLANETS)) if (P.name === planet) { const f = REG.find(k); return f ? f.name : planet; }
+    return planet;
+  };
+  function openTechNet() {
+    if (net) { net.start(); return; }
+    if (netLoading) return;
+    netLoading = true;
+    const ld = el(doc, 'div', 'ld', 'LOADING TECH NET…'); netHost.appendChild(ld);
+    import('./technet.js').then((M) => M.loadTechNetDeps().then(({ THREE, addons }) => {
+      ld.remove();
+      net = M.mountTechNet(THREE, addons, netHost, createGameTechAdapter({
+        save: { loadSave, buyTech, refundTech }, factionOfPlanet,
+        onChange: () => { refreshProgress(); if (cbs.onTechChanged) cbs.onTechChanged(); },
+        onClose: () => show('main'),
+      }));
+      if (current === 'techtree') net.start();
+    })).catch((e) => { ld.textContent = 'TECH NET UNAVAILABLE — ' + ((e && e.message) || e); console.warn('[menu] tech net —', e); })
+      .finally(() => { netLoading = false; });
   }
-
-  // ── TECH TREE screen (the epic: curved color paths, node cards, research inspector) ──
-  const techTree = buildTechTree(doc, {
-    onBack: () => show('main'),
-    onClassic: () => show('tech'),                 // keep the Amendment-B2 structure-tier economy reachable
-    onResearch: (id, cost) => { if (cbs.onResearch) cbs.onResearch(id, cost); },
-  });
-  techTree.root.style.display = 'none';
-  root.appendChild(techTree.root);
 
   // ── SETTINGS (owner: settings on the main menu) — audio channels, shared with the in-game gear ──
   const settings = el(doc, 'div', 'bwm-maps');
@@ -730,20 +708,23 @@ export function createMenu(mountEl, cbs) {
   root.appendChild(el(doc, 'div', 'bwm-foot', 'BULWARK — TEST BUILD'));
 
   function show(screen) {
+    // leaving the Tech Net: whatever it showed as available counts as seen (incl. upgrades opened by a purchase there)
+    if (current === 'techtree' && screen !== 'techtree') { const sv = loadSave(), k = seenFor('techtree', sv, badgeCtx(sv)); markSeen(k[0], k[1]); }
     // the retired screens open the Survey on the target planet (post-battle "main menu" used to open 'maps')
     if (screen === 'maps' || screen === 'factions') { openSurvey(targetKey()); return; }
     main.style.display = screen === 'main' ? 'flex' : 'none';
     harv.style.display = screen === 'harvester' ? 'block' : 'none';
-    tech.style.display = screen === 'tech' ? 'block' : 'none';
-    techTree.root.style.display = screen === 'techtree' ? 'block' : 'none';
+    netHost.style.display = screen === 'techtree' ? 'block' : 'none';
+    if (screen !== 'techtree' && net) net.stop();
     settings.style.display = screen === 'settings' ? 'block' : 'none';
     survey.style.display = screen === 'survey' ? 'grid' : 'none';
     root.classList.toggle('space', screen === 'main' || screen === 'survey');
     current = screen;
     syncStage();
     if (screen === 'harvester') refreshHarvester();
-    if (screen === 'tech') refreshTech();
-    if (screen === 'techtree') techTree.refresh();
+    if (screen === 'techtree') openTechNet();
+    { const sv = loadSave(), k = seenFor(screen, sv, badgeCtx(sv)); if (k) markSeen(k[0], k[1]); }   // opening a screen clears its dot
+    refreshProgress();
     if (screen === 'main') {
       const s = loadSave();
       // the hero = the target planet, and the planet view is ALWAYS the default on open [MM-story_mvftq5q8_l]
@@ -765,10 +746,36 @@ export function createMenu(mountEl, cbs) {
   function refreshHeroTarget() {
     const s = loadSave(), f = REG.find(targetKey()) || REG.find('ground'), P = PLANETS[f.key];
     continueBtn.firstChild.textContent = 'PLAY';
-    continueBtn.lastChild.textContent = (P ? P.name + ' · ' : '') + 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);   // the planet stays in the hint
+    continueBtn.querySelector('.hint').textContent = (P ? P.name + ' · ' : '') + 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);   // the planet stays in the hint
     heroNext.innerHTML = P ? 'NEXT PLANET · <b>' + P.name.toUpperCase() + '</b>' : '';
     hero.style.setProperty('--hue', (P && P.ui) || '#f2c869');
     if (cbs.onPlanetView && root.style.display !== 'none') cbs.onPlanetView(f.key);   // [MM-story_mvgzp51o_8]
+  }
+
+  // ── PROGRESSION + BADGES (Menu-Progression-Design §2–4)
+  function badgeCtx(sv) {
+    const tc = techCtxFromSave(sv, factionOfPlanet), lvl = sv.harvesterLevel || 1;
+    const nx = (MAPDATA.harvesterUpgrades || []).find((u) => u.Level === lvl + 1);
+    return { tc, readyTech: readyIds(tc), harvesterNext: nx ? { level: nx.Level, cost: nx.Gold_Cost } : null, bank: bankOf(sv) };
+  }
+  function progressValues(sv, bc) {
+    return { xp: (sv.progress && sv.progress.xp) || 0, gold: bankOf(sv), stars: totalStars(sv), research: countOwned(bc.tc.owned) };
+  }
+  function refreshProgress() {
+    const sv = loadSave(), bc = badgeCtx(sv), b = computeBadges(sv, bc);
+    for (const [k, d] of Object.entries(DOTS)) d.classList.toggle('on', !!b[k]);
+    if (!playingRewards) widget.render({ ...progressValues(sv, bc), techDot: b.techtree });
+    else widget.render({ techDot: b.techtree });
+  }
+  let playingRewards = false;
+  /** The last battle's rewards fly into the widget — once, when the menu is on screen. */
+  function playPendingRewards() {
+    if (playingRewards || root.style.display === 'none') return;
+    const r = takePendingRewards();
+    if (!r) return;
+    playingRewards = true;
+    const sv = loadSave(), bc = badgeCtx(sv);
+    widget.playRewards(r, progressValues(sv, bc), root).then(() => { playingRewards = false; refreshProgress(); });
   }
 
   mountEl.appendChild(root);
@@ -802,12 +809,16 @@ export function createMenu(mountEl, cbs) {
       root.style.display = 'flex';
       // 'survey' (and the retired 'maps' / 'factions') open the Survey on the target planet [MM-story_mvftq4h6_k]
       if (screen === 'survey' || screen === 'maps' || screen === 'factions') openSurvey(targetKey()); else show(screen || 'main');
+      setTimeout(playPendingRewards, 450);   // after the screen has laid out (the tokens fly to real positions)
     },
-    close() { root.style.display = 'none'; syncStage(); },
+    close() { if (net) net.stop(); root.style.display = 'none'; syncStage(); },
+    /** re-read the save into the widget + dots (main.js calls this after a purchase elsewhere) */
+    refreshProgress,
     isOpen() { return root.style.display !== 'none'; },
     /** test hook: open a faction's survey by key */
     survey(key) { root.style.display = 'flex'; openSurvey(key); },
   };
   show('main');
+  setTimeout(playPendingRewards, 600);
   return api;
 }

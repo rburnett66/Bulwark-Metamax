@@ -2,6 +2,7 @@ import { BUILD_ICONS, buildIcon, buildIconUrl } from './buildIcons.js';
 import { STRUCTURES, ASSUMPTIONS, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
+import { levelFromXp } from '../data/progression.js';
 import { fogWindow, insideWindow } from '../render3d/overlays/fogModel.js';
 
 const STYLE_ID = 'bw-hud-style';
@@ -121,6 +122,20 @@ const CSS = `
 .bw-nextmap { font-size:16px; padding:10px 22px; margin-top:10px; background:#2c5c2c; border-color:#57a057; }
 .bw-nextmap:hover { background:#3a7a3a; }
 .bw-rbanner.bw-lose { color:#f99; }
+/* BATTLE REWARDS on the result (Menu-Progression-Design §3) [MM-story_mvkhegop_j] */
+.bw-rewards { display:none; min-width:min(340px,86vw); background:rgba(14,17,22,.92); border:1px solid #3a4452; padding:10px 14px 8px; }
+.bw-rewards .rh { font-size:10px; letter-spacing:.38em; color:#8fa0b3; text-align:center; margin-bottom:6px; }
+.bw-rewards .rr { display:flex; align-items:center; gap:10px; padding:5px 2px; border-top:1px solid #232a34; opacity:0; animation:bw-rr .4s ease-out forwards; }
+.bw-rewards .rr:nth-child(2){animation-delay:.15s} .bw-rewards .rr:nth-child(3){animation-delay:.35s} .bw-rewards .rr:nth-child(4){animation-delay:.55s} .bw-rewards .rr:nth-child(5){animation-delay:.75s}
+@keyframes bw-rr { from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none} }
+.bw-rewards .ic { width:20px; text-align:center; font-size:16px; }
+.bw-rewards b { font-size:16px; font-variant-numeric:tabular-nums; }
+.bw-rewards span { margin-left:auto; font-size:10px; letter-spacing:.2em; color:#8fa0b3; text-align:right; }
+.bw-rewards .g .ic, .bw-rewards .g b { color:#f2c869; } .bw-rewards .s .ic { color:#ffe08a; } .bw-rewards .x .ic, .bw-rewards .x b { color:#7af0ff; }
+.bw-rewards .xbar { height:4px; background:#0c0e12; border:1px solid #2e3846; margin:2px 0 4px 30px; position:relative; overflow:hidden; }
+.bw-rewards .xbar i { position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#2aa8d8,#7af0ff); box-shadow:0 0 6px #34e1ff; transition:width 1.1s ease-out .9s; }
+.bw-rewards .up { text-align:center; font-size:12px; font-weight:bold; letter-spacing:.28em; color:#7af0ff; text-shadow:0 0 12px #34e1ff; padding:4px 0 2px; }
+.bw-rewards .ft { font-size:9px; letter-spacing:.24em; color:#5c6878; text-align:center; margin-top:4px; }
 .bw-wavebanner { position:absolute; left:50%; top:34%; transform:translate(-50%,-50%); text-align:center;
   pointer-events:none; opacity:0; transition:opacity .25s ease; z-index:30; white-space:nowrap; }
 .bw-wavebanner.bw-show { opacity:1; }
@@ -626,8 +641,10 @@ export function createHud(mountEl, callbacks) {
   });
   const resultMenu = el(doc, 'button', 'bw-btn', 'Menu');
   resultMenu.addEventListener('click', () => { if (cbs.onMainMenu) cbs.onMainMenu(); });
+  const rewardsEl = el(doc, 'div', 'bw-rewards', '');   // the battle's rewards (gold banked, stars, XP)
   resultEl.appendChild(banner);
   resultEl.appendChild(scoreEl);
+  resultEl.appendChild(rewardsEl);
   // VICTORY → advance the campaign: the next, bigger map (owner). Shown by showResult on win.
   const nextMapBtn = el(doc, 'button', 'bw-btn bw-nextmap', 'NEXT MAP →');
   nextMapBtn.style.display = 'none';
@@ -683,6 +700,7 @@ export function createHud(mountEl, callbacks) {
     starBanner, starRow, starLbl,
     banner,
     scoreEl,
+    rewardsEl,
     replayBar,
     lastMoney: null,
     lastSeed: 1,
@@ -990,8 +1008,33 @@ export function waveStarsHtml(starsArr) {
       '<div style="color:#f2c869">avg ' + avg + ' / 5</div></div>';
 }
 
-export function showResult(hud, result, finalScore, nextMap, waveStars) {
+/** The battle's rewards panel on the result screen. rewards = save.js grantBattleRewards' ledger (null = none). */
+export function rewardsHtml(rewards) {
+  if (!rewards) return '';
+  const f = (n) => Math.round(n).toLocaleString('en-US');
+  const win = rewards.result === 'win', L0 = levelFromXp(rewards.xp.from), L1 = levelFromXp(rewards.xp.to);
+  const starsNew = rewards.stars.to - rewards.stars.from;
+  let h = '<div class="rh">REWARDS</div>';
+  h += '<div class="rr g"><span class="ic">◆</span><b>' + (win ? '+' + f(rewards.gold.earned) : '—') + '</b><span>' +
+    (win ? 'GOLD BANKED · BANK ' + f(rewards.gold.to) : 'BANK UNCHANGED · ' + f(rewards.gold.to)) + '</span></div>';
+  h += '<div class="rr s"><span class="ic">★</span><b>' + (starsNew > 0 ? '+' + starsNew : '—') + '</b><span>' +
+    (starsNew > 0 ? 'NEW BEST STARS · ' + rewards.stars.to + ' TOTAL' : 'NO NEW BEST · ' + rewards.stars.to + ' TOTAL') + '</span></div>';
+  h += '<div class="rr x"><span class="ic">⬢</span><b>+' + f(rewards.xp.earned) + '</b><span>XP · LV ' + L1.level + ' ' + L1.title.toUpperCase() + '</span></div>';
+  const startW = L1.level > L0.level ? 0 : L0.frac * 100;
+  h += '<div class="xbar"><i style="width:' + startW.toFixed(1) + '%" data-to="' + (L1.frac * 100).toFixed(1) + '"></i></div>';
+  if (L1.level > L0.level) h += '<div class="up">RANK UP — ' + L1.title.toUpperCase() + '</div>';
+  h += '<div class="ft">SPEND YOUR GOLD IN THE TECH TREE</div>';
+  return h;
+}
+
+export function showResult(hud, result, finalScore, nextMap, waveStars, rewards) {
   if (!hud) return;
+  if (hud.rewardsEl) {
+    hud.rewardsEl.innerHTML = rewardsHtml(rewards);
+    hud.rewardsEl.style.display = rewards ? 'block' : 'none';
+    const bar = hud.rewardsEl.querySelector('.xbar i');
+    if (bar && typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = bar.dataset.to + '%'; }));
+  }
   const win = result === 'win';
   const starsArr = (Array.isArray(waveStars) && waveStars.length) ? waveStars.map((w) => w.stars) : null;
   if (hud.nextMapBtn) {

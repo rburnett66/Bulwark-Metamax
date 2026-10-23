@@ -2,7 +2,8 @@ import { MAP, WAVES, makeWaves, fxScaleForMap, projScaleForMap, getUnitDef } fro
 import { buildCampaignMap, buildTerrainMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
-import { loadSave, updateSave, recordResult, buyStructTier, resetSave } from './save/save.js';
+import { loadSave, updateSave, recordResult, resetSave, grantBattleRewards } from './save/save.js';
+import { xpForBattle } from './data/progression.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
 import { questOfferDue, questClosingDue } from './comm/questBeats.js';
@@ -820,7 +821,7 @@ export function boot(mountEl, seed) {
     if (!devFaction && sv.enemyFaction) currentTestFaction = sv.enemyFaction;
   }
   const menu = createMenu(mountEl, {
-    onPlayMap: (id) => { menu.close(); void selectMap(id); },
+    onPlayMap: (id) => { menu.close(); if (id) pendingCarry = loadSave().carry || null; void selectMap(id); },   // a campaign battle from the menu starts with the banked gold (a won battle banked its leftovers)
     // the Main Menu's planet + craft panel [MM-story_mvcnxgt8_13]: the enemy whose homeworld is next, the player's craft
     currentFaction: () => currentTestFaction || DEFAULT_FACTION,
     onPlanetView: (key) => musicPlay(key, 'menu'),   // the menu plays the planet on screen; a galaxy pick crossfades [MM-story_mvgzp51o_8]
@@ -839,7 +840,7 @@ export function boot(mountEl, seed) {
       restart(currentSeed);
     },
     onResetCampaign: () => { resetSave(); pendingCarry = null; runContract = null; currentTestFaction = DEFAULT_FACTION; flashMessage(hud, 'Campaign reset — start from Map 1'); },   // the chosen enemy drives the wave builder
-    onBuyTier: (type, tier) => { buyStructTier(type, tier); },
+    onTechChanged: () => { pendingCarry = loadSave().carry; },   // the Tech Net spent / refunded banked gold: the next battle sees it
     onBuyHarvester: (level, cost) => {
       updateSave((sv) => {
         if ((sv.harvesterLevel || 1) !== level - 1) return;                    // strict ladder
@@ -1106,7 +1107,16 @@ export function boot(mountEl, seed) {
               nextMap = { id: currentMapId + 1, name: nm.name || ('Map ' + (currentMapId + 1)), size: (nm.cols - 4) + 'x' + (nm.rows - 4) };
             } catch (e) { nextMap = { id: currentMapId + 1, name: 'Map ' + (currentMapId + 1), size: '' }; }
           }
+          const saveBefore = loadSave();
           recordResult(currentMapId, sim.result, sim.finalScore, sim.waveStars, sim.waves ? sim.waves.total : 8, currentTestFaction);
+          // BATTLE REWARDS (Menu-Progression-Design §2.2–3) [MM-story_mvkhegop_j]: a win banks the leftover gold, every
+          // campaign battle earns commander XP; the ledger shows on the result and flies into the menu widget later.
+          // Played battles only — a replay re-runs a battle already paid for.
+          let rewards = null;
+          if (mode === 'play' && currentMapId) {
+            rewards = grantBattleRewards(saveBefore, { mapId: currentMapId, result: sim.result, finalScore: sim.finalScore,
+              waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, xpFor: xpForBattle });
+          }
           // the SECONDARY's end-of-match reward faction (captured before runContract is cleared)
           const rewardFaction = (runContract && runContract.giver) || lastWaveFaction;
           const fiveStar = Array.isArray(sim.waveStars) && sim.waveStars.some((w) => w.stars === 5);
@@ -1129,7 +1139,7 @@ export function boot(mountEl, seed) {
             if (S !== sim) return;   // restarted during the Kill Camera
             musicSting(S.result === 'win' ? 'win' : 'lose');
             if (contractMsg) flashMessage(hud, contractMsg);
-            showResult(hud, S.result, S.finalScore, nextMap, S.waveStars);
+            showResult(hud, S.result, S.finalScore, nextMap, S.waveStars, rewards);
             // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
             // wave star score (banner) -> final map score (overlay) -> PRIMARY dialog -> then, as
             // part of the REWARD FLOW, the SECONDARY grants the star bonus (5-star wave this battle).

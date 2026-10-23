@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.10.22-m';
-export const VERSION_NOTE = 'Maps 2–9 for every faction; Machine Gun tilts at aircraft; quest dialog after wave 1 and 8';
+export const VERSION = 'v2026.10.22-n';
+export const VERSION_NOTE = 'Tech Net is the Tech Tree; progression widget, battle rewards (wins bank gold, commander XP) and menu badges';
