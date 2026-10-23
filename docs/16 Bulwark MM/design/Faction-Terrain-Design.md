@@ -160,7 +160,7 @@ Today every planet uses the same two tree shapes (round, pine) and one rock shap
 | layered mesa (stepped plateau) | Kessra |
 | ice shard | Rime |
 | hexagonal basalt column | Cinder |
-| angular shard + crater rim | Lumen |
+| moon rocks — rounded, angular and flat, mixed greys (was angular shard) | Lumen |
 | crystal ridge | Xenthe |
 
 **Built 2026-10-22 [MM-story_mvk4auz0_n].** The kits are data in `src/data/foliage.js` (one per planet: tree families with weights, a rock style, walkable ground cover with a density per terrain class, and kit colours). The shapes are `src/render3d/obstructions/families.js`. Every family above exists, plus snow pine (Rime) and these ground-cover families, which are walkable and purely cosmetic:
@@ -173,7 +173,7 @@ Today every planet uses the same two tree shapes (round, pine) and one rock shap
 | Kessra | dry twigs, thornscrub |
 | Rime | tussock grass, frozen twigs |
 | Cinder | scorched twigs with ember tips |
-| Lumen | crystal scatter |
+| Lumen | grey moon rubble, crystal scatter (no plants) |
 | Xenthe | glowing sprouts, toadstools |
 | Vexmire | reeds with cattails, moss shrubs |
 
@@ -316,7 +316,8 @@ Each spec gives:
 - **Resources:** Regolith (common) on the maria; Helium-3 (uncommon) as frost in crater shadows; Starfall Iron in a crater; Void Lens (epic) floating over open highland.
 - **Signature:** **craters.**
 - **Sky & air:** white, unfiltered sun; **no haze** (haze #1c2236 is near-black, so distance fades toward space-dark); **no airborne particles** (survey: none). The cloud fog of war should become a dark starfield-tinted edge. This is the one planet with no air, and the fog should say so.
-- **Palette:** `highlands` **contradicts the planet**: green grass, green and orange canopies, blue-green water on an airless grey moon. Add a new **`lunar`** palette:
+- **Built 2026-10-23 [MM-story_mvl774l4_p].** Owner: "Planet Lumen is supposed to be a barren grey landscape .. why does it have grass? Adjust all Lumen maps. Different grey rocks and crystals would make more sense than grass." Lumen now uses its own `lunar` palette (`render3d/styles/lowpoly-palettes.js`) on all nine maps: grey regolith in light/dark bands, darker rubble fields, pale dust tracks, dark cryo pools for the water code, a near-black sky and a hard white sun. The palette is marked `bare` (no grass blades, no normal-mapped grass) and `craters` (a darker bowl inside a lighter rim, shaded into the ground, seeded by position). Its prop kit swaps the angular shards for mixed grey moon rocks and the crystal-only cover for grey rubble plus crystal shards. The cloud fog of war is unchanged.
+- **Palette:** `highlands` **contradicted the planet**: green grass, green and orange canopies, blue-green water on an airless grey moon. The new **`lunar`** palette (built, see above):
   - greys from the globe (#7a7e86 … #d0d2d6) for ground and rock;
   - near-black (#3e424a) for crater pits;
   - cyan crystal glow (#5ac8e8) as `canopy` / `rare`;
@@ -364,7 +365,7 @@ Each spec gives:
 
 | Where | Today | This design |
 |---|---|---|
-| Lumen palette | `highlands`: green grass and trees, blue-green water | new `lunar` palette: grey regolith, black pits, cyan crystals (§3.7) |
+| Lumen palette | `highlands`: green grass and trees, blue-green water | new `lunar` palette: grey regolith, black pits, cyan crystals (§3.7) — **built 2026-10-23** |
 | Vexmire palette | `tropical`: turquoise water, pink canopies | new `toxic` palette: moss, peat, yellow-green bog (§3.9) |
 | Kessra water | `canyon` teal water vs the globe's brown seas | rust-brown sumps (§3.4) |
 | Florael look | "Sakura reads washed out" | saturate grass, deepen blossom pinks (§3.2) |

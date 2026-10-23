@@ -80,6 +80,16 @@ export const LOWPAL = Object.freeze({
     canopy: ['#5a7a4a', '#6a8a52', '#4e6a42', '#7a9a5a', '#a87a3a'], rare: '#a86aa8', pine: ['#2e4a3a', '#385646', '#263e32', '#426250'], trunk: '#4a3e36',
     hills: ['#7a9a5e', '#8aa86a', '#6a8a54', '#96b072'], cliff: ['#8a8c90', '#96989c', '#7e8084', '#a2a4a8'],
     struct: { stone: '#c8c4b8', stoneDark: '#8e8a80', roof: '#4a5a6a', trim: '#a86aa8', metal: '#4a4e54', wood: '#6a5240' } },
+  // LUNAR — Lumen, an airless moon (owner 2026-10-23: "Planet Lumen is supposed to be a barren grey landscape .. why does it
+  // have grass? ... Different grey rocks and crystals would make more sense than grass.") [MM-story_mvl774l4_p]. Lumen used to
+  // borrow `highlands` (green turf). Grey regolith in rolling light/dark bands, darker rubble fields, pale compacted dust
+  // tracks, dark cryo pools for the water code. bare: no grass blades and no grass texture; craters: rims shaded in.
+  lunar: { rock: ['#6e7178', '#82858c', '#5f6269', '#989ba2'], rockB: '#a4a7ae', pebble: '#b4b7be', tuft: '#8c9098', bare: true, craters: true,
+    ground: { lime: '#9a9ca2', grass: '#878a91', teal: '#70737b', brush: '#62666f', forest: '#575b64', stone: '#96989e', lilac: '#7a7d86',
+      sand: '#a9aaaf', dirt: '#7c7874', road: '#b3b5ba', roadEdge: '#989aa0', shore: '#a9b2be', foam: '#c9d2dc', waterL: '#4e5a70', waterD: '#2c3344' },
+    canopy: ['#6a6e78', '#7a7e88', '#5c606a', '#8a8e98', '#5ae0f0'], rare: '#9af4ff', pine: ['#5a5e68', '#646872', '#50545e', '#6e727c'], trunk: '#4a4e58',
+    hills: ['#8a8e96', '#9a9da4', '#7a7e86', '#a8abb2'], cliff: ['#6e7178', '#7c7f86', '#62656c', '#8a8d94'],
+    struct: { stone: '#d6d8dc', stoneDark: '#9ea2aa', roof: '#2e3e60', trim: '#5ae0f0', metal: '#4a4e58', wood: '#6a6e78' } },
   savanna: { rock: ['#b8704a', '#c47c54', '#a8643e', '#d08a5e'], rockB: '#c88a64', pebble: '#d4a07a', tuft: '#d8b860',
     ground: { lime: '#f0d878', grass: '#dcc062', teal: '#b8a050', brush: '#c8b05a', forest: '#9a8a48', stone: '#d0b88a', lilac: '#c09070',
       sand: '#f4dca0', dirt: '#d8a868', road: '#fcecc4', roadEdge: '#e8cc90', shore: '#eedca0', foam: '#d0eef0', waterL: '#6ab8d8', waterD: '#3a80b0' },
@@ -106,6 +116,7 @@ export const WORLD_LIGHT = Object.freeze({
   volcanic: { clear: 0x3a2420, apron: 0x3e3838, ambient: 0.2, hemi: [0xa86a5a, 0x2a1a18, 0.5], sun: [0xffb08a, 0.95] },
   alien: { clear: 0x5ad8a8, apron: 0x30c8b0, ambient: 0.16, hemi: [0xe8ffe0, 0x7a3ac8, 0.5], sun: [0xfff8c0, 1.05] },
   highlands: { clear: 0x9aa8b4, apron: 0x7a9a5e, ambient: 0.2, hemi: [0xd8e0e8, 0x6a7a5a, 0.6], sun: [0xf4f0e8, 0.75] },
+  lunar: { clear: 0x070a12, apron: 0x5f6269, ambient: 0.13, hemi: [0xdfe4ee, 0x484c56, 0.48], sun: [0xffffff, 1.15] },   // black sky, hard white sun
   savanna: { clear: 0xf0c890, apron: 0xdcc062, ambient: 0.16, hemi: [0xfff0d0, 0xa88a50, 0.5], sun: [0xfff0c0, 1.2] },
 });
 

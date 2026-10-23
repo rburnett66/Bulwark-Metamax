@@ -96,7 +96,7 @@ export const PLANETS = Object.freeze({
     ui: '#bfe6ff', sun: '#ffffff',   // label colour on dark UI; sunlight
     survey: { trees: 'Needle spires, glowing crystal clusters', ground: 'Regolith pebbles, small craters, crystal shards', rocks: 'Grey shards', airborne: 'None: no atmosphere' },
     faction: { trope: 'Sci-Fi federation', identity: 'Orbital tech; strong vision; ignores some fog', dmg: 'Electric', beats: 'arcane' },
-    palette: 'highlands',   // the 3D ground palette + lighting (render3d/styles/lowpoly-palettes.js)
+    palette: 'lunar',   // the 3D ground palette + lighting — its own barren grey moon (was 'highlands', green turf) [MM-story_mvl774l4_p]
     name: 'Lumen', type: 'Airless moon', lush: 0, haze: '#1c2236',
     blurb: 'No air, no haze: the clearest sightlines in the system, a natural home for an orbital federation that sees everything.',
     globe: { water: 0.28, polar: 0.0, land: ['#7a7e86', '#9a9ea6', '#b4b8be', '#d0d2d6'], ocean: ['#3e424a', '#5a5e66'], dry: '#868a92', cloud: 0.0, craters: 1 },

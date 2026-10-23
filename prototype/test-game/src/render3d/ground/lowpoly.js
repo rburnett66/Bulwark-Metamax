@@ -78,6 +78,21 @@ export function createGroundColour(map, palette, roadAt = () => 0) {
     return (A[z0 * cols + x0] * (1 - fx) + A[z0 * cols + x1] * fx) * (1 - fz) + (A[z1 * cols + x0] * (1 - fx) + A[z1 * cols + x1] * fx) * fz;
   };
   const P = Object.fromEntries(Object.entries(palette.ground).map(([k, v]) => [k, hexRGB(v)]));
+  // CRATERS (palette.craters — Lumen) [MM-story_mvl774l4_p]: one maybe-crater per 9-cell grid square, a darker bowl inside a
+  // lighter rim, shaded into the colour. Seeded by position, so every build draws the same craters.
+  const craterAt = palette.craters ? (x, z) => {
+    let s = 0;
+    const gx0 = Math.floor(x / 9), gz0 = Math.floor(z / 9);
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+      const gx = gx0 + i, gz = gz0 + j;
+      if (h2(gx * 1.37 + 11, gz * 0.91 + 7) > 0.6) continue;
+      const ox = (gx + 0.2 + h2(gz + 3.1, gx + 5.7) * 0.6) * 9, oz = (gz + 0.2 + h2(gx + 8.3, gz + 1.9) * 0.6) * 9;
+      const d = Math.hypot(x - ox, z - oz) / (1.3 + h2(gx + 2.2, gz + 4.4) * 2.4);
+      if (d < 1) s -= (1 - d * d) * 0.24;
+      else if (d < 1.4) s += Math.max(0, 1 - Math.abs(d - 1.12) / 0.26) * 0.14;
+    }
+    return s;
+  } : null;
   const colAt = (x, z) => {
     const n = vnoise(x * 0.085, z * 0.085) * 0.65 + vnoise(x * 0.21 + 9, z * 0.21 + 3) * 0.35;
     let c = n < 0.5 ? lerp3(P.teal, P.grass, (n - 0.2) / 0.3) : lerp3(P.grass, P.lime, (n - 0.5) / 0.3);   // rolling light bands
@@ -87,6 +102,7 @@ export function createGroundColour(map, palette, roadAt = () => 0) {
     c = lerp3(c, P.forest, Math.min(1, ft * 1.3) * 0.85);
     c = lerp3(c, P.stone, fs * 0.5);
     c = lerp3(c, P.lilac, Math.min(1, fr * 1.4) * 0.8);
+    if (craterAt) { const k = 1 + craterAt(x, z); c = [c[0] * k, c[1] * k, c[2] * k]; }
     if (fd > 0.32) c = lerp3(c, fd > 0.55 ? P.sand : P.dirt, ((fd - 0.32) / 0.25) * 0.9 + 0.1);
     const r = roadAt(x, z);
     if (r > 0.1) c = lerp3(c, r > 0.32 ? P.road : P.roadEdge, r > 0.32 ? 0.9 : ((r - 0.1) / 0.22) * 0.8);
@@ -99,6 +115,7 @@ export function createGroundColour(map, palette, roadAt = () => 0) {
    * the meadow.
    */
   colAt.grassAt = (x, z) => {
+    if (palette.bare) return 0;   // a bare world (Lumen) has no grass to show
     const notGrass = field(F.b, x, z) * 0.8 + field(F.t, x, z) * 1.6 + field(F.d, x, z) * 2.2 + field(F.w, x, z) * 3
       + (field(F.r, x, z) + field(F.c, x, z)) * 2 + field(F.s, x, z) * 1.5 + roadAt(x, z) * 4;
     const open = Math.max(0, Math.min(1, 1 - notGrass));
@@ -217,7 +234,7 @@ export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron
   group.add(ground);
 
   // Grass tufts: 3-sided open cones, merged; normals forced up so blades light like the grass they grow from.
-  const plan = withTufts ? planTufts(map, palette, roadAt, G.colAt) : [];   // Low tier: no tufts (T3.5)
+  const plan = withTufts && !palette.bare ? planTufts(map, palette, roadAt, G.colAt) : [];   // Low tier / a bare world: no grass tufts
   // three's open cone emits two triangles per side, one of them zero-area at the tip: keep only the real ones
   const blade = new THREE.ConeGeometry(1, 1, 3, 1, true).toNonIndexed();
   const bp = [], src = blade.attributes.position.array;
