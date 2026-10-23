@@ -6,4 +6,4 @@
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
 export const VERSION = 'v2026.10.22-d';
-export const VERSION_NOTE = 'Every planet dresses its map in its own trees, ground cover and rock shapes';
+export const VERSION_NOTE = 'Planet foliage + custom rocks on every map; Machine Gun tower';

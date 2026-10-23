@@ -122,7 +122,7 @@ export const UNITS = Object.freeze({
   'GND-Troops': Object.freeze({
     faction: 'Ground / Powder', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: true,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
     domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -144,7 +144,7 @@ export const UNITS = Object.freeze({
   'GND-Tanks': Object.freeze({
     faction: 'Ground / Powder', shape: 'Assault Tank', role: 'Bruiser',
     artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -219,7 +219,7 @@ export const UNITS = Object.freeze({
   'AIR-Troops': Object.freeze({
     faction: 'Air', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: true,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
     domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -241,7 +241,7 @@ export const UNITS = Object.freeze({
   'AIR-Tanks': Object.freeze({
     faction: 'Air', shape: 'Assault Tank', role: 'Bruiser',
     radius: 0.46, artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Kinetic',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -321,7 +321,7 @@ export const UNITS = Object.freeze({
   'HTC-Troops': Object.freeze({
     faction: 'High Tech', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: true,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
     domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -343,7 +343,7 @@ export const UNITS = Object.freeze({
   'HTC-Tanks': Object.freeze({
     faction: 'High Tech', shape: 'Assault Tank', role: 'Bruiser',
     radius: 0.46, artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -409,7 +409,7 @@ export const UNITS = Object.freeze({
   'ART-Troops': Object.freeze({
     faction: 'Artillery', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: true,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
     domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -431,7 +431,7 @@ export const UNITS = Object.freeze({
   'ART-Tanks': Object.freeze({
     faction: 'Artillery', shape: 'Assault Tank', role: 'Bruiser',
     radius: 0.46, artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Concussion',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -497,7 +497,7 @@ export const UNITS = Object.freeze({
   'WTR-Troops': Object.freeze({
     faction: 'Water', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: true,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
     domain: 'Swimmer', render_tier: 'A', armorClass: 'Organic', damageType: 'Frost',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -519,7 +519,7 @@ export const UNITS = Object.freeze({
   'WTR-Tanks': Object.freeze({
     faction: 'Water', shape: 'Assault Tank', role: 'Bruiser',
     radius: 0.46, artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
     domain: 'Swimmer', render_tier: 'A', armorClass: 'Organic', damageType: 'Frost',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -585,7 +585,7 @@ export const UNITS = Object.freeze({
   'ARC-Troops': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: true,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
     domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Fire',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -607,7 +607,7 @@ export const UNITS = Object.freeze({
   'ARC-Tanks': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Assault Tank', role: 'Bruiser',
     radius: 0.46, artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Fire',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -673,7 +673,7 @@ export const UNITS = Object.freeze({
   'SPC-Troops': Object.freeze({
     faction: 'Space Tech', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: true,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
     domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -695,7 +695,7 @@ export const UNITS = Object.freeze({
   'SPC-Tanks': Object.freeze({
     faction: 'Space Tech', shape: 'Assault Tank', role: 'Bruiser',
     radius: 0.46, artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Electric',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -761,7 +761,7 @@ export const UNITS = Object.freeze({
   'DRK-Troops': Object.freeze({
     faction: 'Dark Energy', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: true,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
     domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -783,7 +783,7 @@ export const UNITS = Object.freeze({
   'DRK-Tanks': Object.freeze({
     faction: 'Dark Energy', shape: 'Assault Tank', role: 'Bruiser',
     radius: 0.46, artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 0,
     radarDetect: false, seesGround: false,
@@ -849,7 +849,7 @@ export const UNITS = Object.freeze({
   'GRN-Troops': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Troops', role: 'Skirmisher',
     radius: 0.38, artClass: 'infantry', projectileFx: null, burnsWhenDamaged: false,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, isInfantry: true,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: true, lightGround: true, isInfantry: true,
     domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
@@ -874,7 +874,7 @@ export const UNITS = Object.freeze({
   'GRN-Tanks': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Assault Tank', role: 'Bruiser',
     artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
-    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
+    engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Poison',
     canTarget: 'Ground', targets: 'Base', aoeRadius: 1,
     radarDetect: false, seesGround: false,
@@ -1025,6 +1025,21 @@ export const STRUCTURES = Object.freeze({
     buildTime: 3, upgradeTime: 4, sellTime: 1.5,
     footprint: Object.freeze({ w: 1, h: 1 }),
     cadence: 1.6
+  }),
+  // MACHINE GUN (owner 2026-10-22: "one more low level tower. A machine gun which can damage troops, light tanks, and
+  // aircraft. The gun should spray brass bullet casings up and to the right from the gun base.") [MM-story_mvk3kwu2_m]
+  // The cheap, short-range all-rounder: rapid tracers at aircraft (any) and at LIGHT ground units only —
+  // `groundTargets: 'light'` limits its ground and water targets to units with lightGround (troops, assault tanks).
+  // Appended after the Missile Tower so the existing hotkeys don't move (it takes 7). cadence = render hint (tracers).
+  'STR-MG': Object.freeze({
+    name: 'Machine Gun', kind: 'antiGround',
+    armorClass: 'Structure', damageType: 'Kinetic',
+    canTargetDomains: ['Walker', 'Swimmer', 'Floater', 'Flyer'], groundTargets: 'light',
+    hp: [240, 384, 576], dps: [24, 37.2, 55.2],
+    range: 5, cost: [150, 375, 750],
+    buildTime: 2, upgradeTime: 3, sellTime: 1,
+    footprint: Object.freeze({ w: 1, h: 1 }),
+    cadence: 0.12
   }),
   'STR-Harvestor': Object.freeze({
     // A PURCHASE, not a defense: place it on open ground and after the build time it converts into
@@ -1217,6 +1232,10 @@ export const MAP = Object.freeze({
 // ---------------------------------------------------------------------------
 // Lookups (throw on missing — a bad id is always a programming error)
 // ---------------------------------------------------------------------------
+//   lightGround                     boolean  Troops and light (assault) tanks: the light ground units
+//                                            the Machine Gun tower can hurt. Aircraft it hits regardless;
+//                                            heavy tanks, artillery and trucks shrug it off.
+//                                            (combat.structCanHit) [MM-story_mvk3kwu2_m]
 // SYSTEM units — authorable in the State Bench like any faction, but NEVER part of the enemy
 // roster/waves/balance (they live outside UNITS): the player's Harvester + the four structures.
 // Author their art in the tool under faction "System"; the game consumes it via artKey (harvester)
