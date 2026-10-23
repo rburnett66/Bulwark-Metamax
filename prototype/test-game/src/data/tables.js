@@ -1065,6 +1065,9 @@ export const STRUCTURES = Object.freeze({
     name: 'Machine Gun', kind: 'antiGround',
     armorClass: 'Structure', damageType: 'Kinetic',
     canTargetDomains: ['Walker', 'Swimmer', 'Floater', 'Flyer'], groundTargets: 'light',
+    // owner 2026-10-23: "Machine guns should be very effective against artillery if in range." Artillery (range 9.5,
+    // soft crews and light carriages) is an extra legal ground target, the preferred one, and takes ×3 damage.
+    alsoHitsShapes: Object.freeze(['Artillery']), prefersShapes: Object.freeze(['Artillery']), bonusVsShape: Object.freeze({ Artillery: 3 }),
     hp: [240, 384, 576], dps: [24, 37.2, 55.2],
     range: 5, cost: [150, 375, 750],
     buildTime: 2, upgradeTime: 3, sellTime: 1,
