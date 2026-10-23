@@ -6,4 +6,4 @@
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
 export const VERSION = 'v2026.10.22-e';
-export const VERSION_NOTE = 'Effects Lab in Settings: see and tune every battle effect per faction, incl. the base-cannon reticle';
+export const VERSION_NOTE = 'Effects Lab in Settings; planet foliage + custom rocks; Machine Gun tower';

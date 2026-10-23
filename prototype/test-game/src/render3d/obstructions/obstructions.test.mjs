@@ -64,11 +64,12 @@ test('a workbook map (no terrain codes) plans nothing and does not throw', () =>
   assert.deepEqual([plan.rocks.length, plan.trees.length], [0, 0]);
 });
 
-test('geometry: two merged meshes (rocks, trees) that cast and receive shadows, inside a sane triangle budget', () => {
+test('geometry: merged rocks + trees that cast and receive shadows (+ walkable cover), inside a sane triangle budget', () => {
   const { group, stats } = buildLowPolyObstructions(THREE, MAP);
-  assert.deepEqual(group.children.map((m) => m.name), ['obstructions-rocks', 'obstructions-trees']);
+  assert.deepEqual(group.children.map((m) => m.name), ['obstructions-rocks', 'obstructions-trees', 'obstructions-plants'], 'Verdance has no glow');
   for (const m of group.children) {
-    assert.ok(m.castShadow && m.receiveShadow, `${m.name} casts + receives`);
+    if (m.name === 'obstructions-plants') assert.ok(!m.castShadow && m.receiveShadow, 'cover receives only');
+    else assert.ok(m.castShadow && m.receiveShadow, `${m.name} casts + receives`);
     assert.ok(m.material.vertexColors, `${m.name} is vertex-coloured`);
     const p = m.geometry.getAttribute('position');
     assert.ok(p.count > 0 && p.count % 3 === 0, `${m.name} has whole triangles`);

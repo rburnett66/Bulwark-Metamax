@@ -30,10 +30,10 @@ import { createRecoil, bodyKick, kickMatrix, BODY_KICK } from '../fx/recoil.js';
 /** Sim structure kind → System model. Kinds not listed stay with structures/lowpoly.js. */
 export const SYSTEM_KINDS = Object.freeze({ antiGround: 'sys_cannon', antiAir: 'sys_flak', wall: 'sys_wall' });
 /** Tower types with their own model (the new towers share a kind with cannon / flak). */
-export const SYSTEM_STRUCTS = Object.freeze({ 'STR-Rockets': 'sys_rockets', 'STR-Missile': 'sys_missile' });
+export const SYSTEM_STRUCTS = Object.freeze({ 'STR-Rockets': 'sys_rockets', 'STR-Missile': 'sys_missile', 'STR-MG': 'sys_mg' });
 /** Instance caps per drawn model. The upgradable weapon towers draw as one model per tier (`<model>_t1..3`,
  *  systemModels.js tierModel) — accent colour, barrel length, rocket count [MM-story_mvey3eah_j]. */
-const BASE_CAP = { sys_cannon: 200, sys_flak: 200, sys_wall: 1200, sys_rockets: 120, sys_missile: 120 };
+const BASE_CAP = { sys_cannon: 200, sys_flak: 200, sys_wall: 1200, sys_rockets: 120, sys_missile: 120, sys_mg: 160 };
 export const SYSTEM_CAP = Object.freeze(Object.fromEntries(Object.entries(BASE_CAP).flatMap(([m, c]) =>
   TIERED_MODELS.includes(m) ? [1, 2, 3].map((t) => [tierModelKey(m, t), c]) : [[m, c]])));
 const modelOf = (s) => { const m = SYSTEM_STRUCTS[s.structId] || SYSTEM_KINDS[s.kind]; return m ? tierModelKey(m, s.tier) : m; };
@@ -144,7 +144,18 @@ export function planSystem(list, base = null, mounts = null) {
 export function muzzlePoint(it, wy, i = 0, pitch) {
   const def = it && SYSTEM_MODELS[it.model], list = def && def.muzzles;
   if (!list || !list.length) return null;
-  const m = list[((i % list.length) + list.length) % list.length];
+  return modelPointOf(it, def, list[((i % list.length) + list.length) % list.length], list.length, wy, pitch);
+}
+
+/** Where a tower's ejection port is and which way its spent brass flies (the Machine Gun: `eject` on the model), at
+ *  the turret's yaw — same transform as muzzlePoint; { x, y, z, dx, dy, dz } or null. [MM-story_mvk3kwu2_m] */
+export function ejectPoint(it, wy, pitch) {
+  const def = it && SYSTEM_MODELS[it.model];
+  return def && def.eject ? modelPointOf(it, def, def.eject, 1, wy, pitch) : null;
+}
+
+function modelPointOf(it, def, m, count, wy, pitch) {
+  const list = { length: count };
   const pv = (def.pivots && def.pivots.weapon) || [0, 0, 0], k = (SYSTEM_SCALE[it.model] || 0.25) * (it.ms || 1), sy = it.sy == null ? 1 : it.sy;
   const local = wy - it.ry, cl = Math.cos(local), sl = Math.sin(local), cr = Math.cos(it.ry), sr = Math.sin(it.ry);
   // a pitching barrel: tilt the tip and axis about the trunnion (model Rz) by the pitch past the authored angle
@@ -316,6 +327,11 @@ export function createSystemStructures(THREE, scene, { env } = {}) {
       const it = byItem.get(id);
       if (!it) return null;
       return muzzlePoint(it, yaw.has(id) ? yaw.get(id) : it.ry, i, pitchOf(it));
+    },
+    /** The ejection port of tower `id` (models with `eject`), following its turret; see ejectPoint. */
+    eject(id) {
+      const it = byItem.get(id);
+      return it ? ejectPoint(it, yaw.has(id) ? yaw.get(id) : it.ry, pitchOf(it)) : null;
     },
     /** Point the metal reflection at the world's sky / ground. */
     setEnv(e) { if (e) mat.setEnv(e); },

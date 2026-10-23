@@ -116,6 +116,8 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
     engagesStructuresWhileAdvancing: def.engagesStructuresWhileAdvancing === true,
     // The class the '+10% damage vs troops' wave bonus buffs. (bonuses.bonusDamageMult)
     isInfantry: def.isInfantry === true,
+    // A light ground unit (troops, assault tanks): the Machine Gun tower may hit it. (combat.structCanHit)
+    lightGround: def.lightGround === true,
     costT1: def.cost[0],
     path: [],
     pathIdx: 0,
