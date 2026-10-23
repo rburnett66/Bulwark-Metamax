@@ -558,7 +558,15 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     const t = typeof ev.tick === 'number' ? ev.tick : tick;
     switch (ev.type) {
       case 'damage': if (ev.pos) onDamage(ev, state, t); break;
-      case 'kill': if (ev.pos) onKill(ev, t, opts); break;
+      // a kamikaze drone's own explosion is its death — a blast in its faction's colour, no crashing wreck [MM-story_mvk7mn6z_q]
+      case 'kill': if (ev.pos && !ev.detonated) onKill(ev, t, opts); break;
+      case 'detonate':
+        if (ev.pos && firstTime('d:' + t + ':' + ev.entityId, t)) {
+          tint = tunedFactionColor(ev.unitId);
+          boom(cellToWorld(ev.pos.x), cellToWorld(ev.pos.y), Math.max(0.8, ev.radius || 1), true);
+          tint = null;
+        }
+        break;
       case 'destroyed':
         if (ev.pos && firstTime('x:' + t + ':' + ev.entityId, t)) boom(cellToWorld(ev.pos.x), cellToWorld(ev.pos.y), 1.3);
         break;

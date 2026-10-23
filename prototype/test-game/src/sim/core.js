@@ -612,7 +612,8 @@ export function stepMovement(state, dt) {
         // site still OWNS the damage; stepCombat skips the base to avoid doubling it.
         if (inBaseReach(state, unit)) {
           unit.state = 'attacking';
-          applyDamage(state, unit.id, base, unit.dps, unit.damageType, dt);
+          // a kamikaze drone does no continuous damage — combat.js detonates it this tick [MM-story_mvk7mn6z_q]
+          if (!unit.detonate) applyDamage(state, unit.id, base, unit.dps, unit.damageType, dt);
           engaged = true;
         }
       }
@@ -1201,8 +1202,8 @@ export function stepSim(state, dtFixed) {
     // etc.) still emits a 'kill' — and EVERY attacker kill pays the bounty (owner, 2026-07-13: with the
     // harvest economy there is no passive income, so cannon/AOE kills paying zero read as broken).
     if (u) {
-      const income = u.side === 'attacker' ? grantKillIncome(state, u) : 0;
-      emitEvent(state, { type: 'kill', tick: state.tick, entityId: dead[i], unitId: u.unitId, side: u.side, lane: u.lane, income, radius: u.radius, pos: { x: u.pos.x, y: u.pos.y } });
+      const income = u.side === 'attacker' && !u._detonated ? grantKillIncome(state, u) : 0;   // a drone that blew itself up pays nothing
+      emitEvent(state, { type: 'kill', tick: state.tick, entityId: dead[i], unitId: u.unitId, side: u.side, lane: u.lane, income, radius: u.radius, detonated: !!u._detonated, pos: { x: u.pos.x, y: u.pos.y } });
     }
     state.units.delete(dead[i]);
     if (state.selectedId === dead[i]) state.selectedId = null;

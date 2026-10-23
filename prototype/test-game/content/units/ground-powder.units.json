@@ -138,8 +138,8 @@
       }
     },
     "GND-Missiles": {
-      "shape": "Missile Flyer",
-      "role": "Guided AA",
+      "shape": "Drone",
+      "role": "MG Drone",
       "layers": {
         "base": {
           "frame": "top-down-view-of-bomber-drone-4.png",

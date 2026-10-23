@@ -128,6 +128,22 @@ export const DAMAGE_TYPES = Object.freeze({
 //   speed = 25*0.08*0.92 = 1.84 ; vision = 4 + 15*0.1 = 5.5 ; power 100 ;
 //   cost = 100*3 = 300 (T2 x2.5, T3 x5).
 // ---------------------------------------------------------------------------
+/**
+ * DRONES [MM-story_mvk7mn6z_q] — owner 2026-10-22: "The drone is the lightest attack aircraft. Historically a drone craft
+ * is a dive bomber that hits once and explodes, or a drone could carry a machine gun." The old Missile Flyers (the
+ * lightest aircraft, which used to hover outside every anti-air tower) are Drones now, one of two kinds per faction:
+ *   kamikaze — fast; flies at the base, and on contact DETONATES once (a burst of `detonate.burst` in `radius`, an
+ *              explosion, so Concussion whatever the faction's weapon) and is gone. No kill bounty for a drone that
+ *              blew itself up — shoot it down first. Burst = 6 s of its old fire. Artillery, Arcane, Dark, Greenies.
+ *   gun      — fast; strafes from close range with a machine gun (tracers), 65% of its old fire.
+ *              Ground, Air, High Tech, Water, Space.
+ * Every anti-air tower (Machine Gun 5, Flak 6.5, Missile Tower 8) out-ranges both, so the standoff is gone.
+ */
+export const DRONE = Object.freeze({
+  kamikaze: Object.freeze({ range: 0.9, speed: 2.6, radius: 1.0, damageType: 'Concussion' }),
+  gun: Object.freeze({ range: 3.5, speed: 2.2 }),
+});
+
 export const UNITS = Object.freeze({
   'GND-Troops': Object.freeze({
     faction: 'Ground / Powder', shape: 'Troops', role: 'Skirmisher',
@@ -216,14 +232,14 @@ export const UNITS = Object.freeze({
     power: 99.5, cost: [298.5, 746.25, 1492.5]
   }),
   'GND-Missiles': Object.freeze({
-    faction: 'Ground / Powder', shape: 'Missile Flyer', role: 'Guided AA',
+    faction: 'Ground / Powder', shape: 'Drone', role: 'MG Drone',
     radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
-    canTarget: 'Both', targets: 'Base', aoeRadius: 1,
+    canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
-    hp: [110, 176, 264], dps: [67.5, 104.625, 155.25],
-    range: 8.75, speed: 0.736, vision: 4,
+    hp: [110, 176, 264], dps: [43.875, 68.006, 100.913],
+    range: DRONE.gun.range, speed: DRONE.gun.speed, vision: 4,
     power: 100.2, cost: [300.6, 751.5, 1503]
   }),
   'AIR-Troops': Object.freeze({
@@ -304,14 +320,14 @@ export const UNITS = Object.freeze({
     power: 104, cost: [312, 780, 1560]
   }),
   'AIR-Missiles': Object.freeze({
-    faction: 'Air', shape: 'Missile Flyer', role: 'Guided AA',
+    faction: 'Air', shape: 'Drone', role: 'MG Drone',
     radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
-    canTarget: 'Both', targets: 'Base', aoeRadius: 1,
+    canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
-    hp: [85, 136, 204], dps: [70.875, 109.856, 163.012],
-    range: 8.575, speed: 0.96, vision: 4,
+    hp: [85, 136, 204], dps: [46.069, 71.406, 105.958],
+    range: DRONE.gun.range, speed: DRONE.gun.speed, vision: 4,
     power: 102.05, cost: [306.15, 765.375, 1530.75]
   }),
   // Tier C set-piece (Voxel-Rendering-Tiers spec §3): the heavy bomber renders as a LIVE 3D voxel model
@@ -406,14 +422,14 @@ export const UNITS = Object.freeze({
     power: 101.5, cost: [304.5, 761.25, 1522.5]
   }),
   'HTC-Missiles': Object.freeze({
-    faction: 'High Tech', shape: 'Missile Flyer', role: 'Guided AA',
+    faction: 'High Tech', shape: 'Drone', role: 'MG Drone',
     radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
-    canTarget: 'Both', targets: 'Base', aoeRadius: 1,
+    canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
-    hp: [95, 152, 228], dps: [70.875, 109.856, 163.012],
-    range: 9.8, speed: 0.72, vision: 4,
+    hp: [95, 152, 228], dps: [46.069, 71.406, 105.958],
+    range: DRONE.gun.range, speed: DRONE.gun.speed, vision: 4,
     power: 104.95, cost: [314.85, 787.125, 1574.25]
   }),
   'ART-Troops': Object.freeze({
@@ -494,14 +510,15 @@ export const UNITS = Object.freeze({
     power: 103.05, cost: [309.15, 772.875, 1545.75]
   }),
   'ART-Missiles': Object.freeze({
-    faction: 'Artillery', shape: 'Missile Flyer', role: 'Guided AA',
-    radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
+    faction: 'Artillery', shape: 'Drone', role: 'Kamikaze Drone',
+    radius: 0.42, artClass: 'missile', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Concussion',
-    canTarget: 'Both', targets: 'Base', aoeRadius: 1,
+    canTarget: 'Both', targets: 'Base', aoeRadius: 0,
+    detonate: Object.freeze({ burst: [445.5, 690.528, 1024.65], radius: DRONE.kamikaze.radius, damageType: DRONE.kamikaze.damageType }),
     radarDetect: true, seesGround: true,
     hp: [92, 147.2, 220.8], dps: [74.25, 115.088, 170.775],
-    range: 10.9375, speed: 0.624, vision: 4,
+    range: DRONE.kamikaze.range, speed: DRONE.kamikaze.speed, vision: 4,
     power: 110.25, cost: [330.75, 826.875, 1653.75]
   }),
   'WTR-Troops': Object.freeze({
@@ -582,14 +599,14 @@ export const UNITS = Object.freeze({
     power: 99.05, cost: [297.15, 742.875, 1485.75]
   }),
   'WTR-Missiles': Object.freeze({
-    faction: 'Water', shape: 'Missile Flyer', role: 'Guided AA',
+    faction: 'Water', shape: 'Drone', role: 'MG Drone',
     radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Frost',
-    canTarget: 'Both', targets: 'Base', aoeRadius: 1,
+    canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
-    hp: [112, 179.2, 268.8], dps: [64.125, 99.3937, 147.488],
-    range: 8.575, speed: 0.784, vision: 4,
+    hp: [112, 179.2, 268.8], dps: [41.681, 64.606, 95.867],
+    range: DRONE.gun.range, speed: DRONE.gun.speed, vision: 4,
     power: 98.05, cost: [294.15, 735.375, 1470.75]
   }),
   'ARC-Troops': Object.freeze({
@@ -670,14 +687,15 @@ export const UNITS = Object.freeze({
     power: 101.3, cost: [303.9, 759.75, 1519.5]
   }),
   'ARC-Missiles': Object.freeze({
-    faction: 'Arcane / Energy', shape: 'Missile Flyer', role: 'Guided AA',
-    radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
+    faction: 'Arcane / Energy', shape: 'Drone', role: 'Kamikaze Drone',
+    radius: 0.42, artClass: 'missile', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Fire',
-    canTarget: 'Both', targets: 'Base', aoeRadius: 1,
+    canTarget: 'Both', targets: 'Base', aoeRadius: 0,
+    detonate: Object.freeze({ burst: [437.4, 677.97, 1006.02], radius: DRONE.kamikaze.radius, damageType: DRONE.kamikaze.damageType }),
     radarDetect: true, seesGround: true,
     hp: [100, 160, 240], dps: [72.9, 112.995, 167.67],
-    range: 8.925, speed: 0.736, vision: 4,
+    range: DRONE.kamikaze.range, speed: DRONE.kamikaze.speed, vision: 4,
     power: 103.5, cost: [310.5, 776.25, 1552.5]
   }),
   'SPC-Troops': Object.freeze({
@@ -758,14 +776,14 @@ export const UNITS = Object.freeze({
     power: 101.2, cost: [303.6, 759, 1518]
   }),
   'SPC-Missiles': Object.freeze({
-    faction: 'Space Tech', shape: 'Missile Flyer', role: 'Guided AA',
+    faction: 'Space Tech', shape: 'Drone', role: 'MG Drone',
     radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
-    canTarget: 'Both', targets: 'Base', aoeRadius: 1,
+    canTarget: 'Both', targets: 'Base', aoeRadius: 0,
     radarDetect: true, seesGround: true,
-    hp: [96, 153.6, 230.4], dps: [66.15, 102.532, 152.145],
-    range: 9.625, speed: 0.8, vision: 4,
+    hp: [96, 153.6, 230.4], dps: [42.998, 66.646, 98.894],
+    range: DRONE.gun.range, speed: DRONE.gun.speed, vision: 4,
     power: 102.2, cost: [306.6, 766.5, 1533]
   }),
   'DRK-Troops': Object.freeze({
@@ -846,14 +864,15 @@ export const UNITS = Object.freeze({
     power: 103.2, cost: [309.6, 774, 1548]
   }),
   'DRK-Missiles': Object.freeze({
-    faction: 'Dark Energy', shape: 'Missile Flyer', role: 'Guided AA',
-    radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
+    faction: 'Dark Energy', shape: 'Drone', role: 'Kamikaze Drone',
+    radius: 0.42, artClass: 'missile', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Toxic',
-    canTarget: 'Both', targets: 'Base', aoeRadius: 1,
+    canTarget: 'Both', targets: 'Base', aoeRadius: 0,
+    detonate: Object.freeze({ burst: [453.6, 703.08, 1043.28], radius: DRONE.kamikaze.radius, damageType: DRONE.kamikaze.damageType }),
     radarDetect: true, seesGround: true,
     hp: [90, 144, 216], dps: [75.6, 117.18, 173.88],
-    range: 8.75, speed: 0.816, vision: 4,
+    range: DRONE.kamikaze.range, speed: DRONE.kamikaze.speed, vision: 4,
     power: 104.6, cost: [313.8, 784.5, 1569]
   }),
   'GRN-Troops': Object.freeze({
@@ -940,14 +959,15 @@ export const UNITS = Object.freeze({
     power: 96.6, cost: [289.8, 724.5, 1449]
   }),
   'GRN-Missiles': Object.freeze({
-    faction: 'Greenies (Chem)', shape: 'Missile Flyer', role: 'Guided AA',
-    radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
+    faction: 'Greenies (Chem)', shape: 'Drone', role: 'Kamikaze Drone',
+    radius: 0.42, artClass: 'missile', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Toxic',
-    canTarget: 'Both', targets: 'Base', aoeRadius: 1,
+    canTarget: 'Both', targets: 'Base', aoeRadius: 0,
+    detonate: Object.freeze({ burst: [396.9, 615.192, 912.87], radius: DRONE.kamikaze.radius, damageType: DRONE.kamikaze.damageType }),
     radarDetect: true, seesGround: true,
     hp: [82, 131.2, 196.8], dps: [66.15, 102.532, 152.145],
-    range: 8.3125, speed: 0.84, vision: 4,
+    range: DRONE.kamikaze.range, speed: DRONE.kamikaze.speed, vision: 4,
     power: 96.05, cost: [288.15, 720.375, 1440.75]
   }),
 });

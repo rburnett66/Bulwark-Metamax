@@ -84,6 +84,21 @@ Eight shape classes drive silhouette and atlas; every faction fields all eight (
 | Planes | Striker | Flyer | 150 | 52.5 | 6.25 | 2 | 4 |
 | Missiles | Guided AA | Flyer | 100 | 67.5 | 8.75 | 0.8 | 4 |
 
+**Drones (2026-10-22, [MM-story_mvk7mn6z_q]).** The owner's air roles: "The drone is the lightest attack aircraft. Historically a drone craft is a dive bomber that hits once and explodes, or a drone could carry a machine gun. Fighters are heavy gunners, and bombers are slow and have big AOE damage impact if they can get close enough."
+
+The Missiles row is now the **Drone**. Each faction fields one of two kinds:
+
+| Kind | Factions | Range | Speed | Attack |
+|---|---|---|---|---|
+| Kamikaze drone | Artillery, Arcane, Dark Energy, Greenies | 0.9 (contact) | 2.6 | Flies at the base and explodes once: 6 s of its old fire as one Concussion burst within 1 cell, then it is gone. No kill bounty if it blows itself up. |
+| MG drone | Ground, Air, High Tech, Water, Space | 3.5 | 2.2 | Strafes with a machine gun (tracers) at 65% of its old fire. |
+
+Notes:
+- HP and cost are unchanged.
+- Every anti-air tower (Machine Gun 5, Flak 6.5, Missile Tower 8) out-ranges both kinds. This ends the old missile standoff, where Missiles fired from 8.3–10.9 cells, beyond every anti-air range.
+- Owner calls: Fighters are left as they are; the Bomber stays Air's only (AIR-HeavyBomber).
+- The numbers are data in `tables.js` (`DRONE` and the nine `*-Missiles` rows).
+
 Source: Balance `Archetypes`. Each base unit spends the same **100-point power budget** across HP/DPS/Range/Speed/Utility, so shapes differ in *shape*, not total strength (Balance Overview — Balance Philosophy). Cost is derived flat from power (**gold = power × 3**, `Assumptions` `Cost_per_power_gold`), so equal power = equal price.
 
 **Per-unit requirement:** all base attributes plus T1/T2/T3 HP and DPS, cost (T1–T3), power, and effective DPS vs Organic / Machinery / Aircraft (Balance `Units`). Tier scaling derives directly from `Assumptions` (exact source values, no longer placeholder):

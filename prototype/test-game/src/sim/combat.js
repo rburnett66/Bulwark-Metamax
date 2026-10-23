@@ -497,6 +497,27 @@ export function applyDamage(state, sourceId, target, rawDps, damageType, dt) {
   return { dealt: dealt, killed: killed };
 }
 
+/**
+ * KAMIKAZE DRONE [MM-story_mvk7mn6z_q]: the drone reached its target — it explodes. One burst (dt = 1) of
+ * `unit.detonate.burst` through the real effectiveness matrix to its target and to every enemy structure, the base and
+ * every defender unit inside `radius` of the blast, then the drone is dead. `_detonated` tells the death cleanup to
+ * pay no bounty (it wasn't shot down). Deterministic: entities visited in Map (insertion) order.
+ */
+export function detonate(state, unit, target) {
+  const D = unit.detonate, r2 = D.radius * D.radius;
+  const at = target === state.base ? unit.pos : (target.pos || unit.pos);
+  const near = (p) => p && (p.x - at.x) * (p.x - at.x) + (p.y - at.y) * (p.y - at.y) <= r2;
+  const hit = new Set();
+  const blast = (t) => { if (!t || t.hp <= 0 || hit.has(t)) return; hit.add(t); applyDamage(state, unit.id, t, D.burst, D.damageType, 1); };
+  blast(target);
+  for (const s of state.structures.values()) if (structureIsTargetable(s) && near(s.pos)) blast(s);
+  const b = state.base;
+  if (b && b.hp > 0 && ((b.cells && b.cells.length ? b.cells : [b.pos]).some(near) || target === b)) blast(b);
+  for (const u of state.units.values()) if (u !== unit && u.side !== unit.side && u.hp > 0 && near(u.pos)) blast(u);
+  unit.hp = 0; unit._detonated = true; unit.targetId = null;
+  emitEvent(state, { type: 'detonate', tick: state.tick, entityId: unit.id, unitId: unit.unitId, radius: D.radius, pos: { x: unit.pos.x, y: unit.pos.y } });
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Combat tick                                                               */
 /* -------------------------------------------------------------------------- */
@@ -556,6 +577,7 @@ export function stepCombat(state, dt) {
     }
 
     unit.state = 'attacking';   // lowercase — core.js movement/separation gates test 'attacking'
+    if (unit.detonate) { detonate(state, unit, target); continue; }   // a kamikaze drone hits once and is gone
     if (target !== state.base) {   // base damage is owned by stepMovement (footprint reach) — don't double-apply
       const res = applyDamage(state, unit.id, target, unit.dps, unit.damageType, dt);
       if (res.killed) {

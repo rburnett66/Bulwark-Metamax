@@ -265,3 +265,44 @@ The owner asked on 2026-10-22: "re-run balancing with machine gun at lowest towe
 - **Dark Energy:** its runs stall (a wave still alive after 240 s), so its win counts measure the stall rule, not the tower. Greenies win 5/5 in every plan.
 
 **Verdict.** At 150 gold the Machine Gun is not overpowered. It is the right early and anti-Swimmer pick, and its price can stay. Overall balance still hinges on the Missile Flyer standoff (task_mvjxagdi_h), not on the Machine Gun.
+
+---
+
+## 9. Addendum: Missile Flyers become Drones [MM-story_mvk7mn6z_q]
+
+The owner said on 2026-10-22: "The drone is the lightest attack aircraft … a dive bomber that hits once and explodes, or a drone could carry a machine gun." The owner's calls:
+- Missile Flyer becomes the drone, with both kinds split per faction.
+- Fighters stay as they are.
+- The Bomber stays Air-only.
+
+**Applied:**
+- **Kamikaze drones** (Artillery, Arcane, Dark, Greenies) fly at 2.6. On contact they explode once, as a Concussion burst of 6 s of their old fire within 1 cell, and die. A drone that blows itself up pays no bounty.
+- **MG drones** (Ground, Air, High Tech, Water, Space) fly at 2.2 and strafe from 3.5 cells at 65% of their old fire.
+- HP and cost are unchanged.
+- Every anti-air tower out-ranges both kinds.
+
+**Re-run.** Same harness, each faction's own map 1, 5 seeds, the "MG as a fifth tower" plan, against main as it was before this change:
+
+| Faction | Wins: missiles → drones | Waves survived | Pressure base damage | Drone damage | Top damage dealer now |
+|---|---|---|---|---|---|
+| Ground / Powder | 0/5 → **5/5** | 2.4 → 8.0 | 95,139 → 286 | 94,834 → 2 | GND-Planes |
+| Air | 5/5 → 5/5 | 8.0 → 8.0 | 2,185 → 2,185 | 0 → 0 (no drones in its waves) | AIR-Trucks |
+| High Tech | 0/5 → **3/5** | 2.0 → 6.0 | 90,585 → 7,441 | 84,888 → 34 | HTC-Artillery |
+| Artillery | 0/5 → 0/5 | 2.2 → 4.6 | 190,839 → 24,466 | 163,779 → 0 | ART-Planes |
+| Water | 4/5 → 4/5 | 7.2 → 7.2 | 3,149 → 3,149 | 0 → 0 | WTR-Copters |
+| Arcane / Energy | 0/5 → **4/5** | 2.2 → 7.0 | 165,938 → 3,333 | 163,009 → 87 | ARC-Planes |
+| Space Tech | 0/5 → **4/5** | 2.0 → 6.8 | 86,725 → 3,933 | 84,203 → 96 | SPC-Planes |
+| Dark Energy | 0/5 → **5/5** | 2.0 → 8.0 | 22 → 22 | 0 → 0 | DRK-Artillery |
+| Greenies | 5/5 → 5/5 | 8.0 → 8.0 | 0 → 0 | 0 → 0 | — |
+
+**What it shows**
+
+- **The missile standoff is gone.** It was the single biggest source of base damage, about 85k–165k per faction in the pressure runs. Survival now tracks the units that should decide it: Fighters (Planes), Artillery and Copters.
+- **Dark Energy's stalls are gone.** Its 0/5 came from a missile wave that could never be cleared, and it now plays out to 5/5.
+- **Drones are now too easy to kill.** With their old 82–112 HP and fast but direct flight, the scripted player's anti-air downs almost every drone before it attacks: 0–96 damage per run. As a threat they went from overwhelming to negligible.
+
+**Suggested next tune (not applied; your call):** make drones dangerous in numbers instead of individually.
+- Double kamikaze HP, or have kamikazes arrive in swarms of 3, so a few get through.
+- Raise MG drone HP by about 1.5× so they live long enough to strafe.
+
+Artillery (0/5) is now limited by ART-Planes and its own artillery, not by drones.
