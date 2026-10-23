@@ -12,7 +12,7 @@
 export const FACTION_MAP = Object.freeze({ ground: 'powder', air: 'air', hightech: 'high-tech', artillery: 'artillery', water: 'water',
   arcane: 'arcane-energy', space: 'space-tech', dark: 'dark-energy', greenies: 'greenies' });
 
-export const SHAPE_ORDER = Object.freeze(['Troops', 'Scout', 'Assault Tank', 'Heavy Tank', 'Artillery', 'Gunship', 'Fighter', 'Missile Flyer', 'Bomber']);
+export const SHAPE_ORDER = Object.freeze(['Troops', 'Scout', 'Assault Tank', 'Heavy Tank', 'Artillery', 'Gunship', 'Fighter', 'Drone', 'Bomber']);
 
 /** The map without its wave windows or rings: no fog, nothing hidden as a contact, nothing gated. */
 export function arenaMap(map) {

@@ -178,8 +178,8 @@
       }
     },
     "GRN-Missiles": {
-      "shape": "Missile Flyer",
-      "role": "Guided AA",
+      "shape": "Drone",
+      "role": "Kamikaze Drone",
       "rotation": 0,
       "layers": {
         "base": {

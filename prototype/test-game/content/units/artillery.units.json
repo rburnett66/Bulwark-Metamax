@@ -145,8 +145,8 @@
       }
     },
     "GND-Missiles": {
-      "shape": "Missile Flyer",
-      "role": "Guided AA",
+      "shape": "Drone",
+      "role": "MG Drone",
       "rotation": 0,
       "layers": {
         "base": {

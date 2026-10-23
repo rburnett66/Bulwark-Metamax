@@ -105,6 +105,8 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
     targetsBase: def.targets === 'Base',
     targetsStructures: def.targets === 'Structures',
     aoeRadius: def.aoeRadius || 0,
+    // KAMIKAZE drone [MM-story_mvk7mn6z_q]: one burst on contact, then it is gone (combat.js detonate)
+    detonate: def.detonate ? { burst: def.detonate.burst[idx], radius: def.detonate.radius, damageType: def.detonate.damageType } : null,
     radarDetect: !!def.radarDetect,
     seesGround: !!def.seesGround,
     // ---- CAPABILITIES (DDD-7/9) — copied straight off the def, never inferred from a name.

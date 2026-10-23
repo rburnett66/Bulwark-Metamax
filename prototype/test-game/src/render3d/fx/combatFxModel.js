@@ -351,6 +351,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       case 'kill': flash(x, AIM.ground, z, FLASH.kill, null, (ev.radius || 0.28) / 0.28); break;
       case 'destroyed': flash(x, AIM.structure, z, FLASH.destroyed); break;
       case 'mineExplode': flash(x, 0.2, z, FLASH.mine); break;
+      case 'detonate': flash(x, AIM.structure, z, FLASH.destroyed); break;   // a kamikaze drone's blast [MM-story_mvk7mn6z_q]
       case 'deposit': flash(x, AIM.base, z, FLASH.deposit, DEPOSIT_COLORS[ev.color]); break;
       default: break;
     }
