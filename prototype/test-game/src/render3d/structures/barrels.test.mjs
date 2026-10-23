@@ -9,7 +9,7 @@ import { createCombatFx, wantPitch } from '../fx/combatFxModel.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
 
 const D = Math.PI / 180;
-const ARMED = ['sys_cannon', 'sys_flak', 'sys_rockets', 'sys_missile'];
+const ARMED = ['sys_cannon', 'sys_flak', 'sys_rockets', 'sys_missile', 'sys_mg'];   // the Machine Gun tilts too [MM-story_mvkc1vbd_s]
 
 test('every armed tower has a barrel group about a trunnion pivot, with sane limits', () => {
   for (const k of ARMED) {
@@ -114,4 +114,25 @@ test('rocket rack: stays under 50° at every range, so its turn toward the targe
     assert.ok(h > 0.6 && (ax.x * dx + ax.z * dz) / (h * Math.hypot(dx, dz)) > 0.97, `the rack points at the target (${dx},${dz})`);
     sys.dispose();
   }
+});
+
+test('the Machine Gun tilts up at an aircraft and stays near level for a troop [MM-story_mvkc1vbd_s]', () => {
+  const scene = new THREE.Scene(), sys = createSystemStructures(THREE, scene);
+  sys.setBase({ x: 2, y: 2 });
+  const mg = { id: 1, kind: 'antiGround', structId: 'STR-MG', cell: { x: 10, y: 5 }, lifecycle: 'Complete', hp: 10, maxHp: 10, targetId: 7 };
+  sys.setStructures([mg]);
+  const state = { units: new Map([[7, { pos: { x: 13, y: 5 }, hp: 5 }]]), structures: new Map() };
+  const rest = sys.pitch(1);
+  assert.equal(rest, 0, 'rests level');
+  // a plane 3 cells out, flying high (the drawn pose carries its altitude)
+  for (let i = 0; i < 90; i++) sys.update(1 / 30, state, new Map([[7, { x: 13.5, y: 3.2, z: 5.5 }]]));
+  const up = sys.pitch(1), m = sys.muzzle(1, 0);
+  assert.ok(up > 25 * D, `tilted up at the plane (${(up / D).toFixed(1)}°)`);
+  assert.ok(Math.abs(Math.asin(m.dy) - up) < 1e-6, 'tracers leave along the tilted barrel');
+  const e = sys.eject(1);
+  assert.ok(e && e.y > 0, 'the brass port rides the gun');
+  // the same gun on a troop on the ground
+  for (let i = 0; i < 90; i++) sys.update(1 / 30, state, new Map([[7, { x: 13.5, y: 0.3, z: 5.5 }]]));
+  assert.ok(Math.abs(sys.pitch(1)) < 8 * D, `about level for a troop (${(sys.pitch(1) / D).toFixed(1)}°)`);
+  sys.dispose();
 });
