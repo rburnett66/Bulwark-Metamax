@@ -9,7 +9,7 @@ import { SYSTEM_MODELS } from '../render3d/structures/systemModels.js';
 test('every structure on the BUILD rail, and the harvester, has an icon with the owner\'s name for it', () => {
   for (const id of Object.keys(STRUCTURES).filter((k) => STRUCTURES[k].kind !== 'harvestorBay')) assert.ok(buildIcon(id), id + ' has an icon');
   assert.ok(buildIcon('harvester'));
-  assert.deepEqual(BUILD_ICONS.map((i) => i.label), ['CANNON', 'FLAK GUN', 'WALL', 'LAND MINE', 'ROCKETS', 'ANTI-AIR', 'HARVESTER']);
+  assert.deepEqual(BUILD_ICONS.map((i) => i.label), ['CANNON', 'FLAK GUN', 'WALL', 'LAND MINE', 'ROCKETS', 'ANTI-AIR', 'MACHINE GUN', 'HARVESTER']);
   assert.equal(new Set(BUILD_ICONS.map((i) => i.id)).size, BUILD_ICONS.length);
 });
 

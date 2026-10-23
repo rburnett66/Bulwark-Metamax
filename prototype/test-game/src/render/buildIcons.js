@@ -13,6 +13,7 @@ export const BUILD_ICONS = Object.freeze([
   { id: 'mine',      structId: 'STR-Mine',    label: 'LAND MINE', model: 'mine' },     // no battlefield model: stylized in the bake
   { id: 'rockets',   structId: 'STR-Rockets', label: 'ROCKETS',   model: 'sys_rockets' },
   { id: 'antiair',   structId: 'STR-Missile', label: 'ANTI-AIR',  model: 'sys_missile' },
+  { id: 'mg',        structId: 'STR-MG',      label: 'MACHINE GUN', model: 'sys_mg' },   // owner 2026-10-22 [MM-story_mvk3kwu2_m]
   { id: 'harvester', structId: null,          label: 'HARVESTER', model: 'sys_harvester' },   // bought at the base
 ]);
 
