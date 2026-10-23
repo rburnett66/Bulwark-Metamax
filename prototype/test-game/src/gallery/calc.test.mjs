@@ -46,8 +46,8 @@ test('TTK agrees with hp / effective dps (tick-quantised)', () => {
     `ttk ${m.ttk} vs analytic ${analytic}`);
 });
 
-test('Poison never kills a Structure (x0): infinite TTK, zero eff dps', () => {
-  const sh = unitShooter('DRK-Troops', 1);          // Poison
+test('Toxic never kills a Structure (x0): infinite TTK, zero eff dps', () => {
+  const sh = unitShooter('DRK-Troops', 1);          // Toxic
   const m = measure(sh, makeStructureTarget('STR-Wall', 1));
   assert.equal(m.effDps, 0);
   assert.equal(m.ttk, Infinity);
