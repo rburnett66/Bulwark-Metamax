@@ -1099,7 +1099,7 @@ export function stepSeparation(state, dt) {
 // Base SUPER-CANNON — long range, slow to aim, slow arcing shell, MASSIVE AOE. It locks a target's POSITION,
 // so a unit that keeps moving has left before the shell lands: it only really hurts STATIONARY targets (the
 // enemy's dug-in long-range siege units). Deterministic (target picked by longest-stationary + id tiebreak).
-const CANNON = { range: 26, stillTicks: 24, aim: 3.0, flight: 1.6, cooldown: 4.5, aoe: 2.6, damage: 4000 };
+export const CANNON = { range: 26, stillTicks: 24, aim: 3.0, flight: 1.6, cooldown: 4.5, aoe: 2.6, damage: 4000 };
 export function stepBaseCannon(state, dt) {
   const base = state.base, c = base && base.cannon;
   if (!c || base.hp <= 0) return;
