@@ -37,5 +37,15 @@ baked level. Hand-tuning a map in the Forge and exporting it here is fine — th
 
 The old stopgap gave every faction a **copy of Powder's map**, written by `node tools/maps/copy-faction-maps.mjs` and
 stamped `"_copiedFrom": "powder-map-<n>"`. No copies remain. The script never overwrites a file without `_copiedFrom`,
-so running it now changes nothing. Maps 2–9 have no forge files yet: they still come from the workbook generator, or
-from a Powder slot saved in your browser (the runtime mirror, `TEMP_MIRROR_FACTION` in `src/main.js`).
+so running it now changes nothing.
+
+## Maps 2–9 (2026-10-22, [MM-story_mvkcdc27_t])
+
+Owner: "generate maps with terrain, blockage, water and decor for all factions, all maps" and "use the same large map
+with graduated play areas". Every faction now ships `<slug>-map-2.json` … `<slug>-map-9.json`.
+
+- Each map uses its planet's §2.3 recipe. Powder's maps 2–9 use Verdance's recipe; Powder map 1 stays as it was.
+- Each map has its own seed: the best passing seeds after map 1's.
+- Every map is 64×32, with the same base and the same graduated wave windows as map 1.
+- Every map passes the §1 guardrails on the map the game builds for that slot.
+- Their baked levels hold only `level.json`, `road_mask.png` and `routes.json`, made with `bake3d.mjs <name> --no-tiles`. That is what the default low-poly 3D view loads. The ~3 MB ground tiles are only drawn under `?ground=baked`, so those maps show no baked ground in that mode.

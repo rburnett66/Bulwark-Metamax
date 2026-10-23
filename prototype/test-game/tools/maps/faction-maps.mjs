@@ -31,9 +31,19 @@ export const RECIPES = {
   'greenies':      { planet: 'Vexmire', types: { dirt: t(14, 45), brush: t(18, 55), rocks: t(5, 60),  trees: t(14, 40), cliff: t(2, 50) }, water: { mode: 'patches', pct: 17, noise: 0.45 } },
 };
 
+/**
+ * Powder's map 1 stays the hand-kept Forge-default map (owner); its maps 2–9 [MM-story_mvkcdc27_t] use Verdance's
+ * §2.3 recipe. PLANET_RECIPES = every faction slug → its planet recipe, for the maps 2–9 batch.
+ */
+export const VERDANCE = { planet: 'Verdance', types: { dirt: t(22, 30), brush: t(14, 45), rocks: t(5, 60), trees: t(24, 30), cliff: t(3, 50) }, water: { mode: 'patches', pct: 10, noise: 0.45 } };
+export const PLANET_RECIPES = { powder: VERDANCE, ...RECIPES };
+/** The campaign slots that ship a forge map per faction: map 1 (owner 2026-10-22) and maps 2–9 (same day, same size,
+ *  same graduated wave windows — "use the same large map with graduated play areas"). */
+export const MAP_SLOTS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
 /** Build the forge object exactly as terrain.html render()/exportObj() would (minus decor, which the browser adds). */
 export function forgeFor(slug, seed) {
-  const rc = RECIPES[slug];
+  const rc = PLANET_RECIPES[slug];
   const g = generateTerrain({ cols: 64, rows: 32, seed, types: rc.types, water: rc.water });
   const base = placeBase(g, POWDER.base.gap, { x: 31, y: 15 });
   const tn = POWDER.spawnTuning, spawnsByWave = {};
@@ -55,8 +65,8 @@ function bfs(cols, rows, pass, starts) {
 }
 
 /** Guardrail metrics on the map the GAME builds from the forge object. */
-export function evaluate(forge) {
-  const map = buildTerrainMap(forge, 1, { seed: 0, bakeTune: {} });
+export function evaluate(forge, mapId = 1) {
+  const map = buildTerrainMap(forge, mapId, { seed: 0, bakeTune: {} });
   const { cols, rows } = map, N = cols * rows;
   const nav = buildNavGrid(map, []);
   const water = new Uint8Array(N); for (const c of map.waterCells) water[c.y * cols + c.x] = 1;
@@ -102,7 +112,7 @@ export function passes(slug, e) {
   if (e.unreachable) fails.push(`${e.unreachable} ground spawns cut off`);
   if (!e.secondRoute) fails.push('single route');
   if (e.openReach < 0.97) fails.push(`sealed pockets ${(100 * (1 - e.openReach)).toFixed(1)}%`);
-  if (RECIPES[slug].ponds && !(e.shortcutGain >= 0.5 && e.shortcutMean <= 0.88)) fails.push(`pond shortcut weak (gain ${(100 * e.shortcutGain).toFixed(0)}%, mean ${e.shortcutMean.toFixed(2)})`);
+  if (PLANET_RECIPES[slug] && PLANET_RECIPES[slug].ponds && !(e.shortcutGain >= 0.5 && e.shortcutMean <= 0.88)) fails.push(`pond shortcut weak (gain ${(100 * e.shortcutGain).toFixed(0)}%, mean ${e.shortcutMean.toFixed(2)})`);
   return fails;
 }
 
