@@ -51,7 +51,8 @@ import { createLights } from './lighting.js';
 import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
 import { createHeadingTracker } from './heading.js';
 import { buildBakedGround } from './ground/baked.js';
-import { buildLowPolyGround, GRID as GROUND_GRID } from './ground/lowpoly.js';
+import { buildLowPolyGround, GRID as GROUND_GRID, roadSampler } from './ground/lowpoly.js';
+import { foliageKitKey } from '../data/foliage.js';
 import { renderMapFor } from './ground/synthTerrain.js';
 import { LOWPAL, WORLD_LIGHT, resolveWorld } from './styles/lowpoly-palettes.js';
 import { PLANETS } from '../data/planets.js';
@@ -78,6 +79,7 @@ import { createTrackMarks, trackSpecs } from './fx/trackMarks.js';
 import { createTrackMarksView } from './fx/trackMarksView.js';
 import { createWakes } from './fx/wakes.js';
 import { createWakesView } from './fx/wakesView.js';
+import { createCasings, createCasingsView } from './fx/casings.js';
 import { UNIT_MODELS } from './units/models.js';
 import { createWading, gearHeights } from './units/wading.js';
 import { createFlashGlows } from './fx/flashLights.js';
@@ -232,7 +234,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, wakes: null, wakesView: null, wading: null, killCam: null, baseBlast: null, flashGlows: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, wakes: null, wakesView: null, casings: null, casingsView: null, wading: null, killCam: null, baseBlast: null, flashGlows: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map), viewInsets: typeof opts.viewInsets === 'function' ? opts.viewInsets : null,
@@ -247,7 +249,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     getProjFx: typeof opts.projFx === 'function' ? opts.projFx : () => opts.projFx || null,
     getProjScale: typeof opts.projScale === 'function' ? opts.projScale : () => opts.projScale || 1,
     destroyed: false,
-    world: null,
+    world: null, planet: opts.planet || null,
     lowpoly,
     roadMask: null,
   };
@@ -259,6 +261,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   r.wakes = createWakes({ isWater: (x, z) => waterSet.has(Math.floor(x) + ',' + Math.floor(z)), cap: tier.wakeCap || 600,
     isWaterUnit: (v) => { const u = r.wakeState && r.wakeState.units && r.wakeState.units.get(v.id); return !!u && (u.domain === 'Swimmer' || u.domain === 'Floater'); } });
   r.wakesView = createWakesView(THREE, scene, { cap: tier.wakeCap || 600 });
+  r.casings = createCasings({ cap: tier.casingCap || 260 }); r.casingsView = createCasingsView(THREE, scene, { cap: tier.casingCap || 260 });   // MG brass [MM-story_mvk3kwu2_m]
   r.wading = createWading({ gear: gearHeights(UNIT_MODELS), isWater: (x, z) => waterSet.has(Math.floor(x) + ',' + Math.floor(z)),
     isWaterUnit: (v) => { const u = r.wakeState && r.wakeState.units && r.wakeState.units.get(v.id); return !!u && (u.domain === 'Swimmer' || u.domain === 'Floater'); } });
   // missiles / rockets leave smoke and exhaust through the world-impact particles; rocket hits boom on the ground
@@ -376,7 +379,12 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   r.fxOpts.unitHeavy = (id) => r.unitBarrels.heavy(id);
   r.fxOpts.unitReady = (id) => r.unitBarrels.ready(id);   // legged artillery fires only once its legs are planted [MM-story_mvh8woji_1]   // cannon-armed tanks fire one heavy round per shot [MM-task_mvfpbbtp_1]
   // a round left a modelled barrel: cannon barrels (tower, tank, Tiger) kick back; guns, missiles, rockets never [MM-story_mvee15ja_b]
-  r.fxOpts.kick = (key, n) => { const raw = key.slice(1), id = Number.isNaN(Number(raw)) ? raw : Number(raw); if (key[0] === 's') { if (r.system) r.system.kick(id, n); } else r.unitBarrels.kick(id, n); };
+  r.fxOpts.kick = (key, n) => {
+    const raw = key.slice(1), id = Number.isNaN(Number(raw)) ? raw : Number(raw);
+    if (key[0] === 's') {
+      if (r.system) { r.system.kick(id, n); if (r.casings && r.system.eject) r.casings.emit(r.system.eject(id)); }   // a round left: spent brass out of the port (MG) [MM-story_mvk3kwu2_m]
+    } else r.unitBarrels.kick(id, n);
+  };
   r.fxOpts.boom = (x, z, k) => r.impacts.boom(x, z, k);
   r.fxOpts.groundFire = (x, z, rr, secs) => r.impacts.groundFire(x, z, rr, secs);   // a rocket salvo's splash circle burns [MM-task_mvfjbh78_7]
   r.fxOpts.ignite = (id, secs) => r.impacts.ignite(id, secs);   // rocket-hit units burn until the next salvo [MM-story_mvehp5rq_k]
@@ -455,7 +463,10 @@ export function setWorld(r, key) {
   const palette = LOWPAL[world];
   if (r.obstructions) disposeGroup(scene, r.obstructions.group);
   const gm = r.groundMap || map;
-  r.obstructions = buildLowPolyObstructions(THREE, gm, palette);
+  // the planet's prop kit — its trees, rock shapes and walkable ground cover [MM-story_mvk4auz0_n]; under ?world= with
+  // no battle planet, the kit of the planet that palette belongs to
+  const kit = foliageKitKey(r.planet, world, Object.fromEntries(Object.entries(PLANETS).map(([k, p]) => [k, p.palette])));
+  r.obstructions = buildLowPolyObstructions(THREE, gm, palette, { kit, roadAt: roadSampler(r.roadMask, gm.cols, gm.rows), plants: r.tier.tufts ? 1 : 0.5 });
   if (r.obstructions) scene.add(r.obstructions.group);
   // per-cell obstruction tops — aircraft fly over them [MM-story_mvegnpxf_i]
   r.heightField = r.obstructions ? buildHeightField(r.obstructions.group.children, gm.cols, gm.rows) : null;
@@ -644,6 +655,7 @@ export function renderFrame(r, state, ui, events, dt) {
     r.dust.step(dt, views, r.impacts.emit, FXK);   // light dust behind moving ground vehicles [MM-task_mvd2loid_i]
     r.tracks.step(dt, views); r.stats.trackMarks = r.tracksView.sync(r.tracks.instances());   // wheel / tread marks [MM-task_mvj0wz2d_1]
     r.wakes.step(dt, views); r.stats.wakes = r.wakesView.sync(r.wakes.instances());   // water-unit wakes [MM-task_mvj9o97b_7]
+    r.casings.step(dt); r.stats.casings = r.casingsView.sync(r.casings.instances());   // MG brass [MM-story_mvk3kwu2_m]
     r.unitBarrels.update(views, state, r.map, r.airLift.drawn, dt);   // unit guns pitch to the shot; their tips are firing points [MM-story_mvedy16u_9]
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows, r.clock);
   }
@@ -811,6 +823,7 @@ export function destroyRenderer(r) {
   for (const [type, fn, opts] of r.listeners) canvas.removeEventListener(type, fn, opts);
   r.tracksView.dispose();
   r.wakesView.dispose();
+  if (r.casingsView) r.casingsView.dispose();
   r.markers.dispose();
   if (r.system) r.system.dispose();
   if (r.craft) r.craft.dispose();

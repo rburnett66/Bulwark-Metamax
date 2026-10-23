@@ -15,6 +15,7 @@
  */
 import { cellToWorld } from '../camera.js';
 import { K } from './impacts.js';
+import { TUNE } from './fxTune.js';   // live reticle look (Effects Lab) [MM-story_mvk63439_o]
 
 const prng = (seed) => { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 export const CANNON_FX = Object.freeze({ apex: 1.6, apexPerCell: 0.32, fires: [10, 20], boom: 1.7, shake: 0.32, muzzleY: 0.9 });
@@ -146,21 +147,26 @@ export function createCannonFx({ seed = 1, style = 'shell' } = {}) {
 export function createCannonFxView(THREE, scene, { cap = 16, style = 'shell' } = {}) {
   const ST = BASE_STYLES[style] || BASE_STYLES.shell;
   const group = new THREE.Group(); group.name = 'cannon-fx'; scene.add(group);
+  // the reticle reads its look from the live tuning layer (fx/fxTune.js TUNE.reticle; defaults = the original shader)
+  // so the Effects Lab can tune it [MM-story_mvk63439_o]
   const retMat = () => new THREE.ShaderMaterial({
-    uniforms: { uT: { value: 0 }, uA: { value: 1 } },
+    uniforms: { uT: { value: 0 }, uA: { value: 1 }, uCol: { value: new THREE.Color(1, 0.31, 0.19) },
+      uRing: { value: 0.04 }, uInner: { value: 0.7 }, uInnerR: { value: 0.45 }, uCross: { value: 0.8 },
+      uFill: { value: 0.1 }, uPulseFill: { value: 0.08 }, uSpeed: { value: 9 }, uDepth: { value: 0.35 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform float uT, uA; varying vec2 vUv;
+    fragmentShader: `uniform float uT, uA, uRing, uInner, uInnerR, uCross, uFill, uPulseFill, uSpeed, uDepth; uniform vec3 uCol; varying vec2 vUv;
       void main() {
         vec2 p = vUv * 2.0 - 1.0; float d = length(p);
         if (d > 1.0) discard;
-        float pulse = 0.5 + 0.5 * sin(uT * 9.0);
-        float ring = smoothstep(0.86, 0.9, d) * (1.0 - smoothstep(0.97, 1.0, d));
-        float inner = smoothstep(0.42, 0.45, d) * (1.0 - smoothstep(0.47, 0.5, d)) * 0.7;
+        float pulse = 0.5 + 0.5 * sin(uT * uSpeed);
+        float r0 = 1.0 - uRing * 2.5;
+        float ring = smoothstep(r0 - 0.04, r0, d) * (1.0 - smoothstep(0.97, 1.0, d));
+        float inner = smoothstep(uInnerR - 0.03, uInnerR, d) * (1.0 - smoothstep(uInnerR + 0.02, uInnerR + 0.05, d)) * uInner;
         float cross = (1.0 - smoothstep(0.012, 0.03, abs(p.x))) + (1.0 - smoothstep(0.012, 0.03, abs(p.y)));
-        cross *= step(0.12, d) * (1.0 - step(0.88, d)) * 0.8;
-        float fill = 0.10 + 0.08 * pulse;
-        float a = max(max(ring, inner), cross) * (0.65 + 0.35 * pulse) + fill;
-        gl_FragColor = vec4(1.0, 0.31, 0.19, a * uA);
+        cross *= step(0.12, d) * (1.0 - step(r0 - 0.02, d)) * uCross;
+        float fill = uFill + uPulseFill * pulse;
+        float a = max(max(ring, inner), cross) * ((1.0 - uDepth) + uDepth * pulse) + fill;
+        gl_FragColor = vec4(uCol, a * uA);
       }`,
     transparent: true, depthWrite: false,
   });
@@ -185,9 +191,12 @@ export function createCannonFxView(THREE, scene, { cap = 16, style = 'shell' } =
         const r = model.reticles[i];
         m.visible = !!r;
         if (!r) return;
-        m.position.x = r.x; m.position.z = r.z; m.scale.set(r.r, 1, r.r);
-        m.material.uniforms.uT.value = clock + i * 0.37;
-        m.material.uniforms.uA.value = Math.min(1, r.t * 4);
+        const R = TUNE.reticle, u = m.material.uniforms;
+        m.position.x = r.x; m.position.z = r.z; m.scale.set(r.r * R.size, 1, r.r * R.size);
+        u.uT.value = clock + i * 0.37;
+        u.uA.value = Math.min(1, r.t * 4) * R.alpha;
+        u.uCol.value.set(R.color); u.uRing.value = R.ring; u.uInner.value = R.inner; u.uInnerR.value = R.innerR;
+        u.uCross.value = R.cross; u.uFill.value = R.fill; u.uPulseFill.value = R.pulseFill; u.uSpeed.value = R.pulseSpeed; u.uDepth.value = R.pulseDepth;
       });
       const live = model.shells.filter((q) => q.live);
       shells.forEach((v, i) => {
