@@ -1,10 +1,10 @@
 # Tech Tree — design
 
-**Version:** 1.0 (2026-10-22) · epic **TT** [MM-epic_mvkg5mm7_2] · plan story [MM-story_mvkg5mpn_3]
+**Version:** 1.1 (2026-10-22) — v1.1 regroups the tree into four divisions (§2) and adds the 3D view (§11) · epic **TT** [MM-epic_mvkg5mm7_2] · plan story [MM-story_mvkg5mpn_3]
 
 Repo copy is canonical: `docs/16 Bulwark MM/design/Tech-Tree-Design.md`.
 
-**Owner request (2026-10-22):** "We need to implement a proper tech tree. Unlocking tier 2 and tier 3 upgrades, long range rockets, missiles, and the bases, base defenses should all be upgrade slots even portal code to visit new planets." Then: "We should structure upgrades for the base and for the harvesters. Each of the bases is an upgrade and the 4 defense pods could be unlocked. Each base model should provide bonuses to attack, defense, range, damage, upgrade cost, harvester speed, harvester gathering." Earlier the same day: "The base defense is supposed to be an upgrade" [MM-story_mvk635mq_p].
+**Owner request (2026-10-22):** "We need to implement a proper tech tree. Unlocking tier 2 and tier 3 upgrades, long range rockets, missiles, and the bases, base defenses should all be upgrade slots even portal code to visit new planets." Then: "We should structure upgrades for the base and for the harvesters. Each of the bases is an upgrade and the 4 defense pods could be unlocked. Each base model should provide bonuses to attack, defense, range, damage, upgrade cost, harvester speed, harvester gathering." Earlier the same day: "The base defense is supposed to be an upgrade" [MM-story_mvk635mq_p]. Then: "Divide tree into Units, Bases, Map, and Outpost (coming soon)".
 
 ## 1. What is there today (three systems, none of them complete)
 
@@ -17,22 +17,22 @@ Repo copy is canonical: `docs/16 Bulwark MM/design/Tech-Tree-Design.md`.
 
 The tree replaces the first three with one screen and one save field; the wave bonuses stay as the in-battle layer on top.
 
-## 2. Shape — five branches
+## 2. Shape — four divisions
 
 The tree is bought **between battles** with **banked gold** (`save.carry.gold`, as today). Everything owned is turned into one **loadout** at `createSim`, so the battle stays deterministic and a replay carries its loadout.
 
-| branch | what it holds | items |
+| division | groups | items |
 |---|---|---|
-| **BASE** | the landing-craft models (each a bonus profile), the 4 defense pods and their weapons, the super-cannon | 21 |
-| **HARVESTERS** | harvester marks, extra docks, refinery | 7 |
-| **TOWERS** | new tower types (Rockets, Missile, Mine) and T2 / T3 per tower type | 17 |
-| **PORTALS** | the portal code for each planet | 8 |
-| **COMMAND** | the old tree's specials that nothing else covers | 4 |
+| **UNITS** | Towers (§5) · Harvesters (§4) · Troops (L3 Troop Command, §7) | 25 |
+| **BASES** | Base models · Defense pods · Super-cannon (§3) | 21 |
+| **MAP** | Portals (§6) · Intel (Mining Drone, Early Warning Net, §7) | 10 |
+| **OUTPOST** | coming soon — forward bases built on the map between battles; no items yet | 0 |
+| capstone | Apocalypse Cannon (§7) — needs the last item of every line | 1 |
 | | **total** | **57** |
 
 §9 lists every item. The old tree's generic stat nodes (structure HP, damage, range, base armour, harvest yield…) are folded into the base models and tower tiers rather than kept as separate buys (owner decision D2).
 
-## 3. BASE branch
+## 3. BASES division
 
 ### 3.1 Base models — each landing craft is an upgrade
 
@@ -57,7 +57,7 @@ Attack and Damage are split so the base and the towers can be tuned apart: Attac
 | craft | faction | plays as | atk | def | rng | dmg | cost | hspd | hgat | price | requires |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | BS-7 Pathfinder | Neutral | starter, no trade | 0 | 0 | 0 | 0 | 0 | 0 | 0 | free | — |
-| Ironhoard Casemate | Ground (Verdance) | hold the line | +10 | **+25** | 0 | +15 | 0 | −10 | 0 | 2,000 | Verdance portal + 1 win there |
+| Ironhoard Casemate | Ground (Verdance) | hold the line | +10 | **+25** | 0 | +15 | 0 | −10 | 0 | 2,000 | 1 win on Verdance (home planet — no portal) |
 | Skylark Carrier | Air (Florael) | fast economy, reach | +15 | −10 | +10 | +5 | 0 | **+20** | 0 | 2,000 | Florael portal + 1 win |
 | Sterling Vault | High Tech (Ochre) | cheap upgrades, shield | −10 | **+20** | 0 | 0 | **+20** | 0 | +10 | 2,500 | Ochre portal + 1 win |
 | Siegeworks Emplacement | Artillery (Kessra) | out-range everything | +10 | 0 | **+25** | +15 | 0 | −10 | 0 | 2,500 | Kessra portal + 1 win |
@@ -101,7 +101,7 @@ In the sim a pod is a weapon emitter at its corner of the base: it fires like a 
 
 Without the item, `stepBaseCannon` never arms. The wave bonuses 13 / 14 still stack on top in battle.
 
-## 4. HARVESTERS branch
+## 4. UNITS — Harvesters
 
 | item | price | effect | from |
 |---|---|---|---|
@@ -115,7 +115,7 @@ Without the item, `stepBaseCannon` never arms. The wave bonuses 13 / 14 still st
 
 The marks keep `mapdata.harvesterUpgrades` as their data (one source). Docks: the fleet cap in battle starts at **2** (today 4), Dock 3 / Dock 4 raise it (owner decision D5 — this makes the early economy tighter than today). The base model's `hspd` / `hgat` multiply on top of the mark.
 
-## 5. TOWERS branch
+## 5. UNITS — Towers
 
 **Starting kit:** Cannon, Flak, Wall, Machine Gun at T1.
 
@@ -134,7 +134,7 @@ The marks keep `mapdata.harvesterUpgrades` as their data (one source). Docks: th
 
 A tower type not owned is greyed out in the build bar with its price in the tree. The in-battle tier cap per type is the owned tier. Wave bonuses 15 / 16 ("Enable Tier-3") still unlock T3 **for that battle** when it is not owned; once it is owned they are dropped from the bonus pool.
 
-## 6. PORTALS branch
+## 6. MAP — Portals
 
 Each planet other than the starting one needs its **portal code** before it can be entered from the galaxy menu.
 
@@ -144,39 +144,39 @@ Each planet other than the starting one needs its **portal code** before it can 
 
 The rising price by count (not by planet) lets the player choose the order. Portals replace the old **clearance** gate (Map-2 faction wins) as the tree's progression: "1 portal" / "3 portals" in the requirements above means portal codes owned.
 
-## 7. COMMAND branch
+## 7. Troops, Intel and the capstone
 
-The old tree's nodes that no other branch covers:
+The old tree's nodes that no other group covers — Troop Command sits in UNITS, the two intel items in MAP, the Apocalypse Cannon above everything:
 
 | item | price | effect | old id |
 |---|---|---|---|
 | Mining Drone | 1,500 | +5 gold /s passive | `h-min` |
 | Early Warning Net | 2,600 | the next wave's composition is shown before it deploys | `h-ewn` |
 | L3 Troop Command | 3,800 | fields allied troops each wave | `h-l3` |
-| Apocalypse Cannon | 25,000 | the ultimate: needs every branch's last item | `ult` |
+| Apocalypse Cannon | 25,000 | the ultimate: needs the last item of every line: Pod 4, both cannon buybacks, Harvester Mk V, Rockets T3, Missile T3, Troop Command + all 8 portal codes | `ult` |
 
 Dropped (folded into base models or tiers): `b-def`, `b-atk`, `b-awr`, `e-hp`, `e-rng`, `e-dual`, `e-rep`, `s-hp`, `s-dmg`, `s-rng`, `s-dual`, `s-rep`, `h-l4`. A save that researched one gets its gold back on migration.
 
 ## 8. How it is built
 
-- **Data:** `src/data/techtree.js` — every item `{ id, branch, name, price, requires: [ids], gate: { portals, winsOn }, effect }`, plus `BASE_MODELS` (the §3.1 table), `POD_WEAPONS`, `TOWER_START`. Balance is data: retunes are table edits.
+- **Data:** `src/data/techtree.js` — every item `{ id, division, group, name, price, requires: [ids], gate: { portals, winsOn }, effect }`, plus `BASE_MODELS` (the §3.1 table), `POD_WEAPONS`, `TOWER_START`. Balance is data: retunes are table edits.
 - **Loadout (pure):** `deriveLoadout(owned, equipped) → { baseModel, mods: {atk, def, rng, dmg, cost, hspd, hgat}, pods: [weapon|null ×4], cannon: {on, rangeMult, powerMult}, towers: {[structId]: maxTier | 0}, harvester: {mark, docks, yield}, command: {...} }`. No save access, no clock — the same input always gives the same loadout.
 - **Save:** `save.tech = { owned: {[id]: true}, equip: { base, pods: [...] } }`. Migration: `structTiers` → tower tier items; `harvesterLevel` → marks; `techNodes` → kept ids, refunds for dropped ones. Existing players keep Super-cannon and the starting kit, so a migrated save plays as today.
 - **Sim:** `createSim(map, { loadout })` on **every** map (forge maps included — fixes the ignored `structTiers`). The loadout is logged in the replay init. Hooks: `structures.js` tier cap + tower availability + `cost` discount + `def`/`dmg`/`rng`; `harvest.js` mark, docks, `hspd`/`hgat`, refinery; `core.js` super-cannon on/off and its multipliers × `atk`/`rng`; a new `pods.js` steps the pod weapons.
 - **Render:** the equipped base model is the craft that lands (replaces `?craft=` / neutral default); pods show their weapon.
-- **Menu:** one **TECH TREE** screen with the five branches, replacing the TECH, Tech Tree and Harvester screens; an **EQUIP** panel (base model + pod weapons) before battle. Prototype first, reviewable outside Claude (standalone HTML), before it goes in the game.
+- **Menu:** one **TECH TREE** screen with the four divisions (Outpost shown as coming soon), replacing the TECH, Tech Tree and Harvester screens; an **EQUIP** panel (base model + pod weapons) before battle. Prototype first, reviewable outside Claude (standalone HTML), before it goes in the game.
 - **Balance:** `balanceSim.js` takes a loadout; the pass checks (a) starter loadout on Maps 1–3 still wins at today's rates, (b) each base model is within ±10 % of the others on a mixed map set, (c) the prices fit what a player banks per map (with [MM-task_mvjxajem_j]).
 - **Tests:** loadout derivation (every item, requirement chains, migration), sim hooks per stat, replay round-trip with a loadout, deploy gates green.
 
 ## 9. Every item (57)
 
-**BASE (21):** 9 faction base models · Pod 1–4 (4) · RPG Pod, SAM Pod, Repair Pod (3) · Super-cannon · Cannon range I, II · Cannon power I, II.
-**HARVESTERS (7):** Mk II–V (4) · Dock 3, Dock 4 · Refinery.
-**TOWERS (17):** Rocket Tower, Missile Tower, Mine (3) · T2 + T3 for Cannon, Flak, Wall, MG, Rockets, Missile, Mine (14).
-**PORTALS (8):** one per homeworld other than the start.
-**COMMAND (4):** Mining Drone · Early Warning Net · L3 Troop Command · Apocalypse Cannon.
+**UNITS (25):** Towers — Rocket Tower, Missile Tower, Mine (3) · T2 + T3 for Cannon, Flak, Wall, MG, Rockets, Missile, Mine (14). Harvesters — Mk II–V (4) · Dock 3, Dock 4 · Refinery. Troops — L3 Troop Command.
+**BASES (21):** 9 faction base models · Pod 1–4 (4) · RPG Pod, SAM Pod, Repair Pod (3) · Super-cannon · Cannon range I, II · Cannon power I, II.
+**MAP (10):** 8 portal codes · Mining Drone · Early Warning Net.
+**OUTPOST:** coming soon.
+**Capstone (1):** Apocalypse Cannon.
 
-(The starter Pathfinder and the Gun Pod come free and are not counted.)
+(The starter Pathfinder, the T1 starting kit and the Gun Pod come free and are not counted.)
 
 ## 10. Open — owner decisions
 
@@ -192,6 +192,10 @@ Dropped (folded into base models or tiers): `b-def`, `b-atk`, `b-awr`, `e-hp`, `
 | D8 | Starting planet: Verdance, or the player's choice | Verdance |
 | D9 | Portal requirement: beat Map 3 anywhere, or clear a planet's whole campaign | Map 3 anywhere |
 | D10 | All prices | placeholders until the balance pass |
+
+## 11. The 3D view
+
+`prototype/test-game/techtree3d.html` [MM-story_mvkgjacw_e] draws this tree as an interactive 3D page: the four divisions as sectors round the starter base, the capstone above, every item a node with its requirement links, a detail panel (base-model bonus radar, pod weapon stats, requirements, gates, unlocks) and a sandbox bank to research items. It opens standalone in a browser (three.js from a CDN) and its data mirrors this document — change both together until `src/data/techtree.js` exists, then the page reads that.
 
 ## Dependencies
 
