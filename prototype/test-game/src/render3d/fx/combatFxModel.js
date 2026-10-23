@@ -56,6 +56,8 @@ export const STRUCT_RECIPES = Object.freeze({
   // aim point (it used to fall back to the antiAir homing-missile recipe) [MM-task_mvfqb2gm_4]
   'STR-Flak': Object.freeze({ kind: 'flak', cadence: 0.6, speed: 26, color: 0x151515, burst: 2 }),
   'STR-Missile': Object.freeze({ kind: 'missile', cadence: STRUCTURES['STR-Missile'].cadence, speed: 10, color: 0xffe2a0, burst: 2, big: 1 }),
+  // the Machine Gun: a fast stream of single tracers [MM-story_mvk3kwu2_m]
+  'STR-MG': Object.freeze({ kind: 'tracer', cadence: STRUCTURES['STR-MG'].cadence, speed: 30, color: 0xffd27a, burst: 1 }),
 });
 export const SHOT_LOOK = Object.freeze({   // Pixi at ~35 px/cell: shell dot 12 px + 33 px streak, flak 17 px, tracer 4 px + 11 px
   shell: Object.freeze({ size: 0.24, len: 0.62 }),

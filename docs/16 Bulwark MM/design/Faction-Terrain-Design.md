@@ -163,6 +163,24 @@ Today every planet uses the same two tree shapes (round, pine) and one rock shap
 | angular shard + crater rim | Lumen |
 | crystal ridge | Xenthe |
 
+**Built 2026-10-22 [MM-story_mvk4auz0_n].** The kits are data in `src/data/foliage.js` (one per planet: tree families with weights, a rock style, walkable ground cover with a density per terrain class, and kit colours). The shapes are `src/render3d/obstructions/families.js`. Every family above exists, plus snow pine (Rime) and these ground-cover families, which are walkable and purely cosmetic:
+
+| Planet | Ground cover |
+|---|---|
+| Verdance | shrubs, flower bushes |
+| Florael | blossom bushes, flower bushes |
+| Ochre | thornscrub, barrel cacti and prickly pads |
+| Kessra | dry twigs, thornscrub |
+| Rime | tussock grass, frozen twigs |
+| Cinder | scorched twigs with ember tips |
+| Lumen | crystal scatter |
+| Xenthe | glowing sprouts, toadstools |
+| Vexmire | reeds with cattails, moss shrubs |
+
+Ground cover is what keeps the nearly treeless maps dressed (Kessra map 1 has one blocked tree cell, Lumen four). It is placed on walkable grass, dirt, brush and tree-border cells. It never goes on water, a blocked cell, the base, a resource field, a spawn or a road, and it uses its own seeded stream, so adding it moved no tree or rock.
+
+Emissive parts (embers, crystals, mushroom caps, spire tips, bog blisters) are one unlit mesh. A planet costs at most four draw calls: rocks, trees, glow and cover. The per-map triangle budget is a node test (`planetKits.test.mjs`): rocks + trees + glow ≤ 30k, cover ≤ 16k, and at least 150 plants and trees on every map 1.
+
 ### 2.5 Atmosphere, light and air
 
 Each planet already defines a haze colour, a sun colour and an airborne kind (`planets.js`); `WORLD_LIGHT` sets the light levels per palette. The per-planet tables in §3 list them. PLN-ATM (distance haze, drifting cloud shadows) and PLN-AIR (camera particles, at most 2 draws) are where they get built. The cloud **fog of war** should tint toward each planet's haze, so the edge of the map feels like that world's sky.

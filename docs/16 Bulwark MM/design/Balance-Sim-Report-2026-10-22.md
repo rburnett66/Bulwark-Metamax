@@ -233,3 +233,35 @@ After 1–3, re-run this report's map study. Reproduce with `node tools/maps/map
 - The tenfold opening spike on the open maps is mostly gone. High Tech is still about 6× the Powder layout on Ochre, and that is still mostly HTC-Artillery: at 9.5 it is inside Rocket range, but on open desert it reaches firing positions the bot's close-in towers don't cover.
 - Survival barely moves, because the Missile range fault [MM-task_mvjxagdi_h] still decides the first air wave.
 - Dark Energy and Greenies still cannot damage the base, so their waves still end only when their units die. Corroding harvesters and repair drones hurts the player's economy and repairs, but does not threaten the base.
+
+---
+
+## 8. Addendum: the Machine Gun tower (PR #123) [MM-story_mvk3kwu2_m]
+
+The owner asked on 2026-10-22: "re-run balancing with machine gun at lowest tower pricing". The Machine Gun already costs the lowest price of any gun: 150 / 375 / 750, the same as a Mine Drone. Only the Wall is cheaper, at 100.
+
+**Method.** Same harness and scripted player as §3 (`tools/maps/map-balance-sim.mjs`). Each faction's own map 1, 5 seeds, with this PR and the Toxic/artillery change (#120) both applied. Three build plans:
+- **No MG:** Cannon, Missile, Rockets, Flak, as before.
+- **MG as a fifth tower:** Cannon, Missile, Rockets, Flak, MG (`MG=add`).
+- **MG-heavy:** MG, Cannon, Missile, MG, Rockets, Flak (`MG=1`).
+
+| Faction | Wins, no MG | Wins, MG fifth | Wins, MG-heavy | Waves 1–2 base damage (no MG → fifth → heavy) |
+|---|---|---|---|---|
+| Ground / Powder | 1/5 | 0/5 | 0/5 | 187 → 100 → 237 |
+| Air | 4/5 | **5/5** | 4/5 | 682 → 879 → 994 |
+| High Tech | 0/5 | 0/5 | 0/5 | 1955 → 1231 → 1215 |
+| Artillery | 0/5 | 0/5 | 0/5 | 120 → 35 → 83 |
+| Water | 0/5 | **4/5** | 3/5 | **9863 → 2522 → 2455** |
+| Arcane / Energy | 0/5 | 0/5 | 0/5 | 975 → 781 → 690 |
+| Space Tech | 0/5 | 0/5 | 0/5 | 311 → 267 → 524 |
+| Dark Energy | 1/5 | 0/5 | 0/5 | 13 → 0 → 0 (runs stall, see below) |
+| Greenies | 5/5 | 5/5 | 5/5 | 0 → 0 → 0 |
+
+**What it shows**
+
+- **Water is the big change, from 0/5 to 4/5.** Water's first waves are mostly aircraft (WTR-Copters and WTR-Planes were its top damage dealers), and its troops and tanks are Swimmers, which the Cannon and Rocket towers cannot target. The Machine Gun hits both, so close-in defence finally has a cheap answer to them.
+- **Early waves get easier almost everywhere.** In waves 1–2, base damage falls for High Tech, Artillery, Arcane and Water, because the Machine Gun shreds troops and aircraft at 150 gold.
+- **The losses after wave 2 are almost all Missile Flyers (finding 5.2).** They park outside every anti-air range. In the pressure runs, missile damage rises from about 21k to 95–107k on Powder and from 23k to 168–185k on Arcane. The Machine Gun's 5-cell range cannot reach the standoff, and any gold it takes from Missile Towers lets the standoff grind longer. The Machine Gun does not fix that finding; it needs the missile-range fix.
+- **Dark Energy:** its runs stall (a wave still alive after 240 s), so its win counts measure the stall rule, not the tower. Greenies win 5/5 in every plan.
+
+**Verdict.** At 150 gold the Machine Gun is not overpowered. It is the right early and anti-Swimmer pick, and its price can stay. Overall balance still hinges on the Missile Flyer standoff (task_mvjxagdi_h), not on the Machine Gun.

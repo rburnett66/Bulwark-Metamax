@@ -107,6 +107,17 @@ function domainsAllow(domainList, targetDomain) {
   return false;
 }
 
+/**
+ * May structure def `def` hit unit `u`? Its domains must allow the unit's, and a tower restricted to light ground
+ * targets (`groundTargets: 'light'`, the Machine Gun) only hits ground / water units flagged lightGround — aircraft
+ * it hits regardless. [MM-story_mvk3kwu2_m]
+ */
+export function structCanHit(def, u) {
+  if (!domainsAllow(def.canTargetDomains, u.domain)) return false;
+  if (def.groundTargets === 'light' && !isAirDomain(u.domain) && !u.lightGround) return false;
+  return true;
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Vision (minimal stub per GDD §vision)                                     */
 /* -------------------------------------------------------------------------- */
@@ -327,7 +338,7 @@ export function acquireTarget(state, shooter) {
     for (const u of state.units.values()) {
       if (u.hp <= 0) continue;
       if (u.side !== 'attacker') continue;
-      if (!domainsAllow(def.canTargetDomains, u.domain)) continue;
+      if (!structCanHit(def, u)) continue;
       if (!canSee(shooter, u)) continue;
       const d2 = dist2Between(shooter.pos, u.pos);
       if (d2 > range2) continue;
@@ -584,7 +595,7 @@ export function stepCombat(state, dt) {
     if (tid !== null && tid !== undefined && tid !== BASE_TARGET_ID) {
       const cand = state.units.get(tid);
       if (cand && cand.hp > 0 && cand.side === 'attacker' &&
-          domainsAllow(def.canTargetDomains, cand.domain) &&
+          structCanHit(def, cand) &&
           dist2Between(s.pos, cand.pos) <= def.range * def.range) {
         target = cand;
       }
@@ -614,7 +625,7 @@ export function stepCombat(state, dt) {
       const px = target.pos.x, py = target.pos.y, r2 = aoe * aoe;
       for (const other of state.units.values()) {
         if (other === target || other.hp <= 0 || other.side !== 'attacker') continue;
-        if (!domainsAllow(def.canTargetDomains, other.domain)) continue;
+        if (!structCanHit(def, other)) continue;
         const ox = other.pos.x - px, oy = other.pos.y - py;
         if (ox * ox + oy * oy > r2) continue;
         if (applyDamage(state, s.id, other, dps * bonusDamageMult(state, other), def.damageType, dt).killed) deadUnitIds.push(other.id);

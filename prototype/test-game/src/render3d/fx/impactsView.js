@@ -14,7 +14,8 @@
  *
  * Sparks run white-hot → orange → red with age, their streak length from speed. THREE is passed in.
  */
-import { tintMix, FX_MIX } from './factionFx.js';
+import { tintMix } from './factionFx.js';
+import { TUNE } from './fxTune.js';
 import { createPBatch, createDBatch, createFBatch } from './particles.js';
 import { createFireAtlas, fireFrame } from './fireAtlas.js';
 import { K, D, DEFAULT_IMPACT_CAPS, SINK_DEPTH } from './impacts.js';
@@ -128,7 +129,7 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
         for (const w of model.wrecks) {
           if (!w.rest || w.t >= w.burn) continue;
           const k = Math.min(1, (w.burn - w.t) / 2.5) * (w.group === 'turret' ? 0.5 : 1);
-          const c = tintMix([1.0, 0.45, 0.15], w.tc, FX_MIX.wreckLight);   // a faction's wreck lights the ground in its colour
+          const c = tintMix([1.0, 0.45, 0.15], w.tc, TUNE.mix.wreckLight);   // a faction's wreck lights the ground in its colour
           decAdd.push(w.x, 0.035, w.z, 0.9 * w.fl * Math.max(0.5, k) * (w.k || 1), 0, D.POOL, 0, c[0], c[1], c[2], 0.5 * k);
         }
       }
