@@ -103,7 +103,7 @@ export function defeatCall(packs, factionName, seed) {
  *                  giver's envoy tips the commander about the promised quest fields.
  *  kind 'reward' — match END, only when the STAR BONUS applied (a 5-star wave this battle):
  *                  the envoy grants the reward. Good-leaning cast pick, deterministic by seed. */
-export function tipsCall(packs, factionName, seed, kind) {
+export function tipsCall(packs, factionName, seed, kind, outcome = null) {
   // WAS `packs.factions[factionName]` — indexing a pack keyed by VOICE KEY ('ground') with a DISPLAY
   // NAME ('Ground / Powder'). It never matched, so tipsCall returned null for every caller and the
   // FIELD TIP and STAR BONUS transmissions never played in the shipped game. Both call sites in
@@ -116,16 +116,22 @@ export function tipsCall(packs, factionName, seed, kind) {
   const ch = cast[Math.abs(seed | 0) % cast.length];
   const phrase = (ch.phrases || [])[Math.abs((seed | 0) >> 2) % Math.max(1, (ch.phrases || []).length)] || '';
   const flavor = phrase ? ' “' + phrase + '”' : '';
+  // 'closing' — the quest-giver's verdict after the last wave [MM-story_mvk8gz1k_r]. PLACEHOLDER COPY (owner: "We will
+  // tune the copy later").
   const line = kind === 'reward'
     ? 'Five stars, commander — the bonus is yours. ' + (ch.motivation || '') + flavor
-    : 'The contract stands. The crystals we spoke of lie beyond the front — push out when the ring opens, and haul at least four of every five.' + flavor;
+    : kind === 'closing'
+      ? (outcome === 'FULFILLED'
+        ? 'The crystals are in our hands. You kept your word, commander — we will remember it.' + flavor
+        : 'The haul came up short. A deal is a deal, commander, and this one is broken.' + flavor)
+      : 'The contract stands. The crystals we spoke of lie beyond the front — push out when the ring opens, and haul at least four of every five.' + flavor;
   // factionKey + sub: the comm card drops any spec without a known factionKey, and main.js awaits
   // the close of this call — so a keyless tip was silently skipped AND hung TAP TO START.
   return {
     factionKey: fac.key, factionName, sub: factionName + ' · ' + ch.align,
     name: ch.name, faction: factionName, gender: ch.gender,
-    line, intent: 'statement', voiceSeed: (seed | 0) ^ (kind === 'reward' ? 0x7e11 : 0x5157),
-    label: kind === 'reward' ? 'STAR BONUS' : 'FIELD TIP',
+    line, intent: 'statement', voiceSeed: (seed | 0) ^ (kind === 'reward' ? 0x7e11 : kind === 'closing' ? 0x6c05 : 0x5157),
+    label: kind === 'reward' ? 'STAR BONUS' : kind === 'closing' ? 'CONTRACT CLOSED' : 'FIELD TIP',
   };
 }
 

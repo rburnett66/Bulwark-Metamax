@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.10.22-j';
-export const VERSION_NOTE = 'Missile Flyers are Drones (kamikaze or machine-gun per faction); Toxic damage; smoother plane passes';
+export const VERSION = 'v2026.10.22-k';
+export const VERSION_NOTE = 'Quest contract offered once (after wave 1) with a closing line after wave 8 — no per-wave tips';
