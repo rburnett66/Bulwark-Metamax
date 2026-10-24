@@ -10,7 +10,7 @@ Version 1.1 · 2026-10-24 · owner request, built to the sim as it is on main (v
 ## 1. Rules
 
 - **One ability per faction, on one unit.** Nine abilities, nine factions. No faction gets two, and every faction gets one.
-- **The carrier is a unit the faction already fields.** No new unit ids. A carrier spawns wherever its unit already spawns, through the campaign's points budget (`campaign.js fillLane`). It keeps the same id, model, stats and cost.
+- **The carrier is a unit the faction already fields.** No new unit ids. A carrier spawns through the campaign's points budget, which guarantees a quota of carriers per wave (§8). It keeps the same id, model, stats and cost.
 - **Enemy waves only, in v1.** Abilities fire for `side: 'attacker'` units. The defender side never gets an ability until a design for player-deployed specials exists (§7, open question Q1).
 - **Balance is data.** Every number lives in one `ABILITIES` table in `tables.js`, keyed by ability id. Every carrier declares `ability: '<id>'` on its unit row. The sim reads the table and nothing is hard-coded.
 - **Deterministic.** Durations and cooldowns are counted in ticks. Choices use nearest-first with the id as tie-break. No `Math.random()` and no `Date.now()`.
@@ -99,7 +99,7 @@ All radii are in cells. Durations are in seconds, converted to ticks. Tier scale
   - `ABILITIES` holds one frozen row per ability id, with every number in §3.
   - Each carrier unit row gains `ability: '<id>'`.
   - A test asserts nine abilities, one per faction, each on exactly one unit of that faction.
-- **`src/sim/abilities.js`** (new) is a single `stepAbilities(state, dt)`. It runs after movement and before combat in `stepSim`. On new units it uses `unit.ability`, `unit.abilityCd` (ticks) and `unit.abilityUses`.
+- **`src/sim/abilities.js`** (new) is a single `stepAbilities(state, dt)`. It runs after movement and before combat in `stepSim`. On new units it uses `unit.ability`, `unit.abilityReady` (tick) and `unit.abilityUses`.
 - **State added:**
   - on structures, `stunnedUntil` (tick);
   - on units, `disruptedUntil`, `cloaked`, `isMirror`, `mirrorOf`, `expiresAt`, `noBounty`, `raised`;
