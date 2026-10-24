@@ -300,7 +300,8 @@ export function runFiringLine(opts) {
       t.lockTicks++;
       const row = EFFECTIVENESS[t.def.damageType];
       const mult = (row && row[unit.armorClass] !== undefined) ? row[unit.armorClass] : 1;
-      t.damage += t.def.dps[t.fix.tier - 1] * mult * FIXED_DT;
+      const armor = live.abilityArmor < 1 ? live.abilityArmor : 1;   // Shield Tank aura (sim/abilities.js) — the real hp loss
+      t.damage += t.def.dps[t.fix.tier - 1] * mult * armor * FIXED_DT;
     }
 
     if (mine.armed && live && live.hp > 0 && live.domain !== 'Flyer' &&

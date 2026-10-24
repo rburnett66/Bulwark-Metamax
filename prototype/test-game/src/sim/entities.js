@@ -120,6 +120,8 @@ export function createUnit(state, unitId, tier, pos, lane, side) {
     isInfantry: def.isInfantry === true,
     // A light ground unit (troops, assault tanks): the Machine Gun tower may hit it. (combat.structCanHit)
     lightGround: def.lightGround === true,
+    // SPECIAL ABILITY id (tables.ABILITIES) — sim/abilities.js runs it for attacker units [MM-story_mvn06wnv_7]
+    ability: def.ability || null,
     costT1: def.cost[0],
     path: [],
     pathIdx: 0,

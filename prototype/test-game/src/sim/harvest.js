@@ -355,7 +355,10 @@ export function stepHarvest(state, dt) {
     }
   }
 
-  for (const u of aliveHarvesters(state)) stepOneHarvester(state, u, dt);
+  for (const u of aliveHarvesters(state)) {
+    if (u.disruptedUntil && state.tick < u.disruptedUntil) continue;   // stuck in a Water Blob puddle [MM-story_mvn06wnv_7]
+    stepOneHarvester(state, u, dt);
+  }
 
   // TRUCK-TRUCK SEPARATION (owner: 'harvesters need to stop colliding'): the fleet ignores the
   // combat crowd by contract, but trucks sharing a field stacked on the same crystal. Gentle

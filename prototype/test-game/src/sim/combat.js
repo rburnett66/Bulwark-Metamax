@@ -6,7 +6,8 @@
  * balance harness (no rendering, no DOM, no randomness of its own).
  */
 
-import { EFFECTIVENESS, ROLE_EFFECTIVENESS, DAMAGE_TYPES, getStructureDef, towerRange } from '../data/tables.js';
+import { EFFECTIVENESS, ROLE_EFFECTIVENESS, DAMAGE_TYPES, ABILITIES, getStructureDef, towerRange } from '../data/tables.js';
+import { towerStunned, unitDisrupted, onUnitDeath } from './abilities.js';
 import { grantKillIncome } from './economy.js';
 import { emitEvent } from './core.js';
 import { bonusDamageMult } from './bonuses.js';
@@ -125,6 +126,8 @@ export function structShapeMult(def, u) {
   return typeof m === 'number' ? m : 1;
 }
 const prefersShape = (def, u) => !!(def.prefersShapes && u && def.prefersShapes.includes(u.shape));
+// a tower's preferred target: the shape it prefers (MG → Artillery), or any Arcane MIRROR — decoys draw fire [MM-story_mvn06wnv_7]
+const preferredTarget = (def, u) => prefersShape(def, u) || !!(u && u.isMirror);
 
 /* -------------------------------------------------------------------------- */
 /*  Vision (minimal stub per GDD §vision)                                     */
@@ -136,6 +139,8 @@ const prefersShape = (def, u) => !!(def.prefersShapes && u && def.prefersShapes.
  * Ground targets are always visible at weapon range in this slice.
  */
 function canSee(shooter, target) {
+  // STEALTH (Space Tech) [MM-story_mvn06wnv_7]: a cloaked unit is invisible to tier-1 towers; upgraded towers see it
+  if (target && target.cloaked && shooter.structId !== undefined && (shooter.tier || 1) < ABILITIES.stealth.seenFromTier) return false;
   if (target && target.domain === 'Flyer') {
     // Towers: the domain-legality check already gates AA capability; AA towers
     // are radar-equipped by definition in this slice.
@@ -351,7 +356,7 @@ export function acquireTarget(state, shooter) {
       if (!canSee(shooter, u)) continue;
       const d2 = dist2Between(shooter.pos, u.pos);
       if (d2 > range2) continue;
-      if (prefersShape(def, u) && beatsBest(d2, u.id, prefD2, prefId, slack2)) {
+      if (preferredTarget(def, u) && beatsBest(d2, u.id, prefD2, prefId, slack2)) {
         if (d2 < prefD2) prefD2 = d2;
         prefId = u.id;
       }
@@ -459,6 +464,25 @@ export function applyDamage(state, sourceId, target, rawDps, damageType, dt) {
     : 1;
 
   let dealt = rawDps * mult * dt;
+  // SPECIAL ABILITIES [MM-story_mvn06wnv_7] — per-tick flags set by sim/abilities.js
+  if (target.unitId !== undefined && dealt > 0) {
+    if (target.abilityArmor < 1) dealt *= target.abilityArmor;                     // Shield Tank aura
+    if (target.shieldedBy != null && sourceId != null) {                            // Shield Drone vs missile towers
+      const src = state.structures && state.structures.get(sourceId);
+      if (src && ABILITIES.shieldDrone.blocks.includes(src.structId)) {
+        const drone = state.units.get(target.shieldedBy);
+        if (drone && drone.hp > 0 && drone.shieldPool > 0) {
+          const absorbed = Math.min(drone.shieldPool, dealt);
+          drone.shieldPool -= absorbed;
+          dealt -= absorbed;
+          if (drone.shieldPool <= 1e-9) {
+            drone.shieldPool = 0;
+            emitEvent(state, { type: 'ability', kind: 'shieldPop', tick: state.tick, entityId: drone.id, pos: { x: drone.pos.x, y: drone.pos.y } });
+          }
+        }
+      }
+    }
+  }
   if (dealt <= 0) return { dealt: 0, killed: false };
   if (dealt > target.hp) dealt = target.hp;
 
@@ -556,6 +580,7 @@ export function stepCombat(state, dt) {
     // was a copy of def.shape ('Troops'), and structures.js flags the troop with isRepairTroop. It only
     // ever "worked" because repair troops are given dps 0 and the check above already skipped them.
     if (unit.isRepairTroop) continue;
+    if (unitDisrupted(state, unit)) continue;   // stuck in a Water Blob puddle / frozen [MM-story_mvn06wnv_7]
 
     // Re-validate a sticky target, otherwise re-acquire deterministically.
     let tid = unit.targetId;
@@ -624,22 +649,24 @@ export function stepCombat(state, dt) {
     const tier = s.tier || 1;
     const dps = Array.isArray(def.dps) ? (def.dps[tier - 1] || 0) : (def.dps || 0);
     if (dps <= 0) continue; // walls/moats do not shoot
+    // FREEZE MISSILE / STUN DRONES [MM-story_mvn06wnv_7]: a knocked-out tower holds fire and drops its target
+    if (towerStunned(state, s)) { s.targetId = null; continue; }
 
     let tid = s.targetId;
     let target = null;
     if (tid !== null && tid !== undefined && tid !== BASE_TARGET_ID) {
       const cand = state.units.get(tid);
       if (cand && cand.hp > 0 && cand.side === 'attacker' &&
-          structCanHit(def, cand) &&
+          structCanHit(def, cand) && canSee(s, cand) &&
           dist2Between(s.pos, cand.pos) <= towerRange(def, tier) ** 2) {
         target = cand;
       }
     }
     // a tower that PREFERS a shape (the MG → Artillery) drops a lesser target the moment a preferred one is in range
-    if (target && def.prefersShapes && !prefersShape(def, target)) {
+    if (target && (def.prefersShapes || state.mirrorCount > 0) && !preferredTarget(def, target)) {
       const pick = acquireTarget(state, s);
       const pu = pick !== null ? state.units.get(pick) : null;
-      if (pu && prefersShape(def, pu)) target = null;
+      if (pu && preferredTarget(def, pu)) target = null;
     }
     if (!target) {
       tid = acquireTarget(state, s);
@@ -679,6 +706,7 @@ export function stepCombat(state, dt) {
     const id = deadUnitIds[i];
     const u = state.units.get(id);
     if (!u) continue; // already resolved this tick
+    onUnitDeath(state, u);   // a Dark Energy scout nearby may raise it [MM-story_mvn06wnv_7]
     let income = 0;
     if (u.side === 'attacker') {
       income = grantKillIncome(state, u);

@@ -1,4 +1,5 @@
 import { ASSUMPTIONS, WAVES, MAP, getUnitDef, getStructureDef, BONUS_NERFS } from '../data/tables.js';
+import { stepAbilities, onUnitDeath } from './abilities.js';
 import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath, findRoute, getFlyerPath, getWaterPath, lineClear } from './pathfinding.js';
 import { createUnit, createBase, createStructure } from './entities.js';
@@ -565,6 +566,7 @@ export function stepMovement(state, dt) {
     if (unit.isRepairTroop) continue;
     // HARVESTERS are owned by harvest.js (collect→haul→deposit FSM) for the same reason.
     if (unit.isHarvester) continue;
+    if (unit.disruptedUntil && state.tick < unit.disruptedUntil) continue;   // Water Blob puddle / frozen [MM-story_mvn06wnv_7]
 
     // STATIONARY tracking (for the base super-cannon: it only lands on units that stay put). Compares to the
     // position at the top of the previous tick, so it captures march + separation movement.
@@ -1181,6 +1183,7 @@ export function stepSim(state, dtFixed) {
 
   // 5. Combat: units + completed towers acquire targets and fire;
   //    kills grant income and emit kill events inside combat.
+  stepAbilities(state, dtFixed);   // special abilities set this tick's stun / cloak / shield flags [MM-story_mvn06wnv_7]
   stepCombat(state, dtFixed);
 
   // 5b. Base super-cannon: aim at a stationary siege unit, fire a slow arcing shell, massive AOE on impact.
@@ -1198,6 +1201,7 @@ export function stepSim(state, dtFixed) {
   }
   for (let i = 0; i < dead.length; i++) {
     const u = state.units.get(dead[i]);
+    if (u) onUnitDeath(state, u);   // a Dark Energy scout nearby may raise it [MM-story_mvn06wnv_7]
     // Any death NOT already resolved+emitted by combat (base super-cannon AOE, enemy ARTILLERY AOE, collisions,
     // etc.) still emits a 'kill' — and EVERY attacker kill pays the bounty (owner, 2026-07-13: with the
     // harvest economy there is no passive income, so cannon/AOE kills paying zero read as broken).

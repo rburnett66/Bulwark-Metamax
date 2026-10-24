@@ -169,6 +169,7 @@ export const UNITS = Object.freeze({
   }),
   'GND-Tanks': Object.freeze({
     faction: 'Ground / Powder', shape: 'Assault Tank', role: 'Bruiser',
+    ability: 'shieldTank',   // SPECIAL ABILITY carrier — ABILITIES below [MM-story_mvn06wnv_7]
     artClass: 'tank', projectileFx: 'shell', burnsWhenDamaged: true,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, lightGround: true, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Kinetic',
@@ -310,6 +311,7 @@ export const UNITS = Object.freeze({
   }),
   'AIR-Planes': Object.freeze({
     faction: 'Air', shape: 'Fighter', role: 'Striker',
+    ability: 'freezeMissile',   // SPECIAL ABILITY carrier — ABILITIES below [MM-story_mvn06wnv_7]
     radius: 0.42, artClass: 'plane', attackPattern: 'strafe', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Kinetic',
@@ -423,6 +425,7 @@ export const UNITS = Object.freeze({
   }),
   'HTC-Missiles': Object.freeze({
     faction: 'High Tech', shape: 'Drone', role: 'MG Drone',
+    ability: 'shieldDrone',   // SPECIAL ABILITY carrier — ABILITIES below [MM-story_mvn06wnv_7]
     radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Electric',
@@ -445,6 +448,7 @@ export const UNITS = Object.freeze({
   }),
   'ART-Trucks': Object.freeze({
     faction: 'Artillery', shape: 'Scout', role: 'Support',
+    ability: 'mineLayer',   // SPECIAL ABILITY carrier — ABILITIES below [MM-story_mvn06wnv_7]
     radius: 0.42, artClass: 'truck', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Concussion',
@@ -600,6 +604,7 @@ export const UNITS = Object.freeze({
   }),
   'WTR-Missiles': Object.freeze({
     faction: 'Water', shape: 'Drone', role: 'MG Drone',
+    ability: 'waterBlobs',   // SPECIAL ABILITY carrier — ABILITIES below [MM-story_mvn06wnv_7]
     radius: 0.42, artClass: 'missile', projectileFx: 'tracer', burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Flyer', render_tier: 'B', armorClass: 'Aircraft', damageType: 'Frost',
@@ -622,6 +627,7 @@ export const UNITS = Object.freeze({
   }),
   'ARC-Trucks': Object.freeze({
     faction: 'Arcane / Energy', shape: 'Scout', role: 'Support',
+    ability: 'mirrorUnits',   // SPECIAL ABILITY carrier — ABILITIES below [MM-story_mvn06wnv_7]
     radius: 0.42, artClass: 'truck', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Fire',
@@ -711,6 +717,7 @@ export const UNITS = Object.freeze({
   }),
   'SPC-Trucks': Object.freeze({
     faction: 'Space Tech', shape: 'Scout', role: 'Support',
+    ability: 'stealth',   // SPECIAL ABILITY carrier — ABILITIES below [MM-story_mvn06wnv_7]
     radius: 0.42, artClass: 'truck', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Machinery', damageType: 'Electric',
@@ -799,6 +806,7 @@ export const UNITS = Object.freeze({
   }),
   'DRK-Trucks': Object.freeze({
     faction: 'Dark Energy', shape: 'Scout', role: 'Support',
+    ability: 'resurrect',   // SPECIAL ABILITY carrier — ABILITIES below [MM-story_mvn06wnv_7]
     radius: 0.42, artClass: 'truck', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Energy', damageType: 'Toxic',
@@ -888,6 +896,7 @@ export const UNITS = Object.freeze({
   }),
   'GRN-Trucks': Object.freeze({
     faction: 'Greenies (Chem)', shape: 'Scout', role: 'Support',
+    ability: 'stunDrones',   // SPECIAL ABILITY carrier — ABILITIES below [MM-story_mvn06wnv_7]
     artClass: 'truck', projectileFx: null, burnsWhenDamaged: false,
     engagesStructuresWhileAdvancing: false, engagesSoftDefenders: false, isInfantry: false,
     domain: 'Walker', render_tier: 'A', armorClass: 'Organic', damageType: 'Toxic',
@@ -1418,6 +1427,49 @@ export const BONUSES = Object.freeze([
   Object.freeze({ id: 'tier3_turret', label: 'Enable Tier-3 turrets',   kind: 'unlockTier', groups: Object.freeze(['cannon', 'flak']) }),
   Object.freeze({ id: 'tier3_wall',   label: 'Enable Tier-3 walls',     kind: 'unlockTier', groups: Object.freeze(['wall']) }),
 ]);
+/**
+ * SPECIAL ABILITIES [MM-story_mvn06wnv_7] — owner 2026-10-24: "I want to create a special ability unit for each
+ * faction … no faction get more than one ability." One row per ability; the carrier unit row names it with
+ * `ability: '<id>'`. Spec: docs/16 Bulwark MM/design/Special-Abilities-Design.md. Seconds and cells throughout;
+ * the sim converts to ticks. `perTier` numbers scale by the carrier's own hp tier ratio (1 / 1.6 / 2.4).
+ * Enemy waves only (side 'attacker') in v1.
+ */
+export const ABILITIES = Object.freeze({
+  shieldTank: Object.freeze({ faction: 'Ground / Powder', carrier: 'GND-Tanks', name: 'Shield Tank',
+    blurb: 'Heavy armor: it and nearby ground units take 30% less damage.',
+    radius: 2.5, damageMult: 0.7 }),
+  freezeMissile: Object.freeze({ faction: 'Air', carrier: 'AIR-Planes', name: 'Freeze Missile',
+    blurb: 'Once per sortie, freezes every tower near the impact for 3 s.',
+    range: 7, flight: 0.6, radius: 2, stun: 3, stunPerTier: 0.5, uses: 1 }),
+  shieldDrone: Object.freeze({ faction: 'High Tech', carrier: 'HTC-Missiles', name: 'Shield Drone',
+    blurb: 'Anti-missile bubble: blocks Rockets and Missile Tower hits until its shield is spent.',
+    radius: 2.5, pool: 300, blocks: Object.freeze(['STR-Rockets', 'STR-Missile']) }),
+  mineLayer: Object.freeze({ faction: 'Artillery', carrier: 'ART-Trucks', name: 'Mine Layer',
+    blurb: 'Mines your resource fields; harvesters that roll over them are blown up.',
+    reach: 3, spacing: 1.5, cooldown: 2, maxMines: 3, armDelay: 1, trigger: 0.8,
+    burst: 180, burstRadius: 1, damageType: 'Concussion', life: 60 }),
+  waterBlobs: Object.freeze({ faction: 'Water', carrier: 'WTR-Missiles', name: 'Water Blobs',
+    blurb: 'Lobs blobs that leave puddles; your units caught in one are stuck in place.',
+    cooldown: 6, range: 5, flight: 0.8, radius: 1.5, duration: 6 }),
+  mirrorUnits: Object.freeze({ faction: 'Arcane / Energy', carrier: 'ARC-Trucks', name: 'Mirror Units',
+    blurb: 'Casts harmless mirror images that your towers shoot first.',
+    cooldown: 8, reach: 4, ahead: 1.5, hpFrac: 0.3, life: 8, maxLive: 2 }),
+  stealth: Object.freeze({ faction: 'Space Tech', carrier: 'SPC-Trucks', name: 'Stealth',
+    blurb: 'Cloaks nearby units from tier-1 towers; upgraded towers see through it.',
+    radius: 2.5, seenFromTier: 2 }),
+  resurrect: Object.freeze({ faction: 'Dark Energy', carrier: 'DRK-Trucks', name: 'Resurrected',
+    blurb: 'Raises fallen units nearby at half health, three times.',
+    reach: 3, delay: 1.5, hpFrac: 0.5, maxRaises: 3 }),
+  stunDrones: Object.freeze({ faction: 'Greenies (Chem)', carrier: 'GRN-Trucks', name: 'Stun Drones',
+    blurb: 'Sends a drone that knocks out one tower at a time for 3 s.',
+    range: 6, flight: 0.5, stun: 3, cooldown: 1 }),
+});
+
+/** How many ability carriers each campaign wave is guaranteed (index = wave − 1), paid out of the wave's own
+ *  budget. Without it the carriers — mostly the cheap scout trucks — were almost never drafted: the wave filler
+ *  takes the biggest affordable unit first, so five of the nine abilities never appeared in a balance run. */
+export const ABILITY_CARRIERS_PER_WAVE = Object.freeze([0, 1, 1, 1, 2, 2, 2, 2]);
+
 export function getBonusDef(id) { return BONUSES.find((b) => b.id === id) || null; }
 
 export function getUnitDef(unitId) {

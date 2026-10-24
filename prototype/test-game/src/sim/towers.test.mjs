@@ -41,6 +41,7 @@ function dummy(st, unitId, x, y, lane) {
   const u = createUnit(st, unitId, 1, { x, y }, lane, 'attacker');
   if (!st.units.has(u.id)) st.units.set(u.id, u);
   u.speed = 0; u.dps = 0; u.hp = u.maxHp = 1e6; u.path = []; u.targetsBase = false;
+  u.ability = null;   // a plain dummy — GND-Tanks carries the Shield Tank aura (sim/abilities.js)
   return u;
 }
 function arena(structId) {

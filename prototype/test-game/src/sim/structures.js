@@ -404,6 +404,7 @@ export function stepStructures(state, dt) {
       state.units.delete(u.id);
       continue;
     }
+    if (u.disruptedUntil && state.tick < u.disruptedUntil) continue;   // stuck in a Water Blob puddle [MM-story_mvn06wnv_7]
     if (u.state === 'repairMarch') {
       const arrivedPath = marchAlong(u, dt);
       if (arrivedPath || distToStructure(u, target) <= 1.25) {
