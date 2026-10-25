@@ -303,7 +303,10 @@ test('campaign waves carry their quota of the faction ability unit from wave 2',
       const waves = buildCampaignWaves(buildCampaignMap(mapId), f);
       waves.forEach((w, i) => {
         const n = w.spawns.filter((s) => s.unitId === carrier).length;
-        const want = (air && i < 2 && f !== 'Water') ? 0 : ABILITY_CARRIERS_PER_WAVE[i];
+        // Advanced-mode pacing [MM-story_mvnzz719_2]: an AIR ability unit is a SPECIAL — held out of the
+        // opening waves (before the gate wave, i<2) for EVERY faction, Water included (its carrier is air,
+        // which used to leak in at wave 1-2). Ground/sea carriers still ride from wave 2 per the quota.
+        const want = (air && i < 2) ? 0 : ABILITY_CARRIERS_PER_WAVE[i];
         assert.ok(n >= want, `${f} map ${mapId} wave ${i + 1}: ${n} carriers, want ≥ ${want}`);
       });
     }
