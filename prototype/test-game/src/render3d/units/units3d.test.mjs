@@ -180,3 +180,23 @@ test('the tools build from the game\'s units modules — no second copy, classic
   assert.equal(Prims.buildModel(classicModels.tank, () => new THREE.MeshBasicMaterial()).tris, GOLDEN.tank[0]);
   assert.equal(typeof track, 'function');
 });
+
+test('special-ability looks: a mirror is only its hologram, a cloaked unit only its ghost, a risen unit both [MM-story_mvn06y2l_8]', async () => {
+  const { createUnits3D } = await import('./models3d.js');
+  const scene = new THREE.Scene();
+  const u3 = createUnits3D(THREE, scene, { sunDir: new THREE.Vector3(0, 1, 0), cap: 8 });
+  const key = MODEL_KEYS[0];
+  const v = (id, fx) => ({ id, model: key, x: id, z: 0, y: 0, heading: 0, fx });
+  u3.setUnits([v(1, null), v(2, { kind: 'mirror', k: 1 }), v(3, { kind: 'cloak', k: 1 }), v(4, { kind: 'raised', k: 0.5 })], 100, false, 0);
+  const meshes = []; scene.traverse((o) => { if (o.isInstancedMesh) meshes.push(o); });
+  const byMat = (pred) => meshes.filter((m) => pred(m.material));
+  const mainLod = byMat((m) => m.type !== 'ShaderMaterial').filter((m) => m.count > 0);
+  const holo = byMat((m) => m.type === 'ShaderMaterial' && m.blending === THREE.AdditiveBlending).filter((m) => m.count > 0);
+  const cloak = byMat((m) => m.type === 'ShaderMaterial' && m.blending !== THREE.AdditiveBlending).filter((m) => m.count > 0);
+  assert.ok(mainLod.length > 0 && mainLod.every((m) => m.count === 2), 'normal look: the plain unit and the risen one');
+  assert.ok(holo.length > 0 && holo.every((m) => m.count === 2), 'hologram: the mirror and the risen unit');
+  assert.ok(cloak.length > 0 && cloak.every((m) => m.count === 1), 'ghost: the cloaked unit');
+  u3.setUnits([v(1, null)], 100, false, 0);
+  assert.ok(holo.every((m) => m.count === 0 && !m.visible) && cloak.every((m) => m.count === 0 && !m.visible), 'gone when nothing needs them');
+  u3.dispose();
+});

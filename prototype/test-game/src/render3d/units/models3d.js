@@ -22,6 +22,47 @@ import { metalFor, isGlowKey } from './metal.js';
 import { createUnitMaterial } from './material.js';
 import { kickMatrix, BODY_KICK } from '../fx/recoil.js';
 
+/**
+ * SPECIAL ABILITY looks [MM-story_mvn06y2l_8]: a view with `fx: { kind, k }` is drawn
+ *   'cloak'  — INSTEAD of its normal look: a heat-haze ghost, dark and see-through with a bright shimmering rim
+ *   'mirror' — INSTEAD of its normal look: a cyan hologram (scanlines, rim, flicker by k) — a fake the player can read
+ *   'raised' — normally AND with a green rising glow that fades with k
+ * Both extra looks are lazy per model group (most groups never need them) and draw the group's LOD geometry.
+ */
+const FX_VS = `attribute vec4 aTint; varying vec3 vN; varying vec3 vW; varying vec4 vTint; varying vec3 vC;
+void main() {
+  vTint = aTint;
+  #ifdef USE_COLOR
+  vC = color;
+  #else
+  vC = vec3(0.6);
+  #endif
+  vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
+  vN = normalize(mat3(modelMatrix * instanceMatrix) * normal);
+  w.xyz += vN * 0.035;   // a skin just outside the body, so it never hides inside the unit's own mesh
+  vW = w.xyz;
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const HOLO_FS = `uniform float uT; varying vec3 vN; varying vec3 vW; varying vec4 vTint; varying vec3 vC;
+void main() {
+  vec3 V = normalize(cameraPosition - vW);
+  float fr = pow(1.0 - abs(dot(normalize(vN), V)), 2.0);
+  float scan = smoothstep(0.35, 0.5, fract(vW.y * 14.0 - uT * 2.5)) * 0.6 + 0.4;
+  float band = smoothstep(0.96, 1.0, sin(vW.y * 3.0 - uT * 5.0));
+  float lum = dot(vC, vec3(0.3, 0.59, 0.11));
+  float a = (0.35 + lum * 0.35 + fr * 0.9) * scan + band * 0.7;
+  gl_FragColor = vec4(mix(vTint.rgb, vec3(1.0), fr * 0.35 + band * 0.4), clamp(a, 0.0, 1.0) * vTint.a);
+}`;
+const CLOAK_FS = `uniform float uT; varying vec3 vN; varying vec3 vW; varying vec4 vTint; varying vec3 vC;
+void main() {
+  vec3 V = normalize(cameraPosition - vW);
+  float fr = pow(1.0 - abs(dot(normalize(vN), V)), 1.6);
+  float haze = sin(vW.y * 9.0 + vW.x * 4.0 - uT * 6.0 + sin(vW.z * 5.0 + uT * 2.0) * 1.5) * 0.5 + 0.5;
+  float a = 0.12 + fr * 0.55 + haze * 0.12;
+  vec3 col = mix(vC * 0.35, vec3(0.75, 0.85, 1.0), fr * 0.8 + haze * 0.15);
+  gl_FragColor = vec4(col, a);
+}`;
+
 const KICK_REAR = 1.5;   // model units from a tank's centre to the rear edge it rears up on [MM-task_mvfpbbtp_1]
 
 /** Studio palette per material key (code design §4.11 UCOL). */
@@ -136,7 +177,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       imLod.receiveShadow = imFull.receiveShadow = true;
       imLod.renderOrder = imFull.renderOrder = 3;
       if (sh) sh.renderOrder = 2;
-      T.groups[gname] = { imFull, imLod, sh, pivot: full[gname].pivot, lodGeo: L.geo, shGeo: SG ? SG.geo : null };
+      T.groups[gname] = { imFull, imLod, sh, pivot: full[gname].pivot, lodGeo: L.geo, shGeo: SG ? SG.geo : null, fxKey: key };
       tris[key].full += full[gname].tris;
       tris[key].lod += L.tris;
       owned.push(full[gname].geo);
@@ -150,6 +191,32 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
   const yAxis = new THREE.Vector3(0, 1, 0), xAxis = new THREE.Vector3(1, 0, 0), qBank = new THREE.Quaternion();
   const counts = {};
   let usingLod = false;
+
+  // ---- special-ability looks (lazy) ----
+  const fxUniforms = { uT: { value: 0 } };
+  let holoMat = null, cloakMat = null;
+  const fxMats = () => {
+    if (!holoMat) {
+      holoMat = new THREE.ShaderMaterial({ uniforms: fxUniforms, vertexShader: FX_VS, fragmentShader: HOLO_FS, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+      cloakMat = new THREE.ShaderMaterial({ uniforms: fxUniforms, vertexShader: FX_VS, fragmentShader: CLOAK_FS, vertexColors: true, transparent: true, depthWrite: false });
+    }
+  };
+  const fxCounts = { holo: {}, cloak: {} };
+  const fxGroups = [];   // groups that have fx meshes (to zero their counts)
+  function fxOf(G) {
+    if (G.fx) return G.fx;
+    fxMats();
+    const tint = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+    tint.setUsage(THREE.DynamicDrawUsage);
+    G.lodGeo.setAttribute('aTint', tint);
+    const holo = new THREE.InstancedMesh(G.lodGeo, holoMat, cap), cloak = new THREE.InstancedMesh(G.lodGeo, cloakMat, cap);
+    for (const m of [holo, cloak]) { m.count = 0; m.frustumCulled = false; m.renderOrder = 4; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); }
+    // aTint (colour + strength) is read by the hologram only; the cloak looks the same on every unit
+    G.fx = { holo, cloak, tint };
+    fxGroups.push(G);
+    return G.fx;
+  }
+  const FX_TINT = { mirror: [0.3, 1.0, 0.95], raised: [0.35, 1.0, 0.45] };
 
   return {
     tris,
@@ -186,9 +253,17 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       for (const u of list) {
         const T = types[u.model];
         if (!T) continue;
-        const i = counts[u.model];
-        if (i >= cap) continue;
-        counts[u.model] = i + 1;
+        const fx = u.fx || null;
+        const cloaked = !!(fx && fx.kind === 'cloak');
+        const holo = !!(fx && (fx.kind === 'mirror' || fx.kind === 'raised'));
+        const hidden = !!(fx && fx.kind === 'mirror');   // a mirror is ONLY its hologram
+        const half = cap >> 1;
+        let i;
+        if (cloaked) { i = fxCounts.cloak[u.model] || 0; if (i >= half) continue; fxCounts.cloak[u.model] = i + 1; }
+        else if (hidden) i = -1;
+        else { i = counts[u.model]; if (i >= cap) continue; counts[u.model] = i + 1; }
+        let hi = -1;
+        if (holo) { hi = fxCounts.holo[u.model] || 0; if (hi >= half) hi = -1; else fxCounts.holo[u.model] = hi + 1; }
         drawn++;
         const k = UNIT_SCALE * (u.scale || 1);
         q.setFromAxisAngle(yAxis, -u.heading);
@@ -218,9 +293,26 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
           } else {
             m2.copy(m1).multiply(mp.makeTranslation(G.pivot.x, G.pivot.y, G.pivot.z));
           }
-          G.imLod.setMatrixAt(i, m2);
+          if (cloaked) {
+            fxOf(G).cloak.setMatrixAt(i, m2);
+          } else if (i >= 0) G.imLod.setMatrixAt(i, m2);
+          if (hi >= 0) {
+            const F = fxOf(G), c = FX_TINT[fx.kind]; F.holo.setMatrixAt(hi, m2); F.tint.setXYZW(hi, c[0], c[1], c[2], fx.k ?? 1);
+          }
         }
       }
+      fxUniforms.uT.value = t;
+      for (const G of fxGroups) {
+        const key = G.fxKey;
+        const nh = fxCounts.holo[key] || 0, nc = fxCounts.cloak[key] || 0;
+        G.fx.holo.count = nh; G.fx.cloak.count = nc;
+        G.fx.holo.visible = nh > 0; G.fx.cloak.visible = nc > 0;
+        if (nh) G.fx.holo.instanceMatrix.needsUpdate = true;
+        if (nc) G.fx.cloak.instanceMatrix.needsUpdate = true;
+        if (nh || nc) G.fx.tint.needsUpdate = true;
+      }
+      for (const key of Object.keys(fxCounts.holo)) fxCounts.holo[key] = 0;
+      for (const key of Object.keys(fxCounts.cloak)) fxCounts.cloak[key] = 0;
       usingLod = camDist > LOD_DISTANCE;
       for (const key of MODEL_KEYS) {
         const n = counts[key];
@@ -237,6 +329,8 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       for (const T of Object.values(types)) for (const G of Object.values(T.groups)) {
         for (const m of [G.imFull, G.imLod, G.sh]) if (m) scene.remove(m);
       }
+      for (const G of fxGroups) { scene.remove(G.fx.holo); scene.remove(G.fx.cloak); }
+      if (holoMat) { holoMat.dispose(); cloakMat.dispose(); }
       for (const g of owned) g.dispose();
       mat.dispose(); shMat.dispose();
     },
