@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.10.23-c';
-export const VERSION_NOTE = 'Tower upgrades add 10% range per tier (T2 ×1.1, T3 ×1.21), in targeting and range rings';
+export const VERSION = 'v2026.10.24-a';
+export const VERSION_NOTE = 'Special abilities: one per faction (sim) — shield tank, freeze missile, shield drone, mine layer, water blobs, mirrors, stealth, resurrect, stun drones';

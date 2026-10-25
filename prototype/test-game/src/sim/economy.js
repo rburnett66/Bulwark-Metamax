@@ -107,6 +107,7 @@ export function spend(state, cost, reason) {
 export function grantKillIncome(state, unit) {
   const eco = state.economy;
   if (!eco || !unit) return 0;
+  if (unit.noBounty) return 0;   // a mirror or a raised unit is not a kill and pays nothing [MM-story_mvn06wnv_7]
   let baseCost = 0;
   try {
     const def = getUnitDef(unit.unitId);

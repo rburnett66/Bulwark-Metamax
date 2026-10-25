@@ -1,4 +1,5 @@
 import { WAVES, MAP, getUnitDef } from '../data/tables.js';
+import { raisesPending } from './abilities.js';
 import { MAX_LIVE_3D } from '../data/renderTiers.js';
 import { createUnit, unitRadius } from './entities.js';
 import { emitEvent, contactDistR, REST_RATIO } from './core.js';
@@ -368,7 +369,7 @@ export function stepWaves(state, dt) {
   }
 
   // Wave clear detection: all spawns emitted and no live attackers remain.
-  if (w.pendingSpawns.length === 0 && !anyAttackersAlive(state)) {
+  if (w.pendingSpawns.length === 0 && !anyAttackersAlive(state) && !raisesPending(state)) {
     w.active = false;
     w.cleared = true;
 

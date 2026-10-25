@@ -3,7 +3,7 @@
 // GDD §4.2: enemy pressure is a POINTS BUDGET per wave, split by lane — "the budget is the contract;
 // the roster is not." This module fills each ring's budget with faction units deterministically, and
 // exposes the current-ring helper the sim uses for spawn placement, build gating, and the ring reveal.
-import { UNITS, factionsInRoster } from '../data/tables.js';
+import { UNITS, factionsInRoster, ABILITY_CARRIERS_PER_WAVE } from '../data/tables.js';
 import { createRng } from './rng.js';
 
 // One workbook budget point buys this much unit `power` (tables.js power ≈ 100 for a tier-1 unit).
@@ -80,11 +80,23 @@ export function buildCampaignWaves(map, onlyFaction) {
     // at wave 3 — UNLESS this wave's faction fields no ground at all (the Air faction IS its air;
     // budgets roll into ground otherwise, so no pressure is dropped).
     const groundOnly = ring.wave <= 2 && factionHasLane(faction, 'ground');
+    // SPECIAL ABILITY CARRIERS [MM-story_mvn06wnv_7]: each wave is guaranteed its quota of the faction's ability
+    // unit, paid out of that lane's budget (ground, the catch-all, absorbs any shortfall). Not before its lane opens.
+    const carrierPower = { ground: 0, air: 0, water: 0 };
+    const carrierIds = [];
+    const carrierId = Object.keys(UNITS).find((id) => UNITS[id].faction === faction && UNITS[id].ability);
+    if (carrierId) {
+      const cl = laneDomain(UNITS[carrierId]);
+      const laneOpen = cl === 'ground' || (cl === 'air' && !groundOnly) || (cl === 'water' && map.hasWater);
+      const want = laneOpen ? (ABILITY_CARRIERS_PER_WAVE[ring.wave - 1] || 0) : 0;
+      for (let i = 0; i < want; i++) { carrierIds.push(carrierId); carrierPower[cl] += UNITS[carrierId].power || 0; }
+    }
+    groundPower -= carrierPower.ground;
     for (const lane of ['air', 'water']) {
       const pts = ring.budget[lane] || 0;
       if (lane === 'air' && groundOnly) { groundPower += pts * POINTS_TO_POWER; continue; }
-      if (pts <= 0 || (lane === 'water' && !map.hasWater)) { groundPower += pts * POINTS_TO_POWER; continue; }
-      const budget = pts * POINTS_TO_POWER;
+      if (pts <= 0 || (lane === 'water' && !map.hasWater)) { groundPower += pts * POINTS_TO_POWER - carrierPower[lane]; continue; }
+      const budget = pts * POINTS_TO_POWER - carrierPower[lane];
       const ids = fillLane(faction, lane, budget, rng);
       groundPower += budget - spent(ids);
       ids.forEach((unitId) => spawns.push({ unitId, lane: laneDomain(UNITS[unitId]), delay: 0, interval: 0, count: 1 }));
@@ -101,6 +113,8 @@ export function buildCampaignWaves(map, onlyFaction) {
       leftover -= spent(extra);
       extra.forEach((unitId) => spawns.push({ unitId, lane: laneDomain(UNITS[unitId]), delay: 0, interval: 0, count: 1 }));
     }
+    // carriers ride a third of the way into the wave, with escorts ahead and behind
+    carrierIds.forEach((unitId, i) => spawns.splice(Math.floor(spawns.length / 3) + i, 0, { unitId, lane: laneDomain(UNITS[unitId]), delay: 0, interval: 0, count: 1 }));
     // stagger the whole wave; the spawn gate spaces the rest. BIG authored waves (owner 2026-07-16:
     // 30-45 troops) compress the stagger so the assault lands inside ~30s instead of dripping for minutes.
     const step = Math.min(1.5, 28 / Math.max(1, spawns.length));
