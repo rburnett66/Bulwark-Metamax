@@ -14,7 +14,7 @@
  * Render-side page: Math.random is not used; the sim stays deterministic.
  */
 import '../data/factions.js';
-import { UNITS, STRUCTURES, projScaleForMap } from '../data/tables.js';
+import { UNITS, STRUCTURES, ABILITIES, projScaleForMap } from '../data/tables.js';
 import { PLANETS } from '../data/planets.js';
 import { buildTerrainMap, resolveResourceTypes } from '../sim/mapgen.js';
 import { createSim, stepSim, applyCommand, FIXED_DT, CANNON } from '../sim/core.js';
@@ -80,12 +80,44 @@ function clearUnits() {
   for (const u of [...S.sim.units.values()]) if (u.side === 'attacker') S.sim.units.delete(u.id);
 }
 
+/** The faction's SPECIAL ABILITY carrier [MM-story_mvn06y2l_8]: its unit id and ability row, or null. */
+function carrierOf(factionName) {
+  const id = Object.keys(UNITS).find((k) => UNITS[k].faction === factionName && UNITS[k].ability);
+  return id ? { id, ability: UNITS[id].ability, row: ABILITIES[UNITS[id].ability] } : null;
+}
+
+/** Ability mode: the Mine Layer and the Water Blobs need something on the ground to hit — a crystal field on the
+ *  approach (harvesters drive to it too, so the mines have victims and the blobs have targets). */
+function seedApproachField() {
+  const sim = S.sim, b = S.map.base;
+  const c = spawnCells(S.map, 1, { dist: Math.max(5, S.dist - 3) })[0];
+  if (!c || !sim.resourceNodes) return;
+  if (sim.resourceNodes.some((n) => n.fieldId === 'fx-field')) return;
+  const tmpl = sim.resourceNodes[0] || { type: 'crystal', role: 'primary', color: 'blue', valuePerUnit: 4, harvestSec: 8 };
+  const mx = Math.round((c.x + b.x) / 2), my = Math.round((c.y + b.y) / 2);
+  [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [2, 1], [-1, 2]].forEach(([dx, dy], i) => {
+    sim.resourceNodes.push({ ...tmpl, id: 'fx-node-' + i, fieldId: 'fx-field', x: mx + dx, y: my + dy, wave: 1, units: 40, remaining: 40, respawns: false, respawnAt: null });
+  });
+}
+
 function spawnWave() {
   const units = factionUnits(UNITS, REG.find(S.faction).name);
-  const pick = S.unit === 'all' ? units : units.filter((u) => u.id === S.unit);
+  const carrier = carrierOf(REG.find(S.faction).name);
+  const ability = S.unit === 'ability' && carrier;
+  const pick = ability ? units.filter((u) => u.id === carrier.id || !UNITS[u.id].ability) : S.unit === 'all' ? units : units.filter((u) => u.id === S.unit);
   if (!pick.length) return;
   const list = [];
-  for (let k = 0; k < S.count; k++) list.push(pick[k % pick.length]);
+  if (ability) {
+    // the carrier in the middle of its escort; Dark gets a fragile escort (things to raise), Arcane a heavy one (things to mirror)
+    let escorts = pick.filter((u) => u.id !== carrier.id && u.domain === (UNITS[carrier.id].domain === 'Flyer' ? 'Walker' : UNITS[carrier.id].domain));
+    if (carrier.ability === 'resurrect') escorts = escorts.filter((u) => u.shape === 'Troops');   // fragile: they fall near the scout and rise
+    const n = Math.max(3, S.count);
+    for (let k = 0; k < n - 1; k++) list.push(escorts[k % Math.max(1, escorts.length)] || pick[0]);
+    list.splice(Math.floor(list.length / 2), 0, pick.find((u) => u.id === carrier.id));
+    if (carrier.ability === 'mineLayer' || carrier.ability === 'waterBlobs') seedApproachField();
+  } else {
+    for (let k = 0; k < S.count; k++) list.push(pick[k % pick.length]);
+  }
   const ground = spawnCells(S.map, list.length, { dist: S.dist });
   const air = spawnCells(S.map, list.length, { dist: S.dist, flyer: true });
   list.forEach((u, k) => {
@@ -230,11 +262,14 @@ function wire() {
   const fillUnits = () => {
     const us = $('fx-unit'); us.textContent = '';
     us.append(el('option', { value: 'all', textContent: 'Every unit type' }));
+    const c = carrierOf(REG.find(S.faction).name);
+    if (c) us.append(el('option', { value: 'ability', textContent: `★ Special ability: ${c.row.name} (${c.id} + escort)` }));
     for (const u of factionUnits(UNITS, REG.find(S.faction).name)) us.append(el('option', { value: u.id, textContent: `${u.shape} (${u.id})` }));
-    us.value = 'all'; S.unit = 'all';
+    const want = S.abilityMode && c ? 'ability' : 'all';
+    us.value = want; S.unit = want;
   };
   fs.addEventListener('change', () => { S.faction = fs.value; fillUnits(); buildArena(); });
-  $('fx-unit').addEventListener('change', (e) => { S.unit = e.target.value; clearUnits(); S.respawnIn = 0.2; });
+  $('fx-unit').addEventListener('change', (e) => { S.unit = e.target.value; S.abilityMode = S.unit === 'ability'; clearUnits(); S.respawnIn = 0.2; });
   const rng = (id, key) => { const i = $(id), v = $(id + '-v'); i.addEventListener('input', () => { S[key] = +i.value; v.textContent = i.value; }); };
   rng('fx-count', 'count'); rng('fx-dist', 'dist');
   $('fx-utier').addEventListener('change', (e) => { S.utier = +e.target.value; });
@@ -301,6 +336,7 @@ async function loadProjFx() {
 
 // the default faction: the one in the query (?faction=dark), else Ground
 const qf = new URLSearchParams(location.search).get('faction');
+S.abilityMode = new URLSearchParams(location.search).has('ability');   // ?ability opens on the faction's special ability
 if (qf && REG.find(qf)) S.faction = REG.find(qf).key;
 wire();
 $('fx-faction').value = S.faction;

@@ -1,5 +1,5 @@
 import { BUILD_ICONS, buildIcon, buildIconUrl } from './buildIcons.js';
-import { STRUCTURES, ASSUMPTIONS, getStructureDef, factionsInRoster } from '../data/tables.js';
+import { STRUCTURES, ASSUMPTIONS, ABILITIES, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
 import { levelFromXp } from '../data/progression.js';
@@ -964,6 +964,11 @@ export function updateHud(hud, state, ui) {
         ['Targets', u.canTarget || (u.targetsBase ? 'Base' : '—')],
         ['Vision', fmt(u.vision)],
       ];
+      // SPECIAL ABILITY [MM-story_mvn06y2l_8]: the carrier names its ability; a mirror or a risen unit says what it is
+      const ab = u.ability && ABILITIES[u.ability];
+      if (ab) rows.unshift(['Ability', '★ ' + ab.name], ['Effect', ab.blurb]);
+      if (u.isMirror) { hud.usub.textContent = 'mirror image · a harmless decoy'; rows = rows.filter((r) => r[0] !== 'DPS'); }
+      if (u.raised) hud.usub.textContent += ' · risen (no bounty)';
     }
     while (hud.ustats.firstChild) hud.ustats.removeChild(hud.ustats.firstChild);
     for (let i = 0; i < rows.length; i++) {

@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.10.24-a';
-export const VERSION_NOTE = 'Special abilities: one per faction (sim) — shield tank, freeze missile, shield drone, mine layer, water blobs, mirrors, stealth, resurrect, stun drones';
+export const VERSION = 'v2026.10.24-b';
+export const VERSION_NOTE = 'Special ability visual effects: hex dome, frost nova, shield bubble, mines, water blobs, mirror holograms, cloak ghosts, soul column, electric stun';

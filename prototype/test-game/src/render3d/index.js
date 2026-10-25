@@ -66,6 +66,7 @@ import { createPathLinesView } from './overlays/pathLines.js';
 import { buildUnitViews, createModelResolver } from './units/unitViews.js';
 import { createCombatFx } from './fx/combatFxModel.js';
 import { createCombatFxView } from './fx/combatFx.js';
+import { createAbilityFx, createAbilityFxView } from './fx/abilityFx.js';
 import { createRocketShots } from './fx/rocketShots.js';
 import { createFlakShots } from './fx/flakShots.js';
 import { createImpacts, K as FXK } from './fx/impacts.js';
@@ -229,12 +230,13 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const baseStyle = baseStyleFor(craft && craft.def && craft.def.weaponType);   // each base fires its own weapon's look
   const cannonFx = createCannonFx({ seed: (map.seed | 0) || 1, style: baseStyle }), cannonFxView = createCannonFxView(THREE, scene, { style: baseStyle });   // the base super-cannon
   const coverageView = createCoverageView(THREE, scene);   // selection range + defensive coverage
+  const abilityFx = createAbilityFx({ seed: ((map.seed | 0) || 1) + 41 }), abilityFxView = createAbilityFxView(THREE, scene);   // special abilities [MM-story_mvn06y2l_8]
   const healthBars = createHealthBarView(THREE, scene);      // units, damaged towers, the base once hit
   const gold = createGoldPopups(), goldView = createGoldPopupView(host);   // "$N" per kill / delivery
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, wakes: null, wakesView: null, casings: null, casingsView: null, wading: null, killCam: null, baseBlast: null, flashGlows: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, abilityFx, abilityFxView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, wakes: null, wakesView: null, casings: null, casingsView: null, wading: null, killCam: null, baseBlast: null, flashGlows: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map), viewInsets: typeof opts.viewInsets === 'function' ? opts.viewInsets : null,
@@ -656,6 +658,9 @@ export function renderFrame(r, state, ui, events, dt) {
     r.tracks.step(dt, views); r.stats.trackMarks = r.tracksView.sync(r.tracks.instances());   // wheel / tread marks [MM-task_mvj0wz2d_1]
     r.wakes.step(dt, views); r.stats.wakes = r.wakesView.sync(r.wakes.instances());   // water-unit wakes [MM-task_mvj9o97b_7]
     r.casings.step(dt); r.stats.casings = r.casingsView.sync(r.casings.instances());   // MG brass [MM-story_mvk3kwu2_m]
+    // special abilities: domes, bubbles, frost, mines, puddles, sigils; cloaked / mirror / risen units [MM-story_mvn06y2l_8]
+    const afx = r.abilityFx.update(state, events, dt, { drawn: r.airLift.drawn });
+    if (afx.unitFx.size) for (const v of views) { const f = afx.unitFx.get(v.id); if (f) v.fx = f; }
     r.unitBarrels.update(views, state, r.map, r.airLift.drawn, dt);   // unit guns pitch to the shot; their tips are firing points [MM-story_mvedy16u_9]
     r.stats.units = r.units3d.setUnits(views, r.cam.dist, r.tier.liveShadows, r.clock);
   }
@@ -679,6 +684,7 @@ export function renderFrame(r, state, ui, events, dt) {
   r.cannonFxView.sync(r.cannonFx, dt);
   // selection range + coverage map (overlays/coverage.js) [MM-task_mvbry998_r]
   r.coverageView.sync(planCoverage(state, ui, getStructureDef), dt);
+  r.stats.abilityFx = r.abilityFxView.sync(r.abilityFx.out);
   r.stats.fx = r.fxView.sync(r.fx);
   r.stats.rockets = r.rocketShots.sync(r.fx);
   r.stats.flak = r.flakShots.sync(r.fx);
@@ -833,7 +839,7 @@ export function destroyRenderer(r) {
   r.ghost.dispose();
   r.fxView.dispose();
   r.rocketShots.dispose(); r.flakShots.dispose();
-  r.cannonFxView.dispose(); r.coverageView.dispose(); r.healthBars.dispose(); r.goldView.dispose(); r.unloadView.dispose();
+  r.cannonFxView.dispose(); r.coverageView.dispose(); r.abilityFxView.dispose(); r.healthBars.dispose(); r.goldView.dispose(); r.unloadView.dispose();
   r.impactsView.dispose();
   r.fogView.dispose(); r.contactsView.dispose();
   r.scene.traverse((o) => {

@@ -142,9 +142,26 @@ export function onUnitDeath(state, u) {
 
 /* ---------------------------------------------------------------------------------------------------- */
 
+/** An AURA scout (Stealth, Resurrected, Mirror Units) keeps pace with its column: it is faster than anything it escorts,
+ *  and an aura that runs ahead of the units it should cover covers nothing. Slows to the slowest friendly unit of its
+ *  own domain within ESCORT_REACH, back to its own speed when alone. */
+const ESCORT_REACH = 5;
+const PACED = new Set(['stealth', 'resurrect', 'mirrorUnits']);
+function paceWithEscort(state, c) {
+  if (c._baseSpeed == null) c._baseSpeed = c.speed;
+  let slow = c._baseSpeed;
+  const r2 = ESCORT_REACH * ESCORT_REACH;
+  for (const u of state.units.values()) {
+    if (u === c || !live(u) || u.side !== 'attacker' || u.isMirror || u.domain !== c.domain || d2(u.pos, c.pos) > r2) continue;
+    if (u.speed > 0 && u.speed < slow) slow = u.speed;
+  }
+  c.speed = slow;
+}
+
 function runCarrier(state, c, dt) {
   const A = ABILITIES[c.ability];
   if (!A) return;
+  if (PACED.has(c.ability)) paceWithEscort(state, c);
   const tick = state.tick;
   const ready = tick >= (c.abilityReady || 0);
   switch (c.ability) {

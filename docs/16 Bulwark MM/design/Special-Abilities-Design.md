@@ -1,6 +1,6 @@
 # Special Abilities — one per faction
 
-Version 1.1 · 2026-10-24 · owner request, built to the sim as it is on main (v2026.10.23-c).
+Version 1.2 · 2026-10-24 · owner request, built to the sim as it is on main (v2026.10.23-c).
 
 > Owner, 2026-10-24: "I want to create a special ability unit for each faction … You can figure out how
 > to best match these abilities to the right faction. The ability can be attached to any unit in the
@@ -84,7 +84,9 @@ All radii are in cells. Durations are in seconds, converted to ticks. Tier scale
 - **Effect:** when a friendly unit dies within **3** cells of the scout, it **rises 1.5 s later where it fell**, at **50% HP**.
 - Mirrors, other carriers and units that have already risen are never raised. A raised unit pays **no bounty the second time**.
 - **3 raises per scout.** If the scout dies before the 1.5 s are up, the raise is cancelled.
-- **Counter:** focus the scout. It is fast and fragile, with 225 HP.
+- **Counter:** focus the scout. It is fragile, with 225 HP.
+
+**Escort pace (Stealth, Resurrected, Mirror Units):** an aura scout slows to the slowest friendly unit of its own domain within 5 cells. Scouts are the fastest units on most rosters, and an aura that runs ahead of the column covers nothing. Alone, it moves at its own speed.
 
 ### 3.9 Stun Drones (Greenies)
 - **Effect:** when a completed tower is within **6** cells, the truck releases **one stun drone** at the nearest one.
@@ -116,21 +118,25 @@ All radii are in cells. Durations are in seconds, converted to ticks. Tier scale
   - Mirrors and raised units are not counted as kills.
 - **Movement and harvest:** a unit with `disruptedUntil > tick` does not move, harvest or repair.
 
-## 5. On screen
+## 5. On screen (built: `render3d/fx/abilityFx.js`, unit looks in `units/models3d.js`)
 
-| Ability | Cue |
+| Ability | What the player sees |
 |---|---|
-| Shield Tank | A faint hex ring around the tank at radius 2.5 |
-| Freeze Missile | A missile streak to the impact point; frost burst; stunned towers tinted icy blue with a snowflake |
-| Shield Drone | A translucent bubble at radius 2.5 that flashes when it absorbs a hit and pops when the pool empties |
-| Mine Layer | A small dark mine model on the resource cell, blinking red once armed |
-| Water Blobs | A lobbed blob arc; a blue puddle disc; disrupted units bob |
-| Mirror Units | Mirror units drawn with a cyan ghost tint and shimmer; a shatter puff on death or fade |
-| Stealth | Cloaked units drawn at 40% opacity with a soft shimmer edge |
-| Resurrected | A green rise column where the unit fell |
-| Stun Drones | A small drone dart from the truck to the tower; a disabled tower shows electric sparks |
+| Shield Tank | A golden hex-energy dome over the tank (radius 2.5) with a turning ground ring; a light sweep runs round it, and it flares when a covered unit is hit |
+| Freeze Missile | A glowing ice-blue missile arcs from the fighter, trailing frost. On impact: a frost-nova ring, a burst of ice shards and mist. Frozen towers wear a translucent ice crust with glints, and frost drifts off them until they thaw |
+| Shield Drone | An iridescent cyan-violet bubble with a faint hex weave and ripples, sitting where the sim protects. An energy tether runs from the drone to the bubble while the drone flies its attack run. It flashes when it blocks a missile, and shatters into shards with a shockwave when its shield is spent |
+| Mine Layer | A dirt puff where the truck drops a mine. A dark mine sits on the field; its red eye blinks once armed. A detonation is a fireball with dirt, sparks and a shockwave |
+| Water Blobs | A wobbling water blob arcs over, dripping. It splats with foam and droplets into a rippling, glinting puddle that fades as it dries. Units stuck in the puddle trail bubbles |
+| Mirror Units | Mirrors are drawn only as cyan holograms (scanlines, rim light, a sweeping band), so the player can read them as fakes while the towers still fall for them. They flicker in their last 1.5 s, and shatter into glass shards when killed or faded |
+| Stealth | A violet broken ring with heat-haze bands and a sweeping light marks the field. Cloaked units are drawn as see-through ghosts with a shimmering rim |
+| Resurrected | A green rune circle turns where the unit fell, with soul wisps spiralling in. The unit stands up in a green soul column with a shockwave, and glows green for a moment |
+| Stun Drones | A small glowing dart weaves from the truck to the tower. The disabled tower crackles with electric arcs and throws sparks until the stun ends |
 
-The unit info card shows the carrier's ability name and a one-line description from `ABILITIES[id].blurb`.
+Every carrier that has no aura gets a small coloured beacon over it, so the player can pick it out of the column.
+
+The unit card shows the carrier's ability name and effect. A mirror reads "mirror image · a harmless decoy", and a risen unit is marked "risen (no bounty)".
+
+**Where to see them:** the Effects Lab (`fxlab.html`, reached from Settings). Pick a faction, then **★ Special ability** in the Attackers list. `fxlab.html?faction=dark&ability` opens straight on one.
 
 ## 6. Build order and tickets
 

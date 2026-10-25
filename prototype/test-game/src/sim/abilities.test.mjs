@@ -309,3 +309,15 @@ test('campaign waves carry their quota of the faction ability unit from wave 2',
     }
   }
 });
+
+test('aura scouts keep pace with their escort, and run at full speed alone', () => {
+  const st = arena();
+  const scout = createUnit(st, 'DRK-Trucks', 1, { x: SLOT.x + 9, y: SLOT.y + 9 }, 'ground', 'attacker'); st.units.set(scout.id, scout);
+  const troop = createUnit(st, 'DRK-Troops', 1, { x: SLOT.x + 10, y: SLOT.y + 9 }, 'ground', 'attacker'); st.units.set(troop.id, troop);
+  const full = scout.speed;
+  run(st, 1);
+  assert.equal(scout.speed, troop.speed, 'paced to the troop');
+  troop.pos = { x: SLOT.x - 30, y: SLOT.y };
+  run(st, 1);
+  assert.equal(scout.speed, full, 'alone again: its own speed');
+});
