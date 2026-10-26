@@ -5,7 +5,7 @@
  * the starting kit + Map 3 Victory once won) and gives the view a buy / refund adapter that moves the gold.
  * No DOM, no three.js: the save functions are passed in, so tests drive it with a fake save.
  */
-import { TECH_BY_ID, startingOwned, settleFree, techStatus, techPrice, refundBlock } from '../data/techtree.js';
+import { TECH_BY_ID, startingOwned, settleFree, techStatus, techPrice, refundBlock, PORTALS } from '../data/techtree.js';
 
 export const map3Won = (s) => !!((s.maps && s.maps[3] && s.maps[3].beaten) ||
   Object.values(s.factionRecords || {}).some((f) => f && f.mapsWon && f.mapsWon[3]));
@@ -23,6 +23,23 @@ export function techCtxFromSave(s, factionOfPlanet = (p) => p) {
       return !!(fr && fr.mapsWon && Object.values(fr.mapsWon).some(Boolean));
     },
   };
+}
+
+/** TESTING (owner 2026-10-25): "today they are all unlocked for testing". Every planet counts as open while this is
+ *  true; set it false to gate planets by portal code (planetOpen below), with nothing else to change. The menu's
+ *  `?planets=locked` shows the gated look without touching this. */
+export const ALL_PLANETS_OPEN = true;
+
+/**
+ * Can the player campaign on this planet? The home planet (the one with no portal code — Verdance) always; every
+ * other homeworld once its portal code is owned (Tech-Tree-Design §6). planetName: 'Florael'. ctx: techCtxFromSave.
+ * opts.allOpen defaults to ALL_PLANETS_OPEN (the testing switch). [MM-story_mvoi0e36_3]
+ */
+export function planetOpen(ctx, planetName, { allOpen = ALL_PLANETS_OPEN } = {}) {
+  if (allOpen) return true;
+  const k = String(planetName || '').toLowerCase();
+  if (!PORTALS.some(([key]) => key === k)) return true;
+  return !!(ctx && ctx.owned && ctx.owned.has('portal_' + k));
 }
 
 /** The view adapter for the game menu. save = { loadSave, buyTech, refundTech }. */

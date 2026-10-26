@@ -16,7 +16,7 @@ import { MAPDATA } from '../../content/maps/mapdata.js';
 import { loadSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars, bankOf } from '../save/save.js';
 import { setChannelVolume } from '../comm/voice.js';
 import { readyIds, countOwned } from '../data/techtree.js';
-import { techCtxFromSave, createGameTechAdapter } from './techSave.js';
+import { techCtxFromSave, createGameTechAdapter, planetOpen } from './techSave.js';
 import { computeBadges, seenFor } from './badges.js';
 import { createProgressWidget } from './progressWidget.js';
 // The faction registry (GGG-3). Side-effect import + global namespace: factions.js is a classic
@@ -300,7 +300,17 @@ export function createMenu(mountEl, cbs) {
     b.appendChild(img);
     return b;
   }
-  const setGlobe = (b, key) => { b.dataset.globe = key; const img = b.querySelector('img'); if (img) img.src = planetImage(key) || ''; };
+  const setGlobe = (b, key) => { b.dataset.globe = key; const img = b.querySelector('img'); if (img) img.src = planetImage(key) || ''; markSurvey(b); };
+  // the survey ship orbits a planet the player can campaign on (home, or its portal code owned); a locked one's
+  // space stays clean [MM-story_mvoi0e36_3]. Re-read on every show: buying a portal code opens a planet.
+  // ?planets=locked: preview the portal-code gate while every planet is open for testing (techSave ALL_PLANETS_OPEN)
+  const gateOverride = () => (/[?&]planets=locked(&|$)/.test((typeof location !== 'undefined' && location.search) || '') ? { allOpen: false } : undefined);
+  function markSurvey(b) {
+    const key = b.dataset.globe, P = key && PLANETS[key];
+    let open = false;
+    try { open = !!P && planetOpen(techCtxFromSave(loadSave(), factionOfPlanet), P.name, gateOverride()); } catch (e) { /* no save: clean space */ }
+    if (open) b.dataset.survey = '1'; else delete b.dataset.survey;
+  }
 
   // top bar: crest + wordmark (the proof's brand row)
   const top = el(doc, 'div', 'bwm-top');
@@ -719,6 +729,7 @@ export function createMenu(mountEl, cbs) {
     settings.style.display = screen === 'settings' ? 'block' : 'none';
     survey.style.display = screen === 'survey' ? 'grid' : 'none';
     root.classList.toggle('space', screen === 'main' || screen === 'survey');
+    for (const b of root.querySelectorAll('[data-globe]')) markSurvey(b);   // a portal bought since the last show opens a planet
     current = screen;
     syncStage();
     if (screen === 'harvester') refreshHarvester();

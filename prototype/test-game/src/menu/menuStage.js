@@ -5,6 +5,7 @@
  *
  * The menu marks where pictures go with plain elements and this draws into their on-screen rectangles (scissor):
  *   <div data-globe="water" data-spin="drag">   a homeworld globe (data-spin="drag": the player can spin it)
+ *        data-survey="1"                          … with the survey ship in orbit (a planet open to campaign) [MM-story_mvoi0e36_3]
  *   <div data-craft="system">                   a landing craft on a slow turntable (FACTION_CRAFT key or lc_*)
  *   <div data-res="water:rare">                 a resource model (planet : tier) turning on a plinth
  *   <div data-galaxy data-target data-mode>      the 3D galaxy and the planet ⇄ galaxy fly (galaxyStage.js) [MM-story_mvftq5q8_l]
@@ -15,6 +16,7 @@
  *   const st = createMenuStage(THREE, rootEl);   st.start() · st.stop() · st.dispose()
  */
 import { makeGlobe } from '../render3d/planet/globe.js';
+import { makeSurveyShip } from '../render3d/planet/surveyShip.js';
 import { createCraft3D } from '../render3d/craft/craft3d.js';
 import { landingPose, phaseStart } from '../render3d/craft/landing.js';
 import { resourceModel } from '../render3d/resources/models.js';
@@ -160,7 +162,12 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
         const s = spin.get(el);
         if (s && !s.drag) s.vel += (SPIN - s.vel) * Math.min(1, dt * 1.5);
         w.g.spin(dt * mv, s ? s.vel : SPIN);
+        if (w.ship) w.ship.update(dt * mv);
       }
+      // the survey ship: in orbit round a planet the player can campaign on; a locked planet's space stays clean
+      const survey = el.dataset.survey === '1';
+      if (survey && !w.ship) { w.ship = makeSurveyShip(THREE); w.scene.add(w.ship.root); }
+      if (w.ship) w.ship.root.visible = survey;
       // keep the whole globe + halo in frame whatever the box's shape
       const r = el.getBoundingClientRect(), a = r.width / Math.max(1, r.height);
       gcam.position.z = a >= 1 ? 6 : 6 / a;
@@ -208,7 +215,7 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
     get running() { return running; },
     dispose() {
       api.pause(); document.removeEventListener('visibilitychange', onVis);
-      for (const w of globes.values()) w.g.dispose();
+      for (const w of globes.values()) { w.g.dispose(); if (w.ship) w.ship.dispose(); }
       if (galaxy) galaxy.dispose();
       if (craft) craft.dispose();
       sphere.dispose(); litMat.dispose(); glowMat.dispose(); plinthGeo.dispose(); plinthMat.dispose();
