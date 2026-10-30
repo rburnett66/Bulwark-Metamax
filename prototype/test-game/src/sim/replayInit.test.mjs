@@ -41,7 +41,11 @@ function playLive(B, extra) {
   return { sim, log };
 }
 
-const UPGRADED = { harvesterLevel: 3, structTiers: { cannon: 3, flak: 3, wall: 3 } };
+// A deterministic opening-gold cushion (carried identically into replay by replayOpts) so the single
+// cannon can actually be upgraded to tier 3 — the bigger advanced-mode waves [MM-story_mvnzz719_2]
+// tighten the in-battle economy enough that kill/harvest income alone no longer funds the T2→T3 upgrade,
+// which would leave this guard's tier-3 assertion unreachable for reasons unrelated to replay/init.
+const UPGRADED = { harvesterLevel: 3, structTiers: { cannon: 3, flak: 3, wall: 3 }, carry: { gold: 8000 } };
 
 test('replay: a serialized campaign log + the rebuilt board reproduces the live hash (upgraded save)', () => {
   const B = board(2);

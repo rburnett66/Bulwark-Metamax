@@ -1109,6 +1109,22 @@ function _laneFor(domain) {
   if (domain === 'Floater' || domain === 'Swimmer') return 'water';
   return 'ground';
 }
+// Advanced-mode wave pacing [MM-story_mvnzz719_2]: special/advanced units (siege Artillery + Heavy Tank;
+// air Gunship/Fighter/Drone/Bomber) are held out of the opening waves and ramp in from wave 3 — the
+// opening is a BASIC war (Troops/Scout/Assault Tank). Mirrors SPECIAL_GATE_WAVE in sim/campaign.js, which
+// drives the real campaign maps; kept local here because campaign.js imports THIS module (no cycle).
+const WAVE_SPECIAL_GATE = 3;
+const BASIC_WAVE_SHAPES = new Set(['Troops', 'Scout', 'Assault Tank']);
+/** The unit pool a faction draws from at wave `n`: basics first, then a GROWING slice of specials
+ *  (none before the gate wave). Falls back to the full roster for a faction with no basics so a wave
+ *  is never empty. The spawn builders pick their `kinds` entries from the head of this. */
+function _wavePool(units, ids, n) {
+  const basics = ids.filter((id) => BASIC_WAVE_SHAPES.has(units[id].shape));
+  const specials = ids.filter((id) => !BASIC_WAVE_SHAPES.has(units[id].shape));
+  const nSpecial = n < WAVE_SPECIAL_GATE ? 0 : Math.min(specials.length, n - WAVE_SPECIAL_GATE + 1);
+  const pool = basics.concat(specials.slice(0, nSpecial));
+  return pool.length ? pool : ids;
+}
 function _buildWaves(units, onlyFaction) {
   const byFaction = {};
   for (const id in units) {
@@ -1121,12 +1137,13 @@ function _buildWaves(units, onlyFaction) {
     const ids = byFaction[onlyFaction] || [];
     const waves = [];
     for (let n = 1; n <= 8 && ids.length; n++) {
+      const pool = _wavePool(units, ids, n);   // specials gated out until wave 3, then ramping
       const spawns = [];
-      const kinds = Math.min(ids.length, 2 + Math.floor(n / 2));
+      const kinds = Math.min(pool.length, 2 + Math.floor(n / 2));
       for (let k = 0; k < kinds; k++) {
-        const unitId = ids[(n + k) % ids.length];
+        const unitId = pool[(n + k) % pool.length];
         spawns.push(Object.freeze({
-          unitId, count: 2 + Math.floor(n / 2) + k, lane: _laneFor(units[unitId].domain),
+          unitId, count: 3 + Math.floor(n / 2) + k, lane: _laneFor(units[unitId].domain),   // bigger: base +1 (owner 2026-10-25)
           delay: k * 1.3, interval: Math.max(0.6, 1.4 - n * 0.06),
         }));
       }
@@ -1142,12 +1159,13 @@ function _buildWaves(units, onlyFaction) {
     const ids = byFaction[fac] || [];
     if (!ids.length) return;
     const n = i + 1;
+    const pool = _wavePool(units, ids, n);   // by wave position: opening waves basic, specials from wave 3
     const spawns = [];
-    for (let k = 0; k < 3 && k < ids.length; k++) {
-      const unitId = ids[(i + k) % ids.length];
+    for (let k = 0; k < 3 && k < pool.length; k++) {
+      const unitId = pool[(i + k) % pool.length];
       spawns.push(Object.freeze({
         unitId,
-        count: 3 + Math.floor(n / 2) + k,
+        count: 4 + Math.floor(n / 2) + k,   // bigger: base +1 (owner 2026-10-25)
         lane: _laneFor(units[unitId].domain),
         delay: k * 1.4,
         interval: Math.max(0.6, 1.4 - n * 0.05),
@@ -1161,7 +1179,7 @@ function _buildWaves(units, onlyFaction) {
     const ids = byFaction[fac] || [];
     if (!ids.length) return;
     const unitId = ids[k % ids.length];
-    finale.push(Object.freeze({ unitId, count: 4, lane: _laneFor(units[unitId].domain), delay: (k % 4) * 1.2, interval: 0.8 }));
+    finale.push(Object.freeze({ unitId, count: 5, lane: _laneFor(units[unitId].domain), delay: (k % 4) * 1.2, interval: 0.8 }));
   });
   waves.push(Object.freeze({ wave: order.length + 1, faction: 'Combined forces', spawns: Object.freeze(finale) }));
   return waves;

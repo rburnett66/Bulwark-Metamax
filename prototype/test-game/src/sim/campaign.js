@@ -7,9 +7,28 @@ import { UNITS, factionsInRoster, ABILITY_CARRIERS_PER_WAVE } from '../data/tabl
 import { createRng } from './rng.js';
 
 // One workbook budget point buys this much unit `power` (tables.js power ≈ 100 for a tier-1 unit).
-// INVENTED (the GDD prices waves in abstract points): 4.0 makes map 1 wave 1 (100 pts) ≈ 4 troops and
-// map 9 wave 8 (407 pts) ≈ a 16-unit assault. The single knob for overall campaign pressure.
-export const POINTS_TO_POWER = 4.0;
+// INVENTED (the GDD prices waves in abstract points): the single knob for overall campaign pressure.
+// Owner, 2026-10-25 (advanced-mode wave re-pace [MM-story_mvnzz719_2]): waves felt too small — raised
+// 4.0 → 6.0 (+50% bodies on every standard campaign map). Forge maps that author their own spawn points
+// are unaffected: mapgen converts a point COUNT to budget with the inverse 100/POINTS_TO_POWER, so
+// "N painted points ≈ N units" holds at any value of this knob.
+export const POINTS_TO_POWER = 6.0;
+
+// ── Advanced-mode wave pacing [MM-story_mvnzz719_2] ───────────────────────────────────────────────
+// Owner rule (2026-10-25): special/advanced units must NOT appear IN VOLUME until wave 3 — the opening
+// waves are a BASIC ground/sea war — then specials ramp in as a capped, growing share of the budget.
+// BASIC  = Troops / Scout / Assault Tank (the light bread-and-butter bodies, any lane).
+// SPECIAL = Artillery + Heavy Tank (siege) and Gunship + Fighter + Drone + Bomber (air) — the heavies
+//           that fillLane's greedy "biggest power first" used to flood waves 1-2 with.
+export const SPECIAL_GATE_WAVE = 3;                                   // first wave specials may enter in volume
+export const SPECIAL_SHARE = Object.freeze({ start: 0.35, step: 0.10, max: 0.70 });   // of the lane budget
+const BASIC_SHAPES = new Set(['Troops', 'Scout', 'Assault Tank']);
+const isBasicUnit = (u) => BASIC_SHAPES.has(u && u.shape);
+/** Fraction of a wave's budget specials may claim: 0 before the gate, then start + step·(w−gate), capped. */
+export function specialShare(wave) {
+  if ((wave || 0) < SPECIAL_GATE_WAVE) return 0;
+  return Math.min(SPECIAL_SHARE.max, SPECIAL_SHARE.start + SPECIAL_SHARE.step * (wave - SPECIAL_GATE_WAVE));
+}
 
 function factionHasLane(faction, lane) {
   for (const id in UNITS) {
@@ -33,27 +52,42 @@ export function currentRing(map, waveNumber) {
 }
 
 /** Fill one lane's power budget with units of `faction`, deterministically. Greedy from the top with
- *  a seeded skip so waves vary: big anchors first, change fills the tail with cheap bodies. */
-function fillLane(faction, lane, powerBudget, rng) {
+ *  a seeded skip so waves vary: big anchors first, change fills the tail with cheap bodies.
+ *  Specials are capped to specialShare(wave) of the budget (0 before the gate wave) so the opening
+ *  waves are basic bodies; basics then spend the remainder down to ~one unit of the budget. A lane
+ *  with no basic units (air) spends its whole budget on specials so no pressure is ever dropped. */
+function fillLane(faction, lane, powerBudget, rng, wave) {
   const pool = [];
   for (const id in UNITS) {
     const u = UNITS[id];
-    if (u.faction === faction && laneDomain(u) === lane && (u.power || 0) > 0) pool.push({ id, power: u.power });
+    // Tier C is sparse-by-design — the bulk wave builder skips it (render-tiers spec §2/§5), same as
+    // tables.js _buildWaves. A bigger air budget would otherwise let the greedy picker draft a Bomber.
+    if (u.render_tier === 'C') continue;
+    if (u.faction === faction && laneDomain(u) === lane && (u.power || 0) > 0) pool.push({ id, power: u.power, basic: isBasicUnit(u) });
   }
   if (!pool.length) return [];
-  pool.sort((a, b) => b.power - a.power);
+  const basics = pool.filter((p) => p.basic);
+  const specials = pool.filter((p) => !p.basic);
   const picks = [];
-  let left = powerBudget;
-  let guard = 200;
-  while (left >= pool[pool.length - 1].power && guard-- > 0) {
-    const affordable = pool.filter((p) => p.power <= left);
-    if (!affordable.length) break;
-    // mostly take the biggest affordable; sometimes reach one step down for texture
-    const idx = (affordable.length > 1 && rng() < 0.35) ? 1 : 0;
-    const pick = affordable[idx];
-    picks.push(pick.id);
-    left -= pick.power;
-  }
+  // greedily spend `left` power on `cands` (biggest first, seeded one-step-down for texture)
+  const take = (cands, left) => {
+    if (!cands.length || left <= 0) return 0;
+    const sorted = cands.slice().sort((a, b) => b.power - a.power);
+    const cheapest = sorted[sorted.length - 1].power;
+    let spent = 0, guard = 400;
+    while (left - spent >= cheapest && guard-- > 0) {
+      const affordable = sorted.filter((p) => p.power <= left - spent);
+      if (!affordable.length) break;
+      const idx = (affordable.length > 1 && rng() < 0.35) ? 1 : 0;
+      picks.push(affordable[idx].id);
+      spent += affordable[idx].power;
+    }
+    return spent;
+  };
+  // specials get a ramping share of the budget; a lane with no basics (air) lets specials take it all
+  const specialCap = basics.length ? powerBudget * specialShare(wave) : powerBudget;
+  const specialSpent = take(specials, Math.min(specialCap, powerBudget));
+  take(basics.length ? basics : specials, powerBudget - specialSpent);
   return picks;
 }
 
@@ -76,40 +110,45 @@ export function buildCampaignWaves(map, onlyFaction) {
     // unit, but ground can always spend it). The GDD budgets lanes on the MAP; the roster is the
     // designer's problem — ours is to never drop pressure on the floor.
     let groundPower = (ring.budget.ground || 0) * POINTS_TO_POWER;
-    // GROUND-WAR OPENING (owner, 2026-07-15): no air pressure in waves 1-2 — the air axis enters
-    // at wave 3 — UNLESS this wave's faction fields no ground at all (the Air faction IS its air;
-    // budgets roll into ground otherwise, so no pressure is dropped).
-    const groundOnly = ring.wave <= 2 && factionHasLane(faction, 'ground');
+    // GROUND/SEA-WAR OPENING (owner 2026-07-15, generalised 2026-10-25 [MM-story_mvnzz719_2]): the air
+    // axis is a SPECIAL lane — it does not open until the gate wave, for EVERY faction. Earlier this was
+    // waves 1-2 AND only when the faction fielded ground, which let a no-ground faction (Water) field air
+    // at wave 1. Now air stays shut before the gate whenever a basic non-air lane can absorb its budget
+    // (ground, or water on a water map); only a faction with no ground and no water to spend into keeps
+    // air open, so pressure is still never dropped. Siege specials are held by fillLane's share cap.
+    const canAbsorbAir = factionHasLane(faction, 'ground') || (map.hasWater && factionHasLane(faction, 'water'));
+    const airClosed = ring.wave < SPECIAL_GATE_WAVE && canAbsorbAir;
     // SPECIAL ABILITY CARRIERS [MM-story_mvn06wnv_7]: each wave is guaranteed its quota of the faction's ability
-    // unit, paid out of that lane's budget (ground, the catch-all, absorbs any shortfall). Not before its lane opens.
+    // unit, paid out of that lane's budget (ground, the catch-all, absorbs any shortfall). Not before its lane
+    // opens — and an AIR ability unit (a special) waits for the gate wave like the rest of the air axis.
     const carrierPower = { ground: 0, air: 0, water: 0 };
     const carrierIds = [];
     const carrierId = Object.keys(UNITS).find((id) => UNITS[id].faction === faction && UNITS[id].ability);
     if (carrierId) {
       const cl = laneDomain(UNITS[carrierId]);
-      const laneOpen = cl === 'ground' || (cl === 'air' && !groundOnly) || (cl === 'water' && map.hasWater);
+      const laneOpen = cl === 'ground' || (cl === 'air' && ring.wave >= SPECIAL_GATE_WAVE) || (cl === 'water' && map.hasWater);
       const want = laneOpen ? (ABILITY_CARRIERS_PER_WAVE[ring.wave - 1] || 0) : 0;
       for (let i = 0; i < want; i++) { carrierIds.push(carrierId); carrierPower[cl] += UNITS[carrierId].power || 0; }
     }
     groundPower -= carrierPower.ground;
     for (const lane of ['air', 'water']) {
       const pts = ring.budget[lane] || 0;
-      if (lane === 'air' && groundOnly) { groundPower += pts * POINTS_TO_POWER; continue; }
+      if (lane === 'air' && airClosed) { groundPower += pts * POINTS_TO_POWER; continue; }
       if (pts <= 0 || (lane === 'water' && !map.hasWater)) { groundPower += pts * POINTS_TO_POWER - carrierPower[lane]; continue; }
       const budget = pts * POINTS_TO_POWER - carrierPower[lane];
-      const ids = fillLane(faction, lane, budget, rng);
+      const ids = fillLane(faction, lane, budget, rng, ring.wave);
       groundPower += budget - spent(ids);
       ids.forEach((unitId) => spawns.push({ unitId, lane: laneDomain(UNITS[unitId]), delay: 0, interval: 0, count: 1 }));
     }
-    const groundIds = fillLane(faction, 'ground', groundPower, rng);
+    const groundIds = fillLane(faction, 'ground', groundPower, rng, ring.wave);
     groundIds.forEach((unitId) => spawns.push({ unitId, lane: 'ground', delay: 0, interval: 0, count: 1 }));
     // a faction may have NO ground roster at all (the Water faction fields floaters + flyers only) —
     // spend the remaining ground budget on the lanes it does field, water first when the map has any
     let leftover = groundPower - spent(groundIds);
     for (const lane of (map.hasWater ? ['water', 'air'] : ['air'])) {
-      if (lane === 'air' && groundOnly) continue;   // the opening stays a ground war
+      if (lane === 'air' && airClosed) continue;   // the opening stays a basic ground/sea war
       if (leftover < 60) break;
-      const extra = fillLane(faction, lane, leftover, rng);
+      const extra = fillLane(faction, lane, leftover, rng, ring.wave);
       leftover -= spent(extra);
       extra.forEach((unitId) => spawns.push({ unitId, lane: laneDomain(UNITS[unitId]), delay: 0, interval: 0, count: 1 }));
     }
