@@ -114,7 +114,7 @@ def make():
 
     # three crystal spires — the signature: centreline fore, mirrored pair aft
     spire("spire_c", 2.6, 0.0, 1.2, 1.25, hull, trim, glow)
-    spire("spire_p", -5.4, 1.7, 0.9, 1.05, hull, trim, glow)
+    spire("spire_p", -5.4, 1.4, 0.9, 1.05, hull, trim, glow)
     box("spine_glow", (-1.0, 0.45, 1.52), (14.0, 0.05, 0.03), glow)
 
     # thorns along the dorsal rim
@@ -133,7 +133,7 @@ def make():
         spike("banner_tip", (x, w, -0.3 - ln), 0.6, 0.18, trim, down=True)
 
     # rows of downward spikes and hanging fins under the slab
-    rows = [(3.0, 0.22, 2.2), (1.9, 0.18, 1.5), (0.8, 0.15, 1.1)]
+    rows = [(3.0, 0.22, 2.6), (1.9, 0.2, 2.1), (0.8, 0.16, 1.6)]
     for row, (y, r, ln) in enumerate(rows):
         for i in range(12):
             x = 9.4 - i * 1.65 - row * 0.7
@@ -142,7 +142,7 @@ def make():
             l = ln * (0.75 + 0.45 * ((i * 7 + row * 3) % 4) / 3)
             spike("under_spike", (x, y, -0.45 - 0.25 * (row > 0)), l, r, hull, down=True)
             if (i + row) % 2 == 0:  # violet streak spikes alongside
-                spike("under_glow", (x + 0.45, y - 0.15, -0.5 - 0.25 * (row > 0)), l * 0.8, 0.05, glow, down=True)
+                spike("under_glow", (x + 0.45, y - 0.15, -0.5 - 0.25 * (row > 0)), l * 0.9, 0.08, glow, down=True)
     for x, ln in ((5.0, 2.2), (0.6, 2.6), (-3.2, 2.4), (-7.6, 1.8)):  # thin hanging fins
         loft("fin", [(-0.8, 0.8, 0.05, 0.02, x, 1.3), (-0.8 - ln, 0.06, 0.02, 0.01, x, 1.3)], hull, axis="Z")
         box("fin_glow", (x, 1.36, -0.8 - ln * 0.4), (0.04, 0.03, ln * 0.7), glow)
