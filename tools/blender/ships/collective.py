@@ -39,15 +39,15 @@ def pod(name, root, tip, z, yaw, hull, trim, accent, glow):
            (rx + dx * 0.5, ry + dy * 0.5, z), a)
     placed(box(name + "_root", (0, 0, 0), (0.7, 1.5, 1.4), trim, chamfer=0.3), (rx + dx * 0.12, ry + dy * 0.12, z), a)
     # the pod body, built along +X at the origin then turned
-    st = [(-2.4, 0.5, 0.5, 0.22, 0, 0), (-1.9, 0.75, 0.72, 0.32, 0, 0), (1.5, 0.75, 0.72, 0.32, 0, 0),
-          (2.8, 0.5, 0.46, 0.22, 0, -0.1), (3.6, 0.18, 0.15, 0.08, 0, -0.18)]
+    st = [(-1.7, 0.45, 0.48, 0.2, 0, 0), (-1.3, 0.7, 0.7, 0.3, 0, 0), (0.9, 0.7, 0.7, 0.3, 0, 0),
+          (1.9, 0.45, 0.44, 0.2, 0, -0.1), (2.6, 0.16, 0.14, 0.07, 0, -0.18)]
     placed(loft(name + "_pod", st, hull), (tx, ty, z), yaw)
-    placed(box(name + "_stripe", (0.0, 0.76, -0.12), (3.6, 0.04, 0.22), accent), (tx, ty, z), yaw)
-    placed(box(name + "_glow", (0.2, 0.765, -0.42), (4.2, 0.03, 0.05), glow), (tx, ty, z), yaw)
-    placed(box(name + "_glow_s", (0.2, -0.765, -0.42), (4.2, 0.03, 0.05), glow), (tx, ty, z), yaw)
-    placed(box(name + "_turret", (-0.5, 0, 0.82), (1.6, 0.95, 0.35), hull, chamfer=0.15), (tx, ty, z), yaw)
+    placed(box(name + "_stripe", (-0.2, 0.71, -0.12), (2.6, 0.04, 0.22), accent), (tx, ty, z), yaw)
+    placed(box(name + "_glow", (0.1, 0.715, -0.4), (3.2, 0.03, 0.05), glow), (tx, ty, z), yaw)
+    placed(box(name + "_glow_s", (0.1, -0.715, -0.4), (3.2, 0.03, 0.05), glow), (tx, ty, z), yaw)
+    placed(box(name + "_turret", (-0.4, 0, 0.8), (1.3, 0.9, 0.35), hull, chamfer=0.15), (tx, ty, z), yaw)
     c, s = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
-    spire(tx - 0.5 * c, ty - 0.5 * s, z + 0.99, 0.15, 1.3, hull)
+    spire(tx - 0.4 * c, ty - 0.4 * s, z + 0.97, 0.15, 1.3, hull)
 
 
 def make():
@@ -99,10 +99,8 @@ def make():
     loft("cowl", [(-10.45, 1.6, 0.35, 0.3, 0, 1.45), (-9.4, 2.0, 0.65, 0.5, 0, 1.55), (-4.2, 2.0, 0.65, 0.5, 0, 1.55),
                   (-2.4, 1.4, 0.3, 0.25, 0, 1.6)], hull, bevel=0.02)
     box("cowl_orange", (-6.8, 2.01, 1.55), (5.0, 0.04, 0.22), accent)
-    b = placed(cyl("stern_emblem", (0, 0, 0), 0.85, 0.05, gold, sides=10, axis="Z"), (-7.0, 0.95, 2.21))
-    b.rotation_euler = (math.radians(10), 0, 0)
-    b2 = placed(cyl("stern_emblem_core", (0, 0, 0), 0.5, 0.05, trim, sides=8, axis="Z"), (-7.0, 0.97, 2.25))
-    b2.rotation_euler = (math.radians(10), 0, 0)
+    placed(cyl("stern_emblem", (0, 0, 0), 1.0, 0.05, gold, sides=10, axis="Z"), (-7.0, 0.0, 2.21))
+    placed(cyl("stern_emblem_core", (0, 0, 0), 0.6, 0.05, trim, sides=8, axis="Z"), (-7.0, 0.0, 2.25))
 
     # crown of spires around the dome
     for ang, h in ((15, 1.8), (55, 2.3), (95, 2.6), (135, 2.3), (170, 1.8)):
@@ -117,8 +115,8 @@ def make():
     box("fore_tower_glow", (5.6, 1.81, 2.0), (2.2, 0.03, 0.06), glow)
 
     # radiating spokes: barrels out to gun-pods (fore pods sweep forward, aft pods sweep aft)
-    spokes = [((6.0, 2.0), (7.4, 5.0), 0.0, 14), ((2.2, 2.4), (2.8, 6.0), -0.1, 5),
-              ((-2.0, 2.4), (-2.4, 6.1), -0.2, -4), ((-5.8, 2.4), (-7.0, 5.4), -0.1, -12)]
+    spokes = [((5.6, 2.1), (7.6, 5.9), 0.0, 16), ((2.0, 2.5), (2.8, 6.9), -0.1, 6),
+              ((-2.2, 2.5), (-2.6, 7.0), -0.2, -4), ((-5.8, 2.5), (-7.6, 6.2), -0.1, -14)]
     for i, (root, tip, z, yaw) in enumerate(spokes):
         pod(f"spoke{i}", root, tip, z, yaw, hull, trim, accent, glow)
 

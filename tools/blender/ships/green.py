@@ -68,10 +68,14 @@ def make():
     loft("belly", [(-8.6, 3.0, 0.9, 0.5, 0, -2.0), (8.6, 3.0, 0.9, 0.5, 0, -2.0)], hull)
 
     # ── slime coat on the upper hull ────────────────────────────────────────────────
-    loft("slime_c", [(-8.8, 1.55, 0.14, 0.1, 0, CZ + CH - 0.02), (9.2, 1.55, 0.14, 0.1, 0, CZ + CH - 0.02)],
-         slime)
-    loft("slime_s", [(-8.0, 1.25, 0.14, 0.1, SY, SZ + SH - 0.02), (8.0, 1.25, 0.14, 0.1, SY, SZ + SH - 0.02)],
-         slime)
+    # irregular patches rather than one sheet, so the olive hull still shows between them
+    for i, (x0, x1, y, w) in enumerate(((-9.0, -6.2, 0.5, 1.0), (-5.0, -1.4, 0.9, 0.62), (-0.2, 3.0, 0.4, 1.05),
+                                        (3.8, 5.6, 1.0, 0.5), (6.4, 9.4, 0.6, 0.9))):
+        loft(f"slime_c{i}", [(x0, w, 0.12, 0.08, y, CZ + CH - 0.02), (x1, w, 0.12, 0.08, y, CZ + CH - 0.02)], slime)
+    for i, (x0, x1, y, w) in enumerate(((-8.4, -5.6, 0.7, 0.55), (-4.2, -0.4, 0.4, 0.75), (1.6, 4.4, 0.8, 0.45),
+                                        (6.0, 8.6, 0.3, 0.7))):
+        loft(f"slime_s{i}", [(x0, w, 0.12, 0.08, SY + y, SZ + SH - 0.02), (x1, w, 0.12, 0.08, SY + y, SZ + SH - 0.02)],
+             slime)
     # slime oozing along the seam between the centre and side tanks
     loft("slime_seam", [(-8.6, 0.55, 0.22, 0.15, 2.05, 2.15), (8.6, 0.55, 0.22, 0.15, 2.05, 2.15)], slime)
     for i, x in enumerate((-6.6, -2.9, 1.6, 5.8)):    # runs down the flanks of the side tank
@@ -107,6 +111,9 @@ def make():
              (7.3, SY + 0.4, side_bot + 0.1, 1.9, 0.26), (8.7, SY + 1.4, side_bot + 0.7, 0.9, 0.2),
              (-7.8, 1.2, cen_bot, 1.4, 0.24), (-4.6, 1.7, cen_bot, 2.0, 0.28), (-1.4, 0.9, cen_bot, 2.6, 0.3),
              (1.8, 1.8, cen_bot, 1.6, 0.24), (5.0, 1.0, cen_bot, 2.2, 0.28), (7.9, 1.6, cen_bot, 1.2, 0.22)]
+    fy, fz = SY + 1.55, SZ - 1.45                     # drips off the outer lower flank (visible side-on)
+    drips += [(x, fy, fz, ln, 0.2) for x, ln in ((-8.0, 1.3), (-6.2, 2.1), (-4.4, 1.0), (-1.6, 1.8), (0.2, 1.1),
+                                                 (2.0, 2.3), (3.4, 1.2), (6.4, 1.7), (8.2, 1.0))]
     for i, (x, y, zt, ln, r) in enumerate(drips):
         drip(f"drip{i}", x, y, zt, ln, r, slime)
     # slime sheet the drips hang from
