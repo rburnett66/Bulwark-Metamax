@@ -22,7 +22,8 @@
   --s-risk:#ff8a3d;    /* At risk   ▲ triangle  — will fail or expire soon               */
   --s-ready:#5fe39a;   /* Ready     ⬢ hex+tick  — objectives met, rewards waiting        */
   --s-failed:#ef5350;  /* Failed    ⬢ hex+cross — broken / expired / abandoned           */
-  --s-done:#7b8898;    /* Completed ✓ tick      — rewards claimed, archived              */
+  --s-done:#7b8898;    /* Completed ✓ tick      — rewards collected, archived            */
+  --s-locked:#566273;  /* Locked    padlock     — visible, gates not met yet             */
   /* resource rarity (CRYSTAL, lowpoly-palettes.js) */
   --r-common:#5aa8f0; --r-uncommon:#f2c84a; --r-rare:#e85050; --r-epic:#52c070;
   --f-ui:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
@@ -158,7 +159,7 @@ button.chip:hover{border-color:var(--gold2);background:var(--panel-hi)}
   background:var(--sc);opacity:.75}
 .badge svg{position:relative;width:22px;height:22px}
 .st-done .badge{color:#9aa6b4}
-.mid{min-width:0}
+.mid{min-width:0;display:block}
 .title{display:block;font-weight:800;font-size:14.5px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sub{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden}
 .sub .fi{width:13px;height:13px;color:var(--fc)}
@@ -223,13 +224,13 @@ button.chip:hover{border-color:var(--gold2);background:var(--panel-hi)}
 .sec{margin-top:22px}
 .sec h3{font-size:10px;letter-spacing:.3em;color:var(--dim);font-weight:900;margin-bottom:9px;display:flex;gap:10px;align-items:center}
 .sec h3::after{content:"";flex:1;height:1px;background:var(--line2)}
-.obj{display:grid;grid-template-columns:22px 1fr 150px 56px;align-items:center;gap:10px;padding:9px 12px;background:rgba(20,24,31,.7);border:1px solid var(--line2);margin-bottom:4px}
+.obj{display:grid;grid-template-columns:22px 1fr 150px 76px;align-items:center;gap:10px;padding:9px 12px;background:rgba(20,24,31,.7);border:1px solid var(--line2);margin-bottom:4px}
 .obj .ck{width:18px;height:18px;color:var(--dimmer)}
 .obj.ok .ck{color:var(--s-ready)}
 .obj.bad .ck{color:var(--s-failed)}
 .obj .ot{font-size:13.5px}
 .obj.ok .ot{color:#cfe9da}
-.obj .oc{font-size:12px;font-weight:800;text-align:right}
+.obj .oc{font-size:12px;font-weight:800;text-align:right;white-space:nowrap}
 .obj.opt .ot::after{content:"Bonus";margin-left:8px;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);border:1px solid rgba(242,200,105,.4);padding:1px 5px;vertical-align:2px}
 .items{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px}
 .item{--rc:var(--r-common);display:flex;gap:10px;align-items:center;padding:9px 10px;background:var(--well);border:1px solid var(--line2);border-left:3px solid var(--rc)}
@@ -339,6 +340,53 @@ button.chip:hover{border-color:var(--gold2);background:var(--panel-hi)}
   .dossier{grid-template-columns:1fr}.row[aria-selected=true]::after{display:none}
   .giver{display:grid;grid-template-columns:96px 1fr;gap:12px}.dtitle{font-size:24px}.obj{grid-template-columns:20px 1fr 54px}.obj .bar{display:none}
 }
+
+/* ═══ flow v2: role kicker, quest line, gates, faction impact, collect aboard ═══ */
+.kick{display:flex;flex-wrap:nowrap;overflow:hidden;align-items:center;gap:7px;font-size:8.5px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:2px;white-space:nowrap}
+.kick .role{color:var(--gold)} .kick .role.r2{color:#b9c6d6} .kick .var-l{color:#7fe0b0} .kick .var-s{color:#c99be8} .kick .stp{color:var(--dimmer)}
+.row.st-locked{background:rgba(18,21,27,.7);border-style:dashed;border-left-style:solid}
+.row.st-locked .title{color:#9aa6b4}
+.qline{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--dim);letter-spacing:.06em}
+.qline svg{width:14px;height:14px;color:var(--gold)}
+.gates{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}
+.gate{display:flex;gap:9px;align-items:center;padding:9px 11px;background:var(--well);border:1px solid var(--line2);font-size:12.5px}
+.gate svg{width:16px;height:16px;flex:none} .gate.ok svg{color:var(--s-ready)} .gate.no{border-color:rgba(255,138,61,.35)} .gate.no svg{color:var(--s-risk)}
+.gate small{display:block;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);font-weight:800}
+.impact{display:flex;gap:6px;flex-wrap:wrap}
+.imp{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--well);border:1px solid var(--line2);border-left:3px solid var(--ic);font-size:12.5px}
+.imp b{font-size:16px;font-weight:900;color:var(--ic)} .imp svg{width:16px;height:16px;color:var(--ic)}
+.shipnote{font-size:11px;color:var(--dim);text-align:center;line-height:1.35;margin-top:2px} .shipnote b{color:var(--text)}
+/* inventory */
+.invbtn{border-color:#1f4a55;background:linear-gradient(180deg,rgba(18,36,44,.9),rgba(20,22,26,.9))} .invbtn .glyph{color:var(--cyan2)}
+.invbtn[aria-expanded=true]{border-color:var(--cyan2);box-shadow:0 0 0 1px var(--cyan2),0 0 22px rgba(52,225,255,.3)}
+.inv::before,.inv::after{background:var(--cyan2)}
+.prow2{--fc:#888;display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:11px;width:100%;text-align:left;padding:10px 12px 10px 11px;margin-bottom:5px;
+  background:linear-gradient(90deg,rgba(26,31,40,.95),rgba(20,24,31,.9));border:1px solid var(--line2);border-left:3px solid var(--fc)}
+.prow2:hover{background:var(--panel-hi)} .prow2 > svg{width:20px;height:20px;color:var(--fc)}
+.prow2 b{font-size:14px;font-weight:800;display:block} .prow2 small{display:block;font-size:11px;color:var(--dim)}
+.prow2 .tot{font-size:14px;font-weight:900;display:flex;flex-direction:column;align-items:flex-end;gap:2px} .prow2 .tot svg{width:12px;height:12px;color:var(--dimmer)}
+.prow2 .nw{font-style:normal;font-size:10px;color:var(--cyan2)}
+.prow2[aria-selected=true]{background:linear-gradient(90deg,color-mix(in srgb,var(--fc) 16%,#1a1f28),#1a1f28);border-color:color-mix(in srgb,var(--fc) 45%,#2e3846);border-left-color:var(--fc)}
+.prow2.locked{opacity:.55}
+.pips{display:flex;gap:3px;margin-top:5px} .pips i{width:18px;height:4px;background:var(--c);opacity:.22} .pips i.on{opacity:1}
+.ipane{padding:22px 28px 28px}
+.ihead{display:flex;align-items:center;gap:14px} .ihead > svg{width:40px;height:40px;color:var(--fc)}
+.ihead .pl{font-size:32px;font-weight:900;line-height:1} .ihead .fx{font-size:12px;color:var(--dim);margin-top:4px}
+.ihtot{margin-left:auto;text-align:right} .ihtot b{display:block;font-size:28px;font-weight:900;color:var(--fc)} .ihtot small{font-size:10px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+.rtiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:18px}
+.rtile{--rc:#888;position:relative;padding:16px 16px 14px;background:linear-gradient(180deg,#171c24,#10141a);border:1px solid var(--line2);border-top:3px solid var(--rc)}
+.rtile .gem2{display:block;width:52px;height:52px;color:var(--rc);filter:drop-shadow(0 0 12px color-mix(in srgb,var(--rc) 50%,transparent))} .rtile .gem2 svg{width:52px;height:52px}
+.rtile .cnt{position:absolute;right:16px;top:14px;font-size:30px;font-weight:900} .rtile.zero .cnt{color:var(--dimmer)}
+.rtile .new{position:absolute;right:16px;top:52px;font-size:10px;font-weight:900;color:var(--cyan2);letter-spacing:.1em}
+.rtile b{display:block;font-size:16px;font-weight:900;margin-top:8px} .rtile small{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:800;color:var(--rc)}
+.rtile dl{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;margin-top:12px;font-size:11.5px;color:#c3cdd8}
+.rtile dt{color:var(--dimmer);text-transform:uppercase;letter-spacing:.14em;font-size:9px;font-weight:800;padding-top:2px}
+.inote{margin-top:16px;font-size:12px;color:var(--dim);max-width:70ch}
+@media (max-height:500px){.ipane{padding:12px 16px}.ihead .pl{font-size:22px}.rtiles{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:10px}.rtile{padding:10px 12px}.rtile .gem2,.rtile .gem2 svg{width:34px;height:34px}.rtile .cnt{font-size:22px}.rtile dl{display:none}.inote{display:none}}
+@media (max-width:700px){.inv .dp .ipane{padding:16px}.ihead .pl{font-size:24px}}
+@media (min-width:981px),(max-height:500px) and (min-width:701px){.inv .dp{overflow-y:auto}}
+@media (max-width:900px){.invbtn .v .lbl{display:none}}
+@media (max-height:500px){.mlbtn .v{display:none}.mlbtn{padding:0 10px}.crest{flex:none}.word b{font-size:15px;letter-spacing:.2em}.prog{gap:5px}}
 
 /* ═══════════════════════ DESIGN SYSTEM SHEET ═══════════════════════ */
 #sheet{position:fixed;inset:0;overflow-y:auto;background:radial-gradient(1200px 600px at 80% -10%,rgba(242,200,105,.07),transparent),var(--ink);display:none;padding:48px 6vw 110px}
@@ -471,6 +519,12 @@ body.show-sheet #sheet{display:block} body.show-sheet #game{display:none}
   <symbol id="s-risk" viewBox="0 0 12 12"><path d="M6 .6l5.6 10.2H.4z" fill="currentColor"/><path d="M6 4.3v3M6 8.9v.1" stroke="#0c0e12" stroke-width="1.5" stroke-linecap="round"/></symbol>
   <symbol id="s-ready" viewBox="0 0 12 12"><path d="M6 .3l5.2 3v5.4L6 11.7.8 8.7V3.3z" fill="currentColor"/><path d="M3.5 6.1l1.7 1.7 3.4-3.6" fill="none" stroke="#0c0e12" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="s-failed" viewBox="0 0 12 12"><path d="M6 .3l5.2 3v5.4L6 11.7.8 8.7V3.3z" fill="currentColor"/><path d="M4.1 4.1l3.8 3.8M7.9 4.1L4.1 7.9" stroke="#0c0e12" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="s-locked" viewBox="0 0 12 12"><rect x="2" y="5.2" width="8" height="6" rx=".6" fill="currentColor"/><path d="M3.8 5.2V3.8a2.2 2.2 0 014.4 0v1.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <!-- header: inventory — an open supply crate with crystals -->
+  <symbol id="i-inv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+   <path d="M3 11h18v9.5H3z"/><path d="M3 11l2.2-3.5h13.6L21 11"/><path d="M9.5 14.5h5"/>
+   <path d="M9 7.5l1.6-4.3 1.6 4.3" fill="currentColor" fill-opacity=".3"/><path d="M13 7.5l1.4-3 1.4 3" fill="currentColor" fill-opacity=".3"/>
+  </symbol>
   <symbol id="s-done" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 6.4l2.8 2.8 5.6-6"/></symbol>
   <!-- UI -->
   <symbol id="u-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 1.5l7.4 4.25v8.5L10 18.5l-7.4-4.25v-8.5z"/><path d="M6.4 10.2l2.4 2.4 4.8-5"/></symbol>
@@ -497,6 +551,11 @@ body.show-sheet #sheet{display:block} body.show-sheet #game{display:none}
     <span class="glyph"><svg class="i"><use href="#i-log"/></svg><span class="count num" id="mlcount">2</span></span>
     <span class="v"><b>MISSIONS</b><span class="lbl" id="mlsub"><em>2 ready</em> · 4 active</span></span>
    </button>
+   <!-- NEW: Inventory — right of Missions -->
+   <button class="chip mlbtn invbtn" id="invbtn" aria-expanded="false" aria-controls="inv" title="Inventory">
+    <span class="glyph"><svg class="i"><use href="#i-inv"/></svg><span class="count num" id="invcount" style="background:var(--s-new)">+24</span></span>
+    <span class="v"><b>INVENTORY</b><span class="lbl">36 resources</span></span>
+   </button>
    <button class="chip rank" title="Commander rank">
     <span class="hex num">4</span>
     <span class="rk"><i>SERGEANT</i><span class="xpbar"><span></span></span><em class="num">318 / 750 XP</em></span>
@@ -522,6 +581,19 @@ body.show-sheet #sheet{display:block} body.show-sheet #game{display:none}
   </div>
   <div class="dp" id="dp"></div>
  </section>
+
+ <section class="log inv" id="inv" aria-label="Inventory">
+  <div class="lp">
+   <div class="lp-head">
+    <svg class="i" style="width:24px;height:24px;color:var(--cyan2)"><use href="#i-inv"/></svg>
+    <h1>INVENTORY</h1>
+    <div class="sum" id="isum"></div>
+   </div>
+   <div class="tabs" role="tablist" id="itabs"></div>
+   <div class="list" id="plist"></div>
+  </div>
+  <div class="dp" id="ipane"></div>
+ </section>
 </div>
 
 <!-- ════════ DESIGN SYSTEM SHEET ════════ -->
@@ -530,6 +602,7 @@ body.show-sheet #sheet{display:block} body.show-sheet #game{display:none}
 <!-- review controls (prototype only) -->
 <nav class="rv" aria-label="Review controls">
  <button id="rv-log" aria-pressed="true">Mission Log</button>
+ <button id="rv-inv" aria-pressed="false">Inventory</button>
  <button id="rv-menu" aria-pressed="false">Main screen</button>
  <span class="sep"></span>
  <button id="rv-assign">Assign a mission</button>
@@ -551,6 +624,10 @@ const FI = {
  greenies:'<circle cx="12" cy="7" r="3"/><circle cx="7" cy="15" r="3"/><circle cx="17" cy="15" r="3"/><path d="M12 10v2M9.5 13l-1 1M14.5 13l1 1"/>',
  artillery:'<path d="M4 20L18 6M6 4l14 14" stroke-linecap="round"/><circle cx="12" cy="12" r="2.4"/>',
  space:'<circle cx="12" cy="12" r="5"/><ellipse cx="12" cy="12" rx="11" ry="4.2" transform="rotate(-25 12 12)"/>',
+ hightech:'<path d="M12 2l8.5 5v10L12 22l-8.5-5V7z"/><path d="M12 7v10M8 9.5v5M16 9.5v5" stroke-linecap="round"/>',
+ water:'<path d="M12 3v18M7 6l5-3 5 3M6 8v3a6 6 0 0012 0V8"/>',
+ arcane:'<circle cx="12" cy="12" r="3.4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" stroke-linecap="round"/>',
+ dark:'<path d="M12 2l9 10-9 10-9-10z"/><path d="M12 2v20M7 8l5 3 5-3"/>',
  unknown:'<path d="M12 3a8 8 0 018 8v2M12 3a8 8 0 00-8 8v2" stroke-linecap="round"/><path d="M8 15.5a4 4 0 008 0M9.5 11.5h.01M14.5 11.5h.01" stroke-linecap="round"/>'
 };
 const FACTION = {
@@ -559,6 +636,10 @@ const FACTION = {
  greenies:{name:'Greenies (Chem)',home:'Vexmire',color:'#8fd14f'},
  artillery:{name:'Artillery',home:'Kessra',color:'#d9a441'},
  space:{name:'Space Tech',home:'Lumen',color:'#7fd8ff'},
+ hightech:{name:'High Tech',home:'Ochre',color:'#8fb6ff'},
+ water:{name:'Water',home:'Rime',color:'#33c3b0'},
+ arcane:{name:'Arcane / Energy',home:'Cinder',color:'#d7b24a'},
+ dark:{name:'Dark Energy',home:'Xenthe',color:'#d1495b'},
  unknown:{name:'Unaffiliated',home:'—',color:'#a98cff'}
 };
 const fsvg = (k) => `<svg class="i fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">${FI[k]}</svg>`;
@@ -584,85 +665,120 @@ const REWARD = {
  gold:{n:'Gold',i:'r-gold',col:'var(--gold)'}, xp:{n:'Commander XP',i:'r-xp',col:'var(--cyan2)'}, stars:{n:'Stars',i:'r-stars',col:'#ffe08a'},
  research:{n:'Research',i:'r-research',col:'var(--cyan2)'}, loyalty:{n:'Loyalty',i:'r-loyalty',col:null}, unit:{n:'Unit unlock',i:'r-unit',col:'#d6dde6'},
  structure:{n:'Structure unlock',i:'r-structure',col:'#d6dde6'}, blueprint:{n:'Blueprint',i:'r-blueprint',col:'#8fb6ff'},
- sealed:{n:'Sealed reward',i:'r-sealed',col:'#b49cff'}, crystal:{n:'Resource',i:'r-crystal',col:null}, penalty:{n:'Loyalty lost',i:'r-penalty',col:'var(--s-failed)'}
+ sealed:{n:'Sealed reward',i:'r-sealed',col:'#b49cff'}, crystal:{n:'Resource',i:'r-crystal',col:null}, penalty:{n:'Loyalty lost',i:'r-penalty',col:'var(--s-failed)'}, tech:{n:'Tech unlock',i:'r-research',col:'var(--cyan2)'}, alignment:{n:'Alignment',i:'r-stars',col:'#7fe0b0'}
 };
 const STATUS = {
  new:{n:'New',g:'s-new',v:'--s-new',d:'Logged the moment a mission is assigned. Clears when you open it.'},
  active:{n:'Active',g:'s-active',v:'--s-active',d:'In progress. The bar fills as objectives count up.'},
  risk:{n:'At risk',g:'s-risk',v:'--s-risk',d:'Will fail or expire soon — a deadline, or a condition about to break.'},
- ready:{n:'Ready',g:'s-ready',v:'--s-ready',d:'Objectives met. Rewards wait for you to claim them.'},
+ ready:{n:'Ready',g:'s-ready',v:'--s-ready',d:'Objectives met. Rewards wait aboard the capital ship; collecting them continues the quest line.'},
  failed:{n:'Failed',g:'s-failed',v:'--s-failed',d:'Broken, expired or abandoned. Shows what was lost.'},
- done:{n:'Completed',g:'s-done',v:'--s-done',d:'Rewards claimed. Kept in the archive.'}
+ done:{n:'Completed',g:'s-done',v:'--s-done',d:'Rewards collected aboard the capital ship. Kept in the archive.'},
+ locked:{n:'Locked',g:'s-locked',v:'--s-locked',d:'Visible, not yet unlocked: its gates (level, alignment, tech node, capital ship, quest step) are listed instead.'}
 };
 
 const G = (k) => ({
- aldric:{id:'colonel-aldric-vane',name:'Colonel Aldric Vane',role:'Regimental commander, Verdance garrison',f:'ground',al:'PG',mot:'Duty above self; the nation is a promise kept.'},
+ aldric:{id:'colonel-aldric-vane',name:'Colonel Aldric Vane',role:"Commander aboard Halbrecht's Oath",f:'ground',al:'PG',mot:'Duty above self; the nation is a promise kept.'},
  bricks:{id:'sergeant-bricks-malloy',name:'Sergeant "Bricks" Malloy',role:'Wall sergeant, 3rd Powder Company',f:'ground',al:'CG',mot:'Rules are for parades; I fight for the lads.'},
  hikari:{id:'squadron-mother-hikari-dawnwing-aoi',name:'Squadron-Mother Hikari "Dawnwing" Aoi',role:'Wing leader, Florael carrier group',f:'air',al:'AG',mot:'Bring every kid home.'},
  ilya:{id:'mother-spore-ilya',name:'Mother-Spore Ilya',role:'Elder of the Vexmire collective',f:'greenies',al:'AG',mot:'Everyone shares the harvest; no one is weeded.'},
  sora:{id:'mechanic-sora-ito',name:'Mechanic Sora Ito',role:'Survey ship crew chief',f:'air',al:'N',mot:'I fix wings. I don\'t pick sides.'},
  graf:{id:'chancellor-wilhelmina-graf',name:'Chancellor Wilhelmina Graf',role:'Chancellor of the Powder Realm',f:'ground',al:'PE',mot:'Order is worth any cruelty; balance demands a hard hand.'},
  ines:{id:'quartermaster-ines-roth',name:'Quartermaster Ines Roth',role:'Supply officer, landing craft BS-7',f:'ground',al:'N',mot:'Someone counts the powder while they wave flags.'},
+ otto:{id:'captain-otto-von-halbrecht',name:'Captain Otto von Halbrecht',role:"Flag captain, Halbrecht's Oath",f:'ground',al:'G',mot:'Carry the name, not its sins.'},
+ halo:{id:'ace-jun-halo-sato',name:'Ace Jun "Halo" Sato',role:'Ace, Dawnwing Carrier wing',f:'air',al:'PG',mot:'Fly clean; cover the wingman.'},
+ grigor:{id:'freikorps-raider-grigor-vosk',name:'Freikorps raider Grigor Vosk',role:'Freikorps raider',f:'ground',al:'CE',mot:'Give me a border to burn.'},
  contact:{id:null,name:'The Unknown Contact',role:'Identity withheld',f:'unknown',al:null,mot:'No face to show, by design.'}
 })[k];
 
+// Mission flow v2 (owner 2026-11-02): primaries per planet × map, Light / Shadow secondaries, capital ships,
+// quest lines, tech unlocks that must still be bought. Values mirror docs/sources/Bulwark-Missions.xlsx.
+const SHIPS = { Verdance:{name:"Halbrecht's Oath",arrived:true}, Florael:{name:'Dawnwing Carrier',arrived:false} };
+const LINES = { 'QL-VER-P':'Verdance campaign', 'QL-VER-S':"Halbrecht's Oath favours", 'QL-FLO-P':'Florael campaign', 'QL-FLO-S':'Dawnwing Carrier favours' };
 let MISSIONS = [
- {id:'m1',type:'contract',status:'ready',title:'Rootsong for the Vanguard',giver:'aldric',planet:'Verdance',where:'Verdance · campaign 1',
-  quote:'The seed vaults burned in the first landing. Bring me what grows back, Sergeant, and the regiment will remember who fed it.',
-  obj:[{t:'Win campaign 1 on Verdance',c:1,n:1},{t:'Haul Rootsong Seeds',c:6,n:6},{t:'Haul Elder Bloom',c:2,n:2},{t:'Lose no walls in waves 6–8',c:1,n:1,opt:1}],
-  items:[{n:'Rootsong Seeds',r:'rare',c:6,need:6},{n:'Elder Bloom',r:'epic',c:2,need:2}],
-  rw:[{k:'loyalty',a:'+80',l:'Ground loyalty',f:'ground'},{k:'gold',a:'450'},{k:'xp',a:'180'},{k:'unit',a:'T1',l:'Powder unit unlock'}],
-  terms:[['Fulfil at','≥ 80 % hauled and a win'],['Rival','Air loses 40 loyalty'],['Broken promise','−45 Ground loyalty']],loy:{have:62,gain:80,tier:100}},
- {id:'m2',type:'defend',status:'risk',title:'Not One Brick',giver:'bricks',planet:'Verdance',where:'Verdance · next 3 battles',
-  quote:'Lads say walls are just for slowing them down. Prove \'em wrong. Three fights, my walls stay standing — that\'s the whole job.',
-  obj:[{t:'Win battles without losing a wall',c:2,n:3},{t:'Wall breaches (limit 2)',c:2,n:2,limit:1}],
-  items:[],rw:[{k:'structure',a:'T2',l:'Reinforced wall'},{k:'stars',a:'3'},{k:'xp',a:'120'}],
-  terms:[['Expires','After 1 more battle'],['Fails if','A third wall falls']],note:'One more breached wall and this fails.',loy:{have:62,gain:30,tier:100}},
- {id:'m3',type:'favour',status:'new',title:'A Quiet Exchange',giver:'contact',planet:'Kessra',where:'Kessra · any battle',
-  quote:'You have been digging in Kessra\'s slag. Some of what you dig is not yours to keep. I will pay well for it, and I will not ask twice.',
-  obj:[{t:'Deliver Ghost Brass',c:0,n:4},{t:'Deliver a Dreadnought Core',c:0,n:1}],
-  items:[{n:'Ghost Brass',r:'rare',c:0,need:4},{n:'Dreadnought Core',r:'epic',c:0,need:1}],
-  rw:[{k:'research',a:'+2',l:'Research nodes'},{k:'sealed',a:'?',l:'Sealed reward'}],
-  terms:[['Decline','No cost — the Contact remembers'],['Accept','Unaffiliated; no loyalty changes']]},
- {id:'m4',type:'haul',status:'active',title:'Silk for the Wings',giver:'hikari',planet:'Florael',where:'Florael · across battles',
-  quote:'My pilots fly in patched canopies. Petal Silk holds where nothing else will. Every bale you send home is a kid who lands.',
-  obj:[{t:'Haul Petal Silk',c:7,n:12},{t:'Haul Skyhoney',c:1,n:3}],
-  items:[{n:'Petal Silk',r:'common',c:7,need:12},{n:'Skyhoney',r:'uncommon',c:1,need:3}],
-  rw:[{k:'loyalty',a:'+60',l:'Air loyalty',f:'air'},{k:'gold',a:'300'},{k:'crystal',a:'2',l:'Dawnpollen',r:'rare'}],
-  terms:[['Progress','Counts every battle on Florael']],loy:{have:28,gain:60,tier:100}},
- {id:'m5',type:'bounty',status:'active',title:'Silence the Blight',giver:'ilya',planet:'Vexmire',where:'Vexmire · Sear\'s swarm',
-  quote:'Sear calls it equality, choking the fields until nothing stands taller than rot. Thin his swarm. Spare the mulch; it never chose.',
-  obj:[{t:'Destroy units of Sear\'s swarm',c:26,n:40},{t:'Destroy a Hive carrier',c:0,n:1,opt:1}],
-  items:[],rw:[{k:'xp',a:'220'},{k:'research',a:'+1'},{k:'loyalty',a:'+40',l:'Greenies loyalty',f:'greenies'},{k:'blueprint',a:'1',l:'Spore filter'}],
-  terms:[['Rival','Blight-Agitator Sear marks you']],loy:{have:12,gain:40,tier:100}},
- {id:'m6',type:'survey',status:'new',title:'Chart the Far Side',giver:'sora',planet:'Lumen',where:'Lumen · orbit',
-  quote:'Sensors keep pinging Helium-3 on the dark side. Park the survey ship over it and I\'ll tell you if it\'s real or a ghost.',
-  obj:[{t:'Survey resource sites on Lumen',c:0,n:4}],
-  items:[],rw:[{k:'xp',a:'150'},{k:'crystal',a:'5',l:'Helium-3',r:'uncommon'}],terms:[['Requires','Survey ship in orbit of Lumen']]},
- {id:'m7',type:'contract',status:'failed',title:'Order Through Fire',giver:'graf',planet:'Verdance',where:'Verdance · campaign 1',
-  quote:'The border villages hoard their Heartwood. Take it. Order is a ledger, Commander, and they are in arrears.',
-  obj:[{t:'Haul Heartwood Amber',c:5,n:10},{t:'Win the battle',c:1,n:1}],
-  items:[{n:'Heartwood Amber',r:'uncommon',c:5,need:10}],
-  rw:[{k:'penalty',a:'−45',l:'Ground loyalty',neg:1},{k:'gold',a:'150',l:'Partial pay'}],
-  terms:[['Result','Broken — 50 % hauled, needed 80 %']],failNote:'Broken promise: hauled 50 %, needed 80 %.',loy:{have:62,gain:-45,tier:100}},
- {id:'m8',type:'campaign',status:'done',title:'First Light on Verdance',giver:'ines',planet:'Verdance',where:'Verdance · campaign 1',
-  quote:'Landing craft is down, powder\'s counted. Eight waves, Commander. Hold the line and I\'ll have a hot meal waiting.',
-  obj:[{t:'Survive all 8 waves',c:8,n:8},{t:'Earn 3 stars on any wave',c:1,n:1,opt:1}],
-  items:[],rw:[{k:'gold',a:'250'},{k:'xp',a:'100'},{k:'stars',a:'2'}],terms:[['Claimed','Rewards collected']]}
+ {id:'m1',role:'primary',line:'QL-VER-P',step:5,type:'campaign',status:'ready',title:'Amber Fields',giver:'aldric',planet:'Verdance',where:'Verdance · map 5',
+  quote:'Crystals pay well and harvest slow. Hold the field long enough to bring the amber home, and Halbrecht\'s Oath will see it banked.',
+  obj:[{t:'Win Verdance map 5',c:1,n:1},{t:'Harvest 260 gold of Heartwood Amber',c:260,n:260}],items:[],
+  gates:[{t:'Collect step 4',k:'Quest line',ok:1},{t:'Commander level 4',k:'Level',ok:1}],
+  impact:[{k:'loyalty',f:'ground',a:'+20'}],
+  rw:[{k:'gold',a:'700'},{k:'xp',a:'300'},{k:'crystal',a:'9',l:'Loam Grain',r:'common'},{k:'tech',a:'Unlock',l:'Ironhoard Casemate · 2,000 gold'}],
+  terms:[['Collect at',"Halbrecht's Oath, in orbit of Verdance"],['Next step','Three Banners opens when you collect']],loy:{have:62,gain:20,tier:100}},
+ {id:'m2',role:'secondary',variant:'light',line:'QL-VER-S',step:2,type:'contract',status:'risk',title:'Fair Shares of Heartwood Amber',giver:'otto',planet:'Verdance',where:'Verdance · map 2 · one attempt',
+  quote:'Carry the name, not its sins. The villages get their share of the amber before the regiment takes a grain.',
+  obj:[{t:'Win Verdance map 2',c:0,n:1},{t:'Meet the Loam Grain quota on 6 waves',c:4,n:6}],items:[],
+  gates:[{t:'Replay map 2 for more stars',k:'Unlocked by',ok:1},{t:'Alignment history ≥ 0',k:'Light band',ok:1},{t:'Commander level 2',k:'Level',ok:1}],
+  impact:[{k:'loyalty',f:'ground',a:'+40'},{k:'loyalty',f:'air',a:'−19',l:'Air loyalty (rival)'}],
+  rw:[{k:'gold',a:'250'},{k:'crystal',a:'2',l:'Heartwood Amber',r:'uncommon'}],
+  terms:[['One attempt','The next battle on Verdance map 2'],['Broken promise','−45 Ground loyalty'],['Withdrawn if','Your alignment history drops below 0']],
+  note:'Alignment history is at 0. One evil choice and this Light favour is withdrawn.',loy:{have:62,gain:40,tier:100}},
+ {id:'m6',role:'primary',line:'QL-FLO-P',step:1,type:'campaign',status:'new',title:'First Petals',giver:'ines',planet:'Florael',where:'Florael · map 1',
+  quote:'Landing craft is down on Florael, powder\'s counted. Win it clean — three stars — and the Air flagship will come to meet us.',
+  obj:[{t:'Win Florael map 1',c:0,n:1},{t:'Average 3 stars — the Dawnwing Carrier answers',c:0,n:3,opt:1}],items:[],
+  gates:[{t:'Own Portal: Florael',k:'Tech node',ok:1},{t:'Commander level 1',k:'Level',ok:1}],
+  impact:[{k:'loyalty',f:'air',a:'+12'}],
+  rw:[{k:'gold',a:'300'},{k:'xp',a:'140'},{k:'crystal',a:'5',l:'Petal Silk',r:'common'},{k:'tech',a:'Unlock',l:'Mine · 800 gold'}],
+  terms:[['Granted on','Landing craft BS-7'],['Collect at','Dawnwing Carrier — arrives when map 1 averages 3 stars']]},
+ {id:'m9',role:'primary',line:'QL-VER-P',step:6,type:'campaign',status:'locked',title:'Three Banners',giver:'aldric',planet:'Verdance',where:'Verdance · map 6',
+  quote:'Three-way spawn pressure, Commander. We will need every banner we have.',
+  obj:[{t:'Win Verdance map 6',c:0,n:1},{t:'Destroy 260 enemies on three fronts',c:0,n:260}],items:[],
+  gates:[{t:'Collect step 5 (Amber Fields)',k:'Quest line',ok:0},{t:'Commander level 5',k:'Level',ok:0}],
+  impact:[{k:'loyalty',f:'ground',a:'+22'}],rw:[{k:'gold',a:'800'},{k:'xp',a:'340'},{k:'crystal',a:'10',l:'Loam Grain',r:'common'}],
+  terms:[['Granted on',"Halbrecht's Oath"]]},
+ {id:'m10',role:'secondary',variant:'light',line:'QL-FLO-S',step:1,type:'contract',status:'locked',title:'Shelter the Petal Silk Fields',giver:'halo',planet:'Florael',where:'Florael · map 1 · one attempt',
+  quote:'Fly clean; cover the wingman. Keep the walls unmarked and the fields stay ours.',
+  obj:[{t:'Win Florael map 1',c:0,n:1},{t:'No base damage on 4 waves',c:0,n:4}],items:[],
+  gates:[{t:'Dawnwing Carrier in orbit',k:'Capital ship',ok:0},{t:'Replay map 1 for more stars',k:'Unlocked by',ok:0},{t:'Alignment history ≥ 0',k:'Light band',ok:1}],
+  impact:[{k:'loyalty',f:'air',a:'+35'},{k:'loyalty',f:'ground',a:'−17',l:'Ground loyalty (rival)'},{k:'alignment',a:'+1'}],
+  rw:[{k:'gold',a:'200'},{k:'crystal',a:'2',l:'Skyhoney',r:'uncommon'}],terms:[['Broken promise','−45 Air loyalty']]},
+ {id:'m7',role:'secondary',variant:'shadow',line:'QL-VER-S',step:1,type:'contract',status:'failed',title:'Seize the Rootsong Seeds',giver:'grigor',planet:'Verdance',where:'Verdance · map 1',
+  quote:'Give me a border to burn. The seed vaults are guarded by farmers; farmers run.',
+  obj:[{t:'Win Verdance map 1',c:1,n:1},{t:'Seize 4 Rootsong Seeds',c:2,n:4}],items:[{n:'Rootsong Seeds',r:'rare',c:2,need:4}],
+  gates:[{t:'Alignment history ≤ −1',k:'Shadow band',ok:0}],impact:[{k:'loyalty',f:'ground',a:'−45',neg:1,l:'Broken promise'}],
+  rw:[{k:'penalty',a:'−45',l:'Ground loyalty',neg:1}],terms:[['Result','Withdrawn — your alignment history moved to Good']],
+  failNote:'Withdrawn: your alignment history left the Shadow band. The Light version of step 1 took its place.'},
+ {id:'m11',role:'secondary',variant:'light',line:'QL-VER-S',step:1,type:'contract',status:'done',title:'Shelter the Loam Grain Fields',giver:'aldric',planet:'Verdance',where:'Verdance · map 1',
+  quote:'Behind me, the realm. Keep the walls unmarked.',obj:[{t:'Win Verdance map 1',c:1,n:1},{t:'No base damage on 4 waves',c:4,n:4}],items:[],
+  gates:[],impact:[{k:'loyalty',f:'ground',a:'+35'},{k:'loyalty',f:'air',a:'−17',l:'Air loyalty (rival)'},{k:'alignment',a:'+1'}],
+  rw:[{k:'gold',a:'200'},{k:'crystal',a:'2',l:'Heartwood Amber',r:'uncommon'}],terms:[['Collected',"Halbrecht's Oath"]]},
+ {id:'m8',role:'primary',line:'QL-VER-P',step:4,type:'campaign',status:'done',title:'The Reveal at Halbrecht Ridge',giver:'aldric',planet:'Verdance',where:'Verdance · map 4',
+  quote:'The reveal wave lands hard here. Not one shell on the keep.',obj:[{t:'Win Verdance map 4',c:1,n:1},{t:'No base damage on 3 waves',c:3,n:3}],items:[],
+  gates:[],impact:[{k:'loyalty',f:'ground',a:'+18'}],rw:[{k:'gold',a:'600'},{k:'xp',a:'260'},{k:'tech',a:'Unlock',l:'Machine Gun T2'}],terms:[['Collected',"Halbrecht's Oath"]]}
 ];
+// what collecting a step opens next (quest line continuation)
+const NEXT = { m1:'m9' };
 const POOL = [
- {id:'m9',type:'bounty',status:'new',title:'Clear the Flight Lanes',giver:'hikari',planet:'Florael',where:'Florael · any battle',
-  quote:'Raiders are picking off our supply flyers. Ground them, and the lanes open for everyone.',
-  obj:[{t:'Destroy enemy flyers',c:0,n:25}],items:[],rw:[{k:'gold',a:'200'},{k:'xp',a:'90'},{k:'loyalty',a:'+20',l:'Air loyalty',f:'air'}],
-  terms:[['Progress','Any battle, any planet']],loy:{have:28,gain:20,tier:100}}
+ {id:'m12',role:'secondary',variant:'light',line:'QL-VER-S',step:3,type:'contract',status:'new',title:'Escort the Loam Grain Haul',giver:'bricks',planet:'Verdance',where:'Verdance · map 3 · one attempt',
+  quote:'I answer for these lads. Water lanes, harvesters out front — nobody sinks on my watch.',
+  obj:[{t:'Win Verdance map 3',c:0,n:1},{t:'Lose no harvester on 6 waves',c:0,n:6}],items:[],
+  gates:[{t:'Replay map 3 for more stars',k:'Unlocked by',ok:1},{t:'Alignment history ≥ 0',k:'Light band',ok:1}],
+  impact:[{k:'loyalty',f:'ground',a:'+45'},{k:'loyalty',f:'air',a:'−21',l:'Air loyalty (rival)'}],
+  rw:[{k:'gold',a:'300'},{k:'crystal',a:'3',l:'Heartwood Amber',r:'uncommon'}],terms:[['Broken promise','−45 Ground loyalty']]}
 ];
+
+// INVENTORY — every resource in the game, by faction / planet (Bulwark-Missions.xlsx › Resources)
+const PLANETS = [
+ {p:'Verdance',f:'ground',open:1,res:[['Loam Grain',184,9],['Heartwood Amber',61,3],['Rootsong Seeds',9,0],['Elder Bloom',3,0]]},
+ {p:'Florael',f:'air',open:1,res:[['Petal Silk',12,12],['Skyhoney',0,0],['Dawnpollen',0,0],['Choir Lily',0,0]]},
+ {p:'Ochre',f:'hightech',open:0,res:[['Sunsalt'],['Dune Quartz'],['Mirage Oil'],['Solar Pearl']]},
+ {p:'Kessra',f:'artillery',open:0,res:[['Slag Iron'],['Mesa Copper'],['Ghost Brass'],['Dreadnought Core']]},
+ {p:'Rime',f:'water',open:0,res:[['Brine Ice'],['Frost Pearl'],['Glacier Breath'],['Leviathan Scale']]},
+ {p:'Cinder',f:'arcane',open:0,res:[['Ash Basalt'],['Ember Obsidian'],['Phoenix Glass'],['Heartflame']]},
+ {p:'Lumen',f:'space',open:0,res:[['Regolith'],['Helium-3'],['Starfall Iron'],['Void Lens']]},
+ {p:'Xenthe',f:'dark',open:0,res:[['Glowcap Spores'],['Duskmoss Resin'],['Dreamspore'],['Mycelial Heart']]},
+ {p:'Vexmire',f:'greenies',open:0,res:[['Mire Peat'],['Venom Sap'],['Hive Jelly'],['Broodqueen Egg']]}
+];
+const TIERS = ['common','uncommon','rare','epic'];
+const ROLE = {common:'Kept · worth 1 gold each',uncommon:'Kept · worth 2 gold each',rare:'Quest crystal',epic:'Quest crystal'};
+const WANTED = {'Heartwood Amber':['Amber Fields (primary, Verdance 5)','Fair Shares of Heartwood Amber (favour)'],'Rootsong Seeds':['Ironhoard Casemate (tech · cost set in the workbook)'],
+ 'Petal Silk':['First Petals (primary, Florael 1)'],'Loam Grain':['Three Banners (primary, Verdance 6)']};
+let ISEL = 'Verdance', ITAB = 'all';
 
 /* ═══════════════════════ RENDER ═══════════════════════ */
 const $ = (s, r = document) => r.querySelector(s);
 const use = (id, cls = 'i') => `<svg class="${cls}"><use href="#${id}"/></svg>`;
-const ORDER = {ready:0, risk:1, new:2, active:3, failed:4, done:5};
+const ORDER = {ready:0, risk:1, new:2, active:3, locked:4, failed:5, done:6};
 const pctOf = (m) => { const main = m.obj.filter(o => !o.opt && !o.limit); const c = main.reduce((a,o)=>a+Math.min(o.c,o.n),0), n = main.reduce((a,o)=>a+o.n,0); return {c, n, p: n ? c / n : 0}; };
-let TAB = 'active', SEL = 'm1', TRACK = new Set(['m4']);
+let TAB = 'active', SEL = 'm1', TRACK = new Set(['m2']);
 
 function bar(m, big) {
  const {c, n, p} = pctOf(m), st = m.status;
@@ -670,33 +786,34 @@ function bar(m, big) {
  return `<div class="bar cont st-${st}${big?' big':''}" style="--sc:var(${STATUS[st].v})" role="progressbar" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${c}"><span class="fill" style="width:${p*100}%"></span>${[.25,.5,.75].map(t=>`<span class="tick" style="left:${t*100}%"></span>`).join('')}</div>`;
 }
 const tag = (st) => `<span class="tag" style="--sc:var(${STATUS[st].v})">${use(STATUS[st].g)}${STATUS[st].n}</span>`;
-function rewardColor(r) { if (r.k === 'loyalty') return FACTION[r.f].color; if (r.k === 'crystal') return `var(${RAR[r.r].v})`; return REWARD[r.k].col; }
+function rewardColor(r) { if (r.k === 'loyalty' || r.k === 'penalty') return r.neg ? 'var(--s-failed)' : FACTION[r.f] ? FACTION[r.f].color : 'var(--s-failed)'; if (r.k === 'crystal') return `var(${RAR[r.r].v})`; return REWARD[r.k].col; }
 
+const kick = (m) => `<span class="kick"><span class="role${m.role==='secondary'?' r2':''}">${m.role==='primary'?'Primary':'Secondary'}</span>${m.variant?`<span class="var-${m.variant[0]}">${m.variant==='light'?'Light':'Shadow'}</span>`:''}<span class="stp">Step ${m.step} / 9</span></span>`;
 function row(m) {
  const g = G(m.giver), f = FACTION[g.f], {c, n} = pctOf(m);
  const rws = m.rw.slice(0, 3).map(r => `<span class="rwi" style="--rc:${rewardColor(r)}" title="${r.a} ${r.l||REWARD[r.k].n}">${use(REWARD[r.k].i)}</span>`).join('') + (m.rw.length > 3 ? `<span class="rwi more">+${m.rw.length-3}</span>` : '');
- const right = m.status === 'ready' ? 'Claim' : m.status === 'failed' ? 'Broken' : m.status === 'done' ? 'Done' : `${c}/${n}`;
+ const right = m.status === 'ready' ? 'Collect' : m.status === 'failed' ? 'Failed' : m.status === 'done' ? 'Done' : m.status === 'locked' ? 'Locked' : `${c}/${n}`;
  return `<button class="row st-${m.status}" role="option" aria-selected="${m.id===SEL}" data-id="${m.id}" style="--sc:var(${STATUS[m.status].v});--fc:${f.color}">
   <span class="badge">${use('t-'+m.type)}</span>
-  <span class="mid"><span class="title">${m.title}</span><span class="sub">${fsvg(g.f)}<span>${g.name} · ${m.planet}</span></span></span>
+  <span class="mid">${kick(m)}<span class="title">${m.title}</span><span class="sub">${fsvg(g.f)}<span>${g.name} · ${m.planet}</span></span></span>
   <span class="right">${tag(m.status)}<span class="rw">${rws}</span></span>
   <span class="prow">${bar(m)}<span class="pct num">${right}</span></span></button>`;
 }
 
 const TABS = [
- {k:'active',n:'Current',f:m=>['ready','risk','new','active'].includes(m.status)},
+ {k:'active',n:'Current',f:m=>['ready','risk','new','active','locked'].includes(m.status)},
  {k:'ready',n:'Ready',f:m=>m.status==='ready'},
  {k:'archive',n:'Archive',f:m=>['done','failed'].includes(m.status)}
 ];
 function renderList() {
  const cur = MISSIONS.filter(TABS[0].f), ready = MISSIONS.filter(TABS[1].f);
  $('#tabs').innerHTML = TABS.map(t => { const k = MISSIONS.filter(t.f).length; return `<button class="tab" role="tab" aria-selected="${t.k===TAB}" data-tab="${t.k}">${t.k==='ready'&&k?'<span class="dot"></span>':''}${t.n} <b class="num">${k}</b></button>`; }).join('');
- $('#sum').innerHTML = `<b class="num">${cur.length}</b> current<br><b class="num">${ready.length}</b> to claim`;
+ $('#sum').innerHTML = `<b class="num">${cur.length}</b> current<br><b class="num">${ready.length}</b> to collect`;
  const items = MISSIONS.filter(TABS.find(t=>t.k===TAB).f).sort((a,b)=>ORDER[a.status]-ORDER[b.status]);
- if (!items.length) { $('#list').innerHTML = `<div class="empty">${use('i-log')}${TAB==='ready'?'Nothing to claim yet. Finish an objective and its rewards wait here.':'No missions here yet.'}</div>`; return; }
+ if (!items.length) { $('#list').innerHTML = `<div class="empty">${use('i-log')}${TAB==='ready'?'Nothing to collect yet. Finish a mission and its rewards wait aboard the capital ship.':'No missions here yet.'}</div>`; return; }
  let html = '', last = '';
  for (const m of items) {
-  const grp = TAB === 'archive' ? STATUS[m.status].n : ({ready:'Ready to claim',risk:'Needs attention',new:'Newly logged',active:'In progress'})[m.status];
+  const grp = TAB === 'archive' ? STATUS[m.status].n : ({ready:'Ready to collect',risk:'Needs attention',new:'Newly logged',active:'In progress',locked:'Locked — next steps'})[m.status];
   if (grp !== last) { html += `<div class="grp">${grp}</div>`; last = grp; }
   html += row(m);
  }
@@ -710,7 +827,7 @@ function renderList() {
 
 function renderDetail() {
  const m = MISSIONS.find(x => x.id === SEL); if (!m) { $('#dp').innerHTML = ''; return; }
- const g = G(m.giver), f = FACTION[g.f], st = STATUS[m.status], {c, n, p} = pctOf(m);
+ const g = G(m.giver), f = FACTION[g.f], st = STATUS[m.status], {c, n, p} = pctOf(m), ship = SHIPS[m.planet];
  const al = g.al ? ALIGN.findIndex(a => a.c === g.al) : -1;
  const portrait = g.id && PORTRAITS[g.id] ? `<img src="${PORTRAITS[g.id]}" alt="Portrait of ${g.name}">` : `<div class="sil">${HOOD}</div>`;
  const objs = m.obj.map(o => { const bad = (o.limit && o.c >= o.n) || (m.status==='failed' && !o.limit && o.c < o.n), ok = o.c >= o.n && !o.limit;
@@ -719,12 +836,13 @@ function renderDetail() {
  const items = m.items.length ? `<div class="sec"><h3>REQUIRED ITEMS</h3><div class="items">${m.items.map(it => `<div class="item" style="--rc:var(${RAR[it.r].v})"><span class="gem">${use('r-crystal')}</span><span><b>${it.n}</b><small>${RAR[it.r].n} · ${m.planet}</small></span><span class="have num">${it.c}<span style="color:var(--dim)"> / ${it.need}</span></span></div>`).join('')}</div></div>` : '';
  const rws = m.rw.map(r => `<div class="rwd${r.neg?' neg':''}" style="--rc:${rewardColor(r)}"><span class="ri">${use(REWARD[r.k].i)}</span><b class="num">${r.a}</b><small>${r.l||REWARD[r.k].n}</small></div>`).join('');
  const terms = m.terms.map(([a,b]) => `<div><b>${a}</b><span class="${/−|Broken/.test(b)?'neg':''}">${b}</span></div>`).join('');
- const note = m.status==='risk' ? `${use('s-risk')}${m.note}` : m.status==='failed' ? `${use('s-failed')}${m.failNote}` : m.status==='ready' ? `${use('s-ready')}All objectives complete. Claim to bank the rewards.` : m.status==='new' ? `${use('s-new')}Logged just now. Progress counts from your next battle on ${m.planet}.` : m.status==='done' ? `${use('s-done')}Rewards claimed.` : `${use('u-clock')}Updates after every battle on ${m.planet}.`;
+ const note = m.status==='risk' ? `${use('s-risk')}${m.note}` : m.status==='failed' ? `${use('s-failed')}${m.failNote}` : m.status==='ready' ? `${use('s-ready')}All objectives complete. Collect the rewards aboard ${ship.name}.` : m.status==='locked' ? `${use('s-locked')}Locked: meet the gates below and it is granted aboard ${ship.name}.` : m.status==='new' ? `${use('s-new')}Logged just now. Progress counts from your next battle on ${m.planet}.` : m.status==='done' ? `${use('s-done')}Rewards claimed.` : `${use('u-clock')}Updates after every battle on ${m.planet}.`;
  let actions;
- if (m.status==='ready') actions = `<button class="btn claim" id="claim">${use('s-ready')}Claim rewards</button>`;
- else if (m.status==='done') actions = `<div class="claimed-stamp">${use('s-done')}Rewards claimed</div>`;
+ if (m.status==='ready') actions = ship.arrived ? `<button class="btn claim" id="claim">${use('s-ready')}Collect aboard ${ship.name}</button><div class="shipnote">Collecting continues <b>${LINES[m.line]}</b>${NEXT[m.id]?' — step '+(m.step+1)+' opens':''}.</div>` : `<div class="claimed-stamp">${use('u-clock')}Waiting for ${ship.name}</div><div class="shipnote">It arrives when ${m.planet} map 1 averages 3 stars.</div>`;
+ else if (m.status==='locked') actions = `<div class="claimed-stamp">${use('s-locked')}Locked</div><div class="shipnote">Granted aboard <b>${ship.name}</b> once every gate is met.</div>`;
+ else if (m.status==='done') actions = `<div class="claimed-stamp">${use('s-done')}Collected aboard ${ship.name}</div>`;
  else if (m.status==='failed') actions = `<button class="btn" id="dismiss">Remove from log</button>`;
- else actions = `<button class="btn${TRACK.has(m.id)?'':' primary'}" id="track" aria-pressed="${TRACK.has(m.id)}">${use('u-pin')}${TRACK.has(m.id)?'Tracking in battle':'Track in battle'}</button>${m.type==='favour'?'':'<button class="btn ghost" id="abandon">Abandon mission</button>'}`;
+ else actions = `<button class="btn${TRACK.has(m.id)?'':' primary'}" id="track" aria-pressed="${TRACK.has(m.id)}">${use('u-pin')}${TRACK.has(m.id)?'Tracking in battle':'Track in battle'}</button>${m.role==='primary'?'':'<button class="btn ghost" id="abandon">Abandon favour</button>'}`;
  const loy = m.loy && g.f !== 'unknown' ? (() => { const L = m.loy, pos = L.gain>=0; const a = Math.min(L.have, L.tier), b = Math.max(0, Math.min(L.tier, L.have + L.gain));
    return `<div class="loy"><div class="lh"><span>${f.name.split(' ')[0]} loyalty</span><b class="num">${L.have}${pos?` → ${Math.min(L.have+L.gain,999)}`:` → ${Math.max(0,L.have+L.gain)}`}</b></div>
    <div class="lb"><span style="width:${Math.min(a,b)/L.tier*100}%"></span><em style="left:${Math.min(a,b)/L.tier*100}%;width:${Math.abs(b-a)/L.tier*100}%;${pos?'':'background:repeating-linear-gradient(-45deg,var(--s-failed) 0 3px,transparent 3px 6px)'}"></em></div>
@@ -732,12 +850,15 @@ function renderDetail() {
  $('#dp').innerHTML = `<button class="dback" id="back">${use('u-back')}All missions</button>
  <article class="dossier st-${m.status}" style="--sc:var(${st.v});--fc:${f.color}">
   <div class="dmain">
-   <div class="dk"><span class="type">${use('t-'+m.type)}${TYPES[m.type].n}</span>${tag(m.status)}<span class="where">${m.where}</span></div>
+   <div class="dk"><span class="type">${use('t-'+m.type)}${m.role==='primary'?'Primary mission':'Secondary mission'}${m.variant?' · '+(m.variant==='light'?'Light':'Shadow'):''}</span>${tag(m.status)}<span class="where">${m.where}</span></div>
    <h2 class="dtitle">${m.title}</h2>
+   <div class="qline">${use('i-log')}${LINES[m.line]} · step ${m.step} of 9</div>
    <div class="dprog">${bar(m, true)}<span class="pct num">${Math.round(p*100)}<small>%</small></span></div>
    <div class="dnote">${note}</div>
    <div class="brief"><q>${m.quote}</q><div class="who">— ${g.name}</div></div>
-   <div class="sec"><h3>OBJECTIVES</h3>${objs}</div>
+   <div class="sec"><h3>${m.status==='locked'?'OBJECTIVES (WHEN UNLOCKED)':'OBJECTIVES'}</h3>${objs}</div>
+   ${m.gates.length ? `<div class="sec"><h3>GATES</h3><div class="gates">${m.gates.map(q=>`<div class="gate ${q.ok?'ok':'no'}">${use(q.ok?'u-check':'s-locked')}<span><small>${q.k}</small>${q.t}</span></div>`).join('')}</div></div>` : ''}
+   ${m.impact.length ? `<div class="sec"><h3>${m.role==='secondary'?'FACTION IMPACT':'FACTION STANDING'}</h3><div class="impact">${m.impact.map(q=>{const col=q.k==='alignment'?'#7fe0b0':q.neg||/−/.test(q.a)?'var(--s-failed)':FACTION[q.f].color;return `<div class="imp" style="--ic:${col}">${q.k==='alignment'?use('r-stars'):fsvg(q.f)}<b class="num">${q.a}</b>${q.l||(q.k==='alignment'?'Alignment':FACTION[q.f].name.split(' ')[0]+' loyalty')}</div>`;}).join('')}</div></div>` : ''}
    ${items}
    <div class="sec"><h3>${m.status==='failed'?'OUTCOME':'REWARDS'}</h3><div class="rewards">${rws}</div></div>
    <div class="sec"><h3>TERMS</h3><div class="terms">${terms}</div></div>
@@ -760,10 +881,13 @@ function renderDetail() {
  $('#dp').scrollTop = 0;
 }
 
-function open(on) {
- $('#log').classList.toggle('on', on); $('#mlbtn').setAttribute('aria-expanded', on);
- $('#rv-log').setAttribute('aria-pressed', on); $('#rv-menu').setAttribute('aria-pressed', !on);
+function open(on, which = 'log') {
+ const L = on && which === 'log', I = on && which === 'inv';
+ $('#log').classList.toggle('on', L); $('#inv').classList.toggle('on', I);
+ $('#mlbtn').setAttribute('aria-expanded', L); $('#invbtn').setAttribute('aria-expanded', I);
+ $('#rv-log').setAttribute('aria-pressed', L); $('#rv-inv').setAttribute('aria-pressed', I); $('#rv-menu').setAttribute('aria-pressed', !on);
  $('#backdrop').style.filter = on ? 'blur(3px) brightness(.45) saturate(.8)' : 'none';
+ if (I) renderInv();
 }
 function select(id) {
  SEL = id; const m = MISSIONS.find(x=>x.id===id); if (m && m.status==='new') { /* opening clears New on close-out, kept visible here for review */ }
@@ -774,6 +898,11 @@ function select(id) {
 document.addEventListener('click', (e) => {
  const t = e.target.closest('button'); if (!t) return;
  if (t.id === 'mlbtn' || t.id === 'rv-log') open(!(t.id==='mlbtn' && $('#log').classList.contains('on')));
+ else if (t.id === 'invbtn' || t.id === 'rv-inv') open(!(t.id==='invbtn' && $('#inv').classList.contains('on')), 'inv');
+ else if (t.dataset.planet) { ISEL = t.dataset.planet; renderInv(); $('#inv').classList.add('detail'); }
+ else if (t.dataset.itab) { ITAB = t.dataset.itab; renderInv(); }
+ else if (t.id === 'iback') $('#inv').classList.remove('detail');
+ else if (t.id === 'close3') open(false);
  else if (t.id === 'rv-menu' || t.id === 'close2') open(false);
  else if (t.dataset.id) select(t.dataset.id);
  else if (t.dataset.tab) { TAB = t.dataset.tab; renderList(); }
@@ -792,20 +921,20 @@ function claim(btn) {
  const m = MISSIONS.find(x=>x.id===SEL), b = document.createElement('div'); b.className = 'burst';
  b.innerHTML = Array.from({length:14},(_,i)=>{ const a = i/14*Math.PI*2, d = 90+Math.random()*60; return `<span style="--x:${Math.cos(a)*d}px;--y:${Math.sin(a)*d}px;animation-delay:${i*12}ms"></span>`; }).join('');
  btn.parentElement.style.position = 'relative'; btn.parentElement.appendChild(b);
- setTimeout(() => { m.status = 'done'; m.terms = [['Claimed','Rewards collected']]; renderList(); renderDetail(); }, 650);
+ setTimeout(() => { m.status = 'done'; m.terms = [['Collected', SHIPS[m.planet].name]]; const nx = MISSIONS.find(x => x.id === NEXT[m.id]); if (nx) { nx.status = 'new'; nx.gates.forEach(q => q.ok = 1); toast(nx); } renderList(); renderDetail(); }, 650);
 }
 function toast(m) {
  const g = G(m.giver), el = $('#toast');
- el.innerHTML = `<span class="badge" style="--sc:var(--s-new)">${use('t-'+m.type)}</span><span class="tt"><span class="k">MISSION LOGGED</span><span class="n">${m.title}</span><span class="g">${g.name}</span>${bar(m)}</span>`;
+ el.innerHTML = `<span class="badge" style="--sc:var(--s-new)">${use('t-'+m.type)}</span><span class="tt"><span class="k">MISSION LOGGED · ${m.role==='primary'?'PRIMARY':'SECONDARY'} STEP ${m.step}</span><span class="n">${m.title}</span><span class="g">${g.name}</span>${bar(m)}</span>`;
  el.classList.add('on'); $('#mlbtn').classList.remove('ping'); void $('#mlbtn').offsetWidth; $('#mlbtn').classList.add('ping');
  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 3600);
 }
 function assign() {
- const m = POOL.shift() || {...MISSIONS.find(x=>x.id==='m6'), id:'m'+Date.now(), title:'Chart the Kessra Mesas', planet:'Kessra', where:'Kessra · orbit'};
+ const m = POOL.shift(); if (!m) return;
  m.status = 'new'; MISSIONS.unshift(m); TAB = 'active'; renderList(); if ($('#log').classList.contains('on')) { SEL = m.id; renderList(); renderDetail(); } toast(m);
 }
 function advance() {
- for (const m of MISSIONS) if (['active','new','risk'].includes(m.status)) {
+ for (const m of MISSIONS) if (['active','new','risk'].includes(m.status) && m.role) {
   const o = m.obj.find(o => !o.opt && !o.limit && o.c < o.n); if (!o) continue;
   o.c = Math.min(o.n, o.c + Math.max(1, Math.round(o.n * .2)));
   const it = m.items.find(i => o.t.includes(i.n)); if (it) it.c = o.c;
@@ -815,6 +944,32 @@ function advance() {
  renderList(); renderDetail();
 }
 
+/* ═══════════════════════ INVENTORY ═══════════════════════ */
+function renderInv() {
+ const owned = (pl) => pl.res.reduce((a, r) => a + (r[1] || 0), 0), fresh = (pl) => pl.res.reduce((a, r) => a + (r[2] || 0), 0);
+ const ITABS = [['all','All'],['kept','Kept'],['quest','Quest crystals']];
+ $('#itabs').innerHTML = ITABS.map(([k, n]) => `<button class="tab" role="tab" aria-selected="${k===ITAB}" data-itab="${k}">${n}</button>`).join('');
+ const tot = PLANETS.reduce((a, pl) => a + owned(pl), 0), nw = PLANETS.reduce((a, pl) => a + fresh(pl), 0);
+ $('#isum').innerHTML = `<b class="num">${tot.toLocaleString()}</b> held<br><b class="num">36</b> resources`;
+ $('#plist').innerHTML = `<div class="grp">Factions · campaign order</div>` + PLANETS.map(pl => { const f = FACTION[pl.f];
+  return `<button class="prow2${pl.open?'':' locked'}" data-planet="${pl.p}" aria-selected="${pl.p===ISEL}" style="--fc:${f.color}">${fsvg(pl.f)}
+   <span><b>${pl.p}</b><small>${f.name}${pl.open?'':' · portal not owned'}</small><span class="pips">${pl.res.map((r,i)=>`<i class="${(r[1]||0)>0?'on':''}" style="--c:var(${RAR[TIERS[i]].v})"></i>`).join('')}</span></span>
+   <span class="tot num">${pl.open?owned(pl).toLocaleString():use('s-locked')}${fresh(pl)?`<em class="nw">+${fresh(pl)}</em>`:''}</span></button>`; }).join('');
+ const pl = PLANETS.find(x => x.p === ISEL), f = FACTION[pl.f];
+ const tiles = pl.res.map((r, i) => ({r, t: TIERS[i]})).filter(({t}) => ITAB === 'all' || (ITAB === 'kept') === (t === 'common' || t === 'uncommon')).map(({r, t}) => {
+  const [nm, have = 0, nwc = 0] = r, w = WANTED[nm] || [];
+  return `<div class="rtile${have?'':' zero'}" style="--rc:var(${RAR[t].v})"><span class="gem2">${use('r-crystal')}</span><span class="cnt num">${pl.open?have.toLocaleString():'—'}</span>${nwc?`<span class="new num">+${nwc} new</span>`:''}
+   <b>${nm}</b><small>${RAR[t].n}</small><dl><dt>Role</dt><dd>${ROLE[t]}</dd><dt>From</dt><dd>${pl.p} harvests${t==='rare'||t==='epic'?' (quest nodes)':''}</dd>
+   <dt>Wanted by</dt><dd>${w.length?w.join('<br>'):'—'}</dd></dl></div>`; }).join('');
+ $('#ipane').innerHTML = `<button class="dback" id="iback">${use('u-back')}All factions</button><div class="ipane" style="--fc:${f.color}">
+  <div class="ihead">${fsvg(pl.f)}<div><div class="pl">${pl.p}</div><div class="fx">${f.name} homeworld${SHIPS[pl.p]?` · ${SHIPS[pl.p].name} ${SHIPS[pl.p].arrived?'in orbit':'not yet arrived'}`:''}</div></div>
+  <div class="ihtot"><b class="num">${pl.open?owned(pl).toLocaleString():'—'}</b><small>held</small></div></div>
+  ${pl.open?'':`<div class="dnote" style="--sc:var(--s-locked);margin-top:12px">${use('s-locked')}Locked: own <b>&nbsp;Portal: ${pl.p}&nbsp;</b> in the Tech Net to campaign here.</div>`}
+  <div class="rtiles">${tiles}</div>
+  <p class="inote">Common and uncommon resources are kept and can pay for Tech Net nodes that missions unlock. Rare and epic come from quest nodes and fill faction favours.</p></div>`;
+ $('#invcount').textContent = '+' + nw; $('#invcount').style.display = nw ? '' : 'none';
+}
+
 /* ═══════════════════════ DESIGN SYSTEM SHEET ═══════════════════════ */
 function renderSheet() {
  const demo = (st, c, n) => bar({status:st, obj:[{c, n}]});
@@ -822,8 +977,8 @@ function renderSheet() {
  $('#sheet').innerHTML = `
  <div class="sh-h"><h1>MISSION <span>LOG</span></h1><p>Design system for the Mission Log (MLG-1). Every token here maps onto the shipped “gold on ink” menu. One hue, one glyph and one bar treatment per status, so state never rests on colour alone.</p></div>
 
- <section class="sh-sec"><h2>STATUS LANGUAGE</h2><p>Six states. Each pairs a hue with a shape and a bar treatment, ordered the way the list sorts them: what needs you sits at the top.</p>
-  <div class="status-grid">${['ready','risk','new','active','failed','done'].map(k=>{const s=STATUS[k];return `<div class="sw" style="--sc:var(${s.v})"><div class="sh"><svg class="glyphbig"><use href="#${s.g}"/></svg><div><b>${s.n}</b><br><code>${getComputedStyle(document.documentElement).getPropertyValue(s.v).trim()} · ${s.v}</code></div></div><p>${s.d}</p>${tag(k)}<div style="height:10px"></div>${demo(k, k==='new'?0:k==='ready'||k==='done'?6:k==='failed'?3:4, 6)}</div>`;}).join('')}</div></section>
+ <section class="sh-sec"><h2>STATUS LANGUAGE</h2><p>Seven states. Each pairs a hue with a shape and a bar treatment, ordered the way the list sorts them: what needs you sits at the top. Locked (added with the mission flow) sits below Active.</p>
+  <div class="status-grid">${['ready','risk','new','active','locked','failed','done'].map(k=>{const s=STATUS[k];return `<div class="sw" style="--sc:var(${s.v})"><div class="sh"><svg class="glyphbig"><use href="#${s.g}"/></svg><div><b>${s.n}</b><br><code>${getComputedStyle(document.documentElement).getPropertyValue(s.v).trim()} · ${s.v}</code></div></div><p>${s.d}</p>${tag(k)}<div style="height:10px"></div>${demo(k, k==='new'||k==='locked'?0:k==='ready'||k==='done'?6:k==='failed'?3:4, 6)}</div>`;}).join('')}</div></section>
 
  <section class="sh-sec"><h2>PROGRESS BARS</h2><p>Up to 14 units the bar is segmented, one cell per thing to collect, so “7 of 12” reads at a glance. Above that it turns continuous with quarter ticks. Ready shimmers (the only idle motion in the log), At risk is hazard-striped, and Failed hatches what was never reached.</p>
   <div style="display:grid;gap:14px;max-width:560px">${demo('active',7,12)}${demo('ready',6,6)}${demo('risk',2,3)}${demo('failed',5,10)}${demo('active',26,40)}${demo('done',8,8)}</div></section>
@@ -835,7 +990,7 @@ function renderSheet() {
   <div class="icon-grid">${Object.entries(REWARD).map(([k,r])=>`<div class="ic-card" style="--x:1"><div class="sizes" style="color:${r.col||'#d6dde6'}">${use(r.i)}${use(r.i)}${use(r.i)}</div><b>${r.n}</b><code>#${r.i}</code></div>`).join('')}</div></section>
 
  <section class="sh-sec"><h2>HEADER AND STATUS GLYPHS</h2><p>The ledger glyph opens the log. The status glyphs are drawn on a 12-unit grid so they stay crisp at 10 px inside tags.</p>
-  <div class="icon-grid">${ic('i-log','Mission Log','Header button, list header, empty state','gold')}${Object.entries(STATUS).map(([k,s])=>`<div class="ic-card"><div class="sizes" style="color:var(${s.v})">${use(s.g)}${use(s.g)}${use(s.g)}</div><b>${s.n}</b><code>#${s.g}</code></div>`).join('')}</div></section>
+  <div class="icon-grid">${ic('i-log','Mission Log','Header button, list header, empty state','gold')}${ic('i-inv','Inventory','Header button next to Missions','cyan')}${Object.entries(STATUS).map(([k,s])=>`<div class="ic-card"><div class="sizes" style="color:var(${s.v})">${use(s.g)}${use(s.g)}${use(s.g)}</div><b>${s.n}</b><code>#${s.g}</code></div>`).join('')}</div></section>
 
  <section class="sh-sec"><h2>RESOURCE RARITY</h2><p>Required items use the crystal colours already used in the world and on the survey dossier.</p>
   <div class="rar">${Object.entries(RAR).map(([k,r])=>`<div class="item" style="--rc:var(${r.v})"><span class="gem">${use('r-crystal')}</span><span><b>${r.n}</b><small>${getComputedStyle(document.documentElement).getPropertyValue(r.v).trim()}</small></span></div>`).join('')}</div></section>
@@ -861,6 +1016,8 @@ if (innerWidth <= 700) $('#log').classList.remove('detail');
 const q = new URLSearchParams(location.search);
 if (q.get('view') === 'sheet') $('#rv-sheet').click();
 if (q.get('view') === 'menu') open(false);
+if (q.get('view') === 'inv') open(true, 'inv');
+if (q.get('planet')) { ISEL = q.get('planet'); renderInv(); }
 if (q.get('sel')) select(q.get('sel'));
 if (q.get('tab')) { TAB = q.get('tab'); renderList(); }
 if (q.get('toast')) setTimeout(assign, 300);

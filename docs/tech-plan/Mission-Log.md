@@ -12,6 +12,10 @@
 - **D4 — Contracts become missions; they do not get a second system.** `save.maps[id].contract` stays the source of loyalty rules (`src/save/contracts.js`). The mission record points at it (`ref: {kind:'contract', mapId}`), and the contract's verdict (FULFILLED / BROKEN) sets the mission's terminal state. The Unknown Contact favour (`contactCall`, `src/comm/dialog.js:157`; design in `docs/16 Bulwark MM/design/Unknown-Contact-Dialog.md`), which is not saved anywhere today, gets its first persistence through the log.
 - **D5 — Track in battle reuses the quest-crystal HUD line.** At most one tracked mission shows under the existing "● red ● green" counter (`src/render/hud.js:291-296`).
 
+- **D6 — Flow (owner 2026-11-02, MLD §11).** One primary per planet × map (81) and an optional secondary per planet × map in a Light / Shadow version chosen by alignment history, unlocked by a replay that beats the best average stars. Gates: level, alignment band, owned tech node. The planet's faction capital ship arrives after map 1 at ≥ 3 stars; missions are granted and rewards collected aboard; collecting advances the quest line (planet campaign + favours line per planet). The wave-2 contract offer moves off the battle timeline and becomes the secondary.
+- **D7 — Tech nodes unlock through missions, then are bought (owner 2026-11-02).** `tech_unlock` adds a node to an `unlocked` set; the Tech Net shows it purchasable and still charges its price. Starting-kit and free nodes stay owned from the start.
+- **D8 — Inventory (owner 2026-11-02, MLD §12).** `save.inventory[resourceId]` counts; an INVENTORY header chip next to MISSIONS opens the resource list grouped by faction / planet.
+
 ## 1. What exists today
 
 - Contracts: `buildOffer` → `OFFERED`, `ACCEPTED`, `DECLINED`, `FULFILLED`, `BROKEN` in `save.maps[id].contract`, judged at match end. One offer per map, in the wave-2 interlude (`src/comm/questBeats.js`).
@@ -77,6 +81,48 @@ Audit of `main` @ `02352f4`, 2026-11-01. Paths are under `prototype/test-game/sr
 
 **Save defect to fix first in MLG-2:** `defaultSave()` declares `tech` twice (`save.js:37,45`), so the per-faction tiers `contracts.js:83` writes as `s.tech[faction]` share an object with `tech.owned`/`tech.paid`.
 
+### 1.2 Economy — mission rewards vs the whole tech tree (owner 2026-11-02)
+
+**owner**: "do a comparison of the total mapped rewards, against the total cost of unlocking 100 [%] of the current tech tree. Leave out Outpost upgrades."
+
+The live version is the **Economy** sheet of `docs/sources/Bulwark-Missions.xlsx`. All numbers are formulas over the Rewards and Tech_Unlocks sheets.
+
+**Tech tree, 100 %, 57 nodes: 140,300 gold.**
+- Units: 39,300.
+- Bases: 74,900, including the Apocalypse Cannon at 25,000.
+- Map: 26,100, of which 22,000 is the 8 portals. Portals cost 1,000 + 500 × portals already owned, bought in unlock order.
+- Left out: Outposts and Ships (both coming soon), the free starting kit, and the Map 3 milestone.
+
+**Mission rewards, gold plus the gold value of granted common / uncommon resources:**
+
+| | rewards | coverage | gap left for battle income |
+|---|---|---|---|
+| Primaries (81) | 73,629 | 52.5 % | 66,671 |
+| Primaries + one secondary per step, Light path | 106,569 | 76.0 % | 33,731 |
+| Primaries + one secondary per step, Shadow path | 110,889 | 79.0 % | 29,411 |
+
+Primaries also give 24,300 XP. Rare and epic resources are quest crystals and are not counted.
+
+**Per planet, the curve runs out late.** Each planet's primaries pay 6.4k (Verdance) to 10.0k (Vexmire), and the Light secondaries add 3.7k. The nodes those primaries unlock cost:
+- Verdance: 5.6k.
+- Lumen: 17.6k.
+- Xenthe: 18.4k.
+- Vexmire: 42.2k, including the Apocalypse Cannon.
+
+On the Light path the running balance stays positive through Lumen (+37) and ends at −33.7k. The last two planets are where battle income has to carry the tree.
+
+**Open owner decision (`task_mvzkudeg_1n`):** close the gap with battle gold (as designed today), raise late mission rewards, or move the Apocalypse Cannon's price into resources.
+
+### 1.3 Ships (coming soon)
+
+**owner**: "We will need to add Ship upgrades for future trade and space combat economies. Ship upgrades should be added to tech tree as coming soon."
+
+Done in `src/data/techtree.js` and `src/menu/technet.js` (`story_mvzkubvz_1m`). There is a fifth division, **SHIPS**, between Outpost and the 360° seam:
+- **Trade:** Cargo Holds, Trade Charter, Hyperlane Drive.
+- **Space combat:** Deflector Screens, Broadside Batteries, Fighter Bay.
+
+Like the Outpost ghosts, these nodes are never priced, counted or bought; `TECH_TOTAL` stays 57. The floor shader now takes 5 division colours, the 1–5 keys fly to each division, and the chips for coming-soon divisions are greyed without a count.
+
 ## 2. Data model — `save.missions[]`
 
 ```js
@@ -93,6 +139,12 @@ Audit of `main` @ `02352f4`, 2026-11-01. Paths are under `prototype/test-game/sr
 
 - `assignedBattle` is the battle counter (`save.progress.battles`), not wall-clock time.
 - Authored missions come from `content/missions/missions.json`, generated from `docs/sources/Bulwark-Missions.xlsx` by `tools/extract_missions.py` (MLG-7, `story_mvys6jex_k`). Each mission carries requirement lists for **view**, **unlock**, **execute**, **complete** and **fail**, built from the workbook's condition catalogue (which repeats §1.1's tiers). The extractor refuses unknown conditions, conditions in the wrong stage, unknown reward kinds and missions with no objective. `missionStatus` gains **locked** (view met, unlock not). Contract and favour missions are built from the existing offers; campaign missions from map unlocks.
+- **Content (v2, 2026-11-02):** 243 missions — 81 primaries and 162 secondaries (81 Light + 81 Shadow) — in 18 quest lines, plus 9 capital ships, 36 resources and 57 tech unlocks. Every mission is tier B (battle-end values) plus mechanics this epic builds (tier M). The 2026-11-01 starter set of 39 is replaced.
+- **New save fields:**
+  - `planetMaps[planet][map] = {beaten, bestAvg, runs}`: the per-planet record that drives capital ship arrival and replay improvement.
+  - `capitalShips[planet] = {arrived}`.
+  - `tech.unlocked`.
+  - `inventory`.
 
 ## 3. Pure core — `src/save/missions.js`
 
@@ -129,6 +181,9 @@ Also `badges.test.mjs` for the new rule. Then the full suite and both deploy gat
 | MLG-5 Mission detail view | `story_mvyqoplz_g` | MLG-4 |
 | MLG-6 Mission iconography set | `story_mvyqor1y_h` | MLG-1 |
 | MLG-7 Missions spreadsheet + extractor | `story_mvys6jex_k` | MLG-1 |
+| MLG-8 Capital ships: arrival, grants, collection | `story_mvzkd148_1j` | MLG-2 |
+| MLG-9 Primary/secondary flow + quest lines | `story_mvzkd2t8_1k` | MLG-2, MLG-8 |
+| MLG-10 Inventory button + resource list | `story_mvzkdvrl_1l` | MLG-2 |
 
 Open owner decisions: the authored mission list per planet (`content/missions/missions.json`), and whether tracking allows one mission or several.
 

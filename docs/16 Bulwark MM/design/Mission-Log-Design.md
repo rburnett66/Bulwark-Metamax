@@ -166,3 +166,64 @@ The missions themselves are authored in `docs/sources/Bulwark-Missions.xlsx` (ML
 - **Fail:** optional. Any one row met fails the mission.
 
 A mission whose View is met but whose Unlock is not shows as **Locked**. It gets a padlock glyph and dim steel edge, and its dossier lists the Unlock requirements in place of objectives. It sits below Active in the Current tab. The design page does not draw this state yet; the build stories (MLG-4/5) add it.
+
+## 11. Mission flow (owner, 2026-11-02)
+
+**owner**: "1. Primary mission per map, not per wave. 2. Secondary mission per map which is optional, and includes faction impact. Secondary missions may change on alignment history as well. Secondary missions can be unlocked by redoing a planet … 3. Missions are gated by level, faction alignment, and tech tree nodes. 4. Capital ships arrive after finishing the first map on each planet at 3 star or above, then missions can be granted on the capital ships. 5. Mission rewards must be collected at Capital ships when mission series can continue. Linked missions are called a quest line." Owner answers the same day:
+- capital ship = **the planet's own faction**;
+- the secondary unlock = **a replay that beats your previous result**;
+- primaries = **one per planet × map** (81).
+
+**The loop on one planet:**
+
+1. **Landing (map 1).** The landing craft's quartermaster grants primary 1. The player wins the map.
+2. **Capital ship arrives.** It comes when the planet's first map is won at an average of **3 stars or more**. The planet's faction flagship drops into orbit; the nine ships are listed on the workbook's Capital_Ships sheet (Verdance: *Halbrecht's Oath*, Colonel Aldric Vane). If map 1 was won below 3 stars, primary 1 stays Ready, and its rewards wait for the ship.
+3. **Collect aboard the ship.** Rewards for every Ready mission on that planet are collected aboard. Collecting is what advances a quest line, because the next step is only offered once the previous one is collected.
+4. **Primaries 2–9.** They are granted aboard the ship, one per map. Each is gated by commander level and by **owning** the tech node the previous primary unlocked.
+5. **Secondaries.** When a replay of a won map **beats your best average stars**, the ship offers that map's secondary. It is optional and has one attempt: the next battle on that map. Each secondary comes in a **Light** version (alignment history ≥ 0, good or neutral givers) or a **Shadow** version (≤ −1, evil givers from the same faction).
+   - **Success** applies the faction impact: loyalty with the planet's faction, a loss with its rival, and an alignment shift when the giver is a zealot.
+   - **Failure** costs the broken-promise penalty (−45, as for today's contracts).
+6. **Quest lines.** Each planet has two:
+   - **Planet campaign:** the 9 primaries.
+   - **Favours line:** the 9 secondaries. Either the Light or the Shadow version of a step advances it, so a commander whose alignment flips continues on the other path instead of being stranded.
+
+**Today's wave-2 contract offer moves off the battle timeline.** The faction contract becomes the planet's secondary, offered aboard the capital ship before the battle, and its loyalty rules carry over. Only tracking stays in battle. This retires `questBeats.js`'s mid-battle offer; the build decides whether the contract card is kept as a briefing.
+
+**Gating:**
+
+| gate | rule |
+|---|---|
+| level | primaries rise with the map and the planet's place in the order (Verdance map 1 = level 1, Vexmire map 9 = level 11) |
+| alignment | the Light / Shadow band of a secondary; hidden outside its band (VIEW) |
+| tech | map 1 of each planet needs that planet's portal node; later primaries need the node the previous step unlocked, owned |
+
+**Tech nodes unlock through missions but are still paid for.** A primary's `tech_unlock` reward makes a node purchasable in the Tech Net; buying it still costs its price. The loop is: complete → collect → unlock → pay → the next primary.
+- All 57 buyable nodes are unlocked by exactly one primary, in prerequisite order. The last is the Apocalypse Cannon, on Vexmire map 9.
+- Each planet's map 3 opens the next planet's portal.
+- Map 5 unlocks that faction's landing craft.
+- Resource costs per node are open columns on the workbook's Tech_Unlocks sheet.
+
+**Mission Log changes this implies** (design page update pending):
+- Rows carry a **Primary** or **Secondary · Light/Shadow** tag and the quest step ("4 / 9").
+- The Ready action reads **Collect aboard Halbrecht's Oath** and opens the capital ship view. Ready missions stay Ready until collected there.
+- The dossier shows the quest line, the gates (level, alignment band, tech node) and the faction impact.
+
+## 12. Inventory (owner, 2026-11-02)
+
+**owner**: "Along with missions we should introduce an inventory button next to missions with a list of each resource currently in the game sorted by faction/planet."
+
+- **INVENTORY** is a header chip directly right of MISSIONS (left of the rank chip). Same shape as the other chips; a crate-and-crystal glyph; the count of resources gained since the last visit as a cyan badge.
+- **Inventory screen:** the Mission Log frame. Left, the nine factions / planets in campaign order (Verdance → Vexmire) with owned totals. Right, the selected planet's four resources as tiles in rarity colours (common blue, uncommon yellow, rare red, epic green) with owned count, gold value, role, and which tech nodes and missions use it.
+- **Source of truth:** `docs/sources/Bulwark-Missions.xlsx` › Resources (36 = 9 planets × 4), extracted into `missions.json` › `resources`.
+- **Open build question (MLG-10):** how harvest feeds the inventory. Today common and uncommon convert straight to gold, and rare and epic are quest crystals.
+
+## 13. Design page v2 (2026-11-02)
+
+The design page now shows the flow:
+- **Header:** an INVENTORY chip right of MISSIONS.
+- **List:** Primary / Secondary · Light / Shadow tags with the quest step on every row, and a **Locked — next steps** group.
+- **Dossier:** the quest line, a **Gates** panel (met / not met), **Faction impact** for secondaries, and **Collect aboard <capital ship>** in place of Claim. Collecting Amber Fields opens Three Banners, the next step, with the assignment toast.
+- **Inventory screen:** the nine factions / planets in campaign order. Planets whose portal is not owned are locked, and each planet's four resources are tiles in rarity colours with held count, role, source and what wants them.
+- **Review bar:** gains an Inventory view (`?view=inv`, `&planet=Florael`).
+
+The sample's Ace Jun "Halo" Sato portrait (`content/dialog/portraits/ace-jun-halo-sato.png`) is a group poster with lettering, not a single portrait. The art needs replacing.
