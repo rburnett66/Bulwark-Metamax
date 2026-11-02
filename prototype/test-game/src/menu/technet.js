@@ -40,12 +40,14 @@ const CSS = `
 .tn .brand .logo{font:900 18px Orbitron,sans-serif;letter-spacing:.18em;color:#fff;text-shadow:0 0 12px var(--cyan)}
 .tn .brand .logo span{color:var(--cyan);margin:0 .35em}
 .tn .brand .tag{font:500 10px 'JetBrains Mono',monospace;color:var(--dim);letter-spacing:.12em;margin-top:3px}
-.tn .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1;justify-content:center}
+.tn .chips{display:flex;gap:5px;flex-wrap:nowrap;flex:1;min-width:0;justify-content:center}
 .tn .chip{font:700 11px Orbitron,sans-serif;letter-spacing:.14em;color:var(--c,#cfe9ff);background:rgba(255,255,255,.03);border:1px solid color-mix(in srgb,var(--c,#5ac8ff) 45%,transparent);
   padding:7px 10px;cursor:pointer;display:flex;gap:8px;align-items:center;transition:.15s}
 .tn .chip:hover,.tn .chip.on{background:color-mix(in srgb,var(--c,#5ac8ff) 18%,transparent);box-shadow:0 0 14px color-mix(in srgb,var(--c,#5ac8ff) 40%,transparent)}
 .tn .chip em{font:500 10px 'JetBrains Mono',monospace;font-style:normal;color:#9fb6cc;letter-spacing:0}
 .tn .chip.soon{opacity:.6}
+.tn .chip.soon em{display:none}
+@media (min-width:901px){.tn .chip{padding:7px 8px;letter-spacing:.1em;gap:6px}}
 .tn .hud-r{display:flex;align-items:center;gap:12px}
 .tn .bank{display:flex;align-items:center;gap:6px;font:700 18px 'JetBrains Mono',monospace;color:var(--gold);text-shadow:0 0 10px rgba(255,211,74,.5)}
 .tn .bank label{font:700 9px Orbitron,sans-serif;letter-spacing:.2em;color:var(--dim)}
@@ -125,7 +127,7 @@ const CSS = `
 
 const STATUS_TXT = { owned: 'RESEARCHED', ready: 'AVAILABLE', short: 'NEEDS GOLD', locked: 'LOCKED', soon: 'COMING SOON' };
 const KIND_TXT = { core: 'BASE MODEL · EQUIPPED', ult: 'CAPSTONE', tier: 'TOWER TIER', tower: 'NEW TOWER', pod: 'DEFENSE POD SLOT', podw: 'POD WEAPON', weapon: 'SUPER-CANNON',
-  harv: 'HARVESTER', item: 'COMMAND', craft: 'BASE MODEL', milestone: 'MILESTONE', portal: 'PORTAL CODE', ghost: 'OUTPOST' };
+  harv: 'HARVESTER', item: 'COMMAND', craft: 'BASE MODEL', milestone: 'MILESTONE', portal: 'PORTAL CODE', ghost: 'OUTPOST', shipghost: 'SHIP UPGRADE' };
 const R0 = 8, STEP = 5, ULT_Y = 24;
 
 export function mountTechNet(THREE, addons, host, adapter) {
@@ -145,7 +147,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
   root.innerHTML = `
     <div class="stage"></div><div class="labels"></div><div class="scan"></div><div class="vig"></div>
     <header class="hud glass">
-      <div class="brand"><div class="logo">BULWARK<span>//</span>TECH NET</div><div class="tag">${sandbox ? 'SANDBOX · ' : ''}57 UPGRADES · 4 DIVISIONS</div></div>
+      <div class="brand"><div class="logo">BULWARK<span>//</span>TECH NET</div><div class="tag">${sandbox ? 'SANDBOX · ' : ''}57 UPGRADES · 5 DIVISIONS</div></div>
       <nav class="chips"></nav>
       <div class="hud-r">
         <div class="bank"><label>BANK</label><b data-bank>0</b><span>g</span></div>
@@ -156,7 +158,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
       </div>
     </header>
     <div class="sub glass"><input class="search" list="tn-names" placeholder="Search upgrades…" autocomplete="off"><datalist id="tn-names"></datalist>
-      <span class="spent">SPENT <b>0g</b></span><span class="hint">0 overview · 1–4 divisions · drag to orbit</span></div>
+      <span class="spent">SPENT <b>0g</b></span><span class="hint">0 overview · 1–5 divisions · drag to orbit</span></div>
     <aside class="panel glass"></aside>
     <div class="tip glass"></div>
     <div class="legend glass">
@@ -229,24 +231,24 @@ export function mountTechNet(THREE, addons, host, adapter) {
   }
   // holographic floor: polar grid, division tints, boundaries, scan pulse
   const floorU = { uTime: { value: 0 }, uR0: { value: R0 }, uStep: { value: STEP }, uCol: { value: DIV_ORDER.map((k) => col(DIV[k].color)) },
-    uA: { value: [0, DIV.units.a1, DIV.bases.a1, DIV.map.a1, 360, 360] } };
+    uA: { value: [0, DIV.units.a1, DIV.bases.a1, DIV.map.a1, DIV.outpost.a1, 360, 360] } };
   {
     const m = new THREE.ShaderMaterial({
       uniforms: floorU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, extensions: { derivatives: true },
       vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
       fragmentShader: `
-        uniform float uTime, uR0, uStep; uniform vec3 uCol[4]; uniform float uA[6]; varying vec2 vP;
+        uniform float uTime, uR0, uStep; uniform vec3 uCol[5]; uniform float uA[7]; varying vec2 vP;
         float gl(float v, float sp, float w){ float g = abs(fract(v/sp + 0.5) - 0.5)*sp; float fw = fwidth(v); return 1.0 - smoothstep(w, w + fw*1.5, g); }
         void main(){
           float r = length(vP);
           float ang = degrees(atan(vP.y, vP.x)); if (ang < 0.0) ang += 360.0;
           vec3 c = uCol[0];
-          for (int i = 0; i < 4; i++) { if (ang >= uA[i] && ang < uA[i+1]) c = uCol[i]; }
+          for (int i = 0; i < 5; i++) { if (ang >= uA[i] && ang < uA[i+1]) c = uCol[i]; }
           float rings = r > uR0 - 0.2 ? gl(r - uR0, uStep, 0.05) : 0.0;
           float fine = gl(r, 1.0, 0.02) * 0.10;
           float rad = gl(ang, 5.0, 0.03*57.3/max(r,1.0)) * 0.18;
           float bound = 0.0;
-          for (int i = 0; i < 4; i++) { float d = abs(ang - uA[i]); d = min(d, 360.0 - d); bound = max(bound, 1.0 - smoothstep(0.0, 0.16*57.3/max(r,1.0), d)); }
+          for (int i = 0; i < 5; i++) { float d = abs(ang - uA[i]); d = min(d, 360.0 - d); bound = max(bound, 1.0 - smoothstep(0.0, 0.16*57.3/max(r,1.0), d)); }
           float scan = mod(uTime*13.0, 95.0); float s = exp(-abs(r - scan)*0.9) * (1.0 - scan/95.0);
           float fade = 1.0 - smoothstep(34.0, 64.0, r);
           float inner = smoothstep(uR0 - 3.0, uR0, r);
@@ -322,7 +324,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
         g.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.TorusGeometry(1.05, 0.12, 4, 24)), edgeM));
         break;
       }
-      case 'ghost': geo = GEO.ghost; spin = 0.2; body.wireframe = true; break;
+      case 'ghost': case 'shipghost': geo = GEO.ghost; spin = 0.2; body.wireframe = true; break;
     }
     let mesh = null;
     if (geo) {
@@ -530,7 +532,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
     $('.spent').innerHTML = 'SPENT <b>' + Object.entries(ctx.paid || {}).reduce((a, [id, g]) => a + (ctx.owned.has(id) ? g : 0), 0).toLocaleString() + 'g</b>';
     for (const k of DIV_ORDER) {
       const dv = DIV[k], o = countOwned(ctx.owned, k);
-      root.querySelector('[data-cnt="' + k + '"]').textContent = dv.soon ? 'SOON' : o + '/' + dv.total;
+      root.querySelector('[data-cnt="' + k + '"]').textContent = dv.soon ? '' : o + '/' + dv.total;   // a soon chip is greyed; its title says COMING SOON
       TITLES.find((t) => t.k === k).el.querySelector('span').textContent = dv.soon ? 'COMING SOON' : o + ' / ' + dv.total + ' RESEARCHED';
     }
     for (const v of V.values()) { v.st = status(v.n); labelText(v); }
@@ -576,7 +578,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
     if (!running || (e.target && e.target.tagName === 'INPUT')) return;
     if (e.key === 'Escape') { if (selId) select(null); else if (adapter.onClose) adapter.onClose(); }
     if (e.key === '0') flyHome();
-    const i = '1234'.indexOf(e.key); if (i >= 0) flyToDiv(DIV_ORDER[i]);
+    const i = '12345'.indexOf(e.key); if (i >= 0) flyToDiv(DIV_ORDER[i]);
   };
   win.addEventListener('keydown', onKey);
   function pick() { ray.setFromCamera(mouse, camera); const hit = ray.intersectObjects(hitMeshes, false)[0]; return hit ? hit.object.userData.id : null; }
