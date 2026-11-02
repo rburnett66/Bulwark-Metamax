@@ -10,7 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import box, build, cyl, loft, mat  # noqa: E402
+from common import box, build, cyl, engine, loft, mat  # noqa: E402
 
 
 def make():
@@ -74,9 +74,9 @@ def make():
 
     # spine detail + stern engines
     box("spine_band", (-8.0, 1.51, 0.2), (4.6, 0.05, 0.6), trim)
-    cyl("engine_pod", (-10.62, AY, AZ), 0.5, 0.06, glow, sides=8)
-    cyl("engine_main", (-10.45, 0.62, 0.15), 0.42, 0.06, glow, sides=8)
-    cyl("engine_main_lo", (-10.45, 0.62, -0.8), 0.32, 0.06, glow, sides=8)
+    engine((-10.6, AY, AZ), 0.48, trim)
+    engine((-10.4, 0.62, 0.2), 0.42, trim)
+    engine((-10.4, 0.62, -0.75), 0.32, trim)
 
 
 if __name__ == "__main__":
