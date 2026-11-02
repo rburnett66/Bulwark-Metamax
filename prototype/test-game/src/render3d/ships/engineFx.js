@@ -206,7 +206,12 @@ export function prepareShip(THREE, root, { anisotropy = 1 } = {}) {
     if (!o.isMesh || !o.material) return;
     const m = o.material;
     if (m.name === 'ship_glow') {
-      fleet.glow = fleet.glow || new THREE.MeshBasicMaterial({ name: 'ship_glow', vertexColors: true, toneMapped: false });
+      // Light strips, windows and engine cores sit on (or a hair above) the hull. Pull them toward the camera
+      // in depth so they always win the tie and never shimmer through the plating underneath (z-fighting).
+      fleet.glow = fleet.glow || new THREE.MeshBasicMaterial({
+        name: 'ship_glow', vertexColors: true, toneMapped: false,
+        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8,
+      });
       if (m !== fleet.glow) m.dispose();
       o.material = fleet.glow;
     } else if (m.name === 'ship_body') {
