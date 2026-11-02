@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.02-a';
-export const VERSION_NOTE = 'Mission Log: missions, capital ships, Light and Shadow favours, inventory; tech nodes unlock through missions; the wave-2 contract offer is gone';
+export const VERSION = 'v2026.11.02-b';
+export const VERSION_NOTE = 'Leaving the Inventory no longer corrupts the 3D menu';

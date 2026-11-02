@@ -107,6 +107,14 @@ test('the screen: all 36 tiles with counts and tier, tabs filter, a locked plane
   assert.ok(wantedBy(CATALOG, 'Loam Grain').length > 0);
 });
 
+test('the screen never uses an attribute the 3D menu draws into: a closed screen stays laid out, so the stage would paint over the menu', () => {
+  const s = defaultSave();
+  const bands = inventoryBands(s, CATALOG, () => true);
+  const html = inventoryListHtml(bands, 'all', 'loam-grain') + inventoryDetailHtml(bands, 'loam-grain', CATALOG);
+  assert.ok(html.includes('data-inv-id="loam-grain"'), 'the tiles still say which resource they are');
+  for (const attr of ['data-res', 'data-globe', 'data-craft', 'data-galaxy']) assert.ok(!new RegExp(attr + '[=\\s>]').test(html), attr);
+});
+
 test('the INVENTORY chip sits right of MISSIONS and shows what is new', () => {
   const src = readFileSync(new URL('../menu/progressWidget.js', import.meta.url), 'utf8');
   const markup = src.slice(src.indexOf('el.innerHTML'));
