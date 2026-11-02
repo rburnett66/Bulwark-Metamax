@@ -3,9 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { defaultSave } from '../save/save.js';
-import { logMission, markMissionSeen, abandon } from '../save/missions.js';
+import { logMission, markMissionSeen, abandon, trackerLine, setTracked } from '../save/missions.js';
 import { flowCtx, syncMissions } from '../save/missionFlow.js';
-import { missionRows, sortRows, listHtml, tabsHtml, summaryHtml, rowHtml, barHtml, rewardView, STATUS, ORDER, TABS, TYPE_ICON, REWARD_ICON } from './missionView.js';
+import { missionRows, sortRows, listHtml, tabsHtml, summaryHtml, rowHtml, barHtml, rewardView, STATUS, ORDER, TABS, TYPE_ICON, REWARD_ICON, dossierHtml, actionsHtml, gateViews, impactViews, noteFor, burstHtml } from './missionView.js';
 import { MISSION_LOG_CSS } from './missionLogCss.js';
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
@@ -122,4 +122,108 @@ test('the CSS is the design page\'s, and every selector stays inside the log', (
   for (const m of noMedia.matchAll(/^([^{}\n]+)\{/gm)) for (const part of m[1].split(',')) assert.ok(part.trim().startsWith('.bwm-ml'), part);
   assert.ok(MISSION_LOG_CSS.includes('@media (max-height:500px)'), 'phone landscape');
   assert.ok(MISSION_LOG_CSS.includes('prefers-reduced-motion'));
+});
+
+// ── the dossier [MM-story_mvyqoplz_g] ───────────────────────────────────────────────────────────────────────────
+const PACKS = JSON.parse(readFileSync(new URL('../../content/dialog/voicepacks.json', import.meta.url), 'utf8'));
+const dossier = (s, m, status) => dossierHtml({ m, status }, s, CATALOG, ctx(s), PACKS);
+
+test('the dossier shows briefing, objectives with progress, rewards, faction, alignment and the giver', () => {
+  const s = defaultSave();
+  const m = logMission(s, def('P-VER-01'), opt);
+  const html = dossier(s, m, 'new');
+  assert.ok(html.includes('Tutorial pressure. Land, dig in'), 'briefing');
+  assert.ok(html.includes('Win Verdance map 1') && html.includes('0 / 1'), 'objectives with progress');
+  assert.ok(html.includes('class="obj') && html.includes(' opt"'), 'the bonus is tagged');
+  assert.ok(html.includes('REWARDS') && html.includes('>300<') && html.includes('Commander XP'), 'rewards');
+  assert.ok(html.includes('Cannon T2 · 600 gold'), 'the node it unlocks and what it will cost');
+  assert.ok(html.includes('Quartermaster Ines Roth') && html.includes('Ground / Powder'), 'giver and faction');
+  assert.ok(html.includes('content/dialog/portraits/quartermaster-ines-roth.png'), 'the real portrait');
+  assert.ok(html.includes('Homeworld') && html.includes('Verdance'));
+  assert.ok(html.includes('class="on" style="--c:#9aa6b4"') && html.includes('>Neutral<small>Unaligned</small>'), 'the alignment rail marks N');
+  assert.ok(html.includes('Someone counts the powder'), 'the motivation line from the voice packs');
+  assert.ok(html.includes('Verdance campaign · step 1 of 9'), 'the quest line');
+});
+
+test('every giver in the content has a portrait file and a place in the voice packs', () => {
+  for (const m of CATALOG.missions) {
+    const cast = PACKS.factions[m.giver.faction];
+    assert.ok(cast, m.id + ' faction');
+    assert.ok(cast.characters.some((c) => c.name === m.giver.name), m.id + ' ' + m.giver.name);
+  }
+});
+
+test('the action follows the state: collect, waiting, track, abandon, remove, stamps', () => {
+  const s = defaultSave();
+  const p = logMission(s, def('P-VER-01'), opt);
+  assert.match(actionsHtml({ m: p, status: 'ready' }, s, CATALOG), /Waiting for Halbrecht/, 'no ship yet');
+  assert.ok(!actionsHtml({ m: p, status: 'ready' }, s, CATALOG).includes('data-act="collect"'));
+  s.capitalShips.Verdance = { arrived: true };
+  const ready = actionsHtml({ m: p, status: 'ready' }, s, CATALOG);
+  assert.ok(ready.includes('data-act="collect"') && ready.includes("Collect aboard Halbrecht's Oath"));
+  assert.ok(ready.includes('Verdance campaign'), 'collecting continues the line');
+  const act = actionsHtml({ m: p, status: 'active' }, s, CATALOG);
+  assert.ok(act.includes('data-act="track"') && !act.includes('data-act="abandon"'), 'a primary cannot be abandoned');
+  const sec = logMission(s, def('S-VER-01-L'), opt);
+  assert.ok(actionsHtml({ m: sec, status: 'risk' }, s, CATALOG).includes('data-act="abandon"'));
+  setTracked(s, sec.id);
+  assert.ok(actionsHtml({ m: sec, status: 'risk' }, s, CATALOG).includes('Tracking in battle'));
+  assert.ok(actionsHtml({ m: sec, status: 'failed' }, s, CATALOG).includes('data-act="dismiss"'));
+  assert.ok(actionsHtml({ m: p, status: 'done' }, s, CATALOG).includes('claimed-stamp'));
+  assert.ok(actionsHtml({ m: p, status: 'locked' }, s, CATALOG).includes('Locked'));
+  assert.equal((burstHtml().match(/<span/g) || []).length, 14);
+});
+
+test('gates list what is met and what is not; a locked mission is judged live', () => {
+  const s = defaultSave();
+  s.questSteps['QL-VER-P'] = 1;
+  const rows = missionRows(s, CATALOG, ctx(s));
+  const row = rows.find((r) => r.m.id === 'P-VER-02');
+  assert.equal(row.status, 'locked');
+  const g = gateViews(row, s, ctx(s));
+  assert.ok(g.some((x) => x.kind === 'Quest line' && x.ok));
+  assert.ok(g.some((x) => x.kind === 'Tech node' && x.text === 'Own Cannon T2' && !x.ok));
+  assert.ok(g.some((x) => x.kind === 'Capital ship' && !x.ok));
+  assert.ok(dossierHtml(row, s, CATALOG, ctx(s), PACKS).includes('OBJECTIVES (WHEN UNLOCKED)'));
+  assert.deepEqual(gateViews({ m: row.m, status: 'done' }, s, ctx(s)), [], 'history has no gates');
+});
+
+test('faction impact and terms for a secondary; a failed one shows its outcome', () => {
+  const s = defaultSave();
+  const m = logMission(s, def('S-VER-01-L'), opt);
+  const imp = impactViews(m);
+  assert.deepEqual(imp.map((x) => x.amount), ['+35', '−17', '+1']);
+  assert.ok(imp[1].label.includes('rival'));
+  const html = dossier(s, m, 'risk');
+  assert.ok(html.includes('FACTION IMPACT') && html.includes('One attempt') && html.includes('Broken promise') && html.includes('Withdrawn if'));
+  assert.match(noteFor({ m, status: 'risk' }, s), /Alignment history is at 0/);
+  m.end = 'failed'; m.endReason = 'Broken promise: the attempt ended short.';
+  const failed = dossier(s, m, 'failed');
+  assert.ok(failed.includes('OUTCOME') && failed.includes('rwd neg') && failed.includes('−45') && failed.includes('Broken promise: the attempt ended short.'));
+});
+
+test('a planet with no ship says so in its note', () => {
+  const s = defaultSave(), m = logMission(s, def('P-VER-01'), opt);
+  assert.match(noteFor({ m, status: 'ready' }, s), /wait for Halbrecht/);
+  s.capitalShips.Verdance = { arrived: true };
+  assert.match(noteFor({ m, status: 'ready' }, s), /Collect the rewards aboard/);
+});
+
+test('the battle tracker reads the live counters, writes nothing, and only shows on its own map', () => {
+  const s = defaultSave();
+  const m = logMission(s, def('P-VER-02'), opt);
+  const state = { mapScore: { goldFromPrimary: 150 }, economy: { kills: 1 }, waves: { total: 8 }, waveStars: [], time: 30 };
+  const before = JSON.stringify(m), sim = JSON.stringify(state);
+  const line = trackerLine(m, state, { mapId: 2, planet: 'Verdance' });
+  assert.match(line, new RegExp('^' + m.title + ' · 50%$'), '150 of 300 gold, the win still to come');
+  assert.equal(JSON.stringify(m), before, 'the record is untouched');
+  assert.equal(JSON.stringify(state), sim, 'the sim is untouched');
+  assert.equal(trackerLine(m, state, { mapId: 3, planet: 'Verdance' }), null, 'another map');
+  assert.equal(trackerLine(null, state, {}), null);
+});
+
+test('the log\'s actions are wired, and the HUD asks for the tracker line', () => {
+  const src = readFileSync(new URL('./missionLog.js', import.meta.url), 'utf8');
+  for (const a of ['collect', 'track', 'abandon', 'dismiss', 'back']) assert.ok(src.includes("act_ === '" + a + "'"), a);
+  assert.ok(/hud\.trackedLine/.test(readFileSync(new URL('../render/hud.js', import.meta.url), 'utf8')));
 });

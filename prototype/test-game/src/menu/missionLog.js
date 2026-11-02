@@ -2,21 +2,25 @@
  * src/menu/missionLog.js — the Mission Log screen and the moment a mission is logged [MM-story_mvyqoo07_f].
  * The look lives in missionView.js (pure) and missionLogCss.js; this file mounts it, owns the clicks and writes the save.
  *
- *   createMissionLog({ doc, host, chipPing, gateOpts, onChange, onClose }) → { open, close, sync, drainQueue, isOpen }
+ *   createMissionLog({ doc, host, chipPing, gateOpts, onChange, onClose, onCollected }) → { open, close, sync, drainQueue, isOpen }
+ * [MM-story_mvyqoplz_g] the dossier and its actions.
  */
 import { loadSave, updateSave } from '../save/save.js';
 import { loadMissionCatalog } from '../save/missionCatalog.js';
-import { syncMissions, flowCtx } from '../save/missionFlow.js';
-import { markMissionSeen, progress } from '../save/missions.js';
+import { syncMissions, flowCtx, collect } from '../save/missionFlow.js';
+import { markMissionSeen, progress, setTracked, abandon, dismiss } from '../save/missions.js';
 import { MISSION_LOG_CSS } from './missionLogCss.js';
-import { missionRows, sortRows, TABS, tabsHtml, summaryHtml, listHtml, use, esc, barHtml, TYPE_ICON } from './missionView.js';
+import { missionRows, sortRows, TABS, tabsHtml, summaryHtml, listHtml, dossierHtml, burstHtml, use, esc, barHtml, TYPE_ICON } from './missionView.js';
 
 export function ensureMissionStyle(doc) {
   if (doc.getElementById('bwm-ml-style')) return;
   const st = doc.createElement('style'); st.id = 'bwm-ml-style'; st.textContent = MISSION_LOG_CSS; doc.head.appendChild(st);
 }
 
-export function createMissionLog({ doc, host, chipPing, gateOpts = () => ({}), onChange, onClose }) {
+let packsPending = null;
+const loadPacks = () => packsPending || (packsPending = fetch(new URL('../../content/dialog/voicepacks.json', import.meta.url)).then((r) => r.json()).catch((e) => { console.error('[missions] voice packs failed to load', e); packsPending = null; return null; }));
+
+export function createMissionLog({ doc, host, chipPing, gateOpts = () => ({}), onChange, onClose, onCollected }) {
   ensureMissionStyle(doc);
   host.classList.add('bwm-ml');
   const log = doc.createElement('section');
@@ -28,7 +32,7 @@ export function createMissionLog({ doc, host, chipPing, gateOpts = () => ({}), o
   toastEl.className = 'toast'; toastEl.setAttribute('role', 'status'); toastEl.setAttribute('aria-live', 'polite');
   host.appendChild(toastEl); host.appendChild(log);
   const $ = (q) => log.querySelector(q);
-  let catalog = null, tab = 'active', selected = null, loadError = null, toastTimer = 0, toastQueue = [];
+  let catalog = null, packs = null, tab = 'active', selected = null, loadError = null, toastTimer = 0, toastQueue = [];
   const ctxFor = (s) => flowCtx(s, gateOpts());
 
   /** Load the content once, then bring the log up to date. A failed load is shown in the log, never read as "no missions". */
@@ -85,7 +89,30 @@ export function createMissionLog({ doc, host, chipPing, gateOpts = () => ({}), o
     $('[data-list]').innerHTML = listHtml(rows, catalog, tab, selected);
     renderDetail(s, rows);
   }
-  function renderDetail() { /* the dossier arrives with MLG-5 */ }
+  function renderDetail(s, rows) {
+    const row = rows.find((r) => r.m.id === selected), dp = $('[data-dp]');
+    if (!row) { dp.innerHTML = ''; return; }
+    const keep = dp.scrollTop;
+    dp.innerHTML = dossierHtml(row, s, catalog, ctxFor(s), packs);
+    dp.scrollTop = keep;
+  }
+  /** Run a save change for the selected mission, then bring everything on screen up to date. */
+  function act(fn) {
+    updateSave(fn);
+    if (onChange) onChange();
+    drainQueue();
+    render();
+  }
+  function collectSelected(btn) {
+    const id = selected, wrap = btn.parentElement;
+    wrap.style.position = 'relative';
+    wrap.insertAdjacentHTML('beforeend', burstHtml());
+    btn.disabled = true;
+    doc.defaultView.setTimeout(() => {
+      act((s) => { collect(s, id, catalog, ctxFor(s)); });
+      if (onCollected) onCollected();
+    }, 650);
+  }
 
   function select(id) {
     selected = id;
@@ -97,7 +124,13 @@ export function createMissionLog({ doc, host, chipPing, gateOpts = () => ({}), o
 
   log.addEventListener('click', (e) => {
     const t = e.target.closest('button'); if (!t) return;
-    if (t.dataset.id) select(t.dataset.id);
+    const act_ = t.dataset.act;
+    if (act_ === 'back') log.classList.remove('detail');
+    else if (act_ === 'collect') collectSelected(t);
+    else if (act_ === 'track') act((s) => { setTracked(s, selected); });
+    else if (act_ === 'abandon') act((s) => { abandon(s, selected); });
+    else if (act_ === 'dismiss') { const id = selected; selected = null; act((s) => { dismiss(s, id); }); }
+    else if (t.dataset.id) select(t.dataset.id);
     else if (t.dataset.tab) { tab = t.dataset.tab; selected = null; render(); }
   });
   const onKey = (e) => {
@@ -107,10 +140,14 @@ export function createMissionLog({ doc, host, chipPing, gateOpts = () => ({}), o
   };
   doc.addEventListener('keydown', onKey);
 
+  // a missing portrait falls back to nothing rather than a broken-image icon (error events do not bubble)
+  log.addEventListener('error', (e) => { if (e.target && e.target.dataset && 'portrait' in e.target.dataset) e.target.style.visibility = 'hidden'; }, true);
+
   const isOpen = () => log.classList.contains('on');
   function open() {
     log.classList.add('on');
     render();
+    loadPacks().then((p) => { if (p && !packs) { packs = p; if (isOpen()) render(); } });
     return sync();
   }
   function close() { log.classList.remove('on', 'detail'); }

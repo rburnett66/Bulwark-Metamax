@@ -334,7 +334,7 @@ export function createMenu(mountEl, cbs) {
   // the Mission Log sits over the main screen, under the live top bar (Mission-Log-Design §1) [MM-story_mvyqoo07_f]
   const mlHost = el(doc, 'div');
   const missionLog = createMissionLog({ doc, host: mlHost, chipPing: () => widget.ping('missions'), gateOpts: () => gateOverride() || {},
-    onChange: () => refreshProgress(), onClose: () => show('main') });
+    onChange: () => refreshProgress(), onClose: () => show('main'), onCollected: () => { if (cbs.onTechChanged) cbs.onTechChanged(); playPendingRewards(); } });
 
   // ── MAIN screen ──
   const main = el(doc, 'div', 'bwm-main');

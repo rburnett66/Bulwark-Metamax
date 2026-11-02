@@ -4,7 +4,7 @@ import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, resetSave, grantBattleRewards } from './save/save.js';
 import { xpForBattle } from './data/progression.js';
-import { battleResult, bankBattle, planetOfFaction } from './save/missions.js';
+import { battleResult, bankBattle, planetOfFaction, trackedMission, trackerLine } from './save/missions.js';
 import { settleBattle, resolvedSecondary, favourMessage } from './save/missionFlow.js';
 import { loadMissionCatalog } from './save/missionCatalog.js';
 import { createBattleTally, tallyEvents, noteHarvesters, noteTroopDeployed, finishTally } from './save/battleTally.js';
@@ -273,6 +273,7 @@ export function boot(mountEl, seed) {
   let pendingCarry = null;   // campaign carry (gold + defenses) applied by restart() until the map changes by hand
   let missionCatalog = null;   // content/missions/missions.json
   loadMissionCatalog().then((c) => { missionCatalog = c; }).catch((e) => console.error('[missions] content failed to load', e));
+  let trackedNow = null;       // the mission pinned to the battle HUD: read at battle start, so the line is a read-only look
   let battleTally = createBattleTally();   // this battle's counts, from the drained events: banked at battle end only [MM-story_mvyqol3w_d]
 
   // ---------------------------------------------------------------------
@@ -353,6 +354,7 @@ export function boot(mountEl, seed) {
         mapId: currentMapId, faction: currentTestFaction || null };
       sim = createSim(currentSeed, simInit);
       battleTally = createBattleTally();
+      trackedNow = trackedMission(sv);
       log = createLog(currentSeed, simInit);   // capture the init so an in-memory replay reproduces THIS board, not default MAP/WAVES
     }
     ui = createUiState();
@@ -886,6 +888,8 @@ export function boot(mountEl, seed) {
   // authored voice packs (content/dialog/voicepacks.json), picked
   // deterministically from (faction, wave, seed) so replays hear the same calls.
   // ---------------------------------------------------------------------
+  hud.trackedLine = (state) => (mode === 'play' && currentMapId && trackedNow
+    ? trackerLine(trackedNow, state, { mapId: currentMapId, planet: planetOfFaction(currentTestFaction) }) : null);
   const comm = createComm(document);
   // Jumping back to the menu ends all dialog; leaving it lets the speakers talk again [MM-task_mvcs0s2v_15]
   {

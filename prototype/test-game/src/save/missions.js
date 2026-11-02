@@ -292,6 +292,26 @@ export function setTracked(s, id) {
 
 export const trackedMission = (s) => (s.missions || []).find((m) => m.tracked && !m.end) || null;
 
+/**
+ * The battle HUD's tracker line (D5): the mission's progress if this battle ended now. A read-only look at the sim's
+ * existing counters: nothing is written, to the sim or to the record. null when this battle does not count for it.
+ */
+export function trackerLine(m, state, { mapId, planet } = {}) {
+  if (!m || !state) return null;
+  const live = battleResult({ mapId, planet, result: 'win', mapScore: state.mapScore, waveStars: state.waveStars, totalWaves: state.waves ? state.waves.total : 8,
+    finalScore: { kills: state.economy ? state.economy.kills || 0 : 0, goldSpent: state.goldSpent || 0, totalSeconds: Math.floor(state.time || 0) } });
+  if (!inScope(m, live)) return null;
+  let have = 0, need = 0;
+  for (const o of m.objectives) {
+    const def = MEASURE[o.cond];
+    if (o.bonus || o.limit || !def) continue;
+    if (o.cond === 'win_map' || o.cond === 'planet_map_beaten' || o.cond === 'finish_under') { need += o.need; have += Math.min(o.have, o.need); continue; }   // only a finished battle can settle these
+    const v = def.v(live, o), now = def.best ? Math.max(o.have, v) : o.have + v;
+    need += o.need; have += Math.min(now, o.need);
+  }
+  return m.title + ' · ' + Math.round(need ? (have / need) * 100 : 0) + '%';
+}
+
 /** The header's numbers: Ready to claim, unopened New, everything else in progress. */
 export function badge(s) {
   const out = { ready: 0, fresh: 0, active: 0 };

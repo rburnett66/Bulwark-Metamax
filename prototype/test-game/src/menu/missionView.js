@@ -5,9 +5,9 @@
  * (save, catalog, ctx) → view models → HTML. No DOM and no save writes here, so node tests read exactly what the player
  * will see. missionLog.js mounts it and owns the clicks.
  */
-import { logMission, missionStatus, progress, atRisk, factionOfPlanet, alignmentBand } from '../save/missions.js';
+import { logMission, missionStatus, progress, factionOfPlanet, alignmentBand } from '../save/missions.js';
 import { lockedMissions, gateMet, shipArrived } from '../save/missionFlow.js';
-import { LOYALTY_TIERS } from '../save/contracts.js';
+import { LOYALTY_TIERS, rivalOf } from '../save/contracts.js';
 import { ICONS, FACTIONS as VOICES, HOOD_PORTRAIT } from '../comm/voice.js';
 import { portraitSlug } from '../comm/commCard.js';
 import { TECH_BY_ID } from '../data/techtree.js';
@@ -132,4 +132,153 @@ export function listHtml(rows, catalog, tab, selectedId) {
     html += rowHtml(r, catalog, selectedId);
   }
   return html;
+}
+
+// ── the dossier (design §5, §13) ───────────────────────────────────────────────────────────────────────────────
+const GATE_KIND = Object.freeze({ rank_at_least: 'Level', tech_node: 'Tech node', planet_open: 'Planet', planet_map_unlocked: 'Map', planet_map_beaten: 'Map', planet_map_stars: 'Stars',
+  replay_improves: 'Unlocked by', capital_ship_arrived: 'Capital ship', quest_step_collected: 'Quest line', loyalty: 'Loyalty' });
+
+/** The gates, met or not. A logged mission met them all when it was granted, so only a Locked one is re-judged. */
+export function gateViews(row, s, ctx) {
+  const { m, status } = row;
+  if (status === 'done' || status === 'failed') return [];
+  const seen = new Set(), out = [];
+  for (const g of [...(m.view || []), ...(m.gates || [])]) {
+    const key = g.cond + '|' + g.param + '|' + g.op + '|' + g.value;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const kind = g.cond === 'alignment' ? (m.variant === 'shadow' ? 'Shadow band' : 'Light band') : GATE_KIND[g.cond] || 'Gate';
+    const text = g.cond === 'tech_node' && TECH_BY_ID[g.param] ? 'Own ' + TECH_BY_ID[g.param].name : g.text;
+    out.push({ kind, text, ok: status === 'locked' ? gateMet(s, g, ctx) : true });
+  }
+  return out;
+}
+
+const signed = (n) => (n > 0 ? '+' : '−') + Math.abs(n);
+const voiceOfName = (name) => Object.keys(VOICES).find((k) => VOICES[k].name === name) || null;
+
+/** The faction impact: loyalty with the planet's faction, a loss with its rival, an alignment shift. */
+export function impactViews(m) {
+  const faction = factionOfPlanet(m.planet), key = voiceOfName(faction), out = [];
+  const short = (n) => String(n || '').split(' ')[0];
+  if (m.impact.loyaltyPlanet) out.push({ icon: fsvg(key), color: factionColor(key), amount: signed(m.impact.loyaltyPlanet), label: short(faction) + ' loyalty' });
+  if (m.impact.loyaltyRival) {
+    const rival = rivalOf(faction), rk = voiceOfName(rival);
+    out.push({ icon: fsvg(rk), color: 'var(--s-failed)', amount: signed(m.impact.loyaltyRival), label: short(rival) + ' loyalty (rival)' });
+  }
+  if (m.impact.alignment) out.push({ icon: use('r-stars'), color: '#7fe0b0', amount: signed(m.impact.alignment), label: 'Alignment' });
+  return out;
+}
+
+function termsOf(row) {
+  const { m, status } = row, faction = factionOfPlanet(m.planet);
+  if (status === 'done') return [['Collected', m.collectAt]];
+  if (status === 'failed') return [['Result', m.endReason || 'Failed']];
+  const out = [];
+  if (status === 'locked') out.push(['Granted on', m.grantedAt]);
+  out.push(['Collect at', m.collectAt]);
+  if (m.execute.some((e) => e.cond === 'next_attempt')) out.push(['One attempt', `The next battle on ${m.planet} map ${m.map}`]);
+  if (m.impact.brokenPenalty) out.push(['Broken promise', signed(m.impact.brokenPenalty) + ' ' + String(faction).split(' ')[0] + ' loyalty']);
+  const band = alignmentBand(m);
+  if (band.min !== undefined) out.push(['Withdrawn if', `Your alignment history drops below ${band.min}`]);
+  if (band.max !== undefined) out.push(['Withdrawn if', `Your alignment history rises above ${band.max}`]);
+  return out;
+}
+
+/** The one line in the status hue that says what is happening. */
+export function noteFor(row, s) {
+  const { m, status } = row;
+  if (status === 'ready') return shipArrived(s, m.planet) ? `${use('s-ready')}All objectives complete. Collect the rewards aboard ${esc(m.collectAt)}.` : `${use('s-ready')}All objectives complete. The rewards wait for ${esc(m.collectAt)}.`;
+  if (status === 'risk') {
+    if (m.objectives.some((o) => o.limit && o.have >= o.need)) return `${use('s-risk')}One more and this fails.`;
+    return `${use('s-risk')}Alignment history is at ${s.alignment || 0}. One more step and this ${m.variant === 'shadow' ? 'Shadow' : 'Light'} favour is withdrawn.`;
+  }
+  if (status === 'failed') return `${use('s-failed')}${esc(m.endReason || 'Failed.')}`;
+  if (status === 'locked') return `${use('s-locked')}Locked: meet the gates below and it is granted aboard ${esc(m.grantedAt)}.`;
+  if (status === 'new') return `${use('s-new')}Logged just now. Progress counts from your next battle on ${esc(m.planet)}.`;
+  if (status === 'done') return `${use('s-done')}Rewards claimed.`;
+  return `${use('u-clock')}Updates after every battle on ${esc(m.planet)}.`;
+}
+
+function objectiveHtml(o, status) {
+  const have = Math.round(o.have * 10) / 10;
+  const ok = !o.limit && o.have >= o.need, bad = (o.limit && o.have >= o.need) || (status === 'failed' && !o.limit && !ok);
+  const st = ok ? (status === 'done' ? 'done' : 'ready') : bad ? (status === 'failed' ? 'failed' : 'risk') : status === 'new' ? 'new' : status === 'done' ? 'done' : status === 'locked' ? 'locked' : 'active';
+  return `<div class="obj${ok ? ' ok' : ''}${bad ? ' bad' : ''}${o.bonus ? ' opt' : ''}">${use(ok ? 'u-check' : bad ? 'u-x' : 'u-open', 'i ck')}<span class="ot">${esc(o.text)}</span>${barHtml(o.have, o.need, st)}<span class="oc num">${num(have)} / ${num(o.need)}</span></div>`;
+}
+
+function loyaltyHtml(row, s) {
+  const { m, status } = row;
+  if (status === 'done' || status === 'failed' || !m.impact.loyaltyPlanet) return '';
+  const faction = factionOfPlanet(m.planet), have = (s.loyalty || {})[faction] || 0, gain = m.impact.loyaltyPlanet;
+  const tier = LOYALTY_TIERS.find((t) => t > have) || LOYALTY_TIERS[LOYALTY_TIERS.length - 1];
+  const a = Math.max(0, Math.min(have, tier)), b = Math.max(0, Math.min(tier, have + gain)), pct = (x) => (x / tier) * 100;
+  return `<div class="loy"><div class="lh"><span>${esc(String(faction).split(' ')[0])} loyalty</span><b class="num">${have} → ${have + gain}</b></div>
+   <div class="lb"><span style="width:${pct(Math.min(a, b))}%"></span><em style="left:${pct(Math.min(a, b))}%;width:${pct(Math.abs(b - a))}%"></em></div>
+   <div class="lt"><span>0</span><span>Tier ${LOYALTY_TIERS.indexOf(tier) + 1} unlock · ${tier}</span></div></div>`;
+}
+
+export function actionsHtml(row, s, catalog) {
+  const { m, status } = row, ship = m.collectAt;
+  if (status === 'ready') {
+    if (!shipArrived(s, m.planet)) return `<div class="claimed-stamp">${use('u-clock')}Waiting for ${esc(ship)}</div><div class="shipnote">It arrives when ${esc(m.planet)} map 1 averages 3 stars.</div>`;
+    const line = catalog.questLines[m.questLine];
+    return `<button class="btn claim" data-act="collect">${use('s-ready')}Collect aboard ${esc(ship)}</button><div class="shipnote">Collecting continues <b>${esc(line ? line.name : m.questLine)}</b>.</div>`;
+  }
+  if (status === 'locked') return `<div class="claimed-stamp">${use('s-locked')}Locked</div><div class="shipnote">Granted aboard <b>${esc(m.grantedAt)}</b> once every gate is met.</div>`;
+  if (status === 'done') return `<div class="claimed-stamp">${use('s-done')}Collected aboard ${esc(ship)}</div>`;
+  if (status === 'failed') return `<button class="btn" data-act="dismiss">Remove from log</button>`;
+  return `<button class="btn${m.tracked ? '' : ' primary'}" data-act="track" aria-pressed="${!!m.tracked}">${use('u-pin')}${m.tracked ? 'Tracking in battle' : 'Track in battle'}</button>${m.role === 'primary' ? '' : '<button class="btn ghost" data-act="abandon">Abandon favour</button>'}`;
+}
+
+/** packs: content/dialog/voicepacks.json (null while it loads; the motivation line is simply absent until then). */
+export function dossierHtml(row, s, catalog, ctx, packs = null) {
+  const { m, status: st } = row, g = m.giver, p = progress(m), color = factionColor(g.faction);
+  const cast = packs && packs.factions && packs.factions[g.faction] && packs.factions[g.faction].characters;
+  const char = cast ? cast.find((c) => c.name === g.name) : null;
+  const al = ALIGN.findIndex((a) => a.c === g.align);
+  const portrait = g.faction === 'unknown' ? `<div class="sil">${HOOD_PORTRAIT}</div>` : `<img src="content/dialog/portraits/${esc(portraitSlug(g.name))}.png" alt="Portrait of ${esc(g.name)}" data-portrait>`;
+  const line = catalog.questLines[m.questLine];
+  const total = catalog.missions.filter((d) => d.questLine === m.questLine && d.variant === m.variant).length;
+  const gates = gateViews(row, s, ctx), impact = impactViews(m);
+  const outcome = st === 'failed' && m.impact.brokenPenalty && !/^Abandoned/.test(m.endReason || '')
+    ? [{ icon: REWARD_ICON.penalty, color: 'var(--s-failed)', amount: signed(m.impact.brokenPenalty), label: String(factionOfPlanet(m.planet)).split(' ')[0] + ' loyalty', neg: true }]
+    : m.rewards.map((r) => rewardView(r, m, catalog));
+  const where = m.planet + ' · map ' + m.map + (m.execute.some((e) => e.cond === 'next_attempt') ? ' · one attempt' : '');
+  const quoted = /"/.test(m.briefing || '');
+  return `<button class="dback" data-act="back">${use('u-back')}All missions</button>
+ <article class="dossier st-${st}" style="--sc:var(${STATUS[st].v});--fc:${color}">
+  <div class="dmain">
+   <div class="dk"><span class="type">${use(TYPE_ICON[m.type] || 't-contract')}${m.role === 'primary' ? 'Primary mission' : 'Secondary mission'}${m.variant ? ' · ' + (m.variant === 'light' ? 'Light' : 'Shadow') : ''}</span>${tagHtml(st)}<span class="where">${esc(where)}</span></div>
+   <h2 class="dtitle">${esc(m.title)}</h2>
+   <div class="qline">${use('i-log')}${esc(line ? line.name : m.questLine)} · step ${m.step} of ${total}</div>
+   <div class="dprog">${barHtml(p.have, p.need, st, true)}<span class="pct num">${Math.round(p.frac * 100)}<small>%</small></span></div>
+   <div class="dnote">${noteFor(row, s)}</div>
+   <div class="brief"><q${quoted ? ' style="quotes:none"' : ''}>${esc(m.briefing)}</q><div class="who">— ${esc(g.name)}</div></div>
+   <div class="sec"><h3>${st === 'locked' ? 'OBJECTIVES (WHEN UNLOCKED)' : 'OBJECTIVES'}</h3>${m.objectives.map((o) => objectiveHtml(o, st)).join('')}</div>
+   ${gates.length ? `<div class="sec"><h3>GATES</h3><div class="gates">${gates.map((q) => `<div class="gate ${q.ok ? 'ok' : 'no'}">${use(q.ok ? 'u-check' : 's-locked')}<span><small>${esc(q.kind)}</small>${esc(q.text)}</span></div>`).join('')}</div></div>` : ''}
+   ${impact.length ? `<div class="sec"><h3>${m.role === 'secondary' ? 'FACTION IMPACT' : 'FACTION STANDING'}</h3><div class="impact">${impact.map((q) => `<div class="imp" style="--ic:${q.color}">${q.icon}<b class="num">${q.amount}</b>${esc(q.label)}</div>`).join('')}</div></div>` : ''}
+   <div class="sec"><h3>${st === 'failed' ? 'OUTCOME' : 'REWARDS'}</h3><div class="rewards">${outcome.map((v) => `<div class="rwd${v.neg ? ' neg' : ''}" style="--rc:${v.color}"><span class="ri">${use(v.icon)}</span><b class="num">${esc(v.amount)}</b><small>${esc(v.label)}</small></div>`).join('')}</div></div>
+   <div class="sec"><h3>TERMS</h3><div class="terms">${termsOf(row).map(([a, b]) => `<div><b>${esc(a)}</b><span class="${/−|Broken/.test(a + b) ? 'neg' : ''}">${esc(b)}</span></div>`).join('')}</div></div>
+  </div>
+  <aside class="dside">
+   <div class="giver">
+    <div class="pframe">${portrait}<span class="edge"></span><span class="fbadge">${fsvg(g.faction)}${esc(factionName(g.faction))}</span></div>
+    <div><div class="gname">${esc(g.name)}</div><div class="grole">${esc(m.grantedAt)}</div>${char && char.motivation ? `<div class="gmot">“${esc(char.motivation)}”</div>` : ''}</div>
+   </div>
+   <dl class="facts"><dt>Faction</dt><dd>${fsvg(g.faction)}${esc(factionName(g.faction))}</dd><dt>Homeworld</dt><dd>${esc(homeworld(g.faction))}</dd><dt>Mission</dt><dd>${esc(m.planet)}</dd></dl>
+   ${al >= 0 ? `<div class="align"><div class="al-h"><span>Good</span><span>Alignment</span><span>Evil</span></div>
+    <div class="rail">${ALIGN.map((a, i) => `<i class="${i === al ? 'on' : ''}" style="--c:${a.col}"></i>`).join('')}</div>
+    <div class="rail-codes">${ALIGN.map((a, i) => `<span class="${i === al ? 'on' : ''}">${a.c}</span>`).join('')}</div>
+    <div class="al-n" style="color:${ALIGN[al].col}">${ALIGN[al].n}<small>${ALIGN[al].t}</small></div></div>`
+    : `<div class="align"><div class="al-h"><span>Good</span><span>Alignment</span><span>Evil</span></div><div class="rail">${ALIGN.map(() => '<i style="--c:#5c4f80"></i>').join('')}</div><div class="al-n" style="color:#b49cff">Unreadable<small>The Contact shows no allegiance</small></div></div>`}
+   ${loyaltyHtml(row, s)}
+   <div class="actions">${actionsHtml(row, s, catalog)}</div>
+  </aside>
+ </article>`;
+}
+
+/** The claim moment: fourteen hexes fly out. Fixed angles: nothing here needs randomness. */
+export function burstHtml() {
+  return `<div class="burst">${Array.from({ length: 14 }, (_, i) => { const a = (i / 14) * Math.PI * 2, d = 90 + ((i * 37) % 60); return `<span style="--x:${(Math.cos(a) * d).toFixed(1)}px;--y:${(Math.sin(a) * d).toFixed(1)}px;animation-delay:${i * 12}ms"></span>`; }).join('')}</div>`;
 }
