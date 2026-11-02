@@ -204,7 +204,7 @@ function objectiveHtml(o, status) {
   const have = Math.round(o.have * 10) / 10;
   const ok = !o.limit && o.have >= o.need, bad = (o.limit && o.have >= o.need) || (status === 'failed' && !o.limit && !ok);
   const st = ok ? (status === 'done' ? 'done' : 'ready') : bad ? (status === 'failed' ? 'failed' : 'risk') : status === 'new' ? 'new' : status === 'done' ? 'done' : status === 'locked' ? 'locked' : 'active';
-  return `<div class="obj${ok ? ' ok' : ''}${bad ? ' bad' : ''}${o.bonus ? ' opt' : ''}">${use(ok ? 'u-check' : bad ? 'u-x' : 'u-open', 'i ck')}<span class="ot">${esc(o.text)}</span>${barHtml(o.have, o.need, st)}<span class="oc num">${num(have)} / ${num(o.need)}</span></div>`;
+  return `<div class="obj${ok ? ' ok' : ''}${bad ? ' bad' : ''}${o.bonus ? ' opt' : ''}">${use(ok ? 'u-check' : bad ? 'u-x' : 'u-open', 'i ck')}<span class="ot">${esc(o.text)}</span>${barHtml(o.have, o.need, st)}<span class="oc num">${num(o.limit ? have : Math.min(have, o.need))} / ${num(o.need)}</span></div>`;
 }
 
 function loyaltyHtml(row, s) {

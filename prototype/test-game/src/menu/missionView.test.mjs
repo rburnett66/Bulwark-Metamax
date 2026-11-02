@@ -204,6 +204,13 @@ test('faction impact and terms for a secondary; a failed one shows its outcome',
   assert.ok(failed.includes('OUTCOME') && failed.includes('rwd neg') && failed.includes('−45') && failed.includes('Broken promise: the attempt ended short.'));
 });
 
+test('an objective past its need reads full, never 8 / 4', () => {
+  const s = defaultSave(), m = logMission(s, def('P-VER-03'), opt);
+  for (const o of m.objectives) o.have = o.need * 2;
+  const html = dossier(s, m, 'ready');
+  assert.ok(html.includes('4 / 4') && !html.includes('8 / 4'));
+});
+
 test('a planet with no ship says so in its note', () => {
   const s = defaultSave(), m = logMission(s, def('P-VER-01'), opt);
   assert.match(noteFor({ m, status: 'ready' }, s), /wait for Halbrecht/);

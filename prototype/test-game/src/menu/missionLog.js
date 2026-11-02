@@ -151,5 +151,10 @@ export function createMissionLog({ doc, host, chipPing, gateOpts = () => ({}), o
     return sync();
   }
   function close() { log.classList.remove('on', 'detail'); }
-  return { open, close, sync, drainQueue, isOpen };
+  /** The mission that unlocks a tech node, for the Tech Net's gate line. */
+  function unlockedBy(id) {
+    const t = catalog && catalog.techUnlocks[id], m = t && t.by && catalog.missions.find((x) => x.id === t.by);
+    return m ? m.title : null;
+  }
+  return { open, close, sync, drainQueue, isOpen, unlockedBy };
 }

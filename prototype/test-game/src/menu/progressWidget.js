@@ -3,7 +3,7 @@
  * into it [MM-story_mvkhegop_j]. Menu-Progression-Design §2–3.
  *
  *   createProgressWidget(doc, { onOpen }) → { el, render(values), playRewards(ledger, finalValues, layer) → Promise }
- *     values = { xp, gold, stars, research, techDot, missions }   onOpen(key) — a tap on an indicator ('missions'|'xp'|'gold'|'stars'|'research')
+ *     values = { xp, gold, stars, research, techDot, missions, inventory }   onOpen(key) — a tap on an indicator ('missions'|'inventory'|'xp'|'gold'|'stars'|'research')
  *
  * DOM only (Web Animations API for the flight); the numbers come from the save. Presentation: nothing here changes a value.
  */
@@ -44,7 +44,8 @@ const CSS = `
 .bwm-prog .mlbtn .glyph { position:relative; width:30px; height:30px; color:#f2c869; display:grid; place-items:center; }
 .bwm-prog .mlbtn .glyph svg { width:26px; height:26px; display:block; }
 .bwm-prog .mlbtn .pw-v b { font-size:12px; letter-spacing:.2em; }
-.bwm-prog .mlbtn .pw-v label { letter-spacing:.2em; white-space:nowrap; }
+.bwm-prog .mlbtn .pw-v label { letter-spacing:.2em; white-space:nowrap; text-transform:uppercase; }
+.bwm-prog .pw-ic svg { width:18px; height:18px; display:block; margin:auto; }
 .bwm-prog .mlbtn .pw-v label em { font-style:normal; color:#5fe39a; font-weight:700; }
 .bwm-prog .mlbtn .count { position:absolute; right:-7px; top:-7px; min-width:18px; height:18px; padding:0 5px; display:none; place-items:center; font-size:10px; font-weight:900;
   color:#0c0e12; font-variant-numeric:tabular-nums; clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%); }
@@ -54,6 +55,9 @@ const CSS = `
 .bwm-prog .mlbtn.ping { animation:ml-ping 1.1s ease-out 2; }
 @keyframes ml-ping { 0%{box-shadow:0 0 0 0 rgba(52,225,255,.8),0 0 0 1px #34e1ff} 100%{box-shadow:0 0 0 14px rgba(52,225,255,0),0 0 0 1px #34e1ff} }
 @media (prefers-reduced-motion: reduce) { .bwm-prog .mlbtn.ping { animation:none; } }
+.bwm-prog button.invbtn { border-color:#1f4a55; background:linear-gradient(180deg,rgba(18,36,44,.9),rgba(20,22,26,.9)); }
+.bwm-prog .invbtn .glyph { color:#34e1ff; }
+.bwm-prog .invbtn[aria-expanded="true"] { border-color:#34e1ff; box-shadow:0 0 0 1px #34e1ff,0 0 22px rgba(52,225,255,.3); }
 /* the rewards card + flying tokens */
 .bwm-rw { position:absolute; inset:0; z-index:40; display:flex; align-items:center; justify-content:center; background:rgba(7,9,12,.55); cursor:pointer; animation:rw-in .3s ease-out; }
 .bwm-rw.out { animation:rw-out .45s ease-in forwards; }
@@ -106,14 +110,15 @@ const ICON = { gold: '◆', stars: '★', xp: '⬢', research: '⬡' };
 export function createProgressWidget(doc, { onOpen } = {}) {
   if (!doc.getElementById('bwm-prog-style')) { const st = doc.createElement('style'); st.id = 'bwm-prog-style'; st.textContent = CSS; doc.head.appendChild(st); }
   const el = doc.createElement('div'); el.className = 'bwm-prog'; el.setAttribute('aria-label', 'Your progress');
-  const chip = (key, glyph, word, title) => `<button class="mlbtn" data-econ="${key}" aria-expanded="false" title="${title}"><span class="glyph"><svg class="i"><use href="#${glyph}"/></svg><span class="count" data-count></span></span><span class="pw-v"><b>${word}</b><label data-sub></label></span></button>`;
+  const chip = (key, glyph, word, title, cls = '') => `<button class="mlbtn${cls}" data-econ="${key}" aria-expanded="false" title="${title}"><span class="glyph"><svg class="i"><use href="#${glyph}"/></svg><span class="count" data-count></span></span><span class="pw-v"><b>${word}</b><label data-sub></label></span></button>`;
   el.innerHTML = `
     ${chip('missions', 'i-log', 'MISSIONS', 'Mission Log')}
+    ${chip('inventory', 'i-inv', 'INVENTORY', 'Inventory', ' invbtn')}
     <button class="pw-rank" data-econ="xp" title="Commander rank"><span class="pw-hex"><span data-lvl>1</span></span>
       <span class="pw-rk"><i data-title>Recruit</i><span class="pw-xpbar"><span data-bar></span></span><em data-xp>0 / 300 XP</em></span></button>
-    <button data-econ="gold" title="Banked gold — spend it in the Tech Tree"><span class="pw-ic">${ICON.gold}</span><span class="pw-v"><b data-v>0</b><label>GOLD</label></span></button>
-    <button data-econ="stars" title="Best stars over every map"><span class="pw-ic">${ICON.stars}</span><span class="pw-v"><b data-v>0</b><label>STARS</label></span></button>
-    <button data-econ="research" title="Tech Tree upgrades researched"><span class="pw-ic">${ICON.research}</span><span class="pw-v"><b data-v>0/${TECH_TOTAL}</b><label>RESEARCH</label></span><i class="bwm-dot" data-dot></i></button>`;
+    <button data-econ="gold" title="Banked gold — spend it in the Tech Tree"><span class="pw-ic"><svg class="i"><use href="#r-gold"/></svg></span><span class="pw-v"><b data-v>0</b><label>GOLD</label></span></button>
+    <button data-econ="stars" title="Best stars over every map"><span class="pw-ic"><svg class="i"><use href="#r-stars"/></svg></span><span class="pw-v"><b data-v>0</b><label>STARS</label></span></button>
+    <button data-econ="research" title="Tech Tree upgrades researched"><span class="pw-ic"><svg class="i"><use href="#r-research"/></svg></span><span class="pw-v"><b data-v>0/${TECH_TOTAL}</b><label>RESEARCH</label></span><i class="bwm-dot" data-dot></i></button>`;
   const btn = (k) => el.querySelector('[data-econ="' + k + '"]');
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-econ]'); if (b && onOpen) onOpen(b.dataset.econ); });
   const shown = { xp: 0, gold: 0, stars: 0, research: 0 };
@@ -134,10 +139,11 @@ export function createProgressWidget(doc, { onOpen } = {}) {
     for (const k of ['xp', 'gold', 'stars', 'research']) if (values[k] != null) setValue(k, values[k]);
     el.querySelector('[data-dot]').classList.toggle('on', !!values.techDot);
     if (values.missions) renderChip('missions', values.missions);
+    if (values.inventory) renderChip('inventory', values.inventory);
   }
   function renderChip(key, c) {
     const b = btn(key), count = b.querySelector('[data-count]'), sub = b.querySelector('[data-sub]');
-    count.textContent = c.count ? String(c.count) : '';
+    count.textContent = c.text || (c.count ? String(c.count) : '');
     count.className = 'count' + (c.tone ? ' ' + c.tone : '');
     sub.textContent = '';
     if (c.sub[0]) { const em = doc.createElement('em'); em.textContent = c.sub[0]; sub.appendChild(em); sub.appendChild(doc.createTextNode(' · ')); }

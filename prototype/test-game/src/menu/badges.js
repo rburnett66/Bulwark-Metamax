@@ -39,3 +39,8 @@ export function missionChip(b) {
     sub: ready ? [ready + ' ready', active + ' active'] : [null, active + ' active'],
   };
 }
+
+/** The header INVENTORY chip [MM-story_mvzkdvrl_1l]: cyan with what was gained since the last visit. */
+export function inventoryChip(fresh, total) {
+  return { count: fresh, text: fresh ? '+' + Math.min(fresh, 999) : '', tone: fresh ? 'new' : null, sub: [null, total + ' resources'] };
+}

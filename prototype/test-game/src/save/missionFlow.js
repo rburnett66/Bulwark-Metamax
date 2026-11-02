@@ -15,6 +15,7 @@
  */
 import { STAR_GATE } from './save.js';
 import { logMission, claim, bankBattle, missionStatus, failMission, alignmentBand, factionOfPlanet } from './missions.js';
+import { bankHarvest } from './inventory.js';
 import { levelFromXp } from '../data/progression.js';
 import { techCtxFromSave, planetOpen } from '../menu/techSave.js';
 
@@ -126,6 +127,7 @@ export function recordPlanetMap(s, result) {
 /** Everything a finished, played battle changes in the log. */
 export function settleBattle(s, result, catalog, ctx = flowCtx(s)) {
   const out = bankBattle(s, result, ctx);
+  out.harvested = bankHarvest(s, result, catalog);
   out.arrived = recordPlanetMap(s, result).arrived;
   out.logged = syncMissions(s, catalog, ctx).map((m) => m.id);
   return out;
