@@ -202,6 +202,35 @@
   ],
   "length": 21.12
  },
+ "powder": {
+  "lods": [
+   {
+    "file": "powder_lod0.glb",
+    "tris": 5356,
+    "drawCalls": 2,
+    "bytes": 654596
+   },
+   {
+    "file": "powder_lod1.glb",
+    "tris": 2060,
+    "drawCalls": 2,
+    "bytes": 350568
+   },
+   {
+    "file": "powder_lod2.glb",
+    "tris": 516,
+    "drawCalls": 1,
+    "bytes": 221996
+   }
+  ],
+  "engines": 6,
+  "engineColor": [
+   1.0,
+   0.3,
+   0.14
+  ],
+  "length": 22.39
+ },
  "tech": {
   "lods": [
    {

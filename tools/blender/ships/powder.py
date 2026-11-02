@@ -117,7 +117,7 @@ def make():
     spire("spire_stern", -8.6, 0.0, 1.8, 0.3, 2.2, stone, tip=bronze)
 
     # ── red heraldic banners ────────────────────────────────────────────────────────────
-    banner("banner_front", 2.63, 0.0, 4.7, 1.5, 1.1, cloth, bronze, face="X")      # the great banner
+    banner("banner_front", 2.63, 0.0, 4.75, 1.65, 1.35, cloth, bronze, face="X")      # the great banner
     banner("banner_spire", -0.57, 0.0, 5.5, 0.8, 0.5, cloth, bronze, face="X")
     for x in (-7.0, -2.0, 3.0, 7.6):                                                 # flank banners on the galleries
         banner("banner_flank", x, 3.08, 0.85, 2.3, 0.8, cloth, bronze)
