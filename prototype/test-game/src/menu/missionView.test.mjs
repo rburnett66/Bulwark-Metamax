@@ -1,12 +1,13 @@
 // [MM-story_mvyqoo07_f] The Mission Log list: rows, tabs, sort, status colour; drawn from real content.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { defaultSave } from '../save/save.js';
 import { logMission, markMissionSeen, abandon, trackerLine, setTracked } from '../save/missions.js';
 import { flowCtx, syncMissions } from '../save/missionFlow.js';
 import { missionRows, sortRows, listHtml, tabsHtml, summaryHtml, rowHtml, barHtml, rewardView, STATUS, ORDER, TABS, TYPE_ICON, REWARD_ICON, dossierHtml, actionsHtml, gateViews, impactViews, noteFor, burstHtml } from './missionView.js';
 import { MISSION_LOG_CSS } from './missionLogCss.js';
+import { portraitSlug } from '../comm/commCard.js';
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
 const def = (id) => CATALOG.missions.find((m) => m.id === id);
@@ -150,6 +151,7 @@ test('every giver in the content has a portrait file and a place in the voice pa
     const cast = PACKS.factions[m.giver.faction];
     assert.ok(cast, m.id + ' faction');
     assert.ok(cast.characters.some((c) => c.name === m.giver.name), m.id + ' ' + m.giver.name);
+    assert.ok(existsSync(new URL('../../content/dialog/portraits/' + portraitSlug(m.giver.name) + '.png', import.meta.url)), m.giver.name + ' portrait');
   }
 });
 

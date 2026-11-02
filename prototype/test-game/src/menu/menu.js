@@ -21,6 +21,7 @@ import { computeBadges, seenFor, missionChip } from './badges.js';
 import { badge as missionBadge } from '../save/missions.js';
 import { createProgressWidget } from './progressWidget.js';
 import { createMissionLog } from './missionLog.js';
+import { ensureMissionIcons } from './missionIcons.js';
 // The faction registry (GGG-3). Side-effect import + global namespace: factions.js is a classic
 // script with no ES exports, so a named import is a SyntaxError. See voice.js for the full note.
 import '../data/factions.js';
@@ -333,6 +334,7 @@ export function createMenu(mountEl, cbs) {
   root.appendChild(top);
   // the Mission Log sits over the main screen, under the live top bar (Mission-Log-Design §1) [MM-story_mvyqoo07_f]
   const mlHost = el(doc, 'div');
+  ensureMissionIcons(doc);
   const missionLog = createMissionLog({ doc, host: mlHost, chipPing: () => widget.ping('missions'), gateOpts: () => gateOverride() || {},
     onChange: () => refreshProgress(), onClose: () => show('main'), onCollected: () => { if (cbs.onTechChanged) cbs.onTechChanged(); playPendingRewards(); } });
 
