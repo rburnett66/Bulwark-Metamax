@@ -539,7 +539,7 @@ export function createMenu(mountEl, cbs) {
     }
     // the faction's tech badges (they were on the FACTIONS cards): lit once the loyalty threshold is reached
     {
-      const sv = loadSave(), loyalty = (sv.loyalty || {})[name] || 0, tier = (sv.tech || {})[name] || 0;
+      const sv = loadSave(), loyalty = (sv.loyalty || {})[name] || 0, tier = (sv.factionTiers || {})[name] || 0;
       const row = fac && MAPDATA.factions.find((r) => r.Faction_ID === fac.ordinal);
       const tech = (row && MAPDATA.techTree.find((t) => t.Faction === row.Faction_Name)) || {};
       const box = doss.querySelector('.bwm-facts .bwm-badges');

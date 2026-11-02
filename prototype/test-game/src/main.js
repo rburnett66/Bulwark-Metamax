@@ -3,7 +3,9 @@ import { buildCampaignMap, buildTerrainMap, resolveResourceTypes } from './sim/m
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, resetSave, grantBattleRewards } from './save/save.js';
-import { xpForBattle } from './data/progression.js';
+import { xpForBattle, levelFromXp } from './data/progression.js';
+import { battleResult, bankBattle, planetOfFaction } from './save/missions.js';
+import { createBattleTally, tallyEvents, noteHarvesters, noteTroopDeployed, finishTally } from './save/battleTally.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
 import { questOfferDue, questClosingDue } from './comm/questBeats.js';
@@ -269,6 +271,7 @@ export function boot(mountEl, seed) {
     inputHandle = makeInput();
   }
   let pendingCarry = null;   // campaign carry (gold + defenses) applied by restart() until the map changes by hand
+  let battleTally = createBattleTally();   // this battle's counts, from the drained events: banked at battle end only [MM-story_mvyqol3w_d]
   let runContract = null;    // the ACCEPTED quest contract for the current map run (judged at match end)
 
   // ---------------------------------------------------------------------
@@ -319,6 +322,7 @@ export function boot(mountEl, seed) {
     if (res.ok) {
       recordCommand(log, sim.tick, cmd);
       killRec.command(sim.tick, cmd);
+      if (cmd.type === 'deployTroop') noteTroopDeployed(battleTally);
     } else if (res.reason) {
       flashMessage(hud, res.reason);
     }
@@ -347,6 +351,7 @@ export function boot(mountEl, seed) {
         structTiers: currentMapId && !(currentMap && currentMap.fromForge) ? sv.structTiers : null,
         mapId: currentMapId, faction: currentTestFaction || null };
       sim = createSim(currentSeed, simInit);
+      battleTally = createBattleTally();
       log = createLog(currentSeed, simInit);   // capture the init so an in-memory replay reproduces THIS board, not default MAP/WAVES
     }
     ui = createUiState();
@@ -1041,6 +1046,7 @@ export function boot(mountEl, seed) {
         }
         const evs = stepSim(sim, FIXED_DT);
         killRec.after(sim, evs);   // Kill Camera memory — outside the tick path [MM-task_mvjng7sh_a]
+        if (mode === 'play') { tallyEvents(battleTally, evs); noteHarvesters(battleTally, sim.harvesterIds); }
         if (evs && evs.length) {
           for (let i = 0; i < evs.length; i++) {
             pendingEvents.push(evs[i]);
@@ -1116,6 +1122,9 @@ export function boot(mountEl, seed) {
           if (mode === 'play' && currentMapId) {
             rewards = grantBattleRewards(saveBefore, { mapId: currentMapId, result: sim.result, finalScore: sim.finalScore,
               waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, xpFor: xpForBattle });
+            const played = battleResult({ mapId: currentMapId, planet: planetOfFaction(currentTestFaction), faction: currentTestFaction, result: sim.result,
+              finalScore: sim.finalScore, mapScore: sim.mapScore, waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, tally: finishTally(battleTally) });
+            updateSave((sv) => { bankBattle(sv, played, { level: (x) => levelFromXp(x.progress.xp).level }); });
           }
           // the SECONDARY's end-of-match reward faction (captured before runContract is cleared)
           const rewardFaction = (runContract && runContract.giver) || lastWaveFaction;

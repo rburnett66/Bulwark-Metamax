@@ -80,12 +80,21 @@ export function buildOffer(mapId, map, voicePacks, save) {
   };
 }
 
-function addLoyalty(s, faction, delta) {
+export const DECLINE = Object.freeze({ cost: DECLINE_COST, rivalGain: DECLINE_RIVAL_GAIN });
+
+/** A faction's rival (workbook Rival_Faction), by display name. Null when it has none. */
+export function rivalOf(factionName) {
+  const f = REG.FACTIONS.find((x) => x.name === factionName);
+  const row = f && factionRow(f.ordinal);
+  return row && row.Rival_Faction ? (factionByOrdinal(row.Rival_Faction) || {}).name || null : null;
+}
+
+export function addLoyalty(s, faction, delta) {
   if (!faction || !delta) return;
   const l = (s.loyalty || (s.loyalty = {}));
   l[faction] = (l[faction] || 0) + delta;
   // tech tiers are CUMULATIVE loyalty thresholds (workbook): recompute, never revoke
-  const t = (s.tech || (s.tech = {}));
+  const t = (s.factionTiers || (s.factionTiers = {}));
   let tier = t[faction] || 0;
   while (tier < 3 && l[faction] >= TECH_AT[tier]) tier++;
   t[faction] = tier;
