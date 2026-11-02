@@ -104,8 +104,8 @@ def hull_r(x):
 
 
 def make():
-    hull = mat("hull", (0.25, 0.20, 0.10), rough=0.45, metal=0.7)       # brass
-    trim = mat("trim", (0.085, 0.075, 0.05), rough=0.5, metal=0.6)        # dark bronze
+    hull = mat("hull", (0.13, 0.11, 0.055), rough=0.45, metal=0.7)       # brass
+    trim = mat("trim", (0.045, 0.045, 0.035), rough=0.5, metal=0.6)        # dark bronze
     glass = mat("glass", (0.03, 0.12, 0.14), rough=0.15, metal=0.1)     # dark-teal dome glass
     iron = mat("iron", (0.09, 0.09, 0.09), rough=0.6, metal=0.4)        # stacks, vents
     port = mat("port", (0.6, 0.3, 0.05), emit=(1.0, 0.52, 0.14), strength=7)    # orange portholes
