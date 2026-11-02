@@ -260,6 +260,35 @@
   ],
   "length": 22.29
  },
+ "tug": {
+  "lods": [
+   {
+    "file": "tug_lod0.glb",
+    "tris": 560,
+    "drawCalls": 2,
+    "bytes": 225992
+   },
+   {
+    "file": "tug_lod1.glb",
+    "tris": 560,
+    "drawCalls": 2,
+    "bytes": 225992
+   },
+   {
+    "file": "tug_lod2.glb",
+    "tris": 416,
+    "drawCalls": 2,
+    "bytes": 213864
+   }
+  ],
+  "engines": 3,
+  "engineColor": [
+   0.6,
+   0.8,
+   1.0
+  ],
+  "length": 1.28
+ },
  "water": {
   "lods": [
    {
