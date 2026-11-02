@@ -19,6 +19,64 @@
 - Header: `progressWidget.js` (rank, gold, stars, research) inside `.bwm-prog`; red dots from `src/menu/badges.js`.
 - No mission list, no per-objective tracking, no authored missions.
 
+### 1.1 What the game can measure today (objective catalogue)
+
+Audit of `main` @ `02352f4`, 2026-11-01. Paths are under `prototype/test-game/src/`. The sim emits rich events (`kill` carries unitId/lane/wave, `damage` carries type/target, structures emit build/upgrade/destroy), but `stepSim` (`sim/core.js:1233`) drains them and nothing tallies them. The save holds no lifetime totals: everything per-battle resets. An objective kind is only buildable when its row is tier A or B.
+
+**Tier A — already persisted (read from the save; no new counting):**
+
+| objective kind | source |
+|---|---|
+| Win map *N* | `maps[id].beaten` (`save/save.js:110-127`) |
+| Reach average stars ≥ *x* on a map; total stars ≥ *n* | `maps[id].avg`, derived total (`save.js:126,141`) |
+| Any 5-star wave | `lastRunFiveStar` (last battle only, `save.js:107`) |
+| Reach rank / level *n* | `progress.xp` (`data/progression.js:24`) |
+| Fulfil a faction contract | `maps[id].contract` (`save/contracts.js:92-131`) |
+| Reach loyalty tier *t* with a faction | `loyalty[f]`, tiers 100/260/520 (`contracts.js:78-85`) |
+| Beat a faction *n* times | `factionRecords[f].mapsWon` (`save.js:110-117`) |
+| Buy *n* tech nodes / open a portal | `tech.owned` (`save.js:199-222`) |
+| Raise the harvester to level *n* | `harvesterLevel` (`main.js:844-853`) |
+| Shift alignment past a threshold | `alignment` (`contracts.js:126`) |
+
+**Tier B — per-battle values that exist at battle end (add to `applyBattle`; no sim change):**
+
+| objective kind | source |
+|---|---|
+| Kill *n* enemies (total only) | `eco.kills` (`sim/economy.js:107-137`) |
+| Haul *n* rare / epic quest crystals | `mapScore.questRed` / `questGreen` (`sim/harvest.js:495-496`) |
+| Earn *n* gold from common / uncommon harvest | `mapScore.goldFromPrimary` / `goldFromPremium` (`harvest.js:490-491`) |
+| Spend *n* gold in one battle | `state.goldSpent` (`economy.js:84-87`) |
+| Per-wave star flags, *n* waves: no core damage, no harvester lost, primary quota ≥ 60 %, premium claimed, under par time | `sim.waveStars[]` flags (`sim/waves.js:110-137`) |
+| Score ≥ *n*; finish under *m* minutes | final score object (`sim/core.js:182-215`) |
+| Take *n* wave bonuses / a specific bonus | `state.bonuses.owned[]` (`sim/bonuses.js:55,131`) |
+
+**Tier C — the event exists but nothing counts it (needs a battle-end tally from the event stream, MLG-2):**
+
+| objective kind | event |
+|---|---|
+| Kill *n* of a unit type / faction / domain (e.g. flyers) | `kill` (`sim/combat.js:715`) — no killer credit today |
+| Kills by a tower type, the super-cannon or mines | `damage.sourceId` (`combat.js:513`), cannon `core.js:1140`, mines `sim/mines.js:100` |
+| Build / upgrade *n* of a structure type or to tier *t* | `structures.js:193,233,344,356` |
+| Lose no more than *n* walls / structures | destroyed (`combat.js:526`); `structuresLostThisWave` is presentation-only (`main.js:908`) |
+| Keep base HP ≥ *x* % / take ≤ *n* damage | `damage` with target `base` |
+| Deploy *n* troops | `cmdDeployTroop` (command log only, `core.js` ~498) |
+| Lose no harvesters / troops | defender-side `kill` (`combat.js:715`) |
+| Survive a faction ability (stuns, freezes, raises, mirrors) | `sim/abilities.js:140-354` |
+
+**Tier D — not possible yet:**
+- Survey (no survey-site event; galaxy and planet views are not counted).
+- The Unknown Contact favour (`contactCall` exists but is not wired up or saved).
+- Named planet resources: harvest counts by tier/colour; the names in `planets.js` are presentation. Haul objectives are therefore written per tier and shown with the planet's resource name.
+- Losses and retries are not counted.
+
+**Consequences for the design prototype's sample missions:**
+- *Rootsong for the Vanguard*, *Order Through Fire* (contracts) and *First Light on Verdance* (campaign) are A/B today.
+- *Silk for the Wings* is B when written as "common/uncommon gold on Florael".
+- *Silence the Blight* (kills of one faction), *Not One Brick* (walls lost) and *Clear the Flight Lanes* (flyer kills) need tier C tallies.
+- *Chart the Far Side* (survey) and *A Quiet Exchange* (favour) are tier D.
+
+**Save defect to fix first in MLG-2:** `defaultSave()` declares `tech` twice (`save.js:37,45`), so the per-faction tiers `contracts.js:83` writes as `s.tech[faction]` share an object with `tech.owned`/`tech.paid`.
+
 ## 2. Data model — `save.missions[]`
 
 ```js
