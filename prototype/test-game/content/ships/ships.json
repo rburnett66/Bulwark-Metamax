@@ -172,5 +172,34 @@
    1.0
   ],
   "length": 21.12
+ },
+ "water": {
+  "lods": [
+   {
+    "file": "water_lod0.glb",
+    "tris": 4968,
+    "drawCalls": 2,
+    "bytes": 577872
+   },
+   {
+    "file": "water_lod1.glb",
+    "tris": 3720,
+    "drawCalls": 2,
+    "bytes": 477964
+   },
+   {
+    "file": "water_lod2.glb",
+    "tris": 2012,
+    "drawCalls": 2,
+    "bytes": 341196
+   }
+  ],
+  "engines": 5,
+  "engineColor": [
+   0.26,
+   1.0,
+   0.82
+  ],
+  "length": 22.99
  }
 }
