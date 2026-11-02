@@ -173,6 +173,35 @@
   ],
   "length": 21.12
  },
+ "tech": {
+  "lods": [
+   {
+    "file": "tech_lod0.glb",
+    "tris": 4192,
+    "drawCalls": 2,
+    "bytes": 545568
+   },
+   {
+    "file": "tech_lod1.glb",
+    "tris": 3012,
+    "drawCalls": 2,
+    "bytes": 432800
+   },
+   {
+    "file": "tech_lod2.glb",
+    "tris": 644,
+    "drawCalls": 2,
+    "bytes": 232976
+   }
+  ],
+  "engines": 6,
+  "engineColor": [
+   1.0,
+   0.8,
+   0.34
+  ],
+  "length": 22.29
+ },
  "water": {
   "lods": [
    {
