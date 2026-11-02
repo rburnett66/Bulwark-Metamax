@@ -28,6 +28,35 @@
   ],
   "length": 21.24
  },
+ "arcane": {
+  "lods": [
+   {
+    "file": "arcane_lod0.glb",
+    "tris": 3818,
+    "drawCalls": 2,
+    "bytes": 523572
+   },
+   {
+    "file": "arcane_lod1.glb",
+    "tris": 2326,
+    "drawCalls": 2,
+    "bytes": 386836
+   },
+   {
+    "file": "arcane_lod2.glb",
+    "tris": 1270,
+    "drawCalls": 2,
+    "bytes": 286864
+   }
+  ],
+  "engines": 6,
+  "engineColor": [
+   1.0,
+   0.28,
+   0.78
+  ],
+  "length": 21.34
+ },
  "artillery": {
   "lods": [
    {
