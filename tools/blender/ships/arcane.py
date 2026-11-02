@@ -80,12 +80,12 @@ def spire(name, x, y, z0, h, r, material, glow=None, sides=4):
 
 # ── the ship ──────────────────────────────────────────────────────────────────────────
 def make():
-    roof = mat("roof", (0.24, 0.018, 0.04), rough=0.45, metal=0.2)       # crimson
+    roof = mat("roof", (0.17, 0.01, 0.025), rough=0.45, metal=0.2)       # crimson
     frame = mat("frame", (0.11, 0.105, 0.12), rough=0.45, metal=0.45)    # gunmetal
     trim = mat("trim", (0.045, 0.04, 0.05), rough=0.4, metal=0.4)        # near-black ribs and keel
     bronze = mat("bronze", (0.30, 0.17, 0.12), rough=0.4, metal=0.6)     # rose-window rim
-    glow = mat("glow", (0.5, 0.1, 0.35), emit=(1.0, 0.2, 0.62), strength=3)
-    core = mat("core", (0.5, 0.25, 0.1), emit=(1.0, 0.5, 0.16), strength=4)
+    glow = mat("glow", (0.5, 0.1, 0.35), emit=(0.85, 0.1, 0.48), strength=3)
+    core = mat("core", (0.5, 0.25, 0.1), emit=(0.9, 0.36, 0.06), strength=4)
 
     # frame deck + gallery ledge + keel (centreline)
     loft("deck", [(-10.4, 2.75, 0.45, 0.3, 0, -0.15), (8.2, 2.75, 0.45, 0.3, 0, -0.15),
