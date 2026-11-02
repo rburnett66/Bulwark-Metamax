@@ -15,7 +15,7 @@
 
 ## 2. Status language
 
-Six states. Each one is a **hue + a glyph + a bar treatment**, so nothing relies on colour alone. The list sorts in this order, so whatever needs the player is always on top.
+Six live states plus **Locked** (added with the missions workbook, §10). Each one is a **hue + a glyph + a bar treatment**, so nothing relies on colour alone. The list sorts in this order, so whatever needs the player is always on top.
 
 | state | hue | glyph | bar | meaning | list group |
 |---|---|---|---|---|---|
@@ -25,6 +25,7 @@ Six states. Each one is a **hue + a glyph + a bar treatment**, so nothing relies
 | Active | `#f2c869` | open arc | solid gold | in progress | In progress |
 | Failed | `#ef5350` | filled hex + cross | dark red, hatched remainder | broken, expired or abandoned | Archive · Failed |
 | Completed | `#7b8898` | tick | steel | rewards claimed | Archive · Completed |
+| Locked | `#5c6a7a` dim steel | padlock | none — the Unlock requirements are listed instead | visible (View met) but not yet unlocked; added 2026-11-01 with the missions workbook | Locked (bottom of Current) |
 
 **Where the hue appears:**
 - the 3 px left edge of a row, so the list scans as a column of colour;
@@ -153,3 +154,15 @@ Every mission uses real factions, characters and portraits, real planets and the
 | First Light on Verdance | campaign | Completed | Quartermaster Ines Roth, Ground, N |
 
 Only Ground, Air and Greenies have finished portrait art today. Givers from the other six factions show their named placeholder until their art lands.
+
+## 10. Mission content and the four requirement stages
+
+The missions themselves are authored in `docs/sources/Bulwark-Missions.xlsx` (MLG-7) and extracted to `prototype/test-game/content/missions/missions.json` by `tools/extract_missions.py`. Every mission has requirements in four stages, plus optional failure:
+
+- **View:** when the mission appears in the log at all. Until then it is invisible, which is how alignment-gated missions stay hidden.
+- **Unlock:** when it is assigned (status New), with the toast and the header ping.
+- **Execute:** where progress counts: a planet, a campaign map, an enemy faction, or anywhere.
+- **Complete:** the objectives, which drive the progress bar.
+- **Fail:** optional. Any one row met fails the mission.
+
+A mission whose View is met but whose Unlock is not shows as **Locked**. It gets a padlock glyph and dim steel edge, and its dossier lists the Unlock requirements in place of objectives. It sits below Active in the Current tab. The design page does not draw this state yet; the build stories (MLG-4/5) add it.

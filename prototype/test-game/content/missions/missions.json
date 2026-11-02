@@ -1,0 +1,3090 @@
+{
+ "_source": "docs/sources/Bulwark-Missions.xlsx",
+ "_generator": "tools/extract_missions.py",
+ "conditions": {
+  "always": {
+   "stages": [
+    "View",
+    "Unlock"
+   ],
+   "tier": "A"
+  },
+  "rank_at_least": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete"
+   ],
+   "tier": "A"
+  },
+  "map_unlocked": {
+   "stages": [
+    "View",
+    "Unlock"
+   ],
+   "tier": "A"
+  },
+  "map_beaten": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete"
+   ],
+   "tier": "A"
+  },
+  "map_avg_stars": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete"
+   ],
+   "tier": "A"
+  },
+  "stars_total": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete"
+   ],
+   "tier": "A"
+  },
+  "loyalty": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete",
+    "Fail"
+   ],
+   "tier": "A"
+  },
+  "loyalty_tier": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete"
+   ],
+   "tier": "A"
+  },
+  "alignment": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Fail"
+   ],
+   "tier": "A"
+  },
+  "faction_beaten": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete"
+   ],
+   "tier": "A"
+  },
+  "tech_owned": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete"
+   ],
+   "tier": "A"
+  },
+  "tech_node": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete"
+   ],
+   "tier": "A"
+  },
+  "harvester_level": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete"
+   ],
+   "tier": "A"
+  },
+  "contract_state": {
+   "stages": [
+    "View",
+    "Unlock",
+    "Complete",
+    "Fail"
+   ],
+   "tier": "A"
+  },
+  "mission_done": {
+   "stages": [
+    "View",
+    "Unlock"
+   ],
+   "tier": "A"
+  },
+  "mission_failed": {
+   "stages": [
+    "View",
+    "Unlock"
+   ],
+   "tier": "A"
+  },
+  "battles_played": {
+   "stages": [
+    "View",
+    "Unlock"
+   ],
+   "tier": "C"
+  },
+  "anywhere": {
+   "stages": [
+    "Execute"
+   ],
+   "tier": "A"
+  },
+  "on_planet": {
+   "stages": [
+    "Execute"
+   ],
+   "tier": "A"
+  },
+  "on_map": {
+   "stages": [
+    "Execute"
+   ],
+   "tier": "A"
+  },
+  "vs_faction": {
+   "stages": [
+    "Execute"
+   ],
+   "tier": "A"
+  },
+  "waves_from": {
+   "stages": [
+    "Execute"
+   ],
+   "tier": "B"
+  },
+  "win_map": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "win_battles": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "haul_rare": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "haul_epic": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "harvest_common_gold": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "harvest_uncommon_gold": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "kills_total": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "gold_spent": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "waves_no_base_damage": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "waves_no_harvester_lost": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "waves_quota_met": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "waves_premium_claimed": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "waves_under_par": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "five_star_waves": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "score_at_least": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "finish_under": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "bonuses_taken": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "B"
+  },
+  "kills_domain": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "C"
+  },
+  "kills_unit": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "C"
+  },
+  "kills_by_structure": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "C"
+  },
+  "build_structure": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "C"
+  },
+  "upgrade_structure": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "C"
+  },
+  "walls_lost_max": {
+   "stages": [
+    "Complete",
+    "Fail"
+   ],
+   "tier": "C"
+  },
+  "base_damage_max": {
+   "stages": [
+    "Complete",
+    "Fail"
+   ],
+   "tier": "C"
+  },
+  "troops_deployed": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "C"
+  },
+  "no_harvester_lost": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "C"
+  },
+  "survive_ability": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "C"
+  },
+  "survey_sites": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "D"
+  },
+  "deliver_rare": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "D"
+  },
+  "deliver_epic": {
+   "stages": [
+    "Complete"
+   ],
+   "tier": "D"
+  },
+  "lose_battle": {
+   "stages": [
+    "Fail"
+   ],
+   "tier": "B"
+  },
+  "expires_after": {
+   "stages": [
+    "Fail"
+   ],
+   "tier": "C"
+  },
+  "declined": {
+   "stages": [
+    "Fail"
+   ],
+   "tier": "A"
+  },
+  "favour_accepted": {
+   "stages": [
+    "Unlock"
+   ],
+   "tier": "D"
+  }
+ },
+ "rewardKinds": {
+  "gold": {
+   "tier": "A"
+  },
+  "xp": {
+   "tier": "A"
+  },
+  "loyalty": {
+   "tier": "A"
+  },
+  "alignment": {
+   "tier": "A"
+  },
+  "tech_node": {
+   "tier": "A"
+  },
+  "harvester_level": {
+   "tier": "A"
+  },
+  "contract_rules": {
+   "tier": "A"
+  },
+  "unit_unlock": {
+   "tier": "B"
+  },
+  "structure_unlock": {
+   "tier": "C"
+  },
+  "stars": {
+   "tier": "D"
+  },
+  "resource": {
+   "tier": "D"
+  },
+  "blueprint": {
+   "tier": "D"
+  },
+  "sealed": {
+   "tier": "D"
+  }
+ },
+ "missions": [
+  {
+   "id": "CMP-01",
+   "title": "First Light",
+   "type": "campaign",
+   "planet": "Any",
+   "map": 1,
+   "giver": {
+    "name": "Quartermaster Ines Roth",
+    "faction": "ground",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "Tutorial pressure. Hold for eight waves.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "always",
+     "text": "Shown from the start"
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "always",
+     "text": "Assigned at the first landing"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 1",
+     "param": 1
+    }
+   ],
+   "complete": [
+    {
+     "cond": "win_map",
+     "text": "Win campaign map 1",
+     "param": 1
+    },
+    {
+     "cond": "five_star_waves",
+     "text": "Bonus: earn 5 stars on 2 waves",
+     "op": "≥",
+     "value": 2,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 225,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 110,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CMP-02",
+   "title": "Second Front",
+   "type": "campaign",
+   "planet": "Any",
+   "map": 2,
+   "giver": {
+    "name": "Quartermaster Ines Roth",
+    "faction": "ground",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "Air introduced. Hold for eight waves.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "Shown once map 1 is won",
+     "param": 1
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 2 unlocked (average ≥ 3 stars on map 1)",
+     "op": "≥",
+     "value": 2
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 2",
+     "param": 2
+    }
+   ],
+   "complete": [
+    {
+     "cond": "win_map",
+     "text": "Win campaign map 2",
+     "param": 2
+    },
+    {
+     "cond": "five_star_waves",
+     "text": "Bonus: earn 5 stars on 2 waves",
+     "op": "≥",
+     "value": 2,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 300,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 140,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CMP-03",
+   "title": "Waterline",
+   "type": "campaign",
+   "planet": "Any",
+   "map": 3,
+   "giver": {
+    "name": "Quartermaster Ines Roth",
+    "faction": "ground",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "Water lanes. Hold for eight waves.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "Shown once map 2 is won",
+     "param": 2
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 3 unlocked (average ≥ 3 stars on map 2)",
+     "op": "≥",
+     "value": 3
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 3",
+     "param": 3
+    }
+   ],
+   "complete": [
+    {
+     "cond": "win_map",
+     "text": "Win campaign map 3",
+     "param": 3
+    },
+    {
+     "cond": "five_star_waves",
+     "text": "Bonus: earn 5 stars on 2 waves",
+     "op": "≥",
+     "value": 2,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 375,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 170,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CMP-04",
+   "title": "The Reveal",
+   "type": "campaign",
+   "planet": "Any",
+   "map": 4,
+   "giver": {
+    "name": "Quartermaster Ines Roth",
+    "faction": "ground",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "First mid-size map. Hold for eight waves.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "Shown once map 3 is won",
+     "param": 3
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 4 unlocked (average ≥ 3 stars on map 3)",
+     "op": "≥",
+     "value": 4
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 4",
+     "param": 4
+    }
+   ],
+   "complete": [
+    {
+     "cond": "win_map",
+     "text": "Win campaign map 4",
+     "param": 4
+    },
+    {
+     "cond": "five_star_waves",
+     "text": "Bonus: earn 5 stars on 2 waves",
+     "op": "≥",
+     "value": 2,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 450,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 200,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CMP-05",
+   "title": "Tempo Trap",
+   "type": "campaign",
+   "planet": "Any",
+   "map": 5,
+   "giver": {
+    "name": "Quartermaster Ines Roth",
+    "faction": "ground",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "Crystals: high value, slow harvest. Hold for eight waves.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "Shown once map 4 is won",
+     "param": 4
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 5 unlocked (average ≥ 3 stars on map 4)",
+     "op": "≥",
+     "value": 5
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 5",
+     "param": 5
+    }
+   ],
+   "complete": [
+    {
+     "cond": "win_map",
+     "text": "Win campaign map 5",
+     "param": 5
+    },
+    {
+     "cond": "five_star_waves",
+     "text": "Bonus: earn 5 stars on 2 waves",
+     "op": "≥",
+     "value": 2,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 525,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 230,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CMP-06",
+   "title": "Three Winds",
+   "type": "campaign",
+   "planet": "Any",
+   "map": 6,
+   "giver": {
+    "name": "Quartermaster Ines Roth",
+    "faction": "ground",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "Three-way spawn pressure. Hold for eight waves.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "Shown once map 5 is won",
+     "param": 5
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 6 unlocked (average ≥ 3 stars on map 5)",
+     "op": "≥",
+     "value": 6
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 6",
+     "param": 6
+    }
+   ],
+   "complete": [
+    {
+     "cond": "win_map",
+     "text": "Win campaign map 6",
+     "param": 6
+    },
+    {
+     "cond": "five_star_waves",
+     "text": "Bonus: earn 5 stars on 2 waves",
+     "op": "≥",
+     "value": 2,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 600,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 260,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CMP-07",
+   "title": "The Long Field",
+   "type": "campaign",
+   "planet": "Any",
+   "map": 7,
+   "giver": {
+    "name": "Quartermaster Ines Roth",
+    "faction": "ground",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "Widest ground field. Hold for eight waves.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "Shown once map 6 is won",
+     "param": 6
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 7 unlocked (average ≥ 3 stars on map 6)",
+     "op": "≥",
+     "value": 7
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 7",
+     "param": 7
+    }
+   ],
+   "complete": [
+    {
+     "cond": "win_map",
+     "text": "Win campaign map 7",
+     "param": 7
+    },
+    {
+     "cond": "five_star_waves",
+     "text": "Bonus: earn 5 stars on 2 waves",
+     "op": "≥",
+     "value": 2,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 675,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 290,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CMP-08",
+   "title": "Stranded Prize",
+   "type": "campaign",
+   "planet": "Any",
+   "map": 8,
+   "giver": {
+    "name": "Quartermaster Ines Roth",
+    "faction": "ground",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "Premium is deliberately stranded far out. Hold for eight waves.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "Shown once map 7 is won",
+     "param": 7
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 8 unlocked (average ≥ 3 stars on map 7)",
+     "op": "≥",
+     "value": 8
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 8",
+     "param": 8
+    }
+   ],
+   "complete": [
+    {
+     "cond": "win_map",
+     "text": "Win campaign map 8",
+     "param": 8
+    },
+    {
+     "cond": "five_star_waves",
+     "text": "Bonus: earn 5 stars on 2 waves",
+     "op": "≥",
+     "value": 2,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 750,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 320,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CMP-09",
+   "title": "Everything at Once",
+   "type": "campaign",
+   "planet": "Any",
+   "map": 9,
+   "giver": {
+    "name": "Quartermaster Ines Roth",
+    "faction": "ground",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "Full 64x32. Hold for eight waves.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "Shown once map 8 is won",
+     "param": 8
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 9 unlocked (average ≥ 3 stars on map 8)",
+     "op": "≥",
+     "value": 9
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 9",
+     "param": 9
+    }
+   ],
+   "complete": [
+    {
+     "cond": "win_map",
+     "text": "Win campaign map 9",
+     "param": 9
+    },
+    {
+     "cond": "five_star_waves",
+     "text": "Bonus: earn 5 stars on 2 waves",
+     "op": "≥",
+     "value": 2,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 825,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 350,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CON-01",
+   "title": "High Tech contract, map 1",
+   "type": "contract",
+   "planet": "Any",
+   "map": 1,
+   "giver": {
+    "name": "R&D Lead Amara Okonkwo",
+    "faction": "hightech",
+    "align": "PG",
+    "art": "Placeholder"
+   },
+   "briefing": "The High Tech faction pays for the quest crystals on map 1. Haul at least 80 % and win, or the promise breaks.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 1 unlocked",
+     "op": "≥",
+     "value": 1
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "contract_state",
+     "text": "Accept the contract in the wave-2 interlude",
+     "param": 1,
+     "op": "is",
+     "value": "ACCEPTED"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 1",
+     "param": 1
+    }
+   ],
+   "complete": [
+    {
+     "cond": "contract_state",
+     "text": "Haul ≥ 80 % of the quest crystals and win",
+     "param": 1,
+     "op": "is",
+     "value": "FULFILLED"
+    }
+   ],
+   "fail": [
+    {
+     "cond": "contract_state",
+     "text": "Broken promise: under 80 % hauled or the battle lost",
+     "param": 1,
+     "op": "is",
+     "value": "BROKEN"
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "contract_rules",
+     "amount": "+10 per node",
+     "label": "High Tech loyalty (contract rules)",
+     "target": "hightech"
+    },
+    {
+     "kind": "xp",
+     "amount": 80,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CON-02",
+   "title": "Space Tech contract, map 2",
+   "type": "contract",
+   "planet": "Any",
+   "map": 2,
+   "giver": {
+    "name": "Commander Idris Vale",
+    "faction": "space",
+    "align": "PG",
+    "art": "Placeholder"
+   },
+   "briefing": "The Space Tech faction pays for the quest crystals on map 2. Haul at least 80 % and win, or the promise breaks.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 2 unlocked",
+     "op": "≥",
+     "value": 2
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "contract_state",
+     "text": "Accept the contract in the wave-2 interlude",
+     "param": 2,
+     "op": "is",
+     "value": "ACCEPTED"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 2",
+     "param": 2
+    }
+   ],
+   "complete": [
+    {
+     "cond": "contract_state",
+     "text": "Haul ≥ 80 % of the quest crystals and win",
+     "param": 2,
+     "op": "is",
+     "value": "FULFILLED"
+    }
+   ],
+   "fail": [
+    {
+     "cond": "contract_state",
+     "text": "Broken promise: under 80 % hauled or the battle lost",
+     "param": 2,
+     "op": "is",
+     "value": "BROKEN"
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "contract_rules",
+     "amount": "+10 per node",
+     "label": "Space Tech loyalty (contract rules)",
+     "target": "space"
+    },
+    {
+     "kind": "xp",
+     "amount": 100,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CON-03",
+   "title": "Ground contract, map 3",
+   "type": "contract",
+   "planet": "Any",
+   "map": 3,
+   "giver": {
+    "name": "Colonel Aldric Vane",
+    "faction": "ground",
+    "align": "PG",
+    "art": "Final"
+   },
+   "briefing": "The Ground / Powder faction pays for the quest crystals on map 3. Haul at least 80 % and win, or the promise breaks.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 3 unlocked",
+     "op": "≥",
+     "value": 3
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "contract_state",
+     "text": "Accept the contract in the wave-2 interlude",
+     "param": 3,
+     "op": "is",
+     "value": "ACCEPTED"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 3",
+     "param": 3
+    }
+   ],
+   "complete": [
+    {
+     "cond": "contract_state",
+     "text": "Haul ≥ 80 % of the quest crystals and win",
+     "param": 3,
+     "op": "is",
+     "value": "FULFILLED"
+    }
+   ],
+   "fail": [
+    {
+     "cond": "contract_state",
+     "text": "Broken promise: under 80 % hauled or the battle lost",
+     "param": 3,
+     "op": "is",
+     "value": "BROKEN"
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "contract_rules",
+     "amount": "+10 per node",
+     "label": "Ground / Powder loyalty (contract rules)",
+     "target": "ground"
+    },
+    {
+     "kind": "xp",
+     "amount": 120,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CON-04",
+   "title": "Water contract, map 4",
+   "type": "contract",
+   "planet": "Any",
+   "map": 4,
+   "giver": {
+    "name": "Chieftain Coral of the Reef-Born",
+    "faction": "water",
+    "align": "PG",
+    "art": "Placeholder"
+   },
+   "briefing": "The Water faction pays for the quest crystals on map 4. Haul at least 80 % and win, or the promise breaks.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 4 unlocked",
+     "op": "≥",
+     "value": 4
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "contract_state",
+     "text": "Accept the contract in the wave-2 interlude",
+     "param": 4,
+     "op": "is",
+     "value": "ACCEPTED"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 4",
+     "param": 4
+    }
+   ],
+   "complete": [
+    {
+     "cond": "contract_state",
+     "text": "Haul ≥ 80 % of the quest crystals and win",
+     "param": 4,
+     "op": "is",
+     "value": "FULFILLED"
+    }
+   ],
+   "fail": [
+    {
+     "cond": "contract_state",
+     "text": "Broken promise: under 80 % hauled or the battle lost",
+     "param": 4,
+     "op": "is",
+     "value": "BROKEN"
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "contract_rules",
+     "amount": "+10 per node",
+     "label": "Water loyalty (contract rules)",
+     "target": "water"
+    },
+    {
+     "kind": "xp",
+     "amount": 140,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CON-05",
+   "title": "Greenies contract, map 5",
+   "type": "contract",
+   "planet": "Any",
+   "map": 5,
+   "giver": {
+    "name": "Steward Bractus",
+    "faction": "greenies",
+    "align": "PG",
+    "art": "Final"
+   },
+   "briefing": "The Greenies (Chem) faction pays for the quest crystals on map 5. Haul at least 80 % and win, or the promise breaks.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 5 unlocked",
+     "op": "≥",
+     "value": 5
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "contract_state",
+     "text": "Accept the contract in the wave-2 interlude",
+     "param": 5,
+     "op": "is",
+     "value": "ACCEPTED"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 5",
+     "param": 5
+    }
+   ],
+   "complete": [
+    {
+     "cond": "contract_state",
+     "text": "Haul ≥ 80 % of the quest crystals and win",
+     "param": 5,
+     "op": "is",
+     "value": "FULFILLED"
+    }
+   ],
+   "fail": [
+    {
+     "cond": "contract_state",
+     "text": "Broken promise: under 80 % hauled or the battle lost",
+     "param": 5,
+     "op": "is",
+     "value": "BROKEN"
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "contract_rules",
+     "amount": "+10 per node",
+     "label": "Greenies (Chem) loyalty (contract rules)",
+     "target": "greenies"
+    },
+    {
+     "kind": "xp",
+     "amount": 160,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CON-06",
+   "title": "Air contract, map 6",
+   "type": "contract",
+   "planet": "Any",
+   "map": 6,
+   "giver": {
+    "name": "Ace Jun \"Halo\" Sato",
+    "faction": "air",
+    "align": "PG",
+    "art": "Final"
+   },
+   "briefing": "The Air faction pays for the quest crystals on map 6. Haul at least 80 % and win, or the promise breaks.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 6 unlocked",
+     "op": "≥",
+     "value": 6
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "contract_state",
+     "text": "Accept the contract in the wave-2 interlude",
+     "param": 6,
+     "op": "is",
+     "value": "ACCEPTED"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 6",
+     "param": 6
+    }
+   ],
+   "complete": [
+    {
+     "cond": "contract_state",
+     "text": "Haul ≥ 80 % of the quest crystals and win",
+     "param": 6,
+     "op": "is",
+     "value": "FULFILLED"
+    }
+   ],
+   "fail": [
+    {
+     "cond": "contract_state",
+     "text": "Broken promise: under 80 % hauled or the battle lost",
+     "param": 6,
+     "op": "is",
+     "value": "BROKEN"
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "contract_rules",
+     "amount": "+10 per node",
+     "label": "Air loyalty (contract rules)",
+     "target": "air"
+    },
+    {
+     "kind": "xp",
+     "amount": 180,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CON-07",
+   "title": "Dark Energy contract, map 7",
+   "type": "contract",
+   "planet": "Any",
+   "map": 7,
+   "giver": {
+    "name": "Sister Maren",
+    "faction": "dark",
+    "align": "PG",
+    "art": "Placeholder"
+   },
+   "briefing": "The Dark Energy faction pays for the quest crystals on map 7. Haul at least 80 % and win, or the promise breaks.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 7 unlocked",
+     "op": "≥",
+     "value": 7
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "contract_state",
+     "text": "Accept the contract in the wave-2 interlude",
+     "param": 7,
+     "op": "is",
+     "value": "ACCEPTED"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 7",
+     "param": 7
+    }
+   ],
+   "complete": [
+    {
+     "cond": "contract_state",
+     "text": "Haul ≥ 80 % of the quest crystals and win",
+     "param": 7,
+     "op": "is",
+     "value": "FULFILLED"
+    }
+   ],
+   "fail": [
+    {
+     "cond": "contract_state",
+     "text": "Broken promise: under 80 % hauled or the battle lost",
+     "param": 7,
+     "op": "is",
+     "value": "BROKEN"
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "contract_rules",
+     "amount": "+10 per node",
+     "label": "Dark Energy loyalty (contract rules)",
+     "target": "dark"
+    },
+    {
+     "kind": "xp",
+     "amount": 200,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CON-08",
+   "title": "Artillery contract, map 8",
+   "type": "contract",
+   "planet": "Any",
+   "map": 8,
+   "giver": {
+    "name": "Fire-Director Yusuf Kaya",
+    "faction": "artillery",
+    "align": "PG",
+    "art": "Placeholder"
+   },
+   "briefing": "The Artillery faction pays for the quest crystals on map 8. Haul at least 80 % and win, or the promise breaks.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 8 unlocked",
+     "op": "≥",
+     "value": 8
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "contract_state",
+     "text": "Accept the contract in the wave-2 interlude",
+     "param": 8,
+     "op": "is",
+     "value": "ACCEPTED"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 8",
+     "param": 8
+    }
+   ],
+   "complete": [
+    {
+     "cond": "contract_state",
+     "text": "Haul ≥ 80 % of the quest crystals and win",
+     "param": 8,
+     "op": "is",
+     "value": "FULFILLED"
+    }
+   ],
+   "fail": [
+    {
+     "cond": "contract_state",
+     "text": "Broken promise: under 80 % hauled or the battle lost",
+     "param": 8,
+     "op": "is",
+     "value": "BROKEN"
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "contract_rules",
+     "amount": "+10 per node",
+     "label": "Artillery loyalty (contract rules)",
+     "target": "artillery"
+    },
+    {
+     "kind": "xp",
+     "amount": 220,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "CON-09",
+   "title": "Arcane contract, map 9",
+   "type": "contract",
+   "planet": "Any",
+   "map": 9,
+   "giver": {
+    "name": "Lightbearer Cassian",
+    "faction": "arcane",
+    "align": "PG",
+    "art": "Placeholder"
+   },
+   "briefing": "The Arcane / Energy faction pays for the quest crystals on map 9. Haul at least 80 % and win, or the promise breaks.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 9 unlocked",
+     "op": "≥",
+     "value": 9
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "contract_state",
+     "text": "Accept the contract in the wave-2 interlude",
+     "param": 9,
+     "op": "is",
+     "value": "ACCEPTED"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Battles on campaign map 9",
+     "param": 9
+    }
+   ],
+   "complete": [
+    {
+     "cond": "contract_state",
+     "text": "Haul ≥ 80 % of the quest crystals and win",
+     "param": 9,
+     "op": "is",
+     "value": "FULFILLED"
+    }
+   ],
+   "fail": [
+    {
+     "cond": "contract_state",
+     "text": "Broken promise: under 80 % hauled or the battle lost",
+     "param": 9,
+     "op": "is",
+     "value": "BROKEN"
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "contract_rules",
+     "amount": "+10 per node",
+     "label": "Arcane / Energy loyalty (contract rules)",
+     "target": "arcane"
+    },
+    {
+     "kind": "xp",
+     "amount": 240,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "HRV-01",
+   "title": "Silk for the Wings",
+   "type": "harvest",
+   "planet": "Florael",
+   "map": null,
+   "giver": {
+    "name": "Squadron-Mother Hikari \"Dawnwing\" Aoi",
+    "faction": "air",
+    "align": "AG",
+    "art": "Final"
+   },
+   "briefing": "My pilots fly in patched canopies. Petal Silk holds where nothing else will.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "After map 2",
+     "param": 2
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "loyalty",
+     "text": "Air loyalty not negative",
+     "param": "air",
+     "op": "≥",
+     "value": 0
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_planet",
+     "text": "Battles on Florael",
+     "param": "Florael"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "harvest_common_gold",
+     "text": "Harvest 600 gold of Petal Silk",
+     "op": "≥",
+     "value": 600
+    },
+    {
+     "cond": "harvest_uncommon_gold",
+     "text": "Harvest 200 gold of Skyhoney",
+     "op": "≥",
+     "value": 200
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "loyalty",
+     "amount": 60,
+     "label": "Air loyalty",
+     "target": "air"
+    },
+    {
+     "kind": "gold",
+     "amount": 300,
+     "label": "Gold"
+    }
+   ]
+  },
+  {
+   "id": "HRV-02",
+   "title": "Fuel the Pathfinder",
+   "type": "harvest",
+   "planet": "Verdance",
+   "map": null,
+   "giver": {
+    "name": "Quartermaster Ines Roth",
+    "faction": "ground",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "Powder runs on grain and amber. Fill the holds and we fly further.",
+   "repeatable": true,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "always",
+     "text": "Always shown"
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "map_beaten",
+     "text": "After map 1",
+     "param": 1
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_planet",
+     "text": "Battles on Verdance",
+     "param": "Verdance"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "harvest_common_gold",
+     "text": "Harvest 800 gold of Loam Grain",
+     "op": "≥",
+     "value": 800
+    },
+    {
+     "cond": "waves_quota_met",
+     "text": "Meet the harvest quota on 6 waves",
+     "op": "≥",
+     "value": 6
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 350,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 90,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "HRV-03",
+   "title": "Crystal Discipline",
+   "type": "harvest",
+   "planet": "Ochre",
+   "map": null,
+   "giver": {
+    "name": "CFO Julian Vance",
+    "faction": "hightech",
+    "align": "G",
+    "art": "Placeholder"
+   },
+   "briefing": "Sustainable margins, Commander. Bring the quartz home without bleeding the ledger.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 5 unlocked",
+     "op": "≥",
+     "value": 5
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "loyalty",
+     "text": "High Tech loyalty ≥ 50",
+     "param": "hightech",
+     "op": "≥",
+     "value": 50
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_planet",
+     "text": "Battles on Ochre",
+     "param": "Ochre"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "harvest_uncommon_gold",
+     "text": "Harvest 500 gold of Dune Quartz",
+     "op": "≥",
+     "value": 500
+    },
+    {
+     "cond": "waves_premium_claimed",
+     "text": "Claim the uncommon resource on 5 waves",
+     "op": "≥",
+     "value": 5
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 500,
+     "label": "Gold"
+    },
+    {
+     "kind": "loyalty",
+     "amount": 40,
+     "label": "High Tech loyalty",
+     "target": "hightech"
+    }
+   ]
+  },
+  {
+   "id": "DEF-01",
+   "title": "Not One Brick",
+   "type": "defense",
+   "planet": "Verdance",
+   "map": null,
+   "giver": {
+    "name": "Sergeant \"Bricks\" Malloy",
+    "faction": "ground",
+    "align": "CG",
+    "art": "Final"
+   },
+   "briefing": "Three fights, my walls stay standing — that’s the whole job.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "C",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "After map 1",
+     "param": 1
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "tech_owned",
+     "text": "Own 3 Tech Net upgrades",
+     "op": "≥",
+     "value": 3
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_planet",
+     "text": "Battles on Verdance",
+     "param": "Verdance"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "win_battles",
+     "text": "Win 3 battles",
+     "op": "≥",
+     "value": 3
+    },
+    {
+     "cond": "walls_lost_max",
+     "text": "Lose no more than 2 walls",
+     "op": "≤",
+     "value": 2
+    }
+   ],
+   "fail": [
+    {
+     "cond": "walls_lost_max",
+     "text": "A third wall falls",
+     "op": "≥",
+     "value": 3
+    },
+    {
+     "cond": "expires_after",
+     "text": "Expires after 4 battles",
+     "op": "≥",
+     "value": 4
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "structure_unlock",
+     "amount": "T2",
+     "label": "Reinforced wall",
+     "target": "STR-Wall"
+    },
+    {
+     "kind": "xp",
+     "amount": 120,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "DEF-02",
+   "title": "Clean Hands",
+   "type": "defense",
+   "planet": "Any",
+   "map": null,
+   "giver": {
+    "name": "Field-Marshal Seraphine von Halbrecht",
+    "faction": "ground",
+    "align": "AG",
+    "art": "Final"
+   },
+   "briefing": "Defend the realm without staining it. Not one shell on the keep.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "rank_at_least",
+     "text": "Commander rank 3",
+     "op": "≥",
+     "value": 3
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "alignment",
+     "text": "Alignment leans good",
+     "op": "≥",
+     "value": 1
+    }
+   ],
+   "execute": [
+    {
+     "cond": "anywhere",
+     "text": "Any battle"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "waves_no_base_damage",
+     "text": "12 waves with no base damage",
+     "op": "≥",
+     "value": 12
+    },
+    {
+     "cond": "five_star_waves",
+     "text": "Bonus: 3 five-star waves",
+     "op": "≥",
+     "value": 3,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "loyalty",
+     "amount": 50,
+     "label": "Ground loyalty",
+     "target": "ground"
+    },
+    {
+     "kind": "alignment",
+     "amount": 1,
+     "label": "Alignment +1"
+    },
+    {
+     "kind": "gold",
+     "amount": 400,
+     "label": "Gold"
+    }
+   ]
+  },
+  {
+   "id": "DEF-03",
+   "title": "Escort Duty",
+   "type": "defense",
+   "planet": "Rime",
+   "map": null,
+   "giver": {
+    "name": "Ferryman Old Brack",
+    "faction": "water",
+    "align": "N",
+    "art": "Placeholder"
+   },
+   "briefing": "I carry every tribe’s dead. I would rather not carry your harvesters.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 3 unlocked (water lanes)",
+     "op": "≥",
+     "value": 3
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "map_beaten",
+     "text": "After map 3",
+     "param": 3
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_planet",
+     "text": "Battles on Rime",
+     "param": "Rime"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "waves_no_harvester_lost",
+     "text": "16 waves without losing a harvester",
+     "op": "≥",
+     "value": 16
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "harvester_level",
+     "amount": 1,
+     "label": "Harvester level +1"
+    },
+    {
+     "kind": "xp",
+     "amount": 150,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "BNT-01",
+   "title": "Silence the Blight",
+   "type": "bounty",
+   "planet": "Vexmire",
+   "map": null,
+   "giver": {
+    "name": "Mother-Spore Ilya",
+    "faction": "greenies",
+    "align": "AG",
+    "art": "Final"
+   },
+   "briefing": "Thin Sear’s swarm. Spare the mulch; it never chose.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 5 unlocked",
+     "op": "≥",
+     "value": 5
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "loyalty",
+     "text": "Greenies loyalty not negative",
+     "param": "greenies",
+     "op": "≥",
+     "value": 0
+    }
+   ],
+   "execute": [
+    {
+     "cond": "vs_faction",
+     "text": "Battles against Greenies",
+     "param": "greenies"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "kills_total",
+     "text": "Destroy 400 of Sear’s swarm",
+     "op": "≥",
+     "value": 400
+    },
+    {
+     "cond": "win_battles",
+     "text": "Win 2 of those battles",
+     "op": "≥",
+     "value": 2
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "loyalty",
+     "amount": 40,
+     "label": "Greenies loyalty",
+     "target": "greenies"
+    },
+    {
+     "kind": "xp",
+     "amount": 220,
+     "label": "Commander XP"
+    },
+    {
+     "kind": "alignment",
+     "amount": 1,
+     "label": "Alignment +1"
+    }
+   ]
+  },
+  {
+   "id": "BNT-02",
+   "title": "Clear the Flight Lanes",
+   "type": "bounty",
+   "planet": "Florael",
+   "map": null,
+   "giver": {
+    "name": "Ace Jun \"Halo\" Sato",
+    "faction": "air",
+    "align": "PG",
+    "art": "Final"
+   },
+   "briefing": "Raiders are picking off our supply flyers. Ground them.",
+   "repeatable": true,
+   "status": "Draft",
+   "tier": "C",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "After map 2 (air introduced)",
+     "param": 2
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "always",
+     "text": "Assigned on view"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "anywhere",
+     "text": "Any battle"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "kills_domain",
+     "text": "Destroy 60 flyers",
+     "param": "flyer",
+     "op": "≥",
+     "value": 60
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 250,
+     "label": "Gold"
+    },
+    {
+     "kind": "loyalty",
+     "amount": 20,
+     "label": "Air loyalty",
+     "target": "air"
+    }
+   ]
+  },
+  {
+   "id": "BNT-03",
+   "title": "Debt of the Reef",
+   "type": "bounty",
+   "planet": "Rime",
+   "map": null,
+   "giver": {
+    "name": "Wavecaller Nerea",
+    "faction": "water",
+    "align": "G",
+    "art": "Placeholder"
+   },
+   "briefing": "Vex Marrow shelled my reef. Avenge it, then help me rebuild.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "faction_beaten",
+     "text": "Beaten Artillery once",
+     "param": "artillery",
+     "op": "≥",
+     "value": 1
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "loyalty",
+     "text": "Water loyalty tier 1",
+     "param": "water",
+     "op": "≥",
+     "value": 100
+    }
+   ],
+   "execute": [
+    {
+     "cond": "vs_faction",
+     "text": "Battles against Artillery",
+     "param": "artillery"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "kills_total",
+     "text": "Destroy 300 Artillery units",
+     "op": "≥",
+     "value": 300
+    },
+    {
+     "cond": "win_battles",
+     "text": "Win against Artillery",
+     "op": "≥",
+     "value": 1
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "loyalty",
+     "amount": 60,
+     "label": "Water loyalty",
+     "target": "water"
+    },
+    {
+     "kind": "loyalty",
+     "amount": -30,
+     "label": "Artillery loyalty",
+     "target": "artillery"
+    }
+   ]
+  },
+  {
+   "id": "BNT-04",
+   "title": "Tower Discipline",
+   "type": "bounty",
+   "planet": "Kessra",
+   "map": null,
+   "giver": {
+    "name": "Fire-Director Yusuf Kaya",
+    "faction": "artillery",
+    "align": "PG",
+    "art": "Placeholder"
+   },
+   "briefing": "Precision spares more than it kills. Let the rockets do the talking.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "C",
+   "view": [
+    {
+     "cond": "tech_owned",
+     "text": "Own 5 upgrades",
+     "op": "≥",
+     "value": 5
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "loyalty",
+     "text": "Artillery loyalty ≥ 50",
+     "param": "artillery",
+     "op": "≥",
+     "value": 50
+    }
+   ],
+   "execute": [
+    {
+     "cond": "anywhere",
+     "text": "Any battle"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "build_structure",
+     "text": "Build 4 rocket towers",
+     "param": "STR-Rockets",
+     "op": "≥",
+     "value": 4
+    },
+    {
+     "cond": "kills_by_structure",
+     "text": "150 kills by rocket towers",
+     "param": "STR-Rockets",
+     "op": "≥",
+     "value": 150
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 450,
+     "label": "Gold"
+    },
+    {
+     "kind": "loyalty",
+     "amount": 40,
+     "label": "Artillery loyalty",
+     "target": "artillery"
+    }
+   ]
+  },
+  {
+   "id": "BNT-05",
+   "title": "Thaw the Line",
+   "type": "bounty",
+   "planet": "Cinder",
+   "map": null,
+   "giver": {
+    "name": "Archivist Balthus",
+    "faction": "arcane",
+    "align": "N",
+    "art": "Placeholder"
+   },
+   "briefing": "Every doctrine fears the freeze. I merely record who survives it.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "C",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 6 unlocked",
+     "op": "≥",
+     "value": 6
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "always",
+     "text": "Assigned on view"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "anywhere",
+     "text": "Any battle"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "survive_ability",
+     "text": "Survive 10 freeze strikes",
+     "param": "freezeMissile",
+     "op": "≥",
+     "value": 10
+    },
+    {
+     "cond": "win_battles",
+     "text": "Win 2 battles",
+     "op": "≥",
+     "value": 2
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "xp",
+     "amount": 200,
+     "label": "Commander XP"
+    },
+    {
+     "kind": "tech_node",
+     "amount": 1,
+     "label": "A free Tech Net upgrade"
+    }
+   ]
+  },
+  {
+   "id": "PRG-01",
+   "title": "Field Promotion",
+   "type": "progression",
+   "planet": "Any",
+   "map": null,
+   "giver": {
+    "name": "Colonel Aldric Vane",
+    "faction": "ground",
+    "align": "PG",
+    "art": "Final"
+   },
+   "briefing": "A sergeant who holds the line earns the right to lead it.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "rank_at_least",
+     "text": "Commander rank 3",
+     "op": "≥",
+     "value": 3
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "rank_at_least",
+     "text": "Commander rank 4 (Sergeant)",
+     "op": "≥",
+     "value": 4
+    }
+   ],
+   "execute": [
+    {
+     "cond": "anywhere",
+     "text": "Any battle"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "rank_at_least",
+     "text": "Reach rank 6 (Lieutenant)",
+     "op": "≥",
+     "value": 6
+    },
+    {
+     "cond": "stars_total",
+     "text": "Earn 40 stars in total",
+     "op": "≥",
+     "value": 40
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 800,
+     "label": "Gold"
+    },
+    {
+     "kind": "loyalty",
+     "amount": 40,
+     "label": "Ground loyalty",
+     "target": "ground"
+    }
+   ]
+  },
+  {
+   "id": "PRG-02",
+   "title": "R&D Partnership",
+   "type": "progression",
+   "planet": "Any",
+   "map": null,
+   "giver": {
+    "name": "R&D Lead Amara Okonkwo",
+    "faction": "hightech",
+    "align": "PG",
+    "art": "Placeholder"
+   },
+   "briefing": "Ship what heals before what harms. Show me you invest.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "tech_owned",
+     "text": "Own 3 upgrades",
+     "op": "≥",
+     "value": 3
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "loyalty",
+     "text": "High Tech loyalty not negative",
+     "param": "hightech",
+     "op": "≥",
+     "value": 0
+    }
+   ],
+   "execute": [
+    {
+     "cond": "anywhere",
+     "text": "Menu progress"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "tech_owned",
+     "text": "Own 12 Tech Net upgrades",
+     "op": "≥",
+     "value": 12
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "tech_node",
+     "amount": 1,
+     "label": "A free Tech Net upgrade"
+    },
+    {
+     "kind": "loyalty",
+     "amount": 50,
+     "label": "High Tech loyalty",
+     "target": "hightech"
+    }
+   ]
+  },
+  {
+   "id": "PRG-03",
+   "title": "Wings Need Wrenches",
+   "type": "progression",
+   "planet": "Any",
+   "map": null,
+   "giver": {
+    "name": "Mechanic Sora Ito",
+    "faction": "air",
+    "align": "N",
+    "art": "Final"
+   },
+   "briefing": "I fix wings. You fix the harvester budget.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "A",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "After map 1",
+     "param": 1
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "always",
+     "text": "Assigned on view"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "anywhere",
+     "text": "Menu progress"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "harvester_level",
+     "text": "Raise the harvester to level 3",
+     "op": "≥",
+     "value": 3
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 300,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 100,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "PRG-04",
+   "title": "Friends Among the Stars",
+   "type": "progression",
+   "planet": "Lumen",
+   "map": null,
+   "giver": {
+    "name": "Commander Idris Vale",
+    "faction": "space",
+    "align": "PG",
+    "art": "Placeholder"
+   },
+   "briefing": "Explore, uplift, protect. Earn the Fleet’s trust and the frontier opens.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 2 unlocked",
+     "op": "≥",
+     "value": 2
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "contract_state",
+     "text": "Fulfil the Space Tech contract on map 2",
+     "param": 2,
+     "op": "is",
+     "value": "FULFILLED"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "anywhere",
+     "text": "Any"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "loyalty_tier",
+     "text": "Reach Space Tech loyalty tier 1",
+     "param": "space",
+     "op": "≥",
+     "value": 1
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "unit_unlock",
+     "amount": "T1",
+     "label": "Space Tech unit unlock",
+     "target": "space"
+    },
+    {
+     "kind": "xp",
+     "amount": 150,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "ALN-01",
+   "title": "Order Through Fire",
+   "type": "contract",
+   "planet": "Verdance",
+   "map": null,
+   "giver": {
+    "name": "Chancellor Wilhelmina Graf",
+    "faction": "ground",
+    "align": "PE",
+    "art": "Final"
+   },
+   "briefing": "The border villages hoard their Heartwood. Take it. Order is a ledger.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "C",
+   "view": [
+    {
+     "cond": "alignment",
+     "text": "Alignment leans evil",
+     "op": "≤",
+     "value": -1
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "loyalty",
+     "text": "Ground loyalty tier 1",
+     "param": "ground",
+     "op": "≥",
+     "value": 100
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_planet",
+     "text": "Battles on Verdance",
+     "param": "Verdance"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "harvest_uncommon_gold",
+     "text": "Seize 400 gold of Heartwood Amber",
+     "op": "≥",
+     "value": 400
+    },
+    {
+     "cond": "haul_rare",
+     "text": "Haul 8 Rootsong Seeds",
+     "op": "≥",
+     "value": 8
+    }
+   ],
+   "fail": [
+    {
+     "cond": "lose_battle",
+     "text": "Lose any battle on Verdance"
+    },
+    {
+     "cond": "expires_after",
+     "text": "Expires after 3 battles",
+     "op": "≥",
+     "value": 3
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "alignment",
+     "amount": -1,
+     "label": "Alignment −1"
+    },
+    {
+     "kind": "loyalty",
+     "amount": 80,
+     "label": "Ground loyalty",
+     "target": "ground"
+    },
+    {
+     "kind": "gold",
+     "amount": 500,
+     "label": "Gold"
+    }
+   ]
+  },
+  {
+   "id": "ALN-02",
+   "title": "The Deep Keeps Balance",
+   "type": "contract",
+   "planet": "Rime",
+   "map": null,
+   "giver": {
+    "name": "Tide-Priestess Marena",
+    "faction": "water",
+    "align": "AG",
+    "art": "Placeholder"
+   },
+   "briefing": "Take only what the tide gives back. The deep remembers greed.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "alignment",
+     "text": "Alignment Good or better",
+     "op": "≥",
+     "value": 2
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "loyalty",
+     "text": "Water loyalty ≥ 50",
+     "param": "water",
+     "op": "≥",
+     "value": 50
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_planet",
+     "text": "Battles on Rime",
+     "param": "Rime"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "waves_quota_met",
+     "text": "Meet the quota on 8 waves",
+     "op": "≥",
+     "value": 8
+    },
+    {
+     "cond": "haul_epic",
+     "text": "Haul 2 Leviathan Scales",
+     "op": "≥",
+     "value": 2
+    }
+   ],
+   "fail": [
+    {
+     "cond": "alignment",
+     "text": "Alignment drops to neutral",
+     "op": "≤",
+     "value": 0
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "alignment",
+     "amount": 1,
+     "label": "Alignment +1"
+    },
+    {
+     "kind": "loyalty",
+     "amount": 80,
+     "label": "Water loyalty",
+     "target": "water"
+    }
+   ]
+  },
+  {
+   "id": "ALN-03",
+   "title": "Erase the Self",
+   "type": "contract",
+   "planet": "Xenthe",
+   "map": null,
+   "giver": {
+    "name": "The Hollow Prophet",
+    "faction": "dark",
+    "align": "DE",
+    "art": "Placeholder"
+   },
+   "briefing": "Only the Movement remains. Prove you have nothing left to lose.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "alignment",
+     "text": "Alignment Pure Evil or below (hidden until then)",
+     "op": "≤",
+     "value": -3
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "loyalty",
+     "text": "Dark Energy loyalty tier 2",
+     "param": "dark",
+     "op": "≥",
+     "value": 260
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_planet",
+     "text": "Battles on Xenthe",
+     "param": "Xenthe"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "kills_total",
+     "text": "Destroy 800 enemies",
+     "op": "≥",
+     "value": 800
+    },
+    {
+     "cond": "finish_under",
+     "text": "Win in under 30 minutes",
+     "op": "≤",
+     "value": 30
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "alignment",
+     "amount": -1,
+     "label": "Alignment −1"
+    },
+    {
+     "kind": "loyalty",
+     "amount": 120,
+     "label": "Dark Energy loyalty",
+     "target": "dark"
+    },
+    {
+     "kind": "unit_unlock",
+     "amount": "T2",
+     "label": "Dark Energy unit unlock",
+     "target": "dark"
+    }
+   ]
+  },
+  {
+   "id": "SPD-01",
+   "title": "Halo’s Clock",
+   "type": "bounty",
+   "planet": "Any",
+   "map": null,
+   "giver": {
+    "name": "Ace Jun \"Halo\" Sato",
+    "faction": "air",
+    "align": "PG",
+    "art": "Final"
+   },
+   "briefing": "Fly clean, land fast. Beat my time.",
+   "repeatable": true,
+   "status": "Draft",
+   "tier": "B",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "After map 2",
+     "param": 2
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "always",
+     "text": "Assigned on view"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_map",
+     "text": "Campaign map 2",
+     "param": 2
+    }
+   ],
+   "complete": [
+    {
+     "cond": "waves_under_par",
+     "text": "All 8 waves under par",
+     "op": "≥",
+     "value": 8
+    },
+    {
+     "cond": "score_at_least",
+     "text": "Bonus: score 9,000",
+     "op": "≥",
+     "value": 9000,
+     "bonus": true
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "gold",
+     "amount": 300,
+     "label": "Gold"
+    },
+    {
+     "kind": "xp",
+     "amount": 120,
+     "label": "Commander XP"
+    }
+   ]
+  },
+  {
+   "id": "FAV-01",
+   "title": "A Quiet Exchange",
+   "type": "favour",
+   "planet": "Kessra",
+   "map": null,
+   "giver": {
+    "name": "The Unknown Contact",
+    "faction": "unknown",
+    "align": "—",
+    "art": "Silhouette"
+   },
+   "briefing": "Some of what you dig is not yours to keep. I will pay well for it.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "D",
+   "view": [
+    {
+     "cond": "map_beaten",
+     "text": "After map 3",
+     "param": 3
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "favour_accepted",
+     "text": "Accept the Contact’s call in orbit"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_planet",
+     "text": "Battles on Kessra",
+     "param": "Kessra"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "deliver_rare",
+     "text": "Deliver 4 Ghost Brass",
+     "op": "≥",
+     "value": 4
+    },
+    {
+     "cond": "deliver_epic",
+     "text": "Deliver 1 Dreadnought Core",
+     "op": "≥",
+     "value": 1
+    }
+   ],
+   "fail": [
+    {
+     "cond": "declined",
+     "text": "Decline the call"
+    }
+   ],
+   "rewards": [
+    {
+     "kind": "tech_node",
+     "amount": 2,
+     "label": "Two free Tech Net upgrades"
+    },
+    {
+     "kind": "sealed",
+     "amount": "?",
+     "label": "Sealed reward"
+    }
+   ]
+  },
+  {
+   "id": "SRV-01",
+   "title": "Chart the Far Side",
+   "type": "survey",
+   "planet": "Lumen",
+   "map": null,
+   "giver": {
+    "name": "Navigator AI \"Vector\"",
+    "faction": "space",
+    "align": "N",
+    "art": "Placeholder"
+   },
+   "briefing": "Sensors ping Helium-3 on the dark side. I plot courses; you decide if it is real.",
+   "repeatable": false,
+   "status": "Draft",
+   "tier": "D",
+   "view": [
+    {
+     "cond": "map_unlocked",
+     "text": "Map 4 unlocked",
+     "op": "≥",
+     "value": 4
+    }
+   ],
+   "unlock": [
+    {
+     "cond": "always",
+     "text": "Assigned on view"
+    }
+   ],
+   "execute": [
+    {
+     "cond": "on_planet",
+     "text": "Survey ship over Lumen",
+     "param": "Lumen"
+    }
+   ],
+   "complete": [
+    {
+     "cond": "survey_sites",
+     "text": "Survey 4 resource sites",
+     "param": "Lumen",
+     "op": "≥",
+     "value": 4
+    }
+   ],
+   "fail": [],
+   "rewards": [
+    {
+     "kind": "xp",
+     "amount": 150,
+     "label": "Commander XP"
+    },
+    {
+     "kind": "resource",
+     "amount": 5,
+     "label": "Helium-3",
+     "target": "uncommon"
+    }
+   ]
+  }
+ ]
+}

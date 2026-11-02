@@ -92,7 +92,7 @@ Audit of `main` @ `02352f4`, 2026-11-01. Paths are under `prototype/test-game/sr
 ```
 
 - `assignedBattle` is the battle counter (`save.progress.battles`), not wall-clock time.
-- Authored missions (haul, bounty, survey, defend) come from a new content file, `content/missions/missions.json`, keyed by planet and unlock condition. Contract and favour missions are built from the existing offers; campaign missions from map unlocks.
+- Authored missions come from `content/missions/missions.json`, generated from `docs/sources/Bulwark-Missions.xlsx` by `tools/extract_missions.py` (MLG-7, `story_mvys6jex_k`). Each mission carries requirement lists for **view**, **unlock**, **execute**, **complete** and **fail**, built from the workbook's condition catalogue (which repeats §1.1's tiers). The extractor refuses unknown conditions, conditions in the wrong stage, unknown reward kinds and missions with no objective. `missionStatus` gains **locked** (view met, unlock not). Contract and favour missions are built from the existing offers; campaign missions from map unlocks.
 
 ## 3. Pure core — `src/save/missions.js`
 
@@ -128,6 +128,7 @@ Also `badges.test.mjs` for the new rule. Then the full suite and both deploy gat
 | MLG-4 Mission list view | `story_mvyqoo07_f` | MLG-2, MLG-6 |
 | MLG-5 Mission detail view | `story_mvyqoplz_g` | MLG-4 |
 | MLG-6 Mission iconography set | `story_mvyqor1y_h` | MLG-1 |
+| MLG-7 Missions spreadsheet + extractor | `story_mvys6jex_k` | MLG-1 |
 
 Open owner decisions: the authored mission list per planet (`content/missions/missions.json`), and whether tracking allows one mission or several.
 
