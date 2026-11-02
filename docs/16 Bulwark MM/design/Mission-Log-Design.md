@@ -187,7 +187,7 @@ A mission whose View is met but whose Unlock is not shows as **Locked**. It gets
    - **Planet campaign:** the 9 primaries.
    - **Favours line:** the 9 secondaries. Either the Light or the Shadow version of a step advances it, so a commander whose alignment flips continues on the other path instead of being stranded.
 
-**Today's wave-2 contract offer moves off the battle timeline.** The faction contract becomes the planet's secondary, offered aboard the capital ship before the battle, and its loyalty rules carry over. Only tracking stays in battle. This retires `questBeats.js`'s mid-battle offer; the build decides whether the contract card is kept as a briefing.
+**Today's wave-2 contract offer moves off the battle timeline.** The faction contract becomes the planet's secondary, offered aboard the capital ship before the battle, and its loyalty rules carry over. Only tracking stays in battle. This retires `questBeats.js`'s mid-battle offer. The build did not keep the contract card as a briefing: the dossier does that job.
 
 **Gating:**
 
@@ -215,7 +215,7 @@ A mission whose View is met but whose Unlock is not shows as **Locked**. It gets
 - **INVENTORY** is a header chip directly right of MISSIONS (left of the rank chip). Same shape as the other chips; a crate-and-crystal glyph; the count of resources gained since the last visit as a cyan badge.
 - **Inventory screen** (owner 2026-11-02: "the inventory screen should show all resources, sorted by planet"): one scrolling view of **all 36 resources**. They are grouped into a band per planet in campaign order (Verdance → Vexmire), each band with the faction icon and colour, the planet's held total and new count. Each band holds the planet's four resources as tiles: rarity colour top edge, crystal glyph, name, tier, held count, +new. Planets whose portal is not owned stay listed but dimmed, with "Portal: X not owned". Tabs filter All 36 / Kept / Quest crystals. Selecting a tile opens the detail pane on the right (on a narrow screen it slides over), showing held count, planet, faction, role, source and what wants the resource.
 - **Source of truth:** `docs/sources/Bulwark-Missions.xlsx` › Resources (36 = 9 planets × 4), extracted into `missions.json` › `resources`.
-- **Open build question (MLG-10):** how harvest feeds the inventory. Today common and uncommon convert straight to gold, and rare and epic are quest crystals.
+- **Harvest (owner 2026-11-02):** all four tiers go to the inventory at battle end, and common and uncommon still pay their gold in battle.
 
 ## 13. Design page v2 (2026-11-02)
 

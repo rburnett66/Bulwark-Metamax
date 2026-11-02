@@ -111,7 +111,7 @@ Primaries also give 24,300 XP. Rare and epic resources are quest crystals and ar
 
 On the Light path the running balance stays positive through Lumen (+37) and ends at −33.7k. The last two planets are where battle income has to carry the tree.
 
-**Open owner decision (`task_mvzkudeg_1n`):** close the gap with battle gold (as designed today), raise late mission rewards, or move the Apocalypse Cannon's price into resources.
+**Owner decision for now (2026-11-02, `task_mvzkudeg_1n`):** battle gold closes the gap, as designed today. Raising late mission rewards or moving the Apocalypse Cannon's price into resources stay open for later.
 
 ### 1.3 Ships (coming soon)
 
@@ -185,7 +185,22 @@ Also `badges.test.mjs` for the new rule. Then the full suite and both deploy gat
 | MLG-9 Primary/secondary flow + quest lines | `story_mvzkd2t8_1k` | MLG-2, MLG-8 |
 | MLG-10 Inventory button + resource list | `story_mvzkdvrl_1l` | MLG-2 |
 
-Open owner decisions: the authored mission list per planet (`content/missions/missions.json`), and whether tracking allows one mission or several.
+Open owner decisions: the authored mission list per planet (`content/missions/missions.json`), and whether tracking allows one mission or several (built: one).
+
+## 7. Decisions made while building (2026-11-02)
+
+**Owner, for now:**
+- Tech nodes cost gold only until the workbook's resource columns are filled in. `inventory.test.mjs` fails if they are filled in without the Tech Net charging them.
+- All four harvested tiers go to the inventory, and common and uncommon still pay their gold in battle.
+
+**Agent, for owner review:**
+- **Counting:** haul, harvest and kill objectives add up over every battle that counts. Gold spent, wave flags, five-star waves and finish time keep the best single battle.
+- **Harvest on a loss:** what the harvesters brought home is kept, win or lose.
+- **Failed secondaries:** the step is offered again only by another replay that beats the best. Otherwise a broken promise would strand the favours line.
+- **Withdrawn favours:** leaving the alignment band costs the broken-promise penalty, as the design page's sample shows, and the other version takes its place.
+- **Contract card:** not kept as a briefing. `render/contractModal.js` and the offer functions in `save/contracts.js` are no longer called by the game.
+- **Timestamps:** a record carries both the battle counter and wall-clock time. Wall-clock is written in the save layer only, never in the tick.
+- **Existing saves:** progress from before the log is not backfilled. Tech nodes already bought stay owned; the next one needs its mission.
 
 ## Dependencies
 
