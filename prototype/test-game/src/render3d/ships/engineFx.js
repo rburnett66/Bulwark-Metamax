@@ -44,14 +44,14 @@ void main() {
   // turbulence scrolls down the plume
   float n = noise(vec2(vTheta * 2.0 + vSeed, vT * 6.0 - uTime * 9.0)) * 0.6
           + noise(vec2(vTheta * 5.0, vT * 14.0 - uTime * 17.0)) * 0.4;
-  float fade = pow(1.0 - vT, core > 0.5 ? 1.2 : 1.7);
-  float soft = pow(vEdge, core > 0.5 ? 0.8 : 1.6);           // feathered silhouette, no hard cone edge
+  float fade = pow(1.0 - vT, core > 0.5 ? 1.4 : 1.05);
+  float soft = pow(vEdge, core > 0.5 ? 1.0 : 1.3);           // feathered silhouette, no hard cone edge
   // Mach diamonds in the core
   float diamonds = core * (0.55 + 0.45 * pow(abs(sin(vT * 18.0 - uTime * 2.0)), 6.0));
-  float a = fade * soft * (core > 0.5 ? diamonds : (0.3 + 0.35 * n)) * min(k, 1.0);   // throttle lengthens, not whitens
+  float a = fade * soft * (core > 0.5 ? diamonds * 0.8 : (0.5 + 0.45 * n)) * min(k, 1.0);   // throttle lengthens, not whitens
   vec3 hot = mix(vColor, vec3(1.0), core > 0.5 ? 0.55 : 0.15 * (1.0 - vT));
   vec3 cool = vColor * mix(1.0, 0.45, vT);                  // cools and deepens toward the tail
-  vec3 col = mix(hot, cool, smoothstep(0.0, 0.7, vT)) * (core > 0.5 ? 1.05 : 0.8) * (0.7 + 0.3 * k);
+  vec3 col = mix(hot, cool, smoothstep(0.0, 0.7, vT)) * (core > 0.5 ? 0.9 : 1.0) * (0.75 + 0.25 * min(k, 2.0));
   gl_FragColor = vec4(col, a);   // additive: src·alpha + dst
 }`;
 
@@ -66,7 +66,7 @@ void main() {
   vec3 axis = normalize((modelViewMatrix * vec4(-1.0, 0.0, 0.0, 0.0)).xyz);
   vBehind = clamp(dot(axis, normalize(-mvO.xyz)), 0.0, 1.0);
   float flick = 1.0 + 0.05 * sin(uTime * 31.0 + aSeed * 5.0);
-  float size = aRadius * (1.6 + 1.4 * min(k, 2.0) + 2.2 * vBehind * min(k, 1.5)) * flick;
+  float size = aRadius * (1.5 + 0.9 * min(k, 2.0) + 1.1 * vBehind * min(k, 1.5)) * flick;
   mvO.xy += aCorner * size;
   vUv = aCorner; vColor = aColor;
   gl_Position = projectionMatrix * mvO;
@@ -83,7 +83,7 @@ void main() {
   float hot = pow(max(1.0 - d * 2.4, 0.0), 2.0);             // white-hot centre
   float ring = smoothstep(0.42, 0.36, abs(d - 0.38)) * 0.35 * vBehind;  // nozzle lip, seen from behind
   vec3 col = vColor * halo * 1.1 + mix(vColor, vec3(1.0), 0.6) * hot * (0.45 + 0.6 * vBehind) + vColor * ring;
-  float a = (halo * 0.7 + hot) * min(k, 1.2) * (0.5 + 0.4 * vBehind);
+  float a = (halo * 0.55 + hot * 0.8) * min(k, 1.2) * (0.45 + 0.35 * vBehind);
   gl_FragColor = vec4(col, a);   // additive: src·alpha + dst
 }`;
 
@@ -189,7 +189,7 @@ export function createEngineFx(THREE, root, { pointLight = true } = {}) {
       shown += (k - shown) * Math.min(1, dt * 3);        // spool up and down instead of snapping
       uniforms.uTime.value += dt;
       uniforms.uK.value = shown;
-      if (light) light.intensity = 2.5 * shown;
+      if (light) light.intensity = 1.1 * Math.min(shown, 2);
     },
     dispose() { pg.dispose(); gg.dispose(); plumes.material.dispose(); glows.material.dispose(); root.remove(group); },
   };

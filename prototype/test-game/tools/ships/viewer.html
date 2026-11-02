@@ -170,6 +170,7 @@ async function show(s, keepView) {
   const box = new THREE.Box3().setFromObject(current);
   size = box.getSize(new THREE.Vector3()).length();
   controls.target.copy(box.getCenter(new THREE.Vector3()));
+  controls.target.x -= size * 0.07;                     // leave room aft for the exhaust plume
   if (!keepView) setView(q.get('view') || 'hero');
   const ref = BUNDLE && BUNDLE.refs[s];
   document.getElementById('ref').hidden = !ref;
@@ -182,7 +183,7 @@ async function show(s, keepView) {
 const VIEWS = { hero: [-35, 24], rear: [160, 14], side: [-90, 2], top: [-90, 88] };   // yaw from the bow, pitch
 function setView(v) {
   const [yaw, pitch] = VIEWS[v] || VIEWS.hero, y = THREE.MathUtils.degToRad(yaw), p = THREE.MathUtils.degToRad(pitch);
-  const d = size * 1.45;
+  const d = size * 1.75;
   // yaw is measured from the bow toward starboard, like the Blender renders (glTF: starboard is +Z)
   const dir = new THREE.Vector3(Math.cos(p) * Math.cos(y), Math.sin(p), -Math.cos(p) * Math.sin(y));
   camera.position.copy(controls.target).addScaledVector(dir, d);
