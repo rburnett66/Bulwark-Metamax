@@ -57,6 +57,35 @@
   ],
   "length": 23.59
  },
+ "collective": {
+  "lods": [
+   {
+    "file": "collective_lod0.glb",
+    "tris": 5112,
+    "drawCalls": 2,
+    "bytes": 614832
+   },
+   {
+    "file": "collective_lod1.glb",
+    "tris": 3848,
+    "drawCalls": 2,
+    "bytes": 502176
+   },
+   {
+    "file": "collective_lod2.glb",
+    "tris": 1660,
+    "drawCalls": 2,
+    "bytes": 320484
+   }
+  ],
+  "engines": 8,
+  "engineColor": [
+   0.3,
+   0.52,
+   1.0
+  ],
+  "length": 22.44
+ },
  "green": {
   "lods": [
    {
