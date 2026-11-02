@@ -13,16 +13,24 @@
  *   maps             { [mapId]: { beaten, bestScore, stars:[...8]|null, avg|null, contract|null } }
  *                    contract: 'ACCEPTED'|'DECLINED'|'FULFILLED'|'BROKEN'
  *   loyalty          { [factionId]: signed number } (cumulative; tech thresholds read this)
- *   tech             { [factionId]: 0..3 } highest unlocked tier
+ *   factionTiers     { [factionId]: 0..3 } highest loyalty tier reached (contracts.js)
  *   harvesterLevel   1..5
- *   progress         { xp } commander XP (data/progression.js) [MM-story_mvkhef1t_i]
- *   tech             { owned: {id: true}, paid: {id: gold} } the Tech Tree (data/techtree.js) [MM-story_mvkhed1f_h]
+ *   progress         { xp, battles } commander XP (data/progression.js) [MM-story_mvkhef1t_i]; played campaign battles
+ *   tech             { owned: {id: true}, paid: {id: gold}, unlocked: {id: true} } the Tech Tree (data/techtree.js) [MM-story_mvkhed1f_h]
+ *   missions         the Mission Log's records (save/missions.js) [MM-story_mvyqol3w_d]
+ *   stats            lifetime battle tallies (save/battleTally.js)
+ *   planetMaps       { [planet]: { [map]: {beaten, bestAvg, runs, improved} } } the per-planet record
+ *   capitalShips     { [planet]: {arrived} }
+ *   questSteps       { [questLine]: highest step collected }
+ *   inventory        { [resourceId]: count }; inventoryNew: the same, since the last visit
  *   seen             what the menu's red-dot badges last showed (menu/badges.js) [MM-story_mvkhei9q_k]
  *   pendingRewards   the last battle(s)' rewards, waiting to fly into the menu widget [MM-story_mvkhegop_j]
  *
  * Determinism contract: any field that CHANGES A BATTLE (carry, tech, harvesterLevel, contract
  * buffs) must be injected at createSim time — never mid-battle — so replays stay reproducible.
  */
+
+import { emptyStats } from './battleTally.js';
 
 const KEY = 'bulwark:save';
 
@@ -34,30 +42,60 @@ export function defaultSave() {
     unlockedThrough: 1,
     maps: {},
     loyalty: {},
-    tech: {},
+    factionTiers: {},
     harvesterLevel: 1,
     structTiers: { cannon: 1, flak: 1, wall: 1 },   // Amendment B2: max in-battle tier unlocked per type (gold-bought)
     techNodes: {},       // Tech Tree epic: { [nodeId]: true } researched upgrades (gold-bought). Clearance
                          // (which tiers are buyable) DERIVES from Map-2 faction wins — see techClearance().
     alignment: 0,        // the good/evil axis (owner): finishing a good hero's contract raises it,
                          // an evil hero's lowers it — the 81-character matrix supplies the givers
-    progress: { xp: 0 },
-    tech: { owned: {}, paid: {} },
+    progress: { xp: 0, battles: 0 },
+    tech: { owned: {}, paid: {}, unlocked: {} },
     seen: {},
     pendingRewards: null,
+    missions: [],
+    stats: emptyStats(),
+    planetMaps: {},
+    capitalShips: {},
+    questSteps: {},
+    inventory: {},
+    inventoryNew: {},
+    loggedQueue: [],     // missions logged away from the menu: the toast plays when the menu next shows
   };
 }
 
-function migrate(s) {
+const TECH_KEYS = new Set(['owned', 'paid', 'unlocked']);
+
+export function migrate(s) {
   if (!s || typeof s !== 'object' || typeof s.v !== 'number') return defaultSave();
   // v1 field fills (schema grew within v1 during the epic — additive, no version bump needed)
   if (typeof s.alignment !== 'number') s.alignment = 0;
   if (!s.factionRecords) s.factionRecords = {};
   if (!s.structTiers) s.structTiers = { cannon: 1, flak: 1, wall: 1 };
   if (!s.techNodes) s.techNodes = {};
-  if (!s.progress || typeof s.progress.xp !== 'number') s.progress = { xp: 0 };
-  if (!s.tech || typeof s.tech !== 'object' || !s.tech.owned) s.tech = { owned: {}, paid: {} };
+  if (!s.progress || typeof s.progress.xp !== 'number') s.progress = { xp: 0, battles: 0 };
+  if (typeof s.progress.battles !== 'number') s.progress.battles = 0;
+  // defaultSave() used to declare `tech` twice, so contracts.js wrote per-faction loyalty tiers into the same object
+  // as the Tech Tree's owned/paid. Those tiers now live in factionTiers; an old save's are moved out here.
+  if (!s.factionTiers) s.factionTiers = {};
+  if (s.tech && typeof s.tech === 'object') {
+    for (const k of Object.keys(s.tech)) {
+      if (TECH_KEYS.has(k)) continue;
+      if (typeof s.tech[k] === 'number') s.factionTiers[k] = Math.max(s.factionTiers[k] || 0, s.tech[k]);
+      delete s.tech[k];
+    }
+  }
+  if (!s.tech || typeof s.tech !== 'object' || !s.tech.owned) s.tech = { owned: {}, paid: {}, unlocked: {} };
   if (!s.tech.paid) s.tech.paid = {};
+  if (!s.tech.unlocked) s.tech.unlocked = {};
+  if (!Array.isArray(s.missions)) s.missions = [];
+  if (!s.stats || !s.stats.kills) s.stats = emptyStats();
+  if (!s.planetMaps) s.planetMaps = {};
+  if (!s.capitalShips) s.capitalShips = {};
+  if (!s.questSteps) s.questSteps = {};
+  if (!s.inventory) s.inventory = {};
+  if (!s.inventoryNew) s.inventoryNew = {};
+  if (!Array.isArray(s.loggedQueue)) s.loggedQueue = [];
   if (!s.seen || typeof s.seen !== 'object') s.seen = {};
   if (s.pendingRewards === undefined) s.pendingRewards = null;
   return s;
@@ -183,7 +221,7 @@ export function grantBattleRewards(before, battle) {
     ledger = r.ledger;
     if (!battle.mapId) return;
     if (battle.result === 'win') { s.carry = { gold: r.bankTo, structures: [] }; s.goldBank = r.bankTo; }
-    s.progress = { xp: r.xpTo };
+    s.progress = { ...s.progress, xp: r.xpTo };
     s.pendingRewards = mergeRewards(s.pendingRewards, r.ledger);
   });
   return ledger;

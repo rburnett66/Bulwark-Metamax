@@ -10,14 +10,19 @@ import { TECH_BY_ID, startingOwned, settleFree, techStatus, techPrice, refundBlo
 export const map3Won = (s) => !!((s.maps && s.maps[3] && s.maps[3].beaten) ||
   Object.values(s.factionRecords || {}).some((f) => f && f.mapsWon && f.mapsWon[3]));
 
-/** factionOfPlanet: planet name ('Florael') → the faction name factionRecords is keyed by. */
-export function techCtxFromSave(s, factionOfPlanet = (p) => p) {
+/**
+ * factionOfPlanet: planet name ('Florael') → the faction name factionRecords is keyed by.
+ * opts.missionGate: nodes need a mission to unlock them before they can be bought (tech plan D7) [MM-story_mvzkdvrl_1l];
+ * opts.unlockedBy(id) names that mission on the node's gate.
+ */
+export function techCtxFromSave(s, factionOfPlanet = (p) => p, opts = {}) {
   const owned = startingOwned();
   for (const [id, on] of Object.entries((s.tech && s.tech.owned) || {})) if (on && TECH_BY_ID[id]) owned.add(id);
   if (map3Won(s)) owned.add('map3');
   settleFree(owned);
   return {
     owned, bank: (s.carry && s.carry.gold) || 0, paid: (s.tech && s.tech.paid) || {},
+    ...(opts.missionGate ? { unlocked: new Set(Object.keys((s.tech && s.tech.unlocked) || {})), unlockedBy: opts.unlockedBy || null } : {}),
     hasWin: (planet) => {
       const fr = s.factionRecords && s.factionRecords[factionOfPlanet(planet)];
       return !!(fr && fr.mapsWon && Object.values(fr.mapsWon).some(Boolean));
@@ -43,8 +48,8 @@ export function planetOpen(ctx, planetName, { allOpen = ALL_PLANETS_OPEN } = {})
 }
 
 /** The view adapter for the game menu. save = { loadSave, buyTech, refundTech }. */
-export function createGameTechAdapter({ save, factionOfPlanet, onChange, onClose }) {
-  const ctx = () => techCtxFromSave(save.loadSave(), factionOfPlanet);
+export function createGameTechAdapter({ save, factionOfPlanet, onChange, onClose, ctxOpts }) {
+  const ctx = () => techCtxFromSave(save.loadSave(), factionOfPlanet, ctxOpts);
   return {
     mode: 'game',
     ctx,

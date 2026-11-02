@@ -68,6 +68,6 @@ test('old saves gain the new fields', () => {
   store.clear();
   store.set('bulwark:save', JSON.stringify({ v: 1, maps: {}, carry: { gold: 5 } }));
   const s = S.loadSave();
-  assert.deepEqual(s.progress, { xp: 0 }); assert.deepEqual(s.tech, { owned: {}, paid: {} }); assert.deepEqual(s.seen, {});
+  assert.deepEqual(s.progress, { xp: 0, battles: 0 }); assert.deepEqual(s.tech, { owned: {}, paid: {}, unlocked: {} }); assert.deepEqual(s.seen, {});
   assert.equal(s.pendingRewards, null);
 });

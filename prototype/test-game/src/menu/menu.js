@@ -17,8 +17,13 @@ import { loadSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars
 import { setChannelVolume } from '../comm/voice.js';
 import { readyIds, countOwned } from '../data/techtree.js';
 import { techCtxFromSave, createGameTechAdapter, planetOpen } from './techSave.js';
-import { computeBadges, seenFor } from './badges.js';
+import { computeBadges, seenFor, missionChip, inventoryChip } from './badges.js';
+import { inventoryFresh } from '../save/inventory.js';
+import { createInventoryScreen } from './inventoryScreen.js';
+import { badge as missionBadge } from '../save/missions.js';
 import { createProgressWidget } from './progressWidget.js';
+import { createMissionLog } from './missionLog.js';
+import { ensureMissionIcons } from './missionIcons.js';
 // The faction registry (GGG-3). Side-effect import + global namespace: factions.js is a classic
 // script with no ES exports, so a named import is a SyntaxError. See voice.js for the full note.
 import '../data/factions.js';
@@ -108,6 +113,7 @@ const CSS = `
 .bwm-live .bwm-globe > img { visibility:hidden; }
 /* MAIN: the GALAXY layer — the main screen zooms out from the planet to the 9 systems [MM-story_mvftq5q8_l] */
 .bwm-main { position:relative; }
+.bwm-main.bwm-dim { filter:blur(3px) brightness(.45) saturate(.8); pointer-events:none; }
 .bwm-menu > * { position:relative; z-index:7; }   /* buttons over the 3D canvas; the column itself stays unpositioned (phone craft card) */
 .bwm-galaxy { position:absolute; inset:0; display:none; z-index:7; touch-action:none; cursor:default; }   /* above the 3D canvas (transparent DOM): labels stay on top */
 .bwm-root.galaxy .bwm-galaxy { display:block; }
@@ -321,9 +327,20 @@ export function createMenu(mountEl, cbs) {
   brand.appendChild(el(doc, 'div', 'bwm-tag', 'HOLD THE LINE'));
   top.appendChild(brand);
   // the PROGRESSION WIDGET (Menu-Progression-Design §2): rank + XP, gold, stars, research — on every menu screen
-  const widget = createProgressWidget(doc, { onOpen: (k) => { if (k === 'gold' || k === 'research') show('techtree'); else openSurvey(targetKey()); } });
+  const widget = createProgressWidget(doc, { onOpen: (k) => {
+    if (k === 'missions' || k === 'inventory') show(current === k ? 'main' : k);
+    else if (k === 'gold' || k === 'research') show('techtree');
+    else openSurvey(targetKey());
+  } });
   top.appendChild(widget.el);
   root.appendChild(top);
+  // the Mission Log sits over the main screen, under the live top bar (Mission-Log-Design §1) [MM-story_mvyqoo07_f]
+  const mlHost = el(doc, 'div');
+  ensureMissionIcons(doc);
+  const missionLog = createMissionLog({ doc, host: mlHost, chipPing: () => widget.ping('missions'), gateOpts: () => gateOverride() || {},
+    onChange: () => refreshProgress(), onClose: () => show('main'), onCollected: () => { if (cbs.onTechChanged) cbs.onTechChanged(); playPendingRewards(); } });
+
+  const inventory = createInventoryScreen({ doc, host: mlHost, gateOpts: () => gateOverride() || {}, onChange: () => refreshProgress(), onClose: () => show('main') });
 
   // ── MAIN screen ──
   const main = el(doc, 'div', 'bwm-main');
@@ -431,6 +448,7 @@ export function createMenu(mountEl, cbs) {
   menu.appendChild(craftCard);
   main.appendChild(menu);
   root.appendChild(main);
+  root.appendChild(mlHost);
 
   // the TARGET planet: the saved enemy faction's homeworld (or the galaxy pick on the main menu)
   function targetKey() {
@@ -539,7 +557,7 @@ export function createMenu(mountEl, cbs) {
     }
     // the faction's tech badges (they were on the FACTIONS cards): lit once the loyalty threshold is reached
     {
-      const sv = loadSave(), loyalty = (sv.loyalty || {})[name] || 0, tier = (sv.tech || {})[name] || 0;
+      const sv = loadSave(), loyalty = (sv.loyalty || {})[name] || 0, tier = (sv.factionTiers || {})[name] || 0;
       const row = fac && MAPDATA.factions.find((r) => r.Faction_ID === fac.ordinal);
       const tech = (row && MAPDATA.techTree.find((t) => t.Faction === row.Faction_Name)) || {};
       const box = doss.querySelector('.bwm-facts .bwm-badges');
@@ -638,7 +656,7 @@ export function createMenu(mountEl, cbs) {
     import('./technet.js').then((M) => M.loadTechNetDeps().then(({ THREE, addons }) => {
       ld.remove();
       net = M.mountTechNet(THREE, addons, netHost, createGameTechAdapter({
-        save: { loadSave, buyTech, refundTech }, factionOfPlanet,
+        save: { loadSave, buyTech, refundTech }, factionOfPlanet, ctxOpts: techGateOpts(),
         onChange: () => { refreshProgress(); if (cbs.onTechChanged) cbs.onTechChanged(); },
         onClose: () => show('main'),
       }));
@@ -717,18 +735,24 @@ export function createMenu(mountEl, cbs) {
 
   root.appendChild(el(doc, 'div', 'bwm-foot', 'BULWARK — TEST BUILD'));
 
+  const OVERLAYS = new Set(['missions', 'inventory']);   // these sit over the main screen, which stays behind them dimmed
   function show(screen) {
     // leaving the Tech Net: whatever it showed as available counts as seen (incl. upgrades opened by a purchase there)
     if (current === 'techtree' && screen !== 'techtree') { const sv = loadSave(), k = seenFor('techtree', sv, badgeCtx(sv)); markSeen(k[0], k[1]); }
     // the retired screens open the Survey on the target planet (post-battle "main menu" used to open 'maps')
     if (screen === 'maps' || screen === 'factions') { openSurvey(targetKey()); return; }
-    main.style.display = screen === 'main' ? 'flex' : 'none';
+    const overlay = OVERLAYS.has(screen);
+    main.style.display = screen === 'main' || overlay ? 'flex' : 'none';
+    main.classList.toggle('bwm-dim', overlay);
+    widget.setExpanded(overlay ? screen : null);
+    if (screen === 'missions') missionLog.open(); else { missionLog.close(); missionLog.sync(); }
+    if (screen === 'inventory') inventory.open(); else inventory.close();
     harv.style.display = screen === 'harvester' ? 'block' : 'none';
     netHost.style.display = screen === 'techtree' ? 'block' : 'none';
     if (screen !== 'techtree' && net) net.stop();
     settings.style.display = screen === 'settings' ? 'block' : 'none';
     survey.style.display = screen === 'survey' ? 'grid' : 'none';
-    root.classList.toggle('space', screen === 'main' || screen === 'survey');
+    root.classList.toggle('space', screen === 'main' || screen === 'survey' || overlay);
     for (const b of root.querySelectorAll('[data-globe]')) markSurvey(b);   // a portal bought since the last show opens a planet
     current = screen;
     syncStage();
@@ -736,7 +760,7 @@ export function createMenu(mountEl, cbs) {
     if (screen === 'techtree') openTechNet();
     { const sv = loadSave(), k = seenFor(screen, sv, badgeCtx(sv)); if (k) markSeen(k[0], k[1]); }   // opening a screen clears its dot
     refreshProgress();
-    if (screen === 'main') {
+    if (screen === 'main' || overlay) {
       const s = loadSave();
       // the hero = the target planet, and the planet view is ALWAYS the default on open [MM-story_mvftq5q8_l]
       galaxy.dataset.mode = 'planet'; root.classList.remove('galaxy'); zoomBtn.firstChild.textContent = '◎ GALAXY';
@@ -764,19 +788,24 @@ export function createMenu(mountEl, cbs) {
   }
 
   // ── PROGRESSION + BADGES (Menu-Progression-Design §2–4)
+  // tech nodes unlock through missions, then are bought (tech plan D7) [MM-story_mvzkdvrl_1l]
+  const techGateOpts = () => ({ missionGate: true, unlockedBy: (id) => missionLog.unlockedBy(id) });
   function badgeCtx(sv) {
-    const tc = techCtxFromSave(sv, factionOfPlanet), lvl = sv.harvesterLevel || 1;
+    const tc = techCtxFromSave(sv, factionOfPlanet, techGateOpts()), lvl = sv.harvesterLevel || 1;
     const nx = (MAPDATA.harvesterUpgrades || []).find((u) => u.Level === lvl + 1);
     return { tc, readyTech: readyIds(tc), harvesterNext: nx ? { level: nx.Level, cost: nx.Gold_Cost } : null, bank: bankOf(sv) };
   }
   function progressValues(sv, bc) {
     return { xp: (sv.progress && sv.progress.xp) || 0, gold: bankOf(sv), stars: totalStars(sv), research: countOwned(bc.tc.owned) };
   }
+  const RESOURCE_COUNT = Object.keys(PLANETS).length * 4;   // four tiers on each of the nine homeworlds
   function refreshProgress() {
     const sv = loadSave(), bc = badgeCtx(sv), b = computeBadges(sv, bc);
     for (const [k, d] of Object.entries(DOTS)) d.classList.toggle('on', !!b[k]);
-    if (!playingRewards) widget.render({ ...progressValues(sv, bc), techDot: b.techtree });
-    else widget.render({ techDot: b.techtree });
+    const missions = missionChip(missionBadge(sv));
+    const inventory = inventoryChip(inventoryFresh(sv), RESOURCE_COUNT);
+    if (!playingRewards) widget.render({ ...progressValues(sv, bc), techDot: b.techtree, missions, inventory });
+    else widget.render({ techDot: b.techtree, missions, inventory });
   }
   let playingRewards = false;
   /** The last battle's rewards fly into the widget — once, when the menu is on screen. */

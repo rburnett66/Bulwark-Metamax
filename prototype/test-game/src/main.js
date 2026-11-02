@@ -4,9 +4,11 @@ import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, resetSave, grantBattleRewards } from './save/save.js';
 import { xpForBattle } from './data/progression.js';
-import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
-import { showContractModal } from './render/contractModal.js';
-import { questOfferDue, questClosingDue } from './comm/questBeats.js';
+import { battleResult, bankBattle, planetOfFaction, trackedMission, trackerLine } from './save/missions.js';
+import { settleBattle, resolvedSecondary, favourMessage } from './save/missionFlow.js';
+import { loadMissionCatalog } from './save/missionCatalog.js';
+import { createBattleTally, tallyEvents, noteHarvesters, noteTroopDeployed, finishTally } from './save/battleTally.js';
+import { questClosingDue } from './comm/questBeats.js';
 import { showWaveIntel, showBonusPicker, showHowToPlay } from './render/gameDialog.js';
 import { getBonusDef } from './data/tables.js';
 import { createMenu } from './menu/menu.js';
@@ -269,7 +271,10 @@ export function boot(mountEl, seed) {
     inputHandle = makeInput();
   }
   let pendingCarry = null;   // campaign carry (gold + defenses) applied by restart() until the map changes by hand
-  let runContract = null;    // the ACCEPTED quest contract for the current map run (judged at match end)
+  let missionCatalog = null;   // content/missions/missions.json
+  loadMissionCatalog().then((c) => { missionCatalog = c; }).catch((e) => console.error('[missions] content failed to load', e));
+  let trackedNow = null;       // the mission pinned to the battle HUD: read at battle start, so the line is a read-only look
+  let battleTally = createBattleTally();   // this battle's counts, from the drained events: banked at battle end only [MM-story_mvyqol3w_d]
 
   // ---------------------------------------------------------------------
   // Command submission: validates via sim core, records accepted commands.
@@ -319,6 +324,7 @@ export function boot(mountEl, seed) {
     if (res.ok) {
       recordCommand(log, sim.tick, cmd);
       killRec.command(sim.tick, cmd);
+      if (cmd.type === 'deployTroop') noteTroopDeployed(battleTally);
     } else if (res.reason) {
       flashMessage(hud, res.reason);
     }
@@ -347,6 +353,8 @@ export function boot(mountEl, seed) {
         structTiers: currentMapId && !(currentMap && currentMap.fromForge) ? sv.structTiers : null,
         mapId: currentMapId, faction: currentTestFaction || null };
       sim = createSim(currentSeed, simInit);
+      battleTally = createBattleTally();
+      trackedNow = trackedMission(sv);
       log = createLog(currentSeed, simInit);   // capture the init so an in-memory replay reproduces THIS board, not default MAP/WAVES
     }
     ui = createUiState();
@@ -552,12 +560,7 @@ export function boot(mountEl, seed) {
     // the map banner waits for the landing too (owner 2026-10-17) — see afterLanding
     const announceMap = () => flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
 
-    // ── QUEST CONTRACT offer (owner design): a character from the map's quest-giver faction
-    // makes the pitch before the first tap. Skipped when the map seeds no quest fields (maps
-    // 1-2) or the map's contract is already FULFILLED.
-    runContract = null;
-    // WB2 — WAVE INTEL: after the contract dialog resolves (or immediately when there's none),
-    // brief the FIRST wave's unit types (no counts; new units flagged). Per-wave intel for later
+    // WB2 — WAVE INTEL: brief the FIRST wave's unit types (no counts; new units flagged). Per-wave intel for later
     // waves fires from the interlude below.
     // ...then the speaker. The intro's last step — the only place the match-start dialog begins.
     const speakNow = () => {
@@ -831,7 +834,7 @@ export function boot(mountEl, seed) {
       // structures): set the faction, drop the carried gold/defenses, rebuild the schedule and
       // restart from wave 1 with a full base and starting economy.
       currentTestFaction = f || DEFAULT_FACTION;
-      pendingCarry = null; runContract = null;
+      pendingCarry = null;
       // maps are faction-owned and the planet is the enemy's homeworld: a campaign map reloads for the new enemy
       // (its map — or the temporary Powder mirror — its planet palette and resources) [MM-task_mvbzgc9n_12]
       if (currentMapId) { void selectMap(currentMapId); return; }
@@ -839,7 +842,7 @@ export function boot(mountEl, seed) {
         : (currentTestFaction ? makeWaves(currentTestFaction) : WAVES);
       restart(currentSeed);
     },
-    onResetCampaign: () => { resetSave(); pendingCarry = null; runContract = null; currentTestFaction = DEFAULT_FACTION; flashMessage(hud, 'Campaign reset — start from Map 1'); },   // the chosen enemy drives the wave builder
+    onResetCampaign: () => { resetSave(); pendingCarry = null; currentTestFaction = DEFAULT_FACTION; flashMessage(hud, 'Campaign reset — start from Map 1'); },   // the chosen enemy drives the wave builder
     onTechChanged: () => { pendingCarry = loadSave().carry; },   // the Tech Net spent / refunded banked gold: the next battle sees it
     onBuyHarvester: (level, cost) => {
       updateSave((sv) => {
@@ -885,6 +888,8 @@ export function boot(mountEl, seed) {
   // authored voice packs (content/dialog/voicepacks.json), picked
   // deterministically from (faction, wave, seed) so replays hear the same calls.
   // ---------------------------------------------------------------------
+  hud.trackedLine = (state) => (mode === 'play' && currentMapId && trackedNow
+    ? trackerLine(trackedNow, state, { mapId: currentMapId, planet: planetOfFaction(currentTestFaction) }) : null);
   const comm = createComm(document);
   // Jumping back to the menu ends all dialog; leaving it lets the speakers talk again [MM-task_mvcs0s2v_15]
   {
@@ -926,22 +931,8 @@ export function boot(mountEl, seed) {
   // Runs inside the frozen interlude: the cleared wave's commentary plays through, THEN the
   // UPCOMING wave's challenge — whose speaker HOLDS on screen until the tap starts the fight.
   let preDialogFaction = null;   // challenge already delivered pre-battle → skip it at wave start
-  // the QUEST OFFER beat [MM-story_mvk8gz1k_r] (owner 2026-10-22: "Having these pop-up on every waves feel like too
-  // much dialog. Let's have it pop up between wave 1 and 2"): the map's quest-giver pitches the contract ONCE, in the
-  // interlude before wave 2 (comm/questBeats.js). It used to open at map start and then send a FIELD TIP every wave.
-  function offerContract() {
-    return new Promise((resolve) => {
-      if (!currentMapId) { resolve(); return; }
-      const sv = loadSave();
-      const already = sv.maps[currentMapId] && sv.maps[currentMapId].contract === 'FULFILLED';
-      const offer = already ? null : buildOffer(currentMapId, currentMap, voicePacks, sv);
-      if (!offer) { resolve(); return; }
-      showContractModal(mountEl, offer, {
-        onAccept: () => { applyAccept(offer); runContract = offer; flashMessage(hud, 'Contract accepted — haul the quest crystals'); resolve(); },
-        onDecline: () => { applyDecline(offer); flashMessage(hud, 'Contract declined — ' + offer.giver + ' will remember (−' + offer.declineCost + ' loyalty)'); resolve(); },
-      });
-    });
-  }
+  // The faction contract no longer interrupts the battle: it is the planet's secondary mission, offered aboard the
+  // capital ship before the battle [MM-story_mvzkd2t8_1k]. Only tracking stays in battle.
   function playPreBattleDialog(clearCall) {
     const idx = sim.waves ? sim.waves.current : 0;          // next wave = table index `current`
     const next = (currentWaves && currentWaves[idx]) || null;
@@ -981,8 +972,6 @@ export function boot(mountEl, seed) {
       } else {
         // BETWEEN WAVES (owner 2026-10-18): primary closed → the OPTIONAL dialog the same way (centre, 2×) → the
         // next-wave intel (its TO THE WALLS button is the continue) → a 1s beat → the next wave starts.
-        if (questOfferDue(idx)) await offerContract();     // the quest's one mid-map beat: before wave 2 only
-        if (!interlude || mode !== 'play') return;
         const info = waveIntel(currentWaves && currentWaves[idx], idx + 1);
         if (info) await new Promise((res) => showWaveIntel(mountEl, info, res));
         if (!interlude || mode !== 'play') return;
@@ -1041,6 +1030,7 @@ export function boot(mountEl, seed) {
         }
         const evs = stepSim(sim, FIXED_DT);
         killRec.after(sim, evs);   // Kill Camera memory — outside the tick path [MM-task_mvjng7sh_a]
+        if (mode === 'play') { tallyEvents(battleTally, evs); noteHarvesters(battleTally, sim.harvesterIds); }
         if (evs && evs.length) {
           for (let i = 0; i < evs.length; i++) {
             pendingEvents.push(evs[i]);
@@ -1112,27 +1102,22 @@ export function boot(mountEl, seed) {
           // BATTLE REWARDS (Menu-Progression-Design §2.2–3) [MM-story_mvkhegop_j]: a win banks the leftover gold, every
           // campaign battle earns commander XP; the ledger shows on the result and flies into the menu widget later.
           // Played battles only — a replay re-runs a battle already paid for.
-          let rewards = null;
+          let rewards = null, resolvedFavour = null;
           if (mode === 'play' && currentMapId) {
             rewards = grantBattleRewards(saveBefore, { mapId: currentMapId, result: sim.result, finalScore: sim.finalScore,
               waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, xpFor: xpForBattle });
+            const played = battleResult({ mapId: currentMapId, planet: planetOfFaction(currentTestFaction), faction: currentTestFaction, result: sim.result,
+              finalScore: sim.finalScore, mapScore: sim.mapScore, waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, tally: finishTally(battleTally) });
+            updateSave((sv) => {
+              if (missionCatalog) resolvedFavour = resolvedSecondary(sv, settleBattle(sv, played, missionCatalog));
+              else { console.error('[missions] content not loaded: battle counted, missions not advanced'); bankBattle(sv, played); }
+            });
           }
-          // the SECONDARY's end-of-match reward faction (captured before runContract is cleared)
-          const rewardFaction = (runContract && runContract.giver) || lastWaveFaction;
+          const rewardFaction = (resolvedFavour && resolvedFavour.giver) || lastWaveFaction;
           const fiveStar = Array.isArray(sim.waveStars) && sim.waveStars.some((w) => w.stars === 5);
-          let contractMsg = null;
-          let closing = null;   // the quest-giver's closing beat after the last wave [MM-story_mvk8gz1k_r]
-          // judge the ACCEPTED contract from the hauled quest crystals (red + green units)
-          if (runContract) {
-            const hauled = sim.mapScore ? (sim.mapScore.questRed || 0) + (sim.mapScore.questGreen || 0) : 0;
-            const verdict = judgeContract(runContract, hauled, sim.result === 'win');
-            contractMsg = (verdict.outcome === 'FULFILLED'
-              ? 'CONTRACT FULFILLED — +' + verdict.gain + ' ' + runContract.giver + ' loyalty' +
-                (verdict.alignShift ? (verdict.alignShift > 0 ? ' · your reputation brightens' : ' · your reputation darkens') : '')
-              : 'CONTRACT BROKEN — ' + (verdict.gain >= 0 ? '+' : '') + verdict.gain + ' ' + runContract.giver + ' loyalty');
-            if (questClosingDue(runContract, sim.result)) closing = { giver: runContract.giver, outcome: verdict.outcome };
-            runContract = null;
-          }
+          // a secondary's one attempt just ended: its giver has the last word [MM-story_mvzkd2t8_1k]
+          const contractMsg = resolvedFavour ? favourMessage(resolvedFavour) : null;
+          const closing = resolvedFavour && questClosingDue(resolvedFavour, sim.result) ? resolvedFavour : null;
           // what the player sees at the end — after the Kill Camera on a defeat [MM-task_mvjng96y_b]
           const S = sim;
           const presentResult = () => {

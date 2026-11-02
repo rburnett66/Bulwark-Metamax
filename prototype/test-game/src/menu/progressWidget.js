@@ -3,7 +3,7 @@
  * into it [MM-story_mvkhegop_j]. Menu-Progression-Design §2–3.
  *
  *   createProgressWidget(doc, { onOpen }) → { el, render(values), playRewards(ledger, finalValues, layer) → Promise }
- *     values = { xp, gold, stars, research, techDot }   onOpen(key) — a tap on an indicator ('xp'|'gold'|'stars'|'research')
+ *     values = { xp, gold, stars, research, techDot, missions, inventory }   onOpen(key) — a tap on an indicator ('missions'|'inventory'|'xp'|'gold'|'stars'|'research')
  *
  * DOM only (Web Animations API for the flight); the numbers come from the save. Presentation: nothing here changes a value.
  */
@@ -38,6 +38,26 @@ const CSS = `
   box-shadow:0 0 8px rgba(255,59,59,.8); display:none; z-index:2; pointer-events:none; animation:bwm-dot 2.4s ease-in-out infinite; }
 .bwm-dot.on { display:block; }
 @keyframes bwm-dot { 0%,100%{transform:scale(1)} 50%{transform:scale(1.18)} }
+/* the MISSIONS chip [MM-story_mvyqomk8_e]: the one gold-tinted chip, an action and not a readout (Mission-Log-Design §1) */
+.bwm-prog button.mlbtn { gap:11px; padding:7px 14px 7px 12px; border-color:#4a3c1c; background:linear-gradient(180deg,rgba(38,33,22,.9),rgba(22,22,24,.9)); }
+.bwm-prog button.mlbtn:hover { border-color:#d9a441; }
+.bwm-prog .mlbtn .glyph { position:relative; width:30px; height:30px; color:#f2c869; display:grid; place-items:center; }
+.bwm-prog .mlbtn .glyph svg { width:26px; height:26px; display:block; }
+.bwm-prog .mlbtn .pw-v b { font-size:12px; letter-spacing:.2em; }
+.bwm-prog .mlbtn .pw-v label { letter-spacing:.2em; white-space:nowrap; text-transform:uppercase; }
+.bwm-prog .pw-ic svg { width:18px; height:18px; display:block; margin:auto; }
+.bwm-prog .mlbtn .pw-v label em { font-style:normal; color:#5fe39a; font-weight:700; }
+.bwm-prog .mlbtn .count { position:absolute; right:-7px; top:-7px; min-width:18px; height:18px; padding:0 5px; display:none; place-items:center; font-size:10px; font-weight:900;
+  color:#0c0e12; font-variant-numeric:tabular-nums; clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%); }
+.bwm-prog .mlbtn .count.ready { display:grid; background:#5fe39a; filter:drop-shadow(0 0 6px rgba(95,227,154,.7)); }
+.bwm-prog .mlbtn .count.new { display:grid; background:#34e1ff; filter:drop-shadow(0 0 6px rgba(52,225,255,.7)); }
+.bwm-prog .mlbtn[aria-expanded="true"] { border-color:#f2c869; box-shadow:0 0 0 1px #f2c869,0 0 22px rgba(242,200,105,.35); }
+.bwm-prog .mlbtn.ping { animation:ml-ping 1.1s ease-out 2; }
+@keyframes ml-ping { 0%{box-shadow:0 0 0 0 rgba(52,225,255,.8),0 0 0 1px #34e1ff} 100%{box-shadow:0 0 0 14px rgba(52,225,255,0),0 0 0 1px #34e1ff} }
+@media (prefers-reduced-motion: reduce) { .bwm-prog .mlbtn.ping { animation:none; } }
+.bwm-prog button.invbtn { border-color:#1f4a55; background:linear-gradient(180deg,rgba(18,36,44,.9),rgba(20,22,26,.9)); }
+.bwm-prog .invbtn .glyph { color:#34e1ff; }
+.bwm-prog .invbtn[aria-expanded="true"] { border-color:#34e1ff; box-shadow:0 0 0 1px #34e1ff,0 0 22px rgba(52,225,255,.3); }
 /* the rewards card + flying tokens */
 .bwm-rw { position:absolute; inset:0; z-index:40; display:flex; align-items:center; justify-content:center; background:rgba(7,9,12,.55); cursor:pointer; animation:rw-in .3s ease-out; }
 .bwm-rw.out { animation:rw-out .45s ease-in forwards; }
@@ -68,11 +88,19 @@ const CSS = `
   .bwm-prog .pw-rk i { font-size:10px; letter-spacing:.1em; }
   .bwm-prog .pw-v b { font-size:13px; }
   .bwm-prog .pw-hex { width:28px; height:32px; font-size:13px; }
+  .bwm-prog button.mlbtn { padding:5px 9px 5px 7px; gap:6px; }
+  .bwm-prog .mlbtn .pw-v label { display:none; }
 }
 @media (max-width: 560px) {
   .bwm-prog .pw-rk { display:none; } .bwm-prog .pw-ic { width:auto; }
+  .bwm-prog .mlbtn .pw-v { display:none; }
   .bwm-top { padding:12px 12px; gap:8px; }                  /* phone: the crest stays, the wordmark makes room for the widget */
   .bwm-top > div:not(.bwm-crest):not(.bwm-prog) { display:none; }
+}
+@media (max-height: 500px) {
+  .bwm-prog .mlbtn { height:40px; }
+  .bwm-prog .mlbtn .glyph { width:24px; height:24px; } .bwm-prog .mlbtn .glyph svg { width:22px; height:22px; }
+  .bwm-prog .mlbtn .pw-v { display:none; }
 }
 `;
 
@@ -82,12 +110,15 @@ const ICON = { gold: '◆', stars: '★', xp: '⬢', research: '⬡' };
 export function createProgressWidget(doc, { onOpen } = {}) {
   if (!doc.getElementById('bwm-prog-style')) { const st = doc.createElement('style'); st.id = 'bwm-prog-style'; st.textContent = CSS; doc.head.appendChild(st); }
   const el = doc.createElement('div'); el.className = 'bwm-prog'; el.setAttribute('aria-label', 'Your progress');
+  const chip = (key, glyph, word, title, cls = '') => `<button class="mlbtn${cls}" data-econ="${key}" aria-expanded="false" title="${title}"><span class="glyph"><svg class="i"><use href="#${glyph}"/></svg><span class="count" data-count></span></span><span class="pw-v"><b>${word}</b><label data-sub></label></span></button>`;
   el.innerHTML = `
+    ${chip('missions', 'i-log', 'MISSIONS', 'Mission Log')}
+    ${chip('inventory', 'i-inv', 'INVENTORY', 'Inventory', ' invbtn')}
     <button class="pw-rank" data-econ="xp" title="Commander rank"><span class="pw-hex"><span data-lvl>1</span></span>
       <span class="pw-rk"><i data-title>Recruit</i><span class="pw-xpbar"><span data-bar></span></span><em data-xp>0 / 300 XP</em></span></button>
-    <button data-econ="gold" title="Banked gold — spend it in the Tech Tree"><span class="pw-ic">${ICON.gold}</span><span class="pw-v"><b data-v>0</b><label>GOLD</label></span></button>
-    <button data-econ="stars" title="Best stars over every map"><span class="pw-ic">${ICON.stars}</span><span class="pw-v"><b data-v>0</b><label>STARS</label></span></button>
-    <button data-econ="research" title="Tech Tree upgrades researched"><span class="pw-ic">${ICON.research}</span><span class="pw-v"><b data-v>0/${TECH_TOTAL}</b><label>RESEARCH</label></span><i class="bwm-dot" data-dot></i></button>`;
+    <button data-econ="gold" title="Banked gold — spend it in the Tech Tree"><span class="pw-ic"><svg class="i"><use href="#r-gold"/></svg></span><span class="pw-v"><b data-v>0</b><label>GOLD</label></span></button>
+    <button data-econ="stars" title="Best stars over every map"><span class="pw-ic"><svg class="i"><use href="#r-stars"/></svg></span><span class="pw-v"><b data-v>0</b><label>STARS</label></span></button>
+    <button data-econ="research" title="Tech Tree upgrades researched"><span class="pw-ic"><svg class="i"><use href="#r-research"/></svg></span><span class="pw-v"><b data-v>0/${TECH_TOTAL}</b><label>RESEARCH</label></span><i class="bwm-dot" data-dot></i></button>`;
   const btn = (k) => el.querySelector('[data-econ="' + k + '"]');
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-econ]'); if (b && onOpen) onOpen(b.dataset.econ); });
   const shown = { xp: 0, gold: 0, stars: 0, research: 0 };
@@ -107,7 +138,20 @@ export function createProgressWidget(doc, { onOpen } = {}) {
   function render(values) {
     for (const k of ['xp', 'gold', 'stars', 'research']) if (values[k] != null) setValue(k, values[k]);
     el.querySelector('[data-dot]').classList.toggle('on', !!values.techDot);
+    if (values.missions) renderChip('missions', values.missions);
+    if (values.inventory) renderChip('inventory', values.inventory);
   }
+  function renderChip(key, c) {
+    const b = btn(key), count = b.querySelector('[data-count]'), sub = b.querySelector('[data-sub]');
+    count.textContent = c.text || (c.count ? String(c.count) : '');
+    count.className = 'count' + (c.tone ? ' ' + c.tone : '');
+    sub.textContent = '';
+    if (c.sub[0]) { const em = doc.createElement('em'); em.textContent = c.sub[0]; sub.appendChild(em); sub.appendChild(doc.createTextNode(' · ')); }
+    sub.appendChild(doc.createTextNode(c.sub[1] || ''));
+  }
+  /** The header's moment a mission is logged: the chip pings cyan twice. */
+  function ping(key) { const b = btn(key); b.classList.remove('ping'); void b.offsetWidth; b.classList.add('ping'); }
+  function setExpanded(key) { for (const b of el.querySelectorAll('.mlbtn')) b.setAttribute('aria-expanded', String(b.dataset.econ === key)); }
   const pulse = (key) => { const b = btn(key); b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse'); };
 
   /**
@@ -127,10 +171,12 @@ export function createProgressWidget(doc, { onOpen } = {}) {
       const lvFrom = levelFromXp(ledger.xp ? ledger.xp.from : 0), lvTo = levelFromXp(ledger.xp ? ledger.xp.to : 0);
       const win1 = ledger.result === 'win';
       const ov = doc.createElement('div'); ov.className = 'bwm-rw';
-      ov.innerHTML = '<div class="card"><div class="k">BATTLE REWARDS' + (ledger.battles > 1 ? ' · ' + ledger.battles + ' BATTLES' : '') + '</div>' +
-        '<h3 class="' + (win1 ? '' : 'lose') + '">' + (win1 ? 'VICTORY' : 'DEFEAT') + '</h3><div class="m">MAP ' + (ledger.mapId || '—') + '</div>' +
+      const isMission = ledger.kind === 'mission';
+      ov.innerHTML = '<div class="card"><div class="k">' + (isMission ? 'MISSION REWARDS' : 'BATTLE REWARDS') + (ledger.battles > 1 ? ' · ' + ledger.battles + ' BATTLES' : '') + '</div>' +
+        '<h3 class="' + (win1 ? '' : 'lose') + '">' + (isMission ? 'COLLECTED' : win1 ? 'VICTORY' : 'DEFEAT') + '</h3><div class="m" data-m></div>' +
         rows.map((r) => '<div class="row r-' + r.key + '" data-row="' + r.key + '"><span class="ic">' + ICON[r.key] + '</span><b>+' + fmt(r.n) + '</b><span>' + r.label + '</span></div>').join('') +
         '<div class="up" data-up></div><div class="tap">TAP TO SKIP</div></div>';
+      ov.querySelector('[data-m]').textContent = isMission ? String(ledger.title || '') : 'MAP ' + (ledger.mapId || '—');
       layer.appendChild(ov);
       const anims = [], timers = [];
       let finished = false;
@@ -188,5 +234,5 @@ export function createProgressWidget(doc, { onOpen } = {}) {
       });
     });
   }
-  return { el, render, playRewards, setValue };
+  return { el, render, playRewards, setValue, ping, setExpanded };
 }

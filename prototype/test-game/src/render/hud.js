@@ -294,6 +294,12 @@ export function createHud(mountEl, callbacks) {
   questEl.style.display = 'none';
   questEl.title = 'Quest crystals hauled (red / green) — they also pay gold';
   topbar.appendChild(questEl);
+  // the tracked mission (Mission-Log tech plan D5): one line beside the quest crystals [MM-story_mvyqoplz_g]
+  const trackEl = el(doc, 'span', 'bw-seed');
+  trackEl.style.display = 'none';
+  trackEl.style.color = '#f2c869';
+  trackEl.title = 'Tracked mission';
+  topbar.appendChild(trackEl);
   topbar.appendChild(startWaveBtn);
   // Between-wave INTERLUDE prompt — centered TAP TO START; shown while the sim is frozen after the
   // wave-clear dialog (the speaker stays on screen). Clicking it is the only way time resumes.
@@ -670,6 +676,7 @@ export function createHud(mountEl, callbacks) {
     timerEl,
     startWaveBtn,
     questEl,
+    trackEl,
     nextWaveBtn,
     setNextWavePrompt(on, label) {
       nextWaveBtn.style.display = on ? 'flex' : 'none';
@@ -854,6 +861,14 @@ export function updateHud(hud, state, ui) {
         '</span> <span style="color:#7ae08a">● ' + (state.mapScore.questGreen || 0) + '</span>';
     } else {
       hud.questEl.style.display = 'none';
+    }
+  }
+  if (hud.trackEl) {
+    const line = hud.trackedLine ? hud.trackedLine(state) : null;
+    if (line !== hud.trackShown) {
+      hud.trackShown = line;
+      hud.trackEl.style.display = line ? '' : 'none';
+      hud.trackEl.textContent = line ? '◆ ' + line : '';
     }
   }
 

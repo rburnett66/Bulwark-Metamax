@@ -1,7 +1,8 @@
 // Red-dot badges [MM-story_mvkhei9q_k] and the Tech Net's game-save adapter [MM-story_mvkhed1f_h].
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeBadges, seenFor, SETTINGS_NEWS } from './badges.js';
+import { readFileSync } from 'node:fs';
+import { computeBadges, seenFor, SETTINGS_NEWS, missionChip } from './badges.js';
 import { techCtxFromSave, createGameTechAdapter, map3Won } from './techSave.js';
 import { readyIds } from '../data/techtree.js';
 
@@ -44,4 +45,19 @@ test('Map 3 and planet wins come from the campaign record', () => {
   assert.ok(c.owned.has('map3'));
   assert.equal(c.hasWin('Verdance'), true); assert.equal(c.hasWin('Florael'), false);
   assert.ok(readyIds({ ...c, bank: 99999 }).includes('ironhoard'));
+});
+
+test('the MISSIONS chip: green while anything is ready, cyan for new, nothing otherwise', () => {
+  assert.deepEqual(missionChip({ ready: 2, fresh: 3, active: 4 }), { count: 2, tone: 'ready', sub: ['2 ready', '4 active'] });
+  assert.deepEqual(missionChip({ ready: 0, fresh: 3, active: 4 }), { count: 3, tone: 'new', sub: [null, '4 active'] });
+  assert.deepEqual(missionChip({ ready: 0, fresh: 0, active: 1 }), { count: 0, tone: null, sub: [null, '1 active'] });
+});
+
+test('the MISSIONS chip is the first thing in the header, left of the rank chip, and collapses with the rest', () => {
+  const src = readFileSync(new URL('./progressWidget.js', import.meta.url), 'utf8');
+  const markup = src.slice(src.indexOf('el.innerHTML'));
+  assert.ok(markup.indexOf("chip('missions'") >= 0 && markup.indexOf("chip('missions'") < markup.indexOf('pw-rank'), 'left of Player Info');
+  assert.match(src, /@media \(max-width: 900px\)[\s\S]*\.mlbtn \.pw-v label \{ display:none; \}/, 'the sub-line drops at 900');
+  assert.match(src, /@media \(max-width: 560px\)[\s\S]*\.mlbtn \.pw-v \{ display:none; \}/, 'glyph and badge only at 560');
+  assert.match(src, /@media \(max-height: 500px\)[\s\S]*\.mlbtn \{ height:40px;/, 'compact on a phone held sideways');
 });
