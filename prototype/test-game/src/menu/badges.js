@@ -27,3 +27,15 @@ export function seenFor(screen, s, ctx) {
   if (screen === 'settings') return ['settings', [...SETTINGS_NEWS]];
   return null;
 }
+
+/**
+ * The header MISSIONS chip [MM-story_mvyqomk8_e]: green with the count ready to collect, otherwise cyan with the count of
+ * unopened new missions, otherwise no badge. b = save/missions.js badge(save).
+ */
+export function missionChip(b) {
+  const ready = (b && b.ready) || 0, fresh = (b && b.fresh) || 0, active = (b && b.active) || 0;
+  return {
+    count: ready || fresh, tone: ready ? 'ready' : fresh ? 'new' : null,
+    sub: ready ? [ready + ' ready', active + ' active'] : [null, active + ' active'],
+  };
+}
