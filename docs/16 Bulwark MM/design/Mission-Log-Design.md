@@ -213,7 +213,7 @@ A mission whose View is met but whose Unlock is not shows as **Locked**. It gets
 **owner**: "Along with missions we should introduce an inventory button next to missions with a list of each resource currently in the game sorted by faction/planet."
 
 - **INVENTORY** is a header chip directly right of MISSIONS (left of the rank chip). Same shape as the other chips; a crate-and-crystal glyph; the count of resources gained since the last visit as a cyan badge.
-- **Inventory screen:** the Mission Log frame. Left, the nine factions / planets in campaign order (Verdance → Vexmire) with owned totals. Right, the selected planet's four resources as tiles in rarity colours (common blue, uncommon yellow, rare red, epic green) with owned count, gold value, role, and which tech nodes and missions use it.
+- **Inventory screen** (owner 2026-11-02: "the inventory screen should show all resources, sorted by planet"): one scrolling view of **all 36 resources**. They are grouped into a band per planet in campaign order (Verdance → Vexmire), each band with the faction icon and colour, the planet's held total and new count. Each band holds the planet's four resources as tiles: rarity colour top edge, crystal glyph, name, tier, held count, +new. Planets whose portal is not owned stay listed but dimmed, with "Portal: X not owned". Tabs filter All 36 / Kept / Quest crystals. Selecting a tile opens the detail pane on the right (on a narrow screen it slides over), showing held count, planet, faction, role, source and what wants the resource.
 - **Source of truth:** `docs/sources/Bulwark-Missions.xlsx` › Resources (36 = 9 planets × 4), extracted into `missions.json` › `resources`.
 - **Open build question (MLG-10):** how harvest feeds the inventory. Today common and uncommon convert straight to gold, and rare and epic are quest crystals.
 
@@ -223,7 +223,7 @@ The design page now shows the flow:
 - **Header:** an INVENTORY chip right of MISSIONS.
 - **List:** Primary / Secondary · Light / Shadow tags with the quest step on every row, and a **Locked — next steps** group.
 - **Dossier:** the quest line, a **Gates** panel (met / not met), **Faction impact** for secondaries, and **Collect aboard <capital ship>** in place of Claim. Collecting Amber Fields opens Three Banners, the next step, with the assignment toast.
-- **Inventory screen:** the nine factions / planets in campaign order. Planets whose portal is not owned are locked, and each planet's four resources are tiles in rarity colours with held count, role, source and what wants them.
+- **Inventory screen:** all 36 resources on one screen, banded by planet in campaign order, with a detail pane for the selected resource (`?view=inv&res=Petal%20Silk`).
 - **Review bar:** gains an Inventory view (`?view=inv`, `&planet=Florael`).
 
 The sample's Ace Jun "Halo" Sato portrait (`content/dialog/portraits/ace-jun-halo-sato.png`) is a group poster with lettering, not a single portrait. The art needs replacing.

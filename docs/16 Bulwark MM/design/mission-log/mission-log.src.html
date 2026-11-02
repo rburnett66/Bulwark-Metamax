@@ -360,6 +360,32 @@ button.chip:hover{border-color:var(--gold2);background:var(--panel-hi)}
 .invbtn{border-color:#1f4a55;background:linear-gradient(180deg,rgba(18,36,44,.9),rgba(20,22,26,.9))} .invbtn .glyph{color:var(--cyan2)}
 .invbtn[aria-expanded=true]{border-color:var(--cyan2);box-shadow:0 0 0 1px var(--cyan2),0 0 22px rgba(52,225,255,.3)}
 .inv::before,.inv::after{background:var(--cyan2)}
+.log.inv{grid-template-columns:1fr 300px}
+.inv .lp{border-right:1px solid var(--line2)}
+.pband{--fc:#888;margin:0 0 10px;background:rgba(18,22,28,.6);border:1px solid var(--line2);border-left:3px solid var(--fc)}
+.pband header{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line2)}
+.pband header > svg{width:18px;height:18px;color:var(--fc)} .pband header b{font-size:14px;font-weight:900} .pband header small{font-size:11px;color:var(--dim)}
+.pbt{margin-left:auto;font-size:11px;color:var(--dim);display:flex;align-items:center;gap:5px} .pbt b{color:var(--text);font-size:13px} .pbt em{font-style:normal;color:var(--cyan2);font-weight:800} .pbt svg{width:11px;height:11px}
+.pband.locked{opacity:.55}
+.rts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line2)}
+.rt{--rc:#888;display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:9px;padding:10px 12px;background:#12161d;text-align:left;border-top:2px solid var(--rc)}
+.rt:hover{background:var(--panel-hi)} .rt[aria-selected=true]{background:color-mix(in srgb,var(--rc) 14%,#151a22);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--rc) 55%,transparent)}
+.rt .gem3{width:28px;height:28px;color:var(--rc);filter:drop-shadow(0 0 6px color-mix(in srgb,var(--rc) 45%,transparent))}
+.rtx{min-width:0} .rtx b{display:block;font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rtx small{font-size:9px;letter-spacing:.18em;text-transform:uppercase;font-weight:800;color:var(--rc)}
+.rtn{font-size:18px;font-weight:900;text-align:right;display:flex;flex-direction:column;align-items:flex-end;line-height:1.05}
+.rtn em{font-style:normal;font-size:10px;color:var(--cyan2)} .rt.zero .rtn{color:var(--dimmer)}
+.rdet{--rc:#888;padding:22px 20px;border-top:3px solid var(--rc);min-height:100%}
+.rdet .gem2{display:block;width:64px;height:64px;color:var(--rc);filter:drop-shadow(0 0 14px color-mix(in srgb,var(--rc) 55%,transparent))} .rdet .gem2 svg{width:64px;height:64px}
+.rdn{font-size:40px;font-weight:900;margin-top:10px;line-height:1} .rdnew{font-size:11px;color:var(--cyan2);font-weight:800;margin-top:4px}
+.rdet h2{font-size:22px;font-weight:900;margin-top:12px} .rdt{font-size:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:900;color:var(--rc)}
+.rdet dl{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin-top:16px;font-size:12.5px;color:#c3cdd8}
+.rdet dt{color:var(--dimmer);text-transform:uppercase;letter-spacing:.14em;font-size:9.5px;font-weight:800;padding-top:3px}
+.rdet dd{display:flex;align-items:center;gap:6px;flex-wrap:wrap} .rdet dd svg{width:13px;height:13px;color:var(--fc)}
+@media (max-width:1180px){.rts{grid-template-columns:repeat(2,1fr)}}
+@media (max-height:500px){.log.inv{grid-template-columns:1fr 210px}.rts{grid-template-columns:repeat(4,1fr)}.rt{grid-template-columns:22px 1fr auto;padding:6px 8px;gap:6px}.rt .gem3{width:20px;height:20px}
+  .rtx b{font-size:11px}.rtn{font-size:14px}.pband header{padding:5px 10px}.rdet{padding:12px}.rdet .gem2,.rdet .gem2 svg{width:36px;height:36px}.rdn{font-size:26px}.rdet h2{font-size:16px}.rdet .inote{display:none}.rdet dl{margin-top:8px;font-size:11px}}
+@media (max-width:700px){.log.inv{grid-template-columns:1fr}.rts{grid-template-columns:1fr 1fr}}
 .prow2{--fc:#888;display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:11px;width:100%;text-align:left;padding:10px 12px 10px 11px;margin-bottom:5px;
   background:linear-gradient(90deg,rgba(26,31,40,.95),rgba(20,24,31,.9));border:1px solid var(--line2);border-left:3px solid var(--fc)}
 .prow2:hover{background:var(--panel-hi)} .prow2 > svg{width:20px;height:20px;color:var(--fc)}
@@ -771,7 +797,7 @@ const TIERS = ['common','uncommon','rare','epic'];
 const ROLE = {common:'Kept · worth 1 gold each',uncommon:'Kept · worth 2 gold each',rare:'Quest crystal',epic:'Quest crystal'};
 const WANTED = {'Heartwood Amber':['Amber Fields (primary, Verdance 5)','Fair Shares of Heartwood Amber (favour)'],'Rootsong Seeds':['Ironhoard Casemate (tech · cost set in the workbook)'],
  'Petal Silk':['First Petals (primary, Florael 1)'],'Loam Grain':['Three Banners (primary, Verdance 6)']};
-let ISEL = 'Verdance', ITAB = 'all';
+let IRES = 'Loam Grain', ITAB = 'all';
 
 /* ═══════════════════════ RENDER ═══════════════════════ */
 const $ = (s, r = document) => r.querySelector(s);
@@ -899,7 +925,7 @@ document.addEventListener('click', (e) => {
  const t = e.target.closest('button'); if (!t) return;
  if (t.id === 'mlbtn' || t.id === 'rv-log') open(!(t.id==='mlbtn' && $('#log').classList.contains('on')));
  else if (t.id === 'invbtn' || t.id === 'rv-inv') open(!(t.id==='invbtn' && $('#inv').classList.contains('on')), 'inv');
- else if (t.dataset.planet) { ISEL = t.dataset.planet; renderInv(); $('#inv').classList.add('detail'); }
+ else if (t.dataset.res) { IRES = t.dataset.res; renderInv(); $('#inv').classList.add('detail'); }
  else if (t.dataset.itab) { ITAB = t.dataset.itab; renderInv(); }
  else if (t.id === 'iback') $('#inv').classList.remove('detail');
  else if (t.id === 'close3') open(false);
@@ -946,27 +972,31 @@ function advance() {
 
 /* ═══════════════════════ INVENTORY ═══════════════════════ */
 function renderInv() {
+ // ALL 36 resources on one screen, grouped by planet in campaign order (owner 2026-11-02); the side pane details one.
  const owned = (pl) => pl.res.reduce((a, r) => a + (r[1] || 0), 0), fresh = (pl) => pl.res.reduce((a, r) => a + (r[2] || 0), 0);
- const ITABS = [['all','All'],['kept','Kept'],['quest','Quest crystals']];
+ const keep = (t) => ITAB === 'all' || (ITAB === 'kept') === (t === 'common' || t === 'uncommon');
+ const ITABS = [['all','All 36'],['kept','Kept'],['quest','Quest crystals']];
  $('#itabs').innerHTML = ITABS.map(([k, n]) => `<button class="tab" role="tab" aria-selected="${k===ITAB}" data-itab="${k}">${n}</button>`).join('');
  const tot = PLANETS.reduce((a, pl) => a + owned(pl), 0), nw = PLANETS.reduce((a, pl) => a + fresh(pl), 0);
- $('#isum').innerHTML = `<b class="num">${tot.toLocaleString()}</b> held<br><b class="num">36</b> resources`;
- $('#plist').innerHTML = `<div class="grp">Factions · campaign order</div>` + PLANETS.map(pl => { const f = FACTION[pl.f];
-  return `<button class="prow2${pl.open?'':' locked'}" data-planet="${pl.p}" aria-selected="${pl.p===ISEL}" style="--fc:${f.color}">${fsvg(pl.f)}
-   <span><b>${pl.p}</b><small>${f.name}${pl.open?'':' · portal not owned'}</small><span class="pips">${pl.res.map((r,i)=>`<i class="${(r[1]||0)>0?'on':''}" style="--c:var(${RAR[TIERS[i]].v})"></i>`).join('')}</span></span>
-   <span class="tot num">${pl.open?owned(pl).toLocaleString():use('s-locked')}${fresh(pl)?`<em class="nw">+${fresh(pl)}</em>`:''}</span></button>`; }).join('');
- const pl = PLANETS.find(x => x.p === ISEL), f = FACTION[pl.f];
- const tiles = pl.res.map((r, i) => ({r, t: TIERS[i]})).filter(({t}) => ITAB === 'all' || (ITAB === 'kept') === (t === 'common' || t === 'uncommon')).map(({r, t}) => {
-  const [nm, have = 0, nwc = 0] = r, w = WANTED[nm] || [];
-  return `<div class="rtile${have?'':' zero'}" style="--rc:var(${RAR[t].v})"><span class="gem2">${use('r-crystal')}</span><span class="cnt num">${pl.open?have.toLocaleString():'—'}</span>${nwc?`<span class="new num">+${nwc} new</span>`:''}
-   <b>${nm}</b><small>${RAR[t].n}</small><dl><dt>Role</dt><dd>${ROLE[t]}</dd><dt>From</dt><dd>${pl.p} harvests${t==='rare'||t==='epic'?' (quest nodes)':''}</dd>
-   <dt>Wanted by</dt><dd>${w.length?w.join('<br>'):'—'}</dd></dl></div>`; }).join('');
- $('#ipane').innerHTML = `<button class="dback" id="iback">${use('u-back')}All factions</button><div class="ipane" style="--fc:${f.color}">
-  <div class="ihead">${fsvg(pl.f)}<div><div class="pl">${pl.p}</div><div class="fx">${f.name} homeworld${SHIPS[pl.p]?` · ${SHIPS[pl.p].name} ${SHIPS[pl.p].arrived?'in orbit':'not yet arrived'}`:''}</div></div>
-  <div class="ihtot"><b class="num">${pl.open?owned(pl).toLocaleString():'—'}</b><small>held</small></div></div>
-  ${pl.open?'':`<div class="dnote" style="--sc:var(--s-locked);margin-top:12px">${use('s-locked')}Locked: own <b>&nbsp;Portal: ${pl.p}&nbsp;</b> in the Tech Net to campaign here.</div>`}
-  <div class="rtiles">${tiles}</div>
-  <p class="inote">Common and uncommon resources are kept and can pay for Tech Net nodes that missions unlock. Rare and epic come from quest nodes and fill faction favours.</p></div>`;
+ $('#isum').innerHTML = `<b class="num">${tot.toLocaleString()}</b> held<br><b class="num">${nw}</b> new`;
+ $('#plist').innerHTML = PLANETS.map(pl => { const f = FACTION[pl.f];
+  const tiles = pl.res.map((r, i) => ({r, t: TIERS[i]})).filter(({t}) => keep(t)).map(({r, t}) => { const [nm, have = 0, nwc = 0] = r;
+   return `<button class="rt${have?'':' zero'}" data-res="${nm}" aria-selected="${nm===IRES}" style="--rc:var(${RAR[t].v})">${use('r-crystal','i gem3')}
+    <span class="rtx"><b>${nm}</b><small>${RAR[t].n}</small></span><span class="rtn num">${pl.open?have.toLocaleString():'—'}${nwc?`<em>+${nwc}</em>`:''}</span></button>`; }).join('');
+  return `<section class="pband${pl.open?'':' locked'}" style="--fc:${f.color}"><header>${fsvg(pl.f)}<b>${pl.p}</b><small>${f.name}</small>
+   <span class="pbt">${pl.open?`<b class="num">${owned(pl).toLocaleString()}</b> held${fresh(pl)?` · <em>+${fresh(pl)} new</em>`:''}`:`${use('s-locked')} Portal: ${pl.p} not owned`}</span></header>
+   <div class="rts">${tiles}</div></section>`; }).join('');
+ // detail pane: the selected resource
+ let pl = PLANETS.find(x => x.res.some(r => r[0] === IRES)) || PLANETS[0]; const i = pl.res.findIndex(r => r[0] === IRES), r = pl.res[Math.max(0, i)], t = TIERS[Math.max(0, i)], f = FACTION[pl.f];
+ const [nm, have = 0, nwc = 0] = r, w = WANTED[nm] || [];
+ $('#ipane').innerHTML = `<button class="dback" id="iback">${use('u-back')}All resources</button>
+  <div class="rdet" style="--rc:var(${RAR[t].v});--fc:${f.color}">
+   <span class="gem2">${use('r-crystal')}</span><div class="rdn num">${pl.open?have.toLocaleString():'—'}</div>${nwc?`<div class="rdnew num">+${nwc} since your last visit</div>`:''}
+   <h2>${nm}</h2><div class="rdt">${RAR[t].n}</div>
+   <dl><dt>Planet</dt><dd>${fsvg(pl.f)}${pl.p}${pl.open?'':' · locked'}</dd><dt>Faction</dt><dd>${f.name}</dd><dt>Role</dt><dd>${ROLE[t]}</dd>
+    <dt>From</dt><dd>${pl.p} harvests${t==='rare'||t==='epic'?' (quest nodes)':''}</dd><dt>Wanted by</dt><dd>${w.length?w.join('<br>'):'—'}</dd></dl>
+   <p class="inote">Common and uncommon resources are kept and can pay for Tech Net nodes that missions unlock. Rare and epic come from quest nodes and fill faction favours.</p>
+  </div>`;
  $('#invcount').textContent = '+' + nw; $('#invcount').style.display = nw ? '' : 'none';
 }
 
@@ -1017,7 +1047,7 @@ const q = new URLSearchParams(location.search);
 if (q.get('view') === 'sheet') $('#rv-sheet').click();
 if (q.get('view') === 'menu') open(false);
 if (q.get('view') === 'inv') open(true, 'inv');
-if (q.get('planet')) { ISEL = q.get('planet'); renderInv(); }
+if (q.get('res')) { IRES = q.get('res'); renderInv(); }
 if (q.get('sel')) select(q.get('sel'));
 if (q.get('tab')) { TAB = q.get('tab'); renderList(); }
 if (q.get('toast')) setTimeout(assign, 300);
