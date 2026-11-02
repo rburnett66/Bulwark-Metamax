@@ -5,7 +5,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { classicUnitsSource } from '../unit-models/classic.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../..');   // prototype/test-game
 const MAP_ID = process.argv[2] || 'powder-map-1';
@@ -31,7 +30,10 @@ const pfSrc = pf.slice(start, end).replace(/^export /gm, '');
 let html = tpl.replace('/*__LEVEL__*/null', () => JSON.stringify(level))
   .replace('/*__IMAGES__*/{}', () => JSON.stringify(images))
   .replace('/*__PATHFINDING__*/', () => pfSrc)
-  .replace('/*__UNITS__*/', () => classicUnitsSource());   // ONE source: src/render3d/units/ (unit-models/classic.mjs)
+  // body3d now draws three-part units (base / weapon / head) and the King Tiger, so the prototype inlines the NEXT
+  // unit models (tools/unit-models/next, classic scripts). The game still runs src/render3d/units/ until the HEAD
+  // story ports them. [MM-story_mva2f3vg_9]
+  .replace('/*__UNITS__*/', () => ['prims.js', 'models.js'].map((f) => fs.readFileSync(path.join(HERE, '../unit-models/next', f), 'utf8')).join('\n'));
 fs.mkdirSync(path.join(HERE, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(HERE, 'dist/terrain-proto-3d.html'), html);
 console.log('built', (html.length / 1024 / 1024).toFixed(2), 'MB');

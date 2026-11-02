@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bulwark Unit Models</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #eef0f2; --panel: #ffffff; --ink: #14181d; --mute: #5d6670; --line: #d5dae0; --accent: #0e8f86; --chip: #f3f5f7;
+  --stage: #dfe3e7;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b0e10; --panel: #13181b; --ink: #e6ecef; --mute: #8b979e; --line: #243037; --accent: #6fd3c8; --chip: #182026; --stage: #0f1416;
+} }
+:root[data-theme="dark"] { --bg: #0b0e10; --panel: #13181b; --ink: #e6ecef; --mute: #8b979e; --line: #243037; --accent: #6fd3c8; --chip: #182026; --stage: #0f1416; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 14px/1.4 "JetBrains Mono", ui-monospace, monospace; }
+.app { display: grid; grid-template-columns: 300px 1fr; height: 100vh; height: 100dvh; }
+aside { border-right: 1px solid var(--line); background: var(--panel); overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+h1 { font: 700 24px/1 "Barlow Condensed", sans-serif; margin: 0; letter-spacing: .01em; }
+.sub { color: var(--mute); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin-top: 4px; }
+.lbl { color: var(--mute); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+.units { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.unit { background: var(--chip); border: 1px solid var(--line); border-radius: 8px; padding: 6px; cursor: pointer; text-align: left; color: var(--ink); font: inherit; }
+.unit img { width: 100%; aspect-ratio: 4/3; object-fit: contain; background: #fff; border-radius: 4px; display: block; }
+.unit span { display: block; font: 600 15px/1.1 "Barlow Condensed", sans-serif; margin-top: 6px; }
+.unit[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button, .btn { background: var(--chip); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+dl { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin: 0; font-size: 12px; }
+dt { color: var(--mute); } dd { margin: 0; text-align: right; }
+.ref img { width: 100%; border-radius: 6px; background: #fff; display: block; border: 1px solid var(--line); }
+.note { color: var(--mute); font-size: 11.5px; margin: 0; }
+main { position: relative; background: var(--stage); min-width: 0; }
+#stage { position: absolute; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.vlabel { position: absolute; font: 600 13px "Barlow Condensed", sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #fff; background: rgba(0,0,0,.45); padding: 2px 8px; border-radius: 4px; pointer-events: none; }
+.hint { position: absolute; left: 12px; bottom: 12px; font-size: 11px; color: #fff; background: rgba(0,0,0,.45); padding: 4px 8px; border-radius: 4px; pointer-events: none; }
+textarea { width: 100%; height: 120px; font: 11px "JetBrains Mono", monospace; background: var(--chip); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
+[hidden] { display: none !important; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 58vh auto; height: auto; }
+  aside { order: 2; border-right: 0; border-top: 1px solid var(--line); }
+  main { order: 1; height: 58vh; }
+  .units { grid-template-columns: repeat(4, 1fr); }
+  .unit span { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div><h1>Bulwark Unit Models</h1><div class="sub">built from primitives · three.js</div></div>
+    <div><div class="lbl">Unit</div><div class="units" id="units"></div></div>
+    <div><div class="lbl">View</div><div class="seg" id="views">
+      <button data-v="orbit" aria-pressed="true">Orbit</button><button data-v="ortho" aria-pressed="false">Ortho 4-up</button><button data-v="battle" aria-pressed="false">Battle scale</button>
+    </div></div>
+    <div><div class="lbl">Style</div><div class="seg" id="styles"></div></div>
+    <div><div class="lbl">Model</div><dl>
+      <dt>Parts</dt><dd id="mParts">–</dd><dt>Triangles</dt><dd id="mTris">–</dd><dt>Roster unit</dt><dd id="mUnit">–</dd><dt>Draw calls (base + weapon + head)</dt><dd id="mCalls">–</dd><dt>Weapon</dt><dd id="mTurret">–</dd><dt>Head</dt><dd id="mHead">–</dd>
+    </dl></div>
+    <div class="ref"><div class="lbl">Reference sheet</div><img id="refImg" alt="Reference views of the selected unit"></div>
+    <p class="note">Each model is a list of simple parts — boxes, cylinders, extruded side or top profiles, lofted cross-sections — with one material key per part. Parts merge per material, so a unit is a handful of draw calls and can be instanced. Ortho 4-up renders front, side, top and rear like the reference sheet.</p>
+    <div><button class="btn" id="copyJson" type="button">Copy part list (JSON)</button></div>
+    <textarea id="jsonOut" hidden readonly aria-label="Model part list"></textarea>
+  </aside>
+  <main><div id="stage"></div><div id="labels"></div><div class="hint" id="hint">Drag to orbit · wheel / pinch to zoom</div></main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>/*__PRIMS__*/</script>
+<script>/*__MODELS__*/</script>
+<script>
+const REFS = /*__REFS__*/{};
+(function () {
+const $ = (id) => document.getElementById(id);
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.autoClear = false;
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const amb = new THREE.AmbientLight(0xffffff, 0.5); scene.add(amb);
+const sun = new THREE.DirectionalLight(0xffffff, 0.7); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 40 }); sun.shadow.camera.updateProjectionMatrix(); sun.shadow.bias = -0.0008;
+sun.position.set(-6, 9, -5); scene.add(sun, sun.target);
+
+// ── Styles: studio grey + the four terrain presets (face colour per material, edge colour, glow colour) ──
+const STY = {
+  studio: { label: 'Studio', bg: 0xdfe3e7, ground: 0xc9ced3, grid: 0xb3bac1, amb: [0xffffff, 0.5], sun: [0xffffff, 0.75], edges: null,
+    mat: { hull: 0xc4c8cd, hull2: 0xa6acb3, panel: 0xadb3ba, dark: 0x4a4f56, black: 0x22252a, track: 0x2e3135, metal: 0x7b828a, glass: 0x1c2533, gun: 0x50555c, gun2: 0x646a72, gunD: 0x34383d, accent: 0xd0462c, hazard: 0xe2a224, chrome: 0xc4c8ce, bone: 0xe8e3d8, brass: 0xb8862e },
+    glow: 0x46f2ff, glowB: 0x4aa8ff, amber: 0xffb340, glowR: 0xff5a3a, bloom: null },
+  metal: { label: 'Studio metal', bg: 0xdfe3e7, ground: 0xc9ced3, grid: 0xb3bac1, amb: [0xffffff, 0.5], sun: [0xffffff, 0.75], edges: null, metal: true,
+    envSky: 0xe8eef6, envGround: 0x8a9096,
+    mat: { hull: 0xc4c8cd, hull2: 0xa6acb3, panel: 0xadb3ba, dark: 0x4a4f56, black: 0x22252a, track: 0x2e3135, metal: 0x7b828a, glass: 0x1c2533, gun: 0x50555c, gun2: 0x646a72, gunD: 0x34383d, accent: 0xd0462c, hazard: 0xe2a224, chrome: 0xc4c8ce, bone: 0xe8e3d8, brass: 0xb8862e },
+    glow: 0x46f2ff, glowB: 0x4aa8ff, amber: 0xffb340, glowR: 0xff5a3a, bloom: null },
+  neon: { label: 'Neon voxel', bg: 0x06040d, ground: 0x0d0b1c, grid: 0x29d8ff, amb: [0x9a8cff, 0.55], sun: [0xb8c8ff, 0.5], edges: 0x29e8ff, face: 0x2e2a58,
+    glow: 0x46f2ff, glowB: 0x4aa8ff, amber: 0xffb340, glowR: 0xff4a6a, bloom: [0.6, 0.85] },
+  synth: { label: 'Synthwave', bg: 0x1a0626, ground: 0x210a30, grid: 0xff3fd0, amb: [0xc87ad8, 0.5], sun: [0xff9a5c, 0.6], edges: 0xff3fd0, face: 0x3c1a56,
+    glow: 0x39f0ff, glowB: 0x39f0ff, amber: 0xff8a2a, bloom: [0.6, 0.85] },
+  ember: { label: 'Ember', bg: 0x0b0402, ground: 0x160805, grid: 0xff5a1f, amb: [0xb0705a, 0.5], sun: [0xff9a6a, 0.6], edges: 0xff6a1a, face: 0x2c1e1a,
+    glow: 0xffb03a, glowB: 0xff7a2a, amber: 0xffd060, bloom: [0.58, 0.9] },
+  holo: { label: 'Hologram', bg: 0x020a1c, ground: 0x041230, grid: 0x7fe8ff, amb: [0x6a9cff, 0.6], sun: [0xbfe0ff, 0.5], edges: 0x9ff0ff, face: 0x0f2350,
+    glow: 0xffc040, glowB: 0xffffff, amber: 0xffc040, bloom: [0.6, 0.8] },
+};
+// Same metal model as the terrain engine's unitMaterial (metalness, roughness per material key; Blinn-Phong
+// highlight + sky/ground environment reflection + fresnel). Here per material instead of per vertex.
+const UMETAL = { hull: [0.55, 0.45], hull2: [0.6, 0.4], panel: [0.6, 0.4], dark: [0.7, 0.35], black: [0.4, 0.6], track: [0.3, 0.75],
+  metal: [0.95, 0.2], glass: [1.0, 0.05], gun: [0.6, 0.45], gun2: [0.55, 0.5], gunD: [0.7, 0.4], accent: [0.3, 0.5], hazard: [0.1, 0.7], chrome: [0.95, 0.15], bone: [0.15, 0.6], brass: [0.85, 0.3] };
+function metalMaterial(col, mr, S) {
+  const m = new THREE.MeshPhongMaterial({ color: col });
+  const U = { uMR: { value: new THREE.Vector2(...mr) }, uEnvSky: { value: new THREE.Color(S.envSky) }, uEnvGround: { value: new THREE.Color(S.envGround) } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, U);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec2 uMR; uniform vec3 uEnvSky; uniform vec3 uEnvGround;')
+      .replace('#include <lights_phong_fragment>', `#include <lights_phong_fragment>
+float mtl = uMR.x, rgh = uMR.y; vec3 baseCol = diffuseColor.rgb;
+material.diffuseColor = diffuseColor.rgb * (1.0 - mtl * 0.72);
+material.specularColor = mix(vec3(0.05), diffuseColor.rgb * 1.6 + 0.15, mtl);
+material.specularShininess = mix(6.0, 110.0, 1.0 - rgh);`)
+      .replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;',
+        `vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;
+{ vec3 Vv = normalize(vViewPosition); vec3 Rv = reflect(-Vv, normal); vec3 Rw = (vec4(Rv, 0.0) * viewMatrix).xyz;
+  float hz = smoothstep(-0.12, 0.18, Rw.y);
+  vec3 env = mix(uEnvGround * 0.3, uEnvSky * (0.75 + 0.35 * smoothstep(0.6, 0.0, Rw.y)), hz);
+  float fr = pow(1.0 - clamp(dot(normal, Vv), 0.0, 1.0), 4.0);
+  outgoingLight += env * (mix(vec3(0.03), baseCol, mtl) * (0.75 - 0.6 * rgh) + fr * (0.3 - 0.22 * rgh)); }`);
+  };
+  m.customProgramCacheKey = () => 'metal' + mr.join(',');
+  return m;
+}
+const FACE_K = { hull: 1.0, hull2: 0.82, panel: 0.9, dark: 0.45, black: 0.3, track: 0.35, metal: 0.7, glass: 0.25, gun: 0.55, gun2: 0.65, gunD: 0.4, accent: 1.1, hazard: 1.2, chrome: 1.0, bone: 1.15, brass: 0.9 };
+let styleKey = 'studio', viewMode = 'orbit', unitKey = 'tank';
+function makeMats(S) {
+  const cache = {};
+  return (k) => {
+    if (cache[k]) return cache[k];
+    if (/^glow|amber/.test(k)) return cache[k] = new THREE.MeshBasicMaterial({ color: S[k] ?? (k === 'glowR' ? 0xff5a3a : S.glow) });
+    let col;
+    if (S.mat) col = new THREE.Color(S.mat[k] ?? 0xff00ff);
+    else col = new THREE.Color(S.face).multiplyScalar(FACE_K[k] ?? 0.8);
+    if (S.metal) return cache[k] = metalMaterial(col, UMETAL[k] || [0.5, 0.5], S);
+    return cache[k] = new THREE.MeshLambertMaterial({ color: col });
+  };
+}
+
+// ── Ground ─────────────────────────────────────────────────────────────────────────────────────────────
+let ground, grid;
+function buildGround() {
+  if (ground) { scene.remove(ground, grid); }
+  const S = STY[styleKey];
+  ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: S.ground }));
+  ground.receiveShadow = true; ground.position.y = -0.001;
+  // 1 cell = 4 model units (a hull length)
+  grid = new THREE.GridHelper(400, 100, S.grid, S.grid);
+  grid.material.transparent = true; grid.material.opacity = S.edges ? 0.35 : 0.5; grid.position.y = 0.02;
+  scene.add(ground, grid);
+}
+
+// ── Model instances ────────────────────────────────────────────────────────────────────────────────────
+let units = [];       // {root, turret, def}
+function clearUnits() { for (const u of units) scene.remove(u.root); units = []; }
+function spawn(key, x, z, yaw) {
+  const def = UNIT_MODELS[key], S = STY[styleKey];
+  const built = Prims.buildModel(def, makeMats(S));
+  const root = built.group;
+  if (S.edges) root.traverse((o) => {
+    if (!o.isMesh || /^glow|amber/.test(o.userData.mat)) return;
+    const eg = new THREE.EdgesGeometry(o.geometry, 28);
+    const ls = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: S.edges, transparent: true, opacity: o.userData.mat === 'dark' || o.userData.mat === 'black' || o.userData.mat === 'track' ? 0.45 : 0.95 }));
+    o.add(ls);
+  });
+  root.position.set(x, def.hover || 0, z); root.rotation.y = yaw || 0;
+  scene.add(root);
+  const u = { root, turret: built.groups.weapon || null, barrel: built.groups.barrel || null, head: built.groups.head || null, def, tris: built.tris, phase: Math.random() * 6, hs: 0 };
+  units.push(u); return u;
+}
+function rebuild() {
+  clearUnits(); buildGround();
+  const S = STY[styleKey];
+  const ext = viewMode === 'battle' ? 40 : 6;
+  Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext }); sun.shadow.camera.updateProjectionMatrix();
+  sun.position.set(-6, 9, -5).multiplyScalar(viewMode === 'battle' ? 3 : 1); sun.shadow.camera.far = viewMode === 'battle' ? 120 : 40; sun.shadow.camera.updateProjectionMatrix();
+  renderer.setClearColor(S.bg, 1);
+  amb.color.setHex(S.amb[0]); amb.intensity = S.amb[1]; sun.color.setHex(S.sun[0]); sun.intensity = S.sun[1];
+  if (viewMode === 'battle') {
+    // a marching column, as the battle camera sees it
+    for (let i = 0; i < 6; i++) spawn(unitKey, -i * 6 + 10, (i % 2 ? 1 : -1) * 2.5, 0);
+  } else spawn(unitKey, 0, 0, 0);
+  const u = units[0], def = u.def;
+  $('mParts').textContent = def.parts.reduce((a, p) => a + (p.mir ? 2 : 1), 0);
+  $('mTris').textContent = u.tris.toLocaleString();
+  let calls = 0; u.root.traverse((o) => { if (o.isMesh) calls++; }); $('mCalls').textContent = calls;
+  $('mTurret').textContent = u.turret ? (u.barrel ? 'rotates · barrel elevates ' + ((def.barrel||{}).min ?? -5) + '° to ' + ((def.barrel||{}).max ?? 30) + '°' : 'rotates') : 'fixed'; $('mHead').textContent = u.head ? (def.head && def.head.mode === 'spin' ? 'radar · spins' : 'radar · sweeps') : 'none'; $('mUnit').textContent = def.unit || '–';
+  $('refImg').src = REFS[def.ref] || '';
+  $('jsonOut').value = JSON.stringify({ name: def.name, axes: 'X forward, Y up, Z right; hull ≈ 4 units; 4 units = 1 cell', pivots: def.pivots, parts: def.parts });
+  setupPost();
+}
+
+// ── Cameras ───────────────────────────────────────────────────────────────────────────────────────────
+const persp = new THREE.PerspectiveCamera(35, 1, 0.5, 1000);
+const orbit = { yaw: -0.75, pitch: 0.42, dist: 11, auto: true };
+function placeOrbit() {
+  const t = new THREE.Vector3(0, (units[0] && units[0].def.hover) || 0, 0).add(new THREE.Vector3(0, 0.9, 0));
+  persp.fov = 35;
+  persp.position.set(t.x + Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * orbit.dist, t.y + Math.sin(orbit.pitch) * orbit.dist, t.z + Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * orbit.dist);
+  persp.lookAt(t); persp.updateProjectionMatrix();
+}
+function placeBattle() {
+  // engine battle camera: FOV 30°, pitch 37°, distance 46 cells; 1 cell = 4 model units
+  persp.fov = 30; const d = 46 * 4 * (orbit.dist / 11) * 0.55, p = 37 * Math.PI / 180;
+  persp.position.set(0, Math.sin(p) * d, Math.cos(p) * d); persp.lookAt(0, 0, 0); persp.updateProjectionMatrix();
+}
+const orthoViews = [
+  { name: 'Front', dir: [1, 0, 0], up: [0, 1, 0] }, { name: 'Side', dir: [0, 0, 1], up: [0, 1, 0] },
+  { name: 'Top', dir: [0, 1, 0], up: [-1, 0, 0] }, { name: 'Rear', dir: [-1, 0, 0], up: [0, 1, 0] }];
+const ocam = new THREE.OrthographicCamera(-1, 1, 1, -1, -50, 50);
+function fitOrtho(v, w, h) {
+  const def = units[0].def, V = def.views;
+  let dir = v.dir, up = v.up;
+  if (v.name === 'Side') dir = V.side === 'right' ? [0, 0, 1] : [0, 0, -1];
+  if (v.name === 'Top') up = V.top === 'down' ? [-1, 0, 0] : V.top === 'up' ? [1, 0, 0] : [0, 0, -1];
+  ocam.position.set(...dir).multiplyScalar(10).add(units[0].root.position); ocam.up.set(...up); ocam.lookAt(units[0].root.position); ocam.updateMatrixWorld();
+  const inv = ocam.matrixWorldInverse, p = new THREE.Vector3(); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  units[0].root.traverse((o) => { if (!o.isMesh) return; const a = o.geometry.attributes.position;
+    for (let i = 0; i < a.count; i += 3) { p.fromBufferAttribute(a, i).applyMatrix4(o.matrixWorld).applyMatrix4(inv); x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); } });
+  let bw = (x1 - x0) * 1.12, bh = (y1 - y0) * 1.12; const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, asp = w / h;
+  if (bw / bh > asp) bh = bw / asp; else bw = bh * asp;
+  Object.assign(ocam, { left: cx - bw / 2, right: cx + bw / 2, top: cy + bh / 2, bottom: cy - bh / 2 }); ocam.updateProjectionMatrix();
+}
+
+// ── Glow pass (neon styles) ─────────────────────────────────────────────────────────────────────────────
+const POST = {};
+(function () {
+  const VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+  const mk = (fs, u) => new THREE.ShaderMaterial({ uniforms: u, vertexShader: VS, fragmentShader: fs, depthTest: false, depthWrite: false });
+  POST.bright = mk(`uniform sampler2D t; uniform float th; varying vec2 vUv; void main() { vec3 c = texture2D(t, vUv).rgb; float l = max(c.r, max(c.g, c.b)); gl_FragColor = vec4(c * smoothstep(th, th + 0.3, l), 1.0); }`, { t: { value: null }, th: { value: 0.6 } });
+  POST.blur = mk(`uniform sampler2D t; uniform vec2 dir; varying vec2 vUv; void main() { vec3 s = texture2D(t, vUv).rgb * 0.227; s += (texture2D(t, vUv + dir * 1.385).rgb + texture2D(t, vUv - dir * 1.385).rgb) * 0.316; s += (texture2D(t, vUv + dir * 3.231).rgb + texture2D(t, vUv - dir * 3.231).rgb) * 0.070; gl_FragColor = vec4(s, 1.0); }`, { t: { value: null }, dir: { value: new THREE.Vector2() } });
+  POST.comp = mk(`uniform sampler2D t; uniform sampler2D b1; uniform sampler2D b2; uniform float k; varying vec2 vUv; void main() { gl_FragColor = vec4(texture2D(t, vUv).rgb + (texture2D(b1, vUv).rgb * 0.8 + texture2D(b2, vUv).rgb * 1.1) * k, 1.0); }`, { t: { value: null }, b1: { value: null }, b2: { value: null }, k: { value: 0.85 } });
+  POST.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), POST.bright); POST.quad.frustumCulled = false;
+  POST.scene = new THREE.Scene(); POST.scene.add(POST.quad); POST.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const opt = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+  POST.rt = renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget ? new THREE.WebGLMultisampleRenderTarget(4, 4) : new THREE.WebGLRenderTarget(4, 4);
+  for (const k of ['a', 'b', 'c', 'd']) POST[k] = new THREE.WebGLRenderTarget(4, 4, opt);
+})();
+const db = new THREE.Vector2();
+function setupPost() {
+  renderer.getDrawingBufferSize(db); const w = Math.max(1, db.x), h = Math.max(1, db.y);
+  POST.rt.setSize(w, h); POST.a.setSize(w >> 1, h >> 1); POST.b.setSize(w >> 1, h >> 1); POST.c.setSize(w >> 2, h >> 2); POST.d.setSize(w >> 2, h >> 2);
+  const S = STY[styleKey]; if (S.bloom) { POST.bright.uniforms.th.value = S.bloom[0]; POST.comp.uniforms.k.value = S.bloom[1]; }
+}
+function pass(m, t) { POST.quad.material = m; renderer.setRenderTarget(t); renderer.render(POST.scene, POST.cam); }
+function blur(s, d, sx, sy) { POST.blur.uniforms.t.value = s.texture; POST.blur.uniforms.dir.value.set(sx / s.width, sy / s.height); pass(POST.blur, d); }
+
+// ── Render ──────────────────────────────────────────────────────────────────────────────────────────────
+function size() { return [stage.clientWidth || 1, stage.clientHeight || 1]; }
+function resize() { const [w, h] = size(); renderer.setSize(w, h, false); persp.aspect = w / h; setupPost(); }
+function drawScene(target) {
+  const [w, h] = size(); renderer.setRenderTarget(target); renderer.setScissorTest(false); renderer.clear();
+  const labels = $('labels');
+  if (viewMode === 'ortho') {
+    const hw = Math.floor(w / 2), hh = Math.floor(h / 2), dpr = target ? renderer.getPixelRatio() : 1;
+    grid.visible = ground.visible = false;
+    orthoViews.forEach((v, i) => {
+      const x = (i % 2) * hw, y = i < 2 ? hh : 0;
+      fitOrtho(v, hw, hh);
+      if (target) { target.viewport.set(x * dpr, y * dpr, hw * dpr, hh * dpr); target.scissor.set(x * dpr, y * dpr, hw * dpr, hh * dpr); target.scissorTest = true; renderer.setRenderTarget(target); }
+      else { renderer.setViewport(x, y, hw, hh); renderer.setScissor(x, y, hw, hh); renderer.setScissorTest(true); }
+      renderer.render(scene, ocam);
+    });
+    if (target) { target.viewport.set(0, 0, target.width, target.height); target.scissor.set(0, 0, target.width, target.height); target.scissorTest = false; }
+    renderer.setViewport(0, 0, w, h); renderer.setScissorTest(false);
+    grid.visible = ground.visible = true;
+  } else {
+    renderer.render(scene, persp);
+  }
+}
+function layoutLabels() {
+  const labels = $('labels'); labels.innerHTML = '';
+  if (viewMode !== 'ortho') return;
+  const [w, h] = size();
+  orthoViews.forEach((v, i) => { const d = document.createElement('div'); d.className = 'vlabel'; d.textContent = v.name; d.style.left = ((i % 2) * w / 2 + 10) + 'px'; d.style.top = ((i < 2 ? 0 : h / 2) + 10) + 'px'; labels.appendChild(d); });
+}
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (orbit.auto && viewMode === 'orbit') orbit.yaw += dt * 0.25;
+  for (const u of units) {
+    if (u.turret) u.turret.rotation.y = viewMode === 'ortho' ? 0 : Math.sin(now / 1400 + u.phase) * 0.7;
+    if (u.barrel) { const B = u.def.barrel || {}, lo = (B.min ?? -5) * Math.PI / 180, hi = (B.max ?? 30) * Math.PI / 180;
+      u.barrel.rotation[B.axis || 'z'] = viewMode === 'ortho' ? 0 : lo + (hi - lo) * (0.5 + 0.5 * Math.sin(now / 1900 + u.phase)); }
+    if (u.head) { const H = u.def.head || {}; u.head.rotation[H.axis || 'y'] = viewMode === 'ortho' ? 0 : H.mode === 'spin' ? (now / 1000) * (H.speed || 2) + u.phase : Math.sin(now / 700 + u.phase * 2) * 0.9; }
+    if (viewMode === 'battle') { u.root.position.x += dt * 1.5; if (u.root.position.x > 30) u.root.position.x -= 36; }
+    if (u.def.hover && viewMode !== 'ortho') u.root.position.y = u.def.hover + Math.sin(now / 600 + u.phase) * 0.06;
+  }
+  if (viewMode === 'battle') placeBattle(); else placeOrbit();
+  const S = STY[styleKey];
+  if (S.bloom) {
+    drawScene(POST.rt);
+    POST.bright.uniforms.t.value = POST.rt.texture; pass(POST.bright, POST.a);
+    blur(POST.a, POST.b, 1, 0); blur(POST.b, POST.a, 0, 1); blur(POST.a, POST.c, 1.5, 0); blur(POST.c, POST.d, 0, 1.5);
+    const u = POST.comp.uniforms; u.t.value = POST.rt.texture; u.b1.value = POST.a.texture; u.b2.value = POST.d.texture; pass(POST.comp, null);
+  } else drawScene(null);
+  requestAnimationFrame(frame);
+}
+
+// ── UI ──────────────────────────────────────────────────────────────────────────────────────────────────
+for (const [k, def] of Object.entries(UNIT_MODELS)) {
+  const b = document.createElement('button'); b.className = 'unit'; b.type = 'button'; b.dataset.k = k; b.setAttribute('aria-pressed', String(k === unitKey));
+  b.innerHTML = `<img alt=""><span></span>`; b.querySelector('img').src = REFS[def.ref] || ''; b.querySelector('span').textContent = def.name;
+  b.onclick = () => { unitKey = k; document.querySelectorAll('.unit').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.k === k))); rebuild(); };
+  $('units').appendChild(b);
+}
+for (const [k, S] of Object.entries(STY)) {
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = S.label; b.dataset.s = k; b.setAttribute('aria-pressed', String(k === styleKey));
+  b.onclick = () => { styleKey = k; document.querySelectorAll('#styles button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.s === k))); rebuild(); };
+  $('styles').appendChild(b);
+}
+document.querySelectorAll('#views button').forEach((b) => b.onclick = () => {
+  viewMode = b.dataset.v; document.querySelectorAll('#views button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  $('hint').textContent = viewMode === 'ortho' ? 'Front · side · top · rear, laid out like the reference sheet' : viewMode === 'battle' ? 'Engine battle camera (30° FOV, 37° pitch) — 1 grid cell = 1 map cell · wheel to zoom' : 'Drag to orbit · wheel / pinch to zoom';
+  rebuild(); layoutLabels();
+});
+$('copyJson').onclick = async () => {
+  const t = $('jsonOut'); t.hidden = false;
+  try { await navigator.clipboard.writeText(t.value); $('copyJson').textContent = 'Copied'; } catch (e) { t.select(); $('copyJson').textContent = 'Select and copy below'; }
+  setTimeout(() => { $('copyJson').textContent = 'Copy part list (JSON)'; }, 1800);
+};
+const el = renderer.domElement, pts = new Map(); let pinch = null;
+el.addEventListener('pointerdown', (e) => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); orbit.auto = false;
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: orbit.dist }; } });
+el.addEventListener('pointermove', (e) => { const p = pts.get(e.pointerId); if (!p) return;
+  if (pts.size === 2 && pinch) { p.x = e.clientX; p.y = e.clientY; const [a, b] = [...pts.values()]; orbit.dist = Math.max(4, Math.min(30, pinch.dist * pinch.d / Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)))); return; }
+  orbit.yaw -= (e.clientX - p.x) * 0.008; orbit.pitch = Math.max(-0.1, Math.min(1.45, orbit.pitch + (e.clientY - p.y) * 0.006)); p.x = e.clientX; p.y = e.clientY; });
+const up = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; };
+el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+el.addEventListener('wheel', (e) => { e.preventDefault(); orbit.dist = Math.max(4, Math.min(30, orbit.dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+window.addEventListener('resize', () => { resize(); layoutLabels(); });
+resize(); rebuild(); requestAnimationFrame(frame);
+window.__orbit = (yaw, pitch, dist) => { Object.assign(orbit, { yaw, pitch, dist: dist || orbit.dist, auto: false }); };
+window.__setView = (u, s, v) => { unitKey = u; styleKey = s; viewMode = v; rebuild(); layoutLabels(); };
+})();
+</script>
+</body>
+</html>
