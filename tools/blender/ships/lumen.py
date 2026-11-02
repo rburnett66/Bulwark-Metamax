@@ -60,7 +60,7 @@ def make():
         for side in (-1, 1):                                    # glow outline on both faces
             f = x + side * 0.77
             loft(name + "_glow", [(f - 0.02, 2.82, 2.42, 1.04, 0, 0.35), (f + 0.02, 2.82, 2.42, 1.04, 0, 0.35)], glow)
-            loft(name + "_cover", [(f - 0.03, 2.66, 2.26, 0.97, 0, 0.35), (f + 0.03, 2.66, 2.26, 0.97, 0, 0.35)], hull)
+            loft(name + "_cover", [(f - 0.07, 2.66, 2.26, 0.97, 0, 0.35), (f + 0.07, 2.66, 2.26, 0.97, 0, 0.35)], hull)  # 5 cm proud of the glow: no z-fight
 
     # aft side pods (port; mirrored)
     AY, AZ = 2.05, -0.15
