@@ -163,7 +163,7 @@ async function show(s, keepView) {
   const m = manifest[s];
   const gltf = await loader.loadAsync(asset(m.lods[lod].file));
   if (current) { fx && fx.dispose(); holder.remove(current); }
-  current = prepareShip(THREE, gltf.scene);
+  current = prepareShip(THREE, gltf.scene, { anisotropy: renderer.capabilities.getMaxAnisotropy() });
   holder.add(current);
   fx = createEngineFx(THREE, current);
   fx.setIntensity(+kIn.value);

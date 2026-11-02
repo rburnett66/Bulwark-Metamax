@@ -199,7 +199,9 @@ export function createEngineFx(THREE, root, { pointLight = true } = {}) {
 // material and ONE unlit glow material for the whole fleet, so the textures sit in GPU memory once and
 // ships batch well. ship_glow is unlit by design (glTF can't express emissive-by-vertex-colour).
 const fleet = {};
-export function prepareShip(THREE, root) {
+// anisotropy: pass renderer.capabilities.getMaxAnisotropy() — keeps the fine panel lines sharp on hull faces
+// seen at a grazing angle (the common case on a long ship) instead of smearing to grey.
+export function prepareShip(THREE, root, { anisotropy = 1 } = {}) {
   root.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     const m = o.material;
@@ -208,7 +210,11 @@ export function prepareShip(THREE, root) {
       if (m !== fleet.glow) m.dispose();
       o.material = fleet.glow;
     } else if (m.name === 'ship_body') {
-      if (!fleet.body) { fleet.body = m; return; }
+      if (!fleet.body) {
+        fleet.body = m;
+        for (const t of [m.map, m.normalMap]) if (t) { t.anisotropy = anisotropy; t.needsUpdate = true; }
+        return;
+      }
       if (m !== fleet.body) { m.map && m.map.dispose(); m.normalMap && m.normalMap.dispose(); m.dispose(); }
       o.material = fleet.body;
     }

@@ -247,7 +247,7 @@ def _rgb(m):
     return tuple(p.inputs[key].default_value)
 
 
-TILE = 6.0          # world units per repeat of the shared panel texture (same panel size on every ship)
+TILE = 3.0          # world units per repeat of the shared panel texture (same panel size on every ship)
 TEX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tex")
 
 
