@@ -1,4 +1,33 @@
 {
+ "air": {
+  "lods": [
+   {
+    "file": "air_lod0.glb",
+    "tris": 3940,
+    "drawCalls": 2,
+    "bytes": 525480
+   },
+   {
+    "file": "air_lod1.glb",
+    "tris": 2928,
+    "drawCalls": 2,
+    "bytes": 430348
+   },
+   {
+    "file": "air_lod2.glb",
+    "tris": 1372,
+    "drawCalls": 2,
+    "bytes": 299012
+   }
+  ],
+  "engines": 8,
+  "engineColor": [
+   0.62,
+   0.8,
+   1.0
+  ],
+  "length": 21.24
+ },
  "artillery": {
   "lods": [
    {
