@@ -36,6 +36,7 @@
     { id: 'stack-forge', name: 'Stack Forge',   at: 'tools/voxel-stack/stack-forge.html', glyph: '🧊' },
     { id: 'harness',     name: 'State Harness', at: 'harness.html',                    glyph: '🔧' },
     { id: 'terrain',     name: 'Terrain Forge', at: 'terrain.html',                    glyph: '🌿' },
+    { id: 'unitart',     name: 'Unit Art',      at: 'unit-art.html',                   glyph: '🎯' },
     { id: 'maplab',      name: 'Map Lab',       at: 'maplab.html',                     glyph: '🗺' },
     { id: 'gallery',     name: 'Gallery',       at: 'gallery.html',                    glyph: '🖼' },
     { id: 'comm',        name: 'Comms',         at: 'comm.html',                       glyph: '📡' },
