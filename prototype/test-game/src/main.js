@@ -3,8 +3,10 @@ import { buildCampaignMap, buildTerrainMap, resolveResourceTypes } from './sim/m
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, resetSave, grantBattleRewards } from './save/save.js';
-import { xpForBattle, levelFromXp } from './data/progression.js';
+import { xpForBattle } from './data/progression.js';
 import { battleResult, bankBattle, planetOfFaction } from './save/missions.js';
+import { settleBattle } from './save/missionFlow.js';
+import { loadMissionCatalog } from './save/missionCatalog.js';
 import { createBattleTally, tallyEvents, noteHarvesters, noteTroopDeployed, finishTally } from './save/battleTally.js';
 import { buildOffer, applyAccept, applyDecline, judgeContract } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
@@ -271,6 +273,8 @@ export function boot(mountEl, seed) {
     inputHandle = makeInput();
   }
   let pendingCarry = null;   // campaign carry (gold + defenses) applied by restart() until the map changes by hand
+  let missionCatalog = null;   // content/missions/missions.json
+  loadMissionCatalog().then((c) => { missionCatalog = c; }).catch((e) => console.error('[missions] content failed to load', e));
   let battleTally = createBattleTally();   // this battle's counts, from the drained events: banked at battle end only [MM-story_mvyqol3w_d]
   let runContract = null;    // the ACCEPTED quest contract for the current map run (judged at match end)
 
@@ -1124,7 +1128,10 @@ export function boot(mountEl, seed) {
               waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, xpFor: xpForBattle });
             const played = battleResult({ mapId: currentMapId, planet: planetOfFaction(currentTestFaction), faction: currentTestFaction, result: sim.result,
               finalScore: sim.finalScore, mapScore: sim.mapScore, waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, tally: finishTally(battleTally) });
-            updateSave((sv) => { bankBattle(sv, played, { level: (x) => levelFromXp(x.progress.xp).level }); });
+            updateSave((sv) => {
+              if (missionCatalog) settleBattle(sv, played, missionCatalog);
+              else { console.error('[missions] content not loaded: battle counted, missions not advanced'); bankBattle(sv, played); }
+            });
           }
           // the SECONDARY's end-of-match reward faction (captured before runContract is cleared)
           const rewardFaction = (runContract && runContract.giver) || lastWaveFaction;
