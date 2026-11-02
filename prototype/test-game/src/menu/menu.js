@@ -20,6 +20,7 @@ import { techCtxFromSave, createGameTechAdapter, planetOpen } from './techSave.j
 import { computeBadges, seenFor, missionChip } from './badges.js';
 import { badge as missionBadge } from '../save/missions.js';
 import { createProgressWidget } from './progressWidget.js';
+import { createMissionLog } from './missionLog.js';
 // The faction registry (GGG-3). Side-effect import + global namespace: factions.js is a classic
 // script with no ES exports, so a named import is a SyntaxError. See voice.js for the full note.
 import '../data/factions.js';
@@ -330,6 +331,10 @@ export function createMenu(mountEl, cbs) {
   } });
   top.appendChild(widget.el);
   root.appendChild(top);
+  // the Mission Log sits over the main screen, under the live top bar (Mission-Log-Design §1) [MM-story_mvyqoo07_f]
+  const mlHost = el(doc, 'div');
+  const missionLog = createMissionLog({ doc, host: mlHost, chipPing: () => widget.ping('missions'), gateOpts: () => gateOverride() || {},
+    onChange: () => refreshProgress(), onClose: () => show('main') });
 
   // ── MAIN screen ──
   const main = el(doc, 'div', 'bwm-main');
@@ -437,6 +442,7 @@ export function createMenu(mountEl, cbs) {
   menu.appendChild(craftCard);
   main.appendChild(menu);
   root.appendChild(main);
+  root.appendChild(mlHost);
 
   // the TARGET planet: the saved enemy faction's homeworld (or the galaxy pick on the main menu)
   function targetKey() {
@@ -733,6 +739,7 @@ export function createMenu(mountEl, cbs) {
     main.style.display = screen === 'main' || overlay ? 'flex' : 'none';
     main.classList.toggle('bwm-dim', overlay);
     widget.setExpanded(overlay ? screen : null);
+    if (screen === 'missions') missionLog.open(); else { missionLog.close(); missionLog.sync(); }
     harv.style.display = screen === 'harvester' ? 'block' : 'none';
     netHost.style.display = screen === 'techtree' ? 'block' : 'none';
     if (screen !== 'techtree' && net) net.stop();

@@ -80,6 +80,7 @@ export function buildOffer(mapId, map, voicePacks, save) {
   };
 }
 
+export const LOYALTY_TIERS = Object.freeze(TECH_AT.slice());
 export const DECLINE = Object.freeze({ cost: DECLINE_COST, rivalGain: DECLINE_RIVAL_GAIN });
 
 /** A faction's rival (workbook Rival_Faction), by display name. Null when it has none. */
