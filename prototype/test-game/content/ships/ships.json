@@ -115,6 +115,35 @@
   ],
   "length": 22.44
  },
+ "dark": {
+  "lods": [
+   {
+    "file": "dark_lod0.glb",
+    "tris": 3278,
+    "drawCalls": 2,
+    "bytes": 498720
+   },
+   {
+    "file": "dark_lod1.glb",
+    "tris": 2254,
+    "drawCalls": 2,
+    "bytes": 396828
+   },
+   {
+    "file": "dark_lod2.glb",
+    "tris": 710,
+    "drawCalls": 2,
+    "bytes": 236560
+   }
+  ],
+  "engines": 3,
+  "engineColor": [
+   0.62,
+   0.22,
+   1.0
+  ],
+  "length": 22.55
+ },
  "green": {
   "lods": [
    {
