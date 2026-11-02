@@ -1,7 +1,7 @@
 /**
  * src/data/techtree.js — THE TECH TREE's data and rules [MM-story_mvkhed1f_h], epic [MM-epic_mvkg5mm7_2].
  * docs/16 Bulwark MM/design/Tech-Tree-Design.md v1.1: 57 upgrades in four divisions — Units, Bases, Map, Outpost
- * (coming soon) — plus the Apocalypse Cannon capstone.
+ * (coming soon) — plus the Apocalypse Cannon capstone. A fifth, Ships (coming soon), was added 2026-11-02.
  *
  * Pure: no DOM, no three.js, no save access, no clock. The Tech Net view (src/menu/technet.js) and the sandbox page
  * (techtree3d.html) both read this; the game menu adapts the save to it. Balance is data — prices and requirements are
@@ -16,9 +16,12 @@ export const DIVISIONS = Object.freeze({
   units:   Object.freeze({ label: 'UNITS',   color: '#ff8a3d', a0: 0,   a1: 130, total: 25 }),
   bases:   Object.freeze({ label: 'BASES',   color: '#34e1ff', a0: 130, a1: 245, total: 21 }),
   map:     Object.freeze({ label: 'MAP',     color: '#b67cff', a0: 245, a1: 315, total: 10 }),
-  outpost: Object.freeze({ label: 'OUTPOST', color: '#6f8c9c', a0: 315, a1: 360, total: 0, soon: true }),
+  outpost: Object.freeze({ label: 'OUTPOST', color: '#6f8c9c', a0: 315, a1: 338, total: 0, soon: true }),
+  // owner 2026-11-02: "We will need to add Ship upgrades for future trade and space combat economies. Ship upgrades should be
+  // added to tech tree as coming soon." [MM-story_mvzkubvz_1m]
+  ships:   Object.freeze({ label: 'SHIPS',   color: '#5fb8c9', a0: 338, a1: 360, total: 0, soon: true }),
 });
-export const DIV_ORDER = Object.freeze(['units', 'bases', 'map', 'outpost']);
+export const DIV_ORDER = Object.freeze(['units', 'bases', 'map', 'outpost', 'ships']);
 /** Floor labels for the groups inside a division. */
 export const GROUPS = Object.freeze([
   { div: 'units', lane: -0.47, text: 'TOWERS' }, { div: 'units', lane: 0.36, text: 'TROOPS' }, { div: 'units', lane: 0.76, text: 'HARVESTERS' },
@@ -122,6 +125,13 @@ add({ id: 'ewn', div: 'map', kind: 'item', name: 'Early Warning Net', price: 260
 ['Outpost Hub', 'Forward Relay', 'Supply Depot', 'Sensor Spire', 'Outpost Walls'].forEach((nm, i) =>
   add({ id: 'op' + i, div: 'outpost', kind: 'ghost', name: 'Classified', d: [1.4, 2.6, 3.2, 4.3, 5.2][i], lane: [-0.1, -0.55, 0.45, -0.2, 0.4][i], soon: true,
     desc: 'Outposts are coming soon: forward bases you build on the map between battles.' }));
+
+// ── SHIPS (coming soon) — the landing craft becomes a ship: trade runs and space combat. Named so players see what is
+// coming, but like the Outpost ghosts they are never counted, priced or bought.
+[['shp_hold', 'Cargo Holds', 'Trade', 1.4, -0.55], ['shp_charter', 'Trade Charter', 'Trade', 2.4, -0.6], ['shp_drive', 'Hyperlane Drive', 'Trade', 3.4, -0.5],
+ ['shp_shield', 'Deflector Screens', 'Space combat', 1.8, 0.5], ['shp_guns', 'Broadside Batteries', 'Space combat', 2.8, 0.55], ['shp_bay', 'Fighter Bay', 'Space combat', 3.8, 0.45]]
+  .forEach(([id, nm, line, d, lane]) => add({ id, div: 'ships', kind: 'shipghost', name: nm, sub: 'Coming soon · ' + line, d, lane, soon: true,
+    desc: 'Ship upgrades are coming soon: your landing craft becomes a ship for trade runs and space combat between planets.' }));
 
 for (const n of N) { n.req = n.req || []; n.kids = []; }
 export const TECH_BY_ID = Object.freeze(Object.fromEntries(N.map((n) => [n.id, n])));
