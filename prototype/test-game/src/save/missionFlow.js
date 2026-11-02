@@ -5,11 +5,16 @@
  * more. Missions are granted aboard it, and Ready rewards are collected there; collecting is what moves a quest line.
  * Every gate here comes from the mission's own View / Unlock rows in content/missions/missions.json.
  *
+ * Secondaries [MM-story_mvzkd2t8_1k]: a replay that beats a map's best average offers that map's optional secondary,
+ * in the Light or Shadow version the commander's alignment history selects, for one attempt: the next battle on that
+ * map. Leaving the band before collection withdraws it. Either version of a step moves the favours line, so a commander
+ * whose alignment flips carries on with the other path.
+ *
  * Pure: functions change only the save object they are given. A condition this file does not know throws, so a new
  * row in the workbook cannot quietly leave a mission locked forever.
  */
 import { STAR_GATE } from './save.js';
-import { logMission, claim, bankBattle, missionStatus } from './missions.js';
+import { logMission, claim, bankBattle, missionStatus, failMission, alignmentBand, factionOfPlanet } from './missions.js';
 import { levelFromXp } from '../data/progression.js';
 import { techCtxFromSave, planetOpen } from '../menu/techSave.js';
 
@@ -59,12 +64,33 @@ export function gateMet(s, c, ctx) {
 export const viewMet = (s, def, ctx) => (def.view || []).every((c) => gateMet(s, c, ctx));
 export const unlockMet = (s, def, ctx) => (def.unlock || []).every((c) => gateMet(s, c, ctx));
 
+/** A live mission whose alignment band was left is withdrawn. → the ids withdrawn. */
+export function reviewAlignment(s, ctx = {}) {
+  const out = [];
+  for (const m of s.missions) {
+    if (m.end || !(m.fail || []).some((f) => f.cond === 'alignment_flips')) continue;
+    const b = alignmentBand(m), a = s.alignment || 0;
+    if ((b.min !== undefined && a < b.min) || (b.max !== undefined && a > b.max)) {
+      failMission(s, m, 'Withdrawn: your alignment history left the ' + (m.variant === 'shadow' ? 'Shadow' : 'Light') + ' band.', { now: ctx.now });
+      out.push(m.id);
+    }
+  }
+  return out;
+}
+
+/** This step of the line was already collected (by either version): its other version is never offered. */
+const stepTaken = (s, def) => ((s.questSteps || {})[def.questLine] || 0) >= def.step;
+
 /** Log every mission whose gates are now met. → the records logged. Called wherever a gate can have changed. */
 export function syncMissions(s, catalog, ctx = flowCtx(s)) {
+  reviewAlignment(s, ctx);
   const logged = [];
   for (const def of catalog.missions) {
-    if (s.missions.some((m) => m.id === def.id)) continue;
+    if (stepTaken(s, def)) continue;
+    const old = s.missions.findIndex((m) => m.id === def.id);
+    if (old >= 0 && s.missions[old].end !== 'failed') continue;
     if (viewMet(s, def, ctx) && unlockMet(s, def, ctx)) {
+      if (old >= 0) s.missions.splice(old, 1);   // offered again: a new replay beat the best, or the band came back
       const rec = logMission(s, def, { now: ctx.now });
       logged.push(rec);
       s.loggedQueue.push({ kind: 'mission', id: rec.id });
@@ -75,7 +101,7 @@ export function syncMissions(s, catalog, ctx = flowCtx(s)) {
 
 /** Visible but not yet granted: the "Locked — next steps" group. Derived from the catalogue, never stored. */
 export function lockedMissions(s, catalog, ctx = flowCtx(s)) {
-  return catalog.missions.filter((def) => !s.missions.some((m) => m.id === def.id) && viewMet(s, def, ctx) && !unlockMet(s, def, ctx));
+  return catalog.missions.filter((def) => !stepTaken(s, def) && !s.missions.some((m) => m.id === def.id) && viewMet(s, def, ctx) && !unlockMet(s, def, ctx));
 }
 
 /** The per-planet map record, and the capital ship's arrival. → { arrived: planet | null }. */
@@ -86,6 +112,7 @@ export function recordPlanetMap(s, result) {
   const rec = byMap[mapId] || (byMap[mapId] = { beaten: false, bestAvg: null, runs: 0, improved: false });
   rec.runs += 1;
   if (result.result !== 'win') return { arrived: null };
+  if (rec.beaten && result.avgStars > rec.bestAvg) rec.improved = true;   // a replay that beats the best offers the secondary
   rec.beaten = true;
   if (rec.bestAvg === null || result.avgStars > rec.bestAvg) rec.bestAvg = result.avgStars;
   if (mapId === 1 && rec.bestAvg >= STAR_GATE && !shipArrived(s, planet)) {
@@ -102,6 +129,20 @@ export function settleBattle(s, result, catalog, ctx = flowCtx(s)) {
   out.arrived = recordPlanetMap(s, result).arrived;
   out.logged = syncMissions(s, catalog, ctx).map((m) => m.id);
   return out;
+}
+
+/** The secondary whose one attempt ended in this battle, for the giver's closing word and the result message. */
+export function resolvedSecondary(s, out) {
+  const ended = [...out.failed.map((id) => [id, 'BROKEN']), ...out.ready.map((id) => [id, 'FULFILLED'])];
+  for (const [id, outcome] of ended) {
+    const m = s.missions.find((x) => x.id === id);
+    if (m && m.role === 'secondary') return { id, title: m.title, giver: factionOfPlanet(m.planet), outcome, ship: m.collectAt, penalty: m.impact.brokenPenalty || 0 };
+  }
+  return null;
+}
+export function favourMessage(f) {
+  return f.outcome === 'FULFILLED' ? 'FAVOUR KEPT — ' + f.title + ': collect aboard ' + f.ship
+    : 'FAVOUR BROKEN — ' + f.title + (f.penalty ? ': ' + f.penalty + ' ' + f.giver + ' loyalty' : '');
 }
 
 /** Why a Ready mission cannot be collected yet, or null: the planet's ship must be in orbit. */

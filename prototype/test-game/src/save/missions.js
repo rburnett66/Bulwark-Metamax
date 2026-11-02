@@ -141,6 +141,12 @@ export function failMission(s, m, reason, { now = Date.now() } = {}) {
   if (m.impact && m.impact.brokenPenalty) addLoyalty(s, factionOfPlanet(m.planet), m.impact.brokenPenalty);
 }
 
+/** A secondary's attempt was used up: only another replay that beats the best result offers that step again. */
+function spendReplay(s, m) {
+  const rec = m.role === 'secondary' && s.planetMaps && s.planetMaps[m.planet] && s.planetMaps[m.planet][m.map];
+  if (rec) rec.improved = false;
+}
+
 /**
  * Advance every live mission from one finished battle. → { progressed:[id], ready:[id], failed:[id] }.
  * ctx: { level(save), now }.
@@ -175,6 +181,7 @@ export function applyBattle(s, result, ctx = {}) {
           (f.cond === 'walls_lost_max' && (result.tally ? result.tally.structures.lost.wall || 0 : 0) > f.value);
         if (hit) {
           failMission(s, m, 'attempt_ends_unmet' === f.cond ? 'Broken promise: the attempt ended short.' : f.text, { now });
+          spendReplay(s, m);
           out.failed.push(m.id);
           break;
         }
@@ -253,6 +260,7 @@ export function abandon(s, id, { now = Date.now() } = {}) {
   addLoyalty(s, faction, -DECLINE.cost);
   if (rival) addLoyalty(s, rival, Math.round(DECLINE.cost * DECLINE.rivalGain));
   endMission(s, m, 'failed', 'Abandoned by the commander.', now);
+  spendReplay(s, m);
   return true;
 }
 
