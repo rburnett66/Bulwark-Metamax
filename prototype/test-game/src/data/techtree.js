@@ -152,6 +152,11 @@ export function techPrice(n, ctx) {
 /** The node's gates as [{ txt, ok }]. */
 export function techGates(n, ctx) {
   const out = [], g = n.gate || {}, held = portalsOwned(ctx.owned);
+  // tech plan D7: a node unlocks through a mission and is then bought. Only the game's context carries `unlocked`.
+  if (ctx.unlocked && !n.free && !n.soon && !n.milestone && !ctx.unlocked.has(n.id)) {
+    const by = ctx.unlockedBy ? ctx.unlockedBy(n.id) : null;
+    out.push({ txt: 'Unlocked by a mission' + (by ? ': ' + by : ''), ok: false });
+  }
   if (g.portals) out.push({ txt: g.portals + (g.portals > 1 ? ' portal codes owned' : ' portal code owned') + ' (' + held + ')', ok: held >= g.portals });
   if (g.win) {
     const ok = ctx.hasWin ? !!ctx.hasWin(g.win) : true;
