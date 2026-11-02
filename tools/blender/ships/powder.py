@@ -48,7 +48,7 @@ def windows(prefix, x0, x1, y, z, n, glow, face="Y"):
 def make():
     stone = mat("hull", (0.115, 0.08, 0.045), rough=0.65, metal=0.2)      # bronze-brown stone
     dark = mat("trim", (0.045, 0.035, 0.025), rough=0.6, metal=0.3)        # soot-dark plating, turrets
-    bronze = mat("bronze", (0.45, 0.3, 0.1), rough=0.4, metal=0.6)     # gilded edges, emblems
+    bronze = mat("bronze", (0.62, 0.42, 0.12), rough=0.4, metal=0.6)     # gilded edges, emblems
     cloth = mat("banner", (0.32, 0.025, 0.02), rough=0.8, metal=0.0)    # heraldic red
     glow = mat("glow", (0.6, 0.3, 0.05), emit=(1.0, 0.58, 0.18), strength=6)
     tipglow = mat("tip", (0.5, 0.05, 0.02), emit=(1.0, 0.16, 0.08), strength=9)
@@ -70,11 +70,11 @@ def make():
 
     # ── stepped ziggurat terraces ──────────────────────────────────────────────────────
     tiers = [  # x0, x1, half-width, z0, z1
-        (-9.2, 7.4, 2.35, 1.1, 2.0),
-        (-7.4, 4.4, 1.9, 2.0, 3.1),
-        (-5.8, 2.4, 1.45, 3.1, 4.3),
-        (-4.4, 0.8, 1.05, 4.3, 5.6),
-        (-3.4, -0.6, 0.72, 5.6, 7.0),
+        (-9.2, 7.4, 2.35, 1.1, 1.8),
+        (-7.4, 4.4, 1.9, 1.8, 2.7),
+        (-5.8, 2.4, 1.45, 2.7, 3.6),
+        (-4.4, 0.8, 1.05, 3.6, 4.6),
+        (-3.4, -0.6, 0.72, 4.6, 5.6),
     ]
     for i, (x0, x1, w, z0, z1) in enumerate(tiers):
         box(f"tier{i}", ((x0 + x1) / 2, 0, (z0 + z1) / 2), (x1 - x0, 2 * w, z1 - z0), stone, chamfer=0.1)
@@ -82,10 +82,10 @@ def make():
         windows(f"tier{i}_win", x0 + 0.5, x1 - 0.5, w + 0.01, (z0 + z1) / 2, max(4, int((x1 - x0) / 1.1)), glow)
         windows(f"tier{i}_fwin", 0.35, w - 0.3, x1 + 0.01, (z0 + z1) / 2, 2, glow, face="X")
     # gatehouse: a tall flat wall on the ziggurat's front that carries the great banner
-    box("gatehouse", (1.8, 0, 3.75), (1.6, 1.5, 3.3), stone, chamfer=0.12)
-    box("gatehouse_cap", (1.8, 0, 5.5), (1.8, 1.7, 0.2), bronze)
+    box("gatehouse", (1.8, 0, 3.4), (1.6, 1.5, 2.8), stone, chamfer=0.12)
+    box("gatehouse_cap", (1.8, 0, 4.88), (1.8, 1.7, 0.2), bronze)
     for x in (2.75, 3.6):   # flying buttresses running down to the terraces
-        box("buttress", (x, 0.6, 3.6 - (x - 2.75) * 0.8), (0.9, 0.18, 0.5), stone)
+        box("buttress", (x, 0.6, 3.1 - (x - 2.75) * 0.8), (0.9, 0.18, 0.5), stone)
     # forward gun terrace on the bow deck
     box("bow_terrace", (8.6, 0, 1.45), (2.6, 3.4, 0.7), stone, chamfer=0.15)
     windows("bow_win", 7.6, 9.6, 1.71, 1.45, 3, glow)
@@ -97,32 +97,32 @@ def make():
             cyl(name + "_barrel", (x + 0.95 * s, y + dy * s, z + 0.26 * s), 0.06 * s, 1.0 * s, dark, sides=4)
 
     turret("turret_bow", 8.4, 1.0, 1.8)
-    turret("turret_bow_c", 6.6, 0.0, 2.0, 1.15)
-    turret("turret_t1", 4.6, 1.5, 2.0)
-    turret("turret_t1b", 1.0, 1.9, 2.0, 0.9)
-    turret("turret_t2", 3.4, 1.4, 3.1, 0.85)
-    turret("turret_aft", -8.4, 1.4, 2.0, 0.9)
+    turret("turret_bow_c", 6.6, 0.0, 1.8, 1.15)
+    turret("turret_t1", 4.6, 1.5, 1.8)
+    turret("turret_t1b", 1.0, 1.9, 1.8, 0.9)
+    turret("turret_t2", 3.4, 1.4, 2.7, 0.85)
+    turret("turret_aft", -8.4, 1.4, 1.8, 0.9)
 
     # ── spires: one great central spire and a handful of lesser ones ──────────────────────
-    spire("spire_main", -2.0, 0, 7.0, 0.62, 6.2, stone, tip=tipglow, sides=6)
-    for z, r in ((8.6, 0.55), (10.0, 0.45)):  # bronze rings up the main spire
+    spire("spire_main", -2.0, 0, 5.6, 0.62, 4.8, stone, tip=tipglow, sides=6)
+    for z, r in ((6.9, 0.55), (7.9, 0.45)):  # bronze rings up the main spire
         cyl("spire_ring", (-2.0, 0, z), r, 0.12, bronze, sides=6, axis="Z")
-    cyl("spire_needle", (-2.0, 0, 13.6), 0.05, 0.9, tipglow, sides=4, axis="Z")
-    spire("spire_flank", -2.9, 0.95, 5.6, 0.36, 3.8, stone, tip=bronze)
-    spire("spire_t3", 0.0, 0.85, 5.6, 0.3, 2.8, stone, tip=bronze)
-    spire("spire_t2", -4.9, 1.15, 4.3, 0.32, 3.2, stone, tip=bronze)
-    spire("spire_gate", 1.8, 0.55, 5.6, 0.24, 2.0, stone, tip=bronze)
-    spire("spire_aft", -6.7, 1.5, 3.1, 0.3, 2.8, stone, tip=bronze)
-    spire("spire_t1", 3.9, 1.6, 3.1, 0.26, 2.2, stone, tip=bronze)
-    spire("spire_stern", -8.6, 0.0, 2.0, 0.3, 2.4, stone, tip=bronze)
+    cyl("spire_needle", (-2.0, 0, 10.55), 0.05, 0.6, tipglow, sides=4, axis="Z")
+    spire("spire_flank", -2.9, 0.95, 4.6, 0.36, 3.2, stone, tip=bronze)
+    spire("spire_t3", 0.0, 0.85, 4.6, 0.3, 2.4, stone, tip=bronze)
+    spire("spire_t2", -4.9, 1.15, 3.6, 0.32, 2.8, stone, tip=bronze)
+    spire("spire_gate", 1.8, 0.55, 4.98, 0.24, 1.6, stone, tip=bronze)
+    spire("spire_aft", -6.7, 1.5, 2.7, 0.3, 2.4, stone, tip=bronze)
+    spire("spire_t1", 3.9, 1.6, 2.7, 0.26, 2.0, stone, tip=bronze)
+    spire("spire_stern", -8.6, 0.0, 1.8, 0.3, 2.2, stone, tip=bronze)
 
     # ── red heraldic banners ────────────────────────────────────────────────────────────
-    banner("banner_front", 2.63, 0.0, 5.3, 1.75, 1.1, cloth, bronze, face="X")      # the great banner
-    banner("banner_spire", -0.57, 0.0, 6.9, 1.0, 0.5, cloth, bronze, face="X")
+    banner("banner_front", 2.63, 0.0, 4.75, 1.65, 1.35, cloth, bronze, face="X")      # the great banner
+    banner("banner_spire", -0.57, 0.0, 5.5, 0.8, 0.5, cloth, bronze, face="X")
     for x in (-7.0, -2.0, 3.0, 7.6):                                                 # flank banners on the galleries
         banner("banner_flank", x, 3.08, 0.85, 2.3, 0.8, cloth, bronze)
-    banner("banner_t1", -2.6, 1.93, 2.95, 1.0, 0.55, cloth, bronze)
-    banner("banner_t2", 0.6, 1.48, 4.15, 0.9, 0.5, cloth, bronze)
+    banner("banner_t1", -2.6, 1.93, 2.65, 0.75, 0.55, cloth, bronze)
+    banner("banner_t2", 0.6, 1.48, 3.55, 0.75, 0.5, cloth, bronze)
 
     # ── stern engines ──────────────────────────────────────────────────────────────────
     box("stern_block", (-10.95, 0, -0.1), (0.3, 4.6, 1.6), dark)

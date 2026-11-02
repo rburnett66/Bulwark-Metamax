@@ -28,6 +28,35 @@
   ],
   "length": 21.24
  },
+ "arcane": {
+  "lods": [
+   {
+    "file": "arcane_lod0.glb",
+    "tris": 3818,
+    "drawCalls": 2,
+    "bytes": 523572
+   },
+   {
+    "file": "arcane_lod1.glb",
+    "tris": 2326,
+    "drawCalls": 2,
+    "bytes": 386836
+   },
+   {
+    "file": "arcane_lod2.glb",
+    "tris": 1270,
+    "drawCalls": 2,
+    "bytes": 286864
+   }
+  ],
+  "engines": 6,
+  "engineColor": [
+   1.0,
+   0.28,
+   0.78
+  ],
+  "length": 21.34
+ },
  "artillery": {
   "lods": [
    {
@@ -57,6 +86,93 @@
   ],
   "length": 23.59
  },
+ "collective": {
+  "lods": [
+   {
+    "file": "collective_lod0.glb",
+    "tris": 5112,
+    "drawCalls": 2,
+    "bytes": 614832
+   },
+   {
+    "file": "collective_lod1.glb",
+    "tris": 3848,
+    "drawCalls": 2,
+    "bytes": 502176
+   },
+   {
+    "file": "collective_lod2.glb",
+    "tris": 1660,
+    "drawCalls": 2,
+    "bytes": 320484
+   }
+  ],
+  "engines": 8,
+  "engineColor": [
+   0.3,
+   0.52,
+   1.0
+  ],
+  "length": 22.44
+ },
+ "dark": {
+  "lods": [
+   {
+    "file": "dark_lod0.glb",
+    "tris": 3278,
+    "drawCalls": 2,
+    "bytes": 498720
+   },
+   {
+    "file": "dark_lod1.glb",
+    "tris": 2254,
+    "drawCalls": 2,
+    "bytes": 396828
+   },
+   {
+    "file": "dark_lod2.glb",
+    "tris": 710,
+    "drawCalls": 2,
+    "bytes": 236560
+   }
+  ],
+  "engines": 3,
+  "engineColor": [
+   0.62,
+   0.22,
+   1.0
+  ],
+  "length": 22.55
+ },
+ "green": {
+  "lods": [
+   {
+    "file": "green_lod0.glb",
+    "tris": 5608,
+    "drawCalls": 2,
+    "bytes": 647932
+   },
+   {
+    "file": "green_lod1.glb",
+    "tris": 4240,
+    "drawCalls": 2,
+    "bytes": 533412
+   },
+   {
+    "file": "green_lod2.glb",
+    "tris": 1736,
+    "drawCalls": 1,
+    "bytes": 326396
+   }
+  ],
+  "engines": 5,
+  "engineColor": [
+   0.58,
+   1.0,
+   0.22
+  ],
+  "length": 22.17
+ },
  "lumen": {
   "lods": [
    {
@@ -85,5 +201,92 @@
    1.0
   ],
   "length": 21.12
+ },
+ "powder": {
+  "lods": [
+   {
+    "file": "powder_lod0.glb",
+    "tris": 5356,
+    "drawCalls": 2,
+    "bytes": 654596
+   },
+   {
+    "file": "powder_lod1.glb",
+    "tris": 2060,
+    "drawCalls": 2,
+    "bytes": 350568
+   },
+   {
+    "file": "powder_lod2.glb",
+    "tris": 516,
+    "drawCalls": 1,
+    "bytes": 221996
+   }
+  ],
+  "engines": 6,
+  "engineColor": [
+   1.0,
+   0.3,
+   0.14
+  ],
+  "length": 22.39
+ },
+ "tech": {
+  "lods": [
+   {
+    "file": "tech_lod0.glb",
+    "tris": 4192,
+    "drawCalls": 2,
+    "bytes": 545568
+   },
+   {
+    "file": "tech_lod1.glb",
+    "tris": 3012,
+    "drawCalls": 2,
+    "bytes": 432800
+   },
+   {
+    "file": "tech_lod2.glb",
+    "tris": 644,
+    "drawCalls": 2,
+    "bytes": 232976
+   }
+  ],
+  "engines": 6,
+  "engineColor": [
+   1.0,
+   0.8,
+   0.34
+  ],
+  "length": 22.29
+ },
+ "water": {
+  "lods": [
+   {
+    "file": "water_lod0.glb",
+    "tris": 4968,
+    "drawCalls": 2,
+    "bytes": 577872
+   },
+   {
+    "file": "water_lod1.glb",
+    "tris": 3720,
+    "drawCalls": 2,
+    "bytes": 477964
+   },
+   {
+    "file": "water_lod2.glb",
+    "tris": 2012,
+    "drawCalls": 2,
+    "bytes": 341196
+   }
+  ],
+  "engines": 5,
+  "engineColor": [
+   0.26,
+   1.0,
+   0.82
+  ],
+  "length": 22.99
  }
 }

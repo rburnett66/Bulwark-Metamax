@@ -61,6 +61,8 @@ def cluster(name, x, y, z, towers, glass, trim, glow, base_r):
     cyl(name + "_step", (x, y, z + 0.55), base_r * 0.7, 0.3, trim, sides=6, axis="Z", r1=base_r * 0.6)
     for i, (dx, dy, r, h) in enumerate(towers):
         crystal(f"{name}_t{i}", x + dx, y + dy, z + 0.6, r, h, glass)
+        if h > 2.8:                                   # gold seam ring where the tall towers taper
+            cyl(f"{name}_t{i}_seam", (x + dx, y + dy, z + 0.6 + h * 0.55), r * 0.9, 0.05, glow, sides=4, axis="Z")
 
 
 def turret(name, x, y, z, hull, trim, glow):
@@ -75,8 +77,8 @@ def turret(name, x, y, z, hull, trim, glow):
 def make():
     hull = mat("hull", (0.065, 0.065, 0.075), rough=0.45, metal=0.35)        # graphite plates
     trim = mat("trim", (0.03, 0.03, 0.035), rough=0.4, metal=0.4)          # near-black pads/plinths
-    glass = mat("glass", (0.13, 0.15, 0.19), rough=0.15, metal=0.7)        # crystal-glass towers
-    glow = mat("glow", (0.6, 0.45, 0.1), emit=(1.0, 0.72, 0.28), strength=6)  # gold trim + hangar light
+    glass = mat("glass", (0.06, 0.07, 0.10), rough=0.2, metal=0.5)        # crystal-glass towers
+    glow = mat("glow", (0.6, 0.45, 0.1), emit=(1.0, 0.6, 0.16), strength=4)  # gold trim + hangar light
 
     # ── main wedge slab and faceted belly ──
     loft("deck", [(x, w, 1.05, C, 0, TOP - 1.05) for x, w in PLAN], hull, bevel=0.03)

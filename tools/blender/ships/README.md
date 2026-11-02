@@ -29,6 +29,38 @@ python3 tools/blender/ships/sheet.py lumen   # → out/lumen/lumen_sheet.jpg (re
 The per-ship cost is low next to a full frame. Mobile WebGL handles a few hundred thousand triangles, so the
 budget is about keeping draw calls and texture memory down when several ships share a screen.
 
-| Ship | Triangles | Materials | Status |
-|---|---|---|---|
-| Lumen | 2,728 | 3 (hull, trim, glow) | pilot, awaiting sign-off |
+| Ship | LOD0 tris | LOD1 tris | LOD2 tris | Engines | Length |
+|---|---|---|---|---|---|
+| Air | 3,940 | 2,928 | 1,372 | 8 | 21.24 |
+| Arcane | 3,818 | 2,326 | 1,270 | 6 | 21.34 |
+| Artillery | 5,064 | 2,692 | 536 | 6 | 23.59 |
+| Collective | 5,112 | 3,848 | 1,660 | 8 | 22.44 |
+| Dark | 3,278 | 2,254 | 710 | 3 | 22.55 |
+| Green | 5,608 | 4,240 | 1,736 | 5 | 22.17 |
+| Lumen | 2,896 | 2,056 | 1,100 | 6 | 21.12 |
+| Powder | 5,356 | 2,060 | 516 | 6 | 22.39 |
+| Tech | 4,192 | 3,012 | 644 | 6 | 22.29 |
+| Water | 4,968 | 3,720 | 2,012 | 5 | 22.99 |
+
+Every ship is 2 draw calls (body + glow) plus 2 for its exhaust effect. LOD1 runs over its ≈ 2,000 target on
+Green, Collective, Water, Air, Tech and Artillery — tune `common.LODS` or tag small parts per ship when that matters.
+
+## Pipeline
+
+1. `python3 tools/blender/ships/<slug>.py` — build, mirror, LODs, GLBs + renders in `out/<slug>/`.
+2. `python3 tools/blender/ships/sheet.py <slug>` — reference beside the renders for review.
+3. `python3 tools/blender/ships/publish.py <slug>` — copy the GLBs into `prototype/test-game/content/ships/` and
+   update `ships.json`. Commit `content/ships/` with the script: the game loads content at runtime.
+4. Review in the game's viewer: `prototype/test-game/tools/ships/viewer.html` (Pages: `/tools/ships/viewer.html`).
+
+## In the game
+
+`src/render3d/ships/engineFx.js`: `prepareShip(THREE, gltf.scene)` swaps in one shared body material and one
+unlit glow material for the whole fleet (textures load once); `createEngineFx(THREE, root)` adds the exhaust from the
+`engine_N` markers (radius + faction colour in extras) — 2 draw calls per ship, `setIntensity(0 … 2)` for
+cold / idle / cruise / story burn, eased so it spools rather than snaps.
+
+## Faction propulsion colours
+
+`common.ENGINE_COLORS` — air pale blue-white, arcane magenta, artillery orange, collective deep blue, dark violet,
+green chem green, lumen cyan, powder ember red, tech gold, water teal.

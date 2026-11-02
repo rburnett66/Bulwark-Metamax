@@ -3,7 +3,7 @@
     python3 tools/blender/ships/dark.py [out_dir] [--no-render]
 
 Read of the reference: a long, low, wide black slab bristling with spikes; three tall faceted crystal
-spires on top (one on the centreline, a mirrored pair aft) each with a glowing violet eye; tall hanging
+spires in a row along the centreline (fore, middle, aft), each with a glowing violet eye; tall hanging
 banner pylons with violet diamonds; rows of downward spikes and fins under the keel; violet glow lines
 along the rim. Near-black hull with gunmetal trim so the silhouette still reads. Modelled port-side +
 centreline only — the build mirrors it.
@@ -112,20 +112,22 @@ def make():
         box("window", (x, 3.41, 0.12), (0.42, 0.04, 0.12), glow)
     box("side_band", (-1.5, 3.41, -0.18), (9.0, 0.05, 0.16), trim)
 
-    # three crystal spires — the signature: centreline fore, mirrored pair aft
-    spire("spire_c", 2.6, 0.0, 1.2, 1.25, hull, trim, glow)
-    spire("spire_p", -5.4, 1.7, 0.9, 1.05, hull, trim, glow)
-    box("spine_glow", (-1.0, 0.45, 1.52), (14.0, 0.05, 0.03), glow)
+    # three crystal spires in a row along the centreline — the signature; the middle one stands tallest
+    SPIRES = ((5.2, 1.15), (0.0, 1.25), (-5.6, 1.15))
+    for x, sc in SPIRES:
+        spire("spire", x, 0.0, 1.2, sc, hull, trim, glow)
+    for x, ln in ((8.4, 1.4), (2.7, 0.8), (-2.9, 1.2), (-9.0, 1.6)):  # deck glow strips between the spires
+        box("spine_glow", (x, 0.45, 1.52), (ln, 0.05, 0.03), glow)
 
     # thorns along the dorsal rim
     for i, x in enumerate((9.6, 8.6, 7.6, 6.6, 5.6, 4.6, 0.9, -0.1, -1.1, -2.1, -3.1, -8.0, -9.0, -9.9)):
         w = rim_w(x)
         spike("rim_thorn", (x, w - 0.5, 0.55), 0.6 + 0.4 * (i % 3), 0.1, hull, lean=(-0.15, 0.12))
-    for i, x in enumerate((8.4, 6.9, -0.6, -2.6, -8.6)):          # taller thorns along the deck crest
+    for i, x in enumerate((9.0, 2.7, -2.9, -8.4)):          # taller thorns along the deck crest
         spike("crest_thorn", (x, 1.1, 1.3), 1.0 + 0.5 * (i % 2), 0.13, hull, lean=(-0.2, 0.0))
 
     # hanging banner pylons with violet diamonds, one under each spire plus one at the bow
-    for x, ln in ((6.8, 3.0), (2.6, 3.8), (-5.4, 3.4)):
+    for x, ln in ((5.2, 3.4), (0.0, 3.8), (-5.6, 3.4)):
         w = rim_w(x) - 0.25
         loft("banner", [(-0.3, 0.42, 0.1, 0.03, x, w), (-0.3 - ln, 0.28, 0.07, 0.02, x, w)], trim, axis="Z")
         diamond("banner_eye", (x, w + 0.11, -0.3 - ln * 0.45), 0.14, 0.42, 0.04, glow)
@@ -133,17 +135,17 @@ def make():
         spike("banner_tip", (x, w, -0.3 - ln), 0.6, 0.18, trim, down=True)
 
     # rows of downward spikes and hanging fins under the slab
-    rows = [(3.0, 0.22, 2.2), (1.9, 0.18, 1.5), (0.8, 0.15, 1.1)]
+    rows = [(3.0, 0.22, 2.6), (1.9, 0.2, 2.1), (0.8, 0.16, 1.6)]
     for row, (y, r, ln) in enumerate(rows):
         for i in range(12):
             x = 9.4 - i * 1.65 - row * 0.7
-            if x < -10.2 or rim_w(x) < y + 0.3 or any(abs(x - bx) < 0.6 for bx in (6.8, 2.6, -5.4)) and row == 0:
+            if x < -10.2 or rim_w(x) < y + 0.3 or any(abs(x - bx) < 0.6 for bx in (5.2, 0.0, -5.6)) and row == 0:
                 continue
             l = ln * (0.75 + 0.45 * ((i * 7 + row * 3) % 4) / 3)
             spike("under_spike", (x, y, -0.45 - 0.25 * (row > 0)), l, r, hull, down=True)
             if (i + row) % 2 == 0:  # violet streak spikes alongside
-                spike("under_glow", (x + 0.45, y - 0.15, -0.5 - 0.25 * (row > 0)), l * 0.8, 0.05, glow, down=True)
-    for x, ln in ((5.0, 2.2), (0.6, 2.6), (-3.2, 2.4), (-7.6, 1.8)):  # thin hanging fins
+                spike("under_glow", (x + 0.45, y - 0.15, -0.5 - 0.25 * (row > 0)), l * 0.9, 0.08, glow, down=True)
+    for x, ln in ((7.4, 2.0), (2.6, 2.6), (-2.8, 2.4), (-8.0, 1.8)):  # thin hanging fins
         loft("fin", [(-0.8, 0.8, 0.05, 0.02, x, 1.3), (-0.8 - ln, 0.06, 0.02, 0.01, x, 1.3)], hull, axis="Z")
         box("fin_glow", (x, 1.36, -0.8 - ln * 0.4), (0.04, 0.03, ln * 0.7), glow)
 
