@@ -1,0 +1,89 @@
+{
+ "air": {
+  "lods": [
+   {
+    "file": "air_lod0.glb",
+    "tris": 3940,
+    "drawCalls": 2,
+    "bytes": 525480
+   },
+   {
+    "file": "air_lod1.glb",
+    "tris": 2928,
+    "drawCalls": 2,
+    "bytes": 430348
+   },
+   {
+    "file": "air_lod2.glb",
+    "tris": 1372,
+    "drawCalls": 2,
+    "bytes": 299012
+   }
+  ],
+  "engines": 8,
+  "engineColor": [
+   0.62,
+   0.8,
+   1.0
+  ],
+  "length": 21.24
+ },
+ "artillery": {
+  "lods": [
+   {
+    "file": "artillery_lod0.glb",
+    "tris": 5064,
+    "drawCalls": 2,
+    "bytes": 633252
+   },
+   {
+    "file": "artillery_lod1.glb",
+    "tris": 2692,
+    "drawCalls": 2,
+    "bytes": 406408
+   },
+   {
+    "file": "artillery_lod2.glb",
+    "tris": 536,
+    "drawCalls": 1,
+    "bytes": 222384
+   }
+  ],
+  "engines": 6,
+  "engineColor": [
+   1.0,
+   0.55,
+   0.16
+  ],
+  "length": 23.59
+ },
+ "lumen": {
+  "lods": [
+   {
+    "file": "lumen_lod0.glb",
+    "tris": 2896,
+    "drawCalls": 2,
+    "bytes": 430248
+   },
+   {
+    "file": "lumen_lod1.glb",
+    "tris": 2056,
+    "drawCalls": 2,
+    "bytes": 347760
+   },
+   {
+    "file": "lumen_lod2.glb",
+    "tris": 1100,
+    "drawCalls": 2,
+    "bytes": 270580
+   }
+  ],
+  "engines": 6,
+  "engineColor": [
+   0.28,
+   0.86,
+   1.0
+  ],
+  "length": 21.12
+ }
+}
