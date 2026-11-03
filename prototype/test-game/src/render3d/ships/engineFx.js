@@ -201,28 +201,53 @@ export function createEngineFx(THREE, root, { pointLight = true } = {}) {
 const fleet = {};
 // anisotropy: pass renderer.capabilities.getMaxAnisotropy() — keeps the fine panel lines sharp on hull faces
 // seen at a grazing angle (the common case on a long ship) instead of smearing to grey.
-export function prepareShip(THREE, root, { anisotropy = 1 } = {}) {
+// Specular anti-aliasing (Kaplanyan, GDC 2016): where the normal-mapped normal changes fast across a pixel —
+// panel seams shrunk below a pixel at distance — raise roughness so the seam turns into a slightly duller plate
+// instead of sparkling. Needs the PERTURBED normal, which r128's built-in geometryRoughness ignores. ~8 ALU.
+const SPEC_AA = `
+#include <lights_physical_fragment>
+{
+  vec3 ndx = dFdx( normal ), ndy = dFdy( normal );
+  float v = 2.0 * ( dot( ndx, ndx ) + dot( ndy, ndy ) );
+  float r = material.specularRoughness;
+  material.specularRoughness = sqrt( min( 1.0, r * r + min( v, 0.18 ) ) );
+}`;
+
+export function prepareShip(THREE, root, { anisotropy = 1, specularAA = true } = {}) {
   root.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     const m = o.material;
     if (m.name === 'ship_glow') {
       // Light strips, windows and engine cores sit on (or a hair above) the hull. Pull them toward the camera
       // in depth so they always win the tie and never shimmer through the plating underneath (z-fighting).
+      // Model glow as visible surfaces only: a glow disc hidden behind a cover plate shows through.
       fleet.glow = fleet.glow || new THREE.MeshBasicMaterial({
         name: 'ship_glow', vertexColors: true, toneMapped: false,
         polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8,
       });
       if (m !== fleet.glow) m.dispose();
       o.material = fleet.glow;
-    } else if (m.name === 'ship_body') {
-      if (!fleet.body) {
-        fleet.body = m;
+    } else if (m.name === 'ship_body' || m.name === 'ship_body_v2') {
+      // one shared material per surface version (v1 tiling panels; v2 lap-step panels in part frames)
+      const key = m.name;
+      if (!fleet[key]) {
+        fleet[key] = m;
         for (const t of [m.map, m.normalMap, m.roughnessMap]) if (t) { t.anisotropy = anisotropy; t.needsUpdate = true; }
+        if (specularAA && key === 'ship_body_v2') {
+          m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_fragment>', SPEC_AA); };
+          m.customProgramCacheKey = () => 'ship_body_v2_specaa';
+          m.needsUpdate = true;
+        }
         return;
       }
-      if (m !== fleet.body) { for (const t of [m.map, m.normalMap, m.roughnessMap]) t && t.dispose(); m.dispose(); }
-      o.material = fleet.body;
+      if (m !== fleet[key]) { for (const t of [m.map, m.normalMap, m.roughnessMap]) t && t.dispose(); m.dispose(); }
+      o.material = fleet[key];
     }
   });
   return root;
+}
+
+// The shared body materials, e.g. to give them an environment map: shipMaterials().forEach(m => m.envMap = …)
+export function shipMaterials() {
+  return ['ship_body', 'ship_body_v2'].map((k) => fleet[k]).filter(Boolean);
 }

@@ -82,4 +82,4 @@ def make():
 
 
 if __name__ == "__main__":
-    build("lumen", make)
+    build("lumen", make, surface="v2")
