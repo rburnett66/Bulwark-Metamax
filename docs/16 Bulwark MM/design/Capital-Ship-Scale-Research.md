@@ -120,3 +120,56 @@ with distance. Hierarchy resolves the conflict.
   them agree.
 - Buried glow geometry shows through its cover because glow is pulled forward in depth (polygon offset). Glow must be
   modelled as visible surfaces only — outlines, not hidden discs (fixed on Lumen and Tech).
+
+## Presentation lab — applied to Lumen (2026-11-02, [MM-story_mw01uvuu_4])
+
+The ship viewer (`prototype/test-game/tools/ships/viewer.html`) now carries a **Lab** row that switches each technique
+on and off for side-by-side review, and four **Shots**. `?hdr=0` restores the old chain; `?tier=standard|low`
+previews the mobile presets; `?cut=orbit|flyby|stern|bow` plays one shot.
+
+**Applied to Lumen** (the only ship on `surface="v2"` so far — `build(..., surface="v2")`):
+- `detail_tex_v2.py` — panels authored at 4× with quantised plate levels and one-sided lap-step seams (cone
+  dilation of the level map), seam line + bright lip carried in the colour map, varied bays, ≈ 30 % rest plates.
+- Per-part UV frames with panel scale by part size (hull ×1.25, modules ×0.9, small ×0.55 of `TILE`).
+- Specular anti-aliasing on the v2 material (Kaplanyan, `onBeforeCompile`, ≈ 8 ALU).
+
+**Render chain (fix #1):** `renderer.toneMapping = NoToneMapping`; half-float composer target; `hdrBloom()` makes the
+bloom pass's internal targets half-float too (8-bit ones drew concentric boxes round the sun); bloom threshold 1.0;
+glow ×1.25 so only emissives bloom; one `tonemapPass` (r128 ACES + sRGB, numerically identical); then one lens pass.
+MSAA is not used yet: the lens-flare occlusion copy cannot read a multisampled buffer — DPR supersampling covers it
+on high tier.
+
+**Light (fix #2):** one source — the backdrop's sun is the key (2.1, sun colour), cool hemisphere fill 0.14 (≈ 15:1),
+reflections from a PMREM of the backdrop's own env scene. Haze: `FogExp2(0x0b1220, 0.11/size)`.
+
+**Space backdrop** (`src/render3d/space/backdrop.js`): power-law starfield with colour temperature, a few spiked bright
+stars, domain-warped fbm nebula (subtle, dithered), an HDR sun disc with corona; all at infinity, `fog:false`, drawn
+first. **Lens FX** (`src/render3d/space/lensFx.js`): radial chromatic aberration + vignette + grain in one pass,
+procedural lens flare on the sun (anamorphic streak, hex ghosts) with occlusion that works in a half-float buffer.
+
+**Camera** (`src/render3d/ships/shots.js`, tested): lenses as full-frame focal lengths, converted so a portrait phone
+keeps the landscape horizontal coverage. Shots: **Orbit** 135 mm from ≈ 4 L, 1.2 °/s, below and looking up;
+**Flyby** 35 mm trucking 0.18 L off the hull at 0.04 L/s; **Stern** 85 mm from 2.2 L astern, 1.5 %/s push-in;
+**Bow reveal** 24 mm under the keel looking back and up as the hull slides overhead. ±0.1° operator drift on the aim
+point, dip-to-black cuts, letterbox sized to 2.39:1 in landscape only, title-card offset as 14 % of frame width.
+Turntable slowed to ≈ 1.4 °/s. No depth of field.
+
+### Recommended presets
+
+| | High | Standard | Low |
+|---|---|---|---|
+| DPR cap | 2 | 1.5 | 1 |
+| Chain | HDR, one tone map, exposure 0.85 | same | same |
+| Bloom (threshold 1) | strength 0.45, radius 0.5 | 0.4 / 0.4 | off (opt in `?bloom=1`) |
+| Lens pass | CA 0.0012, vignette 0.22, grain 0.025 | CA 0.0008, grain 0.02 | off |
+| Flare | sun only | sun only | off |
+| Backdrop | 3.6 k stars, 4-octave nebula, spiked stars | 2.6 k, 3-octave | 1.6 k, 2-octave, no spikes |
+| Reflections, haze | on | on | on |
+| Camera | shot recipes | same | same |
+
+Measured in the viewer (Lumen, high tier, presenting): ≈ 30–40 draw calls per frame including bloom's blur passes,
+the backdrop (4) and the flare (≈ 10, only while the sun is on screen).
+
+**Still to do:** roll `surface="v2"` out to the other nine ships and re-audit; MSAA alongside the flare (resolve
+before the occlusion copy, or occlusion from a depth test); a hue-preserving tone curve (AgX via `CustomToneMapping`)
+if ACES's yellow shift on orange plumes bothers; game scenes using bloom need the same chain fix.

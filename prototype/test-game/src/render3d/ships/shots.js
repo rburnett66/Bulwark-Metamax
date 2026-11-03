@@ -31,11 +31,11 @@ const drift = (t, s) => (Math.sin(t * 0.31 + s) * 0.6 + Math.sin(t * 0.17 + s * 
 export const SHOTS = {
   // establishing orbit: 135 mm from ~4 L, slow orbit, looking up, ship on the lower-right third
   orbit: { mm: 135, seconds: 18 },
-  // hull flyby: 35 mm trucking along the hull 0.08 L off it, a little below the mid-plane
+  // hull flyby: 35 mm trucking along the hull 0.18 L off it, a little below the mid-plane
   flyby: { mm: 35, seconds: 10 },
-  // stern engines: 85 mm from 0.8 L astern, low and a little off axis, slow push-in
+  // stern engines: 85 mm from 2.2 L astern, low and a little off axis, slow push-in
   stern: { mm: 85, seconds: 8 },
-  // bow reveal: 24 mm under the keel line; the ship slides overhead and the bow enters the frame
+  // bow reveal: 24 mm under the keel line looking back and up; the ship slides overhead, bow first
   bow: { mm: 24, seconds: 12 },
 };
 export const SHOT_ORDER = ['orbit', 'flyby', 'stern', 'bow'];
@@ -51,17 +51,17 @@ export function shot(name, t, { box, aspect = LAND, still = false }) {
   let p, g;                                                       // position, look-at target
   if (name === 'flyby') {
     const x = lo.x + L * (0.15 + 0.04 * tt);                      // 0.04 L/s toward the bow
-    p = [x, cy - H * 0.12, hi.z + L * 0.08];
-    g = [x + L * 0.18, cy + H * 0.05, cz + W * 0.15];             // look forward along the hull
+    p = [x, cy - H * 0.2, hi.z + L * 0.18];
+    g = [x + L * 0.4, cy + H * 0.1, cz + W * 0.2];                // look forward along the hull
   } else if (name === 'stern') {
-    const d = L * 0.8 * (1 - 0.015 * tt);                         // push in 1.5 % of distance per second
+    const d = L * 2.2 * (1 - 0.015 * tt);                         // push in 1.5 % of distance per second
     p = [lo.x - d * Math.cos(12 * D), cy - d * Math.sin(8 * D), cz + d * Math.sin(12 * D)];
     g = [lo.x + L * 0.12, cy, cz];
   } else if (name === 'bow') {
-    const x = hi.x + L * 0.1 - L * 0.05 * tt;                     // the ship "moves" 0.05 L/s past the camera
-    p = [x, lo.y - L * 0.08, cz + L * 0.3];
-    const tilt = (18 - 0.5 * tt) * D;                             // tilt up, easing down as the bow passes
-    g = [x + L * 0.35 * Math.cos(tilt), p[1] + L * 0.35 * Math.sin(tilt), cz + L * 0.05];
+    const x = hi.x + L * 0.35 - L * 0.05 * tt;                    // the ship "moves" 0.05 L/s past the camera
+    p = [x, lo.y - L * 0.08, cz + L * 0.22];
+    const tilt = (24 - 0.6 * tt) * D;                             // look back and up; ease down as the bow passes
+    g = [x - L * 0.4 * Math.cos(tilt), p[1] + L * 0.4 * Math.sin(tilt), cz];
   } else {                                                        // orbit
     const f = 0.6;                                                // ship spans 60 % of frame width
     const d = L / (f * 2 * Math.tan(hfov / 2));
