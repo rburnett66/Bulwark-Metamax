@@ -177,21 +177,21 @@
   "lods": [
    {
     "file": "lumen_lod0.glb",
-    "tris": 2896,
+    "tris": 3500,
     "drawCalls": 2,
-    "bytes": 430248
+    "bytes": 555728
    },
    {
     "file": "lumen_lod1.glb",
-    "tris": 2056,
+    "tris": 2036,
     "drawCalls": 2,
-    "bytes": 347760
+    "bytes": 414580
    },
    {
     "file": "lumen_lod2.glb",
     "tris": 1100,
     "drawCalls": 2,
-    "bytes": 270580
+    "bytes": 338928
    }
   ],
   "engines": 6,
@@ -200,7 +200,7 @@
    0.86,
    1.0
   ],
-  "length": 21.12
+  "length": 21.1
  },
  "powder": {
   "lods": [
@@ -264,21 +264,21 @@
   "lods": [
    {
     "file": "tug_lod0.glb",
-    "tris": 560,
+    "tris": 564,
     "drawCalls": 2,
-    "bytes": 225992
+    "bytes": 226748
    },
    {
     "file": "tug_lod1.glb",
-    "tris": 560,
+    "tris": 564,
     "drawCalls": 2,
-    "bytes": 225992
+    "bytes": 226748
    },
    {
     "file": "tug_lod2.glb",
-    "tris": 416,
+    "tris": 384,
     "drawCalls": 2,
-    "bytes": 213864
+    "bytes": 211588
    }
   ],
   "engines": 3,
@@ -287,7 +287,7 @@
    0.8,
    1.0
   ],
-  "length": 1.28
+  "length": 0.73
  },
  "water": {
   "lods": [
