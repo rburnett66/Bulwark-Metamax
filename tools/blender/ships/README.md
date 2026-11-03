@@ -66,16 +66,17 @@ budget is about keeping draw calls and texture memory down when several ships sh
 
 | Ship | LOD0 tris | LOD1 tris | LOD2 tris | Engines | Length |
 |---|---|---|---|---|---|
-| Air | 3,940 | 2,928 | 1,372 | 8 | 21.24 |
-| Arcane | 3,818 | 2,326 | 1,270 | 6 | 21.34 |
-| Artillery | 5,064 | 2,692 | 536 | 6 | 23.59 |
-| Collective | 5,112 | 3,848 | 1,660 | 8 | 22.44 |
-| Dark | 3,278 | 2,254 | 710 | 3 | 22.55 |
-| Green | 5,608 | 4,240 | 1,736 | 5 | 22.17 |
-| Lumen | 2,896 | 2,056 | 1,100 | 6 | 21.12 |
-| Powder | 5,356 | 2,060 | 516 | 6 | 22.39 |
-| Tech | 4,192 | 3,012 | 644 | 6 | 22.29 |
-| Water | 4,968 | 3,720 | 2,012 | 5 | 22.99 |
+| Air | 5,904 | 2,692 | 1,396 | 8 | 21.24 |
+| Arcane | 5,970 | 2,254 | 1,242 | 6 | 21.34 |
+| Artillery | 5,972 | 2,768 | 536 | 6 | 23.54 |
+| Collective | 5,868 | 2,804 | 924 | 8 | 22.44 |
+| Dark | 4,758 | 2,106 | 634 | 3 | 22.51 |
+| Green | 5,920 | 4,016 | 1,736 | 5 | 22.17 |
+| Lumen | 3,500 | 2,036 | 1,100 | 6 | 21.1 |
+| Powder | 5,932 | 2,092 | 516 | 6 | 22.39 |
+| Tech | 5,826 | 3,170 | 618 | 6 | 22.3 |
+| Tug | 564 | 564 | 384 | 3 | 0.73 |
+| Water | 5,984 | 3,720 | 2,012 | 5 | 22.99 |
 
 Every ship is 2 draw calls (body + glow) plus 2 for its exhaust effect. LOD1 runs over its ≈ 2,000 target on
 Green, Collective, Water, Air, Tech and Artillery — tune `common.LODS` or tag small parts per ship when that matters.
