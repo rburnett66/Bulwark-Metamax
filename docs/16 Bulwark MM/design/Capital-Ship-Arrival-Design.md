@@ -124,13 +124,22 @@ The structure and timings are identical for all nine ships; the dressing changes
 |---|---|---|---|---|---|
 | Verdance (ground) | Halbrecht's Oath | Colonel Aldric Vane | powder | ember red | Shockwave ring, ember sparks |
 | Florael (air) | Dawnwing Carrier | Squadron-Mother Hikari "Dawnwing" Aoi | air | pale blue-white | Clean white flash, escort fighters peel off in beat 5 |
-| Ochre (hightech) | Sterling Meridian | R&D Lead Amara Okonkwo | tech *(confirm)* | gold | Gold lattice that unfolds into the hull |
+| Ochre (hightech) | Sterling Meridian | R&D Lead Amara Okonkwo | tech | gold | Gold lattice that unfolds into the hull |
 | Kessra (artillery) | Siegeholm | Fire-Director Yusuf Kaya | artillery | orange | Heavy orange flash, gun turrets traverse during braking |
 | Rime (water) | Reefmother Leviathan | Chieftain Coral of the Reef-Born | water | teal | Teal ripple, like surfacing |
 | Cinder (arcane) | Cathedral of the Lamp | Lightbearer Cassian | arcane | magenta *(blood red? confirm)* | Blood-red rift that bleeds light |
 | Lumen (space) | Vale's Horizon | Commander Idris Vale | lumen | cyan | Cyan collar rings light up one by one |
 | Xenthe (dark) | The Manifesto | Sister Maren | dark | violet | The stars go out around it, then it is there |
-| Vexmire (greenies) | Hivemother Ark | Steward Bractus | green | chem green | Green bio-glow pulse; cargo pods unlatch tugs |
+| Vexmire (greenies) | Hivemother Ark | Steward Bractus | green | chem green | Green bio-glow pulse; tugs launch from the hull |
+| *No planet* — red giant | Collective ship | — | collective | deep blue | Deep-blue flash against the star's red glare; cargo pods unlatch tugs |
+
+**The Collective has no planet.** Its ship orbits a red giant, so its arrival uses a star stage instead of a
+globe: the red giant's limb fills the lower half of the frame where the planet would be, its swollen corona
+and surface granulation replace the atmosphere, and the star itself is the key light (deep red-orange, low
+colour temperature, very large apparent size — so `createBackdrop` takes a `star: 'redGiant'` option and the
+lens flare is replaced by a broad glare). Every beat, cue and timing in §3 is unchanged; the ship's blue
+engines read strongly against the red. The resting composition of §6 anchors above the star instead of a
+globe. How the player reaches the Collective (and so what triggers its arrival) is not yet defined — see §9.
 
 ## 6. Return coast-in
 
@@ -201,7 +210,8 @@ stack is affordable. Draw calls: ship 2, engines 2, tugs 3, planet 2–3, backdr
 
 ## 9. Open decisions
 
-1. **Ochre (hightech) model** — tech or collective? The collective model is otherwise unused.
+1. **Collective trigger** — the Collective ship orbits a red giant with no planet of its own. What unlocks it,
+   and which screen shows the red giant (a galaxy-map stop, or a stage reached from the Collective's contact)?
 2. **Arcane propulsion colour** — keep magenta, or match the new blood-red hull lights?
 3. **Skip counts as seen?** Proposed yes (a skipper chose to skip). Replay stays available.
 4. **Music** — commission nine 22-second cues against the hit points, or ship with the synthesized fallback
