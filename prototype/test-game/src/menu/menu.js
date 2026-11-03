@@ -17,7 +17,7 @@ import { battlesOn } from '../save/battleLog.js';
 import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { loadSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars, bankOf } from '../save/save.js';
-import { setChannelVolume } from '../comm/voice.js';
+import { setChannelVolume, getChannelVolume, isMuted, setMuted, onAudioChange } from '../comm/voice.js';
 import { readyIds, countOwned } from '../data/techtree.js';
 import { techCtxFromSave, createGameTechAdapter, planetOpen } from './techSave.js';
 import { computeBadges, seenFor, missionChip, inventoryChip } from './badges.js';
@@ -727,21 +727,32 @@ export function createMenu(mountEl, cbs) {
     row.appendChild(sel); row.appendChild(rst);
     setBox.appendChild(row);
   }
-  const vols = { master: 0.8, dialog: 1, game: 1 };
-  try { Object.assign(vols, JSON.parse(localStorage.getItem('bw.volumes') || '{}')); } catch (e) { /* fresh */ }
-  for (const ch of ['master', 'dialog', 'game']) {
+  // VOLUME: the engine (voice.js) owns and saves the levels; these sliders and the in-game audio control stay in step
+  // [MM-story_mw1bw933_e]. MUSIC had a channel but no slider.
+  const volRows = {};
+  for (const [ch, label] of [['master', 'MASTER'], ['music', 'MUSIC'], ['dialog', 'VOICES'], ['game', 'BATTLE SOUND']]) {
     const row = el(doc, 'div', 'bwm-srow');
-    row.appendChild(el(doc, 'label', null, ch.toUpperCase() + ' VOLUME'));
-    const sl = el(doc, 'input'); sl.type = 'range'; sl.min = '0'; sl.max = '100'; sl.value = String(Math.round((vols[ch] ?? 1) * 100));
+    row.appendChild(el(doc, 'label', null, label + ' VOLUME'));
+    const sl = el(doc, 'input'); sl.type = 'range'; sl.min = '0'; sl.max = '100'; sl.value = String(Math.round((getChannelVolume(ch) ?? 1) * 100));
+    sl.setAttribute('aria-label', label + ' volume');
     const vlab = el(doc, 'span', 'v', sl.value + '%');
     sl.addEventListener('input', () => {
-      const v = (+sl.value) / 100; vols[ch] = v; vlab.textContent = sl.value + '%';
-      try { localStorage.setItem('bw.volumes', JSON.stringify(vols)); } catch (e) { /* full */ }
-      try { setChannelVolume(ch, v); } catch (e) { /* audio not up yet */ }
+      vlab.textContent = sl.value + '%';
+      setChannelVolume(ch, (+sl.value) / 100);
+      if (ch === 'master' && +sl.value > 0 && isMuted()) setMuted(false);
     });
+    volRows[ch] = { sl, vlab };
     row.appendChild(sl); row.appendChild(vlab);
     setBox.appendChild(row);
   }
+  onAudioChange(({ muted, volumes }) => {
+    for (const [ch, r] of Object.entries(volRows)) {
+      if (doc.activeElement === r.sl) continue;
+      r.sl.value = String(Math.round((volumes[ch] ?? 1) * 100));
+      r.vlab.textContent = ch === 'master' && muted ? 'MUTED' : r.sl.value + '%';
+    }
+  });
+  if (isMuted()) volRows.master.vlab.textContent = 'MUTED';
   // EFFECTS LAB (owner 2026-10-22): every battle effect, per faction, with live tuning [MM-story_mvk63439_o]
   {
     const row = el(doc, 'div', 'bwm-srow');

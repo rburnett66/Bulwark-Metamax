@@ -13,13 +13,14 @@
  * spec's seed, so replays show the identical transmission.
  *
  * - Click the card to skip (cuts voice + static, dismisses).
- * - 🔊 toggle (persisted, 'bulwark:commMuted') mutes audio; the card still shows — the dialog
+ * - the audio control (🔊 + volume slider, voice.js mute/volume) silences audio; the card still shows — the dialog
  *   is content, the voice is flavor.
  * - prefers-reduced-motion: no static/flash/glyph noise, shortened beats (tool's body.rm).
  */
 import {
   speakerOf, ICONS, PORTRAIT, hash,
   initAudio, audioReady, paramsFor, playUtterance, startStatic, playSweep, playDrop, utterDuration,
+  isMuted, setMuted, getChannelVolume, setChannelVolume, onAudioChange,
 } from './voice.js';
 
 /* Authored portrait lookup: content/dialog/portraits/<slug(name)>.png, silhouette SVG fallback
@@ -90,9 +91,20 @@ canvas.bw-comm-static.on{opacity:.85}
   .bw-comm.flash{animation:none}
   .bw-comm-portrait.speaking>svg,.bw-comm-portrait.speaking img{animation:none}
 }
-.bw-comm-mute{position:fixed;right:14px;bottom:88px;z-index:61;width:30px;height:26px;border-radius:6px;
-  border:1px solid #26333f;background:#0b1119;color:#8ea0b0;cursor:pointer;font-size:13px;line-height:1}
-.bw-comm-mute:hover{border-color:#3fb6c8;color:#dbe7f0}
+.bw-audio{position:fixed;right:14px;bottom:88px;z-index:61;display:flex;align-items:center;gap:6px;padding:3px 8px 3px 3px;
+  border:1px solid #26333f;border-radius:6px;background:rgba(11,17,25,.92);color:#8ea0b0}
+.bw-audio-btn{width:30px;height:28px;display:grid;place-items:center;border:0;border-radius:4px;background:transparent;color:#cfe3f0;cursor:pointer;padding:0}
+.bw-audio-btn svg{width:20px;height:20px}
+.bw-audio-btn:hover{color:#fff;background:rgba(63,182,200,.15)}
+.bw-audio.muted .bw-audio-btn{color:#e0907a}
+.bw-audio-btn:focus-visible,.bw-audio-vol:focus-visible{outline:2px solid #3fb6c8;outline-offset:2px}
+.bw-audio-vol{-webkit-appearance:none;appearance:none;width:84px;height:18px;background:transparent;cursor:pointer;margin:0;--p:80%}
+.bw-audio-vol::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(90deg,#3fb6c8 var(--p),#26333f var(--p))}
+.bw-audio-vol::-moz-range-track{height:4px;border-radius:2px;background:#26333f}
+.bw-audio-vol::-moz-range-progress{height:4px;border-radius:2px;background:#3fb6c8}
+.bw-audio-vol::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5px;border-radius:50%;background:#dbe7f0;border:2px solid #3fb6c8}
+.bw-audio-vol::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#dbe7f0;border:2px solid #3fb6c8}
+.bw-audio.muted .bw-audio-vol{opacity:.45}
 /* PHONE LANDSCAPE [MM-story_mvalr59j_13]: at ~390px tall the card (bottom:120px) clipped off the top
    and covered most of the board. Sit it just above the corner buttons (fullscreen / settings), cap
    its height below the HUD bar, tighten the type, and park the mute toggle beside those buttons. */
@@ -105,7 +117,9 @@ canvas.bw-comm-static.on{opacity:.85}
   .bw-comm-meta{min-height:0;padding:4px 9px;line-height:1.5;font-size:8.5px}
   .bw-comm-text{padding:6px 10px;font-size:11.5px;line-height:1.42;overflow-y:auto}
   .bw-comm-foot{padding:4px 10px;min-height:22px}
-  .bw-comm-mute{bottom:10px;right:100px;width:34px;height:34px}
+  .bw-audio{bottom:10px;right:100px;padding:2px 6px 2px 2px}
+  .bw-audio-btn{width:34px;height:34px}
+  .bw-audio-vol{width:64px}
 }
 `;
 
@@ -208,19 +222,44 @@ export function createComm(doc) {
   card.title = 'click to skip transmission';
   doc.body.appendChild(card);
 
-  const muteBtn = doc.createElement('button');
-  muteBtn.className = 'bw-comm-mute';
-  muteBtn.title = 'toggle comm voice audio';
-  doc.body.appendChild(muteBtn);
-
-  let muted = false;
-  try { muted = localStorage.getItem('bulwark:commMuted') === '1'; } catch (e) { /* storage blocked */ }
-  function renderMute() { muteBtn.textContent = muted ? '🔇' : '🔊'; }
-  renderMute();
+  // THE AUDIO CONTROL [MM-story_mw1bw933_e]: one speaker button that mutes ALL game audio (music, battle sound,
+  // voices) and a small master-volume slider beside it. Both are the engine's own state (voice.js), so they agree
+  // with the Settings sliders and survive a reload. (It used to mute comm voice only.)
+  const ctl = doc.createElement('div');
+  ctl.className = 'bw-audio';
+  ctl.innerHTML = '<button type="button" class="bw-audio-btn" aria-pressed="false"></button>' +
+    '<input type="range" class="bw-audio-vol" min="0" max="100" step="1" aria-label="Volume">';
+  doc.body.appendChild(ctl);
+  const muteBtn = ctl.querySelector('.bw-audio-btn'), vol = ctl.querySelector('.bw-audio-vol');
+  const SPK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/>';
+  function renderAudio() {
+    const m = isMuted(), v = Math.round((getChannelVolume('master') || 0) * 100);
+    const lvl = m || v === 0 ? '<path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" fill="none"/>'
+      : (v < 50 ? '<path d="M16 9.5a4 4 0 0 1 0 5" stroke="currentColor" stroke-width="2" fill="none"/>'
+        : '<path d="M16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10" stroke="currentColor" stroke-width="2" fill="none"/>');
+    muteBtn.innerHTML = SPK + lvl + '</svg>';
+    muteBtn.setAttribute('aria-pressed', String(m));
+    muteBtn.setAttribute('aria-label', m ? 'Unmute sound' : 'Mute sound');
+    muteBtn.title = m ? 'Sound off · tap to unmute' : 'Sound on · tap to mute';
+    ctl.classList.toggle('muted', m);
+    if (doc.activeElement !== vol) vol.value = String(v);
+    vol.style.setProperty('--p', v + '%');
+    vol.setAttribute('aria-valuetext', m ? 'muted' : v + '%');
+  }
+  renderAudio();
+  onAudioChange(renderAudio);
   muteBtn.addEventListener('click', () => {
-    muted = !muted;
-    try { localStorage.setItem('bulwark:commMuted', muted ? '1' : '0'); } catch (e) { /* storage blocked */ }
-    renderMute();
+    initAudio();   // a tap is a user gesture: the context may start here
+    // unmuting at zero volume would still be silent: bring it back to a usable level
+    if (isMuted() && !(getChannelVolume('master') > 0)) setChannelVolume('master', 0.6);
+    setMuted(!isMuted());
+  });
+  vol.addEventListener('input', () => {
+    initAudio();
+    const v = (+vol.value) / 100;
+    setChannelVolume('master', v);
+    if (v > 0 && isMuted()) setMuted(false);   // moving the slider up means "I want sound"
+    vol.style.setProperty('--p', vol.value + '%');
   });
 
   let token = 0;            // bumping this cancels the running call's choreography
@@ -248,7 +287,7 @@ export function createComm(doc) {
     stopAudio();
 
     const key = d.factionKey, f = speakerOf(key);
-    if (!muted) initAudio();                            // always follows a user gesture, so autoplay-safe
+    if (!isMuted()) initAudio();                            // always follows a user gesture, so autoplay-safe
     const rm = reducedMotion();
 
     card.style.setProperty('--accent', f.color);
@@ -271,14 +310,14 @@ export function createComm(doc) {
     }
 
     // channel static bed for this faction — rides under the whole transmission
-    const bed = (!muted && audioReady()) ? startStatic(key, 1) : null;
+    const bed = (!isMuted() && audioReady()) ? startStatic(key, 1) : null;
     liveAudio = { utter: null, bed };
 
     // S1 RF acquire — deterministic channel from the call's seed (replays read identically)
     staticNoise(cv, true);
     const chan = '0' + (1 + ((d.voiceSeed || hash(d.name)) % 9));
     footl.textContent = '◌ ACQUIRING…';
-    if (!muted) playSweep();
+    if (!isMuted()) playSweep();
     for (let i = 0; i < 5; i++) { await delay(rm ? 20 : 110); if (!live()) return; bars[i].classList.add('lit'); }
     // S2 lock
     staticNoise(cv, false);
@@ -303,7 +342,7 @@ export function createComm(doc) {
     footl.textContent = '◉ RECEIVING';
     const p = paramsFor(key);
     const g = { gender: d.gender, intent: d.intent, seed: d.voiceSeed || hash(d.name) };
-    const utter = (!muted && audioReady()) ? playUtterance(d.line, p, g)
+    const utter = (!isMuted() && audioReady()) ? playUtterance(d.line, p, g)
       : { duration: utterDuration(d.line, p, d.intent), stop: function () {} };
     if (liveAudio) liveAudio.utter = utter;
     await typeText(txt, d.line, utter.duration * 1000, live);
@@ -333,7 +372,7 @@ export function createComm(doc) {
     card.classList.add('signoff');
     const footl = card.querySelector('.bw-comm-foot-l');   // was the caller's local: a ReferenceError on every sign-off
     if (footl) { footl.textContent = ''; footl.classList.remove('bw-tapclose'); }
-    if (!muted) playDrop();
+    if (!isMuted()) playDrop();
     if (bed) bed.stop();
     if (liveAudio && liveAudio.bed === bed) liveAudio.bed = null;
     await delay(rm ? 80 : 520); if (!live()) return;
@@ -380,7 +419,7 @@ export function createComm(doc) {
     unhush,
     get hushed() { return hushed; },
     waitForClose,
-    get muted() { return muted; },
+    get muted() { return isMuted(); },
     destroy() { token++; stopAudio(); card.remove(); muteBtn.remove(); style.remove(); },
   };
 }
