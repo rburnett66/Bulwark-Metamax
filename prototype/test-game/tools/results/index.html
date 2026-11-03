@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Results Screen Review</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin:0; height:100%; background:#1d2a1a; overflow:hidden; }
+  /* a stand-in battlefield: grass, sand roads and a few dark props, so the blurred scrim has something to blur */
+  #field { position:absolute; inset:0;
+    background:
+      radial-gradient(14% 10% at 30% 62%, #3a1d16 0 60%, transparent 62%),
+      radial-gradient(9% 7% at 64% 70%, #5a1e18 0 60%, transparent 62%),
+      radial-gradient(10% 8% at 78% 40%, #2c331f 0 60%, transparent 62%),
+      linear-gradient(115deg, transparent 0 28%, #b48a5c 28% 46%, transparent 46%),
+      linear-gradient(160deg, #4f8a2f, #3c7a26 50%, #2f6a20); }
+  #m { position:absolute; left:0; top:0; width:100vw; height:100vh; height:100dvh; }
+  .bar { position:fixed; left:6px; top:6px; z-index:999; display:flex; gap:4px; flex-wrap:wrap; justify-content:center;
+    font:600 12px/1 system-ui, sans-serif; opacity:.35; transition:opacity .2s; }
+  .bar:hover, .bar:focus-within { opacity:1; }
+  .bar button { padding:6px 9px; background:#111a; color:#cde; border:1px solid #456; cursor:pointer; }
+  .bar button[aria-pressed="true"] { border-color:#D9A441; color:#f2c869; }
+</style>
+</head>
+<body>
+<div id="field"></div>
+<div id="m"></div>
+<div class="bar" role="toolbar" aria-label="Scenario">
+  <button data-s="win" aria-pressed="true">Victory</button>
+  <button data-s="defeat">Defeat</button>
+  <button data-s="classic">No contract</button>
+  <button data-s="replay">Play again</button>
+</div>
+<script type="module">
+// Review page for the final results screen [MM-story_mw15hyvl_2]. Uses the game's own module with sample data.
+import { createHud, showResult } from '../../src/render/hud.js';
+const names = { common: 'Loam Grain', uncommon: 'Heartwood Amber', rare: 'Rootsong Seeds', epic: 'Oathstone' };
+const z = () => ({ common: 0, uncommon: 0, rare: 0, epic: 0 });
+const total = (u, s, g) => ({ units: { ...z(), ...u }, sold: { ...z(), ...s }, kept: Object.fromEntries(Object.keys({ ...z(), ...u }).map((k) => [k, ((u[k] || 0) - (s[k] || 0))])), gold: g });
+const S = {
+  win: { result: 'win', finalScore: { score: 36358, kills: 83, minutes: 10, seconds: 17, goldRemaining: 36358 },
+    waveStars: [4, 3, 3, 2, 3, 3, 4, 3], rewards: { result: 'win', gold: { earned: 36358, to: 36358 }, stars: { from: 78, to: 80 }, xp: { from: 380, to: 638, earned: 258 } },
+    nextMap: { id: 4, name: 'Seedline Ridge', size: '32x18' },
+    resources: { total: total({ common: 1592, uncommon: 159, rare: 101 }, { common: 1592, uncommon: 159, rare: 10 }, 14669), names, contract: true } },
+  defeat: { result: 'lose', finalScore: { score: 8120, kills: 41, minutes: 6, seconds: 2, goldRemaining: 220 },
+    waveStars: [4, 2, 1, 1], rewards: { result: 'lose', gold: { earned: 0, to: 36358 }, stars: { from: 80, to: 80 }, xp: { from: 638, to: 702, earned: 64 } },
+    resources: { total: total({ common: 480, uncommon: 40 }, { common: 480, uncommon: 40 }, 2080), names, contract: true } },
+  classic: { result: 'win', finalScore: { score: 22410, kills: 140, minutes: 12, seconds: 40, goldRemaining: 950 },
+    waveStars: [5, 5, 4, 5, 3, 4, 5, 5], rewards: null, nextMap: null, resources: null },
+};
+const hud = createHud(document.getElementById('m'), {
+  onRestart: () => play(cur), onMainMenu: () => hud.hideResult(), onNextMap: () => play(cur),
+});
+let cur = 'win';
+function play(k) {
+  cur = k;
+  const s = S[k];
+  for (const b of document.querySelectorAll('[data-s]')) b.setAttribute('aria-pressed', String(b.dataset.s === k));
+  showResult(hud, s.result, s.finalScore, s.nextMap || null, s.waveStars.map((n) => ({ stars: n })), s.rewards,
+    { resources: s.resources, planet: 'Verdance', mapId: 3, mapName: '' });
+}
+for (const b of document.querySelectorAll('[data-s]')) b.addEventListener('click', (e) => { e.stopPropagation(); b.dataset.s === 'replay' ? play(cur) : play(b.dataset.s); });
+const q = new URLSearchParams(location.search).get('s');
+play(S[q] ? q : 'win');
+</script>
+</body>
+</html>

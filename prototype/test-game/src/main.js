@@ -24,7 +24,7 @@ import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
 import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
 import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner } from './render/hud.js';
-import { createResourceLedger, feedResources, closeWave, resourceNames, waveResourcesHtml, mapResourcesHtml } from './render/resourceSummary.js';
+import { createResourceLedger, feedResources, closeWave, resourceNames, waveResourcesHtml } from './render/resourceSummary.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
 import { setChannelVolume, initAudio } from './comm/voice.js';
@@ -1137,8 +1137,10 @@ export function boot(mountEl, seed) {
             if (S !== sim) return;   // restarted during the Kill Camera
             musicSting(S.result === 'win' ? 'win' : 'lose');
             if (contractMsg) flashMessage(hud, contractMsg);
-            showResult(hud, S.result, S.finalScore, nextMap, S.waveStars, rewards,
-              S.resourceNodes ? mapResourcesHtml(resLedger.total, battleResourceNames(), { contract: !!S.contract }) : '');
+            showResult(hud, S.result, S.finalScore, nextMap, S.waveStars, rewards, {
+              resources: S.resourceNodes ? { total: resLedger.total, names: battleResourceNames(), contract: !!S.contract } : null,
+              planet: planetOfFaction(currentTestFaction) || '', mapId: currentMapId || null,
+              mapName: (S.map && S.map.name) || '' });
             // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
             // wave star score (banner) -> final map score (overlay) -> PRIMARY dialog -> then, as
             // part of the REWARD FLOW, the SECONDARY grants the star bonus (5-star wave this battle).
