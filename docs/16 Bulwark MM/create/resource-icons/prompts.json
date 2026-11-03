@@ -1,0 +1,423 @@
+{
+ "style": "Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects.",
+ "tiers": {
+  "common": [
+   "Common",
+   "#58a6ff",
+   "Humble and matte: plain natural materials, no inner light. A faint cool blue glow (#58a6ff) behind the object."
+  ],
+  "uncommon": [
+   "Uncommon",
+   "#ffd76a",
+   "Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object."
+  ],
+  "rare": [
+   "Rare",
+   "#ff7a6a",
+   "Luminous accents inside the object and a few small floating motes. A coral-red glow (#ff7a6a) behind the object."
+  ],
+  "epic": [
+   "Epic",
+   "#7ae08a",
+   "Radiant and the most detailed of the set: strong inner light, fine detail, small drifting particles. A vivid green glow (#7ae08a) behind the object."
+  ]
+ },
+ "items": [
+  {
+   "id": "loam-grain",
+   "name": "Loam Grain",
+   "tier": "common",
+   "tierLabel": "Common",
+   "color": "#58a6ff",
+   "planet": "Verdance",
+   "faction": "Ground / Powder",
+   "file": "content/icons/resources/loam-grain.png",
+   "prompt": "a small tied burlap sack spilling plump golden grain kernels, with two ripe wheat ears leaning against it. A resource from Verdance, lush river plains and ancient forests; warm greens and golden light. Humble and matte: plain natural materials, no inner light. A faint cool blue glow (#58a6ff) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "heartwood-amber",
+   "name": "Heartwood Amber",
+   "tier": "uncommon",
+   "tierLabel": "Uncommon",
+   "color": "#ffd76a",
+   "planet": "Verdance",
+   "faction": "Ground / Powder",
+   "file": "content/icons/resources/heartwood-amber.png",
+   "prompt": "a rounded chunk of polished honey-coloured amber with wood-grain swirls and a tiny leaf trapped inside, warm light passing through it. A resource from Verdance, lush river plains and ancient forests; warm greens and golden light. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "rootsong-seeds",
+   "name": "Rootsong Seeds",
+   "tier": "rare",
+   "tierLabel": "Rare",
+   "color": "#ff7a6a",
+   "planet": "Verdance",
+   "faction": "Ground / Powder",
+   "file": "content/icons/resources/rootsong-seeds.png",
+   "prompt": "three dark teardrop seed pods with faint glowing vein patterns, fine root tendrils curling from them, and soft concentric hum-ripples in the air around them. A resource from Verdance, lush river plains and ancient forests; warm greens and golden light. Luminous accents inside the object and a few small floating motes. A coral-red glow (#ff7a6a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "elder-bloom",
+   "name": "Elder Bloom",
+   "tier": "epic",
+   "tierLabel": "Epic",
+   "color": "#7ae08a",
+   "planet": "Verdance",
+   "faction": "Ground / Powder",
+   "file": "content/icons/resources/elder-bloom.png",
+   "prompt": "a large ancient flower with layered ivory and pale-green petals on a short mossy stem, a glowing golden heart of pollen at its centre. A resource from Verdance, lush river plains and ancient forests; warm greens and golden light. Radiant and the most detailed of the set: strong inner light, fine detail, small drifting particles. A vivid green glow (#7ae08a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "petal-silk",
+   "name": "Petal Silk",
+   "tier": "common",
+   "tierLabel": "Common",
+   "color": "#58a6ff",
+   "planet": "Florael",
+   "faction": "Air",
+   "file": "content/icons/resources/petal-silk.png",
+   "prompt": "a loosely folded bolt of soft pink-lilac silk woven from flower petals, a few loose petal-strands floating off it. A resource from Florael, a blooming sky garden; soft pinks, lilacs and dawn light. Humble and matte: plain natural materials, no inner light. A faint cool blue glow (#58a6ff) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "skyhoney",
+   "name": "Skyhoney",
+   "tier": "uncommon",
+   "tierLabel": "Uncommon",
+   "color": "#ffd76a",
+   "planet": "Florael",
+   "faction": "Air",
+   "file": "content/icons/resources/skyhoney.png",
+   "prompt": "a small round glass jar of thick golden honey with a slow drip over the rim, a pale blue sky reflected in the glass. A resource from Florael, a blooming sky garden; soft pinks, lilacs and dawn light. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "dawnpollen",
+   "name": "Dawnpollen",
+   "tier": "rare",
+   "tierLabel": "Rare",
+   "color": "#ff7a6a",
+   "planet": "Florael",
+   "faction": "Air",
+   "file": "content/icons/resources/dawnpollen.png",
+   "prompt": "a stoppered glass vial of glowing peach-gold pollen dust, tiny motes rising from it like sunrise light. A resource from Florael, a blooming sky garden; soft pinks, lilacs and dawn light. Luminous accents inside the object and a few small floating motes. A coral-red glow (#ff7a6a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "choir-lily",
+   "name": "Choir Lily",
+   "tier": "epic",
+   "tierLabel": "Epic",
+   "color": "#7ae08a",
+   "planet": "Florael",
+   "faction": "Air",
+   "file": "content/icons/resources/choir-lily.png",
+   "prompt": "a white and lavender lily with several trumpet-shaped blooms, faint rings of light rippling outward from them like visible chords of music. A resource from Florael, a blooming sky garden; soft pinks, lilacs and dawn light. Radiant and the most detailed of the set: strong inner light, fine detail, small drifting particles. A vivid green glow (#7ae08a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "sunsalt",
+   "name": "Sunsalt",
+   "tier": "common",
+   "tierLabel": "Common",
+   "color": "#58a6ff",
+   "planet": "Ochre",
+   "faction": "High Tech",
+   "file": "content/icons/resources/sunsalt.png",
+   "prompt": "a cluster of coarse white salt crystals on a cracked, sun-bleached slab of salt pan. A resource from Ochre, an arid desert of salt pans and dunes; bleached whites, sand golds. Humble and matte: plain natural materials, no inner light. A faint cool blue glow (#58a6ff) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "dune-quartz",
+   "name": "Dune Quartz",
+   "tier": "uncommon",
+   "tierLabel": "Uncommon",
+   "color": "#ffd76a",
+   "planet": "Ochre",
+   "faction": "High Tech",
+   "file": "content/icons/resources/dune-quartz.png",
+   "prompt": "a cluster of wind-polished translucent sand-gold quartz prisms with smooth frosted edges. A resource from Ochre, an arid desert of salt pans and dunes; bleached whites, sand golds. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "mirage-oil",
+   "name": "Mirage Oil",
+   "tier": "rare",
+   "tierLabel": "Rare",
+   "color": "#ff7a6a",
+   "planet": "Ochre",
+   "faction": "High Tech",
+   "file": "content/icons/resources/mirage-oil.png",
+   "prompt": "a sealed teardrop glass flask of slick oil with a shifting rainbow sheen and a ripple of heat-haze distortion around it. A resource from Ochre, an arid desert of salt pans and dunes; bleached whites, sand golds. Luminous accents inside the object and a few small floating motes. A coral-red glow (#ff7a6a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "solar-pearl",
+   "name": "Solar Pearl",
+   "tier": "epic",
+   "tierLabel": "Epic",
+   "color": "#7ae08a",
+   "planet": "Ochre",
+   "faction": "High Tech",
+   "file": "content/icons/resources/solar-pearl.png",
+   "prompt": "a glass orb fused from lightning, branching fulgurite glass around it, a tiny blazing noon sun held inside. A resource from Ochre, an arid desert of salt pans and dunes; bleached whites, sand golds. Radiant and the most detailed of the set: strong inner light, fine detail, small drifting particles. A vivid green glow (#7ae08a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "slag-iron",
+   "name": "Slag Iron",
+   "tier": "common",
+   "tierLabel": "Common",
+   "color": "#58a6ff",
+   "planet": "Kessra",
+   "faction": "Artillery",
+   "file": "content/icons/resources/slag-iron.png",
+   "prompt": "a rough chunk of rusted scrap iron with pitted slag and jagged shrapnel edges. A resource from Kessra, a shelled dust wasteland; rust, copper and scorched ochre. Humble and matte: plain natural materials, no inner light. A faint cool blue glow (#58a6ff) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "mesa-copper",
+   "name": "Mesa Copper",
+   "tier": "uncommon",
+   "tierLabel": "Uncommon",
+   "color": "#ffd76a",
+   "planet": "Kessra",
+   "faction": "Artillery",
+   "file": "content/icons/resources/mesa-copper.png",
+   "prompt": "a nugget of red rock split open to show bright metallic copper veins and green patina. A resource from Kessra, a shelled dust wasteland; rust, copper and scorched ochre. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "ghost-brass",
+   "name": "Ghost Brass",
+   "tier": "rare",
+   "tierLabel": "Rare",
+   "color": "#ff7a6a",
+   "planet": "Kessra",
+   "faction": "Artillery",
+   "file": "content/icons/resources/ghost-brass.png",
+   "prompt": "a small bundle of tarnished ancient brass shell casings with pale spectral wisps curling out of their mouths. A resource from Kessra, a shelled dust wasteland; rust, copper and scorched ochre. Luminous accents inside the object and a few small floating motes. A coral-red glow (#ff7a6a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "dreadnought-core",
+   "name": "Dreadnought Core",
+   "tier": "epic",
+   "tierLabel": "Epic",
+   "color": "#7ae08a",
+   "planet": "Kessra",
+   "faction": "Artillery",
+   "file": "content/icons/resources/dreadnought-core.png",
+   "prompt": "a heavy armoured cylindrical reactor core with riveted, cracked plating and a glowing orange-white heart showing through the cracks. A resource from Kessra, a shelled dust wasteland; rust, copper and scorched ochre. Radiant and the most detailed of the set: strong inner light, fine detail, small drifting particles. A vivid green glow (#7ae08a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "brine-ice",
+   "name": "Brine Ice",
+   "tier": "common",
+   "tierLabel": "Common",
+   "color": "#58a6ff",
+   "planet": "Rime",
+   "faction": "Water",
+   "file": "content/icons/resources/brine-ice.png",
+   "prompt": "a cut block of pale blue sea ice crusted with salt, frosted edges. A resource from Rime, a frozen sea under ice shelves; pale blues, frost white, deep teal. Humble and matte: plain natural materials, no inner light. A faint cool blue glow (#58a6ff) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "frost-pearl",
+   "name": "Frost Pearl",
+   "tier": "uncommon",
+   "tierLabel": "Uncommon",
+   "color": "#ffd76a",
+   "planet": "Rime",
+   "faction": "Water",
+   "file": "content/icons/resources/frost-pearl.png",
+   "prompt": "a half-open icy shellfish shell holding a pale blue-white pearl, frost crystals on the shell. A resource from Rime, a frozen sea under ice shelves; pale blues, frost white, deep teal. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "glacier-breath",
+   "name": "Glacier Breath",
+   "tier": "rare",
+   "tierLabel": "Rare",
+   "color": "#ff7a6a",
+   "planet": "Rime",
+   "faction": "Water",
+   "file": "content/icons/resources/glacier-breath.png",
+   "prompt": "a sealed frosted glass ampoule holding swirling ancient pale-blue mist. A resource from Rime, a frozen sea under ice shelves; pale blues, frost white, deep teal. Luminous accents inside the object and a few small floating motes. A coral-red glow (#ff7a6a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "leviathan-scale",
+   "name": "Leviathan Scale",
+   "tier": "epic",
+   "tierLabel": "Epic",
+   "color": "#7ae08a",
+   "planet": "Rime",
+   "faction": "Water",
+   "file": "content/icons/resources/leviathan-scale.png",
+   "prompt": "a single huge ridged scale in iridescent deep teal, sharp-edged, with frost along one rim. A resource from Rime, a frozen sea under ice shelves; pale blues, frost white, deep teal. Radiant and the most detailed of the set: strong inner light, fine detail, small drifting particles. A vivid green glow (#7ae08a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "ash-basalt",
+   "name": "Ash Basalt",
+   "tier": "common",
+   "tierLabel": "Common",
+   "color": "#58a6ff",
+   "planet": "Cinder",
+   "faction": "Arcane / Energy",
+   "file": "content/icons/resources/ash-basalt.png",
+   "prompt": "a chunk of dark grey porous basalt dusted with fine ash, faint warm cracks. A resource from Cinder, volcanic ash fields; charcoal, ember and deep blood red. Humble and matte: plain natural materials, no inner light. A faint cool blue glow (#58a6ff) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "ember-obsidian",
+   "name": "Ember Obsidian",
+   "tier": "uncommon",
+   "tierLabel": "Uncommon",
+   "color": "#ffd76a",
+   "planet": "Cinder",
+   "faction": "Arcane / Energy",
+   "file": "content/icons/resources/ember-obsidian.png",
+   "prompt": "a shard of glossy black volcanic glass with edges glowing deep red, as if still warm. A resource from Cinder, volcanic ash fields; charcoal, ember and deep blood red. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "phoenix-glass",
+   "name": "Phoenix Glass",
+   "tier": "rare",
+   "tierLabel": "Rare",
+   "color": "#ff7a6a",
+   "planet": "Cinder",
+   "faction": "Arcane / Energy",
+   "file": "content/icons/resources/phoenix-glass.png",
+   "prompt": "a shard of red-gold glass caught mid-reforming, molten edges fusing back together, tiny flame shapes like feathers. A resource from Cinder, volcanic ash fields; charcoal, ember and deep blood red. Luminous accents inside the object and a few small floating motes. A coral-red glow (#ff7a6a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "heartflame",
+   "name": "Heartflame",
+   "tier": "epic",
+   "tierLabel": "Epic",
+   "color": "#7ae08a",
+   "planet": "Cinder",
+   "faction": "Arcane / Energy",
+   "file": "content/icons/resources/heartflame.png",
+   "prompt": "a living ember floating inside a small ornate reliquary cage of dark iron and gold, burning deep blood-red at the core. A resource from Cinder, volcanic ash fields; charcoal, ember and deep blood red. Radiant and the most detailed of the set: strong inner light, fine detail, small drifting particles. A vivid green glow (#7ae08a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "regolith",
+   "name": "Regolith",
+   "tier": "common",
+   "tierLabel": "Common",
+   "color": "#58a6ff",
+   "planet": "Lumen",
+   "faction": "Space Tech",
+   "file": "content/icons/resources/regolith.png",
+   "prompt": "a small heap of grey moon dust and metallic rubble pebbles. A resource from Lumen, an airless moon; grey regolith, cold white light, cyan instruments. Humble and matte: plain natural materials, no inner light. A faint cool blue glow (#58a6ff) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "helium-3",
+   "name": "Helium-3",
+   "tier": "uncommon",
+   "tierLabel": "Uncommon",
+   "color": "#ffd76a",
+   "planet": "Lumen",
+   "faction": "Space Tech",
+   "file": "content/icons/resources/helium-3.png",
+   "prompt": "a sleek cylindrical fuel canister with a cyan glowing sight window and a wisp of cold vapour. A resource from Lumen, an airless moon; grey regolith, cold white light, cyan instruments. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "starfall-iron",
+   "name": "Starfall Iron",
+   "tier": "rare",
+   "tierLabel": "Rare",
+   "color": "#ff7a6a",
+   "planet": "Lumen",
+   "faction": "Space Tech",
+   "file": "content/icons/resources/starfall-iron.png",
+   "prompt": "a meteorite chunk with a scorched black crust and one polished face showing a crosshatched Widmanstatten pattern. A resource from Lumen, an airless moon; grey regolith, cold white light, cyan instruments. Luminous accents inside the object and a few small floating motes. A coral-red glow (#ff7a6a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "void-lens",
+   "name": "Void Lens",
+   "tier": "epic",
+   "tierLabel": "Epic",
+   "color": "#7ae08a",
+   "planet": "Lumen",
+   "faction": "Space Tech",
+   "file": "content/icons/resources/void-lens.png",
+   "prompt": "a flawless circular crystal lens floating upright, a deep starfield and nebula visible inside the lens rather than behind it. A resource from Lumen, an airless moon; grey regolith, cold white light, cyan instruments. Radiant and the most detailed of the set: strong inner light, fine detail, small drifting particles. A vivid green glow (#7ae08a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "glowcap-spores",
+   "name": "Glowcap Spores",
+   "tier": "common",
+   "tierLabel": "Common",
+   "color": "#58a6ff",
+   "planet": "Xenthe",
+   "faction": "Dark Energy",
+   "file": "content/icons/resources/glowcap-spores.png",
+   "prompt": "a small cluster of mushroom caps with softly glowing violet gills, a few luminous spores drifting up. A resource from Xenthe, a fungal alien forest at twilight; violets, magentas, cold cyan glow. Humble and matte: plain natural materials, no inner light. A faint cool blue glow (#58a6ff) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "duskmoss-resin",
+   "name": "Duskmoss Resin",
+   "tier": "uncommon",
+   "tierLabel": "Uncommon",
+   "color": "#ffd76a",
+   "planet": "Xenthe",
+   "faction": "Dark Energy",
+   "file": "content/icons/resources/duskmoss-resin.png",
+   "prompt": "a drop-shaped chunk of translucent dark violet resin with fine moss fibres trapped inside. A resource from Xenthe, a fungal alien forest at twilight; violets, magentas, cold cyan glow. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "dreamspore",
+   "name": "Dreamspore",
+   "tier": "rare",
+   "tierLabel": "Rare",
+   "color": "#ff7a6a",
+   "planet": "Xenthe",
+   "faction": "Dark Energy",
+   "file": "content/icons/resources/dreamspore.png",
+   "prompt": "a single large floating spore pod, its translucent skin showing a swirling purple-pink dream haze inside. A resource from Xenthe, a fungal alien forest at twilight; violets, magentas, cold cyan glow. Luminous accents inside the object and a few small floating motes. A coral-red glow (#ff7a6a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "mycelial-heart",
+   "name": "Mycelial Heart",
+   "tier": "epic",
+   "tierLabel": "Epic",
+   "color": "#7ae08a",
+   "planet": "Xenthe",
+   "faction": "Dark Energy",
+   "file": "content/icons/resources/mycelial-heart.png",
+   "prompt": "a pulsing knot of glowing violet mycelium threads woven into the shape of a heart, fine filaments trailing from it. A resource from Xenthe, a fungal alien forest at twilight; violets, magentas, cold cyan glow. Radiant and the most detailed of the set: strong inner light, fine detail, small drifting particles. A vivid green glow (#7ae08a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "mire-peat",
+   "name": "Mire Peat",
+   "tier": "common",
+   "tierLabel": "Common",
+   "color": "#58a6ff",
+   "planet": "Vexmire",
+   "faction": "Greenies (Chem)",
+   "file": "content/icons/resources/mire-peat.png",
+   "prompt": "a cut block of dark wet peat streaked with toxic yellow-green, a few small bubbles on its surface. A resource from Vexmire, a toxic hive swamp; murky olive, acid green, waxy amber. Humble and matte: plain natural materials, no inner light. A faint cool blue glow (#58a6ff) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "venom-sap",
+   "name": "Venom Sap",
+   "tier": "uncommon",
+   "tierLabel": "Uncommon",
+   "color": "#ffd76a",
+   "planet": "Vexmire",
+   "faction": "Greenies (Chem)",
+   "file": "content/icons/resources/venom-sap.png",
+   "prompt": "a corked glass vial of thick acid-green sap with one drip down the side and a thin curl of fumes. A resource from Vexmire, a toxic hive swamp; murky olive, acid green, waxy amber. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "hive-jelly",
+   "name": "Hive Jelly",
+   "tier": "rare",
+   "tierLabel": "Rare",
+   "color": "#ff7a6a",
+   "planet": "Vexmire",
+   "faction": "Greenies (Chem)",
+   "file": "content/icons/resources/hive-jelly.png",
+   "prompt": "a few waxy hexagonal honeycomb cells brimming with glowing amber-green royal jelly. A resource from Vexmire, a toxic hive swamp; murky olive, acid green, waxy amber. Luminous accents inside the object and a few small floating motes. A coral-red glow (#ff7a6a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  },
+  {
+   "id": "broodqueen-egg",
+   "name": "Broodqueen Egg",
+   "tier": "epic",
+   "tierLabel": "Epic",
+   "color": "#7ae08a",
+   "planet": "Vexmire",
+   "faction": "Greenies (Chem)",
+   "file": "content/icons/resources/broodqueen-egg.png",
+   "prompt": "a large ridged leathery egg with bioluminescent green veins, resting in a nest of hardened hive resin. A resource from Vexmire, a toxic hive swamp; murky olive, acid green, waxy amber. Radiant and the most detailed of the set: strong inner light, fine detail, small drifting particles. A vivid green glow (#7ae08a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects."
+  }
+ ]
+}
