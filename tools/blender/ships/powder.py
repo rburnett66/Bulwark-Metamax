@@ -11,7 +11,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import box, build, cyl, engine, loft, mat  # noqa: E402
+from common import DECK, barrel, box, build, cyl, engine, loft, mast, mat, window_row  # noqa: E402
 
 
 def spire(name, x, y, z0, r, h, stone, tip=None, sides=6):
@@ -36,13 +36,12 @@ def banner(name, x, y, ztop, length, width, cloth, gold, face="Y"):
         box(name + "_emblem", (x + 0.04, y, ztop - length * 0.5), (0.03, width * 0.5, width * 0.5), gold)
 
 
-def windows(prefix, x0, x1, y, z, n, glow, face="Y"):
-    step = (x1 - x0) / max(n - 1, 1)
-    for i in range(n):
-        if face == "Y":    # row along X on a port-facing wall at y
-            box(prefix, (x0 + i * step, y, z), (0.16, 0.04, 0.12), glow)
-        else:              # row along Y on a bow-facing wall at x = y
-            box(prefix, (y, x0 + i * step, z), (0.04, 0.16, 0.12), glow)
+def windows(name, segs, y, zs, pitch, glow):
+    """Standard windows on a port-facing wall at y: one row per deck height in `zs`, over each (x0, x1)
+    segment of wall (gaps leave room for banners and casemates), about one window per `pitch`."""
+    for k, z in enumerate(zs):
+        for j, (x0, x1) in enumerate(segs):
+            window_row(f"{name}_{k}_{j}", (x0, y, z), (x1, y, z), glow, count=max(1, round((x1 - x0) / pitch)))
 
 
 def make():
@@ -64,9 +63,12 @@ def make():
     # side casemates along the flank (reference: boxy gun galleries over the hull)
     for x in (-7.0, -2.0, 3.0, 7.6):
         box("casemate", (x, 2.75, 0.55), (2.6, 0.6, 0.7), stone, chamfer=0.12)
-        box("casemate_gun", (x + 1.55, 2.85, 0.6), (0.9, 0.12, 0.12), dark)
-    windows("hull_win", -9.6, 9.4, 2.94, 0.2, 20, glow)
-    windows("hull_win_lo", -8.0, 7.0, 2.94, -0.65, 12, glow)
+        barrel("gun_m_casemate", (x + 1.55, 2.85, 0.6), 0.9, dark, size="m")
+        windows("win_casemate", [(x - 1.15, x - 0.5), (x + 0.5, x + 1.15)], 3.05, (0.55,), 1.0, glow)
+    # hull decks: one row above the dark band, one below; gaps where the flank banners hang
+    hull_segs = [(-8.3, -7.5), (-6.5, -2.5), (-1.5, 2.5), (3.5, 6.3)]
+    windows("win_hull", hull_segs, 2.9, (0.0,), 0.8, glow)
+    windows("win_hull_lo", hull_segs, 2.9, (-0.55,), 1.6, glow)
 
     # ── stepped ziggurat terraces ──────────────────────────────────────────────────────
     tiers = [  # x0, x1, half-width, z0, z1
@@ -79,8 +81,11 @@ def make():
     for i, (x0, x1, w, z0, z1) in enumerate(tiers):
         box(f"tier{i}", ((x0 + x1) / 2, 0, (z0 + z1) / 2), (x1 - x0, 2 * w, z1 - z0), stone, chamfer=0.1)
         box(f"tier{i}_cornice", ((x0 + x1) / 2, w - 0.05, z1 + 0.04), (x1 - x0 + 0.1, 0.22, 0.08), bronze)
-        windows(f"tier{i}_win", x0 + 0.5, x1 - 0.5, w + 0.01, (z0 + z1) / 2, max(4, int((x1 - x0) / 1.1)), glow)
-        windows(f"tier{i}_fwin", 0.35, w - 0.3, x1 + 0.01, (z0 + z1) / 2, 2, glow, face="X")
+        zc = (z0 + z1) / 2                                             # two decks of windows per terrace
+        windows(f"win_tier{i}", [(x0 + 0.2, x1 - 0.2)], w, (zc - DECK / 2, zc + DECK / 2), 1.6, glow)
+        if i in (1, 3, 4):                                             # fronts not masked by gatehouse/bow terrace
+            window_row(f"win_tier{i}_front", (x1, 0.05, zc), (x1, w - 0.2, zc), glow, face="x",
+                       count=max(1, round((w - 0.25) / 0.8)))
     # gatehouse: a tall flat wall on the ziggurat's front that carries the great banner
     box("gatehouse", (1.8, 0, 3.4), (1.6, 1.5, 2.8), stone, chamfer=0.12)
     box("gatehouse_cap", (1.8, 0, 4.88), (1.8, 1.7, 0.2), bronze)
@@ -88,16 +93,16 @@ def make():
         box("buttress", (x, 0.6, 3.1 - (x - 2.75) * 0.8), (0.9, 0.18, 0.5), stone)
     # forward gun terrace on the bow deck
     box("bow_terrace", (8.6, 0, 1.45), (2.6, 3.4, 0.7), stone, chamfer=0.15)
-    windows("bow_win", 7.6, 9.6, 1.71, 1.45, 3, glow)
+    window_row("win_bow", (7.5, 1.7, 1.45), (9.7, 1.7, 1.45), glow, count=4)
 
     # ── turrets on the terraces ────────────────────────────────────────────────────────
-    def turret(name, x, y, z, s=1.0):
+    def turret(name, x, y, z, s=1.0, cal="m"):
         box(name, (x, y, z + 0.22 * s), (1.0 * s, 0.8 * s, 0.44 * s), dark, chamfer=0.12 * s)
-        for dy in (-0.15, 0.15):
-            cyl(name + "_barrel", (x + 0.95 * s, y + dy * s, z + 0.26 * s), 0.06 * s, 1.0 * s, dark, sides=4)
+        for dy in ((0.15,) if y == 0 else (-0.15, 0.15)):              # centreline turret: the mirror adds the twin
+            barrel(f"gun_{cal}_{name}", (x + 0.95 * s, y + dy * s, z + 0.26 * s), 1.0 * s, dark, size=cal)
 
     turret("turret_bow", 8.4, 1.0, 1.8)
-    turret("turret_bow_c", 6.6, 0.0, 1.8, 1.15)
+    turret("turret_bow_c", 6.6, 0.0, 1.8, 1.15, cal="l")
     turret("turret_t1", 4.6, 1.5, 1.8)
     turret("turret_t1b", 1.0, 1.9, 1.8, 0.9)
     turret("turret_t2", 3.4, 1.4, 2.7, 0.85)
@@ -107,7 +112,7 @@ def make():
     spire("spire_main", -2.0, 0, 5.6, 0.62, 4.8, stone, tip=tipglow, sides=6)
     for z, r in ((6.9, 0.55), (7.9, 0.45)):  # bronze rings up the main spire
         cyl("spire_ring", (-2.0, 0, z), r, 0.12, bronze, sides=6, axis="Z")
-    cyl("spire_needle", (-2.0, 0, 10.55), 0.05, 0.6, tipglow, sides=4, axis="Z")
+    mast("mast_spire_needle", -2.0, 0, 10.25, 0.6, tipglow)
     spire("spire_flank", -2.9, 0.95, 4.6, 0.36, 3.2, stone, tip=bronze)
     spire("spire_t3", 0.0, 0.85, 4.6, 0.3, 2.4, stone, tip=bronze)
     spire("spire_t2", -4.9, 1.15, 3.6, 0.32, 2.8, stone, tip=bronze)
