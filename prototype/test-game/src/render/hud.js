@@ -3,6 +3,7 @@ import { STRUCTURES, ASSUMPTIONS, ABILITIES, getStructureDef, factionsInRoster }
 import { getSellValue } from '../sim/economy.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
 import { levelFromXp } from '../data/progression.js';
+import { resultsModel, mountResults } from './resultsScreen.js';
 import { fogWindow, insideWindow } from '../render3d/overlays/fogModel.js';
 
 const STYLE_ID = 'bw-hud-style';
@@ -114,8 +115,8 @@ const CSS = `
 .bw-toast { position:absolute; left:50%; top:70px; transform:translateX(-50%); background:rgba(60,20,20,0.92);
   border:1px solid #c66; border-radius:4px; padding:6px 14px; font-size:13px; color:#ffd7d7;
   display:none; pointer-events:none; }
-.bw-result { position:absolute; left:0; top:0; right:0; bottom:0; display:none; align-items:center; justify-content:center;
-  background:rgba(0,0,0,0.55); pointer-events:auto; flex-direction:column; gap:14px; }
+.bw-result { position:absolute; left:0; top:0; right:0; bottom:0; display:none; align-items:center; justify-content:center; z-index:60;
+  background:none; pointer-events:auto; flex-direction:column; gap:14px; }
 .bw-result.bw-show { display:flex; }
 .bw-rbanner { font-size:36px; font-weight:bold; letter-spacing:2px; text-shadow:0 2px 8px #000; }
 .bw-rbanner.bw-win { color:#9f9; }
@@ -735,6 +736,8 @@ export function createHud(mountEl, callbacks) {
     hideResult() {
       resultEl.classList.remove('bw-show');
       resultEl.style.display = 'none';
+      root.classList.remove('bw-results-open');
+      if (hud._results) { hud._results.dispose(); hud._results = null; }
     },
     killCam,
     /** Show / hide the Kill Camera overlay; onSkip runs on a tap while it is up. */
@@ -1077,46 +1080,22 @@ export function rewardsHtml(rewards) {
   return h;
 }
 
-export function showResult(hud, result, finalScore, nextMap, waveStars, rewards, resourcesHtml = '') {
+/**
+ * The map's final result: a full-screen, animated after-action report (render/resultsScreen.js)
+ * [MM-story_mw15hyvl_2]. extra = { resources: {total, names, contract} | null, planet, mapId, mapName }.
+ */
+export function showResult(hud, result, finalScore, nextMap, waveStars, rewards, extra = {}) {
   if (!hud) return;
-  if (hud.resourcesEl) {
-    hud.resourcesEl.innerHTML = resourcesHtml || '';
-    hud.resourcesEl.style.display = resourcesHtml ? 'block' : 'none';
-  }
-  if (hud.rewardsEl) {
-    hud.rewardsEl.innerHTML = rewardsHtml(rewards);
-    hud.rewardsEl.style.display = rewards ? 'block' : 'none';
-    const bar = hud.rewardsEl.querySelector('.xbar i');
-    if (bar && typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = bar.dataset.to + '%'; }));
-  }
-  const win = result === 'win';
-  const starsArr = (Array.isArray(waveStars) && waveStars.length) ? waveStars.map((w) => w.stars) : null;
-  if (hud.nextMapBtn) {
-    if (win && nextMap) {
-      hud.nextMapBtn.textContent = 'NEXT MAP →  ' + (nextMap.name || ('Map ' + nextMap.id)) + ' (' + nextMap.size + ')';
-      hud.nextMapBtn.style.display = 'inline-block';
-    } else {
-      hud.nextMapBtn.style.display = 'none';
-    }
-  }
-  hud.banner.textContent = win ? 'VICTORY' : 'DEFEAT';
-  hud.banner.className = 'bw-rbanner ' + (win ? 'bw-win' : 'bw-lose');
-  // s12: present the Final Score (kills − time − gold spent + gold left) the sim computes on game end.
-  if (hud.scoreEl) {
-    const fs = finalScore;
-    if (fs && typeof fs.score === 'number') {
-      const mm = String(fs.minutes != null ? fs.minutes : 0).padStart(2, '0');
-      const ss = String(fs.seconds != null ? fs.seconds : 0).padStart(2, '0');
-      const starsHtml = starsArr ? waveStarsHtml(starsArr) : '';
-      hud.scoreEl.innerHTML =
-        '<div class="bw-rscore-total">SCORE ' + fs.score + '</div>' + starsHtml +
-        '<div class="bw-rscore-line">' + (fs.kills || 0) + ' kills · ' + mm + ':' + ss +
-        ' · ' + (fs.goldRemaining || 0) + ' gold left</div>';
-      hud.scoreEl.style.display = 'block';
-    } else {
-      hud.scoreEl.style.display = 'none';
-    }
-  }
+  const model = resultsModel({ result, finalScore, waveStars, rewards, nextMap, resources: extra.resources || null,
+    planet: extra.planet || '', mapId: extra.mapId || null, mapName: extra.mapName || '' });
+  if (hud._results) hud._results.dispose();
+  const cbs = hud.callbacks || {};
+  hud._results = mountResults(hud.resultEl, model, {
+    onNext: () => { if (cbs.onNextMap) cbs.onNextMap(); },
+    onRestart: () => { if (cbs.onRestart) cbs.onRestart(hud.lastSeed); },
+    onMenu: () => { if (cbs.onMainMenu) cbs.onMainMenu(); },
+  });
+  hud.root.classList.add('bw-results-open');   // the battle HUD steps aside; the battlefield stays as the backdrop
   hud.resultEl.style.display = 'flex';
   hud.resultEl.classList.add('bw-show');
 }
