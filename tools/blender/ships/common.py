@@ -256,6 +256,24 @@ def loft(name, stations, material, cap0=True, cap1=True, bevel=0.0, axis="X"):
     return _obj(name, bm, material, bevel)
 
 
+def ring_x(name, x0, x1, outer, inner, cy, cz, material):
+    """A hollow chamfered-section ring between x0 and x1 (facing ±X): outer = (w, h, c), inner = (w, h, c).
+    Use it for glow OUTLINES — a solid glow disc hidden behind a cover plate shows through, because the
+    glow material is pulled toward the camera in depth so it never z-fights."""
+    bm = bmesh.new()
+    ring = lambda x, sec: [bm.verts.new(Vector((x, cy + y, cz + z))) for y, z in section(*sec)]
+    o0, o1, i0, i1 = ring(x0, outer), ring(x1, outer), ring(x0, inner), ring(x1, inner)
+    n = len(o0)
+    for k in range(n):
+        j = (k + 1) % n
+        bm.faces.new((o0[k], o0[j], o1[j], o1[k]))       # outer wall
+        bm.faces.new((i1[k], i1[j], i0[j], i0[k]))       # inner wall
+        bm.faces.new((o1[k], o1[j], i1[j], i1[k]))       # +X face
+        bm.faces.new((i0[k], i0[j], o0[j], o0[k]))       # -X face
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _obj(name, bm, material)
+
+
 def box(name, center, size, material, chamfer=0.0, bevel=0.0):
     x, y, z = center
     sx, sy, sz = size

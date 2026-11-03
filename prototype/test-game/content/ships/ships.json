@@ -177,21 +177,21 @@
   "lods": [
    {
     "file": "lumen_lod0.glb",
-    "tris": 3500,
+    "tris": 3676,
     "drawCalls": 2,
-    "bytes": 555728
+    "bytes": 566640
    },
    {
     "file": "lumen_lod1.glb",
-    "tris": 2036,
+    "tris": 2212,
     "drawCalls": 2,
-    "bytes": 414580
+    "bytes": 425496
    },
    {
     "file": "lumen_lod2.glb",
-    "tris": 1100,
+    "tris": 1276,
     "drawCalls": 2,
-    "bytes": 338928
+    "bytes": 349844
    }
   ],
   "engines": 6,
