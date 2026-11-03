@@ -6,6 +6,8 @@
  * The ledger reads the sim's deposit events (outside the tick, like battleTally) and splits each tier into what the
  * Collective contract bought (sold, paid in gold) and what the player kept (the inventory's share). Pure data + HTML.
  */
+import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
+
 export const TIERS = Object.freeze(['common', 'uncommon', 'rare', 'epic']);
 const COLOR_TIER = Object.freeze({ blue: 'common', yellow: 'uncommon', red: 'rare', green: 'epic' });
 export const TIER_COLOR = Object.freeze({ common: '#58a6ff', uncommon: '#ffd76a', rare: '#ff7a6a', epic: '#7ae08a' });
@@ -48,12 +50,15 @@ export function resourceNames(catalog, planet) {
 const f = (n) => Math.round(n).toLocaleString('en-US');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
+/** The icon id for a tier's name, or null while the names are still the tier words (catalogue not loaded). */
+export const iconIdFor = (names, t) => (names && names[t] && names[t] !== TIER_LABEL[t] ? resourceId(names[t]) : null);
+
 /** The wave banner line: each tier this wave collected, with the map total so far. Empty when nothing came in yet. */
 export function waveResourcesHtml(wave, total, names = TIER_LABEL) {
   const tiers = TIERS.filter((t) => total.units[t] > 0);
   if (!tiers.length) return '';
   return '<div class="res">' + tiers.map((t) =>
-    '<span class="r" style="--c:' + TIER_COLOR[t] + '"><i></i><b>+' + f(wave.units[t]) + '</b> ' + esc(names[t]) +
+    '<span class="r" style="--c:' + TIER_COLOR[t] + '">' + (iconIdFor(names, t) ? resourceIconHtml(iconIdFor(names, t), 'ri') : '<i></i>') + '<b>+' + f(wave.units[t]) + '</b> ' + esc(names[t]) +
     '<em>' + f(total.units[t]) + ' total</em></span>').join('') + '</div>';
 }
 

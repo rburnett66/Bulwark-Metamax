@@ -3,6 +3,7 @@
  * design page's Inventory view: all 36 resources on one screen, a band per planet, a detail pane for the selected one.
  * Html functions are pure; createInventoryScreen mounts them.
  */
+import { resourceIconHtml } from '../data/resourceIcons.js';
 import { loadSave, updateSave } from '../save/save.js';
 import { loadMissionCatalog } from '../save/missionCatalog.js';
 import { flowCtx } from '../save/missionFlow.js';
@@ -21,7 +22,7 @@ const roleOf = (r) => (kept(r.tier) ? 'Kept · worth ' + r.value + ' gold each' 
 export function inventoryListHtml(bands, tab, selected) {
   return bands.map((b) => {
     const key = voiceOfName(b.faction);
-    const tiles = b.resources.filter((r) => inTab(tab, r.tier)).map((r) => `<button class="rt${r.have ? '' : ' zero'}" data-inv-id="${esc(r.id)}" aria-selected="${r.id === selected}" style="--rc:var(${TIER_VAR[r.tier]})">${use('r-crystal', 'i gem3')}
+    const tiles = b.resources.filter((r) => inTab(tab, r.tier)).map((r) => `<button class="rt${r.have ? '' : ' zero'}" data-inv-id="${esc(r.id)}" aria-selected="${r.id === selected}" style="--rc:var(${TIER_VAR[r.tier]})">${resourceIconHtml(r.id, 'gem3 resi')}
     <span class="rtx"><b>${esc(r.name)}</b><small>${TIER_NAME[r.tier]}</small></span><span class="rtn num">${b.open ? num(r.have) : '—'}${r.fresh ? `<em>+${num(r.fresh)}</em>` : ''}</span></button>`).join('');
     return `<section class="pband${b.open ? '' : ' locked'}" style="--fc:${factionColor(key)}"><header>${fsvg(key)}<b>${esc(b.planet)}</b><small>${esc(b.faction)}</small>
    <span class="pbt">${b.open ? `<b class="num">${num(b.held)}</b> held${b.fresh ? ` · <em>+${num(b.fresh)} new</em>` : ''}` : `${use('s-locked')} Portal: ${esc(b.planet)} not owned`}</span></header>
@@ -35,7 +36,7 @@ export function inventoryDetailHtml(bands, selected, catalog) {
   const r = band.resources.find((x) => x.id === selected) || band.resources[0], key = voiceOfName(band.faction), w = wantedBy(catalog, r.name);
   return `<button class="dback" data-iback>${use('u-back')}All resources</button>
   <div class="rdet" style="--rc:var(${TIER_VAR[r.tier]});--fc:${factionColor(key)}">
-   <span class="gem2">${use('r-crystal')}</span><div class="rdn num">${band.open ? num(r.have) : '—'}</div>${r.fresh ? `<div class="rdnew num">+${num(r.fresh)} since your last visit</div>` : ''}
+   <span class="gem2">${resourceIconHtml(r.id, 'resi')}</span><div class="rdn num">${band.open ? num(r.have) : '—'}</div>${r.fresh ? `<div class="rdnew num">+${num(r.fresh)} since your last visit</div>` : ''}
    <h2>${esc(r.name)}</h2><div class="rdt">${TIER_NAME[r.tier]}</div>
    <dl><dt>Planet</dt><dd>${fsvg(key)}${esc(band.planet)}${band.open ? '' : ' · locked'}</dd><dt>Faction</dt><dd>${esc(band.faction)}</dd><dt>Role</dt><dd>${roleOf(r)}</dd>
     <dt>From</dt><dd>${esc(band.planet)} harvests${kept(r.tier) ? '' : ' (quest nodes)'}</dd><dt>Wanted by</dt><dd>${w.length ? w.map(esc).join('<br>') : '—'}</dd></dl>

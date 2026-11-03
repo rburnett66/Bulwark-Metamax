@@ -167,6 +167,7 @@ const CSS = `
 .bw-starbanner .res { display:flex; flex-wrap:wrap; justify-content:center; gap:6px 14px; margin-top:10px; max-width:min(560px,92vw); }
 .bw-starbanner .res .r { font-size:13px; color:#cfe3f0; text-shadow:0 2px 8px rgba(0,0,0,.9); white-space:nowrap; }
 .bw-starbanner .res .r i { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--c); box-shadow:0 0 8px var(--c); margin-right:6px; vertical-align:middle; }
+.bw-starbanner .res .r .ri { width:28px; height:28px; vertical-align:middle; margin-right:6px; border-radius:3px; box-shadow:0 0 0 1px var(--c), 0 0 10px color-mix(in srgb, var(--c) 50%, transparent); }
 .bw-starbanner .res .r b { color:var(--c); font-size:16px; font-variant-numeric:tabular-nums; }
 .bw-starbanner .res .r em { font-style:normal; color:#8fa0b3; font-size:11px; margin-left:6px; }
 .bw-resources { display:none; min-width:min(340px,86vw); background:rgba(14,17,22,.92); border:1px solid #3a4452; padding:10px 14px 8px; margin-top:8px; }
