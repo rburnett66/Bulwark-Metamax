@@ -6,7 +6,7 @@
  * will see. missionLog.js mounts it and owns the clicks.
  */
 import { logMission, missionStatus, progress, factionOfPlanet, alignmentBand } from '../save/missions.js';
-import { lockedMissions, gateMet, shipArrived } from '../save/missionFlow.js';
+import { lockedMissions, gateMet, collectShipHere, SHIP_MAP } from '../save/missionFlow.js';
 import { LOYALTY_TIERS, rivalOf } from '../save/contracts.js';
 import { ICONS, FACTIONS as VOICES, HOOD_PORTRAIT } from '../comm/voice.js';
 import { portraitSlug } from '../comm/commCard.js';
@@ -188,7 +188,7 @@ function termsOf(row) {
 /** The one line in the status hue that says what is happening. */
 export function noteFor(row, s) {
   const { m, status } = row;
-  if (status === 'ready') return shipArrived(s, m.planet) ? `${use('s-ready')}All objectives complete. Collect the rewards aboard ${esc(m.collectAt)}.` : `${use('s-ready')}All objectives complete. The rewards wait for ${esc(m.collectAt)}.`;
+  if (status === 'ready') return collectShipHere(s, m) ? `${use('s-ready')}All objectives complete. Collect the rewards aboard ${esc(m.collectAt)}.` : `${use('s-ready')}All objectives complete. The rewards wait for ${esc(m.collectAt)}.`;
   if (status === 'risk') {
     if (m.objectives.some((o) => o.limit && o.have >= o.need)) return `${use('s-risk')}One more and this fails.`;
     return `${use('s-risk')}Alignment history is at ${s.alignment || 0}. One more step and this ${m.variant === 'shadow' ? 'Shadow' : 'Light'} favour is withdrawn.`;
@@ -221,7 +221,7 @@ function loyaltyHtml(row, s) {
 export function actionsHtml(row, s, catalog) {
   const { m, status } = row, ship = m.collectAt;
   if (status === 'ready') {
-    if (!shipArrived(s, m.planet)) return `<div class="claimed-stamp">${use('u-clock')}Waiting for ${esc(ship)}</div><div class="shipnote">It arrives when ${esc(m.planet)} map 1 averages 3 stars.</div>`;
+    if (!collectShipHere(s, m)) return `<div class="claimed-stamp">${use('u-clock')}Waiting for ${esc(ship)}</div><div class="shipnote">It arrives when ${esc(m.planet)} map ${SHIP_MAP} averages 3 stars.</div>`;
     const line = catalog.questLines[m.questLine];
     return `<button class="btn claim" data-act="collect">${use('s-ready')}Collect aboard ${esc(ship)}</button><div class="shipnote">Collecting continues <b>${esc(line ? line.name : m.questLine)}</b>.</div>`;
   }

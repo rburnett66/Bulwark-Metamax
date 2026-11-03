@@ -32,6 +32,7 @@ XLSX = os.path.join(ROOT, "docs", "sources", "Bulwark-Missions.xlsx")
 OUT = os.path.join(ROOT, "prototype", "test-game", "content", "missions", "missions.json")
 STAGES = ("View", "Unlock", "Execute", "Complete", "Fail")
 LANDING = "Landing craft BS-7"
+COLLECTIVE = "(Collective)"   # Capital_Ships row for the Collective ship: always present, handles maps 1-3
 
 
 def norm(v):
@@ -59,7 +60,12 @@ def main():
     givers = {g["Name"]: {"faction": g["Faction_Key"], "align": g["Align"], "art": g["Portrait_Art"]} for g in rows(wb["Givers"], 9)}
     nodes = {n["Node"]: {"price": n["Gold price (game)"], "cost": [x for x in ((n["Resource cost 1"], n["Qty 1"]), (n["Resource cost 2"], n["Qty 2"])) if x[0]]}
              for n in rows(wb["Tech_Unlocks"], 12)}
-    ships = {s["Planet"]: {"ship": s["Capital ship"], "captain": s["Captain (giver)"], "arrives": s["Arrives when"]} for s in rows(wb["Capital_Ships"], 5)}
+    ship_rows = list(rows(wb["Capital_Ships"], 5))
+    ships = {s["Planet"]: {"ship": s["Capital ship"], "captain": s["Captain (giver)"], "arrives": s["Arrives when"]} for s in ship_rows if s["Planet"] != COLLECTIVE}
+    coll = [s for s in ship_rows if s["Planet"] == COLLECTIVE]
+    if len(coll) != 1:
+        problems.append("Capital_Ships: needs exactly one (Collective) row")
+    collective = {"ship": coll[0]["Capital ship"], "arrives": coll[0]["Arrives when"]} if coll else None
     lines = {q["Quest_Line"]: {"name": q["Name"], "planet": q["Planet"], "role": q["Role"], "variant": q["Variant"], "ship": q["Capital ship"]} for q in rows(wb["Quest_Lines"], 7)}
     resources = [{"id": r["Resource_ID"], "name": r["Name"], "tier": r["Tier"].lower(), "planet": r["Planet"], "faction": r["Faction"], "value": r["Gold value"]}
                  for r in rows(wb["Resources"], 6)]
@@ -141,7 +147,7 @@ def main():
             unlock.append({"cond": "planet_open", "param": P, "text": f"{P} is open"})
         elif trig == "replay_improves":
             unlock.append({"cond": "replay_improves", "param": P, "value": m["Map"], "text": f"Replay {P} map {m['Map']} and beat your best stars"})
-        if ship and ship != LANDING:
+        if ship and ship != LANDING and not (collective and ship == collective["ship"]):
             unlock.append({"cond": "capital_ship_arrived", "param": P, "text": f"{ship} is in orbit"})
         impact = {k: m[c] for k, c in (("loyaltyPlanet", "Loyalty_Planet"), ("loyaltyRival", "Loyalty_Rival"), ("alignment", "Alignment_Shift"), ("brokenPenalty", "Broken_Penalty")) if m[c] is not None}
         missions.append({
@@ -164,7 +170,7 @@ def main():
         sys.exit(f"{len(problems)} problem(s) — nothing written")
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     data = {"_source": "docs/sources/Bulwark-Missions.xlsx", "_generator": "tools/extract_missions.py",
-            "capitalShips": ships, "questLines": lines, "resources": resources,
+            "capitalShips": ships, "collective": collective, "questLines": lines, "resources": resources,
             "techUnlocks": {n: {"by": unlocked_by.get(n), **nodes[n]} for n in nodes},
             "conditions": conds, "rewardKinds": kinds, "missions": missions}
     with open(OUT, "w", encoding="utf-8") as f:

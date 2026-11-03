@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { defaultSave, migrate } from './save.js';
 import { battleResult, missionStatus, abandon, dismiss } from './missions.js';
-import { reviewAlignment, resolvedSecondary, favourMessage, flowCtx, gateMet, GATE_CONDITIONS, syncMissions, lockedMissions, recordPlanetMap, settleBattle, collect, collectBlock, shipArrived, mapRecord } from './missionFlow.js';
+import { reviewAlignment, resolvedSecondary, favourMessage, flowCtx, gateMet, GATE_CONDITIONS, syncMissions, lockedMissions, recordPlanetMap, settleBattle, collect, collectBlock, shipArrived, mapRecord, SHIP_MAP, COLLECTIVE_SHIP } from './missionFlow.js';
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
 const allOpen = (s) => flowCtx(s, { allOpen: true, now: 1 });
@@ -23,9 +23,12 @@ test('every View and Unlock row in the content can be judged, and every catalogu
 
 test('every capital ship and quest line the missions name exists', () => {
   assert.equal(Object.keys(CATALOG.capitalShips).length, 9);
+  assert.equal(CATALOG.collective.ship, COLLECTIVE_SHIP, 'the code names the Collective ship the workbook names');
   for (const m of CATALOG.missions) {
     assert.ok(CATALOG.questLines[m.questLine], m.id);
-    assert.equal(m.collectAt, CATALOG.capitalShips[m.planet].ship, m.id);
+    // [MM-story_mw12m06h_1] maps 1-3 are served by the Collective ship; the planet's own ship takes over from map 4
+    assert.equal(m.collectAt, m.map <= SHIP_MAP ? COLLECTIVE_SHIP : CATALOG.capitalShips[m.planet].ship, m.id);
+    assert.equal(m.unlock.some((c) => c.cond === 'capital_ship_arrived'), m.map > SHIP_MAP, m.id + ': needs the planet ship only from map 4');
   }
 });
 
@@ -53,31 +56,30 @@ test('the per-planet map record keeps runs, the win and the best average, planet
   assert.deepEqual(migrate(JSON.parse(JSON.stringify(s))).planetMaps, s.planetMaps);
 });
 
-test('the ship arrives on map 1 at 3 stars or more, not below, not on another map, not on a loss', () => {
+test('the ship arrives on map 3 at 3 stars or more, not below, not on another map, not on a loss', () => {
   const s = defaultSave();
+  assert.equal(SHIP_MAP, 3);
+  assert.equal(recordPlanetMap(s, battle('Verdance', 1, 5)).arrived, null, 'map 1');
   assert.equal(recordPlanetMap(s, battle('Verdance', 2, 5)).arrived, null, 'map 2');
-  assert.equal(recordPlanetMap(s, battle('Verdance', 1, 2)).arrived, null, 'below 3 stars');
-  assert.equal(recordPlanetMap(s, battle('Verdance', 1, 5, { result: 'lose' })).arrived, null, 'a loss');
+  assert.equal(recordPlanetMap(s, battle('Verdance', 3, 2)).arrived, null, 'below 3 stars');
+  assert.equal(recordPlanetMap(s, battle('Verdance', 3, 5, { result: 'lose' })).arrived, null, 'a loss');
   assert.equal(shipArrived(s, 'Verdance'), false);
-  assert.equal(recordPlanetMap(s, battle('Verdance', 1, 3)).arrived, 'Verdance');
+  assert.equal(recordPlanetMap(s, battle('Verdance', 3, 3)).arrived, 'Verdance');
   assert.equal(shipArrived(s, 'Verdance'), true);
   assert.equal(shipArrived(s, 'Florael'), false, 'one planet at a time');
   assert.deepEqual(s.loggedQueue, [{ kind: 'ship', planet: 'Verdance' }]);
-  assert.equal(recordPlanetMap(s, battle('Verdance', 1, 5)).arrived, null, 'arrives once');
+  assert.equal(recordPlanetMap(s, battle('Verdance', 3, 5)).arrived, null, 'arrives once');
 });
 
-test('won below 3 stars: primary 1 stays Ready and its rewards wait for the ship', () => {
+test('maps 1-3 are collected aboard the Collective ship, with no planet ship in orbit', () => {
   const s = defaultSave(), ctx = gated(s);
   syncMissions(s, CATALOG, ctx);
   settleBattle(s, battle('Verdance', 1, 2), CATALOG, ctx);
   const m = rec(s, 'P-VER-01');
   assert.equal(missionStatus(m, s), 'ready');
-  assert.equal(collectBlock(s, m), "Waiting for Halbrecht's Oath");
-  assert.equal(collect(s, 'P-VER-01', CATALOG, ctx), null);
-  assert.equal(missionStatus(m, s), 'ready', 'still waiting');
-  assert.equal((s.carry && s.carry.gold) || 0, 0, 'nothing banked');
-  settleBattle(s, battle('Verdance', 1, 3), CATALOG, ctx);
-  assert.equal(shipArrived(s, 'Verdance'), true);
+  assert.equal(m.collectAt, COLLECTIVE_SHIP);
+  assert.equal(shipArrived(s, 'Verdance'), false);
+  assert.equal(collectBlock(s, m), null, 'the Collective ship is always here');
   assert.ok(collect(s, 'P-VER-01', CATALOG, ctx));
   assert.equal(s.carry.gold, 300);
 });
@@ -96,15 +98,16 @@ test('collecting continues the quest line, and the next primary is granted aboar
   s.tech.owned.cannon2 = true;
   const later = gated(s);
   assert.deepEqual(syncMissions(s, CATALOG, later).map((m) => m.id).filter((id) => id === 'P-VER-02'), ['P-VER-02']);
-  assert.equal(rec(s, 'P-VER-02').grantedAt, "Halbrecht's Oath");
+  assert.equal(rec(s, 'P-VER-02').grantedAt, COLLECTIVE_SHIP);
 });
 
-test('without the ship nothing past step 1 is granted, even with the other gates met', () => {
+test('without the planet ship nothing past map 3 is granted, even with the other gates met', () => {
   const s = defaultSave();
-  s.questSteps['QL-VER-P'] = 1; s.tech.owned.cannon2 = true; s.progress.xp = 5000;
-  assert.equal(syncMissions(s, CATALOG, gated(s)).some((m) => m.id === 'P-VER-02'), false);
+  s.questSteps['QL-VER-P'] = 3; s.progress.xp = 1e6;
+  for (const n of Object.keys(CATALOG.techUnlocks)) s.tech.owned[n] = true;
+  assert.equal(syncMissions(s, CATALOG, gated(s)).some((m) => m.id === 'P-VER-04'), false);
   s.capitalShips.Verdance = { arrived: true };
-  assert.equal(syncMissions(s, CATALOG, gated(s)).some((m) => m.id === 'P-VER-02'), true);
+  assert.equal(syncMissions(s, CATALOG, gated(s)).some((m) => m.id === 'P-VER-04'), true);
 });
 
 test('another planet opens with its portal node; the testing switch opens it too', () => {
@@ -120,10 +123,11 @@ test('settleBattle reports what changed and queues the arrival and new missions 
   syncMissions(s, CATALOG, ctx);
   s.loggedQueue.length = 0;
   const out = settleBattle(s, battle('Verdance', 1, 3), CATALOG, ctx);
-  assert.equal(out.arrived, 'Verdance');
+  assert.equal(out.arrived, null, 'map 1 brings no ship');
   assert.deepEqual(out.ready, ['P-VER-01']);
-  assert.ok(s.loggedQueue.some((q) => q.kind === 'ship'));
   assert.equal(s.progress.battles, 1);
+  assert.equal(settleBattle(s, battle('Verdance', 3, 3), CATALOG, ctx).arrived, 'Verdance');
+  assert.ok(s.loggedQueue.some((q) => q.kind === 'ship'));
 });
 
 test('main.js settles missions in the played-battle branch only', () => {
