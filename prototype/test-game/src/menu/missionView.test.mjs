@@ -64,7 +64,7 @@ test('a row carries type icon, title, giver, planet, status tag, reward icons an
   assert.ok(html.includes('Quartermaster Ines Roth · Verdance'));
   assert.ok(html.includes('--sc:var(--s-ready)'));
   assert.ok(html.includes('aria-selected="true"'));
-  assert.ok(html.includes('#r-gold') && html.includes('#r-xp') && html.includes('#r-crystal'));
+  assert.ok(html.includes('#r-gold') && html.includes('#r-xp') && /content\/icons\/resources\/[a-z0-9-]+\.webp/.test(html), 'a resource reward shows its own icon');
   assert.ok(html.includes('rwi more">+1<'), 'three icons then +N');
   assert.ok(html.includes('role="progressbar"'));
   assert.ok(html.includes('>Collect<'), 'Ready says Collect instead of a count');

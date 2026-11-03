@@ -23,7 +23,8 @@
  * Pure HTML builders (resultsModel, resultsHtml) for tests and the standalone review page; mountResults adds the
  * timeline and the button wiring.
  */
-import { TIERS, TIER_COLOR } from './resourceSummary.js';
+import { TIERS, TIER_COLOR, iconIdFor } from './resourceSummary.js';
+import { resourceIconHtml } from '../data/resourceIcons.js';
 import { levelFromXp } from '../data/progression.js';
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap';
@@ -129,8 +130,9 @@ export const RESULTS_CSS = `
 .rs-res.in { opacity:1; }
 .rs-res .n { display:flex; align-items:center; gap:8px; font-weight:700; font-size:1.08em; color:#e8eef5; min-width:0; }
 .rs-res .n span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rs-res .ic { width:clamp(22px,4vmin,34px); height:clamp(22px,4vmin,34px); flex:0 0 auto; border-radius:3px; box-shadow:0 0 0 1px var(--c), 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); }
 .rs-res .d { width:9px; height:9px; flex:0 0 9px; background:var(--c); box-shadow:0 0 8px var(--c); transform:rotate(45deg); }
-.rs-res .q { font-family:Orbitron,sans-serif; font-weight:800; font-size:1.15em; text-align:right; font-variant-numeric:tabular-nums; color:#f4f7fb; }
+.rs-res .q { align-self:center; font-family:Orbitron,sans-serif; font-weight:800; font-size:1.15em; text-align:right; font-variant-numeric:tabular-nums; color:#f4f7fb; }
 .rs-bar { grid-column:1 / 3; display:flex; height:7px; background:#0a0d12; border:1px solid #222a35; overflow:hidden; }
 .rs-bar .sold { width:0; background:var(--c); opacity:.85; transition:width .8s cubic-bezier(.3,.9,.3,1); }
 .rs-bar .kept { width:0; background:repeating-linear-gradient(135deg, var(--cyan) 0 4px, #2aa8c0 4px 7px); box-shadow:0 0 8px rgba(122,240,255,.6);
@@ -169,6 +171,9 @@ export const RESULTS_CSS = `
   .rs-stats { margin-top:6px; }
   .rs-rw { padding:3px 0; }
   .rs-res { padding:3px 0; }
+  .rs-res .ic { width:22px; height:22px; }
+  .rs-res .n { font-size:1em; gap:6px; } .rs-res .m { font-size:.74em; } .rs-foot { margin-top:2px; }
+  .rs-body { gap:8px; } .rs-col { gap:6px; }
   .rs-act { padding-top:6px; }
   .rs-btn { min-height:40px; }
 }
@@ -196,7 +201,7 @@ export function resultsModel({ result, finalScore, waveStars, rewards = null, re
   let res = null;
   if (resources && resources.total) {
     const t = resources.total, names = resources.names || {};
-    const rows = TIERS.filter((k) => t.units[k] > 0).map((k) => ({ tier: k, name: names[k] || k, units: t.units[k], sold: t.sold[k], kept: t.kept[k], color: TIER_COLOR[k] }));
+    const rows = TIERS.filter((k) => t.units[k] > 0).map((k) => ({ tier: k, name: names[k] || k, icon: iconIdFor(names, k), units: t.units[k], sold: t.sold[k], kept: t.kept[k], color: TIER_COLOR[k] }));
     const max = Math.max(1, ...rows.map((r) => r.units));
     res = { rows: rows.map((r) => ({ ...r, soldPct: r.sold / max * 100, keptPct: r.kept / max * 100 })), contract: !!resources.contract, gold: t.gold,
       kept: rows.reduce((a, r) => a + r.kept, 0) };
@@ -240,7 +245,7 @@ export function resultsHtml(m) {
     if (!x.rows.length) h += '<div class="rs-none">Nothing was harvested this battle.</div>';
     for (const r of x.rows) {
       h += '<div class="rs-res" style="--c:' + r.color + ';--sold:' + (x.contract ? r.soldPct : r.soldPct + r.keptPct).toFixed(1) + '%;--kept:' + (x.contract ? r.keptPct : 0).toFixed(1) + '%">' +
-        '<div class="n"><span class="d"></span><span>' + esc(r.name) + '</span></div><div class="q" data-count="' + r.units + '">' + fmt(r.units) + '</div>' +
+        '<div class="n">' + (r.icon ? resourceIconHtml(r.icon, 'ic') : '<span class="d"></span>') + '<span>' + esc(r.name) + '</span></div><div class="q" data-count="' + r.units + '">' + fmt(r.units) + '</div>' +
         '<div class="rs-bar"><span class="sold"></span><span class="kept"></span></div>' +
         (x.contract ? '<div class="m"><span>SOLD ' + fmt(r.sold) + '</span><span>' + (r.kept ? '<b>KEPT +' + fmt(r.kept) + '</b>' : 'KEPT —') + '</span></div>' : '') + '</div>';
     }

@@ -58,6 +58,7 @@ export const MISSION_LOG_CSS = String.raw`
 .bwm-ml .sub span{overflow:hidden;text-overflow:ellipsis}
 .bwm-ml .right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .bwm-ml .rw{display:flex;gap:3px}
+.bwm-ml img.resi{display:block;width:100%;height:100%;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px color-mix(in srgb,var(--rc,#888) 45%,transparent)}
 .bwm-ml .rwi{position:relative;width:24px;height:24px;display:grid;place-items:center;background:var(--well);border:1px solid var(--line2);color:var(--rc,var(--text))}
 .bwm-ml .rwi svg{width:15px;height:15px}
 .bwm-ml .rwi.more{width:auto;padding:0 5px;font-size:10px;font-weight:800;color:var(--dim)}

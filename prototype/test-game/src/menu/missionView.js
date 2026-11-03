@@ -5,6 +5,7 @@
  * (save, catalog, ctx) → view models → HTML. No DOM and no save writes here, so node tests read exactly what the player
  * will see. missionLog.js mounts it and owns the clicks.
  */
+import { resourceIconHtml } from '../data/resourceIcons.js';
 import { logMission, missionStatus, progress, factionOfPlanet, alignmentBand } from '../save/missions.js';
 import { lockedMissions, gateMet, collectShipHere, SHIP_MAP } from '../save/missionFlow.js';
 import { LOYALTY_TIERS, rivalOf } from '../save/contracts.js';
@@ -86,7 +87,7 @@ export function rewardView(r, m, catalog) {
   if (r.kind === 'xp') return { icon: REWARD_ICON.xp, color: 'var(--cyan2)', amount: num(r.amount), label: 'Commander XP' };
   if (r.kind === 'resource') {
     const res = (catalog.resources || []).find((x) => x.name === r.target);
-    return { icon: REWARD_ICON.resource, color: `var(${TIER_VAR[res ? res.tier : 'common']})`, amount: num(r.amount), label: r.target };
+    return { icon: REWARD_ICON.resource, img: res ? res.id : null, color: `var(${TIER_VAR[res ? res.tier : 'common']})`, amount: num(r.amount), label: r.target };
   }
   if (r.kind === 'tech_unlock') {
     const n = TECH_BY_ID[r.target], t = (catalog.techUnlocks || {})[r.target];
@@ -100,7 +101,7 @@ export function rewardView(r, m, catalog) {
 export function rowHtml(row, catalog, selectedId) {
   const { m, status: st } = row, g = m.giver, p = progress(m);
   const views = m.rewards.map((r) => rewardView(r, m, catalog));
-  const rws = views.slice(0, 3).map((v) => `<span class="rwi" style="--rc:${v.color}" title="${esc(v.amount + ' ' + v.label)}">${use(v.icon)}</span>`).join('') + (views.length > 3 ? `<span class="rwi more">+${views.length - 3}</span>` : '');
+  const rws = views.slice(0, 3).map((v) => `<span class="rwi" style="--rc:${v.color}" title="${esc(v.amount + ' ' + v.label)}">${v.img ? resourceIconHtml(v.img, 'resi') : use(v.icon)}</span>`).join('') + (views.length > 3 ? `<span class="rwi more">+${views.length - 3}</span>` : '');
   const right = st === 'ready' ? 'Collect' : st === 'failed' ? 'Failed' : st === 'done' ? 'Done' : st === 'locked' ? 'Locked' : `${num(p.have)}/${num(p.need)}`;
   return `<button class="row st-${st}" role="option" aria-selected="${m.id === selectedId}" data-id="${esc(m.id)}" style="--sc:var(${STATUS[st].v});--fc:${factionColor(g.faction)}">
   <span class="badge">${use(TYPE_ICON[m.type] || 't-contract')}</span>
@@ -258,7 +259,7 @@ export function dossierHtml(row, s, catalog, ctx, packs = null) {
    <div class="sec"><h3>${st === 'locked' ? 'OBJECTIVES (WHEN UNLOCKED)' : 'OBJECTIVES'}</h3>${m.objectives.map((o) => objectiveHtml(o, st)).join('')}</div>
    ${gates.length ? `<div class="sec"><h3>GATES</h3><div class="gates">${gates.map((q) => `<div class="gate ${q.ok ? 'ok' : 'no'}">${use(q.ok ? 'u-check' : 's-locked')}<span><small>${esc(q.kind)}</small>${esc(q.text)}</span></div>`).join('')}</div></div>` : ''}
    ${impact.length ? `<div class="sec"><h3>${m.role === 'secondary' ? 'FACTION IMPACT' : 'FACTION STANDING'}</h3><div class="impact">${impact.map((q) => `<div class="imp" style="--ic:${q.color}">${q.icon}<b class="num">${q.amount}</b>${esc(q.label)}</div>`).join('')}</div></div>` : ''}
-   <div class="sec"><h3>${st === 'failed' ? 'OUTCOME' : 'REWARDS'}</h3><div class="rewards">${outcome.map((v) => `<div class="rwd${v.neg ? ' neg' : ''}" style="--rc:${v.color}"><span class="ri">${use(v.icon)}</span><b class="num">${esc(v.amount)}</b><small>${esc(v.label)}</small></div>`).join('')}</div></div>
+   <div class="sec"><h3>${st === 'failed' ? 'OUTCOME' : 'REWARDS'}</h3><div class="rewards">${outcome.map((v) => `<div class="rwd${v.neg ? ' neg' : ''}" style="--rc:${v.color}"><span class="ri">${v.img ? resourceIconHtml(v.img, 'resi') : use(v.icon)}</span><b class="num">${esc(v.amount)}</b><small>${esc(v.label)}</small></div>`).join('')}</div></div>
    <div class="sec"><h3>TERMS</h3><div class="terms">${termsOf(row).map(([a, b]) => `<div><b>${esc(a)}</b><span class="${/−|Broken/.test(a + b) ? 'neg' : ''}">${esc(b)}</span></div>`).join('')}</div></div>
   </div>
   <aside class="dside">
