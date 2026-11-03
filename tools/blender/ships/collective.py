@@ -4,7 +4,7 @@
 
 Read of the reference: a long, rounded ivory hull with an orange accent sweep and a blue light line down the
 flank; a central ivory dome with emblem discs and a lantern spire; a crown of spires around it; cargo pods
-(open scaffold cages of stacked containers) on truss booms radiating outward like spokes along the length; a stern engine block of eight round nozzles
+(open scaffold cages packed with container stacks) on box-girder booms radiating outward like spokes along the length; a stern engine block of eight round nozzles
 (2 rows x 4). Modelled port-side + centreline only — the build mirrors it.
 """
 import math
@@ -36,41 +36,52 @@ def strut(name, a, b, z, material):
                   ((ax + bx) / 2, (ay + by) / 2, z), math.degrees(math.atan2(by - ay, bx - ax)))
 
 
-# cargo pod cage: 3.0 long (3 bays of 1.0), 0.6 wide, 0.5 tall — holds 0.1 x 0.1 x 0.25 containers
-CL, CW, CH = 3.0, 0.3, 0.25
-CONT = (0.25, 0.1, 0.1)
-# container stacks per pod, each resting across a bottom rib: (rib frame 0..3, row across y 0..4, height)
-LOADS = [
-    [(0, 3, 1), (1, 4, 2), (2, 1, 1), (3, 4, 1)],
-    [(0, 4, 1), (1, 2, 1), (2, 4, 2), (3, 3, 1)],
-    [(0, 2, 1), (1, 4, 1), (2, 3, 2), (3, 4, 1)],
-    [(0, 4, 2), (1, 3, 1), (2, 4, 1), (3, 1, 1)],
+# cargo pod: a 3-bay cage 2.4 long x 0.9 wide x 0.8 tall, packed with container stacks, and a cab at its bow end
+CL, CW, CH = 2.4, 0.45, 0.4
+CAB = 0.4
+ROWS = (-0.28, 0.0, 0.28)          # three stack rows across the cage, each two containers (0.2) wide
+# stack heights in containers (0.1 each) per bay x row — uneven tops read as stacked cargo
+HEIGHTS = [
+    [(7, 5, 6), (6, 7, 5), (5, 6, 7)],
+    [(6, 7, 7), (5, 6, 5), (7, 5, 6)],
+    [(5, 6, 6), (7, 7, 5), (6, 5, 7)],
+    [(7, 6, 5), (6, 5, 7), (5, 7, 6)],
 ]
 
 
-def cargo_pod(i, root, tip, z, hull, trim, glow, colours):
-    """A spoke: a truss boom from the hull side out to an open scaffold cage of stacked containers, with a
-    control cab (lit strip) at its bow end. Built axis-aligned so every member stays at strut size."""
+def cargo_pod(i, root, tip, z, hull, trim, metal, glow, colours):
+    """A spoke: a boxy truss girder from the hull side out to an open scaffold cage packed with container
+    stacks, and a control cab (lit strip + windows) at its bow end. Built parallel to the hull so every
+    standard member stays axis-aligned."""
     (rx, ry), (tx, ty) = root, tip
     name = f"spoke{i}"
     x0, x1 = tx - CL / 2, tx + CL / 2
-    scaffold(name, x0, x1, ty, z, CW, CH, trim, bays=3, top=False)   # open-topped: bottom chords carry the load
-    # containers sit on the cage floor in stacks, two or three muted colours
-    for k, (slot, row, n) in enumerate(LOADS[i]):
-        for j in range(n):
-            cx = min(max(x0 + CL / 3 * slot, x0 + 0.15), x1 - 0.15)
-            cy = ty - 0.22 + 0.1 * row
-            box(f"{name}_box{k}_{j}", (cx, cy, z - CH + 0.075 + 0.1 * j), CONT,
-                colours[(k + j + i) % len(colours)])
-    # truss boom: a top and bottom chord (standard struts) from the hull root to the cage's inboard face
+    scaffold(name, x0, x1, ty, z, CW, CH, trim, bays=3, outer=False)
+    # one box per container stack: a bay long (three 0.25 containers end to end), two containers wide; each
+    # stack rests on the bottom ribs at both ends of its bay
+    bay = CL / 3
+    floor = z - CH + DETAIL["strut"]["t"] / 2
+    for k in range(3):
+        for r, dy in enumerate(ROWS):
+            h = HEIGHTS[i][k][r] * 0.1
+            box(f"{name}_stack{k}{r}", (x0 + bay * (k + 0.5), ty + dy, floor + h / 2), (bay, 0.2, h),
+                colours[(i + k + r) % len(colours)])
+    # control cab closing the bow end of the cage: lit strip and two windows on its outboard face
+    cx = x1 + CAB / 2
+    box(f"{name}_cab", (cx, ty, z), (CAB, CW * 2 + 0.05, CH * 2 + 0.05), hull)
+    oy = ty + CW + 0.025
+    light_strip(f"strip_{name}_cab", (cx - 0.16, oy, z - 0.2), (cx + 0.16, oy, z - 0.2), glow)
+    window_row(f"win_{name}_cab", (cx - 0.12, oy, z + 0.12), (cx + 0.12, oy, z + 0.12), glow, count=2)
+    # boom: a solid box girder from inside the hull to the middle of the cage's inboard face, braced by two
+    # standard struts (horizontal, in the girder's plane) from mid-girder to the cage's inner frames
     inb = ty - CW
-    a, b = (rx, ry), (tx, inb)
-    for dz in (CH, -CH):
-        strut(f"strut_{name}_boom{'tb'[dz < 0]}", a, b, z + dz, trim)
-    # control cab at the bow end: lit strip along its outboard face
-    cx = x1 + 0.22
-    box(f"{name}_cab", (cx, ty, z), (0.44, CW * 2 + 0.05, CH * 2 + 0.05), hull)
-    light_strip(f"strip_{name}_cab", (cx - 0.18, ty + CW + 0.025, z - 0.1), (cx + 0.18, ty + CW + 0.025, z - 0.1), glow)
+    gx0, gy0 = rx, ry - 0.3                                   # root buried in the hull
+    L = math.hypot(tx - gx0, inb - gy0)
+    placed(box(f"{name}_girder", (0, 0, 0), (L, 0.18, 0.18), metal),
+           ((gx0 + tx) / 2, (gy0 + inb) / 2, z), math.degrees(math.atan2(inb - gy0, tx - gx0)))
+    mx, my = gx0 + (tx - gx0) * 0.45, gy0 + (inb - gy0) * 0.45        # braces leave the girder part-way out
+    for xe in (x0 + bay, x1 - bay):
+        strut(f"strut_{name}_brace{'ab'[xe > tx]}", (mx, my), (xe, inb), z, trim)
 
 
 def make():
@@ -143,14 +154,15 @@ def make():
     for k in range(2):
         window_row(f"win_drum_{k}", (DX - 0.5, ay, DZ + 0.36 + k * DECK), (DX + 0.5, ay, DZ + 0.36 + k * DECK), glow, count=2)
 
-    # radiating spokes: truss booms out to cargo pods (fore pods sweep forward, aft pods sweep aft)
+    # radiating spokes: girder booms out to cargo pods (fore pods sweep forward, aft pods sweep aft)
     colours = (mat("cargo_rust", (0.42, 0.22, 0.13), rough=0.6, metal=0.2),
                mat("cargo_slate", (0.20, 0.27, 0.33), rough=0.6, metal=0.2),
                mat("cargo_ochre", (0.50, 0.43, 0.27), rough=0.6, metal=0.2))
+    metal = mat("girder", (0.11, 0.11, 0.12), rough=0.4, metal=0.7)
     spokes = [((5.6, 2.1), (7.6, 5.9), 0.0, 16), ((2.0, 2.5), (2.8, 6.9), -0.1, 6),
               ((-2.2, 2.5), (-2.6, 7.0), -0.2, -4), ((-5.8, 2.5), (-7.6, 6.2), -0.1, -14)]
     for i, (root, tip, z, _yaw) in enumerate(spokes):
-        cargo_pod(i, root, tip, z, hull, trim, glow, colours)
+        cargo_pod(i, root, tip, z, hull, trim, metal, glow, colours)
 
     # stern: dark engine frame and the 2 x 4 nozzle block (port half: two columns x two rows)
     loft("engine_frame", [(-10.9, 2.25, 1.25, 0.6, 0, -0.05), (-10.45, 2.3, 1.3, 0.62, 0, -0.05)], trim)

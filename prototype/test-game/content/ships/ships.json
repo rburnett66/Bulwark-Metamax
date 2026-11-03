@@ -90,21 +90,21 @@
   "lods": [
    {
     "file": "collective_lod0.glb",
-    "tris": 5948,
+    "tris": 5868,
     "drawCalls": 2,
-    "bytes": 742412
+    "bytes": 751760
    },
    {
     "file": "collective_lod1.glb",
-    "tris": 2996,
+    "tris": 2804,
     "drawCalls": 2,
-    "bytes": 504512
+    "bytes": 486448
    },
    {
     "file": "collective_lod2.glb",
-    "tris": 1020,
+    "tris": 924,
     "drawCalls": 2,
-    "bytes": 334304
+    "bytes": 325276
    }
   ],
   "engines": 8,
@@ -235,21 +235,21 @@
   "lods": [
    {
     "file": "tech_lod0.glb",
-    "tris": 5698,
+    "tris": 5826,
     "drawCalls": 2,
-    "bytes": 796824
+    "bytes": 797592
    },
    {
     "file": "tech_lod1.glb",
-    "tris": 3078,
+    "tris": 3170,
     "drawCalls": 2,
-    "bytes": 506456
+    "bytes": 507008
    },
    {
     "file": "tech_lod2.glb",
-    "tris": 614,
+    "tris": 618,
     "drawCalls": 2,
-    "bytes": 299732
+    "bytes": 299756
    }
   ],
   "engines": 6,

@@ -77,6 +77,26 @@ def pane(name, c, d, nrm, h, depth, material):
     return _obj(name, bm, material)
 
 
+def ring(name, center, r_out, r_in, h, material, sides=6):
+    """A lit ring along Z: the gold lip round a pad, plinth or tower — only its outer wall and top annulus,
+    since the rest is buried. Only the rim is lit: a filled glow disc shows through the plating above it
+    (the real-time glow draws depth-offset)."""
+    x, y, z = center
+    bm = bmesh.new()
+    rings = []
+    for zz in (z - h / 2, z + h / 2):
+        for r in (r_out, r_in):
+            rings.append([bm.verts.new((x + r * math.cos(2 * math.pi * (i + 0.5) / sides),
+                                        y + r * math.sin(2 * math.pi * (i + 0.5) / sides), zz)) for i in range(sides)])
+    bo, bi, to, ti = rings
+    for i in range(sides):
+        j = (i + 1) % sides
+        for a, b in ((bo, to), (to, ti)):     # outer wall + top: the inner and bottom walls sit in the plating
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _obj(name, bm, material)
+
+
 def crystal(name, x, y, z, r, h, material, sides=4):
     """Faceted crystal tower: a straight prism body capped by a sharp pyramid tip."""
     body = h * 0.86
@@ -89,13 +109,13 @@ def cluster(name, x, y, z, towers, glass, trim, glow, base_r):
     """Hexagonal plinth with a gold rim, carrying several crystal towers (dx, dy, r, h)."""
     cyl(name + "_plinth", (x, y, z + 0.2), base_r, 0.4, trim, sides=6, axis="Z", r1=base_r * 0.88)
     # gold rim: a standard 2 m band showing round the foot of the step (feat_: a ring outline)
-    cyl("feat_" + name + "_rim", (x, y, z + 0.41), base_r * 0.7 + BAND / HEX, 0.03, glow, sides=6, axis="Z")
+    ring("feat_" + name + "_rim", (x, y, z + 0.41), base_r * 0.7 + BAND / HEX, base_r * 0.7 - 0.05, 0.03, glow)
     cyl(name + "_step", (x, y, z + 0.55), base_r * 0.7, 0.3, trim, sides=6, axis="Z", r1=base_r * 0.6)
     for i, (dx, dy, r, h) in enumerate(towers):
         crystal(f"{name}_t{i}", x + dx, y + dy, z + 0.6, r, h, glass)
         if h > 2.8:                                   # gold seam ring where the tall towers taper
-            cyl(f"feat_{name}_t{i}_seam", (x + dx, y + dy, z + 0.6 + h * 0.55), r * 0.9, STRIP, glow, sides=4,
-                axis="Z")
+            ring(f"feat_{name}_t{i}_seam", (x + dx, y + dy, z + 0.6 + h * 0.55), r * 0.9, r * 0.8, STRIP, glow,
+                 sides=4)
 
 
 def turret(name, x, y, z, hull, trim, glow):
@@ -139,7 +159,7 @@ def make():
     for x, y, r in ((3.4, 1.4, 1.0), (5.9, 0.0, 0.85), (1.2, 2.8, 0.95), (-1.2, 3.6, 0.8), (7.8, 0.0, 0.6),
                     (-5.7, 3.5, 0.9), (-9.4, 3.1, 0.85), (-9.4, 1.0, 0.75), (-0.6, 1.4, 0.75), (4.0, 3.0, 0.6)):
         cyl("pad", (x, y, TOP + 0.16), r, 0.32, trim, sides=6, axis="Z", r1=r * 0.86)
-        cyl("feat_pad_ring", (x, y, TOP + 0.33), r * 0.76 + STRIP / HEX, 0.02, glow, sides=6, axis="Z")  # 1 m lip
+        ring("feat_pad_ring", (x, y, TOP + 0.33), r * 0.76 + STRIP / HEX, r * 0.76 - 0.05, 0.02, glow)  # 1 m lip
         cyl("pad_top", (x, y, TOP + 0.36), r * 0.76, 0.08, hull, sides=6, axis="Z", r1=r * 0.6)
 
     # ── crystal tower clusters (the signature) ──
