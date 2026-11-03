@@ -3,21 +3,21 @@
   "lods": [
    {
     "file": "air_lod0.glb",
-    "tris": 3940,
+    "tris": 5904,
     "drawCalls": 2,
-    "bytes": 525480
+    "bytes": 778108
    },
    {
     "file": "air_lod1.glb",
-    "tris": 2928,
+    "tris": 2692,
     "drawCalls": 2,
-    "bytes": 430348
+    "bytes": 476876
    },
    {
     "file": "air_lod2.glb",
-    "tris": 1372,
+    "tris": 1396,
     "drawCalls": 2,
-    "bytes": 299012
+    "bytes": 369612
    }
   ],
   "engines": 8,
