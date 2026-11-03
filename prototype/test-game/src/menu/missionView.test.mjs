@@ -158,12 +158,16 @@ test('every giver in the content has a portrait file and a place in the voice pa
 test('the action follows the state: collect, waiting, track, abandon, remove, stamps', () => {
   const s = defaultSave();
   const p = logMission(s, def('P-VER-01'), opt);
-  assert.match(actionsHtml({ m: p, status: 'ready' }, s, CATALOG), /Waiting for Halbrecht/, 'no ship yet');
-  assert.ok(!actionsHtml({ m: p, status: 'ready' }, s, CATALOG).includes('data-act="collect"'));
+  const early = actionsHtml({ m: p, status: 'ready' }, s, CATALOG);
+  assert.ok(early.includes('data-act="collect"') && early.includes('Collect aboard the Collective ship'), 'maps 1-3: the Collective ship is always here');
+  assert.ok(early.includes('Verdance campaign'), 'collecting continues the line');
+  const p4 = logMission(s, def('P-VER-04'), opt);
+  assert.match(actionsHtml({ m: p4, status: 'ready' }, s, CATALOG), /Waiting for Halbrecht/, 'map 4: no planet ship yet');
+  assert.match(actionsHtml({ m: p4, status: 'ready' }, s, CATALOG), /map 3 averages 3 stars/);
+  assert.ok(!actionsHtml({ m: p4, status: 'ready' }, s, CATALOG).includes('data-act="collect"'));
   s.capitalShips.Verdance = { arrived: true };
-  const ready = actionsHtml({ m: p, status: 'ready' }, s, CATALOG);
+  const ready = actionsHtml({ m: p4, status: 'ready' }, s, CATALOG);
   assert.ok(ready.includes('data-act="collect"') && ready.includes("Collect aboard Halbrecht's Oath"));
-  assert.ok(ready.includes('Verdance campaign'), 'collecting continues the line');
   const act = actionsHtml({ m: p, status: 'active' }, s, CATALOG);
   assert.ok(act.includes('data-act="track"') && !act.includes('data-act="abandon"'), 'a primary cannot be abandoned');
   const sec = logMission(s, def('S-VER-01-L'), opt);
@@ -185,8 +189,11 @@ test('gates list what is met and what is not; a locked mission is judged live', 
   const g = gateViews(row, s, ctx(s));
   assert.ok(g.some((x) => x.kind === 'Quest line' && x.ok));
   assert.ok(g.some((x) => x.kind === 'Tech node' && x.text === 'Own Cannon T2' && !x.ok));
-  assert.ok(g.some((x) => x.kind === 'Capital ship' && !x.ok));
+  assert.ok(!g.some((x) => x.kind === 'Capital ship'), 'map 2 needs no planet ship');
   assert.ok(dossierHtml(row, s, CATALOG, ctx(s), PACKS).includes('OBJECTIVES (WHEN UNLOCKED)'));
+  s.questSteps['QL-VER-P'] = 3;
+  const row4 = missionRows(s, CATALOG, ctx(s)).find((r) => r.m.id === 'P-VER-04');
+  assert.ok(gateViews(row4, s, ctx(s)).some((x) => x.kind === 'Capital ship' && !x.ok), 'map 4 does');
   assert.deepEqual(gateViews({ m: row.m, status: 'done' }, s, ctx(s)), [], 'history has no gates');
 });
 
@@ -212,8 +219,9 @@ test('an objective past its need reads full, never 8 / 4', () => {
 });
 
 test('a planet with no ship says so in its note', () => {
-  const s = defaultSave(), m = logMission(s, def('P-VER-01'), opt);
+  const s = defaultSave(), m = logMission(s, def('P-VER-04'), opt);
   assert.match(noteFor({ m, status: 'ready' }, s), /wait for Halbrecht/);
+  assert.match(noteFor({ m: logMission(s, def('P-VER-01'), opt), status: 'ready' }, s), /aboard the Collective ship/);
   s.capitalShips.Verdance = { arrived: true };
   assert.match(noteFor({ m, status: 'ready' }, s), /Collect the rewards aboard/);
 });

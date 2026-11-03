@@ -7,7 +7,7 @@ import { acquireTarget, applyDamage, stepCombat, inBaseReach } from './combat.js
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
 import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
 import { initWaves, startNextWave, stepWaves } from './waves.js';
-import { initHarvest, cmdHarvest, stepHarvest, cmdBuyHarvester, resetFleetForWave } from './harvest.js';
+import { initHarvest, cmdHarvest, stepHarvest, cmdBuyHarvester, resetFleetForWave, initContract } from './harvest.js';
 import { deployMine, stepMines } from './mines.js';
 import { initBonuses, applyBonus, cannonRange, cannonDamage } from './bonuses.js';
 import { createLog, recordCommand } from './replay.js';
@@ -330,6 +330,7 @@ export function createSim(seed, opts) {
   state.waterPath = getWaterPath(map);
   // campaign maps carry resource nodes → runtime node state + the player's harvester (harvest.js)
   initHarvest(state, map);
+  state.contract = initContract(options.contract);   // Collective contract quota (null = every load pays)
 
   // CAMPAIGN CARRY (owner): winning a map brings your remaining gold AND your standing defenses
   // into the next battle. Structures re-plant at the same offsets from the NEW base; ones that

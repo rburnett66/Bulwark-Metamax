@@ -23,7 +23,8 @@ export function emptyStats() {
 const bump = (o, k, n = 1) => { o[k] = (o[k] || 0) + n; };
 
 export function createBattleTally() {
-  return { ...emptyStats(), unknownUnits: {}, harvesterIds: new Set(), lostIds: new Set() };
+  // kept: the units above the Collective contract's quota — the only harvest the inventory banks [MM-story_mw12m2df_2]
+  return { ...emptyStats(), kept: { common: 0, uncommon: 0, rare: 0, epic: 0 }, unknownUnits: {}, harvesterIds: new Set(), lostIds: new Set() };
 }
 
 /** The sim drops a dead harvester from its list, so the ids are remembered here from tick to tick. */
@@ -53,7 +54,10 @@ export function tallyEvents(t, events, unitDef = getUnitDef) {
       if (e.targetKind === 'base') t.baseDamage += e.amount || 0;
     } else if (e.type === 'deposit') {
       const tier = COLOR_TIER[e.color];
-      if (tier) t.harvested[tier] += e.units || 0;
+      if (tier) {
+        t.harvested[tier] += e.units || 0;
+        if (t.kept) t.kept[tier] += e.kept != null ? e.kept : (e.units || 0);   // no contract: everything is kept
+      }
     }
   }
   return t;

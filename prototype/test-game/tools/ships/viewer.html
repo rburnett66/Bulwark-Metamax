@@ -47,6 +47,23 @@
   .throttle input { flex: 1; accent-color: var(--hot); }
   .throttle output { font: 600 14px "Chakra Petch", sans-serif; min-width: 92px; color: var(--hot); }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--sel); outline-offset: 2px; }
+  /* presentation: chrome fades, letterbox slides in, a title card names the ship */
+  .fleet, .dock, .stats, .ref { transition: opacity .6s ease; }
+  body.present .fleet, body.present .dock, body.present .stats, body.present .ref { opacity: 0; pointer-events: none; }
+  .bar { position: fixed; left: 0; right: 0; height: var(--bar, 0px); background: #000; z-index: 2; transition: transform .9s cubic-bezier(.2,.7,.2,1); }
+  .bar.top { top: 0; transform: translateY(-100%); } .bar.bot { bottom: 0; transform: translateY(100%); }
+  body.present .bar { transform: none; }
+  .card { position: fixed; left: max(24px, 5vw); bottom: calc(var(--bar, 0px) + 28px); z-index: 3; opacity: 0; transform: translateY(12px);
+    transition: opacity .8s ease .5s, transform .8s ease .5s; pointer-events: none; }
+  body.present .card { opacity: 1; transform: none; }
+  .card .faction { font: 600 clamp(36px, 6vw, 72px)/1 "Chakra Petch", sans-serif; text-transform: capitalize; letter-spacing: .02em; }
+  .card .rule { width: 72px; height: 3px; margin: 14px 0 10px; border-radius: 2px; background: var(--eng, #9fd8ff); box-shadow: 0 0 14px var(--eng, #9fd8ff); }
+  .card .kind { color: var(--dim); font-size: 15px; }
+  .exit { position: fixed; top: calc(var(--bar, 0px) + 16px); right: 16px; z-index: 3; opacity: 0; pointer-events: none; transition: opacity .6s ease .6s; }
+  body.present .exit { opacity: 1; pointer-events: auto; }
+  .fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 1; }
+  .lab .seg[aria-pressed="false"] { opacity: .55; }
+  .perf { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
   @media (max-width: 720px) {
     .fleet { top: auto; bottom: auto; left: 16px; right: 16px; width: auto; height: auto; display: flex; overflow-x: auto; padding: 6px; }
     .fleet h1 { display: none; }
@@ -63,6 +80,10 @@
 <nav class="fleet" aria-label="Capital ships"><h1>Capital ships</h1><div id="list"></div></nav>
 <figure class="ref" id="ref" hidden><img id="refImg" alt=""><span>Grok concept</span></figure>
 <div class="stats" id="stats"></div>
+<div class="fade" id="fade" aria-hidden="true"></div>
+<div class="bar top" aria-hidden="true"></div><div class="bar bot" aria-hidden="true"></div>
+<div class="card" aria-live="polite"><div class="faction" id="cardName"></div><div class="rule"></div><div class="kind" id="cardKind">Capital ship</div></div>
+<button class="seg exit" id="exit">Exit presentation</button>
 <div class="dock">
   <div class="throttle">
     <label for="k" class="group" style="color:var(--dim);font-size:12px">Engines</label>
@@ -80,7 +101,17 @@
   <div class="group" role="group" aria-label="Level of detail"><label>Detail</label>
     <button class="seg" data-lod="0" aria-pressed="true">Close</button><button class="seg" data-lod="1">Orbit</button><button class="seg" data-lod="2">Far</button>
   </div>
-  <div class="group"><button class="seg" id="spin" aria-pressed="false">Turntable</button><button class="seg" id="bloom" aria-pressed="true">Bloom</button></div>
+  <div class="group lab" role="group" aria-label="Presentation lab"><label>Lab</label>
+    <button class="seg" data-lab="hdr" title="HDR chain: one tone map, half-float, bloom on HDR values (reloads)">HDR</button>
+    <button class="seg" data-lab="backdrop">Space</button><button class="seg" data-lab="bloom">Bloom</button>
+    <button class="seg" data-lab="ca" title="Chromatic aberration, vignette, grain">Lens</button><button class="seg" data-lab="flare">Flare</button>
+    <button class="seg" data-lab="haze">Haze</button><button class="seg" data-lab="env" title="Reflections from the backdrop">Reflect</button>
+  </div>
+  <div class="group" role="group" aria-label="Shots"><label>Shots</label>
+    <button class="seg" data-cut="orbit">Orbit 135</button><button class="seg" data-cut="flyby">Flyby 35</button>
+    <button class="seg" data-cut="stern">Stern 85</button><button class="seg" data-cut="bow">Bow 24</button>
+  </div>
+  <div class="group"><button class="seg" id="present">Present</button><button class="seg" id="tugsBtn" aria-pressed="false">Tugs</button><button class="seg" id="spin" aria-pressed="false">Turntable</button><button class="seg" id="bloom" aria-pressed="true">Bloom</button></div>
 </div>
 <script type="module">
 import * as THREE from 'three';
@@ -88,59 +119,119 @@ import { OrbitControls } from '../../vendor/three-addons/controls/OrbitControls.
 import { GLTFLoader } from '../../vendor/three-addons/loaders/GLTFLoader.js';
 import { EffectComposer } from '../../vendor/three-addons/postprocessing/EffectComposer.js';
 import { RenderPass } from '../../vendor/three-addons/postprocessing/RenderPass.js';
+import { ShaderPass } from '../../vendor/three-addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from '../../vendor/three-addons/postprocessing/UnrealBloomPass.js';
+import { Lensflare, LensflareElement } from '../../vendor/three-addons/objects/Lensflare.js';
 import { createEngineFx, prepareShip } from '../../src/render3d/ships/engineFx.js';
+import { createTugs } from '../../src/render3d/ships/tugs.js';
+import { shot, SHOT_ORDER, lensFov } from '../../src/render3d/ships/shots.js';
+import { createBackdrop } from '../../src/render3d/space/backdrop.js';
+import { chromaticAberrationPass, createLensFlare, hdrBloom, tonemapPass } from '../../src/render3d/space/lensFx.js';
 
 const ORDER = ['air', 'arcane', 'artillery', 'collective', 'dark', 'green', 'lumen', 'powder', 'tech', 'water'];
 const BUNDLE = window.SHIP_BUNDLE || null;              // standalone review copy: inlined GLBs + refs
 const asset = (f) => (BUNDLE && BUNDLE.files[f]) || `../../content/ships/${f}`;
 const q = new URLSearchParams(location.search);
+const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ── presentation lab: every technique from Capital-Ship-Scale-Research.md can be switched on and off ──────
+// ?hdr=0 gives the old chain (ACES in every material, 8-bit buffer, bloom at 0.88) for side-by-side review.
+const tier = ['high', 'standard', 'low'].includes(q.get('tier')) ? q.get('tier') : 'high';
+const LAB = {};
+for (const k of ['hdr', 'backdrop', 'bloom', 'ca', 'flare', 'haze', 'env']) LAB[k] = q.get(k) !== '0';
+if (tier === 'low') { LAB.ca = q.get('ca') === '1'; LAB.flare = q.get('flare') === '1'; LAB.bloom = q.get('bloom') === '1'; }
+if (!LAB.hdr) { LAB.backdrop = q.get('backdrop') === '1'; LAB.ca = LAB.flare = LAB.haze = LAB.env = false; }
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: q.has('shot') });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, tier === 'low' ? 1 : tier === 'standard' ? 1.5 : 2));
 renderer.outputEncoding = THREE.sRGBEncoding;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = LAB.hdr ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;   // HDR: tone map ONCE, at the end
 renderer.toneMappingExposure = 0.9;
+renderer.info.autoReset = false;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x05070d).convertSRGBToLinear();
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 2000);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 
-// light: cool space fill, warm key, blue rim
-scene.add(new THREE.HemisphereLight(0x9fb4d9, 0x0a0c14, 0.35));
-const key = new THREE.DirectionalLight(0xfff1dc, 1.5); key.position.set(12, -8, 14); scene.add(key);
-const rim = new THREE.DirectionalLight(0x7fa6ff, 1.0); rim.position.set(-14, 10, 6); scene.add(rim);
-// stars
-{
+// ── sky and light ────────────────────────────────────────────────────────────────────────────────────────
+// New: one light source — the backdrop's sun is the key; a dim cool fill; reflections from the same sky.
+// Old (?hdr=0): key from below/front, a rim nearly as strong as the key, flat starfield, no reflections.
+const bd = createBackdrop(THREE, { seed: +(q.get('seed') || 3), tier });
+bd.group.visible = LAB.backdrop;
+scene.add(bd.group);
+const oldStars = legacyStars();
+oldStars.visible = !LAB.backdrop;
+scene.background = LAB.backdrop ? null : new THREE.Color(0x05070d).convertSRGBToLinear();
+let key, fill, rim = null;
+if (LAB.hdr) {
+  key = new THREE.DirectionalLight(bd.sunColor, 2.1);
+  key.position.copy(bd.sunDirection).multiplyScalar(100);
+  fill = new THREE.HemisphereLight(0x6f84b0, 0x05060a, 0.14);
+} else {
+  key = new THREE.DirectionalLight(0xfff1dc, 1.5); key.position.set(12, -8, 14);
+  fill = new THREE.HemisphereLight(0x9fb4d9, 0x0a0c14, 0.35);
+  rim = new THREE.DirectionalLight(0x7fa6ff, 1.0); rim.position.set(-14, 10, 6); scene.add(rim);
+}
+scene.add(key, fill);
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envTex = pmrem.fromScene(bd.envScene, 0.04).texture;
+const applyEnv = () => { scene.environment = LAB.env ? envTex : null; };
+applyEnv();
+const fogColor = new THREE.Color(0x0b1220).convertSRGBToLinear();
+
+function legacyStars() {
   const n = 2400, pos = new Float32Array(n * 3), rnd = mulberry(7);
   for (let i = 0; i < n; i++) {
     const u = rnd() * 2 - 1, t = rnd() * Math.PI * 2, r = 600;
     pos.set([Math.sqrt(1 - u * u) * Math.cos(t) * r, Math.sqrt(1 - u * u) * Math.sin(t) * r, u * r], i * 3);
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0x9aa6c0, size: 1.2, sizeAttenuation: false })));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x9aa6c0, size: 1.2, sizeAttenuation: false, fog: false }));
+  scene.add(p);
+  return p;
 }
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
   t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
-const composer = new EffectComposer(renderer);
+// ── post chain ───────────────────────────────────────────────────────────────────────────────────────────
+// HDR: scene → half-float buffer → bloom on values > 1 (engines, windows, sun) → ACES + sRGB once → lens pass
+// (radial chromatic aberration, vignette, grain — one cheap full-screen pass).
+const composer = LAB.hdr
+  ? new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }))
+  : new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.7, 0.45, 0.88);
+const bloom = LAB.hdr
+  ? hdrBloom(THREE, new UnrealBloomPass(new THREE.Vector2(1, 1), tier === 'high' ? 0.45 : 0.4, tier === 'high' ? 0.5 : 0.4, 1.0))
+  : new UnrealBloomPass(new THREE.Vector2(1, 1), 0.7, 0.45, 0.88);
+bloom.enabled = LAB.bloom;
 composer.addPass(bloom);
+let tonemap = null, lens = null;
+if (LAB.hdr) {
+  tonemap = tonemapPass(THREE, ShaderPass, { exposure: 0.85 });
+  composer.addPass(tonemap);
+  lens = chromaticAberrationPass(THREE, ShaderPass, { amount: tier === 'high' ? 0.0012 : 0.0008, vignette: 0.22, grain: tier === 'high' ? 0.025 : 0.02 });
+  lens.enabled = LAB.ca;
+  composer.addPass(lens);
+}
+let flare = null;
+if (LAB.hdr && tier !== 'low') {
+  flare = createLensFlare(THREE, Lensflare, LensflareElement, { color: bd.sunColor, seed: 3, pixelRatio: renderer.getPixelRatio() });
+  flare.visible = LAB.flare;
+  bd.sunAnchor.add(flare);
+}
 
-// ── fleet ────────────────────────────────────────────────────────────────────────────
+// ── fleet ────────────────────────────────────────────────────────────────────────────────────────────────
 const loader = new GLTFLoader();
-let manifest = {}, current = null, slug = null, lod = 0, fx = null, size = 20;
-const holder = new THREE.Group();                       // glTF is Y-up: +X bow, +Y up, -Z port
+let manifest = {}, current = null, slug = null, lod = 0, fx = null, size = 20, tugs = null, tugScene = null, presenting = false;
+const center = new THREE.Vector3(), hull = new THREE.Box3();
+const holder = new THREE.Group();                       // glTF is Y-up: +X bow, +Y up, +Z starboard
 scene.add(holder);
 
 async function loadManifest() {
   if (BUNDLE) return BUNDLE.manifest;
   const r = await fetch(asset('ships.json')); return r.ok ? r.json() : {};
 }
-
 function rgbCss(c) { return c ? `rgb(${c.map((v) => Math.round(v * 255)).join(',')})` : '#888'; }
 
 function renderList() {
@@ -157,40 +248,57 @@ function renderList() {
   }
 }
 
+function hdrGlow(root) {                                // emissive above 1 so HDR bloom picks it up (and only it)
+  root.traverse((o) => { if (o.isMesh && o.material && o.material.name === 'ship_glow') o.material.uniforms.gain.value = LAB.hdr ? 1.4 : 1; });
+}
+
 async function show(s, keepView) {
   slug = s;
   renderList();
   const m = manifest[s];
   const gltf = await loader.loadAsync(asset(m.lods[lod].file));
-  if (current) { fx && fx.dispose(); holder.remove(current); }
-  current = prepareShip(THREE, gltf.scene);
+  if (current) { fx && fx.dispose(); tugs && tugs.dispose(); holder.remove(current); }
+  current = prepareShip(THREE, gltf.scene, { anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()) });
+  hdrGlow(current);
   holder.add(current);
+  hull.setFromObject(current);                          // the hull alone, before fx and tugs join it
   fx = createEngineFx(THREE, current);
   fx.setIntensity(+kIn.value);
-  const box = new THREE.Box3().setFromObject(current);
-  size = box.getSize(new THREE.Vector3()).length();
-  controls.target.copy(box.getCenter(new THREE.Vector3()));
+  tugs = null;
+  if (manifest.tug) {
+    tugScene = tugScene || prepareShip(THREE, (await loader.loadAsync(asset(manifest.tug.lods[0].file))).scene,
+      { anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()) });
+    hdrGlow(tugScene);
+    tugs = createTugs(THREE, tugScene, current, { count: 7, color: m.engineColor || [0.6, 0.8, 1], seed: s.length * 7 });
+    tugs.group.visible = presenting || tugsBtn.getAttribute('aria-pressed') === 'true';
+  }
+  document.getElementById('cardName').textContent = s;
+  document.querySelector('.card').style.setProperty('--eng', rgbCss(m.engineColor));
+  size = hull.getSize(new THREE.Vector3()).length();
+  camera.near = size * 0.01; camera.far = size * 40;      // tight depth range = precise depth = no shimmer
+  camera.updateProjectionMatrix();
+  scene.fog = LAB.haze ? new THREE.FogExp2(fogColor, 0.11 / size) : null;   // aerial perspective: far end recedes
+  controls.target.copy(hull.getCenter(center));
   controls.target.x -= size * 0.07;                     // leave room aft for the exhaust plume
   if (!keepView) setView(q.get('view') || 'hero');
   const ref = BUNDLE && BUNDLE.refs[s];
   document.getElementById('ref').hidden = !ref;
   if (ref) document.getElementById('refImg').src = ref;
-  const l = m.lods[lod];
-  document.getElementById('stats').innerHTML =
-    `<b>${l.tris.toLocaleString()}</b> triangles · <b>${l.drawCalls}</b> + 2 fx draw calls · <b>${m.engines}</b> engines · length <b>${m.length}</b>`;
+  statsLine = `<b>${m.lods[lod].tris.toLocaleString()}</b> triangles · <b>${m.engines}</b> engines · length <b>${m.length}</b>` +
+    (tugs ? ' · <b>7</b> tugs' : '');
 }
 
 const VIEWS = { hero: [-35, 24], rear: [160, 14], side: [-90, 2], top: [-90, 88] };   // yaw from the bow, pitch
 function setView(v) {
   const [yaw, pitch] = VIEWS[v] || VIEWS.hero, y = THREE.MathUtils.degToRad(yaw), p = THREE.MathUtils.degToRad(pitch);
-  const d = size * 1.75;
-  // yaw is measured from the bow toward starboard, like the Blender renders (glTF: starboard is +Z)
+  camera.fov = lensFov(35, camera.aspect); camera.updateProjectionMatrix();
+  const d = size * 1.9;
   const dir = new THREE.Vector3(Math.cos(p) * Math.cos(y), Math.sin(p), -Math.cos(p) * Math.sin(y));
   camera.position.copy(controls.target).addScaledVector(dir, d);
   document.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.view === v));
 }
 
-// ── controls ─────────────────────────────────────────────────────────────────────────
+// ── controls ─────────────────────────────────────────────────────────────────────────────────────────────
 const kIn = document.getElementById('k'), kOut = document.getElementById('kOut');
 function setK(v) {
   kIn.value = v;
@@ -206,30 +314,107 @@ document.querySelectorAll('[data-lod]').forEach((b) => (b.onclick = () => {
   document.querySelectorAll('[data-lod]').forEach((x) => x.setAttribute('aria-pressed', x === b));
   show(slug, true);
 }));
+const tugsBtn = document.getElementById('tugsBtn');
+tugsBtn.onclick = () => {
+  const on = tugsBtn.getAttribute('aria-pressed') !== 'true';
+  tugsBtn.setAttribute('aria-pressed', on);
+  if (tugs) tugs.group.visible = on || presenting;
+};
+// lab toggles: live where cheap; the HDR chain itself rebuilds the page
+const labApply = {
+  backdrop: (on) => { bd.group.visible = on; oldStars.visible = !on; scene.background = on ? null : new THREE.Color(0x05070d).convertSRGBToLinear(); },
+  bloom: (on) => { bloom.enabled = on; },
+  ca: (on) => { if (lens) lens.enabled = on; },
+  flare: (on) => { if (flare) flare.visible = on; },
+  haze: (on) => { scene.fog = on ? new THREE.FogExp2(fogColor, 0.11 / size) : null; },
+  env: () => applyEnv(),
+};
+document.querySelectorAll('[data-lab]').forEach((b) => {
+  const k = b.dataset.lab;
+  b.setAttribute('aria-pressed', LAB[k]);
+  if (!LAB.hdr && k !== 'hdr' && k !== 'backdrop' && k !== 'bloom') b.disabled = true;
+  b.onclick = () => {
+    if (k === 'hdr') { q.set('hdr', LAB.hdr ? '0' : '1'); location.search = q.toString(); return; }
+    LAB[k] = !LAB[k];
+    b.setAttribute('aria-pressed', LAB[k]);
+    labApply[k](LAB[k]);
+  };
+});
+
+// presentation: cinematic shot recipes (shots.js) cut together; the UI steps aside; tugs fly
+let shotIdx = 0, shotT = 0, shotLock = null;
+function present(on, cut) {
+  presenting = on;
+  shotLock = cut || null;
+  shotIdx = Math.max(0, SHOT_ORDER.indexOf(cut || 'orbit'));
+  shotT = 0;
+  document.body.classList.toggle('present', on);
+  controls.enabled = !on;
+  if (tugs) tugs.group.visible = on || tugsBtn.getAttribute('aria-pressed') === 'true';
+  if (on) { if (+kIn.value < 0.6) setK(1); holder.rotation.y = 0; }
+  else { camera.filmOffset = 0; document.getElementById('fade').style.opacity = 0; setView('hero'); }
+  frame();
+}
+document.getElementById('present').onclick = () => present(true);
+document.getElementById('exit').onclick = () => present(false);
+document.querySelectorAll('[data-cut]').forEach((b) => (b.onclick = () => present(true, b.dataset.cut)));
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && presenting) present(false); });
 const spin = document.getElementById('spin'), bloomBtn = document.getElementById('bloom');
 spin.onclick = () => spin.setAttribute('aria-pressed', spin.getAttribute('aria-pressed') !== 'true');
-bloomBtn.onclick = () => { bloomBtn.setAttribute('aria-pressed', !(bloom.enabled = !bloom.enabled)); bloomBtn.setAttribute('aria-pressed', bloom.enabled); };
+bloomBtn.remove();                                      // bloom lives in the Lab group now
 
+function frame() {                                      // letterbox only where it frames a wide shot
+  const w = innerWidth, h = innerHeight;
+  const bar = presenting && w > h ? Math.max(0, (h - w / 2.39) / 2) : 0;
+  document.body.style.setProperty('--bar', `${bar}px`);
+}
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false); composer.setSize(w, h); bloom.setSize(w, h);
   camera.aspect = w / h; camera.updateProjectionMatrix();
+  frame();
 }
 addEventListener('resize', resize); resize();
 
+let statsLine = '', perfT = 0;
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (spin.getAttribute('aria-pressed') === 'true' && !matchMedia('(prefers-reduced-motion: reduce)').matches) holder.rotation.y += dt * 0.15;
-  controls.update();
+  if (!presenting && spin.getAttribute('aria-pressed') === 'true' && !still()) holder.rotation.y += dt * 0.025;   // ≈1.4°/s
+  if (presenting) {
+    shotT += still() ? 0 : dt;
+    let name = SHOT_ORDER[shotIdx];
+    let c = shot(name, shotT, { box: hull, aspect: camera.aspect, still: still() });
+    if (shotT > c.seconds && !shotLock) { shotIdx = (shotIdx + 1) % SHOT_ORDER.length; shotT = 0; name = SHOT_ORDER[shotIdx]; c = shot(name, 0, { box: hull, aspect: camera.aspect }); }
+    if (shotT > c.seconds && shotLock) shotT = 0;
+    camera.fov = c.fov;
+    // landscape: frame the subject right of the title card (14 % of frame width); portrait: centred
+    camera.filmOffset = camera.aspect > 1 ? -0.14 * camera.getFilmWidth() * 2 * Math.tan(c.fov * Math.PI / 360) * camera.aspect : 0;
+    camera.updateProjectionMatrix();
+    camera.position.set(...c.position);
+    camera.lookAt(...c.target);
+    document.getElementById('fade').style.opacity = shotLock ? 0 : (1 - c.fade).toFixed(3);
+  } else controls.update();
   fx && fx.update(dt);
+  tugs && tugs.group.visible && tugs.update(dt, renderer.domElement.height);
+  bd.update(dt, camera);
+  lens && lens.tick && lens.tick(dt);
+  renderer.info.reset();
   composer.render();
+  if ((perfT += dt) > 0.5) {
+    perfT = 0;
+    const i = renderer.info.render;
+    document.getElementById('stats').innerHTML = statsLine +
+      ` · frame <b>${i.calls}</b> draws, <b>${(i.triangles / 1000).toFixed(1)}k</b> tris · ${LAB.hdr ? 'HDR' : 'old chain'} · ${tier}`;
+  }
 });
 
 manifest = await loadManifest();
 setK(q.has('k') ? +q.get('k') : 1);
 const first = q.get('ship') && manifest[q.get('ship')] ? q.get('ship') : ORDER.find((s) => manifest[s]);
 if (first) await show(first);
+if (q.has('present') || q.has('cut')) present(true, q.get('cut'));
+if (q.has('t')) { shotT = +q.get('t'); }
 window.__ready = true;
 </script>
 </body>

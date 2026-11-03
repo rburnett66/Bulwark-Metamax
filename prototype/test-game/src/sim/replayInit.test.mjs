@@ -72,7 +72,8 @@ test('replay: a serialized log WITHOUT the board runs the wrong field (why the c
 
 test('replayOpts: carries every rebuildable scalar and the board, defaults the rest', () => {
   const B = { map: { id: 'm' }, waves: [1] };
-  assert.deepEqual(replayOpts({ mapId: 4, faction: 'Dark', carry: { gold: 5 }, harvesterLevel: 2, structTiers: { cannon: 3 } }, B),
-    { map: B.map, waves: B.waves, carry: { gold: 5 }, harvesterLevel: 2, structTiers: { cannon: 3 }, mapId: 4, faction: 'Dark' });
-  assert.deepEqual(replayOpts(null, B), { map: B.map, waves: B.waves, carry: null, harvesterLevel: 1, structTiers: null, mapId: null, faction: null });
+  const contract = { common: 100, uncommon: 10, rare: 1, epic: 0 };
+  assert.deepEqual(replayOpts({ mapId: 4, faction: 'Dark', carry: { gold: 5 }, harvesterLevel: 2, structTiers: { cannon: 3 }, contract }, B),
+    { map: B.map, waves: B.waves, carry: { gold: 5 }, harvesterLevel: 2, structTiers: { cannon: 3 }, mapId: 4, faction: 'Dark', contract });
+  assert.deepEqual(replayOpts(null, B), { map: B.map, waves: B.waves, carry: null, harvesterLevel: 1, structTiers: null, mapId: null, faction: null, contract: null });
 });

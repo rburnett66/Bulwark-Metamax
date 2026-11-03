@@ -13,7 +13,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import _obj, box, build, cyl, engine, mat  # noqa: E402  (imports bpy before bmesh)
+from common import DECK, DETAIL, _obj, box, build, cyl, engine, mast, mat, window_row  # noqa: E402  (imports bpy before bmesh)
 import bmesh  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
@@ -72,22 +72,22 @@ def rib(name, cx, cz, r, phi, material, h=1.0, steps=5, t=0.07, w=0.05):
     return _obj(name, bm, material)
 
 
-def porthole(name, x, z, r, material, sides=6, proud=0.03):
-    """A flat hex lens lying on the hull's flank (port side), tilted to the local surface normal."""
-    rh = hull_r(x)
-    rz = rh * SQUASH
-    y = rh * math.sqrt(max(0.0, 1 - (z / rz) ** 2))
-    n = Vector((0, y / rh ** 2, z / rz ** 2)).normalized()
-    u = Vector((1, 0, 0))
-    v = n.cross(u).normalized()
-    c = Vector((x, y, z)) + n * proud
-    bm = bmesh.new()
-    vs = [bm.verts.new(c + u * r * math.cos(2 * math.pi * i / sides) + v * r * math.sin(2 * math.pi * i / sides))
-          for i in range(sides)]
-    f = bm.faces.new(vs)
-    if f.normal.dot(n) < 0:
-        f.normal_flip()
-    return _obj(name, bm, material)
+def port_row(name, x0, x1, z, surf_y, material, count):
+    """A row of standard portholes (⌀ 2 m) on the port flank of a round hull: flat hex lenses facing +Y, set just
+    proud of the hull. surf_y(x, z) gives the hull's y at that point; each lens sits on the outermost point it
+    covers, so no edge sinks into the curve. (A flat hex keeps the tri budget; porthole_row's 8-gon prisms
+    cost 7x as much.)"""
+    r = DETAIL["port"]["d"] / 2
+    for i in range(count):
+        x = x0 + (x1 - x0) * (i + 0.5) / count
+        y = max(surf_y(x, z - r), surf_y(x, z + r)) + 0.012
+        bm = bmesh.new()
+        vs = [bm.verts.new(Vector((x + r * math.cos(math.pi * k / 3), y, z + r * math.sin(math.pi * k / 3) / math.sin(math.pi / 3))))
+              for k in range(6)]
+        f = bm.faces.new(vs)
+        if f.normal.y < 0:
+            f.normal_flip()
+        _obj(f"{name}_{i}", bm, material)
 
 
 # hull profile: (x, radius) — the bow bulb, the long body, the tapering stern
@@ -101,6 +101,19 @@ def hull_r(x):
         if x1 <= x <= x0:
             return r1 + (r0 - r1) * (x - x1) / (x0 - x1)
     return PROFILE[-1][1]
+
+
+def hull_y(x, z):
+    """Port-side surface y of the hull at (x, z)."""
+    rh = hull_r(x)
+    return rh * math.sqrt(max(0.0, 1 - (z / (rh * SQUASH)) ** 2))
+
+
+def rim_y(x, z):
+    """Port-side surface y of the bow gallery rim (x 7.6–9.6, centred z = -0.35)."""
+    ry = 2.8 + (2.72 - 2.8) * (x - 7.6) / 2.0
+    rz = 2.5 + (2.45 - 2.5) * (x - 7.6) / 2.0
+    return ry * math.sqrt(max(0.0, 1 - ((z + 0.35) / rz) ** 2))
 
 
 def make():
@@ -127,16 +140,14 @@ def make():
         box("bow_flute", (10.9, 0.62 * math.cos(a), 0.62 * math.sin(a) * SQUASH), (0.9, 0.1, 0.1), hull)
     cyl("bow_tip", (11.85, 0, 0), 0.08, 0.5, iron, sides=6)
 
-    # ── portholes: two rows down each flank, grouped between the bands ──
+    # ── portholes: standard ⌀ 2 m, three decks on deck pitch, grouped between the bands ──
     bands = (6.65, 4.3, 1.9, -0.6, -3.0, -5.3, -7.4)
-    for z, row in ((0.35, 0), (-0.55, 1)):
-        for xa, xb in zip(bands, bands[1:]):
-            n = 4 if row == 0 else 2
-            for k in range(n):
-                x = xb + (xa - xb) * (k + 1) / (n + 1)
-                porthole("porthole", x, z, 0.16, port)
-    for x in (9.9, 9.3, 8.7, 8.1, 7.5):                                               # bow-bulb portholes
-        porthole("porthole", x, 0.3, 0.17, port)
+    for xa, xb in zip(bands, bands[1:]):
+        mid, n = (xa + xb) / 2, 7
+        for k in range(3):
+            port_row(f"port_hull_{k}", mid + 0.11 * n, mid - 0.11 * n, 0.12 + k * DECK, hull_y, port, n)
+    for k in range(2):                                                                # bow-gallery portholes
+        port_row(f"port_bow_{k}", 9.3, 7.9, 0.12 + k * DECK, rim_y, port, 6)
 
     # ── dorsal deck (centreline) ──
     top = 2.1 * SQUASH
@@ -146,35 +157,37 @@ def make():
     # forward dome on the bow bulb
     fx, fz, fr = 8.3, 2.55, 1.8
     rloft("fdome_drum", [(fz - 0.4, fr + 0.25, fr + 0.25, fx, 0), (fz, fr + 0.25, fr + 0.25, fx, 0)], trim, sides=16, axis="Z")
-    rloft("fdome_glow", [(fz, fr + 0.12, fr + 0.12, fx, 0), (fz + 0.06, fr + 0.12, fr + 0.12, fx, 0)], teal, sides=16, axis="Z")
+    rloft("feat_fdome_glow", [(fz, fr + 0.12, fr + 0.12, fx, 0), (fz + 0.06, fr + 0.12, fr + 0.12, fx, 0)], teal, sides=16, axis="Z")
     dome("fdome", fx, fz, fr, glass, sides=16, steps=5)
     for i in range(5):
         rib("fdome_rib", fx, fz, fr, math.pi * i / 4, hull, steps=4)
     rloft("fdome_crown", [(fz + fr - 0.05, 0.35, 0.35, fx, 0), (fz + fr + 0.2, 0.25, 0.25, fx, 0),
                           (fz + fr + 0.5, 0.08, 0.08, fx, 0)], trim, sides=8, axis="Z")
-    cyl("fdome_spike", (fx, 0, fz + fr + 0.75), 0.03, 0.6, iron, sides=4, axis="Z")
+    mast("mast_fdome", fx, 0, fz + fr + 0.45, 0.6, iron)
 
     # aft dome raised on a drum amidships
     ax, az, ar = -1.8, 3.2, 2.0
     rloft("adome_tower", [(top - 0.2, 1.4, 1.4, ax, 0), (az - 0.45, 1.6, 1.6, ax, 0), (az - 0.2, 2.3, 2.3, ax, 0),
                           (az, 2.3, 2.3, ax, 0)], trim, sides=16, axis="Z")
-    rloft("adome_glow", [(az, ar + 0.12, ar + 0.12, ax, 0), (az + 0.06, ar + 0.12, ar + 0.12, ax, 0)], teal, sides=16, axis="Z")
+    rloft("feat_adome_glow", [(az, ar + 0.12, ar + 0.12, ax, 0), (az + 0.06, ar + 0.12, ar + 0.12, ax, 0)], teal, sides=16, axis="Z")
     dome("adome", ax, az, ar, glass, sides=16, steps=5)
     for i in range(5):
         rib("adome_rib", ax, az, ar, math.pi * i / 4, hull, steps=4)
     rloft("adome_crown", [(az + ar - 0.05, 0.4, 0.4, ax, 0), (az + ar + 0.25, 0.28, 0.28, ax, 0),
                           (az + ar + 0.6, 0.08, 0.08, ax, 0)], trim, sides=8, axis="Z")
-    cyl("adome_spike", (ax, 0, az + ar + 0.9), 0.03, 0.8, iron, sides=4, axis="Z")
+    mast("mast_adome", ax, 0, az + ar + 0.5, 0.8, iron)
 
     # ── smokestacks, spires, vents along the top ──
-    for x, y, h, r in ((3.0, 0.5, 1.9, 0.26), (1.0, 0.0, 1.5, 0.24), (-4.6, 0.0, 2.6, 0.34), (-6.4, 0.55, 2.0, 0.26), (-8.0, 0.0, 1.6, 0.24)):
+    for x, y, h, r in ((3.0, 0.5, 1.9, 0.19), (1.0, 0.0, 1.5, 0.17), (-4.6, 0.0, 2.6, 0.22), (-6.4, 0.55, 2.0, 0.19), (-8.0, 0.0, 1.6, 0.17)):
         zb = top + 0.3
-        cyl("stack", (x, y, zb + h / 2), r, h, iron, sides=8, axis="Z")
-        cyl("stack_lip", (x, y, zb + h - 0.05), r + 0.08, 0.14, hull, sides=8, axis="Z")
+        cyl("stack_body", (x, y, zb + h / 2), r, h, iron, sides=8, axis="Z")
+        cyl("stack_lip", (x, y, zb + h - 0.05), r + 0.04, 0.14, hull, sides=8, axis="Z")
     # spired tower behind the aft dome
     box("tower", (-4.6, 0.0, top + 0.6), (1.4, 1.6, 0.8), hull, chamfer=0.2)
+    for k in range(2):                                                  # two decks of tower windows
+        window_row(f"win_tower_{k}", (-5.1, 0.8, top + 0.52 + k * DECK), (-4.1, 0.8, top + 0.52 + k * DECK), port, count=5)
     for x, y, h in ((3.4, 0.0, 2.0), (2.0, 0.85, 1.6), (-4.0, 0.85, 2.4), (-7.1, 0.9, 1.6), (-9.0, 0.6, 1.2)):
-        cyl("spire", (x, y, top + 0.3 + h / 2), 0.14, h, hull, sides=6, axis="Z", r1=0.02)
+        cyl("spire_dorsal", (x, y, top + 0.3 + h / 2), 0.14, h, hull, sides=6, axis="Z", r1=0.02)
     for x in (-3.4, -5.6):                                              # dorsal vents
         box("vent", (x, 0.45, top + 0.38), (0.7, 0.45, 0.25), iron, chamfer=0.08)
 
@@ -185,7 +198,7 @@ def make():
         rloft("belly_pod", [(x + 1.6, 0.25, 0.25, 1.3, -1.75), (x + 1.2, 0.5, 0.5, 1.3, -1.75),
                             (x - 1.2, 0.5, 0.5, 1.3, -1.75), (x - 1.6, 0.3, 0.3, 1.3, -1.75)], hull, sides=8)
         rloft("belly_pod_band", [(x - 0.1, 0.56, 0.56, 1.3, -1.75), (x + 0.1, 0.56, 0.56, 1.3, -1.75)], trim, sides=8)
-        cyl("belly_pod_glow", (x - 1.62, 1.3, -1.75), 0.18, 0.04, teal, sides=8)
+        cyl("feat_belly_pod_glow", (x - 1.62, 1.3, -1.75), 0.18, 0.04, teal, sides=8)
 
     # ── stern engines ──
     box("stern_plate", (-10.25, 0, 0), (0.15, 2.0, 2.0), trim, chamfer=0.5)

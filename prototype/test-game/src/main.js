@@ -1,4 +1,5 @@
 import { MAP, WAVES, makeWaves, fxScaleForMap, projScaleForMap, getUnitDef } from './data/tables.js';
+import { contractFor } from './data/collectiveContract.js';
 import { buildCampaignMap, buildTerrainMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
@@ -23,6 +24,7 @@ import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
 import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
 import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner } from './render/hud.js';
+import { createResourceLedger, feedResources, closeWave, resourceNames, waveResourcesHtml, mapResourcesHtml } from './render/resourceSummary.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
 import { setChannelVolume, initAudio } from './comm/voice.js';
@@ -275,6 +277,9 @@ export function boot(mountEl, seed) {
   loadMissionCatalog().then((c) => { missionCatalog = c; }).catch((e) => console.error('[missions] content failed to load', e));
   let trackedNow = null;       // the mission pinned to the battle HUD: read at battle start, so the line is a read-only look
   let battleTally = createBattleTally();   // this battle's counts, from the drained events: banked at battle end only [MM-story_mvyqol3w_d]
+  let resLedger = createResourceLedger();   // resources collected this wave and this map [MM-story_mw13ek87_1]
+  /** The battle planet's resource names by tier (missions.json); tier words until the catalogue has loaded. */
+  const battleResourceNames = () => resourceNames(missionCatalog, planetOfFaction(currentTestFaction));
 
   // ---------------------------------------------------------------------
   // Command submission: validates via sim core, records accepted commands.
@@ -351,9 +356,12 @@ export function boot(mountEl, seed) {
         // classic board AND forge maps stay all-open — the campaign tier-unlock shop (Amendment B2)
         // has no UI yet, so gating forge playtests made upgrades silently impossible (owner 2026-07-16)
         structTiers: currentMapId && !(currentMap && currentMap.fromForge) ? sv.structTiers : null,
-        mapId: currentMapId, faction: currentTestFaction || null };
+        mapId: currentMapId, faction: currentTestFaction || null,
+        // the Collective buys the harvest up to this map's quota; the surplus is kept [MM-story_mw12m2df_2]
+        contract: currentMapId ? contractFor(currentMapId) : null };
       sim = createSim(currentSeed, simInit);
       battleTally = createBattleTally();
+      resLedger = createResourceLedger();   // resources collected per wave / map, for the result screens
       trackedNow = trackedMission(sv);
       log = createLog(currentSeed, simInit);   // capture the init so an in-memory replay reproduces THIS board, not default MAP/WAVES
     }
@@ -1035,8 +1043,11 @@ export function boot(mountEl, seed) {
           for (let i = 0; i < evs.length; i++) {
             pendingEvents.push(evs[i]);
             // Boldly announce who's attacking, before the wave's enemies appear.
+            if (evs[i].type === 'deposit') feedResources(resLedger, [evs[i]]);
             if (evs[i].type === 'waveStars') {
-              showStarBanner(hud, evs[i].wave, evs[i].stars);   // Story 4: stars FIRST, then the dialog beat
+              // Story 4: stars FIRST, then the dialog beat; under them what this wave collected [MM-story_mw13ek87_1]
+              const waveRes = closeWave(resLedger);
+              showStarBanner(hud, evs[i].wave, evs[i].stars, waveResourcesHtml(waveRes, resLedger.total, battleResourceNames()));
             }
             if (evs[i].type === 'wave' && evs[i].phase === 'start') musicIntensity('wave');
             if (evs[i].type === 'wave' && evs[i].phase === 'clear' && evs[i].wave < evs[i].total) musicIntensity('build');
@@ -1051,7 +1062,9 @@ export function boot(mountEl, seed) {
             // harvest feedback: what the haul was worth (quest hauls pay loyalty, not gold)
             if (evs[i].type === 'deposit') {
               const d = evs[i];
-              flashMessage(hud, d.role === 'quest' ? `+${d.units} quest units (loyalty)` : `+${d.gold}g ${d.role}`);
+              const keptNote = d.kept > 0 ? `+${d.kept} kept` : '';   // above the Collective quota: no gold, kept
+              if (d.role === 'quest' && !d.contract) flashMessage(hud, `+${d.units} quest units (loyalty)`);
+              else flashMessage(hud, [d.gold > 0 ? `+${d.gold}g ${d.role}` : '', keptNote].filter(Boolean).join(' · ') || `+0g ${d.role}`);
             }
             // Between waves (owner 2026-07-16): ONE dialog from the opposing (next) faction, held.
             // NO tap-to-start prompt — the dialog's TAP TO CLOSE is the continue: closing it (after
@@ -1124,7 +1137,8 @@ export function boot(mountEl, seed) {
             if (S !== sim) return;   // restarted during the Kill Camera
             musicSting(S.result === 'win' ? 'win' : 'lose');
             if (contractMsg) flashMessage(hud, contractMsg);
-            showResult(hud, S.result, S.finalScore, nextMap, S.waveStars, rewards);
+            showResult(hud, S.result, S.finalScore, nextMap, S.waveStars, rewards,
+              S.resourceNodes ? mapResourcesHtml(resLedger.total, battleResourceNames(), { contract: !!S.contract }) : '');
             // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
             // wave star score (banner) -> final map score (overlay) -> PRIMARY dialog -> then, as
             // part of the REWARD FLOW, the SECONDARY grants the star bonus (5-star wave this battle).

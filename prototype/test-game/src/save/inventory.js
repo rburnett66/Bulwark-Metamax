@@ -2,9 +2,10 @@
  * src/save/inventory.js — what the commander holds [MM-story_mvzkdvrl_1l]. Mission-Log-Design §12, tech plan D8.
  * save.inventory[resourceId] counts; save.inventoryNew is the same since the last visit.
  *
- * Harvest (owner default, 2026-11-02): every resource a harvester brings home goes to the inventory, and common and
- * uncommon still pay their gold in battle as they always did. Rare and epic are the quest crystals. The counts come
- * from the battle tally's deposit events at battle end; the sim is untouched and a replay banks nothing.
+ * Harvest (owner 2026-11-03) [MM-story_mw12m2df_2]: the player sells every harvested resource to the Collective under
+ * the map's contract; a load pays gold until its tier's quota is met. Only the surplus above the quota is kept, so only
+ * the surplus reaches the inventory (tally.kept). The counts come from the battle tally's deposit events at battle
+ * end; a replay banks nothing. A tally without `kept` (older code paths) banks everything harvested, as before.
  */
 const addTo = (s, id, n) => {
   s.inventory[id] = (s.inventory[id] || 0) + n;
@@ -22,7 +23,7 @@ export function resourceOf(catalog, planet, tier) {
 export function bankHarvest(s, result, catalog) {
   const out = {};
   if (!result.tally || !result.planet) return out;
-  for (const [tier, n] of Object.entries(result.tally.harvested)) {
+  for (const [tier, n] of Object.entries(result.tally.kept || result.tally.harvested)) {
     if (!(n > 0)) continue;
     const r = resourceOf(catalog, result.planet, tier);
     addTo(s, r.id, n);

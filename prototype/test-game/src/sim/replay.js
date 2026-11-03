@@ -55,6 +55,7 @@ export function replayOpts(init, board) {
     structTiers: i.structTiers || null,
     mapId: i.mapId != null ? i.mapId : null,
     faction: i.faction || null,
+    contract: i.contract || null,
   };
 }
 
@@ -73,6 +74,7 @@ export function serializeLog(log) {
     carry: log.init.carry || null,
     harvesterLevel: log.init.harvesterLevel || 1,
     structTiers: log.init.structTiers || null,
+    contract: log.init.contract || null,   // the Collective contract quota changes what each load pays
   } : null;
   return JSON.stringify(
     {
