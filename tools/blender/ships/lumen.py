@@ -10,7 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import DECK, box, build, cyl, engine, light_strip, loft, mat, window_row  # noqa: E402
+from common import DECK, box, ring_x, build, cyl, engine, light_strip, loft, mat, window_row  # noqa: E402
 
 
 def make():
@@ -61,7 +61,7 @@ def make():
         loft(name + "_band", [(x - 0.22, 3.0, 2.6, 1.12, 0, 0.35), (x + 0.22, 3.0, 2.6, 1.12, 0, 0.35)], trim)
         for side in (-1, 1):                                    # glow outline on both faces
             f = x + side * 0.77
-            loft("feat_" + name + "_glow", [(f - 0.02, 2.82, 2.42, 1.04, 0, 0.35), (f + 0.02, 2.82, 2.42, 1.04, 0, 0.35)], glow)
+            ring_x("feat_" + name + "_glow", f - 0.02, f + 0.02, (2.82, 2.42, 1.04), (2.6, 2.2, 0.96), 0, 0.35, glow)
             loft(name + "_cover", [(f - 0.07, 2.66, 2.26, 0.97, 0, 0.35), (f + 0.07, 2.66, 2.26, 0.97, 0, 0.35)], hull)  # 5 cm proud of the glow: no z-fight
 
     # aft side pods (port; mirrored)
@@ -82,4 +82,4 @@ def make():
 
 
 if __name__ == "__main__":
-    build("lumen", make)
+    build("lumen", make, surface="v2")

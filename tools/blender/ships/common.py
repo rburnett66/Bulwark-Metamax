@@ -256,6 +256,24 @@ def loft(name, stations, material, cap0=True, cap1=True, bevel=0.0, axis="X"):
     return _obj(name, bm, material, bevel)
 
 
+def ring_x(name, x0, x1, outer, inner, cy, cz, material):
+    """A hollow chamfered-section ring between x0 and x1 (facing ±X): outer = (w, h, c), inner = (w, h, c).
+    Use it for glow OUTLINES — a solid glow disc hidden behind a cover plate shows through, because the
+    glow material is pulled toward the camera in depth so it never z-fights."""
+    bm = bmesh.new()
+    ring = lambda x, sec: [bm.verts.new(Vector((x, cy + y, cz + z))) for y, z in section(*sec)]
+    o0, o1, i0, i1 = ring(x0, outer), ring(x1, outer), ring(x0, inner), ring(x1, inner)
+    n = len(o0)
+    for k in range(n):
+        j = (k + 1) % n
+        bm.faces.new((o0[k], o0[j], o1[j], o1[k]))       # outer wall
+        bm.faces.new((i1[k], i1[j], i0[j], i0[k]))       # inner wall
+        bm.faces.new((o1[k], o1[j], i1[j], i1[k]))       # +X face
+        bm.faces.new((i0[k], i0[j], o0[j], o0[k]))       # -X face
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _obj(name, bm, material)
+
+
 def box(name, center, size, material, chamfer=0.0, bevel=0.0):
     x, y, z = center
     sx, sy, sz = size
@@ -373,19 +391,25 @@ def _rgb(m):
 
 TILE = 3.0          # world units per repeat of the shared panel texture (same panel size on every ship)
 TEX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tex")
+# Surface version: "v1" = the original tiling panels (world box projection); "v2" = lap-step panels from
+# detail_tex_v2.py, projected in each PART's own frame with a panel scale chosen by the part's size, so seams
+# start at form edges and big hull lofts carry big plates. Default since 2026-11-02; build(..., surface="v1") opts out.
+SURFACE = "v1"
 
 
 def _img(name, colorspace):
-    im = bpy.data.images.load(os.path.join(TEX, name), check_existing=True)
+    folder = os.path.join(TEX, "v2") if SURFACE == "v2" else TEX
+    im = bpy.data.images.load(os.path.join(folder, name), check_existing=True)
     im.colorspace_settings.name = colorspace
     return im
 
 
 def _shared_mats():
     """ship_body: base colour = vertex colour × shared cavity map; shared panel normal and roughness/metal maps."""
-    body = bpy.data.materials.get("ship_body")
+    name = "ship_body_v2" if SURFACE == "v2" else "ship_body"
+    body = bpy.data.materials.get(name)
     if not body:
-        body = bpy.data.materials.new("ship_body")
+        body = bpy.data.materials.new(name)
         body.use_nodes = True
         nt = body.node_tree
         p = nt.nodes["Principled BSDF"]
@@ -458,6 +482,37 @@ def _diag(ob):
             Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))).length
 
 
+def _part_uvs(me, length):
+    """v2: box-project UVs in the part's own frame. Origin at the part's min corner (seams start at its edges);
+    panel scale by part size — big hull lofts ×1.25, modules ×0.9, small parts ×0.55 of TILE."""
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    if not bm.verts:
+        bm.free()
+        return
+    lo = Vector((min(v.co.x for v in bm.verts), min(v.co.y for v in bm.verts), min(v.co.z for v in bm.verts)))
+    hi = Vector((max(v.co.x for v in bm.verts), max(v.co.y for v in bm.verts), max(v.co.z for v in bm.verts)))
+    diag = (hi - lo).length
+    tile = TILE * (1.25 if diag > 0.35 * length else 0.9 if diag > 0.08 * length else 0.55)
+    bm.normal_update()
+    uv = bm.loops.layers.uv.verify()
+    for f in bm.faces:
+        n = f.normal
+        ax = max(range(3), key=lambda i: abs(n[i]))
+        sg = 1 if n[ax] >= 0 else -1
+        for lp in f.loops:
+            x, y, z = lp.vert.co - lo
+            if ax == 0:
+                u, v = sg * y, z
+            elif ax == 1:
+                u, v = -sg * x, z
+            else:
+                u, v = x, sg * y
+            lp[uv].uv = (u / tile, v / tile)
+    bm.to_mesh(me)
+    bm.free()
+
+
 def _merge(slug, lod, parts, length):
     """parts: source objects. Returns the LOD's finished objects (body + one per glow colour)."""
     body_mat = _shared_mats()
@@ -478,6 +533,8 @@ def _merge(slug, lod, parts, length):
         for d in col.data:
             d.color = rgb
         key = ("glow", "glow") if _is_glow(m) else ("body", "body")
+        if SURFACE == "v2" and key[0] == "body":
+            _part_uvs(me, length)
         groups.setdefault(key, (m, []))[1].append(me)
     out = []
     for (role, name), (m, meshes) in groups.items():
@@ -491,7 +548,8 @@ def _merge(slug, lod, parts, length):
         bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
         bm.normal_update()
-        _box_uvs(bm)
+        if SURFACE != "v2" or role != "body":
+            _box_uvs(bm)
         oname = f"{slug}_lod{lod}_{'body' if role == 'body' else name}"
         me = bpy.data.meshes.new(oname)
         bm.to_mesh(me)
@@ -533,11 +591,11 @@ def _dump_parts(out, slug, src):
         json.dump({"slug": slug, "parts": rows}, f, indent=0)
 
 
-def build(slug, make, argv=None):
+def build(slug, make, argv=None, surface="v2"):
     """Run a ship's make() in a clean scene, then finish it (mirror, 2 draw calls, LOD0-2), export
     {slug}_lod{0,1,2}.glb + {slug}.blend and render the LOD0 views. Writes only inside out_dir."""
-    global SLUG
-    SLUG = slug
+    global SLUG, SURFACE
+    SLUG, SURFACE = slug, surface
     argv = argv if argv is not None else sys.argv[1:]
     out = os.path.abspath(argv[0] if argv and not argv[0].startswith("--") else os.path.join(os.path.dirname(__file__), "out", slug))
     os.makedirs(out, exist_ok=True)

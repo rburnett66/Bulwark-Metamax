@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Backdrop Test</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font: 12px/1.4 system-ui, sans-serif; color: #9aa6c0; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  #hud { position: fixed; left: 12px; bottom: 10px; pointer-events: none; opacity: 0.7; }
+</style>
+<script type="importmap">{ "imports": { "three": "../../vendor/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<script type="module">
+// Standalone check for src/render3d/space/{backdrop,lensFx}.js — the backdrop, a cube, and the HDR lens chain.
+// Query: ?tier=high|standard|low  ?seed=N  ?view=sun|away|edge  ?hdr=0 (old LDR chain)  ?flare=0  ?bloom=0
+import * as THREE from 'three';
+import { EffectComposer } from '../../vendor/three-addons/postprocessing/EffectComposer.js';
+import { RenderPass } from '../../vendor/three-addons/postprocessing/RenderPass.js';
+import { ShaderPass } from '../../vendor/three-addons/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from '../../vendor/three-addons/postprocessing/UnrealBloomPass.js';
+import { Lensflare, LensflareElement } from '../../vendor/three-addons/objects/Lensflare.js';
+import { createBackdrop } from '../../src/render3d/space/backdrop.js';
+import { chromaticAberrationPass, createLensFlare, hdrBloom, tonemapPass } from '../../src/render3d/space/lensFx.js';
+
+const q = new URLSearchParams(location.search);
+const tier = q.get('tier') || 'high', seed = +(q.get('seed') || 7), hdr = q.get('hdr') !== '0';
+
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, tier === 'low' ? 1.5 : 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = hdr ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.9;
+renderer.info.autoReset = false;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.26, 1040);   // ≈ the viewer's near/far for a 26-unit ship
+
+const bd = createBackdrop(THREE, { seed, tier });
+scene.add(bd.group);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(bd.envScene, 0.04).texture;
+
+const key = new THREE.DirectionalLight(bd.sunColor, 2.2);
+key.position.copy(bd.sunDirection).multiplyScalar(50);
+scene.add(key, new THREE.HemisphereLight(0x6f84b0, 0x05060a, 0.15));
+
+const cube = new THREE.Mesh(new THREE.BoxGeometry(6, 6, 6),
+  new THREE.MeshStandardMaterial({ color: 0x8a919c, metalness: 0.7, roughness: 0.35 }));
+cube.rotation.set(0.5, 0.7, 0.1);
+scene.add(cube);
+
+let flare = null;
+if (q.get('flare') !== '0') {
+  flare = createLensFlare(THREE, Lensflare, LensflareElement, { color: bd.sunColor, seed, pixelRatio: renderer.getPixelRatio() });
+  bd.sunAnchor.add(flare);
+}
+
+// camera: look at the cube with the sun ~16° off-axis (view=sun), the sun behind the cube's edge (edge),
+// or away from the sun into the galactic band (away)
+const view = q.get('view') || 'sun';
+const up = new THREE.Vector3(0, 1, 0);
+const look = bd.sunDirection.clone().applyAxisAngle(up, THREE.MathUtils.degToRad(view === 'edge' ? 6 : 16));
+look.y -= view === 'edge' ? 0.02 : 0.08; look.normalize();
+if (view === 'away') look.copy(bd.sunDirection).negate().applyAxisAngle(up, 0.9);
+if (view === 'star' && bd.brightStarDirections.length) look.copy(bd.brightStarDirections[+(q.get('i') || 0)]).applyAxisAngle(up, +(q.get('off') || 0.3));
+camera.position.copy(look).multiplyScalar(-24);
+camera.lookAt(0, 0, 0);
+
+const rtOpts = hdr ? { type: THREE.HalfFloatType } : {};
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, rtOpts));
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), hdr ? 0.6 : 0.7, 0.45, hdr ? 1.0 : 0.88);
+if (hdr) hdrBloom(THREE, bloom);
+bloom.enabled = q.get('bloom') !== '0';
+composer.addPass(bloom);
+if (hdr) composer.addPass(tonemapPass(THREE, ShaderPass, { exposure: 0.9 }));
+const ca = chromaticAberrationPass(THREE, ShaderPass, { amount: 0.0025, vignette: 0.35, grain: 0.035 });
+composer.addPass(ca);
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false); composer.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+const clock = new THREE.Clock();
+let frames = 0;
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  renderer.info.reset();
+  bd.update(dt, camera);
+  ca.tick(dt);
+  composer.render();
+  if (++frames === 3) {
+    const s = bd.sunScreenVisible(camera);
+    document.getElementById('hud').textContent = `tier ${tier} · ${bd.stats.stars} stars (${bd.stats.brightStars} spiked) · ` +
+      `${bd.stats.drawCalls} backdrop draws · ${hdr ? 'HDR' : 'LDR'} · sun ${s.visible ? 'on screen' : 'off screen'}` +
+      (flare ? ` · flare occlusion ${flare.hdrOcclusion}` : '') + ` · calls ${renderer.info.render.calls}`;
+    window.__ready = true;
+    if (q.has('shot')) renderer.setAnimationLoop(null);   // headless screenshots: hold the frame
+  }
+});
+</script>
+</body>
+</html>
