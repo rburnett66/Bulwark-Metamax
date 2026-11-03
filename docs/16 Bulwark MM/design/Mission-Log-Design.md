@@ -174,6 +174,14 @@ A mission whose View is met but whose Unlock is not shows as **Locked**. It gets
 - the secondary unlock = **a replay that beats your previous result**;
 - primaries = **one per planet × map** (81).
 
+**Update (owner 2026-11-03)** [MM-story_mw12m06h_1]: a planet's capital ship arrives when its **map 3** is won at an
+average of **3 stars or more** (only 3★ wins open the next map, so map 3 at 3★). Until then the **Collective ship** —
+the player's first employer, present from the opening — grants and collects that planet's **maps 1–3** missions,
+primaries and secondaries. From map 4 they are granted and collected aboard the planet's own ship. Steps 2–4 below
+read with that change: the ship comes after map 3, and primaries 2–3 are granted aboard the Collective ship.
+*Open:* the map 2–3 primaries still name the planet's captain as giver; a Collective giver is needed once the opening
+script names the Collective's people.
+
 **The loop on one planet:**
 
 1. **Landing (map 1).** The landing craft's quartermaster grants primary 1. The player wins the map.
@@ -215,7 +223,9 @@ A mission whose View is met but whose Unlock is not shows as **Locked**. It gets
 - **INVENTORY** is a header chip directly right of MISSIONS (left of the rank chip). Same shape as the other chips; a crate-and-crystal glyph; the count of resources gained since the last visit as a cyan badge.
 - **Inventory screen** (owner 2026-11-02: "the inventory screen should show all resources, sorted by planet"): one scrolling view of **all 36 resources**. They are grouped into a band per planet in campaign order (Verdance → Vexmire), each band with the faction icon and colour, the planet's held total and new count. Each band holds the planet's four resources as tiles: rarity colour top edge, crystal glyph, name, tier, held count, +new. Planets whose portal is not owned stay listed but dimmed, with "Portal: X not owned". Tabs filter All 36 / Kept / Quest crystals. Selecting a tile opens the detail pane on the right (on a narrow screen it slides over), showing held count, planet, faction, role, source and what wants the resource.
 - **Source of truth:** `docs/sources/Bulwark-Missions.xlsx` › Resources (36 = 9 planets × 4), extracted into `missions.json` › `resources`.
-- **Harvest (owner 2026-11-02):** all four tiers go to the inventory at battle end, and common and uncommon still pay their gold in battle.
+- **Harvest — the Collective contract (owner 2026-11-03, replaces the 2026-11-02 rule)** [MM-story_mw12m2df_2]: at the start of the game the player sells every harvested resource to the Collective through the contract. Each map's contract buys a set number of units per tier (map-data workbook › Maps › `Contract_Common/_Uncommon/_Rare/_Epic`). In battle a load pays gold until its tier's quota is met; above the quota a load pays **no gold** and the player **keeps** it. Only the kept surplus goes to the inventory at battle end. The battle HUD shows each tier as *sold / required*, then ✓ and the units kept.
+  - **Starting quotas** come from `tools/economy/contract_quota.mjs`: common (which regrows) = what one harvester delivers on the richest common field in the map's par time, the minimum over the nine planets; uncommon, rare and epic (consumed) = 80 % of what the map seeds, minimum over the planets. So a commander with only the starting harvester sells everything, and extra harvesters produce the surplus. They are tuning values, not rules.
+  - *Open:* who buys the harvest once the planet's own ship has arrived (the Collective, or the planet's faction).
 
 ## 13. Design page v2 (2026-11-02)
 

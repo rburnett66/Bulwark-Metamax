@@ -2,7 +2,8 @@
 
 Tracking: [MM-story_mw05b8th_6] · Status: design for review · 2026-11-02
 Builds on: `Capital-Ship-Scale-Research.md` (lenses, HDR chain, scale rules), `Mission-Log-Design.md` §11
-(the ship arrives at 3★ on map 1; missions are granted and collected aboard).
+(owner 2026-11-03: the ship arrives when the planet's map 3 is won at 3★; until then the Collective ship grants and
+collects maps 1–3).
 
 ## 1. The moment
 
@@ -30,7 +31,7 @@ Three rules shape every beat:
 | Situation | What happens |
 |---|---|
 | First start of the game (new save) | **Collective arrival** above the red giant, inside the opening script (§5). |
-| Map 1 cleared at 3★ (`recordPlanetMap` sets `capitalShips[planet].arrived` and queues `{kind:'ship', planet}`) | Nothing yet. The results screen gains one line: "A capital ship is inbound to <Planet>." Assets start preloading. |
+| Map 3 cleared at 3★ (`recordPlanetMap` sets `capitalShips[planet].arrived` and queues `{kind:'ship', planet}`) | Nothing yet. The results screen gains one line: "A capital ship is inbound to <Planet>." Assets start preloading. |
 | Player next lands on that planet's screen (globe visible) and `arrived && !introSeen` | **First-sight arrival** plays before any other menu toast. The queued mission-log toast is consumed by the cinematic's end card instead. |
 | Planet screen opened later (`introSeen`) | **Return coast-in** (§6). |
 | Player taps "Replay arrival" on the ship panel | First-sight arrival plays again; it changes no state. |
