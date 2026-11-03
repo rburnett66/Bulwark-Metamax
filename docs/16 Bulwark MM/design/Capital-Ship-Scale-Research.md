@@ -170,6 +170,8 @@ Turntable slowed to ≈ 1.4 °/s. No depth of field.
 Measured in the viewer (Lumen, high tier, presenting): ≈ 30–40 draw calls per frame including bloom's blur passes,
 the backdrop (4) and the flare (≈ 10, only while the sun is on screen).
 
-**Still to do:** roll `surface="v2"` out to the other nine ships and re-audit; MSAA alongside the flare (resolve
+**Rolled out (2026-11-02):** `surface="v2"` is now the build default; all ten capital ships and the tug are rebuilt on it, audited at 0 issues and checked in the real-time viewer. The orbit shot fits height as well as length.
+
+**Still to do:** MSAA alongside the flare (resolve
 before the occlusion copy, or occlusion from a depth test); a hue-preserving tone curve (AgX via `CustomToneMapping`)
 if ACES's yellow shift on orange plumes bothers; game scenes using bloom need the same chain fix.

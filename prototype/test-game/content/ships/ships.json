@@ -5,19 +5,19 @@
     "file": "air_lod0.glb",
     "tris": 5904,
     "drawCalls": 2,
-    "bytes": 778108
+    "bytes": 595532
    },
    {
     "file": "air_lod1.glb",
     "tris": 2692,
     "drawCalls": 2,
-    "bytes": 476876
+    "bytes": 294296
    },
    {
     "file": "air_lod2.glb",
     "tris": 1396,
     "drawCalls": 2,
-    "bytes": 369612
+    "bytes": 187036
    }
   ],
   "engines": 8,
@@ -34,19 +34,19 @@
     "file": "arcane_lod0.glb",
     "tris": 5970,
     "drawCalls": 2,
-    "bytes": 791480
+    "bytes": 608948
    },
    {
     "file": "arcane_lod1.glb",
     "tris": 2254,
     "drawCalls": 2,
-    "bytes": 448504
+    "bytes": 265972
    },
    {
     "file": "arcane_lod2.glb",
     "tris": 1242,
     "drawCalls": 2,
-    "bytes": 352320
+    "bytes": 169784
    }
   ],
   "engines": 6,
@@ -63,19 +63,19 @@
     "file": "artillery_lod0.glb",
     "tris": 5972,
     "drawCalls": 2,
-    "bytes": 786584
+    "bytes": 604004
    },
    {
     "file": "artillery_lod1.glb",
     "tris": 2768,
     "drawCalls": 2,
-    "bytes": 479964
+    "bytes": 297384
    },
    {
     "file": "artillery_lod2.glb",
     "tris": 536,
     "drawCalls": 1,
-    "bytes": 290728
+    "bytes": 108148
    }
   ],
   "engines": 6,
@@ -92,19 +92,19 @@
     "file": "collective_lod0.glb",
     "tris": 5868,
     "drawCalls": 2,
-    "bytes": 751760
+    "bytes": 583260
    },
    {
     "file": "collective_lod1.glb",
     "tris": 2804,
     "drawCalls": 2,
-    "bytes": 486448
+    "bytes": 303868
    },
    {
     "file": "collective_lod2.glb",
     "tris": 924,
     "drawCalls": 2,
-    "bytes": 325276
+    "bytes": 142696
    }
   ],
   "engines": 8,
@@ -121,19 +121,19 @@
     "file": "dark_lod0.glb",
     "tris": 4758,
     "drawCalls": 2,
-    "bytes": 693456
+    "bytes": 510876
    },
    {
     "file": "dark_lod1.glb",
     "tris": 2106,
     "drawCalls": 2,
-    "bytes": 453840
+    "bytes": 271264
    },
    {
     "file": "dark_lod2.glb",
     "tris": 634,
     "drawCalls": 2,
-    "bytes": 300304
+    "bytes": 117724
    }
   ],
   "engines": 3,
@@ -150,19 +150,19 @@
     "file": "green_lod0.glb",
     "tris": 5920,
     "drawCalls": 2,
-    "bytes": 754416
+    "bytes": 571840
    },
    {
     "file": "green_lod1.glb",
     "tris": 4016,
     "drawCalls": 2,
-    "bytes": 585280
+    "bytes": 402704
    },
    {
     "file": "green_lod2.glb",
     "tris": 1736,
     "drawCalls": 1,
-    "bytes": 394740
+    "bytes": 212164
    }
   ],
   "engines": 5,
@@ -208,19 +208,19 @@
     "file": "powder_lod0.glb",
     "tris": 5932,
     "drawCalls": 2,
-    "bytes": 766524
+    "bytes": 586588
    },
    {
     "file": "powder_lod1.glb",
     "tris": 2092,
     "drawCalls": 2,
-    "bytes": 421216
+    "bytes": 238904
    },
    {
     "file": "powder_lod2.glb",
     "tris": 516,
     "drawCalls": 1,
-    "bytes": 290340
+    "bytes": 107760
    }
   ],
   "engines": 6,
@@ -237,19 +237,19 @@
     "file": "tech_lod0.glb",
     "tris": 5826,
     "drawCalls": 2,
-    "bytes": 797592
+    "bytes": 615016
    },
    {
     "file": "tech_lod1.glb",
     "tris": 3170,
     "drawCalls": 2,
-    "bytes": 507008
+    "bytes": 324432
    },
    {
     "file": "tech_lod2.glb",
     "tris": 618,
     "drawCalls": 2,
-    "bytes": 299756
+    "bytes": 117176
    }
   ],
   "engines": 6,
@@ -266,19 +266,19 @@
     "file": "tug_lod0.glb",
     "tris": 564,
     "drawCalls": 2,
-    "bytes": 295092
+    "bytes": 112512
    },
    {
     "file": "tug_lod1.glb",
     "tris": 564,
     "drawCalls": 2,
-    "bytes": 295092
+    "bytes": 112512
    },
    {
     "file": "tug_lod2.glb",
     "tris": 384,
     "drawCalls": 2,
-    "bytes": 279932
+    "bytes": 97348
    }
   ],
   "engines": 3,
@@ -295,19 +295,19 @@
     "file": "water_lod0.glb",
     "tris": 5984,
     "drawCalls": 2,
-    "bytes": 724652
+    "bytes": 542076
    },
    {
     "file": "water_lod1.glb",
     "tris": 3720,
     "drawCalls": 2,
-    "bytes": 546312
+    "bytes": 363732
    },
    {
     "file": "water_lod2.glb",
     "tris": 2012,
     "drawCalls": 2,
-    "bytes": 409544
+    "bytes": 226964
    }
   ],
   "engines": 5,

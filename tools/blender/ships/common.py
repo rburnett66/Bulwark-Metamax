@@ -393,7 +393,7 @@ TILE = 3.0          # world units per repeat of the shared panel texture (same p
 TEX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tex")
 # Surface version: "v1" = the original tiling panels (world box projection); "v2" = lap-step panels from
 # detail_tex_v2.py, projected in each PART's own frame with a panel scale chosen by the part's size, so seams
-# start at form edges and big hull lofts carry big plates. A ship opts in with build(..., surface="v2").
+# start at form edges and big hull lofts carry big plates. Default since 2026-11-02; build(..., surface="v1") opts out.
 SURFACE = "v1"
 
 
@@ -591,7 +591,7 @@ def _dump_parts(out, slug, src):
         json.dump({"slug": slug, "parts": rows}, f, indent=0)
 
 
-def build(slug, make, argv=None, surface="v1"):
+def build(slug, make, argv=None, surface="v2"):
     """Run a ship's make() in a clean scene, then finish it (mirror, 2 draw calls, LOD0-2), export
     {slug}_lod{0,1,2}.glb + {slug}.blend and render the LOD0 views. Writes only inside out_dir."""
     global SLUG, SURFACE

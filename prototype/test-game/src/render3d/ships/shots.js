@@ -64,7 +64,7 @@ export function shot(name, t, { box, aspect = LAND, still = false }) {
     g = [x - L * 0.4 * Math.cos(tilt), p[1] + L * 0.4 * Math.sin(tilt), cz];
   } else {                                                        // orbit
     const f = 0.6;                                                // ship spans 60 % of frame width
-    const d = L / (f * 2 * Math.tan(hfov / 2));
+    const d = Math.max(L / (f * 2 * Math.tan(hfov / 2)), H / (0.7 * 2 * Math.tan(fov * D / 2)));   // fit length AND height
     const yaw = (-30 - 1.2 * tt) * D;
     const pitch = (-6 - 3 * Math.sin(tt * 0.06)) * D;             // camera below, looking up
     p = [cx + Math.cos(pitch) * Math.cos(yaw) * d, cy + Math.sin(pitch) * d, cz - Math.cos(pitch) * Math.sin(yaw) * d];
