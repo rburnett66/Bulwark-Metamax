@@ -48,6 +48,128 @@ def engine(center, r, housing, depth=0.5, sides=8):
     ENGINES.append((x - 0.05, y, z, r))
 
 
+# ── detail scale standard ─────────────────────────────────────────────────────────────
+# 1 unit = 25 m. The tug (1.1 u ≈ 27 m) anchors it; capital ships are 21–24 u (≈ 525–600 m).
+# Secondary details are drawn at ONE human scale on every ship so the fleet reads as one world: a window is
+# a window-sized window whatever ship it sits on. Name each detail part with its class prefix ("win_…");
+# audit_scale.py checks every prefixed part against this table, and flags glowing parts with no class.
+#   class      size (units)                    real size     what it is
+DETAIL = {
+    "win":    {"h": 0.08, "w": 0.10},          # 2 × 2.5 m    window (lit), one per deck
+    "port":   {"d": 0.08},                     # 2 m          round porthole (lit)
+    "strip":  {"w": 0.04},                     # 1 m          running-light strip (lit), any length
+    "band":   {"w": 0.08},                     # 2 m          wide accent light band (lit), any length
+    "door":   {"h": 0.16, "w": 0.12},          # 4 × 3 m      hatch / door, one deck tall
+    "mast":   {"t": 0.05},                     # 1.25 m       mast or antenna thickness
+    "strut":  {"t": 0.05},                     # 1.25 m       scaffold / truss member thickness
+    "gun_s":  {"d": 0.06},                     # 1.5 m        point-defence barrel
+    "gun_m":  {"d": 0.12},                     # 3 m          medium gun barrel
+    "gun_l":  {"d": 0.22},                     # 5.5 m        heavy gun barrel
+    "spire":  {"min_base": 0.15},              # ≥ 4 m        spire / pinnacle base width
+    "stack":  {"d_min": 0.25, "d_max": 0.45},  # 6–11 m       smokestack diameter
+}
+DECK = 0.16                                     # 4 m          deck pitch: window rows, terrace steps
+TOL = 0.12                                      # ±12 % passes the audit
+# Prefix "feat_" marks a deliberate one-off feature light (rose window, hangar mouth, bridge glass band)
+# that is exempt from the table; engine cores are exempt automatically.
+
+
+def _axes(face):
+    """(depth axis, the face's two in-plane axes) for a face whose normal is +X, +Y or +Z."""
+    return {"x": (0, 1, 2), "y": (1, 0, 2), "z": (2, 0, 1)}[face]
+
+
+def _detail_box(name, at, face, along, across, material, depth=0.03):
+    """A thin box lying on a face: `along` × `across` in the face plane, `depth` out of it (proud by depth/3)."""
+    d, a, b = _axes(face)
+    size = [0, 0, 0]
+    size[d], size[a], size[b] = depth, along, across
+    c = list(at)
+    c[d] += depth / 3
+    if face == "x":                   # in a bow/stern face the row runs across Y, windows stand up in Z
+        size[1], size[2] = along, across
+    box(name, tuple(c), tuple(size), material)
+
+
+def window_row(name, start, end, glow, face="y", count=None, pitch=None):
+    """Standard windows (2 × 2.5 m) evenly spaced from point `start` to `end` on a face whose outward normal
+    is +`face` (port side 'y', bow 'x', deck 'z'). Rows on a side run along X; on the bow they run across Y."""
+    w, h = DETAIL["win"]["w"], DETAIL["win"]["h"]
+    L = sum((e - s0) ** 2 for s0, e in zip(start, end)) ** 0.5
+    n = count or max(1, int(L / (pitch or w * 2.2)))
+    for i in range(n):
+        t = (i + 0.5) / n
+        at = tuple(s0 + (e - s0) * t for s0, e in zip(start, end))
+        _detail_box(f"{name}_{i}", at, face, w, h, glow)
+
+
+def porthole_row(name, start, end, glow, face="y", count=None, sides=8):
+    """Standard round portholes (⌀ 2 m) from `start` to `end` on a face with outward normal +`face`."""
+    dd = DETAIL["port"]["d"]
+    L = sum((e - s0) ** 2 for s0, e in zip(start, end)) ** 0.5
+    n = count or max(1, int(L / (dd * 2.5)))
+    for i in range(n):
+        t = (i + 0.5) / n
+        at = [s0 + (e - s0) * t for s0, e in zip(start, end)]
+        at[_axes(face)[0]] += 0.01
+        cyl(f"{name}_{i}", tuple(at), dd / 2, 0.03, glow, sides=sides, axis=face.upper())
+
+
+def light_strip(name, start, end, glow, face="y", wide=False):
+    """A straight running-light strip (1 m) or wide accent band (2 m) from `start` to `end`, lying on a face
+    with outward normal +`face`. The strip must run along one axis."""
+    w = DETAIL["band" if wide else "strip"]["w"]
+    c = tuple((s0 + e) / 2 for s0, e in zip(start, end))
+    ext = [abs(e - s0) for s0, e in zip(start, end)]
+    d = _axes(face)[0]
+    size = [w if k != d else 0.02 for k in range(3)]
+    run = max(range(3), key=lambda k: ext[k])
+    size[run] = ext[run]
+    c = list(c)
+    c[d] += 0.01
+    box(name, tuple(c), tuple(size), glow)
+
+
+def scaffold(name, x0, x1, cy, cz, half_w, half_h, material, bays=None, top=True, bottom=True, outer=True):
+    """An open truss cage around a box region (e.g. a cargo pod): longitudinal chords along the four
+    corners, a ring frame at every bay and an X brace on the outboard face of each bay. Every member is a
+    standard 1.25 m strut, so the cage reads at the same scale on any ship. Port side (cy ≥ 0)."""
+    t = DETAIL["strut"]["t"]
+    L = abs(x1 - x0)
+    n = bays or max(1, int(round(L / 0.9)))
+    xs = [x0 + (x1 - x0) * i / n for i in range(n + 1)]
+    corners = [(cy - half_w, cz - half_h), (cy + half_w, cz - half_h), (cy - half_w, cz + half_h), (cy + half_w, cz + half_h)]
+    for k, (y, z) in enumerate(corners):
+        if (not top and z > cz) or (not bottom and z < cz):
+            continue
+        box(f"strut_{name}_chord{k}", ((x0 + x1) / 2, y, z), (L, t, t), material)
+    for i, x in enumerate(xs):
+        box(f"strut_{name}_rib{i}_t", (x, cy, cz + half_h), (t, half_w * 2 + t, t), material)
+        box(f"strut_{name}_rib{i}_b", (x, cy, cz - half_h), (t, half_w * 2 + t, t), material)
+        for side in ((-1, 1) if outer else (1,)):
+            box(f"strut_{name}_rib{i}_s{side}", (x, cy + side * half_w, cz), (t, t, half_h * 2 + t), material)
+    if outer:                                            # X brace on the outboard (+Y) face of each bay
+        import math as _m
+        for i in range(n):
+            xa, xb = xs[i], xs[i + 1]
+            dx, dz = xb - xa, 2 * half_h
+            length = (dx * dx + dz * dz) ** 0.5
+            for sgn in (1, -1):
+                ob = box(f"strut_{name}_x{i}{'ab'[sgn < 0]}", ((xa + xb) / 2, cy + half_w, cz), (length, t, t), material)
+                ob.rotation_euler = (0, sgn * _m.atan2(dz, dx), 0)
+
+
+def mast(name, x, y, z, height, material):
+    t = DETAIL["mast"]["t"]
+    box(name, (x, y, z + height / 2), (t, t, height), material)
+
+
+def barrel(name, center, length, material, size="m", axis="X"):
+    """A gun barrel of a standard calibre (size 's' 1.5 m, 'm' 3 m, 'l' 5.5 m)."""
+    d = DETAIL["gun_" + size]["d"]
+    return cyl(name, center, d / 2, length, material, sides=6 if size == "s" else 8, axis=axis)
+
+
 # ── scene ─────────────────────────────────────────────────────────────────────────────
 def reset():
     ENGINES.clear()
@@ -258,7 +380,7 @@ def _img(name, colorspace):
 
 
 def _shared_mats():
-    """ship_body: base colour = vertex colour × shared cavity map; shared panel normal map."""
+    """ship_body: base colour = vertex colour × shared cavity map; shared panel normal and roughness/metal maps."""
     body = bpy.data.materials.get("ship_body")
     if not body:
         body = bpy.data.materials.new("ship_body")
@@ -277,6 +399,12 @@ def _shared_mats():
         nt.links.new(ca.outputs["Color"], mul.inputs[6])
         nt.links.new(cav.outputs["Color"], mul.inputs[7])
         nt.links.new(mul.outputs[2], p.inputs["Base Color"])
+        rm = nt.nodes.new("ShaderNodeTexImage")
+        rm.image = _img("panel_rough.png", "Non-Color")
+        sep = nt.nodes.new("ShaderNodeSeparateColor")
+        nt.links.new(rm.outputs["Color"], sep.inputs["Color"])
+        nt.links.new(sep.outputs["Green"], p.inputs["Roughness"])
+        nt.links.new(sep.outputs["Blue"], p.inputs["Metallic"])
         nrm = nt.nodes.new("ShaderNodeTexImage")
         nrm.image = _img("panel_normal.png", "Non-Color")
         nm = nt.nodes.new("ShaderNodeNormalMap")
@@ -388,6 +516,21 @@ def _export(objs, path):
                               export_lights=False, export_cameras=False)
 
 
+def _dump_parts(out, slug, src):
+    """parts.json: every source part's name, material role and world-space size, for audit_scale.py."""
+    import json
+    rows = []
+    for ob in src:
+        pts = [ob.matrix_world @ Vector(c) for c in ob.bound_box]
+        lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+        hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+        m = ob.data.materials[0] if ob.data.materials else None
+        rows.append({"name": ob.name.split(".")[0], "mat": m.name if m else None, "glow": _is_glow(m),
+                     "size": [round(v, 4) for v in (hi - lo)], "at": [round(v, 3) for v in (lo + hi) / 2]})
+    with open(os.path.join(out, "parts.json"), "w") as f:
+        json.dump({"slug": slug, "parts": rows}, f, indent=0)
+
+
 def build(slug, make, argv=None):
     """Run a ship's make() in a clean scene, then finish it (mirror, 2 draw calls, LOD0-2), export
     {slug}_lod{0,1,2}.glb + {slug}.blend and render the LOD0 views. Writes only inside out_dir."""
@@ -402,6 +545,7 @@ def build(slug, make, argv=None):
     src = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     lo, hi = _bounds()
     length = hi.x - lo.x
+    _dump_parts(out, slug, src)
     lods = {lod: _merge(slug, lod, src, length) for lod in LODS}
     markers = []
     for x, y, z, r in ENGINES:

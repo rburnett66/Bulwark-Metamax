@@ -217,10 +217,10 @@ export function prepareShip(THREE, root, { anisotropy = 1 } = {}) {
     } else if (m.name === 'ship_body') {
       if (!fleet.body) {
         fleet.body = m;
-        for (const t of [m.map, m.normalMap]) if (t) { t.anisotropy = anisotropy; t.needsUpdate = true; }
+        for (const t of [m.map, m.normalMap, m.roughnessMap]) if (t) { t.anisotropy = anisotropy; t.needsUpdate = true; }
         return;
       }
-      if (m !== fleet.body) { m.map && m.map.dispose(); m.normalMap && m.normalMap.dispose(); m.dispose(); }
+      if (m !== fleet.body) { for (const t of [m.map, m.normalMap, m.roughnessMap]) t && t.dispose(); m.dispose(); }
       o.material = fleet.body;
     }
   });
