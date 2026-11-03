@@ -180,7 +180,13 @@ const CSS = `
 .bwm-survey .nav { display:flex; gap:8px; margin-top:8px; }
 .bwm-survey .nav button { width:auto; padding:8px 14px; }
 .bwm-doss { background:rgba(18,22,28,.86); border:1px solid #2e3846; padding:16px 18px; max-height:100%; min-height:0; display:flex; flex-direction:column; }
-.bwm-doss .db { overflow-y:auto; min-height:0; flex:1 1 auto; padding-right:4px; }
+.bwm-doss .db { overflow-y:auto; min-height:0; flex:1 1 auto; padding-right:10px;
+  /* a visible, themed scrollbar so a survey taller than the panel reads as scrollable (owner 2026-11-03) */
+  scrollbar-width:thin; scrollbar-color:var(--hue,#d9a441) rgba(255,255,255,.06); scrollbar-gutter:stable; }
+.bwm-doss .db::-webkit-scrollbar { width:8px; }
+.bwm-doss .db::-webkit-scrollbar-track { background:rgba(255,255,255,.06); }
+.bwm-doss .db::-webkit-scrollbar-thumb { background:var(--hue,#d9a441); border:2px solid rgba(18,22,28,.86); min-height:32px; }
+.bwm-doss .db::-webkit-scrollbar-thumb:hover { background:#f2c869; }
 .bwm-doss .ty { font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:var(--hue,#f2c869); }
 .bwm-doss .fa { font-size:15px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--hue,#f2c869); margin-top:6px; }
 .bwm-doss h2 { font-size:clamp(34px,5vw,52px); font-weight:900; line-height:.95; letter-spacing:.05em; text-transform:uppercase; margin:2px 0 8px; }
