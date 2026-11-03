@@ -21,7 +21,7 @@ const roleOf = (r) => (kept(r.tier) ? 'Kept · worth ' + r.value + ' gold each' 
 export function inventoryListHtml(bands, tab, selected) {
   return bands.map((b) => {
     const key = voiceOfName(b.faction);
-    const tiles = b.resources.filter((r) => inTab(tab, r.tier)).map((r) => `<button class="rt${r.have ? '' : ' zero'}" data-res="${esc(r.id)}" aria-selected="${r.id === selected}" style="--rc:var(${TIER_VAR[r.tier]})">${use('r-crystal', 'i gem3')}
+    const tiles = b.resources.filter((r) => inTab(tab, r.tier)).map((r) => `<button class="rt${r.have ? '' : ' zero'}" data-inv-id="${esc(r.id)}" aria-selected="${r.id === selected}" style="--rc:var(${TIER_VAR[r.tier]})">${use('r-crystal', 'i gem3')}
     <span class="rtx"><b>${esc(r.name)}</b><small>${TIER_NAME[r.tier]}</small></span><span class="rtn num">${b.open ? num(r.have) : '—'}${r.fresh ? `<em>+${num(r.fresh)}</em>` : ''}</span></button>`).join('');
     return `<section class="pband${b.open ? '' : ' locked'}" style="--fc:${factionColor(key)}"><header>${fsvg(key)}<b>${esc(b.planet)}</b><small>${esc(b.faction)}</small>
    <span class="pbt">${b.open ? `<b class="num">${num(b.held)}</b> held${b.fresh ? ` · <em>+${num(b.fresh)} new</em>` : ''}` : `${use('s-locked')} Portal: ${esc(b.planet)} not owned`}</span></header>
@@ -65,7 +65,7 @@ export function createInventoryScreen({ doc, host, gateOpts = () => ({}), onChan
   }
   inv.addEventListener('click', (e) => {
     const t = e.target.closest('button'); if (!t) return;
-    if (t.dataset.res) { selected = t.dataset.res; render(); inv.classList.add('detail'); }
+    if (t.dataset.invId) { selected = t.dataset.invId; render(); inv.classList.add('detail'); }
     else if (t.dataset.itab) { tab = t.dataset.itab; render(); }
     else if ('iback' in t.dataset) inv.classList.remove('detail');
   });
