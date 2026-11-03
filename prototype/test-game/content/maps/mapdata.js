@@ -106,7 +106,11 @@ export const MAPDATA = {
    "Difficulty": 1,
    "Par_Time_Sec": 1290,
    "Quest_Giver_Faction": 3,
-   "Notes": "Tutorial pressure. Ground only. Teaches the ring."
+   "Notes": "Tutorial pressure. Ground only. Teaches the ring.",
+   "Contract_Common": 2020,
+   "Contract_Uncommon": 270,
+   "Contract_Rare": 10,
+   "Contract_Epic": 40
   },
   {
    "Map_ID": 2,
@@ -119,7 +123,11 @@ export const MAPDATA = {
    "Difficulty": 1.1,
    "Par_Time_Sec": 1814,
    "Quest_Giver_Faction": 7,
-   "Notes": "Air introduced. Same footprint, new axis."
+   "Notes": "Air introduced. Same footprint, new axis.",
+   "Contract_Common": 2840,
+   "Contract_Uncommon": 250,
+   "Contract_Rare": 40,
+   "Contract_Epic": 10
   },
   {
    "Map_ID": 3,
@@ -132,7 +140,11 @@ export const MAPDATA = {
    "Difficulty": 1.2,
    "Par_Time_Sec": 2285,
    "Quest_Giver_Faction": 1,
-   "Notes": "Water lanes. Harvester escort becomes a thing."
+   "Notes": "Water lanes. Harvester escort becomes a thing.",
+   "Contract_Common": 2660,
+   "Contract_Uncommon": 300,
+   "Contract_Rare": 10,
+   "Contract_Epic": 30
   },
   {
    "Map_ID": 4,
@@ -145,7 +157,11 @@ export const MAPDATA = {
    "Difficulty": 1.3,
    "Par_Time_Sec": 2957,
    "Quest_Giver_Faction": 5,
-   "Notes": "First mid-size map. The reveal wave lands hard here."
+   "Notes": "First mid-size map. The reveal wave lands hard here.",
+   "Contract_Common": 3400,
+   "Contract_Uncommon": 300,
+   "Contract_Rare": 10,
+   "Contract_Epic": 0
   },
   {
    "Map_ID": 5,
@@ -158,7 +174,11 @@ export const MAPDATA = {
    "Difficulty": 1.4,
    "Par_Time_Sec": 3548,
    "Quest_Giver_Faction": 9,
-   "Notes": "Crystals: high value, slow harvest. Tempo trap."
+   "Notes": "Crystals: high value, slow harvest. Tempo trap.",
+   "Contract_Common": 2720,
+   "Contract_Uncommon": 270,
+   "Contract_Rare": 30,
+   "Contract_Epic": 0
   },
   {
    "Map_ID": 6,
@@ -171,7 +191,11 @@ export const MAPDATA = {
    "Difficulty": 1.5,
    "Par_Time_Sec": 4368,
    "Quest_Giver_Faction": 2,
-   "Notes": "Three-way spawn pressure."
+   "Notes": "Three-way spawn pressure.",
+   "Contract_Common": 7440,
+   "Contract_Uncommon": 270,
+   "Contract_Rare": 30,
+   "Contract_Epic": 10
   },
   {
    "Map_ID": 7,
@@ -184,7 +208,11 @@ export const MAPDATA = {
    "Difficulty": 1.6,
    "Par_Time_Sec": 5080,
    "Quest_Giver_Faction": 8,
-   "Notes": "Widest ground field. Routing puzzle."
+   "Notes": "Widest ground field. Routing puzzle.",
+   "Contract_Common": 6680,
+   "Contract_Uncommon": 330,
+   "Contract_Rare": 0,
+   "Contract_Epic": 10
   },
   {
    "Map_ID": 8,
@@ -197,7 +225,11 @@ export const MAPDATA = {
    "Difficulty": 1.7,
    "Par_Time_Sec": 6048,
    "Quest_Giver_Faction": 4,
-   "Notes": "Premium is deliberately stranded far out."
+   "Notes": "Premium is deliberately stranded far out.",
+   "Contract_Common": 4040,
+   "Contract_Uncommon": 200,
+   "Contract_Rare": 10,
+   "Contract_Epic": 10
   },
   {
    "Map_ID": 9,
@@ -210,7 +242,11 @@ export const MAPDATA = {
    "Difficulty": 1.8,
    "Par_Time_Sec": 6881,
    "Quest_Giver_Faction": 6,
-   "Notes": "Full 64x32. Everything at once."
+   "Notes": "Full 64x32. Everything at once.",
+   "Contract_Common": 4760,
+   "Contract_Uncommon": 280,
+   "Contract_Rare": 10,
+   "Contract_Epic": 30
   }
  ],
  "factions": [

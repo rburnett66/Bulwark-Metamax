@@ -1,4 +1,5 @@
 import { MAP, WAVES, makeWaves, fxScaleForMap, projScaleForMap, getUnitDef } from './data/tables.js';
+import { contractFor } from './data/collectiveContract.js';
 import { buildCampaignMap, buildTerrainMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
@@ -351,7 +352,9 @@ export function boot(mountEl, seed) {
         // classic board AND forge maps stay all-open — the campaign tier-unlock shop (Amendment B2)
         // has no UI yet, so gating forge playtests made upgrades silently impossible (owner 2026-07-16)
         structTiers: currentMapId && !(currentMap && currentMap.fromForge) ? sv.structTiers : null,
-        mapId: currentMapId, faction: currentTestFaction || null };
+        mapId: currentMapId, faction: currentTestFaction || null,
+        // the Collective buys the harvest up to this map's quota; the surplus is kept [MM-story_mw12m2df_2]
+        contract: currentMapId ? contractFor(currentMapId) : null };
       sim = createSim(currentSeed, simInit);
       battleTally = createBattleTally();
       trackedNow = trackedMission(sv);
@@ -1051,7 +1054,9 @@ export function boot(mountEl, seed) {
             // harvest feedback: what the haul was worth (quest hauls pay loyalty, not gold)
             if (evs[i].type === 'deposit') {
               const d = evs[i];
-              flashMessage(hud, d.role === 'quest' ? `+${d.units} quest units (loyalty)` : `+${d.gold}g ${d.role}`);
+              const keptNote = d.kept > 0 ? `+${d.kept} kept` : '';   // above the Collective quota: no gold, kept
+              if (d.role === 'quest' && !d.contract) flashMessage(hud, `+${d.units} quest units (loyalty)`);
+              else flashMessage(hud, [d.gold > 0 ? `+${d.gold}g ${d.role}` : '', keptNote].filter(Boolean).join(' · ') || `+0g ${d.role}`);
             }
             // Between waves (owner 2026-07-16): ONE dialog from the opposing (next) faction, held.
             // NO tap-to-start prompt — the dialog's TAP TO CLOSE is the continue: closing it (after
