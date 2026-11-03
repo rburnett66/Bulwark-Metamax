@@ -56,11 +56,12 @@ vec4 nebulaField(vec3 dir) {
 #if WARP > 2
   q.z = fbm(p + vec3(1.7, 9.2, 4.1));
 #endif
-  float n = fbm(p + 2.2 * (q - 0.5) * 2.0);
+  float n = fbm(p * 1.3 + 2.6 * (q - 0.5));
   float b = dot(dir, uBandN);
-  float band = exp(-b * b * 9.0);                       // the clouds gather along a galactic band
-  float density = smoothstep(0.38, 0.82, n) * (0.25 + 0.75 * band) + 0.12 * band;
-  float dust = smoothstep(0.5, 0.72, q.y * 0.6 + n * 0.55) * band;   // dark lanes inside the band
+  float band = exp(-b * b * 7.0);                       // the clouds gather along a galactic band
+  float fil = 1.0 - abs(2.0 * n - 1.0); fil = fil * fil * fil;   // wispy ridges along the warp folds
+  float density = (smoothstep(0.45, 0.85, n) * 0.75 + fil * 0.35) * (0.15 + 0.85 * band) + 0.06 * band;
+  float dust = smoothstep(0.52, 0.7, q.y * 0.55 + n * 0.6) * (0.3 + 0.7 * band);   // dark lanes
   return vec4(density, dust, q.x, q.z);
 }`;
 
@@ -79,8 +80,8 @@ varying vec3 vDir;
 void main() {
   vec3 dir = normalize(vDir);
   vec4 f = nebulaField(dir);
-  vec3 col = mix(uA, uB, smoothstep(0.3, 0.7, f.z));
-  col = mix(col, uC, smoothstep(0.55, 0.85, f.w) * smoothstep(0.4, 0.9, f.x));
+  vec3 col = mix(uA, uB, smoothstep(0.38, 0.62, f.z));
+  col = mix(col, uC, smoothstep(0.5, 0.7, f.w) * smoothstep(0.25, 0.7, f.x));
   float lum = f.x * (1.0 - 0.85 * f.y);
   vec3 c = uDeep + col * lum * uIntensity;
   float s = max(dot(dir, uSunDir), 0.0);
@@ -109,7 +110,7 @@ void main() {
   I *= 1.0 - 0.8 * f.y;                                 // stars dim behind the dust lanes
 #endif
   vI = I; vColor = aColor;
-  float px = 1.6 + 2.8 * sqrt(clamp(I, 0.0, 4.0));      // bright stars are bigger; the faint are a soft 1–2 px dot
+  float px = 1.9 + 2.6 * sqrt(clamp(I, 0.0, 4.0));      // bright stars are bigger; the faint are a soft 1–2 px dot
   vSharp = mix(5.0, 9.0, clamp(I, 0.0, 1.0));
   gl_PointSize = px * uPR;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -177,13 +178,13 @@ void main() {
   float limb = 0.55 + 0.45 * sqrt(1.0 - x * x);         // limb darkening
   float disc = (1.0 - smoothstep(rd * 0.88, rd, r)) * limb;
   float rr = max(r, rd);
-  float corona = pow(rd / rr, 2.4) * 1.4 + exp(-(rr - rd) * 22.0) * 2.0;
-  float a = atan(vUv.y, vUv.x);
+  float fade = 1.0 - smoothstep(0.0, 1.0, r); fade *= fade;   // no visible quad/circle edge, even after ACES lifts the darks
+  float corona = (pow(rd / rr, 2.2) * 1.2 + exp(-(rr - rd) * 22.0) * 2.0) * fade;
+  float a = atan(vUv.y, vUv.x + 1e-5);                 // atan(0,0) is NaN on some GPUs — NaN in a float target smears through bloom
   float rays = 0.5 + 0.5 * sin(a * 7.0 + uSeed) * sin(a * 11.0 - uSeed * 1.7 + uTime * 0.05);
-  rays = pow(rays, 3.0) * exp(-(rr - rd) * 5.0) * 0.5 * pow(rd / rr, 0.6);
-  float edge = 1.0 - smoothstep(0.6, 1.0, r);
+  rays = pow(rays, 3.0) * exp(-(rr - rd) * 5.0) * 0.5 * pow(rd / rr, 0.6) * fade;
   vec3 white = mix(uCol, vec3(1.0), 0.6);
-  vec3 col = white * disc * uDisc + uCol * (corona + rays) * edge;
+  vec3 col = white * disc * uDisc + uCol * (corona + rays);
   gl_FragColor = vec4(col * uIntensity, 1.0);
   #include <tonemapping_fragment>
   #include <encodings_fragment>
@@ -208,7 +209,7 @@ function kelvinToRgb(k) {
 
 export function createBackdrop(THREE, {
   seed = 1, tier = 'high', sunDir = [0.62, 0.28, 0.73], palette = {},
-  nebulaIntensity = 0.10, starBrightness = 1, sunIntensity = 1, sunSize = 1, twinkle = true,
+  nebulaIntensity = 0.9, starBrightness = 1, sunIntensity = 1, sunSize = 1, twinkle = true,
 } = {}) {
   const T = TIERS[tier] || TIERS.high;
   const pal = { ...DEFAULT_PALETTE, ...palette };
@@ -233,11 +234,15 @@ export function createBackdrop(THREE, {
   const rot3 = new THREE.Matrix3().setFromMatrix4(rotM);
   const fieldUniforms = {
     uRot: { value: rot3 }, uOffset: { value: new THREE.Vector3(rnd() * 50, rnd() * 50, rnd() * 50) },
-    uBandN: { value: bandN }, uScale: { value: 2.2 },
+    uBandN: { value: bandN }, uScale: { value: 2.6 },
   };
   const defines = { OCTAVES: T.octaves, WARP: T.warp };
   const time = { value: 0 };
-  const common = { depthWrite: false, depthTest: true, transparent: false, blending: THREE.AdditiveBlending, fog: false };
+  // additive on RGB, leave destination alpha alone (plain AdditiveBlending would pile alpha above 1 in a float
+  // target, and UnrealBloomPass then shows each backdrop quad as a faint box)
+  const common = { depthWrite: false, depthTest: true, transparent: false, fog: false,
+    blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
+    blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor };
 
   // ── nebula ─────────────────────────────────────────────────────────────────────────────────────────
   const nebMat = own(new THREE.ShaderMaterial({
@@ -274,7 +279,7 @@ export function createBackdrop(THREE, {
     const kel = Math.min(25000, Math.max(2800, 6200 * Math.exp(gauss() * 0.32)));
     const c = kelvinToRgb(kel).map((v) => 0.45 + 0.55 * v);   // stars read pale; keep the hint of temperature
     const col = new THREE.Color(c[0], c[1], c[2]).convertSRGBToLinear();
-    stars.push({ dir, I: 0.055 * Math.pow(flux, 0.45), col, kel });
+    stars.push({ dir, I: 0.13 * Math.pow(flux, 0.42), col, kel });
   }
   stars.sort((a, b) => b.I - a.I);
   // the brightest few become spike quads (high/standard); on low they stay points
@@ -353,7 +358,7 @@ export function createBackdrop(THREE, {
   const sunHalf = Math.tan(THREE.MathUtils.degToRad(6.5 * sunSize)) * SUN_R;
   const sunMat = own(new THREE.ShaderMaterial({
     ...common,
-    uniforms: { uCol: { value: sunColor }, uDisc: { value: 40 }, uRd: { value: 0.062 }, uTime: time,
+    uniforms: { uCol: { value: sunColor }, uDisc: { value: 2.5 }, uRd: { value: 0.062 }, uTime: time,
       uSeed: { value: rnd() * 10 }, uIntensity: { value: sunIntensity } },
     vertexShader: SUN_VS, fragmentShader: SUN_FS,
   }));
@@ -373,7 +378,7 @@ export function createBackdrop(THREE, {
   {
     const avg = lin(pal.a).add(lin(pal.b)).multiplyScalar(0.5 * nebulaIntensity * 0.45).add(lin(pal.deep));
     const sky = new THREE.Mesh(own(new THREE.SphereGeometry(50, 24, 12)),
-      own(new THREE.MeshBasicMaterial({ color: avg.multiplyScalar(3), side: THREE.BackSide, fog: false, toneMapped: false })));
+      own(new THREE.MeshBasicMaterial({ color: avg.multiplyScalar(1.2), side: THREE.BackSide, fog: false, toneMapped: false })));
     envScene.add(sky);
     // faint cool band along the galactic plane — gives the hull a soft cool streak in its reflections
     const band = new THREE.Mesh(own(new THREE.CylinderGeometry(40, 40, 9, 32, 1, true)),
@@ -425,6 +430,7 @@ export function createBackdrop(THREE, {
     group, sunDirection, sunColor, envScene, sunAnchor, update, sunWorldPosition, sunScreenVisible, dispose,
     /** live knobs */
     uniforms: { nebulaIntensity: nebMat.uniforms.uIntensity, sunIntensity: sunMat.uniforms.uIntensity, time },
+    brightStarDirections: brightStars.map((s) => s.dir.clone()),
     stats: { drawCalls: 2 + (spikeMat ? 1 : 0) + 1, stars: pointStars.length + brightStars.length, brightStars: brightStars.length, tier },
   };
 }

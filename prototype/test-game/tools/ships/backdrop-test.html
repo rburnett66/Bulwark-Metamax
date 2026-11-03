@@ -25,7 +25,7 @@ import { ShaderPass } from '../../vendor/three-addons/postprocessing/ShaderPass.
 import { UnrealBloomPass } from '../../vendor/three-addons/postprocessing/UnrealBloomPass.js';
 import { Lensflare, LensflareElement } from '../../vendor/three-addons/objects/Lensflare.js';
 import { createBackdrop } from '../../src/render3d/space/backdrop.js';
-import { chromaticAberrationPass, createLensFlare, tonemapPass } from '../../src/render3d/space/lensFx.js';
+import { chromaticAberrationPass, createLensFlare, hdrBloom, tonemapPass } from '../../src/render3d/space/lensFx.js';
 
 const q = new URLSearchParams(location.search);
 const tier = q.get('tier') || 'high', seed = +(q.get('seed') || 7), hdr = q.get('hdr') !== '0';
@@ -35,6 +35,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, tier === 'low' ? 1.5 : 2));
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = hdr ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.9;
+renderer.info.autoReset = false;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(38, 1, 0.26, 1040);   // ≈ the viewer's near/far for a 26-unit ship
@@ -66,13 +67,15 @@ const up = new THREE.Vector3(0, 1, 0);
 const look = bd.sunDirection.clone().applyAxisAngle(up, THREE.MathUtils.degToRad(view === 'edge' ? 6 : 16));
 look.y -= view === 'edge' ? 0.02 : 0.08; look.normalize();
 if (view === 'away') look.copy(bd.sunDirection).negate().applyAxisAngle(up, 0.9);
+if (view === 'star' && bd.brightStarDirections.length) look.copy(bd.brightStarDirections[+(q.get('i') || 0)]).applyAxisAngle(up, +(q.get('off') || 0.3));
 camera.position.copy(look).multiplyScalar(-24);
 camera.lookAt(0, 0, 0);
 
 const rtOpts = hdr ? { type: THREE.HalfFloatType } : {};
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, rtOpts));
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), hdr ? 0.6 : 0.7, 0.5, hdr ? 1.0 : 0.88);
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), hdr ? 0.6 : 0.7, 0.45, hdr ? 1.0 : 0.88);
+if (hdr) hdrBloom(THREE, bloom);
 bloom.enabled = q.get('bloom') !== '0';
 composer.addPass(bloom);
 if (hdr) composer.addPass(tonemapPass(THREE, ShaderPass, { exposure: 0.9 }));
@@ -90,6 +93,7 @@ const clock = new THREE.Clock();
 let frames = 0;
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
+  renderer.info.reset();
   bd.update(dt, camera);
   ca.tick(dt);
   composer.render();
@@ -99,6 +103,7 @@ renderer.setAnimationLoop(() => {
       `${bd.stats.drawCalls} backdrop draws · ${hdr ? 'HDR' : 'LDR'} · sun ${s.visible ? 'on screen' : 'off screen'}` +
       (flare ? ` · flare occlusion ${flare.hdrOcclusion}` : '') + ` · calls ${renderer.info.render.calls}`;
     window.__ready = true;
+    if (q.has('shot')) renderer.setAnimationLoop(null);   // headless screenshots: hold the frame
   }
 });
 </script>

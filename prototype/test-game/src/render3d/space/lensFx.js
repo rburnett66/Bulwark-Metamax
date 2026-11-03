@@ -76,12 +76,12 @@ varying vec2 vUv;
 #define saturate(a) clamp( a, 0.0, 1.0 )
 #endif
 // copied from three r128 tonemapping_pars_fragment
-vec3 RRTAndODTFit( vec3 v ) {
+vec3 bwRRTAndODTFit( vec3 v ) {
   vec3 a = v * ( v + 0.0245786 ) - 0.000090537;
   vec3 b = v * ( 0.983729 * v + 0.4329510 ) + 0.238081;
   return a / b;
 }
-vec3 ACESFilmicToneMapping( vec3 color ) {
+vec3 bwACESFilmic( vec3 color ) {
   const mat3 ACESInputMat = mat3(
     vec3( 0.59719, 0.07600, 0.02840 ), vec3( 0.35458, 0.90834, 0.13383 ),
     vec3( 0.04823, 0.01566, 0.83777 )
@@ -92,17 +92,17 @@ vec3 ACESFilmicToneMapping( vec3 color ) {
   );
   color *= exposure / 0.6;
   color = ACESInputMat * color;
-  color = RRTAndODTFit( color );
+  color = bwRRTAndODTFit( color );
   color = ACESOutputMat * color;
   return saturate( color );
 }
 // copied from three r128 encodings_pars_fragment
-vec4 LinearTosRGB( in vec4 value ) {
+vec4 bwLinearTosRGB( in vec4 value ) {
   return vec4( mix( pow( value.rgb, vec3( 0.41666 ) ) * 1.055 - vec3( 0.055 ), value.rgb * 12.92, vec3( lessThanEqual( value.rgb, vec3( 0.0031308 ) ) ) ), value.a );
 }
 void main() {
   vec4 tex = texture2D(tDiffuse, vUv);
-  vec4 c = LinearTosRGB(vec4(ACESFilmicToneMapping(max(tex.rgb, 0.0)), 1.0));
+  vec4 c = bwLinearTosRGB(vec4(bwACESFilmic(max(tex.rgb, 0.0)), 1.0));
   // ±0.5 LSB triangular-ish dither after encoding: kills 8-bit banding in the nebula gradients (0 = exact match)
   float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
   c.rgb += (ign - 0.5) * dither / 255.0;
@@ -120,6 +120,17 @@ export function tonemapPass(THREE, ShaderPass, { exposure = 1, dither = 1 } = {}
   pass.uniforms.exposure.value = exposure;
   pass.uniforms.dither.value = dither;
   return pass;
+}
+
+/**
+ * r128's UnrealBloomPass keeps its mip chain in 8-bit targets. Before tone mapping that quantises the faint bloom
+ * tail to 1/255 linear steps, which ACES + sRGB then lift into visible concentric boxes around every bright
+ * source. Call this once, right after constructing the pass and before the first render, in an HDR chain.
+ */
+export function hdrBloom(THREE, bloomPass, type = THREE.HalfFloatType) {
+  const rts = [bloomPass.renderTargetBright, ...bloomPass.renderTargetsHorizontal, ...bloomPass.renderTargetsVertical];
+  for (const rt of rts) if (rt) { rt.texture.type = type; rt.texture.needsUpdate = true; rt.dispose(); }
+  return bloomPass;
 }
 
 // ── lens flare ────────────────────────────────────────────────────────────────────────────────────────
@@ -189,7 +200,7 @@ export function createLensFlare(THREE, Lensflare, LensflareElement, {
   const flare = new Lensflare();
   flare.name = 'lensFlare';
   flare.addElement(new LensflareElement(tex.glow, 220 * pr, 0, tint(1, 1, 1, 0.45)));
-  if (streak) flare.addElement(new LensflareElement(tex.streak, 900 * pr, 0, tint(0.75, 0.85, 1.2, 0.22)));
+  if (streak) flare.addElement(new LensflareElement(tex.streak, 900 * pr, 0, tint(0.75, 0.85, 1.2, 0.12)));
   // ghosts: distance along the sun→centre axis (0 = sun, 1 = screen centre, 2 = mirrored)
   const ghosts = [
     [tex.hex, 0.42, 46, [0.6, 0.8, 1.2], 0.06],
