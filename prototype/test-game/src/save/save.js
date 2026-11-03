@@ -25,6 +25,7 @@
  *   inventory        { [resourceId]: count }; inventoryNew: the same, since the last visit
  *   seen             what the menu's red-dot badges last showed (menu/badges.js) [MM-story_mvkhei9q_k]
  *   pendingRewards   the last battle(s)' rewards, waiting to fly into the menu widget [MM-story_mvkhegop_j]
+ *   battleLog        played campaign battles, newest first, capped (save/battleLog.js) [MM-story_mw1azvh8_d]
  *
  * Determinism contract: any field that CHANGES A BATTLE (carry, tech, harvesterLevel, contract
  * buffs) must be injected at createSim time — never mid-battle — so replays stay reproducible.
@@ -61,6 +62,7 @@ export function defaultSave() {
     inventory: {},
     inventoryNew: {},
     loggedQueue: [],     // missions logged away from the menu: the toast plays when the menu next shows
+    battleLog: [],
   };
 }
 
@@ -96,6 +98,7 @@ export function migrate(s) {
   if (!s.inventory) s.inventory = {};
   if (!s.inventoryNew) s.inventoryNew = {};
   if (!Array.isArray(s.loggedQueue)) s.loggedQueue = [];
+  if (!Array.isArray(s.battleLog)) s.battleLog = [];
   if (!s.seen || typeof s.seen !== 'object') s.seen = {};
   if (s.pendingRewards === undefined) s.pendingRewards = null;
   return s;
