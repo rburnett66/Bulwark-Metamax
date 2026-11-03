@@ -226,8 +226,8 @@ stack is affordable. Draw calls: ship 2, engines 2, tugs 3, planet 2–3, backdr
 
 ## 9. Open decisions
 
-1. **Opening script alignment** — the Collective arrival must be fitted to the existing opening script (first
-   ship and contract offer before Verdance): where in the script the ship appears, who speaks, and whether the
+1. **Opening script alignment** — the opening script (first ship and contract offer before Verdance) is still
+   to be supplied; once it is, the Collective arrival is fitted to it: where in the script the ship appears, who speaks, and whether the
    first-ever run may be skipped.
 2. **Arcane propulsion colour** — keep magenta, or match the new blood-red hull lights?
 3. **Skip counts as seen?** Proposed yes (a skipper chose to skip). Replay stays available.
