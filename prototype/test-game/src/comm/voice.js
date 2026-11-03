@@ -259,10 +259,39 @@ let musicBus = null, musicDuck = null;
 const VOLS = { master: 0.8, dialog: 1, game: 1, music: 0.7 };
 export const DUCK = Object.freeze({ level: 0.35, attack: 0.15, release: 0.6 });
 
+// AUDIO CONTROL [MM-story_mw1bw933_e]: the saved volumes (bw.volumes, written by the Settings sliders and the in-game
+// control) and the master mute (bw.muted) are applied at module load, so they hold from the first sound. Before this
+// they were only read by the Settings panel and never reached the engine, and the in-game 🔊 muted comm voice only.
+let muted = false;
+const listeners = new Set();
+const store = (() => { try { return typeof localStorage !== 'undefined' ? localStorage : null; } catch (e) { return null; } })();
+if (store) {
+  try { Object.assign(VOLS, JSON.parse(store.getItem('bw.volumes') || '{}')); } catch (e) { /* fresh */ }
+  try { muted = store.getItem('bw.muted') === '1' || (store.getItem('bw.muted') == null && store.getItem('bulwark:commMuted') === '1'); } catch (e) { /* blocked */ }
+}
+const persist = () => {
+  if (!store) return;
+  try { store.setItem('bw.volumes', JSON.stringify(VOLS)); store.setItem('bw.muted', muted ? '1' : '0'); } catch (e) { /* full or blocked */ }
+};
+const emit = () => { for (const fn of listeners) { try { fn({ muted, volumes: { ...VOLS } }); } catch (e) { /* a listener's problem */ } } };
+const masterLevel = () => (muted ? 0 : VOLS.master);
+/** A channel's saved volume, 0..1. */
+export const getChannelVolume = (channel) => VOLS[channel];
+export const isMuted = () => muted;
+/** Mute or unmute everything (music, battle sound, voices). Persisted. */
+export function setMuted(on) {
+  muted = !!on;
+  if (master) master.gain.setTargetAtTime(masterLevel(), AC.currentTime, 0.03);
+  persist(); emit();
+}
+/** Be told when the mute or any volume changes (the in-game control and the Settings sliders stay in step). → unsubscribe. */
+export function onAudioChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+
 export function setChannelVolume(channel, v) {
   const x = Math.max(0, Math.min(1, Number(v) || 0));
   VOLS[channel] = x;
-  if (channel === 'master' && master) master.gain.value = x;
+  persist(); emit();
+  if (channel === 'master' && master) master.gain.value = masterLevel();
   if (channel === 'dialog' && dialogBus) dialogBus.gain.value = x;
   if (channel === 'game' && gameBus) gameBus.gain.value = x;
   if (channel === 'music' && musicBus) musicBus.gain.value = x;
@@ -287,7 +316,7 @@ export function initAudio(volume) {
   if (AC) { if (AC.state === 'suspended') AC.resume(); return true; }
   try {
     AC = new (window.AudioContext || window.webkitAudioContext)();
-    master = AC.createGain(); master.gain.value = (volume != null ? volume : VOLS.master);
+    master = AC.createGain(); master.gain.value = (volume != null ? volume : masterLevel());
     comp = AC.createDynamicsCompressor();
     master.connect(comp); comp.connect(AC.destination);
     dialogBus = AC.createGain(); dialogBus.gain.value = VOLS.dialog; dialogBus.connect(master);
@@ -303,7 +332,7 @@ export function initAudio(volume) {
   } catch (e) { audioOK = false; console.warn('Audio unavailable:', e); return false; }
 }
 export function audioReady() { return !!(audioOK && AC); }
-export function setVolume(v) { if (master) master.gain.value = v; }
+export function setVolume(v) { setChannelVolume('master', v); }
 
 function makeImpulse(sec, decay) {
   const rate = AC.sampleRate, len = Math.floor(rate * sec), buf = AC.createBuffer(2, len, rate);
