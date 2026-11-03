@@ -47,6 +47,20 @@
   .throttle input { flex: 1; accent-color: var(--hot); }
   .throttle output { font: 600 14px "Chakra Petch", sans-serif; min-width: 92px; color: var(--hot); }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--sel); outline-offset: 2px; }
+  /* presentation: chrome fades, letterbox slides in, a title card names the ship */
+  .fleet, .dock, .stats, .ref { transition: opacity .6s ease; }
+  body.present .fleet, body.present .dock, body.present .stats, body.present .ref { opacity: 0; pointer-events: none; }
+  .bar { position: fixed; left: 0; right: 0; height: 10vh; background: #000; z-index: 2; transition: transform .9s cubic-bezier(.2,.7,.2,1); }
+  .bar.top { top: 0; transform: translateY(-100%); } .bar.bot { bottom: 0; transform: translateY(100%); }
+  body.present .bar { transform: none; }
+  .card { position: fixed; left: max(24px, 5vw); bottom: calc(10vh + 28px); z-index: 3; opacity: 0; transform: translateY(12px);
+    transition: opacity .8s ease .5s, transform .8s ease .5s; pointer-events: none; }
+  body.present .card { opacity: 1; transform: none; }
+  .card .faction { font: 600 clamp(36px, 6vw, 72px)/1 "Chakra Petch", sans-serif; text-transform: capitalize; letter-spacing: .02em; }
+  .card .rule { width: 72px; height: 3px; margin: 14px 0 10px; border-radius: 2px; background: var(--eng, #9fd8ff); box-shadow: 0 0 14px var(--eng, #9fd8ff); }
+  .card .kind { color: var(--dim); font-size: 15px; }
+  .exit { position: fixed; top: calc(10vh + 16px); right: 16px; z-index: 3; opacity: 0; pointer-events: none; transition: opacity .6s ease .6s; }
+  body.present .exit { opacity: 1; pointer-events: auto; }
   @media (max-width: 720px) {
     .fleet { top: auto; bottom: auto; left: 16px; right: 16px; width: auto; height: auto; display: flex; overflow-x: auto; padding: 6px; }
     .fleet h1 { display: none; }
@@ -63,6 +77,9 @@
 <nav class="fleet" aria-label="Capital ships"><h1>Capital ships</h1><div id="list"></div></nav>
 <figure class="ref" id="ref" hidden><img id="refImg" alt=""><span>Grok concept</span></figure>
 <div class="stats" id="stats"></div>
+<div class="bar top" aria-hidden="true"></div><div class="bar bot" aria-hidden="true"></div>
+<div class="card" aria-live="polite"><div class="faction" id="cardName"></div><div class="rule"></div><div class="kind" id="cardKind">Capital ship</div></div>
+<button class="seg exit" id="exit">Exit presentation</button>
 <div class="dock">
   <div class="throttle">
     <label for="k" class="group" style="color:var(--dim);font-size:12px">Engines</label>
@@ -80,7 +97,7 @@
   <div class="group" role="group" aria-label="Level of detail"><label>Detail</label>
     <button class="seg" data-lod="0" aria-pressed="true">Close</button><button class="seg" data-lod="1">Orbit</button><button class="seg" data-lod="2">Far</button>
   </div>
-  <div class="group"><button class="seg" id="spin" aria-pressed="false">Turntable</button><button class="seg" id="bloom" aria-pressed="true">Bloom</button></div>
+  <div class="group"><button class="seg" id="present">Present</button><button class="seg" id="tugsBtn" aria-pressed="false">Tugs</button><button class="seg" id="spin" aria-pressed="false">Turntable</button><button class="seg" id="bloom" aria-pressed="true">Bloom</button></div>
 </div>
 <script type="module">
 import * as THREE from 'three';
@@ -90,6 +107,7 @@ import { EffectComposer } from '../../vendor/three-addons/postprocessing/EffectC
 import { RenderPass } from '../../vendor/three-addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../../vendor/three-addons/postprocessing/UnrealBloomPass.js';
 import { createEngineFx, prepareShip } from '../../src/render3d/ships/engineFx.js';
+import { createTugs } from '../../src/render3d/ships/tugs.js';
 
 const ORDER = ['air', 'arcane', 'artillery', 'collective', 'dark', 'green', 'lumen', 'powder', 'tech', 'water'];
 const BUNDLE = window.SHIP_BUNDLE || null;              // standalone review copy: inlined GLBs + refs
@@ -132,7 +150,8 @@ composer.addPass(bloom);
 
 // ── fleet ────────────────────────────────────────────────────────────────────────────
 const loader = new GLTFLoader();
-let manifest = {}, current = null, slug = null, lod = 0, fx = null, size = 20;
+let manifest = {}, current = null, slug = null, lod = 0, fx = null, size = 20, tugs = null, tugScene = null, presenting = false;
+const center = new THREE.Vector3();
 const holder = new THREE.Group();                       // glTF is Y-up: +X bow, +Y up, -Z port
 scene.add(holder);
 
@@ -162,14 +181,25 @@ async function show(s, keepView) {
   renderList();
   const m = manifest[s];
   const gltf = await loader.loadAsync(asset(m.lods[lod].file));
-  if (current) { fx && fx.dispose(); holder.remove(current); }
-  current = prepareShip(THREE, gltf.scene);
+  if (current) { fx && fx.dispose(); tugs && tugs.dispose(); holder.remove(current); }
+  current = prepareShip(THREE, gltf.scene, { anisotropy: renderer.capabilities.getMaxAnisotropy() });
   holder.add(current);
+  const box = new THREE.Box3().setFromObject(current);   // the hull alone, before fx and tugs join it
   fx = createEngineFx(THREE, current);
   fx.setIntensity(+kIn.value);
-  const box = new THREE.Box3().setFromObject(current);
+  tugs = null;
+  if (manifest.tug) {
+    tugScene = tugScene || prepareShip(THREE, (await loader.loadAsync(asset(manifest.tug.lods[0].file))).scene,
+      { anisotropy: renderer.capabilities.getMaxAnisotropy() });
+    tugs = createTugs(THREE, tugScene, current, { count: 7, color: m.engineColor || [0.6, 0.8, 1], seed: s.length * 7 });
+    tugs.group.visible = presenting || tugsBtn.getAttribute('aria-pressed') === 'true';
+  }
+  document.getElementById('cardName').textContent = s;
+  document.querySelector('.card').style.setProperty('--eng', rgbCss(m.engineColor));
   size = box.getSize(new THREE.Vector3()).length();
-  controls.target.copy(box.getCenter(new THREE.Vector3()));
+  camera.near = size * 0.01; camera.far = size * 40;      // tight depth range = precise depth = no shimmer
+  camera.updateProjectionMatrix();
+  controls.target.copy(box.getCenter(center));
   controls.target.x -= size * 0.07;                     // leave room aft for the exhaust plume
   if (!keepView) setView(q.get('view') || 'hero');
   const ref = BUNDLE && BUNDLE.refs[s];
@@ -177,7 +207,8 @@ async function show(s, keepView) {
   if (ref) document.getElementById('refImg').src = ref;
   const l = m.lods[lod];
   document.getElementById('stats').innerHTML =
-    `<b>${l.tris.toLocaleString()}</b> triangles · <b>${l.drawCalls}</b> + 2 fx draw calls · <b>${m.engines}</b> engines · length <b>${m.length}</b>`;
+    `<b>${l.tris.toLocaleString()}</b> triangles · <b>${l.drawCalls}</b> + 2 fx draw calls · <b>${m.engines}</b> engines · length <b>${m.length}</b>` +
+    (tugs ? ` · tugs <b>7</b> in <b>3</b> draw calls` : '');
 }
 
 const VIEWS = { hero: [-35, 24], rear: [160, 14], side: [-90, 2], top: [-90, 88] };   // yaw from the bow, pitch
@@ -206,6 +237,27 @@ document.querySelectorAll('[data-lod]').forEach((b) => (b.onclick = () => {
   document.querySelectorAll('[data-lod]').forEach((x) => x.setAttribute('aria-pressed', x === b));
   show(slug, true);
 }));
+const tugsBtn = document.getElementById('tugsBtn');
+tugsBtn.onclick = () => {
+  const on = tugsBtn.getAttribute('aria-pressed') !== 'true';
+  tugsBtn.setAttribute('aria-pressed', on);
+  if (tugs) tugs.group.visible = on || presenting;
+};
+// presentation: the camera takes a slow cinematic orbit; tugs fly; the UI steps aside
+let camT = 0;
+function present(on) {
+  presenting = on;
+  document.body.classList.toggle('present', on);
+  controls.enabled = !on;
+  if (tugs) tugs.group.visible = on || tugsBtn.getAttribute('aria-pressed') === 'true';
+  camera.filmOffset = on ? -6 : 0;                     // frame the ship right of the title card
+  camera.updateProjectionMatrix();
+  if (on) { camT = 0; if (+kIn.value < 0.6) setK(1); }
+  else setView('hero');
+}
+document.getElementById('present').onclick = () => present(true);
+document.getElementById('exit').onclick = () => present(false);
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && presenting) present(false); });
 const spin = document.getElementById('spin'), bloomBtn = document.getElementById('bloom');
 spin.onclick = () => spin.setAttribute('aria-pressed', spin.getAttribute('aria-pressed') !== 'true');
 bloomBtn.onclick = () => { bloomBtn.setAttribute('aria-pressed', !(bloom.enabled = !bloom.enabled)); bloomBtn.setAttribute('aria-pressed', bloom.enabled); };
@@ -221,8 +273,18 @@ const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (spin.getAttribute('aria-pressed') === 'true' && !matchMedia('(prefers-reduced-motion: reduce)').matches) holder.rotation.y += dt * 0.15;
-  controls.update();
+  if (presenting) {
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    camT += still ? 0 : dt;
+    const yaw = THREE.MathUtils.degToRad(-30 - camT * 2.2);               // ~2° a second around the ship
+    const pitch = THREE.MathUtils.degToRad(9 + 5 * Math.sin(camT * 0.07));
+    const d = size * (1.05 + 0.12 * Math.sin(camT * 0.05));
+    camera.position.set(center.x + Math.cos(pitch) * Math.cos(yaw) * d, center.y + Math.sin(pitch) * d,
+      center.z - Math.cos(pitch) * Math.sin(yaw) * d);
+    camera.lookAt(center.x - size * 0.05, center.y, center.z);
+  } else controls.update();
   fx && fx.update(dt);
+  tugs && tugs.group.visible && tugs.update(dt, renderer.domElement.height);
   composer.render();
 });
 
@@ -230,6 +292,8 @@ manifest = await loadManifest();
 setK(q.has('k') ? +q.get('k') : 1);
 const first = q.get('ship') && manifest[q.get('ship')] ? q.get('ship') : ORDER.find((s) => manifest[s]);
 if (first) await show(first);
+if (q.has('present')) present(true);
+if (q.has('t')) { camT = +q.get('t'); }
 window.__ready = true;
 </script>
 </body>

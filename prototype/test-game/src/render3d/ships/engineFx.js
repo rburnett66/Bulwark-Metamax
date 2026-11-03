@@ -199,17 +199,28 @@ export function createEngineFx(THREE, root, { pointLight = true } = {}) {
 // material and ONE unlit glow material for the whole fleet, so the textures sit in GPU memory once and
 // ships batch well. ship_glow is unlit by design (glTF can't express emissive-by-vertex-colour).
 const fleet = {};
-export function prepareShip(THREE, root) {
+// anisotropy: pass renderer.capabilities.getMaxAnisotropy() — keeps the fine panel lines sharp on hull faces
+// seen at a grazing angle (the common case on a long ship) instead of smearing to grey.
+export function prepareShip(THREE, root, { anisotropy = 1 } = {}) {
   root.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     const m = o.material;
     if (m.name === 'ship_glow') {
-      fleet.glow = fleet.glow || new THREE.MeshBasicMaterial({ name: 'ship_glow', vertexColors: true, toneMapped: false });
+      // Light strips, windows and engine cores sit on (or a hair above) the hull. Pull them toward the camera
+      // in depth so they always win the tie and never shimmer through the plating underneath (z-fighting).
+      fleet.glow = fleet.glow || new THREE.MeshBasicMaterial({
+        name: 'ship_glow', vertexColors: true, toneMapped: false,
+        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8,
+      });
       if (m !== fleet.glow) m.dispose();
       o.material = fleet.glow;
     } else if (m.name === 'ship_body') {
-      if (!fleet.body) { fleet.body = m; return; }
-      if (m !== fleet.body) { m.map && m.map.dispose(); m.normalMap && m.normalMap.dispose(); m.dispose(); }
+      if (!fleet.body) {
+        fleet.body = m;
+        for (const t of [m.map, m.normalMap, m.roughnessMap]) if (t) { t.anisotropy = anisotropy; t.needsUpdate = true; }
+        return;
+      }
+      if (m !== fleet.body) { for (const t of [m.map, m.normalMap, m.roughnessMap]) t && t.dispose(); m.dispose(); }
       o.material = fleet.body;
     }
   });

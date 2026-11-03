@@ -15,7 +15,7 @@ import bpy  # noqa: E402,F401  (bpy must load before bmesh)
 import bmesh  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-from common import _obj, box, build, cyl, engine, loft, mat  # noqa: E402
+from common import DECK, _obj, box, build, cyl, engine, light_strip, loft, mast, mat, window_row  # noqa: E402
 
 
 # ── local helpers ─────────────────────────────────────────────────────────────────────
@@ -53,9 +53,22 @@ def dome(name, center, r, material, h=None):
     cyl(name + "_top", (x, y, z + 0.2 + h * 0.75), r * 0.72, h * 0.3, material, sides=10, axis="Z", r1=r * 0.25)
 
 
-def spire(name, center, h, r, material):
+def spire(name, center, h, material, antenna=0.0):
+    """Standard spire (4 m square base, tapering) with an optional standard mast/antenna rising from its tip."""
     x, y, z = center
-    cyl(name, (x, y, z + h / 2), r, h, material, sides=4, axis="Z", r1=r * 0.25)
+    r = 0.11                                         # 4-sided: across-flats r·√2 ≈ 0.156 ≥ the 0.15 spire base
+    cyl(name, (x, y, z + h / 2), r, h, material, sides=4, axis="Z", r1=r * 0.3)
+    if antenna:
+        mast("mast_" + name[len("spire_"):], x, y, z + h * 0.85, antenna, material)
+
+
+def window_bays(name, x0, x1, y, z, glow, bays, per=4):
+    """`bays` clusters of `per` standard windows at window pitch, spread evenly between x0 and x1 on a +Y face."""
+    pitch = 0.22
+    for b in range(bays):
+        cx = x0 + (x1 - x0) * (b + 0.5) / bays
+        half = pitch * per / 2
+        window_row(f"{name}_{b}", (cx - half, y, z), (cx + half, y, z), glow, count=per)
 
 
 def make():
@@ -71,8 +84,7 @@ def make():
                   (9.6, 0.45, 0.28, 0.2, 0, -0.1)], hull, bevel=0.03)
     loft("belly", [(-9.6, 1.6, 0.45, 0.25, 0, -0.9), (4.0, 1.7, 0.45, 0.25, 0, -0.9), (6.5, 0.9, 0.3, 0.2, 0, -0.75)],
          trim)
-    for x in (-7.5, -5.0, -2.5, 0.0, 2.5):                                      # belly window bays
-        box("belly_glow", (x, 1.72, -0.95), (1.4, 0.04, 0.18), glow)
+    window_bays("win_belly", -7.5, 2.5, 1.6, -0.88, glow, bays=2)              # belly window bays
     box("hull_red", (-1.0, 2.31, 0.15), (14.0, 0.05, 0.22), red)                # side livery
     box("hull_blue", (-1.0, 2.31, -0.15), (14.0, 0.05, 0.28), blue)
 
@@ -88,7 +100,7 @@ def make():
                            (-4.0, PY + 0.25)], PZ + 0.75, PZ + 0.79, blue)
     fin("pod_fin", [(1.0, PZ + 0.7), (4.6, PZ + 0.7), (2.4, PZ + 2.4), (1.6, PZ + 2.4)], PY, 0.35, hull)
     fin("pod_fin_blue", [(2.2, PZ + 1.5), (3.6, PZ + 1.5), (2.5, PZ + 2.2), (2.0, PZ + 2.2)], PY, 0.4, blue)
-    box("pod_glow", (-1.0, PY + 0.86, PZ - 0.45), (8.0, 0.04, 0.1), glow)
+    light_strip("strip_pod", (-5.0, PY + 0.85, PZ - 0.42), (3.0, PY + 0.85, PZ - 0.42), glow)
     box("pod_bridge", (-1.5, 2.55, 0.1), (7.0, 1.0, 0.8), trim)                 # ties pod to hull
 
     # outer forward blade: a flat pointed wing reaching to the bow
@@ -117,7 +129,11 @@ def make():
         plate(f"hangar{i}", [(xa + 0.3, -0.5), (xf - 0.9, -0.5), (xf - 0.9, hw * 0.6), (xf - 1.9, hw), (xa + 0.3, hw)],
               prev_top, zt - 0.2, trim)
         h = zt - 0.2 - prev_top
-        box(f"hangar{i}_glow", ((xa + xf) / 2 - 0.6, hw + 0.01, prev_top + h * 0.5), (xf - xa - 3.5, 0.03, h * 0.35), glow)
+        x0, x1 = xa + 0.6, xf - 2.2
+        rows = (prev_top + h / 2,) if h < 0.4 else (prev_top + h / 2 - DECK / 2, prev_top + h / 2 + DECK / 2)
+        for k, z in enumerate(rows):                                            # hangar-level window decks
+            window_bays(f"win_hangar{i}_{k}", x0, x1, hw, z, glow, bays=2)
+        light_strip(f"strip_deck{i}", (xa, w + 0.05, zt - 0.125), (xf - 1.3, w + 0.05, zt - 0.125), glow)  # deck-edge light
         prev_top = zt
 
     # ── central tower with blue domes and spires ──────────────────────────────────────
@@ -125,23 +141,33 @@ def make():
     loft("tower_base", [(TX - 1.8, 1.25, 0.6, 0.3, 0, 4.15), (TX + 1.4, 1.25, 0.6, 0.3, 0, 4.15),
                         (TX + 2.2, 0.6, 0.35, 0.2, 0, 4.0)], hull, bevel=0.02)
     box("tower_band", (TX, 1.26, 4.25), (3.0, 0.04, 0.16), blue)
-    box("tower_glow", (TX + 1.0, 1.27, 4.0), (1.6, 0.03, 0.08), glow)
+    for k in range(2):                                                          # two decks of tower-base windows
+        window_row(f"win_tower_base{k}", (TX - 1.4, 1.25, 3.94 + k * DECK), (TX + 1.0, 1.25, 3.94 + k * DECK), glow,
+                   count=5)
     loft("tower_mid", [(5.25, 0.8, 0.75, 0.25, TX, 0), (6.3, 0.6, 0.55, 0.2, TX, 0), (6.35, 0.5, 0.45, 0.15, TX, 0),
                         (7.4, 0.4, 0.38, 0.12, TX, 0)], hull, axis="Z")
     box("tower_mid_blue", (TX + 0.3, 0, 6.8), (0.85, 0.82, 0.14), blue)
     dome("dome_mid", (TX + 1.0, 0, 5.4), 0.5, blue)
-    spire("spire_mid2", (TX + 1.0, 0, 6.1), 1.0, 0.05, hull)
+    spire("spire_mid2", (TX + 1.0, 0, 6.1), 0.6, hull, antenna=0.5)
     box("tower_mid_red", (TX, 0, 5.35), (1.62, 1.62, 0.12), red)
     dome("dome_top", (TX, 0, 7.4), 0.55, blue)
-    spire("spire_top", (TX, 0, 8.1), 1.6, 0.08, hull)
+    spire("spire_top", (TX, 0, 8.1), 0.9, hull, antenna=0.8)
     dome("dome_fore", (TX + 2.2, 0, 4.3), 0.5, blue)
     dome("dome_side", (TX - 0.4, 1.75, 4.75 - 0.6), 0.42, blue)
     box("dome_side_plinth", (TX - 0.4, 1.75, 3.9), (1.0, 0.9, 0.5), hull, chamfer=0.15)
     dome("dome_aft", (TX - 2.4, 1.5, 3.55), 0.45, blue)
-    spire("spire_side", (TX - 0.4, 1.75, 4.95), 1.3, 0.06, hull)
-    spire("spire_aft", (TX - 2.4, 1.5, 4.3), 1.1, 0.06, hull)
-    spire("spire_mid", (TX - 1.0, 0.7, 5.25), 1.6, 0.07, hull)
-    box("tower_glass", (TX + 0.8, 0, 5.8), (0.04, 1.0, 0.14), glow)
+    spire("spire_side", (TX - 0.4, 1.75, 4.95), 0.7, hull, antenna=0.6)
+    spire("spire_aft", (TX - 2.4, 1.5, 4.3), 0.6, hull, antenna=0.5)
+    spire("spire_mid", (TX - 1.0, 0.7, 5.25), 0.9, hull, antenna=0.7)
+    for k in range(2):                                   # tower windows: side faces taper, so follow them in
+        z = 5.55 + k * DECK
+        window_row(f"win_tower_mid{k}", (TX - 0.45, 0.75 - (z - 5.25) / 1.05 * 0.2, z),
+                   (TX + 0.05, 0.75 - (z - 5.25) / 1.05 * 0.2, z), glow, count=2)
+        z = 6.5 + k * DECK
+        window_row(f"win_tower_hi{k}", (TX - 0.3, 0.45 - (z - 6.35) / 1.05 * 0.07, z),
+                   (TX + 0.2, 0.45 - (z - 6.35) / 1.05 * 0.07, z), glow, count=2)
+        window_row(f"win_tower_fore{k}", (TX + 0.5 - (z - 6.35) / 1.05 * 0.1, 0.06, z),
+                   (TX + 0.5 - (z - 6.35) / 1.05 * 0.1, 0.30, z), glow, face="x", count=1)
     # chevron fin on the tower front (the emblem shape)
     fin("tower_fin", [(TX + 0.4, 3.55), (TX + 2.2, 3.55), (TX + 0.9, 5.0), (TX + 0.5, 5.0)], 0.35, 0.2, hull)
     box("tower_fin_blue", (TX + 1.1, 0.35, 4.1), (0.9, 0.22, 0.12), blue)
@@ -156,7 +182,7 @@ def make():
     fin("wing_fin_red", [(-10.2, 2.1), (-9.45, 2.1), (-9.6, 2.5), (-10.5, 2.5)], 7.62, 0.22, red)
     fin("wing_fin_blue", [(-9.9, 1.0), (-8.6, 1.0), (-9.1, 1.5), (-10.0, 1.5)], 7.27, 0.22, blue)
     fin("wing_fin_lo", [(-9.8, WZ - 0.15), (-8.4, WZ - 0.15), (-9.6, -1.4), (-10.2, -1.4)], 4.6, 0.15, hull, lean=0.0)
-    box("wing_glow", (-6.0, 4.6, WZ - 0.17), (2.4, 0.08, 0.03), glow)
+    box("band_wing", (-6.0, 4.6, WZ - 0.165), (2.4, 0.08, 0.02), glow)         # underside accent band
 
     # dorsal stern fins rising behind the decks (port)
     fin("stern_fin", [(-10.2, 1.2), (-8.0, 1.2), (-9.6, 3.3), (-10.4, 3.3)], 2.6, 0.18, hull, lean=0.25)

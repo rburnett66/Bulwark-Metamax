@@ -3,21 +3,21 @@
   "lods": [
    {
     "file": "air_lod0.glb",
-    "tris": 3940,
+    "tris": 5904,
     "drawCalls": 2,
-    "bytes": 525480
+    "bytes": 778108
    },
    {
     "file": "air_lod1.glb",
-    "tris": 2928,
+    "tris": 2692,
     "drawCalls": 2,
-    "bytes": 430348
+    "bytes": 476876
    },
    {
     "file": "air_lod2.glb",
-    "tris": 1372,
+    "tris": 1396,
     "drawCalls": 2,
-    "bytes": 299012
+    "bytes": 369612
    }
   ],
   "engines": 8,
@@ -32,21 +32,21 @@
   "lods": [
    {
     "file": "arcane_lod0.glb",
-    "tris": 3818,
+    "tris": 5970,
     "drawCalls": 2,
-    "bytes": 523572
+    "bytes": 791480
    },
    {
     "file": "arcane_lod1.glb",
-    "tris": 2326,
+    "tris": 2254,
     "drawCalls": 2,
-    "bytes": 386836
+    "bytes": 448504
    },
    {
     "file": "arcane_lod2.glb",
-    "tris": 1270,
+    "tris": 1242,
     "drawCalls": 2,
-    "bytes": 286864
+    "bytes": 352320
    }
   ],
   "engines": 6,
@@ -61,21 +61,21 @@
   "lods": [
    {
     "file": "artillery_lod0.glb",
-    "tris": 5064,
+    "tris": 5972,
     "drawCalls": 2,
-    "bytes": 633252
+    "bytes": 786584
    },
    {
     "file": "artillery_lod1.glb",
-    "tris": 2692,
+    "tris": 2768,
     "drawCalls": 2,
-    "bytes": 406408
+    "bytes": 479964
    },
    {
     "file": "artillery_lod2.glb",
     "tris": 536,
     "drawCalls": 1,
-    "bytes": 222384
+    "bytes": 290728
    }
   ],
   "engines": 6,
@@ -84,27 +84,27 @@
    0.55,
    0.16
   ],
-  "length": 23.59
+  "length": 23.54
  },
  "collective": {
   "lods": [
    {
     "file": "collective_lod0.glb",
-    "tris": 5112,
+    "tris": 5868,
     "drawCalls": 2,
-    "bytes": 614832
+    "bytes": 751760
    },
    {
     "file": "collective_lod1.glb",
-    "tris": 3848,
+    "tris": 2804,
     "drawCalls": 2,
-    "bytes": 502176
+    "bytes": 486448
    },
    {
     "file": "collective_lod2.glb",
-    "tris": 1660,
+    "tris": 924,
     "drawCalls": 2,
-    "bytes": 320484
+    "bytes": 325276
    }
   ],
   "engines": 8,
@@ -119,21 +119,21 @@
   "lods": [
    {
     "file": "dark_lod0.glb",
-    "tris": 3278,
+    "tris": 4758,
     "drawCalls": 2,
-    "bytes": 498720
+    "bytes": 693456
    },
    {
     "file": "dark_lod1.glb",
-    "tris": 2254,
+    "tris": 2106,
     "drawCalls": 2,
-    "bytes": 396828
+    "bytes": 453840
    },
    {
     "file": "dark_lod2.glb",
-    "tris": 710,
+    "tris": 634,
     "drawCalls": 2,
-    "bytes": 236560
+    "bytes": 300304
    }
   ],
   "engines": 3,
@@ -142,27 +142,27 @@
    0.22,
    1.0
   ],
-  "length": 22.55
+  "length": 22.51
  },
  "green": {
   "lods": [
    {
     "file": "green_lod0.glb",
-    "tris": 5608,
+    "tris": 5920,
     "drawCalls": 2,
-    "bytes": 647932
+    "bytes": 754416
    },
    {
     "file": "green_lod1.glb",
-    "tris": 4240,
+    "tris": 4016,
     "drawCalls": 2,
-    "bytes": 533412
+    "bytes": 585280
    },
    {
     "file": "green_lod2.glb",
     "tris": 1736,
     "drawCalls": 1,
-    "bytes": 326396
+    "bytes": 394740
    }
   ],
   "engines": 5,
@@ -177,21 +177,21 @@
   "lods": [
    {
     "file": "lumen_lod0.glb",
-    "tris": 2896,
+    "tris": 3500,
     "drawCalls": 2,
-    "bytes": 430248
+    "bytes": 555728
    },
    {
     "file": "lumen_lod1.glb",
-    "tris": 2056,
+    "tris": 2036,
     "drawCalls": 2,
-    "bytes": 347760
+    "bytes": 414580
    },
    {
     "file": "lumen_lod2.glb",
     "tris": 1100,
     "drawCalls": 2,
-    "bytes": 270580
+    "bytes": 338928
    }
   ],
   "engines": 6,
@@ -200,27 +200,27 @@
    0.86,
    1.0
   ],
-  "length": 21.12
+  "length": 21.1
  },
  "powder": {
   "lods": [
    {
     "file": "powder_lod0.glb",
-    "tris": 5356,
+    "tris": 5932,
     "drawCalls": 2,
-    "bytes": 654596
+    "bytes": 766524
    },
    {
     "file": "powder_lod1.glb",
-    "tris": 2060,
+    "tris": 2092,
     "drawCalls": 2,
-    "bytes": 350568
+    "bytes": 421216
    },
    {
     "file": "powder_lod2.glb",
     "tris": 516,
     "drawCalls": 1,
-    "bytes": 221996
+    "bytes": 290340
    }
   ],
   "engines": 6,
@@ -235,21 +235,21 @@
   "lods": [
    {
     "file": "tech_lod0.glb",
-    "tris": 4192,
+    "tris": 5826,
     "drawCalls": 2,
-    "bytes": 545568
+    "bytes": 797592
    },
    {
     "file": "tech_lod1.glb",
-    "tris": 3012,
+    "tris": 3170,
     "drawCalls": 2,
-    "bytes": 432800
+    "bytes": 507008
    },
    {
     "file": "tech_lod2.glb",
-    "tris": 644,
+    "tris": 618,
     "drawCalls": 2,
-    "bytes": 232976
+    "bytes": 299756
    }
   ],
   "engines": 6,
@@ -258,27 +258,56 @@
    0.8,
    0.34
   ],
-  "length": 22.29
+  "length": 22.3
+ },
+ "tug": {
+  "lods": [
+   {
+    "file": "tug_lod0.glb",
+    "tris": 564,
+    "drawCalls": 2,
+    "bytes": 295092
+   },
+   {
+    "file": "tug_lod1.glb",
+    "tris": 564,
+    "drawCalls": 2,
+    "bytes": 295092
+   },
+   {
+    "file": "tug_lod2.glb",
+    "tris": 384,
+    "drawCalls": 2,
+    "bytes": 279932
+   }
+  ],
+  "engines": 3,
+  "engineColor": [
+   0.6,
+   0.8,
+   1.0
+  ],
+  "length": 0.73
  },
  "water": {
   "lods": [
    {
     "file": "water_lod0.glb",
-    "tris": 4968,
+    "tris": 5984,
     "drawCalls": 2,
-    "bytes": 577872
+    "bytes": 724652
    },
    {
     "file": "water_lod1.glb",
     "tris": 3720,
     "drawCalls": 2,
-    "bytes": 477964
+    "bytes": 546312
    },
    {
     "file": "water_lod2.glb",
     "tris": 2012,
     "drawCalls": 2,
-    "bytes": 341196
+    "bytes": 409544
    }
   ],
   "engines": 5,

@@ -10,7 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import box, build, cyl, engine, loft, mat  # noqa: E402
+from common import DECK, box, build, cyl, engine, light_strip, loft, mat, window_row  # noqa: E402
 
 
 def make():
@@ -28,27 +28,29 @@ def make():
     loft("bow_pod", [(-2, 1.0, 1.15, 0.38, Y, Z), (7.2, 1.0, 1.15, 0.38, Y, Z), (9.2, 0.9, 0.95, 0.45, Y, Z - 0.05),
                      (10.4, 0.6, 0.55, 0.35, Y, Z - 0.15)], hull, bevel=0.03)
     box("bow_band", (3.2, Y + 1.0, Z - 0.15), (8.4, 0.06, 0.55), trim)          # navy side band
-    box("bow_glow_lo", (3.2, Y + 1.02, Z - 0.48), (8.4, 0.05, 0.05), glow)        # light strip under it
+    light_strip("strip_bow_lo", (-1.0, Y + 1.0, Z - 0.48), (7.4, Y + 1.0, Z - 0.48), glow)   # running light under it
     for dy in (-0.32, 0.32):                                                      # twin dorsal strips
-        box("bow_glow_top", (3.0, Y + dy, Z + 1.16), (7.6, 0.07, 0.03), glow)
+        light_strip("strip_bow_top", (-0.8, Y + dy, Z + 1.15), (6.8, Y + dy, Z + 1.15), glow, face="z")
     for x in (-0.6, 1.8, 4.2, 6.4):                                               # segment collars
         loft("bow_seg", [(x - 0.1, 1.03, 1.18, 0.39, Y, Z), (x + 0.1, 1.03, 1.18, 0.39, Y, Z)], trim)
     loft("bow_face", [(10.38, 0.5, 0.47, 0.3, Y, Z - 0.15), (10.44, 0.5, 0.47, 0.3, Y, Z - 0.15)], trim)
     for dy in (-0.18, 0.18):                                                      # vertical nose lights
-        box("bow_face_glow", (10.46, Y + dy, Z - 0.15), (0.03, 0.05, 0.8), glow)
+        light_strip("strip_bow_face", (10.44, Y + dy, Z - 0.55), (10.44, Y + dy, Z + 0.25), glow, face="x")
     box("bow_vent", (6.0, Y, Z + 1.18), (2.0, 0.36, 0.06), trim)
 
     # dorsal ridge climbing to the bridge (centreline)
     loft("ridge", [(8.6, 0.55, 0.12, 0.08, 0, 0.95), (5.0, 0.95, 0.75, 0.3, 0, 1.55), (0.5, 1.15, 1.15, 0.4, 0, 2.0),
                    (-6.5, 1.15, 1.15, 0.4, 0, 2.0), (-8.6, 0.95, 0.75, 0.35, 0, 1.6)], hull, bevel=0.03)
     box("ridge_band", (-2.5, 1.17, 2.0), (7.0, 0.05, 0.45), trim)
-    box("ridge_glow", (-4.5, 0.6, 3.16), (3.6, 0.06, 0.03), glow)
+    light_strip("strip_ridge", (-6.3, 0.6, 3.15), (-2.7, 0.6, 3.15), glow, face="z")
     for x in (-7.6, -1.0):
         loft("ridge_seg", [(x - 0.12, 1.18, 1.18, 0.41, 0, 2.0), (x + 0.12, 1.18, 1.18, 0.41, 0, 2.0)], trim)
     box("bridge", (-2.6, 0, 3.55), (3.0, 1.7, 0.8), hull, chamfer=0.3)
     box("bridge_top", (-2.9, 0, 4.15), (1.4, 1.0, 0.5), hull, chamfer=0.2)
-    box("bridge_glass", (-1.12, 0, 3.62), (0.06, 1.2, 0.18), glow)
-    cyl("antenna", (-3.1, 0, 4.9), 0.04, 1.2, hull, sides=4, axis="Z")
+    window_row("win_bridge_fore", (-1.1, 0.04, 3.62), (-1.1, 0.74, 3.62), glow, face="x", count=4)
+    for k, z in enumerate((3.4, 3.4 + DECK)):                                          # two decks of bridge windows
+        window_row(f"win_bridge_{k}", (-3.9, 0.85, z), (-1.4, 0.85, z), glow)
+    box("mast_antenna", (-3.1, 0, 4.9), (0.05, 0.05, 1.2), hull)
     for x in (-6.0, -5.0):
         box("ridge_block", (x, 0.55, 3.25), (0.7, 0.5, 0.25), hull)
 
@@ -59,7 +61,7 @@ def make():
         loft(name + "_band", [(x - 0.22, 3.0, 2.6, 1.12, 0, 0.35), (x + 0.22, 3.0, 2.6, 1.12, 0, 0.35)], trim)
         for side in (-1, 1):                                    # glow outline on both faces
             f = x + side * 0.77
-            loft(name + "_glow", [(f - 0.02, 2.82, 2.42, 1.04, 0, 0.35), (f + 0.02, 2.82, 2.42, 1.04, 0, 0.35)], glow)
+            loft("feat_" + name + "_glow", [(f - 0.02, 2.82, 2.42, 1.04, 0, 0.35), (f + 0.02, 2.82, 2.42, 1.04, 0, 0.35)], glow)
             loft(name + "_cover", [(f - 0.07, 2.66, 2.26, 0.97, 0, 0.35), (f + 0.07, 2.66, 2.26, 0.97, 0, 0.35)], hull)  # 5 cm proud of the glow: no z-fight
 
     # aft side pods (port; mirrored)
@@ -67,7 +69,7 @@ def make():
     loft("aft_pod", [(-10.6, 0.78, 0.92, 0.3, AY, AZ), (-1.6, 0.78, 0.92, 0.3, AY, AZ), (-0.4, 0.5, 0.6, 0.25, AY, AZ)],
          hull, bevel=0.03)
     box("aft_band", (-6.0, AY + 0.79, AZ), (8.6, 0.05, 0.4), trim)
-    box("aft_glow", (-6.0, AY + 0.8, AZ - 0.32), (8.6, 0.04, 0.04), glow)
+    light_strip("strip_aft", (-10.3, AY + 0.78, AZ - 0.32), (-1.7, AY + 0.78, AZ - 0.32), glow)
     for x in (-9.0, -6.8, -2.6):
         loft("aft_seg", [(x - 0.1, 0.81, 0.95, 0.31, AY, AZ), (x + 0.1, 0.81, 0.95, 0.31, AY, AZ)], trim)
     box("aft_block", (-8.2, AY, AZ + 1.0), (1.6, 0.8, 0.35), hull, chamfer=0.1)
