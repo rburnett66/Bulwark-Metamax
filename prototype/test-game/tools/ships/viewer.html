@@ -249,7 +249,7 @@ function renderList() {
 }
 
 function hdrGlow(root) {                                // emissive above 1 so HDR bloom picks it up (and only it)
-  root.traverse((o) => { if (o.isMesh && o.material && o.material.name === 'ship_glow') o.material.color.setScalar(LAB.hdr ? 1.25 : 1); });
+  root.traverse((o) => { if (o.isMesh && o.material && o.material.name === 'ship_glow') o.material.uniforms.gain.value = LAB.hdr ? 1.4 : 1; });
 }
 
 async function show(s, keepView) {

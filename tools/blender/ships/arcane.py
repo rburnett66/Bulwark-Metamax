@@ -99,8 +99,8 @@ def make():
     frame = mat("frame", (0.11, 0.105, 0.12), rough=0.45, metal=0.45)    # gunmetal
     trim = mat("trim", (0.045, 0.04, 0.05), rough=0.4, metal=0.4)        # near-black ribs and keel
     bronze = mat("bronze", (0.30, 0.17, 0.12), rough=0.4, metal=0.6)     # rose-window rim
-    glow = mat("glow", (0.5, 0.1, 0.35), emit=(0.85, 0.1, 0.48), strength=3)
-    core = mat("core", (0.5, 0.25, 0.1), emit=(0.9, 0.36, 0.06), strength=4)
+    glow = mat("glow", (0.3, 0.01, 0.02), emit=(0.55, 0.01, 0.025), strength=3)     # deep blood red
+    core = mat("core", (0.45, 0.04, 0.02), emit=(0.85, 0.08, 0.03), strength=4)     # hotter red heart of the rose windows
 
     # frame deck + gallery ledge + keel (centreline)
     loft("deck", [(-10.4, 2.75, 0.45, 0.3, 0, -0.15), (8.2, 2.75, 0.45, 0.3, 0, -0.15),

@@ -201,6 +201,43 @@ export function createEngineFx(THREE, root, { pointLight = true } = {}) {
 const fleet = {};
 // anisotropy: pass renderer.capabilities.getMaxAnisotropy() — keeps the fine panel lines sharp on hull faces
 // seen at a grazing angle (the common case on a long ship) instead of smearing to grey.
+// Ship glow — windows, light strips, engine cores, ring outlines. Lights EMIT OUTWARD along their surface
+// normal: one-sided (back faces never draw, so a light is never seen from behind or through the hull), and
+// brightness falls toward grazing angles like a real lit panel. Glow parts sit 1–3 cm proud of the hull, so a
+// small CONSTANT depth bias is enough to beat z-fighting — the old slope-scaled offset (factor −2) grew huge on
+// faces seen edge-on and pulled far-side lights through the hull. Vertex colours carry the colour; uniforms.gain
+// lifts it above 1 for HDR bloom. Works on InstancedMesh (tug lights). Unlit, no fog.
+const SHIP_GLOW_VS = `
+varying vec3 vCol; varying vec3 vN; varying vec3 vV;
+void main() {
+  vec4 p = vec4( position, 1.0 );
+  vec3 n = normal;
+  #ifdef USE_INSTANCING
+    p = instanceMatrix * p;
+    n = mat3( instanceMatrix ) * n;
+  #endif
+  vec4 mv = modelViewMatrix * p;
+  vCol = color;
+  vN = normalize( normalMatrix * n );
+  vV = normalize( -mv.xyz );
+  gl_Position = projectionMatrix * mv;
+}`;
+const SHIP_GLOW_FS = `
+uniform float gain;
+varying vec3 vCol; varying vec3 vN; varying vec3 vV;
+void main() {
+  float facing = clamp( dot( normalize( vN ), normalize( vV ) ), 0.0, 1.0 );
+  gl_FragColor = vec4( vCol * gain * ( 0.3 + 0.7 * facing ), 1.0 );
+}`;
+function glowMaterial(THREE) {
+  const m = new THREE.ShaderMaterial({
+    name: 'ship_glow', uniforms: { gain: { value: 1 } }, vertexShader: SHIP_GLOW_VS, fragmentShader: SHIP_GLOW_FS,
+    vertexColors: true, side: THREE.FrontSide, toneMapped: false, fog: false,
+    polygonOffset: true, polygonOffsetFactor: 0, polygonOffsetUnits: -2,
+  });
+  return m;
+}
+
 // Specular anti-aliasing (Kaplanyan, GDC 2016): where the normal-mapped normal changes fast across a pixel —
 // panel seams shrunk below a pixel at distance — raise roughness so the seam turns into a slightly duller plate
 // instead of sparkling. Needs the PERTURBED normal, which r128's built-in geometryRoughness ignores. ~8 ALU.
@@ -218,13 +255,7 @@ export function prepareShip(THREE, root, { anisotropy = 1, specularAA = true } =
     if (!o.isMesh || !o.material) return;
     const m = o.material;
     if (m.name === 'ship_glow') {
-      // Light strips, windows and engine cores sit on (or a hair above) the hull. Pull them toward the camera
-      // in depth so they always win the tie and never shimmer through the plating underneath (z-fighting).
-      // Model glow as visible surfaces only: a glow disc hidden behind a cover plate shows through.
-      fleet.glow = fleet.glow || new THREE.MeshBasicMaterial({
-        name: 'ship_glow', vertexColors: true, toneMapped: false,
-        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8,
-      });
+      fleet.glow = fleet.glow || glowMaterial(THREE);
       if (m !== fleet.glow) m.dispose();
       o.material = fleet.glow;
     } else if (m.name === 'ship_body' || m.name === 'ship_body_v2') {
