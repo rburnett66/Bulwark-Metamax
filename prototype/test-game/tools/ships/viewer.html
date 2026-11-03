@@ -184,6 +184,7 @@ async function show(s, keepView) {
   if (current) { fx && fx.dispose(); tugs && tugs.dispose(); holder.remove(current); }
   current = prepareShip(THREE, gltf.scene, { anisotropy: renderer.capabilities.getMaxAnisotropy() });
   holder.add(current);
+  const box = new THREE.Box3().setFromObject(current);   // the hull alone, before fx and tugs join it
   fx = createEngineFx(THREE, current);
   fx.setIntensity(+kIn.value);
   tugs = null;
@@ -195,7 +196,6 @@ async function show(s, keepView) {
   }
   document.getElementById('cardName').textContent = s;
   document.querySelector('.card').style.setProperty('--eng', rgbCss(m.engineColor));
-  const box = new THREE.Box3().setFromObject(current);
   size = box.getSize(new THREE.Vector3()).length();
   camera.near = size * 0.01; camera.far = size * 40;      // tight depth range = precise depth = no shimmer
   camera.updateProjectionMatrix();

@@ -167,7 +167,9 @@ def mast(name, x, y, z, height, material):
 def barrel(name, center, length, material, size="m", axis="X"):
     """A gun barrel of a standard calibre (size 's' 1.5 m, 'm' 3 m, 'l' 5.5 m)."""
     d = DETAIL["gun_" + size]["d"]
-    return cyl(name, center, d / 2, length, material, sides=6 if size == "s" else 8, axis=axis)
+    sides = 6 if size == "s" else 8
+    r = d / 2 / math.cos(math.pi / sides)               # calibre measured across the flats
+    return cyl(name, center, r, length, material, sides=sides, axis=axis)
 
 
 # ── scene ─────────────────────────────────────────────────────────────────────────────
@@ -542,6 +544,7 @@ def build(slug, make, argv=None):
     t = time.time()
     reset()
     make()
+    bpy.context.view_layer.update()                       # bake rotations set in make() into matrix_world
     src = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     lo, hi = _bounds()
     length = hi.x - lo.x
