@@ -12,6 +12,9 @@
  * through the same selectMap() the settings picker uses. Dev loop: ?map=N boots straight into a
  * battle with no menu (main.js).
  */
+import { openBattleHistory } from './battleHistory.js';
+import { battlesOn } from '../save/battleLog.js';
+import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { loadSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars, bankOf } from '../save/save.js';
 import { setChannelVolume } from '../comm/voice.js';
@@ -162,6 +165,15 @@ const CSS = `
   font-weight:700; letter-spacing:.06em; cursor:pointer; }
 .bwm-camp select:focus { outline:1px solid #d9a441; }
 .bwm-camp .cd { margin-top:6px; font-size:11px; color:#8fa0b3; line-height:1.45; }
+.bwm-camp .row { display:flex; gap:8px; align-items:stretch; }
+.bwm-camp .row select { flex:1 1 auto; min-width:0; width:auto; }
+.bwm-hist { flex:0 0 auto; display:inline-flex; align-items:center; gap:7px; padding:0 12px; min-height:40px; background:#1a1f28; color:#e6ecf3;
+  border:1px solid #3e4a5a; font:inherit; font-size:12px; font-weight:800; letter-spacing:.16em; cursor:pointer; transition:border-color .12s, color .12s, background .12s; }
+.bwm-hist svg { width:18px; height:18px; color:var(--hue,#d9a441); }
+.bwm-hist .n { min-width:20px; padding:1px 5px; font-size:11px; letter-spacing:0; color:#1a1206; background:var(--hue,#d9a441); text-align:center; }
+.bwm-hist .n:empty { display:none; }
+.bwm-hist:hover { border-color:var(--hue,#d9a441); background:#20262f; }
+.bwm-hist:focus-visible { outline:2px solid #7af0ff; outline-offset:2px; }
 .bwm-survey .stagecol { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:0; height:100%; }
 .bwm-survey .stagecol .bwm-globe { width:min(100%, 66vh); }
 .bwm-survey .hint { font-size:10px; letter-spacing:.24em; color:#5c6a7a; margin-top:4px; }
@@ -186,6 +198,8 @@ const CSS = `
 .bwm-res { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .bwm-rtile { display:flex; gap:10px; align-items:flex-start; background:#14181f; border:1px solid #2e3846; padding:8px; border-left:3px solid var(--tc); }
 .bwm-rtile .rv { flex:0 0 64px; height:64px; position:relative; }
+.bwm-rtile .ri { flex:0 0 44px; height:44px; align-self:center; }
+.bwm-rtile .rimg { display:block; width:100%; height:100%; border-radius:3px; box-shadow:0 0 0 1px var(--tc), 0 0 10px color-mix(in srgb, var(--tc) 40%, transparent); }
 .bwm-rtile .rn { font-size:13px; font-weight:800; letter-spacing:.04em; }
 .bwm-rtile .rr { font-size:9.5px; letter-spacing:.16em; color:var(--tc); text-transform:uppercase; margin-top:2px; }
 .bwm-rtile .rx { font-size:11px; color:#8fa0b3; line-height:1.4; margin-top:3px; }
@@ -277,6 +291,8 @@ const CSS = `
   .bwm-doss h2 { font-size:28px; }
   .bwm-doss p { font-size:12px; margin-bottom:6px; }
   .bwm-rtile .rv { flex-basis:48px; height:48px; }
+  .bwm-rtile .ri { flex-basis:32px; height:32px; }
+  .bwm-hist { min-height:32px; padding:0 8px; } .bwm-hist span { display:none; }
   .bwm-rtile .rx { display:none; }
 }
 `;
@@ -543,7 +559,7 @@ export function createMenu(mountEl, cbs) {
       </dl>
       <div class="bwm-res-h">RESOURCES ON ${esc(P.name.toUpperCase())}</div>
       <div class="bwm-res"></div></div>
-      <div class="bwm-camp"><label for="bwm-camp-sel">CAMPAIGN</label><select id="bwm-camp-sel"></select><div class="cd"></div></div>
+      <div class="bwm-camp"><label for="bwm-camp-sel">CAMPAIGN</label><div class="row"><select id="bwm-camp-sel"></select><button type="button" class="bwm-hist" data-history title="Battle history on ${esc(P.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 1-7.6 5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 5v5h5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v4.5l3 2" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>HISTORY</span><b class="n"></b></button></div><div class="cd"></div></div>
       <div class="bwm-acts"></div>`;
     const res = doss.querySelector('.bwm-res');
     for (const tier of ['common', 'uncommon', 'rare', 'epic']) {
@@ -551,9 +567,10 @@ export function createMenu(mountEl, cbs) {
       const [col, role] = TIER_ROLE[tier];
       const t = el(doc, 'div', 'bwm-rtile'); t.style.setProperty('--tc', CRYSTAL[col]);
       const v = el(doc, 'div', 'rv'); v.dataset.res = key + ':' + tier;
+      const ic = el(doc, 'div', 'ri'); ic.innerHTML = resourceIconHtml(resourceId(r.name), 'rimg');   // the icon left of the turning model
       const tx = el(doc, 'div');
       tx.appendChild(el(doc, 'div', 'rn', r.name)); tx.appendChild(el(doc, 'div', 'rr', role)); tx.appendChild(el(doc, 'div', 'rx', r.note));
-      t.appendChild(v); t.appendChild(tx); res.appendChild(t);
+      t.appendChild(ic); t.appendChild(v); t.appendChild(tx); res.appendChild(t);
     }
     // the faction's tech badges (they were on the FACTIONS cards): lit once the loyalty threshold is reached
     {
@@ -573,6 +590,10 @@ export function createMenu(mountEl, cbs) {
     sel.value = String(defaultCampaign(sv0, MAPDATA.maps.length));
     const detail = () => { const o = opts.find((x) => String(x.id) === sel.value); cd.textContent = o ? o.detail : ''; };
     sel.addEventListener('change', detail); detail();
+    // HISTORY: this planet's battles, in a modal over the menu [MM-story_mw1azvh8_d]
+    const hist = doss.querySelector('[data-history]'), nBattles = battlesOn(sv0, P.name).length;
+    hist.querySelector('.n').textContent = nBattles ? String(nBattles) : '';
+    hist.addEventListener('click', () => openBattleHistory(root, P, { save: loadSave(), faction: name }));
     const acts = doss.querySelector('.bwm-acts');
     const go = el(doc, 'button', 'bwm-btn primary bwm-play'); go.appendChild(el(doc, 'span', null, 'PLAY'));   // owner 2026-10-19: just PLAY [MM-task_mvg1hbnl_1u]
     go.addEventListener('click', () => {

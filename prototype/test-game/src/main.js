@@ -1,4 +1,5 @@
 import { MAP, WAVES, makeWaves, fxScaleForMap, projScaleForMap, getUnitDef } from './data/tables.js';
+import { battleEntry, logBattle } from './save/battleLog.js';
 import { contractFor } from './data/collectiveContract.js';
 import { buildCampaignMap, buildTerrainMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
@@ -1124,6 +1125,11 @@ export function boot(mountEl, seed) {
             updateSave((sv) => {
               if (missionCatalog) resolvedFavour = resolvedSecondary(sv, settleBattle(sv, played, missionCatalog));
               else { console.error('[missions] content not loaded: battle counted, missions not advanced'); bankBattle(sv, played); }
+              // the planet's battle history (Play page › HISTORY) [MM-story_mw1azvh8_d]
+              logBattle(sv, battleEntry({ at: Date.now(), planet: played.planet, faction: currentTestFaction, mapId: currentMapId,
+                mapName: (sim.map && sim.map.name) || '', result: sim.result, finalScore: sim.finalScore, waveStars: sim.waveStars,
+                totalWaves: sim.waves ? sim.waves.total : 8, rewards, harvested: resLedger.total.units, kept: resLedger.total.kept,
+                contract: !!sim.contract, favour: resolvedFavour }));
             });
           }
           const rewardFaction = (resolvedFavour && resolvedFavour.giver) || lastWaveFaction;
