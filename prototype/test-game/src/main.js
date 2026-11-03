@@ -24,6 +24,7 @@ import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
 import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
 import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner } from './render/hud.js';
+import { createResourceLedger, feedResources, closeWave, resourceNames, waveResourcesHtml, mapResourcesHtml } from './render/resourceSummary.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
 import { setChannelVolume, initAudio } from './comm/voice.js';
@@ -276,6 +277,9 @@ export function boot(mountEl, seed) {
   loadMissionCatalog().then((c) => { missionCatalog = c; }).catch((e) => console.error('[missions] content failed to load', e));
   let trackedNow = null;       // the mission pinned to the battle HUD: read at battle start, so the line is a read-only look
   let battleTally = createBattleTally();   // this battle's counts, from the drained events: banked at battle end only [MM-story_mvyqol3w_d]
+  let resLedger = createResourceLedger();   // resources collected this wave and this map [MM-story_mw13ek87_1]
+  /** The battle planet's resource names by tier (missions.json); tier words until the catalogue has loaded. */
+  const battleResourceNames = () => resourceNames(missionCatalog, planetOfFaction(currentTestFaction));
 
   // ---------------------------------------------------------------------
   // Command submission: validates via sim core, records accepted commands.
@@ -357,6 +361,7 @@ export function boot(mountEl, seed) {
         contract: currentMapId ? contractFor(currentMapId) : null };
       sim = createSim(currentSeed, simInit);
       battleTally = createBattleTally();
+      resLedger = createResourceLedger();   // resources collected per wave / map, for the result screens
       trackedNow = trackedMission(sv);
       log = createLog(currentSeed, simInit);   // capture the init so an in-memory replay reproduces THIS board, not default MAP/WAVES
     }
@@ -1038,8 +1043,11 @@ export function boot(mountEl, seed) {
           for (let i = 0; i < evs.length; i++) {
             pendingEvents.push(evs[i]);
             // Boldly announce who's attacking, before the wave's enemies appear.
+            if (evs[i].type === 'deposit') feedResources(resLedger, [evs[i]]);
             if (evs[i].type === 'waveStars') {
-              showStarBanner(hud, evs[i].wave, evs[i].stars);   // Story 4: stars FIRST, then the dialog beat
+              // Story 4: stars FIRST, then the dialog beat; under them what this wave collected [MM-story_mw13ek87_1]
+              const waveRes = closeWave(resLedger);
+              showStarBanner(hud, evs[i].wave, evs[i].stars, waveResourcesHtml(waveRes, resLedger.total, battleResourceNames()));
             }
             if (evs[i].type === 'wave' && evs[i].phase === 'start') musicIntensity('wave');
             if (evs[i].type === 'wave' && evs[i].phase === 'clear' && evs[i].wave < evs[i].total) musicIntensity('build');
@@ -1129,7 +1137,8 @@ export function boot(mountEl, seed) {
             if (S !== sim) return;   // restarted during the Kill Camera
             musicSting(S.result === 'win' ? 'win' : 'lose');
             if (contractMsg) flashMessage(hud, contractMsg);
-            showResult(hud, S.result, S.finalScore, nextMap, S.waveStars, rewards);
+            showResult(hud, S.result, S.finalScore, nextMap, S.waveStars, rewards,
+              S.resourceNodes ? mapResourcesHtml(resLedger.total, battleResourceNames(), { contract: !!S.contract }) : '');
             // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
             // wave star score (banner) -> final map score (overlay) -> PRIMARY dialog -> then, as
             // part of the REWARD FLOW, the SECONDARY grants the star bonus (5-star wave this battle).

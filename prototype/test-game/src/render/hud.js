@@ -163,6 +163,21 @@ const CSS = `
 .bw-starbanner .lbl { font-size:13px; letter-spacing:.3em; color:#cfe3f0; margin-top:4px;
   text-shadow:0 2px 8px rgba(0,0,0,.9); }
 .bw-starbanner.bw-show { opacity:1; }
+.bw-starbanner .res { display:flex; flex-wrap:wrap; justify-content:center; gap:6px 14px; margin-top:10px; max-width:min(560px,92vw); }
+.bw-starbanner .res .r { font-size:13px; color:#cfe3f0; text-shadow:0 2px 8px rgba(0,0,0,.9); white-space:nowrap; }
+.bw-starbanner .res .r i { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--c); box-shadow:0 0 8px var(--c); margin-right:6px; vertical-align:middle; }
+.bw-starbanner .res .r b { color:var(--c); font-size:16px; font-variant-numeric:tabular-nums; }
+.bw-starbanner .res .r em { font-style:normal; color:#8fa0b3; font-size:11px; margin-left:6px; }
+.bw-resources { display:none; min-width:min(340px,86vw); background:rgba(14,17,22,.92); border:1px solid #3a4452; padding:10px 14px 8px; margin-top:8px; }
+.bw-resources .rh { font-size:10px; letter-spacing:.38em; color:#8fa0b3; text-align:center; margin-bottom:6px; }
+.bw-resources .rtab { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:13px; color:#dfe8f0; }
+.bw-resources .rtab th { font-size:9px; letter-spacing:.2em; color:#8fa0b3; font-weight:normal; text-align:right; padding:2px 4px; }
+.bw-resources .rtab td { padding:4px; border-top:1px solid #232a34; text-align:right; }
+.bw-resources .rtab td:first-child { text-align:left; }
+.bw-resources .rtab .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:middle; }
+.bw-resources .rtab .k { color:#7af0ff; }
+.bw-resources .rtab .sum td { color:#f2c869; font-weight:bold; }
+.bw-resources .rnone, .bw-resources .rft { font-size:9px; letter-spacing:.24em; color:#5c6878; text-align:center; margin-top:6px; }
 .bw-wavebanner .bw-line { font-size:40px; font-weight:900; letter-spacing:1px; color:#ff5a3c;
   text-shadow:0 3px 12px #000, 0 0 26px rgba(255,80,40,0.65); text-transform:uppercase; }
 .bw-wavebanner .bw-sub { font-size:18px; font-weight:700; letter-spacing:3px; color:#ffd6c8;
@@ -611,8 +626,10 @@ export function createHud(mountEl, callbacks) {
   const starBanner = el(doc, 'div', 'bw-starbanner');
   const starRow = el(doc, 'div', 'stars', '');
   const starLbl = el(doc, 'div', 'lbl', '');
+  const starRes = el(doc, 'div', 'resline', '');   // resources collected this wave [MM-story_mw13ek87_1]
   starBanner.appendChild(starRow);
   starBanner.appendChild(starLbl);
+  starBanner.appendChild(starRes);
   root.appendChild(starBanner);
 
   const waveBanner = el(doc, 'div', 'bw-wavebanner');
@@ -648,9 +665,11 @@ export function createHud(mountEl, callbacks) {
   const resultMenu = el(doc, 'button', 'bw-btn', 'Menu');
   resultMenu.addEventListener('click', () => { if (cbs.onMainMenu) cbs.onMainMenu(); });
   const rewardsEl = el(doc, 'div', 'bw-rewards', '');   // the battle's rewards (gold banked, stars, XP)
+  const resourcesEl = el(doc, 'div', 'bw-resources', '');   // resources collected this map [MM-story_mw13ek87_1]
   resultEl.appendChild(banner);
   resultEl.appendChild(scoreEl);
   resultEl.appendChild(rewardsEl);
+  resultEl.appendChild(resourcesEl);
   // VICTORY → advance the campaign: the next, bigger map (owner). Shown by showResult on win.
   const nextMapBtn = el(doc, 'button', 'bw-btn bw-nextmap', 'NEXT MAP →');
   nextMapBtn.style.display = 'none';
@@ -704,7 +723,7 @@ export function createHud(mountEl, callbacks) {
     waveBannerTimer: null,
     resultEl,
     nextMapBtn,
-    starBanner, starRow, starLbl,
+    starBanner, starRow, starLbl, starRes, resourcesEl,
     banner,
     scoreEl,
     rewardsEl,
@@ -1005,7 +1024,7 @@ export function updateHud(hud, state, ui) {
 }
 
 /** WAVE STARS banner (Story 4): big gold stars at wave clear — shown BEFORE the dialog beat. */
-export function showStarBanner(hud, wave, stars) {
+export function showStarBanner(hud, wave, stars, resourcesHtml = '') {
   if (!hud || !hud.starBanner) return;
   hud.starRow.innerHTML = '';
   for (let i = 1; i <= 5; i++) {
@@ -1015,9 +1034,11 @@ export function showStarBanner(hud, wave, stars) {
     hud.starRow.appendChild(sp);
   }
   hud.starLbl.textContent = 'WAVE ' + wave + ' — ' + stars + '/5';
+  if (hud.starRes) hud.starRes.innerHTML = resourcesHtml || '';
   hud.starBanner.classList.add('bw-show');
   clearTimeout(hud._starT);
-  hud._starT = setTimeout(() => hud.starBanner.classList.remove('bw-show'), 2600);
+  // a little longer when there is a resource line to read
+  hud._starT = setTimeout(() => hud.starBanner.classList.remove('bw-show'), resourcesHtml ? 3800 : 2600);
 }
 
 /**
@@ -1056,8 +1077,12 @@ export function rewardsHtml(rewards) {
   return h;
 }
 
-export function showResult(hud, result, finalScore, nextMap, waveStars, rewards) {
+export function showResult(hud, result, finalScore, nextMap, waveStars, rewards, resourcesHtml = '') {
   if (!hud) return;
+  if (hud.resourcesEl) {
+    hud.resourcesEl.innerHTML = resourcesHtml || '';
+    hud.resourcesEl.style.display = resourcesHtml ? 'block' : 'none';
+  }
   if (hud.rewardsEl) {
     hud.rewardsEl.innerHTML = rewardsHtml(rewards);
     hud.rewardsEl.style.display = rewards ? 'block' : 'none';
