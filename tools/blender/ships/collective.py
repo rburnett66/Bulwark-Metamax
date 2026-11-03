@@ -36,21 +36,21 @@ def strut(name, a, b, z, material):
                   ((ax + bx) / 2, (ay + by) / 2, z), math.degrees(math.atan2(by - ay, bx - ax)))
 
 
-# cargo pod cage: 3.0 long (3 bays of 1.0), 0.5 wide, 0.4 tall — holds 0.1 x 0.1 x 0.25 containers
-CL, CW, CH = 3.0, 0.25, 0.2
+# cargo pod cage: 3.0 long (3 bays of 1.0), 0.6 wide, 0.5 tall — holds 0.1 x 0.1 x 0.25 containers
+CL, CW, CH = 3.0, 0.3, 0.25
 CONT = (0.25, 0.1, 0.1)
-# container stacks per pod: (bay slot along x 0..11, row across y 0..4, height in containers) — loaded unevenly
+# container stacks per pod, each resting across a bottom rib: (rib frame 0..3, row across y 0..4, height)
 LOADS = [
-    [(1, 4, 2), (2, 2, 1), (6, 4, 1), (9, 3, 1)],
-    [(2, 4, 1), (4, 3, 2), (8, 4, 1), (10, 2, 1)],
-    [(1, 3, 1), (3, 4, 2), (7, 2, 1), (10, 4, 1)],
-    [(0, 4, 1), (5, 4, 2), (6, 2, 1), (9, 4, 1)],
+    [(0, 3, 1), (1, 4, 2), (2, 1, 1), (3, 4, 1)],
+    [(0, 4, 1), (1, 2, 1), (2, 4, 2), (3, 3, 1)],
+    [(0, 2, 1), (1, 4, 1), (2, 3, 2), (3, 4, 1)],
+    [(0, 4, 2), (1, 3, 1), (2, 4, 1), (3, 1, 1)],
 ]
 
 
 def cargo_pod(i, root, tip, z, hull, trim, glow, colours):
     """A spoke: a truss boom from the hull side out to an open scaffold cage of stacked containers, with a
-    control cab (lit strip + windows) at its bow end. Built axis-aligned so every member stays at strut size."""
+    control cab (lit strip) at its bow end. Built axis-aligned so every member stays at strut size."""
     (rx, ry), (tx, ty) = root, tip
     name = f"spoke{i}"
     x0, x1 = tx - CL / 2, tx + CL / 2
@@ -58,17 +58,15 @@ def cargo_pod(i, root, tip, z, hull, trim, glow, colours):
     # containers sit on the cage floor in stacks, two or three muted colours
     for k, (slot, row, n) in enumerate(LOADS[i]):
         for j in range(n):
-            cx = x0 + 0.06 + CONT[0] * (slot + 0.5) * (CL - 0.12) / CL / 1.0
-            cy = ty - CW + 0.05 + 0.1 * row
-            box(f"{name}_box{k}_{j}", (cx, cy, z - CH + 0.05 + 0.1 * j + 0.025), CONT,
+            cx = min(max(x0 + CL / 3 * slot, x0 + 0.15), x1 - 0.15)
+            cy = ty - 0.22 + 0.1 * row
+            box(f"{name}_box{k}_{j}", (cx, cy, z - CH + 0.075 + 0.1 * j), CONT,
                 colours[(k + j + i) % len(colours)])
-    # truss boom: a top and bottom chord with a zig-zag tie, from the hull root to the cage's inboard face
+    # truss boom: a top and bottom chord (standard struts) from the hull root to the cage's inboard face
     inb = ty - CW
     a, b = (rx, ry), (tx, inb)
     for dz in (CH, -CH):
         strut(f"strut_{name}_boom{'tb'[dz < 0]}", a, b, z + dz, trim)
-    ob = box(f"{name}_boom_root", (0, 0, 0), (0.6, 0.5, 0.6), hull)
-    placed(ob, (rx + (tx - rx) * 0.06, ry + (inb - ry) * 0.06, z), math.degrees(math.atan2(inb - ry, tx - rx)))
     # control cab at the bow end: lit strip along its outboard face
     cx = x1 + 0.22
     box(f"{name}_cab", (cx, ty, z), (0.44, CW * 2 + 0.05, CH * 2 + 0.05), hull)
@@ -86,7 +84,7 @@ def make():
     W, H, C = 2.6, 1.6, 1.0
     loft("hull", [(-10.5, 2.35, 1.35, 0.85, 0, 0), (-9.6, W, H, C, 0, 0), (3.5, W, H, C, 0, 0),
                   (7.0, 2.0, 1.25, 0.8, 0, -0.1), (9.6, 1.1, 0.75, 0.5, 0, -0.25), (11.0, 0.35, 0.28, 0.15, 0, -0.35)],
-         hull, bevel=0.03)
+         hull)
     loft("keel", [(-9.5, 1.5, 0.4, 0.25, 0, -1.6), (5.5, 1.3, 0.35, 0.2, 0, -1.55), (8.0, 0.6, 0.2, 0.12, 0, -1.2)],
          trim)
     # flank livery: orange sweep with the blue light line beneath it
@@ -99,7 +97,7 @@ def make():
 
     # dorsal deck carrying the dome
     loft("deck", [(-6.0, 1.5, 0.3, 0.2, 0, 1.6), (-4.5, 2.0, 0.35, 0.2, 0, 1.7), (4.5, 2.0, 0.35, 0.2, 0, 1.7),
-                  (6.5, 1.2, 0.2, 0.15, 0, 1.55)], hull, bevel=0.02)
+                  (6.5, 1.2, 0.2, 0.15, 0, 1.55)], hull)
     box("deck_band", (0.0, 2.02, 1.72), (8.4, 0.04, 0.16), accent)
 
     # the dome: drum, stepped cap, lantern and spire
@@ -123,7 +121,7 @@ def make():
 
     # stern cowl: the raised, rounded aft crown that carries the second emblem (ref: above the engines)
     loft("cowl", [(-10.45, 1.6, 0.35, 0.3, 0, 1.45), (-9.4, 2.0, 0.65, 0.5, 0, 1.55), (-4.2, 2.0, 0.65, 0.5, 0, 1.55),
-                  (-2.4, 1.4, 0.3, 0.25, 0, 1.6)], hull, bevel=0.02)
+                  (-2.4, 1.4, 0.3, 0.25, 0, 1.6)], hull)
     box("cowl_orange", (-6.8, 2.01, 1.55), (5.0, 0.04, 0.22), accent)
     placed(cyl("stern_emblem", (0, 0, 0), 1.0, 0.05, gold, sides=10, axis="Z"), (-7.0, 0.0, 2.21))
     placed(cyl("stern_emblem_core", (0, 0, 0), 0.6, 0.05, trim, sides=8, axis="Z"), (-7.0, 0.0, 2.25))
@@ -134,16 +132,16 @@ def make():
         spire(DX + 3.1 * math.cos(a), 2.85 * math.sin(a) + 0.15, 1.85, 0.16, h, hull)
 
     # fore cathedral block with the tallest spires
-    box("fore_tower", (5.6, 1.0, 2.0), (2.6, 1.6, 0.8), hull, chamfer=0.25, bevel=0.02)
+    box("fore_tower", (5.6, 1.0, 2.0), (2.6, 1.6, 0.8), hull, chamfer=0.25)
     spire(6.2, 1.2, 2.4, 0.24, 3.4, hull)
     spire(4.9, 1.45, 2.4, 0.18, 2.5, hull)
     spire(5.4, 0.35, 2.4, 0.2, 2.8, hull)
     for k in range(2):                                     # two decks of windows on the tower's port face
-        window_row(f"win_tower_{k}", (4.6, 1.8, 1.92 + k * DECK), (6.6, 1.8, 1.92 + k * DECK), glow, count=5)
+        window_row(f"win_tower_{k}", (4.6, 1.8, 1.92 + k * DECK), (6.6, 1.8, 1.92 + k * DECK), glow, count=4)
     # two decks of windows on the dome drum's port face (the 12-gon's flat face at +Y)
     ay = 2.4 * math.cos(math.radians(15))
     for k in range(2):
-        window_row(f"win_drum_{k}", (DX - 0.5, ay, DZ + 0.36 + k * DECK), (DX + 0.5, ay, DZ + 0.36 + k * DECK), glow, count=3)
+        window_row(f"win_drum_{k}", (DX - 0.5, ay, DZ + 0.36 + k * DECK), (DX + 0.5, ay, DZ + 0.36 + k * DECK), glow, count=2)
 
     # radiating spokes: truss booms out to cargo pods (fore pods sweep forward, aft pods sweep aft)
     colours = (mat("cargo_rust", (0.42, 0.22, 0.13), rough=0.6, metal=0.2),
