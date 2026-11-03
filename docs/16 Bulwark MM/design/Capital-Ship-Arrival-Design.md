@@ -29,6 +29,7 @@ Three rules shape every beat:
 
 | Situation | What happens |
 |---|---|
+| First start of the game (new save) | **Collective arrival** above the red giant, inside the opening script (§5). |
 | Map 1 cleared at 3★ (`recordPlanetMap` sets `capitalShips[planet].arrived` and queues `{kind:'ship', planet}`) | Nothing yet. The results screen gains one line: "A capital ship is inbound to <Planet>." Assets start preloading. |
 | Player next lands on that planet's screen (globe visible) and `arrived && !introSeen` | **First-sight arrival** plays before any other menu toast. The queued mission-log toast is consumed by the cinematic's end card instead. |
 | Planet screen opened later (`introSeen`) | **Return coast-in** (§6). |
@@ -139,7 +140,22 @@ and surface granulation replace the atmosphere, and the star itself is the key l
 colour temperature, very large apparent size — so `createBackdrop` takes a `star: 'redGiant'` option and the
 lens flare is replaced by a broad glare). Every beat, cue and timing in §3 is unchanged; the ship's blue
 engines read strongly against the red. The resting composition of §6 anchors above the star instead of a
-globe. How the player reaches the Collective (and so what triggers its arrival) is not yet defined — see §9.
+globe.
+
+**The Collective arrival is the game's opening.** It plays the first time a player starts the game, as part of
+the opening script in which the player is offered their first ship and contract before going to Verdance. That
+makes it the player's first sight of any capital ship, so it sets the grammar every later arrival repeats: the
+same beats, hit points, sounds and title card. Differences from the planet arrivals:
+
+- **Trigger:** a new save (no `capitalShips.collective`), not a 3★ win. The beats of §3 slot into the opening
+  script where the ship first appears; the script's own dialogue replaces the captain's hail of beat 7, and the
+  hand-off is the first-contract offer rather than the Mission Log.
+- **No skip on a first-ever run until beat 6** would hide the premise; skip becomes available as normal on a
+  replay. *(To confirm against the script.)*
+- **Persistence:** `capitalShips.collective.introSeen` is written with the new save, so a restart mid-opening
+  replays it.
+- **Loading:** it is the first scene of the game, so the Collective GLB, red-giant stage and its arrival cue are
+  part of the initial load rather than a preload on a results screen.
 
 ## 6. Return coast-in
 
@@ -210,8 +226,9 @@ stack is affordable. Draw calls: ship 2, engines 2, tugs 3, planet 2–3, backdr
 
 ## 9. Open decisions
 
-1. **Collective trigger** — the Collective ship orbits a red giant with no planet of its own. What unlocks it,
-   and which screen shows the red giant (a galaxy-map stop, or a stage reached from the Collective's contact)?
+1. **Opening script alignment** — the Collective arrival must be fitted to the existing opening script (first
+   ship and contract offer before Verdance): where in the script the ship appears, who speaks, and whether the
+   first-ever run may be skipped.
 2. **Arcane propulsion colour** — keep magenta, or match the new blood-red hull lights?
 3. **Skip counts as seen?** Proposed yes (a skipper chose to skip). Replay stays available.
 4. **Music** — commission nine 22-second cues against the hit points, or ship with the synthesized fallback
