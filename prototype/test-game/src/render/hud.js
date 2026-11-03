@@ -292,7 +292,7 @@ export function createHud(mountEl, callbacks) {
   // boards with no resources.
   const questEl = el(doc, 'span', 'bw-seed');
   questEl.style.display = 'none';
-  questEl.title = 'Quest crystals hauled (red / green) — they also pay gold';
+  questEl.title = 'Quest crystals hauled (red / green) — they also pay gold';   // campaign: replaced by the contract readout
   topbar.appendChild(questEl);
   // the tracked mission (Mission-Log tech plan D5): one line beside the quest crystals [MM-story_mvyqoplz_g]
   const trackEl = el(doc, 'span', 'bw-seed');
@@ -855,7 +855,16 @@ export function updateHud(hud, state, ui) {
 
   // Quest crystal objectives (campaign maps only)
   if (hud.questEl) {
-    if (state.mapScore) {
+    if (state.contract) {
+      // COLLECTIVE CONTRACT [MM-story_mw12m2df_2]: sold / quota per tier; once a tier is filled, what is kept
+      const html = contractReadout(state.contract);
+      if (html !== hud.contractShown) {
+        hud.contractShown = html;
+        hud.questEl.style.display = '';
+        hud.questEl.title = 'Collective contract: sold / required per resource. Above the quota a load pays no gold and is kept in your inventory.';
+        hud.questEl.innerHTML = html;
+      }
+    } else if (state.mapScore) {
       hud.questEl.style.display = '';
       hud.questEl.innerHTML = '<span style="color:#ff7a6a">● ' + (state.mapScore.questRed || 0) +
         '</span> <span style="color:#7ae08a">● ' + (state.mapScore.questGreen || 0) + '</span>';
@@ -1107,4 +1116,15 @@ export function showWaveBanner(hud, faction) {
   if (typeof setTimeout === 'function') {
     hud.waveBannerTimer = setTimeout(() => { hud.waveBanner.classList.remove('bw-show'); }, 3000);
   }
+}
+
+/** The Collective contract readout: one coloured dot per tier with a quota, "sold/quota" until it is filled, then
+ *  "✓" and the units kept above it. Exported for the test. */
+const CONTRACT_DOT = { common: '#58a6ff', uncommon: '#ffd76a', rare: '#ff7a6a', epic: '#7ae08a' };
+export function contractReadout(c) {
+  return Object.keys(CONTRACT_DOT).filter((k) => c.quota[k] > 0 || c.kept[k] > 0).map((k) => {
+    const full = c.sold[k] >= c.quota[k];
+    const txt = full ? '✓' + (c.kept[k] > 0 ? ' +' + c.kept[k] : '') : c.sold[k] + '/' + c.quota[k];
+    return '<span style="color:' + CONTRACT_DOT[k] + '">● ' + txt + '</span>';
+  }).join(' ');
 }

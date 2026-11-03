@@ -480,11 +480,37 @@ function beginUnload(state, u, dt) {
   });
 }
 
-/** DEPOSIT (owner color economy): EVERY haul pays gold — blue/yellow are the economy crystals,
- *  red/green additionally count up the header QUEST objectives. Runs when the unload completes. */
+/** The colour economy's tiers (same table as save/battleTally.js COLOR_TIER; the sim may not import save code). */
+const CARGO_TIER = { blue: 'common', yellow: 'uncommon', red: 'rare', green: 'epic' };
+
+/** COLLECTIVE CONTRACT [MM-story_mw12m2df_2] (owner 2026-11-03): the player sells every harvested resource to the
+ *  Collective under the map's contract. A load pays gold until its tier's quota is met; anything above the quota is
+ *  NOT sold — it pays no gold and the player keeps it (the inventory banks it at battle end). `quota` comes from the
+ *  map-data workbook (Maps: Contract_*), passed in through createSim's options so a replay rebuilds the same contract.
+ *  No contract (classic board, harness) = every load pays, as before. */
+export function initContract(quota) {
+  if (!quota) return null;
+  const z = () => ({ common: 0, uncommon: 0, rare: 0, epic: 0 });
+  const q = z();
+  for (const k of Object.keys(q)) q[k] = Math.max(0, Math.floor(Number(quota[k]) || 0));
+  return { quota: q, sold: z(), kept: z() };
+}
+
+/** DEPOSIT (owner color economy): every haul the contract still buys pays gold — blue/yellow are the economy
+ *  crystals, red/green additionally count up the header QUEST objectives. Runs when the unload completes. */
 function creditDeposit(state, u) {
   if (!(u.cargo > 0)) return;
-  const gold = cargoGold(u);
+  const units = Math.floor(u.cargo);
+  const tier = CARGO_TIER[u.cargoColor || 'blue'] || 'common';
+  let gold = cargoGold(u), sold = units, kept = 0;
+  const c = state.contract;
+  if (c) {
+    sold = Math.min(units, Math.max(0, c.quota[tier] - c.sold[tier]));
+    kept = units - sold;
+    gold = units > 0 ? Math.floor(gold * sold / units) : 0;
+    c.sold[tier] += sold;
+    c.kept[tier] += kept;
+  }
   if (gold > 0) {
     if (state.economy) state.economy.money = (state.economy.money || 0) + gold;
     if (u.cargoRole === 'premium') state.mapScore.goldFromPremium += gold;
@@ -495,7 +521,7 @@ function creditDeposit(state, u) {
     state.mapScore.questUnits += n;
     if (u.cargoColor === 'red') state.mapScore.questRed += n; else state.mapScore.questGreen += n;
   }
-  emitEvent(state, { type: 'deposit', tick: state.tick, gold, units: Math.floor(u.cargo), role: u.cargoRole || 'primary', color: u.cargoColor || 'blue', fieldId: u.fieldId, pos: { x: u.pos.x, y: u.pos.y } });
+  emitEvent(state, { type: 'deposit', tick: state.tick, gold, units, sold, kept, contract: !!c, role: u.cargoRole || 'primary', color: u.cargoColor || 'blue', fieldId: u.fieldId, pos: { x: u.pos.x, y: u.pos.y } });
   u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null;
 }
 

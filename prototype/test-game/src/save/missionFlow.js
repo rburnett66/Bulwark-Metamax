@@ -1,8 +1,10 @@
 /**
  * src/save/missionFlow.js — how missions reach the log and leave it [MM-story_mvzkd148_1j]. Mission-Log-Design §11.
  *
- * Capital ships: a planet's faction flagship arrives when that planet's first map is won at an average of 3 stars or
- * more. Missions are granted aboard it, and Ready rewards are collected there; collecting is what moves a quest line.
+ * Capital ships [MM-story_mw12m06h_1]: a planet's faction flagship arrives when that planet's map 3 is won at an average
+ * of 3 stars or more. Until then the Collective ship, the player's first employer and always present, grants and
+ * collects the planet's maps 1-3 missions; maps 4-9 are granted and collected aboard the planet's own ship. Collecting
+ * is what moves a quest line.
  * Every gate here comes from the mission's own View / Unlock rows in content/missions/missions.json.
  *
  * Secondaries [MM-story_mvzkd2t8_1k]: a replay that beats a map's best average offers that map's optional secondary,
@@ -32,6 +34,11 @@ export function flowCtx(s, opts = {}) {
 
 export const mapRecord = (s, planet, map) => ((s.planetMaps || {})[planet] || {})[map] || null;
 export const shipArrived = (s, planet) => !!((s.capitalShips || {})[planet] && s.capitalShips[planet].arrived);
+/** The map whose ≥ 3★ win brings a planet's capital ship, and the ship that serves maps 1..SHIP_MAP until then. */
+export const SHIP_MAP = 3;
+export const COLLECTIVE_SHIP = 'the Collective ship';   // = missions.json collective.ship (missionFlow.test checks)
+/** Is the ship this mission is collected at in orbit? The Collective ship always is. */
+export const collectShipHere = (s, m) => m.collectAt === COLLECTIVE_SHIP || shipArrived(s, m.planet);
 
 function compare(have, op, want) {
   if (op === '≥') return have >= want;
@@ -116,7 +123,7 @@ export function recordPlanetMap(s, result) {
   if (rec.beaten && result.avgStars > rec.bestAvg) rec.improved = true;   // a replay that beats the best offers the secondary
   rec.beaten = true;
   if (rec.bestAvg === null || result.avgStars > rec.bestAvg) rec.bestAvg = result.avgStars;
-  if (mapId === 1 && rec.bestAvg >= STAR_GATE && !shipArrived(s, planet)) {
+  if (mapId === SHIP_MAP && rec.bestAvg >= STAR_GATE && !shipArrived(s, planet)) {
     s.capitalShips[planet] = { arrived: true };
     s.loggedQueue.push({ kind: 'ship', planet });
     return { arrived: planet };
@@ -150,7 +157,7 @@ export function favourMessage(f) {
 /** Why a Ready mission cannot be collected yet, or null: the planet's ship must be in orbit. */
 export function collectBlock(s, m) {
   if (missionStatus(m, s) !== 'ready') return 'Not ready';
-  return shipArrived(s, m.planet) ? null : 'Waiting for ' + m.collectAt;
+  return collectShipHere(s, m) ? null : 'Waiting for ' + m.collectAt;
 }
 
 /** Collect a Ready mission aboard its ship: the rewards bank, the quest line moves, its next step can be granted. */
