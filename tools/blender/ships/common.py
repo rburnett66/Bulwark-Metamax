@@ -568,7 +568,7 @@ def build(slug, make, argv=None):
         for ob in objs:
             ob.hide_render = ob.hide_viewport = lod != 0
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out, f"{slug}.blend"))
-    if "--no-render" not in argv:
+    if "--render" in argv:                                 # offline Cycles sheet: opt-in; the viewer is the review
         render_views(out, slug)
     line = f"{len(markers)} engines; " + ", ".join(f"LOD{l} {n} tris / {d} draw calls" for l, (n, d) in stats.items())
     print(f"[{slug}] {line}; built in {time.time() - t:.1f}s → {out}")
