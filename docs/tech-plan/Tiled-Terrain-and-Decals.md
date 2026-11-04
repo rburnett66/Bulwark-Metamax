@@ -77,6 +77,21 @@ Review page, map 1 unless noted, 1280 × 720 unless noted:
 - GPU memory: 256 KB (+ mips) splat texture per planet, 1 MB (+ mips) decal atlas.
 - Verdance maps 1–9 all build; 328–395 decals per map.
 
+**Size and load time** (node 22 on the cloud box; a phone is likely 3–5× slower):
+
+| item | cost |
+|---|---|
+| new code (`splat.js` + `decals.js`) | 28 KB raw, 11 KB gzip — the whole download cost |
+| painted tiles it replaces | 3.1 MB for powder map 1; 28 MB committed today for 63 tiles |
+| make the splat texture (once per planet) | 148 ms |
+| draw the decal atlas (once per session) | 30 ms |
+| place the decals (per map) | 10 ms |
+| ground arrays, default vs tiled | 46 ms vs 34 ms |
+
+- The 148 ms texture build is the one load cost worth watching on phones; if TT-2 finds it slow, build it in a worker or ship the 256² result as a ~100 KB PNG per planet.
+
+**Frame rate: not measured.** Software GL in the cloud gives no valid frame rates (TE §7.2); TT-2 measures on devices. Expected per-pixel cost against today's ground: today's High and Standard read 0–4 texels per pixel (2 where grass detail shows, 2 more where sand detail shows, none elsewhere). Tiled High reads 4 everywhere, so it costs a little more on bare ground; tiled Standard reads 1, so it should be cheaper than today. Decals add ≤ 8 draw calls and ~400 small alpha quads; zoomed out they draw nothing.
+
 ## 6. Decisions made while building (2026-11-04)
 
 - **Screen-space bump was rejected.** `dFdx(height)` alone shades in 2 × 2 pixel blocks (reads as pixelation, worst on sand). Replaced by two filtered taps at the neighbouring pixels' uv (D5's 4 reads on High). Standard has no bump.
@@ -107,4 +122,3 @@ Seamless tiling; texture contrast per channel, caching, differs per planet; tier
 | relation | plan | what it holds that this plan does not restate |
 |---|---|---|
 | depends-on | docs/tech-plan/Terrain-Engine-3D-and-Threejs-Migration.md | the ground plane (§3), quality tiers and draw-call budget (§7) this prototype amends |
-| related | docs/16 Bulwark MM/design/Terrain-Detail-and-Complexity.md | the current terrain detail inventory and complexity audit |
