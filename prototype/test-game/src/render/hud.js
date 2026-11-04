@@ -294,8 +294,7 @@ export function createHud(mountEl, callbacks) {
   // MAP picker — the classic fixed board, or a generated ring-campaign map (maps GDD). Changing it
   // rebuilds the board (sizes differ per map) and restarts the run. Author/edit maps in the Map Lab.
   const mapSel = el(doc, 'select', 'bw-faction');
-  mapSel.title = 'Board: Classic (fixed slice) or a ring-campaign map 1-9 (restarts the run)';
-  const optClassic = el(doc, 'option', null, 'Classic board'); optClassic.value = '0'; mapSel.appendChild(optClassic);
+  mapSel.title = 'Board: the faction\'s campaign map 1-9 (restarts the run)';   // no classic board [MM-story_mw2ml1ze_e]
   for (let m = 1; m <= 9; m++) { const o = el(doc, 'option', null, 'Map ' + m); o.value = String(m); mapSel.appendChild(o); }
   if (cbs.defaultMapId != null) mapSel.value = String(cbs.defaultMapId);   // boot board (main.js loads it)
   mapSel.addEventListener('change', () => { if (cbs.onMapSelect) cbs.onMapSelect(Number(mapSel.value) || 0); });

@@ -453,7 +453,7 @@ export function createMenu(mountEl, cbs) {
   const continueBtn = mkBtn('PLAY', ' ', 'primary bwm-play', () => openSurvey(targetKey()));   // owner 2026-10-19: reads PLAY [MM-task_mvg1hbnl_1u]
   const harvBtn = mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
   const techBtn = mkBtn('TECH TREE', 'research upgrades', null, () => show('techtree'));
-  mkBtn('CLASSIC BOARD', 'endless test field', null, () => { if (cbs.onPlayMap) cbs.onPlayMap(0); });
+  // (no classic-board button any more: every battle is a faction's own forge map — owner 2026-11-04 [MM-story_mw2ml1ze_e])
   mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
   mkBtn('RESET PROGRESS', 'wipe all progress', null, () => {
     if (doc.defaultView && !doc.defaultView.confirm('Reset all progress? Stars, gold, loyalty, tech and faction records are wiped.')) return;
