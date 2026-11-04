@@ -12,6 +12,8 @@
  * LP [MM-story_mv87jxp2_7]: the low-poly organic ground (ground/lowpoly.js) is the default ground; a world
  * palette + its lighting (styles/lowpoly-palettes.js) recolours ground, tufts, rocks and trees. World: ?world=
  * (preview) → the map's `world` → Meadow. ?ground=baked keeps the previous baked-texture ground.
+ * ?ground=tiled (prototype, MM-story_mw2qkmb1_2): the tiled splat terrain shader (ground/splat.js) + instanced decals
+ * (ground/decals.js) that fade out toward the whole-map view.
  *
  * READ-ONLY: it reads the sim state handed to renderFrame and never writes to it.
  * The default game never loads this module or three.js — main.js imports it dynamically under the flag.
@@ -52,6 +54,8 @@ import { bakedLevelDir, checkLevelAgainstMap } from './level.js';
 import { createHeadingTracker } from './heading.js';
 import { buildBakedGround } from './ground/baked.js';
 import { buildLowPolyGround, GRID as GROUND_GRID, roadSampler } from './ground/lowpoly.js';
+import { tapsForTier } from './ground/splat.js';
+import { buildDecals } from './ground/decals.js';
 import { foliageKitKey } from '../data/foliage.js';
 import { renderMapFor } from './ground/synthTerrain.js';
 import { LOWPAL, WORLD_LIGHT, resolveWorld } from './styles/lowpoly-palettes.js';
@@ -253,6 +257,8 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     destroyed: false,
     world: null, planet: opts.planet || null,
     lowpoly,
+    tiledGround: opts.ground === 'tiled',   // ?ground=tiled — the tiled terrain shader + decals (prototype) [MM-story_mw2qkmb1_2]
+    decals: null,
     roadMask: null,
   };
   // wheel / tread marks behind ground vehicles: specs read from the models' part lists; never on water [MM-task_mvj0wz2d_1]
@@ -451,7 +457,7 @@ async function loadRoadMask(url) {
 function disposeGroup(scene, group) {
   if (!group) return;
   scene.remove(group);
-  group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+  group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); for (const t of (o.material.userData && o.material.userData.textures) || []) t.dispose(); o.material.dispose(); } });
 }
 
 /**
@@ -475,8 +481,16 @@ export function setWorld(r, key) {
   r.flightFloor = flightFloor(r.heightField, [craftTop(r)]);   // the minimum flight level [MM-task_mvesj7tg_b]
   if (r.lowpoly) {
     if (r.ground) disposeGroup(scene, r.ground.group);
-    r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts, grassDetail: !!r.tier.grassDetail });
+    // ?ground=tiled on High / Standard: the tiled splat shader + decals; Low keeps the flat ground [MM-story_mw2qkmb1_2]
+    const tiled = r.tiledGround && !!r.tier.grassDetail;
+    r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts, grassDetail: !!r.tier.grassDetail,
+      splat: tiled ? { world, taps: tapsForTier(r.tier.key) } : null });
     scene.add(r.ground.group);
+    if (r.decals) { disposeGroup(scene, r.decals.group); r.decals = null; }
+    if (r.tiledGround) {   // decals on every tier — they are a handful of instanced draws
+      r.decals = buildDecals(THREE, gm, r.ground.colAt, roadSampler(r.roadMask, gm.cols, gm.rows));
+      scene.add(r.decals.group);
+    }
     r.lights.setWorld(WORLD_LIGHT[world]);
     if (r.markers.setWorld) r.markers.setWorld(palette);
   }
@@ -605,6 +619,7 @@ export function renderFrame(r, state, ui, events, dt) {
   const pose = cameraPose(r.viewCam || r.cam);
   r.camera.position.set(pose.position.x, pose.position.y, pose.position.z);
   r.camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
+  if (r.decals) r.decals.update(r.viewCam || r.cam, (r._w || 16) / (r._h || 9));   // decals fade out toward the whole-map view
 
   // Static set: structures (re-render the shadow map only when it changed)
   if (state && state.structures) {

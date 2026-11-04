@@ -23,6 +23,7 @@
  */
 import { rng } from '../obstructions/placement.js';
 import { GRASS, createGrassGroundMaterial } from './grassDetail.js';
+import { SPLAT, createSplatGroundMaterial } from './splat.js';
 
 export const GRID = 0.5;          // vertex spacing, in cells
 export const JITTER = 0.42;       // interior vertex jitter, × GRID (±21%)
@@ -133,6 +134,24 @@ export function createGroundColour(map, palette, roadAt = () => 0) {
     const keep = Math.max(0, 1 - roadAt(x, z) * 3 - Math.max(0, field(F.w, x, z) - 0.2) * 4);
     return s * s * (3 - 2 * s) * keep;
   };
+  /**
+   * layersAt(x, z) → the tiled-terrain layer weights [MM-story_mw2qkmb1_2]: { grass, soil, rock, sand } (sum ≤ 1 — the rest,
+   * water, keeps the plain vertex colour) plus the raw forest / water / road fields the decal planner reads.
+   */
+  colAt.layersAt = (x, z) => {
+    const fd = field(F.d, x, z), fw = field(F.w, x, z), ft = field(F.t, x, z), road = roadAt(x, z);
+    const fr = field(F.r, x, z) + field(F.c, x, z), fs = field(F.s, x, z);
+    const cl = (v) => Math.max(0, Math.min(1, v));
+    const dk = cl((fd - 0.25) / 0.3), sk = cl((fd - 0.5) / 0.15);
+    let sand = dk * sk, soil = Math.max(dk * (1 - sk), cl((road - 0.1) / 0.25));
+    let rock = cl(fr * 1.4 + fs * 0.8);
+    const busy = soil + sand + rock;
+    if (busy > 1) { soil /= busy; sand /= busy; rock /= busy; }
+    let grass = Math.max(0, 1 - soil - sand - rock);
+    if (palette.bare) { soil += grass; grass = 0; }   // a bare world: regolith, not turf
+    const wet = cl(1 - (fw - 0.2) * 4);
+    return { grass: grass * wet, soil: soil * wet, rock: rock * wet, sand: sand * wet, forest: ft, water: fw, road };
+  };
   return colAt;
 }
 
@@ -140,7 +159,7 @@ export function createGroundColour(map, palette, roadAt = () => 0) {
  * The ground triangles. Returns { position, normal, color } (Float32Arrays, non-indexed, 3 verts per
  * triangle, wound to face UP) and `triangles`.
  */
-export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID, { grass = false, tile = GRASS.tileCells } = {}) {
+export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID, { grass = false, tile = GRASS.tileCells, splat = false } = {}) {
   const { cols, rows } = map;
   const colAt = createGroundColour(map, palette, roadAt);
   const NX = Math.round(cols / grid), NZ = Math.round(rows / grid);
@@ -159,15 +178,27 @@ export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID, {
   if (smask) for (let k = 0; k < smask.length; k++) smask[k] = colAt.sandAt(vx[k], vz[k]);
   const aGrass = grass ? new Float32Array(tris * 3) : null, aGUv = grass ? new Float32Array(tris * 6) : null;
   const aSand = grass ? new Float32Array(tris * 3) : null;
+  // the tiled terrain [MM-story_mw2qkmb1_2]: a per-VERTEX colour (smooth across facets, the texture carries the detail),
+  // four layer weights per vertex and a world-space uv (world / SPLAT.tileCells)
+  const vcol = splat ? new Float32Array((NX + 1) * (NZ + 1) * 3) : null, vw = splat ? new Float32Array((NX + 1) * (NZ + 1) * 4) : null;
+  if (splat) for (let k = 0; k < vw.length / 4; k++) {
+    const c = colAt(vx[k], vz[k]), L = colAt.layersAt(vx[k], vz[k]);
+    vcol[k * 3] = c[0]; vcol[k * 3 + 1] = c[1]; vcol[k * 3 + 2] = c[2];
+    vw[k * 4] = L.grass; vw[k * 4 + 1] = L.soil; vw[k * 4 + 2] = L.rock; vw[k * 4 + 3] = L.sand;
+  }
+  const aSplat = splat ? new Float32Array(tris * 12) : null, aSUv = splat ? new Float32Array(tris * 6) : null;
   let o = 0;
   const tri = (a, b, c) => {
     const cx = (vx[a] + vx[b] + vx[c]) / 3, cz = (vz[a] + vz[b] + vz[c]) / 3;
     const k = 0.95 + h2(cx * 3.1, cz * 2.7) * 0.1, cc = colAt(cx, cz);
+    const flatWater = vcol && colAt.layersAt(cx, cz).water > 0.15;   // water + shore keep their crisp low-poly bands
     const nx = (h2(cx * 1.3, cz * 5.1) - 0.5) * TILT, nz = (h2(cx * 4.7, cz * 1.9) - 0.5) * TILT, nl = Math.hypot(nx, 1, nz);
     for (const v of [a, c, b]) {        // a, c, b: counter-clockwise seen from above → the front face is up
       position[o] = vx[v]; position[o + 1] = 0; position[o + 2] = vz[v];
       normal[o] = nx / nl; normal[o + 1] = 1 / nl; normal[o + 2] = nz / nl;
-      color[o] = cc[0] * k; color[o + 1] = cc[1] * k; color[o + 2] = cc[2] * k;
+      if (vcol && !flatWater) { color[o] = vcol[v * 3] * k; color[o + 1] = vcol[v * 3 + 1] * k; color[o + 2] = vcol[v * 3 + 2] * k; }
+      else { color[o] = cc[0] * k; color[o + 1] = cc[1] * k; color[o + 2] = cc[2] * k; }
+      if (aSplat) { const q = o / 3; for (let c = 0; c < 4; c++) aSplat[q * 4 + c] = vw[v * 4 + c]; aSUv[q * 2] = vx[v] / SPLAT.tileCells; aSUv[q * 2 + 1] = vz[v] / SPLAT.tileCells; }
       if (aGrass) { const q = o / 3; aGrass[q] = mask[v]; aSand[q] = smask[v]; aGUv[q * 2] = vx[v] / tile; aGUv[q * 2 + 1] = vz[v] / tile; }
       o += 3;
     }
@@ -177,7 +208,7 @@ export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID, {
     const a = VI(i, j), b = VI(i + 1, j), c = VI(i + 1, j + 1), d = VI(i, j + 1);
     if (h2(i * 0.7, j * 1.3) < 0.5) { tri(a, b, c); tri(a, c, d); } else { tri(a, b, d); tri(b, c, d); }
   }
-  return { position, normal, color, triangles: tris, colAt, aGrass, aGUv, aSand };
+  return { position, normal, color, triangles: tris, colAt, aGrass, aGUv, aSand, aSplat, aSUv };
 }
 
 /**
@@ -212,9 +243,10 @@ export function planTufts(map, palette, roadAt = () => 0, colAt = createGroundCo
  * ({ width, height, data }). `apron` = the off-map colour. `grid` (vertex spacing) and `tufts` are the quality
  * tier's ground resolution (render3d/quality.js — Low builds a 1-cell grid without tufts). Returns { group, stats }.
  */
-export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron = 0x5cbf6c, grid = GRID, tufts: withTufts = true, grassDetail = false } = {}) {
+export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron = 0x5cbf6c, grid = GRID, tufts: withTufts = true, grassDetail = false, splat = null } = {}) {
   const roadAt = roadSampler(roadMask, map.cols, map.rows);
-  const G = buildGroundArrays(map, palette, roadAt, grid, { grass: grassDetail });
+  // splat = { world, taps } → the tiled terrain shader instead of the grass / sand detail [MM-story_mw2qkmb1_2]
+  const G = buildGroundArrays(map, palette, roadAt, grid, { grass: grassDetail && !splat, splat: !!splat });
   const group = new THREE.Group();
   group.name = 'ground';
 
@@ -222,12 +254,16 @@ export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron
   g.setAttribute('position', new THREE.BufferAttribute(G.position, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(G.normal, 3));
   g.setAttribute('color', new THREE.BufferAttribute(G.color, 3));
+  if (G.aSplat) {
+    g.setAttribute('aSplat', new THREE.BufferAttribute(G.aSplat, 4));
+    g.setAttribute('aSUv', new THREE.BufferAttribute(G.aSUv, 2));
+  }
   if (G.aGrass) {   // normal-mapped grass patches (High / Standard) [MM-story_mven9dp1_r]
     g.setAttribute('aGrass', new THREE.BufferAttribute(G.aGrass, 1));
     g.setAttribute('aGUv', new THREE.BufferAttribute(G.aGUv, 2));
     g.setAttribute('aSand', new THREE.BufferAttribute(G.aSand, 1));   // sand / dirt detail [MM-task_mvfn5gxu_d]
   }
-  const ground = new THREE.Mesh(g, G.aGrass ? createGrassGroundMaterial(THREE) : new THREE.MeshLambertMaterial({ vertexColors: true, depthWrite: false }));
+  const ground = new THREE.Mesh(g, G.aSplat ? createSplatGroundMaterial(THREE, splat) : G.aGrass ? createGrassGroundMaterial(THREE) : new THREE.MeshLambertMaterial({ vertexColors: true, depthWrite: false }));
   ground.name = 'ground-lowpoly';
   ground.receiveShadow = true;
   ground.renderOrder = 0;
@@ -279,5 +315,5 @@ export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron
   apronMesh.renderOrder = -1;
   group.add(apronMesh);
 
-  return { group, stats: { triangles: G.triangles, tufts: plan.length, bladeTriangles: (pos.length / 9) | 0, grassCover: G.aGrass ? G.aGrass.reduce((a, b) => a + b, 0) / G.aGrass.length : 0 } };
+  return { group, colAt: G.colAt, stats: { triangles: G.triangles, tufts: plan.length, bladeTriangles: (pos.length / 9) | 0, grassCover: G.aGrass ? G.aGrass.reduce((a, b) => a + b, 0) / G.aGrass.length : 0, splat: !!G.aSplat } };
 }
