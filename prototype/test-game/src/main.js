@@ -1,7 +1,7 @@
 import { MAP, WAVES, makeWaves, fxScaleForMap, projScaleForMap, getUnitDef } from './data/tables.js';
 import { battleEntry, logBattle } from './save/battleLog.js';
 import { contractFor } from './data/collectiveContract.js';
-import { buildCampaignMap, buildTerrainMap, resolveResourceTypes } from './sim/mapgen.js';
+import { buildTerrainMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
 import { createSim, applyCommand, stepSim, FIXED_DT } from './sim/core.js';
 import { loadSave, updateSave, recordResult, resetSave, grantBattleRewards } from './save/save.js';
@@ -459,14 +459,8 @@ export function boot(mountEl, seed) {
   const forgeFileSlug = (f) => forgeSlotFaction(f).toLowerCase().replace(/[^a-z]+/g, '-').replace(/(^-+|-+$)/g, '');
   // Lookup order: localStorage slot (the authoring hot loop — terrain.html Save, same origin) →
   // committed content/maps/forge/<faction>-map-<n>.json (the SHIP path, survives browser wipes and
-  // deploys to Pages) → null, which falls back to the OLD workbook generator (testing only — all
-  // future map development happens in the forge).
-  // TEMP PLAYTEST MIRROR (owner 2026-10-16: "temporarily copy all the Powder map data to the other factions so we
-  // can play test on each planet") [MM-task_mvbzgc9n_12]: a faction with no forge map for a slot plays POWDER's map
-  // for that slot (your local Powder slot first, then the committed file) — on its own planet, palette, resources
-  // and waves. A faction's own map always wins, so authoring one retires the mirror for that slot. Remove this
-  // (set to null) once every faction has its maps.
-  const TEMP_MIRROR_FACTION = 'Powder';
+  // deploys to Pages) → null, which is an error: the old workbook generator no longer stands in (owner 2026-11-04:
+  // "100% of the maps for all factions … unique 3D maps … no more legacy maps") [MM-story_mw2ml1ze_e].
   let forgeSource = null;   // the forge slot faction the last loaded map actually came from
   async function loadForgeSlot(fac, mapId) {
     try {
@@ -483,11 +477,7 @@ export function boot(mountEl, seed) {
   async function loadForgeMap(mapId) {
     const fac = forgeSlotFaction(currentTestFaction || DEFAULT_FACTION);
     forgeSource = fac;
-    const own = await loadForgeSlot(fac, mapId);
-    if (own || !TEMP_MIRROR_FACTION || fac === TEMP_MIRROR_FACTION) return own;
-    const mirrored = await loadForgeSlot(TEMP_MIRROR_FACTION, mapId);
-    if (mirrored) { forgeSource = TEMP_MIRROR_FACTION; console.info(`[maps] ${fac} has no map ${mapId} yet — playing ${TEMP_MIRROR_FACTION}'s (temporary playtest mirror)`); }
-    return mirrored;
+    return loadForgeSlot(fac, mapId);   // every faction ships all 9 of its own maps: no mirror, no generator [MM-story_mw2ml1ze_e]
   }
 
   // Intro overlays (contract offer, wave intel, how to play, bonus picker) are DOM cards on mountEl; a new board or the
@@ -521,13 +511,8 @@ export function boot(mountEl, seed) {
           nextSlug = (typeof forge._copiedFrom === 'string' && /^[a-z-]+-map-\d+$/.test(forge._copiedFrom)) ? forge._copiedFrom
             : `${forgeFileSlug(forgeSource || forgeSlotFaction(currentTestFaction || DEFAULT_FACTION))}-map-${id}`;
         } else {
-          let overrides = null;
-          try {
-            const r = await fetch(`content/maps/overrides/map-${id}.json`);
-            if (r.ok) overrides = await r.json();
-          } catch (e) { /* no override file — generator output as-is */ }
-          if (mySeq !== mapSelectSeq) return;
-          m = buildCampaignMap(id, { seed: 0, overrides });
+          // no forge map (offline, or a missing file): say so — never substitute a legacy generated board
+          throw new Error(`no map ${id} for ${forgeSlotFaction(currentTestFaction || DEFAULT_FACTION)} (content/maps/forge/${forgeFileSlug(forgeSlotFaction(currentTestFaction || DEFAULT_FACTION))}-map-${id}.json)`);
         }
         resolveResourceTypes(m, 1);   // harvest lands later; faction 1 typing for the node markers
         nextMap = m;
@@ -1106,10 +1091,7 @@ export function boot(mountEl, seed) {
           // campaign advance (owner): victory offers the next, bigger map (1→9; none after 9 or on classic)
           let nextMap = null;
           if (sim.result === 'win' && currentMapId > 0 && currentMapId < 9) {
-            try {
-              const nm = buildCampaignMap(currentMapId + 1, { seed: 0 });
-              nextMap = { id: currentMapId + 1, name: nm.name || ('Map ' + (currentMapId + 1)), size: (nm.cols - 4) + 'x' + (nm.rows - 4) };
-            } catch (e) { nextMap = { id: currentMapId + 1, name: 'Map ' + (currentMapId + 1), size: '' }; }
+            nextMap = { id: currentMapId + 1, name: 'Map ' + (currentMapId + 1), size: '' };   // the next forge map (the old preview built a legacy generated board for its size)
           }
           const saveBefore = loadSave();
           recordResult(currentMapId, sim.result, sim.finalScore, sim.waveStars, sim.waves ? sim.waves.total : 8, currentTestFaction);
