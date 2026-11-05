@@ -125,3 +125,47 @@ test('every Verdance map 1–9 builds the tiled ground and its decals', () => {
     assert.ok(D.stats.decals > 100, `map ${n}: ${D.stats.decals}`);
   }
 });
+
+// [MM-story_mw2uk8lq_1] the tiled ground is the default on every map; each planet's decals fit the planet.
+import { WORLD_DECALS } from './decals.js';
+import { PLANETS } from '../../data/planets.js';
+
+const FAC = [['powder', 'ground'], ['air', 'air'], ['high-tech', 'hightech'], ['artillery', 'artillery'], ['water', 'water'],
+  ['arcane-energy', 'arcane'], ['space-tech', 'space'], ['dark-energy', 'dark'], ['greenies', 'greenies']];
+
+test('every battle planet has a splat set and a decal rule (or is lush: every kind)', () => {
+  for (const [, key] of FAC) {
+    const w = PLANETS[key].palette;
+    assert.ok(LOWPAL[w], w);
+    assert.ok(splatSetFor(w) && splatSetFor(w) !== splatSetFor('nope') || w === 'meadow', `${w} has its own splat set`);
+    assert.ok(w in WORLD_DECALS, `${w} has a decal rule`);
+  }
+});
+
+test('barren, frozen and burnt worlds grow no flowers, clover or leaves', () => {
+  const m = mapN(1);
+  for (const w of ['lunar', 'volcanic', 'winter', 'canyon']) {
+    const col = createGroundColour(m, LOWPAL[w]);
+    const kinds = new Set(planDecals(m, col, () => 0, { world: w }).map((d) => KINDS[d.kind]));
+    for (const k of ['flowers', 'clover', 'leaves']) assert.ok(!kinds.has(k), `${w}: ${k}`);
+    assert.ok(kinds.size >= 1, `${w} still has detail`);
+  }
+  const lunar = new Set(planDecals(m, createGroundColour(m, LOWPAL.lunar), () => 0, { world: 'lunar' }).map((d) => KINDS[d.kind]));
+  for (const k of lunar) assert.ok(['pebbles', 'crack', 'ruts'].includes(k), 'lunar: ' + k);
+  const lush = planDecals(m, createGroundColour(m, PAL), () => 0, { world: 'meadow' });
+  assert.deepEqual(lush, planDecals(m, createGroundColour(m, PAL)), 'a lush world = every kind, same as no world');
+});
+
+test('all 81 maps (9 planets × 9) build the tiled ground and their decals', () => {
+  for (const [slug, key] of FAC) {
+    const world = PLANETS[key].palette, pal = LOWPAL[world];
+    for (let n = 1; n <= 9; n++) {
+      const m = buildTerrainMap(JSON.parse(fs.readFileSync(path.join(GAME, `content/maps/forge/${slug}-map-${n}.json`), 'utf8')), n, { seed: 0, bakeTune: {} });
+      const r = buildLowPolyGround(THREE, m, pal, { splat: { world, taps: 2 }, tufts: false });
+      assert.equal(r.stats.splat, true, `${slug} ${n}`);
+      const D = buildDecals(THREE, m, r.colAt, () => 0, { world });
+      assert.ok(D.stats.decals > 30, `${slug} ${n}: ${D.stats.decals} decals`);
+      assert.ok(D.stats.chunks <= Math.ceil(m.cols / DECALS.chunk) * Math.ceil(m.rows / DECALS.chunk));
+    }
+  }
+});

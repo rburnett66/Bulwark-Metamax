@@ -35,11 +35,12 @@
 <div id="stage"></div>
 <div class="seg hide"><button id="hide" aria-pressed="false" title="Hide the panel (H)">Hide panel</button></div>
 <section class="panel" aria-label="Terrain review">
-  <h1>Verdance ground</h1>
-  <p>The same map with today's ground, the tiled shader + decals, or the painted tiles. Drag to pan, wheel or pinch to zoom.</p>
+  <h1 id="title">Verdance ground</h1>
+  <p>Any planet's map with the tiled ground + decals (the default), the previous low-poly ground, or the painted tiles. Drag to pan, wheel or pinch to zoom.</p>
+  <div class="row"><span>Planet</span><div class="seg" id="planets"></div></div>
   <div class="row"><span>Map</span><div class="seg" id="maps"></div></div>
   <div class="row"><span>Ground</span><div class="seg" id="modes">
-    <button data-m="current">Current</button><button data-m="tiled">Tiled</button><button data-m="baked">Painted</button></div></div>
+    <button data-m="tiled">Tiled</button><button data-m="lowpoly">Low-poly</button><button data-m="baked">Painted</button></div></div>
   <div class="row"><span>Quality</span><div class="seg" id="tiers">
     <button data-q="high">High</button><button data-q="standard">Standard</button><button data-q="low">Low</button></div></div>
   <div class="row"><span>Zoom</span><input id="zoom" type="range" min="10" max="95" step="1" aria-label="Camera distance"></div>
@@ -47,32 +48,41 @@
   <div class="note" id="note"></div>
 </section>
 <script type="module">
-// Review page for the tiled terrain prototype [MM-story_mw2qkmb1_2]: the game's own 3D renderer on a Verdance forge map,
-// switching ground mode, quality tier and zoom. Painted tiles exist for map 1 only (the others were never baked).
+// Review page for the tiled terrain [MM-story_mw2qkmb1_2] [MM-story_mw2uk8lq_1]: the game's own 3D renderer on any
+// planet's forge map, switching ground mode, quality tier and zoom. Painted tiles exist for map 1 only (the others were
+// never baked).
 import { createRenderer3D, renderFrame, destroyRenderer } from '../../src/render3d/index.js';
 import { buildTerrainMap, resolveResourceTypes } from '../../src/sim/mapgen.js';
-import { DECALS } from '../../src/render3d/ground/decals.js';
+import { PLANETS } from '../../src/data/planets.js';
+// forge file slug → the planet key the renderer takes (data/planets.js)
+const FACTIONS = [['powder', 'ground'], ['air', 'air'], ['high-tech', 'hightech'], ['artillery', 'artillery'], ['water', 'water'],
+  ['arcane-energy', 'arcane'], ['space-tech', 'space'], ['dark-energy', 'dark'], ['greenies', 'greenies']];
 
 const q = new URLSearchParams(location.search);
-const S = { map: +(q.get('map') || 1), mode: q.get('ground') || 'tiled', tier: q.get('quality') || 'high', dist: q.get('dist') ? +q.get('dist') : null };
+const S = { fac: q.get('faction') || 'powder', map: +(q.get('map') || 1), mode: q.get('ground') || 'tiled', tier: q.get('quality') || 'high', dist: q.get('dist') ? +q.get('dist') : null };
 const stage = document.getElementById('stage');
 const maps = document.getElementById('maps');
 for (let n = 1; n <= 9; n++) maps.insertAdjacentHTML('beforeend', `<button data-n="${n}">${n}</button>`);
+const planets = document.getElementById('planets');
+for (const [slug, key] of FACTIONS) planets.insertAdjacentHTML('beforeend', `<button data-f="${slug}">${PLANETS[key].name}</button>`);
+const planetKey = () => (FACTIONS.find(([s]) => s === S.fac) || FACTIONS[0])[1];
 let r = null, seq = 0, last = performance.now();
 
 function sync() {
   for (const b of maps.children) b.setAttribute('aria-pressed', String(+b.dataset.n === S.map));
+  for (const b of planets.children) b.setAttribute('aria-pressed', String(b.dataset.f === S.fac));
+  document.getElementById('title').textContent = PLANETS[planetKey()].name + ' ground';
   for (const b of document.querySelectorAll('#modes button')) {
     b.setAttribute('aria-pressed', String(b.dataset.m === S.mode));
     if (b.dataset.m === 'baked') b.disabled = S.map !== 1;
   }
   for (const b of document.querySelectorAll('#tiers button')) b.setAttribute('aria-pressed', String(b.dataset.q === S.tier));
   const u = new URL(location.href);
-  u.searchParams.set('map', S.map); u.searchParams.set('ground', S.mode); u.searchParams.set('quality', S.tier);
+  u.searchParams.set('faction', S.fac); u.searchParams.set('map', S.map); u.searchParams.set('ground', S.mode); u.searchParams.set('quality', S.tier);
   history.replaceState(null, '', u);
   document.getElementById('note').textContent = S.mode === 'baked' ? 'Painted: six 2048² tiles, about 3 MB for this map.'
     : S.mode === 'tiled' ? (S.tier === 'low' ? 'Low keeps the flat ground; decals still draw.' : 'Tiled: one 256² texture made in code — nothing to download.')
-    : 'Current: flat colour per triangle' + (S.tier === 'low' ? '.' : ' + grass / sand detail.');
+    : 'Low-poly (previous default): flat colour per triangle' + (S.tier === 'low' ? '.' : ' + grass / sand detail.');
 }
 
 async function mount() {
@@ -80,11 +90,11 @@ async function mount() {
   if (S.mode === 'baked' && S.map !== 1) S.mode = 'tiled';
   sync();
   if (r) { destroyRenderer(r); r = null; stage.innerHTML = ''; }
-  const forge = await (await fetch(`../../content/maps/forge/powder-map-${S.map}.json`)).json();
+  const forge = await (await fetch(`../../content/maps/forge/${S.fac}-map-${S.map}.json`)).json();
   const map = buildTerrainMap(forge, S.map, { seed: 0, bakeTune: {} });
   resolveResourceTypes(map, 1);
-  const next = await createRenderer3D(stage, map, { slug: `powder-map-${S.map}`, baseUrl: '../../', ground: S.mode === 'current' ? undefined : S.mode,
-    craft: false, planet: 'powder', qualityQuery: S.tier });
+  const next = await createRenderer3D(stage, map, { slug: `${S.fac}-map-${S.map}`, baseUrl: '../../', ground: S.mode,
+    craft: false, planet: planetKey(), qualityQuery: S.tier });
   if (my !== seq) { destroyRenderer(next); return; }
   r = next;
   window.__r = r;   // for scripted screenshots
@@ -118,6 +128,7 @@ function frame(t) {
 }
 setInterval(stats, 300);
 
+planets.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.fac = b.dataset.f; S.dist = r && r.cam.dist; mount(); } });
 maps.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.map = +b.dataset.n; S.dist = r && r.cam.dist; mount(); } });
 document.getElementById('modes').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && !b.disabled) { S.mode = b.dataset.m; S.dist = r && r.cam.dist; mount(); } });
 document.getElementById('tiers').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.tier = b.dataset.q; S.dist = r && r.cam.dist; mount(); } });

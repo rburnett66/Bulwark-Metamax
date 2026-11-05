@@ -42,6 +42,7 @@ const WORLD_SET = Object.freeze({
   winter: { seed: 53, grassClump: 6, pebbles: 12, cracks: 6, ripple: 3 },
   volcanic: { seed: 67, grassClump: 8, pebbles: 14, cracks: 7, ripple: 3 },
   lunar: { seed: 71, grassClump: 8, pebbles: 16, cracks: 6, ripple: 3 },
+  tropical: { seed: 97, grassClump: 7, pebbles: 10, cracks: 5, ripple: 4 },
   alien: { seed: 89, grassClump: 7, pebbles: 11, cracks: 5, ripple: 6 },
 });
 export const splatSetFor = (world) => WORLD_SET[world] || WORLD_SET.meadow;
