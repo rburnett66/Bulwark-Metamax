@@ -773,6 +773,13 @@ export function boot(mountEl, seed) {
       restart(newSeed);
     },
   });
+  // Settings › FPS reads the 3D view's last frame [MM-story_mw2s3s9k_c]
+  hud.setFpsInfo(() => {
+    const r = renderer3d;
+    if (!r || !r.renderer) return null;
+    const i = r.renderer.info.render;
+    return { calls: i.calls, triangles: i.triangles, ground: r.tiledGround ? 'tiled ground' : r.lowpoly ? 'low-poly ground' : 'painted ground', tier: r.tier && r.tier.label };
+  });
 
   // ---------------------------------------------------------------------
   // Input

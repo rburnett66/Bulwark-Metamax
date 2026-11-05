@@ -255,6 +255,13 @@ Integration rules:
 - CPU time to fill instance buffers and submit: 0.6–0.9 ms (1.35 ms at the FX demo peak).
 - Frame rate on iPhone 12, Pixel 6 and desktop GPUs is NOT yet measured (T1). v2.1 adds per-pixel unit lighting and particle overdraw to what T1 must measure.
 
+### 7.3 Frame-rate counter (2026-11-04, story `story_mw2s3s9k_c`)
+**owner**: "Let's add a framerate counter to settings as a toggle on/off."
+- Settings › **FPS** button, off by default, saved per device (`localStorage` `bw.fps`). Module `src/render/fpsMeter.js`; wired in `render/hud.js` and `main.js` (`hud.setFpsInfo`).
+- Times real display frames with its own `requestAnimationFrame` loop (not the Pixi ticker), over a rolling 120-frame window: FPS, mean frame time, worst frame. Second line: the 3D view's last-frame draw calls and triangles (`renderer.info.render`), ground mode and quality tier — enough to compare ground modes (e.g. `?ground=tiled`) on a device for the T1 question in §7.2.
+- Off means no loop and no element shown. When on, it is fixed to the viewport above every overlay (dialogs included) and click-through.
+- Measured in the cloud it reads 2–4 FPS: software GL, not a device number (see §7.2).
+
 ## 8. Plan — stories on epic `epic_mv77hbbc_1`
 Order follows the board's `depends_on`; the ids are the `[MM-<id>]` to stamp.
 
