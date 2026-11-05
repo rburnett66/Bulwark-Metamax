@@ -1,7 +1,7 @@
 import { ASSUMPTIONS, WAVES, MAP, getUnitDef, getStructureDef, BONUS_NERFS } from '../data/tables.js';
 import { stepAbilities, onUnitDeath } from './abilities.js';
 import { createRng } from './rng.js';
-import { buildNavGrid, findWalkerPath, findRoute, getFlyerPath, getWaterPath, lineClear } from './pathfinding.js';
+import { buildNavGrid, findWalkerPath, findRoute, getFlyerPath, getWaterPath, lineClear, waveBounds, findRouteInWindow } from './pathfinding.js';
 import { createUnit, createBase, createStructure } from './entities.js';
 import { acquireTarget, applyDamage, stepCombat, inBaseReach } from './combat.js';
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
@@ -34,34 +34,72 @@ function roundCell(pos) {
 // spawn/tick order — no RNG, no wall-clock — so it rebuilds byte-identically on REPLAY (deterministic). The
 // list + cursor live on state, so they are recreated the same way when a replay re-runs the same steps.
 const MAX_ROUTES = 8;
-function routesSetup(state) { if (!state.routes) { state.routes = []; state.routeCursor = 0; } }
-// Cells occupied by all current routes (+ an optional buffer) — used to force each NEW route into fresh space
+// ROUTES PER SPAWN POINT, INSIDE THE WAVE'S WINDOW [MM-story_mw2xd5wf_1]. The route list used to be ONE list
+// seeded from map.spawnGround (wave 1's spawn) and never re-seeded. Forge maps alternate sides (powder-map-1:
+// wave 1 spawns west at x 11, wave 2 east at x 52), so a wave-2 unit was handed a west route: it walked to
+// route[0] across the base and out of its own window into the fog, then all the way back. Now each painted
+// spawn point (unit.origin) gets its own route set, searched inside that wave's view window (+1 cell), and
+// alternates that can only be found by leaving the window are not added. `state.routes` stays the flat list of
+// every route found (tests and debug read it).
+function routesSetup(state) {
+  if (!state.routes) { state.routes = []; state.routeCursor = 0; }
+  if (!state.routeSets) state.routeSets = new Map();
+}
+// The window a walker belongs to: its spawn wave's view rect, one cell of margin, clipped to the map. null when
+// the map has no windows (the classic board) → unbounded, as before.
+function unitBounds(state, unit) {
+  const wave = (unit && unit.origin && unit.origin.wave) || (state.waves && state.waves.current) || 1;
+  return waveBounds(state.map, wave, state.navGrid);
+}
+// A route that stays in the window when one exists (pathfinding.findRouteInWindow widens it a step at a time,
+// then allows the whole map — a unit must never be stranded).
+function boundedRouteB(state, from, to, avoid, bounds) { return findRouteInWindow(state.navGrid, from, to, avoid, bounds); }
+function boundedRoute(state, from, to, avoid, bounds) { return boundedRouteB(state, from, to, avoid, bounds).path; }
+// Cells occupied by a set's routes (+ an optional buffer) — used to force each NEW route into fresh space
 // so the corridors are genuinely DIVERSE (not hugging the same line).
-function routeCellsSet(state, buffer) {
-  const g = state.navGrid, set = new Set();
-  for (const r of state.routes) for (let i = 0; i < r.length; i++) {
+function routeCellsSet(state, buffer, set) {
+  const g = state.navGrid, cells = new Set();
+  for (const r of (set ? set.routes : state.routes)) for (let i = 0; i < r.length; i++) {
     const c = roundCell(r[i]);
     for (let dx = -buffer; dx <= buffer; dx++) for (let dy = -buffer; dy <= buffer; dy++) {
       const x = c.x + dx, y = c.y + dy;
-      if (x >= 0 && x < g.cols && y >= 0 && y < g.rows) set.add(y * g.cols + x);
+      if (x >= 0 && x < g.cols && y >= 0 && y < g.rows) cells.add(y * g.cols + x);
     }
+  }
+  return cells;
+}
+function addRoute(state, set, r) { set.routes.push(r); state.routes.push(r); }
+// The route set for a unit's spawn point, seeded on first use.
+function routeSetFor(state, unit) {
+  routesSetup(state);
+  // origin.point is the INDEX of the painted spawn point (waves.js); units from the same point share a set, seeded
+  // from where the first of them stands. No painted point (staged / classic) → keyed by the cell itself.
+  const o = roundCell(unit.pos), og = unit.origin || {};
+  const wave = og.wave || 0;
+  const key = og.point != null ? wave + ':' + (og.lane || '') + '#' + og.point : wave + ':' + o.x + ',' + o.y;
+  let set = state.routeSets.get(key);
+  if (!set) {
+    set = { key, from: o, bounds: unitBounds(state, unit), routes: [], cursor: 0 };
+    state.routeSets.set(key, set);
+    seedRoute(state, set);
   }
   return set;
 }
-function seedRoute(state) {
-  routesSetup(state);
-  if (state.routes.length) return;
-  const spawn = (state.map && state.map.spawnGround) || { x: 0, y: 0 };
-  const from = roundCell(spawn), to = roundCell(state.base.pos);
-  const primary = findRoute(state.navGrid, from, to);   // prefer a 2-wide corridor
+function seedRoute(state, set) {
+  const to = roundCell(state.base.pos);
+  const first = boundedRouteB(state, set.from, to, null, set.bounds);   // prefer a 2-wide corridor, in the window
+  const primary = first.path;
   if (!primary || !primary.length) return;
-  state.routes.push(primary);
+  set.bounds = first.bounds;                                            // alternates keep to the window the primary needed
+  addRoute(state, set, primary);
   // Seed several DISTINCT corridors up front: each avoids the cells of the routes already found (buffer 1 for
   // a lane of clear space between them, then buffer 0 as a fallback), so units fan out from the very start.
-  for (let k = 0; k < 4 && state.routes.length < MAX_ROUTES; k++) {
-    let alt = findRoute(state.navGrid, from, to, routeCellsSet(state, 1));
-    if (!alt || !alt.length) alt = findRoute(state.navGrid, from, to, routeCellsSet(state, 0));
-    if (alt && alt.length && !state.routes.some((r) => sameRoute(r, alt))) state.routes.push(alt);
+  // An alternate is searched in the window only — one that exists only by leaving it is not worth having.
+  for (let k = 0; k < 4 && set.routes.length < MAX_ROUTES; k++) {
+    const B = set.bounds;
+    let alt = findRoute(state.navGrid, set.from, to, routeCellsSet(state, 1, set), B);
+    if (!alt || !alt.length) alt = findRoute(state.navGrid, set.from, to, routeCellsSet(state, 0, set), B);
+    if (alt && alt.length && !set.routes.some((r) => sameRoute(r, alt))) addRoute(state, set, alt);
     else break;
   }
 }
@@ -111,19 +149,20 @@ function baseTargetFor(state, unit) {
 // with targetId null. Do not reintroduce a local copy.
 
 function assignRoutePath(state, unit) {
-  seedRoute(state);
-  if (!state.routes.length) return null;
-  const idx = state.routeCursor % state.routes.length;
+  const set = routeSetFor(state, unit);
+  if (!set.routes.length) return null;
+  const idx = set.cursor % set.routes.length;
+  set.cursor += 1;
   state.routeCursor += 1;
   unit.routeIdx = idx;
-  const route = state.routes[idx].slice();   // clone — the unit advances its own pathIdx, never mutating the shared route
-  // Shared routes are string-pulled from map.spawnGround, but a unit can spawn at ANY painted point. From
-  // elsewhere, route[0] may sit behind a wall: the unit then drove into it, the terrain clamp put it back,
-  // and it flip-flopped forever (and the bounce read as "progress" to the stuck detector, so it never
-  // re-pathed). Walk to route[0] first whenever the straight line there isn't clear.
+  unit._routeKey = set.key;
+  const route = set.routes[idx].slice();   // clone — the unit advances its own pathIdx, never mutating the shared route
+  // A unit can stand a little off its painted point (spawn spread). If route[0] sits behind a wall from here, the
+  // unit drove into it, the terrain clamp put it back, and it flip-flopped forever — walk to route[0] first
+  // whenever the straight line there isn't clear (in the window).
   const cell = roundCell(unit.pos);
   if (route.length && !lineClear(state.navGrid, cell, route[0])) {
-    const lead = findWalkerPath(state.navGrid, cell, route[0]);
+    const lead = findWalkerPath(state.navGrid, cell, route[0], null, false, set.bounds);
     if (lead && lead.length) return lead.concat(route.slice(1));   // lead ends AT route[0]
   }
   return route;
@@ -133,18 +172,18 @@ function sameRoute(a, b) {
   for (let i = 0; i < a.length; i++) if (a[i].x !== b[i].x || a[i].y !== b[i].y) return false;
   return true;
 }
-function discoverRoute(state, jam) {   // append a NEW spawn→base route that skirts BOTH the jam and existing lines
+function discoverRoute(state, jam, unit) {   // append a NEW spawn→base route to the unit's set, skirting BOTH the jam and existing lines
   routesSetup(state);
-  if (state.routes.length >= MAX_ROUTES) return;
-  const spawn = (state.map && state.map.spawnGround) || { x: 0, y: 0 };
-  const from = roundCell(spawn), to = roundCell(state.base.pos);
-  const avoid = routeCellsSet(state, 0);
+  const set = (unit && unit._routeKey && state.routeSets.get(unit._routeKey)) || (unit && routeSetFor(state, unit));
+  if (!set || set.routes.length >= MAX_ROUTES) return;
+  const to = roundCell(state.base.pos);
+  const avoid = routeCellsSet(state, 0, set);
   if (jam) for (const c of jam) avoid.add(c);
-  let p = findRoute(state.navGrid, from, to, avoid);          // prefer 2-wide, avoid existing routes + the jam
-  if (!p || !p.length) p = findRoute(state.navGrid, from, to, jam);   // fallback: just skirt the jam
-  if (!p || !p.length) return;
-  for (const r of state.routes) if (sameRoute(r, p)) return;
-  state.routes.push(p);
+  let p = findRoute(state.navGrid, set.from, to, avoid, set.bounds);          // prefer 2-wide, avoid existing routes + the jam
+  if (!p || !p.length) p = findRoute(state.navGrid, set.from, to, jam, set.bounds);   // fallback: just skirt the jam
+  if (!p || !p.length) return;                                                // nothing in the window: no alternate
+  for (const r of set.routes) if (sameRoute(r, p)) return;
+  addRoute(state, set, p);
 }
 // The jammed region around a stuck unit: its cell (3×3) + the next few waypoints of its current line
 // + THE CROWD — the cells of nearby walkers. The crowd IS the jam; without it, every stuck unit's
@@ -648,8 +687,8 @@ export function stepMovement(state, dt) {
         if (advanced || state.tick < (unit._detourGraceTick || 0) || state.tick <= (unit._ovtUntil || 0)) { unit._stuck = 0; }
         else if ((unit._stuck = (unit._stuck || 0) + 1) >= 12) {                   // ~0.4s truly wedged → route around
           const avoid = jamCells(state, unit);
-          discoverRoute(state, avoid);                                             // append a reusable alternate
-          const detour = findRoute(state.navGrid, roundCell(unit.pos), roundCell(base.pos), avoid);   // stuck → reroute wide, around the jam
+          discoverRoute(state, avoid, unit);                                       // append a reusable alternate
+          const detour = boundedRoute(state, roundCell(unit.pos), roundCell(base.pos), avoid, unitBounds(state, unit));   // stuck → reroute wide, around the jam, in the window
           if (detour && detour.length > 0) {
             unit.path = detour; unit.pathIdx = 0;
             unit._detourGraceTick = state.tick + 45;                               // ~1.5s to commit to going around
@@ -775,7 +814,7 @@ export function stepMovement(state, dt) {
             // re-path (already had a route) heads for this unit's own base SLOT so the mob rings the base.
             const p = (unit.routeIdx == null && (!unit.path || unit.path.length === 0))
               ? assignRoutePath(state, unit)
-              : findRoute(state.navGrid, roundCell(unit.pos), baseTargetFor(state, unit));   // prefer 2-wide on the long haul
+              : boundedRoute(state, roundCell(unit.pos), baseTargetFor(state, unit), null, unitBounds(state, unit));   // prefer 2-wide on the long haul, in the window
             if (p && p.length > 0) {
               unit.path = p;
               unit.pathIdx = 0;

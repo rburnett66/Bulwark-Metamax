@@ -20,12 +20,14 @@ function battle(ticks) {
   const map = buildTerrainMap(FORGE, 1, { seed: 0, bakeTune: {} });
   resolveResourceTypes(map, 1);
   const sim = createSim(1, { waves: buildCampaignWaves(map, null), map });
-  const prev = new Map(), lastD = new Map(), reversals = new Map(), firstPath = new Map();
+  const prev = new Map(), lastD = new Map(), reversals = new Map(), firstPath = new Map(), closest = new Map();
   for (let t = 1; t <= ticks; t++) {
     if (t % 300 === 1) applyCommand(sim, { type: 'startWave' });
     stepSim(sim, FIXED_DT);
     for (const u of sim.units.values()) {
       if (u.side !== 'attacker' || u.domain !== 'Walker') continue;
+      const db = Math.hypot(u.pos.x - sim.base.pos.x, u.pos.y - sim.base.pos.y);
+      if (!closest.has(u.id) || db < closest.get(u.id).d) closest.set(u.id, { d: db, unitId: u.unitId });
       if (!firstPath.has(u.id) && u.path && u.path.length) firstPath.set(u.id, { from: { x: Math.round(u.pos.x), y: Math.round(u.pos.y) }, path: u.path.slice() });
       const p = prev.get(u.id);
       if (p) {
@@ -37,7 +39,7 @@ function battle(ticks) {
       prev.set(u.id, { x: u.pos.x, y: u.pos.y });
     }
   }
-  return { sim, reversals, firstPath };
+  return { sim, reversals, firstPath, closest };
 }
 
 test('powder-map-1 wave 1: no attacker walker flip-flops (the AIR-Trucks wall bounce)', () => {
@@ -58,9 +60,10 @@ test('every walker can walk straight to the first waypoint it is handed', () => 
 });
 
 test('the AIR-Trucks spawned at (11,3) reaches the base', () => {
-  const { sim } = battle(400);
-  const truck = sim.units.get(2);
-  assert.ok(truck && truck.unitId === 'AIR-Trucks', 'unit #2 is the wave-1 AIR-Trucks');
-  const d = Math.hypot(truck.pos.x - sim.base.pos.x, truck.pos.y - sim.base.pos.y);
-  assert.ok(d < 4, `still ${d.toFixed(1)} cells from the base`);
+  // its closest approach, not where it is at the end: since routes start at each unit's own spawn point
+  // [MM-story_mw2xd5wf_1] it arrives sooner, attacks and is gone before tick 400
+  const { closest } = battle(400);
+  assert.ok(closest.has(2), 'unit #2 (the wave-1 AIR-Trucks) was tracked');
+  assert.equal(closest.get(2).unitId, 'AIR-Trucks');
+  assert.ok(closest.get(2).d < 4, `got no closer than ${closest.get(2).d.toFixed(1)} cells to the base`);
 });

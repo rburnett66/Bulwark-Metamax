@@ -84,10 +84,32 @@ export function buildNavGrid(map, structures, extraBlocked) {
 /** Route a walker preferring 2-tile-wide corridors: try a WIDE-only path first (never squeezes through a
  *  1-tile crack when a wider way to the goal exists), and only fall back to the full grid when no wide route
  *  reaches the goal. Deterministic. Use this for long-haul routes; the base-ring approach stays full-grid. */
-export function findRoute(navGrid, from, to, avoid) {
-  const w = findWalkerPath(navGrid, from, to, avoid, true);
+export function findRoute(navGrid, from, to, avoid, bounds) {
+  const w = findWalkerPath(navGrid, from, to, avoid, true, bounds);
   if (w && w.length) return w;
-  return findWalkerPath(navGrid, from, to, avoid, false);
+  return findWalkerPath(navGrid, from, to, avoid, false, bounds);
+}
+
+/** A wave's view window as path bounds: the window (inclusive cells) + 1 cell margin, clipped to the grid; null
+ *  when the map has no wave windows [MM-story_mw2xd5wf_1]. */
+export function waveBounds(map, wave, navGrid) {
+  const wins = map && map.waveWindows;
+  if (!wins || !wins.length) return null;
+  const w = wins.find((x) => x.wave === wave) || wins[wins.length - 1];
+  return { x0: Math.max(0, w.x0 - 1), y0: Math.max(0, w.y0 - 1), x1: Math.min(navGrid.cols - 1, w.x1 + 1), y1: Math.min(navGrid.rows - 1, w.y1 + 1) };
+}
+// A window with no way through widens a few cells at a time — the smallest step into the fog that gets through —
+// before the whole map is allowed.
+export const WINDOW_GROW = [0, 2, 5];
+/** findRoute kept inside `bounds` when it can be, else inside the smallest widened bounds, else unbounded (a unit
+ *  must never be stranded). Returns { path, bounds } — the bounds that worked (null = whole map). */
+export function findRouteInWindow(navGrid, from, to, avoid, bounds) {
+  if (bounds) for (const m of WINDOW_GROW) {
+    const b = m ? { x0: Math.max(0, bounds.x0 - m), y0: Math.max(0, bounds.y0 - m), x1: Math.min(navGrid.cols - 1, bounds.x1 + m), y1: Math.min(navGrid.rows - 1, bounds.y1 + m) } : bounds;
+    const p = findRoute(navGrid, from, to, avoid, b);
+    if (p && p.length) return { path: p, bounds: b };
+  }
+  return { path: findRoute(navGrid, from, to, avoid), bounds: null };
 }
 
 /**
@@ -95,8 +117,12 @@ export function findRoute(navGrid, from, to, avoid) {
  * Fixed neighbor order: North, East, South, West.
  * Returns an array of cells (excluding start, including goal), or null if unreachable.
  * The goal cell itself is always treated as enterable (e.g. the base clearing).
+ * `bounds` ({ x0, y0, x1, y1 }, inclusive cells, optional) keeps the search inside a rectangle — the wave's fog
+ * window, so a route never leaves what the player can see [MM-story_mw2xd5wf_1]. A start outside the
+ * rectangle ignores it (the unit must be allowed to walk back in). A straightened path stays inside: a straight
+ * line between two points of a rectangle never leaves it.
  */
-export function findWalkerPath(navGrid, from, to, avoid, wideOnly) {
+export function findWalkerPath(navGrid, from, to, avoid, wideOnly, bounds) {
   const passable = navGrid.passable;
   const wide = (wideOnly && navGrid.wide) ? navGrid.wide : null;   // wideOnly → traverse only 2-wide cells (start/goal exempt)
   const hasAvoid = avoid && (avoid.size > 0 || avoid.length > 0);
@@ -111,6 +137,7 @@ export function findWalkerPath(navGrid, from, to, avoid, wideOnly) {
   const start = sy * cols + sx;
   const goal = gy * cols + gx;
   if (start === goal) return [];
+  const B = (bounds && sx >= bounds.x0 && sx <= bounds.x1 && sy >= bounds.y0 && sy <= bounds.y1) ? bounds : null;
 
   const total = cols * rows;
   const prev = new Int32Array(total);
@@ -147,6 +174,7 @@ export function findWalkerPath(navGrid, from, to, avoid, wideOnly) {
       if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
       const ni = ny * cols + nx;
       if (visited[ni]) continue;
+      if (B && ni !== goal && (nx < B.x0 || nx > B.x1 || ny < B.y0 || ny > B.y1)) continue;   // stay in the window
       if (ni !== goal && (!passable[ni] || (wide && !wide[ni]))) continue;   // wideOnly: skip 1-tile-crack cells
       if (hasAvoid && ni !== goal && avoid.has(ni)) continue;   // temporarily route AROUND jammed cells
       if (d >= 4) {   // diagonal — require both orthogonal neighbours open (no corner cut)

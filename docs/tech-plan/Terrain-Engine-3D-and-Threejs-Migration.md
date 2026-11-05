@@ -262,6 +262,21 @@ Integration rules:
 - Off means no loop and no element shown. When on, it is fixed to the viewport above every overlay (dialogs included) and click-through.
 - Measured in the cloud it reads 2–4 FPS: software GL, not a device number (see §7.2).
 
+### 7.4 Ground routes stay in the wave's window (2026-11-04, story `story_mw2xd5wf_1`)
+**owner**: "I am seeing some bizarre unit pathing where unit appear to wrap around the map even leaving the visual area into the fog".
+
+**Cause.** `core.js` kept ONE shared route list, seeded from `map.spawnGround` (wave 1's spawn) and never re-seeded. Forge maps alternate sides (powder-map-1: wave 1 spawns west at x 11, wave 2 east at x 52, windows 11–34 and 29–52), so a wave-2 unit was handed a west route; `assignRoutePath` walked it to `route[0]` across the base, out of its own window and into the fog, then back. Alternates were searched on the whole map, so they could swing round the far side too. Measured on 12 maps before the fix: 21–47% of walkers left their window, up to 18.7 cells.
+
+**Fix.**
+- **Route sets per spawn point.** Key: `wave:lane#point` from `unit.origin`, so units from one painted point share up to 8 routes. Each set is searched inside that wave's window +1 cell (`pathfinding.waveBounds`, `findRouteInWindow`). Alternates are added only when one exists inside the window.
+- **Every path call is bounded.** The stuck-unit detour, the mid-field re-path and the lead-in to `route[0]` all use the window. `findRouteInWindow` widens it +2 then +5 cells before allowing the whole map, so a unit is never stranded.
+- **Map build (`mapgen.js`) checks every spawn point.**
+  - A ground point whose window holds no walkable way to the base is dropped from `spawnList`. This applied to 57 of the 3,790 points on the 81 maps. The wave budget still counts every painted point, so the wave keeps its size.
+  - When no point of a wave can reach the base, the window grows to cover the actual route (`grownFrom` keeps the authored rect). This happened on 90 points, for example water-map-1 wave 1, where the lake forces the route south. Fog and camera read `map.waveWindows`, so the player sees the ground the troops walk.
+- **Path lines match the troops.** The expected-path lines (`overlays/pathLinesModel.js`) use the same window routing.
+
+**Measured after (all 81 maps, waves 1–8, unkillable base).** Of 2,062 walkers, 36 (1.7%) ever went more than 1 cell outside their window, at most 3.0 cells: the window margin plus body size at the map edge. Every ground spawn point reaches the base inside its window (test). Determinism holds: routes are a pure function of sim state, and no RNG was added.
+
 ## 8. Plan — stories on epic `epic_mv77hbbc_1`
 Order follows the board's `depends_on`; the ids are the `[MM-<id>]` to stamp.
 
