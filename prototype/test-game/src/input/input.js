@@ -171,8 +171,11 @@ function onPointerDown(handle, ev) {
   // SUBJECT → ACTION grammar: a completed action drops the subject; a failed action KEEPS it
   // (the subject only changes when the order lands or another unit is picked); otherwise the
   // nearest idle truck takes the job.
-  if (state.resourceNodes) {
-    const node = state.resourceNodes.find((n) => n.x === cell.x && n.y === cell.y);
+  // A STRUCTURE ON THE CELL WINS: building on a resource crushes it (structures.js CRUSH RULE) but the spent node stays
+  // in the list, so a tower built on a crop cell must still be selectable for upgrades [MM-story_mw30o5e9_4].
+  let cardOpen = false;
+  if (state.resourceNodes && findStructureAtCell(state, cell) === null) {
+    const node = state.resourceNodes.find((n) => n.x === cell.x && n.y === cell.y && (n.remaining > 0 || n.respawns));
     if (node) {
       ui.selectedResourceId = node.id;   // open its description card — the harvest order below still goes out
       ui.selectedStructureId = null;
@@ -188,12 +191,11 @@ function onPointerDown(handle, ev) {
       // subject, KEEP it selected — a failed order must not silently eat the selection.
       ui.pendingHint = { text: 'Harvest: ' + ((res && res.reason) || 'unavailable') };
       if (harvesterId != null) return;
-      // no harvester subject → the card stays open; nothing else on this cell to select
-      ui.selectedUnitId = null;
-      return;
+      // no harvester subject → the card stays open and the click falls through to normal selection
+      cardOpen = true;
     }
   }
-  ui.selectedResourceId = null;   // any other click closes the resource card
+  if (!cardOpen) ui.selectedResourceId = null;   // any other click closes the resource card
 
   // BASE CLICK = purchase a harvester (owner: 'select base to purchase'). The sim ladder-prices
   // and caps; the hint carries the result to the HUD.
@@ -211,6 +213,7 @@ function onPointerDown(handle, ev) {
   ui.selectedUnitId = null;
   if (structId === null) {
     ui.selectedUnitId = findUnitAtCell(state, cell);   // s5: show the selected unit's attack range
+    if (ui.selectedUnitId != null) ui.selectedResourceId = null;   // the unit window takes the card's slot
     // CLICKING A HARVESTER pops a base message pointing at the purchase mechanism (owner)
     if (ui.selectedUnitId != null && state.resourceNodes) {
       const su = state.units.get(ui.selectedUnitId);

@@ -62,7 +62,7 @@ test('a field of a later wave says when it opens; a gone node closes the card; t
 
 // ── input.js: a tap on a resource opens its card AND still sends a harvester; Esc / another tap closes it ──
 import { createInput, createUiState } from '../input/input.js';
-function rig(ok = true) {
+function rig(ok = true, extra = {}) {
   const ls = {}, wls = {};
   const canvas = {
     addEventListener(t, fn) { (ls[t] = ls[t] || []).push(fn); }, removeEventListener() {},
@@ -70,7 +70,7 @@ function rig(ok = true) {
   };
   globalThis.window = { addEventListener(t, fn) { (wls[t] = wls[t] || []).push(fn); }, removeEventListener() {} };
   const ui = createUiState(), sent = [];
-  const st = { units: new Map(), structures: new Map(), base: { pos: { x: 30, y: 15 }, cells: [] }, resourceNodes: [node('n1', 'blue', { x: 5, y: 3 })] };
+  const st = { units: new Map(), structures: new Map(), base: { pos: { x: 30, y: 15 }, cells: [] }, resourceNodes: [node('n1', 'blue', { x: 5, y: 3 })], ...extra };
   const pick = (ev) => ({ x: Math.floor(ev.clientX / 10), y: Math.floor(ev.clientY / 10) });
   createInput(canvas, null, () => st, (cmd) => { sent.push(cmd); return ok ? { ok: true } : { ok: false, reason: 'not revealed yet' }; }, ui, { pick, tapToAct: true });
   const tap = (x, y) => { canvas.fire('pointerdown', { pointerId: 1, clientX: x, clientY: y }); canvas.fire('pointerup', { pointerId: 1, clientX: x, clientY: y, timeStamp: 100 }); };
@@ -95,4 +95,32 @@ test('a refused harvest order still opens the card (and says why); Esc closes it
   assert.match(ui.pendingHint.text, /not revealed yet/);
   key('Escape');
   assert.equal(ui.selectedResourceId, null);
+});
+
+// [MM-story_mw30o5e9_4] owner 2026-11-04: "now I can't click on towers to do upgrades". Building on a resource crushes it
+// but the spent node stays in the list; the card's click handler caught the tower's cell first and returned.
+test('a tower built on a resource cell is selected, not the (crushed) resource', () => {
+  const tower = { id: 7, pos: { x: 5, y: 3 }, footprint: { w: 1, h: 1 }, lifecycle: 'Active' };
+  const crushed = node('n1', 'blue', { x: 5, y: 3, remaining: 0, respawns: false });
+  const { ui, sent, tap } = rig(false, { structures: new Map([[7, tower]]), resourceNodes: [crushed] });
+  tap(52, 33);
+  assert.equal(ui.selectedStructureId, 7, 'the tower is selected');
+  assert.equal(ui.selectedResourceId, null, 'no resource card');
+  assert.equal(sent.length, 0, 'no harvest order');
+});
+
+test('a structure on a live resource cell still wins the click', () => {
+  const tower = { id: 9, pos: { x: 5, y: 3 }, footprint: { w: 1, h: 1 }, lifecycle: 'Active' };
+  const { ui, sent, tap } = rig(true, { structures: new Map([[9, tower]]) });
+  tap(52, 33);
+  assert.equal(ui.selectedStructureId, 9);
+  assert.equal(ui.selectedResourceId, null);
+  assert.equal(sent.length, 0);
+});
+
+test('a refused order on an empty resource cell falls through to selecting a unit there', () => {
+  const { ui, tap } = rig(false, { units: new Map([[3, { id: 3, hp: 10, pos: { x: 5, y: 3 }, radius: 0.4, side: 'attacker' }]]) });
+  tap(52, 33);
+  assert.equal(ui.selectedUnitId, 3, 'the unit on the cell is selected');
+  assert.equal(ui.selectedResourceId, null, 'the unit window takes the slot');
 });
