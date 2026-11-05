@@ -15,7 +15,7 @@
  * not along the walker grid. Origins with `point: null` (workbook maps — no painted points) get none.
  * READ-ONLY on the sim.
  */
-import { findRoute } from '../../sim/pathfinding.js';
+import { findRouteInWindow, waveBounds } from '../../sim/pathfinding.js';
 
 export const FADE = 0.3;                                   // seconds in / out
 export const WAVE_HUES = [186, 198, 174, 210, 162, 222, 150, 234];
@@ -37,10 +37,11 @@ export function spawnCell(map, origin) {
   return p ? { x: Math.round(p.x), y: Math.round(p.y) } : null;
 }
 
-/** Route cells from the spawn to the base on `nav` (start included), or null when there is no route. */
-export function routeFor(nav, from, base) {
+/** Route cells from the spawn to the base on `nav` (start included), or null when there is no route. With `map` and
+ *  `wave`, the line keeps to that wave's window the way the sim's troops do [MM-story_mw2xd5wf_1]. */
+export function routeFor(nav, from, base, map = null, wave = 0) {
   if (!nav || !from || !base) return null;
-  const r = findRoute(nav, from, { x: base.x, y: base.y });
+  const r = findRouteInWindow(nav, from, { x: base.x, y: base.y }, null, map && wave ? waveBounds(map, wave, nav) : null).path;
   return r && r.length ? [from, ...r] : null;
 }
 
@@ -77,7 +78,7 @@ export function createPathLines() {
         if (lines.has(k)) continue;
         const spawn = spawnCell(map, o);
         if (!spawn) continue;
-        const pts = routeFor(nav, spawn, base);
+        const pts = routeFor(nav, spawn, base, map, o.wave);
         lines.set(k, { key: k, wave: o.wave, lane: o.lane, spawn, pts, len: pts ? pathLength(pts) : 0, alpha: 0, prog: 0, nav });
         dirty = true;
       }
@@ -86,7 +87,7 @@ export function createPathLines() {
       for (const [k, L] of lines) {
         if (L.nav !== nav) {   // the sim rebuilt its walkable grid (structure change) — follow it
           L.nav = nav;
-          L.pts = routeFor(nav, L.spawn, base);
+          L.pts = routeFor(nav, L.spawn, base, map, L.wave);
           L.len = L.pts ? pathLength(L.pts) : 0;
           dirty = true;
         }

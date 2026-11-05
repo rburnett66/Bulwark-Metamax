@@ -551,6 +551,41 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
       budget,
       parSec: row.Wave_Par_Sec, nodes: { primary: 0, premium: 0, quest: 0, primaryQuota: 0 } };
   });
+  // GROUND SPAWNS MUST REACH THE BASE IN THEIR WINDOW [MM-story_mw2xd5wf_1]: a painted ground point whose wave
+  // window (+1 cell) holds no walkable way to the base sends its troops out through the fog and round the map
+  // (4% of the 3,790 points on the 81 maps — water or cliffs cut the window). Drop those points from the
+  // spawner's list while at least one point of that wave does reach; the budget still counts every painted
+  // point, so the wave keeps its size. If NONE reach (the window itself has no way through — 2% of points, e.g.
+  // water-map-1 wave 1, where the lake forces the route south of the window), the window GROWS to cover the
+  // route from each point, so the fog opens over the ground the troops really walk (fog + camera read
+  // map.waveWindows).
+  {
+    const nav = buildNavGrid({ cols, rows, waterCells, blockedCells }, []);
+    const goal = { x: bx, y: cy };
+    for (const ring of rings) {
+      const list = ring.spawnList && ring.spawnList.ground;
+      const w = wins.find((x) => x.wave === ring.wave);
+      if (!list || !list.length || !w) continue;
+      const B = { x0: Math.max(0, w.x0 - 1), y0: Math.max(0, w.y0 - 1), x1: Math.min(cols - 1, w.x1 + 1), y1: Math.min(rows - 1, w.y1 + 1) };
+      const ok = list.filter((p) => { const r = findWalkerPath(nav, p, goal, null, false, B); return r && r.length; });
+      if (!ok.length) {
+        let gx0 = w.x0, gy0 = w.y0, gx1 = w.x1, gy1 = w.y1;
+        for (const p of list) {
+          const r = findWalkerPath(nav, p, goal, null, true) || findWalkerPath(nav, p, goal, null, false);   // wide first, like the router
+          if (!r) continue;
+          for (const c of [p, ...r]) { gx0 = Math.min(gx0, c.x - 1); gy0 = Math.min(gy0, c.y - 1); gx1 = Math.max(gx1, c.x + 1); gy1 = Math.max(gy1, c.y + 1); }
+        }
+        w.grownFrom = { x0: w.x0, y0: w.y0, x1: w.x1, y1: w.y1 };
+        w.x0 = Math.max(0, gx0); w.y0 = Math.max(0, gy0); w.x1 = Math.min(cols - 1, gx1); w.y1 = Math.min(rows - 1, gy1);
+        continue;
+      }
+      if (ok.length < list.length) {
+        ring.spawnList.ground = ok;
+        ring.droppedGround = list.length - ok.length;
+        if (!ok.some((p) => p.x === ring.spawns.ground.x && p.y === ring.spawns.ground.y)) ring.spawns.ground = { ...ok[(ok.length / 2) | 0] };
+      }
+    }
+  }
   // buildable / advisory slots: any open non-base, non-water, non-blocked cell
   const waterSet = new Set(waterCells.map((c) => `${c.x},${c.y}`));
   const blockSet = new Set(blockedCells.map((c) => `${c.x},${c.y}`));
