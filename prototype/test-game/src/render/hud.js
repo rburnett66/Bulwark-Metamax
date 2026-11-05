@@ -5,6 +5,7 @@ import { VERSION, VERSION_NOTE } from '../version.js';
 import { levelFromXp } from '../data/progression.js';
 import { resultsModel, mountResults } from './resultsScreen.js';
 import { fogWindow, insideWindow } from '../render3d/overlays/fogModel.js';
+import { createFpsMeter, loadFpsChoice, saveFpsChoice, FPS_CSS } from './fpsMeter.js';
 
 const STYLE_ID = 'bw-hud-style';
 
@@ -206,7 +207,7 @@ function injectStyle(doc) {
     if (doc.getElementById && doc.getElementById(STYLE_ID)) return;
     const style = doc.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = CSS;
+    style.textContent = CSS + FPS_CSS;
     const host = doc.head || doc.body || doc.documentElement;
     if (host) host.appendChild(style);
   } catch (e) { /* styling is non-critical */ }
@@ -580,6 +581,21 @@ export function createHud(mountEl, callbacks) {
   sessionPanel.appendChild(mapSel);
   sessionPanel.appendChild(seedEl);
   sessionPanel.appendChild(buildEl);
+  // FPS counter toggle: off by default, saved on this device [MM-story_mw2s3s9k_c]
+  let storage = null;
+  try { storage = doc.defaultView && doc.defaultView.localStorage; } catch (e) { storage = null; }
+  const fpsInfo = { get: () => null };
+  const fpsMeter = createFpsMeter(doc, doc.body || root, { getInfo: () => fpsInfo.get() });
+  const fpsBtn = el(doc, 'button', 'bw-btn', 'FPS: off');
+  fpsBtn.title = 'Frame-rate counter (frames per second, frame time, 3D draw calls) — saved on this device';
+  fpsBtn.setAttribute('aria-pressed', 'false');
+  const setFps = (on) => {
+    fpsMeter.set(on);
+    fpsBtn.textContent = 'FPS: ' + (on ? 'ON' : 'off');
+    fpsBtn.setAttribute('aria-pressed', String(!!on));
+  };
+  fpsBtn.addEventListener('click', () => { const on = !fpsMeter.on; setFps(on); saveFpsChoice(storage, on); });
+  sessionPanel.appendChild(fpsBtn);
   bottombar.appendChild(sessionPanel);
   bottombar.appendChild(volPanel);
   bottombar.appendChild(help);
@@ -685,6 +701,10 @@ export function createHud(mountEl, callbacks) {
   const hud = {
     doc,
     root,
+    fpsMeter,
+    fpsBtn,
+    /** Where the counter reads 3D numbers: fn() → { calls, triangles, ground, tier } or null. */
+    setFpsInfo(fn) { fpsInfo.get = typeof fn === 'function' ? fn : () => null; },
     callbacks: cbs,
     harvBtn,
     harvCost: hCost,
@@ -793,6 +813,7 @@ export function createHud(mountEl, callbacks) {
     return sel;
   };
 
+  setFps(loadFpsChoice(storage));   // the saved choice (off unless the player turned it on)
   return hud;
 }
 
