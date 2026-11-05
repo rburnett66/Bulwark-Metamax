@@ -6,6 +6,7 @@ import { levelFromXp } from '../data/progression.js';
 import { resultsModel, mountResults } from './resultsScreen.js';
 import { fogWindow, insideWindow } from '../render3d/overlays/fogModel.js';
 import { createFpsMeter, loadFpsChoice, saveFpsChoice, FPS_CSS } from './fpsMeter.js';
+import { resourceInfoModel, resourceInfoHtml, RESOURCE_INFO_CSS } from './resourceInfo.js';
 
 const STYLE_ID = 'bw-hud-style';
 
@@ -207,7 +208,7 @@ function injectStyle(doc) {
     if (doc.getElementById && doc.getElementById(STYLE_ID)) return;
     const style = doc.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = CSS + FPS_CSS;
+    style.textContent = CSS + FPS_CSS + RESOURCE_INFO_CSS;
     const host = doc.head || doc.body || doc.documentElement;
     if (host) host.appendChild(style);
   } catch (e) { /* styling is non-critical */ }
@@ -502,6 +503,15 @@ export function createHud(mountEl, callbacks) {
   unitPanel.appendChild(ustats);
   root.appendChild(unitPanel);
 
+  // ---- RESOURCE card: a clicked resource field's description + live state [MM-story_mw2xo93o_2] ----
+  const resPanel = el(doc, 'div', 'bw-resinfo');
+  resPanel.setAttribute('role', 'dialog');
+  resPanel.setAttribute('aria-label', 'Resource');
+  resPanel.addEventListener('click', (e) => {
+    if (e.target.closest('.x') && resPanel._ui) { resPanel._ui.selectedResourceId = null; resPanel.classList.remove('on'); }
+  });
+  root.appendChild(resPanel);
+
   // ---- bottom bar (help + debug) --------------------------------------
   const bottombar = el(doc, 'div', 'bw-bottombar');
   const help = el(doc, 'div', 'bw-help bw-panel',
@@ -703,6 +713,9 @@ export function createHud(mountEl, callbacks) {
     root,
     fpsMeter,
     fpsBtn,
+    resPanel,
+    planet: null,                              // the battle planet's name (or a getter) — names the resources on the card
+    setPlanet(nameOrGetter) { hud.planet = nameOrGetter || null; },
     /** Where the counter reads 3D numbers: fn() → { calls, triangles, ground, tier } or null. */
     setFpsInfo(fn) { fpsInfo.get = typeof fn === 'function' ? fn : () => null; },
     callbacks: cbs,
@@ -983,6 +996,20 @@ export function updateHud(hud, state, ui) {
     hud.sellBtn.disabled = busy;
     hud.sellBtn._label.textContent = ' Sell (+' + Math.floor(sellVal) + 'g)';   // keep bold X
     hud.repairBtn.disabled = busy || s.hp >= s.maxHp;
+  }
+
+  // ---- Selected RESOURCE card (lower-middle; replaces the unit window while open) [MM-story_mw2xo93o_2] ----
+  const rId = ui ? ui.selectedResourceId : null;
+  const rm = rId != null ? resourceInfoModel(state, rId, typeof hud.planet === 'function' ? hud.planet() : hud.planet) : null;
+  if (hud.resPanel) {
+    hud.resPanel._ui = ui;
+    if (!rm) { if (ui && rId != null) ui.selectedResourceId = null; hud.resPanel.classList.remove('on'); }
+    else {
+      const html = resourceInfoHtml(rm);
+      if (hud.resPanel._html !== html) { hud.resPanel.innerHTML = html; hud.resPanel._html = html; }
+      hud.resPanel.style.setProperty('--c', rm.color);
+      hud.resPanel.classList.add('on');
+    }
   }
 
   // ---- Selected UNIT info window (lower-middle): name + live stats ----

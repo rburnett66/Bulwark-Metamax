@@ -13,6 +13,7 @@ export function createUiState() {
     hoverValid: false,
     selectedStructureId: null,
     selectedUnitId: null,      // s5: a selected unit (enemy/defender) whose attack range is shown
+    selectedResourceId: null,  // a clicked resource node: its description card is open [MM-story_mw2xo93o_2]
     showFieldRings: false,     // white rings on the harvester's assigned field — debug aid, off by default
     pendingHint: null,         // {text, atBase} — set by input, consumed + flashed by the main ticker
     placingPointer: null,      // touch placement: the finger steering the build slot (the camera won't pan with it)
@@ -173,6 +174,8 @@ function onPointerDown(handle, ev) {
   if (state.resourceNodes) {
     const node = state.resourceNodes.find((n) => n.x === cell.x && n.y === cell.y);
     if (node) {
+      ui.selectedResourceId = node.id;   // open its description card — the harvest order below still goes out
+      ui.selectedStructureId = null;
       const sel = ui.selectedUnitId != null ? state.units.get(ui.selectedUnitId) : null;
       const harvesterId = (sel && sel.isHarvester && sel.hp > 0) ? sel.id : undefined;
       const res = handle.submit({ type: 'harvest', nodeId: node.id, harvesterId });
@@ -185,9 +188,12 @@ function onPointerDown(handle, ev) {
       // subject, KEEP it selected — a failed order must not silently eat the selection.
       ui.pendingHint = { text: 'Harvest: ' + ((res && res.reason) || 'unavailable') };
       if (harvesterId != null) return;
-      // no harvester subject → fall through to normal selection
+      // no harvester subject → the card stays open; nothing else on this cell to select
+      ui.selectedUnitId = null;
+      return;
     }
   }
+  ui.selectedResourceId = null;   // any other click closes the resource card
 
   // BASE CLICK = purchase a harvester (owner: 'select base to purchase'). The sim ladder-prices
   // and caps; the hint carries the result to the HUD.
@@ -237,6 +243,8 @@ function onKeyDown(handle, ev) {
     if (ui.buildSelection) {
       ui.buildSelection = null;
       ui.hoverValid = false;
+    } else if (ui.selectedResourceId != null) {
+      ui.selectedResourceId = null;
     } else if (ui.selectedStructureId !== null) {
       ui.selectedStructureId = null;
     } else if (ui.selectedUnitId !== null) {
