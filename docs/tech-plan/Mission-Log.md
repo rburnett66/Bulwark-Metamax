@@ -219,6 +219,10 @@ Open owner decisions: the authored mission list per planet (`content/missions/mi
   - the regrow timer;
   - "opens in wave N" for fields not revealed yet.
 - **Planet.** `hud.setPlanet(getter)` reads `planetOfFaction(currentTestFaction)` live, because the enemy faction changes between battles.
+- **Fix 2026-11-04 (`story_mw30o5e9_4`).** **owner**: "now I can't click on towers to do upgrades". Building on a resource crushes it (`structures.js` CRUSH RULE), but the spent node stays in `state.resourceNodes`. The new click branch matched that node first and returned, so a tower built on a crop cell could never be selected. Before the card existed, the refused harvest order had fallen through to selection. Now:
+  - a structure on the cell always wins;
+  - crushed nodes (empty and not regrowing) are not clickable;
+  - a refused order on a live node keeps the card open and falls through to selecting a unit there, and the unit window then takes the card's slot.
 - **Placement.** It sits in the lower-middle slot, like the unit window. On a short phone-landscape screen it drops the field-kind line, so the description still fits.
 
 ## Dependencies
