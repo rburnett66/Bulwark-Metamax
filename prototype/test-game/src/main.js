@@ -773,6 +773,8 @@ export function boot(mountEl, seed) {
       restart(newSeed);
     },
   });
+  // the resource card names each resource after the battle planet [MM-story_mw2xo93o_2]
+  hud.setPlanet(() => planetOfFaction(currentTestFaction));   // read live: the enemy faction changes between battles
   // Settings › FPS reads the 3D view's last frame [MM-story_mw2s3s9k_c]
   hud.setFpsInfo(() => {
     const r = renderer3d;

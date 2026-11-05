@@ -204,6 +204,23 @@ Open owner decisions: the authored mission list per planet (`content/missions/mi
 - **Timestamps:** a record carries both the battle counter and wall-clock time. Wall-clock is written in the save layer only, never in the tick.
 - **Existing saves:** progress from before the log is not backfilled. Tech nodes already bought stay owned; the next one needs its mission.
 
+## 8. Resource card on the map (2026-11-04, story `story_mw2xo93o_2`)
+
+**owner**: "I should be able to click on map resources and see a description"
+
+- **Click behaviour.** Clicking a resource field in battle still sends a harvester (`input.js`), and it now also opens a card: `ui.selectedResourceId`. A refused order (field not revealed yet, no truck) still opens the card, and the reason flashes as before. Esc, the × button, or any other click closes it.
+- **What the card shows** (`src/render/resourceInfo.js`, pure, read live each frame by `hud.js`):
+  - the battle planet's name and description for the resource (`data/planets.js` › `resources[tier]`, the same names the inventory and results use, D8);
+  - the tier and its icon;
+  - what kind of field it is;
+  - how much is left across the whole connected field;
+  - the Collective contract line for that tier: gold a unit and how much the Collective still buys, or "quota met", from D8a's `state.contract`;
+  - harvesters working the field;
+  - the regrow timer;
+  - "opens in wave N" for fields not revealed yet.
+- **Planet.** `hud.setPlanet(getter)` reads `planetOfFaction(currentTestFaction)` live, because the enemy faction changes between battles.
+- **Placement.** It sits in the lower-middle slot, like the unit window. On a short phone-landscape screen it drops the field-kind line, so the description still fits.
+
 ## Dependencies
 
 | relation | plan | what it holds that this plan does not restate |
