@@ -12,8 +12,8 @@
  * LP [MM-story_mv87jxp2_7]: the low-poly organic ground (ground/lowpoly.js) is the default ground; a world
  * palette + its lighting (styles/lowpoly-palettes.js) recolours ground, tufts, rocks and trees. World: ?world=
  * (preview) → the map's `world` → Meadow. ?ground=baked keeps the previous baked-texture ground.
- * ?ground=tiled (prototype, MM-story_mw2qkmb1_2): the tiled splat terrain shader (ground/splat.js) + instanced decals
- * (ground/decals.js) that fade out toward the whole-map view.
+ * Default ground (MM-story_mw2qkmb1_2): the tiled splat terrain shader (ground/splat.js) + instanced decals
+ * (ground/decals.js) that fade out toward the whole-map view; ?ground=lowpoly keeps the flat low-poly ground.
  *
  * READ-ONLY: it reads the sim state handed to renderFrame and never writes to it.
  * The default game never loads this module or three.js — main.js imports it dynamically under the flag.
@@ -257,7 +257,9 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     destroyed: false,
     world: null, planet: opts.planet || null,
     lowpoly,
-    tiledGround: opts.ground === 'tiled',   // ?ground=tiled — the tiled terrain shader + decals (prototype) [MM-story_mw2qkmb1_2]
+    // the tiled terrain shader + decals is the default ground [MM-story_mw2qkmb1_2] [MM-story_mw2uk8lq_1];
+    // ?ground=lowpoly keeps the flat low-poly ground with the grass / sand detail, ?ground=baked the painted tiles
+    tiledGround: lowpoly && opts.ground !== 'lowpoly',
     decals: null,
     roadMask: null,
   };
@@ -481,14 +483,14 @@ export function setWorld(r, key) {
   r.flightFloor = flightFloor(r.heightField, [craftTop(r)]);   // the minimum flight level [MM-task_mvesj7tg_b]
   if (r.lowpoly) {
     if (r.ground) disposeGroup(scene, r.ground.group);
-    // ?ground=tiled on High / Standard: the tiled splat shader + decals; Low keeps the flat ground [MM-story_mw2qkmb1_2]
+    // the tiled splat shader + decals on High / Standard; Low keeps the flat ground [MM-story_mw2qkmb1_2]
     const tiled = r.tiledGround && !!r.tier.grassDetail;
     r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts, grassDetail: !!r.tier.grassDetail,
       splat: tiled ? { world, taps: tapsForTier(r.tier.key) } : null });
     scene.add(r.ground.group);
     if (r.decals) { disposeGroup(scene, r.decals.group); r.decals = null; }
     if (r.tiledGround) {   // decals on every tier — they are a handful of instanced draws
-      r.decals = buildDecals(THREE, gm, r.ground.colAt, roadSampler(r.roadMask, gm.cols, gm.rows));
+      r.decals = buildDecals(THREE, gm, r.ground.colAt, roadSampler(r.roadMask, gm.cols, gm.rows), { world });
       scene.add(r.decals.group);
     }
     r.lights.setWorld(WORLD_LIGHT[world]);

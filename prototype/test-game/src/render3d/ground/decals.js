@@ -173,10 +173,25 @@ const RULES = [
 ];
 
 /**
+ * Which decal kinds each world grows (by palette key) [MM-story_mw2uk8lq_1]: a barren, frozen or burnt world has no
+ * flowers, clover or leaves. `scale` thins a kind (0.3 = 30% as often). Unknown worlds get everything.
+ */
+export const WORLD_DECALS = Object.freeze({
+  meadow: null, sakura: null, tropical: null, alien: null,   // lush: every kind
+  savanna: { allow: ['pebbles', 'crack', 'flowers', 'ruts', 'mud', 'twigs'], scale: { flowers: 0.3 } },
+  canyon: { allow: ['pebbles', 'crack', 'ruts', 'mud', 'twigs'] },
+  winter: { allow: ['pebbles', 'crack', 'ruts', 'mud', 'twigs'], scale: { twigs: 0.5 } },
+  volcanic: { allow: ['pebbles', 'crack', 'ruts', 'mud'] },
+  lunar: { allow: ['pebbles', 'crack', 'ruts'] },
+});
+
+/**
  * Where the decals go: [{ x, z, rot, size, kind, tint: [r,g,b] }], deterministic for the map. `colAt` is the ground
  * colour sampler (lowpoly.js createGroundColour — it carries layersAt), `roadAt` the road mask sampler.
  */
-export function planDecals(map, colAt, roadAt = () => 0, { seed = 7717, tries = 2 } = {}) {
+export function planDecals(map, colAt, roadAt = () => 0, { seed = 7717, tries = 2, world = null } = {}) {
+  const W = (world && WORLD_DECALS[world]) || null;
+  const rules = W ? RULES.filter((r) => W.allow.includes(r[0])).map((r) => (W.scale && W.scale[r[0]] ? [r[0], r[1], r[2] * W.scale[r[0]], r[3], r[4]] : r)) : RULES;
   const { cols, rows } = map;
   const blocked = new Set((map.blockedCells || []).map((c) => c.y * cols + c.x));
   const base = map.base || null, R = rng(seed + ((map.seed | 0) >>> 0)), out = [];
@@ -189,7 +204,7 @@ export function planDecals(map, colAt, roadAt = () => 0, { seed = 7717, tries = 
       if (L.water > 0.25) continue;
       const w = { grass: L.grass * (L.road > 0.2 ? 0 : 1) * (1 - Math.min(1, L.forest * 1.5)), forest: Math.min(1, L.forest * 1.3), soil: L.soil * (L.road > 0.3 ? 0.4 : 1), rock: L.rock, sand: L.sand, road: L.road > 0.4 ? 1 : 0 };
       let acc = 0, rule = null;
-      for (const r of RULES) { acc += r[2] * w[r[1]]; if (roll < acc) { rule = r; break; } }
+      for (const r of rules) { acc += r[2] * w[r[1]]; if (roll < acc) { rule = r; break; } }
       if (!rule) continue;
       const [kind, , , [s0, s1], tint] = rule;
       let rot = R() * Math.PI * 2;
@@ -232,8 +247,8 @@ export function decalFade(cam, aspect, cols, rows, F = DECALS.fade) {
 /**
  * Build the decal group for a map. Returns { group, update(cam, aspect), stats: { decals, chunks } }.
  */
-export function buildDecals(THREE, map, colAt, roadAt, { seed } = {}) {
-  const list = planDecals(map, colAt, roadAt, seed != null ? { seed } : {});
+export function buildDecals(THREE, map, colAt, roadAt, { seed, world = null } = {}) {
+  const list = planDecals(map, colAt, roadAt, { ...(seed != null ? { seed } : {}), world });
   const A = decalAtlasData();
   const tex = new THREE.DataTexture(A.data, A.size, A.size, THREE.RGBAFormat);
   tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter;

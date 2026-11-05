@@ -1,4 +1,4 @@
-# TECH PLAN — Tiled Terrain Shader + Ground Decals (v0.1, prototype)
+# TECH PLAN — Tiled Terrain Shader + Ground Decals (v0.2, default ground)
 
 **Provenance.** Owner sentences are quoted and marked **owner**; everything else is **agent-proposed**. Written 2026-11-04 by the repo-rooted cloud session (Claude Code, Opus 5.5) from the owner's requests that day and the repo at `main` @ `3478e5b`. Epic `epic_mv77hbbc_1` (3D Terrain + three.js Renderer), story `story_mw2qkmb1_2`. **The repo copy is canonical**: `docs/tech-plan/Tiled-Terrain-and-Decals.md`; the MetaMax document mirrors it. It amends the ground plane of `docs/tech-plan/Terrain-Engine-3D-and-Threejs-Migration.md` (cited as **TE §n**).
 
@@ -8,7 +8,7 @@
 
 ## 0. Governing decisions
 
-- **D1 — Opt-in first.** The tiled ground is `?ground=tiled`. The default ground (low-poly, `ground/lowpoly.js`) and the painted tiles (`?ground=baked`) are unchanged until the owner chooses (§7).
+- **D1 — Default on every map (v0.2).** **owner** 2026-11-04: "terrain looks fine .. lets put this level of detail on all maps". The tiled ground + decals is the default for all 81 maps (story `story_mw2uk8lq_1`). `?ground=lowpoly` keeps the previous low-poly ground with the grass / sand detail; `?ground=baked` keeps the painted tiles. (v0.1 was opt-in under `?ground=tiled`; that URL still works.)
 - **D2 — No per-map download.** Each planet gets one 256² RGBA texture, generated in code at load time. Each channel is the detail height of one layer: R grass · G soil (dirt, roads) · B rock (rock, stone, cliff) · A sand. The painted ground (TE §3.1) costs about 3 MB per map (six 2048² WebP tiles).
 - **D3 — The map decides where each layer shows.** Per-vertex layer weights come from the sim map's own terrain codes and the level's road mask (`colAt.layersAt`, the same fields the low-poly colour reads). No authoring step, no splat image.
 - **D4 — The palette still owns colour.** The texture only shades the vertex colour between a dark and a light multiplier per layer, centred on 1, so a world palette (`styles/lowpoly-palettes.js`) keeps its look and every planet gets the shader for free.
@@ -53,8 +53,22 @@
 - **Draw**: `chunkDecals` buckets by 16 × 16 cells. Each chunk is a `BufferGeometry` sharing the quad's position / normal / uv / index buffers, with its own `aCell` (atlas offset) instanced attribute and a preset bounding sphere. `MeshLambertMaterial` with `map` = atlas, `instanceColor` for tint, `transparent`, `depthWrite: false`, `receiveShadow`. Shader patch: `vUv = vUv * 0.25 + aCell`, `alpha *= uFade`.
 - **Fade** (`decalFade`, pure): `cover` = (visible ground width ÷ map width) × (visible depth ÷ map depth); `far` = dist ÷ `CAMERA.maxDist`. Fade = 1 − max(smoothstep(0.86, 1.0, cover), smoothstep(0.8, 0.97, far)). The `far` term handles portrait phones, which never see the whole map width. `update(cam, aspect)` runs every frame after the camera pose; `group.visible = fade > 0.01`.
 
+### 3.1 Decals per planet (v0.2, `WORLD_DECALS`)
+Keyed by the world palette (`data/planets.js` › `palette`). Lush worlds (meadow, sakura, tropical, alien) grow every kind.
+
+| world (planet) | kinds |
+|---|---|
+| savanna (Ochre) | pebbles, crack, flowers (×0.3), ruts, mud, twigs |
+| canyon (Kessra) | pebbles, crack, ruts, mud, twigs |
+| winter (Rime) | pebbles, crack, ruts, mud, twigs (×0.5) |
+| volcanic (Cinder) | pebbles, crack, ruts, mud |
+| lunar (Lumen) | pebbles, crack, ruts |
+
+Measured map 1 per planet (review page, dist 34, High): 67–395 decals; 15–17 draw calls. Water-heavy maps (Rime, Cinder's lava) carry the fewest.
+
 ## 4. Integration (`render3d/index.js`)
-- `r.tiledGround = opts.ground === 'tiled'`.
+- `r.tiledGround = lowpoly && opts.ground !== 'lowpoly'` (v0.2; was `opts.ground === 'tiled'`).
+- Decals take the world: `buildDecals(..., { world })`.
 - `setWorld`: on High / Standard (`tier.grassDetail`) the ground is built with `splat: { world, taps: tapsForTier(tier.key) }`; Low builds the flat ground. Decals are built on every tier when tiled, rebuilt with the world, and disposed with the old ground.
 - `renderFrame`: `r.decals.update(r.viewCam || r.cam, w / h)` after the camera pose.
 - `buildLowPolyGround` returns `colAt` so the decal planner reads the same fields and colours as the ground.
@@ -106,14 +120,14 @@ Review page, map 1 unless noted, 1280 × 720 unless noted:
 
 1. **TT-1 — Prototype** (`story_mw2qkmb1_2`, PR #157): `?ground=tiled`, splat texture + shader, decals, review page `tools/terrain/index.html`, tests. **Built.**
 2. **TT-2 — Device check (owner call).** Frame time on iPhone 12 / Pixel 6 / desktop, tiled vs current (TE §7.2's T1 question). Not yet measured.
-3. **TT-3 — Default (owner call).** If approved: tiled becomes the High / Standard default, the `grassDetail` path is retired, and the committed `ground_*.webp` tiles can be dropped from the shipped build.
-4. **TT-4 — Per-planet tuning.** Review the other 8 palettes under `?world=`; tune `WORLD_SET` and the decal rules per planet (e.g. no flowers on Lumen, ash on volcanic).
+3. **TT-3 — Default on every map** (`story_mw2uk8lq_1`). **Built.** `render3d/index.js`: `tiledGround = lowpoly && opts.ground !== 'lowpoly'`. The `grassDetail` path stays for `?ground=lowpoly`; the painted tiles stay for `?ground=baked` until Q2 is answered.
+4. **TT-4 — Per-planet fit** (`story_mw2uk8lq_1`). **Built** for the decals (§3.1); `WORLD_SET` gained `tropical` (Vexmire). The texture set itself is shared by all planets (only scales and seeds differ) — a per-planet texture (snow, ash, regolith) is a later story if the owner wants one.
 
 ## 8. Tests — `src/render3d/ground/splat.test.mjs`
 Seamless tiling; texture contrast per channel, caching, differs per planet; tier → taps; layer weights follow terrain codes (grass, water, rock, roads → soil, sum ≤ 1); splat arrays keep the default mesh; material cache key; atlas size; decal placement (deterministic, never on blocked / base / water, flowers on turf, ≥ 4 kinds); chunking (≤ 8 chunks, one shared material, preset spheres, culling on); fade (desktop start full, desktop whole map gone, portrait far gone, close full, group hidden); all Verdance maps 1–9 build. `npm test` 978 / 978.
 
 ## 9. Open questions (owner)
-- Q1 — Make tiled the default on High / Standard (TT-3)?
+- Q1 — answered 2026-11-04: tiled is the default on every map (D1).
 - Q2 — Drop the painted map-1 tiles once tiled is the default?
 - Q3 — Decals on Low: they are ~8 draw calls; keep, or turn off with tufts?
 
