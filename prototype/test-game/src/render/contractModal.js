@@ -41,26 +41,32 @@ export function showContractModal(mountEl, offer, cbs) {
   const card = doc.createElement('div'); card.className = 'bwc-card';
   const w = offer.alignScore >= 2 ? 'good' : offer.alignScore <= -2 ? 'evil' : 'neutral';
   const ch = offer.character;
+  // Any contract (Dialog-Unification F4) [MM-story_mw56vk3i_8]: a caller may give its own kicker, task and terms
+  // (trusted HTML built from game data) and the ACCEPT label; with no onDecline there is one button.
   card.innerHTML =
-    '<div class="bwc-kicker">CONTRACT — ' + offer.giver.toUpperCase() + '</div>' +
+    '<div class="bwc-kicker">' + (offer.kicker || 'CONTRACT — ' + offer.giver.toUpperCase()) + '</div>' +
     '<div class="bwc-who">' + (ch ? ch.name : 'An envoy') +
-      '<span class="bwc-align ' + w + '">' + alignWord(offer.alignScore) + '</span></div>' +
+      (offer.alignScore != null ? '<span class="bwc-align ' + w + '">' + alignWord(offer.alignScore) + '</span>' : '') + '</div>' +
     (ch && ch.phrase ? '<div class="bwc-phrase">“' + ch.phrase + '”</div>' : '') +
-    '<div class="bwc-task">Haul the <b>quest crystals</b> seeded beyond the front — ' + offer.nodes +
+    '<div class="bwc-task">' + (offer.task != null ? offer.task : 'Haul the <b>quest crystals</b> seeded beyond the front — ' + offer.nodes +
       ' field' + (offer.nodes === 1 ? '' : 's') + ', deep in contested ground. Deliver at least 80% and the ' +
-      offer.giver + ' remember it.</div>' +
-    '<div class="bwc-terms">Fulfil: <b>+' + offer.gainMax + ' loyalty</b> (their rival loses half that)' +
+      offer.giver + ' remember it.') + '</div>' +
+    '<div class="bwc-terms">' + (offer.terms != null ? offer.terms : 'Fulfil: <b>+' + offer.gainMax + ' loyalty</b> (their rival loses half that)' +
       '<br>Break it: partial credit minus the broken-promise penalty — worse than never agreeing' +
-      '<br>Decline: <b>−' + offer.declineCost + ' loyalty</b> now, and their rival smiles</div>';
+      '<br>Decline: <b>−' + offer.declineCost + ' loyalty</b> now, and their rival smiles') + '</div>';
   const row = doc.createElement('div'); row.className = 'bwc-row';
-  const acc = doc.createElement('button'); acc.className = 'bwc-btn accept'; acc.textContent = 'ACCEPT CONTRACT';
-  const dec = doc.createElement('button'); dec.className = 'bwc-btn'; dec.textContent = 'DECLINE';
+  const acc = doc.createElement('button'); acc.className = 'bwc-btn accept'; acc.textContent = offer.acceptLabel || 'ACCEPT CONTRACT';
   const close = (fn) => { veil.remove(); if (fn) fn(); };
   acc.addEventListener('click', () => close(cbs.onAccept));
-  dec.addEventListener('click', () => close(cbs.onDecline));
-  row.appendChild(acc); row.appendChild(dec);
+  row.appendChild(acc);
+  if (cbs.onDecline) {
+    const dec = doc.createElement('button'); dec.className = 'bwc-btn'; dec.textContent = offer.declineLabel || 'DECLINE';
+    dec.addEventListener('click', () => close(cbs.onDecline));
+    row.appendChild(dec);
+  }
   card.appendChild(row);
   veil.appendChild(card);
   mountEl.appendChild(veil);
-  return { close: () => veil.remove() };
+  setTimeout(() => acc.focus({ preventScroll: true }), 0);
+  return { el: veil, close: () => veil.remove() };
 }

@@ -54,3 +54,26 @@ export function settleRareContract(contract, rareHarvested) {
   const sold = Math.max(0, Math.min(contract.quota, Math.floor(rareHarvested || 0)));
   return { sold, gold: sold * contract.pricePerUnit, loyalty: sold > 0 ? contract.loyalty : 0 };
 }
+
+/**
+ * Bank a settled rare contract into the save (end of map, win or lose) [MM-story_mw5eozsn_c]. The units sold leave the
+ * battle's kept tally, so the inventory does not bank them as well; the gold goes to the campaign bank; the loyalty to
+ * the buyer through addLoyalty (save/contracts.js, passed in so this file stays free of the save layer). → settled.
+ */
+export function bankRareSale(s, settled, { buyerFaction, tally = null, addLoyalty } = {}) {
+  if (!settled || !settled.sold) return settled;
+  if (tally && tally.kept) tally.kept.rare = Math.max(0, (tally.kept.rare || 0) - settled.sold);
+  if (settled.gold > 0) {
+    const c = s.carry || (s.carry = { gold: 0, structures: [] });
+    c.gold = (c.gold || 0) + settled.gold; s.goldBank = c.gold;
+  }
+  if (addLoyalty && buyerFaction && settled.loyalty) addLoyalty(s, buyerFaction, settled.loyalty);
+  return settled;
+}
+
+/** The results-screen line for a settled contract. */
+export function rareResultLine(settled, shipName, resourceName = 'rare') {
+  return settled.sold > 0
+    ? `${shipName} bought ${settled.sold} ${resourceName} for ${settled.gold.toLocaleString('en-US')} gold.`
+    : `${shipName}'s contract closed with nothing to sell.`;
+}

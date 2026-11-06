@@ -9,6 +9,7 @@
  *   <div data-craft="system">                   a landing craft on a slow turntable (FACTION_CRAFT key or lc_*)
  *   <div data-res="water:rare">                 a resource model (planet : tier) turning on a plinth
  *   <div data-galaxy data-target data-mode>      the 3D galaxy and the planet ⇄ galaxy fly (galaxyStage.js) [MM-story_mvftq5q8_l]
+ *   <div data-ship="powder">                    a capital ship at its station, idling (ships.json model key) [MM-story_mw56v8nu_4]
  * Change the attribute and the next frame draws the new subject. Hidden elements cost nothing; the loop stops while
  * the menu is closed (stop()) or the tab is hidden. If WebGL is unavailable createMenuStage returns null and the
  * menu keeps its baked planet PNGs (each globe element carries one as a fallback <img>).
@@ -22,6 +23,7 @@ import { landingPose, phaseStart } from '../render3d/craft/landing.js';
 import { resourceModel } from '../render3d/resources/models.js';
 import { mergeResourceModel } from '../render3d/resources/resources3d.js';
 import { createGalaxyStage } from './galaxyStage.js';
+import { prepareShip, createEngineFx } from '../render3d/ships/engineFx.js';
 
 const SPIN = 0.12;          // rad/s a globe turns on its own
 const TURN = 0.35;          // rad/s the craft / resource turntables
@@ -90,6 +92,32 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
     }
     return w;
   };
+
+  // ── capital ships at their station (Content-Reveal §5.2, owner 2026-11-06: "the ship would present itself in a
+  //    stationary orbit in the upper left corner of the screen") [MM-story_mw56v8nu_4]: the ship's own GLB, engines
+  //    idling, a slow bob and roll; loaded on first sight
+  const shipScene = new THREE.Scene(); lit(shipScene, [5, 6, 8]);
+  const scam = new THREE.PerspectiveCamera(24, 1, 0.1, 500);
+  const ships = new Map();   // model key → { root, fx, box, L } | 'loading' | 'failed'
+  let shipMan = null, shipT = 0;
+  function shipModel(key) {
+    const w = ships.get(key);
+    if (w) return typeof w === 'object' ? w : null;
+    ships.set(key, 'loading');
+    const base = new URL('../../', import.meta.url).href;
+    Promise.all([import(base + 'vendor/three-addons/loaders/GLTFLoader.js'), shipMan || (shipMan = fetch(base + 'content/ships/ships.json').then((r) => r.json()))])
+      .then(async ([gl, man]) => {
+        const rec = man[key]; if (!rec) throw new Error('no ship ' + key);
+        const gltf = await new gl.GLTFLoader().loadAsync(base + 'content/ships/' + rec.lods[1].file);
+        const root = prepareShip(THREE, gltf.scene, { anisotropy: 4 });
+        const g = new THREE.Group(); g.add(root); shipScene.add(g);
+        const fx = createEngineFx(THREE, root); fx.setIntensity(0.35);
+        const b = new THREE.Box3().setFromObject(root);
+        ships.set(key, { g, root, fx, box: b, L: b.max.x - b.min.x });
+      })
+      .catch((e) => { ships.set(key, 'failed'); console.warn('[menu] ship', key, e && e.message); });
+    return null;
+  }
 
   // ── drag to spin (data-spin="drag" globes)
   const spin = new WeakMap();   // element → { extra, vel, drag }
@@ -176,6 +204,26 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
       gcam.position.z = a >= 1 ? 6 : 6 / a;
       draw(el, w.scene, gcam);
     }
+    const se = root.querySelector('[data-ship]');
+    if (se && se.offsetParent && se.offsetHeight >= 48) {   // a phone shows the station as a chip only
+      const w = shipModel(se.dataset.ship);
+      if (w) {
+        shipT += dt * mv;
+        for (const v of ships.values()) if (typeof v === 'object') v.g.visible = v === w;
+        const c = new THREE.Vector3(); w.box.getCenter(c);
+        w.g.position.set(-c.x, -c.y + Math.sin(shipT * 0.5) * w.L * 0.012, -c.z);
+        w.g.rotation.x = Math.sin(shipT * 0.23) * 0.02;
+        // three-quarter view from the starboard bow quarter, a little below: bow to the right, toward the planet
+        const r = se.getBoundingClientRect(), a = r.width / Math.max(1, r.height);
+        const d = w.L * (a >= 1.6 ? 1.75 : 2.2);
+        scam.near = w.L * 0.01; scam.far = w.L * 20;
+        scam.position.set(w.L * 0.35, -w.L * 0.12, d); scam.lookAt(w.L * 0.05, 0, 0);
+        w.fx.update(dt, scam);
+        renderer.autoClearColor = false;                // the ship's box overlaps the hero globe: keep what is drawn under it
+        draw(se, shipScene, scam);
+        renderer.autoClearColor = true;
+      }
+    }
     const ce = root.querySelector('[data-craft]');
     if (ce && ce.offsetParent) {
       setCraft(ce.dataset.craft);
@@ -221,6 +269,7 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
       for (const w of globes.values()) { w.g.dispose(); if (w.ship) w.ship.dispose(); }
       if (galaxy) galaxy.dispose();
       if (craft) craft.dispose();
+      for (const v of ships.values()) if (typeof v === 'object') v.fx.dispose();
       sphere.dispose(); litMat.dispose(); glowMat.dispose(); plinthGeo.dispose(); plinthMat.dispose();
       renderer.dispose(); canvas.remove(); root.classList.remove('bwm-live');
     },

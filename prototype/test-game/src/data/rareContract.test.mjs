@@ -40,3 +40,13 @@ test('it resolves at map end: sold up to the quota at the price', () => {
   assert.deepEqual(settleRareContract(c, 0), { sold: 0, gold: 0, loyalty: 0 });
   assert.deepEqual(settleRareContract(null, 30), { sold: 0, gold: 0, loyalty: 0 });
 });
+
+test('bankRareSale: gold to the bank, loyalty to the buyer, the sold units leave the kept tally', async () => {
+  const { bankRareSale, rareResultLine } = await import('./rareContract.js');
+  const s = { carry: { gold: 100, structures: [] } }, tally = { kept: { rare: 30 } }, got = [];
+  bankRareSale(s, { sold: 12, gold: 240, loyalty: 5 }, { buyerFaction: 'Sky Union', tally, addLoyalty: (_, f, n) => got.push([f, n]) });
+  assert.equal(s.carry.gold, 340); assert.equal(s.goldBank, 340); assert.equal(tally.kept.rare, 18);
+  assert.deepEqual(got, [['Sky Union', 5]]);
+  const t = {}; bankRareSale(t, { sold: 0, gold: 0, loyalty: 0 }, {}); assert.deepEqual(t, {});
+  assert.match(rareResultLine({ sold: 12, gold: 240 }, 'Dawnwing Carrier', 'Ember Shard'), /Dawnwing Carrier bought 12 Ember Shard for 240 gold/);
+});

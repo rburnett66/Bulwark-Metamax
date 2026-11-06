@@ -63,6 +63,22 @@ function spec(key, factionName, ch, entry, role) {
   };
 }
 
+/**
+ * A named character's line as a call spec [MM-story_mw56vk3i_8]: the ship reveal's captain and the in-battle rare
+ * contract's giver speak through the same comm card as every other line. `which` is a line key in the character's
+ * pack ('reward', 'm0', …), or 'phrase' (their first signature phrase), or { line, intent } given directly.
+ * → spec | null (unknown faction / character / line).
+ */
+export function characterCall(packs, factionKey, name, which, role) {
+  const fac = packs && packs.factions && packs.factions[factionKey];
+  const ch = fac && fac.characters.find((c) => c.name === name);
+  if (!ch) return null;
+  const entry = typeof which === 'object' ? which
+    : which === 'phrase' ? (ch.phrases && ch.phrases[0] ? { line: ch.phrases[0], intent: 'statement' } : null)
+    : ch.lines && ch.lines[which];
+  return spec(factionKey, fac.name, ch, entry, role);
+}
+
 /** M0/M1 — the challenge when a faction's wave starts. Champion by default (§3.2); repeat
  *  visits from the same faction (test mode) rotate through the rest of the cast's M0s. */
 export function challengeCall(packs, factionName, wave, seed, visitCount) {

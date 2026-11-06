@@ -59,3 +59,13 @@ test('the CSS hides the battle HUD while the report is up, and honours reduced m
   assert.match(RESULTS_CSS, /prefers-reduced-motion: reduce/);
   assert.match(RESULTS_CSS, /safe-area-inset-bottom/, 'the actions clear a phone home bar');
 });
+
+test('notes: a new signal and a settled contract show in their own panel [MM-story_mw56v5hu_2]', async () => {
+  const { resultsModel, resultsHtml } = await import('./resultsScreen.js');
+  const m = resultsModel({ result: 'win', finalScore: { score: 1, minutes: 1, seconds: 2 }, waveStars: [{ wave: 1, stars: 3 }],
+    notes: [{ kind: 'signal', head: 'NEW SIGNAL', text: 'Florael discovered.' }, { kind: 'x', text: '' }] });
+  assert.equal(m.notes.length, 1);
+  const h = resultsHtml(m);
+  assert.match(h, /data-step="notes"/); assert.match(h, /Florael discovered\./);
+  assert.doesNotMatch(resultsHtml(resultsModel({ result: 'win', finalScore: {}, waveStars: [] })), /rs-notes/);
+});

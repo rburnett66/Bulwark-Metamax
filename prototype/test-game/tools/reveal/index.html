@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Content Reveal — review</title>
+<!-- [MM-story_mw56vtvv_b] Review page for the content reveals (docs/tech-plan/Content-Reveal.md §9): play any planet's
+     discovery and survey, any capital ship's first sight and first time aboard, and the re-board, outside the game.
+     Query: ?play=planet&planet=air · ?play=ship&planet=ground · ?play=aboard&planet=ground · ?reduced=1 · ?quality=low -->
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin:0; height:100%; background:#05070a; color:#e6ebe3; font:14px/1.45 "IBM Plex Sans Condensed", system-ui, sans-serif; }
+  main { max-width:880px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font:700 26px "Chakra Petch", sans-serif; letter-spacing:.06em; margin:0 0 4px; }
+  p { color:#9aa6a0; margin:0 0 18px; max-width:70ch; }
+  fieldset { border:1px solid #24302e; border-radius:6px; margin:0 0 14px; padding:12px 14px; }
+  legend { padding:0 6px; color:#6fd3c8; font:600 11px ui-monospace, Menlo, monospace; letter-spacing:.12em; text-transform:uppercase; }
+  label { margin-right:14px; }
+  select, button { font:inherit; color:inherit; background:#121a1c; border:1px solid #2e3c3a; border-radius:5px; padding:7px 11px; }
+  button { cursor:pointer; background:#1b2a2a; } button:hover { border-color:#f2c869; }
+  button:focus-visible, select:focus-visible { outline:2px solid #f2c869; outline-offset:2px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  #log { margin-top:16px; font:12px ui-monospace, Menlo, monospace; color:#8f9c97; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Content reveal — review</h1>
+  <p>Each button plays one reveal exactly as the game does, outside the game. Hold SKIP (or Space / Esc) to jump a timed beat. In the game they play from the menu when a planet is unlocked or a capital ship arrives.</p>
+  <fieldset><legend>Options</legend>
+    <div class="row">
+      <label>Planet <select id="planet"></select></label>
+      <label>Quality <select id="quality"><option>high</option><option>standard</option><option>low</option></select></label>
+      <label><input type="checkbox" id="reduced"> Reduced motion</label>
+    </div>
+  </fieldset>
+  <fieldset><legend>Play</legend>
+    <div class="row">
+      <button type="button" data-play="planet">New planet discovered + survey</button>
+      <button type="button" data-play="ship">Capital ship: first sight + first time aboard</button>
+      <button type="button" data-play="coast">Capital ship: coast-in (seen before)</button>
+      <button type="button" data-play="board">Board the ship (explore, depart)</button>
+      <button type="button" data-play="collective">The Collective coasts in, grants the planet's contract</button>
+    </div>
+  </fieldset>
+  <div id="log"></div>
+</main>
+<script type="module">
+import { PLANETS } from '../../src/data/planets.js';
+import { playPlanetReveal } from '../../src/reveal/planetReveal.js';
+
+const $ = (s) => document.querySelector(s);
+const q = new URLSearchParams(location.search);
+for (const [k, p] of Object.entries(PLANETS)) $('#planet').add(new Option(p.name, k));
+$('#planet').value = q.get('planet') || 'air';
+if (q.get('quality')) $('#quality').value = q.get('quality');
+$('#reduced').checked = q.get('reduced') === '1';
+const log = (m) => { $('#log').textContent += m + '\n'; console.log('[review]', m); };
+window.__review = { done: [], log };
+
+async function play(kind) {
+  const planet = $('#planet').value, tier = $('#quality').value, reduce = $('#reduced').checked;
+  log(`play ${kind} · ${planet}`);
+  try {
+    if (kind === 'planet') await playPlanetReveal({ planet, tier, reduce, onSurveyed: (p) => log('surveyed ' + p) });
+    else {
+      const M = await import('../../src/reveal/shipReveal.js');
+      if (kind === 'ship') await M.playShipReveal({ planet, tier, reduce, firstTime: true, start: +(q.get('t') || 0), missions: ['Hold the Verdance line', 'Powder for the guns'], onSeen: (p) => log('ship seen ' + p), onContract: (p) => log('contract accepted ' + p) });
+      else if (kind === 'coast') await M.playShipReveal({ planet, tier, reduce, firstTime: false });
+      else if (kind === 'board') await M.boardShip({ planet, tier, reduce });
+      else if (kind === 'collective') await M.playCollectiveIntroduces({ planet, tier, reduce, onContract: (p) => log('collective contract ' + p) });
+    }
+    log(`done ${kind}`); window.__review.done.push(kind);
+  } catch (e) { log('ERROR ' + (e && e.stack || e)); }
+}
+for (const b of document.querySelectorAll('[data-play]')) b.addEventListener('click', () => play(b.dataset.play));
+if (q.get('play')) play(q.get('play'));
+</script>
+</body>
+</html>
