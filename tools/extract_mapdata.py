@@ -163,6 +163,9 @@ def main():
         # the Collective's contracts, one per planet × map, common and uncommon only [MM-story_mw4a1o3p_m]
         "collectiveContracts": sheet_rows(wb["Collective_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
                                           header_row_probe=("Planet_Key",)),
+        # the optional in-battle rare contracts, one per planet × map [MM-task_mw5h8fxu_d]
+        "rareContracts": sheet_rows(wb["Rare_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                    header_row_probe=("Planet_Key",)),
     }
 
     apply_rework(data)
@@ -184,6 +187,14 @@ def main():
     for r in cc:
         if not all(isinstance(r.get(k), int) and r[k] > 0 for k in ("Common", "Uncommon", "Standing")):
             problems.append(f"Collective_Contracts {r.get('Planet_Key')} map {r.get('Map_ID')}: Common, Uncommon and Standing must be positive")
+    rc = data["rareContracts"]
+    if len(rc) != 81 or len({(r.get("Planet_Key"), r.get("Map_ID")) for r in rc}) != 81:
+        problems.append(f"Rare_Contracts: expected 81 distinct planet x map rows, got {len(rc)}")
+    for r in rc:
+        if not all(isinstance(r.get(k), int) and r[k] > 0 for k in ("Quota", "Price_Per_Unit", "Loyalty")):
+            problems.append(f"Rare_Contracts {r.get('Planet_Key')} map {r.get('Map_ID')}: Quota, Price_Per_Unit and Loyalty must be positive")
+        elif r["Quota"] > r.get("Rare_Seeded", 0):
+            problems.append(f"Rare_Contracts {r.get('Planet_Key')} map {r.get('Map_ID')}: Quota exceeds the rare units the board seeds")
     for f in data["factions"]:
         if f.get("Premium_Secondary") == f.get("Premium_Resource"):
             problems.append(f"{f.get('Faction_Name')}: Premium_Secondary == Premium_Resource (GDD 5.2)")
@@ -208,7 +219,7 @@ def main():
     print(f"OK -> {os.path.relpath(OUT, ROOT)} (+ .js module)")
     print(f"   maps={len(data['maps'])} waveRows={len(data['waveTable'])} roles={len(data['resourceRoles'])} "
           f"factions={len(data['factions'])} params={len(data['globalParams'])} "
-          f"collectiveContracts={len(data['collectiveContracts'])}")
+          f"collectiveContracts={len(data['collectiveContracts'])} rareContracts={len(data['rareContracts'])}")
 
 
 if __name__ == "__main__":
