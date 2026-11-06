@@ -72,11 +72,10 @@ The thresholds are new workbook parameters (`Standing_Hostile = −60`; Trusted 
 `Tech_T2_Threshold`), so balance stays in data. `standingOf(s, faction)` and `standingAtLeast(s, faction, need)` live in
 `save/reputation.js`.
 
-**The Collective** joins the ledger under its own key. Proposed feeds:
-- each map whose contract quota is met: +10;
-- replies to Collective officers.
-
-Owner decision Q2.
+**The Collective** is a tenth faction without a planet and joins the ledger under its own key (owner 2026-11-05). Its
+standing comes from **completing resource contracts**: one per planet per map, on common and uncommon resources.
+Replies to its officers can also move it. The contracts, their values and what Collective standing unlocks are in
+`Collective-Faction.md`.
 
 ### 3.2 Replies (response mode)
 
@@ -194,7 +193,7 @@ three factions.
 | # | Question | Proposal |
 |---|---|---|
 | Q1 | Standing thresholds | Hostile ≤ −60; Trusted = Tech T1 (100); Honored = Tech T2 (260) |
-| Q2 | How the Collective earns standing | +10 per met contract quota, plus replies to its officers |
+| Q2 | How the Collective earns standing | **Decided by the owner (2026-11-05):** by completing the resource contract for each planet and map (common and uncommon). See `Collective-Faction.md`. |
 | Q3 | Use the counter ring in reputation? | Small +5 to the faction that beats the one you harmed; or leave the ring to battle only |
 | Q4 | Reply alignment weight | ¼ of the reply tone's score (a fulfilled contract is 2×) |
 | Q5 | The prototype's Bar reply names Dark Energy as Arcane's rival; the workbook pairs Arcane with Water | Follow the workbook |
@@ -203,6 +202,8 @@ three factions.
 
 - **2026-11-05.** Plan written. It closes the epic's "Complete the tech plan" story. It grounds reputation in the
   existing loyalty ledger and workbook rivals rather than a second standing number.
+- **2026-11-05.** The owner decided Q2. The Collective is a faction without a planet, and its standing comes from the
+  per-planet, per-map resource contracts on common and uncommon resources. Detail is in `Collective-Faction.md`.
 
 ## Dependencies
 

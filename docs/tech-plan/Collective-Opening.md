@@ -137,3 +137,4 @@ in desktop, phone portrait and phone landscape frames.
 | depends-on | docs/16 Bulwark MM/tech-plan/Menu-Survey-Galaxy.md | the galaxy stage and the galaxy-to-planet fly |
 | depends-on | docs/tech-plan/Capital-Ship-Interior.md | the room view, primitive rooms, hub, layout and editor |
 | depends-on | docs/tech-plan/Ship-Crew-Characters.md | the figures, poses (incl. flash / turn / sit-drink) and crew life |
+| depends-on | docs/tech-plan/Collective-Faction.md | the Collective as a faction, its cast, and the Verdance map 1 contract the opening hands over |
