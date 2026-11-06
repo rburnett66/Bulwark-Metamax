@@ -8,8 +8,9 @@
  *              (ship-interior/roomView.js) — the prototype's board wipe, now over 3D;
  *   beats 5–7  life inside; Factor Mira Valcourt flashes at the bar; every other room dims, the bar glows gold,
  *              "THE BAR · Tap to enter" (auto-enters after ROOMS.autoEnter s);
- *   beat 8     the avatar walks into the bar, the camera pushes in, Mira turns; a placeholder line card until the
- *              conversation panel lands (Opening S6), then back to the game.
+ *   beat 8     the avatar walks into the bar, the camera pushes in, Mira turns, and the conversation plays
+ *              (dialog/conversation.js, content/dialog/opening.json) with holo-slides [MM-story_mw47llqj_6]; at its
+ *              end, back to the game (the contract card and transport are Opening S7).
  * Everything timed comes from timeline.js openingAt(t) / roomsAt(t), so the review page and tests see the same thing.
  *
  *   const intro = await playIntro({ mount: document.body, tier, reduced, onDone });   // intro.close() to abort
@@ -20,12 +21,13 @@ import { openingAt, skipTarget, ROOMS, BEATS } from './timeline.js';
 import { createOpeningStage } from './openingStage.js';
 import { prepareLayout } from '../ship-interior/layout.js';
 import { createRoomView } from '../ship-interior/roomView.js';
+import { openConversation } from '../dialog/conversation.js';
+import { validateScript } from '../dialog/conversationState.js';
+import { contractFor } from '../data/collectiveContract.js';
 
 const VENDOR = new URL('../../vendor/', import.meta.url).href;
 const CONTENT = new URL('../../content/', import.meta.url).href;
 const PATRON = Object.freeze({ room: 'bar', fac: 'collective', name: 'Factor Mira Valcourt', title: 'Contract officer · The Collective' });
-// Placeholder until the owner's transcript (Collective-Opening-Design §6.4); the conversation panel replaces this card.
-const PLACEHOLDER_LINE = 'You made it aboard the Long Ledger. Sit — the Collective has work for a commander with a ship and no debts. Yet.';
 
 const CSS = `
 .cx-intro { position:fixed; inset:0; z-index:200; background:#000; color:#e9e2d6; font:14px/1.45 "IBM Plex Sans Condensed", system-ui, sans-serif; overflow:hidden; touch-action:none; user-select:none; }
@@ -44,12 +46,6 @@ const CSS = `
 .cx-intro .cx-prompt.tap span { opacity:1; animation:cxPulse 2s ease-in-out infinite; }
 @keyframes cxPulse { 0%,100% { opacity:.55 } 50% { opacity:1 } }
 @media (prefers-reduced-motion: reduce) { .cx-intro .cx-prompt.tap span { animation:none; } }
-.cx-intro .cx-card { position:absolute; left:50%; bottom:max(20px, env(safe-area-inset-bottom)); transform:translateX(-50%); width:min(560px, calc(100% - 32px)); background:linear-gradient(180deg, rgba(22,16,12,.94), rgba(12,9,8,.96)); border:1px solid rgba(242,200,105,.4); border-radius:12px; padding:18px 20px 16px; display:none; }
-.cx-intro .cx-card .who { font:700 16px "Chakra Petch", sans-serif; letter-spacing:.06em; color:#f2c869; }
-.cx-intro .cx-card .role { font-size:12px; color:#9b8f80; margin-bottom:10px; }
-.cx-intro .cx-card p { margin:0 0 14px; font-size:16px; min-height:3em; }
-.cx-intro .cx-card .cx-btn { position:static; }
-.cx-intro .cx-card .tag { float:right; font-size:10px; letter-spacing:.2em; color:#6f655a; }
 `;
 
 /** Load three.js and the addons the opening needs (vendored r128). */
@@ -74,12 +70,11 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
   root.innerHTML = `<canvas class="cx-ship"></canvas><canvas class="cx-rooms"></canvas><div class="cx-scan"></div>
     <div class="cx-fade"></div><div class="cx-cap"></div>
     <div class="cx-prompt"><b>THE BAR</b><span>TAP TO ENTER</span></div>
-    <div class="cx-card" aria-live="polite"><span class="tag">PROTOTYPE</span><div class="who"></div><div class="role"></div><p></p><button class="cx-btn cx-go" type="button">CONTINUE ▸</button></div>
     <button class="cx-btn cx-skip" type="button">SKIP ▸</button><button class="cx-btn cx-close" type="button" aria-label="Close the intro">✕</button>`;
   mount.appendChild(root);
   const $ = (s) => root.querySelector(s);
   const shipCanvas = $('.cx-ship'), roomCanvas = $('.cx-rooms'), scanEl = $('.cx-scan'), fadeEl = $('.cx-fade'), capEl = $('.cx-cap');
-  const promptEl = $('.cx-prompt'), cardEl = $('.cx-card'), skipEl = $('.cx-skip');
+  const promptEl = $('.cx-prompt'), skipEl = $('.cx-skip');
 
   const { THREE, addons } = await loadThree();
   const pr = Math.min(devicePixelRatio || 1, tier === 'low' ? 1 : tier === 'standard' ? 1.5 : 2);
@@ -89,9 +84,12 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
   roomR.setPixelRatio(pr); roomR.outputEncoding = THREE.sRGBEncoding;
 
   const stage = createOpeningStage(THREE, { renderer: shipR, addons, tier, reduced: reduce });
-  const [manifest, layoutJson] = await Promise.all([
+  const [manifest, layoutJson, script] = await Promise.all([
     fetch(CONTENT + 'ships/ships.json').then((r) => r.json()),
-    fetch(CONTENT + 'ships/collective/ship-layout.json').then((r) => r.json())]);
+    fetch(CONTENT + 'ships/collective/ship-layout.json').then((r) => r.json()),
+    fetch(CONTENT + 'dialog/opening.json').then((r) => r.json())]);
+  const scriptErrors = validateScript(script);
+  if (scriptErrors.length) console.warn('[intro] opening script:', scriptErrors);
   await stage.load({
     ship: CONTENT + 'ships/' + manifest.collective.lods[tier === 'low' ? 1 : 0].file,
     tug: manifest.tug ? CONTENT + 'ships/' + manifest.tug.lods[0].file : null, engineColor: manifest.collective.engineColor,
@@ -108,7 +106,7 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
   addEventListener('resize', resize); resize();
 
   // ── state ─────────────────────────────────────────────────────────────────────────────────────────────────────
-  let t = Math.max(0, start), phase = 'timed', closed = false, last = performance.now(), raf = 0, cardT = 0;
+  let t = Math.max(0, start), phase = 'timed', closed = false, last = performance.now(), raf = 0, conv = null;
   const finish = () => { if (closed) return; closed = true; cleanup(); onDone(); };
 
   function enterBar() {
@@ -119,17 +117,13 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
     view.walkPlayerTo(ROOMS.room, () => {
       view.patronTurn();
       phase = 'talk';
-      cardEl.style.display = 'block';
-      cardEl.querySelector('.who').textContent = PATRON.name;
-      cardEl.querySelector('.role').textContent = PATRON.title;
-      cardT = 0;
-      cardEl.querySelector('.cx-go').focus({ preventScroll: true });
+      // the Verdance map 1 contract the offer is about (the Collective buys common and uncommon only)
+      conv = openConversation(document, root, script, { reduce, data: { contract: contractFor('ground', 1) }, onEnd: finish });
     });
   }
 
   skipEl.addEventListener('click', () => { const to = skipTarget(t); if (to != null) t = to; });
   $('.cx-close').addEventListener('click', finish);
-  cardEl.querySelector('.cx-go').addEventListener('click', finish);
   root.addEventListener('keydown', (e) => { if (e.key === 'Escape') finish(); });
   roomCanvas.addEventListener('pointerup', (e) => {
     if (phase !== 'timed') return;
@@ -184,16 +178,15 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
     skipEl.style.display = phase === 'timed' && skipTarget(t) != null ? 'block' : 'none';
 
     // the placeholder line types out
-    if (phase === 'talk') {
-      cardT += dt;
-      const n = reduce ? PLACEHOLDER_LINE.length : Math.min(PLACEHOLDER_LINE.length, Math.floor(cardT * 42));
-      const p = cardEl.querySelector('p'); if (p.textContent.length !== n) p.textContent = PLACEHOLDER_LINE.slice(0, n);
+    if (phase === 'talk' && conv) {
+      conv.tick(dt);
     }
   }
   raf = requestAnimationFrame(loop);
 
   function cleanup() {
     cancelAnimationFrame(raf);
+    if (conv) conv.close();
     removeEventListener('resize', resize);
     try { stage.dispose(); view.dispose(); } catch (e) { /* best effort */ }
     shipR.dispose(); roomR.dispose();
@@ -206,6 +199,7 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
     get t() { return t; }, get phase() { return phase; },
     seek(s) { t = s; },
     enterBar,
+    get conversation() { return conv; },
     beats: BEATS,
   };
 }
