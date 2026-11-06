@@ -1,7 +1,7 @@
 # Tech Plan — The Collective as a faction (no planet) and its resource contracts
 
 **Epic:** `epic_mvo5po8u_4` The Collective trade faction.
-**Status:** v0.3, 2026-11-05. Q1 decided by the owner. C1 and C2 built on branch `feat/collective-contracts` (not merged). Notes and as-built justifications for this epic go here, not on the tickets.
+**Status:** v0.3, 2026-11-05. Q1 and Q7 decided by the owner. C1 and C2 built on branch `feat/collective-contracts` (PR #165, not merged). Notes and as-built justifications for this epic go here, not on the tickets.
 
 **Companion plans:**
 - `Collective-Opening.md`: the first contract is handed over in the opening.
