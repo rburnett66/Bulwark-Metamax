@@ -38,6 +38,7 @@ export const ICONS = {
   dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 2l9 10-9 10-9-10z"/><path d="M12 2v20M7 8l5 3 5-3"/></svg>',
   greenies: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="7" r="3"/><circle cx="7" cy="15" r="3"/><circle cx="17" cy="15" r="3"/><path d="M12 10v2M9.5 13l-1 1M14.5 13l1 1" stroke-linecap="round"/></svg>',
   unknown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 3a8 8 0 018 8v2M12 3a8 8 0 00-8 8v2"/><path d="M8 15.5a4 4 0 008 0M9.5 11.5h.01M14.5 11.5h.01"/><path d="M4 19l2.5-2M20 19l-2.5-2"/></svg>',
+  collective: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M7.5 12h9M12 7.5v9M8.8 8.8l6.4 6.4M15.2 8.8l-6.4 6.4"/></svg>',
 };
 export const PORTRAIT = '<svg viewBox="0 0 100 100"><circle cx="50" cy="36" r="17"/><path d="M22 94c0-17 12-27 28-27s28 10 28 27z"/></svg>';
 /* the Unknown Contact's hooded silhouette — no face to show, by design */
@@ -141,6 +142,14 @@ export const CONTACTS = Object.freeze({
     cast: [
       { n: 'Unknown Contact', a: '??', g: 'neutral', intent: 'statement', line: "Harvester. Don't close the channel. I pay better than your charter ever will." },
     ] }),
+  // collective — the Collective's officers aboard The Long Ledger [MM-story_mw47llqj_6]. Not a combat faction
+  // (data/factions.js COLLECTIVE), so a contact: warm, clear and unhurried — a voice used to closing deals.
+  collective: Object.freeze({ name: 'The Collective', trope: 'Trade house', color: '#f2c869', portrait: HOOD_PORTRAIT,
+    pitchM: 118, pitchF: 205, wave: 'sine', f1: 640, f2: 1650, rate: 4.6, noise: 0.03, reverb: 0.22,
+    drive: 0.05, ringmod: 0, detune: 2, octave: false, lowpass: 5200, attack: 0.03, sustain: 0.4, overlap: 0.26,
+    cast: [
+      { n: 'Factor Mira Valcourt', a: 'G', g: 'female', intent: 'statement', line: 'Welcome aboard the Long Ledger.' },
+    ] }),
 });
 
 export const FACTIONS = Object.freeze(Object.fromEntries(
@@ -170,7 +179,7 @@ export function voiceKeyOf(factionName) {
    Harsh/low timbres (square/saw + sub) carry more energy → trimmed below 1;
    soft timbres (sine/triangle) carry less → boosted above 1, so all land at similar loudness. */
 export const VGAIN = { ground: 0.85, air: 1.15, hightech: 0.85, artillery: 0.50, water: 1.35,
-  arcane: 1.30, space: 0.80, dark: 0.60, greenies: 0.72, unknown: 1.1 };
+  arcane: 1.30, space: 0.80, dark: 0.60, greenies: 0.72, unknown: 1.1, collective: 1.0 };
 export const REVERB_MULT = 1.5;   /* global voice-reverb boost (+50%) */
 
 /* per-faction "channel static" bed — the carrier each voice rides in on */
@@ -185,6 +194,7 @@ export const STATIC = {
   dark: { type: 'lowpass', freq: 300, q: 1.0, level: 0.080, trem: 0.5, tremDepth: 0.85, rev: 0.4 },
   greenies: { type: 'bandpass', freq: 4200, q: 0.8, level: 0.050, trem: 13.0, tremDepth: 0.5 },
   unknown: { type: 'bandpass', freq: 1400, q: 1.4, level: 0.040, trem: 4.0, tremDepth: 0.6 },   // encrypted-link dropout
+  collective: { type: 'lowpass', freq: 900, q: 0.5, level: 0.018, trem: 0, tremDepth: 0 },       // a quiet room, not a radio
 };
 
 /* ---------- pure helpers (unit-tested in comm.test.mjs) ---------- */

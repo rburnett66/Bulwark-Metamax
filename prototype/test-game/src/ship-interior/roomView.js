@@ -115,7 +115,9 @@ export function createRoomView(THREE, { renderer, layout: L, standing = {}, seed
   function walkPlayerTo(roomId, done) {
     const room = L.rooms.find((r) => r.id === roomId); if (!room) return;
     const lane = laneOf(room.floor);
-    player.lane = lane; player.target = room.fx - 3; player.dir = player.target >= player.x ? 1 : -1; face(player);
+    // stop short of the patron when she is in this room (she sits by the stand spot), else at the stand spot
+    const seatX = patronAgent && patron && patron.room === roomId ? patronAgent.x - 9 : room.fx - 3;
+    player.lane = lane; player.target = seatX; player.dir = player.target >= player.x ? 1 : -1; face(player);
     player.state = 'walkto'; player.speed = 9; onArrive = done || null;
     if (reduce) { player.x = player.target; }
   }

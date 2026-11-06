@@ -1,7 +1,7 @@
 # Tech Plan — The Collective Opening (Vesper, the cinematic, the bar beat, the first contract)
 
 **Epic:** `epic_mvo5po8u_4` The Collective trade faction · **Design:** `docs/16 Bulwark MM/design/Collective-Opening-Design.md`
-**Status:** v0.4, 2026-11-05. S1 and beats 0–3 merged (PR #164). Beats 4–8 play in the game as a prototype (`story_mw4d1bsw_q`). Notes and as-built justifications for this epic go here, not
+**Status:** v0.5, 2026-11-05. S1 and beats 0–3 merged (PR #164). Beats 4–8 play in the game (PR #166). S6, the conversation, built. Notes and as-built justifications for this epic go here, not
 on the tickets.
 
 ## 1. Scope
@@ -162,6 +162,27 @@ in desktop, phone portrait and phone landscape frames.
   - the contract, transport, save and replay (S7);
   - sound (S9);
   - the scan wipe peeling the 3D hull itself: the room view's hull is a stylised cutaway, not the GLB's profile.
+- **2026-11-05, S6 as built: the conversation** (`feat/collective-conversation`, story `story_mw47llqj_6`).
+  - **Script.** `content/dialog/opening.json` holds 14 PLACEHOLDER lines in the owner's order: welcome, who the
+    Collective are, the frontier, the offer, the terms, the handshake. Each slide id is the hook for the owner's
+    transcript and stills. The terms line says rare is kept (owner Q1).
+  - **`src/dialog/conversationState.js`.** A pure state machine: typing at 42 characters a second, a press finishes
+    the line then advances, slides carry over between lines, and reduced motion shows whole lines. Tested in
+    `conversationState.test.mjs`.
+  - **`src/dialog/conversation.js`.** The panel: the Collective tag, name and role, the typed line, progress pips, and
+    TAP ▸ / CONTINUE ▸. Tap, click, Space or Enter advances. Each line is spoken through `playUtterance` with the new
+    `collective` voice, added in `comm/voice.js` as a contact (not a combat faction): warm, clear and unhurried.
+  - **`src/dialog/holoSlide.js`.** The six slides are drawn on canvas from primitives in the hologram's cyan and gold:
+    the Ledger's profile, the seal, the frontier map, Verdance, the hauler, and the terms with the live Verdance
+    map 1 quotas. A `slide.image` replaces a drawing once the owner's stills arrive. The panel adds scan lines, a
+    flicker, Ken Burns and cross-dissolves.
+  - **Deviations from §6.2–6.3.**
+    - The slide floats in the scene beside the speaker (upper right on a wide screen, top centre in portrait), not
+      over a projector disc on the counter.
+    - There is no 3D close-up yet (I7): the camera's push-in shows Mira at the bar, and the avatar stops short of her
+      stool so both are seen.
+    - Esc closes the intro; there is no separate "skip conversation".
+  - **The end.** CONTINUE on the last line returns to the menu. The contract card and the transport are S7.
 
 ## Dependencies
 

@@ -1,0 +1,30 @@
+{
+  "_source": "PLACEHOLDER script for the Collective opening's bar conversation (Collective-Opening-Design §6.4), in the owner's order: welcome, who the Collective are, the frontier, the offer, the terms, the handshake. The owner's transcript replaces the lines; slide ids stay. [MM-story_mw47llqj_6]",
+  "speakers": {
+    "mira": { "name": "Factor Mira Valcourt", "title": "Contract officer · The Collective", "voice": "collective", "gender": "female", "fac": "collective" }
+  },
+  "slides": {
+    "ledger":    { "title": "The Long Ledger", "caption": "Capital ship of the Collective · above Vesper" },
+    "seal":      { "title": "The Collective", "caption": "Traders, not soldiers" },
+    "frontier":  { "title": "The frontier", "caption": "Nine homeworlds · nine factions · one market" },
+    "verdance":  { "title": "Verdance", "caption": "Ground · Powder homeworld" },
+    "transport": { "title": "Your transport", "caption": "Collective hauler · fitted for harvest" },
+    "terms":     { "title": "The terms", "caption": "We buy to the quota · the surplus is yours" }
+  },
+  "lines": [
+    { "speaker": "mira", "text": "Welcome aboard the Long Ledger, Commander. Mind the stools — they bolt them down after the last convoy.", "slide": "ledger" },
+    { "speaker": "mira", "text": "I'm Mira Valcourt. I write the contracts on this ship, which makes me the most interesting person in the bar.", "intent": "statement" },
+    { "speaker": "mira", "text": "You'll hear a lot of things about the Collective out there. Most of them are true, and none of them are about guns.", "slide": "seal" },
+    { "speaker": "mira", "text": "We're traders. We don't take worlds. We buy what comes out of them.", "intent": "statement" },
+    { "speaker": "mira", "text": "Nine homeworlds on this arm, nine factions, and every one of them sitting on resources they can't move without us.", "slide": "frontier" },
+    { "speaker": "mira", "text": "They'll fight each other over it. We'd rather they fought efficiently.", "intent": "trail" },
+    { "speaker": "mira", "text": "Which brings me to you. Verdance — green, loud, and rich in powder ore.", "slide": "verdance" },
+    { "speaker": "mira", "text": "The Ground faction holds it. Their harvest lines need a commander who can keep them standing.", "intent": "statement" },
+    { "speaker": "mira", "text": "So here's the offer: a transport, fitted and fuelled, waiting in the Loading Bay.", "slide": "transport" },
+    { "speaker": "mira", "text": "It's yours for as long as you keep a contract with us. Fair?", "intent": "question" },
+    { "speaker": "mira", "text": "The terms are simple. Whatever you harvest, we buy — up to the quota.", "slide": "terms" },
+    { "speaker": "mira", "text": "Common ore and the uncommon finds. Anything past the quota, and anything rare, you keep.", "intent": "statement" },
+    { "speaker": "mira", "text": "Fill enough contracts and the Collective remembers your name. That's worth more than the gold.", "intent": "statement" },
+    { "speaker": "mira", "text": "Then we have a deal. Welcome to the Collective, Commander.", "intent": "exclaim", "handshake": true }
+  ]
+}
