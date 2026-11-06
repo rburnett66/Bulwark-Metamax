@@ -12,7 +12,7 @@
  * 'bwm-galaxy-arrive' when a fly back to a planet lands (the menu swaps the live globe back in).
  * Render-only; THREE and makeGlobe are injected.
  */
-import { GALAXY, CAM, SYSTEM_KEYS, systemPos, galaxyStars, galaxyCamera } from '../data/galaxy.js';
+import { GALAXY, CAM, SYSTEM_KEYS, systemPos, galaxyStars, galaxyCamera, VESPER, vesperPos } from '../data/galaxy.js';
 import { PLANETS } from '../data/planets.js';
 import { SUN_DIR } from '../render3d/planet/globe.js';
 
@@ -108,6 +108,22 @@ export function createGalaxyStage(THREE, makeGlobe) {
   const marker = new THREE.Line(new THREE.BufferGeometry().setFromPoints(mpts), new THREE.LineBasicMaterial({ color: 0xf2c869, transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
   marker.renderOrder = 6; scene.add(marker);
 
+  // ── Vesper, the Collective's red giant [MM-story_mw47l791_1]: a big, slowly pulsing red glow and a thin gold ring.
+  //    Not a homeworld: no globe, no orbit, never picked (its label is [data-star], not [data-sys]).
+  const vp = vesperPos();
+  const vg = new THREE.BufferGeometry();
+  vg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vp), 3));
+  vg.setAttribute('aCol', new THREE.BufferAttribute(new Float32Array(VESPER.color.map((c) => c / 255)), 3));
+  vg.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array([58]), 1));
+  const vMat = new THREE.ShaderMaterial({ uniforms: { uPR: { value: 1 }, uFade: { value: 1 } }, vertexShader: GVERT, fragmentShader: GFRAG,
+    transparent: true, depthWrite: false, depthTest: false });
+  light(THREE, vMat);
+  const vGlow = new THREE.Points(vg, vMat); vGlow.frustumCulled = false; vGlow.renderOrder = 5;
+  scene.add(vGlow);
+  const vpts = []; for (let k = 0; k <= 64; k++) { const a = (k / 64) * Math.PI * 2; vpts.push(new THREE.Vector3(vp[0] + Math.cos(a) * 2.6, vp[1], vp[2] + Math.sin(a) * 2.6)); }
+  const vRing = new THREE.Line(new THREE.BufferGeometry().setFromPoints(vpts), new THREE.LineBasicMaterial({ color: new THREE.Color(VESPER.ring), transparent: true, opacity: 0, depthWrite: false }));
+  scene.add(vRing);
+
   let f = 0, focus = null, focusKey = null, arrived = true, t = 0;
   const v = new THREE.Vector3();
 
@@ -154,6 +170,16 @@ export function createGalaxyStage(THREE, makeGlobe) {
         lab.style.opacity = String(la * (v.z < 1 ? 1 : 0)); lab.style.pointerEvents = la > 0.5 ? 'auto' : 'none';
         lab.classList.toggle('on', lab.dataset.sys === key);
       }
+      // Vesper: shows with the galaxy, breathes slowly (a red giant pulsates); its label follows it
+      const pulse = reduce ? 1 : 0.82 + 0.18 * Math.sin(t * 1.3);
+      vMat.uniforms.uPR.value = pr; vMat.uniforms.uFade.value = Math.min(1, C.e * 1.6) * pulse;
+      vRing.material.opacity = 0.5 * Math.min(1, C.e * 2);
+      for (const lab of el.querySelectorAll('[data-star]')) {
+        if (!show) { lab.style.opacity = '0'; continue; }
+        v.set(vp[0], vp[1], vp[2]).project(cam);
+        lab.style.transform = `translate(${((v.x * 0.5 + 0.5) * W).toFixed(1)}px, ${((-v.y * 0.5 + 0.5) * H).toFixed(1)}px)`;
+        lab.style.opacity = String(la * (v.z < 1 ? 0.9 : 0));
+      }
       if (want === 0 && f <= 0 && !arrived) { arrived = true; el.dispatchEvent(new CustomEvent('bwm-galaxy-arrive')); }
       if (f > 0) arrived = false;
       return cam;
@@ -174,7 +200,7 @@ export function createGalaxyStage(THREE, makeGlobe) {
     get fly() { return f; },
     dispose() {
       for (const s of systems.values()) { s.globe.dispose(); s.ring.geometry.dispose(); s.ring.material.dispose(); }
-      sphere.dispose(); disc.geometry.dispose(); discMat.dispose(); sg.dispose(); starMat.dispose(); gg.dispose(); glowMat.dispose(); marker.geometry.dispose(); marker.material.dispose();
+      sphere.dispose(); vg.dispose(); vMat.dispose(); vRing.geometry.dispose(); vRing.material.dispose(); disc.geometry.dispose(); discMat.dispose(); sg.dispose(); starMat.dispose(); gg.dispose(); glowMat.dispose(); marker.geometry.dispose(); marker.material.dispose();
     },
   };
 }
