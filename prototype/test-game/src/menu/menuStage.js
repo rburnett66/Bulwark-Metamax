@@ -116,6 +116,9 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
     const el = e.target.closest && e.target.closest('[data-galaxy]');
     if (!el || !galaxy || !downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 8) { downAt = null; return; }
     downAt = null;
+    // Vesper's label opens the Collective intro (in-game prototype) [MM-story_mw4d1bsw_q]
+    const star = e.target.closest('[data-star]');
+    if (star) { el.dispatchEvent(new CustomEvent('bwm-galaxy-star', { detail: { key: star.dataset.star } })); return; }
     const lab = e.target.closest('[data-sys]');
     const r = el.getBoundingClientRect(), key = lab ? lab.dataset.sys : galaxy.pick(e.clientX - r.left, e.clientY - r.top, r.width, r.height);
     if (key) el.dispatchEvent(new CustomEvent('bwm-galaxy-pick', { detail: { key } }));

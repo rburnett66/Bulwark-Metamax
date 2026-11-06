@@ -59,7 +59,7 @@ import { RenderPass } from '../../vendor/three-addons/postprocessing/RenderPass.
 import { ShaderPass } from '../../vendor/three-addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from '../../vendor/three-addons/postprocessing/UnrealBloomPass.js';
 import { createOpeningStage } from '../../src/opening/openingStage.js';
-import { BEATS, BUILT_UNTIL, skipTarget } from '../../src/opening/timeline.js';
+import { BEATS, SHIP_UNTIL, skipTarget } from '../../src/opening/timeline.js';
 
 const q = new URLSearchParams(location.search);
 const tier = ['high', 'standard', 'low'].includes(q.get('tier')) ? q.get('tier') : 'high';
@@ -80,7 +80,7 @@ const END = 46, scrub = document.getElementById('scrub'), timeEl = document.getE
 const beatsEl = document.getElementById('beats');
 for (const b of BEATS) {
   if (b.start > END) continue;
-  const m = document.createElement('span'); m.className = 'beat' + (b.start >= BUILT_UNTIL ? ' later' : '');
+  const m = document.createElement('span'); m.className = 'beat' + (b.start >= SHIP_UNTIL ? ' later' : '');
   m.textContent = b.id; m.style.left = (b.start / END * 100) + '%'; m.dataset.id = b.id; beatsEl.appendChild(m);
 }
 let t = q.has('t') ? +q.get('t') : 0, playing = q.get('play') !== '0';
@@ -116,7 +116,7 @@ renderer.setAnimationLoop((now) => {
   scrub.value = t; timeEl.textContent = t.toFixed(1) + ' s';
   for (const m of beatsEl.children) m.classList.toggle('on', m.dataset.id === o.beat);
   const i = stage.info;
-  statsEl.textContent = `${o.beat}${o.built ? '' : ' · beats past 40 s arrive with the room view'} · ${i.calls} draws · ${(i.triangles / 1000).toFixed(1)}k tris · ${tier}${reduced ? ' · reduced' : ''}`;
+  statsEl.textContent = `${o.beat}${t < SHIP_UNTIL ? '' : ' · the rooms (beats 4–8) play in the game: index.html?intro=1'} · ${i.calls} draws · ${(i.triangles / 1000).toFixed(1)}k tris · ${tier}${reduced ? ' · reduced' : ''}`;
 });
 window.__ready = true;
 window.__seek = (s) => { t = s; setPlay(false); };

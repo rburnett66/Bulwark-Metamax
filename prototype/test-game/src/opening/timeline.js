@@ -6,8 +6,10 @@
  * Design: Collective-Opening-Design §2 (beat sheet). Tech plan: docs/tech-plan/Collective-Opening.md §3.1 — every beat
  * value comes from openingAt(t), so tests scrub it headlessly and the review page's scrub bar is the same function.
  *
- * Built so far: beats 0–3 (cold open, the red giant, the fly-by, the swing to the flank). Beat 4 (the hull opens into
- * the room view) waits on the room view (Interiors I1); until then the timeline holds the flank shot from 40 s.
+ * Built: beats 0–3 (cold open, the red giant, the fly-by, the swing to the flank) in 3D, then beats 4–7 over the room
+ * view drawn from primitives (src/ship-interior): the scan wipe opens the hull, life inside, the patron's flash, the bar
+ * highlighted with "tap to enter" [MM-story_mw4d1bsw_q]. The 3D camera holds the flank from SHIP_UNTIL on. Beat 8 (the
+ * conversation) is player-paced and starts on a tap, or after AUTO_ENTER seconds idle.
  *
  * World (glTF / ship space): +X bow, +Y up, +Z starboard; one unit = 25 m. Lengths below are in units of the ship's
  * length L, from its bounding box, so any ship works. The ship flies bow-first along +X past Vesper, which hangs far
@@ -29,7 +31,13 @@ export const BEATS = Object.freeze([
   { id: 'bar', start: 60, end: 63 },
   { id: 'talk', start: 63, end: null },
 ]);
-export const BUILT_UNTIL = 40;   // seconds of the timeline this story draws; later beats hold the flank shot
+export const SHIP_UNTIL = 40;    // the 3D shot ends on the flank here; the room view takes over (beat 4)
+export const BUILT_UNTIL = 63;   // seconds of timed beats; beat 8 (talk) is player-paced
+/** The room view's beats (seconds): the scan wipe, the patron's two flash pulses, the bar prompt and auto-enter. */
+export const ROOMS = Object.freeze({
+  scan: [41, 44.5], pulses: [56.4, 57.0], pulseUp: 0.25, pulseDown: 0.35, dim: [60, 60.6], tapAfter: 61, autoEnter: 66,
+  room: 'bar', patronFill: 0.45, barFill: 0.62,
+});
 
 /** Where a first-run skip lands (design §2: from beat 3 straight to the highlighted bar). */
 export const SKIP = Object.freeze({ from: 'flank', to: 'bar' });
@@ -77,9 +85,10 @@ export function openingAt(t, { box, aspect = 16 / 9, reduced = false } = {}) {
   const lo = vec(box.min), hi = vec(box.max);
   const L = hi[0] - lo[0], H = hi[1] - lo[1];
   const c = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
-  const tt = Math.max(0, Math.min(t, BUILT_UNTIL));
+  const tt = Math.max(0, Math.min(t, SHIP_UNTIL));      // the 3D shot's own time: it holds the flank after SHIP_UNTIL
   const B = beatAt(tt);
   const T = reduced ? heldTime(tt) : tt;               // reduced motion: every beat is a still at its settled pose
+  const tb = Math.max(0, Math.min(t, BUILT_UNTIL)), BB = beatAt(t);
 
   // the ship: bow-first along +X, its centre crossing x = 0 as the flank beat starts
   const flank0 = BEATS[3].start;
@@ -126,11 +135,11 @@ export function openingAt(t, { box, aspect = 16 / 9, reduced = false } = {}) {
   // light, engines, tugs, fades
   const starIn = smooth(OPEN.fadeIn[0], OPEN.fadeIn[1] + 2, tt);
   let fade = smooth(OPEN.fadeIn[0], OPEN.fadeIn[1], tt);
-  if (reduced) fade *= crossFade(tt);
+  if (reduced) fade *= crossFade(tb);
   const capA = B.beat === 'cold' ? smooth(0.3, 1.0, tt) * (1 - smooth(2.4, 3.0, tt))
     : B.beat === 'star' ? 1 - smooth(BEATS[1].start, BEATS[1].start + 1.2, tt) : 0;
   return {
-    beat: B.beat, index: B.index, k: B.k, built: t <= BUILT_UNTIL,
+    beat: BB.beat, index: BB.index, k: BB.k, built: true,
     ship: { x: shipX, visible: B.index >= 2 },
     camera: { position: pos, target, fov },
     star: { position: star, radius: starR, intensity: 0.15 + 0.85 * starIn },
@@ -138,6 +147,36 @@ export function openingAt(t, { box, aspect = 16 / 9, reduced = false } = {}) {
     tugs: B.index >= 2,
     fade,
     caption: { text: BEATS[0].caption, alpha: capA },
+    room: roomsAt(t, reduced),
+  };
+}
+
+/**
+ * The room view's state at time t (beats 4–8): { scan 0..1 (the wipe's progress, left → right), show3d, focus
+ * { room, fill } | null, flash 0..1, dim 0..1 (every other room), highlight 0..1 (the bar), prompt null | 'name' | 'tap',
+ * enter (auto-enter reached) }.
+ */
+export function roomsAt(t, reduced = false) {
+  const R = ROOMS;
+  const scan = reduced ? (t >= R.scan[0] + 1.5 ? 1 : 0) : smooth(R.scan[0], R.scan[1], t);
+  let flash = 0;
+  if (t >= R.pulses[0] && t < BEATS[7].start) {
+    if (reduced) flash = 1;
+    else {
+      for (const p of R.pulses) {
+        const u = t - p;
+        if (u >= 0 && u < R.pulseUp) flash = Math.max(flash, u / R.pulseUp);
+        else if (u >= R.pulseUp && u < R.pulseUp + R.pulseDown) flash = Math.max(flash, 1 - (u - R.pulseUp) / R.pulseDown);
+      }
+      if (t >= R.pulses[1] + R.pulseUp + R.pulseDown) flash = 0.35;   // after the two pulses: a soft glow, the chevron stays
+    }
+  }
+  const dim = reduced ? (t >= R.dim[0] ? 1 : 0) : smooth(R.dim[0], R.dim[1], t);
+  const focus = t >= BEATS[6].start ? { room: R.room, fill: t >= BEATS[7].start ? R.barFill : R.patronFill } : null;
+  return {
+    scan, show3d: scan < 1, focus, flash, dim, highlight: dim,
+    prompt: t >= R.tapAfter ? 'tap' : t >= R.dim[0] ? 'name' : null,
+    enter: t >= R.autoEnter,
   };
 }
 

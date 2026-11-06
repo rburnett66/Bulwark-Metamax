@@ -126,7 +126,8 @@ const CSS = `
   transition:border-color .12s, background .12s; z-index:7; }
 .bwm-galaxy [data-sys]:hover { border-color:var(--hue,#d9a441); }
 .bwm-galaxy [data-sys].on { border-color:#f2c869; background:rgba(40,32,14,.85); color:#f2c869; }
-.bwm-galaxy [data-star] { position:absolute; left:0; top:0; margin:16px 0 0 -8px; padding:2px 7px; font-size:10px; font-weight:800; letter-spacing:.2em; color:#ffb08a; background:rgba(30,12,8,.7); border:1px solid rgba(242,200,105,.45); border-radius:4px; white-space:nowrap; pointer-events:none; opacity:0; }
+.bwm-galaxy [data-star] { position:absolute; left:0; top:0; margin:16px 0 0 -8px; padding:2px 7px; font-size:10px; font-weight:800; letter-spacing:.2em; color:#ffb08a; background:rgba(30,12,8,.7); border:1px solid rgba(242,200,105,.45); border-radius:4px; white-space:nowrap; pointer-events:none; opacity:0; cursor:pointer; }
+.bwm-galaxy [data-star]:hover, .bwm-galaxy [data-star]:focus-visible { border-color:#f2c869; color:#ffd0b0; outline:none; }
 .bwm-zoom { position:absolute; z-index:8; right:calc(min(72vh, 36vw) / 2); top:4%; transform:translateX(50%); width:auto !important;
   padding:7px 14px !important; font-size:11px !important; letter-spacing:.24em !important; gap:8px; }
 .bwm-root.galaxy .bwm-zoom { right:auto; left:clamp(24px,6vw,90px); top:10px; transform:none; }
@@ -313,6 +314,7 @@ function el(doc, tag, cls, text) {
 
 export function createMenu(mountEl, cbs) {
   const doc = mountEl.ownerDocument;
+  let introOpen = false;   // the Collective intro is playing over the menu [MM-story_mw4d1bsw_q]
   if (!doc.getElementById('bwm-style')) {
     const st = el(doc, 'style'); st.id = 'bwm-style'; st.textContent = CSS;
     doc.head.appendChild(st);
@@ -392,9 +394,12 @@ export function createMenu(mountEl, cbs) {
     const f = REG.find(key); lab.title = PLANETS[key].name + (f ? ' — ' + f.name : '');
     galaxy.appendChild(lab);
   }
-  // Vesper (the Collective's red giant) is labelled but not a target: no planet to fly to [MM-story_mw47l791_1]
+  // Vesper (the Collective's red giant) is not a target — no planet to fly to [MM-story_mw47l791_1] — but tapping it
+  // plays the Collective intro: the Long Ledger's fly-by and its rooms (in-game prototype) [MM-story_mw4d1bsw_q]
   const vlab = el(doc, 'span', null, VESPER.name.toUpperCase());
-  vlab.dataset.star = VESPER.key; vlab.title = VESPER.name + ' — ' + VESPER.faction + ' (' + VESPER.ship + ')';
+  vlab.dataset.star = VESPER.key; vlab.title = VESPER.name + ' — ' + VESPER.faction + ' (' + VESPER.ship + '). Tap to visit.';
+  vlab.setAttribute('role', 'button'); vlab.tabIndex = 0;
+  vlab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCollectiveIntro(); } });
   galaxy.appendChild(vlab);
   main.appendChild(galaxy);
   const zoomBtn = el(doc, 'button', 'bwm-btn bwm-zoom');
@@ -423,6 +428,7 @@ export function createMenu(mountEl, cbs) {
     zoomBtn.firstChild.textContent = '◎ GALAXY';
   }
   galaxy.addEventListener('bwm-galaxy-arrive', landPlanet);
+  galaxy.addEventListener('bwm-galaxy-star', () => openCollectiveIntro());
   galaxy.addEventListener('bwm-galaxy-pick', (e) => {
     const key = e.detail && e.detail.key; if (!key || !PLANETS[key]) return;
     setTarget(key);
@@ -903,5 +909,20 @@ export function createMenu(mountEl, cbs) {
   };
   show('main');
   setTimeout(playPendingRewards, 600);
+  // ?intro=1 plays the Collective intro straight away (review link) [MM-story_mw4d1bsw_q]
+  try { if (new URLSearchParams(location.search).get('intro') === '1') setTimeout(openCollectiveIntro, 50); } catch (e) { /* no location */ }
   return api;
+
+  /** The Collective intro (in-game prototype): Vesper, the Long Ledger's fly-by and its rooms, the bar. One at a time. */
+  function openCollectiveIntro() {
+    if (introOpen) return;
+    introOpen = true;
+    const q = new URLSearchParams(location.search);
+    const tier = ['high', 'standard', 'low'].includes(q.get('quality')) ? q.get('quality') : 'high';
+    if (stage) stage.pause();                             // the menu's own 3D rests under the intro
+    import('../opening/introRunner.js')
+      .then((M) => M.playIntro({ mount: doc.body, tier, start: +q.get('introT') || 0, onDone: () => { introOpen = false; syncStage(); } }))
+      .then((intro) => { if (typeof window !== 'undefined') window.__intro = intro; })
+      .catch((err) => { introOpen = false; console.error('[intro]', err); });
+  }
 }

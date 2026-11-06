@@ -175,8 +175,9 @@ export function createGalaxyStage(THREE, makeGlobe) {
       vMat.uniforms.uPR.value = pr; vMat.uniforms.uFade.value = Math.min(1, C.e * 1.6) * pulse;
       vRing.material.opacity = 0.5 * Math.min(1, C.e * 2);
       for (const lab of el.querySelectorAll('[data-star]')) {
-        if (!show) { lab.style.opacity = '0'; continue; }
+        if (!show) { lab.style.opacity = '0'; lab.style.pointerEvents = 'none'; continue; }
         v.set(vp[0], vp[1], vp[2]).project(cam);
+        lab.style.pointerEvents = la > 0.5 ? 'auto' : 'none';   // tap it: the Collective intro [MM-story_mw4d1bsw_q]
         lab.style.transform = `translate(${((v.x * 0.5 + 0.5) * W).toFixed(1)}px, ${((-v.y * 0.5 + 0.5) * H).toFixed(1)}px)`;
         lab.style.opacity = String(la * (v.z < 1 ? 0.9 : 0));
       }
