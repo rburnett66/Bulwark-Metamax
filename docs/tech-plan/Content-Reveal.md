@@ -229,12 +229,13 @@ actually visiting the capital ship for that faction, and the optional contract w
   the existing `comm` call and the `contractModal`, which already offers ACCEPT and DECLINE (Dialog-Unification F4).
 - **Accept:** rare finds this map count toward the quota, and are paid for when the contract resolves. Without the
   contract the player has to visit that faction's ship to sell them.
-- **Decline:** the battle continues; nothing is lost (Q6).
+- **Decline:** costs nothing, but the offer is gone for this run and must be **re-earned** (3★ on wave 3 again, on a later run). Owner, 2026-11-06.
 - **Resolves at the end of the map:** win or lose, the haul is paid and the giver gets the closing line
   (`questClosingDue`, already built). The result screen shows the sale.
 - **Built from:** `save/contracts.js` (offer, accept, judge, loyalty), `comm/questBeats.js` (closing), harvest's
   per-tier crediting (`u.cargoMix`), and the workbook for the quota and price (a `Rare_Contracts` sheet beside
-  `Collective_Contracts`).
+  `Collective_Contracts`). All 81 contracts are built (owner: *"propose defaults is fine, create all contracts"*):
+  `docs/16 Bulwark MM/design/Rare-Contracts-Design.md`, `MAPDATA.rareContracts`, `src/data/rareContract.js` (PR #172).
 - **What changes from 2026-11-02:** that move took the wave-2 faction contract out of battle and made it the
   planet's secondary mission aboard the ship. That stays. This is a separate, **optional**, rare-only offer from
   *another* faction.
@@ -343,9 +344,8 @@ Headless review (Playwright, swiftshader) at desktop and phone landscape.
   introduces a new character, who greets the player and gives a mission on the first visit to that ship (§5.5).
 - **Q5 — Decided 2026-11-06.** The game opens on the red giant and the Collective ship; the Verdance mission is granted
   aboard as a contract; then the player departs, surveys Verdance, and presses PLAY.
-- **Q6 — The rare contract (§5.5):**
-  - The quota and price: proposed as a workbook sheet.
-  - Does declining cost loyalty, as the old contract's decline did? Proposed: no.
+- **Q6 — Decided 2026-11-06.** Proposed defaults accepted; all 81 contracts built (PR #172). Declining costs nothing
+  but the offer must be re-earned.
 
 ## Dependencies
 
