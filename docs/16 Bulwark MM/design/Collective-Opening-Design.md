@@ -1,16 +1,18 @@
-# The Collective Opening — red giant, capital ship, room view and the first contract
+# The Collective Opening — Vesper, The Long Ledger, the room view and the first contract
 
-**Provenance.** Owner sentences are quoted and marked **owner**. Everything else is **agent-proposed** and open to
-correction. Written 2026-11-05 by the repo-rooted cloud session (Claude Code, Opus 5.5) from:
-- the owner's request that day;
+**v0.2, 2026-11-05.** Owner sentences are quoted and marked **owner**. Everything else is **agent-proposed** and open to
+correction. Epic `epic_mvo5po8u_4` (The Collective trade faction). Tech plan: `docs/tech-plan/Collective-Opening.md`.
+
+**Sources:**
+- the owner's requests of 2026-11-05;
 - `Capital-Ship-Arrival-Design.md`, which this extends;
 - `Menu-Survey-Galaxy.md` (the galaxy);
-- the Collective ship build (`tools/blender/ships/collective.py`, LOD0–2 GLBs in `content/ships/`);
+- the Collective ship build (`tools/blender/ships/collective.py`, LOD0–2 GLBs);
+- the **Bulwark Capital Ship** prototype ("The Long Ledger", artifact `S9B7GgVN7XcRDBTSF7BVth`, 2026-10-27): rooms, decks, live three.js crew, faction helmets, poses, the walk-to-room and dialog flow, standing locks, the board/depart scan and the layout editor;
+- the **Bulwark Character Sheet** artifact (`MBrTStmqgULyFM4XFkj5jM`): the shared rig, civilians, roles and the emote set;
+- the **Bulwark Dossier** artifact (`VFU7kuFB51N61M9YChgeb9`): the nine Collective officers;
 - the comm-card dialog and procedural voice (`src/comm/`);
-- the 81 faction characters (`Bulwark-Missions.xlsx` › Givers, 81 portraits);
-- the Collective contract economy (`src/sim/harvest.js`, `src/data/collectiveContract.js`).
-
-Epic `epic_mvo5po8u_4` (The Collective trade faction). Tech plan: `docs/tech-plan/Collective-Opening.md`.
+- the Collective contract economy.
 
 > **owner**: "we should add the collective capital ship and the red giant it orbits as a new unplayable planet. The
 > red giant will also need to be added to the galaxy, not to far from verdance maybe at the edge of the galaxy. The
@@ -26,26 +28,44 @@ Epic `epic_mvo5po8u_4` (The Collective trade faction). Tech plan: `docs/tech-pla
 > **owner**: "We will need the new planet, the introduction of the capital ship, the camera to the side view. We will
 > also need a way to draw each of the room modules we have already listed, and we will need to populate the key
 > faction characters in appropriate rooms. This will include the characters and crew walking around and animating."
+>
+> **owner** (v0.2): "You already have a prototype with animated characters and crew for each faction. The prototype
+> assumes there is a base image for each faction. I expect the faction ships to be revised so for now I would prefer
+> to mockup rooms with primitives."
+
+## What changed in v0.2
+
+- **Rooms.** The room list is the Long Ledger prototype's seven rooms on three decks, not an invented list. Rooms are
+  **mocked up with three.js primitives** instead of the prototype's pre-rendered base image (`cutaway.jpg`), because
+  the faction ships will be revised.
+- **Characters.** Crew and key characters reuse the prototype's rig, faction helmets and pose machine. The Blender
+  character pipeline is dropped.
+- **Names.** The ship is **The Long Ledger**. The patron is **Factor Mira Valcourt**, who per the Dossier "gives you
+  the ship and the opening contract". The invented names from v0.1 (Ottoline Crane, Mags Tolliver, the Ember Room,
+  Collective Anchorage, Embassy Row) are withdrawn.
 
 ---
 
-## 0. Reading of the request (stated so it can be corrected)
+## 0. Reading of the request
 
-1. **A tenth body in the galaxy, not a battlefield.** The red giant has no maps, no survey and no campaign. Its
-   only content is the Collective capital ship in orbit, which is the player's first employer and hub.
-2. **The game opens there.** On a new save, the first thing the player sees is the red giant. The Collective ship
-   flies by, the camera swings to the ship's flank, and the hull opens into a cutaway of rooms with people moving
-   in them. The patron at the bar is called out, the bar lights up, and a click-through conversation gives the
-   player their first contract and a transport ship. Then the player goes to Verdance.
-3. **The "animated slide show"** is the owner's opening material, kept as stills to keep the download small
-   (owner, earlier: "my plan was to take snap shots and present text"). It is presented *inside* the bar
-   conversation as holo-slides the patron shows the player (§6.3). This is a reading; §11 Q3 offers the
-   alternative of a prologue before the red giant.
-4. **The room view is a lasting place, not a cutscene backdrop.** It is drawn from data (a room list and a deck
-   layout) so the same view serves as the Collective hub on later visits, and later each faction's capital ship.
-5. **"The room modules we have already listed"** — no such list was found in the repo, the MetaMax board and
-   documents, the workbooks or past conversations. §4.2 proposes one. It is a single data file
-   (`content/ships/collective/rooms.json`), so the owner's list replaces it without code changes (§11 Q1).
+1. **A tenth body in the galaxy, not a battlefield.** The red giant has no maps, no survey and no campaign. Its only
+   content is The Long Ledger in orbit, which is the player's first employer and hub.
+2. **The game opens there.** On a new save:
+   - the red giant;
+   - The Long Ledger flies by;
+   - the camera swings to the ship's flank;
+   - the hull opens into the room view with crew moving in it;
+   - the patron seated at the bar flashes and the bar lights up;
+   - a click-through conversation gives the first contract and a transport;
+   - the player goes to Verdance.
+3. **The "animated slide show"** is the owner's opening material, kept as stills (owner, earlier: "my plan was to take
+   snap shots and present text"). It is presented *inside* the bar conversation as holo-slides (§6.3). Q3 offers a
+   prologue instead.
+4. **The room view is a lasting place.** It is the hub the prototype already sketches ("Collective capital ship · your
+   hub — click a room to walk in"). The opening is the first time the player sees it.
+5. **Primitives now, art later.** Every room is drawn from boxes, cylinders, spheres and planes driven by the layout
+   data. When a faction's ship is revised, its rooms can take a rendered or modelled skin without changing the
+   layout, the crew or the flow (§4.5).
 
 ---
 
@@ -53,278 +73,212 @@ Epic `epic_mvo5po8u_4` (The Collective trade faction). Tech plan: `docs/tech-pla
 
 | Piece | Where | State |
 |---|---|---|
-| Collective capital ship model | `tools/blender/ships/collective.py` → `content/ships/collective_lod{0,1,2}.glb` | Built, v2 surface. Ivory hull ~21.5 units long (1 unit = 25 m, so ≈ 540 m), orange livery, blue light line, central dome, fore cathedral tower with spires, eight cargo spokes, eight-nozzle stern. Shown only in `tools/ships/viewer.html`. |
-| Arrival cinematic design | `Capital-Ship-Arrival-Design.md` | Designed, not built. §5 already says the Collective arrival plays above a red giant (`createBackdrop({star:'redGiant'})`, broad glare instead of a lens flare) and is the game's opening. |
-| Engine FX, tugs, presentation shots | `src/render3d/ships/engineFx.js`, `tugs.js`, `shots.js` | Built (viewer). |
-| Galaxy | `src/data/galaxy.js` (`SYSTEMS`, `systemPos`), `src/menu/galaxyStage.js`, `menuStage.js` | Built. Nine homeworlds on a two-armed spiral, radius 100. Verdance at r 22, 18°. |
-| Planets | `src/data/planets.js` (`PLANETS`) | Nine playable homeworlds. |
-| Dialog | `src/comm/commCard.js` (in-battle comm card), `voice.js` (procedural voice, mute/volume), 81 portraits in `content/dialog/portraits/` | Built for one-way in-battle transmissions. |
-| Characters | Givers sheet: 9 per faction × 9 factions, alignment-ranked (AG → DE). The nine captains are the PG of each faction. | Data + 2D portraits only. No 3D characters exist. |
-| Collective economy | contract quota per map and tier; the Collective ship grants and collects missions on maps 1–3 | Built. |
-| Collective cast | — | **None.** "Collective giver name" has been open since 2026-11-03. |
+| **Hub prototype — The Long Ledger** | Artifact `S9B7GgVN7XcRDBTSF7BVth` (not in the repo) | Built as a review page. A pre-rendered cutaway image with hotspot rooms on three deck floors, and a live three.js orthographic crew layer on top. Your gold avatar walks to a clicked room, then a dialog opens with a 3D close-up of the occupant. It also has faction-standing locks, a board/depart scan wipe from an exterior image, and a layout editor that exports `ship-layout.json` (`{floors, rooms}`). |
+| **Crew rig** | Same prototype + Character Sheet artifact | A primitive humanoid (the Project City foreman) with a vest, stripes and a per-faction helmet. There are ten faction helmets plus the captain's cap, a hard hat and a beanie. An 8-state pose machine covers idle, walk, talk, point, wave, salute, angry and celebrate. Civilians and roles are also defined. |
+| **Collective officers** | Dossier artifact | Nine officers by alignment. Factor Mira Valcourt (G) gives the ship and opening contract. Supercargo Dorian Quell (CG) is her boss, met at the capital-ship unlock. Seven more complete the ladder. |
+| Collective capital ship model | `tools/blender/ships/collective.py` → `content/ships/collective_lod{0,1,2}.glb` | Built. Ivory ≈ 540 m hull. Used for the fly-by. Will be revised with the other faction ships. |
+| Arrival cinematic design | `Capital-Ship-Arrival-Design.md` | Designed, not built. §5 puts the Collective arrival above a red giant as the game's opening. |
+| Engine FX, tugs, shots | `src/render3d/ships/` | Built (viewer). |
+| Galaxy | `src/data/galaxy.js`, `menu/galaxyStage.js` | Built. Nine homeworlds; Verdance at r 22, 18°. |
+| Dialog | `src/comm/commCard.js`, `voice.js`, 81 portraits | Built for one-way in-battle transmissions. |
+| Collective economy | Contract quota per map and tier | Built. |
 
 ---
 
 ## 2. The opening at a glance
 
-First launch, new save. Total ≈ 70 s before the conversation; the conversation is player-paced.
+First launch, new save. About 70 s before the conversation; the conversation is player-paced.
 
 | # | Beat | Time | What the player sees | Hands-on |
 |---|---|---|---|---|
-| 0 | **Cold open** | 0–3 s | Black. Comm static rises; caption "COLLECTIVE ANCHORAGE · VESPER". | — |
-| 1 | **The red giant** | 3–14 s | Vesper fills the frame: a vast, slow-boiling red star, granulated surface, prominences curling off the limb. Long lens, almost still. | — |
-| 2 | **Fly-by** | 14–30 s | The Collective ship crosses the star's face bow-first, silhouetted, then lit by the red glare as it passes the camera. Tugs peel away. Arrival design §3 beats 2–5, with the Collective variant of §5. | — |
-| 3 | **Swing to the flank** | 30–40 s | The camera matches speed and arcs to the ship's port beam. It flattens from the 85 mm close-up to a long-lens side view; the ship fills the width, level, bow to the right. | — |
-| 4 | **The hull opens** | 40–46 s | The flank plating separates along panel seams and slides back in layers, revealing the cutaway: decks of lit rooms inside the ship's own silhouette. | — |
-| 5 | **Life inside** | 46–56 s | The view settles. Crew walk corridors and ride lifts; dockhands move crates; faction delegates sit in their embassies; the dome's trade floor bustles. Slow drift across the ship. | Drag to look around (from here on). |
-| 6 | **The patron** | 56–60 s | In the bar, one seated figure **flashes**: a rim-light pulse twice and a small gold chevron above her. | — |
-| 7 | **The bar** | 60–63 s | The bar room **highlights**: every other room dims to 35 %, the bar's frame glows gold, and a label slides in: "THE EMBER ROOM — TAP TO ENTER". The camera eases toward it. | **Tap the bar** (auto after 6 s idle). |
-| 8 | **The conversation** | player-paced | The camera pushes into the bar. The patron turns to face the camera. The dialog panel opens: portrait, name, typed lines, procedural voice. Holo-slides rise from the table for the lines that show something. | Click / tap / Space advances; hold to fast-type. |
-| 9 | **The contract** | — | A contract card: terms, the Collective seal, ACCEPT. | **Accept.** |
-| 10 | **The transport** | ≈ 8 s | The camera drops two decks to the docking bay. The player's transport is lit, its colours chosen there (Q5). | Pick your colours (if Q5 = yes). |
-| 11 | **Departure** | ≈ 6 s | The transport launches out of the bay; cut to the galaxy, flying from Vesper to Verdance. | — |
-| 12 | **Hand-off** | — | Verdance planet screen; map 1 is ready. | Play. |
+| 0 | **Cold open** | 0–3 s | Black. Comm static; caption "THE LONG LEDGER · VESPER". | — |
+| 1 | **The red giant** | 3–14 s | Vesper fills the frame: boiling granulation, prominences off the limb. Long lens, almost still. | — |
+| 2 | **Fly-by** | 14–30 s | The Long Ledger crosses the star's face bow-first, silhouetted, then lit red as it passes. Tugs peel away. Arrival design §3 beats 2–5 with the §5 variant. | — |
+| 3 | **Swing to the flank** | 30–40 s | The camera matches speed and arcs to the port beam, flattening to a long-lens side view. The ship fills the width, bow right. | — |
+| 4 | **The hull opens** | 40–46 s | The prototype's scan line sweeps the hull and peels the plating away behind it, revealing the primitive cutaway: three decks of lit rooms. | — |
+| 5 | **Life inside** | 46–56 s | Crew walk the decks, gesture, talk, salute; officers work in their rooms. Slow drift. | Drag to look around. |
+| 6 | **The patron** | 56–60 s | In the bar, Mira Valcourt sits at the counter. She **flashes**: two gold pulses and a chevron. | — |
+| 7 | **The bar** | 60–63 s | Every other room dims; the bar's frame glows gold; label "THE BAR — TAP TO ENTER". | **Tap the bar** (auto after 6 s idle). |
+| 8 | **The conversation** | player-paced | Your avatar walks in (prototype flow); the camera pushes in; Mira turns to you. The dialog panel opens: 3D close-up, name, typed lines, voice. Holo-slides rise from the counter. | Click / tap / Space; hold to fast-type. |
+| 9 | **The contract** | — | Contract card: terms, the Collective seal, ACCEPT. | **Accept.** |
+| 10 | **The transport** | ≈ 8 s | The camera drops to the **Loading Bay**. Your transport (a primitive mock until its art lands) sits in the clamps. | Pick your colours (if Q5). |
+| 11 | **Departure** | ≈ 6 s | The prototype's depart flow: the hull closes, your shuttle leaves; cut to the galaxy, Vesper → Verdance. | — |
+| 12 | **Hand-off** | — | Verdance planet screen; map 1 ready. | Play. |
 
-Beats 0–7 can be skipped from beat 3 on a first run, and at any time on a replay (§9). The conversation can
-never be skipped on a first run, because it carries the premise and the contract. Each line can still be
-fast-typed.
+Beats 0–7 can be skipped from beat 3 on a first run, and at any time on replays (§9). The conversation is never
+skipped on a first run, because it carries the premise and the contract; lines can be fast-typed.
 
 ---
 
-## 3. Vesper, the red giant (the tenth body)
-
-### 3.1 Identity
+## 3. Vesper, the red giant
 
 | Field | Proposal |
 |---|---|
-| Name | **Vesper** (red giant). The ship's station there is **Collective Anchorage**. *(Q2)* |
-| Kind | `star`, not a planet. No surface battles, no survey, no resources. |
-| Playable | `false`. It never appears in the faction picker, the campaign list or the inventory's planet list. |
-| Look | Deep red-orange (≈ 3,200 K), very large, slowly boiling granulation, darker limb, a few prominences. It is the key light for everything near it: red rim light on the ship, long red-black shadows. |
-| Galaxy marker | A larger, softly pulsing red point with a thin gold ring (the Collective's colour). Label: "Vesper · The Collective". |
+| Name | **Vesper** (Q2). |
+| Kind | `star`. No battles, survey or resources. |
+| Playable | `false`. It never appears in the faction picker, the campaign list or the inventory planets. |
+| Look | Deep red-orange (≈ 3,200 K), huge, slow granulation, a darker limb, prominences. It is the key light for everything near it. |
+| Galaxy marker | A larger, pulsing red point with a thin gold ring. Label: "Vesper · The Long Ledger". |
 
-### 3.2 Place in the galaxy
-
-> **owner**: "not to far from verdance maybe at the edge of the galaxy"
-
-Verdance sits on the inner arm (r 22, 18°). Two readings:
+**Placement.** Owner: "not to far from verdance maybe at the edge of the galaxy". Two options:
 
 | Option | Position | Effect |
 |---|---|---|
-| **A (recommended)** | **r 34, 4°, y +7.** Just off the end of Verdance's arm segment, lifted above the disc. | Close to Verdance: the opening's flight is short and reads as "next door". Sitting above the disc makes it read as outside the spiral, an edge without being far away. |
-| B | r 97, 18°, y +2. On the true outer rim, on Verdance's bearing. | Literally the galaxy's edge. The first flight crosses most of the galaxy, which is spectacular but long, and it puts the hub far from every later planet. |
+| **A (recommended)** | r 34, 4°, y +7: just off Verdance's arm segment, lifted above the disc. | Close to Verdance, and it reads as outside the spiral. |
+| B | r 97, 18°, y +2: the true rim, on Verdance's bearing. | The literal edge, but a long first flight and far from every later planet. |
 
-The galaxy view gains a faint gold "trade lane" from Vesper to every homeworld the player has unlocked: the
-Collective's reach. It is drawn only after the opening.
+After the opening, faint gold trade lanes run from Vesper to every unlocked homeworld.
 
-### 3.3 Rendering Vesper
-
-- **Opening and hub backdrop:** a screen-filling star. A sphere with an animated granulation shader: two octaves
-  of cellular noise drifting at different speeds, limb darkening and a red-to-orange ramp. Two or three
-  billboard prominences loop slowly. A broad, soft glare replaces the lens flare (arrival design §5). Cost: one
-  draw for the sphere, one for prominences, one for the glare.
-- **Galaxy:** a point sprite with a pulse plus the gold ring. It uses the same pipeline as the other systems in
-  `galaxyStage.js`.
+**Rendering.** A granulation-shader sphere, 2–3 looping prominence billboards and a broad soft glare instead of a
+lens flare. Three draws. In the galaxy it is a pulse sprite plus the ring.
 
 ---
 
-## 4. The capital ship's room view
+## 4. The room view — primitives on the prototype's layout
 
-### 4.1 How the side view becomes rooms
+### 4.1 What carries over from the prototype, and what changes
 
-The real ship is ≈ 540 m long and ≈ 30 decks tall at 4 m a deck, too fine to read. The room view is therefore a
-**stylized cutaway**, the way an ant-farm or dollhouse view works: a few chunky decks of big, readable rooms
-inside the ship's true side silhouette. The hull is the frame and the rooms are the picture.
+| Kept as built | Replaced |
+|---|---|
+| The 100 × 56.25 orthographic stage, the % layout and the deck walk lines (`FLOORS`) | `cutaway.jpg` → rooms built from primitives (§4.3) |
+| The `ROOMS` record (`id, name, fac, cap, who, line, flag, acts / choices, unlock, x, top, w, h, fx, floor`) | `exterior.jpg` → the 3D Collective GLB side view (beats 3–4) |
+| Hotspots, activity flags and pulses, the "N things to do" count | — |
+| Standing locks (`unlock: {fac, need}`), the sealed-room toast | — |
+| The crew layer: depth layers, ambient walkers and gestures | — |
+| The walk-to-room avatar, then the dialog with a 3D close-up | — |
+| The board / depart scan wipe and shuttle | — |
+| The layout editor (drag rooms, resize, stand spots, deck floors) and `ship-layout.json` export | — |
 
-- **Transition (beat 4).** The camera reaches the flank shot with an orthographic-like long lens (fov 10–12°).
-  The flank's panel plates (the existing panel UVs) separate along seams: plates offset 2–4 % outward and slide
-  aft in staggered bands over 1.2 s, then fade. Behind them the cutaway is already in place, lit, inside a
-  dark interior shell that matches the hull's side profile. Keel, dome, tower and spires stay solid as the frame.
-- **The cutaway is a separate scene layer** aligned to the side silhouette: a 2.5D stage of room boxes seen
-  from the side, open on the near face. It uses a perspective camera with a narrow fov and a gentle 4–6°
-  downward tilt, so floors read and characters stand on them.
-- **Navigation.**
-  - Drag pans along the ship; pinch or wheel zooms from the whole ship (every room visible) to a single room
-    (filling about 70 % of the screen).
-  - Tapping a room focuses it: the camera eases in, the room label shows, and its occupants become tappable.
-  - Edge limits keep the ship in frame.
+The layout editor becomes the authoring tool for the room view. A room is moved in the editor, exported, and committed
+as data.
 
-### 4.2 Rooms (proposed list — owner to replace, Q1)
+### 4.2 The rooms — the prototype's list
 
-Laid out to match the ship's shape: dome amidships, cathedral tower fore, engines aft, docking and cargo low.
-"Bays" are the horizontal room unit (one bay ≈ one small room); decks are numbered from the top.
+Three decks: deck 1 is the top. Positions are the prototype's current layout.
 
-| Deck | Room | Bays | Where | Purpose (opening → hub later) |
-|---|---|---|---|---|
-| Dome | **The Exchange** (trade floor) | 4 | under the dome | Traders, tickers, haggling. Hub: sell / buy resources. |
-| Dome | Observation Gallery | 2 | dome cap | Visitors at the windows looking at Vesper. Ambience. |
-| Tower | **Bridge** | 2 | fore tower top | Officers at consoles. Hub: the ship's captain. |
-| Tower | Governor's Office | 1 | fore tower, below the bridge | The Collective's governor (later story). |
-| 1 | **The Ember Room** (the bar) | 3 | amidships, under the Exchange | **The opening conversation.** Hub: Collective contracts and missions for maps 1–3. |
-| 1 | Counting House | 2 | aft of the bar | Clerks, ledgers, a vault door. Hub: contract history. |
-| 1 | Embassy Row | 3 | fore of the bar | The faction delegations (§5.3). Hub: faction characters met. |
-| 2 | Crew Quarters | 2 | aft | Bunks, lockers. Ambience. |
-| 2 | Mess Hall | 2 | amidships | Crew eating. Ambience. |
-| 2 | Medbay | 1 | fore | Ambience. |
-| 2 | Market Stalls | 2 | fore | Small traders, faction goods. Hub: later shop. |
-| 3 | Cargo Holds | 3 | amidships | Container stacks, a gantry crane, dockhands. |
-| 3 | Workshop / Refit | 2 | fore | Mechanics on a transport. Hub: transport upgrades. |
-| 4 | **Docking Bay** | 3 | lowest deck, open to space on the near side | **The player's transport (beat 10).** |
-| 4 | Engineering | 2 | aft, above the stern nozzles | Reactor glow, engineers. |
-| all | Corridors, lifts, stairwells | — | between rooms | Walking routes (§5.4). |
+| Deck | Room | Occupant | Faction | Activity | Lock | Role in the opening |
+|---|---|---|---|---|---|---|
+| 1 | **Helm** | Captain Vale (captain's cap) | Collective | Mission | — | Ambience: officers at consoles. |
+| 1 | **Chapel** | Confessor Aldous | Arcane | Talk | Trusted with Arcane | Seen sealed (greyed, lock badge). Shows the player that rooms open with standing. |
+| 2 | **Armory** | Quartermaster Roth | Ground · Powder | Upgrade | — | Ambience: tank hulls, recruits. Roth is Verdance's quartermaster, so the first planet's face is aboard. |
+| 2 | **Bar** | **Factor Mira Valcourt** (opening); Supercargo Dorian Quell (later, Q4) | Collective | Talk | — | **The conversation.** |
+| 3 | **Trade Station** | Factor Mira Valcourt in the prototype (Q4) | High Tech in the prototype | Deal | — | Ambience: ticker, crates. Hub: sell. |
+| 3 | **Loading Bay** | Ops-Chief Farrell | Artillery | Reward | — | **The transport (beat 10)** and the departure. |
+| 3 | **Engineering** | Chief Okonkwo | Space Tech | — | Trusted with Space Tech | Seen sealed. |
 
-That is 15 rooms plus circulation, about 35 bays. The whole-ship view shows every room at once on a 16:9 screen.
+When the owner revises the room list, it is changed in the editor or in `ship-layout.json`. No code changes.
 
-### 4.3 Drawing a room module
+### 4.3 Drawing a room from primitives
 
-Every room is built from **one shell plus a prop set**. Both are data, so new rooms are mostly content.
+Each room is a **shell** plus a **prop set**, both built in code from three.js primitives with flat, toned colours.
+Nothing is loaded from an image or a model.
 
-- **Shell (code).** A parametric box from bays × deck height:
-  - back wall, floor, ceiling and side walls with door cut-outs; the near face is open;
-  - trim lines at the floor and ceiling;
-  - a lit sign over the door;
-  - a palette from the room's theme (Collective ivory / gold / orange by default, faction colours for
-    embassies);
-  - two-tone baked-in shading (vertex AO along corners) and an emissive ceiling strip.
+**The shell**, from the room's box (`x, top, w, h`):
+- **Back wall.** A plane set back in z, in the room's tone: the occupant faction's outfit colour, darkened 60 %.
+- **Floor slab.** A box whose top face sits on the deck's walk line. A lighter top strip makes the floor read in the
+  straight-on orthographic view.
+- **Ceiling slab** with an emissive light strip (warm for Bar, Chapel and Armory; cool for Helm, Engineering and Trade
+  Station).
+- **Side walls.** Thin boxes, with a door gap at floor height wherever the room meets a neighbour on the same deck,
+  so walkers pass through.
+- **Sign plate** over the door: a canvas-texture label with the room name.
+- **Frame.** An outline in the room's state colour. It carries the prototype's flag pulse, the gold highlight (beat 7)
+  and the locked hatch.
 
-  It is one merged mesh, one draw.
-- **Props (kit).** A low-poly library built in the same headless-Blender pipeline as the ships, with the same
-  detail-scale standard and palette materials. Each prop is a GLB entry in a single kit file with a shared
-  texture atlas. Around 40 props cover the list:
+**The hull** is a primitive too:
+- a rounded-rectangle silhouette (`THREE.Shape`, extruded thin) in Collective ivory around the deck block;
+- an orange flank stripe and a dark interior behind the rooms;
+- a stub of the dome above deck 1 and the stern block left of deck 3.
 
-  | Group | Props |
-  |---|---|
-  | Bar | bar counter, bar stool, booth, round table, bottles shelf, tap rack, lamp |
-  | Trade | ticker board, trading desk, scales, crate stack, banner |
-  | Office and command | desk, chair, console, wall screen, star map table, vault door |
-  | Living | bunk, locker, mess table, bench, medbay bed |
-  | Industry | container, gantry crane, cable spool, reactor core, pipes, barrel, tool rack |
-  | Bay | docking clamp, launch rail, bay door frame |
-  | Small | plant, rug, poster, holo-projector |
-- **Room recipe (data).** `rooms.json` lists, per room, the shell size and theme, the props with bay-relative
-  positions, and the **points of interest** characters use: `seat`, `stand`, `lean`, `work`, `door`. A
-  room-recipe editor is out of scope; recipes are hand-authored JSON and previewed on the review page (§10).
-- **Draw cost per room:** shell 1, props 1–2 (static props merged per room at load), signs 1. The whole ship is
-  about 45 draws for rooms.
+It hints at the ship without copying a design that will change.
+
+**Props per room.** A small recipe of primitives, each `{shape: box | cyl | sphere | plane, at, size, color,
+glow?}` in room-relative %. Presets keep the data short:
+
+| Room | Props |
+|---|---|
+| Helm | Three consoles (boxes with glowing screen faces), the captain's chair (box + cylinder), a viewport on the back wall (dark plane with star points) |
+| Chapel | Altar box, two candle cylinders with glowing tips, two pews, a stained window (four tinted glowing panes) |
+| Armory | Two tank hulls (box + cylinder turret + barrel), a weapon rack (thin boxes), a crate |
+| Bar | Long counter (box + lip), four stools (cylinder + disc), a back shelf with bottle cylinders, two booth tables, three hanging lamps (glowing spheres) |
+| Trade Station | Ticker board (glowing plane with a scrolling canvas texture), two desks, crate stacks, a scale |
+| Loading Bay | Container stacks (Collective orange), a gantry (box frame), bay door stripes, clamps, and **the transport** (capsule body + two fin boxes + a glowing engine disc) |
+| Engineering | Reactor (cylinder with pulsing glow), pipe runs (cylinders), wall panels |
+
+**Draw cost.** Static props in a room are merged into one vertex-coloured geometry, plus one emissive geometry for
+glows. A room is about 4 draws (shell, props, glows, sign), so the ship is about 30 draws plus the hull.
 
 ### 4.4 Light and mood
 
-- **Inside the cutaway**, rooms are self-lit:
-  - warm 2700 K ceiling light for the bar and quarters;
-  - cool white for the bridge, medbay and workshop;
-  - amber ticker light on the Exchange;
-  - blue-white reactor glow in Engineering.
-- **Outside**, Vesper's red key light rims the hull frame.
-- **Each room has one shadowless point light** for its occupants, so characters pop against the back wall.
-- **Bloom** is reserved for signs, screens and the reactor.
+- One hemisphere fill and one warm sun, as in the prototype, so crew look the same as they do today.
+- Each room adds its ceiling strip (emissive, no real light) and one shadowless point light for its occupants.
+- Vesper's red tints the hull frame's outer edge.
+- **Locked rooms** use the prototype's treatment: grey, half brightness, a hatch pattern in the lock faction's colour,
+  and a lock badge.
+
+### 4.5 When the faction ships are revised
+
+- The layout (`ship-layout.json`) and the crew layer do not depend on how a room is drawn.
+- A room may later declare `skin: 'primitive' | 'image' | 'model'`:
+  - `image` is the prototype's original mode (a rendered cutaway behind the hotspots);
+  - `model` is a GLB room kit.
+- Primitive stays the default. Each faction's capital ship gets its own layout file
+  (`content/ships/<faction>/ship-layout.json`) when its interior is designed. Only the Collective's exists now.
 
 ---
 
-## 5. Characters and crew
+## 5. Characters and crew — the prototype's rig
 
-### 5.1 Who is aboard
+### 5.1 Reused as built
 
-| Group | Who | Where | Behaviour |
-|---|---|---|---|
-| **The patron** | The Collective's agent who hires the player. Proposed: **Factor Ottoline Crane**, Chief Factor of the Collective (Q4). | Ember Room, a stool at the near end of the bar | Seated, sipping, glancing at the door. Flashes in beat 6. Turns to camera in beat 8. |
-| Barkeep | Proposed: **Mags Tolliver** | behind the bar | Wipes glasses, pours, slides drinks. |
-| Bar patrons | 3–5 off-duty crew and a few faction characters (§5.3) | booths and stools | Sit, drink, talk (gesture loop), occasionally leave. |
-| Officers | 3 | Bridge | Work consoles; one walks between stations. |
-| Traders | 4–6 | The Exchange | Stand, haggle (gesture), walk between desks. |
-| Clerks | 2 | Counting House | Sit and write; one carries ledgers to the vault. |
-| Crew | 6–10 | corridors, mess, quarters | Walk schedules between rooms and lifts. |
-| Dockhands | 3 | Cargo, Docking Bay | Carry crates, ride the gantry, wave in the transport. |
-| Engineers | 2 | Engineering, Workshop | Work panels, inspect the reactor. |
-| Faction delegations | see §5.3 | Embassy Row, the bar | Posted at their suite; some visit the bar. |
+- **Body.** The foreman rig: squashed-sphere head with hair, eyes and ears; shirt torso; an open vest with reflective
+  stripes; denim legs; shoes; arm pivots at the shoulders; head pivot at the neck.
+- **Helmets.** One per faction:
 
-That is about 30–40 animated figures, which is within budget (§8).
-
-### 5.2 Character look and rig
-
-- **Style.** Low-poly, chunky, readable at small size, matching the ships and battle units. About 600–900
-  triangles each. Proportions run slightly heroic: big heads and hands so gestures read from the whole-ship view.
-- **One shared body, many outfits.** A single humanoid mesh with a 17-bone rig: hips, spine ×2, neck, head, and
-  two each of shoulder, upper arm, forearm, hand, thigh, shin and foot. Outfits are attached kit pieces on bone
-  sockets: coats, hats, helmets, aprons, armour plates, tool belts, robes and mechanical parts. Each faction
-  gets 3–4 outfit sets built from its palette and trope:
-
-  | Faction | Outfit |
+  | Faction | Helmet |
   |---|---|
-  | Ground / Powder | greatcoats and peaked caps |
-  | Air | flight suits and goggles |
-  | High Tech | sharp suits and visors |
-  | Artillery | flak vests and helmets |
-  | Water | reef wraps and shell ornaments |
-  | Arcane | robes and lantern staffs |
-  | Space Tech | ship uniforms |
-  | Dark Energy | hooded cloaks |
-  | Greenies | hazmat and chem tanks |
-  | Collective | ivory-and-gold merchant coats, aprons for crew |
-- **Faces.** Key characters get a face decal drawn from their existing portrait (the 81 portraits), so the 3D
-  figure and the dialog portrait read as the same person. Crew get generic faces from a small set.
-- **Built in the existing headless-Blender pipeline:** one script for the body and rig, one per outfit kit,
-  exported to glTF with skinning. One shared animation file holds all clips (§5.5).
+  | Collective | Service cap |
+  | Ground | Combat helmet |
+  | Air | Aviator |
+  | High Tech | Tech visor |
+  | Artillery | Tanker |
+  | Water | Diver |
+  | Arcane | Cowl |
+  | Space Tech | Space helm |
+  | Dark Energy | Hood and mask |
+  | Greenies | Gas mask |
 
-### 5.3 Key faction characters in their rooms
+  Plus the captain's peaked cap, the player's gold hard hat, and the Character Sheet's civilians (bare head, beanie).
+- **Poses.** The 8-state pose machine (`drivePose`): idle, walk, talk, point, wave, salute, angry, celebrate. Each
+  room's flag picks its occupant's signature gesture (mission → point, reward → celebrate, deal and talk → talk); the
+  captain salutes.
+- **Deck crew.** Up to 16 per deck, one per depth layer so none clip; walk / gesture / walk cycles; reduced motion
+  honoured.
+- **Player.** The gold avatar walks to the clicked room's stand spot, then the dialog opens.
 
-The ship is neutral ground, so every faction keeps a delegation aboard. **Embassy Row** has one suite per
-faction:
-- In the whole-ship view three suites are visible at once; the row scrolls, or nests as a "corridor of doors"
-  that opens on tap.
-- Each suite is themed in its faction's colours and props.
-- The faction's **captain** (the capital-ship captain from the Capital_Ships sheet) is posted at a desk there.
-- The **Neutral** character of each faction is the attaché at the door (the quartermaster, mechanic, actuary
-  and so on).
+### 5.2 Added for this design
 
-**Who appears in the opening.** Showing all 18 at once is crowded, so the opening shows the delegations the
-story has met:
-- On a first run, only Verdance's delegation is present. Colonel Aldric Vane is at his desk and Quartermaster
-  Ines Roth is at the door; Verdance is the first planet.
-- The other suites show closed doors with their faction emblem lit dim.
-- Later visits fill a suite once its planet is reached.
-- A few named characters drop into the bar now and then, chosen by alignment, so the bar feels like a
-  crossroads. Proposed: Sergeant "Bricks" Malloy (Ground, CG) arm-wrestling, and Mechanic Sora Ito (Air, N)
-  nursing a drink.
-
-### 5.4 Walking around: routes and schedules
-
-- **Nav graph (data).** Nodes come from each room's `door` points, its points of interest, the corridor
-  waypoints and the lift stops. Edges are corridor segments, room interiors (straight lines from the door to
-  each point) and lift shafts, which link the same column across decks. It is built once from `rooms.json` at
-  load.
-- **Movement.** Characters move along graph edges at walk speed (1.2–1.6 m/s, scaled to the stylized room
-  size). They turn smoothly, slow at doors, ride lifts (enter, doors close, platform moves, exit) and use
-  stairs (a climb clip on the stair segment).
-  - **Avoidance** is cheap: two walkers on the same edge in opposite directions sidestep and pass.
-  - At a point of interest that is already taken, the walker waits or re-picks.
-- **Schedules.** Each crew member has a short loop of activities with dwell times, for example quarters
-  (sleep) → mess (eat) → workstation (work) → bar (drink) → corridor.
-  - Each activity is a point of interest plus a clip (sit-eat, work-console, lean-bar, and so on).
-  - A deterministic seed per character picks the order and the dwell lengths, so the ship looks the same each
-    time the opening plays, which matters for review.
-  - Key characters are mostly posted: they idle at their post and take short walks, such as Vane going to the
-    star map.
-- **Not the sim.** This is presentation only, outside the game sim and its replay determinism. It runs on its
-  own clock and its own seeded RNG.
-
-### 5.5 Animation clips
-
-Twelve clips on the shared rig cover everything:
-
-| Clip | Use |
+| Addition | Why |
 |---|---|
-| idle (breathing, weight shift) | anyone standing |
-| walk, walk-carry | crew; dockhands with crates |
-| climb (stairs / ladder) | stairwells |
-| sit-idle, sit-drink, sit-write | bar, mess, counting house |
-| lean-bar | bar patrons standing |
-| talk-gesture | conversations, haggling |
-| work-console | bridge, engineering, workshop |
-| wipe-glass / pour | barkeep |
-| turn-to-camera | the patron in beat 8 |
+| **Leg pivots** at the hips and a leg swing in walk | Today only the arms swing. Sitting needs legs that bend. |
+| **sit** and **sit-drink** poses | The owner's patron is "sitting in the bar". Bar patrons and the stools use them. |
+| **work** pose (hands forward, small nods) | Officers at consoles and engineers at panels. |
+| **Flash** state | The patron's vest material (`vestM`) pulses gold emissive twice; a gold chevron sprite bobs above her (beat 6). |
+| **Turn-to-camera** | Mira turns from the counter to face you in beat 8 (yaw ease). |
+| **Room posts** | A key character stays at their room's stand spot and plays their signature gesture with idle breaks, instead of walking the deck lane. |
+| **Lift between decks** | A primitive lift shaft at the stern end of the decks. Ambient crew sometimes ride it, so movement crosses decks, not only along them. |
+| **Seeded RNG** | The prototype uses `Math.random`. The game version takes a seeded generator so the room view looks the same on every run (review and screenshots). It is presentation only, outside the battle sim. |
 
-They are authored in Blender as keyed poses with eased interpolation, which is cheap to make. Clips crossfade
-in 0.2–0.3 s. Two people talking face each other and alternate talk-gesture with idle (listening).
+### 5.3 Who is where
+
+- **Key characters, one per room**, from the prototype's list (§4.2), with Mira Valcourt at the bar for the opening.
+- **Ambient crew** chosen so every faction's helmet appears somewhere (as the prototype does): Air and Dark Energy on
+  deck 1, Water and Greenies on deck 2, Space Tech and High Tech on deck 3. Add two or three Collective deck crew and
+  Character Sheet civilians (dockhand, trader) in the Loading Bay and Trade Station.
+- **The bar** has the patron on a stool, plus one or two seated Collective crew in a booth. The prototype's bar has no
+  barkeep. One can be added as a Collective crew member with the talk pose.
+
+About 15–20 figures in total: well within budget (§8).
 
 ---
 
@@ -332,72 +286,62 @@ in 0.2–0.3 s. Two people talking face each other and alternate talk-gesture wi
 
 ### 6.1 The flash and the highlight (beats 6–7)
 
-- **The flash.** The patron gets two rim-light pulses (gold, 0.25 s up / 0.35 s down) and a soft
-  scale-pulse on a gold chevron marker above her head. It respects the flash limits (≤ 3 per second). Reduced
-  motion: a steady gold outline instead.
-- **The highlight.**
-  - Every other room fades to 35 % brightness and desaturates by half over 0.6 s.
-  - The bar's frame gets a gold outline glow and its sign brightens.
-  - A label card slides in beside the bar: "THE EMBER ROOM", then "Tap to enter" after 1 s.
-  - The camera eases from whole-ship to a bar-and-neighbours framing.
-  - Inviting input: a soft pulse on the label every 2 s. After 6 s idle the game enters by itself.
+- **Flash.** Two gold pulses on Mira's vest (0.25 s up, 0.35 s down) and a bobbing chevron. Flashes stay at three a
+  second or fewer. Reduced motion: a steady gold outline.
+- **Highlight.**
+  - Every other room dims to 35 % and half-desaturates over 0.6 s.
+  - The bar's frame turns gold with a glow.
+  - A label slides in, "THE BAR", then "Tap to enter" after 1 s, pulsing every 2 s.
+  - The game auto-enters after 6 s idle.
 
 ### 6.2 Into the bar (beat 8)
 
-- The camera dollies into the bar (1.6 s, ease-in-out) until the room fills the frame. Neighbouring rooms stay
-  visible at the edges, dimmed.
-- The patron plays turn-to-camera; the barkeep pauses mid-wipe; ambient chatter ducks −8 dB.
-- **The dialog panel** opens along the bottom, reusing the comm card's typography and the procedural voice. It
-  is a different shell: a warm, in-person "conversation" skin, not a radio transmission.
-  - **Layout.** Portrait left (the patron's portrait), then name and title, then the typed line. On the right
-  sits a "▸ Continue" affordance; a progress pip row sits at the bottom.
-  - **Input.** Click, tap, Space or Enter advances. Holding or a second press finishes the typing at once. Esc
-    opens "Skip conversation?" on replays only.
-  - **Speakers.** Lines can change speaker, for example the barkeep's aside. The camera does a gentle
-    shot-reverse: it favours whoever speaks within the bar framing.
-  - **Captions.** Always on. Voice follows the master and voice volume.
+- The prototype's flow: your avatar walks to the bar's stand spot, the camera pushes in until the bar fills most of the
+  frame, and Mira turns to you.
+- **The dialog panel** replaces the prototype's modal for this scene and reuses its parts: the 3D close-up of the
+  speaker (same rig, larger), the faction tag, the name and the line. It adds:
+  - **Typed lines** with the procedural voice (`voice.js`), captions always on.
+  - **Input.** Click, tap, Space or Enter advances; holding or a second press finishes the line.
+  - **Speaker changes.** The close-up swaps character.
+  - **Holo-slides** (§6.3).
+  - **Progress pips.**
+  - Esc → "Skip conversation?" on replays only.
+- The prototype's bar **choices** ("Business is business." / "They had it coming.", with standing changes) stay as a
+  later hub conversation with Dorian Quell. The opening ends on the contract, not a standing choice.
 
 ### 6.3 The slide show inside the conversation
 
-- The opening stills (the owner's "animated slide show") are **holo-slides**. Lines that show something carry a
-  `slide` reference. A holo-projector on the bar table blooms, and the still appears as a floating, slightly
-  scan-lined panel above the table.
-- **Animation.** A slow Ken Burns pan and zoom on the still. For stills that are split into layers, a two- or
-  three-layer parallax. Subtle holo flicker; a cross-dissolve between consecutive slides.
-- **Text** stays in the dialog panel; the slide carries only the picture.
-- **The transport ship slides.** These are the two jungle stills the owner wants to swap. They use the
-  replacement images when supplied, otherwise the current stills.
-- **Download.** Stills are WebP at 1280 px long edge, ≈ 80–150 KB each. They load progressively during
-  beats 1–5, so ten slides cost ≈ 1–1.5 MB.
+- Lines can carry a `slide`. A holo-projector (a glowing primitive disc) on the counter blooms, and the still floats
+  above it as a scan-lined panel.
+- Animation: slow Ken Burns pan and zoom, 2–3-layer parallax for layered stills, a subtle flicker, cross-dissolves.
+- The text stays in the panel.
+- The two jungle transport stills use the owner's replacement images when supplied.
+- WebP at 1280 px, about 80–150 KB each, preloaded during beats 1–5.
 
 ### 6.4 The script
 
-The script is the owner's to supply (the transcript of the opening video). Until then the conversation runs on
-**placeholder lines** that carry the premise in the order the owner described:
-1. Welcome aboard.
+The owner supplies the transcript. Until then, placeholder lines follow the owner's order:
+1. Welcome aboard The Long Ledger.
 2. Who the Collective are (traders, not soldiers).
 3. The frontier planets and their resources.
 4. The offer: a transport and a contract to harvest on Verdance.
 5. The terms: sell to the Collective up to the quota, and keep the surplus.
 6. The handshake.
 
-It is about 12–16 lines with 4–6 slides. The script is data (`content/dialog/opening.json`), so the transcript
-replaces it without code changes.
+That is 12–16 lines and 4–6 slides, in `content/dialog/opening.json`.
 
 ### 6.5 The contract and the transport (beats 9–10)
 
-- **The contract card** slides up over the bar: the Collective seal, "FIRST CONTRACT — VERDANCE", and the terms
-  in plain words (the Verdance quota from the workbook: what the Collective buys per tier, and that surplus is
-  the player's), with one ACCEPT button. This is the moment the existing contract economy starts. Accepting
-  writes the save's opening state (§9).
-- **The transport.** The camera drops to the Docking Bay. The player's transport sits in the clamps, lit by
-  bay floods; dockhands step back, and the barkeep's line plays as an off-screen comm. If the faction choice
-  happens here (Q5), the existing faction picker opens over the bay ("Choose the colours you fly under"), and
-  the transport takes that faction's landing-craft livery. Otherwise the transport is a Collective-issue craft
-  in ivory and orange.
-- **Launch.** Bay doors open to Vesper's glare, the launch rail fires and the transport slides out. Cut to the
-  galaxy: the camera follows a gold trail from Vesper to Verdance, the same galaxy-to-planet fly the menu
-  already uses, and arrives on the Verdance planet screen.
+- **The contract card.** The Collective seal, "FIRST CONTRACT — VERDANCE", the terms in plain words (the Verdance quota
+  per tier; the surplus is the player's), and one ACCEPT button. Accepting starts the existing contract economy and
+  writes the opening save state.
+- **The transport.** The camera drops to the Loading Bay.
+  - The primitive transport sits in the clamps under the bay's lights. Ops-Chief Farrell celebrates (his flag is
+    *reward*) and a dockhand waves.
+  - If Q5 = bay, the faction picker opens here ("Choose the colours you fly under") and the transport takes that
+    faction's colours.
+- **Launch.** The prototype's depart sequence: the hull closes and the shuttle leaves. Then the galaxy fly from Vesper
+  to Verdance, ending on the Verdance planet screen.
 
 ---
 
@@ -405,81 +349,71 @@ replaces it without code changes.
 
 | Element | Treatment |
 |---|---|
-| Vesper | A deep, slow sub-bass swell with a crackling high layer (the star's "boil"), panned wide. |
-| Fly-by | The engine roar of the arrival design §4, using the Collective's timbre (smooth, harmonic, merchant-ship hum). |
-| Hull opening | Mechanical plate slides and clunks, staggered with the plate bands. |
-| Room view | A bed of ship ambience plus per-room spots that fade with camera distance: the bar's murmur, glass clinks and a faint music box; the Exchange's chatter and ticker beeps; the bay's clangs and hydraulics; Engineering's reactor hum. |
-| Flash / highlight | A soft bell for the flash and a warm swell for the bar highlight. |
-| Conversation | The procedural voice per speaker; a slide-in whoosh for holo-slides; a seal stamp on ACCEPT. |
-| Music | The Collective theme: warm, mercantile, brass and strings. The arrival cue (arrival design §4) uses its key, and it resolves into Verdance's theme at hand-off. Synthesized fallback until commissioned (arrival design Q4). |
+| Vesper | Deep, slow sub-bass swell with a crackling high "boil", wide. |
+| Fly-by | The arrival design §4 engine roar in the Collective's smooth, harmonic merchant hum. |
+| Hull opening | A scan hum that sweeps with the line, and plate clunks behind it. |
+| Room view | A ship bed plus per-room spots that fade with camera distance: bar murmur and glasses; Helm console beeps; Chapel hum and candle crackle; Armory clanks; Trade ticker; Loading Bay hydraulics; Engineering reactor drone. |
+| Flash / highlight | A soft bell; a warm swell. |
+| Conversation | Procedural voice per speaker; a holo-slide whoosh; a seal stamp on ACCEPT. |
+| Music | The Collective theme, resolving into Verdance's at hand-off. Synth fallback until commissioned. |
 
 ---
 
 ## 8. Platforms, performance, accessibility
 
-- **Budgets.** The opening owns the GPU; the menu canvas is paused. All three tiers keep animation at 30 Hz or
-  better.
+| | Desktop / high | Mobile / mid | Low |
+|---|---|---|---|
+| Ship (fly-by) | LOD0 | LOD0 | LOD1 |
+| Post | Full HDR | Half-res bloom | Bloom only |
+| Primitive rooms + hull | ≈ 30 draws | ≈ 30 draws | Merged per deck (≈ 8) |
+| Figures | 20 | 20 | 12 |
+| Target | 60 fps | 60, floor 30 | 30 |
 
-  | | Desktop / high | Mobile / mid | Low |
-  |---|---|---|---|
-  | Ship | LOD0 | LOD0 | LOD1 |
-  | Post | full HDR chain | half-res bloom | bloom only |
-  | Room shell + props | ≈ 45 draws | ≈ 45 draws | merged per deck |
-  | Animated figures | 40 | 30 (far ones update at 15 Hz) | 18 |
-  | Target | 60 fps | 60 fps, floor 30 | 30 fps |
-- **Skinning.** Skinned figures share one material and atlas. three r128 has no skinned instancing, so each
-  figure is one draw. Forty figures is about 40 draws, under budget. Figures outside the camera are culled.
-- **Phone portrait.**
-  - The ship is long and the screen is narrow. In the whole-ship view the ship is shown at the width that
-    fits the bar plus a room on each side, panned by drag.
-  - A thin minimap strip of the ship silhouette sits at the top with the viewport box.
-  - Beats 3–4 frame the side view on the bar's third of the ship, so the bar highlight lands on screen.
-- **Phone landscape:** whole ship visible, as on desktop.
+- **Figure cost.** Each figure is about 40 small meshes in the prototype. The game version merges each figure's static
+  parts per material at spawn, so a figure is about 6 draws (body, vest, stripes, skin, helmet, shadow) with pivots
+  kept as groups. Twenty figures is about 120 draws, comfortably under budget.
+- **Phone portrait.** The room view fits deck width to the screen at a scale where the bar and one neighbour show,
+  with drag to pan and a thin minimap strip of the deck block at the top. Beats 3–4 frame the bar's side of the ship
+  so the highlight lands on screen.
+- **Phone landscape:** the whole ship, as on desktop.
 - **Reduced motion:**
-  - beats 1–3 are cross-fades;
-  - the hull opening is a fade;
-  - no camera dollies (cuts with a short fade);
-  - the flash is a steady outline;
-  - walkers still walk, slower.
-- **Captions** for every voiced line and labels for every room. A focus ring and keyboard for the bar and every
-  button. Text meets WCAG AA contrast on the dialog panel.
-- **Backgrounding** pauses the timeline and resumes from the start of the current beat.
+  - beats 1–3 cross-fade;
+  - the scan wipe becomes a fade;
+  - cuts instead of camera pushes;
+  - a steady outline instead of the flash;
+  - walkers keep walking, with no bob (as the prototype does).
+- Captions on every voiced line; labels on every room; a focus ring and keyboard for every room and button; WCAG AA on
+  the panel.
+- **Backgrounding** pauses and resumes at the start of the current beat.
 
 ---
 
 ## 9. Persistence, skip and later visits
 
-- **New save.** The opening plays. The first contract is accepted in beat 9; the transport is granted in beat
-  10.
-  - Saved: `collective.introSeen`, `collective.contractAccepted`, `collective.transport` (and the faction, if
-    picked there).
-  - A reload mid-opening resumes at the last completed milestone: before the bar it restarts the opening; after
-    ACCEPT it resumes at the transport.
-- **Skip.**
-  - **First run:** Skip appears from beat 3 and jumps straight to beat 7 (the highlighted bar). The
-    conversation itself is never skipped on a first run, though each line can be fast-typed.
-  - **Replays:** the whole opening is skippable.
-  - Skipping counts as seen (arrival design Q3).
-- **Replay.** "Replay opening" in Settings and in the Collective hub.
-- **Later visits: the Collective hub.**
-  - Tapping Vesper in the galaxy, or "Collective" on the main menu, opens the room view directly with a short
-    coast-in of the ship at the side view (arrival design §6), with no fly-by.
-  - Rooms with a purpose are tappable: the bar (Collective contracts and maps 1–3 missions), the Exchange
-    (sell), the Docking Bay (your transport) and Embassy Row (characters met).
-  - The first version wires the bar and the bay; the other rooms are ambience until their stories land.
-- **Existing saves.** Players who already have progress skip the opening. Their save is marked `introSeen`, and
-  a "Replay opening" prompt appears once on the main menu.
+- **New save.** The opening plays.
+  - Saved: `collective.introSeen`, `collective.contractAccepted`, `collective.transport` (and the faction, if picked
+    there).
+  - A reload before the bar restarts the opening; after ACCEPT it resumes at the transport.
+- **Skip.** On a first run, from beat 3 straight to beat 7; the conversation is never skipped. Replays are fully
+  skippable. Skipping counts as seen.
+- **Replay.** "Replay opening" in Settings and in the hub.
+- **The hub on later visits.** This is the prototype's Board flow.
+  - Tap Vesper in the galaxy, or "Collective" on the main menu: The Long Ledger at the side view, then Board, the scan,
+    and the room view. No fly-by.
+  - Rooms behave as in the prototype: flags, walk-to, dialog, locks by standing.
+  - The first version wires the Bar (Collective contracts, maps 1–3 missions) and the Loading Bay (your transport, idle
+    haul). The rest are ambience until their stories land.
+- **Existing saves** skip the opening, are marked `introSeen`, and see a one-time "Replay opening" prompt.
 
 ---
 
 ## 10. Review outside the game
 
-`tools/collective/index.html` (owner rule: UI must be reviewable outside Claude) offers:
-- **Opening:** play the whole opening with a scrub bar and beat markers.
-- **Room view:** jump to it, with every room labelled; tap a room to focus it.
-- **Overlays:** toggle the nav graph and points of interest.
-- **Character board:** every figure with its outfit and a clip picker.
-- **Settings:** tier (low / mid / high), `?reduced=1`, phone portrait and landscape frames, and mute.
+`tools/collective/index.html`. It starts from the prototype page, ported into the repo:
+- the room view drawn with primitives, with the layout editor and `ship-layout.json` export;
+- the whole opening with a scrub bar and beat markers;
+- a crew board: every helmet and pose, including the new sit, sit-drink, work and flash;
+- toggles for tier, `?reduced=1`, phone portrait and landscape frames, and mute.
 
 ---
 
@@ -487,16 +421,16 @@ replaces it without code changes.
 
 | # | Decision | Proposal |
 |---|---|---|
-| Q1 | **The room list** — "the room modules we have already listed" was not found anywhere. Supply the list, or approve §4.2. | §4.2 (15 rooms). |
-| Q2 | Names: the red giant and the station. | Vesper; Collective Anchorage. |
-| Q3 | Where the animated slide show plays. | Inside the bar conversation as holo-slides (§6.3). Alternative: a short prologue of stills before beat 1. |
-| Q4 | The patron's name and the Collective cast (this also closes "Collective giver name", open since 11-03). | Factor Ottoline Crane (patron), Mags Tolliver (barkeep). A full Collective roster, alignment-ranked like the other factions, is a follow-up story. |
-| Q5 | Faction choice: before the opening, or in the docking bay after the contract? | In the bay: "Choose the colours you fly under". The transport takes that faction's landing-craft livery. |
-| Q6 | Galaxy position: A (r 34, near Verdance, above the disc) or B (true outer rim). | A. |
-| Q7 | Embassy Row in the opening: only Verdance's delegation, or all nine? | Verdance only; the others fill as planets are reached. |
-| Q8 | Skip on a first run: from beat 3 to the highlighted bar, conversation never skipped. | As proposed. |
-| Q9 | Opening script and slide order. | Owner transcript replaces the placeholder lines in `content/dialog/opening.json`. |
-| Q10 | Transport ship images for the two jungle stills. | Owner to supply; current stills until then. |
+| Q1 | The room list | The prototype's seven rooms (§4.2). Revise in the editor at any time. |
+| Q2 | The red giant's name | Vesper |
+| Q3 | Where the slide show plays | Inside the bar conversation as holo-slides. Alternative: a prologue of stills before beat 1. |
+| Q4 | Who is at the bar for the opening, and Mira's faction. The Dossier makes Mira a Collective officer who gives the ship and contract; the prototype puts her in Trade Station dressed as High Tech, with Dorian Quell at the bar. | Mira at the bar for the opening, in Collective dress. Quell takes the bar afterwards (the Dossier has him "met when Capital ships unlock"). Trade Station gets another Collective officer from the Dossier, e.g. Chief Ledger-Keeper Ovid Marlow. |
+| Q5 | Faction choice: before the opening, or in the Loading Bay after the contract | In the bay |
+| Q6 | Galaxy position A or B | A |
+| Q7 | Add a barkeep to the bar? | Yes: one Collective crew member, no name needed |
+| Q8 | First-run skip | From beat 3 to the highlighted bar; the conversation is never skipped |
+| Q9 | The opening script and slide order | The owner's transcript replaces the placeholder lines |
+| Q10 | Transport ship images for the two jungle stills | Owner to supply |
 
 ---
 
@@ -506,4 +440,4 @@ replaces it without code changes.
 |---|---|---|
 | extends | docs/16 Bulwark MM/design/Capital-Ship-Arrival-Design.md | the arrival beats, hit points, engine roar, camera grammar and the Collective red-giant variant (§5) |
 | depends-on | docs/16 Bulwark MM/tech-plan/Menu-Survey-Galaxy.md | the galaxy view, systems and the galaxy-to-planet camera fly |
-| depends-on | docs/16 Bulwark MM/design/Capital-Ship-Scale-Research.md | the ship surface, scale standard and presentation pipeline the room kit reuses |
+| depends-on | docs/16 Bulwark MM/design/Capital-Ship-Scale-Research.md | the ship model and scale standard used for the fly-by |
