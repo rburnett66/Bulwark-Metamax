@@ -43,7 +43,7 @@ def _is_int(v):
 
 
 def sheet_rows(ws, key_ok, header_row_probe=("Map_ID", "Wave", "Param", "Star", "Faction_ID",
-                                             "Resource", "Level", "Faction", "Map", "Outcome")):
+                                             "Resource", "Level", "Faction", "Map", "Outcome", "Planet_Key")):
     """Find the header row (first cell matches a known header), then yield dicts for every row whose
     KEY cell passes `key_ok` — the sheets carry titles above and prose notes below the data block."""
     rows = list(ws.iter_rows(values_only=True))
@@ -160,6 +160,9 @@ def main():
         "resourceRoles": sheet_rows(wb["Resource_Roles"], lambda v: isinstance(v, str) and v.startswith("Map_")),
         "techTree": sheet_rows(wb["Tech_Tree"], lambda v: isinstance(v, str) and v.startswith("Faction_")),
         "questContract": sheet_rows(wb["Quest_Contract"], lambda v: isinstance(v, str) and (v.startswith("ACCEPT") or v.startswith("DECLINE"))),
+        # the Collective's contracts, one per planet × map, common and uncommon only [MM-story_mw4a1o3p_m]
+        "collectiveContracts": sheet_rows(wb["Collective_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                          header_row_probe=("Planet_Key",)),
     }
 
     apply_rework(data)
@@ -175,6 +178,12 @@ def main():
     broken = [r for r in data["resourceRoles"] if str(r.get("Valid?", "")).lower() != "ok"]
     if broken:
         problems.append(f"Resource_Roles: {len(broken)} BROKEN pairings (GDD 5.2 requires 0)")
+    cc = data["collectiveContracts"]
+    if len(cc) != 81 or len({(r.get("Planet_Key"), r.get("Map_ID")) for r in cc}) != 81:
+        problems.append(f"Collective_Contracts: expected 81 distinct planet x map rows, got {len(cc)}")
+    for r in cc:
+        if not all(isinstance(r.get(k), int) and r[k] > 0 for k in ("Common", "Uncommon", "Standing")):
+            problems.append(f"Collective_Contracts {r.get('Planet_Key')} map {r.get('Map_ID')}: Common, Uncommon and Standing must be positive")
     for f in data["factions"]:
         if f.get("Premium_Secondary") == f.get("Premium_Resource"):
             problems.append(f"{f.get('Faction_Name')}: Premium_Secondary == Premium_Resource (GDD 5.2)")
@@ -198,7 +207,8 @@ def main():
         fh.write(";\n")
     print(f"OK -> {os.path.relpath(OUT, ROOT)} (+ .js module)")
     print(f"   maps={len(data['maps'])} waveRows={len(data['waveTable'])} roles={len(data['resourceRoles'])} "
-          f"factions={len(data['factions'])} params={len(data['globalParams'])}")
+          f"factions={len(data['factions'])} params={len(data['globalParams'])} "
+          f"collectiveContracts={len(data['collectiveContracts'])}")
 
 
 if __name__ == "__main__":
