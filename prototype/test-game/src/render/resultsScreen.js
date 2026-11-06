@@ -142,6 +142,11 @@ export const RESULTS_CSS = `
 .rs-res .m b { color:var(--cyan); font-weight:700; }
 .rs-foot { margin-top:6px; text-wrap:balance; font-size:.78em; letter-spacing:.2em; color:#6d7a8a; text-align:center; }
 .rs-foot b { color:var(--gold-hi); font-weight:700; }
+.rs-note { display:grid; gap:2px; padding:3px 0; }
+.rs-note + .rs-note { border-top:1px solid var(--line); padding-top:7px; margin-top:4px; }
+.rs-note b { font-size:.72em; letter-spacing:.24em; color:var(--gold-hi); }
+.rs-note.signal b { color:#8fd3ff; }
+.rs-note span { font-size:.9em; color:#d6dce4; text-wrap:pretty; }
 .rs-none { color:#6d7a8a; letter-spacing:.14em; text-align:center; padding:6px 0; }
 
 /* actions */
@@ -184,7 +189,7 @@ export const RESULTS_CSS = `
 `;
 
 /** Everything the report shows, from the battle's own records. Pure. */
-export function resultsModel({ result, finalScore, waveStars, rewards = null, resources = null, nextMap = null, planet = '', mapId = null, mapName = '' }) {
+export function resultsModel({ result, finalScore, waveStars, rewards = null, resources = null, nextMap = null, planet = '', mapId = null, mapName = '', notes = [] }) {
   const fs = finalScore || {};
   const stars = (Array.isArray(waveStars) ? waveStars : []).map((w) => (typeof w === 'number' ? w : (w && w.stars) || 0));
   const avg = stars.length ? Math.round(stars.reduce((a, b) => a + b, 0) / stars.length * 10) / 10 : 0;
@@ -210,6 +215,8 @@ export function resultsModel({ result, finalScore, waveStars, rewards = null, re
     win: result === 'win', planet, mapId, mapName, time: pad2(fs.minutes) + ':' + pad2(fs.seconds),
     score: fs.score || 0, kills: fs.kills || 0, goldLeft: fs.goldRemaining || 0, stars, avg, rewards: rw, resources: res,
     nextMap: result === 'win' && nextMap ? { label: nextMap.name || ('Map ' + nextMap.id), size: nextMap.size || '' } : null,
+    // what this battle opened or settled beyond the map: [{ kind: 'signal' | 'contract', head, text }] (Content-Reveal §6)
+    notes: (notes || []).filter((n) => n && n.text),
   };
 }
 
@@ -251,6 +258,10 @@ export function resultsHtml(m) {
     }
     if (x.rows.length) h += '<div class="rs-foot"><b>' + fmt(x.gold) + '</b> GOLD FROM HARVEST' + (x.contract && x.kept ? ' · <b>+' + fmt(x.kept) + '</b> TO YOUR INVENTORY' : '') + '</div>';
     h += '</div>';
+  }
+  if (m.notes && m.notes.length) {
+    h += '<div class="rs-panel rs-notes" data-step="notes">' + m.notes.map((n) =>
+      '<div class="rs-note ' + esc(n.kind || '') + '"><b>' + esc(n.head || '') + '</b><span>' + esc(n.text) + '</span></div>').join('') + '</div>';
   }
   h += '</div></div><div class="rs-act">';
   if (m.nextMap) h += '<button class="rs-btn primary" data-act="next">Next map<span class="sub">' + esc(m.nextMap.label) + (m.nextMap.size ? ' · ' + esc(m.nextMap.size) : '') + '</span></button>';
@@ -344,6 +355,8 @@ export function mountResults(host, model, handlers = {}, opts = {}) {
       resources.querySelectorAll('.rs-res').forEach((r, i) => at(t + 80 + i * 140, () => { r.classList.add('in'); r.querySelectorAll('[data-count]').forEach((el) => countUp(el, 650, now)); }));
       t += 80 + resources.querySelectorAll('.rs-res').length * 140 + 300;
     }
+    const notes = $('[data-step="notes"]');
+    if (notes) { at(t, () => notes.classList.add('in')); t += 400; }
     at(t, () => { $('.rs-act').classList.add('in'); });
     at(t + 900, finish);
   }

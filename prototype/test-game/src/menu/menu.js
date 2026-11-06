@@ -37,6 +37,8 @@ import { LANDING_CRAFT, craftFor } from '../render3d/craft/models.js';
 import { CRYSTAL } from '../render3d/styles/lowpoly-palettes.js';
 import { campaignOptions, defaultCampaign } from './campaignPick.js';
 import { SYSTEM_KEYS, VESPER } from '../data/galaxy.js';
+import { ensureReveals, revealsDue, markSurveyed, markShipSeen, isSurveyed, shipArrived } from '../save/reveals.js';
+import { SHIP_MODEL } from '../reveal/three.js';
 // the live globes / craft / resource models load with three.js on first open (menuStage.js); until then (and with
 // no WebGL) the baked planet PNGs stand in
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
@@ -127,6 +129,24 @@ const CSS = `
   transition:border-color .12s, background .12s; z-index:7; }
 .bwm-galaxy [data-sys]:hover { border-color:var(--hue,#d9a441); }
 .bwm-galaxy [data-sys].on { border-color:#f2c869; background:rgba(40,32,14,.85); color:#f2c869; }
+.bwm-galaxy [data-sys].bwm-uns::after { content:'UNSURVEYED'; display:block; margin-top:1px; font-size:8px; font-weight:700; letter-spacing:.26em; color:#8fa0b3; }
+.bwm-galaxy [data-sys].bwm-new { border-color:var(--hue,#f2c869); box-shadow:0 0 0 1px var(--hue,#f2c869), 0 0 18px var(--hue,#f2c869); animation:bwm-sig 1.1s ease-in-out infinite; }
+.bwm-galaxy [data-sys].bwm-new::after { content:'NEW SIGNAL'; color:var(--hue,#f2c869); }
+@keyframes bwm-sig { 50% { box-shadow:0 0 0 1px var(--hue,#f2c869), 0 0 4px var(--hue,#f2c869); } }
+/* the capital ship at its station, upper left (Content-Reveal §5.2) [MM-story_mw56v8nu_4]: menuStage draws the ship
+   into this box; tap to board */
+.bwm-ship { position:absolute; z-index:7; left:0; top:-2%; width:min(30vw, 380px); aspect-ratio:2.4/1; padding:0; margin:0; border:0; background:none;
+  cursor:pointer; color:#cfc4b4; display:none; }
+.bwm-ship.on { display:block; }
+.bwm-ship.arrive { animation:bwm-coast 2.6s cubic-bezier(.16,.8,.3,1) both; }
+@keyframes bwm-coast { from { transform:translateX(-55%); opacity:0; } 30% { opacity:1; } to { transform:none; opacity:1; } }
+.bwm-ship .sn { position:absolute; left:8%; top:6%; font:700 10px "Chakra Petch", sans-serif; letter-spacing:.24em; text-transform:uppercase; white-space:nowrap;
+  padding:2px 7px; background:rgba(10,13,18,.6); border:1px solid rgba(242,200,105,.3); border-radius:4px; opacity:.85; }
+.bwm-ship .sn .ph { display:none; }
+.bwm-ship:hover .sn, .bwm-ship:focus-visible .sn { border-color:#f2c869; color:#f2c869; opacity:1; }
+.bwm-ship:focus-visible { outline:2px solid #f2c869; outline-offset:2px; }
+.bwm-root.galaxy .bwm-ship { display:none; }
+@media (prefers-reduced-motion: reduce) { .bwm-ship.arrive, .bwm-galaxy [data-sys].bwm-new { animation:none; } }
 .bwm-galaxy [data-star] { position:absolute; left:0; top:0; margin:16px 0 0 -8px; padding:2px 7px; font-size:10px; font-weight:800; letter-spacing:.2em; color:#ffb08a; background:rgba(30,12,8,.7); border:1px solid rgba(242,200,105,.45); border-radius:4px; white-space:nowrap; pointer-events:none; opacity:0; cursor:pointer; }
 .bwm-galaxy [data-star]:hover, .bwm-galaxy [data-star]:focus-visible { border-color:#f2c869; color:#ffd0b0; outline:none; }
 .bwm-zoom { position:absolute; z-index:8; right:calc(min(72vh, 36vw) / 2); top:4%; transform:translateX(50%); width:auto !important;
@@ -225,6 +245,11 @@ const CSS = `
   .bwm-survey .stagecol .bwm-globe { width:min(78vw, 360px); }
   .bwm-hero.planet { flex:0 0 auto; height:auto; }
   .bwm-hero.planet .bwm-globe { height:min(46vh, 80vw); }
+  /* phone: no room for the ship over the planet — its station is a chip (menuStage skips a box this short) */
+  .bwm-ship { width:auto; aspect-ratio:auto; top:auto; bottom:0; left:0; }
+  .bwm-ship .sn { position:static; display:inline-block; }
+  .bwm-ship .sn .nm { display:none; }
+  .bwm-ship .sn .ph { display:inline; }
 }
 /* SETTINGS screen */
 .bwm-set { max-width:420px; }
@@ -403,6 +428,11 @@ export function createMenu(mountEl, cbs) {
   vlab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCollectiveIntro(); } });
   galaxy.appendChild(vlab);
   main.appendChild(galaxy);
+  // the capital ship at its station (upper left): the target planet's own ship once met, else the Long Ledger
+  const shipBox = el(doc, 'button', 'bwm-ship'); shipBox.type = 'button';
+  const shipName = el(doc, 'span', 'sn'); shipBox.appendChild(shipName);
+  shipBox.addEventListener('click', () => boardStation());
+  hero.appendChild(shipBox);
   const zoomBtn = el(doc, 'button', 'bwm-btn bwm-zoom');
   zoomBtn.appendChild(el(doc, 'span', null, '◎ GALAXY'));
   zoomBtn.addEventListener('click', () => (galaxyOn() ? zoomIn() : zoomOut()));
@@ -828,6 +858,7 @@ export function createMenu(mountEl, cbs) {
       galaxy.dataset.mode = 'planet'; root.classList.remove('galaxy'); zoomBtn.firstChild.textContent = '◎ GALAXY';
       refreshHeroTarget();
       setGlobe(heroGlobe, targetKey());
+      refreshShip(); refreshUnsurveyed();
       zoomBtn.style.display = stageFailed ? 'none' : '';
       // the player's landing craft
       const ck = (cbs.playerCraft && cbs.playerCraft()) || 'system', cd = craftFor(ck) || LANDING_CRAFT.lc_neutral;
@@ -874,10 +905,92 @@ export function createMenu(mountEl, cbs) {
   function playPendingRewards() {
     if (playingRewards || root.style.display === 'none') return;
     const r = takePendingRewards();
-    if (!r) return;
+    if (!r) { playReveals(); return; }
     playingRewards = true;
     const sv = loadSave(), bc = badgeCtx(sv);
-    widget.playRewards(r, progressValues(sv, bc), root).then(() => { playingRewards = false; refreshProgress(); });
+    widget.playRewards(r, progressValues(sv, bc), root).then(() => { playingRewards = false; refreshProgress(); setTimeout(playReveals, 300); });
+  }
+
+  // ── CONTENT REVEALS (docs/tech-plan/Content-Reveal.md) [MM-story_mw56v5hu_2 … mw56vk3i_8]: what the last battles
+  //    unlocked plays when the menu next shows its main screen — planets first (discovered, the transport surveys it,
+  //    the Collective posts its maps 1–3), then capital ships (first sight, aboard, the captain's missions)
+  let revealing = false, shipCat = null;
+  const revealTier = () => { try { const q = new URLSearchParams(location.search).get('quality'); return ['high', 'standard', 'low'].includes(q) ? q : 'high'; } catch (e) { return 'high'; } };
+  const shipModelFor = (key) => SHIP_MODEL[key] || null;
+  function refreshShip() {
+    const s = loadSave(), key = targetKey(), seen = ((s.reveals || {}).shipSeen || {})[key];
+    const own = seen && shipArrived(s, key);
+    const coll = !own && s.collective && s.collective.introSeen;
+    const model = own ? shipModelFor(key) : coll ? 'collective' : null;
+    shipBox.classList.toggle('on', !!model);
+    if (!model) { shipBox.removeAttribute('data-ship'); return; }
+    if (shipBox.dataset.ship !== model) {
+      shipBox.dataset.ship = model; shipBox.dataset.planet = own ? key : 'collective';
+      shipBox.classList.remove('arrive'); void shipBox.offsetWidth; shipBox.classList.add('arrive');   // coasts in to its station
+    }
+    const P = PLANETS[key];
+    const nameOf = (c) => (own ? ((c && c.capitalShips && c.capitalShips[P.name]) || {}).ship : 'The Long Ledger') || 'Capital ship';
+    const label = (n) => { shipName.innerHTML = ''; shipName.append(el(doc, 'span', 'nm', n + ' · '), el(doc, 'span', null, 'BOARD'), el(doc, 'span', 'ph', ' THE SHIP'), el(doc, 'span', null, ' ▸')); };
+    label(nameOf(shipCat));
+    shipBox.setAttribute('aria-label', 'Board ' + nameOf(shipCat));
+    if (own && !shipCat) fetch(new URL('../../content/missions/missions.json', import.meta.url).href).then((r) => r.json())
+      .then((c) => { shipCat = c; label(nameOf(c)); shipBox.setAttribute('aria-label', 'Board ' + nameOf(c)); }).catch(() => {});
+  }
+  function refreshUnsurveyed() {
+    const s = loadSave();
+    for (const lab of galaxy.querySelectorAll('[data-sys]')) lab.classList.toggle('bwm-uns', !isSurveyed(s, lab.dataset.sys));
+  }
+  /** Tap the ship at its station: board it (its rooms, explore, depart). The Long Ledger replays the intro. */
+  function boardStation() {
+    const planet = shipBox.dataset.planet;
+    if (!planet || revealing || introOpen) return;
+    if (planet === 'collective') { openCollectiveIntro(); return; }
+    revealing = true; if (stage) stage.pause();
+    import('../reveal/shipReveal.js').then((M) => M.boardShip({ planet, tier: revealTier() }))
+      .catch((e) => console.warn('[menu] board', e))
+      .finally(() => { revealing = false; syncStage(); });
+  }
+  // the menu's galaxy, lent to the planet reveal (P1–P3): out, the new system lights up, the real fly in
+  const galaxyHooks = {
+    zoomOut: () => zoomOut(),
+    ignite: (key) => { const lab = galaxy.querySelector('[data-sys="' + key + '"]'); if (lab) lab.classList.add('bwm-new'); },
+    flyTo: (key) => new Promise((res) => {
+      const on = () => { galaxy.removeEventListener('bwm-galaxy-arrive', on); res(); };
+      galaxy.addEventListener('bwm-galaxy-arrive', on);
+      setTarget(key); galaxy.dataset.target = key; refreshHeroTarget();
+      if (galaxyOn()) zoomIn(); else { setGlobe(heroGlobe, key); on(); }
+    }),
+    settle: (key) => { const lab = galaxy.querySelector('[data-sys="' + key + '"]'); if (lab) lab.classList.remove('bwm-new'); landPlanet(); refreshUnsurveyed(); },
+  };
+  const missionsChanged = () => { missionLog.sync(); refreshProgress(); };
+  /** Play every reveal now due, one at a time, while the main screen is up and nothing else is over it. */
+  async function playReveals() {
+    if (revealing || introOpen || playingRewards || root.style.display === 'none' || current !== 'main') return;
+    updateSave(ensureReveals);
+    if (!revealsDue(loadSave()).length) return;
+    revealing = true;
+    try {
+      for (let item; (item = revealsDue(loadSave())[0]);) {
+        if (item.kind === 'planet') {
+          const M = await import('../reveal/planetReveal.js');
+          await M.playPlanetReveal({ planet: item.planet, menu: galaxyHooks, tier: revealTier(), onSurveyed: (p) => updateSave((s) => markSurveyed(s, p)) });
+          updateSave((s) => markSurveyed(s, item.planet));
+          // the Collective posts the new planet's maps 1–3 (Verdance's came with the first contract, in the opening)
+          if (item.planet !== 'ground') {
+            const S = await import('../reveal/shipReveal.js');
+            await S.playCollectiveIntroduces({ planet: item.planet, onContract: missionsChanged });
+          }
+        } else {
+          const S = await import('../reveal/shipReveal.js');
+          if (stage) stage.pause();
+          await S.playShipReveal({ planet: item.planet, firstTime: true, tier: revealTier(), onSeen: (p) => updateSave((s) => markShipSeen(s, p)), onContract: missionsChanged });
+          updateSave((s) => markShipSeen(s, item.planet));
+          setTarget(item.planet);                          // back on its planet, the ship at its station
+          syncStage();
+        }
+      }
+    } catch (e) { console.warn('[menu] reveal', e); }
+    finally { revealing = false; syncStage(); if (current === 'main') show('main'); missionsChanged(); }
   }
 
   mountEl.appendChild(root);
@@ -916,6 +1029,8 @@ export function createMenu(mountEl, cbs) {
     close() { if (net) net.stop(); root.style.display = 'none'; syncStage(); },
     /** re-read the save into the widget + dots (main.js calls this after a purchase elsewhere) */
     refreshProgress,
+    /** play the reveals now due (test / review hook; the menu also calls it after the rewards) */
+    playReveals,
     isOpen() { return root.style.display !== 'none'; },
     /** test hook: open a faction's survey by key */
     survey(key) { root.style.display = 'flex'; openSurvey(key); },
@@ -955,6 +1070,7 @@ export function createMenu(mountEl, cbs) {
         onLaunch: () => save(markLaunched),
         onDone: (r = {}) => {
           introOpen = false; syncStage();
+          if (r.survey) setTimeout(playReveals, 200);           // the transport surveys Verdance (owner Q5) [MM-story_mw56vrsc_a]
           if (r.depart) {                                   // the transport left for Verdance: the menu turns to it
             setTarget(r.depart);
             if (galaxyOn()) { galaxy.dataset.target = r.depart; zoomIn(); } else setGlobe(heroGlobe, r.depart);

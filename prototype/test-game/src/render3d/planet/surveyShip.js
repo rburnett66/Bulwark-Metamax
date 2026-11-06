@@ -122,15 +122,29 @@ export function makeSurveyShip(THREE, opts = {}) {
   const basis = new THREE.Matrix4(), zAxis = new THREE.Vector3(0, 0, 1), yAxis = new THREE.Vector3(0, 1, 0);
   const black = new THREE.Color(0, 0, 0), ringCol = new THREE.Color(SCAN), navCol = navs.map((n) => n.material.color.clone());
 
+  // FREE FLIGHT [MM-story_mw56vi32_7]: the planet reveal flies this hull along the Orbital Survey arrival path and aims
+  // the beam itself (setPose / setBeam); update() then only animates the lights, beam and footprint.
+  let free = !!o.free, beamOverride = null, beamTarget = null;
+  function setPose(pos, quat) { ship.position.copy(pos); ship.quaternion.copy(quat); }
+  function setBeam(on, target = null) { beamOverride = on; beamTarget = target; }
   function update(dt) {
-    t += dt; a += dt * o.speed;
-    const f = orbitFrame(a, o), up = V(f.up), nose = V(f.vel), side = new THREE.Vector3().crossVectors(up, nose).normalize();
-    ship.position.copy(V(f.pos));
-    ship.quaternion.setFromRotationMatrix(basis.makeBasis(side, up, nose));
-    // beam: from the belly straight down to the ground; the cone's radius at the ground is the footprint
-    const on = scanLevel(t, o), len = o.orbit - 1 - o.scale * 0.5;
-    beam.position.copy(up).multiplyScalar(o.orbit - o.scale * 0.5);
-    beam.quaternion.setFromUnitVectors(yAxis, up);
+    t += dt;
+    let up;
+    if (!free) {
+      a += dt * o.speed;
+      const f = orbitFrame(a, o), nose = V(f.vel);
+      up = V(f.up);
+      const side = new THREE.Vector3().crossVectors(up, nose).normalize();
+      ship.position.copy(V(f.pos));
+      ship.quaternion.setFromRotationMatrix(basis.makeBasis(side, up, nose));
+    } else up = (beamTarget ? beamTarget.clone() : ship.position.clone()).normalize();
+    // beam: from the belly to the ground (straight down in orbit; in free flight, to the aimed ground point);
+    // the cone's radius at the ground is the footprint
+    const on = beamOverride != null ? beamOverride : scanLevel(t, o);
+    const apex = free ? ship.position.clone() : up.clone().multiplyScalar(o.orbit - o.scale * 0.5);
+    const toGround = up.clone().sub(apex), len = Math.max(0.001, toGround.length());
+    beam.position.copy(apex);
+    beam.quaternion.setFromUnitVectors(yAxis, toGround.normalize().negate());
     beam.scale.set(o.footprint, len, o.footprint);
     beamU.uT.value = t; beamU.uOn.value = on; beam.visible = on > 0.01;
     const pulse = (t * 0.9) % 1;
@@ -144,8 +158,10 @@ export function makeSurveyShip(THREE, opts = {}) {
   update(0);
 
   return {
-    root, update,
+    root, update, setPose, setBeam, ship,
+    set free(v) { free = !!v; if (!free) { beamOverride = null; beamTarget = null; } },
     get angle() { return a; },
+    set angle(v) { a = v; },
     dispose() { for (const g of geos) g.dispose(); for (const m of mats) m.dispose(); },
   };
 }

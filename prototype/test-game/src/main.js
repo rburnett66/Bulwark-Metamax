@@ -30,7 +30,12 @@ import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
 import { setChannelVolume, initAudio } from './comm/voice.js';
 import { musicPlay, musicIntensity, musicSting, musicResume } from './audio/music.js';
-import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, tipsCall, classifyOutcome } from './comm/dialog.js';
+import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, tipsCall, classifyOutcome, characterCall } from './comm/dialog.js';
+import { RARE_OFFER, rareOfferEarned, rareContractFor, pickBuyer, settleRareContract, bankRareSale, rareResultLine } from './data/rareContract.js';
+import { addLoyalty } from './save/contracts.js';
+import { showContractModal } from './render/contractModal.js';
+import { ensureReveals, newlyDue, revealLine, shipArrived } from './save/reveals.js';
+import { PLANETS } from './data/planets.js';
 
 /**
  * CSS px the HUD covers on each side of the game view — the top bar across the top, the build tray down the left.
@@ -279,6 +284,8 @@ export function boot(mountEl, seed) {
   let trackedNow = null;       // the mission pinned to the battle HUD: read at battle start, so the line is a read-only look
   let battleTally = createBattleTally();   // this battle's counts, from the drained events: banked at battle end only [MM-story_mvyqol3w_d]
   let resLedger = createResourceLedger();   // resources collected this wave and this map [MM-story_mw13ek87_1]
+  // the optional RARE contract (Content-Reveal §5.5) [MM-story_mw5eozsn_c]: offered once a run, after wave 3 at 3★+
+  let rareRun = { offered: false, contract: null, waveStars: {} };
   /** The battle planet's resource names by tier (missions.json); tier words until the catalogue has loaded. */
   const battleResourceNames = () => resourceNames(missionCatalog, planetOfFaction(currentTestFaction));
 
@@ -364,6 +371,7 @@ export function boot(mountEl, seed) {
       sim = createSim(currentSeed, simInit);
       battleTally = createBattleTally();
       resLedger = createResourceLedger();   // resources collected per wave / map, for the result screens
+      rareRun = { offered: false, contract: null, waveStars: {} };
       trackedNow = trackedMission(sv);
       log = createLog(currentSeed, simInit);   // capture the init so an in-memory replay reproduces THIS board, not default MAP/WAVES
     }
@@ -1011,7 +1019,57 @@ export function boot(mountEl, seed) {
     if (renderer3d && render3dMod && render3dMod.focusPlayArea) glide = render3dMod.focusPlayArea(renderer3d, sim) || 0;
     if (glide > 0) await new Promise((r) => setTimeout(r, glide * 1000 + WAVE_END.afterCameraMs));
     if (!live()) return;
+    await offerRareContract();          // wave 3 at 3★+: a capital ship's contact offers to buy this map's rare
+    if (!live()) return;
     await playPreBattleDialog(null);    // character dialog → optional dialog → intel → start
+  }
+  /**
+   * The RARE contract offer (owner 2026-11-06, Q4/Q6) [MM-story_mw5eozsn_c]. In the frozen interlude after wave 3, if it
+   * scored 3★ or more and a capital ship other than this planet's has arrived, that ship's contact (a new character:
+   * the first of its crew who is not the captain) calls in and offers to buy up to the quota of this map's rare at a
+   * set price. ACCEPT holds the contract until the map ends (win or lose); DECLINE costs nothing, and the offer is
+   * re-earned on a later run, never re-offered in this one.
+   */
+  /** End of map: sell the rare harvested to the contract's ship, up to the quota. → settled | null. */
+  function settleRareRun(sv, played) {
+    const c = rareRun.contract;
+    if (!c) return null;
+    const settled = settleRareContract(c, (played.tally && played.tally.harvested && played.tally.harvested.rare) || 0);
+    return bankRareSale(sv, settled, { buyerFaction: c.buyerFaction, tally: played.tally, addLoyalty });
+  }
+  async function offerRareContract() {
+    if (mode !== 'play' || !currentMapId || rareRun.offered || !missionCatalog) return;
+    const cleared = sim.waves ? sim.waves.current : 0;            // waves cleared so far = the wave just cleared
+    if (!rareOfferEarned({ clearedWave: cleared, waveStars: rareRun.waveStars[cleared], alreadyOffered: rareRun.offered })) return;
+    rareRun.offered = true;
+    const sv = loadSave(), here = (REG.find(currentTestFaction || DEFAULT_FACTION) || {}).key;
+    const arrived = Object.keys(PLANETS).filter((k) => shipArrived(sv, k));   // the save keys ships by planet name
+    const buyer = pickBuyer(arrived, here, currentSeed);
+    const terms = buyer && rareContractFor(here, currentMapId);
+    if (!buyer || !terms) return;
+    const BP = PLANETS[buyer], cs = (missionCatalog.capitalShips || {})[BP.name] || {};
+    const fac = voicePacks && voicePacks.factions && voicePacks.factions[buyer];
+    const contact = fac && fac.characters.find((c) => c.name !== cs.captain && c.phrases && c.phrases.length);
+    const rareName = battleResourceNames().rare;
+    if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
+    const call = contact && characterCall(voicePacks, buyer, contact.name, 'phrase', 'NEW CONTACT');
+    if (call) { const shut = comm.waitForClose(); await comm.showCall({ ...call, hold: true, center: true }); await shut; }
+    if (mode !== 'play') return;
+    const accepted = await new Promise((res) => showContractModal(mountEl, {
+      kicker: 'OPTIONAL CONTRACT — ' + String(cs.ship || BP.name).toUpperCase(),
+      character: { name: contact ? contact.name : (cs.captain || 'An envoy'), phrase: '' },
+      task: `${cs.ship || 'The ' + BP.name + ' ship'} will buy the <b>${rareName}</b> you lift on this map, up to the quota, without a visit to the ship.`,
+      terms: `Up to <b>${terms.quota}</b> ${rareName} at <b>${terms.pricePerUnit}</b> gold each, paid when the map ends, win or lose` +
+        `<br>Something sold: <b>+${terms.loyalty} loyalty</b> with ${fac ? fac.name : BP.name}` +
+        `<br>Decline: no cost, and this offer has to be earned again`,
+      acceptLabel: 'ACCEPT', declineLabel: 'DECLINE',
+    }, { onAccept: () => res(true), onDecline: () => res(false) }));
+    if (accepted) {
+      rareRun.contract = { ...terms, buyer, buyerFaction: fac ? fac.name : null, ship: cs.ship || BP.name, contact: contact ? contact.name : null, rareName };
+      // the contact greets the player aboard on the first visit (Q4): remembered per ship
+      if (contact) updateSave((s) => { const r = ensureReveals(s).reveals; (r.contacts || (r.contacts = {}))[buyer] = r.contacts[buyer] || contact.name; });
+      flashMessage(hud, 'Contract accepted — ' + rareName + ' sells to ' + rareRun.contract.ship);
+    }
   }
   function commOutcome() {
     const hpPct = (sim.base && sim.base.maxHp) ? Math.max(0, sim.base.hp) / sim.base.maxHp : 1;
@@ -1042,6 +1100,7 @@ export function boot(mountEl, seed) {
             if (evs[i].type === 'deposit') feedResources(resLedger, [evs[i]]);
             if (evs[i].type === 'waveStars') {
               // Story 4: stars FIRST, then the dialog beat; under them what this wave collected [MM-story_mw13ek87_1]
+              rareRun.waveStars[evs[i].wave] = evs[i].stars;
               const waveRes = closeWave(resLedger);
               showStarBanner(hud, evs[i].wave, evs[i].stars, waveResourcesHtml(waveRes, resLedger.total, battleResourceNames()));
             }
@@ -1108,13 +1167,14 @@ export function boot(mountEl, seed) {
           // BATTLE REWARDS (Menu-Progression-Design §2.2–3) [MM-story_mvkhegop_j]: a win banks the leftover gold, every
           // campaign battle earns commander XP; the ledger shows on the result and flies into the menu widget later.
           // Played battles only — a replay re-runs a battle already paid for.
-          let rewards = null, resolvedFavour = null;
+          let rewards = null, resolvedFavour = null, rareSettled = null;
           if (mode === 'play' && currentMapId) {
             rewards = grantBattleRewards(saveBefore, { mapId: currentMapId, result: sim.result, finalScore: sim.finalScore,
               waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, xpFor: xpForBattle });
             const played = battleResult({ mapId: currentMapId, planet: planetOfFaction(currentTestFaction), faction: currentTestFaction, result: sim.result,
               finalScore: sim.finalScore, mapScore: sim.mapScore, waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, tally: finishTally(battleTally) });
             updateSave((sv) => {
+              rareSettled = settleRareRun(sv, played);   // the RARE contract resolves, win or lose (before the inventory banks)
               if (missionCatalog) resolvedFavour = resolvedSecondary(sv, settleBattle(sv, played, missionCatalog));
               else { console.error('[missions] content not loaded: battle counted, missions not advanced'); bankBattle(sv, played); }
               // the planet's battle history (Play page › HISTORY) [MM-story_mw1azvh8_d]
@@ -1130,6 +1190,18 @@ export function boot(mountEl, seed) {
           const contractMsg = resolvedFavour ? favourMessage(resolvedFavour) : null;
           const closing = resolvedFavour && questClosingDue(resolvedFavour, sim.result) ? resolvedFavour : null;
           // what the player sees at the end — after the Kill Camera on a defeat [MM-task_mvjng96y_b]
+          // what this battle opened or settled beyond the map (Content-Reveal §6): new signals, the rare contract
+          const resultNotes = [];
+          if (rareSettled && rareRun.contract) resultNotes.push({ kind: 'contract', head: 'RARE CONTRACT', text: rareResultLine(rareSettled, rareRun.contract.ship, rareRun.contract.rareName) });
+          if (mode === 'play' && currentMapId) {
+            try {
+              const before = ensureReveals(JSON.parse(JSON.stringify(saveBefore))), after = ensureReveals(loadSave());
+              for (const it of newlyDue(before, after)) {
+                const ship = it.kind === 'ship' && missionCatalog ? ((missionCatalog.capitalShips || {})[(PLANETS[it.planet] || {}).name] || {}).ship : null;
+                resultNotes.push({ kind: 'signal', head: it.kind === 'planet' ? 'NEW SIGNAL' : 'CAPITAL SHIP', text: revealLine(it, ship) + ' Return to the menu to see it.' });
+              }
+            } catch (e) { console.warn('[reveals] results line', e); }
+          }
           const S = sim;
           const presentResult = () => {
             if (S !== sim) return;   // restarted during the Kill Camera
@@ -1138,7 +1210,7 @@ export function boot(mountEl, seed) {
             showResult(hud, S.result, S.finalScore, nextMap, S.waveStars, rewards, {
               resources: S.resourceNodes ? { total: resLedger.total, names: battleResourceNames(), contract: !!S.contract } : null,
               planet: planetOfFaction(currentTestFaction) || '', mapId: currentMapId || null,
-              mapName: (S.map && S.map.name) || '' });
+              mapName: (S.map && S.map.name) || '', notes: resultNotes });
             // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
             // wave star score (banner) -> final map score (overlay) -> PRIMARY dialog -> then, as
             // part of the REWARD FLOW, the SECONDARY grants the star bonus (5-star wave this battle).

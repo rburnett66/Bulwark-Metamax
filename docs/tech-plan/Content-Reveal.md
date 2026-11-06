@@ -347,6 +347,39 @@ Headless review (Playwright, swiftshader) at desktop and phone landscape.
 - **Q6 — Decided 2026-11-06.** Proposed defaults accepted; all 81 contracts built (PR #172). Declining costs nothing
   but the offer must be re-earned.
 
+## 12. As built (PR for R1–R11, 2026-11-06)
+
+What changed from §4–§6 while building, and why:
+
+- **The queue is derived, not pushed.** `save/reveals.js` `revealsDue(s)` reads the save: a planet is due when the
+  previous planet's map 3 is beaten and it is not in `s.reveals.surveyed`; a ship is due when it has arrived and is not
+  in `s.reveals.shipSeen`. Nothing is pushed onto `loggedQueue`, so the queue cannot drift from the save, a reload
+  replays exactly what was not committed, and old saves need no migration beyond `ensureReveals` (a planet already
+  fought on counts as surveyed). The save keys `planetMaps` / `capitalShips` by planet **name** (missionFlow); the
+  reveals read either.
+- **Verdance's survey is owed by the departure (Q5).** Leaving the Long Ledger (`collective.launched`) makes Verdance
+  due; the menu plays it as soon as the opening hands back (`onDone({ depart:'ground', survey:true })`).
+- **`ALL_PLANETS_OPEN` does not touch reveals.** The survey follows the map 3 win whether or not the portal gate is
+  switched off for testing, so the owner sees the reveal on today's builds.
+- **The opening re-cut (R9).** After ACCEPT the bar's lights come up and the player can walk to any room; the Loading
+  Bay is marked "YOUR TRANSPORT · TAP TO DEPART" and a DEPART button sits bottom-right. The old forced launch is gone.
+- **The ship's station.** Desktop and landscape: the ship's own GLB, idling, drawn by the menu's single 3D canvas into
+  the upper-left box over the planet; it coasts in when it first parks. Phone portrait has no room over the planet,
+  so the station is a "BOARD THE SHIP ▸" chip. Until a faction ship is met, the Long Ledger holds the station.
+- **Results notes.** The results screen has a notes panel: "NEW SIGNAL — Florael discovered…", "CAPITAL SHIP —
+  Halbrecht's Oath is inbound…", and the rare contract's settlement.
+- **Rare contract (R11).** Offered in the wave-end interlude after wave 3 at 3★+, before the next faction's dialog.
+  The contact is the first of the buyer's crew who is not the captain (placeholder pick until the character registry,
+  Dialog-Unification). The contact's name is stored in `s.reveals.contacts[planet]` for the first-visit greeting.
+  Settlement runs inside the battle's save write, before the inventory banks, so sold units are not also kept.
+
+Placeholders, to be replaced by authored content:
+
+- Faction ships reuse the Long Ledger's room layout (`content/ships/collective/ship-layout.json`) with their own crew.
+- The Collective's new-planet line in `content/reveals/reveals.json` waits for Dialog-Unification F5.
+- **Follow-up:** the rare contact's greeting and mission on the first visit to that ship (Q4) — the name is stored;
+  the greeting beat and its mission need authored lines and a mission row.
+
 ## Dependencies
 
 | relation | document | what it holds that this plan does not restate |

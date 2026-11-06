@@ -1,0 +1,13 @@
+{
+  "_source": "docs/tech-plan/Content-Reveal.md §5.2–5.3 (story_mw56vk3i_8). Placeholder lines until Dialog-Unification F5 moves the Collective's hub lines into the dialog doc §10; the captains speak their own voice-pack lines.",
+  "collective": {
+    "speaker": { "factionKey": "collective", "name": "Factor Mira Valcourt", "sub": "The Collective · Contract officer", "gender": "female" },
+    "newPlanet": "{planet} is on the ledger. Same terms as before: we buy the common and the uncommon you lift, up to the quota, and everything past it is yours. Maps one to three are posted.",
+    "room": "bar"
+  },
+  "factionShip": {
+    "room": "helm",
+    "greet": "phrase",
+    "offer": "reward"
+  }
+}

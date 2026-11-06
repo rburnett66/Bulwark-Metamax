@@ -1135,7 +1135,7 @@ export function rewardsHtml(rewards) {
 export function showResult(hud, result, finalScore, nextMap, waveStars, rewards, extra = {}) {
   if (!hud) return;
   const model = resultsModel({ result, finalScore, waveStars, rewards, nextMap, resources: extra.resources || null,
-    planet: extra.planet || '', mapId: extra.mapId || null, mapName: extra.mapName || '' });
+    planet: extra.planet || '', mapId: extra.mapId || null, mapName: extra.mapName || '', notes: extra.notes || [] });
   if (hud._results) hud._results.dispose();
   const cbs = hud.callbacks || {};
   hud._results = mountResults(hud.resultEl, model, {

@@ -94,6 +94,11 @@ export function createRoomView(THREE, { renderer, layout: L, standing = {}, seed
       patronAgent = spawn(cfgFor(patron.fac || 'collective'), { lane, x: (seat.x + 50), kind: 'seat', z: seat.z + 0.6, y: seat.y - yOff, state: 'sit-drink' });
       patronAgent.baseYaw = 0.95; patronAgent.cur.yaw = 0.95; patronAgent.g.rotation.y = 0.95;
       patronAgent.cur.leg = -1.45;
+    } else if (rec) {
+      // no seat in this room (the helm): the patron stands at the room's post, turned toward the door
+      // [MM-story_mw56vk3i_8] — a faction ship's captain met on the first visit
+      patronAgent = spawn(cfgFor(patron.fac || 'collective', { captain: !!patron.captain }), { lane: laneOf(rec.room.floor), x: rec.room.fx, kind: 'post', z: -3, state: 'idle' });
+      patronAgent.dir = -1; face(patronAgent);
     }
   }
   // the player: gold hard hat, on the patron's deck at its left end

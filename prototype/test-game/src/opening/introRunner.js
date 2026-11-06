@@ -11,9 +11,11 @@
  *   beat 8     the avatar walks into the bar, the camera pushes in, Mira turns, and the conversation plays
  *              (dialog/conversation.js, content/dialog/opening.json) with holo-slides [MM-story_mw47llqj_6];
  *   beat 9     the first contract card (contractCard.js) → ACCEPT [MM-story_mw47lq0l_7];
- *   beat 10    the camera drops to the Loading Bay: the transport under the bay lights, "YOUR TRANSPORT · TAP TO
- *              LAUNCH"; launch closes the hull (the wipe in reverse) over the 3D ship and fades out "DEPARTING FOR
- *              VERDANCE"; onDone({ depart: 'ground' }) and the menu turns to Verdance.
+ *   beat 10    explore (Content-Reveal §5.3, R9 [MM-story_mw56vrsc_a]): the bar's lights come up, the player can walk
+ *              to any room; the Loading Bay is marked "YOUR TRANSPORT · TAP TO DEPART" and DEPART sits bottom-right.
+ *              Departing closes the hull (the wipe in reverse) over the 3D ship and fades out "DEPARTING FOR
+ *              VERDANCE"; onDone({ depart: 'ground', survey: true }) and the menu plays the Verdance survey
+ *              (save/reveals.js owes it once the transport has left).
  * Saving is the caller's: onAccept() and onLaunch() fire at those beats (the menu writes save/collective.js).
  * resume: 'transport' starts straight at the Loading Bay (a reload between ACCEPT and launch).
  * Everything timed comes from timeline.js openingAt(t) / roomsAt(t), so the review page and tests see the same thing.
@@ -45,6 +47,7 @@ const CSS = `
 .cx-intro .cx-btn { position:absolute; font:600 12px "Chakra Petch", sans-serif; letter-spacing:.16em; color:#e9e2d6; background:rgba(14,9,8,.78); border:1px solid rgba(242,200,105,.35); border-radius:6px; padding:9px 13px; cursor:pointer; min-height:36px; }
 .cx-intro .cx-btn:focus-visible { outline:2px solid #f2c869; outline-offset:2px; }
 .cx-intro .cx-skip { right:max(16px, env(safe-area-inset-right)); top:max(16px, env(safe-area-inset-top)); display:none; }
+.cx-intro .cx-depart { right:max(16px, env(safe-area-inset-right)); bottom:max(16px, env(safe-area-inset-bottom)); display:none; color:#1a1208; background:#f2c869; border-color:#f2c869; font-weight:700; }
 .cx-intro .cx-close { left:max(16px, env(safe-area-inset-left)); top:max(16px, env(safe-area-inset-top)); }
 .cx-intro .cx-prompt { position:absolute; transform:translate(-50%, -100%); text-align:center; pointer-events:none; opacity:0; transition:opacity .4s; }
 .cx-intro .cx-prompt b { display:block; font:700 clamp(14px,2vw,20px) "Chakra Petch", sans-serif; letter-spacing:.3em; padding-left:.3em; color:#ffcf5c; text-shadow:0 0 14px rgba(255,207,92,.6); }
@@ -77,11 +80,11 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
   root.innerHTML = `<canvas class="cx-ship"></canvas><canvas class="cx-rooms"></canvas><div class="cx-scan"></div>
     <div class="cx-fade"></div><div class="cx-cap"></div>
     <div class="cx-prompt"><b>THE BAR</b><span>TAP TO ENTER</span></div>
-    <button class="cx-btn cx-skip" type="button">SKIP ▸</button><button class="cx-btn cx-close" type="button" aria-label="Close the intro">✕</button>`;
+    <button class="cx-btn cx-skip" type="button">SKIP ▸</button><button class="cx-btn cx-depart" type="button">DEPART ▸</button><button class="cx-btn cx-close" type="button" aria-label="Close the intro">✕</button>`;
   mount.appendChild(root);
   const $ = (s) => root.querySelector(s);
   const shipCanvas = $('.cx-ship'), roomCanvas = $('.cx-rooms'), scanEl = $('.cx-scan'), fadeEl = $('.cx-fade'), capEl = $('.cx-cap');
-  const promptEl = $('.cx-prompt'), skipEl = $('.cx-skip');
+  const promptEl = $('.cx-prompt'), skipEl = $('.cx-skip'), departEl = $('.cx-depart');
 
   const { THREE, addons } = await loadThree();
   const pr = Math.min(devicePixelRatio || 1, tier === 'low' ? 1 : tier === 'standard' ? 1.5 : 2);
@@ -126,18 +129,27 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
       onAccept: () => { card.close(); card = null; try { onAccept(); } catch (e) { console.warn('[intro] onAccept', e); } toBay(); },
     });
   }
-  // beat 10: the Loading Bay, then launch
+  // beat 10: explore the ship; the Loading Bay is the way out (R9 [MM-story_mw56vrsc_a])
+  let walking = false;
   function toBay() {
     phase = 'bay';
-    view.ship.setAll('dim', 'loading'); view.ship.setState('loading', 'highlight');
-    view.focus('loading', root.clientWidth < root.clientHeight ? 0.95 : 0.75);
+    view.ship.setAll('normal'); view.ship.setState('loading', 'highlight');
+    const portrait = root.clientWidth < root.clientHeight;
+    view.focus(portrait ? 'loading' : null, portrait ? 0.95 : 0.7);
     promptEl.querySelector('b').textContent = 'YOUR TRANSPORT';
-    promptEl.querySelector('span').textContent = 'TAP TO LAUNCH';
+    promptEl.querySelector('span').textContent = 'TAP TO DEPART';
     promptEl.classList.add('tap');
+    departEl.style.display = 'block';
+  }
+  function exploreTo(id) {
+    if (walking) return;
+    walking = true;
+    if (root.clientWidth < root.clientHeight) view.focus(id, 0.95);
+    view.walkPlayerTo(id, () => { walking = false; });
   }
   function launch() {
     if (phase !== 'bay') return;
-    phase = 'launch'; launchT = 0; promptEl.style.opacity = '0';
+    phase = 'launch'; launchT = 0; promptEl.style.opacity = '0'; departEl.style.display = 'none';
     try { onLaunch(); } catch (e) { console.warn('[intro] onLaunch', e); }
   }
 
@@ -156,9 +168,14 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
 
   skipEl.addEventListener('click', () => { const to = skipTarget(t); if (to != null) t = to; });
   $('.cx-close').addEventListener('click', finish);
+  departEl.addEventListener('click', launch);
   root.addEventListener('keydown', (e) => { if (e.key === 'Escape') finish(); });
   roomCanvas.addEventListener('pointerup', (e) => {
-    if (phase === 'bay') { const hit = view.pick(e.clientX, e.clientY, roomCanvas.getBoundingClientRect()); if (hit && hit.id === 'loading') launch(); return; }
+    if (phase === 'bay') {
+      const hit = view.pick(e.clientX, e.clientY, roomCanvas.getBoundingClientRect());
+      if (hit && hit.id === 'loading') launch(); else if (hit) exploreTo(hit.id);
+      return;
+    }
     if (phase !== 'timed') return;
     const o = openingAt(t, { box: stage.box, reduced: reduce });
     if (!o.room.prompt) return;
@@ -228,7 +245,7 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
       const out = Math.max(0, Math.min(1, (launchT - 1.8) / 1.0));
       fadeEl.style.opacity = out.toFixed(3);
       capEl.textContent = 'DEPARTING FOR VERDANCE'; capEl.style.opacity = Math.min(1, Math.max(0, (launchT - 1.4) / 0.6)).toFixed(3);
-      if (launchT >= 3.6) finish({ depart: FIRST.planet });
+      if (launchT >= 3.6) finish({ depart: FIRST.planet, survey: true });
     }
   }
   // a reload between ACCEPT and launch: straight to the Loading Bay, the room view already open
