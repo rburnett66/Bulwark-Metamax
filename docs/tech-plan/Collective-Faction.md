@@ -1,7 +1,7 @@
 # Tech Plan — The Collective as a faction (no planet) and its resource contracts
 
 **Epic:** `epic_mvo5po8u_4` The Collective trade faction.
-**Status:** v0.2, 2026-11-05, agent-proposed; Q1 decided by the owner. Notes and as-built justifications for this epic go here, not on the tickets.
+**Status:** v0.3, 2026-11-05. Q1 decided by the owner. C1 and C2 built on branch `feat/collective-contracts` (not merged). Notes and as-built justifications for this epic go here, not on the tickets.
 
 **Companion plans:**
 - `Collective-Opening.md`: the first contract is handed over in the opening.
@@ -186,6 +186,7 @@ few reward rows.
 | Q4 | Can a contract lower Collective standing? | No; only replies can |
 | Q5 | What Collective standing unlocks | The officer ladder in §3.5 |
 | Q6 | Standing per contract | 10 / 15 / 20 by map band (a planet = 135) |
+| Q7 | Per-planet common quotas raise harvest gold about 7.5 % (Notes, C2 as built). Keep them, or hold each map's common quota at the old minimum over the nine planets? | Keep: each planet's contract is measured on its own board. The values are data in `Collective_Contracts`, so either answer is a retune. |
 
 ## 8. Notes
 
@@ -216,6 +217,41 @@ few reward rows.
   Collective contracts are common and uncommon only. Rare and epic stay with the secondary and quest contracts, so
   first-time Collective standing (Q3) and replayed secondaries pull in different directions: breadth across planets
   for the Collective, depth on each map for the secondaries.
+- **2026-11-05, C1 as built** (`feat/collective-contracts`, `c580ef4`). Deviations from §3.1:
+  - **The Collective sits beside `SYSTEM`, not inside `FACTIONS`.** `FACTIONS` already meant "the nine the player picks
+    between", so no caller had to be switched to stay correct. `COMBAT_FACTIONS` is added as that list's name for
+    combat callers, and the production callers that iterate it now read it (`fxlab.js`, `rivalOf`, `voice.js`). The
+    Stack Forge, which lists `ALL`, keeps only factions with `combat !== false`.
+  - **No workbook Factions row 10.** That sheet is each faction's harvester profile and rival; a Collective row would
+    give it a harvester. The registry's ordinal 10 is enough for `factionOfOrdinal`.
+  - Tests: `src/data/collectiveFaction.test.mjs`.
+- **2026-11-05, C2 as built** (`42f26e4`, `c062e06`, `5b41eec`).
+  - **Per-tier crediting (Found 2).** `harvest.js` keeps `u.cargoMix` (units, value and role per colour) and
+    `creditDeposit` credits each colour at its own tier, one `deposit` event per colour (blue, yellow, red, green). A
+    single-colour load credits exactly as before.
+  - **Live-board quotas (Found 1).** `contract_quota.mjs` builds the board as `main.js` does
+    (`resolveResourceTypes` + `createSim`) and prints the 81-row CSV; a test checks no uncommon quota exceeds what its
+    board holds. `tools/economy/write_collective_contracts.py` writes the `Collective_Contracts` sheet and recalculates
+    the workbook with LibreOffice headless, refusing if any other sheet's values change.
+  - **Sheet columns** add `Planet_Key` (the registry key the battle passes) beside `Planet` (the name). `Gold_Bonus` is 0
+    everywhere for now.
+  - **`contractFor(planet, mapId)` → `{common, uncommon}`** with no per-map fallback, since the sheet is full. The Maps
+    sheet's `Contract_*` columns are no longer read; they can be deleted from the workbook.
+  - **HUD.** A tier the Collective doesn't buy shows only what is kept (`● +12`), not a tick.
+  - **Balance before/after** (`tools/economy/contract_compare.mjs`, run on `origin/main` and on the branch; live board,
+    no enemies, to par time):
+
+    | Commander | Harvest gold, main → branch | Change | Worst board | Best board |
+    |---|---|---|---|---|
+    | starter | 2,069,526 → 2,265,874 | +9.5 % | 0 % | Lumen map 4 +19.9 % |
+    | fleet | 2,621,688 → 2,819,448 | +7.5 % | Rime map 1 −11.1 % | Xenthe map 8 +27.9 % |
+    | quest | 2,618,455 → 2,812,550 | +7.4 % | Rime map 1 −11.1 % | Xenthe map 8 +23.5 % |
+
+    By tier (fleet): common +245,207, uncommon −37,431, rare and epic −10,016. The rare and epic loss is the −0.4 %
+    measured before. The rise comes from **per-planet common quotas**: the old per-map quota was the minimum over the
+    nine planets, so on most boards the Collective now buys more of the common harvest. Map 1 falls 5.6 % because the
+    live-board uncommon quotas are smaller than the old raw-board ones. The uncommon quota now fills on 55 of 81 boards
+    (was 34). The lowest board after the change still pays 7,950 gold to a starter commander. Owner decision Q7.
 
 ## Dependencies
 
