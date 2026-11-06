@@ -154,8 +154,12 @@ Times are seconds. Every camera, ship and effect value is a pure function of `t`
 | P5 | 26–38 | **Survey scan.** A wide-area sweep, then candidate sites scanned one by one, rated, and one **locked** ("Landing site locked"). This is the commit beat. | Orbital Survey `stepSurvey`, site markers in the globe shader |
 | P6 | 38–40 | The readout folds away; the camera settles on the menu's planet framing. The transport keeps orbiting as the menu's survey ship. | `surveyShip.js` (same hull) |
 
-The transport is **the player's own**: the one granted with the first contract (`collective.transport`), so the
-ship the player was given is the ship they watch arrive.
+Owner, 2026-11-06: *"when you unlock a planet, and return to the menu the players transport ship surveys the new
+planet. It is in the prototype, use the generic transport ship for now .. we will model transport ship options
+later."* So the arriving ship is the player's transport, drawn with the prototype's **generic transport hull**. That
+hull is already in the game as `makeSurveyShip` (`surveyShip.js`, ported from the prototype). One hull is used for
+every planet and every player until transport options are modelled; `collective.transport` stays the save field the
+choice will hang on.
 
 ### 5.2 The capital ship presents itself
 
