@@ -16,7 +16,8 @@ import { openBattleHistory } from './battleHistory.js';
 import { battlesOn } from '../save/battleLog.js';
 import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
-import { loadSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars, bankOf } from '../save/save.js';
+import { loadSave, updateSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars, bankOf } from '../save/save.js';
+import { needsIntro, resumeBeat, acceptFirstContract, markLaunched } from '../save/collective.js';
 import { setChannelVolume, getChannelVolume, isMuted, setMuted, onAudioChange } from '../comm/voice.js';
 import { readyIds, countOwned } from '../data/techtree.js';
 import { techCtxFromSave, createGameTechAdapter, planetOpen } from './techSave.js';
@@ -776,6 +777,18 @@ export function createMenu(mountEl, cbs) {
     row.appendChild(go);
     setBox.appendChild(row);
   }
+  // REPLAY OPENING: the Collective intro again, saving nothing [MM-story_mw47lq0l_7]
+  {
+    const row = el(doc, 'div', 'bwm-srow');
+    row.appendChild(el(doc, 'label', null, 'OPENING'));
+    const go = el(doc, 'button', 'bwm-btn'); go.style.cssText = 'width:auto;padding:6px 14px;flex:0 0 auto';
+    go.appendChild(el(doc, 'span', null, 'REPLAY'));
+    go.title = 'Play the Collective intro again';
+    go.addEventListener('click', () => openCollectiveIntro());
+    row.appendChild(el(doc, 'span', 'v', 'the Long Ledger and the first contract'));
+    row.appendChild(go);
+    setBox.appendChild(row);
+  }
   setBox.appendChild(el(doc, 'div', 'note', 'Audio is shared with the in-game settings gear. More options land here as they ship.'));
   const nsty = el(doc, 'style'); nsty.textContent = '.bwm-set .note{font-size:11px;color:#8fa0b3;margin-top:6px}';
   setBox.appendChild(nsty);
@@ -911,18 +924,45 @@ export function createMenu(mountEl, cbs) {
   setTimeout(playPendingRewards, 600);
   // ?intro=1 plays the Collective intro straight away (review link) [MM-story_mw4d1bsw_q]
   try { if (new URLSearchParams(location.search).get('intro') === '1') setTimeout(openCollectiveIntro, 50); } catch (e) { /* no location */ }
+  // a new save opens on the Collective intro; a reload after ACCEPT resumes at the Loading Bay [MM-story_mw47lq0l_7]
+  try {
+    const q = new URLSearchParams(location.search);
+    const s0 = loadSave();
+    if (q.get('intro') !== '1' && q.get('intro') !== '0' && !q.has('map') && needsIntro(s0) || resumeBeat(s0) === 'transport') {
+      setTimeout(() => openCollectiveIntro({ firstRun: true, resume: resumeBeat(s0) === 'transport' ? 'transport' : null }), 50);
+    }
+  } catch (e) { /* no location / storage (tests) */ }
   return api;
 
   /** The Collective intro (in-game prototype): Vesper, the Long Ledger's fly-by and its rooms, the bar. One at a time. */
-  function openCollectiveIntro() {
+  /**
+   * The Collective intro: Vesper, the Long Ledger's fly-by and its rooms, the bar, the first contract, the transport.
+   * firstRun — a new save opens on it: ACCEPT and launch are saved (save/collective.js) and a reload between them
+   * resumes at the Loading Bay [MM-story_mw47lq0l_7]. Otherwise (Vesper, Settings, ?intro=1) it is a replay and
+   * saves nothing. Launching turns the menu to Verdance.
+   */
+  function openCollectiveIntro({ firstRun = false, resume = null } = {}) {
     if (introOpen) return;
     introOpen = true;
     const q = new URLSearchParams(location.search);
     const tier = ['high', 'standard', 'low'].includes(q.get('quality')) ? q.get('quality') : 'high';
     if (stage) stage.pause();                             // the menu's own 3D rests under the intro
+    const save = (fn) => { if (firstRun) { try { updateSave(fn); } catch (e) { console.warn('[intro] save', e); } } };
     import('../opening/introRunner.js')
-      .then((M) => M.playIntro({ mount: doc.body, tier, start: +q.get('introT') || 0, onDone: () => { introOpen = false; syncStage(); } }))
+      .then((M) => M.playIntro({
+        mount: doc.body, tier, start: +q.get('introT') || 0, resume,
+        onAccept: () => save(acceptFirstContract),
+        onLaunch: () => save(markLaunched),
+        onDone: (r = {}) => {
+          introOpen = false; syncStage();
+          if (r.depart) {                                   // the transport left for Verdance: the menu turns to it
+            setTarget(r.depart);
+            if (galaxyOn()) { galaxy.dataset.target = r.depart; zoomIn(); } else setGlobe(heroGlobe, r.depart);
+          }
+        },
+      }))
       .then((intro) => { if (typeof window !== 'undefined') window.__intro = intro; })
       .catch((err) => { introOpen = false; console.error('[intro]', err); });
   }
+
 }

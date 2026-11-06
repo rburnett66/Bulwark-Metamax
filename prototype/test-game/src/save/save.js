@@ -32,6 +32,7 @@
  */
 
 import { emptyStats } from './battleTally.js';
+import { collectiveOf } from './collective.js';
 
 const KEY = 'bulwark:save';
 
@@ -63,6 +64,7 @@ export function defaultSave() {
     inventoryNew: {},
     loggedQueue: [],     // missions logged away from the menu: the toast plays when the menu next shows
     battleLog: [],
+    collective: { introSeen: false, contractAccepted: false, transport: null, seenBefore: false },   // the opening [MM-story_mw47lq0l_7]
   };
 }
 
@@ -101,6 +103,7 @@ export function migrate(s) {
   if (!Array.isArray(s.battleLog)) s.battleLog = [];
   if (!s.seen || typeof s.seen !== 'object') s.seen = {};
   if (s.pendingRewards === undefined) s.pendingRewards = null;
+  collectiveOf(s);   // the opening's state; a save that has already played is marked seen [MM-story_mw47lq0l_7]
   return s;
 }
 
