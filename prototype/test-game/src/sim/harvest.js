@@ -77,7 +77,7 @@ export function spawnHarvester(state) {
   u.state = 'harvestIdle';
   u.dps = 0; u.targetsBase = false; u.targetId = null;
   u.hp = s.hp; u.maxHp = s.hp; u.speed = s.speed;
-  u.cargo = 0; u.cargoValue = 0; u.capacity = s.capacity; u.yieldMult = s.yieldMult;
+  u.cargo = 0; u.cargoValue = 0; u.cargoMix = {}; u.capacity = s.capacity; u.yieldMult = s.yieldMult;
   u.fieldId = null;        // the assigned FIELD (whole connected patch)
   u.harvestNodeId = null;  // the specific cell being worked right now
   u.homePos = { x: pos.x, y: pos.y };
@@ -422,7 +422,11 @@ function stepOneHarvester(state, u, dt) {
       u.cargo += take;
       u.cargoValue += take * (node.valuePerUnit || 0);
       u.cargoRole = node.role;
-      u.cargoColor = node.color;
+      u.cargoColor = node.color;                  // the colour on the truck's bed (the renderer draws the last pull)
+      // what the load is made of, per colour: a truck retasked part-loaded onto another field carries both, and each
+      // part is credited at its own tier on delivery [MM-story_mw4a1o3p_m]
+      const m = (u.cargoMix ||= {})[node.color] ||= { units: 0, value: 0, role: node.role };
+      m.units += take; m.value += take * (node.valuePerUnit || 0); m.role = node.role;
     }
     // L3 unlock (workbook): AUTO-RETURN AT 90% — stop topping off on sparse cells (micro relief)
     const fullAt = (state.harvesterLevel || 1) >= 3 ? u.capacity * 0.9 : u.capacity - 1e-9;
@@ -449,7 +453,7 @@ function stepOneHarvester(state, u, dt) {
     // drops out of aliveHarvesters — its cargo was never credited.)
     if (!state.base || !(state.base.hp > 0)) {
       emitEvent(state, { type: 'unloadCancel', tick: state.tick, id: u.id, pos: { x: u.pos.x, y: u.pos.y } });
-      u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null;
+      u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null; u.cargoMix = {};
       u.unloadTicks = 0;
       u.fieldId = null; u.harvestNodeId = null;
       u.state = 'harvestIdle';
@@ -497,12 +501,29 @@ export function initContract(quota) {
 }
 
 /** DEPOSIT (owner color economy): every haul the contract still buys pays gold — blue/yellow are the economy
- *  crystals, red/green additionally count up the header QUEST objectives. Runs when the unload completes. */
+ *  crystals, red/green additionally count up the header QUEST objectives. Runs when the unload completes.
+ *
+ *  PER TIER [MM-story_mw4a1o3p_m]. A load is credited colour by colour (blue, yellow, red, green), each part at its
+ *  own tier, with one `deposit` event per colour. It used to be credited whole at the tier of its LAST crystal, so a
+ *  truck retasked part-loaded from a common field onto a rare one sold its common units as rare (balance report
+ *  2026-11-05, "mixed loads"). A single-colour load — the usual case — credits exactly as before. */
+const MIX_ORDER = ['blue', 'yellow', 'red', 'green'];
 function creditDeposit(state, u) {
   if (!(u.cargo > 0)) return;
-  const units = Math.floor(u.cargo);
-  const tier = CARGO_TIER[u.cargoColor || 'blue'] || 'common';
-  let gold = cargoGold(u), sold = units, kept = 0;
+  const mix = u.cargoMix && Object.keys(u.cargoMix).length ? u.cargoMix
+    : { [u.cargoColor || 'blue']: { units: u.cargo, value: u.cargoValue, role: u.cargoRole } };   // a truck from an older save
+  const colors = Object.keys(mix).sort((a, b) => MIX_ORDER.indexOf(a) - MIX_ORDER.indexOf(b));
+  for (const color of colors) creditPart(state, u, color, mix[color]);
+  u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null; u.cargoMix = {};
+}
+
+/** Credit one colour of a load: sell it to the contract up to its tier's quota, keep the rest. */
+function creditPart(state, u, color, part) {
+  const units = Math.floor(part.units);
+  if (!(part.units > 0)) return;
+  const tier = CARGO_TIER[color] || 'common';
+  const role = part.role || 'primary';
+  let gold = Math.floor(part.value * (u.yieldMult || 1)), sold = units, kept = 0;
   const c = state.contract;
   if (c) {
     sold = Math.min(units, Math.max(0, c.quota[tier] - c.sold[tier]));
@@ -513,16 +534,14 @@ function creditDeposit(state, u) {
   }
   if (gold > 0) {
     if (state.economy) state.economy.money = (state.economy.money || 0) + gold;
-    if (u.cargoRole === 'premium') state.mapScore.goldFromPremium += gold;
+    if (role === 'premium') state.mapScore.goldFromPremium += gold;
     else state.mapScore.goldFromPrimary += gold;
   }
-  if (u.cargoColor === 'red' || u.cargoColor === 'green') {
-    const n = Math.floor(u.cargo);
-    state.mapScore.questUnits += n;
-    if (u.cargoColor === 'red') state.mapScore.questRed += n; else state.mapScore.questGreen += n;
+  if (color === 'red' || color === 'green') {
+    state.mapScore.questUnits += units;
+    if (color === 'red') state.mapScore.questRed += units; else state.mapScore.questGreen += units;
   }
-  emitEvent(state, { type: 'deposit', tick: state.tick, gold, units, sold, kept, contract: !!c, role: u.cargoRole || 'primary', color: u.cargoColor || 'blue', fieldId: u.fieldId, pos: { x: u.pos.x, y: u.pos.y } });
-  u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null;
+  emitEvent(state, { type: 'deposit', tick: state.tick, gold, units, sold, kept, contract: !!c, role, color, fieldId: u.fieldId, pos: { x: u.pos.x, y: u.pos.y } });
 }
 
 /** Done at the dock: still mid-job? head back out — to the assigned field, or if it was stripped

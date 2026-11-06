@@ -106,5 +106,55 @@ test('the HUD reads sold / quota until a tier is full, then what is kept', () =>
   assert.match(html, /✓ \+45/);
   assert.match(html, /20\/170/);
   assert.match(html, /0\/10/);
-  assert.match(html, /✓ \+3/, 'a zero-quota tier shows what is kept');
+  assert.match(html, /● \+3</, 'a tier the Collective does not buy shows only what is kept');
+  assert.doesNotMatch(html, /✓ \+3/);
+});
+
+// [MM-story_mw4a1o3p_m] The Collective buys common and uncommon only; a mixed load is credited per tier.
+
+/** A truck docked with a hand-built load, one tick from finishing its unload. */
+function dockedWith(contract, mix) {
+  const s = board(contract);
+  const u = s.units.get(s.harvesterIds[0]);
+  u.cargoMix = {};
+  let cargo = 0, value = 0;
+  for (const [color, units] of Object.entries(mix)) {
+    const vpu = { blue: 1, yellow: 2, red: 4, green: 8 }[color];
+    u.cargoMix[color] = { units, value: units * vpu, role: color === 'blue' ? 'primary' : color === 'yellow' ? 'premium' : 'quest' };
+    cargo += units; value += units * vpu; u.cargoColor = color;
+  }
+  u.cargo = cargo; u.cargoValue = value; u.yieldMult = 1;
+  u.state = 'harvestUnload'; u.unloadTicks = 1;
+  return { s, u };
+}
+const depositsNow = (s) => stepSim(s, 1 / 30).filter((e) => e.type === 'deposit');
+
+test('a mixed load is credited per tier: its common units sell as common, its rare units as rare', () => {
+  const { s, u } = dockedWith({ common: 1000, uncommon: 100 }, { blue: 30, red: 10 });
+  const money0 = s.economy.money, q0 = s.mapScore.questUnits;
+  const ds = depositsNow(s);
+  assert.deepEqual(ds.map((d) => d.color), ['blue', 'red'], 'one deposit per colour, blue first');
+  const [b, r] = ds;
+  assert.deepEqual([b.units, b.sold, b.kept, b.gold], [30, 30, 0, 30], 'the common part sells under the common quota');
+  assert.deepEqual([r.units, r.sold, r.kept, r.gold], [10, 0, 10, 0], 'the rare part is kept, unpaid');
+  assert.equal(s.economy.money - money0, 30);
+  assert.equal(s.mapScore.questUnits - q0, 10, 'only the rare units count toward the quest');
+  assert.deepEqual([s.contract.sold.common, s.contract.kept.rare], [30, 10]);
+  assert.equal(u.cargo, 0);
+  assert.deepEqual(u.cargoMix, {});
+});
+
+test('the Collective buys no rare or epic: with a contract they are always kept and pay no gold', () => {
+  const c = initContract({ common: 100, uncommon: 50 });
+  assert.deepEqual(c.quota, { common: 100, uncommon: 50, rare: 0, epic: 0 });
+  const { s } = dockedWith({ common: 100, uncommon: 50 }, { green: 12 });
+  const [d] = depositsNow(s);
+  assert.deepEqual([d.color, d.units, d.sold, d.kept, d.gold], ['green', 12, 0, 12, 0]);
+});
+
+test('a single-colour load credits exactly as before (one event, floor of the whole load)', () => {
+  const { s } = dockedWith(null, { yellow: 20.6 });
+  const ds = depositsNow(s);
+  assert.equal(ds.length, 1);
+  assert.deepEqual([ds[0].color, ds[0].units, ds[0].gold, ds[0].role], ['yellow', 20, 41, 'premium']);
 });
