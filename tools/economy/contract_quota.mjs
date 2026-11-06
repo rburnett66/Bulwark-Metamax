@@ -9,6 +9,12 @@
  *   everything; extra harvesters are what produce a surplus.
  * - UNCOMMON, RARE, EPIC are consumed, so the quota is 80 % of what the map seeds (minimum over the nine planets).
  * Values are floored to 10 units.
+ *
+ *   node tools/economy/contract_quota.mjs --per-planet   # CSV Planet,Map_ID,Common,Uncommon — one row per planet × map
+ *
+ * --per-planet (owner 2026-11-05, refs [MM-story_mw4a1o3p_m]): the contract covers only COMMON and UNCOMMON, and each
+ * planet gets its own quota per map — the same method, measured on that planet's own forge map instead of the minimum
+ * over the nine. Rare and epic are not bought (quota 0), so they are not output.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,6 +28,13 @@ const MD = JSON.parse(fs.readFileSync(path.join(G, 'content/maps/mapdata.json'),
 const TIER = { blue: 'common', yellow: 'uncommon', red: 'rare', green: 'epic' };
 const FORGE = path.join(G, 'content/maps/forge');
 const floor10 = (v) => Math.floor(v / 10) * 10;
+const PER_PLANET = process.argv.includes('--per-planet');
+// forge file slug → planet (src/data/planets.js + factions.js; main.js forgeFileSlug)
+const PLANET_OF_SLUG = {
+  powder: 'Verdance', air: 'Florael', 'high-tech': 'Ochre', artillery: 'Kessra', water: 'Rime',
+  'arcane-energy': 'Cinder', 'space-tech': 'Lumen', 'dark-energy': 'Xenthe', greenies: 'Vexmire',
+};
+const perPlanet = [];
 
 const out = {};
 for (const f of fs.readdirSync(FORGE).filter((x) => /-map-\d\.json$/.test(x)).sort()) {
@@ -39,9 +52,18 @@ for (const f of fs.readdirSync(FORGE).filter((x) => /-map-\d\.json$/.test(x)).so
     const par = MD.maps.find((m) => m.Map_ID === id).Par_Time_Sec;
     for (let t = 0; t < par * 30; t++) for (const e of stepSim(s, 1 / 30)) if (e.type === 'deposit' && e.color === 'blue') delivered += e.units;
   }
+  const slug = f.replace(/-map-\d\.json$/, '');
+  perPlanet.push({ planet: PLANET_OF_SLUG[slug] || slug, id, common: floor10(delivered), uncommon: floor10(seeded.uncommon * 0.8) });
   const o = (out[id] ||= { common: Infinity, uncommon: Infinity, rare: Infinity, epic: Infinity });
   o.common = Math.min(o.common, delivered);
   for (const k of ['uncommon', 'rare', 'epic']) o[k] = Math.min(o[k], seeded[k] * 0.8);
+}
+if (PER_PLANET) {
+  const planets = Object.values(PLANET_OF_SLUG);
+  perPlanet.sort((a, b) => (planets.indexOf(a.planet) - planets.indexOf(b.planet)) || (a.id - b.id));
+  console.log('Planet,Map_ID,Common,Uncommon');
+  for (const r of perPlanet) console.log([r.planet, r.id, r.common, r.uncommon].join(','));
+  process.exit(0);
 }
 console.log('Map_ID\tContract_Common\tContract_Uncommon\tContract_Rare\tContract_Epic');
 for (const id of Object.keys(out).sort()) {
