@@ -2,7 +2,7 @@
 // with the bow on the right, the ship never pops into frame, reduced motion holds still poses, skip lands on the bar.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BEATS, BUILT_UNTIL, OPEN, beatAt, skipTarget, openingAt } from './timeline.js';
+import { BEATS, BUILT_UNTIL, SHIP_UNTIL, ROOMS, OPEN, beatAt, skipTarget, openingAt, roomsAt } from './timeline.js';
 import { lensFov } from '../render3d/ships/shots.js';
 
 const BOX = { min: [-10.5, -1.2, -1.6], max: [11, 3.6, 1.6] };   // the Collective GLB's rough box
@@ -24,7 +24,8 @@ test('beats are contiguous and in the design order; beatAt finds each', () => {
   assert.deepEqual(BEATS.map((b) => b.id), ['cold', 'star', 'flyby', 'flank', 'open', 'life', 'patron', 'bar', 'talk']);
   for (let i = 1; i < BEATS.length; i++) assert.equal(BEATS[i].start, BEATS[i - 1].end, BEATS[i].id + ' follows on');
   for (const b of BEATS) assert.equal(beatAt(b.start + 0.01).beat, b.id);
-  assert.equal(BUILT_UNTIL, 40);
+  assert.equal(SHIP_UNTIL, 40);
+  assert.equal(BUILT_UNTIL, BEATS.find((b) => b.id === 'talk').start);
 });
 
 test('the opening is deterministic and smooth: no camera jump bigger than the ship moves', () => {
@@ -57,7 +58,7 @@ test('the ship never pops in: while hidden it is out of frame, and it crosses th
 });
 
 test('the flank: level, side-on from starboard, bow on the right, the ship filling ~85 % of the width', () => {
-  const A = 16 / 9, o = openingAt(BUILT_UNTIL, { box: BOX, aspect: A });
+  const A = 16 / 9, o = openingAt(SHIP_UNTIL, { box: BOX, aspect: A });
   assert.equal(o.beat, 'open');
   const c = o.camera;
   assert.ok(Math.abs(c.position[1] - c.target[1]) < L * 0.02, 'level');
@@ -67,7 +68,7 @@ test('the flank: level, side-on from starboard, bow on the right, the ship filli
   assert.ok(bow[0] > stern[0], 'bow on the right');
   const span = (bow[0] - stern[0]) / 2;
   assert.ok(span > 0.78 && span < 0.92, `ship spans ${(span * 100).toFixed(0)} % of the width`);
-  const P = openingAt(BUILT_UNTIL, { box: BOX, aspect: 9 / 19.5 }).camera;
+  const P = openingAt(SHIP_UNTIL, { box: BOX, aspect: 9 / 19.5 }).camera;
   assert.ok(P.position[2] < c.position[2], 'portrait frames closer (the bar\'s side of the ship)');
 });
 
@@ -89,4 +90,40 @@ test('reduced motion: one still pose per beat, with a dip at each beat boundary 
 test('skip: from the flank on, a first-run skip lands on the highlighted bar', () => {
   assert.equal(skipTarget(10), null);
   assert.equal(skipTarget(31), BEATS.find((b) => b.id === 'bar').start);
+});
+
+// [MM-story_mw4d1bsw_q] Beats 4–8 over the room view drawn from primitives.
+test('the hull opens: the scan wipe runs left to right in beat 4, then the 3D shot stops', () => {
+  assert.equal(roomsAt(40.5).scan, 0);
+  const mid = roomsAt((ROOMS.scan[0] + ROOMS.scan[1]) / 2).scan;
+  assert.ok(mid > 0.3 && mid < 0.7);
+  assert.equal(roomsAt(46).scan, 1);
+  assert.equal(roomsAt(46).show3d, false);
+  assert.deepEqual(openingAt(50, { box: BOX }).camera, openingAt(SHIP_UNTIL, { box: BOX }).camera, 'the 3D camera holds the flank');
+  assert.equal(openingAt(50, { box: BOX }).beat, 'life');
+});
+
+test('the patron flashes twice at no more than 3 Hz, then the bar is highlighted and the rest dim', () => {
+  let rises = 0, prev = 0, peak = 0;
+  for (let t = 55; t < 60; t += 1 / 120) {
+    const f = roomsAt(t).flash;
+    if (f > 0.95 && prev <= 0.95) rises++;
+    prev = f; peak = Math.max(peak, f);
+  }
+  assert.equal(rises, 2, 'two gold pulses');
+  assert.ok(ROOMS.pulses[1] - ROOMS.pulses[0] >= 1 / 3, 'pulses at most 3 a second');
+  assert.equal(roomsAt(55).flash, 0);
+  assert.deepEqual(roomsAt(57.5).focus, { room: 'bar', fill: ROOMS.patronFill });
+  assert.equal(roomsAt(59).dim, 0);
+  assert.equal(roomsAt(61).dim, 1); assert.equal(roomsAt(61).highlight, 1);
+  assert.equal(roomsAt(60.3).prompt, 'name'); assert.equal(roomsAt(61.5).prompt, 'tap');
+  assert.equal(roomsAt(65).enter, false); assert.equal(roomsAt(ROOMS.autoEnter).enter, true);
+  assert.equal(openingAt(70, { box: BOX }).beat, 'talk');
+});
+
+test('reduced motion in the room view: a cut instead of the wipe, a steady glow instead of pulses', () => {
+  const s = [];
+  for (let t = 40; t < 47; t += 0.1) s.push(roomsAt(t, true).scan);
+  assert.ok(s.every((v) => v === 0 || v === 1), 'no partial wipe');
+  for (let t = 56.5; t < 60; t += 0.05) assert.equal(roomsAt(t, true).flash, 1);
 });

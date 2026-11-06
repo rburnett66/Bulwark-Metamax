@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Long Ledger rooms</title>
+<!-- [MM-story_mw47laf1_2] [MM-story_mw47lcvv_3] Review page for the room view drawn from primitives: the Long Ledger's
+     seven rooms on three decks, crew, the patron at the bar. Serve the game folder and open tools/ship-interior/.
+     ?state=bar (dim the rest, highlight the bar) · ?flash=1 · ?focus=bar · ?reduced=1 · ?standing=arcane:Trusted -->
+<style>
+  html, body { margin: 0; height: 100%; background: #04060b; color: #e9e2d6; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  .bar { position: fixed; left: 12px; bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: 600 12px system-ui; color: #e9e2d6; background: rgba(14,9,8,.8); border: 1px solid rgba(242,200,105,.35); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  button[aria-pressed="true"] { color: #f2c869; border-color: #f2c869; }
+  #info { position: fixed; left: 12px; top: 10px; color: #9b8f80; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info"></div>
+<div class="bar">
+  <button id="hl" type="button" aria-pressed="false">Highlight bar</button>
+  <button id="fl" type="button" aria-pressed="false">Flash patron</button>
+  <button id="fo" type="button" aria-pressed="false">Focus bar</button>
+  <button id="wk" type="button">Walk to bar</button>
+</div>
+<script type="module">
+import * as THREE from '../../vendor/three.module.js';
+import { prepareLayout } from '../../src/ship-interior/layout.js';
+import { createRoomView } from '../../src/ship-interior/roomView.js';
+
+const q = new URLSearchParams(location.search);
+const reduce = q.get('reduced') === '1' || matchMedia('(prefers-reduced-motion: reduce)').matches;
+const standing = Object.fromEntries((q.get('standing') || '').split(',').filter(Boolean).map((s) => s.split(':')));
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: q.has('shot') });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.info.autoReset = false;
+const L = prepareLayout(await (await fetch('../../content/ships/collective/ship-layout.json')).json());
+if (!L.ok) document.getElementById('info').textContent = 'Layout errors: ' + L.errors.join(' · ');
+const view = createRoomView(THREE, { renderer, layout: L, standing, reduce, patron: { room: 'bar', fac: 'collective', name: 'Factor Mira Valcourt' } });
+const resize = () => { renderer.setSize(innerWidth, innerHeight, false); view.resize(innerWidth, innerHeight); };
+addEventListener('resize', resize); resize();
+
+let hl = q.get('state') === 'bar', fl = q.get('flash') === '1', fo = q.get('focus') === 'bar';
+const sync = () => {
+  document.getElementById('hl').setAttribute('aria-pressed', hl); document.getElementById('fl').setAttribute('aria-pressed', fl);
+  document.getElementById('fo').setAttribute('aria-pressed', fo);
+  if (hl) { view.ship.setAll('dim', 'bar'); view.ship.setState('bar', 'highlight'); } else view.ship.setAll('normal');
+  view.focus(fo ? 'bar' : null, 0.62);
+};
+document.getElementById('hl').onclick = () => { hl = !hl; sync(); };
+document.getElementById('fl').onclick = () => { fl = !fl; sync(); };
+document.getElementById('fo').onclick = () => { fo = !fo; sync(); };
+document.getElementById('wk').onclick = () => view.walkPlayerTo('bar', () => { view.patronTurn(); });
+canvas.addEventListener('click', (e) => {
+  const r = view.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
+  document.getElementById('info').textContent = r ? `${r.name} — ${r.who}` : '';
+});
+sync();
+let last = performance.now(), t = 0;
+renderer.setAnimationLoop((now) => {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+  renderer.info.reset();
+  const flash = fl ? (reduce ? 1 : Math.max(0, Math.sin(t * Math.PI * 2 / 1.2)) ** 2) : 0;
+  view.frame(dt, { flash });
+  if (!document.getElementById('info').textContent.includes('—')) document.getElementById('info').textContent = `${renderer.info.render.calls} draws · ${(renderer.info.render.triangles / 1000).toFixed(1)}k tris`;
+});
+window.__ready = true;
+window.__view = view;
+</script>
+</body>
+</html>
