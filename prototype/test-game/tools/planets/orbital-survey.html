@@ -1,0 +1,1073 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta charset="utf-8">
+<title>Bulwark Orbital Survey</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a full-bleed orbital shot; the survey readout floats over it like the ship's own HUD.
+   One deliberate dark look (deep space), matching Bulwark Planets and the game's HUD chrome. */
+:root {
+  --void: #05070a;
+  --panel: rgba(12, 18, 20, 0.72);
+  --line: rgba(170, 214, 206, 0.18);
+  --fg: #e6ebe3;
+  --muted: #8f9c97;
+  --scan: #6fd3c8;          /* survey beam + readout */
+  --site: #f2c869;          /* candidate sites (the game's gold) */
+  --lock: #eafffb;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; background: var(--void); color: var(--fg); overflow: hidden; }
+body { font-family: var(--body); font-size: 14px; line-height: 1.4; }
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+#gl:active { cursor: grabbing; }
+#overlay { position: fixed; inset: 0; pointer-events: none; }
+#tagLine { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+
+.hud { position: fixed; inset: 0; pointer-events: none; display: grid;
+  grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px; padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.hud > * { pointer-events: auto; min-width: 0; }
+
+.title { grid-column: 1; grid-row: 1; align-self: start; pointer-events: none; }
+.kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--scan); }
+h1 { margin: 2px 0 0; font-family: var(--display); font-weight: 700; font-size: clamp(34px, 6vw, 64px); line-height: 0.92;
+  letter-spacing: 0.04em; text-transform: uppercase; text-wrap: balance; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6); }
+.sub { margin-top: 6px; font-size: 14px; color: #c3cdc6; max-width: 46ch; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8); }
+
+.survey { grid-column: 2; grid-row: 1 / span 2; align-self: start; width: 318px; max-width: 100%;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px 12px;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; gap: 10px; }
+.survey header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.ship { font-family: var(--display); font-weight: 600; font-size: 19px; letter-spacing: 0.08em; text-transform: uppercase; }
+.mode { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; color: var(--scan); text-transform: uppercase; white-space: nowrap; }
+dl.tel { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 14px; margin: 0;
+  font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+dl.tel dt { color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+dl.tel dd { margin: 0; text-align: right; }
+.sites { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.sites li { display: grid; grid-template-columns: 18px minmax(0, 1fr) 30px; gap: 2px 8px; align-items: center;
+  font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.sites li .id { font-family: var(--display); font-weight: 700; font-size: 15px; color: var(--site); text-align: center; }
+.sites li .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sites li .sc { text-align: right; color: var(--fg); }
+.sites li .bar { grid-column: 2 / span 2; height: 3px; background: rgba(255, 255, 255, 0.07); border-radius: 2px; overflow: hidden; }
+.sites li .bar i { display: block; height: 100%; width: 0; background: var(--site); }
+.sites li[data-s="scanning"] { color: var(--fg); }
+.sites li[data-s="scanning"] .bar i { background: var(--scan); }
+.sites li[data-s="locked"] { color: var(--lock); }
+.sites li[data-s="locked"] .id { color: var(--lock); background: rgba(111, 211, 200, 0.22); border-radius: 2px; }
+.sites li[data-s="locked"] .bar i { background: var(--lock); }
+.sites li[data-s="queued"] .meta, .sites li[data-s="hidden"] { opacity: 0.45; }
+.status { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--scan);
+  border-top: 1px solid var(--line); padding-top: 8px; min-height: 2.8em; }
+.status b { color: var(--lock); font-weight: 500; }
+
+.dock { grid-column: 1 / span 2; grid-row: 3; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
+.views { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: var(--panel); flex: none; }
+.views button, .worlds button { appearance: none; font: inherit; color: var(--fg); background: transparent; border: 0; cursor: pointer; }
+.views button { padding: 8px 14px; font-family: var(--display); font-weight: 600; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; }
+.views button[aria-pressed="true"] { background: rgba(111, 211, 200, 0.18); color: var(--lock); }
+.worlds { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; min-width: 0; flex: 1 1 320px; padding-bottom: 2px; }
+.worlds::-webkit-scrollbar { display: none; }
+.worlds button { flex: none; display: flex; align-items: center; gap: 7px; padding: 6px 10px 6px 7px; border: 1px solid transparent; border-radius: 4px;
+  font-family: var(--display); font-weight: 600; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: #c3cdc6; }
+.worlds button i { width: 12px; height: 12px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
+.worlds button:hover { background: rgba(255, 255, 255, 0.05); }
+.worlds button[aria-pressed="true"] { border-color: var(--line); background: var(--panel); color: var(--fg); }
+button:focus-visible { outline: 2px solid var(--scan); outline-offset: 2px; }
+.hint { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+
+.tag { position: fixed; left: 0; top: 0; pointer-events: none; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--scan); white-space: nowrap; text-shadow: 0 1px 6px #000; will-change: transform; }
+.tag b { display: block; font-family: var(--display); font-size: 14px; font-weight: 600; letter-spacing: 0.1em; color: var(--fg); }
+.tag.moon { color: var(--muted); }
+
+/* resource targets: four tiers per world; the contact claims the rare and the epic */
+.th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.targets { list-style: none; margin: 0; padding: 0 0 9px; display: grid; gap: 4px; border-bottom: 1px solid var(--line); }
+.targets li { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-family: var(--mono); font-size: 11px;
+  opacity: 0; transform: translateX(8px); transition: opacity 0.45s, transform 0.45s; }
+.targets li.on { opacity: 1; transform: none; }
+.targets .tier { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tc); }
+.targets .nm { font-family: var(--display); font-weight: 600; font-size: 15px; letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.targets .val { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; transition: color 0.4s; }
+.targets li.contact .val, .targets li.contact .nm { color: #f0c675; }
+.arr { appearance: none; font: inherit; cursor: pointer; padding: 8px 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--fg);
+  font-family: var(--display); font-weight: 600; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; flex: none; }
+
+/* the contact's video message: the in-game comm card (src/comm/commCard.js), same beats */
+.comm { position: fixed; z-index: 5; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  width: min(440px, calc(100vw - 32px)); display: flex; flex-direction: column; font-family: var(--mono); --accent: #b48cff;
+  border: 1px solid var(--accent); border-radius: 12px; overflow: hidden; background: linear-gradient(180deg, #0a1119ee, #070c12ee); cursor: pointer;
+  box-shadow: 0 0 40px -18px var(--accent), 0 20px 50px -30px #000; }
+.comm[hidden] { display: none; }
+.comm.flash { animation: cFlash 0.35s; }
+@keyframes cFlash { 0% { background: #fff; } }
+.comm.spent { filter: grayscale(0.7) brightness(0.5); transition: filter 0.6s; }
+.comm-head { display: flex; align-items: center; gap: 9px; padding: 8px 11px; border-bottom: 1px solid #1a2430;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, #0a1119), #0a1119); }
+.comm-ic { width: 24px; height: 24px; color: var(--accent); flex: none; filter: drop-shadow(0 0 5px var(--accent)); opacity: 0; transition: opacity 0.3s; }
+.comm-ic.on { opacity: 1; }
+.comm-name { font-weight: 700; color: #eef6fa; font-size: 13.5px; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.2em; }
+.comm-sub { font-size: 9.5px; color: var(--accent); letter-spacing: 1px; margin-top: 1px; text-transform: uppercase; opacity: 0.85; min-height: 1.2em; }
+.comm-bars { margin-left: auto; display: flex; gap: 2px; align-items: flex-end; height: 15px; flex: none; }
+.comm-bars i { width: 3px; height: 5px; background: #26333f; border-radius: 1px; }
+.comm-bars i:nth-child(2) { height: 7px; } .comm-bars i:nth-child(3) { height: 9px; } .comm-bars i:nth-child(4) { height: 12px; } .comm-bars i:nth-child(5) { height: 15px; }
+.comm-bars i.lit { background: var(--accent); box-shadow: 0 0 4px var(--accent); }
+.comm-body { display: grid; grid-template-columns: 36% 1fr; min-height: 158px; }
+.comm-portrait { position: relative; border-right: 1px solid #1a2430; overflow: hidden;
+  background: radial-gradient(80% 70% at 50% 35%, color-mix(in srgb, var(--accent) 22%, #060a0f), #05080c); }
+.comm-portrait svg { position: absolute; inset: 0; margin: auto; width: 78%; height: 84%; top: 10%; }
+.comm-portrait.speaking svg { animation: cBreathe 0.18s infinite alternate, cGlitch 3.1s steps(1) infinite; }
+@keyframes cBreathe { from { opacity: 0.8; } to { opacity: 1; } }
+@keyframes cGlitch { 0%, 91%, 97% { transform: none; } 92% { transform: translateX(3px) skewX(-6deg); } 94% { transform: translateX(-4px); } 96% { transform: translateX(2px) scaleY(1.03); } }
+.comm-pscan { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(0, 0, 0, 0.4) 3px 4px); mix-blend-mode: overlay; pointer-events: none; z-index: 2; }
+.comm-veil { position: absolute; inset: 0; background: #05080c; transition: opacity 0.5s; z-index: 3; }
+.comm-right { display: flex; flex-direction: column; min-width: 0; }
+.comm-meta { font-size: 9px; color: #5c6b7a; padding: 6px 10px; border-bottom: 1px solid #1a2430; line-height: 1.65; letter-spacing: 0.5px; min-height: 48px; }
+.comm-meta b { color: var(--accent); font-weight: 600; }
+.comm-meta .tl { color: #7fe6a1; }
+.comm-text { flex: 1; padding: 9px 11px; font-size: 12.5px; line-height: 1.55; color: #dbe7f0; white-space: pre-wrap; }
+.comm-text::after { content: "▋"; color: var(--accent); animation: cBlink 1s steps(1) infinite; margin-left: 1px; }
+.comm.done .comm-text::after { display: none; }
+@keyframes cBlink { 50% { opacity: 0; } }
+.comm-foot { padding: 6px 11px; border-top: 1px solid #1a2430; font-size: 9px; letter-spacing: 2px; color: #5c6b7a;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 24px; }
+.comm-foot .tap { color: #ffd76a; letter-spacing: 0.2em; animation: cTap 1.1s ease-in-out infinite; }
+@keyframes cTap { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+.comm-chip { border: 1px solid #d8a13a; color: #f0c675; border-radius: 6px; padding: 2px 8px; font-size: 8.5px; letter-spacing: 1px; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+.comm-chip.on { opacity: 1; }
+canvas.comm-static { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 0.1s; pointer-events: none; mix-blend-mode: screen; z-index: 4; }
+canvas.comm-static.on { opacity: 0.85; }
+@media (prefers-reduced-motion: reduce) { .comm.flash, .comm-portrait.speaking svg { animation: none; } }
+
+@media (max-width: 760px) {
+  .comm { bottom: auto; top: calc(12px + env(safe-area-inset-top, 0px)); }
+  .comm-body { min-height: 132px; }
+  .targets { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; }
+  .targets li { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .targets .val { display: none; }
+  .targets .nm { font-size: 14px; }
+  .hud { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto; }
+  .survey { grid-column: 1; grid-row: 3; width: 100%; padding: 10px 12px; gap: 7px; }
+  .survey dl.tel { display: none; }
+  .sites { grid-template-columns: repeat(5, minmax(0, 1fr)); column-gap: 8px; }
+  .sites li { grid-template-columns: 14px minmax(0, 1fr); }
+  .sites li .meta { display: none; }
+  .sites li .bar { grid-column: 1 / span 2; }
+  .dock { grid-column: 1; grid-row: 4; }
+  .hint { display: none; }
+  .sub { font-size: 13px; }
+}
+@media (max-height: 520px) and (min-width: 761px) { .survey .sites li .meta { display: none; } }
+</style>
+
+<canvas id="gl" aria-label="A resource ship holding a low orbit over a planet, scanning the surface for a landing site. Drag to look around, scroll or pinch to zoom."></canvas>
+<svg id="tagLine" aria-hidden="true"><path id="tagPath" fill="none" stroke="#6fd3c8" stroke-width="1" stroke-opacity="0.75"></path><circle id="tagDot" r="2.5" fill="#6fd3c8"></circle></svg>
+<div class="tag" id="shipTag"><b>Harvester SH-7</b>low orbit · station-keeping</div>
+<div class="tag moon" id="sunTag"><b>Sun</b>1.00 AU · 149.6 M km</div>
+<div class="tag moon" id="moonTag"><b>Moon</b>far orbit · <span id="moonDist">45,800 km</span></div>
+
+<div class="hud">
+  <div class="title">
+    <div class="kicker" id="kicker">Bulwark · orbital survey</div>
+    <h1 id="pName">Verdance</h1>
+    <div class="sub" id="pSub"></div>
+  </div>
+
+  <section class="survey" aria-label="Survey readout" aria-live="polite">
+    <header><span class="ship">Harvester SH-7</span><span class="mode" id="mode">Surveying</span></header>
+    <dl class="tel">
+      <dt>Orbit</dt><dd id="tAlt">980 km · low</dd>
+      <dt>Ground track</dt><dd>0.0 m/s</dd>
+      <dt>Sub-ship</dt><dd id="tSub">—</dd>
+      <dt>Seeking</dt><dd id="tRes">—</dd>
+    </dl>
+    <div class="th">Resource targets</div>
+    <ol class="targets" id="targets"></ol>
+    <ul class="sites" id="sites"></ul>
+    <div class="status" id="status">Wide-area sweep</div>
+  </section>
+
+  <div class="dock">
+    <div class="views" role="group" aria-label="Camera">
+      <button type="button" id="vWide" aria-pressed="true">Orbit</button>
+      <button type="button" id="vShip" aria-pressed="false">Ship</button>
+    </div>
+    <button type="button" class="arr" id="arrBtn">Skip</button>
+    <nav class="worlds" id="worlds" aria-label="Choose a homeworld"></nav>
+    <span class="hint">drag to look · scroll to zoom</span>
+  </div>
+</div>
+
+<div class="comm" id="comm" role="dialog" aria-label="Incoming transmission" aria-live="polite" title="tap to close" hidden>
+  <div class="comm-head">
+    <span class="comm-ic" id="cIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2 22 12 12 22 2 12Z"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6"/><circle cx="12" cy="16.6" r=".6" fill="currentColor"/></svg></span>
+    <div style="min-width:0"><div class="comm-name" id="cName"></div><div class="comm-sub" id="cSub"></div></div>
+    <div class="comm-bars" id="cBars"><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+  <div class="comm-body">
+    <div class="comm-portrait" id="cPortrait">
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+        <defs><linearGradient id="hood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2e52"/><stop offset="1" stop-color="#0d0a14"/></linearGradient></defs>
+        <path d="M50 6C27 6 15 26 15 49c0 13 4 23 9 31L8 120h84L76 80c5-8 9-18 9-31C85 26 73 6 50 6Z" fill="url(#hood)" stroke="#b48cff" stroke-opacity=".35"/>
+        <ellipse cx="50" cy="52" rx="19" ry="23" fill="#020104"/>
+        <circle cx="43" cy="50" r="1.8" fill="#d6b8ff"/><circle cx="57" cy="50" r="1.8" fill="#d6b8ff"/>
+      </svg>
+      <div class="comm-pscan"></div><div class="comm-veil" id="cVeil"></div>
+    </div>
+    <div class="comm-right">
+      <div class="comm-meta" id="cMeta"></div>
+      <div class="comm-text" id="cText"></div>
+      <div class="comm-foot"><span id="cFoot"></span><span class="comm-chip" id="cChip">◇ FAVOUR ASKED</span></div>
+    </div>
+  </div>
+  <canvas class="comm-static" id="cStatic"></canvas>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+const $ = (id) => document.getElementById(id);
+
+// ── the nine homeworlds (Bulwark Planets) + each faction's premium resource (map data) ───────────
+const PLANETS = {
+  ground:    { name: 'Verdance', type: 'Lush homeworld', faction: 'Ground / Powder', res: 'Crystals', lush: 1, haze: '#a8c4ec',
+    globe: { water: 0.5, polar: 0.12, land: ['#3e9a44', '#6cc85a', '#c8b07a', '#e8ecf0'], ocean: ['#1e5aa8', '#3a8ad8'], dry: '#b8a070', cloud: 0.55 } },
+  air:       { name: 'Florael', type: 'Blooming garden', faction: 'Air', res: 'Flowers', lush: 1, haze: '#e6c6e6',
+    globe: { water: 0.42, polar: 0.08, land: ['#6cc08a', '#f0a0c8', '#f6e0d0', '#ffffff'], ocean: ['#5a6ad8', '#8aa0f0'], dry: '#e0c0a8', cloud: 0.45 } },
+  hightech:  { name: 'Ochre', type: 'Arid desert', faction: 'High Tech', res: 'Minerals', lush: 0.3, haze: '#f0d8a8',
+    globe: { water: 0.12, polar: 0.03, land: ['#c0824e', '#e2c478', '#f6e2b0', '#ffffff'], ocean: ['#2a8aa8', '#5ac0c8'], dry: '#d0905a', cloud: 0.2 } },
+  artillery: { name: 'Kessra', type: 'Barren dust', faction: 'Artillery', res: 'Crystals', lush: 0.1, haze: '#c89a70',
+    globe: { water: 0.16, polar: 0.05, land: ['#9a6646', '#b08058', '#d8b07e', '#e8dcc8'], ocean: ['#5a3a2a', '#7a5038'], dry: '#c89a6a', cloud: 0.15 } },
+  water:     { name: 'Rime', type: 'Frozen', faction: 'Water', res: 'Flowers', lush: 0.3, haze: '#cfe0f0',
+    globe: { water: 0.25, polar: 0.55, land: ['#2f5a5a', '#c8d8e6', '#eef4fa', '#ffffff'], ocean: ['#2a4a78', '#5a86b8'], dry: '#b8c8d8', cloud: 0.5 } },
+  arcane:    { name: 'Cinder', type: 'Volcanic ash', faction: 'Arcane / Energy', res: 'Minerals', lush: 0, haze: '#5a3a34',
+    globe: { water: 0.18, polar: 0.0, land: ['#2a2424', '#4a4040', '#6a5a50', '#8a7a70'], ocean: ['#ff5a10', '#ffb030'], dry: '#3a3030', cloud: 0.35, lava: 1 } },
+  space:     { name: 'Lumen', type: 'Airless moon', faction: 'Space Tech', res: 'Crystals', lush: 0, haze: '#1c2236',
+    globe: { water: 0.28, polar: 0.0, land: ['#7a7e86', '#9a9ea6', '#b4b8be', '#d0d2d6'], ocean: ['#3e424a', '#5a5e66'], dry: '#868a92', cloud: 0.0, craters: 1, dryBasins: 1 } },
+  dark:      { name: 'Xenthe', type: 'Fungal alien', faction: 'Dark Energy', res: 'Flowers', lush: 0.95, haze: '#7a6ac8',
+    globe: { water: 0.4, polar: 0.06, land: ['#1a8a94', '#2ec0a8', '#c84ad8', '#f0e8ff'], ocean: ['#4aa020', '#9ae850'], dry: '#7a2e8a', cloud: 0.35 } },
+  greenies:  { name: 'Vexmire', type: 'Toxic hive swamp', faction: 'Greenies (Chem)', res: 'Minerals', lush: 0.7, haze: '#a8b860',
+    globe: { water: 0.38, polar: 0.0, land: ['#5e7a3a', '#8aa040', '#c8c848', '#d8d898'], ocean: ['#78a018', '#c8f030'], dry: '#6a5a38', cloud: 0.6 } },
+};
+const KEYS = Object.keys(PLANETS);
+// Four resources per world (game data: src/data/planets.js). Common and uncommon go in the hold (uncommon pays ×2);
+// rare and epic go to the unknown contact, who calls once the ship is in orbit, a last try at talking the crew into it.
+const RESOURCES = {
+  ground:    ['Loam Grain', 'Heartwood Amber', 'Rootsong Seeds', 'Elder Bloom'],
+  air:       ['Petal Silk', 'Skyhoney', 'Dawnpollen', 'Choir Lily'],
+  hightech:  ['Sunsalt', 'Dune Quartz', 'Mirage Oil', 'Solar Pearl'],
+  artillery: ['Slag Iron', 'Mesa Copper', 'Ghost Brass', 'Dreadnought Core'],
+  water:     ['Brine Ice', 'Frost Pearl', 'Glacier Breath', 'Leviathan Scale'],
+  arcane:    ['Ash Basalt', 'Ember Obsidian', 'Phoenix Glass', 'Heartflame'],
+  space:     ['Regolith', 'Helium-3', 'Starfall Iron', 'Void Lens'],
+  dark:      ['Glowcap Spores', 'Duskmoss Resin', 'Dreamspore', 'Mycelial Heart'],
+  greenies:  ['Mire Peat', 'Venom Sap', 'Hive Jelly', 'Broodqueen Egg'],
+};
+const TIERS = [
+  { key: 'common', label: 'Common', color: '#c3cdc6', val: 'hold · ×1' },
+  { key: 'uncommon', label: 'Uncommon', color: '#6fd3c8', val: 'hold · ×2' },
+  { key: 'rare', label: 'Rare', color: '#8fb4ff', val: 'off-manifest', contact: 'for contact' },
+  { key: 'epic', label: 'Epic', color: '#d79bff', val: 'off-manifest', contact: 'for contact' },
+];
+const HOOK = {
+  ground: 'Your charter wants grain and amber from Verdance. Dull, but honest.',
+  air: 'Petals and honey, is it? Your buyers have no imagination.',
+  hightech: 'The corp will weigh every grain of sunsalt you lift off Ochre. They can\'t weigh what they never see.',
+  artillery: 'Nobody misses scrap on Kessra. But something under that dust is still warm.',
+  water: 'Cold work on Rime. Let me make it worth the frostbite.',
+  arcane: 'The priests of Cinder would call this theft. I call it a rescue.',
+  space: 'Federation sensors see everything on Lumen. Almost everything.',
+  dark: 'Keep your filters sealed down there, and listen to me before you breathe.',
+  greenies: 'The hive will notice. That\'s why I\'m asking you, and not someone sensible.',
+};
+const contactLine = (k) => { const r = RESOURCES[k];
+  return `Harvester. Don't close the channel. ${HOOK[k]}\nBring me ${r[2]}. And if you find ${r[3]}, bring that too. Off the manifest. I pay better than your charter ever will.`; };
+// Each world's sky: three gas colours (main cloud, second veil, bright heart), how big the clouds are (scale),
+// how much they fold (warp), how dark the dust lanes run (dust), how stringy the gas is (ridge: 0 billows,
+// 1 filaments), overall brightness, and where the bright heart sits.
+const NEBULA = {
+  ground:    { c1: '#1f4a8c', c2: '#1f6e6a', c3: '#9c86e0', scale: 2.2, warp: 1.6, dust: 0.75, ridge: 0.0, bright: 0.85, core: [0.55, 0.28, -0.79], seed: 0 },
+  air:       { c1: '#8a3a78', c2: '#5a4aa8', c3: '#ffb8a0', scale: 1.7, warp: 2.3, dust: 0.35, ridge: 0.0, bright: 0.9, core: [0.4, 0.55, -0.73], seed: 11 },
+  hightech:  { c1: '#7a5420', c2: '#1d3a6a', c3: '#ffd890', scale: 2.6, warp: 1.2, dust: 0.95, ridge: 0.2, bright: 0.8, core: [0.7, 0.1, -0.7], seed: 23 },
+  artillery: { c1: '#6a2a18', c2: '#3a2a26', c3: '#d87a48', scale: 3.0, warp: 1.0, dust: 1.0, ridge: 0.35, bright: 0.75, core: [0.6, 0.35, -0.72], seed: 37 },
+  water:     { c1: '#3a6a8a', c2: '#9ac8e0', c3: '#eafcff', scale: 1.5, warp: 2.8, dust: 0.45, ridge: 0.55, bright: 0.7, core: [0.3, 0.6, -0.74], seed: 41 },
+  arcane:    { c1: '#6a1410', c2: '#8a2e14', c3: '#ff9a40', scale: 2.8, warp: 2.0, dust: 1.1, ridge: 1.0, bright: 0.55, core: [0.62, 0.2, -0.76], seed: 53 },
+  space:     { c1: '#1a2440', c2: '#2a3a5a', c3: '#a8c4ff', scale: 3.4, warp: 0.9, dust: 0.6, ridge: 0.15, bright: 0.38, core: [0.5, 0.45, -0.74], seed: 67 },
+  dark:      { c1: '#4a1478', c2: '#a0208a', c3: '#7af0a0', scale: 2.0, warp: 2.4, dust: 0.85, ridge: 0.65, bright: 1.0, core: [0.45, 0.3, -0.84], seed: 79 },
+  greenies:  { c1: '#4a5a14', c2: '#2a4a2a', c3: '#e0f050', scale: 2.4, warp: 2.6, dust: 0.9, ridge: 0.3, bright: 0.85, core: [0.58, 0.22, -0.78], seed: 97 },
+};
+const R_KM = 6120;                       // planet radius for the readout
+const ORBIT = 1.32, MOON_ORBIT = 7.5;    // in planet radii (ship ~1,960 km up: still a low orbit)
+const MAX_SITES = 6;
+
+// ── shaders (Bulwark Planets' globe, lit in world space, plus the survey overlay) ───────────────
+const GNOISE = `
+float gh(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float gn(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(gh(i), gh(i + vec3(1,0,0)), f.x), mix(gh(i + vec3(0,1,0)), gh(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(gh(i + vec3(0,0,1)), gh(i + vec3(1,0,1)), f.x), mix(gh(i + vec3(0,1,1)), gh(i + vec3(1,1,1)), f.x), f.y), f.z); }
+float fbm(vec3 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += a * gn(p); p = p * 2.03 + 1.7; a *= 0.5; } return s; }
+float polarCap(vec3 n, vec3 p, float polar) { return step(0.001, polar) * smoothstep(1.0 - polar - 0.04, 1.0 - polar + 0.04, abs(n.y) + (gn(p * 4.0) - 0.5) * 0.12); }`;
+const VS = `varying vec3 vN; varying vec3 vP; varying vec3 vV;
+  void main() { vec4 w = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vP = position;
+    vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`;
+const SURF = `uniform vec3 uOcean[2]; uniform vec3 uLand[4]; uniform vec3 uDry; uniform float uWater, uPolar, uLush, uLava, uSeed, uCrater; uniform vec3 uSun, uHaze;
+  uniform vec3 uScanP; uniform float uScanR, uScanA, uScanOn, uT;
+  uniform vec3 uSite[${MAX_SITES}]; uniform float uSiteS[${MAX_SITES}]; uniform float uSiteQ[${MAX_SITES}];
+  uniform vec3 uCScan, uCSite, uCLock;
+  varying vec3 vN; varying vec3 vP; varying vec3 vV; ${GNOISE}
+  void frame(vec3 c, out vec3 t1, out vec3 t2) { vec3 up = abs(c.y) > 0.95 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0); t1 = normalize(cross(up, c)); t2 = cross(c, t1); }
+  void main() {
+    vec3 n = normalize(vP), p = n * 2.1 + uSeed;
+    float h = fbm(p), bio = fbm(p * 1.7 + 5.3);
+    vec3 c;
+    if (h < uWater) { c = mix(uOcean[0], uOcean[1], smoothstep(uWater - 0.12, uWater, h)); if (uLava > 0.5) c *= 1.0 + 0.6 * gn(p * 9.0); }
+    else { float e = (h - uWater) / max(1.0 - uWater, 0.01);
+      c = e < 0.45 ? mix(uLand[0], uLand[1], e / 0.45) : e < 0.8 ? mix(uLand[1], uLand[2], (e - 0.45) / 0.35) : mix(uLand[2], uLand[3], (e - 0.8) / 0.2);
+      c = mix(c, uDry, smoothstep(0.55, 0.75, bio) * (1.0 - uLush) * 0.9 + smoothstep(0.62, 0.8, bio) * 0.25); }
+    if (uCrater > 0.5) { vec3 q = n * 7.0 + uSeed; vec3 ci = floor(q); float dmin = 9.0;
+      for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) for (int k = -1; k <= 1; k++) { vec3 o = ci + vec3(float(i), float(j), float(k)); vec3 cpt = o + vec3(gh(o), gh(o + 3.1), gh(o + 7.7)); dmin = min(dmin, length(q - cpt) / (0.25 + 0.5 * gh(o + 1.3))); }
+      c *= 0.78 + 0.22 * smoothstep(0.55, 0.85, dmin) + 0.18 * (1.0 - smoothstep(0.85, 1.0, dmin)) * step(0.85, dmin); }
+    c = mix(c, vec3(0.93, 0.96, 1.0), polarCap(n, p, uPolar));
+    vec3 N = normalize(vN);
+    float nl = dot(N, uSun), day = smoothstep(-0.15, 0.35, nl);
+    vec3 col = c * (0.05 + 1.05 * max(nl, 0.0));
+    if (uLava > 0.5 && h < uWater) col += uOcean[0] * 0.6 * (1.0 - day);
+    float rim = pow(1.0 - max(dot(N, normalize(vV)), 0.0), 3.0);
+    col = mix(col, uHaze * (0.05 + day), rim * 0.55);
+
+    // survey overlay: the beam's footprint (range rings, crosshair, a sweeping wedge) and the candidate sites
+    float px = max(fwidth(length(vP)) + length(fwidth(n)), 1e-4);
+    if (uScanOn > 0.001) {
+      vec3 t1, t2; frame(uScanP, t1, t2);
+      vec3 d = n - uScanP * dot(n, uScanP); float ang = acos(clamp(dot(n, uScanP), -1.0, 1.0));
+      if (dot(n, uScanP) > 0.0 && ang < uScanR * 1.4) {
+        float x = dot(d, t1), y = dot(d, t2), a = atan(y, x);
+        float edge = 1.0 - smoothstep(px * 0.8, px * 2.2, abs(ang - uScanR));
+        float mid = (1.0 - smoothstep(px * 0.5, px * 1.6, abs(ang - uScanR * 0.5))) * 0.5;
+        float cross1 = (1.0 - smoothstep(px * 0.4, px * 1.4, min(abs(x), abs(y)))) * step(ang, uScanR) * 0.35;
+        float wa = mod(uScanA - a, 6.2831853);
+        float wedge = step(ang, uScanR) * exp(-wa * 2.4) * 0.55;
+        float fill = step(ang, uScanR) * 0.08;
+        float k = (edge + mid + cross1 + wedge + fill) * uScanOn;
+        col = mix(col, uCScan, clamp(k, 0.0, 0.9)) + uCScan * edge * 0.25 * uScanOn;
+      }
+    }
+    for (int i = 0; i < ${MAX_SITES}; i++) {
+      float s = uSiteS[i]; if (s < 0.5) continue;
+      vec3 sp = uSite[i]; if (dot(n, sp) < 0.9) continue;
+      vec3 t1, t2; frame(sp, t1, t2);
+      vec3 d = n - sp * dot(n, sp); float x = dot(d, t1), y = dot(d, t2), r = length(vec2(x, y));
+      vec3 sc = mix(uCSite, uCScan, smoothstep(40.0, 85.0, uSiteQ[i]) * step(2.5, s));
+      float ring = 1.0 - smoothstep(px * 0.6, px * 1.8, abs(r - 0.016));
+      float dot0 = 1.0 - smoothstep(0.0035, 0.0035 + px * 1.5, r);
+      float m = ring + dot0;
+      if (s > 3.5) {   // locked: corner brackets + a pulse
+        float b = 0.034, w = px * 1.6; vec2 q = abs(vec2(x, y));
+        float box = (1.0 - smoothstep(w * 0.5, w * 1.5, abs(max(q.x, q.y) - b))) * step(b * 0.45, min(q.x, q.y) < b * 0.45 ? 0.0 : 1.0);
+        float corner = (1.0 - smoothstep(w * 0.5, w * 1.5, abs(max(q.x, q.y) - b))) * step(b * 0.55, max(q.x, q.y)) * (1.0 - step(b * 0.45, min(q.x, q.y)) * step(min(q.x, q.y), b * 0.6));
+        float br = (1.0 - smoothstep(w * 0.5, w * 1.5, abs(q.x - b))) * step(q.y, b) * step(b * 0.55, q.y)
+                 + (1.0 - smoothstep(w * 0.5, w * 1.5, abs(q.y - b))) * step(q.x, b) * step(b * 0.55, q.x);
+        float pulse = (1.0 - smoothstep(px, px * 2.5, abs(r - fract(uT * 0.6) * 0.06))) * (1.0 - fract(uT * 0.6));
+        col = mix(col, uCLock, clamp(br + m + pulse * 0.8, 0.0, 1.0));
+      } else {
+        float a = s > 1.5 && s < 2.5 ? 0.6 + 0.4 * sin(uT * 10.0) : 1.0;
+        col = mix(col, sc, clamp(m * a, 0.0, 1.0));
+      }
+    }
+    gl_FragColor = vec4(col, 1.0);
+  }`;
+const CLOUD = `uniform float uCloud, uT, uSeed; uniform vec3 uSun; varying vec3 vN; varying vec3 vP; varying vec3 vV; ${GNOISE}
+  void main() { vec3 p = normalize(vP) * 3.2 + vec3(uT * 0.02, 0.0, uSeed);
+    float c = smoothstep(1.0 - uCloud * 0.55, 1.0 - uCloud * 0.55 + 0.18, fbm(p) + 0.18);
+    float nl = max(dot(normalize(vN), uSun), 0.0); gl_FragColor = vec4(vec3(0.95) * (0.06 + nl), c * 0.85); }`;
+const ATMO = `uniform vec3 uHaze, uSun; varying vec3 vN; varying vec3 vV;
+  void main() { float f = pow(clamp(-dot(normalize(vN), normalize(vV)) * 1.9, 0.0, 1.0), 2.2) * 1.15;
+    float day = smoothstep(-0.4, 0.5, dot(normalize(vN), uSun)); gl_FragColor = vec4(uHaze * f * (0.03 + 0.85 * day), 1.0); }`;
+// Terrain probe: the same height field, read back for chosen directions — so the survey scores real ground.
+const PROBE_VS = `attribute vec3 aDir; attribute float aIdx; uniform float uW; varying vec3 vD;
+  void main() { vD = aDir; gl_PointSize = 1.0; gl_Position = vec4((aIdx + 0.5) / uW * 2.0 - 1.0, 0.0, 0.0, 1.0); }`;
+const PROBE_FS = `precision highp float; uniform float uSeed, uPolar; varying vec3 vD; ${GNOISE}
+  void main() { vec3 n = normalize(vD), p = n * 2.1 + uSeed; float h = fbm(p), bio = fbm(p * 1.7 + 5.3);
+    gl_FragColor = vec4(h, fract(h * 255.0), bio, polarCap(n, p, uPolar)); }`;
+
+// ── renderer, scene, camera ─────────────────────────────────────────────────────────────────────
+const canvas = $('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setClearColor(0x05070a, 1);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 0.005, 1200);
+const SUN = new THREE.Vector3(-0.855, 0.422, -0.302).normalize();   // low on the ship's horizon
+const D = new THREE.Vector3(0.1, 0.93, 0.36).normalize();   // where the ship holds station (world)
+const sunLight = new THREE.DirectionalLight(0xfff2e0, 1.7); sunLight.position.copy(SUN); scene.add(sunLight);
+const bounce = new THREE.DirectionalLight(0x6fa0c8, 0.9); bounce.position.copy(D).negate(); scene.add(bounce);   // light off the planet, from below
+scene.add(new THREE.AmbientLight(0x26303e, 0.9));
+
+// the nebula's settings, eased toward the chosen world's
+const NU = { uBand: { value: new THREE.Vector3(0.3, 1, -0.2).normalize() }, uSun: { value: SUN },
+  uC1: { value: C0('#1f4a8c') }, uC2: { value: C0('#1f6e6a') }, uC3: { value: C0('#9c86e0') }, uCore: { value: new THREE.Vector3(0.55, 0.28, -0.79).normalize() },
+  uScale: { value: 2.2 }, uWarp: { value: 1.6 }, uDust: { value: 0.75 }, uRidge: { value: 0 }, uBright: { value: 0.85 }, uNSeed: { value: 0 } };
+function C0(h) { return new THREE.Color(h); }
+let nebTarget = null;
+function stepNebula(dt) {
+  if (!nebTarget) return; const k = Math.min(1, dt * 1.8);
+  for (const c of ['c1', 'c2', 'c3']) NU['u' + c.toUpperCase()].value.lerp(nebTarget[c], k);
+  for (const n of ['scale', 'warp', 'dust', 'ridge', 'bright']) { const u = NU['u' + n[0].toUpperCase() + n.slice(1)]; u.value += (nebTarget[n] - u.value) * k; }
+  NU.uCore.value.lerp(nebTarget.core, k).normalize();
+}
+// starfield + a faint galactic band
+(function stars() {
+  let s = 11; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const N = 5200, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), size = new Float32Array(N), ph = new Float32Array(N);
+  const band = NU.uBand.value;
+  for (let i = 0; i < N; i++) {
+    let v;
+    if (i < N * 0.45) { // concentrate toward the band's great circle
+      const a = rnd() * Math.PI * 2, off = (rnd() + rnd() + rnd() - 1.5) * 0.22;
+      const t1 = new THREE.Vector3(1, 0, 0).cross(band).normalize(), t2 = band.clone().cross(t1);
+      v = t1.multiplyScalar(Math.cos(a)).add(t2.multiplyScalar(Math.sin(a))).add(band.clone().multiplyScalar(off)).normalize();
+    } else { v = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1); if (v.lengthSq() > 1 || v.lengthSq() < 1e-4) { i--; continue; } v.normalize(); }
+    v.multiplyScalar(700); pos.set([v.x, v.y, v.z], i * 3);
+    const t = rnd(); const c = t < 0.15 ? [1, 0.82, 0.66] : t < 0.35 ? [0.72, 0.82, 1] : [0.92, 0.94, 1];
+    const b = 0.35 + Math.pow(rnd(), 3) * 0.9; col.set([c[0] * b, c[1] * b, c[2] * b], i * 3);
+    size[i] = 1 + Math.pow(rnd(), 6) * 3.2; ph[i] = rnd() * 6.28;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aCol', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('aSize', new THREE.BufferAttribute(size, 1)); g.setAttribute('aPh', new THREE.BufferAttribute(ph, 1));
+  const m = new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 }, uDpr: { value: renderer.getPixelRatio() } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `attribute vec3 aCol; attribute float aSize, aPh; uniform float uT, uDpr; varying vec3 vC;
+      void main() { vC = aCol * (0.82 + 0.18 * sin(uT * 1.3 + aPh)); gl_PointSize = aSize * uDpr; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `varying vec3 vC; void main() { float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vC * smoothstep(0.5, 0.0, d), 1.0); }` });
+  const pts = new THREE.Points(g, m); pts.frustumCulled = false; scene.add(pts); scene.userData.stars = m;
+  // the nebula: a soft, domain-warped dust cloud on a sphere far beyond everything else
+  const neb = new THREE.Mesh(new THREE.SphereGeometry(900, 64, 32), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false,
+    uniforms: NU,
+    vertexShader: `varying vec3 vD; void main() { vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uBand, uSun, uC1, uC2, uC3, uCore; uniform float uScale, uWarp, uDust, uRidge, uBright, uNSeed; varying vec3 vD; ${GNOISE}
+      float fbm6(vec3 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 6; i++) {
+          float n = gn(p); s += a * mix(n, 1.0 - abs(2.0 * n - 1.0), uRidge);   // ridge → filaments
+          p = p * 2.07 + 3.1; a *= 0.5; } return s; }
+      void main() {
+        vec3 d = normalize(vD), o = vec3(uNSeed, uNSeed * 0.37, -uNSeed * 0.61);
+        vec3 w = d * uScale + o + vec3(fbm(d * 1.6 + 2.0 + o), fbm(d * 1.6 + 7.0 + o), fbm(d * 1.6 + 13.0 + o)) * uWarp;   // domain warp: soft, folded clouds
+        float gas = fbm6(w), gas2 = fbm6(w * 1.7 + 9.0), dust = fbm6(d * uScale * 2.0 + w * 0.6 + 21.0);
+        float band = exp(-pow(dot(d, uBand) / 0.42, 2.0));
+        float core = exp(-pow(acos(clamp(dot(d, uCore), -1.0, 1.0)) / 0.75, 2.0));
+        float g = smoothstep(0.38, 0.85, gas) * (0.35 + 0.65 * band) * (0.45 + 0.9 * core);
+        float g2 = smoothstep(0.45, 0.9, gas2) * (0.25 + 0.75 * band);
+        vec3 col = uC1 * g + uC2 * g2 * 0.9 + uC3 * pow(g, 2.2) * core * 0.9;
+        float sunward = pow(max(dot(d, uSun), 0.0), 3.0);
+        col += vec3(0.42, 0.24, 0.10) * g * sunward * 0.7;
+        col *= 1.0 - smoothstep(0.45, 0.8, dust) * uDust * band;   // dark dust lanes
+        gl_FragColor = vec4(max(col, 0.0) * uBright, 1.0);
+      }` }));
+  neb.renderOrder = -2; scene.add(neb);
+})();
+
+// a distant sun glow
+function glowTex(stops) {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+  const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); for (const [o, col] of stops) g.addColorStop(o, col);
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); return t;
+}
+const GLOW = glowTex([[0, 'rgba(255,255,255,1)'], [0.18, 'rgba(255,240,215,0.55)'], [0.5, 'rgba(255,200,150,0.12)'], [1, 'rgba(255,200,150,0)']]);
+// The sun at 1 AU. Its disk has the size it would have from 149.6 million km (0.53 degrees across);
+// the glare and the streak are the drama. Drawn at 600 units out, scaled to keep that angle.
+const AU_KM = 149.6e6, SUN_R_KM = 696000, SUN_DIST = 600;
+const SUN_DISK_R = SUN_DIST * Math.tan(SUN_R_KM / AU_KM);
+const DISK = glowTex([[0, 'rgba(255,255,255,1)'], [0.42, 'rgba(255,252,240,1)'], [0.5, 'rgba(255,236,200,0.9)'], [0.56, 'rgba(255,220,170,0.25)'], [1, 'rgba(255,210,160,0)']]);
+const sunGroup = new THREE.Group(); sunGroup.position.copy(SUN).multiplyScalar(SUN_DIST); scene.add(sunGroup);
+const mkSunSprite = (map, scale, color, opacity) => { const m = new THREE.Sprite(new THREE.SpriteMaterial({ map, color, opacity, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true }));
+  m.scale.set(scale[0], scale[1], 1); m.renderOrder = 4; sunGroup.add(m); return m; };
+const sunDisk = mkSunSprite(DISK, [SUN_DISK_R * 2 / 0.5 * 1.0, SUN_DISK_R * 2 / 0.5 * 1.0], 0xffffff, 1);
+const sunGlare = mkSunSprite(GLOW, [SUN_DIST * 0.34, SUN_DIST * 0.34], 0xffd9a8, 0.85);
+const sunHalo = mkSunSprite(GLOW, [SUN_DIST * 0.95, SUN_DIST * 0.95], 0xff9a6a, 0.22);
+const sunStreak = mkSunSprite(GLOW, [SUN_DIST * 0.7, SUN_DIST * 0.012], 0xcfe8ff, 0.55);
+const sunSprites = [sunDisk, sunGlare, sunHalo, sunStreak];
+
+// ── planet ──────────────────────────────────────────────────────────────────────────────────────
+const C = (h) => new THREE.Color(h);
+const U = {
+  uOcean: { value: [C('#000'), C('#000')] }, uLand: { value: [C('#000'), C('#000'), C('#000'), C('#000')] }, uDry: { value: C('#000') },
+  uWater: { value: 0.4 }, uPolar: { value: 0 }, uLush: { value: 1 }, uLava: { value: 0 }, uSeed: { value: 0 }, uCrater: { value: 0 },
+  uSun: { value: SUN }, uHaze: { value: C('#fff') }, uCloud: { value: 0.5 }, uT: { value: 0 },
+  uScanP: { value: new THREE.Vector3(0, 1, 0) }, uScanR: { value: 0.2 }, uScanA: { value: 0 }, uScanOn: { value: 0 },
+  uSite: { value: Array.from({ length: MAX_SITES }, () => new THREE.Vector3(0, 1, 0)) }, uSiteS: { value: new Array(MAX_SITES).fill(0) }, uSiteQ: { value: new Array(MAX_SITES).fill(0) },
+  uCScan: { value: C('#6fd3c8') }, uCSite: { value: C('#f2c869') }, uCLock: { value: C('#eafffb') },
+};
+const planetGroup = new THREE.Group(); scene.add(planetGroup);
+const geoP = new THREE.SphereGeometry(1, 160, 112);
+const planet = new THREE.Mesh(geoP, new THREE.ShaderMaterial({ uniforms: U, vertexShader: VS, fragmentShader: SURF, extensions: { derivatives: true } }));
+const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.012, 96, 64), new THREE.ShaderMaterial({ uniforms: U, vertexShader: VS, fragmentShader: CLOUD, transparent: true, depthWrite: false }));
+const atmo = new THREE.Mesh(new THREE.SphereGeometry(1.06, 96, 64), new THREE.ShaderMaterial({ uniforms: U, vertexShader: VS, fragmentShader: ATMO, transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending }));
+planetGroup.add(planet, clouds); scene.add(atmo);
+
+// ── the moon, far out ───────────────────────────────────────────────────────────────────────────
+const MU = Object.fromEntries(Object.entries(U).map(([k, v]) => [k, { value: v.value }]));
+Object.assign(MU, {
+  uOcean: { value: [C('#4a4844'), C('#5e5b56')] }, uLand: { value: [C('#76726c'), C('#8e8a84'), C('#a8a49c'), C('#c4c0b8')] }, uDry: { value: C('#807b74') },
+  uWater: { value: 0.42 }, uPolar: { value: 0 }, uLush: { value: 0 }, uLava: { value: 0 }, uSeed: { value: 41.3 }, uCrater: { value: 1 },
+  uHaze: { value: C('#000000') }, uScanOn: { value: 0 }, uSiteS: { value: new Array(MAX_SITES).fill(0) },
+});
+const moon = new THREE.Mesh(new THREE.SphereGeometry(0.27, 64, 48), new THREE.ShaderMaterial({ uniforms: MU, vertexShader: VS, fragmentShader: SURF, extensions: { derivatives: true } }));
+scene.add(moon);
+const MOON_AXIS = new THREE.Vector3(0.18, 1, 0.12).normalize();
+const MOON_START = new THREE.Vector3(-2.9, 1.25, -6.8).normalize().multiplyScalar(MOON_ORBIT);
+let moonAngle = 0;
+
+// ── the resource ship ───────────────────────────────────────────────────────────────────────────
+const ship = new THREE.Group(); scene.add(ship);
+const shipBody = new THREE.Group(); ship.add(shipBody);
+const navLights = [];
+(function buildShip() {
+  const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.62, metalness: 0.35, flatShading: true, ...o });
+  const hullM = M(0xb9c0bf), darkM = M(0x3b4246), paintM = M(0xd9a441, { roughness: 0.5 }), glassM = M(0x9ff3ea, { emissive: 0x6fd3c8, emissiveIntensity: 0.9 });
+  const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); shipBody.add(m); return m; };
+  // ship local: +Z = nose, +Y = away from the planet (dorsal), -Y = belly
+  add(new THREE.CylinderGeometry(0.5, 0.58, 2.8, 6), hullM, 0, 0, 0, Math.PI / 2, 0, 0);
+  add(new THREE.ConeGeometry(0.5, 0.9, 6), hullM, 0, 0, 1.85, Math.PI / 2, 0, 0);
+  add(new THREE.BoxGeometry(0.5, 0.28, 0.7), darkM, 0, 0.5, 0.9);              // bridge
+  add(new THREE.BoxGeometry(0.42, 0.06, 0.12), glassM, 0, 0.6, 1.26);          // bridge windows
+  add(new THREE.BoxGeometry(2.6, 0.12, 0.22), darkM, 0, 0, -0.2);              // cargo spine
+  for (const sx of [-1, 1]) for (const z of [0.45, -0.85]) {                    // four ore pods
+    add(new THREE.CylinderGeometry(0.34, 0.34, 1.05, 8), paintM, sx * 1.05, -0.05, z, Math.PI / 2, 0, 0);
+    add(new THREE.CylinderGeometry(0.355, 0.355, 0.1, 8), darkM, sx * 1.05, -0.05, z + 0.3, Math.PI / 2, 0, 0);
+    add(new THREE.CylinderGeometry(0.355, 0.355, 0.1, 8), darkM, sx * 1.05, -0.05, z - 0.3, Math.PI / 2, 0, 0);
+  }
+  for (const sx of [-1, 1]) {                                                   // radiator fins
+    add(new THREE.BoxGeometry(0.04, 0.9, 1.0), darkM, sx * 0.3, 0.75, -0.75, 0, 0, sx * -0.35);
+    add(new THREE.CylinderGeometry(0.24, 0.3, 0.7, 8), darkM, sx * 0.42, -0.08, -1.65, Math.PI / 2, 0, 0);   // engines
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: 0x8ff0ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    glow.position.set(sx * 0.42, -0.08, -2.05); glow.scale.setScalar(0.9); shipBody.add(glow); glow.userData.engine = true;
+  }
+  add(new THREE.SphereGeometry(0.42, 12, 6, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45), darkM, 0, -0.22, 0.25);   // survey dish (belly)
+  const emitter = add(new THREE.SphereGeometry(0.1, 10, 8), glassM, 0, -0.5, 0.25);
+  emitter.userData.emitter = true;
+  const nav = (x, y, z, color) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    s.position.set(x, y, z); s.scale.setScalar(0.35); shipBody.add(s); navLights.push(s); return s; };
+  nav(-1.45, -0.05, -0.2, 0xff4a3a); nav(1.45, -0.05, -0.2, 0x5aff8a); nav(0, 0.72, 0.9, 0xffffff);
+})();
+const SHIP_SCALE = 0.0135;
+ship.scale.setScalar(SHIP_SCALE);
+const shipBase = D.clone().multiplyScalar(ORBIT);
+(function orientShip() {
+  const up = D.clone(), east = new THREE.Vector3(0, 1, 0).cross(up).normalize();
+  if (east.lengthSq() < 1e-6) east.set(1, 0, 0);
+  const nose = east.clone().negate(), side = up.clone().cross(nose).normalize();
+  ship.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(side, up, nose));
+  ship.position.copy(shipBase);
+})();
+const SHIP_Q = ship.quaternion.clone();
+
+// scan beam: an open cone from the dish to the footprint
+const beamGeo = new THREE.CylinderGeometry(0.035, 1, 1, 40, 12, true); beamGeo.translate(0, -0.5, 0);
+const beamU = { uT: { value: 0 }, uC: { value: C('#6fd3c8') }, uOn: { value: 0 } };
+const beam = new THREE.Mesh(beamGeo, new THREE.ShaderMaterial({ uniforms: beamU, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+  vertexShader: `varying float vT; varying vec3 vN; varying vec3 vV; void main() { vT = -position.y; vec4 w = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,
+  fragmentShader: `uniform float uT, uOn; uniform vec3 uC; varying float vT; varying vec3 vN; varying vec3 vV;
+    void main() { float edge = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 1.6);
+      float bands = 0.55 + 0.45 * smoothstep(0.6, 1.0, fract(vT * 7.0 - uT * 1.6));
+      float a = (0.10 + 0.55 * edge) * bands * (0.35 + 0.65 * vT) * smoothstep(0.0, 0.08, vT) * uOn;
+      gl_FragColor = vec4(uC * a, 1.0); }` }));
+beam.frustumCulled = false; scene.add(beam);
+
+// ── terrain probe (GPU read-back of the height field) ───────────────────────────────────────────
+const PROBE_W = 256;
+const probeRT = new THREE.WebGLRenderTarget(PROBE_W, 1, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat, depthBuffer: false });
+const probeScene = new THREE.Scene(), probeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const probeMat = new THREE.ShaderMaterial({ uniforms: { uSeed: { value: 0 }, uPolar: { value: 0 }, uW: { value: PROBE_W } }, vertexShader: PROBE_VS, fragmentShader: PROBE_FS });
+const probeGeo = new THREE.BufferGeometry();
+probeGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PROBE_W * 3), 3));
+probeGeo.setAttribute('aDir', new THREE.BufferAttribute(new Float32Array(PROBE_W * 3), 3));
+probeGeo.setAttribute('aIdx', new THREE.BufferAttribute(Float32Array.from({ length: PROBE_W }, (_, i) => i), 1));
+const probePts = new THREE.Points(probeGeo, probeMat); probePts.frustumCulled = false; probeScene.add(probePts);
+const probeBuf = new Uint8Array(PROBE_W * 4);
+function probe(dirs) {   // local unit dirs → [{ h, bio, cap }]
+  const out = [];
+  for (let at = 0; at < dirs.length; at += PROBE_W) {
+    const chunk = dirs.slice(at, at + PROBE_W), a = probeGeo.attributes.aDir;
+    chunk.forEach((d, i) => a.setXYZ(i, d.x, d.y, d.z)); a.needsUpdate = true;
+    probeGeo.setDrawRange(0, chunk.length);
+    renderer.setRenderTarget(probeRT); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(probeScene, probeCam);
+    renderer.readRenderTargetPixels(probeRT, 0, 0, PROBE_W, 1, probeBuf);
+    renderer.setRenderTarget(null); renderer.setClearColor(0x05070a, 1);
+    for (let i = 0; i < chunk.length; i++) {
+      const r = probeBuf[i * 4], g = probeBuf[i * 4 + 1];
+      out.push({ h: (r + g / 255) / 255, bio: probeBuf[i * 4 + 2] / 255, cap: probeBuf[i * 4 + 3] / 255 });
+    }
+  }
+  return out;
+}
+
+// ── survey model ────────────────────────────────────────────────────────────────────────────────
+let current = 'ground', water = 0.4, liquid = true, rng = mulberry(1), sites = [], nadirLocal = new THREE.Vector3();
+function mulberry(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const tangentFrame = (c) => { const up = Math.abs(c.y) > 0.95 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0); const t1 = up.clone().cross(c).normalize(); return [t1, c.clone().cross(t1)]; };
+const offsetDir = (c, ang, dist) => { const [t1, t2] = tangentFrame(c); return c.clone().multiplyScalar(Math.cos(dist)).add(t1.multiplyScalar(Math.sin(dist) * Math.cos(ang))).add(t2.multiplyScalar(Math.sin(dist) * Math.sin(ang))).normalize(); };
+const isLand = (s) => (!liquid || s.h > water + 0.015);
+const latLon = (v) => { const lat = Math.asin(v.y) * 180 / Math.PI, lon = Math.atan2(v.x, v.z) * 180 / Math.PI;
+  return `${Math.abs(lat).toFixed(1)}°${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(1)}°${lon >= 0 ? 'E' : 'W'}`; };
+
+function applyPlanet(key) {
+  current = key; const pl = PLANETS[key], g = pl.globe, i = KEYS.indexOf(key);
+  U.uOcean.value = g.ocean.map(C); U.uLand.value = g.land.map(C); U.uDry.value = C(g.dry);
+  water = 0.32 + g.water * 0.3; liquid = !g.dryBasins;
+  U.uWater.value = water; U.uPolar.value = g.polar; U.uLush.value = pl.lush; U.uLava.value = g.lava ? 1 : 0;
+  U.uSeed.value = i * 3.7; U.uCrater.value = g.craters ? 1 : 0; U.uHaze.value = C(pl.haze); U.uCloud.value = g.cloud;
+  probeMat.uniforms.uSeed.value = U.uSeed.value; probeMat.uniforms.uPolar.value = g.polar;
+  bounce.color.copy(C(g.land[1])).lerp(C(pl.haze), 0.4);
+  const nb = NEBULA[key];
+  nebTarget = { c1: C(nb.c1), c2: C(nb.c2), c3: C(nb.c3), scale: nb.scale, warp: nb.warp, dust: nb.dust, ridge: nb.ridge, bright: nb.bright, core: new THREE.Vector3(...nb.core).normalize() };
+  NU.uNSeed.value = nb.seed;   // a new cloud layout at once; colours and shape ease in
+  // Turn and tilt the globe (an axial tilt) so the ship holds station at mid-latitudes over the most usable ground:
+  // 12 headings × 6 tilts tried; ice caps and open water count against a heading.
+  let bestQ = new THREE.Quaternion(), bestScore = -1e9;
+  for (const tilt of [-0.95, -0.75, -0.55, 0.55, 0.75, 0.95]) for (let k = 0; k < 12; k++) {
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt, (k / 12) * Math.PI * 2, 0, 'XYZ'));
+    const local = D.clone().applyQuaternion(q.clone().invert());
+    if (Math.abs(local.y) > 0.62) continue;
+    const ring = [local]; for (let j = 0; j < 15; j++) ring.push(offsetDir(local, (j / 15) * Math.PI * 2, 0.08 + (j % 3) * 0.07));
+    const res = probe(ring); const score = res.reduce((s, r) => s + (isLand(r) ? 1 - r.cap * 0.9 : 0), 0) - Math.abs(local.y) * 2;
+    if (score > bestScore + 0.25) { bestScore = score; bestQ = q; }
+  }
+  planetGroup.quaternion.copy(bestQ);
+  nadirLocal = D.clone().applyQuaternion(bestQ.clone().invert()).normalize();
+  $('pName').textContent = pl.name;
+  $('pSub').textContent = `${pl.type}. Homeworld of ${pl.faction}.`;
+  $('tSub').textContent = latLon(nadirLocal);
+  $('tRes').textContent = RESOURCES[key][0];
+  renderTargets(key);
+  $('moonDist').textContent = `${(Math.round(MOON_ORBIT * R_KM / 100) * 100).toLocaleString('en-US')} km`;
+  document.querySelectorAll('#worlds button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === key)));
+  try { history.replaceState(null, '', '#' + key); } catch (e) { /* sandboxed */ }
+  rng = mulberry(17 + i * 101);
+  startArrival();
+}
+
+const targetList = $('targets');
+function renderTargets(key) {
+  targetList.textContent = '';
+  TIERS.forEach((tr, i) => { const li = document.createElement('li'); li.dataset.tier = tr.key; li.style.setProperty('--tc', tr.color);
+    li.innerHTML = `<span class="tier">${tr.label}</span><span class="nm">${RESOURCES[key][i]}</span><span class="val">${tr.val}</span>`; targetList.appendChild(li); });
+}
+const revealTargets = (n) => [...targetList.children].forEach((li, i) => li.classList.toggle('on', i < n));
+function claimTargets() {
+  [...targetList.children].forEach((li, i) => { if (TIERS[i].contact) { li.classList.add('contact'); li.querySelector('.val').textContent = TIERS[i].contact; } });
+}
+
+// ── arrival: inbound past the moon, a gravity-assist swing, then the burn down into the survey orbit ─
+let arr = null, commAt = -1; const ORIGIN = new THREE.Vector3();
+const ARRIVE_S = 17;
+function startArrival() {
+  closeComm(true); commAt = -1;
+  siteList.textContent = ''; sites = []; phase = 'arrive';
+  setView('wide'); blend = 0;
+  if (reduce) { arr = null; revealTargets(4); settle(); return; }
+  revealTargets(0);
+  const m = MOON_START.clone().applyAxisAngle(MOON_AXIS, moonAngle), mDir = m.clone().normalize();   // (the moon holds still until we settle)
+  const east = WORLD_UP.clone().cross(D).normalize();
+  const entry = shipBase.clone().addScaledVector(east, 0.9).addScaledVector(D, 0.3);
+  const side = mDir.clone().cross(WORLD_UP).normalize(); if (side.dot(SUN) < 0) side.negate();   // pass the moon on its sunlit side
+  const fly = m.clone().addScaledVector(side, 0.62).addScaledVector(WORLD_UP, 0.06);
+  const out = m.clone().multiplyScalar(0.5).addScaledVector(side, 1.1);
+  const mid = out.clone().add(entry).multiplyScalar(0.5); if (mid.length() < 2.4) mid.setLength(2.4);   // keep the cut-in clear of the planet
+  const pts = [m.clone().addScaledVector(mDir, 9).addScaledVector(side, -1.5).addScaledVector(WORLD_UP, 1.2), fly, out, mid, entry,
+    shipBase.clone().addScaledVector(east, 0.2).addScaledVector(D, 0.03), shipBase.clone()];
+  const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+  let uFly = 0, best = 1e9; for (let j = 0; j <= 400; j++) { const d = curve.getPointAt(j / 400).distanceTo(fly); if (d < best) { best = d; uFly = j / 400; } }
+  // speed along the path: fast inbound, eased right down through the flyby so the moon reads, then a long braking burn
+  const N = 600, speed = (u) => (0.1 + Math.pow(1 - u, 1.3)) * (1 - 0.72 * Math.exp(-(((u - uFly) / 0.05) ** 2)));
+  const T = [0]; for (let j = 1; j <= N; j++) T.push(T[j - 1] + 1 / speed((j - 0.5) / N));
+  arr = { t: 0, curve, uFly, moon: m, T: T.map((v) => v / T[N]) };
+}
+function arcU(x) {   // time fraction → path fraction (inverts the speed profile)
+  const T = arr.T, N = T.length - 1; let lo = 0, hi = N;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (T[mid] < x) lo = mid; else hi = mid; }
+  return (lo + (x - T[lo]) / Math.max(1e-9, T[hi] - T[lo])) / N;
+}
+function settle() {   // in orbit: the survey starts, and the contact calls a moment later
+  arr = null; ship.position.copy(shipBase); ship.quaternion.copy(SHIP_Q);
+  startCycle(); commAt = t + (reduce ? 0.5 : 2.6);
+  arrBtn.textContent = 'Arrive again';
+}
+const arrBtn = $('arrBtn');
+arrBtn.addEventListener('click', () => { if (arr) arr.t = ARRIVE_S; else startArrival(); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (arr) arr.t = ARRIVE_S; else closeComm(); } });
+const arrQ = new THREE.Quaternion(), arrM = new THREE.Matrix4(), cineP = new THREE.Vector3(), cineT = new THREE.Vector3(), cineU = new THREE.Vector3();
+function stepArrival(dt) {   // → camera blend weight toward the normal view (0 = chase cam)
+  arr.t += Math.max(0, dt); const x = Math.min(1, Math.max(0, arr.t / ARRIVE_S)), u = arcU(x);
+  const pos = arr.curve.getPointAt(u), tan = arr.curve.getTangentAt(u);
+  const upv = pos.clone().normalize(); upv.addScaledVector(tan, -upv.dot(tan)).normalize();
+  const side = upv.clone().cross(tan).normalize();
+  arrQ.setFromRotationMatrix(arrM.makeBasis(side, upv, tan));
+  const k = Math.min(1, Math.max(0, (x - 0.84) / 0.16)); arrQ.slerp(SHIP_Q, k * k * (3 - 2 * k));
+  ship.position.copy(pos); ship.quaternion.copy(arrQ);
+  // chase camera: a little behind and above, looking ahead along the path
+  cineP.copy(pos).addScaledVector(tan, -0.22).addScaledVector(upv, 0.06).addScaledVector(side, 0.07);
+  cineT.copy(pos).addScaledVector(tan, 0.3); cineU.copy(upv);
+  const mk = Math.exp(-(((u - arr.uFly) / 0.07) ** 2));   // swing the view onto the moon as the ship passes it
+  if (mk > 0.01) { const toMoon = arr.moon.clone().sub(pos), sideOff = toMoon.clone().addScaledVector(tan, -toMoon.dot(tan)).normalize();
+    cineP.addScaledVector(sideOff, -0.12 * mk).addScaledVector(tan, -0.1 * mk); cineT.lerp(arr.moon, 0.45 * mk); }
+  const pk = Math.min(1, Math.max(0, (u - arr.uFly - 0.04) / 0.12));   // after the flyby, hold the planet in frame through the burn
+  const far = Math.min(1, Math.max(0, (pos.length() - 1.6) / 1.4));   // close in, look along the horizon again so the ship stays in shot
+  if (pk > 0) cineT.lerp(ORIGIN, 0.55 * pk * pk * (3 - 2 * pk) * far);
+  cineP.addScaledVector(upv, 0.05 * (1 - far)); cineT.lerp(pos.clone().addScaledVector(upv, -0.06), 1 - far);   // close in: frame the ship against the planet below
+  revealTargets(Math.floor((x - 0.06) / 0.06) + 1);
+  const km = Math.round((pos.length() - 1) * R_KM);
+  const mode = $('mode'), st = $('status');
+  $('tAlt').textContent = `${km.toLocaleString('en-US')} km`;
+  if (u < arr.uFly - 0.07) { mode.textContent = 'Inbound'; st.innerHTML = `Inbound to <b>${PLANETS[current].name}</b> · resource targets loaded`; }
+  else if (u < arr.uFly + 0.06) { mode.textContent = 'Flyby'; st.textContent = 'Lunar flyby · gravity assist'; }
+  else if (x < 0.88) { mode.textContent = 'Insertion'; st.textContent = 'Orbit insertion burn'; }
+  else { mode.textContent = 'Settling'; st.textContent = 'Settling into survey orbit'; }
+  arr.burn = x < 0.12 || (u > arr.uFly + 0.04 && x < 0.9) ? 1 : 0.2;
+  if (x >= 1) { $('tAlt').textContent = `${Math.round((ORBIT - 1) * R_KM).toLocaleString('en-US')} km · low`; settle(); return 1; }
+  const w = Math.min(1, Math.max(0, (x - 0.7) / 0.3)); return w * w * (3 - 2 * w);
+}
+
+// ── the contact's video message (the in-game comm card's S1→S7 beats) ───────────────────────────
+const comm = $('comm'), cName = $('cName'), cSub = $('cSub'), cMeta = $('cMeta'), cText = $('cText'), cFoot = $('cFoot'), cChip = $('cChip'),
+  cVeil = $('cVeil'), cPortrait = $('cPortrait'), cIc = $('cIc'), cStatic = $('cStatic'), cBars = [...$('cBars').children];
+let commTok = 0, commFull = '', commTyping = false;
+const wait = (ms) => new Promise((r) => setTimeout(r, reduce ? Math.min(ms, 60) : ms));
+function staticNoise(on) {
+  cStatic.classList.toggle('on', on);
+  if (!on || reduce || !cStatic.clientWidth) return;
+  const ctx = cStatic.getContext('2d'); cStatic.width = cStatic.clientWidth >> 1; cStatic.height = cStatic.clientHeight >> 1;
+  const img = ctx.createImageData(cStatic.width, cStatic.height), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { const v = Math.random() * 255; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
+  ctx.putImageData(img, 0, 0); requestAnimationFrame(() => staticNoise(cStatic.classList.contains('on')));
+}
+function typeText(el, text, ms, live) {
+  const glyphs = '▚▞░▒▓/\\|<>#*+='; commTyping = true;
+  return new Promise((res) => { const t0 = performance.now();
+    (function step(now) {
+      if (!live() || !commTyping) { el.textContent = text; commTyping = false; res(); return; }
+      const p = Math.min(1, (now - t0) / Math.max(120, reduce ? 120 : ms)), n = Math.floor(p * text.length);
+      el.textContent = text.slice(0, n) + (n < text.length && !reduce ? glyphs[Math.floor(Math.random() * glyphs.length)] : '');
+      if (p >= 1) { el.textContent = text; commTyping = false; res(); } else requestAnimationFrame(step);
+    })(t0); });
+}
+async function transmit(key) {
+  const my = ++commTok, live = () => commTok === my;
+  comm.hidden = false; comm.className = 'comm'; cPortrait.classList.remove('speaking'); cIc.classList.remove('on'); cChip.classList.remove('on');
+  cName.textContent = ''; cSub.textContent = ''; cMeta.textContent = ''; cText.textContent = ''; cVeil.style.opacity = 1; cBars.forEach((b) => b.classList.remove('lit'));
+  // S1 RF acquire
+  staticNoise(true); cFoot.className = ''; cFoot.textContent = '◌ ACQUIRING…';
+  for (const b of cBars) { await wait(130); if (!live()) return; b.classList.add('lit'); }
+  // S2 lock
+  staticNoise(false); comm.classList.add('flash'); setTimeout(() => comm.classList.remove('flash'), 350); cIc.classList.add('on');
+  cMeta.innerHTML = 'FACTION: <b>UNREGISTERED</b><br>CH ?? · ENCRYPTED · RELAYED ×4<br><span class="tl">● UNIVERSAL TRANSLATOR: ACTIVE</span>';
+  cFoot.textContent = '◉ SIGNAL LOCK'; await wait(420); if (!live()) return;
+  // S3 translator boot → S4 portrait resolve → S5 header
+  cSub.textContent = 'DECODING…'; await wait(380); if (!live()) return;
+  cVeil.style.opacity = 0.18; await wait(520); if (!live()) return;   // the veil never fully lifts: they keep to the shadow
+  cSub.textContent = 'ORIGIN UNTRACEABLE';
+  await typeText(cName, 'UNKNOWN CONTACT', 420, live); if (!live()) return;
+  // S6 speak
+  cPortrait.classList.add('speaking'); cFoot.textContent = '◉ RECEIVING';
+  commFull = contactLine(key);
+  await typeText(cText, commFull, commFull.length * 34, live); if (!live()) return;
+  cPortrait.classList.remove('speaking'); comm.classList.add('done'); cChip.classList.add('on'); claimTargets();
+  await wait(420); if (!live()) return;
+  cFoot.className = 'tap'; cFoot.textContent = 'TAP TO CLOSE';
+}
+async function closeComm(now) {
+  const my = ++commTok; commTyping = false; staticNoise(false);
+  if (now || comm.hidden) { comm.hidden = true; return; }
+  comm.classList.add('done', 'spent'); cFoot.className = ''; cFoot.textContent = '— END —';
+  await wait(900); if (commTok === my) comm.hidden = true;
+}
+comm.addEventListener('click', () => {
+  if (commTyping) { commTyping = false; return; }                 // first tap: show the whole message
+  if (comm.classList.contains('done')) { claimTargets(); closeComm(); }
+});
+
+function pickSites() {
+  const cands = [];
+  for (let j = 0; j < 60; j++) cands.push(offsetDir(nadirLocal, rng() * Math.PI * 2, 0.05 + Math.sqrt(rng()) * 0.2));
+  const step = 0.012, probesIn = [];
+  for (const c of cands) { probesIn.push(c, offsetDir(c, 0, step), offsetDir(c, Math.PI / 2, step)); }
+  const res = probe(probesIn), pl = PLANETS[current], out = [];
+  for (let j = 0; j < cands.length && out.length < 5; j++) {
+    const s = res[j * 3], a = res[j * 3 + 1], b = res[j * 3 + 2];
+    if (!isLand(s) || !isLand(a) || !isLand(b) || s.cap > 0.6) continue;
+    if (out.some((o) => o.dir.angleTo(cands[j]) < 0.07)) continue;
+    const e = Math.min(1, Math.max(0, (s.h - water) / (1 - water)));
+    const grad = Math.hypot(a.h - s.h, b.h - s.h) / step;          // height units per radian
+    const slope = Math.min(34, grad * 9);                          // read as degrees of ground slope
+    const sm = (a0, a1, x) => { const t = Math.min(1, Math.max(0, (x - a0) / (a1 - a0))); return t * t * (3 - 2 * t); };
+    let yieldQ = pl.res === 'Crystals' ? 30 + 68 * sm(0.18, 0.7, e)
+      : pl.res === 'Flowers' ? 34 + 64 * (1 - Math.min(1, Math.abs(e - 0.22) * 2.6)) * (1 - 0.6 * sm(0.5, 0.8, s.bio))
+      : 30 + 46 * sm(0.4, 0.75, s.bio) + 22 * sm(0.15, 0.55, e);
+    yieldQ = yieldQ * (1 - s.cap * 0.6) + (rng() - 0.5) * 8;
+    const flat = 100 - slope * 3.2;
+    const score = Math.round(Math.min(98, Math.max(8, yieldQ * 0.68 + flat * 0.32)));
+    out.push({ dir: cands[j], yield: Math.round(Math.min(99, Math.max(5, yieldQ))), slope, score, state: 'hidden', shown: 0 });
+  }
+  return out;
+}
+
+// cycle: wide sweep → each site scanned in turn → the best one locked → hold → resurvey
+let phase = 'sweep', phaseT = 0, scanIdx = -1, lockIdx = -1, cycle = 0;
+const SWEEP_S = 4.2, SLEW_S = 0.8, DWELL_S = 2.3, HOLD_S = 7;
+const scanFrom = new THREE.Vector3(), scanTo = new THREE.Vector3(), scanP = new THREE.Vector3();
+let scanR = 0.26, scanRFrom = 0.26, scanRTo = 0.26;
+const LETTERS = 'ABCDEF';
+function startCycle() {
+  sites = pickSites(); cycle++;
+  phase = 'sweep'; phaseT = 0; scanIdx = -1; lockIdx = -1;
+  scanP.copy(nadirLocal); scanFrom.copy(nadirLocal); scanTo.copy(nadirLocal); scanR = scanRFrom = scanRTo = 0.28;
+  renderSites(true);
+}
+function aimAt(dir, r) { scanFrom.copy(scanP); scanTo.copy(dir); scanRFrom = scanR; scanRTo = r; }
+function stepSurvey(dt) {
+  phaseT += dt;
+  if (phase === 'sweep') {
+    U.uScanA.value = (phaseT / SWEEP_S) * Math.PI * 2 * 1.25;
+    // a site shows when the sweep line passes it
+    const [t1, t2] = tangentFrame(nadirLocal);
+    for (const s of sites) if (s.state === 'hidden') {
+      const d = s.dir.clone().sub(nadirLocal.clone().multiplyScalar(s.dir.dot(nadirLocal)));
+      let a = Math.atan2(d.dot(t2), d.dot(t1)); if (a < 0) a += Math.PI * 2;
+      if (U.uScanA.value >= a) s.state = 'queued';
+    }
+    if (phaseT >= SWEEP_S) { sites.forEach((s) => { if (s.state === 'hidden') s.state = 'queued'; }); nextSite(); }
+  } else if (phase === 'slew') {
+    const k = Math.min(1, phaseT / SLEW_S), e = k * k * (3 - 2 * k);
+    scanP.copy(scanFrom).lerp(scanTo, e).normalize(); scanR = scanRFrom + (scanRTo - scanRFrom) * e;
+    if (k >= 1) { phase = scanIdx >= 0 ? 'dwell' : phase; phaseT = 0; if (lockIdx >= 0 && scanIdx < 0) { phase = 'hold'; } }
+  } else if (phase === 'dwell') {
+    U.uScanA.value += dt * 5.5;
+    const s = sites[scanIdx]; s.shown = Math.min(1, phaseT / (DWELL_S * 0.85));
+    if (phaseT >= DWELL_S) { s.state = 'rated'; s.shown = 1; nextSite(); }
+  } else if (phase === 'hold') {
+    U.uScanA.value += dt * 1.6;
+    if (phaseT >= HOLD_S) { aimAt(nadirLocal, 0.28); phase = 'return'; phaseT = 0; }
+  } else if (phase === 'return') {
+    const k = Math.min(1, phaseT / 1.2), e = k * k * (3 - 2 * k);
+    scanP.copy(scanFrom).lerp(scanTo, e).normalize(); scanR = scanRFrom + (scanRTo - scanRFrom) * e;
+    if (k >= 1) startCycle();
+  }
+  renderSites(false);
+}
+function nextSite() {
+  scanIdx = sites.findIndex((s) => s.state === 'queued');
+  if (scanIdx >= 0) { sites[scanIdx].state = 'scanning'; aimAt(sites[scanIdx].dir, 0.045); phase = 'slew'; phaseT = 0; return; }
+  // all rated → lock the best
+  lockIdx = sites.reduce((bi, s, i) => (bi < 0 || s.score > sites[bi].score ? i : bi), -1);
+  if (lockIdx >= 0) { sites[lockIdx].state = 'locked'; aimAt(sites[lockIdx].dir, 0.06); phase = 'slew'; phaseT = 0; }
+  else { phase = 'hold'; phaseT = 0; }
+}
+
+const siteList = $('sites');
+let listKey = '';
+function renderSites(force) {
+  const key = sites.map((s) => s.state + Math.round(s.shown * 20)).join('|') + phase;
+  if (!force && key === listKey) return; listKey = key;
+  if (force || siteList.children.length !== sites.length) {
+    siteList.textContent = '';
+    sites.forEach((s, i) => { const li = document.createElement('li'); li.innerHTML = `<span class="id">${LETTERS[i]}</span><span class="meta"></span><span class="sc"></span><span class="bar"><i></i></span>`; siteList.appendChild(li); });
+  }
+  sites.forEach((s, i) => {
+    const li = siteList.children[i]; li.dataset.s = s.state;
+    const known = s.state === 'rated' || s.state === 'locked', scanning = s.state === 'scanning';
+    li.querySelector('.meta').textContent = s.state === 'hidden' ? 'no contact' : s.state === 'queued' ? `${latLon(s.dir)} · queued`
+      : `yield ${scanning ? Math.round(s.yield * s.shown) : s.yield} · slope ${Math.round(s.slope)}°`;
+    li.querySelector('.sc').textContent = known ? s.score : scanning ? Math.round(s.score * s.shown) : '';
+    li.querySelector('.bar i').style.width = (known ? s.score : scanning ? s.score * s.shown : 0) + '%';
+  });
+  const pl = PLANETS[current];
+  const st = $('status'), mode = $('mode');
+  if (phase === 'sweep') { mode.textContent = 'Surveying'; st.textContent = `Wide-area sweep for ${RESOURCES[current][0]} · ${sites.filter((s) => s.state !== 'hidden').length} contacts`; }
+  else if (phase === 'slew' && scanIdx >= 0 || phase === 'dwell') { mode.textContent = 'Surveying'; st.textContent = `Scanning site ${LETTERS[scanIdx]} · ${latLon(sites[scanIdx].dir)}`; }
+  else if (lockIdx >= 0 && (phase === 'slew' || phase === 'hold')) { const s = sites[lockIdx]; mode.textContent = 'Site locked';
+    st.innerHTML = `<b>Landing site ${LETTERS[lockIdx]} confirmed</b> · score ${s.score} · ${latLon(s.dir)} · descent window opens`; }
+  else if (phase === 'hold') { mode.textContent = 'No site'; st.textContent = 'No usable ground under the beam · resurveying'; }
+  else { mode.textContent = 'Resurvey'; st.textContent = 'Widening the beam for a fresh sweep'; }
+}
+
+// ── camera: orbit view and ship view, drag to look, wheel / pinch to zoom ───────────────────────
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const views = {
+  wide: { target: new THREE.Vector3(0, 0.42, 0), up: WORLD_UP.clone(), fwd: new THREE.Vector3(0, 0, 1), yaw: -0.55, pitch: 0.08, dist: 4.7, min: 2.0, max: 9 },
+  ship: { target: shipBase.clone(), up: D.clone(), fwd: null, yaw: 1.15, pitch: 0.3, dist: 0.095, min: 0.05, max: 0.7 },
+};
+views.ship.fwd = new THREE.Vector3(0, 0, 1).sub(D.clone().multiplyScalar(D.z)).normalize();
+let view = 'wide', blend = 0, blendTarget = 0;
+const camT = new THREE.Vector3(), camU = new THREE.Vector3(), camF = new THREE.Vector3();
+function offsetFor(v, out) {
+  const R = new THREE.Vector3().crossVectors(v.up, v.fwd).normalize();
+  return out.copy(v.fwd).multiplyScalar(Math.cos(v.yaw)).add(R.multiplyScalar(Math.sin(v.yaw))).multiplyScalar(Math.cos(v.pitch)).add(v.up.clone().multiplyScalar(Math.sin(v.pitch))).multiplyScalar(v.dist);
+}
+const oA = new THREE.Vector3(), oB = new THREE.Vector3();
+function placeCamera(t) {
+  const sway = reduce ? 0 : Math.sin(t * 0.07) * 0.05;
+  const w = views.wide, s = views.ship; const k = blend * blend * (3 - 2 * blend);
+  w.yaw += sway * 0.0; // keep user's yaw; sway added below
+  const yw = w.yaw; w.yaw = yw + sway; offsetFor(w, oA); w.yaw = yw;
+  s.target.copy(ship.position);
+  offsetFor(s, oB);
+  camT.copy(w.target).lerp(s.target, k);
+  // interpolate the offset by direction and length so the move arcs instead of cutting through the planet
+  const la = oA.length(), lb = oB.length(), len = Math.exp(Math.log(la) * (1 - k) + Math.log(lb) * k);
+  const dir = oA.clone().normalize().lerp(oB.clone().normalize(), k).normalize();
+  camera.position.copy(camT).addScaledVector(dir, len);
+  camU.copy(w.up).lerp(s.up, k).normalize(); camera.up.copy(camU);
+  camera.fov = baseFov + (shipFov - baseFov) * k; camera.updateProjectionMatrix();
+  camera.lookAt(camT);
+}
+function setView(v) {
+  view = v; blendTarget = v === 'ship' ? 1 : 0;
+  $('vWide').setAttribute('aria-pressed', String(v === 'wide')); $('vShip').setAttribute('aria-pressed', String(v === 'ship'));
+}
+$('vWide').addEventListener('click', () => setView('wide'));
+$('vShip').addEventListener('click', () => setView('ship'));
+
+const pointers = new Map(); let pinch0 = 0;
+canvas.addEventListener('pointerdown', (e) => { pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); canvas.setPointerCapture(e.pointerId);
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); } });
+canvas.addEventListener('pointermove', (e) => {
+  const p = pointers.get(e.pointerId); if (!p) return;
+  const v = views[view];
+  if (pointers.size === 1) {
+    v.yaw -= (e.clientX - p.x) * 0.005; v.pitch = Math.max(-1.2, Math.min(1.35, v.pitch + (e.clientY - p.y) * 0.004));
+  } else if (pointers.size === 2) {
+    p.x = e.clientX; p.y = e.clientY; const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinch0 > 0) zoom(pinch0 / d); pinch0 = d; return;
+  }
+  p.x = e.clientX; p.y = e.clientY;
+});
+const up = (e) => { pointers.delete(e.pointerId); pinch0 = 0; };
+canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoom(Math.exp(e.deltaY * 0.0012)); }, { passive: false });
+function zoom(f) { const v = views[view]; v.dist = Math.max(v.min, Math.min(v.max, v.dist * f)); }
+addEventListener('keydown', (e) => {
+  const v = views[view];
+  if (e.key === 'ArrowLeft') v.yaw += 0.12; else if (e.key === 'ArrowRight') v.yaw -= 0.12;
+  else if (e.key === 'ArrowUp') v.pitch = Math.min(1.35, v.pitch + 0.08); else if (e.key === 'ArrowDown') v.pitch = Math.max(-1.2, v.pitch - 0.08);
+  else if (e.key === '+' || e.key === '=') zoom(0.9); else if (e.key === '-') zoom(1.1);
+});
+
+// ── world chips ─────────────────────────────────────────────────────────────────────────────────
+const worlds = $('worlds');
+for (const k of KEYS) {
+  const b = document.createElement('button'); b.type = 'button'; b.dataset.k = k;
+  b.style.setProperty('--c', PLANETS[k].globe.land[1]);
+  b.innerHTML = `<i></i>${PLANETS[k].name}`; b.title = `${PLANETS[k].name} · ${PLANETS[k].faction}`;
+  b.addEventListener('click', () => applyPlanet(k)); worlds.appendChild(b);
+}
+
+// ── labels ──────────────────────────────────────────────────────────────────────────────────────
+const sunTag = $('sunTag'), shipTag = $('shipTag'), moonTag = $('moonTag'), tagPath = $('tagPath'), tagDot = $('tagDot');
+const ndc = new THREE.Vector3();
+function project(v) { ndc.copy(v).project(camera); return { x: (ndc.x * 0.5 + 0.5) * innerWidth, y: (-ndc.y * 0.5 + 0.5) * innerHeight, front: ndc.z < 1 && ndc.z > -1 }; }
+function hiddenByPlanet(p) { // is the planet between the camera and p?
+  const o = camera.position, d = p.clone().sub(o), L = d.length(); d.divideScalar(L);
+  const b = o.dot(d), c = o.lengthSq() - 1, disc = b * b - c; if (disc < 0) return false;
+  const t = -b - Math.sqrt(disc); return t > 0 && t < L;
+}
+function placeTags() {
+  if (arr) { sunTag.style.opacity = shipTag.style.opacity = moonTag.style.opacity = tagPath.style.opacity = tagDot.style.opacity = '0'; return; }
+  const showShip = blend < 0.35 && !hiddenByPlanet(ship.position);
+  const p = project(ship.position);
+  if (showShip && p.front) {
+    const nx = p.x + 46, ny = p.y - 52;
+    const fitsRight = nx + 170 < innerWidth;
+    const tx = Math.max(8, fitsRight ? nx : p.x - 46 - shipTag.offsetWidth), ty = Math.max(8, ny - 28);
+    tagPath.setAttribute('d', `M${p.x},${p.y} L${fitsRight ? nx : p.x - 46},${ny} L${fitsRight ? nx + 26 : p.x - 72},${ny}`);
+    tagDot.setAttribute('cx', p.x); tagDot.setAttribute('cy', p.y);
+    shipTag.style.transform = `translate(${Math.round(tx)}px, ${Math.round(ty)}px)`; shipTag.style.opacity = String(1 - blend * 2.8);
+    tagPath.style.opacity = tagDot.style.opacity = shipTag.style.opacity;
+  } else { shipTag.style.opacity = '0'; tagPath.style.opacity = '0'; tagDot.style.opacity = '0'; }
+  const m = project(moon.position), mr = 0.27 / moon.position.distanceTo(camera.position) / Math.tan(camera.fov * Math.PI / 360) * innerHeight * 0.5;
+  if (blend < 0.35 && m.front && !hiddenByPlanet(moon.position) && m.x > 0 && m.x < innerWidth && m.y > 0 && m.y < innerHeight) {
+    moonTag.style.transform = `translate(${Math.round(m.x + mr + 10)}px, ${Math.round(m.y - 12)}px)`; moonTag.style.opacity = String(0.85 - blend * 2.4);
+  } else moonTag.style.opacity = '0';
+  const sp = project(sunGroup.position);
+  if (sp.front && sunVisK > 0.5 && sp.x > 20 && sp.x < innerWidth - 160 && sp.y > 30 && sp.y < innerHeight - 30) {
+    sunTag.style.transform = `translate(${Math.round(sp.x + 18)}px, ${Math.round(sp.y + 14)}px)`; sunTag.style.opacity = '0.85';
+  } else sunTag.style.opacity = '0';
+}
+
+// ── frame ───────────────────────────────────────────────────────────────────────────────────────
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const tmpQ = new THREE.Quaternion(), yAxis = new THREE.Vector3(0, -1, 0);
+let sunVisK = 1;
+let last = performance.now(), t = 0, baseFov = 35, shipFov = 50;
+function resize() {
+  const w = innerWidth, h = innerHeight, a = w / h;
+  renderer.setSize(w, h, false); camera.aspect = a;
+  views.wide.target.y = a < 0.8 ? -0.15 : 0.42;   // portrait: lift the planet clear of the readout
+  baseFov = Math.max(35, 2 * Math.atan(0.42 / a) * 180 / Math.PI);   // portrait phones: keep the planet and the moon in frame
+  shipFov = Math.max(68, 2 * Math.atan(0.68 / a) * 180 / Math.PI);   // wide enough for the sun and the horizon from 1,960 km
+}
+addEventListener('resize', resize); resize();
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; const sp = reduce ? 0.35 : 1; t += dt * sp;
+  blend += (blendTarget - blend) * Math.min(1, dt * 2.2); if (Math.abs(blendTarget - blend) < 1e-3) blend = blendTarget;
+  stepNebula(dt);
+  U.uT.value = t; MU.uT.value = t; beamU.uT.value = t; scene.userData.stars.uniforms.uT.value = t;
+  // moon on its far orbit (about 9 minutes a lap here); held still while the ship flies its arrival path past it
+  if (!arr) moonAngle += dt * sp * (Math.PI * 2 / 540);
+  moon.position.copy(MOON_START).applyAxisAngle(MOON_AXIS, moonAngle); moon.rotation.y = -moonAngle;
+  let cineW = 1;
+  if (arr) cineW = stepArrival(dt);
+  else ship.position.copy(shipBase).addScaledVector(D, Math.sin(t * 0.7) * 0.0016);   // station-keeping: a slow bob
+  shipBody.rotation.set(Math.sin(t * 0.45) * 0.03, Math.sin(t * 0.31) * 0.04, Math.sin(t * 0.53) * 0.025);
+  for (let i = 0; i < navLights.length; i++) navLights[i].material.opacity = i < 2 ? (Math.sin(t * 3 + i * 3.1) > 0.2 ? 1 : 0.15) : (t % 1.4 < 0.08 ? 1 : 0);
+  const burn = arr ? arr.burn : 0;
+  shipBody.children.forEach((c) => { if (c.userData.engine) c.scale.setScalar((0.75 + 0.12 * Math.sin(t * 23 + c.position.x * 9)) * (1 + 1.4 * burn)); });
+  if (commAt >= 0 && t >= commAt) { commAt = -1; transmit(current); }
+
+  if (!arr) stepSurvey(dt * sp);
+  U.uScanP.value.copy(scanP); U.uScanR.value = scanR; U.uScanOn.value = arr ? 0 : 1;
+  sites.forEach((s, i) => { U.uSite.value[i].copy(s.dir); U.uSiteS.value[i] = { hidden: 0, queued: 1, scanning: 2, rated: 3, locked: 4 }[s.state]; U.uSiteQ.value[i] = s.score; });
+  for (let i = sites.length; i < MAX_SITES; i++) U.uSiteS.value[i] = 0;
+
+  // beam from the dish to the footprint centre (world)
+  const dish = new THREE.Vector3(0, -0.5, 0.25).applyMatrix4(shipBody.matrixWorld);
+  ship.updateMatrixWorld(true);
+  dish.set(0, -0.5, 0.25).applyMatrix4(shipBody.matrixWorld);
+  const foot = scanP.clone().applyQuaternion(planetGroup.quaternion).multiplyScalar(1.002);
+  const dv = foot.clone().sub(dish), len = dv.length();
+  beam.position.copy(dish); tmpQ.setFromUnitVectors(yAxis, dv.clone().normalize()); beam.quaternion.copy(tmpQ);
+  beam.scale.set(scanR * 1.0, len, scanR * 1.0); beamU.uOn.value = arr ? 0 : phase === 'return' ? 0.6 : 1;
+
+  placeCamera(t);
+  if (cineW < 1) {   // arrival: the chase camera hands over to the orbit view as the ship settles
+    const pa = cineP.length(), pb = camera.position.length();   // arc round the planet, as the view switch does, so the pull-back never cuts through it
+    const dir = cineP.clone().normalize().lerp(camera.position.clone().normalize(), cineW).normalize();
+    camera.position.copy(dir.multiplyScalar(Math.exp(Math.log(pa) * (1 - cineW) + Math.log(pb) * cineW)));
+    camera.up.lerpVectors(cineU, camU, cineW).normalize();
+    camera.fov = 56 + (camera.fov - 56) * cineW; camera.updateProjectionMatrix();
+    camera.lookAt(cineT.clone().lerp(camT, cineW * cineW));   // keep the ship centred through most of the pull-back
+  }
+  const sunVis = hiddenByPlanet(sunGroup.position) ? 0 : 1;
+  sunVisK += (sunVis - sunVisK) * Math.min(1, dt * 10);
+  sunSprites.forEach((m, i) => { m.material.opacity = [1, 0.85, 0.22, 0.55][i] * sunVisK; });
+  sunStreak.material.rotation = 0;
+  renderer.render(scene, camera);
+  placeTags();
+  requestAnimationFrame(frame);
+}
+
+const fromHash = (location.hash || '').slice(1);
+applyPlanet(PLANETS[fromHash] ? fromHash : 'ground');
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>

@@ -162,8 +162,9 @@ same beats, hit points, sounds and title card. Differences from the planet arriv
 
 On every later visit the ship is simply present, with a small arrival so it feels alive.
 
-- **Resting composition.** Upper-right of the planet, above the lit limb, bow pointing left and slightly down
-  toward the planet. The ship spans about **24 % of the screen width** (landscape) or **55 %** (portrait, in the
+- **Resting composition.** **Upper-left of the screen** (owner 2026-11-06: "the ship would present itself in a
+  stationary orbit in the upper left corner of the screen"; was upper-right — see `docs/tech-plan/Content-Reveal.md`
+  §5.2), bow pointing right and slightly down toward the planet. The ship spans about **24 % of the screen width** (landscape) or **55 %** (portrait, in the
   band above the globe). It must not overlap the planet's menu buttons; the anchor is a DOM element
   (`data-ship-anchor`) like the globe's `data-survey`, so layout owns the space.
 - **Coast-in (3.5 s).** The ship enters from just off the top-right edge travelling bow-first along its
