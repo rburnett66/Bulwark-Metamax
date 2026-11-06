@@ -1,7 +1,7 @@
 # Tech Plan — The Collective Opening (Vesper, the cinematic, the bar beat, the first contract)
 
 **Epic:** `epic_mvo5po8u_4` The Collective trade faction · **Design:** `docs/16 Bulwark MM/design/Collective-Opening-Design.md`
-**Status:** v0.3, 2026-11-05, agent-proposed. Not started. Notes and as-built justifications for this epic go here, not
+**Status:** v0.3, 2026-11-05, agent-proposed. S1 and beats 0–3 of S2 built (PR #164, not merged). Notes and as-built justifications for this epic go here, not
 on the tickets.
 
 ## 1. Scope
