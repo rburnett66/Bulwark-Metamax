@@ -134,6 +134,9 @@ in desktop, phone portrait and phone landscape frames.
     ship.
   - **The fly-by lens is 135 mm** throughout beats 1–2 and eases to **105 mm** for the flank.
   - **Timing.** The ship crosses at 0.12 L/s.
+  - **Vesper is its own export, not a `SYSTEMS` row.** `galaxy.js` exports `VESPER` and `vesperPos()`, so
+    `SYSTEMS` and `SYSTEM_KEYS` stay the nine homeworlds and no `ALL_SYSTEM_KEYS` is needed. Its galaxy label is not
+    tappable yet; tapping it opens the hub once the hub exists (I5).
 
   Still to come: beat 4 onward, which waits on the room view (I1), and the galaxy's trade lanes, which wait on
   `collective.introSeen` (S7).
