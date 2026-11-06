@@ -190,6 +190,24 @@ few reward rows.
 
 - **2026-11-05.** Plan written from the owner's direction. Collective standing now comes from resource contracts. This
   closes Dialog-Response-Reputation Q2, which proposed +10 per met quota.
+- **2026-11-05, balance measurement (Q1).** Branch `research/collective-contract-balance`, commit `584ec1f`. Full report:
+  `docs/reports/collective-contract-balance-2026-11-05.md`. New tool: `tools/economy/contract_balance.mjs`.
+  - **Method.** The game's seeded sim on all 81 boards, with no enemies, run to each map's par time, with three
+    commanders: starter, fleet and quest. `balanceSim.js` only prices units against towers, so it couldn't measure this.
+  - **Result.** Taking rare and epic out of the contract removes about 0.4 % of all harvest gold (fleet −0.38 %, quest
+    −0.40 %). The starter commander loses nothing, because the default harvester never reaches rare or epic. Maps 1 and 2
+    lose the most, at most about 200 gold (map 1 −1.27 %; worst board Vexmire map 1 −1.43 %).
+  - **Early game unaffected.** Nothing changes in waves 1–2, because no map has rare or epic before ring 3. No board
+    falls below the 300 gold a tier-1 Cannon costs. Wave stars don't read gold, so they don't change. Quest objectives
+    still count every rare and epic unit.
+  - **Found 1: uncommon quotas are counted on the raw forge map.** The live board resets uncommon node sizes and clears
+    the cells next to the base. On 56 of 81 boards the per-planet uncommon quota is larger than everything the board
+    holds, so it could never fill. The current per-map workbook quotas share this flaw. The quota tool must count the
+    live board, at 80 % of what it actually holds (the report's appendix lists these values), before
+    `Collective_Contracts` is filled (C2).
+  - **Found 2: mixed loads.** A part-loaded truck sent to a rare or epic field sells its whole load at the tier of its
+    last crystal. With the change, its common units would be kept unpaid. C2 must credit each unit at its own tier
+    (`harvest.js` `creditDeposit`).
 
 ## Dependencies
 
