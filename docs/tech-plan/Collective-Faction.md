@@ -217,7 +217,7 @@ few reward rows.
   Collective contracts are common and uncommon only. Rare and epic stay with the secondary and quest contracts, so
   first-time Collective standing (Q3) and replayed secondaries pull in different directions: breadth across planets
   for the Collective, depth on each map for the secondaries.
-- **2026-11-05, C1 as built** (`feat/collective-contracts`, `c580ef4`). Deviations from §3.1:
+- **2026-11-05, C1 as built** (`feat/collective-contracts`, `445af41`). Deviations from §3.1:
   - **The Collective sits beside `SYSTEM`, not inside `FACTIONS`.** `FACTIONS` already meant "the nine the player picks
     between", so no caller had to be switched to stay correct. `COMBAT_FACTIONS` is added as that list's name for
     combat callers, and the production callers that iterate it now read it (`fxlab.js`, `rivalOf`, `voice.js`). The
@@ -225,7 +225,7 @@ few reward rows.
   - **No workbook Factions row 10.** That sheet is each faction's harvester profile and rival; a Collective row would
     give it a harvester. The registry's ordinal 10 is enough for `factionOfOrdinal`.
   - Tests: `src/data/collectiveFaction.test.mjs`.
-- **2026-11-05, C2 as built** (`42f26e4`, `c062e06`, `5b41eec`).
+- **2026-11-05, C2 as built** (`c8e5edb`, `57e818e`, `ca0080f`).
   - **Per-tier crediting (Found 2).** `harvest.js` keeps `u.cargoMix` (units, value and role per colour) and
     `creditDeposit` credits each colour at its own tier, one `deposit` event per colour (blue, yellow, red, green). A
     single-colour load credits exactly as before.
