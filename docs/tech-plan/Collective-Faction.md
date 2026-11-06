@@ -186,7 +186,7 @@ few reward rows.
 | Q4 | Can a contract lower Collective standing? | No; only replies can |
 | Q5 | What Collective standing unlocks | The officer ladder in §3.5 |
 | Q6 | Standing per contract | 10 / 15 / 20 by map band (a planet = 135) |
-| Q7 | Per-planet common quotas raise harvest gold about 7.5 % (Notes, C2 as built). Keep them, or hold each map's common quota at the old minimum over the nine planets? | Keep: each planet's contract is measured on its own board. The values are data in `Collective_Contracts`, so either answer is a retune. |
+| Q7 | Per-planet common quotas raise harvest gold about 7.5 % (Notes, C2 as built). Keep them, or hold each map's common quota at the old minimum over the nine planets? | **Decided by the owner (2026-11-05):** keep them. |
 
 ## 8. Notes
 
@@ -252,6 +252,10 @@ few reward rows.
     nine planets, so on most boards the Collective now buys more of the common harvest. Map 1 falls 5.6 % because the
     live-board uncommon quotas are smaller than the old raw-board ones. The uncommon quota now fills on 55 of 81 boards
     (was 34). The lowest board after the change still pays 7,950 gold to a starter commander. Owner decision Q7.
+- **2026-11-05, owner decision (Q7).**
+  > **owner**: "Keep them"
+
+  The per-planet common quotas stay as measured; harvest gold rises about 7.5 % against `main`.
 
 ## Dependencies
 
