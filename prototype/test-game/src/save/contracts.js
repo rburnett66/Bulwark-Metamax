@@ -85,7 +85,7 @@ export const DECLINE = Object.freeze({ cost: DECLINE_COST, rivalGain: DECLINE_RI
 
 /** A faction's rival (workbook Rival_Faction), by display name. Null when it has none. */
 export function rivalOf(factionName) {
-  const f = REG.FACTIONS.find((x) => x.name === factionName);
+  const f = REG.COMBAT_FACTIONS.find((x) => x.name === factionName);
   const row = f && factionRow(f.ordinal);
   return row && row.Rival_Faction ? (factionByOrdinal(row.Rival_Faction) || {}).name || null : null;
 }

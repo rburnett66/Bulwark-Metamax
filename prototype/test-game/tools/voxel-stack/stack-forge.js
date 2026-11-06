@@ -4923,7 +4923,8 @@ const FAC = BulwarkFactions;
 // FAC.ALL is the nine playable factions plus System, in that order — so this no longer names 'System'
 // as a literal. It did (`[...FAC.NAMES, FAC.SYSTEM.name, …]`, and again in UNIT_FACTIONS), which is the
 // exact habit the registry exists to end: a display name spelled by hand in a second place.
-const FACTIONS = [...FAC.ALL.map((f) => f.name), DECOR_SET, UNASSIGNED_SET];
+// Only factions that own units: The Collective (FAC.COLLECTIVE, combat: false) has none to author.
+const FACTIONS = [...FAC.ALL.filter((f) => f.combat !== false).map((f) => f.name), DECOR_SET, UNASSIGNED_SET];
 const ROLES = ['Skirmisher', 'Support', 'Bruiser', 'Siege', 'Juggernaut', 'Harasser', 'Striker', 'Guided AA'];
 // prefixFor GUESSED the id prefix as name.slice(0,3).toUpperCase() and was wrong for SIX of the nine
 // factions — GRO/GND, HIG/HTC, WAT/WTR, SPA/SPC, DAR/DRK, GRE/GRN. Every unit the owner created in those
