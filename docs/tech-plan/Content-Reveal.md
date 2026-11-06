@@ -110,8 +110,9 @@ battle won ──► objective met (e.g. Verdance map 3) ──► results scree
 - Saved as `s.discovered[planetKey] = true`. Old saves migrate with every planet they have played discovered, so no
   one replays a reveal for a planet they know.
 - `ALL_PLANETS_OPEN` (testing) also marks every planet discovered, and no planet reveal queues.
-- The galaxy draws an undiscovered system as an **uncharted star**: a dim glow, no orbit ring, no label, not
-  pickable (Q3). Discovery is what turns it into a named system.
+- **Undiscovered planets are not dimmed** (owner, 2026-11-06). Every system draws at full strength with its name and
+  ring; one not yet reached is tagged **UNSURVEYED**. Its dossier says what surveys it, and PLAY is not offered
+  there. The reveal's survey scan is what removes the tag.
 
 ### 4.2 The queue
 
@@ -156,7 +157,21 @@ Times are seconds. Every camera, ship and effect value is a pure function of `t`
 The transport is **the player's own**: the one granted with the first contract (`collective.transport`), so the
 ship the player was given is the ship they watch arrive.
 
-### 5.2 The capital ship presents itself (Q1 decides which ship)
+### 5.2 The capital ship presents itself
+
+Owner, 2026-11-06: *"The Collective always introduces new planets. Once a player completes Map 3 at 3 stars or
+better the capital ship arrives for that faction and the player unlocks visiting the capital ship and collecting new
+missions."* So two ships use this section:
+
+- **A new planet → the Collective's Long Ledger.** After the survey (§5.1) it coasts in to the upper-left station
+  over the new planet. The Factor calls on the comm, and the planet's first missions (maps 1–3) are offered **as a
+  contract** (F6's contract card). ACCEPT grants them to the Mission Log. There is no boarding beat here, because
+  the Long Ledger's first time aboard was the opening; the player can tap it to board.
+- **Map 3 won at ≥ 3★ → that planet's faction ship.** It queues `{kind:'ship'}` (already built). On the next menu
+  it plays **first sight**, then **first time aboard** (§5.3) with its captain, who grants the planet's next missions
+  as a contract. From then on the player can visit the ship and collect missions there.
+
+The timing for both:
 
 - **A ship already seen** coasts in to its station in 3.5 s (Arrival-Design §6), engines settling to idle.
 - **First sight** plays the arrival beats of Arrival-Design §3 (beats 0–6, 22 s): the arrival flash, the approach on
@@ -191,6 +206,32 @@ ship the player was given is the ship they watch arrive.
 - PLAY → Survey → pick a planet → battle, exactly as today. The player chooses where to gather; the reveal does not
   choose for them.
 - Tapping the ship boards it again (F2, F7, F8) with no story beats.
+
+### 5.5 Optional rare-resource contract in battle
+
+Owner, 2026-11-06: *"Players do not get missions associated with other planets, although a faction character can
+appear if your star level is above a 2 on wave 3 and present you with the optional contract to collect rare
+resources from a currently unlocked planet. Accepting the contract allows you to sell some rare resources without
+actually visiting the capital ship for that faction, and the optional contract will resolve at the end of that map."*
+
+- **No cross-planet missions.** The Mission Log only ever holds missions for the planet they were granted on.
+- **When:** wave 3 is cleared with **more than 2★**. The offer plays in the existing interlude before wave 4 (the
+  frozen pre-wave dialog in `main.js` `playPreBattleDialog`), so it never interrupts combat.
+- **Who:** a character of a faction whose **capital ship has arrived** (that planet's map 3 won at ≥ 3★), picked
+  from the Givers sheet. It is never the faction being fought on this map.
+- **What:** an optional contract to **sell rare resources** from this map to that faction, up to a quota. It uses
+  the existing `comm` call and the `contractModal`, which already offers ACCEPT and DECLINE (Dialog-Unification F4).
+- **Accept:** rare finds this map count toward the quota, and are paid for when the contract resolves. Without the
+  contract the player has to visit that faction's ship to sell them.
+- **Decline:** the battle continues; nothing is lost (Q6).
+- **Resolves at the end of the map:** win or lose, the haul is paid and the giver gets the closing line
+  (`questClosingDue`, already built). The result screen shows the sale.
+- **Built from:** `save/contracts.js` (offer, accept, judge, loyalty), `comm/questBeats.js` (closing), harvest's
+  per-tier crediting (`u.cargoMix`), and the workbook for the quota and price (a `Rare_Contracts` sheet beside
+  `Collective_Contracts`).
+- **What changes from 2026-11-02:** that move took the wave-2 faction contract out of battle and made it the
+  planet's secondary mission aboard the ship. That stays. This is a separate, **optional**, rare-only offer from
+  *another* faction.
 
 ## 6. The opening is the first reveal
 
@@ -279,28 +320,26 @@ Headless review (Playwright, swiftshader) at desktop and phone landscape.
 | R8 | Explore and depart F7–F8, and re-boarding from the station | R7, Interiors I5 |
 | R9 | The opening re-cut as the first reveal (§6) | R4, R8 |
 | R10 | Review page and headless review | R4, R7 |
+| R11 | Optional rare-resource contract in battle (§5.5) | Dialog D1 (contract card) |
 
 ## 11. Questions for the owner
 
-- **Q1 — Which ship presents a new planet?**
-  - **A.** Each new planet arrives with **its own faction's ship**, which grants all its missions. This replaces the
-    map-3-at-3★ arrival rule and the Collective's maps 1–3 role (Mission-Log-Design §11).
-  - **B (proposed).** Keep the current rules. A new planet's reveal brings the Collective's Long Ledger to the
-    upper-left station over it, and the Factor gives the planet's maps 1–3 missions. The planet's own ship gets
-    the same choreography later, when its map 3 is won at 3★.
-
-  B fits "if this is the first time introduction": the Long Ledger's first time is the opening, so later planets
-  coast it in. Each faction ship's first time comes with its own arrival.
+- **Q1 — Decided 2026-11-06.** The Collective always introduces new planets. A faction's ship arrives when its map
+  3 is won at ≥ 3★, and visiting it unlocks then (§5.2).
 - **Q2 — Discovery objective.** Proposed default: the previous planet's map 3 beaten, the same win that opens the
   portal. Alternatives: map 3 at 3★, or a per-planet column in the workbook.
-- **Q3 — Undiscovered planets in the galaxy.** Proposed: dim uncharted stars with no name. The alternative is
-  hiding them entirely.
+- **Q3 — Decided 2026-11-06.** Not dimmed; tagged UNSURVEYED until surveyed (§4.1).
 - **Q4 — The unknown contact's call.** The Orbital Survey prototype has the contact call after the site locks.
   Should it be part of the planet reveal? The alternative is keeping it at the start of the first battle there
   (epic *Orbital arrival and contact*).
 - **Q5 — The opening (§6). Decided 2026-11-06.** The game opens on the reveal of the red giant and the Collective ship.
   The Verdance mission is granted aboard as a contract. Still open within Q5: after the contract, the player departs
   and *Verdance discovered* plays before PLAY (proposed), or the menu opens straight on Verdance.
+
+- **Q6 — The rare contract (§5.5):**
+  - "Star level above 2 on wave 3": is that wave 3's own stars, or the average so far?
+  - The quota and price: proposed as a workbook sheet.
+  - Does declining cost loyalty, as the old contract's decline did? Proposed: no.
 
 ## Dependencies
 
