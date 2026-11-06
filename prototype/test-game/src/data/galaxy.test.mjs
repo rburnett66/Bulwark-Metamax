@@ -48,17 +48,15 @@ test('the camera: f = 0 frames the planet exactly like the live globe; f = 1 is 
 // [MM-story_mw47l791_1] Vesper, the Collective's red giant: a tenth body, not a homeworld.
 import { VESPER, vesperPos } from './galaxy.js';
 
-test('Vesper sits near Verdance, above the disc, apart from every homeworld, and is never a playable system', () => {
+test('Vesper sits at the far edge, past the arms, clear of every homeworld, and is never a playable system [MM-story_mw55p9hi_12]', () => {
   assert.ok(!SYSTEM_KEYS.includes(VESPER.key) && !(VESPER.key in SYSTEMS), 'not a homeworld system');
   assert.equal(VESPER.playable, false);
-  const v = vesperPos();
-  assert.ok(Math.hypot(v[0], v[2]) < GALAXY.radius, 'inside the galaxy');
+  const v = vesperPos(), rv = Math.hypot(v[0], v[2]);
+  assert.ok(rv > GALAXY.radius, `past the spiral's rim (${rv.toFixed(1)} > ${GALAXY.radius})`);
   assert.ok(v[1] > GALAXY.thickness, 'lifted above the disc');
-  const ground = systemPos('ground');
-  const dv = Math.hypot(v[0] - ground[0], v[1] - ground[1], v[2] - ground[2]);
   for (const k of SYSTEM_KEYS) {
     const p = systemPos(k), d = Math.hypot(v[0] - p[0], v[1] - p[1], v[2] - p[2]);
-    assert.ok(d > 12, `${k} clear of Vesper (${d.toFixed(1)})`);
-    assert.ok(d >= dv - 1e-9, `Verdance is Vesper's nearest homeworld (${k} ${d.toFixed(1)} vs ${dv.toFixed(1)})`);
+    assert.ok(d > 40, `${k} well clear of Vesper (${d.toFixed(1)})`);
+    assert.ok(Math.hypot(p[0], p[2]) < rv - 15, `${k} sits inside Vesper's radius`);
   }
 });

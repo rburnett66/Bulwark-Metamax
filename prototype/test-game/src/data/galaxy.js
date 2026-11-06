@@ -54,14 +54,16 @@ export const SYSTEM_KEYS = Object.freeze(Object.keys(SYSTEMS).filter((k) => PLAN
 
 /**
  * VESPER — the red giant the Collective's capital ship, The Long Ledger, orbits [MM-story_mw47l791_1].
- * Owner 2026-11-05: "add the collective capital ship and the red giant it orbits as a new unplayable planet … not to far
- * from verdance maybe at the edge of the galaxy". A tenth body that is NOT a homeworld: no maps, no survey, never in
- * SYSTEM_KEYS (so the faction picker, campaign and planet rail never see it). Placement option A of the opening design:
- * just past Verdance's arm segment, lifted well above the disc so it reads as outside the spiral.
+ * A tenth body that is NOT a homeworld: no maps, no survey, never in SYSTEM_KEYS (so the faction picker, campaign and
+ * planet rail never see it).
+ * Owner 2026-11-06 [MM-story_mw55p9hi_12]: "I asked for the new Collective planet to be at the far edge of the galaxy
+ * where it won't draw over existing content". So it sits past the spiral's rim (GALAXY.radius) in the empty sector
+ * beyond Ochre, between Cinder's and Lumen's arm segments, lifted above the disc: in the galaxy view that is the
+ * upper-left, where no homeworld, label or arm light is drawn.
  */
 export const VESPER = Object.freeze({
   key: 'collective', name: 'Vesper', ship: 'The Long Ledger', faction: 'The Collective',
-  r: 34, a: 4, y: 7, playable: false,
+  r: 106, a: 219, y: 5, playable: false,
   color: [255, 96, 48],      // ≈ 3,200 K, the marker's glow
   ring: '#f2c869',           // the Collective's gold
 });
