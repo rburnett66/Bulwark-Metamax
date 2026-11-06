@@ -1,7 +1,7 @@
 # Tech Plan — Capital Ship Interior: the room view and the hub
 
 **Epic:** `epic_mw49625t_b` "L2 Capital ship interiors" (Bulwark advanced mode).
-**Status:** v0.1, 2026-11-05, agent-proposed. Notes and as-built justifications for this epic go here, not on the tickets.
+**Status:** v0.2, 2026-11-05. I1 in progress: the room view from primitives plays in the game's Collective intro (prototype). Notes and as-built justifications for this epic go here, not on the tickets.
 
 **Design inputs:**
 - `docs/16 Bulwark MM/design/Collective-Opening-Design.md` v0.2 (§4 rooms, §9 hub);
@@ -299,6 +299,35 @@ and phone frames.
 
 - **2026-11-05.** Plan written from the Long Ledger prototype as built. The prototype and the Character Sheet were
   combined in one demo (owner). There were no tickets or plan for that work; I0 records it.
+- **2026-11-05, I1 as built for the intro** (`feat/collective-intro-ingame`, story `story_mw4d1bsw_q`).
+  > **owner**: "We need to put the prototype in the game" … "Do rooms and capital ship presentation for collective intro
+  > only as in game prototype"
+
+  Built:
+  - `content/ships/collective/ship-layout.json`: the prototype's seven rooms and three decks, plus `props`, `theme`,
+    `purpose`, `hull` and an empty `lifts`. Faction keys are the registry's (`space`, not the prototype's
+    `spacetech`). `choices[].effects` replaces the free-text `note`.
+  - `src/ship-interior/layout.js`: `validateLayout`, `prepareLayout` (floor, lanes, doors), `isLocked`, `toWorld`.
+    Tested in `layout.test.mjs`.
+  - `src/ship-interior/primitiveRooms.js`: the shell, the seven prop presets, the sign, the frame and the sealed-room
+    hatch, merged per room into one vertex-coloured mesh plus one glow mesh. The hull is a rounded ivory silhouette
+    with a dark interior, an orange stripe, a dome stub and a stern block. States are `normal | dim | highlight`, plus
+    the flag pulse and the locked look.
+  - `src/ship-interior/roomView.js`: the 100 × 56.25 orthographic stage. The camera fits the whole ship or eases to
+    one room. Also picking, screen boxes for DOM labels, ambient crew in depth layers, one post per room, the
+    patron seated at the bar and the avatar's walk-to.
+  - `tools/ship-interior/index.html`: review page (`?state=bar`, `?flash=1`, `?focus=bar`, `?reduced=1`,
+    `?standing=arcane:Trusted`).
+
+  Not yet:
+  - the layout editor (P10);
+  - lifts and walking between decks (the avatar starts on the bar's deck);
+  - DOM accessibility hotspots and lock badges;
+  - drag and pinch on the camera;
+  - the hub.
+
+  Draws: the rooms and hull are about 40 draws; the crew is most of the rest (≈ 480 for the whole ship at 1280 × 720,
+  ≈ 120 close on the bar). Merging figures stays with I3.
 
 ## Dependencies
 

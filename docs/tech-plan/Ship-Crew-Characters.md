@@ -1,7 +1,7 @@
 # Tech Plan — Ship Crew Characters: the rig, faction looks, poses and crew life
 
 **Epic:** `epic_mw49625t_b` "L2 Capital ship interiors" (Bulwark advanced mode).
-**Status:** v0.1, 2026-11-05, agent-proposed. Notes and as-built justifications for this epic go here, not on the tickets.
+**Status:** v0.2, 2026-11-05. I2 in progress: `crew.js` built and used by the in-game Collective intro. Notes and as-built justifications for this epic go here, not on the tickets.
 
 **Design inputs:**
 - `Collective-Opening-Design.md` v0.2 §5;
@@ -137,6 +137,21 @@ About 6 draws a figure gives about 120 draws at most. Figures out of view stop u
 
 - **2026-11-05.** Plan written from the Character Sheet and the Long Ledger as built. This replaces the Blender
   character pipeline of the opening design v0.1.
+- **2026-11-05, I2 as built for the intro** (`feat/collective-intro-ingame`, story `story_mw4d1bsw_q`).
+  `src/ship-interior/crew.js` is the prototype's rig and helmets and its 8-pose machine, ported with these additions:
+  - **Hip pivots**: legs swing in a walk and fold forward to sit.
+  - **New poses**: `sit`, `sit-drink` (a slow sip every ~7 s) and `work`.
+  - **Flash**: `setFlash(k)` lights the figure's own vest gold. The vest material is per figure; every other material
+    is shared by colour.
+  - **Seeded**: `rng(seed)` and time passed in as seconds, so the scene repeats run to run.
+
+  Faction looks are keyed by registry keys. Tests are in `crew.test.mjs`.
+
+  Not yet:
+  - figure merging (each figure is still ~40 meshes);
+  - the lift;
+  - a separate turn-to-camera state (`patronTurn` eases the seated patron's yaw to the camera);
+  - the shared close-up (I7).
 
 ## Dependencies
 

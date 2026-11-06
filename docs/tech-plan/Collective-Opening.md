@@ -1,7 +1,7 @@
 # Tech Plan — The Collective Opening (Vesper, the cinematic, the bar beat, the first contract)
 
 **Epic:** `epic_mvo5po8u_4` The Collective trade faction · **Design:** `docs/16 Bulwark MM/design/Collective-Opening-Design.md`
-**Status:** v0.3, 2026-11-05, agent-proposed. S1 and beats 0–3 of S2 built (PR #164, not merged). Notes and as-built justifications for this epic go here, not
+**Status:** v0.4, 2026-11-05. S1 and beats 0–3 merged (PR #164). Beats 4–8 play in the game as a prototype (`story_mw4d1bsw_q`). Notes and as-built justifications for this epic go here, not
 on the tickets.
 
 ## 1. Scope
@@ -51,7 +51,7 @@ All paths are under `prototype/test-game/` unless they start with `tools/`.
 | save / `missionFlow` | edit | `collective.{introSeen, contractAccepted, transport, faction?}`; milestone resume; mark existing saves as seen. |
 | menu | edit | New-save route → opening; "Replay opening" in Settings; a one-time prompt for existing saves; a "Collective" entry → hub. |
 | `src/audio/openingAudio.js` | new | Star bed, scan hum + clunks, per-room spot ambiences by camera distance, bell, swell, seal stamp. Synthesized. |
-| `tools/collective/index.html` | new | Review page: the room view with the editor, an opening scrub bar, a crew board (all helmets × all poses), tier / reduced-motion / phone frames. |
+| `tools/collective/index.html` | new | Review page (as built: `tools/ship-interior/` for the room view, `tools/opening/` for beats 0–3, the game's `?intro=1` for the whole intro): the room view with the editor, an opening scrub bar, a crew board (all helmets × all poses), tier / reduced-motion / phone frames. |
 
 ### Data files
 
@@ -140,6 +140,28 @@ in desktop, phone portrait and phone landscape frames.
 
   Still to come: beat 4 onward, which waits on the room view (I1), and the galaxy's trade lanes, which wait on
   `collective.introSeen` (S7).
+- **2026-11-05, the intro in the game (prototype)** (`feat/collective-intro-ingame`, story `story_mw4d1bsw_q`).
+  > **owner**: "We need to put the prototype in the game" … "Do rooms and capital ship presentation for collective intro
+  > only as in game prototype"
+
+  - **Entry.** Tap VESPER in the menu's galaxy view, or open the game with `?intro=1` (`&introT=<s>` starts later).
+    It is not yet the new-save route (S7).
+  - **`src/opening/introRunner.js` `playIntro`.** A full-screen overlay with two canvases: the 3D shot
+    (`openingStage`) under the room view (Capital-Ship-Interior I1). The scan wipe is the prototype's: a
+    left-to-right `clip-path` on the room canvas behind a cyan line, not a shader pass. Both canvases pause when the
+    tab hides, and the menu's own 3D pauses under the overlay.
+  - **Timeline.** `SHIP_UNTIL` is 40 (the 3D camera holds the flank); `BUILT_UNTIL` is 63 (the timed beats).
+    `roomsAt(t)` gives the scan, the flash (two pulses at 56.4 s and 57.0 s, then a soft glow), the dim and
+    highlight, the camera focus, the prompt, and auto-enter at 66 s. Skip lands on the bar.
+  - **Beat 8.** The avatar walks into the bar, the camera pushes in, and Mira turns. A placeholder line card
+    ("PROTOTYPE") stands in for the conversation panel (S6). CONTINUE or ✕ returns to the menu.
+  - **Phone portrait.** The camera holds the bar's side from beat 5 and pushes in closer (design §8).
+
+  Not yet:
+  - the conversation and holo-slides (S6);
+  - the contract, transport, save and replay (S7);
+  - sound (S9);
+  - the scan wipe peeling the 3D hull itself: the room view's hull is a stylised cutaway, not the GLB's profile.
 
 ## Dependencies
 
