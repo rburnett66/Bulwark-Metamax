@@ -1,0 +1,694 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta charset="utf-8">
+<title>Bulwark Capital Ship</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+/* Pre-rendered cutaway diorama (image) + a live three.js character layer composited on top. */
+:root{
+  --bg:#0a0f1a; --fg:#e7ecf4; --muted:#93a3ba; --dim:#6b7c97; --line:#2a3b5c;
+  --cyan:#38e1c8; --amber:#f2a623; --gold:#ffcf5c; --green:#5fd39b; --violet:#b58cff; --room:#16233d;
+  --disp:'Space Grotesk',system-ui,sans-serif; --body:'IBM Plex Sans',system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5}
+body.noscroll{overflow:hidden}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:22px}
+.topbar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+h1{font-family:var(--disp);font-weight:700;font-size:clamp(22px,4vw,30px);margin:0;letter-spacing:.3px}
+.sub{color:var(--muted);font-size:14px;margin:4px 0 0}
+.todo{font-family:var(--disp);font-weight:600;font-size:14px;color:#07131a;background:var(--cyan);border-radius:999px;padding:6px 14px;white-space:nowrap}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0 2px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+/* the diorama stage */
+.stage{position:relative;width:100%;margin-top:12px;border-radius:14px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1792/1008;background:#05070d}
+.stage>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+#crewfx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3}
+.hotspot{position:absolute;z-index:2;border:0;background:transparent;border-radius:12px;cursor:pointer;padding:0;transition:box-shadow .15s,background .15s,opacity .5s}
+.hotspot:hover,.hotspot:focus-visible{background:#38e1c81f;box-shadow:inset 0 0 0 2px #38e1c8aa,0 0 22px -4px #38e1c8;outline:none;animation:none}
+.hotspot .tip{position:absolute;left:50%;top:8px;transform:translateX(-50%);opacity:0;transition:opacity .15s;font-family:var(--disp);font-weight:600;font-size:12px;color:#07131a;background:var(--cyan);padding:3px 10px;border-radius:999px;white-space:nowrap;pointer-events:none}
+.hotspot:hover .tip,.hotspot:focus-visible .tip{opacity:1}
+.hotspot .flag{position:absolute;right:8px;top:8px;font-family:var(--disp);font-weight:600;font-size:10.5px;letter-spacing:.3px;padding:2px 8px;border-radius:999px;color:#07131a;opacity:.92}
+.f-mission .flag{background:var(--cyan)} .f-reward .flag{background:var(--gold)} .f-store .flag{background:var(--amber)} .f-talk .flag{background:var(--violet)} .f-upgrade .flag{background:var(--green)}
+/* at-rest highlight so rooms with an available activity read at a glance */
+.f-mission{--ac:var(--cyan)} .f-reward{--ac:var(--gold)} .f-store{--ac:var(--amber)} .f-talk{--ac:var(--violet)} .f-upgrade{--ac:var(--green)}
+.hotspot.live{animation:actpulse 2.9s ease-in-out infinite}
+@keyframes actpulse{0%,100%{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--ac) 32%,transparent),0 0 12px -7px var(--ac)}50%{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--ac) 70%,transparent),0 0 24px -3px var(--ac)}}
+@media (prefers-reduced-motion:reduce){.hotspot.live{animation:none;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--ac) 45%,transparent),0 0 14px -6px var(--ac)}}
+.hint{font-size:12.5px;color:var(--dim);margin-top:10px}
+.faclegend{display:flex;flex-wrap:wrap;gap:7px 12px;margin-top:8px;font-size:11.5px;color:var(--muted)}
+.faclegend span{display:inline-flex;align-items:center;gap:6px}
+.faclegend i{width:13px;height:9px;border-radius:7px 7px 3px 3px;display:inline-block;box-shadow:inset 0 -2px 2px -1px #0007}
+
+/* dialog modal */
+.modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(4,8,16,.76);backdrop-filter:blur(3px)}
+.modal.show{display:flex;animation:mfade .3s ease}
+@keyframes mfade{from{opacity:0}to{opacity:1}}
+.sheet{width:min(740px,100%);max-height:88vh;overflow:auto;position:relative;background:linear-gradient(180deg,#16233d,#101a2e);border:1px solid var(--line);border-radius:18px;display:grid;grid-template-columns:250px 1fr;box-shadow:0 26px 64px -22px #000;animation:mrise .35s ease}
+@keyframes mrise{from{transform:translateY(12px);opacity:.4}to{transform:translateY(0);opacity:1}}
+.sheet .x{position:absolute;top:10px;right:12px;z-index:3;width:30px;height:30px;border-radius:8px;cursor:pointer;background:#0e182b;border:1px solid var(--line);color:var(--muted);font-size:13px}
+.sheet .x:hover{color:var(--fg);border-color:#51688f}
+.portrait{position:relative;overflow:hidden;border-right:1px solid var(--line);border-radius:18px 0 0 18px;min-height:330px;background:linear-gradient(180deg,transparent 56%,#0a1120 100%),radial-gradient(135% 100% at 50% -8%,var(--pc),#0b1322 70%);box-shadow:inset 0 -44px 60px -34px #000,inset 0 0 42px -12px #0007}
+.portrait canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block}
+.portrait .tag-render{position:absolute;left:12px;bottom:10px;z-index:2;font-family:var(--disp);font-size:9.5px;letter-spacing:1.4px;text-transform:uppercase;color:#ffffff59}
+.portrait::after{content:"";position:absolute;inset:0;z-index:1;background:repeating-linear-gradient(0deg,transparent 0 3px,#00000021 3px 4px);pointer-events:none;opacity:.4}
+.talk{padding:30px 26px 24px}
+.talk .ptag{font-family:var(--disp);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--cyan)}
+.talk h2{font-family:var(--disp);font-weight:600;font-size:22px;margin:6px 0 2px}
+.talk .who{font-size:13px;color:var(--muted);margin-bottom:12px}
+.talk .line{font-size:16px;line-height:1.5;margin:0 0 16px}
+.acts{display:flex;flex-wrap:wrap;gap:10px}
+.btn{font-family:var(--disp);font-weight:600;font-size:14px;border-radius:10px;padding:9px 16px;cursor:pointer;border:1px solid var(--line);background:#223457;color:var(--fg)}
+.btn.primary{background:var(--cyan);color:#07131a;border-color:var(--cyan)}
+.btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.mhint{font-size:12px;color:var(--dim);margin-top:4px;flex-basis:100%}
+.toast{margin-top:12px;font-size:13.5px;color:var(--cyan);min-height:18px}
+/* ---- in-game layout editor ---- */
+.editctl{display:flex;align-items:center;gap:10px;margin:0 0 8px;flex-wrap:wrap}
+.ebtn{font-family:var(--disp);font-weight:600;font-size:12.5px;border-radius:8px;padding:6px 12px;cursor:pointer;border:1px solid var(--line);background:#1b2942;color:var(--fg)}
+.ebtn.primary{background:var(--cyan);color:#07131a;border-color:var(--cyan)}
+.ebtn.on{background:var(--gold);color:#1a1205;border-color:var(--gold)}
+.einfo{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+.stage.editing .hotspot{animation:none;background:#38e1c810;box-shadow:inset 0 0 0 1px #ffffff33;touch-action:none}
+.stage.editing .hotspot.sel{background:#eab23a26;box-shadow:inset 0 0 0 2px var(--gold),0 0 18px -4px var(--gold);z-index:4}
+.stage.editing .hotspot .tip{opacity:1}
+.rhandle{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:3px;background:var(--gold);border:1px solid #1a1205;cursor:nwse-resize;display:none;z-index:5;touch-action:none}
+.stage.editing .hotspot.sel .rhandle{display:block}
+.fdot{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--cyan);border:2px solid #07131a;transform:translate(-50%,-50%);cursor:grab;z-index:4;display:none;box-shadow:0 0 0 2px #0007;touch-action:none}
+.fdot b{position:absolute;left:15px;top:-5px;font:600 10px var(--disp);color:var(--cyan);white-space:nowrap;text-shadow:0 1px 2px #000}
+.stage.editing .fdot{display:block}
+.floorline{position:absolute;left:0;right:0;height:0;border-top:2px dashed #38e1c877;z-index:3;display:none;pointer-events:none}
+.floorline b{position:absolute;left:8px;top:-10px;font:600 10px var(--disp);color:#07131a;background:var(--cyan);padding:2px 8px;border-radius:7px;cursor:ns-resize;pointer-events:auto;touch-action:none}
+.stage.editing .floorline{display:block}
+/* ---- locked room: you can see in, you can't go in ---- */
+.hotspot.locked{cursor:not-allowed;-webkit-backdrop-filter:grayscale(1) brightness(.45);backdrop-filter:grayscale(1) brightness(.45);background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--lc) 13%,transparent) 0 8px,transparent 8px 18px);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--lc) 40%,transparent)}
+.hotspot.locked:hover,.hotspot.locked:focus-visible{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--lc) 22%,transparent) 0 8px,transparent 8px 18px);box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--lc) 70%,transparent)}
+.lock{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-weight:600;font-size:11.5px;color:var(--fg);background:#0b1220e8;border:1px solid color-mix(in srgb,var(--lc) 55%,transparent);padding:4px 11px;border-radius:999px;white-space:nowrap;pointer-events:none}
+.lock svg{width:12px;height:12px;color:var(--lc)}
+.stoast{position:absolute;left:50%;bottom:4%;transform:translateX(-50%);z-index:9;font-family:var(--disp);font-weight:600;font-size:13px;background:#0b1220ee;border:1px solid var(--line);color:var(--fg);padding:7px 14px;border-radius:999px;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis}
+.stoast.show{opacity:1}
+/* ---- exterior / boarding ---- */
+.tright{display:flex;align-items:center;gap:10px}
+.bbtn{font-family:var(--disp);font-weight:700;font-size:14px;border-radius:999px;padding:6px 16px;cursor:pointer;border:1px solid var(--gold);background:var(--gold);color:#1a1205;white-space:nowrap}
+.bbtn.depart{background:transparent;color:var(--gold)}
+.bbtn:disabled{opacity:.55;cursor:default}
+.bbtn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.ext{position:absolute;inset:0;z-index:6;overflow:hidden;background:#000}
+.ext img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transform-origin:50% 61%}
+.stage>img.cut{transform-origin:50% 61%}
+.wrap.outside .ext img{animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{from{translate:0 -.6%}to{translate:0 .6%}}
+.scan{position:absolute;top:0;bottom:0;left:0;width:3px;margin-left:-1px;z-index:7;display:none;background:var(--cyan);box-shadow:0 0 18px 4px #38e1c8aa,0 0 64px 14px #38e1c844;pointer-events:none}
+.shuttle{position:absolute;z-index:8;left:-6%;top:46%;width:2.4%;height:.9%;display:none;border-radius:40% 60% 60% 40%/50%;background:linear-gradient(180deg,#fff6d6,#e7b84a);box-shadow:0 0 10px 2px #ffcf5c99;pointer-events:none}
+.shuttle::before{content:"";position:absolute;right:90%;top:50%;width:420%;height:60%;transform:translateY(-50%);background:linear-gradient(90deg,transparent,#ffcf5c88);border-radius:999px}
+#crewfx{transition:opacity .5s ease}
+.wrap.outside #crewfx,.wrap.outside .hotspot,.wrap.outside .fdot,.wrap.outside .floorline{opacity:0;pointer-events:none}
+.wrap.outside .editctl{visibility:hidden}
+@media (prefers-reduced-motion:reduce){.wrap.outside .ext img{animation:none}}
+@media(max-width:560px){.sheet{grid-template-columns:1fr;max-height:92vh}.portrait{border-right:0;border-bottom:1px solid var(--line);border-radius:18px 18px 0 0;min-height:220px}}
+</style>
+<div class="wrap outside" id="wrap">
+  <div class="topbar">
+    <div>
+      <h1>The Long Ledger</h1>
+      <p class="sub" id="sub">Collective capital ship · holding orbit</p>
+    </div>
+    <div class="tright">
+      <div class="todo" id="todo">6 things to do</div>
+      <button class="bbtn" id="boardBtn">Board ▸</button>
+    </div>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--gold)"></i>You</span>
+    <span><i style="background:var(--cyan)"></i>Mission</span>
+    <span><i style="background:var(--gold)"></i>Reward</span>
+    <span><i style="background:var(--amber)"></i>Deal</span>
+    <span><i style="background:var(--violet)"></i>Talk</span>
+    <span style="color:var(--dim)">· crew &amp; your avatar are live 3D over the pre-rendered cutaway</span>
+  </div>
+  <div class="editctl">
+    <button class="ebtn" id="editToggle">✎ Edit layout</button>
+    <span class="egrp" id="editActions" hidden>
+      <button class="ebtn" id="btnCopy">Copy JSON</button>
+      <button class="ebtn primary" id="btnDownload">Download ship-layout.json</button>
+    </span>
+    <span class="einfo" id="editInfo"></span>
+  </div>
+  <div class="stage" id="stage">
+    <img class="cut" src="cutaway.jpg" alt="Cutaway of the capital ship">
+    <canvas id="crewfx"></canvas>
+    <div class="ext" id="ext"><img src="exterior.jpg" alt="The Long Ledger holding orbit, side view"></div>
+    <div class="scan" id="scan"></div>
+    <div class="shuttle" id="shuttle"></div>
+    <div class="stoast" id="stoast" role="status"></div>
+  </div>
+  <p class="hint">Live three.js crew over a pre-rendered cutaway. Each faction wears its own military helmet; the captain gets the peaked cap. Crew walk, talk, point, wave, salute, celebrate and bristle — click a room and your gold avatar walks in.</p>
+  <div class="faclegend" id="faclegend"></div>
+</div>
+<div class="modal" id="modal"></div>
+<script>
+const R=Math.random, clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const FLAGLABEL={mission:"Mission",reward:"Reward",store:"Deal",talk:"Talk",upgrade:"Upgrade"};
+// a room's flag chooses its occupant's signature gesture
+const FLAGPOSE={mission:"point",reward:"celebrate",store:"talk",talk:"talk",upgrade:"point"};
+
+// ---------- the ten Bulwark factions: outfit colour + a military-style helmet ----------
+// hc = helmet colours {shell, trim, accent}. Each helmet style is modelled below.
+const FACTIONS={
+ collective:{label:"Collective",outfit:0xE8863A,stripe:0xFAD14A,helmet:"servicecap",hc:{shell:0xF1EDE4,trim:0x222733,accent:0xE8863A}},
+ ground:    {label:"Ground · Powder",outfit:0x5f6a36,stripe:0xb7c070,helmet:"combat",  hc:{shell:0x5c6534,trim:0x343a20,accent:0x8a2f2a}},
+ air:       {label:"Air",            outfit:0x3f6fae,stripe:0xa9c8ef,helmet:"aviator", hc:{shell:0xeef3f8,trim:0x24396a,accent:0xd23a3a}},
+ hightech:  {label:"High Tech",      outfit:0x3a3f46,stripe:0xd4c07a,helmet:"techvisor",hc:{shell:0x2f333a,trim:0xd4af37,accent:0x9fe8ff}},
+ artillery: {label:"Artillery",      outfit:0x8a7f52,stripe:0xd8c98a,helmet:"tanker",  hc:{shell:0x766c42,trim:0x322d1c,accent:0xcaa54a}},
+ water:     {label:"Water",          outfit:0x3f8c86,stripe:0x8fd8cf,helmet:"diver",   hc:{shell:0x4f9c8c,trim:0xb5903f,accent:0xf0d49a}},
+ arcane:    {label:"Arcane · Energy",outfit:0xa6382f,stripe:0xe59a5a,helmet:"cowl",    hc:{shell:0x8a2f2a,trim:0xc9a24a,accent:0xff8a3a}},
+ spacetech: {label:"Space Tech",     outfit:0x2a4a8a,stripe:0x8fb6f0,helmet:"spacehelm",hc:{shell:0xdfe8f2,trim:0x24407a,accent:0x38e1c8}},
+ darkenergy:{label:"Dark Energy",    outfit:0x3a2f4a,stripe:0xb06fd0,helmet:"hoodmask",hc:{shell:0x1b1724,trim:0x463a58,accent:0xc0379a}},
+ greenies:  {label:"Greenies · Chem",outfit:0x5a7a3a,stripe:0xcfd84a,helmet:"gasmask", hc:{shell:0x47591f,trim:0x2f3a16,accent:0xcfd84a}}
+};
+const CAPTAIN_HC={shell:0x141821,trim:0x0d1017,accent:0xd9b24a}; // naval officer's cap
+const PLAYER_GOLD=0xEAB23A;
+
+// Rooms laid out over the cutaway image. x/top/w/h are % of the stage (hotspot box);
+// fx/fy are the % floor spot where the character stands / the avatar walks to.
+// fac = the occupant's faction (drives the helmet); cap = the captain's hat.
+const ROOMS=[
+ {id:"helm",name:"Helm",fac:"collective",cap:true,who:"Captain Vale · Bridge",line:"A fresh Collective contract just posted — good money if you can hold the sector.",flag:"mission",x:15,top:14,w:33,h:28,fx:30,fy:40,acts:[{t:"View contract",p:1},{t:"Open rankings"}]},
+ {id:"chapel",name:"Chapel",fac:"arcane",who:"Confessor Aldous · Arcane envoy",line:"The Arcane keep their bargains — and their grudges. Light a candle before you decide.",flag:"talk",unlock:{fac:"arcane",need:"Trusted"},x:50,top:11,w:22,h:30,fx:60,fy:40,acts:[{t:"Seek counsel",p:1}]},
+ {id:"armory",name:"Armory",fac:"ground",who:"Quartermaster Roth · Ground · Powder",line:"Two tank hulls on the line, recruits mustered. Say the word and they roll.",flag:"upgrade",x:15,top:44,w:33,h:16,fx:30,fy:57,acts:[{t:"Build / upgrade",p:1}]},
+ {id:"bar",name:"Bar",fac:"collective",who:"Supercargo Dorian Quell · Collective",line:"Heard you soured things with the Arcane. Bold. Costly. Which was it?",flag:"talk",x:49,top:44,w:23,h:16,fx:60,fy:57,choices:[{t:"Business is business.",note:"Collective favor +2"},{t:"They had it coming.",note:"Arcane -2 · Dark Energy +1 — offending one opens another"}]},
+ {id:"trade",name:"Trade Station",fac:"hightech",who:"Factor Mira Valcourt · High Tech",line:"Rare glacier-ice is fetching a premium here today — 1.4× the Collective floor.",flag:"store",x:5,top:61,w:39,h:35,fx:25,fy:90,acts:[{t:"Sell haul",p:1},{t:"Open market"}]},
+ {id:"loading",name:"Loading Bay",fac:"artillery",who:"Ops-Chief Farrell · Artillery",line:"Idle haul's in: 1,240 ore and 60 energy waiting at the dock.",flag:"reward",x:45,top:61,w:25,h:35,fx:57,fy:90,acts:[{t:"Collect haul",p:1}]},
+ {id:"eng",name:"Engineering",fac:"spacetech",who:"Chief Okonkwo · Space Tech",line:"Core's steady at 82%. Headroom for one more district — and the fleet's repaired.",unlock:{fac:"spacetech",need:"Trusted"},x:71,top:61,w:21,h:35,fx:80,fy:88,acts:[{t:"Manage power"},{t:"Repair fleet"}]}
+];
+// Deck floor levels (fy %). Every room on a floor shares this one walk line, so
+// crew and the avatar cross from room to room cleanly. Adjustable in the editor.
+const FLOORS=[40,57,90];
+// bind each room to its nearest floor and snap its stand-spot onto that walk line
+ROOMS.forEach(r=>{let bi=0,bd=1e9;FLOORS.forEach((y,i)=>{const d=Math.abs(y-r.fy);if(d<bd){bd=d;bi=i;}});r.floor=bi;r.fy=FLOORS[bi];});
+// faction standing gates rooms: unlock:{fac,need} opens once the player's standing reaches `need`
+const STAND=["Hostile","Wary","Neutral","Trusted","Honored"];
+const STANDING={collective:"Trusted",arcane:"Neutral",spacetech:"Wary"};
+const isLocked=r=>!!r.unlock&&STAND.indexOf(STANDING[r.unlock.fac]||"Neutral")<STAND.indexOf(r.unlock.need);
+const LOCKSVG=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
+
+// ---------- 3D character: the MetaMax "Project City" foreman model ----------
+// Ported from the owner's foreman prototype (artifact "Project City foremen",
+// 2026-10-08): squashed-sphere head, hair/eyes/ears, hi-vis vest + bands, denim legs —
+// now with a per-faction military helmet and a full pose state machine.
+const SRGB=h=>new THREE.Color(h).convertSRGBToLinear();
+const SKIN=0xF5C9A0, HAIR=0x5A3A24, SHIRT=0x9C7A5B, DENIM=0x3E5F8A, SHOE=0x6B4227;
+const sm=(h,o)=>new THREE.MeshStandardMaterial(Object.assign({color:SRGB(h),roughness:.6,metalness:.04},o||{}));
+const put=(geo,m,parent,pos,scl,rot)=>{const o=new THREE.Mesh(geo,m);if(pos)o.position.set(pos[0],pos[1],pos[2]);if(scl)o.scale.set(scl[0],scl[1],scl[2]);if(rot)o.rotation.set(rot[0],rot[1],rot[2]);parent.add(o);return o;};
+const lighten=(hex,a)=>new THREE.Color(hex).lerp(new THREE.Color(0xffffff),a==null?.5:a).getHex();
+
+// How far down each helmet sits over the head (full-cover helmets ride lower).
+const HELM_DROP={servicecap:-.02,captain:-.02,combat:-.05,aviator:-.04,techvisor:0,tanker:-.03,diver:-.1,cowl:0,spacehelm:-.08,hoodmask:-.07,gasmask:-.07,hardhat:0};
+
+// Build one helmet from primitives. Returns a group to mount on the head.
+function makeHelmet(style,hc){
+  const h=new THREE.Group();
+  const shell=sm(hc.shell,{roughness:.5}), trim=sm(hc.trim,{roughness:.5});
+  const accent=sm(hc.accent,{roughness:.4,metalness:.2});
+  const glow=c=>sm(c,{emissive:SRGB(c),emissiveIntensity:.7,roughness:.4});
+  const glass=sm(0x0c1622,{transparent:true,opacity:.34,roughness:.06,metalness:.5});
+  const dome=(r,seg)=>new THREE.SphereGeometry(r,seg||26,14,0,Math.PI*2,0,Math.PI/2);
+  const ball=(r)=>new THREE.SphereGeometry(r,20,14);
+  const cyl=(a,b,ht,s)=>new THREE.CylinderGeometry(a,b,ht,s||20);
+  if(style==="hardhat"){
+    const d=new THREE.Group();d.scale.set(1.02,.85,1.08);h.add(d);
+    put(dome(.4),shell,d);put(new THREE.TorusGeometry(.4,.035,8,32,Math.PI),shell,d,null,null,[0,Math.PI/2,0]);
+    put(cyl(.47,.48,.05,40),shell,h,[0,0,.03],[1,1,1.1]);
+  } else if(style==="servicecap"){            // Collective merchant service cap
+    put(cyl(.4,.41,.15,24),trim,h,[0,-.04,0]);
+    const crown=new THREE.Group();crown.scale.set(1.04,.6,1.12);h.add(crown);put(dome(.4),shell,crown,[0,.02,0]);
+    put(new THREE.TorusGeometry(.405,.018,8,28),accent,h,[0,.04,0],null,[Math.PI/2,0,0]);
+    put(new THREE.CylinderGeometry(.52,.5,.03,28,1,false,0,Math.PI),trim,h,[0,-.1,.12],[1,1,.6],[-.3,0,0]); // peak
+  } else if(style==="captain"){               // naval officer's peaked cap
+    put(cyl(.41,.42,.16,26),trim,h,[0,-.03,0]);
+    put(new THREE.TorusGeometry(.41,.022,8,30),accent,h,[0,.0,0],null,[Math.PI/2,0,0]); // gold band line
+    const crown=new THREE.Group();crown.scale.set(1.08,.52,1.14);h.add(crown);put(dome(.42),shell,crown,[0,.05,0]);
+    put(new THREE.CylinderGeometry(.56,.52,.035,30,1,false,0,Math.PI),trim,h,[0,-.1,.14],[1,1,.62],[-.34,0,0]); // visor
+    put(new THREE.CylinderGeometry(.58,.54,.015,30,1,false,0,Math.PI),accent,h,[0,-.1,.145],[1,1,.6],[-.34,0,0]); // scrambled-egg edge
+    put(new THREE.BoxGeometry(.14,.1,.02),accent,h,[0,.03,.4]); // cap badge
+  } else if(style==="combat"){                // Ground: combat / steel-pot helmet
+    const d=new THREE.Group();d.scale.set(1.12,.96,1.2);h.add(d);put(dome(.44),shell,d,[0,-.02,0]);
+    put(new THREE.TorusGeometry(.49,.03,8,34),trim,h,[0,-.06,0],[1.08,1,1.14],[Math.PI/2,0,0]); // rim
+    put(new THREE.BoxGeometry(.24,.06,.1),accent,h,[0,.12,.46],null,[.2,0,0]); // front band
+    [-1,1].forEach(s=>put(cyl(.03,.03,.3,8),trim,h,[s*.3,-.24,.1],null,[.5,0,s*.2])); // chin strap
+  } else if(style==="aviator"){               // Air: flight helmet + visor
+    const d=new THREE.Group();d.scale.set(1.04,1,1.06);h.add(d);put(dome(.45),shell,d,[0,-.03,0]);
+    put(new THREE.TorusGeometry(.4,.07,10,28,Math.PI),glass,h,[0,-.02,.1],[1.05,.8,1.2],[.15,0,0]); // visor band
+    [-1,1].forEach(s=>put(cyl(.13,.13,.1,16),trim,h,[s*.44,-.12,0],null,[0,0,Math.PI/2])); // earcups
+    put(new THREE.BoxGeometry(.5,.05,.04),accent,h,[0,.2,.3]); // stripe
+  } else if(style==="techvisor"){             // High Tech: sleek visor
+    const d=new THREE.Group();d.scale.set(1.04,.82,1.06);h.add(d);put(dome(.43),shell,d,[0,0,0]);
+    put(new THREE.TorusGeometry(.42,.016,8,30),accent,h,[0,.02,0],null,[Math.PI/2,0,0]); // gold line
+    put(new THREE.BoxGeometry(.6,.1,.06),glow(hc.accent),h,[0,-.04,.33],[1,1,1],[.1,0,0]); // glowing visor
+    [-1,1].forEach(s=>put(cyl(.05,.05,.12,10),trim,h,[s*.42,-.06,.08],null,[0,0,Math.PI/2]));
+  } else if(style==="tanker"){                // Artillery: crew helmet, big ear cans
+    const d=new THREE.Group();d.scale.set(1.06,.96,1.1);h.add(d);put(dome(.44),shell,d,[0,-.02,0]);
+    [-1,1].forEach(s=>put(cyl(.16,.16,.16,16),trim,h,[s*.44,-.1,0],null,[0,0,Math.PI/2])); // ear cans
+    put(new THREE.BoxGeometry(.5,.1,.06),trim,h,[0,-.02,.36],null,[.2,0,0]); // brow pad
+    put(cyl(.02,.02,.34,8),trim,h,[.4,-.22,.26],null,[0,0,-.6]); // mic boom
+    put(ball(.05),accent,h,[.24,-.32,.4]);
+  } else if(style==="diver"){                 // Water: nautilus brass diving helmet
+    put(ball(.5),shell,h,[0,-.04,0],[1,1.04,1]);
+    put(new THREE.TorusGeometry(.19,.035,10,26),accent,h,[0,-.02,.47]); // porthole ring
+    put(new THREE.CircleGeometry(.17,22),glass,h,[0,-.02,.48]);
+    put(cyl(.07,.07,.1,12),accent,h,[0,.42,0]); // top valve
+    [[-.34,.1],[.34,.1],[0,-.42]].forEach(p=>put(ball(.04),accent,h,[p[0],p[1],.3])); // rivets
+  } else if(style==="cowl"){                  // Arcane: hooded mitre with an ember
+    put(new THREE.ConeGeometry(.5,.95,18,1,true),shell,h,[0,.16,-.04]);
+    put(new THREE.ConeGeometry(.44,.8,18,1,true),trim,h,[0,.12,0]); // inner lip
+    put(new THREE.TorusGeometry(.46,.03,8,26),accent,h,[0,-.26,0],[1,1,1],[Math.PI/2,0,0]); // gold hem
+    put(ball(.06),glow(hc.accent),h,[0,.02,.42]); // brow ember
+  } else if(style==="spacehelm"){             // Space Tech: clear bubble + light ring
+    put(ball(.5),glass,h,[0,-.02,0]);
+    put(new THREE.TorusGeometry(.42,.055,12,30),sm(hc.trim,{metalness:.4,roughness:.3}),h,[0,-.3,0],null,[Math.PI/2,0,0]); // neck ring
+    put(new THREE.TorusGeometry(.44,.02,10,30),glow(hc.accent),h,[0,-.24,0],null,[Math.PI/2,0,0]); // cyan ring
+    put(new THREE.TorusGeometry(.5,.016,8,30),accent,h,[0,.06,0],[1,.7,1],[Math.PI/2,0,0]); // antenna arc
+  } else if(style==="hoodmask"){              // Dark Energy: hood + single sensor eye
+    put(ball(.47),shell,h,[0,-.02,-.03],[1,1.08,1.02]);
+    put(new THREE.ConeGeometry(.12,.3,10),trim,h,[0,.46,-.08],null,[.3,0,0]); // top spike
+    [-1,1].forEach(s=>put(new THREE.ConeGeometry(.05,.16,8),trim,h,[s*.3,.34,-.02],null,[0,0,s*.5]));
+    put(cyl(.025,.025,.14,8),trim,h,[0,.12,.4],null,[1.2,0,0]); // eye stalk
+    put(ball(.075),glow(hc.accent),h,[0,.16,.5]);
+    put(new THREE.TorusGeometry(.47,.012,8,28),glow(hc.accent),h,[0,-.04,0],[1,1.06,1],[Math.PI/2,0,0]); // seam
+  } else if(style==="gasmask"){               // Greenies: rebreather hood + lenses
+    put(ball(.46),shell,h,[0,-.02,0],[1,1.06,1]);
+    [-1,1].forEach(s=>put(ball(.1),glass,h,[s*.15,.1,.38],[1,1,.6])); // round lenses
+    put(cyl(.11,.13,.12,14),trim,h,[0,-.16,.36],null,[Math.PI/2,0,0]); // filter canister
+    put(new THREE.TorusGeometry(.11,.02,8,18),accent,h,[0,-.16,.42],null,[Math.PI/2,0,0]);
+    put(new THREE.TorusGeometry(.46,.014,8,26),accent,h,[0,0,0],[1,1.06,1],[Math.PI/2,0,0]); // seam
+  } else { // fallback
+    put(dome(.4),shell,h);
+  }
+  return h;
+}
+
+// cfg builder from a faction key (+ captain / player overrides)
+function cfgFor(facKey,opts){
+  const f=FACTIONS[facKey]||FACTIONS.collective; opts=opts||{};
+  const captain=!!opts.captain;
+  return {
+    outfit: opts.outfit!=null?opts.outfit:f.outfit,
+    stripe: opts.stripe!=null?opts.stripe:(f.stripe||lighten(f.outfit)),
+    helmet: opts.helmet || (captain?"captain":f.helmet),
+    hc: opts.hc || (captain?CAPTAIN_HC:f.hc),
+    faction: facKey, captain
+  };
+}
+
+function makeChar(cfg){
+  if(typeof cfg==="number"||typeof cfg==="string") cfg=cfgFor("collective",{outfit:cfg});
+  const g=new THREE.Group();
+  const rig=new THREE.Group(); g.add(rig);
+  const vestM=sm(cfg.outfit,{side:THREE.DoubleSide});
+  const stripeM=sm(cfg.stripe,{side:THREE.DoubleSide});
+  const body=new THREE.Group(); rig.add(body);
+  // shoes (flattened sphere) + denim legs
+  const shoeG=new THREE.SphereGeometry(1,16,12), legG=new THREE.CylinderGeometry(.1,.1,.36,14);
+  [-1,1].forEach(s=>{put(shoeG,sm(SHOE),body,[s*.12,.06,.04],[.15,.08,.21]);put(legG,sm(DENIM),body,[s*.11,.28,0]);});
+  // shirt torso
+  put(new THREE.CylinderGeometry(.25,.27,.5,20),sm(SHIRT),body,[0,.7,0]);
+  // hi-vis vest (open front) + reflective bands
+  put(new THREE.CylinderGeometry(.28,.295,.46,24,1,true,.25,Math.PI*2-.5),vestM,body,[0,.69,0]);
+  put(new THREE.CylinderGeometry(.297,.297,.05,24,1,true,.25,Math.PI*2-.5),stripeM,body,[0,.56,0]);
+  [-1,1].forEach(s=>put(new THREE.BoxGeometry(.05,.42,.02),stripeM,body,[s*.1,.69,.278]));
+  // arms pivot at the shoulder
+  const sleeveG=new THREE.CylinderGeometry(.075,.08,.34,12), handG=new THREE.SphereGeometry(.085,14,10);
+  const arm=side=>{const p=new THREE.Group();p.position.set(side*.3,.9,0);put(sleeveG,sm(SHIRT),p,[0,-.17,0]);put(handG,sm(SKIN),p,[0,-.38,0]);body.add(p);return p;};
+  const lArm=arm(-1), rArm=arm(1);
+  // head pivot at the neck: squashed SPHERE head, hair shell, eyes, ears
+  const head=new THREE.Group();head.position.set(0,.95,0);
+  put(new THREE.SphereGeometry(.36,28,20),sm(SKIN),head,[0,.32,0],[1,.94,.94]);
+  put(new THREE.SphereGeometry(.372,28,16,Math.PI-.55,Math.PI+1.1,.35,1.45),sm(HAIR),head,[0,.33,-.01]);
+  [-1,1].forEach(s=>{
+    put(new THREE.SphereGeometry(.048,12,10),sm(0x231812,{roughness:.25}),head,[s*.125,.3,.322],[1,1.1,.6]);
+    put(new THREE.SphereGeometry(.07,12,10),sm(SKIN),head,[s*.37,.3,.02],[.6,1,.9]);
+  });
+  // per-faction helmet
+  const helm=makeHelmet(cfg.helmet,cfg.hc);
+  helm.position.set(0,.4+(HELM_DROP[cfg.helmet]||0),0);
+  head.add(helm); body.add(head);
+  // camera-facing contact shadow at the feet
+  const sh=new THREE.Mesh(new THREE.CircleGeometry(.5,22),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.26}));
+  sh.position.set(0,.02,-.06);sh.scale.set(1.1,.42,1);rig.add(sh);
+  rig.scale.setScalar(2.7);  // foreman native ~1.7u -> ~4.6u, matching the old placement/scale code
+  g.scale.setScalar(.72);    // modal uses this directly; the stage overwrites it per-agent
+  g.userData={lArm,rArm,head,body,vestM,stripeM,cfg};
+  return g;
+}
+
+// ---------- pose state machine: resting arm/head targets per state ----------
+// Arm groups pivot at the shoulder; +rotation.z raises an arm outward/up (mirror the left).
+const POSE={
+  idle:     {rax: .06, raz: .10, lax: .06, laz:-.10, hx: .00, bx:0},
+  walk:     {rax: 0,   raz: .06, lax: 0,   laz:-.06, hx: .02, bx:0},
+  talk:     {rax:-.55, raz: .40, lax:-.45, laz:-.40, hx: .05, bx:0},
+  point:    {rax:-1.45,raz: .14, lax: .06, laz:-.10, hx:-.05, bx:.05},
+  wave:     {rax:-.10, raz:2.45, lax: .06, laz:-.10, hx:-.05, bx:0},
+  salute:   {rax:-2.55,raz:-.28, lax: .06, laz:-.10, hx: .04, bx:0},
+  angry:    {rax:-.95, raz: .50, lax:-.95, laz:-.50, hx: .14, bx:.14},
+  celebrate:{rax:-2.55,raz: .45, lax:-2.55,laz:-.45, hx:-.14, bx:-.08}
+};
+// which gestures ambient deck crew cycle through (so every animation is on show)
+const GESTURES=["talk","talk","point","idle","wave","salute","angry","celebrate"];
+
+// Drive one character's pose. Lerps arm/head/body toward the state's targets and
+// layers the per-state motion; returns a vertical hop in rig units. Shared by the
+// deck crew and the dialog close-up so both animate identically.
+function drivePose(ud,cur,state,baseYaw,dt,now,phase){
+  const P=POSE[state]||POSE.idle,k=1-Math.exp(-dt*7);
+  cur.rax+=(P.rax-cur.rax)*k;cur.raz+=(P.raz-cur.raz)*k;cur.lax+=(P.lax-cur.lax)*k;cur.laz+=(P.laz-cur.laz)*k;
+  cur.hx+=(P.hx-cur.hx)*k;cur.bx+=(P.bx-cur.bx)*k;
+  const ph=(now/1000)+phase;let oRx=0,oRz=0,oLx=0,oLz=0,hop=0,bodyRz=0,hb=0;
+  if(REDUCE){}
+  else if(state==="talk"){oRx=Math.sin(ph*3)*.22;oLx=Math.sin(ph*3+1)*.18;hb=Math.sin(ph*3)*.05;}
+  else if(state==="wave"){oRz=Math.sin(ph*9)*.4;}
+  else if(state==="celebrate"){hop=Math.max(0,Math.sin(ph*5))*1.1;oRz=Math.sin(ph*10)*.2;oLz=-Math.sin(ph*10)*.2;}
+  else if(state==="angry"){bodyRz=Math.sin(ph*16)*.05;oRx=Math.sin(ph*16)*.16;oLx=Math.sin(ph*16+.5)*.16;hop=Math.max(0,Math.sin(ph*8))*.3;}
+  else if(state==="point"){oRx=Math.sin(ph*2)*.05;}
+  else if(state==="idle"){hb=Math.sin(ph*1.2)*.03;}
+  let yawT=baseYaw;
+  if(state==="wave"||state==="angry"||state==="celebrate"||state==="salute")yawT=0;
+  cur.yaw+=(yawT-cur.yaw)*k*.9;
+  ud.rArm.rotation.set(cur.rax+oRx,0,cur.raz+oRz);
+  ud.lArm.rotation.set(cur.lax+oLx,0,cur.laz+oLz);
+  ud.head.rotation.set(cur.hx+(REDUCE?0:Math.sin(ph*1.3)*.03+hb),0,REDUCE?0:Math.sin(ph*.7)*.04);
+  ud.body.rotation.set(cur.bx,0,bodyRz);
+  return {hop,yaw:cur.yaw};
+}
+
+// ---------- stage overlay: 3D crew walking the decks over the image ----------
+const stage=document.getElementById("stage");
+const REDUCE=matchMedia("(prefers-reduced-motion:reduce)").matches;
+const WW=100, WH=56.25; // world units (16:9), centered at origin
+const toWX=px=>px-50, toWY=py=>28.125-(py/100)*56.25;
+let SC=null;
+function initStage(){
+  const scene=new THREE.Scene();
+  const cam=new THREE.OrthographicCamera(-50,50,28.125,-28.125,-100,100);
+  cam.position.z=40;
+  // foreman lighting: hemisphere fill + a warm sun (UPDATE-02 language)
+  scene.add(new THREE.HemisphereLight(0xffffff,0xa89c88,.6));
+  const sun=new THREE.DirectionalLight(0xfff6e8,.9);sun.position.set(-6,12,9);scene.add(sun);
+  const rim=new THREE.DirectionalLight(0x8fd6ff,.22);rim.position.set(8,2,-6);scene.add(rim);
+  const renderer=new THREE.WebGLRenderer({canvas:document.getElementById("crewfx"),antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputEncoding=THREE.sRGBEncoding;
+  const SCALE=1.40; // deck crew, 20% smaller (was 1.75)
+  // depth layers: each deck packs up to 16 crew, one per layer, so no two ever
+  // share a depth-plane and clip through each other. a deeper layer is set back in
+  // z (clean draw order) and nudged slightly higher + smaller so the rows read as
+  // real depth and crew pass in front of / behind each other instead of merging.
+  const LAYER_GAP=2.0, LAYER_RISE=0.40, LAYER_SHRINK=0.975, MAX_LAYERS=16;
+  const agents=[];
+  function spawn(cfg,lane,x,dir,isPlayer){
+    const g=makeChar(cfg);g.scale.setScalar(isPlayer?1.56:SCALE);
+    let layer=-1,rise=0;
+    if(!isPlayer){
+      lane._n=lane._n||0;
+      if(lane._n>=MAX_LAYERS){console.warn(`deck full (${MAX_LAYERS} layers) — crew not spawned`);return null;}
+      layer=lane._n++;rise=layer*LAYER_RISE;
+      g.scale.multiplyScalar(Math.pow(LAYER_SHRINK,layer));
+    }
+    const z=isPlayer?0:-(layer+1)*LAYER_GAP;          // player holds the front layer
+    g.position.set(toWX(x),toWY(lane.fy)+rise,z);
+    scene.add(g);
+    const a={g,lane,x,dir,speed:isPlayer?0:(2.3+R()*1.4),state:isPlayer?"idle":"walk",t:400+R()*2600,isPlayer,target:null,phase:R()*6,ph2:R()*6,layer,rise,
+      cur:{rax:.06,raz:.1,lax:.06,laz:-.1,hx:0,bx:0,yaw:0}};
+    face(a);agents.push(a);return a;
+  }
+  function face(a){a.baseYaw=(a.dir>=0?-1:1)*0.72;a.g.rotation.y=a.baseYaw;if(a.cur)a.cur.yaw=a.baseYaw;}
+  // deck lanes derived from the image floors
+  const LANES=[{fi:0,fy:FLOORS[0],x0:16,x1:70},{fi:1,fy:FLOORS[1],x0:16,x1:70},{fi:2,fy:FLOORS[2],x0:7,x1:90}];
+  // ambient crew — chosen to show every faction's helmet that the rooms don't
+  spawn(cfgFor("air"),LANES[0],36,-1);        spawn(cfgFor("darkenergy"),LANES[0],58,1);
+  spawn(cfgFor("water"),LANES[1],24,1);        spawn(cfgFor("greenies"),LANES[1],60,-1);
+  spawn(cfgFor("spacetech"),LANES[2],40,1);    spawn(cfgFor("hightech"),LANES[2],74,-1);
+  // the player avatar — gold hard hat, "you"
+  const player=spawn(cfgFor("collective",{outfit:PLAYER_GOLD,helmet:"hardhat",hc:{shell:PLAYER_GOLD,trim:0x8a6a1e,accent:0xffe08a}}),LANES[2],18,1,true);
+  player.anchor=18;
+
+  function startWalk(a){
+    const steps=1+Math.floor(R()*3);a.dir=a.x<a.lane.x0+8?1:a.x>a.lane.x1-8?-1:(R()<.5?1:-1);
+    face(a);a.target=clamp(a.x+a.dir*steps*12,a.lane.x0,a.lane.x1);a.state="walk";
+  }
+  function nextGesture(a){a.state=GESTURES[Math.floor(R()*GESTURES.length)];a.t=1500+R()*2400;}
+  function walkPlayerTo(fx,fy,done){
+    player.lane={fy,x0:5,x1:92};player.target=fx;player.dir=fx>=player.x?1:-1;face(player);
+    player.g.position.y=toWY(fy);player.state="walkto";player.speed=9;player._done=done;
+  }
+  // apply the current pose state; returns a vertical hop in world units
+  function applyPose(a,dt,now){
+    const r=drivePose(a.g.userData,a.cur,a.state,a.baseYaw,dt,now,a.phase);
+    a.g.rotation.y=r.yaw;return r.hop;
+  }
+  // move a deck's walk line live, so the editor's floor drag shifts the crew too
+  function setFloor(i,y){FLOORS[i]=y;for(const l of LANES)if(l.fi===i)l.fy=y;if(player.lane&&player.lane.fi===i)player.lane.fy=y;}
+  SC={scene,cam,renderer,agents,player,startWalk,walkPlayerTo,setFloor,LANES};
+
+  function resize(){const w=stage.clientWidth,h=stage.clientHeight;if(w)renderer.setSize(w,h,false);}
+  resize();addEventListener("resize",resize);
+  let last=performance.now();
+  function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/1000);last=now;
+    for(const a of agents){
+      let hop=0;
+      if(a.state==="walk"||a.state==="walkto"){
+        a.x+=a.dir*a.speed*dt*2.2;const arrived=a.dir>0?a.x>=a.target:a.x<=a.target;
+        a.g.position.x=toWX(a.x);a.g.rotation.y=a.cur.yaw=a.baseYaw;
+        if(!REDUCE){a.ph2+=dt*8;const sw=Math.sin(a.ph2)*.5;
+          a.cur.lax=sw;a.cur.rax=-sw;a.cur.raz=.06;a.cur.laz=-.06;
+          a.g.userData.lArm.rotation.set(sw,0,-.06);a.g.userData.rArm.rotation.set(-sw,0,.06);
+          a.g.userData.head.rotation.set(.02,0,0);a.g.userData.body.rotation.set(0,0,0);}
+        if(arrived){
+          if(a.state==="walkto"){a.state="idle";a.dir=1;a.baseYaw=0;a.cur.yaw=0;a.g.rotation.y=0;if(a._done){a._done();a._done=null;}}
+          else nextGesture(a);
+        }
+      } else {
+        hop=applyPose(a,dt,now);
+        if(!a.isPlayer){a.t-=dt*1000;if(a.t<=0){R()<.5?startWalk(a):nextGesture(a);}}
+      }
+      a.g.position.y=toWY(a.lane.fy)+(a.rise||0)+(REDUCE?0:Math.sin((now/650)+a.phase)*0.1)+hop*0.9;
+    }
+    renderer.render(scene,cam);
+  }
+  requestAnimationFrame(loop);
+}
+
+// ---------- hotspots ----------
+const wrap=document.getElementById("wrap"), stoast=document.getElementById("stoast");let stoastT=0;
+function stageToast(msg){stoast.textContent=msg;stoast.classList.add("show");clearTimeout(stoastT);stoastT=setTimeout(()=>stoast.classList.remove("show"),2600);}
+ROOMS.forEach(r=>{
+  const b=document.createElement("button"), lk=isLocked(r);
+  const lf=lk?FACTIONS[r.unlock.fac]:null, lname=lk?lf.label.split(" ·")[0]:"";
+  b.className="hotspot"+(lk?" locked":r.flag?` f-${r.flag} live`:"");
+  b.dataset.rid=r.id;
+  b.style.left=r.x+"%";b.style.top=r.top+"%";b.style.width=r.w+"%";b.style.height=r.h+"%";
+  if(lk){b.style.setProperty("--lc","#"+lf.stripe.toString(16).padStart(6,"0"));b.setAttribute("aria-label",`${r.name}, locked: reach ${r.unlock.need} with ${lname}`);}
+  b.innerHTML=`<span class="tip">${r.name}</span>`
+    +(lk?`<span class="lock">${LOCKSVG}${lname} · ${r.unlock.need}</span>`:r.flag?`<span class="flag">${FLAGLABEL[r.flag]}</span>`:"")
+    +`<span class="rhandle"></span>`;
+  b.addEventListener("click",e=>{if(stage.classList.contains("editing")){e.preventDefault();return;}
+    if(lk){stageToast(`${r.name} is sealed. Reach ${r.unlock.need} with ${lname} to open it.`);return;}
+    openRoom(r);});
+  stage.appendChild(b);r._el=b;
+});
+document.getElementById("todo").textContent=ROOMS.filter(r=>r.flag&&!isLocked(r)).length+" things to do";
+
+// ---------- in-game layout editor: drag floors / rooms, export the layout ----------
+(function(){
+  let editing=false, sel=null, drag=null;
+  const toggle=document.getElementById("editToggle"), actions=document.getElementById("editActions"), info=document.getElementById("editInfo");
+  const rnd=v=>Math.round(v*10)/10;
+  const pct=(cx,cy)=>{const b=stage.getBoundingClientRect();return{x:clamp((cx-b.left)/b.width*100,0,100),y:clamp((cy-b.top)/b.height*100,0,100)};};
+
+  // deck floor lines — drag the pill to set the shared walk level
+  const floorEls=FLOORS.map((y,i)=>{
+    const f=document.createElement("div");f.className="floorline";f.style.top=y+"%";f.innerHTML=`<b>Deck ${i+1}</b>`;
+    f.addEventListener("pointerdown",e=>{if(!editing)return;e.preventDefault();e.stopPropagation();
+      sel=null;ROOMS.forEach(x=>x._el.classList.remove("sel"));drag={type:"floor",i};
+      try{e.target.setPointerCapture(e.pointerId);}catch(_){}});
+    stage.appendChild(f);return f;
+  });
+  // stand-spot dots (fx along the floor); vertical is locked to the room's floor
+  ROOMS.forEach(r=>{
+    const d=document.createElement("div");d.className="fdot";d.innerHTML=`<b>${r.id}</b>`;
+    d.style.left=r.fx+"%";d.style.top=r.fy+"%";
+    d.addEventListener("pointerdown",e=>{if(!editing)return;e.preventDefault();e.stopPropagation();
+      select(r);drag={type:"dot",r};try{d.setPointerCapture(e.pointerId);}catch(_){}});
+    stage.appendChild(d);r._dot=d;
+  });
+
+  function select(r){sel=r;ROOMS.forEach(x=>x._el.classList.toggle("sel",x===r));readout();}
+  function applyRoom(r){const b=r._el;b.style.left=r.x+"%";b.style.top=r.top+"%";b.style.width=r.w+"%";b.style.height=r.h+"%";}
+  function moveFloor(i,y){y=clamp(y,5,99);FLOORS[i]=y;if(SC&&SC.setFloor)SC.setFloor(i,y);
+    floorEls[i].style.top=y+"%";ROOMS.forEach(r=>{if(r.floor===i){r.fy=y;r._dot.style.top=y+"%";}});}
+  function readout(){
+    if(drag&&drag.type==="floor"){info.textContent=`Deck ${drag.i+1}  ·  floor level ${rnd(FLOORS[drag.i])}%`;return;}
+    if(sel){info.textContent=`${sel.id} (deck ${sel.floor+1})   x ${rnd(sel.x)}  top ${rnd(sel.top)}  w ${rnd(sel.w)}  h ${rnd(sel.h)}   ·  stand fx ${rnd(sel.fx)}`;return;}
+    info.textContent=editing?"Drag a room to move · gold corner to resize · cyan dot = stand spot · dashed line = deck floor":"";
+  }
+
+  stage.addEventListener("pointermove",e=>{if(!drag)return;const p=pct(e.clientX,e.clientY),r=drag.r;
+    if(drag.type==="move"){r.x=clamp(p.x-drag.ox,0,100-r.w);r.top=clamp(p.y-drag.oy,0,100-r.h);applyRoom(r);}
+    else if(drag.type==="size"){r.w=clamp(p.x-r.x,4,100-r.x);r.h=clamp(p.y-r.top,4,100-r.top);applyRoom(r);}
+    else if(drag.type==="dot"){r.fx=p.x;r._dot.style.left=p.x+"%";}        // y stays on the floor
+    else if(drag.type==="floor"){moveFloor(drag.i,p.y);}
+    readout();});
+  const end=()=>{if(drag){drag=null;readout();}};
+  stage.addEventListener("pointerup",end);stage.addEventListener("pointercancel",end);
+
+  // room body move + corner resize
+  ROOMS.forEach(r=>{const b=r._el,h=b.querySelector(".rhandle");
+    b.addEventListener("pointerdown",e=>{if(!editing||e.target===h)return;e.preventDefault();
+      select(r);const p=pct(e.clientX,e.clientY);drag={type:"move",r,ox:p.x-r.x,oy:p.y-r.top};try{b.setPointerCapture(e.pointerId);}catch(_){}});
+    h.addEventListener("pointerdown",e=>{if(!editing)return;e.preventDefault();e.stopPropagation();
+      select(r);drag={type:"size",r};try{h.setPointerCapture(e.pointerId);}catch(_){}});
+  });
+
+  function setEdit(on){if(on&&wrap.classList.contains("outside"))return;editing=on;stage.classList.toggle("editing",on);
+    toggle.classList.toggle("on",on);toggle.textContent=on?"✓ Done":"✎ Edit layout";actions.hidden=!on;
+    if(!on){sel=null;ROOMS.forEach(x=>x._el.classList.remove("sel"));}readout();}
+  toggle.addEventListener("click",()=>setEdit(!editing));
+  addEventListener("keydown",e=>{const t=(e.target.tagName||"").toLowerCase();if(e.key==="e"&&t!=="input"&&t!=="textarea")setEdit(!editing);});
+
+  const layoutJSON=()=>JSON.stringify({floors:FLOORS,rooms:ROOMS},(k,v)=>k[0]==="_"?undefined:v,2);
+  document.getElementById("btnDownload").addEventListener("click",async()=>{
+    const json=layoutJSON();
+    let ns=null;try{ns=(window.claude&&claude.use)?await claude.use("downloads"):null;}catch(_){}
+    if(ns){ // published artifact: the viewer confirms the save
+      try{await ns.save({filename:"ship-layout.json",data:json});info.textContent="Saved ship-layout.json — drop it into the repo.";}
+      catch(e){info.textContent=(e&&e.code==="declined")?"Save cancelled.":"Save unavailable here — use Copy JSON instead.";}
+    } else { // local/dev fallback: direct download
+      const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([json],{type:"application/json"}));
+      a.download="ship-layout.json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+      info.textContent="Saved ship-layout.json to your downloads.";
+    }});
+  document.getElementById("btnCopy").addEventListener("click",async()=>{
+    try{await navigator.clipboard.writeText(layoutJSON());info.textContent="Copied layout JSON to clipboard.";}
+    catch(_){info.textContent="Clipboard blocked — use Download instead.";}});
+})();
+
+// ---------- dialog modal with a 3D close-up character ----------
+const modal=document.getElementById("modal");
+let MC=null;
+function disposeTree(o){o.traverse(n=>{if(n.geometry)n.geometry.dispose();if(n.material){(Array.isArray(n.material)?n.material:[n.material]).forEach(m=>m.dispose());}});}
+function initModalScene(){
+  const scene=new THREE.Scene();
+  const cam=new THREE.PerspectiveCamera(30,.78,.1,100);cam.position.set(0,1.75,9.9);cam.lookAt(0,1.45,0);
+  scene.add(new THREE.HemisphereLight(0xffffff,0xa89c88,.65));
+  const sun=new THREE.DirectionalLight(0xfff6e8,.95);sun.position.set(-4,7,6);scene.add(sun);
+  const rim=new THREE.DirectionalLight(0x38e1c8,.28);rim.position.set(5,2,-4);scene.add(rim);
+  const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputEncoding=THREE.sRGBEncoding;
+  MC={scene,cam,g:null,renderer,raf:0,container:null,cur:null,sig:"talk",cap:false,phase:0,enter:0};
+}
+function startModal3D(container,r){
+  if(!MC)initModalScene();
+  if(MC.g){MC.scene.remove(MC.g);disposeTree(MC.g);}
+  MC.g=makeChar(cfgFor(r.fac,{captain:r.cap}));MC.g.position.y=-.15;MC.scene.add(MC.g);
+  MC.sig=r.cap?"salute":(FLAGPOSE[r.flag]||"talk");MC.cap=!!r.cap;
+  MC.cur={rax:.06,raz:.1,lax:.06,laz:-.1,hx:0,bx:0,yaw:0};MC.phase=R()*6;MC.enter=performance.now();
+  container.appendChild(MC.renderer.domElement);MC.container=container;
+  const resize=()=>{const w=container.clientWidth||250,h=container.clientHeight||330;MC.renderer.setSize(w,h,false);MC.cam.aspect=w/h;MC.cam.updateProjectionMatrix();};
+  resize();MC._resize=resize;addEventListener("resize",resize);
+  cancelAnimationFrame(MC.raf);let last=performance.now();
+  const loop=()=>{MC.raf=requestAnimationFrame(loop);const now=performance.now();const dt=Math.min(.05,(now-last)/1000);last=now;
+    // greet with a wave on entry, then settle into the room's signature gesture
+    let st=MC.sig;
+    if(!REDUCE&&!MC.cap&&MC.sig!=="celebrate"&&now-MC.enter<1400)st="wave";
+    const res=drivePose(MC.g.userData,MC.cur,st,0,dt,now,MC.phase);
+    MC.g.rotation.y=res.yaw;MC.g.position.y=-.15+(REDUCE?0:Math.sin(now/650)*.03)+res.hop*.25;
+    MC.renderer.render(MC.scene,MC.cam);};
+  loop();
+}
+function stopModal3D(){if(MC){cancelAnimationFrame(MC.raf);MC.raf=0;if(MC._resize)removeEventListener("resize",MC._resize);
+  if(MC.renderer.domElement.parentNode)MC.renderer.domElement.parentNode.removeChild(MC.renderer.domElement);}}
+
+function showModal(r){
+  const tag=r.flag?FLAGLABEL[r.flag]:"Aboard", fac=FACTIONS[r.fac]||FACTIONS.collective;
+  const pc="#"+new THREE.Color(r.cap?CAPTAIN_HC.accent:fac.outfit).getHexString();
+  const faclabel=(r.cap?"Captain · ":"")+fac.label;
+  let acts;
+  if(r.choices){acts=r.choices.map((c,i)=>`<button class="btn${i===0?' primary':''}" data-note="${c.note}">${c.t}</button>`).join("")+`<div class="mhint">Your reply shifts standing — offending one faction can open a door with its rival.</div>`;}
+  else{acts=r.acts.map(a=>`<button class="btn${a.p?' primary':''}" data-note="${a.t} — done.">${a.t}</button>`).join("");}
+  modal.innerHTML=`<div class="sheet"><button class="x" aria-label="Leave">✕</button>`
+    +`<div class="portrait" id="mportrait" style="--pc:${pc}"><span class="tag-render">${faclabel} · live 3D</span></div>`
+    +`<div class="talk"><div class="ptag">${tag}</div><h2>${r.name}</h2><div class="who">${r.who}</div><p class="line">${r.line}</p><div class="acts">${acts}</div><div class="toast" id="mtoast"></div></div></div>`;
+  modal.classList.add("show");document.body.classList.add("noscroll");
+  const port=document.getElementById("mportrait");
+  if(typeof THREE!=="undefined")startModal3D(port,r);
+  modal.querySelector(".x").onclick=closeModal;
+  modal.onclick=e=>{if(e.target===modal)closeModal();};
+  modal.querySelectorAll(".btn").forEach(bn=>bn.addEventListener("click",()=>{document.getElementById("mtoast").textContent="✓ "+bn.dataset.note;}));
+}
+function closeModal(){stopModal3D();modal.classList.remove("show");document.body.classList.remove("noscroll");}
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&modal.classList.contains("show"))closeModal();});
+
+function openRoom(r){
+  // your avatar walks over on the cutaway, then the dialog opens
+  if(SC){SC.walkPlayerTo(r.fx,r.fy,()=>showModal(r));}
+  else showModal(r);
+}
+
+// faction helmet legend
+(function(){const el=document.getElementById("faclegend");if(!el)return;
+  const hx=h=>"#"+new THREE.Color(h).getHexString();
+  el.innerHTML=`<span><i style="background:#141821"></i>Captain</span>`+
+    Object.keys(FACTIONS).map(k=>`<span><i style="background:${hx(FACTIONS[k].hc.shell)}"></i>${FACTIONS[k].label}</span>`).join("");
+})();
+
+// ---------- board / depart: your shuttle docks, then a cutaway scan peels the hull back ----------
+(function(){
+  const btn=document.getElementById("boardBtn"), sub=document.getElementById("sub"), ext=document.getElementById("ext"),
+        extImg=ext.querySelector("img"), cut=stage.querySelector("img.cut"), scan=document.getElementById("scan"), sh=document.getElementById("shuttle");
+  const DOCK={x:50,y:61}, ZOOM=1.14, EASE="cubic-bezier(.45,0,.2,1)";
+  const run=(el,kf,ms,easing)=>el.animate(kf,{id:"bd",duration:REDUCE?1:ms,easing:easing||EASE,fill:"forwards"}).finished;
+  const wait=ms=>new Promise(res=>setTimeout(res,REDUCE?0:ms));
+  const reset=()=>[ext,extImg,cut,scan,sh].forEach(el=>el.getAnimations().forEach(a=>{if(a.id==="bd")a.cancel();}));
+  const zoomed=`scale(${ZOOM})`;
+
+  async function board(){
+    sh.style.display="block";
+    await Promise.all([
+      run(sh,[{left:"-6%",top:"46%",transform:"scale(1)",opacity:1},{opacity:1,offset:.8},{left:DOCK.x+"%",top:DOCK.y+"%",transform:"scale(.4)",opacity:0}],1300),
+      run(extImg,[{transform:"scale(1)"},{transform:zoomed}],1300)]);
+    sh.style.display="none";scan.style.display="block";
+    await Promise.all([
+      run(ext,[{clipPath:"inset(0 0 0 0)"},{clipPath:"inset(0 0 0 100%)"}],1100,"ease-in-out"),
+      run(scan,[{left:"0%"},{left:"100%"}],1100,"ease-in-out"),
+      run(cut,[{transform:zoomed},{transform:"scale(1)"}],1500)]);
+    scan.style.display="none";ext.hidden=true;reset();
+    wrap.classList.remove("outside");
+  }
+  async function depart(){
+    if(stage.classList.contains("editing"))document.getElementById("editToggle").click();
+    wrap.classList.add("outside");await wait(450);
+    ext.hidden=false;scan.style.display="block";
+    await Promise.all([
+      run(ext,[{clipPath:"inset(0 0 0 100%)"},{clipPath:"inset(0 0 0 0)"}],1100,"ease-in-out"),
+      run(scan,[{left:"100%"},{left:"0%"}],1100,"ease-in-out"),
+      run(extImg,[{transform:zoomed},{transform:"scale(1)"}],1600)]);
+    scan.style.display="none";sh.style.display="block";
+    await run(sh,[{left:DOCK.x+"%",top:DOCK.y+"%",transform:"scale(.4)",opacity:0},{opacity:1,offset:.2},{left:"106%",top:"40%",transform:"scale(1)",opacity:1}],1300);
+    sh.style.display="none";reset();
+  }
+  btn.addEventListener("click",async()=>{
+    btn.disabled=true;const inside=!wrap.classList.contains("outside");
+    if(inside){await depart();btn.textContent="Board ▸";btn.classList.remove("depart");sub.textContent="Collective capital ship · holding orbit";}
+    else{await board();btn.textContent="◂ Depart";btn.classList.add("depart");sub.textContent="Collective capital ship · your hub — click a room to walk in";}
+    btn.disabled=false;
+  });
+})();
+
+// boot once three.js + image are ready
+function boot(){ if(typeof THREE==="undefined"){return setTimeout(boot,60);} initStage(); }
+boot();
+</script>
+
+</body></html>
