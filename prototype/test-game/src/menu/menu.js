@@ -35,7 +35,7 @@ import { PLANETS, planetImage } from '../data/planets.js';
 import { LANDING_CRAFT, craftFor } from '../render3d/craft/models.js';
 import { CRYSTAL } from '../render3d/styles/lowpoly-palettes.js';
 import { campaignOptions, defaultCampaign } from './campaignPick.js';
-import { SYSTEM_KEYS } from '../data/galaxy.js';
+import { SYSTEM_KEYS, VESPER } from '../data/galaxy.js';
 // the live globes / craft / resource models load with three.js on first open (menuStage.js); until then (and with
 // no WebGL) the baked planet PNGs stand in
 const THREE_URL = new URL('../../vendor/three.module.js', import.meta.url).href;
@@ -126,6 +126,7 @@ const CSS = `
   transition:border-color .12s, background .12s; z-index:7; }
 .bwm-galaxy [data-sys]:hover { border-color:var(--hue,#d9a441); }
 .bwm-galaxy [data-sys].on { border-color:#f2c869; background:rgba(40,32,14,.85); color:#f2c869; }
+.bwm-galaxy [data-star] { position:absolute; left:0; top:0; margin:16px 0 0 -8px; padding:2px 7px; font-size:10px; font-weight:800; letter-spacing:.2em; color:#ffb08a; background:rgba(30,12,8,.7); border:1px solid rgba(242,200,105,.45); border-radius:4px; white-space:nowrap; pointer-events:none; opacity:0; }
 .bwm-zoom { position:absolute; z-index:8; right:calc(min(72vh, 36vw) / 2); top:4%; transform:translateX(50%); width:auto !important;
   padding:7px 14px !important; font-size:11px !important; letter-spacing:.24em !important; gap:8px; }
 .bwm-root.galaxy .bwm-zoom { right:auto; left:clamp(24px,6vw,90px); top:10px; transform:none; }
@@ -391,6 +392,10 @@ export function createMenu(mountEl, cbs) {
     const f = REG.find(key); lab.title = PLANETS[key].name + (f ? ' — ' + f.name : '');
     galaxy.appendChild(lab);
   }
+  // Vesper (the Collective's red giant) is labelled but not a target: no planet to fly to [MM-story_mw47l791_1]
+  const vlab = el(doc, 'span', null, VESPER.name.toUpperCase());
+  vlab.dataset.star = VESPER.key; vlab.title = VESPER.name + ' — ' + VESPER.faction + ' (' + VESPER.ship + ')';
+  galaxy.appendChild(vlab);
   main.appendChild(galaxy);
   const zoomBtn = el(doc, 'button', 'bwm-btn bwm-zoom');
   zoomBtn.appendChild(el(doc, 'span', null, '◎ GALAXY'));
