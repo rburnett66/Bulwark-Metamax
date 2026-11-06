@@ -20,8 +20,9 @@
    ship, The Long Ledger above Vesper (Collective-Opening).
 2. **Standing comes from resource contracts.** There is one contract **per planet per map**: 9 planets × 9 maps = 81.
    Completing one raises your standing with the Collective. This answers Dialog-Response-Reputation Q2.
-3. **The contracts cover common and uncommon resources only.** Rare and epic stay outside them. Those are the quest and
-   prize resources, which already feed loyalty with the combat factions through quest contracts.
+3. **The contracts cover common and uncommon resources only.** Rare and epic stay outside them. Rare resources belong to
+   the **secondary contracts**, which make each map harder and give players a reason to go back and replay levels
+   (owner 2026-11-05). They also feed loyalty with the combat factions through quest contracts.
 
 ## 2. What exists
 
@@ -179,7 +180,7 @@ few reward rows.
 
 | # | Question | Proposal |
 |---|---|---|
-| Q1 | Rare and epic under contract today (small quotas): drop them so contracts are common and uncommon only, with rare and epic always kept? | Yes; rerun the balance sim and report the gold change |
+| Q1 | Rare and epic under contract today (small quotas): drop them so contracts are common and uncommon only? | **Decided by the owner (2026-11-05):** yes. Rare resources belong to the **secondary contracts**, which make each map harder and give players a reason to replay levels. Cost measured at −0.4 % of harvest gold (Notes). |
 | Q2 | When is a contract complete? | Both quotas sold and the battle won |
 | Q3 | Standing on repeats | First completion only |
 | Q4 | Can a contract lower Collective standing? | No; only replies can |
@@ -208,6 +209,13 @@ few reward rows.
   - **Found 2: mixed loads.** A part-loaded truck sent to a rare or epic field sells its whole load at the tier of its
     last crystal. With the change, its common units would be kept unpaid. C2 must credit each unit at its own tier
     (`harvest.js` `creditDeposit`).
+- **2026-11-05, owner decision (Q1).**
+  > **owner**: "the rare resources are part of the secondary contracts that make each map harder, and also give players
+  > a reason to go back and replay levels"
+
+  Collective contracts are common and uncommon only. Rare and epic stay with the secondary and quest contracts, so
+  first-time Collective standing (Q3) and replayed secondaries pull in different directions: breadth across planets
+  for the Collective, depth on each map for the secondaries.
 
 ## Dependencies
 
