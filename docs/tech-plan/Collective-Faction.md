@@ -1,7 +1,7 @@
 # Tech Plan — The Collective as a faction (no planet) and its resource contracts
 
 **Epic:** `epic_mvo5po8u_4` The Collective trade faction.
-**Status:** v0.1, 2026-11-05, agent-proposed. Notes and as-built justifications for this epic go here, not on the tickets.
+**Status:** v0.2, 2026-11-05, agent-proposed; Q1 decided by the owner. Notes and as-built justifications for this epic go here, not on the tickets.
 
 **Companion plans:**
 - `Collective-Opening.md`: the first contract is handed over in the opening.
@@ -99,8 +99,8 @@
   quota is sold, then the surplus is kept, as now.
 - **Rare and epic are not bought by the Collective.** Today they sell up to a small quota (rare 0–40, epic 0–40 per map).
   Under this plan every rare and epic unit goes to the player's inventory and still counts toward quest objectives. This
-  is a balance change: gold from rare and epic drops by that small quota. `balanceSim.js` is rerun and reported before it
-  merges (owner rule: balance is data). See Q1.
+  is a balance change: gold from rare and epic drops by that small quota. Measured at about −0.4 % of harvest gold and
+  decided by the owner (Q1, Notes).
 - **Completing a contract.** It is complete when **both** quotas are sold by the end of a battle that is won (Q2). The
   HUD's contract line shows `common sold / quota · uncommon sold / quota`, ticks each when met, and shows "Contract
   complete" when both are.
