@@ -9,8 +9,13 @@
  *   beats 5–7  life inside; Factor Mira Valcourt flashes at the bar; every other room dims, the bar glows gold,
  *              "THE BAR · Tap to enter" (auto-enters after ROOMS.autoEnter s);
  *   beat 8     the avatar walks into the bar, the camera pushes in, Mira turns, and the conversation plays
- *              (dialog/conversation.js, content/dialog/opening.json) with holo-slides [MM-story_mw47llqj_6]; at its
- *              end, back to the game (the contract card and transport are Opening S7).
+ *              (dialog/conversation.js, content/dialog/opening.json) with holo-slides [MM-story_mw47llqj_6];
+ *   beat 9     the first contract card (contractCard.js) → ACCEPT [MM-story_mw47lq0l_7];
+ *   beat 10    the camera drops to the Loading Bay: the transport under the bay lights, "YOUR TRANSPORT · TAP TO
+ *              LAUNCH"; launch closes the hull (the wipe in reverse) over the 3D ship and fades out "DEPARTING FOR
+ *              VERDANCE"; onDone({ depart: 'ground' }) and the menu turns to Verdance.
+ * Saving is the caller's: onAccept() and onLaunch() fire at those beats (the menu writes save/collective.js).
+ * resume: 'transport' starts straight at the Loading Bay (a reload between ACCEPT and launch).
  * Everything timed comes from timeline.js openingAt(t) / roomsAt(t), so the review page and tests see the same thing.
  *
  *   const intro = await playIntro({ mount: document.body, tier, reduced, onDone });   // intro.close() to abort
@@ -23,7 +28,8 @@ import { prepareLayout } from '../ship-interior/layout.js';
 import { createRoomView } from '../ship-interior/roomView.js';
 import { openConversation } from '../dialog/conversation.js';
 import { validateScript } from '../dialog/conversationState.js';
-import { contractFor } from '../data/collectiveContract.js';
+import { contractFor, contractReward } from '../data/collectiveContract.js';
+import { openContractCard } from './contractCard.js';
 
 const VENDOR = new URL('../../vendor/', import.meta.url).href;
 const CONTENT = new URL('../../content/', import.meta.url).href;
@@ -61,7 +67,8 @@ async function loadThree() {
  * Play the intro over `mount`. → { close(), get t(), seek(s) }. onDone() runs once, when the player continues out of
  * the bar or closes the intro.
  */
-export async function playIntro({ mount = document.body, tier = 'high', reduced = null, onDone = () => {}, start = 0, standing = {} } = {}) {
+export async function playIntro({ mount = document.body, tier = 'high', reduced = null, onDone = () => {}, onAccept = () => {}, onLaunch = () => {},
+  start = 0, resume = null, standing = {} } = {}) {
   const reduce = reduced != null ? reduced : matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!document.getElementById('cx-intro-css')) {
     const st = document.createElement('style'); st.id = 'cx-intro-css'; st.textContent = CSS; document.head.appendChild(st);
@@ -106,8 +113,33 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
   addEventListener('resize', resize); resize();
 
   // ── state ─────────────────────────────────────────────────────────────────────────────────────────────────────
-  let t = Math.max(0, start), phase = 'timed', closed = false, last = performance.now(), raf = 0, conv = null;
-  const finish = () => { if (closed) return; closed = true; cleanup(); onDone(); };
+  let t = Math.max(0, start), phase = 'timed', closed = false, last = performance.now(), raf = 0, conv = null, card = null, launchT = 0;
+  const finish = (result = {}) => { if (closed) return; closed = true; cleanup(); onDone(result); };
+  const FIRST = { planet: 'ground', mapId: 1, name: 'Verdance' };
+
+  // beat 9: the contract card
+  function offerContract() {
+    if (conv) { conv.close(); conv = null; }
+    phase = 'contract';
+    card = openContractCard(document, root, {
+      planet: FIRST.name, mapId: FIRST.mapId, contract: contractFor(FIRST.planet, FIRST.mapId), reward: contractReward(FIRST.planet, FIRST.mapId),
+      onAccept: () => { card.close(); card = null; try { onAccept(); } catch (e) { console.warn('[intro] onAccept', e); } toBay(); },
+    });
+  }
+  // beat 10: the Loading Bay, then launch
+  function toBay() {
+    phase = 'bay';
+    view.ship.setAll('dim', 'loading'); view.ship.setState('loading', 'highlight');
+    view.focus('loading', root.clientWidth < root.clientHeight ? 0.95 : 0.75);
+    promptEl.querySelector('b').textContent = 'YOUR TRANSPORT';
+    promptEl.querySelector('span').textContent = 'TAP TO LAUNCH';
+    promptEl.classList.add('tap');
+  }
+  function launch() {
+    if (phase !== 'bay') return;
+    phase = 'launch'; launchT = 0; promptEl.style.opacity = '0';
+    try { onLaunch(); } catch (e) { console.warn('[intro] onLaunch', e); }
+  }
 
   function enterBar() {
     if (phase !== 'timed') return;
@@ -118,7 +150,7 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
       view.patronTurn();
       phase = 'talk';
       // the Verdance map 1 contract the offer is about (the Collective buys common and uncommon only)
-      conv = openConversation(document, root, script, { reduce, data: { contract: contractFor('ground', 1) }, onEnd: finish });
+      conv = openConversation(document, root, script, { reduce, data: { contract: contractFor('ground', 1) }, onEnd: offerContract });
     });
   }
 
@@ -126,6 +158,7 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
   $('.cx-close').addEventListener('click', finish);
   root.addEventListener('keydown', (e) => { if (e.key === 'Escape') finish(); });
   roomCanvas.addEventListener('pointerup', (e) => {
+    if (phase === 'bay') { const hit = view.pick(e.clientX, e.clientY, roomCanvas.getBoundingClientRect()); if (hit && hit.id === 'loading') launch(); return; }
     if (phase !== 'timed') return;
     const o = openingAt(t, { box: stage.box, reduced: reduce });
     if (!o.room.prompt) return;
@@ -177,16 +210,35 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
     } else if (phase === 'timed') promptEl.style.opacity = '0';
     skipEl.style.display = phase === 'timed' && skipTarget(t) != null ? 'block' : 'none';
 
-    // the placeholder line types out
-    if (phase === 'talk' && conv) {
-      conv.tick(dt);
+    if (phase === 'talk' && conv) conv.tick(dt);
+
+    // "YOUR TRANSPORT · TAP TO LAUNCH" over the Loading Bay
+    if (phase === 'bay') {
+      const box = view.screenBox('loading', { left: 0, top: 0, width: root.clientWidth, height: root.clientHeight });
+      promptEl.style.left = (box.left + box.width / 2) + 'px'; promptEl.style.top = Math.max(60, box.top - 8) + 'px';
+      promptEl.style.opacity = '1';
+    }
+    // launch: the hull closes over the rooms (the wipe in reverse), the 3D ship holds its flank, then black
+    if (phase === 'launch') {
+      launchT += dt;
+      const close = reduce ? 1 : Math.min(1, launchT / 1.6);
+      roomCanvas.style.clipPath = `inset(0 0 0 ${(close * 100).toFixed(2)}%)`;
+      scanEl.style.display = close > 0 && close < 1 ? 'block' : 'none'; scanEl.style.left = (close * 100).toFixed(2) + '%';
+      stage.frame(Math.min(t, 40), dt);
+      const out = Math.max(0, Math.min(1, (launchT - 1.8) / 1.0));
+      fadeEl.style.opacity = out.toFixed(3);
+      capEl.textContent = 'DEPARTING FOR VERDANCE'; capEl.style.opacity = Math.min(1, Math.max(0, (launchT - 1.4) / 0.6)).toFixed(3);
+      if (launchT >= 3.6) finish({ depart: FIRST.planet });
     }
   }
+  // a reload between ACCEPT and launch: straight to the Loading Bay, the room view already open
+  if (resume === 'transport') { t = BEATS.find((b) => b.id === 'talk').start; phase = 'bay'; toBay(); }
   raf = requestAnimationFrame(loop);
 
   function cleanup() {
     cancelAnimationFrame(raf);
     if (conv) conv.close();
+    if (card) card.close();
     removeEventListener('resize', resize);
     try { stage.dispose(); view.dispose(); } catch (e) { /* best effort */ }
     shipR.dispose(); roomR.dispose();
@@ -200,6 +252,7 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
     seek(s) { t = s; },
     enterBar,
     get conversation() { return conv; },
+    offerContract, launch,
     beats: BEATS,
   };
 }

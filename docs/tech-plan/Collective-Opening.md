@@ -1,7 +1,7 @@
 # Tech Plan — The Collective Opening (Vesper, the cinematic, the bar beat, the first contract)
 
 **Epic:** `epic_mvo5po8u_4` The Collective trade faction · **Design:** `docs/16 Bulwark MM/design/Collective-Opening-Design.md`
-**Status:** v0.5, 2026-11-05. S1 and beats 0–3 merged (PR #164). Beats 4–8 play in the game (PR #166). S6, the conversation, built. Notes and as-built justifications for this epic go here, not
+**Status:** v0.5, 2026-11-05. S1 and beats 0–3 merged (PR #164). Beats 4–8 play in the game (PR #166). S6 (conversation, PR #167) merged; S7 (contract, transport, save) built. Notes and as-built justifications for this epic go here, not
 on the tickets.
 
 ## 1. Scope
@@ -183,6 +183,33 @@ in desktop, phone portrait and phone landscape frames.
       stool so both are seen.
     - Esc closes the intro; there is no separate "skip conversation".
   - **The end.** CONTINUE on the last line returns to the menu. The contract card and the transport are S7.
+- **2026-11-05, S7 as built: the contract, the transport and save** (`feat/collective-contract-transport`, story
+  `story_mw47lq0l_7`).
+  - **Contract card** (`src/opening/contractCard.js`). It opens when the conversation ends: the seal, "FIRST
+    CONTRACT — VERDANCE", the map 1 common and uncommon quotas and the +10 first-completion standing from
+    `Collective_Contracts`, the plain-words terms (the surplus and every rare find are yours), and ACCEPT.
+  - **The Loading Bay.** The bay is highlighted and the camera drops to it. Farrell celebrates by the primitive
+    transport, under "YOUR TRANSPORT · TAP TO LAUNCH".
+  - **Launch.** The hull closes over the rooms (the wipe in reverse) onto the 3D flank, then "DEPARTING FOR
+    VERDANCE" and a fade. `onDone({ depart: 'ground' })` turns the menu to Verdance: the galaxy flies there if it is
+    open, else the globe changes. The contract economy itself was already live, so ACCEPT only records it.
+  - **Save** (`src/save/collective.js`): `collective = { introSeen, contractAccepted, transport, launched?,
+    seenBefore }`, filled in by `migrate`.
+    - ACCEPT sets `introSeen`. A reload before launch resumes at the bay (`resumeBeat` → `'transport'`).
+    - A save with battles or map results is marked seen and launched (`seenBefore: true`), so returning players skip
+      it.
+    - Tests are in `collective.test.mjs`.
+  - **Routes.**
+    - A new save opens on the intro over the menu (`needsIntro`), which is the "first-run" mode, the only one that
+      saves.
+    - Settings has OPENING · REPLAY; tapping Vesper and `?intro=1` also replay it, saving nothing.
+    - `?intro=0` and `?map=N` bypass it.
+    - ✕ or Esc before ACCEPT means the next load opens on it again.
+  - **Not yet.**
+    - The faction picker in the bay (design Q5).
+    - The transport in the player's faction colours.
+    - The galaxy's trade lanes after `introSeen` (S1).
+    - Sound (S9).
 
 ## Dependencies
 
