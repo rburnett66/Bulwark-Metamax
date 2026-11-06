@@ -34,6 +34,18 @@ sequence. The work is the sequence, its trigger and its persistence. No piece is
 
 ## 2. What already exists
 
+**The prototypes, where to open them.** Several exist only as Claude artifacts, not in the repo:
+
+| Prototype | Source |
+|---|---|
+| Planet fly-by, transport arrival, survey scan | Artifact **Bulwark Orbital Survey** — https://claude.ai/artifact/YWypZzQT45WYG8yZmcaUTv (not in the repo) |
+| Capital ship fly-by (Long Ledger at Vesper) | Repo review page `tools/opening/index.html` (`?t=` scrubs the opening); ship look and lenses in `tools/ships/viewer.html` |
+| Board / depart transition, rooms, crew | Artifact **Bulwark Capital Ship** — https://claude.ai/artifact/S9B7GgVN7XcRDBTSF7BVth; repo copy `tools/ship-interior/prototype/long-ledger/index.html` |
+| Characters | Artifact **Bulwark Character Sheet** — https://claude.ai/artifact/MBrTStmqgULyFM4XFkj5jM; repo copy `tools/ship-interior/prototype/character-sheet.html` |
+| Globe look | Artifact **Bulwark Planets** — https://claude.ai/artifact/Ey7UQfY7eei6639zyobSXa (globe viewer only; no fly-by) |
+
+R4 starts by committing the Orbital Survey artifact under `tools/planets/orbital-survey.html`, as Interiors I0 did for the Long Ledger, so the port has a source in the repo.
+
 Reality queries run before writing this plan (`does_exist`, project 16): "planet fly by transport arrival survey scan",
 "capital ship fly by introduction", "board depart capital ship screen transition", "galaxy map planet position".
 Board searches: "arrival", "board", "coast". Each piece is then read in source.
