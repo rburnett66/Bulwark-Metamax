@@ -180,7 +180,7 @@ ship the player was given is the ship they watch arrive.
 | F3 | Life inside: crew at their posts and walking the decks (≈ 4 s). | Beat `life`; Interiors I3 |
 | F4 | **The path to the character.** Every other room dims, the character's room glows and they flash. A caption reads "<ROOM> · Tap to enter" (auto after a few seconds). The avatar walks there and the camera pushes in. | Beats `patron`, `bar`; walk-to (Interiors I4) |
 | F5 | **The story.** The character's scene plays on the comm card, with holo-slides. | Dialog-Unification F1 `playScene`; scene from the dialog doc |
-| F6 | **The first missions.** Their cards are presented (one per mission, the dossier view). ACCEPT sends them flying into the MISSIONS indicator, which pulses and counts up. They are now in the Mission Log. | `missionView.js` cards; the rewards-ledger token flight; `syncMissions` |
+| F6 | **The first missions.** They are offered **as a contract**: the contract card (`contractModal`) shows the giver, the task and the terms, and ACCEPT grants the missions. They fly into the MISSIONS indicator, which pulses and counts up, and are now in the Mission Log. On the Collective ship this is the Verdance contract (owner, 2026-11-06). | `render/contractModal.js` (Dialog-Unification F4); the rewards-ledger token flight; `syncMissions` |
 | F7 | **Explore.** The room view stays live. "◂ Leave room" pulls back to the whole ship. Tapping any room walks the avatar there and its occupant speaks. The top bar shows **◂ DEPART**. Nothing pushes the player on. | Interiors I4, I5 |
 | F8 | **Depart.** The prototype's `depart()`: the hull closes behind the scan line and the shuttle leaves. Cut back to the menu. | The prototype's `depart()`, in the game as the launch close |
 
@@ -194,6 +194,12 @@ ship the player was given is the ship they watch arrive.
 
 ## 6. The opening is the first reveal
 
+Owner, 2026-11-06: *"The first opening of the game should be the reveal of the red giant and the Collective ship. On
+the Collective ship the mission for Verdance is granted as a contract."*
+
+So a new game opens on a reveal, not on the menu: Vesper, the red giant, is discovered at the galaxy's edge, and the
+Long Ledger makes its first-sight arrival there. Aboard, Mira grants the Verdance mission as a contract.
+
 The merged Collective intro already runs most of these beats, but as its own one-off. It becomes the first
 reveal, with the same parts:
 
@@ -201,7 +207,7 @@ reveal, with the same parts:
 |---|---|
 | Cold open on Vesper, the Long Ledger fly-by, the flank | §5.2 first sight on Vesper's star stage, ending at the upper-left station; then F1 |
 | The scan wipe into the rooms, life, Mira flashes, walk to the bar | F2–F4 |
-| The conversation and the first contract | F5–F6 (Mira's scene; the contract and Verdance's maps 1–3 missions go to the log) |
+| The conversation and the first contract | F5–F6: Mira's scene, then the **Verdance contract**. ACCEPT grants the Verdance mission, which goes to the Mission Log |
 | The Loading Bay transport, "TAP TO LAUNCH", forced departure to Verdance | F7 explore (the Loading Bay shows your transport), F8 depart, then **Verdance discovered** (§5.1): your transport arrives and surveys it |
 | The menu turns to Verdance | The menu shows Verdance with PLAY lit |
 
@@ -292,8 +298,9 @@ Headless review (Playwright, swiftshader) at desktop and phone landscape.
 - **Q4 — The unknown contact's call.** The Orbital Survey prototype has the contact call after the site locks.
   Should it be part of the planet reveal? The alternative is keeping it at the start of the first battle there
   (epic *Orbital arrival and contact*).
-- **Q5 — The opening re-cut (§6).** The forced "launch to Verdance" becomes depart, then Verdance discovered, then
-  PLAY. Is that right?
+- **Q5 — The opening (§6). Decided 2026-11-06.** The game opens on the reveal of the red giant and the Collective ship.
+  The Verdance mission is granted aboard as a contract. Still open within Q5: after the contract, the player departs
+  and *Verdance discovered* plays before PLAY (proposed), or the menu opens straight on Verdance.
 
 ## Dependencies
 
