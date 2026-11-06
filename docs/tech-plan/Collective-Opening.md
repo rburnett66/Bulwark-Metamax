@@ -127,6 +127,16 @@ in desktop, phone portrait and phone landscape frames.
 
   S3, S4, S5 and S8 moved to the interiors epic. This plan keeps the opening: Vesper, the cinematic, the bar beat, the
   conversation, the contract, the transport and save.
+- **2026-11-05, as built (PR #164).** Vesper (S1) and beats 0–3 of the opening (S2) are built, with a standalone
+  review page at `tools/opening/`. Deviations from the design:
+  - **The flank is shot from starboard, not port.** The ship flies bow-first along +X, so from starboard the bow is on
+    the right. That matches the room view, where the stern is on the left. Vesper hangs off the port side, behind the
+    ship.
+  - **The fly-by lens is 135 mm** throughout beats 1–2 and eases to **105 mm** for the flank.
+  - **Timing.** The ship crosses at 0.12 L/s.
+
+  Still to come: beat 4 onward, which waits on the room view (I1), and the galaxy's trade lanes, which wait on
+  `collective.introSeen` (S7).
 
 ## Dependencies
 
