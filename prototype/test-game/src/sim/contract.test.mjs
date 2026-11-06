@@ -2,12 +2,14 @@
 // gold and is kept, and only what is kept reaches the inventory.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { buildCampaignMap, resolveResourceTypes } from './mapgen.js';
 import { createSim, applyCommand, stepSim } from './core.js';
 import { initContract } from './harvest.js';
 import { createLog, serializeLog, deserializeLog, replayOpts, hashState } from './replay.js';
-import { contractFor, CONTRACT_TIERS } from '../data/collectiveContract.js';
+import { contractFor, contractReward, CONTRACT_TIERS } from '../data/collectiveContract.js';
+import { PLANETS } from '../data/planets.js';
 import { createBattleTally, tallyEvents, finishTally } from '../save/battleTally.js';
 import { bankHarvest } from '../save/inventory.js';
 import { defaultSave } from '../save/save.js';
@@ -88,16 +90,41 @@ test('only the kept surplus reaches the inventory', () => {
   assert.deepEqual(Object.values(got).sort((x, y) => x - y), [6, 15]);
 });
 
-test('every map has a quota in the workbook, and gold-based missions can still be met within it', () => {
-  for (let id = 1; id <= 9; id++) {
-    const q = contractFor(id);
-    assert.ok(q, 'map ' + id);
-    for (const k of CONTRACT_TIERS) assert.ok(Number.isInteger(q[k]) && q[k] >= 0, `map ${id} ${k}`);
+test('every planet × map has a contract, common and uncommon only, and gold-based missions can be met within it', () => {
+  const REG = createRequire(import.meta.url)('../data/factions.js');
+  assert.deepEqual(CONTRACT_TIERS, ['common', 'uncommon']);
+  let n = 0;
+  for (const f of REG.COMBAT_FACTIONS) for (let id = 1; id <= 9; id++) {
+    const q = contractFor(f.key, id);
+    assert.ok(q, `${f.key} map ${id}`);
+    assert.deepEqual(Object.keys(q), ['common', 'uncommon'], 'no rare or epic quota');
+    for (const k of CONTRACT_TIERS) assert.ok(Number.isInteger(q[k]) && q[k] > 0, `${f.key} map ${id} ${k}`);
+    assert.deepEqual(contractFor(PLANETS[f.key].name, id), q, 'by planet name too');
+    const r = contractReward(f.key, id);
+    assert.equal(r.standing, id <= 3 ? 10 : id <= 6 ? 15 : 20, 'standing 10 / 15 / 20 by map band');
+    n++;
   }
+  assert.equal(n, 81);
+  assert.equal(contractFor('collective', 1), null, 'the Collective has no planet');
+  assert.equal(contractFor('ground', 10), null);
   const GOLD = { harvest_common_gold: 'common', harvest_uncommon_gold: 'uncommon' };
   for (const m of CATALOG.missions) for (const c of m.complete) if (GOLD[c.cond]) {
     // the cheapest unit pays 4 gold (mapgen's default value); the quota must be able to pay the requirement
-    assert.ok(contractFor(m.map)[GOLD[c.cond]] * 4 >= c.value, `${m.id}: ${c.value} gold needs a bigger ${GOLD[c.cond]} quota`);
+    assert.ok(contractFor(m.planet, m.map)[GOLD[c.cond]] * 4 >= c.value, `${m.id}: ${c.value} gold needs a bigger ${GOLD[c.cond]} quota on ${m.planet}`);
+  }
+});
+
+test('the uncommon quota is never more than the live board holds', async () => {
+  // balance report 2026-11-05: counted on the raw forge board, 56 of 81 uncommon quotas could never fill
+  const { buildTerrainMap } = await import('./mapgen.js');
+  const { PLANET_OF_SLUG } = await import('../../../../tools/economy/contract_quota.mjs');
+  const dir = new URL('../../content/maps/forge/', import.meta.url);
+  for (const f of readdirSync(dir).filter((x) => /-map-\d\.json$/.test(x))) {
+    const [, slug, id] = f.match(/^(.*)-map-(\d)\.json$/);
+    const map = resolveResourceTypes(buildTerrainMap(JSON.parse(readFileSync(new URL(f, dir), 'utf8')), +id, { seed: 0, bakeTune: {} }), 1);
+    const s = createSim(7, { map, waves: [] });
+    const held = s.resourceNodes.filter((n) => n.color === 'yellow').reduce((a, n) => a + n.units, 0);
+    assert.ok(contractFor(PLANET_OF_SLUG[slug], +id).uncommon <= held, `${f}: uncommon quota above the ${held} the board holds`);
   }
 });
 
@@ -106,5 +133,55 @@ test('the HUD reads sold / quota until a tier is full, then what is kept', () =>
   assert.match(html, /✓ \+45/);
   assert.match(html, /20\/170/);
   assert.match(html, /0\/10/);
-  assert.match(html, /✓ \+3/, 'a zero-quota tier shows what is kept');
+  assert.match(html, /● \+3</, 'a tier the Collective does not buy shows only what is kept');
+  assert.doesNotMatch(html, /✓ \+3/);
+});
+
+// [MM-story_mw4a1o3p_m] The Collective buys common and uncommon only; a mixed load is credited per tier.
+
+/** A truck docked with a hand-built load, one tick from finishing its unload. */
+function dockedWith(contract, mix) {
+  const s = board(contract);
+  const u = s.units.get(s.harvesterIds[0]);
+  u.cargoMix = {};
+  let cargo = 0, value = 0;
+  for (const [color, units] of Object.entries(mix)) {
+    const vpu = { blue: 1, yellow: 2, red: 4, green: 8 }[color];
+    u.cargoMix[color] = { units, value: units * vpu, role: color === 'blue' ? 'primary' : color === 'yellow' ? 'premium' : 'quest' };
+    cargo += units; value += units * vpu; u.cargoColor = color;
+  }
+  u.cargo = cargo; u.cargoValue = value; u.yieldMult = 1;
+  u.state = 'harvestUnload'; u.unloadTicks = 1;
+  return { s, u };
+}
+const depositsNow = (s) => stepSim(s, 1 / 30).filter((e) => e.type === 'deposit');
+
+test('a mixed load is credited per tier: its common units sell as common, its rare units as rare', () => {
+  const { s, u } = dockedWith({ common: 1000, uncommon: 100 }, { blue: 30, red: 10 });
+  const money0 = s.economy.money, q0 = s.mapScore.questUnits;
+  const ds = depositsNow(s);
+  assert.deepEqual(ds.map((d) => d.color), ['blue', 'red'], 'one deposit per colour, blue first');
+  const [b, r] = ds;
+  assert.deepEqual([b.units, b.sold, b.kept, b.gold], [30, 30, 0, 30], 'the common part sells under the common quota');
+  assert.deepEqual([r.units, r.sold, r.kept, r.gold], [10, 0, 10, 0], 'the rare part is kept, unpaid');
+  assert.equal(s.economy.money - money0, 30);
+  assert.equal(s.mapScore.questUnits - q0, 10, 'only the rare units count toward the quest');
+  assert.deepEqual([s.contract.sold.common, s.contract.kept.rare], [30, 10]);
+  assert.equal(u.cargo, 0);
+  assert.deepEqual(u.cargoMix, {});
+});
+
+test('the Collective buys no rare or epic: with a contract they are always kept and pay no gold', () => {
+  const c = initContract({ common: 100, uncommon: 50 });
+  assert.deepEqual(c.quota, { common: 100, uncommon: 50, rare: 0, epic: 0 });
+  const { s } = dockedWith({ common: 100, uncommon: 50 }, { green: 12 });
+  const [d] = depositsNow(s);
+  assert.deepEqual([d.color, d.units, d.sold, d.kept, d.gold], ['green', 12, 0, 12, 0]);
+});
+
+test('a single-colour load credits exactly as before (one event, floor of the whole load)', () => {
+  const { s } = dockedWith(null, { yellow: 20.6 });
+  const ds = depositsNow(s);
+  assert.equal(ds.length, 1);
+  assert.deepEqual([ds[0].color, ds[0].units, ds[0].gold, ds[0].role], ['yellow', 20, 41, 'premium']);
 });

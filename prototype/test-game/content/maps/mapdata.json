@@ -3372,5 +3372,736 @@
    "Tempo Cost": "NONE",
    "What it means": "Free. You keep every second of the time bonus. But you have made an enemy and pleased their enemy."
   }
+ ],
+ "collectiveContracts": [
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 1,
+   "Common": 2100,
+   "Uncommon": 190,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 2,
+   "Common": 3000,
+   "Uncommon": 160,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 3,
+   "Common": 3160,
+   "Uncommon": 210,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 4,
+   "Common": 3880,
+   "Uncommon": 230,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 5,
+   "Common": 2840,
+   "Uncommon": 310,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 6,
+   "Common": 7440,
+   "Uncommon": 190,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 7,
+   "Common": 7380,
+   "Uncommon": 190,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 8,
+   "Common": 4840,
+   "Uncommon": 330,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 9,
+   "Common": 5480,
+   "Uncommon": 300,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 1,
+   "Common": 2180,
+   "Uncommon": 250,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 2,
+   "Common": 2840,
+   "Uncommon": 310,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 3,
+   "Common": 3040,
+   "Uncommon": 210,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 4,
+   "Common": 4110,
+   "Uncommon": 220,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 5,
+   "Common": 2840,
+   "Uncommon": 320,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 6,
+   "Common": 8540,
+   "Uncommon": 210,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 7,
+   "Common": 7070,
+   "Uncommon": 220,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 8,
+   "Common": 4760,
+   "Uncommon": 360,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 9,
+   "Common": 5440,
+   "Uncommon": 440,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 1,
+   "Common": 2020,
+   "Uncommon": 230,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 2,
+   "Common": 3390,
+   "Uncommon": 200,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 3,
+   "Common": 3160,
+   "Uncommon": 250,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 4,
+   "Common": 4260,
+   "Uncommon": 200,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 5,
+   "Common": 2840,
+   "Uncommon": 320,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 6,
+   "Common": 8610,
+   "Uncommon": 280,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 7,
+   "Common": 7230,
+   "Uncommon": 240,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 8,
+   "Common": 4840,
+   "Uncommon": 460,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 9,
+   "Common": 5520,
+   "Uncommon": 400,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 1,
+   "Common": 2260,
+   "Uncommon": 210,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 2,
+   "Common": 3270,
+   "Uncommon": 210,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 3,
+   "Common": 2850,
+   "Uncommon": 280,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 4,
+   "Common": 4070,
+   "Uncommon": 190,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 5,
+   "Common": 2760,
+   "Uncommon": 280,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 6,
+   "Common": 8930,
+   "Uncommon": 220,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 7,
+   "Common": 7100,
+   "Uncommon": 260,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 8,
+   "Common": 4880,
+   "Uncommon": 280,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 9,
+   "Common": 5440,
+   "Uncommon": 360,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 1,
+   "Common": 2020,
+   "Uncommon": 210,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 2,
+   "Common": 2920,
+   "Uncommon": 240,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 3,
+   "Common": 2660,
+   "Uncommon": 180,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 4,
+   "Common": 3400,
+   "Uncommon": 200,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 5,
+   "Common": 2800,
+   "Uncommon": 360,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 6,
+   "Common": 8540,
+   "Uncommon": 200,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 7,
+   "Common": 6680,
+   "Uncommon": 200,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 8,
+   "Common": 4040,
+   "Uncommon": 320,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 9,
+   "Common": 4760,
+   "Uncommon": 370,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 1,
+   "Common": 2300,
+   "Uncommon": 200,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 2,
+   "Common": 3270,
+   "Uncommon": 240,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 3,
+   "Common": 3050,
+   "Uncommon": 190,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 4,
+   "Common": 4110,
+   "Uncommon": 200,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 5,
+   "Common": 2720,
+   "Uncommon": 370,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 6,
+   "Common": 8930,
+   "Uncommon": 240,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 7,
+   "Common": 7310,
+   "Uncommon": 240,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 8,
+   "Common": 4840,
+   "Uncommon": 270,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 9,
+   "Common": 5560,
+   "Uncommon": 320,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 1,
+   "Common": 2260,
+   "Uncommon": 240,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 2,
+   "Common": 3230,
+   "Uncommon": 200,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 3,
+   "Common": 2850,
+   "Uncommon": 160,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 4,
+   "Common": 4110,
+   "Uncommon": 220,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 5,
+   "Common": 2760,
+   "Uncommon": 360,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 6,
+   "Common": 8770,
+   "Uncommon": 240,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 7,
+   "Common": 7350,
+   "Uncommon": 240,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 8,
+   "Common": 4880,
+   "Uncommon": 320,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 9,
+   "Common": 5560,
+   "Uncommon": 340,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 1,
+   "Common": 2180,
+   "Uncommon": 170,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 2,
+   "Common": 2880,
+   "Uncommon": 210,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 3,
+   "Common": 3040,
+   "Uncommon": 240,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 4,
+   "Common": 3600,
+   "Uncommon": 170,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 5,
+   "Common": 2800,
+   "Uncommon": 330,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 6,
+   "Common": 8810,
+   "Uncommon": 210,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 7,
+   "Common": 7020,
+   "Uncommon": 230,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 8,
+   "Common": 4880,
+   "Uncommon": 390,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 9,
+   "Common": 5480,
+   "Uncommon": 340,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 1,
+   "Common": 2060,
+   "Uncommon": 160,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 2,
+   "Common": 3080,
+   "Uncommon": 160,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 3,
+   "Common": 3160,
+   "Uncommon": 190,
+   "Standing": 10,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 4,
+   "Common": 4040,
+   "Uncommon": 200,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 5,
+   "Common": 2800,
+   "Uncommon": 260,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 6,
+   "Common": 8460,
+   "Uncommon": 220,
+   "Standing": 15,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 7,
+   "Common": 6790,
+   "Uncommon": 200,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 8,
+   "Common": 4880,
+   "Uncommon": 270,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 9,
+   "Common": 5560,
+   "Uncommon": 300,
+   "Standing": 20,
+   "Gold_Bonus": 0
+  }
  ]
 }

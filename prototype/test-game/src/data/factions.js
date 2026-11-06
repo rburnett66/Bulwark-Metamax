@@ -82,7 +82,23 @@
     files: Object.freeze(['system', 'system-flak', 'system-base']),
   });
 
-  const ALL = Object.freeze([...FACTIONS, SYSTEM]);
+  /**
+   * THE COLLECTIVE is a faction you trade with, never one you fight or play [MM-story_mw4a1kcg_l].
+   * Owner 2026-11-05: "The collective should be designed as another faction, without a playable planet. The player
+   * gains faction with the collective by completing resource contracts which exist for each planet and each map."
+   *
+   * It has a standing (the same loyalty ledger as everyone: s.loyalty['The Collective']), a voice and a cast, but no
+   * planet, no maps, no units, no rival and no waves. Like SYSTEM it sits BESIDE the nine, not in FACTIONS, so every
+   * caller that iterates FACTIONS / COMBAT_FACTIONS / NAMES (the picker, the counter ring, wave factions, quest givers,
+   * voice timbres) never sees it — adding it changes no battle. It is reachable by key, prefix, name and ordinal 10.
+   * Tech plan: docs/tech-plan/Collective-Faction.md §3.1.
+   */
+  const COLLECTIVE = Object.freeze({
+    key: 'collective', prefix: 'COL', name: 'The Collective', files: Object.freeze([]), voice: 'collective', ordinal: 10,
+    planet: null, playable: false, combat: false,
+  });
+
+  const ALL = Object.freeze([...FACTIONS, SYSTEM, COLLECTIVE]);
 
   const by = (field) => {
     const m = new Map();
@@ -135,7 +151,10 @@
   }
 
   return {
-    FACTIONS, SYSTEM, ALL,
+    FACTIONS, SYSTEM, COLLECTIVE, ALL,
+    // "a faction you fight or play": the nine. Same list as FACTIONS; callers that mean combat read this name so a
+    // non-combat faction can never be added to their list by accident.
+    COMBAT_FACTIONS: FACTIONS,
     BY_KEY, BY_PREFIX, BY_NAME, BY_VOICE, BY_ORDINAL,
     factionOfOrdinal,
     find, filesOf, factionOfUnitId,

@@ -144,14 +144,14 @@ export const CONTACTS = Object.freeze({
 });
 
 export const FACTIONS = Object.freeze(Object.fromEntries(
-  REG.FACTIONS.map((f) => [f.voice, Object.freeze({ ...TIMBRE[f.voice], name: f.name })]),
+  REG.COMBAT_FACTIONS.map((f) => [f.voice, Object.freeze({ ...TIMBRE[f.voice], name: f.name })]),
 ));
 
 /** A comm speaker by key — a registry faction or a CONTACT. Null for anything else. */
 export function speakerOf(key) { return FACTIONS[key] || CONTACTS[key] || null; }
 
 /* Roster order for the comm screen's faction grid — the registry's order, which is the workbook's. */
-export const ORDER = Object.freeze(REG.FACTIONS.map((f) => f.voice));
+export const ORDER = Object.freeze(REG.COMBAT_FACTIONS.map((f) => f.voice));
 
 /**
  * Display name -> voice key. WAS a hand-maintained 9-entry object (FACTION_KEY_BY_NAME), which is

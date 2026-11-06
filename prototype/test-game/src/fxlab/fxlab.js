@@ -35,7 +35,7 @@ const DEFAULT_TOWERS = new Set(TOWERS.filter((t) => t.id !== 'STR-Wall' && t.id 
 const SPEEDS = [0.1, 0.25, 0.5, 1, 2];
 
 const S = {
-  faction: REG.FACTIONS[0].key, unit: 'all', count: 4, utier: 1, dist: 10, loop: true,
+  faction: REG.COMBAT_FACTIONS[0].key, unit: 'all', count: 4, utier: 1, dist: 10, loop: true,
   towers: new Set(DEFAULT_TOWERS), ttier: 1, tcount: 2, speed: 1, paused: false, clickFire: false,
   r: null, sim: null, map: null, slug: null, events: [], acc: 0, last: 0, respawnIn: 0, upgrades: true, seq: 0, stepOnce: 0,
 };
@@ -222,7 +222,7 @@ function buildTuning() {
   refreshers.push(slider(kinds, 'Camera shake', () => TUNE.shake, (v) => { TUNE.shake = v; }, 0, 3, 0.05, (v) => '×' + (+v).toFixed(2)));
 
   const sw = $('fx-swatches'); sw.textContent = '';
-  for (const f of REG.FACTIONS) {
+  for (const f of REG.COMBAT_FACTIONS) {
     const base = FACTION_FX[f.prefix];
     const cur = () => (Object.prototype.hasOwnProperty.call(TUNE.faction, f.prefix) ? TUNE.faction[f.prefix] : (base ? rgbToHex(base) : null));
     const color = el('input', { type: 'color', value: cur() || '#ffcc66', title: `${f.name} effect colour` });
@@ -258,7 +258,7 @@ function showJson() {
 
 function wire() {
   const fs = $('fx-faction');
-  for (const f of REG.FACTIONS) fs.append(el('option', { value: f.key, textContent: `${f.name} — ${PLANETS[f.key] ? PLANETS[f.key].name : ''}` }));
+  for (const f of REG.COMBAT_FACTIONS) fs.append(el('option', { value: f.key, textContent: `${f.name} — ${PLANETS[f.key] ? PLANETS[f.key].name : ''}` }));
   const fillUnits = () => {
     const us = $('fx-unit'); us.textContent = '';
     us.append(el('option', { value: 'all', textContent: 'Every unit type' }));

@@ -358,8 +358,9 @@ export function boot(mountEl, seed) {
         // has no UI yet, so gating forge playtests made upgrades silently impossible (owner 2026-07-16)
         structTiers: currentMapId && !(currentMap && currentMap.fromForge) ? sv.structTiers : null,
         mapId: currentMapId, faction: currentTestFaction || null,
-        // the Collective buys the harvest up to this map's quota; the surplus is kept [MM-story_mw12m2df_2]
-        contract: currentMapId ? contractFor(currentMapId) : null };
+        // the Collective buys the common and uncommon harvest up to this planet × map's quota; the surplus, and every
+        // rare and epic crystal, is kept [MM-story_mw12m2df_2] [MM-story_mw4a1o3p_m]
+        contract: currentMapId ? contractFor((REG.find(currentTestFaction || DEFAULT_FACTION) || {}).key, currentMapId) : null };
       sim = createSim(currentSeed, simInit);
       battleTally = createBattleTally();
       resLedger = createResourceLedger();   // resources collected per wave / map, for the result screens

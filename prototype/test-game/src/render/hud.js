@@ -1176,7 +1176,9 @@ const CONTRACT_DOT = { common: '#58a6ff', uncommon: '#ffd76a', rare: '#ff7a6a', 
 export function contractReadout(c) {
   return Object.keys(CONTRACT_DOT).filter((k) => c.quota[k] > 0 || c.kept[k] > 0).map((k) => {
     const full = c.sold[k] >= c.quota[k];
-    const txt = full ? '✓' + (c.kept[k] > 0 ? ' +' + c.kept[k] : '') : c.sold[k] + '/' + c.quota[k];
+    // a tier the Collective does not buy (rare / epic since [MM-story_mw4a1o3p_m]) shows only what is kept
+    const txt = c.quota[k] === 0 ? '+' + c.kept[k]
+      : full ? '✓' + (c.kept[k] > 0 ? ' +' + c.kept[k] : '') : c.sold[k] + '/' + c.quota[k];
     return '<span style="color:' + CONTRACT_DOT[k] + '">● ' + txt + '</span>';
   }).join(' ');
 }
