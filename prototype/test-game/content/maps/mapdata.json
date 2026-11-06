@@ -4103,5 +4103,736 @@
    "Standing": 20,
    "Gold_Bonus": 0
   }
+ ],
+ "rareContracts": [
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 1,
+   "Rare_Seeded": 60,
+   "Quota": 30,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 2,
+   "Rare_Seeded": 100,
+   "Quota": 50,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 3,
+   "Rare_Seeded": 80,
+   "Quota": 40,
+   "Price_Per_Unit": 21,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 4,
+   "Rare_Seeded": 100,
+   "Quota": 50,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 5,
+   "Rare_Seeded": 140,
+   "Quota": 70,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 6,
+   "Rare_Seeded": 160,
+   "Quota": 80,
+   "Price_Per_Unit": 30,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 7,
+   "Rare_Seeded": 200,
+   "Quota": 100,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 8,
+   "Rare_Seeded": 240,
+   "Quota": 120,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "ground",
+   "Planet": "Verdance",
+   "Map_ID": 9,
+   "Rare_Seeded": 320,
+   "Quota": 160,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 1,
+   "Rare_Seeded": 60,
+   "Quota": 30,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 2,
+   "Rare_Seeded": 100,
+   "Quota": 50,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 3,
+   "Rare_Seeded": 40,
+   "Quota": 20,
+   "Price_Per_Unit": 21,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 4,
+   "Rare_Seeded": 140,
+   "Quota": 70,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 5,
+   "Rare_Seeded": 100,
+   "Quota": 50,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 6,
+   "Rare_Seeded": 240,
+   "Quota": 120,
+   "Price_Per_Unit": 30,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 7,
+   "Rare_Seeded": 280,
+   "Quota": 140,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 8,
+   "Rare_Seeded": 160,
+   "Quota": 80,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "air",
+   "Planet": "Florael",
+   "Map_ID": 9,
+   "Rare_Seeded": 260,
+   "Quota": 130,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 1,
+   "Rare_Seeded": 100,
+   "Quota": 50,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 2,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 3,
+   "Rare_Seeded": 80,
+   "Quota": 40,
+   "Price_Per_Unit": 21,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 4,
+   "Rare_Seeded": 60,
+   "Quota": 30,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 5,
+   "Rare_Seeded": 200,
+   "Quota": 100,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 6,
+   "Rare_Seeded": 180,
+   "Quota": 90,
+   "Price_Per_Unit": 30,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 7,
+   "Rare_Seeded": 220,
+   "Quota": 110,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 8,
+   "Rare_Seeded": 280,
+   "Quota": 140,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "hightech",
+   "Planet": "Ochre",
+   "Map_ID": 9,
+   "Rare_Seeded": 200,
+   "Quota": 100,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 1,
+   "Rare_Seeded": 100,
+   "Quota": 50,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 2,
+   "Rare_Seeded": 80,
+   "Quota": 40,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 3,
+   "Rare_Seeded": 140,
+   "Quota": 70,
+   "Price_Per_Unit": 21,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 4,
+   "Rare_Seeded": 180,
+   "Quota": 90,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 5,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 6,
+   "Rare_Seeded": 220,
+   "Quota": 110,
+   "Price_Per_Unit": 30,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 7,
+   "Rare_Seeded": 140,
+   "Quota": 70,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 8,
+   "Rare_Seeded": 280,
+   "Quota": 140,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "artillery",
+   "Planet": "Kessra",
+   "Map_ID": 9,
+   "Rare_Seeded": 220,
+   "Quota": 110,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 1,
+   "Rare_Seeded": 80,
+   "Quota": 40,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 2,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 3,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 21,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 4,
+   "Rare_Seeded": 80,
+   "Quota": 40,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 5,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 6,
+   "Rare_Seeded": 260,
+   "Quota": 130,
+   "Price_Per_Unit": 30,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 7,
+   "Rare_Seeded": 180,
+   "Quota": 90,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 8,
+   "Rare_Seeded": 220,
+   "Quota": 110,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "water",
+   "Planet": "Rime",
+   "Map_ID": 9,
+   "Rare_Seeded": 300,
+   "Quota": 150,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 1,
+   "Rare_Seeded": 40,
+   "Quota": 20,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 2,
+   "Rare_Seeded": 200,
+   "Quota": 100,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 3,
+   "Rare_Seeded": 100,
+   "Quota": 50,
+   "Price_Per_Unit": 21,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 4,
+   "Rare_Seeded": 100,
+   "Quota": 50,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 5,
+   "Rare_Seeded": 240,
+   "Quota": 120,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 6,
+   "Rare_Seeded": 140,
+   "Quota": 70,
+   "Price_Per_Unit": 30,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 7,
+   "Rare_Seeded": 200,
+   "Quota": 100,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 8,
+   "Rare_Seeded": 300,
+   "Quota": 150,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "arcane",
+   "Planet": "Cinder",
+   "Map_ID": 9,
+   "Rare_Seeded": 300,
+   "Quota": 150,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 1,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 2,
+   "Rare_Seeded": 160,
+   "Quota": 80,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 3,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 21,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 4,
+   "Rare_Seeded": 140,
+   "Quota": 70,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 5,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 6,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 30,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 7,
+   "Rare_Seeded": 160,
+   "Quota": 80,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 8,
+   "Rare_Seeded": 160,
+   "Quota": 80,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "space",
+   "Planet": "Lumen",
+   "Map_ID": 9,
+   "Rare_Seeded": 280,
+   "Quota": 140,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 1,
+   "Rare_Seeded": 140,
+   "Quota": 70,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 2,
+   "Rare_Seeded": 140,
+   "Quota": 70,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 3,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 21,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 4,
+   "Rare_Seeded": 180,
+   "Quota": 90,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 5,
+   "Rare_Seeded": 220,
+   "Quota": 110,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 6,
+   "Rare_Seeded": 200,
+   "Quota": 100,
+   "Price_Per_Unit": 30,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 7,
+   "Rare_Seeded": 240,
+   "Quota": 120,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 8,
+   "Rare_Seeded": 240,
+   "Quota": 120,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "dark",
+   "Planet": "Xenthe",
+   "Map_ID": 9,
+   "Rare_Seeded": 240,
+   "Quota": 120,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 1,
+   "Rare_Seeded": 160,
+   "Quota": 80,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 2,
+   "Rare_Seeded": 120,
+   "Quota": 60,
+   "Price_Per_Unit": 30,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 3,
+   "Rare_Seeded": 80,
+   "Quota": 40,
+   "Price_Per_Unit": 21,
+   "Loyalty": 10
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 4,
+   "Rare_Seeded": 140,
+   "Quota": 70,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 5,
+   "Rare_Seeded": 160,
+   "Quota": 80,
+   "Price_Per_Unit": 21,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 6,
+   "Rare_Seeded": 160,
+   "Quota": 80,
+   "Price_Per_Unit": 30,
+   "Loyalty": 15
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 7,
+   "Rare_Seeded": 140,
+   "Quota": 70,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 8,
+   "Rare_Seeded": 200,
+   "Quota": 100,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  },
+  {
+   "Planet_Key": "greenies",
+   "Planet": "Vexmire",
+   "Map_ID": 9,
+   "Rare_Seeded": 320,
+   "Quota": 160,
+   "Price_Per_Unit": 21,
+   "Loyalty": 20
+  }
  ]
 }

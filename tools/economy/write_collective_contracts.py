@@ -29,33 +29,27 @@ SHEET = "Collective_Contracts"
 COLS = ["Planet_Key", "Planet", "Map_ID", "Common", "Uncommon", "Standing", "Gold_Bonus"]
 
 
-def values(path):
+def values(path, skip):
     wb = openpyxl.load_workbook(path, data_only=True)
-    return {ws.title: [tuple(r) for r in ws.iter_rows(values_only=True)] for ws in wb if ws.title != SHEET}
+    return {ws.title: [tuple(r) for r in ws.iter_rows(values_only=True)] for ws in wb if ws.title != skip}
 
 
-def main(csv_path):
+def write_sheet(sheet, cols, header_lines, rows):
+    """Replace `sheet` in the map-data workbook with header_lines, the column row and rows, recalculate with
+    LibreOffice, and refuse if any other sheet's values change. Shared with write_rare_contracts.py."""
     soffice = shutil.which("soffice")
     if not soffice:
         sys.exit("soffice (LibreOffice) is needed to recalculate the workbook; open+save it in Excel instead")
-    with open(csv_path, newline="", encoding="utf-8") as fh:
-        rows = list(csv.DictReader(fh))
-    if len(rows) != 81:
-        sys.exit(f"expected 81 planet × map rows, got {len(rows)}")
-
-    before = values(XLSX)
+    before = values(XLSX, sheet)
     wb = openpyxl.load_workbook(XLSX)
-    if SHEET in wb.sheetnames:
-        del wb[SHEET]
-    ws = wb.create_sheet(SHEET)
-    ws.append(["Collective contracts (81) — one per planet × map, common and uncommon only"])
-    ws.append(["Measured by tools/economy/contract_quota.mjs on the live board; tune by hand. Rare and epic belong to the "
-               "secondary contracts (owner 2026-11-05). Standing is paid on the first completion only."])
-    ws.append([])
-    ws.append(COLS)
+    if sheet in wb.sheetnames:
+        del wb[sheet]
+    ws = wb.create_sheet(sheet)
+    for line in header_lines:
+        ws.append([line] if line else [])
+    ws.append(cols)
     for r in rows:
-        ws.append([r["Planet_Key"], r["Planet"]] + [int(r[c]) for c in COLS[2:]])
-
+        ws.append(r)
     with tempfile.TemporaryDirectory() as tmp:
         raw = os.path.join(tmp, "raw.xlsx")
         wb.save(raw)
@@ -63,12 +57,25 @@ def main(csv_path):
         subprocess.run([soffice, "--headless", "--calc", "--convert-to", "xlsx", "--outdir", out, raw],
                        check=True, capture_output=True)
         calc = os.path.join(out, "raw.xlsx")
-        after = values(calc)
+        after = values(calc, sheet)
         changed = [t for t in before if before[t] != after.get(t)]
         if changed:
             sys.exit(f"recalculation changed other sheets' values: {changed} — workbook left untouched")
         shutil.copyfile(calc, XLSX)
-    print(f"OK -> {os.path.relpath(XLSX, ROOT)} › {SHEET} ({len(rows)} rows); now run tools/extract_mapdata.py")
+    print(f"OK -> {os.path.relpath(XLSX, ROOT)} › {sheet} ({len(rows)} rows); now run tools/extract_mapdata.py")
+
+
+def main(csv_path):
+    with open(csv_path, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    if len(rows) != 81:
+        sys.exit(f"expected 81 planet × map rows, got {len(rows)}")
+    write_sheet(SHEET, COLS, [
+        "Collective contracts (81) — one per planet × map, common and uncommon only",
+        "Measured by tools/economy/contract_quota.mjs on the live board; tune by hand. Rare and epic belong to the "
+        "secondary contracts (owner 2026-11-05). Standing is paid on the first completion only.",
+        "",
+    ], [[r["Planet_Key"], r["Planet"]] + [int(r[c]) for c in COLS[2:]] for r in rows])
 
 
 if __name__ == "__main__":
