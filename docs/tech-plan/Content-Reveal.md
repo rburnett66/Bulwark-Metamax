@@ -215,10 +215,12 @@ resources from a currently unlocked planet. Accepting the contract allows you to
 actually visiting the capital ship for that faction, and the optional contract will resolve at the end of that map."*
 
 - **No cross-planet missions.** The Mission Log only ever holds missions for the planet they were granted on.
-- **When:** wave 3 is cleared with **more than 2★**. The offer plays in the existing interlude before wave 4 (the
+- **When:** wave 3 is cleared with **3★ or better** (wave 3's own stars; owner, 2026-11-06). The offer plays in the existing interlude before wave 4 (the
   frozen pre-wave dialog in `main.js` `playPreBattleDialog`), so it never interrupts combat.
-- **Who:** a character of a faction whose **capital ship has arrived** (that planet's map 3 won at ≥ 3★), picked
-  from the Givers sheet. It is never the faction being fought on this map.
+- **Who:** a faction whose **capital ship has arrived** (that planet's map 3 won at ≥ 3★). It is never the faction
+  being fought on this map. The offer **introduces a new character** (owner, 2026-11-06), and this character is the
+  same person who **greets the player and gives them a mission the first time they visit that ship**: the target of
+  F4–F6 for that ship. Meeting them in battle is how the player first learns of them.
 - **What:** an optional contract to **sell rare resources** from this map to that faction, up to a quota. It uses
   the existing `comm` call and the `contractModal`, which already offers ACCEPT and DECLINE (Dialog-Unification F4).
 - **Accept:** rare finds this map count toward the quota, and are paid for when the contract resolves. Without the
@@ -232,6 +234,10 @@ actually visiting the capital ship for that faction, and the optional contract w
 - **What changes from 2026-11-02:** that move took the wave-2 faction contract out of battle and made it the
   planet's secondary mission aboard the ship. That stays. This is a separate, **optional**, rare-only offer from
   *another* faction.
+
+Owner, 2026-11-06, on the "unknown contact": *"What unknown contact .. the optional contract which appears only if
+you get 3 stars on wave 3 will introduce a new character."* The Orbital Survey prototype's unknown-contact call is
+therefore **not** part of any reveal, and the contact favour story (`story_mvajl0pm_11`) is replaced by R11.
 
 ## 6. The opening is the first reveal
 
@@ -249,7 +255,7 @@ reveal, with the same parts:
 | Cold open on Vesper, the Long Ledger fly-by, the flank | §5.2 first sight on Vesper's star stage, ending at the upper-left station; then F1 |
 | The scan wipe into the rooms, life, Mira flashes, walk to the bar | F2–F4 |
 | The conversation and the first contract | F5–F6: Mira's scene, then the **Verdance contract**. ACCEPT grants the Verdance mission, which goes to the Mission Log |
-| The Loading Bay transport, "TAP TO LAUNCH", forced departure to Verdance | F7 explore (the Loading Bay shows your transport), F8 depart, then **Verdance discovered** (§5.1): your transport arrives and surveys it |
+| The Loading Bay transport, "TAP TO LAUNCH", forced departure to Verdance | F7 explore (the Loading Bay shows your transport), F8 depart, then **you survey Verdance** (§5.1): your transport arrives and runs the scan, then PLAY (owner, 2026-11-06) |
 | The menu turns to Verdance | The menu shows Verdance with PLAY lit |
 
 The save keeps its fields:
@@ -329,15 +335,11 @@ Headless review (Playwright, swiftshader) at desktop and phone landscape.
 - **Q2 — Discovery objective.** Proposed default: the previous planet's map 3 beaten, the same win that opens the
   portal. Alternatives: map 3 at 3★, or a per-planet column in the workbook.
 - **Q3 — Decided 2026-11-06.** Not dimmed; tagged UNSURVEYED until surveyed (§4.1).
-- **Q4 — The unknown contact's call.** The Orbital Survey prototype has the contact call after the site locks.
-  Should it be part of the planet reveal? The alternative is keeping it at the start of the first battle there
-  (epic *Orbital arrival and contact*).
-- **Q5 — The opening (§6). Decided 2026-11-06.** The game opens on the reveal of the red giant and the Collective ship.
-  The Verdance mission is granted aboard as a contract. Still open within Q5: after the contract, the player departs
-  and *Verdance discovered* plays before PLAY (proposed), or the menu opens straight on Verdance.
-
+- **Q4 — Decided 2026-11-06.** There is no unknown contact in the reveal. The optional rare contract (3★ on wave 3)
+  introduces a new character, who greets the player and gives a mission on the first visit to that ship (§5.5).
+- **Q5 — Decided 2026-11-06.** The game opens on the red giant and the Collective ship; the Verdance mission is granted
+  aboard as a contract; then the player departs, surveys Verdance, and presses PLAY.
 - **Q6 — The rare contract (§5.5):**
-  - "Star level above 2 on wave 3": is that wave 3's own stars, or the average so far?
   - The quota and price: proposed as a workbook sheet.
   - Does declining cost loyalty, as the old contract's decline did? Proposed: no.
 
