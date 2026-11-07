@@ -10,9 +10,9 @@ import { outpostMapFromForge } from './outpostMap.js';
 import { DRAFT_LAYOUT } from './draftLayout.js';
 import {
   runRaid, createRaid, makeRaidHook, raidUnits, raidSize, raidSeed, wellDefended, stepOutpost, holdsBeforeBreach,
-  MEASURE_SEEDS, RAID_DT, RAID_RANGE_CAP,
+  MEASURE_SEEDS, RAID_DT, RAID_RANGE_CAP, FIRST_RAID_SIZE,
 } from './raid.js';
-import { raidFor, allStructures, OUTPOST } from '../data/outpost.js';
+import { raidFor, allStructures, OUTPOST, structureDef } from '../data/outpost.js';
 import { UNITS, EFFECTIVENESS } from '../data/tables.js';
 import '../data/factions.js';
 
@@ -119,6 +119,24 @@ test('with the measured raids the starter kit holds 4–6 raids before a breach 
   assert.ok(median(k) >= 4 && median(k) <= 6, `kit holds ${median(k)} (seeds: ${k.join(' ')})`);
   assert.ok(median(w) >= 7 && median(w) <= 9, `well defended holds ${median(w)} (seeds: ${w.join(' ')})`);
   assert.equal(wellDefended(kit(), map).defenses.filter((d) => d.kind === 'mg').length, 2, 'well defended = the kit plus one Machine Gun');
+});
+
+test('the scripted first raid is a probe the setup plus one Machine Gun and two walls holds (owner 2026-11-07)', () => {
+  const seeds = [11, 222, 3333, 44444, 555555];
+  const run = (defs, seed) => {
+    const o = referenceOutpost('ground', { seed, map, now: T0 });
+    o.defenses = defs.map(([kind, cell], i) => ({ id: `d${i + 1}`, kind, tier: 1, cell, hp: structureDef(kind, 1).battle.hp }));
+    const raid = createRaid(o, { at: T0, first: true, powered: powerGrids(o, map).powered }, { map, step: 1 });
+    assert.equal(raid.units.length, FIRST_RAID_SIZE, 'a probe, no breacher');
+    return raid.finish().result;
+  };
+  const setups = [
+    [['mg', [42, 20]], ['wall', [38, 22]], ['wall', [39, 22]]],      // MG and walls on the south ramp
+    [['mg', [42, 20]], ['wall', [26, 14]], ['wall', [26, 15]]],      // MG south-east, walls on the west ramp
+    [['mg', [27, 13]], ['wall', [26, 14]], ['wall', [26, 15]]],      // MG and walls on the west ramp
+  ];
+  for (const set of setups) for (const seed of seeds) assert.equal(run(set, seed), 'held', `${JSON.stringify(set)} seed ${seed}`);
+  for (const seed of seeds) assert.equal(run([], seed), 'breach', 'with no defenses the probe walks in');
 });
 
 test('the scripted first raid runs headless through advance with the real hook', () => {
