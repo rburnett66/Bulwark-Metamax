@@ -144,14 +144,15 @@ def apply_rework(data):
     return data
 
 
-OUTPOST_KINDS = {"hub", "power", "rig", "storage", "harvesterBay", "upgradeBay", "mg", "cannon", "wall"}
+OUTPOST_KINDS = {"hub", "power", "rig", "storage", "resourceBay", "harvester", "upgradeBay", "mg", "cannon", "wall"}
 RIG_HEADS = {"auger", "laser", "brine", "crystal", "bore", "shielded"}
 # Owner: outposts have no anti-air and no long range. The battle structures an outpost may use; their stats (range
 # within 5, ground targets) are checked against STRUCTURES by src/data/outpost.test.mjs.
 OUTPOST_BATTLE_STRUCTS = {"STR-MG", "STR-Cannon", "STR-Wall"}
 OUTPOST_PARAMS = ("Load_Sec", "Store_Hours", "Deep_Rate_Mult", "Deep_Price_Mult", "Raid_Mean_Hours",
                   "Raid_Min_Gap_Hours", "Breach_Storage_Loss", "First_Raid_Sec", "Away_Cap_Hours", "Replay_Keep",
-                  "Far_Buyer_Mult", "Far_Loyalty_Cost", "Defense_Price_Mult", "Repair_Share_Per_HP", "Shuttle_II_Bonus")
+                  "Far_Buyer_Mult", "Far_Loyalty_Cost", "Defense_Price_Mult", "Repair_Share_Per_HP", "Shuttle_II_Bonus",
+                  "Rig_Bay_Min", "Harvester_Cap", "Harvester_Max")
 
 
 def outpost_problems(data):
@@ -201,9 +202,22 @@ def outpost_problems(data):
             out.append(f"{tag}: Battle_Struct {bs!r} is not an outpost defense (no anti-air, no long range)")
         if bs and r.get("Kind") not in ("mg", "cannon", "wall"):
             out.append(f"{tag}: only defenses take a Battle_Struct")
-    for k in ("hub", "power", "rig", "storage", "mg", "cannon", "wall"):
+    for k in ("hub", "power", "rig", "storage", "resourceBay", "harvester", "mg", "cannon", "wall"):
         if (k, 1) not in seen:
-            out.append(f"Outpost_Structures: the kit needs {k} tier 1")
+            out.append(f"Outpost_Structures: the build list needs {k} tier 1")
+    # owner 2026-11-07: the contract grants only the hub; everything else is bought with the player's gold
+    for r in data["outpostStructures"]:
+        tag = f"Outpost_Structures {r.get('Kind')} tier {r.get('Tier')}"
+        if r.get("Kind") == "hub":
+            if r.get("Unlock") != "granted":
+                out.append(f"{tag}: the hub is the one granted building (Unlock 'granted')")
+        elif not (isinstance(r.get("Cost"), (int, float)) and r["Cost"] > 0):
+            out.append(f"{tag}: every building but the hub is bought, so Cost must be positive")
+        if r.get("Kind") == "harvester" and (r.get("Tier") != 1 or r.get("Power_Draw")):
+            out.append(f"{tag}: the harvester is one tier-1 row with no power draw")
+    hp = data["outpostParams"]
+    if all(isinstance(hp.get(k), int) for k in ("Harvester_Cap", "Harvester_Max")) and not (0 < hp["Harvester_Cap"] <= hp["Harvester_Max"]):
+        out.append("Outpost_Params: need 0 < Harvester_Cap <= Harvester_Max")
     for key in planets:
         rows = sorted((r for r in data["outpostContracts"] if r.get("Planet_Key") == key), key=lambda r: r.get("Step", 0))
         if [r.get("Step") for r in rows] != [1, 2, 3]:
@@ -219,6 +233,55 @@ def outpost_problems(data):
     for p in OUTPOST_PARAMS:
         if not isinstance(data["outpostParams"].get(p), (int, float)):
             out.append(f"Outpost_Params: missing or non-numeric {p}")
+    out += raid_problems(data, planets)
+    return out
+
+
+# The raiders' unit kinds (owner: troops and low-end tanks only). The sheet holds unit ids; that each is lightGround
+# and spawned at tier I is checked against UNITS by src/outpost/raid.test.mjs (the battle tables live in JS).
+RAID_UNIT_KINDS = ("Troops", "Tanks")
+# The documented breacher exception (owner 2026-11-07): a planet whose troops cannot hurt walls (Toxic does 0 to
+# Structure) adds one unit of its own faction that can. No light ground unit of those factions qualifies, so the
+# breacher is the faction's Artillery (the only one that damages structures); raid.js caps every raider's range at the
+# outposts' longest gun, so it must come under the guns. raid.test.mjs checks it is a ground unit that hurts walls.
+BREACHER_KINDS = ("Artillery",)
+
+
+def raid_problems(data, planets):
+    """Outpost_Raids (tech plan Outpost §3.1): one row per planet, the faction's own troops / assault tanks, positive
+    whole sizes per contract step."""
+    out, rows = [], data["outpostRaids"]
+    if not rows:
+        return ["Outpost_Raids: the sheet is missing or empty (run node tools/economy/outpost_raids.mjs --write)"]
+    keys = [r.get("Planet_Key") for r in rows]
+    if sorted(keys) != sorted(planets):
+        out.append(f"Outpost_Raids: expected one row per planet {sorted(planets)}, got {sorted(map(str, keys))}")
+    for r in rows:
+        tag = f"Outpost_Raids {r.get('Planet_Key')}"
+        units = str(r.get("Units") or "").split()
+        if not units:
+            out.append(f"{tag}: no Units")
+        prefixes = {u.split("-", 1)[0] for u in units}
+        if len(prefixes) > 1:
+            out.append(f"{tag}: Units mix factions {sorted(prefixes)} (raiders are the planet's own dissidents)")
+        for u in units:
+            if "-" not in u or u.split("-", 1)[1] not in RAID_UNIT_KINDS:
+                out.append(f"{tag}: unit {u!r} is not a troop or an assault tank (owner: tier I light ground only)")
+        b = r.get("Breacher") or ""
+        if b:
+            if "-" not in b or b.split("-", 1)[1] not in BREACHER_KINDS:
+                out.append(f"{tag}: Breacher {b!r} is not one of the documented breacher kinds {BREACHER_KINDS}")
+            elif units and b.split("-", 1)[0] not in prefixes:
+                out.append(f"{tag}: Breacher {b!r} is not the planet's own faction")
+        for k in ("Raider_HP_Mult", "Raider_Damage_Mult"):
+            v = r.get(k)
+            if not (isinstance(v, (int, float)) and 0 < v <= 1):
+                out.append(f"{tag}: {k} must be in (0, 1] (raiders are never stronger than in battle), got {v!r}")
+        sizes = [r.get(f"Size_Step{i}") for i in (1, 2, 3)]
+        if not all(isinstance(v, int) and v > 0 for v in sizes):
+            out.append(f"{tag}: Size_Step1..3 must be positive whole numbers, got {sizes}")
+        if not (isinstance(r.get("Far_Day_Bump"), int) and r["Far_Day_Bump"] >= 0):
+            out.append(f"{tag}: Far_Day_Bump must be a whole number >= 0")
     return out
 
 
@@ -251,6 +314,9 @@ def main():
         "outpostContracts": sheet_rows(wb["Outpost_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
                                        header_row_probe=("Planet_Key",)),
         "outpostParams": params_map(wb["Outpost_Params"]),
+        # raid sizes per planet and contract step, measured on the battle sim [MM-story_mw5oegk1_o] (tech plan §4.3)
+        "outpostRaids": sheet_rows(wb["Outpost_Raids"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                   header_row_probe=("Planet_Key",)) if "Outpost_Raids" in wb.sheetnames else [],
     }
 
     apply_rework(data)
@@ -307,7 +373,8 @@ def main():
           f"factions={len(data['factions'])} params={len(data['globalParams'])} "
           f"collectiveContracts={len(data['collectiveContracts'])} rareContracts={len(data['rareContracts'])}")
     print(f"   ores={len(data['ores'])} outpostStructures={len(data['outpostStructures'])} "
-          f"outpostContracts={len(data['outpostContracts'])} outpostParams={len(data['outpostParams'])}")
+          f"outpostContracts={len(data['outpostContracts'])} outpostParams={len(data['outpostParams'])} "
+          f"outpostRaids={len(data['outpostRaids'])}")
 
 
 if __name__ == "__main__":

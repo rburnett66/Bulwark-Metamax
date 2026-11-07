@@ -16,7 +16,8 @@
  * row in the workbook cannot quietly leave a mission locked forever.
  */
 import { STAR_GATE } from './save.js';
-import { logMission, claim, bankBattle, missionStatus, failMission, alignmentBand, factionOfPlanet } from './missions.js';
+import { logMission, claim, bankBattle, missionStatus, failMission, alignmentBand, factionOfPlanet, refreshSaveObjectives } from './missions.js';
+import { measureOnline, measureOreSold, measureRaidsHeld, contractStepCollected, planetKeyOf } from '../outpost/contract.js';
 import { bankHarvest } from './inventory.js';
 import { levelFromXp } from '../data/progression.js';
 import { techCtxFromSave, planetOpen } from '../menu/techSave.js';
@@ -60,6 +61,11 @@ const GATE = Object.freeze({
   replay_improves: (s, c) => !!(mapRecord(s, c.param, c.value) || {}).improved,
   capital_ship_arrived: (s, c) => shipArrived(s, c.param),
   quest_step_collected: (s, c) => ((s.questSteps || {})[c.param] || 0) >= c.value,
+  // the outpost contracts (Outpost tech plan §5.2) [MM-story_mw5oe8km_k]: param is the planet key, or the ore id
+  outpost_online: (s, c) => measureOnline(s, c.param) === 1,
+  ore_sold: (s, c) => measureOreSold(s, c.param) >= c.value,
+  raids_held: (s, c) => measureRaidsHeld(s, c.param) >= c.value,
+  outpost_contract_step: (s, c) => (((s.outpostContracts || {})[c.param] || {}).step || 0) >= c.value,
 });
 export const GATE_CONDITIONS = Object.freeze(Object.keys(GATE));
 
@@ -154,6 +160,16 @@ export function favourMessage(f) {
     : 'FAVOUR BROKEN — ' + f.title + (f.penalty ? ': ' + f.penalty + ' ' + f.giver + ' loyalty' : '');
 }
 
+/**
+ * Something changed at an outpost (accepted, online, a sale, a raid): re-read the outpost missions' objectives and log
+ * any mission whose gate it opened. → { progressed, ready, logged }.
+ */
+export function settleOutpost(s, catalog, ctx = flowCtx(s)) {
+  const out = refreshSaveObjectives(s, ctx);
+  out.logged = syncMissions(s, catalog, ctx).map((m) => m.id);
+  return out;
+}
+
 /** Why a Ready mission cannot be collected yet, or null: the planet's ship must be in orbit. */
 export function collectBlock(s, m) {
   if (missionStatus(m, s) !== 'ready') return 'Not ready';
@@ -167,5 +183,6 @@ export function collect(s, id, catalog, ctx = flowCtx(s)) {
   const ledger = claim(s, id, catalog, { now: ctx.now });
   if (!ledger) return null;
   s.questSteps[m.questLine] = Math.max(s.questSteps[m.questLine] || 0, m.step);
+  if (m.type === 'outpost') contractStepCollected(s, planetKeyOf(m.planet), m.step, { now: ctx.now === undefined ? Date.now() : ctx.now });
   return { ledger, logged: syncMissions(s, catalog, ctx).map((x) => x.id) };
 }

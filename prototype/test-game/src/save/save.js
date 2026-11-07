@@ -112,6 +112,13 @@ export function migrate(s) {
   if (!s.outpostContracts || typeof s.outpostContracts !== 'object') s.outpostContracts = {};
   if (!s.outpostTrade || typeof s.outpostTrade !== 'object') s.outpostTrade = { discovered: {}, farSoldToday: null };
   if (!s.outpostTrade.discovered) s.outpostTrade.discovered = {};
+  // the Harvester Bay became the Resource Bay, and harvesters are bought and counted (owner 2026-11-07, story O16);
+  // the same rule as src/outpost/model.js migrateOutpost, inlined so the save stays free of the outpost rules
+  for (const o of Object.values(s.outposts)) {
+    if (!o || typeof o !== 'object') continue;
+    for (const b of [...Object.values(o.pads || {}), ...(o.building || [])]) if (b && b.kind === 'harvesterBay') b.kind = 'resourceBay';
+    if (!Number.isFinite(o.harvesters)) o.harvesters = 0;
+  }
   collectiveOf(s);   // the opening's state; a save that has already played is marked seen [MM-story_mw47lq0l_7]
   return s;
 }

@@ -50,26 +50,34 @@
 <script type="module">
 // Review page for the tiled terrain [MM-story_mw2qkmb1_2] [MM-story_mw2uk8lq_1]: the game's own 3D renderer on any
 // planet's forge map, switching ground mode, quality tier and zoom. Painted tiles exist for map 1 only (the others were
-// never baked).
+// never baked). The Outpost button [MM-story_mw5oeatc_l] opens the planet's outpost map (<planet key>-outpost.json and
+// its baked level), for the planets that have one.
 import { createRenderer3D, renderFrame, destroyRenderer } from '../../src/render3d/index.js';
 import { buildTerrainMap, resolveResourceTypes } from '../../src/sim/mapgen.js';
 import { PLANETS } from '../../src/data/planets.js';
+import { fitCameraToRect } from '../../src/render3d/camera.js';
+import { mesaFrame } from '../../src/terrain/outpostPads.js';
 // forge file slug → the planet key the renderer takes (data/planets.js)
 const FACTIONS = [['powder', 'ground'], ['air', 'air'], ['high-tech', 'hightech'], ['artillery', 'artillery'], ['water', 'water'],
   ['arcane-energy', 'arcane'], ['space-tech', 'space'], ['dark-energy', 'dark'], ['greenies', 'greenies']];
 
 const q = new URLSearchParams(location.search);
-const S = { fac: q.get('faction') || 'powder', map: +(q.get('map') || 1), mode: q.get('ground') || 'tiled', tier: q.get('quality') || 'high', dist: q.get('dist') ? +q.get('dist') : null };
+const OUTPOSTS = new Set(['ground']);   // planet keys with a content/maps/forge/<key>-outpost.json
+const S = { fac: q.get('faction') || 'powder', map: q.get('map') === 'outpost' ? 'outpost' : +(q.get('map') || 1), mode: q.get('ground') || 'tiled', tier: q.get('quality') || 'high', dist: q.get('dist') ? +q.get('dist') : null };
 const stage = document.getElementById('stage');
 const maps = document.getElementById('maps');
 for (let n = 1; n <= 9; n++) maps.insertAdjacentHTML('beforeend', `<button data-n="${n}">${n}</button>`);
+maps.insertAdjacentHTML('beforeend', '<button data-n="outpost">Outpost</button>');
 const planets = document.getElementById('planets');
 for (const [slug, key] of FACTIONS) planets.insertAdjacentHTML('beforeend', `<button data-f="${slug}">${PLANETS[key].name}</button>`);
 const planetKey = () => (FACTIONS.find(([s]) => s === S.fac) || FACTIONS[0])[1];
 let r = null, seq = 0, last = performance.now();
 
 function sync() {
-  for (const b of maps.children) b.setAttribute('aria-pressed', String(+b.dataset.n === S.map));
+  for (const b of maps.children) {
+    b.setAttribute('aria-pressed', String(String(b.dataset.n) === String(S.map)));
+    if (b.dataset.n === 'outpost') b.disabled = !OUTPOSTS.has(planetKey());
+  }
   for (const b of planets.children) b.setAttribute('aria-pressed', String(b.dataset.f === S.fac));
   document.getElementById('title').textContent = PLANETS[planetKey()].name + ' ground';
   for (const b of document.querySelectorAll('#modes button')) {
@@ -88,18 +96,25 @@ function sync() {
 async function mount() {
   const my = ++seq;
   if (S.mode === 'baked' && S.map !== 1) S.mode = 'tiled';
+  if (S.map === 'outpost' && !OUTPOSTS.has(planetKey())) S.map = 1;
   sync();
+  const name = S.map === 'outpost' ? `${planetKey()}-outpost` : `${S.fac}-map-${S.map}`;
   if (r) { destroyRenderer(r); r = null; stage.innerHTML = ''; }
-  const forge = await (await fetch(`../../content/maps/forge/${S.fac}-map-${S.map}.json`)).json();
-  const map = buildTerrainMap(forge, S.map, { seed: 0, bakeTune: {} });
+  const forge = await (await fetch(`../../content/maps/forge/${name}.json`)).json();
+  const map = buildTerrainMap(forge, S.map === 'outpost' ? 1 : S.map, { seed: 0, bakeTune: {} });
   resolveResourceTypes(map, 1);
-  const next = await createRenderer3D(stage, map, { slug: `${S.fac}-map-${S.map}`, baseUrl: '../../', ground: S.mode,
+  const next = await createRenderer3D(stage, map, { slug: name, baseUrl: '../../', ground: S.mode,
     craft: false, planet: planetKey(), qualityQuery: S.tier });
   if (my !== seq) { destroyRenderer(next); return; }
   r = next;
   window.__r = r;   // for scripted screenshots
   r.fog.update = () => ({ win: null });   // no battle here: open the whole board (clouds only past the map edge)
   if (S.dist) { r.cam.dist = S.dist; r.userMoved = true; }
+  else if (S.map === 'outpost') {   // the outpost view frames the mesa, not the 64 × 32 map (tech plan §6.1)
+    const f = mesaFrame(forge, 1);
+    fitCameraToRect(r.cam, { x0: f.x, z0: f.y, x1: f.x + f.w, z1: f.y + f.h }, innerWidth / innerHeight);
+    r.userMoved = true;
+  }
   document.getElementById('zoom').value = r.cam.dist;
 }
 
@@ -129,7 +144,7 @@ function frame(t) {
 setInterval(stats, 300);
 
 planets.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.fac = b.dataset.f; S.dist = r && r.cam.dist; mount(); } });
-maps.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.map = +b.dataset.n; S.dist = r && r.cam.dist; mount(); } });
+maps.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && !b.disabled) { S.map = b.dataset.n === 'outpost' ? 'outpost' : +b.dataset.n; S.dist = r && r.cam.dist; mount(); } });
 document.getElementById('modes').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && !b.disabled) { S.mode = b.dataset.m; S.dist = r && r.cam.dist; mount(); } });
 document.getElementById('tiers').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { S.tier = b.dataset.q; S.dist = r && r.cam.dist; mount(); } });
 document.getElementById('zoom').addEventListener('input', (e) => { if (r) { r.cam.dist = +e.target.value; r.userMoved = true; } });

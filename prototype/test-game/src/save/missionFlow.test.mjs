@@ -26,6 +26,12 @@ test('every capital ship and quest line the missions name exists', () => {
   assert.equal(CATALOG.collective.ship, COLLECTIVE_SHIP, 'the code names the Collective ship the workbook names');
   for (const m of CATALOG.missions) {
     assert.ok(CATALOG.questLines[m.questLine], m.id);
+    // outpost contracts (O3) are granted and collected aboard the planet's own ship, whatever the map
+    if (m.type === 'outpost') {
+      assert.equal(m.collectAt, CATALOG.capitalShips[m.planet].ship, m.id);
+      assert.ok(m.unlock.some((c) => c.cond === 'capital_ship_arrived'), m.id);
+      continue;
+    }
     // [MM-story_mw12m06h_1] maps 1-3 are served by the Collective ship; the planet's own ship takes over from map 4
     assert.equal(m.collectAt, m.map <= SHIP_MAP ? COLLECTIVE_SHIP : CATALOG.capitalShips[m.planet].ship, m.id);
     assert.equal(m.unlock.some((c) => c.cond === 'capital_ship_arrived'), m.map > SHIP_MAP, m.id + ': needs the planet ship only from map 4');
@@ -147,7 +153,7 @@ const ctxOf = gated;
 const ids = (list) => list.map((m) => m.id);
 
 test('the content is one primary per planet x map and a Light and a Shadow secondary for each', () => {
-  const m = CATALOG.missions;
+  const m = CATALOG.missions.filter((x) => x.type !== 'outpost');   // the outpost contracts are their own line (O3)
   assert.equal(m.filter((x) => x.role === 'primary').length, 81);
   assert.equal(m.filter((x) => x.variant === 'light').length, 81);
   assert.equal(m.filter((x) => x.variant === 'shadow').length, 81);

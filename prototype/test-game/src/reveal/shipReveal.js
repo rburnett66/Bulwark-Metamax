@@ -18,7 +18,8 @@
  *     their own voice-pack lines through the comm card (comm/commCard.js, comm/dialog.js characterCall);
  *   - the missions: offered as a contract on the contract card (render/contractModal.js), ACCEPT → onContract.
  *
- *   await playShipReveal({ planet, firstTime, tier, onSeen, onContract, missions })   // first sight (+ aboard) or coast-in
+ *   await playShipReveal({ planet, firstTime, tier, onSeen, onContract, missions, outpost })   // first sight (+ aboard) or coast-in
+ *     outpost: { cardFor(shipName) → card, onAccept(key), onDecline(key) } — the outpost contract before the missions (O3)
  *   await boardShip({ planet })                                                        // re-board: explore, depart
  *   await playCollectiveIntroduces({ planet, onContract })                             // a new planet's contract
  */
@@ -124,7 +125,7 @@ async function speak(doc, calls) {
  * Inside the ship (F2–F8): the board wipe over the 3D flank, life, then either the path to the character, their
  * scene and the contract (story), or straight to exploring. Explore until DEPART; the depart wipe; resolve.
  */
-async function aboard(S, { story = false, onContract = () => {}, missions = [] } = {}) {
+async function aboard(S, { story = false, onContract = () => {}, missions = [], outpost = null } = {}) {
   const { d, THREE, stage, ship } = S, doc = d.doc, reduce = d.reduce;
   const roomCanvas = doc.createElement('canvas'); roomCanvas.className = 'rv-rooms';
   const scanEl = doc.createElement('div'); scanEl.className = 'rv-scan';
@@ -185,11 +186,23 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [] }
     const L = d.loop((dt) => view.frame(dt, { flash: 0, camEase: 2.4 }));
     const pk = await packs(), R2 = await revealsData();
     const P = PLANETS[ship.key] || {};
-    const calls = ship.isCollective ? [] : [
-      characterCall(pk, ship.key, ship.captain, R2.factionShip.greet, 'CAPTAIN'),
-      characterCall(pk, ship.key, ship.captain, R2.factionShip.offer, 'CAPTAIN'),
-    ];
-    if (calls.some(Boolean)) await speak(doc, calls);
+    const greet = ship.isCollective ? null : characterCall(pk, ship.key, ship.captain, R2.factionShip.greet, 'CAPTAIN');
+    const offer = ship.isCollective ? null : characterCall(pk, ship.key, ship.captain, R2.factionShip.offer, 'CAPTAIN');
+    // the outpost contract comes first on every faction ship (Outpost-Design §2.1–2.3) [MM-story_mw5oe8km_k]: the
+    // captain's outpost lines (their own greeting replaces the generic one), then its card; LATER keeps it in the
+    // Mission Log, where it can be accepted. Then the generic offer line and the ship's missions, as before.
+    const outpostLines = outpost && outpost.card
+      ? ((R2.factionShip.outpost || {})[ship.key] || []).map((l) => characterCall(pk, ship.key, ship.captain, { line: l.line, intent: l.intent || 'statement' }, 'CAPTAIN')).filter(Boolean)
+      : [];
+    if (outpost && outpost.card) {
+      await speak(doc, outpostLines.length ? outpostLines : [greet]);
+      await new Promise((res) => {
+        const done = (fn) => () => { try { fn(ship.key); } catch (e) { console.warn('[reveal] outpost', e); } res(); };
+        showContractModal(d.root, { ...outpost.card, character: { name: ship.captain, phrase: '' } },
+          { onAccept: done(outpost.onAccept || (() => {})), onDecline: done(outpost.onDecline || (() => {})) });
+      });
+      if (offer) await speak(doc, [offer]);
+    } else if (greet || offer) await speak(doc, [greet, offer]);
     // F6 — the missions, offered as a contract
     await new Promise((res) => {
       const list = missions.length ? '<br>' + missions.slice(0, 5).map((m) => '· ' + m).join('<br>') : '';
@@ -271,7 +284,7 @@ function arrivalOverlay(d, ship) {
  * the pan to the flank, then aboard with the story (the character, the contract → onContract), explore, depart.
  * Otherwise: the 3.5 s coast-in into its orbit. → Promise.
  */
-export async function playShipReveal({ planet, firstTime = true, tier = 'high', reduce = null, mount, onSeen = () => {}, onContract = () => {}, missions = [], start = 0 } = {}) {
+export async function playShipReveal({ planet, firstTime = true, tier = 'high', reduce = null, mount, onSeen = () => {}, onContract = () => {}, missions = [], start = 0, outpost = null } = {}) {
   if (firstTime && !missions.length) missions = await shipMissions(planet).catch(() => []);
   const S = await openShipStage({ planet, tier, reduce, mount, label: 'Capital ship arriving' });
   const { d, stage, ship } = S;
@@ -297,7 +310,7 @@ export async function playShipReveal({ planet, firstTime = true, tier = 'high', 
     commit(); ov.remove(); d.caption('', false);
     // F1 — the pan to the flank
     await d.timed(d.reduce ? 0.2 : FLANK_S - FIRST_SIGHT_S, (t, dt) => { stage.frame(FIRST_SIGHT_S + t, dt); });
-    await aboard(S, { story: true, onContract, missions });
+    await aboard(S, { story: true, onContract, missions, outpost: outpost && outpost.card ? outpost : (outpost && outpost.cardFor ? { ...outpost, card: outpost.cardFor(ship.name) } : null) });
   } finally {
     commit();
     S.dispose(); d.close();

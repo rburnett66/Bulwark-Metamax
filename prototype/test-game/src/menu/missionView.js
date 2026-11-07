@@ -13,6 +13,7 @@ import { ICONS, FACTIONS as VOICES, HOOD_PORTRAIT } from '../comm/voice.js';
 import { portraitSlug } from '../comm/commCard.js';
 import { TECH_BY_ID } from '../data/techtree.js';
 import { PLANETS } from '../data/planets.js';
+import { planetKeyOf } from '../outpost/contract.js';
 
 export const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 export const use = (id, cls = 'i') => `<svg class="${cls}"><use href="#${id}"/></svg>`;
@@ -27,7 +28,7 @@ export const STATUS = Object.freeze({
 });
 export const ORDER = Object.freeze({ ready: 0, risk: 1, new: 2, active: 3, locked: 4, failed: 5, done: 6 });
 const GROUP = Object.freeze({ ready: 'Ready to collect', risk: 'Needs attention', new: 'Newly logged', active: 'In progress', locked: 'Locked — next steps' });
-export const TYPE_ICON = Object.freeze({ campaign: 't-campaign', faction: 't-contract', contract: 't-contract', favour: 't-favour', defend: 't-defend', haul: 't-haul', bounty: 't-bounty', survey: 't-survey' });
+export const TYPE_ICON = Object.freeze({ outpost: 't-haul', campaign: 't-campaign', faction: 't-contract', contract: 't-contract', favour: 't-favour', defend: 't-defend', haul: 't-haul', bounty: 't-bounty', survey: 't-survey' });
 export const REWARD_ICON = Object.freeze({ gold: 'r-gold', xp: 'r-xp', resource: 'r-crystal', tech_unlock: 'r-research', alignment: 'r-stars', loyalty: 'r-loyalty', penalty: 'r-penalty' });
 export const TIER_VAR = Object.freeze({ common: '--r-common', uncommon: '--r-uncommon', rare: '--r-rare', epic: '--r-epic' });
 export const TIER_NAME = Object.freeze({ common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic' });
@@ -137,7 +138,8 @@ export function listHtml(rows, catalog, tab, selectedId) {
 
 // ── the dossier (design §5, §13) ───────────────────────────────────────────────────────────────────────────────
 const GATE_KIND = Object.freeze({ rank_at_least: 'Level', tech_node: 'Tech node', planet_open: 'Planet', planet_map_unlocked: 'Map', planet_map_beaten: 'Map', planet_map_stars: 'Stars',
-  replay_improves: 'Unlocked by', capital_ship_arrived: 'Capital ship', quest_step_collected: 'Quest line', loyalty: 'Loyalty' });
+  replay_improves: 'Unlocked by', capital_ship_arrived: 'Capital ship', quest_step_collected: 'Quest line', loyalty: 'Loyalty',
+  outpost_online: 'Outpost', ore_sold: 'Delivered', raids_held: 'Raids held', outpost_contract_step: 'Contract' });
 
 /** The gates, met or not. A logged mission met them all when it was granted, so only a Locked one is re-judged. */
 export function gateViews(row, s, ctx) {
@@ -229,6 +231,12 @@ export function actionsHtml(row, s, catalog) {
   if (status === 'locked') return `<div class="claimed-stamp">${use('s-locked')}Locked</div><div class="shipnote">Granted aboard <b>${esc(m.grantedAt)}</b> once every gate is met.</div>`;
   if (status === 'done') return `<div class="claimed-stamp">${use('s-done')}Collected aboard ${esc(ship)}</div>`;
   if (status === 'failed') return `<button class="btn" data-act="dismiss">Remove from log</button>`;
+  // an outpost contract (O3): ACCEPT grants the kit if it was put off aboard; after that it runs from OUTPOST
+  if (m.type === 'outpost') {
+    const key = planetKeyOf(m.planet);
+    return s.outposts && s.outposts[key] ? `<div class="shipnote">Run it from <b>OUTPOST</b> on the main menu.</div>`
+      : `<button class="btn primary" data-act="accept-outpost" data-planet="${esc(key)}">${use('s-ready')}Accept the outpost contract</button><div class="shipnote">Grants the outpost kit on ${esc(m.planet)}.</div>`;
+  }
   return `<button class="btn${m.tracked ? '' : ' primary'}" data-act="track" aria-pressed="${!!m.tracked}">${use('u-pin')}${m.tracked ? 'Tracking in battle' : 'Track in battle'}</button>${m.role === 'primary' ? '' : '<button class="btn ghost" data-act="abandon">Abandon favour</button>'}`;
 }
 
@@ -245,7 +253,7 @@ export function dossierHtml(row, s, catalog, ctx, packs = null) {
   const outcome = st === 'failed' && m.impact.brokenPenalty && !/^Abandoned/.test(m.endReason || '')
     ? [{ icon: REWARD_ICON.penalty, color: 'var(--s-failed)', amount: signed(m.impact.brokenPenalty), label: String(factionOfPlanet(m.planet)).split(' ')[0] + ' loyalty', neg: true }]
     : m.rewards.map((r) => rewardView(r, m, catalog));
-  const where = m.planet + ' · map ' + m.map + (m.execute.some((e) => e.cond === 'next_attempt') ? ' · one attempt' : '');
+  const where = m.planet + (m.map ? ' · map ' + m.map : m.type === 'outpost' ? ' · outpost' : '') + (m.execute.some((e) => e.cond === 'next_attempt') ? ' · one attempt' : '');
   const quoted = /"/.test(m.briefing || '');
   return `<button class="dback" data-act="back">${use('u-back')}All missions</button>
  <article class="dossier st-${st}" style="--sc:var(${STATUS[st].v});--fc:${color}">

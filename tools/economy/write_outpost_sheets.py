@@ -70,25 +70,30 @@ def ore_rows():
 
 STRUCT_COLS = ["Kind", "Tier", "Cost", "Value", "Build_Sec", "Power_Draw", "Power_Supply", "Power_Reach",
                "Bay_Hours", "Rate_Mult", "Capacity_Mult", "Battle_Struct", "Model", "Unlock"]
-# Cost: the price to build one (0 = contract kit only). Value: what a repair is priced against (design §6.1).
-# Defense prices are the battle price × 4 (design §5.2), the battle tier stats come from Battle_Struct.
+# Cost: the price to build one with the player's own gold. Value: what a repair is priced against (design §6.1).
+# Owner 2026-11-07: the contract grants only the hub; the player buys power, the mining station, storage, the Resource
+# Bay, harvesters and the defenses. The first setup (Power I + Rig I + Storage I, 1,500) is sized to the gold a player
+# banks by map 3 at 3 stars and pays back from iron (720 gold an hour) in about two hours (design §6.1).
+# Defense prices are the battle price × 4 (design §5.2), the battle tier stats come from Battle_Struct; the
+# harvester is the battle harvester's 500 × 4 (the same ×4 as the defenses).
 STRUCTS = [
-    ["hub", 1, 0, 0, 0, 2, 0, 0, "", "", "", "", "hub", "kit"],
-    ["power", 1, 4000, 4000, 600, 0, 10, 10, "", "", "", "", "power", "kit"],
+    ["hub", 1, 0, 0, 0, 2, 0, 0, "", "", "", "", "hub", "granted"],
+    ["power", 1, 600, 600, 120, 0, 10, 10, "", "", "", "", "power", "contract:1"],
     ["power", 2, 6000, 6000, 900, 0, 20, 14, "", "", "", "", "power_ii", "tech:power_grid_2"],
-    ["rig", 1, 3000, 3000, 300, 4, 0, 0, "", 1, 1, "", "rig", "kit"],
+    ["rig", 1, 600, 600, 120, 4, 0, 0, "", 1, 1, "", "rig", "contract:1"],
     ["rig", 2, 8000, 8000, 1200, 4, 0, 0, "", 2, 2, "", "rig", "tech:rig_mk2"],
-    ["storage", 1, 0, 0, 0, 1, 0, 0, 4, "", "", "", "storage", "kit"],
+    ["storage", 1, 300, 300, 60, 1, 0, 0, 4, "", "", "", "storage", "contract:1"],
     ["storage", 2, 5000, 5000, 900, 1, 0, 0, 8, "", "", "", "storage", "tech:supply_depot"],
-    ["harvesterBay", 1, 2500, 2500, 300, 2, 0, 0, "", "", "", "", "harvester_bay", "contract:1"],
+    ["resourceBay", 1, 2500, 2500, 300, 2, 0, 0, "", "", "", "", "resource_bay", "contract:1"],
+    ["harvester", 1, 2000, 2000, 0, 0, 0, 0, "", "", "", "", "harvester", "contract:1"],
     ["upgradeBay", 1, 4000, 4000, 600, 1, 0, 0, "", "", "", "", "upgrade_bay", "contract:1"],
-    ["mg", 1, 600, 600, 120, 1, 0, 0, "", "", "", "STR-MG", "", "kit"],
+    ["mg", 1, 600, 600, 120, 1, 0, 0, "", "", "", "STR-MG", "", "contract:1"],
     ["mg", 2, 1500, 1500, 120, 1, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
     ["mg", 3, 3000, 3000, 120, 1, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
-    ["cannon", 1, 1200, 1200, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "kit"],
+    ["cannon", 1, 1200, 1200, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "contract:1"],
     ["cannon", 2, 3000, 3000, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
     ["cannon", 3, 6000, 6000, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
-    ["wall", 1, 400, 400, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "kit"],
+    ["wall", 1, 400, 400, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "contract:1"],
     ["wall", 2, 1000, 1000, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "tech:reinforced_walls"],
 ]
 
@@ -130,6 +135,9 @@ PARAMS = [
     ["Defense_Price_Mult", 4, "x", "an outpost defense costs its battle price times this (design 5.2)"],
     ["Repair_Share_Per_HP", 1, "x", "repair cost = value x this x share of HP restored (10% per 10%)"],
     ["Shuttle_II_Bonus", 0.10, "share", "Cargo Shuttle II adds this to every sale"],
+    ["Rig_Bay_Min", 15, "min", "a rig's own bay without a powered Storage Tower: this many minutes of its shallow output (owner 2026-11-07)"],
+    ["Harvester_Cap", 2, "count", "harvesters an outpost may own once its Resource Bay is built (design 6: 2 to start)"],
+    ["Harvester_Max", 4, "count", "the most harvesters an outpost can ever hold (design 6: up to 4; raising the cap is O10)"],
 ]
 
 
@@ -142,7 +150,8 @@ def main():
     ], ore_rows())
     write_sheet("Outpost_Structures", STRUCT_COLS, [
         "Outpost buildings and defenses, per tier",
-        "Design §4.5 (power), §5.2 (defenses, battle price x 4), §6.1 (costs). Cost 0 = contract kit only. Defenses take "
+        "Design §4.5 (power), §5.2 (defenses, battle price x 4), §6.1 (costs). Only the hub is granted (owner 2026-11-07); "
+        "everything else is bought. harvester: bought once a Resource Bay is built (battle price x 4). Defenses take "
         "their battle stats from Battle_Struct (STRUCTURES in src/data/tables.js); no anti-air, no long range.",
         "",
     ], STRUCTS)

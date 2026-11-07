@@ -16,6 +16,7 @@ import { addLoyalty, rivalOf, DECLINE } from './contracts.js';
 import { bankOf, totalStars, mergeRewards } from './save.js';
 import { mergeTally } from './battleTally.js';
 import { PLANETS } from '../data/planets.js';
+import { measureOnline, measureOreSold, measureRaidsHeld } from '../outpost/contract.js';
 // Faction registry: a classic script with no ES exports (see comm/voice.js).
 import '../data/factions.js';
 const REG = globalThis.BulwarkFactions;
@@ -44,7 +45,13 @@ const MEASURE = Object.freeze({
 const SAVE_MEASURE = Object.freeze({
   rank_at_least: (s, o, ctx) => (ctx.level ? ctx.level(s) : 0),
   loyalty: (s, o) => (s.loyalty || {})[o.param] || 0,
+  // the outpost contracts (Outpost tech plan §5.2) [MM-story_mw5oe8km_k]: param is the planet key or the ore id
+  outpost_online: (s, o) => measureOnline(s, o.param),
+  ore_sold: (s, o) => measureOreSold(s, o.param),
+  raids_held: (s, o, ctx, m) => measureRaidsHeld(s, o.param, m ? m.assignedAt || 0 : 0),
 });
+/** Save measures that never go back (the raid log keeps only the last raids, so a count must latch). */
+const SAVE_LATCH = new Set(['outpost_online', 'ore_sold', 'raids_held']);
 export const MEASURED_CONDITIONS = Object.freeze([...Object.keys(MEASURE), ...Object.keys(SAVE_MEASURE)]);
 
 export const planetKey = (planet) => Object.keys(PLANETS).find((k) => PLANETS[k].name === planet) || null;
@@ -161,8 +168,7 @@ export function applyBattle(s, result, ctx = {}) {
     let moved = false;
     for (const o of m.objectives) {
       if (SAVE_MEASURE[o.cond]) {
-        const v = SAVE_MEASURE[o.cond](s, o, ctx);
-        if (v !== o.have) { o.have = v; moved = true; }
+        if (readSaveMeasure(s, m, o, ctx)) moved = true;
         continue;
       }
       if (!scoped) continue;
@@ -203,6 +209,32 @@ export function battleResult({ mapId, planet, faction, result, finalScore, mapSc
     goldCommon: ms.goldFromPrimary || 0, goldUncommon: ms.goldFromPremium || 0, rare: ms.questRed || 0, epic: ms.questGreen || 0,
     waveStars: ws.map((w) => ({ stars: w.stars, flags: w.flags })), tally,
   };
+}
+
+/** Update one save-read objective; → whether it moved. */
+function readSaveMeasure(s, m, o, ctx) {
+  const v = SAVE_MEASURE[o.cond](s, o, ctx, m);
+  const next = SAVE_LATCH.has(o.cond) ? Math.max(o.have, v) : v;
+  if (next === o.have) return false;
+  o.have = next;
+  return true;
+}
+
+/**
+ * Re-read every live mission's save-side objectives (outpost online, ore sold, raids held, level, loyalty) outside a
+ * battle: the outpost view calls it after each change. → { progressed:[id], ready:[id] }.
+ */
+export function refreshSaveObjectives(s, ctx = {}) {
+  const out = { progressed: [], ready: [] };
+  for (const m of s.missions || []) {
+    if (m.end) continue;
+    const wasReady = progress(m).done;
+    let moved = false;
+    for (const o of m.objectives) if (SAVE_MEASURE[o.cond] && readSaveMeasure(s, m, o, ctx)) moved = true;
+    if (moved) out.progressed.push(m.id);
+    if (!wasReady && progress(m).done) out.ready.push(m.id);
+  }
+  return out;
 }
 
 /** Bank a finished, played battle: lifetime stats and the battle counter, then mission progress. */

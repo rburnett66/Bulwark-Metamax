@@ -5257,14 +5257,14 @@
    "Capacity_Mult": null,
    "Battle_Struct": null,
    "Model": "hub",
-   "Unlock": "kit"
+   "Unlock": "granted"
   },
   {
    "Kind": "power",
    "Tier": 1,
-   "Cost": 4000,
-   "Value": 4000,
-   "Build_Sec": 600,
+   "Cost": 600,
+   "Value": 600,
+   "Build_Sec": 120,
    "Power_Draw": 0,
    "Power_Supply": 10,
    "Power_Reach": 10,
@@ -5273,7 +5273,7 @@
    "Capacity_Mult": null,
    "Battle_Struct": null,
    "Model": "power",
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "power",
@@ -5294,9 +5294,9 @@
   {
    "Kind": "rig",
    "Tier": 1,
-   "Cost": 3000,
-   "Value": 3000,
-   "Build_Sec": 300,
+   "Cost": 600,
+   "Value": 600,
+   "Build_Sec": 120,
    "Power_Draw": 4,
    "Power_Supply": 0,
    "Power_Reach": 0,
@@ -5305,7 +5305,7 @@
    "Capacity_Mult": 1,
    "Battle_Struct": null,
    "Model": "rig",
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "rig",
@@ -5326,9 +5326,9 @@
   {
    "Kind": "storage",
    "Tier": 1,
-   "Cost": 0,
-   "Value": 0,
-   "Build_Sec": 0,
+   "Cost": 300,
+   "Value": 300,
+   "Build_Sec": 60,
    "Power_Draw": 1,
    "Power_Supply": 0,
    "Power_Reach": 0,
@@ -5337,7 +5337,7 @@
    "Capacity_Mult": null,
    "Battle_Struct": null,
    "Model": "storage",
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "storage",
@@ -5356,7 +5356,7 @@
    "Unlock": "tech:supply_depot"
   },
   {
-   "Kind": "harvesterBay",
+   "Kind": "resourceBay",
    "Tier": 1,
    "Cost": 2500,
    "Value": 2500,
@@ -5368,7 +5368,23 @@
    "Rate_Mult": null,
    "Capacity_Mult": null,
    "Battle_Struct": null,
-   "Model": "harvester_bay",
+   "Model": "resource_bay",
+   "Unlock": "contract:1"
+  },
+  {
+   "Kind": "harvester",
+   "Tier": 1,
+   "Cost": 2000,
+   "Value": 2000,
+   "Build_Sec": 0,
+   "Power_Draw": 0,
+   "Power_Supply": 0,
+   "Power_Reach": 0,
+   "Bay_Hours": null,
+   "Rate_Mult": null,
+   "Capacity_Mult": null,
+   "Battle_Struct": null,
+   "Model": "harvester",
    "Unlock": "contract:1"
   },
   {
@@ -5401,7 +5417,7 @@
    "Capacity_Mult": null,
    "Battle_Struct": "STR-MG",
    "Model": null,
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "mg",
@@ -5449,7 +5465,7 @@
    "Capacity_Mult": null,
    "Battle_Struct": "STR-Cannon",
    "Model": null,
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "cannon",
@@ -5497,7 +5513,7 @@
    "Capacity_Mult": null,
    "Battle_Struct": "STR-Wall",
    "Model": null,
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "wall",
@@ -5857,6 +5873,119 @@
   "Far_Loyalty_Cost": 1,
   "Defense_Price_Mult": 4,
   "Repair_Share_Per_HP": 1,
-  "Shuttle_II_Bonus": 0.1
- }
+  "Shuttle_II_Bonus": 0.1,
+  "Rig_Bay_Min": 15,
+  "Harvester_Cap": 2,
+  "Harvester_Max": 4
+ },
+ "outpostRaids": [
+  {
+   "Planet_Key": "ground",
+   "Units": "GND-Troops GND-Troops GND-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.8,
+   "Raider_Damage_Mult": 0.5,
+   "Size_Step1": 2,
+   "Size_Step2": 2,
+   "Size_Step3": 2,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "air",
+   "Units": "AIR-Troops AIR-Troops AIR-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.7,
+   "Raider_Damage_Mult": 0.3,
+   "Size_Step1": 3,
+   "Size_Step2": 3,
+   "Size_Step3": 3,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "hightech",
+   "Units": "HTC-Troops HTC-Troops HTC-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.8,
+   "Raider_Damage_Mult": 1,
+   "Size_Step1": 2,
+   "Size_Step2": 2,
+   "Size_Step3": 2,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "artillery",
+   "Units": "ART-Troops ART-Troops ART-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.9,
+   "Raider_Damage_Mult": 0.4,
+   "Size_Step1": 2,
+   "Size_Step2": 2,
+   "Size_Step3": 2,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "water",
+   "Units": "WTR-Troops WTR-Troops WTR-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.9,
+   "Raider_Damage_Mult": 0.4,
+   "Size_Step1": 3,
+   "Size_Step2": 3,
+   "Size_Step3": 3,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "arcane",
+   "Units": "ARC-Troops ARC-Troops ARC-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.4,
+   "Raider_Damage_Mult": 1,
+   "Size_Step1": 3,
+   "Size_Step2": 4,
+   "Size_Step3": 4,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "space",
+   "Units": "SPC-Troops SPC-Troops SPC-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.5,
+   "Raider_Damage_Mult": 0.6,
+   "Size_Step1": 4,
+   "Size_Step2": 4,
+   "Size_Step3": 4,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "dark",
+   "Units": "DRK-Troops DRK-Troops DRK-Tanks",
+   "Breacher": "DRK-Artillery",
+   "Raider_HP_Mult": 0.4,
+   "Raider_Damage_Mult": 1,
+   "Size_Step1": 3,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "greenies",
+   "Units": "GRN-Troops GRN-Troops GRN-Tanks",
+   "Breacher": "GRN-Artillery",
+   "Raider_HP_Mult": 0.4,
+   "Raider_Damage_Mult": 1,
+   "Size_Step1": 3,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  }
+ ]
 }

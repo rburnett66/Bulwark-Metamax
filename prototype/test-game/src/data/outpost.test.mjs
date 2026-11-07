@@ -1,9 +1,12 @@
 // Outpost buildings, contracts and tuning read from the workbook match the design [MM-story_mw5oe4ap_i].
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { OUTPOST, KIT, DEFENSE_KINDS, structureDef, maxTier, contractFor, powerBudget, bayUnits, loadUnits, allStructures } from './outpost.js';
+import {
+  OUTPOST, REFERENCE_SET, GRANTED, ESTABLISH, DEFENSE_KINDS, structureDef, maxTier, contractFor, powerBudget, bayUnits, loadUnits,
+  allStructures, harvesterDef, canonicalKind,
+} from './outpost.js';
 import { oresOf, ORE_TIERS } from './ores.js';
-import { STRUCTURES } from './tables.js';
+import { STRUCTURES, SYSTEM_UNITS } from './tables.js';
 
 const PLANETS = ['ground', 'air', 'hightech', 'artillery', 'water', 'arcane', 'space', 'dark', 'greenies'];
 
@@ -16,8 +19,8 @@ test("the owner's fixed numbers (design §4.1)", () => {
   assert.equal(OUTPOST.Far_Buyer_Mult, 2);
 });
 
-test('the kit draws 9 of the first station\'s 10 power (design §4.5)', () => {
-  const kit = KIT.map((kind) => ({ kind, tier: 1 }));
+test('the reference set draws 9 of the first station\'s 10 power (design §4.5)', () => {
+  const kit = REFERENCE_SET.map((kind) => ({ kind, tier: 1 }));
   assert.deepEqual(powerBudget(kit), { supply: 10, draw: 9, spare: 1 });
   assert.equal(structureDef('power', 2).supply, 20);
   assert.equal(structureDef('power', 1).reach, 10);
@@ -30,23 +33,45 @@ test('storage bays hold 4 hours per rig; Mk II and Storage Tower II double them 
   assert.deepEqual([iron, alu, li].map((o) => bayUnits(o, { rigTier: 2 })), [1440, 720, 384]);
   assert.equal(bayUnits(iron, { storageTier: 2 }), 1440);
   assert.equal(bayUnits(iron) / (iron.rate * iron.deepRate * 60), 16, 'a deep iron bay fills in 16 hours');
+  // owner 2026-11-07: with no (powered) Storage Tower a rig mines into its own small bay, Rig_Bay_Min of its output
+  assert.equal(OUTPOST.Rig_Bay_Min, 15);
+  assert.deepEqual([iron, alu, li].map((o) => bayUnits(o, { storageTier: 0 })), [45, 22.5, 12]);
+  assert.equal(bayUnits(iron, { rigTier: 2, storageTier: 0 }), 90, 'Mk II doubles the own bay too');
 });
 
 test('a shuttle load is 5 minutes of a rig (design §4.2: 15 / 7.5 / 4 units)', () => {
   assert.deepEqual(oresOf('ground').map((o) => loadUnits(o.rate)), [15, 7.5, 4]);
 });
 
-test('costs follow design §6.1; defenses cost their battle price × 4 at every tier (§5.2)', () => {
-  assert.equal(structureDef('rig', 1).cost, 3000);
+test('costs follow design §6.1 (owner 2026-11-07: only the hub is granted); defenses cost their battle price × 4 at every tier (§5.2)', () => {
+  assert.deepEqual([...GRANTED], ['hub']);
+  assert.deepEqual([...ESTABLISH], ['hub', 'power', 'rig', 'storage']);
+  assert.equal(structureDef('hub', 1).cost, 0);
+  assert.equal(structureDef('hub', 1).unlock, 'granted');
+  for (const s of allStructures().filter((x) => x.kind !== 'hub')) assert.ok(s.cost > 0, `${s.kind} ${s.tier} is bought`);
+  const setup = ['power', 'rig', 'storage'].reduce((a, k) => a + structureDef(k, 1).cost, 0);
+  assert.equal(setup, 1500, 'the first setup: Power I 600 + Rig I 600 + Storage I 300');
+  assert.ok(setup / 720 < 2.5, 'pays back from iron (720 gold an hour) in about two hours');
   assert.equal(structureDef('rig', 2).cost, 8000);
-  assert.equal(structureDef('power', 1).cost, 4000);
   assert.equal(structureDef('storage', 2).cost, 5000);
+  assert.equal(structureDef('resourceBay', 1).cost, 2500);
+  assert.deepEqual(structureDef('harvesterBay', 1), structureDef('resourceBay', 1), 'the old name still reads');
+  assert.equal(structureDef('harvesterBay', 1).kind, 'resourceBay');
+  assert.equal(canonicalKind('harvesterBay'), 'resourceBay');
   for (const kind of DEFENSE_KINDS) {
     for (let t = 1; t <= maxTier(kind); t++) {
       const d = structureDef(kind, t);
       assert.equal(d.cost, STRUCTURES[d.battleStruct].cost[t - 1] * OUTPOST.Defense_Price_Mult, `${kind} ${t}`);
     }
   }
+});
+
+test('harvesters (owner 2026-11-07): the battle harvester\'s price × 4, 2 to start, up to 4', () => {
+  const h = harvesterDef();
+  assert.equal(h.cost, SYSTEM_UNITS['SYS-Harvester'].cost[0] * OUTPOST.Defense_Price_Mult);
+  assert.equal(h.cost, 2000);
+  assert.deepEqual([h.cap, h.max], [2, 4]);
+  assert.equal(structureDef('harvester', 1).draw, 0);
 });
 
 test('outpost defenses: no anti-air and no long range (owner); battle stats come from STRUCTURES', () => {

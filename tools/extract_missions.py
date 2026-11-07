@@ -29,6 +29,15 @@ except ImportError:
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 XLSX = os.path.join(ROOT, "docs", "sources", "Bulwark-Missions.xlsx")
+MAP_XLSX = os.path.join(ROOT, "docs", "sources", "Bulwark-Map-Data.xlsx")   # Outpost_Contracts + Ores (outpost missions)
+FORGE = os.path.join(ROOT, "prototype", "test-game", "content", "maps", "forge")
+# The outpost contracts' conditions (Outpost tech plan §5.2) [MM-story_mw5oe8km_k]: read from the save, not a battle.
+OUTPOST_CONDS = {
+    "outpost_online": {"stages": ["Unlock", "Complete"], "tier": "A"},
+    "ore_sold": {"stages": ["Unlock", "Complete"], "tier": "A"},
+    "raids_held": {"stages": ["Unlock", "Complete"], "tier": "A"},
+    "outpost_contract_step": {"stages": ["View", "Unlock"], "tier": "A"},
+}
 OUT = os.path.join(ROOT, "prototype", "test-game", "content", "missions", "missions.json")
 STAGES = ("View", "Unlock", "Execute", "Complete", "Fail")
 LANDING = "Landing craft BS-7"
@@ -50,6 +59,74 @@ def rows(ws, ncols):
         if r[0] is None or str(r[0]).strip() == "":
             continue
         yield dict(zip(head, (norm(v) for v in r)))
+
+
+def sheet_from(ws, probe):
+    """Rows of a map-data sheet whose header row starts with `probe` (those sheets carry a title and a note first)."""
+    it = ws.iter_rows(values_only=True)
+    for head in it:
+        if head and head[0] == probe:
+            break
+    else:
+        return []
+    out = []
+    for r in it:
+        if r[0] is None or str(r[0]).strip() == "":
+            continue
+        out.append(dict(zip(head, (norm(v) for v in r))))
+    return out
+
+
+def outpost_missions(ships, givers, problems):
+    """
+    The outpost contracts as missions (Outpost tech plan §5.2): one per planet × step from the map-data workbook's
+    Outpost_Contracts, quest line QL-<PLA>-O, granted and collected aboard the planet's capital ship. A planet's contracts
+    are written only once its outpost map exists (content/maps/forge/<planet key>-outpost.json), so a planet is never
+    offered an outpost it has no ground for. → (missions, quest lines).
+    """
+    wb = openpyxl.load_workbook(MAP_XLSX, data_only=True)
+    ores = sheet_from(wb["Ores"], "Planet_Key")
+    contracts = sheet_from(wb["Outpost_Contracts"], "Planet_Key")
+    missions, lines = [], {}
+    for c in contracts:
+        key, step = c["Planet_Key"], c["Step"]
+        if not os.path.exists(os.path.join(FORGE, f"{key}-outpost.json")):
+            continue
+        ore = next((o for o in ores if o["Planet_Key"] == key and o["Tier"] == c["Ore_Tier"]), None)
+        if not ore:
+            problems.append(f"Outpost_Contracts {key} step {step}: no {c['Ore_Tier']} ore on the Ores sheet")
+            continue
+        planet = ore["Planet"]
+        ship = ships.get(planet)
+        if not ship:
+            problems.append(f"Outpost_Contracts {key}: {planet} has no capital ship on Capital_Ships")
+            continue
+        g = givers.get(ship["captain"])
+        if not g:
+            problems.append(f"Outpost_Contracts {key}: captain {ship['captain']!r} is not on the Givers sheet")
+        abbr = planet[:3].upper()
+        ql = f"QL-{abbr}-O"
+        lines[ql] = {"name": f"{planet} outpost", "planet": planet, "role": "Primary", "variant": None, "ship": ship["ship"]}
+        complete = []
+        if step == 1:
+            complete.append({"cond": "outpost_online", "param": key, "op": "≥", "value": 1, "text": f"Establish the outpost on {planet}: build power, a mining station on the {ore['Ore'].lower()} and storage, all powered"})
+        complete.append({"cond": "ore_sold", "param": ore["Ore_Id"], "op": "≥", "value": c["Deliver"], "text": f"Deliver {c['Deliver']} {ore['Ore']} to {ship['ship']}"})
+        if c["Raids_Held"]:
+            n = c["Raids_Held"]
+            complete.append({"cond": "raids_held", "param": key, "op": "≥", "value": n, "text": "Hold the outpost through a raid" if n == 1 else f"Hold the outpost through {n} raids"})
+        view = [] if step == 1 else [{"cond": "quest_step_collected", "param": ql, "value": step - 1, "text": "The previous contract was collected"}]
+        unlock = [{"cond": "capital_ship_arrived", "param": planet, "text": f"{ship['ship']} is in orbit"}]
+        rewards = [{"kind": "gold", "amount": c["Gold"], "label": "Gold"}, {"kind": "xp", "amount": c["XP"], "label": "Commander XP"}]
+        missions.append({
+            "id": f"OC-{abbr}-{step}", "questLine": ql, "step": step, "role": "primary", "variant": None,
+            "planet": planet, "map": None, "title": c["Title"], "type": "outpost",
+            "giver": {"name": ship["captain"], **(g or {})}, "grantedAt": ship["ship"], "collectAt": ship["ship"],
+            "briefing": f"Outpost contract {step} of 3. Run it from OUTPOST on the main menu; every sale pays as it lands.",
+            "status": "Draft", "impact": {"loyaltyPlanet": c["Loyalty"]},
+            "view": view, "unlock": unlock, "execute": [], "complete": complete, "fail": [], "rewards": rewards,
+            "outpost": {"planetKey": key, "unlocks": str(c["Unlocks"] or "").split()},
+        })
+    return missions, lines
 
 
 def main():
@@ -158,6 +235,13 @@ def main():
             "view": view, "unlock": unlock, "execute": st["Execute"], "complete": st["Complete"], "fail": st["Fail"],
             "rewards": rewards.get(mid, []),
         })
+    om, olines = outpost_missions(ships, givers, problems)
+    for m in om:
+        if m["id"] in seen:
+            problems.append(f"outpost mission {m['id']} duplicates a Missions row")
+    missions += om
+    lines.update(olines)
+    conds.update(OUTPOST_CONDS)
     for (ql, var), ss in steps.items():   # each variant of a line must cover steps 1..n once
         if sorted(ss) != list(range(1, len(ss) + 1)):
             problems.append(f"quest line {ql} ({var or 'primary'}): steps {sorted(ss)} are not 1..{len(ss)}")
