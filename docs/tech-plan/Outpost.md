@@ -271,6 +271,13 @@ deposit's debris emitter runs at about 3× its particle rate with larger chunks.
   size of a battle aircraft.
 - **States.** Building (rises in steps with a cool tint, as towers do today), online, unpowered (emissive off),
   damaged defenses (darkened, sparking, by their HP), upgrading (warm tint). These follow `lifecycleLook` in `render3d/structures/models.js`.
+- **Animation clips (built, O5).** Moving parts are baked into the GLB as looping glTF clips, one per node, named
+  after the node (`auger_l`, `auger_r`, `ore`, `radar`, `pump`, `dish`). Each node's meshes hang under a pivot empty
+  (extras `node`, `pivot: true`) so the clip turns them about the right point; find nodes by the `node` extra, not
+  by name (lower LODs carry a `.001` suffix). The game plays every clip on a three.js `AnimationMixer`, looping
+  while the building works (a rig: while extracting) and stopped when idle or unpowered; Mk II sets `timeScale = 2`.
+  Values set by game state (the storage hologram's fill, the brine level, the core pulse, the shuttle's take-off) are
+  driven in code, not clips. `--anim` on any building script renders `<slug>_anim.gif` for review.
 - **Animated nodes:** the reactor pulse, each rig's working motion (on while extracting, aimed at the deposit,
   tinted with the ore's `Colour`), the storage hologram (its height is the fill), the shuttle (take-off arc on SELL),
   and harvesters and ore carts.

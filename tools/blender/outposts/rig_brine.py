@@ -14,7 +14,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from outpost_common import anchor, box, build, cyl, drum, mats, octo, ring, ship  # noqa: E402
+from outpost_common import anchor, box, build, clip, cyl, drum, mats, node_frame, octo, ring, ship  # noqa: E402
 from rig_auger import heap  # noqa: E402
 
 
@@ -59,6 +59,8 @@ def make():
          cyl("dish__face", (0, 0, 0.135), 0.24, 0.01, M["mid"], sides=14, axis="Z"),
          cyl("dish__horn", (0, 0, 0.24), 0.018, 0.2, M["dark"], sides=6, axis="Z")],
         pivot, (math.radians(45), 0, math.radians(-20)))
+    node_frame("dish", pivot, (math.radians(45), 0, math.radians(-20)))
+    clip("dish", "spin_world", 14.0)
 
     # tanks with glowing brine windows (node `brine`)
     for sx in (-1, 1):
@@ -91,6 +93,8 @@ def make():
          box("pump__bridle", (0.6, 0, -0.5), (0.02, 0.02, 0.56), M["dark"]),
          box("pump__tail", (-0.44, 0, -0.04), (0.16, 0.14, 0.14), M["mid"])],
         beam_pivot, (0, math.radians(5), 0))
+    node_frame("pump", beam_pivot, (0, math.radians(5), 0))
+    clip("pump", "rock", 2.4, axis="Y", amp=12)          # the walking beam nods while the rig pumps
 
     # pipes and valve wheels from the wellhead to the tanks
     for sx in (-1, 1):

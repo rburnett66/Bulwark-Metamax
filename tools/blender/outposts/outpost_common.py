@@ -25,13 +25,96 @@ sys.path.insert(0, os.path.join(HERE, "..", "ships"))
 import common as ship  # noqa: E402  (the ship helpers; bpy is imported there)
 import bpy  # noqa: E402
 import bmesh  # noqa: E402
-from mathutils import Vector  # noqa: E402
+from mathutils import Euler, Matrix, Quaternion, Vector  # noqa: E402
 
 box, cyl, loft, ring_x, section = ship.box, ship.cyl, ship.loft, ship.ring_x, ship.section
 
 ship.SURFACE = "v2"
 ship.TILE = 0.75                  # one panel repeat ≈ 3 m at 1 cell ≈ 4 m: plates read at building scale
 LODS = {0: 0.0, 1: 0.045, 2: 0.14}  # drop parts whose bounding diagonal is below this × the building's footprint
+
+# ── animation: pivots and looping clips ───────────────────────────────────────────────
+# A node that moves gets a pivot frame: its meshes are re-expressed about the pivot and parented to an empty there
+# (named <slug>_<node>, extras node=<node>), so the game can also turn it by hand. A node with a clip gets a looping
+# glTF animation named <node> on that empty. In the game every clip loops on an AnimationMixer while the building
+# works (a rig: while extracting) and stops when it idles or loses power; the Mk II rig plays them at timeScale 2.
+FPS = 24
+_FRAMES, _CLIPS = {}, {}
+
+
+def node_frame(node, pivot, euler=(0.0, 0.0, 0.0)):
+    """The pivot a node turns about: a point and the node's rest orientation (radians, XYZ)."""
+    _FRAMES[node] = (Vector(pivot), Euler(euler))
+
+
+def clip(node, kind, period, axis="Z", amp=0.0, vec=(0.0, 0.0, 0.0), turns=1):
+    """A looping clip on a node that has a pivot frame. kind:
+    spin   - full turns about the node's own axis (an auger screw);   spin_world - about a world axis (a dish);
+    rock   - a sine swing of `amp` degrees about the node's own axis (a pump beam);   sweep - the same about a world
+    axis (a radar);   slide - moves by `vec` over the period, then snaps back (ore riding a chute, one chunk spacing)."""
+    assert node in _FRAMES, f"clip on {node} needs node_frame first"
+    _CLIPS[node] = dict(kind=kind, period=period, axis=axis, amp=amp, vec=Vector(vec), turns=turns)
+
+
+def _keys(node):
+    """[(frame, location, quaternion)] for a node's clip."""
+    p, e = _FRAMES[node]
+    q0, c = e.to_quaternion(), _CLIPS[node]
+    n = max(2, round(c["period"] * FPS))
+    ax = Vector({"X": (1, 0, 0), "Y": (0, 1, 0), "Z": (0, 0, 1)}[c["axis"]])
+    k = c["kind"]
+    if k == "slide":
+        return [(0, p.copy(), q0), (n, p + c["vec"], q0)]
+    steps = 24 * c["turns"] if k.startswith("spin") else 16
+    out = []
+    for i in range(steps + 1):
+        t = i / steps
+        a = 2 * math.pi * c["turns"] * t if k.startswith("spin") else math.radians(c["amp"]) * math.sin(2 * math.pi * t)
+        r = Quaternion(ax, a)
+        out.append((n * t, p.copy(), q0 @ r if k in ("spin", "rock") else r @ q0))
+    return out
+
+
+def _rig(slug, lod, objs):
+    """Parent each framed node's meshes to a pivot empty and key its clip. Returns the empties."""
+    prefs = bpy.context.preferences.edit
+    prefs.keyframe_new_interpolation_type = "LINEAR"
+    bpy.context.scene.render.fps = FPS
+    empties = []
+    for node, (p, e) in _FRAMES.items():
+        parts = [o for o in objs if o.get("node") == node]
+        if not parts:
+            continue
+        m = Matrix.Translation(p) @ e.to_matrix().to_4x4()
+        emp = bpy.data.objects.new(f"{slug}_{node}", None)
+        emp["node"], emp["pivot"] = node, True
+        emp.rotation_mode = "QUATERNION"
+        emp.location, emp.rotation_quaternion = p, e.to_quaternion()
+        bpy.context.scene.collection.objects.link(emp)
+        for o in parts:
+            o.data.transform(m.inverted())
+            o.parent = emp
+            o.matrix_parent_inverse = Matrix.Identity(4)
+            o.matrix_basis = Matrix.Identity(4)
+        if node in _CLIPS:
+            for f, loc, q in _keys(node):
+                emp.location, emp.rotation_quaternion = loc, q
+                emp.keyframe_insert("location", frame=f)
+                emp.keyframe_insert("rotation_quaternion", frame=f)
+            emp.animation_data.action.name = f"{node}__lod{lod}"
+            emp.location, emp.rotation_quaternion = p, e.to_quaternion()
+        empties.append(emp)
+    return empties
+
+
+def _export_lod(objs, path, lod):
+    """Export one LOD; its clips are renamed to the bare node name for the file, then back."""
+    acts = [o.animation_data.action for o in objs if o.type == "EMPTY" and o.animation_data and o.animation_data.action]
+    for a in acts:
+        a.name = a.name.split("__lod")[0]
+    ship._export(objs, path)
+    for a in acts:
+        a.name = f"{a.name}__lod{lod}"
 
 # ── palette (the concept image) ────────────────────────────────────────────────────────
 WHITE = (0.70, 0.71, 0.72)        # hull panels
@@ -194,7 +277,7 @@ def _merge(slug, lod, parts, size):
 VIEWS = {"concept": (-90, 38), "back": (90, 38), "left": (180, 30), "top": (-90, 89)}
 
 
-def _render(out, slug, res=(960, 720)):
+def _render(out, slug, res=(960, 720), views=VIEWS):
     """Cycles views: 'concept' matches the owner's image (from the front, about 38° down), on a brown ground."""
     lo, hi = ship._bounds()                       # the building only, before the ground goes in
     lo.z = 0
@@ -212,7 +295,7 @@ def _render(out, slug, res=(960, 720)):
     s.cycles.samples = 32
     s.view_settings.view_transform = "Standard"   # closer to the game's tone and the concept's saturated blues
     s.view_settings.exposure = -0.9
-    for v, (yaw, pitch) in VIEWS.items():
+    for v, (yaw, pitch) in views.items():
         y, p = math.radians(yaw), math.radians(pitch)
         cam.data.type = "ORTHO" if v == "top" else "PERSP"
         cam.data.ortho_scale = max(hi.x - lo.x, hi.y - lo.y) * 1.15
@@ -231,6 +314,8 @@ def build(slug, make, argv=None, ref=None):
     os.makedirs(out, exist_ok=True)
     t = time.time()
     ship.reset()
+    _FRAMES.clear()
+    _CLIPS.clear()
     make()
     bpy.context.view_layer.update()
     src = [o for o in bpy.context.scene.objects if o.type == "MESH"]
@@ -240,21 +325,53 @@ def build(slug, make, argv=None, ref=None):
     lods = {lod: _merge(slug, lod, src, size) for lod in LODS}
     for ob in src:
         bpy.data.objects.remove(ob)
+    rigs = {lod: _rig(slug, lod, objs) for lod, objs in lods.items()}
     stats = {}
     for lod, objs in lods.items():
-        ship._export(objs + anchors, os.path.join(out, f"{slug}_lod{lod}.glb"))
+        _export_lod(objs + rigs[lod] + anchors, os.path.join(out, f"{slug}_lod{lod}.glb"), lod)
         stats[lod] = (ship._tris(objs), len(objs))
     for lod, objs in lods.items():
-        for ob in objs:
+        for ob in objs + rigs[lod]:
             ob.hide_render = ob.hide_viewport = lod != 0
+    bpy.context.scene.frame_set(0)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out, f"{slug}.blend"))
     if "--render" in argv:
         _render(out, slug)
         sheet(out, slug, ref)
+    if "--anim" in argv and _CLIPS:
+        _anim_preview(out, slug, (lo, hi))
     dims = f"{hi.x - lo.x:.2f} × {hi.y - lo.y:.2f} × {hi.z - lo.z:.2f}"
     line = ", ".join(f"LOD{l} {n} tris / {d} meshes" for l, (n, d) in stats.items())
-    print(f"[{slug}] {dims} cells; {line}; {len(anchors)} anchors; built in {time.time() - t:.1f}s → {out}")
+    clips = ", ".join(f"{n} {c['kind']} {c['period']}s" for n, c in _CLIPS.items()) or "none"
+    print(f"[{slug}] {dims} cells; {line}; {len(anchors)} anchors; clips: {clips}; built in {time.time() - t:.1f}s → {out}")
     return stats
+
+
+def _anim_preview(out, slug, bounds, seconds=3.0, fps=12, res=(640, 480)):
+    """Render the LOD0 clips from the concept angle for `seconds` and write {slug}_anim.gif (a review aid)."""
+    from PIL import Image
+    lo, hi = bounds
+    lo = lo.copy()
+    lo.z = 0
+    s = bpy.context.scene
+    if not s.camera:                                     # --anim without --render: set the stage up here
+        _render(out, slug, views={})
+    cam = s.camera
+    ctr, size = (lo + hi) / 2, (hi - lo).length
+    y, p = math.radians(-90), math.radians(38)
+    cam.data.type = "PERSP"
+    cam.location = ctr + Vector((math.cos(p) * math.cos(y), math.cos(p) * math.sin(y), math.sin(p))) * size * 1.35
+    cam.rotation_euler = (ctr - cam.location).to_track_quat("-Z", "Y").to_euler()
+    s.render.resolution_x, s.render.resolution_y = res
+    s.cycles.samples = 12
+    frames = []
+    for i in range(int(seconds * fps)):
+        s.frame_set(round(i * FPS / fps))
+        s.render.filepath = os.path.join(out, "anim", f"{i:03d}.png")
+        bpy.ops.render.render(write_still=True)
+        frames.append(Image.open(s.render.filepath).convert("RGB"))
+    frames[0].save(os.path.join(out, f"{slug}_anim.gif"), save_all=True, append_images=frames[1:],
+                   duration=int(1000 / fps), loop=0)
 
 
 def sheet(out, slug, ref):

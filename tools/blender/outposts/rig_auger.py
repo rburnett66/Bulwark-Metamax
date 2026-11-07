@@ -5,7 +5,8 @@
 Footprint: a 3 × 3 pad (one unit = one battle cell). A light chamfered bunker framed by two tall pillars with lit
 panels; a dark portal over an ore chute that runs down to the ground carrying ore chunks (node `ore`: flows at
 runtime); low wings to each side with lit doors; two side augers angled down into rubble heaps with orange screw
-bands (nodes `auger_l`, `auger_r`: spin about their anchors); a radar grid on the roof (node `radar`, sweeps).
+bands (nodes `auger_l`, `auger_r`, clips: the screws spin); a radar grid on the roof (node `radar`, clip: it sweeps).
+All clips loop while the rig mines.
 --mk2 renders a REVIEW PREVIEW of the Mk II: trim and screw bands turn hot amber and the heaps grow. The shipped Mk II is
 the same GLB recoloured at runtime with 3× debris particles (tech plan §6.2), so the preview is not published.
 Front = -Y.
@@ -15,7 +16,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from outpost_common import anchor, box, build, cyl, drum, mats, octo, yloft  # noqa: E402
+from outpost_common import anchor, box, build, clip, cyl, drum, mats, node_frame, octo, yloft  # noqa: E402
 
 MK2 = "--mk2" in sys.argv
 
@@ -27,7 +28,7 @@ def heap(name, x, y, r, h, M, chunks=4, seed=0):
     for k in range(chunks):
         a = 2.4 * k + seed
         rr = r * (0.45 + 0.1 * (k % 3))
-        box(f"ore__{name}_{k}", (x + rr * math.cos(a), y + rr * math.sin(a), h * 0.38), (0.07, 0.06, 0.05), M["ore"])
+        box(f"{name}_ore_{k}", (x + rr * math.cos(a), y + rr * math.sin(a), h * 0.38), (0.07, 0.06, 0.05), M["ore"])
 
 
 def auger(name, pivot, yaw, M, accent):
@@ -39,10 +40,17 @@ def auger(name, pivot, yaw, M, accent):
     ]
     for k in range(4):
         parts.append(cyl(f"{name}__band_{k}", (0, 0, -0.12 - 0.13 * k), 0.12, 0.05, accent, sides=8, axis="Z"))
+    for k in range(10):                                  # helical teeth, so the spin reads on screen
+        t = math.radians(k * 60)
+        parts.append(box(f"{name}__tooth_{k}", (0.115 * math.cos(t), 0.115 * math.sin(t), -0.08 - 0.055 * k),
+                         (0.07, 0.07, 0.05), accent if k % 2 else M["light"]))
     parts.append(cyl(f"{name}__tip", (0, 0, -0.65), 0.08, 0.1, M["mid"], sides=8, axis="Z", r1=0.02))
+    euler = (math.radians(-62), 0, yaw)
     for ob in parts:
-        ob.rotation_euler = (math.radians(-62), 0, yaw)
+        ob.rotation_euler = euler
         ob.location = pivot
+    node_frame(name, pivot, euler)
+    clip(name, "spin", 0.8)                              # the screw turns while the rig mines
 
 
 def make():
@@ -116,6 +124,11 @@ def make():
         box(f"radar__bar_{k}", (-0.2 + 0.1 * k, 0.17, 1.48), (0.02, 0.02, 0.24), M["light"])
     box("radar__light", (0.27, 0.18, 1.6), (0.05, 0.02, 0.05), M["glow"])
 
+    # clips: ore rides down the chute one chunk spacing per loop; the radar sweeps
+    node_frame("ore", (0, -0.45, 0.52))
+    clip("ore", "slide", 0.25, vec=(0, -1.0 / 14, -0.39 / 14))
+    node_frame("radar", (0, 0.25, 1.29))
+    clip("radar", "sweep", 5.0, amp=50)
     anchor("radar", (0, 0.25, 1.29))
     anchor("ore_out", (0, -1.5, 0.05))
     anchor("power", (0, 0.85, 0.02))

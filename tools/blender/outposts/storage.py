@@ -12,7 +12,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from outpost_common import anchor, box, build, cyl, drum, mats, octo, ring  # noqa: E402
+from outpost_common import anchor, box, build, clip, cyl, drum, mats, node_frame, octo, ring  # noqa: E402
 
 ROOF = 1.0
 
@@ -92,6 +92,8 @@ def make():
     for ob in parts:                                       # tilted up toward the front left
         ob.rotation_euler = (math.radians(40), 0, math.radians(-35))
         ob.location = pivot
+    node_frame("dish", pivot, (math.radians(40), 0, math.radians(-35)))
+    clip("dish", "spin_world", 16.0)
 
     # two raised blocks at the right with stepped spires, one at the back centre
     octo("block_rb", 1.12, 0.65, ROOF, ROOF + 0.45, 0.48, 0.55, 0.14, M["light"])
