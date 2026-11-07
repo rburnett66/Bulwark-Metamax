@@ -126,6 +126,21 @@ powerGrids(outpost, map)                              → [{ stations, supply, d
 runRaid(outpost, raid, { map, sim })                  → { result: 'held'|'breach', defenses (new HP), events }
 ```
 
+**As built (O2).** `src/outpost/model.js` with 16 node tests in `src/outpost/model.test.mjs`. Where it differs from
+the sketch above:
+
+- **The signatures take a `ctx`.** `advance(o, toMs, { map, raid?, params? })`, `sell(o, ctx, { buyer })`,
+  `place(o, { pad | cell, kind }, { map, gold, now, unlockedTiers, unlocks })`; `upgrade`, `repair`, `repairCost`,
+  `setDeep`, `onlineProblems`, `confirmOnline`, `loadsReady`, `status` and `createOutpost(planet, { seed, map, now })`
+  complete the set. `powerGrids` returns `{ grids, powered: Set, off: { pad: 'reach' | 'supply' } }`.
+- **Stations are derived from the pads,** not stored separately: any pad holding a `power` building is a station.
+  Consumers draw in priority order: hub, storage, rigs, defenses, bays.
+- **`place` allows an unpowered pad,** so a remote rig can be built before its station; it simply stays off.
+- **`runRaid` is not in the model.** `advance` resolves each due raid through an optional `ctx.raid(outpost, raid)`
+  hook returning `{ result, defenses }`; without it a raid counts as held. O7 plugs the battle sim into that hook.
+- **Until O4 authors the real maps,** the model, its tests and the review page run on `src/outpost/draftLayout.js`
+  (`DRAFT_LAYOUT`, 40 × 24: a mesa within reach of the first station, a remote rare pad with its own station).
+
 ### 4.1 Advancing through time, in closed form
 
 `advance` never steps second by second. It cuts the interval `[t, toMs]` at every event: a build finishing, a raid,
@@ -191,6 +206,10 @@ contract holds.
 - A far-buyer sale pays `Far_Buyer_Mult` and costs home loyalty; before discovery `sell` refuses a far buyer.
 - `advance` never sells, whatever the tier of the shuttle; `sell` returns one entry per full load.
 
+**As built (O2):** every item above is tested except those that need the battle sim (measured raid sizes and the
+4–6 / 7–9 hold counts, raid determinism live vs headless, raid composition, the scripted first raid run headless).
+Those move to O7, with `ctx.raid`.
+
 ## 5. The contract and the missions
 
 ### 5.1 Granting it
@@ -240,7 +259,7 @@ renderer.
 - **Camera.** The concept image's three-quarter angle, framing the mesa. Pinch or wheel zooms between the whole mesa
   and one building, and a drag pans within the map. Tapping a building focuses it and opens its panel.
 - **The HUD** uses the battle HUD's visual language:
-  - top bar: gold, each ore in storage with its icon, the storage fill bar, power used / supplied, and the defense
+  - top bar: gold, each ore in storage with its icon, the storage fill bar, power used / supplied, and the
     defenses' state as a shield filled to their total HP;
   - bottom: **SELL** (with the number of loads), **BUILD** (pads and defenses), **REPAIR** when the defenses are worn;
   - the selected building's panel: status, tier, rate, the deep / shallow switch on a rig, and upgrade.
@@ -359,6 +378,11 @@ reviewed outside Claude:
 - each building model on a turntable;
 - a live-raid button.
 
+**As built (O2):** `prototype/test-game/tools/outpost/index.html` draws the draft layout on a canvas with the five
+save presets (or `?state=`), time buttons from +5 min to +3 days, a raid stand-in (wear, breach or off), SELL and far
+sell, Go online, build / upgrade / deep / repair on the selected pad or defense, defense placement, unlock switches,
+and the away report. The map view, turntables and live raid wait on O4–O7.
+
 ## 7. The menu and replay
 
 - **`menu.js`:** the `REPLAY LAST BATTLE` button becomes `OUTPOST`.
@@ -371,6 +395,18 @@ reviewed outside Claude:
   dropping the oldest. `bulwark:lastReplay` is migrated into it once.
 - **History:** `battleHistory.js` cards get a REPLAY button when the card's `at` has a stored replay. It closes the
   menu and calls `startReplay(log)`, the same path the old button used.
+
+**As built (O8):**
+
+- `src/menu/outpostButton.js` (`outpostButtonModel(save, target, now)`, 4 tests) gives the button its locked state,
+  status line and dot. The copy advances without a raid hook, so raids that came while away are counted
+  ("5 raids while away") rather than fought; the outpost view fights them (O7). Until the view exists (O5) the
+  unlocked button only flashes a message.
+- `src/save/replays.js` (6 tests) stores replays compact (`serializeLog` pretty-prints; compact is about half).
+  **Measured size:** about 0.15 KB per command, so a 100-command battle is about 15 KB and 20 of them about 0.3 MB.
+  `Replay_Keep` stays at 20, and a 1 MB budget drops the oldest replays when long battles would pass it. A storage
+  quota error also drops the oldest rather than failing.
+- The battle log entry and its stored replay share one `at`, taken when the battle ends.
 
 ## 8. Stories
 
@@ -398,7 +434,8 @@ O9 starts with O2 so every later story is reviewable outside Claude as it lands.
 - **Time-based play and clock cheats.** Handled by the guards in §4.1. Storage caps the gain from any clock trick
   at the value of one full storage per planet, which is small next to the tech tree.
 - **localStorage size.** 20 replays plus outposts must stay well under the browser quota. O8 measures a replay's
-  serialized size and lowers `Replay_Keep` if 20 would pass 1 MB.
+  serialized size and lowers `Replay_Keep` if 20 would pass 1 MB. *Measured (O8): about 0.3 MB for 20 typical
+  battles; a 1 MB budget in `replays.js` drops the oldest when long battles would pass it.*
 - **Catch-up cost.** 72 hours away is at most 24 raids, each a short headless sim of a few light units. O2 measures
   the catch-up time on a phone-class CPU and caps it under 200 ms, or spreads it across frames behind the away report.
 - **Model budget.** Six buildings plus the map must hold the battle view's frame time on the low tier. O6 measures

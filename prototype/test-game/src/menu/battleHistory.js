@@ -60,9 +60,10 @@ function cardHtml(e, m) {
   const win = e.result === 'win';
   const res = TIERS.filter((t) => e.harvested[t] > 0).map((t) => '<span class="bh-r" style="--c:' + TIER_COLOR[t] + '" title="' + esc(m.names[t]) +
     '">' + resourceIconHtml(resourceId(m.names[t]), 'ic') + '<b>' + fmt(e.harvested[t]) + '</b>' + (e.kept[t] ? '<em>+' + fmt(e.kept[t]) + ' kept</em>' : '') + '</span>').join('');
-  return '<li class="bh-card ' + (win ? 'win' : 'lose') + '" data-map="' + e.mapId + '" data-res="' + e.result + '">' +
+  return '<li class="bh-card ' + (win ? 'win' : 'lose') + '" data-map="' + e.mapId + '" data-res="' + e.result + '" data-at="' + e.at + '">' +
     '<div class="bh-c1"><span class="bh-res">' + (win ? 'VICTORY' : 'DEFEAT') + '</span><b class="bh-map">Map ' + e.mapId + (e.mapName ? ' · ' + esc(e.mapName) : '') + '</b>' +
-    '<time datetime="' + new Date(e.at).toISOString() + '" title="' + esc(new Date(e.at).toLocaleString('en-US')) + '">' + esc(e.when) + '</time></div>' +
+    '<time datetime="' + new Date(e.at).toISOString() + '" title="' + esc(new Date(e.at).toLocaleString('en-US')) + '">' + esc(e.when) + '</time>' +
+    (m.replays && m.replays.has(e.at) ? '<button type="button" class="bh-replay" data-replay="' + e.at + '" aria-label="Replay this battle">REPLAY</button>' : '') + '</div>' +
     '<div class="bh-c2">' + starBars(e.stars, e.totalWaves) + '<span class="bh-avg"><span><b>' + e.avg.toFixed(1) + '</b>★</span>' +
     (win ? '' : '<small>wave ' + e.waves + ' / ' + e.totalWaves + '</small>') + '</span></div>' +
     '<dl class="bh-c3"><div><dt>Score</dt><dd>' + fmt(e.score) + '</dd></div><div><dt>Kills</dt><dd>' + fmt(e.kills) + '</dd></div><div><dt>Time</dt><dd>' + mmss(e.seconds) + '</dd></div></dl>' +
@@ -156,6 +157,9 @@ export const HISTORY_CSS = `
   opacity:0; transform:translateY(10px); transition:opacity .3s, transform .35s cubic-bezier(.2,1,.3,1); }
 .bh-card.in { opacity:1; transform:none; }
 .bh-card.lose { --acc:var(--ember); }
+.bh-replay { align-self:flex-start; margin-top:6px; padding:4px 10px; font:inherit; font-size:10px; letter-spacing:.12em; color:var(--acc);
+  background:transparent; border:1px solid var(--acc); border-radius:3px; cursor:pointer; }
+.bh-replay:hover, .bh-replay:focus-visible { background:var(--acc); color:#10141a; outline:none; }
 .bh-card[hidden] { display:none; }
 .bh-c1 { grid-area:a; display:flex; flex-direction:column; gap:2px; min-width:0; }
 .bh-res { font:900 15px Orbitron,sans-serif; letter-spacing:.16em; color:var(--acc); }
@@ -203,7 +207,8 @@ export const HISTORY_CSS = `
 `;
 
 /**
- * Open the modal over `host` (the menu root). planet = PLANETS[key]; opts: { faction, save, onClose, reduced }.
+ * Open the modal over `host` (the menu root). planet = PLANETS[key]; opts: { faction, save, onClose, reduced,
+ * hasReplay(at), onReplay(at) } — a card whose battle still has a stored replay gets a REPLAY button (O8).
  * → { root, close }.
  */
 export function openBattleHistory(host, planet, opts = {}) {
@@ -211,6 +216,7 @@ export function openBattleHistory(host, planet, opts = {}) {
   if (!doc.getElementById('bh-css')) { const st = doc.createElement('style'); st.id = 'bh-css'; st.textContent = HISTORY_CSS; doc.head.appendChild(st); }
   if (!doc.getElementById('rs-fonts')) { const l = doc.createElement('link'); l.id = 'rs-fonts'; l.rel = 'stylesheet'; l.href = FONTS; doc.head.appendChild(l); }
   const m = historyModel(opts.save, planet, { faction: opts.faction || '' });
+  if (opts.hasReplay) m.replays = new Set(m.battles.map((e) => e.at).filter((at) => opts.hasReplay(at)));
   const root = doc.createElement('div');
   root.className = 'bh';
   root.style.setProperty('--hue', m.hue);
@@ -260,6 +266,7 @@ export function openBattleHistory(host, planet, opts = {}) {
   }
   doc.addEventListener('keydown', onKey, true);
   $$('[data-close]').forEach((x) => x.addEventListener('click', close));
+  $$('[data-replay]').forEach((x) => x.addEventListener('click', () => { const at = Number(x.dataset.replay); close(); if (opts.onReplay) opts.onReplay(at); }));
 
   const finish = () => { root.classList.add('on'); $$('.bh-node, .bh-card').forEach((e) => e.classList.add('in')); };
   if (reduced) finish();
