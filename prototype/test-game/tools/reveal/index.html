@@ -70,7 +70,7 @@ async function play(kind) {
       const outpost = q.get('outpost') === '0' ? null : { cardFor: (ship) => C.outpostCard(planet, ship), onAccept: (p) => log('outpost contract accepted ' + p), onDecline: (p) => log('outpost contract put off ' + p) };
       if (kind === 'ship') await M.playShipReveal({ planet, tier, reduce, firstTime: true, start: +(q.get('t') || 0), missions: ['Hold the Verdance line', 'Powder for the guns'], onSeen: (p) => log('ship seen ' + p), onContract: (p) => log('contract accepted ' + p), outpost });
       else if (kind === 'coast') await M.playShipReveal({ planet, tier, reduce, firstTime: false });
-      else if (kind === 'board') await M.boardShip({ planet, tier, reduce });
+      else if (kind === 'board') await M.boardShip({ planet, tier, reduce, outpost });
       else if (kind === 'collective') await M.playCollectiveIntroduces({ planet, tier, reduce, onContract: (p) => log('collective contract ' + p) });
     }
     log(`done ${kind}`); window.__review.done.push(kind);

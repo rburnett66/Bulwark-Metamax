@@ -125,7 +125,7 @@ async function speak(doc, calls) {
  * Inside the ship (F2–F8): the board wipe over the 3D flank, life, then either the path to the character, their
  * scene and the contract (story), or straight to exploring. Explore until DEPART; the depart wipe; resolve.
  */
-async function aboard(S, { story = false, onContract = () => {}, missions = [], outpost = null } = {}) {
+async function aboard(S, { story = false, onContract = () => {}, missions = [], outpost = null, missionsCard = true } = {}) {
   const { d, THREE, stage, ship } = S, doc = d.doc, reduce = d.reduce;
   const roomCanvas = doc.createElement('canvas'); roomCanvas.className = 'rv-rooms';
   const scanEl = doc.createElement('div'); scanEl.className = 'rv-scan';
@@ -203,8 +203,8 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
       });
       if (offer) await speak(doc, [offer]);
     } else if (greet || offer) await speak(doc, [greet, offer]);
-    // F6 — the missions, offered as a contract
-    await new Promise((res) => {
+    // F6 — the missions, offered as a contract (not on a later boarding, which only carries the outpost offer)
+    if (missionsCard) await new Promise((res) => {
       const list = missions.length ? '<br>' + missions.slice(0, 5).map((m) => '· ' + m).join('<br>') : '';
       showContractModal(d.root, {
         kicker: 'CONTRACT — ' + ship.name.toUpperCase(),
@@ -318,11 +318,15 @@ export async function playShipReveal({ planet, firstTime = true, tier = 'high', 
 }
 
 /** Re-board a ship already met (tap its station): the flank, the board wipe, explore, depart. */
-export async function boardShip({ planet, tier = 'high', reduce = null, mount } = {}) {
+export async function boardShip({ planet, tier = 'high', reduce = null, mount, outpost = null } = {}) {
   const S = await openShipStage({ planet, tier, reduce, mount, label: 'Boarding' });
   try {
     await S.d.timed(S.d.reduce ? 0.2 : 1.2, (t, dt) => { S.stage.frame(FLANK_S, dt); });
-    await aboard(S, { story: false });
+    // the outpost contract is still on offer (put off, or the ship came before outposts existed) [MM-story_mw5oe8km_k]:
+    // boarding walks to the captain and makes the offer again; otherwise boarding is free exploring
+    const card = outpost && (outpost.card || (outpost.cardFor && outpost.cardFor(S.ship.name)));
+    if (card) await aboard(S, { story: true, outpost: { ...outpost, card }, missionsCard: false });
+    else await aboard(S, { story: false });
   } finally { S.dispose(); S.d.close(); }
 }
 

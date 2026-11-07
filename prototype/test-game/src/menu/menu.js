@@ -990,7 +990,10 @@ export function createMenu(mountEl, cbs) {
     if (!planet || revealing || introOpen) return;
     if (planet === 'collective') { openCollectiveIntro(); return; }
     revealing = true; if (stage) stage.pause();
-    import('../reveal/shipReveal.js').then((M) => M.boardShip({ planet, tier: revealTier() }))
+    const offer = outpostOffer(loadSave(), planet);   // still on offer: boarding makes it again (Vane's lines + card)
+    const outpost = offer ? { cardFor: (ship) => outpostCard(planet, ship), onAccept: (k) => acceptOutpost(k),
+      onDecline: (k) => { updateSave((s) => declineOutpostContract(s, k, { now: Date.now() })); missionsChanged(); } } : null;
+    import('../reveal/shipReveal.js').then((M) => M.boardShip({ planet, tier: revealTier(), outpost }))
       .catch((e) => console.warn('[menu] board', e))
       .finally(() => { revealing = false; syncStage(); });
   }
