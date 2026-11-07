@@ -18,8 +18,9 @@ function fresh(gold = 10_000) {
 }
 const flowOpts = { allOpen: true };
 
-test('the raid seam passes no hook until story O7 (raids count as held)', () => {
-  assert.equal(raidHookFor(map, 1), undefined);
+test('the raid seam runs raids on the battle sim (O7): a hook for a map, none without one', () => {
+  assert.equal(typeof raidHookFor(map, 1), 'function');
+  assert.equal(raidHookFor(null, 1), undefined);
 });
 
 test('opening a fresh kit advances nothing, shows no report, and the outpost waits to go online', () => {
