@@ -640,6 +640,39 @@ deposit's debris emitter runs at about 3× its particle rate with larger chunks.
 - **Which head:** the `Ores` sheet gains a `Rig_Head` column (auger, laser, brine, crystal, bore, shielded), filled
   from the design's §8.4 table. Validation refuses a planet whose three ores share a head.
 
+**As built (O10, O11 rigs, O15 models; `tools/blender/outposts/`).** Seven new models on the same pipeline, each a
+script with three LODs, the `trim` slot, `glow` emissives and looping clips, published to `content/outposts/` with a
+review sheet and an `--anim` GIF. Triangle counts are well under the table's budgets, in line with the kit already
+built (the O5 rigs are about 2k at LOD0):
+
+| Slug (kind, tier / head) | Script, art | Footprint × height (cells) | Tris LOD0 / 1 / 2 | Clips (all loop while working) |
+|---|---|---|---|---|
+| `rig_bore` (rig, `bore`) | `rig_bore.py`, `mv_drill_bore*.jpg` | 3.1 × 2.7 × 3.1 | 2,736 / 2,592 / 1,564 | `bore` (core and bit spin), `auger_r`, `ore`, `fan`, `dish` |
+| `rig_crystal` (rig, `crystal`) | `rig_crystal.py`, `set_crystal_refinery.jpg` | 2.9 × 3.1 × 2.1 | 2,836 / 2,748 / 1,736 | `resonator` (the arm collar turns), `shards` (rise to the collector), `dish` |
+| `rig_shielded` (rig, `shielded`) | `rig_shielded.py`, **no art** (design §8.4, PROMPTS.md §2) | 2.9 × 2.8 × 1.5 | 3,254 / 2,966 / 1,194 | `arm_l`, `arm_r` (swing canisters), `cart` (rail), `beacon_l`, `beacon_r` |
+| `resourceBay` (resourceBay) | `resource_bay.py`, `mv_garage.jpg`, `harvester_bay.jpg` | 4.0 × 3.9 × 1.8 | 1,574 / 1,286 / 802 | `door` (right bay's up-and-over door, `swing`), `harvester` (drives out and back) |
+| `upgradeBay` (upgradeBay) | `upgrade_bay.py`, `mv_upgrade_pad.jpg`, `upgrade_bay.jpg` | 3.9 × 4.1 × 2.8 | 2,384 / 1,916 / 1,148 | `craft` (hover bob), `scan` (scanner frame rises and falls) |
+| `habitat` (habitat 1) | `habitat.py`, `set_habitat.jpg` | 3.8 × 3.8 × 1.5 | 1,688 / 1,416 / 1,040 | `vent` |
+| `habitat_ii` (habitat 2) | `habitat.py --tier2` | 3.8 × 3.8 × 2.1 | 2,878 / 2,370 / 1,738 | `vent` |
+
+- **Mapping by data.** The bays' slugs are their kinds (`resourceBay`, `upgradeBay`), as the view looks them up
+  (`modelSlug` in `render3d/outposts/outpostModels.js`, O10 merge); the only mapping change here is habitat tier 2 →
+  `habitat_ii`. `publish.py` also writes each slug's `kind`, `tier` and (rigs) `rigHead` into `outposts.json`. A test
+  checks every manifest entry round-trips through `modelSlug` and every `Rig_Head` in the ores data has a published
+  rig, so the view's `hasModel` picks the new models up in place of its placeholder blocks.
+- **Storage door (owner: closed while unpowered).** `storage.py`'s portal is now a frame round a dark recess holding
+  node `door`: a shutter panel with its pivot at the sill, **resting closed**. The view's `setDoor` (outpostScene.js)
+  opens it while powered by squashing it to 8 % of its height and lifting it 0.6 into the header, where it hides; no
+  clip (a looping clip would cycle it while working). `outposts.html` has an "Unpowered" toggle doing the same.
+- **New clip kind `swing`** (`outpost_common.py`): eases from rest to `amp` degrees about the node's axis and back
+  (the garage door). Extra emissive colours ride the `glow` role by vertex colour: the bore's hot orange core bands,
+  the shielded rig's amber beacons and green canister windows, the habitat's warm windows (dimmed so Cycles does not
+  blow them out to yellow). The Mk II remap only turns blue lights amber, so these keep their colour.
+- **Habitat II** is the same base with added modules (the tier II rule above): the ribbed dome with portholes and
+  aerials replaces the stepped roof, and two capsule pods on corridors join the sides.
+- **Unfinished:** the Shielded Extractor waits on the owner's art (`ref/mv_shielded.jpg`, PROMPTS.md §2); Storage II
+  (the extra tank) is still not modelled.
+
 ### 6.3 Conduits
 
 The glowing double lines are generated, not modelled: a path from each station to every powered pad within its reach,

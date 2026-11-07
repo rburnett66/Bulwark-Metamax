@@ -43,7 +43,8 @@ _FRAMES, _CLIPS = {}, {}
 
 
 def node_frame(node, pivot, euler=(0.0, 0.0, 0.0)):
-    """The pivot a node turns about: a point and the node's rest orientation (radians, XYZ)."""
+    """The pivot a node turns about: a point and the node's rest orientation (radians, XYZ). A node with no clip is
+    still framed so the game can set it by hand (the storage door: closed at rest, lifted open while powered)."""
     _FRAMES[node] = (Vector(pivot), Euler(euler))
 
 
@@ -52,7 +53,8 @@ def clip(node, kind, period, axis="Z", amp=0.0, vec=(0.0, 0.0, 0.0), turns=1):
     spin   - full turns about the node's own axis (an auger screw);   spin_world - about a world axis (a dish);
     rock   - a sine swing of `amp` degrees about the node's own axis (a pump beam);   sweep - the same about a world
     axis (a radar);   slide - moves by `vec` over the period, then snaps back (ore riding a chute, one chunk spacing);
-    travel - eases out by `vec` and back over the period (an ore cart running its track)."""
+    travel - eases out by `vec` and back over the period (an ore cart running its track);   swing - eases from the
+    rest pose to `amp` degrees about the node's own axis and back (a garage door opening and closing)."""
     assert node in _FRAMES, f"clip on {node} needs node_frame first"
     _CLIPS[node] = dict(kind=kind, period=period, axis=axis, amp=amp, vec=Vector(vec), turns=turns)
 
@@ -72,9 +74,14 @@ def _keys(node):
     out = []
     for i in range(steps + 1):
         t = i / steps
-        a = 2 * math.pi * c["turns"] * t if k.startswith("spin") else math.radians(c["amp"]) * math.sin(2 * math.pi * t)
+        if k.startswith("spin"):
+            a = 2 * math.pi * c["turns"] * t
+        elif k == "swing":
+            a = math.radians(c["amp"]) * (0.5 - 0.5 * math.cos(2 * math.pi * t))
+        else:
+            a = math.radians(c["amp"]) * math.sin(2 * math.pi * t)
         r = Quaternion(ax, a)
-        out.append((n * t, p.copy(), q0 @ r if k in ("spin", "rock") else r @ q0))
+        out.append((n * t, p.copy(), q0 @ r if k in ("spin", "rock", "swing") else r @ q0))
     return out
 
 
@@ -350,7 +357,7 @@ def build(slug, make, argv=None, ref=None):
     return stats
 
 
-def _anim_preview(out, slug, bounds, seconds=3.0, fps=12, res=(640, 480)):
+def _anim_preview(out, slug, bounds, seconds=3.0, fps=8, res=(560, 420)):
     """Render the LOD0 clips from the concept angle for `seconds` and write {slug}_anim.gif (a review aid)."""
     from PIL import Image
     lo, hi = bounds
@@ -366,7 +373,8 @@ def _anim_preview(out, slug, bounds, seconds=3.0, fps=12, res=(640, 480)):
     cam.location = ctr + Vector((math.cos(p) * math.cos(y), math.cos(p) * math.sin(y), math.sin(p))) * size * 1.35
     cam.rotation_euler = (ctr - cam.location).to_track_quat("-Z", "Y").to_euler()
     s.render.resolution_x, s.render.resolution_y = res
-    s.cycles.samples = 12
+    s.cycles.samples = 8
+    s.render.use_persistent_data = True                  # keep the BVH between frames: the GIF renders much faster
     frames = []
     for i in range(int(seconds * fps)):
         s.frame_set(round(i * FPS / fps))

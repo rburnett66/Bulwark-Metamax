@@ -25,11 +25,32 @@ MODELS = {
     "shuttle": "Cargo Shuttle: flies off the hub on SELL",
     "power": "Power Station I: drum reactor",
     "power_ii": "Power Station II: energy reactor",
-    "storage": "Storage: ore depot with the fill hologram",
+    "storage": "Storage: ore depot with the fill hologram; the door shutter shuts while unpowered",
+    "resourceBay": "Resource Bay: the harvesters' garage, two bays",
+    "upgradeBay": "Upgrade Bay: hangar pad, two control towers and the craft",
+    "habitat": "Habitat I: living quarters (+2 guns)",
+    "habitat_ii": "Habitat II: the quarters with the dome and two pods (+4 guns)",
     "rig_auger": "Auger rig: iron and the other auger ores",
     "rig_laser": "Laser Cutter rig: aluminum and the other laser ores",
     "rig_brine": "Brine Pump rig: lithium and the other brine ores",
+    "rig_crystal": "Crystal Harvester rig: silicon, yttrium, iridium",
+    "rig_bore": "Deep Bore rig: cobalt and the other deep-bore ores",
+    "rig_shielded": "Shielded Extractor rig: uranium (no owner art yet)",
 }
+# The game kind each slug stands for (outpostModels.js modelSlug): kind, tier, and the rig's Rig_Head. Written into
+# the manifest so the game and the review page can map kinds to files by data. The bays' slugs ARE their kinds
+# (resourceBay, upgradeBay): the view looks them up by kind.
+KINDS = {
+    "hub": ("hub", 1), "shuttle": ("shuttle", 1), "power": ("power", 1), "power_ii": ("power", 2),
+    "storage": ("storage", 1), "resourceBay": ("resourceBay", 1), "upgradeBay": ("upgradeBay", 1),
+    "habitat": ("habitat", 1), "habitat_ii": ("habitat", 2),
+}
+
+
+def kind_of(slug):
+    """{kind, tier[, rigHead]} for a slug, as modelSlug maps them."""
+    kind, tier = KINDS.get(slug, ("rig", 1))
+    return {"kind": kind, "tier": tier, **({"rigHead": slug[len("rig_"):]} if kind == "rig" else {})}
 
 
 def glb_json(path):
@@ -70,7 +91,7 @@ def describe(slug):
             acc = info["accessors"][p["attributes"]["POSITION"]]
             lo = [min(a, b) for a, b in zip(lo, acc["min"])]
             hi = [max(a, b) for a, b in zip(hi, acc["max"])]
-    return {"label": MODELS[slug], "lods": lods, "clips": clips, "nodes": named, "anchors": anchors,
+    return {"label": MODELS[slug], **kind_of(slug), "lods": lods, "clips": clips, "nodes": named, "anchors": anchors,
             "footprint": [round(hi[0] - lo[0], 2), round(hi[2] - lo[2], 2)], "height": round(hi[1], 2)}
 
 
@@ -88,7 +109,7 @@ def main(slugs):
         m = manifest[slug]
         print(f"[publish] {slug}: LOD0 {m['lods'][0]['tris']} tris, {m['lods'][0]['bytes'] // 1024} KB; "
               f"clips {m['clips'] or '-'}; nodes {m['nodes'] or '-'}")
-    manifest = {k: manifest[k] for k in MODELS if k in manifest}
+    manifest = {k: {**manifest[k], "label": MODELS[k], **kind_of(k)} for k in MODELS if k in manifest}   # entries not rebuilt get their kind too
     with open(path, "w") as f:
         json.dump(manifest, f, indent=1)
     print(f"[publish] {len(manifest)} models → {os.path.relpath(path)}")

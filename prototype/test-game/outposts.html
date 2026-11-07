@@ -58,6 +58,7 @@
     <label class="tog"><input type="checkbox" id="spin" checked> Turntable</label>
     <label class="tog"><input type="checkbox" id="grid"> Cell grid (1 cell squares)</label>
     <label class="tog"><input type="checkbox" id="anchors"> Anchors</label>
+    <label class="tog"><input type="checkbox" id="closed"> Unpowered (storage door shut)</label>
   </div>
   <div class="group"><div>Level of detail</div>
     <div class="seg" id="lods"><button data-lod="0" aria-pressed="true">LOD0</button><button data-lod="1">LOD1</button><button data-lod="2">LOD2</button></div>
@@ -171,6 +172,20 @@ function setWorking() {
   else mixer.update(0);
 }
 
+// The storage door (O10): node `door` rests closed; powered, the view (outpostScene.js setDoor) squashes it to 8 % of
+// its height and lifts it 0.6 into the header. The same here, so the open and the unpowered look can be reviewed.
+function applyPose() {
+  if (!current) return;
+  const closed = document.getElementById('closed').checked;
+  current.scene.traverse((o) => {
+    if (!o.userData || o.userData.node !== 'door' || !o.userData.pivot) return;
+    if (!o.userData.doorRest) o.userData.doorRest = { y: o.position.y, sy: o.scale.y };
+    const r0 = o.userData.doorRest;
+    o.scale.y = closed ? r0.sy : r0.sy * 0.08;
+    o.position.y = closed ? r0.y : r0.y + 0.6;
+  });
+}
+
 function anchorsOn(root) {
   const show = document.getElementById('anchors').checked;
   root.traverse((o) => {
@@ -198,7 +213,7 @@ async function show(nextSlug, nextLod = lod) {
   gltf.scene.userData.debris = [];
   gltf.scene.traverse((o) => { if (o.name.startsWith('anchor_debris')) gltf.scene.userData.debris.push(o); });
   parts.length = 0;
-  setWorking(); applyLook(); anchorsOn(gltf.scene);
+  setWorking(); applyLook(); applyPose(); anchorsOn(gltf.scene);
   const m = manifest[slug], l = m.lods[lod];
   const clips = Object.entries(m.clips).map(([k, v]) => `${k} (${v}s)`).join(', ') || 'none';
   document.getElementById('stats').innerHTML = `
@@ -296,6 +311,7 @@ for (const [name, hex] of Object.entries(TRIMS)) {
 document.getElementById('mk2').onchange = applyLook;
 document.getElementById('working').onchange = setWorking;
 document.getElementById('grid').onchange = (e) => { grid.visible = e.target.checked; };
+document.getElementById('closed').onchange = applyPose;
 document.getElementById('anchors').onchange = () => current && anchorsOn(current.scene);
 for (const b of document.querySelectorAll('#lods button')) b.onclick = () => show(slug, +b.dataset.lod);
 
