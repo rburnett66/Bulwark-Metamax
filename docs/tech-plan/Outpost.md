@@ -298,6 +298,38 @@ renderer.
 - **Performance.** The battle's quality tiers apply. The outpost view stops the menu stage while open, as the reveals
   do.
 
+**As built (O6):** `src/outpost/view/` (`outpostView.js` opens it; the menu's OUTPOST button calls it and pauses its
+own 3D stage while it is open, then refreshes the button, the missions and the bank). The map goes through the battle
+path: `outpostBoard.js` builds the board with `buildTerrainMap` on the map's Forge export and hands
+`createRenderer3D` the baked level (`content/maps/baked/<planet>-outpost/`) when it exists; ground, palette, decor,
+resource fields and the defenses (System `STR-MG` / Cannon / Wall, darkened and sparking when worn) are the battle
+renderer's, with no waves and the ring fog off. `outpostScene.js` adds pad plates, the GLB buildings
+(`render3d/outposts/outpostModels.js`, factored from the O5 review page: LODs, trim slot, clips while working, Mk II
+amber + 2× + 3× debris, rise / cool / warm / unpowered states, offline lights dimmed), conduits (two merged meshes, a
+pulse toward the building), procedural ore outcrops (cut face under a rig, dim with a lock when locked), mining
+debris, the storage hologram's fill and the SELL sequence (`sellTimeline.js`: drain, crates along the conduit route,
+shuttle with `createEngineFx`, camera shake, ore splatter, "$N" pops via `goldPopups`, count-up; reduced motion keeps
+the pops and count-up). `hud.js` is the HUD, panels, BUILD sheet (pads, then defenses placed on `defenseRing`), the
+GO ONLINE card (`onlineProblems` / `confirmOnline`) and the away report; `hudModel.js`, `layout.js`, `conduits.js`,
+`awayReport.js` and `session.js` are pure and node-tested (24 tests). On open the away catch-up runs one raid window per frame (`session.openChunked`; advance is split-invariant, so it equals one call) behind the loading line, for O7's sim raids. Every action runs `session.act`: advance the
+save to now, the model function, the gold, then `settleOutpost`. `Date.now()` is read only by the view (on open, a 1 s
+live tick that saves only when a raid or build lands, and each action). Raids: `raidSeam.js` `raidHookFor(map, step)`
+is the one place O7's `makeRaidHook` plugs in; it returns no hook yet, so raids count as held. Review:
+`tools/outpost/view.html` (presets, quality, clock speed, stand-in raids; in-memory save), linked from
+`tools/outpost/index.html`. Deviations: deposits are procedural outcrops in `outpostScene.js`, not a new kind in
+`resources/models.js`; the Harvester and Upgrade Bays draw as placeholder blocks until O10; the hull is drawn nearly
+dielectric and lifted (`bodyLift`) because the battle view has no environment map and writes linear colour; the camera
+keeps the battle pitch (37°) and its 95 distance cap, so a portrait phone frames the mesa's pads rather than the whole
+rim (`layout.framedCamera` falls back), and the three-quarter angle is a 0.38 rad yaw. **Frame time, low tier, full
+kit** (every pad built: hub, three stations, Rig Mk II, laser and brine rigs, Storage II, both bays, 12 defenses; the
+`fullkit` preset of `tools/outpost/view.html`, `handle.measure(60)`: script + draw + `gl.finish` per frame, then 20
+frames during a SELL): 390 × 844 — 8.9 ms average (p95 16), 73 draw calls, 90k triangles; 844 × 390 — 12.0 ms (p95
+17.1), 90 calls; 1280 × 800 — 14.7 ms (p95 22.2), 85 calls; during a SELL 12.7–16.5 ms average, p95 50–62 ms (the
+shuttle's first frames build its engine FX and LOD clones). Measured in headless Chromium on SwiftShader (software GL)
+on a 2-core Xeon at 2.1 GHz, where the frame interval (215–677 ms) is the software rasteriser and the headless
+compositor, not the view; these are a ceiling for the CPU side, not a phone figure, and need a real low-tier phone
+before launch. The live raid's frame time is O7's.
+
 ### 6.2 Building models
 
 New GLB models through the capital ship pipeline: built in headless Blender, three LODs, loaded with `prepareShip`.

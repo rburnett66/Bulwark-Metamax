@@ -876,8 +876,8 @@ export function boot(mountEl, seed) {
       // the battle's OWN map, loaded and awaited before playback (was: the default map + a 50 ms race) [MM-task_mvgyb5ma_1]
       void startReplay(lastReplayLog).catch((e) => { console.error('[Bulwark] replay failed', e); flashMessage(hud, 'replay failed'); });
     },
-    // OUTPOST (O8): the outpost view arrives with story O5; until then the dev review page shows the outpost
-    onOutpost: (planet) => { flashMessage(hud, 'the ' + planet + ' outpost view is coming (story O5)'); },
+    // OUTPOST (O8): the menu opens the outpost view itself (O6, src/outpost/view/outpostView.js) and calls
+    // onTechChanged when it closes, so the next battle sees the bank the outpost changed
     // a Battle History card's REPLAY (O8): that battle's own stored replay
     hasReplay: (at) => !!replayFor(replayStore, at),
     onReplayBattle: (at) => {

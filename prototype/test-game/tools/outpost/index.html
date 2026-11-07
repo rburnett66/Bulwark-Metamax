@@ -41,7 +41,7 @@
 <main>
   <div>
     <h1>Outpost: model review</h1>
-    <p class="sub">The outpost's rules running on <span id="mapName">the Verdance outpost map</span>. Tap a pad to build or inspect it, tap a defense to repair it. Time only moves when you move it. Raids use a stand-in outcome until the battle sim runs them (O7). The building models are on <a href="../../outposts.html" style="color:var(--cyan)">the model review page</a>.</p>
+    <p class="sub">The outpost's rules running on <span id="mapName">the Verdance outpost map</span>. Tap a pad to build or inspect it, tap a defense to repair it. Time only moves when you move it. Raids use a stand-in outcome until the battle sim runs them (O7). The building models are on <a href="../../outposts.html" style="color:var(--cyan)">the model review page</a>; the game's 3D outpost view is on <a href="./view.html" style="color:var(--cyan)">the view review page</a>.</p>
     <div class="viewbar"><span>View</span><button id="vMesa" type="button">Mesa</button><button id="vMap" type="button">Whole map</button><span id="viewNote"></span></div>
     <canvas id="map" width="1200" height="720" aria-label="Outpost map"></canvas>
     <section style="margin-top:10px"><h2>Away report and events</h2><div id="log"></div></section>
@@ -58,6 +58,7 @@
           <option value="breached">Breached, defenses worn</option>
         </select>
         <button id="reset">Load</button>
+        <button id="open3d" class="primary" title="The game's own outpost view (story O6) on this preset">Open the 3D view</button>
       </div>
     </section>
     <section>
@@ -363,6 +364,9 @@ cv.addEventListener('click', (e) => {
   draw();
 });
 $('reset').onclick = () => load($('preset').value);
+// the real outpost view (O6) on the same preset: view.html builds that save in memory (the game save is untouched)
+const VIEW_STATE = { fresh: 'fresh', running: 'running', full: 'full', raid: 'raided', breached: 'breached' };
+$('open3d').onclick = () => { location.href = `./view.html?state=${VIEW_STATE[$('preset').value] || 'running'}`; };
 $('time').onclick = (e) => { const m = +e.target.dataset.adv; if (m) advanceBy(m); };
 $('online').onclick = () => { const r = confirmOnline(o, map, now); if (r.error) log(`Refused: ${r.error}`, 'err'); else { o = r.outpost; log(`ONLINE. The first raid comes in ${OUTPOST.First_Raid_Sec / 60} minutes.`, 'ok'); draw(); } };
 const doSell = (buyer) => {

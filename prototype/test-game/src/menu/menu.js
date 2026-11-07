@@ -510,10 +510,29 @@ export function createMenu(mountEl, cbs) {
   // (no classic-board button any more: every battle is a faction's own forge map — owner 2026-11-04 [MM-story_mw2ml1ze_e])
   // OUTPOST replaces REPLAY LAST BATTLE (O8 [MM-story_mw5oeidu_p]): locked until a contract is accepted; the status
   // line + red dot come from a copy of the outpost advanced to now. Replays moved to the Battle History cards.
+  // O6 [MM-story_mw5oeer7_n]: it opens the outpost view full screen; the menu's own 3D stage rests while it is open,
+  // as it does under the reveals, and the button, missions and gold refresh when it closes
+  let outpostOpen = false;
   const outpostBtn = mkBtn('OUTPOST', ' ', 'bwm-outpost', () => {
     const m = outpostButtonModel(loadSave(), targetKey());
-    if (!m.locked && cbs.onOutpost) cbs.onOutpost(m.planet);
+    if (!m.locked && !outpostOpen) openOutpost(m.planet);
   });
+  async function openOutpost(planet) {
+    outpostOpen = true;
+    if (stage) stage.pause();
+    try {
+      const V = await import('../outpost/view/outpostView.js');
+      const q = (() => { try { return new URLSearchParams(location.search).get('quality'); } catch (e) { return null; } })();
+      const v = await V.openOutpostView({ planet, mount: doc.body, tier: ['high', 'standard', 'low'].includes(q) ? q : null, onChange: () => refreshOutpost() });
+      if (cbs.onOutpost) cbs.onOutpost(planet);
+      await v.closed;
+    } catch (e) { console.error('[outpost] the outpost view failed', e); }
+    finally {
+      outpostOpen = false;
+      syncStage(); refreshOutpost(); missionsChanged();
+      if (cbs.onTechChanged) cbs.onTechChanged();   // the bank changed (sales, builds): the next battle sees it
+    }
+  }
   function refreshOutpost() {
     let m;
     try { m = outpostButtonModel(loadSave(), targetKey()); } catch (e) { console.error('[outpost] status failed', e); return; }
@@ -1025,7 +1044,7 @@ export function createMenu(mountEl, cbs) {
 
   // ── live 3D (menuStage.js): loads three.js once, runs only while the menu shows a screen with a 3D picture
   let current = 'main', stage = null, stageLoading = false, stageFailed = false;
-  const wants3D = () => root.style.display !== 'none' && (current === 'main' || current === 'survey');
+  const wants3D = () => root.style.display !== 'none' && !outpostOpen && (current === 'main' || current === 'survey');
   function syncStage() {
     if (stage) { if (wants3D()) stage.start(); else stage.pause(); return; }
     if (stageFailed || stageLoading || !wants3D()) return;
