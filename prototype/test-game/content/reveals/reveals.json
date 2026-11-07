@@ -7,12 +7,60 @@
   },
   "factionShip": {
     "outpost": {
-      "_source": "Outpost-Design §2.2 (draft lines; the owner's own words kept) [MM-story_mw5oe8km_k]. One set per planet; the other eight come with story O11.",
+      "_source": "Outpost-Design §2.2 (draft lines; the owner's own words kept) [MM-story_mw5oe8km_k]. One set per planet. The other eight (air … greenies) are O11 DRAFTS FOR OWNER REVIEW [MM-story_mw5oeob4_s], written in each captain's voice (missions.json capitalShips; voicepacks.json characters and phrases) to the same four beats and the same facts: the contract grants only the base, the player builds power, a mining station on the planet's common ore and a storage tower with their own gold, and raids will come.",
       "ground": [
         { "beat": "greet", "line": "You have done well gathering what lies on the surface of Verdance. Better than most of my own regiments.", "intent": "statement" },
         { "beat": "turn", "line": "So tell me: how are you at mining? And farming?", "intent": "question" },
         { "beat": "offer", "line": "We have a site for you: an outpost base on the mesa. Build your power, a mining station on the iron and a storage tower with your own gold, and the place is yours to run.", "intent": "statement" },
         { "beat": "warning", "line": "Not everybody aboard is happy about your progress. Help us bring up the ore and you will earn some moral equity with the realm. There will be opposition. We will pay well.", "intent": "statement" }
+      ],
+      "air": [
+        { "beat": "greet", "line": "You picked Florael's meadows clean and still came home in one piece, little one. Half my squadron could learn from that.", "intent": "statement" },
+        { "beat": "turn", "line": "So tell me: ever had your hands in the ground instead of the sky? Mining, I mean.", "intent": "question" },
+        { "beat": "offer", "line": "There's an outpost base on the mesa down there, and it's yours. That's all I'm handing you. Build your power, a mining station on the magnesium and a storage tower with your own gold, and you run the place.", "intent": "statement" },
+        { "beat": "warning", "line": "Not every pilot aboard likes how fast you're climbing, and some of them will come at that mesa. Keep your guns up and bring the magnesium home. The Dawnwing pays well, and the dawn keeps its promises.", "intent": "statement" }
+      ],
+      "hightech": [
+        { "beat": "greet", "line": "Your surface yields on Ochre beat our forecasts. I checked the numbers twice; they hold.", "intent": "statement" },
+        { "beat": "turn", "line": "Next question, then: can you run extraction? Not salvage. Mining.", "intent": "question" },
+        { "beat": "offer", "line": "We have a site: an outpost base on the mesa, and nothing more. Build your power, a mining station on the silicon and a storage tower with your own gold. Run it well and the outpost is yours.", "intent": "statement" },
+        { "beat": "warning", "line": "Not everyone on the Meridian likes a contractor outperforming the division, and some of them will come at that mesa. Expect it. Bring up the silicon and we will pay well. I sign my name to that.", "intent": "statement" }
+      ],
+      "artillery": [
+        { "beat": "greet", "line": "You worked Kessra's craters cleaner than my own survey crews. Good ranging.", "intent": "statement" },
+        { "beat": "turn", "line": "Now tell me: can you dig as well as you gather?", "intent": "question" },
+        { "beat": "offer", "line": "There is an outpost base on the mesa, ranged and cleared. That is all we hand you. Build your power, a mining station on the nickel and a storage tower with your own gold, and the site is yours.", "intent": "statement" },
+        { "beat": "warning", "line": "Some of the gun crews aboard do not like your progress, and they will not stay at their posts over it. Expect them on that mesa. Bring the nickel up and Siegeholm pays well. I answer for each round, and I will answer for this.", "intent": "statement" }
+      ],
+      "water": [
+        { "beat": "greet", "line": "You gathered from Rime's ice like one of the Reef-Born, landwalker. The shoal noticed.", "intent": "statement" },
+        { "beat": "turn", "line": "But can you go deeper than the surface? Can you mine?", "intent": "question" },
+        { "beat": "offer", "line": "There is a mesa above the frozen ponds with an outpost base on it, and that base is yours. Build your power, a mining station on the manganese and a storage tower with your own gold, and the place is yours to keep.", "intent": "statement" },
+        { "beat": "warning", "line": "Not every clan aboard is glad of you. Some will come for that mesa the way raiders come for the shoal. Bring up the manganese and the Reef-Born will pay well. The reef remembers who guards it.", "intent": "statement" }
+      ],
+      "arcane": [
+        { "beat": "greet", "line": "You gathered from Cinder's ash fields and harmed no one doing it. The faithful noticed.", "intent": "statement" },
+        { "beat": "turn", "line": "Tell me, then: will you work the deep places too? Will you mine?", "intent": "question" },
+        { "beat": "offer", "line": "There is an outpost base on the mesa above the lava pools. That is all the Cathedral gives. Build your power, a mining station on the zinc and a storage tower with your own gold, and it is yours to tend.", "intent": "statement" },
+        { "beat": "warning", "line": "Some aboard say the Hierophant's ore should never pass through an outsider's hands, and they will come to that mesa. Bring up the zinc for the people, not the throne, and we will pay well.", "intent": "statement" }
+      ],
+      "space": [
+        { "beat": "greet", "line": "Your survey of Lumen's surface matched our charts better than our own teams managed.", "intent": "statement" },
+        { "beat": "turn", "line": "So, next on my list: how are you at mining?", "intent": "question" },
+        { "beat": "offer", "line": "We've charted a site for you: an outpost base on the mesa between the craters. Build your power, a mining station on the thorium and a storage tower with your own gold, and the outpost is yours. By the charter.", "intent": "statement" },
+        { "beat": "warning", "line": "Not everyone in the fleet likes a local moving this fast, and some of them will come for that mesa. My protection doesn't reach the surface. Bring up the thorium and the fleet pays well.", "intent": "statement" }
+      ],
+      "dark": [
+        { "beat": "greet", "line": "You gathered among the glowing groves of Xenthe and left them whole. The Movement saw that.", "intent": "statement" },
+        { "beat": "turn", "line": "Would you go beneath them? Would you mine for us?", "intent": "question" },
+        { "beat": "offer", "line": "There is an outpost base on the mesa, and I can give you that much. Build your power, a mining station on the neodymium and a storage tower with your own gold, and it is yours.", "intent": "statement" },
+        { "beat": "warning", "line": "Not every sister aboard wants an unawakened outsider holding our ground. Some will come to that mesa, and I cannot stop them all. Bring up the neodymium and we will pay well. I'll answer for it.", "intent": "statement" }
+      ],
+      "greenies": [
+        { "beat": "greet", "line": "You gathered from Vexmire's bogs and took no more than you needed. The hive marked it, single stalk.", "intent": "statement" },
+        { "beat": "turn", "line": "Now: will you tend the deep stores as well? Can you mine?", "intent": "question" },
+        { "beat": "offer", "line": "There is an outpost base on the mesa between the hive mounds, held in trust for you. Build your power, a mining station on the sulfur and a storage tower with your own gold, and it is yours to tend.", "intent": "statement" },
+        { "beat": "warning", "line": "Not every part of the hive wants a single stalk keeping its own stores. Some will come to that mesa. Bring up the sulfur for the whole, and the Ark will pay well.", "intent": "statement" }
       ]
     },
     "room": "helm",
