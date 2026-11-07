@@ -19,7 +19,7 @@ concept art (`tools/blender/outposts/`, one script per building). The art they a
 | Harvester Bay (garage) | `ref/mv_garage.jpg` (4 views) | covered |
 | Upgrade Bay | `ref/mv_upgrade_pad.jpg` (4 views), `ref/set_research_lab.jpg` | covered |
 | Defenses (Cannon, Machine Gun) | `ref/set_defense.jpg` | covered |
-| **Brine Pump rig (lithium)** | none | **prompt 1 below; Verdance needs it for contract 1's rare ore** |
+| Brine Pump rig (lithium) | `ref/mv_brine.jpg` (4 views, from prompt 1) | covered |
 | **Shielded Extractor rig (uranium)** | none | prompt 2 below; needed for Lumen later |
 
 ## How to run a prompt
