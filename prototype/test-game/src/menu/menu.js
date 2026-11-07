@@ -14,6 +14,8 @@
  */
 import { openBattleHistory } from './battleHistory.js';
 import { outpostButtonModel } from './outpostButton.js';
+import { outpostOffer, outpostCard, acceptOutpostContract, declineOutpostContract } from '../outpost/contract.js';
+import { DRAFT_LAYOUT } from '../outpost/draftLayout.js';
 import { battlesOn } from '../save/battleLog.js';
 import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
@@ -390,7 +392,16 @@ export function createMenu(mountEl, cbs) {
   const mlHost = el(doc, 'div');
   ensureMissionIcons(doc);
   const missionLog = createMissionLog({ doc, host: mlHost, chipPing: () => widget.ping('missions'), gateOpts: () => gateOverride() || {},
-    onChange: () => refreshProgress(), onClose: () => show('main'), onCollected: () => { if (cbs.onTechChanged) cbs.onTechChanged(); playPendingRewards(); } });
+    onChange: () => refreshProgress(), onClose: () => show('main'), onCollected: () => { if (cbs.onTechChanged) cbs.onTechChanged(); playPendingRewards(); },
+    onAcceptOutpost: (key) => acceptOutpost(key) });
+  // ACCEPT on the outpost contract (aboard, or later from the Mission Log) [MM-story_mw5oe8km_k]: the kit is placed on
+  // the planet's outpost map; the OUTPOST button lights
+  const outpostMap = async (key) => DRAFT_LAYOUT;   // O4 swaps in the planet's own outpost map
+  async function acceptOutpost(key) {
+    const map = await outpostMap(key), now = Date.now();
+    updateSave((s) => { acceptOutpostContract(s, key, { map, now }); });
+    missionsChanged();
+  }
 
   const inventory = createInventoryScreen({ doc, host: mlHost, gateOpts: () => gateOverride() || {}, onChange: () => refreshProgress(), onClose: () => show('main') });
 
@@ -997,7 +1008,10 @@ export function createMenu(mountEl, cbs) {
         } else {
           const S = await import('../reveal/shipReveal.js');
           if (stage) stage.pause();
-          await S.playShipReveal({ planet: item.planet, firstTime: true, tier: revealTier(), onSeen: (p) => updateSave((s) => markShipSeen(s, p)), onContract: missionsChanged });
+          const offer = outpostOffer(loadSave(), item.planet);
+          const outpost = offer ? { cardFor: (ship) => outpostCard(item.planet, ship), onAccept: (k) => acceptOutpost(k),
+            onDecline: (k) => { updateSave((s) => declineOutpostContract(s, k, { now: Date.now() })); missionsChanged(); } } : null;
+          await S.playShipReveal({ planet: item.planet, firstTime: true, tier: revealTier(), onSeen: (p) => updateSave((s) => markShipSeen(s, p)), onContract: missionsChanged, outpost });
           updateSave((s) => markShipSeen(s, item.planet));
           setTarget(item.planet);                          // back on its planet, the ship at its station
           syncStage();

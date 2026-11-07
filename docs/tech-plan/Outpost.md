@@ -240,6 +240,33 @@ rewards them like any mission. New gate conditions in `missionFlow.js` `GATE`:
 Each is added to `GATE_CONDITIONS` and covered in `missionFlow.test.mjs`. Rewards use the existing reward kinds:
 gold, XP, loyalty, and `tech_unlock` for the node the step unlocks.
 
+**As built (O3).**
+
+- **`src/outpost/contract.js`** holds what is outpost-specific: `outpostOffer`, `acceptOutpostContract` (creates the
+  outpost with the kit through `createOutpost`, not online, and sets `outpostContracts[key] = { step, state, since }`),
+  `declineOutpostContract`, `contractStepCollected`, `outpostUnlocks`, `outpostCard` (the card's words), and the three
+  measures. It has 7 tests, including contract 1 end to end: logged, accepted, online, 300 iron sold, a raid held,
+  collected, contract 2 active.
+- **The missions are generated, not hand-entered.** `extract_missions.py` reads `Outpost_Contracts` and `Ores` from
+  the map-data workbook and writes one `type: 'outpost'` mission per planet × step (`OC-VER-1`, quest line
+  `QL-VER-O`), granted and collected aboard the planet's ship. A planet's contracts are written only once its outpost
+  map exists (`content/maps/forge/<planet key>-outpost.json`), so no planet is offered an outpost it has no ground
+  for. The Missions workbook is not changed.
+- **Completion reads the save, not a battle.** `outpost_online`, `ore_sold` and `raids_held` are `SAVE_MEASURE`
+  conditions in `missions.js`. They latch, because the raid log keeps only the last raids. `raids_held` counts raids
+  since the mission was assigned. `refreshSaveObjectives` / `missionFlow.settleOutpost` re-read them outside a
+  battle; the outpost view (O6) calls `settleOutpost` after each sale and advance. The four conditions are also
+  `GATE` conditions, as planned.
+- **The unlocks are derived, not rewarded.** Collecting step *k* moves `questSteps[QL-…-O]`, and `outpostUnlocks`
+  reads the `Unlocks` of every collected step (ore tiers and outpost techs such as `deep_drilling_1`). No
+  `tech_unlock` reward is used, because the Outpost tech nodes join the tree only in O10. The rewards are gold and XP,
+  plus the contract's loyalty as the mission's `impact.loyaltyPlanet`.
+- **Aboard:** `playShipReveal({ outpost })` plays the captain's outpost lines (`reveals.json factionShip.outpost`,
+  Verdance only until O11) in place of the generic greeting, then the outpost card (ACCEPT CONTRACT / LATER). After
+  that come the generic offer line and the missions card, as before. LATER leaves the mission in the Mission Log, whose
+  dossier shows **Accept the outpost contract** until the outpost exists. `tools/reveal/index.html` shows the card
+  (`?outpost=0` hides it).
+
 ### 5.3 Lines
 
 The captain's outpost lines go in `content/reveals/reveals.json` under `factionShip.outpost`, one set per planet,
