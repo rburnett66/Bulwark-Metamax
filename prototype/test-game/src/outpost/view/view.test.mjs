@@ -8,11 +8,11 @@ import { layoutFor, framedCamera, frameRect, padsRect, focusCamera, VIEW_YAW } f
 import { sellTimeline, SELL, MAX_POPS, popColour } from './sellTimeline.js';
 import { conduitRoute, planConduits, planBuildings, planDeposits, defenseStructures, TINT } from './conduits.js';
 import { outpostBattleMap, bakedSlugOf, lowlandResources } from './outpostBoard.js';
-import { createOutpost, confirmOnline, advance, sell, place } from '../model.js';
+import { referenceOutpost, confirmOnline, advance, sell, place } from '../model.js';
 import { groundToNdc, clearBox } from '../../render3d/camera.js';
 import { map, T0, MIN, HOUR } from './fixtures.mjs';
 
-const kit = () => createOutpost('ground', { seed: 7, map, now: T0 });
+const kit = () => referenceOutpost('ground', { seed: 7, map, now: T0 });
 const online = () => confirmOnline(kit(), map, T0).outpost;
 const quiet = { map, raid: null };
 const rigPad = (o) => Object.keys(o.pads).find((id) => o.pads[id].kind === 'rig');

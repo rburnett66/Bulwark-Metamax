@@ -109,7 +109,7 @@ def outpost_missions(ships, givers, problems):
         lines[ql] = {"name": f"{planet} outpost", "planet": planet, "role": "Primary", "variant": None, "ship": ship["ship"]}
         complete = []
         if step == 1:
-            complete.append({"cond": "outpost_online", "param": key, "op": "≥", "value": 1, "text": f"Establish the outpost on {planet}: every building on its pad and powered"})
+            complete.append({"cond": "outpost_online", "param": key, "op": "≥", "value": 1, "text": f"Establish the outpost on {planet}: build power, a mining station on the {ore['Ore'].lower()} and storage, all powered"})
         complete.append({"cond": "ore_sold", "param": ore["Ore_Id"], "op": "≥", "value": c["Deliver"], "text": f"Deliver {c['Deliver']} {ore['Ore']} to {ship['ship']}"})
         if c["Raids_Held"]:
             n = c["Raids_Held"]

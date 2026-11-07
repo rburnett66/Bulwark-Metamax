@@ -1,6 +1,6 @@
 # Tech Plan — Outposts and mining: data and visualization
 
-Status: owner decisions applied (design §11) · 2026-11-06 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
+Status: owner decisions applied (design §11; the build-it-yourself start, 2026-11-07) · 2026-11-07 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
 · Design: `docs/16 Bulwark MM/design/Outpost-Design.md` (what the player gets, and why; this plan does not restate it)
 
 ## 1. Scope
@@ -18,8 +18,8 @@ What this plan builds, in order:
 6. **The models and maps.** Six buildings, the shuttle, the ore deposits, and nine outpost maps.
 
 Phase A (the first PR set) is Verdance end to end: data for all nine planets, the model, contract 1, the Verdance
-map, the starter-kit models, the outpost view, live raids and the menu. Phase B adds the other eight maps, the
-Harvester Bay and Upgrade Bay models and behaviour, contracts 2–3 and the Outpost tech nodes.
+map, the first-setup models, the outpost view, live raids and the menu. Phase B adds the other eight maps, the
+Resource Bay (was the Harvester Bay) and Upgrade Bay models and behaviour, contracts 2–3 and the Outpost tech nodes.
 
 ## 2. What already exists — reuse, do not rebuild
 
@@ -56,7 +56,7 @@ Five new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edi
 | `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Value, Build_Sec, Power_Draw, Power_Supply, Power_Reach, Bay_Hours, Rate_Mult, Capacity_Mult, Battle_Struct, Model, Unlock` — `Battle_Struct` names the `STRUCTURES` entry a defense takes its stats from (`STR-MG`, `STR-Cannon`, `STR-Wall`) |
 | `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Size_Step1, Size_Step2, Size_Step3, Far_Day_Bump, Measured_On` — sizes measured by `outpost_raids.mjs` (§4.3, as built O7) |
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
-| `Outpost_Params` | ~12 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20, Far_Buyer_Mult 2, Far_Loyalty_Cost 1` |
+| `Outpost_Params` | ~18 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20, Far_Buyer_Mult 2, Far_Loyalty_Cost 1, Rig_Bay_Min 15, Harvester_Cap 2, Harvester_Max 4` (the last three O16) |
 
 `tools/extract_mapdata.py` extracts them to `MAPDATA.ores`, `.outpostStructures`, `.outpostRaids`, `.outpostContracts`
 and `.outpostParams`. Its validation refuses a planet without exactly three ores, a duplicate `Ore_Id`, a structure kind
@@ -94,9 +94,11 @@ s.outposts = {
     seed: 912345,                 // from the save's id + planet; drives the raid schedule
     online: true,                 // contract step 1 done
     t: 1762470000000,             // last advanced (ms since epoch, wall clock)
-    pads: { hub: { kind:'hub', tier:1 }, p1: { kind:'power', tier:1 }, p2: { kind:'rig', tier:1, deposit:'common', deep:false },
+    pads: { hub: { kind:'hub', tier:1 },          // the only building the contract grants (O16); the rest are bought
+            p1: { kind:'power', tier:1 }, p2: { kind:'rig', tier:1, deposit:'common', deep:false },
             p3: { kind:'storage', tier:1 }, … },
-    building: [{ pad:'p4', kind:'harvesterBay', tier:1, done: 1762470300000 }],
+    building: [{ pad:'p4', kind:'resourceBay', tier:1, done: 1762470300000 }],   // 'harvesterBay' in old saves, migrated
+    harvesters: 2,                // bought once a Resource Bay is finished, up to Harvester_Cap (O16; behaviour O10)
     stations: [{ pad:'p1', tier:1 }, { pad:'r2', tier:1 }],   // power stations; grids are derived from reach
     defenses: [{ id:'d1', struct:'STR-MG', tier:1, cell:[12,7], hp:240 }],   // HP carries over between raids
     storage: { p2: { iron: 412.6 } },   // per rig bay (pad id), fractional units, shown floored; deep grade is 'iron_deep'
@@ -108,8 +110,9 @@ s.outpostContracts = { ground: { step: 1, state: 'active', delivered: 0, raidsHe
 s.outpostTrade = { discovered: { air: 'lithium' }, farSoldToday: { day: 20398, loads: 3 } };   // the far buyer (design §8.5)
 ```
 
-`migrate()` adds empty `outposts` and `outpostContracts`. Nothing is stored that can be derived (gold per hour, power
-used, loads ready).
+`migrate()` adds empty `outposts` and `outpostContracts`, renames a saved `harvesterBay` to `resourceBay` and gives an
+outpost without one `harvesters: 0` (O16). Nothing is stored that can be derived (gold per hour, power used, loads
+ready, bay caps, warnings).
 
 ## 4. The outpost model (`src/outpost/model.js`)
 
@@ -140,6 +143,52 @@ the sketch above:
   hook returning `{ result, defenses }`; without it a raid counts as held. O7 plugs the battle sim into that hook.
 - **Until O4 authors the real maps,** the model, its tests and the review page run on `src/outpost/draftLayout.js`
   (`DRAFT_LAYOUT`, 40 × 24: a mesa within reach of the first station, a remote rare pad with its own station).
+
+**As built (O16), the build-it-yourself start** (owner, 2026-11-07; design §2.3, §4.2, §4.5, §6, §6.1, §11):
+
+- **`createOutpost` grants only the hub.** `pads: { hub }`, no defenses, no storage, `harvesters: 0`. The player buys
+  the rest with `place(o, { pad, kind }, ctx)` (`PAD_KINDS`: `power`, `rig`, `storage`, `resourceBay`, `upgradeBay`;
+  `harvesterBay` is read as `resourceBay`) and `place(o, { cell, kind }, ctx)` for `DEFENSE_KINDS` (`mg`, `cannon`,
+  `wall`; anything else is `unknown building …`). `place` refuses `hub` ("the hub comes with the contract") and
+  `harvester` ("harvesters are bought, not placed (buyHarvester)"). Pad buildings land after their `Build_Sec`
+  (Power I and Rig I 2 min, Storage I 1 min) through `advance`; defenses are placed at once. `defaultPads(map)` names
+  the setup's pads (hub, power, the common rig pad, storage) for the view.
+- **`referenceOutpost(planet, { seed, map, now })`** is the former kit: the four buildings finished plus the map's
+  `kitDefenses` (the field keeps its name). Nothing in play grants it. The raid measurement (`stepOutpost`), the
+  tests and the review fixtures start from it.
+- **Going online** (`onlineProblems` / `confirmOnline`) asks for the hub, a Power Station, a Mining Rig on the
+  common deposit and a Storage Tower, all finished, and the hub, the common rig and the tower powered. The messages are
+  `no power station`, `no mining rig on the <ore>`, `no storage tower`, `no hub`, `<pad> unpowered (reach|supply)`.
+  Other unpowered buildings no longer block it.
+- **Storage and power** (owner, 07:33). A rig mines whenever it is finished and powered: online or not, with or
+  without a tower. It mines into its own bay. With no open tower the bay holds `Rig_Bay_Min` (15) minutes of its
+  shallow output × Mk II. A finished, powered Storage Tower raises the bay to `Bay_Hours` (× Mk II × Storage II). An
+  unpowered tower's door is closed, and an unpowered rig does not mine. Stored ore is never removed by a power change,
+  and `sell` ships it whatever the power. `bayCapacity(o, pad, map?)` takes the map so it can tell whether the tower is
+  powered; without the map, every finished tower counts. The old rule that mining waits for online, a powered hub and
+  a powered tower is gone.
+- **`warnings(o, map)`** → `{ [padId | defenseId]: ['no_power' | 'storage_full' | 'door_closed'] }`, only for ids with a
+  warning. `storage_full` marks a rig whose bay is full, and the tower when every rig's bay is full. `door_closed`
+  marks an unpowered tower. The view draws its warning icons from it.
+- **Harvesters.** `buyHarvester(o, { gold, params? })` → `{ outpost, cost }` or `{ error }`. The refusals, from
+  `harvesterRefusal(o, ctx)`, are `build the Resource Bay first` (none finished), `the Resource Bay holds N
+  harvesters` (at `Harvester_Cap`) and `costs 2000 gold`. Price and cap come from `harvesterDef()` in
+  `src/data/outpost.js`: the `harvester` row of `Outpost_Structures` (2,000, the battle harvester's 500 × 4),
+  `Harvester_Cap` 2 and `Harvester_Max` 4. Raising the cap toward 4 and what harvesters gather are O10.
+- **Data.** `src/data/outpost.js` exports `GRANTED` (`['hub']`), `ESTABLISH` (the four), `REFERENCE_SET` (the former
+  `KIT`), `KIND_ALIASES` / `canonicalKind`, and `harvesterDef`. `structureDef('harvesterBay')` resolves to the
+  Resource Bay, so a view that still says `harvesterBay` keeps building and pricing. `bayUnits(ore, { storageTier: 0 })`
+  is the rig's own bay. The extractor knows `resourceBay` and `harvester`. It requires a hub with `Unlock` `granted`
+  and a positive `Cost` on every other row, a one-row `harvester` with no power draw, the three new params, and
+  `0 < Harvester_Cap ≤ Harvester_Max`.
+- **Prices** (design §6.1): Power Station I 600, Mining Rig I 600, Storage Tower I 300 (the first setup 1,500, about
+  2 h of iron), Resource Bay 2,500, harvester 2,000, defenses at the battle price × 4. `outpost_model.mjs` prints the
+  setup, its payback and the bank it is sized to.
+- **Measured, the first raid against a bought outpost** (Verdance map, `makeRaidHook`, seeds 1–5). The setup with an
+  MG, a Cannon, or both: breached 5 of 5. With the six reference walls alone: breached 5 of 5. Walls + MG: held 4 of 5.
+  Walls + Cannon: held 1 of 5. A player who buys only the setup will lose a quarter of the stored ore to the scripted
+  raid. That is allowed (step 3 waits), but it belongs to the open raid-balance decision (§4.3 as built O7, design §11
+  "weaker raiders").
 
 ### 4.1 Advancing through time, in closed form
 
@@ -226,7 +275,7 @@ live view (fixed `FIXED_DT` ticks, so any frame timing then `finish()` gives run
 
 ### 4.4 Tests (`src/outpost/model.test.mjs`)
 
-- 4 hours on the starter kit fills 720 iron; 5 minutes is a 15-unit load; deep fills in 16 hours.
+- 4 hours on the reference set fills 720 iron; 5 minutes is a 15-unit load; deep fills in 16 hours.
 - Advancing once over 10 hours equals advancing 600 times one minute at a time, within 1e-9 (the closed form is
   exact).
 - A clock that goes back advances nothing. A 10-day gap is capped at 72 hours.
@@ -249,6 +298,14 @@ live view (fixed `FIXED_DT` ticks, so any frame timing then `finish()` gives run
 4–6 / 7–9 hold counts, raid determinism live vs headless, raid composition, the scripted first raid run headless).
 Those move to O7, with `ctx.raid`.
 
+**As built (O16):** `model.test.mjs` adds the base-only grant, the first setup bought with gold and brought online,
+the four going-online asks, the harvester purchase (refused before a finished Resource Bay, then capped), the
+defense kinds, the Harvester Bay save migration, a rig mining to its own small bay with no tower and the tower raising
+it, an unpowered rig and an unpowered tower (door closed, ore kept, still sold), and `warnings`. `contract.test.mjs`
+runs contract 1 end to end on the Verdance map. The player buys the setup, an MG and the six reference walls with
+4,500 gold, and holds the scripted raid on the real raid hook. `data/outpost.test.mjs` checks the prices, the
+harvester (battle price × 4) and the rig's own bay.
+
 **As built (O7):** those items are in `src/outpost/raid.test.mjs` (9 tests), on the real Verdance outpost map: raid
 composition and outpost defenses, determinism (headless twice, and stepped live with uneven frame times then finished
 headless), saved HP / wrecks / unpowered guns, the scripted first raid through `advance` with `makeRaidHook`, and a
@@ -264,9 +321,9 @@ missions: if `outpostContractFor(planet, 1)` exists and the player has none for 
 lines (§5.3) play, then the contract card. The card uses `showContractModal` with `kicker`, `task` and `terms` (the
 fields added in Content-Reveal F4).
 
-- **ACCEPT:** writes `outpostContracts[planet] = { step:1, state:'active' }`, creates the outpost with the kit placed
-  on its default pads (`online: false` until the player confirms it in the view, design §2.3 step 1), and sets a menu
-  badge.
+- **ACCEPT:** writes `outpostContracts[planet] = { step:1, state:'active' }`, creates the outpost with only the hub on
+  its pad (O16; `online: false` until the player has bought and powered the setup and confirms it in the view, design
+  §2.3 step 1), and sets a menu badge.
 - **Decline:** leaves the contract `offered`; the Mission Log shows it with ACCEPT.
 
 ### 5.2 Missions and gates
@@ -285,10 +342,17 @@ rewards them like any mission. New gate conditions in `missionFlow.js` `GATE`:
 Each is added to `GATE_CONDITIONS` and covered in `missionFlow.test.mjs`. Rewards use the existing reward kinds:
 gold, XP, loyalty, and `tech_unlock` for the node the step unlocks.
 
+**As built (O16).** ACCEPT grants only the hub. The card (`outpostCard`) says the contract grants an outpost base, that
+the player builds a power station, a mining station on the common ore and a storage tower with their own gold, and
+that the defenses are theirs to buy. Its step 1 reads "power, a mining station on the iron and storage, all powered".
+`extract_missions.py` writes step 1's objective as "Establish the outpost on Verdance: build power, a mining station
+on the iron and storage, all powered". Vane's `offer` line in `reveals.json` no longer promises a kit. The greet,
+turn and warning lines, which keep the owner's words, are unchanged.
+
 **As built (O3).**
 
 - **`src/outpost/contract.js`** holds what is outpost-specific: `outpostOffer`, `acceptOutpostContract` (creates the
-  outpost with the kit through `createOutpost`, not online, and sets `outpostContracts[key] = { step, state, since }`),
+  outpost through `createOutpost`, since O16 the hub only, not online, and sets `outpostContracts[key] = { step, state, since }`),
   `declineOutpostContract`, `contractStepCollected`, `outpostUnlocks`, `outpostCard` (the card's words), and the three
   measures. It has 7 tests, including contract 1 end to end: logged, accepted, online, 300 iron sold, a raid held,
   collected, contract 2 active.
@@ -386,7 +450,7 @@ New GLB models through the capital ship pipeline: built in headless Blender, thr
 | `power_ii` | Power Station II: the energy reactor, a core column through a ring of capsule cells with a light beam (owner's revised concept) | 9k / 2k |
 | `rig_auger`, `rig_laser`, `rig_brine`, `rig_crystal`, `rig_bore`, `rig_shielded` | the six rig buildings, one per extraction method (design §8.4), each with its animated nodes (augers and ore chute, beam emitter, pump arm, resonator arms, tilted drill column, canister arms) | 6–8k / 1–1.5k each |
 | `storage` | block with dish and antennas, a glass deck over the hologram (separate node: the fill bar) | 9k / 1.5k |
-| `harvesterBay` | garage with two bays, door open | 7k / 1.2k |
+| `resourceBay` (was `harvesterBay`) | garage with two bays, door open | 7k / 1.2k |
 | `upgradeBay` | hangar pad with two control towers and a small craft (separate node) | 10k / 1.8k |
 | `shuttle` | the small craft the hub launches on SELL (Cargo Shuttle II is a larger variant) | 3k / 0.6k |
 | tier II variants | storage: the same base with added modules (extra tank); the power station's tier II is `power_ii` | +30 % |
@@ -566,12 +630,14 @@ view that defaults to the mesa; `?map=draft` keeps the draft layout.
 | O7 | Raids on the battle sim: `runRaid` (headless and live), the raid sizes measured per planet, the live raid view | A |
 | O8 | Menu: OUTPOST replaces REPLAY LAST BATTLE; replays stored per battle; REPLAY on history cards | A |
 | O9 | Review page `tools/outpost/index.html` (built first, extended with each story) | A |
-| O10 | Harvester Bay and Upgrade Bay: models, behaviour, the Outpost tech nodes replacing the ghosts | B |
+| O10 | Resource Bay (was Harvester Bay), harvesters' behaviour, and Upgrade Bay: models, behaviour, the Outpost tech nodes replacing the ghosts | B |
 | O11 | Outpost maps for the other eight planets, the remaining rigs (Crystal Harvester, Deep Bore, Shielded Extractor), and the captains' outpost lines | B |
 | O12 | Ore icons (27) and deposit colours, with the resource icon pipeline | B |
 | O13 | Contracts 2 and 3: deep drilling in play, Rig Mk II, Cargo Shuttle II (+10 % sales) | B |
 | O14 | The far buyer (design §8.5): `Wanted_By`, the discovery line, the second buyer on SELL, loyalty cost, raid +1 unit that day | B |
 | O15 | Habitat (owner, 2026-11-07): the hub crews 3 guns, each Habitat tier adds 2 (design §6); model, cap in `place`, tests | B |
+| O16 | Build-it-yourself start (owner, 2026-11-07): the contract grants only the hub; power, rig, storage, Resource Bay, harvesters and defenses bought; prices; storage and power rules and warnings; contract text | A |
+| O17 | The build menu: the icon list with prices on the left of the outpost view, like the battle's (owner, 2026-11-07) | A |
 
 O9 starts with O2 so every later story is reviewable outside Claude as it lands. O5 runs alongside O1–O4.
 

@@ -66,7 +66,7 @@ import { startNextWave } from '../sim/waves.js';
 import { createStructure } from '../sim/entities.js';
 import { buildNavGrid, findWalkerPath } from '../sim/pathfinding.js';
 import { getStructureDef } from '../data/tables.js';
-import { createOutpost, powerGrids } from './model.js';
+import { referenceOutpost, powerGrids } from './model.js';
 import { structureDef, raidFor } from '../data/outpost.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
 import { buildTerrainMap } from '../sim/mapgen.js';
@@ -392,12 +392,12 @@ export function makeRaidHook({ map, step = 1, units } = {}) {
 
 // ── measurement helpers (tools/economy/outpost_raids.mjs and the tests) ─────────────────────────────────────────────
 /**
- * The outpost a contract step is played with (design §2.3–§2.4): step 1 the kit; step 2 adds a Rig I on the uncommon
+ * The outpost a contract step is played with (design §2.3–§2.4): step 1 the reference set (referenceOutpost); step 2 adds a Rig I on the uncommon
  * deposit and upgrades the first station to Power Station II; step 3 adds a Rig I on the remote rare deposit with its
  * own station. Every building finished, the kit's defenses at full HP.
  */
 export function stepOutpost(planet, step, { map, seed = 1 }) {
-  const o = createOutpost(planet, { seed, map, now: 0 });
+  const o = referenceOutpost(planet, { seed, map, now: 0 });
   const padFor = (tier) => (map.deposits.find((d) => d.tier === tier) || {}).pad;
   if (step >= 2) {
     const first = map.pads.find((p) => p.role === 'power' && !p.remote);

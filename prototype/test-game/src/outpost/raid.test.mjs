@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { createOutpost, confirmOnline, advance, powerGrids } from './model.js';
+import { referenceOutpost, confirmOnline, advance, powerGrids } from './model.js';
 import { outpostMapFromForge } from './outpostMap.js';
 import { DRAFT_LAYOUT } from './draftLayout.js';
 import {
@@ -22,7 +22,7 @@ const OUTPOST_STRUCTS = new Set(['STR-MG', 'STR-Cannon', 'STR-Wall']);
 const map = outpostMapFromForge(JSON.parse(fs.readFileSync(new URL('../../content/maps/forge/ground-outpost.json', import.meta.url), 'utf8')), 'ground');
 const T0 = Date.UTC(2026, 10, 7, 12, 0, 0);
 const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
-const kit = (seed = 11) => createOutpost('ground', { seed, map, now: T0 });
+const kit = (seed = 11) => referenceOutpost('ground', { seed, map, now: T0 });
 const raidOf = (o, extra = {}) => ({ window: 3, at: T0, powered: powerGrids(o, map).powered, ...extra });
 
 const hurtsWalls = (id) => ((EFFECTIVENESS[UNITS[id].damageType] || {}).Structure || 0) > 0;
@@ -151,7 +151,7 @@ test('a breach through advance loses 25 % of the ore in storage and changes no b
 
 test('a raid on the draft layout (no terrain) still runs: open board, default lanes', () => {
   const draft = { ...JSON.parse(JSON.stringify(DRAFT_LAYOUT)), planet: 'ground' };
-  const o = createOutpost('ground', { seed: 3, map: draft, now: T0 });
+  const o = referenceOutpost('ground', { seed: 3, map: draft, now: T0 });
   const r = runRaid(o, { window: 1, powered: powerGrids(o, draft).powered }, { map: draft, units: ['GND-Troops'] });
   assert.ok(['held', 'breach'].includes(r.result));
 });

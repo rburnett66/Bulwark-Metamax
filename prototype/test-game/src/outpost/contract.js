@@ -5,7 +5,8 @@
  * The three contracts per planet are mission rows (type 'outpost', quest line QL-<PLANET>-O) that
  * tools/extract_missions.py generates from the map-data workbook's Outpost_Contracts sheet. The Mission Log lists,
  * tracks and pays them like any mission. This module holds what is outpost-specific:
- *   - ACCEPT on the contract card (aboard, or later from the Mission Log) creates the outpost with the kit placed;
+ *   - ACCEPT on the contract card (aboard, or later from the Mission Log) creates the outpost with only its hub (owner
+ *     2026-11-07: the player builds power, a mining station and storage, and buys defenses, with their own gold);
  *   - what the contract has unlocked so far (ore tiers and outpost techs), derived from the steps collected;
  *   - the save-side measures the missions read (online, ore sold, raids held).
  *
@@ -42,7 +43,8 @@ export function outpostOffer(s, key) {
 }
 
 /**
- * ACCEPT: create the outpost with the kit on its default pads (not online until the player confirms it in the view,
+ * ACCEPT: create the outpost with only the hub on its pad (owner 2026-11-07; not online until the player has built
+ * power, a mining station on the common ore and storage, and confirms it in the view,
  * design §2.3 step 1), and mark the contract active. Accepting twice changes nothing. → the outpost.
  */
 export function acceptOutpostContract(s, key, { map, now, seedSalt = '' }) {
@@ -113,9 +115,9 @@ export function outpostCard(key, ship) {
   const raids = c.raidsHeld === 1 ? 'Hold the outpost through a raid' : `Hold the outpost through ${c.raidsHeld} raids`;
   return {
     kicker: 'OUTPOST CONTRACT — ' + String(ship || '').toUpperCase(),
-    task: `<b>${c.title}.</b> A hub, a power station, a mining rig and a storage tower on ${P.name || key}, with a cannon, a machine gun and a wall ring to guard them. Yours to run.`,
+    task: `<b>${c.title}.</b> The contract grants you an outpost base on ${P.name || key}. Build a power station, a mining station on the ${ore.name.toLowerCase()} and a storage tower with your own gold; the defenses are yours to buy. Yours to run.`,
     terms: [
-      `1 · Establish the outpost: every building on its pad and powered`,
+      `1 · Establish the outpost: power, a mining station on the ${ore.name.toLowerCase()} and storage, all powered`,
       `2 · Deliver <b>${c.deliver.toLocaleString('en-US')} ${ore.name}</b> to ${ship} (${ore.price} gold each as it sells)`,
       c.raidsHeld ? `3 · ${raids}` : '',
       `Pays <b>${c.gold.toLocaleString('en-US')} gold</b>, <b>+${c.loyalty} loyalty</b>, ${c.xp} XP` + (next.length ? ` · unlocks <b>${next.join(', ')}</b>` + (c.unlocks.techs.includes('deep_drilling_1') ? ' and Deep Drilling I' : '') : ''),

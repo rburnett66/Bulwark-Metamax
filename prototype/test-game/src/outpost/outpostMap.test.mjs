@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { outpostMapFor, outpostMapFromForge, outpostMapUrl } from './outpostMap.js';
-import { createOutpost, confirmOnline, onlineProblems, powerGrids, place, advance } from './model.js';
+import { referenceOutpost, confirmOnline, onlineProblems, powerGrids, place, advance } from './model.js';
 import { buildTerrainMap } from '../sim/mapgen.js';
 import { buildNavGrid } from '../sim/pathfinding.js';
 
@@ -13,7 +13,7 @@ const map = outpostMapFromForge(FORGE);
 const T0 = Date.UTC(2026, 10, 7, 12);
 
 test('the contract kit goes online on the Verdance map, drawing 9 of the first station\'s 10', () => {
-  const o = createOutpost('ground', { seed: 1, map, now: T0 });
+  const o = referenceOutpost('ground', { seed: 1, map, now: T0 });
   assert.deepEqual(Object.keys(o.pads).sort(), ['hub', 'p1', 'r1', 's1']);
   assert.deepEqual(onlineProblems(o, map), []);
   const g = powerGrids(o, map);
@@ -24,7 +24,7 @@ test('the contract kit goes online on the Verdance map, drawing 9 of the first s
 });
 
 test('the remote rare rig needs its own station (design §4.5)', () => {
-  let o = confirmOnline(createOutpost('ground', { seed: 1, map, now: T0 }), map, T0).outpost;
+  let o = confirmOnline(referenceOutpost('ground', { seed: 1, map, now: T0 }), map, T0).outpost;
   o.firstRaidAt = null;
   const ctx = { map, now: T0, unlockedTiers: ['common', 'uncommon', 'rare'] };
   o = place(o, { pad: 'r3', kind: 'rig' }, ctx).outpost;

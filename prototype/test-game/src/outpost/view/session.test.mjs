@@ -5,6 +5,7 @@ import { createSession, repairAllCost, onlineIssues } from './session.js';
 import { raidHookFor } from './raidSeam.js';
 import { awayReportModel, awayFor } from './awayReport.js';
 import { acceptOutpostContract } from '../contract.js';
+import { referenceOutpost } from '../model.js';
 import { defaultSave } from '../../save/save.js';
 import { missionStatus } from '../../save/missions.js';
 import { map, catalog, memoryStore, T0, MIN, HOUR } from './fixtures.mjs';
@@ -14,6 +15,7 @@ function fresh(gold = 10_000) {
   s.capitalShips = { Verdance: { arrived: true } };
   s.carry = { gold, structures: [] }; s.goldBank = gold;
   acceptOutpostContract(s, 'ground', { map, now: T0, seedSalt: 'test' });
+  s.outposts.ground = referenceOutpost('ground', { seed: s.outposts.ground.seed, map, now: T0 });   // O16: the contract grants only the hub; these tests start from the former kit
   return s;
 }
 const flowOpts = { allOpen: true };
@@ -26,7 +28,7 @@ test('the raid seam runs raids on the battle sim (O7): a hook for a map, none wi
 test('opening a fresh kit advances nothing, shows no report, and the outpost waits to go online', () => {
   const store = memoryStore(fresh());
   const v = createSession({ store, planet: 'ground', map, catalog, flowOpts });
-  const r = v.open(T0 + 5 * MIN);
+  const r = v.open(T0);   // O16: a powered rig now mines before the outpost is online, so a later open would report it
   assert.equal(r.outpost.online, false);
   assert.equal(r.away.show, false);
   assert.deepEqual(onlineIssues(r.outpost, map), []);

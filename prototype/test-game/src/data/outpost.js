@@ -13,9 +13,21 @@ import { STRUCTURES } from './tables.js';
 /** The tuning (Outpost_Params), by name: Load_Sec, Store_Hours, Deep_Rate_Mult, … */
 export const OUTPOST = Object.freeze({ ...(MAPDATA.outpostParams || {}) });
 
-/** The buildings in the contract-1 kit (design §2.3). Walls come as a ring, placed with the map. */
-export const KIT = Object.freeze(['hub', 'power', 'rig', 'storage', 'cannon', 'mg', 'wall']);
+/** What the contract grants (design §2.3, owner 2026-11-07): the Outpost Hub only. Everything else is bought. */
+export const GRANTED = Object.freeze(['hub']);
+/** What going online (contract step 1, "Establish") asks for: these four, all powered, the rig on the common ore. */
+export const ESTABLISH = Object.freeze(['hub', 'power', 'rig', 'storage']);
+/**
+ * The reference outpost the raid measurement and the design's power sums use (the former contract kit): the four
+ * above plus the map's `kitDefenses` (a Cannon, a Machine Gun and walls). Nothing grants it any more.
+ */
+export const REFERENCE_SET = Object.freeze(['hub', 'power', 'rig', 'storage', 'cannon', 'mg', 'wall']);
+/** The only defenses an outpost may build (owner: Wall, Machine Gun, the turret tower = the battle's Cannon Tower). */
 export const DEFENSE_KINDS = Object.freeze(['mg', 'cannon', 'wall']);
+/** Old kind names kept readable: the Harvester Bay became the Resource Bay (owner, 2026-11-07). */
+export const KIND_ALIASES = Object.freeze({ harvesterBay: 'resourceBay' });
+/** A kind's current name ('harvesterBay' → 'resourceBay'; anything else unchanged). */
+export const canonicalKind = (kind) => KIND_ALIASES[kind] || kind;
 
 const num = (v) => (typeof v === 'number' ? v : 0);
 const STRUCTS = Object.freeze((MAPDATA.outpostStructures || []).map((r) => Object.freeze({
@@ -27,6 +39,7 @@ const STRUCTS = Object.freeze((MAPDATA.outpostStructures || []).map((r) => Objec
 
 /** A building's definition at a tier, or null. A defense also carries its battle stats at that tier (`battle`). */
 export function structureDef(kind, tier = 1) {
+  kind = canonicalKind(kind);
   const d = STRUCTS.find((s) => s.kind === kind && s.tier === tier);
   if (!d) return null;
   if (!d.battleStruct) return d;
@@ -36,7 +49,17 @@ export function structureDef(kind, tier = 1) {
 }
 
 /** The highest tier the data defines for a kind. */
-export const maxTier = (kind) => Math.max(0, ...STRUCTS.filter((s) => s.kind === kind).map((s) => s.tier));
+export const maxTier = (kind) => Math.max(0, ...STRUCTS.filter((s) => s.kind === canonicalKind(kind)).map((s) => s.tier));
+
+/**
+ * The harvester the Resource Bay fields (owner 2026-11-07: bought from the build list once a Resource Bay is built):
+ * { cost, cap, max } — cost from the Outpost_Structures `harvester` row (the battle harvester's price × 4), the cap
+ * an outpost starts with (Harvester_Cap) and the most it can ever hold (Harvester_Max; raising the cap is O10).
+ */
+export function harvesterDef() {
+  const d = structureDef('harvester', 1);
+  return d ? { cost: d.cost, value: d.value, cap: OUTPOST.Harvester_Cap, max: OUTPOST.Harvester_Max } : null;
+}
 
 /** Every outpost structure row (for tools and tests). */
 export const allStructures = () => STRUCTS;
@@ -90,11 +113,17 @@ export function powerBudget(structures) {
   return { supply, draw, spare: supply - draw };
 }
 
-/** Storage bay size in units for one rig (design §4.2): Store tower hours × that rig's shallow output × rig capacity. */
+/**
+ * Storage bay size in units for one rig (design §4.2): with a powered Storage Tower, the tower's hours × that rig's
+ * shallow output × rig capacity; with none (storageTier 0, or a tower without power: its door is closed), the rig's
+ * own small bay, Rig_Bay_Min minutes of its shallow output × rig capacity (owner 2026-11-07).
+ */
 export function bayUnits(ore, { rigTier = 1, storageTier = 1 } = {}) {
-  const rig = structureDef('rig', rigTier), st = structureDef('storage', storageTier);
-  if (!rig || !st) return 0;
-  return ore.rate * 60 * st.bayHours * rig.capacityMult;
+  const rig = structureDef('rig', rigTier);
+  if (!rig) return 0;
+  if (!storageTier) return ore.rate * OUTPOST.Rig_Bay_Min * rig.capacityMult;
+  const st = structureDef('storage', storageTier);
+  return st ? ore.rate * 60 * st.bayHours * rig.capacityMult : 0;
 }
 
 /** Units in one shuttle load for one rig: Load_Sec of its current output. */

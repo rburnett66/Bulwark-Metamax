@@ -26,7 +26,7 @@ export function modelSlug(kind, tier, rigHead) {
   if (kind === 'rig') return `rig_${rigHead || 'auger'}`;
   if (kind === 'power') return tier >= 2 ? 'power_ii' : 'power';
   if (kind === 'hub' || kind === 'storage' || kind === 'shuttle') return kind;
-  return null;   // harvesterBay / upgradeBay: models in story O10
+  return null;   // resourceBay (was harvesterBay) / upgradeBay / harvester: models in story O10
 }
 
 /**
