@@ -47,22 +47,25 @@ code, document or ticket exists beyond the initiative's one-line "L3 outposts+mi
 
 ### 3.1 Workbook sheets (the source of truth)
 
-Four new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edit, then extract" flow as
+Five new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edit, then extract" flow as
 `Rare_Contracts`:
 
 | Sheet | Rows | Columns |
 |---|---|---|
-| `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Rig_Head, Use` |
-| `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Build_Sec, Power_Draw, Power_Supply, Capacity, Rate_Mult, Defense_Power, Model, Unlock` |
+| `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Rig_Head, Wanted_By, Use` |
+| `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Value, Build_Sec, Power_Draw, Power_Supply, Power_Reach, Bay_Hours, Rate_Mult, Capacity_Mult, Battle_Struct, Model, Unlock` — `Battle_Struct` names the `STRUCTURES` entry a defense takes its stats from (`STR-MG`, `STR-Cannon`, `STR-Wall`) |
+| `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Size_Step1, Size_Step2, Size_Step3, Far_Day_Bump` — sizes measured by `outpost_model.mjs` (§4.3) |
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
-| `Outpost_Params` | ~12 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Raid_Wear 0.07, Raid_Strength 0.55, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20` |
+| `Outpost_Params` | ~12 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20, Far_Buyer_Mult 2, Far_Loyalty_Cost 1` |
 
-`tools/extract_mapdata.py` extracts them to `MAPDATA.ores`, `.outpostStructures`, `.outpostContracts` and
-`.outpostParams`. Its validation refuses a planet without exactly three ores, a duplicate `Ore_Id`, a structure kind
-the code does not know, and a contract that delivers an ore tier the planet has not unlocked by then.
+`tools/extract_mapdata.py` extracts them to `MAPDATA.ores`, `.outpostStructures`, `.outpostRaids`, `.outpostContracts`
+and `.outpostParams`. Its validation refuses a planet without exactly three ores, a duplicate `Ore_Id`, a structure kind
+the code does not know, and a contract that delivers an ore tier the planet has not unlocked by then. It also refuses
+a raid unit that is not `lightGround` or not tier I, and an outpost defense whose `Battle_Struct` is anti-air or has
+a range above 5 (owner: no anti-air, no long range).
 
 The design's numbers (Outpost-Design §3–§7) are the first values. `tools/economy/outpost_model.mjs` prints the
-derived table: gold per hour per tier, fill times, raids held per defense rating. The design's tables come from it,
+derived table: gold per hour per tier, fill times, and raids held per defense set (by running the sim, §4.3). The design's tables come from it,
 so a retune shows its consequences before it is extracted.
 
 ### 3.2 Game data readers (pure, node-tested)
@@ -85,13 +88,15 @@ s.outposts = {
     pads: { hub: { kind:'hub', tier:1 }, p1: { kind:'power', tier:1 }, p2: { kind:'rig', tier:1, deposit:'common', deep:false },
             p3: { kind:'storage', tier:1 }, … },
     building: [{ pad:'p4', kind:'harvesterBay', tier:1, done: 1762470300000 }],
-    defenses: [{ id:'d1', type:'machineGun', tier:1, cell:[12,7], integrity:1 }],
-    storage: { iron: 412.6 },     // fractional units, shown floored
-    raids: { window: 412, log: [{ at, result:'held'|'breach', wear }] },   // log keeps the last 20
+    stations: [{ pad:'p1', tier:1 }, { pad:'r2', tier:1 }],   // power stations; grids are derived from reach
+    defenses: [{ id:'d1', struct:'STR-MG', tier:1, cell:[12,7], hp:240 }],   // HP carries over between raids
+    storage: { p2: { iron: 412.6 } },   // per rig bay (pad id), fractional units, shown floored; deep grade is 'iron_deep'
+    raids: { window: 412, log: [{ at, result:'held'|'breach', damage }] },   // log keeps the last 20
     sold: { iron: 300 },          // lifetime, for contract steps
   },
 };
 s.outpostContracts = { ground: { step: 1, state: 'active', delivered: 0, raidsHeld: 0 } };
+s.outpostTrade = { discovered: { air: 'lithium' }, farSoldToday: { day: 20398, loads: 3 } };   // the far buyer (design §8.5)
 ```
 
 `migrate()` adds empty `outposts` and `outpostContracts`. Nothing is stored that can be derived (gold per hour, power
@@ -105,17 +110,20 @@ answers.
 ```js
 advance(outpost, toMs, { params, ores, structures })  → { outpost, report }
 loadsReady(outpost)                                   → n
-sell(outpost)                                         → { outpost, loads: [{ ore, units, gold }], gold }   // one entry per load, for the pops
+sell(outpost, { buyer })                              → { outpost, loads: [{ ore, units, gold }], gold, loyalty }   // one entry per load, for the pops; buyer defaults to the home ship
 place(outpost, pad, kind) / repair(outpost, id) / setDeep(outpost, pad, on)   → outpost (or a refusal reason)
 raidSchedule(seed, fromWindow, toWindow, params)      → [{ window, at }]
-defenseRating(outpost) / raidOutcome(outpost, raid)   → { result, wear }
+powerGrids(outpost, map)                              → [{ stations, supply, draw, powered: Set<pad> }]   // reach + pooling
+runRaid(outpost, raid, { map, sim })                  → { result: 'held'|'breach', defenses (new HP), events }
 ```
 
 ### 4.1 Advancing through time, in closed form
 
 `advance` never steps second by second. It cuts the interval `[t, toMs]` at every event: a build finishing, a raid,
 or storage filling. Nothing is ever sold inside `advance`: selling is always the player's tap (design §4.3). Between two events every rate is
-constant, so extraction is `rate × Δt`, capped by the space left in storage. Three days away is a few dozen segments.
+constant, so each rig's extraction is `rate × Δt`, capped by the space left in its own bay (design §4.2: a bay holds
+`Bay_Hours` of the rig's shallow output, × `Capacity_Mult` for Mk II and Storage Tower II). Three days away is a few
+dozen segments.
 
 - **The clock.** Wall-clock time (`Date.now()`) is read only by the menu and the outpost view, then passed in.
   `advance` itself is pure. This is outside the battle simulation, so the replay-determinism contract is not
@@ -132,25 +140,26 @@ Time is cut into 3-hour windows from the epoch. A window holds a raid with proba
 index, so opening the game more or less often never changes which raids happen. `raids.window` records the last
 window resolved, so a raid is resolved exactly once.
 
-- **Away:** `raidOutcome` applies the rating rule (design §5.2): the defenses wear and, on a breach, storage loses
-  `Breach_Storage_Loss` (25 %) of each ore. No building goes down.
+- **Every raid runs the battle sim** (design §5.2): `runRaid` builds a `createSim` on the outpost map with the
+  outpost's defenses (their `STRUCTURES` stats at their tier, starting from their saved HP), its buildings as
+  weaponless structures, and one wave of the planet's `Outpost_Raids` units at the contract step's size, on the raid
+  lanes. It runs the sim to the end of the wave and reads the result: each defense's HP, and a breach if any raider
+  reached a building. A breach takes `Breach_Storage_Loss` (25 %) of each ore. No building goes down.
 - **First raid:** contract step 3's raid is not drawn. It is fixed `First_Raid_Sec` after the outpost comes online.
 
-### 4.3 A live raid (outpost view open)
+`advance` stays pure: the sim is passed in (`{ sim }`), and the sim is itself deterministic and seeded with
+`seed + window`, so the same raid gives the same result live, headless or in a test, and the replay-determinism
+contract holds.
 
-When a raid comes due while the view is open, the view runs it with the battle simulation:
+### 4.3 Live and away raids are the same raid
 
-- `createSim` on the outpost map, with only the defenses, walls and buildings as structures. The buildings are
-  structures with HP and no weapon.
-- One small wave of the planet faction's units, from `Outpost_Params` (count and tier by contract step), along the
-  map's raid lanes.
-- The sim's own seeded RNG, seeded with `seed + window`, so it obeys the determinism contract like any battle.
-- When the wave is over: defenses that took damage lose integrity in proportion to the damage; if any raider reached
-  the mesa, the raid is a breach and storage loses its 25 %; the result is logged like an away raid.
-
-Live and away raids must agree on average. `outpost_model.mjs` runs a few hundred simulated raids per defense set and
-checks that the away rule's breach rate matches the simulation's within 10 %. A gap is closed by tuning
-`Raid_Strength`, not by changing the live raid.
+- **Away:** `advance` runs each due raid headless, in order, during catch-up.
+- **Live (outpost view open):** the view runs the same `runRaid`, ticking the sim in real time and drawing it with the
+  battle renderer. Closing the view mid-raid finishes it headless; the result is identical.
+- **Tuning:** `outpost_model.mjs` runs repeated raids against the starter kit and the "well defended" set with no
+  repairs, per planet, and searches each step's raid size so the kit holds about 5 raids and the well defended set
+  about 8 (design §5.2). It writes `Size_Step1..3` to the `Outpost_Raids` sheet. A retune of any tower or unit in
+  `tables.js` is followed by re-running it.
 
 ### 4.4 Tests (`src/outpost/model.test.mjs`)
 
@@ -159,10 +168,18 @@ checks that the away rule's breach rate matches the simulation's within 10 %. A 
   exact).
 - A clock that goes back advances nothing. A 10-day gap is capped at 72 hours.
 - The raid schedule for a seed is the same whether it is resolved in one call or in many.
-- The starter kit holds 5 raids before a breach; a 1.0 rating holds 8 (design §5.2).
-- Power: a building over budget is reported, and stays off.
+- With the measured raid sizes, the starter kit holds 4–6 raids before a breach and the well defended set 7–9, on
+  every planet (design §5.2).
+- A raid's result is identical run once headless, run twice, or run live and finished headless.
+- Raids contain only tier I `lightGround` units; outpost defenses are only `STR-MG`, `STR-Cannon`, `STR-Wall`.
+- Power: a building over its grid's supply, or outside every station's reach, is reported and stays off; two stations
+  within reach of each other pool their supply; a remote rig with its own station is powered.
 - Building, repairing and selling refuse when the player cannot pay, or the pad is wrong, taken or unpowered.
 - A breach removes exactly 25 % of each ore in storage and changes no building.
+- A Mk II rig's bay holds twice a Rig I's; a deep rig fills its bay in 16 hours; one full bay stops only its rig.
+- Only `repair` restores a defense's HP; `place` does not. A kit item's repair is priced from its `Value`.
+- The scripted first raid runs headless if the view is closed; a breach leaves contract step 3 waiting.
+- A far-buyer sale pays `Far_Buyer_Mult` and costs home loyalty; before discovery `sell` refuses a far buyer.
 - `advance` never sells, whatever the tier of the shuttle; `sell` returns one entry per full load.
 
 ## 5. The contract and the missions
@@ -215,7 +232,7 @@ renderer.
   and one building, and a drag pans within the map. Tapping a building focuses it and opens its panel.
 - **The HUD** uses the battle HUD's visual language:
   - top bar: gold, each ore in storage with its icon, the storage fill bar, power used / supplied, and the defense
-    rating as a shield with its integrity;
+    defenses' state as a shield filled to their total HP;
   - bottom: **SELL** (with the number of loads), **BUILD** (pads and defenses), **REPAIR** when the defenses are worn;
   - the selected building's panel: status, tier, rate, the deep / shallow switch on a rig, and upgrade.
 - **The away report.** On open, when anything happened since the last visit, a modal in the results-screen style
@@ -253,7 +270,7 @@ deposit's debris emitter runs at about 3× its particle rate with larger chunks.
 - **Scale.** One pad is 4 × 4 battle cells. The hub's landing pad is 6 × 6. The parked shuttle reads at about the
   size of a battle aircraft.
 - **States.** Building (rises in steps with a cool tint, as towers do today), online, unpowered (emissive off),
-  worn defenses (darkened, sparking), upgrading (warm tint). These follow `lifecycleLook` in `render3d/structures/models.js`.
+  damaged defenses (darkened, sparking, by their HP), upgrading (warm tint). These follow `lifecycleLook` in `render3d/structures/models.js`.
 - **Animated nodes:** the reactor pulse, each rig head's working motion (on while extracting, aimed at the deposit,
   tinted with the ore's `Colour`), the storage hologram (its height is the fill), the shuttle (take-off arc on SELL),
   and harvesters and ore carts.
@@ -262,8 +279,9 @@ deposit's debris emitter runs at about 3× its particle rate with larger chunks.
 
 ### 6.3 Conduits
 
-The glowing double lines are generated, not modelled: a path from the power station to each powered pad along the
-pad graph the map declares (§6.6). Each is drawn as two thin emissive tubes with a light pulse running toward the
+The glowing double lines are generated, not modelled: a path from each station to every powered pad within its reach,
+and between stations of the same grid (design §4.5), routed along the pad graph the map declares (§6.6). A station's
+reach is drawn as a faint ring when the player is placing a building. Each is drawn as two thin emissive tubes with a light pulse running toward the
 building, and goes dark when the building is unpowered. One merged mesh per state, so all conduits cost two draw
 calls.
 
@@ -300,14 +318,16 @@ The other effects also reuse the battle's FX system (`render3d/fx`):
 
 - **Forge format.** Each outpost map is a Terrain Forge map (`content/maps/forge/<faction>-outpost.json`) with three
   new top-level fields the Forge writes and the loader reads:
-  - `pads: [{ id, x, y, w, h, role }]`, where `role` is `hub`, `power`, `rig`, `storage`, `bay` or `spare`;
+  - `pads: [{ id, x, y, w, h, role, remote }]`, where `role` is `hub`, `power`, `rig`, `storage`, `bay` or `spare`,
+    and `remote` marks the pads at the remote rare site (a rig pad and a power pad);
   - `deposits: [{ tier, x, y, pad }]`;
   - `conduits: [[padA, padB], …]`, the pad graph for §6.3.
 
   Raid lanes use the existing `spawns`. The defense ring uses the existing buildable cells.
 - **Forge support.** A pad tool and a deposit tool in `terrain.html`. Its existing validator gains three checks: the
   pads do not overlap and sit on flat buildable ground; every pad is reachable from the hub through the conduit
-  graph; there is one deposit of each tier.
+  graph; there is one deposit of each tier; the rare deposit is outside the first station's reach and has a power pad
+within reach of its rig pad.
 - **Size.** About 40 × 24 cells, measured to frame the mesa on a 390 × 844 portrait phone at the default zoom.
 - **Recipe.** The Forge recipe for each planet (Faction-Terrain-Design §2.3), with a central raised mesa and one of
   the planet's signature props. Verdance is first.
@@ -340,19 +360,20 @@ reviewed outside Claude:
 
 | # | Story | Phase |
 |---|---|---|
-| O1 | Data: the four workbook sheets, extraction and validation, `ores.js` / `outpost.js`, `outpost_model.mjs` | A |
-| O2 | The outpost model: `advance`, sales, building, power, the raid schedule, the away raid rule, tests | A |
+| O1 | Data: the five workbook sheets, extraction and validation, `ores.js` / `outpost.js`, `outpost_model.mjs` | A |
+| O2 | The outpost model: `advance`, sales, building, power grids with reach, the raid schedule, tests | A |
 | O3 | Contract 1: the grant aboard the ship, mission rows, the new gates, the kit, the captain's lines (Verdance) | A |
 | O4 | The Verdance outpost map, with the Forge's pad, deposit and conduit support and validation | A |
 | O5 | Models: hub, power station, storage tower, shuttle, the rig base and Verdance's three rig heads (Auger Drill, Laser Cutter, Brine Pump); LODs, trim slot, states, the Mk II highlight and 2× animation | A |
 | O6 | The outpost view: scene, camera, conduits, deposits, effects, HUD, the SELL sequence (shuttle, ore splatter, "$N" pops), build and repair, away report, phone layouts | A |
-| O7 | Live raids with the battle sim on the outpost map, and the away rule calibrated against them | A |
+| O7 | Raids on the battle sim: `runRaid` (headless and live), the raid sizes measured per planet, the live raid view | A |
 | O8 | Menu: OUTPOST replaces REPLAY LAST BATTLE; replays stored per battle; REPLAY on history cards | A |
 | O9 | Review page `tools/outpost/index.html` (built first, extended with each story) | A |
 | O10 | Harvester Bay and Upgrade Bay: models, behaviour, the Outpost tech nodes replacing the ghosts | B |
 | O11 | Outpost maps for the other eight planets, the remaining rig heads (Crystal Harvester, Deep Bore, Shielded Extractor), and the captains' outpost lines | B |
 | O12 | Ore icons (27) and deposit colours, with the resource icon pipeline | B |
 | O13 | Contracts 2 and 3: deep drilling in play, Rig Mk II, Cargo Shuttle II (+10 % sales) | B |
+| O14 | The far buyer (design §8.5): `Wanted_By`, the discovery line, the second buyer on SELL, loyalty cost, raid +1 unit that day | B |
 
 O9 starts with O2 so every later story is reviewable outside Claude as it lands. O5 runs alongside O1–O4.
 
@@ -362,8 +383,8 @@ O9 starts with O2 so every later story is reviewable outside Claude as it lands.
   at the value of one full storage per planet, which is small next to the tech tree.
 - **localStorage size.** 20 replays plus outposts must stay well under the browser quota. O8 measures a replay's
   serialized size and lowers `Replay_Keep` if 20 would pass 1 MB.
-- **Live and away raids disagreeing.** Handled by the calibration run in §4.3, which is part of O7's definition of
-  done.
+- **Catch-up cost.** 72 hours away is at most 24 raids, each a short headless sim of a few light units. O2 measures
+  the catch-up time on a phone-class CPU and caps it under 200 ms, or spreads it across frames behind the away report.
 - **Model budget.** Six buildings plus the map must hold the battle view's frame time on the low tier. O6 measures
   frame time on the review page's low tier with the full kit and a live raid.
 
