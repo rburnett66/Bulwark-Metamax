@@ -241,6 +241,15 @@ def main():
             problems.append(f"outpost mission {m['id']} duplicates a Missions row")
     missions += om
     lines.update(olines)
+    # the Outpost tech nodes (story O10) are unlocked by the outpost contracts, not by a tech_unlock reward: a node's
+    # mission is the first contract step (campaign order) whose Unlocks name it; gold still buys it (tech plan D7)
+    for m in om:
+        for u in m["outpost"]["unlocks"]:
+            if u.startswith("tech:") and u[5:] not in unlocked_by:
+                if u[5:] not in nodes:
+                    problems.append(f"{m['id']}: unlocks tech {u[5:]}, which is not on Tech_Unlocks")
+                else:
+                    unlocked_by[u[5:]] = m["id"]
     conds.update(OUTPOST_CONDS)
     for (ql, var), ss in steps.items():   # each variant of a line must cover steps 1..n once
         if sorted(ss) != list(range(1, len(ss) + 1)):

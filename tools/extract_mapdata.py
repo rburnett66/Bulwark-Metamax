@@ -144,7 +144,7 @@ def apply_rework(data):
     return data
 
 
-OUTPOST_KINDS = {"hub", "power", "rig", "storage", "resourceBay", "harvester", "upgradeBay", "mg", "cannon", "wall"}
+OUTPOST_KINDS = {"hub", "power", "rig", "storage", "resourceBay", "harvester", "upgradeBay", "habitat", "mg", "cannon", "wall"}
 RIG_HEADS = {"auger", "laser", "brine", "crystal", "bore", "shielded"}
 # Owner: outposts have no anti-air and no long range. The battle structures an outpost may use; their stats (range
 # within 5, ground targets) are checked against STRUCTURES by src/data/outpost.test.mjs.
@@ -152,7 +152,9 @@ OUTPOST_BATTLE_STRUCTS = {"STR-MG", "STR-Cannon", "STR-Wall"}
 OUTPOST_PARAMS = ("Load_Sec", "Store_Hours", "Deep_Rate_Mult", "Deep_Price_Mult", "Raid_Mean_Hours",
                   "Raid_Min_Gap_Hours", "Breach_Storage_Loss", "First_Raid_Sec", "Away_Cap_Hours", "Replay_Keep",
                   "Far_Buyer_Mult", "Far_Loyalty_Cost", "Defense_Price_Mult", "Repair_Share_Per_HP", "Shuttle_II_Bonus",
-                  "Rig_Bay_Min", "Harvester_Cap", "Harvester_Max")
+                  "Rig_Bay_Min", "Harvester_Cap", "Harvester_Max", "Hopper_Hours", "Harvest_Route_Mult",
+                  "Harvest_Rate_Mult", "Surface_Respawn_Mult", "Gun_Cap", "Habitat_Guns_Per_Tier")
+OUTPOST_TECH_APPLIES = {"outposts", "upgradeBay"}
 
 
 def outpost_problems(data):
@@ -230,6 +232,24 @@ def outpost_problems(data):
             if not (isinstance(r.get("Deliver"), int) and r["Deliver"] > 0):
                 out.append(f"Outpost_Contracts {key} step {r['Step']}: Deliver must be a positive whole number")
             unlocked |= {u.split(":", 1)[1] for u in str(r.get("Unlocks") or "").split() if u.startswith("ore:")}
+    # the Outpost division of the tech tree (design 7, story O10): every tech a contract unlocks is a priced node
+    tech = data.get("outpostTech") or []
+    ids = [r.get("Node") for r in tech]
+    for d in sorted({i for i in ids if ids.count(i) > 1}):
+        out.append(f"Outpost_Tech: duplicate Node {d}")
+    for r in tech:
+        tag = f"Outpost_Tech {r.get('Node')}"
+        if not (isinstance(r.get("Price"), (int, float)) and r["Price"] > 0):
+            out.append(f"{tag}: Price must be positive (every Outpost node is bought)")
+        if r.get("Applies") not in OUTPOST_TECH_APPLIES:
+            out.append(f"{tag}: Applies {r.get('Applies')!r} is not one of {sorted(OUTPOST_TECH_APPLIES)}")
+        for q in str(r.get("Requires") or "").split():
+            if q not in ids:
+                out.append(f"{tag}: requires unknown node {q}")
+    named = {u.split(":", 1)[1] for r in data["outpostContracts"] for u in str(r.get("Unlocks") or "").split() if u.startswith("tech:")}
+    named |= {u.split(":", 1)[1] for r in data["outpostStructures"] for u in [str(r.get("Unlock") or "")] if u.startswith("tech:")}
+    for n in sorted(named - set(ids)):
+        out.append(f"Outpost_Tech: tech:{n} is unlocked or required by the outpost sheets but is not a node")
     for p in OUTPOST_PARAMS:
         if not isinstance(data["outpostParams"].get(p), (int, float)):
             out.append(f"Outpost_Params: missing or non-numeric {p}")
@@ -273,6 +293,14 @@ def raid_problems(data, planets):
                 out.append(f"{tag}: Breacher {b!r} is not one of the documented breacher kinds {BREACHER_KINDS}")
             elif units and b.split("-", 1)[0] not in prefixes:
                 out.append(f"{tag}: Breacher {b!r} is not the planet's own faction")
+        if b and not (isinstance(r.get("Breacher_Every"), int) and r["Breacher_Every"] >= 1):
+            out.append(f"{tag}: Breacher_Every must be a whole number >= 1 (owner 2026-11-07: breacher every other raid)")
+        if b and not (isinstance(r.get("Breacher_HP_Mult"), (int, float)) and r["Breacher_HP_Mult"] > 0):
+            out.append(f"{tag}: Breacher_HP_Mult must be positive")
+        for k in ("Strength_Step2", "Strength_Step3"):
+            v = r.get(k)
+            if v is not None and not (isinstance(v, (int, float)) and 0 < v <= 1):
+                out.append(f"{tag}: {k} must be in (0, 1], got {v!r}")
         for k in ("Raider_HP_Mult", "Raider_Damage_Mult"):
             v = r.get(k)
             if not (isinstance(v, (int, float)) and 0 < v <= 1):
@@ -314,6 +342,9 @@ def main():
         "outpostContracts": sheet_rows(wb["Outpost_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
                                        header_row_probe=("Planet_Key",)),
         "outpostParams": params_map(wb["Outpost_Params"]),
+        # the Outpost division of the tech tree (design 7, story O10)
+        "outpostTech": sheet_rows(wb["Outpost_Tech"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                  header_row_probe=("Node",)) if "Outpost_Tech" in wb.sheetnames else [],
         # raid sizes per planet and contract step, measured on the battle sim [MM-story_mw5oegk1_o] (tech plan §4.3)
         "outpostRaids": sheet_rows(wb["Outpost_Raids"], lambda v: isinstance(v, str) and v.isidentifier(),
                                    header_row_probe=("Planet_Key",)) if "Outpost_Raids" in wb.sheetnames else [],
@@ -374,7 +405,7 @@ def main():
           f"collectiveContracts={len(data['collectiveContracts'])} rareContracts={len(data['rareContracts'])}")
     print(f"   ores={len(data['ores'])} outpostStructures={len(data['outpostStructures'])} "
           f"outpostContracts={len(data['outpostContracts'])} outpostParams={len(data['outpostParams'])} "
-          f"outpostRaids={len(data['outpostRaids'])}")
+          f"outpostRaids={len(data['outpostRaids'])} outpostTech={len(data['outpostTech'])}")
 
 
 if __name__ == "__main__":

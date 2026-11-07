@@ -1,4 +1,5 @@
-// The Tech Tree's data and rules [MM-story_mvkhed1f_h] — Tech-Tree-Design v1.1 (57 upgrades, four divisions).
+// The Tech Tree's data and rules [MM-story_mvkhed1f_h] — Tech-Tree-Design v1.1 (57 upgrades, four divisions), + the
+// 7 Outpost nodes of story O10 [MM-story_mw5oem5o_r].
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TECH_NODES, TECH_BY_ID, BUYABLE, TECH_TOTAL, DIVISIONS, startingOwned, techStatus, techPrice, techGates, readyIds,
@@ -6,14 +7,43 @@ import { TECH_NODES, TECH_BY_ID, BUYABLE, TECH_TOTAL, DIVISIONS, startingOwned, 
 
 const ctx = (owned, bank = 0, extra = {}) => ({ owned: settleFree(new Set([...startingOwned(), ...owned])), bank, paid: {}, ...extra });
 
-test('57 upgrades: Units 25, Bases 21 (+ capstone), Map 10, Outpost none', () => {
+test('64 upgrades: Units 25, Bases 21 (+ capstone), Map 10, Outpost 7 (story O10 replaced the ghosts)', () => {
   assert.equal(BUYABLE.length, TECH_TOTAL);
+  assert.equal(TECH_TOTAL, 64);
   const by = (d) => BUYABLE.filter((id) => TECH_BY_ID[id].div === d && TECH_BY_ID[id].kind !== 'ult').length;
   assert.equal(by('units'), DIVISIONS.units.total);
   assert.equal(by('bases'), DIVISIONS.bases.total);
   assert.equal(by('map'), DIVISIONS.map.total);
-  assert.equal(by('outpost'), 0);
+  assert.equal(by('outpost'), 7);
+  assert.equal(DIVISIONS.outpost.total, 7);
+  assert.ok(!DIVISIONS.outpost.soon, 'the Outpost division is no longer coming soon');
   assert.ok(BUYABLE.includes('apocalypse'));
+});
+
+test('the Outpost nodes: every contract tech exists, priced from the workbook, and no ghost is left (story O10)', async () => {
+  const { MAPDATA } = await import('../../content/maps/mapdata.js');
+  const named = new Set();
+  for (const c of MAPDATA.outpostContracts) for (const t of String(c.Unlocks).split(/\s+/)) if (t.startsWith('tech:')) named.add(t.slice(5));
+  for (const r of MAPDATA.outpostStructures) if (String(r.Unlock).startsWith('tech:')) named.add(r.Unlock.slice(5));
+  assert.deepEqual([...named].sort(), ['cargo_shuttle_2', 'deep_drilling_1', 'power_grid_2', 'reinforced_walls', 'rig_mk2', 'sensor_spire', 'supply_depot']);
+  for (const id of named) {
+    const n = TECH_BY_ID[id], row = MAPDATA.outpostTech.find((r) => r.Node === id);
+    assert.ok(n && n.div === 'outpost' && !n.soon, id + ' is a buyable Outpost node');
+    assert.ok(row && row.Price > 0 && n.price === row.Price, id + ' is priced from the workbook');
+    assert.equal(techStatus(n, ctx([], 0)) !== 'soon', true);
+  }
+  assert.ok(!TECH_NODES.some((n) => n.kind === 'ghost' || /^op\d$/.test(n.id)), 'the five ghosts are gone');
+  assert.deepEqual(TECH_BY_ID.rig_mk2.req, ['deep_drilling_1']);
+});
+
+test('an Outpost node is gated by its contract, then bought like any mission node (tech plan D7)', () => {
+  const c = ctx([], 99999, { unlocked: new Set(), unlockedBy: () => null });
+  assert.equal(techStatus(TECH_BY_ID.deep_drilling_1, c), 'locked');
+  assert.match(techGates(TECH_BY_ID.deep_drilling_1, c)[0].txt, /Outpost contract 1/);
+  const u = ctx([], 99999, { unlocked: new Set(['deep_drilling_1']) });
+  assert.equal(techStatus(TECH_BY_ID.deep_drilling_1, u), 'ready');
+  assert.equal(techPrice(TECH_BY_ID.deep_drilling_1, u), TECH_BY_ID.deep_drilling_1.price);
+  assert.equal(techStatus(TECH_BY_ID.rig_mk2, ctx([], 99999, { unlocked: new Set(['rig_mk2']) })), 'locked', 'needs Deep Drilling I');
 });
 
 test('every requirement names a real node and the graph has no cycles', () => {
@@ -42,7 +72,7 @@ test('statuses: starter kit owned, roots ready, chains locked, gold short', () =
   assert.equal(techStatus(TECH_BY_ID.cannon3, c), 'locked');
   assert.equal(techStatus(TECH_BY_ID.mk3, c), 'locked');
   assert.equal(techStatus(TECH_BY_ID.pod2, ctx(['pod1'], 1000)), 'short');
-  assert.equal(techStatus(TECH_BY_ID.op0, c), 'soon');
+  assert.equal(techStatus(TECH_BY_ID.shp_hold, c), 'soon');
   assert.ok(readyIds(c).includes('cannon2') && !readyIds(c).includes('pod2'));
 });
 

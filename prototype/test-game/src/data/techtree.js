@@ -1,7 +1,12 @@
 /**
  * src/data/techtree.js — THE TECH TREE's data and rules [MM-story_mvkhed1f_h], epic [MM-epic_mvkg5mm7_2].
- * docs/16 Bulwark MM/design/Tech-Tree-Design.md v1.1: 57 upgrades in four divisions — Units, Bases, Map, Outpost
- * (coming soon) — plus the Apocalypse Cannon capstone. A fifth, Ships (coming soon), was added 2026-11-02.
+ * docs/16 Bulwark MM/design/Tech-Tree-Design.md v1.1: 57 upgrades in three divisions — Units, Bases, Map — plus the
+ * Apocalypse Cannon capstone; the fourth, OUTPOST, holds the 7 Outpost nodes (Outpost-Design §7, story O10
+ * [MM-story_mw5oem5o_r]), 64 in all. A fifth, Ships (coming soon), was added 2026-11-02.
+ *
+ * The Outpost nodes and their prices come from the map-data workbook's Outpost_Tech sheet (MAPDATA.outpostTech, read
+ * through data/outpost.js OUTPOST_TECH); their place in the 3D view is set here. A contract step unlocks one (the
+ * game's ctx.unlocked); gold buys it, as every mission-unlocked node.
  *
  * Pure: no DOM, no three.js, no save access, no clock. The Tech Net view (src/menu/technet.js) and the sandbox page
  * (techtree3d.html) both read this; the game menu adapts the save to it. Balance is data — prices and requirements are
@@ -16,7 +21,7 @@ export const DIVISIONS = Object.freeze({
   units:   Object.freeze({ label: 'UNITS',   color: '#ff8a3d', a0: 0,   a1: 130, total: 25 }),
   bases:   Object.freeze({ label: 'BASES',   color: '#34e1ff', a0: 130, a1: 245, total: 21 }),
   map:     Object.freeze({ label: 'MAP',     color: '#b67cff', a0: 245, a1: 315, total: 10 }),
-  outpost: Object.freeze({ label: 'OUTPOST', color: '#6f8c9c', a0: 315, a1: 338, total: 0, soon: true }),
+  outpost: Object.freeze({ label: 'OUTPOST', color: '#6f8c9c', a0: 315, a1: 338, total: OUTPOST_TECH.length }),
   // owner 2026-11-02: "We will need to add Ship upgrades for future trade and space combat economies. Ship upgrades should be
   // added to tech tree as coming soon." [MM-story_mvzkubvz_1m]
   ships:   Object.freeze({ label: 'SHIPS',   color: '#5fb8c9', a0: 338, a1: 360, total: 0, soon: true }),
@@ -27,11 +32,14 @@ export const GROUPS = Object.freeze([
   { div: 'units', lane: -0.47, text: 'TOWERS' }, { div: 'units', lane: 0.36, text: 'TROOPS' }, { div: 'units', lane: 0.76, text: 'HARVESTERS' },
   { div: 'bases', lane: -0.82, text: 'SUPER-CANNON' }, { div: 'bases', lane: -0.3, text: 'DEFENSE PODS' }, { div: 'bases', lane: 0.52, text: 'BASE MODELS' },
   { div: 'map', lane: -0.2, text: 'PORTALS' }, { div: 'map', lane: 0.84, text: 'INTEL' },
+  { div: 'outpost', lane: -0.5, text: 'MINING' }, { div: 'outpost', lane: 0.55, text: 'OUTPOST' },
 ]);
 export const STAT_KEYS = Object.freeze(['ATK', 'DEF', 'RNG', 'DMG', 'COST', 'H-SPD', 'H-GAT']);
 export const STAT_NAMES = Object.freeze(['Attack', 'Defense', 'Range', 'Damage', 'Upgrade cost', 'Harvester speed', 'Harvester gathering']);
-export const TECH_TOTAL = 57;
+export const TECH_TOTAL = 57 + OUTPOST_TECH.length;   // 64: the battle tree's 57 and the Outpost division
 export const PORTAL_BASE_PRICE = 1000, PORTAL_STEP = 500;
+
+import { OUTPOST_TECH } from './outpost.js';
 
 const N = [];
 const add = (o) => { N.push(o); return o; };
@@ -121,13 +129,23 @@ PORTALS.forEach(([k, nm, fac], i) => add({ id: 'portal_' + k, div: 'map', kind: 
 add({ id: 'mining', div: 'map', kind: 'item', name: 'Mining Drone', price: 1500, d: 1.4, lane: 0.84, desc: 'An autonomous miner: +5 gold/s without a harvester.' });
 add({ id: 'ewn', div: 'map', kind: 'item', name: 'Early Warning Net', price: 2600, d: 2.6, lane: 0.84, desc: 'Shows the next wave\'s composition before it deploys.' });
 
-// ── OUTPOST (coming soon) — ghosts, never counted or bought
-['Outpost Hub', 'Forward Relay', 'Supply Depot', 'Sensor Spire', 'Outpost Walls'].forEach((nm, i) =>
-  add({ id: 'op' + i, div: 'outpost', kind: 'ghost', name: 'Classified', d: [1.4, 2.6, 3.2, 4.3, 5.2][i], lane: [-0.1, -0.55, 0.45, -0.2, 0.4][i], soon: true,
-    desc: 'Outposts are coming soon: forward bases you build on the map between battles.' }));
+// ── OUTPOST (Outpost-Design §7, story O10): the 7 nodes that replaced the five ghosts. Data from the workbook
+// (Outpost_Tech); a contract step unlocks each, gold buys it. Defense tiers (Reinforced Walls) are installed in the
+// outpost's Upgrade Bay; the rest apply to every outpost at once.
+const OUTPOST_LAYOUT = {   // [ring, lane] in the 3D view's narrow sector — mining down the left, the outpost down the right
+  deep_drilling_1: [1.4, -0.55], rig_mk2: [2.8, -0.6], supply_depot: [2.1, -0.15], power_grid_2: [1.5, 0.3],
+  reinforced_walls: [2.5, 0.6], sensor_spire: [3.4, 0.25], cargo_shuttle_2: [4.4, -0.2],
+};
+OUTPOST_TECH.forEach((t, i) => {
+  const [d, lane] = OUTPOST_LAYOUT[t.id] || [1.4 + i * 0.6, 0];
+  add({ id: t.id, div: 'outpost', kind: 'item', name: t.name, sub: 'Outpost · ' + t.unlockedBy, price: t.price, d, lane, req: [...t.requires],
+    unlockBy: 'Outpost ' + t.unlockedBy, outpost: true, applies: t.applies,
+    desc: t.effect.replace(/^./, (c) => c.toUpperCase()) + '. Unlocked by the outpost ' + t.unlockedBy + ' on any planet' +
+      (t.applies === 'upgradeBay' ? '; installed at an outpost with an Upgrade Bay.' : '; applies to every outpost.') });
+});
 
 // ── SHIPS (coming soon) — the landing craft becomes a ship: trade runs and space combat. Named so players see what is
-// coming, but like the Outpost ghosts they are never counted, priced or bought.
+// coming, but they are never counted, priced or bought.
 [['shp_hold', 'Cargo Holds', 'Trade', 1.4, -0.55], ['shp_charter', 'Trade Charter', 'Trade', 2.4, -0.6], ['shp_drive', 'Hyperlane Drive', 'Trade', 3.4, -0.5],
  ['shp_shield', 'Deflector Screens', 'Space combat', 1.8, 0.5], ['shp_guns', 'Broadside Batteries', 'Space combat', 2.8, 0.55], ['shp_bay', 'Fighter Bay', 'Space combat', 3.8, 0.45]]
   .forEach(([id, nm, line, d, lane]) => add({ id, div: 'ships', kind: 'shipghost', name: nm, sub: 'Coming soon · ' + line, d, lane, soon: true,
@@ -138,7 +156,7 @@ export const TECH_BY_ID = Object.freeze(Object.fromEntries(N.map((n) => [n.id, n
 for (const n of N) for (const r of n.req) TECH_BY_ID[r].kids.push(n.id);
 for (const n of N) { Object.freeze(n.req); Object.freeze(n.kids); Object.freeze(n); }
 export const TECH_NODES = Object.freeze(N);
-/** The 57 things a player buys (not the free starting kit, the Gun Pod, the milestone or the Outpost ghosts). */
+/** The 64 things a player buys (not the free starting kit, the Gun Pod, the milestone or the Ships ghosts). */
 export const BUYABLE = Object.freeze(N.filter((n) => !n.free && !n.soon && !n.milestone).map((n) => n.id));
 
 // ════════════════════════════════════════════════ rules ════════════════════════════════════════════════
@@ -154,7 +172,7 @@ export function techGates(n, ctx) {
   const out = [], g = n.gate || {}, held = portalsOwned(ctx.owned);
   // tech plan D7: a node unlocks through a mission and is then bought. Only the game's context carries `unlocked`.
   if (ctx.unlocked && !n.free && !n.soon && !n.milestone && !ctx.unlocked.has(n.id)) {
-    const by = ctx.unlockedBy ? ctx.unlockedBy(n.id) : null;
+    const by = (ctx.unlockedBy ? ctx.unlockedBy(n.id) : null) || n.unlockBy || null;
     out.push({ txt: 'Unlocked by a mission' + (by ? ': ' + by : ''), ok: false });
   }
   if (g.portals) out.push({ txt: g.portals + (g.portals > 1 ? ' portal codes owned' : ' portal code owned') + ' (' + held + ')', ok: held >= g.portals });

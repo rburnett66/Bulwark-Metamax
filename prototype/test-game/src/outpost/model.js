@@ -16,6 +16,8 @@
  *     defenses: [{ id, kind, tier, cell: [x, y], hp }],
  *     storage: { [rigPadId]: { [itemId]: units } },                 // one bay per rig; deep grade is '<ore>_deep'
  *     harvesters: n,                                                // bought for the Resource Bay (O16; behaviour O10)
+ *     hopper: { common: units, uncommon: units },                   // the Resource Bay's hopper (O10), fractional
+ *     fields: { [fieldId]: units },                                 // surface field stock (O10); absent = full
  *     raids: { window, log: [{ at, result, lost, damage }] },
  *     sold: { [oreId]: units } }                                    // lifetime, both grades, for contract steps
  *
@@ -28,6 +30,19 @@
  * remote }], deposits: [{ tier, pad }], kitDefenses: [{ kind, cell }] } — kitDefenses is the reference defense set
  * (referenceOutpost, the raid measurement); it is not granted.
  *
+ * Harvesters (story O10, design §6, §6.2): a finished, powered Resource Bay sends its harvesters to the outpost map's
+ * surface fields (common and uncommon, off the mesa). They drive and load at the battle harvest rate (data/outpost.js
+ * harvesterRate), but a field is a finite stock that regrows at Surface_Respawn_Mult (5 %) of the battle's rate (owner
+ * 2026-11-07): a harvester takes its field's stock, then only what regrows. Into a hopper that holds Hopper_Hours of
+ * the steady take; emptyHopper() banks it when the outpost is opened. Piecewise closed form inside advance().
+ *
+ * Guns and the Habitat (story O15): the hub crews Gun_Cap guns (Machine Guns and Cannons; walls do not count); the
+ * one Habitat adds Habitat_Guns_Per_Tier per tier. place() refuses a gun over the cap.
+ *
+ * Tech (story O10): ctx.unlocks is the Outpost tech the player OWNS (bought in the Tech Tree after a contract
+ * unlocked it); ctx.techOwned the whole tree's owned ids. A defense goes past tier 1 only at an outpost with a
+ * finished, powered Upgrade Bay, up to the tier the player owns in the tree (mg2, cannon3, ...; walls: Reinforced Walls).
+ *
  * Raids: `advance` finds each raid due and asks `ctx.raid(outpost, { at, window, first, powered })` for its outcome:
  * { result: 'held' | 'breach', defenses: [{ id, hp }] }. The game passes the battle sim's runRaid (story O7); the
  * tests and the review page pass a stand-in. raidOutcome() applies an outcome: a breach loses Breach_Storage_Loss of
@@ -35,7 +50,7 @@
  */
 import { createRng } from '../sim/rng.js';
 import { oresOf, oreById, oreItemId } from '../data/ores.js';
-import { OUTPOST, structureDef, DEFENSE_KINDS, canonicalKind, harvesterDef } from '../data/outpost.js';
+import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock } from '../data/outpost.js';
 
 const MIN = 60_000, HOUR = 3_600_000;
 const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
@@ -100,7 +115,7 @@ export function createOutpost(planet, { seed, map, now }) {
   return {
     planet, seed: seed >>> 0, online: false, t: now, firstRaidAt: null,
     pads: { [firstPad(map, 'hub').id]: { kind: 'hub', tier: 1 } }, building: [], defenses: [], storage: {},
-    harvesters: 0, raids: { window: null, log: [] }, sold: {},
+    harvesters: 0, hopper: {}, fields: {}, raids: { window: null, log: [] }, sold: {},
   };
 }
 
@@ -131,12 +146,14 @@ export function migrateOutpost(o) {
   for (const b of Object.values(o.pads || {})) if (b && b.kind) b.kind = canonicalKind(b.kind);
   for (const b of o.building || []) if (b && b.kind) b.kind = canonicalKind(b.kind);
   if (!Number.isFinite(o.harvesters)) o.harvesters = 0;
+  if (!o.hopper || typeof o.hopper !== 'object') o.hopper = {};
+  if (!o.fields || typeof o.fields !== 'object') o.fields = {};
   return o;
 }
 
 // ── power (design §4.5) ──────────────────────────────────────────────────────────────────────────────────────────
 // Consumers are served in this order when a grid is short, so the outpost keeps its core running first.
-const PRIORITY = { hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, resourceBay: 4, upgradeBay: 5 };
+const PRIORITY = { hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, resourceBay: 4, upgradeBay: 5, habitat: 6 };
 
 /**
  * The power grids: stations within reach of each other pool their supply; a consumer joins the grid of the nearest
@@ -241,6 +258,189 @@ function runningRigs(o, map, params = OUTPOST) {
   });
 }
 
+// ── harvesters and the hopper (design §6, story O10) ─────────────────────────────────────────────────────────────
+/** The surface tiers a Resource Bay's harvesters gather: the map's primary fields are common, premium uncommon. */
+export const HARVEST_TIERS = Object.freeze(['common', 'uncommon']);
+const ROLE_TIER = { primary: 'common', premium: 'uncommon' };
+/**
+ * The surface fields the harvesters can reach: the outpost map's resources (Forge `resources`) of the two tiers, off
+ * the mesa (heights > 0) and off the pads and their 1-cell margin, the cells the view draws. -> [{ x, y, tier }]
+ */
+export function surfaceFields(map) {
+  const cols = map.width, H = map.heights;
+  const onPad = (x, y) => (map.pads || []).some((p) => x >= p.x - 1 && x < p.x + p.w + 1 && y >= p.y - 1 && y < p.y + p.h + 1);
+  return (map.resources || []).filter((r) => ROLE_TIER[r.role] && !(H && H[r.y * cols + r.x] > 0) && !onPad(r.x, r.y))
+    .map((r) => ({ x: r.x, y: r.y, tier: ROLE_TIER[r.role] }));
+}
+/**
+ * The surface fields as the battle groups them: connected (8-neighbour) cells of one tier. Each holds its cells' battle
+ * stock and regrows at Surface_Respawn_Mult of the battle rate (data/outpost.js surfaceStock). Cached per map.
+ * -> [{ id ('<tier>:<x>,<y>' of its first cell), tier, cells: [[x, y]], cap (units), regrow (units / ms) }]
+ */
+const FIELD_CACHE = new WeakMap();
+export function surfaceFieldGroups(map, params = OUTPOST) {
+  const key = params.Surface_Respawn_Mult;
+  const hit = FIELD_CACHE.get(map);
+  if (hit && hit.key === key) return hit.groups;
+  const cells = surfaceFields(map).sort((a, b) => a.y - b.y || a.x - b.x);
+  const at = new Map(cells.map((c) => [`${c.x},${c.y}`, c])), seen = new Set(), stock = surfaceStock(params), groups = [];
+  for (const c of cells) {
+    if (seen.has(c)) continue;
+    const g = [], stack = [c];
+    seen.add(c);
+    while (stack.length) {
+      const k = stack.pop();
+      g.push([k.x, k.y]);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nb = at.get(`${k.x + dx},${k.y + dy}`);
+        if (nb && !seen.has(nb) && nb.tier === c.tier) { seen.add(nb); stack.push(nb); }
+      }
+    }
+    g.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    const per = stock[c.tier];
+    groups.push(Object.freeze({ id: `${c.tier}:${g[0][0]},${g[0][1]}`, tier: c.tier, cells: g, cap: per.units * g.length, regrow: (per.regrow * g.length) / 1000 }));
+  }
+  FIELD_CACHE.set(map, { key, groups });
+  return groups;
+}
+/** Each field's stock now: { [fieldId]: units } (a field never touched is full). */
+export function fieldStock(o, map, params = OUTPOST) {
+  const out = {};
+  for (const f of surfaceFieldGroups(map, params)) out[f.id] = Math.min(f.cap, (o.fields || {})[f.id] ?? f.cap);
+  return out;
+}
+
+/** The finished Resource Bay's pad id, or null. */
+export const resourceBayPad = (o) => Object.keys(o.pads).sort().find((id) => o.pads[id].kind === 'resourceBay') || null;
+
+/**
+ * Where each harvester works (the view drives them along these): harvesters alternate common, uncommon, common, ...;
+ * the k-th harvester of a tier takes the k-th nearest field of that tier to the Resource Bay (the other tier when the
+ * map has none), and drives to that field's nearest cell. It stays on its field: once the stock is gone it takes only
+ * what regrows (owner 2026-11-07).
+ * -> [{ i, tier, fieldId, from: [x, y] (the bay's centre), field: [x, y] (cell), dist (cells), rate (units / ms, the
+ * battle rate) }]; [] with no finished bay or no fields. Power is not asked here (see harvestRunning).
+ */
+export function harvestPlan(o, map, params = OUTPOST) {
+  const bay = resourceBayPad(o), n = Math.min(o.harvesters || 0, params.Harvester_Max ?? 4);
+  if (!bay || !n) return [];
+  const pad = padOf(map, bay);
+  if (!pad) return [];
+  const at = centre(pad), groups = surfaceFieldGroups(map, params);
+  const byTier = {};
+  for (const t of HARVEST_TIERS) {
+    byTier[t] = groups.filter((f) => f.tier === t).map((f) => {
+      let best = null;
+      for (const c of f.cells) { const d = dist(at, cellCentre(c)); if (!best || d < best.d || (d === best.d && (c[0] < best.c[0] || (c[0] === best.c[0] && c[1] < best.c[1])))) best = { d, c }; }
+      return { f, d: best.d, c: best.c };
+    }).sort((a, b) => a.d - b.d || (a.f.id < b.f.id ? -1 : 1));
+  }
+  const used = { common: 0, uncommon: 0 }, out = [];
+  for (let i = 0; i < n; i++) {
+    let tier = HARVEST_TIERS[i % 2];
+    if (!byTier[tier].length) tier = HARVEST_TIERS[(i + 1) % 2];
+    const list = byTier[tier];
+    if (!list.length) break;
+    const x = list[used[tier]++ % list.length];
+    out.push({ i, tier, fieldId: x.f.id, from: at, field: [...x.c], dist: x.d, rate: harvesterRate(tier, x.d, params) / 1000 });
+  }
+  return out;
+}
+/**
+ * What the harvesters bring in once their fields are bare (the steady take): per field, the lesser of the harvesters'
+ * battle rate and the field's regrowth. -> { total (units / ms), byTier: { common, uncommon }, byField: { [id]: units / ms } }
+ */
+export function steadyHarvest(o, map, params = OUTPOST) {
+  const groups = new Map(surfaceFieldGroups(map, params).map((f) => [f.id, f])), demand = {};
+  for (const h of harvestPlan(o, map, params)) demand[h.fieldId] = (demand[h.fieldId] || 0) + h.rate;
+  const out = { total: 0, byTier: { common: 0, uncommon: 0 }, byField: {} };
+  for (const [id, d] of Object.entries(demand)) {
+    const f = groups.get(id), t = Math.min(d, f.regrow);
+    out.byField[id] = t; out.byTier[f.tier] += t; out.total += t;
+  }
+  return out;
+}
+/**
+ * The hopper's size in units: Hopper_Hours of the harvesters' steady take (their fields' regrowth, or less), and never
+ * less than the full stock of the fields they work, so a fresh field always fits.
+ */
+export function hopperCap(o, map, params = OUTPOST) {
+  const st = steadyHarvest(o, map, params), groups = new Map(surfaceFieldGroups(map, params).map((f) => [f.id, f]));
+  const stock = Object.keys(st.byField).reduce((a, id) => a + groups.get(id).cap, 0);
+  return Math.max(st.total * params.Hopper_Hours * HOUR, stock);
+}
+
+/**
+ * The surface fields and the hopper over dt ms, in closed form (owner 2026-11-07): piecewise linear between the moments
+ * a field runs dry, a field is full again, or the hopper fills. On a field, harvesters take their battle rate while it
+ * has stock, then only what regrows; with nobody on it (or the hopper full) it regrows to its full stock. Mutates o.
+ */
+function harvestFields(o, map, params, dt, running, report, now) {
+  const groups = surfaceFieldGroups(map, params);
+  if (!groups.length) return;
+  o.fields = o.fields || {};
+  const demand = {};
+  for (const h of running) demand[h.fieldId] = (demand[h.fieldId] || 0) + h.rate;
+  const cap = hopperCap(o, map, params);
+  const live = groups.filter((f) => demand[f.id] || (o.fields[f.id] != null && o.fields[f.id] < f.cap));
+  let left = dt, t = now;
+  for (let guard = 0; left > 0 && live.length && guard < 10_000; guard++) {
+    const space = cap - hopperUnits(o), open = space > 1e-9;
+    const rows = live.map((f) => {
+      const S = Math.min(f.cap, o.fields[f.id] ?? f.cap), want = open ? demand[f.id] || 0 : 0;
+      const take = S > 1e-9 ? want : Math.min(want, f.regrow);
+      let dS = f.regrow - take;
+      if (S >= f.cap - 1e-9 && dS > 0) dS = 0;
+      return { f, S, take, dS };
+    });
+    const T = rows.reduce((a, r) => a + r.take, 0);
+    let step = left;
+    for (const r of rows) {
+      if (r.dS < 0) step = Math.min(step, r.S / -r.dS);
+      else if (r.dS > 0) step = Math.min(step, (r.f.cap - r.S) / r.dS);
+    }
+    if (T > 0) step = Math.min(step, space / T);
+    step = Math.max(0, step);
+    for (const r of rows) {
+      let S = r.S + r.dS * step;
+      if (r.dS < 0 && step >= r.S / -r.dS - 1e-9) S = 0;
+      if (r.dS > 0 && step >= (r.f.cap - r.S) / r.dS - 1e-9) S = r.f.cap;
+      o.fields[r.f.id] = Math.max(0, Math.min(r.f.cap, S));
+      if (r.take > 0) {
+        const g = r.take * step;
+        o.hopper[r.f.tier] = (o.hopper[r.f.tier] || 0) + g;
+        report.harvested[r.f.tier] = (report.harvested[r.f.tier] || 0) + g;
+      }
+    }
+    if (T > 0 && step >= space / T - 1e-9) { report.hopperFull = report.hopperFull ?? t + step; }
+    left -= step; t += step;   // a zero step only lands a field on its boundary (clamped above); the next one moves on
+  }
+  for (const f of groups) if (o.fields[f.id] != null && o.fields[f.id] >= f.cap - 1e-9) delete o.fields[f.id];   // full = absent
+}
+/** The harvesters at work now: the plan when the Resource Bay is finished AND powered (no power, no operation). */
+export function harvestRunning(o, map, params = OUTPOST, powered = powerGrids(o, map).powered) {
+  const bay = resourceBayPad(o);
+  return bay && powered.has(bay) ? harvestPlan(o, map, params) : [];
+}
+export const hopperUnits = (o) => Object.values(o.hopper || {}).reduce((a, b) => a + b, 0);
+
+/**
+ * Empty the hopper (opening the outpost, design §6): its whole units leave for the player's inventory, the fractions
+ * stay. -> { outpost, units: { common, uncommon } } (only tiers with a whole unit). The caller banks `units`
+ * (src/save/inventory.js bankOutpostHarvest).
+ */
+export function emptyHopper(outpost) {
+  const o = clone(outpost), units = {};
+  o.hopper = o.hopper || {};
+  for (const [tier, u] of Object.entries(o.hopper)) {
+    const whole = Math.floor(u + 1e-9);
+    if (whole <= 0) continue;
+    units[tier] = whole;
+    o.hopper[tier] = Math.max(0, u - whole);
+  }
+  return { outpost: o, units };
+}
+
 // ── advancing through time (tech plan §4.1) ──────────────────────────────────────────────────────────────────────
 /**
  * Advance the outpost to `toMs`, in closed form: the interval is cut only at the events that change a rate (a build
@@ -252,7 +452,8 @@ function runningRigs(o, map, params = OUTPOST) {
 export function advance(outpost, toMs, ctx) {
   const params = P(ctx), map = ctx.map;
   const o = clone(outpost);
-  const report = { from: o.t, to: o.t, extracted: {}, full: [], raids: [], built: [] };
+  const report = { from: o.t, to: o.t, extracted: {}, harvested: {}, full: [], raids: [], built: [] };
+  o.hopper = o.hopper || {};
   if (!(toMs > o.t)) return { outpost: o, report };
   const end = Math.min(toMs, o.t + params.Away_Cap_Hours * HOUR);
 
@@ -285,6 +486,8 @@ export function advance(outpost, toMs, ctx) {
       report.extracted[r.item] = (report.extracted[r.item] || 0) + got;
       if (got >= space - 1e-9) report.full.push({ pad: r.pad, at: now + space / r.rate });
     }
+    // the harvesters and the surface fields (finite stock, 5 % regrowth), into the hopper
+    harvestFields(o, map, params, dt, harvestRunning(o, map, params), report, now);
     now = until;
   };
   for (const ev of events) {
@@ -432,10 +635,28 @@ export function sell(outpost, ctx = {}, { buyer = null } = {}) {
 // ── building, upgrading, repairing (design §6, §6.1) ─────────────────────────────────────────────────────────────
 const ROLE_FITS = {
   hub: ['hub'], power: ['power', 'spare'], rig: ['rig'], storage: ['storage'],
-  resourceBay: ['bay', 'spare'], upgradeBay: ['bay', 'spare'],
+  resourceBay: ['bay', 'spare'], upgradeBay: ['bay', 'spare'], habitat: ['bay', 'spare'],
 };
 /** The pad kinds the build list offers (everything but the granted hub), and the defenses (placed on cells). */
-export const PAD_KINDS = Object.freeze(['power', 'rig', 'storage', 'resourceBay', 'upgradeBay']);
+export const PAD_KINDS = Object.freeze(['power', 'rig', 'storage', 'resourceBay', 'upgradeBay', 'habitat']);
+
+// ── the gun cap (owner 2026-11-07, design §6, story O15) ─────────────────────────────────────────────────────────
+/** The guns placed (Machine Guns and Cannons, wrecks included: a wreck keeps its crew post). Walls do not count. */
+export const gunCount = (o) => o.defenses.filter((d) => GUN_KINDS.includes(d.kind)).length;
+/** The finished Habitat's tier (0 = none). Under construction it does not count yet. */
+export const habitatTier = (o) => Math.max(0, ...Object.values(o.pads).filter((b) => b.kind === 'habitat').map((b) => b.tier));
+/** How many guns the outpost crews: Gun_Cap from the hub, + Habitat_Guns_Per_Tier for each Habitat tier. */
+export function gunCap(o, params = OUTPOST) {
+  return (params.Gun_Cap ?? 3) + (params.Habitat_Guns_Per_Tier ?? 2) * habitatTier(o);
+}
+/** Why one more gun cannot be placed now, or null. */
+export function gunRefusal(o, params = OUTPOST) {
+  const n = gunCount(o), cap = gunCap(o, params), h = habitatTier(o);
+  if (n < cap) return null;
+  if (!h) return `the hub crews ${cap} guns: build a Habitat for more`;
+  if (structureDef('habitat', h + 1)) return `the Habitat crews ${cap} guns: upgrade it to Habitat ${'I'.repeat(h + 1)} for more`;
+  return `the outpost crews at most ${cap} guns`;
+}
 const busy = (o, pad) => !!o.pads[pad] || o.building.some((b) => b.pad === pad);
 
 /**
@@ -453,6 +674,10 @@ export function place(outpost, what, ctx) {
   if (kind === 'hub') return { error: 'the hub comes with the contract' };
   const def = structureDef(kind, 1);
   if (!def) return { error: `unknown building ${kind}` };
+  if (GUN_KINDS.includes(kind)) { const why = gunRefusal(outpost, P(ctx)); if (why) return { error: why }; }
+  if (kind === 'habitat' && (Object.values(outpost.pads).some((b) => b.kind === 'habitat') || outpost.building.some((b) => b.kind === 'habitat'))) {
+    return { error: 'the outpost has its Habitat: upgrade it to Habitat II' };
+  }
   if (def.cost > gold) return { error: `costs ${def.cost} gold` };
   if (!unlocked(def, ctx, outpost)) return { error: `${kind} is not unlocked (${def.unlock})` };
   const o = clone(outpost);
@@ -492,13 +717,59 @@ export function upgrade(outpost, padId, ctx) {
   return { outpost: o, cost: def.cost };
 }
 
+const inSet = (set, id) => (set instanceof Set ? set.has(id) : (set || []).includes(id));
 function unlocked(def, ctx, o) {
   const u = def.unlock || '';
   if (u === 'granted' || u === 'kit' || u.startsWith('contract:')) return true;
-  const has = (id) => (ctx.unlocks instanceof Set ? ctx.unlocks.has(id) : (ctx.unlocks || []).includes(id));
-  if (u.startsWith('tech:')) return has(u.slice(5));
-  if (u === 'techtree+upgradeBay') return has(`tier${def.tier}`) && Object.values(o.pads).some((b) => b.kind === 'upgradeBay');
+  if (u.startsWith('tech:')) return inSet(ctx.unlocks, u.slice(5));
+  // a tower tier from the tech tree (mg2, cannon3 ...), at an outpost with an Upgrade Bay (design §5.2, §6)
+  if (u === 'techtree+upgradeBay') return inSet(ctx.techOwned, `${def.kind}${def.tier}`) && Object.values(o.pads).some((b) => b.kind === 'upgradeBay');
   return false;
+}
+
+// ── defense upgrades: the Upgrade Bay (design §6, story O10) ─────────────────────────────────────────────────────
+const TECH_NAME = { reinforced_walls: 'Reinforced Walls' };
+const DEF_NAME = { mg: 'Machine Gun', cannon: 'Cannon', wall: 'Wall' };
+/** A finished Upgrade Bay with power (map given): "no electricity, no operation". -> pad id or null */
+export function upgradeBayReady(o, map) {
+  const ids = Object.keys(o.pads).filter((id) => o.pads[id].kind === 'upgradeBay');
+  if (!ids.length) return null;
+  if (!map) return ids[0];
+  const { powered } = powerGrids(o, map);
+  return ids.find((id) => powered.has(id)) || null;
+}
+/**
+ * Why a defense cannot go to its next tier now, or null (gold is asked only when ctx.gold is given). Tiers past I need
+ * a finished, powered Upgrade Bay at this outpost, and the tier owned in the tech tree: `<kind><tier>` (mg2, cannon3)
+ * for an Unlock of 'techtree+upgradeBay', the Outpost node for 'tech:<node>' (walls: Reinforced Walls).
+ * ctx: { map, gold?, techOwned: Set<tree id>, unlocks: Set<owned Outpost node> }.
+ */
+export function defenseUpgradeRefusal(o, id, ctx = {}) {
+  const d = o.defenses.find((x) => x.id === id);
+  if (!d) return `no defense ${id}`;
+  const next = structureDef(d.kind, d.tier + 1);
+  if (!next) return `the ${DEF_NAME[d.kind] || d.kind} is at its top tier`;
+  if (d.hp <= 0) return 'repair the wreck first';
+  if (!Object.values(o.pads).some((b) => b.kind === 'upgradeBay')) return 'build the Upgrade Bay first';
+  if (ctx.map && !upgradeBayReady(o, ctx.map)) return 'the Upgrade Bay has no power';
+  const u = next.unlock || '';
+  if (u === 'techtree+upgradeBay' && !inSet(ctx.techOwned, `${d.kind}${next.tier}`)) return `needs ${DEF_NAME[d.kind]} T${next.tier} in the Tech Tree`;
+  if (u.startsWith('tech:') && !inSet(ctx.unlocks, u.slice(5))) return `needs ${TECH_NAME[u.slice(5)] || u.slice(5).replace(/_/g, ' ')} in the Tech Tree`;
+  if (next.cost > (ctx.gold ?? Infinity)) return `costs ${next.cost} gold`;
+  return null;
+}
+/**
+ * Install a defense's next tier at the Upgrade Bay (instant, as placing a defense is). Its HP rises by the tier's
+ * extra HP; wear it already had stays (only repair() restores HP). -> { outpost, cost } or { error }
+ */
+export function upgradeDefense(outpost, id, ctx = {}) {
+  const why = defenseUpgradeRefusal(outpost, id, ctx);
+  if (why) return { error: why };
+  const o = clone(outpost), d = o.defenses.find((x) => x.id === id);
+  const was = structureDef(d.kind, d.tier), next = structureDef(d.kind, d.tier + 1);
+  d.tier += 1;
+  d.hp = Math.min(next.battle.hp, d.hp + (next.battle.hp - was.battle.hp));
+  return { outpost: o, cost: next.cost };
 }
 
 /** What repairing a defense to full HP costs: Value × Repair_Share_Per_HP × the share of HP missing (design §6.1). */
@@ -531,12 +802,24 @@ export function setDeep(outpost, padId, on, ctx = {}) {
 }
 
 // ── harvesters (owner 2026-11-07: bought from the build list once the Resource Bay is built) ────────────────────────
+/**
+ * How many harvesters the Resource Bay holds (design §6: 2 to start, up to 4): Harvester_Cap, + 1 each for the tech
+ * tree's Dock 3 and Dock 4 at an outpost with a finished Upgrade Bay (tech-tree upgrades reach an outpost through its
+ * Upgrade Bay, design §6), never above Harvester_Max. ctx: { techOwned?, params? }.
+ */
+export function harvesterCap(o, ctx = {}) {
+  const params = P(ctx), h = harvesterDef();
+  const base = params.Harvester_Cap ?? (h && h.cap) ?? 2, max = params.Harvester_Max ?? (h && h.max) ?? 4;
+  const bay = Object.values(o.pads).some((b) => b.kind === 'upgradeBay');
+  const docks = bay ? ['dock3', 'dock4'].filter((id) => inSet(ctx.techOwned, id)).length : 0;
+  return Math.min(max, base + docks);
+}
 /** What stops buying a harvester now, or null: no finished Resource Bay, the cap reached, or the gold short. */
 export function harvesterRefusal(o, ctx = {}) {
   const h = harvesterDef();
   if (!h) return 'harvesters are not in the data';
   if (!Object.values(o.pads).some((b) => b.kind === 'resourceBay')) return 'build the Resource Bay first';
-  const cap = (ctx.params && ctx.params.Harvester_Cap) || h.cap;
+  const cap = harvesterCap(o, ctx);
   if ((o.harvesters || 0) >= cap) return `the Resource Bay holds ${cap} harvesters`;
   if (h.cost > (ctx.gold ?? Infinity)) return `costs ${h.cost} gold`;
   return null;
@@ -577,6 +860,27 @@ export function warnings(o, map, params = OUTPOST) {
     else if (rigs.length && rigs.every(fullRig)) add(id, 'storage_full');
   }
   return out;
+}
+
+// ── the Sensor Spire (design §7): a raid's early warning ────────────────────────────────────────────────────────────
+/**
+ * The next raid after `from` (ms): the scripted first raid, else the schedule's next (the same draw advance() uses),
+ * looked for up to `horizonMs` ahead. -> ms or null. Offline outposts are not raided. Pure.
+ */
+export function nextRaidAt(o, from, { params = OUTPOST, horizonMs = 24 * HOUR } = {}) {
+  if (!o.online) return null;
+  if (o.firstRaidAt != null && o.firstRaidAt > from) return o.firstRaidAt;
+  const w = windowMs(params);
+  const fromW = Math.max(Math.floor(from / w), o.raids.window == null ? -Infinity : o.raids.window + 1);
+  const r = raidSchedule(o.seed, fromW, Math.floor((from + horizonMs) / w), params).find((x) => x.at > from);
+  return r ? r.at : null;
+}
+/** A raid inbound within ctx.leadMs (the Sensor Spire's 10 minutes): ms until it, or null. Needs the node owned. */
+export function raidWarning(o, now, ctx = {}) {
+  if (!inSet(ctx.unlocks, 'sensor_spire')) return null;
+  const at = nextRaidAt(o, now, { params: P(ctx) });
+  const lead = ctx.leadMs ?? 10 * MIN;
+  return at != null && at - now <= lead ? at - now : null;
 }
 
 /** A one-glance status for the menu's OUTPOST button (design §10): loads ready, storage full, worn defenses, last raid. */

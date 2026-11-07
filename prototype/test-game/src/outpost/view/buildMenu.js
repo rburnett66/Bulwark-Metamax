@@ -42,6 +42,7 @@ export const MENU = Object.freeze([
   { id: 'storage', label: 'STORAGE TOWER', place: 'pad' },
   { id: 'resourceBay', label: 'RESOURCE BAY', place: 'pad' },
   { id: 'upgradeBay', label: 'UPGRADE BAY', place: 'pad' },
+  { id: 'habitat', label: 'HABITAT', place: 'pad' },   // story O15: raises the gun cap
   { id: 'harvester', label: 'HARVESTER', place: 'buy' },
   { id: 'wall', label: 'WALL', place: 'cell' },
   { id: 'mg', label: 'MACHINE GUN', place: 'cell' },
@@ -54,7 +55,9 @@ export const kindOf = (id) => (id === 'resourceBay' ? bayKind() : id);
 /** The battle icon (render/buildIcons.js id) a menu item reuses, or null (outpost buildings render their GLBs). */
 export const BATTLE_ICON = Object.freeze({ wall: 'wall', mg: 'mg', cannon: 'cannon', harvester: 'harvester' });
 /** The GLB slug an outpost building's icon renders from (rig: per head, chosen at runtime). null → a drawn glyph. */
-export const ICON_SLUG = Object.freeze({ power: 'power', storage: 'storage', rig: 'rig_auger', resourceBay: null, upgradeBay: null });
+export const ICON_SLUG = Object.freeze({ power: 'power', storage: 'storage', rig: 'rig_auger', resourceBay: 'resourceBay', upgradeBay: 'upgradeBay', habitat: 'habitat' });   // the bays and the Habitat: their GLB once content/outposts/outposts.json lists the kind, else a glyph
+/** The guns the gun cap counts (story O15): their list items show n / cap. */
+export const GUN_ITEMS = Object.freeze(['mg', 'cannon']);
 
 const has = (ctx, id) => (ctx.unlocks instanceof Set ? ctx.unlocks.has(id) : (ctx.unlocks || []).includes(id));
 const nice = (s) => String(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -71,13 +74,14 @@ const present = (o, kind) => Object.values(o.pads || {}).some((b) => b.kind === 
  * → { count, max (what the Resource Bay holds now: Harvester_Cap), price (null when the data has none), api
  *   (buyHarvester is exported), refusal (model.harvesterRefusal's reason ignoring gold, or null) }
  */
-export function harvesterInfo(o, model = M) {
+export function harvesterInfo(o, model = M, ctx = {}) {
   const h = o.harvesters;
   const count = Array.isArray(h) ? h.length : typeof h === 'number' ? h : (h && typeof h.count === 'number') ? h.count : 0;
   const def = typeof harvesterDef === 'function' ? harvesterDef() : null;
-  const max = (def && (def.cap ?? def.max)) ?? OUTPOST.Harvester_Cap ?? OUTPOST.Harvester_Max ?? 4;
+  // the cap now (O10): Harvester_Cap, raised by Dock 3 / Dock 4 through the Upgrade Bay (model.harvesterCap)
+  const max = typeof model.harvesterCap === 'function' ? model.harvesterCap(o, ctx) : (def && (def.cap ?? def.max)) ?? OUTPOST.Harvester_Cap ?? OUTPOST.Harvester_Max ?? 4;
   const price = def ? def.cost : (structureDef('harvester', 1) || {}).cost ?? null;
-  const refusal = typeof model.harvesterRefusal === 'function' ? model.harvesterRefusal(o, { gold: Infinity }) : null;
+  const refusal = typeof model.harvesterRefusal === 'function' ? model.harvesterRefusal(o, { ...ctx, gold: Infinity }) : null;
   return { count, max, price, api: typeof model.buyHarvester === 'function', refusal };
 }
 
@@ -114,8 +118,8 @@ export function whyText(error, id, o) {
   let m;
   if ((m = e.match(/not unlocked \((?:tech:)?([^)]+)\)/))) return `Needs ${nice(m[1])}`;
   if ((m = e.match(/the (\w+) ore is not unlocked/))) { const ore = oresOf(o.planet).find((x) => x.tier === m[1]); return `${ore ? ore.name : nice(m[1])} is not unlocked yet`; }
-  if (/a rig goes on a deposit|cannot go on a rig/.test(e) || id === 'rig') return 'No free deposit';
-  if (/cap|crew|limit|max/i.test(e)) return 'Gun limit reached · build a Habitat';
+  if (id === 'rig') return 'No free deposit';   // (a storage tower refused a rig pad is 'No free pad', below)
+  if (/crew/i.test(e)) return e.replace(/^./, (c) => c.toUpperCase());   // the gun cap (O15): the model's words name the next step
   if (/taken|cannot go on/.test(e)) return 'No free pad';
   return e.replace(/^./, (c) => c.toUpperCase());
 }
@@ -133,9 +137,9 @@ export function buildMenu(o, map, ctx = {}, model = M) {
   const guide = guideStep(o);
   return MENU.map((m, i) => {
     const kind = kindOf(m.id);
-    const out = { id: m.id, kind, label: m.label, place: m.place, key: i + 1 < 10 ? String(i + 1) : null, guide: guide === m.id };
+    const out = { id: m.id, kind, label: m.label, place: m.place, key: i < 10 ? String((i + 1) % 10) : null, guide: guide === m.id };
     if (m.place === 'buy') {
-      const h = harvesterInfo(o, model);
+      const h = harvesterInfo(o, model, ctx);
       Object.assign(out, { cost: h.price, count: h.count, max: h.max, targets: [] });
       if (!hasResourceBay(o)) out.why = 'Build a Resource Bay first';
       else if (!h.api) out.why = 'Harvesters are not for sale yet';
@@ -151,6 +155,7 @@ export function buildMenu(o, map, ctx = {}, model = M) {
         out.locked = !targets.length;
         out.why = out.locked ? whyText(error, m.id, o) || 'No free pad' : null;
       }
+      if (GUN_ITEMS.includes(m.id) && typeof model.gunCount === 'function') { out.count = model.gunCount(o); out.max = model.gunCap(o); }
     }
     out.poor = out.cost != null && out.cost > gold;
     if (!out.locked && out.poor) out.why = `Costs ${fmt(out.cost)} gold`;

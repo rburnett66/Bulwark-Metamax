@@ -46,7 +46,9 @@
    6,
    6.62
   ],
-  "height": 1.52
+  "height": 1.52,
+  "kind": "hub",
+  "tier": 1
  },
  "shuttle": {
   "label": "Cargo Shuttle: flies off the hub on SELL",
@@ -95,7 +97,9 @@
    3.12,
    2.5
   ],
-  "height": 0.98
+  "height": 0.98,
+  "kind": "shuttle",
+  "tier": 1
  },
  "power": {
   "label": "Power Station I: drum reactor",
@@ -145,7 +149,9 @@
    4.3,
    4.7
   ],
-  "height": 2.63
+  "height": 2.63,
+  "kind": "power",
+  "tier": 1
  },
  "power_ii": {
   "label": "Power Station II: energy reactor",
@@ -196,28 +202,32 @@
    4,
    4
   ],
-  "height": 3.65
+  "height": 3.65,
+  "kind": "power",
+  "tier": 2
  },
  "storage": {
-  "label": "Storage: ore depot with the fill hologram",
+  "label": "Storage: ore depot with the fill hologram; the door shutter shuts while unpowered",
+  "kind": "storage",
+  "tier": 1,
   "lods": [
    {
     "file": "storage_lod0.glb",
-    "tris": 1644,
-    "drawCalls": 6,
-    "bytes": 218492
+    "tris": 1768,
+    "drawCalls": 9,
+    "bytes": 232904
    },
    {
     "file": "storage_lod1.glb",
-    "tris": 1520,
-    "drawCalls": 6,
-    "bytes": 206712
+    "tris": 1632,
+    "drawCalls": 8,
+    "bytes": 219216
    },
    {
     "file": "storage_lod2.glb",
-    "tris": 884,
-    "drawCalls": 4,
-    "bytes": 150172
+    "tris": 984,
+    "drawCalls": 5,
+    "bytes": 160356
    }
   ],
   "clips": {
@@ -225,6 +235,7 @@
   },
   "nodes": [
    "dish",
+   "door",
    "hologram"
   ],
   "anchors": {
@@ -249,6 +260,227 @@
    4.06
   ],
   "height": 2.7
+ },
+ "resourceBay": {
+  "label": "Resource Bay: the harvesters' garage, two bays",
+  "kind": "resourceBay",
+  "tier": 1,
+  "lods": [
+   {
+    "file": "resourceBay_lod0.glb",
+    "tris": 1574,
+    "drawCalls": 9,
+    "bytes": 219916
+   },
+   {
+    "file": "resourceBay_lod1.glb",
+    "tris": 1286,
+    "drawCalls": 8,
+    "bytes": 192880
+   },
+   {
+    "file": "resourceBay_lod2.glb",
+    "tris": 802,
+    "drawCalls": 6,
+    "bytes": 148920
+   }
+  ],
+  "clips": {
+   "door": 8,
+   "harvester": 8
+  },
+  "nodes": [
+   "door",
+   "harvester"
+  ],
+  "anchors": {
+   "bay_l": [
+    -0.68,
+    0,
+    1.35
+   ],
+   "bay_r": [
+    0.68,
+    0,
+    1.35
+   ],
+   "power": [
+    0,
+    0.02,
+    -1.07
+   ]
+  },
+  "footprint": [
+   4,
+   3.9
+  ],
+  "height": 1.77
+ },
+ "upgradeBay": {
+  "label": "Upgrade Bay: hangar pad, two control towers and the craft",
+  "kind": "upgradeBay",
+  "tier": 1,
+  "lods": [
+   {
+    "file": "upgradeBay_lod0.glb",
+    "tris": 2384,
+    "drawCalls": 7,
+    "bytes": 284636
+   },
+   {
+    "file": "upgradeBay_lod1.glb",
+    "tris": 1916,
+    "drawCalls": 6,
+    "bytes": 241780
+   },
+   {
+    "file": "upgradeBay_lod2.glb",
+    "tris": 1148,
+    "drawCalls": 4,
+    "bytes": 173352
+   }
+  ],
+  "clips": {
+   "craft": 3,
+   "scan": 4
+  },
+  "nodes": [
+   "craft",
+   "scan"
+  ],
+  "anchors": {
+   "craft": [
+    0,
+    0.48,
+    0.15
+   ],
+   "craft_exit": [
+    0,
+    4.48,
+    0.15
+   ],
+   "power": [
+    0,
+    0.02,
+    -2
+   ],
+   "ramp": [
+    0,
+    0,
+    2.05
+   ]
+  },
+  "footprint": [
+   3.94,
+   4.07
+  ],
+  "height": 2.79
+ },
+ "habitat": {
+  "label": "Habitat I: living quarters (+2 guns)",
+  "kind": "habitat",
+  "tier": 1,
+  "lods": [
+   {
+    "file": "habitat_lod0.glb",
+    "tris": 1688,
+    "drawCalls": 4,
+    "bytes": 219800
+   },
+   {
+    "file": "habitat_lod1.glb",
+    "tris": 1416,
+    "drawCalls": 4,
+    "bytes": 193908
+   },
+   {
+    "file": "habitat_lod2.glb",
+    "tris": 1040,
+    "drawCalls": 3,
+    "bytes": 156556
+   }
+  ],
+  "clips": {
+   "vent": 3
+  },
+  "nodes": [
+   "vent"
+  ],
+  "anchors": {
+   "door": [
+    0,
+    0.34,
+    1.3
+   ],
+   "power": [
+    0,
+    0.02,
+    -1.9
+   ],
+   "vent": [
+    0,
+    1.45,
+    0
+   ]
+  },
+  "footprint": [
+   3.8,
+   3.8
+  ],
+  "height": 1.49
+ },
+ "habitat_ii": {
+  "label": "Habitat II: the quarters with the dome and two pods (+4 guns)",
+  "kind": "habitat",
+  "tier": 2,
+  "lods": [
+   {
+    "file": "habitat_ii_lod0.glb",
+    "tris": 2878,
+    "drawCalls": 4,
+    "bytes": 319028
+   },
+   {
+    "file": "habitat_ii_lod1.glb",
+    "tris": 2370,
+    "drawCalls": 4,
+    "bytes": 271632
+   },
+   {
+    "file": "habitat_ii_lod2.glb",
+    "tris": 1738,
+    "drawCalls": 3,
+    "bytes": 210568
+   }
+  ],
+  "clips": {
+   "vent": 3
+  },
+  "nodes": [
+   "vent"
+  ],
+  "anchors": {
+   "door": [
+    0,
+    0.34,
+    1.3
+   ],
+   "power": [
+    0,
+    0.02,
+    -1.9
+   ],
+   "vent": [
+    0,
+    1.83,
+    0
+   ]
+  },
+  "footprint": [
+   3.8,
+   3.8
+  ],
+  "height": 2.08
  },
  "rig_auger": {
   "label": "Auger rig: iron and the other auger ores",
@@ -325,7 +557,10 @@
    2.98,
    2.7
   ],
-  "height": 1.32
+  "height": 1.32,
+  "kind": "rig",
+  "tier": 1,
+  "rigHead": "auger"
  },
  "rig_laser": {
   "label": "Laser Cutter rig: aluminum and the other laser ores",
@@ -385,7 +620,10 @@
    2.9,
    3.21
   ],
-  "height": 0.77
+  "height": 0.77,
+  "kind": "rig",
+  "tier": 1,
+  "rigHead": "laser"
  },
  "rig_brine": {
   "label": "Brine Pump rig: lithium and the other brine ores",
@@ -455,6 +693,221 @@
    3.22,
    3.2
   ],
-  "height": 1.45
+  "height": 1.45,
+  "kind": "rig",
+  "tier": 1,
+  "rigHead": "brine"
+ },
+ "rig_crystal": {
+  "label": "Crystal Harvester rig: silicon, yttrium, iridium",
+  "kind": "rig",
+  "tier": 1,
+  "rigHead": "crystal",
+  "lods": [
+   {
+    "file": "rig_crystal_lod0.glb",
+    "tris": 2836,
+    "drawCalls": 9,
+    "bytes": 314156
+   },
+   {
+    "file": "rig_crystal_lod1.glb",
+    "tris": 2748,
+    "drawCalls": 9,
+    "bytes": 306320
+   },
+   {
+    "file": "rig_crystal_lod2.glb",
+    "tris": 1736,
+    "drawCalls": 6,
+    "bytes": 220408
+   }
+  ],
+  "clips": {
+   "dish": 14,
+   "resonator": 9,
+   "shards": 0.583
+  },
+  "nodes": [
+   "dish",
+   "resonator",
+   "shards"
+  ],
+  "anchors": {
+   "cluster": [
+    0,
+    0.7,
+    0.45
+   ],
+   "collector": [
+    -0.78,
+    1.62,
+    -0.7
+   ],
+   "debris": [
+    0,
+    0.6,
+    0.45
+   ],
+   "power": [
+    0.72,
+    0.02,
+    -1.3
+   ]
+  },
+  "footprint": [
+   2.9,
+   3.13
+  ],
+  "height": 2.14
+ },
+ "rig_bore": {
+  "label": "Deep Bore rig: cobalt and the other deep-bore ores",
+  "kind": "rig",
+  "tier": 1,
+  "rigHead": "bore",
+  "lods": [
+   {
+    "file": "rig_bore_lod0.glb",
+    "tris": 2736,
+    "drawCalls": 11,
+    "bytes": 321480
+   },
+   {
+    "file": "rig_bore_lod1.glb",
+    "tris": 2592,
+    "drawCalls": 11,
+    "bytes": 308048
+   },
+   {
+    "file": "rig_bore_lod2.glb",
+    "tris": 1564,
+    "drawCalls": 6,
+    "bytes": 206960
+   }
+  ],
+  "clips": {
+   "auger_r": 0.792,
+   "bore": 1.208,
+   "dish": 12,
+   "fan": 2,
+   "ore": 0.25
+  },
+  "nodes": [
+   "auger_r",
+   "bore",
+   "dish",
+   "fan",
+   "ore"
+  ],
+  "anchors": {
+   "auger_r": [
+    1.05,
+    0.62,
+    0.45
+   ],
+   "bore_bit": [
+    -1.02,
+    0.05,
+    0.86
+   ],
+   "debris_l": [
+    -1.02,
+    0.25,
+    0.98
+   ],
+   "debris_r": [
+    1.2,
+    0.28,
+    1.05
+   ],
+   "ore_out": [
+    0.05,
+    0.05,
+    1.5
+   ],
+   "power": [
+    0.05,
+    0.02,
+    -0.85
+   ]
+  },
+  "footprint": [
+   3.11,
+   2.7
+  ],
+  "height": 2.86
+ },
+ "rig_shielded": {
+  "label": "Shielded Extractor rig: uranium (no owner art yet)",
+  "kind": "rig",
+  "tier": 1,
+  "rigHead": "shielded",
+  "lods": [
+   {
+    "file": "rig_shielded_lod0.glb",
+    "tris": 3254,
+    "drawCalls": 14,
+    "bytes": 359528
+   },
+   {
+    "file": "rig_shielded_lod1.glb",
+    "tris": 2966,
+    "drawCalls": 11,
+    "bytes": 330576
+   },
+   {
+    "file": "rig_shielded_lod2.glb",
+    "tris": 1194,
+    "drawCalls": 6,
+    "bytes": 172080
+   }
+  ],
+  "clips": {
+   "arm_l": 3.208,
+   "arm_r": 3.208,
+   "beacon_l": 1,
+   "beacon_r": 1,
+   "cart": 5
+  },
+  "nodes": [
+   "arm_l",
+   "arm_r",
+   "beacon_l",
+   "beacon_r",
+   "cart"
+  ],
+  "anchors": {
+   "beacon_l": [
+    -0.62,
+    1.04,
+    0
+   ],
+   "beacon_r": [
+    0.62,
+    1.04,
+    0
+   ],
+   "debris": [
+    0,
+    0.3,
+    1.1
+   ],
+   "hatch": [
+    0,
+    0.44,
+    0.62
+   ],
+   "power": [
+    0,
+    0.02,
+    -0.95
+   ]
+  },
+  "footprint": [
+   2.9,
+   2.76
+  ],
+  "height": 1.54
  }
 }

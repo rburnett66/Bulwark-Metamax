@@ -57,3 +57,54 @@ test('trim and glow use the named material slots the game swaps at load', () => 
     assert.ok(names.has('outpost_trim'), `${slug} has outpost_trim`);
   }
 });
+
+// O10 / O11 / O15 (MM-story_mw5oem5o_r): the bays, the habitat tiers and the remaining rig heads.
+const NEW = ['resourceBay', 'upgradeBay', 'habitat', 'habitat_ii', 'rig_crystal', 'rig_bore', 'rig_shielded'];
+
+test('the bays, both habitat tiers and every Rig_Head the ores use are published', async () => {
+  const { allOres } = await import('../data/ores.js');
+  for (const slug of NEW) assert.ok(manifest[slug], `${slug} in outposts.json`);
+  for (const head of new Set(allOres().map((o) => o.rig))) assert.ok(manifest[`rig_${head}`], `a rig for head ${head}`);
+});
+
+test('modelSlug maps every published model kind / tier / head back to its own file', async () => {
+  const { modelSlug } = await import('./outposts/outpostModels.js');
+  for (const [slug, m] of Object.entries(manifest)) {
+    assert.ok(m.kind, `${slug} records its kind`);
+    assert.equal(modelSlug(m.kind, m.tier, m.rigHead), slug, `${m.kind} tier ${m.tier} ${m.rigHead || ''} → ${slug}`);
+  }
+  assert.equal(modelSlug('harvesterBay', 1), 'resourceBay', 'the old kind name still finds the Resource Bay');
+  assert.equal(modelSlug('wall', 1), null, 'defenses have no outpost model');
+});
+
+test('every clip on the new models drives its own pivot node', () => {
+  for (const slug of NEW) {
+    const j = glbJson(manifest[slug].lods[0].file);
+    assert.ok((j.animations || []).length > 0, `${slug} has clips`);
+    for (const a of j.animations) {
+      for (const c of a.channels) {
+        const node = j.nodes[c.target.node];
+        assert.equal(node.extras?.node, a.name, `${slug} clip ${a.name} drives node ${a.name}`);
+        assert.equal(node.extras?.pivot, true, `${slug} ${a.name} is a pivot node`);
+      }
+    }
+  }
+  assert.ok('door' in manifest.resourceBay.clips, 'the Resource Bay has its door clip');
+});
+
+test('the storage door is a node the view can shut: a pivot at the sill, resting closed, no looping clip', () => {
+  // outpostScene.js setDoor: closed = the rest pose; open = scale.y × 0.08 and lifted 0.6 into the header
+  for (const l of manifest.storage.lods) {
+    const j = glbJson(l.file);
+    const door = j.nodes.find((n) => n.extras?.node === 'door' && n.extras?.pivot);
+    assert.ok(door, `${l.file} has the door pivot`);
+    assert.ok(!door.rotation || door.rotation.every((v, i) => Math.abs(v - [0, 0, 0, 1][i]) < 1e-6), 'upright, not turned');
+    const meshes = (door.children || []).map((i) => j.nodes[i]).filter((n) => n.mesh !== undefined);
+    assert.ok(meshes.length > 0, 'the door carries its panel');
+    for (const n of meshes) {
+      const acc = j.accessors[j.meshes[n.mesh].primitives[0].attributes.POSITION];
+      assert.ok(acc.min[1] >= -0.01 && acc.max[1] <= 0.62, `${n.name} spans the opening up from the sill (0–0.6)`);
+    }
+  }
+  assert.ok(!('door' in manifest.storage.clips), 'the storage door is a state, not a looping clip');
+});

@@ -54,8 +54,9 @@ Five new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edi
 |---|---|---|
 | `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Rig_Head, Wanted_By, Use` |
 | `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Value, Build_Sec, Power_Draw, Power_Supply, Power_Reach, Bay_Hours, Rate_Mult, Capacity_Mult, Battle_Struct, Model, Unlock` — `Battle_Struct` names the `STRUCTURES` entry a defense takes its stats from (`STR-MG`, `STR-Cannon`, `STR-Wall`) |
-| `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Breacher, Raider_HP_Mult, Raider_Damage_Mult, Size_Step1, Size_Step2, Size_Step3, Far_Day_Bump, Measured_On` — measured by `outpost_raids.mjs` (§4.3, as built O7) |
+| `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Breacher, Breacher_Every, Breacher_HP_Mult, Raider_HP_Mult, Raider_Damage_Mult, Size_Step1, Size_Step2, Size_Step3, Strength_Step2, Strength_Step3, Far_Day_Bump, Measured_On` — measured by `outpost_raids.mjs` (§4.3, as built O7) |
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
+| `Outpost_Tech` | 7 (O10) | `Node, Name, Price, Effect, Unlocked_By, Requires, Applies` — the Outpost division of the tech tree (design §7) |
 | `Outpost_Params` | ~18 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20, Far_Buyer_Mult 2, Far_Loyalty_Cost 1, Rig_Bay_Min 15, Harvester_Cap 2, Harvester_Max 4` (the last three O16) |
 
 `tools/extract_mapdata.py` extracts them to `MAPDATA.ores`, `.outpostStructures`, `.outpostRaids`, `.outpostContracts`
@@ -266,16 +267,24 @@ live view (fixed `FIXED_DT` ticks, so any frame timing then `finish()` gives run
 
 **Owner decisions, 2026-11-07, as built.**
 
-- **Weaker raiders.** `Outpost_Raids` gains `Raider_HP_Mult` and `Raider_Damage_Mult` per planet (0–1, one pair for all
-  three contract steps), applied inside `createRaid` only, to every raider: HP and damage × the multipliers. The
+- **Weaker raiders.** `Outpost_Raids` gains `Raider_HP_Mult` and `Raider_Damage_Mult` per planet (0–1, × the step's
+  `Strength_Step` at contracts 2–3), applied inside `createRaid` only, to every raider: HP and damage × the multipliers. The
   battle game's units are unchanged (tested). Every raider's range is also capped at the outposts' longest gun
   (`RAID_RANGE_CAP`, 5), the "no long range" rule applied to raiders.
-- **A breacher.** `Outpost_Raids` gains `Breacher`: one unit added after the others in each raid of a planet whose
-  troops do nothing to a wall (their damage type's `EFFECTIVENESS` against Structure is 0: Toxic, Xenthe and Vexmire).
-  The rule picks the faction's own ground unit that hurts structures most, light ground first. No light ground unit of
-  those factions hurts structures at all (Toxic is 0 against Structure), so the closest is used: their **Artillery**
-  (Concussion), tier I, with its range capped at 5 by the raid. This is the one documented exception to "troops and
-  low-end tanks only"; the extractor allows exactly `<prefix>-Artillery` as a breacher of the planet's own faction.
+- **A breacher, every other raid.** `Outpost_Raids` gains `Breacher`: one unit added after the others for a planet
+  whose troops do nothing to a wall (their damage type's `EFFECTIVENESS` against Structure is 0: Toxic, Xenthe and
+  Vexmire). The rule picks the faction's own ground unit that hurts structures most, light ground first. No light ground
+  unit of those factions hurts structures at all, so the closest is used: their **Artillery** (Concussion), tier I. This
+  is the one documented exception to "troops and low-end tanks only"; the extractor allows exactly `<prefix>-Artillery`
+  as a breacher of the planet's own faction.
+  - *Cadence* (owner, 2026-11-07, "breacher every other raid"): `Breacher_Every` (2) — only the raids of windows with
+    `window % Breacher_Every === 0` bring it (`breacherDue`), so the same raid brings the same raiders away and live;
+    the scripted first raid has no window and never does.
+  - *Reach and HP* (O7, measured on the own maps): at the outposts' range of 5 the Artillery shot a ramp's walls from
+    below the cliff, out of every gun's reach, and no strength held it (Vexmire: starter 2 / well defended 2). Its reach
+    is now its faction's troops' (2.5), so it must come up under the guns; there the Machine Gun hits Artillery three
+    times as hard and it died before touching a wall at any strength. So the breacher has its own HP dial,
+    `Breacher_HP_Mult` (against battle HP, × the step's strength), measured with the raid: 6 on Xenthe, 5 on Vexmire.
 - **The scripted first raid is a probe** (contract 1 step 3, "winnable while watching"): `FIRST_RAID_SIZE` (1) of the
   planet's Units, no breacher, down the lane that passes closest to an armed, powered defense; the probe marches on the
   nearest gun and fights it where it stands. Measured on Verdance (10 seeds, every planet's raiders): the setup plus
@@ -283,31 +292,38 @@ live view (fixed `FIXED_DT` ticks, so any frame timing then `finish()` gives run
   the MG alone holds it; with no defenses it walks in. Without this rule the first raid was a normal raid, and a
   player needed a gun at every way in to hold it (the O16 measurement: six walls + MG held 4 / 5).
 - **Measurement:** `node tools/economy/outpost_raids.mjs --write` is the whole pipeline (measure → `write_outpost_raids.py`
-  → `extract_mapdata.py` → `MAPDATA.outpostRaids` → `raidFor(planet, step)`), one child process per planet in parallel;
-  `node tools/economy/outpost_raids.mjs dark greenies --write` re-measures some planets and keeps the others' rows.
-  `outpost_model.mjs` prints what the data holds. Per planet it searches the multipliers (HP 0.3–1, damage 0.3–1) and
-  the contract-1 raid size (2–4: the owner wants raids above one troop) together, then the size for steps 2 and 3 at
-  those multipliers; median over 7 outpost seeds, 12 raids at most, no repairs, scored by the distance from 5 (starter)
-  and 8 (well defended), ties to the strongest raiders. Only Verdance has an outpost map; the other eight planets are
-  measured on it with their own units. Units are `<prefix>-Troops <prefix>-Troops <prefix>-Tanks` cycled.
-  **Re-run it whenever a map, a tower or a unit changes** (about 30 min for all nine on a 2-core machine).
-- **Measured (2026-11-07, the 64 × 32 Verdance map).** Starter / well defended medians at step 1:
+  → `extract_mapdata.py` → `MAPDATA.outpostRaids` → `raidFor(planet, step)`), one child process per planet in parallel,
+  each on the planet's own outpost map (O11); `node tools/economy/outpost_raids.mjs dark greenies --write` re-measures
+  some planets and keeps the others' rows. `outpost_model.mjs` prints what the data holds. Median over 7 outpost seeds,
+  12 raids at most, no repairs, scored by the distance from 5 (starter) and 8 (well defended).
+  - *Step 1*: the planet's multipliers (HP 0.3–1, damage 0.3–1) and the raid size (2–4: the owner wants raids above
+    one troop) together; ties go to the strongest raiders. With a breacher: the breacher's HP (2–10) and the size, the
+    troops' multipliers barely mattering since they cannot hurt walls.
+  - *Steps 2 and 3* (owner, 2026-11-07, **"same set, smaller raids"**): the same two sets (the starter set and the
+    starter set plus one MG; the larger outpost of each step around them), against a raid of at most step 1's size and,
+    where the size bottoms out, a smaller `Strength_Step2` / `Strength_Step3` (0.3–1, × both multipliers and the
+    breacher's HP).
+  - Units are `<prefix>-Troops <prefix>-Troops <prefix>-Tanks` cycled. **Re-run it whenever a map, a tower or a unit
+    changes** (about 25 min for all nine on a 2-core machine).
+- **Measured (2026-11-07, each planet's own 64 × 32 outpost map).** Starter / well defended medians:
 
-  | Planet | Raiders | HP × | Damage × | Size (steps 1, 2, 3) | Starter | Well defended |
-  |---|---|---|---|---|---|---|
-  | Verdance (ground) | troops, tanks | 0.8 | 0.5 | 2, 2, 2 | 4 | 8 |
-  | Florael (air) | troops, tanks | 0.7 | 0.3 | 3, 3, 3 | 5 | 8 |
-  | Ochre (hightech) | troops, tanks | 0.8 | 1 | 2, 2, 2 | 5 | 8 |
-  | Kessra (artillery) | troops, tanks | 0.9 | 0.4 | 2, 2, 2 | 5 | 8 |
-  | Rime (water) | troops, tanks | 0.9 | 0.4 | 3, 3, 3 | 5 | 8 |
-  | Cinder (arcane) | troops, tanks | 0.4 | 1 | 3, 4, 4 | 4 | 8 |
-  | Lumen (space) | troops, tanks | 0.5 | 0.6 | 4, 4, 4 | 5 | 8 |
-  | Xenthe (dark) | troops, tanks + Artillery | 0.4 | 1 | 3, 1, 1 | 5 | 10 |
-  | Vexmire (greenies) | troops, tanks + Artillery | 0.4 | 1 | 3, 1, 1 | 5 | 11 |
+  | Planet | Raiders | HP × | Damage × | Step 1 size | Step 2 size, strength | Step 3 size, strength | Starter (steps 1, 2, 3) | Well defended (steps 1, 2, 3) |
+  |---|---|---|---|---|---|---|---|---|
+  | Verdance (ground) | troops, tanks | 0.8 | 0.5 | 2 | 2, 1 | 2, 1 | 4, 4, 4 | 8, 8, 8 |
+  | Florael (air) | troops, tanks | 0.6 | 0.4 | 3 | 3, 1 | 3, 1 | 5, 4, 4 | 8, 8, 8 |
+  | Ochre (hightech) | troops, tanks | 0.6 | 0.6 | 4 | 4, 1 | 4, 1 | 5, 5, 5 | 8, 8, 8 |
+  | Kessra (artillery) | troops, tanks | 0.3 | 0.8 | 4 | 4, 1 | 4, 1 | 5, 5, 5 | 8, 8, **10** |
+  | Rime (water) | troops, tanks | 0.6 | 0.7 | 3 | 3, 1 | 3, 1 | 5, 4, 4 | 8, 7, 7 |
+  | Cinder (arcane) | troops, tanks | 0.5 | 0.7 | 3 | 3, 0.6 | 3, 0.6 | 5, 5, 5 | 8, 8, 8 |
+  | Lumen (space) | troops, tanks | 0.6 | 0.7 | 3 | 3, 1 | 3, 0.9 | 5, 5, 6 | 8, 8, 8 |
+  | Xenthe (dark) | troops, tanks + Artillery (HP × 6) every 2nd raid | 0.5 | 1 | 3 | 3, 1 | 1, 1 | 6, 6, 6 | 8, 8, **6** |
+  | Vexmire (greenies) | troops, tanks + Artillery (HP × 5) every 2nd raid | 0.5 | 1 | 3 | 3, 1 | 3, 1 | 5, 5, 5 | 8, 8, **10** |
 
-  Every planet's starter set is in 4–6 and seven of nine well defended sets are in 7–9. Xenthe and Vexmire's well
-  defended sets hold 10–11: their result swings on which lane the breacher takes, and the grid found nothing closer.
-  At steps 2–3, where the larger outpost changes the routes, Florael and Rime's starter sets hold 7 and Cinder's 3–4.
+  Every starter set holds 4–6 at every step. The well defended set holds 7–9 at every step except three step-3 cells
+  (bold): Kessra and Vexmire hold 10 (the step-3 outpost's remote rig and station change the raiders' routes so the
+  extra MG covers more; a smaller raid only holds longer, and the owner asked for smaller, not larger, later raids), and
+  Xenthe holds 6 (already at one raider and full strength; the breacher every other raid sets the pace). Size and
+  strength were the only dials for steps 2–3; closing these needs a per-step breacher HP or a larger step-3 raid.
 
 ### 4.4 Tests (`src/outpost/model.test.mjs`)
 
@@ -342,12 +358,13 @@ runs contract 1 end to end on the Verdance map. The player buys the setup, an MG
 4,500 gold, and holds the scripted raid on the real raid hook. `data/outpost.test.mjs` checks the prices, the
 harvester (battle price × 4) and the rig's own bay.
 
-**As built (O7):** those items are in `src/outpost/raid.test.mjs` (9 tests, about 2.5 s), on the real Verdance outpost
+**As built (O7):** those items are in `src/outpost/raid.test.mjs` (11 tests, about 5 s), on the real Verdance outpost
 map: raid composition (light ground raiders of the planet's own faction, the breacher only where the troops cannot
 hurt walls, the raid-only multipliers and range cap, the battle units unchanged) and outpost defenses, determinism
 (headless twice, and stepped live with uneven frame times then finished headless), saved HP / wrecks / unpowered guns,
-the starter set holding 4–6 raids and the well defended set 7–9 (Verdance, from the data), the first-raid probe held by
-the setup plus one MG and two walls, the scripted first raid through `advance` with `makeRaidHook`, and a breach's
+the starter set holding 4–6 raids and the well defended set 7–9 at every contract step (Verdance, from the data), the
+breacher's every-other-window cadence (the same through `createRaid` as in the data), the first-raid probe held by
+the setup plus one MG and two walls on Verdance and on every planet's own map (O11), the scripted first raid through `advance` with `makeRaidHook`, and a breach's
 25 % loss through `advance`. Only Verdance has an outpost map, so the hold counts are tested there; the other planets'
 are in the measurement's table (§4.3).
 
@@ -410,7 +427,7 @@ turn and warning lines, which keep the owner's words, are unchanged.
   `tech_unlock` reward is used, because the Outpost tech nodes join the tree only in O10. The rewards are gold and XP,
   plus the contract's loyalty as the mission's `impact.loyaltyPlanet`.
 - **Aboard:** `playShipReveal({ outpost })` plays the captain's outpost lines (`reveals.json factionShip.outpost`,
-  Verdance only until O11) in place of the generic greeting, then the outpost card (ACCEPT CONTRACT / LATER). After
+  all nine planets since O11) in place of the generic greeting, then the outpost card (ACCEPT CONTRACT / LATER). After
   that come the generic offer line and the missions card, as before. LATER leaves the mission in the Mission Log, whose
   dossier shows **Accept the outpost contract** until the outpost exists. `tools/reveal/index.html` shows the card
   (`?outpost=0` hides it).
@@ -420,6 +437,16 @@ turn and warning lines, which keep the owner's words, are unchanged.
 The captain's outpost lines go in `content/reveals/reveals.json` under `factionShip.outpost`, one set per planet,
 until Dialog-Unification moves faction lines into the dialog document. Verdance's are in the design (§2.2). The
 other eight are written in Phase B, in each captain's voice from the voice packs.
+
+**As built (O11, lines):** all nine planet keys have the four beats (greet, turn, offer, warning) in Verdance's shape,
+in each captain's voice (`missions.json capitalShips`; their `voicepacks.json` character, motivation and phrases):
+Aoi ("little one", the dawn keeps its promises), Okonkwo (numbers checked twice, signs her name), Kaya (ranging,
+answers for each round), Coral (landwalker, the shoal, the reef remembers), Cassian (the people, not the throne), Vale
+(charts, the charter), Maren (mercy, "I'll answer for it"), Bractus (single stalk, held in trust). Every offer keeps
+the facts: the contract gives the outpost base on the mesa and nothing more; the player builds power, a mining station
+on the planet's common ore and a storage tower with their own gold; the warning says some aboard will come for the
+mesa. They are **drafts for owner review** (the `_source` note says so); `contract.test.mjs` checks the beats and
+that each offer names its planet's common ore, power, the storage tower and the player's own gold.
 
 ## 6. Visualization
 
@@ -521,6 +548,94 @@ power and full storage, the unpowered Storage Tower's door shut). This replaces 
   the menu for screenshots. Tests: `view/buildMenu.test.mjs` (items, prices, locks, targets, guidance, the placement
   reducer for mouse and touch, the warnings).
 
+**As built (O10), the Resource Bay, the Upgrade Bay and the Outpost tech** [MM-story_mw5oem5o_r] (design §6, §6.2,
+§7, §11):
+
+- **Harvesters and the surface fields, in closed form** (`src/outpost/model.js`). `surfaceFields(map)` is the outpost
+  map's Forge `resources` off the mesa and the pads (primary → common, premium → uncommon; quest left out);
+  `surfaceFieldGroups(map)` joins them into fields as `harvest.js` does (8-neighbour, one tier; id `<tier>:<x>,<y>` of
+  the first cell), each with `cap` = cells × the tier's battle `Units_Per_Node` and `regrow` = cells × units /
+  `Primary_Respawn_Sec` × `Surface_Respawn_Mult` (0.05, owner 2026-11-07: "Full battle rate but the spawn rate of surface
+  resources on outpost land is 5% of the premium land surveyed for the tower defense mode"; `data/outpost.js
+  surfaceStock`). `o.fields` holds a field's stock only while it is below full. `harvestPlan(o, map)` alternates the
+  tiers and gives the k-th harvester of a tier the k-th nearest field (its `fieldId`, its nearest cell), with the
+  battle rate from `harvesterRate(tier, dist)`: the battle harvester's trip from the rows `harvest.js` reads (capacity,
+  `Harvester_Base_Speed` × `BONUS_NERFS.harvesterSpeedMult`, `Units_Per_Node / Harvest_Sec_Per_Node`,
+  `HARVESTER_UNLOAD_TIME`), the drive × `Harvest_Route_Mult` (1.3), × `Harvest_Rate_Mult` (1). Inside `advance`,
+  `harvestFields` runs the fields and the hopper piecewise-linearly between the moments a field runs dry, a field is full
+  again or the hopper fills: a field with stock gives its harvesters' demand and loses demand − regrow; a bare field gives
+  only its regrowth; a field nobody takes from (or with the hopper full) regrows to its cap. `steadyHarvest` is the take
+  once the fields are bare (min(demand, regrow) per field); `hopperCap` = max(`Hopper_Hours` × that, the worked fields'
+  full stock). Only a finished, **powered** Resource Bay harvests (`harvestRunning`); the fields regrow regardless.
+  Split-invariant (tested: one 10 h advance = 600 one-minute advances, with and without a filling hopper; a 72 h gap in
+  one call = 24 three-hour windows). `emptyHopper(o)` → `{ outpost, units }`; `migrateOutpost` adds `hopper` and
+  `fields`. Verdance, two harvesters: 10.5 units an hour once the fields are bare, the stock (about 45 units) in the
+  first hour, a 42-unit hopper; `tools/economy/outpost_model.mjs` prints each planet (Resource Bay income).
+- **The view's fields.** The battle renderer's drained-node look shows each field's stock (`remaining` = stock / cap,
+  a regrowing stub at 0), refreshed on the live tick; the Resource Bay's panel lists each harvester's field stock and
+  "Fields regrowing: n / h".
+- **Banking.** `session.open` / `openChunked` empty the hopper after the catch-up and bank it with
+  `src/save/inventory.js bankOutpostHarvest(s, units, catalog, planetName)` (the planet's common / uncommon resource
+  from the mission catalogue, `inventory` and `inventoryNew`). Without the catalogue the hopper waits. The away report
+  gains a HARVESTED · TO YOUR INVENTORY section (`awayReport.harvestRows`), the HUD a hopper chip, the Resource Bay's
+  panel the harvesters (n / cap), each one's rate and the hopper.
+- **The harvester cap.** `harvesterCap(o, ctx)` = `Harvester_Cap` + Dock 3 + Dock 4 (tree ids in `ctx.techOwned`)
+  when the outpost has an Upgrade Bay, ≤ `Harvester_Max`. `harvesterRefusal` and the build list read it.
+- **The Upgrade Bay.** `defenseUpgradeRefusal(o, id, ctx)` / `upgradeDefense(o, id, ctx)` (session action
+  `upgradeDefense`; the defense panel's UPGRADE button): a finished and (with the map) powered Upgrade Bay, the next tier
+  owned — `<kind><tier>` in `ctx.techOwned` for an Unlock of `techtree+upgradeBay` (mg2, mg3, cannon2, cannon3), the
+  Outpost node for `tech:<node>` (wall tier II: `reinforced_walls`) — not a wreck, and its price. Instant; HP rises by the
+  tier's extra HP, wear stays. The model's old placeholder (`has('tier2')`) is gone. The bay's panel lists the seven
+  nodes as installed / available (buy in the Tech Tree) / locked.
+- **The ctx.** `session.ctxFor` now gives the model `unlocks` = the Outpost nodes the player **owns** (`s.tech.owned`),
+  `techOwned` = every owned tree id plus the starting kit, `unlockedTiers` and `contractUnlocks` from the contracts, and
+  `shuttleTier` 2 with Cargo Shuttle II. **Decision:** a contract makes a node buyable, it does not grant it (the tech
+  tree's D7 rule, design §7, §11), so `setDeep`, Storage II, Power II, Rig Mk II and wall tier II all wait for the purchase.
+- **The Outpost nodes.** The map-data workbook gains `Outpost_Tech` (Node, Name, Price, Effect, Unlocked_By, Requires,
+  Applies), written by `tools/economy/write_outpost_sheets.py` and extracted to `MAPDATA.outpostTech`; the extractor
+  refuses a contract or structure `tech:` id that is not a node, a non-positive price, an unknown `Requires`.
+  `data/outpost.js OUTPOST_TECH` reads it and `data/techtree.js` builds the seven nodes from it in place of `op0`–`op4`
+  (kind `item`, layout in the OUTPOST sector; `DIVISIONS.outpost.total` 7, no longer `soon`; `TECH_TOTAL` 64). The gate:
+  `menu/techSave.js outpostTechUnlocked(s)` adds every planet's collected-contract techs to the context's `unlocked`
+  set, so the node reads "Unlocked by a mission: Iron for the Oath" until then. `tools/extract_missions.py` names a
+  node's mission as the first contract step that unlocks it (`techUnlocks.deep_drilling_1.by = OC-VER-1`).
+- **The Economy sheet.** `tools/economy/write_outpost_tech_unlocks.py` (new; LibreOffice recalculation, refused if any
+  sheet but Tech_Unlocks and Economy changes) replaces the ghost rows of the Missions workbook's Tech_Unlocks with the
+  seven nodes (prices from `Outpost_Tech`) and adds the Economy sheet's **Outpost** line (row 10): 33,000, outside the
+  100 % total (still 140,300, owner 2026-11-02).
+- **Sensor Spire.** `nextRaidAt(o, from)` (the scripted first raid, else the same schedule `advance` resolves) and
+  `raidWarning(o, now, ctx)` (owned node, within 10 min) → the HUD's RAID INBOUND chip with a countdown.
+- **The view.** The harvesters are the battle's own miner (`SYS-Harvester`), put into the battle renderer's
+  `state.units` (`view/harvestDrive.js`: a looping trip — out, pull, back, unload — on a route from the bay's centre to
+  its field walked by `findWalkerPath` on the battle board, timed by the battle numbers, on the view's animation clock;
+  parked at the bay without power). Models by kind: `modelSlug` returns `resourceBay` / `upgradeBay` / `habitat`, and the
+  scene uses the GLB when `content/outposts/outposts.json` lists the kind, else its placeholder block (the Habitat a
+  dome), so the models need no code change when they land; the menu icons render them the same way. The Storage
+  Tower's door: its `door` node(s) slide up when powered and down when not (finished building, no power or under
+  construction); without the node the old shutter stays.
+- **Review.** `tools/outpost/view.html ?state=bays` (Power Station II, the Resource Bay with two harvesters, the Upgrade
+  Bay, a Habitat I, the kit's Machine Gun at tier II, four Outpost nodes owned, back after 2 hours) and `?state=guncap`
+  (the hub's 3 guns, no Habitat). `handle.harvesters` and `handle.driveTo(sec)` drive the trucks for screenshots.
+- **Tests.** `src/outpost/bays.test.mjs` (20), `src/outpost/view/harvestDrive.test.mjs` (3) and two in
+  `src/data/techtree.test.mjs`: the battle rate recomputed from the workbook, the fields (stock, depletion then regrowth-limited take, regrowth to the full stock, a 72 h gap), split invariance,
+  cap and fill time, no bay / no power, banking through inventory.js and on open, the away report and HUD, docks, the
+  Upgrade Bay's gating (bay, power, tier owned, Reinforced Walls, wreck, gold), owned-not-unlocked tech, the Sensor
+  Spire, the Tech Tree's contract gate and price, the nodes present and priced and the ghosts gone.
+
+**As built (O15), the Habitat and the gun cap** [MM-story_mw6ipqj0_3] (design §6, §6.2):
+
+- `Outpost_Structures` gains `habitat` I (3,000, 10 min) and II (5,000, 15 min), no power draw; `Outpost_Params` gains
+  `Gun_Cap` 3 and `Habitat_Guns_Per_Tier` 2. `PAD_KINDS` adds `habitat` (bay or spare pads); one per outpost (a second
+  is refused: "the outpost has its Habitat: upgrade it to Habitat II"); tier II through `upgrade`.
+- `gunCount(o)` (Machine Guns and Cannons, wrecks included), `habitatTier(o)` (finished only), `gunCap(o)` = 3 + 2 ×
+  tier, `gunRefusal(o)`: "the hub crews 3 guns: build a Habitat for more", "the Habitat crews 5 guns: upgrade it to
+  Habitat II for more", "the outpost crews at most 7 guns". `place` asks it before the price, so the build list (which
+  probes `place` with unlimited gold) greys the guns with that reason; walls are never capped.
+- The build list adds HABITAT after the Upgrade Bay (the tenth item takes hotkey 0) and gives the Machine Gun and the
+  Cannon Tower an n / cap badge. The hub's panel and the Habitat's show the guns crewed.
+- The raid measurement is unchanged: `wellDefended` (the starter set plus one Machine Gun) is 3 guns, inside the cap
+  (tested); `stepOutpost` adds no guns.
+
 ### 6.2 Building models
 
 New GLB models through the capital ship pipeline: built in headless Blender, three LODs, loaded with `prepareShip`.
@@ -561,6 +676,39 @@ deposit's debris emitter runs at about 3× its particle rate with larger chunks.
   and harvesters and ore carts.
 - **Which head:** the `Ores` sheet gains a `Rig_Head` column (auger, laser, brine, crystal, bore, shielded), filled
   from the design's §8.4 table. Validation refuses a planet whose three ores share a head.
+
+**As built (O10, O11 rigs, O15 models; `tools/blender/outposts/`).** Seven new models on the same pipeline, each a
+script with three LODs, the `trim` slot, `glow` emissives and looping clips, published to `content/outposts/` with a
+review sheet and an `--anim` GIF. Triangle counts are well under the table's budgets, in line with the kit already
+built (the O5 rigs are about 2k at LOD0):
+
+| Slug (kind, tier / head) | Script, art | Footprint × height (cells) | Tris LOD0 / 1 / 2 | Clips (all loop while working) |
+|---|---|---|---|---|
+| `rig_bore` (rig, `bore`) | `rig_bore.py`, `mv_drill_bore*.jpg` | 3.1 × 2.7 × 3.1 | 2,736 / 2,592 / 1,564 | `bore` (core and bit spin), `auger_r`, `ore`, `fan`, `dish` |
+| `rig_crystal` (rig, `crystal`) | `rig_crystal.py`, `set_crystal_refinery.jpg` | 2.9 × 3.1 × 2.1 | 2,836 / 2,748 / 1,736 | `resonator` (the arm collar turns), `shards` (rise to the collector), `dish` |
+| `rig_shielded` (rig, `shielded`) | `rig_shielded.py`, **no art** (design §8.4, PROMPTS.md §2) | 2.9 × 2.8 × 1.5 | 3,254 / 2,966 / 1,194 | `arm_l`, `arm_r` (swing canisters), `cart` (rail), `beacon_l`, `beacon_r` |
+| `resourceBay` (resourceBay) | `resource_bay.py`, `mv_garage.jpg`, `harvester_bay.jpg` | 4.0 × 3.9 × 1.8 | 1,574 / 1,286 / 802 | `door` (right bay's up-and-over door, `swing`), `harvester` (drives out and back) |
+| `upgradeBay` (upgradeBay) | `upgrade_bay.py`, `mv_upgrade_pad.jpg`, `upgrade_bay.jpg` | 3.9 × 4.1 × 2.8 | 2,384 / 1,916 / 1,148 | `craft` (hover bob), `scan` (scanner frame rises and falls) |
+| `habitat` (habitat 1) | `habitat.py`, `set_habitat.jpg` | 3.8 × 3.8 × 1.5 | 1,688 / 1,416 / 1,040 | `vent` |
+| `habitat_ii` (habitat 2) | `habitat.py --tier2` | 3.8 × 3.8 × 2.1 | 2,878 / 2,370 / 1,738 | `vent` |
+
+- **Mapping by data.** The bays' slugs are their kinds (`resourceBay`, `upgradeBay`), as the view looks them up
+  (`modelSlug` in `render3d/outposts/outpostModels.js`, O10 merge); the only mapping change here is habitat tier 2 →
+  `habitat_ii`. `publish.py` also writes each slug's `kind`, `tier` and (rigs) `rigHead` into `outposts.json`. A test
+  checks every manifest entry round-trips through `modelSlug` and every `Rig_Head` in the ores data has a published
+  rig, so the view's `hasModel` picks the new models up in place of its placeholder blocks.
+- **Storage door (owner: closed while unpowered).** `storage.py`'s portal is now a frame round a dark recess holding
+  node `door`: a shutter panel with its pivot at the sill, **resting closed**. The view's `setDoor` (outpostScene.js)
+  opens it while powered by squashing it to 8 % of its height and lifting it 0.6 into the header, where it hides; no
+  clip (a looping clip would cycle it while working). `outposts.html` has an "Unpowered" toggle doing the same.
+- **New clip kind `swing`** (`outpost_common.py`): eases from rest to `amp` degrees about the node's axis and back
+  (the garage door). Extra emissive colours ride the `glow` role by vertex colour: the bore's hot orange core bands,
+  the shielded rig's amber beacons and green canister windows, the habitat's warm windows (dimmed so Cycles does not
+  blow them out to yellow). The Mk II remap only turns blue lights amber, so these keep their colour.
+- **Habitat II** is the same base with added modules (the tier II rule above): the ribbed dome with portholes and
+  aerials replaces the stepped roof, and two capsule pods on corridors join the sides.
+- **Unfinished:** the Shielded Extractor waits on the owner's art (`ref/mv_shielded.jpg`, PROMPTS.md §2); Storage II
+  (the extra tank) is still not modelled.
 
 ### 6.3 Conduits
 
@@ -655,6 +803,62 @@ model and views, falling back to `DRAFT_LAYOUT`. **Framing:** the views frame th
 390 × 844 phone the 23 × 21-cell mesa frame fills the width at about 17 px a cell (a 4 × 4 pad is about 68 px), using
 about 360 px of height; the 3D terrain review (`tools/terrain/index.html?faction=powder&map=outpost`) fits the battle
 camera to the same frame.
+
+**As built (O11, maps) [MM-story_mw5oeob4_s]:** every planet now ships `content/maps/forge/<planet key>-outpost.json`
+and its bake `content/maps/baked/<planet key>-outpost/` (`bake3d.mjs <key>-outpost --no-tiles`), made exactly as
+Verdance's: `outpost-maps.mjs` on the planet's own §2.3 recipe, 64 × 32 world mode, the seed searched inside the
+guardrails, exported by the real headless Forge, then written through the same checks.
+
+| Planet (key) | Recipe slug | Seed | Impassable | Decor groves | Resource fields |
+|---|---|---|---|---|---|
+| Verdance (`ground`) | powder | 313 | 19.7 % | 145 | 54 |
+| Florael (`air`) | air | 54 | 13.0 % | 54 | 56 |
+| Ochre (`hightech`) | high-tech | 120 | 13.0 % | 15 | 97 |
+| Kessra (`artillery`) | artillery | 186 | 19.4 % | 0 | 73 |
+| Rime (`water`) | water | 172 | 23.1 % | 45 | 51 |
+| Cinder (`arcane`) | arcane-energy | 158 | 19.7 % | 16 | 59 |
+| Lumen (`space`) | space-tech | 191 | 14.4 % | 10 | 66 |
+| Xenthe (`dark`) | dark-energy | 12 | 20.6 % | 150 | 52 |
+| Vexmire (`greenies`) | greenies | 114 | 20.5 % | 28 | 49 |
+
+Decisions and deviations: **one outpost layer for all nine** (`SHARED` in `outpost-maps.mjs`: Verdance's mesa, ramps,
+pads `hub p1 r1 s1 r2 b1 b2 x1` + remote `r3 p2`, deposits, two lanes and the reference kit — Cannon, Machine Gun, six
+walls closing the ramps and the south-east corner), so the raid measurement compares planets like with like; a
+per-planet `OVERRIDES` entry exists for when a planet's ground needs its own (only Lumen's pinned seed so far). The
+seed search scores impassable nearest each recipe's battle-map share (faction-maps.mjs targets, clamped 13–23 %) and
+open-ground reach; Verdance keeps its pond score, Rime scores pond count. **Rime's pond-shortcut guardrail is not
+applied to outposts:** raiders are light ground only (Outpost-Design §5.2) and each lane is a straight cart track, so
+no seed of 400 gives swimmers a shorter way (gain 0 %, mean ≈ 1.0 on every seed); the ponds are there. **Lumen pins
+seed 191:** the search's best (178) came out of the Forge's scatter with 1 decor grove against its battle maps' ~5;
+191 is the passing seed among the top 12 with the most (10). Decor follows each planet's battle maps (the test now
+checks at least half their median, not a flat 80: Kessra's battle maps carry 0–3). `jobs` takes planet names so a
+remake touches only those. The signature props come from the recipes (Florael blossom groves, Ochre oases, Kessra
+mesas, Rime ponds, Cinder lava pools, Lumen craters, Xenthe glowing groves, Vexmire bog pools); the battle renderer
+draws each mesa's cliff rim in the planet's own rocks. `tools/outpost/view.html?planet=<key>` has a planet picker
+(all nine), and `tools/terrain/index.html`'s Outpost button works for every faction. Every planet's three contracts
+are generated (`extract_missions.py`, 27 outpost missions).
+
+**Raids on each planet's own map** (`outpost_raids.mjs <8 planets> --write`, 2026-11-07, after O10/O15 merged; median of
+7 seeds; Verdance's row unchanged from O7: kit 5, well defended 8, size 2, ×0.8 HP, ×0.5 damage):
+
+| Planet | HP × | Dmg × | Size (steps 1/2/3) | Step 1 kit holds | Step 1 well defended | Steps 2 / 3 (kit; well) |
+|---|---|---|---|---|---|---|
+| Florael | 0.6 | 0.4 | 3 / 3 / 3 | 5 | 8 | 4; 8 · 4; 8 |
+| Ochre | 0.6 | 0.6 | 4 / 4 / 4 | 5 | 8 | 5; 8 · 5; 8 |
+| Kessra | 0.3 | 0.8 | 4 / 4 / 3 | 5 | 8 | 5; 8 · 5; 10 |
+| Rime | 0.6 | 0.7 | 3 / 3 / 3 | 5 | 8 | 4; 7 · 4; 7 |
+| Cinder | 0.5 | 0.7 | 3 / 2 / 2 | 5 | 8 | 4; 4 · 4; 4 |
+| Lumen | 0.6 | 0.7 | 3 / 3 / 3 | 5 | 8 | 5; 8 · 5; 6 |
+| Xenthe (+ Artillery breacher) | 0.5 | 1 | 3 / 3 / 3 | 4 | 8 | 4; 2 · 4; 2 |
+| Vexmire (+ Artillery breacher) | 0.5 | 1 | 3 / 1 / 1 | **2** | **2** | 2; 2 · 2; 2 |
+
+Seven of eight hit the targets on their own map (kit 4–6, well defended 7–9). **Vexmire misses** and the table shows
+it as measured: its Artillery breacher takes down one ramp's walls (and the Cannon on the west ramp) in a raid, and
+the next raid walks through, so the extra Machine Gun changes nothing (kit = well defended = 2; the same units held 5
+on Verdance's map at O7's ×0.4 HP, 2 on Vexmire's own). It needs a design answer (the breacher, or Vexmire's kit),
+not a map tweak. Steps 2–3 for Cinder, Xenthe and Vexmire also fall short of 8 well defended. The scripted first raid
+(one troop) is held on every planet's own map by the setup plus one Machine Gun and two walls (3 placements × 5 seeds,
+and breached with no defenses), now in `raid.test.mjs` for all nine.
 
 ### 6.7 Review page
 

@@ -35,6 +35,10 @@ import { structureDef } from '../../data/outpost.js';
 import { oresOf } from '../../data/ores.js';
 import { PLANETS } from '../../data/planets.js';
 import { loadChoice } from '../../render3d/quality.js';
+import { harvestRunning, harvestPlan, surfaceFieldGroups, fieldStock } from '../model.js';
+import { harvestRates } from '../../data/outpost.js';
+import { harvesterUnits } from './harvestDrive.js';
+import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
 
 const ROOT = new URL('../../../', import.meta.url).href;   // the game root (prototype/test-game/)
 const LIVE_TICK = 1;   // seconds between live advances of the outpost
@@ -92,7 +96,7 @@ export async function openOutpostView(opts = {}) {
   const opened = await session.openChunked(clockNow(), nextFrame);
   onChange();
   let o = opened.outpost;
-  const slugs = new Set(['hub', 'shuttle', 'power', 'storage', ...oresOf(planet).map((x) => `rig_${x.rig}`)]);
+  const slugs = new Set(['hub', 'shuttle', 'power', 'storage', ...oresOf(planet).map((x) => `rig_${x.rig}`), 'resourceBay', 'upgradeBay', 'habitat']);
   for (const b of planBuildings(o, map, clockNow())) slugs.add(modelSlug(b.kind, b.tier, b.rigHead));
   await kit.preload([...slugs].filter(Boolean));
   // the unlocks and the bank come from the save: read once and again only after something changed it (an action, a
@@ -110,6 +114,46 @@ export async function openOutpostView(opts = {}) {
   const syncDefenses = () => { state.structures = new Map(defenseStructures(o).map((s) => [s.id, s])); };
   syncDefenses();
 
+  // ── the Resource Bay's harvesters (story O10): the battle's own miner, driven along a route from the bay to its field
+  // (harvestDrive.js); the hopper's numbers are the model's closed form, this is the picture of it. The routes walk the
+  // battle board (ramps and all) once per bay / field, on the view's animation clock (never the wall clock).
+  const HRATES = harvestRates();
+  const routeCache = new Map();
+  let nav = null, driveClock = 0;
+  function routeFor(h) {
+    const key = `${h.from.join(',')}>${h.field.join(',')}`;
+    if (routeCache.has(key)) return routeCache.get(key);
+    nav = nav || buildNavGrid(board, [], []);
+    const from = { x: Math.floor(h.from[0]), y: Math.floor(h.from[1]) }, to = { x: h.field[0], y: h.field[1] };
+    let path = null;
+    try { path = findWalkerPath(nav, from, to); } catch (e) { path = null; }
+    const route = path && path.length ? [from, ...path.map((c) => ({ x: c.x, y: c.y }))] : [from, to];
+    routeCache.set(key, route);
+    return route;
+  }
+  function syncHarvesters() {
+    for (const id of [...state.units.keys()]) if (String(id).startsWith('oh')) state.units.delete(id);
+    const plan = harvestPlan(o, map);
+    if (!plan.length) return;
+    const running = harvestRunning(o, map).length > 0, routes = {};
+    for (const h of plan) routes[h.i] = routeFor(h);
+    for (const u of harvesterUnits(plan, routes, HRATES, driveClock, { running })) state.units.set(u.id, u);
+  }
+  syncHarvesters();
+  // the surface fields' stock (owner 2026-11-07: they regrow at 5 % of the battle's rate): a field's markers shrink and
+  // dim as it empties, through the battle renderer's own drained-node look (remaining / units, a regrowing stub at 0)
+  const fieldOfCell = new Map();
+  for (const f of surfaceFieldGroups(map)) for (const c of f.cells) fieldOfCell.set(`${c[0]},${c[1]}`, f);
+  function syncFieldStock() {
+    const st = fieldStock(o, map);
+    for (const n of state.resourceNodes) {
+      const f = fieldOfCell.get(`${n.x},${n.y}`);
+      if (!f) continue;
+      n.units = 1; n.respawns = true; n.remaining = f.cap > 0 ? st[f.id] / f.cap : 1;
+    }
+  }
+  syncFieldStock();
+
   // ── HUD ──────────────────────────────────────────────────────────────────────────────────────────────────────
   let sel = null, saleRun = null, shownGold = session.gold(), closed = false, resolveClosed;
   const closedP = new Promise((ok) => { resolveClosed = ok; });
@@ -126,6 +170,7 @@ export async function openOutpostView(opts = {}) {
     onDeep: (pad, on) => act({ type: 'deep', pad, on }, () => (on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam'), () => select({ pad })),
     onUpgrade: (pad) => act({ type: 'upgrade', pad }, (res) => `Upgrade started · −${fmtGold(res.cost)} gold`, () => select({ pad })),
     onRepair: (id) => act({ type: 'repair', id }, (res) => `Repaired · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
+    onUpgradeDefense: (id) => act({ type: 'upgradeDefense', id }, (res) => `Upgraded at the Upgrade Bay · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onReportClose: () => { hud.report(null); },
   }, { title: 'OUTPOST', planetName: (PLANETS[planet] && PLANETS[planet].name) || planet });
 
@@ -172,7 +217,7 @@ export async function openOutpostView(opts = {}) {
   }
   function refreshMenu(force = false) {
     const ctx = { ...ctxNow(), gold: bank(), now: clockNow() };
-    const key = JSON.stringify([o.pads, o.building.map((b) => [b.pad, b.kind]), o.defenses.map((d) => d.cell), o.harvesters ?? null, o.online, ctx.gold, ctx.unlockedTiers, [...(ctx.unlocks || [])]]);
+    const key = JSON.stringify([o.pads, o.building.map((b) => [b.pad, b.kind]), o.defenses.map((d) => [d.cell, d.kind]), o.harvesters ?? null, o.online, ctx.gold, ctx.unlockedTiers, [...(ctx.unlocks || [])], [...(ctx.techOwned || [])].filter((x) => /^dock/.test(x))]);
     if (force || key !== menuKey) {
       menuKey = key; menuItems = buildMenu(o, map, ctx);
       if (pl.phase !== 'idle') {
@@ -257,7 +302,7 @@ export async function openOutpostView(opts = {}) {
     return { cell: [cell.x, cell.y] };
   }
   // the outpost buildings' pictures, rendered from their GLBs once the kit is loaded (menuIcons.js)
-  const iconSlugs = ['power', 'storage', ...new Set(oresOf(planet).map((x) => `rig_${x.rig}`))].filter((x) => kit.manifest[x]);
+  const iconSlugs = ['power', 'storage', ...new Set(oresOf(planet).map((x) => `rig_${x.rig}`)), 'resourceBay', 'upgradeBay', 'habitat'].filter((x) => kit.manifest[x]);
   renderMenuIcons(THREE, r.renderer, kit, iconSlugs).then((m) => { icons = m; if (!closed) refreshMenu(true); }).catch((e) => console.warn('[outpost] menu icons', e));
 
   let panelKey = '';
@@ -345,7 +390,7 @@ export async function openOutpostView(opts = {}) {
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
     if (e.key === 'Escape') { if (hud.reportOpen) hud.report(null); else if (pl.phase !== 'idle') cancelPlacing(); else if (sel) select(null); else close(); return; }
     if (hud.reportOpen) return;
-    if (/^[1-9]$/.test(e.key) && MENU[+e.key - 1]) { pickItem(MENU[+e.key - 1].id); e.preventDefault(); return; }
+    if (/^[0-9]$/.test(e.key) && MENU[(+e.key + 9) % 10]) { pickItem(MENU[(+e.key + 9) % 10].id); e.preventDefault(); return; }   // 1–9, then 0 for the tenth
     if (e.key === 'Enter' && pl.phase === 'aimed') { placeEvent({ type: 'confirm' }); e.preventDefault(); }
   };
   doc.addEventListener('keydown', onKey);
@@ -388,7 +433,7 @@ export async function openOutpostView(opts = {}) {
   // ── the frame loop ────────────────────────────────────────────────────────────────────────────────────────────
   let raf = 0, last = performance.now(), liveAcc = 0, frames = [], measuring = null;
   function refreshHud(force = false) {
-    const h = hudModel(o, map, { gold: bank() });
+    const h = hudModel(o, map, { gold: bank(), now: clockNow(), unlocks: ctxNow().unlocks });
     hud.update(h, saleRun ? shownGold : bank());
     hud.online(pl.phase !== 'idle' ? null : onlineChecks());   // the GO ONLINE card steps aside while placing
     scene.setWarnings(buildingWarnings(o, map), markerOf);
@@ -415,11 +460,14 @@ export async function openOutpostView(opts = {}) {
       refreshHud(true);
     }
     scene.sync(o, clockNow(), ctxNow());
+    driveClock += dt;
+    syncHarvesters();
+    if (liveAcc === 0) syncFieldStock();
     const out = scene.update(dt, o);
     if (saleRun) {
       saleRun.t += dt;
       if (out.sale) shownGold = out.sale.gold;
-      hud.update(hudModel(o, map, { gold: bank() }), shownGold);
+      hud.update(hudModel(o, map, { gold: bank(), now: clockNow(), unlocks: ctxNow().unlocks }), shownGold);
       if (out.sale && out.sale.done) { saleRun = null; shownGold = bank(); hud.setBusy(false); refreshHud(true); }
     }
     if (out.shake) shake = out.shake;
@@ -470,10 +518,15 @@ export async function openOutpostView(opts = {}) {
   refreshHud(true);
   loading.remove();
   if (opened.away.show) hud.report(opened.away, { reduced });
+  else if (opened.banked && Object.keys(opened.banked).length) hud.toast(`Hopper emptied into your inventory · +${fmtGold(Object.values(opened.banked).reduce((a, b) => a + b, 0))}`);
   raf = win.requestAnimationFrame(frame);
 
   const handle = {
     get outpost() { return o; }, map, session, scene, r, hud, opened,
+    /** The harvesters drawn now (review): [{ id, pos, state, tier }]. */
+    get harvesters() { return [...state.units.values()].filter((u) => u.isHarvester).map((u) => ({ id: u.id, pos: { ...u.pos }, state: u.state, tier: u.tier })); },
+    /** Run the harvesters' trip clock forward (review screenshots). */
+    driveTo(sec) { driveClock = sec; syncHarvesters(); },
     select, sell: doSell, close,
     /** The build menu (review / screenshots): pick(id, target?), aim(target, touch), hoverAt(target), confirm(), cancel(). */
     pick: (id, target) => pickItem(id, target), confirm: () => placeEvent({ type: 'confirm' }), cancel: () => cancelPlacing(),

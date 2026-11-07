@@ -1,6 +1,6 @@
 # Outposts and Mining — design
 
-Status: owner decisions applied (Q1–Q7, 2026-11-06; build-it-yourself start and storage/power rules, 2026-11-07) · 2026-11-07 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
+Status: owner decisions applied (Q1–Q7, 2026-11-06; build-it-yourself start and storage/power rules, 2026-11-07); bays, Outpost tech and Habitat as built (O10, O15) · 2026-11-07 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
 · Tech plan: `docs/tech-plan/Outpost.md` · Concept art: the owner's outpost image (2026-11-06), described in §8
 
 ![Outpost concept (owner, 2026-11-06)](outpost/outpost-concept.jpg)
@@ -245,7 +245,7 @@ Selling is **always a manual tap** (Q5). There is no automatic selling at any ti
 
 ### 4.4 Deep drilling
 
-**Deep Drilling I** (the contract 1 unlock, then bought in the Upgrade Bay) lets a rig switch to its deposit's
+**Deep Drilling I** (contract 1 unlocks it; it is then bought in the Tech Tree, §7) lets a rig switch to its deposit's
 **deep seam**: the same ore at a higher grade (*Iron, deep grade*), extracted at **¼ the speed** and sold at **5×
 the price** (Q3: the owner raised it from 3×).
 
@@ -336,13 +336,26 @@ with no repairs:
 | Reference set (the map's starter defenses: a cannon, a machine gun, walls) | about 5 | ~30 |
 | No defenses | 0 | the first raid breaches |
 
-The raid sizes that give these numbers are measured by running the sim (the tech plan's `outpost_model.mjs`), not
+The raid sizes that give these numbers are measured by running the sim (the tech plan's `outpost_raids.mjs`), not
 picked by hand, and they are written to the data for each planet. Since 2026-11-07 nothing grants the defenses: the
 "reference set" is the map's own starter layout (`kitDefenses`), which the measurement uses and the player can copy.
 
-**What it takes to hold the first raid** (measured 2026-11-07 on the Verdance map, one-troop raid, five seeds): the
-first setup with one Machine Gun, or one Cannon, or both, is breached every time, because raiders walk past a gun up
-the open ramps. Walls are what hold. The six reference walls with the Machine Gun held 4 of 5 (3,000 gold of
+**The dials (owner, 2026-11-07).**
+
+- **Weaker raiders.** Raiders at an outpost are weaker than in battle: each planet's raid carries an HP and a damage
+  multiplier, measured with the size, so raids of two to four units hold the targets. The battle game is unchanged.
+- **A breacher, every other raid.** Xenthe's and Vexmire's troops do nothing to a wall, so their raids bring one unit
+  that does (the faction's Artillery, its range cut to the outposts' 5). "Breacher every other raid": only every
+  second raid window brings it, by the window's number, so a raid is the same whether watched or not.
+- **Same set, smaller raids.** At contracts 2 and 3 the outpost has more buildings but the yardstick stays the same:
+  the reference set should still hold about 5 raids and the well defended set about 8. Later contract steps' raids
+  are smaller (fewer units, and weaker where the size cannot go lower), not larger.
+- **The first raid is winnable while watching.** The scripted first raid is a single raider that goes for the nearest
+  gun; the first setup with one Machine Gun and a couple of walls holds it.
+
+**What it takes to hold the first raid** (measured 2026-11-07 on the Verdance map, one-troop raid, five seeds, before
+the first raid became a probe, above): the first setup with one Machine Gun, or one Cannon, or both, is breached every
+time, because raiders walk past a gun up the open ramps. Walls are what hold. The six reference walls with the Machine Gun held 4 of 5 (3,000 gold of
 defenses). The six walls with the Cannon held 1 of 5. A breach on the scripted raid costs a quarter of the stored ore,
 and step 3 waits for the next held raid; nothing fails.
 
@@ -380,7 +393,7 @@ power or has full storage carries a warning icon (§4.5).
 | **Resource Bay** (was the Harvester Bay; owner, 2026-11-07) | left: the garage with the buggies | the building harvesters need: **harvesters are bought from the build list, but not until a Resource Bay is built** (2 to start, up to 4). They gather the planet's common and uncommon surface resources at the battle harvest rates, into a 4-hour hopper that empties into the inventory when the player opens the outpost (behaviour: story O10) | I |
 | **Harvester** | the buggies | bought from the build list once the Resource Bay is finished; a count, not a building on a pad | — |
 | **Upgrade Bay** | top right: the hangar pad with two control towers and a small craft | where Outpost-division tech upgrades are bought and installed; it also lets tech-tree tower upgrades apply to the outpost's defenses | I |
-| **Habitat** | the revised concept's living quarters | **raises the gun cap** (owner, 2026-11-07): the hub crews 3 guns (Machine Guns and Cannons; walls do not count), the reference set uses 2; each Habitat tier adds 2 more. Built on a free pad | I (+2), II (+4) |
+| **Habitat** | the revised concept's living quarters | **raises the gun cap** (owner, 2026-11-07): the hub crews 3 guns (Machine Guns and Cannons; walls do not count), the reference set uses 2; each Habitat tier adds 2 more. Built on a free pad (a bay or spare pad); one per outpost, Habitat II is its upgrade. It draws no power, so the cap never moves with the grid (§6.2) | I (+2), II (+4) |
 | **Defenses** | not in the picture | a limited set (owner, 2026-11-07): the **Wall**, the **Machine Gun** and the **Cannon Tower** (the owner's "turret tower"), with their battle stats (§5.2); no anti-air and no long range | I; II and III from the tech tree |
 
 ### 6.1 Costs (proposed defaults)
@@ -417,6 +430,40 @@ Retune here if contract 2 should cost more.
 Build times are real time and run while the player is away. They are short on purpose: the outpost is a place to
 spend gold, not to wait.
 
+### 6.2 The bays and the Habitat, as built (stories O10, O15, 2026-11-07)
+
+- **Harvesters drive and load at the battle's rate; the land regrows slowly** (owner, 2026-11-07: "Full battle rate
+  but the spawn rate of surface resources on outpost land is 5% of the premium land surveyed for the tower defense
+  mode"). The outpost map's surface resources form fields as in battle (connected cells of one tier: primary fields are
+  common, premium fields uncommon; quest fields and the mesa are left out). Each field starts with a battle field's
+  stock (25 units a common cell, 10 an uncommon one) and regrows at `Surface_Respawn_Mult` (5 %) of the battle rate
+  (a cell's units per the battle's 600 s respawn): **7.5 common or 3 uncommon units a cell an hour**, up to its full
+  stock. Harvesters alternate tiers; the k-th of a tier works the k-th nearest field of that tier to the Resource Bay.
+  A trip is the battle harvester's (starting speed, a full load of 40 at the battle pull rate, 3 s unload, the drive
+  × 1.3 for the ramps), so a harvester strips its field in minutes and then brings in only what regrows. It stays on its
+  field (it does not hop to the next one). Battle premium fields never regrow inside a battle, so both tiers use the
+  battle's primary respawn time.
+- **What that earns** (`tools/economy/outpost_model.mjs`, Verdance): two harvesters about **10.5 units an hour**
+  (7.5 common + 3 uncommon, about 13.5 gold-equivalent), four about 28.5; the first hour brings the fields' stock (about
+  45 units with two). `Harvest_Rate_Mult` stays 1.
+- **The hopper** holds 4 hours of the harvesters' steady take (`Hopper_Hours`), and never less than the full stock of
+  the fields they work; then they stop and the fields regrow. It empties into the inventory each time the outpost is
+  opened (whole units; fractions wait). The Resource Bay needs power like any building: without it the harvesters wait
+  at the bay (the fields still regrow). A raid's breach does not touch the hopper. In the view a field's markers shrink
+  and dim as it empties, and the Resource Bay's panel shows each harvester's field stock and "Fields regrowing: n / h".
+- **More harvesters.** The bay starts with 2. The tech tree's Dock 3 and Dock 4 raise it to 3 and 4 at an outpost that
+  has an Upgrade Bay, the same door the tower tiers use.
+- **The Upgrade Bay** is where tech-tree upgrades reach the outpost. A defense goes past tier I only at an outpost with
+  a finished, powered Upgrade Bay, and only to the tier the player owns in the tech tree for that tower (Machine Gun
+  T2 / T3, Cannon T2 / T3). Walls go to tier II with the Outpost node Reinforced Walls. An upgrade is instant and costs
+  the tier's price; wear stays. The Outpost nodes themselves are bought in the Tech Tree (§7); the Upgrade Bay lists them
+  with their state.
+- **The gun cap.** `place` refuses a fourth gun with "the hub crews 3 guns: build a Habitat for more". The build list
+  shows the guns as n / cap and greys them with that reason. The raid measurement's "well defended" set (the starter
+  set plus one Machine Gun) is 3 guns, inside the cap.
+- **The Storage Tower's door** is the model's `door` node once the GLB has one; until then a shutter is drawn over the
+  door anchor when the tower has no power.
+
 ## 7. The Outpost division of the tech tree
 
 The tech tree already has an **OUTPOST** division with five "coming soon" ghosts (`techtree.js`: Outpost Hub,
@@ -435,6 +482,15 @@ with gold from the tech tree or from the Upgrade Bay; the Upgrade Bay is the out
 
 Prices are set in the workbook with the rest of the tech tree. They are counted in a new **Outpost** line of the
 Economy sheet, which Mission-Log §1.2 left out until now.
+
+**As built (O10, 2026-11-07).** The seven nodes replace the five ghosts. Their prices (proposed, sized to outpost income
+of about 720 gold an hour per iron rig) are in the map-data workbook's `Outpost_Tech` sheet: Deep Drilling I 3,000,
+Supply Depot 4,000, Power Grid II 4,000, Reinforced Walls 2,500, Rig Mk II 6,000 (needs Deep Drilling I), Sensor Spire
+3,500, Cargo Shuttle II 10,000; 33,000 in all. **A contract unlocks a node; the player buys it** in the Tech Tree, as
+every other mission-unlocked node (the tech tree's rule D7). A contract never grants a node. The Economy sheet counts
+them on its own Outpost line, outside the "100 % of the tree" total, which stays the battle tree's 140,300 (owner,
+2026-11-02: leave out Outpost upgrades). Once owned, a node applies to every outpost; Reinforced Walls is installed at an
+outpost's Upgrade Bay. Sensor Spire shows RAID INBOUND with a countdown in the outpost HUD 10 minutes before a raid.
 
 ## 8. Look and feel
 
@@ -574,6 +630,9 @@ Nine new maps, one per planet, made **exactly like the large tower-defense maps*
 | — | Raiders | **Troops and low-end tanks only** (§5.2) |
 | — | Raid balance (2026-11-07) | **Weaker raiders**: raid-only strength multipliers in the workbook, so raid sizes above one troop are possible and the targets hold (kit ~5 raids, well defended ~8); the battle game is unchanged |
 | — | Toxic raiders (2026-11-07) | **A breacher unit**: planets whose troops barely hurt walls (Xenthe, Vexmire) add one unit that is good against structures to each raid |
+| — | Breacher cadence (2026-11-07) | **"Breacher every other raid"**: only every second raid brings the breacher, decided by the raid window's number (the same away and live); it is data (`Breacher_Every` = 2) |
+| — | Later contract steps (2026-11-07) | **"Same set, smaller raids"**: keep the step-1 yardsticks (reference set ~5, well defended ~8) at every step and shrink the step 2 and 3 raids (size, then strength) until they hold |
+| — | First raid (2026-11-07) | **Winnable while watching**: the setup plus one Machine Gun and a couple of walls holds the scripted first raid |
 | — | Habitat (2026-11-07) | **It raises a cap**: the gun cap (§6). Numbers are proposed defaults |
 | — | Building (2026-11-07) | **"The same way the tower defense game works"**: an icon list with prices on the left; the contract grants only the base (the Outpost Hub); the player buys power and a mining station with their own gold (§2.3, §6, §6.1) |
 | — | Storage Tower (2026-11-07) | **Part of the contract's first step**: establishing the outpost asks for the hub, power, a mining station on the iron and a Storage Tower, all powered. It no longer gates mining (next row) |
@@ -581,6 +640,11 @@ Nine new maps, one per planet, made **exactly like the large tower-defense maps*
 | — | Defenses (2026-11-07) | **A limited set: Wall, Machine Gun, Cannon Tower** (the "turret tower"), at battle stats, bought, not granted |
 | — | Harvesters (2026-11-07) | **Bought from the build list, once the Resource Bay is built** (the Harvester Bay becomes the Resource Bay); 2,000 each (battle price × 4), 2 to start, up to 4 (proposed) |
 | — | Upgrade Bay (2026-11-07) | **Unchanged** |
+| — | Outpost tech (O10, 2026-11-07) | **A contract unlocks, gold buys**: the seven nodes are bought in the Tech Tree once a contract step unlocks them, as every mission-unlocked node; prices proposed (§7) |
+| — | Defense tiers (O10) | **Through the Upgrade Bay**: tiers past I need a finished, powered Upgrade Bay and the tier owned in the tech tree; Dock 3 / Dock 4 raise the harvester cap the same way (§6.2) |
+| — | Harvesters (O10) | **The battle's rate, a 4-hour hopper, banked on open** |
+| — | Outpost surface (2026-11-07) | "Full battle rate but the spawn rate of surface resources on outpost land is 5% of the premium land surveyed for the tower defense mode": fields hold a battle field's stock and regrow at 5 % of the battle rate (`Surface_Respawn_Mult`), §6.2 |
+| — | Habitat (O15) | **One per outpost, no power draw**, Habitat II is its upgrade (§6, §6.2) |
 
 Design gaps closed with defaults on 2026-11-06 (owner review asked): storage per rig (§4.2); contract 2's power
 requirement (§2.4); repair only restores a defense's HP, and every defense carries a value for repairs

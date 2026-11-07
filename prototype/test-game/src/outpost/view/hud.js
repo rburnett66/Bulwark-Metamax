@@ -18,7 +18,7 @@
  * on hover / tap; the first-run guidance pulses with the battle's hint glow. While an item is armed the banner says
  * where it goes, with CONFIRM (touch: once a spot is aimed) and CANCEL.
  */
-import { fmtGold, fmtUnits, sellButton, ROMAN } from './hudModel.js';
+import { fmtGold, fmtUnits, fmtClock, sellButton, ROMAN } from './hudModel.js';
 import { PALETTE_CSS, paletteBaseCss, railFit, applyRailFit, STRUCT_ICONS } from '../../render/buildPalette.js';
 import { buildIcon, buildIconUrl } from '../../render/buildIcons.js';
 import { OUTPOST_GLYPHS } from './menuIcons.js';
@@ -64,6 +64,16 @@ export const HUD_CSS = `
 .op-bar > i { position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(90deg,var(--cyan-d),var(--cyan)); transition:width .4s; }
 .op-bar.full > i { background:linear-gradient(90deg,#c26a00,var(--trim-hi)); }
 .op-chip.power .num { color:var(--cyan-d); }
+.op-chip.hopper[hidden], .op-chip.raid[hidden] { display:none; }
+.op-chip.hopper .op-bar i { background:linear-gradient(90deg,#5fb8ff,#ffd34a); }
+.op-chip.raid { background:#3a0d0a; border-color:#d2453a; color:#ffd7d2; font-weight:800; letter-spacing:.06em; animation:opRaid 1s ease-in-out infinite alternate; }
+@keyframes opRaid { from { box-shadow:0 0 0 0 rgba(210,69,58,.0); } to { box-shadow:0 0 0 4px rgba(210,69,58,.45); } }
+.op-techs { display:grid; gap:5px; margin:8px 0 2px; }
+.op-tech { display:grid; grid-template-columns:1fr auto; gap:0 8px; padding:6px 8px; border:1px solid #c5cdd5; border-left:3px solid #9aa4ae; background:#f6f8fa; }
+.op-tech b { font-size:.92em; } .op-tech small { grid-column:1 / -1; opacity:.75; }
+.op-tech.owned { border-left-color:#2fa36b; } .op-tech.buy { border-left-color:var(--cyan-d); }
+.op-tech .st { font-size:.75em; font-weight:800; letter-spacing:.08em; } .op-tech.owned .st { color:#2fa36b; } .op-tech.buy .st { color:var(--cyan-d); } .op-tech.locked .st { color:#6a7d92; }
+.op-note { margin:8px 0 2px; font-size:.86em; opacity:.8; }
 .op-chip.power.short .num { color:var(--bad); }
 .op-shield { position:relative; width:18px; height:20px; }
 .op-shield svg { position:absolute; inset:0; width:100%; height:100%; }
@@ -256,7 +266,7 @@ ${paletteBaseCss('.op')}
 `;
 
 /** Names for the narrow two-column rail (a landscape phone), where the long ones would clip. */
-const SHORT = { power: 'POWER', rig: 'MINING', storage: 'STORAGE', resourceBay: 'RES. BAY', upgradeBay: 'UPGRADE', cannon: 'CANNON' };
+const SHORT = { power: 'POWER', rig: 'MINING', storage: 'STORAGE', resourceBay: 'RES. BAY', upgradeBay: 'UPGRADE', habitat: 'HABITAT', cannon: 'CANNON' };
 const LOCK_SVG ='<svg class="bw-lock" viewBox="0 0 11 12"><rect x="1" y="5" width="9" height="7" rx="1" fill="#cfd6dd"/><path d="M3 5V3.6a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="#cfd6dd" stroke-width="1.5"/></svg>';
 export const WARN_SVG = {
   bolt: '<svg viewBox="0 0 20 20"><path d="M11.5 1 3.5 11.5h5L7.5 19l9-11.5h-5.2z" fill="#ffd23a" stroke="#8a5a00" stroke-width="1.2" stroke-linejoin="round"/></svg>',
@@ -267,6 +277,7 @@ export const WARN_SVG = {
 const ICON = {
   coin: '<svg class="op-ico" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.2" fill="#f2c040" stroke="#8a5a00" stroke-width="1.6"/><circle cx="10" cy="10" r="5" fill="none" stroke="#b07a10" stroke-width="1.4"/></svg>',
   bolt: '<svg class="op-ico" viewBox="0 0 20 20"><path d="M11.5 1 3.5 11.5h5L7.5 19l9-11.5h-5.2z" fill="#3fd0ff" stroke="#0a6f99" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+  leaf: '<svg class="op-ico" viewBox="0 0 20 20"><path d="M4 16c0-7 5-11 13-12-1 8-5 13-12 13z" fill="#5fb8ff" stroke="#1d5f8f" stroke-width="1.3" stroke-linejoin="round"/><path d="M4 16 12 8" stroke="#1d5f8f" stroke-width="1.2"/></svg>',
   box: '<svg class="op-ico" viewBox="0 0 20 20"><path d="M10 1.8 17.5 6v8L10 18.2 2.5 14V6z" fill="#cfd6dd" stroke="#4a5560" stroke-width="1.4" stroke-linejoin="round"/><path d="M2.5 6 10 10l7.5-4M10 10v8" fill="none" stroke="#4a5560" stroke-width="1.2"/></svg>',
 };
 const shieldSvg = (frac) => `<svg viewBox="0 0 18 20"><defs><clipPath id="opsc"><rect x="0" y="${(20 * (1 - frac)).toFixed(1)}" width="18" height="20"/></clipPath></defs>
@@ -275,7 +286,7 @@ const shieldSvg = (frac) => `<svg viewBox="0 0 18 20"><defs><clipPath id="opsc">
 
 /**
  * mountHud(host, cbs) → the HUD. cbs: { onClose, onSell, onRepairAll, onOnline, onPanelClose, onPick(menuId),
- * onPickFor(kind, pad), onConfirmPlace, onCancelPlace, onDeep(pad, on), onUpgrade(pad), onRepair(id), onReportClose }
+ * onPickFor(kind, pad), onConfirmPlace, onCancelPlace, onDeep(pad, on), onUpgrade(pad), onRepair(id), onUpgradeDefense(id), onReportClose }
  */
 export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } = {}) {
   const doc = host.ownerDocument;
@@ -292,6 +303,8 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
         <div class="op-chip gold" title="Gold">${ICON.coin}<span class="num" data-k="gold">0</span></div>
         <div class="op-chip" title="Ore in storage"><div class="op-ores" data-k="ores"></div></div>
         <div class="op-chip" title="Storage">${ICON.box}<div class="op-bar" data-k="storeBar"><i></i></div><span class="num" data-k="store">0%</span></div>
+        <div class="op-chip hopper" title="Resource Bay hopper: banked to your inventory when you open the outpost" hidden>${ICON.leaf}<div class="op-bar" data-k="hopperBar"><i></i></div><span class="num" data-k="hopper">0</span></div>
+        <div class="op-chip raid" data-k="raid" title="Sensor Spire: a raid is inbound" hidden>RAID INBOUND <span class="num" data-k="raidIn"></span></div>
         <div class="op-chip power" title="Power used / supplied">${ICON.bolt}<span class="num" data-k="power">0/0</span><span class="lbl">POWER</span></div>
         <div class="op-chip shield" title="Defenses"><span class="op-shield" data-k="shieldIco"></span><span class="num" data-k="shield">100%</span></div>
       </div>
@@ -335,6 +348,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     else if (a === 'deep') call('onDeep', b.dataset.pad, b.dataset.on === '1');
     else if (a === 'upgrade') call('onUpgrade', b.dataset.pad);
     else if (a === 'repair') call('onRepair', b.dataset.id);
+    else if (a === 'upgradeDefense') call('onUpgradeDefense', b.dataset.id);
     else if (a === 'reportClose') call('onReportClose');
   });
   // the HUD's own pointer events never reach the canvas under it
@@ -354,6 +368,11 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       $('storeBar').classList.toggle('full', h.storage.frac >= 0.999);
       $('store').textContent = Math.floor(h.storage.frac * 100) + '%';
       $('power').textContent = `${h.power.draw}/${h.power.supply}`;
+      const hc = root.querySelector('.op-chip.hopper');
+      hc.hidden = !h.hopper;
+      if (h.hopper) { $('hopperBar').firstElementChild.style.width = (h.hopper.frac * 100).toFixed(1) + '%'; $('hopper').textContent = fmtUnits(h.hopper.units); }
+      $('raid').hidden = h.raidInbound == null;
+      if (h.raidInbound != null) $('raidIn').textContent = fmtClock(h.raidInbound / 1000);
       root.querySelector('.op-chip.power').classList.toggle('short', h.power.short || h.power.unpowered > 0);
       const sf = h.shield.frac;
       const sh = shieldSvg(Math.max(0, Math.min(1, sf)));
@@ -388,6 +407,9 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       }
       if (m.upgrade) body += `<button class="op-wide alt" data-a="upgrade" data-pad="${esc(pad)}" ${m.upgrade.enabled ? '' : 'disabled'}>${esc(m.upgrade.label)}</button>${m.upgrade.why ? `<div class="op-why">${esc(m.upgrade.why)}</div>` : ''}`;
       if (m.repair) body += `<button class="op-wide" data-a="repair" data-id="${esc(id)}" ${m.repair.enabled ? '' : 'disabled'}>${esc(m.repair.label)}</button>`;
+      if (m.upgradeDefense) body += `<button class="op-wide alt" data-a="upgradeDefense" data-id="${esc(id)}" ${m.upgradeDefense.enabled ? '' : 'disabled'}>${esc(m.upgradeDefense.label)}</button>${m.upgradeDefense.why ? `<div class="op-why">${esc(m.upgradeDefense.why)}</div>` : ''}`;
+      if (m.note) body += `<div class="op-note">${esc(m.note)}</div>`;
+      if (m.techs) body += `<div class="op-sec">OUTPOST TECH</div><div class="op-techs">${m.techs.map((t) => `<div class="op-tech ${t.state}"><b>${esc(t.name)}</b><span class="st">${t.state === 'owned' ? 'INSTALLED' : t.state === 'buy' ? 'AVAILABLE' : 'LOCKED'}</span><small>${esc(t.effect)} · ${esc(t.note)}</small></div>`).join('')}</div>`;
       if (m.build) {   // an empty pad: what fits, each one arming the build menu on this pad (the ghost, then CONFIRM)
         body += `<div class="op-sec">FITS HERE · OR PICK FROM THE LIST</div><div class="op-list op-chips">${m.build.map((o) => `<button class="op-opt" data-a="pickFor" data-kind="${o.kind}" data-pad="${esc(pad)}" ${o.enabled ? '' : 'disabled'}>
           <b>${esc(o.name)}</b><span class="num">${o.cost ? fmtGold(o.cost) : 'FREE'}</span><small>${o.why ? esc(o.why) : `${Math.round(o.buildSec / 60)} min to build`}</small></button>`).join('')}</div>`;
@@ -483,6 +505,11 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       if (m.extracted.length) {
         rows.push(`<div class="op-rep-sec"><span>EXTRACTED</span><span>UNITS</span></div>`);
         for (const x of m.extracted) rows.push(`<div class="op-rep-row"><span class="op-rep-dot" style="--c:${esc(x.colour)}"></span><b>${esc(x.name)}</b><span class="num">+${fmtUnits(x.units)}</span></div>`);
+      }
+      if (m.harvested && m.harvested.length) {
+        rows.push(`<div class="op-rep-sec"><span>HARVESTED · TO YOUR INVENTORY</span><span>UNITS</span></div>`);
+        for (const x of m.harvested) rows.push(`<div class="op-rep-row"><span class="op-rep-dot" style="--c:${esc(x.colour)}"></span><b>${esc(x.name)}</b><span class="num">+${fmtUnits(x.banked || x.units)}</span></div>`);
+        if (m.hopperFull) rows.push(`<div class="op-rep-row"><span class="op-rep-dot" style="--c:#ff8a3a"></span><b>The hopper filled</b><span class="tag bad">STOPPED</span><small>it empties each time you open the outpost</small></div>`);
       }
       if (m.full) rows.push(`<div class="op-rep-row"><span class="op-rep-dot" style="--c:#ff8a3a"></span><b>${m.full === 1 ? 'A rig bay filled' : `${m.full} rig bays filled`}</b><span class="tag bad">STOPPED</span><small>sell to start the rig again</small></div>`);
       rows.push(`<div class="op-rep-sec"><span>RAIDS</span><span>${m.raids.length ? `${m.held} HELD${m.breached ? ` · ${m.breached} BROKE THROUGH` : ''}` : ''}</span></div>`);

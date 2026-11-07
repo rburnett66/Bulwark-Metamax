@@ -78,7 +78,7 @@ test('an empty pad lists what it can take; a locked deposit says so; defenses an
   assert.equal(p.build[0].enabled, false);
   const bay = map.pads.find((x) => x.role === 'bay');
   const b = panelModel(o, map, { pad: bay.id }, { gold: 3000, unlockedTiers: ['common'] });
-  assert.deepEqual(b.build.map((x) => [x.kind, x.enabled]), [['resourceBay', true], ['upgradeBay', false]]);   // the Harvester Bay is the Resource Bay (O16)
+  assert.deepEqual(b.build.map((x) => [x.kind, x.enabled]), [['resourceBay', true], ['upgradeBay', false], ['habitat', true]]);   // the Harvester Bay is the Resource Bay (O16)
   assert.deepEqual(defenseOptions({ gold: 1000 }).map((d) => [d.kind, d.enabled]), [['mg', true], ['cannon', false], ['wall', true]]);
   const empty = emptyPads(o, map);
   assert.equal(empty.length, map.pads.length - 4);

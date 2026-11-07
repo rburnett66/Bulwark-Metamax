@@ -21,17 +21,17 @@ const ctx = (gold, extra = {}) => ({ gold, unlockedTiers: ['common'], unlocks: n
 const item = (menu, id) => menu.find((m) => m.id === id);
 
 test('the list, in the owner\'s order: buildings, the harvester, then wall, machine gun, cannon tower', () => {
-  assert.deepEqual(MENU.map((m) => m.id), ['power', 'rig', 'storage', 'resourceBay', 'upgradeBay', 'harvester', 'wall', 'mg', 'cannon']);
+  assert.deepEqual(MENU.map((m) => m.id), ['power', 'rig', 'storage', 'resourceBay', 'upgradeBay', 'habitat', 'harvester', 'wall', 'mg', 'cannon']);   // the Habitat joins with O15
   assert.deepEqual(MENU.map((m) => m.label).slice(-3), ['WALL', 'MACHINE GUN', 'CANNON TOWER']);
   assert.equal(item(MENU, 'rig').label, 'MINING STATION');
   assert.equal(kindOf('resourceBay'), bayKind());
   assert.ok(['resourceBay', 'harvesterBay'].includes(bayKind()));
 });
 
-test('prices come from the data, the hotkeys are 1–9, and an unaffordable item is greyed with its price', () => {
+test('prices come from the data, the hotkeys are 1–9 then 0, and an unaffordable item is greyed with its price', () => {
   const m = buildMenu(hubOnly(), map, ctx(5000));
   for (const x of m.filter((i) => i.place !== 'buy')) assert.equal(x.cost, structureDef(x.kind, 1).cost, x.id);
-  assert.deepEqual(m.map((x) => x.key), ['1', '2', '3', '4', '5', '6', '7', '8', '9']);
+  assert.deepEqual(m.map((x) => x.key), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
   const poor = buildMenu(hubOnly(), map, ctx(500));
   const power = item(poor, 'power');
   assert.equal(power.poor, structureDef('power', 1).cost > 500);

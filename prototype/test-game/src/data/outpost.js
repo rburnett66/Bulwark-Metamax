@@ -8,7 +8,7 @@
  * Pure data; no DOM, no clock.
  */
 import { MAPDATA } from '../../content/maps/mapdata.js';
-import { STRUCTURES } from './tables.js';
+import { STRUCTURES, BONUS_NERFS, HARVESTER_UNLOAD_TIME } from './tables.js';
 
 /** The tuning (Outpost_Params), by name: Load_Sec, Store_Hours, Deep_Rate_Mult, … */
 export const OUTPOST = Object.freeze({ ...(MAPDATA.outpostParams || {}) });
@@ -24,6 +24,8 @@ export const ESTABLISH = Object.freeze(['hub', 'power', 'rig', 'storage']);
 export const REFERENCE_SET = Object.freeze(['hub', 'power', 'rig', 'storage', 'cannon', 'mg', 'wall']);
 /** The only defenses an outpost may build (owner: Wall, Machine Gun, the turret tower = the battle's Cannon Tower). */
 export const DEFENSE_KINDS = Object.freeze(['mg', 'cannon', 'wall']);
+/** The defenses the hub crews and the gun cap counts (owner 2026-11-07: Machine Guns and Cannons; walls do not count). */
+export const GUN_KINDS = Object.freeze(['mg', 'cannon']);
 /** Old kind names kept readable: the Harvester Bay became the Resource Bay (owner, 2026-11-07). */
 export const KIND_ALIASES = Object.freeze({ harvesterBay: 'resourceBay' });
 /** A kind's current name ('harvesterBay' → 'resourceBay'; anything else unchanged). */
@@ -61,6 +63,64 @@ export function harvesterDef() {
   return d ? { cost: d.cost, value: d.value, cap: OUTPOST.Harvester_Cap, max: OUTPOST.Harvester_Max } : null;
 }
 
+/**
+ * The battle harvest rate an outpost harvester gathers at (design §6, story O10): the battle harvester's own numbers,
+ * read from the same workbook rows the battle reads (harvest.js harvesterStats / nodeHarvestSec):
+ *   capacity  Factions row 1 Harvester_Base_Capacity (the tuning reference, upgrade level 1);
+ *   speed     Harvester_Base_Speed × BONUS_NERFS.harvesterSpeedMult (the battle's starting speed), cells / s;
+ *   pull      units / s at a cell: Units_Per_Node / Harvest_Sec_Per_Node of the tier's Resources row — common is
+ *             the Primary row of Flowers (every planet's primary fields), uncommon the Premium row of the reference
+ *             faction's Premium_Resource;
+ *   unload    HARVESTER_UNLOAD_TIME, s at the bay.
+ * A trip to a field d cells away is 2·d·Harvest_Route_Mult / speed + capacity / pull + unload seconds and brings
+ * `capacity` units, × Harvest_Rate_Mult (1 = the battle's rate). → { capacity, speed, unload, pull: { common, uncommon } }
+ */
+export function harvestRates() {
+  const f = (MAPDATA.factions && MAPDATA.factions[0]) || {};
+  const row = (type, tier) => (MAPDATA.resources || []).find((r) => r.Resource === type && r.Tier === tier) || {};
+  const pull = (r) => (r.Units_Per_Node || 20) / Math.max(1, r.Harvest_Sec_Per_Node || 8);
+  return Object.freeze({
+    capacity: f.Harvester_Base_Capacity || 40,
+    speed: (f.Harvester_Base_Speed || 3) * BONUS_NERFS.harvesterSpeedMult,
+    unload: HARVESTER_UNLOAD_TIME,
+    pull: Object.freeze({ common: pull(row('Flowers', 'Primary')), uncommon: pull(row(f.Premium_Resource || 'Crystals', 'Premium')) }),
+  });
+}
+
+/**
+ * An outpost surface field's stock and regrowth per cell (owner 2026-11-07: "Full battle rate but the spawn rate of
+ * surface resources on outpost land is 5% of the premium land surveyed for the tower defense mode"). A cell holds what
+ * a battle node of its tier holds (Units_Per_Node: Flowers Primary for common, the reference faction's premium row for
+ * uncommon) and regrows at Surface_Respawn_Mult × the battle's rate, a node's units per Primary_Respawn_Sec.
+ * → { common: { units, regrow (units / s) }, uncommon: { … } }
+ */
+export function surfaceStock(params = OUTPOST) {
+  const f = (MAPDATA.factions && MAPDATA.factions[0]) || {};
+  const row = (type, tier) => (MAPDATA.resources || []).find((r) => r.Resource === type && r.Tier === tier) || {};
+  const respawn = (MAPDATA.globalParams && MAPDATA.globalParams.Primary_Respawn_Sec) || 75;
+  const cell = (r) => { const units = r.Units_Per_Node || 20; return Object.freeze({ units, regrow: (units / respawn) * (params.Surface_Respawn_Mult ?? 1) }); };
+  return Object.freeze({ common: cell(row('Flowers', 'Primary')), uncommon: cell(row(f.Premium_Resource || 'Crystals', 'Premium')), respawnSec: respawn });
+}
+
+/** Units per second one harvester brings home from a field `dist` cells (straight line) from the Resource Bay. */
+export function harvesterRate(tier, dist, params = OUTPOST, rates = harvestRates()) {
+  const pull = rates.pull[tier];
+  if (!pull) return 0;
+  const trip = (2 * dist * (params.Harvest_Route_Mult ?? 1)) / rates.speed + rates.capacity / pull + rates.unload;
+  return (rates.capacity / trip) * (params.Harvest_Rate_Mult ?? 1);
+}
+
+/**
+ * The Outpost division of the tech tree (design §7, story O10): MAPDATA.outpostTech (the workbook's Outpost_Tech
+ * sheet) → [{ id, name, price, effect, unlockedBy, requires: [id], applies: 'outposts' | 'upgradeBay' }].
+ * A contract step unlocks a node; the player buys it in the Tech Tree.
+ */
+export const OUTPOST_TECH = Object.freeze((MAPDATA.outpostTech || []).map((r) => Object.freeze({
+  id: r.Node, name: r.Name, price: num(r.Price), effect: r.Effect || '', unlockedBy: r.Unlocked_By || '',
+  requires: Object.freeze(String(r.Requires || '').split(/\s+/).filter(Boolean)), applies: r.Applies || 'outposts',
+})));
+export const OUTPOST_TECH_IDS = Object.freeze(OUTPOST_TECH.map((t) => t.id));
+
 /** Every outpost structure row (for tools and tests). */
 export const allStructures = () => STRUCTS;
 
@@ -82,18 +142,24 @@ export function contractFor(planet, step) {
 
 /**
  * A planet's raid at a contract step (Outpost_Raids, measured by tools/economy/outpost_raids.mjs; design §5.2):
- * { planet, step, units: [unit ids, cycled in spawn order], size, breacher: unit id | null (one per raid, after the
- * others; owner 2026-11-07, for planets whose troops cannot hurt walls), hpMult, dmgMult (raid-only raider strength,
- * owner 2026-11-07 "weaker raiders"; 1 = battle strength), farDayBump }, or null when the data has none.
+ * { planet, step, units: [unit ids, cycled in spawn order], size, breacher: unit id | null (after the others, in the
+ * raids of every Breacher_Every-th window; owner 2026-11-07, for planets whose troops cannot hurt walls, "breacher
+ * every other raid"), breacherEvery, breacherHpMult (the breacher's HP against battle HP, × the step's strength), strength (the step's Strength_Step, 1 at step 1), hpMult, dmgMult (raid-only
+ * raider strength, owner 2026-11-07 "weaker raiders", × the step's strength; 1 = battle strength), farDayBump }, or
+ * null when the data has none.
  */
 export function raidFor(planet, step = 1) {
   const r = (MAPDATA.outpostRaids || []).find((x) => x.Planet_Key === planet);
   if (!r) return null;
   const s = Math.max(1, Math.min(3, step | 0 || 1));
+  // the step's strength (owner 2026-11-07, "same set, smaller raids"): Strength_Step2/3 scale both multipliers
+  const strength = s === 1 ? 1 : (num(r[`Strength_Step${s}`]) || 1);
   return Object.freeze({
     planet, step: s, units: Object.freeze(String(r.Units || '').split(/\s+/).filter(Boolean)),
-    size: num(r[`Size_Step${s}`]), breacher: r.Breacher || null,
-    hpMult: num(r.Raider_HP_Mult) || 1, dmgMult: num(r.Raider_Damage_Mult) || 1, farDayBump: num(r.Far_Day_Bump),
+    size: num(r[`Size_Step${s}`]), breacher: r.Breacher || null, breacherEvery: Math.max(1, num(r.Breacher_Every) || 1),
+    breacherHpMult: num(r.Breacher_HP_Mult) || 1,
+    strength, hpMult: (num(r.Raider_HP_Mult) || 1) * strength, dmgMult: (num(r.Raider_Damage_Mult) || 1) * strength,
+    farDayBump: num(r.Far_Day_Bump),
   });
 }
 

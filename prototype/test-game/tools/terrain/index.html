@@ -62,7 +62,7 @@ const FACTIONS = [['powder', 'ground'], ['air', 'air'], ['high-tech', 'hightech'
   ['arcane-energy', 'arcane'], ['space-tech', 'space'], ['dark-energy', 'dark'], ['greenies', 'greenies']];
 
 const q = new URLSearchParams(location.search);
-const OUTPOSTS = new Set(['ground']);   // planet keys with a content/maps/forge/<key>-outpost.json
+const OUTPOSTS = new Set(FACTIONS.map(([, k]) => k));   // planet keys with a content/maps/forge/<key>-outpost.json (all nine since O11)
 const S = { fac: q.get('faction') || 'powder', map: q.get('map') === 'outpost' ? 'outpost' : +(q.get('map') || 1), mode: q.get('ground') || 'tiled', tier: q.get('quality') || 'high', dist: q.get('dist') ? +q.get('dist') : null };
 const stage = document.getElementById('stage');
 const maps = document.getElementById('maps');

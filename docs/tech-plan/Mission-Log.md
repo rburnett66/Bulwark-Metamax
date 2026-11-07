@@ -105,6 +105,10 @@ The live version is the **Economy** sheet of `docs/sources/Bulwark-Missions.xlsx
 
 Primaries also give 24,300 XP. Rare and epic resources are quest crystals and are not counted.
 
+**Outpost line (story O10, 2026-11-07).** The seven Outpost nodes cost 33,000 and sit on their own Economy row (row 10),
+outside the 100 % total above, which the owner asked to leave without Outpost upgrades. They are paid from outpost
+income. `tools/economy/write_outpost_tech_unlocks.py` writes the rows from the map-data workbook's `Outpost_Tech`.
+
 **Per planet, the curve runs out late.** Each planet's primaries pay 6.4k (Verdance) to 10.0k (Vexmire), and the Light secondaries add 3.7k. The nodes those primaries unlock cost:
 - Verdance: 5.6k.
 - Lumen: 17.6k.

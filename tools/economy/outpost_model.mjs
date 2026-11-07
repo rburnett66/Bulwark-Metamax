@@ -73,3 +73,42 @@ for (const p of PLANETS.filter((x) => !only || x === only)) {
   if (raids[0]) table(['Raiders (Units, cycled)', 'Breacher', 'HP ×', 'Damage ×', 'Size, step 1', 'Size, step 2', 'Size, step 3', 'Far-buyer day bump'],
     [[raids[0].units.join(' '), raids[0].breacher || '—', raids[0].hpMult, raids[0].dmgMult, ...raids.map((r) => r.size), raids[0].farDayBump]]);
 }
+
+// ── the Resource Bay's harvesters (story O10; owner 2026-11-07: "Full battle rate but the spawn rate of surface
+// resources on outpost land is 5% of the premium land surveyed for the tower defense mode") ──────────────────────────
+{
+  const M = await import('../../prototype/test-game/src/outpost/model.js');
+  const { outpostMapFromForge } = await import('../../prototype/test-game/src/outpost/outpostMap.js');
+  const { surfaceStock } = await import('../../prototype/test-game/src/data/outpost.js');
+  const { existsSync } = await import('node:fs');
+  const catalog = JSON.parse(readFileSync(new URL('../../prototype/test-game/content/missions/missions.json', import.meta.url), 'utf8'));
+  const st = surfaceStock();
+  console.log(`## Resource Bay income (design §6.2)\n\nHarvesters drive and load at the battle rate; a surface field holds a battle field's stock ` +
+    `(${st.common.units} common / ${st.uncommon.units} uncommon units a cell) and regrows at ${OUTPOST.Surface_Respawn_Mult * 100} % of the battle rate ` +
+    `(a cell's units per ${st.respawnSec} s): ${fmt(st.common.regrow * 3600)} common / ${fmt(st.uncommon.regrow * 3600)} uncommon units a cell an hour. ` +
+    `A harvester takes its field's stock, then its regrowth. Hourly = the steady take once the fields are bare; first hour = what the ` +
+    `harvesters bring in during the first hour (mostly the fields' stock). Gold-equivalent uses the inventory's resource values. ` +
+    `Planets without an outpost map are measured on Verdance's (marked *).\n`);
+  const rows = [];
+  for (const p of PLANETS.filter((x) => !only || x === only)) {
+    const file = new URL(`../../prototype/test-game/content/maps/forge/${p}-outpost.json`, import.meta.url);
+    const own = existsSync(file);
+    const map = outpostMapFromForge(JSON.parse(readFileSync(own ? file : new URL('../../prototype/test-game/content/maps/forge/ground-outpost.json', import.meta.url), 'utf8')), p);
+    const planetName = oresOf(p)[0].planetName;
+    const val = (tier) => ((catalog.resources.find((r) => r.planet === planetName && r.tier === tier) || {}).value || 0);
+    for (const n of [2, 4]) {
+      const o = M.referenceOutpost(p, { seed: 1, map, now: 0 });
+      const bay = map.pads.find((x) => x.role === 'bay' && !o.pads[x.id]);
+      if (!bay) continue;
+      o.pads[bay.id] = { kind: 'resourceBay', tier: 1 };
+      o.harvesters = n; o.online = true; o.firstRaidAt = null;
+      for (const id of Object.keys(o.pads)) if (o.pads[id].kind === 'power') o.pads[id].tier = 2;
+      const s = M.steadyHarvest(o, map), H = 3_600_000;
+      const first = M.advance(o, H, { map, params: { ...OUTPOST, Raid_Mean_Hours: 1e12, Hopper_Hours: 1e6 } }).outpost.hopper;
+      const gold = s.byTier.common * H * val('common') + s.byTier.uncommon * H * val('uncommon');
+      rows.push([`${planetName}${own ? '' : ' *'}`, n, M.surfaceFieldGroups(map).length, s.byTier.common * H, s.byTier.uncommon * H, s.total * H,
+        gold, (first.common || 0) + (first.uncommon || 0), M.hopperCap(o, map)]);
+    }
+  }
+  table(['Planet', 'Harvesters', 'Fields', 'Common / h', 'Uncommon / h', 'Units / h', 'Gold-eq. / h', 'First hour', 'Hopper (units)'], rows);
+}

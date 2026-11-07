@@ -18,6 +18,7 @@ export const OUTPOST_GLYPHS = Object.freeze({
   storage: '<rect x="4" y="9" width="16" height="10" rx="1" fill="#e2e6ea"/><rect x="4" y="9" width="16" height="2" fill="#eb5c0d"/><rect x="9" y="13" width="6" height="6" fill="#3a4148"/><rect x="9.5" y="13.5" width="5" height="3" fill="#3fd0ff" opacity=".8"/><circle cx="7" cy="6" r="2.4" fill="none" stroke="#9aa4ae" stroke-width="1.3"/><path d="M7 6l3 3" stroke="#9aa4ae" stroke-width="1.3"/>',
   resourceBay: STRUCT_ICONS.harvestorBay,
   upgradeBay: '<rect x="3" y="15" width="18" height="4" rx="1" fill="#9aa4ae"/><rect x="4" y="7" width="3" height="8" fill="#cfd6dd"/><rect x="17" y="7" width="3" height="8" fill="#cfd6dd"/><rect x="4" y="7" width="3" height="1.6" fill="#eb5c0d"/><rect x="17" y="7" width="3" height="1.6" fill="#eb5c0d"/><path d="M9 13.5l3-4 3 4z" fill="#3fd0ff"/><path d="M12 9.5v-4" stroke="#3fd0ff" stroke-width="1.4"/>',
+  habitat: '<rect x="3" y="15" width="18" height="4" rx="1" fill="#9aa4ae"/><path d="M4 15V10a8 5 0 0 1 16 0v5z" fill="#e2e6ea"/><rect x="4" y="12" width="16" height="1.4" fill="#eb5c0d"/><rect x="7" y="9" width="2.4" height="2" fill="#3fd0ff"/><rect x="10.8" y="8.4" width="2.4" height="2" fill="#3fd0ff"/><rect x="14.6" y="9" width="2.4" height="2" fill="#3fd0ff"/><rect x="10.5" y="15" width="3" height="4" fill="#3a4148"/>',
 });
 
 /**

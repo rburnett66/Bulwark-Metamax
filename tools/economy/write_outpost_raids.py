@@ -17,8 +17,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from write_collective_contracts import write_sheet  # noqa: E402
 
-COLS = ["Planet_Key", "Units", "Breacher", "Raider_HP_Mult", "Raider_Damage_Mult", "Size_Step1", "Size_Step2",
-        "Size_Step3", "Far_Day_Bump", "Measured_On"]
+COLS = ["Planet_Key", "Units", "Breacher", "Breacher_Every", "Breacher_HP_Mult", "Raider_HP_Mult", "Raider_Damage_Mult", "Size_Step1",
+        "Size_Step2", "Size_Step3", "Strength_Step2", "Strength_Step3", "Far_Day_Bump", "Measured_On"]
 
 
 def main(path):
@@ -30,11 +30,14 @@ def main(path):
         "Outpost raids (9) — one per planet: the raiders and the raid size per contract step",
         "Measured by tools/economy/outpost_raids.mjs on the battle sim (design 5.2: the starter kit holds about 5 raids "
         "before a breach, the well defended set about 8, no repairs). Units: tier I lightGround ids, cycled in spawn "
-        "order. Breacher: one unit added to each raid where the troops cannot hurt walls (owner 2026-11-07). "
+        "order. Breacher: one unit added where the troops cannot hurt walls (owner 2026-11-07), in the raids of every "
+        "Breacher_Every-th window (owner 2026-11-07: every other raid). Strength_Step2/3 scale both multipliers at that "
+        "contract step (owner 2026-11-07: same set, smaller raids). Breacher_HP_Mult: the breacher's HP against its battle HP "
+        "(its reach is cut to its faction's troops', so it must come under the guns). "
         "Raider_HP_Mult / Raider_Damage_Mult: raid-only raider strength, 1 = battle (owner 2026-11-07, weaker raiders). "
         "Far_Day_Bump: raiders added on a day the far buyer was used (design 8.5). Measured_On: the outpost map.",
         "",
-    ], [[r[c] for c in COLS] for r in rows])
+    ], [[r.get(c) if r.get(c) is not None else "" for c in COLS] for r in rows])
 
 
 if __name__ == "__main__":

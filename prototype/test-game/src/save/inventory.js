@@ -32,6 +32,24 @@ export function bankHarvest(s, result, catalog) {
   return out;
 }
 
+/**
+ * Bank an outpost's hopper (Outpost-Design §6, story O10): the Resource Bay's harvesters gather the planet's common
+ * and uncommon surface resources; opening the outpost empties the hopper here. units: { common: n, uncommon: n } (whole
+ * units, from model.emptyHopper); planet: the planet's NAME ('Verdance'), as the catalogue keys it. → { [resourceId]: n }
+ */
+export function bankOutpostHarvest(s, units, catalog, planet) {
+  const out = {};
+  if (!s.inventory) s.inventory = {};
+  if (!s.inventoryNew) s.inventoryNew = {};
+  for (const [tier, n] of Object.entries(units || {})) {
+    if (!(n > 0)) continue;
+    const r = resourceOf(catalog, planet, tier);
+    addTo(s, r.id, n);
+    out[r.id] = n;
+  }
+  return out;
+}
+
 export const inventoryFresh = (s) => Object.values(s.inventoryNew || {}).reduce((a, n) => a + n, 0);
 
 /** Opening the screen counts as the visit. → what was new, for the screen to show while it stays open. */

@@ -10,7 +10,7 @@ import { outpostMapFromForge } from './outpostMap.js';
 import { DRAFT_LAYOUT } from './draftLayout.js';
 import {
   runRaid, createRaid, makeRaidHook, raidUnits, raidSize, raidSeed, wellDefended, stepOutpost, holdsBeforeBreach,
-  MEASURE_SEEDS, RAID_DT, RAID_RANGE_CAP, FIRST_RAID_SIZE,
+  MEASURE_SEEDS, RAID_DT, RAID_RANGE_CAP, FIRST_RAID_SIZE, breacherDue,
 } from './raid.js';
 import { raidFor, allStructures, OUTPOST, structureDef } from '../data/outpost.js';
 import { UNITS, EFFECTIVENESS } from '../data/tables.js';
@@ -112,13 +112,35 @@ test('defenses start from their saved HP; a wreck is not placed; an unpowered gu
   assert.equal(res.defenses.find((d) => d.id === o.defenses[2].id).hp, 0, 'a wreck stays a wreck');
 });
 
-test('with the measured raids the starter kit holds 4–6 raids before a breach and the well defended set 7–9 (Verdance, design §5.2)', () => {
-  const step = 1;
-  const k = MEASURE_SEEDS.map((seed) => holdsBeforeBreach(stepOutpost('ground', step, { map, seed }), { map, step }));
-  const w = MEASURE_SEEDS.map((seed) => holdsBeforeBreach(wellDefended(stepOutpost('ground', step, { map, seed }), map), { map, step }));
-  assert.ok(median(k) >= 4 && median(k) <= 6, `kit holds ${median(k)} (seeds: ${k.join(' ')})`);
-  assert.ok(median(w) >= 7 && median(w) <= 9, `well defended holds ${median(w)} (seeds: ${w.join(' ')})`);
-  assert.equal(wellDefended(kit(), map).defenses.filter((d) => d.kind === 'mg').length, 2, 'well defended = the kit plus one Machine Gun');
+test('with the measured raids the starter set holds 4–6 raids before a breach and the well defended set 7–9, at every contract step (Verdance, design §5.2)', () => {
+  for (const step of [1, 2, 3]) {   // owner 2026-11-07: the same two sets at every step; later raids are smaller
+    const k = MEASURE_SEEDS.map((seed) => holdsBeforeBreach(stepOutpost('ground', step, { map, seed }), { map, step }));
+    const w = MEASURE_SEEDS.map((seed) => holdsBeforeBreach(wellDefended(stepOutpost('ground', step, { map, seed }), map), { map, step }));
+    assert.ok(median(k) >= 4 && median(k) <= 6, `step ${step}: starter holds ${median(k)} (seeds: ${k.join(' ')})`);
+    assert.ok(median(w) >= 7 && median(w) <= 9, `step ${step}: well defended holds ${median(w)} (seeds: ${w.join(' ')})`);
+  }
+  assert.equal(wellDefended(kit(), map).defenses.filter((d) => d.kind === 'mg').length, 2, 'well defended = the starter set plus one Machine Gun');
+});
+
+test('the breacher comes every Breacher_Every-th raid window, the same away and live (owner 2026-11-07)', () => {
+  const breachers = PLANETS.map((p) => raidFor(p, 1)).filter((r) => r.breacher);
+  assert.ok(breachers.length >= 2, 'Xenthe and Vexmire carry a breacher');
+  for (const r of breachers) {
+    assert.equal(r.breacherEvery, 2, `${r.planet}: every other raid`);
+    for (const w of [0, 1, 2, 3, 40, 41]) {
+      const units = raidUnits(r.planet, 1, w);
+      assert.equal(units.includes(r.breacher), w % 2 === 0, `${r.planet} window ${w}`);
+    }
+    // through createRaid: the raid's own window decides, so a live raid and the away hook bring the same raiders
+    const pmap = outpostMapFromForge(JSON.parse(fs.readFileSync(new URL(`../../content/maps/forge/${r.planet}-outpost.json`, import.meta.url), 'utf8')), r.planet);
+    const o = referenceOutpost(r.planet, { seed: 5, map: pmap, now: T0 });
+    for (const w of [6, 7]) {
+      const raid = createRaid(o, { window: w, at: T0, powered: powerGrids(o, pmap).powered }, { map: pmap, step: 1 });
+      assert.equal(raid.units.includes(r.breacher), w % 2 === 0);
+    }
+  }
+  for (const p of PLANETS) if (!raidFor(p, 1).breacher) assert.ok(raidUnits(p, 1, 0).every((u) => UNITS[u].lightGround));
+  assert.equal(breacherDue(null, 2), false, 'the scripted first raid has no window: never a breacher');
 });
 
 test('the scripted first raid is a probe the setup plus one Machine Gun and two walls holds (owner 2026-11-07)', () => {
@@ -137,6 +159,21 @@ test('the scripted first raid is a probe the setup plus one Machine Gun and two 
   ];
   for (const set of setups) for (const seed of seeds) assert.equal(run(set, seed), 'held', `${JSON.stringify(set)} seed ${seed}`);
   for (const seed of seeds) assert.equal(run([], seed), 'breach', 'with no defenses the probe walks in');
+});
+
+test('on every planet\'s own outpost map the scripted first raid is held by the setup plus one Machine Gun and two walls (O11)', () => {
+  for (const p of PLANETS.filter((q) => q !== 'ground')) {
+    const pmap = outpostMapFromForge(JSON.parse(fs.readFileSync(new URL(`../../content/maps/forge/${p}-outpost.json`, import.meta.url), 'utf8')), p);
+    const run = (defs, seed) => {
+      const o = referenceOutpost(p, { seed, map: pmap, now: T0 });
+      o.defenses = defs.map(([kind, cell], i) => ({ id: `d${i + 1}`, kind, tier: 1, cell, hp: structureDef(kind, 1).battle.hp }));
+      return createRaid(o, { at: T0, first: true, powered: powerGrids(o, pmap).powered }, { map: pmap, step: 1 }).finish().result;
+    };
+    for (const set of [[['mg', [42, 20]], ['wall', [38, 22]], ['wall', [39, 22]]], [['mg', [27, 13]], ['wall', [26, 14]], ['wall', [26, 15]]]]) {
+      for (const seed of [11, 222, 3333]) assert.equal(run(set, seed), 'held', `${p}: ${JSON.stringify(set)} seed ${seed}`);
+    }
+    assert.equal(run([], 11), 'breach', `${p}: with no defenses the probe walks in`);
+  }
 });
 
 test('the scripted first raid runs headless through advance with the real hook', () => {

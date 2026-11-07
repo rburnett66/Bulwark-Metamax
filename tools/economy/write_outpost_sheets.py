@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """write_outpost_sheets.py — put the outpost data into the map-data workbook [MM-story_mw5oe4ap_i].
 
-    python tools/economy/write_outpost_sheets.py      # writes Ores, Outpost_Structures, Outpost_Contracts, Outpost_Params
+    python tools/economy/write_outpost_sheets.py      # writes Ores, Outpost_Structures, Outpost_Contracts, Outpost_Tech, Outpost_Params
     python tools/extract_mapdata.py                   # → MAPDATA.ores / .outpostStructures / .outpostContracts / .outpostParams
     node tools/economy/outpost_model.mjs              # prints the derived tables (design §4)
 
@@ -87,6 +87,10 @@ STRUCTS = [
     ["resourceBay", 1, 2500, 2500, 300, 2, 0, 0, "", "", "", "", "resource_bay", "contract:1"],
     ["harvester", 1, 2000, 2000, 0, 0, 0, 0, "", "", "", "", "harvester", "contract:1"],
     ["upgradeBay", 1, 4000, 4000, 600, 1, 0, 0, "", "", "", "", "upgrade_bay", "contract:1"],
+    # Habitat (owner 2026-11-07, story O15): raises the gun cap (Gun_Cap + Habitat_Guns_Per_Tier x tier). Tier II is the
+    # upgrade of the one Habitat. It draws no power, so the gun cap never moves with the grid (design 6, 11).
+    ["habitat", 1, 3000, 3000, 600, 0, 0, 0, "", "", "", "", "habitat", "contract:1"],
+    ["habitat", 2, 5000, 5000, 900, 0, 0, 0, "", "", "", "", "habitat", "contract:1"],
     ["mg", 1, 600, 600, 120, 1, 0, 0, "", "", "", "STR-MG", "", "contract:1"],
     ["mg", 2, 1500, 1500, 120, 1, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
     ["mg", 3, 3000, 3000, 120, 1, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
@@ -137,7 +141,28 @@ PARAMS = [
     ["Shuttle_II_Bonus", 0.10, "share", "Cargo Shuttle II adds this to every sale"],
     ["Rig_Bay_Min", 15, "min", "a rig's own bay without a powered Storage Tower: this many minutes of its shallow output (owner 2026-11-07)"],
     ["Harvester_Cap", 2, "count", "harvesters an outpost may own once its Resource Bay is built (design 6: 2 to start)"],
-    ["Harvester_Max", 4, "count", "the most harvesters an outpost can ever hold (design 6: up to 4; raising the cap is O10)"],
+    ["Harvester_Max", 4, "count", "the most harvesters an outpost can ever hold (design 6: up to 4; Dock 3 / Dock 4 through the Upgrade Bay, O10)"],
+    ["Hopper_Hours", 4, "h", "the Resource Bay's hopper holds this many hours of its harvesters' gathering (design 6, O10)"],
+    ["Harvest_Route_Mult", 1.3, "x", "a harvester's drive is the straight line from the Resource Bay to its field times this (the ramps' detour, O10)"],
+    ["Harvest_Rate_Mult", 1, "x", "outpost harvesters gather at the battle harvest rate times this (1 = the battle's rate, design 6; tune here)"],
+    ["Surface_Respawn_Mult", 0.05, "x", "owner 2026-11-07: outpost surface fields regrow at 5% of the battle maps' rate (units per cell / Primary_Respawn_Sec); stock as a battle field (O10)"],
+    ["Gun_Cap", 3, "count", "guns (Machine Guns and Cannons; walls do not count) the hub crews without a Habitat (design 6, O15)"],
+    ["Habitat_Guns_Per_Tier", 2, "count", "guns each Habitat tier adds: Habitat I +2, Habitat II +4 (design 6, O15)"],
+]
+
+TECH_COLS = ["Node", "Name", "Price", "Effect", "Unlocked_By", "Requires", "Applies"]
+# The Outpost division of the tech tree (design 7, story O10). A contract step UNLOCKS a node (Outpost_Contracts
+# Unlocks, tech:<node>); the player then BUYS it with gold in the Tech Tree (tech plan D7: a mission unlocks, gold buys).
+# Prices are proposed defaults, sized to outpost income (a Rig I on iron earns 720 gold an hour). Applies: 'outposts' =
+# every outpost at once; 'upgradeBay' = a defense tier, installed only at an outpost with a finished Upgrade Bay.
+OUTPOST_TECH = [
+    ["deep_drilling_1", "Deep Drilling I", 3000, "rigs can mine the deep seam: 1/4 the speed, 5x the price", "contract 1", "", "outposts"],
+    ["supply_depot", "Supply Depot", 4000, "Storage Tower II: 8 hours per rig bay", "contract 1", "", "outposts"],
+    ["power_grid_2", "Power Grid II", 4000, "Power Station II: 20 power, 14-cell reach", "contract 1", "", "outposts"],
+    ["reinforced_walls", "Reinforced Walls", 2500, "walls to tier II (960 HP), installed in the Upgrade Bay", "contract 1", "", "upgradeBay"],
+    ["rig_mk2", "Rig Mk II", 6000, "Mining Rig II: 2x extraction and 2x bay", "contract 2", "deep_drilling_1", "outposts"],
+    ["sensor_spire", "Sensor Spire", 3500, "raid early warning: the outpost shows a raid inbound 10 minutes ahead", "contract 2", "", "outposts"],
+    ["cargo_shuttle_2", "Cargo Shuttle II", 10000, "+10% on every sale (still a manual tap)", "contract 3", "", "outposts"],
 ]
 
 
@@ -161,6 +186,12 @@ def main():
         "Deliver counts both grades of the step's ore; Raids_Held counts raids repelled while the step is active.",
         "",
     ], contract_rows())
+    write_sheet("Outpost_Tech", TECH_COLS, [
+        "The Outpost division of the tech tree (7 nodes)",
+        "Design 7. A contract step unlocks a node (Outpost_Contracts Unlocks); the player buys it in the Tech Tree. "
+        "Read by src/data/techtree.js through MAPDATA.outpostTech; counted on the Missions workbook's Economy sheet (Outpost line).",
+        "",
+    ], OUTPOST_TECH)
     write_sheet("Outpost_Params", PARAMS[0], [
         "Outpost tuning",
         "Design §4.1 (the owner's fixed numbers), §5, §8.5. Read by src/data/outpost.js as OUTPOST.",
