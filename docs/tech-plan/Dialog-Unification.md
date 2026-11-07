@@ -130,9 +130,9 @@ Epic: *Unify the dialog system*. These replace the open story `story_mw548j4g_v`
 | # | Story | DoD (summary) | Depends on |
 |---|---|---|---|
 | D0 | The dialog source doc in the repo | `bulwark-dialog-system.md` committed under `docs/16 Bulwark MM/design/`; `extract_dialog.py` defaults to it; a drift test like `contact.test.mjs` fails when `voicepacks.json` and the doc differ | Owner supplies the file (Q1, open) |
-| D1 | The opening on the comm card; duplicates deleted | F1, F2, F4. The opening plays as a comm scene with slides and offers its contract on `showContractModal`. `conversation*.js`, `contractCard.js` and the hand-written `opening.json` are deleted; the post-battle chain uses `playScene` | D3 (lines), D0 |
-| D2 | One character registry | F7. Givers gains the §5.1 columns, filled for the 81 from the voice packs and the doc; `characters.json` extracted; registry ↔ voice packs ↔ portraits test | D0 |
-| D3 | The Collective cast, tracked like the 81 | F5, F6. Nine registry rows and nine §10 entries (backstory, alignment, friends, enemies, phrases, voice profile, hub lines, portrait brief); the opening as a §10 scene; the Collective voice in `FACTIONS`; the Comm Array lists them; placeholder portraits made | D0, D2 |
+| D1 | The opening on the comm card; duplicates deleted | F1, F2, F4. The opening plays as a comm scene with slides and offers its contract on `showContractModal`. `conversation*.js`, `contractCard.js` and the hand-written `opening.json` are deleted; the post-battle chain uses `playScene` | D3 (lines) |
+| D2 | One character registry | F7. Givers gains the §5.1 columns, filled for the 81 from the voice packs and the doc; `characters.json` extracted; registry ↔ voice packs ↔ portraits test | — (reads `voicepacks.json` until D0 lands) |
+| D3 | The Collective cast, tracked like the 81 | F5, F6. Nine registry rows and nine §10 entries (backstory, alignment, friends, enemies, phrases, voice profile, hub lines, portrait brief); the opening as a §10 scene; the Collective voice in `FACTIONS`; the Comm Array lists them; placeholder portraits made | D2 |
 | D4 | Image descriptions and prompts for every placeholder | F8. `Portrait_Brief` for the 56 placeholder heroes and the 9 officers; the prompt sheet generated; `placeholder_portraits.py` reads the registry | D2, D3 |
 | D5 | Replies on the comm card | F3; Dialog-Response-Reputation R2 rebuilt on the card | D1 |
 
