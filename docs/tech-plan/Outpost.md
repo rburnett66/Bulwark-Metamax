@@ -52,7 +52,7 @@ Four new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edi
 
 | Sheet | Rows | Columns |
 |---|---|---|
-| `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Use` |
+| `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Rig_Head, Use` |
 | `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Build_Sec, Power_Draw, Power_Supply, Capacity, Rate_Mult, Defense_Power, Model, Unlock` |
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
 | `Outpost_Params` | ~12 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Raid_Wear 0.07, Raid_Strength 0.55, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20` |
@@ -234,12 +234,18 @@ New GLB models through the capital ship pipeline: built in headless Blender, thr
 |---|---|---|
 | `hub` | octagonal landing pad, two ramps, cargo pods on the deck, the parked shuttle (separate node) | 12k / 2k |
 | `power` | round station with an open top and a glowing core (emissive, pulses) | 8k / 1.5k |
-| `rig` | drill block, a laser emitter (separate node, aims at the deposit), ore-cart track | 9k / 1.5k |
+| `rig_base` | the pad footing, power socket and ore-cart track every rig shares | 3k / 0.5k |
+| `rig_head_auger`, `_laser`, `_brine`, `_crystal`, `_bore`, `_shielded` | the six extraction heads (design §8.4), each with its animated nodes (screw, beam emitter, pump arm, resonator arms, core barrel, canister arms) | 6–8k / 1–1.2k each |
 | `storage` | block with dish and antennas, a glass deck over the hologram (separate node: the fill bar) | 9k / 1.5k |
 | `harvesterBay` | garage with two bays, door open | 7k / 1.2k |
 | `upgradeBay` | hangar pad with two control towers and a small craft (separate node) | 10k / 1.8k |
 | `shuttle` | the small craft the hub launches on SELL (Cargo Shuttle II is a larger variant) | 3k / 0.6k |
-| tier II variants | the same base with added modules (larger core, second drill, extra tank) | +30 % |
+| tier II variants | power station and storage: the same base with added modules (larger core, extra tank) | +30 % |
+
+**Rig Mk II is not a separate model** (owner, design §8.4). It is the same base and head with three runtime changes:
+the `trim` and `glow_*` materials switch to the Mk II highlight colour (hot amber); the head's animation clips play
+at 2× with larger amplitudes (a `power` parameter on each head's animator, 1 for Mk I and 2 for Mk II); and the
+deposit's debris emitter runs at about 3× its particle rate with larger chunks. No new GLB is needed for Mk II.
 
 - **Material contract.** Matches the concept image: light grey and white panels, dark grey chamfered bases, orange
   trim, cyan emissive. The trim is its own material slot (`trim`), so each faction's colour can be set at load time
@@ -248,8 +254,11 @@ New GLB models through the capital ship pipeline: built in headless Blender, thr
   size of a battle aircraft.
 - **States.** Building (rises in steps with a cool tint, as towers do today), online, unpowered (emissive off),
   worn defenses (darkened, sparking), upgrading (warm tint). These follow `lifecycleLook` in `render3d/structures/models.js`.
-- **Animated nodes:** the reactor pulse, the rig laser (on while extracting, a beam to the deposit with sparks), the
-  storage hologram (its height is the fill), the shuttle (take-off arc on SELL), and harvesters and ore carts.
+- **Animated nodes:** the reactor pulse, each rig head's working motion (on while extracting, aimed at the deposit,
+  tinted with the ore's `Colour`), the storage hologram (its height is the fill), the shuttle (take-off arc on SELL),
+  and harvesters and ore carts.
+- **Which head:** the `Ores` sheet gains a `Rig_Head` column (auger, laser, brine, crystal, bore, shielded), filled
+  from the design's §8.4 table. Validation refuses a planet whose three ores share a head.
 
 ### 6.3 Conduits
 
@@ -282,7 +291,8 @@ Reduced motion: the pops and the count-up stay, and the shuttle and the splatter
 The other effects also reuse the battle's FX system (`render3d/fx`):
 
 - the shuttle's engine glow (`createEngineFx`);
-- the laser's sparks and dust at the deposit;
+- **mining debris** at each working deposit: rock chips, dust and ore chunks in the ore's colour, from the
+  world-impact particles; about 3× the rate and larger chunks under a Mk II rig;
 - raid fire, explosions and wrecks, from the battle;
 - on a breach, the storage tower's hologram drops by the lost quarter, with a burst of scattered ore.
 
@@ -334,13 +344,13 @@ reviewed outside Claude:
 | O2 | The outpost model: `advance`, sales, building, power, the raid schedule, the away raid rule, tests | A |
 | O3 | Contract 1: the grant aboard the ship, mission rows, the new gates, the kit, the captain's lines (Verdance) | A |
 | O4 | The Verdance outpost map, with the Forge's pad, deposit and conduit support and validation | A |
-| O5 | Models: hub, power station, mining rig, storage tower and shuttle (LODs, trim slot, states) | A |
+| O5 | Models: hub, power station, storage tower, shuttle, the rig base and Verdance's three rig heads (Auger Drill, Laser Cutter, Brine Pump); LODs, trim slot, states, the Mk II highlight and 2× animation | A |
 | O6 | The outpost view: scene, camera, conduits, deposits, effects, HUD, the SELL sequence (shuttle, ore splatter, "$N" pops), build and repair, away report, phone layouts | A |
 | O7 | Live raids with the battle sim on the outpost map, and the away rule calibrated against them | A |
 | O8 | Menu: OUTPOST replaces REPLAY LAST BATTLE; replays stored per battle; REPLAY on history cards | A |
 | O9 | Review page `tools/outpost/index.html` (built first, extended with each story) | A |
 | O10 | Harvester Bay and Upgrade Bay: models, behaviour, the Outpost tech nodes replacing the ghosts | B |
-| O11 | Outpost maps for the other eight planets, and the captains' outpost lines | B |
+| O11 | Outpost maps for the other eight planets, the remaining rig heads (Crystal Harvester, Deep Bore, Shielded Extractor), and the captains' outpost lines | B |
 | O12 | Ore icons (27) and deposit colours, with the resource icon pipeline | B |
 | O13 | Contracts 2 and 3: deep drilling in play, Rig Mk II, Cargo Shuttle II (+10 % sales) | B |
 

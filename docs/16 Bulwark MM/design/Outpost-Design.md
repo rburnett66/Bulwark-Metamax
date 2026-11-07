@@ -41,6 +41,9 @@ Status: owner decisions applied (Q1–Q7, 2026-11-06) · 2026-11-06 · Epic *Out
 > selling is always a manual tap with a cool shuttle animation, ore splatter, and a dollar value animation just like
 > in combat 6. When raids break through 25% of ore is lost. 7. Yes, I simplified to 3 for now.
 
+> The ore mining towers for different materials should be different designs, while the 2x miner simply uses a
+> different highlight color with an enhanced mining animation. More debris. *(owner, 2026-11-06, 16:53)*
+
 The first build is **the Verdance contract plus the Verdance outpost map** (Q1). The answers are applied throughout;
 §11 records them. ("sooner animation" in the reply is read as *shuttle* animation.)
 
@@ -109,7 +112,7 @@ gets several outposts, one per planet.
 | Contract | Ask | Unlocks |
 |---|---|---|
 | 1 — establish | outpost online; deliver 300 common ore; hold the first raid | the uncommon ore; Deep Drilling I |
-| 2 — expand | build a second Mining Rig on the uncommon deposit; deliver 150 uncommon ore | the rare ore; Rig Mk II |
+| 2 — expand | build a second Mining Rig on the uncommon deposit; deliver 150 uncommon ore | the rare ore; Rig Mk II (2× extraction) |
 | 3 — master | deliver 60 rare ore; hold 3 raids without a breach | Cargo Shuttle II (+10 % on every sale, §4.3); the planet's spacecraft blueprint (later, Ships division) |
 
 Only contract 1 is specified to build. Contracts 2 and 3 fix the direction and the unlock order; their numbers are
@@ -271,7 +274,7 @@ themselves. Defenses are placed freely on the outer ring, the way towers are pla
 |---|---|---|---|
 | **Outpost Hub** | centre: the octagonal landing pad with the ship, ramps | command and landing pad; the shuttle sells from here; must exist for anything else to run | I |
 | **Power Station** | top left: round building with the blue core | supplies power (§4.5) | I, II |
-| **Mining Rig** | bottom left: the drill with the crystal laser, ore carts on a track | built on an ore deposit; extracts that ore; shallow or deep (§4.4) | I, II |
+| **Mining Rig** | bottom left: the drill with the crystal laser, ore carts on a track | built on an ore deposit; extracts that ore; shallow or deep (§4.4). **A different design for each material** (§8.4) | I, II (2×) |
 | **Storage Tower** | bottom right: the building with the dish and the holographic floor | holds extracted ore; the hologram shows how full it is | I (4 h), II (8 h) |
 | **Harvester Bay** | left: the garage with the buggies | builds and runs surface harvesters on the outpost map, just like in battle; their resources go to the inventory | I |
 | **Upgrade Bay** | top right: the hangar pad with two control towers and a small craft | where Outpost-division tech upgrades are bought and installed; it also lets tech-tree tower upgrades apply to the outpost's defenses | I |
@@ -287,7 +290,7 @@ themselves. Defenses are placed freely on the outer ring, the way towers are pla
 | Upgrade Bay | 4,000 | 10 min |
 | Power Station II | 6,000 | 15 min |
 | Storage Tower II | 5,000 | 15 min |
-| Mining Rig II (+50 % speed) | 8,000 | 20 min |
+| Mining Rig II (2× extraction) | 8,000 | 20 min |
 | a defense | its battle price × 4 | 2 min |
 | repair | 10 % of the building's cost per 10 % integrity | instant |
 
@@ -303,7 +306,7 @@ with gold from the tech tree or from the Upgrade Bay; the Upgrade Bay is the out
 | Node | Effect | Unlocked by |
 |---|---|---|
 | Deep Drilling I | rigs can mine the deep seam (§4.4) | contract 1 |
-| Rig Mk II | Mining Rig II: +50 % extraction | contract 2 |
+| Rig Mk II | Mining Rig II: **2× extraction**, shown by its highlight colour (§8.4) | contract 2 |
 | Supply Depot | Storage Tower II: 8 hours | contract 1 |
 | Power Grid II | Power Station II: 20 power | contract 1 |
 | Reinforced Walls | the kit's walls upgraded; raid wear 7 % → 4 % | contract 1 |
@@ -338,6 +341,46 @@ colour takes the faction's colour. The concept's orange is Verdance's default.
 Three deposits per map, one per tier, drawn as ore outcrops in each ore's colour. The concept shows the rare
 deposits as blue and violet crystal clusters. A deposit with a rig on it shows the cut and the laser; a locked tier
 (not yet unlocked by a contract) shows as a dim outcrop with a lock.
+
+### 8.4 Mining rigs: one design per material
+
+The owner's direction: the mining towers for different materials are **different designs**. A rig is a shared
+base (the pad footing, the power socket and the ore-cart track to storage) with an **extraction head** that shows
+how that material comes out of the ground. There are six heads, and every ore has one. On every planet the three
+ores use three different heads, so the three rigs of one outpost never look alike.
+
+| Head | How it works, on screen | Ores |
+|---|---|---|
+| **Auger Drill** | a heavy screw drill hammering into the rock; ore chunks ride a conveyor into the carts | Iron, Copper, Nickel, Manganese, Zinc, Thorium, Neodymium, Phosphorus |
+| **Laser Cutter** | the concept's rig: a beam slices the outcrop, cut blocks drop onto the track | Aluminum, Magnesium, Chromium, Titanium |
+| **Brine Pump** | a pump derrick with tanks; the ore comes up as glowing fluid and drains into evaporation trays | Lithium, Boron, Sulfur, Helium-3 |
+| **Crystal Harvester** | resonator arms ring the crystal cluster until shards break off and float into a collector | Silicon, Yttrium, Iridium |
+| **Deep Bore** | a tall derrick lowering a core barrel; cores come up and are split on the deck | Cobalt, Gallium, Tungsten, Vanadium, Platinum, Palladium, Europium |
+| **Shielded Extractor** | a sealed dome with warning lights; robotic arms move lead-lined canisters | Uranium |
+
+| Planet | Common | Uncommon | Rare |
+|---|---|---|---|
+| Verdance | Iron: Auger Drill | Aluminum: Laser Cutter | Lithium: Brine Pump |
+| Florael | Magnesium: Laser Cutter | Boron: Brine Pump | Cobalt: Deep Bore |
+| Ochre | Silicon: Crystal Harvester | Copper: Auger Drill | Gallium: Deep Bore |
+| Kessra | Nickel: Auger Drill | Chromium: Laser Cutter | Tungsten: Deep Bore |
+| Rime | Manganese: Auger Drill | Titanium: Laser Cutter | Vanadium: Deep Bore |
+| Cinder | Zinc: Auger Drill | Platinum: Deep Bore | Iridium: Crystal Harvester |
+| Lumen | Thorium: Auger Drill | Uranium: Shielded Extractor | Helium-3: Brine Pump |
+| Xenthe | Neodymium: Auger Drill | Yttrium: Crystal Harvester | Europium: Deep Bore |
+| Vexmire | Sulfur: Brine Pump | Phosphorus: Auger Drill | Palladium: Deep Bore |
+
+Every head also takes the ore's colour on its working parts (the beam, the fluid, the cores, the shards), so two
+Auger Drills on different planets still read as different materials.
+
+**Rig Mk II is the same design, not a new model** (owner). It is the 2× miner, and it reads as stronger through:
+
+- **a different highlight colour:** its trim lights and emissive edges switch from the base cyan to **hot amber**,
+  so a Mk II rig is recognisable from across the mesa;
+- **an enhanced mining animation:** the head works at double tempo with a heavier rhythm (bigger drill strokes, a
+  wider beam, a faster pump stroke, quicker resonance pulses), and the ore carts leave twice as often;
+- **more debris:** about three times the particles at the deposit: rock chips, dust plumes and ore chunks in the
+  ore's colour, bouncing off the pad. The debris is the clearest sign of the doubled output.
 
 ## 9. The outpost map, per planet
 
