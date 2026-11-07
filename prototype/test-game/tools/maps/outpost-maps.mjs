@@ -61,12 +61,15 @@ export const OUTPOST_LAYOUTS = {
       { tier: 'uncommon', x: 42, y: 14, pad: 'r2' },
       { tier: 'rare', x: 15, y: 19, pad: 'r3' },
     ],
-    // design §2.3: a Cannon, a Machine Gun and a wall ring — the cannon covers the west ramp, the MG the south ramp,
-    // and the walls flank both ramp heads
+    // design §2.3: a Cannon, a Machine Gun and a wall ring — the cannon covers the west ramp, the MG the south ramp and
+    // the mesa's south-east corner. The walls CLOSE the ways onto the mesa (O7, measured on the raid sim): walls that
+    // only flank a ramp let a lone tier I troop walk past the guns to the hub, 1–2 cells from the ramp head. They
+    // close the west ramp head (26,14–15), the south ramp head (38–39,22) and the south-east corner (43,21)+(44,20),
+    // where the battle's baked cliff (buildTerrainMap's bake warp) opens the rim cell (44,21) to the lowland.
     kitDefenses: [
       { kind: 'cannon', cell: [27, 13] },
-      { kind: 'mg', cell: [40, 21] },
-      ...[[26, 12], [26, 13], [26, 16], [26, 17], [37, 22], [40, 22]].map((cell) => ({ kind: 'wall', cell })),
+      { kind: 'mg', cell: [42, 20] },
+      ...[[26, 14], [26, 15], [38, 22], [39, 22], [43, 21], [44, 20]].map((cell) => ({ kind: 'wall', cell })),
     ],
     lanes: [{ x: 0, y: 6, lane: 'ground' }, { x: 63, y: 26, lane: 'ground' }],
   },

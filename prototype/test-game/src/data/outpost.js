@@ -58,6 +58,20 @@ export function contractFor(planet, step) {
 }
 
 /**
+ * A planet's raid at a contract step (Outpost_Raids, measured by tools/economy/outpost_raids.mjs; design §5.2):
+ * { planet, step, units: [unit ids, cycled in spawn order], size, farDayBump }, or null when the data has none.
+ */
+export function raidFor(planet, step = 1) {
+  const r = (MAPDATA.outpostRaids || []).find((x) => x.Planet_Key === planet);
+  if (!r) return null;
+  const s = Math.max(1, Math.min(3, step | 0 || 1));
+  return Object.freeze({
+    planet, step: s, units: Object.freeze(String(r.Units || '').split(/\s+/).filter(Boolean)),
+    size: num(r[`Size_Step${s}`]), farDayBump: num(r.Far_Day_Bump),
+  });
+}
+
+/**
  * Power budget of a set of buildings, ignoring reach: [{ kind, tier }] → { supply, draw, spare }. Reach and grid
  * pooling need the map (powerGrids in src/outpost/model.js); this is the whole-outpost sum the design quotes
  * ("the kit draws 9 of the first station's 10").

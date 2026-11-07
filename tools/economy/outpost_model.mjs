@@ -7,9 +7,10 @@
 // Reads MAPDATA through the game's own readers (src/data/ores.js, src/data/outpost.js), so what it prints is what the
 // game will run. The design's tables (Outpost-Design §4.2 rates and bays, §4.4 deep drilling, §4.5 power, §2.4 the
 // contract ladder) come from here: retune the workbook, re-extract, re-run, and check the consequences before play.
-// Raid sizes (§5.2) are measured by running the battle sim once the outpost model exists (tech plan §4.3, story O2/O3).
+// Raid sizes (§5.2) are measured on the battle sim by tools/economy/outpost_raids.mjs (tech plan §4.3, story O7);
+// this prints what the data holds (Outpost_Raids → raidFor).
 import { oresOf, oreValuePerHour, oreRatePerMin, orePrice, ORE_TIERS } from '../../prototype/test-game/src/data/ores.js';
-import { OUTPOST, KIT, structureDef, powerBudget, bayUnits, loadUnits, contractFor } from '../../prototype/test-game/src/data/outpost.js';
+import { OUTPOST, KIT, structureDef, powerBudget, bayUnits, loadUnits, contractFor, raidFor } from '../../prototype/test-game/src/data/outpost.js';
 
 const PLANETS = ['ground', 'air', 'hightech', 'artillery', 'water', 'arcane', 'space', 'dark', 'greenies'];
 const only = process.argv[2];
@@ -44,4 +45,7 @@ for (const p of PLANETS.filter((x) => !only || x === only)) {
       const tags = [...c.unlocks.ores.map((t) => `${t} ore`), ...c.unlocks.techs, ...(c.unlocks.farBuyer ? ['far buyer'] : [])];
       return [s, c.title, `${c.deliver} ${o.name}`, hours, c.raidsHeld, `${fmt(c.deliver * o.price)} + ${fmt(c.gold)}, +${c.loyalty} loyalty, ${c.xp} XP`, tags.join(', ')];
     }));
+  const raids = [1, 2, 3].map((s) => raidFor(p, s));
+  if (raids[0]) table(['Raiders (Units, cycled)', 'Size, step 1', 'Size, step 2', 'Size, step 3', 'Far-buyer day bump'],
+    [[raids[0].units.join(' '), ...raids.map((r) => r.size), raids[0].farDayBump]]);
 }

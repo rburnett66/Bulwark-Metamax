@@ -54,7 +54,7 @@ Five new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edi
 |---|---|---|
 | `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Rig_Head, Wanted_By, Use` |
 | `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Value, Build_Sec, Power_Draw, Power_Supply, Power_Reach, Bay_Hours, Rate_Mult, Capacity_Mult, Battle_Struct, Model, Unlock` — `Battle_Struct` names the `STRUCTURES` entry a defense takes its stats from (`STR-MG`, `STR-Cannon`, `STR-Wall`) |
-| `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Size_Step1, Size_Step2, Size_Step3, Far_Day_Bump` — sizes measured by `outpost_model.mjs` (§4.3) |
+| `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Size_Step1, Size_Step2, Size_Step3, Far_Day_Bump, Measured_On` — sizes measured by `outpost_raids.mjs` (§4.3, as built O7) |
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
 | `Outpost_Params` | ~12 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20, Far_Buyer_Mult 2, Far_Loyalty_Cost 1` |
 
@@ -185,6 +185,45 @@ contract holds.
   about 8 (design §5.2). It writes `Size_Step1..3` to the `Outpost_Raids` sheet. A retune of any tower or unit in
   `tables.js` is followed by re-running it.
 
+**As built (O7).** `src/outpost/raid.js` (its header is the contract with the view, O6):
+`runRaid(outpost, raid, { map, step })` → `{ result, defenses: [{ id, hp }], events, ticks, timedOut }`;
+`createRaid(…)` → `{ state, tick(), step(seconds), finish(), done, result(), defenseIds, buildingPads, lanes }` for the
+live view (fixed `FIXED_DT` ticks, so any frame timing then `finish()` gives runRaid's result, tested);
+`makeRaidHook({ map, step })` is `ctx.raid` for `advance`. Where it differs from the sketch above:
+
+- **The board is the battle board.** The outpost map's Forge export goes through `buildTerrainMap` with the default
+  bake tune, as `main.js` loads a battle map (built once per map and cached); then the base is put on the hub, the one
+  wave comes down the map's ground spawns (the first lane drawn from the raid seed, then alternating), surface
+  resources and wave windows are dropped, the hub's super-cannon is off, and finished buildings' pads are solid. The
+  draft layout (no terrain) gets an open board.
+- **Raiders fire on the defenses they pass** (`engagesStructuresWhileAdvancing` set on raid units only): battle
+  attackers ignore towers, so without it a defense would never wear and "damage carries over" would mean nothing.
+  Water's swimmers walk (an outpost has no water lane).
+- **Walls may close the ramps**, unlike a battle's placement rule. A raider the router leaves with no open route
+  marches on the hub up to the first defense in its way and shoots it until it falls (siege). The Verdance kit's walls
+  were moved to close the three ways onto the mesa (`tools/maps/outpost-maps.mjs` and the shipped map): measured, walls
+  that only flank a ramp let a single tier I troop walk past both guns to the hub, which sits 1–2 cells from the ramp
+  heads. The third way is the mesa's south-east corner, (44, 21): the battle's bake warp opens that rim cell, which the
+  Forge grid has as cliff. The kit's MG moved to (42, 20) to cover it and the south ramp.
+- **A breach** is a raider on the mesa top within 0.75 cells of a finished, non-remote pad (the hub included); below
+  the cliff does not count. A raid undecided after 300 s is held (`timedOut`).
+- **Unpowered guns** (not in `raid.powered`) are placed but inert; wrecks (HP 0) are not placed.
+- **"Well defended"** is the design's: the kit plus one Machine Gun, on the free powered mesa-top cell nearest the kit's
+  Cannon (`wellDefended`; beside the MG measured no better).
+- **Measurement:** `node tools/economy/outpost_raids.mjs --write` is the whole pipeline (measure → `write_outpost_raids.py`
+  → `extract_mapdata.py` → `MAPDATA.outpostRaids` → `raidFor(planet, step)`); `outpost_model.mjs` prints what the data
+  holds. Median over 7 outpost seeds, 20 raids at most, no repairs. Only Verdance has an outpost map; the other eight
+  planets are measured on it with their own units. Units are `<prefix>-Troops <prefix>-Troops <prefix>-Tanks` cycled.
+  **Re-run it whenever the map changes** (it takes about 15 s for Verdance, 15 min for all nine).
+- **Measured (2026-11-07, the 64 × 32 Verdance map): every planet and step is size 1** (one troop), the smallest raid
+  there is. Kit / well defended medians, step 1: Verdance 4 / 5, Florael 5 / 5, Kessra 5 / 5, Cinder 5 / 5, Ochre 8 / 8,
+  Rime 8 / 8, Lumen 9 / 9, Xenthe and Vexmire 20+ / 20+ (their Toxic troops do almost nothing to a wall, so a closed
+  outpost is never breached). The kit's "about 5" holds; **the well defended set's "about 8" does not**: raids take
+  either lane, a breach anywhere ends the count, and one extra gun can only cover one way in (the ways in are 17 cells
+  apart, the MG's range is 5). Size is an integer and already 1, so it cannot close the gap. Owner decision needed:
+  define "well defended" as one extra gun per way in, or the kit plus an MG and two walls, or accept about 5 for it;
+  and whether Toxic raiders should get a wall-breaking answer.
+
 ### 4.4 Tests (`src/outpost/model.test.mjs`)
 
 - 4 hours on the starter kit fills 720 iron; 5 minutes is a 15-unit load; deep fills in 16 hours.
@@ -209,6 +248,12 @@ contract holds.
 **As built (O2):** every item above is tested except those that need the battle sim (measured raid sizes and the
 4–6 / 7–9 hold counts, raid determinism live vs headless, raid composition, the scripted first raid run headless).
 Those move to O7, with `ctx.raid`.
+
+**As built (O7):** those items are in `src/outpost/raid.test.mjs` (9 tests), on the real Verdance outpost map: raid
+composition and outpost defenses, determinism (headless twice, and stepped live with uneven frame times then finished
+headless), saved HP / wrecks / unpowered guns, the scripted first raid through `advance` with `makeRaidHook`, and a
+breach's 25 % loss through `advance`. The kit's 4–6 holds is asserted; the well defended set's 7–9 is a `todo` test,
+because it is not reached (§4.3 as built). Only Verdance has an outpost map, so the hold counts are tested there.
 
 ## 5. The contract and the missions
 
@@ -506,6 +551,11 @@ O9 starts with O2 so every later story is reviewable outside Claude as it lands.
   battles; a 1 MB budget in `replays.js` drops the oldest when long battles would pass it.*
 - **Catch-up cost.** 72 hours away is at most 24 raids, each a short headless sim of a few light units. O2 measures
   the catch-up time on a phone-class CPU and caps it under 200 ms, or spreads it across frames behind the away report.
+  *Measured (O7, node on the dev container, Verdance, one-troop raids, no repairs): 72 h away is 10–24 raids and takes
+  36–330 ms warm, about 600 ms on the first open (the one-time terrain bake and JIT warm-up); a raid is 4–40 ms. Over
+  the 200 ms budget, so O6 spreads catch-up across frames: `advance` is exact when cut into pieces, so the view can
+  advance one raid window per frame behind the away report. A raid that times out (Toxic raiders at a closed wall) runs
+  the full 300 s of sim and is the worst case.*
 - **Model budget.** Six buildings plus the map must hold the battle view's frame time on the low tier. O6 measures
   frame time on the review page's low tier with the full kit and a live raid.
 

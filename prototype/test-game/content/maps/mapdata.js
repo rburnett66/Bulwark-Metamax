@@ -5859,5 +5859,88 @@ export const MAPDATA = {
   "Defense_Price_Mult": 4,
   "Repair_Share_Per_HP": 1,
   "Shuttle_II_Bonus": 0.1
- }
+ },
+ "outpostRaids": [
+  {
+   "Planet_Key": "ground",
+   "Units": "GND-Troops GND-Troops GND-Tanks",
+   "Size_Step1": 1,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "air",
+   "Units": "AIR-Troops AIR-Troops AIR-Tanks",
+   "Size_Step1": 1,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "hightech",
+   "Units": "HTC-Troops HTC-Troops HTC-Tanks",
+   "Size_Step1": 1,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "artillery",
+   "Units": "ART-Troops ART-Troops ART-Tanks",
+   "Size_Step1": 1,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "water",
+   "Units": "WTR-Troops WTR-Troops WTR-Tanks",
+   "Size_Step1": 1,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "arcane",
+   "Units": "ARC-Troops ARC-Troops ARC-Tanks",
+   "Size_Step1": 1,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "space",
+   "Units": "SPC-Troops SPC-Troops SPC-Tanks",
+   "Size_Step1": 1,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "dark",
+   "Units": "DRK-Troops DRK-Troops DRK-Tanks",
+   "Size_Step1": 1,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  },
+  {
+   "Planet_Key": "greenies",
+   "Units": "GRN-Troops GRN-Troops GRN-Tanks",
+   "Size_Step1": 1,
+   "Size_Step2": 1,
+   "Size_Step3": 1,
+   "Far_Day_Bump": 1,
+   "Measured_On": "ground-outpost"
+  }
+ ]
 };

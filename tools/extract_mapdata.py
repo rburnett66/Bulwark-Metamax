@@ -219,6 +219,40 @@ def outpost_problems(data):
     for p in OUTPOST_PARAMS:
         if not isinstance(data["outpostParams"].get(p), (int, float)):
             out.append(f"Outpost_Params: missing or non-numeric {p}")
+    out += raid_problems(data, planets)
+    return out
+
+
+# The raiders' unit kinds (owner: troops and low-end tanks only). The sheet holds unit ids; that each is lightGround
+# and spawned at tier I is checked against UNITS by src/outpost/raid.test.mjs (the battle tables live in JS).
+RAID_UNIT_KINDS = ("Troops", "Tanks")
+
+
+def raid_problems(data, planets):
+    """Outpost_Raids (tech plan Outpost §3.1): one row per planet, the faction's own troops / assault tanks, positive
+    whole sizes per contract step."""
+    out, rows = [], data["outpostRaids"]
+    if not rows:
+        return ["Outpost_Raids: the sheet is missing or empty (run node tools/economy/outpost_raids.mjs --write)"]
+    keys = [r.get("Planet_Key") for r in rows]
+    if sorted(keys) != sorted(planets):
+        out.append(f"Outpost_Raids: expected one row per planet {sorted(planets)}, got {sorted(map(str, keys))}")
+    for r in rows:
+        tag = f"Outpost_Raids {r.get('Planet_Key')}"
+        units = str(r.get("Units") or "").split()
+        if not units:
+            out.append(f"{tag}: no Units")
+        prefixes = {u.split("-", 1)[0] for u in units}
+        if len(prefixes) > 1:
+            out.append(f"{tag}: Units mix factions {sorted(prefixes)} (raiders are the planet's own dissidents)")
+        for u in units:
+            if "-" not in u or u.split("-", 1)[1] not in RAID_UNIT_KINDS:
+                out.append(f"{tag}: unit {u!r} is not a troop or an assault tank (owner: tier I light ground only)")
+        sizes = [r.get(f"Size_Step{i}") for i in (1, 2, 3)]
+        if not all(isinstance(v, int) and v > 0 for v in sizes):
+            out.append(f"{tag}: Size_Step1..3 must be positive whole numbers, got {sizes}")
+        if not (isinstance(r.get("Far_Day_Bump"), int) and r["Far_Day_Bump"] >= 0):
+            out.append(f"{tag}: Far_Day_Bump must be a whole number >= 0")
     return out
 
 
@@ -251,6 +285,9 @@ def main():
         "outpostContracts": sheet_rows(wb["Outpost_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
                                        header_row_probe=("Planet_Key",)),
         "outpostParams": params_map(wb["Outpost_Params"]),
+        # raid sizes per planet and contract step, measured on the battle sim [MM-story_mw5oegk1_o] (tech plan §4.3)
+        "outpostRaids": sheet_rows(wb["Outpost_Raids"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                   header_row_probe=("Planet_Key",)) if "Outpost_Raids" in wb.sheetnames else [],
     }
 
     apply_rework(data)
@@ -307,7 +344,8 @@ def main():
           f"factions={len(data['factions'])} params={len(data['globalParams'])} "
           f"collectiveContracts={len(data['collectiveContracts'])} rareContracts={len(data['rareContracts'])}")
     print(f"   ores={len(data['ores'])} outpostStructures={len(data['outpostStructures'])} "
-          f"outpostContracts={len(data['outpostContracts'])} outpostParams={len(data['outpostParams'])}")
+          f"outpostContracts={len(data['outpostContracts'])} outpostParams={len(data['outpostParams'])} "
+          f"outpostRaids={len(data['outpostRaids'])}")
 
 
 if __name__ == "__main__":
