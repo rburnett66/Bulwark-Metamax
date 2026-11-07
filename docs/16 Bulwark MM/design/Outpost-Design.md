@@ -1,6 +1,6 @@
 # Outposts and Mining — design
 
-Status: draft for owner review · 2026-11-06 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
+Status: owner decisions applied (Q1–Q7, 2026-11-06) · 2026-11-06 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
 · Tech plan: `docs/tech-plan/Outpost.md` · Concept art: the owner's outpost image (2026-11-06), described in §8
 
 ![Outpost concept (owner, 2026-11-06)](outpost/outpost-concept.jpg)
@@ -35,8 +35,14 @@ Status: draft for owner review · 2026-11-06 · Epic *Outposts and mining* (init
 > materials and power stations. We should be able to fill in the rest of the planets. These resources will sell for
 > gold to be used to construct Outposts, mining equipment, and eventually spacecraft.
 
-One sentence of the request was cut off: "Let's get the contract in place with the new map and this would …".
-This design assumes the first build is **the Verdance contract plus the Verdance outpost map** (§11, Q1).
+### Owner decisions (2026-11-06)
+
+> 1. Yes, 2. Ground defenses cannon and machine gun, and walls 3. Raise the price 4. Ores are good 5. Harvesting ore
+> selling is always a manual tap with a cool shuttle animation, ore splatter, and a dollar value animation just like
+> in combat 6. When raids break through 25% of ore is lost. 7. Yes, I simplified to 3 for now.
+
+The first build is **the Verdance contract plus the Verdance outpost map** (Q1). The answers are applied throughout;
+§11 records them. ("sooner animation" in the reply is read as *shuttle* animation.)
 
 ## 1. What the outpost is
 
@@ -87,7 +93,7 @@ not be lost.
 | | Verdance, contract 1: *Iron for the Oath* |
 |---|---|
 | Granted | aboard *Halbrecht's Oath*, first visit |
-| Kit | Outpost Hub, Power Station I, Mining Rig I, Storage Tower I, 2 Sentry Guns (Q2) |
+| Kit | Outpost Hub, Power Station I, Mining Rig I, Storage Tower I, and the ground defenses: a Cannon, a Machine Gun and a wall ring (Q2) |
 | Step 1 | **Establish the outpost on Verdance.** All four buildings are placed on their pads, the rig sits on the iron deposit, and every building is powered. The outpost reads ONLINE. |
 | Step 2 | **Deliver 300 iron to the Oath.** That is 20 shuttle loads, about 100 minutes of the starter rig. |
 | Step 3 | **Hold the outpost through its first raid.** The first raid is scripted for 10 minutes after the outpost comes online, so it arrives while the player is watching (§5.3). |
@@ -104,7 +110,7 @@ gets several outposts, one per planet.
 |---|---|---|
 | 1 — establish | outpost online; deliver 300 common ore; hold the first raid | the uncommon ore; Deep Drilling I |
 | 2 — expand | build a second Mining Rig on the uncommon deposit; deliver 150 uncommon ore | the rare ore; Rig Mk II |
-| 3 — master | deliver 60 rare ore; hold 3 raids without a breach | Cargo Shuttle II (auto-sell, §4.3); the planet's spacecraft blueprint (later, Ships division) |
+| 3 — master | deliver 60 rare ore; hold 3 raids without a breach | Cargo Shuttle II (+10 % on every sale, §4.3); the planet's spacecraft blueprint (later, Ships division) |
 
 Only contract 1 is specified to build. Contracts 2 and 3 fix the direction and the unlock order; their numbers are
 set with the ore table once contract 1 has been played.
@@ -139,7 +145,7 @@ Iron and Ochre's Copper.
 
 - **A shuttle load every 5 minutes.** A load is 5 minutes of what the outpost extracts.
 - **Storage holds 4 hours.** Storage Tower I holds 4 hours of the starter rig.
-- **Deep ore: ¼ the speed, 3× the price.**
+- **Deep ore: ¼ the speed, a higher price** (Q3: raised to 5×).
 - **Up to 2 days without new construction** for a well defended outpost.
 
 ### 4.2 Extraction rates and prices (proposed defaults)
@@ -162,31 +168,43 @@ roughly one good battle. It is meaningful, but it does not replace playing. The 
 
 ### 4.3 Selling
 
+Selling is **always a manual tap** (Q5). There is no automatic selling at any tier.
+
 - When the storage holds at least one load, the hub shows **LOADS READY**, and the menu's OUTPOST button gets a red
   dot.
-- **SELL** launches the shuttle from the hub's landing pad. It sells every full load in storage to the planet's
-  capital ship and plays the take-off. A partial load stays.
+- **SELL** sells every full load in storage to the planet's capital ship. A partial load stays. The tap plays the
+  sale the way combat plays a harvester delivery:
+  1. the storage tower's hologram drains and the ore crates ride the conduit to the landing pad;
+  2. the shuttle lifts off the hub with a burst of **ore splatter**, chunks of the ore in its colour spraying from
+     the cargo bay;
+  3. the **"$N" pops** over the hub, the same pop, rise and fade as a kill's bounty or a harvester's delivery in
+     battle (`overlays/goldPopups.js`), one per load, stacking upward and in the ore's colour;
+  4. the shuttle arcs up and out of frame, and the gold counter in the HUD counts up.
 - The buyer is the planet's own faction ship, at the contract price while a contract is active and the market price
   after. The defaults set both to the table price.
 - When storage is full the rig stops; nothing is lost, it just stops earning. The menu shows **STORAGE FULL** on the
   OUTPOST button.
-- **Cargo Shuttle II** (contract 3) sells full loads automatically every 5 minutes, even while the player is away.
-  Until then selling is the player's action, which is what brings them back.
+- **Cargo Shuttle II** (contract 3) is a bigger shuttle that pays **+10 %** on every sale. It still sells only on a
+  tap.
 
 ### 4.4 Deep drilling
 
 **Deep Drilling I** (the contract 1 unlock, then bought in the Upgrade Bay) lets a rig switch to its deposit's
-**deep seam**: the same ore at a higher grade (*Iron, deep grade*), extracted at **¼ the speed** and sold at **3×
-the price**.
+**deep seam**: the same ore at a higher grade (*Iron, deep grade*), extracted at **¼ the speed** and sold at **5×
+the price** (Q3: the owner raised it from 3×).
 
-The owner's numbers make deep ore worth **0.75× per hour** (¼ × 3). It earns less per hour and fills storage four
-times slower: 16 hours to fill Storage Tower I instead of 4. So deep drilling is the **overnight setting**. A player
-who checks in every few hours runs shallow for the most gold; a player going to bed or to work switches deep, and
-the outpost keeps earning until the next morning instead of stopping full at hour 4. The switch is one tap per rig,
-and the rig keeps its setting.
+Deep ore earns **1.25× per hour** (¼ × 5) and fills storage four times slower: 16 hours to fill Storage Tower I
+instead of 4. So the upgrade is a straight improvement, and it suits both kinds of player: more gold per hour, and
+an outpost that keeps earning overnight instead of stopping full at hour 4.
 
-If the owner meant deep ore to earn *more* per hour, the change is one number: 3× → 5× makes it 1.25× per hour
-(Q3).
+| Deep grade, Rig I | Speed | Price | Gold per hour | Hours to fill Storage I |
+|---|---|---|---|---|
+| Iron | 0.75 / min | 20 | 900 | 16 |
+| Aluminum | 0.375 / min | 60 | 1,350 | 32 |
+| Lithium | 0.2 / min | 150 | 1,800 | 60 |
+
+The switch is one tap per rig, and the rig keeps its setting. Shallow stays useful when a contract asks for
+quantity: deliveries count units, and deep ore delivers a quarter as many.
 
 ### 4.5 Power
 
@@ -199,8 +217,8 @@ an unpowered building stops. Power is what limits how much a player can build be
 | Mining Rig | 4 | | Upgrade Bay | 1 |
 | Storage Tower | 1 | | each defense | 1 |
 
-Power Station I supplies **10**. The kit (hub, rig, storage, 2 sentries) draws 9, so the player has room for one
-more small building. Power Station II supplies 20.
+Walls draw no power. Power Station I supplies **10**. The kit (hub, rig, storage, cannon, machine gun) draws 9, so
+the player has room for one more small building. Power Station II supplies 20.
 
 ## 5. Raids
 
@@ -219,15 +237,15 @@ out of scope here.
   and count as construction.
 - The outpost's **defense rating** is the sum of its defenses' power times their integrity. A raid **breaches** when
   the rating falls below the raid's strength.
-- **A breach** disables the Mining Rig and destroys 25 % of what is in storage. The rig stays down until the player
-  repairs it.
+- **A breach** loses **25 % of the ore in storage** (Q6). Nothing else breaks: the buildings keep running. Every
+  breach while the defenses stay worn loses another quarter, which is the cost of leaving them unrepaired.
 
 Proposed tuning that matches "up to 2 days":
 
 | Outpost | Rating at start | Raids held before the first breach | Hours, at one raid per 6 h |
 |---|---|---|---|
 | Well defended (4 defenses, walls) | 1.00 | 8 | ~48 |
-| Starter kit (2 sentries) | 0.80 | 5 | ~30 |
+| Starter kit (cannon, machine gun, walls) | 0.80 | 5 | ~30 |
 | No defenses | 0 | 0 | the first raid breaches |
 
 Raid strength is 0.55 of a well defended outpost's rating and does not grow over time. Building or repairing
@@ -240,8 +258,8 @@ anything resets the worn defenses, so the 2-day clock is about how long the play
   REPAIR, but cannot build during a raid. The first contract's raid is scripted to arrive this way, 10 minutes after
   the outpost comes online.
 - **While the player is away,** raids are resolved by the rating rule above.
-- **Back in the outpost view,** a **while you were away** report lists what was extracted, any automatic sales, each
-  raid (repelled or breached, with the wear) and anything that needs repair.
+- **Back in the outpost view,** a **while you were away** report lists what was extracted, each raid (repelled, or
+  breached with the ore lost) and the defenses' wear.
 
 ## 6. The buildings
 
@@ -257,13 +275,13 @@ themselves. Defenses are placed freely on the outer ring, the way towers are pla
 | **Storage Tower** | bottom right: the building with the dish and the holographic floor | holds extracted ore; the hologram shows how full it is | I (4 h), II (8 h) |
 | **Harvester Bay** | left: the garage with the buggies | builds and runs surface harvesters on the outpost map, just like in battle; their resources go to the inventory | I |
 | **Upgrade Bay** | top right: the hangar pad with two control towers and a small craft | where Outpost-division tech upgrades are bought and installed; it also lets tech-tree tower upgrades apply to the outpost's defenses | I |
-| **Defenses** | not in the picture | the battle game's towers (Sentry Gun = Machine Gun tower, Cannon, Flak) and walls, at the tiers the player owns | from the tech tree |
+| **Defenses** | not in the picture | the battle game's ground defenses: Cannon, Machine Gun and walls (Q2), at the tiers the player owns | from the tech tree |
 
 ### 6.1 Costs (proposed defaults)
 
 | Building | Cost | Build time |
 |---|---|---|
-| Outpost Hub, Power Station I, Mining Rig I, Storage Tower I, 2 Sentries | free (contract kit) | instant |
+| Outpost Hub, Power Station I, Mining Rig I, Storage Tower I, Cannon, Machine Gun, wall ring | free (contract kit) | instant |
 | second Mining Rig I | 3,000 | 5 min |
 | Harvester Bay | 2,500 | 5 min |
 | Upgrade Bay | 4,000 | 10 min |
@@ -288,9 +306,9 @@ with gold from the tech tree or from the Upgrade Bay; the Upgrade Bay is the out
 | Rig Mk II | Mining Rig II: +50 % extraction | contract 2 |
 | Supply Depot | Storage Tower II: 8 hours | contract 1 |
 | Power Grid II | Power Station II: 20 power | contract 1 |
-| Outpost Walls | walls on the defense ring; raid wear 7 % → 4 % | contract 1 |
+| Reinforced Walls | the kit's walls upgraded; raid wear 7 % → 4 % | contract 1 |
 | Sensor Spire | raid early warning (the menu shows "raid inbound"), +15 % defense rating | contract 2 |
-| Cargo Shuttle II | automatic sales every 5 minutes | contract 3 |
+| Cargo Shuttle II | +10 % on every sale (still a manual tap) | contract 3 |
 
 Prices are set in the workbook with the rest of the tech tree. They are counted in a new **Outpost** line of the
 Economy sheet, which Mission-Log §1.2 left out until now.
@@ -340,26 +358,22 @@ Nine new maps, one per planet, authored in the Terrain Forge like the battle map
 - **REPLAY LAST BATTLE becomes OUTPOST.** Before an outpost contract is accepted it is shown locked: "Accept an
   outpost contract aboard a capital ship." After, it opens the outpost of the planet the menu is targeting. If that
   planet has no outpost, it opens the player's most recent one, with a planet switcher in the outpost header.
-- **The OUTPOST button's status:** a red dot when loads are ready or something needs repair; the line under the label
-  reads *3 loads ready*, *storage full*, *raid repelled* or *rig down: repair*.
+- **The OUTPOST button's status:** a red dot when loads are ready or the defenses are worn; the line under the label
+  reads *3 loads ready*, *storage full*, *raid repelled* or *raid broke through: ore lost*.
 - **Replay moves to battle history.** Each battle card in the planet's history modal gets **REPLAY** when that battle
   has a stored replay. The game keeps replays of the most recent 20 battles; older cards show no button.
 
-## 11. Questions for the owner
+## 11. Owner decisions (2026-11-06)
 
-- **Q1. The cut-off sentence.** "Let's get the contract in place with the new map and this would …". Default: the
-  first build is the Verdance contract, the Verdance outpost map, the starter kit models, the outpost view and the
-  menu change; the other eight maps follow.
-- **Q2. Defenses in the starter kit.** You listed four buildings. Default: the kit also has 2 Sentry Guns, so the
-  first raid can be held without spending gold.
-- **Q3. Deep ore value.** ¼ speed × 3× price earns 0.75× per hour, made worthwhile here by the longer unattended run
-  (§4.4). If deep ore should earn more per hour, use 5×.
-- **Q4. Ores for planets 3–9** (§3): the proposed list, or your own.
-- **Q5. Selling while away.** Default: manual SELL until Cargo Shuttle II (contract 3).
-- **Q6. A breach.** Default: the rig goes down and 25 % of storage is lost. A gentler option: the rig goes down and
-  nothing is lost.
-- **Q7. The star ladder.** The board's star-score story (`story_mvnzz8m4_3`) put "outpost" at 4★. This design gives
-  the outpost at 3★ map 3, with the capital ship. Default: 3★, as you wrote today.
+| # | Question | Decision |
+|---|---|---|
+| Q1 | The cut-off sentence: what to build first | **Yes**: the Verdance contract and the Verdance outpost map first; the other eight maps follow |
+| Q2 | Defenses in the starter kit | **Ground defenses: a Cannon, a Machine Gun and walls** |
+| Q3 | Deep ore value | **Raise the price**: 5×, so deep ore earns 1.25× per hour (§4.4) |
+| Q4 | Ores for planets 3–9 | **The proposed list stands** (§3) |
+| Q5 | Selling | **Always a manual tap**, with a shuttle animation, ore splatter and a "$N" pop like combat (§4.3); no automatic selling at any tier |
+| Q6 | A breach | **25 % of the ore in storage is lost**; nothing else breaks (§5.2) |
+| Q7 | The star ladder | **3★ on map 3** brings the ship and the outpost contract, simplified to 3 for now |
 
 ## Dependencies
 

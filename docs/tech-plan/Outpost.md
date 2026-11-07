@@ -1,6 +1,6 @@
 # Tech Plan — Outposts and mining: data and visualization
 
-Status: draft for owner review · 2026-11-06 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
+Status: owner decisions applied (design §11) · 2026-11-06 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
 · Design: `docs/16 Bulwark MM/design/Outpost-Design.md` (what the player gets, and why; this plan does not restate it)
 
 ## 1. Scope
@@ -55,7 +55,7 @@ Four new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edi
 | `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Use` |
 | `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Build_Sec, Power_Draw, Power_Supply, Capacity, Rate_Mult, Defense_Power, Model, Unlock` |
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
-| `Outpost_Params` | ~12 named values | `Load_Sec 300, Store_Hours 4, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Raid_Wear 0.07, Raid_Strength 0.55, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20` |
+| `Outpost_Params` | ~12 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Raid_Wear 0.07, Raid_Strength 0.55, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20` |
 
 `tools/extract_mapdata.py` extracts them to `MAPDATA.ores`, `.outpostStructures`, `.outpostContracts` and
 `.outpostParams`. Its validation refuses a planet without exactly three ores, a duplicate `Ore_Id`, a structure kind
@@ -87,7 +87,6 @@ s.outposts = {
     building: [{ pad:'p4', kind:'harvesterBay', tier:1, done: 1762470300000 }],
     defenses: [{ id:'d1', type:'machineGun', tier:1, cell:[12,7], integrity:1 }],
     storage: { iron: 412.6 },     // fractional units, shown floored
-    down: { p2: 'breach' },       // buildings waiting for repair
     raids: { window: 412, log: [{ at, result:'held'|'breach', wear }] },   // log keeps the last 20
     sold: { iron: 300 },          // lifetime, for contract steps
   },
@@ -106,7 +105,7 @@ answers.
 ```js
 advance(outpost, toMs, { params, ores, structures })  → { outpost, report }
 loadsReady(outpost)                                   → n
-sell(outpost, { auto })                               → { outpost, sold: { iron: 90 }, gold }
+sell(outpost)                                         → { outpost, loads: [{ ore, units, gold }], gold }   // one entry per load, for the pops
 place(outpost, pad, kind) / repair(outpost, id) / setDeep(outpost, pad, on)   → outpost (or a refusal reason)
 raidSchedule(seed, fromWindow, toWindow, params)      → [{ window, at }]
 defenseRating(outpost) / raidOutcome(outpost, raid)   → { result, wear }
@@ -115,7 +114,7 @@ defenseRating(outpost) / raidOutcome(outpost, raid)   → { result, wear }
 ### 4.1 Advancing through time, in closed form
 
 `advance` never steps second by second. It cuts the interval `[t, toMs]` at every event: a build finishing, a raid,
-storage filling, and an automatic sale when the player has Cargo Shuttle II. Between two events every rate is
+or storage filling. Nothing is ever sold inside `advance`: selling is always the player's tap (design §4.3). Between two events every rate is
 constant, so extraction is `rate × Δt`, capped by the space left in storage. Three days away is a few dozen segments.
 
 - **The clock.** Wall-clock time (`Date.now()`) is read only by the menu and the outpost view, then passed in.
@@ -133,8 +132,8 @@ Time is cut into 3-hour windows from the epoch. A window holds a raid with proba
 index, so opening the game more or less often never changes which raids happen. `raids.window` records the last
 window resolved, so a raid is resolved exactly once.
 
-- **Away:** `raidOutcome` applies the rating rule (design §5.2): the defenses wear and, on a breach, the rig goes down
-  and storage loses its share.
+- **Away:** `raidOutcome` applies the rating rule (design §5.2): the defenses wear and, on a breach, storage loses
+  `Breach_Storage_Loss` (25 %) of each ore. No building goes down.
 - **First raid:** contract step 3's raid is not drawn. It is fixed `First_Raid_Sec` after the outpost comes online.
 
 ### 4.3 A live raid (outpost view open)
@@ -146,8 +145,8 @@ When a raid comes due while the view is open, the view runs it with the battle s
 - One small wave of the planet faction's units, from `Outpost_Params` (count and tier by contract step), along the
   map's raid lanes.
 - The sim's own seeded RNG, seeded with `seed + window`, so it obeys the determinism contract like any battle.
-- When the wave is over: defenses that took damage lose integrity in proportion to the damage; a building destroyed
-  in the raid is `down`; the result is logged like an away raid.
+- When the wave is over: defenses that took damage lose integrity in proportion to the damage; if any raider reached
+  the mesa, the raid is a breach and storage loses its 25 %; the result is logged like an away raid.
 
 Live and away raids must agree on average. `outpost_model.mjs` runs a few hundred simulated raids per defense set and
 checks that the away rule's breach rate matches the simulation's within 10 %. A gap is closed by tuning
@@ -163,6 +162,8 @@ checks that the away rule's breach rate matches the simulation's within 10 %. A 
 - The starter kit holds 5 raids before a breach; a 1.0 rating holds 8 (design §5.2).
 - Power: a building over budget is reported, and stays off.
 - Building, repairing and selling refuse when the player cannot pay, or the pad is wrong, taken or unpowered.
+- A breach removes exactly 25 % of each ore in storage and changes no building.
+- `advance` never sells, whatever the tier of the shuttle; `sell` returns one entry per full load.
 
 ## 5. The contract and the missions
 
@@ -215,11 +216,11 @@ renderer.
 - **The HUD** uses the battle HUD's visual language:
   - top bar: gold, each ore in storage with its icon, the storage fill bar, power used / supplied, and the defense
     rating as a shield with its integrity;
-  - bottom: **SELL** (with the number of loads), **BUILD** (pads and defenses), **REPAIR** when something is down;
+  - bottom: **SELL** (with the number of loads), **BUILD** (pads and defenses), **REPAIR** when the defenses are worn;
   - the selected building's panel: status, tier, rate, the deep / shallow switch on a rig, and upgrade.
 - **The away report.** On open, when anything happened since the last visit, a modal in the results-screen style
-  (`render/resultsScreen.js`) lists extraction per ore, sales, each raid with its result and wear, and what needs
-  repair. Its rows are the `report` that `advance` returns.
+  (`render/resultsScreen.js`) lists extraction per ore, each raid with its result (and the ore lost on a breach), and
+  the defenses' wear. Its rows are the `report` that `advance` returns.
 - **Phone.** Portrait and landscape layouts, like the battle HUD. The mesa must frame in portrait: this sets the
   outpost maps' size (§6.6).
 - **Performance.** The battle's quality tiers apply. The outpost view stops the menu stage while open, as the reveals
@@ -237,7 +238,7 @@ New GLB models through the capital ship pipeline: built in headless Blender, thr
 | `storage` | block with dish and antennas, a glass deck over the hologram (separate node: the fill bar) | 9k / 1.5k |
 | `harvesterBay` | garage with two bays, door open | 7k / 1.2k |
 | `upgradeBay` | hangar pad with two control towers and a small craft (separate node) | 10k / 1.8k |
-| `shuttle` | the small craft the hub launches on SELL | 3k / 0.6k |
+| `shuttle` | the small craft the hub launches on SELL (Cargo Shuttle II is a larger variant) | 3k / 0.6k |
 | tier II variants | the same base with added modules (larger core, second drill, extra tank) | +30 % |
 
 - **Material contract.** Matches the concept image: light grey and white panels, dark grey chamfered bases, orange
@@ -246,7 +247,7 @@ New GLB models through the capital ship pipeline: built in headless Blender, thr
 - **Scale.** One pad is 4 × 4 battle cells. The hub's landing pad is 6 × 6. The parked shuttle reads at about the
   size of a battle aircraft.
 - **States.** Building (rises in steps with a cool tint, as towers do today), online, unpowered (emissive off),
-  down (darkened, smoke), upgrading (warm tint). These follow `lifecycleLook` in `render3d/structures/models.js`.
+  worn defenses (darkened, sparking), upgrading (warm tint). These follow `lifecycleLook` in `render3d/structures/models.js`.
 - **Animated nodes:** the reactor pulse, the rig laser (on while extracting, a beam to the deposit with sparks), the
   storage hologram (its height is the fill), the shuttle (take-off arc on SELL), and harvesters and ore carts.
 
@@ -265,12 +266,25 @@ face. A locked tier is drawn dim, with a lock marker.
 
 ### 6.5 Effects
 
-All reuse the battle's FX system (`render3d/fx`):
+The **sale** is the outpost's signature moment and must feel like a harvester's delivery in battle (design §4.3).
+It is a timeline driven by `sell`'s per-load entries, built from the battle's own pieces:
+
+| Time | Beat | Built from |
+|---|---|---|
+| 0.0 s | the storage hologram drains; crates (instanced boxes in the ore colour) ride the conduit to the pad | the hologram node; `unloadFx.js`'s glint stream |
+| 0.6 s | the shuttle's engines light; it lifts with a camera shake | `createEngineFx`; the battle camera shake |
+| 0.8 s | **ore splatter**: a burst of ore chunks from the cargo bay, bouncing on the pad | the world-impact particles, with ore-chunk sprites in the ore colour |
+| 0.9 s | **"$N" pops** per load, staggered 0.12 s, stacking upward in the ore colour | `overlays/goldPopups.js` (`deposit`-style events) |
+| 1.4–3.0 s | the shuttle arcs up and out of frame; the HUD gold counts up | a spline; the HUD counter |
+
+Reduced motion: the pops and the count-up stay, and the shuttle and the splatter are skipped.
+
+The other effects also reuse the battle's FX system (`render3d/fx`):
 
 - the shuttle's engine glow (`createEngineFx`);
 - the laser's sparks and dust at the deposit;
 - raid fire, explosions and wrecks, from the battle;
-- a breach's smoke column over a downed building.
+- on a breach, the storage tower's hologram drops by the lost quarter, with a burst of scattered ore.
 
 ### 6.6 The outpost maps
 
@@ -303,7 +317,7 @@ reviewed outside Claude:
 
 - **`menu.js`:** the `REPLAY LAST BATTLE` button becomes `OUTPOST`.
   - Locked until a contract is accepted.
-  - Its status line and red dot come from `loadsReady`, the storage-full flag, `down`, and the last raid. These are
+  - Its status line and red dot come from `loadsReady`, the storage-full flag, worn defenses, and the last raid. These are
     computed by advancing a copy of the outpost to now, without saving.
   - It opens the outpost view for the targeted planet, or the most recent outpost.
 - **Replays per battle:** `main.js` stores each played battle's serialized replay in `localStorage
@@ -321,14 +335,14 @@ reviewed outside Claude:
 | O3 | Contract 1: the grant aboard the ship, mission rows, the new gates, the kit, the captain's lines (Verdance) | A |
 | O4 | The Verdance outpost map, with the Forge's pad, deposit and conduit support and validation | A |
 | O5 | Models: hub, power station, mining rig, storage tower and shuttle (LODs, trim slot, states) | A |
-| O6 | The outpost view: scene, camera, conduits, deposits, effects, HUD, SELL, build and repair, away report, phone layouts | A |
+| O6 | The outpost view: scene, camera, conduits, deposits, effects, HUD, the SELL sequence (shuttle, ore splatter, "$N" pops), build and repair, away report, phone layouts | A |
 | O7 | Live raids with the battle sim on the outpost map, and the away rule calibrated against them | A |
 | O8 | Menu: OUTPOST replaces REPLAY LAST BATTLE; replays stored per battle; REPLAY on history cards | A |
 | O9 | Review page `tools/outpost/index.html` (built first, extended with each story) | A |
 | O10 | Harvester Bay and Upgrade Bay: models, behaviour, the Outpost tech nodes replacing the ghosts | B |
 | O11 | Outpost maps for the other eight planets, and the captains' outpost lines | B |
 | O12 | Ore icons (27) and deposit colours, with the resource icon pipeline | B |
-| O13 | Contracts 2 and 3: deep drilling in play, Rig Mk II, Cargo Shuttle II and its automatic sales | B |
+| O13 | Contracts 2 and 3: deep drilling in play, Rig Mk II, Cargo Shuttle II (+10 % sales) | B |
 
 O9 starts with O2 so every later story is reviewable outside Claude as it lands. O5 runs alongside O1–O4.
 
