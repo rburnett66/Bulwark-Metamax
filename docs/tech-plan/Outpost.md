@@ -47,7 +47,7 @@ code, document or ticket exists beyond the initiative's one-line "L3 outposts+mi
 
 ### 3.1 Workbook sheets (the source of truth)
 
-Four new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edit, then extract" flow as
+Five new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edit, then extract" flow as
 `Rare_Contracts`:
 
 | Sheet | Rows | Columns |
@@ -58,8 +58,8 @@ Four new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edi
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
 | `Outpost_Params` | ~12 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20, Far_Buyer_Mult 2, Far_Loyalty_Cost 1` |
 
-`tools/extract_mapdata.py` extracts them to `MAPDATA.ores`, `.outpostStructures`, `.outpostContracts` and
-`.outpostParams`. Its validation refuses a planet without exactly three ores, a duplicate `Ore_Id`, a structure kind
+`tools/extract_mapdata.py` extracts them to `MAPDATA.ores`, `.outpostStructures`, `.outpostRaids`, `.outpostContracts`
+and `.outpostParams`. Its validation refuses a planet without exactly three ores, a duplicate `Ore_Id`, a structure kind
 the code does not know, and a contract that delivers an ore tier the planet has not unlocked by then. It also refuses
 a raid unit that is not `lightGround` or not tier I, and an outpost defense whose `Battle_Struct` is anti-air or has
 a range above 5 (owner: no anti-air, no long range).
@@ -91,7 +91,7 @@ s.outposts = {
     stations: [{ pad:'p1', tier:1 }, { pad:'r2', tier:1 }],   // power stations; grids are derived from reach
     defenses: [{ id:'d1', struct:'STR-MG', tier:1, cell:[12,7], hp:240 }],   // HP carries over between raids
     storage: { p2: { iron: 412.6 } },   // per rig bay (pad id), fractional units, shown floored; deep grade is 'iron_deep'
-    raids: { window: 412, log: [{ at, result:'held'|'breach', wear }] },   // log keeps the last 20
+    raids: { window: 412, log: [{ at, result:'held'|'breach', damage }] },   // log keeps the last 20
     sold: { iron: 300 },          // lifetime, for contract steps
   },
 };
@@ -360,7 +360,7 @@ reviewed outside Claude:
 
 | # | Story | Phase |
 |---|---|---|
-| O1 | Data: the four workbook sheets, extraction and validation, `ores.js` / `outpost.js`, `outpost_model.mjs` | A |
+| O1 | Data: the five workbook sheets, extraction and validation, `ores.js` / `outpost.js`, `outpost_model.mjs` | A |
 | O2 | The outpost model: `advance`, sales, building, power grids with reach, the raid schedule, tests | A |
 | O3 | Contract 1: the grant aboard the ship, mission rows, the new gates, the kit, the captain's lines (Verdance) | A |
 | O4 | The Verdance outpost map, with the Forge's pad, deposit and conduit support and validation | A |
