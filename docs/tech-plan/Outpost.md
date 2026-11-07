@@ -434,7 +434,8 @@ O9 starts with O2 so every later story is reviewable outside Claude as it lands.
 - **Time-based play and clock cheats.** Handled by the guards in §4.1. Storage caps the gain from any clock trick
   at the value of one full storage per planet, which is small next to the tech tree.
 - **localStorage size.** 20 replays plus outposts must stay well under the browser quota. O8 measures a replay's
-  serialized size and lowers `Replay_Keep` if 20 would pass 1 MB.
+  serialized size and lowers `Replay_Keep` if 20 would pass 1 MB. *Measured (O8): about 0.3 MB for 20 typical
+  battles; a 1 MB budget in `replays.js` drops the oldest when long battles would pass it.*
 - **Catch-up cost.** 72 hours away is at most 24 raids, each a short headless sim of a few light units. O2 measures
   the catch-up time on a phone-class CPU and caps it under 200 ms, or spreads it across frames behind the away report.
 - **Model budget.** Six buildings plus the map must hold the battle view's frame time on the low tier. O6 measures
