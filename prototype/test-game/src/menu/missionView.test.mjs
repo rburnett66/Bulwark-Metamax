@@ -244,3 +244,18 @@ test('the log\'s actions are wired, and the HUD asks for the tracker line', () =
   for (const a of ['collect', 'track', 'abandon', 'dismiss', 'back']) assert.ok(src.includes("act_ === '" + a + "'"), a);
   assert.ok(/hud\.trackedLine/.test(readFileSync(new URL('../render/hud.js', import.meta.url), 'utf8')));
 });
+
+test('a mission flown under the Collective contract shows that contract in its dossier [MM-task_mw6q0j5r_9]', async () => {
+  const { collectiveTermsOf } = await import('./missionView.js');
+  const s = defaultSave();
+  const m = logMission(s, def('P-VER-01'), opt);
+  const t = collectiveTermsOf(m);
+  assert.match(t[0][1], /^2,100 Loam Grain and 190 \S.* on Verdance map 1/);
+  assert.match(t[1][1], /beyond the quota/);
+  assert.match(t[2][1], /\+10 standing with the Collective/);
+  const html = dossierHtml({ m, status: 'active' }, s, CATALOG, ctx(s));
+  assert.match(html, /COLLECTIVE CONTRACT/);
+  for (const sec of ['OBJECTIVES', 'GATES', 'FACTION STANDING', 'REWARDS', 'TERMS']) assert.match(html, new RegExp(sec), sec);
+  // a mission collected aboard a planet's own ship has no Collective section
+  assert.deepEqual(collectiveTermsOf(logMission(s, def('P-VER-04'), opt)), []);
+});
