@@ -1067,13 +1067,13 @@ export const STRUCTURES = Object.freeze({
   }),
   // MACHINE GUN (owner 2026-10-22: "one more low level tower. A machine gun which can damage troops, light tanks, and
   // aircraft. The gun should spray brass bullet casings up and to the right from the gun base.") [MM-story_mvk3kwu2_m]
-  // The cheap, short-range all-rounder: rapid tracers at aircraft (any) and at LIGHT ground units only —
-  // `groundTargets: 'light'` limits its ground and water targets to units with lightGround (troops, assault tanks).
+  // The cheap, short-range all-rounder: rapid tracers at every troop, tank and aircraft in range (owner 2026-11-07:
+  // "machine guns shoot all troops, tanks and air"; it used to skip heavy tanks and trucks) [MM-task_mw6pwjn5_8].
   // Appended after the Missile Tower so the existing hotkeys don't move (it takes 7). cadence = render hint (tracers).
   'STR-MG': Object.freeze({
     name: 'Machine Gun', kind: 'antiGround',
     armorClass: 'Structure', damageType: 'Kinetic',
-    canTargetDomains: ['Walker', 'Swimmer', 'Floater', 'Flyer'], groundTargets: 'light',
+    canTargetDomains: ['Walker', 'Swimmer', 'Floater', 'Flyer'],
     // owner 2026-10-23: "Machine guns should be very effective against artillery if in range." Artillery (range 9.5,
     // soft crews and light carriages) is an extra legal ground target, the preferred one, and takes ×3 damage.
     alsoHitsShapes: Object.freeze(['Artillery']), prefersShapes: Object.freeze(['Artillery']), bonusVsShape: Object.freeze({ Artillery: 3 }),

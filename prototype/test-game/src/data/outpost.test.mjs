@@ -84,7 +84,7 @@ test('outpost defenses: no anti-air and no long range (owner); battle stats come
   }
   assert.deepEqual(structureDef('mg', 1).battle.hp, 240);
   assert.deepEqual(structureDef('cannon', 2).battle.hp, 640);
-  assert.equal(structureDef('mg', 1).battle.groundTargets, 'light');
+  assert.equal(structureDef('mg', 1).battle.groundTargets, null);   // the MG hits every ground unit (2026-11-07)
 });
 
 test("Verdance's contract 1 is the design's (§2.3)", () => {
