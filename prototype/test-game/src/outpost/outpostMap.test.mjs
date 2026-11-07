@@ -58,8 +58,8 @@ test('the battle loader builds it, with the base on the hub and both raid lanes 
 test('outpostMapFor fetches <planet>-outpost.json and falls back to the draft layout', async () => {
   assert.match(outpostMapUrl('ground'), /content\/maps\/forge\/ground-outpost\.json$/);
   const ok = await outpostMapFor('ground', { fetch: async () => ({ ok: true, json: async () => FORGE }) });
-  assert.equal(ok.source, 'forge'); assert.equal(ok.width, 40); assert.equal(ok.height, 24);
-  assert.equal(ok.heights.length, 960);
+  assert.equal(ok.source, 'forge'); assert.equal(ok.width, 64); assert.equal(ok.height, 32);
+  assert.equal(ok.heights.length, 64 * 32);
   const none = await outpostMapFor('air', { fetch: async () => ({ ok: false, status: 404 }) });
   assert.equal(none.source, 'draft'); assert.equal(none.id, 'draft-outpost');
   const broken = await outpostMapFor('air', { fetch: async () => { throw new Error('offline'); } });

@@ -11,6 +11,8 @@
  *   kitDefenses: [{ kind, cell: [x, y] }]              where the contract kit's defenses start
  *   mesa:        { cx, cy, rx, ry, ramps: [{ x, y, w, h }] }   the raised build mesa (a rounded rectangle)
  *   heights:     [0 | 1 | 2 per cell]                  0 lowland, 1 ramp, 2 mesa top (and its cliff rim)
+ * The mesa itself is stamped into `terrain` (stone top, cliff rim, dirt ramps), so the terrain bake and the battle
+ * renderer draw it like any other map; `heights` is the same shape as numbers, for framing and the outpost views.
  * Raid lanes are the map's ground `spawns`; the defense ring is buildable cells (defenseRing() below).
  *
  * Pure and deterministic: no DOM, no clock, no Math.random. Cells are battle cells; a pad's centre is
@@ -56,7 +58,8 @@ const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 /**
  * Stamp the outpost onto a generated Forge grid g = { cols, rows, terrain, blocking } (after generateTerrain and
- * placeBase): the mesa top becomes flat open ground (dirt) at height 2, ringed by a cliff rim; ramps cut the rim;
+ * placeBase): the mesa top becomes flat open stone (rock-border: walkable, buildable, drawn as the stone plateau of the
+ * concept art and baked a band above grass) at height 2, ringed by a cliff rim; ramps cut the rim;
  * each ground lane is worn into a 2-cell cart track from its spawn to the nearest ramp's foot; remote pads get a
  * flat clearing. Sets g.heights and g.clear (cells decor and resources must leave open). Mutates g; returns it.
  * layout: { mesa, pads, spawns, kitDefenses }.
@@ -75,7 +78,7 @@ export function stampOutpost(g, layout) {
       const rim = N4.some(([dx, dy]) => !ok(x + dx, y + dy) || !inMesa(mesa, x + dx, y + dy));
       if (rim && isRamp(x, y)) { set(x, y, TERRAIN.DIRT); heights[i] = HEIGHT.RAMP; clear[i] = 1; }
       else if (rim) { set(x, y, TERRAIN.CLIFF); heights[i] = HEIGHT.TOP; }
-      else { set(x, y, TERRAIN.DIRT); heights[i] = HEIGHT.TOP; clear[i] = 1; }
+      else { set(x, y, TERRAIN.ROCK_BORDER); heights[i] = HEIGHT.TOP; clear[i] = 1; }
     }
     // the foot of each ramp: the lowland cells of its rect, kept open
     for (const r of ramps) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
@@ -204,7 +207,8 @@ export function mesaFrame(map, margin = 1) {
 // ── validation ───────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Every problem with an outpost map's layer, as readable strings; [] when it is valid. The checks (tech plan §6.6):
- *  - pads: known role, unique id, in bounds, no overlap; exactly one hub, on the mesa; a first power station;
+ *  - pads: known role, unique id, in bounds, no overlap; exactly one hub, on the mesa, under the map's base (when the
+ *    map has one: the battle sim's raids march on the base); a first power station;
  *  - ground (when the map carries terrain): every pad on open, flat ground, and a mesa pad on the mesa top;
  *  - reach: every mesa pad's centre within the first station's reach;
  *  - conduits: known pads, each with a power pad at one end, within reach; every mesa pad reaches the hub through
@@ -232,6 +236,8 @@ export function validateOutpostLayout(map, { powerReach = defaultPowerReach() } 
   const hubs = pads.filter((p) => p.role === 'hub');
   if (hubs.length !== 1) P.push(`${hubs.length} hub pads (needs exactly one)`);
   if (hubs.some((p) => p.remote)) P.push('the hub is marked remote');
+  const bp = map.base && map.base.pos;   // the battle base (raids march on it): world-mode maps pin it at (31, 15)
+  if (bp && hubs.length === 1 && !inPad(hubs[0], bp.x, bp.y)) P.push(`the base (${bp.x}, ${bp.y}) is not on the hub pad`);
   const st = firstStation(map);
   if (!st) P.push('no power pad on the mesa (the first station)');
 

@@ -177,8 +177,8 @@ const C = (p) => [(p.x + p.w / 2) * S, (p.y + p.h / 2) * S];
 const ROLE_COL = { hub: '#3b4048', power: '#2f3d4f', rig: '#3d3a33', storage: '#3a3f3a', bay: '#383640', spare: '#333333' };
 const KIND_LABEL = { hub: 'Hub', power: 'Power', rig: 'Rig', storage: 'Storage', harvesterBay: 'Harvester Bay', upgradeBay: 'Upgrade Bay' };
 
-// ── the view: the whole map, or the mesa framed (the default in portrait, tech plan §6.1) ─────────────────────────
-let viewMode = new URLSearchParams(location.search).get('view') || (innerWidth < innerHeight ? 'mesa' : 'map');
+// ── the view: the mesa framed (the default, tech plan §6.1), or the whole map ─────────────────────────
+let viewMode = new URLSearchParams(location.search).get('view') || 'mesa';   // the outpost view frames the mesa, not the 64 × 32 map
 let view = { x: 0, y: 0, w: map.width, h: map.height };
 function setView(mode) {
   viewMode = mode;
