@@ -7,13 +7,14 @@
  */
 import { resourceIconHtml } from '../data/resourceIcons.js';
 import { logMission, missionStatus, progress, factionOfPlanet, alignmentBand } from '../save/missions.js';
-import { lockedMissions, gateMet, collectShipHere, SHIP_MAP } from '../save/missionFlow.js';
+import { lockedMissions, gateMet, collectShipHere, SHIP_MAP, COLLECTIVE_SHIP } from '../save/missionFlow.js';
 import { LOYALTY_TIERS, rivalOf } from '../save/contracts.js';
 import { ICONS, FACTIONS as VOICES, HOOD_PORTRAIT } from '../comm/voice.js';
 import { portraitSlug } from '../comm/commCard.js';
 import { TECH_BY_ID } from '../data/techtree.js';
 import { PLANETS } from '../data/planets.js';
 import { planetKeyOf } from '../outpost/contract.js';
+import { contractFor, contractReward } from '../data/collectiveContract.js';
 
 export const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 export const use = (id, cls = 'i') => `<svg class="${cls}"><use href="#${id}"/></svg>`;
@@ -188,6 +189,22 @@ function termsOf(row) {
   return out;
 }
 
+/**
+ * The Collective's contract on this mission's map (maps 1–3 are flown under it): what the Collective buys, that the rest
+ * is kept, and what completing it pays [MM-task_mw6q0j5r_9]. → [[label, text]] or [] for any other mission.
+ */
+export function collectiveTermsOf(m) {
+  if (!m || !m.map || m.collectAt !== COLLECTIVE_SHIP) return [];
+  const key = planetKeyOf(m.planet), c = contractFor(key, m.map), r = contractReward(key, m.map);
+  if (!c) return [];
+  const res = (PLANETS[key] || {}).resources || {}, nm = (t) => (res[t] && res[t].name) || t;
+  const n = (x) => Number(x || 0).toLocaleString('en-US');
+  const out = [['Buys', `${n(c.common)} ${nm('common')} and ${n(c.uncommon)} ${nm('uncommon')} on ${m.planet} map ${m.map}, paid as you harvest`],
+    ['You keep', 'everything harvested beyond the quota, and every rare and epic resource']];
+  if (r) out.push(['Completed', `+${r.standing} standing with the Collective` + (r.goldBonus ? ` and ${n(r.goldBonus)} gold` : '') + ' (first time)']);
+  return out;
+}
+
 /** The one line in the status hue that says what is happening. */
 export function noteFor(row, s) {
   const { m, status } = row;
@@ -268,6 +285,7 @@ export function dossierHtml(row, s, catalog, ctx, packs = null) {
    ${gates.length ? `<div class="sec"><h3>GATES</h3><div class="gates">${gates.map((q) => `<div class="gate ${q.ok ? 'ok' : 'no'}">${use(q.ok ? 'u-check' : 's-locked')}<span><small>${esc(q.kind)}</small>${esc(q.text)}</span></div>`).join('')}</div></div>` : ''}
    ${impact.length ? `<div class="sec"><h3>${m.role === 'secondary' ? 'FACTION IMPACT' : 'FACTION STANDING'}</h3><div class="impact">${impact.map((q) => `<div class="imp" style="--ic:${q.color}">${q.icon}<b class="num">${q.amount}</b>${esc(q.label)}</div>`).join('')}</div></div>` : ''}
    <div class="sec"><h3>${st === 'failed' ? 'OUTCOME' : 'REWARDS'}</h3><div class="rewards">${outcome.map((v) => `<div class="rwd${v.neg ? ' neg' : ''}" style="--rc:${v.color}"><span class="ri">${v.img ? resourceIconHtml(v.img, 'resi') : use(v.icon)}</span><b class="num">${esc(v.amount)}</b><small>${esc(v.label)}</small></div>`).join('')}</div></div>
+   ${collectiveTermsOf(m).length && st !== 'done' && st !== 'failed' ? `<div class="sec"><h3>COLLECTIVE CONTRACT</h3><div class="terms">${collectiveTermsOf(m).map(([a, b]) => `<div><b>${esc(a)}</b><span>${esc(b)}</span></div>`).join('')}</div></div>` : ''}
    <div class="sec"><h3>TERMS</h3><div class="terms">${termsOf(row).map(([a, b]) => `<div><b>${esc(a)}</b><span class="${/−|Broken/.test(a + b) ? 'neg' : ''}">${esc(b)}</span></div>`).join('')}</div></div>
   </div>
   <aside class="dside">

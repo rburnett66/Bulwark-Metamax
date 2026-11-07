@@ -20,7 +20,7 @@ import { battlesOn } from '../save/battleLog.js';
 import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { loadSave, updateSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars, bankOf } from '../save/save.js';
-import { needsIntro, resumeBeat, acceptFirstContract, markLaunched } from '../save/collective.js';
+import { needsIntro, resumeBeat, acceptFirstContract, markLaunched, collectiveOf } from '../save/collective.js';
 import { setChannelVolume, getChannelVolume, isMuted, setMuted, onAudioChange } from '../comm/voice.js';
 import { readyIds, countOwned } from '../data/techtree.js';
 import { techCtxFromSave, createGameTechAdapter, planetOpen } from './techSave.js';
@@ -988,7 +988,9 @@ export function createMenu(mountEl, cbs) {
   function boardStation() {
     const planet = shipBox.dataset.planet;
     if (!planet || revealing || introOpen) return;
-    if (planet === 'collective') { openCollectiveIntro(); return; }
+    // The Long Ledger: its Factor's scene and the first contract play once. Once the contract is the player's, boarding
+    // is exploring the ship like any other (the opening can still be replayed from Settings) [MM-task_mw6q0j5r_9].
+    if (planet === 'collective' && !collectiveOf(loadSave()).contractAccepted) { openCollectiveIntro(); return; }
     revealing = true; if (stage) stage.pause();
     const offer = outpostOffer(loadSave(), planet);   // still on offer: boarding makes it again (Vane's lines + card)
     const outpost = offer ? { cardFor: (ship) => outpostCard(planet, ship), onAccept: (k) => acceptOutpost(k),
