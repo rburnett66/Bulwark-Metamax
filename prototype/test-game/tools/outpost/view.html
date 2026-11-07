@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Outpost View Review</title>
+<!-- [MM-story_mw5oeer7_n] Review page for the real outpost view (src/outpost/view/outpostView.js, story O6), outside
+     Claude and outside the game: the game's own 3D view, HUD, SELL sequence and away report on a chosen save preset,
+     with an in-memory save (your real save is never touched) and a clock you can speed up.
+     Query: ?state=fresh|running|full|raided|breached|fullkit|building · ?quality=high|standard|low · ?speed=1 (clock ×)
+            ?raids=seam|wear|breach (seam = the game's raid hook, held until story O7) · ?ui=0 hides the review chip
+            ?reduced=1 forces reduced motion. The model-only review page is ./index.html. -->
+<style>
+  html, body { margin:0; height:100%; background:#0f1412; color:#e6ebe3; font:14px/1.4 system-ui, sans-serif; overflow:hidden; }
+  #dev { position:fixed; z-index:3000; left:max(8px, env(safe-area-inset-left)); top:50%; transform:translateY(-50%); }
+  #dev > button { width:34px; height:34px; border:0; border-radius:4px; background:rgba(29,33,37,.85); color:#fff; font-size:16px; cursor:pointer; }
+  #dev form { display:none; margin-top:6px; padding:10px; background:rgba(18,24,28,.96); border:1px solid #2e3c3a; border-radius:6px; width:240px; }
+  #dev.open form { display:block; }
+  #dev label { display:block; font-size:12px; color:#9aa6b4; margin:6px 0 2px; }
+  #dev select, #dev button.go { width:100%; font:inherit; padding:6px; background:#1b2a2a; color:#e6ebe3; border:1px solid #2e3c3a; border-radius:4px; }
+  #dev button.go { margin-top:10px; background:#eb5c0d; border-color:#eb5c0d; color:#fff; font-weight:700; cursor:pointer; }
+  #dev p { font-size:12px; color:#9aa6b4; margin:8px 0 0; }
+  #closed { position:fixed; inset:0; display:none; place-items:center; text-align:center; }
+  #closed button { margin-top:10px; padding:10px 18px; font:inherit; font-weight:700; background:#eb5c0d; color:#fff; border:0; border-radius:4px; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="dev"><button type="button" aria-label="Review options" id="devBtn">⚙</button>
+  <form id="devForm">
+    <label for="state">Save preset</label>
+    <select id="state" name="state">
+      <option value="fresh">Fresh kit, not online (GO ONLINE)</option>
+      <option value="running" selected>Back after 2 hours</option>
+      <option value="full">Back after 5 hours: storage full</option>
+      <option value="raided">Back after 9 hours: raids held, worn</option>
+      <option value="breached">Back after 9 hours: a raid broke through</option>
+      <option value="fullkit">Full kit: every pad built, Mk II, deep</option>
+      <option value="building">Building and upgrading</option>
+    </select>
+    <label for="quality">Quality tier</label>
+    <select id="quality" name="quality"><option value="">auto</option><option>high</option><option>standard</option><option>low</option></select>
+    <label for="raids">Raids</label>
+    <select id="raids" name="raids"><option value="seam">the game's hook (held until O7)</option><option value="wear">stand-in: held, worn</option><option value="breach">stand-in: break through</option></select>
+    <label for="speed">Clock</label>
+    <select id="speed" name="speed"><option value="1">real time</option><option value="60">1 min per second</option><option value="600">10 min per second</option></select>
+    <button class="go" type="submit">Open</button>
+    <p>An in-memory save: your game save is not touched. <a href="./index.html" style="color:#4fb8ff">Model review</a></p>
+  </form>
+</div>
+<div id="closed"><div>The outpost view closed.<br><button id="reopen">Open again</button></div></div>
+<script type="module">
+import { openOutpostView } from '../../src/outpost/view/outpostView.js';
+import { outpostMapFor } from '../../src/outpost/outpostMap.js';
+import { acceptOutpostContract } from '../../src/outpost/contract.js';
+import { confirmOnline, advance, raidOutcome } from '../../src/outpost/model.js';
+import { defaultSave } from '../../src/save/save.js';
+import { structureDef, OUTPOST } from '../../src/data/outpost.js';
+import { defenseRing } from '../../src/terrain/outpostPads.js';
+
+const q = new URLSearchParams(location.search);
+for (const k of ['state', 'quality', 'raids', 'speed']) if (q.get(k) !== null) document.getElementById(k).value = q.get(k);
+if (q.get('ui') === '0') document.getElementById('dev').style.display = 'none';
+document.getElementById('devBtn').onclick = () => document.getElementById('dev').classList.toggle('open');
+
+const MIN = 60_000, HOUR = 60 * MIN, T0 = Date.UTC(2026, 10, 7, 9);
+const map = await outpostMapFor('ground');
+const clone = (x) => structuredClone(x);
+
+// the stand-in raid outcome (as ./index.html): each defense loses a share of its HP, the same every time for a raid
+function standIn(mode) {
+  return (out, r) => {
+    const wear = (d, i) => ({ id: d.id, hp: Math.max(0, d.hp - structureDef(d.kind, d.tier).battle.hp * (0.14 + ((r.window ?? 3) * 7 + i * 13) % 20 / 100)) });
+    return { result: mode === 'breach' ? 'breach' : 'held', defenses: out.defenses.map(wear) };
+  };
+}
+
+/** A save for a preset, and the time the view opens at. */
+function presetSave(name) {
+  const s = defaultSave();
+  s.capitalShips = { Verdance: { arrived: true } };
+  s.carry = { gold: 24000, structures: [] }; s.goldBank = 24000;
+  acceptOutpostContract(s, 'ground', { map, now: T0, seedSalt: 'review' });
+  let o = s.outposts.ground, openAt = T0;
+  const online = () => { o = confirmOnline(o, map, T0).outpost; o.firstRaidAt = null; };
+  const quiet = { map, params: { ...OUTPOST, Raid_Mean_Hours: 1e12 } };
+  if (name !== 'fresh') online();
+  if (name === 'running') openAt = T0 + 2 * HOUR;
+  if (name === 'full') openAt = T0 + 5 * HOUR;
+  if (name === 'raided' || name === 'breached') openAt = T0 + 9 * HOUR;
+  if (name === 'fullkit' || name === 'building') {
+    const pad = (id, b) => { o.pads[id] = b; };
+    pad('p2', { kind: 'power', tier: 1 });
+    pad('r2', { kind: 'rig', tier: 1, deposit: 'uncommon', deep: true });
+    pad('r3', { kind: 'rig', tier: 1, deposit: 'rare', deep: false });
+    pad('b1', { kind: 'harvesterBay', tier: 1 });
+    pad('b2', { kind: 'upgradeBay', tier: 1 });
+    pad('x1', { kind: 'power', tier: 1 });
+    o.pads.r1.tier = 2;            // Rig Mk II: amber, 2× tempo, 3× debris
+    o.pads.s1.tier = 2;            // Storage Tower II
+    for (const id of ['r2', 'r3']) o.storage[id] = {};
+    s.questSteps = { 'QL-VER-O': 2 };   // contracts 1–2 collected: aluminum, lithium and Deep Drilling I unlocked
+    openAt = T0 + 3 * HOUR;
+    if (name === 'building') {
+      delete o.pads.r3; delete o.storage.r3; delete o.pads.b2;
+      o.building = [{ pad: 'r3', kind: 'rig', tier: 1, deposit: 'rare', done: openAt + 3 * MIN }, { pad: 'b2', kind: 'upgradeBay', tier: 1, done: openAt + 8 * MIN },
+        { pad: 'p1', kind: 'power', tier: 2, done: openAt + 12 * MIN }];
+      openAt = T0 + 3 * HOUR;
+      o = advance(o, T0 + 2 * HOUR, quiet).outpost;
+    }
+    // a few defenses beyond the kit: the full set the frame-time measure uses
+    // (cells from the map's own defense ring, spread round it, so the preset follows any map)
+    let n = o.defenses.length;
+    const taken = new Set(o.defenses.map((d) => d.cell.join(','))), ring = defenseRing(map).filter((c) => !taken.has(c.join(',')));
+    ['mg', 'cannon', 'mg', 'cannon'].forEach((kind, i) => { const cell = ring[Math.floor((i + 0.5) * ring.length / 4)]; if (cell) o.defenses.push({ id: `d${++n}`, kind, tier: 1, cell: [...cell], hp: structureDef(kind, 1).battle.hp }); });
+  }
+  s.outposts.ground = o;
+  if (name === 'breached' || name === 'raided') {
+    // the raids happen in the away catch-up when the view opens, through the stand-in
+  }
+  return { s, openAt };
+}
+
+let current = null;
+async function open() {
+  document.getElementById('closed').style.display = 'none';
+  const name = document.getElementById('state').value;
+  const { s, openAt } = presetSave(name);
+  let save = s;
+  const store = { load: () => clone(save), update(fn) { const x = clone(save); fn(x); save = x; return clone(save); } };
+  const speed = +document.getElementById('speed').value || 1, start = performance.now();
+  const now = () => Math.round(openAt + (performance.now() - start) * speed);
+  const raidMode = q.get('raids') || document.getElementById('raids').value;
+  const raidHook = raidMode === 'seam' ? (name === 'raided' ? standIn('wear') : name === 'breached' ? standIn('breach') : undefined) : standIn(raidMode);
+  current = await openOutpostView({ planet: 'ground', tier: document.getElementById('quality').value || null, store, now, raidHook, map,
+    reduced: q.get('reduced') === '1' ? true : undefined });
+  window.outpost = current.handle;
+  window.outpostStore = store;
+  window.outpostReady = true;
+  current.closed.then(() => { window.outpostReady = false; document.getElementById('closed').style.display = 'grid'; });
+}
+document.getElementById('devForm').onsubmit = (e) => {
+  e.preventDefault();
+  const u = new URL(location.href);
+  for (const k of ['state', 'quality', 'raids', 'speed']) u.searchParams.set(k, document.getElementById(k).value);
+  location.href = u.href;
+};
+document.getElementById('reopen').onclick = open;
+open().catch((e) => { console.error(e); document.body.insertAdjacentHTML('beforeend', `<pre style="color:#f88;padding:20px">${String(e && e.stack || e)}</pre>`); });
+</script>
+</body>
+</html>
