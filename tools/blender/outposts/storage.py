@@ -6,6 +6,7 @@ Footprint: a 4 × 4 pad (one unit = one battle cell). A blocky body on a stepped
 a lit hologram box (node `hologram`: the fill level shows here at runtime); a raised block at the left carrying
 a radar dish (node `dish`, turns slowly about anchor `dish`); two raised blocks at the right with stepped spires;
 a central entry portal with an orange lintel and stairs, and side doors with lit windows. Front = -Y.
+The portal's door is node `door` (O10): a shutter, rest pose closed; the view lifts it open while powered.
 """
 import math
 import os
@@ -37,12 +38,26 @@ def make():
     octo("roof_deck", 0, 0, ROOF, ROOF + 0.015, 1.58, 1.38, 0.34, M["mid"])
 
     # front: central portal with a dark door, orange lintel and lit transom; stairs; side doors with windows
-    box("portal", (0, -1.6, 0.6), (1.2, 0.3, 0.8), M["light"], chamfer=0.05)
+    # the portal is a frame (jambs and a header) round a dark recess, so the door can open into it
+    for sx in (-1, 1):
+        box(f"portal_jamb_{sx}", (sx * 0.455, -1.6, 0.6), (0.29, 0.3, 0.8), M["light"], chamfer=0.05)
+    box("portal_header", (0, -1.6, 0.89), (0.64, 0.3, 0.22), M["light"])
     box("portal_cap", (0, -1.6, 1.03), (1.3, 0.36, 0.08), M["white"])
-    box("portal_door", (0, -1.755, 0.5), (0.62, 0.03, 0.56), M["dark"])
-    box("portal_door_seam", (0, -1.77, 0.5), (0.02, 0.02, 0.5), M["mid"])
+    box("portal_recess", (0, -1.49, 0.5), (0.64, 0.04, 0.58), M["dark"])
+    box("portal_floor", (0, -1.6, 0.215), (0.64, 0.3, 0.01), M["deck"])
+    box("portal_inner_light", (0, -1.515, 0.72), (0.4, 0.02, 0.04), M["glow"])
     box("portal_lintel", (0, -1.765, 0.88), (0.8, 0.03, 0.07), M["trim"])
-    box("portal_light", (0, -1.775, 0.73), (0.3, 0.02, 0.04), M["glow"])
+    box("portal_light", (0, -1.775, 0.81), (0.3, 0.02, 0.03), M["glow"])
+    # the door (node `door`): a shutter panel filling the portal, its pivot at the sill. Rest pose CLOSED. The view
+    # (outpostScene.js setDoor) opens it while the tower has power by squashing it to 8 % of its height and lifting
+    # it 0.6 into the header, where it hides; with no power it drops back shut (design §6). No clip: it is a state.
+    sill = (0.0, -1.7, 0.22)
+    box("door__leaf", (0, -1.7, 0.5), (0.62, 0.04, 0.56), M["dark"])
+    for k in range(3):
+        box(f"door__slat_{k}", (0, -1.725, 0.34 + 0.14 * k), (0.58, 0.012, 0.02), M["mid"])
+    box("door__band", (0, -1.725, 0.29), (0.56, 0.012, 0.04), M["trim"])
+    box("door__lamp", (0.21, -1.727, 0.7), (0.06, 0.012, 0.03), M["glow"])
+    node_frame("door", sill)
     for i in range(4):
         top = 0.22 * (i + 1) / 4
         box(f"stair_{i}", (0, -1.83 - 0.11 * (3 - i), top / 2), (0.86, 0.11, top), M["mid"])
