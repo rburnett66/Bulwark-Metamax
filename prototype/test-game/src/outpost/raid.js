@@ -51,13 +51,21 @@
  *    and is not in raid.powered stays inert: it is placed (it blocks and can be shot) but never fires.
  *  - The raiders: one wave of the planet faction's tier I lightGround units (troops and assault tanks), the measured
  *    number for the contract step, cycling Units in order and alternating the raid lanes (the first lane drawn from
- *    the raid's seed). Raiders fire on the
+ *    the raid's seed), plus the planet's Breacher when it has one (owner 2026-11-07: Xenthe and Vexmire, whose Toxic
+ *    troops do nothing to a wall, bring their Artillery). Raid-only strength (owner 2026-11-07, "weaker raiders"):
+ *    every raider's HP × Raider_HP_Mult and damage × Raider_Damage_Mult from Outpost_Raids; its range is capped at
+ *    RAID_RANGE_CAP (no long range at outposts). The battle game's units are unchanged. Raiders fire on the
  *    defenses they pass while they keep marching (the battle's engagesStructuresWhileAdvancing rule): a raid is
  *    dissidents trying to reach the buildings, and the wear they leave is what carries over between raids. Water's
  *    swimmers walk on an outpost's dry ground (domain Walker), since an outpost map has no water lane.
+ *  - The scripted first raid (raid.first; contract 1's "hold the first raid") is a probe: FIRST_RAID_SIZE raiders, no
+ *    breacher, down the lane that passes closest to an armed, powered defense; the probe marches on the nearest gun
+ *    and fights it where it stands. So a player who bought the setup, one Machine Gun and a couple of walls holds it
+ *    while watching (owner 2026-11-07); with no gun it walks in.
  *  - The result: a breach the moment any raider standing on the mesa top comes within BREACH_REACH of a mesa
- *    building (any finished, non-remote pad, the hub included; design §5.2). Held once every raider is dead. A raid still undecided after
- *    RAID_MAX_SEC is held (the survivors withdraw) and reports timedOut.
+ *    building (any finished, non-remote pad, the hub included; design §5.2). Held once every raider is dead. A raid
+ *    still undecided after RAID_MAX_SEC, or in which nothing moves, hurts or is hurt for RAID_STALL_SEC, is held (the
+ *    survivors withdraw) and reports timedOut.
  *  - Deterministic: the sim is seeded with raidSeed(outpost.seed, raid) and steps only in FIXED_DT; no clock, no
  *    Math.random (replay-determinism contract, CLAUDE.md).
  */
@@ -79,14 +87,18 @@ const TERRAIN_CACHE = new WeakMap();   // forge export → Map(bake tune → bui
 export const RAID_DT = FIXED_DT;
 /** A raid undecided after this long is held: the survivors withdraw. */
 export const RAID_MAX_SEC = 300;
+/** A raid in which nothing moves, hurts or is hurt for this long is held: the survivors withdraw. */
+export const RAID_STALL_SEC = 10;
+const STALL_SEC = RAID_STALL_SEC, STALL_EVERY = 30;
 /** A raider this close (cells, from its centre to a pad's edge) to a mesa building has breached. */
 export const BREACH_REACH = 0.75;
 /** Raid lanes for a map with no ground spawns (the draft layout): the north-west corner and the east edge. */
 const DEFAULT_LANES = (cols, rows) => [{ x: 0, y: 3 }, { x: cols - 1, y: rows - 5 }];
 const MESA_TOP = 2;   // outpostPads HEIGHT.TOP
-/** Where "well defended" puts its extra Machine Gun: beside the kit's Cannon (measured on Verdance: it holds more
- *  than beside the kit's MG). */
-export const WELL_DEFENDED_NEAR = 'cannon';
+/** Where "well defended" puts its extra Machine Gun: beside the kit's Machine Gun, the weaker of the kit's two guns,
+ *  so it strengthens the way in that breaks first (measured on the 64 × 32 Verdance map: beside the Cannon it adds
+ *  nothing, because every raid comes down both lanes and the MG's way in breaks first). */
+export const WELL_DEFENDED_NEAR = 'mg';
 /** The outpost seeds the measurement and the tests run, so both read the same medians. */
 export const MEASURE_SEEDS = Object.freeze([11, 222, 3333, 44444, 555555, 6, 77]);
 const KEEP_EVENTS = new Set(['spawn', 'kill', 'build']);
@@ -105,12 +117,48 @@ export function raidSeed(outpostSeed, raid = {}) {
 
 /** The measured raid size for a planet's contract step (Outpost_Raids), or 0 when the data has none. */
 export const raidSize = (planet, step = 1) => (raidFor(planet, step) || {}).size || 0;
-/** The raid's units, in spawn order: the size taken from Units cycled in order. */
+/** The raid's units, in spawn order: the size taken from Units cycled in order, then the planet's Breacher (if any). */
 export function raidUnits(planet, step = 1) {
   const r = raidFor(planet, step);
   if (!r || !r.units.length) return [];
-  return Array.from({ length: r.size }, (_, i) => r.units[i % r.units.length]);
+  return composeRaid(r.units, r.size, r.breacher);
 }
+/** The scripted first raid's raiders: FIRST_RAID_SIZE of the planet's Units, no breacher. */
+export const FIRST_RAID_SIZE = 1;
+export function firstRaidUnits(planet) {
+  const r = raidFor(planet, 1);
+  return r && r.units.length ? composeRaid(r.units, FIRST_RAID_SIZE) : [];
+}
+/** The lane (index) whose open way to the hub passes closest to an armed, powered defense; ties go to the seed. */
+function probeLane(outpost, simMap, lanes, powered, seed) {
+  const guns = outpost.defenses.filter((d) => d.hp > 0 && d.kind !== 'wall' && powered.has(d.id));
+  if (!guns.length) return seed % lanes.length;
+  const grid = buildNavGrid(simMap, []);
+  const base = { x: simMap.base.x, y: simMap.base.y };
+  let best = null;
+  lanes.forEach((l, i) => {
+    const path = findWalkerPath(grid, l, base) || [];
+    let near = Infinity, at = l;
+    for (const w of path) {   // walk the smoothed path cell by cell
+      const n = Math.max(Math.abs(w.x - at.x), Math.abs(w.y - at.y), 1);
+      for (let k = 1; k <= n; k++) {
+        const x = at.x + ((w.x - at.x) * k) / n, y = at.y + ((w.y - at.y) * k) / n;
+        for (const g of guns) near = Math.min(near, Math.hypot(x - g.cell[0], y - g.cell[1]));
+      }
+      at = w;
+    }
+    const key = near * 1000 + ((i - (seed % lanes.length) + lanes.length) % lanes.length);
+    if (!best || key < best.key) best = { key, i };
+  });
+  return best.i;
+}
+/** size raiders cycled from `cycle`, plus one breacher after them when given. */
+export const composeRaid = (cycle, size, breacher = null) =>
+  [...Array.from({ length: size }, (_, i) => cycle[i % cycle.length]), ...(breacher ? [breacher] : [])];
+
+/** No long range at outposts (owner), for raiders too: a raider's weapon reaches no further than the outposts' own
+ *  longest gun (STR-MG 5), so a breacher that is long range in battle (Artillery, 9.5) must come under the guns. */
+export const RAID_RANGE_CAP = Math.max(getStructureDef('STR-MG').range, getStructureDef('STR-Cannon').range);
 
 // ── the board ────────────────────────────────────────────────────────────────────────────────────────────────────
 const dims = (map) => ({ cols: map.width ?? map.cols, rows: map.height ?? map.rows });
@@ -176,7 +224,7 @@ export function raidSimMap(outpost, map, opts = {}) {
 }
 
 /** The starter kit plus one more Machine Gun (design §5.2 "well defended"), on the free, buildable, powered mesa-top
- *  cell (off the pads) nearest the kit's Cannon (WELL_DEFENDED_NEAR). → a new outpost (the one passed in is unchanged). */
+ *  cell (off the pads) nearest the kit's Machine Gun (WELL_DEFENDED_NEAR). → a new outpost (the one passed in is unchanged). */
 export function wellDefended(outpost, map, { near = WELL_DEFENDED_NEAR } = {}) {
   const o = JSON.parse(JSON.stringify(outpost));
   const anchor = o.defenses.find((d) => d.kind === near) || o.defenses[0];
@@ -215,12 +263,21 @@ export function createRaid(outpost, raid = {}, opts = {}) {
   const map = opts.map;
   if (!map) throw new Error('createRaid: opts.map (the outpost map) is required');
   const step = opts.step || 1;
-  const units = opts.units || raidUnits(outpost.planet, step);
+  // the scripted first raid (contract 1 step 3) is a probe: FIRST_RAID_SIZE raiders, no breacher (owner 2026-11-07:
+  // winnable while watching with the setup, one Machine Gun and a couple of walls)
+  const units = opts.units || (raid.first ? firstRaidUnits(outpost.planet) : raidUnits(outpost.planet, step));
+  // raid-only strength (owner 2026-11-07, "weaker raiders"): Outpost_Raids' Raider_HP_Mult / Raider_Damage_Mult for the
+  // planet, applied to every raider inside this raid only; the battle game's units are unchanged
+  const data = raidFor(outpost.planet, step) || {};
+  const hpMult = opts.hpMult ?? data.hpMult ?? 1, dmgMult = opts.dmgMult ?? data.dmgMult ?? 1;
   const seed = opts.seed != null ? opts.seed : raidSeed(outpost.seed, raid);
   const powered = raid.powered instanceof Set ? raid.powered : new Set(raid.powered || []);
   const simMap = raidSimMap(outpost, map, opts);
-  // which lane the first raider takes is drawn from the raid's seed; the raiders then alternate the lanes
-  const lanes = simMap.rings[0].spawnList.ground, k = seed % lanes.length;
+  // which lane the first raider takes is drawn from the raid's seed; the raiders then alternate the lanes. The scripted
+  // first raid instead comes down the lane whose way to the hub passes closest to an armed, powered defense: the probe
+  // comes where the player is watching
+  const lanes = simMap.rings[0].spawnList.ground;
+  const k = raid.first && !opts.units ? probeLane(outpost, simMap, lanes, powered, seed) : seed % lanes.length;
   simMap.rings[0].spawnList.ground = [...lanes.slice(k), ...lanes.slice(0, k)];
   const waves = [{ faction: outpost.planet, spawns: units.map((unitId) => ({ unitId, lane: 'ground', count: 1, delay: 0, interval: 0 })) }];
   const state = createSim(seed, { map: simMap, waves });
@@ -263,10 +320,48 @@ export function createRaid(outpost, raid = {}, opts = {}) {
     for (const u of state.units.values()) {
       if (u._raider || u.side !== 'attacker') continue;
       u._raider = true;
+      u.hp *= hpMult; u.maxHp *= hpMult;
+      u.dps *= dmgMult;
+      if (u.detonate) u.detonate = { ...u.detonate, burst: u.detonate.burst * dmgMult };
+      u.range = Math.min(u.range, RAID_RANGE_CAP);
       u.engagesStructuresWhileAdvancing = true;   // fire on the defenses passed, keep marching
       if (u.domain !== 'Walker') {                // swimmers walk on an outpost's dry ground
         u.domain = 'Walker'; u.altitude = 0; u.path = []; u.pathIdx = 0; u.routeIdx = null;
       }
+      if (probing) u._probe = true;
+    }
+    if (probing) probe();
+  };
+  // the scripted first raid probes the guns: its raider marches on the nearest armed defense (on the open board, up to
+  // the first defense in its way) and, once in range of it, stands and fights it. If no gun is left it goes for the hub.
+  const probing = !!raid.first && !opts.units;
+  const probe = () => {
+    const g = state.navGrid;
+    const guns = [...state.structures.values()].filter((s) => s.hp > 0 && s.lifecycle !== 'Destroyed' && (s.dps || 0) > 0 && !s.unpowered);
+    for (const u of state.units.values()) {
+      if (!u._probe || u.hp <= 0) continue;
+      let gun = null, gd = Infinity;
+      for (const s of guns) { const d = Math.hypot(s.pos.x - u.pos.x, s.pos.y - u.pos.y); if (d < gd) { gd = d; gun = s; } }
+      if (!gun) { if (u._dug) { u.speed = u._speed; u._dug = false; } u._probe = false; continue; }
+      if (gd <= u.range - 0.25) { if (!u._dug) { u._speed = u.speed; u.speed = 0; u._dug = true; } continue; }
+      if (u._dug) { u.speed = u._speed; u._dug = false; }
+      const last = u.path && u.path.length ? u.path[u.path.length - 1] : null;
+      if (u._dug) continue;
+      if (last && u._probeTo === gun.id && u.path === u._probePath && u.pathIdx < u.path.length) continue;
+      const p = findWalkerPath(openGrid, { x: Math.round(u.pos.x), y: Math.round(u.pos.y) }, { x: gun.pos.x, y: gun.pos.y }) || [];
+      const out = [];
+      let at = { x: Math.round(u.pos.x), y: Math.round(u.pos.y) }, blocked = false;
+      for (const w of p) {
+        const n = Math.max(Math.abs(w.x - at.x), Math.abs(w.y - at.y));
+        for (let k = 1; k <= n && !blocked; k++) {
+          const c = { x: Math.round(at.x + ((w.x - at.x) * k) / n), y: Math.round(at.y + ((w.y - at.y) * k) / n) };
+          if (!g.passable[c.y * g.cols + c.x]) blocked = true; else out.push(c);
+        }
+        if (blocked) break;
+        at = w;
+      }
+      if (out.length) { u.path = out; u.pathIdx = 0; u.state = 'moving'; u._probeTo = gun.id; u._probePath = out; }
+      else if (!u._dug) { u._speed = u.speed; u.speed = 0; u._dug = true; }   // at the first defense in its way: fight it
     }
   };
   // walls may seal the hub (an outpost, unlike a battle, may close its ramps): a raider the battle router leaves
@@ -308,11 +403,21 @@ export function createRaid(outpost, raid = {}, opts = {}) {
     for (const u of state.units.values()) if (u.side === 'attacker' && u.hp > 0) { alive = true; break; }
     if (!w.pendingSpawns.length && !alive) return 'held';
     if (state.tick >= maxTicks) { timedOut = true; return 'held'; }
+    // stalled: nothing moved, hurt or was hurt for STALL_SEC (raiders at a wall they cannot damage, out of every
+    // gun's reach) — the survivors withdraw, as at the time limit
+    if (!w.pendingSpawns.length && state.tick % STALL_EVERY === 0) {
+      let sig = 0;
+      for (const u of state.units.values()) if (u.side === 'attacker' && u.hp > 0) sig += Math.round(u.hp) * 7 + Math.round(u.pos.x * 10) * 3 + Math.round(u.pos.y * 10);
+      for (const s of state.structures.values()) sig += Math.round(s.hp) * 13;
+      if (sig === lastSig) { if (++stallChecks * STALL_EVERY * RAID_DT >= STALL_SEC) { timedOut = true; return 'held'; } }
+      else { lastSig = sig; stallChecks = 0; }
+    }
     return null;
   };
+  let lastSig = null, stallChecks = 0;
 
   const obj = {
-    state, dt: RAID_DT, defenseIds, buildingPads, lanes: simMap.rings[0].spawnList.ground, seed, units: units.slice(),
+    state, dt: RAID_DT, defenseIds, buildingPads, lanes: simMap.rings[0].spawnList.ground, seed, units: units.slice(), hpMult, dmgMult,
     get done() { return outcome !== null; },
     tick() {
       if (outcome) return [];
@@ -388,12 +493,12 @@ export function stepOutpost(planet, step, { map, seed = 1 }) {
 /**
  * Raids held before the first breach, with no repairs between raids (design §5.2): raid after raid (windows 0, 1, …)
  * on the outpost, each defense keeping the HP it ended the last raid with. → n (max when none breached).
- * opts: { map, step, units? (default the measured raid), max = 20, bakeTune? }.
+ * opts: { map, step, units?, hpMult?, dmgMult? (default the measured raid), max = 20, bakeTune? }.
  */
-export function holdsBeforeBreach(outpost, { map, step = 1, units, max = 20, bakeTune } = {}) {
+export function holdsBeforeBreach(outpost, { map, step = 1, units, hpMult, dmgMult, max = 20, bakeTune } = {}) {
   const o = JSON.parse(JSON.stringify(outpost));
   for (let k = 0; k < max; k++) {
-    const r = runRaid(o, { window: k, at: k, powered: powerGrids(o, map).powered }, { map, step, units, bakeTune });
+    const r = runRaid(o, { window: k, at: k, powered: powerGrids(o, map).powered }, { map, step, units, hpMult, dmgMult, bakeTune });
     if (r.result === 'breach') return k;
     for (const d of r.defenses) o.defenses.find((x) => x.id === d.id).hp = d.hp;
   }

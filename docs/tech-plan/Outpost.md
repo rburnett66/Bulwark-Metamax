@@ -54,7 +54,7 @@ Five new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edi
 |---|---|---|
 | `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Rig_Head, Wanted_By, Use` |
 | `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Value, Build_Sec, Power_Draw, Power_Supply, Power_Reach, Bay_Hours, Rate_Mult, Capacity_Mult, Battle_Struct, Model, Unlock` — `Battle_Struct` names the `STRUCTURES` entry a defense takes its stats from (`STR-MG`, `STR-Cannon`, `STR-Wall`) |
-| `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Size_Step1, Size_Step2, Size_Step3, Far_Day_Bump, Measured_On` — sizes measured by `outpost_raids.mjs` (§4.3, as built O7) |
+| `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Breacher, Raider_HP_Mult, Raider_Damage_Mult, Size_Step1, Size_Step2, Size_Step3, Far_Day_Bump, Measured_On` — measured by `outpost_raids.mjs` (§4.3, as built O7) |
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
 | `Outpost_Params` | ~18 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20, Far_Buyer_Mult 2, Far_Loyalty_Cost 1, Rig_Bay_Min 15, Harvester_Cap 2, Harvester_Max 4` (the last three O16) |
 
@@ -253,25 +253,61 @@ live view (fixed `FIXED_DT` ticks, so any frame timing then `finish()` gives run
   were moved to close the three ways onto the mesa (`tools/maps/outpost-maps.mjs` and the shipped map): measured, walls
   that only flank a ramp let a single tier I troop walk past both guns to the hub, which sits 1–2 cells from the ramp
   heads. The third way is the mesa's south-east corner, (44, 21): the battle's bake warp opens that rim cell, which the
-  Forge grid has as cliff. The kit's MG moved to (42, 20) to cover it and the south ramp.
+  Forge grid has as cliff. The reference MG moved to (42, 20) to cover it and the south ramp.
 - **A breach** is a raider on the mesa top within 0.75 cells of a finished, non-remote pad (the hub included); below
-  the cliff does not count. A raid undecided after 300 s is held (`timedOut`).
+  the cliff does not count. A raid undecided after 300 s, or in which nothing moves, hurts or is hurt for 10 s (raiders
+  at a wall they cannot damage, out of every gun's reach), is held (`timedOut`: the survivors withdraw).
 - **Unpowered guns** (not in `raid.powered`) are placed but inert; wrecks (HP 0) are not placed.
-- **"Well defended"** is the design's: the kit plus one Machine Gun, on the free powered mesa-top cell nearest the kit's
-  Cannon (`wellDefended`; beside the MG measured no better).
+- **The two measured sets.** The *starter set* is the defenses a player typically buys first: the map's `kitDefenses`
+  (on Verdance a Cannon, a Machine Gun and six walls closing the three ways in), on the reference outpost
+  (`referenceOutpost`, O16). *Well defended* is the starter set plus one Machine Gun (design §5.2), on the free powered
+  mesa-top cell nearest the starter set's Machine Gun (`wellDefended`). Beside the Cannon it adds nothing on this map:
+  every raid now comes down both lanes, and the MG's way in breaks first.
+
+**Owner decisions, 2026-11-07, as built.**
+
+- **Weaker raiders.** `Outpost_Raids` gains `Raider_HP_Mult` and `Raider_Damage_Mult` per planet (0–1, one pair for all
+  three contract steps), applied inside `createRaid` only, to every raider: HP and damage × the multipliers. The
+  battle game's units are unchanged (tested). Every raider's range is also capped at the outposts' longest gun
+  (`RAID_RANGE_CAP`, 5), the "no long range" rule applied to raiders.
+- **A breacher.** `Outpost_Raids` gains `Breacher`: one unit added after the others in each raid of a planet whose
+  troops do nothing to a wall (their damage type's `EFFECTIVENESS` against Structure is 0: Toxic, Xenthe and Vexmire).
+  The rule picks the faction's own ground unit that hurts structures most, light ground first. No light ground unit of
+  those factions hurts structures at all (Toxic is 0 against Structure), so the closest is used: their **Artillery**
+  (Concussion), tier I, with its range capped at 5 by the raid. This is the one documented exception to "troops and
+  low-end tanks only"; the extractor allows exactly `<prefix>-Artillery` as a breacher of the planet's own faction.
+- **The scripted first raid is a probe** (contract 1 step 3, "winnable while watching"): `FIRST_RAID_SIZE` (1) of the
+  planet's Units, no breacher, down the lane that passes closest to an armed, powered defense; the probe marches on the
+  nearest gun and fights it where it stands. Measured on Verdance (10 seeds, every planet's raiders): the setup plus
+  one Machine Gun plus two walls (on the south ramp, on the west ramp, or the MG on the west ramp) holds it 10 / 10;
+  the MG alone holds it; with no defenses it walks in. Without this rule the first raid was a normal raid, and a
+  player needed a gun at every way in to hold it (the O16 measurement: six walls + MG held 4 / 5).
 - **Measurement:** `node tools/economy/outpost_raids.mjs --write` is the whole pipeline (measure → `write_outpost_raids.py`
-  → `extract_mapdata.py` → `MAPDATA.outpostRaids` → `raidFor(planet, step)`); `outpost_model.mjs` prints what the data
-  holds. Median over 7 outpost seeds, 20 raids at most, no repairs. Only Verdance has an outpost map; the other eight
-  planets are measured on it with their own units. Units are `<prefix>-Troops <prefix>-Troops <prefix>-Tanks` cycled.
-  **Re-run it whenever the map changes** (it takes about 15 s for Verdance, 15 min for all nine).
-- **Measured (2026-11-07, the 64 × 32 Verdance map): every planet and step is size 1** (one troop), the smallest raid
-  there is. Kit / well defended medians, step 1: Verdance 4 / 5, Florael 5 / 5, Kessra 5 / 5, Cinder 5 / 5, Ochre 8 / 8,
-  Rime 8 / 8, Lumen 9 / 9, Xenthe and Vexmire 20+ / 20+ (their Toxic troops do almost nothing to a wall, so a closed
-  outpost is never breached). The kit's "about 5" holds; **the well defended set's "about 8" does not**: raids take
-  either lane, a breach anywhere ends the count, and one extra gun can only cover one way in (the ways in are 17 cells
-  apart, the MG's range is 5). Size is an integer and already 1, so it cannot close the gap. Owner decision needed:
-  define "well defended" as one extra gun per way in, or the kit plus an MG and two walls, or accept about 5 for it;
-  and whether Toxic raiders should get a wall-breaking answer.
+  → `extract_mapdata.py` → `MAPDATA.outpostRaids` → `raidFor(planet, step)`), one child process per planet in parallel;
+  `node tools/economy/outpost_raids.mjs dark greenies --write` re-measures some planets and keeps the others' rows.
+  `outpost_model.mjs` prints what the data holds. Per planet it searches the multipliers (HP 0.3–1, damage 0.3–1) and
+  the contract-1 raid size (2–4: the owner wants raids above one troop) together, then the size for steps 2 and 3 at
+  those multipliers; median over 7 outpost seeds, 12 raids at most, no repairs, scored by the distance from 5 (starter)
+  and 8 (well defended), ties to the strongest raiders. Only Verdance has an outpost map; the other eight planets are
+  measured on it with their own units. Units are `<prefix>-Troops <prefix>-Troops <prefix>-Tanks` cycled.
+  **Re-run it whenever a map, a tower or a unit changes** (about 30 min for all nine on a 2-core machine).
+- **Measured (2026-11-07, the 64 × 32 Verdance map).** Starter / well defended medians at step 1:
+
+  | Planet | Raiders | HP × | Damage × | Size (steps 1, 2, 3) | Starter | Well defended |
+  |---|---|---|---|---|---|---|
+  | Verdance (ground) | troops, tanks | 0.8 | 0.5 | 2, 2, 2 | 4 | 8 |
+  | Florael (air) | troops, tanks | 0.7 | 0.3 | 3, 3, 3 | 5 | 8 |
+  | Ochre (hightech) | troops, tanks | 0.8 | 1 | 2, 2, 2 | 5 | 8 |
+  | Kessra (artillery) | troops, tanks | 0.9 | 0.4 | 2, 2, 2 | 5 | 8 |
+  | Rime (water) | troops, tanks | 0.9 | 0.4 | 3, 3, 3 | 5 | 8 |
+  | Cinder (arcane) | troops, tanks | 0.4 | 1 | 3, 4, 4 | 4 | 8 |
+  | Lumen (space) | troops, tanks | 0.5 | 0.6 | 4, 4, 4 | 5 | 8 |
+  | Xenthe (dark) | troops, tanks + Artillery | 0.4 | 1 | 3, 1, 1 | 5 | 10 |
+  | Vexmire (greenies) | troops, tanks + Artillery | 0.4 | 1 | 3, 1, 1 | 5 | 11 |
+
+  Every planet's starter set is in 4–6 and seven of nine well defended sets are in 7–9. Xenthe and Vexmire's well
+  defended sets hold 10–11: their result swings on which lane the breacher takes, and the grid found nothing closer.
+  At steps 2–3, where the larger outpost changes the routes, Florael and Rime's starter sets hold 7 and Cinder's 3–4.
 
 ### 4.4 Tests (`src/outpost/model.test.mjs`)
 
@@ -306,11 +342,14 @@ runs contract 1 end to end on the Verdance map. The player buys the setup, an MG
 4,500 gold, and holds the scripted raid on the real raid hook. `data/outpost.test.mjs` checks the prices, the
 harvester (battle price × 4) and the rig's own bay.
 
-**As built (O7):** those items are in `src/outpost/raid.test.mjs` (9 tests), on the real Verdance outpost map: raid
-composition and outpost defenses, determinism (headless twice, and stepped live with uneven frame times then finished
-headless), saved HP / wrecks / unpowered guns, the scripted first raid through `advance` with `makeRaidHook`, and a
-breach's 25 % loss through `advance`. The kit's 4–6 holds is asserted; the well defended set's 7–9 is a `todo` test,
-because it is not reached (§4.3 as built). Only Verdance has an outpost map, so the hold counts are tested there.
+**As built (O7):** those items are in `src/outpost/raid.test.mjs` (9 tests, about 2.5 s), on the real Verdance outpost
+map: raid composition (light ground raiders of the planet's own faction, the breacher only where the troops cannot
+hurt walls, the raid-only multipliers and range cap, the battle units unchanged) and outpost defenses, determinism
+(headless twice, and stepped live with uneven frame times then finished headless), saved HP / wrecks / unpowered guns,
+the starter set holding 4–6 raids and the well defended set 7–9 (Verdance, from the data), the first-raid probe held by
+the setup plus one MG and two walls, the scripted first raid through `advance` with `makeRaidHook`, and a breach's
+25 % loss through `advance`. Only Verdance has an outpost map, so the hold counts are tested there; the other planets'
+are in the measurement's table (§4.3).
 
 ## 5. The contract and the missions
 
@@ -693,11 +732,11 @@ O9 starts with O2 so every later story is reviewable outside Claude as it lands.
   battles; a 1 MB budget in `replays.js` drops the oldest when long battles would pass it.*
 - **Catch-up cost.** 72 hours away is at most 24 raids, each a short headless sim of a few light units. O2 measures
   the catch-up time on a phone-class CPU and caps it under 200 ms, or spreads it across frames behind the away report.
-  *Measured (O7, node on the dev container, Verdance, one-troop raids, no repairs): 72 h away is 10–24 raids and takes
-  36–330 ms warm, about 600 ms on the first open (the one-time terrain bake and JIT warm-up); a raid is 4–40 ms. Over
-  the 200 ms budget, so O6 spreads catch-up across frames: `advance` is exact when cut into pieces, so the view can
-  advance one raid window per frame behind the away report. A raid that times out (Toxic raiders at a closed wall) runs
-  the full 300 s of sim and is the worst case.*
+  *Measured (O7, node on the dev container, Verdance, the measured raids, the reference set, no repairs): 72 h away is
+  10–24 raids and takes 117–177 ms warm, about 450 ms on the first open (the one-time terrain bake and JIT warm-up); a
+  raid is 7–28 ms. The first open is over the 200 ms budget, so the view advances one raid window per frame behind the
+  away report (O6, as built). The stall rule (10 s with nothing happening) keeps a raid that cannot finish from
+  running the full 300 s.*
 - **Model budget.** Six buildings plus the map must hold the battle view's frame time on the low tier. O6 measures
   frame time on the review page's low tier with the full kit and a live raid.
 

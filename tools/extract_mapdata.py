@@ -240,6 +240,11 @@ def outpost_problems(data):
 # The raiders' unit kinds (owner: troops and low-end tanks only). The sheet holds unit ids; that each is lightGround
 # and spawned at tier I is checked against UNITS by src/outpost/raid.test.mjs (the battle tables live in JS).
 RAID_UNIT_KINDS = ("Troops", "Tanks")
+# The documented breacher exception (owner 2026-11-07): a planet whose troops cannot hurt walls (Toxic does 0 to
+# Structure) adds one unit of its own faction that can. No light ground unit of those factions qualifies, so the
+# breacher is the faction's Artillery (the only one that damages structures); raid.js caps every raider's range at the
+# outposts' longest gun, so it must come under the guns. raid.test.mjs checks it is a ground unit that hurts walls.
+BREACHER_KINDS = ("Artillery",)
 
 
 def raid_problems(data, planets):
@@ -262,6 +267,16 @@ def raid_problems(data, planets):
         for u in units:
             if "-" not in u or u.split("-", 1)[1] not in RAID_UNIT_KINDS:
                 out.append(f"{tag}: unit {u!r} is not a troop or an assault tank (owner: tier I light ground only)")
+        b = r.get("Breacher") or ""
+        if b:
+            if "-" not in b or b.split("-", 1)[1] not in BREACHER_KINDS:
+                out.append(f"{tag}: Breacher {b!r} is not one of the documented breacher kinds {BREACHER_KINDS}")
+            elif units and b.split("-", 1)[0] not in prefixes:
+                out.append(f"{tag}: Breacher {b!r} is not the planet's own faction")
+        for k in ("Raider_HP_Mult", "Raider_Damage_Mult"):
+            v = r.get(k)
+            if not (isinstance(v, (int, float)) and 0 < v <= 1):
+                out.append(f"{tag}: {k} must be in (0, 1] (raiders are never stronger than in battle), got {v!r}")
         sizes = [r.get(f"Size_Step{i}") for i in (1, 2, 3)]
         if not all(isinstance(v, int) and v > 0 for v in sizes):
             out.append(f"{tag}: Size_Step1..3 must be positive whole numbers, got {sizes}")

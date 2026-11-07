@@ -4,7 +4,8 @@
     node tools/economy/outpost_raids.mjs --write       # measures, then runs this and tools/extract_mapdata.py
 
 Writes (or rewrites) the Outpost_Raids sheet of docs/sources/Bulwark-Map-Data.xlsx from the JSON rows the
-measurement writes: one row per planet (9), columns Planet_Key, Units, Size_Step1..3, Far_Day_Bump, Measured_On
+measurement writes: one row per planet (9), columns Planet_Key, Units, Breacher, Raider_HP_Mult, Raider_Damage_Mult, Size_Step1..3,
+Far_Day_Bump, Measured_On
 (tech plan docs/tech-plan/Outpost.md §3.1, §4.3). Same safe write as the other outpost sheets
 (write_collective_contracts.write_sheet: LibreOffice recalculation, refused if any other sheet's values change).
 The sizes are measured, not picked: re-run the measurement rather than hand-editing them.
@@ -16,7 +17,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from write_collective_contracts import write_sheet  # noqa: E402
 
-COLS = ["Planet_Key", "Units", "Size_Step1", "Size_Step2", "Size_Step3", "Far_Day_Bump", "Measured_On"]
+COLS = ["Planet_Key", "Units", "Breacher", "Raider_HP_Mult", "Raider_Damage_Mult", "Size_Step1", "Size_Step2",
+        "Size_Step3", "Far_Day_Bump", "Measured_On"]
 
 
 def main(path):
@@ -28,7 +30,9 @@ def main(path):
         "Outpost raids (9) — one per planet: the raiders and the raid size per contract step",
         "Measured by tools/economy/outpost_raids.mjs on the battle sim (design 5.2: the starter kit holds about 5 raids "
         "before a breach, the well defended set about 8, no repairs). Units: tier I lightGround ids, cycled in spawn "
-        "order. Far_Day_Bump: raiders added on a day the far buyer was used (design 8.5). Measured_On: the outpost map.",
+        "order. Breacher: one unit added to each raid where the troops cannot hurt walls (owner 2026-11-07). "
+        "Raider_HP_Mult / Raider_Damage_Mult: raid-only raider strength, 1 = battle (owner 2026-11-07, weaker raiders). "
+        "Far_Day_Bump: raiders added on a day the far buyer was used (design 8.5). Measured_On: the outpost map.",
         "",
     ], [[r[c] for c in COLS] for r in rows])
 

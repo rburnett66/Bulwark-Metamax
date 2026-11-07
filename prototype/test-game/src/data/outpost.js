@@ -82,7 +82,9 @@ export function contractFor(planet, step) {
 
 /**
  * A planet's raid at a contract step (Outpost_Raids, measured by tools/economy/outpost_raids.mjs; design §5.2):
- * { planet, step, units: [unit ids, cycled in spawn order], size, farDayBump }, or null when the data has none.
+ * { planet, step, units: [unit ids, cycled in spawn order], size, breacher: unit id | null (one per raid, after the
+ * others; owner 2026-11-07, for planets whose troops cannot hurt walls), hpMult, dmgMult (raid-only raider strength,
+ * owner 2026-11-07 "weaker raiders"; 1 = battle strength), farDayBump }, or null when the data has none.
  */
 export function raidFor(planet, step = 1) {
   const r = (MAPDATA.outpostRaids || []).find((x) => x.Planet_Key === planet);
@@ -90,7 +92,8 @@ export function raidFor(planet, step = 1) {
   const s = Math.max(1, Math.min(3, step | 0 || 1));
   return Object.freeze({
     planet, step: s, units: Object.freeze(String(r.Units || '').split(/\s+/).filter(Boolean)),
-    size: num(r[`Size_Step${s}`]), farDayBump: num(r.Far_Day_Bump),
+    size: num(r[`Size_Step${s}`]), breacher: r.Breacher || null,
+    hpMult: num(r.Raider_HP_Mult) || 1, dmgMult: num(r.Raider_Damage_Mult) || 1, farDayBump: num(r.Far_Day_Bump),
   });
 }
 
