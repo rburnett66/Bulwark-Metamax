@@ -336,13 +336,26 @@ with no repairs:
 | Reference set (the map's starter defenses: a cannon, a machine gun, walls) | about 5 | ~30 |
 | No defenses | 0 | the first raid breaches |
 
-The raid sizes that give these numbers are measured by running the sim (the tech plan's `outpost_model.mjs`), not
+The raid sizes that give these numbers are measured by running the sim (the tech plan's `outpost_raids.mjs`), not
 picked by hand, and they are written to the data for each planet. Since 2026-11-07 nothing grants the defenses: the
 "reference set" is the map's own starter layout (`kitDefenses`), which the measurement uses and the player can copy.
 
-**What it takes to hold the first raid** (measured 2026-11-07 on the Verdance map, one-troop raid, five seeds): the
-first setup with one Machine Gun, or one Cannon, or both, is breached every time, because raiders walk past a gun up
-the open ramps. Walls are what hold. The six reference walls with the Machine Gun held 4 of 5 (3,000 gold of
+**The dials (owner, 2026-11-07).**
+
+- **Weaker raiders.** Raiders at an outpost are weaker than in battle: each planet's raid carries an HP and a damage
+  multiplier, measured with the size, so raids of two to four units hold the targets. The battle game is unchanged.
+- **A breacher, every other raid.** Xenthe's and Vexmire's troops do nothing to a wall, so their raids bring one unit
+  that does (the faction's Artillery, its range cut to the outposts' 5). "Breacher every other raid": only every
+  second raid window brings it, by the window's number, so a raid is the same whether watched or not.
+- **Same set, smaller raids.** At contracts 2 and 3 the outpost has more buildings but the yardstick stays the same:
+  the reference set should still hold about 5 raids and the well defended set about 8. Later contract steps' raids
+  are smaller (fewer units, and weaker where the size cannot go lower), not larger.
+- **The first raid is winnable while watching.** The scripted first raid is a single raider that goes for the nearest
+  gun; the first setup with one Machine Gun and a couple of walls holds it.
+
+**What it takes to hold the first raid** (measured 2026-11-07 on the Verdance map, one-troop raid, five seeds, before
+the first raid became a probe, above): the first setup with one Machine Gun, or one Cannon, or both, is breached every
+time, because raiders walk past a gun up the open ramps. Walls are what hold. The six reference walls with the Machine Gun held 4 of 5 (3,000 gold of
 defenses). The six walls with the Cannon held 1 of 5. A breach on the scripted raid costs a quarter of the stored ore,
 and step 3 waits for the next held raid; nothing fails.
 
@@ -617,6 +630,9 @@ Nine new maps, one per planet, made **exactly like the large tower-defense maps*
 | — | Raiders | **Troops and low-end tanks only** (§5.2) |
 | — | Raid balance (2026-11-07) | **Weaker raiders**: raid-only strength multipliers in the workbook, so raid sizes above one troop are possible and the targets hold (kit ~5 raids, well defended ~8); the battle game is unchanged |
 | — | Toxic raiders (2026-11-07) | **A breacher unit**: planets whose troops barely hurt walls (Xenthe, Vexmire) add one unit that is good against structures to each raid |
+| — | Breacher cadence (2026-11-07) | **"Breacher every other raid"**: only every second raid brings the breacher, decided by the raid window's number (the same away and live); it is data (`Breacher_Every` = 2) |
+| — | Later contract steps (2026-11-07) | **"Same set, smaller raids"**: keep the step-1 yardsticks (reference set ~5, well defended ~8) at every step and shrink the step 2 and 3 raids (size, then strength) until they hold |
+| — | First raid (2026-11-07) | **Winnable while watching**: the setup plus one Machine Gun and a couple of walls holds the scripted first raid |
 | — | Habitat (2026-11-07) | **It raises a cap**: the gun cap (§6). Numbers are proposed defaults |
 | — | Building (2026-11-07) | **"The same way the tower defense game works"**: an icon list with prices on the left; the contract grants only the base (the Outpost Hub); the player buys power and a mining station with their own gold (§2.3, §6, §6.1) |
 | — | Storage Tower (2026-11-07) | **Part of the contract's first step**: establishing the outpost asks for the hub, power, a mining station on the iron and a Storage Tower, all powered. It no longer gates mining (next row) |

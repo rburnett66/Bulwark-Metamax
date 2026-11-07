@@ -54,7 +54,7 @@ Five new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edi
 |---|---|---|
 | `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Rig_Head, Wanted_By, Use` |
 | `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Value, Build_Sec, Power_Draw, Power_Supply, Power_Reach, Bay_Hours, Rate_Mult, Capacity_Mult, Battle_Struct, Model, Unlock` — `Battle_Struct` names the `STRUCTURES` entry a defense takes its stats from (`STR-MG`, `STR-Cannon`, `STR-Wall`) |
-| `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Breacher, Raider_HP_Mult, Raider_Damage_Mult, Size_Step1, Size_Step2, Size_Step3, Far_Day_Bump, Measured_On` — measured by `outpost_raids.mjs` (§4.3, as built O7) |
+| `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Breacher, Breacher_Every, Breacher_HP_Mult, Raider_HP_Mult, Raider_Damage_Mult, Size_Step1, Size_Step2, Size_Step3, Strength_Step2, Strength_Step3, Far_Day_Bump, Measured_On` — measured by `outpost_raids.mjs` (§4.3, as built O7) |
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
 | `Outpost_Tech` | 7 (O10) | `Node, Name, Price, Effect, Unlocked_By, Requires, Applies` — the Outpost division of the tech tree (design §7) |
 | `Outpost_Params` | ~18 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20, Far_Buyer_Mult 2, Far_Loyalty_Cost 1, Rig_Bay_Min 15, Harvester_Cap 2, Harvester_Max 4` (the last three O16) |
@@ -267,16 +267,24 @@ live view (fixed `FIXED_DT` ticks, so any frame timing then `finish()` gives run
 
 **Owner decisions, 2026-11-07, as built.**
 
-- **Weaker raiders.** `Outpost_Raids` gains `Raider_HP_Mult` and `Raider_Damage_Mult` per planet (0–1, one pair for all
-  three contract steps), applied inside `createRaid` only, to every raider: HP and damage × the multipliers. The
+- **Weaker raiders.** `Outpost_Raids` gains `Raider_HP_Mult` and `Raider_Damage_Mult` per planet (0–1, × the step's
+  `Strength_Step` at contracts 2–3), applied inside `createRaid` only, to every raider: HP and damage × the multipliers. The
   battle game's units are unchanged (tested). Every raider's range is also capped at the outposts' longest gun
   (`RAID_RANGE_CAP`, 5), the "no long range" rule applied to raiders.
-- **A breacher.** `Outpost_Raids` gains `Breacher`: one unit added after the others in each raid of a planet whose
-  troops do nothing to a wall (their damage type's `EFFECTIVENESS` against Structure is 0: Toxic, Xenthe and Vexmire).
-  The rule picks the faction's own ground unit that hurts structures most, light ground first. No light ground unit of
-  those factions hurts structures at all (Toxic is 0 against Structure), so the closest is used: their **Artillery**
-  (Concussion), tier I, with its range capped at 5 by the raid. This is the one documented exception to "troops and
-  low-end tanks only"; the extractor allows exactly `<prefix>-Artillery` as a breacher of the planet's own faction.
+- **A breacher, every other raid.** `Outpost_Raids` gains `Breacher`: one unit added after the others for a planet
+  whose troops do nothing to a wall (their damage type's `EFFECTIVENESS` against Structure is 0: Toxic, Xenthe and
+  Vexmire). The rule picks the faction's own ground unit that hurts structures most, light ground first. No light ground
+  unit of those factions hurts structures at all, so the closest is used: their **Artillery** (Concussion), tier I. This
+  is the one documented exception to "troops and low-end tanks only"; the extractor allows exactly `<prefix>-Artillery`
+  as a breacher of the planet's own faction.
+  - *Cadence* (owner, 2026-11-07, "breacher every other raid"): `Breacher_Every` (2) — only the raids of windows with
+    `window % Breacher_Every === 0` bring it (`breacherDue`), so the same raid brings the same raiders away and live;
+    the scripted first raid has no window and never does.
+  - *Reach and HP* (O7, measured on the own maps): at the outposts' range of 5 the Artillery shot a ramp's walls from
+    below the cliff, out of every gun's reach, and no strength held it (Vexmire: starter 2 / well defended 2). Its reach
+    is now its faction's troops' (2.5), so it must come up under the guns; there the Machine Gun hits Artillery three
+    times as hard and it died before touching a wall at any strength. So the breacher has its own HP dial,
+    `Breacher_HP_Mult` (against battle HP, × the step's strength), measured with the raid: 6 on Xenthe, 5 on Vexmire.
 - **The scripted first raid is a probe** (contract 1 step 3, "winnable while watching"): `FIRST_RAID_SIZE` (1) of the
   planet's Units, no breacher, down the lane that passes closest to an armed, powered defense; the probe marches on the
   nearest gun and fights it where it stands. Measured on Verdance (10 seeds, every planet's raiders): the setup plus
@@ -284,31 +292,38 @@ live view (fixed `FIXED_DT` ticks, so any frame timing then `finish()` gives run
   the MG alone holds it; with no defenses it walks in. Without this rule the first raid was a normal raid, and a
   player needed a gun at every way in to hold it (the O16 measurement: six walls + MG held 4 / 5).
 - **Measurement:** `node tools/economy/outpost_raids.mjs --write` is the whole pipeline (measure → `write_outpost_raids.py`
-  → `extract_mapdata.py` → `MAPDATA.outpostRaids` → `raidFor(planet, step)`), one child process per planet in parallel;
-  `node tools/economy/outpost_raids.mjs dark greenies --write` re-measures some planets and keeps the others' rows.
-  `outpost_model.mjs` prints what the data holds. Per planet it searches the multipliers (HP 0.3–1, damage 0.3–1) and
-  the contract-1 raid size (2–4: the owner wants raids above one troop) together, then the size for steps 2 and 3 at
-  those multipliers; median over 7 outpost seeds, 12 raids at most, no repairs, scored by the distance from 5 (starter)
-  and 8 (well defended), ties to the strongest raiders. Only Verdance has an outpost map; the other eight planets are
-  measured on it with their own units. Units are `<prefix>-Troops <prefix>-Troops <prefix>-Tanks` cycled.
-  **Re-run it whenever a map, a tower or a unit changes** (about 30 min for all nine on a 2-core machine).
-- **Measured (2026-11-07, the 64 × 32 Verdance map).** Starter / well defended medians at step 1:
+  → `extract_mapdata.py` → `MAPDATA.outpostRaids` → `raidFor(planet, step)`), one child process per planet in parallel,
+  each on the planet's own outpost map (O11); `node tools/economy/outpost_raids.mjs dark greenies --write` re-measures
+  some planets and keeps the others' rows. `outpost_model.mjs` prints what the data holds. Median over 7 outpost seeds,
+  12 raids at most, no repairs, scored by the distance from 5 (starter) and 8 (well defended).
+  - *Step 1*: the planet's multipliers (HP 0.3–1, damage 0.3–1) and the raid size (2–4: the owner wants raids above
+    one troop) together; ties go to the strongest raiders. With a breacher: the breacher's HP (2–10) and the size, the
+    troops' multipliers barely mattering since they cannot hurt walls.
+  - *Steps 2 and 3* (owner, 2026-11-07, **"same set, smaller raids"**): the same two sets (the starter set and the
+    starter set plus one MG; the larger outpost of each step around them), against a raid of at most step 1's size and,
+    where the size bottoms out, a smaller `Strength_Step2` / `Strength_Step3` (0.3–1, × both multipliers and the
+    breacher's HP).
+  - Units are `<prefix>-Troops <prefix>-Troops <prefix>-Tanks` cycled. **Re-run it whenever a map, a tower or a unit
+    changes** (about 25 min for all nine on a 2-core machine).
+- **Measured (2026-11-07, each planet's own 64 × 32 outpost map).** Starter / well defended medians:
 
-  | Planet | Raiders | HP × | Damage × | Size (steps 1, 2, 3) | Starter | Well defended |
-  |---|---|---|---|---|---|---|
-  | Verdance (ground) | troops, tanks | 0.8 | 0.5 | 2, 2, 2 | 4 | 8 |
-  | Florael (air) | troops, tanks | 0.7 | 0.3 | 3, 3, 3 | 5 | 8 |
-  | Ochre (hightech) | troops, tanks | 0.8 | 1 | 2, 2, 2 | 5 | 8 |
-  | Kessra (artillery) | troops, tanks | 0.9 | 0.4 | 2, 2, 2 | 5 | 8 |
-  | Rime (water) | troops, tanks | 0.9 | 0.4 | 3, 3, 3 | 5 | 8 |
-  | Cinder (arcane) | troops, tanks | 0.4 | 1 | 3, 4, 4 | 4 | 8 |
-  | Lumen (space) | troops, tanks | 0.5 | 0.6 | 4, 4, 4 | 5 | 8 |
-  | Xenthe (dark) | troops, tanks + Artillery | 0.4 | 1 | 3, 1, 1 | 5 | 10 |
-  | Vexmire (greenies) | troops, tanks + Artillery | 0.4 | 1 | 3, 1, 1 | 5 | 11 |
+  | Planet | Raiders | HP × | Damage × | Step 1 size | Step 2 size, strength | Step 3 size, strength | Starter (steps 1, 2, 3) | Well defended (steps 1, 2, 3) |
+  |---|---|---|---|---|---|---|---|---|
+  | Verdance (ground) | troops, tanks | 0.8 | 0.5 | 2 | 2, 1 | 2, 1 | 4, 4, 4 | 8, 8, 8 |
+  | Florael (air) | troops, tanks | 0.6 | 0.4 | 3 | 3, 1 | 3, 1 | 5, 4, 4 | 8, 8, 8 |
+  | Ochre (hightech) | troops, tanks | 0.6 | 0.6 | 4 | 4, 1 | 4, 1 | 5, 5, 5 | 8, 8, 8 |
+  | Kessra (artillery) | troops, tanks | 0.3 | 0.8 | 4 | 4, 1 | 4, 1 | 5, 5, 5 | 8, 8, **10** |
+  | Rime (water) | troops, tanks | 0.6 | 0.7 | 3 | 3, 1 | 3, 1 | 5, 4, 4 | 8, 7, 7 |
+  | Cinder (arcane) | troops, tanks | 0.5 | 0.7 | 3 | 3, 0.6 | 3, 0.6 | 5, 5, 5 | 8, 8, 8 |
+  | Lumen (space) | troops, tanks | 0.6 | 0.7 | 3 | 3, 1 | 3, 0.9 | 5, 5, 6 | 8, 8, 8 |
+  | Xenthe (dark) | troops, tanks + Artillery (HP × 6) every 2nd raid | 0.5 | 1 | 3 | 3, 1 | 1, 1 | 6, 6, 6 | 8, 8, **6** |
+  | Vexmire (greenies) | troops, tanks + Artillery (HP × 5) every 2nd raid | 0.5 | 1 | 3 | 3, 1 | 3, 1 | 5, 5, 5 | 8, 8, **10** |
 
-  Every planet's starter set is in 4–6 and seven of nine well defended sets are in 7–9. Xenthe and Vexmire's well
-  defended sets hold 10–11: their result swings on which lane the breacher takes, and the grid found nothing closer.
-  At steps 2–3, where the larger outpost changes the routes, Florael and Rime's starter sets hold 7 and Cinder's 3–4.
+  Every starter set holds 4–6 at every step. The well defended set holds 7–9 at every step except three step-3 cells
+  (bold): Kessra and Vexmire hold 10 (the step-3 outpost's remote rig and station change the raiders' routes so the
+  extra MG covers more; a smaller raid only holds longer, and the owner asked for smaller, not larger, later raids), and
+  Xenthe holds 6 (already at one raider and full strength; the breacher every other raid sets the pace). Size and
+  strength were the only dials for steps 2–3; closing these needs a per-step breacher HP or a larger step-3 raid.
 
 ### 4.4 Tests (`src/outpost/model.test.mjs`)
 
@@ -343,12 +358,13 @@ runs contract 1 end to end on the Verdance map. The player buys the setup, an MG
 4,500 gold, and holds the scripted raid on the real raid hook. `data/outpost.test.mjs` checks the prices, the
 harvester (battle price × 4) and the rig's own bay.
 
-**As built (O7):** those items are in `src/outpost/raid.test.mjs` (9 tests, about 2.5 s), on the real Verdance outpost
+**As built (O7):** those items are in `src/outpost/raid.test.mjs` (11 tests, about 5 s), on the real Verdance outpost
 map: raid composition (light ground raiders of the planet's own faction, the breacher only where the troops cannot
 hurt walls, the raid-only multipliers and range cap, the battle units unchanged) and outpost defenses, determinism
 (headless twice, and stepped live with uneven frame times then finished headless), saved HP / wrecks / unpowered guns,
-the starter set holding 4–6 raids and the well defended set 7–9 (Verdance, from the data), the first-raid probe held by
-the setup plus one MG and two walls, the scripted first raid through `advance` with `makeRaidHook`, and a breach's
+the starter set holding 4–6 raids and the well defended set 7–9 at every contract step (Verdance, from the data), the
+breacher's every-other-window cadence (the same through `createRaid` as in the data), the first-raid probe held by
+the setup plus one MG and two walls on Verdance and on every planet's own map (O11), the scripted first raid through `advance` with `makeRaidHook`, and a breach's
 25 % loss through `advance`. Only Verdance has an outpost map, so the hold counts are tested there; the other planets'
 are in the measurement's table (§4.3).
 
