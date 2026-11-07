@@ -457,9 +457,12 @@ from other planets. It is not advertised. Nothing in the menus mentions it until
 
 ## 9. The outpost map, per planet
 
-Nine new maps, one per planet, authored in the Terrain Forge like the battle maps.
+Nine new maps, one per planet, made **exactly like the large tower-defense maps** (owner, 2026-11-07).
 
-- **Smaller than a battle map,** about 40 × 24 cells, sized to frame in one view on a phone in landscape and portrait.
+- **Built like a battle map:** the same size as the large maps (64 × 32 cells), from the planet's own terrain
+  recipe, exported by the Terrain Forge and baked to a 3D level, with the decor and resources a battle map has. The
+  outpost layer (mesa, pads, deposits, raid lanes, defense ring) sits on top of that. The view frames the mesa, so it
+  still fits on a phone in portrait and landscape; the rest of the map is the planet around it.
 - **A central build mesa** with **7 pads**: the hub pad in the middle and 6 around it (power, rig × 2, storage,
   harvester bay, upgrade bay). There is one spare rig pad on the uncommon deposit; the rare deposit gets a pad at
   contract 2.
