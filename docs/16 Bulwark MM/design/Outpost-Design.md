@@ -328,6 +328,7 @@ themselves. Defenses are placed freely on the outer ring, the way towers are pla
 | **Storage Tower** | bottom right: the building with the dish and the holographic floor | holds extracted ore; the hologram shows how full it is | I (4 h), II (8 h) |
 | **Harvester Bay** | left: the garage with the buggies | builds and runs surface harvesters on the outpost map, just like in battle (2 to start, up to 4); they gather the planet's common and uncommon surface resources at the battle harvest rates, into a 4-hour hopper that empties into the inventory when the player opens the outpost | I |
 | **Upgrade Bay** | top right: the hangar pad with two control towers and a small craft | where Outpost-division tech upgrades are bought and installed; it also lets tech-tree tower upgrades apply to the outpost's defenses | I |
+| **Habitat** | the revised concept's living quarters | **raises the gun cap** (owner, 2026-11-07): the hub crews 3 guns (Machine Guns and Cannons; walls do not count), the kit uses 2; each Habitat tier adds 2 more. Built on a free pad | I (+2), II (+4) |
 | **Defenses** | not in the picture | the battle game's Cannon, Machine Gun and walls (Q2) with their battle stats (§5.2); no anti-air and no long range | from the tech tree |
 
 ### 6.1 Costs (proposed defaults)
@@ -338,6 +339,7 @@ themselves. Defenses are placed freely on the outer ring, the way towers are pla
 | second Mining Rig I | 3,000 | 5 min |
 | Harvester Bay | 2,500 | 5 min |
 | Upgrade Bay | 4,000 | 10 min |
+| Habitat I (+2 guns) / Habitat II (+4 guns) | 3,000 / 5,000 | 10 / 15 min |
 | another Power Station I | 4,000 | 10 min |
 | Power Station II (upgrade) | 6,000 | 15 min |
 | Storage Tower II | 5,000 | 15 min |
@@ -502,6 +504,9 @@ Nine new maps, one per planet, made **exactly like the large tower-defense maps*
 | — | Defense numbers | **The tower defense game's own numbers**: raids are run by the battle sim (§5.2) |
 | — | Defenses allowed | **No anti-air and no long range** for now: Machine Gun, Cannon, walls (§5.2) |
 | — | Raiders | **Troops and low-end tanks only** (§5.2) |
+| — | Raid balance (2026-11-07) | **Weaker raiders**: raid-only strength multipliers in the workbook, so raid sizes above one troop are possible and the targets hold (kit ~5 raids, well defended ~8); the battle game is unchanged |
+| — | Toxic raiders (2026-11-07) | **A breacher unit**: planets whose troops barely hurt walls (Xenthe, Vexmire) add one unit that is good against structures to each raid |
+| — | Habitat (2026-11-07) | **It raises a cap**: the gun cap (§6). Numbers are proposed defaults |
 
 Design gaps closed with defaults on 2026-11-06 (owner review asked): storage per rig (§4.2); contract 2's power
 requirement (§2.4); repair only restores a defense's HP, and kit items carry a value for repairs

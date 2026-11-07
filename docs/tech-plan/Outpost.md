@@ -539,6 +539,7 @@ view that defaults to the mesa; `?map=draft` keeps the draft layout.
 | O12 | Ore icons (27) and deposit colours, with the resource icon pipeline | B |
 | O13 | Contracts 2 and 3: deep drilling in play, Rig Mk II, Cargo Shuttle II (+10 % sales) | B |
 | O14 | The far buyer (design §8.5): `Wanted_By`, the discovery line, the second buyer on SELL, loyalty cost, raid +1 unit that day | B |
+| O15 | Habitat (owner, 2026-11-07): the hub crews 3 guns, each Habitat tier adds 2 (design §6); model, cap in `place`, tests | B |
 
 O9 starts with O2 so every later story is reviewable outside Claude as it lands. O5 runs alongside O1–O4.
 
