@@ -395,10 +395,14 @@ deposits as blue and violet crystal clusters. A deposit with a rig on it shows t
 
 ### 8.4 Mining rigs: one design per material
 
-The owner's direction: the mining towers for different materials are **different designs**. A rig is a shared
-base (the pad footing, the power socket and the ore-cart track to storage) with an **extraction head** that shows
-how that material comes out of the ground. There are six heads, and every ore has one. On every planet the three
-ores use three different heads, so the three rigs of one outpost never look alike.
+The owner's direction: the mining towers for different materials are **different designs**. Each rig is a whole
+building, one per extraction method (a **head** in the tables below), showing how that material comes out of the
+ground. There are six, and every ore has one. On every planet the three ores use three different heads, so the three
+rigs of one outpost never look alike. The owner's concept sheets (2026-11-06) set the look: the Auger Drill is a
+chamfered bunker with an ore chute out of its portal and two side augers angled into rubble heaps; the Deep Bore is
+the same bunker family with a tall tilted drill column banded in glowing orange; the Laser Cutter is the beam
+emitter on a track with rovers. The sheets are in `tools/blender/outposts/ref/` (`mv_drill*.jpg`,
+`set_outpost_v2*.jpg`).
 
 | Head | How it works, on screen | Ores |
 |---|---|---|
