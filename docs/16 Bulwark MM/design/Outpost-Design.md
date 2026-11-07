@@ -651,6 +651,13 @@ requirement (§2.4); repair only restores a defense's HP, and every defense carr
 (§5.2, §6.1); the first raid when the player is away and leaving a live raid (§2.3, §5.3); deep grade as its own item
 (§4.4); the Harvester Bay's numbers (§6), now the Resource Bay's and the harvester's.
 
+### Open after play-test: free placement (owner, 2026-11-07)
+
+Buildings sit on fixed pads; defenses are placed freely on the ring. The owner's view: "We will try this out but it
+unfortunately takes design freedom and strategy away from the player. We will see." The alternative, if play-testing
+agrees: buildings placed anywhere on the mesa top like towers, each a 4 × 4 footprint, with power reaching by distance
+(the reach rules in §4.5 already work by distance; the fixed conduit links and the pad layout in §9 would go).
+
 ## Dependencies
 
 | relation | document | what it holds that this design does not restate |
