@@ -51,7 +51,8 @@ def clip(node, kind, period, axis="Z", amp=0.0, vec=(0.0, 0.0, 0.0), turns=1):
     """A looping clip on a node that has a pivot frame. kind:
     spin   - full turns about the node's own axis (an auger screw);   spin_world - about a world axis (a dish);
     rock   - a sine swing of `amp` degrees about the node's own axis (a pump beam);   sweep - the same about a world
-    axis (a radar);   slide - moves by `vec` over the period, then snaps back (ore riding a chute, one chunk spacing)."""
+    axis (a radar);   slide - moves by `vec` over the period, then snaps back (ore riding a chute, one chunk spacing);
+    travel - eases out by `vec` and back over the period (an ore cart running its track)."""
     assert node in _FRAMES, f"clip on {node} needs node_frame first"
     _CLIPS[node] = dict(kind=kind, period=period, axis=axis, amp=amp, vec=Vector(vec), turns=turns)
 
@@ -65,6 +66,8 @@ def _keys(node):
     k = c["kind"]
     if k == "slide":
         return [(0, p.copy(), q0), (n, p + c["vec"], q0)]
+    if k == "travel":
+        return [(n * i / 16, p + c["vec"] * (0.5 - 0.5 * math.cos(2 * math.pi * i / 16)), q0) for i in range(17)]
     steps = 24 * c["turns"] if k.startswith("spin") else 16
     out = []
     for i in range(steps + 1):

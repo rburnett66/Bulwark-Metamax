@@ -11,7 +11,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from outpost_common import anchor, box, build, mats, octo, ring, window_strip  # noqa: E402
+from outpost_common import anchor, box, build, mats, node_frame, octo, ring, window_strip  # noqa: E402
 from shuttle import make_shuttle  # noqa: E402
 
 DECK_Z = 0.72
@@ -85,6 +85,7 @@ def make():
         ob.scale = (k, k, k)
         ob.location = tuple(c * (1 - k) for c in pad)
 
+    node_frame("shuttle", pad)                           # the game lifts the shuttle off by this pivot on SELL
     anchor("shuttle_pad", (0.0, -0.05, DECK_Z))
     anchor("shuttle_exit", (0.0, -0.05, DECK_Z + 4.0), scale=1.55)
     anchor("gate", (0.0, -3.3, 0.0))

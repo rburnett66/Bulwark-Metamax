@@ -115,6 +115,7 @@ def make():
 
     anchor("dish", pivot)
     anchor("pump", beam_pivot)
+    anchor("debris", (wx, wy, 0.42), color="brine")           # brine splashes at the wellhead
     anchor("brine_l", (-1.12, -0.5, 0.37), height=0.56)
     anchor("brine_r", (1.12, -0.5, 0.37), height=0.56)
     anchor("power", (0, 1.2, 0.02))

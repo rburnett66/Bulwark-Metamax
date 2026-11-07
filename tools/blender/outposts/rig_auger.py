@@ -131,6 +131,8 @@ def make():
     clip("radar", "sweep", 5.0, amp=50)
     anchor("radar", (0, 0.25, 1.29))
     anchor("ore_out", (0, -1.5, 0.05))
+    anchor("debris_l", (-1.15, -1.05, 0.28), color="rock")   # where each auger bites: rock chips fly (3× on Mk II)
+    anchor("debris_r", (1.15, -1.05, 0.28), color="rock")
     anchor("power", (0, 0.85, 0.02))
 
 

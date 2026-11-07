@@ -39,15 +39,15 @@ def make():
         w = 0.62 if k == 0 else 0.42
         for i in range(4):
             top = 0.47 * (i + 1) / 4
-            d = 2.3 - 0.15 * i
+            d = 2.06 - 0.13 * i
             size = (w, 0.16, top) if dx == 0 else (0.16, w, top)
             box(f"ramp_{k}_{i}", (dx * d, dy * d, top / 2), size, M["mid"])
             edge = (w, 0.03, 0.01) if dx == 0 else (0.03, w, 0.01)
             box(f"ramp_edge_{k}_{i}", (dx * (d + 0.065), dy * (d + 0.065), top + 0.005), edge, M["trim"])
-        cheek = (0.08, 0.62, 0.2) if dx == 0 else (0.62, 0.08, 0.2)
+        cheek = (0.08, 0.5, 0.2) if dx == 0 else (0.5, 0.08, 0.2)
         for sx in (-1, 1):                                 # low white cheeks along each ramp
             off = sx * (w / 2 + 0.04)
-            at = (off, dy * 2.08, 0.1) if dx == 0 else (dx * 2.08, off, 0.1)
+            at = (off, dy * 1.9, 0.1) if dx == 0 else (dx * 1.9, off, 0.1)
             box(f"ramp_cheek_{k}_{sx}", at, cheek, M["white"])
     # front walkway from the ramp to the door
     box("walk", (0, -1.35, 0.5), (0.62, 0.6, 0.02), M["mid"])
