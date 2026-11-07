@@ -303,6 +303,140 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     root.add(selMesh);
   }
 
+  // ── the build menu's placement [MM-story_mw6k9xec_5]: valid pads glow, the ghost building on the aimed pad ─────────
+  // (defenses use the battle renderer's own outline ghost and range ring through renderFrame's ui, and the ring cells)
+  const glowMat = new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: 0.3, depthWrite: false, toneMapped: false });
+  let glowMesh = null;
+  function showPads(ids) {
+    if (glowMesh) { root.remove(glowMesh); glowMesh.geometry.dispose(); glowMesh = null; }
+    if (!ids || !ids.length) return;
+    const geos = [];
+    for (const id of ids) {
+      const p = pads.get(id); if (!p) continue;
+      const [cx, cz] = centre(p), w = p.w - 0.5, d = p.h - 0.5, t = 0.16;
+      geos.push(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2).translate(cx, 0.15, cz));
+      geos.push(new THREE.BoxGeometry(w, 0.03, t).translate(cx, 0.16, cz - d / 2), new THREE.BoxGeometry(w, 0.03, t).translate(cx, 0.16, cz + d / 2),
+        new THREE.BoxGeometry(t, 0.03, d).translate(cx - w / 2, 0.16, cz), new THREE.BoxGeometry(t, 0.03, d).translate(cx + w / 2, 0.16, cz));
+    }
+    if (!geos.length) return;
+    glowMesh = new THREE.Mesh(mergeGeos(THREE, geos), glowMat);
+    glowMesh.name = 'outpost-build-pads'; glowMesh.renderOrder = 9;
+    root.add(glowMesh);
+  }
+  const GHOST = { ok: 0x52e8ff, bad: 0xff3a3a };   // the battle ghost's outline colours (overlays/placement.js OUTLINE)
+  const ghostBody = new THREE.MeshBasicMaterial({ color: GHOST.ok, transparent: true, opacity: 0.22, depthWrite: true, toneMapped: false });
+  const ghostHull = new THREE.MeshBasicMaterial({ color: GHOST.ok, transparent: true, opacity: 0.9, side: THREE.BackSide, depthWrite: false, toneMapped: false });
+  const ghosts = new Map();   // slug | kind → { group } (built on first use, kept)
+  let ghostShown = null, ghostWant = null;
+  async function ghostFor(key, slug, kind) {
+    if (ghosts.has(key)) return ghosts.get(key);
+    const entry = { group: null };
+    ghosts.set(key, entry);
+    const inst = slug ? await kit.make(slug) : placeholderBay(kind);
+    if (!inst) return entry;
+    const body = inst.object, hull = body.clone(true);
+    body.traverse((o) => { if (o.isMesh) { o.material = ghostBody; o.castShadow = false; o.receiveShadow = false; o.renderOrder = 10; } });
+    hull.traverse((o) => { if (o.isMesh) { o.material = ghostHull; o.castShadow = false; o.renderOrder = 11; } });
+    hull.scale.multiplyScalar(1.045);
+    const g = new THREE.Group(); g.add(body, hull); g.visible = false; g.name = `outpost-ghost-${key}`;
+    root.add(g);
+    entry.group = g; entry.inst = inst;
+    if (ghostWant && ghostWant.key === key) applyGhost();
+    return entry;
+  }
+  function applyGhost() {
+    const want = ghostWant, e = want && ghosts.get(want.key);
+    if (ghostShown && ghostShown !== e && ghostShown.group) ghostShown.group.visible = false;
+    ghostShown = null;
+    if (!want || !e || !e.group) return;
+    const p = pads.get(want.pad); if (!p) return;
+    const [cx, cz] = centre(p);
+    e.group.position.set(cx, PAD_Y + 0.07, cz);
+    e.group.visible = true;
+    const c = want.valid ? GHOST.ok : GHOST.bad;
+    ghostBody.color.setHex(c); ghostHull.color.setHex(c);
+    ghostShown = e;
+  }
+  /** The ghost building on a pad: { pad, slug (GLB; null → the placeholder block), kind, valid }, or null. */
+  function showGhost(g) {
+    ghostWant = g ? { ...g, key: g.slug || g.kind } : null;
+    if (ghostWant && !ghosts.has(ghostWant.key)) ghostFor(ghostWant.key, g.slug, g.kind);
+    applyGhost();
+  }
+
+  // ── warnings [MM-story_mw6k9xec_5] (owner 2026-11-07 07:33): a marker over each building with a problem — a bolt for
+  // no power, a full crate for storage full — readable on a phone (screen-sized sprites, drawn over everything, a
+  // gentle bob); an unpowered Storage Tower shows its door shut (a shutter over the door anchor: the GLB has no door node).
+  const markerTex = {};
+  function markerTexture(kind) {
+    if (markerTex[kind]) return markerTex[kind];
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+    const g = cv.getContext('2d');
+    const ring = kind === 'no_power' ? '#ff4a3a' : '#ffb020';
+    g.beginPath(); g.arc(64, 64, 54, 0, Math.PI * 2); g.fillStyle = 'rgba(16,20,26,0.92)'; g.fill();
+    g.lineWidth = 9; g.strokeStyle = ring; g.stroke();
+    g.save(); g.translate(64, 64); g.scale(3.4, 3.4); g.translate(-10, -10);
+    if (kind === 'no_power') {
+      g.fillStyle = '#ffd23a'; g.strokeStyle = '#7a4a00'; g.lineWidth = 0.9; g.lineJoin = 'round';
+      const p = new Path2D('M11.5 1 3.5 11.5h5L7.5 19l9-11.5h-5.2z'); g.fill(p); g.stroke(p);
+    } else {
+      g.fillStyle = '#d99a22'; g.strokeStyle = '#3a2400'; g.lineWidth = 0.9;
+      g.fillRect(2.5, 6, 15, 11); g.strokeRect(2.5, 6, 15, 11);
+      g.beginPath(); g.moveTo(2.5, 10); g.lineTo(17.5, 10); g.moveTo(7.5, 6); g.lineTo(7.5, 17); g.moveTo(12.5, 6); g.lineTo(12.5, 17); g.stroke();
+      g.fillStyle = '#f0c050'; g.beginPath(); g.moveTo(4, 6); g.lineTo(6, 2); g.lineTo(14, 2); g.lineTo(16, 6); g.closePath(); g.fill(); g.stroke();
+    }
+    g.restore();
+    const t = new THREE.CanvasTexture(cv);
+    markerTex[kind] = t;
+    return t;
+  }
+  const markers = new Map();   // pad → { sprite, kind }
+  const shutterMat = new THREE.MeshStandardMaterial({ color: 0x2b3036, roughness: 0.7, metalness: 0.4, emissive: 0x3a0806, emissiveIntensity: 0.6 });
+  const doors = new Map();     // pad → mesh
+  let warnSig = '';
+  function setWarnings(w, markerOf) {
+    const sig = JSON.stringify(w || {});
+    if (sig === warnSig) return;
+    warnSig = sig;
+    const want = new Map();
+    for (const [pad, list] of Object.entries(w || {})) { const k = markerOf(list); if (k && pads.has(pad)) want.set(pad, k); }
+    for (const [pad, m] of markers) if (want.get(pad) !== m.kind) { root.remove(m.sprite); m.sprite.material.dispose(); markers.delete(pad); }
+    for (const [pad, kind] of want) {
+      if (markers.has(pad)) continue;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: markerTexture(kind), depthTest: false, depthWrite: false, transparent: true, sizeAttenuation: false, toneMapped: false }));
+      sp.scale.set(0.058, 0.058, 1); sp.renderOrder = 20; sp.name = `outpost-warning-${pad}`;
+      const [cx, cz] = centre(pads.get(pad));
+      const e = built.get(pad), h = e && e.slug && kit.manifest[e.slug] ? kit.manifest[e.slug].height : 1.6;
+      sp.userData = { x: cx, y: h + 1.3, z: cz, ph: hash(pad) % 100 / 16 };
+      sp.position.set(cx, h + 1.3, cz);
+      root.add(sp);
+      markers.set(pad, { sprite: sp, kind });
+    }
+    // the shut door on an unpowered storage tower
+    const shut = new Set(Object.entries(w || {}).filter(([, l]) => l.includes('door_closed')).map(([p]) => p));
+    for (const [pad, m] of doors) if (!shut.has(pad)) { root.remove(m); m.geometry.dispose(); doors.delete(pad); }
+    for (const pad of shut) {
+      if (doors.has(pad) || !pads.has(pad)) continue;
+      const [cx, cz] = centre(pads.get(pad));
+      const a = (kit.manifest.storage && kit.manifest.storage.anchors && kit.manifest.storage.anchors.door) || [0, 0, 2.3];
+      const geos = [new THREE.BoxGeometry(1.5, 1.15, 0.1).translate(0, 0.58, 0)];
+      for (let i = 0; i < 3; i++) geos.push(new THREE.BoxGeometry(1.52, 0.08, 0.12).translate(0, 0.25 + i * 0.33, 0.01));
+      const m = new THREE.Mesh(mergeGeos(THREE, geos), shutterMat);
+      m.position.set(cx + a[0], PAD_Y + 0.07 + a[1], cz + a[2] - 0.12);
+      m.name = `outpost-door-shut-${pad}`;
+      root.add(m);
+      doors.set(pad, m);
+    }
+    r.lights.invalidateShadows();
+  }
+  function stepMarkers() {
+    for (const { sprite } of markers.values()) {
+      const u = sprite.userData;
+      sprite.position.y = u.y + (reduced ? 0 : Math.sin(clock * 2.4 + u.ph) * 0.18);
+    }
+    if (glowMesh) glowMat.opacity = reduced ? 0.3 : 0.22 + 0.14 * (0.5 + 0.5 * Math.sin(clock * 3.2));
+  }
+
   // ── the SELL sequence (sellTimeline.js drives it) ─────────────────────────────────────────────────────────────
   let sale = null, shuttle = null, shuttleFx = null;
   const crateMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.26, 0.34), new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.2, emissive: 0x111111 }), 16);
@@ -467,10 +601,15 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       out.sale = stepSale(dt, out);
       out.debris = stepDebris(reduced ? dt * 0.5 : dt);
       if (o) stepSparks(o, dt);
+      stepMarkers();
+      if (ghostShown && ghostShown.inst) ghostShown.inst.update(dt, r.camera);
       return out;
     },
     playSale, get saling() { return !!sale; },
-    pickBuilding, select, showCells, showReach,
+    pickBuilding, select, showCells, showReach, showPads, showGhost, setWarnings,
+    /** Is the ghost drawn now (tests / review)? */
+    get ghost() { return ghostShown && ghostShown.group && ghostShown.group.visible ? { pad: ghostWant.pad, valid: ghostWant.valid, key: ghostWant.key } : null; },
+    get warningMarkers() { return [...markers].map(([pad, m]) => ({ pad, kind: m.kind })); },
     /** The world position of a pad's centre (cells), for the camera. */
     padCentre(id) { const p = pads.get(id); return p ? centre(p) : null; },
     buildingCount: () => [...built.values()].filter((e) => e.inst).length,

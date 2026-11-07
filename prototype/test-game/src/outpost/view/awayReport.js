@@ -8,7 +8,7 @@
 import { oreById } from '../../data/ores.js';
 
 const HOUR = 3_600_000, MIN = 60_000;
-const KIND_NAME = { hub: 'Outpost Hub', power: 'Power Station', rig: 'Mining Rig', storage: 'Storage Tower', harvesterBay: 'Harvester Bay', upgradeBay: 'Upgrade Bay' };
+const KIND_NAME = { hub: 'Outpost Hub', power: 'Power Station', rig: 'Mining Rig', storage: 'Storage Tower', harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay' };
 const ROMAN = ['', 'I', 'II', 'III'];
 
 /** "3 h 12 min", "45 min", "2 days 4 h". */

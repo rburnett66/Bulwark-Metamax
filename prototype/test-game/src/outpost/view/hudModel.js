@@ -9,15 +9,17 @@
 import { powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems } from '../model.js';
 import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST } from '../../data/outpost.js';
 import { oresOf, oreById } from '../../data/ores.js';
+import { bayKind } from './buildMenu.js';
+import { buildingWarnings, warningLines } from './warnings.js';
 
 export const KIND_NAME = Object.freeze({
   hub: 'Outpost Hub', power: 'Power Station', rig: 'Mining Rig', storage: 'Storage Tower',
-  harvesterBay: 'Harvester Bay', upgradeBay: 'Upgrade Bay', cannon: 'Cannon', mg: 'Machine Gun', wall: 'Wall',
-});
+  harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay', cannon: 'Cannon Tower', mg: 'Machine Gun', wall: 'Wall',
+});   // the Harvester Bay is the Resource Bay (owner 2026-11-07); the turret tower is the Cannon Tower
 const RIG_NAME = { auger: 'Auger Drill', laser: 'Laser Cutter', brine: 'Brine Pump', crystal: 'Crystal Harvester', bore: 'Deep Bore', shielded: 'Shielded Extractor' };
 export const ROMAN = Object.freeze(['', 'I', 'II', 'III']);
 /** What a pad role can take (model.js ROLE_FITS, read the other way round) — the BUILD menu's choices. */
-const BUILDS_ON = { power: ['power'], spare: ['power', 'harvesterBay', 'upgradeBay'], bay: ['harvesterBay', 'upgradeBay'], rig: ['rig'], storage: ['storage'], hub: ['hub'] };
+const buildsOn = (role) => ({ power: ['power'], spare: ['power', bayKind(), 'upgradeBay'], bay: [bayKind(), 'upgradeBay'], rig: ['rig'], storage: ['storage'], hub: ['hub'] })[role];
 
 // ── formatting ───────────────────────────────────────────────────────────────────────────────────────────────────
 /** 950 → "950", 12_400 → "12,400", 1_250_000 → "1.25M". */
@@ -65,7 +67,7 @@ export function hudModel(o, map, { gold = 0 } = {}) {
     }
   }
   let units = 0, cap = 0;
-  for (const pad of Object.keys(o.pads).filter((id) => o.pads[id].kind === 'rig')) { units += bayUnits(o, pad); cap += bayCapacity(o, pad); }
+  for (const pad of Object.keys(o.pads).filter((id) => o.pads[id].kind === 'rig')) { units += bayUnits(o, pad); cap += bayCapacity(o, pad, map); }
   const { grids, off } = powerGrids(o, map);
   const supply = grids.reduce((a, g) => a + g.supply, 0), draw = grids.reduce((a, g) => a + g.draw, 0);
   let hp = 0, max = 0;
@@ -128,9 +130,13 @@ export function panelModel(o, map, sel, ctx = {}) {
   else if (off[pad.id]) { status = off[pad.id] === 'reach' ? 'No power: out of reach' : 'No power: grid short'; tone = 'off'; }
   else if (!o.online) { status = 'Waiting to go online'; tone = 'warn'; }
   const out = { title, sub: `pad ${pad.id}${pad.remote ? ' · remote site' : ''}`, status, tone, stats, kind, tier };
+  // the building's warnings (owner 2026-11-07 07:33): no power, storage full, the storage tower's door shut
+  const warn = b ? (buildingWarnings(o, map)[pad.id] || []) : [];
+  if (warn.length) out.warnings = warningLines(warn).map((text) => ({ text, icon: /full/.test(text) ? 'crate' : /door/.test(text) ? 'door' : 'bolt' }));
+  if (b && !job && warn.includes('door_closed')) { out.status = 'No power: door shut'; out.tone = 'off'; }
   if (b && kind === 'rig') {
     const ore = oresOf(o.planet).find((x) => x.tier === b.deposit);
-    const cap = bayCapacity(o, pad.id), units = bayUnits(o, pad.id);
+    const cap = bayCapacity(o, pad.id, map), units = bayUnits(o, pad.id);
     const running = o.online && powered.has(pad.id) && !job;
     if (running && units >= cap - 1e-6) { out.status = 'Bay full: sell to resume'; out.tone = 'warn'; }
     stats.push(['Ore', ore ? `${ore.name}${b.deep ? ', deep grade' : ''}` : '—']);
@@ -147,7 +153,7 @@ export function panelModel(o, map, sel, ctx = {}) {
   } else if (b && kind === 'storage') {
     const def = structureDef('storage', b.tier);
     let units = 0, cap = 0;
-    for (const id of Object.keys(o.pads).filter((x) => o.pads[x].kind === 'rig')) { units += bayUnits(o, id); cap += bayCapacity(o, id); }
+    for (const id of Object.keys(o.pads).filter((x) => o.pads[x].kind === 'rig')) { units += bayUnits(o, id); cap += bayCapacity(o, id, map); }
     stats.push(['Holds', `${def.bayHours} h per rig`], ['Stored', `${fmtUnits(units)} / ${fmtUnits(cap)}`]);
     out.bay = cap > 0 ? units / cap : 0;
   } else if (b && kind === 'hub') {
@@ -176,7 +182,7 @@ function powerGridOf(o, map, stationPad) {
 
 /** An empty pad's panel: what can be built on it, with price and why not. */
 function buildPanel(o, map, pad, ctx) {
-  const kinds = BUILDS_ON[pad.role] || [];
+  const kinds = buildsOn(pad.role) || [];
   const tiers = ctx.unlockedTiers || ['common'];
   const options = kinds.map((kind) => {
     const def = structureDef(kind, 1);

@@ -20,9 +20,13 @@ export const VIEW_YAW = 0.38;
 
 export function layoutFor(w, h) {
   const mode = w >= 900 && h >= 600 ? 'desktop' : w > h ? 'landscape' : 'portrait';
+  // left: the BUILD menu's rail (story O17; the battle palette's reactive rail, render/buildPalette.js railFit — one
+  // column of ~64 px buttons on a portrait phone and a desktop, two columns of 58 px on a landscape phone). On a
+  // portrait phone the capped camera cannot clear any of it (the mesa's pads already fill the width at the cap), so
+  // there the rail floats over the mesa's western edge, as the battle's rail floats over the board on a phone.
   const insets = mode === 'portrait' ? { top: 104, bottom: 128, left: 0, right: 0 }
-    : mode === 'landscape' ? { top: 46, bottom: 0, left: 0, right: Math.min(190, Math.round(w * 0.24)) }
-      : { top: 70, bottom: 104, left: 0, right: 0 };
+    : mode === 'landscape' ? { top: 46, bottom: 0, left: 144, right: Math.min(190, Math.round(w * 0.24)) }
+      : { top: 70, bottom: 104, left: 100, right: 0 };
   return { mode, w, h, insets };
 }
 

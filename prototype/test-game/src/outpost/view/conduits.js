@@ -76,7 +76,7 @@ export function planBuildings(o, map, now) {
   const { powered } = powerGrids(o, map);
   const rigs = Object.keys(o.pads).filter((id) => o.pads[id].kind === 'rig');
   let units = 0, cap = 0;
-  for (const id of rigs) { units += Object.values(o.storage[id] || {}).reduce((a, b) => a + b, 0); cap += bayCapacity(o, id); }
+  for (const id of rigs) { units += Object.values(o.storage[id] || {}).reduce((a, b) => a + b, 0); cap += bayCapacity(o, id, map); }
   const fill = cap > 0 ? Math.min(1, units / cap) : 0;
   const hub = Object.keys(o.pads).find((id) => o.pads[id].kind === 'hub');
   const storage = Object.keys(o.pads).find((id) => o.pads[id].kind === 'storage');
@@ -99,7 +99,7 @@ export function planBuildings(o, map, now) {
     const on = kind === 'power' ? true : powered.has(p.id);
     if (b && !on) Object.assign(item, { glow: 0.05, tint: item.upgrading ? item.tint : TINT.off, unpowered: true });
     if (b && kind === 'rig') {
-      const bayFull = Object.values(o.storage[p.id] || {}).reduce((a, c) => a + c, 0) >= bayCapacity(o, p.id) - 1e-6;
+      const bayFull = Object.values(o.storage[p.id] || {}).reduce((a, c) => a + c, 0) >= bayCapacity(o, p.id, map) - 1e-6;
       item.working = !!(coreOn && on && !job && !bayFull);
       item.mk2 = b.tier >= 2;
       item.deep = !!b.deep;

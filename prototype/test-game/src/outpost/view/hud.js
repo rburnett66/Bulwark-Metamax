@@ -10,8 +10,19 @@
  * Layouts (layout.js decides; `data-layout` on the root): portrait (top bar in two rows, actions along the bottom,
  * the panel a bottom sheet), landscape (slim top row, actions in a right column, the panel on the left), desktop.
  * Every number comes from hudModel.js; every tap calls back into the view, which acts through the session.
+ *
+ * The BUILD menu (story O17 [MM-story_mw6k9xec_5], owner 2026-11-07: "the same way the tower defense game works. An
+ * icon list with cost on the left side of the screen"): the battle HUD's own palette (render/buildPalette.js — its CSS,
+ * its reactive left rail, its picture + name + cost buttons, hotkey badges, bw-selected / bw-poor) down the left in
+ * every layout, as on a battle phone. Its items are buildMenu.js's model; a locked item shows a padlock and says why
+ * on hover / tap; the first-run guidance pulses with the battle's hint glow. While an item is armed the banner says
+ * where it goes, with CONFIRM (touch: once a spot is aimed) and CANCEL.
  */
 import { fmtGold, fmtUnits, sellButton, ROMAN } from './hudModel.js';
+import { PALETTE_CSS, paletteBaseCss, railFit, applyRailFit, STRUCT_ICONS } from '../../render/buildPalette.js';
+import { buildIcon, buildIconUrl } from '../../render/buildIcons.js';
+import { OUTPOST_GLYPHS } from './menuIcons.js';
+import { BATTLE_ICON } from './buildMenu.js';
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap';
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -168,7 +179,7 @@ export const HUD_CSS = `
 .op[data-layout="landscape"] .op-chip .lbl { display:none; }
 .op[data-layout="landscape"] .op-bar { width:42px; }
 .op[data-layout="landscape"] .op-actions { left:auto; transform:none; right:max(10px, env(safe-area-inset-right)); bottom:max(10px, env(safe-area-inset-bottom)); flex-direction:column; align-items:stretch; }
-.op[data-layout="landscape"] .op-btn[data-a="build"] { order:1; } .op[data-layout="landscape"] .op-btn.repair { order:2; } .op[data-layout="landscape"] .op-btn.sell { order:3; }
+.op[data-layout="landscape"] .op-btn.repair { order:2; } .op[data-layout="landscape"] .op-btn.sell { order:3; }
 .op[data-layout="landscape"] .op-btn { height:48px; min-width:150px; }
 .op[data-layout="landscape"] .op-btn.sell { height:58px; }
 .op[data-layout="landscape"] .op-panel { left:max(8px, env(safe-area-inset-left)); top:58px; bottom:8px; width:min(300px, 36%); max-height:none; }
@@ -209,8 +220,49 @@ export const HUD_CSS = `
 .op-rep-act { display:flex; gap:10px; margin-top:18px; }
 .op-rep-act .op-wide { margin:0; }
 .op-rep-empty { color:#8A97A8; font-weight:600; padding:6px 0; }
+
+/* ── the BUILD menu: the battle palette (render/buildPalette.js), down the left [MM-story_mw6k9xec_5] ── */
+${PALETTE_CSS}
+${paletteBaseCss('.op')}
+.op .bw-palette.op-rail { left:max(6px, env(safe-area-inset-left)); top:var(--rail-top, 70px); z-index:1; }
+.op .bw-buildbtn { position:relative; }
+.op .bw-bname .op-s { display:none; }
+.op .bw-palette.op-narrow .bw-bname { letter-spacing:.02em; }
+.op .bw-palette.op-narrow .bw-bname .op-l { display:none; }
+.op .bw-palette.op-narrow .bw-bname .op-s { display:inline; }
+.op .bw-buildbtn .bw-cost { font-family:'Courier New', monospace; font-weight:700; }
+.op .bw-buildbtn.bw-poor .bw-cost { color:#ff6a5a; }
+.op .bw-buildbtn.bw-locked { opacity:0.45; }
+.op .bw-buildbtn.bw-locked .bw-cost { color:#9aa6b4; }
+.op .bw-lock { position:absolute; top:2px; right:3px; width:11px; height:12px; }
+.op .bw-count { position:absolute; top:1px; right:3px; font-size:9px; font-weight:800; color:#bfe0ff; text-shadow:0 1px 2px #000; }
+.op .bw-buildbtn.bw-locked .bw-count { right:15px; }
+.op .bw-buildbtn.op-guide { border-color:#5fe0ff; animation:op-guide 1.6s ease-in-out infinite; }
+@keyframes op-guide { 0%,100% { box-shadow:0 0 10px -4px #5fe0ff; } 50% { box-shadow:0 0 18px 0 #5fe0ff; } }
+.op .bw-buildbtn.op-guide::after { content:"▸"; position:absolute; right:-11px; top:50%; transform:translateY(-50%); color:#5fe0ff; font-size:14px; text-shadow:0 0 6px #5fe0ff; animation:op-nudge 1.6s ease-in-out infinite; }
+@keyframes op-nudge { 0%,100% { transform:translate(0,-50%); } 50% { transform:translate(4px,-50%); } }
+.op-banner .op-confirm { background:linear-gradient(180deg,#6fe3ff,var(--cyan) 50%,var(--cyan-d)); color:#062433; }
+.op-warn { display:flex; align-items:center; gap:8px; margin:0 0 10px; padding:7px 10px; background:#fff4e0; border:1px solid #e6b45a; border-left:4px solid var(--warn); font-weight:700; letter-spacing:.03em; }
+.op-warn.bad { background:#fde9e7; border-color:#e5a39c; border-left-color:var(--bad); }
+.op-warn svg { width:18px; height:18px; flex:0 0 auto; }
+.op-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.op-chips .op-opt { flex:1 1 auto; }
+.op[data-layout="portrait"] .op-banner, .op[data-layout="landscape"] .op-banner { left:calc(var(--rail-right, 0px) + 8px); right:8px; transform:none; max-width:none; justify-content:space-between; }
+.op[data-layout="landscape"] .op-banner { right:calc(min(190px, 24%) + 8px); }
+.op[data-layout="portrait"] .op-online { left:calc(var(--rail-right, 0px) + 8px); right:8px; width:auto; transform:none; }
+.op[data-layout="landscape"] .op-panel { left:calc(var(--rail-right, 150px) + 8px); }
+.op[data-layout="landscape"] .op-online { left:calc(var(--rail-right, 150px) + 8px); }
 @media (prefers-reduced-motion: reduce) { .op *, .op *::before, .op *::after { animation:none !important; transition:none !important; } .op-rep-row { opacity:1; transform:none; } }
 `;
+
+/** Names for the narrow two-column rail (a landscape phone), where the long ones would clip. */
+const SHORT = { power: 'POWER', rig: 'MINING', storage: 'STORAGE', resourceBay: 'RES. BAY', upgradeBay: 'UPGRADE', cannon: 'CANNON' };
+const LOCK_SVG ='<svg class="bw-lock" viewBox="0 0 11 12"><rect x="1" y="5" width="9" height="7" rx="1" fill="#cfd6dd"/><path d="M3 5V3.6a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="#cfd6dd" stroke-width="1.5"/></svg>';
+export const WARN_SVG = {
+  bolt: '<svg viewBox="0 0 20 20"><path d="M11.5 1 3.5 11.5h5L7.5 19l9-11.5h-5.2z" fill="#ffd23a" stroke="#8a5a00" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+  crate: '<svg viewBox="0 0 20 20"><rect x="2" y="5" width="16" height="12" fill="#c98a12" stroke="#5a3a00" stroke-width="1.3"/><path d="M2 9h16M7 5v12M13 5v12" stroke="#5a3a00" stroke-width="1.1"/><path d="M5 1.5h10l1.5 3.5h-13z" fill="#e0a83a" stroke="#5a3a00" stroke-width="1"/></svg>',
+  door: '<svg viewBox="0 0 20 20"><rect x="3" y="2" width="14" height="16" fill="#3a4148" stroke="#111" stroke-width="1.2"/><path d="M3 6h14M3 10h14M3 14h14" stroke="#d2453a" stroke-width="1.4"/></svg>',
+};
 
 const ICON = {
   coin: '<svg class="op-ico" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.2" fill="#f2c040" stroke="#8a5a00" stroke-width="1.6"/><circle cx="10" cy="10" r="5" fill="none" stroke="#b07a10" stroke-width="1.4"/></svg>',
@@ -222,8 +274,8 @@ const shieldSvg = (frac) => `<svg viewBox="0 0 18 20"><defs><clipPath id="opsc">
   <path d="M9 1 16.5 4v6c0 4.6-3.2 7.6-7.5 9C4.7 17.6 1.5 14.6 1.5 10V4z" fill="${frac < 0.4 ? '#d2453a' : frac < 1 ? '#e0a020' : '#2fa36b'}" clip-path="url(#opsc)"/></svg>`;
 
 /**
- * mountHud(host, cbs) → the HUD. cbs: { onClose, onSell, onBuild, onRepairAll, onOnline, onPanelClose, onBuildKind(kind, pad),
- * onDefense(kind), onCancelPlace, onDeep(pad, on), onUpgrade(pad), onRepair(id), onReportClose, onFocusPad(pad) }
+ * mountHud(host, cbs) → the HUD. cbs: { onClose, onSell, onRepairAll, onOnline, onPanelClose, onPick(menuId),
+ * onPickFor(kind, pad), onConfirmPlace, onCancelPlace, onDeep(pad, on), onUpgrade(pad), onRepair(id), onReportClose }
  */
 export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } = {}) {
   const doc = host.ownerDocument;
@@ -244,15 +296,15 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
         <div class="op-chip shield" title="Defenses"><span class="op-shield" data-k="shieldIco"></span><span class="num" data-k="shield">100%</span></div>
       </div>
     </div>
+    <div class="bw-palette bw-panel op-rail" data-k="rail" role="toolbar" aria-label="Build"><div class="bw-title">BUILD</div><div class="bw-palette-row" data-k="railRow"></div></div>
     <div class="op-actions">
-      <button class="op-btn" data-a="build"><b>BUILD</b><i>pads · defenses</i></button>
       <button class="op-btn sell" data-a="sell"><b>SELL</b><i data-k="loads">no full load</i></button>
       <button class="op-btn repair" data-a="repairAll" hidden><b>REPAIR</b><i data-k="repair">0</i></button>
     </div>
     <div class="op-panel" data-k="panel" role="dialog" aria-live="polite"></div>
-    <div class="op-banner" data-k="banner"><span data-k="bannerText"></span><button data-a="cancelPlace">CANCEL</button></div>
+    <div class="op-banner" data-k="banner"><span data-k="bannerText"></span><span style="display:flex;gap:6px"><button class="op-confirm" data-a="confirmPlace" hidden>CONFIRM</button><button data-a="cancelPlace">CANCEL</button></span></div>
     <div class="op-online" data-k="online" role="dialog">
-      <h3>ESTABLISH THE OUTPOST</h3><p>The kit is on its pads. Bring the grid up to start mining.</p>
+      <h3>ESTABLISH THE OUTPOST</h3><p>Build power, a mining station and storage from the list, then bring the grid up.</p>
       <div class="op-check" data-k="checks"></div>
       <button class="op-wide" data-a="online">GO ONLINE</button>
     </div>
@@ -262,6 +314,8 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
   const $ = (k) => root.querySelector(`[data-k="${k}"]`);
   const A = (a) => root.querySelector(`[data-a="${a}"]`);
   let toastTimer = 0, panelSel = null;
+  const btns = new Map();   // the BUILD menu's buttons, by item id
+  const keyHtml = (it) => (it.key ? `<b class="bw-bkey">${it.key}</b>` : '');
 
   root.addEventListener('click', (e) => {
     const b = e.target.closest('button');
@@ -271,14 +325,13 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     const call = (fn, ...args) => cbs[fn] && cbs[fn](...args);
     if (a === 'close') call('onClose');
     else if (a === 'sell') call('onSell');
-    else if (a === 'build') call('onBuild');
     else if (a === 'repairAll') call('onRepairAll');
     else if (a === 'online') call('onOnline');
     else if (a === 'panelClose') call('onPanelClose');
     else if (a === 'cancelPlace') call('onCancelPlace');
-    else if (a === 'buildKind') call('onBuildKind', b.dataset.kind, b.dataset.pad);
-    else if (a === 'defense') call('onDefense', b.dataset.kind);
-    else if (a === 'focusPad') call('onFocusPad', b.dataset.pad);
+    else if (a === 'confirmPlace') call('onConfirmPlace');
+    else if (a === 'pick') call('onPick', b.dataset.id);
+    else if (a === 'pickFor') call('onPickFor', b.dataset.kind, b.dataset.pad);
     else if (a === 'deep') call('onDeep', b.dataset.pad, b.dataset.on === '1');
     else if (a === 'upgrade') call('onUpgrade', b.dataset.pad);
     else if (a === 'repair') call('onRepair', b.dataset.id);
@@ -315,7 +368,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       $('repair').textContent = h.repairCost ? `${fmtGold(h.repairCost)} gold` : '';
       A('repairAll').disabled = h.repairCost > gold;
     },
-    setBusy(b) { A('sell').disabled = b || A('sell').disabled; A('build').disabled = b; },
+    setBusy(b) { A('sell').disabled = b || A('sell').disabled; $('rail').style.pointerEvents = b ? 'none' : ''; $('rail').style.opacity = b ? '.6' : ''; },
     /** The selected building's panel (hudModel.panelModel), or null to close. sel echoes back in callbacks. */
     panel(m, sel) {
       const el = $('panel');
@@ -324,6 +377,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       const pad = sel && sel.pad, id = sel && sel.defense;
       let body = `<div class="op-ph"><div><h3>${esc(m.title)}</h3><small>${esc(m.sub)}</small></div><button class="op-x" data-a="panelClose" aria-label="Close">✕</button></div>
         <div class="op-status ${m.tone}">${esc(m.status)}</div>`;
+      for (const w of m.warnings || []) body += `<div class="op-warn ${w.icon === 'crate' ? '' : 'bad'}">${WARN_SVG[w.icon] || ''}<span>${esc(w.text)}</span></div>`;
       if (m.stats && m.stats.length) body += `<dl class="op-kv">${m.stats.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
       if (m.bay != null) body += `<div class="op-meter" title="Bay"><i style="width:${(m.bay * 100).toFixed(1)}%${m.oreColour ? `;background:linear-gradient(90deg,${m.oreColour},${m.oreColour}cc)` : ''}"></i></div>`;
       if (m.hp != null) body += `<div class="op-meter hp"><i style="width:${(m.hp * 100).toFixed(1)}%"></i></div>`;
@@ -334,26 +388,81 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       }
       if (m.upgrade) body += `<button class="op-wide alt" data-a="upgrade" data-pad="${esc(pad)}" ${m.upgrade.enabled ? '' : 'disabled'}>${esc(m.upgrade.label)}</button>${m.upgrade.why ? `<div class="op-why">${esc(m.upgrade.why)}</div>` : ''}`;
       if (m.repair) body += `<button class="op-wide" data-a="repair" data-id="${esc(id)}" ${m.repair.enabled ? '' : 'disabled'}>${esc(m.repair.label)}</button>`;
-      if (m.build) {
-        body += `<div class="op-sec">BUILD HERE</div><div class="op-list">${m.build.map((o) => `<button class="op-opt" data-a="buildKind" data-kind="${o.kind}" data-pad="${esc(pad)}" ${o.enabled ? '' : 'disabled'}>
+      if (m.build) {   // an empty pad: what fits, each one arming the build menu on this pad (the ghost, then CONFIRM)
+        body += `<div class="op-sec">FITS HERE · OR PICK FROM THE LIST</div><div class="op-list op-chips">${m.build.map((o) => `<button class="op-opt" data-a="pickFor" data-kind="${o.kind}" data-pad="${esc(pad)}" ${o.enabled ? '' : 'disabled'}>
           <b>${esc(o.name)}</b><span class="num">${o.cost ? fmtGold(o.cost) : 'FREE'}</span><small>${o.why ? esc(o.why) : `${Math.round(o.buildSec / 60)} min to build`}</small></button>`).join('')}</div>`;
       }
       el.innerHTML = body;
       el.classList.add('open');
     },
     get panelOpen() { return !!panelSel; },
-    /** The BUILD sheet: empty pads (tap to focus) and defenses (tap to place). */
-    buildSheet(pads, defenses) {
-      const el = $('panel');
-      panelSel = { build: true };
-      el.innerHTML = `<div class="op-ph"><div><h3>BUILD</h3><small>pads and defenses</small></div><button class="op-x" data-a="panelClose" aria-label="Close">✕</button></div>
-        <div class="op-sec">EMPTY PADS</div><div class="op-list">${pads.length ? pads.map((p) => `<button class="op-opt" data-a="focusPad" data-pad="${esc(p.id)}">
-          <b>${esc(p.label)}</b><span class="num">›</span><small>${esc(p.note)}</small></button>`).join('') : '<div class="op-why">Every pad is built.</div>'}</div>
-        <div class="op-sec">DEFENSES</div><div class="op-list">${defenses.map((d) => `<button class="op-opt" data-a="defense" data-kind="${d.kind}" ${d.enabled ? '' : 'disabled'}>
-          <b>${esc(d.name)}</b><span class="num">${fmtGold(d.cost)}</span><small>${d.why ? esc(d.why) : 'place on the ring'}</small></button>`).join('')}</div>`;
-      el.classList.add('open');
+    /**
+     * The BUILD menu (buildMenu.js items). selected: the armed item's id; icons: { slug: dataURL } rendered from the
+     * GLBs (menuIcons.js); rigSlug: the Mining Station's head for its picture. Buttons are made once and updated.
+     */
+    menu(items, { selected = null, icons = {}, rigSlug = 'rig_auger' } = {}) {
+      const row = $('railRow'), had = btns.size;
+      for (const it of items) {
+        let btn = btns.get(it.id);
+        if (!btn) {
+          btn = doc.createElement('button');
+          btn.className = 'bw-btn bw-buildbtn';
+          btn.dataset.a = 'pick'; btn.dataset.id = it.id;
+          btn.innerHTML = `<span class="bw-bicon"></span><span class="bw-bname"><span class="op-l">${esc(it.label)}</span><span class="op-s">${esc(SHORT[it.id] || it.label)}</span></span><span class="bw-cost"></span>`;
+          row.appendChild(btn);
+          btns.set(it.id, btn);
+        }
+        // the picture: the battle's baked one (defenses, harvester), else the GLB render, else the glyph
+        const battle = BATTLE_ICON[it.id] && buildIcon(it.id === 'harvester' ? 'harvester' : { wall: 'STR-Wall', mg: 'STR-MG', cannon: 'STR-Cannon' }[it.id]);
+        const slug = it.id === 'rig' ? rigSlug : it.id;
+        const src = battle ? new URL('../../../' + buildIconUrl(battle), import.meta.url).href : icons[slug] || null;   // (the game root, wherever the page is)
+        const pic = src ? `img:${src.length}:${src.slice(-24)}` : `svg:${it.id}`;
+        const ico = btn.querySelector('.bw-bicon');
+        if (ico.dataset.pic !== pic) {
+          ico.dataset.pic = pic;
+          const glyph = OUTPOST_GLYPHS[it.id] || (it.id === 'harvester' ? STRUCT_ICONS.harvestorBay : STRUCT_ICONS[it.id === 'wall' ? 'wall' : 'antiGround']);
+          const svg = `<svg viewBox="0 0 24 24" width="26" height="26">${glyph}</svg>`;
+          ico.innerHTML = src ? `<img class="bw-bimg" alt="" draggable="false" decoding="async">` : svg;
+          if (src) { const img = ico.firstChild; img.src = src; img.addEventListener('error', () => { ico.innerHTML = svg + keyHtml(it); }, { once: true }); }
+          if (it.key) ico.insertAdjacentHTML('beforeend', keyHtml(it));
+        }
+        btn.querySelector('.bw-cost').textContent = it.cost == null ? '—' : fmtGold(it.cost) + 'g';
+        let badge = btn.querySelector('.bw-count');
+        if (it.max != null) { if (!badge) { badge = doc.createElement('span'); badge.className = 'bw-count'; btn.appendChild(badge); } badge.textContent = `${it.count}/${it.max}`; } else if (badge) badge.remove();
+        const lock = btn.querySelector('.bw-lock');
+        if (it.locked && !lock) btn.insertAdjacentHTML('beforeend', LOCK_SVG); else if (!it.locked && lock) lock.remove();
+        btn.classList.toggle('bw-locked', !!it.locked);
+        btn.classList.toggle('bw-poor', !it.locked && !!it.poor);
+        btn.classList.toggle('bw-selected', selected === it.id);
+        btn.classList.toggle('op-guide', !!it.guide && selected !== it.id);
+        btn.title = `${it.key ? `[${it.key}] ` : ''}${it.label}${it.cost != null ? ` · ${fmtGold(it.cost)} gold` : ''}${it.why ? ` — ${it.why}` : ''}`;
+        btn.setAttribute('aria-pressed', selected === it.id ? 'true' : 'false');
+      }
+      if (btns.size !== had) api.fitRail();   // the first build of the list: size the rail to the screen
     },
-    banner(text) { $('banner').classList.toggle('on', !!text); $('bannerText').textContent = text || ''; },
+    /**
+     * Size the rail to the height it has, as the battle's reactive left rail does: from under the top bar to the
+     * bottom of the screen (portrait: to the action row). Sets --rail-top / --rail-right for the panels and banner.
+     */
+    fitRail() {
+      const rail = $('rail'), view = doc.defaultView;
+      if (!rail.isConnected || !btns.size) return null;
+      const r0 = root.getBoundingClientRect(), top = root.querySelector('.op-top').getBoundingClientRect().bottom - r0.top + 12;
+      root.style.setProperty('--rail-top', Math.round(top) + 'px');
+      let bottom = r0.height - 8;
+      if (root.dataset.layout === 'portrait') bottom = root.querySelector('.op-actions').getBoundingClientRect().top - r0.top - 8;
+      const chrome = 12 + 4 + rail.firstChild.getBoundingClientRect().height + 2;
+      const f = railFit(bottom - top, btns.size, chrome, view ? view.innerWidth : r0.width);
+      applyRailFit(rail, f);
+      rail.classList.toggle('op-narrow', f.w < 70);   // phone-width buttons: the short names (SHORT)
+      const right = rail.getBoundingClientRect().right - r0.left;
+      root.style.setProperty('--rail-right', Math.round(right) + 'px');
+      return { right, fit: f };
+    },
+    /** The rail's screen rect (the camera framing leaves it clear). */
+    railRect() { return $('rail').getBoundingClientRect(); },
+    /** The placing banner: text, and CONFIRM when a spot is aimed (touch). null hides it. */
+    banner(text, { confirm = false } = {}) { $('banner').classList.toggle('on', !!text); $('bannerText').textContent = text || ''; A('confirmPlace').hidden = !confirm; },
     toast(text, bad = false) {
       const t = $('toast'); t.textContent = text; t.classList.toggle('bad', bad); t.classList.add('on');
       clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2200);

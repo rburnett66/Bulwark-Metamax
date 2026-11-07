@@ -13,6 +13,7 @@
  * Raids: the hook comes from raidSeam.raidHookFor (story O7 plugs the battle sim in there).
  */
 import { advance, sell, place, upgrade, repair, repairCost, setDeep, confirmOnline, onlineProblems, windowMs } from '../model.js';
+import * as Model from '../model.js';
 import { outpostUnlocks } from '../contract.js';
 import { settleOutpost, flowCtx } from '../../save/missionFlow.js';
 import { bankOf } from '../../save/save.js';
@@ -113,7 +114,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
     },
 
     /**
-     * Act on the outpost. action: { type: 'online' | 'sell' | 'place' | 'upgrade' | 'repair' | 'repairAll' | 'deep', … }.
+     * Act on the outpost. action: { type: 'online' | 'sell' | 'place' | 'upgrade' | 'repair' | 'repairAll' | 'deep' | 'buyHarvester', … }.
      * → { ok: true, outpost, cost, gold (bank after), loads? (sell), earned? } or { ok: false, error }.
      */
     act(action, now) {
@@ -159,6 +160,9 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         return cost ? { outpost: cur, cost } : { error: 'nothing is worn' };
       }
       case 'deep': return setDeep(o, a.pad, a.on, ctx);
+      // the build menu's HARVESTER (story O17): story O16's buyHarvester(o, ctx) → { outpost, cost } | { error }, read
+      // optionally so the view works before it lands (the menu keeps the item locked until it is exported)
+      case 'buyHarvester': return typeof Model.buyHarvester === 'function' ? Model.buyHarvester(o, ctx) : { error: 'Build a Resource Bay first' };
       default: return { error: `unknown action ${a.type}` };
     }
   }

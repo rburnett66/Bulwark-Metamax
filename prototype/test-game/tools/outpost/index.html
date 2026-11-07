@@ -93,7 +93,7 @@
 </main>
 <script type="module">
 import {
-  createOutpost, confirmOnline, advance, sell, loadsReady, place, upgrade, repair, repairCost, setDeep,
+  createOutpost, referenceOutpost, confirmOnline, advance, sell, loadsReady, place, upgrade, repair, repairCost, setDeep,
   raidOutcome, powerGrids, bayCapacity, rigRatePerMin, onlineProblems, status, depositOf,
 } from '../../src/outpost/model.js';
 import { outpostMapFor, draftOutpostMap } from '../../src/outpost/outpostMap.js';
@@ -136,7 +136,8 @@ function quietCtx() { return { ...ctx(), params: { ...OUTPOST, Raid_Mean_Hours: 
 
 function load(preset) {
   now = T0; gold = 20000; selected = null; placing = null;
-  o = createOutpost('ground', { seed: 1234, map, now });
+  // 'fresh': the contract's hub only (story O16); the running presets start from the reference outpost (the former kit)
+  o = preset === 'fresh' ? createOutpost('ground', { seed: 1234, map, now }) : referenceOutpost('ground', { seed: 1234, map, now });
   if (preset !== 'fresh') {
     o = confirmOnline(o, map, now).outpost;
     if (preset !== 'raid') o.firstRaidAt = null;
@@ -176,7 +177,7 @@ const S = 30;                                   // canvas px per cell; the view 
 const padById = (id) => map.pads.find((p) => p.id === id);
 const C = (p) => [(p.x + p.w / 2) * S, (p.y + p.h / 2) * S];
 const ROLE_COL = { hub: '#3b4048', power: '#2f3d4f', rig: '#3d3a33', storage: '#3a3f3a', bay: '#383640', spare: '#333333' };
-const KIND_LABEL = { hub: 'Hub', power: 'Power', rig: 'Rig', storage: 'Storage', harvesterBay: 'Harvester Bay', upgradeBay: 'Upgrade Bay' };
+const KIND_LABEL = { hub: 'Hub', power: 'Power', rig: 'Rig', storage: 'Storage', harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay' };
 
 // ── the view: the mesa framed (the default, tech plan §6.1), or the whole map ─────────────────────────
 let viewMode = new URLSearchParams(location.search).get('view') || 'mesa';   // the outpost view frames the mesa, not the 64 × 32 map
@@ -336,12 +337,12 @@ function renderPanel(grid) {
   const pad = map.pads.find((p) => p.id === selected), b = o.pads[selected];
   if (!b) {
     $('sel').textContent = `Pad ${pad.id} (${pad.role}${pad.remote ? ', remote' : ''})${depositOf(map, pad.id) ? `, on the ${depositOf(map, pad.id)} deposit` : ''}: empty.`;
-    for (const kind of ['rig', 'power', 'harvesterBay', 'upgradeBay']) btn(`Build ${KIND_LABEL[kind]} (${structureDef(kind, 1).cost})`, () => act(place(o, { pad: pad.id, kind }, ctx()), `started a ${KIND_LABEL[kind]}`));
+    for (const kind of ['rig', 'power', 'storage', 'resourceBay', 'upgradeBay']) btn(`Build ${KIND_LABEL[kind]} (${structureDef(kind, 1).cost})`, () => act(place(o, { pad: pad.id, kind }, ctx()), `started a ${KIND_LABEL[kind]}`));
     return;
   }
   const next = structureDef(b.kind, b.tier + 1);
   $('sel').textContent = `${KIND_LABEL[b.kind]} ${['', 'I', 'II', 'III'][b.tier]} on ${pad.id}${grid.off[pad.id] ? `, unpowered (${grid.off[pad.id]})` : grid.powered.has(pad.id) ? ', powered' : ''}`
-    + (b.kind === 'rig' ? `: bay ${fmt(Object.values(o.storage[pad.id] || {}).reduce((a, v) => a + v, 0))} / ${fmt(bayCapacity(o, pad.id))}` : '');
+    + (b.kind === 'rig' ? `: bay ${fmt(Object.values(o.storage[pad.id] || {}).reduce((a, v) => a + v, 0))} / ${fmt(bayCapacity(o, pad.id, map))}` : '');
   if (next) btn(`Upgrade to ${['', 'I', 'II', 'III'][b.tier + 1]} (${next.cost})`, () => act(upgrade(o, pad.id, ctx()), `upgrading ${pad.id}`));
   if (b.kind === 'rig') btn(b.deep ? 'Switch to shallow' : 'Switch to deep seam', () => act(setDeep(o, pad.id, !b.deep, ctx()), b.deep ? 'shallow' : 'deep seam'));
 }

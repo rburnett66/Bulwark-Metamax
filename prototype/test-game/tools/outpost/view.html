@@ -29,7 +29,7 @@
   <form id="devForm">
     <label for="state">Save preset</label>
     <select id="state" name="state">
-      <option value="fresh">Fresh kit, not online (GO ONLINE)</option>
+      <option value="fresh">Fresh contract: the hub only (build from the list)</option>
       <option value="running" selected>Back after 2 hours</option>
       <option value="full">Back after 5 hours: storage full</option>
       <option value="raided">Back after 9 hours: raids held, worn</option>
@@ -52,7 +52,7 @@
 import { openOutpostView } from '../../src/outpost/view/outpostView.js';
 import { outpostMapFor } from '../../src/outpost/outpostMap.js';
 import { acceptOutpostContract } from '../../src/outpost/contract.js';
-import { confirmOnline, advance, raidOutcome } from '../../src/outpost/model.js';
+import { confirmOnline, advance, raidOutcome, referenceOutpost } from '../../src/outpost/model.js';
 import { defaultSave } from '../../src/save/save.js';
 import { structureDef, OUTPOST } from '../../src/data/outpost.js';
 import { defenseRing } from '../../src/terrain/outpostPads.js';
@@ -80,6 +80,9 @@ function presetSave(name) {
   s.capitalShips = { Verdance: { arrived: true } };
   s.carry = { gold: 24000, structures: [] }; s.goldBank = 24000;
   acceptOutpostContract(s, 'ground', { map, now: T0, seedSalt: 'review' });
+  // 'fresh' is the contract's start: the hub only (story O16), built up from the BUILD menu (story O17); the running
+  // presets start from the reference outpost (the former kit: hub, power, rig, storage, the kit defenses)
+  if (name !== 'fresh') s.outposts.ground = referenceOutpost('ground', { seed: s.outposts.ground.seed, map, now: T0 });
   let o = s.outposts.ground, openAt = T0;
   const online = () => { o = confirmOnline(o, map, T0).outpost; o.firstRaidAt = null; };
   const quiet = { map, params: { ...OUTPOST, Raid_Mean_Hours: 1e12 } };
@@ -92,7 +95,8 @@ function presetSave(name) {
     pad('p2', { kind: 'power', tier: 1 });
     pad('r2', { kind: 'rig', tier: 1, deposit: 'uncommon', deep: true });
     pad('r3', { kind: 'rig', tier: 1, deposit: 'rare', deep: false });
-    pad('b1', { kind: 'harvesterBay', tier: 1 });
+    pad('b1', { kind: 'resourceBay', tier: 1 });
+    o.harvesters = 1;
     pad('b2', { kind: 'upgradeBay', tier: 1 });
     pad('x1', { kind: 'power', tier: 1 });
     o.pads.r1.tier = 2;            // Rig Mk II: amber, 2× tempo, 3× debris

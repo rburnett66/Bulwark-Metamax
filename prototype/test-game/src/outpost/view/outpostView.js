@@ -21,13 +21,16 @@ import { outpostBattleMap, bakedSlugFor, lowlandResources } from './outpostBoard
 import { createOutpostScene } from './outpostScene.js';
 import { defenseStructures, planBuildings } from './conduits.js';
 import { createSession, onlineIssues } from './session.js';
-import { hudModel, panelModel, defenseOptions, emptyPads, KIND_NAME, fmtGold } from './hudModel.js';
+import { hudModel, panelModel, KIND_NAME, fmtGold, rigHeadOf } from './hudModel.js';
+import { buildMenu, placementStep, aimValid, IDLE, MENU, DEFENSE_STRUCT, isResourceBay, kindOf } from './buildMenu.js';
+import { buildingWarnings, markerOf } from './warnings.js';
+import { renderMenuIcons } from './menuIcons.js';
 import { sellTimeline } from './sellTimeline.js';
-import { layoutFor, framedCamera, focusCamera, panelInset, VIEW_YAW } from './layout.js';
+import { layoutFor, framedCamera, focusCamera, VIEW_YAW } from './layout.js';
 import { mountHud } from './hud.js';
 import { loadSave, updateSave } from '../../save/save.js';
 import { loadMissionCatalog } from '../../save/missionCatalog.js';
-import { defenseRing, padAt } from '../../terrain/outpostPads.js';
+import { padAt } from '../../terrain/outpostPads.js';
 import { structureDef } from '../../data/outpost.js';
 import { oresOf } from '../../data/ores.js';
 import { PLANETS } from '../../data/planets.js';
@@ -108,19 +111,18 @@ export async function openOutpostView(opts = {}) {
   syncDefenses();
 
   // ── HUD ──────────────────────────────────────────────────────────────────────────────────────────────────────
-  let sel = null, placing = null, saleRun = null, shownGold = session.gold(), closed = false, resolveClosed;
+  let sel = null, saleRun = null, shownGold = session.gold(), closed = false, resolveClosed;
   const closedP = new Promise((ok) => { resolveClosed = ok; });
   const hud = mountHud(host, {
     onClose: () => close(),
     onSell: () => doSell(),
-    onBuild: () => openBuild(),
     onRepairAll: () => act({ type: 'repairAll' }, (res) => `Defenses repaired · −${fmtGold(res.cost)} gold`),
     onOnline: () => act({ type: 'online' }, () => 'OUTPOST ONLINE · mining has begun. Raiders will come: hold the first one.'),
     onPanelClose: () => { select(null); },
-    onCancelPlace: () => stopPlacing(),
-    onBuildKind: (kind, pad) => act({ type: 'place', pad, kind }, () => `${KIND_NAME[kind]} under construction`, () => select({ pad })),
-    onDefense: (kind) => startPlacing(kind),
-    onFocusPad: (pad) => select({ pad }, true),
+    onCancelPlace: () => cancelPlacing(),
+    onConfirmPlace: () => placeEvent({ type: 'confirm' }),
+    onPick: (id) => pickItem(id),
+    onPickFor: (kind, pad) => pickItem(isResourceBay(kind) ? 'resourceBay' : kind, { pad }),
     onDeep: (pad, on) => act({ type: 'deep', pad, on }, () => (on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam'), () => select({ pad })),
     onUpgrade: (pad) => act({ type: 'upgrade', pad }, (res) => `Upgrade started · −${fmtGold(res.cost)} gold`, () => select({ pad })),
     onRepair: (id) => act({ type: 'repair', id }, (res) => `Repaired · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
@@ -156,39 +158,114 @@ export async function openOutpostView(opts = {}) {
     onChange();
   }
 
-  function openBuild() {
-    stopPlacing();
-    const ctx = ctxNow();
-    const tiers = ctx.unlockedTiers || ['common'];
-    const pads = emptyPads(o, map).map((p) => {
-      const dep = (map.deposits || []).find((d) => d.pad === p.id), ore = dep && oresOf(planet).find((x) => x.tier === dep.tier);
-      const label = ore ? `${ore.name} deposit` : p.role === 'power' ? 'Power pad' : p.role === 'bay' ? 'Bay pad' : p.role === 'spare' ? 'Spare pad' : `${p.role} pad`;
-      const note = (ore && !tiers.includes(dep.tier) ? 'locked · ' : '') + `pad ${p.id}${p.remote ? ' · remote site' : ''}`;
-      return { id: p.id, label, note };
-    });
-    sel = { build: true };
-    scene.select(null);
-    hud.buildSheet(pads, defenseOptions({ gold: bank() }));
-    refocus();
+  // ── the BUILD menu (story O17 [MM-story_mw6k9xec_5]): the battle's pick → ghost → build loop ──────────────────────
+  // buildMenu.js is the model (items, prices, locks, valid targets) and the placement reducer; this wires it to the
+  // HUD's left rail, the scene (glowing pads / ring cells, the ghost) and the session (every build is session.act:
+  // advance, model.place, the gold, settleOutpost — so updateSave and settleOutpost run per action, as before).
+  let pl = IDLE, menuItems = [], menuKey = '', icons = {}, hover = null, ui3d = {}, lastPointer = 'mouse';
+  const armedItem = () => (pl.item ? menuItems.find((m) => m.id === pl.item.id) || pl.item : null);
+  const targetsOf = () => { const it = armedItem(); return it ? it.targets || [] : []; };
+  const titleCase = (t) => t.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  function rigIconSlug() {
+    const rig = menuItems.find((m) => m.id === 'rig'), first = rig && rig.targets && rig.targets[0];
+    return modelSlug('rig', 1, first ? rigHeadOf(o, map, first.pad) : (oresOf(planet)[0] || {}).rig);
   }
-
-  function startPlacing(kind) {
-    const taken = new Set(o.defenses.map((d) => d.cell.join(',')));
-    const cells = defenseRing(map).filter(([x, y]) => !taken.has(`${x},${y}`));
-    placing = { kind, cells: new Set(cells.map((c) => c.join(','))) };
-    scene.showCells(cells);
-    hud.panel(null);
-    sel = null;
-    hud.banner(`Tap a lit cell to place a ${KIND_NAME[kind]} (${fmtGold(structureDef(kind, 1).cost)} gold)`);
-    glideTo(framedCamera(map, r._w || win.innerWidth, r._h || win.innerHeight, { yaw: r.cam.yaw }));
+  function refreshMenu(force = false) {
+    const ctx = { ...ctxNow(), gold: bank(), now: clockNow() };
+    const key = JSON.stringify([o.pads, o.building.map((b) => [b.pad, b.kind]), o.defenses.map((d) => d.cell), o.harvesters ?? null, o.online, ctx.gold, ctx.unlockedTiers, [...(ctx.unlocks || [])]]);
+    if (force || key !== menuKey) {
+      menuKey = key; menuItems = buildMenu(o, map, ctx);
+      if (pl.phase !== 'idle') {
+        const it = armedItem();
+        if (!it || it.locked) { const why = it && it.why; cancelPlacing(); if (why) hud.toast(why, true); } else applyPlacement();
+      }
+    }
+    hud.menu(menuItems, { selected: pl.phase !== 'idle' && pl.item ? pl.item.id : null, icons, rigSlug: rigIconSlug() });
   }
-  function stopPlacing() { placing = null; scene.showCells(null); hud.banner(null); }
+  function pickItem(id, target = null) {
+    if (saleRun) return;
+    refreshMenu();
+    const item = menuItems.find((m) => m.id === id);
+    if (!item) return;
+    const r0 = placementStep(pl, { type: 'pick', item, target }, item.targets || []);
+    if (r0.effect && r0.effect.type === 'locked') { hud.toast(item.why || 'Not available', true); return; }
+    if (r0.effect && r0.effect.type === 'buy') {
+      act({ type: 'buyHarvester' }, (res) => `Harvester purchased${res.cost ? ` · −${fmtGold(res.cost)} gold` : ''}`);
+      refreshMenu(true);
+      return;
+    }
+    pl = r0.state;
+    hover = null;
+    if (pl.phase !== 'idle') {
+      if (sel) { sel = null; hud.panel(null); scene.select(null); scene.showReach(null); panelKey = ''; }
+      if (pl.target) { pl = { ...pl, phase: 'aimed' }; lastPointer = 'touch'; }
+      glideTo(framedCamera(map, r._w || win.innerWidth, r._h || win.innerHeight, { yaw: r.cam.yaw }));
+    }
+    applyPlacement();
+    refreshMenu();
+  }
+  function cancelPlacing() { pl = IDLE; hover = null; applyPlacement(); hud.menu(menuItems, { selected: null, icons, rigSlug: rigIconSlug() }); }
+  /** Bring the scene and the banner to the placement state. */
+  function applyPlacement() {
+    const it = pl.phase === 'idle' ? null : armedItem();
+    if (!it) { scene.showPads(null); scene.showCells(null); scene.showGhost(null); hud.banner(null); ui3d = {}; hud.online(onlineChecks()); return; }
+    hud.online(null);
+    const T = it.targets || [], valid = aimValid(pl, T), price = it.cost != null ? ` · ${fmtGold(it.cost)} gold` : '';
+    if (it.place === 'pad') {
+      scene.showPads(T.map((t) => t.pad)); scene.showCells(null); ui3d = {};
+      const pad = pl.target && pl.target.pad, kind = kindOf(it.id);
+      scene.showGhost(pad ? { pad, kind, slug: modelSlug(kind, 1, kind === 'rig' ? rigHeadOf(o, map, pad) : null), valid } : null);
+    } else {
+      scene.showPads(null); scene.showGhost(null);
+      scene.showCells(T.map((t) => t.cell));
+      const c = pl.target && pl.target.cell;
+      // the battle renderer's own placement ghost (outline model, cyan / red) and range ring
+      ui3d = c ? { buildSelection: DEFENSE_STRUCT[it.id], hoverCell: { x: c[0], y: c[1] }, hoverValid: valid } : { buildSelection: DEFENSE_STRUCT[it.id] };
+    }
+    const where = it.place === 'pad' ? 'a lit pad' : 'a lit cell on the ring';
+    const touchAim = pl.phase === 'aimed' && valid && lastPointer === 'touch';
+    hud.banner(touchAim ? `${titleCase(it.label)}${price}` : `Place a ${titleCase(it.label)} on ${where}${price}`, { confirm: touchAim });
+  }
+  /** A placement event (hover / tap / confirm) → the reducer, then its effect. */
+  function placeEvent(ev) {
+    if (saleRun || pl.phase === 'idle') return;
+    const T = targetsOf();
+    const { state: next, effect } = placementStep(pl, ev, T);
+    pl = next;
+    if (effect && effect.type === 'invalid') hud.toast(armedItem() && armedItem().place === 'pad' ? 'Pick a lit pad' : 'Defenses go on the lit ring', true);
+    if (effect && effect.type === 'place') {
+      const it = effect.item, kind = kindOf(it.id), t = effect.target;
+      const res = act({ type: 'place', kind, ...(t.pad ? { pad: t.pad } : { cell: t.cell }) },
+        () => (t.pad ? `${titleCase(it.label)} under construction` : `${KIND_NAME[kind] || titleCase(it.label)} placed`), () => {});
+      if (res && res.ok) {
+        pl = placementStep(pl, { type: 'placed' }, T).state;
+        hover = null;
+        refreshMenu(true);
+        if (t.pad) { applyPlacement(); select({ pad: t.pad }, true); return; }
+      }
+    }
+    applyPlacement();
+    hud.menu(menuItems, { selected: pl.phase !== 'idle' && pl.item ? pl.item.id : null, icons, rigSlug: rigIconSlug() });
+  }
+  /** The build target under a canvas point for the armed item: { pad } or { cell }. */
+  function targetAt(px, py) {
+    const it = armedItem();
+    if (!it) return null;
+    const cell = screenToCell(r, px, py);
+    if (!cell) return null;
+    if (it.place === 'pad') { const p = padAt(map, cell.x, cell.y); return p ? { pad: p.id } : null; }
+    return { cell: [cell.x, cell.y] };
+  }
+  // the outpost buildings' pictures, rendered from their GLBs once the kit is loaded (menuIcons.js)
+  const iconSlugs = ['power', 'storage', ...new Set(oresOf(planet).map((x) => `rig_${x.rig}`))].filter((x) => kit.manifest[x]);
+  renderMenuIcons(THREE, r.renderer, kit, iconSlugs).then((m) => { icons = m; if (!closed) refreshMenu(true); }).catch((e) => console.warn('[outpost] menu icons', e));
 
   let panelKey = '';
   function select(next, focus = false) {
     sel = next;
     scene.select(next && (next.pad ? { pad: next.pad } : next.defense ? { cell: (o.defenses.find((d) => d.id === next.defense) || {}).cell } : null));
-    if (!next || next.build) { hud.panel(null); panelKey = ''; scene.showReach(null); if (!next) refocus(); return; }
+    if (!next) { hud.panel(null); panelKey = ''; scene.showReach(null); refocus(); return; }
+    if (pl.phase !== 'idle') cancelPlacing();
     const m = panelModel(o, map, next, { ...ctxNow(), now: clockNow(), gold: bank() });
     panelKey = JSON.stringify(m);
     hud.panel(m, next);
@@ -205,7 +282,7 @@ export async function openOutpostView(opts = {}) {
     }
   }
   function refreshPanel() {
-    if (!sel || sel.build) return;
+    if (!sel) return;
     const m = panelModel(o, map, sel, { ...ctxNow(), now: clockNow(), gold: bank() });
     const k = JSON.stringify(m);
     if (k !== panelKey) { panelKey = k; hud.panel(m, sel); }
@@ -219,7 +296,7 @@ export async function openOutpostView(opts = {}) {
   function refocus() {
     const w = r._w || win.innerWidth, h = r._h || win.innerHeight;
     const L = layoutFor(w, h);
-    glideTo(framedCamera(map, w, h, { yaw: r.cam.yaw, panel: sel && !sel.build ? null : sel && sel.build ? panelInset(L) : null }));
+    glideTo(framedCamera(map, w, h, { yaw: r.cam.yaw }));
     userTouched = false;
   }
   function autoFit() {
@@ -227,6 +304,7 @@ export async function openOutpostView(opts = {}) {
     const L = layoutFor(w, h);
     hud.setLayout(L.mode);
     const key = `${w}x${h}`;
+    if (key !== fitKey) hud.fitRail();
     if (key === fitKey) return;
     const first = !fitKey;
     fitKey = key;
@@ -238,32 +316,47 @@ export async function openOutpostView(opts = {}) {
   // taps: a building (raycast on the models), else the pad or defense under the finger; drags pan (the renderer's input)
   const canvas = r.canvas;
   let down = null;
-  const onDown = (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId }; glide = null; };
-  const onMove = (e) => { if (down && e.pointerId === down.id && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) userTouched = true; };
+  const onDown = (e) => { lastPointer = e.pointerType === 'touch' || e.pointerType === 'pen' ? 'touch' : 'mouse'; if (e.button === 2) return; down = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId }; glide = null; };
+  const onMove = (e) => {
+    if (down && e.pointerId === down.id && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) userTouched = true;
+    // the mouse: the ghost follows the pointer (a finger aims by tapping), as the battle's hover cell
+    if (pl.phase !== 'idle' && e.pointerType === 'mouse' && !down) {
+      const rect = canvas.getBoundingClientRect(), t = targetAt(e.clientX - rect.left, e.clientY - rect.top);
+      const k = JSON.stringify(t);
+      if (k !== hover) { hover = k; lastPointer = 'mouse'; placeEvent({ type: 'hover', target: t }); }
+    }
+  };
+  const onCtx = (e) => { if (pl.phase !== 'idle') { e.preventDefault(); cancelPlacing(); } };
   const onUp = (e) => {
     if (!down || e.pointerId !== down.id) return;
     const d = down; down = null;
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8 || performance.now() - d.t > 600) return;
-    tap(e.clientX, e.clientY);
+    tap(e.clientX, e.clientY, e.pointerType);
   };
   const onWheel = () => { userTouched = true; glide = null; };
   canvas.addEventListener('pointerdown', onDown);
   canvas.addEventListener('pointermove', onMove);
   canvas.addEventListener('pointerup', onUp);
   canvas.addEventListener('wheel', onWheel, { passive: true });
-  const onKey = (e) => { if (e.key === 'Escape') { if (hud.reportOpen) hud.report(null); else if (placing) stopPlacing(); else if (sel) select(null); else close(); } };
+  canvas.addEventListener('contextmenu', onCtx);
+  // keys, as the battle's: 1–9 pick from the list (again to disarm), Enter confirms, Esc cancels
+  const onKey = (e) => {
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+    if (e.key === 'Escape') { if (hud.reportOpen) hud.report(null); else if (pl.phase !== 'idle') cancelPlacing(); else if (sel) select(null); else close(); return; }
+    if (hud.reportOpen) return;
+    if (/^[1-9]$/.test(e.key) && MENU[+e.key - 1]) { pickItem(MENU[+e.key - 1].id); e.preventDefault(); return; }
+    if (e.key === 'Enter' && pl.phase === 'aimed') { placeEvent({ type: 'confirm' }); e.preventDefault(); }
+  };
   doc.addEventListener('keydown', onKey);
 
-  function tap(cx, cy) {
+  function tap(cx, cy, pointerType = 'mouse') {
     if (saleRun) return;
     const rect = canvas.getBoundingClientRect(), px = cx - rect.left, py = cy - rect.top;
     const cell = screenToCell(r, px, py);
-    if (placing) {
-      if (cell && placing.cells.has(`${cell.x},${cell.y}`)) {
-        const kind = placing.kind;
-        const res = act({ type: 'place', cell: [cell.x, cell.y], kind }, () => `${KIND_NAME[kind]} placed`);
-        if (res && res.ok) { stopPlacing(); const d = o.defenses[o.defenses.length - 1]; if (d) select({ defense: d.id }); }
-      } else hud.toast('Defenses go on the lit ring', true);
+    if (pl.phase !== 'idle') {
+      lastPointer = pointerType === 'touch' || pointerType === 'pen' ? 'touch' : 'mouse';
+      placeEvent({ type: 'tap', target: targetAt(px, py), touch: lastPointer === 'touch' });
       return;
     }
     const ndc = new THREE.Vector2((px / rect.width) * 2 - 1, -(py / rect.height) * 2 + 1);
@@ -298,7 +391,9 @@ export async function openOutpostView(opts = {}) {
   function refreshHud(force = false) {
     const h = hudModel(o, map, { gold: bank() });
     hud.update(h, saleRun ? shownGold : bank());
-    hud.online(onlineChecks());
+    hud.online(pl.phase !== 'idle' ? null : onlineChecks());   // the GO ONLINE card steps aside while placing
+    scene.setWarnings(buildingWarnings(o, map), markerOf);
+    refreshMenu();
     if (force) refreshPanel();
   }
   function frame(t) {
@@ -341,7 +436,7 @@ export async function openOutpostView(opts = {}) {
       if (left > 0) { const a = shake.amp * (left / (shake.until - shake.t0)); jx = Math.sin(saleRun.t * 71) * a; jz = Math.cos(saleRun.t * 53) * a; } else shake = null;
     }
     r.cam.tx += jx; r.cam.tz += jz;
-    renderFrame(r, state, {}, [], dt);
+    renderFrame(r, state, ui3d, [], dt);
     r.cam.tx -= jx; r.cam.tz -= jz;
     if (r.resources && !r._ringsHidden) { r.resources.group.children.forEach((m) => { if (m.name === 'resources-rings') m.visible = false; }); r._ringsHidden = true; }
     // while measuring, wait for the GPU (gl.finish) so the number is the whole frame: script + draw + raster
@@ -360,7 +455,7 @@ export async function openOutpostView(opts = {}) {
     closed = true;
     win.cancelAnimationFrame(raf);
     canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove);
-    canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('wheel', onWheel);
+    canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onCtx);
     doc.removeEventListener('keydown', onKey);
     // a sale in flight is already banked; settle what the screen shows
     try { session.live(clockNow()); } catch (e) { console.warn('[outpost] close', e); }
@@ -380,7 +475,12 @@ export async function openOutpostView(opts = {}) {
 
   const handle = {
     get outpost() { return o; }, map, session, scene, r, hud, opened,
-    select, sell: doSell, openBuild, startPlacing, stopPlacing, close,
+    select, sell: doSell, close,
+    /** The build menu (review / screenshots): pick(id, target?), aim(target, touch), hoverAt(target), confirm(), cancel(). */
+    pick: (id, target) => pickItem(id, target), confirm: () => placeEvent({ type: 'confirm' }), cancel: () => cancelPlacing(),
+    aim: (target, touch = true) => { lastPointer = touch ? 'touch' : 'mouse'; placeEvent({ type: 'tap', target, touch }); },
+    hoverAt: (target) => { lastPointer = 'mouse'; placeEvent({ type: 'hover', target }); },
+    get placement() { return pl; }, get menu() { return menuItems; },
     /** Frame timing over the next n frames: { frames, avgWork (ms, script + draw + gl.finish), p95Work, avgInterval (ms between frames), fps, tier }. */
     measure(n = 120) {
       return new Promise((ok) => {

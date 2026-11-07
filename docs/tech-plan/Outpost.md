@@ -397,7 +397,8 @@ renderer.
 - **The HUD** uses the battle HUD's visual language:
   - top bar: gold, each ore in storage with its icon, the storage fill bar, power used / supplied, and the
     defenses' state as a shield filled to their total HP;
-  - bottom: **SELL** (with the number of loads), **BUILD** (pads and defenses), **REPAIR** when the defenses are worn;
+  - bottom: **SELL** (with the number of loads), **REPAIR** when the defenses are worn;
+  - left: the **BUILD** list, icons with prices, as in battle (story O17, "As built (O17)" below);
   - the selected building's panel: status, tier, rate, the deep / shallow switch on a rig, and upgrade.
 - **The away report.** On open, when anything happened since the last visit, a modal in the results-screen style
   (`render/resultsScreen.js`) lists extraction per ore, each raid with its result (and the ore lost on a breach), and
@@ -438,6 +439,48 @@ shuttle's first frames build its engine FX and LOD clones). Measured in headless
 on a 2-core Xeon at 2.1 GHz, where the frame interval (215–677 ms) is the software rasteriser and the headless
 compositor, not the view; these are a ceiling for the CPU side, not a phone figure, and need a real low-tier phone
 before launch. The live raid's frame time is O7's.
+
+**As built (O17), the build menu** (owner, 2026-11-07: "building an outpost should be done the same way the tower
+defense game works. An icon list with cost on the left side of the screen"; follow-ups: Storage Tower required, the
+turret tower is the Cannon Tower, harvesters bought from the list once the Resource Bay stands; 07:33: warnings for no
+power and full storage, the unpowered Storage Tower's door shut). This replaces the **BUILD** button and sheet above:
+- **The battle's palette, shared.** Its CSS, its SVG fallback glyphs and the reactive left rail's sizing moved out of
+  `render/hud.js` into `render/buildPalette.js` (`PALETTE_CSS`, `paletteBaseCss(scope)`, `STRUCT_ICONS`, `railFit`,
+  `applyRailFit`); the battle HUD imports them unchanged and the outpost HUD draws the same `bw-palette` / `bw-buildbtn`
+  buttons: picture + name + price, the hotkey badge (1–9), `bw-selected` when armed, `bw-poor` greyed when short of
+  gold (the price turns red), plus a padlock and the reason (hover title, toast on tap) when locked.
+- **The list** (`view/buildMenu.js`, pure): Power Station, Mining Station, Storage Tower, Resource Bay, Upgrade Bay,
+  Harvester (n / cap), Wall, Machine Gun, Cannon Tower. Prices are `structureDef(kind, 1).cost` and `harvesterDef()`;
+  which pads / cells take an item is asked of `model.place` on a copy with unlimited gold (so the rules, not the menu,
+  decide: pad roles, unlocked deposits, taken cells, a later gun cap); the harvester's lock is `harvesterRefusal` (gold
+  aside). Pictures: the defenses and the harvester reuse the battle's baked icons (`content/icons/build/`); power,
+  storage and each rig head are rendered from their GLBs once on open (`view/menuIcons.js`, the view's own renderer to
+  a render target); the bays (no GLB until O10) keep a glyph. The Mining Station's picture is the head of the first
+  free deposit.
+- **Placement** is the battle's loop as a reducer (`placementStep`): pick arms (pick again, Esc or right-click
+  disarms); valid pads glow (pulsing cyan) or the defense ring's free cells light; the mouse's ghost follows the
+  pointer; a click on a lit spot builds. On touch the first tap aims (ghost + **CONFIRM** in the banner) and a second
+  tap or CONFIRM builds, because a pad building costs thousands. Pad buildings' ghost is the GLB (or the bay block)
+  in the battle ghost's cyan / red with an inverted-hull rim; defenses use the battle renderer's own outline ghost and
+  range ring (`renderFrame`'s `ui`). Every build is `session.act({ type: 'place' })` (advance, `model.place`, the gold,
+  `settleOutpost`); a pad building returns to the list and opens its panel, a defense stays armed for the next one.
+  The harvester is bought straight from the list (`session.act({ type: 'buyHarvester' })` → `model.buyHarvester`).
+  An empty pad's panel lists what fits; each entry arms the menu on that pad. Upgrade, repair and deep stay on the
+  building panel; SELL and REPAIR stay on the action row; the GO ONLINE card steps aside while placing.
+- **Guidance.** Until the outpost is online the first missing of Power Station → Mining Station → Storage Tower pulses
+  with the battle's hint glow and a nudging arrow (`guideStep`).
+- **Warnings** (`view/warnings.js`): `model.warnings(o, map)` (O16), with a fallback derived from `powerGrids().off`
+  and the bays. A screen-sized marker floats over each building with one (a bolt for no power, a full crate for storage
+  full), the building panel lists the reasons, and an unpowered Storage Tower gets a shutter over its door anchor
+  (the GLB has no door node) and the status "No power: door shut".
+- **Layout.** The rail runs from under the top bar to the bottom (portrait: to the SELL row) on every layout, one column
+  of ~64 px buttons on a portrait phone and a desktop, two columns on a landscape phone, as the battle's rail does.
+  `layout.js` leaves it clear when framing (left inset 144 landscape, 100 desktop); on a portrait phone the capped
+  camera cannot, so there the rail floats over the mesa's western edge, as the battle's floats over its board.
+- **Review.** `tools/outpost/view.html` `?state=fresh` now opens the contract's hub-only start (build it up from the
+  list); the running presets start from `referenceOutpost`. `handle.pick / aim / hoverAt / confirm / cancel` drive
+  the menu for screenshots. Tests: `view/buildMenu.test.mjs` (items, prices, locks, targets, guidance, the placement
+  reducer for mouse and touch, the warnings).
 
 ### 6.2 Building models
 
