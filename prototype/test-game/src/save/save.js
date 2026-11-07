@@ -65,6 +65,11 @@ export function defaultSave() {
     loggedQueue: [],     // missions logged away from the menu: the toast plays when the menu next shows
     battleLog: [],
     collective: { introSeen: false, contractAccepted: false, transport: null, seenBefore: false },   // the opening [MM-story_mw47lq0l_7]
+    // outposts and mining [MM-story_mw5oe696_j]: one outpost per planet key (src/outpost/model.js), the outpost
+    // contract per planet, and the far buyer's discoveries (design §8.5)
+    outposts: {},
+    outpostContracts: {},
+    outpostTrade: { discovered: {}, farSoldToday: null },
   };
 }
 
@@ -103,6 +108,10 @@ export function migrate(s) {
   if (!Array.isArray(s.battleLog)) s.battleLog = [];
   if (!s.seen || typeof s.seen !== 'object') s.seen = {};
   if (s.pendingRewards === undefined) s.pendingRewards = null;
+  if (!s.outposts || typeof s.outposts !== 'object') s.outposts = {};
+  if (!s.outpostContracts || typeof s.outpostContracts !== 'object') s.outpostContracts = {};
+  if (!s.outpostTrade || typeof s.outpostTrade !== 'object') s.outpostTrade = { discovered: {}, farSoldToday: null };
+  if (!s.outpostTrade.discovered) s.outpostTrade.discovered = {};
   collectiveOf(s);   // the opening's state; a save that has already played is marked seen [MM-story_mw47lq0l_7]
   return s;
 }

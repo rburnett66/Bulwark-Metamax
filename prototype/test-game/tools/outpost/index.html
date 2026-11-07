@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Outpost Review</title>
+<!-- [MM-story_mw5oe696_j] Review page for the outpost model (docs/tech-plan/Outpost.md §6.7, story O9 started with O2).
+     Runs src/outpost/model.js on the draft layout, outside the game: pick a save state, move time forward, sell,
+     build, upgrade, switch a rig deep, place and repair defenses, and read the away report. Raids use a stand-in
+     outcome until the battle sim runs them (story O7). The building models are on ../../outposts.html.
+     Query: ?state=fresh|running|full|raid|breached -->
+<style>
+  :root { color-scheme: dark; --bg:#0b0f12; --panel:#121a1d; --line:#24302e; --text:#e6ebe3; --dim:#8f9c97;
+          --cyan:#4fb8ff; --amber:#f2a03b; --red:#e2564d; --gold:#f2c869; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:14px; padding:14px; max-width:1400px; margin:0 auto; }
+  h1 { font-size:18px; margin:0 0 2px; } .sub { color:var(--dim); margin:0 0 10px; font-size:13px; max-width:75ch; }
+  canvas { width:100%; display:block; background:#2a211c; border-radius:6px; touch-action:manipulation; cursor:pointer; }
+  aside { display:flex; flex-direction:column; gap:10px; }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:10px 12px; }
+  section h2 { font-size:12px; margin:0 0 8px; color:var(--dim); font-weight:600; }
+  .row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  button, select { font:inherit; color:inherit; background:#1b2a2a; border:1px solid #2e3c3a; border-radius:5px; padding:6px 10px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--gold); } button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:#2b3a1c; border-color:#5b7a2e; font-weight:600; }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+  .stat { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; font-size:13px; }
+  .stat dt { color:var(--dim); } .stat dd { margin:0; }
+  #log { font:12px/1.5 ui-monospace, Menlo, monospace; color:#b9c6c1; max-height:260px; overflow:auto; white-space:pre-wrap; }
+  .err { color:var(--red); } .ok { color:#8fd18a; }
+  label.chk { display:flex; gap:6px; align-items:center; font-size:13px; }
+  @media (max-width: 860px) { main { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>Outpost: model review</h1>
+    <p class="sub">The outpost's rules running on the draft Verdance layout. Tap a pad to build or inspect it, tap a defense to repair it. Time only moves when you move it. Raids use a stand-in outcome until the battle sim runs them (O7). The building models are on <a href="../../outposts.html" style="color:var(--cyan)">the model review page</a>.</p>
+    <canvas id="map" width="1200" height="720" aria-label="Outpost map"></canvas>
+    <section style="margin-top:10px"><h2>Away report and events</h2><div id="log"></div></section>
+  </div>
+  <aside>
+    <section>
+      <h2>Save state</h2>
+      <div class="row">
+        <select id="preset" aria-label="Save state">
+          <option value="fresh">Fresh kit (not online)</option>
+          <option value="running" selected>Running 2 hours</option>
+          <option value="full">Storage full</option>
+          <option value="raid">First raid due in 1 minute</option>
+          <option value="breached">Breached, defenses worn</option>
+        </select>
+        <button id="reset">Load</button>
+      </div>
+    </section>
+    <section>
+      <h2>Time</h2>
+      <div class="row" id="time">
+        <button data-adv="5">+5 min</button><button data-adv="60">+1 h</button><button data-adv="240">+4 h</button>
+        <button data-adv="1440">+1 day</button><button data-adv="4320">+3 days</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label class="chk">Raids <select id="raidMode"><option value="wear">held, defenses worn</option><option value="breach">break through</option><option value="off">none</option></select></label>
+      </div>
+    </section>
+    <section>
+      <h2>Outpost</h2>
+      <dl class="stat" id="stats"></dl>
+      <div class="row" style="margin-top:8px">
+        <button id="online" class="primary">Go online</button>
+        <button id="sell" class="primary">SELL</button>
+        <button id="sellFar">Sell lithium far (Florael)</button>
+      </div>
+    </section>
+    <section>
+      <h2>Selected</h2>
+      <div id="sel" class="sub" style="margin:0">Tap a pad or a defense.</div>
+      <div class="row" id="selActions" style="margin-top:8px"></div>
+    </section>
+    <section>
+      <h2>Unlocks (contracts and tech)</h2>
+      <div class="row" id="unlocks"></div>
+    </section>
+  </aside>
+</main>
+<script type="module">
+import {
+  createOutpost, confirmOnline, advance, sell, loadsReady, place, upgrade, repair, repairCost, setDeep,
+  raidOutcome, powerGrids, bayCapacity, rigRatePerMin, onlineProblems, status, depositOf,
+} from '../../src/outpost/model.js';
+import { DRAFT_LAYOUT as map } from '../../src/outpost/draftLayout.js';
+import { oresOf, oreById } from '../../src/data/ores.js';
+import { structureDef, OUTPOST } from '../../src/data/outpost.js';
+
+const T0 = Date.UTC(2026, 10, 7, 12), MIN = 60_000, HOUR = 60 * MIN;
+const ORES = oresOf('ground');
+const UNLOCKS = [
+  ['tier:uncommon', 'Aluminum (contract 1)'], ['tier:rare', 'Lithium (contract 2)'],
+  ['deep_drilling_1', 'Deep Drilling I'], ['rig_mk2', 'Rig Mk II'], ['power_grid_2', 'Power Grid II'],
+  ['supply_depot', 'Supply Depot'], ['far', 'Far buyer found'], ['shuttle2', 'Cargo Shuttle II'],
+];
+let o, now, gold, unlocks = new Set(), selected = null, placing = null;
+const $ = (id) => document.getElementById(id);
+const log = (line, cls = '') => { const d = document.createElement('div'); d.textContent = line; if (cls) d.className = cls; $('log').prepend(d); };
+const DAY0 = Date.UTC(2026, 10, 7);   // midnight of day 1, so the day turns over at 00:00
+const clock = (t) => `day ${Math.floor((t - DAY0) / (24 * HOUR)) + 1}, ${new Date(t).toISOString().slice(11, 16)}`;
+const fmt = (n) => (Math.round(n * 10) / 10).toLocaleString('en-US');
+
+function ctx() {
+  return {
+    map, now, gold, farDiscovered: unlocks.has('far'), shuttleTier: unlocks.has('shuttle2') ? 2 : 1,
+    unlocks: new Set([...unlocks].filter((u) => !u.startsWith('tier:'))),
+    unlockedTiers: ['common', ...[...unlocks].filter((u) => u.startsWith('tier:')).map((u) => u.slice(5))],
+    raid: (out, r) => {
+      const mode = $('raidMode').value;
+      // the stand-in: each defense loses a share of its HP, the same share every time for the same raid
+      const wear = (d, i) => ({ id: d.id, hp: Math.max(0, d.hp - structureDef(d.kind, d.tier).battle.hp * (0.12 + ((r.window ?? 3) * 7 + i * 13) % 20 / 100)) });
+      if (mode === 'breach') return { result: 'breach', defenses: out.defenses.map(wear) };
+      return { result: 'held', defenses: out.defenses.map(wear) };
+    },
+  };
+}
+function quietCtx() { return { ...ctx(), params: { ...OUTPOST, Raid_Mean_Hours: 1e12 } }; }
+
+function load(preset) {
+  now = T0; gold = 20000; selected = null; placing = null;
+  o = createOutpost('ground', { seed: 1234, map, now });
+  if (preset !== 'fresh') {
+    o = confirmOnline(o, map, now).outpost;
+    if (preset !== 'raid') o.firstRaidAt = null;
+  }
+  if (preset === 'running') { now += 2 * HOUR; o = advance(o, now, quietCtx()).outpost; }
+  if (preset === 'full') { now += 5 * HOUR; o = advance(o, now, quietCtx()).outpost; }
+  if (preset === 'raid') { o.firstRaidAt = now + MIN; }
+  if (preset === 'breached') {
+    now += 3 * HOUR; o = advance(o, now, quietCtx()).outpost;
+    o = raidOutcome(o, { result: 'breach', at: now, defenses: o.defenses.map((d) => ({ id: d.id, hp: d.hp * 0.45 })) }).outpost;
+  }
+  $('log').textContent = '';
+  log(`Loaded "${$('preset').selectedOptions[0].text}" at ${clock(now)}.`);
+  draw();
+}
+
+function advanceBy(minutes) {
+  const to = now + minutes * MIN;
+  const { outpost, report } = advance(o, to, $('raidMode').value === 'off' ? quietCtx() : ctx());
+  o = outpost; now = to;
+  const lines = [`While you were away (${clock(report.from)} → ${clock(report.to)}):`];
+  const ex = Object.entries(report.extracted);
+  lines.push(ex.length ? '  extracted ' + ex.map(([k, v]) => `${fmt(v)} ${oreById(k).name}${oreById(k).deep ? ' (deep)' : ''}`).join(', ') : '  nothing extracted');
+  for (const f of report.full) lines.push(`  ${f.pad}'s bay filled at ${clock(f.at)}`);
+  for (const b of report.built) lines.push(`  built ${b.kind} ${['', 'I', 'II', 'III'][b.tier]} on ${b.pad}`);
+  for (const r of report.raids) {
+    const lost = Object.entries(r.lost).map(([k, v]) => `${fmt(v)} ${oreById(k).name}`).join(', ');
+    lines.push(`  raid at ${clock(r.at)}: ${r.result === 'held' ? 'repelled' : 'BROKE THROUGH, lost ' + (lost || 'nothing')}; defenses took ${fmt(r.damage)} damage`);
+  }
+  log(lines.join('\n'), report.raids.some((r) => r.result === 'breach') ? 'err' : '');
+  draw();
+}
+
+// ── drawing ────────────────────────────────────────────────────────────────────────────────────────────────────
+const cv = $('map'), g = cv.getContext('2d');
+const S = cv.width / map.width;
+const padById = (id) => map.pads.find((p) => p.id === id);
+const C = (p) => [(p.x + p.w / 2) * S, (p.y + p.h / 2) * S];
+const ROLE_COL = { hub: '#3b4048', power: '#2f3d4f', rig: '#3d3a33', storage: '#3a3f3a', bay: '#383640', spare: '#333333' };
+const KIND_LABEL = { hub: 'Hub', power: 'Power', rig: 'Rig', storage: 'Storage', harvesterBay: 'Harvester Bay', upgradeBay: 'Upgrade Bay' };
+
+function draw() {
+  const grid = powerGrids(o, map);
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.fillStyle = '#2a211c'; g.fillRect(0, 0, cv.width, cv.height);
+  g.strokeStyle = 'rgba(255,255,255,0.04)';
+  for (let x = 0; x <= map.width; x++) { g.beginPath(); g.moveTo(x * S, 0); g.lineTo(x * S, cv.height); g.stroke(); }
+  for (let y = 0; y <= map.height; y++) { g.beginPath(); g.moveTo(0, y * S); g.lineTo(cv.width, y * S); g.stroke(); }
+  // station reach
+  for (const [id, b] of Object.entries(o.pads)) {
+    if (b.kind !== 'power') continue;
+    const [x, y] = C(padById(id));
+    g.setLineDash([8, 8]); g.strokeStyle = 'rgba(79,184,255,0.35)'; g.lineWidth = 2;
+    g.beginPath(); g.arc(x, y, structureDef('power', b.tier).reach * S, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  }
+  // conduits: each powered consumer to its grid's nearest station
+  for (const gr of grid.grids) {
+    for (const id of gr.powered) {
+      const target = padById(id) ? C(padById(id)) : (() => { const d = o.defenses.find((x) => x.id === id); return [(d.cell[0] + 0.5) * S, (d.cell[1] + 0.5) * S]; })();
+      const st = gr.stations.map((s) => C(padById(s))).sort((a, b) => Math.hypot(a[0] - target[0], a[1] - target[1]) - Math.hypot(b[0] - target[0], b[1] - target[1]))[0];
+      g.strokeStyle = 'rgba(79,184,255,0.8)'; g.lineWidth = 3; g.beginPath(); g.moveTo(...st); g.lineTo(...target); g.stroke();
+    }
+  }
+  // deposits
+  for (const d of map.deposits) {
+    const ore = ORES.find((x) => x.tier === d.tier);
+    g.fillStyle = ore.colour; g.globalAlpha = 0.9;
+    g.beginPath(); g.arc((d.x + 1) * S, (d.y + 1) * S, S * 0.9, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
+  }
+  // pads
+  for (const p of map.pads) {
+    const b = o.pads[p.id], bld = o.building.find((x) => x.pad === p.id);
+    g.fillStyle = b ? ROLE_COL[p.role] : 'rgba(255,255,255,0.05)';
+    g.fillRect(p.x * S + 2, p.y * S + 2, p.w * S - 4, p.h * S - 4);
+    g.strokeStyle = selected === p.id ? '#f2c869' : grid.off[p.id] ? '#e2564d' : 'rgba(255,255,255,0.25)';
+    g.lineWidth = selected === p.id ? 4 : 2;
+    g.strokeRect(p.x * S + 2, p.y * S + 2, p.w * S - 4, p.h * S - 4);
+    g.fillStyle = '#e6ebe3'; g.font = `600 ${S * 0.55}px system-ui`; g.textAlign = 'center';
+    const [cx, cy] = C(p);
+    g.fillText(b ? `${KIND_LABEL[b.kind]} ${['', 'I', 'II', 'III'][b.tier]}` : `${p.id} · ${p.role}${p.remote ? ' (remote)' : ''}`, cx, cy - S * 0.2);
+    g.font = `${S * 0.42}px system-ui`; g.fillStyle = '#9fb0aa';
+    if (b && b.kind === 'rig') {
+      const ore = ORES.find((x) => x.tier === b.deposit), units = Object.values(o.storage[p.id] || {}).reduce((a, v) => a + v, 0), cap = bayCapacity(o, p.id);
+      g.fillText(`${ore.name}${b.deep ? ' (deep)' : ''} ${fmt(rigRatePerMin(o, p.id))}/min`, cx, cy + S * 0.4);
+      g.fillStyle = '#111'; g.fillRect(p.x * S + 10, (p.y + p.h) * S - 18, p.w * S - 20, 8);
+      g.fillStyle = units >= cap - 1e-6 ? '#f2a03b' : '#4fb8ff'; g.fillRect(p.x * S + 10, (p.y + p.h) * S - 18, (p.w * S - 20) * Math.min(1, units / cap), 8);
+    }
+    if (grid.off[p.id]) { g.fillStyle = '#e2564d'; g.fillText(`unpowered (${grid.off[p.id]})`, cx, cy + S * 0.9); }
+    if (bld) { g.fillStyle = '#f2c869'; g.fillText(`building ${bld.kind} ${['', 'I', 'II', 'III'][bld.tier]}: ${Math.max(0, Math.ceil((bld.done - now) / MIN))} min`, cx, cy + S * 1.3); }
+  }
+  // defenses
+  for (const d of o.defenses) {
+    const max = structureDef(d.kind, d.tier).battle.hp, x = d.cell[0] * S, y = d.cell[1] * S;
+    g.fillStyle = d.kind === 'wall' ? '#8a8f94' : d.kind === 'cannon' ? '#c9853a' : '#c9b63a';
+    g.fillRect(x + 3, y + 3, S - 6, S - 6);
+    if (selected === d.id) { g.strokeStyle = '#f2c869'; g.lineWidth = 3; g.strokeRect(x + 1, y + 1, S - 2, S - 2); }
+    g.fillStyle = '#111'; g.fillRect(x + 3, y - 4, S - 6, 4);
+    g.fillStyle = d.hp < max ? '#e2564d' : '#8fd18a'; g.fillRect(x + 3, y - 4, (S - 6) * d.hp / max, 4);
+    if (grid.off[d.id]) { g.strokeStyle = '#e2564d'; g.strokeRect(x + 3, y + 3, S - 6, S - 6); }
+  }
+  if (placing) { g.fillStyle = '#f2c869'; g.font = `600 ${S * 0.6}px system-ui`; g.textAlign = 'left'; g.fillText(`Tap a free cell to place a ${placing}`, 10, cv.height - 12); }
+  renderPanel(grid);
+}
+
+function renderPanel(grid) {
+  const st = status(o, ctx());
+  const ores = {};
+  for (const bay of Object.values(o.storage)) for (const [k, v] of Object.entries(bay)) ores[k] = (ores[k] || 0) + v;
+  const sup = grid.grids.map((x) => `${x.draw}/${x.supply}`).join(' + ') || '0';
+  $('stats').innerHTML = `
+    <dt>Time</dt><dd>${clock(now)}</dd><dt>Gold</dt><dd>${gold.toLocaleString('en-US')}</dd>
+    <dt>State</dt><dd>${o.online ? 'ONLINE' : 'not online' + (onlineProblems(o, map).length ? ': ' + onlineProblems(o, map).join(', ') : '')}</dd>
+    <dt>Storage</dt><dd>${Object.entries(ores).map(([k, v]) => `${fmt(v)} ${oreById(k).name}${oreById(k).deep ? ' (deep)' : ''}`).join(', ') || 'empty'}${st.full ? ' · <b style="color:var(--amber)">STORAGE FULL</b>' : ''}</dd>
+    <dt>Loads ready</dt><dd>${st.loads}</dd><dt>Power</dt><dd>${sup} (draw / supply per grid)</dd>
+    <dt>Defenses</dt><dd>${st.worn ? '<span style="color:var(--red)">worn</span>' : 'full HP'}</dd>
+    <dt>Last raid</dt><dd>${st.lastRaid ? (st.lastRaid.result === 'held' ? 'repelled' : 'broke through') + ' at ' + clock(st.lastRaid.at) : 'none'}</dd>
+    <dt>Menu dot</dt><dd>${st.dot ? 'red dot' : 'none'}</dd>`;
+  $('online').disabled = o.online;
+  $('sell').disabled = !st.loads;
+  $('sellFar').disabled = !unlocks.has('far');
+  // selected
+  const box = $('selActions'); box.textContent = '';
+  const btn = (label, fn, disabled) => { const b = document.createElement('button'); b.textContent = label; b.disabled = !!disabled; b.onclick = fn; box.append(b); };
+  if (!selected) { $('sel').textContent = 'Tap a pad or a defense.'; ['mg', 'cannon', 'wall'].forEach((k) => btn(`Place ${k} (${structureDef(k, 1).cost})`, () => { placing = k; draw(); })); return; }
+  const d = o.defenses.find((x) => x.id === selected);
+  if (d) {
+    const max = structureDef(d.kind, d.tier).battle.hp, cost = repairCost(o, d.id);
+    $('sel').textContent = `${d.kind} ${['', 'I', 'II', 'III'][d.tier]} at ${d.cell.join(', ')}: ${Math.round(d.hp)} / ${max} HP${grid.off[d.id] ? `, unpowered (${grid.off[d.id]})` : ''}`;
+    btn(`Repair (${cost})`, () => act(repair(o, d.id, ctx()), 'repaired'), !cost);
+    return;
+  }
+  const pad = map.pads.find((p) => p.id === selected), b = o.pads[selected];
+  if (!b) {
+    $('sel').textContent = `Pad ${pad.id} (${pad.role}${pad.remote ? ', remote' : ''})${depositOf(map, pad.id) ? `, on the ${depositOf(map, pad.id)} deposit` : ''}: empty.`;
+    for (const kind of ['rig', 'power', 'harvesterBay', 'upgradeBay']) btn(`Build ${KIND_LABEL[kind]} (${structureDef(kind, 1).cost})`, () => act(place(o, { pad: pad.id, kind }, ctx()), `started a ${KIND_LABEL[kind]}`));
+    return;
+  }
+  const next = structureDef(b.kind, b.tier + 1);
+  $('sel').textContent = `${KIND_LABEL[b.kind]} ${['', 'I', 'II', 'III'][b.tier]} on ${pad.id}${grid.off[pad.id] ? `, unpowered (${grid.off[pad.id]})` : grid.powered.has(pad.id) ? ', powered' : ''}`
+    + (b.kind === 'rig' ? `: bay ${fmt(Object.values(o.storage[pad.id] || {}).reduce((a, v) => a + v, 0))} / ${fmt(bayCapacity(o, pad.id))}` : '');
+  if (next) btn(`Upgrade to ${['', 'I', 'II', 'III'][b.tier + 1]} (${next.cost})`, () => act(upgrade(o, pad.id, ctx()), `upgrading ${pad.id}`));
+  if (b.kind === 'rig') btn(b.deep ? 'Switch to shallow' : 'Switch to deep seam', () => act(setDeep(o, pad.id, !b.deep, ctx()), b.deep ? 'shallow' : 'deep seam'));
+}
+
+function act(r, what) {
+  if (r.error) { log(`Refused: ${r.error}`, 'err'); return; }
+  o = r.outpost; gold -= r.cost || 0;
+  log(`${what}${r.cost ? ` for ${r.cost} gold` : ''}.`, 'ok');
+  draw();
+}
+
+cv.addEventListener('click', (e) => {
+  const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * map.width, y = (e.clientY - r.top) / r.height * map.height;
+  const cell = [Math.floor(x), Math.floor(y)];
+  if (placing) { const k = placing; placing = null; act(place(o, { kind: k, cell }, ctx()), `placed a ${k}`); return; }
+  const d = o.defenses.find((q) => q.cell[0] === cell[0] && q.cell[1] === cell[1]);
+  const p = map.pads.find((q) => x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h);
+  selected = d ? d.id : p ? p.id : null;
+  draw();
+});
+$('reset').onclick = () => load($('preset').value);
+$('time').onclick = (e) => { const m = +e.target.dataset.adv; if (m) advanceBy(m); };
+$('online').onclick = () => { const r = confirmOnline(o, map, now); if (r.error) log(`Refused: ${r.error}`, 'err'); else { o = r.outpost; log(`ONLINE. The first raid comes in ${OUTPOST.First_Raid_Sec / 60} minutes.`, 'ok'); draw(); } };
+const doSell = (buyer) => {
+  const r = sell(o, ctx(), { buyer });
+  if (r.error) { log(`Refused: ${r.error}`, 'err'); return; }
+  o = r.outpost; gold += r.gold;
+  log(`SOLD ${r.loads.length} loads${buyer ? ' to Florael at the far price' : ''}: ${r.loads.map((l) => '$' + l.gold).join(' ')} = ${r.gold} gold${r.loyalty.home ? `, ${r.loyalty.home} Verdance loyalty` : ''}.`, 'ok');
+  draw();
+};
+$('sell').onclick = () => doSell(null);
+$('sellFar').onclick = () => doSell('air');
+for (const [id, label] of UNLOCKS) {
+  const l = document.createElement('label'); l.className = 'chk';
+  const c = document.createElement('input'); c.type = 'checkbox';
+  c.onchange = () => { c.checked ? unlocks.add(id) : unlocks.delete(id); draw(); };
+  l.append(c, label); $('unlocks').append(l);
+}
+const q = new URLSearchParams(location.search).get('state');
+if (q) $('preset').value = q;
+load($('preset').value);
+</script>
+</body>
+</html>
