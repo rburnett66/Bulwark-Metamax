@@ -1119,7 +1119,9 @@ const BASIC_WAVE_SHAPES = new Set(['Troops', 'Scout', 'Assault Tank']);
  *  (none before the gate wave). Falls back to the full roster for a faction with no basics so a wave
  *  is never empty. The spawn builders pick their `kinds` entries from the head of this. */
 function _wavePool(units, ids, n) {
-  const basics = ids.filter((id) => BASIC_WAVE_SHAPES.has(units[id].shape));
+  let basics = ids.filter((id) => BASIC_WAVE_SHAPES.has(units[id].shape));
+  // LIGHT OPENING (owner 2026-11-07): waves 1–2 are troops and scouts only (campaign.js LIGHT_WAVES)
+  if (n <= 2) { const light = basics.filter((id) => ['Troops', 'Scout'].includes(units[id].shape)); if (light.length) basics = light; }
   const specials = ids.filter((id) => !BASIC_WAVE_SHAPES.has(units[id].shape));
   const nSpecial = n < WAVE_SPECIAL_GATE ? 0 : Math.min(specials.length, n - WAVE_SPECIAL_GATE + 1);
   const pool = basics.concat(specials.slice(0, nSpecial));

@@ -24,6 +24,11 @@ export const SPECIAL_GATE_WAVE = 3;                                   // first w
 export const SPECIAL_SHARE = Object.freeze({ start: 0.35, step: 0.10, max: 0.70 });   // of the lane budget
 const BASIC_SHAPES = new Set(['Troops', 'Scout', 'Assault Tank']);
 const isBasicUnit = (u) => BASIC_SHAPES.has(u && u.shape);
+// LIGHT OPENING (owner 2026-11-07: "just trade heavy units in waves one and two for light units"): the first
+// LIGHT_WAVES waves of every map are troops and scouts only; assault tanks join the basics from wave 3.
+export const LIGHT_WAVES = 2;
+const LIGHT_SHAPES = new Set(['Troops', 'Scout']);
+const isLightUnit = (u) => LIGHT_SHAPES.has(u && u.shape);
 /** Fraction of a wave's budget specials may claim: 0 before the gate, then start + step·(w−gate), capped. */
 export function specialShare(wave) {
   if ((wave || 0) < SPECIAL_GATE_WAVE) return 0;
@@ -66,7 +71,11 @@ function fillLane(faction, lane, powerBudget, rng, wave) {
     if (u.faction === faction && laneDomain(u) === lane && (u.power || 0) > 0) pool.push({ id, power: u.power, basic: isBasicUnit(u) });
   }
   if (!pool.length) return [];
-  const basics = pool.filter((p) => p.basic);
+  let basics = pool.filter((p) => p.basic);
+  if ((wave || 0) <= LIGHT_WAVES) {
+    const light = basics.filter((p) => isLightUnit(UNITS[p.id]));
+    if (light.length) basics = light;   // a faction with no light ground unit keeps its basics
+  }
   const specials = pool.filter((p) => !p.basic);
   const picks = [];
   // greedily spend `left` power on `cands` (biggest first, seeded one-step-down for texture)
@@ -127,7 +136,9 @@ export function buildCampaignWaves(map, onlyFaction) {
     if (carrierId) {
       const cl = laneDomain(UNITS[carrierId]);
       const laneOpen = cl === 'ground' || (cl === 'air' && ring.wave >= SPECIAL_GATE_WAVE) || (cl === 'water' && map.hasWater);
-      const want = laneOpen ? (ABILITY_CARRIERS_PER_WAVE[ring.wave - 1] || 0) : 0;
+      // the light opening holds a carrier that is not itself a light unit until wave LIGHT_WAVES + 1 (owner 2026-11-07)
+      const lightHold = ring.wave <= LIGHT_WAVES && !isLightUnit(UNITS[carrierId]);
+      const want = laneOpen && !lightHold ? (ABILITY_CARRIERS_PER_WAVE[ring.wave - 1] || 0) : 0;
       for (let i = 0; i < want; i++) { carrierIds.push(carrierId); carrierPower[cl] += UNITS[carrierId].power || 0; }
     }
     groundPower -= carrierPower.ground;
