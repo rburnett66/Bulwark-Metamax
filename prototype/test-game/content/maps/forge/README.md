@@ -49,3 +49,14 @@ with graduated play areas". Every faction now ships `<slug>-map-2.json` … `<sl
 - Every map is 64×32, with the same base and the same graduated wave windows as map 1.
 - Every map passes the §1 guardrails on the map the game builds for that slot.
 - Their baked levels hold only `level.json`, `road_mask.png` and `routes.json`, made with `bake3d.mjs <name> --no-tiles`. That is what the default low-poly 3D view loads. The ~3 MB ground tiles are only drawn under `?ground=baked`, so those maps show no baked ground in that mode.
+
+## Outpost maps (2026-11-07, [MM-story_mw5oeatc_l])
+
+`<planet-key>-outpost.json` (e.g. `ground-outpost.json`, Verdance) are the outpost maps (tech plan
+`docs/tech-plan/Outpost.md` §6.6): ordinary Forge maps plus `mesa`, `heights`, `pads`, `deposits`, `conduits` and
+`kitDefenses`. Author them in terrain.html's **Outpost** panel (`terrain.html?outpost=ground`), where
+`validateOutpostLayout` (`src/terrain/outpostPads.js`) checks them live; the game loads them with
+`src/outpost/outpostMap.js`. To regenerate one from its authored layout in `tools/maps/outpost-maps.mjs`:
+`node tools/maps/outpost-maps.mjs jobs jobs.json`, then `python3 tools/maps/forge-export.py jobs.json out.json`,
+then `node tools/maps/outpost-maps.mjs write out.json`. They are not battle-slot maps, so `forge-only.test.mjs`
+counts them separately.

@@ -394,6 +394,32 @@ within reach of its rig pad.
 - **Recipe.** The Forge recipe for each planet (Faction-Terrain-Design §2.3), with a central raised mesa and one of
   the planet's signature props. Verdance is first.
 
+**As built (O4):** `content/maps/forge/ground-outpost.json` (named by planet key, `<planet>-outpost.json`) is a
+40 × 24 Forge map on Verdance's recipe (seed 2): a 21 × 19 mesa with the hub and seven pads (`p1`, `r1`, `s1`, `r2`,
+`b1`, `b2`, `x1`, the draft layout's ids) within Power Station I's reach of 10, 1-cell walkways between them; iron on
+`r1` and aluminum on `r2` at the mesa edge; lithium remote in the west lowland on `r3` with its station pad `p2`; two
+raid lanes (north-west corner, east edge) up two ramps; the kit's cannon, MG and six walls at the ramp heads; Forge
+decor and resource fields in the lowland only. Its farm ponds are the signature prop. `src/terrain/outpostPads.js` holds the outpost layer:
+`stampOutpost` (applied after generation, so the recipe knobs still work: dirt top at height 2, a cliff rim, ramps,
+2-cell cart tracks from each lane to its ramp, flat clearings round remote pads; it adds `heights` and keeps those
+cells free of decor), `deriveConduits`, `defenseRing`, `mesaFrame` and `validateOutpostLayout`. The validator checks
+pad roles, ids, bounds and overlap; one hub and a first station on the mesa; every pad on open, flat ground, mesa pads
+on the mesa top; every mesa pad within the first station's reach; conduits naming real pads, with a power end, within
+reach; every mesa pad reachable from the hub through the conduits and every remote pad linked to a power pad; exactly
+one deposit per tier, each inside a rig pad, common and uncommon within the first station's reach; the rare pad outside
+it with another power pad in reach; kit defenses on buildable cells off the pads, powered ones in reach; and at least
+two ground lanes, each walking to the hub around the other pads. Deviations: **conduits are derived from reach by
+default** (each pad to its nearest station in reach, stations in reach of each other; this reproduces the draft
+layout's hand list), and the Forge's *derive from reach* box turns that off for hand editing; remote pads need a power
+pad, not the hub, at the end of their conduits, since a remote station is its own grid (design §4.5); the map adds
+`mesa`, `heights` and `kitDefenses` beside the three fields above. The Forge's outpost panel (`terrain.html`) places,
+moves and deletes pads (role, remote), deposits (tier), conduits, ramps, lanes and kit defenses, shows the validator's
+problems live, and exports or ships `<planet>-outpost.json`; `?outpost=ground` opens the map. `tools/maps/outpost-maps.mjs`
+holds the authored layout and regenerates the file through the headless Forge (`forge-export.py`).
+`src/outpost/outpostMap.js` `outpostMapFor(planet)` loads it for the model and views, falling back to `DRAFT_LAYOUT`.
+The review page draws the terrain and the raised mesa under the pads and frames the mesa in portrait: on a 390 × 844
+phone the 23 × 21-cell frame fills the width at about 17 px a cell (a 4 × 4 pad is about 68 px), using 360 px of height.
+
 ### 6.7 Review page
 
 `tools/outpost/index.html` is the review page, built and screenshotted first, before the menu wiring, so it can be
@@ -408,7 +434,9 @@ reviewed outside Claude:
 **As built (O2):** `prototype/test-game/tools/outpost/index.html` draws the draft layout on a canvas with the five
 save presets (or `?state=`), time buttons from +5 min to +3 days, a raid stand-in (wear, breach or off), SELL and far
 sell, Go online, build / upgrade / deep / repair on the selected pad or defense, defense placement, unlock switches,
-and the away report. The map view, turntables and live raid wait on O4–O7.
+and the away report. The map view, turntables and live raid wait on O4–O7. **O4:** it runs on the Verdance outpost
+map (terrain, mesa and raid lanes drawn under the pads; the defense ring shown while placing), with a Mesa / Whole map
+view that defaults to the mesa in portrait; `?map=draft` keeps the draft layout.
 
 ## 7. The menu and replay
 
