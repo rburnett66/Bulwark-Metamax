@@ -391,34 +391,47 @@ The other effects also reuse the battle's FX system (`render3d/fx`):
   graph; there is one deposit of each tier; the rare deposit is outside the first station's reach and has a power pad
 within reach of its rig pad.
 - **Size.** About 40 × 24 cells, measured to frame the mesa on a 390 × 844 portrait phone at the default zoom.
+  *(Superseded 2026-11-07: the large maps' 64 × 32, with the view framing the mesa; see As built.)*
 - **Recipe.** The Forge recipe for each planet (Faction-Terrain-Design §2.3), with a central raised mesa and one of
   the planet's signature props. Verdance is first.
 
-**As built (O4):** `content/maps/forge/ground-outpost.json` (named by planet key, `<planet>-outpost.json`) is a
-40 × 24 Forge map on Verdance's recipe (seed 2): a 21 × 19 mesa with the hub and seven pads (`p1`, `r1`, `s1`, `r2`,
-`b1`, `b2`, `x1`, the draft layout's ids) within Power Station I's reach of 10, 1-cell walkways between them; iron on
-`r1` and aluminum on `r2` at the mesa edge; lithium remote in the west lowland on `r3` with its station pad `p2`; two
-raid lanes (north-west corner, east edge) up two ramps; the kit's cannon, MG and six walls at the ramp heads; Forge
-decor and resource fields in the lowland only. Its farm ponds are the signature prop. `src/terrain/outpostPads.js` holds the outpost layer:
-`stampOutpost` (applied after generation, so the recipe knobs still work: dirt top at height 2, a cliff rim, ramps,
-2-cell cart tracks from each lane to its ramp, flat clearings round remote pads; it adds `heights` and keeps those
-cells free of decor), `deriveConduits`, `defenseRing`, `mesaFrame` and `validateOutpostLayout`. The validator checks
-pad roles, ids, bounds and overlap; one hub and a first station on the mesa; every pad on open, flat ground, mesa pads
-on the mesa top; every mesa pad within the first station's reach; conduits naming real pads, with a power end, within
-reach; every mesa pad reachable from the hub through the conduits and every remote pad linked to a power pad; exactly
-one deposit per tier, each inside a rig pad, common and uncommon within the first station's reach; the rare pad outside
-it with another power pad in reach; kit defenses on buildable cells off the pads, powered ones in reach; and at least
-two ground lanes, each walking to the hub around the other pads. Deviations: **conduits are derived from reach by
-default** (each pad to its nearest station in reach, stations in reach of each other; this reproduces the draft
-layout's hand list), and the Forge's *derive from reach* box turns that off for hand editing; remote pads need a power
-pad, not the hub, at the end of their conduits, since a remote station is its own grid (design §4.5); the map adds
-`mesa`, `heights` and `kitDefenses` beside the three fields above. The Forge's outpost panel (`terrain.html`) places,
-moves and deletes pads (role, remote), deposits (tier), conduits, ramps, lanes and kit defenses, shows the validator's
-problems live, and exports or ships `<planet>-outpost.json`; `?outpost=ground` opens the map. `tools/maps/outpost-maps.mjs`
-holds the authored layout and regenerates the file through the headless Forge (`forge-export.py`).
-`src/outpost/outpostMap.js` `outpostMapFor(planet)` loads it for the model and views, falling back to `DRAFT_LAYOUT`.
-The review page draws the terrain and the raised mesa under the pads and frames the mesa in portrait: on a 390 × 844
-phone the 23 × 21-cell frame fills the width at about 17 px a cell (a 4 × 4 pad is about 68 px), using 360 px of height.
+**As built (O4):** `content/maps/forge/ground-outpost.json` (named by planet key, `<planet>-outpost.json`) is made
+exactly like the large tower-defense maps (**owner direction 2026-11-07**: "the outpost maps must be created identically
+to the large tower-defense maps", which replaces the ~40 × 24 size above): a **64 × 32** world-mode Forge map on
+Verdance's §2.3 recipe (the `powder` slug's), **seed 313**, with Powder map 1's base, wave windows and spawn tuning,
+the Forge's full decor groves (145) and resource fields (54), inside the §1 fairness guardrails (19.7 % impassable,
+both lanes reach the base, a second route for each, no sealed pockets; ~9 farm ponds, Verdance's signature), exported
+by the real headless Forge (`forge-export.py`) and baked to `content/maps/baked/ground-outpost/` (`bake3d.mjs
+ground-outpost --no-tiles`). **The mesa is part of the forge terrain**, not an overlay: `stampOutpost` writes a
+rock-border stone top, a cliff rim and dirt ramps into `terrain` after generation (the recipe knobs still work), so
+the terrain bake raises it and the battle renderer draws the rim as stone ridges round a stone plateau; `heights`
+records the same shape as numbers for framing. The hub is centred on the large maps' base (31, 15), so the raid sim
+marches on it; the mesa (21 × 19) carries the hub and seven pads (`p1`, `r1`, `s1`, `r2`, `b1`, `b2`, `x1`, the draft
+layout's ids) within Power Station I's reach of 10, 1-cell walkways between them; iron on `r1` and aluminum on `r2` at
+the mesa edge; lithium remote in the west lowland on `r3` with its station pad `p2`; two raid lanes (west and east map
+edges, worn into cart tracks) up two ramps; the kit's cannon, MG and six walls at the ramp heads; decor and resources
+stay off the mesa, ramps, tracks and clearings. `src/terrain/outpostPads.js` holds the outpost layer (`stampOutpost`,
+`deriveConduits`, `defenseRing`, `mesaFrame`, `validateOutpostLayout`). The validator checks pad roles, ids, bounds and
+overlap; one hub, on the mesa and under the map's base; a first station on the mesa; every pad on open, flat ground,
+mesa pads on the mesa top; every mesa pad within the first station's reach; conduits naming real pads, with a power
+end, within reach; every mesa pad reachable from the hub through the conduits and every remote pad linked to a power
+pad; exactly one deposit per tier, each inside a rig pad, common and uncommon within the first station's reach; the
+rare pad outside it with another power pad in reach; kit defenses on buildable cells off the pads, powered ones in
+reach; and at least two ground lanes, each walking to the hub around the other pads. Deviations: **conduits are
+derived from reach by default** (each pad to its nearest station in reach, stations in reach of each other; this
+reproduces the draft layout's hand list), and the Forge's *derive from reach* box turns that off for hand editing;
+remote pads need a power pad, not the hub, at the end of their conduits, since a remote station is its own grid
+(design §4.5); the map adds `mesa`, `heights` and `kitDefenses` beside the three fields above; the guardrails' second
+route is checked per lane (each lane as its own wave), since the outpost has one raid wave. The Forge's outpost panel
+(`terrain.html`) places, moves and deletes pads (role, remote), deposits (tier), conduits, ramps, lanes and kit
+defenses, shows the validator's problems live, and exports or ships `<planet>-outpost.json`; `?outpost=ground` opens
+the map. `tools/maps/outpost-maps.mjs` holds the authored layout, the seed search and the checks;
+`tools/maps/outpost-maps.test.mjs` keeps the file on its recipe, in the guardrails, equal to the node generator and in
+step with its bake, like `faction-maps.test.mjs`. `src/outpost/outpostMap.js` `outpostMapFor(planet)` loads it for the
+model and views, falling back to `DRAFT_LAYOUT`. **Framing:** the views frame the mesa, not the 64 × 32 map — on a
+390 × 844 phone the 23 × 21-cell mesa frame fills the width at about 17 px a cell (a 4 × 4 pad is about 68 px), using
+about 360 px of height; the 3D terrain review (`tools/terrain/index.html?faction=powder&map=outpost`) fits the battle
+camera to the same frame.
 
 ### 6.7 Review page
 
@@ -436,7 +449,7 @@ save presets (or `?state=`), time buttons from +5 min to +3 days, a raid stand-i
 sell, Go online, build / upgrade / deep / repair on the selected pad or defense, defense placement, unlock switches,
 and the away report. The map view, turntables and live raid wait on O4–O7. **O4:** it runs on the Verdance outpost
 map (terrain, mesa and raid lanes drawn under the pads; the defense ring shown while placing), with a Mesa / Whole map
-view that defaults to the mesa in portrait; `?map=draft` keeps the draft layout.
+view that defaults to the mesa; `?map=draft` keeps the draft layout.
 
 ## 7. The menu and replay
 

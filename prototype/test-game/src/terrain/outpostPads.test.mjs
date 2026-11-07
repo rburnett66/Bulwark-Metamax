@@ -20,7 +20,8 @@ test('the draft layout passes, and its hand-written conduits are exactly the one
 
 test('the shipped Verdance outpost map passes every check', () => {
   assert.deepEqual(validateOutpostLayout(GROUND), []);
-  assert.equal(GROUND.cols, 40); assert.equal(GROUND.rows, 24);
+  assert.equal(GROUND.cols, 64); assert.equal(GROUND.rows, 32);   // the large maps' size (owner 2026-11-07)
+  assert.equal(GROUND.worldMode, true);
   assert.ok(GROUND.pads.filter((p) => !p.remote).length >= 7, '7+ pads on the mesa');
   assert.deepEqual(GROUND.deposits.map((d) => d.tier).sort(), ['common', 'rare', 'uncommon']);
   assert.equal(GROUND.spawns.filter((s) => s.lane === 'ground').length, 2, 'two raid lanes');
@@ -90,37 +91,44 @@ test('raid lanes: two ground spawns, each walking to the hub between the buildin
   assert.ok(has(validateOutpostLayout(g), /1 raid lane \(needs two/));
   const h = JSON.parse(JSON.stringify(GROUND));
   for (const r of h.mesa.ramps) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) h.blocking[y * h.cols + x] = 1;
-  assert.ok(has(validateOutpostLayout(h), /raid lane from \(0, 3\) cannot walk to the hub/));
+  assert.ok(has(validateOutpostLayout(h), /raid lane from \(0, 6\) cannot walk to the hub/));
 });
 
-test('the stamp: a flat dirt top, a cliff rim cut by ramps, cart tracks and clearings; deterministic', () => {
+test('the battle base must sit on the hub (the raids march on it)', () => {
+  const g = JSON.parse(JSON.stringify(GROUND));
+  g.base.pos = { x: 10, y: 10 };
+  assert.ok(has(validateOutpostLayout(g), /the base \(10, 10\) is not on the hub pad/));
+});
+
+test('the stamp: a flat stone top, a cliff rim cut by ramps, cart tracks and clearings; deterministic', () => {
   const layout = { mesa: GROUND.mesa, pads: GROUND.pads, spawns: GROUND.spawns, kitDefenses: GROUND.kitDefenses };
-  const run = () => stampOutpost(generateTerrain({ cols: 40, rows: 24, seed: GROUND.seed, types: GROUND.types, water: GROUND.water }), layout);
+  const W = GROUND.cols, H = GROUND.rows;
+  const run = () => stampOutpost(generateTerrain({ cols: W, rows: H, seed: GROUND.seed, types: GROUND.types, water: GROUND.water }), layout);
   const a = run(), b = run();
   assert.deepEqual(a.terrain, b.terrain); assert.deepEqual(a.heights, b.heights);
   let rim = 0, ramp = 0;
-  for (let y = 0; y < 24; y++) for (let x = 0; x < 40; x++) {
-    const i = y * 40 + x;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x;
     if (!inMesa(GROUND.mesa, x, y)) { assert.equal(a.heights[i], HEIGHT.LOW); continue; }
     if (a.heights[i] === HEIGHT.RAMP) { ramp++; assert.equal(a.blocking[i], 0); }
     else if (a.terrain[i] === TERRAIN.CLIFF) { rim++; assert.equal(a.blocking[i], 1); }
-    else assert.equal(a.terrain[i], TERRAIN.DIRT);
+    else assert.equal(a.terrain[i], TERRAIN.ROCK_BORDER, 'the stone top: walkable, buildable, baked above the grass');
   }
   assert.ok(rim > 40, `a cliff rim (${rim})`);
   assert.equal(ramp, 4, 'two 2-cell ramps');
-  for (const s of GROUND.spawns) assert.equal(a.blocking[s.y * 40 + s.x], 0, 'lanes start on open ground');
+  for (const s of GROUND.spawns) assert.equal(a.blocking[s.y * W + s.x], 0, 'lanes start on open ground');
 });
 
 test('the defense ring rings the mesa top and the remote site, on buildable cells off the pads', () => {
   const ring = defenseRing(GROUND);
   assert.ok(ring.length > 60, `${ring.length} ring cells`);
   for (const [x, y] of ring) assert.ok(buildable(GROUND, x, y));
-  const onMesa = ring.filter(([x, y]) => GROUND.heights[y * 40 + x] === HEIGHT.TOP).length;
+  const onMesa = ring.filter(([x, y]) => GROUND.heights[y * GROUND.cols + x] === HEIGHT.TOP).length;
   assert.ok(onMesa > 40 && ring.length - onMesa > 10, 'around the mesa and around the remote site');
   for (const d of GROUND.kitDefenses) assert.ok(buildable(GROUND, ...d.cell), `${d.kind} on buildable ground`);
 });
 
-test('the mesa frames on a 390 × 844 portrait phone (tech plan §6.1)', () => {
+test('the mesa frames on a 390 × 844 portrait phone (tech plan §6.1), not the whole 64 × 32 map', () => {
   const f = mesaFrame(GROUND);
   const px = 390 / f.w;                          // the frame's width fills the phone's width
   assert.ok(px >= 16, `${px.toFixed(1)} px per cell — a 4 × 4 pad is at least 64 px, a tap target`);

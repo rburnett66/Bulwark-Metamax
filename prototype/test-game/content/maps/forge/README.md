@@ -53,10 +53,21 @@ with graduated play areas". Every faction now ships `<slug>-map-2.json` … `<sl
 ## Outpost maps (2026-11-07, [MM-story_mw5oeatc_l])
 
 `<planet-key>-outpost.json` (e.g. `ground-outpost.json`, Verdance) are the outpost maps (tech plan
-`docs/tech-plan/Outpost.md` §6.6): ordinary Forge maps plus `mesa`, `heights`, `pads`, `deposits`, `conduits` and
-`kitDefenses`. Author them in terrain.html's **Outpost** panel (`terrain.html?outpost=ground`), where
-`validateOutpostLayout` (`src/terrain/outpostPads.js`) checks them live; the game loads them with
-`src/outpost/outpostMap.js`. To regenerate one from its authored layout in `tools/maps/outpost-maps.mjs`:
-`node tools/maps/outpost-maps.mjs jobs jobs.json`, then `python3 tools/maps/forge-export.py jobs.json out.json`,
-then `node tools/maps/outpost-maps.mjs write out.json`. They are not battle-slot maps, so `forge-only.test.mjs`
-counts them separately.
+`docs/tech-plan/Outpost.md` §6.6). Owner 2026-11-07: they are made **exactly like the large maps above** — 64 × 32,
+world mode, the planet's §2.3 recipe (Verdance = the `powder` slug's), Powder map 1's base and wave windows, the
+Forge's decor groves and resource fields, inside the §1 guardrails, and a baked 3D level in `content/maps/baked/`.
+On top sits the outpost layer: the mesa is stamped into the terrain itself (stone top, cliff rim, ramps, cart
+tracks), plus `mesa`, `heights`, `pads`, `deposits`, `conduits` and `kitDefenses`. Author them in terrain.html's
+**Outpost** panel (`terrain.html?outpost=ground`), where `validateOutpostLayout` (`src/terrain/outpostPads.js`)
+checks them live; the game loads them with `src/outpost/outpostMap.js`; view the baked level at
+`tools/terrain/index.html?faction=powder&map=outpost`. To remake one from its authored layout in
+`tools/maps/outpost-maps.mjs`:
+
+1. `node tools/maps/outpost-maps.mjs [planet]` — search seeds for the recipe; prints the best that pass;
+2. `node tools/maps/outpost-maps.mjs jobs jobs.json` — the Forge job for the best seed;
+3. `python3 tools/maps/forge-export.py jobs.json out.json` — the real headless Forge;
+4. `node tools/maps/outpost-maps.mjs write out.json` — checks and writes `<planet>-outpost.json`;
+5. `node tools/terrain3d-proto/bake3d.mjs <planet>-outpost --no-tiles` — the baked level.
+
+`tools/maps/outpost-maps.test.mjs` keeps each on its recipe, inside the guardrails and in step with its bake. They
+are not battle-slot maps, so `forge-only.test.mjs` counts them separately.

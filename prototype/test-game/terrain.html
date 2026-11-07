@@ -484,13 +484,13 @@ function render() {
   }
   spawnsByWave = {}; spawns = [];
   const t = spawnTuning();
-  if (worldMode()) {
+  if (op.on) {
+    selWave = 1; spawnsByWave[1] = op.lanes;          // outpost: the raid lanes ARE the spawns (Lane tool)
+  } else if (worldMode()) {
     for (const w of WAVE_WINDOWS) {
       const rect = { x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 };
       spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w, realBaseWorld()).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
     }
-  } else if (op.on) {
-    selWave = 1; spawnsByWave[1] = op.lanes;          // outpost: the raid lanes ARE the spawns (Lane tool)
   } else {
     spawnsByWave[1] = generateEdgeSpawns(last, { side: 'surround', ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
   }
@@ -835,7 +835,8 @@ function loadState(obj) {
 }
 
 // ── OUTPOST LAYER [MM-story_mw5oeatc_l] — tech plan docs/tech-plan/Outpost.md §6.6 ─────────────────────────────────
-// An outpost map is a Forge map plus: mesa (stamped after generation: dirt top, cliff rim, ramps), pads, deposits,
+// An outpost map is a large (world-mode, 64 × 32) Forge map plus: mesa (stamped into the terrain after generation:
+// stone top, cliff rim, ramps), pads, deposits,
 // conduits, kitDefenses and heights, written as top-level fields. Raid lanes are the map's ground spawns. Conduits are
 // derived from reach by default (each pad to its nearest station in reach, stations in reach of each other); untick
 // "derive from reach" to edit them by hand. src/terrain/outpostPads.js holds the stamp and the validator shown below.
@@ -1034,7 +1035,7 @@ for (const b of document.querySelectorAll('#opTools button')) b.addEventListener
 });
 $('opOn').addEventListener('change', () => {
   op.on = $('opOn').checked;
-  if (op.on) { $('worldMode').checked = false; if (!op.pads.length) { $('cols').value = 40; $('rows').value = 24; } }
+  if (op.on) $('worldMode').checked = true;   // owner 2026-11-07: outpost maps are the large maps' 64 × 32 world
   opRender();
 });
 $('opPlanet').addEventListener('change', () => { op.planet = $('opPlanet').value; redraw(); });
