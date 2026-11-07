@@ -525,18 +525,29 @@ power and full storage, the unpowered Storage Tower's door shut). This replaces 
 **As built (O10), the Resource Bay, the Upgrade Bay and the Outpost tech** [MM-story_mw5oem5o_r] (design §6, §6.2,
 §7, §11):
 
-- **Harvesters, in closed form** (`src/outpost/model.js`). `surfaceFields(map)` is the outpost map's Forge `resources`
-  off the mesa and the pads (primary → common, premium → uncommon; quest left out). `harvestPlan(o, map)` puts the
-  harvesters on fields, alternating common / uncommon, each on the next-nearest cell of its tier to the Resource Bay,
-  with its rate from `data/outpost.js harvesterRate(tier, dist)`: the battle harvester's trip, built from the rows
-  `harvest.js` reads — capacity (Factions row 1), speed (`Harvester_Base_Speed` × `BONUS_NERFS.harvesterSpeedMult`),
-  pull (`Units_Per_Node / Harvest_Sec_Per_Node`, Flowers Primary for common, the reference faction's premium for
-  uncommon), `HARVESTER_UNLOAD_TIME`; the drive is the straight line × `Harvest_Route_Mult` (1.3), all ×
-  `Harvest_Rate_Mult` (1). `advance` fills `o.hopper` (`{ common, uncommon }`, fractional) between events like a rig's
-  bay: the total rate R is constant between events, each tier gets its share, capped at `Hopper_Hours` × R
-  (`hopperCap`); `report.harvested` and `report.hopperFull` say what happened. Only a finished, **powered** Resource Bay
-  runs (`harvestRunning`). Split-invariant (tested: one 10 h advance = 600 one-minute advances, and a split at the fill).
-  `emptyHopper(o)` → `{ outpost, units }` (whole units out, fractions stay); `migrateOutpost` adds `hopper: {}`.
+- **Harvesters and the surface fields, in closed form** (`src/outpost/model.js`). `surfaceFields(map)` is the outpost
+  map's Forge `resources` off the mesa and the pads (primary → common, premium → uncommon; quest left out);
+  `surfaceFieldGroups(map)` joins them into fields as `harvest.js` does (8-neighbour, one tier; id `<tier>:<x>,<y>` of
+  the first cell), each with `cap` = cells × the tier's battle `Units_Per_Node` and `regrow` = cells × units /
+  `Primary_Respawn_Sec` × `Surface_Respawn_Mult` (0.05, owner 2026-11-07: "Full battle rate but the spawn rate of surface
+  resources on outpost land is 5% of the premium land surveyed for the tower defense mode"; `data/outpost.js
+  surfaceStock`). `o.fields` holds a field's stock only while it is below full. `harvestPlan(o, map)` alternates the
+  tiers and gives the k-th harvester of a tier the k-th nearest field (its `fieldId`, its nearest cell), with the
+  battle rate from `harvesterRate(tier, dist)`: the battle harvester's trip from the rows `harvest.js` reads (capacity,
+  `Harvester_Base_Speed` × `BONUS_NERFS.harvesterSpeedMult`, `Units_Per_Node / Harvest_Sec_Per_Node`,
+  `HARVESTER_UNLOAD_TIME`), the drive × `Harvest_Route_Mult` (1.3), × `Harvest_Rate_Mult` (1). Inside `advance`,
+  `harvestFields` runs the fields and the hopper piecewise-linearly between the moments a field runs dry, a field is full
+  again or the hopper fills: a field with stock gives its harvesters' demand and loses demand − regrow; a bare field gives
+  only its regrowth; a field nobody takes from (or with the hopper full) regrows to its cap. `steadyHarvest` is the take
+  once the fields are bare (min(demand, regrow) per field); `hopperCap` = max(`Hopper_Hours` × that, the worked fields'
+  full stock). Only a finished, **powered** Resource Bay harvests (`harvestRunning`); the fields regrow regardless.
+  Split-invariant (tested: one 10 h advance = 600 one-minute advances, with and without a filling hopper; a 72 h gap in
+  one call = 24 three-hour windows). `emptyHopper(o)` → `{ outpost, units }`; `migrateOutpost` adds `hopper` and
+  `fields`. Verdance, two harvesters: 10.5 units an hour once the fields are bare, the stock (about 45 units) in the
+  first hour, a 42-unit hopper; `tools/economy/outpost_model.mjs` prints each planet (Resource Bay income).
+- **The view's fields.** The battle renderer's drained-node look shows each field's stock (`remaining` = stock / cap,
+  a regrowing stub at 0), refreshed on the live tick; the Resource Bay's panel lists each harvester's field stock and
+  "Fields regrowing: n / h".
 - **Banking.** `session.open` / `openChunked` empty the hopper after the catch-up and bank it with
   `src/save/inventory.js bankOutpostHarvest(s, units, catalog, planetName)` (the planet's common / uncommon resource
   from the mission catalogue, `inventory` and `inventoryNew`). Without the catalogue the hopper waits. The away report
@@ -579,8 +590,8 @@ power and full storage, the unpowered Storage Tower's door shut). This replaces 
 - **Review.** `tools/outpost/view.html ?state=bays` (Power Station II, the Resource Bay with two harvesters, the Upgrade
   Bay, a Habitat I, the kit's Machine Gun at tier II, four Outpost nodes owned, back after 2 hours) and `?state=guncap`
   (the hub's 3 guns, no Habitat). `handle.harvesters` and `handle.driveTo(sec)` drive the trucks for screenshots.
-- **Tests.** `src/outpost/bays.test.mjs` (17), `src/outpost/view/harvestDrive.test.mjs` (3) and two in
-  `src/data/techtree.test.mjs`: the battle rate recomputed from the workbook, the hopper's closed form, split invariance,
+- **Tests.** `src/outpost/bays.test.mjs` (20), `src/outpost/view/harvestDrive.test.mjs` (3) and two in
+  `src/data/techtree.test.mjs`: the battle rate recomputed from the workbook, the fields (stock, depletion then regrowth-limited take, regrowth to the full stock, a 72 h gap), split invariance,
   cap and fill time, no bay / no power, banking through inventory.js and on open, the away report and HUD, docks, the
   Upgrade Bay's gating (bay, power, tier owned, Reinforced Walls, wreck, gold), owned-not-unlocked tech, the Sensor
   Spire, the Tech Tree's contract gate and price, the nodes present and priced and the ghosts gone.

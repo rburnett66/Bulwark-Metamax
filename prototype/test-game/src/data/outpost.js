@@ -87,6 +87,21 @@ export function harvestRates() {
   });
 }
 
+/**
+ * An outpost surface field's stock and regrowth per cell (owner 2026-11-07: "Full battle rate but the spawn rate of
+ * surface resources on outpost land is 5% of the premium land surveyed for the tower defense mode"). A cell holds what
+ * a battle node of its tier holds (Units_Per_Node: Flowers Primary for common, the reference faction's premium row for
+ * uncommon) and regrows at Surface_Respawn_Mult × the battle's rate, a node's units per Primary_Respawn_Sec.
+ * → { common: { units, regrow (units / s) }, uncommon: { … } }
+ */
+export function surfaceStock(params = OUTPOST) {
+  const f = (MAPDATA.factions && MAPDATA.factions[0]) || {};
+  const row = (type, tier) => (MAPDATA.resources || []).find((r) => r.Resource === type && r.Tier === tier) || {};
+  const respawn = (MAPDATA.globalParams && MAPDATA.globalParams.Primary_Respawn_Sec) || 75;
+  const cell = (r) => { const units = r.Units_Per_Node || 20; return Object.freeze({ units, regrow: (units / respawn) * (params.Surface_Respawn_Mult ?? 1) }); };
+  return Object.freeze({ common: cell(row('Flowers', 'Primary')), uncommon: cell(row(f.Premium_Resource || 'Crystals', 'Premium')), respawnSec: respawn });
+}
+
 /** Units per second one harvester brings home from a field `dist` cells (straight line) from the Resource Bay. */
 export function harvesterRate(tier, dist, params = OUTPOST, rates = harvestRates()) {
   const pull = rates.pull[tier];

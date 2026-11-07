@@ -153,7 +153,7 @@ OUTPOST_PARAMS = ("Load_Sec", "Store_Hours", "Deep_Rate_Mult", "Deep_Price_Mult"
                   "Raid_Min_Gap_Hours", "Breach_Storage_Loss", "First_Raid_Sec", "Away_Cap_Hours", "Replay_Keep",
                   "Far_Buyer_Mult", "Far_Loyalty_Cost", "Defense_Price_Mult", "Repair_Share_Per_HP", "Shuttle_II_Bonus",
                   "Rig_Bay_Min", "Harvester_Cap", "Harvester_Max", "Hopper_Hours", "Harvest_Route_Mult",
-                  "Harvest_Rate_Mult", "Gun_Cap", "Habitat_Guns_Per_Tier")
+                  "Harvest_Rate_Mult", "Surface_Respawn_Mult", "Gun_Cap", "Habitat_Guns_Per_Tier")
 OUTPOST_TECH_APPLIES = {"outposts", "upgradeBay"}
 
 

@@ -419,19 +419,25 @@ spend gold, not to wait.
 
 ### 6.2 The bays and the Habitat, as built (stories O10, O15, 2026-11-07)
 
-- **Harvesters gather at the battle's rate.** Each harvester works one field cell of the outpost map's surface
-  resources (the primary fields are common, the premium fields uncommon; quest fields and the mesa are left out).
-  Harvesters alternate: the first on the nearest common cell to the Resource Bay, the second on the nearest uncommon
-  cell, and so on. A trip is the battle harvester's: drive out and back at its starting speed, pull a full load
-  (capacity 40) at the field's battle pull rate, unload for 3 s. The drive is the straight line × 1.3 for the ramps
-  (`Harvest_Route_Mult`). On Verdance that is about **6,100 common and 1,460 uncommon units an hour** for the first two
-  harvesters. `Harvest_Rate_Mult` (1) scales it; see the balance note below.
-- **The hopper** holds 4 hours of the harvesters' gathering (`Hopper_Hours`), both tiers together, then they stop. It
-  empties into the inventory each time the outpost is opened (whole units; fractions wait). The Resource Bay needs power
-  like any building: without it the harvesters wait at the bay. A raid's breach does not touch the hopper.
-- **Balance note (owner to decide).** At the battle rate the hopper is large next to the inventory's scale: 4 hours of
-  two harvesters is about 30,000 units, while a mission rewards 5–7 of a resource. `Harvest_Rate_Mult` in
-  `Outpost_Params` is the dial; it stays at 1 because the brief asked for the battle rate.
+- **Harvesters drive and load at the battle's rate; the land regrows slowly** (owner, 2026-11-07: "Full battle rate
+  but the spawn rate of surface resources on outpost land is 5% of the premium land surveyed for the tower defense
+  mode"). The outpost map's surface resources form fields as in battle (connected cells of one tier: primary fields are
+  common, premium fields uncommon; quest fields and the mesa are left out). Each field starts with a battle field's
+  stock (25 units a common cell, 10 an uncommon one) and regrows at `Surface_Respawn_Mult` (5 %) of the battle rate
+  (a cell's units per the battle's 600 s respawn): **7.5 common or 3 uncommon units a cell an hour**, up to its full
+  stock. Harvesters alternate tiers; the k-th of a tier works the k-th nearest field of that tier to the Resource Bay.
+  A trip is the battle harvester's (starting speed, a full load of 40 at the battle pull rate, 3 s unload, the drive
+  × 1.3 for the ramps), so a harvester strips its field in minutes and then brings in only what regrows. It stays on its
+  field (it does not hop to the next one). Battle premium fields never regrow inside a battle, so both tiers use the
+  battle's primary respawn time.
+- **What that earns** (`tools/economy/outpost_model.mjs`, Verdance): two harvesters about **10.5 units an hour**
+  (7.5 common + 3 uncommon, about 13.5 gold-equivalent), four about 28.5; the first hour brings the fields' stock (about
+  45 units with two). `Harvest_Rate_Mult` stays 1.
+- **The hopper** holds 4 hours of the harvesters' steady take (`Hopper_Hours`), and never less than the full stock of
+  the fields they work; then they stop and the fields regrow. It empties into the inventory each time the outpost is
+  opened (whole units; fractions wait). The Resource Bay needs power like any building: without it the harvesters wait
+  at the bay (the fields still regrow). A raid's breach does not touch the hopper. In the view a field's markers shrink
+  and dim as it empties, and the Resource Bay's panel shows each harvester's field stock and "Fields regrowing: n / h".
 - **More harvesters.** The bay starts with 2. The tech tree's Dock 3 and Dock 4 raise it to 3 and 4 at an outpost that
   has an Upgrade Bay, the same door the tower tiers use.
 - **The Upgrade Bay** is where tech-tree upgrades reach the outpost. A defense goes past tier I only at an outpost with
@@ -620,7 +626,8 @@ Nine new maps, one per planet, made **exactly like the large tower-defense maps*
 | — | Upgrade Bay (2026-11-07) | **Unchanged** |
 | — | Outpost tech (O10, 2026-11-07) | **A contract unlocks, gold buys**: the seven nodes are bought in the Tech Tree once a contract step unlocks them, as every mission-unlocked node; prices proposed (§7) |
 | — | Defense tiers (O10) | **Through the Upgrade Bay**: tiers past I need a finished, powered Upgrade Bay and the tier owned in the tech tree; Dock 3 / Dock 4 raise the harvester cap the same way (§6.2) |
-| — | Harvesters (O10) | **The battle's rate, a 4-hour hopper, banked on open**; the hopper's size against the inventory is open for the owner (§6.2 balance note) |
+| — | Harvesters (O10) | **The battle's rate, a 4-hour hopper, banked on open** |
+| — | Outpost surface (2026-11-07) | "Full battle rate but the spawn rate of surface resources on outpost land is 5% of the premium land surveyed for the tower defense mode": fields hold a battle field's stock and regrow at 5 % of the battle rate (`Surface_Respawn_Mult`), §6.2 |
 | — | Habitat (O15) | **One per outpost, no power draw**, Habitat II is its upgrade (§6, §6.2) |
 
 Design gaps closed with defaults on 2026-11-06 (owner review asked): storage per rig (§4.2); contract 2's power

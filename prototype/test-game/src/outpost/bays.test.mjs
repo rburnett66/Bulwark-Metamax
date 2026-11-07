@@ -7,10 +7,10 @@ import { readFileSync } from 'node:fs';
 import {
   referenceOutpost, confirmOnline, advance, place, upgrade, powerGrids, harvestPlan, hopperCap, hopperUnits, emptyHopper,
   surfaceFields, gunCount, gunCap, habitatTier, defenseUpgradeRefusal, upgradeDefense, harvesterCap, buyHarvester,
-  raidWarning, nextRaidAt, migrateOutpost, createOutpost, setDeep,
+  raidWarning, nextRaidAt, migrateOutpost, createOutpost, setDeep, surfaceFieldGroups, fieldStock, steadyHarvest,
 } from './model.js';
 import { wellDefended } from './raid.js';
-import { OUTPOST, structureDef, harvestRates, harvesterRate, OUTPOST_TECH_IDS } from '../data/outpost.js';
+import { OUTPOST, structureDef, harvestRates, harvesterRate, surfaceStock, OUTPOST_TECH_IDS } from '../data/outpost.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { HARVESTER_UNLOAD_TIME, BONUS_NERFS } from '../data/tables.js';
 import { bankOutpostHarvest } from '../save/inventory.js';
@@ -52,32 +52,75 @@ test('harvesters gather the map\'s common and uncommon surface fields at the bat
   close(h.rate * 1000, cap / trip);
   close(harvesterRate('common', h.dist), cap / trip);
   assert.ok(harvestRates().pull.common > harvestRates().pull.uncommon, 'premium fields pull slower, as in battle');
-  // one hour: each tier gets exactly rate × 1 h
-  const r = advance(withBay(), T0 + HOUR, ctx());
-  close(r.outpost.hopper.common, plan[0].rate * HOUR);
-  close(r.outpost.hopper.uncommon, plan[1].rate * HOUR);
-  close(r.report.harvested.common, plan[0].rate * HOUR);
 });
 
-test('the hopper is split-invariant: one 10-hour advance equals 600 one-minute advances', () => {
-  const one = advance(withBay(), T0 + 10 * HOUR, ctx()).outpost;
-  let o = withBay();
-  for (let i = 1; i <= 600; i++) o = advance(o, T0 + i * MIN, ctx()).outpost;
-  close(o.hopper.common, one.hopper.common, 1e-9);
-  close(o.hopper.uncommon, one.hopper.uncommon, 1e-9);
-  // a split right where it fills
-  const cap = hopperCap(withBay(), map, QUIET), R = harvestPlan(withBay(), map, QUIET).reduce((a, h) => a + h.rate, 0);
-  const fill = T0 + cap / R;
-  const two = advance(advance(withBay(), fill - 7 * MIN, ctx()).outpost, fill + 7 * MIN, ctx()).outpost;
-  close(hopperUnits(two), cap, 1e-9);
+// owner 2026-11-07: "Full battle rate but the spawn rate of surface resources on outpost land is 5% of the premium land
+// surveyed for the tower defense mode" — a field is a finite stock (a battle field's), regrowing at 5 % of the battle rate
+const BIG = { ...QUIET, Hopper_Hours: 1e6, Away_Cap_Hours: 1e6 };   // a hopper that never fills, to see the fields alone
+const fieldOf = (o, h) => surfaceFieldGroups(map).find((f) => f.id === h.fieldId);
+
+test('a field\'s stock and regrowth: a battle field\'s units, regrowing at Surface_Respawn_Mult of the battle rate', () => {
+  assert.equal(OUTPOST.Surface_Respawn_Mult, 0.05);
+  const st = surfaceStock(), flowers = MAPDATA.resources.find((r) => r.Resource === 'Flowers' && r.Tier === 'Primary');
+  assert.equal(st.common.units, flowers.Units_Per_Node);
+  close(st.common.regrow, 0.05 * flowers.Units_Per_Node / MAPDATA.globalParams.Primary_Respawn_Sec);
+  const groups = surfaceFieldGroups(map);
+  assert.equal(groups.reduce((a, f) => a + f.cells.length, 0), surfaceFields(map).length, 'every cell in one field');
+  for (const f of groups) { close(f.cap, st[f.tier].units * f.cells.length); close(f.regrow * 1000, st[f.tier].regrow * f.cells.length); }
 });
 
-test('the hopper holds Hopper_Hours of the harvesters\' gathering, then they stop', () => {
-  const o = withBay(), cap = hopperCap(o, map, QUIET), R = harvestPlan(o, map, QUIET).reduce((a, h) => a + h.rate, 0);
-  close(cap, R * OUTPOST.Hopper_Hours * HOUR);
+test('harvesters take a field\'s stock at the battle rate, then only what regrows', () => {
+  const o = withBay(), [h] = harvestPlan(o, map, BIG), f = fieldOf(o, h);
+  assert.ok(h.rate > f.regrow * 100, 'the battle rate far outruns the regrowth');
+  const td = f.cap / (h.rate - f.regrow);   // the field runs dry
+  const a = advance(o, T0 + td / 2, ctx({ params: BIG })).outpost;
+  close(a.hopper.common, h.rate * td / 2);
+  close(fieldStock(a, map, BIG)[f.id], f.cap - (h.rate - f.regrow) * td / 2);
+  const later = advance(o, T0 + 5 * HOUR, ctx({ params: BIG })).outpost;
+  close(later.hopper.common, f.cap + f.regrow * 5 * HOUR, 1e-9);   // the stock, then 5 h of regrowth
+  close(fieldStock(later, map, BIG)[f.id], 0);
+  const st = steadyHarvest(o, map, BIG);
+  close(st.byTier.common, f.regrow);
+});
+
+test('the fields and the hopper are split-invariant: one advance equals 600 one-minute advances, a 72 h gap too', () => {
+  for (const params of [QUIET, BIG]) {
+    const one = advance(withBay(), T0 + 10 * HOUR, ctx({ params })).outpost;
+    let o = withBay();
+    for (let i = 1; i <= 600; i++) o = advance(o, T0 + i * MIN, ctx({ params })).outpost;
+    close(o.hopper.common, one.hopper.common, 1e-9);
+    close(o.hopper.uncommon, one.hopper.uncommon, 1e-9);
+    const s1 = fieldStock(one, map, params), s2 = fieldStock(o, map, params);
+    for (const id of Object.keys(s1)) close(s2[id], s1[id], 1e-9);
+  }
+  // 72 h away, in one call and in 3-hour windows (as the view's chunked open): the hopper full, the fields regrown
+  const gap = advance(withBay(), T0 + 72 * HOUR, ctx()).outpost;
+  let w = withBay();
+  for (let t = 3; t <= 72; t += 3) w = advance(w, T0 + t * HOUR, ctx()).outpost;
+  close(hopperUnits(gap), hopperCap(gap, map, QUIET));
+  close(hopperUnits(w), hopperUnits(gap), 1e-9);
+  assert.deepEqual(gap.fields, {}, 'every field is back to its full stock (a full field is not stored)');
+  const tenDays = advance(withBay(), T0 + 240 * HOUR, ctx());
+  assert.equal(tenDays.report.to, T0 + 72 * HOUR, 'the away cap still holds');
+});
+
+test('a field regrows to its full stock and no further when nobody harvests it', () => {
+  const o = withBay({ harvesters: 0 }), f = surfaceFieldGroups(map).find((x) => x.tier === 'common');
+  o.fields = { [f.id]: 0 };
+  const half = f.cap / 2 / f.regrow;
+  close(fieldStock(advance(o, T0 + half, ctx()).outpost, map)[f.id], f.cap / 2);
+  const full = advance(o, T0 + 3 * (f.cap / f.regrow), ctx()).outpost;
+  assert.equal(fieldStock(full, map)[f.id], f.cap);
+  assert.equal(full.fields[f.id], undefined);
+});
+
+test('the hopper holds Hopper_Hours of the steady take (at least the worked fields\' stock), then the harvesters stop', () => {
+  const o = withBay(), st = steadyHarvest(o, map, QUIET), cap = hopperCap(o, map, QUIET);
+  const stock = harvestPlan(o, map, QUIET).reduce((a, h) => a + fieldOf(o, h).cap, 0);
+  close(cap, Math.max(st.total * OUTPOST.Hopper_Hours * HOUR, stock));
   const r = advance(o, T0 + 10 * HOUR, ctx());
   close(hopperUnits(r.outpost), cap);
-  close(r.report.hopperFull, T0 + OUTPOST.Hopper_Hours * HOUR, 1e-9);
+  assert.ok(r.report.hopperFull > T0 && r.report.hopperFull < T0 + 10 * HOUR);
   const later = advance(r.outpost, T0 + 20 * HOUR, ctx());
   close(hopperUnits(later.outpost), cap);
   assert.deepEqual(later.report.harvested, {}, 'a full hopper gathers nothing');
@@ -120,7 +163,7 @@ test('opening the outpost (session.open) banks the hopper into the save\'s inven
   const v = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: null, flowOpts: { allOpen: true } });
   const r = v.open(T0 + 2 * HOUR);
   const saved = store.load(), common = CATALOG.resources.find((x) => x.planet === 'Verdance' && x.tier === 'common');
-  assert.ok(saved.inventory[common.id] > 1000, 'two hours of a harvester on the common field');
+  assert.ok(saved.inventory[common.id] >= 25, 'the common field\'s stock and its regrowth');
   assert.equal(r.banked[common.id], saved.inventory[common.id]);
   assert.ok(hopperUnits(saved.outposts.ground) < 2, 'the hopper is empty but for fractions');
   assert.ok(r.away.harvested.some((x) => x.name === common.name && x.banked === saved.inventory[common.id]), 'the away report lists it');
@@ -128,17 +171,18 @@ test('opening the outpost (session.open) banks the hopper into the save\'s inven
   const store2 = memoryStore(s);
   const r2 = createSession({ store: store2, planet: 'ground', map, catalog: null, raidHook: null }).open(T0 + 2 * HOUR);
   assert.deepEqual(r2.banked, {});
-  assert.ok(hopperUnits(store2.load().outposts.ground) > 1000);
+  assert.ok(hopperUnits(store2.load().outposts.ground) >= 25);
 });
 
-test('the away report and the HUD show the harvest and the hopper', () => {
-  const r = advance(withBay(), T0 + HOUR, ctx());
+test('the away report and the HUD show the harvest and the hopper; the bay panel the fields\' regrowth', () => {
+  const r = advance(withBay(), T0 + 6 * MIN, ctx());
   const m = awayReportModel({ ...r.report, banked: {} }, 'ground', map, CATALOG);
   assert.ok(m.show && m.harvested.length === 2);
   const h = hudModel(r.outpost, map, { gold: 0 });
   assert.ok(h.hopper && h.hopper.units > 0 && h.hopper.frac > 0 && h.hopper.frac < 1);
   const p = panelModel(r.outpost, map, { pad: 'b1' }, { gold: 0 });
   assert.ok(p.stats.some(([k]) => k === 'Harvesters') && p.stats.some(([k]) => k === 'Hopper'));
+  assert.deepEqual(p.stats.find(([k]) => k === 'Fields regrowing'), ['Fields regrowing', `${+(steadyHarvest(r.outpost, map).total * HOUR).toFixed(1)} / h`]);
 });
 
 test('harvester cap: 2, raised to 3 and 4 by Dock 3 / Dock 4 only through a finished Upgrade Bay', () => {

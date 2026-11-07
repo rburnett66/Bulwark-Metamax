@@ -17,6 +17,7 @@
  *     storage: { [rigPadId]: { [itemId]: units } },                 // one bay per rig; deep grade is '<ore>_deep'
  *     harvesters: n,                                                // bought for the Resource Bay (O16; behaviour O10)
  *     hopper: { common: units, uncommon: units },                   // the Resource Bay's hopper (O10), fractional
+ *     fields: { [fieldId]: units },                                 // surface field stock (O10); absent = full
  *     raids: { window, log: [{ at, result, lost, damage }] },
  *     sold: { [oreId]: units } }                                    // lifetime, both grades, for contract steps
  *
@@ -29,10 +30,11 @@
  * remote }], deposits: [{ tier, pad }], kitDefenses: [{ kind, cell }] } — kitDefenses is the reference defense set
  * (referenceOutpost, the raid measurement); it is not granted.
  *
- * Harvesters (story O10, design §6): a finished, powered Resource Bay sends its harvesters to the outpost map's surface
- * fields (common and uncommon, off the mesa) at the battle harvest rate (data/outpost.js harvesterRate), into a hopper
- * that holds Hopper_Hours of their gathering; emptyHopper() banks it when the outpost is opened. Like a rig, in closed
- * form inside advance().
+ * Harvesters (story O10, design §6, §6.2): a finished, powered Resource Bay sends its harvesters to the outpost map's
+ * surface fields (common and uncommon, off the mesa). They drive and load at the battle harvest rate (data/outpost.js
+ * harvesterRate), but a field is a finite stock that regrows at Surface_Respawn_Mult (5 %) of the battle's rate (owner
+ * 2026-11-07): a harvester takes its field's stock, then only what regrows. Into a hopper that holds Hopper_Hours of
+ * the steady take; emptyHopper() banks it when the outpost is opened. Piecewise closed form inside advance().
  *
  * Guns and the Habitat (story O15): the hub crews Gun_Cap guns (Machine Guns and Cannons; walls do not count); the
  * one Habitat adds Habitat_Guns_Per_Tier per tier. place() refuses a gun over the cap.
@@ -48,7 +50,7 @@
  */
 import { createRng } from '../sim/rng.js';
 import { oresOf, oreById, oreItemId } from '../data/ores.js';
-import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate } from '../data/outpost.js';
+import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock } from '../data/outpost.js';
 
 const MIN = 60_000, HOUR = 3_600_000;
 const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
@@ -113,7 +115,7 @@ export function createOutpost(planet, { seed, map, now }) {
   return {
     planet, seed: seed >>> 0, online: false, t: now, firstRaidAt: null,
     pads: { [firstPad(map, 'hub').id]: { kind: 'hub', tier: 1 } }, building: [], defenses: [], storage: {},
-    harvesters: 0, hopper: {}, raids: { window: null, log: [] }, sold: {},
+    harvesters: 0, hopper: {}, fields: {}, raids: { window: null, log: [] }, sold: {},
   };
 }
 
@@ -145,6 +147,7 @@ export function migrateOutpost(o) {
   for (const b of o.building || []) if (b && b.kind) b.kind = canonicalKind(b.kind);
   if (!Number.isFinite(o.harvesters)) o.harvesters = 0;
   if (!o.hopper || typeof o.hopper !== 'object') o.hopper = {};
+  if (!o.fields || typeof o.fields !== 'object') o.fields = {};
   return o;
 }
 
@@ -269,25 +272,68 @@ export function surfaceFields(map) {
   return (map.resources || []).filter((r) => ROLE_TIER[r.role] && !(H && H[r.y * cols + r.x] > 0) && !onPad(r.x, r.y))
     .map((r) => ({ x: r.x, y: r.y, tier: ROLE_TIER[r.role] }));
 }
+/**
+ * The surface fields as the battle groups them: connected (8-neighbour) cells of one tier. Each holds its cells' battle
+ * stock and regrows at Surface_Respawn_Mult of the battle rate (data/outpost.js surfaceStock). Cached per map.
+ * -> [{ id ('<tier>:<x>,<y>' of its first cell), tier, cells: [[x, y]], cap (units), regrow (units / ms) }]
+ */
+const FIELD_CACHE = new WeakMap();
+export function surfaceFieldGroups(map, params = OUTPOST) {
+  const key = params.Surface_Respawn_Mult;
+  const hit = FIELD_CACHE.get(map);
+  if (hit && hit.key === key) return hit.groups;
+  const cells = surfaceFields(map).sort((a, b) => a.y - b.y || a.x - b.x);
+  const at = new Map(cells.map((c) => [`${c.x},${c.y}`, c])), seen = new Set(), stock = surfaceStock(params), groups = [];
+  for (const c of cells) {
+    if (seen.has(c)) continue;
+    const g = [], stack = [c];
+    seen.add(c);
+    while (stack.length) {
+      const k = stack.pop();
+      g.push([k.x, k.y]);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nb = at.get(`${k.x + dx},${k.y + dy}`);
+        if (nb && !seen.has(nb) && nb.tier === c.tier) { seen.add(nb); stack.push(nb); }
+      }
+    }
+    g.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    const per = stock[c.tier];
+    groups.push(Object.freeze({ id: `${c.tier}:${g[0][0]},${g[0][1]}`, tier: c.tier, cells: g, cap: per.units * g.length, regrow: (per.regrow * g.length) / 1000 }));
+  }
+  FIELD_CACHE.set(map, { key, groups });
+  return groups;
+}
+/** Each field's stock now: { [fieldId]: units } (a field never touched is full). */
+export function fieldStock(o, map, params = OUTPOST) {
+  const out = {};
+  for (const f of surfaceFieldGroups(map, params)) out[f.id] = Math.min(f.cap, (o.fields || {})[f.id] ?? f.cap);
+  return out;
+}
+
 /** The finished Resource Bay's pad id, or null. */
 export const resourceBayPad = (o) => Object.keys(o.pads).sort().find((id) => o.pads[id].kind === 'resourceBay') || null;
 
 /**
  * Where each harvester works (the view drives them along these): harvesters alternate common, uncommon, common, ...;
- * each takes the nearest free field cell of its tier to the Resource Bay (the other tier when the map has none).
- * -> [{ i, tier, from: [x, y] (the bay's centre), field: [x, y] (cell), dist (cells), rate (units / ms) }]; [] with no
- * finished bay or no fields. Power is not asked here (see harvestRunning).
+ * the k-th harvester of a tier takes the k-th nearest field of that tier to the Resource Bay (the other tier when the
+ * map has none), and drives to that field's nearest cell. It stays on its field: once the stock is gone it takes only
+ * what regrows (owner 2026-11-07).
+ * -> [{ i, tier, fieldId, from: [x, y] (the bay's centre), field: [x, y] (cell), dist (cells), rate (units / ms, the
+ * battle rate) }]; [] with no finished bay or no fields. Power is not asked here (see harvestRunning).
  */
 export function harvestPlan(o, map, params = OUTPOST) {
   const bay = resourceBayPad(o), n = Math.min(o.harvesters || 0, params.Harvester_Max ?? 4);
   if (!bay || !n) return [];
   const pad = padOf(map, bay);
   if (!pad) return [];
-  const at = centre(pad), fields = surfaceFields(map);
+  const at = centre(pad), groups = surfaceFieldGroups(map, params);
   const byTier = {};
   for (const t of HARVEST_TIERS) {
-    byTier[t] = fields.filter((f) => f.tier === t)
-      .map((f) => ({ ...f, d: dist(at, cellCentre([f.x, f.y])) })).sort((a, b) => a.d - b.d || a.x - b.x || a.y - b.y);
+    byTier[t] = groups.filter((f) => f.tier === t).map((f) => {
+      let best = null;
+      for (const c of f.cells) { const d = dist(at, cellCentre(c)); if (!best || d < best.d || (d === best.d && (c[0] < best.c[0] || (c[0] === best.c[0] && c[1] < best.c[1])))) best = { d, c }; }
+      return { f, d: best.d, c: best.c };
+    }).sort((a, b) => a.d - b.d || (a.f.id < b.f.id ? -1 : 1));
   }
   const used = { common: 0, uncommon: 0 }, out = [];
   for (let i = 0; i < n; i++) {
@@ -295,14 +341,81 @@ export function harvestPlan(o, map, params = OUTPOST) {
     if (!byTier[tier].length) tier = HARVEST_TIERS[(i + 1) % 2];
     const list = byTier[tier];
     if (!list.length) break;
-    const f = list[Math.min(used[tier]++, list.length - 1)];
-    out.push({ i, tier, from: at, field: [f.x, f.y], dist: f.d, rate: harvesterRate(tier, f.d, params) / 1000 });
+    const x = list[used[tier]++ % list.length];
+    out.push({ i, tier, fieldId: x.f.id, from: at, field: [...x.c], dist: x.d, rate: harvesterRate(tier, x.d, params) / 1000 });
   }
   return out;
 }
-/** The hopper's size in units: Hopper_Hours of what the harvesters bring in when the bay runs. */
+/**
+ * What the harvesters bring in once their fields are bare (the steady take): per field, the lesser of the harvesters'
+ * battle rate and the field's regrowth. -> { total (units / ms), byTier: { common, uncommon }, byField: { [id]: units / ms } }
+ */
+export function steadyHarvest(o, map, params = OUTPOST) {
+  const groups = new Map(surfaceFieldGroups(map, params).map((f) => [f.id, f])), demand = {};
+  for (const h of harvestPlan(o, map, params)) demand[h.fieldId] = (demand[h.fieldId] || 0) + h.rate;
+  const out = { total: 0, byTier: { common: 0, uncommon: 0 }, byField: {} };
+  for (const [id, d] of Object.entries(demand)) {
+    const f = groups.get(id), t = Math.min(d, f.regrow);
+    out.byField[id] = t; out.byTier[f.tier] += t; out.total += t;
+  }
+  return out;
+}
+/**
+ * The hopper's size in units: Hopper_Hours of the harvesters' steady take (their fields' regrowth, or less), and never
+ * less than the full stock of the fields they work, so a fresh field always fits.
+ */
 export function hopperCap(o, map, params = OUTPOST) {
-  return harvestPlan(o, map, params).reduce((a, h) => a + h.rate, 0) * params.Hopper_Hours * HOUR;
+  const st = steadyHarvest(o, map, params), groups = new Map(surfaceFieldGroups(map, params).map((f) => [f.id, f]));
+  const stock = Object.keys(st.byField).reduce((a, id) => a + groups.get(id).cap, 0);
+  return Math.max(st.total * params.Hopper_Hours * HOUR, stock);
+}
+
+/**
+ * The surface fields and the hopper over dt ms, in closed form (owner 2026-11-07): piecewise linear between the moments
+ * a field runs dry, a field is full again, or the hopper fills. On a field, harvesters take their battle rate while it
+ * has stock, then only what regrows; with nobody on it (or the hopper full) it regrows to its full stock. Mutates o.
+ */
+function harvestFields(o, map, params, dt, running, report, now) {
+  const groups = surfaceFieldGroups(map, params);
+  if (!groups.length) return;
+  o.fields = o.fields || {};
+  const demand = {};
+  for (const h of running) demand[h.fieldId] = (demand[h.fieldId] || 0) + h.rate;
+  const cap = hopperCap(o, map, params);
+  const live = groups.filter((f) => demand[f.id] || (o.fields[f.id] != null && o.fields[f.id] < f.cap));
+  let left = dt, t = now;
+  for (let guard = 0; left > 0 && live.length && guard < 10_000; guard++) {
+    const space = cap - hopperUnits(o), open = space > 1e-9;
+    const rows = live.map((f) => {
+      const S = Math.min(f.cap, o.fields[f.id] ?? f.cap), want = open ? demand[f.id] || 0 : 0;
+      const take = S > 1e-9 ? want : Math.min(want, f.regrow);
+      let dS = f.regrow - take;
+      if (S >= f.cap - 1e-9 && dS > 0) dS = 0;
+      return { f, S, take, dS };
+    });
+    const T = rows.reduce((a, r) => a + r.take, 0);
+    let step = left;
+    for (const r of rows) {
+      if (r.dS < 0) step = Math.min(step, r.S / -r.dS);
+      else if (r.dS > 0) step = Math.min(step, (r.f.cap - r.S) / r.dS);
+    }
+    if (T > 0) step = Math.min(step, space / T);
+    step = Math.max(0, step);
+    for (const r of rows) {
+      let S = r.S + r.dS * step;
+      if (r.dS < 0 && step >= r.S / -r.dS - 1e-9) S = 0;
+      if (r.dS > 0 && step >= (r.f.cap - r.S) / r.dS - 1e-9) S = r.f.cap;
+      o.fields[r.f.id] = Math.max(0, Math.min(r.f.cap, S));
+      if (r.take > 0) {
+        const g = r.take * step;
+        o.hopper[r.f.tier] = (o.hopper[r.f.tier] || 0) + g;
+        report.harvested[r.f.tier] = (report.harvested[r.f.tier] || 0) + g;
+      }
+    }
+    if (T > 0 && step >= space / T - 1e-9) { report.hopperFull = report.hopperFull ?? t + step; }
+    left -= step; t += step;   // a zero step only lands a field on its boundary (clamped above); the next one moves on
+  }
+  for (const f of groups) if (o.fields[f.id] != null && o.fields[f.id] >= f.cap - 1e-9) delete o.fields[f.id];   // full = absent
 }
 /** The harvesters at work now: the plan when the Resource Bay is finished AND powered (no power, no operation). */
 export function harvestRunning(o, map, params = OUTPOST, powered = powerGrids(o, map).powered) {
@@ -373,20 +486,8 @@ export function advance(outpost, toMs, ctx) {
       report.extracted[r.item] = (report.extracted[r.item] || 0) + got;
       if (got >= space - 1e-9) report.full.push({ pad: r.pad, at: now + space / r.rate });
     }
-    // the harvesters: one hopper for both tiers, filled in proportion to each harvester's rate, capped at Hopper_Hours
-    const hv = harvestRunning(o, map, params);
-    if (hv.length) {
-      const R = hv.reduce((a, h) => a + h.rate, 0), cap = R * params.Hopper_Hours * HOUR, space = cap - hopperUnits(o);
-      if (R > 0 && space > 0) {
-        const got = Math.min(R * dt, space);
-        for (const h of hv) {
-          const g = got * (h.rate / R);
-          o.hopper[h.tier] = (o.hopper[h.tier] || 0) + g;
-          report.harvested[h.tier] = (report.harvested[h.tier] || 0) + g;
-        }
-        if (got >= space - 1e-9) report.hopperFull = now + space / R;
-      }
-    }
+    // the harvesters and the surface fields (finite stock, 5 % regrowth), into the hopper
+    harvestFields(o, map, params, dt, harvestRunning(o, map, params), report, now);
     now = until;
   };
   for (const ev of events) {

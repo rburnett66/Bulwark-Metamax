@@ -7,7 +7,7 @@
  * DOM lives in hud.js.
  */
 import { powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems, harvestPlan, hopperCap, hopperUnits,
-  gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady } from '../model.js';
+  gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups } from '../model.js';
 import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST, OUTPOST_TECH } from '../../data/outpost.js';
 import { oresOf, oreById } from '../../data/ores.js';
 import { bayKind } from './buildMenu.js';
@@ -169,10 +169,15 @@ export function panelModel(o, map, sel, ctx = {}) {
     out.bay = cap > 0 ? units / cap : 0;
   } else if (b && (kind === 'resourceBay' || kind === 'harvesterBay')) {
     // story O10: the harvesters, where they work and the hopper they fill
+    // owner 2026-11-07: the battle rate, but outpost fields regrow at 5 % of the battle's — a field's stock, then its regrowth
     const plan = harvestPlan(o, map), cap = hopperCap(o, map), units = hopperUnits(o);
-    const running = powered.has(pad.id) && !job;
+    const running = powered.has(pad.id) && !job, stock = fieldStock(o, map), groups = new Map(surfaceFieldGroups(map).map((f) => [f.id, f]));
     stats.push(['Harvesters', `${o.harvesters || 0} / ${harvesterCap(o, ctx)}`]);
-    for (const h of plan) stats.push([`${h.tier === 'common' ? 'Common' : 'Uncommon'} · #${h.i + 1}`, running ? `${fmtUnits(h.rate * 3_600_000)} / h` : 'stopped']);
+    for (const h of plan) {
+      const f = groups.get(h.fieldId);
+      stats.push([`${h.tier === 'common' ? 'Common' : 'Uncommon'} · #${h.i + 1}`, running ? `field ${fmtUnits(stock[h.fieldId])} / ${fmtUnits(f.cap)}` : 'stopped']);
+    }
+    if (plan.length) stats.push(['Fields regrowing', `${+(steadyHarvest(o, map).total * 3_600_000).toFixed(1)} / h`]);
     stats.push(['Hopper', `${fmtUnits(units)} / ${fmtUnits(cap)}`]);
     out.bay = cap > 0 ? units / cap : 0;
     out.oreColour = '#5fb8ff';

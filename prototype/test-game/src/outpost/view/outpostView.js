@@ -35,7 +35,7 @@ import { structureDef } from '../../data/outpost.js';
 import { oresOf } from '../../data/ores.js';
 import { PLANETS } from '../../data/planets.js';
 import { loadChoice } from '../../render3d/quality.js';
-import { harvestRunning, harvestPlan } from '../model.js';
+import { harvestRunning, harvestPlan, surfaceFieldGroups, fieldStock } from '../model.js';
 import { harvestRates } from '../../data/outpost.js';
 import { harvesterUnits } from './harvestDrive.js';
 import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
@@ -140,6 +140,19 @@ export async function openOutpostView(opts = {}) {
     for (const u of harvesterUnits(plan, routes, HRATES, driveClock, { running })) state.units.set(u.id, u);
   }
   syncHarvesters();
+  // the surface fields' stock (owner 2026-11-07: they regrow at 5 % of the battle's rate): a field's markers shrink and
+  // dim as it empties, through the battle renderer's own drained-node look (remaining / units, a regrowing stub at 0)
+  const fieldOfCell = new Map();
+  for (const f of surfaceFieldGroups(map)) for (const c of f.cells) fieldOfCell.set(`${c[0]},${c[1]}`, f);
+  function syncFieldStock() {
+    const st = fieldStock(o, map);
+    for (const n of state.resourceNodes) {
+      const f = fieldOfCell.get(`${n.x},${n.y}`);
+      if (!f) continue;
+      n.units = 1; n.respawns = true; n.remaining = f.cap > 0 ? st[f.id] / f.cap : 1;
+    }
+  }
+  syncFieldStock();
 
   // ── HUD ──────────────────────────────────────────────────────────────────────────────────────────────────────
   let sel = null, saleRun = null, shownGold = session.gold(), closed = false, resolveClosed;
@@ -449,6 +462,7 @@ export async function openOutpostView(opts = {}) {
     scene.sync(o, clockNow(), ctxNow());
     driveClock += dt;
     syncHarvesters();
+    if (liveAcc === 0) syncFieldStock();
     const out = scene.update(dt, o);
     if (saleRun) {
       saleRun.t += dt;
