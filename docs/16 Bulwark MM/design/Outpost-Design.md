@@ -48,6 +48,11 @@ Status: owner decisions applied (Q1–Q7, 2026-11-06) · 2026-11-06 · Epic *Out
 > advances they may discover the Easter egg that other factions will pay even more for rare resources from other
 > planets. *(owner, 2026-11-06, 18:30)*
 
+> The power station can be upgraded or the player can build multiple power stations, power stations also have
+> proximity so a remote build on the map needs another power station. Can we model defense off the numbers used in the
+> tower defense game. Outposts don't have anti air for now and they don't have long range. Outposts will only be
+> attacked by troops and low end tanks. *(owner, 2026-11-06, 18:48)*
+
 The first build is **the Verdance contract plus the Verdance outpost map** (Q1). The answers are applied throughout;
 §11 records them. ("sooner animation" in the reply is read as *shuttle* animation.)
 
@@ -103,7 +108,7 @@ not be lost.
 | Kit | Outpost Hub, Power Station I, Mining Rig I, Storage Tower I, and the ground defenses: a Cannon, a Machine Gun and a wall ring (Q2) |
 | Step 1 | **Establish the outpost on Verdance.** All four buildings are placed on their pads, the rig sits on the iron deposit, and every building is powered. The outpost reads ONLINE. |
 | Step 2 | **Deliver 300 iron to the Oath.** That is 20 shuttle loads, about 100 minutes of the starter rig. |
-| Step 3 | **Hold the outpost through a raid.** The first raid is scripted for 10 minutes after the outpost comes online, so it normally arrives while the player is watching (§5.3). If the player has left, it resolves by the away rule. If it breaks through, the step waits for the next raid the outpost holds; nothing fails. |
+| Step 3 | **Hold the outpost through a raid.** The first raid is scripted for 10 minutes after the outpost comes online, so it normally arrives while the player is watching (§5.3). If the player has left, it runs on its own (§5.3). If it breaks through, the step waits for the next raid the outpost holds; nothing fails. |
 | Pays | 4 gold per iron delivered (contract price, the same as market), then **2,000 gold**, **+20 loyalty with Verdance** ("moral equity"), 300 XP |
 | Unlocks | **Aluminum**, the second ore, and **Deep Drilling I**, the first mining technology (§4.4) |
 
@@ -116,8 +121,8 @@ gets several outposts, one per planet.
 | Contract | Ask | Unlocks |
 |---|---|---|
 | 1 — establish | outpost online; deliver 300 common ore; hold the first raid | the uncommon ore; Deep Drilling I |
-| 2 — expand | build Power Station II and a second Mining Rig on the uncommon deposit (the kit's station has 1 power spare, the rig needs 4); deliver 150 uncommon ore | the rare ore; Rig Mk II (2× extraction, 2× storage) |
-| 3 — master | deliver 60 rare ore; hold 3 raids without a breach | Cargo Shuttle II (+10 % on every sale, §4.3); the planet's spacecraft blueprint (later, Ships division) |
+| 2 — expand | add power (upgrade to Power Station II or build a second station; the kit's station has 1 power spare and a rig needs 4) and a second Mining Rig on the uncommon deposit; deliver 150 uncommon ore | the rare ore; Rig Mk II (2× extraction, 2× storage) |
+| 3 — master | build a rig on the remote rare deposit, with the power station it needs there (§4.5); deliver 60 rare ore; hold 3 raids without a breach | Cargo Shuttle II (+10 % on every sale, §4.3); the planet's spacecraft blueprint (later, Ships division) |
 
 Only contract 1 is specified to build. Contracts 2 and 3 fix the direction and the unlock order; their numbers are
 set with the ore table once contract 1 has been played.
@@ -226,17 +231,27 @@ quantity: deliveries count units, and deep ore delivers a quarter as many.
 
 ### 4.5 Power
 
-The Power Station feeds every building through the glowing conduits in the concept art. Each building draws power;
-an unpowered building stops. Power is what limits how much a player can build before upgrading the station.
+Power Stations feed the buildings through the glowing conduits in the concept art. Each building draws power; an
+unpowered building stops.
 
 | Building | Draw | | Building | Draw |
 |---|---|---|---|---|
 | Outpost Hub | 2 | | Harvester Bay | 2 |
 | Mining Rig | 4 | | Upgrade Bay | 1 |
-| Storage Tower | 1 | | each defense | 1 |
+| Storage Tower | 1 | | Cannon, Machine Gun | 1 each |
 
-Walls draw no power. Power Station I supplies **10**. The kit (hub, rig, storage, cannon, machine gun) draws 9, so
-the player has room for one more small building. Power Station II supplies 20.
+Walls draw no power.
+
+- **More power, two ways** (owner): upgrade a station (Power Station I supplies **10**, Power Station II **20**), or
+  build more stations. A player can have as many stations as they have pads for.
+- **Stations have reach** (owner: "proximity"): a station powers buildings within **10 cells** of it (Power Station
+  II: 14). A building outside every station's reach is unpowered, whatever the supply.
+- **Stations within reach of each other form one grid** and share their supply, and a conduit runs between them.
+- **A remote build needs its own station.** The outpost map has remote deposit sites away from the mesa (§9). A rig
+  there needs a station built within reach of it, either on its own (a separate small grid) or close enough to join
+  the main one. The rare deposit is remote on every map, so contract 3 is where the player first builds out.
+
+The kit (hub, rig, storage, cannon, machine gun) draws 9 of the first station's 10.
 
 ## 5. Raids
 
@@ -249,27 +264,42 @@ out of scope here.
 
 ### 5.2 How often, and how hard
 
+**Raids are played by the tower defense game's own simulation, with its own numbers** (owner: "model defense off the
+numbers used in the tower defense game"). There is no separate rating formula. Each defense has its battle stats and
+each raider its battle stats, and the same deterministic sim decides every raid, whether the player is watching or
+away.
+
+- **Who attacks** (owner): only **troops and low-end tanks**, the planet faction's tier I units that the battle game
+  marks as light ground (`lightGround`: infantry and assault tanks). No aircraft, no artillery, no heavy armour.
+- **What defends** (owner: no anti-air and no long range at outposts for now): the **Machine Gun**, the **Cannon** and
+  **walls** only. Flak, the Missile Tower and the Rocket Tower are not offered at outposts.
+
+| Defense (battle stats, tier I) | HP | DPS | Range | Battle price | Outpost price (×4) |
+|---|---|---|---|---|---|
+| Machine Gun (`STR-MG`): hits troops and light tanks | 240 | 24 | 5 | 150 | 600 |
+| Cannon (`STR-Cannon`): hits all ground | 400 | 45 | 4.5 | 300 | 1,200 |
+| Wall segment (`STR-Wall`) | 600 | — | — | 100 | 400 |
+
+Tiers II and III use the battle's tier stats once the player owns them and has built the Upgrade Bay.
+
 - **About one raid every 6 hours** on average, never more than one per 3-hour window. The schedule is drawn from the
   outpost's seed, so it is the same however often the game is opened.
-- Each defense adds to the **defense rating**: **Cannon 0.30, Machine Gun 0.25, the wall ring 0.25** (Reinforced Walls
-  0.35). Tower tiers the player owns add 20 % per tier above I once the Upgrade Bay is built.
-- Every defense has **integrity** (100 %). Each raid wears the defenses that fought it by **7 %**. Only a **repair**
-  restores integrity; building something else does not.
-- The outpost's **defense rating** is the sum of its defenses' power times their integrity. A raid **breaches** when
-  the rating falls below the raid's strength.
-- **A breach** loses **25 % of the ore in storage** (Q6). Nothing else breaks: the buildings keep running. Every
-  breach while the defenses stay worn loses another quarter, which is the cost of leaving them unrepaired.
+- **Damage carries over.** A defense keeps the HP it ended the last raid with. Only a **repair** restores it; building
+  something else does not. A destroyed defense stays a wreck until it is repaired.
+- **A breach** is any raider reaching the mesa's buildings. It loses **25 % of the ore in storage** (Q6). Nothing else
+  breaks: the buildings keep running. Every breach while the defenses stay damaged loses another quarter.
 
-Proposed tuning that matches "up to 2 days":
+**Tuning to "up to 2 days".** Raid size is the dial: each planet's raid is a number of its light units, set so that
+with no repairs:
 
-| Outpost | Rating at start | Raids held before the first breach | Hours, at one raid per 6 h |
-|---|---|---|---|
-| Well defended (the kit plus one more Machine Gun) | 1.05 | 8 | ~48 |
-| Starter kit (cannon, machine gun, walls) | 0.80 | 5 | ~30 |
-| No defenses | 0 | 0 | the first raid breaches |
+| Outpost | Raids held before the first breach | Hours, at one raid per 6 h |
+|---|---|---|
+| Well defended (the kit plus one more Machine Gun) | about 8 | ~48 |
+| Starter kit (cannon, machine gun, walls) | about 5 | ~30 |
+| No defenses | 0 | the first raid breaches |
 
-Raid strength is 0.55 and does not grow over time. A repair resets the worn defenses, so the 2-day clock is about how
-long the player can leave the outpost alone.
+The raid sizes that give these numbers are measured by running the sim (the tech plan's `outpost_model.mjs`), not
+picked by hand, and they are written to the data for each planet.
 
 ### 5.3 Watching a raid
 
@@ -277,11 +307,12 @@ long the player can leave the outpost alone.
   lanes and the defenses fight, using the battle game's own simulation on the outpost map. The player can tap
   REPAIR, but cannot build during a raid. The first contract's raid is scripted to arrive this way, 10 minutes after
   the outpost comes online.
-- **Leaving during a live raid:** the rest of the raid resolves by the rating rule, with the integrity the defenses had
-  when the player left.
-- **While the player is away,** raids are resolved by the rating rule above.
+- **Leaving during a live raid:** the sim keeps running headless to the end of the raid; the result is the same as
+  if the player had stayed.
+- **While the player is away,** each raid is run by the same sim, headless, when the game next opens. The away
+  report shows the result.
 - **Back in the outpost view,** a **while you were away** report lists what was extracted, each raid (repelled, or
-  breached with the ore lost) and the defenses' wear.
+  breached with the ore lost) and the damage the defenses took.
 
 ## 6. The buildings
 
@@ -292,12 +323,12 @@ themselves. Defenses are placed freely on the outer ring, the way towers are pla
 | Building | In the picture | What it does | Tiers |
 |---|---|---|---|
 | **Outpost Hub** | centre: the octagonal landing pad with the ship, ramps | command and landing pad; the shuttle sells from here; must exist for anything else to run | I |
-| **Power Station** | top left: round building with the blue core | supplies power (§4.5) | I, II |
+| **Power Station** | top left: round building with the blue core | supplies power to buildings within its reach (§4.5); several can be built | I, II |
 | **Mining Rig** | bottom left: the drill with the crystal laser, ore carts on a track | built on an ore deposit; extracts that ore; shallow or deep (§4.4). **A different design for each material** (§8.4) | I, II (2×) |
 | **Storage Tower** | bottom right: the building with the dish and the holographic floor | holds extracted ore; the hologram shows how full it is | I (4 h), II (8 h) |
 | **Harvester Bay** | left: the garage with the buggies | builds and runs surface harvesters on the outpost map, just like in battle (2 to start, up to 4); they gather the planet's common and uncommon surface resources at the battle harvest rates, into a 4-hour hopper that empties into the inventory when the player opens the outpost | I |
 | **Upgrade Bay** | top right: the hangar pad with two control towers and a small craft | where Outpost-division tech upgrades are bought and installed; it also lets tech-tree tower upgrades apply to the outpost's defenses | I |
-| **Defenses** | not in the picture | the battle game's ground defenses: Cannon, Machine Gun and walls (Q2), at the tiers the player owns | from the tech tree |
+| **Defenses** | not in the picture | the battle game's Cannon, Machine Gun and walls (Q2) with their battle stats (§5.2); no anti-air and no long range | from the tech tree |
 
 ### 6.1 Costs (proposed defaults)
 
@@ -307,11 +338,12 @@ themselves. Defenses are placed freely on the outer ring, the way towers are pla
 | second Mining Rig I | 3,000 | 5 min |
 | Harvester Bay | 2,500 | 5 min |
 | Upgrade Bay | 4,000 | 10 min |
-| Power Station II | 6,000 | 15 min |
+| another Power Station I | 4,000 | 10 min |
+| Power Station II (upgrade) | 6,000 | 15 min |
 | Storage Tower II | 5,000 | 15 min |
 | Mining Rig II (2× extraction) | 8,000 | 20 min |
-| a defense | its battle price × 4 | 2 min |
-| repair | 10 % of the building's value per 10 % integrity; kit items are valued at their list price (a defense at its battle price × 4) | instant |
+| a defense | its battle price × 4 (§5.2) | 2 min |
+| repair | 10 % of the building's value per 10 % of its HP; kit items are valued at their list price (a defense at its battle price × 4) | instant |
 
 Build times are real time and run while the player is away. They are short on purpose: the outpost is a place to
 spend gold, not to wait.
@@ -327,9 +359,9 @@ with gold from the tech tree or from the Upgrade Bay; the Upgrade Bay is the out
 | Deep Drilling I | rigs can mine the deep seam (§4.4) | contract 1 |
 | Rig Mk II | Mining Rig II: **2× extraction**, shown by its highlight colour (§8.4) | contract 2 |
 | Supply Depot | Storage Tower II: 8 hours | contract 1 |
-| Power Grid II | Power Station II: 20 power | contract 1 |
-| Reinforced Walls | the kit's walls upgraded; raid wear 7 % → 4 % | contract 1 |
-| Sensor Spire | raid early warning (the menu shows "raid inbound"), +15 % defense rating | contract 2 |
+| Power Grid II | Power Station II: 20 power, 14-cell reach | contract 1 |
+| Reinforced Walls | the kit's walls to tier II (960 HP) | contract 1 |
+| Sensor Spire | raid early warning (the menu shows "raid inbound" 10 minutes ahead) | contract 2 |
 | Cargo Shuttle II | +10 % on every sale (still a manual tap) | contract 3 |
 
 Prices are set in the workbook with the rest of the tech tree. They are counted in a new **Outpost** line of the
@@ -416,8 +448,7 @@ from other planets. It is not advertised. Nothing in the menus mentions it until
   ship, at 2×, alongside the home ship. The sale plays the same sequence; the shuttle flies off toward the far ship's
   side of the sky.
 - **The catch.** Selling to a far buyer earns loyalty with the far faction and **costs loyalty with the home faction**
-  (−1 per load), which feeds the dissidents' story. Raid strength on that outpost rises by 0.05 while far sales
-  continue that day.
+  (−1 per load), which feeds the dissidents' story. That outpost's raids grow by one unit on any day it sells far.
 - **When.** After the first build (Phase B), with contract 3, since the rare ore unlocks there.
 
 ## 9. The outpost map, per planet
@@ -428,9 +459,12 @@ Nine new maps, one per planet, authored in the Terrain Forge like the battle map
 - **A central build mesa** with **7 pads**: the hub pad in the middle and 6 around it (power, rig × 2, storage,
   harvester bay, upgrade bay). There is one spare rig pad on the uncommon deposit; the rare deposit gets a pad at
   contract 2.
-- **Three ore deposits**, one per tier, at the mesa's edge next to rig pads.
+- **Three ore deposits**, one per tier. The common and uncommon deposits sit at the mesa's edge next to rig pads,
+  inside the first station's reach. The **rare deposit is remote**, outside that reach, with its own rig pad and a
+  pad for the power station it needs (§4.5).
 - **Surface resource fields** for the Harvester Bay, a few rings like a battle map's first ring.
-- **Two raid lanes** coming in from the map edge, and a **defense ring** of tower cells around the mesa.
+- **Two raid lanes** coming in from the map edge, and a **defense ring** of tower cells around the mesa and around
+  the remote site.
 - **One signature prop** from the planet's battle maps (Faction-Terrain-Design §2.6), so each outpost reads as that
   planet.
 
@@ -457,9 +491,13 @@ Nine new maps, one per planet, authored in the Terrain Forge like the battle map
 | Q7 | The star ladder | **3★ on map 3** brings the ship and the outpost contract, simplified to 3 for now |
 | — | Storage with more or better rigs | **Mk II doubles capacity**; deep stays slower and lasts longer (§4.2, §4.4) |
 | — | Selling elsewhere | **A hidden far-buyer premium** for rare ore from other planets (§8.5) |
+| — | Power | **Upgrade or build more stations; stations have reach**, so a remote build needs its own (§4.5) |
+| — | Defense numbers | **The tower defense game's own numbers**: raids are run by the battle sim (§5.2) |
+| — | Defenses allowed | **No anti-air and no long range** for now: Machine Gun, Cannon, walls (§5.2) |
+| — | Raiders | **Troops and low-end tanks only** (§5.2) |
 
 Design gaps closed with defaults on 2026-11-06 (owner review asked): storage per rig (§4.2); contract 2's power
-requirement (§2.4); defense values (§5.2); repair only restores integrity, and kit items carry a value for repairs
+requirement (§2.4); repair only restores a defense's HP, and kit items carry a value for repairs
 (§5.2, §6.1); the first raid when the player is away and leaving a live raid (§2.3, §5.3); deep grade as its own item
 (§4.4); the Harvester Bay's numbers (§6).
 
