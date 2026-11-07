@@ -142,18 +142,24 @@ export function contractFor(planet, step) {
 
 /**
  * A planet's raid at a contract step (Outpost_Raids, measured by tools/economy/outpost_raids.mjs; design §5.2):
- * { planet, step, units: [unit ids, cycled in spawn order], size, breacher: unit id | null (one per raid, after the
- * others; owner 2026-11-07, for planets whose troops cannot hurt walls), hpMult, dmgMult (raid-only raider strength,
- * owner 2026-11-07 "weaker raiders"; 1 = battle strength), farDayBump }, or null when the data has none.
+ * { planet, step, units: [unit ids, cycled in spawn order], size, breacher: unit id | null (after the others, in the
+ * raids of every Breacher_Every-th window; owner 2026-11-07, for planets whose troops cannot hurt walls, "breacher
+ * every other raid"), breacherEvery, breacherHpMult (the breacher's HP against battle HP, × the step's strength), strength (the step's Strength_Step, 1 at step 1), hpMult, dmgMult (raid-only
+ * raider strength, owner 2026-11-07 "weaker raiders", × the step's strength; 1 = battle strength), farDayBump }, or
+ * null when the data has none.
  */
 export function raidFor(planet, step = 1) {
   const r = (MAPDATA.outpostRaids || []).find((x) => x.Planet_Key === planet);
   if (!r) return null;
   const s = Math.max(1, Math.min(3, step | 0 || 1));
+  // the step's strength (owner 2026-11-07, "same set, smaller raids"): Strength_Step2/3 scale both multipliers
+  const strength = s === 1 ? 1 : (num(r[`Strength_Step${s}`]) || 1);
   return Object.freeze({
     planet, step: s, units: Object.freeze(String(r.Units || '').split(/\s+/).filter(Boolean)),
-    size: num(r[`Size_Step${s}`]), breacher: r.Breacher || null,
-    hpMult: num(r.Raider_HP_Mult) || 1, dmgMult: num(r.Raider_Damage_Mult) || 1, farDayBump: num(r.Far_Day_Bump),
+    size: num(r[`Size_Step${s}`]), breacher: r.Breacher || null, breacherEvery: Math.max(1, num(r.Breacher_Every) || 1),
+    breacherHpMult: num(r.Breacher_HP_Mult) || 1,
+    strength, hpMult: (num(r.Raider_HP_Mult) || 1) * strength, dmgMult: (num(r.Raider_Damage_Mult) || 1) * strength,
+    farDayBump: num(r.Far_Day_Bump),
   });
 }
 

@@ -14,7 +14,9 @@
 //   - per planet, the raid-only strength (Raider_HP_Mult, Raider_Damage_Mult; owner: "weaker raiders") together with
 //     the contract-1 raid size, over a grid, raids of at least MIN_SIZE (owner: sizes above one troop); ties go to the
 //     strongest raiders, then the larger raid;
-//   - per contract step 2 and 3, the size at those multipliers.
+//   - per contract step 2 and 3 (owner 2026-11-07, "same set, smaller raids"), the same two sets against a raid of at
+//     most step 1's size and, where the size bottoms out, a smaller step strength (Strength_Step2/3 × both multipliers).
+// Planets with a breacher bring it every BREACHER_EVERY-th raid (owner 2026-11-07, "breacher every other raid").
 // Raiders: the faction's tier I lightGround troops and assault tanks (Units cycled: troops, troops, tank). A planet
 // whose troops do nothing to a wall (EFFECTIVENESS vs Structure 0: Toxic) gets a Breacher (owner: "add a breacher
 // unit"): the faction's own ground unit that hurts structures most, light ground first (none qualifies for Xenthe or
@@ -33,7 +35,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const G = path.join(ROOT, 'prototype/test-game');
 const imp = (p) => import(pathToFileURL(path.join(G, p)).href);
 const { outpostMapFromForge } = await imp('src/outpost/outpostMap.js');
-const { stepOutpost, wellDefended, holdsBeforeBreach, composeRaid, MEASURE_SEEDS } = await imp('src/outpost/raid.js');
+const { stepOutpost, wellDefended, holdsBeforeBreach, composeRaid, breacherDue, MEASURE_SEEDS } = await imp('src/outpost/raid.js');
 const { UNITS, EFFECTIVENESS } = await imp('src/data/tables.js');
 await imp('src/data/factions.js');
 const REG = globalThis.BulwarkFactions;
@@ -43,6 +45,12 @@ const TARGET = { kit: 5, well: 8 };          // design §5.2
 const MIN_SIZE = 2, MAX_SIZE = 4, MAX_RAIDS = 12, FAR_DAY_BUMP = 1;
 const HP_GRID = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1];
 const DMG_GRID = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1];
+const STRENGTH_GRID = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3];   // steps 2–3 (owner 2026-11-07: same set, smaller raids)
+const BREACHER_EVERY = 2;                                         // owner 2026-11-07: breacher every other raid
+// planets with a breacher: their troops do nothing to walls, so the troops' multipliers barely matter and the breacher's
+// own HP is the dial (its reach is cut to the troops', so it must come under the guns, where the MG hits it 3×)
+const BREACHER_HP_GRID = [2, 3, 4, 5, 6, 8, 10];
+const BREACHER_TROOP_HP = [0.5, 1], BREACHER_TROOP_DMG = [1];
 const args = process.argv.slice(2), write = args.includes('--write');
 const chosen = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--json');
 for (const p of chosen) if (!PLANETS.includes(p)) throw new Error(`unknown planet ${p}`);
@@ -75,12 +83,14 @@ function breacherOf(planet) {
   return c[0].id;
 }
 
-/** Median holds of the kit and the well defended set for one raid. */
-function holds(planet, step, map, units, hpMult, dmgMult) {
-  const o = { map, step, units, hpMult, dmgMult, max: MAX_RAIDS };
+/** Median holds of the starter and the well defended set for a raid of `size` (the breacher in every
+ *  BREACHER_EVERY-th window, as in play). */
+function holds(planet, step, map, cycle, breacher, size, hpMult, dmgMult, breacherHpMult = 1) {
+  const compose = (k) => composeRaid(cycle, size, breacher && breacherDue(k, BREACHER_EVERY) ? breacher : null);
+  const o = { map, step, compose, hpMult, dmgMult, breacher, breacherHpMult, max: MAX_RAIDS };
   const kit = MEASURE_SEEDS.map((seed) => holdsBeforeBreach(stepOutpost(planet, step, { map, seed }), o));
   const well = MEASURE_SEEDS.map((seed) => holdsBeforeBreach(wellDefended(stepOutpost(planet, step, { map, seed }), map), o));
-  const t = { size: units.length, hpMult, dmgMult, kit: median(kit), well: median(well), kitAll: kit, wellAll: well };
+  const t = { size, hpMult, dmgMult, breacherHpMult, kit: median(kit), well: median(well), kitAll: kit, wellAll: well };
   // a count that hit the MAX_RAIDS cap is "at least that many", so it is penalised beyond its face value: otherwise a
   // never-breached outpost (12 / 12) ties a breached-at-once one (1 / 1) on Xenthe and the tie goes the wrong way
   t.err = Math.abs(t.kit - TARGET.kit) + Math.abs(t.well - TARGET.well) + (t.kit >= MAX_RAIDS ? 5 : 0) + (t.well >= MAX_RAIDS ? 5 : 0);
@@ -93,22 +103,36 @@ const better = (t, b) => !b || t.err < b.err || (t.err === b.err && (t.hpMult * 
  *  stops once the kit holds fewer than 2 (not with a breacher: which lane it takes flips with the size). */
 function measureStep1(planet, map, cycle, breacher) {
   let best = null;
+  if (breacher) {
+    for (const hpMult of BREACHER_TROOP_HP) for (const dmgMult of BREACHER_TROOP_DMG) for (let size = MIN_SIZE; size <= 3; size++) {
+      for (const bh of BREACHER_HP_GRID) {
+        const t = holds(planet, 1, map, cycle, breacher, size, hpMult, dmgMult, bh);
+        if (!best || t.err < best.err || (t.err === best.err && bh < best.breacherHpMult)) best = t;
+        if (t.kit < 2) break;   // a tougher breacher only breaches sooner
+      }
+    }
+    return best;
+  }
   for (const hpMult of HP_GRID) for (const dmgMult of DMG_GRID) for (let size = MIN_SIZE; size <= MAX_SIZE; size++) {
-    const t = holds(planet, 1, map, composeRaid(cycle, size, breacher), hpMult, dmgMult);
-    t.size = size;
+    const t = holds(planet, 1, map, cycle, breacher, size, hpMult, dmgMult);
     if (better(t, best)) best = t;
-    if (t.kit < 2 && !breacher) break;   // with a breacher the lane it takes flips with the size: not monotonic
+    if (t.kit < 2) break;
   }
   return best;
 }
-/** Steps 2–3: the size at the planet's multipliers. */
-function measureSize(planet, step, map, cycle, breacher, hpMult, dmgMult) {
+/** Steps 2–3 (owner 2026-11-07, "same set, smaller raids"): the same starter and well defended sets; the raid size
+ *  (at most step 1's) and, where the size bottoms out, the step's strength (× both multipliers). Ties go to the
+ *  stronger raid, then the larger. */
+function measureStep(planet, step, map, cycle, breacher, s1) {
   let best = null;
-  for (let size = 1; size <= MAX_SIZE; size++) {
-    const t = holds(planet, step, map, composeRaid(cycle, size, breacher), hpMult, dmgMult);
-    t.size = size;
-    if (!best || t.err < best.err || (t.err === best.err && size === MIN_SIZE)) best = t;
-    if (t.kit < 2 && !breacher) break;
+  for (let size = s1.size; size >= 1; size--) {
+    for (const strength of STRENGTH_GRID) {
+      const t = holds(planet, step, map, cycle, breacher, size, s1.hpMult * strength, s1.dmgMult * strength, s1.breacherHpMult * strength);
+      t.strength = strength;
+      if (!best || t.err < best.err || (t.err === best.err && (strength > best.strength || (strength === best.strength && size > best.size)))) best = t;
+      if (t.err === 0 || (t.kit >= MAX_RAIDS && t.well >= MAX_RAIDS)) break;   // on target, or weaker only holds longer
+    }
+    if (best.err === 0) break;
   }
   return best;
 }
@@ -138,16 +162,20 @@ if (!only) {
   }
 }
 if (!jsonOut) console.log(`# Outpost raids — measured on the battle sim (median of ${MEASURE_SEEDS.length} outpost seeds; targets: kit ${TARGET.kit}, well defended ${TARGET.well})\n`);
-if (!jsonOut) console.log('| Planet | Map | Units | HP × | Damage × | Step | Size | Kit holds (median; all seeds) | Well defended holds (median; all seeds) |\n|---|---|---|---|---|---|---|---|---|');
+if (!jsonOut) console.log('| Planet | Map | Units | HP × | Damage × | Step | Size | Step strength | Starter holds (median; all seeds) | Well defended holds (median; all seeds) |\n|---|---|---|---|---|---|---|---|---|---|');
 for (const planet of PLANETS.filter((p) => p === only)) {
   const own = fs.existsSync(mapFile(planet));
   const map = loadMap(own ? planet : 'ground');
   const cycle = unitsOf(planet), breacher = breacherOf(planet);
   const s1 = measureStep1(planet, map, cycle, breacher);
-  const steps = [s1, measureSize(planet, 2, map, cycle, breacher, s1.hpMult, s1.dmgMult), measureSize(planet, 3, map, cycle, breacher, s1.hpMult, s1.dmgMult)];
-  steps.forEach((m, i) => console.log(`| ${planet} | ${own ? 'own' : 'Verdance (no map yet)'} | ${[...new Set(cycle)].join(', ')}${breacher ? ` + ${breacher}` : ''} | ${s1.hpMult} | ${s1.dmgMult} | ${i + 1} | ${m.size} | ${m.kit}; ${m.kitAll.join(' ')} | ${m.well}; ${m.wellAll.join(' ')} |`));
-  const row = { Planet_Key: planet, Units: cycle.join(' '), Breacher: breacher || '', Raider_HP_Mult: s1.hpMult, Raider_Damage_Mult: s1.dmgMult,
+  s1.strength = 1;
+  const steps = [s1, measureStep(planet, 2, map, cycle, breacher, s1), measureStep(planet, 3, map, cycle, breacher, s1)];
+  steps.forEach((m, i) => console.log(`| ${planet} | ${own ? 'own' : 'Verdance (no map yet)'} | ${[...new Set(cycle)].join(', ')}${breacher ? ` + ${breacher} every ${BREACHER_EVERY}, HP × ${s1.breacherHpMult}` : ''} | ${s1.hpMult} | ${s1.dmgMult} | ${i + 1} | ${m.size} | ${m.strength} | ${m.kit}; ${m.kitAll.join(' ')} | ${m.well}; ${m.wellAll.join(' ')} |`));
+  const row = { Planet_Key: planet, Units: cycle.join(' '), Breacher: breacher || '', Breacher_Every: breacher ? BREACHER_EVERY : '',
+    Breacher_HP_Mult: breacher ? s1.breacherHpMult : '',
+    Raider_HP_Mult: s1.hpMult, Raider_Damage_Mult: s1.dmgMult,
     Size_Step1: steps[0].size, Size_Step2: steps[1].size, Size_Step3: steps[2].size,
+    Strength_Step2: steps[1].strength, Strength_Step3: steps[2].strength,
     Far_Day_Bump: FAR_DAY_BUMP, Measured_On: own ? `${planet}-outpost` : 'ground-outpost' };
   rows.push(row);
   if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify(row));

@@ -293,6 +293,14 @@ def raid_problems(data, planets):
                 out.append(f"{tag}: Breacher {b!r} is not one of the documented breacher kinds {BREACHER_KINDS}")
             elif units and b.split("-", 1)[0] not in prefixes:
                 out.append(f"{tag}: Breacher {b!r} is not the planet's own faction")
+        if b and not (isinstance(r.get("Breacher_Every"), int) and r["Breacher_Every"] >= 1):
+            out.append(f"{tag}: Breacher_Every must be a whole number >= 1 (owner 2026-11-07: breacher every other raid)")
+        if b and not (isinstance(r.get("Breacher_HP_Mult"), (int, float)) and r["Breacher_HP_Mult"] > 0):
+            out.append(f"{tag}: Breacher_HP_Mult must be positive")
+        for k in ("Strength_Step2", "Strength_Step3"):
+            v = r.get(k)
+            if v is not None and not (isinstance(v, (int, float)) and 0 < v <= 1):
+                out.append(f"{tag}: {k} must be in (0, 1], got {v!r}")
         for k in ("Raider_HP_Mult", "Raider_Damage_Mult"):
             v = r.get(k)
             if not (isinstance(v, (int, float)) and 0 < v <= 1):

@@ -52,7 +52,8 @@
  *  - The raiders: one wave of the planet faction's tier I lightGround units (troops and assault tanks), the measured
  *    number for the contract step, cycling Units in order and alternating the raid lanes (the first lane drawn from
  *    the raid's seed), plus the planet's Breacher when it has one (owner 2026-11-07: Xenthe and Vexmire, whose Toxic
- *    troops do nothing to a wall, bring their Artillery). Raid-only strength (owner 2026-11-07, "weaker raiders"):
+ *    troops do nothing to a wall, bring their Artillery, in every Breacher_Every-th raid window, with its reach cut to
+ *    its faction's troops'). Raid-only strength (owner 2026-11-07, "weaker raiders"):
  *    every raider's HP × Raider_HP_Mult and damage × Raider_Damage_Mult from Outpost_Raids; its range is capped at
  *    RAID_RANGE_CAP (no long range at outposts). The battle game's units are unchanged. Raiders fire on the
  *    defenses they pass while they keep marching (the battle's engagesStructuresWhileAdvancing rule): a raid is
@@ -73,8 +74,8 @@ import { createSim, stepSim, FIXED_DT } from '../sim/core.js';
 import { startNextWave } from '../sim/waves.js';
 import { createStructure } from '../sim/entities.js';
 import { buildNavGrid, findWalkerPath } from '../sim/pathfinding.js';
-import { getStructureDef } from '../data/tables.js';
-import { referenceOutpost, powerGrids } from './model.js';
+import { getStructureDef, getUnitDef } from '../data/tables.js';
+import { referenceOutpost, powerGrids, windowMs } from './model.js';
 import { structureDef, raidFor } from '../data/outpost.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
 import { buildTerrainMap } from '../sim/mapgen.js';
@@ -117,11 +118,16 @@ export function raidSeed(outpostSeed, raid = {}) {
 
 /** The measured raid size for a planet's contract step (Outpost_Raids), or 0 when the data has none. */
 export const raidSize = (planet, step = 1) => (raidFor(planet, step) || {}).size || 0;
-/** The raid's units, in spawn order: the size taken from Units cycled in order, then the planet's Breacher (if any). */
-export function raidUnits(planet, step = 1) {
+/** Does the raid of this window bring the planet's breacher? Every Breacher_Every-th window (owner 2026-11-07,
+ *  "breacher every other raid"): window % every === 0. Deterministic from the window index alone, so a raid is the
+ *  same away and live; the scripted first raid (no window) never does. */
+export const breacherDue = (window, every = 1) => window != null && ((window % every) + every) % every === 0;
+/** The raid's units, in spawn order: the size taken from Units cycled in order, then the planet's Breacher when the
+ *  window brings it (`window` omitted: as if it does). */
+export function raidUnits(planet, step = 1, window = 0) {
   const r = raidFor(planet, step);
   if (!r || !r.units.length) return [];
-  return composeRaid(r.units, r.size, r.breacher);
+  return composeRaid(r.units, r.size, r.breacher && breacherDue(window, r.breacherEvery) ? r.breacher : null);
 }
 /** The scripted first raid's raiders: FIRST_RAID_SIZE of the planet's Units, no breacher. */
 export const FIRST_RAID_SIZE = 1;
@@ -265,11 +271,17 @@ export function createRaid(outpost, raid = {}, opts = {}) {
   const step = opts.step || 1;
   // the scripted first raid (contract 1 step 3) is a probe: FIRST_RAID_SIZE raiders, no breacher (owner 2026-11-07:
   // winnable while watching with the setup, one Machine Gun and a couple of walls)
-  const units = opts.units || (raid.first ? firstRaidUnits(outpost.planet) : raidUnits(outpost.planet, step));
+  const units = opts.units || (raid.first ? firstRaidUnits(outpost.planet)
+    : raidUnits(outpost.planet, step, raid.window != null ? raid.window : Math.floor((raid.at || 0) / windowMs())));
   // raid-only strength (owner 2026-11-07, "weaker raiders"): Outpost_Raids' Raider_HP_Mult / Raider_Damage_Mult for the
   // planet, applied to every raider inside this raid only; the battle game's units are unchanged
   const data = raidFor(outpost.planet, step) || {};
   const hpMult = opts.hpMult ?? data.hpMult ?? 1, dmgMult = opts.dmgMult ?? data.dmgMult ?? 1;
+  // the breacher (Outpost_Raids Breacher): reach cut to its faction's troops', HP its own dial (Breacher_HP_Mult × the
+  // step's strength, against battle HP) since the Machine Gun hits Artillery three times as hard
+  const breacherId = opts.breacher !== undefined ? opts.breacher : (data.breacher || null);
+  const breacherReach = breacherId ? getUnitDef(breacherId.replace(/-[^-]+$/, '-Troops')).range : null;
+  const breacherHp = opts.breacherHpMult ?? ((data.breacherHpMult ?? 1) * (data.strength ?? 1));
   const seed = opts.seed != null ? opts.seed : raidSeed(outpost.seed, raid);
   const powered = raid.powered instanceof Set ? raid.powered : new Set(raid.powered || []);
   const simMap = raidSimMap(outpost, map, opts);
@@ -320,10 +332,14 @@ export function createRaid(outpost, raid = {}, opts = {}) {
     for (const u of state.units.values()) {
       if (u._raider || u.side !== 'attacker') continue;
       u._raider = true;
-      u.hp *= hpMult; u.maxHp *= hpMult;
+      const hm = breacherId && u.unitId === breacherId ? breacherHp : hpMult;
+      u.hp *= hm; u.maxHp *= hm;
       u.dps *= dmgMult;
       if (u.detonate) u.detonate = { ...u.detonate, burst: u.detonate.burst * dmgMult };
       u.range = Math.min(u.range, RAID_RANGE_CAP);
+      // the breacher closes in like a trooper: its reach is its faction's troops' (measured on the own maps: at the
+      // outposts' 5 it shot walls from below the cliff, out of every gun's reach, and no strength could hold it)
+      if (breacherReach != null && u.unitId === breacherId) u.range = Math.min(u.range, breacherReach);
       u.engagesStructuresWhileAdvancing = true;   // fire on the defenses passed, keep marching
       if (u.domain !== 'Walker') {                // swimmers walk on an outpost's dry ground
         u.domain = 'Walker'; u.altitude = 0; u.path = []; u.pathIdx = 0; u.routeIdx = null;
@@ -493,12 +509,14 @@ export function stepOutpost(planet, step, { map, seed = 1 }) {
 /**
  * Raids held before the first breach, with no repairs between raids (design §5.2): raid after raid (windows 0, 1, …)
  * on the outpost, each defense keeping the HP it ended the last raid with. → n (max when none breached).
- * opts: { map, step, units?, hpMult?, dmgMult? (default the measured raid), max = 20, bakeTune? }.
+ * opts: { map, step, units? or compose? (window k → units), hpMult?, dmgMult? (default the measured raid), max = 20,
+ * bakeTune? }.
  */
-export function holdsBeforeBreach(outpost, { map, step = 1, units, hpMult, dmgMult, max = 20, bakeTune } = {}) {
+export function holdsBeforeBreach(outpost, { map, step = 1, units, compose, hpMult, dmgMult, breacher, breacherHpMult, max = 20, bakeTune } = {}) {
   const o = JSON.parse(JSON.stringify(outpost));
   for (let k = 0; k < max; k++) {
-    const r = runRaid(o, { window: k, at: k, powered: powerGrids(o, map).powered }, { map, step, units, hpMult, dmgMult, bakeTune });
+    const u = compose ? compose(k) : units;
+    const r = runRaid(o, { window: k, at: k, powered: powerGrids(o, map).powered }, { map, step, units: u, hpMult, dmgMult, breacher, breacherHpMult, bakeTune });
     if (r.result === 'breach') return k;
     for (const d of r.defenses) o.defenses.find((x) => x.id === d.id).hp = d.hp;
   }
