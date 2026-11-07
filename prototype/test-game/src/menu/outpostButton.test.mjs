@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { outpostButtonModel, outpostPlanet } from './outpostButton.js';
-import { createOutpost, confirmOnline } from '../outpost/model.js';
+import { referenceOutpost, confirmOnline } from '../outpost/model.js';
 import { DRAFT_LAYOUT as map } from '../outpost/draftLayout.js';
 
 const HOUR = 3_600_000;
 const T0 = Date.UTC(2026, 10, 7, 12, 0, 0);
-const online = (planet, t = T0) => { const o = confirmOnline(createOutpost(planet, { seed: 7, map, now: t }), map, t).outpost; o.firstRaidAt = null; return o; };
+const online = (planet, t = T0) => { const o = confirmOnline(referenceOutpost(planet, { seed: 7, map, now: t }), map, t).outpost; o.firstRaidAt = null; return o; };
 
 test('locked until a contract makes an outpost', () => {
   const m = outpostButtonModel({ outposts: {} }, 'ground', T0);

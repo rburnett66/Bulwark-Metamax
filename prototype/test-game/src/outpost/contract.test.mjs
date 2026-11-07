@@ -5,7 +5,10 @@ import {
   outpostOffer, acceptOutpostContract, declineOutpostContract, outpostUnlocks, outpostCard, outpostQuestLine,
   outpostMissionId, measureRaidsHeld,
 } from './contract.js';
-import { confirmOnline, advance, sell } from './model.js';
+import { readFileSync } from 'node:fs';
+import { confirmOnline, advance, sell, place, onlineProblems, defaultPads } from './model.js';
+import { makeRaidHook } from './raid.js';
+import { outpostMapFromForge } from './outpostMap.js';
 import { DRAFT_LAYOUT as map } from './draftLayout.js';
 import { defaultSave } from '../save/save.js';
 import { syncMissions, settleOutpost, collect, gateMet, GATE_CONDITIONS } from '../save/missionFlow.js';
@@ -29,6 +32,21 @@ const OC1 = {
   fail: [], rewards: [{ kind: 'gold', amount: 2000, label: 'Gold' }, { kind: 'xp', amount: 300, label: 'Commander XP' }],
 };
 const catalog = { missions: [OC1], resources: [], questLines: {}, techUnlocks: {} };
+
+/** The player buys the first setup on the default pads with their gold (owner 2026-11-07) and waits for the builds.
+ *  Spends s.carry.gold through the model's prices. → the outpost, advanced past the builds. */
+function buySetup(s, key, m, now, extra = []) {
+  let o = s.outposts[key];
+  const pads = defaultPads(m);
+  const buys = [{ pad: pads.power, kind: 'power' }, { pad: pads.rig, kind: 'rig' }, { pad: pads.storage, kind: 'storage' }, ...extra];
+  for (const what of buys) {
+    const r = place(o, what, { map: m, now, gold: s.carry.gold, unlockedTiers: ['common'] });
+    assert.ok(!r.error, `${what.kind}: ${r.error}`);
+    o = r.outpost;
+    s.carry.gold -= r.cost;
+  }
+  return (s.outposts[key] = advance(o, now + 2 * MIN, { map: m }).outpost);
+}
 const arrived = () => { const s = defaultSave(); s.capitalShips = { Verdance: { arrived: true } }; return s; };
 
 test('ids and quest line follow the extractor', () => {
@@ -45,13 +63,14 @@ test('the offer appears with the ship and goes once the outpost exists', () => {
   assert.equal(outpostOffer(s, 'ground'), null);
 });
 
-test('ACCEPT grants the kit on its pads, not yet online; accepting twice changes nothing', () => {
+test('ACCEPT grants only the hub (owner 2026-11-07), not yet online; accepting twice changes nothing', () => {
   const s = arrived();
   const o = acceptOutpostContract(s, 'ground', { map, now: T0 });
   assert.equal(o.online, false);
-  assert.deepEqual(Object.values(o.pads).map((p) => p.kind).sort(), ['hub', 'power', 'rig', 'storage']);
-  assert.equal(o.defenses.filter((d) => d.kind === 'cannon').length, 1);
-  assert.equal(o.defenses.filter((d) => d.kind === 'mg').length, 1);
+  assert.deepEqual(Object.values(o.pads).map((p) => p.kind), ['hub']);
+  assert.deepEqual(o.defenses, [], 'the map\'s kitDefenses are not granted');
+  assert.equal(o.harvesters, 0);
+  assert.ok(onlineProblems(o, map).includes('no power station'));
   assert.deepEqual(s.outpostContracts.ground, { step: 1, state: 'active', since: T0 });
   const again = acceptOutpostContract(s, 'ground', { map, now: T0 + HOUR });
   assert.equal(again, o);
@@ -75,7 +94,10 @@ test('the four outpost gates and three measures are known to the mission flow', 
   acceptOutpostContract(s, 'ground', { map, now: T0 });
   assert.equal(g('outpost_contract_step', 'ground', 1), true);
   assert.equal(g('outpost_online', 'ground'), false);
-  s.outposts.ground = confirmOnline(s.outposts.ground, map, T0).outpost;
+  assert.ok(confirmOnline(s.outposts.ground, map, T0).error, 'the base alone cannot go online');
+  s.carry = { gold: 1500, structures: [] };
+  buySetup(s, 'ground', map, T0);
+  s.outposts.ground = confirmOnline(s.outposts.ground, map, T0 + 2 * MIN).outpost;
   assert.equal(g('outpost_online', 'ground'), true);
   assert.equal(g('ore_sold', 'iron', 15), false);
   s.outposts.ground.sold = { iron: 15 };
@@ -88,17 +110,25 @@ test('the four outpost gates and three measures are known to the mission flow', 
   assert.equal(measureRaidsHeld(s, 'ground', T0 + 90_000), 0);
 });
 
-test('contract 1 end to end: logged with the ship, run at the outpost, collected aboard', () => {
+test('contract 1 end to end on the Verdance map: the player buys the setup and defenses, holds the real scripted raid', () => {
+  const vmap = outpostMapFromForge(JSON.parse(readFileSync(new URL('../../content/maps/forge/ground-outpost.json', import.meta.url), 'utf8')));
   const s = arrived();
+  s.carry = { gold: 4500, structures: [] };   // the setup (1,500) and the map's starter MG + walls (600 + 6 x 400)
   assert.deepEqual(syncMissions(s, catalog, ctx).map((m) => m.id), ['OC-VER-1']);
   const m = () => s.missions.find((x) => x.id === 'OC-VER-1');
-  acceptOutpostContract(s, 'ground', { map, now: T0 });
-  s.outposts.ground = confirmOnline(s.outposts.ground, map, T0).outpost;
+  acceptOutpostContract(s, 'ground', { map: vmap, now: T0 });
+  s.outposts.ground.seed = 1;   // a fixed raid seed, so the scripted raid's lane is known
+  const defenses = vmap.kitDefenses.filter((d) => d.kind !== 'cannon').map((d) => ({ kind: d.kind, cell: d.cell }));
+  buySetup(s, 'ground', vmap, T0, defenses);
+  assert.equal(s.carry.gold, 0, 'every gold piece spent through the model');
+  const on = T0 + 2 * MIN;
+  s.outposts.ground = confirmOnline(s.outposts.ground, vmap, on).outpost;
   settleOutpost(s, catalog, ctx);
   assert.equal(m().objectives[0].have, 1);
-  // two hours: the scripted first raid (held) at +10 min, 360 iron mined; every load sold
-  const held = () => ({ result: 'held', defenses: [] });
-  s.outposts.ground = advance(s.outposts.ground, T0 + 2 * HOUR, { map, raid: held }).outpost;
+  // two hours: the scripted first raid at +10 min, run on the battle sim (O7's hook), held; 360 iron mined; sold
+  s.outposts.ground = advance(s.outposts.ground, on + 2 * HOUR, { map: vmap, raid: makeRaidHook({ map: vmap, step: 1 }) }).outpost;
+  assert.equal(s.outposts.ground.raids.log[0].result, 'held');
+  assert.ok(Math.abs(s.outposts.ground.storage.r1.iron - 360) < 1e-6);
   const sale = sell(s.outposts.ground, {});
   s.outposts.ground = sale.outpost;
   const out = settleOutpost(s, catalog, ctx);
@@ -124,10 +154,15 @@ test('contract 1 end to end: logged with the ship, run at the outpost, collected
   assert.ok(u.unlocks.has('deep_drilling_1'));
 });
 
-test('the contract card names the kit, the steps, the pay and the unlocks', () => {
+test('the contract card: the base is granted, the player builds the rest; the steps, the pay and the unlocks', () => {
   const c = outpostCard('ground', "Halbrecht's Oath");
   assert.match(c.kicker, /HALBRECHT'S OATH/);
   assert.match(c.task, /Iron for the Oath/);
+  assert.match(c.task, /grants you an outpost base/);
+  assert.match(c.task, /power station, a mining station on the iron and a storage tower with your own gold/);
+  assert.match(c.task, /defenses are yours to buy/);
+  assert.doesNotMatch(c.task, /cannon|machine gun|wall ring/i);
+  assert.match(c.terms, /power, a mining station on the iron and storage, all powered/);
   assert.match(c.terms, /Deliver <b>300 Iron<\/b>/);
   assert.match(c.terms, /Hold the outpost through a raid/);
   assert.match(c.terms, /2,000 gold/);

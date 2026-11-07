@@ -11,7 +11,7 @@
       "ground": [
         { "beat": "greet", "line": "You have done well gathering what lies on the surface of Verdance. Better than most of my own regiments.", "intent": "statement" },
         { "beat": "turn", "line": "So tell me: how are you at mining? And farming?", "intent": "question" },
-        { "beat": "offer", "line": "We have a site for you. A small outpost and a mining rig: a hub, a power station, a miner and a storage tower. Yours to run.", "intent": "statement" },
+        { "beat": "offer", "line": "We have a site for you: an outpost base on the mesa. Build your power, a mining station on the iron and a storage tower with your own gold, and the place is yours to run.", "intent": "statement" },
         { "beat": "warning", "line": "Not everybody aboard is happy about your progress. Help us bring up the ore and you will earn some moral equity with the realm. There will be opposition. We will pay well.", "intent": "statement" }
       ]
     },

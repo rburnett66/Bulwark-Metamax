@@ -144,14 +144,15 @@ def apply_rework(data):
     return data
 
 
-OUTPOST_KINDS = {"hub", "power", "rig", "storage", "harvesterBay", "upgradeBay", "mg", "cannon", "wall"}
+OUTPOST_KINDS = {"hub", "power", "rig", "storage", "resourceBay", "harvester", "upgradeBay", "mg", "cannon", "wall"}
 RIG_HEADS = {"auger", "laser", "brine", "crystal", "bore", "shielded"}
 # Owner: outposts have no anti-air and no long range. The battle structures an outpost may use; their stats (range
 # within 5, ground targets) are checked against STRUCTURES by src/data/outpost.test.mjs.
 OUTPOST_BATTLE_STRUCTS = {"STR-MG", "STR-Cannon", "STR-Wall"}
 OUTPOST_PARAMS = ("Load_Sec", "Store_Hours", "Deep_Rate_Mult", "Deep_Price_Mult", "Raid_Mean_Hours",
                   "Raid_Min_Gap_Hours", "Breach_Storage_Loss", "First_Raid_Sec", "Away_Cap_Hours", "Replay_Keep",
-                  "Far_Buyer_Mult", "Far_Loyalty_Cost", "Defense_Price_Mult", "Repair_Share_Per_HP", "Shuttle_II_Bonus")
+                  "Far_Buyer_Mult", "Far_Loyalty_Cost", "Defense_Price_Mult", "Repair_Share_Per_HP", "Shuttle_II_Bonus",
+                  "Rig_Bay_Min", "Harvester_Cap", "Harvester_Max")
 
 
 def outpost_problems(data):
@@ -201,9 +202,22 @@ def outpost_problems(data):
             out.append(f"{tag}: Battle_Struct {bs!r} is not an outpost defense (no anti-air, no long range)")
         if bs and r.get("Kind") not in ("mg", "cannon", "wall"):
             out.append(f"{tag}: only defenses take a Battle_Struct")
-    for k in ("hub", "power", "rig", "storage", "mg", "cannon", "wall"):
+    for k in ("hub", "power", "rig", "storage", "resourceBay", "harvester", "mg", "cannon", "wall"):
         if (k, 1) not in seen:
-            out.append(f"Outpost_Structures: the kit needs {k} tier 1")
+            out.append(f"Outpost_Structures: the build list needs {k} tier 1")
+    # owner 2026-11-07: the contract grants only the hub; everything else is bought with the player's gold
+    for r in data["outpostStructures"]:
+        tag = f"Outpost_Structures {r.get('Kind')} tier {r.get('Tier')}"
+        if r.get("Kind") == "hub":
+            if r.get("Unlock") != "granted":
+                out.append(f"{tag}: the hub is the one granted building (Unlock 'granted')")
+        elif not (isinstance(r.get("Cost"), (int, float)) and r["Cost"] > 0):
+            out.append(f"{tag}: every building but the hub is bought, so Cost must be positive")
+        if r.get("Kind") == "harvester" and (r.get("Tier") != 1 or r.get("Power_Draw")):
+            out.append(f"{tag}: the harvester is one tier-1 row with no power draw")
+    hp = data["outpostParams"]
+    if all(isinstance(hp.get(k), int) for k in ("Harvester_Cap", "Harvester_Max")) and not (0 < hp["Harvester_Cap"] <= hp["Harvester_Max"]):
+        out.append("Outpost_Params: need 0 < Harvester_Cap <= Harvester_Max")
     for key in planets:
         rows = sorted((r for r in data["outpostContracts"] if r.get("Planet_Key") == key), key=lambda r: r.get("Step", 0))
         if [r.get("Step") for r in rows] != [1, 2, 3]:

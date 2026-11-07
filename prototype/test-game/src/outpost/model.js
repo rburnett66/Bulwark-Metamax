@@ -15,11 +15,18 @@
  *     building: [{ pad, kind, tier, done, deposit? }],              // under construction (also upgrades)
  *     defenses: [{ id, kind, tier, cell: [x, y], hp }],
  *     storage: { [rigPadId]: { [itemId]: units } },                 // one bay per rig; deep grade is '<ore>_deep'
+ *     harvesters: n,                                                // bought for the Resource Bay (O16; behaviour O10)
  *     raids: { window, log: [{ at, result, lost, damage }] },
  *     sold: { [oreId]: units } }                                    // lifetime, both grades, for contract steps
  *
+ * The contract grants only the hub (owner 2026-11-07, story O16); everything else is bought with place() and
+ * buyHarvester(). A rig mines into its own small bay (Rig_Bay_Min minutes of output) whenever it is powered; a
+ * finished, powered Storage Tower raises every rig's bay to Bay_Hours; an unpowered tower's door is closed. Ore
+ * already stored is never lost to a power cut, and the hub can always ship it (sell).
+ *
  * The map (Forge format, tech plan §6.6; src/outpost/draftLayout.js until O4): { pads: [{ id, x, y, w, h, role,
- * remote }], deposits: [{ tier, pad }], kitDefenses: [{ kind, cell }] }.
+ * remote }], deposits: [{ tier, pad }], kitDefenses: [{ kind, cell }] } — kitDefenses is the reference defense set
+ * (referenceOutpost, the raid measurement); it is not granted.
  *
  * Raids: `advance` finds each raid due and asks `ctx.raid(outpost, { at, window, first, powered })` for its outcome:
  * { result: 'held' | 'breach', defenses: [{ id, hp }] }. The game passes the battle sim's runRaid (story O7); the
@@ -28,7 +35,7 @@
  */
 import { createRng } from '../sim/rng.js';
 import { oresOf, oreById, oreItemId } from '../data/ores.js';
-import { OUTPOST, structureDef, DEFENSE_KINDS } from '../data/outpost.js';
+import { OUTPOST, structureDef, DEFENSE_KINDS, canonicalKind, harvesterDef } from '../data/outpost.js';
 
 const MIN = 60_000, HOUR = 3_600_000;
 const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
@@ -73,33 +80,63 @@ export function raidSchedule(seed, fromWindow, toWindow, params = OUTPOST) {
   return out;
 }
 
-// ── creating the outpost (the contract kit) ──────────────────────────────────────────────────────────────────────
+// ── creating the outpost (the contract grants the hub) ───────────────────────────────────────────────────────────
+const firstPad = (map, role, f = () => true) => map.pads.find((p) => p.role === role && !p.remote && f(p));
+/** The default pads the first setup goes on: { hub, power, rig (on the common deposit), storage } → pad ids. */
+export function defaultPads(map) {
+  const id = (p) => (p ? p.id : null);
+  return {
+    hub: id(firstPad(map, 'hub')), power: id(firstPad(map, 'power')),
+    rig: id(firstPad(map, 'rig', (p) => depositOf(map, p.id) === 'common')), storage: id(firstPad(map, 'storage')),
+  };
+}
+
 /**
- * The outpost the contract grants (design §2.3): the hub, Power Station I, a Rig I on the common deposit, Storage
- * Tower I and the kit defenses, on the map's default pads. It is not online until confirmOnline().
+ * The outpost the contract grants (design §2.3, owner 2026-11-07): ONLY the Outpost Hub, on its pad. The player buys
+ * the Power Station, the Mining Rig, the Storage Tower, the Resource Bay, harvesters and the defenses with their own
+ * gold through place() / buyHarvester(). It is not online until confirmOnline().
  */
 export function createOutpost(planet, { seed, map, now }) {
-  const first = (role, f = () => true) => map.pads.find((p) => p.role === role && !p.remote && f(p));
-  const rigPad = first('rig', (p) => depositOf(map, p.id) === 'common');
-  const pads = {
-    [first('hub').id]: { kind: 'hub', tier: 1 },
-    [first('power').id]: { kind: 'power', tier: 1 },
-    [rigPad.id]: { kind: 'rig', tier: 1, deposit: 'common', deep: false },
-    [first('storage').id]: { kind: 'storage', tier: 1 },
-  };
-  const defenses = (map.kitDefenses || []).map((d, i) => ({
-    id: `d${i + 1}`, kind: d.kind, tier: 1, cell: [...d.cell], hp: structureDef(d.kind, 1).battle.hp,
-  }));
   return {
     planet, seed: seed >>> 0, online: false, t: now, firstRaidAt: null,
-    pads, building: [], defenses, storage: { [rigPad.id]: {} },
-    raids: { window: null, log: [] }, sold: {},
+    pads: { [firstPad(map, 'hub').id]: { kind: 'hub', tier: 1 } }, building: [], defenses: [], storage: {},
+    harvesters: 0, raids: { window: null, log: [] }, sold: {},
   };
+}
+
+/**
+ * The reference outpost (the former contract kit): the hub, Power Station I, a Rig I on the common deposit, Storage
+ * Tower I, all finished, and the map's `kitDefenses` (the reference "starter defense set" the raid measurement uses,
+ * tech plan §4.3). Nothing in play grants it; the measurement, the tests and the review pages build it directly.
+ */
+export function referenceOutpost(planet, { seed, map, now }) {
+  const o = createOutpost(planet, { seed, map, now });
+  const d = defaultPads(map);
+  o.pads[d.power] = { kind: 'power', tier: 1 };
+  o.pads[d.rig] = { kind: 'rig', tier: 1, deposit: 'common', deep: false };
+  o.pads[d.storage] = { kind: 'storage', tier: 1 };
+  o.storage[d.rig] = {};
+  o.defenses = (map.kitDefenses || []).map((k, i) => ({
+    id: `d${i + 1}`, kind: k.kind, tier: 1, cell: [...k.cell], hp: structureDef(k.kind, 1).battle.hp,
+  }));
+  return o;
+}
+
+/**
+ * Bring a saved outpost up to the current rules (save migration): the Harvester Bay is now the Resource Bay
+ * (owner 2026-11-07), and outposts saved before harvesters were bought get `harvesters: 0`. Changes `o` in place.
+ */
+export function migrateOutpost(o) {
+  if (!o || typeof o !== 'object') return o;
+  for (const b of Object.values(o.pads || {})) if (b && b.kind) b.kind = canonicalKind(b.kind);
+  for (const b of o.building || []) if (b && b.kind) b.kind = canonicalKind(b.kind);
+  if (!Number.isFinite(o.harvesters)) o.harvesters = 0;
+  return o;
 }
 
 // ── power (design §4.5) ──────────────────────────────────────────────────────────────────────────────────────────
 // Consumers are served in this order when a grid is short, so the outpost keeps its core running first.
-const PRIORITY = { hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, harvesterBay: 4, upgradeBay: 5 };
+const PRIORITY = { hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, resourceBay: 4, upgradeBay: 5 };
 
 /**
  * The power grids: stations within reach of each other pool their supply; a consumer joins the grid of the nearest
@@ -156,12 +193,30 @@ function rigOre(o, padId) {
   const b = o.pads[padId];
   return oresOf(o.planet).find((x) => x.tier === b.deposit) || null;
 }
-/** The bay capacity of a rig, in units (design §4.2): Bay_Hours of its shallow output × the Mk II multiplier. */
-export function bayCapacity(o, padId) {
+/**
+ * The tier of the Storage Tower whose door is open (finished and powered), or 0 (owner 2026-11-07: a tower without
+ * power has its door closed and takes no new ore). `powered` is a Set from powerGrids; without it (no map to hand)
+ * a finished tower counts as powered.
+ */
+function openTowerTier(o, powered) {
+  return Math.max(0, ...Object.entries(o.pads)
+    .filter(([id, b]) => b.kind === 'storage' && (!powered || powered.has(id))).map(([, b]) => b.tier));
+}
+const capFor = (o, padId, towerTier, params = OUTPOST) => {
   const ore = rigOre(o, padId), rig = structureDef('rig', o.pads[padId].tier);
-  const storageTier = Math.max(0, ...Object.values(o.pads).filter((b) => b.kind === 'storage').map((b) => b.tier));
-  const st = structureDef('storage', storageTier);
-  return ore && st ? ore.rate * 60 * st.bayHours * rig.capacityMult : 0;
+  if (!ore || !rig) return 0;
+  if (!towerTier) return ore.rate * params.Rig_Bay_Min * rig.capacityMult;
+  const st = structureDef('storage', towerTier);
+  return st ? ore.rate * 60 * st.bayHours * rig.capacityMult : 0;
+};
+/**
+ * The bay capacity of a rig, in units (design §4.2, owner 2026-11-07). A rig mines into its own bay. Without an open
+ * Storage Tower the bay is small: Rig_Bay_Min minutes of its shallow output × the Mk II multiplier. A finished,
+ * powered tower raises it to Bay_Hours of that output (× Mk II, × Storage Tower II). Pass the map so an unpowered
+ * tower (door closed) is not counted; without it every finished tower counts.
+ */
+export function bayCapacity(o, padId, map, params = OUTPOST) {
+  return capFor(o, padId, openTowerTier(o, map ? powerGrids(o, map).powered : null), params);
 }
 const bayUnits = (o, padId) => Object.values(o.storage[padId] || {}).reduce((a, b) => a + b, 0);
 
@@ -172,16 +227,17 @@ export function rigRatePerMin(o, padId) {
   return ore.rate * (b.deep ? ore.deepRate : 1) * structureDef('rig', b.tier).rateMult;
 }
 
-/** Which rigs run now: online, hub and storage powered, the rig powered. → [{ pad, item, rate, cap }] */
-function runningRigs(o, map) {
-  if (!o.online) return [];
+/**
+ * Which rigs run now (owner 2026-11-07: no electricity, no operation): every finished, powered rig, into its own bay,
+ * whose cap an open Storage Tower raises. Mining does not wait for the outpost to go online or for a tower; ore
+ * already stored is never lost when power goes. → [{ pad, item, rate, cap }]
+ */
+function runningRigs(o, map, params = OUTPOST) {
   const { powered } = powerGrids(o, map);
-  const hub = Object.keys(o.pads).find((id) => o.pads[id].kind === 'hub');
-  const storage = Object.keys(o.pads).find((id) => o.pads[id].kind === 'storage');
-  if (!hub || !powered.has(hub) || !storage || !powered.has(storage)) return [];
-  return Object.keys(o.pads).filter((id) => o.pads[id].kind === 'rig' && powered.has(id)).map((id) => {
+  const tower = openTowerTier(o, powered);
+  return Object.keys(o.pads).filter((id) => o.pads[id].kind === 'rig' && powered.has(id) && rigOre(o, id)).map((id) => {
     const ore = rigOre(o, id);
-    return { pad: id, item: oreItemId(ore.id, !!o.pads[id].deep), rate: rigRatePerMin(o, id) / MIN, cap: bayCapacity(o, id) };
+    return { pad: id, item: oreItemId(ore.id, !!o.pads[id].deep), rate: rigRatePerMin(o, id) / MIN, cap: capFor(o, id, tower, params) };
   });
 }
 
@@ -220,7 +276,7 @@ export function advance(outpost, toMs, ctx) {
   const extractTo = (until) => {
     const dt = until - now;
     if (dt <= 0) return;
-    for (const r of runningRigs(o, map)) {
+    for (const r of runningRigs(o, map, params)) {
       const bay = (o.storage[r.pad] ||= {});
       const space = r.cap - bayUnits(o, r.pad);
       if (space <= 0) continue;
@@ -291,14 +347,25 @@ export function raidOutcome(outpost, { result, defenses = [], at }, params = OUT
 }
 
 // ── going online (contract step 1) ───────────────────────────────────────────────────────────────────────────────
-/** What stops the outpost going online: [] when every kit building is placed and powered. */
+/**
+ * What stops the outpost going online (contract step 1, "Establish"; owner 2026-11-07): [] once the hub, a Power
+ * Station, a Mining Rig on the common deposit and a Storage Tower are all FINISHED and powered. Mining itself needs
+ * no tower (a rig fills its own small bay), but the contract's ask does. Buildings still under construction do not
+ * count. → ['no power station', 'no mining rig on the iron', 'no storage tower', 'r1 unpowered (reach)', …]
+ */
 export function onlineProblems(o, map) {
   const { off } = powerGrids(o, map);
   const out = [];
-  for (const kind of ['hub', 'power', 'rig', 'storage']) {
-    if (!Object.values(o.pads).some((b) => b.kind === kind)) out.push(`no ${kind}`);
+  const has = (f) => Object.values(o.pads).some(f);
+  const common = (oresOf(o.planet).find((x) => x.tier === 'common') || { name: 'common ore' }).name.toLowerCase();
+  if (!has((b) => b.kind === 'hub')) out.push('no hub');
+  if (!has((b) => b.kind === 'power')) out.push('no power station');
+  if (!has((b) => b.kind === 'rig' && b.deposit === 'common')) out.push(`no mining rig on the ${common}`);
+  if (!has((b) => b.kind === 'storage')) out.push('no storage tower');
+  for (const [id, why] of Object.entries(off)) {
+    const b = o.pads[id];
+    if (b && (b.kind === 'hub' || b.kind === 'storage' || (b.kind === 'rig' && b.deposit === 'common'))) out.push(`${id} unpowered (${why})`);
   }
-  for (const [id, why] of Object.entries(off)) out.push(`${id} unpowered (${why})`);
   return out;
 }
 /** Bring the outpost online at `now` (design §2.3 step 1); schedules the scripted first raid. */
@@ -365,18 +432,25 @@ export function sell(outpost, ctx = {}, { buyer = null } = {}) {
 // ── building, upgrading, repairing (design §6, §6.1) ─────────────────────────────────────────────────────────────
 const ROLE_FITS = {
   hub: ['hub'], power: ['power', 'spare'], rig: ['rig'], storage: ['storage'],
-  harvesterBay: ['bay', 'spare'], upgradeBay: ['bay', 'spare'],
+  resourceBay: ['bay', 'spare'], upgradeBay: ['bay', 'spare'],
 };
+/** The pad kinds the build list offers (everything but the granted hub), and the defenses (placed on cells). */
+export const PAD_KINDS = Object.freeze(['power', 'rig', 'storage', 'resourceBay', 'upgradeBay']);
 const busy = (o, pad) => !!o.pads[pad] || o.building.some((b) => b.pad === pad);
 
 /**
- * Build something new on an empty pad, or a defense on a free cell. what: { pad, kind } or { cell, kind }.
+ * Build something new on an empty pad, or a defense on a free cell, with the player's gold (owner 2026-11-07: the
+ * contract grants only the hub). what: { pad, kind } with kind one of PAD_KINDS ('harvesterBay' is read as
+ * 'resourceBay'), or { cell, kind } with kind one of DEFENSE_KINDS ('mg', 'cannon', 'wall').
  * ctx: { map, gold, now, unlockedTiers: ['common', …], unlocks: Set|[] of tech ids }.
- * → { outpost, cost } or { error }. A new defense starts at full HP; only repair() restores HP afterwards.
+ * → { outpost, cost } or { error }. A pad building goes into `building` and lands after its Build_Sec (advance()
+ * finishes it); a defense is placed at once, at full HP; only repair() restores HP afterwards.
  */
 export function place(outpost, what, ctx) {
   const { map, gold = Infinity, now } = ctx;
-  const kind = what.kind;
+  const kind = canonicalKind(what.kind);
+  if (kind === 'harvester') return { error: 'harvesters are bought, not placed (buyHarvester)' };
+  if (kind === 'hub') return { error: 'the hub comes with the contract' };
   const def = structureDef(kind, 1);
   if (!def) return { error: `unknown building ${kind}` };
   if (def.cost > gold) return { error: `costs ${def.cost} gold` };
@@ -420,7 +494,7 @@ export function upgrade(outpost, padId, ctx) {
 
 function unlocked(def, ctx, o) {
   const u = def.unlock || '';
-  if (u === 'kit' || u.startsWith('contract:')) return true;
+  if (u === 'granted' || u === 'kit' || u.startsWith('contract:')) return true;
   const has = (id) => (ctx.unlocks instanceof Set ? ctx.unlocks.has(id) : (ctx.unlocks || []).includes(id));
   if (u.startsWith('tech:')) return has(u.slice(5));
   if (u === 'techtree+upgradeBay') return has(`tier${def.tier}`) && Object.values(o.pads).some((b) => b.kind === 'upgradeBay');
@@ -456,10 +530,60 @@ export function setDeep(outpost, padId, on, ctx = {}) {
   return { outpost: o };
 }
 
+// ── harvesters (owner 2026-11-07: bought from the build list once the Resource Bay is built) ────────────────────────
+/** What stops buying a harvester now, or null: no finished Resource Bay, the cap reached, or the gold short. */
+export function harvesterRefusal(o, ctx = {}) {
+  const h = harvesterDef();
+  if (!h) return 'harvesters are not in the data';
+  if (!Object.values(o.pads).some((b) => b.kind === 'resourceBay')) return 'build the Resource Bay first';
+  const cap = (ctx.params && ctx.params.Harvester_Cap) || h.cap;
+  if ((o.harvesters || 0) >= cap) return `the Resource Bay holds ${cap} harvesters`;
+  if (h.cost > (ctx.gold ?? Infinity)) return `costs ${h.cost} gold`;
+  return null;
+}
+/**
+ * Buy one harvester for the outpost's Resource Bay. ctx: { gold, params? }. → { outpost, cost } or { error }.
+ * Refused until a FINISHED Resource Bay exists, and at Harvester_Cap. What a harvester gathers is story O10; this
+ * is the purchase and the count (`o.harvesters`).
+ */
+export function buyHarvester(outpost, ctx = {}) {
+  const why = harvesterRefusal(outpost, ctx);
+  if (why) return { error: why };
+  const o = clone(outpost);
+  o.harvesters = (o.harvesters || 0) + 1;
+  return { outpost: o, cost: harvesterDef().cost };
+}
+
+// ── warnings (owner 2026-11-07: full storage or no electricity shows a warning) ──────────────────────────────────
+/**
+ * Per-building warning flags for the view's warning icons. → { [padId | defenseId]: ['no_power' | 'storage_full' |
+ * 'door_closed', …] }, only for ids with a warning. Finished buildings only.
+ *   - no_power: a building (or gun) that draws power and gets none: it does not operate; what it stores is kept;
+ *   - storage_full: a rig whose bay is full (it has stopped), and the Storage Tower when every rig's bay is full;
+ *   - door_closed: a Storage Tower without power: it takes no new ore (rigs fill only their own small bays).
+ */
+export function warnings(o, map, params = OUTPOST) {
+  const { powered, off } = powerGrids(o, map);
+  const tower = openTowerTier(o, powered);
+  const out = {};
+  const add = (id, w) => { (out[id] ||= []).includes(w) || out[id].push(w); };
+  for (const id of Object.keys(off)) add(id, 'no_power');
+  const rigs = Object.keys(o.pads).filter((id) => o.pads[id].kind === 'rig' && rigOre(o, id));
+  const fullRig = (id) => bayUnits(o, id) >= capFor(o, id, tower, params) - 1e-6;
+  for (const id of rigs) if (fullRig(id)) add(id, 'storage_full');
+  for (const [id, b] of Object.entries(o.pads)) {
+    if (b.kind !== 'storage') continue;
+    if (!powered.has(id)) add(id, 'door_closed');
+    else if (rigs.length && rigs.every(fullRig)) add(id, 'storage_full');
+  }
+  return out;
+}
+
 /** A one-glance status for the menu's OUTPOST button (design §10): loads ready, storage full, worn defenses, last raid. */
 export function status(o, ctx) {
   const rigs = Object.keys(o.pads).filter((id) => o.pads[id].kind === 'rig');
-  const full = rigs.length > 0 && rigs.every((id) => bayUnits(o, id) >= bayCapacity(o, id) - 1e-6);
+  const map = ctx && ctx.map;
+  const full = rigs.length > 0 && rigs.every((id) => bayUnits(o, id) >= bayCapacity(o, id, map) - 1e-6);
   const worn = o.defenses.some((d) => d.hp < structureDef(d.kind, d.tier).battle.hp);
   const last = o.raids.log[o.raids.log.length - 1] || null;
   const loads = loadsReady(o, ctx);

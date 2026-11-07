@@ -1,6 +1,6 @@
 # Outposts and Mining — design
 
-Status: owner decisions applied (Q1–Q7, 2026-11-06) · 2026-11-06 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
+Status: owner decisions applied (Q1–Q7, 2026-11-06; build-it-yourself start and storage/power rules, 2026-11-07) · 2026-11-07 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
 · Tech plan: `docs/tech-plan/Outpost.md` · Concept art: the owner's outpost image (2026-11-06), described in §8
 
 ![Outpost concept (owner, 2026-11-06)](outpost/outpost-concept.jpg)
@@ -53,6 +53,25 @@ Status: owner decisions applied (Q1–Q7, 2026-11-06) · 2026-11-06 · Epic *Out
 > tower defense game. Outposts don't have anti air for now and they don't have long range. Outposts will only be
 > attacked by troops and low end tanks. *(owner, 2026-11-06, 18:48)*
 
+### Owner direction (2026-11-07): the player builds the outpost
+
+> building an outpost should be done the same way the tower defense game works. An icon list with cost on the left
+> side of the screen with icons and prices. The user start with the base building and use their own gold to build
+> power and a mining station. Harvester can be purchased and there is a limited set of defenses - wall, machine gun,
+> turret tower.
+
+Answers to the follow-up questions (2026-11-07): the turret tower **is** the battle game's Cannon Tower, so the
+defenses are the Wall, the Machine Gun and the Cannon Tower at their battle stats; harvesters "are bought from the build
+list but they can't be built until the resource bay is constructed", so the Harvester Bay becomes the **Resource
+Bay**, a building the harvesters need; the Upgrade Bay is unchanged.
+
+> A mining structure with no storage still mines but it has very low capacity. Buildings with full storage or no
+> electricity show a warning. no electricity means no operation but the storage is maintained, but a storage tower with
+> no electricity has a closed door and wont take new resources. *(owner, 2026-11-07, 07:33)*
+
+This replaces an earlier answer the same morning that the Storage Tower was needed before any mining ran. The Storage
+Tower is still part of the contract's first step (§2.3). The rules are in §2.3, §4.2, §4.5, §6 and §11.
+
 The first build is **the Verdance contract plus the Verdance outpost map** (Q1). The answers are applied throughout;
 §11 records them. ("sooner animation" in the reply is read as *shuttle* animation.)
 
@@ -92,11 +111,11 @@ they were given.
 |---|---|---|
 | greet | Vane | "You have done well gathering what lies on the surface of Verdance. Better than most of my own regiments." |
 | turn | Vane | "So tell me: how are you at mining? And farming?" |
-| offer | Vane | "We have a site for you. A small outpost and a mining rig: a hub, a power station, a miner and a storage tower. Yours to run." |
+| offer | Vane | "We have a site for you: an outpost base on the mesa. Build your power, a mining station on the iron and a storage tower with your own gold, and the place is yours to run." |
 | warning | Vane | "Not everybody aboard is happy about your progress. Help us bring up the ore and you will earn some moral equity with the realm. There will be opposition. We will pay well." |
 | card | — | Contract card: **Outpost contract: Iron for the Oath** (§2.3) |
 
-ACCEPT grants the outpost kit and lights the OUTPOST button on the main menu. Declining keeps the card in the Mission
+ACCEPT grants the outpost's base, the Outpost Hub, and lights the OUTPOST button on the main menu. Declining keeps the card in the Mission
 Log, where it can be accepted later. It costs nothing, because this contract is the gateway to the outpost and must
 not be lost.
 
@@ -105,8 +124,8 @@ not be lost.
 | | Verdance, contract 1: *Iron for the Oath* |
 |---|---|
 | Granted | aboard *Halbrecht's Oath*, first visit |
-| Kit | Outpost Hub, Power Station I, Mining Rig I, Storage Tower I, and the ground defenses: a Cannon, a Machine Gun and a wall ring (Q2) |
-| Step 1 | **Establish the outpost on Verdance.** All four buildings are placed on their pads, the rig sits on the iron deposit, and every building is powered. The outpost reads ONLINE. |
+| Granted | **the Outpost Hub**, on its pad (owner, 2026-11-07). The player buys everything else with their own gold from the build list (§6, §6.1): the Power Station, the Mining Rig (the "mining station"), the Storage Tower, and the defenses they choose. Nothing else is granted. |
+| Step 1 | **Establish the outpost on Verdance.** Build power, a mining station on the iron and storage, all powered: the hub, a Power Station, a Mining Rig on the iron deposit and a Storage Tower, all finished and powered. The outpost reads ONLINE. A rig mines as soon as it has power, even with no tower (§4.2), but the step asks for the tower. |
 | Step 2 | **Deliver 300 iron to the Oath.** That is 20 shuttle loads, about 100 minutes of the starter rig. |
 | Step 3 | **Hold the outpost through a raid.** The first raid is scripted for 10 minutes after the outpost comes online, so it normally arrives while the player is watching (§5.3). If the player has left, it runs on its own (§5.3). If it breaks through, the step waits for the next raid the outpost holds; nothing fails. |
 | Pays | 4 gold per iron delivered (contract price, the same as market), then **2,000 gold**, **+20 loyalty with Verdance** ("moral equity"), 300 XP |
@@ -121,7 +140,7 @@ gets several outposts, one per planet.
 | Contract | Ask | Unlocks |
 |---|---|---|
 | 1 — establish | outpost online; deliver 300 common ore; hold the first raid | the uncommon ore; Deep Drilling I |
-| 2 — expand | add power (upgrade to Power Station II or build a second station; the kit's station has 1 power spare and a rig needs 4) and a second Mining Rig on the uncommon deposit; deliver 150 uncommon ore | the rare ore; Rig Mk II (2× extraction, 2× storage) |
+| 2 — expand | add power (upgrade to Power Station II or build a second station; the first setup with a Machine Gun and a Cannon leaves 1 power spare and a rig needs 4) and a second Mining Rig on the uncommon deposit; deliver 150 uncommon ore | the rare ore; Rig Mk II (2× extraction, 2× storage) |
 | 3 — master | build a rig on the remote rare deposit, with the power station it needs there (§4.5); deliver 60 rare ore; hold 3 raids without a breach | Cargo Shuttle II (+10 % on every sale, §4.3); the planet's spacecraft blueprint (later, Ships division) |
 
 Only contract 1 is specified to build. Contracts 2 and 3 fix the direction and the unlock order; their numbers are
@@ -130,7 +149,7 @@ set with the ore table once contract 1 has been played.
 ## 3. Ores
 
 Each planet has three ores, the same tiers as its surface resources: **common, uncommon, rare**. Ores are a separate
-family from the surface resources. Surface resources come from battles and the Harvester Bay; ores come only from
+family from the surface resources. Surface resources come from battles and the Resource Bay's harvesters; ores come only from
 mining rigs. Each planet's ores lean toward a use, so that later crafting has a reason to need more than one planet.
 
 | # | Planet | Common | Uncommon | Rare | Used for |
@@ -182,6 +201,21 @@ rig's shallow output** (owner: "the storage building can hold 4 hours"):
 So adding a rig or upgrading one never shortens the 4 hours. Storage Tower II doubles every bay (8 hours). A bay counts
 units (crates), so a rig on its deep seam fills its bay four times slower (§4.4). When one bay is full only that rig
 stops; the others keep going.
+
+**A rig without a Storage Tower** (owner, 2026-11-07: "a mining structure with no storage still mines but it has very
+low capacity"). Each rig has a small bay of its own: **15 minutes of its shallow output** (`Rig_Bay_Min`, proposed
+default), three shuttle loads. That is 45 iron, 22.5 aluminum or 12 lithium for a Rig I, doubled for Mk II. With
+no tower, or with a tower that has no power, a rig fills only this bay and then stops. A finished, powered Storage
+Tower raises every rig's bay to the 4 hours above. The bays stay per rig: the tower makes each one bigger.
+
+**Power and storage** (owner: "no electricity means no operation but the storage is maintained"):
+
+- A rig without power does not mine. What it has stored stays.
+- A Storage Tower without power has its **door closed**: it takes no new ore, and the rigs fall back to their own
+  small bays. Ore already in it stays, nothing is lost, and the hub can still ship it on SELL. Selling is the hub
+  launching the shuttle, so stored ore always sells. A rig whose bay already holds more than its own small bay
+  simply mines nothing until the tower has power again.
+- A rig mines as soon as it is built and powered, before the outpost goes online.
 
 **What 4 hours is worth.** A full Rig I bay of iron sells for 2,880 gold. A Verdance mission primary pays
 about 700–1,100 gold, and a won battle banks what is left of its gold. So 4 hours of a starter outpost is worth
@@ -236,11 +270,15 @@ unpowered building stops.
 
 | Building | Draw | | Building | Draw |
 |---|---|---|---|---|
-| Outpost Hub | 2 | | Harvester Bay | 2 |
+| Outpost Hub | 2 | | Resource Bay | 2 |
 | Mining Rig | 4 | | Upgrade Bay | 1 |
 | Storage Tower | 1 | | Cannon, Machine Gun | 1 each |
 
-Walls draw no power.
+Walls draw no power. The Resource Bay draws 2; a harvester draws none.
+
+**No electricity, no operation** (owner, 2026-11-07). A building without power does nothing: a rig stops mining, a
+gun does not fire, a Storage Tower closes its door (§4.2). What is stored is kept. A building without power, or with
+full storage, shows a **warning** icon in the outpost view.
 
 - **More power, two ways** (owner): upgrade a station (Power Station I supplies **10**, Power Station II **20**), or
   build more stations. A player can have as many stations as they have pads for.
@@ -251,7 +289,7 @@ Walls draw no power.
   there needs a station built within reach of it, either on its own (a separate small grid) or close enough to join
   the main one. The rare deposit is remote on every map, so contract 3 is where the player first builds out.
 
-The kit (hub, rig, storage, cannon, machine gun) draws 9 of the first station's 10.
+The first setup (hub, rig, storage) draws 7 of the first station's 10; with a Cannon and a Machine Gun it draws 9.
 
 ## 5. Raids
 
@@ -294,12 +332,19 @@ with no repairs:
 
 | Outpost | Raids held before the first breach | Hours, at one raid per 6 h |
 |---|---|---|
-| Well defended (the kit plus one more Machine Gun) | about 8 | ~48 |
-| Starter kit (cannon, machine gun, walls) | about 5 | ~30 |
+| Well defended (the reference set plus one more Machine Gun) | about 8 | ~48 |
+| Reference set (the map's starter defenses: a cannon, a machine gun, walls) | about 5 | ~30 |
 | No defenses | 0 | the first raid breaches |
 
 The raid sizes that give these numbers are measured by running the sim (the tech plan's `outpost_model.mjs`), not
-picked by hand, and they are written to the data for each planet.
+picked by hand, and they are written to the data for each planet. Since 2026-11-07 nothing grants the defenses: the
+"reference set" is the map's own starter layout (`kitDefenses`), which the measurement uses and the player can copy.
+
+**What it takes to hold the first raid** (measured 2026-11-07 on the Verdance map, one-troop raid, five seeds): the
+first setup with one Machine Gun, or one Cannon, or both, is breached every time, because raiders walk past a gun up
+the open ramps. Walls are what hold. The six reference walls with the Machine Gun held 4 of 5 (3,000 gold of
+defenses). The six walls with the Cannon held 1 of 5. A breach on the scripted raid costs a quarter of the stored ore,
+and step 3 waits for the next held raid; nothing fails.
 
 ### 5.3 Watching a raid
 
@@ -320,32 +365,54 @@ Every building in the concept image is in the design. They sit on **pads** (fixe
 joined by power conduits, as in the picture. Pads keep the layout readable on a phone and let the conduits route
 themselves. Defenses are placed freely on the outer ring, the way towers are placed in battle.
 
+**Building works the way the tower defense game does** (owner, 2026-11-07): an **icon list down the left side of the
+outpost view**, each entry an icon with its price. Pick one, then a pad (or a cell for a defense). The list holds the
+Power Station, the Mining Rig, the Storage Tower, the Resource Bay, the Upgrade Bay, the Harvester (greyed out
+until a Resource Bay is finished) and the three defenses. The Habitat joins it with O15. A building that is out of
+power or has full storage carries a warning icon (§4.5).
+
 | Building | In the picture | What it does | Tiers |
 |---|---|---|---|
-| **Outpost Hub** | centre: the octagonal landing pad with the ship, ramps | command and landing pad; the shuttle sells from here; must exist for anything else to run | I |
+| **Outpost Hub** | centre: the octagonal landing pad with the ship, ramps | the base the contract grants; command and landing pad; the shuttle sells from here | I |
 | **Power Station** | top left: round building with the blue core | supplies power to buildings within its reach (§4.5); several can be built | I, II |
 | **Mining Rig** | bottom left: the drill with the crystal laser, ore carts on a track | built on an ore deposit; extracts that ore; shallow or deep (§4.4). **A different design for each material** (§8.4) | I, II (2×) |
-| **Storage Tower** | bottom right: the building with the dish and the holographic floor | holds extracted ore; the hologram shows how full it is | I (4 h), II (8 h) |
-| **Harvester Bay** | left: the garage with the buggies | builds and runs surface harvesters on the outpost map, just like in battle (2 to start, up to 4); they gather the planet's common and uncommon surface resources at the battle harvest rates, into a 4-hour hopper that empties into the inventory when the player opens the outpost | I |
+| **Storage Tower** | bottom right: the building with the dish and the holographic floor | raises every rig's bay from its own 15 minutes to 4 hours (§4.2); the hologram shows how full it is. **Required to establish the outpost** (contract step 1), though rigs mine without it. Without power its door is closed. | I (4 h), II (8 h) |
+| **Resource Bay** (was the Harvester Bay; owner, 2026-11-07) | left: the garage with the buggies | the building harvesters need: **harvesters are bought from the build list, but not until a Resource Bay is built** (2 to start, up to 4). They gather the planet's common and uncommon surface resources at the battle harvest rates, into a 4-hour hopper that empties into the inventory when the player opens the outpost (behaviour: story O10) | I |
+| **Harvester** | the buggies | bought from the build list once the Resource Bay is finished; a count, not a building on a pad | — |
 | **Upgrade Bay** | top right: the hangar pad with two control towers and a small craft | where Outpost-division tech upgrades are bought and installed; it also lets tech-tree tower upgrades apply to the outpost's defenses | I |
-| **Habitat** | the revised concept's living quarters | **raises the gun cap** (owner, 2026-11-07): the hub crews 3 guns (Machine Guns and Cannons; walls do not count), the kit uses 2; each Habitat tier adds 2 more. Built on a free pad | I (+2), II (+4) |
-| **Defenses** | not in the picture | the battle game's Cannon, Machine Gun and walls (Q2) with their battle stats (§5.2); no anti-air and no long range | from the tech tree |
+| **Habitat** | the revised concept's living quarters | **raises the gun cap** (owner, 2026-11-07): the hub crews 3 guns (Machine Guns and Cannons; walls do not count), the reference set uses 2; each Habitat tier adds 2 more. Built on a free pad | I (+2), II (+4) |
+| **Defenses** | not in the picture | a limited set (owner, 2026-11-07): the **Wall**, the **Machine Gun** and the **Cannon Tower** (the owner's "turret tower"), with their battle stats (§5.2); no anti-air and no long range | I; II and III from the tech tree |
 
 ### 6.1 Costs (proposed defaults)
 
 | Building | Cost | Build time |
 |---|---|---|
-| Outpost Hub, Power Station I, Mining Rig I, Storage Tower I, Cannon, Machine Gun, wall ring | free (contract kit) | instant |
-| second Mining Rig I | 3,000 | 5 min |
-| Harvester Bay | 2,500 | 5 min |
+| Outpost Hub | granted by the contract | — |
+| Power Station I (each) | 600 | 2 min |
+| Mining Rig I (each) | 600 | 2 min |
+| Storage Tower I | 300 | 1 min |
+| Resource Bay | 2,500 | 5 min |
+| Harvester (each; needs a finished Resource Bay; 2 to start, up to 4) | 2,000 (the battle harvester's 500 × 4) | instant |
 | Upgrade Bay | 4,000 | 10 min |
 | Habitat I (+2 guns) / Habitat II (+4 guns) | 3,000 / 5,000 | 10 / 15 min |
-| another Power Station I | 4,000 | 10 min |
 | Power Station II (upgrade) | 6,000 | 15 min |
 | Storage Tower II | 5,000 | 15 min |
 | Mining Rig II (2× extraction) | 8,000 | 20 min |
-| a defense | its battle price × 4 (§5.2) | 2 min |
-| repair | 10 % of the building's value per 10 % of its HP; kit items are valued at their list price (a defense at its battle price × 4) | instant |
+| a defense: Wall / Machine Gun / Cannon Tower | its battle price × 4 (§5.2): 400 / 600 / 1,200 | 2 min |
+| repair | 10 % of the building's value per 10 % of its HP; a defense is valued at its list price (its battle price × 4) | instant |
+
+**How the first setup is priced** (proposed defaults, owner 2026-11-07; `tools/economy/outpost_model.mjs` prints it).
+Power Station I, Mining Rig I and Storage Tower I were free kit items. They now cost **1,500 together** (600 + 600 +
+300). The bank a player has when the contract arrives is the gold left over from the map 3 win (a won battle banks
+what is left of its gold; the save tests use 1,200–1,840 for a won map), plus the Verdance map 1–3 mission gold
+(primaries 1,200, Light secondaries 750), less what the tech tree took. So 1,500 is about what a player has, and the
+setup pays back from iron (720 gold an hour) in **about 2 hours**. The defenses come on top. The map's reference set
+(a Cannon, a Machine Gun and six walls) is 4,200, and walls plus a Machine Gun (3,000) is the cheapest set that held
+the first raid in the measurement (§5.2). A player who starts with the setup alone mines and sells while buying
+defenses, and gets the reference set back in about 6 hours of iron. One price per building:
+a second Power Station or Mining Rig costs the same 600 (it was 4,000 / 3,000). Reach (§4.5) and the pads limit how
+many there are. Contract 2 asks for a second rig and the power it needs, so it costs about 1,200 in place of 7,000.
+Retune here if contract 2 should cost more.
 
 Build times are real time and run while the player is away. They are short on purpose: the outpost is a place to
 spend gold, not to wait.
@@ -362,7 +429,7 @@ with gold from the tech tree or from the Upgrade Bay; the Upgrade Bay is the out
 | Rig Mk II | Mining Rig II: **2× extraction**, shown by its highlight colour (§8.4) | contract 2 |
 | Supply Depot | Storage Tower II: 8 hours | contract 1 |
 | Power Grid II | Power Station II: 20 power, 14-cell reach | contract 1 |
-| Reinforced Walls | the kit's walls to tier II (960 HP) | contract 1 |
+| Reinforced Walls | walls to tier II (960 HP) | contract 1 |
 | Sensor Spire | raid early warning (the menu shows "raid inbound" 10 minutes ahead) | contract 2 |
 | Cargo Shuttle II | +10 % on every sale (still a manual tap) | contract 3 |
 
@@ -466,12 +533,12 @@ Nine new maps, one per planet, made **exactly like the large tower-defense maps*
   outpost layer (mesa, pads, deposits, raid lanes, defense ring) sits on top of that. The view frames the mesa, so it
   still fits on a phone in portrait and landscape; the rest of the map is the planet around it.
 - **A central build mesa** with **7 pads**: the hub pad in the middle and 6 around it (power, rig × 2, storage,
-  harvester bay, upgrade bay). There is one spare rig pad on the uncommon deposit; the rare deposit gets a pad at
+  resource bay, upgrade bay). There is one spare rig pad on the uncommon deposit; the rare deposit gets a pad at
   contract 2.
 - **Three ore deposits**, one per tier. The common and uncommon deposits sit at the mesa's edge next to rig pads,
   inside the first station's reach. The **rare deposit is remote**, outside that reach, with its own rig pad and a
   pad for the power station it needs (§4.5).
-- **Surface resource fields** for the Harvester Bay, a few rings like a battle map's first ring.
+- **Surface resource fields** for the Resource Bay's harvesters, a few rings like a battle map's first ring.
 - **Two raid lanes** coming in from the map edge, and a **defense ring** of tower cells around the mesa and around
   the remote site.
 - **One signature prop** from the planet's battle maps (Faction-Terrain-Design §2.6), so each outpost reads as that
@@ -483,7 +550,8 @@ Nine new maps, one per planet, made **exactly like the large tower-defense maps*
   outpost contract aboard a capital ship." After, it opens the outpost of the planet the menu is targeting. If that
   planet has no outpost, it opens the player's most recent one, with a planet switcher in the outpost header.
 - **The OUTPOST button's status:** a red dot when loads are ready or the defenses are worn; the line under the label
-  reads *3 loads ready*, *storage full*, *raid repelled* or *raid broke through: ore lost*.
+  reads *3 loads ready*, *storage full*, *raid repelled* or *raid broke through: ore lost*. Before the outpost is
+  established it reads what the player still has to build (power, a mining station, storage).
 - **Replay moves to battle history.** Each battle card in the planet's history modal gets **REPLAY** when that battle
   has a stored replay. The game keeps replays of the most recent 20 battles; older cards show no button.
 
@@ -492,7 +560,7 @@ Nine new maps, one per planet, made **exactly like the large tower-defense maps*
 | # | Question | Decision |
 |---|---|---|
 | Q1 | The cut-off sentence: what to build first | **Yes**: the Verdance contract and the Verdance outpost map first; the other eight maps follow |
-| Q2 | Defenses in the starter kit | **Ground defenses: a Cannon, a Machine Gun and walls** |
+| Q2 | Defenses in the starter kit | **Ground defenses: a Cannon, a Machine Gun and walls** (2026-11-07: no longer granted; they are the defenses the player may buy) |
 | Q3 | Deep ore value | **Raise the price**: 5×, so deep ore earns 1.25× per hour (§4.4) |
 | Q4 | Ores for planets 3–9 | **The proposed list stands** (§3) |
 | Q5 | Selling | **Always a manual tap**, with a shuttle animation, ore splatter and a "$N" pop like combat (§4.3); no automatic selling at any tier |
@@ -507,11 +575,17 @@ Nine new maps, one per planet, made **exactly like the large tower-defense maps*
 | — | Raid balance (2026-11-07) | **Weaker raiders**: raid-only strength multipliers in the workbook, so raid sizes above one troop are possible and the targets hold (kit ~5 raids, well defended ~8); the battle game is unchanged |
 | — | Toxic raiders (2026-11-07) | **A breacher unit**: planets whose troops barely hurt walls (Xenthe, Vexmire) add one unit that is good against structures to each raid |
 | — | Habitat (2026-11-07) | **It raises a cap**: the gun cap (§6). Numbers are proposed defaults |
+| — | Building (2026-11-07) | **"The same way the tower defense game works"**: an icon list with prices on the left; the contract grants only the base (the Outpost Hub); the player buys power and a mining station with their own gold (§2.3, §6, §6.1) |
+| — | Storage Tower (2026-11-07) | **Part of the contract's first step**: establishing the outpost asks for the hub, power, a mining station on the iron and a Storage Tower, all powered. It no longer gates mining (next row) |
+| — | Storage and power (2026-11-07, 07:33) | "A mining structure with no storage still mines but it has very low capacity. Buildings with full storage or no electricity show a warning. no electricity means no operation but the storage is maintained, but a storage tower with no electricity has a closed door and wont take new resources." A rig's own bay is 15 minutes of output (proposed); the tower raises it to 4 h; stored ore is kept and can still be sold (§4.2, §4.5) |
+| — | Defenses (2026-11-07) | **A limited set: Wall, Machine Gun, Cannon Tower** (the "turret tower"), at battle stats, bought, not granted |
+| — | Harvesters (2026-11-07) | **Bought from the build list, once the Resource Bay is built** (the Harvester Bay becomes the Resource Bay); 2,000 each (battle price × 4), 2 to start, up to 4 (proposed) |
+| — | Upgrade Bay (2026-11-07) | **Unchanged** |
 
 Design gaps closed with defaults on 2026-11-06 (owner review asked): storage per rig (§4.2); contract 2's power
-requirement (§2.4); repair only restores a defense's HP, and kit items carry a value for repairs
+requirement (§2.4); repair only restores a defense's HP, and every defense carries a value for repairs
 (§5.2, §6.1); the first raid when the player is away and leaving a live raid (§2.3, §5.3); deep grade as its own item
-(§4.4); the Harvester Bay's numbers (§6).
+(§4.4); the Harvester Bay's numbers (§6), now the Resource Bay's and the harvester's.
 
 ## Dependencies
 

@@ -10,7 +10,8 @@
 // Raid sizes (§5.2) are measured on the battle sim by tools/economy/outpost_raids.mjs (tech plan §4.3, story O7);
 // this prints what the data holds (Outpost_Raids → raidFor).
 import { oresOf, oreValuePerHour, oreRatePerMin, orePrice, ORE_TIERS } from '../../prototype/test-game/src/data/ores.js';
-import { OUTPOST, KIT, structureDef, powerBudget, bayUnits, loadUnits, contractFor, raidFor } from '../../prototype/test-game/src/data/outpost.js';
+import { readFileSync } from 'node:fs';
+import { OUTPOST, REFERENCE_SET, ESTABLISH, structureDef, powerBudget, bayUnits, loadUnits, contractFor, raidFor, harvesterDef } from '../../prototype/test-game/src/data/outpost.js';
 
 const PLANETS = ['ground', 'air', 'hightech', 'artillery', 'water', 'arcane', 'space', 'dark', 'greenies'];
 const only = process.argv[2];
@@ -24,8 +25,31 @@ const table = (head, rows) => {
 console.log(`# Outpost model — from MAPDATA (load ${OUTPOST.Load_Sec / 60} min, bays ${OUTPOST.Store_Hours} h, ` +
   `deep ${OUTPOST.Deep_Rate_Mult}× speed at ${OUTPOST.Deep_Price_Mult}× price)\n`);
 
-const kit = powerBudget(KIT.map((kind) => ({ kind, tier: 1 })));
-console.log(`## Power (design §4.5)\n\nThe kit draws ${kit.draw} of Power Station I's ${kit.supply} (spare ${kit.spare}). ` +
+// ── what the player buys (owner 2026-11-07: the contract grants only the hub; design §2.3, §6.1) ──
+const cost = (k, t = 1) => structureDef(k, t).cost;
+const setup = ESTABLISH.filter((k) => k !== 'hub').reduce((a, k) => a + cost(k), 0);
+const iron = oresOf('ground').find((o) => o.tier === 'common');
+const perHour = oreValuePerHour(iron);
+const missions = JSON.parse(readFileSync(new URL('../../prototype/test-game/content/missions/missions.json', import.meta.url), 'utf8')).missions;
+const goldOf = (m) => m.rewards.filter((r) => r.kind === 'gold').reduce((a, r) => a + r.amount, 0);
+const ver = missions.filter((m) => m.planet === 'Verdance' && m.map >= 1 && m.map <= 3);
+const prim = ver.filter((m) => m.role === 'primary').reduce((a, m) => a + goldOf(m), 0);
+const light = ver.filter((m) => m.role === 'secondary' && /-L$/.test(m.id)).reduce((a, m) => a + goldOf(m), 0);
+const refDefs = { mg: 1, cannon: 1, wall: 6 };
+const refDefCost = Object.entries(refDefs).reduce((a, [k, n]) => a + n * cost(k), 0);
+const h = harvesterDef();
+console.log(`## What the player buys (design §6.1)\n\nThe contract grants the Outpost Hub only. The first setup ` +
+  `(Power Station I ${fmt(cost('power'))} + Mining Rig I ${fmt(cost('rig'))} + Storage Tower I ${fmt(cost('storage'))}) costs ` +
+  `**${fmt(setup)}** and pays back from iron (${fmt(perHour)} gold an hour) in **${fmt(setup / perHour)} h**. ` +
+  `With the map's reference defenses (MG ${fmt(cost('mg'))}, Cannon ${fmt(cost('cannon'))}, 6 walls at ${fmt(cost('wall'))}: ` +
+  `${fmt(refDefCost)}) it is ${fmt(setup + refDefCost)}, paid back in ${fmt((setup + refDefCost) / perHour)} h. ` +
+  `Resource Bay ${fmt(cost('resourceBay'))}; harvester ${fmt(h.cost)} each, ${h.cap} to start, up to ${h.max}.\n\n` +
+  `The bank when the contract arrives (map 3 at 3★) is the battle's leftover gold (\`carry.gold = goldRemaining\`, not ` +
+  `modelled here; the save tests use 1,200–1,840 for a won map) plus the Verdance map 1–3 mission gold collected: ` +
+  `primaries ${fmt(prim)}, Light secondaries ${fmt(light)}, minus what the tech tree took.\n`);
+
+const kit = powerBudget(REFERENCE_SET.map((kind) => ({ kind, tier: 1 })));
+console.log(`## Power (design §4.5)\n\nThe reference set draws ${kit.draw} of Power Station I's ${kit.supply} (spare ${kit.spare}). ` +
   `A second rig needs ${structureDef('rig', 1).draw}: upgrade to Power Station II (${structureDef('power', 2).supply}) ` +
   `or build another station. Reach: ${structureDef('power', 1).reach} cells (II: ${structureDef('power', 2).reach}).\n`);
 

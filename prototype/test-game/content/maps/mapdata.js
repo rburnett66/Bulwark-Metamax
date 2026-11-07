@@ -5258,14 +5258,14 @@ export const MAPDATA = {
    "Capacity_Mult": null,
    "Battle_Struct": null,
    "Model": "hub",
-   "Unlock": "kit"
+   "Unlock": "granted"
   },
   {
    "Kind": "power",
    "Tier": 1,
-   "Cost": 4000,
-   "Value": 4000,
-   "Build_Sec": 600,
+   "Cost": 600,
+   "Value": 600,
+   "Build_Sec": 120,
    "Power_Draw": 0,
    "Power_Supply": 10,
    "Power_Reach": 10,
@@ -5274,7 +5274,7 @@ export const MAPDATA = {
    "Capacity_Mult": null,
    "Battle_Struct": null,
    "Model": "power",
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "power",
@@ -5295,9 +5295,9 @@ export const MAPDATA = {
   {
    "Kind": "rig",
    "Tier": 1,
-   "Cost": 3000,
-   "Value": 3000,
-   "Build_Sec": 300,
+   "Cost": 600,
+   "Value": 600,
+   "Build_Sec": 120,
    "Power_Draw": 4,
    "Power_Supply": 0,
    "Power_Reach": 0,
@@ -5306,7 +5306,7 @@ export const MAPDATA = {
    "Capacity_Mult": 1,
    "Battle_Struct": null,
    "Model": "rig",
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "rig",
@@ -5327,9 +5327,9 @@ export const MAPDATA = {
   {
    "Kind": "storage",
    "Tier": 1,
-   "Cost": 0,
-   "Value": 0,
-   "Build_Sec": 0,
+   "Cost": 300,
+   "Value": 300,
+   "Build_Sec": 60,
    "Power_Draw": 1,
    "Power_Supply": 0,
    "Power_Reach": 0,
@@ -5338,7 +5338,7 @@ export const MAPDATA = {
    "Capacity_Mult": null,
    "Battle_Struct": null,
    "Model": "storage",
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "storage",
@@ -5357,7 +5357,7 @@ export const MAPDATA = {
    "Unlock": "tech:supply_depot"
   },
   {
-   "Kind": "harvesterBay",
+   "Kind": "resourceBay",
    "Tier": 1,
    "Cost": 2500,
    "Value": 2500,
@@ -5369,7 +5369,23 @@ export const MAPDATA = {
    "Rate_Mult": null,
    "Capacity_Mult": null,
    "Battle_Struct": null,
-   "Model": "harvester_bay",
+   "Model": "resource_bay",
+   "Unlock": "contract:1"
+  },
+  {
+   "Kind": "harvester",
+   "Tier": 1,
+   "Cost": 2000,
+   "Value": 2000,
+   "Build_Sec": 0,
+   "Power_Draw": 0,
+   "Power_Supply": 0,
+   "Power_Reach": 0,
+   "Bay_Hours": null,
+   "Rate_Mult": null,
+   "Capacity_Mult": null,
+   "Battle_Struct": null,
+   "Model": "harvester",
    "Unlock": "contract:1"
   },
   {
@@ -5402,7 +5418,7 @@ export const MAPDATA = {
    "Capacity_Mult": null,
    "Battle_Struct": "STR-MG",
    "Model": null,
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "mg",
@@ -5450,7 +5466,7 @@ export const MAPDATA = {
    "Capacity_Mult": null,
    "Battle_Struct": "STR-Cannon",
    "Model": null,
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "cannon",
@@ -5498,7 +5514,7 @@ export const MAPDATA = {
    "Capacity_Mult": null,
    "Battle_Struct": "STR-Wall",
    "Model": null,
-   "Unlock": "kit"
+   "Unlock": "contract:1"
   },
   {
    "Kind": "wall",
@@ -5858,7 +5874,10 @@ export const MAPDATA = {
   "Far_Loyalty_Cost": 1,
   "Defense_Price_Mult": 4,
   "Repair_Share_Per_HP": 1,
-  "Shuttle_II_Bonus": 0.1
+  "Shuttle_II_Bonus": 0.1,
+  "Rig_Bay_Min": 15,
+  "Harvester_Cap": 2,
+  "Harvester_Max": 4
  },
  "outpostRaids": [
   {
