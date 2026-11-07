@@ -71,3 +71,13 @@ checks them live; the game loads them with `src/outpost/outpostMap.js`; view the
 
 `tools/maps/outpost-maps.test.mjs` keeps each on its recipe, inside the guardrails and in step with its bake. They
 are not battle-slot maps, so `forge-only.test.mjs` counts them separately.
+
+**All nine planets (O11, [MM-story_mw5oeob4_s]).** Every planet key now ships one: `ground` (Verdance, seed 313),
+`air` (Florael, 54), `hightech` (Ochre, 120), `artillery` (Kessra, 186), `water` (Rime, 172), `arcane` (Cinder, 158),
+`space` (Lumen, 191), `dark` (Xenthe, 12), `greenies` (Vexmire, 114). All nine share Verdance's outpost layer (mesa,
+ramps, pad ids and roles, deposits, raid lanes, the reference kit defenses), so the raid measurement compares like
+with like; each has its own recipe, seed, decor groves and resource fields (decor as sparse or dense as the planet's
+battle maps: Kessra's dust has none). `node tools/maps/outpost-maps.mjs jobs jobs.json <planet…>` makes jobs for
+just those planets; a layout's `seed` pins the seed (Lumen: the search's best left one decor grove after the
+Forge's scatter, so it uses 191). Rime's pond-shortcut guardrail is not applied to outposts (light ground raiders,
+straight cart-track lanes; no seed of 400 passes it); its ponds are still there.

@@ -182,6 +182,33 @@ test('the generated catalogue carries Verdance contract 1 exactly as the flow ab
   assert.deepEqual(m.rewards.map((r) => [r.kind, r.amount]), [['gold', 2000], ['xp', 300]]);
   assert.equal(m.impact.loyaltyPlanet, 20);
   for (const c of ['outpost_online', 'ore_sold', 'raids_held', 'outpost_contract_step']) assert.ok(cat.conditions[c], c);
-  // only planets with an outpost map get contracts
-  assert.deepEqual([...new Set(cat.missions.filter((x) => x.type === 'outpost').map((x) => x.planet))], ['Verdance']);
+  // only planets with an outpost map get contracts — since O11 all nine have one, three contracts each
+  const { existsSync } = await import('node:fs');
+  const { PLANETS } = await import('../data/planets.js');
+  const outposts = cat.missions.filter((x) => x.type === 'outpost');
+  const withMap = Object.entries(PLANETS).filter(([k]) => existsSync(new URL(`../../content/maps/forge/${k}-outpost.json`, import.meta.url)));
+  assert.equal(withMap.length, 9, 'every planet ships an outpost map');
+  assert.deepEqual([...new Set(outposts.map((x) => x.planet))].sort(), withMap.map(([, p]) => p.name).sort());
+  for (const [k, p] of withMap) {
+    const own = outposts.filter((x) => x.planet === p.name);
+    assert.deepEqual(own.map((x) => x.step).sort(), [1, 2, 3], p.name);
+    assert.ok(own.every((x) => x.outpost.planetKey === k), p.name);
+  }
+});
+
+test("every captain has the outpost scene's four beats, naming their planet's common ore (O11 drafts)", async () => {
+  const R = JSON.parse(readFileSync(new URL('../../content/reveals/reveals.json', import.meta.url), 'utf8'));
+  const { PLANETS } = await import('../data/planets.js');
+  const { oreOf } = await import('../data/ores.js');
+  for (const k of Object.keys(PLANETS)) {
+    const lines = R.factionShip.outpost[k];
+    assert.ok(Array.isArray(lines), k);
+    assert.deepEqual(lines.map((l) => l.beat), ['greet', 'turn', 'offer', 'warning'], k);
+    assert.equal(lines[1].intent, 'question', k);
+    const offer = lines[2].line.toLowerCase();
+    // the contract grants only the base: the player builds power, the mining station on the common ore and storage
+    assert.ok(offer.includes(`mining station on the ${oreOf(k, 'common').name.toLowerCase()}`), `${k}: ${offer}`);
+    for (const w of ['power', 'storage tower', 'your own gold']) assert.ok(offer.includes(w), `${k}: ${w}`);
+    assert.ok(lines.every((l) => l.line && l.line.length < 260), k);
+  }
 });

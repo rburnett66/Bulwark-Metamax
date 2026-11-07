@@ -139,6 +139,21 @@ test('the scripted first raid is a probe the setup plus one Machine Gun and two 
   for (const seed of seeds) assert.equal(run([], seed), 'breach', 'with no defenses the probe walks in');
 });
 
+test('on every planet\'s own outpost map the scripted first raid is held by the setup plus one Machine Gun and two walls (O11)', () => {
+  for (const p of PLANETS.filter((q) => q !== 'ground')) {
+    const pmap = outpostMapFromForge(JSON.parse(fs.readFileSync(new URL(`../../content/maps/forge/${p}-outpost.json`, import.meta.url), 'utf8')), p);
+    const run = (defs, seed) => {
+      const o = referenceOutpost(p, { seed, map: pmap, now: T0 });
+      o.defenses = defs.map(([kind, cell], i) => ({ id: `d${i + 1}`, kind, tier: 1, cell, hp: structureDef(kind, 1).battle.hp }));
+      return createRaid(o, { at: T0, first: true, powered: powerGrids(o, pmap).powered }, { map: pmap, step: 1 }).finish().result;
+    };
+    for (const set of [[['mg', [42, 20]], ['wall', [38, 22]], ['wall', [39, 22]]], [['mg', [27, 13]], ['wall', [26, 14]], ['wall', [26, 15]]]]) {
+      for (const seed of [11, 222, 3333]) assert.equal(run(set, seed), 'held', `${p}: ${JSON.stringify(set)} seed ${seed}`);
+    }
+    assert.equal(run([], 11), 'breach', `${p}: with no defenses the probe walks in`);
+  }
+});
+
 test('the scripted first raid runs headless through advance with the real hook', () => {
   let o = confirmOnline(kit(5), map, T0).outpost;
   let calls = 0;

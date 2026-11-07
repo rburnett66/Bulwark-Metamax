@@ -411,7 +411,7 @@ turn and warning lines, which keep the owner's words, are unchanged.
   `tech_unlock` reward is used, because the Outpost tech nodes join the tree only in O10. The rewards are gold and XP,
   plus the contract's loyalty as the mission's `impact.loyaltyPlanet`.
 - **Aboard:** `playShipReveal({ outpost })` plays the captain's outpost lines (`reveals.json factionShip.outpost`,
-  Verdance only until O11) in place of the generic greeting, then the outpost card (ACCEPT CONTRACT / LATER). After
+  all nine planets since O11) in place of the generic greeting, then the outpost card (ACCEPT CONTRACT / LATER). After
   that come the generic offer line and the missions card, as before. LATER leaves the mission in the Mission Log, whose
   dossier shows **Accept the outpost contract** until the outpost exists. `tools/reveal/index.html` shows the card
   (`?outpost=0` hides it).
@@ -421,6 +421,16 @@ turn and warning lines, which keep the owner's words, are unchanged.
 The captain's outpost lines go in `content/reveals/reveals.json` under `factionShip.outpost`, one set per planet,
 until Dialog-Unification moves faction lines into the dialog document. Verdance's are in the design (§2.2). The
 other eight are written in Phase B, in each captain's voice from the voice packs.
+
+**As built (O11, lines):** all nine planet keys have the four beats (greet, turn, offer, warning) in Verdance's shape,
+in each captain's voice (`missions.json capitalShips`; their `voicepacks.json` character, motivation and phrases):
+Aoi ("little one", the dawn keeps its promises), Okonkwo (numbers checked twice, signs her name), Kaya (ranging,
+answers for each round), Coral (landwalker, the shoal, the reef remembers), Cassian (the people, not the throne), Vale
+(charts, the charter), Maren (mercy, "I'll answer for it"), Bractus (single stalk, held in trust). Every offer keeps
+the facts: the contract gives the outpost base on the mesa and nothing more; the player builds power, a mining station
+on the planet's common ore and a storage tower with their own gold; the warning says some aboard will come for the
+mesa. They are **drafts for owner review** (the `_source` note says so); `contract.test.mjs` checks the beats and
+that each offer names its planet's common ore, power, the storage tower and the player's own gold.
 
 ## 6. Visualization
 
@@ -733,6 +743,62 @@ model and views, falling back to `DRAFT_LAYOUT`. **Framing:** the views frame th
 390 × 844 phone the 23 × 21-cell mesa frame fills the width at about 17 px a cell (a 4 × 4 pad is about 68 px), using
 about 360 px of height; the 3D terrain review (`tools/terrain/index.html?faction=powder&map=outpost`) fits the battle
 camera to the same frame.
+
+**As built (O11, maps) [MM-story_mw5oeob4_s]:** every planet now ships `content/maps/forge/<planet key>-outpost.json`
+and its bake `content/maps/baked/<planet key>-outpost/` (`bake3d.mjs <key>-outpost --no-tiles`), made exactly as
+Verdance's: `outpost-maps.mjs` on the planet's own §2.3 recipe, 64 × 32 world mode, the seed searched inside the
+guardrails, exported by the real headless Forge, then written through the same checks.
+
+| Planet (key) | Recipe slug | Seed | Impassable | Decor groves | Resource fields |
+|---|---|---|---|---|---|
+| Verdance (`ground`) | powder | 313 | 19.7 % | 145 | 54 |
+| Florael (`air`) | air | 54 | 13.0 % | 54 | 56 |
+| Ochre (`hightech`) | high-tech | 120 | 13.0 % | 15 | 97 |
+| Kessra (`artillery`) | artillery | 186 | 19.4 % | 0 | 73 |
+| Rime (`water`) | water | 172 | 23.1 % | 45 | 51 |
+| Cinder (`arcane`) | arcane-energy | 158 | 19.7 % | 16 | 59 |
+| Lumen (`space`) | space-tech | 191 | 14.4 % | 10 | 66 |
+| Xenthe (`dark`) | dark-energy | 12 | 20.6 % | 150 | 52 |
+| Vexmire (`greenies`) | greenies | 114 | 20.5 % | 28 | 49 |
+
+Decisions and deviations: **one outpost layer for all nine** (`SHARED` in `outpost-maps.mjs`: Verdance's mesa, ramps,
+pads `hub p1 r1 s1 r2 b1 b2 x1` + remote `r3 p2`, deposits, two lanes and the reference kit — Cannon, Machine Gun, six
+walls closing the ramps and the south-east corner), so the raid measurement compares planets like with like; a
+per-planet `OVERRIDES` entry exists for when a planet's ground needs its own (only Lumen's pinned seed so far). The
+seed search scores impassable nearest each recipe's battle-map share (faction-maps.mjs targets, clamped 13–23 %) and
+open-ground reach; Verdance keeps its pond score, Rime scores pond count. **Rime's pond-shortcut guardrail is not
+applied to outposts:** raiders are light ground only (Outpost-Design §5.2) and each lane is a straight cart track, so
+no seed of 400 gives swimmers a shorter way (gain 0 %, mean ≈ 1.0 on every seed); the ponds are there. **Lumen pins
+seed 191:** the search's best (178) came out of the Forge's scatter with 1 decor grove against its battle maps' ~5;
+191 is the passing seed among the top 12 with the most (10). Decor follows each planet's battle maps (the test now
+checks at least half their median, not a flat 80: Kessra's battle maps carry 0–3). `jobs` takes planet names so a
+remake touches only those. The signature props come from the recipes (Florael blossom groves, Ochre oases, Kessra
+mesas, Rime ponds, Cinder lava pools, Lumen craters, Xenthe glowing groves, Vexmire bog pools); the battle renderer
+draws each mesa's cliff rim in the planet's own rocks. `tools/outpost/view.html?planet=<key>` has a planet picker
+(all nine), and `tools/terrain/index.html`'s Outpost button works for every faction. Every planet's three contracts
+are generated (`extract_missions.py`, 27 outpost missions).
+
+**Raids on each planet's own map** (`outpost_raids.mjs <8 planets> --write`, 2026-11-07, after O10/O15 merged; median of
+7 seeds; Verdance's row unchanged from O7: kit 5, well defended 8, size 2, ×0.8 HP, ×0.5 damage):
+
+| Planet | HP × | Dmg × | Size (steps 1/2/3) | Step 1 kit holds | Step 1 well defended | Steps 2 / 3 (kit; well) |
+|---|---|---|---|---|---|---|
+| Florael | 0.6 | 0.4 | 3 / 3 / 3 | 5 | 8 | 4; 8 · 4; 8 |
+| Ochre | 0.6 | 0.6 | 4 / 4 / 4 | 5 | 8 | 5; 8 · 5; 8 |
+| Kessra | 0.3 | 0.8 | 4 / 4 / 3 | 5 | 8 | 5; 8 · 5; 10 |
+| Rime | 0.6 | 0.7 | 3 / 3 / 3 | 5 | 8 | 4; 7 · 4; 7 |
+| Cinder | 0.5 | 0.7 | 3 / 2 / 2 | 5 | 8 | 4; 4 · 4; 4 |
+| Lumen | 0.6 | 0.7 | 3 / 3 / 3 | 5 | 8 | 5; 8 · 5; 6 |
+| Xenthe (+ Artillery breacher) | 0.5 | 1 | 3 / 3 / 3 | 4 | 8 | 4; 2 · 4; 2 |
+| Vexmire (+ Artillery breacher) | 0.5 | 1 | 3 / 1 / 1 | **2** | **2** | 2; 2 · 2; 2 |
+
+Seven of eight hit the targets on their own map (kit 4–6, well defended 7–9). **Vexmire misses** and the table shows
+it as measured: its Artillery breacher takes down one ramp's walls (and the Cannon on the west ramp) in a raid, and
+the next raid walks through, so the extra Machine Gun changes nothing (kit = well defended = 2; the same units held 5
+on Verdance's map at O7's ×0.4 HP, 2 on Vexmire's own). It needs a design answer (the breacher, or Vexmire's kit),
+not a map tweak. Steps 2–3 for Cinder, Xenthe and Vexmire also fall short of 8 well defended. The scripted first raid
+(one troop) is held on every planet's own map by the setup plus one Machine Gun and two walls (3 placements × 5 seeds,
+and breached with no defenses), now in `raid.test.mjs` for all nine.
 
 ### 6.7 Review page
 

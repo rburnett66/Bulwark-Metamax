@@ -5998,97 +5998,97 @@ export const MAPDATA = {
    "Planet_Key": "air",
    "Units": "AIR-Troops AIR-Troops AIR-Tanks",
    "Breacher": null,
-   "Raider_HP_Mult": 0.7,
-   "Raider_Damage_Mult": 0.3,
+   "Raider_HP_Mult": 0.6,
+   "Raider_Damage_Mult": 0.4,
    "Size_Step1": 3,
    "Size_Step2": 3,
    "Size_Step3": 3,
    "Far_Day_Bump": 1,
-   "Measured_On": "ground-outpost"
+   "Measured_On": "air-outpost"
   },
   {
    "Planet_Key": "hightech",
    "Units": "HTC-Troops HTC-Troops HTC-Tanks",
    "Breacher": null,
-   "Raider_HP_Mult": 0.8,
-   "Raider_Damage_Mult": 1,
-   "Size_Step1": 2,
-   "Size_Step2": 2,
-   "Size_Step3": 2,
-   "Far_Day_Bump": 1,
-   "Measured_On": "ground-outpost"
-  },
-  {
-   "Planet_Key": "artillery",
-   "Units": "ART-Troops ART-Troops ART-Tanks",
-   "Breacher": null,
-   "Raider_HP_Mult": 0.9,
-   "Raider_Damage_Mult": 0.4,
-   "Size_Step1": 2,
-   "Size_Step2": 2,
-   "Size_Step3": 2,
-   "Far_Day_Bump": 1,
-   "Measured_On": "ground-outpost"
-  },
-  {
-   "Planet_Key": "water",
-   "Units": "WTR-Troops WTR-Troops WTR-Tanks",
-   "Breacher": null,
-   "Raider_HP_Mult": 0.9,
-   "Raider_Damage_Mult": 0.4,
-   "Size_Step1": 3,
-   "Size_Step2": 3,
-   "Size_Step3": 3,
-   "Far_Day_Bump": 1,
-   "Measured_On": "ground-outpost"
-  },
-  {
-   "Planet_Key": "arcane",
-   "Units": "ARC-Troops ARC-Troops ARC-Tanks",
-   "Breacher": null,
-   "Raider_HP_Mult": 0.4,
-   "Raider_Damage_Mult": 1,
-   "Size_Step1": 3,
-   "Size_Step2": 4,
-   "Size_Step3": 4,
-   "Far_Day_Bump": 1,
-   "Measured_On": "ground-outpost"
-  },
-  {
-   "Planet_Key": "space",
-   "Units": "SPC-Troops SPC-Troops SPC-Tanks",
-   "Breacher": null,
-   "Raider_HP_Mult": 0.5,
+   "Raider_HP_Mult": 0.6,
    "Raider_Damage_Mult": 0.6,
    "Size_Step1": 4,
    "Size_Step2": 4,
    "Size_Step3": 4,
    "Far_Day_Bump": 1,
-   "Measured_On": "ground-outpost"
+   "Measured_On": "hightech-outpost"
+  },
+  {
+   "Planet_Key": "artillery",
+   "Units": "ART-Troops ART-Troops ART-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.3,
+   "Raider_Damage_Mult": 0.8,
+   "Size_Step1": 4,
+   "Size_Step2": 4,
+   "Size_Step3": 3,
+   "Far_Day_Bump": 1,
+   "Measured_On": "artillery-outpost"
+  },
+  {
+   "Planet_Key": "water",
+   "Units": "WTR-Troops WTR-Troops WTR-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.6,
+   "Raider_Damage_Mult": 0.7,
+   "Size_Step1": 3,
+   "Size_Step2": 3,
+   "Size_Step3": 3,
+   "Far_Day_Bump": 1,
+   "Measured_On": "water-outpost"
+  },
+  {
+   "Planet_Key": "arcane",
+   "Units": "ARC-Troops ARC-Troops ARC-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.5,
+   "Raider_Damage_Mult": 0.7,
+   "Size_Step1": 3,
+   "Size_Step2": 2,
+   "Size_Step3": 2,
+   "Far_Day_Bump": 1,
+   "Measured_On": "arcane-outpost"
+  },
+  {
+   "Planet_Key": "space",
+   "Units": "SPC-Troops SPC-Troops SPC-Tanks",
+   "Breacher": null,
+   "Raider_HP_Mult": 0.6,
+   "Raider_Damage_Mult": 0.7,
+   "Size_Step1": 3,
+   "Size_Step2": 3,
+   "Size_Step3": 3,
+   "Far_Day_Bump": 1,
+   "Measured_On": "space-outpost"
   },
   {
    "Planet_Key": "dark",
    "Units": "DRK-Troops DRK-Troops DRK-Tanks",
    "Breacher": "DRK-Artillery",
-   "Raider_HP_Mult": 0.4,
+   "Raider_HP_Mult": 0.5,
    "Raider_Damage_Mult": 1,
    "Size_Step1": 3,
-   "Size_Step2": 1,
-   "Size_Step3": 1,
+   "Size_Step2": 3,
+   "Size_Step3": 3,
    "Far_Day_Bump": 1,
-   "Measured_On": "ground-outpost"
+   "Measured_On": "dark-outpost"
   },
   {
    "Planet_Key": "greenies",
    "Units": "GRN-Troops GRN-Troops GRN-Tanks",
    "Breacher": "GRN-Artillery",
-   "Raider_HP_Mult": 0.4,
+   "Raider_HP_Mult": 0.5,
    "Raider_Damage_Mult": 1,
    "Size_Step1": 3,
    "Size_Step2": 1,
    "Size_Step3": 1,
    "Far_Day_Bump": 1,
-   "Measured_On": "ground-outpost"
+   "Measured_On": "greenies-outpost"
   }
  ]
 };
