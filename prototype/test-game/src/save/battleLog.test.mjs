@@ -71,6 +71,19 @@ test('the modal lists the battles with their resources, and says so when there a
   assert.match(empty, /No battles on Rime yet/);
 });
 
+test('a card gets REPLAY only when its battle still has a stored replay (O8)', () => {
+  const s = defaultSave();
+  const t1 = Date.now() - 3600e3, t2 = Date.now();
+  logBattle(s, entry({ at: t1 }));
+  logBattle(s, entry({ at: t2, mapId: 3 }));
+  const m = historyModel(s, PLANETS.ground, { faction: 'Ground / Powder' });
+  assert.equal((historyHtml(m).match(/data-replay=/g) || []).length, 0);
+  m.replays = new Set([t2]);
+  const html = historyHtml(m);
+  assert.equal((html.match(/data-replay=/g) || []).length, 1);
+  assert.match(html, new RegExp('data-replay="' + t2 + '"'));
+});
+
 test('when reads in plain words', () => {
   const now = 10 * 86400e3;
   assert.equal(whenText(now - 10e3, now), 'just now');

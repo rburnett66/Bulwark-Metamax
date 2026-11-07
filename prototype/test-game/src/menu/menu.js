@@ -13,6 +13,7 @@
  * battle with no menu (main.js).
  */
 import { openBattleHistory } from './battleHistory.js';
+import { outpostButtonModel } from './outpostButton.js';
 import { battlesOn } from '../save/battleLog.js';
 import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
@@ -496,7 +497,19 @@ export function createMenu(mountEl, cbs) {
   const harvBtn = mkBtn('HARVESTER', 'upgrade the fleet', null, () => show('harvester'));
   const techBtn = mkBtn('TECH TREE', 'research upgrades', null, () => show('techtree'));
   // (no classic-board button any more: every battle is a faction's own forge map — owner 2026-11-04 [MM-story_mw2ml1ze_e])
-  mkBtn('REPLAY LAST BATTLE', '', null, () => { if (cbs.onReplay) cbs.onReplay(); });
+  // OUTPOST replaces REPLAY LAST BATTLE (O8 [MM-story_mw5oeidu_p]): locked until a contract is accepted; the status
+  // line + red dot come from a copy of the outpost advanced to now. Replays moved to the Battle History cards.
+  const outpostBtn = mkBtn('OUTPOST', ' ', 'bwm-outpost', () => {
+    const m = outpostButtonModel(loadSave(), targetKey());
+    if (!m.locked && cbs.onOutpost) cbs.onOutpost(m.planet);
+  });
+  function refreshOutpost() {
+    let m;
+    try { m = outpostButtonModel(loadSave(), targetKey()); } catch (e) { console.error('[outpost] status failed', e); return; }
+    outpostBtn.disabled = m.locked;
+    outpostBtn.querySelector('.hint').textContent = m.hint;
+    outpostBtn.dot.classList.toggle('on', !!m.dot);
+  }
   mkBtn('RESET PROGRESS', 'wipe all progress', null, () => {
     if (doc.defaultView && !doc.defaultView.confirm('Reset all progress? Stars, gold, loyalty, tech and faction records are wiped.')) return;
     if (cbs.onResetCampaign) cbs.onResetCampaign();
@@ -641,7 +654,7 @@ export function createMenu(mountEl, cbs) {
     // HISTORY: this planet's battles, in a modal over the menu [MM-story_mw1azvh8_d]
     const hist = doss.querySelector('[data-history]'), nBattles = battlesOn(sv0, P.name).length;
     hist.querySelector('.n').textContent = nBattles ? String(nBattles) : '';
-    hist.addEventListener('click', () => openBattleHistory(root, P, { save: loadSave(), faction: name }));
+    hist.addEventListener('click', () => openBattleHistory(root, P, { save: loadSave(), faction: name, hasReplay: cbs.hasReplay, onReplay: cbs.onReplayBattle }));
     const acts = doss.querySelector('.bwm-acts');
     const go = el(doc, 'button', 'bwm-btn primary bwm-play'); go.appendChild(el(doc, 'span', null, 'PLAY'));   // owner 2026-10-19: just PLAY [MM-task_mvg1hbnl_1u]
     go.addEventListener('click', () => {
@@ -895,6 +908,7 @@ export function createMenu(mountEl, cbs) {
   function refreshProgress() {
     const sv = loadSave(), bc = badgeCtx(sv), b = computeBadges(sv, bc);
     for (const [k, d] of Object.entries(DOTS)) d.classList.toggle('on', !!b[k]);
+    refreshOutpost();
     const missions = missionChip(missionBadge(sv));
     const inventory = inventoryChip(inventoryFresh(sv), RESOURCE_COUNT);
     if (!playingRewards) widget.render({ ...progressValues(sv, bc), techDot: b.techtree, missions, inventory });

@@ -1,5 +1,6 @@
 import { MAP, WAVES, makeWaves, fxScaleForMap, projScaleForMap, getUnitDef } from './data/tables.js';
 import { battleEntry, logBattle } from './save/battleLog.js';
+import { storeReplay, replayFor, latestReplay } from './save/replays.js';
 import { contractFor } from './data/collectiveContract.js';
 import { buildTerrainMap, resolveResourceTypes } from './sim/mapgen.js';
 import { buildCampaignWaves } from './sim/campaign.js';
@@ -221,7 +222,10 @@ export function boot(mountEl, seed) {
   // The last COMPLETED game, captured so "Run Replay" replays it even after Restart resets the live log, and
   // after a page reload (persisted to localStorage). mmdev.
   let lastReplayLog = null;
-  try { lastReplayLog = (typeof localStorage !== 'undefined' && localStorage.getItem('bulwark:lastReplay')) || null; }
+  // O8: the last 20 battles each keep their replay (src/save/replays.js), keyed by the history entry's `at`
+  const replayStore = typeof localStorage !== 'undefined' ? localStorage : null;
+  let lastBattleAt = 0;        // the `at` this battle's history entry and stored replay share
+  try { lastReplayLog = latestReplay(replayStore); }
   catch (e) { /* storage blocked */ }
 
   let mode = 'play';          // 'play' | 'replay'
@@ -872,6 +876,16 @@ export function boot(mountEl, seed) {
       // the battle's OWN map, loaded and awaited before playback (was: the default map + a 50 ms race) [MM-task_mvgyb5ma_1]
       void startReplay(lastReplayLog).catch((e) => { console.error('[Bulwark] replay failed', e); flashMessage(hud, 'replay failed'); });
     },
+    // OUTPOST (O8): the outpost view arrives with story O5; until then the dev review page shows the outpost
+    onOutpost: (planet) => { flashMessage(hud, 'the ' + planet + ' outpost view is coming (story O5)'); },
+    // a Battle History card's REPLAY (O8): that battle's own stored replay
+    hasReplay: (at) => !!replayFor(replayStore, at),
+    onReplayBattle: (at) => {
+      const src = replayFor(replayStore, at);
+      menu.close();
+      if (!src) { flashMessage(hud, 'that replay is no longer stored'); return; }
+      void startReplay(src).catch((e) => { console.error('[Bulwark] replay failed', e); flashMessage(hud, 'replay failed'); });
+    },
   });
   // Defer the initial board dispatch to a microtask so the rest of this init function (comm, voicePacks,
   // factionVisits, resetCommTracking …) finishes declaring first. The classic-board path (?map=0) runs
@@ -1146,10 +1160,11 @@ export function boot(mountEl, seed) {
           if (mode === 'play') {
             log.finalHash = hashState(sim);
             // Capture this finished game so "Run Replay" can replay it (survives Restart + reload).
+            lastBattleAt = Date.now();
             try {
               lastReplayLog = serializeLog(log);
               lastReplayBoard = { mapId: currentMapId | 0, faction: currentTestFaction || null, map: currentMap, waves: currentWaves };
-              if (typeof localStorage !== 'undefined') localStorage.setItem('bulwark:lastReplay', lastReplayLog);
+              storeReplay(replayStore, lastBattleAt, lastReplayLog);
             } catch (e) { /* storage blocked/full */ }
           } else if (activeReplayLog && activeReplayLog.finalHash) {
             const h = hashState(sim);
@@ -1178,7 +1193,7 @@ export function boot(mountEl, seed) {
               if (missionCatalog) resolvedFavour = resolvedSecondary(sv, settleBattle(sv, played, missionCatalog));
               else { console.error('[missions] content not loaded: battle counted, missions not advanced'); bankBattle(sv, played); }
               // the planet's battle history (Play page › HISTORY) [MM-story_mw1azvh8_d]
-              logBattle(sv, battleEntry({ at: Date.now(), planet: played.planet, faction: currentTestFaction, mapId: currentMapId,
+              logBattle(sv, battleEntry({ at: lastBattleAt || Date.now(), planet: played.planet, faction: currentTestFaction, mapId: currentMapId,
                 mapName: (sim.map && sim.map.name) || '', result: sim.result, finalScore: sim.finalScore, waveStars: sim.waveStars,
                 totalWaves: sim.waves ? sim.waves.total : 8, rewards, harvested: resLedger.total.units, kept: resLedger.total.kept,
                 contract: !!sim.contract, favour: resolvedFavour }));
