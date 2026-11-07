@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Outpost Review</title>
 <!-- [MM-story_mw5oe696_j] Review page for the outpost model (docs/tech-plan/Outpost.md §6.7, story O9 started with O2).
-     Runs src/outpost/model.js on the draft layout, outside the game: pick a save state, move time forward, sell,
+     Runs src/outpost/model.js on the Verdance outpost map (content/maps/forge/ground-outpost.json, story O4
+     [MM-story_mw5oeatc_l]; the draft layout if it cannot load), outside the game: pick a save state, move time forward, sell,
      build, upgrade, switch a rig deep, place and repair defenses, and read the away report. Raids use a stand-in
      outcome until the battle sim runs them (story O7). The building models are on ../../outposts.html.
-     Query: ?state=fresh|running|full|raid|breached -->
+     Query: ?state=fresh|running|full|raid|breached · ?view=mesa|map · ?map=draft -->
 <style>
   :root { color-scheme: dark; --bg:#0b0f12; --panel:#121a1d; --line:#24302e; --text:#e6ebe3; --dim:#8f9c97;
           --cyan:#4fb8ff; --amber:#f2a03b; --red:#e2564d; --gold:#f2c869; }
@@ -17,6 +18,9 @@
   main { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:14px; padding:14px; max-width:1400px; margin:0 auto; }
   h1 { font-size:18px; margin:0 0 2px; } .sub { color:var(--dim); margin:0 0 10px; font-size:13px; max-width:75ch; }
   canvas { width:100%; display:block; background:#2a211c; border-radius:6px; touch-action:manipulation; cursor:pointer; }
+  .viewbar { display:flex; gap:6px; align-items:center; margin:0 0 6px; font-size:12px; color:var(--dim); }
+  .viewbar button { padding:4px 10px; font-size:12px; } .viewbar button.on { border-color:var(--gold); color:var(--gold); }
+  @media (max-width: 500px) { main { padding:10px; gap:10px; } .sub { font-size:12px; } }
   aside { display:flex; flex-direction:column; gap:10px; }
   section { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:10px 12px; }
   section h2 { font-size:12px; margin:0 0 8px; color:var(--dim); font-weight:600; }
@@ -37,7 +41,8 @@
 <main>
   <div>
     <h1>Outpost: model review</h1>
-    <p class="sub">The outpost's rules running on the draft Verdance layout. Tap a pad to build or inspect it, tap a defense to repair it. Time only moves when you move it. Raids use a stand-in outcome until the battle sim runs them (O7). The building models are on <a href="../../outposts.html" style="color:var(--cyan)">the model review page</a>.</p>
+    <p class="sub">The outpost's rules running on <span id="mapName">the Verdance outpost map</span>. Tap a pad to build or inspect it, tap a defense to repair it. Time only moves when you move it. Raids use a stand-in outcome until the battle sim runs them (O7). The building models are on <a href="../../outposts.html" style="color:var(--cyan)">the model review page</a>.</p>
+    <div class="viewbar"><span>View</span><button id="vMesa" type="button">Mesa</button><button id="vMap" type="button">Whole map</button><span id="viewNote"></span></div>
     <canvas id="map" width="1200" height="720" aria-label="Outpost map"></canvas>
     <section style="margin-top:10px"><h2>Away report and events</h2><div id="log"></div></section>
   </div>
@@ -90,10 +95,14 @@ import {
   createOutpost, confirmOnline, advance, sell, loadsReady, place, upgrade, repair, repairCost, setDeep,
   raidOutcome, powerGrids, bayCapacity, rigRatePerMin, onlineProblems, status, depositOf,
 } from '../../src/outpost/model.js';
-import { DRAFT_LAYOUT as map } from '../../src/outpost/draftLayout.js';
+import { outpostMapFor, draftOutpostMap } from '../../src/outpost/outpostMap.js';
+import { mesaFrame, defenseRing, HEIGHT } from '../../src/terrain/outpostPads.js';
 import { oresOf, oreById } from '../../src/data/ores.js';
 import { structureDef, OUTPOST } from '../../src/data/outpost.js';
 
+// the Verdance outpost map (story O4); ?map=draft forces the draft layout
+const map = new URLSearchParams(location.search).get('map') === 'draft' ? draftOutpostMap('ground') : await outpostMapFor('ground');
+document.getElementById('mapName').textContent = map.source === 'forge' ? 'the Verdance outpost map (ground-outpost.json)' : 'the draft Verdance layout';
 const T0 = Date.UTC(2026, 10, 7, 12), MIN = 60_000, HOUR = 60 * MIN;
 const ORES = oresOf('ground');
 const UNLOCKS = [
@@ -162,19 +171,81 @@ function advanceBy(minutes) {
 
 // ── drawing ────────────────────────────────────────────────────────────────────────────────────────────────────
 const cv = $('map'), g = cv.getContext('2d');
-const S = cv.width / map.width;
+const S = 30;                                   // canvas px per cell; the view picks which cells fill the canvas
 const padById = (id) => map.pads.find((p) => p.id === id);
 const C = (p) => [(p.x + p.w / 2) * S, (p.y + p.h / 2) * S];
 const ROLE_COL = { hub: '#3b4048', power: '#2f3d4f', rig: '#3d3a33', storage: '#3a3f3a', bay: '#383640', spare: '#333333' };
 const KIND_LABEL = { hub: 'Hub', power: 'Power', rig: 'Rig', storage: 'Storage', harvesterBay: 'Harvester Bay', upgradeBay: 'Upgrade Bay' };
 
+// ── the view: the whole map, or the mesa framed (the default in portrait, tech plan §6.1) ─────────────────────────
+let viewMode = new URLSearchParams(location.search).get('view') || (innerWidth < innerHeight ? 'mesa' : 'map');
+let view = { x: 0, y: 0, w: map.width, h: map.height };
+function setView(mode) {
+  viewMode = mode;
+  view = mode === 'mesa' ? mesaFrame(map, 1) : { x: 0, y: 0, w: map.width, h: map.height };
+  cv.width = view.w * S; cv.height = view.h * S;
+  $('vMesa').classList.toggle('on', mode === 'mesa'); $('vMap').classList.toggle('on', mode !== 'mesa');
+  $('viewNote').textContent = `${view.w} × ${view.h} cells of ${map.width} × ${map.height}`;
+  if (o) draw();
+}
+$('vMesa').onclick = () => setView('mesa');
+$('vMap').onclick = () => setView('map');
+
+// ── the terrain under the pads: Verdance's ground, the mesa raised (lit top, cliff rim, cast shadow) ──────────────
+// terrain codes (src/terrain/terrainGen.js): grass dirt brush rocks trees cliff water tree-border rock-border cliff-border
+const GROUND_COL = ['#5f8d3e', '#8d7148', '#6c8b39', '#8a8a8e', '#2e5a2c', '#5e574e', '#3a78b8', '#3f6c32', '#77787b', '#67615a'];
+const TOP_COL = '#a39886', RAMP_COL = '#958a78', RIM_COL = '#5b5249';
+const ringCells = new Set(defenseRing(map).map(([x, y]) => x + ',' + y));
+function drawTerrain() {
+  const T = map.terrain, H = map.heights, W = map.width;
+  if (!T) {                                     // the draft layout: no terrain, a plain grid
+    g.fillStyle = '#2a211c'; g.fillRect(0, 0, map.width * S, map.height * S);
+    g.strokeStyle = 'rgba(255,255,255,0.04)';
+    for (let x = 0; x <= map.width; x++) { g.beginPath(); g.moveTo(x * S, 0); g.lineTo(x * S, map.height * S); g.stroke(); }
+    for (let y = 0; y <= map.height; y++) { g.beginPath(); g.moveTo(0, y * S); g.lineTo(map.width * S, y * S); g.stroke(); }
+    return;
+  }
+  const h = (x, y) => (x < 0 || y < 0 || x >= W || y >= map.height ? 0 : H[y * W + x]);
+  for (let y = 0; y < map.height; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, t = T[i], hh = H[i];
+    g.fillStyle = hh === HEIGHT.RAMP ? RAMP_COL : hh === HEIGHT.TOP ? (t === 5 ? RIM_COL : TOP_COL) : GROUND_COL[t] || '#555';
+    g.fillRect(x * S, y * S, S, S);
+    if (hh === 0) {                               // cast shadow below the mesa's north-west-lit edges
+      const k = Math.max(h(x, y - 1), h(x - 1, y), h(x - 1, y - 1));
+      if (k) { g.fillStyle = `rgba(0,0,0,${0.14 * k})`; g.fillRect(x * S, y * S, S, S); }
+    }
+  }
+  // the mesa top: a faint tile seam grid; the rim: a lit lip on its outer north/west edges, a dark face south/east
+  g.strokeStyle = 'rgba(0,0,0,0.10)'; g.lineWidth = 1;
+  for (let y = 0; y < map.height; y++) for (let x = 0; x < W; x++) if (h(x, y) === HEIGHT.TOP && T[y * W + x] !== 5) g.strokeRect(x * S + 0.5, y * S + 0.5, S - 1, S - 1);
+  for (let y = 0; y < map.height; y++) for (let x = 0; x < W; x++) {
+    if (!(h(x, y) === HEIGHT.TOP && T[y * W + x] === 5)) continue;
+    if (!h(x, y + 1)) { g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(x * S, y * S + S * 0.55, S, S * 0.45); }
+    if (!h(x + 1, y)) { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x * S + S * 0.6, y * S, S * 0.4, S); }
+    if (!h(x, y - 1) || !h(x - 1, y)) { g.fillStyle = 'rgba(255,240,215,.18)'; g.fillRect(x * S, y * S, S, S * 0.3); }
+  }
+  // trees and boulders read as clumps, decor groves as dots
+  for (const d of map.decor || []) {
+    g.fillStyle = 'rgba(30,70,30,.9)'; g.beginPath(); g.arc((d.x + 0.5 + (d.dx || 0)) * S, (d.y + 0.5 + (d.dy || 0)) * S, S * 0.32 * (d.s || 1), 0, Math.PI * 2); g.fill();
+  }
+  // raid lanes: where the raids come in
+  for (const s of map.spawns || []) {
+    g.fillStyle = '#ff9a3d'; g.beginPath(); g.arc((s.x + 0.5) * S, (s.y + 0.5) * S, S * 0.45, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#111'; g.font = `700 ${S * 0.42}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('raid', (s.x + 0.5) * S, (s.y + 0.52) * S); g.textBaseline = 'alphabetic';
+  }
+}
+
 function draw() {
   const grid = powerGrids(o, map);
+  g.setTransform(1, 0, 0, 1, 0, 0);
   g.clearRect(0, 0, cv.width, cv.height);
-  g.fillStyle = '#2a211c'; g.fillRect(0, 0, cv.width, cv.height);
-  g.strokeStyle = 'rgba(255,255,255,0.04)';
-  for (let x = 0; x <= map.width; x++) { g.beginPath(); g.moveTo(x * S, 0); g.lineTo(x * S, cv.height); g.stroke(); }
-  for (let y = 0; y <= map.height; y++) { g.beginPath(); g.moveTo(0, y * S); g.lineTo(cv.width, y * S); g.stroke(); }
+  g.setTransform(1, 0, 0, 1, -view.x * S, -view.y * S);
+  drawTerrain();
+  if (placing) {                                 // the defense ring: where a defense can go
+    g.fillStyle = 'rgba(242,200,105,0.22)';
+    for (const k of ringCells) { const [x, y] = k.split(',').map(Number); g.fillRect(x * S + 2, y * S + 2, S - 4, S - 4); }
+  }
   // station reach
   for (const [id, b] of Object.entries(o.pads)) {
     if (b.kind !== 'power') continue;
@@ -190,23 +261,19 @@ function draw() {
       g.strokeStyle = 'rgba(79,184,255,0.8)'; g.lineWidth = 3; g.beginPath(); g.moveTo(...st); g.lineTo(...target); g.stroke();
     }
   }
-  // deposits
-  for (const d of map.deposits) {
-    const ore = ORES.find((x) => x.tier === d.tier);
-    g.fillStyle = ore.colour; g.globalAlpha = 0.9;
-    g.beginPath(); g.arc((d.x + 1) * S, (d.y + 1) * S, S * 0.9, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
-  }
   // pads
   for (const p of map.pads) {
     const b = o.pads[p.id], bld = o.building.find((x) => x.pad === p.id);
-    g.fillStyle = b ? ROLE_COL[p.role] : 'rgba(255,255,255,0.05)';
+    g.fillStyle = b ? ROLE_COL[p.role] : 'rgba(24,30,36,0.42)';
     g.fillRect(p.x * S + 2, p.y * S + 2, p.w * S - 4, p.h * S - 4);
-    g.strokeStyle = selected === p.id ? '#f2c869' : grid.off[p.id] ? '#e2564d' : 'rgba(255,255,255,0.25)';
+    g.strokeStyle = selected === p.id ? '#f2c869' : grid.off[p.id] ? '#e2564d' : b ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.55)';
     g.lineWidth = selected === p.id ? 4 : 2;
-    g.strokeRect(p.x * S + 2, p.y * S + 2, p.w * S - 4, p.h * S - 4);
+    if (!b) g.setLineDash([6, 5]);
+    g.strokeRect(p.x * S + 2, p.y * S + 2, p.w * S - 4, p.h * S - 4); g.setLineDash([]);
     g.fillStyle = '#e6ebe3'; g.font = `600 ${S * 0.55}px system-ui`; g.textAlign = 'center';
     const [cx, cy] = C(p);
-    g.fillText(b ? `${KIND_LABEL[b.kind]} ${['', 'I', 'II', 'III'][b.tier]}` : `${p.id} · ${p.role}${p.remote ? ' (remote)' : ''}`, cx, cy - S * 0.2);
+    g.fillText(b ? `${KIND_LABEL[b.kind]} ${['', 'I', 'II', 'III'][b.tier]}` : `${p.id} · ${p.role}`, cx, cy - S * 0.2);
+    if (p.remote && !b) { g.font = `${S * 0.42}px system-ui`; g.fillStyle = '#c9d4cf'; g.fillText('remote site', cx, cy + S * 0.4); }
     g.font = `${S * 0.42}px system-ui`; g.fillStyle = '#9fb0aa';
     if (b && b.kind === 'rig') {
       const ore = ORES.find((x) => x.tier === b.deposit), units = Object.values(o.storage[p.id] || {}).reduce((a, v) => a + v, 0), cap = bayCapacity(o, p.id);
@@ -216,6 +283,12 @@ function draw() {
     }
     if (grid.off[p.id]) { g.fillStyle = '#e2564d'; g.fillText(`unpowered (${grid.off[p.id]})`, cx, cy + S * 0.9); }
     if (bld) { g.fillStyle = '#f2c869'; g.fillText(`building ${bld.kind} ${['', 'I', 'II', 'III'][bld.tier]}: ${Math.max(0, Math.ceil((bld.done - now) / MIN))} min`, cx, cy + S * 1.3); }
+  }
+  // deposits: the ore outcrop (2 × 2 cells) at its pad's edge, drawn over the pad so a built rig still shows its ore
+  for (const d of map.deposits) {
+    const ore = ORES.find((x) => x.tier === d.tier), locked = d.tier !== 'common' && !unlocks.has('tier:' + d.tier);
+    g.globalAlpha = locked ? 0.45 : 0.95; g.fillStyle = ore.colour; g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 2;
+    g.beginPath(); g.arc((d.x + 1) * S, (d.y + 1) * S, S * 0.62, 0, Math.PI * 2); g.fill(); g.stroke(); g.globalAlpha = 1;
   }
   // defenses
   for (const d of o.defenses) {
@@ -227,6 +300,7 @@ function draw() {
     g.fillStyle = d.hp < max ? '#e2564d' : '#8fd18a'; g.fillRect(x + 3, y - 4, (S - 6) * d.hp / max, 4);
     if (grid.off[d.id]) { g.strokeStyle = '#e2564d'; g.strokeRect(x + 3, y + 3, S - 6, S - 6); }
   }
+  g.setTransform(1, 0, 0, 1, 0, 0);
   if (placing) { g.fillStyle = '#f2c869'; g.font = `600 ${S * 0.6}px system-ui`; g.textAlign = 'left'; g.fillText(`Tap a free cell to place a ${placing}`, 10, cv.height - 12); }
   renderPanel(grid);
 }
@@ -280,7 +354,7 @@ function act(r, what) {
 
 cv.addEventListener('click', (e) => {
   const r = cv.getBoundingClientRect();
-  const x = (e.clientX - r.left) / r.width * map.width, y = (e.clientY - r.top) / r.height * map.height;
+  const x = view.x + (e.clientX - r.left) / r.width * view.w, y = view.y + (e.clientY - r.top) / r.height * view.h;
   const cell = [Math.floor(x), Math.floor(y)];
   if (placing) { const k = placing; placing = null; act(place(o, { kind: k, cell }, ctx()), `placed a ${k}`); return; }
   const d = o.defenses.find((q) => q.cell[0] === cell[0] && q.cell[1] === cell[1]);
@@ -308,6 +382,7 @@ for (const [id, label] of UNLOCKS) {
 }
 const q = new URLSearchParams(location.search).get('state');
 if (q) $('preset').value = q;
+setView(viewMode);
 load($('preset').value);
 </script>
 </body>

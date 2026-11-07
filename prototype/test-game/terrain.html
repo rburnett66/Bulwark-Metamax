@@ -9,7 +9,7 @@
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; background:var(--ink); color:var(--text); font-family:"Segoe UI",system-ui,sans-serif; }
   #app { display:flex; height:100vh; }
-  #stage { flex:1; display:flex; align-items:safe center; justify-content:safe center; background:#0a0c10; overflow:auto; padding:16px; }
+  #stage { flex:1; display:flex; flex-direction:column; align-items:safe center; justify-content:safe center; background:#0a0c10; overflow:auto; padding:16px; }
   #cv { image-rendering:pixelated; box-shadow:0 8px 40px rgba(0,0,0,.6); border:1px solid var(--line); }
   #side { width:660px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--line); padding:14px 16px; display:flex; flex-direction:column; overflow:hidden; }
   #sideHead { flex:0 0 auto; }
@@ -64,6 +64,14 @@
   .pvLoading { color:var(--muted); font-size:12px; padding:20px; }
   body.preview #mapTools, body.preview #cv, body.preview #cols { display:none !important; }
   body.preview #side { width:380px; }
+  /* OUTPOST layer [MM-story_mw5oeatc_l] — the validator box (maplab's ok/bad look) */
+  .opv { font-size:11px; line-height:1.5; padding:6px 8px; border-radius:5px; background:#1a1f28; color:var(--muted); }
+  .opv.ok { background:#12301b; color:#8fe0a8; } .opv.bad { background:#3a1616; color:#ff9d9d; }
+  .opv ul { margin:4px 0 0; padding-left:16px; }
+  .op4 input[type=number] { flex:1 1 0; min-width:0; width:auto; -moz-appearance:textfield; appearance:textfield; }
+  .op4 input[type=number]::-webkit-inner-spin-button, .op4 input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+  #opTools button { flex:1 1 30%; }
+  #opTools button.on { background:linear-gradient(160deg,#f2c869,#d9a441); color:#0c0e12; border-color:var(--gold); }
   #mapTools .cluster { display:inline-flex; align-items:center; gap:6px; background:rgba(0,0,0,.25);
     border:1px solid var(--line); border-radius:6px; padding:3px 8px; }
 </style>
@@ -115,6 +123,26 @@
           <div class="row"><label>Width</label><input type="number" id="cols" value="40" min="8" max="128"></div>
           <div class="row"><label>Height</label><input type="number" id="rows" value="24" min="8" max="64"></div>
           <div class="row"><label>Seed</label><input type="number" id="seed" value="7" min="1"><button class="ghost" id="reroll" style="width:auto;padding:5px 10px;margin:0">↻</button></div>
+        </div>
+        <div class="grp" id="opGrp">
+          <h2>Outpost — mesa · pads · deposits · conduits</h2>
+          <div class="row"><label><input type="checkbox" id="opOn">Outpost</label><select id="opPlanet" style="flex:1;min-width:0"></select><button class="ghost" id="opLoad" style="width:auto;padding:5px 10px;margin:0" title="Load the committed content/maps/forge/&lt;planet&gt;-outpost.json">Load</button></div>
+          <div class="row op4"><label>Mesa</label>
+            <input type="number" id="opCx" step="0.5" title="centre x"><input type="number" id="opCy" step="0.5" title="centre y">
+            <input type="number" id="opRx" step="0.5" min="2" title="half-width"><input type="number" id="opRy" step="0.5" min="2" title="half-height"></div>
+          <div class="hd" style="padding-left:86px"><span>centre x · y · half-width · half-height</span></div>
+          <div class="row"><label>Tool</label><div class="waveSel" id="opTools">
+            <button data-t="pad">Pad</button><button data-t="deposit">Deposit</button><button data-t="conduit">Conduit</button>
+            <button data-t="ramp">Ramp</button><button data-t="lane">Lane</button><button data-t="defense">Defense</button></div></div>
+          <div class="row"><label>Pad role</label><select id="opRole" style="flex:1;min-width:0"><option>hub</option><option>power</option><option selected>rig</option><option>storage</option><option>bay</option><option>spare</option></select>
+            <label style="flex:0 0 auto"><input type="checkbox" id="opRemote">remote</label></div>
+          <div class="row"><label>Selected</label><span class="note" id="opSel" style="margin:0;flex:1">none</span></div>
+          <div class="row"><label>Deposit</label><select id="opTier" style="flex:1;min-width:0"><option>common</option><option>uncommon</option><option>rare</option></select></div>
+          <div class="row"><label>Defense</label><select id="opKind" style="flex:1;min-width:0"><option value="cannon">cannon</option><option value="mg">machine gun</option><option value="wall">wall</option></select></div>
+          <div class="row"><label>Conduits</label><label style="flex:1"><input type="checkbox" id="opAuto" checked> derive from reach</label></div>
+          <div class="note" style="margin:0 0 6px"><b>Pad:</b> click empty ground to place (role + remote above), drag to move, right-click or Delete to remove; select one to change its role. <b>Deposit:</b> click a rig pad. <b>Conduit:</b> click two pads to link / unlink (untick <i>derive from reach</i> first: by default each pad links to its nearest station in reach). <b>Ramp</b> cuts the cliff rim; <b>Lane</b> toggles a raid spawn (a cart track is worn to the nearest ramp); <b>Defense</b> places the kit.</div>
+          <div id="opValid" class="opv">—</div>
+          <div class="row" style="margin-top:8px;gap:6px"><button class="ghost" id="opExport" style="margin:0">Export outpost file</button><button id="opShip" style="margin:0">🚀 Ship outpost</button></div>
         </div>
         <div class="grp">
           <h2>Baked view — digicam / rigid-voxel</h2>
@@ -223,6 +251,9 @@
 import { generateTerrain, placeBase, generateResources, generateEdgeSpawns, TERRAIN_NAME, TERRAIN_COLOR, RESOURCE_COLOR, LANE_COLOR, BLOCKING, TERRAIN } from './src/terrain/terrainGen.js';
 import { WORLD, BASE, WAVE_WINDOWS, attackSide } from './content/maps/wave-windows.js';
 import { bakeTerrain, DEFAULT_STACK } from './src/terrain/terrainBake.js?v=7';
+import { stampOutpost, deriveConduits, validateOutpostLayout, padAt, nextPadId, firstStation, defaultPowerReach, HEIGHT } from './src/terrain/outpostPads.js';
+import { oresOf } from './src/data/ores.js';
+import { MAPDATA } from './content/maps/mapdata.js';
 
 // wave window (1-indexed w,h,x,y) -> 0-indexed inclusive rect for the grid
 const winRect0 = (w) => ({ x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 });
@@ -371,6 +402,7 @@ function scatterDecor(g, seed) {
   const WATER = 6;                                     // TERRAIN.WATER — rule 4: never place trees on water
   const eligible = (x, y, aff) => x >= 0 && y >= 0 && x < g.cols && y < g.rows
     && Math.max(Math.abs(x - base.x), Math.abs(y - base.y)) > gap
+    && !(g.clear && g.clear[y * g.cols + x])          // outpost: the mesa top, ramps, lanes and remote clearings stay open
     && g.terrain[y * g.cols + x] !== WATER
     && aff.has(TERRAIN_AFFINITY[g.terrain[y * g.cols + x]]);
   const GROVE_FACTOR = 0.10, JIT = 1.5 + nz * 4.5; let stream = 0;   // rule 1: way more groves · rule 5: noise widens the clump (1.5..6 cells)
@@ -437,7 +469,9 @@ function render() {
   $('cols').disabled = $('rows').disabled = worldMode();
   last = generateTerrain(o);
   // world mode pins the base to world-centre (32,16 → 0-indexed); else auto-centre
-  base = placeBase(last, +$('baseGap').value, worldMode() ? { x: BASE.x - 1, y: BASE.y - 1 } : null);
+  base = placeBase(last, +$('baseGap').value, worldMode() ? { x: BASE.x - 1, y: BASE.y - 1 } : (op.on ? opHubCentre() : null));
+  if (op.on) stampOutpost(last, { mesa: op.mesa, pads: op.pads, spawns: op.lanes, kitDefenses: op.kitDefenses });   // the mesa, ramps, cart tracks, clearings
+  else { delete last.heights; delete last.clear; }
   // terrain changed → REGENERATE resources + spawns on the new grid (owner 2026-07-16: the old
   // behavior just CLEARED them, so a map saved after any terrain tweak silently shipped with zero
   // resources). Hand-painted nodes (painted:true) survive when they still sit on open ground.
@@ -455,6 +489,8 @@ function render() {
       const rect = { x0: w.x - 1, y0: w.y - 1, x1: w.x - 1 + w.w - 1, y1: w.y - 1 + w.h - 1 };
       spawnsByWave[w.wave] = generateEdgeSpawns(last, { rect, side: attackSide(w, realBaseWorld()).side, ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
     }
+  } else if (op.on) {
+    selWave = 1; spawnsByWave[1] = op.lanes;          // outpost: the raid lanes ARE the spawns (Lane tool)
   } else {
     spawnsByWave[1] = generateEdgeSpawns(last, { side: 'surround', ground: t.ground, air: t.air, water: t.water, spread: t.spread, bias: t.bias, spacing: t.spacing });
   }
@@ -464,7 +500,8 @@ function render() {
   // #1: no resources in water or under a tree grove (keep crystals reachable). Water=6.
   const decorCells = new Set(decor.map((d) => d.x + ',' + d.y));
   const beforeN = resources.length;
-  resources = resources.filter((r) => last.terrain[r.y * o.cols + r.x] !== 6 && !decorCells.has(r.x + ',' + r.y));
+  resources = resources.filter((r) => last.terrain[r.y * o.cols + r.x] !== 6 && !decorCells.has(r.x + ',' + r.y)
+    && !(last.clear && (last.clear[r.y * o.cols + r.x] || last.heights[r.y * o.cols + r.x])));   // outpost: fields stay in the lowland, off the tracks
   if (resources.length !== beforeN) updResCounts();
   updResCounts();
   syncWaveUI();
@@ -513,6 +550,7 @@ document.querySelectorAll('input,select').forEach((el) => el.addEventListener('i
     return;
   }
   if (e.target.id === 'slotFaction' || e.target.id === 'slotMap' || e.target.id === 'loadSlot') return;   // slot pickers don't touch the map
+  if (e.target.closest && e.target.closest('#opGrp')) return;   // the outpost panel wires its own handlers
   render();
 }));
 $('reroll').addEventListener('click', () => { $('seed').value = (Math.floor(Math.random() * 99999) + 1); render(); });
@@ -554,6 +592,22 @@ function paintGround(o, px) {
   for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) { ctx.fillStyle = TERRAIN_COLOR[last.terrain[y * o.cols + x]]; ctx.fillRect(x * px, y * px, px, px); }
   ctx.strokeStyle = 'rgba(0,0,0,.35)';
   for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) if (last.blocking[y * o.cols + x]) { ctx.beginPath(); ctx.moveTo(x * px, y * px); ctx.lineTo(x * px + px, y * px + px); ctx.stroke(); }
+  if (op.on && last.heights) shadeHeights(o, px);
+}
+// OUTPOST: the mesa reads raised — its top lit, the ramps half-lit, and a cast shadow on the lowland below its
+// south and east edges (the sun's down-right convention of the baked view).
+function shadeHeights(o, px) {
+  const H = last.heights, at = (x, y) => (x < 0 || y < 0 || x >= o.cols || y >= o.rows ? 0 : H[y * o.cols + x]);
+  for (let y = 0; y < o.rows; y++) for (let x = 0; x < o.cols; x++) {
+    const h = at(x, y);
+    if (h === HEIGHT.TOP) { ctx.fillStyle = 'rgba(255,240,210,.16)'; ctx.fillRect(x * px, y * px, px, px); }
+    else if (h === HEIGHT.RAMP) { ctx.fillStyle = 'rgba(255,240,210,.08)'; ctx.fillRect(x * px, y * px, px, px); }
+    else {
+      const north = at(x, y - 1), west = at(x - 1, y), nw = at(x - 1, y - 1);
+      const k = Math.max(north, west, nw);
+      if (k) { ctx.fillStyle = `rgba(0,0,0,${0.16 * k})`; ctx.fillRect(x * px, y * px, px, px); }
+    }
+  }
 }
 // Gather the Baked-view panel settings for the offscreen bake.
 function bakeParams(o) {
@@ -640,6 +694,7 @@ function drawOverlays(px) {
     const g = base.gap;
     ctx.strokeRect((base.pos.x - g) * px, (base.pos.y - g) * px, (2 * g + 1) * px, (2 * g + 1) * px);
   }
+  if (op.on) drawOutpost(px);
 }
 
 function exportObj() {
@@ -661,6 +716,7 @@ function exportObj() {
     decor,                                            // clustered voxel-decor groves {x,y,type} (blocking types already in blocking[])
     // the baked feature map + blocking, so the game needn't regenerate (but could, from the knobs)
     terrain: Array.from(last.terrain), blocking: Array.from(last.blocking),
+    ...(op.on ? opExportFields() : {}),
   };
 }
 $('export').addEventListener('click', () => {
@@ -756,6 +812,7 @@ $('shipAllSlots').addEventListener('click', async () => {
 });
 // apply a saved map: restore knobs, deterministically regen terrain, then overlay saved comp
 function loadState(obj) {
+  opLoadFields(obj);   // an outpost map brings its mesa, pads, deposits, conduits, kit and lanes (else the layer goes off)
   $('worldMode').checked = !!obj.worldMode;
   $('seed').value = obj.seed;
   if (!obj.worldMode) { $('cols').value = obj.cols; $('rows').value = obj.rows; }
@@ -772,14 +829,257 @@ function loadState(obj) {
   render();   // same seed + knobs → identical terrain, so the saved overlays line up
   resources = obj.resources || [];
   updResCounts();
-  spawnsByWave = obj.spawnsByWave || (obj.spawns ? { 1: obj.spawns } : {});
-  if (obj.base) base = placeBase(last, obj.base.gap != null ? obj.base.gap : +$('baseGap').value, worldMode() ? { x: BASE.x - 1, y: BASE.y - 1 } : obj.base.pos);
+  spawnsByWave = op.on ? { 1: op.lanes } : (obj.spawnsByWave || (obj.spawns ? { 1: obj.spawns } : {}));
+  if (obj.base && !op.on) base = placeBase(last, obj.base.gap != null ? obj.base.gap : +$('baseGap').value, worldMode() ? { x: BASE.x - 1, y: BASE.y - 1 } : obj.base.pos);
   syncWaveUI(); redraw();
 }
 
+// ── OUTPOST LAYER [MM-story_mw5oeatc_l] — tech plan docs/tech-plan/Outpost.md §6.6 ─────────────────────────────────
+// An outpost map is a Forge map plus: mesa (stamped after generation: dirt top, cliff rim, ramps), pads, deposits,
+// conduits, kitDefenses and heights, written as top-level fields. Raid lanes are the map's ground spawns. Conduits are
+// derived from reach by default (each pad to its nearest station in reach, stations in reach of each other); untick
+// "derive from reach" to edit them by hand. src/terrain/outpostPads.js holds the stamp and the validator shown below.
+const op = {
+  on: false, planet: 'ground', mesa: { cx: 20, cy: 12, rx: 10, ry: 8, ramps: [] }, pads: [], deposits: [], conduits: [],
+  auto: true, kitDefenses: [], lanes: [], tool: null, sel: null, from: null, drag: null,
+};
+const OP_PLANETS = [...new Map((MAPDATA.ores || []).map((r) => [r.Planet_Key, r.Planet])).entries()];
+$('opPlanet').innerHTML = OP_PLANETS.map(([k, n]) => `<option value="${k}">${n} (${k})</option>`).join('');
+const OP_ROLE_COL = { hub: '#e6ebe3', power: '#4fb8ff', rig: '#f2a03b', storage: '#9fd18a', bay: '#c39bff', spare: '#9aa4ad' };
+const clone = (v) => JSON.parse(JSON.stringify(v));
+function opHubCentre() {
+  const h = op.pads.find((p) => p.role === 'hub');
+  return h ? { x: Math.floor(h.x + h.w / 2), y: Math.floor(h.y + h.h / 2) } : null;
+}
+function opSyncConduits() { if (op.auto) op.conduits = deriveConduits(op); }
+function opExportFields() {
+  opSyncConduits();
+  return {
+    planet: op.planet, outpost: true, autoConduits: op.auto, mesa: clone(op.mesa),
+    pads: clone(op.pads), deposits: clone(op.deposits), conduits: clone(op.conduits), kitDefenses: clone(op.kitDefenses),
+    heights: last && last.heights ? Array.from(last.heights) : [],
+  };
+}
+function opSyncInputs() {
+  $('opOn').checked = op.on; $('opPlanet').value = op.planet; $('opAuto').checked = op.auto;
+  $('opCx').value = op.mesa.cx; $('opCy').value = op.mesa.cy; $('opRx').value = op.mesa.rx; $('opRy').value = op.mesa.ry;
+  for (const b of document.querySelectorAll('#opTools button')) b.classList.toggle('on', b.dataset.t === op.tool);
+  const p = op.pads.find((q) => q.id === op.sel);
+  $('opSel').textContent = p ? `${p.id} · ${p.role} · ${p.w}×${p.h} at (${p.x}, ${p.y})${p.remote ? ' · remote' : ''}` : 'none';
+}
+function opLoadFields(obj) {
+  op.on = !!(obj && (obj.outpost || obj.pads));
+  if (!op.on) { opSyncInputs(); return; }
+  op.planet = obj.planet || op.planet;
+  op.mesa = clone(obj.mesa || op.mesa); op.mesa.ramps = op.mesa.ramps || [];
+  op.pads = clone(obj.pads || []); op.deposits = clone(obj.deposits || []); op.conduits = clone(obj.conduits || []);
+  op.kitDefenses = clone(obj.kitDefenses || []); op.auto = obj.autoConduits !== false;
+  op.lanes = clone((obj.spawns || []).filter((s) => (s.lane || 'ground') === 'ground'));
+  op.sel = null; op.from = null;
+  opSyncInputs();
+}
+function opMapForCheck() {
+  opSyncConduits();
+  return { cols: last.cols, rows: last.rows, terrain: last.terrain, blocking: last.blocking, heights: last.heights, mesa: op.mesa,
+    pads: op.pads, deposits: op.deposits, conduits: op.conduits, kitDefenses: op.kitDefenses, spawns: op.lanes };
+}
+function opShowProblems() {
+  const v = $('opValid');
+  if (!op.on || !last) { v.className = 'opv'; v.textContent = 'Tick “Outpost map” to author a mesa, pads, deposits and conduits.'; return; }
+  const problems = validateOutpostLayout(opMapForCheck());
+  const n = op.pads.length;
+  if (!problems.length) { v.className = 'opv ok'; v.textContent = `valid — ${n} pads, 3 deposits, ${op.conduits.length} conduits, ${op.lanes.length} raid lanes, reach ${defaultPowerReach()}`; return; }
+  v.className = 'opv bad';
+  v.innerHTML = `${problems.length} problem${problems.length > 1 ? 's' : ''}:<ul>${problems.map((p) => `<li>${p.replace(/[<&]/g, (c) => ({ '<': '&lt;', '&': '&amp;' })[c])}</li>`).join('')}</ul>`;
+}
+function drawOutpost(px) {
+  opSyncConduits();
+  const C = (p) => [(p.x + p.w / 2) * px, (p.y + p.h / 2) * px];
+  const byId = (id) => op.pads.find((p) => p.id === id);
+  const reach = defaultPowerReach(), st = firstStation(op);
+  // ramps: dashed gold outline
+  ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(242,200,105,.9)'; ctx.lineWidth = 1.5;
+  for (const r of op.mesa.ramps || []) ctx.strokeRect(r.x * px + 1, r.y * px + 1, r.w * px - 2, r.h * px - 2);
+  // station reach rings
+  for (const p of op.pads.filter((q) => q.role === 'power')) {
+    const [x, y] = C(p);
+    ctx.setLineDash([6, 5]); ctx.strokeStyle = p === st ? 'rgba(79,184,255,.75)' : 'rgba(79,184,255,.45)'; ctx.lineWidth = p === st ? 2 : 1.5;
+    ctx.beginPath(); ctx.arc(x, y, reach * px, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // conduits: a glowing double line
+  for (const [a, b] of op.conduits) {
+    const pa = byId(a), pb = byId(b); if (!pa || !pb) continue;
+    const [x1, y1] = C(pa), [x2, y2] = C(pb), L = Math.hypot(x2 - x1, y2 - y1) || 1, nx = -(y2 - y1) / L * 2, ny = (x2 - x1) / L * 2;
+    ctx.strokeStyle = 'rgba(79,184,255,.95)'; ctx.lineWidth = 1.5;
+    for (const s of [1, -1]) { ctx.beginPath(); ctx.moveTo(x1 + nx * s, y1 + ny * s); ctx.lineTo(x2 + nx * s, y2 + ny * s); ctx.stroke(); }
+  }
+  // pads
+  for (const p of op.pads) {
+    const col = OP_ROLE_COL[p.role] || '#fff';
+    ctx.fillStyle = 'rgba(20,26,32,.55)'; ctx.fillRect(p.x * px + 2, p.y * px + 2, p.w * px - 4, p.h * px - 4);
+    ctx.strokeStyle = p.id === op.sel ? '#f2c869' : p.id === op.from ? '#4fb8ff' : col; ctx.lineWidth = p.id === op.sel || p.id === op.from ? 3 : 1.5;
+    if (p.remote) ctx.setLineDash([5, 3]);
+    ctx.strokeRect(p.x * px + 2, p.y * px + 2, p.w * px - 4, p.h * px - 4); ctx.setLineDash([]);
+    const [cx, cy] = C(p);
+    ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `700 ${Math.max(9, px * 0.75)}px system-ui`; ctx.fillText(p.id, cx, cy - px * 0.35);
+    ctx.font = `${Math.max(8, px * 0.5)}px system-ui`; ctx.fillText(p.role + (p.remote ? ' · remote' : ''), cx, cy + px * 0.5);
+  }
+  // deposits: 2 × 2 outcrops in the ore's colour
+  const ores = oresOf(op.planet);
+  for (const d of op.deposits) {
+    const ore = ores.find((o) => o.tier === d.tier);
+    ctx.fillStyle = ore ? ore.colour : '#fff'; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc((d.x + 1) * px, (d.y + 1) * px, px * 0.8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.font = `700 ${Math.max(8, px * 0.55)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(d.tier[0].toUpperCase(), (d.x + 1) * px, (d.y + 1) * px);
+  }
+  // kit defenses
+  for (const d of op.kitDefenses) {
+    const [x, y] = d.cell;
+    ctx.fillStyle = d.kind === 'wall' ? '#8a8f94' : d.kind === 'cannon' ? '#c9853a' : '#c9b63a';
+    ctx.fillRect(x * px + 2, y * px + 2, px - 4, px - 4);
+    ctx.fillStyle = '#111'; ctx.font = `700 ${Math.max(7, px * 0.5)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(d.kind === 'mg' ? 'M' : d.kind[0].toUpperCase(), (x + 0.5) * px, (y + 0.55) * px);
+  }
+  ctx.textBaseline = 'alphabetic';
+  opShowProblems();
+}
+// tools
+const opCell = (e) => cellFromEvent(e);
+function opRender() { opSyncConduits(); render(); opSyncInputs(); }
+function opDeletePad(id) {
+  op.pads = op.pads.filter((p) => p.id !== id);
+  op.deposits = op.deposits.filter((d) => d.pad !== id);
+  op.conduits = op.conduits.filter(([a, b]) => a !== id && b !== id);
+  if (op.sel === id) op.sel = null;
+  opRender();
+}
+function opRenamePad(p, role) {
+  const old = p.id; p.role = role; p.id = 'tmp'; p.id = nextPadId(op, role);
+  if (role === 'hub') { p.w = 6; p.h = 6; } else if (p.w === 6 && p.h === 6) { p.w = 4; p.h = 4; }
+  for (const d of op.deposits) if (d.pad === old) d.pad = p.id;
+  op.conduits = op.conduits.map((c) => c.map((x) => (x === old ? p.id : x)));
+  if (op.sel === old) op.sel = p.id;
+}
+cv.addEventListener('pointerdown', (e) => {
+  if (!op.on || !op.tool || !last) return;
+  const { x, y } = opCell(e);
+  if (x < 0 || y < 0 || x >= last.cols || y >= last.rows) return;
+  const hit = padAt(op, x, y);
+  e.preventDefault();
+  if (op.tool === 'pad') {
+    if (e.button === 2) { if (hit) opDeletePad(hit.id); return; }
+    if (hit) { op.sel = hit.id; op.drag = { pad: hit, dx: x - hit.x, dy: y - hit.y, moved: false }; cv.setPointerCapture(e.pointerId); $('opRole').value = hit.role; $('opRemote').checked = !!hit.remote; redraw(); opSyncInputs(); return; }
+    const role = $('opRole').value, size = role === 'hub' ? 6 : 4;
+    const p = { id: nextPadId(op, role), x: Math.min(x, last.cols - size), y: Math.min(y, last.rows - size), w: size, h: size, role };
+    if ($('opRemote').checked) p.remote = true;
+    op.pads.push(p); op.sel = p.id; opRender(); return;
+  }
+  if (op.tool === 'deposit') {
+    const tier = $('opTier').value;
+    const atDep = op.deposits.findIndex((d) => x >= d.x && x < d.x + 2 && y >= d.y && y < d.y + 2);
+    if (e.button === 2 || (atDep >= 0 && op.deposits[atDep].tier === tier)) { if (atDep >= 0) op.deposits.splice(atDep, 1); redraw(); return; }
+    if (!hit) return;
+    op.deposits = op.deposits.filter((d) => d.tier !== tier);
+    op.deposits.push({ tier, x: Math.min(x, hit.x + hit.w - 2), y: Math.min(y, hit.y + hit.h - 2), pad: hit.id });
+    redraw(); return;
+  }
+  if (op.tool === 'conduit') {
+    if (op.auto) { $('opValid').className = 'opv bad'; $('opValid').textContent = 'Conduits are derived from reach: untick “derive from reach” to edit them.'; return; }
+    if (!hit) { op.from = null; redraw(); return; }
+    if (!op.from || op.from === hit.id) { op.from = op.from === hit.id ? null : hit.id; redraw(); return; }
+    const k = op.conduits.findIndex(([a, b]) => (a === op.from && b === hit.id) || (b === op.from && a === hit.id));
+    if (k >= 0) op.conduits.splice(k, 1); else op.conduits.push([op.from, hit.id]);
+    op.from = null; redraw(); return;
+  }
+  if (op.tool === 'ramp') {
+    const ramps = op.mesa.ramps, k = ramps.findIndex((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+    if (k >= 0) ramps.splice(k, 1); else if (e.button !== 2) ramps.push({ x, y, w: 2, h: 2 });
+    opRender(); return;
+  }
+  if (op.tool === 'lane') {
+    const k = op.lanes.findIndex((s) => s.x === x && s.y === y);
+    if (k >= 0) op.lanes.splice(k, 1); else if (e.button !== 2) op.lanes.push({ x, y, lane: 'ground' });
+    opRender(); return;
+  }
+  if (op.tool === 'defense') {
+    const k = op.kitDefenses.findIndex((d) => d.cell[0] === x && d.cell[1] === y);
+    if (k >= 0) op.kitDefenses.splice(k, 1); else if (e.button !== 2) op.kitDefenses.push({ kind: $('opKind').value, cell: [x, y] });
+    opRender();
+  }
+});
+cv.addEventListener('pointermove', (e) => {
+  const d = op.drag; if (!d || !last) return;
+  const { x, y } = opCell(e), p = d.pad;
+  const nx = Math.max(0, Math.min(last.cols - p.w, x - d.dx)), ny = Math.max(0, Math.min(last.rows - p.h, y - d.dy));
+  if (nx === p.x && ny === p.y) return;
+  for (const dep of op.deposits) if (dep.pad === p.id) { dep.x += nx - p.x; dep.y += ny - p.y; }
+  p.x = nx; p.y = ny; d.moved = true; redraw();
+});
+const opEndDrag = () => { if (op.drag) { const moved = op.drag.moved; op.drag = null; if (moved) opRender(); } };
+cv.addEventListener('pointerup', opEndDrag);
+cv.addEventListener('pointercancel', opEndDrag);
+cv.addEventListener('contextmenu', (e) => { if (op.on && op.tool) e.preventDefault(); });
+window.addEventListener('keydown', (e) => {
+  if (!op.on || !op.sel || (e.key !== 'Delete' && e.key !== 'Backspace') || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  opDeletePad(op.sel);
+});
+for (const b of document.querySelectorAll('#opTools button')) b.addEventListener('click', () => {
+  op.tool = op.tool === b.dataset.t ? null : b.dataset.t; op.from = null;
+  if (op.tool) { resPaint = null; spawnEdit = false; document.querySelectorAll('.resPaint').forEach((x) => x.style.background = ''); $('spawnEditBtn').style.background = ''; $('spawnEditBtn').style.color = ''; }
+  cv.style.cursor = op.tool ? 'crosshair' : '';
+  opSyncInputs(); redraw();
+});
+$('opOn').addEventListener('change', () => {
+  op.on = $('opOn').checked;
+  if (op.on) { $('worldMode').checked = false; if (!op.pads.length) { $('cols').value = 40; $('rows').value = 24; } }
+  opRender();
+});
+$('opPlanet').addEventListener('change', () => { op.planet = $('opPlanet').value; redraw(); });
+$('opAuto').addEventListener('change', () => { op.auto = $('opAuto').checked; opRender(); });
+for (const [id, k] of [['opCx', 'cx'], ['opCy', 'cy'], ['opRx', 'rx'], ['opRy', 'ry']]) {
+  $(id).addEventListener('change', () => { const v = +$(id).value; if (Number.isFinite(v)) { op.mesa[k] = v; opRender(); } });
+}
+$('opRole').addEventListener('change', () => {
+  const p = op.pads.find((q) => q.id === op.sel); if (!p) return;
+  opRenamePad(p, $('opRole').value); opRender();
+});
+$('opRemote').addEventListener('change', () => {
+  const p = op.pads.find((q) => q.id === op.sel); if (!p) return;
+  if ($('opRemote').checked) p.remote = true; else delete p.remote;
+  opRender();
+});
+async function opLoadPlanet(planet) {
+  try {
+    const obj = await (await fetch(`content/maps/forge/${planet}-outpost.json`, { cache: 'no-store' })).json();
+    loadState(obj);
+    $('slotInfo').textContent = `Loaded ${planet}-outpost.json`;
+  } catch (e) { $('opValid').className = 'opv bad'; $('opValid').textContent = `No ${planet}-outpost.json yet (${e.message}). Tick “Outpost map” to start one.`; }
+}
+$('opLoad').addEventListener('click', () => opLoadPlanet($('opPlanet').value));
+$('opExport').addEventListener('click', () => {
+  if (!op.on) return;
+  dlJson(`${op.planet}-outpost.json`, exportObj());
+  $('slotInfo').textContent = `Exported ${op.planet}-outpost.json → commit to content/maps/forge/`;
+});
+$('opShip').addEventListener('click', async () => {
+  if (!op.on) return;
+  try { await shipJson(`content/maps/forge/${op.planet}-outpost.json`, exportObj()); $('slotInfo').textContent = `🚀 Shipped ${op.planet}-outpost.json → content/maps/forge/`; }
+  catch (e) { $('slotInfo').textContent = `Ship failed: ${e.message} (deployed site? use Export + commit instead)`; }
+});
+opSyncInputs();
+
 refreshSlots();
 render();
-loadDecorCatalog();   // pull the decor catalog (shipped + dev-live) then re-render so groves scatter
+// ?outpost=<planet>[&tool=pad] opens that outpost map once the decor catalog is in (so the load is not re-rolled)
+loadDecorCatalog().then(() => {
+  const q = new URLSearchParams(location.search);
+  if (!q.get('outpost')) return;
+  $('opPlanet').value = q.get('outpost');
+  return opLoadPlanet(q.get('outpost')).then(() => { if (q.get('tool')) document.querySelector(`#opTools button[data-t="${q.get('tool')}"]`)?.click(); });
+});   // pull the decor catalog (shipped + dev-live) then re-render so groves scatter
 
 // ── resource layer interactions ──
 document.querySelectorAll('.resPaint').forEach((b) => b.addEventListener('click', () => {

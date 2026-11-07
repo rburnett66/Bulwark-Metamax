@@ -19,7 +19,11 @@ test('81 maps: every faction has its own map 1-9, each with a different terrain 
     assert.ok(existsSync(new URL(`content/maps/baked/${f}/level.json`, G)), f + ' has no baked 3D level');
   }
   assert.equal(seen.size, 81);
-  assert.equal(readdirSync(FORGE).filter((x) => x.endsWith('.json')).length, 81, 'no stray map files');
+  assert.equal(readdirSync(FORGE).filter((x) => x.endsWith('.json') && !x.endsWith('-outpost.json')).length, 81, 'no stray map files');
+  // the outpost maps (tech plan Outpost §6.6) sit beside them, one per planet key [MM-story_mw5oeatc_l]
+  for (const f of readdirSync(FORGE).filter((x) => x.endsWith('-outpost.json'))) {
+    assert.equal(JSON.parse(readFileSync(new URL(f, FORGE), 'utf8')).outpost, true, `${f} is an outpost map`);
+  }
 });
 
 test('the game has no legacy map path a player can reach', () => {
