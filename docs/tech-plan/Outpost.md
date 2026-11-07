@@ -64,6 +64,15 @@ the code does not know, and a contract that delivers an ore tier the planet has 
 a raid unit that is not `lightGround` or not tier I, and an outpost defense whose `Battle_Struct` is anti-air or has
 a range above 5 (owner: no anti-air, no long range).
 
+**As built (O1).** `tools/economy/write_outpost_sheets.py` seeded `Ores`, `Outpost_Structures`, `Outpost_Contracts`
+and `Outpost_Params` from the design; from then on the workbook is the source (re-running the script overwrites hand
+edits). `Outpost_Raids` is written later, by the sim measurement (§4.3), since its sizes cannot be picked by hand.
+The extractor checks what the sheets alone can show (three ores per planet in three rig designs, unique ids, one
+far-buyer want per faction, known kinds, outpost-only `Battle_Struct`s, the contract ladder's unlock order, every
+param present); the checks that need the battle tables (defense range within 5, no air-only tower, prices equal to
+the battle price × 4 at every tier) run in `src/data/outpost.test.mjs` against `STRUCTURES`. Contracts 2–3 carry
+proposed rewards (4,000 / 8,000 gold, +30 / +40 loyalty, 500 / 800 XP) to tune after contract 1 has been played.
+
 The design's numbers (Outpost-Design §3–§7) are the first values. `tools/economy/outpost_model.mjs` prints the
 derived table: gold per hour per tier, fill times, and raids held per defense set (by running the sim, §4.3). The design's tables come from it,
 so a retune shows its consequences before it is extracted.

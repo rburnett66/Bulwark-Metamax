@@ -223,8 +223,8 @@ inventory, with its own price; contract deliveries count both grades.
 | Deep grade, Rig I | Speed | Price | Gold per hour | Hours to fill its bay |
 |---|---|---|---|---|
 | Iron | 0.75 / min | 20 | 900 | 16 |
-| Aluminum | 0.375 / min | 60 | 1,350 | 32 |
-| Lithium | 0.2 / min | 150 | 1,800 | 60 |
+| Aluminum | 0.375 / min | 60 | 1,350 | 16 |
+| Lithium | 0.2 / min | 150 | 1,800 | 16 |
 
 The switch is one tap per rig, and the rig keeps its setting. Shallow stays useful when a contract asks for
 quantity: deliveries count units, and deep ore delivers a quarter as many.

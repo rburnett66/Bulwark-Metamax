@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""write_outpost_sheets.py — put the outpost data into the map-data workbook [MM-story_mw5oe4ap_i].
+
+    python tools/economy/write_outpost_sheets.py      # writes Ores, Outpost_Structures, Outpost_Contracts, Outpost_Params
+    python tools/extract_mapdata.py                   # → MAPDATA.ores / .outpostStructures / .outpostContracts / .outpostParams
+    node tools/economy/outpost_model.mjs              # prints the derived tables (design §4)
+
+Seeds the four sheets with the design's values (docs/16 Bulwark MM/design/Outpost-Design.md §2–§8; tech plan
+docs/tech-plan/Outpost.md §3.1). After this first write the WORKBOOK is the source: tune it by hand in Excel and
+re-extract; re-running this script overwrites hand edits. Same safe write as the contract sheets
+(write_collective_contracts.write_sheet: LibreOffice recalculation, refused if any other sheet's values change).
+Outpost_Raids is not written here: raid sizes are measured by running the battle sim (tech plan §4.3, story O2/O3).
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from write_collective_contracts import write_sheet  # noqa: E402
+
+# planet key, planet, (common, uncommon, rare) ores, use — design §3; rig heads design §8.4
+PLANETS = [
+    ("ground", "Verdance", ("Iron", "Aluminum", "Lithium"), ("auger", "laser", "brine"),
+     "outposts, hulls, batteries"),
+    ("air", "Florael", ("Magnesium", "Boron", "Cobalt"), ("laser", "brine", "bore"),
+     "light, strong materials and power stations"),
+    ("hightech", "Ochre", ("Silicon", "Copper", "Gallium"), ("crystal", "auger", "bore"),
+     "electronics, sensors, solar arrays"),
+    ("artillery", "Kessra", ("Nickel", "Chromium", "Tungsten"), ("auger", "laser", "bore"),
+     "armour plate and ordnance"),
+    ("water", "Rime", ("Manganese", "Titanium", "Vanadium"), ("auger", "laser", "bore"),
+     "hull alloys for cold and vacuum"),
+    ("arcane", "Cinder", ("Zinc", "Platinum", "Iridium"), ("auger", "bore", "crystal"),
+     "heat-proof parts and reactor catalysts"),
+    ("space", "Lumen", ("Thorium", "Uranium", "Helium-3"), ("auger", "shielded", "brine"),
+     "reactor and drive fuel"),
+    ("dark", "Xenthe", ("Neodymium", "Yttrium", "Europium"), ("auger", "crystal", "bore"),
+     "magnets, shields and energy cells"),
+    ("greenies", "Vexmire", ("Sulfur", "Phosphorus", "Palladium"), ("brine", "auger", "bore"),
+     "fuels, chemistry and catalysts"),
+]
+TIERS = ("common", "uncommon", "rare")
+RATE = {"common": 3, "uncommon": 1.5, "rare": 0.8}          # Rig I units per minute (design §4.2)
+PRICE = {"common": 4, "uncommon": 12, "rare": 30}           # gold per unit
+COLOUR = {
+    "Iron": "#8a4b32", "Aluminum": "#c9d2dc", "Lithium": "#e8c8d6", "Magnesium": "#d8d8cc", "Boron": "#6f5a4a",
+    "Cobalt": "#2a52be", "Silicon": "#6f7b8f", "Copper": "#b87333", "Gallium": "#a9b8c6", "Nickel": "#9c9a8a",
+    "Chromium": "#cfd8e0", "Tungsten": "#5a5f66", "Manganese": "#8e6e8c", "Titanium": "#b8c0c8",
+    "Vanadium": "#3f6fa8", "Zinc": "#a7b0b8", "Platinum": "#e5e4e2", "Iridium": "#7fb6ff", "Thorium": "#6a8f5a",
+    "Uranium": "#7cff5a", "Helium-3": "#a8e8ff", "Neodymium": "#8a7fb0", "Yttrium": "#b06fd8",
+    "Europium": "#6a4fe0", "Sulfur": "#e6d23a", "Phosphorus": "#f0f0e0", "Palladium": "#c9c4b8",
+}
+# The far buyer (design §8.5): each faction wants one other planet's rare ore and pays Far_Buyer_Mult for it.
+# Florael → Lithium and Lumen → Iridium are the design's; the rest follow each faction's use (§3), one want each.
+WANTED_BY = {"Lithium": "air", "Cobalt": "water", "Gallium": "greenies", "Tungsten": "ground", "Vanadium": "artillery",
+             "Iridium": "space", "Helium-3": "arcane", "Europium": "hightech", "Palladium": "dark"}
+
+ORE_COLS = ["Planet_Key", "Planet", "Tier", "Ore", "Ore_Id", "Rate_Per_Min", "Price", "Deep_Rate_Mult",
+            "Deep_Price_Mult", "Colour", "Rig_Head", "Wanted_By", "Use"]
+
+
+def ore_rows():
+    rows = []
+    for key, planet, ores, heads, use in PLANETS:
+        for tier, ore, head in zip(TIERS, ores, heads):
+            oid = ore.lower().replace("-", "")
+            rows.append([key, planet, tier, ore, oid, RATE[tier], PRICE[tier], 0.25, 5, COLOUR[ore], head,
+                         WANTED_BY.get(ore, ""), use])
+    return rows
+
+
+STRUCT_COLS = ["Kind", "Tier", "Cost", "Value", "Build_Sec", "Power_Draw", "Power_Supply", "Power_Reach",
+               "Bay_Hours", "Rate_Mult", "Capacity_Mult", "Battle_Struct", "Model", "Unlock"]
+# Cost: the price to build one (0 = contract kit only). Value: what a repair is priced against (design §6.1).
+# Defense prices are the battle price × 4 (design §5.2), the battle tier stats come from Battle_Struct.
+STRUCTS = [
+    ["hub", 1, 0, 0, 0, 2, 0, 0, "", "", "", "", "hub", "kit"],
+    ["power", 1, 4000, 4000, 600, 0, 10, 10, "", "", "", "", "power", "kit"],
+    ["power", 2, 6000, 6000, 900, 0, 20, 14, "", "", "", "", "power_ii", "tech:power_grid_2"],
+    ["rig", 1, 3000, 3000, 300, 4, 0, 0, "", 1, 1, "", "rig", "kit"],
+    ["rig", 2, 8000, 8000, 1200, 4, 0, 0, "", 2, 2, "", "rig", "tech:rig_mk2"],
+    ["storage", 1, 0, 0, 0, 1, 0, 0, 4, "", "", "", "storage", "kit"],
+    ["storage", 2, 5000, 5000, 900, 1, 0, 0, 8, "", "", "", "storage", "tech:supply_depot"],
+    ["harvesterBay", 1, 2500, 2500, 300, 2, 0, 0, "", "", "", "", "harvester_bay", "contract:1"],
+    ["upgradeBay", 1, 4000, 4000, 600, 1, 0, 0, "", "", "", "", "upgrade_bay", "contract:1"],
+    ["mg", 1, 600, 600, 120, 1, 0, 0, "", "", "", "STR-MG", "", "kit"],
+    ["mg", 2, 1500, 1500, 120, 1, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
+    ["mg", 3, 3000, 3000, 120, 1, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
+    ["cannon", 1, 1200, 1200, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "kit"],
+    ["cannon", 2, 3000, 3000, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
+    ["cannon", 3, 6000, 6000, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
+    ["wall", 1, 400, 400, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "kit"],
+    ["wall", 2, 1000, 1000, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "tech:reinforced_walls"],
+]
+
+CONTRACT_COLS = ["Planet_Key", "Step", "Title", "Ore_Tier", "Deliver", "Raids_Held", "Gold", "Loyalty", "XP", "Unlocks"]
+# Contract 1 is the design's (§2.3); 2 and 3 follow the ladder (§2.4) with proposed rewards, to tune after play.
+LADDER = [
+    (1, "common", 300, 1, 2000, 20, 300, "ore:uncommon tech:deep_drilling_1 tech:supply_depot tech:power_grid_2 tech:reinforced_walls"),
+    (2, "uncommon", 150, 0, 4000, 30, 500, "ore:rare tech:rig_mk2 tech:sensor_spire"),
+    (3, "rare", 60, 3, 8000, 40, 800, "tech:cargo_shuttle_2 far_buyer"),
+]
+TITLE = {1: "Establish: {ore}", 2: "Expand: {ore}", 3: "Master: {ore}"}
+TITLE_OVERRIDE = {("ground", 1): "Iron for the Oath"}
+
+
+def contract_rows():
+    rows = []
+    for key, planet, ores, _, _ in PLANETS:
+        for step, tier, deliver, raids, gold, loyalty, xp, unlocks in LADDER:
+            ore = ores[TIERS.index(tier)]
+            title = TITLE_OVERRIDE.get((key, step), TITLE[step].format(ore=ore))
+            rows.append([key, step, title, tier, deliver, raids, gold, loyalty, xp, unlocks])
+    return rows
+
+
+PARAMS = [
+    ["Param", "Value", "Unit", "Notes"],
+    ["Load_Sec", 300, "s", "a shuttle load is this many seconds of a rig's output (owner: a load every 5 min)"],
+    ["Store_Hours", 4, "h", "a Storage Tower I bay holds this many hours of its rig's shallow output"],
+    ["Deep_Rate_Mult", 0.25, "x", "deep seam extraction speed (owner: 1/4)"],
+    ["Deep_Price_Mult", 5, "x", "deep grade price (owner Q3: raised from 3x to 5x)"],
+    ["Raid_Mean_Hours", 6, "h", "average time between raids"],
+    ["Raid_Min_Gap_Hours", 3, "h", "at most one raid per window of this length"],
+    ["Breach_Storage_Loss", 0.25, "share", "ore in storage lost on a breach (owner Q6)"],
+    ["First_Raid_Sec", 600, "s", "the scripted first raid, after the outpost comes online"],
+    ["Away_Cap_Hours", 72, "h", "time advanced at most when the game reopens"],
+    ["Replay_Keep", 20, "count", "raids kept in the log"],
+    ["Far_Buyer_Mult", 2, "x", "the far buyer's price for its wanted rare ore (design 8.5)"],
+    ["Far_Loyalty_Cost", 1, "loyalty", "home-faction loyalty lost per load sold far"],
+    ["Defense_Price_Mult", 4, "x", "an outpost defense costs its battle price times this (design 5.2)"],
+    ["Repair_Share_Per_HP", 1, "x", "repair cost = value x this x share of HP restored (10% per 10%)"],
+    ["Shuttle_II_Bonus", 0.10, "share", "Cargo Shuttle II adds this to every sale"],
+]
+
+
+def main():
+    write_sheet("Ores", ORE_COLS, [
+        "Ores (27) — three per planet, mined only by outpost rigs; one design per extraction head",
+        "Design: docs/16 Bulwark MM/design/Outpost-Design.md §3, §4.2, §8.4, §8.5. Rate_Per_Min is Rig I shallow; "
+        "deep = rate x Deep_Rate_Mult at price x Deep_Price_Mult. Wanted_By: the faction that pays the far price.",
+        "",
+    ], ore_rows())
+    write_sheet("Outpost_Structures", STRUCT_COLS, [
+        "Outpost buildings and defenses, per tier",
+        "Design §4.5 (power), §5.2 (defenses, battle price x 4), §6.1 (costs). Cost 0 = contract kit only. Defenses take "
+        "their battle stats from Battle_Struct (STRUCTURES in src/data/tables.js); no anti-air, no long range.",
+        "",
+    ], STRUCTS)
+    write_sheet("Outpost_Contracts", CONTRACT_COLS, [
+        "Outpost contracts (27) — three steps per planet",
+        "Design §2.3 (contract 1, specified) and §2.4 (the ladder; steps 2-3 rewards proposed, tune after play). "
+        "Deliver counts both grades of the step's ore; Raids_Held counts raids repelled while the step is active.",
+        "",
+    ], contract_rows())
+    write_sheet("Outpost_Params", PARAMS[0], [
+        "Outpost tuning",
+        "Design §4.1 (the owner's fixed numbers), §5, §8.5. Read by src/data/outpost.js as OUTPOST.",
+        "",
+    ], PARAMS[1:])
+
+
+if __name__ == "__main__":
+    main()
