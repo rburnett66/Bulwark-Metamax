@@ -13,7 +13,7 @@ import { bayKind } from './buildMenu.js';
 import { buildingWarnings, warningLines } from './warnings.js';
 
 export const KIND_NAME = Object.freeze({
-  hub: 'Outpost Hub', power: 'Power Station', rig: 'Mining Rig', storage: 'Storage Tower',
+  hub: 'Outpost Hub', power: 'Power Station', rig: 'Mining Station', storage: 'Storage Tower',
   harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay', cannon: 'Cannon Tower', mg: 'Machine Gun', wall: 'Wall',
 });   // the Harvester Bay is the Resource Bay (owner 2026-11-07); the turret tower is the Cannon Tower
 const RIG_NAME = { auger: 'Auger Drill', laser: 'Laser Cutter', brine: 'Brine Pump', crystal: 'Crystal Harvester', bore: 'Deep Bore', shielded: 'Shielded Extractor' };
@@ -122,7 +122,7 @@ export function panelModel(o, map, sel, ctx = {}) {
   if (!b && !job) return { ...buildPanel(o, map, pad, ctx), empty: true };
   const kind = (b || job).kind, tier = b ? b.tier : 0;
   const head = kind === 'rig' ? rigHeadOf(o, map, pad.id) : null;
-  const title = kind === 'rig' ? `${RIG_NAME[head] || 'Mining Rig'} ${ROMAN[Math.max(1, tier)]}${tier >= 2 ? ' (Mk II)' : ''}` : `${KIND_NAME[kind] || kind} ${ROMAN[Math.max(1, tier)]}`;
+  const title = kind === 'rig' ? `${RIG_NAME[head] || 'Mining Station'} ${ROMAN[Math.max(1, tier)]}${tier >= 2 ? ' (Mk II)' : ''}` : `${KIND_NAME[kind] || kind} ${ROMAN[Math.max(1, tier)]}`;
   const stats = [];
   let status = 'Online', tone = 'ok';
   if (!b) { status = `Building · ${fmtClock((job.done - now) / 1000)}`; tone = 'busy'; }
@@ -194,7 +194,7 @@ function buildPanel(o, map, pad, ctx) {
       else if (!tiers.includes(dep)) why = `${(oresOf(o.planet).find((x) => x.tier === dep) || {}).name || dep} not unlocked`;
     }
     if (!why && def.cost > (ctx.gold ?? Infinity)) why = `costs ${fmtGold(def.cost)}`;
-    const name = kind === 'rig' ? `${RIG_NAME[rigHeadOf(o, map, pad.id)] || 'Mining Rig'}` : KIND_NAME[kind];
+    const name = kind === 'rig' ? `${RIG_NAME[rigHeadOf(o, map, pad.id)] || 'Mining Station'}` : KIND_NAME[kind];
     return { kind, name, cost: def ? def.cost : 0, buildSec: def ? def.buildSec : 0, enabled: !why, why };
   });
   const dep = depositOf(map, pad.id), ore = dep && oresOf(o.planet).find((x) => x.tier === dep);

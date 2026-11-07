@@ -381,7 +381,6 @@ export async function openOutpostView(opts = {}) {
       const ok = pads.length > 0 && !probs.some((p) => pads.some((id) => p.startsWith(id + ' ')));
       return { label: KIND_NAME[k], ok };
     });
-    checks.push({ label: `${o.defenses.length} defenses`, ok: o.defenses.length > 0 });
     checks.push({ label: 'Power grid', ok: !issues.some((x) => /power/.test(x)) });
     return checks;
   }

@@ -132,7 +132,7 @@ test('the away report: words for the time, breach losses, nothing to show for a 
   assert.equal(m.raids[0].label, 'Raid broke through');
   assert.equal(m.raids[0].lostText, 'lost 40 Iron');
   assert.equal(m.breached, 1);
-  assert.deepEqual(m.built, ['Mining Rig finished']);
+  assert.deepEqual(m.built, ['Mining Station finished']);
   assert.equal(awayReportModel({ from: T0, to: T0 + 1000, extracted: { iron: 0.05 }, full: [], built: [], raids: [] }).show, false);
 });
 
