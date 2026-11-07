@@ -259,7 +259,7 @@ renderer.
 - **Camera.** The concept image's three-quarter angle, framing the mesa. Pinch or wheel zooms between the whole mesa
   and one building, and a drag pans within the map. Tapping a building focuses it and opens its panel.
 - **The HUD** uses the battle HUD's visual language:
-  - top bar: gold, each ore in storage with its icon, the storage fill bar, power used / supplied, and the defense
+  - top bar: gold, each ore in storage with its icon, the storage fill bar, power used / supplied, and the
     defenses' state as a shield filled to their total HP;
   - bottom: **SELL** (with the number of loads), **BUILD** (pads and defenses), **REPAIR** when the defenses are worn;
   - the selected building's panel: status, tier, rate, the deep / shallow switch on a rig, and upgrade.
