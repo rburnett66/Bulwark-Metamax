@@ -15,7 +15,7 @@
 import { openBattleHistory } from './battleHistory.js';
 import { outpostButtonModel } from './outpostButton.js';
 import { outpostOffer, outpostCard, acceptOutpostContract, declineOutpostContract } from '../outpost/contract.js';
-import { DRAFT_LAYOUT } from '../outpost/draftLayout.js';
+import { outpostMapFor } from '../outpost/outpostMap.js';
 import { battlesOn } from '../save/battleLog.js';
 import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
@@ -396,7 +396,7 @@ export function createMenu(mountEl, cbs) {
     onAcceptOutpost: (key) => acceptOutpost(key) });
   // ACCEPT on the outpost contract (aboard, or later from the Mission Log) [MM-story_mw5oe8km_k]: the kit is placed on
   // the planet's outpost map; the OUTPOST button lights
-  const outpostMap = async (key) => DRAFT_LAYOUT;   // O4 swaps in the planet's own outpost map
+  const outpostMap = (key) => outpostMapFor(key);   // the planet's own outpost map (O4), the draft layout until it has one
   async function acceptOutpost(key) {
     const map = await outpostMap(key), now = Date.now();
     updateSave((s) => { acceptOutpostContract(s, key, { map, now }); });

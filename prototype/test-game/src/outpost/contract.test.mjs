@@ -134,3 +134,19 @@ test('the contract card names the kit, the steps, the pay and the unlocks', () =
   assert.match(c.terms, /Aluminum<\/b> and Deep Drilling I/);
   assert.equal(c.declineLabel, 'LATER');
 });
+
+test('the generated catalogue carries Verdance contract 1 exactly as the flow above reads it', async () => {
+  const { readFileSync } = await import('node:fs');
+  const cat = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
+  const m = cat.missions.find((x) => x.id === 'OC-VER-1');
+  assert.ok(m, 'OC-VER-1 is generated once ground-outpost.json exists');
+  assert.equal(m.type, 'outpost');
+  assert.equal(m.questLine, 'QL-VER-O');
+  assert.deepEqual(m.complete.map((c) => [c.cond, c.param, c.value]), OC1.complete.map((c) => [c.cond, c.param, c.value]));
+  assert.deepEqual(m.unlock.map((c) => c.cond), ['capital_ship_arrived']);
+  assert.deepEqual(m.rewards.map((r) => [r.kind, r.amount]), [['gold', 2000], ['xp', 300]]);
+  assert.equal(m.impact.loyaltyPlanet, 20);
+  for (const c of ['outpost_online', 'ore_sold', 'raids_held', 'outpost_contract_step']) assert.ok(cat.conditions[c], c);
+  // only planets with an outpost map get contracts
+  assert.deepEqual([...new Set(cat.missions.filter((x) => x.type === 'outpost').map((x) => x.planet))], ['Verdance']);
+});
