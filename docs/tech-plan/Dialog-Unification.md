@@ -114,7 +114,7 @@ The plans that referenced `conversation.js` are corrected too: Collective-Openin
 | PE | Governor Isembard Croke | "A total trade order is a kind of peace." | Ground / Powder |
 | DE | The Standing Charter | Faceless authority | Greenies |
 
-Rows 1–5 are owner-specified (Dossier); the names of rows 6–9 are placeholders until the owner confirms (Q2).
+Rows 1–5 are owner-specified (Dossier); the names of rows 6–9 were confirmed by the owner (Q2).
 
 **Each officer also gets:**
 - the full character entry (motivation, backstory, friends, enemies, phrases, voice profile and signature lines);
@@ -129,7 +129,7 @@ Epic: *Unify the dialog system*. These replace the open story `story_mw548j4g_v`
 
 | # | Story | DoD (summary) | Depends on |
 |---|---|---|---|
-| D0 | The dialog source doc in the repo | `bulwark-dialog-system.md` committed under `docs/16 Bulwark MM/design/`; `extract_dialog.py` defaults to it; a drift test like `contact.test.mjs` fails when `voicepacks.json` and the doc differ | Owner supplies the file (Q1) |
+| D0 | The dialog source doc in the repo | `bulwark-dialog-system.md` committed under `docs/16 Bulwark MM/design/`; `extract_dialog.py` defaults to it; a drift test like `contact.test.mjs` fails when `voicepacks.json` and the doc differ | Owner supplies the file (Q1, open) |
 | D1 | The opening on the comm card; duplicates deleted | F1, F2, F4. The opening plays as a comm scene with slides and offers its contract on `showContractModal`. `conversation*.js`, `contractCard.js` and the hand-written `opening.json` are deleted; the post-battle chain uses `playScene` | D3 (lines), D0 |
 | D2 | One character registry | F7. Givers gains the §5.1 columns, filled for the 81 from the voice packs and the doc; `characters.json` extracted; registry ↔ voice packs ↔ portraits test | D0 |
 | D3 | The Collective cast, tracked like the 81 | F5, F6. Nine registry rows and nine §10 entries (backstory, alignment, friends, enemies, phrases, voice profile, hub lines, portrait brief); the opening as a §10 scene; the Collective voice in `FACTIONS`; the Comm Array lists them; placeholder portraits made | D0, D2 |
@@ -151,14 +151,14 @@ The **C4 story** (the Collective cast in the voice pack) is absorbed by D3.
 The graph was behind the repo (`graph_head d84a711` vs `live 2eb7b26`), so every graph answer above was checked
 against source.
 
-## 8. Open decisions (owner)
+## 8. Owner decisions (2026-11-06)
 
-| # | Question | Proposal |
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Where is `bulwark-dialog-system.md` v1.1? It is not in the repo, so `voicepacks.json` cannot be regenerated here. | Commit it under `docs/16 Bulwark MM/design/` (D0). |
-| Q2 | Names for Collective officers 6–9 (Marlow, Roux, Croke, the Standing Charter) | Keep them |
-| Q3 | Backstory, Friends and Enemies for the 81: write them where the doc has none, for your review? | Yes, in D2, marked draft |
-| Q4 | The Collective's signature moments | `greet`, `contractOffer`, `contractDone`, `standingUp`, `farewell` |
+| Q1 | Where is `bulwark-dialog-system.md` v1.1? It is not in the repo, so `voicepacks.json` cannot be regenerated here. | **Open: the owner will find it with a tool later.** D0 waits for it; D1–D5 can start without it, and their extractions and drift tests run against `voicepacks.json` until the doc is committed. |
+| Q2 | Names for Collective officers 6–9 (Marlow, Roux, Croke, the Standing Charter) | **Keep all four.** |
+| Q3 | Backstory, Friends and Enemies for the 81: write them where the doc has none, for your review? | **Yes:** written in D2, marked draft until the owner approves them. |
+| Q4 | The Collective's signature moments | **The proposed five:** `greet`, `contractOffer`, `contractDone`, `standingUp`, `farewell`. |
 
 ## Dependencies
 
