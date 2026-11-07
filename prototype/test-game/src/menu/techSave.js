@@ -6,6 +6,17 @@
  * No DOM, no three.js: the save functions are passed in, so tests drive it with a fake save.
  */
 import { TECH_BY_ID, startingOwned, settleFree, techStatus, techPrice, refundBlock, PORTALS } from '../data/techtree.js';
+import { outpostUnlocks } from '../outpost/contract.js';
+
+/**
+ * The Outpost nodes the player's outpost contracts have unlocked, on any planet (Outpost-Design §7, story O10): a
+ * collected contract step's `tech:<node>` Unlocks makes the node buyable (tech plan D7: a mission unlocks, gold buys).
+ */
+export function outpostTechUnlocked(s) {
+  const out = new Set();
+  for (const key of Object.keys((s && s.outposts) || {})) for (const t of outpostUnlocks(s, key).unlocks) out.add(t);
+  return out;
+}
 
 export const map3Won = (s) => !!((s.maps && s.maps[3] && s.maps[3].beaten) ||
   Object.values(s.factionRecords || {}).some((f) => f && f.mapsWon && f.mapsWon[3]));
@@ -22,7 +33,7 @@ export function techCtxFromSave(s, factionOfPlanet = (p) => p, opts = {}) {
   settleFree(owned);
   return {
     owned, bank: (s.carry && s.carry.gold) || 0, paid: (s.tech && s.tech.paid) || {},
-    ...(opts.missionGate ? { unlocked: new Set(Object.keys((s.tech && s.tech.unlocked) || {})), unlockedBy: opts.unlockedBy || null } : {}),
+    ...(opts.missionGate ? { unlocked: new Set([...Object.keys((s.tech && s.tech.unlocked) || {}), ...outpostTechUnlocked(s)]), unlockedBy: opts.unlockedBy || null } : {}),
     hasWin: (planet) => {
       const fr = s.factionRecords && s.factionRecords[factionOfPlanet(planet)];
       return !!(fr && fr.mapsWon && Object.values(fr.mapsWon).some(Boolean));

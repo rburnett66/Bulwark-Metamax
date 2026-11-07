@@ -35,7 +35,7 @@ test('the contract grants only the hub (owner 2026-11-07); the rest is bought', 
   assert.deepEqual(onlineProblems(o, map), ['no power station', 'no mining rig on the iron', 'no storage tower', 'hub unpowered (reach)']);
   assert.ok(confirmOnline(o, map, T0).error);
   assert.deepEqual(defaultPads(map), { hub: 'hub', power: 'p1', rig: 'r1', storage: 's1' });
-  assert.deepEqual([...PAD_KINDS], ['power', 'rig', 'storage', 'resourceBay', 'upgradeBay']);
+  assert.deepEqual([...PAD_KINDS], ['power', 'rig', 'storage', 'resourceBay', 'upgradeBay', 'habitat']);   // the Habitat: story O15
 });
 
 test('the reference set (the former kit: the map\'s kitDefenses) is on the default pads and powered', () => {

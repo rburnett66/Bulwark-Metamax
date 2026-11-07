@@ -26,7 +26,11 @@ export function modelSlug(kind, tier, rigHead) {
   if (kind === 'rig') return `rig_${rigHead || 'auger'}`;
   if (kind === 'power') return tier >= 2 ? 'power_ii' : 'power';
   if (kind === 'hub' || kind === 'storage' || kind === 'shuttle') return kind;
-  return null;   // resourceBay (was harvesterBay) / upgradeBay / harvester: models in story O10
+  // story O10 / O15: the bays and the Habitat are looked up by kind in content/outposts/outposts.json; until the
+  // manifest lists a kind the view draws its placeholder block (outpostScene.js), with no code change when it lands
+  if (kind === 'resourceBay' || kind === 'harvesterBay') return 'resourceBay';
+  if (kind === 'upgradeBay' || kind === 'habitat') return kind;
+  return null;   // harvester: the battle's own miner model (harvestDrive.js)
 }
 
 /**

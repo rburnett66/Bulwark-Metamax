@@ -5404,6 +5404,38 @@
    "Unlock": "contract:1"
   },
   {
+   "Kind": "habitat",
+   "Tier": 1,
+   "Cost": 3000,
+   "Value": 3000,
+   "Build_Sec": 600,
+   "Power_Draw": 0,
+   "Power_Supply": 0,
+   "Power_Reach": 0,
+   "Bay_Hours": null,
+   "Rate_Mult": null,
+   "Capacity_Mult": null,
+   "Battle_Struct": null,
+   "Model": "habitat",
+   "Unlock": "contract:1"
+  },
+  {
+   "Kind": "habitat",
+   "Tier": 2,
+   "Cost": 5000,
+   "Value": 5000,
+   "Build_Sec": 900,
+   "Power_Draw": 0,
+   "Power_Supply": 0,
+   "Power_Reach": 0,
+   "Bay_Hours": null,
+   "Rate_Mult": null,
+   "Capacity_Mult": null,
+   "Battle_Struct": null,
+   "Model": "habitat",
+   "Unlock": "contract:1"
+  },
+  {
    "Kind": "mg",
    "Tier": 1,
    "Cost": 600,
@@ -5876,8 +5908,78 @@
   "Shuttle_II_Bonus": 0.1,
   "Rig_Bay_Min": 15,
   "Harvester_Cap": 2,
-  "Harvester_Max": 4
+  "Harvester_Max": 4,
+  "Hopper_Hours": 4,
+  "Harvest_Route_Mult": 1.3,
+  "Harvest_Rate_Mult": 1,
+  "Gun_Cap": 3,
+  "Habitat_Guns_Per_Tier": 2
  },
+ "outpostTech": [
+  {
+   "Node": "deep_drilling_1",
+   "Name": "Deep Drilling I",
+   "Price": 3000,
+   "Effect": "rigs can mine the deep seam: 1/4 the speed, 5x the price",
+   "Unlocked_By": "contract 1",
+   "Requires": null,
+   "Applies": "outposts"
+  },
+  {
+   "Node": "supply_depot",
+   "Name": "Supply Depot",
+   "Price": 4000,
+   "Effect": "Storage Tower II: 8 hours per rig bay",
+   "Unlocked_By": "contract 1",
+   "Requires": null,
+   "Applies": "outposts"
+  },
+  {
+   "Node": "power_grid_2",
+   "Name": "Power Grid II",
+   "Price": 4000,
+   "Effect": "Power Station II: 20 power, 14-cell reach",
+   "Unlocked_By": "contract 1",
+   "Requires": null,
+   "Applies": "outposts"
+  },
+  {
+   "Node": "reinforced_walls",
+   "Name": "Reinforced Walls",
+   "Price": 2500,
+   "Effect": "walls to tier II (960 HP), installed in the Upgrade Bay",
+   "Unlocked_By": "contract 1",
+   "Requires": null,
+   "Applies": "upgradeBay"
+  },
+  {
+   "Node": "rig_mk2",
+   "Name": "Rig Mk II",
+   "Price": 6000,
+   "Effect": "Mining Rig II: 2x extraction and 2x bay",
+   "Unlocked_By": "contract 2",
+   "Requires": "deep_drilling_1",
+   "Applies": "outposts"
+  },
+  {
+   "Node": "sensor_spire",
+   "Name": "Sensor Spire",
+   "Price": 3500,
+   "Effect": "raid early warning: the outpost shows a raid inbound 10 minutes ahead",
+   "Unlocked_By": "contract 2",
+   "Requires": null,
+   "Applies": "outposts"
+  },
+  {
+   "Node": "cargo_shuttle_2",
+   "Name": "Cargo Shuttle II",
+   "Price": 10000,
+   "Effect": "+10% on every sale (still a manual tap)",
+   "Unlocked_By": "contract 3",
+   "Requires": null,
+   "Applies": "outposts"
+  }
+ ],
  "outpostRaids": [
   {
    "Planet_Key": "ground",

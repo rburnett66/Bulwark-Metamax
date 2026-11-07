@@ -6,20 +6,21 @@
  * tier, rate, the deep / shallow switch on a rig, upgrade). Pure: reads the outpost through src/outpost/model.js; the
  * DOM lives in hud.js.
  */
-import { powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems } from '../model.js';
-import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST } from '../../data/outpost.js';
+import { powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems, harvestPlan, hopperCap, hopperUnits,
+  gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady } from '../model.js';
+import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST, OUTPOST_TECH } from '../../data/outpost.js';
 import { oresOf, oreById } from '../../data/ores.js';
 import { bayKind } from './buildMenu.js';
 import { buildingWarnings, warningLines } from './warnings.js';
 
 export const KIND_NAME = Object.freeze({
   hub: 'Outpost Hub', power: 'Power Station', rig: 'Mining Station', storage: 'Storage Tower',
-  harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay', cannon: 'Cannon Tower', mg: 'Machine Gun', wall: 'Wall',
+  harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay', habitat: 'Habitat', cannon: 'Cannon Tower', mg: 'Machine Gun', wall: 'Wall',
 });   // the Harvester Bay is the Resource Bay (owner 2026-11-07); the turret tower is the Cannon Tower
 const RIG_NAME = { auger: 'Auger Drill', laser: 'Laser Cutter', brine: 'Brine Pump', crystal: 'Crystal Harvester', bore: 'Deep Bore', shielded: 'Shielded Extractor' };
 export const ROMAN = Object.freeze(['', 'I', 'II', 'III']);
 /** What a pad role can take (model.js ROLE_FITS, read the other way round) — the BUILD menu's choices. */
-const buildsOn = (role) => ({ power: ['power'], spare: ['power', bayKind(), 'upgradeBay'], bay: [bayKind(), 'upgradeBay'], rig: ['rig'], storage: ['storage'], hub: ['hub'] })[role];
+const buildsOn = (role) => ({ power: ['power'], spare: ['power', bayKind(), 'upgradeBay', 'habitat'], bay: [bayKind(), 'upgradeBay', 'habitat'], rig: ['rig'], storage: ['storage'], hub: ['hub'] })[role];
 
 // ── formatting ───────────────────────────────────────────────────────────────────────────────────────────────────
 /** 950 → "950", 12_400 → "12,400", 1_250_000 → "1.25M". */
@@ -53,7 +54,7 @@ export function rigHeadOf(o, map, pad) {
  * → { gold, ores: [{ id, name, colour, units, deep }], storage: { units, cap, frac }, power: { draw, supply, short },
  *     shield: { hp, max, frac, worn }, loads, online, problems, repairCost, building: n }
  */
-export function hudModel(o, map, { gold = 0 } = {}) {
+export function hudModel(o, map, { gold = 0, now = null, unlocks = null } = {}) {
   const ores = new Map();
   for (const bay of Object.values(o.storage)) {
     for (const [item, units] of Object.entries(bay)) {
@@ -75,8 +76,14 @@ export function hudModel(o, map, { gold = 0 } = {}) {
   const repair = o.defenses.reduce((a, d) => a + (repairCost(o, d.id) || 0), 0);
   // ores in planet order, with the planet's ores that have none yet left out
   const order = oresOf(o.planet).map((x) => x.id);
+  // the Resource Bay's hopper (story O10): what the harvesters have brought in, banked to the inventory on open
+  const hCap = hopperCap(o, map), hUnits = hopperUnits(o);
+  const warn = now != null ? raidWarning(o, now, { unlocks }) : null;
   return {
     gold, online: !!o.online,
+    hopper: o.harvesters > 0 || hUnits > 0 ? { units: hUnits, cap: hCap, frac: hCap > 0 ? Math.min(1, hUnits / hCap) : 0, harvesters: o.harvesters || 0 } : null,
+    guns: { n: gunCount(o), cap: gunCap(o) },
+    raidInbound: warn,
     ores: [...ores.values()].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)),
     storage: { units, cap, frac: cap > 0 ? Math.min(1, units / cap) : 0 },
     power: { draw, supply, short: Object.values(off).includes('supply'), unpowered: Object.keys(off).length },
@@ -107,7 +114,11 @@ export function panelModel(o, map, sel, ctx = {}) {
     if (!d) return null;
     const def = structureDef(d.kind, d.tier), max = def.battle.hp, cost = repairCost(o, d.id) || 0;
     const frac = d.hp / max;
+    // the Upgrade Bay (story O10): the next tier, as far as the tech tree's tier, at an outpost with the bay
+    const next = structureDef(d.kind, d.tier + 1);
+    const upWhy = next ? defenseUpgradeRefusal(o, d.id, { ...ctx, map }) : null;
     return {
+      upgradeDefense: next ? { label: `UPGRADE TO ${ROMAN[d.tier + 1]} · ${fmtGold(next.cost)}`, cost: next.cost, enabled: !upWhy, why: upWhy ? upWhy.replace(/^./, (c) => c.toUpperCase()) : null } : null,
       title: `${KIND_NAME[d.kind]} ${ROMAN[d.tier]}`, sub: `cell ${d.cell[0]}, ${d.cell[1]}`,
       status: off[d.id] ? 'No power' : frac >= 1 ? 'Ready' : frac < 0.4 ? 'Badly worn' : 'Worn',
       tone: off[d.id] ? 'off' : frac >= 1 ? 'ok' : 'warn',
@@ -156,8 +167,29 @@ export function panelModel(o, map, sel, ctx = {}) {
     for (const id of Object.keys(o.pads).filter((x) => o.pads[x].kind === 'rig')) { units += bayUnits(o, id); cap += bayCapacity(o, id, map); }
     stats.push(['Holds', `${def.bayHours} h per rig`], ['Stored', `${fmtUnits(units)} / ${fmtUnits(cap)}`]);
     out.bay = cap > 0 ? units / cap : 0;
+  } else if (b && (kind === 'resourceBay' || kind === 'harvesterBay')) {
+    // story O10: the harvesters, where they work and the hopper they fill
+    const plan = harvestPlan(o, map), cap = hopperCap(o, map), units = hopperUnits(o);
+    const running = powered.has(pad.id) && !job;
+    stats.push(['Harvesters', `${o.harvesters || 0} / ${harvesterCap(o, ctx)}`]);
+    for (const h of plan) stats.push([`${h.tier === 'common' ? 'Common' : 'Uncommon'} · #${h.i + 1}`, running ? `${fmtUnits(h.rate * 3_600_000)} / h` : 'stopped']);
+    stats.push(['Hopper', `${fmtUnits(units)} / ${fmtUnits(cap)}`]);
+    out.bay = cap > 0 ? units / cap : 0;
+    out.oreColour = '#5fb8ff';
+    out.note = 'The hopper empties into your inventory each time you open the outpost.';
+    if (!(o.harvesters > 0)) out.note = 'Buy harvesters from the build list.';
+  } else if (b && kind === 'upgradeBay') {
+    // story O10: the Outpost tech, bought in the Tech Tree, and the defense tiers this bay installs
+    const has = (id) => (ctx.unlocks instanceof Set ? ctx.unlocks.has(id) : (ctx.unlocks || []).includes(id));
+    const open = (id) => (ctx.contractUnlocks instanceof Set ? ctx.contractUnlocks.has(id) : (ctx.contractUnlocks || []).includes(id));
+    out.techs = OUTPOST_TECH.map((t) => ({ id: t.id, name: t.name, effect: t.effect, price: t.price,
+      state: has(t.id) ? 'owned' : open(t.id) ? 'buy' : 'locked', note: has(t.id) ? 'installed' : open(t.id) ? `buy in the Tech Tree · ${fmtGold(t.price)}` : `unlocked by the outpost ${t.unlockedBy}` }));
+    const ready = upgradeBayReady(o, map);
+    stats.push(['Defense tiers', ready ? 'tap a defense to upgrade it' : 'no power']);
+  } else if (b && kind === 'habitat') {
+    stats.push(['Guns crewed', `${gunCount(o)} / ${gunCap(o)}`], ['Crew', `+${(OUTPOST.Habitat_Guns_Per_Tier ?? 2) * b.tier} guns`]);
   } else if (b && kind === 'hub') {
-    stats.push(['Loads ready', String(loadsReady(o, {}))], ['Load', `${OUTPOST.Load_Sec / 60} min of a rig`]);
+    stats.push(['Loads ready', String(loadsReady(o, {}))], ['Load', `${OUTPOST.Load_Sec / 60} min of a rig`], ['Guns crewed', `${gunCount(o)} / ${gunCap(o)}`]);
   }
   if (b && !job) {
     const next = structureDef(kind, b.tier + 1);

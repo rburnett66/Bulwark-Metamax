@@ -12,12 +12,15 @@
  *
  * Raids: the hook comes from raidSeam.raidHookFor (story O7 plugs the battle sim in there).
  */
-import { advance, sell, place, upgrade, repair, repairCost, setDeep, confirmOnline, onlineProblems, windowMs } from '../model.js';
+import { advance, sell, place, upgrade, repair, repairCost, setDeep, confirmOnline, onlineProblems, windowMs, emptyHopper, upgradeDefense } from '../model.js';
 import * as Model from '../model.js';
 import { outpostUnlocks } from '../contract.js';
+import { bankOutpostHarvest } from '../../save/inventory.js';
+import { startingOwned } from '../../data/techtree.js';
+import { PLANETS } from '../../data/planets.js';
 import { settleOutpost, flowCtx } from '../../save/missionFlow.js';
 import { bankOf } from '../../save/save.js';
-import { structureDef, OUTPOST } from '../../data/outpost.js';
+import { structureDef, OUTPOST, OUTPOST_TECH_IDS } from '../../data/outpost.js';
 import { raidHookFor } from './raidSeam.js';
 import { awayReportModel } from './awayReport.js';
 
@@ -35,9 +38,35 @@ const stepOf = (s, planet) => ((s.outpostContracts || {})[planet] || {}).step ||
  */
 export function createSession({ store, planet, map, catalog = null, raidHook, flowOpts = {} }) {
   const hookFor = (s) => (raidHook !== undefined ? raidHook : raidHookFor(map, stepOf(s, planet)));
-  const ctxFor = (s, now) => ({
-    map, now, gold: bankOf(s), raid: hookFor(s), shuttleTier: 1, farDiscovered: false, ...outpostUnlocks(s, planet),
-  });
+  /**
+   * The model's ctx for this save (story O10): unlockedTiers from the collected contracts; `unlocks` the Outpost tech
+   * the player OWNS (a contract unlocks a node, the Tech Tree sells it, tech plan D7); techOwned every owned tree id
+   * (tower tiers and docks reach the outpost through its Upgrade Bay); Cargo Shuttle II sets the shuttle tier.
+   */
+  const ctxFor = (s, now) => {
+    const u = outpostUnlocks(s, planet), owned = startingOwned();
+    for (const [id, on] of Object.entries((s.tech && s.tech.owned) || {})) if (on) owned.add(id);
+    const unlocks = new Set(OUTPOST_TECH_IDS.filter((id) => owned.has(id)));
+    return {
+      map, now, gold: bankOf(s), raid: hookFor(s), shuttleTier: unlocks.has('cargo_shuttle_2') ? 2 : 1, farDiscovered: false,
+      unlockedTiers: u.unlockedTiers, unlocks, techOwned: owned, contractUnlocks: u.unlocks, farBuyer: u.farBuyer,
+    };
+  };
+  /**
+   * Opening the outpost empties the Resource Bay's hopper into the inventory (design §6, story O10), through
+   * src/save/inventory.js. Needs the mission catalogue (it names the planet's resources); without it the hopper waits.
+   * → { [resourceId]: n } banked
+   */
+  function bankHopper(s) {
+    const o = s.outposts && s.outposts[planet];
+    if (!o || !catalog) return {};
+    const e = emptyHopper(o);
+    if (!Object.keys(e.units).length) return {};
+    let banked = {};
+    try { banked = bankOutpostHarvest(s, e.units, catalog, (PLANETS[planet] || {}).name || planet); } catch (err) { console.warn('[outpost] hopper', err); return {}; }
+    s.outposts[planet] = e.outpost;
+    return banked;
+  }
   const settle = (s, now) => { if (catalog) return settleOutpost(s, catalog, flowCtx(s, { ...flowOpts, now })); return null; };
   let last = null;   // the outpost as last advanced (saved or a live copy)
 
@@ -65,10 +94,11 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
      * settle the missions. → { outpost, report, away } — away: the away report's model ({ show, rows… }).
      */
     open(now) {
-      let report = null, settled = null;
-      const s = store.update((sv) => { report = advanceSaved(sv, now); settled = settle(sv, now); });
+      let report = null, settled = null, banked = {};
+      const s = store.update((sv) => { report = advanceSaved(sv, now); banked = bankHopper(sv); settled = settle(sv, now); });
       last = s.outposts[planet] || null;
-      return { outpost: last, report, away: awayReportModel(report, planet, map), settled };
+      if (report) report.banked = banked;
+      return { outpost: last, report, away: awayReportModel(report, planet, map, catalog), settled, banked };
     },
 
     /**
@@ -90,10 +120,11 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         t = to;
         if (t < stop) await pause();
       }
-      let settled = null;
-      const s = store.update((sv) => { settled = settle(sv, now); });
+      let settled = null, banked = {};
+      const s = store.update((sv) => { banked = bankHopper(sv); settled = settle(sv, now); });
       last = s.outposts[planet] || null;
-      return { outpost: last, report: merged, away: awayReportModel(merged, planet, map), settled };
+      if (merged) merged.banked = banked;
+      return { outpost: last, report: merged, away: awayReportModel(merged, planet, map, catalog), settled, banked };
     },
 
     /**
@@ -114,7 +145,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
     },
 
     /**
-     * Act on the outpost. action: { type: 'online' | 'sell' | 'place' | 'upgrade' | 'repair' | 'repairAll' | 'deep' | 'buyHarvester', … }.
+     * Act on the outpost. action: { type: 'online' | 'sell' | 'place' | 'upgrade' | 'upgradeDefense' | 'repair' | 'repairAll' | 'deep' | 'buyHarvester', … }.
      * → { ok: true, outpost, cost, gold (bank after), loads? (sell), earned? } or { ok: false, error }.
      */
     act(action, now) {
@@ -160,6 +191,8 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         return cost ? { outpost: cur, cost } : { error: 'nothing is worn' };
       }
       case 'deep': return setDeep(o, a.pad, a.on, ctx);
+      // the Upgrade Bay (story O10): a defense to its next tier, as far as the tech tree's tier
+      case 'upgradeDefense': return upgradeDefense(o, a.id, ctx);
       // the build menu's HARVESTER (story O17): story O16's buyHarvester(o, ctx) → { outpost, cost } | { error }, read
       // optionally so the view works before it lands (the menu keeps the item locked until it is exported)
       case 'buyHarvester': return typeof Model.buyHarvester === 'function' ? Model.buyHarvester(o, ctx) : { error: 'Build a Resource Bay first' };
@@ -171,11 +204,12 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
 
 /** Two advance() reports, one after the other, as one. */
 export function mergeReports(a, b) {
-  if (!a) return b && { ...b, extracted: { ...b.extracted }, full: [...b.full], raids: [...b.raids], built: [...b.built] };
+  if (!a) return b && { ...b, extracted: { ...b.extracted }, harvested: { ...(b.harvested || {}) }, full: [...b.full], raids: [...b.raids], built: [...b.built] };
   if (!b) return a;
-  const extracted = { ...a.extracted };
+  const extracted = { ...a.extracted }, harvested = { ...(a.harvested || {}) };
   for (const [k, v] of Object.entries(b.extracted)) extracted[k] = (extracted[k] || 0) + v;
-  return { from: a.from, to: b.to, extracted, full: [...a.full, ...b.full], raids: [...a.raids, ...b.raids], built: [...a.built, ...b.built] };
+  for (const [k, v] of Object.entries(b.harvested || {})) harvested[k] = (harvested[k] || 0) + v;
+  return { from: a.from, to: b.to, extracted, harvested, hopperFull: b.hopperFull ?? a.hopperFull, full: [...a.full, ...b.full], raids: [...a.raids, ...b.raids], built: [...a.built, ...b.built] };
 }
 
 /** What it would cost to repair every worn defense (the REPAIR button's label). */

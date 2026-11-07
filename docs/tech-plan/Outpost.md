@@ -56,6 +56,7 @@ Five new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edi
 | `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Value, Build_Sec, Power_Draw, Power_Supply, Power_Reach, Bay_Hours, Rate_Mult, Capacity_Mult, Battle_Struct, Model, Unlock` — `Battle_Struct` names the `STRUCTURES` entry a defense takes its stats from (`STR-MG`, `STR-Cannon`, `STR-Wall`) |
 | `Outpost_Raids` | 9 (one per planet) | `Planet_Key, Units (the faction's tier I lightGround unit ids), Breacher, Raider_HP_Mult, Raider_Damage_Mult, Size_Step1, Size_Step2, Size_Step3, Far_Day_Bump, Measured_On` — measured by `outpost_raids.mjs` (§4.3, as built O7) |
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
+| `Outpost_Tech` | 7 (O10) | `Node, Name, Price, Effect, Unlocked_By, Requires, Applies` — the Outpost division of the tech tree (design §7) |
 | `Outpost_Params` | ~18 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20, Far_Buyer_Mult 2, Far_Loyalty_Cost 1, Rig_Bay_Min 15, Harvester_Cap 2, Harvester_Max 4` (the last three O16) |
 
 `tools/extract_mapdata.py` extracts them to `MAPDATA.ores`, `.outpostStructures`, `.outpostRaids`, `.outpostContracts`
@@ -520,6 +521,83 @@ power and full storage, the unpowered Storage Tower's door shut). This replaces 
   list); the running presets start from `referenceOutpost`. `handle.pick / aim / hoverAt / confirm / cancel` drive
   the menu for screenshots. Tests: `view/buildMenu.test.mjs` (items, prices, locks, targets, guidance, the placement
   reducer for mouse and touch, the warnings).
+
+**As built (O10), the Resource Bay, the Upgrade Bay and the Outpost tech** [MM-story_mw5oem5o_r] (design §6, §6.2,
+§7, §11):
+
+- **Harvesters, in closed form** (`src/outpost/model.js`). `surfaceFields(map)` is the outpost map's Forge `resources`
+  off the mesa and the pads (primary → common, premium → uncommon; quest left out). `harvestPlan(o, map)` puts the
+  harvesters on fields, alternating common / uncommon, each on the next-nearest cell of its tier to the Resource Bay,
+  with its rate from `data/outpost.js harvesterRate(tier, dist)`: the battle harvester's trip, built from the rows
+  `harvest.js` reads — capacity (Factions row 1), speed (`Harvester_Base_Speed` × `BONUS_NERFS.harvesterSpeedMult`),
+  pull (`Units_Per_Node / Harvest_Sec_Per_Node`, Flowers Primary for common, the reference faction's premium for
+  uncommon), `HARVESTER_UNLOAD_TIME`; the drive is the straight line × `Harvest_Route_Mult` (1.3), all ×
+  `Harvest_Rate_Mult` (1). `advance` fills `o.hopper` (`{ common, uncommon }`, fractional) between events like a rig's
+  bay: the total rate R is constant between events, each tier gets its share, capped at `Hopper_Hours` × R
+  (`hopperCap`); `report.harvested` and `report.hopperFull` say what happened. Only a finished, **powered** Resource Bay
+  runs (`harvestRunning`). Split-invariant (tested: one 10 h advance = 600 one-minute advances, and a split at the fill).
+  `emptyHopper(o)` → `{ outpost, units }` (whole units out, fractions stay); `migrateOutpost` adds `hopper: {}`.
+- **Banking.** `session.open` / `openChunked` empty the hopper after the catch-up and bank it with
+  `src/save/inventory.js bankOutpostHarvest(s, units, catalog, planetName)` (the planet's common / uncommon resource
+  from the mission catalogue, `inventory` and `inventoryNew`). Without the catalogue the hopper waits. The away report
+  gains a HARVESTED · TO YOUR INVENTORY section (`awayReport.harvestRows`), the HUD a hopper chip, the Resource Bay's
+  panel the harvesters (n / cap), each one's rate and the hopper.
+- **The harvester cap.** `harvesterCap(o, ctx)` = `Harvester_Cap` + Dock 3 + Dock 4 (tree ids in `ctx.techOwned`)
+  when the outpost has an Upgrade Bay, ≤ `Harvester_Max`. `harvesterRefusal` and the build list read it.
+- **The Upgrade Bay.** `defenseUpgradeRefusal(o, id, ctx)` / `upgradeDefense(o, id, ctx)` (session action
+  `upgradeDefense`; the defense panel's UPGRADE button): a finished and (with the map) powered Upgrade Bay, the next tier
+  owned — `<kind><tier>` in `ctx.techOwned` for an Unlock of `techtree+upgradeBay` (mg2, mg3, cannon2, cannon3), the
+  Outpost node for `tech:<node>` (wall tier II: `reinforced_walls`) — not a wreck, and its price. Instant; HP rises by the
+  tier's extra HP, wear stays. The model's old placeholder (`has('tier2')`) is gone. The bay's panel lists the seven
+  nodes as installed / available (buy in the Tech Tree) / locked.
+- **The ctx.** `session.ctxFor` now gives the model `unlocks` = the Outpost nodes the player **owns** (`s.tech.owned`),
+  `techOwned` = every owned tree id plus the starting kit, `unlockedTiers` and `contractUnlocks` from the contracts, and
+  `shuttleTier` 2 with Cargo Shuttle II. **Decision:** a contract makes a node buyable, it does not grant it (the tech
+  tree's D7 rule, design §7, §11), so `setDeep`, Storage II, Power II, Rig Mk II and wall tier II all wait for the purchase.
+- **The Outpost nodes.** The map-data workbook gains `Outpost_Tech` (Node, Name, Price, Effect, Unlocked_By, Requires,
+  Applies), written by `tools/economy/write_outpost_sheets.py` and extracted to `MAPDATA.outpostTech`; the extractor
+  refuses a contract or structure `tech:` id that is not a node, a non-positive price, an unknown `Requires`.
+  `data/outpost.js OUTPOST_TECH` reads it and `data/techtree.js` builds the seven nodes from it in place of `op0`–`op4`
+  (kind `item`, layout in the OUTPOST sector; `DIVISIONS.outpost.total` 7, no longer `soon`; `TECH_TOTAL` 64). The gate:
+  `menu/techSave.js outpostTechUnlocked(s)` adds every planet's collected-contract techs to the context's `unlocked`
+  set, so the node reads "Unlocked by a mission: Iron for the Oath" until then. `tools/extract_missions.py` names a
+  node's mission as the first contract step that unlocks it (`techUnlocks.deep_drilling_1.by = OC-VER-1`).
+- **The Economy sheet.** `tools/economy/write_outpost_tech_unlocks.py` (new; LibreOffice recalculation, refused if any
+  sheet but Tech_Unlocks and Economy changes) replaces the ghost rows of the Missions workbook's Tech_Unlocks with the
+  seven nodes (prices from `Outpost_Tech`) and adds the Economy sheet's **Outpost** line (row 10): 33,000, outside the
+  100 % total (still 140,300, owner 2026-11-02).
+- **Sensor Spire.** `nextRaidAt(o, from)` (the scripted first raid, else the same schedule `advance` resolves) and
+  `raidWarning(o, now, ctx)` (owned node, within 10 min) → the HUD's RAID INBOUND chip with a countdown.
+- **The view.** The harvesters are the battle's own miner (`SYS-Harvester`), put into the battle renderer's
+  `state.units` (`view/harvestDrive.js`: a looping trip — out, pull, back, unload — on a route from the bay's centre to
+  its field walked by `findWalkerPath` on the battle board, timed by the battle numbers, on the view's animation clock;
+  parked at the bay without power). Models by kind: `modelSlug` returns `resourceBay` / `upgradeBay` / `habitat`, and the
+  scene uses the GLB when `content/outposts/outposts.json` lists the kind, else its placeholder block (the Habitat a
+  dome), so the models need no code change when they land; the menu icons render them the same way. The Storage
+  Tower's door: its `door` node(s) slide up when powered and down when not (finished building, no power or under
+  construction); without the node the old shutter stays.
+- **Review.** `tools/outpost/view.html ?state=bays` (Power Station II, the Resource Bay with two harvesters, the Upgrade
+  Bay, a Habitat I, the kit's Machine Gun at tier II, four Outpost nodes owned, back after 2 hours) and `?state=guncap`
+  (the hub's 3 guns, no Habitat). `handle.harvesters` and `handle.driveTo(sec)` drive the trucks for screenshots.
+- **Tests.** `src/outpost/bays.test.mjs` (17), `src/outpost/view/harvestDrive.test.mjs` (3) and two in
+  `src/data/techtree.test.mjs`: the battle rate recomputed from the workbook, the hopper's closed form, split invariance,
+  cap and fill time, no bay / no power, banking through inventory.js and on open, the away report and HUD, docks, the
+  Upgrade Bay's gating (bay, power, tier owned, Reinforced Walls, wreck, gold), owned-not-unlocked tech, the Sensor
+  Spire, the Tech Tree's contract gate and price, the nodes present and priced and the ghosts gone.
+
+**As built (O15), the Habitat and the gun cap** [MM-story_mw6ipqj0_3] (design §6, §6.2):
+
+- `Outpost_Structures` gains `habitat` I (3,000, 10 min) and II (5,000, 15 min), no power draw; `Outpost_Params` gains
+  `Gun_Cap` 3 and `Habitat_Guns_Per_Tier` 2. `PAD_KINDS` adds `habitat` (bay or spare pads); one per outpost (a second
+  is refused: "the outpost has its Habitat: upgrade it to Habitat II"); tier II through `upgrade`.
+- `gunCount(o)` (Machine Guns and Cannons, wrecks included), `habitatTier(o)` (finished only), `gunCap(o)` = 3 + 2 ×
+  tier, `gunRefusal(o)`: "the hub crews 3 guns: build a Habitat for more", "the Habitat crews 5 guns: upgrade it to
+  Habitat II for more", "the outpost crews at most 7 guns". `place` asks it before the price, so the build list (which
+  probes `place` with unlimited gold) greys the guns with that reason; walls are never capped.
+- The build list adds HABITAT after the Upgrade Bay (the tenth item takes hotkey 0) and gives the Machine Gun and the
+  Cannon Tower an n / cap badge. The hub's panel and the Habitat's show the guns crewed.
+- The raid measurement is unchanged: `wellDefended` (the starter set plus one Machine Gun) is 3 guns, inside the cap
+  (tested); `stepOutpost` adds no guns.
 
 ### 6.2 Building models
 

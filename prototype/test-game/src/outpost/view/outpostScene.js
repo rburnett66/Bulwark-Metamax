@@ -174,7 +174,10 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   // ── buildings ──────────────────────────────────────────────────────────────────────────────────────────────────
   const built = new Map();   // pad → { slug, inst, loading }
   const bayMat = new THREE.MeshStandardMaterial({ color: 0xd9dee4, roughness: 0.6, metalness: 0.2 });
-  function placeholderBay(kind) {   // Harvester / Upgrade Bay until their models (story O10)
+  /** Has the model kit a GLB for this slug (content/outposts/outposts.json)? Else the placeholder block draws. */
+  const hasModel = (slug) => !!(slug && kit.manifest && kit.manifest[slug]);
+  function placeholderBay(kind) {   // Resource / Upgrade Bay and the Habitat until outposts.json lists their GLBs
+    if (kind === 'habitat') return placeholderHabitat();
     const g = new THREE.Group();
     const base = new THREE.Mesh(new THREE.CylinderGeometry(1.7 * 0.95, 1.7, 0.35, 4).rotateY(Math.PI / 4).scale(1.35, 1, 1.35).translate(0, 0.17, 0), new THREE.MeshStandardMaterial({ color: 0x34393f, roughness: 0.8 }));
     const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, kind === 'upgradeBay' ? 0.9 : 1.3, 2.2).translate(0, kind === 'upgradeBay' ? 0.8 : 1.0, -0.2), bayMat);
@@ -184,6 +187,34 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     g.add(base, body, stripe, door);
     return { object: g, slug: kind, anchors: {}, nodes: {}, nodesOf: () => [], setWorking() {}, setLook(l = {}) { g.scale.y = Math.max(0.05, l.rise ?? 1); door.material.color.setScalar(Math.max(0.05, l.glow ?? 1)).multiply(new THREE.Color(C.cyan)); }, update() {}, dispose() {} };
   }
+  function placeholderHabitat() {   // the Habitat (story O15): a low dome of living quarters with lit windows
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.7 * 0.95, 1.7, 0.35, 4).rotateY(Math.PI / 4).scale(1.35, 1, 1.35).translate(0, 0.17, 0), new THREE.MeshStandardMaterial({ color: 0x34393f, roughness: 0.8 }));
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(1.25, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.15, 0.8, 1).translate(0, 0.35, 0), bayMat);
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.46, 1.46, 0.14, 24).translate(0, 0.42, 0), new THREE.MeshStandardMaterial({ color: C.trim }));
+    const win = new THREE.MeshBasicMaterial({ color: C.cyan, toneMapped: false });
+    const lights = [];
+    for (let i = 0; i < 5; i++) { const a = -0.9 + i * 0.45; const w = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.05), win); w.position.set(Math.sin(a) * 1.3, 0.78, Math.cos(a) * 1.0); w.rotation.y = a; lights.push(w); }
+    for (const m of [base, dome, ring]) { m.castShadow = true; m.receiveShadow = true; }
+    g.add(base, dome, ring, ...lights);
+    return { object: g, slug: 'habitat', anchors: {}, nodes: {}, nodesOf: () => [], setWorking() {}, setLook(l = {}) { g.scale.y = Math.max(0.05, l.rise ?? 1); win.color.setScalar(Math.max(0.05, l.glow ?? 1)).multiply(new THREE.Color(C.cyan)); }, update() {}, dispose() {} };
+  }
+  /**
+   * The Storage Tower's door (owner 2026-11-07 07:33: "a storage tower with no electricity has a closed door"): the
+   * model's `door` node when the GLB has one — open slides it up into the lintel, closed brings it down — else the
+   * shutter drawn over the door anchor (setWarnings). → true when the model drove it.
+   */
+  function setDoor(inst, closed) {
+    const nodes = inst && inst.nodesOf ? inst.nodesOf('door') : [];
+    if (!nodes.length) return false;
+    for (const n of nodes) {
+      if (!n.userData.doorRest) n.userData.doorRest = { y: n.position.y, sy: n.scale.y };
+      const r0 = n.userData.doorRest;
+      n.scale.y = closed ? r0.sy : r0.sy * 0.08;
+      n.position.y = closed ? r0.y : r0.y + 0.6;
+    }
+    return true;
+  }
   async function ensureBuilding(item) {
     const slug = modelSlug(item.kind, item.tier, item.rigHead) || item.kind;
     const cur = built.get(item.pad);
@@ -191,7 +222,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     if (cur && cur.loading === slug) return null;
     const entry = { slug, loading: slug, inst: null };
     built.set(item.pad, entry);
-    const inst = modelSlug(item.kind, item.tier, item.rigHead) ? await kit.make(slug) : placeholderBay(item.kind);
+    const inst = hasModel(modelSlug(item.kind, item.tier, item.rigHead)) ? await kit.make(slug) : placeholderBay(item.kind);
     if (built.get(item.pad) !== entry) { if (inst) inst.dispose(); return null; }
     if (cur && cur.inst) { root.remove(cur.inst.object); cur.inst.dispose(); }
     entry.inst = inst; entry.loading = null;
@@ -218,7 +249,10 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       e.inst.setLook({ tint: item.tint, rise: item.rise, mk2: item.mk2, glow: item.glow * (item.kind === 'power' && item.working ? 0.88 + 0.22 * Math.sin(clock * 2.6) : 1) });
       e.inst.setWorking(item.working);
       e.item = item;
-      if (item.kind === 'storage') setHologram(e.inst, sale && sale.fillFrom != null ? item.fill + (sale.fillFrom - item.fill) * sale.drain : item.fill);
+      if (item.kind === 'storage') {
+        setHologram(e.inst, sale && sale.fillFrom != null ? item.fill + (sale.fillFrom - item.fill) * sale.drain : item.fill);
+        e.hasDoor = setDoor(e.inst, !!item.unpowered || !!item.building);
+      }
     }
     for (const [pad, e] of built) if (!keep.has(pad)) { if (e.inst) { root.remove(e.inst.object); e.inst.dispose(); } built.delete(pad); lastLook.delete(pad); r.lights.invalidateShadows(); }
     return plan;
@@ -332,7 +366,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     if (ghosts.has(key)) return ghosts.get(key);
     const entry = { group: null };
     ghosts.set(key, entry);
-    const inst = slug ? await kit.make(slug) : placeholderBay(kind);
+    const inst = hasModel(slug) ? await kit.make(slug) : placeholderBay(kind);
     if (!inst) return entry;
     const body = inst.object, hull = body.clone(true);
     body.traverse((o) => { if (o.isMesh) { o.material = ghostBody; o.castShadow = false; o.receiveShadow = false; o.renderOrder = 10; } });
@@ -417,6 +451,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     for (const [pad, m] of doors) if (!shut.has(pad)) { root.remove(m); m.geometry.dispose(); doors.delete(pad); }
     for (const pad of shut) {
       if (doors.has(pad) || !pads.has(pad)) continue;
+      const own = built.get(pad);
+      if (own && own.inst && setDoor(own.inst, true)) continue;   // the GLB's own door closes; no shutter
       const [cx, cz] = centre(pads.get(pad));
       const a = (kit.manifest.storage && kit.manifest.storage.anchors && kit.manifest.storage.anchors.door) || [0, 0, 2.3];
       const geos = [new THREE.BoxGeometry(1.5, 1.15, 0.1).translate(0, 0.58, 0)];

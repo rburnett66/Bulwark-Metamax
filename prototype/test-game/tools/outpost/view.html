@@ -7,7 +7,7 @@
 <!-- [MM-story_mw5oeer7_n] Review page for the real outpost view (src/outpost/view/outpostView.js, story O6), outside
      Claude and outside the game: the game's own 3D view, HUD, SELL sequence and away report on a chosen save preset,
      with an in-memory save (your real save is never touched) and a clock you can speed up.
-     Query: ?state=fresh|running|full|raided|breached|fullkit|building · ?quality=high|standard|low · ?speed=1 (clock ×)
+     Query: ?state=fresh|running|full|raided|breached|fullkit|building|bays|guncap · ?quality=high|standard|low · ?speed=1 (clock ×)
             ?raids=seam|wear|breach (seam = the game's raid hook, held until story O7) · ?ui=0 hides the review chip
             ?reduced=1 forces reduced motion. The model-only review page is ./index.html. -->
 <style>
@@ -36,6 +36,8 @@
       <option value="breached">Back after 9 hours: a raid broke through</option>
       <option value="fullkit">Full kit: every pad built, Mk II, deep</option>
       <option value="building">Building and upgrading</option>
+      <option value="bays">Bays: harvesters working, Habitat I, an upgraded gun</option>
+      <option value="guncap">At the gun cap: 3 guns, no Habitat</option>
     </select>
     <label for="quality">Quality tier</label>
     <select id="quality" name="quality"><option value="">auto</option><option>high</option><option>standard</option><option>low</option></select>
@@ -90,6 +92,27 @@ function presetSave(name) {
   if (name === 'running') openAt = T0 + 2 * HOUR;
   if (name === 'full') openAt = T0 + 5 * HOUR;
   if (name === 'raided' || name === 'breached') openAt = T0 + 9 * HOUR;
+  if (name === 'bays') {
+    // story O10 / O15: the Resource Bay with two harvesters on the surface fields, the Upgrade Bay, a Habitat I, and
+    // the kit's Machine Gun already at tier II (Machine Gun T2 owned in the tech tree). Power Station II carries it all.
+    o.pads.p1.tier = 2;
+    o.pads.b1 = { kind: 'resourceBay', tier: 1 };
+    o.pads.b2 = { kind: 'upgradeBay', tier: 1 };
+    o.pads.x1 = { kind: 'habitat', tier: 1 };
+    o.harvesters = 2;
+    const mg = o.defenses.find((d) => d.kind === 'mg');
+    if (mg) { mg.tier = 2; mg.hp = structureDef('mg', 2).battle.hp; }
+    s.tech.owned = { ...s.tech.owned, mg2: true, cannon2: true, deep_drilling_1: true, reinforced_walls: true };
+    s.questSteps = { 'QL-VER-O': 1 };   // contract 1 collected: aluminum and four Outpost nodes unlocked
+    openAt = T0 + 2 * HOUR;
+  }
+  if (name === 'guncap') {
+    // story O15: the kit's Cannon and Machine Gun plus one more Machine Gun = the hub's 3 guns; no Habitat yet
+    const ring = defenseRing(map), taken = new Set(o.defenses.map((d) => d.cell.join(',')));
+    const cell = ring.filter((c) => !taken.has(c.join(',')))[Math.floor(ring.length / 3)];
+    o.defenses.push({ id: `d${o.defenses.length + 1}`, kind: 'mg', tier: 1, cell: [...cell], hp: structureDef('mg', 1).battle.hp });
+    openAt = T0 + 10 * MIN;
+  }
   if (name === 'fullkit' || name === 'building') {
     const pad = (id, b) => { o.pads[id] = b; };
     pad('p2', { kind: 'power', tier: 1 });

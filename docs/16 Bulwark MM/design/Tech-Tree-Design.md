@@ -26,9 +26,9 @@ The tree is bought **between battles** with **banked gold** (`save.carry.gold`, 
 | **UNITS** | Towers (§5) · Harvesters (§4) · Troops (L3 Troop Command, §7) | 25 |
 | **BASES** | Base models · Defense pods · Super-cannon (§3) | 21 |
 | **MAP** | Portals (§6) · Intel (Mining Drone, Early Warning Net, §7) | 10 |
-| **OUTPOST** | coming soon — forward bases built on the map between battles; no items yet | 0 |
+| **OUTPOST** | the 7 Outpost nodes (Outpost-Design §7, story O10): unlocked by the outpost contracts, bought here | 7 |
 | capstone | Apocalypse Cannon (§7) — needs the last item of every line | 1 |
-| | **total** | **57** |
+| | **total** | **64** (the battle tree's 57 + Outpost 7) |
 
 §9 lists every item. The old tree's generic stat nodes (structure HP, damage, range, base armour, harvest yield…) are folded into the base models and tower tiers rather than kept as separate buys (owner decision D2).
 
@@ -173,7 +173,7 @@ Dropped (folded into base models or tiers): `b-def`, `b-atk`, `b-awr`, `e-hp`, `
 **UNITS (25):** Towers — Rocket Tower, Missile Tower, Mine (3) · T2 + T3 for Cannon, Flak, Wall, MG, Rockets, Missile, Mine (14). Harvesters — Mk II–V (4) · Dock 3, Dock 4 · Refinery. Troops — L3 Troop Command.
 **BASES (21):** 9 faction base models · Pod 1–4 (4) · RPG Pod, SAM Pod, Repair Pod (3) · Super-cannon · Cannon range I, II · Cannon power I, II.
 **MAP (10):** 8 portal codes · Mining Drone · Early Warning Net.
-**OUTPOST:** coming soon.
+**OUTPOST (7, story O10):** Deep Drilling I, Supply Depot, Power Grid II, Reinforced Walls, Rig Mk II, Sensor Spire, Cargo Shuttle II — data and prices in the map-data workbook's `Outpost_Tech` sheet; a contract step unlocks each (Outpost-Design §7).
 **Capstone (1):** Apocalypse Cannon.
 
 (The starter Pathfinder, the T1 starting kit and the Gun Pod come free and are not counted.)
