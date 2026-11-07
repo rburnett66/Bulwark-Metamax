@@ -79,14 +79,18 @@ const TERRAIN_CACHE = new WeakMap();   // forge export → Map(bake tune → bui
 export const RAID_DT = FIXED_DT;
 /** A raid undecided after this long is held: the survivors withdraw. */
 export const RAID_MAX_SEC = 300;
+/** A raid in which nothing moves, hurts or is hurt for this long is held: the survivors withdraw. */
+export const RAID_STALL_SEC = 10;
+const STALL_SEC = RAID_STALL_SEC, STALL_EVERY = 30;
 /** A raider this close (cells, from its centre to a pad's edge) to a mesa building has breached. */
 export const BREACH_REACH = 0.75;
 /** Raid lanes for a map with no ground spawns (the draft layout): the north-west corner and the east edge. */
 const DEFAULT_LANES = (cols, rows) => [{ x: 0, y: 3 }, { x: cols - 1, y: rows - 5 }];
 const MESA_TOP = 2;   // outpostPads HEIGHT.TOP
-/** Where "well defended" puts its extra Machine Gun: beside the kit's Cannon (measured on Verdance: it holds more
- *  than beside the kit's MG). */
-export const WELL_DEFENDED_NEAR = 'cannon';
+/** Where "well defended" puts its extra Machine Gun: beside the kit's Machine Gun, the weaker of the kit's two guns,
+ *  so it strengthens the way in that breaks first (measured on the 64 × 32 Verdance map: beside the Cannon it adds
+ *  nothing, because every raid comes down both lanes and the MG's way in breaks first). */
+export const WELL_DEFENDED_NEAR = 'mg';
 /** The outpost seeds the measurement and the tests run, so both read the same medians. */
 export const MEASURE_SEEDS = Object.freeze([11, 222, 3333, 44444, 555555, 6, 77]);
 const KEEP_EVENTS = new Set(['spawn', 'kill', 'build']);
@@ -105,12 +109,19 @@ export function raidSeed(outpostSeed, raid = {}) {
 
 /** The measured raid size for a planet's contract step (Outpost_Raids), or 0 when the data has none. */
 export const raidSize = (planet, step = 1) => (raidFor(planet, step) || {}).size || 0;
-/** The raid's units, in spawn order: the size taken from Units cycled in order. */
+/** The raid's units, in spawn order: the size taken from Units cycled in order, then the planet's Breacher (if any). */
 export function raidUnits(planet, step = 1) {
   const r = raidFor(planet, step);
   if (!r || !r.units.length) return [];
-  return Array.from({ length: r.size }, (_, i) => r.units[i % r.units.length]);
+  return composeRaid(r.units, r.size, r.breacher);
 }
+/** size raiders cycled from `cycle`, plus one breacher after them when given. */
+export const composeRaid = (cycle, size, breacher = null) =>
+  [...Array.from({ length: size }, (_, i) => cycle[i % cycle.length]), ...(breacher ? [breacher] : [])];
+
+/** No long range at outposts (owner), for raiders too: a raider's weapon reaches no further than the outposts' own
+ *  longest gun (STR-MG 5), so a breacher that is long range in battle (Artillery, 9.5) must come under the guns. */
+export const RAID_RANGE_CAP = Math.max(getStructureDef('STR-MG').range, getStructureDef('STR-Cannon').range);
 
 // ── the board ────────────────────────────────────────────────────────────────────────────────────────────────────
 const dims = (map) => ({ cols: map.width ?? map.cols, rows: map.height ?? map.rows });
@@ -176,7 +187,7 @@ export function raidSimMap(outpost, map, opts = {}) {
 }
 
 /** The starter kit plus one more Machine Gun (design §5.2 "well defended"), on the free, buildable, powered mesa-top
- *  cell (off the pads) nearest the kit's Cannon (WELL_DEFENDED_NEAR). → a new outpost (the one passed in is unchanged). */
+ *  cell (off the pads) nearest the kit's Machine Gun (WELL_DEFENDED_NEAR). → a new outpost (the one passed in is unchanged). */
 export function wellDefended(outpost, map, { near = WELL_DEFENDED_NEAR } = {}) {
   const o = JSON.parse(JSON.stringify(outpost));
   const anchor = o.defenses.find((d) => d.kind === near) || o.defenses[0];
@@ -216,6 +227,10 @@ export function createRaid(outpost, raid = {}, opts = {}) {
   if (!map) throw new Error('createRaid: opts.map (the outpost map) is required');
   const step = opts.step || 1;
   const units = opts.units || raidUnits(outpost.planet, step);
+  // raid-only strength (owner 2026-11-07, "weaker raiders"): Outpost_Raids' Raider_HP_Mult / Raider_Damage_Mult for the
+  // planet, applied to every raider inside this raid only; the battle game's units are unchanged
+  const data = raidFor(outpost.planet, step) || {};
+  const hpMult = opts.hpMult ?? data.hpMult ?? 1, dmgMult = opts.dmgMult ?? data.dmgMult ?? 1;
   const seed = opts.seed != null ? opts.seed : raidSeed(outpost.seed, raid);
   const powered = raid.powered instanceof Set ? raid.powered : new Set(raid.powered || []);
   const simMap = raidSimMap(outpost, map, opts);
@@ -263,6 +278,10 @@ export function createRaid(outpost, raid = {}, opts = {}) {
     for (const u of state.units.values()) {
       if (u._raider || u.side !== 'attacker') continue;
       u._raider = true;
+      u.hp *= hpMult; u.maxHp *= hpMult;
+      u.dps *= dmgMult;
+      if (u.detonate) u.detonate = { ...u.detonate, burst: u.detonate.burst * dmgMult };
+      u.range = Math.min(u.range, RAID_RANGE_CAP);
       u.engagesStructuresWhileAdvancing = true;   // fire on the defenses passed, keep marching
       if (u.domain !== 'Walker') {                // swimmers walk on an outpost's dry ground
         u.domain = 'Walker'; u.altitude = 0; u.path = []; u.pathIdx = 0; u.routeIdx = null;
@@ -308,11 +327,21 @@ export function createRaid(outpost, raid = {}, opts = {}) {
     for (const u of state.units.values()) if (u.side === 'attacker' && u.hp > 0) { alive = true; break; }
     if (!w.pendingSpawns.length && !alive) return 'held';
     if (state.tick >= maxTicks) { timedOut = true; return 'held'; }
+    // stalled: nothing moved, hurt or was hurt for STALL_SEC (raiders at a wall they cannot damage, out of every
+    // gun's reach) — the survivors withdraw, as at the time limit
+    if (!w.pendingSpawns.length && state.tick % STALL_EVERY === 0) {
+      let sig = 0;
+      for (const u of state.units.values()) if (u.side === 'attacker' && u.hp > 0) sig += Math.round(u.hp) * 7 + Math.round(u.pos.x * 10) * 3 + Math.round(u.pos.y * 10);
+      for (const s of state.structures.values()) sig += Math.round(s.hp) * 13;
+      if (sig === lastSig) { if (++stallChecks * STALL_EVERY * RAID_DT >= STALL_SEC) { timedOut = true; return 'held'; } }
+      else { lastSig = sig; stallChecks = 0; }
+    }
     return null;
   };
+  let lastSig = null, stallChecks = 0;
 
   const obj = {
-    state, dt: RAID_DT, defenseIds, buildingPads, lanes: simMap.rings[0].spawnList.ground, seed, units: units.slice(),
+    state, dt: RAID_DT, defenseIds, buildingPads, lanes: simMap.rings[0].spawnList.ground, seed, units: units.slice(), hpMult, dmgMult,
     get done() { return outcome !== null; },
     tick() {
       if (outcome) return [];
@@ -388,12 +417,12 @@ export function stepOutpost(planet, step, { map, seed = 1 }) {
 /**
  * Raids held before the first breach, with no repairs between raids (design §5.2): raid after raid (windows 0, 1, …)
  * on the outpost, each defense keeping the HP it ended the last raid with. → n (max when none breached).
- * opts: { map, step, units? (default the measured raid), max = 20, bakeTune? }.
+ * opts: { map, step, units?, hpMult?, dmgMult? (default the measured raid), max = 20, bakeTune? }.
  */
-export function holdsBeforeBreach(outpost, { map, step = 1, units, max = 20, bakeTune } = {}) {
+export function holdsBeforeBreach(outpost, { map, step = 1, units, hpMult, dmgMult, max = 20, bakeTune } = {}) {
   const o = JSON.parse(JSON.stringify(outpost));
   for (let k = 0; k < max; k++) {
-    const r = runRaid(o, { window: k, at: k, powered: powerGrids(o, map).powered }, { map, step, units, bakeTune });
+    const r = runRaid(o, { window: k, at: k, powered: powerGrids(o, map).powered }, { map, step, units, hpMult, dmgMult, bakeTune });
     if (r.result === 'breach') return k;
     for (const d of r.defenses) o.defenses.find((x) => x.id === d.id).hp = d.hp;
   }

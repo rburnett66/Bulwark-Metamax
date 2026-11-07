@@ -46,6 +46,6 @@ for (const p of PLANETS.filter((x) => !only || x === only)) {
       return [s, c.title, `${c.deliver} ${o.name}`, hours, c.raidsHeld, `${fmt(c.deliver * o.price)} + ${fmt(c.gold)}, +${c.loyalty} loyalty, ${c.xp} XP`, tags.join(', ')];
     }));
   const raids = [1, 2, 3].map((s) => raidFor(p, s));
-  if (raids[0]) table(['Raiders (Units, cycled)', 'Size, step 1', 'Size, step 2', 'Size, step 3', 'Far-buyer day bump'],
-    [[raids[0].units.join(' '), ...raids.map((r) => r.size), raids[0].farDayBump]]);
+  if (raids[0]) table(['Raiders (Units, cycled)', 'Breacher', 'HP ×', 'Damage ×', 'Size, step 1', 'Size, step 2', 'Size, step 3', 'Far-buyer day bump'],
+    [[raids[0].units.join(' '), raids[0].breacher || '—', raids[0].hpMult, raids[0].dmgMult, ...raids.map((r) => r.size), raids[0].farDayBump]]);
 }

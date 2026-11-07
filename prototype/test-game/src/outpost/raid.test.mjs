@@ -1,6 +1,7 @@
 // Outpost raids on the battle sim (tech plan docs/tech-plan/Outpost.md §4.2–§4.4; design Outpost-Design §5.2–§5.3)
 // [MM-story_mw5oegk1_o]. The §4.4 items O2 deferred to O7: measured raid sizes and the hold counts, raid determinism
-// headless vs live, raid composition, the scripted first raid through advance with the real hook, a breach's loss.
+// headless vs live, raid composition, the scripted first raid through advance with the real hook, a breach's loss;
+// and the owner's 2026-11-07 decisions: raid-only weaker raiders, and a breacher for planets whose troops cannot hurt walls.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,10 +10,10 @@ import { outpostMapFromForge } from './outpostMap.js';
 import { DRAFT_LAYOUT } from './draftLayout.js';
 import {
   runRaid, createRaid, makeRaidHook, raidUnits, raidSize, raidSeed, wellDefended, stepOutpost, holdsBeforeBreach,
-  MEASURE_SEEDS, RAID_DT,
+  MEASURE_SEEDS, RAID_DT, RAID_RANGE_CAP,
 } from './raid.js';
 import { raidFor, allStructures, OUTPOST } from '../data/outpost.js';
-import { UNITS } from '../data/tables.js';
+import { UNITS, EFFECTIVENESS } from '../data/tables.js';
 import '../data/factions.js';
 
 const REG = globalThis.BulwarkFactions;
@@ -24,6 +25,8 @@ const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
 const kit = (seed = 11) => createOutpost('ground', { seed, map, now: T0 });
 const raidOf = (o, extra = {}) => ({ window: 3, at: T0, powered: powerGrids(o, map).powered, ...extra });
 
+const hurtsWalls = (id) => ((EFFECTIVENESS[UNITS[id].damageType] || {}).Structure || 0) > 0;
+
 test('every planet has a measured raid: tier I lightGround units of its own faction, a size per contract step', () => {
   for (const p of PLANETS) {
     const prefix = REG.find(p).prefix;
@@ -31,15 +34,25 @@ test('every planet has a measured raid: tier I lightGround units of its own fact
       const r = raidFor(p, step);
       assert.ok(r && r.size >= 1, `${p} step ${step} has a size`);
       assert.equal(raidSize(p, step), r.size);
+      assert.ok(r.hpMult > 0 && r.hpMult <= 1 && r.dmgMult > 0 && r.dmgMult <= 1, `${p}: raid-only multipliers in (0, 1]`);
       const units = raidUnits(p, step);
-      assert.equal(units.length, r.size);
-      for (const id of units) {
+      assert.equal(units.length, r.size + (r.breacher ? 1 : 0));
+      for (const id of units.slice(0, r.size)) {
         assert.ok(UNITS[id], `${id} is a unit`);
         assert.equal(UNITS[id].lightGround, true, `${id} is light ground (owner: troops and low-end tanks only)`);
         assert.ok(id.startsWith(`${prefix}-`), `${id} is ${p}'s own faction (dissidents)`);
       }
+      // the breacher exception (owner 2026-11-07): only where the troops cannot hurt walls; own faction, ground, hurts walls
+      const troops = r.units[0];
+      if (hurtsWalls(troops)) assert.equal(r.breacher, null, `${p}: its troops hurt walls, no breacher`);
+      else {
+        assert.ok(r.breacher, `${p}: its troops cannot hurt walls, so its raids carry a breacher`);
+        assert.ok(r.breacher.startsWith(`${prefix}-`) && UNITS[r.breacher].domain === 'Walker' && hurtsWalls(r.breacher), r.breacher);
+        assert.equal(units.at(-1), r.breacher, 'one breacher, after the others');
+      }
     }
   }
+  assert.equal(raidFor('ground', 1).size >= 2, true, 'weaker raiders make raids above one troop possible (owner 2026-11-07)');
 });
 
 test('a raid spawns only tier I lightGround raiders and fights only with STR-MG, STR-Cannon and STR-Wall', () => {
@@ -52,10 +65,15 @@ test('a raid spawns only tier I lightGround raiders and fights only with STR-MG,
     for (const u of raid.state.units.values()) if (u.side === 'attacker') seen.set(u.id, u);
   }
   assert.equal(seen.size, 3);
+  const { hpMult, dmgMult } = raidFor('ground', 1);
   for (const u of seen.values()) {
     assert.equal(u.tier, 1, `${u.unitId} spawns at tier I`);
     assert.equal(u.lightGround, true);
+    assert.ok(Math.abs(u.maxHp - UNITS[u.unitId].hp[0] * hpMult) < 1e-9, 'raid-only HP multiplier');
+    assert.ok(Math.abs(u.dps - UNITS[u.unitId].dps[0] * dmgMult) < 1e-9, 'raid-only damage multiplier');
+    assert.ok(u.range <= RAID_RANGE_CAP, 'no long range at outposts');
   }
+  assert.equal(UNITS['GND-Troops'].hp[0], 220, 'the battle game is unchanged');
   for (const s of raid.state.structures.values()) assert.ok(OUTPOST_STRUCTS.has(s.structId), s.structId);
 });
 
@@ -94,19 +112,13 @@ test('defenses start from their saved HP; a wreck is not placed; an unpowered gu
   assert.equal(res.defenses.find((d) => d.id === o.defenses[2].id).hp, 0, 'a wreck stays a wreck');
 });
 
-test('with the measured raid sizes the starter kit holds 4–6 raids before a breach (Verdance, design §5.2)', () => {
+test('with the measured raids the starter kit holds 4–6 raids before a breach and the well defended set 7–9 (Verdance, design §5.2)', () => {
   const step = 1;
   const k = MEASURE_SEEDS.map((seed) => holdsBeforeBreach(stepOutpost('ground', step, { map, seed }), { map, step }));
   const w = MEASURE_SEEDS.map((seed) => holdsBeforeBreach(wellDefended(stepOutpost('ground', step, { map, seed }), map), { map, step }));
   assert.ok(median(k) >= 4 && median(k) <= 6, `kit holds ${median(k)} (seeds: ${k.join(' ')})`);
-  assert.ok(median(w) >= median(k), `well defended holds ${median(w)} ≥ the kit's ${median(k)} (seeds: ${w.join(' ')})`);
-  assert.equal(wellDefended(kit(), map).defenses.filter((d) => d.kind === 'mg').length, 2, 'well defended = the kit plus one Machine Gun');
-});
-
-test('the well defended set holds 7–9 raids (design §5.2)', { todo: 'not reached on the 64×32 Verdance map with +1 MG: see tech plan §4.3 as built (O7)' }, () => {
-  const step = 1;
-  const w = MEASURE_SEEDS.map((seed) => holdsBeforeBreach(wellDefended(stepOutpost('ground', step, { map, seed }), map), { map, step }));
   assert.ok(median(w) >= 7 && median(w) <= 9, `well defended holds ${median(w)} (seeds: ${w.join(' ')})`);
+  assert.equal(wellDefended(kit(), map).defenses.filter((d) => d.kind === 'mg').length, 2, 'well defended = the kit plus one Machine Gun');
 });
 
 test('the scripted first raid runs headless through advance with the real hook', () => {
