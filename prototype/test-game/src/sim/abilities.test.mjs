@@ -292,7 +292,7 @@ test('abilities are deterministic: the same setup gives the same event stream', 
   assert.deepEqual(a, b);
 });
 
-test('campaign waves carry their quota of the faction ability unit from wave 2', async () => {
+test('campaign waves carry their quota of the faction ability unit (light carriers from wave 2, others from wave 3)', async () => {
   const { buildCampaignMap } = await import('./mapgen.js');
   const { buildCampaignWaves } = await import('./campaign.js');
   const { ABILITY_CARRIERS_PER_WAVE } = await import('../data/tables.js');
@@ -306,7 +306,10 @@ test('campaign waves carry their quota of the faction ability unit from wave 2',
         // Advanced-mode pacing [MM-story_mvnzz719_2]: an AIR ability unit is a SPECIAL — held out of the
         // opening waves (before the gate wave, i<2) for EVERY faction, Water included (its carrier is air,
         // which used to leak in at wave 1-2). Ground/sea carriers still ride from wave 2 per the quota.
-        const want = (air && i < 2) ? 0 : ABILITY_CARRIERS_PER_WAVE[i];
+        // Light opening (owner 2026-11-07): waves 1–2 are troops and scouts only, so a carrier that is not a light unit
+        // (troops / scout) also waits for wave 3.
+        const light = ['Troops', 'Scout'].includes(UNITS[carrier].shape);
+        const want = ((air || !light) && i < 2) ? 0 : ABILITY_CARRIERS_PER_WAVE[i];
         assert.ok(n >= want, `${f} map ${mapId} wave ${i + 1}: ${n} carriers, want ≥ ${want}`);
       });
     }
@@ -323,4 +326,20 @@ test('aura scouts keep pace with their escort, and run at full speed alone', () 
   troop.pos = { x: SLOT.x - 30, y: SLOT.y };
   run(st, 1);
   assert.equal(scout.speed, full, 'alone again: its own speed');
+});
+
+test('waves 1 and 2 are troops and scouts only, on every faction (owner 2026-11-07)', async () => {
+  const { buildCampaignMap } = await import('./mapgen.js');
+  const { buildCampaignWaves } = await import('./campaign.js');
+  for (const f of factionsInRoster()) {
+    // a faction with no light GROUND unit (Water fields floaters + flyers) keeps what it can field on a land map
+    const hasLight = Object.values(UNITS).some((u) => u.faction === f && u.domain === 'Walker' && ['Troops', 'Scout'].includes(u.shape));
+    if (!hasLight) continue;
+    for (const mapId of [1, 2, 3, 5]) {
+      buildCampaignWaves(buildCampaignMap(mapId), f).slice(0, 2).forEach((w, i) => {
+        const heavy = w.spawns.map((s) => UNITS[s.unitId]).filter((u) => !['Troops', 'Scout'].includes(u.shape));
+        assert.equal(heavy.length, 0, `${f} map ${mapId} wave ${i + 1}: ${heavy.map((u) => u.shape).join(', ')}`);
+      });
+    }
+  }
 });
