@@ -144,6 +144,84 @@ def apply_rework(data):
     return data
 
 
+OUTPOST_KINDS = {"hub", "power", "rig", "storage", "harvesterBay", "upgradeBay", "mg", "cannon", "wall"}
+RIG_HEADS = {"auger", "laser", "brine", "crystal", "bore", "shielded"}
+# Owner: outposts have no anti-air and no long range. The battle structures an outpost may use; their stats (range
+# within 5, ground targets) are checked against STRUCTURES by src/data/outpost.test.mjs.
+OUTPOST_BATTLE_STRUCTS = {"STR-MG", "STR-Cannon", "STR-Wall"}
+OUTPOST_PARAMS = ("Load_Sec", "Store_Hours", "Deep_Rate_Mult", "Deep_Price_Mult", "Raid_Mean_Hours",
+                  "Raid_Min_Gap_Hours", "Breach_Storage_Loss", "First_Raid_Sec", "Away_Cap_Hours", "Replay_Keep",
+                  "Far_Buyer_Mult", "Far_Loyalty_Cost", "Defense_Price_Mult", "Repair_Share_Per_HP", "Shuttle_II_Bonus")
+
+
+def outpost_problems(data):
+    """The outpost sheets' rules (tech plan Outpost §3.1). Returns a list of problems."""
+    out = []
+    ores, planets = data["ores"], {r["Planet_Key"] for r in data["rareContracts"]}
+    if len(ores) != 27:
+        out.append(f"Ores: expected 27 rows (9 planets x 3 tiers), got {len(ores)}")
+    for key in planets:
+        tiers = sorted(r.get("Tier") for r in ores if r.get("Planet_Key") == key)
+        if tiers != ["common", "rare", "uncommon"]:
+            out.append(f"Ores {key}: expected exactly one common, uncommon and rare ore, got {tiers}")
+        heads = [r.get("Rig_Head") for r in ores if r.get("Planet_Key") == key]
+        if len(set(heads)) != len(heads):
+            out.append(f"Ores {key}: two ores share a rig head (design 8.4: three different rigs per outpost)")
+    ids = [r.get("Ore_Id") for r in ores]
+    for d in sorted({i for i in ids if ids.count(i) > 1}):
+        out.append(f"Ores: duplicate Ore_Id {d}")
+    wanters = []
+    for r in ores:
+        tag = f"Ores {r.get('Planet_Key')} {r.get('Ore')}"
+        if r.get("Planet_Key") not in planets:
+            out.append(f"{tag}: unknown Planet_Key")
+        if not all(isinstance(r.get(k), (int, float)) and r[k] > 0 for k in ("Rate_Per_Min", "Price", "Deep_Rate_Mult", "Deep_Price_Mult")):
+            out.append(f"{tag}: Rate_Per_Min, Price and the deep multipliers must be positive")
+        if r.get("Rig_Head") not in RIG_HEADS:
+            out.append(f"{tag}: Rig_Head {r.get('Rig_Head')!r} is not one of {sorted(RIG_HEADS)}")
+        w = r.get("Wanted_By") or ""
+        if w:
+            if r.get("Tier") != "rare":
+                out.append(f"{tag}: only rare ores have a far buyer (design 8.5)")
+            if w not in planets or w == r.get("Planet_Key"):
+                out.append(f"{tag}: Wanted_By {w!r} must be another planet's key")
+            wanters.append(w)
+    for w in sorted({w for w in wanters if wanters.count(w) > 1}):
+        out.append(f"Ores: faction {w} wants more than one rare ore (design 8.5: one want per faction)")
+    seen = set()
+    for r in data["outpostStructures"]:
+        tag = f"Outpost_Structures {r.get('Kind')} tier {r.get('Tier')}"
+        if r.get("Kind") not in OUTPOST_KINDS:
+            out.append(f"{tag}: unknown kind (the code knows {sorted(OUTPOST_KINDS)})")
+        if (r.get("Kind"), r.get("Tier")) in seen:
+            out.append(f"{tag}: duplicate row")
+        seen.add((r.get("Kind"), r.get("Tier")))
+        bs = r.get("Battle_Struct") or ""
+        if r.get("Kind") in ("mg", "cannon", "wall") and bs not in OUTPOST_BATTLE_STRUCTS:
+            out.append(f"{tag}: Battle_Struct {bs!r} is not an outpost defense (no anti-air, no long range)")
+        if bs and r.get("Kind") not in ("mg", "cannon", "wall"):
+            out.append(f"{tag}: only defenses take a Battle_Struct")
+    for k in ("hub", "power", "rig", "storage", "mg", "cannon", "wall"):
+        if (k, 1) not in seen:
+            out.append(f"Outpost_Structures: the kit needs {k} tier 1")
+    for key in planets:
+        rows = sorted((r for r in data["outpostContracts"] if r.get("Planet_Key") == key), key=lambda r: r.get("Step", 0))
+        if [r.get("Step") for r in rows] != [1, 2, 3]:
+            out.append(f"Outpost_Contracts {key}: expected steps 1, 2, 3")
+            continue
+        unlocked = {"common"}
+        for r in rows:
+            if r.get("Ore_Tier") not in unlocked:
+                out.append(f"Outpost_Contracts {key} step {r['Step']}: delivers {r.get('Ore_Tier')} ore before it is unlocked")
+            if not (isinstance(r.get("Deliver"), int) and r["Deliver"] > 0):
+                out.append(f"Outpost_Contracts {key} step {r['Step']}: Deliver must be a positive whole number")
+            unlocked |= {u.split(":", 1)[1] for u in str(r.get("Unlocks") or "").split() if u.startswith("ore:")}
+    for p in OUTPOST_PARAMS:
+        if not isinstance(data["outpostParams"].get(p), (int, float)):
+            out.append(f"Outpost_Params: missing or non-numeric {p}")
+    return out
+
+
 def main():
     wb = openpyxl.load_workbook(XLSX, data_only=True)
     data = {
@@ -166,6 +244,13 @@ def main():
         # the optional in-battle rare contracts, one per planet × map [MM-task_mw5h8fxu_d]
         "rareContracts": sheet_rows(wb["Rare_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
                                     header_row_probe=("Planet_Key",)),
+        # outposts and mining: ores, buildings, contracts, tuning [MM-story_mw5oe4ap_i] (tech plan Outpost §3.1)
+        "ores": sheet_rows(wb["Ores"], lambda v: isinstance(v, str) and v.isidentifier(), header_row_probe=("Planet_Key",)),
+        "outpostStructures": sheet_rows(wb["Outpost_Structures"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                        header_row_probe=("Kind",)),
+        "outpostContracts": sheet_rows(wb["Outpost_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                       header_row_probe=("Planet_Key",)),
+        "outpostParams": params_map(wb["Outpost_Params"]),
     }
 
     apply_rework(data)
@@ -195,6 +280,7 @@ def main():
             problems.append(f"Rare_Contracts {r.get('Planet_Key')} map {r.get('Map_ID')}: Quota, Price_Per_Unit and Loyalty must be positive")
         elif r["Quota"] > r.get("Rare_Seeded", 0):
             problems.append(f"Rare_Contracts {r.get('Planet_Key')} map {r.get('Map_ID')}: Quota exceeds the rare units the board seeds")
+    problems += outpost_problems(data)
     for f in data["factions"]:
         if f.get("Premium_Secondary") == f.get("Premium_Resource"):
             problems.append(f"{f.get('Faction_Name')}: Premium_Secondary == Premium_Resource (GDD 5.2)")
@@ -220,6 +306,8 @@ def main():
     print(f"   maps={len(data['maps'])} waveRows={len(data['waveTable'])} roles={len(data['resourceRoles'])} "
           f"factions={len(data['factions'])} params={len(data['globalParams'])} "
           f"collectiveContracts={len(data['collectiveContracts'])} rareContracts={len(data['rareContracts'])}")
+    print(f"   ores={len(data['ores'])} outpostStructures={len(data['outpostStructures'])} "
+          f"outpostContracts={len(data['outpostContracts'])} outpostParams={len(data['outpostParams'])}")
 
 
 if __name__ == "__main__":
