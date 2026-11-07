@@ -46,6 +46,24 @@ function findUnitAtCell(state, cell) {
   return bestId;
 }
 
+/**
+ * A harvester whose BODY is under the tap, when it is not the harvester already selected [MM-task_mw6prs97_7].
+ * Harvesters work ON resource cells, so a tap on a truck used to read as a tap on the field under it (a harvest
+ * order went out and the truck could never be selected). A tight body hit (≤ 0.75 cell from its centre) wins over
+ * the field; a tap a cell away still reaches the field. The selected truck itself falls through, so tapping a field
+ * it stands on still orders it. → unit id or null.
+ */
+export function harvesterTapTarget(state, cell, selectedUnitId = null) {
+  if (!state || !state.units || !cell) return null;
+  let best = null, bestD = 0.75;
+  for (const u of state.units.values()) {
+    if (!u || !u.isHarvester || u.hp <= 0 || u.id === selectedUnitId) continue;
+    const d = Math.hypot(u.pos.x - cell.x, u.pos.y - cell.y);
+    if (d <= bestD) { bestD = d; best = u.id; }
+  }
+  return best;
+}
+
 function cellInBase(state, cell) {
   if (!state || !state.base) return false;
   const cells = state.base.cells || [state.base.pos];
@@ -174,6 +192,14 @@ function onPointerDown(handle, ev) {
   // A STRUCTURE ON THE CELL WINS: building on a resource crushes it (structures.js CRUSH RULE) but the spent node stays
   // in the list, so a tower built on a crop cell must still be selectable for upgrades [MM-story_mw30o5e9_4].
   let cardOpen = false;
+  // A HARVESTER ON THE CELL WINS over the field it is working (the truck is the subject the player reached for)
+  const truck = state.resourceNodes && findStructureAtCell(state, cell) === null ? harvesterTapTarget(state, cell, ui.selectedUnitId) : null;
+  if (truck != null) {
+    ui.selectedUnitId = truck; ui.selectedStructureId = null; ui.selectedResourceId = null;
+    const fleet = [...state.units.values()].filter((u) => u.isHarvester && u.hp > 0).length;
+    ui.pendingHint = { text: fleet >= 4 ? 'Harvester selected: tap a field to send it' : 'Harvester selected: tap a field to send it · base to buy more', atBase: false };
+    return;
+  }
   if (state.resourceNodes && findStructureAtCell(state, cell) === null) {
     const node = state.resourceNodes.find((n) => n.x === cell.x && n.y === cell.y && (n.remaining > 0 || n.respawns));
     if (node) {
