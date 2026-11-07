@@ -52,10 +52,10 @@ Four new sheets in `docs/sources/Bulwark-Map-Data.xlsx`, with the same "hand-edi
 
 | Sheet | Rows | Columns |
 |---|---|---|
-| `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Rig_Head, Use` |
-| `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Build_Sec, Power_Draw, Power_Supply, Capacity, Rate_Mult, Defense_Power, Model, Unlock` |
+| `Ores` | 27 (9 planets × 3 tiers) | `Planet_Key, Planet, Tier, Ore, Ore_Id, Rate_Per_Min, Price, Deep_Rate_Mult, Deep_Price_Mult, Colour, Rig_Head, Wanted_By, Use` |
+| `Outpost_Structures` | ~12 (each building × tier) | `Kind, Tier, Cost, Value, Build_Sec, Power_Draw, Power_Supply, Bay_Hours, Rate_Mult, Capacity_Mult, Defense_Power, Model, Unlock` |
 | `Outpost_Contracts` | 27 (9 planets × 3) | `Planet_Key, Step, Title, Ore_Tier, Deliver, Raids_Held, Gold, Loyalty, XP, Unlocks` |
-| `Outpost_Params` | ~12 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Raid_Wear 0.07, Raid_Strength 0.55, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20` |
+| `Outpost_Params` | ~12 named values | `Load_Sec 300, Store_Hours 4, Deep_Price_Mult 5, Raid_Mean_Hours 6, Raid_Min_Gap_Hours 3, Raid_Wear 0.07, Raid_Strength 0.55, Breach_Storage_Loss 0.25, First_Raid_Sec 600, Away_Cap_Hours 72, Replay_Keep 20, Far_Buyer_Mult 2, Far_Loyalty_Cost 1, Far_Raid_Bump 0.05` |
 
 `tools/extract_mapdata.py` extracts them to `MAPDATA.ores`, `.outpostStructures`, `.outpostContracts` and
 `.outpostParams`. Its validation refuses a planet without exactly three ores, a duplicate `Ore_Id`, a structure kind
@@ -86,12 +86,13 @@ s.outposts = {
             p3: { kind:'storage', tier:1 }, … },
     building: [{ pad:'p4', kind:'harvesterBay', tier:1, done: 1762470300000 }],
     defenses: [{ id:'d1', type:'machineGun', tier:1, cell:[12,7], integrity:1 }],
-    storage: { iron: 412.6 },     // fractional units, shown floored
+    storage: { p2: { iron: 412.6 } },   // per rig bay (pad id), fractional units, shown floored; deep grade is 'iron_deep'
     raids: { window: 412, log: [{ at, result:'held'|'breach', wear }] },   // log keeps the last 20
     sold: { iron: 300 },          // lifetime, for contract steps
   },
 };
 s.outpostContracts = { ground: { step: 1, state: 'active', delivered: 0, raidsHeld: 0 } };
+s.outpostTrade = { discovered: { air: 'lithium' }, farSoldToday: { day: 20398, loads: 3 } };   // the far buyer (design §8.5)
 ```
 
 `migrate()` adds empty `outposts` and `outpostContracts`. Nothing is stored that can be derived (gold per hour, power
@@ -105,7 +106,7 @@ answers.
 ```js
 advance(outpost, toMs, { params, ores, structures })  → { outpost, report }
 loadsReady(outpost)                                   → n
-sell(outpost)                                         → { outpost, loads: [{ ore, units, gold }], gold }   // one entry per load, for the pops
+sell(outpost, { buyer })                              → { outpost, loads: [{ ore, units, gold }], gold, loyalty }   // one entry per load, for the pops; buyer defaults to the home ship
 place(outpost, pad, kind) / repair(outpost, id) / setDeep(outpost, pad, on)   → outpost (or a refusal reason)
 raidSchedule(seed, fromWindow, toWindow, params)      → [{ window, at }]
 defenseRating(outpost) / raidOutcome(outpost, raid)   → { result, wear }
@@ -115,7 +116,9 @@ defenseRating(outpost) / raidOutcome(outpost, raid)   → { result, wear }
 
 `advance` never steps second by second. It cuts the interval `[t, toMs]` at every event: a build finishing, a raid,
 or storage filling. Nothing is ever sold inside `advance`: selling is always the player's tap (design §4.3). Between two events every rate is
-constant, so extraction is `rate × Δt`, capped by the space left in storage. Three days away is a few dozen segments.
+constant, so each rig's extraction is `rate × Δt`, capped by the space left in its own bay (design §4.2: a bay holds
+`Bay_Hours` of the rig's shallow output, × `Capacity_Mult` for Mk II and Storage Tower II). Three days away is a few
+dozen segments.
 
 - **The clock.** Wall-clock time (`Date.now()`) is read only by the menu and the outpost view, then passed in.
   `advance` itself is pure. This is outside the battle simulation, so the replay-determinism contract is not
@@ -147,6 +150,7 @@ When a raid comes due while the view is open, the view runs it with the battle s
 - The sim's own seeded RNG, seeded with `seed + window`, so it obeys the determinism contract like any battle.
 - When the wave is over: defenses that took damage lose integrity in proportion to the damage; if any raider reached
   the mesa, the raid is a breach and storage loses its 25 %; the result is logged like an away raid.
+- If the player closes the view mid-raid, the rest resolves by `raidOutcome` with the integrity at that moment.
 
 Live and away raids must agree on average. `outpost_model.mjs` runs a few hundred simulated raids per defense set and
 checks that the away rule's breach rate matches the simulation's within 10 %. A gap is closed by tuning
@@ -163,6 +167,10 @@ checks that the away rule's breach rate matches the simulation's within 10 %. A 
 - Power: a building over budget is reported, and stays off.
 - Building, repairing and selling refuse when the player cannot pay, or the pad is wrong, taken or unpowered.
 - A breach removes exactly 25 % of each ore in storage and changes no building.
+- A Mk II rig's bay holds twice a Rig I's; a deep rig fills its bay in 16 hours; one full bay stops only its rig.
+- Only `repair` restores integrity; `place` does not. A kit item's repair is priced from its `Value`.
+- The scripted first raid resolves by the away rule if the view is closed; a breach leaves contract step 3 waiting.
+- A far-buyer sale pays `Far_Buyer_Mult` and costs home loyalty; before discovery `sell` refuses a far buyer.
 - `advance` never sells, whatever the tier of the shuttle; `sell` returns one entry per full load.
 
 ## 5. The contract and the missions
@@ -353,6 +361,7 @@ reviewed outside Claude:
 | O11 | Outpost maps for the other eight planets, the remaining rig heads (Crystal Harvester, Deep Bore, Shielded Extractor), and the captains' outpost lines | B |
 | O12 | Ore icons (27) and deposit colours, with the resource icon pipeline | B |
 | O13 | Contracts 2 and 3: deep drilling in play, Rig Mk II, Cargo Shuttle II (+10 % sales) | B |
+| O14 | The far buyer (design §8.5): `Wanted_By`, the discovery line, the second buyer on SELL, loyalty cost and raid bump | B |
 
 O9 starts with O2 so every later story is reviewable outside Claude as it lands. O5 runs alongside O1–O4.
 

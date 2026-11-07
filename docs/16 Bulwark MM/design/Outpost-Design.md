@@ -44,6 +44,10 @@ Status: owner decisions applied (Q1–Q7, 2026-11-06) · 2026-11-06 · Epic *Out
 > The ore mining towers for different materials should be different designs, while the 2x miner simply uses a
 > different highlight color with an enhanced mining animation. More debris. *(owner, 2026-11-06, 16:53)*
 
+> Mk II rig should have double capacity, but deeper definitely works better when slower. Eventually when the player
+> advances they may discover the Easter egg that other factions will pay even more for rare resources from other
+> planets. *(owner, 2026-11-06, 18:30)*
+
 The first build is **the Verdance contract plus the Verdance outpost map** (Q1). The answers are applied throughout;
 §11 records them. ("sooner animation" in the reply is read as *shuttle* animation.)
 
@@ -99,7 +103,7 @@ not be lost.
 | Kit | Outpost Hub, Power Station I, Mining Rig I, Storage Tower I, and the ground defenses: a Cannon, a Machine Gun and a wall ring (Q2) |
 | Step 1 | **Establish the outpost on Verdance.** All four buildings are placed on their pads, the rig sits on the iron deposit, and every building is powered. The outpost reads ONLINE. |
 | Step 2 | **Deliver 300 iron to the Oath.** That is 20 shuttle loads, about 100 minutes of the starter rig. |
-| Step 3 | **Hold the outpost through its first raid.** The first raid is scripted for 10 minutes after the outpost comes online, so it arrives while the player is watching (§5.3). |
+| Step 3 | **Hold the outpost through a raid.** The first raid is scripted for 10 minutes after the outpost comes online, so it normally arrives while the player is watching (§5.3). If the player has left, it resolves by the away rule. If it breaks through, the step waits for the next raid the outpost holds; nothing fails. |
 | Pays | 4 gold per iron delivered (contract price, the same as market), then **2,000 gold**, **+20 loyalty with Verdance** ("moral equity"), 300 XP |
 | Unlocks | **Aluminum**, the second ore, and **Deep Drilling I**, the first mining technology (§4.4) |
 
@@ -112,7 +116,7 @@ gets several outposts, one per planet.
 | Contract | Ask | Unlocks |
 |---|---|---|
 | 1 — establish | outpost online; deliver 300 common ore; hold the first raid | the uncommon ore; Deep Drilling I |
-| 2 — expand | build a second Mining Rig on the uncommon deposit; deliver 150 uncommon ore | the rare ore; Rig Mk II (2× extraction) |
+| 2 — expand | build Power Station II and a second Mining Rig on the uncommon deposit (the kit's station has 1 power spare, the rig needs 4); deliver 150 uncommon ore | the rare ore; Rig Mk II (2× extraction, 2× storage) |
 | 3 — master | deliver 60 rare ore; hold 3 raids without a breach | Cargo Shuttle II (+10 % on every sale, §4.3); the planet's spacecraft blueprint (later, Ships division) |
 
 Only contract 1 is specified to build. Contracts 2 and 3 fix the direction and the unlock order; their numbers are
@@ -161,10 +165,20 @@ The same rig extracts each tier at a different speed; rarer ore is slower and wo
 | Uncommon (Aluminum) | 1.5 units / min | 12 gold | 1,080 | 7.5 units |
 | Rare (Lithium) | 0.8 units / min | 30 gold | 1,440 | 4 units |
 
-**Storage Tower I holds 720 units**, 4 hours of the starter rig on iron. Storage counts units (crates), not gold, so
-the slower ores take longer to fill it.
+**Storage is counted per rig.** Each rig fills its own bay in the Storage Tower, and a bay holds **4 hours of that
+rig's shallow output** (owner: "the storage building can hold 4 hours"):
 
-**What 4 hours is worth.** A full Storage Tower I of iron sells for 2,880 gold. A Verdance mission primary pays
+| Rig on | Rig I bay | Rig Mk II bay (owner: double capacity) |
+|---|---|---|
+| Iron (common) | 720 units | 1,440 units |
+| Aluminum (uncommon) | 360 units | 720 units |
+| Lithium (rare) | 192 units | 384 units |
+
+So adding a rig or upgrading one never shortens the 4 hours. Storage Tower II doubles every bay (8 hours). A bay counts
+units (crates), so a rig on its deep seam fills its bay four times slower (§4.4). When one bay is full only that rig
+stops; the others keep going.
+
+**What 4 hours is worth.** A full Rig I bay of iron sells for 2,880 gold. A Verdance mission primary pays
 about 700–1,100 gold, and a won battle banks what is left of its gold. So 4 hours of a starter outpost is worth
 roughly one good battle. It is meaningful, but it does not replace playing. The whole tech tree costs 140,300 gold
 (Mission-Log §1.2); the outpost is the steady income that closes the late-game gap the battles leave.
@@ -185,8 +199,8 @@ Selling is **always a manual tap** (Q5). There is no automatic selling at any ti
   4. the shuttle arcs up and out of frame, and the gold counter in the HUD counts up.
 - The buyer is the planet's own faction ship, at the contract price while a contract is active and the market price
   after. The defaults set both to the table price.
-- When storage is full the rig stops; nothing is lost, it just stops earning. The menu shows **STORAGE FULL** on the
-  OUTPOST button.
+- When a rig's bay is full that rig stops; nothing is lost, it just stops earning. The menu shows **STORAGE FULL** on
+  the OUTPOST button when every bay is full.
 - **Cargo Shuttle II** (contract 3) is a bigger shuttle that pays **+10 %** on every sale. It still sells only on a
   tap.
 
@@ -196,11 +210,12 @@ Selling is **always a manual tap** (Q5). There is no automatic selling at any ti
 **deep seam**: the same ore at a higher grade (*Iron, deep grade*), extracted at **¼ the speed** and sold at **5×
 the price** (Q3: the owner raised it from 3×).
 
-Deep ore earns **1.25× per hour** (¼ × 5) and fills storage four times slower: 16 hours to fill Storage Tower I
-instead of 4. So the upgrade is a straight improvement, and it suits both kinds of player: more gold per hour, and
-an outpost that keeps earning overnight instead of stopping full at hour 4.
+Deep ore earns **1.25× per hour** (¼ × 5) and fills its bay four times slower: 16 hours instead of 4. Slower is the
+point (owner: "deeper definitely works better when slower"): more gold per hour, and an outpost that keeps earning
+overnight instead of stopping full at hour 4. Deep ore is its own item (*Iron, deep grade*) in storage and the
+inventory, with its own price; contract deliveries count both grades.
 
-| Deep grade, Rig I | Speed | Price | Gold per hour | Hours to fill Storage I |
+| Deep grade, Rig I | Speed | Price | Gold per hour | Hours to fill its bay |
 |---|---|---|---|---|
 | Iron | 0.75 / min | 20 | 900 | 16 |
 | Aluminum | 0.375 / min | 60 | 1,350 | 32 |
@@ -236,8 +251,10 @@ out of scope here.
 
 - **About one raid every 6 hours** on average, never more than one per 3-hour window. The schedule is drawn from the
   outpost's seed, so it is the same however often the game is opened.
-- Every defense has **integrity** (100 %). Each raid wears the defenses that fought it by **7 %**. Repairs cost gold
-  and count as construction.
+- Each defense adds to the **defense rating**: **Cannon 0.30, Machine Gun 0.25, the wall ring 0.25** (Reinforced Walls
+  0.35). Tower tiers the player owns add 20 % per tier above I once the Upgrade Bay is built.
+- Every defense has **integrity** (100 %). Each raid wears the defenses that fought it by **7 %**. Only a **repair**
+  restores integrity; building something else does not.
 - The outpost's **defense rating** is the sum of its defenses' power times their integrity. A raid **breaches** when
   the rating falls below the raid's strength.
 - **A breach** loses **25 % of the ore in storage** (Q6). Nothing else breaks: the buildings keep running. Every
@@ -247,12 +264,12 @@ Proposed tuning that matches "up to 2 days":
 
 | Outpost | Rating at start | Raids held before the first breach | Hours, at one raid per 6 h |
 |---|---|---|---|
-| Well defended (4 defenses, walls) | 1.00 | 8 | ~48 |
+| Well defended (the kit plus one more Machine Gun) | 1.05 | 8 | ~48 |
 | Starter kit (cannon, machine gun, walls) | 0.80 | 5 | ~30 |
 | No defenses | 0 | 0 | the first raid breaches |
 
-Raid strength is 0.55 of a well defended outpost's rating and does not grow over time. Building or repairing
-anything resets the worn defenses, so the 2-day clock is about how long the player can leave it alone.
+Raid strength is 0.55 and does not grow over time. A repair resets the worn defenses, so the 2-day clock is about how
+long the player can leave the outpost alone.
 
 ### 5.3 Watching a raid
 
@@ -260,6 +277,8 @@ anything resets the worn defenses, so the 2-day clock is about how long the play
   lanes and the defenses fight, using the battle game's own simulation on the outpost map. The player can tap
   REPAIR, but cannot build during a raid. The first contract's raid is scripted to arrive this way, 10 minutes after
   the outpost comes online.
+- **Leaving during a live raid:** the rest of the raid resolves by the rating rule, with the integrity the defenses had
+  when the player left.
 - **While the player is away,** raids are resolved by the rating rule above.
 - **Back in the outpost view,** a **while you were away** report lists what was extracted, each raid (repelled, or
   breached with the ore lost) and the defenses' wear.
@@ -276,7 +295,7 @@ themselves. Defenses are placed freely on the outer ring, the way towers are pla
 | **Power Station** | top left: round building with the blue core | supplies power (§4.5) | I, II |
 | **Mining Rig** | bottom left: the drill with the crystal laser, ore carts on a track | built on an ore deposit; extracts that ore; shallow or deep (§4.4). **A different design for each material** (§8.4) | I, II (2×) |
 | **Storage Tower** | bottom right: the building with the dish and the holographic floor | holds extracted ore; the hologram shows how full it is | I (4 h), II (8 h) |
-| **Harvester Bay** | left: the garage with the buggies | builds and runs surface harvesters on the outpost map, just like in battle; their resources go to the inventory | I |
+| **Harvester Bay** | left: the garage with the buggies | builds and runs surface harvesters on the outpost map, just like in battle (2 to start, up to 4); they gather the planet's common and uncommon surface resources at the battle harvest rates, into a 4-hour hopper that empties into the inventory when the player opens the outpost | I |
 | **Upgrade Bay** | top right: the hangar pad with two control towers and a small craft | where Outpost-division tech upgrades are bought and installed; it also lets tech-tree tower upgrades apply to the outpost's defenses | I |
 | **Defenses** | not in the picture | the battle game's ground defenses: Cannon, Machine Gun and walls (Q2), at the tiers the player owns | from the tech tree |
 
@@ -292,7 +311,7 @@ themselves. Defenses are placed freely on the outer ring, the way towers are pla
 | Storage Tower II | 5,000 | 15 min |
 | Mining Rig II (2× extraction) | 8,000 | 20 min |
 | a defense | its battle price × 4 | 2 min |
-| repair | 10 % of the building's cost per 10 % integrity | instant |
+| repair | 10 % of the building's value per 10 % integrity; kit items are valued at their list price (a defense at its battle price × 4) | instant |
 
 Build times are real time and run while the player is away. They are short on purpose: the outpost is a place to
 spend gold, not to wait.
@@ -382,6 +401,25 @@ Auger Drills on different planets still read as different materials.
 - **more debris:** about three times the particles at the deposit: rock chips, dust plumes and ore chunks in the
   ore's colour, bouncing off the pad. The debris is the clearest sign of the doubled output.
 
+### 8.5 The far buyer (Easter egg)
+
+The owner's direction: as the player advances they may **discover** that other factions pay even more for rare ore
+from other planets. It is not advertised. Nothing in the menus mentions it until it is found.
+
+- **Who pays more.** Each faction wants one other planet's **rare ore**, for the use in §3: Florael, the power-station
+  planet, wants Verdance's Lithium; Lumen, the fuel moon, wants Cinder's Iridium; and so on (one want per faction, the
+  `Wanted_By` column in the data). That faction's ship pays **2×** the ore's price.
+- **How it is found.** The first time the player has outposts on two planets and visits a ship that wants the other
+  planet's rare ore, the rare-contract contact for that ship (the character met through the optional rare contract
+  in battle) takes the player aside: *"That lithium you sell to the Oath. We'd pay double."* The line plays once.
+- **What changes.** After the discovery, SELL on that outpost offers a second buyer for the wanted rare ore: the far
+  ship, at 2×, alongside the home ship. The sale plays the same sequence; the shuttle flies off toward the far ship's
+  side of the sky.
+- **The catch.** Selling to a far buyer earns loyalty with the far faction and **costs loyalty with the home faction**
+  (−1 per load), which feeds the dissidents' story. Raid strength on that outpost rises by 0.05 while far sales
+  continue that day.
+- **When.** After the first build (Phase B), with contract 3, since the rare ore unlocks there.
+
 ## 9. The outpost map, per planet
 
 Nine new maps, one per planet, authored in the Terrain Forge like the battle maps.
@@ -417,6 +455,13 @@ Nine new maps, one per planet, authored in the Terrain Forge like the battle map
 | Q5 | Selling | **Always a manual tap**, with a shuttle animation, ore splatter and a "$N" pop like combat (§4.3); no automatic selling at any tier |
 | Q6 | A breach | **25 % of the ore in storage is lost**; nothing else breaks (§5.2) |
 | Q7 | The star ladder | **3★ on map 3** brings the ship and the outpost contract, simplified to 3 for now |
+| — | Storage with more or better rigs | **Mk II doubles capacity**; deep stays slower and lasts longer (§4.2, §4.4) |
+| — | Selling elsewhere | **A hidden far-buyer premium** for rare ore from other planets (§8.5) |
+
+Design gaps closed with defaults on 2026-11-06 (owner review asked): storage per rig (§4.2); contract 2's power
+requirement (§2.4); defense values (§5.2); repair only restores integrity, and kit items carry a value for repairs
+(§5.2, §6.1); the first raid when the player is away and leaving a live raid (§2.3, §5.3); deep grade as its own item
+(§4.4); the Harvester Bay's numbers (§6).
 
 ## Dependencies
 
