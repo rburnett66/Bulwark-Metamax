@@ -22,6 +22,8 @@ import { createOutpostScene } from './outpostScene.js';
 import { defenseStructures, planBuildings } from './conduits.js';
 import { createSession, onlineIssues } from './session.js';
 import { statusModel } from './statusReport.js';
+import { constructionSites, createConstructionFx } from './constructionFx.js';
+import { K as FXK } from '../../render3d/fx/impacts.js';
 import { hudModel, panelModel, KIND_NAME, fmtGold, rigHeadOf } from './hudModel.js';
 import { buildMenu, placementStep, aimValid, IDLE, MENU, DEFENSE_STRUCT, isResourceBay, kindOf } from './buildMenu.js';
 import { buildingWarnings, markerOf } from './warnings.js';
@@ -503,6 +505,7 @@ async function openOutpostViewInner(opts, stage) {
     refreshMenu();
     if (force) refreshPanel();
   }
+  const siteFx = createConstructionFx({ seed: 41 });
   function frame(t) {
     if (closed) return;
     raf = win.requestAnimationFrame(frame);
@@ -527,6 +530,8 @@ async function openOutpostViewInner(opts, stage) {
     syncHarvesters();
     if (liveAcc === 0) syncFieldStock();
     const out = scene.update(dt, o);
+    // dust and welding sparks on every building under construction (constructionFx.js, the battle's build + repair FX)
+    if (r.impacts) siteFx.step(dt, constructionSites(o, map, clockNow()), r.impacts.emit, FXK, r.impacts.ring, r.tier.key);
     if (saleRun) {
       saleRun.t += dt;
       if (out.sale) shownGold = out.sale.gold;

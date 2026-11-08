@@ -72,6 +72,7 @@ ${SELPANEL_CSS}
 .bw-unitpanel .bw-ustat { display:flex; justify-content:space-between; border-bottom:1px solid #182430; padding:1px 0; }
 .bw-unitpanel .bw-ustat .k { color:#7f9fb2; }
 .bw-unitpanel .bw-ustat .v { color:#eaf6ff; font-weight:600; }
+.bw-unitpanel .bw-ustat.wide { grid-column:1 / -1; gap:12px; } .bw-unitpanel .bw-ustat.wide .v { text-align:right; }
 .bw-bottombar { position:absolute; right:6px; bottom:calc(52px + env(safe-area-inset-bottom, 0px)); display:none; flex-direction:column; gap:8px; align-items:flex-end;
   z-index:65; max-width:min(430px, calc(100vw - 16px)); }
 .bw-bottombar.open { display:flex; }
@@ -994,7 +995,18 @@ export function updateHud(hud, state, ui) {
       };
       hud.uname.textContent = 'Harvester';
       hud.usub.textContent = 'resource hauler · click a crystal field to send it';
+      // the resource it is working (owner 2026-11-08: "selecting a harvester should show the current resource targeted"):
+      // its field's resource by the planet's name for that tier, and how much of the field is left
+      const TIER = { blue: 'common', yellow: 'uncommon', red: 'rare', green: 'epic' };
+      const cells = u.fieldId != null && state.resourceNodes ? state.resourceNodes.filter((n) => n.fieldId === u.fieldId) : [];
+      let target = 'none — tap a field to send it';
+      if (cells.length) {
+        const tier = TIER[cells[0].color], names = (ui && ui.resourceNames) || {};
+        const left = cells.reduce((a, n) => a + Math.max(0, n.remaining), 0), all = cells.reduce((a, n) => a + (n.units || 0), 0);
+        target = (names[tier] || cells[0].type || 'resource') + (tier ? ' (' + tier + ')' : '') + ' · ' + Math.floor(left) + ' / ' + Math.floor(all) + ' left';
+      }
       rows = [
+        ['Target', target, 'wide'],
         ['HP', Math.max(0, Math.ceil(u.hp)) + ' / ' + Math.ceil(u.maxHp)],
         ['Cargo', Math.floor(u.cargo || 0) + ' / ' + (u.capacity || 0)],
         ['Speed', fmt(u.speed)],
@@ -1026,7 +1038,7 @@ export function updateHud(hud, state, ui) {
     }
     while (hud.ustats.firstChild) hud.ustats.removeChild(hud.ustats.firstChild);
     for (let i = 0; i < rows.length; i++) {
-      const row = el(hud.doc, 'div', 'bw-ustat');
+      const row = el(hud.doc, 'div', 'bw-ustat' + (rows[i][2] === 'wide' ? ' wide' : ''));
       row.appendChild(el(hud.doc, 'span', 'k', rows[i][0]));
       row.appendChild(el(hud.doc, 'span', 'v', rows[i][1]));
       hud.ustats.appendChild(row);
