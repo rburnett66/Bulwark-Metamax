@@ -332,6 +332,10 @@ export const freeFleetFor = (wave) => FREE_FLEET_BY_WAVE[Math.max(1, wave | 0) -
 // QUOTA_SPLIT of it on each tier. Shown before the wave and judged at its clear.
 export const QUOTA_WORK_SHARE = 0.5;   // waves often clear before par: size the ask to half of it
 export const QUOTA_SPLIT = Object.freeze({ common: 2 / 3, uncommon: 1 / 3 });
+// the first wave asks only for the easiest resource (owner 2026-11-08: "the star task on the first wave should be the
+// easiest resource to gather not uncommon or rare. On Verdance the requirement is Amberwood which isn't even visible on
+// the first map"): uncommon is asked from this wave on; before it the fleet's whole share goes to common
+export const UNCOMMON_QUOTA_FROM_WAVE = 2;
 const TIER_OF_COLOR = { blue: 'common', yellow: 'uncommon', red: 'rare', green: 'epic' };
 export const tierOfNode = (n) => TIER_OF_COLOR[n.color] || (n.role === 'primary' ? 'common' : n.role === 'premium' ? 'uncommon' : 'rare');
 /** The wave's quotas → { common, uncommon } units (0 = no fields of that tier revealed: nothing asked). Deterministic. */
@@ -341,14 +345,16 @@ export function waveQuota(state, wave, parSec) {
   if (!nodes.length || !(parSec > 0)) return out;
   const st = harvesterStats(state), b = state.base ? state.base.pos || state.base : { x: 0, y: 0 };
   const fleet = Math.min(HARVESTER_CAP, Math.max(aliveHarvesters(state).length, freeFleetFor(wave)));
-  for (const tier of ['common', 'uncommon']) {
+  const tiers = wave >= UNCOMMON_QUOTA_FROM_WAVE ? ['common', 'uncommon'] : ['common'];
+  for (const tier of tiers) {
+    const share = tiers.length === 1 ? 1 : QUOTA_SPLIT[tier];
     const pool = nodes.filter((n) => n.wave <= wave && tierOfNode(n) === tier && n.units > 0);
     if (!pool.length) continue;
     const near = pool.reduce((a, n) => (Math.hypot(n.x - b.x, n.y - b.y) < Math.hypot(a.x - b.x, a.y - b.y) ? n : a));
     const d = Math.hypot(near.x - b.x, near.y - b.y), pull = near.units / Math.max(1, near.harvestSec);
     const trip = (2 * d) / Math.max(0.1, st.speed) + st.capacity / Math.max(0.1, pull) + HARVESTER_UNLOAD_TIME;
     const total = pool.filter((n) => n.wave === wave).reduce((a, n) => a + n.units, 0) || pool.reduce((a, n) => a + n.units, 0);
-    out[tier] = Math.max(1, Math.min(Math.floor(total * 0.6), Math.floor((st.capacity / trip) * fleet * parSec * QUOTA_WORK_SHARE * QUOTA_SPLIT[tier])));
+    out[tier] = Math.max(1, Math.min(Math.floor(total * 0.6), Math.floor((st.capacity / trip) * fleet * parSec * QUOTA_WORK_SHARE * share)));
   }
   return out;
 }

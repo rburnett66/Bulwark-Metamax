@@ -38,3 +38,11 @@ test('a quota asks only what the wave can give: never more than 60 % of its fiel
   const ring = sim.resourceNodes.filter((n) => n.wave === 1 && n.color === 'blue').reduce((a, n) => a + n.units, 0);
   assert.ok(q.common <= Math.floor(ring * 0.6));
 });
+
+test('wave 1 asks only for common, the easiest resource; uncommon from wave 2 (owner 2026-11-08)', () => {
+  const { sim } = board();
+  const q1 = waveQuota(sim, 1, sim.map.rings[0].parSec), q2 = waveQuota(sim, 2, sim.map.rings[1].parSec);
+  assert.equal(q1.uncommon, 0, 'no uncommon ask on wave 1');
+  assert.ok(q1.common > 0);
+  assert.ok(q2.uncommon > 0, 'uncommon is asked from wave 2');
+});
