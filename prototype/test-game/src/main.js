@@ -1329,6 +1329,8 @@ export function boot(mountEl, seed) {
       try { render3dMod.renderFrame(renderer3d, viewSim, ui, pendingEvents, dtMs / 1000); frameErrors3d = 0; }
       catch (e) { console.error('[render3d] frame failed', e); if (++frameErrors3d >= 30) fallbackTo2D((e && e.message) || e); }
     }
+    // the planet's resource names for the harvester panel's Target row (recomputed only when the enemy changes)
+    if (ui._namesFor !== currentTestFaction) { ui._namesFor = currentTestFaction; try { ui.resourceNames = battleResourceNames(); } catch (e) { ui.resourceNames = null; } }
     updateHud(hud, sim, ui);
     pendingEvents = [];
   });
