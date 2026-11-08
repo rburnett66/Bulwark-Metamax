@@ -520,6 +520,9 @@ export function createMenu(mountEl, cbs) {
   async function openOutpost(planet) {
     outpostOpen = true;
     if (stage) stage.pause();
+    // the battle's 3D view rests behind the menu with its own GPU context: let it go while the outpost (a second full 3D
+    // view) is open, so a phone holds one battle-sized scene at a time (iOS crash, owner 2026-11-07)
+    if (cbs.onOutpostOpen) { try { cbs.onOutpostOpen(); } catch (e) { console.warn('[outpost] release', e); } }
     try {
       const V = await import('../outpost/view/outpostView.js');
       const q = (() => { try { return new URLSearchParams(location.search).get('quality'); } catch (e) { return null; } })();
@@ -529,6 +532,7 @@ export function createMenu(mountEl, cbs) {
     } catch (e) { console.error('[outpost] the outpost view failed', e); }
     finally {
       outpostOpen = false;
+      if (cbs.onOutpostClose) { try { cbs.onOutpostClose(); } catch (e) { console.warn('[outpost] restore', e); } }
       syncStage(); refreshOutpost(); missionsChanged();
       if (cbs.onTechChanged) cbs.onTechChanged();   // the bank changed (sales, builds): the next battle sees it
     }
