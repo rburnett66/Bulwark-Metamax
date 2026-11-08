@@ -26,6 +26,7 @@ import { createKillCamRecorder, createKillCamPlayer } from './killcam/killCam.js
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
 import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
+import { waveQuota } from './sim/harvest.js';
 import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner, showWaveReport } from './render/hud.js';
 import { createResourceLedger, feedResources, closeWave, resourceNames, waveResourcesHtml } from './render/resourceSummary.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
@@ -264,7 +265,14 @@ export function boot(mountEl, seed) {
     }
     for (const s of waveEntry.spawns || []) seenUnitTypes.add(s.unitId);
     // waveNum passed explicitly — campaign wave entries don't all carry a .wave field ("Wave undefined").
-    return { wave: (waveNum != null ? waveNum : waveEntry.wave), faction: waveEntry.faction, units };
+    // the wave's harvest quotas, shown before it (owner 2026-11-07: "the player needs to know about it before and after
+    // the wave"); the same numbers the sim judges at the clear (harvest.js waveQuota)
+    const wn = waveNum != null ? waveNum : waveEntry.wave;
+    const ring = sim && sim.map && sim.map.rings && sim.map.rings.length ? sim.map.rings[Math.min(wn, sim.map.rings.length) - 1] : null;
+    const q = ring && sim.resourceNodes ? waveQuota(sim, wn, ring.parSec) : null;
+    const names = battleResourceNames();
+    const quota = q ? ['common', 'uncommon'].filter((t) => q[t] > 0).map((t) => ({ tier: t, name: names[t] || t, units: q[t] })) : [];
+    return { wave: wn, faction: waveEntry.faction, units, quota, par: ring ? ring.parSec : null };
   }
   let accumulator = 0;        // fixed-timestep accumulator (seconds)
   let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame

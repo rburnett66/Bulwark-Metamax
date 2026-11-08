@@ -11,7 +11,7 @@ import { startNextWave } from '../sim/waves.js';
 const SC = {
   wave: 2, stars: 3, flags: [true, false, true, false, true],
   detail: { core: { start: 1000, end: 1000, max: 1000 }, harvesters: { start: 2, alive: 1 },
-    primary: { gathered: 42, total: 60, need: 36 }, premium: { cleared: 1, total: 2 }, time: { sec: 31.4, par: 40 }, gold: 385 },
+    common: { gathered: 42, need: 36 }, uncommon: { gathered: 6, need: 10 }, time: { sec: 31.4, par: 40 }, gold: 385 },
 };
 
 test('the model gives each of the five stars its own row, with the number behind it', () => {
@@ -19,7 +19,7 @@ test('the model gives each of the five stars its own row, with the number behind
   assert.equal(m.wave, 2);
   assert.equal(m.stars, 3);
   assert.deepEqual(m.rows.map((r) => r.ok), [true, false, true, false, true]);
-  assert.deepEqual(m.rows.map((r) => r.value), ['NO DAMAGE', '1 LOST', '42 / 36', '1 / 2 FIELDS', '31.4s / 40.0s']);
+  assert.deepEqual(m.rows.map((r) => r.value), ['NO DAMAGE', '1 LOST', '42 / 36', '6 / 10', '31.4s / 40.0s']);
   assert.deepEqual(m.stats.map((d) => d.value), ['12', '1', '100%', '+385']);
   assert.deepEqual(m.resources.map((r) => [r.name, r.units]), [['Loam Grain', 42], ['uncommon', 10]]);
 });
@@ -48,6 +48,7 @@ test('the sim sends the numbers with the stars when a wave clears', () => {
   assert.ok(d.harvesters && d.harvesters.start >= 1);
   assert.ok(d.time.sec > 0 && d.time.par > 0);
   assert.equal(ev.flags[4], d.time.sec <= d.time.par + 0.05);
-  if (d.primary) assert.equal(ev.flags[2], d.primary.gathered >= d.primary.total * 0.6 - 1e-6);
+  if (d.common) assert.equal(ev.flags[2], d.common.gathered >= d.common.need);
+  if (d.uncommon) assert.equal(ev.flags[3], d.uncommon.gathered >= d.uncommon.need);
   assert.equal(waveReportModel(ev).rows.length, 5);
 });

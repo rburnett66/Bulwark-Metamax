@@ -67,7 +67,11 @@ export function showWaveIntel(mountEl, info, onStart) {
   card.innerHTML =
     '<div class="bwd-kicker">INCOMING WAVE INTEL</div>' +
     '<div class="bwd-title">Wave ' + info.wave + (info.faction ? ' — ' + esc(info.faction) : '') + '</div>' +
-    (rows || '<div class="bwd-unit">—</div>');
+    (rows || '<div class="bwd-unit">—</div>') +
+    // the wave's harvest quotas (two of its five stars), and its par time
+    ((info.quota && info.quota.length) || info.par ? '<div class="bwd-kicker" style="margin-top:12px">STARS THIS WAVE</div>' +
+      (info.quota || []).map((q) => '<div class="bwd-unit">Gather <b>' + q.units + ' ' + esc(q.name) + '</b></div>').join('') +
+      (info.par ? '<div class="bwd-unit">Clear it in under <b>' + info.par + 's</b>, with no damage to the core and no harvester lost</div>' : '') : '');
   const btn = doc.createElement('button'); btn.className = 'bwd-btn go'; btn.textContent = 'TO THE WALLS ▶';
   btn.addEventListener('click', () => { veil.remove(); if (onStart) onStart(); });
   card.appendChild(btn);

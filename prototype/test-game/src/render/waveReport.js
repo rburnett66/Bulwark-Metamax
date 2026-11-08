@@ -29,13 +29,14 @@ const sec = (n) => (Math.round((n || 0) * 10) / 10).toFixed(1) + 's';
  */
 export function waveReportModel(sc, extra = {}) {
   const d = (sc && sc.detail) || {}, fl = (sc && sc.flags) || [];
-  const core = d.core, hv = d.harvesters, p = d.primary, pr = d.premium, t = d.time || {};
+  const core = d.core, hv = d.harvesters, p = d.common, pr = d.uncommon, t = d.time || {};
+  const names = (extra.resources && extra.resources.names) || {};
   const lost = hv ? Math.max(0, hv.start - hv.alive) : 0;
   const rows = [
     { ok: !!fl[0], label: 'CORE UNDAMAGED', value: core ? (core.end >= core.start ? 'NO DAMAGE' : fmt(core.start - core.end) + ' DAMAGE') : '—' },
     { ok: !!fl[1], label: 'NO HARVESTERS LOST', value: hv ? (lost ? lost + ' LOST' : 'ALL ' + hv.start + ' SAFE') : '—' },
-    { ok: !!fl[2], label: 'GATHER THE QUOTA', value: p ? fmt(p.gathered) + ' / ' + fmt(p.need) : 'NO FIELDS' },
-    { ok: !!fl[3], label: 'CLEAR THE PREMIUM', value: pr ? pr.cleared + ' / ' + pr.total + ' FIELDS' : 'NONE THIS WAVE' },
+    { ok: !!fl[2], label: 'GATHER ' + String(names.common || 'common').toUpperCase(), value: p ? fmt(p.gathered) + ' / ' + fmt(p.need) : 'NONE ASKED' },
+    { ok: !!fl[3], label: 'GATHER ' + String(names.uncommon || 'uncommon').toUpperCase(), value: pr ? fmt(pr.gathered) + ' / ' + fmt(pr.need) : 'NONE ASKED' },
     { ok: !!fl[4], label: 'BEAT PAR', value: t.par ? sec(t.sec) + ' / ' + sec(t.par) : sec(t.sec) },
   ];
   const stats = [

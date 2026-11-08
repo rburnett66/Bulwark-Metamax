@@ -316,12 +316,45 @@ export function cmdBuyHarvester(state) {
   return { ok: true, reason: '', cost: price };
 }
 
-/** Per-wave transition. OWNER RULE CHANGE (epic-mrmwh12kq3 / story-mrmwpzcl6wq, 2026-07-18):
+/** Per-wave transition (the free fleet above). OWNER RULE CHANGE (epic-mrmwh12kq3 / story-mrmwpzcl6wq, 2026-07-18):
  *  harvesters PERSIST between waves — no retirement, no re-dock, no cargo wipe. Trucks keep their
  *  field assignments and keep working straight through the interlude. Only a fully wiped fleet
  *  gets the free starter (the economy must never dead-end); the healed base rule is unchanged. */
+// FREE FLEET PER WAVE (owner 2026-11-07: "have 1 wave 1, have 2 wave 2, have 3 wave 3, then minimum 3 for the rest of
+// the waves"): each wave opens with at least this many harvesters; the game tops the fleet up for free (bought ones
+// count, and the docks still cap it at HARVESTER_CAP).
+export const FREE_FLEET_BY_WAVE = Object.freeze([1, 2, 3]);
+export const freeFleetFor = (wave) => FREE_FLEET_BY_WAVE[Math.max(1, wave | 0) - 1] ?? FREE_FLEET_BY_WAVE[FREE_FLEET_BY_WAVE.length - 1];
+// WAVE QUOTAS (owner 2026-11-07: "a quota for common and a ... quota for uncommon"; the uncommon/premium "all fields
+// cleared" star is gone): each wave asks for an amount of common (blue) and uncommon (yellow) that the wave's free
+// fleet can gather inside its time limit. The amount is sized from the nearest revealed field of each tier: one truck's
+// round trip (drive out, fill, drive home, unload) gives its rate; the fleet works QUOTA_WORK_SHARE of the par time,
+// QUOTA_SPLIT of it on each tier. Shown before the wave and judged at its clear.
+export const QUOTA_WORK_SHARE = 0.5;   // waves often clear before par: size the ask to half of it
+export const QUOTA_SPLIT = Object.freeze({ common: 2 / 3, uncommon: 1 / 3 });
+const TIER_OF_COLOR = { blue: 'common', yellow: 'uncommon', red: 'rare', green: 'epic' };
+export const tierOfNode = (n) => TIER_OF_COLOR[n.color] || (n.role === 'primary' ? 'common' : n.role === 'premium' ? 'uncommon' : 'rare');
+/** The wave's quotas → { common, uncommon } units (0 = no fields of that tier revealed: nothing asked). Deterministic. */
+export function waveQuota(state, wave, parSec) {
+  const out = { common: 0, uncommon: 0 };
+  const nodes = state.resourceNodes || [];
+  if (!nodes.length || !(parSec > 0)) return out;
+  const st = harvesterStats(state), b = state.base ? state.base.pos || state.base : { x: 0, y: 0 };
+  const fleet = Math.min(HARVESTER_CAP, Math.max(aliveHarvesters(state).length, freeFleetFor(wave)));
+  for (const tier of ['common', 'uncommon']) {
+    const pool = nodes.filter((n) => n.wave <= wave && tierOfNode(n) === tier && n.units > 0);
+    if (!pool.length) continue;
+    const near = pool.reduce((a, n) => (Math.hypot(n.x - b.x, n.y - b.y) < Math.hypot(a.x - b.x, a.y - b.y) ? n : a));
+    const d = Math.hypot(near.x - b.x, near.y - b.y), pull = near.units / Math.max(1, near.harvestSec);
+    const trip = (2 * d) / Math.max(0.1, st.speed) + st.capacity / Math.max(0.1, pull) + HARVESTER_UNLOAD_TIME;
+    const total = pool.filter((n) => n.wave === wave).reduce((a, n) => a + n.units, 0) || pool.reduce((a, n) => a + n.units, 0);
+    out[tier] = Math.max(1, Math.min(Math.floor(total * 0.6), Math.floor((st.capacity / trip) * fleet * parSec * QUOTA_WORK_SHARE * QUOTA_SPLIT[tier])));
+  }
+  return out;
+}
 export function resetFleetForWave(state) {
-  if (!aliveHarvesters(state).length) spawnHarvester(state);   // none survived → give the free one
+  const want = Math.min(HARVESTER_CAP, freeFleetFor(state.waves ? state.waves.current : 1));
+  for (let guard = 0; aliveHarvesters(state).length < want && guard < HARVESTER_CAP; guard++) if (!spawnHarvester(state)) break;
   state.harvesterId = (state.harvesterIds || [])[0] ?? null;
   if (state.base) state.base.hp = state.base.maxHp;            // healed base every wave (owner)
 }
@@ -418,6 +451,8 @@ function stepOneHarvester(state, u, dt) {
     const pullRate = (lvl >= 5 && node.role === 'premium') ? rate * 1.5 : rate;
     const take = Math.min(pullRate * dt, Math.max(0, node.remaining), u.capacity - u.cargo);
     if (take > 0) {
+      const tk = (state.waveTake ||= { common: 0, uncommon: 0, rare: 0, epic: 0 });   // the wave quotas' count
+      tk[tierOfNode(node)] = (tk[tierOfNode(node)] || 0) + take;
       node.remaining -= take;
       u.cargo += take;
       u.cargoValue += take * (node.valuePerUnit || 0);
