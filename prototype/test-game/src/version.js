@@ -6,4 +6,4 @@
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
 export const VERSION = 'v2026.11.08-a';
-export const VERSION_NOTE = 'A sale pops its gold in green';
+export const VERSION_NOTE = 'A sale pops its gold in green; outpost loading shows its step';

@@ -51,6 +51,37 @@ const LIVE_TICK = 1;   // seconds between live advances of the outpost
  * → { closed: Promise, close(), handle } — handle exposes state and hooks for the review page and measurements.
  */
 export async function openOutpostView(opts = {}) {
+  // never a dead end (owner 2026-11-08, iPhone: stuck on LANDING AT THE OUTPOST…, nothing answered): the loading screen
+  // names the step it is on and offers BACK after a while; a failure shows what failed, with BACK
+  const stage = { step: 'starting', host: null, loading: null };
+  // BACK during a stalled load hands the menu a closed view at once (the load, if it ever finishes, closes itself)
+  const abandoned = new Promise((ok) => { stage.onAbandon = () => ok({ closed: Promise.resolve(), close() {}, handle: null }); });
+  try { return await Promise.race([openOutpostViewInner(opts, stage), abandoned]); } catch (e) {
+    console.error('[outpost] the outpost view failed at', stage.step, e);
+    if (!stage.host || !stage.host.isConnected) throw e;
+    return loadingFailed(stage, `Could not land (${stage.step}): ${(e && e.message) || e}`);
+  }
+}
+
+/** Turn the loading screen into a failure card with BACK. → { closed, close, handle: null } */
+function loadingFailed(stage, text) {
+  if (stage.watchdog) clearTimeout(stage.watchdog);
+  const doc = stage.host.ownerDocument;
+  let resolveClosed;
+  const closed = new Promise((ok) => { resolveClosed = ok; });
+  const close = () => { stage.host.remove(); resolveClosed(); };
+  stage.loading.innerHTML = '';
+  const box = doc.createElement('div');
+  Object.assign(box.style, { display: 'grid', gap: '14px', justifyItems: 'center', maxWidth: '80vw', textAlign: 'center' });
+  const msg = doc.createElement('div'); msg.textContent = text; Object.assign(msg.style, { letterSpacing: '.06em', fontWeight: '600', color: '#ffb3aa' });
+  const back = doc.createElement('button'); back.textContent = 'BACK';
+  Object.assign(back.style, { font: '700 14px/1 Rajdhani, system-ui, sans-serif', letterSpacing: '.2em', padding: '12px 28px', background: '#D9A441', color: '#1a1206', border: '0', cursor: 'pointer' });
+  back.addEventListener('click', close);
+  box.append(msg, back); stage.loading.appendChild(box);
+  return { closed, close, handle: null };
+}
+
+async function openOutpostViewInner(opts, stage) {
   const planet = opts.planet || 'ground';
   const doc = (opts.mount && opts.mount.ownerDocument) || document;
   const mount = opts.mount || doc.body;
@@ -72,8 +103,23 @@ export async function openOutpostView(opts = {}) {
   loading.textContent = 'LANDING AT THE OUTPOST…';
   host.appendChild(loading);
   mount.appendChild(host);
+  stage.host = host; stage.loading = loading;
+  // the step it is on, under the title; BACK after 12 s so a stall is never a dead end
+  const stepLine = doc.createElement('div');
+  Object.assign(stepLine.style, { position: 'absolute', left: '0', right: '0', top: 'calc(50% + 22px)', textAlign: 'center', font: '600 11px/1.4 Rajdhani, system-ui, sans-serif', letterSpacing: '.18em', color: '#6d7a8a' });
+  loading.appendChild(stepLine);
+  const step = (name) => { stage.step = name; stepLine.textContent = name.toUpperCase(); };
+  stage.watchdog = setTimeout(() => {
+    if (!loading.isConnected) return;
+    const b = doc.createElement('button'); b.textContent = 'BACK';
+    Object.assign(b.style, { position: 'absolute', left: '50%', top: 'calc(50% + 52px)', transform: 'translateX(-50%)', font: '700 13px/1 Rajdhani, system-ui, sans-serif', letterSpacing: '.2em', padding: '10px 24px', background: '#1f2732', color: '#dfe7ef', border: '1px solid #3a4655', cursor: 'pointer' });
+    b.addEventListener('click', () => { stage.abandoned = true; host.remove(); if (stage.onAbandon) stage.onAbandon(); });
+    loading.appendChild(b);
+  }, 12000);
+  step('reading the map');
 
   const map = opts.map || await outpostMapFor(planet);
+  step('reading the contracts');
   const catalog = opts.catalog !== undefined ? opts.catalog : await loadMissionCatalog().catch((e) => { console.warn('[outpost] missions unavailable', e); return null; });
   const session = createSession({ store, planet, map, catalog, raidHook: opts.raidHook });
   if (!store.load().outposts || !store.load().outposts[planet]) { host.remove(); throw new Error(`no outpost on ${planet}`); }
@@ -82,11 +128,13 @@ export async function openOutpostView(opts = {}) {
   let bakeTune = {};
   try { const t = JSON.parse(win.localStorage.getItem('tf.bake.v1')); if (t && typeof t === 'object') bakeTune = t; } catch (_) { /* default */ }
   const board = outpostBattleMap(map, { bakeTune });
+  step('starting the 3D view');
   const slug = await bakedSlugFor(map, { base: ROOT });
   const r = await createRenderer3D(view3d, board, { slug, baseUrl: ROOT, planet, craft: false, landing: false, qualityQuery: opts.tier || null, qualityChoice: loadChoice(win.localStorage) });
   if (r.markers && r.markers.setBaseVisible) r.markers.setBaseVisible(false);
   r.fog.update = () => ({ win: null });   // no battle here: the whole board is open (clouds only past the map edge)
   const THREE = r.THREE;
+  step('loading the building models');
   const { GLTFLoader } = await import(ROOT + 'vendor/three-addons/loaders/GLTFLoader.js');
   const kit = await createOutpostKit(THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader });
   const scene = createOutpostScene(THREE, r, { map, kit, tier: r.tier.key, reduced });
@@ -94,11 +142,13 @@ export async function openOutpostView(opts = {}) {
   // ── open: the away catch-up (the only time a long advance runs) ──────────────────────────────────────────────────
   // the away catch-up, one raid window per frame behind the loading line (raids on the battle sim cost time, O7)
   const nextFrame = () => new Promise((ok) => win.requestAnimationFrame(() => ok()));
+  step('catching up while you were away');
   const opened = await session.openChunked(clockNow(), nextFrame);
   onChange();
   let o = opened.outpost;
   const slugs = new Set(['hub', 'shuttle', 'power', 'storage', ...oresOf(planet).map((x) => `rig_${x.rig}`), 'resourceBay', 'upgradeBay', 'habitat']);
   for (const b of planBuildings(o, map, clockNow())) slugs.add(modelSlug(b.kind, b.tier, b.rigHead));
+  step('placing the buildings');
   await kit.preload([...slugs].filter(Boolean));
   // the unlocks and the bank come from the save: read once and again only after something changed it (an action, a
   // live tick), never per frame (loadSave parses localStorage)
@@ -529,6 +579,8 @@ export async function openOutpostView(opts = {}) {
 
   autoFit();
   refreshHud(true);
+  clearTimeout(stage.watchdog);
+  if (stage.abandoned) { close(); return { closed: closedP, close, handle }; }
   loading.remove();
   if (opened.away.show) hud.report(opened.away, { reduced });
   else if (opened.banked && Object.keys(opened.banked).length) hud.toast(`Hopper emptied into your inventory · +${fmtGold(Object.values(opened.banked).reduce((a, b) => a + b, 0))}`);
