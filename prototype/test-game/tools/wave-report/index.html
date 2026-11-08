@@ -38,14 +38,14 @@ import { createHud, showWaveReport } from '../../src/render/hud.js';
 import { waveReportModel } from '../../src/render/waveReport.js';
 const names = { common: 'Loam Grain', uncommon: 'Heartwood Amber', rare: 'Rootsong Seeds', epic: 'Oathstone' };
 const S = {
-  good: [{ wave: 2, stars: 4, flags: [true, true, true, false, true], detail: { core: { start: 1000, end: 1000, max: 1000 }, harvesters: { start: 2, alive: 2 },
-    primary: { gathered: 42, total: 60, need: 36 }, premium: { cleared: 1, total: 2 }, time: { sec: 31.4, par: 40 }, gold: 385 } },
+  good: [{ wave: 2, stars: 4, flags: [true, true, true, true, false], detail: { core: { start: 1000, end: 1000, max: 1000 }, harvesters: { start: 2, alive: 2 },
+    common: { gathered: 42, need: 36 }, uncommon: { gathered: 12, need: 10 }, time: { sec: 31.4, par: 40 }, gold: 385 } },
     { kills: 12, structuresLost: 0, resources: { wave: { units: { common: 42, uncommon: 10, rare: 0, epic: 0 } }, names } }],
   rough: [{ wave: 5, stars: 1, flags: [false, false, false, false, true], detail: { core: { start: 1000, end: 640, max: 1000 }, harvesters: { start: 3, alive: 1 },
-    primary: { gathered: 18, total: 100, need: 60 }, premium: { cleared: 0, total: 3 }, time: { sec: 58.2, par: 76 }, gold: 210 } },
+    common: { gathered: 18, need: 60 }, uncommon: { gathered: 0, need: 12 }, time: { sec: 58.2, par: 76 }, gold: 210 } },
     { kills: 27, structuresLost: 3, resources: { wave: { units: { common: 18, uncommon: 0, rare: 6, epic: 0 } }, names } }],
   empty: [{ wave: 1, stars: 3, flags: [true, true, false, false, true], detail: { core: { start: 1000, end: 1000, max: 1000 }, harvesters: { start: 1, alive: 1 },
-    primary: { gathered: 0, total: 50, need: 30 }, premium: { cleared: 0, total: 2 }, time: { sec: 19.0, par: 25 }, gold: 120 } },
+    common: { gathered: 0, need: 30 }, uncommon: { gathered: 0, need: 8 }, time: { sec: 19.0, par: 25 }, gold: 120 } },
     { kills: 10, structuresLost: 0, resources: { wave: { units: { common: 0, uncommon: 0, rare: 0, epic: 0 } }, names } }],
 };
 const hud = createHud(document.getElementById('m'), {});

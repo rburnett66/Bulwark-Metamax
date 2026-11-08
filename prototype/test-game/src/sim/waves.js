@@ -3,7 +3,7 @@ import { raisesPending } from './abilities.js';
 import { MAX_LIVE_3D } from '../data/renderTiers.js';
 import { createUnit, unitRadius } from './entities.js';
 import { emitEvent, contactDistR, REST_RATIO } from './core.js';
-import { resetFleetForWave } from './harvest.js';
+import { resetFleetForWave, waveQuota } from './harvest.js';
 import { rollBonusOffer } from './bonuses.js';
 
 // Live Tier C (live-3D render) attackers on the field right now — the §5 sparsity cap counts these.
@@ -104,8 +104,8 @@ export function initWaves(waveTable) {
  * @returns {boolean} false if a wave is already active or all waves are done
  */
 /** Star_Rubric scorer — deterministic, judged at wave clear against the wave-start snapshot.
- *  1 core untouched · 2 no harvesters lost · 3 primary quota (60% of the wave-ring's primary)
- *  4 all ring premium claimed · 5 cleared under the ring's par. Conditions with no subject on
+ *  1 core untouched · 2 no harvesters lost · 3 common quota · 4 uncommon quota (owner 2026-11-07: quotas sized to
+ *  the wave's free fleet, harvesting.js waveQuota; the old "all premium cleared" star is gone) · 5 cleared under par. Conditions with no subject on
  *  this board (classic: no nodes/ring) default TRUE so every board stays 5-starrable. */
 function scoreWave(state, w) {
   const map = state.map;
@@ -115,34 +115,22 @@ function scoreWave(state, w) {
   const hvAlive = (state.harvesterIds || []).reduce((a, id) => {
     const u = state.units.get(id); return a + (u && u.hp > 0 ? 1 : 0);
   }, 0);
-  let primaryQuota = true, premiumClaimed = true;
-  let primary = null, premium = null;   // the wave report's numbers (null = no such fields this wave)
-  if (state.resourceNodes && ring) {
-    const prim = state.resourceNodes.filter((n) => n.wave === w.current && n.role === 'primary');
-    if (prim.length) {
-      const tot = prim.reduce((a, n) => a + n.units, 0);
-      const rem = prim.reduce((a, n) => a + Math.max(0, n.remaining), 0);
-      primaryQuota = tot > 0 ? (tot - rem) / tot >= 0.6 : true;
-      primary = { gathered: Math.round(tot - rem), total: tot, need: Math.ceil(tot * 0.6) };
-    }
-    const prem = state.resourceNodes.filter((n) => n.wave === w.current && n.role === 'premium');
-    if (prem.length) {
-      premiumClaimed = prem.every((n) => n.remaining <= 0);
-      premium = { cleared: prem.filter((n) => n.remaining <= 0).length, total: prem.length };
-    }
-  }
+  // harvest quotas (owner 2026-11-07): common and uncommon gathered this wave against the quotas shown before it
+  const q = w.quota || null, took = state.waveTake || {};
+  const common = q && q.common > 0 ? { gathered: Math.floor((took.common || 0) + 1e-9), need: q.common } : null;
+  const uncommon = q && q.uncommon > 0 ? { gathered: Math.floor((took.uncommon || 0) + 1e-9), need: q.uncommon } : null;
   const flags = [
     ws.baseHp == null || (state.base && state.base.hp >= ws.baseHp),   // 1 core takes no damage
     ws.harvesters == null || hvAlive >= ws.harvesters,                  // 2 zero harvesters lost
-    primaryQuota,                                                       // 3 primary quota met
-    premiumClaimed,                                                     // 4 ring premium claimed
+    !common || common.gathered >= common.need,                          // 3 common quota gathered
+    !uncommon || uncommon.gathered >= uncommon.need,                    // 4 uncommon quota gathered
     !(ring && ring.parSec) || (state.time - (ws.time || 0)) <= ring.parSec,   // 5 under par
   ].map((f) => !!f);
   // WAVE REPORT (owner 2026-11-07: "a proper score with stars at the end of each wave"): the numbers behind each star
   const detail = {
     core: ws.baseHp == null || !state.base ? null : { start: ws.baseHp, end: Math.max(0, state.base.hp), max: ws.baseMaxHp || state.base.maxHp },
     harvesters: ws.harvesters == null ? null : { start: ws.harvesters, alive: hvAlive },
-    primary, premium,
+    common, uncommon,
     time: { sec: Math.round((state.time - (ws.time || 0)) * 10) / 10, par: (ring && ring.parSec) || null },
     gold: state.economy ? Math.round((state.economy.totalEarned || 0) - (ws.earned || 0)) : 0,
   };
@@ -164,7 +152,11 @@ export function startNextWave(state) {
   w.active = true;
   w.cleared = false;
   w.pendingSpawns = [];
-  if (state.resourceNodes) resetFleetForWave(state);   // owner: each wave opens with 1 harvester + healed base
+  if (state.resourceNodes) resetFleetForWave(state);   // owner: each wave opens with its free fleet (1, 2, 3, then 3) + healed base
+  // the wave's harvest quotas (common, uncommon), sized to the free fleet and the ring's par; the take counts from here
+  { const map = state.map, ring = map && map.rings && map.rings.length ? map.rings[Math.min(w.current, map.rings.length) - 1] : null;
+    w.quota = state.resourceNodes && ring ? waveQuota(state, w.current, ring.parSec) : null;
+    state.waveTake = { common: 0, uncommon: 0, rare: 0, epic: 0 }; }
   // STAR RUBRIC snapshot (Story 4): the five wave stars are judged against the state at wave start
   w.waveStart = {
     time: state.time,
