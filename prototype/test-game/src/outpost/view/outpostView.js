@@ -21,6 +21,7 @@ import { outpostBattleMap, bakedSlugFor, lowlandResources } from './outpostBoard
 import { createOutpostScene } from './outpostScene.js';
 import { defenseStructures, planBuildings } from './conduits.js';
 import { createSession, onlineIssues } from './session.js';
+import { statusModel } from './statusReport.js';
 import { hudModel, panelModel, KIND_NAME, fmtGold, rigHeadOf } from './hudModel.js';
 import { buildMenu, placementStep, aimValid, IDLE, MENU, DEFENSE_STRUCT, isResourceBay, kindOf } from './buildMenu.js';
 import { buildingWarnings, markerOf } from './warnings.js';
@@ -111,7 +112,7 @@ export async function openOutpostView(opts = {}) {
 
   // ── state for the battle renderer: the defenses, the lowland resource fields, no units, no waves ───────────────
   const state = { structures: new Map(), units: new Map(), waves: { active: false, current: 0 }, map: board, resourceNodes: lowlandResources(map), projectiles: [] };
-  const syncDefenses = () => { state.structures = new Map(defenseStructures(o).map((s) => [s.id, s])); };
+  const syncDefenses = () => { state.structures = new Map(defenseStructures(o, map).map((s) => [s.id, s])); };
   syncDefenses();
 
   // ── the Resource Bay's harvesters (story O10): the battle's own miner, driven along a route from the bay to its field
@@ -170,8 +171,10 @@ export async function openOutpostView(opts = {}) {
     onDeep: (pad, on) => act({ type: 'deep', pad, on }, () => (on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam'), () => select({ pad })),
     onUpgrade: (pad) => act({ type: 'upgrade', pad }, (res) => `Upgrade started · −${fmtGold(res.cost)} gold`, () => select({ pad })),
     onRepair: (id) => act({ type: 'repair', id }, (res) => `Repaired · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
-    onUpgradeDefense: (id) => act({ type: 'upgradeDefense', id }, (res) => `Upgraded at the Upgrade Bay · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
+    onSellStructure: (target) => act({ type: 'sellStructure', target }, (res) => `Sold · +${fmtGold(res.earned)} gold`, () => select(null)),
+    onUpgradeDefense: (id) => act({ type: 'upgradeDefense', id }, (res) => `On the Upgrade Bay · back in ${fmtClock((res.done - clockNow()) / 1000)} · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onReportClose: () => { hud.report(null); },
+    onStatus: () => { hud.status(statusModel(o, map, { planet, catalog, now: clockNow() }), { reduced }); },
   }, { title: 'OUTPOST', planetName: (PLANETS[planet] && PLANETS[planet].name) || planet });
 
   function act(action, okText, after) {
@@ -392,6 +395,8 @@ export async function openOutpostView(opts = {}) {
     if (hud.reportOpen) return;
     if (/^[0-9]$/.test(e.key) && MENU[(+e.key + 9) % 10]) { pickItem(MENU[(+e.key + 9) % 10].id); e.preventDefault(); return; }   // 1–9, then 0 for the tenth
     if (e.key === 'Enter' && pl.phase === 'aimed') { placeEvent({ type: 'confirm' }); e.preventDefault(); }
+    // the battle's action keys on the selection panel: U upgrade, X sell, R repair
+    if (sel && pl.phase === 'idle' && /^[uxr]$/i.test(e.key) && hud.pressAction(e.key.toUpperCase())) e.preventDefault();
   };
   doc.addEventListener('keydown', onKey);
 

@@ -944,6 +944,46 @@ O9 starts with O2 so every later story is reviewable outside Claude as it lands.
 - **Model budget.** Six buildings plus the map must hold the battle view's frame time on the low tier. O6 measures
   frame time on the review page's low tier with the full kit and a live raid.
 
+## Status screen (as built, 2026-11-07)
+
+Owner: "Since the outpost is continual play, not wave based there should be a status screen that says total collection,
+and current collection per hour rates." A STATUS button beside SELL opens it, in the away report's language and container.
+
+- **Collecting now, per hour** (`model.js collectionRates`): each rig's rate while it is finished, powered and its bay
+  has room; a stopped rig shows BAY FULL or NO POWER instead. Rigs on the same ore share a row. The harvesters' rate per
+  surface resource: the battle rate while their field has stock, else its regrowth; 0 when the hopper is full or the
+  Resource Bay is unpowered.
+- **Total collected** (`o.lifetime`): ore extracted per item and surface resources harvested per tier, added up by
+  `advance`; gold and loads from `sell`. Outposts saved before the ledger start from what they had sold.
+- View model `view/statusReport.js`; tests `statusReport.test.mjs`.
+
+## Timed defense upgrades on the Upgrade Bay (as built, 2026-11-07)
+
+Owner: "the upgrade pad in the outpost should always show the unit being upgraded", then (asked whether upgrades should
+take time) "Timed upgrades on the pad".
+
+- `upgradeDefense` pays the gold and sends the defense to the bay: `o.upgrading = { id, kind, tier, done, since }`, for
+  the next tier's `buildSec`. One defense at a time; a second is refused ("the Upgrade Bay is busy with the …").
+- `advance` finishes it at `done`: the new tier, HP raised by the tier's extra HP (wear stays), back on its cell, and a
+  `report.built` entry. While on the bay it is off its cell and the raid hook does not see it.
+- `o.upgradeShow` keeps the last unit upgraded, so an idle bay still shows one (`upgradeBayShows`).
+- View: `conduits.defenseStructures(o, map)` stands the unit on the bay pad's open side; the defense and bay panels show
+  the countdown. Review preset `tools/outpost/view.html?state=upgrading`.
+- Like building jobs, the timer runs whether or not the bay has power; starting one needs power.
+
+## Selection panel: the battle's (as built, 2026-11-07)
+
+Owner: "We already have a UX for info, as well as repair and upgrade and sell in the tower defense game. Lets repurpose
+that UX instead of building something totally new. If we need to add outpost conditional data that is fine."
+
+- The battle panel's CSS moved to `render/buildPalette.js` `SELPANEL_CSS`, used by both HUDs. The outpost panel draws
+  the battle's name, `State:` line, HP bar and U / X / R action row (keys work too). Outpost rows go under the bar:
+  stats, warnings, the seam switch, the Upgrade Bay's tech list, an empty pad's build buttons. The bar shows a
+  defense's HP, or a building's bay, store or hopper.
+- SELL is new at the outpost (`model.sellStructure`): the battle's refund share (`ASSUMPTIONS.sellRefundFrac`, 50 %) of
+  every tier's cost. Refused for the hub, anything still building, a unit on the Upgrade Bay (and the bay while it
+  works), and a Mining Station with ore in its bay.
+
 ## Dependencies
 
 | relation | document | what it holds that this plan does not restate |

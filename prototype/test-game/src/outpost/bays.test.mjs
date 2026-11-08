@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import {
   referenceOutpost, confirmOnline, advance, place, upgrade, powerGrids, harvestPlan, hopperCap, hopperUnits, emptyHopper,
   surfaceFields, gunCount, gunCap, habitatTier, defenseUpgradeRefusal, upgradeDefense, harvesterCap, buyHarvester,
-  raidWarning, nextRaidAt, migrateOutpost, createOutpost, setDeep, surfaceFieldGroups, fieldStock, steadyHarvest,
+  raidWarning, nextRaidAt, migrateOutpost, createOutpost, setDeep, surfaceFieldGroups, fieldStock, steadyHarvest, upgradeBayShows,
 } from './model.js';
 import { wellDefended } from './raid.js';
 import { OUTPOST, structureDef, harvestRates, harvesterRate, surfaceStock, OUTPOST_TECH_IDS } from '../data/outpost.js';
@@ -205,6 +205,15 @@ test('migration gives an old outpost an empty hopper; a new outpost starts with 
   assert.deepEqual(migrateOutpost(old).hopper, {});
 });
 
+/** Run the clock past the defense on the Upgrade Bay (no raids). */
+function finishOnBay(o) {
+  const quiet = { map, raid: () => ({ result: 'held', defenses: [] }) };
+  const x = structuredClone(o); x.online = false;
+  const out = advance(x, x.upgrading.done + 1, quiet).outpost;
+  out.online = o.online;
+  return out;
+}
+
 // ── O10: the Upgrade Bay ─────────────────────────────────────────────────────────────────────────────────────────
 test('defenses go past tier I only with a finished, powered Upgrade Bay, up to the tier owned in the tech tree', () => {
   const o = withBay();
@@ -218,7 +227,9 @@ test('defenses go past tier I only with a finished, powered Upgrade Bay, up to t
   assert.equal(defenseUpgradeRefusal(o, mg.id, owned), null);
   // wear stays: an MG at 100 / 240 goes to tier II with the tier's extra HP added
   o.defenses.find((d) => d.id === mg.id).hp = 100;
-  const up = upgradeDefense(o, mg.id, { ...owned, gold: 1e9 });
+  const sent = upgradeDefense(o, mg.id, { ...owned, gold: 1e9, now: T0 });
+  assert.equal(sent.outpost.defenses.find((d) => d.id === mg.id).tier, 1, 'timed: still tier I while on the bay');
+  const up = { ...sent, outpost: finishOnBay(sent.outpost) };
   const d2 = up.outpost.defenses.find((d) => d.id === mg.id);
   assert.equal(d2.tier, 2);
   assert.equal(up.cost, structureDef('mg', 2).cost);
@@ -228,9 +239,10 @@ test('defenses go past tier I only with a finished, powered Upgrade Bay, up to t
   // walls: tier II is the Outpost node Reinforced Walls, still installed at the bay
   assert.match(defenseUpgradeRefusal(o, wall.id, owned), /Reinforced Walls/);
   assert.equal(defenseUpgradeRefusal(o, wall.id, { ...owned, unlocks: new Set(['reinforced_walls']) }), null);
-  const w = upgradeDefense(o, wall.id, { ...owned, unlocks: new Set(['reinforced_walls']) }).outpost.defenses.find((d) => d.id === wall.id);
+  const wOut = finishOnBay(upgradeDefense(o, wall.id, { ...owned, unlocks: new Set(['reinforced_walls']), now: T0 }).outpost);
+  const w = wOut.defenses.find((d) => d.id === wall.id);
   assert.equal(structureDef('wall', w.tier).battle.hp, 960, 'design §7: walls to tier II (960 HP)');
-  assert.match(defenseUpgradeRefusal(upgradeDefense(o, wall.id, { ...owned, unlocks: new Set(['reinforced_walls']) }).outpost, wall.id, owned), /top tier/);
+  assert.match(defenseUpgradeRefusal(wOut, wall.id, owned), /top tier/);
   // gold, wrecks, and a bay without power
   assert.match(defenseUpgradeRefusal(o, mg.id, { ...owned, gold: 10 }), /costs/);
   const wreck = structuredClone(o); wreck.defenses.find((d) => d.id === mg.id).hp = 0;
@@ -374,3 +386,42 @@ function freeCells(o, n) {
   }
   return out;
 }
+
+test('defense upgrades are timed: the unit sits on the Upgrade Bay, misses raids, and the bay keeps showing it', () => {
+  const o = withBay(); o.pads.b2 = { kind: 'upgradeBay', tier: 1 };
+  const owned = { map, techOwned: new Set(['mg2', 'cannon2']), unlocks: new Set(), gold: 1e9, now: T0 };
+  const mg = o.defenses.find((d) => d.kind === 'mg'), cannon = o.defenses.find((d) => d.kind === 'cannon');
+  assert.equal(upgradeBayShows(o), null, 'an idle bay that has upgraded nothing shows nothing');
+  const sent = upgradeDefense(o, mg.id, owned);
+  assert.equal(sent.done, T0 + structureDef('mg', 2).buildSec * 1000);
+  assert.deepEqual({ ...upgradeBayShows(sent.outpost), since: undefined }, { id: mg.id, kind: 'mg', tier: 2, done: sent.done, since: undefined, working: true });
+  assert.match(upgradeDefense(sent.outpost, cannon.id, owned).error, /busy with the Machine Gun/);
+  assert.match(upgradeDefense(sent.outpost, mg.id, owned).error, /already on the Upgrade Bay/);
+  // a raid while it is on the bay: the hook never sees it
+  let seen = null;
+  const hook = (out) => { seen = out.defenses.map((d) => d.id); return { result: 'held', defenses: [] }; };
+  const x = structuredClone(sent.outpost); x.online = true; x.firstRaidAt = T0 + 30_000;
+  const mid = advance(x, T0 + 60_000, { map, raid: hook }).outpost;
+  assert.ok(seen && !seen.includes(mg.id), 'the unit on the bay does not fight');
+  assert.ok(mid.upgrading, 'still on the bay');
+  const after = advance(mid, sent.done + 1, { map, raid: () => ({ result: 'held', defenses: [] }) });
+  assert.equal(after.outpost.upgrading, null);
+  assert.equal(after.outpost.defenses.find((d) => d.id === mg.id).tier, 2);
+  assert.deepEqual(after.report.built.at(-1), { defense: mg.id, kind: 'mg', tier: 2, at: sent.done });
+  assert.deepEqual(upgradeBayShows(after.outpost), { kind: 'mg', tier: 2, id: mg.id, working: false });
+});
+
+test('selling a structure: half of what was invested, the hub never, a rig only once its bay is sold', async () => {
+  const { sellStructure, sellStructureQuote } = await import('./model.js');
+  const o = withBay(); o.pads.b2 = { kind: 'upgradeBay', tier: 1 };
+  assert.match(sellStructureQuote(o, { pad: 'hub' }).error, /hub is the outpost/);
+  assert.equal(sellStructureQuote(o, { pad: 'b2' }).refund, Math.floor(structureDef('upgradeBay', 1).cost * 0.5));
+  const mg = o.defenses.find((d) => d.kind === 'mg'); mg.tier = 2;
+  assert.equal(sellStructureQuote(o, { defense: mg.id }).refund, Math.floor((structureDef('mg', 1).cost + structureDef('mg', 2).cost) * 0.5));
+  const sold = sellStructure(o, { defense: mg.id });
+  assert.ok(!sold.outpost.defenses.some((d) => d.id === mg.id));
+  o.storage.r1 = { [Object.keys(o.storage.r1 || {})[0] || 'iron']: 5 };
+  assert.match(sellStructureQuote(o, { pad: 'r1' }).error, /sell the ore/);
+  o.upgrading = { id: 'x', kind: 'mg', tier: 2, done: T0 + 1 };
+  assert.match(sellStructureQuote(o, { pad: 'b2' }).error, /working/);
+});

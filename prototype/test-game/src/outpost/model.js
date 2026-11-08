@@ -49,6 +49,7 @@
  * every bay and changes no building (owner Q6).
  */
 import { createRng } from '../sim/rng.js';
+import { ASSUMPTIONS } from '../data/tables.js';
 import { oresOf, oreById, oreItemId } from '../data/ores.js';
 import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock } from '../data/outpost.js';
 
@@ -116,6 +117,7 @@ export function createOutpost(planet, { seed, map, now }) {
     planet, seed: seed >>> 0, online: false, t: now, firstRaidAt: null,
     pads: { [firstPad(map, 'hub').id]: { kind: 'hub', tier: 1 } }, building: [], defenses: [], storage: {},
     harvesters: 0, hopper: {}, fields: {}, raids: { window: null, log: [] }, sold: {},
+    lifetime: newLifetime(now),
   };
 }
 
@@ -148,7 +150,48 @@ export function migrateOutpost(o) {
   if (!Number.isFinite(o.harvesters)) o.harvesters = 0;
   if (!o.hopper || typeof o.hopper !== 'object') o.hopper = {};
   if (!o.fields || typeof o.fields !== 'object') o.fields = {};
+  if (!o.lifetime || typeof o.lifetime !== 'object') {
+    // saved before the status screen counted: start from what was sold (a lower bound on what was mined)
+    o.lifetime = newLifetime(o.t);
+    for (const [ore, u] of Object.entries(o.sold || {})) o.lifetime.extracted[ore] = u;
+  }
   return o;
+}
+
+// ── lifetime totals and current rates (the status screen, owner 2026-11-07: "the outpost is continual play, not wave
+// based — there should be a status screen that says total collection, and current collection per hour rates") ──
+/** The lifetime ledger: what the rigs extracted (per ore item), the harvesters gathered (per tier), and the gold sales paid. */
+export function newLifetime(since) {
+  return { since: since ?? null, extracted: {}, harvested: {}, gold: 0, loads: 0 };
+}
+/**
+ * What the outpost collects per hour right now. Rigs: their rate while finished, powered and their bay has room (a full
+ * bay or no power reads 0 with its reason). Harvesters: per field, the battle rate while it has stock, else what
+ * regrows; 0 when the hopper is full or the bay is unpowered.
+ * → { ore: [{ pad, item, perHour, stopped: null | 'full' | 'power' }], harvest: { common, uncommon }, oreTotal, harvestTotal }
+ */
+export function collectionRates(o, map, params = OUTPOST) {
+  const { powered } = powerGrids(o, map);
+  const tower = openTowerTier(o, powered);
+  const ore = [];
+  for (const id of Object.keys(o.pads).sort()) {
+    const b = o.pads[id];
+    if (b.kind !== 'rig' || !rigOre(o, id)) continue;
+    const item = oreItemId(rigOre(o, id).id, !!b.deep), full = bayUnits(o, id) >= capFor(o, id, tower, params) - 1e-6;
+    const stopped = !powered.has(id) ? 'power' : full ? 'full' : null;
+    ore.push({ pad: id, item, perHour: stopped ? 0 : rigRatePerMin(o, id) * 60, stopped });
+  }
+  const harvest = { common: 0, uncommon: 0 };
+  const running = harvestRunning(o, map, params, powered);
+  if (running.length && hopperUnits(o) < hopperCap(o, map, params) - 1e-9) {
+    const groups = new Map(surfaceFieldGroups(map, params).map((f) => [f.id, f])), demand = {};
+    for (const h of running) demand[h.fieldId] = (demand[h.fieldId] || 0) + h.rate;
+    for (const [id, d] of Object.entries(demand)) {
+      const f = groups.get(id), S = Math.min(f.cap, (o.fields || {})[id] ?? f.cap);
+      harvest[f.tier] += (S > 1e-9 ? d : Math.min(d, f.regrow)) * HOUR;
+    }
+  }
+  return { ore, harvest, oreTotal: ore.reduce((a, r) => a + r.perHour, 0), harvestTotal: harvest.common + harvest.uncommon };
 }
 
 // ── power (design §4.5) ──────────────────────────────────────────────────────────────────────────────────────────
@@ -471,7 +514,8 @@ export function advance(outpost, toMs, ctx) {
     ...o.building.filter((b) => b.done > o.t && b.done <= end).map((b) => ({ at: b.done, build: b })),
     ...o.building.filter((b) => b.done <= o.t).map((b) => ({ at: o.t, build: b })),
     ...raids.map((r) => ({ at: r.at, raid: r })),
-  ].sort((a, b) => a.at - b.at || (a.build ? -1 : 1));
+    ...(o.upgrading && o.upgrading.done <= end ? [{ at: Math.max(o.t, o.upgrading.done), upgraded: true }] : []),
+  ].sort((a, b) => a.at - b.at || ((a.build || a.upgraded) ? -1 : 1));
 
   let now = o.t;
   const extractTo = (until) => {
@@ -499,8 +543,14 @@ export function advance(outpost, toMs, ctx) {
       o.pads[b.pad] = { ...prev, kind: b.kind, tier: b.tier, ...(b.kind === 'rig' ? { deposit: b.deposit ?? prev.deposit, deep: !!prev.deep } : {}) };
       if (b.kind === 'rig') o.storage[b.pad] ||= {};
       report.built.push({ pad: b.pad, kind: b.kind, tier: b.tier, at: b.done });
+    } else if (ev.upgraded) {
+      const d = finishDefenseUpgrade(o);
+      if (d) report.built.push({ defense: d.id, kind: d.kind, tier: d.tier, at: ev.at });
     } else {
-      const outcome = ctx.raid ? ctx.raid(o, { ...ev.raid, powered: powerGrids(o, map).powered }) : { result: 'held', defenses: [] };
+      // a defense on the Upgrade Bay is off its cell and does not fight
+      const away = o.upgrading ? o.upgrading.id : null;
+      const fighting = away ? { ...o, defenses: o.defenses.filter((d) => d.id !== away) } : o;
+      const outcome = ctx.raid ? ctx.raid(fighting, { ...ev.raid, powered: powerGrids(o, map).powered }) : { result: 'held', defenses: [] };
       const applied = raidOutcome(o, { ...outcome, at: ev.at }, params);
       Object.assign(o, applied.outpost);
       report.raids.push(applied.entry);
@@ -511,6 +561,9 @@ export function advance(outpost, toMs, ctx) {
   if (o.online) o.raids.window = Math.max(o.raids.window ?? -1, lastSettledWindow(o.seed, end, params));
   o.t = end;
   report.to = end;
+  const L = (o.lifetime ||= newLifetime(report.from));
+  for (const [k, u] of Object.entries(report.extracted)) L.extracted[k] = (L.extracted[k] || 0) + u;
+  for (const [k, u] of Object.entries(report.harvested)) L.harvested[k] = (L.harvested[k] || 0) + u;
   return { outpost: o, report };
 }
 
@@ -629,6 +682,8 @@ export function sell(outpost, ctx = {}, { buyer = null } = {}) {
     }
   }
   const gold = loads.reduce((a, l) => a + l.gold, 0);
+  const L = (o.lifetime ||= newLifetime(o.t));
+  L.gold += gold; L.loads += loads.length;
   return { outpost: o, loads, gold, loyalty: { home: far ? -params.Far_Loyalty_Cost * loads.length : 0 } };
 }
 
@@ -751,6 +806,7 @@ export function defenseUpgradeRefusal(o, id, ctx = {}) {
   if (!next) return `the ${DEF_NAME[d.kind] || d.kind} is at its top tier`;
   if (d.hp <= 0) return 'repair the wreck first';
   if (!Object.values(o.pads).some((b) => b.kind === 'upgradeBay')) return 'build the Upgrade Bay first';
+  if (o.upgrading) return o.upgrading.id === id ? `the ${DEF_NAME[d.kind] || d.kind} is already on the Upgrade Bay` : `the Upgrade Bay is busy with the ${DEF_NAME[o.upgrading.kind] || o.upgrading.kind}`;
   if (ctx.map && !upgradeBayReady(o, ctx.map)) return 'the Upgrade Bay has no power';
   const u = next.unlock || '';
   if (u === 'techtree+upgradeBay' && !inSet(ctx.techOwned, `${d.kind}${next.tier}`)) return `needs ${DEF_NAME[d.kind]} T${next.tier} in the Tech Tree`;
@@ -759,17 +815,71 @@ export function defenseUpgradeRefusal(o, id, ctx = {}) {
   return null;
 }
 /**
- * Install a defense's next tier at the Upgrade Bay (instant, as placing a defense is). Its HP rises by the tier's
- * extra HP; wear it already had stays (only repair() restores HP). -> { outpost, cost } or { error }
+ * Send a defense to the Upgrade Bay for its next tier (owner 2026-11-07: "the upgrade pad in the outpost should always
+ * show the unit being upgraded"; upgrades are timed, as buildings are). Gold is paid now; the defense leaves its cell
+ * for the bay's pad for the next tier's build time (it does not fight a raid meanwhile), then returns at the new tier.
+ * Its HP rises by the tier's extra HP; wear it already had stays. One defense on the bay at a time.
+ * -> { outpost, cost, done } or { error }
  */
 export function upgradeDefense(outpost, id, ctx = {}) {
   const why = defenseUpgradeRefusal(outpost, id, ctx);
   if (why) return { error: why };
   const o = clone(outpost), d = o.defenses.find((x) => x.id === id);
-  const was = structureDef(d.kind, d.tier), next = structureDef(d.kind, d.tier + 1);
-  d.tier += 1;
+  const next = structureDef(d.kind, d.tier + 1);
+  const now = ctx.now ?? o.t;
+  o.upgrading = { id, kind: d.kind, tier: d.tier + 1, done: now + next.buildSec * 1000, since: now };
+  return { outpost: o, cost: next.cost, done: o.upgrading.done };
+}
+/** Finish the defense on the Upgrade Bay (advance calls it at its time): the new tier, back on its cell. Mutates o. */
+function finishDefenseUpgrade(o) {
+  const u = o.upgrading, d = u && o.defenses.find((x) => x.id === u.id);
+  o.upgrading = null;
+  if (!d) return null;
+  const was = structureDef(d.kind, d.tier), next = structureDef(d.kind, u.tier);
+  d.tier = u.tier;
   d.hp = Math.min(next.battle.hp, d.hp + (next.battle.hp - was.battle.hp));
-  return { outpost: o, cost: next.cost };
+  o.upgradeShow = { kind: d.kind, tier: d.tier, id: d.id };   // the bay keeps showing the last unit it upgraded
+  return d;
+}
+/** The defense the Upgrade Bay's pad shows: the one on it now, else the last it upgraded. -> { kind, tier, id, working, done } or null */
+export function upgradeBayShows(o) {
+  if (o.upgrading) return { ...o.upgrading, working: true };
+  return o.upgradeShow ? { ...o.upgradeShow, working: false } : null;
+}
+
+// ── selling a structure (the battle's SELL, owner 2026-11-07: "repurpose that UX") ──────────────────────────────
+/** Gold invested in a kind up to a tier (every tier's cost, as the battle counts an upgraded tower). */
+const investedIn = (kind, tier) => { let g = 0; for (let t = 1; t <= tier; t++) g += (structureDef(kind, t) || {}).cost || 0; return g; };
+/**
+ * What selling a building or defense pays back, or why it cannot be sold. target: { pad } or { defense: id }.
+ * The battle's rule: sellRefundFrac (50 %) of everything invested in it. The hub is the outpost and is never sold; a
+ * building under construction, a unit on the Upgrade Bay, the bay while it works, and a Mining Station with ore in its
+ * bay (sell the ore first) are refused. -> { refund } or { error }
+ */
+export function sellStructureQuote(o, target) {
+  const frac = Number.isFinite(ASSUMPTIONS.sellRefundFrac) ? ASSUMPTIONS.sellRefundFrac : 0.5;
+  if (target && target.defense != null) {
+    const d = o.defenses.find((x) => x.id === target.defense);
+    if (!d) return { error: `no defense ${target.defense}` };
+    if (o.upgrading && o.upgrading.id === d.id) return { error: 'it is on the Upgrade Bay' };
+    return { refund: Math.floor(investedIn(d.kind, d.tier) * frac) };
+  }
+  const id = target && target.pad, b = id && o.pads[id];
+  if (!b) return { error: `nothing on ${id}` };
+  if (b.kind === 'hub') return { error: 'the hub is the outpost' };
+  if (o.building.some((x) => x.pad === id)) return { error: 'it is still building' };
+  if (b.kind === 'upgradeBay' && o.upgrading) return { error: 'the Upgrade Bay is working' };
+  if (b.kind === 'rig' && bayUnits(o, id) >= 1) return { error: 'sell the ore in its bay first' };
+  return { refund: Math.floor(investedIn(b.kind, b.tier) * frac) };
+}
+/** Sell a building or defense: it is removed and the refund paid. -> { outpost, refund } or { error } */
+export function sellStructure(outpost, target) {
+  const q = sellStructureQuote(outpost, target);
+  if (q.error) return q;
+  const o = clone(outpost);
+  if (target.defense != null) o.defenses = o.defenses.filter((d) => d.id !== target.defense);
+  else { delete o.pads[target.pad]; delete o.storage[target.pad]; }
+  return { outpost: o, refund: q.refund };
 }
 
 /** What repairing a defense to full HP costs: Value × Repair_Share_Per_HP × the share of HP missing (design §6.1). */

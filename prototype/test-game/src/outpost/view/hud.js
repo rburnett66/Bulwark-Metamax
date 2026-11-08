@@ -2,8 +2,9 @@
  * src/outpost/view/hud.js — the outpost HUD, panels, BUILD sheet, GO ONLINE card and away report (DOM)
  * [MM-story_mw5oeer7_n].
  *
- * Tech plan docs/tech-plan/Outpost.md §6.1; design §8.1 (the concept's materials carried into the UI): light grey and
- * white panels over dark chamfered bases, orange trim stripes, cyan for power and light. Type: Orbitron for numbers and
+ * Tech plan docs/tech-plan/Outpost.md §6.1. Owner 2026-11-07: the interface follows the rest of the game — the battle HUD
+ * and results screen's dark panels, hairline borders and gold primary actions, cyan for power and light. The concept's
+ * light grey, white and orange belong to the 3D buildings only (design §8.1). Type: Orbitron for numbers and
  * labels, Rajdhani for text (the results screen's pair). The away report uses the results screen's language
  * (render/resultsScreen.js: dark scrim, panel with corner ticks, staged reveal).
  *
@@ -19,7 +20,8 @@
  * where it goes, with CONFIRM (touch: once a spot is aimed) and CANCEL.
  */
 import { fmtGold, fmtUnits, fmtClock, sellButton, ROMAN } from './hudModel.js';
-import { PALETTE_CSS, paletteBaseCss, railFit, applyRailFit, STRUCT_ICONS } from '../../render/buildPalette.js';
+import { fmtPerHour } from './statusReport.js';
+import { PALETTE_CSS, SELPANEL_CSS, paletteBaseCss, railFit, applyRailFit, STRUCT_ICONS } from '../../render/buildPalette.js';
 import { buildIcon, buildIconUrl } from '../../render/buildIcons.js';
 import { OUTPOST_GLYPHS } from './menuIcons.js';
 import { BATTLE_ICON } from './buildMenu.js';
@@ -30,9 +32,10 @@ const CH = 'clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px
 
 export const HUD_CSS = `
 .op { position:absolute; inset:0; z-index:40; pointer-events:none; overflow:hidden; font-family:Rajdhani,"Segoe UI",system-ui,sans-serif;
-  color:#1c2228; -webkit-font-smoothing:antialiased; user-select:none; -webkit-user-select:none;
-  --panel:linear-gradient(180deg,#f4f6f8 0%,#dfe4e9 100%); --base:#2b3036; --base2:#1d2125; --trim:#eb5c0d; --trim-hi:#ff8a3a;
-  --cyan:#3fd0ff; --cyan-d:#0a8fc4; --ink:#1c2228; --dim:#5d6873; --ok:#2fa36b; --warn:#d98a12; --bad:#d2453a; --gold:#c98a12;
+  color:#e8eef5; -webkit-font-smoothing:antialiased; user-select:none; -webkit-user-select:none;
+  --panel:linear-gradient(180deg,rgba(20,26,36,.94) 0%,rgba(12,16,23,.96) 100%); --base:#070a0f; --base2:#05070b; --trim:#D9A441; --trim-hi:#f2c869;
+  --line:#2a3340; --line-hi:#3a4655; --well:#141b22;
+  --cyan:#3fd0ff; --cyan-d:#0a8fc4; --ink:#e8eef5; --dim:#8fa0b3; --ok:#2fa36b; --warn:#d98a12; --bad:#d2453a; --gold:#f2c869;
   --fs:clamp(12px, 1.9vmin, 15px); font-size:var(--fs); }
 .op * { box-sizing:border-box; }
 .op [hidden] { display:none !important; }
@@ -43,24 +46,24 @@ export const HUD_CSS = `
 /* ── top bar: a light plate on a dark chamfered base with an orange stripe ── */
 .op-top { position:absolute; left:0; right:0; top:0; display:flex; align-items:center; gap:10px; pointer-events:auto;
   padding:max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 9px max(10px, env(safe-area-inset-left));
-  background:var(--panel); box-shadow:0 3px 0 var(--trim), 0 7px 0 var(--base), 0 10px 18px rgba(0,0,0,.35); }
-.op-back { flex:0 0 auto; width:38px; height:38px; border:0; background:var(--base); color:#fff; font-size:20px; line-height:1; ${CH}; }
-.op-back:hover { background:#3a4148; }
+  background:var(--panel); border-bottom:1px solid var(--line); box-shadow:0 2px 0 var(--trim), 0 8px 18px rgba(0,0,0,.45); }
+.op-back { flex:0 0 auto; width:38px; height:38px; border:1px solid var(--line-hi); background:var(--well); color:#fff; font-size:20px; line-height:1; ${CH}; }
+.op-back:hover { background:#1f2834; }
 .op-title { flex:0 0 auto; min-width:0; }
 .op-title b { display:block; font-family:Orbitron,sans-serif; font-weight:900; font-size:1.05em; letter-spacing:.16em; white-space:nowrap; }
 .op-title i { display:block; font-style:normal; font-size:.8em; letter-spacing:.22em; color:var(--dim); white-space:nowrap; font-weight:700; }
 .op-stats { flex:1 1 auto; display:flex; align-items:center; justify-content:flex-end; gap:8px; min-width:0; flex-wrap:nowrap; }
-.op-chip { display:flex; align-items:center; gap:6px; padding:4px 9px 4px 6px; background:#fff; border:1px solid #c5cdd5; border-bottom:2px solid #aab4be;
+.op-chip { display:flex; align-items:center; gap:6px; padding:4px 9px 4px 6px; background:var(--well); border:1px solid var(--line); border-bottom:2px solid var(--line-hi);
   white-space:nowrap; min-width:0; ${CH.replace(/9px/g, '6px')}; }
 .op-chip .lbl { font-size:.72em; letter-spacing:.2em; color:var(--dim); font-weight:700; }
 .op-chip .num { font-size:1em; }
-.op-chip.gold .num { color:#8a5a00; }
+.op-chip.gold .num { color:var(--gold); }
 .op-ico { width:18px; height:18px; flex:0 0 auto; display:block; }
 .op-ores { display:flex; gap:6px; }
 .op-ore { display:flex; align-items:center; gap:4px; }
 .op-glyph { width:16px; height:16px; flex:0 0 auto; clip-path:polygon(50% 0,100% 28%,100% 72%,50% 100%,0 72%,0 28%);
   background:linear-gradient(140deg, rgba(255,255,255,.75), transparent 45%), var(--c); box-shadow:inset 0 0 0 1px rgba(0,0,0,.25); }
-.op-bar { position:relative; width:64px; height:9px; background:#c9d1d9; border:1px solid #a9b3bd; overflow:hidden; }
+.op-bar { position:relative; width:64px; height:9px; background:#0a0d12; border:1px solid #263142; overflow:hidden; }
 .op-bar > i { position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(90deg,var(--cyan-d),var(--cyan)); transition:width .4s; }
 .op-bar.full > i { background:linear-gradient(90deg,#c26a00,var(--trim-hi)); }
 .op-chip.power .num { color:var(--cyan-d); }
@@ -69,10 +72,10 @@ export const HUD_CSS = `
 .op-chip.raid { background:#3a0d0a; border-color:#d2453a; color:#ffd7d2; font-weight:800; letter-spacing:.06em; animation:opRaid 1s ease-in-out infinite alternate; }
 @keyframes opRaid { from { box-shadow:0 0 0 0 rgba(210,69,58,.0); } to { box-shadow:0 0 0 4px rgba(210,69,58,.45); } }
 .op-techs { display:grid; gap:5px; margin:8px 0 2px; }
-.op-tech { display:grid; grid-template-columns:1fr auto; gap:0 8px; padding:6px 8px; border:1px solid #c5cdd5; border-left:3px solid #9aa4ae; background:#f6f8fa; }
+.op-tech { display:grid; grid-template-columns:1fr auto; gap:0 8px; padding:6px 8px; border:1px solid var(--line); border-left:3px solid #4a5462; background:var(--well); }
 .op-tech b { font-size:.92em; } .op-tech small { grid-column:1 / -1; opacity:.75; }
 .op-tech.owned { border-left-color:#2fa36b; } .op-tech.buy { border-left-color:var(--cyan-d); }
-.op-tech .st { font-size:.75em; font-weight:800; letter-spacing:.08em; } .op-tech.owned .st { color:#2fa36b; } .op-tech.buy .st { color:var(--cyan-d); } .op-tech.locked .st { color:#6a7d92; }
+.op-tech .st { font-size:.75em; font-weight:800; letter-spacing:.08em; } .op-tech.owned .st { color:#2fa36b; } .op-tech.buy .st { color:var(--cyan); } .op-tech.locked .st { color:#6d7a8a; }
 .op-note { margin:8px 0 2px; font-size:.86em; opacity:.8; }
 .op-chip.power.short .num { color:var(--bad); }
 .op-shield { position:relative; width:18px; height:20px; }
@@ -81,25 +84,25 @@ export const HUD_CSS = `
 
 /* ── bottom actions: big chamfered buttons; SELL is the orange one ── */
 .op-actions { position:absolute; left:50%; transform:translateX(-50%); bottom:max(14px, env(safe-area-inset-bottom)); display:flex; gap:10px; align-items:flex-end; pointer-events:none; }
-.op-btn { position:relative; min-width:108px; height:58px; padding:0 18px; border:0; background:var(--panel); color:var(--ink);
-  display:flex; flex-direction:column; align-items:center; justify-content:center; ${CH}; box-shadow:inset 0 -5px 0 var(--base); }
+.op-btn { position:relative; min-width:108px; height:58px; padding:0 18px; border:1px solid var(--line-hi); background:var(--panel); color:var(--ink);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; ${CH}; box-shadow:inset 0 -4px 0 var(--base); }
 .op-btn b { font-family:Orbitron,sans-serif; font-weight:900; font-size:1.05em; letter-spacing:.14em; line-height:1.1; }
 .op-btn i { font-style:normal; font-size:.82em; font-weight:700; letter-spacing:.1em; color:var(--dim); }
 .op-btn:hover:not(:disabled) { filter:brightness(1.06); }
 .op-btn:active:not(:disabled) { transform:translateY(2px); box-shadow:inset 0 -3px 0 var(--base); }
 .op-btn:disabled { opacity:.55; cursor:default; }
-.op-btn.sell { min-width:150px; height:66px; background:linear-gradient(180deg,#ff9a4a,var(--trim) 60%,#c64a06); color:#fff; box-shadow:inset 0 -6px 0 #6e2a05, inset 0 2px 0 rgba(255,255,255,.35); }
-.op-btn.sell b { font-size:1.3em; text-shadow:0 2px 0 rgba(0,0,0,.25); }
-.op-btn.sell i { color:#fff3e6; }
-.op-btn.sell:disabled { background:linear-gradient(180deg,#e7ebef,#c9d0d6); color:#7c8792; box-shadow:inset 0 -6px 0 var(--base); opacity:.9; }
-.op-btn.sell:disabled i { color:#7c8792; }
+.op-btn.sell { min-width:150px; height:66px; border-color:var(--trim-hi); background:linear-gradient(180deg,#f6d27e,#D9A441 55%,#b9852c); color:#1a1206; box-shadow:inset 0 -6px 0 #6b4a12, inset 0 2px 0 rgba(255,255,255,.35); }
+.op-btn.sell b { font-size:1.3em; }
+.op-btn.sell i { color:#3a2a08; }
+.op-btn.sell:disabled { border-color:var(--line-hi); background:linear-gradient(180deg,#1f2732,#151b23); color:#6d7a8a; box-shadow:inset 0 -6px 0 var(--base); opacity:.9; }
+.op-btn.sell:disabled i { color:#6d7a8a; }
 .op-btn.sell.ready::after { content:""; position:absolute; inset:0; background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.45) 50%,transparent 65%) -150% 0/250% 100% no-repeat; animation:op-sweep 2.4s ease-in-out infinite; }
 @keyframes op-sweep { 0%,55% { background-position:-150% 0; } 100% { background-position:150% 0; } }
 .op-btn.repair b { color:var(--warn); }
 .op-btn.on { box-shadow:inset 0 -5px 0 var(--cyan-d), inset 0 0 0 2px var(--cyan); }
 
 /* ── the panel: a light card, orange stripe on its top, dark base ── */
-.op-panel { position:absolute; pointer-events:auto; background:var(--panel); ${CH}; box-shadow:inset 0 -6px 0 var(--base);
+.op-panel { position:absolute; pointer-events:auto; background:var(--panel); border:1px solid var(--line); ${CH}; box-shadow:0 10px 24px rgba(0,0,0,.45);
   padding:14px 16px 18px; display:none; max-height:calc(100% - 140px); overflow-y:auto; overscroll-behavior:contain; }
 .op-panel.open { display:block; animation:op-in .22s cubic-bezier(.2,1,.3,1); }
 @keyframes op-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
@@ -107,17 +110,17 @@ export const HUD_CSS = `
 .op-ph { display:flex; align-items:flex-start; gap:10px; margin-bottom:8px; }
 .op-ph h3 { margin:0; font-family:Orbitron,sans-serif; font-weight:900; font-size:1.08em; letter-spacing:.08em; line-height:1.2; }
 .op-ph small { display:block; color:var(--dim); font-weight:700; letter-spacing:.14em; font-size:.78em; text-transform:uppercase; }
-.op-x { margin-left:auto; flex:0 0 auto; width:30px; height:30px; border:0; background:var(--base); color:#fff; font-size:16px; ${CH.replace(/9px/g, '6px')}; }
-.op-status { display:inline-flex; align-items:center; gap:6px; font-weight:700; letter-spacing:.08em; padding:3px 9px; margin:0 0 10px; background:#fff; border:1px solid #c5cdd5; }
+.op-x { margin-left:auto; flex:0 0 auto; width:30px; height:30px; border:1px solid var(--line-hi); background:var(--well); color:#fff; font-size:16px; ${CH.replace(/9px/g, '6px')}; }
+.op-status { display:inline-flex; align-items:center; gap:6px; font-weight:700; letter-spacing:.08em; padding:3px 9px; margin:0 0 10px; background:var(--well); border:1px solid var(--line); }
 .op-status::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--c, var(--ok)); box-shadow:0 0 6px var(--c, var(--ok)); }
 .op-status.warn { --c:var(--warn); } .op-status.off { --c:var(--bad); } .op-status.busy { --c:var(--cyan-d); }
 .op-kv { display:grid; grid-template-columns:auto 1fr; gap:3px 14px; margin:0 0 10px; }
 .op-kv dt { color:var(--dim); font-weight:700; letter-spacing:.1em; font-size:.86em; text-transform:uppercase; }
 .op-kv dd { margin:0; font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
-.op-meter { height:10px; background:#c9d1d9; border:1px solid #a9b3bd; margin:0 0 12px; position:relative; overflow:hidden; }
+.op-meter { height:10px; background:#0a0d12; border:1px solid #263142; margin:0 0 12px; position:relative; overflow:hidden; }
 .op-meter i { position:absolute; inset:0 auto 0 0; background:linear-gradient(90deg,var(--cyan-d),var(--cyan)); }
 .op-meter.hp i { background:linear-gradient(90deg,#c0392b,#f0a030 50%,var(--ok)); }
-.op-switch { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; background:#fff; border:1px solid #c5cdd5; margin:0 0 10px; }
+.op-switch { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; background:var(--well); border:1px solid var(--line); margin:0 0 10px; }
 .op-switch b { display:block; letter-spacing:.08em; }
 .op-switch small { color:var(--dim); font-weight:600; }
 .op-seg { display:flex; background:var(--base); padding:3px; gap:3px; ${CH.replace(/9px/g, '5px')}; }
@@ -125,15 +128,15 @@ export const HUD_CSS = `
 .op-seg button.on { background:var(--cyan); color:#082230; }
 .op-seg button:disabled { opacity:.45; cursor:default; }
 .op-wide { width:100%; height:46px; border:0; margin-top:4px; font-family:Orbitron,sans-serif; font-weight:900; letter-spacing:.1em; font-size:.92em;
-  background:linear-gradient(180deg,#ff9a4a,var(--trim) 60%,#c64a06); color:#fff; ${CH}; box-shadow:inset 0 -5px 0 #6e2a05; }
-.op-wide.alt { background:linear-gradient(180deg,#4a5560,#2b3036); box-shadow:inset 0 -5px 0 #111; }
-.op-wide:disabled { background:#c9d0d6; color:#6f7a85; box-shadow:inset 0 -5px 0 var(--base); cursor:default; }
+  background:linear-gradient(180deg,#f6d27e,#D9A441 55%,#b9852c); color:#1a1206; ${CH}; box-shadow:inset 0 -5px 0 #6b4a12; }
+.op-wide.alt { background:linear-gradient(180deg,#26303c,#171d25); color:#dfe7ef; border:1px solid var(--line-hi); box-shadow:inset 0 -5px 0 #05070b; }
+.op-wide:disabled { background:#1f2732; color:#6d7a8a; box-shadow:inset 0 -5px 0 var(--base); cursor:default; }
 .op-why { color:var(--dim); font-size:.86em; font-weight:600; margin-top:4px; text-align:center; }
 .op-list { display:flex; flex-direction:column; gap:6px; }
-.op-opt { display:grid; grid-template-columns:1fr auto; align-items:center; gap:2px 10px; text-align:left; padding:9px 12px; border:1px solid #c5cdd5;
-  background:#fff; border-left:4px solid var(--trim); }
+.op-opt { display:grid; grid-template-columns:1fr auto; align-items:center; gap:2px 10px; text-align:left; padding:9px 12px; border:1px solid var(--line);
+  background:var(--well); border-left:4px solid var(--trim); }
 .op-opt:hover:not(:disabled) { border-color:var(--trim); }
-.op-opt:disabled { opacity:.55; border-left-color:#a9b3bd; cursor:default; }
+.op-opt:disabled { opacity:.55; border-left-color:#4a5462; cursor:default; }
 .op-opt b { letter-spacing:.06em; font-size:1.02em; }
 .op-opt small { grid-column:1; color:var(--dim); font-weight:600; }
 .op-opt .num { grid-row:1 / span 2; grid-column:2; color:#8a5a00; }
@@ -141,7 +144,7 @@ export const HUD_CSS = `
 
 /* ── banners and toasts ── */
 .op-banner { position:absolute; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:12px; padding:9px 10px 9px 16px; pointer-events:auto;
-  background:var(--base); color:#e8eef5; font-weight:700; letter-spacing:.06em; ${CH}; box-shadow:inset 0 -3px 0 var(--cyan-d); max-width:calc(100% - 24px); }
+  background:rgba(12,16,23,.94); border:1px solid var(--line); color:#e8eef5; font-weight:700; letter-spacing:.06em; ${CH}; box-shadow:inset 0 -3px 0 var(--cyan-d); max-width:calc(100% - 24px); }
 .op-banner.on { display:flex; }
 .op-banner button { border:0; background:#4a5560; color:#fff; padding:6px 12px; font-weight:800; letter-spacing:.1em; ${CH.replace(/9px/g, '5px')}; }
 .op-toast { position:absolute; left:50%; transform:translate(-50%,8px); top:96px; padding:8px 16px; background:rgba(29,33,37,.94); color:#fff; font-weight:700;
@@ -150,7 +153,7 @@ export const HUD_CSS = `
 .op-toast.bad { border-left-color:var(--bad); }
 
 /* ── GO ONLINE: the contract's first step ── */
-.op-online { position:absolute; pointer-events:auto; display:none; background:var(--panel); ${CH}; box-shadow:inset 0 -6px 0 var(--base); padding:16px 18px 18px; width:min(380px, calc(100% - 24px)); }
+.op-online { position:absolute; pointer-events:auto; display:none; background:var(--panel); border:1px solid var(--line); ${CH}; box-shadow:0 10px 24px rgba(0,0,0,.45); padding:16px 18px 18px; width:min(380px, calc(100% - 24px)); }
 .op-online.on { display:block; animation:op-in .3s cubic-bezier(.2,1,.3,1); }
 .op-online::before { content:""; position:absolute; left:0; right:0; top:0; height:4px; background:linear-gradient(90deg,var(--cyan),var(--cyan-d) 60%,transparent); }
 .op-online h3 { margin:0 0 2px; font-family:Orbitron,sans-serif; font-weight:900; letter-spacing:.12em; font-size:1.1em; }
@@ -160,6 +163,7 @@ export const HUD_CSS = `
 .op-check span::before { content:"✓"; display:grid; place-items:center; width:18px; height:18px; background:var(--ok); color:#fff; font-size:12px; }
 .op-check span.no::before { content:"!"; background:var(--bad); }
 .op-online .op-wide { background:linear-gradient(180deg,#6fe3ff,var(--cyan) 50%,var(--cyan-d)); color:#062433; box-shadow:inset 0 -5px 0 #075a7d; }
+.op-online .op-wide:disabled { background:#1f2732; color:#6d7a8a; box-shadow:inset 0 -5px 0 var(--base); }
 
 /* ── layouts ── */
 .op[data-layout="portrait"] .op-top { flex-wrap:wrap; row-gap:7px; }
@@ -178,7 +182,7 @@ export const HUD_CSS = `
 .op[data-layout="portrait"] .op-btn { min-width:0; flex:1 1 0; padding:0 8px; }
 .op[data-layout="portrait"] .op-btn.sell { flex:1.5 1 0; }
 .op[data-layout="portrait"] .op-btn i { font-size:.74em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
-.op[data-layout="portrait"] .op-panel { left:8px; right:8px; bottom:max(8px, env(safe-area-inset-bottom)); max-height:46%; z-index:2; }
+.op[data-layout="portrait"] .op-sel { top:var(--rail-top, 104px); right:max(6px, env(safe-area-inset-right)); max-height:calc(100% - var(--rail-top, 104px) - 100px); z-index:2; }
 .op[data-layout="portrait"] .op-online { left:50%; transform:translateX(-50%); bottom:max(92px, calc(env(safe-area-inset-bottom) + 84px)); }
 .op[data-layout="portrait"] .op-banner { bottom:96px; }
 .op[data-layout="portrait"] .op-toast { top:112px; }
@@ -192,12 +196,12 @@ export const HUD_CSS = `
 .op[data-layout="landscape"] .op-btn.repair { order:2; } .op[data-layout="landscape"] .op-btn.sell { order:3; }
 .op[data-layout="landscape"] .op-btn { height:48px; min-width:150px; }
 .op[data-layout="landscape"] .op-btn.sell { height:58px; }
-.op[data-layout="landscape"] .op-panel { left:max(8px, env(safe-area-inset-left)); top:58px; bottom:8px; width:min(300px, 36%); max-height:none; }
+.op[data-layout="landscape"] .op-sel { top:var(--rail-top, 56px); right:calc(min(190px, 24%) + 10px); max-height:calc(100% - var(--rail-top, 56px) - 8px); }
 .op[data-layout="landscape"] .op-online { left:max(10px, env(safe-area-inset-left)); bottom:10px; width:min(330px, 44%); padding:12px 14px 14px; }
 .op[data-layout="landscape"] .op-online p { display:none; }
 .op[data-layout="landscape"] .op-banner { top:54px; }
 .op[data-layout="landscape"] .op-toast { top:56px; }
-.op[data-layout="desktop"] .op-panel { right:18px; top:86px; width:330px; }
+.op[data-layout="desktop"] .op-sel { right:max(6px, env(safe-area-inset-right)); top:var(--rail-top, 62px); }
 .op[data-layout="desktop"] .op-online { left:50%; transform:translateX(-50%); bottom:96px; }
 .op[data-layout="desktop"] .op-banner { bottom:96px; }
 
@@ -213,7 +217,7 @@ export const HUD_CSS = `
 .op-rep-card::after { right:-1px; bottom:-1px; border-right:2px solid var(--trim); border-bottom:2px solid var(--trim); }
 .op-rep-k { text-align:center; font-weight:700; letter-spacing:.32em; color:#8A97A8; font-size:.8em; }
 .op-rep-h { text-align:center; font-family:Orbitron,sans-serif; font-weight:900; letter-spacing:.12em; font-size:clamp(20px,5.2vmin,34px); margin:4px 0 2px;
-  color:transparent; background:linear-gradient(105deg, transparent 0 42%, #fff8e0 50%, transparent 58% 100%) 120% 0 / 260% 100% no-repeat #ff9a4a;
+  color:transparent; background:linear-gradient(105deg, transparent 0 42%, #fff8e0 50%, transparent 58% 100%) 120% 0 / 260% 100% no-repeat var(--trim);
   -webkit-background-clip:text; background-clip:text; animation:op-rep-sweep 1.2s .3s ease-in-out 1 both; }
 @keyframes op-rep-sweep { from { background-position:120% 0; } to { background-position:-20% 0; } }
 .op-rep-sub { text-align:center; color:#8A97A8; font-weight:600; letter-spacing:.14em; margin-bottom:14px; }
@@ -234,6 +238,26 @@ export const HUD_CSS = `
 /* ── the BUILD menu: the battle palette (render/buildPalette.js), down the left [MM-story_mw6k9xec_5] ── */
 ${PALETTE_CSS}
 ${paletteBaseCss('.op')}
+/* ── the selection panel: the battle HUD's own (render/buildPalette.js SELPANEL_CSS), with the outpost's extra rows
+   (owner 2026-11-07: "repurpose that UX ... If we need to add outpost conditional data that is fine") ── */
+${SELPANEL_CSS}
+.op .op-sel { width:220px; overflow-y:auto; overscroll-behavior:contain; font-family:'Courier New', monospace; color:#e8e8e8; }
+.op .op-sel.open { display:flex; }
+.op .op-sel .bw-sname { padding-right:26px; }
+.op .op-sel .bw-udeselect { position:absolute; top:5px; right:6px; background:none; border:1px solid #3a4a5a; border-radius:4px; color:#9ec4d8;
+  font:inherit; font-size:10px; padding:1px 6px; cursor:pointer; pointer-events:auto; }
+.op .op-sel .bw-udeselect:hover { background:#22303e; color:#e7f6ff; }
+.op .op-sel .op-sinfo.busy { color:#9fd4ff; } .op .op-sel .op-sinfo.off { color:#ff8a7a; } .op .op-sel .op-sinfo.warn { color:#ffcf7a; }
+.op .op-sel .op-slist { display:flex; flex-direction:column; }
+.op .op-sel .op-stat { display:flex; justify-content:space-between; gap:8px; border-bottom:1px solid #182430; padding:1px 0; }
+.op .op-sel .op-stat .k { color:#7f9fb2; } .op .op-sel .op-stat .v { color:#eaf6ff; font-weight:600; text-align:right; }
+.op .op-sel .op-swarn { color:#ffb36a; font-size:11px; }
+.op .op-sel .op-swhy { color:#8fa0b3; font-size:10.5px; }
+.op .op-sel .op-shead { color:#bfe0ff; font-size:11px; margin-top:4px; }
+.op .op-sel .op-snote { color:#8fa0b3; font-size:11px; }
+.op .op-sel .op-sbuild { display:flex; flex-direction:column; gap:4px; }
+.op .op-sel .op-sbuild .bw-btn { display:flex; justify-content:space-between; gap:6px; font-size:11px; text-align:left; }
+.op .op-sel .op-tech-st.owned { color:#7ac07a; } .op .op-sel .op-tech-st.buy { color:#5fe0ff; } .op .op-sel .op-tech-st.locked { color:#6d7a8a; }
 .op .bw-palette.op-rail { left:max(6px, env(safe-area-inset-left)); top:var(--rail-top, 70px); z-index:1; }
 .op .bw-buildbtn { position:relative; }
 .op .bw-bname .op-s { display:none; }
@@ -252,15 +276,14 @@ ${paletteBaseCss('.op')}
 .op .bw-buildbtn.op-guide::after { content:"▸"; position:absolute; right:-11px; top:50%; transform:translateY(-50%); color:#5fe0ff; font-size:14px; text-shadow:0 0 6px #5fe0ff; animation:op-nudge 1.6s ease-in-out infinite; }
 @keyframes op-nudge { 0%,100% { transform:translate(0,-50%); } 50% { transform:translate(4px,-50%); } }
 .op-banner .op-confirm { background:linear-gradient(180deg,#6fe3ff,var(--cyan) 50%,var(--cyan-d)); color:#062433; }
-.op-warn { display:flex; align-items:center; gap:8px; margin:0 0 10px; padding:7px 10px; background:#fff4e0; border:1px solid #e6b45a; border-left:4px solid var(--warn); font-weight:700; letter-spacing:.03em; }
-.op-warn.bad { background:#fde9e7; border-color:#e5a39c; border-left-color:var(--bad); }
+.op-warn { display:flex; align-items:center; gap:8px; margin:0 0 10px; padding:7px 10px; background:rgba(217,138,18,.12); border:1px solid rgba(230,180,90,.4); border-left:4px solid var(--warn); color:#ffd59a; font-weight:700; letter-spacing:.03em; }
+.op-warn.bad { background:rgba(210,69,58,.14); border-color:rgba(229,163,156,.4); border-left-color:var(--bad); color:#ffb3aa; }
 .op-warn svg { width:18px; height:18px; flex:0 0 auto; }
 .op-chips { display:flex; flex-wrap:wrap; gap:6px; }
 .op-chips .op-opt { flex:1 1 auto; }
 .op[data-layout="portrait"] .op-banner, .op[data-layout="landscape"] .op-banner { left:calc(var(--rail-right, 0px) + 8px); right:8px; transform:none; max-width:none; justify-content:space-between; }
 .op[data-layout="landscape"] .op-banner { right:calc(min(190px, 24%) + 8px); }
 .op[data-layout="portrait"] .op-online { left:calc(var(--rail-right, 0px) + 8px); right:8px; width:auto; transform:none; }
-.op[data-layout="landscape"] .op-panel { left:calc(var(--rail-right, 150px) + 8px); }
 .op[data-layout="landscape"] .op-online { left:calc(var(--rail-right, 150px) + 8px); }
 @media (prefers-reduced-motion: reduce) { .op *, .op *::before, .op *::after { animation:none !important; transition:none !important; } .op-rep-row { opacity:1; transform:none; } }
 `;
@@ -311,10 +334,11 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     </div>
     <div class="bw-palette bw-panel op-rail" data-k="rail" role="toolbar" aria-label="Build"><div class="bw-title">BUILD</div><div class="bw-palette-row" data-k="railRow"></div></div>
     <div class="op-actions">
+      <button class="op-btn" data-a="status"><b>STATUS</b><i>rates · totals</i></button>
       <button class="op-btn sell" data-a="sell"><b>SELL</b><i data-k="loads">no full load</i></button>
       <button class="op-btn repair" data-a="repairAll" hidden><b>REPAIR</b><i data-k="repair">0</i></button>
     </div>
-    <div class="op-panel" data-k="panel" role="dialog" aria-live="polite"></div>
+    <div class="bw-selpanel bw-panel op-sel" data-k="panel" role="dialog" aria-live="polite"></div>
     <div class="op-banner" data-k="banner"><span data-k="bannerText"></span><span style="display:flex;gap:6px"><button class="op-confirm" data-a="confirmPlace" hidden>CONFIRM</button><button data-a="cancelPlace">CANCEL</button></span></div>
     <div class="op-online" data-k="online" role="dialog">
       <h3>ESTABLISH THE OUTPOST</h3><p>Build power, a mining station and storage from the list, then bring the grid up.</p>
@@ -338,6 +362,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     const call = (fn, ...args) => cbs[fn] && cbs[fn](...args);
     if (a === 'close') call('onClose');
     else if (a === 'sell') call('onSell');
+    else if (a === 'status') call('onStatus');
     else if (a === 'repairAll') call('onRepairAll');
     else if (a === 'online') call('onOnline');
     else if (a === 'panelClose') call('onPanelClose');
@@ -349,6 +374,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     else if (a === 'upgrade') call('onUpgrade', b.dataset.pad);
     else if (a === 'repair') call('onRepair', b.dataset.id);
     else if (a === 'upgradeDefense') call('onUpgradeDefense', b.dataset.id);
+    else if (a === 'sellStructure') call('onSellStructure', b.dataset.id != null ? { defense: b.dataset.id } : { pad: b.dataset.pad });
     else if (a === 'reportClose') call('onReportClose');
   });
   // the HUD's own pointer events never reach the canvas under it
@@ -389,35 +415,60 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     },
     setBusy(b) { A('sell').disabled = b || A('sell').disabled; $('rail').style.pointerEvents = b ? 'none' : ''; $('rail').style.opacity = b ? '.6' : ''; },
     /** The selected building's panel (hudModel.panelModel), or null to close. sel echoes back in callbacks. */
+    /**
+     * The selection panel: the battle's (render/hud.js updateHud: name, State line, HP bar, the U / X / R action row),
+     * with the outpost's conditional rows under the bar (stats, warnings, the seam switch, the bay's tech, an empty
+     * pad's build list). hudModel.panelModel gives every value.
+     */
     panel(m, sel) {
       const el = $('panel');
       panelSel = m ? sel : null;
       if (!m) { el.classList.remove('open'); el.innerHTML = ''; return; }
       const pad = sel && sel.pad, id = sel && sel.defense;
-      let body = `<div class="op-ph"><div><h3>${esc(m.title)}</h3><small>${esc(m.sub)}</small></div><button class="op-x" data-a="panelClose" aria-label="Close">✕</button></div>
-        <div class="op-status ${m.tone}">${esc(m.status)}</div>`;
-      for (const w of m.warnings || []) body += `<div class="op-warn ${w.icon === 'crate' ? '' : 'bad'}">${WARN_SVG[w.icon] || ''}<span>${esc(w.text)}</span></div>`;
-      if (m.stats && m.stats.length) body += `<dl class="op-kv">${m.stats.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
-      if (m.bay != null) body += `<div class="op-meter" title="Bay"><i style="width:${(m.bay * 100).toFixed(1)}%${m.oreColour ? `;background:linear-gradient(90deg,${m.oreColour},${m.oreColour}cc)` : ''}"></i></div>`;
-      if (m.hp != null) body += `<div class="op-meter hp"><i style="width:${(m.hp * 100).toFixed(1)}%"></i></div>`;
+      // the battle's HP bar: a defense's armour; a building's bay, store or hopper fills the same bar
+      const barKey = m.hp != null ? 'Armour' : m.bay != null ? (m.stats || []).map(([k]) => k).find((k) => k === 'Bay' || k === 'Stored' || k === 'Hopper') : null;
+      const barVal = barKey ? ((m.stats || []).find(([k]) => k === barKey) || [])[1] || '' : '';
+      const bar = m.hp != null ? { frac: m.hp, colour: '#8cf22e', text: 'HP ' + barVal } : m.bay != null ? { frac: m.bay, colour: m.oreColour || '#8cf22e', text: barKey ? `${barKey} ${barVal}` : '' } : null;
+      let h = `<button class="bw-udeselect" data-a="panelClose" aria-label="Close">✕</button>`;
+      h += `<div class="bw-sname">${esc(m.title)}</div>`;
+      h += `<div class="op-sinfo ${m.tone}">State: ${esc(m.status)}</div>`;
+      if (bar) h += `<div class="bw-shpbar"><div class="bw-shpfill" style="width:${(Math.max(0, Math.min(1, bar.frac)) * 100).toFixed(1)}%;background:${esc(bar.colour)}"></div></div><div>${esc(bar.text)}</div>`;
+      for (const w of m.warnings || []) h += `<div class="op-swarn">⚠ ${esc(w.text)}</div>`;
+      const stats = (m.stats || []).filter(([k]) => k !== barKey);
+      if (stats.length) h += `<div class="op-slist">${stats.map(([k, v]) => `<div class="op-stat"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>`;
       if (m.deep) {
-        body += `<div class="op-switch"><div><b>SEAM</b><small>${esc(m.deep.note)}</small></div><div class="op-seg">
-          <button data-a="deep" data-pad="${esc(pad)}" data-on="0" class="${m.deep.on ? '' : 'on'}">SHALLOW</button>
-          <button data-a="deep" data-pad="${esc(pad)}" data-on="1" class="${m.deep.on ? 'on' : ''}" ${m.deep.enabled ? '' : 'disabled'}>DEEP</button></div></div>`;
+        h += `<div class="op-shead">Seam · ${esc(m.deep.note)}</div><div class="bw-selrow">
+          <button class="bw-btn${m.deep.on ? '' : ' bw-selected'}" data-a="deep" data-pad="${esc(pad)}" data-on="0">Shallow</button>
+          <button class="bw-btn${m.deep.on ? ' bw-selected' : ''}" data-a="deep" data-pad="${esc(pad)}" data-on="1" ${m.deep.enabled ? '' : 'disabled'}>Deep</button></div>`;
       }
-      if (m.upgrade) body += `<button class="op-wide alt" data-a="upgrade" data-pad="${esc(pad)}" ${m.upgrade.enabled ? '' : 'disabled'}>${esc(m.upgrade.label)}</button>${m.upgrade.why ? `<div class="op-why">${esc(m.upgrade.why)}</div>` : ''}`;
-      if (m.repair) body += `<button class="op-wide" data-a="repair" data-id="${esc(id)}" ${m.repair.enabled ? '' : 'disabled'}>${esc(m.repair.label)}</button>`;
-      if (m.upgradeDefense) body += `<button class="op-wide alt" data-a="upgradeDefense" data-id="${esc(id)}" ${m.upgradeDefense.enabled ? '' : 'disabled'}>${esc(m.upgradeDefense.label)}</button>${m.upgradeDefense.why ? `<div class="op-why">${esc(m.upgradeDefense.why)}</div>` : ''}`;
-      if (m.note) body += `<div class="op-note">${esc(m.note)}</div>`;
-      if (m.techs) body += `<div class="op-sec">OUTPOST TECH</div><div class="op-techs">${m.techs.map((t) => `<div class="op-tech ${t.state}"><b>${esc(t.name)}</b><span class="st">${t.state === 'owned' ? 'INSTALLED' : t.state === 'buy' ? 'AVAILABLE' : 'LOCKED'}</span><small>${esc(t.effect)} · ${esc(t.note)}</small></div>`).join('')}</div>`;
-      if (m.build) {   // an empty pad: what fits, each one arming the build menu on this pad (the ghost, then CONFIRM)
-        body += `<div class="op-sec">FITS HERE · OR PICK FROM THE LIST</div><div class="op-list op-chips">${m.build.map((o) => `<button class="op-opt" data-a="pickFor" data-kind="${o.kind}" data-pad="${esc(pad)}" ${o.enabled ? '' : 'disabled'}>
-          <b>${esc(o.name)}</b><span class="num">${o.cost ? fmtGold(o.cost) : 'FREE'}</span><small>${o.why ? esc(o.why) : `${Math.round(o.buildSec / 60)} min to build`}</small></button>`).join('')}</div>`;
+      if (m.build) {   // an empty pad: what fits, each arming the build list on this pad (the ghost, then CONFIRM)
+        h += `<div class="op-shead">Build here</div><div class="op-sbuild">${m.build.map((o) => `<button class="bw-btn" data-a="pickFor" data-kind="${o.kind}" data-pad="${esc(pad)}" ${o.enabled ? '' : 'disabled'} title="${esc(o.why || '')}"><span>${esc(o.name)}</span><span>${o.cost ? fmtGold(o.cost) + 'g' : 'free'}</span></button>`).join('')}</div>`;
+        for (const o of m.build.filter((x) => x.why)) h += `<div class="op-swhy">${esc(o.name)}: ${esc(o.why)}</div>`;
+      } else {
+        // the battle's action row: U upgrade, X sell, R repair (a building or defense; disabled where it does not apply)
+        const up = m.upgradeDefense || m.upgrade, sell = m.sell, rep = m.repair;
+        const upLabel = up ? `Upgrade (${fmtGold(up.cost)}g)` : (m.title && /on the Upgrade Bay/.test(m.sub || '') ? 'Upgrading' : 'Max Tier');
+        const upAct = m.upgradeDefense ? `data-a="upgradeDefense" data-id="${esc(id)}"` : `data-a="upgrade" data-pad="${esc(pad)}"`;
+        h += `<div class="bw-selrow">
+          <button class="bw-btn" ${upAct} ${up && up.enabled ? '' : 'disabled'}><b class="bw-key">U</b><span> ${esc(upLabel)}</span></button>
+          <button class="bw-btn" data-a="sellStructure" ${id != null ? `data-id="${esc(id)}"` : `data-pad="${esc(pad)}"`} ${sell && sell.enabled ? '' : 'disabled'}><b class="bw-key">X</b><span> ${esc(sell ? sell.label : 'Sell')}</span></button>
+          <button class="bw-btn" data-a="repair" data-id="${esc(id || '')}" ${rep && rep.enabled ? '' : 'disabled'}><b class="bw-key">R</b><span> ${rep ? `Repair (${fmtGold(rep.cost)}g)` : 'Repair'}</span></button></div>`;
+        if (up && up.why) h += `<div class="op-swhy">Upgrade: ${esc(up.why)}</div>`;
+        if (sell && sell.why) h += `<div class="op-swhy">Sell: ${esc(sell.why)}</div>`;
       }
-      el.innerHTML = body;
+      if (m.techs) h += `<div class="op-shead">Outpost tech</div><div class="op-slist">${m.techs.map((t) => `<div class="op-stat" title="${esc(t.effect)} · ${esc(t.note)}"><span class="k">${esc(t.name)}</span><span class="v op-tech-st ${t.state}">${t.state === 'owned' ? 'installed' : t.state === 'buy' ? 'available' : 'locked'}</span></div>`).join('')}</div>`;
+      if (m.note) h += `<div class="op-snote">${esc(m.note)}</div>`;
+      el.innerHTML = h;
       el.classList.add('open');
     },
     get panelOpen() { return !!panelSel; },
+    /** Press the panel's action whose hotkey glyph is `key` (U / X / R), as the battle's keys do. → true when pressed. */
+    pressAction(key) {
+      const b = [...$('panel').querySelectorAll('.bw-selrow .bw-btn')].find((x) => (x.querySelector('.bw-key') || {}).textContent === key);
+      if (!b || b.disabled) return false;
+      b.click();
+      return true;
+    },
     /**
      * The BUILD menu (buildMenu.js items). selected: the armed item's id; icons: { slug: dataURL } rendered from the
      * GLBs (menuIcons.js); rigSlug: the Mining Station's head for its picture. Buttons are made once and updated.
@@ -528,6 +579,34 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       const items = [...el.querySelectorAll('.op-rep-row')];
       if (reduced) items.forEach((x) => x.classList.add('in'));
       else items.forEach((x, i) => setTimeout(() => x.classList.add('in'), 350 + i * 110));
+    },
+    /**
+     * The STATUS screen (statusReport.js model), in the away report's language and container: what the outpost
+     * collects per hour now, and everything it has collected. Closes like the report (CONTINUE / Escape).
+     */
+    status(m, { reduced = false } = {}) {
+      const el = $('report');
+      if (!m) { el.classList.remove('on'); el.innerHTML = ''; return; }
+      const dot = (c) => `<span class="op-rep-dot" style="--c:${esc(c)}"></span>`;
+      const rows = [];
+      rows.push(`<div class="op-rep-sec"><span>COLLECTING NOW</span><span>PER HOUR</span></div>`);
+      if (!m.rates.ore.length && !m.rates.harvest.length) rows.push('<div class="op-rep-empty">Nothing is being collected. Build a mining station on a deposit and power it.</div>');
+      for (const x of m.rates.ore) rows.push(`<div class="op-rep-row">${dot(x.colour)}<b>${esc(x.name)}</b>${x.stopped ? `<span class="tag bad">${esc(x.stopped)}</span>` : `<span class="num">${fmtPerHour(x.perHour)}</span>`}${x.stopped ? `<small>${x.stopped === 'BAY FULL' ? 'sell to start the rig again' : 'connect a power station'}</small>` : x.note ? `<small>${esc(x.note)}</small>` : ''}</div>`);
+      for (const x of m.rates.harvest) rows.push(`<div class="op-rep-row">${dot(x.colour)}<b>${esc(x.name)}</b><span class="num">${fmtPerHour(x.perHour)}</span><small>harvesters · to your inventory</small></div>`);
+      rows.push(`<div class="op-rep-sec"><span>TOTAL COLLECTED</span><span>UNITS</span></div>`);
+      if (!m.totals.ore.length && !m.totals.harvest.length) rows.push('<div class="op-rep-empty">Nothing collected yet.</div>');
+      for (const x of m.totals.ore) rows.push(`<div class="op-rep-row">${dot(x.colour)}<b>${esc(x.name)}</b><span class="num">${fmtUnits(x.units)}</span></div>`);
+      for (const x of m.totals.harvest) rows.push(`<div class="op-rep-row">${dot(x.colour)}<b>${esc(x.name)}</b><span class="num">${fmtUnits(x.units)}</span><small>harvested</small></div>`);
+      rows.push(`<div class="op-rep-row">${dot('#f2c869')}<b>Gold from sales</b><span class="num">${fmtGold(m.totals.gold)}</span><small>${m.totals.loads} ${m.totals.loads === 1 ? 'load' : 'loads'} sold</small></div>`);
+      el.innerHTML = `<div class="op-rep-scrim"></div><div class="op-rep-card" role="dialog" aria-label="Outpost status">
+        <div class="op-rep-k">OUTPOST STATUS</div><div class="op-rep-h">COLLECTION</div>
+        <div class="op-rep-sub">${m.online ? 'online' : 'not online yet'}${m.since ? ` · founded <b>${esc(m.since)}</b> ago` : ''}</div>
+        ${rows.join('')}
+        <div class="op-rep-act"><button class="op-wide" data-a="reportClose">CONTINUE</button></div></div>`;
+      el.classList.add('on');
+      const items = [...el.querySelectorAll('.op-rep-row')];
+      if (reduced) items.forEach((x) => x.classList.add('in'));
+      else items.forEach((x, i) => setTimeout(() => x.classList.add('in'), 250 + i * 80));
     },
     get reportOpen() { return $('report').classList.contains('on'); },
     /** CSS px the HUD covers (for the camera framing): measured, so it follows the real layout. */

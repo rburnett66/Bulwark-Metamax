@@ -1,5 +1,5 @@
 import { BUILD_ICONS, buildIcon, buildIconUrl } from './buildIcons.js';
-import { PALETTE_CSS, STRUCT_ICONS, railFit, applyRailFit } from './buildPalette.js';
+import { SELPANEL_CSS, PALETTE_CSS, STRUCT_ICONS, railFit, applyRailFit } from './buildPalette.js';
 import { STRUCTURES, ASSUMPTIONS, ABILITIES, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
@@ -57,12 +57,7 @@ const CSS = `
   box-shadow:0 0 24px -6px #5fe0ff; animation: bw-nw-pulse 1.6s ease-in-out infinite; }
 @keyframes bw-nw-pulse { 0%,100% { box-shadow:0 0 24px -6px #5fe0ff; } 50% { box-shadow:0 0 34px -2px #5fe0ff; } }
 ${PALETTE_CSS}
-.bw-key { font-weight:800; color:#ffe58a; }   /* bold keyboard-shortcut glyph on build + action buttons */
-.bw-selpanel { position:absolute; right:6px; top:56px; width:200px; font-size:12px; display:none; flex-direction:column; gap:4px; }
-.bw-selpanel .bw-sname { font-size:13px; font-weight:bold; color:#bfe0ff; }
-.bw-selpanel .bw-shpbar { width:100%; height:10px; background:#34373c; border:1px solid #141619; }
-.bw-selpanel .bw-shpfill { height:100%; background:#8cf22e; }
-.bw-selrow { display:flex; gap:4px; }
+${SELPANEL_CSS}
 .bw-unitpanel { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); min-width:290px; max-width:460px;
   background:rgba(9,14,20,0.94); border:1px solid #2c3e50; border-radius:7px; padding:8px 14px; display:none;
   font-size:12px; color:#dfeef5; box-shadow:0 3px 16px rgba(0,0,0,0.55); z-index:20; }
@@ -77,7 +72,6 @@ ${PALETTE_CSS}
 .bw-unitpanel .bw-ustat { display:flex; justify-content:space-between; border-bottom:1px solid #182430; padding:1px 0; }
 .bw-unitpanel .bw-ustat .k { color:#7f9fb2; }
 .bw-unitpanel .bw-ustat .v { color:#eaf6ff; font-weight:600; }
-.bw-selrow .bw-btn { flex:1; font-size:11px; padding:3px 4px; }
 .bw-bottombar { position:absolute; right:6px; bottom:calc(52px + env(safe-area-inset-bottom, 0px)); display:none; flex-direction:column; gap:8px; align-items:flex-end;
   z-index:65; max-width:min(430px, calc(100vw - 16px)); }
 .bw-bottombar.open { display:flex; }

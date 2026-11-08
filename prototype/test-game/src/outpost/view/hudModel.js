@@ -7,7 +7,7 @@
  * DOM lives in hud.js.
  */
 import { powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems, harvestPlan, hopperCap, hopperUnits,
-  gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups } from '../model.js';
+  gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups , sellStructureQuote } from '../model.js';
 import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST, OUTPOST_TECH } from '../../data/outpost.js';
 import { oresOf, oreById } from '../../data/ores.js';
 import { bayKind } from './buildMenu.js';
@@ -117,6 +117,16 @@ export function panelModel(o, map, sel, ctx = {}) {
     // the Upgrade Bay (story O10): the next tier, as far as the tech tree's tier, at an outpost with the bay
     const next = structureDef(d.kind, d.tier + 1);
     const upWhy = next ? defenseUpgradeRefusal(o, d.id, { ...ctx, map }) : null;
+    const onBay = o.upgrading && o.upgrading.id === d.id;
+    if (onBay) {   // timed upgrades (owner 2026-11-07): it is on the Upgrade Bay's pad until its new tier is installed
+      return {
+        title: `${KIND_NAME[d.kind]} ${ROMAN[d.tier]}`, sub: 'on the Upgrade Bay',
+        status: `Upgrading to ${ROMAN[o.upgrading.tier]} · ${fmtClock((o.upgrading.done - now) / 1000)}`, tone: 'busy',
+        stats: [['Armour', `${Math.round(d.hp)} / ${max}`], ['Returns to', `cell ${d.cell[0]}, ${d.cell[1]}`]], hp: frac,
+        note: 'Off its cell while it is upgraded: it does not fight a raid until it returns.',
+        sell: sellOf(o, { defense: d.id }),
+      };
+    }
     return {
       upgradeDefense: next ? { label: `UPGRADE TO ${ROMAN[d.tier + 1]} · ${fmtGold(next.cost)}`, cost: next.cost, enabled: !upWhy, why: upWhy ? upWhy.replace(/^./, (c) => c.toUpperCase()) : null } : null,
       title: `${KIND_NAME[d.kind]} ${ROMAN[d.tier]}`, sub: `cell ${d.cell[0]}, ${d.cell[1]}`,
@@ -125,6 +135,7 @@ export function panelModel(o, map, sel, ctx = {}) {
       stats: [['Armour', `${Math.round(d.hp)} / ${max}`], ...(def.battle.dps ? [['Damage', `${def.battle.dps} / s`]] : []), ['Range', `${def.battle.range || 1} cells`]],
       hp: frac,
       repair: cost ? { cost, enabled: cost <= (ctx.gold ?? Infinity), label: `REPAIR · ${fmtGold(cost)}` } : null,
+      sell: sellOf(o, { defense: d.id }),
     };
   }
   const pad = map.pads.find((p) => p.id === sel.pad);
@@ -189,13 +200,19 @@ export function panelModel(o, map, sel, ctx = {}) {
     const open = (id) => (ctx.contractUnlocks instanceof Set ? ctx.contractUnlocks.has(id) : (ctx.contractUnlocks || []).includes(id));
     out.techs = OUTPOST_TECH.map((t) => ({ id: t.id, name: t.name, effect: t.effect, price: t.price,
       state: has(t.id) ? 'owned' : open(t.id) ? 'buy' : 'locked', note: has(t.id) ? 'installed' : open(t.id) ? `buy in the Tech Tree · ${fmtGold(t.price)}` : `unlocked by the outpost ${t.unlockedBy}` }));
-    const ready = upgradeBayReady(o, map);
-    stats.push(['Defense tiers', ready ? 'tap a defense to upgrade it' : 'no power']);
+    const ready = upgradeBayReady(o, map), on = o.upgrading;
+    if (on) {
+      const dd = o.defenses.find((x) => x.id === on.id);
+      out.status = `Upgrading ${KIND_NAME[on.kind]} to ${ROMAN[on.tier]} · ${fmtClock((on.done - now) / 1000)}`; out.tone = 'busy';
+      if (dd) stats.push(['On the pad', `${KIND_NAME[on.kind]} ${ROMAN[dd.tier]} → ${ROMAN[on.tier]}`]);
+    } else if (o.upgradeShow) stats.push(['Last upgraded', `${KIND_NAME[o.upgradeShow.kind]} ${ROMAN[o.upgradeShow.tier]}`]);
+    stats.push(['Defense tiers', !ready ? 'no power' : on ? 'one defense at a time' : 'tap a defense to upgrade it']);
   } else if (b && kind === 'habitat') {
     stats.push(['Guns crewed', `${gunCount(o)} / ${gunCap(o)}`], ['Crew', `+${(OUTPOST.Habitat_Guns_Per_Tier ?? 2) * b.tier} guns`]);
   } else if (b && kind === 'hub') {
     stats.push(['Loads ready', String(loadsReady(o, {}))], ['Load', `${OUTPOST.Load_Sec / 60} min of a rig`], ['Guns crewed', `${gunCount(o)} / ${gunCap(o)}`]);
   }
+  if (b) out.sell = sellOf(o, { pad: pad.id });
   if (b && !job) {
     const next = structureDef(kind, b.tier + 1);
     if (next && b.tier < maxTier(kind) && !DEFENSE_KINDS.includes(kind)) {
@@ -204,6 +221,12 @@ export function panelModel(o, map, sel, ctx = {}) {
     }
   }
   return out;
+}
+
+/** The panel's SELL: the battle's refund (half of what was invested), or why it cannot be sold. */
+function sellOf(o, target) {
+  const q = sellStructureQuote(o, target);
+  return q.error ? { enabled: false, refund: 0, why: q.error.replace(/^./, (c) => c.toUpperCase()), label: 'Sell' } : { enabled: true, refund: q.refund, why: null, label: `Sell (+${fmtGold(q.refund)}g)` };
 }
 
 function upgradeBlock(o, def, ctx) {
