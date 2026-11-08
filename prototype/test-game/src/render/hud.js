@@ -5,6 +5,7 @@ import { getSellValue } from '../sim/economy.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
 import { levelFromXp } from '../data/progression.js';
 import { resultsModel, mountResults } from './resultsScreen.js';
+import { mountWaveReport } from './waveReport.js';
 import { fogWindow, insideWindow } from '../render3d/overlays/fogModel.js';
 import { createFpsMeter, loadFpsChoice, saveFpsChoice, FPS_CSS } from './fpsMeter.js';
 import { resourceInfoModel, resourceInfoHtml, RESOURCE_INFO_CSS } from './resourceInfo.js';
@@ -1111,6 +1112,21 @@ export function showResult(hud, result, finalScore, nextMap, waveStars, rewards,
   hud.root.classList.add('bw-results-open');   // the battle HUD steps aside; the battlefield stays as the backdrop
   hud.resultEl.style.display = 'flex';
   hud.resultEl.classList.add('bw-show');
+}
+
+/**
+ * The end-of-wave report (render/waveReport.js): the same takeover as the final result, in the same container, with
+ * one action. Resolves when the player taps CONTINUE; the HUD comes back.
+ */
+export function showWaveReport(hud, model) {
+  if (!hud || !hud.resultEl) return Promise.resolve();
+  if (hud._results) hud._results.dispose();
+  return new Promise((resolve) => {
+    hud._results = mountWaveReport(hud.resultEl, model, () => { hud.hideResult(); resolve(); });
+    hud.root.classList.add('bw-results-open');
+    hud.resultEl.style.display = 'flex';
+    hud.resultEl.classList.add('bw-show');
+  });
 }
 
 export function flashMessage(hud, text) {

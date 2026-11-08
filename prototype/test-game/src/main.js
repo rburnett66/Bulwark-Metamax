@@ -13,6 +13,7 @@ import { loadMissionCatalog } from './save/missionCatalog.js';
 import { createBattleTally, tallyEvents, noteHarvesters, noteTroopDeployed, finishTally } from './save/battleTally.js';
 import { questClosingDue } from './comm/questBeats.js';
 import { showWaveIntel, showBonusPicker, showHowToPlay } from './render/gameDialog.js';
+import { waveReportModel } from './render/waveReport.js';
 import { getBonusDef } from './data/tables.js';
 import { createMenu } from './menu/menu.js';
 import { setPlaying } from './fullscreen.js';
@@ -25,7 +26,7 @@ import { createKillCamRecorder, createKillCamPlayer } from './killcam/killCam.js
 import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
 import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
-import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner } from './render/hud.js';
+import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner, showWaveReport } from './render/hud.js';
 import { createResourceLedger, feedResources, closeWave, resourceNames, waveResourcesHtml } from './render/resourceSummary.js';
 import { createInput, createUiState, destroyInput } from './input/input.js';
 import { createComm } from './comm/commCard.js';
@@ -937,11 +938,15 @@ export function boot(mountEl, seed) {
   const factionVisits = {};      // faction -> waves seen (test-mode rotation, dialog.js)
   let lastWaveFaction = null;    // wave 'clear' / match-end events carry no faction — remember it
   let structuresLostThisWave = 0;
+  let killsThisWave = 0;          // the wave report's damage line (enemies destroyed this wave)
+  let pendingWaveReport = null;    // { model } — shown by runWaveEnd (hud.showWaveReport), then cleared
 
   function resetCommTracking() {
     for (const k in factionVisits) delete factionVisits[k];
     lastWaveFaction = null;
     structuresLostThisWave = 0;
+    killsThisWave = 0;
+    pendingWaveReport = null;
   }
 
   function commChallenge(faction, wave, hold) {
@@ -1019,6 +1024,11 @@ export function boot(mountEl, seed) {
     if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
     await new Promise((r) => setTimeout(r, WAVE_END.settleMs));
     if (!live()) return;
+    if (pendingWaveReport) {   // the wave report card, held until CONTINUE (owner 2026-11-07)
+      const rep = pendingWaveReport; pendingWaveReport = null;
+      await showWaveReport(hud, rep.model);
+      if (!live()) return;
+    }
     if (sim.bonuses && sim.bonuses.offer && sim.bonuses.offer.length) {
       // WB5 — the sim rolled a 3-of-16 offer at this clear; the pick submits chooseBonus (replay-logged)
       await new Promise((res) => showBonusPicker(mountEl, sim.bonuses.offer, getBonusDef, (bonusId) => {
@@ -1116,7 +1126,14 @@ export function boot(mountEl, seed) {
               // Story 4: stars FIRST, then the dialog beat; under them what this wave collected [MM-story_mw13ek87_1]
               rareRun.waveStars[evs[i].wave] = evs[i].stars;
               const waveRes = closeWave(resLedger);
-              showStarBanner(hud, evs[i].wave, evs[i].stars, waveResourcesHtml(waveRes, resLedger.total, battleResourceNames()));
+              const resHtml = waveResourcesHtml(waveRes, resLedger.total, battleResourceNames());
+              const lastWave = sim.waves && evs[i].wave >= sim.waves.total;
+              if (mode === 'play' && !lastWave) {
+                // the held report card replaces the brief banner (runWaveEnd shows it after the settle beat)
+                pendingWaveReport = { model: waveReportModel(evs[i], { kills: killsThisWave, structuresLost: structuresLostThisWave,
+                  resources: { wave: waveRes, names: battleResourceNames() } }) };
+              } else showStarBanner(hud, evs[i].wave, evs[i].stars, resHtml);
+              killsThisWave = 0;
             }
             if (evs[i].type === 'wave' && evs[i].phase === 'start') musicIntensity('wave');
             if (evs[i].type === 'wave' && evs[i].phase === 'clear' && evs[i].wave < evs[i].total) musicIntensity('build');
@@ -1128,6 +1145,7 @@ export function boot(mountEl, seed) {
               else commChallenge(evs[i].faction, evs[i].wave);
             }
             if (evs[i].type === 'destroyed') structuresLostThisWave++;
+            if (evs[i].type === 'kill' && evs[i].side === 'attacker') killsThisWave++;
             // harvest feedback: what the haul was worth (quest hauls pay loyalty, not gold)
             if (evs[i].type === 'deposit') {
               const d = evs[i];

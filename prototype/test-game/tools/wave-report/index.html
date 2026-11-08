@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Wave Report Review</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin:0; height:100%; background:#1d2a1a; overflow:hidden; }
+  /* a stand-in battlefield: grass, sand roads and a few dark props, so the blurred scrim has something to blur */
+  #field { position:absolute; inset:0;
+    background:
+      radial-gradient(14% 10% at 30% 62%, #3a1d16 0 60%, transparent 62%),
+      radial-gradient(9% 7% at 64% 70%, #5a1e18 0 60%, transparent 62%),
+      radial-gradient(10% 8% at 78% 40%, #2c331f 0 60%, transparent 62%),
+      linear-gradient(115deg, transparent 0 28%, #b48a5c 28% 46%, transparent 46%),
+      linear-gradient(160deg, #4f8a2f, #3c7a26 50%, #2f6a20); }
+  #m { position:absolute; left:0; top:0; width:100vw; height:100vh; height:100dvh; }
+  .bar { position:fixed; left:6px; top:6px; z-index:999; display:flex; gap:4px; flex-wrap:wrap; justify-content:center;
+    font:600 12px/1 system-ui, sans-serif; opacity:.35; transition:opacity .2s; }
+  .bar:hover, .bar:focus-within { opacity:1; }
+  .bar button { padding:6px 9px; background:#111a; color:#cde; border:1px solid #456; cursor:pointer; }
+  .bar button[aria-pressed="true"] { border-color:#D9A441; color:#f2c869; }
+</style>
+</head>
+<body>
+<div id="field"></div>
+<div id="m"></div>
+<div class="bar" role="toolbar" aria-label="Scenario">
+  <button data-s="good" aria-pressed="true">4 stars</button>
+  <button data-s="rough">1 star</button>
+  <button data-s="empty">Nothing harvested</button>
+  <button data-s="replay">Play again</button>
+</div>
+<script type="module">
+// Review page for the end-of-wave report (render/waveReport.js). Uses the game's own modules with sample data.
+import { createHud, showWaveReport } from '../../src/render/hud.js';
+import { waveReportModel } from '../../src/render/waveReport.js';
+const names = { common: 'Loam Grain', uncommon: 'Heartwood Amber', rare: 'Rootsong Seeds', epic: 'Oathstone' };
+const S = {
+  good: [{ wave: 2, stars: 4, flags: [true, true, true, false, true], detail: { core: { start: 1000, end: 1000, max: 1000 }, harvesters: { start: 2, alive: 2 },
+    primary: { gathered: 42, total: 60, need: 36 }, premium: { cleared: 1, total: 2 }, time: { sec: 31.4, par: 40 }, gold: 385 } },
+    { kills: 12, structuresLost: 0, resources: { wave: { units: { common: 42, uncommon: 10, rare: 0, epic: 0 } }, names } }],
+  rough: [{ wave: 5, stars: 1, flags: [false, false, false, false, true], detail: { core: { start: 1000, end: 640, max: 1000 }, harvesters: { start: 3, alive: 1 },
+    primary: { gathered: 18, total: 100, need: 60 }, premium: { cleared: 0, total: 3 }, time: { sec: 58.2, par: 76 }, gold: 210 } },
+    { kills: 27, structuresLost: 3, resources: { wave: { units: { common: 18, uncommon: 0, rare: 6, epic: 0 } }, names } }],
+  empty: [{ wave: 1, stars: 3, flags: [true, true, false, false, true], detail: { core: { start: 1000, end: 1000, max: 1000 }, harvesters: { start: 1, alive: 1 },
+    primary: { gathered: 0, total: 50, need: 30 }, premium: { cleared: 0, total: 2 }, time: { sec: 19.0, par: 25 }, gold: 120 } },
+    { kills: 10, structuresLost: 0, resources: { wave: { units: { common: 0, uncommon: 0, rare: 0, epic: 0 } }, names } }],
+};
+const hud = createHud(document.getElementById('m'), {});
+let cur = 'good';
+function play(k) {
+  cur = k;
+  for (const b of document.querySelectorAll('[data-s]')) b.setAttribute('aria-pressed', String(b.dataset.s === k));
+  showWaveReport(hud, waveReportModel(...S[k]));
+}
+for (const b of document.querySelectorAll('[data-s]')) b.addEventListener('click', (e) => { e.stopPropagation(); b.dataset.s === 'replay' ? play(cur) : play(b.dataset.s); });
+const q = new URLSearchParams(location.search).get('s');
+play(S[q] ? q : 'good');
+</script>
+</body>
+</html>
