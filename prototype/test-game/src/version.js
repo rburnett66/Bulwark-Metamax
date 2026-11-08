@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.07-b';
-export const VERSION_NOTE = 'Waves 1 and 2 are troops and scouts only';
+export const VERSION = 'v2026.11.07-c';
+export const VERSION_NOTE = 'Twice the rare (red) resources on every map';
