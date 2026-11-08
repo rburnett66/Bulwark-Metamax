@@ -18,6 +18,7 @@ import { TERRAIN } from '../terrain/terrainGen.js';
 import { bakedBlocking } from '../terrain/terrainBake.js';
 import { WAVE_WINDOWS } from '../../content/maps/wave-windows.js';
 import { POINTS_TO_POWER } from './campaign.js';
+import { RARE_NODE_MULT } from '../data/tables.js';
 
 const TILE = 64;   // matches tables.js MAP_TILE — 64px/tile
 // SAFE BORDER (owner, 2026-07-13): 2 tiles of non-buildable approach terrain wrap the battlefield.
@@ -514,6 +515,20 @@ export function buildTerrainMap(forge, mapId, opts = {}) {
     guarantee('primary', row.Primary_Nodes || 0, near);         // blue — near-base income
     guarantee('premium', row.Premium_Nodes || 0, far);          // yellow — faction resource, deeper
     if ((row.Quest_Nodes || 0) > 0) guarantee('quest', row.Quest_Nodes, far);   // far edge, waves 5-8
+  }
+
+  // RARE x2 (owner 2026-11-07: "double the amount of rare resources on the map"): settle the quest nodes' colour here
+  // (the same id hash harvest.js used, so every existing node keeps its colour), then give each rare (red) node
+  // RARE_NODE_MULT - 1 partners on the nearest free cells, in the same wave ring. Epic (green) is unchanged.
+  const qHash = (str) => { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h); };
+  for (const r of resources) if (r.role === 'quest' && !r.color) r.color = qHash(r.id) % 2 ? 'red' : 'green';
+  for (const r of resources.filter((n) => n.color === 'red')) {
+    for (let k = 1; k < RARE_NODE_MULT; k++) {
+      const c = nearestFree(r.x, r.y);
+      if (!c) break;
+      occupied.add(`${c.x},${c.y}`);
+      resources.push({ ...r, id: `${r.id}-r${k}`, x: c.x, y: c.y });
+    }
   }
 
   // rings: workbook BUDGETS + one forge spawn point per lane (from the wave's spread)

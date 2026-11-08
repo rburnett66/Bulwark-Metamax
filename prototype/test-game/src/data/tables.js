@@ -1429,6 +1429,9 @@ export const BONUS_NERFS = Object.freeze({
 // the load comes off; gold is credited (the 'deposit' event) only when the timer completes. Seconds,
 // converted to whole sim ticks in harvest.js (deterministic — no wall clock).
 export const HARVESTER_UNLOAD_TIME = 3.0;
+// RARE RESOURCES (owner 2026-11-07: "double the amount of rare resources on the map"): each rare (red) node on a
+// battle map gets RARE_NODE_MULT - 1 partners beside it, in the same wave ring (mapgen.buildTerrainMap).
+export const RARE_NODE_MULT = 2;
 export const BONUSES = Object.freeze([
   Object.freeze({ id: 'dmg_air',      label: '+10% damage vs air',      kind: 'dmgMod',    target: 'air',    mag: 0.10 }),
   Object.freeze({ id: 'dmg_ground',   label: '+10% damage vs ground',   kind: 'dmgMod',    target: 'ground', mag: 0.10 }),
