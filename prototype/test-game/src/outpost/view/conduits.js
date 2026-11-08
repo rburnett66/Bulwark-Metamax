@@ -8,7 +8,7 @@
  *
  * Pure (no three.js): outpostScene.js turns these plans into meshes.
  */
-import { powerGrids, bayCapacity, depositOf } from '../model.js';
+import { powerGrids, bayCapacity, depositOf, upgradeBayShows } from '../model.js';
 import { structureDef } from '../../data/outpost.js';
 import { oresOf } from '../../data/ores.js';
 
@@ -134,13 +134,29 @@ export function planDeposits(o, map, unlockedTiers = ['common']) {
 }
 
 /** Defense records the battle renderer's structure layer draws (system3d: STR-MG / Cannon / Wall). */
-export function defenseStructures(o) {
-  return o.defenses.map((d) => {
-    const def = structureDef(d.kind, d.tier), max = def && def.battle ? def.battle.hp : d.hp;
+export function defenseStructures(o, map = null) {
+  // the Upgrade Bay's pad (owner 2026-11-07: "the upgrade pad in the outpost should always show the unit being
+  // upgraded"): the defense on the bay stands on its pad, off its cell; an idle bay shows the last unit it upgraded
+  const bayId = Object.keys(o.pads || {}).sort().find((id) => o.pads[id].kind === 'upgradeBay');
+  const pad = bayId && map && map.pads ? map.pads.find((p) => p.id === bayId) : null;
+  const padSpot = pad ? { x: pad.x + pad.w - 1, y: pad.y + Math.floor(pad.h / 2) } : null;   // the pad's open right side, beside the hangar's craft
+  const shows = pad ? upgradeBayShows(o) : null;
+  const one = (d, tier, at, extra = {}) => {
+    const def = structureDef(d.kind, tier), max = def && def.battle ? def.battle.hp : d.hp;
     return {
       id: 'od-' + d.id, kind: d.kind === 'wall' ? 'wall' : 'antiGround', structId: d.kind === 'mg' ? 'STR-MG' : d.kind === 'cannon' ? 'STR-Cannon' : 'STR-Wall',
-      tier: d.tier, cell: { x: d.cell[0], y: d.cell[1] }, pos: { x: d.cell[0] + 0.5, y: d.cell[1] + 0.5 }, footprint: { w: 1, h: 1 },
-      hp: d.hp, maxHp: max, lifecycle: d.hp < max ? 'Damaged' : 'Active', outpostId: d.id,
+      tier, cell: { x: at[0], y: at[1] }, pos: { x: at[0] + 0.5, y: at[1] + 0.5 }, footprint: { w: 1, h: 1 },
+      hp: Math.min(d.hp, max), maxHp: max, lifecycle: d.hp < max ? 'Damaged' : 'Active', outpostId: d.id, ...extra,
     };
-  });
+  };
+  const out = [];
+  for (const d of o.defenses) {
+    if (shows && shows.working && shows.id === d.id && padSpot) out.push(one(d, d.tier, [padSpot.x, padSpot.y], { onBay: true }));
+    else out.push(one(d, d.tier, d.cell));
+  }
+  if (shows && !shows.working && padSpot) {
+    const d = o.defenses.find((x) => x.id === shows.id) || { id: 'show', kind: shows.kind, hp: Infinity };
+    out.push(one({ ...d, id: 'bay-show' }, shows.tier, [padSpot.x, padSpot.y], { outpostId: null, showcase: true }));
+  }
+  return out;
 }

@@ -112,7 +112,7 @@ export async function openOutpostView(opts = {}) {
 
   // ── state for the battle renderer: the defenses, the lowland resource fields, no units, no waves ───────────────
   const state = { structures: new Map(), units: new Map(), waves: { active: false, current: 0 }, map: board, resourceNodes: lowlandResources(map), projectiles: [] };
-  const syncDefenses = () => { state.structures = new Map(defenseStructures(o).map((s) => [s.id, s])); };
+  const syncDefenses = () => { state.structures = new Map(defenseStructures(o, map).map((s) => [s.id, s])); };
   syncDefenses();
 
   // ── the Resource Bay's harvesters (story O10): the battle's own miner, driven along a route from the bay to its field
@@ -171,7 +171,7 @@ export async function openOutpostView(opts = {}) {
     onDeep: (pad, on) => act({ type: 'deep', pad, on }, () => (on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam'), () => select({ pad })),
     onUpgrade: (pad) => act({ type: 'upgrade', pad }, (res) => `Upgrade started · −${fmtGold(res.cost)} gold`, () => select({ pad })),
     onRepair: (id) => act({ type: 'repair', id }, (res) => `Repaired · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
-    onUpgradeDefense: (id) => act({ type: 'upgradeDefense', id }, (res) => `Upgraded at the Upgrade Bay · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
+    onUpgradeDefense: (id) => act({ type: 'upgradeDefense', id }, (res) => `On the Upgrade Bay · back in ${fmtClock((res.done - clockNow()) / 1000)} · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onReportClose: () => { hud.report(null); },
     onStatus: () => { hud.status(statusModel(o, map, { planet, catalog, now: clockNow() }), { reduced }); },
   }, { title: 'OUTPOST', planetName: (PLANETS[planet] && PLANETS[planet].name) || planet });

@@ -513,7 +513,8 @@ export function advance(outpost, toMs, ctx) {
     ...o.building.filter((b) => b.done > o.t && b.done <= end).map((b) => ({ at: b.done, build: b })),
     ...o.building.filter((b) => b.done <= o.t).map((b) => ({ at: o.t, build: b })),
     ...raids.map((r) => ({ at: r.at, raid: r })),
-  ].sort((a, b) => a.at - b.at || (a.build ? -1 : 1));
+    ...(o.upgrading && o.upgrading.done <= end ? [{ at: Math.max(o.t, o.upgrading.done), upgraded: true }] : []),
+  ].sort((a, b) => a.at - b.at || ((a.build || a.upgraded) ? -1 : 1));
 
   let now = o.t;
   const extractTo = (until) => {
@@ -541,8 +542,14 @@ export function advance(outpost, toMs, ctx) {
       o.pads[b.pad] = { ...prev, kind: b.kind, tier: b.tier, ...(b.kind === 'rig' ? { deposit: b.deposit ?? prev.deposit, deep: !!prev.deep } : {}) };
       if (b.kind === 'rig') o.storage[b.pad] ||= {};
       report.built.push({ pad: b.pad, kind: b.kind, tier: b.tier, at: b.done });
+    } else if (ev.upgraded) {
+      const d = finishDefenseUpgrade(o);
+      if (d) report.built.push({ defense: d.id, kind: d.kind, tier: d.tier, at: ev.at });
     } else {
-      const outcome = ctx.raid ? ctx.raid(o, { ...ev.raid, powered: powerGrids(o, map).powered }) : { result: 'held', defenses: [] };
+      // a defense on the Upgrade Bay is off its cell and does not fight
+      const away = o.upgrading ? o.upgrading.id : null;
+      const fighting = away ? { ...o, defenses: o.defenses.filter((d) => d.id !== away) } : o;
+      const outcome = ctx.raid ? ctx.raid(fighting, { ...ev.raid, powered: powerGrids(o, map).powered }) : { result: 'held', defenses: [] };
       const applied = raidOutcome(o, { ...outcome, at: ev.at }, params);
       Object.assign(o, applied.outpost);
       report.raids.push(applied.entry);
@@ -798,6 +805,7 @@ export function defenseUpgradeRefusal(o, id, ctx = {}) {
   if (!next) return `the ${DEF_NAME[d.kind] || d.kind} is at its top tier`;
   if (d.hp <= 0) return 'repair the wreck first';
   if (!Object.values(o.pads).some((b) => b.kind === 'upgradeBay')) return 'build the Upgrade Bay first';
+  if (o.upgrading) return o.upgrading.id === id ? `the ${DEF_NAME[d.kind] || d.kind} is already on the Upgrade Bay` : `the Upgrade Bay is busy with the ${DEF_NAME[o.upgrading.kind] || o.upgrading.kind}`;
   if (ctx.map && !upgradeBayReady(o, ctx.map)) return 'the Upgrade Bay has no power';
   const u = next.unlock || '';
   if (u === 'techtree+upgradeBay' && !inSet(ctx.techOwned, `${d.kind}${next.tier}`)) return `needs ${DEF_NAME[d.kind]} T${next.tier} in the Tech Tree`;
@@ -806,17 +814,36 @@ export function defenseUpgradeRefusal(o, id, ctx = {}) {
   return null;
 }
 /**
- * Install a defense's next tier at the Upgrade Bay (instant, as placing a defense is). Its HP rises by the tier's
- * extra HP; wear it already had stays (only repair() restores HP). -> { outpost, cost } or { error }
+ * Send a defense to the Upgrade Bay for its next tier (owner 2026-11-07: "the upgrade pad in the outpost should always
+ * show the unit being upgraded"; upgrades are timed, as buildings are). Gold is paid now; the defense leaves its cell
+ * for the bay's pad for the next tier's build time (it does not fight a raid meanwhile), then returns at the new tier.
+ * Its HP rises by the tier's extra HP; wear it already had stays. One defense on the bay at a time.
+ * -> { outpost, cost, done } or { error }
  */
 export function upgradeDefense(outpost, id, ctx = {}) {
   const why = defenseUpgradeRefusal(outpost, id, ctx);
   if (why) return { error: why };
   const o = clone(outpost), d = o.defenses.find((x) => x.id === id);
-  const was = structureDef(d.kind, d.tier), next = structureDef(d.kind, d.tier + 1);
-  d.tier += 1;
+  const next = structureDef(d.kind, d.tier + 1);
+  const now = ctx.now ?? o.t;
+  o.upgrading = { id, kind: d.kind, tier: d.tier + 1, done: now + next.buildSec * 1000, since: now };
+  return { outpost: o, cost: next.cost, done: o.upgrading.done };
+}
+/** Finish the defense on the Upgrade Bay (advance calls it at its time): the new tier, back on its cell. Mutates o. */
+function finishDefenseUpgrade(o) {
+  const u = o.upgrading, d = u && o.defenses.find((x) => x.id === u.id);
+  o.upgrading = null;
+  if (!d) return null;
+  const was = structureDef(d.kind, d.tier), next = structureDef(d.kind, u.tier);
+  d.tier = u.tier;
   d.hp = Math.min(next.battle.hp, d.hp + (next.battle.hp - was.battle.hp));
-  return { outpost: o, cost: next.cost };
+  o.upgradeShow = { kind: d.kind, tier: d.tier, id: d.id };   // the bay keeps showing the last unit it upgraded
+  return d;
+}
+/** The defense the Upgrade Bay's pad shows: the one on it now, else the last it upgraded. -> { kind, tier, id, working, done } or null */
+export function upgradeBayShows(o) {
+  if (o.upgrading) return { ...o.upgrading, working: true };
+  return o.upgradeShow ? { ...o.upgradeShow, working: false } : null;
 }
 
 /** What repairing a defense to full HP costs: Value × Repair_Share_Per_HP × the share of HP missing (design §6.1). */
