@@ -171,6 +171,7 @@ export async function openOutpostView(opts = {}) {
     onDeep: (pad, on) => act({ type: 'deep', pad, on }, () => (on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam'), () => select({ pad })),
     onUpgrade: (pad) => act({ type: 'upgrade', pad }, (res) => `Upgrade started · −${fmtGold(res.cost)} gold`, () => select({ pad })),
     onRepair: (id) => act({ type: 'repair', id }, (res) => `Repaired · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
+    onSellStructure: (target) => act({ type: 'sellStructure', target }, (res) => `Sold · +${fmtGold(res.earned)} gold`, () => select(null)),
     onUpgradeDefense: (id) => act({ type: 'upgradeDefense', id }, (res) => `On the Upgrade Bay · back in ${fmtClock((res.done - clockNow()) / 1000)} · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onReportClose: () => { hud.report(null); },
     onStatus: () => { hud.status(statusModel(o, map, { planet, catalog, now: clockNow() }), { reduced }); },
@@ -394,6 +395,8 @@ export async function openOutpostView(opts = {}) {
     if (hud.reportOpen) return;
     if (/^[0-9]$/.test(e.key) && MENU[(+e.key + 9) % 10]) { pickItem(MENU[(+e.key + 9) % 10].id); e.preventDefault(); return; }   // 1–9, then 0 for the tenth
     if (e.key === 'Enter' && pl.phase === 'aimed') { placeEvent({ type: 'confirm' }); e.preventDefault(); }
+    // the battle's action keys on the selection panel: U upgrade, X sell, R repair
+    if (sel && pl.phase === 'idle' && /^[uxr]$/i.test(e.key) && hud.pressAction(e.key.toUpperCase())) e.preventDefault();
   };
   doc.addEventListener('keydown', onKey);
 

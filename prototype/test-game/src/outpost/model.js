@@ -49,6 +49,7 @@
  * every bay and changes no building (owner Q6).
  */
 import { createRng } from '../sim/rng.js';
+import { ASSUMPTIONS } from '../data/tables.js';
 import { oresOf, oreById, oreItemId } from '../data/ores.js';
 import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock } from '../data/outpost.js';
 
@@ -844,6 +845,41 @@ function finishDefenseUpgrade(o) {
 export function upgradeBayShows(o) {
   if (o.upgrading) return { ...o.upgrading, working: true };
   return o.upgradeShow ? { ...o.upgradeShow, working: false } : null;
+}
+
+// ── selling a structure (the battle's SELL, owner 2026-11-07: "repurpose that UX") ──────────────────────────────
+/** Gold invested in a kind up to a tier (every tier's cost, as the battle counts an upgraded tower). */
+const investedIn = (kind, tier) => { let g = 0; for (let t = 1; t <= tier; t++) g += (structureDef(kind, t) || {}).cost || 0; return g; };
+/**
+ * What selling a building or defense pays back, or why it cannot be sold. target: { pad } or { defense: id }.
+ * The battle's rule: sellRefundFrac (50 %) of everything invested in it. The hub is the outpost and is never sold; a
+ * building under construction, a unit on the Upgrade Bay, the bay while it works, and a Mining Station with ore in its
+ * bay (sell the ore first) are refused. -> { refund } or { error }
+ */
+export function sellStructureQuote(o, target) {
+  const frac = Number.isFinite(ASSUMPTIONS.sellRefundFrac) ? ASSUMPTIONS.sellRefundFrac : 0.5;
+  if (target && target.defense != null) {
+    const d = o.defenses.find((x) => x.id === target.defense);
+    if (!d) return { error: `no defense ${target.defense}` };
+    if (o.upgrading && o.upgrading.id === d.id) return { error: 'it is on the Upgrade Bay' };
+    return { refund: Math.floor(investedIn(d.kind, d.tier) * frac) };
+  }
+  const id = target && target.pad, b = id && o.pads[id];
+  if (!b) return { error: `nothing on ${id}` };
+  if (b.kind === 'hub') return { error: 'the hub is the outpost' };
+  if (o.building.some((x) => x.pad === id)) return { error: 'it is still building' };
+  if (b.kind === 'upgradeBay' && o.upgrading) return { error: 'the Upgrade Bay is working' };
+  if (b.kind === 'rig' && bayUnits(o, id) >= 1) return { error: 'sell the ore in its bay first' };
+  return { refund: Math.floor(investedIn(b.kind, b.tier) * frac) };
+}
+/** Sell a building or defense: it is removed and the refund paid. -> { outpost, refund } or { error } */
+export function sellStructure(outpost, target) {
+  const q = sellStructureQuote(outpost, target);
+  if (q.error) return q;
+  const o = clone(outpost);
+  if (target.defense != null) o.defenses = o.defenses.filter((d) => d.id !== target.defense);
+  else { delete o.pads[target.pad]; delete o.storage[target.pad]; }
+  return { outpost: o, refund: q.refund };
 }
 
 /** What repairing a defense to full HP costs: Value × Repair_Share_Per_HP × the share of HP missing (design §6.1). */

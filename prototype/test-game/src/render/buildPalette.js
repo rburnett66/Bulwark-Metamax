@@ -36,6 +36,22 @@ export const PALETTE_CSS = `
  * The battle HUD's base panel and button rules, scoped under `scope` (the outpost's root) so a screen without the
  * battle HUD's stylesheet draws the palette the same. The battle HUD keeps its own unscoped copy.
  */
+/**
+ * The selected-structure panel's rules (the battle HUD's, verbatim): name, state line, HP bar, and the action row whose
+ * buttons carry their bold hotkey (U upgrade, X sell, R repair). The outpost's selection panel uses the same panel
+ * (owner 2026-11-07: "We already have a UX for info, as well as repair and upgrade and sell in the tower defense game.
+ * Lets repurpose that UX"). Needs the base .bw-panel / .bw-btn rules (paletteBaseCss).
+ */
+export const SELPANEL_CSS = `
+.bw-key { font-weight:800; color:#ffe58a; }   /* bold keyboard-shortcut glyph on build + action buttons */
+.bw-selpanel { position:absolute; right:6px; top:56px; width:200px; font-size:12px; display:none; flex-direction:column; gap:4px; }
+.bw-selpanel .bw-sname { font-size:13px; font-weight:bold; color:#bfe0ff; }
+.bw-selpanel .bw-shpbar { width:100%; height:10px; background:#34373c; border:1px solid #141619; }
+.bw-selpanel .bw-shpfill { height:100%; background:#8cf22e; }
+.bw-selrow { display:flex; gap:4px; }
+.bw-selrow .bw-btn { flex:1; font-size:11px; padding:3px 4px; }
+`;
+
 export const paletteBaseCss = (scope) => `
 ${scope} .bw-panel { background:rgba(10,14,20,0.85); border:1px solid #3a4a5a; border-radius:4px; padding:6px 8px; pointer-events:auto; }
 ${scope} .bw-btn { pointer-events:auto; background:#22303e; color:#e8e8e8; border:1px solid #4a6076; border-radius:3px;

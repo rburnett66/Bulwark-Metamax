@@ -1,0 +1,121 @@
+/**
+ * tools/sim/five-star-proof.mjs — can a fair player earn 5 stars on waves 1 and 2? (owner 2026-11-07: "run simulations
+ * and prove to me you can get 5 stars on waves 1 and 2 without cheating").
+ *
+ * Fair = the live game's own code path only: the faction's real forge map (buildTerrainMap), the campaign waves
+ * (buildCampaignWaves), createSim / stepSim / applyCommand. The script only issues commands a player can tap (place,
+ * upgrade, harvest, buyHarvester, startWave, chooseBonus), with the gold the game gives. It never edits sim state, and
+ * the sim is NOT stepped before START WAVE (the game freezes between waves: no gathering, no building progress).
+ *
+ * The scripted player (one fixed script for every map; STRATEGY picks a variant):
+ *   build phase: towers between the base and the coming wave's spawn points (cheap Machine Guns first, as a player
+ *   facing troops and scouts would), and a second harvester when the strategy buys one;
+ *   during the wave: every harvester works the current ring's premium fields first (that star needs all of them), then
+ *   its primary fields; spare gold goes on more towers.
+ * Usage: node tools/sim/five-star-proof.mjs [maps e.g. 1,2,3] [strategies e.g. mg4,mg2h]
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+const R = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..') + '/';
+const imp = (p) => import(pathToFileURL(R + p).href);
+await imp('src/data/factions.js');
+const { buildTerrainMap, resolveResourceTypes } = await imp('src/sim/mapgen.js');
+const { buildCampaignWaves } = await imp('src/sim/campaign.js');
+const { createSim, stepSim, applyCommand, FIXED_DT } = await imp('src/sim/core.js');
+const NAMES = globalThis.BulwarkFactions.NAMES;
+const SLOT = { 'Ground / Powder': 'powder', 'Greenies (Chem)': 'greenies' };
+const slug = (n) => SLOT[n] || n.toLowerCase().replace(/[^a-z]+/g, '-').replace(/(^-+|-+$)/g, '');
+const MAPS = (process.argv[2] || '1').split(',').map(Number);
+const STRATS = (process.argv[3] || 'mg4,mg2h,mg3h').split(',');
+const STRAT = {
+  mg4: { towers: ['STR-MG', 'STR-MG', 'STR-MG', 'STR-MG', 'STR-Cannon'], buyHarvester: false },
+  mg2h: { towers: ['STR-MG', 'STR-MG', 'STR-MG', 'STR-Cannon'], buyHarvester: true },
+  mg3h: { towers: ['STR-MG', 'STR-MG', 'STR-MG'], buyHarvester: true, harvesterFirst: true },
+};
+
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function spawnsOf(map, wave) {
+  const ring = map.rings[wave - 1] || {};
+  const L = ring.spawnList || {};
+  const pts = [...(L.ground || []), ...(L.water || []), ...(L.air || [])];
+  if (pts.length) return pts;
+  return Object.values(ring.spawns || {}).filter(Boolean);
+}
+/** Cells 2–5 from the base, nearest first to the line toward the wave's spawns (where the enemy walks in). */
+function towerCells(sim, wave) {
+  const b = sim.map.base, sp = spawnsOf(sim.map, wave);
+  const out = [];
+  for (let r = 2; r <= 5; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+    const c = { x: b.x + dx, y: b.y + dy };
+    const toward = sp.length ? Math.min(...sp.map((s) => dist(c, s))) : 0;
+    out.push({ c, score: toward + r * 0.5 });
+  }
+  return out.sort((p, q) => p.score - q.score).map((x) => x.c);
+}
+function build(sim, list, wave) {
+  const cells = towerCells(sim, wave);
+  for (const structId of list) {
+    for (const c of cells) {
+      const r = applyCommand(sim, { type: 'place', structId, cell: c });
+      if (r.ok) break;
+      if (/gold|money|afford/i.test(r.reason || '')) return;
+    }
+  }
+}
+/** Each harvester: the ring's premium first (that star needs all of it), then primary; nearest live field. */
+function harvest(sim, wave) {
+  const live = (sim.resourceNodes || []).filter((n) => n.wave === wave && n.remaining > 0 && (n.role === 'premium' || n.role === 'primary'));
+  const fleet = [...sim.units.values()].filter((u) => u.isHarvester && u.hp > 0);
+  const taken = new Set();
+  for (const h of fleet) {
+    const cur = h.fieldId && live.find((n) => n.fieldId === h.fieldId);
+    if (cur) { taken.add(h.fieldId); continue; }
+  }
+  for (const h of fleet) {
+    if (h.fieldId && live.some((n) => n.fieldId === h.fieldId)) continue;
+    const want = live.filter((n) => !taken.has(n.fieldId)).sort((p, q) => (p.role === 'premium' ? 0 : 1) - (q.role === 'premium' ? 0 : 1) || dist(h.pos, p) - dist(h.pos, q));
+    const n = want[0] || live.sort((p, q) => dist(h.pos, p) - dist(h.pos, q))[0];
+    if (n && applyCommand(sim, { type: 'harvest', nodeId: n.id, harvesterId: h.id }).ok) taken.add(n.fieldId);
+  }
+}
+function play(forge, faction, mapId, strat) {
+  const S = STRAT[strat];
+  const map = buildTerrainMap(forge, mapId, { seed: 0, bakeTune: {} });
+  resolveResourceTypes(map, 1);
+  const sim = createSim(1, { map, waves: buildCampaignWaves(map, faction), carry: null, harvesterLevel: 1, mapId, faction });
+  const out = [];
+  for (let wave = 1; wave <= 2; wave++) {
+    // ── build phase (the sim is frozen): commands only ──
+    if (sim.bonuses?.offer?.length) applyCommand(sim, { type: 'chooseBonus', bonusId: sim.bonuses.offer[0] });
+    if (S.harvesterFirst && S.buyHarvester) applyCommand(sim, { type: 'buyHarvester' });
+    build(sim, wave === 1 ? S.towers : ['STR-MG', 'STR-MG', 'STR-Cannon'], wave);
+    if (!S.harvesterFirst && S.buyHarvester) applyCommand(sim, { type: 'buyHarvester' });
+    if (!applyCommand(sim, { type: 'startWave' }).ok) break;
+    harvest(sim, wave);
+    let stars = null;
+    for (let t = 0; t < 30 * 600 && !stars && !sim.result; t++) {
+      if (t % 15 === 0) harvest(sim, wave);
+      if (t % 60 === 0) build(sim, ['STR-MG'], wave);
+      for (const e of stepSim(sim, FIXED_DT)) if (e.type === 'waveStars') stars = e;
+    }
+    out.push(stars ? { wave, stars: stars.stars, flags: stars.flags, detail: stars.detail } : { wave, stars: 0, lost: sim.result });
+    if (!stars) break;
+  }
+  return out;
+}
+const STAR = ['core', 'harvesters', 'quota', 'premium', 'par'];
+const rows = [];
+for (const fac of NAMES) for (const mapId of MAPS) {
+  const f = R + `content/maps/forge/${slug(fac)}-map-${mapId}.json`;
+  if (!fs.existsSync(f)) continue;
+  const forge = JSON.parse(fs.readFileSync(f, 'utf8'));
+  const runs = {};
+  for (const st of STRATS) runs[st] = play(forge, fac, mapId, st);
+  rows.push({ faction: fac, mapId, runs });
+  const best = (w) => Math.max(...STRATS.map((st) => (runs[st][w - 1] || {}).stars || 0));
+  const line = STRATS.map((st) => st + ' ' + runs[st].map((r) => r.stars + '★' + (r.flags ? '[' + r.flags.map((f, i) => (f ? '' : STAR[i][0])).join('') + ']' : '')).join(' ')).join('  ');
+  console.log(`${fac.padEnd(18)} map${mapId}  best W1 ${best(1)}★ W2 ${best(2)}★   ${line}`);
+}
+fs.writeFileSync(process.env.OUT || '/dev/null', JSON.stringify(rows));

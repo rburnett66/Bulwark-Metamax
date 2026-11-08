@@ -7,7 +7,7 @@
  * DOM lives in hud.js.
  */
 import { powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems, harvestPlan, hopperCap, hopperUnits,
-  gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups } from '../model.js';
+  gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups , sellStructureQuote } from '../model.js';
 import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST, OUTPOST_TECH } from '../../data/outpost.js';
 import { oresOf, oreById } from '../../data/ores.js';
 import { bayKind } from './buildMenu.js';
@@ -124,6 +124,7 @@ export function panelModel(o, map, sel, ctx = {}) {
         status: `Upgrading to ${ROMAN[o.upgrading.tier]} · ${fmtClock((o.upgrading.done - now) / 1000)}`, tone: 'busy',
         stats: [['Armour', `${Math.round(d.hp)} / ${max}`], ['Returns to', `cell ${d.cell[0]}, ${d.cell[1]}`]], hp: frac,
         note: 'Off its cell while it is upgraded: it does not fight a raid until it returns.',
+        sell: sellOf(o, { defense: d.id }),
       };
     }
     return {
@@ -134,6 +135,7 @@ export function panelModel(o, map, sel, ctx = {}) {
       stats: [['Armour', `${Math.round(d.hp)} / ${max}`], ...(def.battle.dps ? [['Damage', `${def.battle.dps} / s`]] : []), ['Range', `${def.battle.range || 1} cells`]],
       hp: frac,
       repair: cost ? { cost, enabled: cost <= (ctx.gold ?? Infinity), label: `REPAIR · ${fmtGold(cost)}` } : null,
+      sell: sellOf(o, { defense: d.id }),
     };
   }
   const pad = map.pads.find((p) => p.id === sel.pad);
@@ -210,6 +212,7 @@ export function panelModel(o, map, sel, ctx = {}) {
   } else if (b && kind === 'hub') {
     stats.push(['Loads ready', String(loadsReady(o, {}))], ['Load', `${OUTPOST.Load_Sec / 60} min of a rig`], ['Guns crewed', `${gunCount(o)} / ${gunCap(o)}`]);
   }
+  if (b) out.sell = sellOf(o, { pad: pad.id });
   if (b && !job) {
     const next = structureDef(kind, b.tier + 1);
     if (next && b.tier < maxTier(kind) && !DEFENSE_KINDS.includes(kind)) {
@@ -218,6 +221,12 @@ export function panelModel(o, map, sel, ctx = {}) {
     }
   }
   return out;
+}
+
+/** The panel's SELL: the battle's refund (half of what was invested), or why it cannot be sold. */
+function sellOf(o, target) {
+  const q = sellStructureQuote(o, target);
+  return q.error ? { enabled: false, refund: 0, why: q.error.replace(/^./, (c) => c.toUpperCase()), label: 'Sell' } : { enabled: true, refund: q.refund, why: null, label: `Sell (+${fmtGold(q.refund)}g)` };
 }
 
 function upgradeBlock(o, def, ctx) {

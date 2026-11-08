@@ -12,7 +12,7 @@
  *
  * Raids: the hook comes from raidSeam.raidHookFor (story O7 plugs the battle sim in there).
  */
-import { advance, sell, place, upgrade, repair, repairCost, setDeep, confirmOnline, onlineProblems, windowMs, emptyHopper, upgradeDefense } from '../model.js';
+import { advance, sell, place, upgrade, repair, repairCost, setDeep, confirmOnline, onlineProblems, windowMs, emptyHopper, upgradeDefense, sellStructure } from '../model.js';
 import * as Model from '../model.js';
 import { outpostUnlocks } from '../contract.js';
 import { bankOutpostHarvest } from '../../save/inventory.js';
@@ -145,7 +145,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
     },
 
     /**
-     * Act on the outpost. action: { type: 'online' | 'sell' | 'place' | 'upgrade' | 'upgradeDefense' | 'repair' | 'repairAll' | 'deep' | 'buyHarvester', … }.
+     * Act on the outpost. action: { type: 'online' | 'sell' | 'place' | 'upgrade' | 'upgradeDefense' | 'sellStructure' | 'repair' | 'repairAll' | 'deep' | 'buyHarvester', … }.
      * → { ok: true, outpost, cost, gold (bank after), loads? (sell), earned? } or { ok: false, error }.
      */
     act(action, now) {
@@ -193,6 +193,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
       case 'deep': return setDeep(o, a.pad, a.on, ctx);
       // the Upgrade Bay (story O10): a defense to its next tier, as far as the tech tree's tier
       case 'upgradeDefense': return upgradeDefense(o, a.id, ctx);
+      case 'sellStructure': { const r = sellStructure(o, a.target); return r.error ? r : { outpost: r.outpost, gold: r.refund }; }
       // the build menu's HARVESTER (story O17): story O16's buyHarvester(o, ctx) → { outpost, cost } | { error }, read
       // optionally so the view works before it lands (the menu keeps the item locked until it is exported)
       case 'buyHarvester': return typeof Model.buyHarvester === 'function' ? Model.buyHarvester(o, ctx) : { error: 'Build a Resource Bay first' };

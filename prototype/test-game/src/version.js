@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.07-h';
-export const VERSION_NOTE = 'Outpost interface in the dark game style';
+export const VERSION = 'v2026.11.07-i';
+export const VERSION_NOTE = 'Outpost selection panel is the battle panel: info, upgrade, sell, repair';

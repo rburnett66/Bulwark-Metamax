@@ -971,6 +971,19 @@ take time) "Timed upgrades on the pad".
   the countdown. Review preset `tools/outpost/view.html?state=upgrading`.
 - Like building jobs, the timer runs whether or not the bay has power; starting one needs power.
 
+## Selection panel: the battle's (as built, 2026-11-07)
+
+Owner: "We already have a UX for info, as well as repair and upgrade and sell in the tower defense game. Lets repurpose
+that UX instead of building something totally new. If we need to add outpost conditional data that is fine."
+
+- The battle panel's CSS moved to `render/buildPalette.js` `SELPANEL_CSS`, used by both HUDs. The outpost panel draws
+  the battle's name, `State:` line, HP bar and U / X / R action row (keys work too). Outpost rows go under the bar:
+  stats, warnings, the seam switch, the Upgrade Bay's tech list, an empty pad's build buttons. The bar shows a
+  defense's HP, or a building's bay, store or hopper.
+- SELL is new at the outpost (`model.sellStructure`): the battle's refund share (`ASSUMPTIONS.sellRefundFrac`, 50 %) of
+  every tier's cost. Refused for the hub, anything still building, a unit on the Upgrade Bay (and the bay while it
+  works), and a Mining Station with ore in its bay.
+
 ## Dependencies
 
 | relation | document | what it holds that this plan does not restate |

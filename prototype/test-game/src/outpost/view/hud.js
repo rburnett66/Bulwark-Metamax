@@ -21,7 +21,7 @@
  */
 import { fmtGold, fmtUnits, fmtClock, sellButton, ROMAN } from './hudModel.js';
 import { fmtPerHour } from './statusReport.js';
-import { PALETTE_CSS, paletteBaseCss, railFit, applyRailFit, STRUCT_ICONS } from '../../render/buildPalette.js';
+import { PALETTE_CSS, SELPANEL_CSS, paletteBaseCss, railFit, applyRailFit, STRUCT_ICONS } from '../../render/buildPalette.js';
 import { buildIcon, buildIconUrl } from '../../render/buildIcons.js';
 import { OUTPOST_GLYPHS } from './menuIcons.js';
 import { BATTLE_ICON } from './buildMenu.js';
@@ -182,7 +182,7 @@ export const HUD_CSS = `
 .op[data-layout="portrait"] .op-btn { min-width:0; flex:1 1 0; padding:0 8px; }
 .op[data-layout="portrait"] .op-btn.sell { flex:1.5 1 0; }
 .op[data-layout="portrait"] .op-btn i { font-size:.74em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
-.op[data-layout="portrait"] .op-panel { left:8px; right:8px; bottom:max(8px, env(safe-area-inset-bottom)); max-height:46%; z-index:2; }
+.op[data-layout="portrait"] .op-sel { top:var(--rail-top, 104px); right:max(6px, env(safe-area-inset-right)); max-height:calc(100% - var(--rail-top, 104px) - 100px); z-index:2; }
 .op[data-layout="portrait"] .op-online { left:50%; transform:translateX(-50%); bottom:max(92px, calc(env(safe-area-inset-bottom) + 84px)); }
 .op[data-layout="portrait"] .op-banner { bottom:96px; }
 .op[data-layout="portrait"] .op-toast { top:112px; }
@@ -196,12 +196,12 @@ export const HUD_CSS = `
 .op[data-layout="landscape"] .op-btn.repair { order:2; } .op[data-layout="landscape"] .op-btn.sell { order:3; }
 .op[data-layout="landscape"] .op-btn { height:48px; min-width:150px; }
 .op[data-layout="landscape"] .op-btn.sell { height:58px; }
-.op[data-layout="landscape"] .op-panel { left:max(8px, env(safe-area-inset-left)); top:58px; bottom:8px; width:min(300px, 36%); max-height:none; }
+.op[data-layout="landscape"] .op-sel { top:var(--rail-top, 56px); right:calc(min(190px, 24%) + 10px); max-height:calc(100% - var(--rail-top, 56px) - 8px); }
 .op[data-layout="landscape"] .op-online { left:max(10px, env(safe-area-inset-left)); bottom:10px; width:min(330px, 44%); padding:12px 14px 14px; }
 .op[data-layout="landscape"] .op-online p { display:none; }
 .op[data-layout="landscape"] .op-banner { top:54px; }
 .op[data-layout="landscape"] .op-toast { top:56px; }
-.op[data-layout="desktop"] .op-panel { right:18px; top:86px; width:330px; }
+.op[data-layout="desktop"] .op-sel { right:max(6px, env(safe-area-inset-right)); top:var(--rail-top, 62px); }
 .op[data-layout="desktop"] .op-online { left:50%; transform:translateX(-50%); bottom:96px; }
 .op[data-layout="desktop"] .op-banner { bottom:96px; }
 
@@ -238,6 +238,26 @@ export const HUD_CSS = `
 /* ── the BUILD menu: the battle palette (render/buildPalette.js), down the left [MM-story_mw6k9xec_5] ── */
 ${PALETTE_CSS}
 ${paletteBaseCss('.op')}
+/* ── the selection panel: the battle HUD's own (render/buildPalette.js SELPANEL_CSS), with the outpost's extra rows
+   (owner 2026-11-07: "repurpose that UX ... If we need to add outpost conditional data that is fine") ── */
+${SELPANEL_CSS}
+.op .op-sel { width:220px; overflow-y:auto; overscroll-behavior:contain; font-family:'Courier New', monospace; color:#e8e8e8; }
+.op .op-sel.open { display:flex; }
+.op .op-sel .bw-sname { padding-right:26px; }
+.op .op-sel .bw-udeselect { position:absolute; top:5px; right:6px; background:none; border:1px solid #3a4a5a; border-radius:4px; color:#9ec4d8;
+  font:inherit; font-size:10px; padding:1px 6px; cursor:pointer; pointer-events:auto; }
+.op .op-sel .bw-udeselect:hover { background:#22303e; color:#e7f6ff; }
+.op .op-sel .op-sinfo.busy { color:#9fd4ff; } .op .op-sel .op-sinfo.off { color:#ff8a7a; } .op .op-sel .op-sinfo.warn { color:#ffcf7a; }
+.op .op-sel .op-slist { display:flex; flex-direction:column; }
+.op .op-sel .op-stat { display:flex; justify-content:space-between; gap:8px; border-bottom:1px solid #182430; padding:1px 0; }
+.op .op-sel .op-stat .k { color:#7f9fb2; } .op .op-sel .op-stat .v { color:#eaf6ff; font-weight:600; text-align:right; }
+.op .op-sel .op-swarn { color:#ffb36a; font-size:11px; }
+.op .op-sel .op-swhy { color:#8fa0b3; font-size:10.5px; }
+.op .op-sel .op-shead { color:#bfe0ff; font-size:11px; margin-top:4px; }
+.op .op-sel .op-snote { color:#8fa0b3; font-size:11px; }
+.op .op-sel .op-sbuild { display:flex; flex-direction:column; gap:4px; }
+.op .op-sel .op-sbuild .bw-btn { display:flex; justify-content:space-between; gap:6px; font-size:11px; text-align:left; }
+.op .op-sel .op-tech-st.owned { color:#7ac07a; } .op .op-sel .op-tech-st.buy { color:#5fe0ff; } .op .op-sel .op-tech-st.locked { color:#6d7a8a; }
 .op .bw-palette.op-rail { left:max(6px, env(safe-area-inset-left)); top:var(--rail-top, 70px); z-index:1; }
 .op .bw-buildbtn { position:relative; }
 .op .bw-bname .op-s { display:none; }
@@ -264,7 +284,6 @@ ${paletteBaseCss('.op')}
 .op[data-layout="portrait"] .op-banner, .op[data-layout="landscape"] .op-banner { left:calc(var(--rail-right, 0px) + 8px); right:8px; transform:none; max-width:none; justify-content:space-between; }
 .op[data-layout="landscape"] .op-banner { right:calc(min(190px, 24%) + 8px); }
 .op[data-layout="portrait"] .op-online { left:calc(var(--rail-right, 0px) + 8px); right:8px; width:auto; transform:none; }
-.op[data-layout="landscape"] .op-panel { left:calc(var(--rail-right, 150px) + 8px); }
 .op[data-layout="landscape"] .op-online { left:calc(var(--rail-right, 150px) + 8px); }
 @media (prefers-reduced-motion: reduce) { .op *, .op *::before, .op *::after { animation:none !important; transition:none !important; } .op-rep-row { opacity:1; transform:none; } }
 `;
@@ -319,7 +338,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       <button class="op-btn sell" data-a="sell"><b>SELL</b><i data-k="loads">no full load</i></button>
       <button class="op-btn repair" data-a="repairAll" hidden><b>REPAIR</b><i data-k="repair">0</i></button>
     </div>
-    <div class="op-panel" data-k="panel" role="dialog" aria-live="polite"></div>
+    <div class="bw-selpanel bw-panel op-sel" data-k="panel" role="dialog" aria-live="polite"></div>
     <div class="op-banner" data-k="banner"><span data-k="bannerText"></span><span style="display:flex;gap:6px"><button class="op-confirm" data-a="confirmPlace" hidden>CONFIRM</button><button data-a="cancelPlace">CANCEL</button></span></div>
     <div class="op-online" data-k="online" role="dialog">
       <h3>ESTABLISH THE OUTPOST</h3><p>Build power, a mining station and storage from the list, then bring the grid up.</p>
@@ -355,6 +374,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     else if (a === 'upgrade') call('onUpgrade', b.dataset.pad);
     else if (a === 'repair') call('onRepair', b.dataset.id);
     else if (a === 'upgradeDefense') call('onUpgradeDefense', b.dataset.id);
+    else if (a === 'sellStructure') call('onSellStructure', b.dataset.id != null ? { defense: b.dataset.id } : { pad: b.dataset.pad });
     else if (a === 'reportClose') call('onReportClose');
   });
   // the HUD's own pointer events never reach the canvas under it
@@ -395,35 +415,60 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     },
     setBusy(b) { A('sell').disabled = b || A('sell').disabled; $('rail').style.pointerEvents = b ? 'none' : ''; $('rail').style.opacity = b ? '.6' : ''; },
     /** The selected building's panel (hudModel.panelModel), or null to close. sel echoes back in callbacks. */
+    /**
+     * The selection panel: the battle's (render/hud.js updateHud: name, State line, HP bar, the U / X / R action row),
+     * with the outpost's conditional rows under the bar (stats, warnings, the seam switch, the bay's tech, an empty
+     * pad's build list). hudModel.panelModel gives every value.
+     */
     panel(m, sel) {
       const el = $('panel');
       panelSel = m ? sel : null;
       if (!m) { el.classList.remove('open'); el.innerHTML = ''; return; }
       const pad = sel && sel.pad, id = sel && sel.defense;
-      let body = `<div class="op-ph"><div><h3>${esc(m.title)}</h3><small>${esc(m.sub)}</small></div><button class="op-x" data-a="panelClose" aria-label="Close">✕</button></div>
-        <div class="op-status ${m.tone}">${esc(m.status)}</div>`;
-      for (const w of m.warnings || []) body += `<div class="op-warn ${w.icon === 'crate' ? '' : 'bad'}">${WARN_SVG[w.icon] || ''}<span>${esc(w.text)}</span></div>`;
-      if (m.stats && m.stats.length) body += `<dl class="op-kv">${m.stats.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
-      if (m.bay != null) body += `<div class="op-meter" title="Bay"><i style="width:${(m.bay * 100).toFixed(1)}%${m.oreColour ? `;background:linear-gradient(90deg,${m.oreColour},${m.oreColour}cc)` : ''}"></i></div>`;
-      if (m.hp != null) body += `<div class="op-meter hp"><i style="width:${(m.hp * 100).toFixed(1)}%"></i></div>`;
+      // the battle's HP bar: a defense's armour; a building's bay, store or hopper fills the same bar
+      const barKey = m.hp != null ? 'Armour' : m.bay != null ? (m.stats || []).map(([k]) => k).find((k) => k === 'Bay' || k === 'Stored' || k === 'Hopper') : null;
+      const barVal = barKey ? ((m.stats || []).find(([k]) => k === barKey) || [])[1] || '' : '';
+      const bar = m.hp != null ? { frac: m.hp, colour: '#8cf22e', text: 'HP ' + barVal } : m.bay != null ? { frac: m.bay, colour: m.oreColour || '#8cf22e', text: barKey ? `${barKey} ${barVal}` : '' } : null;
+      let h = `<button class="bw-udeselect" data-a="panelClose" aria-label="Close">✕</button>`;
+      h += `<div class="bw-sname">${esc(m.title)}</div>`;
+      h += `<div class="op-sinfo ${m.tone}">State: ${esc(m.status)}</div>`;
+      if (bar) h += `<div class="bw-shpbar"><div class="bw-shpfill" style="width:${(Math.max(0, Math.min(1, bar.frac)) * 100).toFixed(1)}%;background:${esc(bar.colour)}"></div></div><div>${esc(bar.text)}</div>`;
+      for (const w of m.warnings || []) h += `<div class="op-swarn">⚠ ${esc(w.text)}</div>`;
+      const stats = (m.stats || []).filter(([k]) => k !== barKey);
+      if (stats.length) h += `<div class="op-slist">${stats.map(([k, v]) => `<div class="op-stat"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>`;
       if (m.deep) {
-        body += `<div class="op-switch"><div><b>SEAM</b><small>${esc(m.deep.note)}</small></div><div class="op-seg">
-          <button data-a="deep" data-pad="${esc(pad)}" data-on="0" class="${m.deep.on ? '' : 'on'}">SHALLOW</button>
-          <button data-a="deep" data-pad="${esc(pad)}" data-on="1" class="${m.deep.on ? 'on' : ''}" ${m.deep.enabled ? '' : 'disabled'}>DEEP</button></div></div>`;
+        h += `<div class="op-shead">Seam · ${esc(m.deep.note)}</div><div class="bw-selrow">
+          <button class="bw-btn${m.deep.on ? '' : ' bw-selected'}" data-a="deep" data-pad="${esc(pad)}" data-on="0">Shallow</button>
+          <button class="bw-btn${m.deep.on ? ' bw-selected' : ''}" data-a="deep" data-pad="${esc(pad)}" data-on="1" ${m.deep.enabled ? '' : 'disabled'}>Deep</button></div>`;
       }
-      if (m.upgrade) body += `<button class="op-wide alt" data-a="upgrade" data-pad="${esc(pad)}" ${m.upgrade.enabled ? '' : 'disabled'}>${esc(m.upgrade.label)}</button>${m.upgrade.why ? `<div class="op-why">${esc(m.upgrade.why)}</div>` : ''}`;
-      if (m.repair) body += `<button class="op-wide" data-a="repair" data-id="${esc(id)}" ${m.repair.enabled ? '' : 'disabled'}>${esc(m.repair.label)}</button>`;
-      if (m.upgradeDefense) body += `<button class="op-wide alt" data-a="upgradeDefense" data-id="${esc(id)}" ${m.upgradeDefense.enabled ? '' : 'disabled'}>${esc(m.upgradeDefense.label)}</button>${m.upgradeDefense.why ? `<div class="op-why">${esc(m.upgradeDefense.why)}</div>` : ''}`;
-      if (m.note) body += `<div class="op-note">${esc(m.note)}</div>`;
-      if (m.techs) body += `<div class="op-sec">OUTPOST TECH</div><div class="op-techs">${m.techs.map((t) => `<div class="op-tech ${t.state}"><b>${esc(t.name)}</b><span class="st">${t.state === 'owned' ? 'INSTALLED' : t.state === 'buy' ? 'AVAILABLE' : 'LOCKED'}</span><small>${esc(t.effect)} · ${esc(t.note)}</small></div>`).join('')}</div>`;
-      if (m.build) {   // an empty pad: what fits, each one arming the build menu on this pad (the ghost, then CONFIRM)
-        body += `<div class="op-sec">FITS HERE · OR PICK FROM THE LIST</div><div class="op-list op-chips">${m.build.map((o) => `<button class="op-opt" data-a="pickFor" data-kind="${o.kind}" data-pad="${esc(pad)}" ${o.enabled ? '' : 'disabled'}>
-          <b>${esc(o.name)}</b><span class="num">${o.cost ? fmtGold(o.cost) : 'FREE'}</span><small>${o.why ? esc(o.why) : `${Math.round(o.buildSec / 60)} min to build`}</small></button>`).join('')}</div>`;
+      if (m.build) {   // an empty pad: what fits, each arming the build list on this pad (the ghost, then CONFIRM)
+        h += `<div class="op-shead">Build here</div><div class="op-sbuild">${m.build.map((o) => `<button class="bw-btn" data-a="pickFor" data-kind="${o.kind}" data-pad="${esc(pad)}" ${o.enabled ? '' : 'disabled'} title="${esc(o.why || '')}"><span>${esc(o.name)}</span><span>${o.cost ? fmtGold(o.cost) + 'g' : 'free'}</span></button>`).join('')}</div>`;
+        for (const o of m.build.filter((x) => x.why)) h += `<div class="op-swhy">${esc(o.name)}: ${esc(o.why)}</div>`;
+      } else {
+        // the battle's action row: U upgrade, X sell, R repair (a building or defense; disabled where it does not apply)
+        const up = m.upgradeDefense || m.upgrade, sell = m.sell, rep = m.repair;
+        const upLabel = up ? `Upgrade (${fmtGold(up.cost)}g)` : (m.title && /on the Upgrade Bay/.test(m.sub || '') ? 'Upgrading' : 'Max Tier');
+        const upAct = m.upgradeDefense ? `data-a="upgradeDefense" data-id="${esc(id)}"` : `data-a="upgrade" data-pad="${esc(pad)}"`;
+        h += `<div class="bw-selrow">
+          <button class="bw-btn" ${upAct} ${up && up.enabled ? '' : 'disabled'}><b class="bw-key">U</b><span> ${esc(upLabel)}</span></button>
+          <button class="bw-btn" data-a="sellStructure" ${id != null ? `data-id="${esc(id)}"` : `data-pad="${esc(pad)}"`} ${sell && sell.enabled ? '' : 'disabled'}><b class="bw-key">X</b><span> ${esc(sell ? sell.label : 'Sell')}</span></button>
+          <button class="bw-btn" data-a="repair" data-id="${esc(id || '')}" ${rep && rep.enabled ? '' : 'disabled'}><b class="bw-key">R</b><span> ${rep ? `Repair (${fmtGold(rep.cost)}g)` : 'Repair'}</span></button></div>`;
+        if (up && up.why) h += `<div class="op-swhy">Upgrade: ${esc(up.why)}</div>`;
+        if (sell && sell.why) h += `<div class="op-swhy">Sell: ${esc(sell.why)}</div>`;
       }
-      el.innerHTML = body;
+      if (m.techs) h += `<div class="op-shead">Outpost tech</div><div class="op-slist">${m.techs.map((t) => `<div class="op-stat" title="${esc(t.effect)} · ${esc(t.note)}"><span class="k">${esc(t.name)}</span><span class="v op-tech-st ${t.state}">${t.state === 'owned' ? 'installed' : t.state === 'buy' ? 'available' : 'locked'}</span></div>`).join('')}</div>`;
+      if (m.note) h += `<div class="op-snote">${esc(m.note)}</div>`;
+      el.innerHTML = h;
       el.classList.add('open');
     },
     get panelOpen() { return !!panelSel; },
+    /** Press the panel's action whose hotkey glyph is `key` (U / X / R), as the battle's keys do. → true when pressed. */
+    pressAction(key) {
+      const b = [...$('panel').querySelectorAll('.bw-selrow .bw-btn')].find((x) => (x.querySelector('.bw-key') || {}).textContent === key);
+      if (!b || b.disabled) return false;
+      b.click();
+      return true;
+    },
     /**
      * The BUILD menu (buildMenu.js items). selected: the armed item's id; icons: { slug: dataURL } rendered from the
      * GLBs (menuIcons.js); rigSlug: the Mining Station's head for its picture. Buttons are made once and updated.
