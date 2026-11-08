@@ -11,6 +11,7 @@ import { towerStunned, unitDisrupted, onUnitDeath } from './abilities.js';
 import { grantKillIncome } from './economy.js';
 import { emitEvent } from './core.js';
 import { bonusDamageMult } from './bonuses.js';
+import { attackerSees } from './sight.js';
 
 /** Sentinel target id for the player base (the base has no entity id). */
 export const BASE_TARGET_ID = -1;
@@ -265,6 +266,7 @@ function acquireSoftDefender(state, shooter, range2, slack2) {
     if (!canSee(shooter, u)) continue;
     const d2 = dist2Between(shooter.pos, u.pos);
     if (d2 > range2) continue;
+    if (!attackerSees(state, shooter, u)) continue;   // terrain line of sight (sight.js)
     if (beatsBest(d2, u.id, bestD2, bestId, slack2)) {
       if (d2 < bestD2) bestD2 = d2;
       bestId = u.id;
@@ -402,6 +404,7 @@ export function acquireTarget(state, shooter) {
       if (!structureIsTargetable(s)) continue;
       const d2 = dist2Between(shooter.pos, s.pos);
       if (d2 > range2) continue;
+      if (!attackerSees(state, shooter, s)) continue;   // terrain line of sight (sight.js)
       if (beatsBest(d2, s.id, bestD2, bestId, slack2)) {
         if (d2 < bestD2) bestD2 = d2;
         bestId = s.id;
@@ -597,7 +600,8 @@ export function stepCombat(state, dt) {
             dist2Between(unit.pos, cand.pos) <= unit.range * unit.range &&
             (cand.structId !== undefined
               ? structureIsTargetable(cand)
-              : canHitDomain(unit.canTarget, cand.domain))) {
+              : canHitDomain(unit.canTarget, cand.domain)) &&
+            attackerSees(state, unit, cand)) {
           target = cand;
         }
       }
