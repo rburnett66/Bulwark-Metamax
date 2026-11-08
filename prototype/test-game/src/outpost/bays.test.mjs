@@ -410,3 +410,18 @@ test('defense upgrades are timed: the unit sits on the Upgrade Bay, misses raids
   assert.deepEqual(after.report.built.at(-1), { defense: mg.id, kind: 'mg', tier: 2, at: sent.done });
   assert.deepEqual(upgradeBayShows(after.outpost), { kind: 'mg', tier: 2, id: mg.id, working: false });
 });
+
+test('selling a structure: half of what was invested, the hub never, a rig only once its bay is sold', async () => {
+  const { sellStructure, sellStructureQuote } = await import('./model.js');
+  const o = withBay(); o.pads.b2 = { kind: 'upgradeBay', tier: 1 };
+  assert.match(sellStructureQuote(o, { pad: 'hub' }).error, /hub is the outpost/);
+  assert.equal(sellStructureQuote(o, { pad: 'b2' }).refund, Math.floor(structureDef('upgradeBay', 1).cost * 0.5));
+  const mg = o.defenses.find((d) => d.kind === 'mg'); mg.tier = 2;
+  assert.equal(sellStructureQuote(o, { defense: mg.id }).refund, Math.floor((structureDef('mg', 1).cost + structureDef('mg', 2).cost) * 0.5));
+  const sold = sellStructure(o, { defense: mg.id });
+  assert.ok(!sold.outpost.defenses.some((d) => d.id === mg.id));
+  o.storage.r1 = { [Object.keys(o.storage.r1 || {})[0] || 'iron']: 5 };
+  assert.match(sellStructureQuote(o, { pad: 'r1' }).error, /sell the ore/);
+  o.upgrading = { id: 'x', kind: 'mg', tier: 2, done: T0 + 1 };
+  assert.match(sellStructureQuote(o, { pad: 'b2' }).error, /working/);
+});

@@ -56,7 +56,8 @@ test('one palette for every health bar: 3D, HUD base, selection + unit panels, 2
   const { BAR_COLORS } = await import('./healthBars.js');
   assert.deepEqual(BAR_COLORS.fill, hpRgb(HP_COLORS.fill));
   assert.deepEqual(BAR_COLORS.track, hpRgb(HP_COLORS.track));
-  const hud = fs.readFileSync(new URL('../../render/hud.js', import.meta.url), 'utf8');
+  // the selection panel's rules moved to render/buildPalette.js (SELPANEL_CSS, shared with the outpost's panel)
+  const hud = fs.readFileSync(new URL('../../render/hud.js', import.meta.url), 'utf8') + '\n' + fs.readFileSync(new URL('../../render/buildPalette.js', import.meta.url), 'utf8');
   for (const cls of ['.bw-hpfill', '.bw-selpanel .bw-shpfill', '.bw-unitpanel .bw-uhpfill']) {
     const line = hud.split('\n').find((l) => l.includes(cls + ' {'));
     assert.ok(line && line.includes(HP_CSS.fill), `${cls} is lime`);
