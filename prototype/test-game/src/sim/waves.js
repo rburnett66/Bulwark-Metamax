@@ -1,4 +1,4 @@
-import { WAVES, MAP, getUnitDef } from '../data/tables.js';
+import { WAVES, MAP, getUnitDef, WAVE_SPEED_MULT } from '../data/tables.js';
 import { raisesPending } from './abilities.js';
 import { MAX_LIVE_3D } from '../data/renderTiers.js';
 import { createUnit, unitRadius } from './entities.js';
@@ -358,6 +358,9 @@ export function stepWaves(state, dt) {
     // ORIGIN (T0b): which wave, lane and painted point this attacker came from. Output only — set after
     // createUnit so no spawn-time logic can read it; path lines (T3b) key on it.
     if (unit) unit.origin = { wave: w.current, lane: spawn.lane, point: headPoint };
+    // a faction's per-wave speed (tables.js WAVE_SPEED_MULT; owner 2026-11-07: Verdance wave 1 at 80 %)
+    const spdMult = unit && ((WAVE_SPEED_MULT[(((state.waveTable || WAVES)[w.current - 1]) || {}).faction] || {})[w.current]);
+    if (spdMult) unit.speed *= spdMult;
     // Ensure the unit is registered in the sim (createUnit may or may not
     // insert; Map.set is idempotent either way).
     if (unit && state.units && !state.units.has(unit.id)) {
