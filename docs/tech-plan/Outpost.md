@@ -957,6 +957,20 @@ and current collection per hour rates." A STATUS button beside SELL opens it, in
   `advance`; gold and loads from `sell`. Outposts saved before the ledger start from what they had sold.
 - View model `view/statusReport.js`; tests `statusReport.test.mjs`.
 
+## Timed defense upgrades on the Upgrade Bay (as built, 2026-11-07)
+
+Owner: "the upgrade pad in the outpost should always show the unit being upgraded", then (asked whether upgrades should
+take time) "Timed upgrades on the pad".
+
+- `upgradeDefense` pays the gold and sends the defense to the bay: `o.upgrading = { id, kind, tier, done, since }`, for
+  the next tier's `buildSec`. One defense at a time; a second is refused ("the Upgrade Bay is busy with the …").
+- `advance` finishes it at `done`: the new tier, HP raised by the tier's extra HP (wear stays), back on its cell, and a
+  `report.built` entry. While on the bay it is off its cell and the raid hook does not see it.
+- `o.upgradeShow` keeps the last unit upgraded, so an idle bay still shows one (`upgradeBayShows`).
+- View: `conduits.defenseStructures(o, map)` stands the unit on the bay pad's open side; the defense and bay panels show
+  the countdown. Review preset `tools/outpost/view.html?state=upgrading`.
+- Like building jobs, the timer runs whether or not the bay has power; starting one needs power.
+
 ## Dependencies
 
 | relation | document | what it holds that this plan does not restate |

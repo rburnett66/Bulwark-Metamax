@@ -117,6 +117,15 @@ export function panelModel(o, map, sel, ctx = {}) {
     // the Upgrade Bay (story O10): the next tier, as far as the tech tree's tier, at an outpost with the bay
     const next = structureDef(d.kind, d.tier + 1);
     const upWhy = next ? defenseUpgradeRefusal(o, d.id, { ...ctx, map }) : null;
+    const onBay = o.upgrading && o.upgrading.id === d.id;
+    if (onBay) {   // timed upgrades (owner 2026-11-07): it is on the Upgrade Bay's pad until its new tier is installed
+      return {
+        title: `${KIND_NAME[d.kind]} ${ROMAN[d.tier]}`, sub: 'on the Upgrade Bay',
+        status: `Upgrading to ${ROMAN[o.upgrading.tier]} · ${fmtClock((o.upgrading.done - now) / 1000)}`, tone: 'busy',
+        stats: [['Armour', `${Math.round(d.hp)} / ${max}`], ['Returns to', `cell ${d.cell[0]}, ${d.cell[1]}`]], hp: frac,
+        note: 'Off its cell while it is upgraded: it does not fight a raid until it returns.',
+      };
+    }
     return {
       upgradeDefense: next ? { label: `UPGRADE TO ${ROMAN[d.tier + 1]} · ${fmtGold(next.cost)}`, cost: next.cost, enabled: !upWhy, why: upWhy ? upWhy.replace(/^./, (c) => c.toUpperCase()) : null } : null,
       title: `${KIND_NAME[d.kind]} ${ROMAN[d.tier]}`, sub: `cell ${d.cell[0]}, ${d.cell[1]}`,
@@ -189,8 +198,13 @@ export function panelModel(o, map, sel, ctx = {}) {
     const open = (id) => (ctx.contractUnlocks instanceof Set ? ctx.contractUnlocks.has(id) : (ctx.contractUnlocks || []).includes(id));
     out.techs = OUTPOST_TECH.map((t) => ({ id: t.id, name: t.name, effect: t.effect, price: t.price,
       state: has(t.id) ? 'owned' : open(t.id) ? 'buy' : 'locked', note: has(t.id) ? 'installed' : open(t.id) ? `buy in the Tech Tree · ${fmtGold(t.price)}` : `unlocked by the outpost ${t.unlockedBy}` }));
-    const ready = upgradeBayReady(o, map);
-    stats.push(['Defense tiers', ready ? 'tap a defense to upgrade it' : 'no power']);
+    const ready = upgradeBayReady(o, map), on = o.upgrading;
+    if (on) {
+      const dd = o.defenses.find((x) => x.id === on.id);
+      out.status = `Upgrading ${KIND_NAME[on.kind]} to ${ROMAN[on.tier]} · ${fmtClock((on.done - now) / 1000)}`; out.tone = 'busy';
+      if (dd) stats.push(['On the pad', `${KIND_NAME[on.kind]} ${ROMAN[dd.tier]} → ${ROMAN[on.tier]}`]);
+    } else if (o.upgradeShow) stats.push(['Last upgraded', `${KIND_NAME[o.upgradeShow.kind]} ${ROMAN[o.upgradeShow.tier]}`]);
+    stats.push(['Defense tiers', !ready ? 'no power' : on ? 'one defense at a time' : 'tap a defense to upgrade it']);
   } else if (b && kind === 'habitat') {
     stats.push(['Guns crewed', `${gunCount(o)} / ${gunCap(o)}`], ['Crew', `+${(OUTPOST.Habitat_Guns_Per_Tier ?? 2) * b.tier} guns`]);
   } else if (b && kind === 'hub') {

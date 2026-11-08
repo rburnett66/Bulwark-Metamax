@@ -40,6 +40,7 @@
       <option value="fullkit">Full kit: every pad built, Mk II, deep</option>
       <option value="building">Building and upgrading</option>
       <option value="bays">Bays: harvesters working, Habitat I, an upgraded gun</option>
+      <option value="upgrading">Upgrade Bay: a Cannon on the pad being upgraded</option>
       <option value="guncap">At the gun cap: 3 guns, no Habitat</option>
     </select>
     <label for="quality">Quality tier</label>
@@ -100,7 +101,7 @@ function presetSave(name) {
   if (name === 'running') openAt = T0 + 2 * HOUR;
   if (name === 'full') openAt = T0 + 5 * HOUR;
   if (name === 'raided' || name === 'breached') openAt = T0 + 9 * HOUR;
-  if (name === 'bays') {
+  if (name === 'bays' || name === 'upgrading') {
     // story O10 / O15: the Resource Bay with two harvesters on the surface fields, the Upgrade Bay, a Habitat I, and
     // the kit's Machine Gun already at tier II (Machine Gun T2 owned in the tech tree). Power Station II carries it all.
     o.pads.p1.tier = 2;
@@ -110,9 +111,14 @@ function presetSave(name) {
     o.harvesters = 2;
     const mg = o.defenses.find((d) => d.kind === 'mg');
     if (mg) { mg.tier = 2; mg.hp = structureDef('mg', 2).battle.hp; }
+    if (mg) o.upgradeShow = { kind: 'mg', tier: 2, id: mg.id };   // the idle bay shows the last unit it upgraded
     s.tech.owned = { ...s.tech.owned, mg2: true, cannon2: true, deep_drilling_1: true, reinforced_walls: true };
     s.questSteps = { [outpostQuestLine(PLANET)]: 1 };   // contract 1 collected: the uncommon ore and four Outpost nodes unlocked
     openAt = T0 + 2 * HOUR;
+    if (name === 'upgrading') {   // the Cannon on the Upgrade Bay's pad, 90 s from its tier II
+      const cannon = o.defenses.find((d) => d.kind === 'cannon');
+      if (cannon) o.upgrading = { id: cannon.id, kind: 'cannon', tier: 2, done: openAt + 90_000, since: openAt - 30_000 };
+    }
   }
   if (name === 'guncap') {
     // story O15: the kit's Cannon and Machine Gun plus one more Machine Gun = the hub's 3 guns; no Habitat yet
