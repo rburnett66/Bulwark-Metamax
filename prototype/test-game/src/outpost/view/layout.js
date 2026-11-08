@@ -15,8 +15,9 @@
 import { clearBox, fitCameraToRect, CAMERA } from '../../render3d/camera.js';
 import { mesaFrame } from '../../terrain/outpostPads.js';
 
-/** The concept's three-quarter angle: the battle camera's pitch, turned this far off north (radians). */
-export const VIEW_YAW = 0.38;
+/** The battle camera's angle: its pitch, facing north (owner 2026-11-08: "why is the outpost camera angle rotated .. we
+ *  should keep it the same as battle"; it was turned 0.38 rad for the concept's three-quarter view). */
+export const VIEW_YAW = 0;
 
 export function layoutFor(w, h) {
   const mode = w >= 900 && h >= 600 ? 'desktop' : w > h ? 'landscape' : 'portrait';
