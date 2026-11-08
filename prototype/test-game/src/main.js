@@ -115,6 +115,7 @@ export function boot(mountEl, seed) {
   let render3dMod = null;
   let landingReleased = false;   // LC: the landing craft flies in once the field is on screen (releaseLanding)
   let mount3dSeq = 0;
+  let suspended3D = false;   // the outpost view holds the 3D GPU budget (onOutpostOpen / onOutpostClose)
   let last3D = null;   // the map + slug the 3D view was last mounted for (a quality change remounts it)
   if (USE_3D) { canvas.style.visibility = 'hidden'; app.stage.renderable = false; }   // the hidden 2D board draws nothing
   let frameErrors3d = 0;
@@ -884,6 +885,20 @@ export function boot(mountEl, seed) {
       if (!lastReplayLog) { flashMessage(hud, 'no finished game to replay yet'); return; }
       // the battle's OWN map, loaded and awaited before playback (was: the default map + a 50 ms race) [MM-task_mvgyb5ma_1]
       void startReplay(lastReplayLog).catch((e) => { console.error('[Bulwark] replay failed', e); flashMessage(hud, 'replay failed'); });
+    },
+    // the outpost view is a second full 3D scene: the battle's 3D view (behind the menu) gives its GPU context up while it
+    // is open and is rebuilt when it closes — two at once crashed the page on an iPhone (owner 2026-11-07)
+    onOutpostOpen: () => {
+      if (!renderer3d || !render3dMod) return;
+      mount3dSeq++;                                       // cancel a mount in flight
+      try { render3dMod.destroyRenderer(renderer3d); } catch (e) { /* already gone */ }
+      renderer3d = null; suspended3D = true;
+      rebindInput();
+    },
+    onOutpostClose: () => {
+      if (!suspended3D) return;
+      suspended3D = false;
+      if (USE_3D && last3D) void mount3D(last3D.map, last3D.slug);
     },
     // OUTPOST (O8): the menu opens the outpost view itself (O6, src/outpost/view/outpostView.js) and calls
     // onTechChanged when it closes, so the next battle sees the bank the outpost changed

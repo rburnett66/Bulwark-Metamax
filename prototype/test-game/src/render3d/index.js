@@ -864,6 +864,9 @@ export function destroyRenderer(r) {
     if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
   });
   r.renderer.dispose();
+  // hand the GPU context back now: iOS Safari keeps a dropped context's memory until GC, and a few live ones crash the
+  // page ("A problem repeatedly occurred", owner 2026-11-07, iPhone 15 Pro Max opening the outpost)
+  try { r.renderer.forceContextLoss(); } catch (e) { /* already lost */ }
   r.host.remove();
   r.banner.remove();
 }
