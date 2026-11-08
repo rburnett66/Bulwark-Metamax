@@ -28,3 +28,14 @@ test('kills in one spot stack instead of overprinting; deliveries pop at the bas
   assert.deepEqual([g.live[2].x, g.live[2].z, g.live[2].text], [10.5, 10.5, '$80']);
   assert.ok(g.live[2].color);
 });
+
+test('a sale pops its refund in green with the kill choreography (owner 2026-11-08)', async () => {
+  const { createGoldPopups, SALE_COLOR } = await import('./goldPopups.js');
+  const g = createGoldPopups();
+  g.feed([{ type: 'build', phase: 'sold', refund: 75, pos: { x: 4, y: 6 } }, { type: 'build', phase: 'complete', pos: { x: 1, y: 1 } }]);
+  assert.equal(g.live.length, 1);
+  assert.equal(g.live[0].text, '$75');
+  assert.equal(g.live[0].color, SALE_COLOR);
+  g.step(0.3);
+  assert.ok(g.live[0].alpha > 0 && g.live[0].scale > 0, 'it pops like a kill');
+});
