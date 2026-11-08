@@ -15,7 +15,9 @@ import { buildTerrainMap } from '../../sim/mapgen.js';
 
 /** The battle board for an outpost map (outpostMapFor's shape, with `forge`). bakeTune: the Forge's tf.bake.v1. */
 export function outpostBattleMap(om, { bakeTune = {} } = {}) {
-  const forge = om.forge || {
+  // the view draws the rim opened for building (outpostMap.js openRim): the board takes the map's terrain and blocking
+  // over the Forge export's, so no boulders stand where defenses may (the raid sim keeps om.forge as authored)
+  const forge = om.forge ? { ...om.forge, terrain: om.terrain || om.forge.terrain, blocking: om.blocking || om.forge.blocking } : {
     cols: om.width, rows: om.height, terrain: om.terrain || new Array(om.width * om.height).fill(0),
     blocking: om.blocking || new Array(om.width * om.height).fill(0), base: null, spawns: om.spawns || [], decor: [], resources: [],
   };

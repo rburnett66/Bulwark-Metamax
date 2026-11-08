@@ -65,3 +65,22 @@ test('outpostMapFor fetches <planet>-outpost.json and falls back to the draft la
   const broken = await outpostMapFor('air', { fetch: async () => { throw new Error('offline'); } });
   assert.equal(broken.source, 'draft');
 });
+
+test('the mesa rim opens for building; the raid grid keeps the cliff (owner 2026-11-08)', async () => {
+  const { openRim, outpostMapFromForge } = await import('./outpostMap.js');
+  const { TERRAIN } = await import('../terrain/terrainGen.js');
+  const { buildable, defenseRing } = await import('../terrain/outpostPads.js');
+  const fs = await import('node:fs');
+  const forge = JSON.parse(fs.readFileSync(new URL('../../content/maps/forge/ground-outpost.json', import.meta.url), 'utf8'));
+  const rimCells = forge.terrain.map((t, i) => (forge.heights[i] === 2 && (t === TERRAIN.CLIFF || t === TERRAIN.CLIFF_BORDER) ? i : -1)).filter((i) => i >= 0);
+  assert.ok(rimCells.length > 0, 'the authored map has a cliff rim');
+  const m = outpostMapFromForge(forge, 'ground');
+  for (const i of rimCells) {
+    assert.equal(m.terrain[i], TERRAIN.ROCK_BORDER);
+    assert.ok(buildable(m, i % forge.cols, (i / forge.cols) | 0) || m.pads.some((p) => { const x = i % forge.cols, y = (i / forge.cols) | 0; return x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h; }));
+  }
+  assert.equal(m.forge.terrain[rimCells[0]], TERRAIN.CLIFF === forge.terrain[rimCells[0]] ? TERRAIN.CLIFF : forge.terrain[rimCells[0]], 'the raid grid is untouched');
+  const ring = new Set(defenseRing(m).map(([x, y]) => y * forge.cols + x));
+  assert.ok(rimCells.some((i) => ring.has(i)), 'the rim is in the defense ring');
+  assert.deepEqual(openRim(null, null, null), { terrain: null, blocking: null });
+});
