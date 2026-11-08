@@ -3,8 +3,8 @@
  * (owner 2026-11-08: "buildings under construction need dust, and the welding sparks from random locations that cycle
  * every 4 seconds on the structure just like the repair effect in battle").
  *
- *   · DUST — the battle's build dust (render3d/fx/buildFx.js) round the pad's footprint, easing off as the job nears
- *     done (each job is fed to it as a structure with lifecycle 'Building').
+ *   · DUST — DUST_MULT (4) times the battle's build dust (render3d/fx/buildFx.js) round the pad's footprint, easing
+ *     off as the job nears done (each job is fed to it as a structure with lifecycle 'Building').
  *   · WELDING — the battle's repair sparks (render3d/fx/repairFx.js: blue-white, bounce, cool to orange, and the arc
  *     flicker) from a weld point on the structure; the point moves to a new random spot every WELD_CYCLE seconds.
  *
@@ -16,6 +16,8 @@ import { createBuildFx } from '../../render3d/fx/buildFx.js';
 import { REPAIR_FX, SPARK_TINT } from '../../render3d/fx/repairFx.js';
 import { structureDef } from '../../data/outpost.js';
 
+// the dust is DUST_MULT times the battle's build dust (owner 2026-11-08: "the construction dust should be 4x what you demoed")
+export const DUST_MULT = 4;
 export const WELD_CYCLE = 4;   // seconds a weld point holds before the welder moves on
 export const WELD_HEIGHT = Object.freeze([0.3, 1.3]);   // world units up the structure
 
@@ -53,7 +55,9 @@ export function createConstructionFx({ seed = 41 } = {}) {
     step(dt, sites, emit, K, ring, tierKey = 'high') {
       if (!emit) return { puffs: 0, sparks: 0 };
       const d = Math.max(0, Math.min(0.1, dt || 0));
-      const puffs = dust.step(d, { structures: new Map(sites.map((s) => [s.id, s])) }, null, emit, K, ring, tierKey);
+      const st = { structures: new Map(sites.map((s) => [s.id, s])) };
+      let puffs = 0;
+      for (let k = 0; k < DUST_MULT; k++) puffs += dust.step(d, st, null, emit, K, ring, tierKey);
       let sparks = 0;
       const live = new Set();
       for (const s of sites) {

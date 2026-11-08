@@ -30,3 +30,14 @@ test('dust and sparks while building; the weld point moves every WELD_CYCLE seco
   for (let i = 0; i < (WELD_CYCLE / 0.1) + 5; i++) fx.step(0.1, sites, emit, K);
   assert.ok(sparkAt.some((p) => p[0] !== first[0] || p[2] !== first[2]), 'the welder moved on');
 });
+
+test('the dust is four times the battle build dust', async () => {
+  const { createBuildFx } = await import('../../render3d/fx/buildFx.js');
+  const { DUST_MULT } = await import('./constructionFx.js');
+  assert.equal(DUST_MULT, 4);
+  const sites = constructionSites(job(1e9), map, 0);
+  const fx = createConstructionFx({ seed: 9 }), battle = createBuildFx({ seed: 9 });
+  let ours = 0, theirs = 0;
+  for (let i = 0; i < 50; i++) { ours += fx.step(0.05, sites, () => {}, K).puffs; theirs += battle.step(0.05, { structures: new Map(sites.map((s) => [s.id, s])) }, null, () => {}, K); }
+  assert.ok(Math.abs(ours - 4 * theirs) <= 4, ours + ' vs 4 x ' + theirs);
+});
