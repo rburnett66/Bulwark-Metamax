@@ -19,6 +19,7 @@
  * where it goes, with CONFIRM (touch: once a spot is aimed) and CANCEL.
  */
 import { fmtGold, fmtUnits, fmtClock, sellButton, ROMAN } from './hudModel.js';
+import { fmtPerHour } from './statusReport.js';
 import { PALETTE_CSS, paletteBaseCss, railFit, applyRailFit, STRUCT_ICONS } from '../../render/buildPalette.js';
 import { buildIcon, buildIconUrl } from '../../render/buildIcons.js';
 import { OUTPOST_GLYPHS } from './menuIcons.js';
@@ -311,6 +312,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     </div>
     <div class="bw-palette bw-panel op-rail" data-k="rail" role="toolbar" aria-label="Build"><div class="bw-title">BUILD</div><div class="bw-palette-row" data-k="railRow"></div></div>
     <div class="op-actions">
+      <button class="op-btn" data-a="status"><b>STATUS</b><i>rates · totals</i></button>
       <button class="op-btn sell" data-a="sell"><b>SELL</b><i data-k="loads">no full load</i></button>
       <button class="op-btn repair" data-a="repairAll" hidden><b>REPAIR</b><i data-k="repair">0</i></button>
     </div>
@@ -338,6 +340,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     const call = (fn, ...args) => cbs[fn] && cbs[fn](...args);
     if (a === 'close') call('onClose');
     else if (a === 'sell') call('onSell');
+    else if (a === 'status') call('onStatus');
     else if (a === 'repairAll') call('onRepairAll');
     else if (a === 'online') call('onOnline');
     else if (a === 'panelClose') call('onPanelClose');
@@ -528,6 +531,34 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       const items = [...el.querySelectorAll('.op-rep-row')];
       if (reduced) items.forEach((x) => x.classList.add('in'));
       else items.forEach((x, i) => setTimeout(() => x.classList.add('in'), 350 + i * 110));
+    },
+    /**
+     * The STATUS screen (statusReport.js model), in the away report's language and container: what the outpost
+     * collects per hour now, and everything it has collected. Closes like the report (CONTINUE / Escape).
+     */
+    status(m, { reduced = false } = {}) {
+      const el = $('report');
+      if (!m) { el.classList.remove('on'); el.innerHTML = ''; return; }
+      const dot = (c) => `<span class="op-rep-dot" style="--c:${esc(c)}"></span>`;
+      const rows = [];
+      rows.push(`<div class="op-rep-sec"><span>COLLECTING NOW</span><span>PER HOUR</span></div>`);
+      if (!m.rates.ore.length && !m.rates.harvest.length) rows.push('<div class="op-rep-empty">Nothing is being collected. Build a mining station on a deposit and power it.</div>');
+      for (const x of m.rates.ore) rows.push(`<div class="op-rep-row">${dot(x.colour)}<b>${esc(x.name)}</b>${x.stopped ? `<span class="tag bad">${esc(x.stopped)}</span>` : `<span class="num">${fmtPerHour(x.perHour)}</span>`}${x.stopped ? `<small>${x.stopped === 'BAY FULL' ? 'sell to start the rig again' : 'connect a power station'}</small>` : x.note ? `<small>${esc(x.note)}</small>` : ''}</div>`);
+      for (const x of m.rates.harvest) rows.push(`<div class="op-rep-row">${dot(x.colour)}<b>${esc(x.name)}</b><span class="num">${fmtPerHour(x.perHour)}</span><small>harvesters · to your inventory</small></div>`);
+      rows.push(`<div class="op-rep-sec"><span>TOTAL COLLECTED</span><span>UNITS</span></div>`);
+      if (!m.totals.ore.length && !m.totals.harvest.length) rows.push('<div class="op-rep-empty">Nothing collected yet.</div>');
+      for (const x of m.totals.ore) rows.push(`<div class="op-rep-row">${dot(x.colour)}<b>${esc(x.name)}</b><span class="num">${fmtUnits(x.units)}</span></div>`);
+      for (const x of m.totals.harvest) rows.push(`<div class="op-rep-row">${dot(x.colour)}<b>${esc(x.name)}</b><span class="num">${fmtUnits(x.units)}</span><small>harvested</small></div>`);
+      rows.push(`<div class="op-rep-row">${dot('#f2c869')}<b>Gold from sales</b><span class="num">${fmtGold(m.totals.gold)}</span><small>${m.totals.loads} ${m.totals.loads === 1 ? 'load' : 'loads'} sold</small></div>`);
+      el.innerHTML = `<div class="op-rep-scrim"></div><div class="op-rep-card" role="dialog" aria-label="Outpost status">
+        <div class="op-rep-k">OUTPOST STATUS</div><div class="op-rep-h">COLLECTION</div>
+        <div class="op-rep-sub">${m.online ? 'online' : 'not online yet'}${m.since ? ` · founded <b>${esc(m.since)}</b> ago` : ''}</div>
+        ${rows.join('')}
+        <div class="op-rep-act"><button class="op-wide" data-a="reportClose">CONTINUE</button></div></div>`;
+      el.classList.add('on');
+      const items = [...el.querySelectorAll('.op-rep-row')];
+      if (reduced) items.forEach((x) => x.classList.add('in'));
+      else items.forEach((x, i) => setTimeout(() => x.classList.add('in'), 250 + i * 80));
     },
     get reportOpen() { return $('report').classList.contains('on'); },
     /** CSS px the HUD covers (for the camera framing): measured, so it follows the real layout. */
