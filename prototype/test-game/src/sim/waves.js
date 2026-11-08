@@ -116,15 +116,20 @@ function scoreWave(state, w) {
     const u = state.units.get(id); return a + (u && u.hp > 0 ? 1 : 0);
   }, 0);
   let primaryQuota = true, premiumClaimed = true;
+  let primary = null, premium = null;   // the wave report's numbers (null = no such fields this wave)
   if (state.resourceNodes && ring) {
     const prim = state.resourceNodes.filter((n) => n.wave === w.current && n.role === 'primary');
     if (prim.length) {
       const tot = prim.reduce((a, n) => a + n.units, 0);
       const rem = prim.reduce((a, n) => a + Math.max(0, n.remaining), 0);
       primaryQuota = tot > 0 ? (tot - rem) / tot >= 0.6 : true;
+      primary = { gathered: Math.round(tot - rem), total: tot, need: Math.ceil(tot * 0.6) };
     }
     const prem = state.resourceNodes.filter((n) => n.wave === w.current && n.role === 'premium');
-    if (prem.length) premiumClaimed = prem.every((n) => n.remaining <= 0);
+    if (prem.length) {
+      premiumClaimed = prem.every((n) => n.remaining <= 0);
+      premium = { cleared: prem.filter((n) => n.remaining <= 0).length, total: prem.length };
+    }
   }
   const flags = [
     ws.baseHp == null || (state.base && state.base.hp >= ws.baseHp),   // 1 core takes no damage
@@ -133,7 +138,15 @@ function scoreWave(state, w) {
     premiumClaimed,                                                     // 4 ring premium claimed
     !(ring && ring.parSec) || (state.time - (ws.time || 0)) <= ring.parSec,   // 5 under par
   ].map((f) => !!f);
-  return { wave: w.current, flags, stars: flags.reduce((a, f) => a + (f ? 1 : 0), 0) };
+  // WAVE REPORT (owner 2026-11-07: "a proper score with stars at the end of each wave"): the numbers behind each star
+  const detail = {
+    core: ws.baseHp == null || !state.base ? null : { start: ws.baseHp, end: Math.max(0, state.base.hp), max: ws.baseMaxHp || state.base.maxHp },
+    harvesters: ws.harvesters == null ? null : { start: ws.harvesters, alive: hvAlive },
+    primary, premium,
+    time: { sec: Math.round((state.time - (ws.time || 0)) * 10) / 10, par: (ring && ring.parSec) || null },
+    gold: state.economy ? Math.round((state.economy.totalEarned || 0) - (ws.earned || 0)) : 0,
+  };
+  return { wave: w.current, flags, stars: flags.reduce((a, f) => a + (f ? 1 : 0), 0), detail };
 }
 
 export function startNextWave(state) {
@@ -156,6 +169,8 @@ export function startNextWave(state) {
   w.waveStart = {
     time: state.time,
     baseHp: state.base ? state.base.hp : null,
+    baseMaxHp: state.base ? state.base.maxHp : null,
+    earned: state.economy ? state.economy.totalEarned || 0 : 0,   // the wave report's gold line
     harvesters: (state.harvesterIds || []).reduce((a, id) => {
       const u = state.units.get(id); return a + (u && u.hp > 0 ? 1 : 0);
     }, 0),
@@ -376,7 +391,7 @@ export function stepWaves(state, dt) {
     // ── WAVE STARS (Story 4, workbook Star_Rubric — five independent conditions, 1 star each) ──
     const sc = scoreWave(state, w);
     (state.waveStars || (state.waveStars = [])).push(sc);
-    emitEvent(state, { type: 'waveStars', tick: state.tick, wave: sc.wave, stars: sc.stars, flags: sc.flags.slice() });
+    emitEvent(state, { type: 'waveStars', tick: state.tick, wave: sc.wave, stars: sc.stars, flags: sc.flags.slice(), detail: sc.detail });
 
     emitEvent(state, {
       type: 'wave',
