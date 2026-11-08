@@ -4,6 +4,7 @@ import { createRng } from './rng.js';
 import { buildNavGrid, findWalkerPath, findRoute, getFlyerPath, getWaterPath, lineClear, waveBounds, findRouteInWindow } from './pathfinding.js';
 import { createUnit, createBase, createStructure } from './entities.js';
 import { acquireTarget, applyDamage, stepCombat, inBaseReach } from './combat.js';
+import { buildSightGrid, attackerSees } from './sight.js';
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
 import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
 import { initWaves, startNextWave, stepWaves } from './waves.js';
@@ -336,6 +337,7 @@ export function createSim(seed, opts) {
     seed: seed,
     rng: createRng(seed),
     map: map,
+    sightGrid: buildSightGrid(map),   // terrain line of sight for the waves (sight.js); structures never change it
     waveTable: waveTable,
     base: null,
     units: new Map(),
@@ -630,6 +632,7 @@ export function stepMovement(state, dt) {
         unit.targetId = tid;
         tgt = tid != null ? state.structures.get(tid) || null : null;
       }
+      if (tgt && !attackerSees(state, unit, tgt)) { unit.targetId = null; tgt = null; }   // lost sight (sight.js)
       if (tgt && dist(unit.pos, tgt.pos) <= unit.range) {
         unit.state = 'attacking';
         engaged = true; // stepCombat resolves the actual fire
