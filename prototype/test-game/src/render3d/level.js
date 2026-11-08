@@ -31,7 +31,8 @@ export function checkLevelAgainstMap(level, map) {
   if (map.base && level.base && (map.base.x !== level.base.x || map.base.y !== level.base.y)) {
     problems.push(`base at ${level.base.x},${level.base.y} baked, ${map.base.x},${map.base.y} in the sim`);
   }
-  if (Array.isArray(map.blockedCells) && Array.isArray(level.blocked)) {
+  // an outpost board opens its mesa rim for building on purpose (outpost/outpostMap.js openRim): blocking differs there
+  if (!map.outpost && Array.isArray(map.blockedCells) && Array.isArray(level.blocked)) {
     const sim = new Set(map.blockedCells.map((c) => c.y * map.cols + c.x));
     const baked = new Set(level.blocked);
     let onlySim = 0, onlyBaked = 0;

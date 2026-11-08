@@ -7,6 +7,8 @@
  * draw terrain, heights, conduits and the raid lanes). A planet with no map yet gets the draft layout.
  */
 import { DRAFT_LAYOUT } from './draftLayout.js';
+import { TERRAIN } from '../terrain/terrainGen.js';
+import { HEIGHT } from '../terrain/outpostPads.js';
 
 /** The URL of a planet's outpost map, next to the battle maps. */
 export const outpostMapUrl = (planet, base = import.meta.url) => new URL(`../../content/maps/forge/${planet}-outpost.json`, base).href;
@@ -16,11 +18,29 @@ export const outpostMapUrl = (planet, base = import.meta.url) => new URL(`../../
  * terrain, blocking, heights, mesa, spawns, decor, resources, source: 'forge', forge }. `forge` keeps the whole
  * export for the battle loader (buildTerrainMap) when the raid sim runs on it (story O7).
  */
+/**
+ * The mesa's rim, opened for building (owner 2026-11-08: "the rock wall surrounding the outpost takes up valuable space
+ * the defensive placement could use" → keep the plateau, build on the rim): the cliff cells on the mesa top become the
+ * plateau's stone edge, so no boulders are planted there and defenses may stand on them. The raid sim keeps the
+ * Forge's own grid (map.forge), so raiders still climb only by the ramps. → { terrain, blocking } copies.
+ */
+export function openRim(terrain, blocking, heights) {
+  if (!terrain || !heights) return { terrain, blocking };
+  const t = terrain.slice(), b = blocking ? blocking.slice() : null;
+  for (let i = 0; i < t.length; i++) {
+    if (heights[i] !== HEIGHT.TOP || (t[i] !== TERRAIN.CLIFF && t[i] !== TERRAIN.CLIFF_BORDER)) continue;
+    t[i] = TERRAIN.ROCK_BORDER;
+    if (b) b[i] = 0;
+  }
+  return { terrain: t, blocking: b };
+}
+
 export function outpostMapFromForge(forge, planet = forge.planet) {
+  const rim = openRim(forge.terrain || null, forge.blocking || null, forge.heights || null);
   return {
     id: `${planet}-outpost`, planet, width: forge.cols, height: forge.rows,
     pads: forge.pads || [], deposits: forge.deposits || [], conduits: forge.conduits || [], kitDefenses: forge.kitDefenses || [],
-    terrain: forge.terrain || null, blocking: forge.blocking || null, heights: forge.heights || null, mesa: forge.mesa || null,
+    terrain: rim.terrain, blocking: rim.blocking, heights: forge.heights || null, mesa: forge.mesa || null,
     spawns: (forge.spawns || []).filter((s) => (s.lane || 'ground') === 'ground'), decor: forge.decor || [], resources: forge.resources || [],
     source: 'forge', forge,
   };
