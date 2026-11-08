@@ -505,6 +505,10 @@ The owner's image is the target. What it establishes:
 - **Power conduits** run as glowing blue double lines between the buildings.
 - **Life.** Engines glow, the reactor core pulses, the laser cuts the crystal, buggies and ore carts sit ready.
 - **Low-poly and chunky**, close to the capital ship and landing craft models, not the voxel units.
+- **The interface is not the buildings.** Owner 2026-11-07 ("why does outpost have a white UX bias when tower defense
+  and the rest of the game is black"): these materials are for the 3D buildings only. The outpost's HUD, panels and
+  cards follow the rest of the game: the battle HUD and results screen's dark panels, hairline borders and gold primary
+  actions, with cyan for power and light.
 
 ### 8.2 Per planet
 
