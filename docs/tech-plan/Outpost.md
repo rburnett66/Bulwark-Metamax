@@ -944,6 +944,19 @@ O9 starts with O2 so every later story is reviewable outside Claude as it lands.
 - **Model budget.** Six buildings plus the map must hold the battle view's frame time on the low tier. O6 measures
   frame time on the review page's low tier with the full kit and a live raid.
 
+## Status screen (as built, 2026-11-07)
+
+Owner: "Since the outpost is continual play, not wave based there should be a status screen that says total collection,
+and current collection per hour rates." A STATUS button beside SELL opens it, in the away report's language and container.
+
+- **Collecting now, per hour** (`model.js collectionRates`): each rig's rate while it is finished, powered and its bay
+  has room; a stopped rig shows BAY FULL or NO POWER instead. Rigs on the same ore share a row. The harvesters' rate per
+  surface resource: the battle rate while their field has stock, else its regrowth; 0 when the hopper is full or the
+  Resource Bay is unpowered.
+- **Total collected** (`o.lifetime`): ore extracted per item and surface resources harvested per tier, added up by
+  `advance`; gold and loads from `sell`. Outposts saved before the ledger start from what they had sold.
+- View model `view/statusReport.js`; tests `statusReport.test.mjs`.
+
 ## Dependencies
 
 | relation | document | what it holds that this plan does not restate |

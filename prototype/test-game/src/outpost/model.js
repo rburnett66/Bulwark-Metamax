@@ -116,6 +116,7 @@ export function createOutpost(planet, { seed, map, now }) {
     planet, seed: seed >>> 0, online: false, t: now, firstRaidAt: null,
     pads: { [firstPad(map, 'hub').id]: { kind: 'hub', tier: 1 } }, building: [], defenses: [], storage: {},
     harvesters: 0, hopper: {}, fields: {}, raids: { window: null, log: [] }, sold: {},
+    lifetime: newLifetime(now),
   };
 }
 
@@ -148,7 +149,48 @@ export function migrateOutpost(o) {
   if (!Number.isFinite(o.harvesters)) o.harvesters = 0;
   if (!o.hopper || typeof o.hopper !== 'object') o.hopper = {};
   if (!o.fields || typeof o.fields !== 'object') o.fields = {};
+  if (!o.lifetime || typeof o.lifetime !== 'object') {
+    // saved before the status screen counted: start from what was sold (a lower bound on what was mined)
+    o.lifetime = newLifetime(o.t);
+    for (const [ore, u] of Object.entries(o.sold || {})) o.lifetime.extracted[ore] = u;
+  }
   return o;
+}
+
+// ── lifetime totals and current rates (the status screen, owner 2026-11-07: "the outpost is continual play, not wave
+// based — there should be a status screen that says total collection, and current collection per hour rates") ──
+/** The lifetime ledger: what the rigs extracted (per ore item), the harvesters gathered (per tier), and the gold sales paid. */
+export function newLifetime(since) {
+  return { since: since ?? null, extracted: {}, harvested: {}, gold: 0, loads: 0 };
+}
+/**
+ * What the outpost collects per hour right now. Rigs: their rate while finished, powered and their bay has room (a full
+ * bay or no power reads 0 with its reason). Harvesters: per field, the battle rate while it has stock, else what
+ * regrows; 0 when the hopper is full or the bay is unpowered.
+ * → { ore: [{ pad, item, perHour, stopped: null | 'full' | 'power' }], harvest: { common, uncommon }, oreTotal, harvestTotal }
+ */
+export function collectionRates(o, map, params = OUTPOST) {
+  const { powered } = powerGrids(o, map);
+  const tower = openTowerTier(o, powered);
+  const ore = [];
+  for (const id of Object.keys(o.pads).sort()) {
+    const b = o.pads[id];
+    if (b.kind !== 'rig' || !rigOre(o, id)) continue;
+    const item = oreItemId(rigOre(o, id).id, !!b.deep), full = bayUnits(o, id) >= capFor(o, id, tower, params) - 1e-6;
+    const stopped = !powered.has(id) ? 'power' : full ? 'full' : null;
+    ore.push({ pad: id, item, perHour: stopped ? 0 : rigRatePerMin(o, id) * 60, stopped });
+  }
+  const harvest = { common: 0, uncommon: 0 };
+  const running = harvestRunning(o, map, params, powered);
+  if (running.length && hopperUnits(o) < hopperCap(o, map, params) - 1e-9) {
+    const groups = new Map(surfaceFieldGroups(map, params).map((f) => [f.id, f])), demand = {};
+    for (const h of running) demand[h.fieldId] = (demand[h.fieldId] || 0) + h.rate;
+    for (const [id, d] of Object.entries(demand)) {
+      const f = groups.get(id), S = Math.min(f.cap, (o.fields || {})[id] ?? f.cap);
+      harvest[f.tier] += (S > 1e-9 ? d : Math.min(d, f.regrow)) * HOUR;
+    }
+  }
+  return { ore, harvest, oreTotal: ore.reduce((a, r) => a + r.perHour, 0), harvestTotal: harvest.common + harvest.uncommon };
 }
 
 // ── power (design §4.5) ──────────────────────────────────────────────────────────────────────────────────────────
@@ -511,6 +553,9 @@ export function advance(outpost, toMs, ctx) {
   if (o.online) o.raids.window = Math.max(o.raids.window ?? -1, lastSettledWindow(o.seed, end, params));
   o.t = end;
   report.to = end;
+  const L = (o.lifetime ||= newLifetime(report.from));
+  for (const [k, u] of Object.entries(report.extracted)) L.extracted[k] = (L.extracted[k] || 0) + u;
+  for (const [k, u] of Object.entries(report.harvested)) L.harvested[k] = (L.harvested[k] || 0) + u;
   return { outpost: o, report };
 }
 
@@ -629,6 +674,8 @@ export function sell(outpost, ctx = {}, { buyer = null } = {}) {
     }
   }
   const gold = loads.reduce((a, l) => a + l.gold, 0);
+  const L = (o.lifetime ||= newLifetime(o.t));
+  L.gold += gold; L.loads += loads.length;
   return { outpost: o, loads, gold, loyalty: { home: far ? -params.Far_Loyalty_Cost * loads.length : 0 } };
 }
 

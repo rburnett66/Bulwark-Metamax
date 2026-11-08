@@ -21,6 +21,7 @@ import { outpostBattleMap, bakedSlugFor, lowlandResources } from './outpostBoard
 import { createOutpostScene } from './outpostScene.js';
 import { defenseStructures, planBuildings } from './conduits.js';
 import { createSession, onlineIssues } from './session.js';
+import { statusModel } from './statusReport.js';
 import { hudModel, panelModel, KIND_NAME, fmtGold, rigHeadOf } from './hudModel.js';
 import { buildMenu, placementStep, aimValid, IDLE, MENU, DEFENSE_STRUCT, isResourceBay, kindOf } from './buildMenu.js';
 import { buildingWarnings, markerOf } from './warnings.js';
@@ -172,6 +173,7 @@ export async function openOutpostView(opts = {}) {
     onRepair: (id) => act({ type: 'repair', id }, (res) => `Repaired · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onUpgradeDefense: (id) => act({ type: 'upgradeDefense', id }, (res) => `Upgraded at the Upgrade Bay · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onReportClose: () => { hud.report(null); },
+    onStatus: () => { hud.status(statusModel(o, map, { planet, catalog, now: clockNow() }), { reduced }); },
   }, { title: 'OUTPOST', planetName: (PLANETS[planet] && PLANETS[planet].name) || planet });
 
   function act(action, okText, after) {
