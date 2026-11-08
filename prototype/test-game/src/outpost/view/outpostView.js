@@ -221,7 +221,15 @@ async function openOutpostViewInner(opts, stage) {
     onDeep: (pad, on) => act({ type: 'deep', pad, on }, () => (on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam'), () => select({ pad })),
     onUpgrade: (pad) => act({ type: 'upgrade', pad }, (res) => `Upgrade started · −${fmtGold(res.cost)} gold`, () => select({ pad })),
     onRepair: (id) => act({ type: 'repair', id }, (res) => `Repaired · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
-    onSellStructure: (target) => act({ type: 'sellStructure', target }, (res) => `Sold · +${fmtGold(res.earned)} gold`, () => select(null)),
+    onSellStructure: (target) => {
+      // where it stood, for the green "$N" the battle's sale pops (goldPopups.js)
+      const pad = target.pad && map.pads.find((p) => p.id === target.pad), d = target.defense != null && o.defenses.find((x) => x.id === target.defense);
+      const pos = pad ? { x: pad.x + (pad.w - 1) / 2, y: pad.y + (pad.h - 1) / 2 } : d ? { x: d.cell[0], y: d.cell[1] } : null;
+      act({ type: 'sellStructure', target }, (res) => {
+        if (pos && r.gold) r.gold.feed([{ type: 'build', phase: 'sold', refund: res.earned, pos }], board);
+        return `Sold · +${fmtGold(res.earned)} gold`;
+      }, () => select(null));
+    },
     onUpgradeDefense: (id) => act({ type: 'upgradeDefense', id }, (res) => `On the Upgrade Bay · back in ${fmtClock((res.done - clockNow()) / 1000)} · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onReportClose: () => { hud.report(null); },
     onStatus: () => { hud.status(statusModel(o, map, { planet, catalog, now: clockNow() }), { reduced }); },

@@ -7,7 +7,8 @@
  *   0.10 s  "$N" pops out of the fireball: scale 0.35 → 1.25 → 1.0 with a slight overshoot, gold with a dark outline;
  *   → 1.5 s it rises about a cell with an ease-out and fades over its last third.
  * Several kills in one place stack upward instead of overprinting; a big bounty prints larger. Harvester deliveries
- * (`deposit`, gold credited at the dock) pop the same way in the crystal's colour.
+ * (`deposit`, gold credited at the dock) pop the same way in the crystal's colour; a sale (`build` phase `sold`, its
+ * `refund`) pops in green.
  * DOM labels projected through the 3D camera every frame — crisp text at any zoom, no texture atlas. The model
  * (planned popups, positions, phases) is pure and testable; createGoldPopupView owns the DOM.
  */
@@ -15,6 +16,9 @@ import { cellToWorld } from '../camera.js';
 
 export const POP = Object.freeze({ delay: 0.1, pop: 0.12, settle: 0.1, life: 1.5, rise: 1.0, stack: 0.38, near: 0.9 });
 const DEPOSIT_COLOR = { blue: '#7fc4ff', yellow: '#ffd76a', red: '#ff8a7a', green: '#8ff0a0' };
+// a sale's refund pops in green, with the kill's choreography (owner 2026-11-08: "when a structure or tower is sold the $
+// value should present in green text to represent the cash you made the same way the $ value appears when you kill a tank")
+export const SALE_COLOR = '#5cf08a';
 
 /** Pure: a list of live popups; feed(events) adds, step(dt) ages, each popup exposes { x, y, z, text, scale, alpha }. */
 export function createGoldPopups() {
@@ -30,6 +34,7 @@ export function createGoldPopups() {
       if (!events) return;
       for (const ev of events) {
         if (ev.type === 'kill' && ev.income > 0 && ev.pos) add(cellToWorld(ev.pos.x), cellToWorld(ev.pos.y), ev.income, null);
+        else if (ev.type === 'build' && ev.phase === 'sold' && ev.refund > 0 && ev.pos) add(cellToWorld(ev.pos.x), cellToWorld(ev.pos.y), ev.refund, SALE_COLOR);
         else if (ev.type === 'deposit' && ev.gold > 0) {
           const at = ev.pos || (map && map.base);   // deliveries land at the base dock
           if (at) add(cellToWorld(at.x), cellToWorld(at.y), ev.gold, DEPOSIT_COLOR[ev.color] || null);
