@@ -26,6 +26,17 @@ export const DEPOSIT_TIERS = Object.freeze(['common', 'uncommon', 'rare']);
 /** Pad id prefix per role (hub, p1, r1, s1, b1, x1 — the ids the draft layout and the model's tests use). */
 export const PAD_PREFIX = Object.freeze({ hub: 'hub', power: 'p', rig: 'r', storage: 's', bay: 'b', spare: 'x' });
 export const HEIGHT = Object.freeze({ LOW: 0, RAMP: 1, TOP: 2 });
+/**
+ * Pad sizes in cells (owner 2026-11-08: "the outpost scale is very large compared to the size of the map .. reduce the
+ * structures and placement grid by 50%"): the hub 3 × 3 (the battle base's footprint), every other pad 2 × 2. The
+ * building models are authored for the earlier 6 × 6 hub and 4 × 4 pads (MODEL_PAD_SIZE); padModelScale scales them.
+ */
+export const PAD_SIZE = Object.freeze({ hub: 3, pad: 2 });
+export const MODEL_PAD_SIZE = Object.freeze({ hub: 6, pad: 4 });
+/** A role's pad size in cells. */
+export const padSizeFor = (role) => (role === 'hub' ? PAD_SIZE.hub : PAD_SIZE.pad);
+/** The scale a building model (and its pad dressing) draws at on pad p: its size over the size the model was made for. */
+export const padModelScale = (p) => (p && p.w ? p.w / (p.role === 'hub' ? MODEL_PAD_SIZE.hub : MODEL_PAD_SIZE.pad) : 1);
 
 /** Power Station I's reach in cells (Outpost_Structures, design §4.5: 10). */
 export const defaultPowerReach = () => (structureDef('power', 1) || {}).reach || 10;
@@ -105,11 +116,14 @@ export function stampOutpost(g, layout) {
       set(px, py, TERRAIN.DIRT); clear[py * cols + px] = 1;
     }
   }
-  // remote pads: a flat clearing with a 1-cell margin of grass
+  // remote pads: a flat dirt yard the size of the building's model footprint (MODEL_PAD_SIZE: the half-scale pad sits
+  // in its middle), with a 1-cell margin of grass
   for (const p of (layout.pads || []).filter((q) => q.remote)) {
-    for (let y = p.y - 1; y <= p.y + p.h; y++) for (let x = p.x - 1; x <= p.x + p.w; x++) {
+    const gw = Math.max(0, Math.floor((MODEL_PAD_SIZE.pad - p.w) / 2)), gh = Math.max(0, Math.floor((MODEL_PAD_SIZE.pad - p.h) / 2));
+    const yard = { x: p.x - gw, y: p.y - gh, w: p.w + 2 * gw, h: p.h + 2 * gh };
+    for (let y = yard.y - 1; y <= yard.y + yard.h; y++) for (let x = yard.x - 1; x <= yard.x + yard.w; x++) {
       if (!ok(x, y) || (mesa && inMesa(mesa, x, y))) continue;
-      set(x, y, inPad(p, x, y) ? TERRAIN.DIRT : (g.blocking[y * cols + x] ? TERRAIN.GRASS : g.terrain[y * cols + x]));
+      set(x, y, inRect(yard, x, y) ? TERRAIN.DIRT : (g.blocking[y * cols + x] ? TERRAIN.GRASS : g.terrain[y * cols + x]));
       clear[y * cols + x] = 1;
     }
   }

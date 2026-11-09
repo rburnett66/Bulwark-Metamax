@@ -21,6 +21,7 @@ import { createEngineFx } from '../../render3d/ships/engineFx.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
 import { popColour } from './sellTimeline.js';
 import { structureDef } from '../../data/outpost.js';
+import { padModelScale } from '../../terrain/outpostPads.js';
 
 const PAD_Y = 0.05;
 const C = { plate: 0x3b4047, plateTop: 0x4a5058, edge: 0x24282d, trim: 0xeb5c0d, cyan: 0x3fd0ff, rock: 0x8a8076, rockDark: 0x6a625b };
@@ -140,7 +141,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       const rnd = () => { h = (Math.imul(h ^ (h >>> 15), 2246822519) + 0x9e3779b9) >>> 0; return h / 4294967296; };
       const dim = d.locked ? 0.62 : 1, oc = new THREE.Color(d.colour);
       // a rig stands on it: a low cut face at the pad's front edge, where the rig works; else the whole outcrop
-      const cx = d.x, cz = d.mined ? d.z + 1.62 : d.z, spread = d.mined ? 1.3 : 1.35, k = d.mined ? 0.55 : 1;
+      const ps = padModelScale(pads.get(d.pad));   // the outcrop at its pad's scale (half scale, owner 2026-11-08)
+      const cx = d.x, cz = d.mined ? d.z + 1.62 * ps : d.z, spread = (d.mined ? 1.3 : 1.35) * ps, k = (d.mined ? 0.55 : 1) * ps;
       const nRock = d.mined ? 5 : 8, nCrys = d.mined ? 4 : 6;
       for (let i = 0; i < nRock; i++) {
         const s = (0.32 + rnd() * 0.42) * k;
@@ -158,8 +160,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
         crystals.push(colorize(THREE, geo, c));
       }
       if (d.locked) {   // a padlock over the dim outcrop
-        const lx = cx, ly = 2.0, lz = cz;
-        locks.push(new THREE.BoxGeometry(0.62, 0.5, 0.2).translate(lx, ly, lz), new THREE.TorusGeometry(0.2, 0.06, 6, 12, Math.PI).translate(lx, ly + 0.25, lz));
+        const lx = cx, ly = 2.0 * ps, lz = cz;
+        locks.push(new THREE.BoxGeometry(0.62, 0.5, 0.2).scale(ps, ps, ps).translate(lx, ly, lz), new THREE.TorusGeometry(0.2, 0.06, 6, 12, Math.PI).scale(ps, ps, ps).translate(lx, ly + 0.25 * ps, lz));
       }
     }
     if (rocks.length) { const m = new THREE.Mesh(mergeGeos(THREE, rocks, [], true), rockMat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
@@ -224,13 +226,19 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     built.set(item.pad, entry);
     const inst = hasModel(modelSlug(item.kind, item.tier, item.rigHead)) ? await kit.make(slug) : placeholderBay(item.kind);
     if (built.get(item.pad) !== entry) { if (inst) inst.dispose(); return null; }
-    if (cur && cur.inst) { root.remove(cur.inst.object); cur.inst.dispose(); }
+    if (cur && cur.inst) { root.remove(cur.holder || cur.inst.object); cur.inst.dispose(); }
     entry.inst = inst; entry.loading = null;
     if (inst) {
-      const p = pads.get(item.pad), [cx, cz] = centre(p);
-      inst.object.position.set(cx, PAD_Y + 0.07, cz);
+      // the model sits in a holder scaled to its pad (half scale, owner 2026-11-08: padModelScale), so the model's own
+      // scale stays free for its look (rise) and its anchors still read in world space
+      const p = pads.get(item.pad), [cx, cz] = centre(p), holder = new THREE.Group();
+      holder.position.set(cx, PAD_Y + 0.07, cz);
+      holder.scale.setScalar(padModelScale(p));
+      holder.userData.pad = item.pad; holder.name = `outpost-building-${item.pad}`;
       inst.object.userData.pad = item.pad;
-      root.add(inst.object);
+      holder.add(inst.object);
+      entry.holder = holder;
+      root.add(holder);
       r.lights.invalidateShadows();
     }
     return entry;
@@ -254,7 +262,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
         e.hasDoor = setDoor(e.inst, !!item.unpowered || !!item.building);
       }
     }
-    for (const [pad, e] of built) if (!keep.has(pad)) { if (e.inst) { root.remove(e.inst.object); e.inst.dispose(); } built.delete(pad); lastLook.delete(pad); r.lights.invalidateShadows(); }
+    for (const [pad, e] of built) if (!keep.has(pad)) { if (e.inst) { root.remove(e.holder || e.inst.object); e.inst.dispose(); } built.delete(pad); lastLook.delete(pad); r.lights.invalidateShadows(); }
     return plan;
   }
   function setHologram(inst, fill) {
@@ -386,6 +394,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     const p = pads.get(want.pad); if (!p) return;
     const [cx, cz] = centre(p);
     e.group.position.set(cx, PAD_Y + 0.07, cz);
+    e.group.scale.setScalar(padModelScale(p));
     e.group.visible = true;
     const c = want.valid ? GHOST.ok : GHOST.bad;
     ghostBody.color.setHex(c); ghostHull.color.setHex(c);
@@ -440,7 +449,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: markerTexture(kind), depthTest: false, depthWrite: false, transparent: true, sizeAttenuation: false, toneMapped: false }));
       sp.scale.set(0.058, 0.058, 1); sp.renderOrder = 20; sp.name = `outpost-warning-${pad}`;
       const [cx, cz] = centre(pads.get(pad));
-      const e = built.get(pad), h = e && e.slug && kit.manifest[e.slug] ? kit.manifest[e.slug].height : 1.6;
+      const e = built.get(pad), h = (e && e.slug && kit.manifest[e.slug] ? kit.manifest[e.slug].height : 1.6) * padModelScale(pads.get(pad));
       sp.userData = { x: cx, y: h + 1.3, z: cz, ph: hash(pad) % 100 / 16 };
       sp.position.set(cx, h + 1.3, cz);
       root.add(sp);
@@ -457,8 +466,9 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       const a = (kit.manifest.storage && kit.manifest.storage.anchors && kit.manifest.storage.anchors.door) || [0, 0, 2.3];
       const geos = [new THREE.BoxGeometry(1.5, 1.15, 0.1).translate(0, 0.58, 0)];
       for (let i = 0; i < 3; i++) geos.push(new THREE.BoxGeometry(1.52, 0.08, 0.12).translate(0, 0.25 + i * 0.33, 0.01));
-      const m = new THREE.Mesh(mergeGeos(THREE, geos), shutterMat);
-      m.position.set(cx + a[0], PAD_Y + 0.07 + a[1], cz + a[2] - 0.12);
+      const m = new THREE.Mesh(mergeGeos(THREE, geos), shutterMat), ps = padModelScale(pads.get(pad));
+      m.scale.setScalar(ps);
+      m.position.set(cx + a[0] * ps, PAD_Y + 0.07 + a[1] * ps, cz + (a[2] - 0.12) * ps);
       m.name = `outpost-door-shut-${pad}`;
       root.add(m);
       doors.set(pad, m);

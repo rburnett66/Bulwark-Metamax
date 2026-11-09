@@ -37,7 +37,8 @@ test('overlapping pads and a pad on blocked or uneven ground are reported', () =
   g.terrain[r1.y * g.cols + r1.x] = TERRAIN.TREES;
   assert.ok(has(validateOutpostLayout(g), /pad r1 sits on 1 blocked cell/));
   const x1 = g.pads.find((p) => p.id === 'x1');
-  x1.x += 3;                                  // over the cliff rim
+  const rim = g.terrain.findIndex((t, i) => t === TERRAIN.CLIFF && g.heights[i] === HEIGHT.TOP && i % g.cols > 30);
+  Object.assign(x1, { x: rim % g.cols, y: Math.floor(rim / g.cols) });   // onto the cliff rim
   assert.ok(has(validateOutpostLayout(g), /pad x1 (sits on|is not flat)/));
 });
 

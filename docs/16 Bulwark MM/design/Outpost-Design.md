@@ -659,7 +659,7 @@ requirement (§2.4); repair only restores a defense's HP, and every defense carr
 
 Buildings sit on fixed pads; defenses are placed freely on the ring. The owner's view: "We will try this out but it
 unfortunately takes design freedom and strategy away from the player. We will see." The alternative, if play-testing
-agrees: buildings placed anywhere on the mesa top like towers, each a 4 × 4 footprint, with power reaching by distance
+agrees: buildings placed anywhere on the mesa top like towers, each a 2 × 2 footprint (the hub 3 × 3; half scale, owner 2026-11-08), with power reaching by distance
 (the reach rules in §4.5 already work by distance; the fixed conduit links and the pad layout in §9 would go).
 
 ## Dependencies

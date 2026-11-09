@@ -64,7 +64,8 @@
  *    and fights it where it stands. So a player who bought the setup, one Machine Gun and a couple of walls holds it
  *    while watching (owner 2026-11-07); with no gun it walks in.
  *  - The result: a breach the moment any raider standing on the mesa top comes within BREACH_REACH of a mesa
- *    building (any finished, non-remote pad, the hub included; design §5.2). Held once every raider is dead. A raid
+ *    building (any finished, non-remote pad, the hub included; design §5.2), or within its reach of the hub (the
+ *    battle's base reach: it stands and fires on the hub). Held once every raider is dead. A raid
  *    still undecided after RAID_MAX_SEC, or in which nothing moves, hurts or is hurt for RAID_STALL_SEC, is held (the
  *    survivors withdraw) and reports timedOut.
  *  - Deterministic: the sim is seeded with raidSeed(outpost.seed, raid) and steps only in FIXED_DT; no clock, no
@@ -79,6 +80,7 @@ import { referenceOutpost, powerGrids, windowMs } from './model.js';
 import { structureDef, raidFor } from '../data/outpost.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
 import { buildTerrainMap } from '../sim/mapgen.js';
+import { inBaseReach } from '../sim/combat.js';
 
 // buildTerrainMap reads a campaign map id for its workbook rows (resources, wave budgets); a raid replaces both, so
 // any valid id serves. Map 1 is used.
@@ -318,7 +320,7 @@ export function createRaid(outpost, raid = {}, opts = {}) {
   startNextWave(state);
 
   const buildingPads = buildingPadsOf(outpost, map);
-  const rects = buildingPads.map(toRect);
+  const rects = buildingPads.map(toRect), hubBuilt = buildingPads.some((p) => p.role === 'hub');
   const { cols: mc, rows: mr } = dims(map);
   const onTop = map.heights ? (u) => {
     const x = Math.round(u.pos.x), y = Math.round(u.pos.y);
@@ -412,7 +414,9 @@ export function createRaid(outpost, raid = {}, opts = {}) {
     for (const u of state.units.values()) {
       if (u.side !== 'attacker' || u.hp <= 0) continue;
       if (onTop && !onTop(u)) continue;           // below the mesa's cliff is not at a building
-      if (rects.some((r) => rectDist(r, u.pos.x, u.pos.y) <= BREACH_REACH)) { breachBy = u; return 'breach'; }
+      // at a building, or close enough to fire on the hub (the battle's base reach): with the 3 × 3 hub (half scale,
+      // owner 2026-11-08) a raider stops at its reach of the hub before it comes within BREACH_REACH of the pad
+      if (rects.some((r) => rectDist(r, u.pos.x, u.pos.y) <= BREACH_REACH) || (hubBuilt && inBaseReach(state, u))) { breachBy = u; return 'breach'; }
     }
     const w = state.waves;
     let alive = false;

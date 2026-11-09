@@ -27,11 +27,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const R = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..') + '/';
 const imp = (p) => import(pathToFileURL(R + p).href);
 const { generateTerrain, placeBase } = await imp('src/terrain/terrainGen.js');
-const { stampOutpost, deriveConduits, validateOutpostLayout } = await imp('src/terrain/outpostPads.js');
+const { stampOutpost, deriveConduits, validateOutpostLayout, padSizeFor } = await imp('src/terrain/outpostPads.js');
 const { PLANET_RECIPES, evaluate, passes } = await imp('tools/maps/faction-maps.mjs');
 const POWDER = JSON.parse(fs.readFileSync(R + 'content/maps/forge/powder-map-1.json', 'utf8'));
 
-const pad = (id, x, y, role, extra = {}) => ({ id, x, y, w: role === 'hub' ? 6 : 4, h: role === 'hub' ? 6 : 4, role, ...extra });
+const pad = (id, x, y, role, extra = {}) => ({ id, x, y, w: padSizeFor(role), h: padSizeFor(role), role, ...extra });
 
 /** Planet key (src/data/planets.js) → its faction slug (the Forge slot names, tools/maps/faction-maps.mjs). */
 export const PLANET_SLUGS = Object.freeze({
@@ -55,22 +55,26 @@ const IMP_TARGET = { powder: 19.7, air: 12.9, 'high-tech': 12.6, artillery: 19.4
  */
 const SHARED = {
     mesa: { cx: 35.5, cy: 14.5, rx: 10.5, ry: 9.5, ramps: [{ x: 24, y: 14, w: 3, h: 2 }, { x: 38, y: 23, w: 2, h: 2 }] },
+    // half scale (owner 2026-11-08): a 3 × 3 hub on the base's cells (30–32, 14–16) and 2 × 2 pads packed round it with
+    // 1-cell walkways — the bays north, the station and storage east, the uncommon rig beyond the station, the common
+    // rig south. The west half of the mesa (the west ramp's side) is left open for defenses. The remote rare site keeps
+    // its place in the west lowland (the pads centred in their authored clearings).
     pads: [
-      pad('hub', 28, 12, 'hub'),
-      pad('p1', 35, 12, 'power'),
-      pad('r1', 29, 19, 'rig'),
-      pad('s1', 35, 17, 'storage'),
-      pad('r2', 40, 14, 'rig'),
-      pad('b1', 30, 7, 'bay'),
-      pad('b2', 35, 7, 'bay'),
-      pad('x1', 40, 9, 'spare'),
-      pad('r3', 15, 17, 'rig', { remote: true }),
-      pad('p2', 15, 11, 'power', { remote: true }),
+      pad('hub', 30, 14, 'hub'),
+      pad('p1', 34, 13, 'power'),
+      pad('r1', 30, 18, 'rig'),
+      pad('s1', 34, 16, 'storage'),
+      pad('r2', 37, 13, 'rig'),
+      pad('b1', 29, 11, 'bay'),
+      pad('b2', 32, 11, 'bay'),
+      pad('x1', 35, 10, 'spare'),
+      pad('r3', 16, 18, 'rig', { remote: true }),
+      pad('p2', 16, 12, 'power', { remote: true }),
     ],
     deposits: [
-      { tier: 'common', x: 29, y: 19, pad: 'r1' },
-      { tier: 'uncommon', x: 42, y: 14, pad: 'r2' },
-      { tier: 'rare', x: 15, y: 19, pad: 'r3' },
+      { tier: 'common', x: 30, y: 18, pad: 'r1' },
+      { tier: 'uncommon', x: 37, y: 13, pad: 'r2' },
+      { tier: 'rare', x: 16, y: 18, pad: 'r3' },
     ],
     // design §2.3: a Cannon, a Machine Gun and a wall ring — the cannon covers the west ramp, the MG the south ramp and
     // the mesa's south-east corner. The walls CLOSE the ways onto the mesa (O7, measured on the raid sim): walls that
