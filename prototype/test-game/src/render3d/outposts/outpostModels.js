@@ -43,8 +43,31 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
   const manifest = await (await fetch(base + 'outposts.json')).json();
   const loader = new GLTFLoader();
   const files = new Map();
+  // Every GLB (every building, every LOD) carries the same three 1024² panel maps (normal, cavity, roughness). Kept
+  // apart they cost about 236 MB of GPU memory for a full outpost and iOS kills the tab (owner 2026-11-09 error
+  // report: the outpost opens, then the page reloads with no error); shared, one set is about 17 MB.
+  const shared = new Map();
+  // GLTFLoader hands each material its own texture copy with no name, so the key is the material and slot: every
+  // GLB's ship_body_v2 maps the same panel images (outpostModels.test.mjs checks the files stay that way).
+  const shareTextures = (gltf) => {
+    gltf.scene.traverse((o) => {
+      for (const mat of (Array.isArray(o.material) ? o.material : o.material ? [o.material] : [])) {
+        if (!mat.name) continue;
+        for (const k of Object.keys(mat)) {
+          const t = mat[k];
+          if (!t || !t.isTexture) continue;
+          const im = t.image || {};
+          const key = `${mat.name}|${k}|${im.width || 0}x${im.height || 0}|${t.channel || 0}|${t.flipY}|${t.colorSpace || ''}`;
+          const keep = shared.get(key);
+          if (!keep) { shared.set(key, t); continue; }
+          if (keep !== t) { mat[k] = keep; t.dispose(); }
+        }
+      }
+    });
+    return gltf;
+  };
   const load = (file) => {
-    if (!files.has(file)) files.set(file, new Promise((ok, fail) => loader.load(base + file, ok, undefined, fail)));
+    if (!files.has(file)) files.set(file, new Promise((ok, fail) => loader.load(base + file, (g) => ok(shareTextures(g)), undefined, fail)));
     return files.get(file);
   };
   const levels = tier === 'low' ? [1, 2] : [0, 1, 2];

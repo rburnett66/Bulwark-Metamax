@@ -25,6 +25,7 @@ test('catches uncaught errors, rejections, console.error and a lost GL context, 
   win.fire('error', { error: new TypeError('x is undefined'), filename: 'https://h/src/outpost/view/outpostView.js', lineno: 12, colno: 3 });
   win.fire('unhandledrejection', { reason: new Error('model fetch failed') });
   win.console.error('[outpost] close', new Error('boom'));
+  win.fire('webglcontextlost', { target: { __bwReleased: true } });   // let go on purpose: not logged
   win.fire('webglcontextlost', {});
   assert.equal(win.logged.length, 1, 'console.error still reaches the real console');
   const r = errorReport(win);
