@@ -253,6 +253,13 @@ ${SELPANEL_CSS}
 .op .op-sel .op-stat .k { color:#7f9fb2; } .op .op-sel .op-stat .v { color:#eaf6ff; font-weight:600; text-align:right; }
 .op .op-sel .op-swarn { color:#ffb36a; font-size:11px; }
 .op .op-sel .op-swhy { color:#8fa0b3; font-size:10.5px; }
+/* SELL RESOURCES in the panel: the bottom SELL button's gold, full width (owner 2026-11-09) */
+.op .op-sel .op-sellres { width:100%; margin-top:6px; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px;
+  border:1px solid var(--trim-hi); background:linear-gradient(180deg,#f6d27e,#D9A441 55%,#b9852c); color:#1a1206; }
+.op .op-sel .op-sellres b { font-family:Orbitron,sans-serif; font-weight:900; letter-spacing:.12em; }
+.op .op-sel .op-sellres span { font-weight:700; font-size:.9em; color:#3a2a08; }
+.op .op-sel .op-sellres:disabled { border-color:var(--line-hi); background:linear-gradient(180deg,#1f2732,#151b23); color:#6d7a8a; opacity:.9; }
+.op .op-sel .op-sellres:disabled span { color:#6d7a8a; }
 .op .op-sel .op-shead { color:#bfe0ff; font-size:11px; margin-top:4px; }
 .op .op-sel .op-snote { color:#8fa0b3; font-size:11px; }
 .op .op-sel .op-sbuild { display:flex; flex-direction:column; gap:4px; }
@@ -353,6 +360,8 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
   let toastTimer = 0, panelSel = null;
   const btns = new Map();   // the BUILD menu's buttons, by item id
   const keyHtml = (it) => (it.key ? `<b class="bw-bkey">${it.key}</b>` : '');
+  let lastSell = null;   // the bottom SELL button's state, which the panel's SELL RESOURCES copies
+  const ORE_KINDS = new Set(['rig', 'storage', 'resourceBay']);   // buildings that hold ore
 
   root.addEventListener('click', (e) => {
     const b = e.target.closest('button');
@@ -409,6 +418,9 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       A('sell').disabled = !s.enabled;
       A('sell').classList.toggle('ready', s.enabled);
       $('loads').textContent = s.sub;
+      lastSell = s;
+      const ps = root.querySelector('.op-sellres');   // the panel's copy follows the bottom button
+      if (ps) { ps.disabled = !s.enabled; ps.classList.toggle('ready', s.enabled); const sub = ps.querySelector('[data-k="psell"]'); if (sub) sub.textContent = s.sub; }
       A('repairAll').hidden = !h.shield.worn;
       $('repair').textContent = h.repairCost ? `${fmtGold(h.repairCost)} gold` : '';
       A('repairAll').disabled = h.repairCost > gold;
@@ -455,6 +467,13 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
           <button class="bw-btn" data-a="repair" data-id="${esc(id || '')}" ${rep && rep.enabled ? '' : 'disabled'}><b class="bw-key">R</b><span> ${rep ? `Repair (${fmtGold(rep.cost)}g)` : 'Repair'}</span></button></div>`;
         if (up && up.why) h += `<div class="op-swhy">Upgrade: ${esc(up.why)}</div>`;
         if (sell && sell.why) h += `<div class="op-swhy">Sell: ${esc(sell.why)}</div>`;
+      }
+      // SELL RESOURCES on a building that holds ore (owner 2026-11-09: "the sell button was off screen, there should be
+      // a duplicate sell resources on the build ux in the upper right corner when the building is selected"): the same
+      // sale as the bottom SELL button, in the same state
+      if (!m.empty && ORE_KINDS.has(m.kind)) {
+        const s = lastSell || { enabled: false, sub: '' };
+        h += `<button class="bw-btn op-sellres" data-a="sell" ${s.enabled ? '' : 'disabled'}><b>SELL RESOURCES</b><span data-k="psell">${esc(s.sub)}</span></button>`;
       }
       if (m.techs) h += `<div class="op-shead">Outpost tech</div><div class="op-slist">${m.techs.map((t) => `<div class="op-stat" title="${esc(t.effect)} · ${esc(t.note)}"><span class="k">${esc(t.name)}</span><span class="v op-tech-st ${t.state}">${t.state === 'owned' ? 'installed' : t.state === 'buy' ? 'available' : 'locked'}</span></div>`).join('')}</div>`;
       if (m.note) h += `<div class="op-snote">${esc(m.note)}</div>`;
