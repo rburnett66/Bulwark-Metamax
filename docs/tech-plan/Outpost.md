@@ -1005,6 +1005,17 @@ BACK), and on boot a chip over the menu offers it when the last session crashed 
 The report holds the version, the device and screen, and the entries with short stacks. Every storage call is wrapped,
 so private mode keeps the log in memory.
 
+## GPU memory on phones (as built, 2026-11-09)
+
+The first error report from the iPhone (owner 2026-11-09) showed the outpost opening fully and the page reloading two
+seconds later with no error: iOS killing the tab for memory. Every outpost GLB, at every LOD, embeds the same three
+1024² panel maps (normal, cavity, roughness), and three.js uploaded each copy: about 236 MB of textures for a full
+outpost. `createOutpostKit` now shares one texture per (material, slot) across all files and levels (about 18 MB);
+`outpostModels.test.mjs` checks every GLB maps the same image bytes into each slot, so a re-export that breaks that
+fails the suite. Opening the outpost also disposes the menu's live 3D stage (globes, capital ship) and the tech net,
+with `forceContextLoss`; the menu builds them again when the outpost closes. The error log marks a context released
+this way and does not report it.
+
 ## Dependencies
 
 | relation | document | what it holds that this plan does not restate |

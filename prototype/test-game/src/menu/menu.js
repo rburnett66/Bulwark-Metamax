@@ -519,7 +519,11 @@ export function createMenu(mountEl, cbs) {
   });
   async function openOutpost(planet) {
     outpostOpen = true;
-    if (stage) stage.pause();
+    // the menu's own 3D views (the live globes and capital ship, the tech net) hold GPU contexts too: let them go while
+    // the outpost is open (iOS killed the tab two seconds after the outpost opened, owner 2026-11-09 error report);
+    // syncStage and openTechNet build them again on the way back
+    if (stage) { try { stage.dispose(); } catch (e) { console.warn('[menu] stage release', e); } stage = null; }
+    if (net) { try { net.dispose(); } catch (e) { console.warn('[menu] tech net release', e); } net = null; }
     // the battle's 3D view rests behind the menu with its own GPU context: let it go while the outpost (a second full 3D
     // view) is open, so a phone holds one battle-sized scene at a time (iOS crash, owner 2026-11-07)
     if (cbs.onOutpostOpen) { try { cbs.onOutpostOpen(); } catch (e) { console.warn('[outpost] release', e); } }
