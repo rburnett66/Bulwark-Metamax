@@ -90,12 +90,18 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
               add.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, p.size, Math.min(0.16, sp * 0.03), 0.45 + 0.55 * k, 0.78 - 0.26 * k, 1 - 0.85 * k, f * (1 - 0.25 * k));
               break;
             }
+            if (p.shade === 2) {   // damage spark (SPARK_TINT.damage): leaves hot red, cools to a dark ember red
+              const c = Math.min(1, Math.max(0, (u - 0.1) / 0.55)), k = c * c * (3 - 2 * c);
+              add.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, p.size, Math.min(0.16, sp * 0.03), 1 - 0.35 * k, 0.28 - 0.2 * k, 0.18 - 0.14 * k, f * (1 - 0.2 * k));
+              break;
+            }
             const [r, g, b] = T(p, 1, 0.55 + 0.45 * hot, 0.15 + 0.6 * hot * hot);
             add.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, p.size, Math.min(0.22, sp * 0.035), r, g, b, f);
             break;
           }
           case K.EMBER: { const [r, g, b] = T(p, 1, 0.5, 0.15); add.push(p.x, p.y, p.z, 0, 0, 0, p.size * p.fl, 0, r, g, b, f); break; }
           case K.FLASH: if (p.shade === 1) add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, 0.55, 0.8, 1, f * f);   // repair arc: blue
+            else if (p.shade === 2) add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, 1, 0.3, 0.2, f * f);   // damage flicker: red
             else { const [r, g, b] = T(p, 1, 0.92, 0.7); add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, r, g, b, f * f); }
             break;
           case K.FIRE: {   // a flipbook flame on its own frame; tinted from hot to ember-red as it ages [MM-task_mvfqzjkm_7]
