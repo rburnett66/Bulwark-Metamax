@@ -22,11 +22,24 @@ import {
   initAudio, audioReady, paramsFor, playUtterance, startStatic, playSweep, playDrop, utterDuration,
   isMuted, setMuted, getChannelVolume, setChannelVolume, onAudioChange,
 } from './voice.js';
+import { MOOD_PORTRAITS } from '../data/portraitMoods.js';
 
 /* Authored portrait lookup: content/dialog/portraits/<slug(name)>.png, silhouette SVG fallback
    (same authored-art-with-fallback pattern as unitArt.js). */
 export function portraitSlug(name) { return String(name).replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase(); }
 const PORTRAIT_DIR = 'content/dialog/portraits/';
+export const MOODS = Object.freeze(['angry', 'neutral', 'happy']);
+/**
+ * A character's portrait <img>, with their expression when the art exists (owner 2026-11-09: "additional portraits that
+ * show angry, neutral, and happy expressions"): <slug>-<mood>.png, falling back to <slug>.png, then to nothing (the
+ * card's silhouette shows). dir: the portraits folder URL.
+ */
+export function portraitImg(name, mood = null, dir = PORTRAIT_DIR) {
+  const base = dir + portraitSlug(name) + '.png';
+  if (!mood || !MOODS.includes(mood) || !MOOD_PORTRAITS.has(portraitSlug(name))) return '<img alt="" src="' + base + '" onerror="this.remove()">';
+  const first = dir + portraitSlug(name) + '-' + mood + '.png';
+  return '<img alt="" src="' + first + '" data-base="' + base + '" onerror="if(this.dataset.base){this.src=this.dataset.base;this.removeAttribute(\'data-base\')}else{this.remove()}">';
+}
 
 /* Tool card skin (comm.html) at corner scale — same class names/roles, bw-comm prefixed. */
 const CSS = `
@@ -203,7 +216,7 @@ function cardHTML(d, f) {
     '<div class="bw-comm-bars"><i></i><i></i><i></i><i></i><i></i></div></div>' +
     '<div class="bw-comm-body">' +
     '<div class="bw-comm-portrait">' + (f.portrait || PORTRAIT) +
-    '<img alt="" src="' + PORTRAIT_DIR + portraitSlug(d.name) + '.png" onerror="this.remove()">' +
+    portraitImg(d.name, d.mood) +
     '<div class="bw-comm-pscan"></div><div class="bw-comm-veil"></div></div>' +
     '<div class="bw-comm-right"><div class="bw-comm-meta"></div><div class="bw-comm-text"></div>' +
     '<div class="bw-comm-foot"><span class="bw-comm-foot-l"></span><span class="bw-comm-qchip">◇ QUEST OFFER</span><span class="bw-comm-end">— END —</span></div>' +

@@ -34,6 +34,9 @@ import { characterCall } from '../comm/dialog.js';
 import { showContractModal } from '../render/contractModal.js';
 import { contractFor } from '../data/collectiveContract.js';
 import { PLANETS } from '../data/planets.js';
+import { createStandingsScreen } from '../menu/standingsScreen.js';
+import { loadSave, updateSave } from '../save/save.js';
+import { noteRapportEvent, standingOf } from '../save/standings.js';
 
 const CSS = `
 .rv .rv-rooms { position:absolute; inset:0; width:100%; height:100%; display:block; clip-path:inset(0 100% 0 0); }
@@ -109,6 +112,12 @@ async function openShipStage({ planet, tier, reduce, mount, label }) {
 }
 
 /** The comm card for a reveal: its own instance, lifted over the director (.rv-on), held lines, tap to close. */
+/** A call with the character's portrait expression from the player's rating with them (standings.js). */
+function withMood(call, name) {
+  if (!call) return call;
+  try { return { ...call, mood: standingOf(loadSave(), name).mood }; } catch (e) { return call; }
+}
+
 async function speak(doc, calls) {
   const comm = createComm(doc);
   try {
@@ -186,13 +195,13 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
     const L = d.loop((dt) => view.frame(dt, { flash: 0, camEase: 2.4 }));
     const pk = await packs(), R2 = await revealsData();
     const P = PLANETS[ship.key] || {};
-    const greet = ship.isCollective ? null : characterCall(pk, ship.key, ship.captain, R2.factionShip.greet, 'CAPTAIN');
-    const offer = ship.isCollective ? null : characterCall(pk, ship.key, ship.captain, R2.factionShip.offer, 'CAPTAIN');
+    const greet = ship.isCollective ? null : withMood(characterCall(pk, ship.key, ship.captain, R2.factionShip.greet, 'CAPTAIN'), ship.captain);
+    const offer = ship.isCollective ? null : withMood(characterCall(pk, ship.key, ship.captain, R2.factionShip.offer, 'CAPTAIN'), ship.captain);
     // the outpost contract comes first on every faction ship (Outpost-Design §2.1–2.3) [MM-story_mw5oe8km_k]: the
     // captain's outpost lines (their own greeting replaces the generic one), then its card; LATER keeps it in the
     // Mission Log, where it can be accepted. Then the generic offer line and the ship's missions, as before.
     const outpostLines = outpost && outpost.card
-      ? ((R2.factionShip.outpost || {})[ship.key] || []).map((l) => characterCall(pk, ship.key, ship.captain, { line: l.line, intent: l.intent || 'statement' }, 'CAPTAIN')).filter(Boolean)
+      ? ((R2.factionShip.outpost || {})[ship.key] || []).map((l) => withMood(characterCall(pk, ship.key, ship.captain, { line: l.line, intent: l.intent || 'statement' }, 'CAPTAIN'), ship.captain)).filter(Boolean)
       : [];
     if (outpost && outpost.card) {
       await speak(doc, outpostLines.length ? outpostLines : [greet]);
@@ -218,16 +227,33 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
     view.ship.setAll('normal');
   }
 
+  // the captain greets the player on every visit, +1 to their rating once a day (owner 2026-11-09: "greeting the player
+  // on a ship visit is +1" · "greeting limit is 1 per day": standings.noteRapportEvent keeps the day). A story boarding has spoken the greeting above; a free boarding shows it now and does not wait on it.
+  if (!ship.isCollective && ship.captain) {
+    if (!story) {
+      Promise.all([packs(), revealsData()]).then(([pk, R2]) => {
+        const g = withMood(characterCall(pk, ship.key, ship.captain, R2.factionShip.greet, 'CAPTAIN'), ship.captain);
+        if (g) speak(doc, [g]).catch((e) => console.warn('[reveal] greeting', e));
+      }).catch((e) => console.warn('[reveal] greeting', e));
+    }
+    try { updateSave((sv) => noteRapportEvent(sv, ship.captain, ship.key, 'greet')); } catch (e) { console.warn('[reveal] greeting rating', e); }
+  }
+
   // F7 — explore: leave the room, walk anywhere, DEPART when ready
   const where = doc.createElement('div'); where.className = 'rv-where'; where.textContent = ship.name.toUpperCase();
   const bar = doc.createElement('div'); bar.className = 'rv-bar';
-  bar.innerHTML = '<button class="rv-btn primary" type="button" data-depart>◂ DEPART</button><button class="rv-btn" type="button" data-leave>◂ LEAVE ROOM</button>';
+  bar.innerHTML = '<button class="rv-btn primary" type="button" data-depart>◂ DEPART</button><button class="rv-btn" type="button" data-standings aria-pressed="false">STANDINGS</button><button class="rv-btn" type="button" data-leave>◂ LEAVE ROOM</button>';
   d.ui.appendChild(where); d.ui.appendChild(bar);
+  // STANDINGS: every character's rating and every faction's relationship, only aboard a capital ship (owner 2026-11-09)
+  const standBtn = bar.querySelector('[data-standings]');
+  const setStand = (on) => { standBtn.textContent = on ? '✕ CLOSE STANDINGS' : 'STANDINGS'; standBtn.setAttribute('aria-pressed', String(on)); };
+  const standings = createStandingsScreen({ doc, host: d.root, onClose: () => { standings.close(); setStand(false); } });
+  standBtn.addEventListener('click', () => { if (standings.isOpen()) { standings.close(); setStand(false); } else { standings.open(); setStand(true); } });
   const leaveBtn = bar.querySelector('[data-leave]'); leaveBtn.style.display = 'none';
   let inRoom = null, departing = false, walking = false;
   leaveBtn.addEventListener('click', () => { inRoom = null; view.focus(null); leaveBtn.style.display = 'none'; where.textContent = ship.name.toUpperCase(); });
   const onPick = (e) => {
-    if (departing || walking) return;
+    if (departing || walking || standings.isOpen()) return;
     const hit = view.pick(e.clientX, e.clientY, roomCanvas.getBoundingClientRect()); if (!hit) return;
     walking = true; inRoom = hit.id; view.focus(hit.id, portrait() ? 0.9 : 0.6);
     where.textContent = ship.name.toUpperCase() + ' · ' + (roomOf(hit.id).name || hit.id).toUpperCase();
@@ -243,7 +269,7 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
   if (story) { inRoom = ship.room; leaveBtn.style.display = ''; }
   const L2 = d.loop((dt) => view.frame(dt, { flash: 0, camEase: 2.4 }));
   await new Promise((res) => bar.querySelector('[data-depart]').addEventListener('click', res, { once: true }));
-  departing = true; L2.stop(); where.remove(); bar.remove();
+  departing = true; L2.stop(); where.remove(); bar.remove(); standings.dispose();
   roomCanvas.removeEventListener('pointerup', onPick);
   // F8 — depart: the hull closes behind the scan line (the wipe in reverse) over the 3D flank, then black
   view.focus(null);
