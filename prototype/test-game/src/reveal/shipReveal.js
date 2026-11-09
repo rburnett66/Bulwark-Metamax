@@ -35,6 +35,8 @@ import { showContractModal } from '../render/contractModal.js';
 import { contractFor } from '../data/collectiveContract.js';
 import { PLANETS } from '../data/planets.js';
 import { createStandingsScreen } from '../menu/standingsScreen.js';
+import { loadSave, updateSave } from '../save/save.js';
+import { noteRapportEvent, standingOf } from '../save/standings.js';
 
 const CSS = `
 .rv .rv-rooms { position:absolute; inset:0; width:100%; height:100%; display:block; clip-path:inset(0 100% 0 0); }
@@ -110,6 +112,12 @@ async function openShipStage({ planet, tier, reduce, mount, label }) {
 }
 
 /** The comm card for a reveal: its own instance, lifted over the director (.rv-on), held lines, tap to close. */
+/** A call with the character's portrait expression from the player's rating with them (standings.js). */
+function withMood(call, name) {
+  if (!call) return call;
+  try { return { ...call, mood: standingOf(loadSave(), name).mood }; } catch (e) { return call; }
+}
+
 async function speak(doc, calls) {
   const comm = createComm(doc);
   try {
@@ -187,13 +195,13 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
     const L = d.loop((dt) => view.frame(dt, { flash: 0, camEase: 2.4 }));
     const pk = await packs(), R2 = await revealsData();
     const P = PLANETS[ship.key] || {};
-    const greet = ship.isCollective ? null : characterCall(pk, ship.key, ship.captain, R2.factionShip.greet, 'CAPTAIN');
-    const offer = ship.isCollective ? null : characterCall(pk, ship.key, ship.captain, R2.factionShip.offer, 'CAPTAIN');
+    const greet = ship.isCollective ? null : withMood(characterCall(pk, ship.key, ship.captain, R2.factionShip.greet, 'CAPTAIN'), ship.captain);
+    const offer = ship.isCollective ? null : withMood(characterCall(pk, ship.key, ship.captain, R2.factionShip.offer, 'CAPTAIN'), ship.captain);
     // the outpost contract comes first on every faction ship (Outpost-Design §2.1–2.3) [MM-story_mw5oe8km_k]: the
     // captain's outpost lines (their own greeting replaces the generic one), then its card; LATER keeps it in the
     // Mission Log, where it can be accepted. Then the generic offer line and the ship's missions, as before.
     const outpostLines = outpost && outpost.card
-      ? ((R2.factionShip.outpost || {})[ship.key] || []).map((l) => characterCall(pk, ship.key, ship.captain, { line: l.line, intent: l.intent || 'statement' }, 'CAPTAIN')).filter(Boolean)
+      ? ((R2.factionShip.outpost || {})[ship.key] || []).map((l) => withMood(characterCall(pk, ship.key, ship.captain, { line: l.line, intent: l.intent || 'statement' }, 'CAPTAIN'), ship.captain)).filter(Boolean)
       : [];
     if (outpost && outpost.card) {
       await speak(doc, outpostLines.length ? outpostLines : [greet]);
@@ -217,6 +225,18 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
     });
     L.stop();
     view.ship.setAll('normal');
+  }
+
+  // the captain greets the player on every visit, +1 to their rating (owner 2026-11-09: "greeting the player on a ship
+  // visit is +1"). A story boarding has spoken the greeting above; a free boarding shows it now and does not wait on it.
+  if (!ship.isCollective && ship.captain) {
+    if (!story) {
+      Promise.all([packs(), revealsData()]).then(([pk, R2]) => {
+        const g = withMood(characterCall(pk, ship.key, ship.captain, R2.factionShip.greet, 'CAPTAIN'), ship.captain);
+        if (g) speak(doc, [g]).catch((e) => console.warn('[reveal] greeting', e));
+      }).catch((e) => console.warn('[reveal] greeting', e));
+    }
+    try { updateSave((sv) => noteRapportEvent(sv, ship.captain, ship.key, 'greet')); } catch (e) { console.warn('[reveal] greeting rating', e); }
   }
 
   // F7 — explore: leave the room, walk anywhere, DEPART when ready

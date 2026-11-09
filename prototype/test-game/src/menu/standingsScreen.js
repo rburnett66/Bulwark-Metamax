@@ -13,7 +13,7 @@ import { characterStandings, factionStandings, ensureRapport, LOYALTY_TIERS } fr
 import { alignWord } from '../save/contracts.js';
 import { ensureMissionStyle } from './missionLog.js';
 import { esc, fsvg, factionColor } from './missionView.js';
-import { portraitSlug } from '../comm/commCard.js';
+import { portraitImg } from '../comm/commCard.js';
 
 export const STANDING_TABS = Object.freeze([['characters', 'Characters'], ['factions', 'Factions']]);
 const PORTRAITS = new URL('../../content/dialog/portraits/', import.meta.url).href;   // right from any page (game or review)
@@ -21,7 +21,7 @@ const PORTRAITS = new URL('../../content/dialog/portraits/', import.meta.url).hr
 export const BAND_VAR = Object.freeze({ trusted: '--s-ready', allied: '--s-ready', friendly: '--cyan2', neutral: '--s-active', wary: '--s-risk', hostile: '--s-failed', unmet: '--s-locked' });
 const ALIGN_NAME = Object.freeze({ AG: 'Absolute good', PG: 'Principled good', G: 'Good', CG: 'Chaotic good', N: 'Neutral', CE: 'Chaotic evil', E: 'Evil', PE: 'Principled evil', DE: 'Dark evil' });
 const signed = (n) => (n > 0 ? '+' : '') + Math.round(n).toLocaleString('en-US');
-const portrait = (name, cls) => `<span class="${cls}"><img alt="" src="${PORTRAITS}${portraitSlug(name)}.png" onerror="this.remove()"></span>`;
+const portrait = (name, cls, mood = null) => `<span class="${cls}">${portraitImg(name, mood, PORTRAITS)}</span>`;   // the rating's expression (angry / neutral / happy) when drawn
 
 const STYLE = String.raw`
 .bwm-ml .stand .rt{grid-template-columns:34px 1fr auto;border-top-color:var(--rc)}
@@ -48,7 +48,7 @@ const STYLE = String.raw`
 export function characterListHtml(groups, selected) {
   return groups.map((g) => `<section class="pband" style="--fc:${factionColor(g.key)}"><header>${fsvg(g.key)}<b>${esc(g.name)}</b><small>${esc(g.trope)}</small>
    <span class="pbt"><b class="num">${g.characters.filter((c) => c.met).length}</b> of ${g.characters.length} met</span></header>
-   <div class="rts">${g.characters.map((c) => `<button class="rt${c.met ? '' : ' unmet'}" data-char="${esc(c.name)}" aria-selected="${c.name === selected}" style="--rc:var(${BAND_VAR[c.band.key]})">${portrait(c.name, 'pt')}
+   <div class="rts">${g.characters.map((c) => `<button class="rt${c.met ? '' : ' unmet'}" data-char="${esc(c.name)}" aria-selected="${c.name === selected}" style="--rc:var(${BAND_VAR[c.band.key]})">${portrait(c.name, 'pt', c.met ? c.mood : null)}
     <span class="rtx"><b>${esc(c.name)}</b><span class="rb">${c.band.label}</span></span><span class="rtn num">${c.met ? signed(c.score) : '—'}</span></button>`).join('')}</div></section>`).join('');
 }
 
@@ -74,12 +74,13 @@ export function characterDetailHtml(groups, selected) {
   const c = g.characters.find((x) => x.name === selected) || g.characters[0];
   return `<button class="dback" data-sback>All characters</button>
   <div class="rdet" style="--rc:var(${BAND_VAR[c.band.key]});--fc:${factionColor(g.key)}">
-   ${portrait(c.name, 'bigpt')}<div class="rdn num">${c.met ? signed(c.score) : '—'}</div><span class="band">${c.band.label}</span>
+   ${portrait(c.name, 'bigpt', c.met ? c.mood : null)}<div class="rdn num">${c.met ? signed(c.score) : '—'}</div><span class="band">${c.band.label}</span>
    <h2>${esc(c.name)}</h2><div class="rdt">${ALIGN_NAME[c.align] || esc(c.align)}</div>
    <dl><dt>Faction</dt><dd>${fsvg(g.key)}${esc(g.name)}</dd>
     <dt>Missions kept</dt><dd class="num">${c.kept}</dd><dt>Missions broken</dt><dd class="num">${c.broken}</dd>
+    <dt>Visits</dt><dd class="num">${c.greets}</dd><dt>Trades</dt><dd class="num">${c.sales + c.purchases}</dd>
     <dt>Wants</dt><dd>${esc(c.motivation) || '—'}</dd></dl>
-   <p class="inote">${c.met ? 'Keeping the missions this character gives raises your rating with them; breaking or abandoning them lowers it.' : 'You have not taken a mission from this character yet.'}</p>
+   <p class="inote">${c.met ? 'Keeping the missions this character gives, visiting their ship and trading with them raise your rating; breaking or abandoning their missions lowers it.' : 'You have not dealt with this character yet.'}</p>
   </div>`;
 }
 

@@ -12,12 +12,19 @@
  *   abandoned         → ABANDONED (the decline cost)
  * It is written at the one place a mission ends (missions.js endMission → noteRapport) and kept in s.rapport, so a
  * failed mission dismissed from the log still counts. ensureRapport backfills an old save once from the missions it
- * still holds.
+ * still holds. Owner 2026-11-09 adds the everyday dealings (RAPPORT_GAIN, noteRapportEvent):
+ *   "greeting the player on a ship visit is +1"            → the ship's captain, once per boarding (shipReveal.js)
+ *   "selling items or purchasing items from character improve score"
+ *                                                            → SELL at an outpost: the planet ship's captain buys
+ *                                                              (outpost/view/session.js); a rare contract that sold
+ *                                                              something: the ship's contact (main.js); a purchase from
+ *                                                              a character: 'purchase' (no character sells yet)
+ * Each band also picks the character's portrait expression (moodFor: angry, neutral, happy).
  *
  * Factions: the loyalty ledger that already exists (s.loyalty by faction name, contracts.addLoyalty) and its tiers
  * (LOYALTY_TIERS: 100 / 260 / 520).
  *
- *   s.rapport = { [characterName]: { score, kept, broken, faction } }   s.rapportBackfilled = true
+ *   s.rapport = { [characterName]: { score, kept, broken, faction, greets?, sales?, purchases? } }   s.rapportBackfilled = true
  * Pure: no DOM.
  */
 import { LOYALTY_TIERS, rivalOf } from './contracts.js';
@@ -25,6 +32,9 @@ import '../data/factions.js';
 const REG = globalThis.BulwarkFactions;
 
 export const KEPT = 25, BROKEN = -45, ABANDONED = -30;
+/** The everyday dealings (owner 2026-11-09: a greeting is +1; selling to or buying from a character raises it). */
+export const RAPPORT_GAIN = Object.freeze({ greet: 1, sale: 1, purchase: 1 });
+const COUNTER = Object.freeze({ greet: 'greets', sale: 'sales', purchase: 'purchases' });
 const ABANDON_REASON = /abandon/i;
 
 /** The change a mission's end makes to its giver's rating. */
@@ -43,6 +53,37 @@ export function noteRapport(s, m, end, reason) {
   const r = book[g.name] || (book[g.name] = { score: 0, kept: 0, broken: 0, faction: g.faction || null });
   r.score += rapportDelta(m, end, reason);
   if (end === 'done') r.kept++; else r.broken++;
+}
+
+/** A greeting, sale or purchase with a character: + RAPPORT_GAIN[kind]. faction: the registry key. */
+export function noteRapportEvent(s, name, faction, kind) {
+  if (!s || !name || !RAPPORT_GAIN[kind]) return;
+  const book = s.rapport || (s.rapport = {});
+  const r = book[name] || (book[name] = { score: 0, kept: 0, broken: 0, faction: faction || null });
+  r.score += RAPPORT_GAIN[kind];
+  r[COUNTER[kind]] = (r[COUNTER[kind]] || 0) + 1;
+}
+
+/** The captain of a planet's capital ship (mission catalog capitalShips, keyed by planet name), or null. */
+export function captainOf(catalog, planetName) {
+  const cs = catalog && catalog.capitalShips && catalog.capitalShips[planetName];
+  return (cs && cs.captain) || null;
+}
+
+/** Has the player dealt with this character at all? */
+export const hasMet = (r) => !!(r && (r.kept || r.broken || r.greets || r.sales || r.purchases));
+
+/** The portrait expression a rating shows: angry when wary or worse, happy when friendly or better. */
+export function moodFor(bandKey) {
+  if (bandKey === 'hostile' || bandKey === 'wary') return 'angry';
+  if (bandKey === 'friendly' || bandKey === 'trusted' || bandKey === 'allied') return 'happy';
+  return 'neutral';
+}
+
+/** A character's rating band and mood from the save. → { band, mood } */
+export function standingOf(s, name) {
+  const r = s && s.rapport && s.rapport[name], met = hasMet(r), band = rapportBand(r ? r.score : 0, met);
+  return { band, mood: moodFor(band.key) };
 }
 
 /** Old saves: build the ledger once from the ended missions still in the log. → s */
@@ -86,9 +127,10 @@ export function characterStandings(s, packs) {
   return factions().filter((f) => byKey[f.key]).map((f) => ({
     key: f.key, name: f.name, trope: byKey[f.key].trope || '',
     characters: (byKey[f.key].characters || []).map((c) => {
-      const r = book[c.name] || null, met = !!(r && (r.kept || r.broken));
-      const score = r ? r.score : 0;
-      return { name: c.name, align: c.align, motivation: c.motivation || '', score, kept: r ? r.kept : 0, broken: r ? r.broken : 0, met, band: rapportBand(score, met) };
+      const r = book[c.name] || null, met = hasMet(r);
+      const score = r ? r.score : 0, band = rapportBand(score, met);
+      return { name: c.name, align: c.align, motivation: c.motivation || '', score, kept: r ? r.kept : 0, broken: r ? r.broken : 0,
+        greets: (r && r.greets) || 0, sales: (r && r.sales) || 0, purchases: (r && r.purchases) || 0, met, band, mood: moodFor(band.key) };
     }),
   }));
 }
@@ -103,7 +145,7 @@ export function factionStandings(s, packs = null) {
       key: f.key, name: f.name, loyalty: l, tier,
       prev: tier > 0 ? LOYALTY_TIERS[tier - 1] : 0, next: tier < LOYALTY_TIERS.length ? LOYALTY_TIERS[tier] : null,
       band: factionBand(l, tier), rival: rivalOf(f.name),
-      metCount: cast.filter((c) => book[c.name] && (book[c.name].kept || book[c.name].broken)).length, castCount: cast.length,
+      metCount: cast.filter((c) => hasMet(book[c.name])).length, castCount: cast.length,
     };
   });
 }

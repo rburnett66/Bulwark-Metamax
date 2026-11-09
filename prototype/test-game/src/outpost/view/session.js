@@ -20,6 +20,7 @@ import { startingOwned } from '../../data/techtree.js';
 import { PLANETS } from '../../data/planets.js';
 import { settleOutpost, flowCtx } from '../../save/missionFlow.js';
 import { bankOf } from '../../save/save.js';
+import { noteRapportEvent, captainOf } from '../../save/standings.js';
 import { structureDef, OUTPOST, OUTPOST_TECH_IDS } from '../../data/outpost.js';
 import { raidHookFor } from './raidSeam.js';
 import { awayReportModel } from './awayReport.js';
@@ -159,6 +160,8 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         s.outposts[planet] = r.outpost;
         if (r.cost) goldAdd(s, -r.cost);
         if (r.gold) goldAdd(s, r.gold);
+        // a sale to the planet's ship: its captain buys, +1 to their rating (owner 2026-11-09, standings.js)
+        if (action.type === 'sell' && r.gold) noteRapportEvent(s, captainOf(catalog, (PLANETS[planet] || {}).name), planet, 'sale');
         const settled = settle(s, now);
         out = { ok: true, outpost: r.outpost, cost: r.cost || 0, earned: r.gold || 0, loads: r.loads || null, gold: bankOf(s), settled };
       });

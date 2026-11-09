@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { noteRapport, ensureRapport, rapportDelta, rapportBand, factionBand, characterStandings, factionStandings, KEPT, BROKEN, ABANDONED } from './standings.js';
+import { noteRapport, noteRapportEvent, ensureRapport, rapportDelta, rapportBand, factionBand, characterStandings, factionStandings, captainOf, moodFor, standingOf, KEPT, BROKEN, ABANDONED, RAPPORT_GAIN } from './standings.js';
 
 const packs = JSON.parse(readFileSync(new URL('../../content/dialog/voicepacks.json', import.meta.url), 'utf8'));
 const mission = (name, impact = {}) => ({ giver: { name, faction: 'ground' }, impact });
@@ -51,4 +51,28 @@ test('all 81 characters by faction, and all nine factions with loyalty and the n
   const ground = rows.find((r) => r.key === 'ground');
   assert.equal(ground.tier, 1); assert.equal(ground.next, 260); assert.equal(ground.metCount, 1); assert.equal(ground.castCount, 9);
   assert.equal(rows.find((r) => r.key === 'air').band.label, 'Wary');
+});
+
+test('a greeting on each ship visit is +1; a sale or a purchase raises the rating too (owner 2026-11-09)', () => {
+  assert.deepEqual(RAPPORT_GAIN, { greet: 1, sale: 1, purchase: 1 });
+  const s = {};
+  noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'greet');
+  noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'greet');
+  noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'sale');
+  noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'purchase');
+  noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'bribe');   // not a dealing: ignored
+  assert.deepEqual(s.rapport['Colonel Aldric Vane'], { score: 4, kept: 0, broken: 0, faction: 'ground', greets: 2, sales: 1, purchases: 1 });
+  const c = characterStandings(s, packs)[0].characters.find((x) => x.name === 'Colonel Aldric Vane');
+  assert.equal(c.met, true, 'a visit counts as meeting them');
+  assert.equal(c.greets, 2); assert.equal(c.sales, 1);
+});
+
+test('the captain of a planet\'s ship, and the portrait expression a rating shows', () => {
+  const catalog = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
+  assert.equal(captainOf(catalog, 'Verdance'), 'Colonel Aldric Vane');
+  assert.equal(captainOf(catalog, 'Nowhere'), null);
+  assert.equal(moodFor('hostile'), 'angry'); assert.equal(moodFor('wary'), 'angry');
+  assert.equal(moodFor('neutral'), 'neutral'); assert.equal(moodFor('unmet'), 'neutral');
+  assert.equal(moodFor('friendly'), 'happy'); assert.equal(moodFor('trusted'), 'happy');
+  assert.equal(standingOf({ rapport: { X: { score: 70, kept: 2, broken: 0 } } }, 'X').mood, 'happy');
 });

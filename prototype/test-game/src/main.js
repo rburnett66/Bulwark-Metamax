@@ -38,6 +38,7 @@ import { RARE_OFFER, rareOfferEarned, rareContractFor, pickBuyer, settleRareCont
 import { addLoyalty } from './save/contracts.js';
 import { showContractModal } from './render/contractModal.js';
 import { ensureReveals, newlyDue, revealLine, shipArrived } from './save/reveals.js';
+import { noteRapportEvent } from './save/standings.js';
 import { PLANETS } from './data/planets.js';
 
 /**
@@ -1082,7 +1083,10 @@ export function boot(mountEl, seed) {
     const c = rareRun.contract;
     if (!c) return null;
     const settled = settleRareContract(c, (played.tally && played.tally.harvested && played.tally.harvested.rare) || 0);
-    return bankRareSale(sv, settled, { buyerFaction: c.buyerFaction, tally: played.tally, addLoyalty });
+    const out = bankRareSale(sv, settled, { buyerFaction: c.buyerFaction, tally: played.tally, addLoyalty });
+    // something sold: the contact who bought it rates the player higher (owner 2026-11-09, save/standings.js)
+    if (out && out.sold > 0 && c.contact) noteRapportEvent(sv, c.contact, c.buyer, 'sale');
+    return out;
   }
   async function offerRareContract() {
     if (mode !== 'play' || !currentMapId || rareRun.offered || !missionCatalog) return;
