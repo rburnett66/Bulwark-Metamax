@@ -696,7 +696,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
     stop() { running = false; controls.enabled = false; if (raf) win.cancelAnimationFrame(raf); raf = 0; selId = null; hovId = null; tip.style.opacity = 0; renderPanel(); },
     refresh,
     select: (id) => select(id, true),
-    dispose() { api.stop(); win.removeEventListener('keydown', onKey); win.removeEventListener('resize', resize); controls.dispose(); renderer.dispose(); root.remove(); },
+    dispose() { api.stop(); win.removeEventListener('keydown', onKey); win.removeEventListener('resize', resize); controls.dispose(); renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) { /* already gone */ } root.remove(); },
     debug: { V, BY, BUYABLE, get ctx() { return ctx; } },
   };
   return api;

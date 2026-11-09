@@ -69,8 +69,27 @@ export function installErrorLog(win, opts = {}) {
     push('error', `${d.text}${e && e.filename ? ` (${e.filename.split('/').pop()}:${e.lineno}:${e.colno})` : ''}`, d.stack);
   });
   win.addEventListener('unhandledrejection', (e) => { const d = describe(e && e.reason); push('reject', d.text, d.stack); });
-  // a lost WebGL context does not bubble; a capture listener on the window still sees it
-  win.addEventListener('webglcontextlost', () => push('gl', 'WebGL context lost'), true);
+  // a lost WebGL context does not bubble; a capture listener on the window still sees it. A context the game lets go
+  // on purpose (renderer.forceContextLoss → WEBGL_lose_context.loseContext) is marked first and is not an error.
+  for (const C of [win.WebGLRenderingContext, win.WebGL2RenderingContext]) {
+    if (!C || !C.prototype || C.prototype.getExtension.__bwWrapped) continue;
+    const orig = C.prototype.getExtension;
+    const wrapped = function getExtension(name) {
+      const ext = orig.call(this, name);
+      if (ext && /lose_context/i.test(String(name)) && !ext.__bwWrapped) {
+        const lose = ext.loseContext.bind(ext), canvas = this.canvas;
+        ext.loseContext = () => { try { if (canvas) canvas.__bwReleased = true; } catch (_) { /* */ } return lose(); };
+        ext.__bwWrapped = true;
+      }
+      return ext;
+    };
+    wrapped.__bwWrapped = true;
+    C.prototype.getExtension = wrapped;
+  }
+  win.addEventListener('webglcontextlost', (e) => {
+    if (e && e.target && e.target.__bwReleased) return;
+    push('gl', 'WebGL context lost');
+  }, true);
   const con = win.console;
   if (con && typeof con.error === 'function') {
     const orig = con.error.bind(con);

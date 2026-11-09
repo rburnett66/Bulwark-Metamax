@@ -271,7 +271,8 @@ export function createMenuStage(THREE, root, { pixelRatio } = {}) {
       if (craft) craft.dispose();
       for (const v of ships.values()) if (typeof v === 'object') v.fx.dispose();
       sphere.dispose(); litMat.dispose(); glowMat.dispose(); plinthGeo.dispose(); plinthMat.dispose();
-      renderer.dispose(); canvas.remove(); root.classList.remove('bwm-live');
+      renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) { /* already gone */ }
+      canvas.remove(); root.classList.remove('bwm-live');
     },
   };
   return api;
