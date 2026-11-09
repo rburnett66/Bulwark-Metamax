@@ -87,7 +87,9 @@ Verdance's; every planet uses the same rules with its own three ores.
 
 - A building **under construction** shows dust and welding sparks, and does nothing until it is finished.
 - **Sell** (X on a building's panel) refunds **50%** of what it cost.
-- **Repair** (R on a defense, or REPAIR ALL) costs **1 gold per HP**.
+- **Repair** (R on a defense, or REPAIR ALL) costs the defense's **value × the share of its HP that is missing**: a
+  Machine Gun I at half HP costs half its value to repair.
+- A **damaged defense throws red sparks** until it is repaired (more the worse it is).
 - Defenses cost **4×** their battle price: an outpost defense lasts for days, not one map.
 
 ### R7. Harvesters (the surface)
