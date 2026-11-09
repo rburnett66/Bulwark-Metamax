@@ -253,8 +253,9 @@ ${SELPANEL_CSS}
 .op .op-sel .op-stat .k { color:#7f9fb2; } .op .op-sel .op-stat .v { color:#eaf6ff; font-weight:600; text-align:right; }
 .op .op-sel .op-swarn { color:#ffb36a; font-size:11px; }
 .op .op-sel .op-swhy { color:#8fa0b3; font-size:10.5px; }
-/* SELL RESOURCES in the panel: the bottom SELL button's gold, full width (owner 2026-11-09) */
-.op .op-sel .op-sellres { width:100%; margin-top:6px; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px;
+/* SELL RESOURCES in the panel: the bottom SELL button's gold, full width, one slim line (owner 2026-11-09: "half as tall") */
+.op .op-sel .op-sellres { width:100%; margin-top:6px; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:3px 10px;
+  white-space:nowrap; line-height:1.2; min-height:0; font-size:.92em;
   border:1px solid var(--trim-hi); background:linear-gradient(180deg,#f6d27e,#D9A441 55%,#b9852c); color:#1a1206; }
 .op .op-sel .op-sellres b { font-family:Orbitron,sans-serif; font-weight:900; letter-spacing:.12em; }
 .op .op-sel .op-sellres span { font-weight:700; font-size:.9em; color:#3a2a08; }
