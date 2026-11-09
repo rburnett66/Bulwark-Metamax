@@ -84,7 +84,9 @@ export function resourceInfoHtml(m) {
 }
 
 export const RESOURCE_INFO_CSS = `
-.bw-resinfo { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); width:min(380px, calc(100vw - 24px)); z-index:62;
+/* between the minimap and the fullscreen button, above both (hud.js: THE OBJECT WINDOW, owner 2026-11-09) */
+.bw-resinfo { position:absolute; left:var(--obj-left, 144px); right:var(--obj-right, 96px); margin:0 auto; width:auto; max-width:380px; box-sizing:border-box;
+  bottom:calc(6px + env(safe-area-inset-bottom, 0px)); z-index:68;
   pointer-events:auto; display:none; box-sizing:border-box; padding:12px 14px 10px; border-radius:10px;
   background:linear-gradient(180deg, rgba(16,22,30,.96), rgba(10,14,20,.96)); border:1px solid #3a4a5a;
   border-top:3px solid var(--c, #58a6ff); box-shadow:0 10px 30px rgba(0,0,0,.45); font-family:Rajdhani, system-ui, sans-serif; color:#dbe6f0; }
@@ -103,5 +105,5 @@ export const RESOURCE_INFO_CSS = `
 .bw-resinfo .r { display:flex; justify-content:space-between; gap:12px; font-size:13px; }
 .bw-resinfo .k { color:#8fa4b8; }
 .bw-resinfo .v { color:#e8f2fa; font-weight:600; text-align:right; font-variant-numeric:tabular-nums; }
-@media (max-height: 460px) { .bw-resinfo { bottom:6px; padding:8px 12px 6px; } .bw-resinfo .role { display:none; } .bw-resinfo .note { margin:4px 0 2px; font-size:13px; } }
+@media (max-height: 460px) { .bw-resinfo { padding:8px 12px 6px; } .bw-resinfo .role { display:none; } .bw-resinfo .note { margin:4px 0 2px; font-size:13px; } }
 `;
