@@ -42,6 +42,8 @@ import { harvestRunning, harvestPlan, surfaceFieldGroups, fieldStock } from '../
 import { harvestRates } from '../../data/outpost.js';
 import { harvesterUnits } from './harvestDrive.js';
 import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
+import { crumb } from '../../diag/errorLog.js';
+import { reportButton } from '../../diag/reportPanel.js';
 
 const ROOT = new URL('../../../', import.meta.url).href;   // the game root (prototype/test-game/)
 const LIVE_TICK = 1;   // seconds between live advances of the outpost
@@ -60,6 +62,7 @@ export async function openOutpostView(opts = {}) {
   const abandoned = new Promise((ok) => { stage.onAbandon = () => ok({ closed: Promise.resolve(), close() {}, handle: null }); });
   try { return await Promise.race([openOutpostViewInner(opts, stage), abandoned]); } catch (e) {
     console.error('[outpost] the outpost view failed at', stage.step, e);
+    crumb(`outpost: failed at ${stage.step}`);
     if (!stage.host || !stage.host.isConnected) throw e;
     return loadingFailed(stage, `Could not land (${stage.step}): ${(e && e.message) || e}`);
   }
@@ -79,7 +82,7 @@ function loadingFailed(stage, text) {
   const back = doc.createElement('button'); back.textContent = 'BACK';
   Object.assign(back.style, { font: '700 14px/1 Rajdhani, system-ui, sans-serif', letterSpacing: '.2em', padding: '12px 28px', background: '#D9A441', color: '#1a1206', border: '0', cursor: 'pointer' });
   back.addEventListener('click', close);
-  box.append(msg, back); stage.loading.appendChild(box);
+  box.append(msg, back, reportButton(doc)); stage.loading.appendChild(box);
   return { closed, close, handle: null };
 }
 
@@ -110,13 +113,17 @@ async function openOutpostViewInner(opts, stage) {
   const stepLine = doc.createElement('div');
   Object.assign(stepLine.style, { position: 'absolute', left: '0', right: '0', top: 'calc(50% + 22px)', textAlign: 'center', font: '600 11px/1.4 Rajdhani, system-ui, sans-serif', letterSpacing: '.18em', color: '#6d7a8a' });
   loading.appendChild(stepLine);
-  const step = (name) => { stage.step = name; stepLine.textContent = name.toUpperCase(); };
+  const step = (name) => { stage.step = name; stepLine.textContent = name.toUpperCase(); crumb(`outpost: ${name}`); };
   stage.watchdog = setTimeout(() => {
     if (!loading.isConnected) return;
     const b = doc.createElement('button'); b.textContent = 'BACK';
     Object.assign(b.style, { position: 'absolute', left: '50%', top: 'calc(50% + 52px)', transform: 'translateX(-50%)', font: '700 13px/1 Rajdhani, system-ui, sans-serif', letterSpacing: '.2em', padding: '10px 24px', background: '#1f2732', color: '#dfe7ef', border: '1px solid #3a4655', cursor: 'pointer' });
-    b.addEventListener('click', () => { stage.abandoned = true; host.remove(); if (stage.onAbandon) stage.onAbandon(); });
+    b.addEventListener('click', () => { stage.abandoned = true; crumb('outpost: closed'); host.remove(); if (stage.onAbandon) stage.onAbandon(); });
     loading.appendChild(b);
+    // the error report under BACK (the stall may be an error the phone has no console for)
+    const rb = reportButton(doc);
+    Object.assign(rb.style, { position: 'absolute', left: '50%', top: 'calc(50% + 100px)', transform: 'translateX(-50%)' });
+    loading.appendChild(rb);
   }, 12000);
   step('reading the map');
 
@@ -568,6 +575,7 @@ async function openOutpostViewInner(opts, stage) {
   function close() {
     if (closed) return;
     closed = true;
+    crumb('outpost: closed');
     win.cancelAnimationFrame(raf);
     canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove);
     canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onCtx);
@@ -587,6 +595,7 @@ async function openOutpostViewInner(opts, stage) {
   clearTimeout(stage.watchdog);
   if (stage.abandoned) { close(); return { closed: closedP, close, handle }; }
   loading.remove();
+  crumb('outpost: open');
   if (opened.away.show) hud.report(opened.away, { reduced });
   else if (opened.banked && Object.keys(opened.banked).length) hud.toast(`Hopper emptied into your inventory · +${fmtGold(Object.values(opened.banked).reduce((a, b) => a + b, 0))}`);
   raf = win.requestAnimationFrame(frame);

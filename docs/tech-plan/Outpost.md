@@ -992,6 +992,19 @@ that UX instead of building something totally new. If we need to add outpost con
   every tier's cost. Refused for the hub, anything still building, a unit on the Upgrade Bay (and the bay while it
   works), and a Mining Station with ore in its bay.
 
+## Error report on phones (as built, 2026-11-09)
+
+Owner 2026-11-09: "I can't get error logs from ios browser .. what should I try" → option 3, "Copy error report",
+approved. `src/diag/errorLog.js` is installed by `index.html` before the game modules load. It keeps the last 40
+uncaught errors, failed promises, `console.error` calls and lost WebGL contexts in `localStorage`, with breadcrumbs
+for each outpost loading step and for `outpost: open`, `outpost: closed` and `outpost: failed`. A repeat of the last
+entry counts up rather than flooding the log. The log survives a reload, so when iOS kills the tab mid-outpost ("A
+problem repeatedly occurred") the next load sees a session that ended inside the outpost (`lastSessionCrashed`).
+`src/diag/reportPanel.js` puts COPY ERROR REPORT on the outpost's failure card and its stalled-load screen (under
+BACK), and on boot a chip over the menu offers it when the last session crashed in the outpost or logged an error.
+The report holds the version, the device and screen, and the entries with short stacks. Every storage call is wrapped,
+so private mode keeps the log in memory.
+
 ## Dependencies
 
 | relation | document | what it holds that this plan does not restate |
