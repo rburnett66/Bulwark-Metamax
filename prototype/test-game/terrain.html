@@ -251,7 +251,7 @@
 import { generateTerrain, placeBase, generateResources, generateEdgeSpawns, TERRAIN_NAME, TERRAIN_COLOR, RESOURCE_COLOR, LANE_COLOR, BLOCKING, TERRAIN } from './src/terrain/terrainGen.js';
 import { WORLD, BASE, WAVE_WINDOWS, attackSide } from './content/maps/wave-windows.js';
 import { bakeTerrain, DEFAULT_STACK } from './src/terrain/terrainBake.js?v=7';
-import { stampOutpost, deriveConduits, validateOutpostLayout, padAt, nextPadId, firstStation, defaultPowerReach, HEIGHT } from './src/terrain/outpostPads.js';
+import { stampOutpost, deriveConduits, validateOutpostLayout, padAt, nextPadId, firstStation, defaultPowerReach, HEIGHT, padSizeFor } from './src/terrain/outpostPads.js';
 import { oresOf } from './src/data/ores.js';
 import { MAPDATA } from './content/maps/mapdata.js';
 
@@ -973,7 +973,7 @@ cv.addEventListener('pointerdown', (e) => {
   if (op.tool === 'pad') {
     if (e.button === 2) { if (hit) opDeletePad(hit.id); return; }
     if (hit) { op.sel = hit.id; op.drag = { pad: hit, dx: x - hit.x, dy: y - hit.y, moved: false }; cv.setPointerCapture(e.pointerId); $('opRole').value = hit.role; $('opRemote').checked = !!hit.remote; redraw(); opSyncInputs(); return; }
-    const role = $('opRole').value, size = role === 'hub' ? 6 : 4;
+    const role = $('opRole').value, size = padSizeFor(role);
     const p = { id: nextPadId(op, role), x: Math.min(x, last.cols - size), y: Math.min(y, last.rows - size), w: size, h: size, role };
     if ($('opRemote').checked) p.remote = true;
     op.pads.push(p); op.sel = p.id; opRender(); return;

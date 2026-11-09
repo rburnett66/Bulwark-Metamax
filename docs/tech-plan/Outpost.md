@@ -660,8 +660,16 @@ deposit's debris emitter runs at about 3× its particle rate with larger chunks.
 - **Material contract.** Matches the concept image: light grey and white panels, dark grey chamfered bases, orange
   trim, cyan emissive. The trim is its own material slot (`trim`), so each faction's colour can be set at load time
   (design §8.2). Emissive slots are named `glow_*` so the existing bloom and `isGlowKey` pick them up.
-- **Scale.** One pad is 4 × 4 battle cells. The hub's landing pad is 6 × 6. The parked shuttle reads at about the
-  size of a battle aircraft.
+- **Scale.** One pad is 2 × 2 battle cells and the hub's landing pad 3 × 3, the battle base's footprint (owner
+  2026-11-08: "the outpost scale is very large compared to the size of the map .. reduce the structures and placement
+  grid by 50%"; it was 4 × 4 and 6 × 6). The models are still authored for the 4 × 4 and 6 × 6 pads
+  (`outpostPads.MODEL_PAD_SIZE`); the view draws each one in a holder scaled by `padModelScale(pad)` (0.5), and the
+  deposits, ghost, warning markers and door shutter take the same scale. The pads are packed round the hub at half
+  spacing with 1-cell walkways (`tools/maps/outpost-maps.mjs` SHARED); the mesa itself is unchanged, so its west half
+  is open for defenses. A remote pad keeps its 4 × 4 dirt yard (`stampOutpost`), so the terrain and the bakes did
+  not change. Raids: with the 3 × 3 hub a raider stops at its reach of the hub before it comes within
+  `BREACH_REACH` of the pad, so standing in the battle's base reach (`combat.inBaseReach`) on the mesa top is also a
+  breach; the measured holds (§5.2) are unchanged.
 - **States.** Building (rises in steps with a cool tint, as towers do today), online, unpowered (emissive off),
   damaged defenses (darkened, sparking, by their HP), upgrading (warm tint). These follow `lifecycleLook` in `render3d/structures/models.js`.
 - **Animation clips (built, O5).** Moving parts are baked into the GLB as looping glTF clips, one per node, named
@@ -800,7 +808,7 @@ the map. `tools/maps/outpost-maps.mjs` holds the authored layout, the seed searc
 `tools/maps/outpost-maps.test.mjs` keeps the file on its recipe, in the guardrails, equal to the node generator and in
 step with its bake, like `faction-maps.test.mjs`. `src/outpost/outpostMap.js` `outpostMapFor(planet)` loads it for the
 model and views, falling back to `DRAFT_LAYOUT`. **Framing:** the views frame the mesa, not the 64 × 32 map — on a
-390 × 844 phone the 23 × 21-cell mesa frame fills the width at about 17 px a cell (a 4 × 4 pad is about 68 px), using
+390 × 844 phone the 23 × 21-cell mesa frame fills the width at about 17 px a cell (a 2 × 2 pad is about 34 px), using
 about 360 px of height; the 3D terrain review (`tools/terrain/index.html?faction=powder&map=outpost`) fits the battle
 camera to the same frame.
 
