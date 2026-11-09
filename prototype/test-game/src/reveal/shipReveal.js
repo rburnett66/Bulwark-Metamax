@@ -227,8 +227,8 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
     view.ship.setAll('normal');
   }
 
-  // the captain greets the player on every visit, +1 to their rating (owner 2026-11-09: "greeting the player on a ship
-  // visit is +1"). A story boarding has spoken the greeting above; a free boarding shows it now and does not wait on it.
+  // the captain greets the player on every visit, +1 to their rating once a day (owner 2026-11-09: "greeting the player
+  // on a ship visit is +1" · "greeting limit is 1 per day": standings.noteRapportEvent keeps the day). A story boarding has spoken the greeting above; a free boarding shows it now and does not wait on it.
   if (!ship.isCollective && ship.captain) {
     if (!story) {
       Promise.all([packs(), revealsData()]).then(([pk, R2]) => {

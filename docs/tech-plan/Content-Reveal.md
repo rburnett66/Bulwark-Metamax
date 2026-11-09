@@ -266,7 +266,8 @@ the players relationship with each faction. So players need to visit capital shi
   the character also improve scores, selling items or purchasing items from character improve score"):
   `standings.RAPPORT_GAIN` is +1 each for a greeting, a sale and a purchase (`noteRapportEvent`, counted as visits and
   trades in the detail pane). The captain greets on every boarding (`shipReveal.js`: a story boarding speaks it; a free
-  boarding shows it on the comm card without waiting) and that counts once per boarding. SELL at an outpost is a sale
+  boarding shows it on the comm card without waiting); the +1 counts once per local day per character (owner
+  2026-11-09: "greeting limit is 1 per day"; `rapport[name].greetDay`). SELL at an outpost is a sale
   to the planet's captain (`outpost/view/session.js`); a rare contract that sold something is a sale to the ship's
   contact (`main.js settleRareRun`). Nothing sells to the player through a character yet, so 'purchase' has no caller.
   Missions given by the character already counted (above). A visit or a trade counts as having met the character.

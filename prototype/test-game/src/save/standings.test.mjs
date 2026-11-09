@@ -56,12 +56,15 @@ test('all 81 characters by faction, and all nine factions with loyalty and the n
 test('a greeting on each ship visit is +1; a sale or a purchase raises the rating too (owner 2026-11-09)', () => {
   assert.deepEqual(RAPPORT_GAIN, { greet: 1, sale: 1, purchase: 1 });
   const s = {};
-  noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'greet');
-  noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'greet');
+  assert.equal(noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'greet', { day: '2026-11-09' }), true);
+  assert.equal(noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'greet', { day: '2026-11-09' }), false, 'once per day');
+  assert.equal(noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'greet', { day: '2026-11-10' }), true, 'the next day counts');
   noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'sale');
   noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'purchase');
   noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'bribe');   // not a dealing: ignored
-  assert.deepEqual(s.rapport['Colonel Aldric Vane'], { score: 4, kept: 0, broken: 0, faction: 'ground', greets: 2, sales: 1, purchases: 1 });
+  assert.deepEqual(s.rapport['Colonel Aldric Vane'], { score: 4, kept: 0, broken: 0, faction: 'ground', greets: 2, sales: 1, purchases: 1, greetDay: '2026-11-10' });
+  noteRapportEvent(s, 'Ace Jun "Halo" Sato', 'air', 'greet', { day: '2026-11-10' });
+  assert.equal(s.rapport['Ace Jun "Halo" Sato'].score, 1, 'the limit is per character');
   const c = characterStandings(s, packs)[0].characters.find((x) => x.name === 'Colonel Aldric Vane');
   assert.equal(c.met, true, 'a visit counts as meeting them');
   assert.equal(c.greets, 2); assert.equal(c.sales, 1);

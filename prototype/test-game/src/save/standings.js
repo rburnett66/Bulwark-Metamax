@@ -13,7 +13,9 @@
  * It is written at the one place a mission ends (missions.js endMission → noteRapport) and kept in s.rapport, so a
  * failed mission dismissed from the log still counts. ensureRapport backfills an old save once from the missions it
  * still holds. Owner 2026-11-09 adds the everyday dealings (RAPPORT_GAIN, noteRapportEvent):
- *   "greeting the player on a ship visit is +1"            → the ship's captain, once per boarding (shipReveal.js)
+ *   "greeting the player on a ship visit is +1"            → the ship's captain (shipReveal.js); "greeting limit is
+ *                                                              1 per day": the +1 counts once per local day per
+ *                                                              character (the captain still greets on every visit)
  *   "selling items or purchasing items from character improve score"
  *                                                            → SELL at an outpost: the planet ship's captain buys
  *                                                              (outpost/view/session.js); a rare contract that sold
@@ -24,7 +26,7 @@
  * Factions: the loyalty ledger that already exists (s.loyalty by faction name, contracts.addLoyalty) and its tiers
  * (LOYALTY_TIERS: 100 / 260 / 520).
  *
- *   s.rapport = { [characterName]: { score, kept, broken, faction, greets?, sales?, purchases? } }   s.rapportBackfilled = true
+ *   s.rapport = { [characterName]: { score, kept, broken, faction, greets?, sales?, purchases?, greetDay? } }   s.rapportBackfilled = true
  * Pure: no DOM.
  */
 import { LOYALTY_TIERS, rivalOf } from './contracts.js';
@@ -55,13 +57,25 @@ export function noteRapport(s, m, end, reason) {
   if (end === 'done') r.kept++; else r.broken++;
 }
 
-/** A greeting, sale or purchase with a character: + RAPPORT_GAIN[kind]. faction: the registry key. */
-export function noteRapportEvent(s, name, faction, kind) {
-  if (!s || !name || !RAPPORT_GAIN[kind]) return;
+/** The player's local calendar day, 'YYYY-MM-DD' (the greeting limit's day). */
+export function localDay(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * A greeting, sale or purchase with a character: + RAPPORT_GAIN[kind]. faction: the registry key. A greeting counts
+ * once per day per character (owner 2026-11-09: "greeting limit is 1 per day"); day defaults to the local day.
+ * → true when it counted.
+ */
+export function noteRapportEvent(s, name, faction, kind, { day = localDay() } = {}) {
+  if (!s || !name || !RAPPORT_GAIN[kind]) return false;
   const book = s.rapport || (s.rapport = {});
   const r = book[name] || (book[name] = { score: 0, kept: 0, broken: 0, faction: faction || null });
+  if (kind === 'greet') { if (r.greetDay === day) return false; r.greetDay = day; }
   r.score += RAPPORT_GAIN[kind];
   r[COUNTER[kind]] = (r[COUNTER[kind]] || 0) + 1;
+  return true;
 }
 
 /** The captain of a planet's capital ship (mission catalog capitalShips, keyed by planet name), or null. */
