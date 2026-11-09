@@ -244,6 +244,25 @@ Owner, 2026-11-06, on the "unknown contact": *"What unknown contact .. the optio
 you get 3 stars on wave 3 will introduce a new character."* The Orbital Survey prototype's unknown-contact call is
 therefore **not** part of any reveal, and the contact favour story (`story_mvajl0pm_11`) is replaced by R11.
 
+### 5.6 Standings aboard (as built, 2026-11-09)
+
+Owner 2026-11-09: "when a player is on a capital ship there should be a button that allow them to see a list of all
+faction characters and show the players rating with them, on this same view there should be a faction tab that shows
+the players relationship with each faction. So players need to visit capital ships to see this view."
+
+- **Where.** The explore bar aboard (`shipReveal.js`, first time aboard and every later boarding) has STANDINGS beside
+  DEPART; it toggles to CLOSE STANDINGS. The view exists nowhere else, so the ship is the place to read it.
+- **Look.** `menu/standingsScreen.js` is the Inventory screen's layout and the Mission Log's styles: CHARACTERS and
+  FACTIONS tabs over faction bands, a detail pane for the selection; two columns of tiles on a phone in landscape.
+- **Characters.** The 81 heroes of `content/dialog/voicepacks.json`, nine per faction, with their portraits. A
+  character's rating is `s.rapport[name]`, written where a mission ends (`missions.js endMission → standings.noteRapport`):
+  kept + the mission's planet loyalty (default +25), broken its broken-promise penalty (default −45), abandoned −30.
+  Bands: Not met, Hostile ≤ −60, Wary, Neutral, Friendly ≥ 20, Trusted ≥ 60. An old save is backfilled once from the
+  ended missions it holds (`ensureRapport`); a failed mission dismissed later still counts.
+- **Factions.** The existing loyalty ledger (`s.loyalty`, `s.factionTiers`): loyalty, band (Hostile, Wary, Neutral,
+  Friendly, Allied · Tier n), the bar to the next tier (100 / 260 / 520), the rival, characters met and the player's
+  alignment.
+
 ## 6. The opening is the first reveal
 
 Owner, 2026-11-06: *"The first opening of the game should be the reveal of the red giant and the Collective ship. On

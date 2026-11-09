@@ -34,6 +34,7 @@ import { characterCall } from '../comm/dialog.js';
 import { showContractModal } from '../render/contractModal.js';
 import { contractFor } from '../data/collectiveContract.js';
 import { PLANETS } from '../data/planets.js';
+import { createStandingsScreen } from '../menu/standingsScreen.js';
 
 const CSS = `
 .rv .rv-rooms { position:absolute; inset:0; width:100%; height:100%; display:block; clip-path:inset(0 100% 0 0); }
@@ -221,13 +222,18 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
   // F7 — explore: leave the room, walk anywhere, DEPART when ready
   const where = doc.createElement('div'); where.className = 'rv-where'; where.textContent = ship.name.toUpperCase();
   const bar = doc.createElement('div'); bar.className = 'rv-bar';
-  bar.innerHTML = '<button class="rv-btn primary" type="button" data-depart>◂ DEPART</button><button class="rv-btn" type="button" data-leave>◂ LEAVE ROOM</button>';
+  bar.innerHTML = '<button class="rv-btn primary" type="button" data-depart>◂ DEPART</button><button class="rv-btn" type="button" data-standings aria-pressed="false">STANDINGS</button><button class="rv-btn" type="button" data-leave>◂ LEAVE ROOM</button>';
   d.ui.appendChild(where); d.ui.appendChild(bar);
+  // STANDINGS: every character's rating and every faction's relationship, only aboard a capital ship (owner 2026-11-09)
+  const standBtn = bar.querySelector('[data-standings]');
+  const setStand = (on) => { standBtn.textContent = on ? '✕ CLOSE STANDINGS' : 'STANDINGS'; standBtn.setAttribute('aria-pressed', String(on)); };
+  const standings = createStandingsScreen({ doc, host: d.root, onClose: () => { standings.close(); setStand(false); } });
+  standBtn.addEventListener('click', () => { if (standings.isOpen()) { standings.close(); setStand(false); } else { standings.open(); setStand(true); } });
   const leaveBtn = bar.querySelector('[data-leave]'); leaveBtn.style.display = 'none';
   let inRoom = null, departing = false, walking = false;
   leaveBtn.addEventListener('click', () => { inRoom = null; view.focus(null); leaveBtn.style.display = 'none'; where.textContent = ship.name.toUpperCase(); });
   const onPick = (e) => {
-    if (departing || walking) return;
+    if (departing || walking || standings.isOpen()) return;
     const hit = view.pick(e.clientX, e.clientY, roomCanvas.getBoundingClientRect()); if (!hit) return;
     walking = true; inRoom = hit.id; view.focus(hit.id, portrait() ? 0.9 : 0.6);
     where.textContent = ship.name.toUpperCase() + ' · ' + (roomOf(hit.id).name || hit.id).toUpperCase();
@@ -243,7 +249,7 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
   if (story) { inRoom = ship.room; leaveBtn.style.display = ''; }
   const L2 = d.loop((dt) => view.frame(dt, { flash: 0, camEase: 2.4 }));
   await new Promise((res) => bar.querySelector('[data-depart]').addEventListener('click', res, { once: true }));
-  departing = true; L2.stop(); where.remove(); bar.remove();
+  departing = true; L2.stop(); where.remove(); bar.remove(); standings.dispose();
   roomCanvas.removeEventListener('pointerup', onPick);
   // F8 — depart: the hull closes behind the scan line (the wipe in reverse) over the 3D flank, then black
   view.focus(null);

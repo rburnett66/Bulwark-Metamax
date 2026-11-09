@@ -13,6 +13,7 @@
  * measure THROWS: an objective that silently never moves would look like a hard mission rather than a bug.
  */
 import { addLoyalty, rivalOf, DECLINE } from './contracts.js';
+import { noteRapport } from './standings.js';
 import { bankOf, totalStars, mergeRewards } from './save.js';
 import { mergeTally } from './battleTally.js';
 import { PLANETS } from '../data/planets.js';
@@ -140,6 +141,7 @@ export function inScope(m, result) {
 function endMission(s, m, end, reason, now) {
   m.end = end; m.endReason = reason; m.endedAt = now; m.endedBattle = (s.progress && s.progress.battles) || 0;
   m.tracked = false;
+  noteRapport(s, m, end, reason);   // the giver's rating (standings.js), kept even if the mission is later dismissed
 }
 
 /** Fail a mission: the broken-promise penalty lands on the planet's faction. */
