@@ -42,7 +42,7 @@ import { harvestRunning, harvestPlan, surfaceFieldGroups, fieldStock } from '../
 import { harvestRates } from '../../data/outpost.js';
 import { harvesterUnits } from './harvestDrive.js';
 import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
-import { crumb } from '../../diag/errorLog.js';
+import { crumb, lastSessionCrashed } from '../../diag/errorLog.js';
 import { reportButton } from '../../diag/reportPanel.js';
 
 const ROOT = new URL('../../../', import.meta.url).href;   // the game root (prototype/test-game/)
@@ -66,6 +66,26 @@ export async function openOutpostView(opts = {}) {
     if (!stage.host || !stage.host.isConnected) throw e;
     return loadingFailed(stage, `Could not land (${stage.step}): ${(e && e.message) || e}`);
   }
+}
+
+const SAFE_KEY = 'bulwark.outpostSafe';
+/** Is the outpost in safe mode on this device? A visit cut short (errorLog.lastSessionCrashed) turns it on for good. */
+export function outpostSafeMode(win) {
+  let on = false;
+  try { on = win.localStorage.getItem(SAFE_KEY) === '1'; } catch (e) { /* no storage */ }
+  if (!on && lastSessionCrashed()) {
+    on = true;
+    try { win.localStorage.setItem(SAFE_KEY, '1'); } catch (e) { /* no storage: safe for this load only */ }
+  }
+  return on;
+}
+
+/** The renderer's load for a crumb: tier, pixel ratio, drawing buffer, live textures / geometries / shader programs. */
+function gpuLine(r) {
+  try {
+    const R = r.renderer, m = R.info.memory, size = R.getDrawingBufferSize(new r.THREE.Vector2());
+    return `tier ${r.tier.key} · dpr ${R.getPixelRatio()} · ${size.x}×${size.y} · tex ${m.textures} · geo ${m.geometries} · prog ${(R.info.programs || []).length}`;
+  } catch (e) { return 'gpu ?'; }
 }
 
 /** Turn the loading screen into a failure card with BACK. → { closed, close, handle: null } */
@@ -139,13 +159,17 @@ async function openOutpostViewInner(opts, stage) {
   const board = outpostBattleMap(map, { bakeTune });
   step('starting the 3D view');
   const slug = await bakedSlugFor(map, { base: ROOT });
-  const r = await createRenderer3D(view3d, board, { slug, baseUrl: ROOT, planet, craft: false, landing: false, qualityQuery: opts.tier || null, qualityChoice: loadChoice(win.localStorage) });
+  // SAFE MODE (owner's iPhone, 2026-11-09 error reports: the outpost opens, then iOS kills the tab within a second):
+  // once a visit to the outpost has been cut short on this device, the outpost opens at the Low tier with the lightest
+  // building models from then on (a ?quality= in the URL still wins). The error report's crumbs say which mode ran.
+  const safe = !opts.tier && outpostSafeMode(win);
+  const r = await createRenderer3D(view3d, board, { slug, baseUrl: ROOT, planet, craft: false, landing: false, qualityQuery: opts.tier || (safe ? 'low' : null), qualityChoice: loadChoice(win.localStorage) });
   if (r.markers && r.markers.setBaseVisible) r.markers.setBaseVisible(false);
   r.fog.update = () => ({ win: null });   // no battle here: the whole board is open (clouds only past the map edge)
   const THREE = r.THREE;
   step('loading the building models');
   const { GLTFLoader } = await import(ROOT + 'vendor/three-addons/loaders/GLTFLoader.js');
-  const kit = await createOutpostKit(THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader });
+  const kit = await createOutpostKit(THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader, lodLevels: safe ? [2] : null });
   const scene = createOutpostScene(THREE, r, { map, kit, tier: r.tier.key, reduced });
 
   // ── open: the away catch-up (the only time a long advance runs) ──────────────────────────────────────────────────
@@ -513,9 +537,13 @@ async function openOutpostViewInner(opts, stage) {
     if (force) refreshPanel();
   }
   const siteFx = createConstructionFx({ seed: 41 });
+  let frameNo = 0;
   function frame(t) {
     if (closed) return;
     raf = win.requestAnimationFrame(frame);
+    frameNo++;
+    // how far the first frames get, for a phone that loses the tab (the error report's crumbs)
+    if (frameNo === 1 || frameNo === 30 || frameNo === 180) crumb(`outpost: frame ${frameNo} · ${gpuLine(r)}`);
     const t0 = performance.now();
     const raw = Math.max(0, t - last), dt = Math.min(0.1, raw / 1000);
     last = t;
@@ -595,7 +623,7 @@ async function openOutpostViewInner(opts, stage) {
   clearTimeout(stage.watchdog);
   if (stage.abandoned) { close(); return { closed: closedP, close, handle }; }
   loading.remove();
-  crumb('outpost: open');
+  crumb(`outpost: open · ${gpuLine(r)}${safe ? ' · SAFE MODE' : ''}`);
   if (opened.away.show) hud.report(opened.away, { reduced });
   else if (opened.banked && Object.keys(opened.banked).length) hud.toast(`Hopper emptied into your inventory · +${fmtGold(Object.values(opened.banked).reduce((a, b) => a + b, 0))}`);
   raf = win.requestAnimationFrame(frame);
