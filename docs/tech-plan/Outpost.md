@@ -1016,6 +1016,17 @@ fails the suite. Opening the outpost also disposes the menu's live 3D stage (glo
 with `forceContextLoss`; the menu builds them again when the outpost closes. The error log marks a context released
 this way and does not report it.
 
+## Safe mode after a cut-short visit (as built, 2026-11-09)
+
+The second iPhone report (v2026.11.09-e, after the texture sharing) showed the same pattern: the outpost opens, the
+tab is gone within a second, no error. Without a way to measure an iPhone's memory from here, the outpost now heals
+itself: once a visit was cut short on a device (`errorLog.lastSessionCrashed`), `outpostSafeMode` sets
+`localStorage['bulwark.outpostSafe']` and every later visit opens at the Low tier (DPR ≤ 1.5, 1024 shadows, no live
+shadows, half-resolution ground) with only the lightest building LOD (`createOutpostKit` `lodLevels: [2]`). A
+`?quality=` in the URL still wins. The report's crumbs now carry the renderer's load at `outpost: open` and at frames
+1, 30 and 180 (tier, pixel ratio, drawing buffer, textures, geometries, programs, SAFE MODE), so the next report says
+whether safe mode survives and how far the first frames got.
+
 ## Dependencies
 
 | relation | document | what it holds that this plan does not restate |

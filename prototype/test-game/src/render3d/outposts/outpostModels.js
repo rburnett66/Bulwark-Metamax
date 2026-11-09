@@ -39,7 +39,7 @@ export function modelSlug(kind, tier, rigHead) {
  * The model kit: loads the manifest once and each GLB once; make(slug) builds a placed instance (a THREE.LOD with
  * one clone per level). opts: { base (URL of content/outposts/), tier ('high' | 'standard' | 'low'), GLTFLoader }.
  */
-export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader, trim = TRIM.verdance, bodyLift = 1.5 } = {}) {
+export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader, trim = TRIM.verdance, bodyLift = 1.5, lodLevels = null } = {}) {
   const manifest = await (await fetch(base + 'outposts.json')).json();
   const loader = new GLTFLoader();
   const files = new Map();
@@ -70,7 +70,8 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
     if (!files.has(file)) files.set(file, new Promise((ok, fail) => loader.load(base + file, (g) => ok(shareTextures(g)), undefined, fail)));
     return files.get(file);
   };
-  const levels = tier === 'low' ? [1, 2] : [0, 1, 2];
+  // lodLevels: the outpost's safe mode on a phone that lost the tab draws the lightest level only
+  const levels = Array.isArray(lodLevels) && lodLevels.length ? lodLevels : tier === 'low' ? [1, 2] : [0, 1, 2];
   const glowBase = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
 
   /** Preload every level of these slugs (the view awaits this before its first frame). */
