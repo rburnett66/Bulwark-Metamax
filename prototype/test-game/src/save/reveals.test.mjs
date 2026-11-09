@@ -1,7 +1,7 @@
 // Surveyed planets and due reveals [MM-story_mw56v5hu_2]. Tech plan: Content-Reveal §4.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PLANET_ORDER, ensureReveals, revealsDue, markSurveyed, markShipSeen, isSurveyed, newlyDue, revealLine } from './reveals.js';
+import { PLANET_ORDER, SURVEY_MAP, ensureReveals, revealsDue, markSurveyed, markShipSeen, isSurveyed, newlyDue, revealLine } from './reveals.js';
 
 const blank = () => ({ planetMaps: {}, capitalShips: {}, collective: { introSeen: true, launched: true } });
 
@@ -23,15 +23,19 @@ test('a save that has fought on Verdance owes no survey of it', () => {
   assert.deepEqual(revealsDue(ensureReveals(s)), []);
 });
 
-test('Verdance map 3 beaten at 3★: Florael is due, then the Ground ship; marking clears them', () => {
+test('Verdance map 3 beaten at 3★ brings only the Ground ship; map 6 then discovers Florael (owner 2026-11-08)', () => {
+  assert.equal(SURVEY_MAP, 6);
   const s = markSurveyed(ensureReveals(blank()), 'ground');
   s.planetMaps.Verdance = { 1: { beaten: true }, 2: { beaten: true }, 3: { beaten: true, bestAvg: 3.3 } };   // the save keys by name
   s.capitalShips.Verdance = { arrived: true };
   ensureReveals(s);
-  assert.deepEqual(revealsDue(s), [{ kind: 'planet', planet: 'air' }, { kind: 'ship', planet: 'ground' }]);
-  markSurveyed(s, 'air');
-  assert.deepEqual(revealsDue(s), [{ kind: 'ship', planet: 'ground' }]);
+  assert.deepEqual(revealsDue(s), [{ kind: 'ship', planet: 'ground' }], 'map 3: the ship, no new planet');
   markShipSeen(s, 'ground');
+  Object.assign(s.planetMaps.Verdance, { 4: { beaten: true }, 5: { beaten: true } });
+  assert.deepEqual(revealsDue(s), [], 'map 5: still nothing');
+  s.planetMaps.Verdance[6] = { beaten: true };
+  assert.deepEqual(revealsDue(s), [{ kind: 'planet', planet: 'air' }]);
+  markSurveyed(s, 'air');
   assert.deepEqual(revealsDue(s), []);
 });
 
@@ -46,7 +50,7 @@ test('an old save keeps every planet it has played as surveyed (no reveal for a 
 
 test('newlyDue and the results line', () => {
   const before = markSurveyed(ensureReveals(blank()), 'ground'), after = JSON.parse(JSON.stringify(before));
-  after.planetMaps.ground = { 3: { beaten: true } };
+  after.planetMaps.ground = { 6: { beaten: true } };
   assert.deepEqual(newlyDue(before, after), [{ kind: 'planet', planet: 'air' }]);
   assert.match(revealLine({ kind: 'planet', planet: 'air' }), /Florael discovered/);
   assert.match(revealLine({ kind: 'ship', planet: 'ground' }, 'The Ironhoard'), /The Ironhoard is inbound to Verdance/);

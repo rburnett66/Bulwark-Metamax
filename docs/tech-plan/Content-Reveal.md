@@ -72,7 +72,7 @@ transport arrival before every battle. The owner's direction moves it to the men
 ## 3. The player's path
 
 ```
-battle won ──► objective met (e.g. Verdance map 3) ──► results screen: "New signal — Florael discovered"
+battle won ──► objective met (e.g. Verdance map 6) ──► results screen: "New signal — Florael discovered"
                                                          │
                      NEXT MAP / replay: keep fighting ◄──┤   nothing plays in battle
                                                          ▼
@@ -105,7 +105,7 @@ battle won ──► objective met (e.g. Verdance map 3) ──► results scree
   | Planet | Discovered when (default, Q2) |
   |---|---|
   | Verdance | at the opening (§6) |
-  | Each next planet | the previous planet's map 3 is beaten (`planet_map_beaten`) — the same win that opens its portal (Mission-Log-Design §11) |
+  | Each next planet | the previous planet's map 6 is beaten (`reveals.SURVEY_MAP`). Owner 2026-11-08: "we have some design conflict between discovering new planets and unlocking the capital ships. Lets move new planets to map 6" — map 3 brings that planet's capital ship, map 6 discovers the next planet, so the two reveals no longer land on one win |
 
 - Saved as `s.discovered[planetKey] = true`. Old saves migrate with every planet they have played discovered, so no
   one replays a reveal for a planet they know.
@@ -337,8 +337,8 @@ Headless review (Playwright, swiftshader) at desktop and phone landscape.
 
 - **Q1 — Decided 2026-11-06.** The Collective always introduces new planets. A faction's ship arrives when its map
   3 is won at ≥ 3★, and visiting it unlocks then (§5.2).
-- **Q2 — Discovery objective.** Proposed default: the previous planet's map 3 beaten, the same win that opens the
-  portal. Alternatives: map 3 at 3★, or a per-planet column in the workbook.
+- **Q2 — Decided 2026-11-08.** The previous planet's map 6 beaten (it was map 3, the capital ship's win; the owner
+  moved it to keep the planet and ship reveals apart).
 - **Q3 — Decided 2026-11-06.** Not dimmed; tagged UNSURVEYED until surveyed (§4.1).
 - **Q4 — Decided 2026-11-06.** There is no unknown contact in the reveal. The optional rare contract (3★ on wave 3)
   introduces a new character, who greets the player and gives a mission on the first visit to that ship (§5.5).
@@ -352,7 +352,7 @@ Headless review (Playwright, swiftshader) at desktop and phone landscape.
 What changed from §4–§6 while building, and why:
 
 - **The queue is derived, not pushed.** `save/reveals.js` `revealsDue(s)` reads the save: a planet is due when the
-  previous planet's map 3 is beaten and it is not in `s.reveals.surveyed`; a ship is due when it has arrived and is not
+  previous planet's map 6 (`SURVEY_MAP`) is beaten and it is not in `s.reveals.surveyed`; a ship is due when it has arrived and is not
   in `s.reveals.shipSeen`. Nothing is pushed onto `loggedQueue`, so the queue cannot drift from the save, a reload
   replays exactly what was not committed, and old saves need no migration beyond `ensureReveals` (a planet already
   fought on counts as surveyed). The save keys `planetMaps` / `capitalShips` by planet **name** (missionFlow); the
