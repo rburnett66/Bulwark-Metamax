@@ -1,9 +1,168 @@
 # Outposts and Mining — design
 
-Status: owner decisions applied (Q1–Q7, 2026-11-06; build-it-yourself start and storage/power rules, 2026-11-07); bays, Outpost tech and Habitat as built (O10, O15) · 2026-11-07 · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
+Status: **"The rules today" (below) is the current, as-built rule set (2026-11-09)**; the rest is the design history — owner decisions (Q1–Q7, 2026-11-06; build-it-yourself start and storage/power rules, 2026-11-07); bays, Outpost tech and Habitat as built (O10, O15) · Epic *Outposts and mining* (initiative *Bulwark advanced mode*, L3)
 · Tech plan: `docs/tech-plan/Outpost.md` · Concept art: the owner's outpost image (2026-11-06), described in §8
 
 ![Outpost concept (owner, 2026-11-06)](outpost/outpost-concept.jpg)
+
+## The rules today (as built, v2026.11.09)
+
+> **owner** (2026-11-09): "the outpost rules are too obscure .. please give me an updated outpost design document so
+> we can update it."
+
+This section is the outpost as the game plays it today, in plain rules. Every number comes from the map-data workbook
+(`Outpost_Params`, `Outpost_Structures`, `Outpost_Contracts`, `Outpost_Tech`, `Ores`, `Outpost_Raids`), so a change
+there changes the game. Everything after this section is the design history: the owner's directions, the proposals
+and the as-built notes that led here. Where the two disagree, this section is what the game does. Numbers are
+Verdance's; every planet uses the same rules with its own three ores.
+
+### R1. Getting an outpost
+
+- **The contract.** A capital ship's captain offers the outpost contract. Accepting it grants an **Outpost Hub** on the
+  planet's outpost map. Everything else is bought with gold.
+- **The Outpost button** on the main menu opens it once the contract is accepted.
+- **Going online.** The outpost runs its economy only after it is online. GO ONLINE becomes available when four
+  buildings are finished and powered: the **Hub**, a **Power Station**, a **Mining Station on the common deposit**
+  (Iron on Verdance) and a **Storage Tower**. The GO ONLINE card lists what is still missing.
+- **The first raid** comes 10 minutes after going online. It is a small probe.
+
+### R2. The map
+
+- The outpost sits on a raised **mesa** in the middle of the map. Raiders reach the top only by its **ramps**.
+- **Pads** on the mesa hold the buildings: the hub is 3 × 3 cells, every other pad 2 × 2. Each ore deposit has a pad
+  over it, and only a Mining Station can go there.
+- **Defenses** (walls and guns) take single cells anywhere on the mesa that is not a pad, including the rim.
+- A **remote site** in the lowland holds the rare deposit and its own Power Station pad.
+
+### R3. Power
+
+- Every building but the Power Station and the Habitat **draws power**: Hub 2, Mining Station 4, Resource Bay 2,
+  Storage Tower 1, Upgrade Bay 1, each gun 1. Walls draw nothing.
+- A **Power Station** supplies **10** to buildings within **10 cells** (Power Station II: 20 within 14 cells).
+- A building out of reach, or over the station's supply, is **unpowered**. An unpowered building **stops working**,
+  but **keeps what it has stored**. An unpowered Storage Tower **shuts its door** and takes no new ore.
+- The top bar shows power as used / supplied (for example 9/10). It turns red when short.
+
+### R4. Mining and storage
+
+| Ore (Verdance) | Tier | Mined per minute | Sells for (gold / unit) |
+|---|---|---|---|
+| Iron | common | 3 | 4 |
+| Aluminum | uncommon | 1.5 | 12 |
+| Lithium | rare | 0.8 | 30 |
+
+- A **Mining Station** on a deposit mines while it is **powered**, even before the outpost is online.
+- Each Mining Station has its own **bay**. Without a Storage Tower the bay holds **15 minutes** of its output.
+- A finished, powered **Storage Tower** raises every rig's bay to **4 hours** of output (Storage Tower II: 8 hours).
+- When a bay is **full** the rig stops until you sell. The building shows the **storage full** marker (R9).
+- **Deep seam** (after the Deep Drilling I tech): a rig switched to *Deep* mines at **¼ the speed** but each unit sells
+  for **5×** the price.
+- **Mining Station Mk II** (Rig Mk II tech): **2×** the rate and **2×** the bay.
+
+### R5. Selling
+
+- Ore sells in **loads**. A load is **5 minutes** of that rig's output (Iron: 15 units = 60 gold).
+- **SELL** (bottom right, and **SELL RESOURCES** on a rig's or storage tower's panel) sends every **full load** to the
+  capital ship for gold. A part load stays until it fills.
+- SELL is greyed out with "no full load" when nothing is ready, and "outpost offline" before the outpost is online.
+- Selling is always a **tap**: the outpost never sells by itself.
+- **Cargo Shuttle II** (tech): **+10%** on every sale.
+- **The far buyer** (after contract step 3): another faction pays **2×** for its ore, but each load sold costs
+  **1 loyalty** with the home faction.
+
+### R6. Buildings
+
+| Building | Cost | Build time | What it does |
+|---|---|---|---|
+| Outpost Hub | granted | — | The centre. Crews **3 guns** (Machine Guns and Cannons; walls do not count). |
+| Power Station I / II | 600 / 6,000 | 2 / 15 min | 10 power in 10 cells / 20 power in 14 cells |
+| Mining Station I / Mk II | 600 / 8,000 | 2 / 20 min | Mines its deposit (R4) |
+| Storage Tower I / II | 300 / 5,000 | 1 / 15 min | Every rig's bay holds 4 / 8 hours |
+| Resource Bay | 2,500 | 5 min | Fields **harvesters** for the surface fields (R7) |
+| Upgrade Bay | 4,000 | 10 min | Upgrades defenses, one at a time, on its pad (R8) |
+| Habitat I / II | 3,000 / 5,000 | 10 / 15 min | **+2 guns** per tier over the hub's 3 |
+| Machine Gun I / II / III | 600 / 1,500 / 3,000 | 2 min | Defense |
+| Cannon I / II / III | 1,200 / 3,000 / 6,000 | 2 min | Defense |
+| Wall I / II | 400 / 1,000 | 2 min | Blocks a cell. No power, not a gun. |
+
+- A building **under construction** shows dust and welding sparks, and does nothing until it is finished.
+- **Sell** (X on a building's panel) refunds **50%** of what it cost.
+- **Repair** (R on a defense, or REPAIR ALL) costs **1 gold per HP**.
+- Defenses cost **4×** their battle price: an outpost defense lasts for days, not one map.
+
+### R7. Harvesters (the surface)
+
+- A **Resource Bay** lets you buy **harvesters** (2,000 gold each). An outpost starts with room for **2**, at most 4.
+- A harvester works the **surface fields** off the mesa at the battle's rate, and hauls into the Resource Bay's hopper
+  (4 hours).
+- Outpost fields **regrow slowly**: at **5%** of a battle field's rate, so a field worked hard runs dry.
+
+### R8. Defenses and upgrades
+
+- Only **Machine Guns, Cannons and Walls** can be built at an outpost.
+- The **gun cap** is 3 from the hub, plus 2 per Habitat tier. The build list greys a gun out at the cap.
+- **Upgrades** need the tier in the Tech Tree *and* an Upgrade Bay. The defense goes to the bay's pad while it is
+  upgraded (a timed job) and does **not fight** until it comes back.
+
+### R9. What the markers mean
+
+A big round marker over a building is a **warning**. Tap the building to read it in its panel.
+
+| Marker | Meaning | What to do |
+|---|---|---|
+| **Crate** (gold ring) | **Storage full**: the rig, or every bay, is full and mining has stopped | **SELL** |
+| **Lightning bolt** | **No power**: the building is stopped (its storage is kept) | Build or move a Power Station within reach, or add supply |
+| **Door** | **Door shut**: an unpowered Storage Tower takes no new ore | Restore its power |
+
+### R10. Raids
+
+- Once online, raids come on average **every 6 hours**, never less than **3 hours** apart. The first is 10 minutes
+  after going online.
+- Raiders are the planet's faction's own units (Verdance: troops and tanks), weaker than in battle (80% HP, 50% damage).
+  They climb the ramps and go for the buildings.
+- **Held**: no raider reaches a building. Damaged defenses keep their damage until repaired.
+- **Breached**: a raider reaches a building, or stands in firing range of the hub. The outpost loses **25%** of the ore
+  in every bay.
+- The **Sensor Spire** tech shows a raid inbound 10 minutes ahead (the top bar's raid timer).
+
+### R11. While you are away
+
+- The outpost keeps running while the game is closed, for up to **72 hours**. Mining, storage, raids and repairs are
+  worked out when you come back.
+- The **away report** on landing says what happened: ore mined, raids held or breached, what is full.
+- **STATUS** shows lifetime totals and the current collection rates per hour.
+
+### R12. The contract ladder (per planet)
+
+| Step | Asks | Pays | Unlocks |
+|---|---|---|---|
+| 1 · Establish (Iron) | Deliver 300 Iron and hold 1 raid | 2,000 gold, 20 loyalty | Aluminum; techs Deep Drilling I, Supply Depot, Power Grid II, Reinforced Walls |
+| 2 · Expand (Aluminum) | Deliver 150 Aluminum | 4,000 gold, 30 loyalty | Lithium; techs Rig Mk II, Sensor Spire |
+| 3 · Master (Lithium) | Deliver 60 Lithium and hold 3 raids | 8,000 gold, 40 loyalty | Cargo Shuttle II tech; the far buyer |
+
+### R13. Outpost tech (bought in the Tech Tree)
+
+| Tech | Price | Effect |
+|---|---|---|
+| Deep Drilling I | 3,000 | The deep seam: ¼ the speed, 5× the price |
+| Supply Depot | 4,000 | Storage Tower II: 8 hours per rig bay |
+| Power Grid II | 4,000 | Power Station II: 20 power, 14-cell reach |
+| Reinforced Walls | 2,500 | Walls to tier II, in the Upgrade Bay |
+| Rig Mk II (needs Deep Drilling I) | 6,000 | Mining Station Mk II: 2× rate, 2× bay |
+| Sensor Spire | 3,500 | Raid warning 10 minutes ahead |
+| Cargo Shuttle II | 10,000 | +10% on every sale |
+
+### R14. Open for the owner
+
+- Part loads: should SELL also sell a part load, at a smaller price, so a full rig can always be emptied?
+- Stopped rigs: should a full bay keep the rig running into the Storage Tower before it stops?
+- The gun cap and the Habitat: are 3 guns + 2 per Habitat tier the intended limits?
+- Harvester cap 2, maximum 4: what raises it (it is not in the build list today)?
+
+---
+
+*The design history starts here: owner directions, proposals and as-built notes, oldest first.*
+
 
 ## Owner direction (2026-11-06)
 
