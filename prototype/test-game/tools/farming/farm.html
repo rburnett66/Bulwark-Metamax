@@ -10,7 +10,13 @@
      is ../outpost/view.html; this is its farm twin.
      Query: ?state=new|growing|harvest|full|dead|trampled|away · ?quality=high|standard|low · ?speed=1 (clock ×)
             ?tab=farm|outpost · ?ui=0 hides the review chip · ?reduced=1 forces reduced motion.
-     window.outpost is the view's handle (setTab, farmAct, select, pick, aim, confirm …); window.outpostStore the save. -->
+     window.outpost is the view's handle (setTab, farmAct, select, pick, aim, confirm …); window.outpostStore the save.
+     [MM-story_mwabh0cd_i] The surface avatar: farmAct('harvestAll') / farmAct('harvest', 'p1') queue the gold avatar's
+     work; window.outpost.crew reads where it and the farmhands are and what the queue holds; probeNow() brings a raid
+     (everyone shelters at the Farmhouse). The "Raid now" button below does the same. -->
+<style>
+  #raid { position:fixed; z-index:3000; right:max(8px, env(safe-area-inset-right)); bottom:12px; padding:6px 10px; border:0; border-radius:4px; background:rgba(29,33,37,.85); color:#ffb3aa; font:600 12px system-ui, sans-serif; cursor:pointer; }
+</style>
 <style>
   html, body { margin:0; height:100%; background:#0f1412; color:#e6ebe3; font:14px/1.4 system-ui, sans-serif; overflow:hidden; }
   #dev { position:fixed; z-index:3000; left:max(8px, env(safe-area-inset-left)); top:50%; transform:translateY(-50%); }
@@ -48,6 +54,7 @@
     <p>An in-memory save: your game save is not touched. <a href="./scale.html" style="color:#4fb8ff">Scale prototype</a> · <a href="../outpost/view.html" style="color:#4fb8ff">Outpost review</a></p>
   </form>
 </div>
+<button id="raid" type="button" title="Bring a visit probe now: the avatar and farmhands shelter at the Farmhouse">Raid now</button>
 <div id="closed"><div>The farm view closed.<br><button id="reopen">Open again</button></div></div>
 <script type="module">
 import { openOutpostView } from '../../src/outpost/view/outpostView.js';
@@ -64,7 +71,8 @@ import { addPods } from '../../src/farm/pods.js';
 
 const q = new URLSearchParams(location.search);
 for (const k of ['state', 'tab', 'quality', 'speed']) if (q.get(k) !== null) document.getElementById(k).value = q.get(k);
-if (q.get('ui') === '0') document.getElementById('dev').style.display = 'none';
+if (q.get('ui') === '0') { document.getElementById('dev').style.display = 'none'; document.getElementById('raid').style.display = 'none'; }
+document.getElementById('raid').onclick = () => { if (window.outpost) window.outpost.probeNow(); };
 document.getElementById('devBtn').onclick = () => document.getElementById('dev').classList.toggle('open');
 
 const MIN = 60_000, HOUR = 60 * MIN, T0 = Date.UTC(2026, 10, 10, 9);
