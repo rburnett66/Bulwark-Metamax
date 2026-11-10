@@ -74,6 +74,75 @@ Repo copy (canonical): `docs/tech-plan/Farming.md` in rburnett66/Bulwark-Metamax
      Pump: `hasWater`). Data-driven: `Farm_Methods.Level5_Needs` (`never` | `water`; fertilizer and hydroponics join
      later). The plant panel and every PLANT button show the level the plot will grow at and why it is capped
      ("L4 Epic (L5 needs irrigation)").
+   - *Amended by rules 12 and 13:* mastery, not F1, opens the levels; the machinery per level is rule 13's.
+
+Rules 10–13 (owner, 2026-11-10, epic **F-E · Earned seed pods** [MM-epic_mwatmfia_1h]):
+
+10. **A crop's seed pods unlock after 500 of it are delivered** (E2): *"after collecting a set number of a crop you
+    unlock the seed pods. This unlock grants you access to the pods, but you still need to acquire the actual pods …
+    After I have collected and sold 500 units of a crop I unlock the crop's seed pods."* Every unit of the crop
+    delivered counts: at the end of a map (the Collective's quota and the surplus alike) and every later outpost or
+    farm sale (owner answer). The unlock is per crop and galaxy-wide; until then the crop's pods cannot be bought,
+    granted or planted, and the SEED PODS tab shows the count toward 500.
+11. **The Pod Reward Chest** (E3): *"at the end of delivering a resource contract (full map) at any star level I am
+    granted a Pod Reward Chest … one actual seed pod for every 100 resources delivered. These resources accrue between
+    battles, so 50 resources from one map, and 50 resources from another will drop 1 seed pod."* Per unlocked crop, the
+    units delivered add to a carry; each full 100 is one pod in the chest, the rest waits for the next map. A crop's
+    count starts **only once it is unlocked** (owner answer), so the first chest that holds it comes on the map that
+    passes 500. The chest replaces the per-200-units battle pod drip (§2.3 F9). Its sequence is Pirate Bash's
+    (`pirate-bash/src/model.js openChest`, `src/app.js`): the chest is granted on the result screen and held, tapped to
+    open, and its pods revealed one card at a time. *"This would allow players to learn about farming at the end of map
+    1, even before they have an outpost,"* so by the time the outpost opens they want the farm to plant them.
+12. **Mastery opens crop levels 2–5** (E4): *"Planting, harvesting and selling fruit from seed pods increases the
+    player's mastery of the pods allowing level 2–5 to be grown."* Each crop has a mastery count; thresholds (data,
+    proposed) open its `<Crop> II … V` nodes in place of the F1 gates (rule 9), and **gold still buys each level** in
+    the tech tree (owner answer; rule D7 holds).
+13. **Each level above 2 needs machinery** (E5, E6; checked when planting, as rule 9's level 5 is): *"level 4 requires
+    agrobots and 5 requires irrigation. The irrigation also optimizes the mineral content. Level 3 requires fertilizer
+    made by a special fertilizer machine. The specific recipe for each fertilizer must be discovered through missions
+    with the faction who buys the crops. Somebody on the capital ship for each faction will grant these missions but
+    you will need friend status to receive it."* So: **L3** the crop's fertilizer, made by a Fertilizer machine from a
+    recipe learned in a mission from the crop's buyer faction, offered by a character aboard its capital ship at
+    **Friendly** standing (`standings.js`); **L4** agrobots; **L5** irrigation. A plot grows at the highest level its
+    crop has bought and its equipment allows, and the PLANT button names what caps it. Battle-map crops stay level 3.
+    *"Level 3 on some crops may also require a new planting method like terracing, vertical farming, or hydroponics"*
+    (owner, 2026-11-10): a crop's row may name a **method** its level 3 also needs (`Crop_Levels.Method`, blank for
+    most crops); on any other method that crop grows at level 2 at most.
+    **Irrigation equipment serves a limited group** (owner, 2026-11-10, E8): *"Irrigation equipment handles a limited
+    number of plots (4 connected) and it visually changes the look of the plots (a plot is a square of crops)."* One
+    irrigation unit waters up to **4 connected plots** (neighbours across a walkway, rule 8, proposed); a fifth plot
+    needs another unit. A watered plot looks different: channels and wet soil between its rows, so the player can see
+    which squares are irrigated. This replaces the Pump's 4-cell water reach as the way a plot gets water.
+14. **The farm visitor** (owner, 2026-11-10, E9): *"when you have 4 plots of the same crop, on your 4th harvest you
+    will get a visitor to your farm that walks in and tells you about farming."* Proposed reading: once the player has
+    4 plots planted with one crop, that crop's 4th harvest brings a visitor who walks onto the farm (the crew rig, on
+    the outpost nav grid like the avatar) and talks the player through farming.
+    *"The farm visitor will be a new character for every faction. Once unlocked you will find the visitor roaming your
+    outpost land every day. Greeting the visitor gains friend points, and after giving them some crops they will give
+    you information about the crops and how to improve them."* So: **nine new characters**, one per faction (added to
+    the roster; rule: never remove characters). Once unlocked a visitor **roams the outpost land every day**; GREET
+    (once a day, proposed) gains friend points with them; GIVE crops from the farm store earns **tips** about the crops
+    and how to improve them. Which faction's visitor comes first is proposed as the planet's own faction.
+15. **The farming log** (E10): *"There should be a farming log with a list of all the tips and hints."* Every tip a
+    visitor gives is kept in a log the player can reopen, grouped by crop.
+16. **Off-world pods** (E11): *"After some time the visitor may even share tricks for growing seed pods from other
+    planets on your farm to achieve level 3, 4, or 5 for that pod. In general taking a pod from another planet will
+    not produce fruit at levels 1 or 2. The player should be asked when planting 'Are you sure, I don't think those
+    grow here?' but the player is allowed to experiment. The crops will sprout and die without fruit so the player can
+    recover the seed pods from the dead plants."* So: a crop planted away from its home planet **gives no fruit at
+    levels 1 or 2**; PLANT asks *"Are you sure? I don't think those grow here."* and lets the player go on; such a plot
+    sprouts, dies without fruit, and its harvest returns the pods (as every dead plot does). Levels 3–5 off-world need a
+    **trick** learned from a visitor (with rule 13's machinery). Later visitor tips, after enough friendship, teach them.
+17. **Seasonal crops** (E12): *"There will be seasonal crops for holidays like Christmas where special crops can be
+    acquired and grown."* Seasonal crops are available for a date window (data), acquired and grown like any crop.
+18. **The crop mastery award** (E13): *"Players who reach level 5 on a crop get a crop mastery award for that crop
+    which is a chest with gold, premium currency and a trophy they can display in a trophy case. The trophy case is a
+    future feature."* Reaching level 5 on a crop grants, once, a chest (the rule 11 sequence) of gold, premium currency
+    and that crop's trophy; the trophy is kept in the save for the future trophy case. *The game has no premium
+    currency yet; the award needs one (an owner decision).*
+    **Grow-room displays** (E7, with the future rooms): the Vertical farm's roof is a screen that looks like solar
+    panels and shows the grow state of every pod inside; hydroponic and underground rooms show a state lamp outside,
+    and the player enters to see status and harvest.
 
 Helium-4 confirmed (owner, 2026-11-10): the battle's uncommon Lumen resource stays Helium-3; Helium-4 is the new
 material that is Lumen's uncommon crop.
@@ -293,6 +362,24 @@ they come back; the owner will detail them first:
 | **D0** Recipe book design | the full recipe list (design, owner review) | F-C |
 | **D1** Refinery | refining jobs, level carries through | D0 |
 | **D2** Fabricator | Research Level 3 gate, the first ship parts and upgrades | D1 |
+
+### F-E · Earned seed pods (owner rules 10–13, 2026-11-10) [MM-epic_mwatmfia_1h]
+
+| Story | Builds | Depends on |
+|---|---|---|
+| **E1** Design | rules 10–13 in this plan | — |
+| **E2** Pod unlock at 500 | `s.cropDelivered[crop]` counted at every map's end and every outpost/farm sale; `podsUnlocked(s, crop)` at `Pod_Unlock_Units` (500); BUY, chest and PLANT refuse a locked crop; SEED PODS shows the count toward 500 | F-A |
+| **E3** Pod Reward Chest | at every resource map's end (any stars): `s.podChestCarry[crop]` += delivered units of each unlocked crop, ⌊÷ `Chest_Units_Per_Pod` (100)⌋ pods go in a chest; the chest sequence after Pirate Bash's (granted on the result screen, held, tap to open, one card per crop); replaces `battlePods` | E2 |
+| **E4** Crop mastery | `s.mastery[crop]` from plantings, harvests and sales; thresholds (data, proposed) open the L2–L5 nodes in place of the F1 gates; gold still buys | F-A |
+| **E5** Level machinery | at planting: L3 needs the crop's fertilizer (and, for some crops, a method: `Crop_Levels.Method`), L4 agrobots, L5 irrigation (`Crop_Levels.Needs`); the plot grows at the highest level it qualifies for and PLANT names the cap | E4 |
+| **E9** The farm visitors | rule 14: nine new characters, one per faction; unlocked by a crop's 4th harvest with 4 plots of it; they roam the outpost daily; GREET for friend points, GIVE crops for tips | F-A (A8 avatar) |
+| **E10** The farming log | rule 15: every tip kept and grouped by crop, reopenable | E9 |
+| **E11** Off-world pods | rule 16: no fruit at levels 1–2 away from home; the "I don't think those grow here" prompt; sprout, die, pods back; visitor tricks open levels 3–5 | E9, E5 |
+| **E12** Seasonal crops | rule 17: crops with a date window (Christmas first), acquired and grown as usual | E3 |
+| **E13** Crop mastery award | rule 18: level 5 on a crop grants a chest of gold, premium currency and that crop's trophy (kept for the future trophy case) | E3, E4; premium currency |
+| **E8** Irrigation units | an irrigation unit that waters up to 4 connected plots (replacing the Pump's reach); the irrigated plot's look (channels, wet soil between the rows); review page preset | F-A |
+| **E6** Fertilizer recipes | the Fertilizer machine; one recipe mission per crop from its buyer faction, offered aboard that faction's capital ship at Friendly standing | E5 |
+| **E7** Grow-room displays | the Vertical farm's solar-panel roof screen of pod states; the state lamps on hydroponic and underground doorways | the future grow rooms, B8v |
 
 ## 6. Testing and review
 
