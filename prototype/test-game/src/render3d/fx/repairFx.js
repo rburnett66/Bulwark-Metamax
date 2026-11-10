@@ -83,4 +83,4 @@ export function createRepairFx({ seed = 11 } = {}) {
 }
 
 /** impacts particle `shade` values the view reads as a tint for SPARK / FLASH (0 = the default hot white-orange). */
-export const SPARK_TINT = Object.freeze({ repair: 1 });
+export const SPARK_TINT = Object.freeze({ repair: 1, damage: 2 });   // 2: a damaged structure's red sparks (outpost, owner 2026-11-09)

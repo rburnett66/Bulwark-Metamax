@@ -1027,6 +1027,29 @@ shadows, half-resolution ground) with only the lightest building LOD (`createOut
 1, 30 and 180 (tier, pixel ratio, drawing buffer, textures, geometries, programs, SAFE MODE), so the next report says
 whether safe mode survives and how far the first frames got.
 
+## Raiders during a visit (as built, 2026-11-09)
+
+> **owner** (2026-11-09): "when the player visits the outpost there should be some visible drone units or light tanks
+> that occasionally attack the base"
+
+`src/outpost/view/visitProbe.js`, drawn by `outpostView.js`:
+
+- **What comes:** a **probe**, the planet's light tank (`<FAC>-Tanks`) and a trooper, with a second tank every other
+  probe. No faction has a drone unit, so tanks stand in.
+- **How it runs:** on the battle sim, as `createRaid` with its own units, seeded from the outpost seed and the probe's
+  number. The view draws the raiders, the defenses as the probe's sim has them (aim, fire, HP) and its shots with the
+  battle renderer, and passes the sim's events to `renderFrame` for the hit FX.
+- **When:** only while the outpost is online. The first probe comes 45–75 s into a visit, then one every 100–180 s
+  after the last one ends, on the view's clock. Never over the away report or during a placement. Off in safe mode.
+- **What it changes:**
+  - **Defense wear is saved:** the damage the probe dealt comes off each defense's current HP (session action
+    `probeWear`), so the red damage sparks and REPAIR follow from it.
+  - **No ore is taken and no building is changed.** A probe that reaches the base fires on it and pulls back.
+  - **It is not one of the outpost's raids:** the raid schedule, the raid log and the contract are untouched.
+- **Ending:** at the sim's held / breach decision, or after 90 s. Toasts read "Raiders inbound!", then "Raiders driven
+  off" or "Raiders hit the base and pulled back".
+- **To review:** `tools/outpost/view.html?state=fullkit&probe=1` (`window.outpost.probeNow()`, `window.outpost.probe`).
+
 ## Dependencies
 
 | relation | document | what it holds that this plan does not restate |

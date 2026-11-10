@@ -58,13 +58,25 @@ const CSS = `
 @keyframes bw-nw-pulse { 0%,100% { box-shadow:0 0 24px -6px #5fe0ff; } 50% { box-shadow:0 0 34px -2px #5fe0ff; } }
 ${PALETTE_CSS}
 ${SELPANEL_CSS}
-.bw-unitpanel { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); min-width:290px; max-width:460px;
+/* THE OBJECT WINDOW (owner 2026-11-09: "the object window should always fit between the minimap and the full screen
+   button, but not under the mini map. the object info window is temporary and takes priority"): the unit panel and the
+   resource card (resourceInfo.js) sit centred in the strip from the minimap's right edge to the fullscreen button's
+   left edge, drawn above both (z 68). The minimap moves with the build rail, so layoutObjectBand() measures the strip
+   and sets --obj-left / --obj-right on the HUD; where the strip is too narrow (a phone held upright) the HUD gets
+   .bw-objstack and the window sits above the minimap instead (--obj-stack-left / --obj-stack-bottom). */
+.bw-unitpanel { position:absolute; left:var(--obj-left, 144px); right:var(--obj-right, 96px); margin:0 auto; width:fit-content; bottom:calc(6px + env(safe-area-inset-bottom, 0px));
+  min-width:min(290px, 100%); max-width:460px; box-sizing:border-box;
   background:rgba(9,14,20,0.94); border:1px solid #2c3e50; border-radius:7px; padding:8px 14px; display:none;
-  font-size:12px; color:#dfeef5; box-shadow:0 3px 16px rgba(0,0,0,0.55); z-index:20; }
+  font-size:12px; color:#dfeef5; box-shadow:0 3px 16px rgba(0,0,0,0.55); z-index:68; }
+.bw-hud.bw-objstack .bw-unitpanel, .bw-hud.bw-objstack .bw-resinfo { left:var(--obj-stack-left, 6px); right:6px; bottom:var(--obj-stack-bottom, 78px); }
 .bw-unitpanel .bw-uname { font-size:15px; font-weight:800; color:#ffe58a; }
 .bw-udeselect { position:absolute; top:6px; right:8px; background:none; border:1px solid #3a4a5a; border-radius:4px;
   color:#9ec4d8; font:inherit; font-size:10px; letter-spacing:1px; padding:2px 8px; cursor:pointer; pointer-events:auto; }
 .bw-udeselect:hover { background:#22303e; color:#e7f6ff; }
+.bw-unext { position:absolute; top:6px; right:96px; background:#ffe58a; border:1px solid #ffe58a; border-radius:4px; color:#141a20;
+  font:inherit; font-size:11px; font-weight:900; letter-spacing:1.5px; padding:2px 10px; cursor:pointer; pointer-events:auto; display:none; }
+.bw-unext:hover { background:#fff1b8; }
+.bw-unext:disabled { background:none; color:#5d6b78; border-color:#3a4a5a; cursor:default; }
 .bw-unitpanel .bw-usub { color:#8fb0c4; font-size:11px; margin-bottom:5px; text-transform:capitalize; }
 .bw-unitpanel .bw-uhp { height:8px; background:#34373c; border:1px solid #141619; border-radius:3px; overflow:hidden; margin-bottom:6px; }
 .bw-unitpanel .bw-uhpfill { height:100%; background:#8cf22e; transition:width .1s; }
@@ -394,6 +406,22 @@ export function createHud(mountEl, callbacks) {
     applyRailFit(palette, railFit(avail, btns, chrome, view.innerWidth));
     // the minimap sits beside the rail, never over it
     if (railMinimap) railMinimap.style.left = Math.round(palette.getBoundingClientRect().right + 8) + 'px';
+    layoutObjectBand();
+  }
+  // THE OBJECT WINDOW's strip (CSS above): from the minimap's right edge to the fullscreen button's left edge (the gear's
+  // when there is no fullscreen button), 8 px clear of each; too narrow for the window: above the minimap instead.
+  const OBJECT_MIN = 300, OBJECT_GAP = 8;
+  function layoutObjectBand() {
+    const view = doc.defaultView;
+    if (!view || !railMinimap) return;
+    const vw = view.innerWidth, vh = view.innerHeight, mm = railMinimap.getBoundingClientRect();
+    const btn = root.querySelector('.bw-fs') || root.querySelector('.bw-gear');
+    const left = Math.round(mm.right + OBJECT_GAP), right = Math.round(btn ? vw - btn.getBoundingClientRect().left + OBJECT_GAP : 96);
+    root.style.setProperty('--obj-left', left + 'px');
+    root.style.setProperty('--obj-right', right + 'px');
+    root.style.setProperty('--obj-stack-left', Math.round(mm.left) + 'px');
+    root.style.setProperty('--obj-stack-bottom', Math.round(vh - mm.top + OBJECT_GAP) + 'px');
+    root.classList.toggle('bw-objstack', vw - left - right < OBJECT_MIN);
   }
   let railMinimap = null;   // set once the minimap exists (below)
   {
@@ -452,6 +480,11 @@ export function createHud(mountEl, callbacks) {
   deselectBtn.title = 'Clear the selection — map clicks stop giving this unit orders (Esc also works)';
   deselectBtn.addEventListener('click', () => { if (cbs.onDeselect) cbs.onDeselect(); });
   unitPanel.appendChild(deselectBtn);
+  // NEXT (bold, beside DESELECT; harvesters only): select the next harvester (owner 2026-11-09)
+  const nextBtn = el(doc, 'button', 'bw-unext', 'NEXT ▸');
+  nextBtn.title = 'Select the next harvester';
+  nextBtn.addEventListener('click', (e) => { e.stopPropagation(); if (cbs.onNextHarvester) cbs.onNextHarvester(); });
+  unitPanel.appendChild(nextBtn);
   const uname = el(doc, 'div', 'bw-uname', '-');
   const usub = el(doc, 'div', 'bw-usub', '');
   const uhp = el(doc, 'div', 'bw-uhp');
@@ -706,7 +739,7 @@ export function createHud(mountEl, callbacks) {
     upgradeBtn,
     sellBtn,
     repairBtn,
-    unitPanel,
+    unitPanel, nextBtn,
     uname,
     usub,
     uhpfill,
@@ -985,6 +1018,11 @@ export function updateHud(hud, state, ui) {
     const frac = u.maxHp > 0 ? Math.max(0, Math.min(1, u.hp / u.maxHp)) : 0;
     hud.uhpfill.style.width = (frac * 100).toFixed(0) + '%';
     let rows;
+    if (hud.nextBtn) {
+      const fleet = u.isHarvester ? [...state.units.values()].filter((x) => x.isHarvester && x.hp > 0).length : 0;
+      hud.nextBtn.style.display = u.isHarvester ? 'block' : 'none';
+      hud.nextBtn.disabled = fleet < 2;
+    }
     if (u.isHarvester) {
       // the HARVESTER is its own thing — a resource hauler, not a Ground/Powder truck. Its panel
       // reads the economy loop (cargo, yield, job state), never combat stats it doesn't have.

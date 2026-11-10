@@ -201,3 +201,35 @@ export function contactCall(contact, planetKey) {
 export function contactReply(contact, kind) {
   return contactSpec(contact, contact && contact.replies && contact.replies[kind], null);
 }
+
+/* ── The Collective opening's bar conversation [MM-story_mw548j4g_v] ─────────────────────────────────────────────
+   Factor Mira Valcourt, a CONTACT speaker (voice.js CONTACTS.collective). Lines are authored in
+   docs/16 Bulwark MM/design/Collective-Opening-Dialog.md and generated into content/dialog/opening.json by
+   tools/extract_opening.py. They play as one comm scene (commCard.playScene: her run of lines cycles in one window, with
+   breadcrumbs); a line's `slide` cues the holo-slide beside the card (comm/holoSlide.js). */
+
+/** Fetch the opening's lines. Never throws — null means the intro skips the conversation. */
+export async function loadOpening(url = 'content/dialog/opening.json') {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const data = await r.json();
+    return (data && data.speaker && Array.isArray(data.lines)) ? data : null;
+  } catch (e) {
+    console.warn('[dialog] opening.json unavailable:', e && e.message);
+    return null;
+  }
+}
+
+/** The opening as comm call specs, in order: [{ ...spec, slide }]. The last carries the handshake chip. */
+export function openingCalls(opening) {
+  if (!opening || !opening.speaker) return [];
+  const sp = opening.speaker, n = opening.lines.length;
+  return opening.lines.map((l, i) => ({
+    factionKey: 'collective', factionName: CONTACTS.collective.name,
+    name: sp.name, sub: sp.sub, gender: sp.gender || 'female',
+    intent: l.intent || 'statement', line: l.line,
+    voiceSeed: hash(sp.name), chip: i === n - 1 ? '◇ CONTRACT OFFER' : null,
+    slide: l.slide || null,
+  }));
+}
