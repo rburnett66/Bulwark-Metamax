@@ -526,7 +526,9 @@ export function advance(outpost, toMs, ctx) {
     ...raids.map((r) => ({ at: r.at, raid: r })),
     ...(o.upgrading && o.upgrading.done <= end ? [{ at: Math.max(o.t, o.upgrading.done), upgraded: true }] : []),
     ...farmBuildEvents(o, o.t, end),
-  ].sort((a, b) => a.at - b.at || ((a.build || a.upgraded || a.farmBuilt) ? -1 : 1));
+    // a repair drone finishing its work (owner 2026-11-10: drones fly out from the hub) [MM-story_mwb3y511_20]
+    ...o.defenses.filter((d) => d.repair && d.repair.done <= end).map((d) => ({ at: Math.max(o.t, d.repair.done), repaired: d.id })),
+  ].sort((a, b) => a.at - b.at || ((a.build || a.upgraded || a.farmBuilt || a.repaired) ? -1 : 1));
 
   let now = o.t;
   const extractTo = (until) => {
@@ -559,6 +561,13 @@ export function advance(outpost, toMs, ctx) {
     } else if (ev.farmBuilt) {
       const b = o.farm.buildings[ev.farmBuilt];
       report.built.push({ farm: ev.farmBuilt, kind: b.kind, tier: b.tier, at: ev.at });
+    } else if (ev.repaired) {
+      const d = o.defenses.find((x) => x.id === ev.repaired);
+      if (d && d.repair) {
+        delete d.repair;
+        d.hp = structureDef(d.kind, d.tier).battle.hp;
+        (report.repaired ||= []).push({ defense: d.id, at: ev.at });
+      }
     } else if (ev.upgraded) {
       const d = finishDefenseUpgrade(o);
       if (d) report.built.push({ defense: d.id, kind: d.kind, tier: d.tier, at: ev.at });
@@ -910,16 +919,48 @@ export function sellStructure(outpost, target) {
 export function repairCost(o, id, params = OUTPOST) {
   const d = o.defenses.find((x) => x.id === id);
   if (!d) return null;
+  if (d.repair) return 0;   // a drone is already on its way: nothing more to pay
   const def = structureDef(d.kind, d.tier);
   return Math.ceil(def.value * params.Repair_Share_Per_HP * (1 - d.hp / def.battle.hp));
 }
-/** Repair a defense to full HP. Only this restores HP (design §5.2). → { outpost, cost } or { error } */
+/**
+ * Where a repair drone starts: the centre of the outpost's hub pad (the base), in cells. null when the map has no hub.
+ */
+export function droneHome(o, map) {
+  const id = Object.keys(o.pads || {}).sort().find((p) => o.pads[p].kind === 'hub');
+  const pad = id && map && map.pads ? map.pads.find((p) => p.id === id) : null;
+  return pad ? [pad.x + pad.w / 2, pad.y + pad.h / 2] : null;
+}
+/** A repair drone's flight from the hub to a defense, in ms (Repair_Drone_Speed cells / s). */
+export function droneFlightMs(o, map, d, params = OUTPOST) {
+  const home = droneHome(o, map);
+  if (!home) return 0;
+  const dist = Math.hypot(d.cell[0] + 0.5 - home[0], d.cell[1] + 0.5 - home[1]);
+  return Math.round(1000 * dist / Math.max(0.1, params.Repair_Drone_Speed ?? 2));
+}
+
+/**
+ * Repair a defense to full HP. Only this restores HP (design §5.2). Owner 2026-11-10: "the repair drone need to travel
+ * from the base and repair defenses" [MM-story_mwb3y511_20]: the gold is paid now and a drone leaves the hub; it flies
+ * to the defense (droneFlightMs), works Repair_Work_Sec, and the defense is whole when it is done (advance() restores
+ * the HP at d.repair.done, on the outpost's clock, so it is deterministic and finishes while the player is away). A
+ * defense with a drone already on its way cannot be ordered again. Without ctx.now and ctx.map (a bare model call) the
+ * repair is instant, as before. → { outpost, cost, drone? } or { error }
+ */
 export function repair(outpost, id, ctx = {}) {
-  const cost = repairCost(outpost, id, P(ctx));
+  const params = P(ctx);
+  const d0 = outpost.defenses.find((x) => x.id === id);
+  if (d0 && d0.repair) return { error: 'a repair drone is already on its way' };
+  const cost = repairCost(outpost, id, params);
   if (cost == null) return { error: `no defense ${id}` };
   if (cost > (ctx.gold ?? Infinity)) return { error: `costs ${cost} gold` };
   const o = clone(outpost);
   const d = o.defenses.find((x) => x.id === id);
+  if (ctx.now != null && ctx.map && droneHome(o, ctx.map)) {
+    const at = ctx.now, arrive = at + droneFlightMs(o, ctx.map, d, params);
+    d.repair = { at, arrive, done: arrive + Math.round(1000 * (params.Repair_Work_Sec ?? 4)) };
+    return { outpost: o, cost, drone: { ...d.repair } };
+  }
   d.hp = structureDef(d.kind, d.tier).battle.hp;
   return { outpost: o, cost };
 }

@@ -45,7 +45,7 @@ import { structureDef } from '../../data/outpost.js';
 import { oresOf } from '../../data/ores.js';
 import { PLANETS } from '../../data/planets.js';
 import { loadChoice } from '../../render3d/quality.js';
-import { harvestRunning, harvestPlan, surfaceFieldGroups, fieldStock } from '../model.js';
+import { harvestRunning, harvestPlan, surfaceFieldGroups, fieldStock, droneHome, droneFlightMs } from '../model.js';
 import { harvestRates } from '../../data/outpost.js';
 import { harvesterUnits } from './harvestDrive.js';
 import { startProbe, probeDelay, probeWear, probeCells, probeBreached, PROBE_MAX_S } from './visitProbe.js';
@@ -243,6 +243,46 @@ async function openOutpostViewInner(opts, stage) {
     for (const u of harvesterUnits(plan, routes, HRATES, driveClock, { running })) state.units.set(u.id, u);
   }
   syncHarvesters();
+  // ── repair drones (owner 2026-11-10: "the repair drone need to travel from the base and repair defenses")
+  //    [MM-story_mwb3y511_20]: each defense with a repair under way (model.js repair: d.repair { at, arrive, done }) has the
+  //    battle's repair unit (isRepairTroop) in the scene: it flies out from the hub, works at the defense (the battle's
+  //    welding sparks, render3d/fx/repairFx.js, keyed on state 'repairing' + repairTargetId) and, once the repair is
+  //    done, flies home. The clock decides where it is, so a reopened outpost shows a drone mid-flight.
+  const dronesBack = new Map();   // defense id → { from: [x, y], at, ms } a drone flying home after its repair
+  const lastRepair = new Map();   // defense id → its d.repair while under way (to know where a finished drone starts home)
+  function syncRepairDrones() {
+    for (const id of [...state.units.keys()]) if (String(id).startsWith('or')) state.units.delete(id);
+    const home = droneHome(o, map);
+    if (!home) return;
+    const now = clockNow();
+    const lerp = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+    const unit = (key, pos, st, target) => state.units.set('or' + key, { id: 'or' + key, unitId: 'GND-Troops', isRepairTroop: true, domain: 'Walker',
+      pos: { x: pos[0], y: pos[1] }, hp: 60, maxHp: 60, state: st, repairTargetId: target, targetId: null });
+    const live = new Set();
+    for (const d of o.defenses) {
+      const at = [d.cell[0] + 0.5, d.cell[1] + 0.5];
+      // it works from the defense's side toward the hub, half a cell out
+      const dx = home[0] - at[0], dy = home[1] - at[1], L = Math.hypot(dx, dy) || 1;
+      const spot = [at[0] + dx / L * 0.7, at[1] + dy / L * 0.7];
+      if (d.repair) {
+        live.add(d.id); lastRepair.set(d.id, { spot });
+        const r = d.repair;
+        if (now < r.arrive) unit(d.id, lerp(home, spot, Math.max(0, (now - r.at) / Math.max(1, r.arrive - r.at))), 'repairMarch', null);
+        else unit(d.id, spot, 'repairing', 'od-' + d.id);
+      } else if (lastRepair.has(d.id)) {   // just finished: fly home
+        const s = lastRepair.get(d.id).spot;
+        lastRepair.delete(d.id);
+        dronesBack.set(d.id, { from: s, at: now, ms: Math.max(500, droneFlightMs(o, map, d)) });
+      }
+    }
+    for (const [id, b] of dronesBack) {
+      if (live.has(id)) { dronesBack.delete(id); continue; }
+      const k = (now - b.at) / b.ms;
+      if (k >= 1) { dronesBack.delete(id); continue; }
+      unit(id + 'b', lerp(b.from, home, k), 'repairMarch', null);
+    }
+  }
+  syncRepairDrones();
   // the surface fields' stock (owner 2026-11-07: they regrow at 5 % of the battle's rate): a field's markers shrink and
   // dim as it empties, through the battle renderer's own drained-node look (remaining / units, a regrowing stub at 0)
   const fieldOfCell = new Map();
@@ -263,7 +303,7 @@ async function openOutpostViewInner(opts, stage) {
   const hud = mountHud(host, {
     onClose: () => close(),
     onSell: () => doSell(),
-    onRepairAll: () => act({ type: 'repairAll' }, (res) => `Defenses repaired · −${fmtGold(res.cost)} gold`),
+    onRepairAll: () => act({ type: 'repairAll' }, (res) => `Repair drones launched · −${fmtGold(res.cost)} gold`),
     onOnline: () => act({ type: 'online' }, () => 'OUTPOST ONLINE · mining has begun. Raiders will come: hold the first one.'),
     onPanelClose: () => { select(null); },
     onCancelPlace: () => cancelPlacing(),
@@ -272,7 +312,7 @@ async function openOutpostViewInner(opts, stage) {
     onPickFor: (kind, pad) => pickItem(isResourceBay(kind) ? 'resourceBay' : kind, { pad }),
     onDeep: (pad, on) => act({ type: 'deep', pad, on }, () => (on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam'), () => select({ pad })),
     onUpgrade: (pad) => act({ type: 'upgrade', pad }, (res) => `Upgrade started · −${fmtGold(res.cost)} gold`, () => select({ pad })),
-    onRepair: (id) => act({ type: 'repair', id }, (res) => `Repaired · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
+    onRepair: (id) => act({ type: 'repair', id }, (res) => `Repair drone launched · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onSellStructure: (target) => {
       // where it stood, for the green "$N" the battle's sale pops (goldPopups.js)
       const pad = target.pad && map.pads.find((p) => p.id === target.pad), d = target.defense != null && o.defenses.find((x) => x.id === target.defense);
@@ -727,6 +767,7 @@ async function openOutpostViewInner(opts, stage) {
     crew.update(dt);
     driveClock += dt;
     syncHarvesters();
+    syncRepairDrones();
     stepProbe(dt);
     if (liveAcc === 0) syncFieldStock();
     const out = scene.update(dt, o);

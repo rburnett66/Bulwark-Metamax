@@ -355,3 +355,36 @@ test('seeds are stable per save and planet; the save gains empty outposts', () =
   assert.deepEqual(s.outpostTrade, { discovered: {}, farSoldToday: null });
   assert.deepEqual(defaultSave().outposts, {});
 });
+
+// [MM-story_mwb3y511_20] owner 2026-11-10: "the repair drone need to travel from the base and repair defenses"
+test('repair launches a drone from the hub: paid now, whole when it has flown out and worked', async () => {
+  const { droneHome, droneFlightMs } = await import('./model.js');
+  let o = raidOutcome(online(), { result: 'held', at: T0, defenses: [{ id: 'd1', hp: 200 }] }).outpost;
+  const home = droneHome(o, map);
+  assert.ok(home, 'the hub is the drone base');
+  const d = o.defenses.find((x) => x.id === 'd1');
+  const fly = droneFlightMs(o, map, d);
+  assert.equal(fly, Math.round(1000 * Math.hypot(d.cell[0] + 0.5 - home[0], d.cell[1] + 0.5 - home[1]) / 2), '2 cells a second (proposed)');
+  const r = repair(o, 'd1', { gold: 600, now: o.t, map });
+  assert.equal(r.cost, 600, 'paid when ordered');
+  assert.deepEqual(r.drone, { at: o.t, arrive: o.t + fly, done: o.t + fly + 4000 });
+  assert.equal(r.outpost.defenses.find((x) => x.id === 'd1').hp, 200, 'not whole until the drone has done its work');
+  assert.ok(repair(r.outpost, 'd1', { gold: 9999, now: o.t, map }).error, 'one drone per defense');
+  assert.equal(repairCost(r.outpost, 'd1'), 0, 'nothing more to pay while it is on its way');
+  const mid = advance(r.outpost, o.t + fly, ctx()).outpost;
+  assert.equal(mid.defenses.find((x) => x.id === 'd1').hp, 200, 'arrived, still working');
+  const done = advance(r.outpost, o.t + fly + 4000, ctx());
+  const dd = done.outpost.defenses.find((x) => x.id === 'd1');
+  assert.equal(dd.hp, 400);
+  assert.equal(dd.repair, undefined);
+  assert.deepEqual(done.report.repaired, [{ defense: 'd1', at: o.t + fly + 4000 }]);
+  // the same in one long step and in one-second steps (the outpost's clock is closed form)
+  let s = r.outpost;
+  for (let t = o.t + 1000; t <= o.t + fly + 5000; t += 1000) s = advance(s, t, ctx()).outpost;
+  assert.equal(s.defenses.find((x) => x.id === 'd1').hp, 400);
+});
+
+test('repair with no clock or map (a bare model call) is instant, as before', () => {
+  const o = raidOutcome(online(), { result: 'held', at: T0, defenses: [{ id: 'd1', hp: 200 }] }).outpost;
+  assert.equal(repair(o, 'd1', { gold: 600 }).outpost.defenses.find((x) => x.id === 'd1').hp, 400);
+});
