@@ -105,6 +105,14 @@ Rules 10–13 (owner, 2026-11-10, epic **F-E · Earned seed pods** [MM-epic_mwat
     recipe learned in a mission from the crop's buyer faction, offered by a character aboard its capital ship at
     **Friendly** standing (`standings.js`); **L4** agrobots; **L5** irrigation. A plot grows at the highest level its
     crop has bought and its equipment allows, and the PLANT button names what caps it. Battle-map crops stay level 3.
+    *"Level 3 on some crops may also require a new planting method like terracing, vertical farming, or hydroponics"*
+    (owner, 2026-11-10): a crop's row may name a **method** its level 3 also needs (`Crop_Levels.Method`, blank for
+    most crops); on any other method that crop grows at level 2 at most.
+    **Irrigation equipment serves a limited group** (owner, 2026-11-10, E8): *"Irrigation equipment handles a limited
+    number of plots (4 connected) and it visually changes the look of the plots (a plot is a square of crops)."* One
+    irrigation unit waters up to **4 connected plots** (neighbours across a walkway, rule 8, proposed); a fifth plot
+    needs another unit. A watered plot looks different: channels and wet soil between its rows, so the player can see
+    which squares are irrigated. This replaces the Pump's 4-cell water reach as the way a plot gets water.
     **Grow-room displays** (E7, with the future rooms): the Vertical farm's roof is a screen that looks like solar
     panels and shows the grow state of every pod inside; hydroponic and underground rooms show a state lamp outside,
     and the player enters to see status and harvest.
@@ -336,7 +344,8 @@ they come back; the owner will detail them first:
 | **E2** Pod unlock at 500 | `s.cropDelivered[crop]` counted at every map's end and every outpost/farm sale; `podsUnlocked(s, crop)` at `Pod_Unlock_Units` (500); BUY, chest and PLANT refuse a locked crop; SEED PODS shows the count toward 500 | F-A |
 | **E3** Pod Reward Chest | at every resource map's end (any stars): `s.podChestCarry[crop]` += delivered units of each unlocked crop, ⌊÷ `Chest_Units_Per_Pod` (100)⌋ pods go in a chest; the chest sequence after Pirate Bash's (granted on the result screen, held, tap to open, one card per crop); replaces `battlePods` | E2 |
 | **E4** Crop mastery | `s.mastery[crop]` from plantings, harvests and sales; thresholds (data, proposed) open the L2–L5 nodes in place of the F1 gates; gold still buys | F-A |
-| **E5** Level machinery | at planting: L3 needs the crop's fertilizer, L4 agrobots, L5 irrigation (`Crop_Levels.Needs`); the plot grows at the highest level it qualifies for and PLANT names the cap | E4 |
+| **E5** Level machinery | at planting: L3 needs the crop's fertilizer (and, for some crops, a method: `Crop_Levels.Method`), L4 agrobots, L5 irrigation (`Crop_Levels.Needs`); the plot grows at the highest level it qualifies for and PLANT names the cap | E4 |
+| **E8** Irrigation units | an irrigation unit that waters up to 4 connected plots (replacing the Pump's reach); the irrigated plot's look (channels, wet soil between the rows); review page preset | F-A |
 | **E6** Fertilizer recipes | the Fertilizer machine; one recipe mission per crop from its buyer faction, offered aboard that faction's capital ship at Friendly standing | E5 |
 | **E7** Grow-room displays | the Vertical farm's solar-panel roof screen of pod states; the state lamps on hydroponic and underground doorways | the future grow rooms, B8v |
 
