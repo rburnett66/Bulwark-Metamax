@@ -6142,6 +6142,7 @@ export const MAPDATA = {
   "Battle_Pod_Units_Epic": 100,
   "Pod_Crate": 12,
   "Silo_Hours": 8,
+  "Farmhouse_Store_Hours": 1,
   "Breach_Silo_Loss": 0.25,
   "Trample_Fruited_Yield": 0.5,
   "Avatar_Cells": 0.45,

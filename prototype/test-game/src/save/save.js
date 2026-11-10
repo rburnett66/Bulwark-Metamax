@@ -23,9 +23,13 @@
  *   capitalShips     { [planet]: {arrived} }
  *   questSteps       { [questLine]: highest step collected }
  *   inventory        { [resourceId]: count }; inventoryNew: the same, since the last visit
+ *   stores           { farm: { [planetKey]: { [cropId]: units } } } the OUTPOST & FARM inventory (save/stores.js); storesNew:
+ *                    the same, since the last visit [MM-story_mwaf80xq_19]. Mining and parts stores join it later.
  *   seen             what the menu's red-dot badges last showed (menu/badges.js) [MM-story_mvkhei9q_k]
  *   pendingRewards   the last battle(s)' rewards, waiting to fly into the menu widget [MM-story_mvkhegop_j]
  *   battleLog        played campaign battles, newest first, capped (save/battleLog.js) [MM-story_mw1azvh8_d]
+ *   pods             { [cropId]: { [level 1..5]: count } } seed pods, an OUTPOST & FARM holding (farm/pods.js) [MM-story_mwabgh3x_b]
+ *   podCarry         { [cropId]: units } battle units not yet worth a Rare pod (farm/pods.js battlePods)
  *
  * Determinism contract: any field that CHANGES A BATTLE (carry, tech, harvesterLevel, contract
  * buffs) must be injected at createSim time — never mid-battle — so replays stay reproducible.
@@ -33,6 +37,7 @@
 
 import { emptyStats } from './battleTally.js';
 import { collectiveOf } from './collective.js';
+import { emptyStores, emptyStoresNew, migrateStores } from './stores.js';
 
 const KEY = 'bulwark:save';
 
@@ -62,6 +67,8 @@ export function defaultSave() {
     questSteps: {},
     inventory: {},
     inventoryNew: {},
+    stores: emptyStores(),     // the OUTPOST & FARM inventory, apart from the battle's (owner rule 5) [MM-story_mwaf80xq_19]
+    storesNew: emptyStoresNew(),
     loggedQueue: [],     // missions logged away from the menu: the toast plays when the menu next shows
     battleLog: [],
     collective: { introSeen: false, contractAccepted: false, transport: null, seenBefore: false },   // the opening [MM-story_mw47lq0l_7]
@@ -70,6 +77,9 @@ export function defaultSave() {
     outposts: {},
     outpostContracts: {},
     outpostTrade: { discovered: {}, farSoldToday: null },
+    // seed pods (farm/pods.js) [MM-story_mwabgh3x_b]: the farm's stock, never the battle inventory (owner rule 5)
+    pods: {},
+    podCarry: {},
   };
 }
 
@@ -104,6 +114,7 @@ export function migrate(s) {
   if (!s.questSteps) s.questSteps = {};
   if (!s.inventory) s.inventory = {};
   if (!s.inventoryNew) s.inventoryNew = {};
+  migrateStores(s);
   if (!Array.isArray(s.loggedQueue)) s.loggedQueue = [];
   if (!Array.isArray(s.battleLog)) s.battleLog = [];
   if (!s.seen || typeof s.seen !== 'object') s.seen = {};
@@ -112,6 +123,8 @@ export function migrate(s) {
   if (!s.outpostContracts || typeof s.outpostContracts !== 'object') s.outpostContracts = {};
   if (!s.outpostTrade || typeof s.outpostTrade !== 'object') s.outpostTrade = { discovered: {}, farSoldToday: null };
   if (!s.outpostTrade.discovered) s.outpostTrade.discovered = {};
+  if (!s.pods || typeof s.pods !== 'object') s.pods = {};
+  if (!s.podCarry || typeof s.podCarry !== 'object') s.podCarry = {};
   // the Harvester Bay became the Resource Bay, and harvesters are bought and counted (owner 2026-11-07, story O16);
   // the same rule as src/outpost/model.js migrateOutpost, inlined so the save stays free of the outpost rules
   for (const o of Object.values(s.outposts)) {

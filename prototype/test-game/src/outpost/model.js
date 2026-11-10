@@ -52,6 +52,9 @@ import { createRng } from '../sim/rng.js';
 import { ASSUMPTIONS } from '../data/tables.js';
 import { oresOf, oreById, oreItemId } from '../data/ores.js';
 import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock } from '../data/outpost.js';
+// the farm is a layer on the outpost (owner rule 7): it grows inside this advance() and its buildings join this power grid
+import { growFarm, farmBuildEvents } from '../farm/grow.js';
+import { farmBuildingOf } from '../data/farm.js';
 
 const MIN = 60_000, HOUR = 3_600_000;
 const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
@@ -196,15 +199,16 @@ export function collectionRates(o, map, params = OUTPOST) {
 
 // ── power (design §4.5) ──────────────────────────────────────────────────────────────────────────────────────────
 // Consumers are served in this order when a grid is short, so the outpost keeps its core running first.
-const PRIORITY = { hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, resourceBay: 4, upgradeBay: 5, habitat: 6 };
+const PRIORITY = { hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, resourceBay: 4, upgradeBay: 5, habitat: 6, farmhouse: 7, silo: 7, pump: 8 };
 
 /**
  * The power grids: stations within reach of each other pool their supply; a consumer joins the grid of the nearest
  * station whose reach covers it, and a grid powers its consumers in priority order until its supply runs out.
  * → { grids: [{ stations, supply, draw, powered }], powered: Set<id>, off: { [id]: 'reach' | 'supply' } }
- * Ids are pad ids for buildings and defense ids for defenses. Walls draw nothing and are always on.
+ * Ids are pad ids for buildings and defense ids for defenses. Walls draw nothing and are always on. Farm buildings
+ * (o.farm.buildings, owner rule 7) are consumers on the same grids once finished at time `t` (default o.t).
  */
-export function powerGrids(o, map) {
+export function powerGrids(o, map, t = o.t) {
   const stations = Object.entries(o.pads).filter(([, b]) => b.kind === 'power')
     .map(([id, b]) => ({ id, at: centre(padOf(map, id)), def: structureDef('power', b.tier) }));
   // union stations within reach of each other
@@ -226,6 +230,8 @@ export function powerGrids(o, map) {
     ...Object.entries(o.pads).filter(([, b]) => b.kind !== 'power')
       .map(([id, b]) => ({ id, kind: b.kind, at: centre(padOf(map, id)), draw: structureDef(b.kind, b.tier).draw })),
     ...o.defenses.map((d) => ({ id: d.id, kind: d.kind, at: cellCentre(d.cell), draw: structureDef(d.kind, d.tier).draw })),
+    ...Object.entries((o.farm && o.farm.buildings) || {}).filter(([, b]) => b.done <= t)
+      .map(([id, b]) => ({ id, kind: b.kind, at: [b.x + b.w / 2, b.y + b.h / 2], draw: farmBuildingOf(b.kind).draw })),
   ];
   const off = {}, powered = new Set();
   for (const c of consumers) {
@@ -515,7 +521,8 @@ export function advance(outpost, toMs, ctx) {
     ...o.building.filter((b) => b.done <= o.t).map((b) => ({ at: o.t, build: b })),
     ...raids.map((r) => ({ at: r.at, raid: r })),
     ...(o.upgrading && o.upgrading.done <= end ? [{ at: Math.max(o.t, o.upgrading.done), upgraded: true }] : []),
-  ].sort((a, b) => a.at - b.at || ((a.build || a.upgraded) ? -1 : 1));
+    ...farmBuildEvents(o, o.t, end),
+  ].sort((a, b) => a.at - b.at || ((a.build || a.upgraded || a.farmBuilt) ? -1 : 1));
 
   let now = o.t;
   const extractTo = (until) => {
@@ -532,6 +539,8 @@ export function advance(outpost, toMs, ctx) {
     }
     // the harvesters and the surface fields (finite stock, 5 % regrowth), into the hopper
     harvestFields(o, map, params, dt, harvestRunning(o, map, params), report, now);
+    // the farm's plants, at this stretch's power and water (src/farm/grow.js)
+    if (o.farm) growFarm(o, map, now, until, powerGrids(o, map, now).powered, report);
     now = until;
   };
   for (const ev of events) {
@@ -543,6 +552,9 @@ export function advance(outpost, toMs, ctx) {
       o.pads[b.pad] = { ...prev, kind: b.kind, tier: b.tier, ...(b.kind === 'rig' ? { deposit: b.deposit ?? prev.deposit, deep: !!prev.deep } : {}) };
       if (b.kind === 'rig') o.storage[b.pad] ||= {};
       report.built.push({ pad: b.pad, kind: b.kind, tier: b.tier, at: b.done });
+    } else if (ev.farmBuilt) {
+      const b = o.farm.buildings[ev.farmBuilt];
+      report.built.push({ farm: ev.farmBuilt, kind: b.kind, tier: b.tier, at: ev.at });
     } else if (ev.upgraded) {
       const d = finishDefenseUpgrade(o);
       if (d) report.built.push({ defense: d.id, kind: d.kind, tier: d.tier, at: ev.at });

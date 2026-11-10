@@ -551,6 +551,11 @@ body.show-sheet #sheet{display:block} body.show-sheet #game{display:none}
    <path d="M3 11h18v9.5H3z"/><path d="M3 11l2.2-3.5h13.6L21 11"/><path d="M9.5 14.5h5"/>
    <path d="M9 7.5l1.6-4.3 1.6 4.3" fill="currentColor" fill-opacity=".3"/><path d="M13 7.5l1.4-3 1.4 3" fill="currentColor" fill-opacity=".3"/>
   </symbol>
+  <!-- header: stores — the outpost & farm silo with a sprout [MM-story_mwaf80xq_19] -->
+  <symbol id="i-store" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+   <path d="M3.5 21V9.5a4.5 4.5 0 019 0V21"/><path d="M3.5 13.5h9M3.5 17h9"/><path d="M2 21h20"/>
+   <path d="M17.5 21v-5.5"/><path d="M17.5 17c-2.1 0-3.2-1.1-3.2-3 2.1 0 3.2 1.1 3.2 3z" fill="currentColor" fill-opacity=".3"/><path d="M17.5 15.5c0-2.1 1.1-3.2 3.1-3.2 0 2.1-1.1 3.2-3.1 3.2z" fill="currentColor" fill-opacity=".3"/>
+  </symbol>
   <symbol id="s-done" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 6.4l2.8 2.8 5.6-6"/></symbol>
   <!-- UI -->
   <symbol id="u-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 1.5l7.4 4.25v8.5L10 18.5l-7.4-4.25v-8.5z"/><path d="M6.4 10.2l2.4 2.4 4.8-5"/></symbol>
@@ -1020,7 +1025,7 @@ function renderSheet() {
   <div class="icon-grid">${Object.entries(REWARD).map(([k,r])=>`<div class="ic-card" style="--x:1"><div class="sizes" style="color:${r.col||'#d6dde6'}">${use(r.i)}${use(r.i)}${use(r.i)}</div><b>${r.n}</b><code>#${r.i}</code></div>`).join('')}</div></section>
 
  <section class="sh-sec"><h2>HEADER AND STATUS GLYPHS</h2><p>The ledger glyph opens the log. The status glyphs are drawn on a 12-unit grid so they stay crisp at 10 px inside tags.</p>
-  <div class="icon-grid">${ic('i-log','Mission Log','Header button, list header, empty state','gold')}${ic('i-inv','Inventory','Header button next to Missions','cyan')}${Object.entries(STATUS).map(([k,s])=>`<div class="ic-card"><div class="sizes" style="color:var(${s.v})">${use(s.g)}${use(s.g)}${use(s.g)}</div><b>${s.n}</b><code>#${s.g}</code></div>`).join('')}</div></section>
+  <div class="icon-grid">${ic('i-log','Mission Log','Header button, list header, empty state','gold')}${ic('i-inv','Inventory','Header button next to Missions','cyan')}${ic('i-store','Stores','Header button next to Inventory: the Outpost & Farm inventory','cyan')}${Object.entries(STATUS).map(([k,s])=>`<div class="ic-card"><div class="sizes" style="color:var(${s.v})">${use(s.g)}${use(s.g)}${use(s.g)}</div><b>${s.n}</b><code>#${s.g}</code></div>`).join('')}</div></section>
 
  <section class="sh-sec"><h2>RESOURCE RARITY</h2><p>Required items use the crystal colours already used in the world and on the survey dossier.</p>
   <div class="rar">${Object.entries(RAR).map(([k,r])=>`<div class="item" style="--rc:var(${r.v})"><span class="gem">${use('r-crystal')}</span><span><b>${r.n}</b><small>${getComputedStyle(document.documentElement).getPropertyValue(r.v).trim()}</small></span></div>`).join('')}</div></section>

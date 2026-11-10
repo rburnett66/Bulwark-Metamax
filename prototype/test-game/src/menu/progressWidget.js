@@ -3,7 +3,7 @@
  * into it [MM-story_mvkhegop_j]. Menu-Progression-Design §2–3.
  *
  *   createProgressWidget(doc, { onOpen }) → { el, render(values), playRewards(ledger, finalValues, layer) → Promise }
- *     values = { xp, gold, stars, research, techDot, missions, inventory }   onOpen(key) — a tap on an indicator ('missions'|'inventory'|'xp'|'gold'|'stars'|'research')
+ *     values = { xp, gold, stars, research, techDot, missions, inventory, stores }   onOpen(key) — a tap on an indicator ('missions'|'inventory'|'stores'|'xp'|'gold'|'stars'|'research')
  *
  * DOM only (Web Animations API for the flight); the numbers come from the save. Presentation: nothing here changes a value.
  */
@@ -114,6 +114,7 @@ export function createProgressWidget(doc, { onOpen } = {}) {
   el.innerHTML = `
     ${chip('missions', 'i-log', 'MISSIONS', 'Mission Log')}
     ${chip('inventory', 'i-inv', 'INVENTORY', 'Inventory', ' invbtn')}
+    ${chip('stores', 'i-store', 'STORES', 'Outpost & Farm stores', ' invbtn')}
     <button class="pw-rank" data-econ="xp" title="Commander rank"><span class="pw-hex"><span data-lvl>1</span></span>
       <span class="pw-rk"><i data-title>Recruit</i><span class="pw-xpbar"><span data-bar></span></span><em data-xp>0 / 300 XP</em></span></button>
     <button data-econ="gold" title="Banked gold — spend it in the Tech Tree"><span class="pw-ic"><svg class="i"><use href="#r-gold"/></svg></span><span class="pw-v"><b data-v>0</b><label>GOLD</label></span></button>
@@ -140,6 +141,7 @@ export function createProgressWidget(doc, { onOpen } = {}) {
     el.querySelector('[data-dot]').classList.toggle('on', !!values.techDot);
     if (values.missions) renderChip('missions', values.missions);
     if (values.inventory) renderChip('inventory', values.inventory);
+    if (values.stores) renderChip('stores', values.stores);
   }
   function renderChip(key, c) {
     const b = btn(key), count = b.querySelector('[data-count]'), sub = b.querySelector('[data-sub]');
