@@ -23,6 +23,7 @@ import { defenseStructures, planBuildings } from './conduits.js';
 import { createSession, onlineIssues } from './session.js';
 // the FARM tab (story A7 [MM-story_mwabgs3l_f]): the farm on this same view, map, session and build loop (owner rule 7)
 import { createFarmLayer } from '../../farm/view/farmLayer.js';
+import { createFarmEmbers } from '../../farm/view/embers.js';
 import { farmMenu, FARM_MENU, farmAt, farmPanelModel } from '../../farm/view/farmUi.js';
 import { storeCapacity } from '../../farm/model.js';
 import { statusModel } from './statusReport.js';
@@ -178,6 +179,8 @@ async function openOutpostViewInner(opts, stage) {
   const kit = await createOutpostKit(THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader, lodLevels: safe ? [2] : null });
   const scene = createOutpostScene(THREE, r, { map, kit, tier: r.tier.key, reduced });
   const farm = createFarmLayer(THREE, r, { map, kit, reduced });
+  // the harvest effect: embers in the pod level's colour on the battle's particle pool; no idle embers in safe mode (F7)
+  const farmFx = createFarmEmbers({ safe });
 
   // ── open: the away catch-up (the only time a long advance runs) ──────────────────────────────────────────────────
   // the away catch-up, one raid window per frame behind the loading line (raids on the battle sim cost time, O7)
@@ -335,7 +338,11 @@ async function openOutpostViewInner(opts, stage) {
   function farmAct(a, arg) {
     const action = a === 'plant' ? { type: 'plant', plot: sel && sel.plot, pick: arg } : a === 'prep' || a === 'harvest' ? { type: a, plot: arg }
       : a === 'deliver' ? { type: 'deliver', crop: arg } : { type: a };
-    act(action, FARM_TEXT[a] || null, () => { if (sel) select(sel); });
+    act(action, FARM_TEXT[a] || null, (res) => {
+      // a HARVEST / HARVEST ALL: embers off each Fruited plot, dust off each dead one (farm/view/embers.js)
+      if (r.impacts && res.farm && res.farm.plots) farmFx.harvest(res.farm.plots, o, r.impacts, FXK);
+      if (sel) select(sel);
+    });
   }
 
   // ── the BUILD menu (story O17 [MM-story_mw6k9xec_5]): the battle's pick → ghost → build loop ──────────────────────
@@ -698,6 +705,7 @@ async function openOutpostViewInner(opts, stage) {
     if (r.impacts) {
       siteFx.step(dt, constructionSites(o, map, clockNow()), r.impacts.emit, FXK, r.impacts.ring, r.tier.key);
       siteFx.stepDamage(dt, damageSites(o), r.impacts.emit, FXK);   // red sparks off damaged defenses (owner 2026-11-09)
+      farmFx.step(dt, o, r.impacts, FXK);   // a few embers drifting off each Fruited plot (none in safe mode)
     }
     if (saleRun) {
       saleRun.t += dt;
@@ -772,6 +780,8 @@ async function openOutpostViewInner(opts, stage) {
     select, sell: doSell, close,
     /** The FARM tab (review / screenshots): switch tabs, run a farm action, read the farm picture's counts. */
     setTab, farmAct, get tab() { return tab; }, farm,
+    /** The harvest effect (review): embers({ plot, kind, level, cycle }[]) plays it on those plots now; its counts. */
+    embers: (plots) => (r.impacts ? farmFx.harvest(plots, o, r.impacts, FXK) : null), get emberStats() { return { ...farmFx.stats }; },
     /** Visit probes (review): bring the next one now; read the one running ({ n, t, raiders, done } or null). */
     probeNow() { if (!probe) probeWait = 0; },
     get probe() { return probe ? { n: probeN + 1, t: probeT, raiders: [...probe.state.units.values()].filter((u) => u.side === 'attacker').length, done: probe.done } : null; },

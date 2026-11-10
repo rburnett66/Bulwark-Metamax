@@ -70,6 +70,8 @@ test('the loop through the outpost session: place, prep, plant from the Pod Crat
   const panel = farmPanelModel(ses.outpost(), map, { plot: plotId }, ses.ctx(t2));
   r = ses.act({ type: 'harvest', plot: plotId }, t2);
   assert.ok(r.ok, r.error);
+  // which plot was harvested, how, at what level and cycle (the ember effect, farm/view/embers.js) [MM-story_mwabh2oc_j]
+  assert.deepEqual(r.farm.plots, [{ plot: plotId, kind: 'crop', level: 1, cycle: 1 }]);
   const sv = store.load();
   assert.equal(sv.stores.farm.ground['loam-grain'], 16, 'the crop is in the OUTPOST & FARM store');
   assert.equal(sv.inventory['loam-grain'] || 0, 0, 'never in the battle inventory');

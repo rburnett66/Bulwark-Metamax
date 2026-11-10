@@ -25,6 +25,11 @@
  *
  * READ-ONLY on the sim. Private seeded PRNG (never Math.random), so the same frames give the same effects.
  * Pure: no three.js, no DOM (impactsView.js draws it). World: X = column, Z = row, Y = up, cell centre = c + 0.5.
+ *
+ * FARM EMBERS (EMBER_SHADE.farm) [MM-story_mwabh2oc_j]: an EMBER emitted with shade 3 is a harvest ember (farm/view/
+ * embers.js): it carries its own colour (`ex.col`, the pod level's) and noise seed (`ex.ns`), rises on seeded value
+ * noise (the landing craft's noise3) with no wind and no PRNG draw, and the view draws it in that colour, fading in,
+ * flickering and fading out at the top. Shade 0 (the battle's wreck embers) is untouched.
  */
 import { cellToWorld } from '../camera.js';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
@@ -33,10 +38,16 @@ import { UNIT_MODELS } from '../units/models.js';
 import { AIM } from './combatFxModel.js';
 import { tintMix } from './factionFx.js';
 import { TUNE, tunedFactionColor } from './fxTune.js';   // live knobs (Effects Lab) [MM-story_mvk63439_o]
+import { noise3 } from '../craft/landingFx.js';   // the thruster wash's seeded value noise (Landing-Craft §3.4)
 
 /** Particle kinds. Additive batch: SPARK, FIRE, FLASH, EMBER. Alpha (smoke) batch: SMOKE, DUST. */
 export const K = Object.freeze({ SPARK: 0, FIRE: 1, FLASH: 2, EMBER: 3, SMOKE: 4, DUST: 5 });
 export const isAdditive = (kind) => kind <= K.EMBER;
+/** EMBER shades: 0 the battle's wreck ember; 3 the farm's harvest ember (its own colour, value-noise drift). */
+export const EMBER_SHADE = Object.freeze({ wreck: 0, farm: 3 });
+/** The harvest ember's drift (the scale prototype's stepEmbers, per 60 fps frame): velocity kept per frame, noise
+ *  frequency, push, rise kept per frame. */
+export const FARM_EMBER = Object.freeze({ keep: 0.96, freq: 1.4, push: 4, time: 0.9, riseKeep: 0.995 });
 /** Decal kinds: SCORCH (dark batch), RING and POOL (additive batch). */
 export const D = Object.freeze({ SCORCH: 0, RING: 1, POOL: 2 });
 
@@ -125,7 +136,8 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
   // accumulator (no PRNG draw), so at 1 every call emits exactly once — today's stream and look are unchanged.
   const KIND_NAME = ['spark', 'fire', 'flash', 'ember', 'smoke', 'dust'];
   const acc = [0, 0, 0, 0, 0, 0];
-  function emit(kind, x, y, z, vx, vy, vz, life, size, grow = 0, shade = 0, dusty = 0, drag = 0) {
+  // ex (optional): { col: [r, g, b], ns } — a particle that carries its own colour and noise seed (the farm's embers)
+  function emit(kind, x, y, z, vx, vy, vz, life, size, grow = 0, shade = 0, dusty = 0, drag = 0, ex = null) {
     const T = TUNE.impacts[KIND_NAME[kind]];
     if (T && (T.count !== 1 || T.size !== 1 || T.life !== 1)) {
       acc[kind] += T.count;
@@ -133,13 +145,13 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
       while (acc[kind] >= 1) {
         acc[kind] -= 1;
         const j = copy++ ? 0.25 : 0, q = (seedSeq * 13.7) % 1 - 0.5;   // extra copies fan out a little (deterministic)
-        emitOne(kind, x, y, z, vx * (1 + j * q), vy * (1 + j * 0.5 * q), vz * (1 - j * q), life * T.life, size * T.size, grow, shade, dusty, drag);
+        emitOne(kind, x, y, z, vx * (1 + j * q), vy * (1 + j * 0.5 * q), vz * (1 - j * q), life * T.life, size * T.size, grow, shade, dusty, drag, ex);
       }
       return;
     }
-    emitOne(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty, drag);
+    emitOne(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty, drag, ex);
   }
-  function emitOne(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty, drag) {
+  function emitOne(kind, x, y, z, vx, vy, vz, life, size, grow, shade, dusty, drag, ex) {
     if (isAdditive(kind)) { if (nAdd >= limits.additive) return; nAdd++; }
     else { if (nSmoke >= limits.smoke) return; nSmoke++; }
     const p = freeP.pop() || {};
@@ -147,6 +159,7 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
     p.t = 0; p.life = life; p.size = size; p.grow = grow; p.shade = shade; p.dusty = dusty; p.drag = drag; p.bounces = 0; p.fl = 1;
     p.sd = (seedSeq = (seedSeq + 0.6180339887) % 1);   // a flame's flipbook start frame (fx/fireAtlas.js) [MM-task_mvfqzjkm_7]
     p.tc = tint; p.tw = tint ? tintW(kind, p.sd) : 0;
+    if (ex) { if (ex.col) { p.tc = ex.col; p.tw = 1; } p.ns = ex.ns || 0; } else p.ns = 0;
     particles.push(p);
   }
 
@@ -293,6 +306,12 @@ export function createImpacts({ seed = 1, caps = DEFAULT_IMPACT_CAPS } = {}) {
           p.y = 0.01; p.vy = -p.vy * (p.kind === K.DUST ? 0.1 : PHYS.sparkBounce); p.vx *= 0.55; p.vz *= 0.55; p.bounces++;
           if (p.bounces > 2 || p.vy < 0.3) { p.vy = 0; if (p.kind === K.DUST) p.t = p.life; }
         }
+      } else if (p.kind === K.EMBER && p.shade === EMBER_SHADE.farm) {   // a harvest ember: value-noise drift, no PRNG
+        const F = FARM_EMBER, k = Math.pow(F.keep, dt * 60), s = p.ns, tt = (p.t + s * 0.37) * F.time;
+        p.vx = p.vx * k + (noise3(p.x * F.freq + s, p.y * F.freq, tt) - 0.5) * F.push * dt;
+        p.vz = p.vz * k + (noise3(p.z * F.freq + s + 41, p.y * F.freq, tt) - 0.5) * F.push * dt;
+        p.vy *= Math.pow(F.riseKeep, dt * 60);
+        p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       } else if (p.kind === K.EMBER) {
         p.vy -= 0.4 * dt; p.x += (p.vx + W.x) * dt; p.y += p.vy * dt; p.z += (p.vz + W.z) * dt;
         p.fl = 0.7 + 0.6 * rand();
