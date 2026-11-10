@@ -197,6 +197,18 @@ Stories are tickets on the MetaMax board (the DoD lives there); this table is th
 | **A12** Review page | `tools/farming/farm.html` on seeded saves (every plot state, a raid, the away report), phone frames | A7–A11, A13 |
 | **A13** Outpost & farm inventory | (owner rule 5) a clone of the INVENTORY screen dedicated to outposts and farming: `s.stores.farm` banded by planet, the 36 crops with Helium-4 in Lumen's uncommon slot, held / new counts, the detail panel; its own button; built so mining and parts stores can join later | A1 |
 
+**As built (A6):** the Verdance outpost (`content/maps/forge/ground-outpost.json`) is re-authored through the Forge
+pipeline (`tools/maps/outpost-maps.mjs` → `forge-export.py` → `write` → `bake3d.mjs`): a farmland recipe
+(`VERDANCE_FARMLAND`, the forests thinned: trees 24 → 14 %, rocks 5 → 4 %, cliff 3 → 2 %, impassable 19.7 → 12.8 %, above
+the §1 floor), seed 40 (the search's best that keeps the raid hold counts, 5 and 8), the Forge's new **Resource density**
+knob at 12.5 (54 → 15 resource fields; 48 → 11 harvestable surface cells) and Decor density 100, both carried on the map
+as `resourceDensity` / `decorDensity`. The farm-cell layer is `farmCells` on the map (one code per cell; soil, slope,
+water, grove, collection, plus lane), derived by `src/terrain/farmCells.js` from the stamped grid (stampOutpost now leaves
+its cart tracks as `g.lanes`), written by the Forge on export and shown by its Outpost panel's *Farm cells* toggle;
+`outpostMapFromForge` passes it through and `src/farm/cells.js` reads it (`farmCellAt`, `canPlacePlot`, `plotSpots`,
+`packPlots`). Soil 831 → 1035 cells; 2 × 2 plot spots 460 → 688, 148 → 210 packed side by side. Review:
+`tools/farming/cells.html`. Decor props 145 → 78: every forest cell still carries its trees, there are fewer forests.
+
 ### F-B · Environment
 
 | Story | Builds | Depends on |
