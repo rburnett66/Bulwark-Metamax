@@ -10,7 +10,7 @@
  * delivered, f1 } — pods: the save's s.pods; held: the farm store for this planet ({ cropId: units }).
  */
 import { methodOf, farmBuildingOf, cropOf, podLevel, POD_LEVELS, yieldOf, prepCost, CROPS } from '../../data/farm.js';
-import { placePlot, placeFarmBuilding, plotState, storeCapacity, farmStatus } from '../model.js';
+import { occupied, plotState, storeCapacity, farmStatus } from '../model.js';
 import { windowSec } from '../grow.js';
 
 /** The FARM tab's build list, top to bottom: the two Phase A methods, then the farm buildings the player buys. */
@@ -27,17 +27,24 @@ const STATE_NAME = { prepping: 'Prepping', prepped: 'Prepped: ready to plant', p
 const TONE = { prepping: 'busy', prepped: 'ok', planted: 'busy', sprout: 'busy', plant: 'busy', fruited: 'ok', dead: 'warn', harvested: 'warn' };
 const clock = (sec) => { sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60; return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`; };
 
-/** Where an item can go: the top-left cells where the model accepts it (unlimited gold). → { targets: [{ cell }], error } */
+/**
+ * Where an item can go: the top-left cells where it fits — on the map, off everything that takes ground (pads,
+ * defenses, the farm's own things: model.occupied) and on ground the map's rule allows (ctx.cellOk, src/farm/cells.js).
+ * The same tests the model's place* run, without cloning the outpost per cell (a 64 × 32 map is 2,048 spots per item).
+ * → { targets: [{ cell }], error } (error: the first refusal, when there is no target)
+ */
 export function farmTargets(o, map, id, ctx = {}) {
   const it = FARM_MENU.find((m) => m.id === id);
   if (!it) return { targets: [], error: 'unknown item' };
-  const sz = sizeOf(it), probe = { ...ctx, map, gold: Infinity, now: ctx.now ?? o.t };
+  const sz = sizeOf(it), taken = occupied(o, map), targets = [];
   let error = null;
-  const targets = [];
   for (let y = 0; y + sz.h <= map.height; y++) {
     for (let x = 0; x + sz.w <= map.width; x++) {
-      const r = it.what === 'plot' ? placePlot(o, { x, y, method: id }, probe) : placeFarmBuilding(o, { kind: id, x, y }, probe);
-      if (r && !r.error) targets.push({ cell: [x, y] }); else if (!error && r) error = r.error;
+      const r = { x, y, w: sz.w, h: sz.h };
+      const hit = taken.find((t) => r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h);
+      const why = hit ? `the ground is taken (${hit.what})` : ctx.cellOk ? ctx.cellOk(r) : null;
+      if (why) { error = error || why; continue; }
+      targets.push({ cell: [x, y] });
     }
   }
   return { targets, error: targets.length ? null : error };

@@ -50,6 +50,14 @@ export const HUD_CSS = `
 .op-back { flex:0 0 auto; width:38px; height:38px; border:1px solid var(--line-hi); background:var(--well); color:#fff; font-size:20px; line-height:1; ${CH}; }
 .op-back:hover { background:#1f2834; }
 .op-title { flex:0 0 auto; min-width:0; }
+/* the OUTPOST / FARM tab (story A7): one map, two modes (Farming-Design §2.3) */
+.op-tabs { display:flex; gap:4px; flex:0 0 auto; }
+.op-tabs[hidden] { display:none; }
+.op-tab { font:700 .78em/1 Orbitron,sans-serif; letter-spacing:.14em; padding:7px 12px; background:rgba(20,26,34,.85); color:var(--dim); border:1px solid #2e3846; cursor:pointer; }
+.op-tab[aria-pressed="true"] { color:#1a1206; background:#d9a441; border-color:#d9a441; }
+.op-sacts { display:flex; flex-direction:column; gap:5px; margin-top:8px; }
+.op-sacts .bw-btn { justify-content:space-between; text-align:left; }
+.op-sacts .bw-btn i { width:10px; height:10px; border-radius:50%; flex:0 0 auto; margin-right:6px; display:inline-block; }
 .op-title b { display:block; font-family:Orbitron,sans-serif; font-weight:900; font-size:1.05em; letter-spacing:.16em; white-space:nowrap; }
 .op-title i { display:block; font-style:normal; font-size:.8em; letter-spacing:.22em; color:var(--dim); white-space:nowrap; font-weight:700; }
 .op-stats { flex:1 1 auto; display:flex; align-items:center; justify-content:flex-end; gap:8px; min-width:0; flex-wrap:nowrap; }
@@ -297,7 +305,7 @@ ${SELPANEL_CSS}
 `;
 
 /** Names for the narrow two-column rail (a landscape phone), where the long ones would clip. */
-const SHORT = { power: 'POWER', rig: 'MINING', storage: 'STORAGE', resourceBay: 'RES. BAY', upgradeBay: 'UPGRADE', habitat: 'HABITAT', cannon: 'CANNON' };
+const SHORT = { power: 'POWER', rig: 'MINING', storage: 'STORAGE', resourceBay: 'RES. BAY', upgradeBay: 'UPGRADE', habitat: 'HABITAT', cannon: 'CANNON', traditional: 'PLOT', irrigated: 'IRRIGATED', silo: 'SILO', pump: 'PUMP' };
 const LOCK_SVG ='<svg class="bw-lock" viewBox="0 0 11 12"><rect x="1" y="5" width="9" height="7" rx="1" fill="#cfd6dd"/><path d="M3 5V3.6a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="#cfd6dd" stroke-width="1.5"/></svg>';
 export const WARN_SVG = {
   bolt: '<svg viewBox="0 0 20 20"><path d="M11.5 1 3.5 11.5h5L7.5 19l9-11.5h-5.2z" fill="#ffd23a" stroke="#8a5a00" stroke-width="1.2" stroke-linejoin="round"/></svg>',
@@ -330,6 +338,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     <div class="op-top">
       <button class="op-back" data-a="close" aria-label="Back to the menu">‹</button>
       <div class="op-title"><b>${esc(title)}</b><i>${esc(planetName.toUpperCase())}</i></div>
+      <div class="op-tabs" data-k="tabs" role="tablist" hidden><button class="op-tab" data-a="tab" data-tab="outpost" aria-pressed="true">OUTPOST</button><button class="op-tab" data-a="tab" data-tab="farm" aria-pressed="false">FARM</button></div>
       <div class="op-stats">
         <div class="op-chip gold" title="Gold">${ICON.coin}<span class="num" data-k="gold">0</span></div>
         <div class="op-chip" title="Ore in storage"><div class="op-ores" data-k="ores"></div></div>
@@ -386,6 +395,8 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     else if (a === 'upgradeDefense') call('onUpgradeDefense', b.dataset.id);
     else if (a === 'sellStructure') call('onSellStructure', b.dataset.id != null ? { defense: b.dataset.id } : { pad: b.dataset.pad });
     else if (a === 'reportClose') call('onReportClose');
+    else if (a === 'tab') call('onTab', b.dataset.tab);
+    else if (a === 'farmAct') call('onFarmAct', b.dataset.act, b.dataset.arg);
   });
   // the HUD's own pointer events never reach the canvas under it
   for (const t of ['pointerdown', 'wheel']) root.addEventListener(t, (e) => { if (e.target !== root) e.stopPropagation(); }, { passive: true });
@@ -393,6 +404,12 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
   const api = {
     root,
     setLayout(mode) { root.dataset.layout = mode; },
+    /** The OUTPOST / FARM tab (story A7): shown once the planet has a farm; `active` is pressed. */
+    tabs(show, active = 'outpost') {
+      const t = $('tabs'); t.hidden = !show;
+      for (const b of t.querySelectorAll('.op-tab')) b.setAttribute('aria-pressed', String(b.dataset.tab === active));
+      root.dataset.tab = active;
+    },
     /** h: hudModel(); gold: the number to show (counts up during a sale). */
     update(h, gold = h.gold) {
       $('gold').textContent = fmtGold(gold);
@@ -454,7 +471,10 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
           <button class="bw-btn${m.deep.on ? '' : ' bw-selected'}" data-a="deep" data-pad="${esc(pad)}" data-on="0">Shallow</button>
           <button class="bw-btn${m.deep.on ? ' bw-selected' : ''}" data-a="deep" data-pad="${esc(pad)}" data-on="1" ${m.deep.enabled ? '' : 'disabled'}>Deep</button></div>`;
       }
-      if (m.build) {   // an empty pad: what fits, each arming the build list on this pad (the ghost, then CONFIRM)
+      if (m.actions) {   // a farm plot or farm building (story A7): its own actions, in place of the battle's U / X / R row
+        h += `<div class="op-sacts">${m.actions.map((x) => `<button class="bw-btn" data-a="farmAct" data-act="${esc(x.act)}" data-arg="${esc(x.arg || '')}" ${x.enabled ? '' : 'disabled'} title="${esc(x.why || '')}"><span>${x.colour ? `<i style="background:${esc(x.colour)}"></i>` : ''}${esc(x.label)}</span></button>`).join('')}</div>`;
+        for (const x of m.actions.filter((y) => y.why && !y.enabled)) h += `<div class="op-swhy">${esc(x.why)}</div>`;
+      } else if (m.build) {   // an empty pad: what fits, each arming the build list on this pad (the ghost, then CONFIRM)
         h += `<div class="op-shead">Build here</div><div class="op-sbuild">${m.build.map((o) => `<button class="bw-btn" data-a="pickFor" data-kind="${o.kind}" data-pad="${esc(pad)}" ${o.enabled ? '' : 'disabled'} title="${esc(o.why || '')}"><span>${esc(o.name)}</span><span>${o.cost ? fmtGold(o.cost) + 'g' : 'free'}</span></button>`).join('')}</div>`;
         for (const o of m.build.filter((x) => x.why)) h += `<div class="op-swhy">${esc(o.name)}: ${esc(o.why)}</div>`;
       } else {
@@ -531,6 +551,9 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
         btn.title = `${it.key ? `[${it.key}] ` : ''}${it.label}${it.cost != null ? ` · ${fmtGold(it.cost)} gold` : ''}${it.why ? ` — ${it.why}` : ''}`;
         btn.setAttribute('aria-pressed', selected === it.id ? 'true' : 'false');
       }
+      // one rail, two lists (story A7): the OUTPOST tab's items and the FARM tab's; the other tab's are hidden
+      const shown = new Set(items.map((it) => it.id));
+      for (const [id, b] of btns) b.hidden = !shown.has(id);
       if (btns.size !== had) api.fitRail();   // the first build of the list: size the rail to the screen
     },
     /**
