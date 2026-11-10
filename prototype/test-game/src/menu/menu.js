@@ -130,6 +130,7 @@ const CSS = `
 .bwm-galaxy [data-sys] { position:absolute; left:0; top:0; margin:12px 0 0 12px; padding:3px 8px; font-size:11px; font-weight:800; letter-spacing:.22em;
   color:var(--hue,#cfe3f0); background:rgba(10,13,18,.72); border:1px solid rgba(46,56,70,.9); white-space:nowrap; cursor:pointer; opacity:0;
   transition:border-color .12s, background .12s; z-index:7; }
+.bwm-galaxy [data-sys] .bwm-sysfac { display:block; margin-top:1px; font-size:8px; font-weight:700; letter-spacing:.2em; color:#cfc4b4; }
 .bwm-galaxy [data-sys]:hover { border-color:var(--hue,#d9a441); }
 .bwm-galaxy [data-sys].on { border-color:#f2c869; background:rgba(40,32,14,.85); color:#f2c869; }
 .bwm-galaxy [data-sys].bwm-uns::after { content:'UNSURVEYED'; display:block; margin-top:1px; font-size:8px; font-weight:700; letter-spacing:.26em; color:#8fa0b3; }
@@ -430,6 +431,8 @@ export function createMenu(mountEl, cbs) {
     const lab = el(doc, 'span', null, (PLANETS[key].name || key).toUpperCase());
     lab.dataset.sys = key; lab.style.setProperty('--hue', PLANETS[key].ui || '#cfe3f0');
     const f = REG.find(key); lab.title = PLANETS[key].name + (f ? ' — ' + f.name : '');
+    // every planet on screen names its controlling faction (owner 2026-11-09)
+    if (f) lab.appendChild(el(doc, 'small', 'bwm-sysfac', f.name.toUpperCase()));
     galaxy.appendChild(lab);
   }
   // Vesper (the Collective's red giant) is not a target — no planet to fly to [MM-story_mw47l791_1] — but tapping it
@@ -926,7 +929,7 @@ export function createMenu(mountEl, cbs) {
     const s = loadSave(), f = REG.find(targetKey()) || REG.find('ground'), P = PLANETS[f.key];
     continueBtn.firstChild.textContent = 'PLAY';
     continueBtn.querySelector('.hint').textContent = (P ? P.name + ' · ' : '') + 'campaign ' + defaultCampaign(s, MAPDATA.maps.length);   // the planet stays in the hint
-    heroNext.innerHTML = P ? 'NEXT PLANET · <b>' + P.name.toUpperCase() + '</b>' : '';
+    heroNext.innerHTML = P ? 'NEXT PLANET · <b>' + P.name.toUpperCase() + '</b> · ' + f.name.toUpperCase() : '';
     hero.style.setProperty('--hue', (P && P.ui) || '#f2c869');
     if (cbs.onPlanetView && root.style.display !== 'none') cbs.onPlanetView(f.key);   // [MM-story_mvgzp51o_8]
   }

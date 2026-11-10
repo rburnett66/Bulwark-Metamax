@@ -100,6 +100,11 @@ test('no authored portrait ships unreachable', () => {
   for (const pack of Object.values(packs.factions)) {
     for (const c of pack.characters) reachable.add(portraitSlug(c.name));
   }
+  // the opening's speaker (content/dialog/opening.json) speaks on the comm card too
+  const opening = JSON.parse(readFileSync(new URL('dialog/opening.json', CONTENT), 'utf8'));
+  if (opening.speaker && opening.speaker.name) reachable.add(portraitSlug(opening.speaker.name));
+  // expression portraits (<slug>-angry|neutral|happy.png, data/portraitMoods.js) belong to their character
+  for (const slug of [...reachable]) for (const m of ['angry', 'neutral', 'happy']) reachable.add(slug + '-' + m);
   const files = readdirSync(new URL('dialog/portraits/', CONTENT)).filter((f) => f.endsWith('.png'));
   assert.ok(files.length, 'no portraits found at all — the directory moved');
   for (const file of files) {

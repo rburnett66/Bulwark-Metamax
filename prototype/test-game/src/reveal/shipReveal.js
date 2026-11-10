@@ -36,6 +36,7 @@ import { characterCall } from '../comm/dialog.js';
 import { showContractModal } from '../render/contractModal.js';
 import { contractFor } from '../data/collectiveContract.js';
 import { PLANETS } from '../data/planets.js';
+import '../data/factions.js';
 import { createStandingsScreen } from '../menu/standingsScreen.js';
 import { loadSave, updateSave } from '../save/save.js';
 import { noteRapportEvent, standingOf } from '../save/standings.js';
@@ -48,6 +49,8 @@ const CSS = `
 .rv .rv-plate { position:absolute; left:max(24px, env(safe-area-inset-left)); bottom:16%; font:700 clamp(18px,2.6vw,28px) "Chakra Petch", sans-serif; letter-spacing:.12em; color:#e9e2d6; opacity:0; pointer-events:none; text-shadow:0 2px 14px #000; }
 .rv .rv-title { position:absolute; left:0; right:0; top:62%; text-align:center; opacity:0; pointer-events:none; }
 .rv .rv-title b { display:block; font:700 clamp(28px,5vw,54px) "Chakra Petch", sans-serif; letter-spacing:.14em; padding-left:.14em; color:#f2c869; text-shadow:0 0 24px rgba(0,0,0,.8); }
+.rv .rv-plate small { display:block; margin-top:3px; font:600 clamp(10px,1.2vw,13px) "Chakra Petch", sans-serif; letter-spacing:.26em; color:#6fd3c8; }
+.rv .rv-title i { display:block; margin-top:4px; font:600 normal clamp(12px,1.6vw,16px) "Chakra Petch", sans-serif; font-style:normal; letter-spacing:.3em; padding-left:.3em; color:#6fd3c8; text-shadow:0 0 10px #000; }
 .rv .rv-title span { display:block; margin-top:6px; font-size:clamp(12px,1.5vw,15px); letter-spacing:.24em; color:#cfc4b4; text-shadow:0 0 10px #000; }
 .rv .rv-prompt { position:absolute; transform:translate(-50%, -100%); text-align:center; pointer-events:none; opacity:0; transition:opacity .4s; }
 .rv .rv-prompt b { display:block; font:700 clamp(14px,2vw,20px) "Chakra Petch", sans-serif; letter-spacing:.3em; padding-left:.3em; color:#ffcf5c; text-shadow:0 0 14px rgba(255,207,92,.6); }
@@ -80,13 +83,19 @@ export async function shipMissions(planet) {
   return own.filter((m) => m.map === first).map((m) => m.title);
 }
 
-/** Who and what a planet's capital ship is: { key, name, captain, shipModel, room, isCollective }. */
+/** Who and what a planet's capital ship is: { key, name, faction, captain, shipModel, room, isCollective } — faction is the display name. */
 async function shipOf(planet) {
   const P = PLANETS[planet] || {}, cat = await catalog(), R = await revealsData();
-  if (planet === 'collective') return { key: 'collective', name: 'The Long Ledger', captain: R.collective.speaker.name, shipModel: 'collective', room: R.collective.room, isCollective: true };
+  if (planet === 'collective') return { key: 'collective', name: 'The Long Ledger', faction: 'The Collective', captain: R.collective.speaker.name, shipModel: 'collective', room: R.collective.room, isCollective: true };
   const cs = (cat.capitalShips || {})[P.name] || {};
-  return { key: planet, name: cs.ship || (P.name + ' capital ship'), captain: cs.captain || '', shipModel: SHIP_MODEL[planet] || 'powder', room: R.factionShip.room, isCollective: false };
+  return { key: planet, name: cs.ship || (P.name + ' capital ship'), faction: factionNameOf(planet), captain: cs.captain || '', shipModel: SHIP_MODEL[planet] || 'powder', room: R.factionShip.room, isCollective: false };
 }
+
+/** A faction key's display name from the registry ("Ground / Powder"); '' when unknown. */
+function factionNameOf(key) { const R = globalThis.BulwarkFactions, f = R && R.find(key); return f ? f.name : ''; }
+
+/** The ship's name with its faction, as every on-screen ship label reads (owner 2026-11-09: "When you show a capital ship name the faction"). */
+export function shipLabel(ship) { return (ship.name + (ship.faction ? ' · ' + ship.faction : '')).toUpperCase(); }
 
 function ensureCss(doc) { if (!doc.getElementById('rv-ship-css')) { const st = doc.createElement('style'); st.id = 'rv-ship-css'; st.textContent = CSS; doc.head.appendChild(st); } }
 
@@ -121,15 +130,9 @@ function withMood(call, name) {
 }
 
 async function speak(doc, calls) {
+  // the game's comm card as one scene: a character's run of lines cycles in one window with breadcrumbs
   const comm = createComm(doc);
-  try {
-    for (const c of calls) {
-      if (!c) continue;
-      const closed = comm.waitForClose();
-      comm.showCall({ ...c, hold: true, center: false });
-      await closed;
-    }
-  } finally { comm.destroy(); }
+  try { await comm.playScene(calls, { center: false }); } finally { comm.destroy(); }
 }
 
 /**
@@ -242,23 +245,24 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
   }
 
   // F7 — explore: leave the room, walk anywhere, DEPART when ready
-  const where = doc.createElement('div'); where.className = 'rv-where'; where.textContent = ship.name.toUpperCase();
+  const where = doc.createElement('div'); where.className = 'rv-where'; where.textContent = shipLabel(ship);
   const bar = doc.createElement('div'); bar.className = 'rv-bar';
   bar.innerHTML = '<button class="rv-btn primary" type="button" data-depart>◂ DEPART</button><button class="rv-btn" type="button" data-standings aria-pressed="false">STANDINGS</button><button class="rv-btn" type="button" data-leave>◂ LEAVE ROOM</button>';
   d.ui.appendChild(where); d.ui.appendChild(bar);
   // STANDINGS: every character's rating and every faction's relationship, only aboard a capital ship (owner 2026-11-09)
   const standBtn = bar.querySelector('[data-standings]');
   const setStand = (on) => { standBtn.textContent = on ? '✕ CLOSE STANDINGS' : 'STANDINGS'; standBtn.setAttribute('aria-pressed', String(on)); };
-  const standings = createStandingsScreen({ doc, host: d.root, onClose: () => { standings.close(); setStand(false); } });
+  // the Characters tab lists this ship's faction only (owner 2026-11-09); the Collective's crew has no ratings yet
+  const standings = createStandingsScreen({ doc, host: d.root, faction: ship.isCollective ? 'collective' : ship.key, onClose: () => { standings.close(); setStand(false); } });
   standBtn.addEventListener('click', () => { if (standings.isOpen()) { standings.close(); setStand(false); } else { standings.open(); setStand(true); } });
   const leaveBtn = bar.querySelector('[data-leave]'); leaveBtn.style.display = 'none';
   let inRoom = null, departing = false, walking = false;
-  leaveBtn.addEventListener('click', () => { inRoom = null; view.focus(null); leaveBtn.style.display = 'none'; where.textContent = ship.name.toUpperCase(); });
+  leaveBtn.addEventListener('click', () => { inRoom = null; view.focus(null); leaveBtn.style.display = 'none'; where.textContent = shipLabel(ship); });
   const onPick = (e) => {
     if (departing || walking || standings.isOpen()) return;
     const hit = view.pick(e.clientX, e.clientY, roomCanvas.getBoundingClientRect()); if (!hit) return;
     walking = true; inRoom = hit.id; view.focus(hit.id, portrait() ? 0.9 : 0.6);
-    where.textContent = ship.name.toUpperCase() + ' · ' + (roomOf(hit.id).name || hit.id).toUpperCase();
+    where.textContent = shipLabel(ship) + ' · ' + (roomOf(hit.id).name || hit.id).toUpperCase();
     leaveBtn.style.display = '';
     view.walkPlayerTo(hit.id, async () => {
       walking = false;
@@ -288,13 +292,15 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
   roomCanvas.remove(); scanEl.remove(); promptEl.remove(); d.caption('', false);
 }
 
+const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 /** Draw the letterbox, the name plate and the title card from the arrival's state. */
 function arrivalOverlay(d, ship) {
   const lbT = d.doc.createElement('div'), lbB = d.doc.createElement('div');
   lbT.className = 'rv-lb t'; lbB.className = 'rv-lb b';
-  const plate = d.doc.createElement('div'); plate.className = 'rv-plate'; plate.textContent = ship.name;
+  const plate = d.doc.createElement('div'); plate.className = 'rv-plate'; plate.innerHTML = `${esc(ship.name)}${ship.faction ? `<small>${esc(ship.faction.toUpperCase())}</small>` : ''}`;
   const title = d.doc.createElement('div'); title.className = 'rv-title';
-  title.innerHTML = `<b>${ship.name.toUpperCase()}</b><span>${ship.captain ? 'COMMANDED BY ' + ship.captain.toUpperCase() : ''}</span>`;
+  title.innerHTML = `<b>${esc(ship.name.toUpperCase())}</b><i>${esc((ship.faction ? ship.faction + (ship.isCollective ? '' : ' capital ship') : '').toUpperCase())}</i><span>${ship.captain ? 'COMMANDED BY ' + esc(ship.captain.toUpperCase()) : ''}</span>`;
   for (const e of [lbT, lbB, plate, title]) d.root.insertBefore(e, d.root.querySelector('.rv-ui'));
   return {
     set(o) {

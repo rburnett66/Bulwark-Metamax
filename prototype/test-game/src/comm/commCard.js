@@ -91,6 +91,15 @@ const CSS = `
 .bw-comm.signoff .bw-comm-end{opacity:1}
 .bw-comm-qchip{border:1px solid #d8a13a;color:#f0c675;border-radius:6px;padding:2px 8px;font-size:8.5px;letter-spacing:1px;opacity:0;transition:.3s}
 .bw-comm-qchip.on{opacity:1}
+/* a long run's dots wrap rather than widen the card (the text column must never grow past it) */
+.bw-comm-right{min-width:0}
+/* the quest chip and the sign-off's END take no room until they show, so the breadcrumbs get the footer */
+.bw-comm-foot{position:relative}.bw-comm.signoff .bw-comm-crumbs{visibility:hidden}.bw-comm-qchip:not(.on){display:none}.bw-comm-end{position:absolute;right:11px}
+.bw-comm-crumbs{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px 5px;align-items:center;margin-left:auto;min-width:0}
+.bw-comm-crumbs i{width:6px;height:6px;border-radius:50%;background:#2a3846;transition:background .2s}
+.bw-comm-crumbs i.read{background:color-mix(in srgb,var(--accent) 45%,#2a3846)}
+.bw-comm-crumbs i.on{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.bw-comm-crumbs.dense{gap:3px}.bw-comm-crumbs.dense i{width:4px;height:4px}   /* a long run: smaller dots, still one line */
 /* CENTRE STAGE [MM-story_mvempsla_q]: between-wave character dialogs sit mid-screen at 2× (owner 2026-10-18: "character
    dialog messages should be 2x bigger in the middle of the screen"). The card keeps its layout; JS scales it by
    min(2, what fits) about its centre. */
@@ -172,12 +181,12 @@ export function centerScale(card, vw, vh) {
 }
 
 /* type text over durMs with signal-glyph noise at the caret (tool's typeText; skips under reduced motion) */
-function typeText(el, text, durMs, isLive) {
+function typeText(el, text, durMs, isLive, isRushed = null) {
   const glyphs = '▚▞░▒▓/\\|<>#*+=';
   return new Promise((res) => {
     const start = performance.now(), len = text.length, rm = reducedMotion();
     (function frame(now) {
-      if (!isLive()) { el.textContent = text; res(); return; }
+      if (!isLive() || (isRushed && isRushed())) { el.textContent = text; res(); return; }
       const prog = Math.min(1, (now - start) / Math.max(120, durMs));
       const tgt = Math.floor(prog * len);
       let s = text.slice(0, tgt);
@@ -209,6 +218,14 @@ function staticNoise(cv, on) {
   cv._raf = requestAnimationFrame(() => staticNoise(cv, cv.classList.contains('on')));
 }
 
+/** A scene's breadcrumbs: one dot per line of the speaker's run, the current one lit, the read ones dimmer. */
+export function crumbsHTML(c) {
+  if (!c || !(c.n > 1)) return '';
+  let h = '<span class="bw-comm-crumbs' + (c.n > 8 ? ' dense' : '') + '" aria-label="line ' + (c.at + 1) + ' of ' + c.n + '">';
+  for (let i = 0; i < c.n; i++) h += '<i' + (i < c.at ? ' class="read"' : i === c.at ? ' class="on"' : '') + '></i>';
+  return h + '</span>';
+}
+
 function cardHTML(d, f) {
   return '' +
     '<div class="bw-comm-head"><span class="bw-comm-ic"></span>' +
@@ -219,7 +236,7 @@ function cardHTML(d, f) {
     portraitImg(d.name, d.mood) +
     '<div class="bw-comm-pscan"></div><div class="bw-comm-veil"></div></div>' +
     '<div class="bw-comm-right"><div class="bw-comm-meta"></div><div class="bw-comm-text"></div>' +
-    '<div class="bw-comm-foot"><span class="bw-comm-foot-l"></span><span class="bw-comm-qchip">◇ QUEST OFFER</span><span class="bw-comm-end">— END —</span></div>' +
+    '<div class="bw-comm-foot"><span class="bw-comm-foot-l"></span>' + crumbsHTML(d.crumbs) + '<span class="bw-comm-qchip">◇ QUEST OFFER</span><span class="bw-comm-end">— END —</span></div>' +
     '</div></div>' +
     '<canvas class="bw-comm-static"></canvas>';
 }
@@ -285,7 +302,10 @@ export function createComm(doc) {
       liveAudio = null;
     }
   }
-  card.addEventListener('click', () => { token++; stopAudio(); card.className = 'bw-comm'; _resolveClosed(); });
+  card.addEventListener('click', () => {
+    if (_scene) { _scene.tap(); return; }   // a scene: the tap finishes the line, or moves to the next one
+    token++; stopAudio(); card.className = 'bw-comm'; _resolveClosed();
+  });
 
   /** Run one transmission from a call spec (dialog.js):
    *  { factionKey, name, sub, line, gender, intent, voiceSeed, challenge?, chip?, hold? }.
@@ -316,7 +336,7 @@ export function createComm(doc) {
     veil.style.opacity = 1;
     // SIZED FOR THE WHOLE LINE UP FRONT (owner 2026-10-18: "make sure dialog window are big enough for text so they dont
     // have to grow while text is typing"): lay the full line (and name) out once, pin the boxes to that size, clear.
-    presize(nm, d.name); presize(txt, d.line);
+    presize(nm, d.name); presize(txt, d.sizeTo || d.line);   // a scene sizes for its run's longest line
     if (d.center) {
       const k = centerScale(card);
       card.style.transform = 'translate(-50%,-50%) scale(' + k.toFixed(3) + ')';
@@ -358,7 +378,8 @@ export function createComm(doc) {
     const utter = (!isMuted() && audioReady()) ? playUtterance(d.line, p, g)
       : { duration: utterDuration(d.line, p, d.intent), stop: function () {} };
     if (liveAudio) liveAudio.utter = utter;
-    await typeText(txt, d.line, utter.duration * 1000, live);
+    _rush = false;
+    await typeText(txt, d.line, utter.duration * 1000, live, () => _rush);
     if (!live()) return;
     portrait.classList.remove('speaking');
     if (d.chip) qchip.textContent = d.chip;   // e.g. the contact's '◇ FAVOUR ASKED'
@@ -401,6 +422,7 @@ export function createComm(doc) {
   let hushed = false;
   function hush() {
     hushed = true;
+    if (_scene) _scene.abort();
     token++; stopAudio(); _held = null;
     card.className = 'bw-comm';
     _resolveClosed();
@@ -425,8 +447,82 @@ export function createComm(doc) {
   /** Resolves the next time the card fully closes (tap, dismiss, or natural sign-off). */
   function waitForClose() { return new Promise((res) => _closeResolvers.push(res)); }
 
+  // ── SCENES (Dialog-Unification F1; owner 2026-11-09: "When a character has multiple lines of dialog use bread crumbs
+  // and cycle the dialog, but do not redraw the whole dialog window") ──
+  // playScene(calls) plays a conversation. A run of lines by the same speaker is ONE transmission: the card opens once
+  // (showCall, sized for the run's longest line, breadcrumbs in the foot), then each tap swaps the next line into the
+  // same window: re-typed and re-voiced, the breadcrumb moves on, nothing else is rebuilt. A tap while a line is typing
+  // finishes it. A new speaker is a new transmission. onLine(call, index) fires as each line starts (a holo-slide, say).
+  let _scene = null, _rush = false;
+  const sameSpeaker = (a, b) => a.factionKey === b.factionKey && a.name === b.name;
+  function setFoot(text) {
+    const footl = card.querySelector('.bw-comm-foot-l');
+    if (footl) { footl.textContent = text; footl.classList.add('bw-tapclose'); }
+  }
+  function setCrumb(at) {
+    const dots = card.querySelectorAll('.bw-comm-crumbs i');
+    dots.forEach((dot, i) => { dot.className = i < at ? 'read' : i === at ? 'on' : ''; });
+    const box = card.querySelector('.bw-comm-crumbs');
+    if (box) box.setAttribute('aria-label', 'line ' + (at + 1) + ' of ' + dots.length);
+  }
+  async function sayInPlace(d) {
+    const my = token, live = () => token === my && !!_scene && !_scene.aborted;
+    const txt = card.querySelector('.bw-comm-text'), portrait = card.querySelector('.bw-comm-portrait'),
+      footl = card.querySelector('.bw-comm-foot-l');
+    if (liveAudio && liveAudio.utter) liveAudio.utter.stop();
+    txt.textContent = '';
+    if (footl) { footl.textContent = '◉ RECEIVING'; footl.classList.remove('bw-tapclose'); }
+    if (portrait) portrait.classList.add('speaking');
+    const p = paramsFor(d.factionKey);
+    const utter = (!isMuted() && audioReady()) ? playUtterance(d.line, p, { gender: d.gender, intent: d.intent, seed: d.voiceSeed || hash(d.name) })
+      : { duration: utterDuration(d.line, p, d.intent), stop: function () {} };
+    if (liveAudio) liveAudio.utter = utter; else liveAudio = { utter, bed: null };
+    _rush = false;
+    await typeText(txt, d.line, utter.duration * 1000, live, () => _rush);
+    if (portrait) portrait.classList.remove('speaking');
+    if (d.chip) { const q = card.querySelector('.bw-comm-qchip'); if (q) { q.textContent = d.chip; q.classList.add('on'); } }
+  }
+  async function playScene(calls, { onLine = null, center = true } = {}) {
+    const list = (calls || []).filter(Boolean);
+    let i = 0;
+    while (i < list.length && !hushed) {
+      let j = i + 1;
+      while (j < list.length && sameSpeaker(list[j], list[i])) j++;
+      const run = list.slice(i, j), n = run.length, base = i;
+      const sizeTo = run.reduce((a, c) => (String(c.line).length > a.length ? String(c.line) : a), '');
+      const waiting = () => new Promise((res) => { _scene.waiter = res; });
+      _scene = {
+        typing: true, waiter: null, aborted: false,
+        tap() { if (this.typing) _rush = true; else if (this.waiter) { const w = this.waiter; this.waiter = null; w(); } },
+        abort() { this.aborted = true; if (this.waiter) { const w = this.waiter; this.waiter = null; w(); } },
+      };
+      const scene = _scene;
+      if (onLine) onLine(run[0], base);
+      const shut = waitForClose();
+      await showCall({ ...run[0], hold: true, center, sizeTo, crumbs: n > 1 ? { at: 0, n } : null });
+      for (let k = 1; k < n && !scene.aborted && _held; k++) {
+        scene.typing = false; setFoot('TAP ▸ NEXT');
+        await waiting();
+        if (scene.aborted) break;
+        scene.typing = true; setCrumb(k);
+        if (onLine) onLine(run[k], base + k);
+        await sayInPlace(run[k]);
+      }
+      if (!scene.aborted && _held) {
+        scene.typing = false; setFoot(j < list.length ? 'TAP ▸ NEXT' : 'TAP TO CLOSE');
+        await waiting();
+      }
+      if (_scene === scene) _scene = null;
+      if (scene.aborted) break;
+      dismiss();
+      await shut;
+      i = j;
+    }
+  }
+
   return {
     showCall,
+    playScene,
     dismiss,
     hush,
     unhush,
