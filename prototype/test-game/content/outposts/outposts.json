@@ -909,5 +909,187 @@
    2.76
   ],
   "height": 1.54
+ },
+ "farmhouse": {
+  "label": "Farmhouse: the farm's hub, with the pod bench on its porch",
+  "kind": "farmhouse",
+  "tier": 1,
+  "lods": [
+   {
+    "file": "farmhouse_lod0.glb",
+    "tris": 5596,
+    "drawCalls": 9,
+    "bytes": 557804
+   },
+   {
+    "file": "farmhouse_lod1.glb",
+    "tris": 4408,
+    "drawCalls": 8,
+    "bytes": 457708
+   },
+   {
+    "file": "farmhouse_lod2.glb",
+    "tris": 2072,
+    "drawCalls": 6,
+    "bytes": 253928
+   }
+  ],
+  "clips": {
+   "rotor": 3
+  },
+  "nodes": [
+   "bench",
+   "inlay",
+   "rotor"
+  ],
+  "anchors": {
+   "door": [
+    -0.15,
+    0.2,
+    1.85
+   ],
+   "bench": [
+    -1.15,
+    0.73,
+    1
+   ],
+   "inlay": [
+    0,
+    0.135,
+    1.92
+   ],
+   "power": [
+    0,
+    0.02,
+    -1.95
+   ]
+  },
+  "footprint": [
+   3.96,
+   3.94
+  ],
+  "height": 2.76
+ },
+ "silo": {
+  "label": "Silo: stores the farm's harvest; the gauge shows its fill",
+  "kind": "silo",
+  "tier": 1,
+  "lods": [
+   {
+    "file": "silo_lod0.glb",
+    "tris": 4922,
+    "drawCalls": 6,
+    "bytes": 479780
+   },
+   {
+    "file": "silo_lod1.glb",
+    "tris": 4614,
+    "drawCalls": 6,
+    "bytes": 451060
+   },
+   {
+    "file": "silo_lod2.glb",
+    "tris": 2918,
+    "drawCalls": 5,
+    "bytes": 304152
+   }
+  ],
+  "clips": {
+   "vent": 6
+  },
+  "nodes": [
+   "gauge",
+   "vent"
+  ],
+  "anchors": {
+   "hopper": [
+    1.15,
+    1.25,
+    1.05
+   ],
+   "gauge": [
+    0.215,
+    2.7,
+    0.621
+   ],
+   "chute": [
+    -1.285,
+    0.2,
+    0.369
+   ],
+   "power": [
+    0,
+    0.02,
+    -1.95
+   ]
+  },
+  "footprint": [
+   3.96,
+   3.94
+  ],
+  "height": 4.05
+ },
+ "pump": {
+  "label": "Pump: water reach for Irrigated plots (1 \u00d7 1)",
+  "kind": "pump",
+  "tier": 1,
+  "lods": [
+   {
+    "file": "pump_lod0.glb",
+    "tris": 4212,
+    "drawCalls": 5,
+    "bytes": 415840
+   },
+   {
+    "file": "pump_lod1.glb",
+    "tris": 3496,
+    "drawCalls": 5,
+    "bytes": 353504
+   },
+   {
+    "file": "pump_lod2.glb",
+    "tris": 2104,
+    "drawCalls": 4,
+    "bytes": 238772
+   }
+  ],
+  "clips": {
+   "wheel": 1.5
+  },
+  "nodes": [
+   "wheel"
+  ],
+  "anchors": {
+   "water": [
+    -0.45,
+    0.14,
+    0.35
+   ],
+   "out_left": [
+    -0.97,
+    0.36,
+    -0.5
+   ],
+   "out_right": [
+    0.97,
+    0.36,
+    -0.5
+   ],
+   "out_back": [
+    -0.08,
+    0.36,
+    -0.97
+   ],
+   "power": [
+    0.62,
+    0.02,
+    -0.15
+   ]
+  },
+  "footprint": [
+   1.96,
+   1.98
+  ],
+  "height": 1.02
  }
 }

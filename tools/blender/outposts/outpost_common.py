@@ -212,6 +212,30 @@ def window_strip(name, x0, x1, y, z, h, glow, n=None, gap=0.08, face=-1):
     return [box(f"{name}_{i}", (x0 + w / 2 + i * (w + gap), y + face * 0.012, z), (w, 0.03, h), glow) for i in range(n)]
 
 
+def prism(name, x0, x1, profile, material):
+    """A straight prism along X from x0 to x1 over a closed YZ profile [(y, z), …] (a gable roof, a ramp wedge)."""
+    bm = bmesh.new()
+    a = [bm.verts.new((x0, y, z)) for y, z in profile]
+    b = [bm.verts.new((x1, y, z)) for y, z in profile]
+    n = len(profile)
+    for i in range(n):
+        bm.faces.new((a[i], a[(i + 1) % n], b[(i + 1) % n], b[i]))
+    bm.faces.new(list(reversed(a)))
+    bm.faces.new(b)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return ship._obj(name, bm, material)
+
+
+def strut(name, a, b, r, material, sides=6):
+    """A round bar from point a to point b (a pipe run, a brace, a ladder rail at an angle)."""
+    a, b = Vector(a), Vector(b)
+    ob = cyl(name, (0, 0, 0), r, (b - a).length, material, sides=sides, axis="Z")
+    ob.rotation_mode = "QUATERNION"
+    ob.rotation_quaternion = (b - a).to_track_quat("Z", "Y")
+    ob.location = (a + b) / 2
+    return ob
+
+
 def anchor(name, at, **extra):
     """An empty exported with the GLB: a point the game attaches effects to (laser muzzle, beam target, shuttle)."""
     e = bpy.data.objects.new(f"anchor_{name}", None)
@@ -319,7 +343,8 @@ def _render(out, slug, res=(960, 720), views=VIEWS):
 def build(slug, make, argv=None, ref=None):
     """Run make() in a clean scene, merge by node × role, export {slug}_lod{0,1,2}.glb + .blend; --render adds the
     Cycles views and a review sheet beside the concept crop `ref` (a file in ref/)."""
-    argv = argv if argv is not None else sys.argv[1:]
+    if argv is None:   # `python3 <slug>.py out` (bpy module) or `blender -b -P <slug>.py -- out` (the Blender binary)
+        argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
     out = os.path.abspath(argv[0] if argv and not argv[0].startswith("--") else os.path.join(HERE, "out", slug))
     os.makedirs(out, exist_ok=True)
     t = time.time()
@@ -386,8 +411,12 @@ def _anim_preview(out, slug, bounds, seconds=3.0, fps=8, res=(560, 420)):
 
 
 def sheet(out, slug, ref):
-    from PIL import Image, ImageDraw
-    tiles = ([("concept crop", os.path.join(HERE, "ref", ref))] if ref else []) + \
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:   # the Blender binary's own Python has no Pillow: the single views are still written
+        print(f"[{slug}] no Pillow: review sheet skipped")
+        return
+    tiles =([("concept crop", os.path.join(HERE, "ref", ref))] if ref else []) + \
             [(v, os.path.join(out, f"{slug}_{v}.png")) for v in VIEWS]
     W, H = 720, 540
     img = Image.new("RGB", (W * 3, H * 2), (20, 22, 26))
