@@ -930,8 +930,8 @@ automatically opened with a user click."* So:
 - Each unlocked crop's delivered units add to a carry. Counting starts at the unlock: on the map that crosses 500, only
   the units past it count.
 - **A finished map, at any star level, awards one chest** holding one pod per full 100 of each carry, every tier
-  alike; the rest waits for the next map. A lost map adds to the carry but awards no chest (proposed: "at any star
-  level" reads as a map won). A chest that would be empty is not awarded. This lets a player meet farming at the end of
+  alike; the rest waits for the next map. A lost map adds to the carry but awards no chest (owner, 2026-11-10: a chest
+  is for a map won, at any star level). A chest that would be empty is not awarded. This lets a player meet farming at the end of
   map 1, before they have an outpost.
 - **The chest is opened right there, at the end of the map, with one click**: after the result, the chest appears
   with *Tap to open*; the tap opens it, the lid lifts, then **one card per crop every half second** (its icon, name,
