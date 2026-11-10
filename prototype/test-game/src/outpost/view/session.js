@@ -221,7 +221,9 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         if (!results.length) return { error: r.blocked && r.blocked.length ? 'the Silo is full' : 'nothing to harvest' };
         const got = {}, pods = [];
         for (const x of results) { if (x.units) got[x.crop] = (got[x.crop] || 0) + x.units; pods.push(...x.pods); }
-        return { outpost: r.outpost, farm: { harvested: got, pods, blocked: r.blocked || [] }, after: (sv) => {
+        // which plots were harvested, how, at what level and cycle: the harvest effect (farm/view/embers.js) [MM-story_mwabh2oc_j]
+        const plots = results.map((x) => { const id = x.plot || a.plot; return { plot: id, kind: x.kind, level: x.level, cycle: r.outpost.farm.plots[id].cycle }; });
+        return { outpost: r.outpost, farm: { harvested: got, pods, blocked: r.blocked || [], plots }, after: (sv) => {
           for (const [id, u] of Object.entries(got)) addToStore(sv, 'farm', planet, id, u);
           for (const p of pods) addPods(sv, p.crop, p.level, p.n);
         } };

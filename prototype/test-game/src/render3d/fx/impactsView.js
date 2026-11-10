@@ -18,7 +18,7 @@ import { tintMix } from './factionFx.js';
 import { TUNE } from './fxTune.js';
 import { createPBatch, createDBatch, createFBatch } from './particles.js';
 import { createFireAtlas, fireFrame } from './fireAtlas.js';
-import { K, D, DEFAULT_IMPACT_CAPS, SINK_DEPTH } from './impacts.js';
+import { K, D, DEFAULT_IMPACT_CAPS, SINK_DEPTH, EMBER_SHADE } from './impacts.js';
 import { createUnitMaterial } from '../units/material.js';
 import { shadowMaterial } from '../units/models3d.js';
 
@@ -26,6 +26,18 @@ export const CHAR = Object.freeze([0.42, 0.38, 0.35]);   // charred hull tint (c
 export const WRECK_METAL = 0.1;                           // burnt metal: almost no reflection
 /** Flame sprite brightness; the size comes with the atlas (atlas.scale) [MM-task_mvfqzjkm_7]. */
 export const FIRE_SPRITE = Object.freeze({ gain: 0.85 });
+
+/** The harvest ember's look (the scale prototype's): colour × gain (capped so no channel clips and the hue holds), a quick fade in, full, then out over the last 35 %
+ *  of its life, flickering on its own noise seed. */
+export const FARM_EMBER_LOOK = Object.freeze({ gain: 1.8, fadeIn: 0.15, fadeOut: 0.35, flicker: 0.25, rate: 18 });
+/** A farm ember particle → [r, g, b, alpha] (the additive batch multiplies rgb by alpha). Pure. */
+export function farmEmberLook(p) {
+  const F = FARM_EMBER_LOOK, f = 1 - p.t / p.life, c = p.tc || [1, 1, 1];
+  const fade = f > 1 - F.fadeIn ? (1 - f) / F.fadeIn : f < F.fadeOut ? f / F.fadeOut : 1;
+  const a = Math.max(0, fade * (1 - F.flicker + F.flicker * Math.sin(p.t * F.rate + (p.ns || 0) * 7)));
+  const k = Math.min(F.gain, 1 / Math.max(1e-3, c[0], c[1], c[2]));   // as bright as it goes and keeps its hue (gold stays gold)
+  return [c[0] * k, c[1] * k, c[2] * k, a];
+}
 
 /**
  * createImpactsView(THREE, scene, { lodGroups, sunDir, caps })
@@ -99,7 +111,13 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
             add.push(p.x, p.y, p.z, p.vx, p.vy, p.vz, p.size, Math.min(0.22, sp * 0.035), r, g, b, f);
             break;
           }
-          case K.EMBER: { const [r, g, b] = T(p, 1, 0.5, 0.15); add.push(p.x, p.y, p.z, 0, 0, 0, p.size * p.fl, 0, r, g, b, f); break; }
+          case K.EMBER: {
+            if (p.shade === EMBER_SHADE.farm) {   // a harvest ember (farm/view/embers.js): its pod level's colour, unlit [MM-story_mwabh2oc_j]
+              const L = farmEmberLook(p);
+              add.push(p.x, p.y, p.z, 0, 0, 0, p.size, 0, L[0], L[1], L[2], L[3]);
+              break;
+            }
+            const [r, g, b] = T(p, 1, 0.5, 0.15); add.push(p.x, p.y, p.z, 0, 0, 0, p.size * p.fl, 0, r, g, b, f); break; }
           case K.FLASH: if (p.shade === 1) add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, 0.55, 0.8, 1, f * f);   // repair arc: blue
             else if (p.shade === 2) add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, 1, 0.3, 0.2, f * f);   // damage flicker: red
             else { const [r, g, b] = T(p, 1, 0.92, 0.7); add.push(p.x, p.y, p.z, 0, 0, 0, p.size * (0.6 + u), 0, r, g, b, f * f); }

@@ -23,6 +23,7 @@ import { defenseStructures, planBuildings } from './conduits.js';
 import { createSession, onlineIssues } from './session.js';
 // the FARM tab (story A7 [MM-story_mwabgs3l_f]): the farm on this same view, map, session and build loop (owner rule 7)
 import { createFarmLayer } from '../../farm/view/farmLayer.js';
+import { createFarmEmbers } from '../../farm/view/embers.js';
 // the surface avatar and farmhands (story A8 [MM-story_mwabh0cd_i]): the ship's crew rig on this map's nav grid
 import { createFarmCrew } from '../../farm/view/avatar.js';
 import { farmMenu, FARM_MENU, farmAt, farmPanelModel } from '../../farm/view/farmUi.js';
@@ -180,6 +181,8 @@ async function openOutpostViewInner(opts, stage) {
   const kit = await createOutpostKit(THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader, lodLevels: safe ? [2] : null });
   const scene = createOutpostScene(THREE, r, { map, kit, tier: r.tier.key, reduced });
   const farm = createFarmLayer(THREE, r, { map, kit, reduced });
+  // the harvest effect: embers in the pod level's colour on the battle's particle pool; no idle embers in safe mode (F7)
+  const farmFx = createFarmEmbers({ safe });
   // the avatar lands each farm action through act() when its work is done (one session.act per action); the
   // farmhands are life only. Safe mode: no farmhands (tech plan §2.3 F7). Created before the board's state is read.
   const crew = createFarmCrew(THREE, r, { map, board, safe, reduced, land: (a) => landFarm(a), busy: () => !!saleRun });
@@ -344,7 +347,11 @@ async function openOutpostViewInner(opts, stage) {
   // Fruited and Dead plot as its own harvest (Farming-Design §2.6). Deliver and sell are Farmhouse taps: at once.
   const AVATAR_WORK = new Set(['prep', 'plant', 'harvest']);
   function landFarm(action) {
-    return act(action, FARM_TEXT[action.type] || null, () => { if (sel) select(sel); });
+    return act(action, FARM_TEXT[action.type] || null, (res) => {
+      // a harvest landing (the avatar's work done): embers off each Fruited plot, dust off each dead one (story A9)
+      if (r.impacts && res && res.farm && res.farm.plots) farmFx.harvest(res.farm.plots, o, r.impacts, FXK);
+      if (sel) select(sel);
+    });
   }
   function farmAct(a, arg) {
     const action = a === 'plant' ? { type: 'plant', plot: sel && sel.plot, pick: arg } : a === 'prep' || a === 'harvest' ? { type: a, plot: arg }
@@ -719,6 +726,7 @@ async function openOutpostViewInner(opts, stage) {
     if (r.impacts) {
       siteFx.step(dt, constructionSites(o, map, clockNow()), r.impacts.emit, FXK, r.impacts.ring, r.tier.key);
       siteFx.stepDamage(dt, damageSites(o), r.impacts.emit, FXK);   // red sparks off damaged defenses (owner 2026-11-09)
+      farmFx.step(dt, o, r.impacts, FXK);   // a few embers drifting off each Fruited plot (none in safe mode)
     }
     if (saleRun) {
       saleRun.t += dt;
@@ -794,6 +802,8 @@ async function openOutpostViewInner(opts, stage) {
     select, sell: doSell, close,
     /** The FARM tab (review / screenshots): switch tabs, run a farm action, read the farm picture's counts. */
     setTab, farmAct, get tab() { return tab; }, farm,
+    /** The harvest effect (review): embers({ plot, kind, level, cycle }[]) plays it on those plots now; its counts. */
+    embers: (plots) => (r.impacts ? farmFx.harvest(plots, o, r.impacts, FXK) : null), get emberStats() { return { ...farmFx.stats }; },
     /** The surface avatar and farmhands (story A8): { avatar: { x, z, pose, height }, queue, idle, landed, sheltering, farmhands, rigs, home }. */
     get crew() { return crew.info(); }, get safe() { return safe; },
     /** Visit probes (review): bring the next one now; read the one running ({ n, t, raiders, done } or null). */

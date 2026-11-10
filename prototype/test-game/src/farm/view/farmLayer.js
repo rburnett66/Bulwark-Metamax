@@ -26,6 +26,16 @@ const C = { soil: 0x3b2a1c, ridge: 0x4a3524, frame: 0x6d5a44, sprout: 0x7bc24a, 
 // a ripe crop's colour by category (the scale prototype's grain gold; the others read apart at a glance)
 const RIPE = { Grain: 0xe8c860, Vegetable: 0xb05ad8, Fruit: 0xff7a3a, Materials: 0xf2a33a, Minerals: 0xcfd8e0, Gems: 0x7ad8ff };
 
+/** The 16 plant spots of a plot (world x, z): four rows along z (north–south, the battle camera's view), four plants
+ *  each. The plants stand on them, and the harvest embers rise from them (embers.js). */
+export function plantSpots(p) {
+  const out = [];
+  for (let row = 0; row < 4; row++) for (let k = 0; k < 4; k++) out.push([p.x + (row + 0.5) * (p.w / 4), p.y + (k + 0.5) * (p.h / 4)]);
+  return out;
+}
+/** The height the plots' ground plate stands at (the plants and the embers start from it). */
+export const FARM_Y = Y;
+
 export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } = {}) {
   const root = new THREE.Group();
   root.name = 'farm';
@@ -60,12 +70,7 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
   let counts = { plots: 0, plants: 0, buildings: 0 };
 
   const levelColour = (level) => new THREE.Color((POD_LEVELS.find((l) => l.level === level) || POD_LEVELS[0]).colour);
-  /** The 16 plant spots of a plot: four rows along z (north–south, the battle camera's view), four plants each. */
-  const spots = (p) => {
-    const out = [];
-    for (let row = 0; row < 4; row++) for (let k = 0; k < 4; k++) out.push([p.x + (row + 0.5) * (p.w / 4), p.y + (k + 0.5) * (p.h / 4)]);
-    return out;
-  };
+  const spots = plantSpots;
 
   function clear(g) {
     for (const c of [...g.children]) {
