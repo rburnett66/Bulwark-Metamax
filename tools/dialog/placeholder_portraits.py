@@ -32,6 +32,7 @@ TINT = {
     'ground': (176, 160, 120), 'air': (89, 158, 255), 'hightech': (26, 230, 255), 'artillery': (255, 184, 26),
     'water': (26, 217, 184), 'arcane': (255, 46, 13), 'space': (255, 38, 199), 'dark': (140, 38, 255),
     'greenies': (102, 255, 20),
+    'collective': (242, 200, 105),   # the Collective's gold [MM-story_mw548j4g_v]
 }
 ALIGN = {'AG': 'Ascendant Good', 'PG': 'Principled Good', 'G': 'Good', 'CG': 'Chaotic Good', 'N': 'Neutral',
          'CE': 'Chaotic Evil', 'E': 'Evil', 'PE': 'Principled Evil', 'DE': 'Dread Evil'}
@@ -144,6 +145,11 @@ def is_placeholder(path):
 def main():
     data = json.load(open(VOICEPACKS, encoding='utf-8'))
     chars = [(fk, f.get('name'), c) for fk, f in data['factions'].items() for c in f.get('characters', [])]
+    # contact speakers outside the 81 (the Collective opening's Mira Valcourt) [MM-story_mw548j4g_v]
+    opening = os.path.join(ROOT, 'content', 'dialog', 'opening.json')
+    if os.path.exists(opening):
+        sp = json.load(open(opening, encoding='utf-8'))['speaker']
+        chars.append(('collective', 'The Collective', {'name': sp['name'], 'align': 'G', 'gender': sp.get('gender')}))
     if '--list' in sys.argv:
         for fk, fname, c in chars:
             p = os.path.join(OUT, slug(c['name']) + '.png')
