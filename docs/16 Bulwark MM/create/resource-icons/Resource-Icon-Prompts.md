@@ -201,6 +201,13 @@ a small heap of grey moon dust and metallic rubble pebbles. A resource from Lume
 a sleek cylindrical fuel canister with a cyan glowing sight window and a wisp of cold vapour. A resource from Lumen, an airless moon; grey regolith, cold white light, cyan instruments. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects.
 ```
 
+### Helium-4 · Uncommon
+`content/icons/resources/helium-4.png`
+
+```
+a cluster of four upright glass pressure tubes glowing a soft pink-orange, the colour of a helium discharge lamp, standing on a frosted steel tray with small rime crystals. A resource from Lumen, an airless moon; grey regolith, cold white light, cyan instruments. Richer materials with a soft sheen and a few highlights. A warm gold glow (#ffd76a) behind the object. Square 1:1 game inventory icon for a stylized sci-fi strategy game. One single object, centered, three-quarter view, filling about 70% of the frame, with a clean, instantly readable silhouette. Painterly semi-realistic rendering with crisp edges, soft key light from the upper left and a thin rim light. Plain dark slate background (#0d121a) with a soft circular vignette. No text, no letters, no border, no frame, no hands, no table, no extra objects.
+```
+
 ### Starfall Iron · Rare
 `content/icons/resources/starfall-iron.png`
 

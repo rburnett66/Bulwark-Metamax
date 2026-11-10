@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import {
   FARM, CROPS, cropOf, cropsOf, METHODS, methodOf, POD_LEVELS, MAX_POD_LEVEL, podLevel, FARM_BUILDINGS, farmBuildingOf,
-  farmContractOf, growSec, fruitedSec, stageAt, yieldOf, podsBack, prepCost,
+  farmContractOf, growSec, fruitedSec, stageAt, yieldOf, podsBack, prepCost, NEW_MATERIALS,
 } from './farm.js';
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
@@ -26,11 +26,13 @@ test('36 crops: every planet\'s four surface resources, one per tier, in the cat
   assert.equal(new Set(CROPS.map((c) => c.id)).size, 36);
 });
 
-test('Helium-4 is a new material: the only crop that is not yet a catalogue resource, and Helium-3 is untouched', () => {
-  // owner rule 1 (2026-11-09): Helium-3 and Helium-4 are two different materials. Story A2 adds Helium-4 to the
-  // catalogue; until then it is the one crop the catalogue does not know. When A2 lands, this list becomes empty.
+test('Helium-4 is a new material: the only crop that is not a battle resource, and Helium-3 is untouched', () => {
+  // owner rules 1 and 5: Helium-3 and Helium-4 are two different materials, and farming has its own inventory, so
+  // Helium-4 never joins the battle catalogue. The Crops sheet marks it Material = new [MM-story_mwabg5me_7].
   const ids = new Set(CATALOG.resources.map((r) => r.id));
   assert.deepEqual(CROPS.filter((c) => !ids.has(c.id)).map((c) => c.id), ['helium-4']);
+  assert.deepEqual(NEW_MATERIALS.map((c) => c.id), ['helium-4'], 'the sheet says which crops are new materials');
+  assert.ok(CROPS.every((c) => c.newMaterial === !ids.has(c.id)), 'every other crop is the battle resource of its name');
   const he4 = cropOf('helium-4');
   assert.deepEqual([he4.name, he4.planet, he4.tier, he4.category, he4.growsAs], ['Helium-4', 'Lumen', 'uncommon', 'Minerals', 'accreted']);
   assert.equal(cropOf('helium-3'), null, 'Helium-3 is not a crop');

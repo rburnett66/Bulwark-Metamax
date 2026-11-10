@@ -23,7 +23,10 @@ export const CROPS = Object.freeze((MAPDATA.crops || []).map((r) => Object.freez
   id: r.Resource_Id, name: r.Crop, planet: r.Planet, planetKey: r.Planet_Key, tier: r.Tier, category: r.Category,
   growsAs: r.Grows_As, best: Object.freeze(words(r.Best_Method)), growHours: num(r.Grow_Hours), yield: num(r.Yield),
   fruitedHours: num(r.Fruited_Hours), podReturn: num(r.Pod_Return),
+  newMaterial: r.Material === 'new',   // a farm-only material (Helium-4), not a battle resource (owner rules 1, 5)
 })));
+/** The crops that are new materials, made only by farming (Helium-4). */
+export const NEW_MATERIALS = Object.freeze(CROPS.filter((c) => c.newMaterial));
 const CROP_BY_ID = new Map(CROPS.map((c) => [c.id, c]));
 
 /** A crop by its resource id ('loam-grain'), or null. */

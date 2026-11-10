@@ -60,6 +60,8 @@ PLANETS = [
   ("Lumen", "Space Tech", "an airless moon; grey regolith, cold white light, cyan instruments", [
     ("regolith", "Regolith", "common", "a small heap of grey moon dust and metallic rubble pebbles"),
     ("helium-3", "Helium-3", "uncommon", "a sleek cylindrical fuel canister with a cyan glowing sight window and a wisp of cold vapour"),
+    # Helium-4 (owner 2026-11-09): a NEW material, Lumen's farmed crop; it is not Helium-3 and must not look like it [MM-story_mwabg5me_7]
+    ("helium-4", "Helium-4", "uncommon", "a cluster of four upright glass pressure tubes glowing a soft pink-orange, the colour of a helium discharge lamp, standing on a frosted steel tray with small rime crystals"),
     ("starfall-iron", "Starfall Iron", "rare", "a meteorite chunk with a scorched black crust and one polished face showing a crosshatched Widmanstatten pattern"),
     ("void-lens", "Void Lens", "epic", "a flawless circular crystal lens floating upright, a deep starfield and nebula visible inside the lens rather than behind it"),
   ]),

@@ -341,6 +341,32 @@ function model(planet, tier, name, palette, parts) { M[`${planet}.${tier}`] = { 
 export const RESOURCE_MODELS = M;
 /** The model for a planet (faction key) and tier, or null. */
 export function resourceModel(planet, tier) { return M[`${planet}.${tier}`] || null; }
+
+// ══ MATERIALS that are not battle resources — keyed by their own id [MM-story_mwabg5me_7] ══════════════════════
+// Helium-4 (owner 2026-11-09: a completely different material from Helium-3): Lumen's uncommon farm crop, grown from a
+// seed core in a chilled bed. Helium-3 is cyan frost crystals; Helium-4 reads apart at a glance: upright glass pressure
+// tubes glowing helium's own discharge colour (pink-orange) on a frosted steel tray.
+const X = {};
+{
+  const R = rng(97);
+  X['helium-4'] = { key: 'helium-4', id: 'helium-4', planet: 'space', tier: 'uncommon', name: 'Helium-4',
+    palette: { tray: '#5a6068', grate: '#3c4148', frost: '#e8f2f8', cap: '#9aa2ac', glass: '#c8d4dc', glowHe: '#ffa27a', glowHe2: '#ffd2b8' },
+    parts: [
+      { t: 'cyl', r: [0.34, 0.37], l: 0.05, seg: 12, p: [0, 0.025, 0], m: 'tray' },
+      ...[-0.2, -0.1, 0, 0.1, 0.2].map((x) => ({ t: 'box', s: [0.012, 0.012, 0.56], p: [x, 0.055, 0], m: 'grate' })),
+      ...spread(7, 0.28, R, 0.12).map(([x, z]) => ({ t: 'ell', s: [0.045, 0.02, 0.04], seg: 6, p: [x, 0.06, z], m: 'frost' })),
+      ...[[0, 0, 0.42], [0.13, 0.06, 0.32], [-0.12, 0.07, 0.28], [0.03, -0.13, 0.36]].flatMap(([x, z, h], i) => [
+        { t: 'cyl', r: 0.05, l: 0.03, seg: 8, p: [x, 0.065, z], m: 'cap' },
+        { t: 'cyl', r: 0.034, l: h, seg: 8, p: [x, 0.08 + h / 2, z], m: i % 2 ? 'glowHe2' : 'glowHe' },
+        ...[0.3, 0.7].map((k) => ({ t: 'cyl', r: 0.04, l: 0.014, seg: 8, p: [x, 0.08 + h * k, z], m: 'glass' })),
+        { t: 'cyl', r: [0.05, 0.03], l: 0.04, seg: 8, p: [x, 0.1 + h, z], m: 'cap' },
+      ]),
+    ] };
+}
+/** Models of materials that are not battle resources (farm-only), by their resource id. */
+export const MATERIAL_MODELS = Object.freeze(X);
+/** A farm-only material's model by id ('helium-4'), or null. Battle resources use resourceModel(planet, tier). */
+export const materialModel = (id) => X[id] || null;
 /** Planets that have the full four. */
 export const RESOURCE_PLANETS = Object.freeze(Object.keys(PLANETS));
 
