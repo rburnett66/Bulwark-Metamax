@@ -29,6 +29,8 @@ import { createArrivalStage } from './arrivalStage.js';
 import { FIRST_SIGHT_S, FLANK_S } from './arrivalPlan.js';
 import { prepareLayout } from '../ship-interior/layout.js';
 import { createRoomView } from '../ship-interior/roomView.js';
+import { factionShipLayout } from '../ship-interior/shipRooms.js';
+import '../data/factions.js';
 import { createComm } from '../comm/commCard.js';
 import { characterCall } from '../comm/dialog.js';
 import { showContractModal } from '../render/contractModal.js';
@@ -144,9 +146,9 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
   d.ui.appendChild(promptEl);
   const roomR = new THREE.WebGLRenderer({ canvas: roomCanvas, antialias: true });
   roomR.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); roomR.outputEncoding = THREE.sRGBEncoding;
-  // the ship's layout; a faction ship reuses the Collective's with its own crew until it has its own
-  const raw = JSON.parse(JSON.stringify(await shipLayout()));
-  if (!ship.isCollective) for (const r of raw.rooms) r.fac = ship.key;
+  // the ship's layout: the Long Ledger as authored, or a faction ship's — every neutral room plus its own (shipRooms.js)
+  const base = await shipLayout();
+  const raw = ship.isCollective ? JSON.parse(JSON.stringify(base)) : factionShipLayout(base, ship.key, (globalThis.BulwarkFactions && (globalThis.BulwarkFactions.find(ship.key) || {}).name) || ship.key);
   const layout = prepareLayout(raw);
   const roomOf = (id) => raw.rooms.find((r) => r.id === id) || {};
   const patron = { room: ship.room, fac: ship.isCollective ? 'collective' : ship.key, name: ship.captain, captain: !ship.isCollective };
