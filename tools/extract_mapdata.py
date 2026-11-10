@@ -313,6 +313,87 @@ def raid_problems(data, planets):
     return out
 
 
+# ── farming (tech plan docs/tech-plan/Farming.md §3.2) [MM-story_mwabgax7_9] ──────────────────────────────────────
+FARM_TIERS = ("common", "uncommon", "rare", "epic")
+FARM_CATEGORIES = {"Grain", "Vegetable", "Fruit", "Materials", "Minerals", "Gems"}
+FARM_PARAMS = ("Prep_Gold", "Prep_Sec", "Sprout_At", "Plant_At", "Fruited_Window", "Pods_Per_Plot", "Lucky_Chance",
+               "Lucky_Chance_High", "Bench_In", "Battle_Pod_Units", "Battle_Pod_Units_Epic", "Pod_Crate", "Silo_Hours",
+               "Breach_Silo_Loss", "Trample_Fruited_Yield", "Avatar_Cells", "Farmhands")
+
+
+def farm_problems(data, planets):
+    """The farm sheets' rules. The crops' ids are checked against the mission catalogue by src/data/farm.test.mjs."""
+    out = []
+    p = data["farmParams"]
+    for k in FARM_PARAMS:
+        if not isinstance(p.get(k), (int, float)) or p[k] < 0:
+            out.append(f"Farm_Params: missing, negative or non-numeric {k}")
+    if isinstance(p.get("Sprout_At"), (int, float)) and isinstance(p.get("Plant_At"), (int, float)) \
+            and not 0 < p["Sprout_At"] < p["Plant_At"] < 1:
+        out.append("Farm_Params: need 0 < Sprout_At < Plant_At < 1 (the stages run in order inside the grow time)")
+    crops = data["crops"]
+    if len(crops) != 36:
+        out.append(f"Crops: expected 36 crops (9 planets x 4 tiers), got {len(crops)}")
+    if len({r.get("Resource_Id") for r in crops}) != len(crops):
+        out.append("Crops: Resource_Id is not unique")
+    seen = {(r.get("Planet_Key"), r.get("Tier")) for r in crops}
+    for key in planets:
+        for t in FARM_TIERS:
+            if (key, t) not in seen:
+                out.append(f"Crops: {key} has no {t}-tier crop")
+    for r in crops:
+        tag = f"Crops {r.get('Resource_Id')}"
+        if r.get("Category") not in FARM_CATEGORIES:
+            out.append(f"{tag}: Category {r.get('Category')!r} is not one of {sorted(FARM_CATEGORIES)}")
+        if r.get("Grows_As") not in ("living", "accreted"):
+            out.append(f"{tag}: Grows_As must be living or accreted")
+        for k in ("Grow_Hours", "Fruited_Hours"):
+            if not (isinstance(r.get(k), (int, float)) and r[k] > 0):
+                out.append(f"{tag}: {k} must be positive")
+        if not (isinstance(r.get("Yield"), int) and r["Yield"] > 0):
+            out.append(f"{tag}: Yield must be a positive whole number")
+        if not (isinstance(r.get("Pod_Return"), (int, float)) and 0 <= r["Pod_Return"] <= 1):
+            out.append(f"{tag}: Pod_Return must be a share in [0, 1]")
+    methods = {r.get("Method"): r for r in data["farmMethods"]}
+    for need in ("traditional", "irrigated"):
+        if need not in methods:
+            out.append(f"Farm_Methods: Phase A needs {need}")
+    for m, r in methods.items():
+        for k in ("Foot_W", "Foot_H", "Pods_Per"):
+            if not (isinstance(r.get(k), int) and r[k] > 0):
+                out.append(f"Farm_Methods {m}: {k} must be a positive whole number")
+        for k in ("Speed_Mult", "Yield_Mult", "Prep_Mult"):
+            if not (isinstance(r.get(k), (int, float)) and r[k] > 0):
+                out.append(f"Farm_Methods {m}: {k} must be positive")
+    levels = data["podLevels"]
+    if [r.get("Level") for r in levels] != [1, 2, 3, 4, 5]:
+        out.append(f"Pod_Levels: expected levels 1-5 in order, got {[r.get('Level') for r in levels]}")
+    else:
+        if levels[2].get("Value_Mult") != 1:
+            out.append("Pod_Levels: level 3 (Rare) is battle quality, so its Value_Mult must be 1 (owner 2026-11-09)")
+        vals = [r.get("Value_Mult") for r in levels]
+        if not all(isinstance(v, (int, float)) for v in vals) or vals != sorted(vals) or len(set(vals)) != 5:
+            out.append("Pod_Levels: Value_Mult must rise with every level")
+        for r in levels[:4]:
+            if not (isinstance(r.get("Bench_Gold"), int) and r["Bench_Gold"] > 0):
+                out.append(f"Pod_Levels {r['Level']}: Bench_Gold must be positive (levels 1-4 upgrade at the bench)")
+    kinds = {r.get("Kind") for r in data["farmBuildings"]}
+    for need in ("farmhouse", "silo", "pump"):
+        if need not in kinds:
+            out.append(f"Farm_Buildings: Phase A needs {need}")
+    ids = {r.get("Resource_Id") for r in crops}
+    for r in data["farmContracts"]:
+        tag = f"Farm_Contracts {r.get('Planet_Key')} {r.get('Contract')}"
+        if r.get("Planet_Key") not in planets:
+            out.append(f"{tag}: unknown planet")
+        if r.get("Crop_Id") not in ids:
+            out.append(f"{tag}: Crop_Id {r.get('Crop_Id')!r} is not a crop")
+        for k in ("Plant_Plots", "Deliver", "Gold", "Pod_Crate"):
+            if not (isinstance(r.get(k), int) and r[k] > 0):
+                out.append(f"{tag}: {k} must be a positive whole number")
+    return out
+
+
 def main():
     wb = openpyxl.load_workbook(XLSX, data_only=True)
     data = {
@@ -348,6 +429,16 @@ def main():
         # raid sizes per planet and contract step, measured on the battle sim [MM-story_mw5oegk1_o] (tech plan §4.3)
         "outpostRaids": sheet_rows(wb["Outpost_Raids"], lambda v: isinstance(v, str) and v.isidentifier(),
                                    header_row_probe=("Planet_Key",)) if "Outpost_Raids" in wb.sheetnames else [],
+        # farming, Phase A (tech plan Farming §3.2) [MM-story_mwabgax7_9]
+        "farmParams": params_map(wb["Farm_Params"]),
+        "crops": sheet_rows(wb["Crops"], lambda v: isinstance(v, str) and v.isidentifier(), header_row_probe=("Planet_Key",)),
+        "farmMethods": sheet_rows(wb["Farm_Methods"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                  header_row_probe=("Method",)),
+        "podLevels": sheet_rows(wb["Pod_Levels"], _is_int, header_row_probe=("Level",)),
+        "farmBuildings": sheet_rows(wb["Farm_Buildings"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                    header_row_probe=("Kind",)),
+        "farmContracts": sheet_rows(wb["Farm_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                    header_row_probe=("Planet_Key",)),
     }
 
     apply_rework(data)
@@ -378,6 +469,7 @@ def main():
         elif r["Quota"] > r.get("Rare_Seeded", 0):
             problems.append(f"Rare_Contracts {r.get('Planet_Key')} map {r.get('Map_ID')}: Quota exceeds the rare units the board seeds")
     problems += outpost_problems(data)
+    problems += farm_problems(data, {r.get("Planet_Key") for r in data["ores"]})
     for f in data["factions"]:
         if f.get("Premium_Secondary") == f.get("Premium_Resource"):
             problems.append(f"{f.get('Faction_Name')}: Premium_Secondary == Premium_Resource (GDD 5.2)")
@@ -406,6 +498,9 @@ def main():
     print(f"   ores={len(data['ores'])} outpostStructures={len(data['outpostStructures'])} "
           f"outpostContracts={len(data['outpostContracts'])} outpostParams={len(data['outpostParams'])} "
           f"outpostRaids={len(data['outpostRaids'])} outpostTech={len(data['outpostTech'])}")
+    print(f"   crops={len(data['crops'])} farmMethods={len(data['farmMethods'])} podLevels={len(data['podLevels'])} "
+          f"farmBuildings={len(data['farmBuildings'])} farmContracts={len(data['farmContracts'])} "
+          f"farmParams={len(data['farmParams'])}")
 
 
 if __name__ == "__main__":
