@@ -52,14 +52,10 @@ Verdance's; every planet uses the same rules with its own three ores.
 | Lithium | rare | 0.8 | 30 |
 
 - A **Mining Station** on a deposit mines while it is **powered**, even before the outpost is online.
-- The miner's ore goes on to the **Storage Tower** each tick. A finished, powered tower holds **4 hours** of each
-  rig's output (Storage Tower II: 8 hours).
-- Each Mining Station also has its own **bay** of **15 minutes** of its output. With no Storage Tower (or its door
-  shut) that is all it holds.
-- When the tower's bay for a rig is **full**, the tower shows **storage full** and the miner keeps running into its own
-  bay. When that is full too, the miner **stops** and shows **storage full** (owner 2026-11-09: "If storage fills, the
-  miner can run until it is full, full a miner has to stop there is a warning icon for storage full. Storage also has
-  an icon storage full."). A rig's panel shows *In storage* and *In the miner*.
+- Each Mining Station has its own **bay**. Without a Storage Tower the bay holds **15 minutes** of its output.
+- A finished, powered **Storage Tower** raises every rig's bay to **4 hours** of output (Storage Tower II: 8 hours).
+- When a bay is **full** the rig **stops** until you sell (owner 2026-11-09: "When storage is full mining stops"). Both
+  the Mining Station and the Storage Tower show the **storage full** marker (R9).
 - **Deep seam** (after the Deep Drilling I tech): a rig switched to *Deep* mines at **¼ the speed** but each unit sells
   for **5×** the price.
 - **Mining Station Mk II** (Rig Mk II tech): **2×** the rate and **2×** the bay.
@@ -117,7 +113,7 @@ A big round marker over a building is a **warning**. Tap the building to read it
 
 | Marker | Meaning | What to do |
 |---|---|---|
-| **Crate** (gold ring) | **Storage full**: on the Storage Tower, its bay for a rig is full (that miner is filling its own bay); on a miner, its own bay is full too and it has stopped | **SELL** |
+| **Crate** (gold ring) | **Storage full**: on a Mining Station, its bay is full and it has stopped; on the Storage Tower, a rig's bay in it is full | **SELL** |
 | **Lightning bolt** | **No power**: the building is stopped (its storage is kept) | Build or move a Power Station within reach, or add supply |
 | **Door** | **Door shut**: an unpowered Storage Tower takes no new ore | Restore its power |
 
@@ -162,7 +158,7 @@ A big round marker over a building is a **warning**. Tap the building to read it
 ### R14. Open for the owner
 
 - ~~Part loads~~ — answered 2026-11-09: SELL sells whole loads only, never a part load (R5).
-- ~~Stopped rigs~~ — answered 2026-11-09: the miner runs on into its own bay when storage is full, then stops (R4).
+- ~~Stopped rigs~~ — answered 2026-11-09: when storage is full mining stops; the miner and the tower both show storage full (R4, R9).
 - The gun cap and the Habitat: are 3 guns + 2 per Habitat tier the intended limits?
 - Harvester cap 2, maximum 4: what raises it (it is not in the build list today)?
 

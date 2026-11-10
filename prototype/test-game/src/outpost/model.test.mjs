@@ -3,7 +3,7 @@
 // is passed through the same ctx.raid hook.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { baySplit,
+import {
   createOutpost, confirmOnline, advance, sell, loadsReady, place, upgrade, repair, repairCost, setDeep,
   raidSchedule, raidOutcome, powerGrids, bayCapacity, onlineProblems, status, windowMs, outpostSeed,
   referenceOutpost, defaultPads, buyHarvester, harvesterRefusal, warnings, migrateOutpost, PAD_KINDS,
@@ -48,23 +48,16 @@ test('the reference set (the former kit: the map\'s kitDefenses) is on the defau
   assert.deepEqual([g.grids[0].supply, g.grids[0].draw], [10, 9], 'the kit draws 9 of 10');
 });
 
-test('4 hours fill the 720-iron tower bay; the miner runs on into its own 45 and then stops; a load is 15 units; nothing is sold while time passes', () => {
-  // owner 2026-11-09: "The Miner acquires ore which gets processed to storage on a tick. If storage fills, the miner
-  // can run until it is full, full a miner has to stop … Storage also has an icon storage full."
-  const at4 = quiet(online(), T0 + 4 * HOUR);
-  assert.ok(Math.abs(at4.outpost.storage.r1.iron - 720) < 1e-9);
-  assert.equal(loadsReady(at4.outpost, ctx()), 48);
-  assert.equal(at4.report.full.length, 0, 'the tower is full, the miner is not');
-  assert.deepEqual(baySplit(at4.outpost, 'r1', map), { tower: { units: 720, cap: 720 }, miner: { units: 0, cap: 45 } });
-  assert.deepEqual(warnings(at4.outpost, map), { s1: ['storage_full'] }, 'the Storage Tower shows storage full; the miner still runs');
-  const { outpost: o, report } = quiet(online(), T0 + 4 * HOUR + 15 * MIN);
-  assert.ok(Math.abs(o.storage.r1.iron - 765) < 1e-9);
-  assert.equal(loadsReady(o, ctx()), 51);
+test('4 hours fill the 720-iron bay; a load is 15 units; nothing is sold while time passes', () => {
+  const { outpost: o, report } = quiet(online(), T0 + 4 * HOUR);
+  assert.ok(Math.abs(o.storage.r1.iron - 720) < 1e-9);
+  assert.equal(loadsReady(o, ctx()), 48);
   assert.equal(report.full.length, 1);
-  assert.ok(Math.abs(report.full[0].at - (T0 + 4 * HOUR + 15 * MIN)) < 1);
-  assert.deepEqual(warnings(o, map), { r1: ['storage_full'], s1: ['storage_full'] }, 'now the miner has stopped too');
+  assert.ok(Math.abs(report.full[0].at - (T0 + 4 * HOUR)) < 1);
   const later = quiet(o, T0 + 6 * HOUR).outpost;
-  assert.ok(Math.abs(later.storage.r1.iron - 765) < 1e-9, 'a full miner stops');
+  assert.ok(Math.abs(later.storage.r1.iron - 720) < 1e-9, 'a full bay stops its rig');
+  // owner 2026-11-09: "When storage is full mining stops" — both the miner and the Storage Tower show storage full
+  assert.deepEqual(warnings(o, map), { r1: ['storage_full'], s1: ['storage_full'] });
   assert.deepEqual(later.sold, {}, 'advance never sells');
   const five = quiet(online(), T0 + 5 * MIN).outpost;
   assert.equal(loadsReady(five, ctx()), 1);
@@ -288,7 +281,7 @@ test('owner 2026-11-07: a rig with no Storage Tower still mines, into its own sm
   assert.deepEqual(warnings(a, map).r1, ['storage_full']);
   // a tower raises the cap: the rig starts again
   const t = { ...a, pads: { ...a.pads, s1: { kind: 'storage', tier: 1 } } };
-  assert.equal(bayCapacity(t, 'r1', map), 765, 'the tower\'s 720 + the miner\'s own 45');
+  assert.equal(bayCapacity(t, 'r1', map), 720);
   assert.ok(Math.abs(quiet(t, a.t + HOUR).outpost.storage.r1.iron - 225) < 1e-9, '45 + an hour of iron');
   // it mines before the outpost goes online too: power is all it needs
   let pre = createOutpost('ground', { seed: 5, map, now: T0 });
@@ -332,7 +325,7 @@ test('Rig Mk II doubles extraction and its bay; one full bay stops only its own 
   o = upgrade(o, 'r1', { now: T0, unlocks: ['rig_mk2'] }).outpost;
   o = quiet(o, T0 + 20 * MIN).outpost;   // the upgrade finishes at 20 minutes
   assert.equal(o.pads.r1.tier, 2);
-  assert.equal(bayCapacity(o, 'r1'), 1530, 'Mk II: the tower\'s 1,440 + its own 90');
+  assert.equal(bayCapacity(o, 'r1'), 1440);
   const before = o.storage.r1.iron;
   const after = quiet(o, o.t + HOUR).outpost.storage.r1.iron;
   assert.ok(Math.abs(after - before - 360) < 1e-9, 'Mk II mines 6 iron a minute');
@@ -340,8 +333,8 @@ test('Rig Mk II doubles extraction and its bay; one full bay stops only its own 
   let two = place(online(), { pad: 'r2', kind: 'rig' }, { map, now: T0, unlockedTiers: ['common', 'uncommon'] }).outpost;
   two = upgrade(two, 'p1', { now: T0, unlocks: ['power_grid_2'] }).outpost;
   two = quiet(two, T0 + 6 * HOUR).outpost;
-  assert.ok(Math.abs(two.storage.r1.iron - 765) < 1e-9);
-  assert.ok(two.storage.r2.aluminum > 300 && two.storage.r2.aluminum <= 382.5);
+  assert.ok(Math.abs(two.storage.r1.iron - 720) < 1e-9);
+  assert.ok(two.storage.r2.aluminum > 300 && two.storage.r2.aluminum <= 360);
 });
 
 test('going online needs every establishing building powered; status feeds the menu button', () => {

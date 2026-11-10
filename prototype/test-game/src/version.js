@@ -6,4 +6,4 @@
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
 export const VERSION = 'v2026.11.10-c';
-export const VERSION_NOTE = 'Miner feeds storage, then fills its own bay';
+export const VERSION_NOTE = 'Storage full: mining stops, both show it';

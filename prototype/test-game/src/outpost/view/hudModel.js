@@ -6,7 +6,7 @@
  * tier, rate, the deep / shallow switch on a rig, upgrade). Pure: reads the outpost through src/outpost/model.js; the
  * DOM lives in hud.js.
  */
-import { powerGrids, loadsReady, bayCapacity, baySplit, rigRatePerMin, repairCost, depositOf, onlineProblems, harvestPlan, hopperCap, hopperUnits,
+import { powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems, harvestPlan, hopperCap, hopperUnits,
   gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups , sellStructureQuote } from '../model.js';
 import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST, OUTPOST_TECH } from '../../data/outpost.js';
 import { oresOf, oreById } from '../../data/ores.js';
@@ -68,11 +68,7 @@ export function hudModel(o, map, { gold = 0, now = null, unlocks = null } = {}) 
     }
   }
   let units = 0, cap = 0;
-  // the storage bar is the Storage Tower's fill (the miners' own bays when there is no open tower)
-  for (const pad of Object.keys(o.pads).filter((id) => o.pads[id].kind === 'rig')) {
-    const sp = baySplit(o, pad, map), part = sp.tower.cap > 0 ? sp.tower : sp.miner;
-    units += part.units; cap += part.cap;
-  }
+  for (const pad of Object.keys(o.pads).filter((id) => o.pads[id].kind === 'rig')) { units += bayUnits(o, pad); cap += bayCapacity(o, pad, map); }
   const { grids, off } = powerGrids(o, map);
   const supply = grids.reduce((a, g) => a + g.supply, 0), draw = grids.reduce((a, g) => a + g.draw, 0);
   let hp = 0, max = 0;
@@ -164,14 +160,9 @@ export function panelModel(o, map, sel, ctx = {}) {
     const ore = oresOf(o.planet).find((x) => x.tier === b.deposit);
     const cap = bayCapacity(o, pad.id, map), units = bayUnits(o, pad.id);
     const running = o.online && powered.has(pad.id) && !job;
-    const split = baySplit(o, pad.id, map);
-    if (running && units >= cap - 1e-6) { out.status = 'Full: sell to resume'; out.tone = 'warn'; }
-    else if (running && split.tower.cap > 0 && split.tower.units >= split.tower.cap - 1e-6) { out.status = 'Storage full: filling its own bay'; out.tone = 'warn'; }
+    if (running && units >= cap - 1e-6) { out.status = 'Bay full: sell to resume'; out.tone = 'warn'; }
     stats.push(['Ore', ore ? `${ore.name}${b.deep ? ', deep grade' : ''}` : '—']);
     stats.push(['Rate', running ? fmtRate(rigRatePerMin(o, pad.id)) : 'stopped']);
-    // the ore goes on to the Storage Tower each tick; the miner's own bay holds what the tower has no room for
-    if (split.tower.cap > 0) stats.push(['In storage', `${fmtUnits(split.tower.units)} / ${fmtUnits(split.tower.cap)}`]);
-    stats.push(['In the miner', `${fmtUnits(split.miner.units)} / ${fmtUnits(split.miner.cap)}`]);
     stats.push(['Bay', `${fmtUnits(units)} / ${fmtUnits(cap)}`]);
     out.bay = cap > 0 ? units / cap : 0;
     out.oreColour = ore && ore.colour;
@@ -184,7 +175,7 @@ export function panelModel(o, map, sel, ctx = {}) {
   } else if (b && kind === 'storage') {
     const def = structureDef('storage', b.tier);
     let units = 0, cap = 0;
-    for (const id of Object.keys(o.pads).filter((x) => o.pads[x].kind === 'rig')) { const sp = baySplit(o, id, map); units += sp.tower.units; cap += sp.tower.cap; }
+    for (const id of Object.keys(o.pads).filter((x) => o.pads[x].kind === 'rig')) { units += bayUnits(o, id); cap += bayCapacity(o, id, map); }
     stats.push(['Holds', `${def.bayHours} h per rig`], ['Stored', `${fmtUnits(units)} / ${fmtUnits(cap)}`]);
     out.bay = cap > 0 ? units / cap : 0;
   } else if (b && (kind === 'resourceBay' || kind === 'harvesterBay')) {
