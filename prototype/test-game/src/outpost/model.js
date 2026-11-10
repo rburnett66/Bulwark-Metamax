@@ -702,7 +702,7 @@ export const gunCount = (o) => o.defenses.filter((d) => GUN_KINDS.includes(d.kin
 export const habitatTier = (o) => Math.max(0, ...Object.values(o.pads).filter((b) => b.kind === 'habitat').map((b) => b.tier));
 /** How many guns the outpost crews: Gun_Cap from the hub, + Habitat_Guns_Per_Tier for each Habitat tier. */
 export function gunCap(o, params = OUTPOST) {
-  return (params.Gun_Cap ?? 3) + (params.Habitat_Guns_Per_Tier ?? 2) * habitatTier(o);
+  return (params.Gun_Cap ?? 4) + (params.Habitat_Guns_Per_Tier ?? 4) * habitatTier(o);
 }
 /** Why one more gun cannot be placed now, or null. */
 export function gunRefusal(o, params = OUTPOST) {
