@@ -145,7 +145,7 @@ export function defenseStructures(o, map = null) {
     const def = structureDef(d.kind, tier), max = def && def.battle ? def.battle.hp : d.hp;
     return {
       id: 'od-' + d.id, kind: d.kind === 'wall' ? 'wall' : 'antiGround', structId: d.kind === 'mg' ? 'STR-MG' : d.kind === 'cannon' ? 'STR-Cannon' : 'STR-Wall',
-      tier, cell: { x: at[0], y: at[1] }, pos: { x: at[0] + 0.5, y: at[1] + 0.5 }, footprint: { w: 1, h: 1 },
+      tier, cell: { x: at[0], y: at[1] }, pos: { x: at[0] + 0.5, y: at[1] + 0.5 }, footprint: { w: 1, h: 1 }, showHp: true,   // worn: bar always shown [MM-story_mwb8zbk7_24]
       hp: Math.min(d.hp, max), maxHp: max, lifecycle: d.hp < max ? 'Damaged' : 'Active', outpostId: d.id, ...extra,
     };
   };
