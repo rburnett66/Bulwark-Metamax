@@ -269,6 +269,9 @@ export function lifecycleLook(s) {
   }
   if (lc === 'Upgrading') return { key: 'U', sy: 1, tint: [1.22, 1.12, 0.78] };
   if (lc === 'Selling') return { key: 'S', sy: 1, tint: [0.62, 0.62, 0.64] };
+  // an outpost defense at 0 HP stays on its cell until repaired (owner 2026-11-10) [MM-story_mwb8zamf_23]: charred and
+  // slumped, its turret dead (planSystem: aim false); a battle tower is removed instead
+  if (lc === 'Wrecked') return { key: 'W', sy: 0.55, tint: [0.26, 0.23, 0.22] };
   const frac = s.maxHp > 0 ? s.hp / s.maxHp : 1;
   if (lc === 'Damaged' || frac < 1) {
     return frac < 0.4 ? { key: 'D2', sy: 1, tint: [0.62, 0.46, 0.42] } : { key: 'D1', sy: 1, tint: [0.84, 0.7, 0.64] };

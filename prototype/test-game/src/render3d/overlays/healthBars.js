@@ -48,7 +48,9 @@ export function planBars(state, views, mem, dt, opts = {}) {
   const out = [];
   if (!state) return out;
   const seen = new Set();
-  const step = (key, hp, max, live, place) => {
+  // always: a bar shown whenever below full, without waiting to see the hit (an outpost defense worn by a raid that
+  // was settled off screen, s.showHp) [MM-story_mwb8zbk7_24]
+  const step = (key, hp, max, live, place, always = false) => {
     let m = mem.get(key);
     const frac = max > 0 ? Math.max(0, Math.min(1, hp / max)) : 1;
     if (!m) { m = { frac, shown: frac, chunk: frac, hold: 0, alpha: 0, flash: 0, kick: 0, hit: false, base: frac }; mem.set(key, m); }
@@ -59,7 +61,7 @@ export function planBars(state, views, mem, dt, opts = {}) {
     if (m.hold > 0) m.hold -= dt; else m.chunk = Math.max(m.shown, m.chunk - dt / BARS.chunkDrain);
     if (m.chunk < m.shown) m.chunk = m.shown;
     m.flash = Math.max(0, m.flash - dt); m.kick = Math.max(0, m.kick - dt * 6);
-    const want = live && m.hit && (frac < 0.999 || m.chunk > m.shown + 0.002 || key === 'base') ? 1 : 0;   // the base keeps its bar once hit
+    const want = live && (m.hit || always) && (frac < 0.999 || m.chunk > m.shown + 0.002 || key === 'base') ? 1 : 0;   // the base keeps its bar once hit
     m.alpha += Math.sign(want - m.alpha) * Math.min(Math.abs(want - m.alpha), dt / (want ? BARS.fadeIn : BARS.fadeOut));
     if (m.alpha <= 0.001) return;
     const p = place();
@@ -77,7 +79,8 @@ export function planBars(state, views, mem, dt, opts = {}) {
     if (!s.pos || !(s.maxHp > 1)) continue;
     const fp = s.footprint || { w: 1, h: 1 };
     const mt = mountOf(opts.mounts, s);   // a tower mounted on the base's hull carries its bar up with it [MM-task_mvj0k7v3_k]
-    step('s' + s.id, s.hp, s.maxHp, s.hp > 0 && s.lifecycle !== 'Destroyed', () => ({ x: s.pos.x + fp.w / 2, y: (mt ? mt.y : 0) + (s.kind === 'wall' ? 0.95 : 1.15) * (mt ? mt.s : 1), z: s.pos.y + fp.h / 2, w: BARS.structW * fp.w, h: BARS.structH, kind: 1 }));
+    const wreck = s.lifecycle === 'Wrecked';   // an outpost wreck keeps an empty bar over its slumped hull until repaired
+    step('s' + s.id, s.hp, s.maxHp, (s.hp > 0 || (wreck && s.showHp)) && s.lifecycle !== 'Destroyed', () => ({ x: s.pos.x + fp.w / 2, y: (mt ? mt.y : 0) + (s.kind === 'wall' ? 0.95 : wreck ? 0.75 : 1.15) * (mt ? mt.s : 1), z: s.pos.y + fp.h / 2, w: BARS.structW * fp.w, h: BARS.structH, kind: 1 }), !!s.showHp);
   }
   // the base — once it has been hit it keeps its bar for the match
   const b = state.base, mb = opts.baseCell;
