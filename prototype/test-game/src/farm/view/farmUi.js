@@ -10,7 +10,7 @@
  * delivered, f1 } — pods: the save's s.pods; held: the farm store for this planet ({ cropId: units }).
  */
 import { methodOf, farmBuildingOf, cropOf, podLevel, POD_LEVELS, yieldOf, prepCost, CROPS } from '../../data/farm.js';
-import { occupied, plotState, storeCapacity, farmStatus } from '../model.js';
+import { occupied, plotState, storeCapacity, farmStatus, walkwayHit } from '../model.js';
 import { windowSec } from '../grow.js';
 
 /** The FARM tab's build list, top to bottom: the two Phase A methods, then the farm buildings the player buys. */
@@ -42,7 +42,8 @@ export function farmTargets(o, map, id, ctx = {}) {
     for (let x = 0; x + sz.w <= map.width; x++) {
       const r = { x, y, w: sz.w, h: sz.h };
       const hit = taken.find((t) => r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h);
-      const why = hit ? `the ground is taken (${hit.what})` : ctx.cellOk ? ctx.cellOk(r) : null;
+      const crowd = hit ? null : walkwayHit(o, r);   // the walkway between farm things (owner 2026-11-10)
+      const why = hit ? `the ground is taken (${hit.what})` : crowd ? `keep a walkway clear of the ${crowd.what.replace(/ \S+$/, '')}` : ctx.cellOk ? ctx.cellOk(r) : null;
       if (why) { error = error || why; continue; }
       targets.push({ cell: [x, y] });
     }

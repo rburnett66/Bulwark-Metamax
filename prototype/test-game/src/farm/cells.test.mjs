@@ -42,11 +42,12 @@ test('the layer is what the Forge derives from the stamped grid (mesa none, ramp
   for (const r of FORGE.resources) assert.ok(['collection', 'none', 'lane', 'slope'].includes(farmCellAt(map, r.x, r.y)), `field (${r.x}, ${r.y})`);
 });
 
-test('at least 30 2 × 2 soil plots fit round the mesa (measured: 688 spots, 210 packed side by side; the old map 460 and 148)', () => {
+test('at least 30 2 × 2 soil plots fit round the mesa (measured: 688 spots, 109 packed with a 1-cell walkway between plots, 210 edge to edge; the old map 460 and 148)', () => {
   const spots = plotSpots(map), packed = packPlots(map);
   assert.ok(packed.length >= 30, `packed plots ${packed.length}`);
   assert.equal(spots.length, 688);
-  assert.equal(packed.length, 210);
+  assert.equal(packed.length, 109);
+  assert.equal(packPlots(map, null, 2, 2, 0).length, 210);   // edge to edge, the old packing
   for (const p of packed) for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
     assert.equal(map.heights[(p.y + dy) * W + p.x + dx], 0, 'off the mesa');
     assert.equal(farmCellAt(map, p.x + dx, p.y + dy), 'soil');

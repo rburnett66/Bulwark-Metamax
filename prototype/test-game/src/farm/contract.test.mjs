@@ -33,8 +33,8 @@ const ctx = (s) => flowCtx(s, { allOpen: true, now: T0 });
 const free = (o, n) => {
   const t = occupied(o, map), out = [];
   for (let y = 0; y + 2 <= map.height && out.length < n; y += 2) for (let x = 0; x + 2 <= map.width && out.length < n; x += 2) {
-    const r = { x, y, w: 2, h: 2 };
-    if (!t.some((q) => r.x < q.x + q.w && q.x < r.x + r.w && r.y < q.y + q.h && q.y < r.y + r.h)) { out.push(r); t.push(r); }
+    const r = { x, y, w: 2, h: 2 }, g = { x: x - 1, y: y - 1, w: 4, h: 4 };   // the 1-cell walkway between plots
+    if (!t.some((q) => g.x < q.x + q.w && q.x < g.x + g.w && g.y < q.y + q.h && q.y < g.y + g.h)) { out.push(r); t.push(r); }
   }
   return out;
 };

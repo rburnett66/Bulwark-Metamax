@@ -18,6 +18,8 @@
 import { POD_LEVELS, cropOf } from '../../data/farm.js';
 import { plotState } from '../model.js';
 import { mergeGeos } from '../../outpost/view/outpostScene.js';   // the outpost scene's merge (one draw call per material)
+import { PAD_SIZE, MODEL_PAD_SIZE } from '../../terrain/outpostPads.js';
+const KIT_SCALE = PAD_SIZE.pad / MODEL_PAD_SIZE.pad;   // 0.5: the outpost kit's authoring scale to the map's (task_mwagi1nr_1e)
 
 const Y = 0.05;   // the ground plate height the outpost scene stands its pads on (outpostScene.js PAD_Y)
 const C = { soil: 0x3b2a1c, ridge: 0x4a3524, frame: 0x6d5a44, sprout: 0x7bc24a, leaf: 0x4f9a37, dead: 0x8a8578, stubble: 0xb89b5e, cyan: 0x34e1ff, bad: 0xff5a4a, sel: 0xffd34a };
@@ -147,7 +149,13 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
         holder.add(e.inst.object); groups.buildings.add(holder); built.set(id, e);
         const slug = SLUG[b.kind];
         if (kit && kit.manifest && kit.manifest[slug]) {   // swap in the GLB once loaded
-          kit.make(slug).then((inst) => { if (built.get(id) !== e) { inst.dispose && inst.dispose(); return; } holder.remove(e.inst.object); e.inst.dispose(); e.inst = inst; holder.add(inst.object); }).catch(() => {});
+          kit.make(slug).then((inst) => {
+            if (built.get(id) !== e) { inst.dispose && inst.dispose(); return; }
+            holder.remove(e.inst.object); e.inst.dispose(); e.inst = inst; holder.add(inst.object);
+            // the kit's models are made at 2 units a cell, like the pad buildings the outpost scene halves
+            // (padModelScale on a 2-cell pad); one scale for every farm building, so the 1-cell Pump is not quartered
+            holder.scale.setScalar(KIT_SCALE);
+          }).catch(() => {});
         }
       }
       const rise = b.done > now ? 0.2 + 0.8 * Math.max(0, 1 - (b.done - now) / 60000) : 1;

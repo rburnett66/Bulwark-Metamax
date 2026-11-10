@@ -157,6 +157,7 @@ PARAMS = [
     ["Pod_Crate", 12, "count", "Common pods in an F1 Pod Crate (§9.1)"],
     ["Silo_Hours", 8, "h", "the Silo holds this many hours of the farm's output (§6)"],
     ["Farmhouse_Store_Hours", 1, "h", "without a finished, powered Silo the Farmhouse holds this many hours of output (as a rig's own bay without a Storage Tower)"],
+    ["Plot_Walkway_Cells", 1, "cells", "a clear walkway kept between a plot and every other farm thing, for the avatar and the agrobots (owner 2026-11-10)"],
     ["Breach_Silo_Loss", 0.25, "share", "what a raid breach takes from the Silo (§10)"],
     ["Trample_Fruited_Yield", 0.5, "share", "a trampled Fruited plot keeps this share of its yield (§10)"],
     ["Avatar_Cells", 0.45, "cells", "the surface avatar's height (D44)"],
