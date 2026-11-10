@@ -257,11 +257,10 @@ test('harvesters: refused before the Resource Bay is finished, bought after, cap
   assert.equal(one.cost, 2000);
   assert.equal(one.outpost.harvesters, 1);
   assert.equal(o.harvesters, 0, 'the outpost passed in is unchanged');
-  const two = buyHarvester(one.outpost, { gold: 2000 }).outpost;
-  assert.equal(two.harvesters, OUTPOST.Harvester_Cap);
-  assert.equal(buyHarvester(two, { gold: 1e9 }).error, 'the Resource Bay holds 2 harvesters');
-  assert.equal(harvesterRefusal(two, { gold: 1e9 }), 'the Resource Bay holds 2 harvesters');
-  assert.equal(buyHarvester(two, { gold: 1e9, params: { ...OUTPOST, Harvester_Cap: 4 } }).outpost.harvesters, 3, 'the cap is data');
+  assert.equal(one.outpost.harvesters, OUTPOST.Harvester_Cap, 'an outpost starts with room for 1 (owner 2026-11-09)');
+  assert.equal(buyHarvester(one.outpost, { gold: 1e9 }).error, 'the Resource Bay holds 1 harvesters');
+  assert.equal(harvesterRefusal(one.outpost, { gold: 1e9 }), 'the Resource Bay holds 1 harvesters');
+  assert.equal(buyHarvester(one.outpost, { gold: 1e9, params: { ...OUTPOST, Harvester_Cap: 2 } }).outpost.harvesters, 2, 'the cap is data');
 });
 
 test('a save with the old Harvester Bay is migrated to the Resource Bay', () => {

@@ -702,7 +702,7 @@ export const gunCount = (o) => o.defenses.filter((d) => GUN_KINDS.includes(d.kin
 export const habitatTier = (o) => Math.max(0, ...Object.values(o.pads).filter((b) => b.kind === 'habitat').map((b) => b.tier));
 /** How many guns the outpost crews: Gun_Cap from the hub, + Habitat_Guns_Per_Tier for each Habitat tier. */
 export function gunCap(o, params = OUTPOST) {
-  return (params.Gun_Cap ?? 3) + (params.Habitat_Guns_Per_Tier ?? 2) * habitatTier(o);
+  return (params.Gun_Cap ?? 4) + (params.Habitat_Guns_Per_Tier ?? 4) * habitatTier(o);
 }
 /** Why one more gun cannot be placed now, or null. */
 export function gunRefusal(o, params = OUTPOST) {
@@ -913,13 +913,13 @@ export function setDeep(outpost, padId, on, ctx = {}) {
 
 // ── harvesters (owner 2026-11-07: bought from the build list once the Resource Bay is built) ────────────────────────
 /**
- * How many harvesters the Resource Bay holds (design §6: 2 to start, up to 4): Harvester_Cap, + 1 each for the tech
+ * How many harvesters the Resource Bay holds (owner 2026-11-09: 1 to start, 2 at most): Harvester_Cap, + 1 each for the tech
  * tree's Dock 3 and Dock 4 at an outpost with a finished Upgrade Bay (tech-tree upgrades reach an outpost through its
  * Upgrade Bay, design §6), never above Harvester_Max. ctx: { techOwned?, params? }.
  */
 export function harvesterCap(o, ctx = {}) {
   const params = P(ctx), h = harvesterDef();
-  const base = params.Harvester_Cap ?? (h && h.cap) ?? 2, max = params.Harvester_Max ?? (h && h.max) ?? 4;
+  const base = params.Harvester_Cap ?? (h && h.cap) ?? 1, max = params.Harvester_Max ?? (h && h.max) ?? 2;
   const bay = Object.values(o.pads).some((b) => b.kind === 'upgradeBay');
   const docks = bay ? ['dock3', 'dock4'].filter((id) => inSet(ctx.techOwned, id)).length : 0;
   return Math.min(max, base + docks);

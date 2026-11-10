@@ -75,13 +75,13 @@ Verdance's; every planet uses the same rules with its own three ores.
 
 | Building | Cost | Build time | What it does |
 |---|---|---|---|
-| Outpost Hub | granted | — | The centre. Crews **3 guns** (Machine Guns and Cannons; walls do not count). |
+| Outpost Hub | granted | — | The centre. Crews **4 guns** (Machine Guns and Cannons; walls do not count). |
 | Power Station I / II | 600 / 6,000 | 2 / 15 min | 10 power in 10 cells / 20 power in 14 cells |
 | Mining Station I / Mk II | 600 / 8,000 | 2 / 20 min | Mines its deposit (R4) |
 | Storage Tower I / II | 300 / 5,000 | 1 / 15 min | Every rig's bay holds 4 / 8 hours |
 | Resource Bay | 2,500 | 5 min | Fields **harvesters** for the surface fields (R7) |
 | Upgrade Bay | 4,000 | 10 min | Upgrades defenses, one at a time, on its pad (R8) |
-| Habitat I / II | 3,000 / 5,000 | 10 / 15 min | **+2 guns** per tier over the hub's 3 |
+| Habitat I / II | 3,000 / 5,000 | 10 / 15 min | **+4 guns** per tier over the hub's 4 (8 / 12 in all) |
 | Machine Gun I / II / III | 600 / 1,500 / 3,000 | 2 min | Defense |
 | Cannon I / II / III | 1,200 / 3,000 / 6,000 | 2 min | Defense |
 | Wall I / II | 400 / 1,000 | 2 min | Blocks a cell. No power, not a gun. |
@@ -95,7 +95,9 @@ Verdance's; every planet uses the same rules with its own three ores.
 
 ### R7. Harvesters (the surface)
 
-- A **Resource Bay** lets you buy **harvesters** (2,000 gold each). An outpost starts with room for **2**, at most 4.
+- A **Resource Bay** lets you buy **harvesters** (2,000 gold each). An outpost starts with room for **1**, at most **2**
+  (owner 2026-11-09: outpost land is sparse next to a survey location). The tech tree's Dock 3, through a finished
+  Upgrade Bay, raises it to 2.
 - A harvester works the **surface fields** off the mesa at the battle's rate, and hauls into the Resource Bay's hopper
   (4 hours).
 - Outpost fields **regrow slowly**: at **5%** of a battle field's rate, so a field worked hard runs dry.
@@ -103,7 +105,8 @@ Verdance's; every planet uses the same rules with its own three ores.
 ### R8. Defenses and upgrades
 
 - Only **Machine Guns, Cannons and Walls** can be built at an outpost.
-- The **gun cap** is 3 from the hub, plus 2 per Habitat tier. The build list greys a gun out at the cap.
+- The **gun cap** is 4 from the hub, plus 4 per Habitat tier (owner 2026-11-09: "Guns should be 4 base and 4 more per
+  habitat"). The build list greys a gun out at the cap.
 - **Upgrades** need the tier in the Tech Tree *and* an Upgrade Bay. The defense goes to the bay's pad while it is
   upgraded (a timed job) and does **not fight** until it comes back.
 
@@ -159,8 +162,8 @@ A big round marker over a building is a **warning**. Tap the building to read it
 
 - ~~Part loads~~ — answered 2026-11-09: SELL sells whole loads only, never a part load (R5).
 - ~~Stopped rigs~~ — answered 2026-11-09: when storage is full mining stops; the miner and the tower both show storage full (R4, R9).
-- The gun cap and the Habitat: are 3 guns + 2 per Habitat tier the intended limits?
-- Harvester cap 2, maximum 4: what raises it (it is not in the build list today)?
+- ~~The gun cap and the Habitat~~ — answered 2026-11-09: 4 guns base, 4 more per Habitat tier (R6, R8).
+- ~~Harvester cap~~ — answered 2026-11-09: start at 1, cap 2 (R7).
 
 ---
 
