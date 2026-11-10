@@ -185,18 +185,20 @@ test('the away report and the HUD show the harvest and the hopper; the bay panel
   assert.deepEqual(p.stats.find(([k]) => k === 'Fields regrowing'), ['Fields regrowing', `${+(steadyHarvest(r.outpost, map).total * HOUR).toFixed(1)} / h`]);
 });
 
-test('harvester cap: 2, raised to 3 and 4 by Dock 3 / Dock 4 only through a finished Upgrade Bay', () => {
-  const o = withBay({ harvesters: 2 });
-  assert.equal(harvesterCap(o, {}), OUTPOST.Harvester_Cap);
+test('harvester cap: 1, raised to 2 (the most) by Dock 3 only through a finished Upgrade Bay (owner 2026-11-09)', () => {
+  const o = withBay({ harvesters: 1 });
+  assert.deepEqual([OUTPOST.Harvester_Cap, OUTPOST.Harvester_Max], [1, 2], 'outpost land is sparse next to a survey location');
+  assert.equal(harvesterCap(o, {}), 1);
   const docks = { techOwned: new Set(['dock3', 'dock4']) };
-  assert.equal(harvesterCap(o, docks), 2, 'no Upgrade Bay: the tree\'s docks do not reach the outpost');
+  assert.equal(harvesterCap(o, docks), 1, 'no Upgrade Bay: the tree\'s docks do not reach the outpost');
   o.pads.b2 = { kind: 'upgradeBay', tier: 1 };
-  assert.equal(harvesterCap(o, { techOwned: new Set(['dock3']) }), 3);
-  assert.equal(harvesterCap(o, docks), OUTPOST.Harvester_Max);
-  assert.match(buyHarvester(o, { gold: 1e9 }).error, /holds 2/);
+  assert.equal(harvesterCap(o, { techOwned: new Set(['dock3']) }), 2);
+  assert.equal(harvesterCap(o, docks), 2, 'Dock 4 adds nothing past the cap of 2');
+  assert.match(buyHarvester(o, { gold: 1e9 }).error, /holds 1/);
   const b = buyHarvester(o, { gold: 1e9, ...docks });
-  assert.equal(b.outpost.harvesters, 3);
-  assert.equal(harvestPlan(b.outpost, map).length, 3);
+  assert.equal(b.outpost.harvesters, 2);
+  assert.equal(harvestPlan(b.outpost, map).length, 2);
+  assert.match(buyHarvester(b.outpost, { gold: 1e9, ...docks }).error, /holds 2/);
 });
 
 test('migration gives an old outpost an empty hopper; a new outpost starts with one', () => {
