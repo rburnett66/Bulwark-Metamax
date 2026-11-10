@@ -22,13 +22,13 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const G = path.join(ROOT, 'prototype/test-game');
-const { buildTerrainMap, resolveResourceTypes } = await import(path.join(G, 'src/sim/mapgen.js'));
-const { createSim, applyCommand, stepSim } = await import(path.join(G, 'src/sim/core.js'));
-const { PLANETS } = await import(path.join(G, 'src/data/planets.js'));
+const { buildTerrainMap, resolveResourceTypes } = await import(pathToFileURL(path.join(G, 'src/sim/mapgen.js')).href);
+const { createSim, applyCommand, stepSim } = await import(pathToFileURL(path.join(G, 'src/sim/core.js')).href);
+const { PLANETS } = await import(pathToFileURL(path.join(G, 'src/data/planets.js')).href);
 const MD = JSON.parse(fs.readFileSync(path.join(G, 'content/maps/mapdata.json'), 'utf8'));
 const TIER = { blue: 'common', yellow: 'uncommon', red: 'rare', green: 'epic' };
 const FORGE = path.join(G, 'content/maps/forge');
