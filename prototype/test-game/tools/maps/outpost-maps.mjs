@@ -92,7 +92,24 @@ const SHARED = {
 /** Per-planet changes to SHARED, where a planet's own terrain needs them. `seed` pins the seed `jobs` uses in place of
  *  the search's best. Lumen: the best seed (178) came out of the Forge with 1 decor grove (its battle maps have about
  *  5); 191 is the passing seed among the search's top 12 with the most (10), at 14.4 % impassable. */
-const OVERRIDES = { space: { seed: 191 } };
+const t = (pct, noise) => ({ pct, noise: noise / 100 });
+/**
+ * Verdance's farmland (story A6 [MM-story_mwabgjcm_c], owner 2026-11-10: "the outpost map should have the same level of
+ * detail as the current map but more open area for placing structures and crops, and way fewer natural resources to
+ * gather"). The Verdance recipe's own noise, palette, ponds and full decor cover, with the blocking cores thinned
+ * (trees 24 → 14 %, rocks 5 → 4 %, cliff 3 → 2 %) so the lowland round the mesa opens up while the map stays inside the
+ * §1 impassable floor (12 %); the grove scatter at full density (the Forge's Decor density 50 → 100: pine trees on
+ * the forest borders, which block nothing) so the thinner forests carry the battle maps' detail; and the resource
+ * scatter at a quarter of the battle maps' density (0.05 → 0.0125).
+ */
+export const VERDANCE_FARMLAND = Object.freeze({ planet: 'Verdance', types: { dirt: t(22, 30), brush: t(14, 45), rocks: t(4, 60), trees: t(14, 30), cliff: t(2, 50) },
+  water: { mode: 'patches', pct: 10, noise: 0.45 } });
+const OVERRIDES = {
+  space: { seed: 191 },
+  // seed 40: the search's second; its best (97) let the raids past the well-defended set (it held 4, design §5.2 asks
+  // 7–9); 40 holds 5 and 8, as the old seed-313 map did (src/outpost/raid.test.mjs)
+  ground: { recipe: VERDANCE_FARMLAND, resourceDensity: 0.0125, decorDensity: 100, impTarget: 13, seed: 40 },
+};
 
 /** Every planet's authored outpost layer: a fresh copy of SHARED each (editing one never edits another). */
 export const OUTPOST_LAYOUTS = Object.fromEntries(Object.entries(PLANET_SLUGS).map(([planet, slug]) => [planet, {
@@ -102,7 +119,7 @@ export const OUTPOST_LAYOUTS = Object.fromEntries(Object.entries(PLANET_SLUGS).m
 /** The layout with its derived conduits (the Forge's default: auto from reach) and its planet recipe. */
 export function layoutFor(planet) {
   const L = OUTPOST_LAYOUTS[planet];
-  return { ...L, recipe: PLANET_RECIPES[L.slug], conduits: deriveConduits(L) };
+  return { ...L, recipe: L.recipe || PLANET_RECIPES[L.slug], conduits: deriveConduits(L) };
 }
 
 /**
@@ -121,6 +138,8 @@ export function outpostForgeFor(planet, seed) {
     terrain: Array.from(g.terrain), blocking: Array.from(g.blocking),
     planet, outpost: true, autoConduits: true, mesa: L.mesa, pads: L.pads, deposits: L.deposits, conduits: L.conduits,
     kitDefenses: L.kitDefenses, heights: Array.from(g.heights),
+    ...(L.resourceDensity != null ? { resourceDensity: L.resourceDensity } : {}),
+    ...(L.decorDensity != null ? { decorDensity: L.decorDensity } : {}),
   };
   return { forge, g };
 }
@@ -153,8 +172,8 @@ export function searchSeeds(planet, { from = 1, to = 400 } = {}) {
     const { e, fails } = outpostChecks(outpostForgeFor(planet, seed).forge);
     if (!fails.length) ok.push({ seed, e });
   }
-  const slug = OUTPOST_LAYOUTS[planet].slug, target = Math.min(23, Math.max(13, IMP_TARGET[slug]));
-  const score = slug === 'powder' ? (e) => -Math.abs(e.impPct - 19.7) + 5 * e.openReach - 0.2 * Math.abs(e.ponds - 9)
+  const slug = OUTPOST_LAYOUTS[planet].slug, target = Math.min(23, Math.max(13, OUTPOST_LAYOUTS[planet].impTarget ?? IMP_TARGET[slug]));
+  const score = slug === 'powder' ? (e) => -Math.abs(e.impPct - target) + 5 * e.openReach - 0.2 * Math.abs(e.ponds - 9)
     : (e) => -Math.abs(e.impPct - target) + 5 * e.openReach + (PLANET_RECIPES[slug].ponds ? 0.3 * Math.min(e.ponds, 16) : 0);
   return ok.sort((a, b) => score(b.e) - score(a.e));
 }
