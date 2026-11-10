@@ -2,7 +2,7 @@
  * src/menu/missionLog.js — the Mission Log screen and the moment a mission is logged [MM-story_mvyqoo07_f].
  * The look lives in missionView.js (pure) and missionLogCss.js; this file mounts it, owns the clicks and writes the save.
  *
- *   createMissionLog({ doc, host, chipPing, gateOpts, onChange, onClose, onCollected, onAcceptOutpost }) → { open, close, sync, drainQueue, isOpen }
+ *   createMissionLog({ doc, host, chipPing, gateOpts, onChange, onClose, onCollected, onAcceptOutpost, onAcceptFarm }) → { open, close, sync, drainQueue, isOpen }
  * [MM-story_mvyqoplz_g] the dossier and its actions.
  */
 import { loadSave, updateSave } from '../save/save.js';
@@ -20,7 +20,7 @@ export function ensureMissionStyle(doc) {
 let packsPending = null;
 const loadPacks = () => packsPending || (packsPending = fetch(new URL('../../content/dialog/voicepacks.json', import.meta.url)).then((r) => r.json()).catch((e) => { console.error('[missions] voice packs failed to load', e); packsPending = null; return null; }));
 
-export function createMissionLog({ doc, host, chipPing, gateOpts = () => ({}), onChange, onClose, onCollected, onAcceptOutpost }) {
+export function createMissionLog({ doc, host, chipPing, gateOpts = () => ({}), onChange, onClose, onCollected, onAcceptOutpost, onAcceptFarm }) {
   ensureMissionStyle(doc);
   host.classList.add('bwm-ml');
   const log = doc.createElement('section');
@@ -129,6 +129,7 @@ export function createMissionLog({ doc, host, chipPing, gateOpts = () => ({}), o
     else if (act_ === 'collect') collectSelected(t);
     else if (act_ === 'track') act((s) => { setTracked(s, selected); });
     else if (act_ === 'accept-outpost') { if (onAcceptOutpost) Promise.resolve(onAcceptOutpost(t.dataset.planet)).then(() => render()); }
+    else if (act_ === 'accept-farm') { if (onAcceptFarm) Promise.resolve(onAcceptFarm(t.dataset.planet)).then(() => render()); }
     else if (act_ === 'abandon') act((s) => { abandon(s, selected); });
     else if (act_ === 'dismiss') { const id = selected; selected = null; act((s) => { dismiss(s, id); }); }
     else if (t.dataset.id) select(t.dataset.id);
