@@ -8,7 +8,7 @@
      Claude and outside the game: the game's own 3D view, HUD, SELL sequence and away report on a chosen save preset,
      with an in-memory save (your real save is never touched) and a clock you can speed up.
      Query: ?planet=ground|air|hightech|artillery|water|arcane|space|dark|greenies (each planet's own outpost map, O11)
-            ?state=fresh|running|full|raided|breached|fullkit|building|bays|guncap · ?quality=high|standard|low · ?speed=1 (clock ×)
+            ?state=fresh|running|full|raided|breached|fullkit|building|bays|guncap · ?quality=high|standard|low · ?speed=1 (clock ×) · ?probe=1 (raiders now)
             ?raids=seam|wear|breach (seam = the game's raid hook, held until story O7) · ?ui=0 hides the review chip
             ?reduced=1 forces reduced motion. The model-only review page is ./index.html. -->
 <style>
@@ -175,6 +175,7 @@ async function open() {
   current = await openOutpostView({ planet: PLANET, tier: document.getElementById('quality').value || null, store, now, raidHook, map,
     reduced: q.get('reduced') === '1' ? true : undefined });
   window.outpost = current.handle;
+  if (q.get('probe') === '1') current.handle.probeNow();   // a visit probe right away (visitProbe.js)
   window.outpostStore = store;
   window.outpostReady = true;
   current.closed.then(() => { window.outpostReady = false; document.getElementById('closed').style.display = 'grid'; });
