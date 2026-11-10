@@ -20,7 +20,9 @@ import { buildShip } from './primitiveRooms.js';
 import { createCrewKit, cfgFor, drivePose, walkSwing, rng, GESTURES, FLAG_POSE, PLAYER_CFG } from './crew.js';
 import { toWX, toWY, WORLD, isLocked } from './layout.js';
 
-const SCALE = 1.4, PLAYER_SCALE = 1.56;                       // the prototype's deck crew and avatar scales
+// half the prototype's deck crew (1.4) and avatar (1.56) scales — owner 2026-11-09: "Shrink the character avatars by 50%
+// so they look smaller in the rooms." Everything placed relative to a figure scales from SCALE.
+const SCALE = 0.7, PLAYER_SCALE = 0.78;
 const LAYER_GAP = 2.0, LAYER_RISE = 0.40, LAYER_SHRINK = 0.975, MAX_LAYERS = 16;
 
 /** Ambient deck crew: every faction helmet the rooms don't show, plus Collective deck hands (design §5.3). */
@@ -210,7 +212,7 @@ export function createRoomView(THREE, { renderer, layout: L, standing = {}, seed
       patronAgent.g.userData.setFlash(flash);
       chevron.visible = flash > 0.01;
       if (chevron.visible) {
-        chevron.position.set(patronAgent.g.position.x, patronAgent.g.position.y + 7.0 + (reduce ? 0 : Math.sin(time * 6) * 0.35), 6);
+        chevron.position.set(patronAgent.g.position.x, patronAgent.g.position.y + 7.0 * (SCALE / 1.4) + (reduce ? 0 : Math.sin(time * 6) * 0.35), 6);
         chevron.material.opacity = Math.min(1, flash * 1.4);
       }
     }

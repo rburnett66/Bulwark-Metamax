@@ -29,7 +29,7 @@ import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
 import { waveQuota } from './sim/harvest.js';
 import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner, showWaveReport } from './render/hud.js';
 import { createResourceLedger, feedResources, closeWave, resourceNames, waveResourcesHtml } from './render/resourceSummary.js';
-import { createInput, createUiState, destroyInput } from './input/input.js';
+import { createInput, createUiState, destroyInput, nextHarvesterId } from './input/input.js';
 import { createComm } from './comm/commCard.js';
 import { setChannelVolume, initAudio } from './comm/voice.js';
 import { musicPlay, musicIntensity, musicSting, musicResume } from './audio/music.js';
@@ -702,6 +702,8 @@ export function boot(mountEl, seed) {
     },
     onNextWave: () => { endInterlude(); },
     onDeselect: () => { ui.selectedUnitId = null; ui.selectedStructureId = null; },
+    // NEXT on the harvester panel: select the next live harvester (owner 2026-11-09)
+    onNextHarvester: () => { const id = sim ? nextHarvesterId(sim, ui.selectedUnitId) : null; if (id != null) { ui.selectedUnitId = id; ui.selectedStructureId = null; ui.selectedResourceId = null; } },
     onMainMenu: () => { if (hud && hud.hideResult) hud.hideResult(); menu.open('survey'); },   // back to the Survey: next campaign one click away [MM-story_mvftq4h6_k]
     onNextMap: () => {
       if (!(currentMapId > 0 && currentMapId < 9)) return;

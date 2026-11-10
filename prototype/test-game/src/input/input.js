@@ -53,6 +53,20 @@ function findUnitAtCell(state, cell) {
  * the field; a tap a cell away still reaches the field. The selected truck itself falls through, so tapping a field
  * it stands on still orders it. → unit id or null.
  */
+/**
+ * NEXT on the harvester panel (owner 2026-11-09: "a button in bold that says next to cycle to the next harvester"): the
+ * live harvester after currentId, in fleet order (state.harvesterIds, else the unit map's order), wrapping round.
+ * → its id, or null when there is no other live harvester.
+ */
+export function nextHarvesterId(state, currentId) {
+  const ids = (state.harvesterIds && state.harvesterIds.length ? state.harvesterIds : [...state.units.values()].filter((u) => u.isHarvester).map((u) => u.id))
+    .filter((id) => { const u = state.units.get(id); return u && u.isHarvester && u.hp > 0; });
+  if (!ids.length) return null;
+  const i = ids.indexOf(currentId);
+  const next = ids[(i + 1) % ids.length];
+  return next === currentId ? null : next;
+}
+
 export function harvesterTapTarget(state, cell, selectedUnitId = null) {
   if (!state || !state.units || !cell) return null;
   let best = null, bestD = 0.75;

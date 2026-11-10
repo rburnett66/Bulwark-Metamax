@@ -21,6 +21,10 @@ import { createSurveyStage } from './surveyStage.js';
 import { ARRIVE_S, createSurvey, TARGET_TIERS } from './surveyPlan.js';
 import { PLANET_ORDER } from '../save/reveals.js';
 import { PLANETS } from '../data/planets.js';
+import '../data/factions.js';
+
+/** The faction that holds a planet (planets are keyed by faction), as its display name; '' when unknown. */
+export function controllingFaction(planet) { const R = globalThis.BulwarkFactions, f = R && R.find(planet); return f ? f.name : ''; }
 
 const CSS = `
 .rv-sv { position:absolute; right:max(16px, env(safe-area-inset-right)); top:max(16px, env(safe-area-inset-top)); width:min(318px, 46vw);
@@ -48,6 +52,7 @@ const CSS = `
 .rv-pn { position:absolute; left:max(16px, env(safe-area-inset-left)); top:max(16px, env(safe-area-inset-top)); pointer-events:none; }
 .rv-pn .k { font:500 11px ui-monospace, Menlo, monospace; letter-spacing:.14em; text-transform:uppercase; color:#6fd3c8; }
 .rv-pn h1 { margin:2px 0 0; font:700 clamp(30px,5.4vw,58px) "Chakra Petch", sans-serif; letter-spacing:.04em; text-transform:uppercase; line-height:.92; text-shadow:0 2px 18px rgba(0,0,0,.6); }
+.rv-pn .f { margin-top:4px; font:600 clamp(12px,1.5vw,15px) "Chakra Petch", sans-serif; letter-spacing:.2em; text-transform:uppercase; color:#f2c869; text-shadow:0 1px 10px rgba(0,0,0,.8); }
 .rv-pn .s { margin-top:6px; color:#c3cdc6; max-width:42ch; font-size:13px; text-shadow:0 1px 10px rgba(0,0,0,.8); }
 @media (max-width: 760px) { .rv-sv { top:auto; bottom:max(12px, env(safe-area-inset-bottom)); width:min(300px, 60vw); padding:10px 12px; gap:6px; } .rv-sv .sites .meta { display:none; } }
 @media (max-height: 460px) { .rv-sv .tg .val, .rv-sv .sites { display:none; } .rv-pn .s { display:none; } }
@@ -57,7 +62,7 @@ function readout(d, planet) {
   const doc = d.doc, P = PLANETS[planet] || {}, R = P.resources || {};
   if (!doc.getElementById('rv-sv-css')) { const st = doc.createElement('style'); st.id = 'rv-sv-css'; st.textContent = CSS; doc.head.appendChild(st); }
   const pn = doc.createElement('div'); pn.className = 'rv-pn';
-  pn.innerHTML = `<div class="k">Orbital survey</div><h1>${P.name || planet}</h1><div class="s">${P.type || ''}${P.type ? '. ' : ''}A new signal. Your transport goes to look.</div>`;
+  pn.innerHTML = `<div class="k">Orbital survey</div><h1>${P.name || planet}</h1>${controllingFaction(planet) ? `<div class="f">Held by ${controllingFaction(planet)}</div>` : ''}<div class="s">${P.type || ''}${P.type ? '. ' : ''}A new signal. Your transport goes to look.</div>`;
   const el = doc.createElement('section'); el.className = 'rv-sv'; el.setAttribute('aria-live', 'polite');
   el.innerHTML = `<header><span class="ship">Transport</span><span class="mode">Inbound</span></header>
     <div class="th">Resource targets</div><ol class="tg">${TARGET_TIERS.map((t) => `<li style="--tc:${t.color}"><span class="tier">${t.label}</span><span class="nm">${(R[t.key] && R[t.key].name) || '—'}</span><span class="val">${t.val}</span></li>`).join('')}</ol>
@@ -101,7 +106,7 @@ export async function playPlanetReveal({ planet, menu = null, tier = 'high', red
     await d.timed(2.5, (t) => { tEl.textContent = title.slice(0, Math.ceil(Math.min(1, t / 1.1) * title.length)); });
     // P1–P3 — the galaxy: out, the system lights up, in
     if (menu) {
-      d.root.querySelector('.rv-banner .s').textContent = 'NEW SIGNAL · ' + (PLANET_ORDER.indexOf(planet) + 1) + ' OF ' + PLANET_ORDER.length;
+      d.root.querySelector('.rv-banner .s').textContent = (controllingFaction(planet) ? controllingFaction(planet).toUpperCase() + ' TERRITORY · ' : '') + 'NEW SIGNAL · ' + (PLANET_ORDER.indexOf(planet) + 1) + ' OF ' + PLANET_ORDER.length;
       menu.zoomOut();
       await d.timed(1.8, () => {});
       d.hideBanner(); menu.ignite(planet);
@@ -137,7 +142,7 @@ export async function playPlanetReveal({ planet, menu = null, tier = 'high', red
       });
     }
     commit();
-    d.caption((P.name || '').toUpperCase() + ' SURVEYED', true);
+    d.caption((P.name || '').toUpperCase() + (controllingFaction(planet) ? ' · ' + controllingFaction(planet).toUpperCase() : '') + ' SURVEYED', true);
     await d.wait(1.4);
     // P6 — back to the menu
     await d.fade(1, 0.6);

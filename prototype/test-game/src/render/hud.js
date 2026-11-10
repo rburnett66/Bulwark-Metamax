@@ -73,6 +73,10 @@ ${SELPANEL_CSS}
 .bw-udeselect { position:absolute; top:6px; right:8px; background:none; border:1px solid #3a4a5a; border-radius:4px;
   color:#9ec4d8; font:inherit; font-size:10px; letter-spacing:1px; padding:2px 8px; cursor:pointer; pointer-events:auto; }
 .bw-udeselect:hover { background:#22303e; color:#e7f6ff; }
+.bw-unext { position:absolute; top:6px; right:96px; background:#ffe58a; border:1px solid #ffe58a; border-radius:4px; color:#141a20;
+  font:inherit; font-size:11px; font-weight:900; letter-spacing:1.5px; padding:2px 10px; cursor:pointer; pointer-events:auto; display:none; }
+.bw-unext:hover { background:#fff1b8; }
+.bw-unext:disabled { background:none; color:#5d6b78; border-color:#3a4a5a; cursor:default; }
 .bw-unitpanel .bw-usub { color:#8fb0c4; font-size:11px; margin-bottom:5px; text-transform:capitalize; }
 .bw-unitpanel .bw-uhp { height:8px; background:#34373c; border:1px solid #141619; border-radius:3px; overflow:hidden; margin-bottom:6px; }
 .bw-unitpanel .bw-uhpfill { height:100%; background:#8cf22e; transition:width .1s; }
@@ -476,6 +480,11 @@ export function createHud(mountEl, callbacks) {
   deselectBtn.title = 'Clear the selection — map clicks stop giving this unit orders (Esc also works)';
   deselectBtn.addEventListener('click', () => { if (cbs.onDeselect) cbs.onDeselect(); });
   unitPanel.appendChild(deselectBtn);
+  // NEXT (bold, beside DESELECT; harvesters only): select the next harvester (owner 2026-11-09)
+  const nextBtn = el(doc, 'button', 'bw-unext', 'NEXT ▸');
+  nextBtn.title = 'Select the next harvester';
+  nextBtn.addEventListener('click', (e) => { e.stopPropagation(); if (cbs.onNextHarvester) cbs.onNextHarvester(); });
+  unitPanel.appendChild(nextBtn);
   const uname = el(doc, 'div', 'bw-uname', '-');
   const usub = el(doc, 'div', 'bw-usub', '');
   const uhp = el(doc, 'div', 'bw-uhp');
@@ -730,7 +739,7 @@ export function createHud(mountEl, callbacks) {
     upgradeBtn,
     sellBtn,
     repairBtn,
-    unitPanel,
+    unitPanel, nextBtn,
     uname,
     usub,
     uhpfill,
@@ -1009,6 +1018,11 @@ export function updateHud(hud, state, ui) {
     const frac = u.maxHp > 0 ? Math.max(0, Math.min(1, u.hp / u.maxHp)) : 0;
     hud.uhpfill.style.width = (frac * 100).toFixed(0) + '%';
     let rows;
+    if (hud.nextBtn) {
+      const fleet = u.isHarvester ? [...state.units.values()].filter((x) => x.isHarvester && x.hp > 0).length : 0;
+      hud.nextBtn.style.display = u.isHarvester ? 'block' : 'none';
+      hud.nextBtn.disabled = fleet < 2;
+    }
     if (u.isHarvester) {
       // the HARVESTER is its own thing — a resource hauler, not a Ground/Powder truck. Its panel
       // reads the economy loop (cargo, yield, job state), never combat stats it doesn't have.
