@@ -1,6 +1,7 @@
 # Tech Plan — Farming: the third game mode
 
-Status: draft 2 · 2026-11-10: the owner's rules of 2026-11-09 applied (below; they override the rest of this plan) ·
+Status: draft 3 · 2026-11-10: the owner's answers on Helium-4, the Silo and the farm inventory (rules 1, 4, 5) ·
+draft 2 · 2026-11-10: the owner's rules of 2026-11-09 applied (below; they override the rest of this plan) ·
 draft 1 2026-11-09 · Epic *Farming mode design* [MM-epic_mwa8eww2_1] and the four build
 epics in §5
 · Designs: `docs/16 Bulwark MM/design/Farming-Design.md` (draft 3: the mode) and
@@ -24,8 +25,16 @@ Repo copy (canonical): `docs/tech-plan/Farming.md` in rburnett66/Bulwark-Metamax
    two buttons at the top of the tech tree screen). It replaces B2's FARMING division: new farming nodes go into SEED PODS
    or MACHINERY in `src/data/techtree.js` (`DIVISIONS` with `tree: 'outpost'`, `TREES.outpost`) (§2.3 F8).
 4. **Storage full stops mining.** On an outpost, when storage is full the miner stops, and both the miner and the
-   Storage Tower show the storage-full icon. **Whether the Silo follows the same rule is the owner's call: ask before
-   building it** (§2.3 F11, story A3).
+   Storage Tower show the storage-full icon. **The Silo (owner, 2026-11-10):** when the Silo is full, plants keep
+   growing but cannot be harvested; a crop left Fruited too long dies as usual, and Dead gives its pods back (§2.3 F11,
+   story A3).
+5. **Farming has its own inventory** (owner, 2026-11-10): *"all farming inventory goes into the new inventory system.
+   Clone of the previous one but dedicated to outposts and farming, eventually we will also have a mining inventory and
+   a parts inventory."* The battle INVENTORY (its 36 resources) is unchanged; harvested crops, Helium-4 and the seed pods
+   live in the new one (§3.3, stories A13 and A10).
+
+Helium-4 confirmed (owner, 2026-11-10): the battle's uncommon Lumen resource stays Helium-3; Helium-4 is the new
+material that is Lumen's uncommon crop.
 
 ## 1. Scope
 
@@ -101,7 +110,7 @@ Phase 0 (the two designs, `tools/farming/scale.html`, the Blender scripts `tools
 | F8 | **No fifth sector is needed** (owner rule 3). The OUTPOST & FARM tree (PR #225) already has SEED PODS and MACHINERY divisions with "coming soon" ghost nodes, and its total is counted apart from the battle tree (`TREE_TOTAL.outpost`). | Farming nodes replace those ghosts in SEED PODS (pods, the pod bench) and MACHINERY (Pump, Sprinklers and later machines); each division's `total` and `soon` flag change as real nodes land |
 | F9 | **Rare pods from battles** are best made after the battle, not inside it. | `bankHarvest` already gets the kept tally per tier; pods = ⌊units ÷ 200⌋ (epic ⌊÷ 100⌋), with the remainder carried in the save, so the sim and its replays are untouched |
 | F10 | **Harvester cap changed today** (1 to start, 2 at most, v2026.11.10-b, pending). Surface Collection is a farming method that rides on it. | No change to farming; the design's "Rare quality" for Surface Collection stands |
-| F11 | **Outpost storage: full stops mining** (owner rule 4). When storage is full the miner stops and the miner and the Storage Tower show the storage-full icon (`production().ore[].stopped === 'full'`, `report.full`). The Silo is the farm's storage. | **Ask the owner before building the Silo's full rule** (A3). Until answered the Silo has a capacity and a full warning only; whether a full Silo stops harvests, spills or blocks HARVEST is open |
+| F11 | **Outpost storage: full stops mining** (owner rule 4). When storage is full the miner stops and the miner and the Storage Tower show the storage-full icon (`production().ore[].stopped === 'full'`, `report.full`). The Silo is the farm's storage. | **A full Silo blocks HARVEST** (owner, 2026-11-10): plants keep growing; Fruited plants wait and die at the end of their window as usual (Dead returns the pods, which need no Silo room); the Silo shows the storage-full icon like the Storage Tower |
 | F12 | **The contract card and the opening use one dialog system now** (v2026.11.09-k). | Farming contracts use `showContractModal` and `comm.playScene`; no new dialog code |
 
 ## 3. Architecture
@@ -120,7 +129,9 @@ Phase 0 (the two designs, `tools/farming/scale.html`, the Blender scripts `tools
 | `src/farm/view/avatar.js` | no | the surface avatar and farmhands: the crew rig at 0.45 cell, walk-to on the outpost nav grid, the work pose, the tap queue |
 | `src/farm/view/embers.js` | no | the harvest effect: a new shade on `impacts.emit`, five level colours, value-noise drift |
 | `src/farm/room/` | no | **Future** (owner rule 2): the grow-room view (tilted orthographic, floor graph, thirds, slots, machines, bots) |
-| `src/menu/seedPods.js` | no | the SEED PODS tab in the INVENTORY screen |
+| `src/save/stores.js` | yes | the outpost & farm inventory (owner rule 5): `s.stores.farm`, banded by planet; the Silo's contents are its stock; built so `mining` and `parts` stores can join later |
+| `src/menu/storeScreen.js` | no | the OUTPOST & FARM inventory screen: a clone of the INVENTORY screen on the farm store (owner rule 5) |
+| `src/menu/seedPods.js` | no | the SEED PODS tab in the OUTPOST & FARM inventory |
 | `tools/farming/` | no | review pages: the scale page (Phase 0), `farm.html` (the real FARM tab on a seeded save), `rooms.html` (Phase B) |
 
 ### 3.2 Data (the workbook)
@@ -146,14 +157,16 @@ Silo, Pump) and Verdance's F1 row; the rest of the sheets come with their epics.
 ### 3.3 Save
 
 `s.farms[planet]` (plots, buildings, Silo, the farm's clock `t`, its seed), `s.pods[crop][level]`,
-`s.podCarry[crop]` (the battle pod remainder), `s.farmContracts[planet]` (F1–F3 progress). New fields default empty
-on load; Helium-4 is a new id and needs **no migration** (owner rule 1).
+`s.podCarry[crop]` (the battle pod remainder), `s.farmContracts[planet]` (F1–F3 progress), and the outpost & farm
+inventory `s.stores = { farm: { [planet]: { [cropId]: units } } }` (owner rule 5; `mining` and `parts` join it later).
+The battle's `s.inventory` is untouched: crops harvested on a farm never land in it. New fields default empty on load;
+Helium-4 is a new id and needs **no migration** (owner rule 1).
 
 ## 4. Open questions, by the epic they block
 
 | Blocks | Questions (Farming-Design D…, Distribution X…) | The plan builds with the design's assumption unless the owner says otherwise |
 |---|---|---|
-| **F-A** | D1 (four stages + Dead), D2 (Fruited lasts the grow time), D5 (how pods level up), D6/X3 (value per level), D8 (F1 contract), D9 (trample rules), D14 (every number), D36 (4 pods per plot), D44 (avatar 0.45 cell), D45 (farmhands), D46/X4 (per planet), X7 (battle pod rate); **the Silo when full (owner rule 4: asked before A3 builds it)** | yes, except the Silo rule |
+| **F-A** | D1 (four stages + Dead), D2 (Fruited lasts the grow time), D5 (how pods level up), D6/X3 (value per level), D8 (F1 contract), D9 (trample rules), D14 (every number), D36 (4 pods per plot), D44 (avatar 0.45 cell), D45 (farmhands), D46/X4 (per planet), X7 (battle pod rate). The Silo when full is answered (rule 4) | yes |
 | **F-B** | D37 (Vertical floors); enhancements on the surface. The grow-room questions (D3, D18, D19, D21, D23, D24, D26, D27, D28, D30, D31, D32, D33) wait with the future grow rooms (owner rule 2) | yes |
 | **F-C** | D11 (gems as a byproduct), D13 (Lumen enclosed only), D35 (footprints), X1 (accreted crops), X5 (specialties), X6 (rank names and thresholds), X8, X9, X10 | yes |
 | **F-D** | the recipe book (its own design, Farming-Design §11.2) | a design story first |
@@ -168,17 +181,18 @@ Stories are tickets on the MetaMax board (the DoD lives there); this table is th
 |---|---|---|
 | **A0** Farming designs on main | the two designs, the scale page and the Blender scripts from `feat/farming-prototype`, merged (design epic) | — |
 | **A1** Farm data | the Phase A sheets, `write_farm_sheets.py`, extraction, `src/data/farm.js`, tests | A0 |
-| **A2** Helium-4 | **a new material** (owner rule 1): its own name, id `helium-4`, icon, model key and catalogue entry as Lumen's uncommon-tier crop; Helium-3 untouched; no migration | — |
-| **A3** Farm model | plots, prep, plant, stages, Fruited window, Dead returns pods, harvest yield by level, lucky roll (seeded), Silo (capacity and full warning; **its full rule asked of the owner first**, rule 4), segment advance, away report lines, tests | A1 |
+| **A2** Helium-4 | **a new material** (owner rule 1): its own name, id `helium-4`, icon and model key, and its entry in the farm's catalogue as Lumen's uncommon-tier crop (rule 5: not in the battle INVENTORY); Helium-3 untouched; no migration | A1 |
+| **A3** Farm model | plots, prep, plant, stages, Fruited window, Dead returns pods, harvest yield by level, lucky roll (seeded), Silo (capacity; when full HARVEST is blocked and the plants keep growing, rule 4), harvest into the farm store (rule 5), segment advance, away report lines, tests | A1 |
 | **A4** Seed pods | `s.pods`, the pod bench (3 → 1), Rare pods from battle tallies with carry, the F1 Pod Crate, tests | A1 |
 | **A5** The gate and Verdance F1 | `farmingOpen` (Rig Mk II), the F1 offer aboard the ship (contract card), its three steps and rewards, the FARM button and its status line, Mission Log | A3, A4 |
 | **A6** Verdance farm cells | the farmable-cell layer on the Verdance outpost map (Forge tags: soil, slope, water, grove, collection), its reader, the placement rule (2 × 2 on soil, not on pads, lanes or the mesa), tests | A1 |
 | **A7** The FARM tab | the OUTPOST / FARM tab in the outpost view, build list entries (Farmhouse, Silo, Traditional, Irrigated, Pump), placing plots, the plot panel, HARVEST ALL and SELL, the plot bed and plant models in their states, safe-mode rules | A3, A6 |
 | **A8** The surface avatar | the gold avatar at 0.45 cell, walk-to on the outpost nav grid, the work pose, the tap queue; Verdance farmhands; both shelter in a raid | A7 |
 | **A9** Embers | the harvest effect in five colours, the idle embers over Fruited plots, the dead-plot dust | A7 |
-| **A10** SEED PODS tab | the INVENTORY tab: crops by planet, five level slots each, the detail panel, UPGRADE and PLANT | A4 |
+| **A10** SEED PODS tab | a tab of the OUTPOST & FARM inventory (rule 5): crops by planet, five level slots each, the detail panel, UPGRADE and PLANT | A4, A13 |
 | **A11** Raids and the farm | trampling from raider cells (raids and visit probes), Silo breach 25%, tests | A3 |
-| **A12** Review page | `tools/farming/farm.html` on seeded saves (every plot state, a raid, the away report), phone frames | A7–A11 |
+| **A12** Review page | `tools/farming/farm.html` on seeded saves (every plot state, a raid, the away report), phone frames | A7–A11, A13 |
+| **A13** Outpost & farm inventory | (owner rule 5) a clone of the INVENTORY screen dedicated to outposts and farming: `s.stores.farm` banded by planet, the 36 crops with Helium-4 in Lumen's uncommon slot, held / new counts, the detail panel; its own button; built so mining and parts stores can join later | A1 |
 
 ### F-B · Environment
 
@@ -228,7 +242,7 @@ here so the order survives when they come back:
 - **Determinism tests**: advancing a farm once over 72 hours equals advancing it in one-minute steps (the outpost's
   closed-form test, applied to the farm), with raids, Fruited windows and Dead plots in the span.
 - **Save tests**: an old save keeps its `helium-3` exactly as it was (no migration); a save with no `farms` opens the
-  FARM tab empty.
+  FARM tab empty; a farm harvest never changes the battle `s.inventory`.
 - **Review pages** outside Claude: `tools/farming/farm.html` (F-A) and `tools/farming/rooms.html` (F-B), each with
   `?state=` presets and phone frames; screenshots with Playwright before each PR.
 - **iPhone**: the error report's GPU breadcrumbs (`gpuLine`) cover the FARM tab; a farm with 20 plots and the avatar
