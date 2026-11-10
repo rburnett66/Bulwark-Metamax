@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.10-y';
-export const VERSION_NOTE = 'Farming: crop levels come from the tech tree (OUTPOST & FARM › SEED PODS); seed pods have no level and are bought at one price; a plot keeps the level it was planted at; level 5 needs an Irrigated plot with water';
+export const VERSION = 'v2026.11.10-zc';
+export const VERSION_NOTE = 'Outpost: defenses take time to build (they do not fight until built) and are dismantled over the battle sell time';
