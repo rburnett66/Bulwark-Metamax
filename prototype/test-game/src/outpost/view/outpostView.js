@@ -694,6 +694,7 @@ async function openOutpostViewInner(opts, stage) {
     hud.update(h, saleRun ? shownGold : bank());
     hud.online(pl.phase !== 'idle' || tab === 'farm' ? null : onlineChecks());   // the GO ONLINE card steps aside while placing (and on the FARM tab)
     scene.setWarnings(buildingWarnings(o, map), markerOf);
+    { const off = powerGrids(o, map).off; scene.setDefenseWarnings(o.defenses.filter((d) => off[d.id]).map((d) => ({ id: d.id, cell: d.cell }))); }
     refreshMenu();
     if (force) refreshPanel();
   }

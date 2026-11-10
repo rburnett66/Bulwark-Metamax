@@ -475,7 +475,34 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     }
     r.lights.invalidateShadows();
   }
+  // ── an unpowered DEFENSE (owner 2026-11-10: "Unpowered tower has energy bolt icon over it") [MM-story_mwb7in5i_22]: the
+  //    pads' own no-power marker (the yellow bolt in a red ring) floats over each defense the grid does not reach or
+  //    cannot supply (model.js powerGrids off[id]); it bobs with the pad markers and goes when the power comes back.
+  const defMarks = new Map();   // defense id → sprite
+  let defSig = '';
+  function setDefenseWarnings(list) {   // [{ id, cell: [x, y] }]
+    const sig = JSON.stringify(list || []);
+    if (sig === defSig) return;
+    defSig = sig;
+    const want = new Map((list || []).map((d) => [d.id, d]));
+    for (const [id, sp] of defMarks) if (!want.has(id)) { root.remove(sp); sp.material.dispose(); defMarks.delete(id); }
+    for (const d of want.values()) {
+      const x = d.cell[0] + 0.5, z = d.cell[1] + 0.5, y = 2.1;
+      let sp = defMarks.get(d.id);
+      if (!sp) {
+        sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: markerTexture('no_power'), depthTest: false, depthWrite: false, transparent: true, sizeAttenuation: false, toneMapped: false }));
+        sp.scale.set(0.05, 0.05, 1); sp.renderOrder = 20; sp.name = `outpost-defense-no-power-${d.id}`;
+        root.add(sp); defMarks.set(d.id, sp);
+      }
+      sp.userData = { x, y, z, ph: hash(d.id) % 100 / 16 };
+      sp.position.set(x, y, z);
+    }
+  }
   function stepMarkers() {
+    for (const sprite of defMarks.values()) {
+      const u = sprite.userData;
+      sprite.position.y = u.y + (reduced ? 0 : Math.sin(clock * 2.4 + u.ph) * 0.18);
+    }
     for (const { sprite } of markers.values()) {
       const u = sprite.userData;
       sprite.position.y = u.y + (reduced ? 0 : Math.sin(clock * 2.4 + u.ph) * 0.18);
@@ -652,10 +679,11 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       return out;
     },
     playSale, get saling() { return !!sale; },
-    pickBuilding, select, showCells, showReach, showPads, showGhost, setWarnings,
+    pickBuilding, select, showCells, showReach, showPads, showGhost, setWarnings, setDefenseWarnings,
     /** Is the ghost drawn now (tests / review)? */
     get ghost() { return ghostShown && ghostShown.group && ghostShown.group.visible ? { pad: ghostWant.pad, valid: ghostWant.valid, key: ghostWant.key } : null; },
     get warningMarkers() { return [...markers].map(([pad, m]) => ({ pad, kind: m.kind })); },
+    get defenseWarnings() { return [...defMarks.keys()]; },
     /** The world position of a pad's centre (cells), for the camera. */
     padCentre(id) { const p = pads.get(id); return p ? centre(p) : null; },
     buildingCount: () => [...built.values()].filter((e) => e.inst).length,
