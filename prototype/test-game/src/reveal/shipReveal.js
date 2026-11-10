@@ -128,15 +128,9 @@ function withMood(call, name) {
 }
 
 async function speak(doc, calls) {
+  // the game's comm card as one scene: a character's run of lines cycles in one window with breadcrumbs
   const comm = createComm(doc);
-  try {
-    for (const c of calls) {
-      if (!c) continue;
-      const closed = comm.waitForClose();
-      comm.showCall({ ...c, hold: true, center: false });
-      await closed;
-    }
-  } finally { comm.destroy(); }
+  try { await comm.playScene(calls, { center: false }); } finally { comm.destroy(); }
 }
 
 /**
@@ -256,7 +250,8 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
   // STANDINGS: every character's rating and every faction's relationship, only aboard a capital ship (owner 2026-11-09)
   const standBtn = bar.querySelector('[data-standings]');
   const setStand = (on) => { standBtn.textContent = on ? '✕ CLOSE STANDINGS' : 'STANDINGS'; standBtn.setAttribute('aria-pressed', String(on)); };
-  const standings = createStandingsScreen({ doc, host: d.root, onClose: () => { standings.close(); setStand(false); } });
+  // the Characters tab lists this ship's faction only (owner 2026-11-09); the Collective's crew has no ratings yet
+  const standings = createStandingsScreen({ doc, host: d.root, faction: ship.isCollective ? 'collective' : ship.key, onClose: () => { standings.close(); setStand(false); } });
   standBtn.addEventListener('click', () => { if (standings.isOpen()) { standings.close(); setStand(false); } else { standings.open(); setStand(true); } });
   const leaveBtn = bar.querySelector('[data-leave]'); leaveBtn.style.display = 'none';
   let inRoom = null, departing = false, walking = false;
