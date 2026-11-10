@@ -253,6 +253,31 @@ It is standalone (owner rule: reviewable outside Claude). The prototype stays be
 
 ### 5.5 Every faction's ship
 
+**As built (v2026.11.09-p).** Owner 2026-11-09: "It seems like rooms are missing in the ships. All ships should have all
+neutral rooms and faction specific rooms on the correct capital ships." Until a faction's own layout is authored,
+`src/ship-interior/shipRooms.js` `factionShipLayout` derives it from the Long Ledger's:
+
+- **Neutral rooms, on every ship:** Helm (the captain), Armory, Bar, Trade Station, Loading Bay and Engineering. The
+  host faction crews them, and none is sealed. The Long Ledger's locks belong to its envoys, not to a faction's own
+  ship.
+- **The faction room, on that faction's ship only,** goes in the Chapel's slot:
+
+| Faction | Room | Preset |
+|---|---|---|
+| Ground / Powder | War Room | `warroom`: map table, regimental flags |
+| Air | Flight Deck | `flightdeck`: a fighter, runway lights |
+| High Tech | Shield Lab | `shieldlab`: generator dome, panels |
+| Artillery | Fire Control | `firecontrol`: plotting table, shell racks |
+| Water | Moon Pool | `moonpool`: open pool, railing, winch |
+| Arcane / Energy | Chapel | `chapel` |
+| Space Tech | Observatory | `observatory`: telescope, star window |
+| Dark Energy | Void Shrine | `voidshrine`: obelisk, ring |
+| Greenies (Chem) | Greenhouse | `greenhouse`: planters, grow lights, vats |
+
+- **The Long Ledger** keeps its authored envoy rooms, including the sealed Chapel and Engineering that teach standing
+  locks (Collective-Opening-Design §5).
+- **To review:** `tools/ship-interior/?ship=<faction>`.
+
 The loader takes `ship` → `content/ships/<faction>/ship-layout.json`. Only `collective` exists now. Each faction's
 capital ship arrives (existing rule: after map 3 at 3★) with a layout authored in the editor once its interior is
 designed.

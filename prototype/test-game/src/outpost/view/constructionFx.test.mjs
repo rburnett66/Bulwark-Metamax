@@ -41,3 +41,31 @@ test('the dust is four times the battle build dust', async () => {
   for (let i = 0; i < 50; i++) { ours += fx.step(0.05, sites, () => {}, K).puffs; theirs += battle.step(0.05, { structures: new Map(sites.map((s) => [s.id, s])) }, null, () => {}, K); }
   assert.ok(Math.abs(ours - 4 * theirs) <= 4, ours + ' vs 4 x ' + theirs);
 });
+
+// Red sparks on damaged defenses (owner 2026-11-09: "when a structure is damage there should be red sparks, just like
+// the blue construction sparks").
+import { damageSites, DAMAGE_RATE } from './constructionFx.js';
+import { SPARK_TINT } from '../../render3d/fx/repairFx.js';
+import { structureDef } from '../../data/outpost.js';
+test('a damaged defense throws red sparks, more the worse it is; a whole one throws none', () => {
+  const max = structureDef('mg', 1).battle.hp;
+  const o = { defenses: [
+    { id: 'd1', kind: 'mg', tier: 1, cell: [30, 10], hp: max },          // whole
+    { id: 'd2', kind: 'mg', tier: 1, cell: [31, 10], hp: max * 0.9 },    // scratched
+    { id: 'd3', kind: 'mg', tier: 1, cell: [32, 10], hp: 0 },            // wrecked
+  ] };
+  const sites = damageSites(o);
+  assert.deepEqual(sites.map((s) => s.id), ['dmg-d2', 'dmg-d3']);
+  assert.ok(Math.abs(sites[0].damage - 0.1) < 1e-9 && sites[1].damage === 1);
+  const count = (list) => {
+    const fx = createConstructionFx({ seed: 3 }), shades = [];
+    let n = 0;
+    for (let i = 0; i < 60; i++) n += fx.stepDamage(1 / 30, list, (kind, x, y, z, vx, vy, vz, life, size, grow, shade) => { if (kind === 'S') shades.push(shade); }, { SPARK: 'S', FLASH: 'F' });
+    return { n, shades };
+  };
+  const light = count([sites[0]]), heavy = count([sites[1]]);
+  assert.ok(heavy.n > light.n * 3, `a wreck sparks more (${heavy.n} vs ${light.n})`);
+  assert.ok(Math.abs(heavy.n - DAMAGE_RATE.heavy * 2) <= 2, 'about DAMAGE_RATE.heavy a second');
+  assert.ok(heavy.shades.length && heavy.shades.every((s) => s === SPARK_TINT.damage), 'red (the damage tint)');
+  assert.equal(count([]).n, 0);
+});

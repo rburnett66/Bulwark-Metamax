@@ -8,9 +8,11 @@
  *              (ship-interior/roomView.js) — the prototype's board wipe, now over 3D;
  *   beats 5–7  life inside; Factor Mira Valcourt flashes at the bar; every other room dims, the bar glows gold,
  *              "THE BAR · Tap to enter" (auto-enters after ROOMS.autoEnter s);
- *   beat 8     the avatar walks into the bar, the camera pushes in, Mira turns, and the conversation plays
- *              (dialog/conversation.js, content/dialog/opening.json) with holo-slides [MM-story_mw47llqj_6];
- *   beat 9     the first contract card (contractCard.js) → ACCEPT [MM-story_mw47lq0l_7];
+ *   beat 8     the avatar walks into the bar, the camera pushes in, Mira turns, and she talks through the GAME'S
+ *              dialog system: one comm scene (comm/commCard.js playScene: one window for her run of lines, breadcrumbs,
+ *              each line swapped in place), lines from comm/dialog.js openingCalls (doc → tools/extract_opening.py →
+ *              content/dialog/opening.json), a holo-slide beside the card on cued lines [MM-story_mw548j4g_v];
+ *   beat 9     the first contract, offered on the game's contract card (render/contractModal.js) → ACCEPT;
  *   beat 10    explore (Content-Reveal §5.3, R9 [MM-story_mw56vrsc_a]): the bar's lights come up, the player can walk
  *              to any room; the Loading Bay is marked "YOUR TRANSPORT · TAP TO DEPART" and DEPART sits bottom-right.
  *              Departing closes the hull (the wipe in reverse) over the 3D ship and fades out "DEPARTING FOR
@@ -28,10 +30,11 @@ import { openingAt, skipTarget, ROOMS, BEATS } from './timeline.js';
 import { createOpeningStage } from './openingStage.js';
 import { prepareLayout } from '../ship-interior/layout.js';
 import { createRoomView } from '../ship-interior/roomView.js';
-import { openConversation } from '../dialog/conversation.js';
-import { validateScript } from '../dialog/conversationState.js';
+import { createComm } from '../comm/commCard.js';
+import { openingCalls } from '../comm/dialog.js';
+import { createHoloPanel } from '../comm/holoSlide.js';
+import { showContractModal } from '../render/contractModal.js';
 import { contractFor, contractReward } from '../data/collectiveContract.js';
-import { openContractCard } from './contractCard.js';
 
 const VENDOR = new URL('../../vendor/', import.meta.url).href;
 const CONTENT = new URL('../../content/', import.meta.url).href;
@@ -39,6 +42,7 @@ const PATRON = Object.freeze({ room: 'bar', fac: 'collective', name: 'Factor Mir
 
 const CSS = `
 .cx-intro { position:fixed; inset:0; z-index:200; background:#000; color:#e9e2d6; font:14px/1.45 "IBM Plex Sans Condensed", system-ui, sans-serif; overflow:hidden; touch-action:none; user-select:none; }
+.cx-intro ~ .bw-comm, .cx-intro ~ .bw-comm.center { z-index:210; } .cx-intro ~ .bw-audio { display:none; }
 .cx-intro canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
 .cx-intro .cx-rooms { clip-path: inset(0 100% 0 0); }
 .cx-intro .cx-scan { position:absolute; top:0; bottom:0; width:3px; margin-left:-1px; background:#38e1c8; box-shadow:0 0 18px 4px #38e1c8aa, 0 0 64px 14px #38e1c844; pointer-events:none; display:none; }
@@ -98,8 +102,7 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
     fetch(CONTENT + 'ships/ships.json').then((r) => r.json()),
     fetch(CONTENT + 'ships/collective/ship-layout.json').then((r) => r.json()),
     fetch(CONTENT + 'dialog/opening.json').then((r) => r.json())]);
-  const scriptErrors = validateScript(script);
-  if (scriptErrors.length) console.warn('[intro] opening script:', scriptErrors);
+  const calls = openingCalls(script);
   await stage.load({
     ship: CONTENT + 'ships/' + manifest.collective.lods[tier === 'low' ? 1 : 0].file,
     tug: manifest.tug ? CONTENT + 'ships/' + manifest.tug.lods[0].file : null, engineColor: manifest.collective.engineColor,
@@ -116,18 +119,33 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
   addEventListener('resize', resize); resize();
 
   // ── state ─────────────────────────────────────────────────────────────────────────────────────────────────────
-  let t = Math.max(0, start), phase = 'timed', closed = false, last = performance.now(), raf = 0, conv = null, card = null, launchT = 0;
+  let t = Math.max(0, start), phase = 'timed', closed = false, last = performance.now(), raf = 0, comm = null, holo = null, card = null, launchT = 0;
   const finish = (result = {}) => { if (closed) return; closed = true; cleanup(); onDone(result); };
   const FIRST = { planet: 'ground', mapId: 1, name: 'Verdance' };
 
   // beat 9: the contract card
   function offerContract() {
-    if (conv) { conv.close(); conv = null; }
+    if (holo) holo.hide();
     phase = 'contract';
-    card = openContractCard(document, root, {
-      planet: FIRST.name, mapId: FIRST.mapId, contract: contractFor(FIRST.planet, FIRST.mapId), reward: contractReward(FIRST.planet, FIRST.mapId),
-      onAccept: () => { card.close(); card = null; try { onAccept(); } catch (e) { console.warn('[intro] onAccept', e); } toBay(); },
-    });
+    const q = contractFor(FIRST.planet, FIRST.mapId), r = contractReward(FIRST.planet, FIRST.mapId);
+    const n = (v) => Number(v || 0).toLocaleString('en-US');
+    card = showContractModal(root, {
+      giver: 'The Collective', alignScore: 3, character: { name: script.speaker.name, phrase: 'We buy what comes out of them.' },
+      kicker: 'FIRST CONTRACT — ' + FIRST.name.toUpperCase(), acceptLabel: 'ACCEPT CONTRACT',
+      task: 'Harvest on ' + FIRST.name + ' map ' + FIRST.mapId + '. The Collective buys <b>' + n(q.common) + ' common</b> and <b>' +
+        n(q.uncommon) + ' uncommon</b> units at full price. The transport in the Loading Bay is yours while the contract stands.',
+      terms: 'Past the quota: <b>kept</b> — the surplus is yours' + '<br>Rare finds: <b>always yours</b>' +
+        (r ? '<br>First completion: <b>+' + r.standing + ' Collective standing</b>' : ''),
+    }, { onAccept: () => { card = null; try { onAccept(); } catch (e) { console.warn('[intro] onAccept', e); } toBay(); } });
+  }
+
+  // beat 8: the game's comm card as one scene (her lines cycle in one window, with breadcrumbs); the holo-slide beside it
+  async function talk() {
+    comm = createComm(document);
+    holo = createHoloPanel(document, { reduce }); root.appendChild(holo.el);
+    const data = { contract: contractFor(FIRST.planet, FIRST.mapId) };
+    await comm.playScene(calls, { center: true, onLine: (c) => { if (c.slide) holo.show(c.slide, { ...(script.slides[c.slide] || {}), data }); } });
+    if (!closed) offerContract();
   }
   // beat 10: explore the ship; the Loading Bay is the way out (R9 [MM-story_mw56vrsc_a])
   let walking = false;
@@ -162,7 +180,7 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
       view.patronTurn();
       phase = 'talk';
       // the Verdance map 1 contract the offer is about (the Collective buys common and uncommon only)
-      conv = openConversation(document, root, script, { reduce, data: { contract: contractFor('ground', 1) }, onEnd: offerContract });
+      talk();
     });
   }
 
@@ -227,7 +245,6 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
     } else if (phase === 'timed') promptEl.style.opacity = '0';
     skipEl.style.display = phase === 'timed' && skipTarget(t) != null ? 'block' : 'none';
 
-    if (phase === 'talk' && conv) conv.tick(dt);
 
     // "YOUR TRANSPORT · TAP TO LAUNCH" over the Loading Bay
     if (phase === 'bay') {
@@ -254,7 +271,8 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
 
   function cleanup() {
     cancelAnimationFrame(raf);
-    if (conv) conv.close();
+    if (comm) comm.destroy();
+    if (holo) holo.dispose();
     if (card) card.close();
     removeEventListener('resize', resize);
     try { stage.dispose(); view.dispose(); } catch (e) { /* best effort */ }
@@ -268,7 +286,7 @@ export async function playIntro({ mount = document.body, tier = 'high', reduced 
     get t() { return t; }, get phase() { return phase; },
     seek(s) { t = s; },
     enterBar,
-    get conversation() { return conv; },
+    get comm() { return comm; },
     offerContract, launch,
     beats: BEATS,
   };
