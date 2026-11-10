@@ -332,15 +332,16 @@ async function openOutpostViewInner(opts, stage) {
   }
   const FARM_TEXT = {
     prep: () => 'Prepping the plot',
-    plant: (res) => `Planted ${res.farm && res.farm.planted ? res.farm.planted.replace(/-/g, ' ') : ''}`.trim(),
+    plant: (res) => (`Planted ${res.farm && res.farm.planted ? res.farm.planted.replace(/-/g, ' ') : ''}`.trim() +
+      (res.farm && res.farm.level ? ` · level ${res.farm.level}` : '') + (res.farm && res.farm.capped ? ` (${res.farm.capped})` : '')),
     harvest: (res) => harvestText(res), harvestAll: (res) => harvestText(res),
     deliver: (res) => `Delivered ${res.farm.delivered} to the ship`,
     farmSell: (res) => `Crops sold · +${fmtGold(res.earned)} gold`,
   };
   function harvestText(res) {
     const f = res.farm || {}, units = Object.values(f.harvested || {}).reduce((a, b) => a + b, 0);
-    const pods = (f.pods || []).reduce((a, p) => a + p.n, 0), lucky = (f.pods || []).some((p) => p.lucky);
-    return (units ? `Harvested ${units} into the store` : 'Pods recovered') + (pods ? ` · +${pods} pod${pods > 1 ? 's' : ''}` : '') + (lucky ? ' · a lucky pod a level up!' : '') + (f.blocked && f.blocked.length ? ` · ${f.blocked.length} waiting: the Silo is full` : '');
+    const pods = (f.pods || []).reduce((a, p) => a + p.n, 0);
+    return (units ? `Harvested ${units} into the store` : 'Pods recovered') + (pods ? ` · +${pods} pod${pods > 1 ? 's' : ''}` : '') + (f.blocked && f.blocked.length ? ` · ${f.blocked.length} waiting: the Silo is full` : '');
   }
   // story A8: PREP / PLANT / HARVEST / HARVEST ALL are the avatar's work. The tap queues it (avatar.js, avatarQueue.js);
   // the avatar walks to the plot, works it, and the action lands here, through act(), once. HARVEST ALL queues every

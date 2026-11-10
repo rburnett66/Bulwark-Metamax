@@ -40,7 +40,7 @@ const DETAIL = { farm: cropDetail };
 
 /**
  * A store as an inventory-screen source (see BATTLE_INVENTORY in menu/inventoryScreen.js). opts go to the tabs' views:
- * onPlant(cropId, level) wires the Seed pods tab's PLANT (hidden when absent).
+ * onPlant(cropId) wires the Seed pods tab's PLANT (hidden when absent).
  */
 export function storeSource(kind, opts = {}) {
   const st = STORES[kind], tabs = STORE_TABS[kind];
@@ -66,6 +66,6 @@ export const storeDetailHtml = (bands, selected, kind = 'farm') => bandDetailHtm
 
 /**
  * The OUTPOST & FARM screen: the inventory screen on the farm store. Same options as createInventoryScreen, plus
- * onPlant(cropId, level) for the Seed pods tab's PLANT (the FARM view, story A7, wires it; unwired, PLANT is hidden).
+ * onPlant(cropId) for the Seed pods tab's PLANT (the FARM view, story A7, wires it; unwired, PLANT is hidden).
  */
 export const createStoreScreen = ({ onPlant, ...opts }, kind = 'farm') => createInventoryScreen({ ...opts, source: storeSource(kind, { onPlant }) });

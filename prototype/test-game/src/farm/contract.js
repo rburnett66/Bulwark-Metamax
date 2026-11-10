@@ -60,7 +60,7 @@ export function spotNearHub(o, map, w, h, cellOk = null) {
 /**
  * ACCEPT F1: the farm is created on the outpost, the Farmhouse is placed near the hub (built over its Build_Sec), the
  * Pod Crate lands in the pods, and the contract is active. Accepting twice changes nothing. ctx: { map, now, cellOk? }.
- * → { farmhouse: id, crate: { crop, level, n } } or { error }
+ * → { farmhouse: id, crate: { crop, n } } or { error }
  */
 export function acceptFarmContract(s, key, { map, now, cellOk = null }) {
   if (hasFarm(s, key)) return { error: 'already accepted' };
@@ -161,7 +161,7 @@ export function farmCard(key, ship) {
   const crop = cropOf(c.crop), P = nameOf(key);
   return {
     kicker: 'FARMING CONTRACT — ' + String(ship || '').toUpperCase(),
-    task: `<b>${c.title}.</b> The regiments need bread. The contract grants you a <b>Farmhouse</b> beside your ${P} outpost and a <b>Pod Crate</b> of ${c.podCrate} Common ${crop.name} seed pods. Work the land your outpost leaves free.`,
+    task: `<b>${c.title}.</b> The regiments need bread. The contract grants you a <b>Farmhouse</b> beside your ${P} outpost and a <b>Pod Crate</b> of ${c.podCrate} ${crop.name} seed pods. Work the land your outpost leaves free.`,
     terms: [
       `1 · Break ground: prep ${c.plantPlots} Traditional plots and plant them`,
       `2 · Bring in a harvest: deliver <b>${c.deliver} ${crop.name}</b> to ${ship}`,

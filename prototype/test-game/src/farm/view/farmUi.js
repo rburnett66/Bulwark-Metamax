@@ -6,11 +6,13 @@
  * of the outpost view is rebuilt (owner rule 7). The model is src/farm/model.js; the map's ground rule is
  * src/farm/cells.js (passed in as ctx.cellOk).
  *
- * Pure: (outpost, map, ctx) → plain objects the HUD renders. ctx: { gold, now, methods, cellOk, pods, held, room,
- * delivered, f1 } — pods: the save's s.pods; held: the farm store for this planet ({ cropId: units }).
+ * Pure: (outpost, map, ctx) → plain objects the HUD renders. ctx: { gold, now, methods, cellOk, pods, levels, held,
+ * room, delivered, f1 } — pods: the save's s.pods ({ cropId: count }; pods have no level, owner rule 9); levels: every
+ * crop's tech-tree level ({ cropId: 1–5 }, src/farm/levels.js cropLevels); held: the farm store for this planet.
  */
-import { methodOf, farmBuildingOf, cropOf, podLevel, POD_LEVELS, yieldOf, prepCost, CROPS } from '../../data/farm.js';
-import { occupied, plotState, storeCapacity, farmStatus, walkwayHit } from '../model.js';
+import { methodOf, farmBuildingOf, cropOf, podLevel, yieldOf, prepCost, CROPS } from '../../data/farm.js';
+import { occupied, plotState, storeCapacity, farmStatus, walkwayHit, plantLevel } from '../model.js';
+import { podRowCount } from '../pods.js';
 import { windowSec } from '../grow.js';
 
 /** The FARM tab's build list, top to bottom: the two Phase A methods, then the farm buildings the player buys. */
@@ -83,15 +85,25 @@ export function farmAt(o, x, y) {
   return null;
 }
 
-/** The pods held that could plant this plot (one per row), Common first: [{ crop, level, n, name, colour }]. */
-export function plantChoices(plot, pods = {}) {
+/**
+ * The crops this plot could be planted with now (owner rule 9): one choice per crop with a plot's worth of pods (one
+ * per row), each at the level it would actually grow at — the crop's tech-tree level (levels[crop], default 1), capped
+ * by the plot (level 5 needs an Irrigated plot with water: model.plantLevel).
+ * → [{ crop, n, name, level, techLevel, levelName, colour, capped, why }]
+ */
+export function plantChoices(o, map, plot, pods = {}, levels = {}) {
   const need = methodOf(plot.method).pods, out = [];
   for (const c of CROPS) {
-    const row = pods[c.id] || {};
-    for (const L of POD_LEVELS) if ((row[L.level] || 0) >= need) out.push({ crop: c.id, level: L.level, n: row[L.level], name: c.name, levelName: L.name, colour: L.colour });
+    const n = podRowCount(pods[c.id]);
+    if (n < need) continue;
+    const techLevel = levels[c.id] || 1, g = plantLevel(o, map, plot, techLevel), L = podLevel(g.level);
+    out.push({ crop: c.id, n, name: c.name, level: g.level, techLevel, levelName: L.name, colour: L.colour, capped: g.capped, why: g.why });
   }
   return out;
 }
+
+/** "level 5 needs irrigation" → "needs irrigation"; the short words of a cap, for a button. */
+const capShort = (why) => String(why || '').replace(/^level 5 /, '').replace(/:.*$/, '');
 
 const sellValue = (cropId) => {
   const c = cropOf(cropId);
@@ -118,7 +130,8 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
     const out = { kind: 'plot', title: `${m.name}`, sub: `${p.w} × ${p.h} at ${p.x}, ${p.y}`, status: STATE_NAME[st], tone: TONE[st], stats: [], actions: [] };
     if (p.crop) {
       const c = cropOf(p.crop), L = podLevel(p.level);
-      out.stats.push(['Crop', `${c.name} · ${L.name} pods`]);
+      out.stats.push(['Crop', c.name], ['Level', `${p.level} · ${L.name}`]);
+      out.levelColour = L.colour;
       if (st === 'fruited' || st === 'dead') {
         const left = p.ripeAt + windowSec(p) * 1000 - now;   // the Fruited window (Fruited_Window × its grow time)
         out.stats.push([st === 'fruited' ? 'Dies in' : 'Died', st === 'fruited' ? clock(left / 1000) : 'pods come back on harvest']);
@@ -134,9 +147,14 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
         if (full) out.warnings = [{ text: 'Silo full: the crop waits, and dies at the end of its window' }];
       }
     } else if (st === 'prepped') {
-      const choices = plantChoices(p, ctx.pods);
-      for (const ch of choices.slice(0, 6)) out.actions.push({ act: 'plant', arg: `${ch.crop}:${ch.level}`, label: `PLANT ${ch.name} · ${ch.levelName} (${ch.n})`, colour: ch.colour, enabled: true });
-      if (!choices.length) out.note = `No seed pods: ${m.pods} of one crop and level plant this plot. Battles bring Rare pods; F1 grants a crate.`;
+      const choices = plantChoices(o, map, p, ctx.pods, ctx.levels);
+      for (const ch of choices.slice(0, 6)) {
+        out.actions.push({ act: 'plant', arg: ch.crop, level: ch.level, colour: ch.colour, enabled: true, why: ch.capped ? `Level ${ch.level}: ${ch.why}` : null,
+          label: `PLANT ${ch.name} · L${ch.level} ${ch.levelName}${ch.capped ? ` (L5 ${capShort(ch.why)})` : ''} · ${ch.n} pods` });
+      }
+      const capped = choices.find((ch) => ch.capped);
+      if (capped) out.note = `Level ${capped.level} — ${capped.why}.`;
+      if (!choices.length) out.note = `No seed pods: ${m.pods} of one crop plant this plot. Buy them at STORES › Seed pods; battles bring pods; F1 grants a crate.`;
     } else if (st === 'harvested') {
       const c = prepCost(p.method);
       out.actions.push({ act: 'prep', arg: p.id, label: `PREP · ${fmt(c.gold)}g`, enabled: c.gold <= gold, why: c.gold > gold ? `Costs ${fmt(c.gold)} gold` : null });
@@ -163,7 +181,7 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
       const need = Math.max(0, ctx.f1.deliver - (ctx.delivered || 0)), have = Math.floor((ctx.held || {})[ctx.f1.crop] || 0);
       if (need > 0) out.actions.push({ act: 'deliver', arg: ctx.f1.crop, label: `DELIVER ${cropOf(ctx.f1.crop).name} · ${fmt(Math.min(need, have))}/${fmt(need)}`, enabled: have > 0, why: have ? null : `Harvest ${cropOf(ctx.f1.crop).name} first` });
     }
-    out.note = 'The farm\'s hub. Seed pods are upgraded at the pod bench: STORES › Seed pods.';
+    out.note = 'The farm\'s hub. Crop levels are researched in the Tech Tree (OUTPOST & FARM › SEED PODS); seed pods are bought at STORES › Seed pods.';
   }
   if (b.kind === 'pump') out.stats.push(['Water reach', `${def.waterReach} cells`]);
   return out;

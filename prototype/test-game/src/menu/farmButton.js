@@ -13,11 +13,12 @@ import { advance } from '../outpost/model.js';
 import { DRAFT_LAYOUT } from '../outpost/draftLayout.js';
 import { farmStatus } from '../farm/model.js';
 import { hasFarm } from '../farm/contract.js';
+import { podRowCount } from '../farm/pods.js';
 
 /** Units the farm store holds for a planet (the outpost & farm inventory, s.stores.farm). */
 export const farmHeld = (save, planet) => Object.values((((save && save.stores) || {}).farm || {})[planet] || {}).reduce((a, b) => a + b, 0);
-/** Seed pods held, all crops and levels. */
-const podsHeld = (save) => Object.values((save && save.pods) || {}).reduce((a, row) => a + Object.values(row).reduce((x, y) => x + y, 0), 0);
+/** Seed pods held, all crops (a plain count per crop: pods have no level, owner rule 9). */
+const podsHeld = (save) => Object.values((save && save.pods) || {}).reduce((a, row) => a + podRowCount(row), 0);
 
 /** The planet whose farm the button opens: the targeted planet's when it has one, else any farmed planet. */
 export function farmPlanet(save, target) {

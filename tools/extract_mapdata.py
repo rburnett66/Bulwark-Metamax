@@ -11,6 +11,7 @@ Requires openpyxl. Formula cells are read as their last-computed values (data_on
 open+save the workbook in Excel after changing inputs, or the derived sheets go stale.
 """
 import json
+import re
 import os
 import sys
 
@@ -316,8 +317,8 @@ def raid_problems(data, planets):
 # ── farming (tech plan docs/tech-plan/Farming.md §3.2) [MM-story_mwabgax7_9] ──────────────────────────────────────
 FARM_TIERS = ("common", "uncommon", "rare", "epic")
 FARM_CATEGORIES = {"Grain", "Vegetable", "Fruit", "Materials", "Minerals", "Gems"}
-FARM_PARAMS = ("Prep_Gold", "Prep_Sec", "Sprout_At", "Plant_At", "Fruited_Window", "Pods_Per_Plot", "Lucky_Chance",
-               "Lucky_Chance_High", "Bench_In", "Battle_Pod_Units", "Battle_Pod_Units_Epic", "Pod_Crate", "Silo_Hours", "Farmhouse_Store_Hours",
+FARM_PARAMS = ("Prep_Gold", "Prep_Sec", "Sprout_At", "Plant_At", "Fruited_Window", "Pods_Per_Plot", "Pod_Price",
+               "Battle_Pod_Units", "Battle_Pod_Units_Epic", "Pod_Crate", "Silo_Hours", "Farmhouse_Store_Hours",
                "Plot_Walkway_Cells", "Breach_Silo_Loss", "Trample_Fruited_Yield", "Avatar_Cells", "Farmhands")
 
 
@@ -367,6 +368,8 @@ def farm_problems(data, planets):
         for k in ("Speed_Mult", "Yield_Mult", "Prep_Mult"):
             if not (isinstance(r.get(k), (int, float)) and r[k] > 0):
                 out.append(f"Farm_Methods {m}: {k} must be positive")
+        if r.get("Level5_Needs") not in ("never", "water"):
+            out.append(f"Farm_Methods {m}: Level5_Needs must be never or water (owner rule 9)")
     levels = data["podLevels"]
     if [r.get("Level") for r in levels] != [1, 2, 3, 4, 5]:
         out.append(f"Pod_Levels: expected levels 1-5 in order, got {[r.get('Level') for r in levels]}")
@@ -376,9 +379,27 @@ def farm_problems(data, planets):
         vals = [r.get("Value_Mult") for r in levels]
         if not all(isinstance(v, (int, float)) for v in vals) or vals != sorted(vals) or len(set(vals)) != 5:
             out.append("Pod_Levels: Value_Mult must rise with every level")
-        for r in levels[:4]:
-            if not (isinstance(r.get("Bench_Gold"), int) and r["Bench_Gold"] > 0):
-                out.append(f"Pod_Levels {r['Level']}: Bench_Gold must be positive (levels 1-4 upgrade at the bench)")
+    # the tech tree's crop chains (owner rule 9): per crop, levels 2..n in order, each node priced and gated
+    by_crop = {r.get("Resource_Id"): r for r in crops}
+    nodes, chains = set(), {}
+    for r in data["cropLevels"]:
+        tag = f"Crop_Levels {r.get('Crop_Id')} {r.get('Level')}"
+        c = by_crop.get(r.get("Crop_Id"))
+        if not c:
+            out.append(f"{tag}: not a crop")
+        elif c.get("Planet_Key") != r.get("Planet_Key"):
+            out.append(f"{tag}: the crop is not {r.get('Planet_Key')}'s")
+        if not (isinstance(r.get("Price"), int) and r["Price"] > 0):
+            out.append(f"{tag}: Price must be a positive whole number")
+        if not (isinstance(r.get("Node"), str) and r["Node"].isidentifier()) or r.get("Node") in nodes:
+            out.append(f"{tag}: Node must be a unique identifier")
+        nodes.add(r.get("Node"))
+        if not re.fullmatch(r"F\d+:(accepted|complete)", str(r.get("Unlock") or "")):
+            out.append(f"{tag}: Unlock must be F<n>:accepted or F<n>:complete")
+        chains.setdefault(r.get("Crop_Id"), []).append(r.get("Level"))
+    for cid, lv in chains.items():
+        if lv != list(range(2, 2 + len(lv))) or len(lv) > 4:
+            out.append(f"Crop_Levels {cid}: levels must run 2, 3, … 5 in order, got {lv}")
     kinds = {r.get("Kind") for r in data["farmBuildings"]}
     for need in ("farmhouse", "silo", "pump"):
         if need not in kinds:
@@ -441,6 +462,9 @@ def main():
                                     header_row_probe=("Kind",)),
         "farmContracts": sheet_rows(wb["Farm_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
                                     header_row_probe=("Planet_Key",)),
+        # the tech tree's crop level chains (owner rule 9, 2026-11-10) [MM-story_mwai5f8t_1g]
+        "cropLevels": sheet_rows(wb["Crop_Levels"], lambda v: isinstance(v, str) and v.isidentifier(),
+                                 header_row_probe=("Planet_Key",)) if "Crop_Levels" in wb.sheetnames else [],
     }
 
     apply_rework(data)
@@ -502,7 +526,7 @@ def main():
           f"outpostRaids={len(data['outpostRaids'])} outpostTech={len(data['outpostTech'])}")
     print(f"   crops={len(data['crops'])} farmMethods={len(data['farmMethods'])} podLevels={len(data['podLevels'])} "
           f"farmBuildings={len(data['farmBuildings'])} farmContracts={len(data['farmContracts'])} "
-          f"farmParams={len(data['farmParams'])}")
+          f"farmParams={len(data['farmParams'])} cropLevels={len(data['cropLevels'])}")
 
 
 if __name__ == "__main__":

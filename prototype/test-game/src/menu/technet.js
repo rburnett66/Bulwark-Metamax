@@ -533,7 +533,7 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
     if (!selId) { panel.classList.remove('open'); return; }
     const n = BY[selId], st = vv(selId).st, c = n.kind === 'ult' ? '#ffd34a' : DIV[n.div].color;
     panel.style.setProperty('--c', c);
-    let h = '<div class="p-top"><span class="chip" style="--c:' + DIV[n.div].color + ';pointer-events:none">' + DIV[n.div].label + '</span><span class="kind">' + (n.kind === 'core' && tree === 'outpost' ? 'THE CENTRE' : KIND_TXT[n.kind]) + '</span><button class="x" data-close aria-label="Close">✕</button></div>';
+    let h = '<div class="p-top"><span class="chip" style="--c:' + DIV[n.div].color + ';pointer-events:none">' + DIV[n.div].label + '</span><span class="kind">' + (n.kind === 'core' && tree === 'outpost' ? 'THE CENTRE' : n.crop ? 'CROP LEVEL' : KIND_TXT[n.kind]) + '</span><button class="x" data-close aria-label="Close">✕</button></div>';
     h += '<h2>' + n.name + '</h2>' + (n.sub ? '<div class="subl">' + n.sub + '</div>' : '');
     const pr = n.soon || n.milestone ? '' : n.free ? 'FREE' : priceOf(n).toLocaleString() + 'g';
     h += '<div class="srow"><span class="badge s-' + st + '">' + STATUS_TXT[st] + '</span><span class="price">' + pr + '</span></div>';
@@ -553,7 +553,8 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
       else if (n.free) h += '<div class="actions"><button class="act" disabled>' + (ctx.owned.has(n.id) ? 'INCLUDED' : 'COMES WITH ' + BY[n.req[0]].name.toUpperCase()) + '</button></div>';
       else if (st === 'owned') h += '<div class="actions"><button class="act ghost" data-refund>REFUND ' + ((ctx.paid && ctx.paid[n.id]) || 0).toLocaleString() + 'g</button></div>';
       else h += '<div class="actions"><button class="act" data-buy ' + (st === 'ready' ? '' : 'disabled') + '>' + (st === 'short' ? 'NEED ' + (priceOf(n) - ctx.bank).toLocaleString() + 'g MORE' : st === 'locked' ? 'LOCKED' : 'RESEARCH · ' + priceOf(n).toLocaleString() + 'g') + '</button></div>';
-      if (!sandbox && !n.milestone && !n.free) h += '<div class="note">Research is recorded now; its effect reaches battle with the Tech Tree build.</div>';
+      if (!sandbox && n.crop) h += '<div class="note">Takes effect at once: new plantings of this crop grow at this level; plots already growing keep theirs.</div>';
+      else if (!sandbox && !n.milestone && !n.free) h += '<div class="note">Research is recorded now; its effect reaches battle with the Tech Tree build.</div>';
     }
     h += '<div class="msg">' + panelMsg + '</div>';
     panel.innerHTML = h; panel.classList.add('open');

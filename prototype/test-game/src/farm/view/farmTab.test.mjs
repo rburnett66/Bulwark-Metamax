@@ -63,9 +63,10 @@ test('the loop through the outpost session: place, prep, plant from the Pod Crat
   const plotId = r.farm.placed;
   assert.equal(r.gold, 20_000 - FARM.Prep_Gold, 'the prep is paid');
   const t1 = T0 + FARM.Prep_Sec * 1000;
-  r = ses.act({ type: 'plant', plot: plotId, pick: 'loam-grain:1' }, t1);
+  r = ses.act({ type: 'plant', plot: plotId, pick: 'loam-grain' }, t1);
   assert.ok(r.ok, r.error);
-  assert.equal(podCount(store.load(), 'loam-grain', 1), FARM.Pod_Crate - 4, 'four pods spent');
+  assert.equal(podCount(store.load(), 'loam-grain'), FARM.Pod_Crate - 4, 'four pods spent');
+  assert.equal(r.farm.level, 1, 'no crop level bought yet: level 1');
   const t2 = t1 + growSec('loam-grain') * 1000 + MIN;
   const panel = farmPanelModel(ses.outpost(), map, { plot: plotId }, ses.ctx(t2));
   r = ses.act({ type: 'harvest', plot: plotId }, t2);
@@ -75,7 +76,7 @@ test('the loop through the outpost session: place, prep, plant from the Pod Crat
   const sv = store.load();
   assert.equal(sv.stores.farm.ground['loam-grain'], 16, 'the crop is in the OUTPOST & FARM store');
   assert.equal(sv.inventory['loam-grain'] || 0, 0, 'never in the battle inventory');
-  assert.ok(podCount(sv, 'loam-grain', 1) >= FARM.Pod_Crate - 4 + 1, 'grain gives a pod back');
+  assert.ok(podCount(sv, 'loam-grain') >= FARM.Pod_Crate - 4 + 1, 'grain gives a pod back');
   r = ses.act({ type: 'deliver', crop: 'loam-grain' }, t2 + MIN);
   assert.ok(r.ok, r.error);
   assert.equal(measureCropDelivered(store.load(), 'loam-grain'), 16);
@@ -86,9 +87,10 @@ test('the loop through the outpost session: place, prep, plant from the Pod Crat
 
 test('the panels: a prepped plot offers the pods held; a Fruited plot HARVEST; the Farmhouse HARVEST ALL, SELL and DELIVER', () => {
   const s = farmSave(), o = s.outposts.ground;
-  const choices = plantChoices({ method: 'traditional' }, s.pods);
-  assert.deepEqual(choices.map((c) => [c.crop, c.level]), [['loam-grain', 1]]);
-  assert.deepEqual(plantChoices({ method: 'traditional' }, { 'loam-grain': { 1: 3 } }), [], 'one pod per row: four needed');
+  const plot = { x: 0, y: 0, w: 2, h: 2, method: 'traditional' };
+  const choices = plantChoices(o, map, plot, s.pods);
+  assert.deepEqual(choices.map((c) => [c.crop, c.level, c.n]), [['loam-grain', 1, FARM.Pod_Crate]]);
+  assert.deepEqual(plantChoices(o, map, plot, { 'loam-grain': 3 }), [], 'one pod per row: four needed');
   const fhId = Object.keys(o.farm.buildings)[0];
   const fh = farmPanelModel(o, map, { farm: fhId }, { now: T0, held: { 'loam-grain': 30 }, heldTotal: 30, f1: { crop: 'loam-grain', deliver: 40 }, delivered: 16 });
   assert.equal(fh.title, 'Farmhouse');
@@ -107,7 +109,7 @@ test('a full store blocks HARVEST in the panel and the session; plants keep grow
   const spot = farmMenu(ses.outpost(), map, ses.ctx(T0)).find((i) => i.id === 'traditional').targets[0];
   const plotId = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, T0).farm.placed;
   const t1 = T0 + FARM.Prep_Sec * 1000;
-  ses.act({ type: 'plant', plot: plotId, pick: 'loam-grain:1' }, t1);
+  ses.act({ type: 'plant', plot: plotId, pick: 'loam-grain' }, t1);
   const t2 = t1 + growSec('loam-grain') * 1000 + MIN;
   const r = ses.act({ type: 'harvest', plot: plotId }, t2);
   assert.equal(r.ok, false);
@@ -115,4 +117,58 @@ test('a full store blocks HARVEST in the panel and the session; plants keep grow
   const p = farmPanelModel(ses.live(t2).outpost, map, { plot: plotId }, { ...ses.ctx(t2), room: 0 });
   assert.equal(p.actions[0].enabled, false);
   assert.ok(p.warnings[0].text.includes('Silo full'));
+});
+
+// ── owner rule 9 (2026-11-10) [MM-story_mwai5f8t_1g]: crop levels from the tech tree; pods have no level ─────────────
+test('PLANT grows at the crop\'s tech level; a plot keeps its level when the tree is upgraded later', () => {
+  const s0 = farmSave();
+  s0.tech.owned.crop_loam_grain_2 = true;
+  const store = memStore(s0), ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
+  assert.equal(ses.ctx(T0).levels['loam-grain'], 2, 'the session hands the FARM tab every crop\'s level');
+  const targets = farmMenu(ses.outpost(), map, ses.ctx(T0)).find((i) => i.id === 'traditional').targets;
+  const a = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: targets[0].cell }, T0).farm.placed;
+  const t1 = T0 + FARM.Prep_Sec * 1000;
+  const p1 = ses.act({ type: 'plant', plot: a, pick: 'loam-grain' }, t1);
+  assert.ok(p1.ok, p1.error);
+  assert.equal(p1.farm.level, 2);
+  assert.equal(ses.outpost().farm.plots[a].level, 2);
+  store.update((sv) => { sv.tech.owned.crop_loam_grain_3 = true; sv.tech.owned.crop_loam_grain_4 = true; });   // upgraded on the tech tree
+  const spot = farmMenu(ses.live(t1).outpost, map, ses.ctx(t1)).find((i) => i.id === 'traditional').targets[0];
+  const b = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, t1).farm.placed;
+  const t2 = t1 + FARM.Prep_Sec * 1000;
+  const panel = farmPanelModel(ses.live(t2).outpost, map, { plot: b }, ses.ctx(t2));
+  const btn = panel.actions.find((x) => x.act === 'plant');
+  assert.equal(btn.arg, 'loam-grain');
+  assert.equal(btn.level, 4);
+  assert.match(btn.label, /PLANT Loam Grain · L4 Epic · \d+ pods/);
+  assert.equal(btn.colour, '#b25cff', 'the level\'s colour');
+  assert.ok(ses.act({ type: 'plant', plot: b, pick: 'loam-grain' }, t2).ok);
+  const o = ses.outpost();
+  assert.equal(o.farm.plots[b].level, 4, 'new plantings grow at the new level');
+  assert.equal(o.farm.plots[a].level, 2, 'the plot already growing keeps level 2');
+  const shown = farmPanelModel(o, map, { plot: a }, ses.ctx(t2));
+  assert.deepEqual(shown.stats.find((x) => x[0] === 'Level'), ['Level', '2 · Uncommon']);
+  assert.equal(store.load().pods['loam-grain'], FARM.Pod_Crate - 8, 'a plain count, four per plot');
+});
+
+test('PLANT on a Traditional plot shows the level-5 cap and why', () => {
+  const s = farmSave(), o = s.outposts.ground;
+  const plot = { x: 0, y: 0, w: 2, h: 2, method: 'traditional' };
+  const [ch] = plantChoices(o, map, plot, s.pods, { 'loam-grain': 5 });
+  assert.deepEqual([ch.techLevel, ch.level, ch.capped, ch.why], [5, 4, true, 'level 5 needs irrigation']);
+  assert.equal(ch.levelName, 'Epic');
+  // the panel's PLANT button says the level the plot will grow at and why it is capped
+  const s0 = farmSave();
+  for (const L of [2, 3, 4, 5]) s0.tech.owned['crop_loam_grain_' + L] = true;
+  const store = memStore(s0), ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
+  const spot = farmMenu(ses.outpost(), map, ses.ctx(T0)).find((i) => i.id === 'traditional').targets[0];
+  const id = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, T0).farm.placed;
+  const t1 = T0 + FARM.Prep_Sec * 1000;
+  const panel = farmPanelModel(ses.live(t1).outpost, map, { plot: id }, ses.ctx(t1));
+  const btn = panel.actions.find((x) => x.act === 'plant');
+  assert.equal(btn.label, `PLANT Loam Grain · L4 Epic (L5 needs irrigation) · ${FARM.Pod_Crate} pods`);
+  assert.equal(btn.why, 'Level 4: level 5 needs irrigation');
+  assert.equal(panel.note, 'Level 4 — level 5 needs irrigation.');
+  const r = ses.act({ type: 'plant', plot: id, pick: 'loam-grain' }, t1);
+  assert.deepEqual([r.farm.level, r.farm.capped], [4, 'level 5 needs irrigation']);
 });
