@@ -24,6 +24,7 @@ import { noteRapportEvent, captainOf } from '../../save/standings.js';
 import { structureDef, OUTPOST, OUTPOST_TECH_IDS } from '../../data/outpost.js';
 import { raidHookFor } from './raidSeam.js';
 import { awayReportModel } from './awayReport.js';
+import { applyProbeWear } from './visitProbe.js';
 
 const goldAdd = (s, n) => {
   s.carry = s.carry || { gold: 0, structures: [] };
@@ -194,6 +195,8 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         return cost ? { outpost: cur, cost } : { error: 'nothing is worn' };
       }
       case 'deep': return setDeep(o, a.pad, a.on, ctx);
+      // the wear a visit probe left on the defenses (visitProbe.js): HP only, never ore or buildings
+      case 'probeWear': return a.wear && a.wear.length ? { outpost: applyProbeWear(o, a.wear) } : { error: 'no wear' };
       // the Upgrade Bay (story O10): a defense to its next tier, as far as the tech tree's tier
       case 'upgradeDefense': return upgradeDefense(o, a.id, ctx);
       case 'sellStructure': { const r = sellStructure(o, a.target); return r.error ? r : { outpost: r.outpost, gold: r.refund }; }

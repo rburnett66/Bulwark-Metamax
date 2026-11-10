@@ -1,5 +1,5 @@
 /**
- * src/dialog/holoSlide.js — the holo-projector slides inside a conversation [MM-story_mw47llqj_6].
+ * src/comm/holoSlide.js — the holo-projector slides beside a comm scene (Dialog-Unification F2) [MM-story_mw47llqj_6].
  *
  * Design: Collective-Opening-Design §6.3 — a projector on the counter blooms and a still floats above it as a
  * scan-lined panel; slow Ken Burns pan and zoom, a subtle flicker, cross-dissolves. Until the owner's stills arrive
