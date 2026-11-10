@@ -94,7 +94,9 @@ Verdance's; every planet uses the same rules with its own three ores.
 
 ### R7. Harvesters (the surface)
 
-- A **Resource Bay** lets you buy **harvesters** (2,000 gold each). An outpost starts with room for **2**, at most 4.
+- A **Resource Bay** lets you buy **harvesters** (2,000 gold each). An outpost starts with room for **1**, at most **2**
+  (owner 2026-11-09: outpost land is sparse next to a survey location). The tech tree's Dock 3, through a finished
+  Upgrade Bay, raises it to 2.
 - A harvester works the **surface fields** off the mesa at the battle's rate, and hauls into the Resource Bay's hopper
   (4 hours).
 - Outpost fields **regrow slowly**: at **5%** of a battle field's rate, so a field worked hard runs dry.
@@ -160,7 +162,7 @@ A big round marker over a building is a **warning**. Tap the building to read it
 - Part loads: should SELL also sell a part load, at a smaller price, so a full rig can always be emptied?
 - Stopped rigs: should a full bay keep the rig running into the Storage Tower before it stops?
 - ~~The gun cap and the Habitat~~ — answered 2026-11-09: 4 guns base, 4 more per Habitat tier (R6, R8).
-- Harvester cap 2, maximum 4: what raises it (it is not in the build list today)?
+- ~~Harvester cap~~ — answered 2026-11-09: start at 1, cap 2 (R7).
 
 ---
 

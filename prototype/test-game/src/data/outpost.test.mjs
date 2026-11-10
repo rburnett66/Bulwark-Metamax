@@ -66,11 +66,11 @@ test('costs follow design §6.1 (owner 2026-11-07: only the hub is granted); def
   }
 });
 
-test('harvesters (owner 2026-11-07): the battle harvester\'s price × 4, 2 to start, up to 4', () => {
+test('harvesters (owner 2026-11-07): the battle harvester\'s price × 4; 1 to start, 2 at most (owner 2026-11-09)', () => {
   const h = harvesterDef();
   assert.equal(h.cost, SYSTEM_UNITS['SYS-Harvester'].cost[0] * OUTPOST.Defense_Price_Mult);
   assert.equal(h.cost, 2000);
-  assert.deepEqual([h.cap, h.max], [2, 4]);
+  assert.deepEqual([h.cap, h.max], [1, 2]);
   assert.equal(structureDef('harvester', 1).draw, 0);
 });
 
