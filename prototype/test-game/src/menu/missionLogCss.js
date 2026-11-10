@@ -364,4 +364,61 @@ export const MISSION_LOG_CSS = String.raw`
 @media (max-width:700px){.bwm-ml .inv .dp .ipane{padding:16px}
 .bwm-ml .ihead .pl{font-size:24px}}
 @media (min-width:981px),(max-height:500px) and (min-width:701px){.bwm-ml .inv .dp{overflow-y:auto}}
+/* the OUTPOST & FARM store's Seed pods tab (menu/seedPods.js) [MM-story_mwabgu9v_g]: level = coloured badge, tier = ring */
+.bwm-ml .plv{--lc:#fff;display:inline-block;flex:none;width:13px;height:13px;background:var(--lc);clip-path:polygon(50% 0,100% 28%,100% 72%,50% 100%,0 72%,0 28%);filter:drop-shadow(0 0 4px color-mix(in srgb,var(--lc) 60%,transparent))}
+.bwm-ml .plvn{display:inline-flex;align-items:center;gap:4px;font-weight:800;white-space:nowrap}
+.bwm-ml .plegend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0 0 10px;padding:7px 10px;font-size:11px;color:var(--dim);background:var(--well);border:1px solid var(--line2)}
+.bwm-ml .plegend > span:first-child,.bwm-ml .plegend .plring{font-size:9px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:var(--dimmer)}
+.bwm-ml .plegend .plring{margin-left:auto}
+.bwm-ml .podrows{display:grid;gap:1px;background:var(--line2)}
+.bwm-ml .podrow{--rc:#888;display:grid;grid-template-columns:minmax(140px,1fr) minmax(0,330px);align-items:center;gap:10px;padding:6px 10px;background:#12161d}
+.bwm-ml .pcrop{display:grid;grid-template-columns:30px 1fr;align-items:center;gap:9px;text-align:left;min-width:0;padding:2px}
+.bwm-ml .pcrop[aria-selected=true] b{color:var(--gold)}
+.bwm-ml .pring{width:26px;height:26px;border-radius:50%;padding:2px;box-shadow:0 0 0 2px var(--rc)}
+.bwm-ml .pcrop .rtx small{color:var(--rc);letter-spacing:.14em}
+.bwm-ml .pslots{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+.bwm-ml .pslot{--lc:#fff;display:flex;align-items:center;justify-content:center;gap:5px;height:32px;padding:0 4px;background:var(--well);border:1px solid var(--line2);border-bottom:2px solid var(--lc)}
+.bwm-ml .pslot b{font-size:14px;font-weight:900}
+.bwm-ml .pslot:hover{background:var(--panel-hi)}
+.bwm-ml .pslot.nil{border-bottom-color:var(--line2)}
+.bwm-ml .pslot.nil .plv{opacity:.28;filter:none}
+.bwm-ml .pslot.nil b{color:var(--dimmer);font-weight:700}
+.bwm-ml .pslot[aria-selected=true]{background:color-mix(in srgb,var(--lc) 14%,#151a22);box-shadow:inset 0 0 0 1px var(--lc)}
+.bwm-ml .ptab{width:100%;margin-top:14px;border-collapse:collapse;font-size:12px;color:#c3cdd8}
+.bwm-ml .ptab th{text-align:left;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dimmer);font-weight:800;padding:0 4px 4px}
+.bwm-ml .ptab td{padding:4px;border-top:1px solid var(--line2)}
+.bwm-ml .ptab td.num,.bwm-ml .ptab th:not(:first-child){text-align:right}
+.bwm-ml .ptab tr.nil td{color:var(--dimmer)}
+.bwm-ml .ptab tr.nil .plv{opacity:.35}
+.bwm-ml .ptab tr.on td{background:rgba(255,255,255,.04)}
+.bwm-ml .pbench{--lc:#fff;margin-top:14px;padding:10px 12px;background:var(--well);border:1px solid var(--line2);border-left:3px solid var(--lc);font-size:12px}
+.bwm-ml .pbh{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:800;color:var(--dim);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bwm-ml .pbp{margin-top:6px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.bwm-ml .pbp b{color:var(--gold)}
+.bwm-ml .pbhave{margin-top:3px;color:var(--dim);font-size:11px}
+.bwm-ml .pbb{display:flex;gap:8px;margin-top:9px}
+.bwm-ml .pbb .btn{flex:1;height:36px;font-size:11px}
+.bwm-ml .pbb .btn[disabled]{opacity:.4}
+.bwm-ml .pbmsg{margin-top:8px;font-size:11.5px;line-height:1.4}
+.bwm-ml .pbmsg.ok{color:var(--s-ready)}
+.bwm-ml .pbmsg.no{color:var(--s-risk)}
+.bwm-ml .pbmsg .plvn{color:var(--text)}
+.bwm-ml .pfrom{margin-top:14px;font-size:11.5px;color:#c3cdd8}
+.bwm-ml .pfrom > b{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dimmer)}
+.bwm-ml .pfrom ul{margin:5px 0 0 16px;padding:0;display:grid;gap:4px}
+.bwm-ml .pfrom li .plvn{vertical-align:-2px}
+@media (max-height:500px){.bwm-ml .podrow{grid-template-columns:minmax(110px,1fr) minmax(0,250px);padding:3px 8px;gap:6px}
+.bwm-ml .pcrop{grid-template-columns:20px 1fr;gap:6px}
+.bwm-ml .pring{width:18px;height:18px;padding:1px}
+.bwm-ml .pcrop .rtx b{font-size:11px}
+.bwm-ml .pslot{height:24px;gap:3px}
+.bwm-ml .pslot b{font-size:11px}
+.bwm-ml .plv{width:10px;height:10px}
+.bwm-ml .plegend{padding:4px 8px;margin-bottom:6px;font-size:10px;gap:4px 8px}
+.bwm-ml .ptab{margin-top:8px;font-size:10px}
+.bwm-ml .ptab td{padding:2px 3px}
+.bwm-ml .pbench{margin-top:8px;padding:7px 8px;font-size:10.5px}
+.bwm-ml .pbb .btn{height:30px;font-size:10px;letter-spacing:.12em}
+.bwm-ml .pfrom{margin-top:8px;font-size:10px}}
+@media (max-width:700px){.bwm-ml .podrow{grid-template-columns:1fr}}
 `;

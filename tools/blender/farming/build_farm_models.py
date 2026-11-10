@@ -706,7 +706,7 @@ MODELS = {
 
 def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
-    out = argv[0] if argv else 'out'
+    out = argv[0] if argv else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')   # gitignored; publish.py reads it
     names = argv[1:] or list(MODELS)
     os.makedirs(out, exist_ok=True)
     for name in names:
