@@ -30,6 +30,26 @@ test('every model: palette covers its keys, it fits on one cell, and it has some
   }
 });
 
+test('Helium-4 has its own model, apart from Helium-3, and fits the same rules (owner rule 1, story A2)', async () => {
+  const { MATERIAL_MODELS, materialModel } = await import('./models.js');
+  const he4 = materialModel('helium-4'), he3 = resourceModel('space', 'uncommon');
+  assert.equal(he4.key, 'helium-4');
+  assert.equal(he4.name, 'Helium-4');
+  assert.equal(he3.name, 'Helium-3', 'the battle resource keeps its model');
+  assert.notEqual(he4, he3);
+  assert.ok(!Object.values(RESOURCE_MODELS).some((m) => m.name === 'Helium-4'), 'not a planet × tier battle model');
+  assert.equal(materialModel('helium-3'), null);
+  for (const m of Object.values(MATERIAL_MODELS)) {
+    for (const p of m.parts) assert.ok(m.palette[p.m], `${m.key}: ${p.m} has a colour`);
+    const g = mergeResourceModel(THREE, m);
+    const box = new THREE.Box3();
+    for (const geo of [g.lit, g.glow]) if (geo) { geo.computeBoundingBox(); box.union(geo.boundingBox); }
+    assert.ok(box.min.x >= -0.5 && box.max.x <= 0.5 && box.min.z >= -0.5 && box.max.z <= 0.5, `${m.key}: inside one cell`);
+    assert.ok(box.max.y <= 1.0 && box.min.y >= -0.15, `${m.key}: height ${box.max.y.toFixed(2)}`);
+    assert.ok(g.tris > 20 && g.tris < 2500 && g.glow, `${m.key}: ${g.tris} triangles, something glows`);
+  }
+});
+
 test('tierOf: primary → common, premium → uncommon, quest red → rare, quest green → epic', () => {
   assert.equal(tierOf({ role: 'primary', color: 'blue' }), 'common');
   assert.equal(tierOf({ role: 'premium', color: 'yellow' }), 'uncommon');

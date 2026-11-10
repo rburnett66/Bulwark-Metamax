@@ -352,6 +352,8 @@ def farm_problems(data, planets):
                 out.append(f"{tag}: {k} must be positive")
         if not (isinstance(r.get("Yield"), int) and r["Yield"] > 0):
             out.append(f"{tag}: Yield must be a positive whole number")
+        if r.get("Material") not in ("battle", "new"):
+            out.append(f"{tag}: Material must be battle (a battle resource) or new (a farm-only material)")
         if not (isinstance(r.get("Pod_Return"), (int, float)) and 0 <= r["Pod_Return"] <= 1):
             out.append(f"{tag}: Pod_Return must be a share in [0, 1]")
     methods = {r.get("Method"): r for r in data["farmMethods"]}

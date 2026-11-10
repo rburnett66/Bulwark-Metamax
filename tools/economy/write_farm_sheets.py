@@ -87,7 +87,10 @@ def slug(name):
 
 
 CROP_COLS = ["Planet_Key", "Planet", "Tier", "Crop", "Resource_Id", "Category", "Grows_As", "Best_Method",
-             "Grow_Hours", "Yield", "Fruited_Hours", "Pod_Return"]
+             "Grow_Hours", "Yield", "Fruited_Hours", "Pod_Return", "Material"]
+# Material: "battle" = the battle resource of the same name; "new" = a material only farming makes (owner rule 1, 5:
+# it lives in the outpost & farm inventory, never the battle INVENTORY). Helium-4 is the one new material.
+NEW_MATERIALS = {"Helium-4"}
 
 
 def crop_rows():
@@ -98,7 +101,7 @@ def crop_rows():
             k = TIER_STRETCH[tier]
             grow = round(hours * k, 2)
             rows.append([key, planet, tier, name, slug(name), cat, grows, best, grow, max(1, round(yld / k)), grow,
-                         POD_RETURN.get(cat, 0)])
+                         POD_RETURN.get(cat, 0), "new" if name in NEW_MATERIALS else "battle"])
     return rows
 
 

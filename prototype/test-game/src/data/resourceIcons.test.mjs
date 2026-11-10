@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resourceId, resourceIconUrl, resourceIconHtml } from './resourceIcons.js';
 import { PLANETS } from './planets.js';
+import { NEW_MATERIALS } from './farm.js';
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
 const DIR = new URL('../../content/icons/resources/', import.meta.url);
@@ -14,10 +15,13 @@ test('the id of every resource is its name in kebab case', () => {
   for (const p of Object.values(PLANETS)) for (const r of Object.values(p.resources)) assert.ok(CATALOG.resources.some((x) => x.id === resourceId(r.name)), r.name);
 });
 
-test('every resource has a committed icon, and there are no strays', () => {
-  for (const r of CATALOG.resources) assert.ok(existsSync(new URL(r.id + '.webp', DIR)), r.id + '.webp');
+test('every resource and every farm-only material has a committed icon, and there are no strays', () => {
+  // the farm-only materials (Helium-4, owner rule 1) have icons too, under their own ids [MM-story_mwabg5me_7]
+  const ids = [...CATALOG.resources.map((r) => r.id), ...NEW_MATERIALS.map((c) => c.id)];
+  for (const id of ids) assert.ok(existsSync(new URL(id + '.webp', DIR)), id + '.webp');
   const files = readdirSync(DIR).filter((f) => f.endsWith('.webp')).map((f) => f.slice(0, -5)).sort();
-  assert.deepEqual(files, CATALOG.resources.map((r) => r.id).sort());
+  assert.deepEqual(files, ids.sort());
+  assert.ok(files.includes('helium-3') && files.includes('helium-4'), 'Helium-3 and Helium-4 are two icons');
 });
 
 test('the icon markup is a decorative image at the resolved URL', () => {

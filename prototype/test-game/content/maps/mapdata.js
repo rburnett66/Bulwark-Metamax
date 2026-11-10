@@ -6160,7 +6160,8 @@ export const MAPDATA = {
    "Grow_Hours": 2,
    "Yield": 16,
    "Fruited_Hours": 2,
-   "Pod_Return": 0.2
+   "Pod_Return": 0.2,
+   "Material": "battle"
   },
   {
    "Planet_Key": "ground",
@@ -6174,7 +6175,8 @@ export const MAPDATA = {
    "Grow_Hours": 6,
    "Yield": 4,
    "Fruited_Hours": 6,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "ground",
@@ -6188,7 +6190,8 @@ export const MAPDATA = {
    "Grow_Hours": 7.5,
    "Yield": 5,
    "Fruited_Hours": 7.5,
-   "Pod_Return": 0.1
+   "Pod_Return": 0.1,
+   "Material": "battle"
   },
   {
    "Planet_Key": "ground",
@@ -6202,7 +6205,8 @@ export const MAPDATA = {
    "Grow_Hours": 16,
    "Yield": 2,
    "Fruited_Hours": 16,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "air",
@@ -6216,7 +6220,8 @@ export const MAPDATA = {
    "Grow_Hours": 4,
    "Yield": 6,
    "Fruited_Hours": 4,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "air",
@@ -6230,7 +6235,8 @@ export const MAPDATA = {
    "Grow_Hours": 9,
    "Yield": 5,
    "Fruited_Hours": 9,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "air",
@@ -6244,7 +6250,8 @@ export const MAPDATA = {
    "Grow_Hours": 10,
    "Yield": 2,
    "Fruited_Hours": 10,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "air",
@@ -6258,7 +6265,8 @@ export const MAPDATA = {
    "Grow_Hours": 16,
    "Yield": 2,
    "Fruited_Hours": 16,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "hightech",
@@ -6272,7 +6280,8 @@ export const MAPDATA = {
    "Grow_Hours": 4,
    "Yield": 6,
    "Fruited_Hours": 4,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "hightech",
@@ -6286,7 +6295,8 @@ export const MAPDATA = {
    "Grow_Hours": 12,
    "Yield": 2,
    "Fruited_Hours": 12,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "hightech",
@@ -6300,7 +6310,8 @@ export const MAPDATA = {
    "Grow_Hours": 10,
    "Yield": 2,
    "Fruited_Hours": 10,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "hightech",
@@ -6314,7 +6325,8 @@ export const MAPDATA = {
    "Grow_Hours": 32,
    "Yield": 1,
    "Fruited_Hours": 32,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "artillery",
@@ -6328,7 +6340,8 @@ export const MAPDATA = {
    "Grow_Hours": 4,
    "Yield": 6,
    "Fruited_Hours": 4,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "artillery",
@@ -6342,7 +6355,8 @@ export const MAPDATA = {
    "Grow_Hours": 6,
    "Yield": 4,
    "Fruited_Hours": 6,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "artillery",
@@ -6356,7 +6370,8 @@ export const MAPDATA = {
    "Grow_Hours": 10,
    "Yield": 2,
    "Fruited_Hours": 10,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "artillery",
@@ -6370,7 +6385,8 @@ export const MAPDATA = {
    "Grow_Hours": 16,
    "Yield": 2,
    "Fruited_Hours": 16,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "water",
@@ -6384,7 +6400,8 @@ export const MAPDATA = {
    "Grow_Hours": 4,
    "Yield": 6,
    "Fruited_Hours": 4,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "water",
@@ -6398,7 +6415,8 @@ export const MAPDATA = {
    "Grow_Hours": 12,
    "Yield": 2,
    "Fruited_Hours": 12,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "water",
@@ -6412,7 +6430,8 @@ export const MAPDATA = {
    "Grow_Hours": 10,
    "Yield": 2,
    "Fruited_Hours": 10,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "water",
@@ -6426,7 +6445,8 @@ export const MAPDATA = {
    "Grow_Hours": 16,
    "Yield": 2,
    "Fruited_Hours": 16,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "arcane",
@@ -6440,7 +6460,8 @@ export const MAPDATA = {
    "Grow_Hours": 4,
    "Yield": 6,
    "Fruited_Hours": 4,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "arcane",
@@ -6454,7 +6475,8 @@ export const MAPDATA = {
    "Grow_Hours": 12,
    "Yield": 2,
    "Fruited_Hours": 12,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "arcane",
@@ -6468,7 +6490,8 @@ export const MAPDATA = {
    "Grow_Hours": 20,
    "Yield": 1,
    "Fruited_Hours": 20,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "arcane",
@@ -6482,7 +6505,8 @@ export const MAPDATA = {
    "Grow_Hours": 16,
    "Yield": 2,
    "Fruited_Hours": 16,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "space",
@@ -6496,7 +6520,8 @@ export const MAPDATA = {
    "Grow_Hours": 4,
    "Yield": 6,
    "Fruited_Hours": 4,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "space",
@@ -6510,7 +6535,8 @@ export const MAPDATA = {
    "Grow_Hours": 6,
    "Yield": 4,
    "Fruited_Hours": 6,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "new"
   },
   {
    "Planet_Key": "space",
@@ -6524,7 +6550,8 @@ export const MAPDATA = {
    "Grow_Hours": 10,
    "Yield": 2,
    "Fruited_Hours": 10,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "space",
@@ -6538,7 +6565,8 @@ export const MAPDATA = {
    "Grow_Hours": 32,
    "Yield": 1,
    "Fruited_Hours": 32,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "dark",
@@ -6552,7 +6580,8 @@ export const MAPDATA = {
    "Grow_Hours": 3,
    "Yield": 12,
    "Fruited_Hours": 3,
-   "Pod_Return": 0.1
+   "Pod_Return": 0.1,
+   "Material": "battle"
   },
   {
    "Planet_Key": "dark",
@@ -6566,7 +6595,8 @@ export const MAPDATA = {
    "Grow_Hours": 6,
    "Yield": 4,
    "Fruited_Hours": 6,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "dark",
@@ -6580,7 +6610,8 @@ export const MAPDATA = {
    "Grow_Hours": 7.5,
    "Yield": 5,
    "Fruited_Hours": 7.5,
-   "Pod_Return": 0.1
+   "Pod_Return": 0.1,
+   "Material": "battle"
   },
   {
    "Planet_Key": "dark",
@@ -6594,7 +6625,8 @@ export const MAPDATA = {
    "Grow_Hours": 16,
    "Yield": 2,
    "Fruited_Hours": 16,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "greenies",
@@ -6608,7 +6640,8 @@ export const MAPDATA = {
    "Grow_Hours": 4,
    "Yield": 6,
    "Fruited_Hours": 4,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "greenies",
@@ -6622,7 +6655,8 @@ export const MAPDATA = {
    "Grow_Hours": 6,
    "Yield": 4,
    "Fruited_Hours": 6,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "greenies",
@@ -6636,7 +6670,8 @@ export const MAPDATA = {
    "Grow_Hours": 15,
    "Yield": 3,
    "Fruited_Hours": 15,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   },
   {
    "Planet_Key": "greenies",
@@ -6650,7 +6685,8 @@ export const MAPDATA = {
    "Grow_Hours": 16,
    "Yield": 2,
    "Fruited_Hours": 16,
-   "Pod_Return": 0
+   "Pod_Return": 0,
+   "Material": "battle"
   }
  ],
  "farmMethods": [

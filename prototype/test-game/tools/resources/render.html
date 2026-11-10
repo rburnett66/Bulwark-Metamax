@@ -21,7 +21,7 @@
 // angle. ?size=1024 sets the image size, ?bg=0 renders on a transparent background, ?plinth=0 hides the plinth.
 // window.__renders → [{ key, planet, tier, name, png }] for tools that save the files.
 import * as THREE from '../../vendor/three.module.js';
-import { resourceModel } from '../../src/render3d/resources/models.js';
+import { resourceModel, MATERIAL_MODELS } from '../../src/render3d/resources/models.js';
 import { mergeResourceModel } from '../../src/render3d/resources/resources3d.js';
 import { PLANETS } from '../../src/data/planets.js';
 
@@ -37,7 +37,10 @@ const litMat = new THREE.MeshLambertMaterial({ vertexColors: true }), glowMat = 
 const plinthGeo = new THREE.CylinderGeometry(0.62, 0.7, 0.08, 28), plinthMat = new THREE.MeshLambertMaterial({ color: 0x1c222b });
 const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
 const out = [];
-for (const [key, p] of Object.entries(PLANETS)) for (const tier of TIERS) {
+// the 36 battle resources, then the farm-only materials (Helium-4) [MM-story_mwabg5me_7]
+const JOBS = [...Object.entries(PLANETS).flatMap(([key, p]) => TIERS.map((tier) => ({ key: `${key}.${tier}`, planet: p.name, tier, name: p.resources[tier].name, def: resourceModel(key, tier) }))),
+  ...Object.values(MATERIAL_MODELS).map((d) => ({ key: d.key, planet: PLANETS[d.planet].name, tier: d.tier, name: d.name, def: d }))];
+for (const { key, planet, tier, name, def } of JOBS) {
   const scene = new THREE.Scene();
   const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x3a3f48, 0.75), amb = new THREE.AmbientLight(0xffffff, 0.2);
   const sun = new THREE.DirectionalLight(0xfff2e0, 1.15); sun.position.set(-3, 6, 4);
@@ -45,7 +48,7 @@ for (const [key, p] of Object.entries(PLANETS)) for (const tier of TIERS) {
   scene.add(hemi, amb, sun, rim);
   if (PLINTH) { const pl = new THREE.Mesh(plinthGeo, plinthMat); pl.position.y = -0.04; scene.add(pl); }
   const turn = new THREE.Group(); turn.rotation.y = -0.6; scene.add(turn);
-  const m = mergeResourceModel(THREE, resourceModel(key, tier));
+  const m = mergeResourceModel(THREE, def);
   for (const [geo, mat] of [[m.lit, litMat], [m.glow, glowMat]]) if (geo) turn.add(new THREE.Mesh(geo, mat));
   // frame the model: the menu's angle (camera up and in front, looking slightly down), distance fitted to its size
   const box = new THREE.Box3().setFromObject(turn), c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() / 2;
@@ -54,10 +57,9 @@ for (const [key, p] of Object.entries(PLANETS)) for (const tier of TIERS) {
   cam.position.copy(c).addScaledVector(dir, d); cam.lookAt(c);
   renderer.render(scene, cam);
   const png = canvas.toDataURL('image/png');
-  const name = p.resources[tier].name;
-  out.push({ key: `${key}.${tier}`, planet: p.name, tier, name, png });
+  out.push({ key, planet, tier, name, png });
   const f = document.createElement('figure');
-  f.innerHTML = `<img alt="${name}" src="${png}"><figcaption>${name}<span>${p.name} · ${tier}</span></figcaption>`;
+  f.innerHTML = `<img alt="${name}" src="${png}"><figcaption>${name}<span>${planet} · ${tier}</span></figcaption>`;
   document.getElementById('g').appendChild(f);
   for (const o of turn.children) o.geometry.dispose();
 }
