@@ -23,6 +23,8 @@
  *   capitalShips     { [planet]: {arrived} }
  *   questSteps       { [questLine]: highest step collected }
  *   inventory        { [resourceId]: count }; inventoryNew: the same, since the last visit
+ *   stores           { farm: { [planetKey]: { [cropId]: units } } } the OUTPOST & FARM inventory (save/stores.js); storesNew:
+ *                    the same, since the last visit [MM-story_mwaf80xq_19]. Mining and parts stores join it later.
  *   seen             what the menu's red-dot badges last showed (menu/badges.js) [MM-story_mvkhei9q_k]
  *   pendingRewards   the last battle(s)' rewards, waiting to fly into the menu widget [MM-story_mvkhegop_j]
  *   battleLog        played campaign battles, newest first, capped (save/battleLog.js) [MM-story_mw1azvh8_d]
@@ -33,6 +35,7 @@
 
 import { emptyStats } from './battleTally.js';
 import { collectiveOf } from './collective.js';
+import { emptyStores, emptyStoresNew, migrateStores } from './stores.js';
 
 const KEY = 'bulwark:save';
 
@@ -62,6 +65,8 @@ export function defaultSave() {
     questSteps: {},
     inventory: {},
     inventoryNew: {},
+    stores: emptyStores(),     // the OUTPOST & FARM inventory, apart from the battle's (owner rule 5) [MM-story_mwaf80xq_19]
+    storesNew: emptyStoresNew(),
     loggedQueue: [],     // missions logged away from the menu: the toast plays when the menu next shows
     battleLog: [],
     collective: { introSeen: false, contractAccepted: false, transport: null, seenBefore: false },   // the opening [MM-story_mw47lq0l_7]
@@ -104,6 +109,7 @@ export function migrate(s) {
   if (!s.questSteps) s.questSteps = {};
   if (!s.inventory) s.inventory = {};
   if (!s.inventoryNew) s.inventoryNew = {};
+  migrateStores(s);
   if (!Array.isArray(s.loggedQueue)) s.loggedQueue = [];
   if (!Array.isArray(s.battleLog)) s.battleLog = [];
   if (!s.seen || typeof s.seen !== 'object') s.seen = {};

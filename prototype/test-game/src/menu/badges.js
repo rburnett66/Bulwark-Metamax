@@ -40,7 +40,10 @@ export function missionChip(b) {
   };
 }
 
-/** The header INVENTORY chip [MM-story_mvzkdvrl_1l]: cyan with what was gained since the last visit. */
-export function inventoryChip(fresh, total) {
-  return { count: fresh, text: fresh ? '+' + Math.min(fresh, 999) : '', tone: fresh ? 'new' : null, sub: [null, total + ' resources'] };
+/**
+ * The header INVENTORY chip [MM-story_mvzkdvrl_1l]: cyan with what was gained since the last visit. The STORES chip
+ * [MM-story_mwaf80xq_19] is the same chip on the OUTPOST & FARM store, counting its own noun ('36 crops').
+ */
+export function inventoryChip(fresh, total, noun = 'resources') {
+  return { count: fresh, text: fresh ? '+' + Math.min(fresh, 999) : '', tone: fresh ? 'new' : null, sub: [null, total + ' ' + noun] };
 }
