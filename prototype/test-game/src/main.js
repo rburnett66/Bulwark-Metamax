@@ -113,7 +113,9 @@ export function boot(mountEl, seed) {
   // T7 deletes Pixi once nothing needs the fallback.
   const RENDERER_Q = (() => { try { return (new URLSearchParams(window.location.search).get('renderer') || '').toLowerCase(); } catch (e) { return ''; } })();
   const hasWebGL = () => { try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl'))); } catch (e) { return false; } };
-  let USE_3D = RENDERER_Q !== 'pixi' && RENDERER_Q !== '2d' && hasWebGL();
+  const WEBGL_OK = RENDERER_Q !== 'pixi' && RENDERER_Q !== '2d' && hasWebGL();   // asked once: each probe costs a GL context
+  let USE_3D = WEBGL_OK;
+  let fell2D = false;   // the 3D view failed on this map; the next map tries 3D again (retry3D)
   let renderer3d = null;
   let render3dMod = null;
   let landingReleased = false;   // LC: the landing craft flies in once the field is on screen (releaseLanding)
@@ -126,13 +128,36 @@ export function boot(mountEl, seed) {
   function fallbackTo2D(reason) {
     if (!USE_3D) return;
     console.error('[render3d] falling back to the 2D view:', reason);
-    USE_3D = false;
+    USE_3D = false; fell2D = true;
     mount3dSeq++;                                         // cancel any mount in flight
     if (renderer3d && render3dMod) { try { render3dMod.destroyRenderer(renderer3d); } catch (e) { /* already gone */ } }
     renderer3d = null;
     canvas.style.visibility = ''; app.stage.renderable = true;
     rebindInput();
     flashMessage(hud, '3D view unavailable — playing in 2D');
+  }
+  // Owner 2026-11-10: Verdance map 6 played in the old 2D view. A fallback used to last the whole session; now it lasts
+  // one map, and the next map tries 3D again (a lost GPU context, e.g. phones capping live WebGL contexts, is usually
+  // over by then).
+  function retry3D() {
+    if (USE_3D || !fell2D || !WEBGL_OK) return;
+    USE_3D = true; fell2D = false; frameErrors3d = 0;
+    canvas.style.visibility = 'hidden'; app.stage.renderable = false;
+  }
+  // One heavy WebGL view at a time on a phone (owner 2026-11-07: two at once crashed an iPhone): the outpost view and the
+  // Pod Reward Chest borrow the GPU from the battle view, which is rebuilt when they close.
+  function suspend3D() {
+    if (!renderer3d || !render3dMod) return false;
+    mount3dSeq++;                                       // cancel a mount in flight
+    try { render3dMod.destroyRenderer(renderer3d); } catch (e) { /* already gone */ }
+    renderer3d = null; suspended3D = true;
+    rebindInput();
+    return true;
+  }
+  function resume3D() {
+    if (!suspended3D) return;
+    suspended3D = false;
+    if (USE_3D && last3D) void mount3D(last3D.map, last3D.slug);
   }
   async function mount3D(map, slug) {
     const mySeq = ++mount3dSeq;
@@ -571,6 +596,7 @@ export function boot(mountEl, seed) {
     // the 3D view builds when the board is actually played: a board selected UNDER the menu (boot, a faction pick) skips
     // it — the menu hides it anyway, and Play selects the map again. Two heavy builds back to back (faction pick, then
     // the map card) left phones with no 3D view at all for a long while. [MM-task_mvd8b1mg_o]
+    retry3D();
     if (USE_3D && !(menu && menu.isOpen())) void mount3D(currentMap, nextSlug);
     clearIntroOverlays();   // a previous board's contract / wave-intel / how-to-play card never carries over [MM-task_mvd6cfh8_n]
     // [MM-story_mvamfcnp_14] one dialog at a time: the intro below runs the speaker last, so the board
@@ -893,18 +919,8 @@ export function boot(mountEl, seed) {
     },
     // the outpost view is a second full 3D scene: the battle's 3D view (behind the menu) gives its GPU context up while it
     // is open and is rebuilt when it closes — two at once crashed the page on an iPhone (owner 2026-11-07)
-    onOutpostOpen: () => {
-      if (!renderer3d || !render3dMod) return;
-      mount3dSeq++;                                       // cancel a mount in flight
-      try { render3dMod.destroyRenderer(renderer3d); } catch (e) { /* already gone */ }
-      renderer3d = null; suspended3D = true;
-      rebindInput();
-    },
-    onOutpostClose: () => {
-      if (!suspended3D) return;
-      suspended3D = false;
-      if (USE_3D && last3D) void mount3D(last3D.map, last3D.slug);
-    },
+    onOutpostOpen: () => { suspend3D(); },
+    onOutpostClose: () => { resume3D(); },
     // OUTPOST (O8): the menu opens the outpost view itself (O6, src/outpost/view/outpostView.js) and calls
     // onTechChanged when it closes, so the next battle sees the bank the outpost changed
     // a Battle History card's REPLAY (O8): that battle's own stored replay
@@ -1284,8 +1300,13 @@ export function boot(mountEl, seed) {
             // owner (2026-11-10): "chests in Bulwark are awarded at the end of each map and are automatically opened with
             // a user click" — the map's Pod Reward Chest plays over the result, one tap opens it, before the final word
             // [MM-story_mwatmvpt_1k]. Unopened (the game closed first) it waits in STORES › Seed pods.
-            const openPodChest = podChest ? () => (S !== sim ? null : playChestOpen({ doc: document, chest: podChest,
-              open: () => { let r = null; updateSave((sv) => { r = openChest(sv, podChest.id); }); return r; } })) : null;
+            const openPodChest = podChest ? () => {
+              if (S !== sim) return null;
+              const lent = suspend3D();   // the chest's own 3D view borrows the GPU; the battlefield comes back on COLLECT
+              return playChestOpen({ doc: document, chest: podChest,
+                open: () => { let r = null; updateSave((sv) => { r = openChest(sv, podChest.id); }); return r; } })
+                .finally(() => { if (lent && S === sim) resume3D(); });
+            } : null;
             if (openPodChest && !lastWaveFaction) setTimeout(openPodChest, 1200);
             if (lastWaveFaction) {
               const call = S.result === 'win'

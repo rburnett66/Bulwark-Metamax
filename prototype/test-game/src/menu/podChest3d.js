@@ -420,6 +420,7 @@ export async function createChestStage({ host, tier = 'high', reduced = false, t
       disposed = true; win.cancelAnimationFrame(raf); if (ro) ro.disconnect();
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) m.dispose(); });
       haloTex.dispose(); composer.renderTarget1.dispose(); composer.renderTarget2.dispose(); renderer.dispose();
+      try { renderer.forceContextLoss(); } catch (e) { /* already gone */ }   // free the GL context now, not at GC: phones cap them
       canvas.remove(); flashEl.remove();
     },
   };
