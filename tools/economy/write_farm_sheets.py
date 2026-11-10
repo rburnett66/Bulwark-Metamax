@@ -156,6 +156,7 @@ PARAMS = [
     ["Battle_Pod_Units_Epic", 100, "units", "the same on an epic-tier field"],
     ["Pod_Crate", 12, "count", "Common pods in an F1 Pod Crate (§9.1)"],
     ["Silo_Hours", 8, "h", "the Silo holds this many hours of the farm's output (§6)"],
+    ["Farmhouse_Store_Hours", 1, "h", "without a finished, powered Silo the Farmhouse holds this many hours of output (as a rig's own bay without a Storage Tower)"],
     ["Breach_Silo_Loss", 0.25, "share", "what a raid breach takes from the Silo (§10)"],
     ["Trample_Fruited_Yield", 0.5, "share", "a trampled Fruited plot keeps this share of its yield (§10)"],
     ["Avatar_Cells", 0.45, "cells", "the surface avatar's height (D44)"],
