@@ -41,6 +41,8 @@ import { loadChoice } from '../../render3d/quality.js';
 import { harvestRunning, harvestPlan, surfaceFieldGroups, fieldStock } from '../model.js';
 import { harvestRates } from '../../data/outpost.js';
 import { harvesterUnits } from './harvestDrive.js';
+import { startProbe, probeDelay, probeWear, probeBreached, PROBE_MAX_S } from './visitProbe.js';
+import { powerGrids } from '../model.js';
 import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
 import { crumb, lastSessionCrashed } from '../../diag/errorLog.js';
 import { reportButton } from '../../diag/reportPanel.js';
@@ -538,6 +540,46 @@ async function openOutpostViewInner(opts, stage) {
   }
   const siteFx = createConstructionFx({ seed: 41 });
   let frameNo = 0;
+
+  // ── probes (visitProbe.js; owner 2026-11-09): now and then a light tank and a trooper come at the online outpost, on the
+  // battle sim, drawn live with the battle renderer. Their wear on the defenses is saved; they take no ore. Off in safe
+  // mode (a phone that lost the tab gets the lightest view).
+  let probe = null, probeN = 0, probeT = 0, probeWait = safe ? Infinity : probeDelay(o.seed, 0), probeEvents = [];
+  const probeUnitIds = new Set();
+  function clearProbeUnits() { for (const id of probeUnitIds) state.units.delete(id); probeUnitIds.clear(); }
+  function endProbe() {
+    const breached = probeBreached(probe), wear = probeWear(o, probe);
+    probe = null; probeN++; probeWait = probeDelay(o.seed, probeN);
+    clearProbeUnits(); state.projectiles = [];
+    if (wear.length) { const res = session.act({ type: 'probeWear', wear }, clockNow()); if (res.ok) { o = res.outpost; onChange(); } }
+    syncDefenses(); refreshHud(true);
+    hud.toast(breached ? 'Raiders hit the base and pulled back' : 'Raiders driven off');
+    crumb(`outpost: probe ${probeN} ${breached ? 'reached the base' : 'driven off'} · wear ${wear.length}`);
+  }
+  function stepProbe(dt) {
+    probeEvents = [];
+    if (!probe) {
+      if (!o.online || saleRun || closed || hud.reportOpen || pl.phase !== 'idle') return;   // not over the away report or a placement
+      probeWait -= dt;
+      if (probeWait > 0) return;
+      try { probe = startProbe(o, probeN, { map, powered: [...powerGrids(o, map).powered] }); } catch (e) { console.warn('[outpost] probe', e); probe = null; }
+      if (!probe) { probeWait = Infinity; return; }
+      probeT = 0; hud.toast('Raiders inbound!', true); crumb(`outpost: probe ${probeN + 1} inbound`);
+      return;
+    }
+    probeT += dt;
+    probeEvents = probe.step(dt);
+    if (probe.done || probeT > PROBE_MAX_S) { endProbe(); return; }
+    // draw it: the raiders, the defenses as the probe's sim has them (HP, aim, fire) and its shots
+    clearProbeUnits();
+    for (const [id, u] of probe.state.units) if (u.side === 'attacker') { state.units.set(id, u); probeUnitIds.add(id); }
+    syncDefenses();
+    const inProbe = new Set(probe.defenseIds.values()), m = new Map();
+    for (const s of state.structures.values()) if (!inProbe.has(s.outpostId) || s.onBay) m.set(s.id, s);
+    for (const [sid, s] of probe.state.structures) { const did = probe.defenseIds.get(sid); if (did != null) { s.outpostId = did; m.set(sid, s); } }
+    state.structures = m;
+    state.projectiles = probe.state.projectiles || [];
+  }
   function frame(t) {
     if (closed) return;
     raf = win.requestAnimationFrame(frame);
@@ -563,6 +605,7 @@ async function openOutpostViewInner(opts, stage) {
     scene.sync(o, clockNow(), ctxNow());
     driveClock += dt;
     syncHarvesters();
+    stepProbe(dt);
     if (liveAcc === 0) syncFieldStock();
     const out = scene.update(dt, o);
     // dust and welding sparks on every building under construction (constructionFx.js, the battle's build + repair FX)
@@ -589,7 +632,7 @@ async function openOutpostViewInner(opts, stage) {
       if (left > 0) { const a = shake.amp * (left / (shake.until - shake.t0)); jx = Math.sin(saleRun.t * 71) * a; jz = Math.cos(saleRun.t * 53) * a; } else shake = null;
     }
     r.cam.tx += jx; r.cam.tz += jz;
-    renderFrame(r, state, ui3d, [], dt);
+    renderFrame(r, state, ui3d, probeEvents, dt);
     r.cam.tx -= jx; r.cam.tz -= jz;
     if (r.resources && !r._ringsHidden) { r.resources.group.children.forEach((m) => { if (m.name === 'resources-rings') m.visible = false; }); r._ringsHidden = true; }
     // while measuring, wait for the GPU (gl.finish) so the number is the whole frame: script + draw + raster
@@ -638,6 +681,9 @@ async function openOutpostViewInner(opts, stage) {
     /** Run the harvesters' trip clock forward (review screenshots). */
     driveTo(sec) { driveClock = sec; syncHarvesters(); },
     select, sell: doSell, close,
+    /** Visit probes (review): bring the next one now; read the one running ({ n, t, raiders, done } or null). */
+    probeNow() { if (!probe) probeWait = 0; },
+    get probe() { return probe ? { n: probeN + 1, t: probeT, raiders: [...probe.state.units.values()].filter((u) => u.side === 'attacker').length, done: probe.done } : null; },
     /** The build menu (review / screenshots): pick(id, target?), aim(target, touch), hoverAt(target), confirm(), cancel(). */
     pick: (id, target) => pickItem(id, target), confirm: () => placeEvent({ type: 'confirm' }), cancel: () => cancelPlacing(),
     aim: (target, touch = true) => { lastPointer = touch ? 'touch' : 'mouse'; placeEvent({ type: 'tap', target, touch }); },
