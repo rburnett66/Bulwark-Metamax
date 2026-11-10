@@ -425,7 +425,8 @@ const bladeY = (c, L, a, w, h, m, g) => ({ t: 'box', s: [L, h, w], p: [c[0] + Ma
 {
   const S = SYSTEM_MODELS.sys_harvester;
   M.miner = { name: S.name, unit: 'SYS-Harvester', ref: 'miner', parts: S.parts.map((p) => (p.g === 'head' ? { ...p, g: 'spin' } : p)),
-    pivots: { spin: S.pivots.head }, spin: { spin: { axis: 'x', speed: S.head.speed || 7 } }, colors: SYSTEM_COLORS, cargo: S.cargo, views: S.views };
+    pivots: { spin: S.pivots.head }, spin: { spin: { axis: 'x', speed: S.head.speed || 7 } }, colors: SYSTEM_COLORS, cargo: S.cargo, views: S.views,
+    lodKeepSpin: true };   // the drill keeps spinning at the outpost's camera distance (owner 2026-11-10) [MM-story_mwb420z3_21]
 }
 
 // the AIR faction's own models (air/*.js) [MM-story_mvh8woji_1]

@@ -23,6 +23,8 @@ export const LOD_DISTANCE = 22;
 const isGlow = (p) => /^glow|amber/.test(p.m || '');
 /** The detail flag — `d: 1` only. An extrusion's `d: [from, to]` is its depth, not a flag. */
 export const isDetail = (p) => p.d === 1 || p.d === true;
+/** A part of a spin group (def.spin: drills, rotors, fans): kept by the LOD so the motion survives at a distance. */
+export const isSpin = (p) => typeof p.g === 'string' && p.g.startsWith('spin');
 /** Parts that make the silhouette: never dropped by the LOD. */
 export const isSilhouette = (p) => p.t === 'ext' || p.t === 'loft' || p.t === 'ell';
 const mid = (a) => a.slice().sort((x, y) => x - y)[1];
@@ -39,7 +41,10 @@ export function partSize(p) {
 
 export function lodDef(def) {
   const parts = def.parts
-    .filter((p) => isSilhouette(p) || (!isDetail(p) && partSize(p) >= (isGlow(p) ? LOD_MIN_GLOW_PART : LOD_MIN_PART)))
+    // a model with def.lodKeepSpin keeps its spinning parts at a distance: their motion is how it reads as working
+    // (owner 2026-11-10: the outpost's harvesters, seen from beyond LOD_DISTANCE, had lost their rotating nose cones).
+    // Opt-in, so rotor units in a big wave stay as light as they were.
+    .filter((p) => isSilhouette(p) || (def.lodKeepSpin && isSpin(p)) || (!isDetail(p) && partSize(p) >= (isGlow(p) ? LOD_MIN_GLOW_PART : LOD_MIN_PART)))
     .map((p) => (p.t === 'cyl' ? { ...p, seg: Math.min(p.seg || 8, LOD_MAX_CYL_SEG) } : p));
   return { ...def, parts };
 }
