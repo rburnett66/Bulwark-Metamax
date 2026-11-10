@@ -53,7 +53,7 @@ function mergeColored(THREE, parts) {
 const shade = (hex, k) => { const r = (hex >> 16) & 255, g = (hex >> 8) & 255, b = hex & 255; return (Math.round(r * k) << 16) | (Math.round(g * k) << 8) | Math.round(b * k); };
 
 /**
- * Prop presets, one per prototype room. Each returns { solid: parts[], glow: parts[], seats: [], stands: [] } from a
+ * Prop presets, one per prototype room, plus one per faction room (shipRooms.js). Each returns { solid: parts[], glow: parts[], seats: [], stands: [] } from a
  * room frame R = { x0, x1, w, fy (floor y), top (ceiling y), H (height above floor) } in world units. u = 0..1 across
  * the room, v = world units above the floor.
  */
@@ -140,6 +140,81 @@ const PRESETS = {
     for (const v of [0.25, 0.55, 0.85]) B.cyl([at(0.5), R.fy + R.H * v, BACK + 2], [0.35, R.w * 0.9, 0.35], 0x5a6478, [0, 0, Math.PI / 2]);
     for (const u of [0.15, 0.85]) { B.box([at(u), R.fy + 3, -8], [2.2, 4, 1], 0x2b3446); B.glow([at(u), R.fy + 3.6, -7.4], [1.6, 1.4, 0.1], 0x5fd39b); }
     B.stands.push(0.5);
+  },
+
+  // ── the faction rooms: one per faction, aboard that faction's ship only (shipRooms.js FACTION_ROOMS; owner 2026-11-09)
+  warroom(B, R) {                                    // Ground / Powder: the map table under the regimental flags
+    const at = (u) => R.x0 + u * R.w;
+    B.box([at(0.5), R.fy + 1.1, -12], [R.w * 0.5, 2.2, 5], 0x4a3a26);
+    B.glow([at(0.5), R.fy + 2.3, -12], [R.w * 0.44, 0.1, 4.2], 0x5fd39b);
+    for (const [u, c] of [[0.15, 0xa6382f], [0.3, 0xd4af37], [0.7, 0xa6382f], [0.85, 0xd4af37]]) {
+      B.cyl([at(u), R.fy + R.H * 0.4, BACK + 1], [0.15, R.H * 0.8, 0.15], 0x2a2a24);
+      B.box([at(u) + 1.1, R.fy + R.H * 0.68, BACK + 1.2], [2, 1.4, 0.1], c);
+    }
+    B.stands.push(0.35);
+  },
+  flightdeck(B, R) {                                 // Air: a fighter on the deck and the runway lights
+    const at = (u) => R.x0 + u * R.w;
+    B.box([at(0.42), R.fy + 2.2, -22], [11, 1.9, 2.2], 0xc9d3de);                            // fuselage
+    B.box([at(0.4), R.fy + 2.3, -22], [3.8, 0.3, 11], 0xa9b6c4);                             // wings
+    B.box([at(0.42) - 5, R.fy + 3.8, -22], [1.6, 2.6, 0.3], 0xa9b6c4);                       // tail
+    for (const dx of [-3, 3]) B.cyl([at(0.42) + dx, R.fy + 0.6, -22], [0.3, 1.2, 0.3], 0x343a44);   // gear
+    B.glow([at(0.42) + 3.6, R.fy + 3.3, -20.8], [2.2, 0.8, 0.1], 0x9fe8ff);                  // canopy
+    for (let i = 0; i < 7; i++) B.glow([at(0.1 + i * 0.13), R.fy + 0.1, -6], [0.5, 0.15, 0.5], i % 2 ? 0xffcf5c : 0x38e1c8);
+    B.stands.push(0.8);
+  },
+  shieldlab(B, R) {                                  // High Tech: the shield generator under its dome
+    const at = (u) => R.x0 + u * R.w;
+    B.cyl([at(0.5), R.fy + 0.8, -18], [4, 1.6, 4], 0x3a3f46);
+    B.sphere([at(0.5), R.fy + 4.4, -22], [7, 7, 7], 0x5a7aa0);
+    B.glow([at(0.5), R.fy + 4.4, -18.4], [3.6, 3.6, 0.2], 0x9fe8ff);
+    B.glow([at(0.5), R.fy + 1.7, -19.9], [4.4, 0.25, 0.2], 0x38e1c8);
+    for (const u of [0.15, 0.85]) { B.box([at(u), R.fy + 2.6, -8], [2.4, 3.6, 1], 0x2b3446); B.glow([at(u), R.fy + 3.2, -7.4], [1.8, 1.6, 0.1], 0xb58cff); }
+    B.stands.push(0.3);
+  },
+  firecontrol(B, R) {                                // Artillery: the plotting table and the shell racks
+    const at = (u) => R.x0 + u * R.w;
+    B.box([at(0.4), R.fy + 1.1, -10], [R.w * 0.35, 2.2, 3.2], 0x3d4048);
+    B.glow([at(0.4), R.fy + 2.25, -10], [R.w * 0.3, 0.1, 2.6], 0xffb347);
+    for (let i = 0; i < 6; i++) B.cyl([at(0.78) + (i % 3) * 1.1, R.fy + 1 + Math.floor(i / 3) * 2.2, -20], [0.8, 2, 0.8], 0x8a6a3a);
+    B.box([at(0.5), R.fy + R.H * 0.62, BACK + 0.5], [R.w * 0.5, R.H * 0.3, 0.2], 0x0d1a12);
+    B.glow([at(0.5), R.fy + R.H * 0.62, BACK + 0.7], [R.w * 0.4, 0.15, 0.1], 0x5fd39b);
+    B.stands.push(0.4);
+  },
+  moonpool(B, R) {                                   // Water: an open pool to the sea below, and its railing
+    const at = (u) => R.x0 + u * R.w;
+    B.glow([at(0.5), R.fy + 0.05, -14], [R.w * 0.6, 0.1, 10], 0x1f6fa8);
+    B.glow([at(0.5), R.fy + 0.1, -14], [R.w * 0.3, 0.1, 5], 0x38c8e1);
+    for (const u of [0.18, 0.82]) B.cyl([at(u), R.fy + 1.2, -14], [0.2, 2.4, 0.2], 0xc9d3de);
+    B.box([at(0.5), R.fy + 2.3, -8.8], [R.w * 0.66, 0.2, 0.2], 0xc9d3de);
+    B.cyl([at(0.5), R.fy + R.H - 2, -14], [0.3, 3, 0.3], 0x4a4f58);                          // winch
+    B.stands.push(0.15);
+  },
+  observatory(B, R) {                                // Space Tech: the telescope under the star window
+    const at = (u) => R.x0 + u * R.w;
+    B.box([at(0.5), R.fy + R.H * 0.6, BACK + 0.4], [R.w * 0.7, R.H * 0.5, 0.2], 0x050812);
+    for (let i = 0; i < 16; i++) B.glow([at(0.2 + ((i * 41) % 60) / 100), R.fy + R.H * (0.4 + ((i * 29) % 40) / 100), BACK + 0.6], [0.2, 0.2, 0.05], i % 4 ? 0xdfe8ff : 0xb58cff);
+    B.cyl([at(0.55), R.fy + 1, -16], [1.4, 2, 1.4], 0x3a4a66);
+    B.cyl([at(0.55), R.fy + 4, -16], [1, 6, 1], 0xc9d3de, [0, 0, -0.6]);
+    B.stands.push(0.25);
+  },
+  voidshrine(B, R) {                                 // Dark Energy: the obelisk in its ring
+    const at = (u) => R.x0 + u * R.w;
+    B.box([at(0.5), R.fy + R.H * 0.38, -20], [2.2, R.H * 0.76, 2.2], 0x16101f);
+    B.glow([at(0.5), R.fy + R.H * 0.38, -18.8], [0.4, R.H * 0.6, 0.1], 0xb58cff);
+    B.cyl([at(0.5), R.fy + 0.15, -20], [9, 0.3, 9], 0x2a1f3a);
+    for (const u of [0.2, 0.8]) B.glow([at(u), R.fy + 2.2, -10], [0.5, 0.8, 0.5], 0x7a4cff);
+    B.stands.push(0.25);
+  },
+  greenhouse(B, R) {                                 // Greenies: planters under grow lights, and the chem vats
+    const at = (u) => R.x0 + u * R.w;
+    for (const u of [0.2, 0.45]) {
+      B.box([at(u), R.fy + 0.7, -12], [4.4, 1.4, 3], 0x5a3a22);
+      for (let k = 0; k < 3; k++) B.sphere([at(u) + (k - 1) * 1.3, R.fy + 2, -12], [1.2, 1.4, 1.2], k % 2 ? 0x4f9a3a : 0x6fbf4a);
+      B.glow([at(u), R.fy + R.H - 1.6, -12], [3.6, 0.2, 0.6], 0xd8ff8a);
+    }
+    for (const u of [0.72, 0.86]) { B.cyl([at(u), R.fy + 2.2, -20], [2, 4.4, 2], 0x3a4458); B.glow([at(u), R.fy + 2.6, -18.9], [1, 2.4, 0.1], 0x7ae08a); }
+    B.stands.push(0.6);
   },
 };
 

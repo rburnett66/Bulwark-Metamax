@@ -254,7 +254,9 @@ the players relationship with each faction. So players need to visit capital shi
   DEPART; it toggles to CLOSE STANDINGS. The view exists nowhere else, so the ship is the place to read it.
 - **Look.** `menu/standingsScreen.js` is the Inventory screen's layout and the Mission Log's styles: CHARACTERS and
   FACTIONS tabs over faction bands, a detail pane for the selection; two columns of tiles on a phone in landscape.
-- **Characters.** The 81 heroes of `content/dialog/voicepacks.json`, nine per faction, with their portraits. A
+- **Characters.** The 81 heroes of `content/dialog/voicepacks.json`, nine per faction, with their portraits. Aboard a
+  ship the tab lists **that ship's faction only** (owner 2026-11-09: "When you check the friends list only show the faction
+  of that capital ship not all characters. The Faction tab shows all factions."; `createStandingsScreen({ faction })`). A
   character's rating is `s.rapport[name]`, written where a mission ends (`missions.js endMission → standings.noteRapport`):
   kept + the mission's planet loyalty (default +25), broken its broken-promise penalty (default −45), abandoned −30.
   Bands: Not met, Hostile ≤ −60, Wary, Neutral, Friendly ≥ 20, Trusted ≥ 60. An old save is backfilled once from the
