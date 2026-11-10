@@ -53,6 +53,16 @@ export function canPlacePlot(map, outpost, x, y, w = PLOT_SIZE.w, h = PLOT_SIZE.
   return true;
 }
 
+/**
+ * The farm model's ground rule for this map (src/farm/model.js ctx.cellOk): a rect → null when a farm thing may stand
+ * there, else the refusal. Overlaps with the farm's own things and the outpost's are the model's to check, so only the
+ * map's cells are asked here (story A7: the same rule for plots, the Silo, the Pump and the granted Farmhouse).
+ */
+export const cellRule = (map, outpost = null) => (rect) => {
+  const r = canPlacePlot(map, outpost, rect.x, rect.y, rect.w, rect.h);
+  return r === true ? null : r;
+};
+
 /** Every top-left where a w × h plot may stand (they overlap one another): [[x, y]]. */
 export function plotSpots(map, outpost = null, w = PLOT_SIZE.w, h = PLOT_SIZE.h, occupied = []) {
   const out = [];

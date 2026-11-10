@@ -21,6 +21,10 @@ import { outpostBattleMap, bakedSlugFor, lowlandResources } from './outpostBoard
 import { createOutpostScene } from './outpostScene.js';
 import { defenseStructures, planBuildings } from './conduits.js';
 import { createSession, onlineIssues } from './session.js';
+// the FARM tab (story A7 [MM-story_mwabgs3l_f]): the farm on this same view, map, session and build loop (owner rule 7)
+import { createFarmLayer } from '../../farm/view/farmLayer.js';
+import { farmMenu, FARM_MENU, farmAt, farmPanelModel } from '../../farm/view/farmUi.js';
+import { storeCapacity } from '../../farm/model.js';
 import { statusModel } from './statusReport.js';
 import { constructionSites, damageSites, createConstructionFx } from './constructionFx.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
@@ -173,6 +177,7 @@ async function openOutpostViewInner(opts, stage) {
   const { GLTFLoader } = await import(ROOT + 'vendor/three-addons/loaders/GLTFLoader.js');
   const kit = await createOutpostKit(THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader, lodLevels: safe ? [2] : null });
   const scene = createOutpostScene(THREE, r, { map, kit, tier: r.tier.key, reduced });
+  const farm = createFarmLayer(THREE, r, { map, kit, reduced });
 
   // ── open: the away catch-up (the only time a long advance runs) ──────────────────────────────────────────────────
   // the away catch-up, one raid window per frame behind the loading line (raids on the battle sim cost time, O7)
@@ -181,6 +186,9 @@ async function openOutpostViewInner(opts, stage) {
   const opened = await session.openChunked(clockNow(), nextFrame);
   onChange();
   let o = opened.outpost;
+  // the tab: OUTPOST or FARM (the menu's FARM button opens this view on FARM); the FARM tab exists once there is a farm
+  let tab = opts.tab === 'farm' && o.farm ? 'farm' : 'outpost';
+  farm.sync(o, clockNow());
   const slugs = new Set(['hub', 'shuttle', 'power', 'storage', ...oresOf(planet).map((x) => `rig_${x.rig}`), 'resourceBay', 'upgradeBay', 'habitat']);
   for (const b of planBuildings(o, map, clockNow())) slugs.add(modelSlug(b.kind, b.tier, b.rigHead));
   step('placing the buildings');
@@ -268,6 +276,8 @@ async function openOutpostViewInner(opts, stage) {
     onUpgradeDefense: (id) => act({ type: 'upgradeDefense', id }, (res) => `On the Upgrade Bay · back in ${fmtClock((res.done - clockNow()) / 1000)} · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onReportClose: () => { hud.report(null); },
     onStatus: () => { hud.status(statusModel(o, map, { planet, catalog, now: clockNow() }), { reduced }); },
+    onTab: (t) => setTab(t),
+    onFarmAct: (a, arg) => farmAct(a, arg),
   }, { title: 'OUTPOST', planetName: (PLANETS[planet] && PLANETS[planet].name) || planet });
 
   function act(action, okText, after) {
@@ -277,6 +287,7 @@ async function openOutpostViewInner(opts, stage) {
     o = res.outpost; shownGold = res.gold; dirty();
     syncDefenses();
     scene.sync(o, clockNow(), ctxNow());
+    farm.sync(o, clockNow());
     if (okText) hud.toast(typeof okText === 'function' ? okText(res) : okText);
     if (after) after(res);
     else if (sel) select(sel);
@@ -299,6 +310,34 @@ async function openOutpostViewInner(opts, stage) {
     onChange();
   }
 
+  // ── the FARM tab (story A7): the switch and the farm's actions (all through session.act, as every outpost action)
+  function setTab(t) {
+    if (t === tab || (t === 'farm' && !o.farm)) return;
+    tab = t;
+    if (pl.phase !== 'idle') cancelPlacing();
+    select(null);
+    hud.tabs(!!o.farm, tab);
+    refreshMenu(true);
+    hud.online(tab === 'farm' ? null : onlineChecks());
+  }
+  const FARM_TEXT = {
+    prep: () => 'Prepping the plot',
+    plant: (res) => `Planted ${res.farm && res.farm.planted ? res.farm.planted.replace(/-/g, ' ') : ''}`.trim(),
+    harvest: (res) => harvestText(res), harvestAll: (res) => harvestText(res),
+    deliver: (res) => `Delivered ${res.farm.delivered} to the ship`,
+    farmSell: (res) => `Crops sold · +${fmtGold(res.earned)} gold`,
+  };
+  function harvestText(res) {
+    const f = res.farm || {}, units = Object.values(f.harvested || {}).reduce((a, b) => a + b, 0);
+    const pods = (f.pods || []).reduce((a, p) => a + p.n, 0), lucky = (f.pods || []).some((p) => p.lucky);
+    return (units ? `Harvested ${units} into the store` : 'Pods recovered') + (pods ? ` · +${pods} pod${pods > 1 ? 's' : ''}` : '') + (lucky ? ' · a lucky pod a level up!' : '') + (f.blocked && f.blocked.length ? ` · ${f.blocked.length} waiting: the Silo is full` : '');
+  }
+  function farmAct(a, arg) {
+    const action = a === 'plant' ? { type: 'plant', plot: sel && sel.plot, pick: arg } : a === 'prep' || a === 'harvest' ? { type: a, plot: arg }
+      : a === 'deliver' ? { type: 'deliver', crop: arg } : { type: a };
+    act(action, FARM_TEXT[a] || null, () => { if (sel) select(sel); });
+  }
+
   // ── the BUILD menu (story O17 [MM-story_mw6k9xec_5]): the battle's pick → ghost → build loop ──────────────────────
   // buildMenu.js is the model (items, prices, locks, valid targets) and the placement reducer; this wires it to the
   // HUD's left rail, the scene (glowing pads / ring cells, the ghost) and the session (every build is session.act:
@@ -313,9 +352,10 @@ async function openOutpostViewInner(opts, stage) {
   }
   function refreshMenu(force = false) {
     const ctx = { ...ctxNow(), gold: bank(), now: clockNow() };
-    const key = JSON.stringify([o.pads, o.building.map((b) => [b.pad, b.kind]), o.defenses.map((d) => [d.cell, d.kind]), o.harvesters ?? null, o.online, ctx.gold, ctx.unlockedTiers, [...(ctx.unlocks || [])], [...(ctx.techOwned || [])].filter((x) => /^dock/.test(x))]);
+    const key = JSON.stringify([tab, o.pads, o.building.map((b) => [b.pad, b.kind]), o.defenses.map((d) => [d.cell, d.kind]), o.harvesters ?? null, o.online, ctx.gold, ctx.unlockedTiers, [...(ctx.unlocks || [])], [...(ctx.techOwned || [])].filter((x) => /^dock/.test(x)),
+      tab === 'farm' && o.farm ? [Object.values(o.farm.plots).map((q) => [q.x, q.y]), Object.values(o.farm.buildings).map((q) => [q.x, q.y]), ctx.methods] : null]);
     if (force || key !== menuKey) {
-      menuKey = key; menuItems = buildMenu(o, map, ctx);
+      menuKey = key; menuItems = tab === 'farm' ? farmMenu(o, map, ctx) : buildMenu(o, map, ctx);
       if (pl.phase !== 'idle') {
         const it = armedItem();
         if (!it || it.locked) { const why = it && it.why; cancelPlacing(); if (why) hud.toast(why, true); } else applyPlacement();
@@ -349,9 +389,19 @@ async function openOutpostViewInner(opts, stage) {
   /** Bring the scene and the banner to the placement state. */
   function applyPlacement() {
     const it = pl.phase === 'idle' ? null : armedItem();
-    if (!it) { scene.showPads(null); scene.showCells(null); scene.showGhost(null); hud.banner(null); ui3d = {}; hud.online(onlineChecks()); return; }
+    if (!it) { scene.showPads(null); scene.showCells(null); scene.showGhost(null); farm.showTargets(null); farm.showGhost(null); hud.banner(null); ui3d = {}; hud.online(tab === 'farm' ? null : onlineChecks()); return; }
     hud.online(null);
     const T = it.targets || [], valid = aimValid(pl, T), price = it.cost != null ? ` · ${fmtGold(it.cost)} gold` : '';
+    if (it.what) {   // a FARM item: a w × h piece of farm ground (story A7)
+      scene.showPads(null); scene.showGhost(null); scene.showCells(null); ui3d = {};
+      farm.showTargets(T.map((t) => ({ x: t.cell[0], y: t.cell[1], w: it.size.w, h: it.size.h })));
+      const c = pl.target && pl.target.cell;
+      farm.showGhost(c ? { x: c[0], y: c[1], w: it.size.w, h: it.size.h, valid } : null);
+      const touchAim = pl.phase === 'aimed' && valid && lastPointer === 'touch';
+      hud.banner(touchAim ? `${titleCase(it.label)}${price}` : `Place a ${titleCase(it.label)} on lit farm ground${price}`, { confirm: touchAim });
+      return;
+    }
+    farm.showTargets(null); farm.showGhost(null);
     if (it.place === 'pad') {
       scene.showPads(T.map((t) => t.pad)); scene.showCells(null); ui3d = {};
       const pad = pl.target && pl.target.pad, kind = kindOf(it.id);
@@ -373,8 +423,12 @@ async function openOutpostViewInner(opts, stage) {
     const T = targetsOf();
     const { state: next, effect } = placementStep(pl, ev, T);
     pl = next;
-    if (effect && effect.type === 'invalid') hud.toast(armedItem() && armedItem().place === 'pad' ? 'Pick a lit pad' : 'Defenses go on the lit ring', true);
-    if (effect && effect.type === 'place') {
+    if (effect && effect.type === 'invalid') hud.toast(armedItem() && armedItem().what ? 'Pick lit farm ground' : armedItem() && armedItem().place === 'pad' ? 'Pick a lit pad' : 'Defenses go on the lit ring', true);
+    if (effect && effect.type === 'place' && effect.item.what) {   // a FARM item (story A7)
+      const it = effect.item, t = effect.target;
+      const res = act({ type: 'farmPlace', what: it.what, id: it.id, cell: t.cell }, () => (it.what === 'plot' ? `${titleCase(it.label)} placed · prepping` : `${titleCase(it.label)} under construction`), () => {});
+      if (res && res.ok) { pl = placementStep(pl, { type: 'placed' }, T).state; hover = null; refreshMenu(true); }
+    } else if (effect && effect.type === 'place') {
       const it = effect.item, kind = kindOf(it.id), t = effect.target;
       const res = act({ type: 'place', kind, ...(t.pad ? { pad: t.pad } : { cell: t.cell }) },
         () => (t.pad ? `${titleCase(it.label)} under construction` : `${KIND_NAME[kind] || titleCase(it.label)} placed`), () => {});
@@ -395,6 +449,13 @@ async function openOutpostViewInner(opts, stage) {
     const cell = screenToCell(r, px, py);
     if (!cell) return null;
     if (it.place === 'pad') { const p = padAt(map, cell.x, cell.y); return p ? { pad: p.id } : null; }
+    if (it.what) {   // a farm piece: the valid top-left whose rect holds the pointed cell, nearest first, else the cell
+      const T = it.targets || [];
+      for (let dy = 0; dy < it.size.h; dy++) for (let dx = 0; dx < it.size.w; dx++) {
+        const c = [cell.x - dx, cell.y - dy];
+        if (T.some((t) => t.cell[0] === c[0] && t.cell[1] === c[1])) return { cell: c };
+      }
+    }
     return { cell: [cell.x, cell.y] };
   }
   // the outpost buildings' pictures, rendered from their GLBs once the kit is loaded (menuIcons.js)
@@ -402,7 +463,25 @@ async function openOutpostViewInner(opts, stage) {
   renderMenuIcons(THREE, r.renderer, kit, iconSlugs).then((m) => { icons = m; if (!closed) refreshMenu(true); }).catch((e) => console.warn('[outpost] menu icons', e));
 
   let panelKey = '';
+  /** The farm panel's context: the store's room for the Silo rule (owner rule 4) and the contract's deliveries. */
+  const farmCtx = () => { const c = ctxNow(); return { ...c, now: clockNow(), gold: bank(), room: Math.max(0, storeCapacity(o, map) - (c.heldTotal || 0)) }; };
+  function farmRect(next) {
+    if (!o.farm) return null;
+    const q = next.plot ? o.farm.plots[next.plot] : next.farm ? o.farm.buildings[next.farm] : null;
+    return q ? { x: q.x, y: q.y, w: q.w, h: q.h } : null;
+  }
   function select(next, focus = false) {
+    if (next && (next.plot || next.farm)) {   // a farm plot or farm building (story A7)
+      sel = next;
+      if (pl.phase !== 'idle') cancelPlacing();
+      scene.select(null); scene.showReach(null);
+      farm.select(farmRect(next));
+      const m = farmPanelModel(o, map, next, farmCtx());
+      panelKey = JSON.stringify(m);
+      hud.panel(m, next);
+      return;
+    }
+    farm.select(null);
     sel = next;
     scene.select(next && (next.pad ? { pad: next.pad } : next.defense ? { cell: (o.defenses.find((d) => d.id === next.defense) || {}).cell } : null));
     if (!next) { hud.panel(null); panelKey = ''; scene.showReach(null); refocus(); return; }
@@ -424,7 +503,8 @@ async function openOutpostViewInner(opts, stage) {
   }
   function refreshPanel() {
     if (!sel) return;
-    const m = panelModel(o, map, sel, { ...ctxNow(), now: clockNow(), gold: bank() });
+    const m = sel.plot || sel.farm ? farmPanelModel(o, map, sel, farmCtx()) : panelModel(o, map, sel, { ...ctxNow(), now: clockNow(), gold: bank() });
+    if ((sel.plot || sel.farm) && !m) { select(null); return; }
     const k = JSON.stringify(m);
     if (k !== panelKey) { panelKey = k; hud.panel(m, sel); }
   }
@@ -486,7 +566,8 @@ async function openOutpostViewInner(opts, stage) {
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
     if (e.key === 'Escape') { if (hud.reportOpen) hud.report(null); else if (pl.phase !== 'idle') cancelPlacing(); else if (sel) select(null); else close(); return; }
     if (hud.reportOpen) return;
-    if (/^[0-9]$/.test(e.key) && MENU[(+e.key + 9) % 10]) { pickItem(MENU[(+e.key + 9) % 10].id); e.preventDefault(); return; }   // 1–9, then 0 for the tenth
+    const LIST = tab === 'farm' ? FARM_MENU : MENU;
+    if (/^[0-9]$/.test(e.key) && LIST[(+e.key + 9) % 10]) { pickItem(LIST[(+e.key + 9) % 10].id); e.preventDefault(); return; }   // 1–9, then 0 for the tenth
     if (e.key === 'Enter' && pl.phase === 'aimed') { placeEvent({ type: 'confirm' }); e.preventDefault(); }
     // the battle's action keys on the selection panel: U upgrade, X sell, R repair
     if (sel && pl.phase === 'idle' && /^[uxr]$/i.test(e.key) && hud.pressAction(e.key.toUpperCase())) e.preventDefault();
@@ -505,6 +586,10 @@ async function openOutpostViewInner(opts, stage) {
     const ndc = new THREE.Vector2((px / rect.width) * 2 - 1, -(py / rect.height) * 2 + 1);
     const hit = scene.pickBuilding(ndc, r.camera);
     if (hit) return select(hit, true);
+    if (cell && o.farm) {
+      const f = farmAt(o, cell.x, cell.y);
+      if (f) return select(f, true);
+    }
     if (cell) {
       const d = o.defenses.find((x) => x.cell[0] === cell.x && x.cell[1] === cell.y);
       if (d) return select({ defense: d.id }, true);
@@ -533,7 +618,7 @@ async function openOutpostViewInner(opts, stage) {
   function refreshHud(force = false) {
     const h = hudModel(o, map, { gold: bank(), now: clockNow(), unlocks: ctxNow().unlocks });
     hud.update(h, saleRun ? shownGold : bank());
-    hud.online(pl.phase !== 'idle' ? null : onlineChecks());   // the GO ONLINE card steps aside while placing
+    hud.online(pl.phase !== 'idle' || tab === 'farm' ? null : onlineChecks());   // the GO ONLINE card steps aside while placing (and on the FARM tab)
     scene.setWarnings(buildingWarnings(o, map), markerOf);
     refreshMenu();
     if (force) refreshPanel();
@@ -603,6 +688,7 @@ async function openOutpostViewInner(opts, stage) {
       refreshHud(true);
     }
     scene.sync(o, clockNow(), ctxNow());
+    farm.sync(o, clockNow()); farm.update(dt);
     driveClock += dt;
     syncHarvesters();
     stepProbe(dt);
@@ -657,6 +743,7 @@ async function openOutpostViewInner(opts, stage) {
     // a sale in flight is already banked; settle what the screen shows
     try { session.live(clockNow()); } catch (e) { console.warn('[outpost] close', e); }
     scene.dispose();
+    farm.dispose();
     destroyRenderer(r);
     hud.dispose();
     host.remove();
@@ -665,7 +752,9 @@ async function openOutpostViewInner(opts, stage) {
   }
 
   autoFit();
+  hud.tabs(!!o.farm, tab);
   refreshHud(true);
+  if (tab === 'farm') hud.online(null);
   clearTimeout(stage.watchdog);
   if (stage.abandoned) { close(); return { closed: closedP, close, handle }; }
   loading.remove();
@@ -681,6 +770,8 @@ async function openOutpostViewInner(opts, stage) {
     /** Run the harvesters' trip clock forward (review screenshots). */
     driveTo(sec) { driveClock = sec; syncHarvesters(); },
     select, sell: doSell, close,
+    /** The FARM tab (review / screenshots): switch tabs, run a farm action, read the farm picture's counts. */
+    setTab, farmAct, get tab() { return tab; }, farm,
     /** Visit probes (review): bring the next one now; read the one running ({ n, t, raiders, done } or null). */
     probeNow() { if (!probe) probeWait = 0; },
     get probe() { return probe ? { n: probeN + 1, t: probeT, raiders: [...probe.state.units.values()].filter((u) => u.side === 'attacker').length, done: probe.done } : null; },

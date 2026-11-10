@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Farm View Review</title>
+<!-- [MM-story_mwabgs3l_f] [MM-story_mwabh8h1_l] Review page for the real FARM tab: the game's own outpost view
+     (src/outpost/view/outpostView.js) opened on its FARM tab, on a seeded save built with the game's own functions, an
+     in-memory save (your real save is never touched) and a clock you can speed up. The outpost view's own review page
+     is ../outpost/view.html; this is its farm twin.
+     Query: ?state=new|growing|harvest|full|dead|trampled|away · ?quality=high|standard|low · ?speed=1 (clock ×)
+            ?tab=farm|outpost · ?ui=0 hides the review chip · ?reduced=1 forces reduced motion.
+     window.outpost is the view's handle (setTab, farmAct, select, pick, aim, confirm …); window.outpostStore the save. -->
+<style>
+  html, body { margin:0; height:100%; background:#0f1412; color:#e6ebe3; font:14px/1.4 system-ui, sans-serif; overflow:hidden; }
+  #dev { position:fixed; z-index:3000; left:max(8px, env(safe-area-inset-left)); top:50%; transform:translateY(-50%); }
+  #dev > button { width:34px; height:34px; border:0; border-radius:4px; background:rgba(29,33,37,.85); color:#fff; font-size:16px; cursor:pointer; }
+  #dev form { display:none; margin-top:6px; padding:10px; background:rgba(18,24,28,.96); border:1px solid #2e3c3a; border-radius:6px; width:250px; }
+  #dev.open form { display:block; }
+  #dev label { display:block; font-size:12px; color:#9aa6b4; margin:6px 0 2px; }
+  #dev select, #dev button.go { width:100%; font:inherit; padding:6px; background:#1b2a2a; color:#e6ebe3; border:1px solid #2e3c3a; border-radius:4px; }
+  #dev button.go { margin-top:10px; background:#d9a441; border-color:#d9a441; color:#1a1206; font-weight:700; cursor:pointer; }
+  #dev p { font-size:12px; color:#9aa6b4; margin:8px 0 0; }
+  #closed { position:fixed; inset:0; display:none; place-items:center; text-align:center; }
+  #closed button { margin-top:10px; padding:10px 18px; font:inherit; font-weight:700; background:#d9a441; color:#1a1206; border:0; border-radius:4px; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="dev"><button type="button" aria-label="Review options" id="devBtn">⚙</button>
+  <form id="devForm">
+    <label for="state">Farm preset (Verdance)</label>
+    <select id="state" name="state">
+      <option value="new">F1 just accepted: the Farmhouse and the Pod Crate</option>
+      <option value="growing" selected>Growing: plots in every stage, Irrigated with a Pump</option>
+      <option value="harvest">Harvest time: Fruited plots, a Silo, crops in store</option>
+      <option value="full">Silo full: Fruited plots waiting</option>
+      <option value="dead">Missed: dead plants (pods come back)</option>
+      <option value="trampled">After a raid: plots trampled</option>
+      <option value="away">Back after 6 hours: the away report</option>
+    </select>
+    <label for="tab">Tab</label>
+    <select id="tab" name="tab"><option value="farm" selected>FARM</option><option value="outpost">OUTPOST</option></select>
+    <label for="quality">Quality tier</label>
+    <select id="quality" name="quality"><option value="">auto</option><option>high</option><option>standard</option><option>low</option></select>
+    <label for="speed">Clock</label>
+    <select id="speed" name="speed"><option value="1">real time</option><option value="60">1 min per second</option><option value="600">10 min per second</option></select>
+    <button class="go" type="submit">Open</button>
+    <p>An in-memory save: your game save is not touched. <a href="./scale.html" style="color:#4fb8ff">Scale prototype</a> · <a href="../outpost/view.html" style="color:#4fb8ff">Outpost review</a></p>
+  </form>
+</div>
+<div id="closed"><div>The farm view closed.<br><button id="reopen">Open again</button></div></div>
+<script type="module">
+import { openOutpostView } from '../../src/outpost/view/outpostView.js';
+import { outpostMapFor } from '../../src/outpost/outpostMap.js';
+import { referenceOutpost, confirmOnline, advance } from '../../src/outpost/model.js';
+import { OUTPOST } from '../../src/data/outpost.js';
+import { defaultSave } from '../../src/save/save.js';
+import { FARM, growSec } from '../../src/data/farm.js';
+import { acceptFarmContract } from '../../src/farm/contract.js';
+import { cellRule, packPlots } from '../../src/farm/cells.js';
+import { placePlot, placeFarmBuilding, plant, trample, occupied } from '../../src/farm/model.js';
+import { addToStore } from '../../src/save/stores.js';
+import { addPods } from '../../src/farm/pods.js';
+
+const q = new URLSearchParams(location.search);
+for (const k of ['state', 'tab', 'quality', 'speed']) if (q.get(k) !== null) document.getElementById(k).value = q.get(k);
+if (q.get('ui') === '0') document.getElementById('dev').style.display = 'none';
+document.getElementById('devBtn').onclick = () => document.getElementById('dev').classList.toggle('open');
+
+const MIN = 60_000, HOUR = 60 * MIN, T0 = Date.UTC(2026, 10, 10, 9);
+const PLANET = 'ground';
+const map = await outpostMapFor(PLANET);
+const quiet = { map, params: { ...OUTPOST, Raid_Mean_Hours: 1e12 } };
+const G = growSec('loam-grain') * 1000;
+
+/** The free farm spots nearest the outpost's hub, packed (src/farm/cells.js), taking what the farm already holds. */
+function nearSpots(o, n) {
+  const hub = map.pads.find((p) => o.pads[p.id] && o.pads[p.id].kind === 'hub');
+  const c = [hub.x + hub.w / 2, hub.y + hub.h / 2], taken = occupied(o, map);
+  return packPlots(map, o).filter((r) => !taken.some((t) => r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h))
+    .sort((a, b) => Math.hypot(a.x - c[0], a.y - c[1]) - Math.hypot(b.x - c[0], b.y - c[1])).slice(0, n);
+}
+
+/** A save for a preset, and the time the view opens at. */
+function presetSave(name) {
+  const s = defaultSave();
+  s.collective = { introSeen: true, contractAccepted: true, launched: true, seenBefore: true };
+  s.capitalShips = { Verdance: { arrived: true } };
+  s.carry = { gold: 24000, structures: [] }; s.goldBank = 24000;
+  const START = T0 - 8 * HOUR;   // the outpost's clock never runs back: the preset's history starts before every planting
+  let o = referenceOutpost(PLANET, { seed: 77, map, now: START });
+  for (const b of Object.values(o.pads)) if (b.kind === 'rig') b.tier = 2;   // Rig Mk II: farming is open (D41)
+  for (const b of Object.values(o.pads)) if (b.kind === 'power') b.tier = 2;  // room on the grid for the farm's buildings
+  o = confirmOnline(o, map, START).outpost; o.firstRaidAt = null;
+  s.outposts = { [PLANET]: o }; s.outpostContracts = { [PLANET]: { step: 3, state: 'complete', since: T0 } };
+  const rule = cellRule(map, o);
+  acceptFarmContract(s, PLANET, { map, now: START, cellOk: rule });
+  o = s.outposts[PLANET];
+  if (name === 'new') { s.outposts[PLANET] = o; return { s, openAt: START + MIN }; }
+  addPods(s, 'loam-grain', 2, 8); addPods(s, 'loam-grain', 3, 8); addPods(s, 'heartwood-amber', 1, 4);
+  const ctx = (t) => ({ map, now: t, gold: Infinity, methods: ['traditional', 'irrigated'], cellOk: rule });
+  const spots = nearSpots(o, 7);
+  const plots = [];
+  spots.forEach((r, i) => { const res = placePlot(o, { x: r.x, y: r.y, method: i === 3 ? 'irrigated' : 'traditional' }, ctx(START)); if (!res.error) { o = res.outpost; plots.push(res.plot); } });
+  // a Silo and a Pump beside them
+  for (const kind of ['silo', 'pump']) {
+    const sp = nearSpots(o, 1)[0];
+    if (sp) { const res = placeFarmBuilding(o, { kind, x: sp.x, y: sp.y }, ctx(START)); if (!res.error) o = res.outpost; }
+  }
+  o = advance(o, START + FARM.Prep_Sec * 1000, quiet).outpost;
+  // plant at staggered times so the plots show every stage when the view opens
+  const lag = { growing: [0.05, 0.25, 0.6, 0.9, 1.3, null, null], harvest: [1.2, 1.4, 1.1, 1.3, 1.5, 0.5, null], full: [1.2, 1.4, 1.1, 1.3, 1.5, 1.2, 1.3], dead: [2.4, 2.6, 1.2, 0.4, null, null, null], trampled: [0.6, 0.7, 1.2, 0.5, 0.8, null, null], away: [0.3, 0.5, 0.2, 0.6, 0.4, 0.3, null] }[name] || [];
+  const openAt = name === 'away' ? T0 + 6 * HOUR : T0;
+  const levels = [1, 2, 3, 2, 1, 3, 1];
+  // plant in time order (earliest first), each at its moment on the outpost's clock
+  plots.map((id, i) => ({ id, i, at: lag[i] == null ? null : T0 - lag[i] * G })).filter((x) => x.at != null).sort((a, b) => a.at - b.at).forEach(({ id, i, at }) => {
+    o = advance(o, at, quiet).outpost;
+    const res = plant(o, id, { crop: 'loam-grain', level: levels[i] }, { now: o.t, podsHeld: 99 });
+    if (!res.error) o = res.outpost;
+  });
+  o = advance(o, name === 'away' ? T0 : T0, quiet).outpost;
+  if (name === 'trampled') {
+    const cells = [];
+    for (const id of plots.slice(0, 3)) { const p = o.farm.plots[id]; cells.push([p.x, p.y], [p.x + 1, p.y + 1]); }
+    o = trample(o, cells, T0).outpost;
+  }
+  s.outposts[PLANET] = o;
+  if (name === 'harvest') addToStore(s, 'farm', PLANET, 'loam-grain', 24);
+  if (name === 'full') addToStore(s, 'farm', PLANET, 'loam-grain', 400);
+  return { s, openAt };
+}
+
+let current = null;
+async function open() {
+  document.getElementById('closed').style.display = 'none';
+  const name = document.getElementById('state').value;
+  const { s, openAt } = presetSave(name);
+  let save = s;
+  const store = { load: () => structuredClone(save), update(fn) { const x = structuredClone(save); fn(x); save = x; return structuredClone(save); } };
+  const speed = +document.getElementById('speed').value || 1, start = performance.now();
+  const now = () => Math.round(openAt + (performance.now() - start) * speed);
+  current = await openOutpostView({ planet: PLANET, tab: document.getElementById('tab').value, tier: document.getElementById('quality').value || null, store, now, map,
+    raidHook: () => ({ result: 'held', defenses: [] }), reduced: q.get('reduced') === '1' ? true : undefined });
+  window.outpost = current.handle;
+  window.outpostStore = store;
+  window.outpostReady = true;
+  current.closed.then(() => { window.outpostReady = false; document.getElementById('closed').style.display = 'grid'; });
+}
+document.getElementById('devForm').onsubmit = (e) => {
+  e.preventDefault();
+  const u = new URL(location.href);
+  for (const k of ['state', 'tab', 'quality', 'speed']) u.searchParams.set(k, document.getElementById(k).value);
+  location.href = u.href;
+};
+document.getElementById('reopen').onclick = open;
+open();
+</script>
+</body>
+</html>

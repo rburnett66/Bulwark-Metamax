@@ -19,6 +19,11 @@ export const OUTPOST_GLYPHS = Object.freeze({
   resourceBay: STRUCT_ICONS.harvestorBay,
   upgradeBay: '<rect x="3" y="15" width="18" height="4" rx="1" fill="#9aa4ae"/><rect x="4" y="7" width="3" height="8" fill="#cfd6dd"/><rect x="17" y="7" width="3" height="8" fill="#cfd6dd"/><rect x="4" y="7" width="3" height="1.6" fill="#eb5c0d"/><rect x="17" y="7" width="3" height="1.6" fill="#eb5c0d"/><path d="M9 13.5l3-4 3 4z" fill="#3fd0ff"/><path d="M12 9.5v-4" stroke="#3fd0ff" stroke-width="1.4"/>',
   habitat: '<rect x="3" y="15" width="18" height="4" rx="1" fill="#9aa4ae"/><path d="M4 15V10a8 5 0 0 1 16 0v5z" fill="#e2e6ea"/><rect x="4" y="12" width="16" height="1.4" fill="#eb5c0d"/><rect x="7" y="9" width="2.4" height="2" fill="#3fd0ff"/><rect x="10.8" y="8.4" width="2.4" height="2" fill="#3fd0ff"/><rect x="14.6" y="9" width="2.4" height="2" fill="#3fd0ff"/><rect x="10.5" y="15" width="3" height="4" fill="#3a4148"/>',
+  // the FARM tab's list (story A7 [MM-story_mwabgs3l_f]): two plots, the Silo and the Pump, until their GLBs render
+  traditional: '<rect x="3" y="7" width="18" height="12" rx="1" fill="#4a3524"/><path d="M6 8v10M10 8v10M14 8v10M18 8v10" stroke="#6b4c33" stroke-width="2"/><path d="M6 13l-1.5-2.5M6 13l1.5-2.5M10 12l-1.5-2.5M10 12l1.5-2.5M14 13l-1.5-2.5M14 13l1.5-2.5M18 12l-1.5-2.5M18 12l1.5-2.5" stroke="#7bc24a" stroke-width="1.4"/>',
+  irrigated: '<rect x="3" y="7" width="15" height="12" rx="1" fill="#4a3524"/><rect x="18" y="7" width="3" height="12" fill="#3f8fd0"/><path d="M6 8v10M10 8v10M14 8v10" stroke="#6b4c33" stroke-width="2"/><path d="M6 13l-1.5-2.5M6 13l1.5-2.5M10 12l-1.5-2.5M10 12l1.5-2.5M14 13l-1.5-2.5M14 13l1.5-2.5" stroke="#7bc24a" stroke-width="1.4"/>',
+  silo: '<rect x="7" y="7" width="10" height="13" fill="#cfd6dd"/><path d="M7 7a5 3.5 0 0 1 10 0z" fill="#9aa4ae"/><rect x="7" y="11" width="10" height="1.4" fill="#eb5c0d"/><rect x="10.5" y="14" width="3" height="6" fill="#3a4148"/><rect x="17" y="10" width="1.4" height="10" fill="#9aa4ae"/>',
+  pump: '<rect x="6" y="12" width="12" height="7" rx="1" fill="#4d7fa8"/><rect x="11" y="5" width="2.4" height="7" fill="#9aa4ae"/><path d="M13.4 7h4v3" stroke="#9aa4ae" stroke-width="2" fill="none"/><path d="M17.4 11c1 1.6-1 2.4 0 4" stroke="#3fd0ff" stroke-width="1.4" fill="none"/>',
 });
 
 /**

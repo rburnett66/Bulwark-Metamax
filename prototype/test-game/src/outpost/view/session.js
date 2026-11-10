@@ -25,7 +25,14 @@ import { structureDef, OUTPOST, OUTPOST_TECH_IDS } from '../../data/outpost.js';
 import { raidHookFor } from './raidSeam.js';
 import { awayReportModel } from './awayReport.js';
 import { applyProbeWear } from './visitProbe.js';
-import { trample } from '../../farm/model.js';
+import { trample, placePlot, placeFarmBuilding, prep, plant, harvest, harvestAll, applyFarmLoss } from '../../farm/model.js';
+// the FARM tab (story A7): the farm's actions run through this same session, on the same save and settle (owner rule 7)
+import { cellRule } from '../../farm/cells.js';
+import { farmUnlocks, recordDelivery, measureCropDelivered } from '../../farm/contract.js';
+import { podCount, spendPods, addPods } from '../../farm/pods.js';
+import { addToStore, takeFromStore } from '../../save/stores.js';
+import { farmContractOf, cropOf } from '../../data/farm.js';
+import { sellable } from '../../farm/view/farmUi.js';
 
 const goldAdd = (s, n) => {
   s.carry = s.carry || { gold: 0, structures: [] };
@@ -33,6 +40,20 @@ const goldAdd = (s, n) => {
   s.goldBank = s.carry.gold;
 };
 const stepOf = (s, planet) => ((s.outpostContracts || {})[planet] || {}).step || 1;
+/** The farm store's stock for a planet ({ cropId: units }; src/save/stores.js), and its total. */
+const farmHeld = (s, planet) => ((s.stores || {}).farm || {})[planet] || {};
+const sumOf = (h) => Object.values(h).reduce((a, b) => a + b, 0);
+/** A raid that breached took Breach_Silo_Loss of the farm's store (story A11 reports the share; the save holds the store). */
+function bankRaidLoss(s, planet, report) {
+  for (const raid of (report && report.raids) || []) {
+    if (!(raid.farmLoss > 0)) continue;
+    const held = farmHeld(s, planet);
+    if (!Object.keys(held).length) continue;
+    const r = applyFarmLoss(held, raid.farmLoss);
+    for (const [id, u] of Object.entries(r.held)) s.stores.farm[planet][id] = Math.floor(u);
+    raid.farmLost = r.lost;
+  }
+}
 
 /**
  * createSession({ store, planet, map, catalog, raidHook? }) → the view's session.
@@ -50,9 +71,14 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
     const u = outpostUnlocks(s, planet), owned = startingOwned();
     for (const [id, on] of Object.entries((s.tech && s.tech.owned) || {})) if (on) owned.add(id);
     const unlocks = new Set(OUTPOST_TECH_IDS.filter((id) => owned.has(id)));
+    const held = farmHeld(s, planet), f1 = farmContractOf(planet, 'F1');
     return {
       map, now, gold: bankOf(s), raid: hookFor(s), shuttleTier: unlocks.has('cargo_shuttle_2') ? 2 : 1, farDiscovered: false,
       unlockedTiers: u.unlockedTiers, unlocks, techOwned: owned, contractUnlocks: u.unlocks, farBuyer: u.farBuyer,
+      // the farm (story A7): its methods, the map's ground rule, the pods and the store, for the FARM tab and its actions
+      methods: farmUnlocks(s, planet).methods, cellOk: cellRule(map, s.outposts && s.outposts[planet]), pods: s.pods || {},
+      held, heldTotal: sumOf(held),
+      f1: f1 && ((s.farmContracts || {})[planet] || {}).state === 'active' ? f1 : null, delivered: f1 ? measureCropDelivered(s, f1.crop) : 0,
     };
   };
   /**
@@ -79,6 +105,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
     if (!o) return null;
     const r = advance(o, now, ctxFor(s, now));
     s.outposts[planet] = r.outpost;
+    bankRaidLoss(s, planet, r.report);
     return r.report;
   }
 
@@ -139,7 +166,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
       if (!o) return { outpost: null, report: null, saved: false };
       const r = advance(o, now, ctxFor(s, now));
       if (r.report.raids.length || r.report.built.length) {
-        const sv = store.update((x) => { x.outposts[planet] = r.outpost; settle(x, now); });
+        const sv = store.update((x) => { x.outposts[planet] = r.outpost; bankRaidLoss(x, planet, r.report); settle(x, now); });
         last = sv.outposts[planet];
         return { outpost: last, report: r.report, saved: true };
       }
@@ -157,23 +184,64 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         if (!s.outposts || !s.outposts[planet]) { out = { ok: false, error: 'no outpost here' }; return; }
         advanceSaved(s, now);
         const o = s.outposts[planet], ctx = ctxFor(s, now);
-        const r = apply(o, action, ctx, now);
+        const r = apply(o, action, ctx, now, s);
         if (!r || r.error) { out = { ok: false, error: (r && r.error) || 'nothing to do' }; s.outposts[planet] = o; settle(s, now); return; }
         s.outposts[planet] = r.outpost;
+        if (r.after) r.after(s);   // the farm's side of an action: pods, the farm store, deliveries (story A7)
         if (r.cost) goldAdd(s, -r.cost);
         if (r.gold) goldAdd(s, r.gold);
         // a sale to the planet's ship: its captain buys, +1 to their rating (owner 2026-11-09, standings.js)
         if (action.type === 'sell' && r.gold) noteRapportEvent(s, captainOf(catalog, (PLANETS[planet] || {}).name), planet, 'sale');
         const settled = settle(s, now);
-        out = { ok: true, outpost: r.outpost, cost: r.cost || 0, earned: r.gold || 0, loads: r.loads || null, gold: bankOf(s), settled };
+        out = { ok: true, outpost: r.outpost, cost: r.cost || 0, earned: r.gold || 0, loads: r.loads || null, gold: bankOf(s), settled, farm: r.farm || null };
       });
       if (out.ok) last = out.outpost;
       return out;
     },
   };
 
-  function apply(o, a, ctx, now) {
+  function apply(o, a, ctx, now, s) {
     switch (a.type) {
+      // ── the FARM tab (story A7) ──
+      case 'farmPlace': {
+        const [x, y] = a.cell;
+        const r = a.what === 'plot' ? placePlot(o, { x, y, method: a.id }, ctx) : placeFarmBuilding(o, { kind: a.id, x, y }, ctx);
+        return r.error ? r : { outpost: r.outpost, cost: r.cost, farm: { placed: r.plot || r.id } };
+      }
+      case 'prep': return prep(o, a.plot, ctx);
+      case 'plant': {
+        const [crop, lv] = String(a.pick).split(':'), level = +lv;
+        const r = plant(o, a.plot, { crop, level }, { ...ctx, podsHeld: podCount(s, crop, level) });
+        return r.error ? r : { outpost: r.outpost, after: (sv) => spendPods(sv, crop, level, r.spend.n), farm: { planted: crop } };
+      }
+      case 'harvest': case 'harvestAll': {
+        const r = a.type === 'harvest' ? harvest(o, a.plot, { map, held: ctx.heldTotal }) : harvestAll(o, { map, held: ctx.heldTotal });
+        if (r.error) return r;
+        const results = a.type === 'harvest' ? [r] : r.results;
+        if (!results.length) return { error: r.blocked && r.blocked.length ? 'the Silo is full' : 'nothing to harvest' };
+        const got = {}, pods = [];
+        for (const x of results) { if (x.units) got[x.crop] = (got[x.crop] || 0) + x.units; pods.push(...x.pods); }
+        return { outpost: r.outpost, farm: { harvested: got, pods, blocked: r.blocked || [] }, after: (sv) => {
+          for (const [id, u] of Object.entries(got)) addToStore(sv, 'farm', planet, id, u);
+          for (const p of pods) addPods(sv, p.crop, p.level, p.n);
+        } };
+      }
+      case 'deliver': {   // a farming contract's delivery to the ship (F1: Loam Grain to Halbrecht's Oath)
+        if (!ctx.f1 || ctx.f1.crop !== a.crop) return { error: 'no contract asks for that' };
+        const n = Math.min(Math.max(0, ctx.f1.deliver - ctx.delivered), Math.floor(ctx.held[a.crop] || 0));
+        if (!n) return { error: `harvest ${cropOf(a.crop).name} first` };
+        return { outpost: o, farm: { delivered: n }, after: (sv) => { takeFromStore(sv, 'farm', planet, a.crop, n); recordDelivery(sv, planet, a.crop, n); } };
+      }
+      case 'farmSell': {   // the farm store's crops at the battle's price (common 1, uncommon 2; rare and epic are kept)
+        const sale = sellable(ctx.held);
+        if (!sale.units) return { error: 'nothing to sell' };
+        return { outpost: o, gold: sale.gold, farm: { sold: sale.units }, after: (sv) => {
+          for (const [id, u] of Object.entries(ctx.held)) {
+            const c = cropOf(id);
+            if (c && (c.tier === 'common' || c.tier === 'uncommon') && Math.floor(u) > 0) takeFromStore(sv, 'farm', planet, id, Math.floor(u));
+          }
+        } };
+      }
       case 'online': return confirmOnline(o, map, now);
       case 'sell': {
         const r = sell(o, ctx);
