@@ -22,7 +22,7 @@ import { createOutpostScene } from './outpostScene.js';
 import { defenseStructures, planBuildings } from './conduits.js';
 import { createSession, onlineIssues } from './session.js';
 import { statusModel } from './statusReport.js';
-import { constructionSites, createConstructionFx } from './constructionFx.js';
+import { constructionSites, damageSites, createConstructionFx } from './constructionFx.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
 import { hudModel, panelModel, KIND_NAME, fmtGold, rigHeadOf } from './hudModel.js';
 import { buildMenu, placementStep, aimValid, IDLE, MENU, DEFENSE_STRUCT, isResourceBay, kindOf } from './buildMenu.js';
@@ -566,7 +566,10 @@ async function openOutpostViewInner(opts, stage) {
     if (liveAcc === 0) syncFieldStock();
     const out = scene.update(dt, o);
     // dust and welding sparks on every building under construction (constructionFx.js, the battle's build + repair FX)
-    if (r.impacts) siteFx.step(dt, constructionSites(o, map, clockNow()), r.impacts.emit, FXK, r.impacts.ring, r.tier.key);
+    if (r.impacts) {
+      siteFx.step(dt, constructionSites(o, map, clockNow()), r.impacts.emit, FXK, r.impacts.ring, r.tier.key);
+      siteFx.stepDamage(dt, damageSites(o), r.impacts.emit, FXK);   // red sparks off damaged defenses (owner 2026-11-09)
+    }
     if (saleRun) {
       saleRun.t += dt;
       if (out.sale) shownGold = out.sale.gold;
