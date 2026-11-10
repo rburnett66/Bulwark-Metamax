@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Farm Models</title>
+<style>
+  :root { --bg:#0d1116; --panel:rgba(16,21,28,.9); --line:#2a3542; --text:#e8edf2; --muted:#98a5b3; --accent:#6fe3ff; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font:13px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; overflow:hidden; }
+  canvas { display:block; }
+  #ui { position:fixed; left:12px; top:12px; width:300px; max-height:calc(100% - 24px); overflow:auto; background:var(--panel);
+    border:1px solid var(--line); border-radius:10px; padding:10px 12px; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); box-sizing:border-box; }
+  #ui h1 { font-size:14px; margin:0 0 4px; }
+  #ui p { margin:4px 0 8px; color:var(--muted); }
+  #ui b { color:var(--text); }
+  .sec { border-top:1px solid var(--line); margin-top:8px; padding-top:8px; }
+  .sec h2 { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 6px; }
+  .row { display:flex; flex-wrap:wrap; gap:6px; }
+  button { font:inherit; color:var(--text); background:#1d2631; border:1px solid #334252; border-radius:6px; padding:5px 8px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.on { background:#12394a; border-color:var(--accent); }
+  label.tg { display:flex; align-items:center; gap:6px; margin:3px 0; cursor:pointer; }
+  .lv { width:18px; height:18px; border-radius:4px; padding:0; border:2px solid transparent; }
+  .lv.on { border-color:#fff; }
+  #toggle { display:none; position:fixed; left:12px; top:12px; z-index:2; }
+  #labels { position:fixed; inset:0; pointer-events:none; }
+  .lbl { position:absolute; transform:translate(-50%,-100%); white-space:nowrap; font-size:11px; background:rgba(10,14,19,.78);
+    border:1px solid #2c3846; border-radius:4px; padding:1px 5px; color:#dfe7ef; }
+  .lbl.ref { border-color:#ffb347; color:#ffd9a1; }
+  .pop { position:fixed; transform:translate(-50%,-50%); font-weight:700; font-size:15px; pointer-events:none; text-shadow:0 1px 3px #000;
+    transition:transform 1.4s ease-out, opacity 1.4s ease-in; }
+  #loading { position:fixed; inset:0; display:grid; place-items:center; color:var(--muted); font-size:14px; }
+  @media (max-width:700px) {
+    #ui { width:calc(100% - 24px); max-height:46%; }
+    #ui.hidden { display:none; }
+    #toggle { display:block; }
+    #ui:not(.hidden) ~ #toggle { left:auto; right:12px; }
+  }
+</style>
+</head>
+<body>
+<div id="loading">Loading models…</div>
+<div id="labels"></div>
+<div id="ui">
+  <h1>Bulwark · Farming models</h1>
+  <p>Built in headless Blender 5.2: <b>flat shaded, no textures</b>. Verdance outpost ground, <b>1 square = 1 battle cell</b>
+    (4 model units). A farm plot is 2 × 2 cells, 4 rows, the area of 4 Machine Guns. The ground here is a stand-in: in game it is
+    the outpost map's own terrain.</p>
+
+  <div class="sec"><h2>Camera</h2>
+    <div class="row">
+      <button data-cam="battle" class="on">Battle (37°, north)</button>
+      <button data-cam="top">Top-down</button>
+      <button data-cam="orbit">Free orbit</button>
+    </div>
+    <div class="row" style="margin-top:6px" id="focusRow"></div>
+  </div>
+
+  <div class="sec"><h2>Vertical farm level</h2>
+    <div class="row" id="vlevels"></div>
+  </div>
+
+  <div class="sec"><h2>Seed pod level</h2>
+    <div class="row" id="levels"></div>
+    <p id="levelName" style="margin:6px 0 0"></p>
+  </div>
+
+  <div class="sec"><h2>Plots</h2>
+    <div class="row">
+      <button id="harvestAll">Harvest every fruited plot</button>
+      <button id="reset">Reset states</button>
+    </div>
+    <p style="margin-top:6px">Tap a plot: your avatar (the ship's gold hard-hat figure) walks to it and works it on: Prepped →
+      Planted → Sprout → Plant → Fruited. Fruited harvests (embers in the pod's colour); Dead gives the pods back. Taps queue.
+      The farmhands are the ship's Verdance crew.</p>
+  </div>
+
+  <div class="sec"><h2>Overlays</h2>
+    <label class="tg"><input type="checkbox" id="grid" checked> Cell grid</label>
+    <label class="tg"><input type="checkbox" id="labelsOn" checked> Labels</label>
+    <label class="tg"><input type="checkbox" id="ghost"> 4 Machine Gun ghosts on the comparison plot</label>
+    <label class="tg"><input type="checkbox" id="bloom" checked> Bloom</label>
+  </div>
+  <p id="stats" style="margin-top:8px"></p>
+</div>
+<button id="toggle">Panel</button>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script>window.FARM_GLB = /*__MODELS__*/;</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// The capital ship's crew rig (src/ship-interior/crew.js), inlined by make_page.py: the farm's avatars are the ship's.
+const CREW = (() => {
+/*__CREW__*/
+return { createCrewKit, cfgFor, PLAYER_CFG, drivePose, walkSwing };
+})();
+const U = 0.25;                       // model units → cells (4 model units = 1 cell)
+const LEVELS = [
+  { name: 'Common', color: 0xffffff }, { name: 'Uncommon', color: 0x4dff6a }, { name: 'Rare', color: 0x4da6ff },
+  { name: 'Epic', color: 0xb25cff }, { name: 'Legendary', color: 0xffc83d },
+];
+const STATE_LABEL = { prepped: 'Prepped', planted: 'Planted', sprout: 'Sprout', plant: 'Plant', fruited: 'Fruited', dead: 'Dead', harvested: 'Harvested' };
+let level = 4, vLevel = 4;
+
+// ---------------------------------------------------------------- renderer
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xa9c8d8);
+scene.fog = new THREE.Fog(0xa9c8d8, 80, 170);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+scene.add(new THREE.HemisphereLight(0xdcefff, 0x3a3020, 0.7));
+const sun = new THREE.DirectionalLight(0xfff1d6, 2.4);
+sun.position.set(-18, 30, 8);
+sun.target.position.set(22, 0, 16);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 100 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+scene.add(sun, sun.target);
+
+// ---------------------------------------------------------------- helpers
+const matCache = new Map();
+function mat(color, o = {}) {
+  const k = color + JSON.stringify(o);
+  if (!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial({ color, roughness: .85, flatShading: true, envMapIntensity: .4, ...o }));
+  return matCache.get(k);
+}
+function mesh(geo, m, x = 0, y = 0, z = 0, cast = true) {
+  const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = cast; o.receiveShadow = true; return o;
+}
+const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+const rbox = (w, h, d, r = .03) => new RoundedBoxGeometry(w, h, d, 1, r);
+const cyl = (rt, rb, h, s = 8) => new THREE.CylinderGeometry(rt, rb, h, s);
+const labels = [], labelRoot = document.getElementById('labels');
+function addLabel(text, x, y, z, cls = '') {
+  const el = document.createElement('div'); el.className = 'lbl ' + cls; el.textContent = text; labelRoot.appendChild(el);
+  const l = { el, pos: new THREE.Vector3(x, y, z) }; labels.push(l); return l;
+}
+
+// ---------------------------------------------------------------- models
+const loader = new GLTFLoader();
+const MODELS = {};
+function b64(s) { const b = atob(s), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a.buffer; }
+async function loadModels() {
+  for (const [name, data] of Object.entries(window.FARM_GLB)) {
+    const g = await loader.parseAsync(b64(data), '');
+    g.scene.traverse(o => {
+      if (!o.isMesh) return;
+      const m = o.material;
+      m.flatShading = true; m.envMapIntensity = m.metalness > .5 ? 1.0 : .35; m.needsUpdate = true;
+      if (m.name === 'glass') { m.transparent = true; m.depthWrite = false; m.side = THREE.DoubleSide; m.envMapIntensity = 0.9; o.castShadow = false; }
+      else o.castShadow = true;
+      if (m.name.startsWith('glow')) { o.castShadow = false; }
+      o.receiveShadow = true;
+    });
+    MODELS[name] = g.scene;
+  }
+}
+function node(model, name) {
+  const n = MODELS[model].getObjectByName(name);
+  if (!n) throw new Error(`no node ${name} in ${model}`);
+  return n;
+}
+function place(obj, x, y, z, s = U, rotY = 0) {
+  obj.position.set(x, y, z); obj.scale.setScalar(s); obj.rotation.y = rotY; scene.add(obj); return obj;
+}
+// pod-level materials: the pod body and its glow ring take the level's colour
+const podMats = LEVELS.map(L => ({
+  pod: new THREE.MeshStandardMaterial({ color: L.color, roughness: .4, metalness: .1, flatShading: true }),
+  glow: new THREE.MeshStandardMaterial({ color: L.color, emissive: L.color, emissiveIntensity: 3, flatShading: true }),
+}));
+
+// One plant node → a set of InstancedMeshes (one per material), so a plot is a handful of draw calls
+function instancePlant(model, nodeName, mats, lv) {
+  const src = node(model, nodeName);
+  src.updateMatrixWorld(true);
+  const out = [];
+  src.traverse(o => {
+    if (!o.isMesh) return;
+    let m = o.material;
+    if (m.name === 'pod') m = podMats[lv].pod;
+    if (m.name === 'glow_pod') m = podMats[lv].glow;
+    const geo = o.geometry.clone().applyMatrix4(new THREE.Matrix4().copy(src.matrixWorld).invert().multiply(o.matrixWorld));
+    const im = new THREE.InstancedMesh(geo, m, mats.length);
+    mats.forEach((mx, i) => im.setMatrixAt(i, mx));
+    im.castShadow = !m.name.startsWith('glow'); im.receiveShadow = true;
+    out.push(im);
+  });
+  return out;
+}
+
+// ---------------------------------------------------------------- ground, mesa, references
+function buildWorld() {
+  const GW = 50, GD = 40;
+  const g = new THREE.PlaneGeometry(GW, GD, GW, GD).toNonIndexed(); g.rotateX(-Math.PI / 2);
+  const cols = [], c = new THREE.Color(), pos = g.attributes.position, greens = [0x5f8f36, 0x6a9a3c, 0x557f30];
+  for (let i = 0; i < pos.count; i += 3) {
+    const cx = Math.floor((pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3 + GW / 2), cz = Math.floor((pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3 + GD / 2);
+    const r = Math.abs(Math.sin(cx * 12.9898 + cz * 78.233) * 43758.5453) % 1; c.setHex(greens[r < .5 ? 0 : r < .85 ? 1 : 2]);
+    for (let k = 0; k < 3; k++) cols.push(c.r, c.g, c.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  scene.add(mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, flatShading: true, envMapIntensity: .3 }), GW / 2 - 1, 0, GD / 2 - 1, false));
+  scene.add(mesh(box(46, .02, 1), mat(0x7a5a3a), 22, .01, 19.5, false));
+  // mesa with the half-scale pads
+  const M = { x0: 4, x1: 22, z0: 1, z1: 12, h: 1.2 };
+  scene.add(mesh(box(M.x1 - M.x0, M.h, M.z1 - M.z0), mat(0x6f6e66), (M.x0 + M.x1) / 2, M.h / 2, (M.z0 + M.z1) / 2));
+  scene.add(mesh(box(M.x1 - M.x0 - .2, .06, M.z1 - M.z0 - .2), mat(0x9b9a90), (M.x0 + M.x1) / 2, M.h + .03, (M.z0 + M.z1) / 2, false));
+  const ramp = mesh(box(2, .2, Math.hypot(3, M.h)), mat(0x7a5a3a), 13, M.h / 2, M.z1 + 1.5); ramp.rotation.x = Math.atan2(M.h, 3); scene.add(ramp);
+  const T = M.h + .06;
+  const pad = (x0, z0, w, d) => scene.add(mesh(box(w - .08, .05, d - .08), mat(0x55585e), x0 + w / 2, T + .025, z0 + d / 2, false));
+  pad(6, 3, 3, 3); scene.add(mesh(cyl(1.35, 1.45, .22, 8), mat(0xdedcd4), 7.5, T + .11, 4.5)); addLabel('Outpost Hub · 3 × 3', 7.5, T + 1, 4.5, 'ref');
+  pad(10, 3, 2, 2); scene.add(mesh(cyl(.8, .85, .7, 12), mat(0xdedcd4), 11, T + .35, 4)); addLabel('Power Station · 2 × 2', 11, T + 1.4, 4, 'ref');
+  pad(13, 3, 2, 2); scene.add(mesh(box(1.6, 1, 1.6), mat(0xdedcd4), 14, T + .5, 4)); addLabel('Storage Tower · 2 × 2', 14, T + 1.4, 4, 'ref');
+  mgSquare(17, 8, T); addLabel('4 Machine Guns · 2 × 2', 18, T + .9, 9, 'ref');
+  // grid
+  const grid = new THREE.Group();
+  const lines = (x0, z0, x1, z1, y, every, op) => {
+    const p = []; for (let x = x0; x <= x1; x += every) p.push(x, y, z0, x, y, z1); for (let z = z0; z <= z1; z += every) p.push(x0, y, z, x1, y, z);
+    const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+    return new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: op, depthWrite: false }));
+  };
+  grid.add(lines(0, 13, 46, 38, .035, 1, .2), lines(0, 14, 46, 38, .04, 2, .4), lines(M.x0, M.z0, M.x1, M.z1, T + .01, 1, .2));
+  scene.add(grid);
+  return grid;
+}
+function machineGun(ghost) {
+  const g = new THREE.Group();
+  const body = ghost ? new THREE.MeshBasicMaterial({ color: 0x6fe3ff, transparent: true, opacity: .45, depthWrite: false }) : mat(0x4a4f57, { roughness: .6, metalness: .3 });
+  const brass = ghost ? body : mat(0xc79a3a, { roughness: .4, metalness: .6 });
+  g.add(mesh(cyl(.42, .46, .2, 8), body, 0, .1, 0, !ghost), mesh(rbox(.42, .24, .42), body, 0, .32, 0, !ghost));
+  for (const x of [-.07, .07]) { const b = mesh(cyl(.035, .035, .5, 6), brass, x, .36, -.36, !ghost); b.rotation.x = Math.PI / 2; g.add(b); }
+  return g;
+}
+function mgSquare(x0, z0, y, ghost = false) {
+  const g = new THREE.Group();
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { const m = machineGun(ghost); m.position.set(x0 + i + .5, y, z0 + j + .5); g.add(m); }
+  scene.add(g); return g;
+}
+
+// ---------------------------------------------------------------- plots
+const plots = [], pickables = [];
+const ROW_X = [-.66, -.22, .22, .66], PLANT_Z = [-.62, -.21, .21, .62];
+function plantMatrices(seed) {
+  const out = []; let s = seed;
+  const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (const x of ROW_X) for (const z of PLANT_Z) {
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(x + (r() - .5) * .04, .14, z + (r() - .5) * .06),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), r() * Math.PI * 2), new THREE.Vector3().setScalar(U * (.88 + r() * .24)));
+    out.push(m);
+  }
+  return out;
+}
+const FRAME = mat(0x6b4a2e, { roughness: .8 }), CAP = mat(0x5c6670, { roughness: .4, metalness: .8 });
+function buildPlot(p) {
+  const g = p.group; while (g.children.length) g.remove(g.children[0]);
+  const lv = level, s = p.state;
+  const bed = mesh(rbox(1.84, .08, 1.84, .02), mat(s === 'harvested' ? 0x6b5038 : 0x3b2a1e), 0, .04, 0); g.add(bed);
+  for (const [x, z, w, d] of [[0, -.95, 2, .1], [0, .95, 2, .1], [-.95, 0, .1, 1.8], [.95, 0, .1, 1.8]]) g.add(mesh(rbox(w, .16, d, .02), FRAME, x, .08, z));
+  for (const x of [-.95, .95]) for (const z of [-.95, .95]) g.add(mesh(rbox(.15, .2, .15, .02), CAP, x, .1, z));
+  // pod-level inlay on the front beam
+  g.add(mesh(box(1.2, .03, .012), podMats[lv].glow, 0, .1, 1.006, false));
+  const ridge = mat(s === 'harvested' ? 0x6b5038 : 0x4a3424);
+  for (const x of ROW_X) { const r = mesh(cyl(.14, .14, 1.72, 8), ridge, x, .08, 0); r.rotation.x = Math.PI / 2; r.scale.set(1, 1, .45); g.add(r); }
+  if (s !== 'prepped') for (const im of instancePlant(p.crop === 'leafy' ? 'plant_leafy' : 'plant_grain', `${p.crop}_${s}`, plantMatrices(p.seed), lv)) g.add(im);
+  if (p.label) p.label.el.textContent = (p.title ? p.title + ' · ' : '') + STATE_LABEL[s];
+}
+function addPlot(x0, z0, state, title, crop = 'grain', noLabel = false) {
+  const group = new THREE.Group(); group.position.set(x0 + 1, 0, z0 + 1); scene.add(group);
+  const p = { group, state, initial: state, title, crop, seed: 1000 + plots.length * 77, cx: x0 + 1, cz: z0 + 1, y: 0 };
+  if (!noLabel) p.label = addLabel('', x0 + 1, 1.0, z0 + 1);
+  buildPlot(p); plots.push(p); pickables.push(group); return p;
+}
+
+// ---------------------------------------------------------------- methods
+const FOCUS = { plots: { c: [14.5, 0, 17], w: 30, t: 'Plot states' }, avatars: { c: [5.5, 0, 17.9], w: 9, t: 'Avatars' } };
+let vfarm = null;
+function buildMethods() {
+  ['prepped', 'planted', 'sprout', 'plant', 'fruited', 'dead', 'harvested'].forEach((s, i) => addPlot(1 + i * 3, 16, s, i === 0 ? 'Grain plot 2 × 2' : ''));
+  mgSquare(23, 16, 0); addLabel('4 Machine Guns · 2 × 2', 24, 1.0, 17, 'ref');
+  addPlot(26, 16, 'fruited', 'Same plot');
+  window.__ghosts = mgSquare(26, 16, .02, true); window.__ghosts.visible = false;
+  ['plant', 'fruited'].forEach((s, i) => addPlot(29 + i * 3, 16, s, i === 0 ? 'Leafy plot' : '', 'leafy'));
+
+  const MZ = 22; let mx = 1.5;
+  const next = w => { const x = mx; mx += w + 1.5; return x; };
+  const focus = (key, t, x, w, d = w) => { FOCUS[key] = { c: [x + w / 2, 0, MZ + d / 2], w: Math.max(w, d) + 1.2, t }; };
+
+  // Irrigated: a plot with a steel channel on its west edge
+  { const x = next(2); addPlot(x, MZ, 'fruited', 'Irrigated · 2 × 2', 'grain');
+    const ch = new THREE.Group(); ch.add(mesh(rbox(.24, .12, 2.2, .02), mat(0x8a939c, { metalness: .8, roughness: .35 }), 0, .06, 0));
+    ch.add(mesh(box(.16, .02, 2.1), new THREE.MeshPhysicalMaterial({ color: 0x2f7fa8, roughness: .08, clearcoat: 1, transparent: true, opacity: .85 }), 0, .11, 0, false));
+    ch.position.set(x - .15, 0, MZ + 1); scene.add(ch); }
+  // Terraced 2 × 3: three stone steps with leafy rows
+  { const x = next(2);
+    for (let k = 0; k < 3; k++) {
+      const h = .25 + k * .25, z = MZ + 2.5 - k;
+      for (let i = 0; i < 6; i++) scene.add(mesh(new THREE.DodecahedronGeometry(.18 + (i % 2) * .03, 0), mat(i % 2 ? 0x8b8a82 : 0x67665f), x + .17 + i * .33, h * .5, z + .45).scale.set(1, h * 2.2, .8) && scene.children.at(-1));
+      scene.add(mesh(rbox(2, h, 1, .03), mat(0x67665f), x + 1, h / 2, z));
+      scene.add(mesh(box(1.9, .05, .9), mat(0x3b2a1e), x + 1, h + .02, z, false));
+      const mats = []; for (const rx of [-.5, .5]) for (const rz of [-.22, .22]) mats.push(new THREE.Matrix4().compose(new THREE.Vector3(x + 1 + rx, h + .04, z + rz), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rx * 5 + rz * 3), new THREE.Vector3().setScalar(U * .9)));
+      for (const im of instancePlant('plant_leafy', 'leafy_plant', mats, level)) scene.add(im);
+    }
+    addLabel('Terraced · 2 × 3', x + 1, 1.6, MZ + 1.5); focus('terraced', 'Terraced', x, 2, 3); }
+  // Orchard 3 × 3: four orchard trees
+  { const x = next(3);
+    scene.add(mesh(box(3, .04, 3), mat(0x4f7a2c), x + 1.5, .02, MZ + 1.5, false));
+    [[.8, .8], [2.2, .8], [.8, 2.2], [2.2, 2.2]].forEach(([tx, tz], i) => place(node('tree_orchard', 'tree_orchard').clone(), x + tx, 0, MZ + tz, U * .62, i * 1.7));
+    addLabel('Orchard · 3 × 3', x + 1.5, 2.6, MZ + 1.5); focus('orchard', 'Orchard', x, 3); }
+  // Solo tree 2 × 2
+  { const x = next(2); place(node('tree_solo', 'tree_solo').clone(), x + 1, 0, MZ + 1, U, .4);
+    addLabel('Solo tree · 2 × 2', x + 1, 3.6, MZ + 1); focus('solo', 'Solo tree', x, 2); }
+  // Spatial 4 × 4: three crops competing in half-cell patches
+  { const x = next(4);
+    scene.add(mesh(rbox(4, .08, 4, .02), mat(0x3b2a1e), x + 2, .04, MZ + 2));
+    const sets = { grain: [], leafyp: [], leafyf: [] };
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
+      const r = (Math.sin(i * 1.7 + j * 2.3) + Math.cos(i * .9 - j * 1.4) + 2) / 4;
+      const k = r < .42 ? 'leafyp' : r < .66 ? 'leafyf' : 'grain';
+      sets[k].push(new THREE.Matrix4().compose(new THREE.Vector3(x + .25 + i * .5, .08, MZ + .25 + j * .5), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), i * 2.1 + j), new THREE.Vector3().setScalar(U * .55)));
+    }
+    for (const im of instancePlant('plant_grain', 'grain_fruited', sets.grain, level)) scene.add(im);
+    for (const im of instancePlant('plant_leafy', 'leafy_plant', sets.leafyp, level)) scene.add(im);
+    for (const im of instancePlant('plant_leafy', 'leafy_fruited', sets.leafyf, level)) scene.add(im);
+    addLabel('Spatial · 4 × 4', x + 2, 1.0, MZ + 2); focus('spatial', 'Spatial', x, 4); }
+  // Vertical farm 2 × 2, levels 1–4
+  { const x = next(2); vfarm = place(node('vertical_farm', 'vertical_farm').clone(), x + 1, 0, MZ + 1, U);
+    vfarm.userData.label = addLabel('', x + 1, 3.4, MZ + 1); setVLevel(vLevel); focus('vertical', 'Vertical farm', x, 2); }
+  // Tub 1 × 1
+  { const x = next(1);
+    const pts = [[0, 0], [.26, 0], [.3, .05], [.33, .32], [.36, .34], [.36, .38], [.3, .38], [0, .38]].map(([a, b]) => new THREE.Vector2(a, b));
+    scene.add(mesh(new THREE.LatheGeometry(pts, 12), mat(0xdedcd4, { roughness: .55 }), x + .5, 0, MZ + .5));
+    scene.add(mesh(cyl(.3, .3, .02, 12), mat(0x3b2a1e), x + .5, .37, MZ + .5, false));
+    scene.add(mesh(new THREE.TorusGeometry(.35, .02, 4, 12).rotateX(Math.PI / 2), mat(0xe07a2a), x + .5, .38, MZ + .5));
+    for (const im of instancePlant('plant_leafy', 'leafy_fruited', [new THREE.Matrix4().compose(new THREE.Vector3(x + .5, .38, MZ + .5), new THREE.Quaternion(), new THREE.Vector3().setScalar(U * .8))], level)) scene.add(im);
+    addLabel('Tub · 1 × 1', x + .5, 1.0, MZ + .5); }
+  // Hydroponic farm: the glass dome doorway, 2 × 2
+  { const x = next(2); place(node('hydro_dome', 'hydro_dome').clone(), x + 1, 0, MZ + 1, U);
+    addLabel('Hydroponic dome · 2 × 2', x + 1, 1.5, MZ + 1); focus('dome', 'Hydroponic dome', x, 2); }
+  // Underground farm: the dirt mound with its steel door, 2 × 2
+  { const x = next(2); place(node('bunker_mound', 'bunker_mound').clone(), x + 1, 0, MZ + 1, U);
+    addLabel('Underground entrance · ammo bunker · 2 × 2', x + 1, 1.45, MZ + 1); focus('mound', 'Underground', x, 2);
+    walker(CREW.cfgFor('ground'), x - .2, MZ + 1.7, { post: [x - .2, MZ + 1.7], pose: 'idle', yaw: .5 }); }
+  // Hydrofarm 2 × 2 of water
+  { const x = next(2);
+    scene.add(mesh(box(2.4, .04, 2.4), new THREE.MeshPhysicalMaterial({ color: 0x2f7fa8, roughness: .06, clearcoat: 1, envMapIntensity: 1.2 }), x + 1, .02, MZ + 1, false));
+    for (let k = 0; k < 5; k++) scene.add(mesh(rbox(.06, .07, 2.2, .01), mat(0x7a5634), x + .1 + k * .45, .05, MZ + 1));
+    const ms = []; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) ms.push(new THREE.Matrix4().compose(new THREE.Vector3(x + .32 + i * .45, .03, MZ + .25 + j * .5), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), i + j * 2), new THREE.Vector3().setScalar(U * .55)));
+    for (const im of instancePlant('plant_grain', 'grain_plant', ms, level)) scene.add(im);
+    addLabel('Hydrofarm · 2 × 2 of water', x + 1, 1.0, MZ + 1); }
+  FOCUS.methods = { c: [mx / 2, 0, MZ + 2], w: mx + 2, t: 'All methods' };
+
+  // Grow-room machines: metres at the ship-interior scale, shown on a showcase floor beside the farm
+  const MS = .55, MX = 3, MZ2 = 30;     // 1 m = 0.55 world units here (not outpost scale)
+  scene.add(mesh(rbox(17 * MS + 2, .08, 4.5, .03), mat(0x2b3138, { roughness: .6, metalness: .3 }), MX + 7 * MS + 1, .04, MZ2));
+  const mroot = MODELS.machines;
+  const names = { irrigation_system: 'Irrigation System', air_control: 'Air Control', light_rig: 'Light Rig', climate_unit: 'Climate Unit', nutrient_doser: 'Nutrient Doser', robot_bay: 'Robot Bay', gro_bot: 'Gro-bot' };
+  for (const [k, t] of Object.entries(names)) {
+    const n = node('machines', k).clone();
+    const lx = n.position.x;
+    place(n, MX + 3.3 + lx * MS, .08, MZ2, MS, 0);
+    addLabel(t, MX + 3.3 + lx * MS, 2.9 * MS + .3, MZ2, '');
+  }
+  // the avatar for height: 1.8 m
+  walker(CREW.PLAYER_CFG, MX + 3.3 + 15 * MS, MZ2, { post: [MX + 3.3 + 15 * MS, MZ2], pose: 'point', y: .08, height: 1.8 * MS });
+  addLabel('Avatar · 1.8 m', MX + 3.3 + 15 * MS, 2.0 * MS + .3, MZ2, 'ref');
+  addLabel('Grow-room machines · metres, ship-interior scale (not outpost cells)', MX + 7 * MS + 1, 2.6, MZ2 - 2, 'ref');
+  FOCUS.machines = { c: [MX + 3.3 + 7 * MS, 0, MZ2], w: 17 * MS + 2, t: 'Machines' };
+}
+function setVLevel(L) {
+  vLevel = L; if (!vfarm) return;
+  for (let n = 1; n <= 4; n++) vfarm.getObjectByName(`floor_${n}`).visible = n <= L;
+  vfarm.getObjectByName('roof').position.y = .4 + L * 2.6;
+  vfarm.userData.label.pos.y = (.4 + L * 2.6 + 1.6) * U;
+  vfarm.userData.label.el.textContent = `Vertical farm · 2 × 2 · level ${L}`;
+}
+
+// ---------------------------------------------------------------- avatars (the ship's crew rig, at outpost scale)
+// Proposed surface height: 0.45 cell (a 2 × 2 plot is about four and a half people across). The rig is ~4.6 units tall.
+const AV_H = .45, RIG_H = 4.6, WALK = 1.6;      // cells, rig units, cells / s
+let crewKit = null;
+const walkers = [];
+function walker(cfg, x, z, o = {}) {
+  crewKit = crewKit || CREW.createCrewKit(THREE);
+  const g = crewKit.makeChar(cfg);
+  g.scale.setScalar((o.height || AV_H) / RIG_H); g.position.set(x, o.y || 0, z);
+  g.traverse(m => { if (m.isMesh) { m.castShadow = !m.material.transparent; m.receiveShadow = true; } });
+  scene.add(g);
+  const w = { g, ud: g.userData, cur: { rax: 0, raz: 0, lax: 0, laz: 0, hx: 0, bx: 0, leg: 0, yaw: 0 }, pose: o.pose || 'idle', yaw: o.yaw || 0,
+    y: o.y || 0, ph: 0, phase: (x * 7.3 + z * 3.1) % 10, target: null, busy: 0, onArrive: null, then: null, post: o.post, rounds: o.rounds || null, ri: 0 };
+  walkers.push(w); return w;
+}
+function goTo(w, x, z, onArrive) { w.target = [x, z]; w.onArrive = onArrive; }
+// the player: tapping a plot queues it; the avatar walks to the plot's front edge, works, then the plot moves on
+const queue = [];
+let player = null;
+function playerNext() {
+  const p = queue.shift(); if (!p) return;
+  const sx = p.cx + (Math.random() - .5) * .6, sz = p.cz + 1.22;
+  goTo(player, sx, sz, () => { player.pose = 'work'; player.yaw = Math.PI; player.busy = .9; player.then = () => { advancePlot(p); player.pose = 'idle'; playerNext(); }; });
+}
+function stepWalkers(dt, t) {
+  for (const w of walkers) {
+    if (w.target) {
+      const dx = w.target[0] - w.g.position.x, dz = w.target[1] - w.g.position.z, d = Math.hypot(dx, dz);
+      if (d < .04) { w.target = null; const f = w.onArrive; w.onArrive = null; w.pose = 'idle'; if (f) f(); }
+      else {
+        const step = Math.min(d, WALK * dt); w.g.position.x += dx / d * step; w.g.position.z += dz / d * step;
+        w.yaw = Math.atan2(dx, dz); w.ph += step / AV_H * 5.5;
+        CREW.walkSwing(w.ud, w.cur, w.ph); w.cur.yaw += (w.yaw - w.cur.yaw) * Math.min(1, dt * 10); w.g.rotation.y = w.cur.yaw;
+        w.g.position.y = w.y + Math.abs(Math.sin(w.ph)) * .012;
+        continue;
+      }
+    }
+    if (w.busy > 0 && (w.busy -= dt) <= 0) { const f = w.then; w.then = null; if (f) f(); }
+    if (!w.target && w.busy <= 0 && w.rounds) {          // farmhands: walk their rounds, stop and work a while at each
+      const [x, z, pose, hold, yaw] = w.rounds[w.ri++ % w.rounds.length];
+      goTo(w, x, z, () => { w.pose = pose; w.yaw = yaw; w.busy = hold; });
+    }
+    const r = CREW.drivePose(w.ud, w.cur, w.pose, w.yaw, dt, t, w.phase);
+    w.g.rotation.y = r.yaw; w.g.position.y = w.y + r.hop * w.g.scale.y * .3;
+  }
+}
+window.__farm = { scene, tap: i => { queue.push(plots[i]); if (!player.target && player.busy <= 0) playerNext(); },
+  view: (x, y, z, tx, ty, tz) => { camMode = 'orbit'; frame(); persp.position.set(x, y, z); controls.target.set(tx, ty, tz); persp.lookAt(tx, ty, tz); } };
+function buildAvatars() {
+  player = walker(CREW.PLAYER_CFG, 12.5, 19.1, { yaw: 0 });
+  // two Verdance farmhands working the rows (the ship's ground-faction crew look)
+  walker(CREW.cfgFor('ground'), 2, 19.2, { rounds: [[2.2, 19.15, 'work', 2.5, Math.PI], [5.1, 19.2, 'work', 2.2, Math.PI], [8.2, 19.2, 'point', 1.6, Math.PI], [5, 19.5, 'talk', 1.8, 0]] });
+  walker(CREW.cfgFor('ground'), 31, 19.2, { rounds: [[29.9, 19.2, 'work', 2.4, Math.PI], [33.1, 19.15, 'work', 2.6, Math.PI], [31.5, 19.6, 'wave', 1.4, 0]] });
+}
+
+// ---------------------------------------------------------------- embers
+const MAX_P = 6000;
+const pPos = new Float32Array(MAX_P * 3), pCol = new Float32Array(MAX_P * 3), pVel = new Float32Array(MAX_P * 3);
+const pLife = new Float32Array(MAX_P), pMax = new Float32Array(MAX_P), pBase = new Float32Array(MAX_P * 3), pSeed = new Float32Array(MAX_P);
+for (let i = 0; i < MAX_P; i++) pPos[i * 3 + 1] = -999;
+const pGeo = new THREE.BufferGeometry();
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3)); pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+const spriteTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.25, 'rgba(255,255,255,.85)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+const embers = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: .14, map: spriteTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+embers.frustumCulled = false; scene.add(embers);
+let pNext = 0;
+function hash3(x, y, z) { let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(z | 0, 1274126177); h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+function vnoise(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf), l = (a, b, t) => a + (b - a) * t;
+  return l(l(l(hash3(xi, yi, zi), hash3(xi + 1, yi, zi), u), l(hash3(xi, yi + 1, zi), hash3(xi + 1, yi + 1, zi), u), v),
+    l(l(hash3(xi, yi, zi + 1), hash3(xi + 1, yi, zi + 1), u), l(hash3(xi, yi + 1, zi + 1), hash3(xi + 1, yi + 1, zi + 1), u), v), w);
+}
+function emit(cx, cy, cz, count, color, { spread = .95, rise = 1, life = 1.8, gain = 1.8 } = {}) {
+  const c = new THREE.Color(color);
+  for (let n = 0; n < count; n++) {
+    const i = pNext; pNext = (pNext + 1) % MAX_P;
+    pPos[i * 3] = cx + (Math.random() * 2 - 1) * spread; pPos[i * 3 + 1] = cy + Math.random() * .2; pPos[i * 3 + 2] = cz + (Math.random() * 2 - 1) * spread;
+    pVel[i * 3] = (Math.random() - .5) * .3; pVel[i * 3 + 1] = rise * (.7 + Math.random() * .8); pVel[i * 3 + 2] = (Math.random() - .5) * .3;
+    pMax[i] = pLife[i] = life * (.6 + Math.random() * .8);
+    pBase[i * 3] = c.r * gain; pBase[i * 3 + 1] = c.g * gain; pBase[i * 3 + 2] = c.b * gain; pSeed[i] = Math.random() * 100;
+  }
+}
+function stepEmbers(dt, t) {
+  for (let i = 0; i < MAX_P; i++) {
+    if (pLife[i] <= 0) continue;
+    pLife[i] -= dt; const k = i * 3;
+    if (pLife[i] <= 0) { pPos[k + 1] = -999; pCol[k] = pCol[k + 1] = pCol[k + 2] = 0; continue; }
+    const s = pSeed[i];
+    pVel[k] = pVel[k] * .96 + (vnoise(pPos[k] * 1.4 + s, pPos[k + 1] * 1.4, t * .9) - .5) * 4 * dt;
+    pVel[k + 2] = pVel[k + 2] * .96 + (vnoise(pPos[k + 2] * 1.4 + s + 41, pPos[k + 1] * 1.4, t * .9) - .5) * 4 * dt;
+    pVel[k + 1] *= .995;
+    pPos[k] += pVel[k] * dt; pPos[k + 1] += pVel[k + 1] * dt; pPos[k + 2] += pVel[k + 2] * dt;
+    const f = pLife[i] / pMax[i], fade = f > .85 ? (1 - f) / .15 : f < .35 ? f / .35 : 1, b = fade * (.75 + .25 * Math.sin(t * 18 + s * 7));
+    pCol[k] = pBase[k] * b; pCol[k + 1] = pBase[k + 1] * b; pCol[k + 2] = pBase[k + 2] * b;
+  }
+  pGeo.attributes.position.needsUpdate = true; pGeo.attributes.color.needsUpdate = true;
+}
+
+// ---------------------------------------------------------------- interaction
+const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function plotAt(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  raycaster.setFromCamera(ndc, activeCam());
+  for (const h of raycaster.intersectObjects(pickables, true)) { let o = h.object; while (o && !plots.find(p => p.group === o)) o = o.parent; if (o) return plots.find(p => p.group === o); }
+  return null;
+}
+function popText(p, text, color) {
+  const v = new THREE.Vector3(p.cx, 1, p.cz).project(activeCam());
+  const el = document.createElement('div'); el.className = 'pop'; el.textContent = text; el.style.color = '#' + new THREE.Color(color).getHexString();
+  el.style.left = ((v.x + 1) / 2 * innerWidth) + 'px'; el.style.top = ((1 - v.y) / 2 * innerHeight) + 'px'; document.body.appendChild(el);
+  requestAnimationFrame(() => { el.style.transform = 'translate(-50%,-260%)'; el.style.opacity = '0'; }); setTimeout(() => el.remove(), 1500);
+}
+function harvest(p) {
+  const L = LEVELS[level];
+  emit(p.cx, .3, p.cz, Math.round(110 * Math.pow(1.5, level)), L.color, { spread: .9, rise: .9 + level * .18, life: 1.6 + level * .35 });
+  popText(p, `+${Math.round(16 * (1 + .05 * level))} ${p.crop === 'leafy' ? 'Rootsong Seeds' : 'Loam Grain'} · ${L.name}`, L.color);
+  p.state = 'harvested'; buildPlot(p);
+}
+function returnPods(p) { emit(p.cx, .15, p.cz, 70, 0x9c8a6a, { spread: .9, rise: .35, life: .9, gain: 1 }); popText(p, `+4 pods back · ${LEVELS[level].name}`, 0xd8c7a0); p.state = 'prepped'; buildPlot(p); }
+function advancePlot(p) {
+  if (p.state === 'fruited') return harvest(p);
+  if (p.state === 'dead') return returnPods(p);
+  const order = ['prepped', 'planted', 'sprout', 'plant', 'fruited'];
+  p.state = p.state === 'harvested' ? 'prepped' : order[Math.min(order.indexOf(p.state) + 1, 4)]; buildPlot(p);
+}
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => { if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return; const p = plotAt(e); if (p) { queue.push(p); if (!player.target && player.busy <= 0) playerNext(); } });
+
+// ---------------------------------------------------------------- cameras + post
+const persp = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, .1, 400);
+const ortho = new THREE.OrthographicCamera(-10, 10, 10, -10, .1, 200);
+const controls = new OrbitControls(persp, renderer.domElement); controls.enableDamping = true; controls.enabled = false;
+let camMode = 'battle', focus = 'plots';
+const activeCam = () => (camMode === 'top' ? ortho : persp);
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, persp);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .55, .45, .92);
+composer.addPass(renderPass); composer.addPass(bloom); composer.addPass(new OutputPass());
+function frame() {
+  const f0 = FOCUS[focus], aspect = innerWidth / innerHeight;
+  const panel = (innerWidth > 700 && !document.getElementById('ui').classList.contains('hidden')) ? 330 / innerWidth : 0;
+  const w = (f0.w + 2) / (1 - panel), target = new THREE.Vector3(f0.c[0] - (w * panel) / 2, f0.c[1], f0.c[2]);
+  if (camMode === 'top') {
+    const hw = Math.max(w / 2 + 1, 6 * aspect);
+    Object.assign(ortho, { left: -hw, right: hw, top: hw / aspect, bottom: -hw / aspect });
+    ortho.position.set(target.x, 60, target.z); ortho.up.set(0, 0, -1); ortho.lookAt(target.x, 0, target.z); ortho.updateProjectionMatrix();
+  } else {
+    const pitch = THREE.MathUtils.degToRad(37), hfov = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(persp.fov) / 2) * aspect);
+    const dist = (w / 2 + 1) / Math.tan(hfov / 2) * 1.05;
+    persp.position.set(target.x, target.y + dist * Math.sin(pitch), target.z + dist * Math.cos(pitch)); persp.lookAt(target); controls.target.copy(target);
+  }
+  controls.enabled = camMode === 'orbit'; renderPass.camera = activeCam();
+}
+
+// ---------------------------------------------------------------- UI
+function wireUI(grid) {
+  const fr = document.getElementById('focusRow');
+  for (const [k, f] of Object.entries(FOCUS)) {
+    const b = document.createElement('button'); b.textContent = f.t; b.dataset.focus = k; if (k === focus) b.className = 'on';
+    b.onclick = () => { focus = k; fr.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); frame(); };
+    fr.appendChild(b);
+  }
+  const vr = document.getElementById('vlevels');
+  for (let L = 1; L <= 4; L++) {
+    const b = document.createElement('button'); b.textContent = `Level ${L}`; if (L === vLevel) b.className = 'on';
+    b.onclick = () => { setVLevel(L); vr.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); }; vr.appendChild(b);
+  }
+  const lr = document.getElementById('levels');
+  LEVELS.forEach((L, i) => {
+    const b = document.createElement('button'); b.className = 'lv' + (i === level ? ' on' : ''); b.title = L.name; b.style.background = '#' + new THREE.Color(L.color).getHexString();
+    b.onclick = () => { level = i; lr.querySelectorAll('button').forEach((c, k) => c.classList.toggle('on', k === i)); setLevelText(); plots.forEach(buildPlot); };
+    lr.appendChild(b);
+  });
+  const setLevelText = () => { document.getElementById('levelName').textContent = `${LEVELS[level].name} pods: embers in this colour on harvest`; };
+  setLevelText();
+  document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => { camMode = b.dataset.cam; document.querySelectorAll('[data-cam]').forEach(x => x.classList.toggle('on', x === b)); frame(); });
+  document.getElementById('grid').onchange = e => { grid.visible = e.target.checked; };
+  document.getElementById('labelsOn').onchange = e => { labelRoot.style.display = e.target.checked ? '' : 'none'; };
+  document.getElementById('ghost').onchange = e => { window.__ghosts.visible = e.target.checked; };
+  document.getElementById('bloom').onchange = e => { bloom.enabled = e.target.checked; };
+  document.getElementById('harvestAll').onclick = () => plots.filter(p => p.state === 'fruited').forEach(harvest);
+  document.getElementById('reset').onclick = () => plots.forEach(p => { p.state = p.initial; buildPlot(p); });
+  document.getElementById('toggle').onclick = () => { document.getElementById('ui').classList.toggle('hidden'); frame(); };
+}
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); persp.aspect = innerWidth / innerHeight; persp.updateProjectionMatrix(); frame(); });
+
+// ---------------------------------------------------------------- start
+const clock = new THREE.Clock(); let ambientT = 0; const v = new THREE.Vector3();
+const fans = [];
+function tick() {
+  const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
+  if ((ambientT += dt) > .12) { ambientT = 0; for (const p of plots) if (p.state === 'fruited') emit(p.cx, .45, p.cz, level >= 3 ? 2 : 1, LEVELS[level].color, { spread: .8, rise: .45, life: 1.4 }); }
+  for (const f of fans) f.rotation[f.userData.axis] += dt * 6;
+  stepEmbers(dt, t);
+  stepWalkers(dt, t);
+  if (camMode === 'orbit') controls.update();
+  composer.render();
+  const cam = activeCam();
+  if (labelRoot.style.display !== 'none') for (const l of labels) {
+    v.copy(l.pos).project(cam); const on = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
+    l.el.style.display = on ? '' : 'none'; if (on) { l.el.style.left = ((v.x + 1) / 2 * innerWidth) + 'px'; l.el.style.top = ((1 - v.y) / 2 * innerHeight) + 'px'; }
+  }
+  requestAnimationFrame(tick);
+}
+(async () => {
+  await loadModels();
+  const grid = buildWorld(); buildMethods(); buildAvatars();
+  scene.traverse(o => { if (/^fan_\d$/.test(o.name)) { o.userData.axis = o.parent && o.parent.name === 'roof' ? 'y' : 'z'; fans.push(o); } });
+  wireUI(grid); frame();
+  document.getElementById('loading').remove();
+  renderer.info.autoReset = false; composer.render();
+  document.getElementById('stats').textContent = `${renderer.info.render.calls} draw calls · ${(renderer.info.render.triangles / 1000).toFixed(0)}k triangles (incl. bloom passes)`;
+  renderer.info.autoReset = true;
+  window.__ready = true;
+  tick();
+})();
+</script>
+</body>
+</html>
