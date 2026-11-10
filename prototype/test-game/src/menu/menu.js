@@ -29,6 +29,8 @@ import { techCtxFromSave, createGameTechAdapter, planetOpen } from './techSave.j
 import { computeBadges, seenFor, missionChip, inventoryChip } from './badges.js';
 import { inventoryFresh } from '../save/inventory.js';
 import { createInventoryScreen } from './inventoryScreen.js';
+import { createStoreScreen } from './storeScreen.js';
+import { STORES, storeFresh } from '../save/stores.js';
 import { badge as missionBadge } from '../save/missions.js';
 import { createProgressWidget } from './progressWidget.js';
 import { createMissionLog } from './missionLog.js';
@@ -388,7 +390,7 @@ export function createMenu(mountEl, cbs) {
   top.appendChild(brand);
   // the PROGRESSION WIDGET (Menu-Progression-Design §2): rank + XP, gold, stars, research — on every menu screen
   const widget = createProgressWidget(doc, { onOpen: (k) => {
-    if (k === 'missions' || k === 'inventory') show(current === k ? 'main' : k);
+    if (OVERLAYS.has(k)) show(current === k ? 'main' : k);
     else if (k === 'gold' || k === 'research') show('techtree');
     else openSurvey(targetKey());
   } });
@@ -427,6 +429,8 @@ export function createMenu(mountEl, cbs) {
   }
 
   const inventory = createInventoryScreen({ doc, host: mlHost, gateOpts: () => gateOverride() || {}, onChange: () => refreshProgress(), onClose: () => show('main') });
+  // the OUTPOST & FARM inventory: the same screen on the farm store (owner rule 5) [MM-story_mwaf80xq_19]
+  const stores = createStoreScreen({ doc, host: mlHost, gateOpts: () => gateOverride() || {}, onChange: () => refreshProgress(), onClose: () => show('main') });
 
   // ── MAIN screen ──
   const main = el(doc, 'div', 'bwm-main');
@@ -914,7 +918,7 @@ export function createMenu(mountEl, cbs) {
 
   root.appendChild(el(doc, 'div', 'bwm-foot', 'BULWARK — TEST BUILD'));
 
-  const OVERLAYS = new Set(['missions', 'inventory']);   // these sit over the main screen, which stays behind them dimmed
+  const OVERLAYS = new Set(['missions', 'inventory', 'stores']);   // these sit over the main screen, which stays behind them dimmed
   function show(screen) {
     // leaving the Tech Net: whatever it showed as available counts as seen (incl. upgrades opened by a purchase there)
     if (current === 'techtree' && screen !== 'techtree') { const sv = loadSave(), k = seenFor('techtree', sv, badgeCtx(sv)); markSeen(k[0], k[1]); }
@@ -926,6 +930,7 @@ export function createMenu(mountEl, cbs) {
     widget.setExpanded(overlay ? screen : null);
     if (screen === 'missions') missionLog.open(); else { missionLog.close(); missionLog.sync(); }
     if (screen === 'inventory') inventory.open(); else inventory.close();
+    if (screen === 'stores') stores.open(); else stores.close();
     harv.style.display = screen === 'harvester' ? 'block' : 'none';
     netHost.style.display = screen === 'techtree' ? 'block' : 'none';
     if (screen !== 'techtree' && net) net.stop();
@@ -985,8 +990,9 @@ export function createMenu(mountEl, cbs) {
     refreshOutpost();
     const missions = missionChip(missionBadge(sv));
     const inventory = inventoryChip(inventoryFresh(sv), RESOURCE_COUNT);
-    if (!playingRewards) widget.render({ ...progressValues(sv, bc), techDot: b.techtree, missions, inventory });
-    else widget.render({ techDot: b.techtree, missions, inventory });
+    const storesChip = inventoryChip(storeFresh(sv, 'farm'), STORES.farm.items.length, STORES.farm.noun);
+    if (!playingRewards) widget.render({ ...progressValues(sv, bc), techDot: b.techtree, missions, inventory, stores: storesChip });
+    else widget.render({ techDot: b.techtree, missions, inventory, stores: storesChip });
   }
   let playingRewards = false;
   /** The last battle's rewards fly into the widget — once, when the menu is on screen. */
