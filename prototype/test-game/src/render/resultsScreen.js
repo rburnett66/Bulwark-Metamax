@@ -124,21 +124,24 @@ export const RESULTS_CSS = `
 .rs-rw.in .rs-up { opacity:1; transform:none; transition-delay:.9s; }
 
 /* resources */
-.rs-res { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 12px; padding:6px 0; border-top:1px solid #1e252f;
-  opacity:0; transition:opacity .3s; }
+/* one line per crop (owner 2026-11-10: "this screen should be fixed so I don't have to scroll") [MM-story_mwb1o40v_1y]:
+   icon + name · the sold/kept bar · SOLD / KEPT · the total */
+.rs-res { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(32px,1fr) auto minmax(3.2em,auto); align-items:center; gap:0 10px;
+  padding:5px 0; border-top:1px solid #1e252f; opacity:0; transition:opacity .3s; }
 .rs-res:first-of-type { border-top:0; }
 .rs-res.in { opacity:1; }
 .rs-res .n { display:flex; align-items:center; gap:8px; font-weight:700; font-size:1.08em; color:#e8eef5; min-width:0; }
 .rs-res .n span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .rs-res .ic { width:clamp(22px,4vmin,34px); height:clamp(22px,4vmin,34px); flex:0 0 auto; border-radius:3px; box-shadow:0 0 0 1px var(--c), 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); }
 .rs-res .d { width:9px; height:9px; flex:0 0 9px; background:var(--c); box-shadow:0 0 8px var(--c); transform:rotate(45deg); }
-.rs-res .q { align-self:center; font-family:Orbitron,sans-serif; font-weight:800; font-size:1.15em; text-align:right; font-variant-numeric:tabular-nums; color:#f4f7fb; }
-.rs-bar { grid-column:1 / 3; display:flex; height:7px; background:#0a0d12; border:1px solid #222a35; overflow:hidden; }
+.rs-res .n { grid-column:1; grid-row:1; }
+.rs-res .q { grid-column:4; grid-row:1; align-self:center; font-family:Orbitron,sans-serif; font-weight:800; font-size:1.1em; text-align:right; font-variant-numeric:tabular-nums; color:#f4f7fb; }
+.rs-bar { grid-column:2; grid-row:1; display:flex; height:7px; background:#0a0d12; border:1px solid #222a35; overflow:hidden; }
 .rs-bar .sold { width:0; background:var(--c); opacity:.85; transition:width .8s cubic-bezier(.3,.9,.3,1); }
 .rs-bar .kept { width:0; background:repeating-linear-gradient(135deg, var(--cyan) 0 4px, #2aa8c0 4px 7px); box-shadow:0 0 8px rgba(122,240,255,.6);
   transition:width .6s .55s cubic-bezier(.3,.9,.3,1); }
 .rs-res.in .sold { width:var(--sold); } .rs-res.in .kept { width:var(--kept); }
-.rs-res .m { grid-column:1 / 3; font-size:.8em; letter-spacing:.14em; color:#6d7a8a; display:flex; justify-content:space-between; }
+.rs-res .m { grid-column:3; grid-row:1; font-size:.68em; line-height:1.2; letter-spacing:.1em; color:#6d7a8a; display:flex; flex-direction:column; align-items:flex-end; white-space:nowrap; }
 .rs-res .m b { color:var(--cyan); font-weight:700; }
 .rs-foot { margin-top:6px; text-wrap:balance; font-size:.78em; letter-spacing:.2em; color:#6d7a8a; text-align:center; }
 .rs-foot b { color:var(--gold-hi); font-weight:700; }
@@ -171,14 +174,15 @@ export const RESULTS_CSS = `
 /* landscape phone: tighter vertical rhythm so the whole report fits a ~390 px tall screen */
 @media (orientation:landscape) and (max-height:520px) {
   .rs-verdict { padding:2px 0 0; }
-  .rs-word { font-size:clamp(28px, 10vh, 52px); }
-  .rs-panel { padding:7px 12px; }
-  .rs-stats { margin-top:6px; }
+  .rs-word { font-size:clamp(26px, 9vh, 52px); }
+  .rs-wave { padding:3px 0 2px; } .rs-big { font-size:clamp(22px, 7.5vh, 44px); } .rs-sub { margin-top:2px; }
+  .rs-panel { padding:5px 11px; } .rs-h { margin-bottom:4px; }
+  .rs-stats { margin-top:4px; }
   .rs-rw { padding:3px 0; }
   .rs-res { padding:3px 0; }
   .rs-res .ic { width:22px; height:22px; }
-  .rs-res .n { font-size:1em; gap:6px; } .rs-res .m { font-size:.74em; } .rs-foot { margin-top:2px; }
-  .rs-body { gap:8px; } .rs-col { gap:6px; }
+  .rs-res .n { font-size:1em; gap:6px; } .rs-res .m { font-size:.64em; } .rs-foot { margin-top:2px; }
+  .rs-body { gap:8px; padding-top:max(8px, env(safe-area-inset-top)); padding-bottom:6px; } .rs-col { gap:5px; }
   .rs-act { padding-top:6px; }
   .rs-btn { min-height:40px; }
 }
@@ -236,6 +240,12 @@ export function resultsHtml(m) {
     '<div class="rs-avg rs-big"><small>AVERAGE</small><span data-count="' + m.avg + '" data-dec="1">' + m.avg.toFixed(1) + '</span>★</div></div>' +
     '<div class="rs-stats"><div class="rs-stat"><i>KILLS</i><b data-count="' + m.kills + '">' + fmt(m.kills) + '</b></div>' +
     '<div class="rs-stat"><i>TIME</i><b>' + m.time + '</b></div><div class="rs-stat"><i>GOLD LEFT</i><b data-count="' + m.goldLeft + '">' + fmt(m.goldLeft) + '</b></div></div></div>';
+  // the notes sit under the score, where the left column has room, so the right column ends with the resources and the
+  // whole report fits a phone held sideways without scrolling [MM-story_mwb1o40v_1y]
+  if (m.notes && m.notes.length) {
+    h += '<div class="rs-panel rs-notes" data-step="notes">' + m.notes.map((n) =>
+      '<div class="rs-note ' + esc(n.kind || '') + '"><b>' + esc(n.head || '') + '</b><span>' + esc(n.text) + '</span></div>').join('') + '</div>';
+  }
   h += '</div><div class="rs-col">';
   if (m.rewards) {
     const r = m.rewards;
@@ -258,10 +268,6 @@ export function resultsHtml(m) {
     }
     if (x.rows.length) h += '<div class="rs-foot"><b>' + fmt(x.gold) + '</b> GOLD FROM HARVEST' + (x.contract && x.kept ? ' · <b>+' + fmt(x.kept) + '</b> TO YOUR INVENTORY' : '') + '</div>';
     h += '</div>';
-  }
-  if (m.notes && m.notes.length) {
-    h += '<div class="rs-panel rs-notes" data-step="notes">' + m.notes.map((n) =>
-      '<div class="rs-note ' + esc(n.kind || '') + '"><b>' + esc(n.head || '') + '</b><span>' + esc(n.text) + '</span></div>').join('') + '</div>';
   }
   h += '</div></div><div class="rs-act">';
   if (m.nextMap) h += '<button class="rs-btn primary" data-act="next">Next map<span class="sub">' + esc(m.nextMap.label) + (m.nextMap.size ? ' · ' + esc(m.nextMap.size) : '') + '</span></button>';
