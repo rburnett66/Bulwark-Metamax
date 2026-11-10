@@ -22,3 +22,4 @@ prototype/test-game/tools/planets/dist/
 # Blender ship builds (scripts are the source)
 tools/blender/ships/out/
 tools/blender/outposts/out/
+tools/blender/farming/out/

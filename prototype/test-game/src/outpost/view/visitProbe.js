@@ -11,6 +11,7 @@
  * - **Defense wear carries over:** a defense ends the probe with the HP the sim left it, so the red damage sparks and
  *   REPAIR follow from it.
  * - **A probe takes no ore.** If it reaches the base it fires on it and then pulls back.
+ * - **It tramples the farm** like a raid: the cells its raiders stood on (probeCells) set growing plots back a stage.
  * - **It is not one of the outpost's raids,** so it doesn't touch the raid schedule, the log or the contract steps.
  *
  * Determinism: the probe's sim is seeded from the outpost seed and the probe's number in the visit, and steps only in
@@ -81,6 +82,10 @@ export function probeWear(outpost, probe) {
 export function probeDefenseHp(probe) {
   return [...probe.defenseIds].map(([sid, id]) => { const s = probe.state.structures.get(sid); return { id, hp: s ? Math.max(0, s.hp) : 0 }; });
 }
+
+/** The cells the probe's raiders have stood on so far, [[x, y], …] in row order (raid.js cells()): a probe tramples the
+ *  farm like a raid does (src/farm/model.js trample; Farming-Design §10). [] without a probe. */
+export const probeCells = (probe) => (probe && typeof probe.cells === 'function' ? probe.cells() : []);
 
 /** Has a running probe reached the base? (the sim's breach rule) */
 export const probeBreached = (probe) => !!(probe && probe.done && probe.result() && probe.result().result === 'breach');

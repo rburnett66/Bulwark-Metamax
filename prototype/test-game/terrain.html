@@ -140,6 +140,8 @@
           <div class="row"><label>Deposit</label><select id="opTier" style="flex:1;min-width:0"><option>common</option><option>uncommon</option><option>rare</option></select></div>
           <div class="row"><label>Defense</label><select id="opKind" style="flex:1;min-width:0"><option value="cannon">cannon</option><option value="mg">machine gun</option><option value="wall">wall</option></select></div>
           <div class="row"><label>Conduits</label><label style="flex:1"><input type="checkbox" id="opAuto" checked> derive from reach</label></div>
+          <div class="row"><label>Farm cells</label><label style="flex:1"><input type="checkbox" id="opFarm"> show the farm layer</label></div>
+          <div class="note" id="opFarmV" style="margin:0 0 6px"></div>
           <div class="note" style="margin:0 0 6px"><b>Pad:</b> click empty ground to place (role + remote above), drag to move, right-click or Delete to remove; select one to change its role. <b>Deposit:</b> click a rig pad. <b>Conduit:</b> click two pads to link / unlink (untick <i>derive from reach</i> first: by default each pad links to its nearest station in reach). <b>Ramp</b> cuts the cliff rim; <b>Lane</b> toggles a raid spawn (a cart track is worn to the nearest ramp); <b>Defense</b> places the kit.</div>
           <div id="opValid" class="opv">—</div>
           <div class="row" style="margin-top:8px;gap:6px"><button class="ghost" id="opExport" style="margin:0">Export outpost file</button><button id="opShip" style="margin:0">🚀 Ship outpost</button></div>
@@ -169,6 +171,8 @@
           <div class="row"><label>Decor density</label><input type="range" id="decorDensity" min="0" max="100" value="50"><span class="val" id="decorDensityV">50</span></div>
           <div class="row"><label>Placement noise</label><input type="range" id="decorNoise" min="0" max="100" value="40"><span class="val" id="decorNoiseV">40</span></div>
           <div class="note" style="margin:2px 0 0">🌿 Impassable cores (trees/rocks/cliff) are FULLY covered — a blocked cell always shows its prop. Density/noise only shape the pathable border scatter: density = how many groves (3-5 per dot), noise = how spread out.</div>
+          <div class="row"><label>Resource density</label><input type="range" id="resDensity" min="0" max="100" step="0.5" value="50"><span class="val" id="resDensityV">50</span></div>
+          <div class="note" style="margin:2px 0 0">Resource fields per 1000 open cells (battle maps 50; an outpost's farmland fewer, owner 2026-11-10).</div>
           <button class="ghost" id="genRes" style="margin-top:2px">Generate resources</button>
           <div class="row" style="margin-top:6px;gap:4px;flex-wrap:wrap">
             <button class="ghost resPaint" data-res="blue" style="flex:1;min-width:64px">🔵 Blue</button>
@@ -253,6 +257,7 @@ import { WORLD, BASE, WAVE_WINDOWS, attackSide } from './content/maps/wave-windo
 import { bakeTerrain, DEFAULT_STACK } from './src/terrain/terrainBake.js?v=7';
 import { stampOutpost, deriveConduits, validateOutpostLayout, padAt, nextPadId, firstStation, defaultPowerReach, HEIGHT, padSizeFor } from './src/terrain/outpostPads.js';
 import { oresOf } from './src/data/ores.js';
+import { deriveFarmCells, farmCellCounts, FARM_CELL_COLOR } from './src/terrain/farmCells.js';
 import { MAPDATA } from './content/maps/mapdata.js';
 
 // wave window (1-indexed w,h,x,y) -> 0-indexed inclusive rect for the grid
@@ -476,7 +481,7 @@ function render() {
   // behavior just CLEARED them, so a map saved after any terrain tweak silently shipped with zero
   // resources). Hand-painted nodes (painted:true) survive when they still sit on open ground.
   const painted = resources.filter((q) => q.painted);
-  resources = generateResources(last, { seed: o.seed });
+  resources = generateResources(last, { seed: o.seed, density: resDensity() });
   for (const q of painted) {
     const i = q.y * o.cols + q.x;
     if (q.x < o.cols && q.y < o.rows && !BLOCKING.has(last.terrain[i])
@@ -516,6 +521,7 @@ function render() {
   $('waterNoiseV').textContent = $('waterNoise').value;
   $('baseGapV').textContent = $('baseGap').value;
   if ($('decorDensityV')) $('decorDensityV').textContent = $('decorDensity').value;
+  if ($('resDensityV')) $('resDensityV').textContent = $('resDensity').value;
   if ($('decorNoiseV')) $('decorNoiseV').textContent = $('decorNoise').value;
   $('spSpreadV').textContent = $('spSpread').value;
   $('spBiasV').textContent = $('spBias').value;
@@ -554,7 +560,7 @@ document.querySelectorAll('input,select').forEach((el) => el.addEventListener('i
   render();
 }));
 $('reroll').addEventListener('click', () => { $('seed').value = (Math.floor(Math.random() * 99999) + 1); render(); });
-$('genRes').addEventListener('click', () => { resources = generateResources(last, { seed: +$('seed').value }); redraw(); });
+$('genRes').addEventListener('click', () => { resources = generateResources(last, { seed: +$('seed').value, density: resDensity() }); redraw(); });
 $('genSpawn').addEventListener('click', () => {
   const t = spawnTuning();
   spawnsByWave = {};
@@ -697,6 +703,9 @@ function drawOverlays(px) {
   if (op.on) drawOutpost(px);
 }
 
+/** The resource scatter density (generateResources): the slider is fields per 1000 open cells. */
+const RES_DENSITY_DEFAULT = 0.05, DECOR_DENSITY_DEFAULT = 50;
+function resDensity() { const v = +$('resDensity').value; return Number.isFinite(v) ? v / 1000 : RES_DENSITY_DEFAULT; }
 function exportObj() {
   const o = opts();
   return {
@@ -712,6 +721,8 @@ function exportObj() {
     spawnTuning: spawnTuning(),
     spawnsByWave,
     resources,
+    ...(resDensity() !== RES_DENSITY_DEFAULT ? { resourceDensity: resDensity() } : {}),   // only when moved off the battle default
+    ...(+$('decorDensity').value !== DECOR_DENSITY_DEFAULT ? { decorDensity: +$('decorDensity').value } : {}),   // likewise the grove scatter
     spawns: spawnsByWave[selWave] || spawns || [],   // the previewed wave, for back-compat
     decor,                                            // clustered voxel-decor groves {x,y,type} (blocking types already in blocking[])
     // the baked feature map + blocking, so the game needn't regenerate (but could, from the knobs)
@@ -815,6 +826,8 @@ function loadState(obj) {
   opLoadFields(obj);   // an outpost map brings its mesa, pads, deposits, conduits, kit and lanes (else the layer goes off)
   $('worldMode').checked = !!obj.worldMode;
   $('seed').value = obj.seed;
+  $('resDensity').value = 1000 * (obj.resourceDensity != null ? obj.resourceDensity : RES_DENSITY_DEFAULT);
+  $('decorDensity').value = obj.decorDensity != null ? obj.decorDensity : DECOR_DENSITY_DEFAULT;
   if (!obj.worldMode) { $('cols').value = obj.cols; $('rows').value = obj.rows; }
   if (obj.water) { $('waterMode').value = obj.water.mode; $('waterPct').value = Math.round(obj.water.pct); $('waterNoise').value = Math.round(obj.water.noise * 100); }
   if (obj.types) for (const t of TUNABLE) if (obj.types[t.key]) {
@@ -859,7 +872,14 @@ function opExportFields() {
     planet: op.planet, outpost: true, autoConduits: op.auto, mesa: clone(op.mesa),
     pads: clone(op.pads), deposits: clone(op.deposits), conduits: clone(op.conduits), kitDefenses: clone(op.kitDefenses),
     heights: last && last.heights ? Array.from(last.heights) : [],
+    farmCells: opFarmCells(),   // the farmable-cell layer (story A6): soil, slope, water, grove, collection, lane
   };
+}
+/** The farm-cell layer of the current render (src/terrain/farmCells.js): the stamped grid, decor groves, fields, pads. */
+function opFarmCells() {
+  if (!last || !last.heights) return [];
+  return deriveFarmCells({ cols: last.cols, rows: last.rows, terrain: last.terrain, blocking: last.blocking, heights: last.heights,
+    pads: op.pads, decor, resources }, last.lanes);
 }
 function opSyncInputs() {
   $('opOn').checked = op.on; $('opPlanet').value = op.planet; $('opAuto').checked = op.auto;
@@ -945,6 +965,18 @@ function drawOutpost(px) {
     ctx.fillText(d.kind === 'mg' ? 'M' : d.kind[0].toUpperCase(), (x + 0.5) * px, (y + 0.55) * px);
   }
   ctx.textBaseline = 'alphabetic';
+  // the farm-cell layer (story A6), when ticked: a tint per tag, and the counts
+  if ($('opFarm') && $('opFarm').checked) {
+    const cells = opFarmCells();
+    for (let i = 0; i < cells.length; i++) {
+      if (!cells[i]) continue;
+      ctx.globalAlpha = 0.55; ctx.fillStyle = FARM_CELL_COLOR[cells[i]];
+      ctx.fillRect((i % last.cols) * px, ((i / last.cols) | 0) * px, px, px);
+    }
+    ctx.globalAlpha = 1;
+    const c = farmCellCounts(cells);
+    $('opFarmV').textContent = `soil ${c.soil} · slope ${c.slope} · water ${c.water} · grove ${c.grove} · collection ${c.collection} · lane ${c.lane}`;
+  } else if ($('opFarmV')) $('opFarmV').textContent = '';
   opShowProblems();
 }
 // tools
@@ -1040,6 +1072,7 @@ $('opOn').addEventListener('change', () => {
 });
 $('opPlanet').addEventListener('change', () => { op.planet = $('opPlanet').value; redraw(); });
 $('opAuto').addEventListener('change', () => { op.auto = $('opAuto').checked; opRender(); });
+$('opFarm').addEventListener('change', () => redraw());
 for (const [id, k] of [['opCx', 'cx'], ['opCy', 'cy'], ['opRx', 'rx'], ['opRy', 'ry']]) {
   $(id).addEventListener('change', () => { const v = +$(id).value; if (Number.isFinite(v)) { op.mesa[k] = v; opRender(); } });
 }

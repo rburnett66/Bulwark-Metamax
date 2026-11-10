@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OUTPOST_LAYOUTS, layoutFor, outpostForgeFor, outpostChecks } from './outpost-maps.mjs';
 import { checkLevelAgainstMap } from '../../src/render3d/level.js';
+import { deriveFarmCells } from '../../src/terrain/farmCells.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const FORGE = path.join(ROOT, 'content/maps/forge'), BAKED = path.join(ROOT, 'content/maps/baked');
@@ -32,7 +33,12 @@ test('each outpost map is a large map on its planet recipe: 64 × 32, world mode
     assert.equal(m.water.mode, 'patches', 'ponds, never rivers (§2.1)');
     assert.deepEqual(m.base, POWDER.base, 'the large maps\' base, which is the hub');
     assert.deepEqual(m.waveWindows, POWDER.waveWindows);
-    assert.ok(m.resources.length >= 40, `${planet}: resource fields (${m.resources.length})`);
+    // resource fields: the battle maps' scatter, except where a planet's farmland asks for far fewer (story A6, owner
+    // 2026-11-10: "way fewer natural resources to gather"; Verdance 54 → 15 at resourceDensity 0.0125)
+    if (L.resourceDensity != null) {
+      assert.equal(m.resourceDensity, L.resourceDensity, `${planet}: the Forge's resource density`);
+      assert.ok(m.resources.length > 0 && m.resources.length <= 20, `${planet}: far fewer resource fields (${m.resources.length})`);
+    } else assert.ok(m.resources.length >= 40, `${planet}: resource fields (${m.resources.length})`);
     // decor like the planet's own battle maps: the recipe decides how much (Kessra's dust has next to none)
     const battle = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => read(path.join(FORGE, `${L.slug}-map-${n}.json`)).decor.length).sort((a, b) => a - b);
     assert.ok(m.decor.length >= Math.floor(battle[4] / 2), `${planet}: decor groves (${m.decor.length}; its battle maps' median ${battle[4]})`);
@@ -61,6 +67,8 @@ test('the Forge export and the node generator agree cell for cell (the mesa is i
       if (g.blocking[i]) assert.equal(m.blocking[i], 1);
       if (g.clear[i]) assert.equal(m.blocking[i], 0, `cell ${i} is kept clear`);
     }
+    // the farm-cell layer (story A6), where a map carries one, is the Forge's derivation of this grid
+    if (m.farmCells) assert.deepEqual(m.farmCells, deriveFarmCells(m, g.lanes), `${planet}: farmCells`);
   }
 });
 

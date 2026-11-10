@@ -38,6 +38,13 @@ OUTPOST_CONDS = {
     "raids_held": {"stages": ["Unlock", "Complete"], "tier": "A"},
     "outpost_contract_step": {"stages": ["View", "Unlock"], "tier": "A"},
 }
+# The farming contracts' conditions (Farming tech plan §5 A5) [MM-story_mwabgpsa_e]: read from the save, like the outpost's.
+FARM_CONDS = {
+    "farming_open": {"stages": ["Unlock"], "tier": "A"},
+    "farm_plots_planted": {"stages": ["Complete"], "tier": "A"},
+    "crop_delivered": {"stages": ["Complete"], "tier": "A"},
+    "farm_methods_growing": {"stages": ["Complete"], "tier": "A"},
+}
 OUT = os.path.join(ROOT, "prototype", "test-game", "content", "missions", "missions.json")
 STAGES = ("View", "Unlock", "Execute", "Complete", "Fail")
 LANDING = "Landing craft BS-7"
@@ -125,6 +132,53 @@ def outpost_missions(ships, givers, problems):
             "status": "Draft", "impact": {"loyaltyPlanet": c["Loyalty"]},
             "view": view, "unlock": unlock, "execute": [], "complete": complete, "fail": [], "rewards": rewards,
             "outpost": {"planetKey": key, "unlocks": str(c["Unlocks"] or "").split()},
+        })
+    return missions, lines
+
+
+def farm_missions(ships, givers, problems):
+    """
+    The farming contracts as missions (Farming tech plan §5 A5, Farming-Design §2.2): one per Farm_Contracts row of the
+    map-data workbook, quest line QL-<PLA>-F, offered aboard the planet's capital ship once that planet's outpost has a
+    Rig Mk II (farming_open), the same way the outpost contracts are. Phase A ships Verdance F1. → (missions, lines).
+    """
+    wb = openpyxl.load_workbook(MAP_XLSX, data_only=True)
+    if "Farm_Contracts" not in wb.sheetnames:
+        return [], {}
+    crops = {c["Resource_Id"]: c for c in sheet_from(wb["Crops"], "Planet_Key")}
+    missions, lines = [], {}
+    for c in sheet_from(wb["Farm_Contracts"], "Planet_Key"):
+        key, code = c["Planet_Key"], c["Contract"]
+        crop = crops.get(c["Crop_Id"])
+        if not crop:
+            problems.append(f"Farm_Contracts {key} {code}: crop {c['Crop_Id']!r} is not on the Crops sheet")
+            continue
+        planet, step = crop["Planet"], int(str(code).lstrip("F"))
+        abbr, ship = planet[:3].upper(), ships.get(planet)
+        if not ship:
+            problems.append(f"Farm_Contracts {key}: {planet} has no capital ship on Capital_Ships")
+            continue
+        g = givers.get(ship["captain"])
+        ql = f"QL-{abbr}-F"
+        lines[ql] = {"name": f"{planet} farm", "planet": planet, "role": "Primary", "variant": None, "ship": ship["ship"]}
+        complete = [
+            {"cond": "farm_plots_planted", "param": key, "op": "≥", "value": c["Plant_Plots"], "text": f"Break ground: prep {c['Plant_Plots']} Traditional plots and plant them"},
+            {"cond": "crop_delivered", "param": c["Crop_Id"], "op": "≥", "value": c["Deliver"], "text": f"Bring in a harvest: deliver {c['Deliver']} {crop['Crop']} to {ship['ship']}"},
+            {"cond": "farm_methods_growing", "param": key, "op": "≥", "value": c["Methods_At_Once"], "text": f"Grow {c['Methods_At_Once']} ways: have {c['Methods_At_Once']} methods growing at once"},
+        ]
+        view = [] if step == 1 else [{"cond": "quest_step_collected", "param": ql, "value": step - 1, "text": "The previous farming contract was collected"}]
+        unlock = [{"cond": "capital_ship_arrived", "param": planet, "text": f"{ship['ship']} is in orbit"},
+                  {"cond": "farming_open", "param": key, "text": f"A Mining Rig Mk II at the {planet} outpost"}]
+        missions.append({
+            "id": f"FC-{abbr}-{step}", "questLine": ql, "step": step, "role": "primary", "variant": None,
+            "planet": planet, "map": None, "title": c["Title"], "type": "farm",
+            "giver": {"name": ship["captain"], **(g or {})}, "grantedAt": ship["ship"], "collectAt": ship["ship"],
+            "briefing": f"Farming contract {code}. Run it from FARM on the main menu.",
+            "status": "Draft", "impact": {"loyaltyPlanet": c["Loyalty"]},
+            "view": view, "unlock": unlock, "execute": [], "complete": complete, "fail": [],
+            "rewards": [{"kind": "gold", "amount": c["Gold"], "label": "Gold"}, {"kind": "xp", "amount": c["XP"], "label": "Commander XP"}],
+            "farm": {"planetKey": key, "contract": code, "grants": str(c["Grants"] or "").split(), "unlocks": str(c["Unlocks"] or "").split(),
+                     "podCrate": {"crop": c["Crop_Id"], "level": c["Pod_Crate_Level"] or 1, "n": c["Pod_Crate"] or 0}},
         })
     return missions, lines
 
@@ -251,6 +305,13 @@ def main():
                 else:
                     unlocked_by[u[5:]] = m["id"]
     conds.update(OUTPOST_CONDS)
+    fm, flines = farm_missions(ships, givers, problems)
+    for m in fm:
+        if m["id"] in seen or any(x["id"] == m["id"] for x in om):
+            problems.append(f"farm mission {m['id']} duplicates another mission")
+    missions += fm
+    lines.update(flines)
+    conds.update(FARM_CONDS)
     for (ql, var), ss in steps.items():   # each variant of a line must cover steps 1..n once
         if sorted(ss) != list(range(1, len(ss) + 1)):
             problems.append(f"quest line {ql} ({var or 'primary'}): steps {sorted(ss)} are not 1..{len(ss)}")

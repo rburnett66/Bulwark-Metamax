@@ -18,6 +18,7 @@
 import { STAR_GATE } from './save.js';
 import { logMission, claim, bankBattle, missionStatus, failMission, alignmentBand, factionOfPlanet, refreshSaveObjectives } from './missions.js';
 import { measureOnline, measureOreSold, measureRaidsHeld, contractStepCollected, planetKeyOf } from '../outpost/contract.js';
+import { farmingOpen, measureFarmPlanted, measureCropDelivered, measureMethodsGrowing, farmStepCollected } from '../farm/contract.js';
 import { bankHarvest } from './inventory.js';
 import { battlePods } from '../farm/pods.js';
 import { levelFromXp } from '../data/progression.js';
@@ -67,6 +68,11 @@ const GATE = Object.freeze({
   ore_sold: (s, c) => measureOreSold(s, c.param) >= c.value,
   raids_held: (s, c) => measureRaidsHeld(s, c.param) >= c.value,
   outpost_contract_step: (s, c) => (((s.outpostContracts || {})[c.param] || {}).step || 0) >= c.value,
+  // the farming contracts (Farming tech plan §5 A5) [MM-story_mwabgpsa_e]: the gate is a Rig Mk II at the planet's outpost
+  farming_open: (s, c) => farmingOpen(s, c.param),
+  farm_plots_planted: (s, c) => measureFarmPlanted(s, c.param) >= c.value,
+  crop_delivered: (s, c) => measureCropDelivered(s, c.param) >= c.value,
+  farm_methods_growing: (s, c) => measureMethodsGrowing(s, c.param) >= c.value,
 });
 export const GATE_CONDITIONS = Object.freeze(Object.keys(GATE));
 
@@ -188,5 +194,6 @@ export function collect(s, id, catalog, ctx = flowCtx(s)) {
   if (!ledger) return null;
   s.questSteps[m.questLine] = Math.max(s.questSteps[m.questLine] || 0, m.step);
   if (m.type === 'outpost') contractStepCollected(s, planetKeyOf(m.planet), m.step, { now: ctx.now === undefined ? Date.now() : ctx.now });
+  if (m.type === 'farm') farmStepCollected(s, planetKeyOf(m.planet), m.step, { now: ctx.now === undefined ? Date.now() : ctx.now });
   return { ledger, logged: syncMissions(s, catalog, ctx).map((x) => x.id) };
 }

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Farm Cells</title>
+<!-- Review page for story A6 [MM-story_mwabgjcm_c]: an outpost map's farmable-cell layer, top down. The layer is the
+     Terrain Forge's (src/terrain/farmCells.js, written to the map as farmCells); src/farm/cells.js decides where a 2 × 2
+     plot may stand. ?map=<url of a forge outpost json> reviews another map (one without a layer is derived here). -->
+<style>
+  :root { --bg:#0d1116; --panel:#141b23; --line:#2a3542; --text:#e8edf2; --muted:#98a5b3; }
+  html,body { margin:0; background:var(--bg); color:var(--text); font:13px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { padding:16px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; }
+  canvas { display:block; max-width:100%; height:auto; border:1px solid var(--line); border-radius:6px; image-rendering:pixelated; }
+  aside { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; min-width:240px; }
+  h1 { font-size:15px; margin:0 0 6px; }
+  .k { display:flex; align-items:center; gap:8px; margin:3px 0; }
+  .sw { width:14px; height:14px; border-radius:3px; border:1px solid #0006; }
+  .m { color:var(--muted); }
+  label { display:flex; gap:6px; align-items:center; margin:4px 0; cursor:pointer; }
+</style>
+</head>
+<body>
+<main>
+  <canvas id="cv"></canvas>
+  <aside>
+    <h1 id="ttl">Farm cells</h1>
+    <div id="legend"></div>
+    <div class="m" id="stats" style="margin-top:8px"></div>
+    <label><input type="checkbox" id="plots" checked> packed 2 × 2 plots</label>
+    <label><input type="checkbox" id="terrain" checked> terrain under the tags</label>
+  </aside>
+</main>
+<script type="module">
+import { outpostMapFromForge } from '../../src/outpost/outpostMap.js';
+import { surfaceFieldGroups } from '../../src/outpost/model.js';
+import { generateTerrain, TERRAIN_COLOR } from '../../src/terrain/terrainGen.js';
+import { stampOutpost } from '../../src/terrain/outpostPads.js';
+import { deriveFarmCells, farmCellCounts, FARM_CELL_COLOR, FARM_CELL_NAME } from '../../src/terrain/farmCells.js';
+import { packPlots, plotSpots } from '../../src/farm/cells.js';
+
+const q = new URLSearchParams(location.search);
+const url = q.get('map') || '../../content/maps/forge/ground-outpost.json';
+const forge = await (await fetch(url, { cache: 'no-store' })).json();
+let derived = false;
+if (!forge.farmCells || !forge.farmCells.length) {   // an older map: derive its layer the way the Forge does
+  const g = generateTerrain({ cols: forge.cols, rows: forge.rows, seed: forge.seed, types: forge.types, water: forge.water });
+  stampOutpost(g, { mesa: forge.mesa, pads: forge.pads, spawns: forge.spawns, kitDefenses: forge.kitDefenses });
+  forge.farmCells = deriveFarmCells(forge, g.lanes); derived = true;
+}
+const map = outpostMapFromForge(forge);
+const PX = 14, W = map.width, H = map.height, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+cv.width = W * PX; cv.height = H * PX;
+const plots = packPlots(map), spots = plotSpots(map).length, counts = farmCellCounts(map.farmCells);
+
+function draw() {
+  ctx.fillStyle = '#0d1116'; ctx.fillRect(0, 0, cv.width, cv.height);
+  const showT = document.getElementById('terrain').checked;
+  for (let i = 0; i < W * H; i++) {
+    const x = i % W, y = (i / W) | 0;
+    if (showT) { ctx.fillStyle = map.heights && map.heights[i] === 2 ? '#6c6e73' : TERRAIN_COLOR[map.terrain[i]]; ctx.fillRect(x * PX, y * PX, PX, PX); }
+    const c = map.farmCells[i];
+    if (c) { ctx.globalAlpha = showT ? 0.72 : 1; ctx.fillStyle = FARM_CELL_COLOR[c]; ctx.fillRect(x * PX, y * PX, PX, PX); ctx.globalAlpha = 1; }
+  }
+  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
+  for (let x = 0; x <= W; x++) { ctx.beginPath(); ctx.moveTo(x * PX + 0.5, 0); ctx.lineTo(x * PX + 0.5, H * PX); ctx.stroke(); }
+  for (let y = 0; y <= H; y++) { ctx.beginPath(); ctx.moveTo(0, y * PX + 0.5); ctx.lineTo(W * PX, y * PX + 0.5); ctx.stroke(); }
+  for (const p of map.pads) {
+    ctx.fillStyle = 'rgba(20,26,32,.75)'; ctx.fillRect(p.x * PX, p.y * PX, p.w * PX, p.h * PX);
+    ctx.strokeStyle = '#e6ebe3'; ctx.lineWidth = 2; ctx.strokeRect(p.x * PX + 1, p.y * PX + 1, p.w * PX - 2, p.h * PX - 2);
+    ctx.fillStyle = '#e6ebe3'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(p.id, (p.x + p.w / 2) * PX, (p.y + p.h / 2) * PX);
+  }
+  if (document.getElementById('plots').checked) {
+    ctx.strokeStyle = 'rgba(20,40,10,.9)'; ctx.lineWidth = 1.5;
+    for (const r of plots) ctx.strokeRect(r.x * PX + 2, r.y * PX + 2, r.w * PX - 4, r.h * PX - 4);
+  }
+}
+document.getElementById('ttl').textContent = `Farm cells — ${map.planet}-outpost (seed ${forge.seed})${derived ? ' · derived' : ''}`;
+document.getElementById('legend').innerHTML = FARM_CELL_NAME.map((n, i) => i ? `<div class="k"><span class="sw" style="background:${FARM_CELL_COLOR[i]}"></span>${n} <span class="m">${counts[n]}</span></div>` : '').join('')
+  + `<div class="k"><span class="sw" style="background:#6c6e73"></span>none (mesa, pads, stone) <span class="m">${counts.none}</span></div>`;
+document.getElementById('stats').innerHTML = `2 × 2 plot spots: <b>${spots}</b><br>packed side by side: <b>${plots.length}</b><br>resource fields: <b>${(forge.resources || []).length}</b> (surface groups ${surfaceFieldGroups(map).length})<br>decor props: <b>${(forge.decor || []).length}</b>`;
+for (const id of ['plots', 'terrain']) document.getElementById(id).addEventListener('change', draw);
+draw();
+window.__ready = true;
+</script>
+</body>
+</html>

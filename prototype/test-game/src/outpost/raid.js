@@ -8,18 +8,19 @@
  * ── The API (the contract with the outpost view, story O6) ──────────────────────────────────────────────────────
  *
  *   runRaid(outpost, raid, { map, step, seed?, units?, bakeTune?, onTick? })
- *     → { result: 'held' | 'breach', defenses: [{ id, hp }], events, ticks, timedOut }
- *     Runs the raid headless to its end. `raid` is what advance() hands its hook: { at, window?, first?, powered }.
+ *     → { result: 'held' | 'breach', defenses: [{ id, hp }], cells, events, ticks, timedOut }
+ *     Runs the raid headless to its end. `cells` are the outpost-map cells a raider stood on during the raid, each once,
+ *     as [x, y] in row order (the farm's trampling reads them, src/farm/model.js trample; tech plan Farming §2.3 F5). `raid` is what advance() hands its hook: { at, window?, first?, powered }.
  *     onTick(events, raidObj) is called after every fixed tick (optional; e.g. a progress bar).
  *
  *   createRaid(outpost, raid, { map, step, seed?, units?, bakeTune? })
- *     → { state, dt, tick(), step(seconds), finish(), done, result(), defenseIds, buildingPads, lanes }
+ *     → { state, dt, tick(), step(seconds), finish(), done, result(), cells(), defenseIds, buildingPads, lanes }
  *     The stepping form for the live view. tick() runs one fixed sim tick (FIXED_DT = 1/30 s) and returns that
  *     tick's drained sim events (spawn, kill, damage, destroyed …) for the battle renderer's FX. step(seconds)
  *     accumulates real time and runs as many whole fixed ticks as fit, returning their events concatenated.
  *     finish() runs the rest headless and returns result(). `done` turns true on the tick that decides the raid;
  *     result() is null until then. `state` is a battle SimState: draw state.units / state.structures with the
- *     battle renderer. defenseIds maps a sim structure id → the outpost defense id; buildingPads lists the mesa
+ *     battle renderer. cells() is the raider cells so far (the same list result() ends with). defenseIds maps a sim structure id → the outpost defense id; buildingPads lists the mesa
  *     pads that count as buildings for a breach; lanes are the raid spawn points.
  *     Because the sim only ever advances in FIXED_DT ticks, a raid stepped live with any frame timing and then
  *     finished headless gives exactly the result runRaid gives.
@@ -328,6 +329,18 @@ export function createRaid(outpost, raid = {}, opts = {}) {
   } : null;
   const maxTicks = Math.ceil(RAID_MAX_SEC / RAID_DT);
   const kept = [];
+  // the cells raiders stood on (tech plan Farming §2.3 F5): read from the sim's unit positions after every tick, out
+  // here, so the sim is unchanged. A unit at pos (x, y) stands on cell (round x, round y), as the probe and siege
+  // paths read it. Indices y * cols + x of the outpost map, each once.
+  const stood = new Set();
+  const noteCells = () => {
+    for (const u of state.units.values()) {
+      if (u.side !== 'attacker' || u.hp <= 0) continue;
+      const x = Math.round(u.pos.x), y = Math.round(u.pos.y);
+      if (x >= 0 && y >= 0 && x < mc && y < mr) stood.add(y * mc + x);
+    }
+  };
+  const cellList = () => [...stood].sort((a, b) => a - b).map((i) => [i % mc, (i / mc) | 0]);
   let outcome = null, acc = 0, timedOut = false, breachBy = null;
 
   const raidify = () => {
@@ -443,6 +456,7 @@ export function createRaid(outpost, raid = {}, opts = {}) {
       if (outcome) return [];
       raidify();
       const evs = stepSim(state, RAID_DT);
+      noteCells();
       for (const e of evs) if (KEEP_EVENTS.has(e.type)) kept.push(e);
       siege();
       const r = decide();
@@ -456,7 +470,7 @@ export function createRaid(outpost, raid = {}, opts = {}) {
             const hit = placed.find(([id]) => id === d.id);
             return { id: d.id, hp: hit ? Math.max(0, Math.round(hit[1].hp * 1000) / 1000) : d.hp };
           }),
-          events: kept, ticks: state.tick, timedOut,
+          cells: cellList(), events: kept, ticks: state.tick, timedOut,
         };
       }
       return evs;
@@ -472,6 +486,7 @@ export function createRaid(outpost, raid = {}, opts = {}) {
       return outcome;
     },
     result() { return outcome; },
+    cells: cellList,
   };
   return obj;
 }
