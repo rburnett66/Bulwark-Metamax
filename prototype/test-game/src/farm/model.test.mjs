@@ -1,0 +1,198 @@
+// [MM-story_mwabgeyj_a] The farm model: a layer on the outpost (owner rule 7), growing inside the outpost's advance().
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { referenceOutpost, advance, powerGrids } from '../outpost/model.js';
+import { DRAFT_LAYOUT as map } from '../outpost/draftLayout.js';
+import { FARM, yieldOf, growSec } from '../data/farm.js';
+import { TERRAIN } from '../terrain/terrainGen.js';
+import {
+  ensureFarm, occupied, plotState, placePlot, prep, plant, harvest, harvestAll, placeFarmBuilding, storeCapacity,
+  outputPerHour, farmStatus, farmReportLines, luckyRoll,
+} from './model.js';
+
+const T0 = Date.UTC(2026, 10, 10, 8, 0, 0), MIN = 60_000, H = 3_600_000;
+const base = () => referenceOutpost('ground', { seed: 7, map, now: T0 });
+// free 2 × 2 spots on the draft layout, away from pads and defenses
+function freeSpots(o, n, w = 2, h = 2) {
+  const taken = occupied(o, map), out = [];
+  for (let y = 0; y + h <= map.height && out.length < n; y += h) {
+    for (let x = 0; x + w <= map.width && out.length < n; x += w) {
+      const r = { x, y, w, h };
+      if (!taken.some((t) => r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h)) { out.push(r); taken.push(r); }
+    }
+  }
+  return out;
+}
+const go = (o, t) => advance(o, t, { map }).outpost;
+/** A free spot within the reference outpost's Power Station reach (so a farm building on it is powered). */
+function nearPower(o, w, h, near = null) {
+  const pw = map.pads.find((p) => o.pads[p.id] && o.pads[p.id].kind === 'power');
+  const c = [pw.x + pw.w / 2, pw.y + pw.h / 2];
+  return freeSpots(o, 400, w, h).filter((r) => Math.hypot(r.x + w / 2 - c[0], r.y + h / 2 - c[1]) <= 8)
+    .sort((a, b) => (near ? Math.hypot(a.x - near.x, a.y - near.y) - Math.hypot(b.x - near.x, b.y - near.y) : 0))[0];
+}
+/** A plot placed, prepped and planted with Loam Grain at `level`, the outpost advanced to planting time. */
+function planted(level = 1, method = 'traditional') {
+  let o = base();
+  const s = method === 'irrigated' ? nearPower(o, 2, 2) : freeSpots(o, 1)[0];
+  let r = placePlot(o, { ...s, method }, { map, now: T0, methods: ['traditional', 'irrigated'] });
+  o = go(r.outpost, T0 + FARM.Prep_Sec * 1000);
+  r = plant(o, r.plot, { crop: 'loam-grain', level }, { now: o.t, podsHeld: 4 });
+  return { o: r.outpost, id: Object.keys(r.outpost.farm.plots)[0], t: o.t };
+}
+
+test('the farm lives inside the outpost record and has no clock of its own (owner rule 7)', () => {
+  const o = base();
+  assert.equal(o.farm, undefined, 'an outpost without farming has no farm');
+  const f = ensureFarm(structuredClone(o));
+  assert.deepEqual(Object.keys(f).sort(), ['buildings', 'next', 'plots'], 'no t, no seed, no raids: the outpost has those');
+  const src = readFileSync(new URL('./model.js', import.meta.url), 'utf8') + readFileSync(new URL('./grow.js', import.meta.url), 'utf8');
+  assert.ok(!/Date\.now|Math\.random/.test(src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')), 'no wall clock or unseeded random in the farm model');
+});
+
+test('a plot: prep, plant, the four stages, Fruited, then Dead at the end of its window', () => {
+  const { o, id, t } = planted(1);
+  const g = growSec('loam-grain') * 1000;
+  assert.equal(plotState(o, o.farm.plots[id]), 'planted');
+  const at = (k) => { const x = go(o, t + k * g); return plotState(x, x.farm.plots[id]); };
+  assert.deepEqual([0.05, 0.2, 0.5, 0.99, 1.01, 1.99, 2.01].map(at), ['planted', 'sprout', 'plant', 'plant', 'fruited', 'fruited', 'dead']);
+});
+
+test('advancing once over 72 hours equals advancing in steps (one clock: the outpost\'s)', () => {
+  const { o, t } = planted(2);
+  const once = go(o, t + 72 * H);
+  let stepped = o;
+  for (let k = 1; k <= 72 * 4; k++) stepped = go(stepped, t + k * 15 * MIN);
+  const a = Object.values(once.farm.plots)[0], b = Object.values(stepped.farm.plots)[0];
+  assert.equal(a.progress, b.progress);
+  assert.ok(Math.abs(a.ripeAt - b.ripeAt) < 1, `ripeAt ${a.ripeAt} vs ${b.ripeAt}`);
+  assert.equal(plotState(once, a), plotState(stepped, b));
+});
+
+test('harvest at Fruited: the crop and its units by level, grain pods back, the plot left to prep again', () => {
+  const { o, id, t } = planted(3);
+  const ripe = go(o, t + growSec('loam-grain') * 1000 + MIN);
+  const r = harvest(ripe, id, { map, held: 0 });
+  assert.equal(r.kind, 'crop');
+  assert.equal(r.crop, 'loam-grain');
+  assert.equal(r.units, yieldOf('loam-grain', 'traditional', 3));
+  assert.ok(r.pods.some((p) => p.crop === 'loam-grain' && p.level === 3 && p.n >= 1), 'grain gives some pods back');
+  assert.equal(plotState(r.outpost, r.outpost.farm.plots[id]), 'harvested');
+  assert.equal(plotState(ripe, ripe.farm.plots[id]), 'fruited', 'the outpost passed in is unchanged');
+  assert.match(prep(r.outpost, id, { now: r.outpost.t, gold: 0 }).error, /costs 100 gold/);
+  assert.ok(prep(r.outpost, id, { now: r.outpost.t, gold: 100 }).outpost);
+});
+
+test('Dead gives the same pods back (crop, level, count) and needs no Silo room', () => {
+  const { o, id, t } = planted(4);
+  const dead = go(o, t + 3 * growSec('loam-grain') * 1000);
+  assert.equal(plotState(dead, dead.farm.plots[id]), 'dead');
+  const r = harvest(dead, id, { map, held: 1e9 });
+  assert.equal(r.kind, 'pods');
+  assert.deepEqual(r.pods, [{ crop: 'loam-grain', level: 4, n: 4 }]);
+  assert.equal(r.units, 0);
+});
+
+test('a full Silo blocks HARVEST; the plant keeps growing and dies at the end of its window (owner, 2026-11-10)', () => {
+  const { o, id, t } = planted(1);
+  const ripe = go(o, t + growSec('loam-grain') * 1000 + MIN);
+  const cap = storeCapacity(ripe, map);
+  const r = harvest(ripe, id, { map, held: cap });
+  assert.equal(r.error, 'the Silo is full');
+  assert.ok(r.full);
+  assert.ok(farmStatus(ripe, map, { held: cap }).siloFull);
+  const later = go(ripe, t + 3 * growSec('loam-grain') * 1000);
+  assert.equal(plotState(later, later.farm.plots[id]), 'dead', 'growth was never stopped');
+  assert.equal(harvest(later, id, { map, held: cap }).kind, 'pods', 'the pods still come back');
+});
+
+test('the Silo: a finished, powered Silo holds Silo_Hours of output; without one the Farmhouse holds Farmhouse_Store_Hours', () => {
+  let { o, t } = planted(1);
+  const out = outputPerHour(o);
+  assert.equal(out, 16 / 2, 'one Loam Grain plot: 16 units over 2 hours');
+  assert.equal(storeCapacity(o, map), Math.max(Math.ceil(FARM.Farmhouse_Store_Hours * out), 16));
+  const s = nearPower(o, 2, 2);
+  const b = placeFarmBuilding(o, { kind: 'silo', ...s }, { map, now: t, gold: 1e9 });
+  assert.equal(b.cost, 800);
+  o = go(b.outpost, t + 10 * MIN);
+  const g = powerGrids(o, map);
+  assert.ok(g.powered.has(b.id), 'the Silo is a consumer on the outpost\'s own grid');
+  assert.equal(storeCapacity(o, map), Math.ceil(FARM.Silo_Hours * out));
+});
+
+test('Irrigated grows 1.5× with water in reach: a powered Pump or a natural water cell; without water it grows as Traditional', () => {
+  const { o, id, t } = planted(1, 'irrigated');
+  const g = growSec('loam-grain') * 1000;
+  const dry = go(o, t + g / 1.5 + MIN);
+  assert.equal(plotState(dry, dry.farm.plots[id]), 'plant', 'no water: Traditional speed');
+  const plot = o.farm.plots[id];
+  const pumpAt = freeSpots(o, 600, 1, 1).find((c) => Math.hypot(c.x + 0.5 - (plot.x + 1), c.y + 0.5 - (plot.y + 1)) <= 3);
+  const p = placeFarmBuilding(o, { kind: 'pump', ...pumpAt }, { map, now: t - 2 * MIN, gold: 1e9 });
+  // the reference outpost's Power Station I is fully drawn (supply 10): the Pump is last in priority, so it is off
+  const short = go(p.outpost, t + g / 1.5 + MIN);
+  assert.equal(powerGrids(short, map).off[p.id], 'supply');
+  assert.equal(plotState(short, short.farm.plots[id]), 'plant', 'an unpowered Pump gives no water');
+  const grid2 = structuredClone(p.outpost);
+  for (const b of Object.values(grid2.pads)) if (b.kind === 'power') b.tier = 2;
+  const wet = go(grid2, t + g / 1.5 + MIN);
+  assert.equal(plotState(wet, wet.farm.plots[id]), 'fruited', 'a powered Pump in reach');
+  // natural water: a map with a water cell beside the plot
+  const terrain = new Array(map.width * map.height).fill(TERRAIN.GRASS);
+  terrain[(plot.y + 2) * map.width + plot.x] = TERRAIN.WATER;
+  const lake = advance(o, t + g / 1.5 + MIN, { map: { ...map, terrain } }).outpost;
+  assert.equal(plotState(lake, lake.farm.plots[id]), 'fruited', 'natural water in reach');
+});
+
+test('placing: refusals for taken ground, locked methods, gold, and the map rule passed in', () => {
+  const o = base();
+  const pad = map.pads[0];
+  assert.match(placePlot(o, { x: pad.x, y: pad.y }, { map, now: T0 }).error, /taken/);
+  const [s] = freeSpots(o, 1);
+  assert.match(placePlot(o, { ...s, method: 'irrigated' }, { map, now: T0 }).error, /not unlocked/);
+  assert.match(placePlot(o, s, { map, now: T0, gold: 50 }).error, /costs 100 gold/);
+  assert.equal(placePlot(o, s, { map, now: T0, cellOk: () => 'not soil' }).error, 'not soil');
+  const ok = placePlot(o, s, { map, now: T0, gold: 100 });
+  assert.equal(ok.cost, 100);
+  assert.match(placePlot(ok.outpost, s, { map, now: T0 }).error, /plot p1/);
+  assert.match(placeFarmBuilding(o, { kind: 'farmhouse', ...s }, { map, now: T0 }).error, /farming contract/);
+  const fh = placeFarmBuilding(o, { kind: 'farmhouse', ...s }, { map, now: T0, grant: true });
+  assert.equal(fh.cost, 0);
+  const [s2] = freeSpots(fh.outpost, 1);
+  assert.match(placeFarmBuilding(fh.outpost, { kind: 'farmhouse', ...s2 }, { map, now: T0, grant: true }).error, /has its Farmhouse/);
+});
+
+test('plant needs a prepped plot and the pods: one per row', () => {
+  let o = base();
+  const [s] = freeSpots(o, 1);
+  const r = placePlot(o, s, { map, now: T0 });
+  assert.match(plant(r.outpost, r.plot, { crop: 'loam-grain', level: 1 }, { now: T0, podsHeld: 4 }).error, /not prepped/);
+  o = go(r.outpost, T0 + FARM.Prep_Sec * 1000);
+  assert.match(plant(o, r.plot, { crop: 'loam-grain', level: 1 }, { now: o.t, podsHeld: 3 }).error, /needs 4 pods/);
+  assert.deepEqual(plant(o, r.plot, { crop: 'loam-grain', level: 1 }, { now: o.t, podsHeld: 4 }).spend, { crop: 'loam-grain', level: 1, n: 4 });
+});
+
+test('HARVEST ALL takes every Fruited and Dead plot and lists what the Silo had no room for', () => {
+  let o = base();
+  const spots = freeSpots(o, 3);
+  for (const s of spots) o = placePlot(o, s, { map, now: T0 }).outpost;
+  o = go(o, T0 + FARM.Prep_Sec * 1000);
+  for (const id of Object.keys(o.farm.plots)) o = plant(o, id, { crop: 'loam-grain', level: 1 }, { now: o.t, podsHeld: 4 }).outpost;
+  o = go(o, o.t + growSec('loam-grain') * 1000 + MIN);
+  const cap = storeCapacity(o, map);
+  const r = harvestAll(o, { map, held: cap - 20 });
+  assert.equal(r.results.length, 1, 'one plot of 16 fits in the room left');
+  assert.equal(r.blocked.length, 2);
+  assert.equal(harvestAll(o, { map, held: 0 }).results.length, Math.min(3, Math.floor(cap / 16)));
+});
+
+test('the away report names what ripened and died; the lucky roll is seeded and near its rate', () => {
+  const { o, t } = planted(1);
+  const { report } = advance(o, t + 3 * growSec('loam-grain') * 1000, { map });
+  assert.deepEqual(farmReportLines(report), ['1 plot fruited', '1 plant died']);
+  assert.equal(luckyRoll(7, 'p1', 3, 1), luckyRoll(7, 'p1', 3, 1));
+  assert.equal(luckyRoll(7, 'p1', 3, 5), false, 'never from Legendary');
+  let hits = 0;
+  for (let c = 0; c < 20000; c++) hits += luckyRoll(11, 'p' + (c % 50), c, 1) ? 1 : 0;
+  assert.ok(Math.abs(hits / 20000 - FARM.Lucky_Chance) < 0.01, `rate ${hits / 20000}`);
+});

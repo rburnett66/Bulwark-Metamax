@@ -36,6 +36,11 @@ MODELS = {
     "rig_crystal": "Crystal Harvester rig: silicon, yttrium, iridium",
     "rig_bore": "Deep Bore rig: cobalt and the other deep-bore ores",
     "rig_shielded": "Shielded Extractor rig: uranium (no owner art yet)",
+    # the farm's buildings (Farming-Design §6): the farm is a new system on top of the outpost, so its buildings are
+    # outpost buildings through this same pipeline, loader and states [MM-task_mwagi1nr_1e]
+    "farmhouse": "Farmhouse: the farm's hub, with the pod bench on its porch",
+    "silo": "Silo: stores the farm's harvest; the gauge shows its fill",
+    "pump": "Pump: water reach for Irrigated plots (1 × 1)",
 }
 # The game kind each slug stands for (outpostModels.js modelSlug): kind, tier, and the rig's Rig_Head. Written into
 # the manifest so the game and the review page can map kinds to files by data. The bays' slugs ARE their kinds
@@ -44,6 +49,7 @@ KINDS = {
     "hub": ("hub", 1), "shuttle": ("shuttle", 1), "power": ("power", 1), "power_ii": ("power", 2),
     "storage": ("storage", 1), "resourceBay": ("resourceBay", 1), "upgradeBay": ("upgradeBay", 1),
     "habitat": ("habitat", 1), "habitat_ii": ("habitat", 2),
+    "farmhouse": ("farmhouse", 1), "silo": ("silo", 1), "pump": ("pump", 1),
 }
 
 
