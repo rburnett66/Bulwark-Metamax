@@ -293,47 +293,51 @@ test('the Sensor Spire shows a raid inbound 10 minutes ahead, only when owned', 
 });
 
 // ── O15: the Habitat and the gun cap ─────────────────────────────────────────────────────────────────────────────
-test('the hub crews 3 guns (walls do not count); place() refuses a fourth with a clear message', () => {
+test('the hub crews 4 guns (walls do not count); place() refuses a fifth with a clear message (owner 2026-11-09)', () => {
   const o = withBay();
   assert.equal(gunCount(o), 2, 'the reference set: a Cannon and a Machine Gun (+ six walls)');
   assert.equal(gunCap(o), OUTPOST.Gun_Cap);
-  assert.equal(OUTPOST.Gun_Cap, 3);
+  assert.equal(OUTPOST.Gun_Cap, 4);
   const cells = freeCells(o, 4);
-  const a = place(o, { cell: cells[0], kind: 'mg' }, { map, gold: 1e9, now: T0 });
+  let a = place(o, { cell: cells[0], kind: 'mg' }, { map, gold: 1e9, now: T0 });
   assert.ok(!a.error, a.error);
-  assert.equal(gunCount(a.outpost), 3);
-  const b = place(a.outpost, { cell: cells[1], kind: 'cannon' }, { map, gold: 1e9, now: T0 });
-  assert.equal(b.error, 'the hub crews 3 guns: build a Habitat for more');
-  assert.equal(place(a.outpost, { cell: cells[1], kind: 'mg' }, { map, gold: 1e9, now: T0 }).error, b.error);
-  assert.ok(!place(a.outpost, { cell: cells[1], kind: 'wall' }, { map, gold: 1e9, now: T0 }).error, 'walls are not guns');
+  a = place(a.outpost, { cell: cells[1], kind: 'cannon' }, { map, gold: 1e9, now: T0 });
+  assert.ok(!a.error, a.error);
+  assert.equal(gunCount(a.outpost), 4);
+  const b = place(a.outpost, { cell: cells[2], kind: 'cannon' }, { map, gold: 1e9, now: T0 });
+  assert.equal(b.error, 'the hub crews 4 guns: build a Habitat for more');
+  assert.equal(place(a.outpost, { cell: cells[2], kind: 'mg' }, { map, gold: 1e9, now: T0 }).error, b.error);
+  assert.ok(!place(a.outpost, { cell: cells[2], kind: 'wall' }, { map, gold: 1e9, now: T0 }).error, 'walls are not guns');
 });
 
-test('Habitat I / II raise the gun cap by 2 / 4: one Habitat, on a free pad, bought and built, then upgraded', () => {
+test('Habitat I / II raise the gun cap by 4 / 8 (owner 2026-11-09): one Habitat, on a free pad, bought and built, then upgraded', () => {
   let o = withBay();
   const h1 = structureDef('habitat', 1), h2 = structureDef('habitat', 2);
   assert.deepEqual([h1.cost, h1.buildSec, h2.cost, h2.buildSec, h1.draw], [3000, 600, 5000, 900, 0]);
+  assert.equal(OUTPOST.Habitat_Guns_Per_Tier, 4);
   assert.match(place(o, { pad: 'r2', kind: 'habitat' }, { map, gold: 1e9, now: T0 }).error, /cannot go on a rig pad/);
   const r = place(o, { pad: 'x1', kind: 'habitat' }, { map, gold: 1e9, now: T0 });
   assert.equal(r.cost, 3000);
   o = r.outpost;
-  assert.equal(gunCap(o), 3, 'under construction it crews nobody yet');
+  assert.equal(gunCap(o), 4, 'under construction it crews nobody yet');
   assert.match(place(o, { pad: 'b2', kind: 'habitat' }, { map, gold: 1e9, now: T0 }).error, /has its Habitat/);
   o = advance(o, T0 + 10 * MIN, ctx()).outpost;
   assert.equal(habitatTier(o), 1);
-  assert.equal(gunCap(o), 5);
-  for (const c of freeCells(o, 3)) { const p = place(o, { cell: c, kind: 'mg' }, { map, gold: 1e9, now: T0 }); if (p.outpost) o = p.outpost; }
-  assert.equal(gunCount(o), 5);
-  assert.equal(place(o, { cell: freeCells(o, 1)[0], kind: 'mg' }, { map, gold: 1e9, now: T0 }).error, 'the Habitat crews 5 guns: upgrade it to Habitat II for more');
+  assert.equal(gunCap(o), 8);
+  for (const c of freeCells(o, 6)) { const p = place(o, { cell: c, kind: 'mg' }, { map, gold: 1e9, now: T0 }); if (p.outpost) o = p.outpost; }
+  assert.equal(gunCount(o), 8);
+  assert.equal(place(o, { cell: freeCells(o, 1)[0], kind: 'mg' }, { map, gold: 1e9, now: T0 }).error, 'the Habitat crews 8 guns: upgrade it to Habitat II for more');
   const u = upgrade(o, 'x1', { map, gold: 1e9, now: T0 + 10 * MIN });
   assert.equal(u.cost, 5000);
   o = advance(u.outpost, T0 + 26 * MIN, ctx()).outpost;
-  assert.equal(gunCap(o), 7);
-  for (const c of freeCells(o, 2)) { const p = place(o, { cell: c, kind: 'cannon' }, { map, gold: 1e9, now: T0 }); if (p.outpost) o = p.outpost; }
-  assert.equal(place(o, { cell: freeCells(o, 1)[0], kind: 'mg' }, { map, gold: 1e9, now: T0 }).error, 'the outpost crews at most 7 guns');
+  assert.equal(gunCap(o), 12);
+  for (const c of freeCells(o, 4)) { const p = place(o, { cell: c, kind: 'cannon' }, { map, gold: 1e9, now: T0 }); if (p.outpost) o = p.outpost; }
+  assert.equal(gunCount(o), 12);
+  assert.equal(place(o, { cell: freeCells(o, 1)[0], kind: 'mg' }, { map, gold: 1e9, now: T0 }).error, 'the outpost crews at most 12 guns');
   assert.equal(powerGrids(o, map).off.x1, undefined, 'the Habitat draws no power, so the cap never moves with the grid');
 });
 
-test('the raid measurement\'s "well defended" set (starter + 1 Machine Gun) fits the hub\'s 3 guns', () => {
+test('the raid measurement\'s "well defended" set (starter + 1 Machine Gun) fits the hub\'s 4 guns', () => {
   const o = wellDefended(referenceOutpost('ground', { seed: 1, map, now: T0 }), map);
   assert.equal(gunCount(o), 3);
   assert.ok(gunCount(o) <= gunCap(o));
@@ -344,13 +348,14 @@ test('the build list: the Habitat, and the guns\' count n / cap, greyed with the
   let m = buildMenu(o, map, { gold: 1e9, unlockedTiers: ['common'], unlocks: new Set(), now: T0 });
   const hab = m.find((x) => x.id === 'habitat');
   assert.ok(hab && !hab.locked && hab.cost === 3000 && hab.targets.some((t) => t.pad === 'x1'));
-  assert.deepEqual(['mg', 'cannon'].map((id) => { const x = m.find((i) => i.id === id); return [x.count, x.max, x.locked]; }), [[2, 3, false], [2, 3, false]]);
-  const full = place(o, { cell: freeCells(o, 1)[0], kind: 'mg' }, { map, gold: 1e9, now: T0 }).outpost;
+  assert.deepEqual(['mg', 'cannon'].map((id) => { const x = m.find((i) => i.id === id); return [x.count, x.max, x.locked]; }), [[2, 4, false], [2, 4, false]]);
+  let full = o;
+  for (const c of freeCells(o, 2)) full = place(full, { cell: c, kind: 'mg' }, { map, gold: 1e9, now: T0 }).outpost;
   m = buildMenu(full, map, { gold: 1e9, unlockedTiers: ['common'], unlocks: new Set(), now: T0 });
   for (const id of ['mg', 'cannon']) {
     const x = m.find((i) => i.id === id);
-    assert.deepEqual([x.count, x.max, x.locked, x.enabled], [3, 3, true, false], id);
-    assert.equal(x.why, 'The hub crews 3 guns: build a Habitat for more');
+    assert.deepEqual([x.count, x.max, x.locked, x.enabled], [4, 4, true, false], id);
+    assert.equal(x.why, 'The hub crews 4 guns: build a Habitat for more');
   }
   assert.equal(m.find((i) => i.id === 'wall').locked, false);
 });

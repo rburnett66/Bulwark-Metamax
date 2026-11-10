@@ -74,13 +74,13 @@ Verdance's; every planet uses the same rules with its own three ores.
 
 | Building | Cost | Build time | What it does |
 |---|---|---|---|
-| Outpost Hub | granted | — | The centre. Crews **3 guns** (Machine Guns and Cannons; walls do not count). |
+| Outpost Hub | granted | — | The centre. Crews **4 guns** (Machine Guns and Cannons; walls do not count). |
 | Power Station I / II | 600 / 6,000 | 2 / 15 min | 10 power in 10 cells / 20 power in 14 cells |
 | Mining Station I / Mk II | 600 / 8,000 | 2 / 20 min | Mines its deposit (R4) |
 | Storage Tower I / II | 300 / 5,000 | 1 / 15 min | Every rig's bay holds 4 / 8 hours |
 | Resource Bay | 2,500 | 5 min | Fields **harvesters** for the surface fields (R7) |
 | Upgrade Bay | 4,000 | 10 min | Upgrades defenses, one at a time, on its pad (R8) |
-| Habitat I / II | 3,000 / 5,000 | 10 / 15 min | **+2 guns** per tier over the hub's 3 |
+| Habitat I / II | 3,000 / 5,000 | 10 / 15 min | **+4 guns** per tier over the hub's 4 (8 / 12 in all) |
 | Machine Gun I / II / III | 600 / 1,500 / 3,000 | 2 min | Defense |
 | Cannon I / II / III | 1,200 / 3,000 / 6,000 | 2 min | Defense |
 | Wall I / II | 400 / 1,000 | 2 min | Blocks a cell. No power, not a gun. |
@@ -102,7 +102,8 @@ Verdance's; every planet uses the same rules with its own three ores.
 ### R8. Defenses and upgrades
 
 - Only **Machine Guns, Cannons and Walls** can be built at an outpost.
-- The **gun cap** is 3 from the hub, plus 2 per Habitat tier. The build list greys a gun out at the cap.
+- The **gun cap** is 4 from the hub, plus 4 per Habitat tier (owner 2026-11-09: "Guns should be 4 base and 4 more per
+  habitat"). The build list greys a gun out at the cap.
 - **Upgrades** need the tier in the Tech Tree *and* an Upgrade Bay. The defense goes to the bay's pad while it is
   upgraded (a timed job) and does **not fight** until it comes back.
 
@@ -158,7 +159,7 @@ A big round marker over a building is a **warning**. Tap the building to read it
 
 - Part loads: should SELL also sell a part load, at a smaller price, so a full rig can always be emptied?
 - Stopped rigs: should a full bay keep the rig running into the Storage Tower before it stops?
-- The gun cap and the Habitat: are 3 guns + 2 per Habitat tier the intended limits?
+- ~~The gun cap and the Habitat~~ — answered 2026-11-09: 4 guns base, 4 more per Habitat tier (R6, R8).
 - Harvester cap 2, maximum 4: what raises it (it is not in the build list today)?
 
 ---
