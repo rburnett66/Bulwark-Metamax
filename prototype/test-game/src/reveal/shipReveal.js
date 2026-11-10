@@ -119,15 +119,9 @@ function withMood(call, name) {
 }
 
 async function speak(doc, calls) {
+  // the game's comm card as one scene: a character's run of lines cycles in one window with breadcrumbs
   const comm = createComm(doc);
-  try {
-    for (const c of calls) {
-      if (!c) continue;
-      const closed = comm.waitForClose();
-      comm.showCall({ ...c, hold: true, center: false });
-      await closed;
-    }
-  } finally { comm.destroy(); }
+  try { await comm.playScene(calls, { center: false }); } finally { comm.destroy(); }
 }
 
 /**
