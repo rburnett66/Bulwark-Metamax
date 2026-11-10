@@ -3,13 +3,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { defaultSave, migrate } from '../save/save.js';
+import { defaultSave as freshSave, migrate } from '../save/save.js';
 import { settleBattle, flowCtx } from '../save/missionFlow.js';
 import { battleResult } from '../save/missions.js';
 import { createBattleTally, finishTally } from '../save/battleTally.js';
 import { FARM, farmContractOf } from '../data/farm.js';
 import * as PODS from './pods.js';
 import { podCount, podsHeld, addPods, spendPods, buyPods, podPrice, unitsPerPod, battlePods, grantPodCrate } from './pods.js';
+import { CROPS as ALL_CROPS } from '../data/farm.js';
+// owner rule 10: these tests are about pods, so every crop's pods start unlocked (farm/unlock.test.mjs covers the lock)
+const defaultSave = () => { const s = freshSave(); for (const c of ALL_CROPS) s.podUnlocks[c.id] = true; return s; };
 
 const withGold = (gold) => { const s = defaultSave(); s.carry = { gold, structures: [] }; s.goldBank = gold; return s; };
 const tiers = (o) => ({ common: 0, uncommon: 0, rare: 0, epic: 0, ...o });

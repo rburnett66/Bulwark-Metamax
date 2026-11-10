@@ -31,6 +31,7 @@ import { cellRule } from '../../farm/cells.js';
 import { farmUnlocks, recordDelivery, measureCropDelivered } from '../../farm/contract.js';
 import { podCount, spendPods, addPods } from '../../farm/pods.js';
 import { cropLevel, cropLevels } from '../../farm/levels.js';
+import { podsUnlocked, recordDelivered } from '../../farm/unlock.js';
 import { addToStore, takeFromStore } from '../../save/stores.js';
 import { farmContractOf, cropOf } from '../../data/farm.js';
 import { sellable } from '../../farm/view/farmUi.js';
@@ -215,6 +216,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
       case 'plant': {
         // pods have no level: the plot grows at the crop's tech-tree level now, capped by the plot (owner rule 9)
         const crop = String(a.pick).split(':')[0];
+        if (!podsUnlocked(s, crop)) return { error: `${(cropOf(crop) || { name: crop }).name} seed pods are locked` };   // owner rule 10
         const r = plant(o, a.plot, { crop, level: cropLevel(s, crop) }, { ...ctx, podsHeld: podCount(s, crop) });
         return r.error ? r : { outpost: r.outpost, after: (sv) => spendPods(sv, crop, r.spend.n), farm: { planted: crop, level: r.level, capped: r.why } };
       }
@@ -236,7 +238,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         if (!ctx.f1 || ctx.f1.crop !== a.crop) return { error: 'no contract asks for that' };
         const n = Math.min(Math.max(0, ctx.f1.deliver - ctx.delivered), Math.floor(ctx.held[a.crop] || 0));
         if (!n) return { error: `harvest ${cropOf(a.crop).name} first` };
-        return { outpost: o, farm: { delivered: n }, after: (sv) => { takeFromStore(sv, 'farm', planet, a.crop, n); recordDelivery(sv, planet, a.crop, n); } };
+        return { outpost: o, farm: { delivered: n }, after: (sv) => { takeFromStore(sv, 'farm', planet, a.crop, n); recordDelivery(sv, planet, a.crop, n); recordDelivered(sv, { [a.crop]: n }); } };
       }
       case 'farmSell': {   // the farm store's crops at the battle's price (common 1, uncommon 2; rare and epic are kept)
         const sale = sellable(ctx.held);
@@ -244,7 +246,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         return { outpost: o, gold: sale.gold, farm: { sold: sale.units }, after: (sv) => {
           for (const [id, u] of Object.entries(ctx.held)) {
             const c = cropOf(id);
-            if (c && (c.tier === 'common' || c.tier === 'uncommon') && Math.floor(u) > 0) takeFromStore(sv, 'farm', planet, id, Math.floor(u));
+            if (c && (c.tier === 'common' || c.tier === 'uncommon') && Math.floor(u) > 0) { takeFromStore(sv, 'farm', planet, id, Math.floor(u)); recordDelivered(sv, { [id]: Math.floor(u) }); }
           }
         } };
       }

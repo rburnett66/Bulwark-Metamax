@@ -21,6 +21,7 @@ import { measureOnline, measureOreSold, measureRaidsHeld, contractStepCollected,
 import { farmingOpen, measureFarmPlanted, measureCropDelivered, measureMethodsGrowing, farmStepCollected } from '../farm/contract.js';
 import { bankHarvest } from './inventory.js';
 import { battlePods } from '../farm/pods.js';
+import { recordDelivered, battleDelivery } from '../farm/unlock.js';
 import { levelFromXp } from '../data/progression.js';
 import { techCtxFromSave, planetOpen } from '../menu/techSave.js';
 
@@ -148,6 +149,8 @@ export function recordPlanetMap(s, result) {
 export function settleBattle(s, result, catalog, ctx = flowCtx(s)) {
   const out = bankBattle(s, result, ctx);
   out.harvested = bankHarvest(s, result, catalog);
+  // every unit banked counts toward its crop's seed pod unlock (owner rule 10) [MM-story_mwatmukb_1j]
+  out.podsUnlocked = result.tally ? recordDelivered(s, battleDelivery(result.planet, result.tally.harvested || result.tally.kept)) : [];
   // Rare seed pods from every unit the harvesters carried home (Farming-Design §9.1: "per 200 units carried"), after
   // the battle (tech plan §2.3 F9) [MM-story_mwabgh3x_b]. Not just the surplus over the Collective's quota.
   out.pods = result.tally ? battlePods(s, result.planet, result.tally.harvested || result.tally.kept) : {};

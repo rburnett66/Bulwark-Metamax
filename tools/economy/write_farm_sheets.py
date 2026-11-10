@@ -178,6 +178,7 @@ PARAMS = [
     ["Fruited_Window", 1, "x", "Fruited lasts this times the grow time, then the plant dies (D2)"],
     ["Pods_Per_Plot", 4, "count", "one pod per row of a 4-row plot (D36)"],
     ["Pod_Price", 25, "gold", "one seed pod, any crop, bought on the SEED PODS tab (pods have no level; owner rule 9). Proposed"],
+    ["Pod_Unlock_Units", 500, "units", "a crop's seed pods unlock once this many of it are delivered: every unit at a map's end plus farm sales and deliveries (owner rule 10, 2026-11-10)"],
     ["Battle_Pod_Units", 200, "units", "a battle field gives one pod per this many units carried (§9.1, X7)"],
     ["Battle_Pod_Units_Epic", 100, "units", "the same on an epic-tier field"],
     ["Pod_Crate", 12, "count", "pods in an F1 Pod Crate (§9.1)"],

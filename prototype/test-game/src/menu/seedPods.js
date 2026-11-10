@@ -19,6 +19,7 @@ import { resourceIconHtml } from '../data/resourceIcons.js';
 import { POD_LEVELS, FARM, FARM_CONTRACTS, MAP_CROP_LEVEL, podLevel, cropOf, growSec, yieldOf } from '../data/farm.js';
 import { RESOURCE_TIERS, PLANETS } from '../data/planets.js';
 import { podCount, podsHeld, buyPods, podPrice, unitsPerPod } from '../farm/pods.js';
+import { unlockProgress } from '../farm/unlock.js';
 import { cropLevel, nextLevelNode, cropTechUnlocked } from '../farm/levels.js';
 import { bankOf } from '../save/save.js';
 import { bandHtml, bandDetailHtml } from './inventoryScreen.js';
@@ -59,8 +60,11 @@ export function seedPodsListHtml(bands, s, selected) {
   const legend = `<div class="plegend"><span>Crop level</span>${POD_LEVELS.map((l) => named(l.level)).join('')}<span class="plring">ring = crop tier</span></div>`;
   return legend + bands.map((b) => {
     const rows = b.resources.map((c) => {
-      const n = podCount(s, c.id), L = cropLevel(s, c.id), next = nextHtml(s, c), id = esc(c.id);
-      const cells = `<button class="pslot pheld${n ? '' : ' nil'}" data-inv-id="${id}" aria-label="${esc(c.name)}: ${b.open ? num(n) : 'locked'} pods"><small>Pods</small><b class="num">${b.open ? num(n) : '—'}</b></button>`
+      const n = podCount(s, c.id), L = cropLevel(s, c.id), next = nextHtml(s, c), id = esc(c.id), u = unlockProgress(s, c.id);
+      // a crop whose pods are still locked (owner rule 10) shows its count toward the unlock instead of pods held
+      const cells = (b.open && !u.open
+        ? `<button class="pslot pheld plock nil" data-inv-id="${id}" aria-label="${esc(c.name)}: pods locked, ${num(Math.min(u.delivered, u.need))} of ${num(u.need)} delivered"><b class="num">${num(Math.min(u.delivered, u.need))}<i>/${num(u.need)}</i></b></button>`
+        : `<button class="pslot pheld${n ? '' : ' nil'}" data-inv-id="${id}" aria-label="${esc(c.name)}: ${b.open ? num(n) : 'locked'} pods"><small>Pods</small><b class="num">${b.open ? num(n) : '—'}</b></button>`)
         + `<button class="pslot plevel" data-inv-id="${id}" style="--lc:${podLevel(L).colour}" aria-label="${esc(c.name)}: level ${L}, ${esc(levelName(L))}">${named(L)}</button>`
         + `<button class="pslot pnextc${next.node ? '' : ' nil'}" data-inv-id="${id}" aria-label="${esc(c.name)}: next level ${next.node ? esc(next.node.name) + ', ' + num(next.node.price) + ' gold' : 'none'}">${next.html}</button>`;
       return `<div class="podrow${n ? '' : ' none'}" style="--rc:var(${TIER_VAR[c.tier]})"><button class="pcrop" data-inv-id="${id}" aria-selected="${c.id === selected}">${resourceIconHtml(c.id, 'gem3 resi pring')}
@@ -99,7 +103,14 @@ function levelHtml(s, c) {
 
 /** BUY (one plot's worth at the fixed price), PLANT (when the menu wires it), the last answer. */
 function buyHtml(s, c, msg, canPlant) {
-  const have = podCount(s, c.id), gold = podPrice(BUY_PODS);
+  const have = podCount(s, c.id), gold = podPrice(BUY_PODS), u = unlockProgress(s, c.id);
+  if (!u.open) {   // owner rule 10: deliver 500 of the crop to unlock its pods; the unlock gives access, not pods
+    return `<div class="pbench pbuy plocked"><div class="pbh">Seed pods · ${esc(c.name)} · locked</div>
+   <div class="pbp">Deliver ${num(u.need)} ${esc(c.name)} to unlock its seed pods. Every unit your harvesters bring home at the end of a map counts, and every farm sale.</div>
+   <div class="pmeter" role="meter" aria-valuemin="0" aria-valuemax="${u.need}" aria-valuenow="${Math.min(u.delivered, u.need)}" aria-label="${esc(c.name)} delivered toward the unlock"><i style="width:${Math.round(100 * Math.min(1, u.delivered / u.need))}%"></i></div>
+   <div class="pbhave"><b class="num">${num(Math.min(u.delivered, u.need))}</b> of <b class="num">${num(u.need)}</b> delivered</div>
+   ${msg ? `<p class="pbmsg ${msg.ok ? 'ok' : 'no'}" role="status">${msg.html}</p>` : ''}</div>`;
+  }
   return `<div class="pbench pbuy"><div class="pbh">Seed pods · ${esc(c.name)}</div>
    <div class="pbp"><b class="num">${num(podPrice(1))}</b> gold a pod, any crop · one plot takes ${num(FARM.Pods_Per_Plot)}</div>
    <div class="pbhave">You hold <b class="num">${num(have)}</b> · bank <b class="num">${num(bankOf(s))}</b> gold</div>
@@ -136,6 +147,7 @@ export function seedPodsDetailHtml(bands, s, selected, { back = 'All crops', msg
 export function buyMessage(r, cropId) {
   const c = cropOf(cropId);
   if (r.ok) return { ok: true, html: `Bought ${num(r.n)} ${esc(c.name)} pods for ${num(r.gold)} gold.` };
+  if (r.reason === 'locked') return { ok: false, html: `${esc(c.name)} seed pods are locked: deliver ${num(unlockProgress({}, cropId).need)} ${esc(c.name)} first.` };
   return { ok: false, html: `Too little gold: ${num(BUY_PODS)} pods cost ${num(r.need)} gold and the bank holds ${num(r.have)}.` };
 }
 
