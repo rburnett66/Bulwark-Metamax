@@ -3,6 +3,8 @@
  * "a button that allow them to see a list of all faction characters and show the players rating with them, on this
  * same view there should be a faction tab that shows the players relationship with each faction. So players need to
  * visit capital ships to see this view."
+ * Owner 2026-11-09: "When you check the friends list only show the faction of that capital ship not all characters. The
+ * Faction tab shows all factions." → `faction` (the ship's registry key) limits CHARACTERS to that faction's cast.
  *
  * It is the Inventory screen's layout (inventoryScreen.js, the Mission Log's styles): tabs over a list of faction bands,
  * a detail pane for the selection. CHARACTERS: each faction's nine heroes with the player's rating; FACTIONS: each
@@ -104,7 +106,7 @@ let packsP = null;
 const loadPacks = () => packsP || (packsP = fetch(new URL('../../content/dialog/voicepacks.json', import.meta.url)).then((r) => r.json()).catch((e) => { packsP = null; throw e; }));
 
 /** The STANDINGS screen in host (the ship view's root). → { open(), close(), isOpen(), dispose() } */
-export function createStandingsScreen({ doc, host, onClose }) {
+export function createStandingsScreen({ doc, host, onClose, faction = null }) {
   ensureMissionStyle(doc);
   if (!doc.getElementById('bwm-stand-style')) { const st = doc.createElement('style'); st.id = 'bwm-stand-style'; st.textContent = STYLE; doc.head.appendChild(st); }
   const wrap = doc.createElement('div'); wrap.className = 'bwm-ml bwm-stand';
@@ -120,10 +122,13 @@ export function createStandingsScreen({ doc, host, onClose }) {
     $('[data-tabs]').innerHTML = STANDING_TABS.map(([k, n]) => `<button class="tab" role="tab" aria-selected="${k === tab}" data-stab="${k}">${n}</button>`).join('');
     if (!packs) { $('[data-list]').innerHTML = loadError ? `<div class="stale">Characters failed to load: ${esc(loadError.message || loadError)}</div>` : ''; $('[data-dp]').innerHTML = ''; return; }
     const s = loadSave();
-    const groups = characterStandings(s, packs), rows = factionStandings(s, packs);
+    const rows = factionStandings(s, packs);
+    // aboard a faction's ship the CHARACTERS tab is that faction's cast only (FACTIONS still lists every faction)
+    const groups = characterStandings(s, packs).filter((g) => !faction || g.key === faction);
     const met = groups.reduce((a, g) => a + g.characters.filter((c) => c.met).length, 0), all = groups.reduce((a, g) => a + g.characters.length, 0);
     $('[data-sum]').innerHTML = `<b class="num">${met}</b> of ${all} met<br>Alignment <b>${alignWord(s.alignment || 0)}</b>`;
     if (tab === 'characters') {
+      if (!groups.length) { $('[data-list]').innerHTML = `<div class="stale">No ratings are kept with this ship's crew.</div>`; $('[data-dp]').innerHTML = ''; return; }
       if (!selChar) selChar = (groups.flatMap((g) => g.characters).find((c) => c.met) || (groups[0] && groups[0].characters[0]) || {}).name;
       $('[data-list]').innerHTML = characterListHtml(groups, selChar);
       $('[data-dp]').innerHTML = characterDetailHtml(groups, selChar);
