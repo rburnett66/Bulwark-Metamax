@@ -39,6 +39,18 @@ export function constructionSites(o, map, now) {
     out.push({ id: 'site-' + job.pad, pos: { x: pad.x, y: pad.y }, footprint: { w: pad.w, h: pad.h }, lifecycle: 'Building',
       progress: Math.max(0, Math.min(1, 1 - (job.done - now) / sec)) });
   }
+  // the defense on the Upgrade Bay (owner 2026-11-10, tower parity) [MM-story_mwb8zcgz_25]: the battle's build dust and
+  // welding sparks where it stands on the bay's pad (conduits.js defenseStructures: the pad's open right side)
+  const u = o && o.upgrading;
+  if (u && u.done > now) {
+    const bayId = Object.keys(o.pads || {}).sort().find((id) => o.pads[id].kind === 'upgradeBay');
+    const pad = bayId && map && map.pads ? map.pads.find((p) => p.id === bayId) : null;
+    if (pad) {
+      const span = Math.max(1, u.done - (u.since ?? (u.done - 60000)));
+      out.push({ id: 'upgrade-' + u.id, pos: { x: pad.x + pad.w - 1, y: pad.y + Math.floor(pad.h / 2) }, footprint: { w: 1, h: 1 }, lifecycle: 'Building',
+        progress: Math.max(0, Math.min(1, 1 - (u.done - now) / span)) });
+    }
+  }
   return out;
 }
 

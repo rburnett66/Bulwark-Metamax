@@ -152,7 +152,8 @@ export function defenseStructures(o, map = null) {
   };
   const out = [];
   for (const d of o.defenses) {
-    if (shows && shows.working && shows.id === d.id && padSpot) out.push(one(d, d.tier, [padSpot.x, padSpot.y], { onBay: true }));
+    // on the bay it is the battle's 'Upgrading' tower: the warm tint (render3d lifecycleLook) [MM-story_mwb8zcgz_25]
+    if (shows && shows.working && shows.id === d.id && padSpot) out.push(one(d, d.tier, [padSpot.x, padSpot.y], { onBay: true, lifecycle: 'Upgrading' }));
     else out.push(one(d, d.tier, d.cell));
   }
   if (shows && !shows.working && padSpot) {
