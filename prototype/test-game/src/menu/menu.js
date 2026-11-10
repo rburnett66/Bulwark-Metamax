@@ -16,6 +16,7 @@ import { openBattleHistory } from './battleHistory.js';
 import { outpostButtonModel } from './outpostButton.js';
 import { farmButtonModel } from './farmButton.js';
 import { farmOffer, farmCard, acceptFarmContract, declineFarmContract } from '../farm/contract.js';
+import { cellRule } from '../farm/cells.js';
 import { outpostOffer, outpostCard, acceptOutpostContract, declineOutpostContract } from '../outpost/contract.js';
 import { outpostMapFor } from '../outpost/outpostMap.js';
 import { battlesOn } from '../save/battleLog.js';
@@ -414,7 +415,7 @@ export function createMenu(mountEl, cbs) {
   // Crate, and the FARM button lights
   async function acceptFarm(key) {
     const map = await outpostMap(key), now = Date.now();
-    updateSave((s) => { const r = acceptFarmContract(s, key, { map, now }); if (r.error) console.warn('[farm] accept', r.error); });
+    updateSave((s) => { const r = acceptFarmContract(s, key, { map, now, cellOk: cellRule(map, s.outposts && s.outposts[key]) }); if (r.error) console.warn('[farm] accept', r.error); });
     missionsChanged();
     refreshOutpost();
   }
