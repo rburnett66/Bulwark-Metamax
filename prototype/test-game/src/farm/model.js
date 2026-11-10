@@ -275,3 +275,59 @@ export function farmReportLines(report) {
   if (f.died.length) lines.push(`${f.died.length} plant${f.died.length > 1 ? 's' : ''} died`);
   return lines;
 }
+
+// ── raids and the farm (Farming-Design §10; tech plan §2.3 F5, story A11) ───────────────────────────────────────────
+// The farm has no raids of its own: the outpost's raid (src/outpost/raid.js, the battle sim on the outpost map) reports
+// the cells its raiders stood on, and the outpost's advance() hands them to trample() at the raid's moment. Plots never
+// block paths. The farmhands and the avatar are not in the raid sim at all, so they are never targets.
+const GROWING = new Set(['planted', 'sprout', 'plant']);
+
+/**
+ * Raiders crossing the farm. cells: [[x, y], …] (or { x, y }) the raiders stood on; t: the raid's moment (ms, default the
+ * outpost's clock). Every growing surface plot a cell falls on is set back one stage, once per raid: Plant → Sprout
+ * (progress to Sprout_At), Sprout → Planted (progress to 0); Planted stays Planted. A Fruited plot keeps
+ * Trample_Fruited_Yield of its yield (yieldShare), once: a second trampling takes nothing more. Dead, prepping,
+ * prepped and harvested plots are untouched; nothing is killed and no pod is lost.
+ * → { outpost (a new one), trampled: [{ plot, from, to, yieldShare? }] } in plot-id order.
+ */
+export function trample(outpost, cells, t = outpost.t) {
+  const plots = (outpost.farm && outpost.farm.plots) || {};
+  const ids = Object.keys(plots).sort((a, b) => +a.slice(1) - +b.slice(1));
+  if (!ids.length || !cells || !cells.length) return { outpost, trampled: [] };
+  const at = new Set(cells.map((c) => (Array.isArray(c) ? `${c[0]},${c[1]}` : `${c.x},${c.y}`)));
+  const hit = (p) => {
+    for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) if (at.has(`${x},${y}`)) return true;
+    return false;
+  };
+  const o = clone(outpost), trampled = [];
+  for (const id of ids) {
+    const p = o.farm.plots[id], from = plotState(o, p, t);
+    if ((from !== 'fruited' && !GROWING.has(from)) || from === 'planted') continue;   // Planted has no stage to lose
+    if (!hit(p)) continue;
+    if (from === 'fruited') {
+      const share = Math.min(p.yieldShare ?? 1, FARM.Trample_Fruited_Yield);
+      if (share === (p.yieldShare ?? 1)) continue;   // trampled already: no second loss
+      p.yieldShare = share;
+      trampled.push({ plot: id, from, to: from, yieldShare: share });
+      continue;
+    }
+    if (from === 'plant') p.progress = FARM.Sprout_At;
+    else p.progress = 0;   // sprout → planted
+    trampled.push({ plot: id, from, to: plotState(o, p, t) });
+  }
+  return trampled.length ? { outpost: o, trampled } : { outpost, trampled };
+}
+
+/**
+ * A breach on the farm's store (Farming-Design §10: a breach takes 25 % of what is stored, here the Silo). The farm model
+ * does not hold the store (the caller banks harvests into the farm inventory, s.stores.farm[planet]); a raid entry's
+ * `farmLoss` is the share lost, and the caller applies it to what it holds with this. held: a number of units, or
+ * { [crop]: units }. → { held (what is left, same shape), lost (same shape) }
+ */
+export function applyFarmLoss(held, share = FARM.Breach_Silo_Loss) {
+  const cut = (u) => { const l = (+u || 0) * share; return [(+u || 0) - l, l]; };
+  if (held == null || typeof held !== 'object') { const [k, l] = cut(held); return { held: k, lost: l }; }
+  const left = {}, lost = {};
+  for (const [item, u] of Object.entries(held)) [left[item], lost[item]] = cut(u);
+  return { held: left, lost };
+}
