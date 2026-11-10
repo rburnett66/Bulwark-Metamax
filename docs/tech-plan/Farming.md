@@ -32,6 +32,9 @@ Repo copy (canonical): `docs/tech-plan/Farming.md` in rburnett66/Bulwark-Metamax
    Clone of the previous one but dedicated to outposts and farming, eventually we will also have a mining inventory and
    a parts inventory."* The battle INVENTORY (its 36 resources) is unchanged; harvested crops, Helium-4 and the seed pods
    live in the new one (§3.3, stories A13 and A10).
+6. **The outpost map** (owner, 2026-11-10): *"the outpost map should have the same level of detail as the current map
+   but more open area for placing structures and crops, and way fewer natural resources to gather."* Story A6 reworks
+   the Verdance outpost map to this before its farm cells are painted; C8 does the same for the other eight.
 
 Helium-4 confirmed (owner, 2026-11-10): the battle's uncommon Lumen resource stays Helium-3; Helium-4 is the new
 material that is Lumen's uncommon crop.
@@ -185,7 +188,7 @@ Stories are tickets on the MetaMax board (the DoD lives there); this table is th
 | **A3** Farm model | plots, prep, plant, stages, Fruited window, Dead returns pods, harvest yield by level, lucky roll (seeded), Silo (capacity; when full HARVEST is blocked and the plants keep growing, rule 4), harvest into the farm store (rule 5), segment advance, away report lines, tests | A1 |
 | **A4** Seed pods | `s.pods`, the pod bench (3 → 1), Rare pods from battle tallies with carry, the F1 Pod Crate, tests | A1 |
 | **A5** The gate and Verdance F1 | `farmingOpen` (Rig Mk II), the F1 offer aboard the ship (contract card), its three steps and rewards, the FARM button and its status line, Mission Log | A3, A4 |
-| **A6** Verdance farm cells | the farmable-cell layer on the Verdance outpost map (Forge tags: soil, slope, water, grove, collection), its reader, the placement rule (2 × 2 on soil, not on pads, lanes or the mesa), tests | A1 |
+| **A6** Verdance farm cells | the Verdance outpost map at the battle maps' level of detail, with more open ground for structures and crops and far fewer natural resources (owner rule 6); the farmable-cell layer on it (Forge tags: soil, slope, water, grove, collection), its reader, the placement rule (2 × 2 on soil, not on pads, lanes or the mesa), tests | A1 |
 | **A7** The FARM tab | the OUTPOST / FARM tab in the outpost view, build list entries (Farmhouse, Silo, Traditional, Irrigated, Pump), placing plots, the plot panel, HARVEST ALL and SELL, the plot bed and plant models in their states, safe-mode rules | A3, A6 |
 | **A8** The surface avatar | the gold avatar at 0.45 cell, walk-to on the outpost nav grid, the work pose, the tap queue; Verdance farmhands; both shelter in a raid | A7 |
 | **A9** Embers | the harvest effect in five colours, the idle embers over Fruited plots, the dead-plot dust | A7 |
@@ -226,7 +229,7 @@ here so the order survives when they come back:
 | **C5** The six other methods | Terraced, Orchard, Solo, Spatial (§5.5), Hydrofarm, Truffle Hunting and the Hunter Kennel | C1 |
 | **C6** The 36 crop models | living and accreted, every state, LODs | A7 |
 | **C7** Gems from the deep seam | the 5% cut-gem chance per load | — |
-| **C8** The other eight maps | the farmable-cell layer on each outpost map | A6 |
+| **C8** The other eight maps | each outpost map reworked as rule 6 (battle-map detail, more open ground, far fewer resources) and its farmable-cell layer | A6 |
 
 ### F-D · Processing
 
