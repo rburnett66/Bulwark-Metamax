@@ -453,10 +453,15 @@ async function openOutpostViewInner(opts, stage) {
     refreshMenu();
   }
   function cancelPlacing() { pl = IDLE; hover = null; applyPlacement(); hud.menu(menuItems, { selected: null, icons, rigSlug: rigIconSlug() }); }
+  // Owner 2026-11-10: "the defenses in the outpost need the same range ux as resource gathering maps" [MM-story_mwb3y3zr_1z].
+  // Not placing: a selected defense is the battle renderer's selected structure (outpost defense d → structure 'od-' +
+  // d.id, conduits.js defenseStructures), so render3d/overlays/coverage.js draws exactly what a battle map does: a bright
+  // dashed ring at its range and a faint ring over every other defense of its kind, overlaps stacking brighter.
+  const idleUi = () => (sel && sel.defense ? { selectedStructureId: 'od-' + sel.defense } : {});
   /** Bring the scene and the banner to the placement state. */
   function applyPlacement() {
     const it = pl.phase === 'idle' ? null : armedItem();
-    if (!it) { scene.showPads(null); scene.showCells(null); scene.showGhost(null); farm.showTargets(null); farm.showGhost(null); hud.banner(null); ui3d = {}; hud.online(tab === 'farm' ? null : onlineChecks()); return; }
+    if (!it) { scene.showPads(null); scene.showCells(null); scene.showGhost(null); farm.showTargets(null); farm.showGhost(null); hud.banner(null); ui3d = idleUi(); hud.online(tab === 'farm' ? null : onlineChecks()); return; }
     hud.online(null);
     const T = it.targets || [], valid = aimValid(pl, T), price = it.cost != null ? ` · ${fmtGold(it.cost)} gold` : '';
     if (it.what) {   // a FARM item: a w × h piece of farm ground (story A7)
@@ -541,6 +546,7 @@ async function openOutpostViewInner(opts, stage) {
     if (next && (next.plot || next.farm)) {   // a farm plot or farm building (story A7)
       sel = next;
       if (pl.phase !== 'idle') cancelPlacing();
+      else ui3d = {};
       scene.select(null); scene.showReach(null);
       farm.select(farmRect(next));
       const m = farmPanelModel(o, map, next, farmCtx());
@@ -551,8 +557,9 @@ async function openOutpostViewInner(opts, stage) {
     farm.select(null);
     sel = next;
     scene.select(next && (next.pad ? { pad: next.pad } : next.defense ? { cell: (o.defenses.find((d) => d.id === next.defense) || {}).cell } : null));
-    if (!next) { hud.panel(null); panelKey = ''; scene.showReach(null); refocus(); return; }
+    if (!next) { hud.panel(null); panelKey = ''; scene.showReach(null); if (pl.phase === 'idle') ui3d = {}; refocus(); return; }
     if (pl.phase !== 'idle') cancelPlacing();
+    else ui3d = idleUi();
     const m = panelModel(o, map, next, { ...ctxNow(), now: clockNow(), gold: bank() });
     panelKey = JSON.stringify(m);
     hud.panel(m, next);
