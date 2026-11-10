@@ -1,7 +1,7 @@
 # Tech Plan — One dialog system: remove the duplicate, extend the comm system, track every character the same way
 
 **Repo copy is canonical:** `docs/tech-plan/Dialog-Unification.md`.
-**Status:** v0.1, 2026-11-06, agent-proposed. Nothing in §5 is built.
+**Status:** v0.2, 2026-11-09. D1 built (F1 scenes, F2 slides, F4 offers; the duplicates deleted), see §9; §5 and D2–D5 not yet.
 **Notes and as-built justifications for this work go here, not on the tickets.**
 
 > **owner** (2026-11-06): "you built a completely new dialog system, when we already had a dialog system. Why didnt you
@@ -159,6 +159,29 @@ against source.
 | Q2 | Names for Collective officers 6–9 (Marlow, Roux, Croke, the Standing Charter) | **Keep all four.** |
 | Q3 | Backstory, Friends and Enemies for the 81: write them where the doc has none, for your review? | **Yes:** written in D2, marked draft until the owner approves them. |
 | Q4 | The Collective's signature moments | **The proposed five:** `greet`, `contractOffer`, `contractDone`, `standingUp`, `farewell`. |
+
+## 9. As built: D1 (2026-11-09)
+
+> **owner** (2026-11-09): "When a character has multiple lines of dialog use bread crumbs and cycle the dialog, but do
+> not redraw the whole dialog window." · "Always use our primary dialog system and remove the duplicate system that
+> was created by accident."
+
+- **F1, scenes.** `commCard.playScene(calls, { onLine, center })`. A run of lines by the same speaker is one
+  transmission. The card opens once with `showCall`, sized for the run's longest line, with breadcrumbs (one dot per
+  line, the current one lit, more than 8 lines drawn smaller) in the footer. Each tap swaps the next line into the same
+  window, re-typed and re-voiced, and moves the breadcrumb on; nothing else is rebuilt. A tap while a line types
+  finishes it. A new speaker is a new transmission. `hush()` ends a scene. The card's text column can no longer be
+  widened by its footer (`.bw-comm-right{min-width:0}`, the hidden quest chip and END take no room).
+- **Users.** The Collective opening's bar conversation (`opening/introRunner.js`), with `onLine` cueing its
+  holo-slides, and every ship visit's captain lines (`reveal/shipReveal.js speak`).
+- **F2.** `holoSlide.js` moved to `src/comm/`.
+- **F4.** The opening's first contract is the game's contract card (`render/contractModal.js showContractModal`).
+- **Deleted.** `src/dialog/conversation.js`, `conversationState.js` (and its test), `src/opening/contractCard.js`.
+- **Lines.** Mira's lines live in `docs/16 Bulwark MM/design/Collective-Opening-Dialog.md` and are generated into
+  `content/dialog/opening.json` by `tools/extract_opening.py` (`comm/opening.test.mjs` keeps the two in step). This is
+  the interim source until D3 puts the Collective cast in the dialog doc.
+- **Not moved yet.** The post-battle chain in `main.js` (verdict → quest close → grant) still chains `showCall`; its
+  calls come from different speakers, so a scene would not change what the player sees.
 
 ## Dependencies
 
