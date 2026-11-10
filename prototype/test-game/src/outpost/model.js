@@ -44,9 +44,11 @@
  * finished, powered Upgrade Bay, up to the tier the player owns in the tree (mg2, cannon3, ...; walls: Reinforced Walls).
  *
  * Raids: `advance` finds each raid due and asks `ctx.raid(outpost, { at, window, first, powered })` for its outcome:
- * { result: 'held' | 'breach', defenses: [{ id, hp }] }. The game passes the battle sim's runRaid (story O7); the
+ * { result: 'held' | 'breach', defenses: [{ id, hp }], cells? }. The game passes the battle sim's runRaid (story O7); the
  * tests and the review page pass a stand-in. raidOutcome() applies an outcome: a breach loses Breach_Storage_Loss of
- * every bay and changes no building (owner Q6).
+ * every bay and changes no building (owner Q6). With a farm (o.farm), the raid's `cells` (where its raiders stood)
+ * trample the plots at the raid's moment (src/farm/model.js trample) and the report's raid entry carries
+ * `trampled: [{ plot, from, to }]` and `farmLoss` (Breach_Silo_Loss on a breach, else 0) for the farm store (story A11).
  */
 import { createRng } from '../sim/rng.js';
 import { ASSUMPTIONS } from '../data/tables.js';
@@ -54,7 +56,9 @@ import { oresOf, oreById, oreItemId } from '../data/ores.js';
 import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock } from '../data/outpost.js';
 // the farm is a layer on the outpost (owner rule 7): it grows inside this advance() and its buildings join this power grid
 import { growFarm, farmBuildEvents } from '../farm/grow.js';
-import { farmBuildingOf } from '../data/farm.js';
+// raids trample the farm (story A11): the raid's raider cells, applied at the raid's moment on this one clock
+import { trample } from '../farm/model.js';
+import { FARM, farmBuildingOf } from '../data/farm.js';
 
 const MIN = 60_000, HOUR = 3_600_000;
 const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
@@ -565,6 +569,14 @@ export function advance(outpost, toMs, ctx) {
       const outcome = ctx.raid ? ctx.raid(fighting, { ...ev.raid, powered: powerGrids(o, map).powered }) : { result: 'held', defenses: [] };
       const applied = raidOutcome(o, { ...outcome, at: ev.at }, params);
       Object.assign(o, applied.outpost);
+      if (o.farm) {
+        // the farm on this map (Farming-Design §10): raiders that crossed growing plots trampled them, and a breach
+        // takes Breach_Silo_Loss of the farm's store (held by the caller: the entry carries the share, farmLoss)
+        const tr = trample(o, outcome.cells || [], ev.at);
+        o.farm = tr.outpost.farm;
+        applied.entry.trampled = tr.trampled;
+        applied.entry.farmLoss = outcome.result === 'breach' ? FARM.Breach_Silo_Loss : 0;
+      }
       report.raids.push(applied.entry);
       if (ev.raid.window != null) o.raids.window = ev.raid.window;
     }
