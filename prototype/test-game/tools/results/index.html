@@ -29,12 +29,14 @@
 <div class="bar" role="toolbar" aria-label="Scenario">
   <button data-s="win" aria-pressed="true">Victory</button>
   <button data-s="defeat">Defeat</button>
+  <button data-s="chest">Pod chest</button>
   <button data-s="classic">No contract</button>
   <button data-s="replay">Play again</button>
 </div>
 <script type="module">
 // Review page for the final results screen [MM-story_mw15hyvl_2]. Uses the game's own module with sample data.
 import { createHud, showResult } from '../../src/render/hud.js';
+import { playChestOpen } from '../../src/menu/podChest.js';
 const names = { common: 'Loam Grain', uncommon: 'Heartwood Amber', rare: 'Rootsong Seeds', epic: 'Oathstone' };
 const z = () => ({ common: 0, uncommon: 0, rare: 0, epic: 0 });
 const total = (u, s, g) => ({ units: { ...z(), ...u }, sold: { ...z(), ...s }, kept: Object.fromEntries(Object.keys({ ...z(), ...u }).map((k) => [k, ((u[k] || 0) - (s[k] || 0))])), gold: g });
@@ -46,6 +48,12 @@ const S = {
   defeat: { result: 'lose', finalScore: { score: 8120, kills: 41, minutes: 6, seconds: 2, goldRemaining: 220 },
     waveStars: [4, 2, 1, 1], rewards: { result: 'lose', gold: { earned: 0, to: 36358 }, stars: { from: 80, to: 80 }, xp: { from: 638, to: 702, earned: 64 } },
     resources: { total: total({ common: 480, uncommon: 40 }, { common: 480, uncommon: 40 }, 2080), names, contract: true } },
+  // owner rule 11: a won map awards a Pod Reward Chest, played over the result and opened with one tap (main.js)
+  chest: { result: 'win', finalScore: { score: 36358, kills: 83, minutes: 10, seconds: 17, goldRemaining: 36358 },
+    waveStars: [4, 3, 3, 2, 3, 3, 4, 3], rewards: { result: 'win', gold: { earned: 36358, to: 36358 }, stars: { from: 78, to: 80 }, xp: { from: 380, to: 638, earned: 258 } },
+    nextMap: { id: 4, name: 'Seedline Ridge', size: '32x18' },
+    resources: { total: total({ common: 1592, uncommon: 159, rare: 101 }, { common: 1592, uncommon: 159, rare: 10 }, 14669), names, contract: true },
+    chest: { id: 'pc1', planet: 'ground', mapId: 3, at: 0, pods: { 'loam-grain': 15, 'heartwood-amber': 1, 'rootsong-seeds': 1 } } },
   classic: { result: 'win', finalScore: { score: 22410, kills: 140, minutes: 12, seconds: 40, goldRemaining: 950 },
     waveStars: [5, 5, 4, 5, 3, 4, 5, 5], rewards: null, nextMap: null, resources: null },
 };
@@ -57,8 +65,13 @@ function play(k) {
   cur = k;
   const s = S[k];
   for (const b of document.querySelectorAll('[data-s]')) b.setAttribute('aria-pressed', String(b.dataset.s === k));
+  const n = s.chest ? Object.values(s.chest.pods).reduce((a, k) => a + k, 0) : 0;
   showResult(hud, s.result, s.finalScore, s.nextMap || null, s.waveStars.map((n) => ({ stars: n })), s.rewards,
-    { resources: s.resources, planet: 'Verdance', mapId: 3, mapName: '' });
+    { resources: s.resources, planet: 'Verdance', mapId: 3, mapName: '',
+      notes: s.chest ? [{ kind: 'chest', head: 'POD REWARD CHEST', text: `${n} seed pods inside. Tap the chest to open it.` }] : [] });
+  for (const o of document.querySelectorAll('.pchov')) o.remove();
+  // the sample chest opens in memory only: no save is touched
+  if (s.chest) setTimeout(() => playChestOpen({ chest: s.chest, open: () => ({ draws: Object.entries(s.chest.pods).map(([crop, k]) => ({ crop, n: k })) }) }), 1200);
 }
 for (const b of document.querySelectorAll('[data-s]')) b.addEventListener('click', (e) => { e.stopPropagation(); b.dataset.s === 'replay' ? play(cur) : play(b.dataset.s); });
 const q = new URLSearchParams(location.search).get('s');
