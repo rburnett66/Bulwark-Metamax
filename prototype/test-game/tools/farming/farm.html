@@ -58,7 +58,7 @@ import { defaultSave } from '../../src/save/save.js';
 import { FARM, growSec } from '../../src/data/farm.js';
 import { acceptFarmContract } from '../../src/farm/contract.js';
 import { cellRule, packPlots } from '../../src/farm/cells.js';
-import { placePlot, placeFarmBuilding, plant, trample, occupied } from '../../src/farm/model.js';
+import { placePlot, placeFarmBuilding, plant, trample, occupied, walkwayHit } from '../../src/farm/model.js';
 import { addToStore } from '../../src/save/stores.js';
 import { addPods } from '../../src/farm/pods.js';
 
@@ -77,7 +77,7 @@ const G = growSec('loam-grain') * 1000;
 function nearSpots(o, n) {
   const hub = map.pads.find((p) => o.pads[p.id] && o.pads[p.id].kind === 'hub');
   const c = [hub.x + hub.w / 2, hub.y + hub.h / 2], taken = occupied(o, map);
-  return packPlots(map, o).filter((r) => !taken.some((t) => r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h))
+  return packPlots(map, o).filter((r) => !walkwayHit(o, r) && !taken.some((t) => r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h))
     .sort((a, b) => Math.hypot(a.x - c[0], a.y - c[1]) - Math.hypot(b.x - c[0], b.y - c[1])).slice(0, n);
 }
 

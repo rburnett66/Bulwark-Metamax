@@ -49,11 +49,26 @@ export function occupied(o, map) {
   return out;
 }
 
+/**
+ * The walkway rule (owner 2026-11-10 [MM-story_mwahj1kx_1f]): plots and farm buildings keep FARM.Plot_Walkway_Cells of
+ * clear ground between them, so the avatar and, later, the agrobots can walk between the beds. → the farm thing the
+ * rect would crowd ({ what }), or null. Only the farm's own things count: pads keep their own yard (cells.js).
+ */
+export function walkwayHit(o, rect, gap = FARM.Plot_Walkway_Cells ?? 1) {
+  if (!o.farm || !(gap > 0)) return null;
+  const grown = { x: rect.x - gap, y: rect.y - gap, w: rect.w + 2 * gap, h: rect.h + 2 * gap };
+  for (const p of Object.values(o.farm.plots)) if (overlaps(grown, p)) return { what: 'plot ' + p.id };
+  for (const [id, b] of Object.entries(o.farm.buildings)) if (overlaps(grown, b)) return { what: b.kind + ' ' + id };
+  return null;
+}
+
 /** Why a w × h rect at (x, y) cannot take a farm thing, or null. ctx.cellOk(rect) adds the map's farm-cell rule (A6). */
-function groundRefusal(o, map, rect, ctx) {
+export function groundRefusal(o, map, rect, ctx) {
   if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > map.width || rect.y + rect.h > map.height) return 'off the map';
   const hit = occupied(o, map).find((r) => overlaps(r, rect));
   if (hit) return `the ground is taken (${hit.what})`;
+  const crowd = walkwayHit(o, rect);
+  if (crowd) return `keep a walkway clear of the ${crowd.what.replace(/ \S+$/, '')}`;
   return ctx && ctx.cellOk ? ctx.cellOk(rect) || null : null;
 }
 

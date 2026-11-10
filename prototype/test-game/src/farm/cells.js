@@ -9,6 +9,7 @@
 import { FARM_CELL, FARM_CELL_NAME } from '../terrain/farmCells.js';
 import { BLOCKING } from '../terrain/terrainGen.js';
 import { HEIGHT } from '../terrain/outpostPads.js';
+import { FARM } from '../data/farm.js';
 
 export { FARM_CELL, FARM_CELL_NAME };
 
@@ -73,13 +74,13 @@ export function plotSpots(map, outpost = null, w = PLOT_SIZE.w, h = PLOT_SIZE.h,
   return out;
 }
 
-/** How many w × h plots fit side by side, packed row by row from the top-left (a lower bound on the farm's room):
- *  → [{ x, y, w, h }]. */
-export function packPlots(map, outpost = null, w = PLOT_SIZE.w, h = PLOT_SIZE.h) {
+/** How many w × h plots fit, packed row by row from the top-left with the walkway between them (FARM.Plot_Walkway_Cells,
+ *  owner 2026-11-10: room for the avatar and the agrobots) — a lower bound on the farm's room: → [{ x, y, w, h }]. */
+export function packPlots(map, outpost = null, w = PLOT_SIZE.w, h = PLOT_SIZE.h, gap = FARM.Plot_Walkway_Cells ?? 1) {
   const placed = [];
   for (const [x, y] of plotSpots(map, outpost, w, h)) {
-    const r = { x, y, w, h };
-    if (!placed.some((q) => overlaps(q, r))) placed.push(r);
+    const r = { x: x - gap, y: y - gap, w: w + 2 * gap, h: h + 2 * gap };
+    if (!placed.some((q) => overlaps(q, r))) placed.push({ x, y, w, h });
   }
   return placed;
 }
