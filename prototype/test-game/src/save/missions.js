@@ -18,6 +18,7 @@ import { bankOf, totalStars, mergeRewards } from './save.js';
 import { mergeTally } from './battleTally.js';
 import { PLANETS } from '../data/planets.js';
 import { measureOnline, measureOreSold, measureRaidsHeld } from '../outpost/contract.js';
+import { measureFarmPlanted, measureCropDelivered, measureMethodsGrowing } from '../farm/contract.js';
 // Faction registry: a classic script with no ES exports (see comm/voice.js).
 import '../data/factions.js';
 const REG = globalThis.BulwarkFactions;
@@ -50,9 +51,13 @@ const SAVE_MEASURE = Object.freeze({
   outpost_online: (s, o) => measureOnline(s, o.param),
   ore_sold: (s, o) => measureOreSold(s, o.param),
   raids_held: (s, o, ctx, m) => measureRaidsHeld(s, o.param, m ? m.assignedAt || 0 : 0),
+  // the farming contracts [MM-story_mwabgpsa_e]: param is the planet key, or the crop id
+  farm_plots_planted: (s, o) => measureFarmPlanted(s, o.param),
+  crop_delivered: (s, o) => measureCropDelivered(s, o.param),
+  farm_methods_growing: (s, o) => measureMethodsGrowing(s, o.param),
 });
-/** Save measures that never go back (the raid log keeps only the last raids, so a count must latch). */
-const SAVE_LATCH = new Set(['outpost_online', 'ore_sold', 'raids_held']);
+/** Save measures that never go back (the raid log keeps only the last raids, so a count must latch; plants are harvested). */
+const SAVE_LATCH = new Set(['outpost_online', 'ore_sold', 'raids_held', 'farm_plots_planted', 'crop_delivered', 'farm_methods_growing']);
 export const MEASURED_CONDITIONS = Object.freeze([...Object.keys(MEASURE), ...Object.keys(SAVE_MEASURE)]);
 
 export const planetKey = (planet) => Object.keys(PLANETS).find((k) => PLANETS[k].name === planet) || null;
