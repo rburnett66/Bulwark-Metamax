@@ -37,7 +37,7 @@
 // Review page for the final results screen [MM-story_mw15hyvl_2]. Uses the game's own module with sample data.
 import { createHud, showResult } from '../../src/render/hud.js';
 import { playChestOpen } from '../../src/menu/podChest.js';
-const names = { common: 'Loam Grain', uncommon: 'Heartwood Amber', rare: 'Rootsong Seeds', epic: 'Oathstone' };
+const names = { common: 'Loam Grain', uncommon: 'Heartwood Amber', rare: 'Rootsong Seeds', epic: 'Elder Bloom' };
 const z = () => ({ common: 0, uncommon: 0, rare: 0, epic: 0 });
 const total = (u, s, g) => ({ units: { ...z(), ...u }, sold: { ...z(), ...s }, kept: Object.fromEntries(Object.keys({ ...z(), ...u }).map((k) => [k, ((u[k] || 0) - (s[k] || 0))])), gold: g });
 const S = {
@@ -52,7 +52,7 @@ const S = {
   chest: { result: 'win', finalScore: { score: 36358, kills: 83, minutes: 10, seconds: 17, goldRemaining: 36358 },
     waveStars: [4, 3, 3, 2, 3, 3, 4, 3], rewards: { result: 'win', gold: { earned: 36358, to: 36358 }, stars: { from: 78, to: 80 }, xp: { from: 380, to: 638, earned: 258 } },
     nextMap: { id: 4, name: 'Seedline Ridge', size: '32x18' },
-    resources: { total: total({ common: 1592, uncommon: 159, rare: 101 }, { common: 1592, uncommon: 159, rare: 10 }, 14669), names, contract: true },
+    resources: { total: total({ common: 1467, uncommon: 47, rare: 91, epic: 9 }, { common: 1467, uncommon: 47 }, 7330), names, contract: true },
     chest: { id: 'pc1', planet: 'ground', mapId: 3, at: 0, pods: { 'loam-grain': 15, 'heartwood-amber': 1, 'rootsong-seeds': 1 } } },
   classic: { result: 'win', finalScore: { score: 22410, kills: 140, minutes: 12, seconds: 40, goldRemaining: 950 },
     waveStars: [5, 5, 4, 5, 3, 4, 5, 5], rewards: null, nextMap: null, resources: null },
