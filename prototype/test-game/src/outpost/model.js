@@ -952,7 +952,7 @@ export function buyHarvester(outpost, ctx = {}) {
  * Per-building warning flags for the view's warning icons. → { [padId | defenseId]: ['no_power' | 'storage_full' |
  * 'door_closed', …] }, only for ids with a warning. Finished buildings only.
  *   - no_power: a building (or gun) that draws power and gets none: it does not operate; what it stores is kept;
- *   - storage_full: a rig whose bay is full (it has stopped), and the Storage Tower when every rig's bay is full;
+ *   - storage_full: a rig whose bay is full (mining stops), and the Storage Tower when any rig's bay is full;
  *   - door_closed: a Storage Tower without power: it takes no new ore (rigs fill only their own small bays).
  */
 export function warnings(o, map, params = OUTPOST) {
@@ -967,7 +967,9 @@ export function warnings(o, map, params = OUTPOST) {
   for (const [id, b] of Object.entries(o.pads)) {
     if (b.kind !== 'storage') continue;
     if (!powered.has(id)) add(id, 'door_closed');
-    else if (rigs.length && rigs.every(fullRig)) add(id, 'storage_full');
+    // owner 2026-11-09: "When storage is full mining stops" — the miner stops and shows storage full, and so does the
+    // Storage Tower, as soon as any rig's bay in it is full
+    else if (rigs.some(fullRig)) add(id, 'storage_full');
   }
   return out;
 }

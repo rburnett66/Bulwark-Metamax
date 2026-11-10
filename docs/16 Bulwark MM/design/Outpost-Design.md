@@ -54,7 +54,8 @@ Verdance's; every planet uses the same rules with its own three ores.
 - A **Mining Station** on a deposit mines while it is **powered**, even before the outpost is online.
 - Each Mining Station has its own **bay**. Without a Storage Tower the bay holds **15 minutes** of its output.
 - A finished, powered **Storage Tower** raises every rig's bay to **4 hours** of output (Storage Tower II: 8 hours).
-- When a bay is **full** the rig stops until you sell. The building shows the **storage full** marker (R9).
+- When a bay is **full** the rig **stops** until you sell (owner 2026-11-09: "When storage is full mining stops"). Both
+  the Mining Station and the Storage Tower show the **storage full** marker (R9).
 - **Deep seam** (after the Deep Drilling I tech): a rig switched to *Deep* mines at **¼ the speed** but each unit sells
   for **5×** the price.
 - **Mining Station Mk II** (Rig Mk II tech): **2×** the rate and **2×** the bay.
@@ -115,7 +116,7 @@ A big round marker over a building is a **warning**. Tap the building to read it
 
 | Marker | Meaning | What to do |
 |---|---|---|
-| **Crate** (gold ring) | **Storage full**: the rig, or every bay, is full and mining has stopped | **SELL** |
+| **Crate** (gold ring) | **Storage full**: on a Mining Station, its bay is full and it has stopped; on the Storage Tower, a rig's bay in it is full | **SELL** |
 | **Lightning bolt** | **No power**: the building is stopped (its storage is kept) | Build or move a Power Station within reach, or add supply |
 | **Door** | **Door shut**: an unpowered Storage Tower takes no new ore | Restore its power |
 
@@ -159,8 +160,8 @@ A big round marker over a building is a **warning**. Tap the building to read it
 
 ### R14. Open for the owner
 
-- Part loads: should SELL also sell a part load, at a smaller price, so a full rig can always be emptied?
-- Stopped rigs: should a full bay keep the rig running into the Storage Tower before it stops?
+- ~~Part loads~~ — answered 2026-11-09: SELL sells whole loads only, never a part load (R5).
+- ~~Stopped rigs~~ — answered 2026-11-09: when storage is full mining stops; the miner and the tower both show storage full (R4, R9).
 - ~~The gun cap and the Habitat~~ — answered 2026-11-09: 4 guns base, 4 more per Habitat tier (R6, R8).
 - ~~Harvester cap~~ — answered 2026-11-09: start at 1, cap 2 (R7).
 

@@ -56,6 +56,8 @@ test('4 hours fill the 720-iron bay; a load is 15 units; nothing is sold while t
   assert.ok(Math.abs(report.full[0].at - (T0 + 4 * HOUR)) < 1);
   const later = quiet(o, T0 + 6 * HOUR).outpost;
   assert.ok(Math.abs(later.storage.r1.iron - 720) < 1e-9, 'a full bay stops its rig');
+  // owner 2026-11-09: "When storage is full mining stops" — both the miner and the Storage Tower show storage full
+  assert.deepEqual(warnings(o, map), { r1: ['storage_full'], s1: ['storage_full'] });
   assert.deepEqual(later.sold, {}, 'advance never sells');
   const five = quiet(online(), T0 + 5 * MIN).outpost;
   assert.equal(loadsReady(five, ctx()), 1);
