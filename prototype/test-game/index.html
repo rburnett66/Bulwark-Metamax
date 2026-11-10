@@ -92,11 +92,17 @@
       B.boot = B.boot || null;   // src/main.js assigns the real boot(mountEl, seed?)
       window.Bulwark = B;
 
+      // Errors are for us, not the player (owner 2026-11-10: "the error dialog messes up the UX ... let's plan to hide
+      // that error UX") [MM-story_mwb10lqu_1x]. This box shows only while the game is starting (a boot that fails
+      // must say why, not leave a blank screen) or with ?debug=1. Every error still goes to the game's error log
+      // (src/diag/errorLog.js), whose report ?debug=1 also offers.
+      var DEBUG = /[?&]debug=1(&|$)/.test(window.location.search || "");
+      window.__bulwarkDebug = DEBUG;
       window.__bulwarkBootError = function (msg) {
         var el = document.getElementById("boot-error");
         if (!el) return;
-        el.style.display = "block";
         el.textContent += (el.textContent ? "\n" : "") + msg;
+        if (!window.__bulwarkBooted || DEBUG) el.style.display = "block";
       };
       window.addEventListener("error", function (ev) {
         var where = ev.filename ? (ev.filename + ":" + ev.lineno) : "";
@@ -156,6 +162,10 @@
           var handle = (seed === undefined) ? B.boot(mountEl) : B.boot(mountEl, seed);
           // Expose the running game handle for debugging / console-driven replay tests.
           B.game = handle;
+          // started: from here on errors are logged, not shown (the box only stays up with ?debug=1)
+          window.__bulwarkBooted = true;
+          var box = document.getElementById("boot-error");
+          if (box && !window.__bulwarkDebug) box.style.display = "none";
           // eslint-disable-next-line no-console
           console.log("[Bulwark] booted", seed === undefined ? "(default seed)" : ("seed=" + seed), handle);
         } catch (e) {

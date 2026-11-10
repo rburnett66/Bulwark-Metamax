@@ -29,11 +29,17 @@ export function reportButton(doc, { label = 'COPY ERROR REPORT' } = {}) {
   return wrap;
 }
 
+/** ?debug=1 in the address: the error UX is shown (owner 2026-11-10: hidden from players otherwise). */
+export const debugOn = (doc) => /[?&]debug=1(&|$)/.test(((doc && doc.defaultView && doc.defaultView.location) || {}).search || '');
+
 /**
- * On boot: when the last session was killed inside the outpost, or the log holds errors, a small chip offers the
- * report (bottom-left, over the menu). Dismiss hides it for this session; CLEAR empties the log. → element | null
+ * On boot, with ?debug=1 only (owner 2026-11-10: "the error dialog messes up the UX ... hide that error UX")
+ * [MM-story_mwb10lqu_1x]: when the last session was killed inside the outpost, or the log holds errors, a small chip
+ * offers the report (bottom-left, over the menu). Dismiss hides it for this session; CLEAR empties the log.
+ * opts.force shows it whatever the address says (tests). → element | null
  */
-export function mountReportChip(doc) {
+export function mountReportChip(doc, { force = false } = {}) {
+  if (!force && !debugOn(doc)) return null;
   const crashed = lastSessionCrashed();
   if (!crashed && !hasErrors()) return null;
   const chip = doc.createElement('div');
