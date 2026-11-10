@@ -1,0 +1,103 @@
+{
+ "states": [
+  "planted",
+  "sprout",
+  "plant",
+  "fruited",
+  "dead",
+  "harvested"
+ ],
+ "models": {
+  "plant_grain": {
+   "label": "Grain: stalks with grain heads and awns",
+   "file": "plant_grain.glb",
+   "bytes": 203024,
+   "tris": 2834,
+   "units": "battle units, 4 to a cell",
+   "perPlot": 16,
+   "materials": [
+    "dead",
+    "dead_dark",
+    "glow_pod",
+    "grain",
+    "leaf",
+    "leaf_light",
+    "pod",
+    "soil_light",
+    "straw"
+   ],
+   "nodes": {
+    "planted": {
+     "node": "grain_planted",
+     "tris": 130
+    },
+    "sprout": {
+     "node": "grain_sprout",
+     "tris": 24
+    },
+    "plant": {
+     "node": "grain_plant",
+     "tris": 224
+    },
+    "fruited": {
+     "node": "grain_fruited",
+     "tris": 1232
+    },
+    "dead": {
+     "node": "grain_dead",
+     "tris": 1064
+    },
+    "harvested": {
+     "node": "grain_harvested",
+     "tris": 160
+    }
+   }
+  },
+  "plant_leafy": {
+   "label": "Leafy: a rosette crop over a bulb",
+   "file": "plant_leafy.glb",
+   "bytes": 41348,
+   "tris": 518,
+   "units": "battle units, 4 to a cell",
+   "perPlot": 16,
+   "materials": [
+    "bulb",
+    "dead",
+    "dead_dark",
+    "glow_pod",
+    "leaf",
+    "leaf_dark",
+    "leaf_light",
+    "pod",
+    "soil",
+    "soil_light"
+   ],
+   "nodes": {
+    "planted": {
+     "node": "leafy_planted",
+     "tris": 130
+    },
+    "sprout": {
+     "node": "leafy_sprout",
+     "tris": 20
+    },
+    "plant": {
+     "node": "leafy_plant",
+     "tris": 110
+    },
+    "fruited": {
+     "node": "leafy_fruited",
+     "tris": 130
+    },
+    "dead": {
+     "node": "leafy_dead",
+     "tris": 80
+    },
+    "harvested": {
+     "node": "leafy_harvested",
+     "tris": 48
+    }
+   }
+  }
+ }
+}
