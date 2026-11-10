@@ -30,7 +30,10 @@ const roleOf = (r) => (kept(r.tier) ? 'Kept · worth ' + r.value + ' gold each' 
  *   key, title, label, icon, tabs [[key, name]], inTab(tab, r), back (the phone's back-link text),
  *   load() → ctx or a Promise of it (what bands/detail need; here the mission catalogue), loadFailed (its error line),
  *   bands(save, ctx, planetOpen, fresh), visit(save) → fresh, first(ctx, bands) → the id selected on open,
- *   detail(band, r, ctx) → { rows: [[label, html]] (after Planet and Faction), note }
+ *   detail(band, r, ctx) → { rows: [[label, html]] (after Planet and Faction), note, count? (the big number, else r.have), tierLabel?, extra? (html after the rows) }
+ *   view(tab) → optional: a tab with a view of its own (the farm store's Seed pods, menu/seedPods.js) draws its list and
+ *     detail itself — { list(bands, selected, save), detail(bands, selected, save), sum?(bands, save),
+ *     click?(button, api) → true when it handled the click } — on this screen's markup, tabs and selection.
  */
 export const BATTLE_INVENTORY = Object.freeze({
   key: 'inventory', title: 'INVENTORY', label: 'Inventory', icon: 'i-inv', tabs: INV_TABS, back: 'All resources',
@@ -48,15 +51,19 @@ export const BATTLE_INVENTORY = Object.freeze({
   },
 });
 
+/** A planet band: its header (planet, faction, the count or the locked line) round `body`. held/fresh default to the band's. */
+export function bandHtml(b, body, held = b.held, fresh = b.fresh) {
+  return `<section class="pband${b.open ? '' : ' locked'}" style="--fc:${factionColor(keyOf(b))}"><header>${fsvg(keyOf(b))}<b>${esc(b.planet)}</b><small>${esc(b.faction)}</small>
+   <span class="pbt">${b.open ? `<b class="num">${num(held)}</b> held${fresh ? ` · <em>+${num(fresh)} new</em>` : ''}` : `${use('s-locked')} Portal: ${esc(b.planet)} not owned`}</span></header>
+   ${body}</section>`;
+}
+
 /** The list: a band per planet, a tile per item the tab shows. */
 export function bandListHtml(bands, src, tab, selected) {
   return bands.map((b) => {
-    const key = keyOf(b);
     const tiles = b.resources.filter((r) => src.inTab(tab, r)).map((r) => `<button class="rt${r.have ? '' : ' zero'}" data-inv-id="${esc(r.id)}" aria-selected="${r.id === selected}" style="--rc:var(${TIER_VAR[r.tier]})">${resourceIconHtml(r.id, 'gem3 resi')}
     <span class="rtx"><b>${esc(r.name)}</b><small>${TIER_NAME[r.tier]}</small></span><span class="rtn num">${b.open ? num(r.have) : '—'}${r.fresh ? `<em>+${num(r.fresh)}</em>` : ''}</span></button>`).join('');
-    return `<section class="pband${b.open ? '' : ' locked'}" style="--fc:${factionColor(key)}"><header>${fsvg(key)}<b>${esc(b.planet)}</b><small>${esc(b.faction)}</small>
-   <span class="pbt">${b.open ? `<b class="num">${num(b.held)}</b> held${b.fresh ? ` · <em>+${num(b.fresh)} new</em>` : ''}` : `${use('s-locked')} Portal: ${esc(b.planet)} not owned`}</span></header>
-   <div class="rts">${tiles}</div></section>`;
+    return bandHtml(b, `<div class="rts">${tiles}</div>`);
   }).join('');
 }
 
@@ -68,9 +75,9 @@ export function bandDetailHtml(bands, selected, src, ctx) {
   const rows = d.rows.map(([k, v], i) => (i === 1 ? '\n    ' : '') + `<dt>${k}</dt><dd>${v}</dd>`).join('');
   return `<button class="dback" data-iback>${use('u-back')}${esc(src.back)}</button>
   <div class="rdet" style="--rc:var(${TIER_VAR[r.tier]});--fc:${factionColor(key)}">
-   <span class="gem2">${resourceIconHtml(r.id, 'resi')}</span><div class="rdn num">${band.open ? num(r.have) : '—'}</div>${r.fresh ? `<div class="rdnew num">+${num(r.fresh)} since your last visit</div>` : ''}
-   <h2>${esc(r.name)}</h2><div class="rdt">${TIER_NAME[r.tier]}</div>
-   <dl><dt>Planet</dt><dd>${fsvg(key)}${esc(band.planet)}${band.open ? '' : ' · locked'}</dd><dt>Faction</dt><dd>${esc(band.faction)}</dd>${rows}</dl>
+   <span class="gem2">${resourceIconHtml(r.id, 'resi')}</span><div class="rdn num">${band.open ? num(d.count == null ? r.have : d.count) : '—'}</div>${r.fresh && d.count == null ? `<div class="rdnew num">+${num(r.fresh)} since your last visit</div>` : ''}
+   <h2>${esc(r.name)}</h2><div class="rdt">${d.tierLabel || TIER_NAME[r.tier]}</div>
+   <dl><dt>Planet</dt><dd>${fsvg(key)}${esc(band.planet)}${band.open ? '' : ' · locked'}</dd><dt>Faction</dt><dd>${esc(band.faction)}</dd>${rows}</dl>${d.extra || ''}
    <p class="inote">${d.note}</p>
   </div>`;
 }
@@ -94,13 +101,19 @@ export function createInventoryScreen({ doc, host, source = BATTLE_INVENTORY, ga
     const s = loadSave(), fc = flowCtx(s, gateOpts());
     const bands = src.bands(s, ctx, fc.planetOpen, fresh);
     if (!selected) selected = src.first(ctx, bands);
+    const v = viewOf();
     $('[data-tabs]').innerHTML = src.tabs.map(([k, n]) => `<button class="tab" role="tab" aria-selected="${k === tab}" data-itab="${k}">${n}</button>`).join('');
-    $('[data-sum]').innerHTML = `<b class="num">${num(bands.reduce((a, b) => a + b.held, 0))}</b> held<br><b class="num">${num(bands.reduce((a, b) => a + b.fresh, 0))}</b> new`;
-    $('[data-list]').innerHTML = bandListHtml(bands, src, tab, selected);
-    $('[data-dp]').innerHTML = bandDetailHtml(bands, selected, src, ctx);
+    $('[data-sum]').innerHTML = v && v.sum ? v.sum(bands, s) : `<b class="num">${num(bands.reduce((a, b) => a + b.held, 0))}</b> held<br><b class="num">${num(bands.reduce((a, b) => a + b.fresh, 0))}</b> new`;
+    $('[data-list]').innerHTML = v ? v.list(bands, selected, s) : bandListHtml(bands, src, tab, selected);
+    $('[data-dp]').innerHTML = v ? v.detail(bands, selected, s) : bandDetailHtml(bands, selected, src, ctx);
   }
+  const viewOf = () => (src.view ? src.view(tab) : null);
+  // what a tab's own view may do: write the save (save.js updateSave), redraw, tell the menu, close the screen
+  const api = { update: (fn) => updateSave(fn), render: () => render(), changed: () => { if (onChange) onChange(); }, close: () => { if (onClose) onClose(); } };
   inv.addEventListener('click', (e) => {
     const t = e.target.closest('button'); if (!t) return;
+    const v = viewOf();
+    if (v && v.click && v.click(t, api)) return;
     if (t.dataset.invId) { selected = t.dataset.invId; render(); inv.classList.add('detail'); }
     else if (t.dataset.itab) { tab = t.dataset.itab; render(); }
     else if ('iback' in t.dataset) inv.classList.remove('detail');
