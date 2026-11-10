@@ -7,6 +7,7 @@
  */
 import { TECH_BY_ID, startingOwned, settleFree, techStatus, techPrice, refundBlock, PORTALS } from '../data/techtree.js';
 import { outpostUnlocks } from '../outpost/contract.js';
+import { cropTechUnlocked } from '../farm/levels.js';
 
 /**
  * The Outpost nodes the player's outpost contracts have unlocked, on any planet (Outpost-Design §7, story O10): a
@@ -15,6 +16,8 @@ import { outpostUnlocks } from '../outpost/contract.js';
 export function outpostTechUnlocked(s) {
   const out = new Set();
   for (const key of Object.keys((s && s.outposts) || {})) for (const t of outpostUnlocks(s, key).unlocks) out.add(t);
+  // the crop levels (owner rule 9): a farming contract unlocks a crop's next level node, gold buys it
+  for (const t of cropTechUnlocked(s)) out.add(t);
   return out;
 }
 

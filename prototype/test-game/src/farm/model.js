@@ -21,12 +21,16 @@
  * ({ crop, units } for the farm store, story A13; pods for s.pods, story A4); the caller banks them. `ctx.held` is
  * what the farm store already holds for this planet (units), so the Silo can be checked.
  *
+ * Crop levels (owner rule 9, 2026-11-10): seed pods have no level. A plot is planted at its crop's tech-tree level (the
+ * caller reads it with src/farm/levels.js cropLevel), capped by growLevel (level 5 needs a trick: an Irrigated plot with
+ * water), and keeps that level until it is harvested — a later upgrade only reaches new plantings.
+ *
  * Every function returns a NEW outpost; the one passed in is never changed. No Date.now, no Math.random: times come in
- * as ms, and the lucky roll is seeded from the outpost's seed, the plot and its cycle (tech plan §2.3 F4).
+ * as ms; nothing here is random.
  */
-import { FARM, cropOf, methodOf, podLevel, MAX_POD_LEVEL, farmBuildingOf, yieldOf, podsBack, prepCost } from '../data/farm.js';
+import { FARM, cropOf, methodOf, podLevel, farmBuildingOf, yieldOf, podsBack, prepCost, growLevel } from '../data/farm.js';
 import { powerGrids } from '../outpost/model.js';
-import { windowSec, finished } from './grow.js';
+import { windowSec, finished, hasWater } from './grow.js';
 
 const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -118,21 +122,35 @@ export function prep(outpost, plotId, ctx) {
 }
 
 /**
- * Plant a prepped plot with one crop at one pod level, one pod per row (the method's Pods_Per). The caller spends the
- * pods (story A4): ctx.podsHeld is how many of that crop and level the player holds.
- * → { outpost, spend: { crop, level, n } } or { error }
+ * The level a plot would grow a crop at if planted now (owner rule 9): the crop's tech-tree level `techLevel`, capped by
+ * the plot's method (growLevel: level 5 needs an Irrigated plot with water — a water cell or a finished, powered Pump
+ * in reach at time t). map: the outpost map (no map: no water). → { level, capped, why }
  */
-export function plant(outpost, plotId, { crop, level }, ctx) {
+export function plantLevel(o, map, plot, techLevel, t = o.t) {
+  const m = methodOf(plot.method);
+  const water = !!(m && m.waterReach && o.farm && hasWater(o, map, plot, t, map ? powerGrids(o, map).powered : null));
+  return growLevel(techLevel, plot.method, { water });
+}
+
+/**
+ * Plant a prepped plot with one crop, one pod per row (the method's Pods_Per). Pods have no level: `level` is the
+ * crop's tech-tree level (src/farm/levels.js cropLevel), and the plot stores the level it actually grows at
+ * (plantLevel) until it is harvested. The caller spends the pods (story A4): ctx.podsHeld is how many of that crop the
+ * player holds. ctx: { now, map, podsHeld }.
+ * → { outpost, level, capped, why, spend: { crop, n } } or { error }
+ */
+export function plant(outpost, plotId, { crop, level = 1 }, ctx) {
   const p = outpost.farm && outpost.farm.plots[plotId];
   if (!p) return { error: `no plot ${plotId}` };
   if (plotState(outpost, p, ctx.now) !== 'prepped') return { error: 'the plot is not prepped' };
   if (!cropOf(crop)) return { error: `unknown crop ${crop}` };
-  if (!podLevel(level)) return { error: `no pod level ${level}` };
+  if (!podLevel(level)) return { error: `no crop level ${level}` };
   const n = methodOf(p.method).pods;
   if ((ctx.podsHeld ?? 0) < n) return { error: `needs ${n} pods` };
+  const grow = plantLevel(outpost, ctx.map, p, level, ctx.now);
   const o = clone(outpost), q = o.farm.plots[plotId];
-  Object.assign(q, { crop, level, plantedAt: ctx.now, progress: 0, ripeAt: null, cycle: q.cycle + 1, yieldShare: 1 });
-  return { outpost: o, spend: { crop, level, n } };
+  Object.assign(q, { crop, level: grow.level, plantedAt: ctx.now, progress: 0, ripeAt: null, cycle: q.cycle + 1, yieldShare: 1 });
+  return { outpost: o, level: grow.level, capped: grow.capped, why: grow.why, spend: { crop, n } };
 }
 
 // ── the Silo ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -168,29 +186,12 @@ export function storeCapacity(o, map) {
 }
 
 // ── harvesting ───────────────────────────────────────────────────────────────────────────────────────────────────
-function mix(a, b) {
-  let h = (a ^ Math.imul(b + 0x9e3779b9, 0x85ebca6b)) >>> 0;
-  h = Math.imul(h ^ (h >>> 16), 0x7feb352d) >>> 0;
-  h = Math.imul(h ^ (h >>> 15), 0x846ca68b) >>> 0;
-  return (h ^ (h >>> 16)) >>> 0;
-}
-const idNum = (id) => [...String(id)].reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0, 2166136261);
-/**
- * The lucky level-up (Farming-Design §8.3): a Fruited harvest returns one pod a level up on a seeded chance —
- * Lucky_Chance, Lucky_Chance_High from Rare up, never from Legendary. Seeded from the outpost's seed, the plot and its
- * cycle only, so the same harvest always rolls the same.
- */
-export function luckyRoll(seed, plotId, cycle, level) {
-  if (level >= MAX_POD_LEVEL) return false;
-  const chance = level >= 3 ? FARM.Lucky_Chance_High : FARM.Lucky_Chance;
-  return mix(mix(seed >>> 0, idNum(plotId)), cycle) / 4294967296 < chance;
-}
-
 /**
  * Harvest a plot at the outpost's time (advance it first). Fruited: the crop into the store, if it fits
- * (ctx.held = units the farm store holds for this planet); some pods back for grain and vegetables; the lucky roll.
- * Dead: the planted pods back, no crop, no room needed. Either way the plot is left harvested (prep it again).
- * ctx: { map, held }. → { outpost, kind: 'crop' | 'pods', crop, level, units, pods: [{ crop, level, n }] } or { error }
+ * (ctx.held = units the farm store holds for this planet); some pods back for grain and vegetables (a plain count:
+ * pods have no level, owner rule 9). Dead: the planted pods back, no crop, no room needed. Either way the plot is left
+ * harvested (prep it again). `level` is the plot's own (it grew at it), for the harvest effect.
+ * ctx: { map, held }. → { outpost, kind: 'crop' | 'pods', crop, level, units, pods: [{ crop, n }] } or { error }
  */
 export function harvest(outpost, plotId, ctx) {
   const p = outpost.farm && outpost.farm.plots[plotId];
@@ -200,7 +201,7 @@ export function harvest(outpost, plotId, ctx) {
   const o = clone(outpost), q = o.farm.plots[plotId], n = methodOf(q.method).pods;
   const clear = () => Object.assign(q, { crop: null, level: null, plantedAt: null, progress: 0, ripeAt: null, prepDone: null, yieldShare: 1 });
   if (st === 'dead') {
-    const out = { outpost: o, kind: 'pods', crop: q.crop, level: q.level, units: 0, pods: [{ crop: q.crop, level: q.level, n }] };
+    const out = { outpost: o, kind: 'pods', crop: q.crop, level: q.level, units: 0, pods: [{ crop: q.crop, n }] };
     clear();
     return out;
   }
@@ -209,8 +210,7 @@ export function harvest(outpost, plotId, ctx) {
   if (units > room) return { error: 'the Silo is full', full: true };
   const pods = [];
   const back = podsBack(q.crop, n);
-  if (back) pods.push({ crop: q.crop, level: q.level, n: back });
-  if (luckyRoll(o.seed, q.id, q.cycle, q.level)) pods.push({ crop: q.crop, level: q.level + 1, n: 1, lucky: true });
+  if (back) pods.push({ crop: q.crop, n: back });
   const out = { outpost: o, kind: 'crop', crop: q.crop, level: q.level, units, pods };
   clear();
   return out;

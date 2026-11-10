@@ -105,7 +105,8 @@ function presetSave(name) {
   acceptFarmContract(s, PLANET, { map, now: START, cellOk: rule });
   o = s.outposts[PLANET];
   if (name === 'new') { s.outposts[PLANET] = o; return { s, openAt: START + MIN }; }
-  addPods(s, 'loam-grain', 2, 8); addPods(s, 'loam-grain', 3, 8); addPods(s, 'heartwood-amber', 1, 4);
+  // pods have no level (owner rule 9): a plain count per crop
+  addPods(s, 'loam-grain', 16); addPods(s, 'heartwood-amber', 4);
   const ctx = (t) => ({ map, now: t, gold: Infinity, methods: ['traditional', 'irrigated'], cellOk: rule });
   const spots = nearSpots(o, 7);
   const plots = [];
@@ -119,11 +120,12 @@ function presetSave(name) {
   // plant at staggered times so the plots show every stage when the view opens
   const lag = { growing: [0.05, 0.25, 0.6, 0.9, 1.3, null, null], harvest: [1.2, 1.4, 1.1, 1.3, 1.5, 0.5, null], full: [1.2, 1.4, 1.1, 1.3, 1.5, 1.2, 1.3], dead: [2.4, 2.6, 1.2, 0.4, null, null, null], trampled: [0.6, 0.7, 1.2, 0.5, 0.8, null, null], away: [0.3, 0.5, 0.2, 0.6, 0.4, 0.3, null] }[name] || [];
   const openAt = name === 'away' ? T0 + 6 * HOUR : T0;
-  const levels = [1, 2, 3, 2, 1, 3, 1];
+  // the Loam Grain level each plot was planted at, as the tech tree stood then: older plots keep 1 and 2
+  const levels = [1, 2, 1, 2, 1, 2, 1];
   // plant in time order (earliest first), each at its moment on the outpost's clock
   plots.map((id, i) => ({ id, i, at: lag[i] == null ? null : T0 - lag[i] * G })).filter((x) => x.at != null).sort((a, b) => a.at - b.at).forEach(({ id, i, at }) => {
     o = advance(o, at, quiet).outpost;
-    const res = plant(o, id, { crop: 'loam-grain', level: levels[i] }, { now: o.t, podsHeld: 99 });
+    const res = plant(o, id, { crop: 'loam-grain', level: levels[i] }, { now: o.t, podsHeld: 99, map });
     if (!res.error) o = res.outpost;
   });
   o = advance(o, name === 'away' ? T0 : T0, quiet).outpost;
@@ -133,6 +135,9 @@ function presetSave(name) {
     o = trample(o, cells, T0).outpost;
   }
   s.outposts[PLANET] = o;
+  // the tech tree now: Loam Grain III (new plantings grow at 3; the plots above keep 1 and 2), Heartwood Amber V (a
+  // plain Traditional plot grows it at 4: level 5 needs irrigation)
+  for (const id of ['crop_loam_grain_2', 'crop_loam_grain_3', 'crop_heartwood_amber_2', 'crop_heartwood_amber_3', 'crop_heartwood_amber_4', 'crop_heartwood_amber_5']) s.tech.owned[id] = true;
   if (name === 'harvest') addToStore(s, 'farm', PLANET, 'loam-grain', 24);
   if (name === 'full') addToStore(s, 'farm', PLANET, 'loam-grain', 400);
   return { s, openAt };

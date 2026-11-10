@@ -28,8 +28,9 @@
  *   seen             what the menu's red-dot badges last showed (menu/badges.js) [MM-story_mvkhei9q_k]
  *   pendingRewards   the last battle(s)' rewards, waiting to fly into the menu widget [MM-story_mvkhegop_j]
  *   battleLog        played campaign battles, newest first, capped (save/battleLog.js) [MM-story_mw1azvh8_d]
- *   pods             { [cropId]: { [level 1..5]: count } } seed pods, an OUTPOST & FARM holding (farm/pods.js) [MM-story_mwabgh3x_b]
- *   podCarry         { [cropId]: units } battle units not yet worth a Rare pod (farm/pods.js battlePods)
+ *   pods             { [cropId]: count } seed pods, an OUTPOST & FARM holding (farm/pods.js) [MM-story_mwabgh3x_b]; no level
+ *                    (owner rule 9, 2026-11-10: a crop's level is the tech tree's, farm/levels.js) [MM-story_mwai5f8t_1g]
+ *   podCarry         { [cropId]: units } battle units not yet worth a pod (farm/pods.js battlePods)
  *
  * Determinism contract: any field that CHANGES A BATTLE (carry, tech, harvesterLevel, contract
  * buffs) must be injected at createSim time — never mid-battle — so replays stay reproducible.
@@ -124,6 +125,13 @@ export function migrate(s) {
   if (!s.outpostTrade || typeof s.outpostTrade !== 'object') s.outpostTrade = { discovered: {}, farSoldToday: null };
   if (!s.outpostTrade.discovered) s.outpostTrade.discovered = {};
   if (!s.pods || typeof s.pods !== 'object') s.pods = {};
+  // owner rule 9 (2026-11-10): pods have no level. A save from before kept { [level]: count } per crop: summed into a
+  // plain count. Plots already planted keep their own plot.level (the outpost record is untouched).
+  for (const [id, row] of Object.entries(s.pods)) {
+    const n = typeof row === 'number' ? row : row && typeof row === 'object' ? Object.values(row).reduce((a, k) => a + (+k || 0), 0) : 0;
+    if (Number.isFinite(n) && n > 0) s.pods[id] = Math.floor(n);
+    else delete s.pods[id];
+  }
   if (!s.podCarry || typeof s.podCarry !== 'object') s.podCarry = {};
   // the Harvester Bay became the Resource Bay, and harvesters are bought and counted (owner 2026-11-07, story O16);
   // the same rule as src/outpost/model.js migrateOutpost, inlined so the save stays free of the outpost rules

@@ -1,5 +1,5 @@
 /**
- * src/data/farm.js — farming's data: crops, methods, seed pod levels, farm buildings, contracts and tuning
+ * src/data/farm.js — farming's data: crops, methods, crop levels (and their tech chains), farm buildings, contracts and tuning
  * [MM-story_mwabgax7_9].
  *
  * Values: the map-data workbook's Farm_Params, Crops, Farm_Methods, Pod_Levels, Farm_Buildings and Farm_Contracts
@@ -7,8 +7,10 @@
  * Design: docs/16 Bulwark MM/design/Farming-Design.md §4–§9 · Tech plan: docs/tech-plan/Farming.md §3.1–§3.2.
  * Pure data; no DOM, no clock. Every number is a proposed default until the owner rules on it (Farming-Design D14).
  *
- * Words: a pod LEVEL is 1–5 (Common … Legendary, the pod's quality); a crop TIER is the resource's battle tier
- * (common … epic, how hard it is to grow). They share names on purpose and never mix (Farming-Design §8.2, D4).
+ * Words: a crop LEVEL is 1–5 (Common … Legendary): researched per crop in the tech tree and kept by each plot it was
+ * planted on (owner rule 9, 2026-11-10; seed pods have no level). A crop TIER is the resource's battle tier (common …
+ * epic, how hard it is to grow). They share names on purpose and never mix (Farming-Design §8.2, D4).
+ * Crop_Levels (the tech tree's crop chains) → MAPDATA.cropLevels → CROP_LEVEL_NODES.
  */
 import { MAPDATA } from '../../content/maps/mapdata.js';
 
@@ -39,19 +41,46 @@ export const METHODS = Object.freeze((MAPDATA.farmMethods || []).map((r) => Obje
   id: r.Method, name: r.Name, family: r.Family, w: num(r.Foot_W), h: num(r.Foot_H), where: r.Where,
   speed: num(r.Speed_Mult), yieldMult: num(r.Yield_Mult), power: num(r.Power), prepMult: num(r.Prep_Mult),
   pods: num(r.Pods_Per), waterReach: num(r.Water_Reach), taughtBy: r.Taught_By,
+  level5Needs: r.Level5_Needs || 'never',   // owner rule 9: what lets this method grow level 5 ('water' | 'never')
 })));
 /** A method by id, or null. */
 export const methodOf = (id) => METHODS.find((m) => m.id === id) || null;
 
-/** The five seed pod levels, 1 (Common) … 5 (Legendary). */
+/**
+ * The five CROP levels, 1 (Common) … 5 (Legendary) — a plot's level (owner rule 9, 2026-11-10). The names keep "pod"
+ * for history (the workbook's Pod_Levels sheet); seed pods themselves have no level: a crop's level comes from the tech
+ * tree (src/farm/levels.js cropLevel) and a plot keeps the level it was planted at.
+ */
 export const POD_LEVELS = Object.freeze((MAPDATA.podLevels || []).map((r) => Object.freeze({
   level: r.Level, name: r.Name, colour: r.Colour, value: num(r.Value_Mult), yieldBonus: num(r.Yield_Bonus),
-  benchGold: typeof r.Bench_Gold === 'number' ? r.Bench_Gold : null,
   embers: Object.freeze({ count: num(r.Ember_Count), life: num(r.Ember_Life_Sec), rise: num(r.Ember_Rise) }),
 })));
+/** The same table under its current name. */
+export const CROP_LEVELS = POD_LEVELS;
 export const MAX_POD_LEVEL = POD_LEVELS.length;
-/** A pod level (1–5) or null for anything else. */
+/** A crop level (1–5) or null for anything else. */
 export const podLevel = (n) => POD_LEVELS.find((l) => l.level === n) || null;
+
+/**
+ * Battle-map crops always count as level 3 (owner, 2026-11-10): where a farm crop's level is set against a battle
+ * map's resource (yield, value, labels), the map's is Rare. Its Value_Mult is 1, the battle price (checked by the
+ * workbook extractor).
+ */
+export const MAP_CROP_LEVEL = 3;
+
+/**
+ * The tech tree's crop level nodes (owner rule 9): per crop a chain II … V in the OUTPOST & FARM tree's SEED PODS
+ * division, from the workbook's Crop_Levels sheet. Level 1 is the base and has no node. unlock: the farming contract
+ * and the state it must reach on the crop's planet ({ contract: 'F1', state: 'accepted' | 'complete' }) — rule D7, a
+ * contract unlocks and gold buys. Prices and the III–V gates are proposed (D14).
+ */
+export const CROP_LEVEL_NODES = Object.freeze((MAPDATA.cropLevels || []).map((r) => {
+  const [contract, state] = String(r.Unlock || '').split(':');
+  return Object.freeze({ id: r.Node, crop: r.Crop_Id, planetKey: r.Planet_Key, level: r.Level, name: r.Name, price: num(r.Price),
+    unlock: Object.freeze({ contract, state }), proposed: r.Status === 'proposed' });
+}));
+/** A crop's chain, level 2 up: [node…] (empty for a crop with no chain yet). */
+export const cropLevelChain = (cropId) => CROP_LEVEL_NODES.filter((n) => n.crop === cropId).sort((a, b) => a.level - b.level);
 
 /** The farm buildings this build ships (farmhouse, silo, pump). */
 export const FARM_BUILDINGS = Object.freeze((MAPDATA.farmBuildings || []).map((r) => Object.freeze({
@@ -65,7 +94,7 @@ export const farmBuildingOf = (kind) => FARM_BUILDINGS.find((b) => b.kind === ki
 export const FARM_CONTRACTS = Object.freeze((MAPDATA.farmContracts || []).map((r) => Object.freeze({
   planetKey: r.Planet_Key, code: r.Contract, title: r.Title, crop: r.Crop_Id, plantPlots: num(r.Plant_Plots),
   deliver: num(r.Deliver), methodsAtOnce: num(r.Methods_At_Once), gold: num(r.Gold), loyalty: num(r.Loyalty),
-  xp: num(r.XP), podCrate: num(r.Pod_Crate), podCrateLevel: num(r.Pod_Crate_Level) || 1,
+  xp: num(r.XP), podCrate: num(r.Pod_Crate),
   grants: Object.freeze(words(r.Grants)), unlocks: Object.freeze(words(r.Unlocks)),
 })));
 /** A planet's farming contract ('ground', 'F1'), or null. */
@@ -104,7 +133,22 @@ export function yieldOf(c, m, level) {
   return Math.max(1, Math.floor(c.yield * m.yieldMult * (1 + L.yieldBonus)));
 }
 
-/** Pods a Fruited harvest hands back at the same level (§9.1): grain 20 %, vegetables 10 %, at least 1 for grain. */
+/**
+ * The level a plot actually grows a crop at (owner rule 9): the crop's tech-tree level, except that level 5 always
+ * needs a trick or machinery. A method's level5Needs says which: 'water' — level 5 on a plot with water in reach (an
+ * Irrigated plot by a water cell or a powered Pump); 'never' — a plain plot grows a level-5 crop at level 4.
+ * Fertilizer and hydroponics join as more methods / equipment later. → { level, capped, why }
+ */
+export function growLevel(techLevel, m, { water = false } = {}) {
+  m = method(m);
+  const L = Math.max(1, Math.min(MAX_POD_LEVEL, Math.floor(techLevel) || 1));
+  if (L < MAX_POD_LEVEL || !m) return { level: L, capped: false, why: null };
+  if (m.level5Needs === 'water' && water) return { level: L, capped: false, why: null };
+  const why = m.level5Needs === 'water' ? 'level 5 needs water: a water cell or a powered Pump in reach' : 'level 5 needs irrigation';
+  return { level: L - 1, capped: true, why };
+}
+
+/** Pods a Fruited harvest hands back (§9.1): grain 20 %, vegetables 10 %, at least 1 for grain. A plain count. */
 export function podsBack(c, planted) {
   c = crop(c);
   const n = Math.floor(planted * c.podReturn);

@@ -384,6 +384,15 @@ export const MISSION_LOG_CSS = String.raw`
 .bwm-ml .pslot.nil .plv{opacity:.28;filter:none}
 .bwm-ml .pslot.nil b{color:var(--dimmer);font-weight:700}
 .bwm-ml .pslot[aria-selected=true]{background:color-mix(in srgb,var(--lc) 14%,#151a22);box-shadow:inset 0 0 0 1px var(--lc)}
+.bwm-ml .pslots.pcols{grid-template-columns:minmax(0,.7fr) minmax(0,1fr) minmax(0,1.6fr)}
+.bwm-ml .pslot.pheld small{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dimmer);font-weight:800}
+.bwm-ml .pslot.pheld,.bwm-ml .pslot.pnextc{border-bottom-color:var(--line2)}
+.bwm-ml .pslot.plevel .plvn{font-size:11px}
+.bwm-ml .pslot.pnextc{font-size:10.5px;color:#c3cdd8;justify-content:space-between;padding:0 7px;min-width:0}
+.bwm-ml .pslot.pnextc .pnext{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bwm-ml .pslot.pnextc b{font-size:11px;color:var(--gold);margin-left:auto}
+.bwm-ml .pslot.pnextc.nil{color:var(--dimmer);justify-content:center}
+.bwm-ml .ptab td small{color:var(--dimmer);font-size:9.5px}
 .bwm-ml .ptab{width:100%;margin-top:14px;border-collapse:collapse;font-size:12px;color:#c3cdd8}
 .bwm-ml .ptab th{text-align:left;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dimmer);font-weight:800;padding:0 4px 4px}
 .bwm-ml .ptab td{padding:4px;border-top:1px solid var(--line2)}
@@ -413,6 +422,7 @@ export const MISSION_LOG_CSS = String.raw`
 .bwm-ml .pcrop .rtx b{font-size:11px}
 .bwm-ml .pslot{height:24px;gap:3px}
 .bwm-ml .pslot b{font-size:11px}
+.bwm-ml .pslot.pnextc,.bwm-ml .pslot.plevel .plvn{font-size:9.5px}
 .bwm-ml .plv{width:10px;height:10px}
 .bwm-ml .plegend{padding:4px 8px;margin-bottom:6px;font-size:10px;gap:4px 8px}
 .bwm-ml .ptab{margin-top:8px;font-size:10px}

@@ -2,14 +2,14 @@
 """write_farm_sheets.py — put farming's Phase A data into the map-data workbook [MM-story_mwabgax7_9].
 
     python tools/economy/write_farm_sheets.py     # writes Farm_Params, Crops, Farm_Methods, Pod_Levels,
-                                                  #        Farm_Buildings, Farm_Contracts
+                                                  #        Farm_Buildings, Farm_Contracts, Crop_Levels
     python tools/extract_mapdata.py               # → MAPDATA.farmParams / .crops / .farmMethods / .podLevels /
-                                                  #   .farmBuildings / .farmContracts
+                                                  #   .farmBuildings / .farmContracts / .cropLevels
 
 Seeds the sheets with the designs' proposed values (docs/16 Bulwark MM/design/Farming-Design.md §4–§8,
 Farming-Distribution-Design.md §2–§5; tech plan docs/tech-plan/Farming.md §3.2). Every number is a placeholder until the
 owner rules on it (Farming-Design D14). After this first write the WORKBOOK is the source: tune it by hand and
-re-extract; re-running this script overwrites hand edits to these six sheets.
+re-extract; re-running this script overwrites hand edits to these seven sheets.
 
 How it writes: these sheets hold plain values, no formulas, so nothing needs recalculating. Each sheet is written
 straight into the .xlsx package as its own part; every other part is copied byte for byte. The script then reads every
@@ -106,24 +106,52 @@ def crop_rows():
 
 
 # Farming-Design §4.2: Phase A ships two methods. Foot in battle cells (§4.4: a 4-row plot is 2 × 2, owner).
+# Level5_Needs (owner rule 9, 2026-11-10: "level 5 always needs a trick or machinery"): what lets a plot of the method
+# grow a crop at level 5 — "water" (an Irrigated plot with water in reach: a water cell or a powered Pump), "never"
+# (a plain plot grows a level-5 crop at level 4). Fertilizer and hydroponics join as methods or equipment later.
 METHOD_COLS = ["Method", "Name", "Family", "Foot_W", "Foot_H", "Where", "Speed_Mult", "Yield_Mult", "Power",
-               "Prep_Mult", "Pods_Per", "Water_Reach", "Taught_By"]
+               "Prep_Mult", "Pods_Per", "Water_Reach", "Taught_By", "Level5_Needs"]
 METHODS = [
-    ["traditional", "Traditional plot", "open", 2, 2, "soil", 1, 1, 0, 1, 4, 0, "every F1"],
+    ["traditional", "Traditional plot", "open", 2, 2, "soil", 1, 1, 0, 1, 4, 0, "every F1", "never"],
     # within Water_Reach cells of water or a Pump; the Pump draws the power (Farm_Buildings)
-    ["irrigated", "Irrigated plot", "open", 2, 2, "soil", 1.5, 1, 0, 1, 4, 4, "the first F1"],
+    ["irrigated", "Irrigated plot", "open", 2, 2, "soil", 1.5, 1, 0, 1, 4, 4, "the first F1", "water"],
 ]
 
-# Farming-Design §5.3, §8.2, §8.3; colours and embers as the signed-off scale prototype draws them
-# (tools/farming/scale.html: count 110 × 1.5^i, life 1.6 + 0.35 i s, rise 0.9 + 0.18 i cells).
-LEVEL_COLS = ["Level", "Name", "Colour", "Value_Mult", "Yield_Bonus", "Bench_Gold", "Ember_Count", "Ember_Life_Sec",
-              "Ember_Rise"]
+# The five CROP levels (owner rule 9, 2026-11-10: a crop's level comes from the tech tree and a plot keeps the level it
+# was planted at; seed pods have no level). Farming-Design §5.3, §8.2; colours and embers as the signed-off scale
+# prototype draws them (tools/farming/scale.html: count 110 × 1.5^i, life 1.6 + 0.35 i s, rise 0.9 + 0.18 i cells).
+# The sheet keeps its name, Pod_Levels, so the workbook's history reads on; the pod bench and its Bench_Gold are gone.
+LEVEL_COLS = ["Level", "Name", "Colour", "Value_Mult", "Yield_Bonus", "Ember_Count", "Ember_Life_Sec", "Ember_Rise"]
 LEVELS = []
-for i, (name, colour, value, bench) in enumerate([("Common", "#ffffff", 0.5, 50), ("Uncommon", "#4dff6a", 0.75, 150),
-                                                  ("Rare", "#4da6ff", 1.0, 400), ("Epic", "#b25cff", 1.3, 1000),
-                                                  ("Legendary", "#ffc83d", 1.75, "")]):
-    LEVELS.append([i + 1, name, colour, value, round(0.05 * i, 2), bench, round(110 * 1.5 ** i),
+for i, (name, colour, value) in enumerate([("Common", "#ffffff", 0.5), ("Uncommon", "#4dff6a", 0.75),
+                                           ("Rare", "#4da6ff", 1.0), ("Epic", "#b25cff", 1.3),
+                                           ("Legendary", "#ffc83d", 1.75)]):
+    LEVELS.append([i + 1, name, colour, value, round(0.05 * i, 2), round(110 * 1.5 ** i),
                    round(1.6 + 0.35 * i, 2), round(0.9 + 0.18 * i, 2)])
+
+# The tech tree's crop chains (owner rule 9): one node per crop and level, II … V, in the OUTPOST & FARM tree's SEED
+# PODS division. Level 1 is the base (no node); each node needs the one before. Rule D7: a contract unlocks, gold buys.
+# Unlock "F1:accepted" = the planet's F1 accepted; "F1:complete" = F1 collected. Verdance first; other planets' chains
+# are more rows. Prices and the III–V gates are PROPOSED (D14): III–V tie to F2/F3 once those contracts exist.
+CROP_LEVEL_COLS = ["Planet_Key", "Crop_Id", "Level", "Node", "Name", "Price", "Unlock", "Status"]
+CROP_LEVEL_PRICE = {2: 500, 3: 1200, 4: 2500, 5: 5000}                    # a common-tier crop's price per level
+CROP_LEVEL_TIER = {"common": 1, "uncommon": 1.5, "rare": 2, "epic": 3}     # dearer for the harder crops
+ROMAN = {2: "II", 3: "III", 4: "IV", 5: "V"}
+CROP_LEVEL_PLANETS = ("ground",)                                           # Verdance first
+
+
+def crop_level_rows():
+    rows = []
+    for key, _planet, crops in CROPS:
+        if key not in CROP_LEVEL_PLANETS:
+            continue
+        for tier, name, *_ in crops:
+            cid = slug(name)
+            for lv in (2, 3, 4, 5):
+                price = int(round(CROP_LEVEL_PRICE[lv] * CROP_LEVEL_TIER[tier] / 50) * 50)
+                rows.append([key, cid, lv, "crop_" + cid.replace("-", "_") + "_" + str(lv), f"{name} {ROMAN[lv]}", price,
+                             "F1:accepted" if lv == 2 else "F1:complete", "proposed"])
+    return rows
 
 # Farming-Design §6: Phase A's buildings. Cost/Build_Sec proposed (D14), sized like the outpost's pads.
 BUILDING_COLS = ["Kind", "Name", "Foot_W", "Foot_H", "Cost", "Build_Sec", "Power_Draw", "Water_Reach", "Unlock"]
@@ -135,9 +163,9 @@ BUILDINGS = [
 
 # Distribution §5.2 / Farming-Design §2.2: Verdance's F1, "Bread for the Regiments". Phase A ships F1 on Verdance only.
 CONTRACT_COLS = ["Planet_Key", "Contract", "Title", "Crop_Id", "Plant_Plots", "Deliver", "Methods_At_Once", "Gold",
-                 "Loyalty", "XP", "Pod_Crate", "Pod_Crate_Level", "Grants", "Unlocks"]
+                 "Loyalty", "XP", "Pod_Crate", "Grants", "Unlocks"]
 CONTRACTS = [
-    ["ground", "F1", "Bread for the Regiments", "loam-grain", 3, 40, 2, 1500, 15, 300, 12, 1, "farmhouse",
+    ["ground", "F1", "Bread for the Regiments", "loam-grain", 3, 40, 2, 1500, 15, 300, 12, "farmhouse",
      "button:farm tab:seedpods method:irrigated tech:sprinklers"],
 ]
 
@@ -149,12 +177,10 @@ PARAMS = [
     ["Plant_At", 0.3, "share", "Sprout becomes Plant at this share of the grow time (§5.1)"],
     ["Fruited_Window", 1, "x", "Fruited lasts this times the grow time, then the plant dies (D2)"],
     ["Pods_Per_Plot", 4, "count", "one pod per row of a 4-row plot (D36)"],
-    ["Lucky_Chance", 0.05, "share", "a Fruited harvest returns one pod a level up (§8.3)"],
-    ["Lucky_Chance_High", 0.03, "share", "the lucky chance from Rare pods up (§8.3)"],
-    ["Bench_In", 3, "count", "pods of one crop and level the bench turns into one of the next level (§8.3)"],
-    ["Battle_Pod_Units", 200, "units", "a battle field gives one Rare pod per this many units carried (§9.1, X7)"],
+    ["Pod_Price", 25, "gold", "one seed pod, any crop, bought on the SEED PODS tab (pods have no level; owner rule 9). Proposed"],
+    ["Battle_Pod_Units", 200, "units", "a battle field gives one pod per this many units carried (§9.1, X7)"],
     ["Battle_Pod_Units_Epic", 100, "units", "the same on an epic-tier field"],
-    ["Pod_Crate", 12, "count", "Common pods in an F1 Pod Crate (§9.1)"],
+    ["Pod_Crate", 12, "count", "pods in an F1 Pod Crate (§9.1)"],
     ["Silo_Hours", 8, "h", "the Silo holds this many hours of the farm's output (§6)"],
     ["Farmhouse_Store_Hours", 1, "h", "without a finished, powered Silo the Farmhouse holds this many hours of output (as a rig's own bay without a Storage Tower)"],
     ["Plot_Walkway_Cells", 1, "cells", "a clear walkway kept between a plot and every other farm thing, for the avatar and the agrobots (owner 2026-11-10)"],
@@ -267,12 +293,15 @@ def main():
                         CROP_COLS, crop_rows())),
         ("Farm_Methods", block("Farming methods (Phase A: Traditional and Irrigated)",
                                "Farming-Design §4.2, §4.4. The other twelve come with their epics.", METHOD_COLS, METHODS)),
-        ("Pod_Levels", block("Seed pod levels (5)", "Farming-Design §5.3, §8.2, §8.3; colours and embers as "
-                             "tools/farming/scale.html. Bench_Gold: gold to make one of the next level.", LEVEL_COLS, LEVELS)),
+        ("Pod_Levels", block("Crop levels (5)", "A plot's level (owner rule 9: from the tech tree, kept by the plot). "
+                             "Farming-Design §5.3, §8.2; colours and embers as tools/farming/scale.html.", LEVEL_COLS, LEVELS)),
         ("Farm_Buildings", block("Farm buildings (Phase A)", "Farming-Design §6. Cost and Build_Sec proposed.",
                                  BUILDING_COLS, BUILDINGS)),
         ("Farm_Contracts", block("Farming contracts (Phase A: Verdance F1)", "Distribution §5; Farming-Design §2.2.",
                                  CONTRACT_COLS, CONTRACTS)),
+        ("Crop_Levels", block("Crop level nodes (tech tree, SEED PODS)", "Owner rule 9 (2026-11-10). One chain per crop, "
+                              "II-V; each needs the one before. Prices and the III-V gates are PROPOSED (D14).",
+                              CROP_LEVEL_COLS, crop_level_rows())),
     ])
 
 

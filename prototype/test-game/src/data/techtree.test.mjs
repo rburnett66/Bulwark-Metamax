@@ -7,9 +7,9 @@ import { TECH_NODES, TECH_BY_ID, BUYABLE, TECH_TOTAL, DIVISIONS, TREES, TREE_ORD
 
 const ctx = (owned, bank = 0, extra = {}) => ({ owned: settleFree(new Set([...startingOwned(), ...owned])), bank, paid: {}, ...extra });
 
-test('64 upgrades: Units 25, Bases 21 (+ capstone), Map 10, Outpost 7 (story O10 replaced the ghosts)', () => {
+test('80 upgrades: Units 25, Bases 21 (+ capstone), Map 10, Outpost 7 (story O10), Seed pods 16 (owner rule 9)', () => {
   assert.equal(BUYABLE.length, TECH_TOTAL);
-  assert.equal(TECH_TOTAL, 64);
+  assert.equal(TECH_TOTAL, 80);
   const by = (d) => BUYABLE.filter((id) => TECH_BY_ID[id].div === d && TECH_BY_ID[id].kind !== 'ult').length;
   assert.equal(by('units'), DIVISIONS.units.total);
   assert.equal(by('bases'), DIVISIONS.bases.total);
@@ -17,6 +17,8 @@ test('64 upgrades: Units 25, Bases 21 (+ capstone), Map 10, Outpost 7 (story O10
   assert.equal(by('structures') + by('mining'), 7);
   assert.equal(DIVISIONS.structures.total, by('structures'));
   assert.equal(DIVISIONS.mining.total, by('mining'));
+  assert.equal(by('seedpods'), 16, 'Verdance\'s four crops, II–V');
+  assert.equal(DIVISIONS.seedpods.total, by('seedpods'));
   assert.ok(BUYABLE.includes('apocalypse'));
 });
 
@@ -36,7 +38,8 @@ test('two trees (owner 2026-11-09): the battle tree has no Outpost section; the 
   }
   assert.equal(TREE_TOTAL.battle + TREE_TOTAL.outpost, TECH_TOTAL);
   for (const n of TECH_NODES) for (const r of n.req) assert.equal(treeOf(TECH_BY_ID[r]), treeOf(n), n.id + ' and its prerequisite ' + r + ' are in one tree');
-  assert.ok(DIVISIONS.seedpods.soon && DIVISIONS.machinery.soon, 'seed pods and machinery are coming soon');
+  assert.ok(!DIVISIONS.seedpods.soon && DIVISIONS.machinery.soon, 'seed pods holds the crop levels; machinery is coming soon');
+  assert.deepEqual(TREE_TOTAL, { battle: 57, outpost: 23 });
   assert.ok(startingOwned().has('outpost_hub'), 'the outpost tree\'s centre is owned from the start');
 });
 
@@ -64,6 +67,35 @@ test('an Outpost node is gated by its contract, then bought like any mission nod
   assert.equal(techStatus(TECH_BY_ID.deep_drilling_1, u), 'ready');
   assert.equal(techPrice(TECH_BY_ID.deep_drilling_1, u), TECH_BY_ID.deep_drilling_1.price);
   assert.equal(techStatus(TECH_BY_ID.rig_mk2, ctx([], 99999, { unlocked: new Set(['rig_mk2']) })), 'locked', 'needs Deep Drilling I');
+});
+
+// ── owner rule 9 (2026-11-10) [MM-story_mwai5f8t_1g]: crop levels in the SEED PODS division ────────────────────────
+test('the crop levels: a chain per crop in SEED PODS, each needing the one before; the pod bench ghosts are gone', () => {
+  assert.ok(!TECH_BY_ID.pod_bench && !TECH_BY_ID.pod_bench2, 'the bench is gone');
+  assert.ok(TECH_BY_ID.pod_store && TECH_BY_ID.pod_store.soon, 'Faction Pod Stores stays a ghost');
+  const chain = ['crop_loam_grain_2', 'crop_loam_grain_3', 'crop_loam_grain_4', 'crop_loam_grain_5'].map((id) => TECH_BY_ID[id]);
+  assert.deepEqual(chain.map((n) => n.name), ['Loam Grain II', 'Loam Grain III', 'Loam Grain IV', 'Loam Grain V']);
+  assert.deepEqual(chain.map((n) => n.req), [[], ['crop_loam_grain_2'], ['crop_loam_grain_3'], ['crop_loam_grain_4']]);
+  assert.deepEqual(chain.map((n) => n.price), [500, 1200, 2500, 5000]);
+  for (const n of chain) {
+    assert.equal(n.div, 'seedpods'); assert.equal(treeOf(n), 'outpost'); assert.equal(n.crop, 'loam-grain');
+    assert.ok(BUYABLE.includes(n.id));
+  }
+  const lanes = new Set(TECH_NODES.filter((n) => n.crop).map((n) => n.lane));
+  assert.equal(lanes.size, 4, 'one lane per crop');
+});
+
+test('a crop level is gated by its farming contract (II: F1 accepted; III–V: F1 complete), then bought with gold', () => {
+  const ii = TECH_BY_ID.crop_loam_grain_2, iii = TECH_BY_ID.crop_loam_grain_3;
+  const shut = ctx([], 99999, { unlocked: new Set(), unlockedBy: () => 'Bread for the Regiments' });
+  assert.equal(techStatus(ii, shut), 'locked');
+  assert.match(techGates(ii, shut)[0].txt, /Farming F1 on Verdance accepted/);
+  assert.match(techGates(iii, shut)[0].txt, /Farming F1 on Verdance complete/);
+  const open = ctx([], 99999, { unlocked: new Set([ii.id, iii.id]) });
+  assert.equal(techStatus(ii, open), 'ready');
+  assert.equal(techStatus(iii, open), 'locked', 'III needs II');
+  assert.equal(techStatus(iii, ctx([ii.id], 99999, { unlocked: new Set([ii.id, iii.id]) })), 'ready');
+  assert.equal(techStatus(ii, ctx([], 100, { unlocked: new Set([ii.id]) })), 'short');
 });
 
 test('every requirement names a real node and the graph has no cycles', () => {

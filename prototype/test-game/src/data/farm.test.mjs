@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import {
   FARM, CROPS, cropOf, cropsOf, METHODS, methodOf, POD_LEVELS, MAX_POD_LEVEL, podLevel, FARM_BUILDINGS, farmBuildingOf,
-  farmContractOf, growSec, fruitedSec, stageAt, yieldOf, podsBack, prepCost, NEW_MATERIALS,
+  farmContractOf, growSec, fruitedSec, stageAt, yieldOf, podsBack, prepCost, NEW_MATERIALS, MAP_CROP_LEVEL, CROP_LEVELS,
+  CROP_LEVEL_NODES, cropLevelChain, growLevel,
 } from './farm.js';
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
@@ -13,7 +14,7 @@ const H = 3600;
 
 test('the JSON and the JS module carry the same farm data', () => {
   const json = JSON.parse(readFileSync(new URL('../../content/maps/mapdata.json', import.meta.url), 'utf8'));
-  for (const k of ['farmParams', 'crops', 'farmMethods', 'podLevels', 'farmBuildings', 'farmContracts']) {
+  for (const k of ['farmParams', 'crops', 'farmMethods', 'podLevels', 'farmBuildings', 'farmContracts', 'cropLevels']) {
     assert.ok(k in MAPDATA, k + ' extracted');
     assert.deepEqual(MAPDATA[k], json[k], k);
   }
@@ -59,12 +60,13 @@ test('Phase A methods: Traditional and Irrigated, both 2 × 2 with 4 pods; Irrig
   assert.equal(methodOf('hydroponic'), null, 'the grow rooms are future (owner rule 2)');
 });
 
-test('five pod levels in the prototype\'s colours; Rare (level 3) is battle quality', () => {
+test('five crop levels in the prototype\'s colours; Rare (level 3) is battle quality', () => {
   assert.equal(MAX_POD_LEVEL, 5);
+  assert.equal(CROP_LEVELS, POD_LEVELS, 'one table, two names');
   assert.deepEqual(POD_LEVELS.map((l) => l.name), ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']);
   assert.deepEqual(POD_LEVELS.map((l) => l.colour), ['#ffffff', '#4dff6a', '#4da6ff', '#b25cff', '#ffc83d']);
   assert.deepEqual(POD_LEVELS.map((l) => l.value), [0.5, 0.75, 1, 1.3, 1.75]);
-  assert.deepEqual(POD_LEVELS.map((l) => l.benchGold), [50, 150, 400, 1000, null], 'Legendary is the top: no bench above it');
+  assert.ok(POD_LEVELS.every((l) => !('benchGold' in l)), 'the pod bench is gone (owner rule 9)');
   assert.ok(POD_LEVELS.every((l, i) => !i || (l.embers.count > POD_LEVELS[i - 1].embers.count && l.embers.life > POD_LEVELS[i - 1].embers.life)),
     'a higher level throws more embers, for longer');
   assert.equal(podLevel(0), null);
@@ -98,8 +100,9 @@ test('Phase A buildings and Verdance F1', () => {
   const f1 = farmContractOf('ground', 'F1');
   assert.equal(f1.title, 'Bread for the Regiments');
   assert.equal(cropOf(f1.crop).name, 'Loam Grain');
-  assert.deepEqual([f1.plantPlots, f1.deliver, f1.methodsAtOnce, f1.gold, f1.loyalty, f1.xp, f1.podCrate, f1.podCrateLevel],
-    [3, 40, 2, 1500, 15, 300, FARM.Pod_Crate, 1]);
+  assert.deepEqual([f1.plantPlots, f1.deliver, f1.methodsAtOnce, f1.gold, f1.loyalty, f1.xp, f1.podCrate],
+    [3, 40, 2, 1500, 15, 300, FARM.Pod_Crate]);
+  assert.ok(!('podCrateLevel' in f1), 'the crate\'s pods have no level');
   assert.ok(f1.deliver <= 3 * yieldOf(f1.crop, 'traditional', 1), 'F1\'s delivery fits three Common plots (Farming-Design §5.4)');
   assert.deepEqual(f1.grants, ['farmhouse']);
   assert.ok(f1.unlocks.includes('method:irrigated') && f1.unlocks.includes('tab:seedpods'));
@@ -107,8 +110,54 @@ test('Phase A buildings and Verdance F1', () => {
 });
 
 test('the tuning is all there and numeric', () => {
-  for (const k of ['Prep_Gold', 'Prep_Sec', 'Sprout_At', 'Plant_At', 'Fruited_Window', 'Pods_Per_Plot', 'Lucky_Chance',
-    'Lucky_Chance_High', 'Bench_In', 'Battle_Pod_Units', 'Battle_Pod_Units_Epic', 'Pod_Crate', 'Silo_Hours',
+  for (const k of ['Prep_Gold', 'Prep_Sec', 'Sprout_At', 'Plant_At', 'Fruited_Window', 'Pods_Per_Plot', 'Pod_Price',
+    'Battle_Pod_Units', 'Battle_Pod_Units_Epic', 'Pod_Crate', 'Silo_Hours',
     'Breach_Silo_Loss', 'Trample_Fruited_Yield', 'Avatar_Cells', 'Farmhands']) assert.equal(typeof FARM[k], 'number', k);
   assert.ok(FARM.Sprout_At < FARM.Plant_At);
+  for (const k of ['Lucky_Chance', 'Lucky_Chance_High', 'Bench_In']) assert.ok(!(k in FARM), k + ' is gone with the bench and the lucky roll (owner rule 9)');
+});
+
+// ── owner rule 9 (2026-11-10) [MM-story_mwai5f8t_1g]: crop levels come from the tech tree; pods have no level ──────
+test('seed pods have one fixed price, every crop alike (Farm_Params Pod_Price, proposed)', () => {
+  assert.equal(FARM.Pod_Price, 25);
+  assert.ok(Number.isInteger(FARM.Pod_Price) && FARM.Pod_Price > 0);
+});
+
+test('battle-map crops count as level 3 (Rare): its worth is the battle price', () => {
+  assert.equal(MAP_CROP_LEVEL, 3);
+  assert.equal(podLevel(MAP_CROP_LEVEL).name, 'Rare');
+  assert.equal(podLevel(MAP_CROP_LEVEL).value, 1);
+});
+
+test('the crop level nodes: Verdance\'s four crops, a chain II–V each, priced and gated from the workbook', () => {
+  const verdance = cropsOf('ground').map((c) => c.id);
+  assert.equal(CROP_LEVEL_NODES.length, 16);
+  assert.deepEqual([...new Set(CROP_LEVEL_NODES.map((n) => n.crop))], verdance, 'Verdance first, in tier order');
+  for (const id of verdance) {
+    const chain = cropLevelChain(id);
+    assert.deepEqual(chain.map((n) => n.level), [2, 3, 4, 5], id);
+    assert.ok(chain.every((n, i) => !i || n.price > chain[i - 1].price), id + ': each level dearer');
+    assert.deepEqual(chain.map((n) => n.unlock.state), ['accepted', 'complete', 'complete', 'complete'], id + ': II with F1 accepted, III–V with F1 complete');
+    assert.ok(chain.every((n) => n.unlock.contract === 'F1' && n.proposed), id + ': proposed gates and prices');
+  }
+  assert.deepEqual(cropLevelChain('loam-grain').map((n) => [n.id, n.name, n.price]), [
+    ['crop_loam_grain_2', 'Loam Grain II', 500], ['crop_loam_grain_3', 'Loam Grain III', 1200],
+    ['crop_loam_grain_4', 'Loam Grain IV', 2500], ['crop_loam_grain_5', 'Loam Grain V', 5000]]);
+  assert.deepEqual(cropLevelChain('elder-bloom').map((n) => n.price), [1500, 3600, 7500, 15000], 'epic tier ×3');
+  assert.deepEqual(cropLevelChain('petal-silk'), [], 'other planets join later as rows');
+});
+
+test('level 5 needs a trick: a Traditional plot grows a level-5 crop at 4; an Irrigated plot reaches 5 with water', () => {
+  assert.equal(methodOf('traditional').level5Needs, 'never');
+  assert.equal(methodOf('irrigated').level5Needs, 'water');
+  for (const L of [1, 2, 3, 4]) {
+    assert.deepEqual(growLevel(L, 'traditional'), { level: L, capped: false, why: null });
+    assert.deepEqual(growLevel(L, 'irrigated', { water: false }), { level: L, capped: false, why: null });
+  }
+  assert.deepEqual(growLevel(5, 'traditional'), { level: 4, capped: true, why: 'level 5 needs irrigation' });
+  assert.deepEqual(growLevel(5, 'traditional', { water: true }), { level: 4, capped: true, why: 'level 5 needs irrigation' }, 'water alone is not enough');
+  const dry = growLevel(5, 'irrigated', { water: false });
+  assert.equal(dry.level, 4);
+  assert.match(dry.why, /level 5 needs water/);
+  assert.deepEqual(growLevel(5, 'irrigated', { water: true }), { level: 5, capped: false, why: null });
 });

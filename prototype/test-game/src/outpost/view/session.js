@@ -30,6 +30,7 @@ import { trample, placePlot, placeFarmBuilding, prep, plant, harvest, harvestAll
 import { cellRule } from '../../farm/cells.js';
 import { farmUnlocks, recordDelivery, measureCropDelivered } from '../../farm/contract.js';
 import { podCount, spendPods, addPods } from '../../farm/pods.js';
+import { cropLevel, cropLevels } from '../../farm/levels.js';
 import { addToStore, takeFromStore } from '../../save/stores.js';
 import { farmContractOf, cropOf } from '../../data/farm.js';
 import { sellable } from '../../farm/view/farmUi.js';
@@ -75,8 +76,10 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
     return {
       map, now, gold: bankOf(s), raid: hookFor(s), shuttleTier: unlocks.has('cargo_shuttle_2') ? 2 : 1, farDiscovered: false,
       unlockedTiers: u.unlockedTiers, unlocks, techOwned: owned, contractUnlocks: u.unlocks, farBuyer: u.farBuyer,
-      // the farm (story A7): its methods, the map's ground rule, the pods and the store, for the FARM tab and its actions
+      // the farm (story A7): its methods, the map's ground rule, the pods and the store, for the FARM tab and its actions;
+      // levels: every crop's tech-tree level, the level new plantings grow at (owner rule 9, farm/levels.js)
       methods: farmUnlocks(s, planet).methods, cellOk: cellRule(map, s.outposts && s.outposts[planet]), pods: s.pods || {},
+      levels: cropLevels(s),
       held, heldTotal: sumOf(held),
       f1: f1 && ((s.farmContracts || {})[planet] || {}).state === 'active' ? f1 : null, delivered: f1 ? measureCropDelivered(s, f1.crop) : 0,
     };
@@ -210,9 +213,10 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
       }
       case 'prep': return prep(o, a.plot, ctx);
       case 'plant': {
-        const [crop, lv] = String(a.pick).split(':'), level = +lv;
-        const r = plant(o, a.plot, { crop, level }, { ...ctx, podsHeld: podCount(s, crop, level) });
-        return r.error ? r : { outpost: r.outpost, after: (sv) => spendPods(sv, crop, level, r.spend.n), farm: { planted: crop } };
+        // pods have no level: the plot grows at the crop's tech-tree level now, capped by the plot (owner rule 9)
+        const crop = String(a.pick).split(':')[0];
+        const r = plant(o, a.plot, { crop, level: cropLevel(s, crop) }, { ...ctx, podsHeld: podCount(s, crop) });
+        return r.error ? r : { outpost: r.outpost, after: (sv) => spendPods(sv, crop, r.spend.n), farm: { planted: crop, level: r.level, capped: r.why } };
       }
       case 'harvest': case 'harvestAll': {
         const r = a.type === 'harvest' ? harvest(o, a.plot, { map, held: ctx.heldTotal }) : harvestAll(o, { map, held: ctx.heldTotal });
@@ -225,7 +229,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         const plots = results.map((x) => { const id = x.plot || a.plot; return { plot: id, kind: x.kind, level: x.level, cycle: r.outpost.farm.plots[id].cycle }; });
         return { outpost: r.outpost, farm: { harvested: got, pods, blocked: r.blocked || [], plots }, after: (sv) => {
           for (const [id, u] of Object.entries(got)) addToStore(sv, 'farm', planet, id, u);
-          for (const p of pods) addPods(sv, p.crop, p.level, p.n);
+          for (const p of pods) addPods(sv, p.crop, p.n);
         } };
       }
       case 'deliver': {   // a farming contract's delivery to the ship (F1: Loam Grain to Halbrecht's Oath)

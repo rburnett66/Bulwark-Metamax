@@ -45,6 +45,9 @@ const CSS = `
 .tn .brand .logo span{color:var(--cyan);margin:0 .35em}
 .tn .brand .tag{font:500 10px 'JetBrains Mono',monospace;color:var(--dim);letter-spacing:.12em;margin-top:3px}
 .tn .chips{display:flex;gap:5px;flex-wrap:nowrap;flex:1;min-width:0;justify-content:center}
+/* the chips scroll inside their row, never over the tree buttons (phone landscape, 821-900 px wide) */
+.tn .chips{overflow-x:auto;scrollbar-width:none;justify-content:flex-start}.tn .chips>:first-child{margin-left:auto}.tn .chips>:last-child{margin-right:auto}.tn .chips::-webkit-scrollbar{display:none}
+@media (max-width:900px){.tn .brand .tag{display:none}.tn .hud{gap:10px}.tn .chip{padding:6px 7px;font-size:10px;letter-spacing:.08em;gap:5px;flex:none}.tn .tree{padding:8px 9px;font-size:10px;letter-spacing:.1em}}
 .tn .chip{font:700 11px Orbitron,sans-serif;letter-spacing:.14em;color:var(--c,#cfe9ff);background:rgba(255,255,255,.03);border:1px solid color-mix(in srgb,var(--c,#5ac8ff) 45%,transparent);
   padding:7px 10px;cursor:pointer;display:flex;gap:8px;align-items:center;transition:.15s;white-space:nowrap}
 .tn .chip:hover,.tn .chip.on{background:color-mix(in srgb,var(--c,#5ac8ff) 18%,transparent);box-shadow:0 0 14px color-mix(in srgb,var(--c,#5ac8ff) 40%,transparent)}
@@ -533,7 +536,7 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
     if (!selId) { panel.classList.remove('open'); return; }
     const n = BY[selId], st = vv(selId).st, c = n.kind === 'ult' ? '#ffd34a' : DIV[n.div].color;
     panel.style.setProperty('--c', c);
-    let h = '<div class="p-top"><span class="chip" style="--c:' + DIV[n.div].color + ';pointer-events:none">' + DIV[n.div].label + '</span><span class="kind">' + (n.kind === 'core' && tree === 'outpost' ? 'THE CENTRE' : KIND_TXT[n.kind]) + '</span><button class="x" data-close aria-label="Close">✕</button></div>';
+    let h = '<div class="p-top"><span class="chip" style="--c:' + DIV[n.div].color + ';pointer-events:none">' + DIV[n.div].label + '</span><span class="kind">' + (n.kind === 'core' && tree === 'outpost' ? 'THE CENTRE' : n.crop ? 'CROP LEVEL' : KIND_TXT[n.kind]) + '</span><button class="x" data-close aria-label="Close">✕</button></div>';
     h += '<h2>' + n.name + '</h2>' + (n.sub ? '<div class="subl">' + n.sub + '</div>' : '');
     const pr = n.soon || n.milestone ? '' : n.free ? 'FREE' : priceOf(n).toLocaleString() + 'g';
     h += '<div class="srow"><span class="badge s-' + st + '">' + STATUS_TXT[st] + '</span><span class="price">' + pr + '</span></div>';
@@ -553,7 +556,8 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
       else if (n.free) h += '<div class="actions"><button class="act" disabled>' + (ctx.owned.has(n.id) ? 'INCLUDED' : 'COMES WITH ' + BY[n.req[0]].name.toUpperCase()) + '</button></div>';
       else if (st === 'owned') h += '<div class="actions"><button class="act ghost" data-refund>REFUND ' + ((ctx.paid && ctx.paid[n.id]) || 0).toLocaleString() + 'g</button></div>';
       else h += '<div class="actions"><button class="act" data-buy ' + (st === 'ready' ? '' : 'disabled') + '>' + (st === 'short' ? 'NEED ' + (priceOf(n) - ctx.bank).toLocaleString() + 'g MORE' : st === 'locked' ? 'LOCKED' : 'RESEARCH · ' + priceOf(n).toLocaleString() + 'g') + '</button></div>';
-      if (!sandbox && !n.milestone && !n.free) h += '<div class="note">Research is recorded now; its effect reaches battle with the Tech Tree build.</div>';
+      if (!sandbox && n.crop) h += '<div class="note">Takes effect at once: new plantings of this crop grow at this level; plots already growing keep theirs.</div>';
+      else if (!sandbox && !n.milestone && !n.free) h += '<div class="note">Research is recorded now; its effect reaches battle with the Tech Tree build.</div>';
     }
     h += '<div class="msg">' + panelMsg + '</div>';
     panel.innerHTML = h; panel.classList.add('open');

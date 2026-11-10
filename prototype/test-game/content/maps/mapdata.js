@@ -6135,9 +6135,7 @@ export const MAPDATA = {
   "Plant_At": 0.3,
   "Fruited_Window": 1,
   "Pods_Per_Plot": 4,
-  "Lucky_Chance": 0.05,
-  "Lucky_Chance_High": 0.03,
-  "Bench_In": 3,
+  "Pod_Price": 25,
   "Battle_Pod_Units": 200,
   "Battle_Pod_Units_Epic": 100,
   "Pod_Crate": 12,
@@ -6705,7 +6703,8 @@ export const MAPDATA = {
    "Prep_Mult": 1,
    "Pods_Per": 4,
    "Water_Reach": 0,
-   "Taught_By": "every F1"
+   "Taught_By": "every F1",
+   "Level5_Needs": "never"
   },
   {
    "Method": "irrigated",
@@ -6720,7 +6719,8 @@ export const MAPDATA = {
    "Prep_Mult": 1,
    "Pods_Per": 4,
    "Water_Reach": 4,
-   "Taught_By": "the first F1"
+   "Taught_By": "the first F1",
+   "Level5_Needs": "water"
   }
  ],
  "podLevels": [
@@ -6730,7 +6730,6 @@ export const MAPDATA = {
    "Colour": "#ffffff",
    "Value_Mult": 0.5,
    "Yield_Bonus": 0,
-   "Bench_Gold": 50,
    "Ember_Count": 110,
    "Ember_Life_Sec": 1.6,
    "Ember_Rise": 0.9
@@ -6741,7 +6740,6 @@ export const MAPDATA = {
    "Colour": "#4dff6a",
    "Value_Mult": 0.75,
    "Yield_Bonus": 0.05,
-   "Bench_Gold": 150,
    "Ember_Count": 165,
    "Ember_Life_Sec": 1.95,
    "Ember_Rise": 1.08
@@ -6752,7 +6750,6 @@ export const MAPDATA = {
    "Colour": "#4da6ff",
    "Value_Mult": 1,
    "Yield_Bonus": 0.1,
-   "Bench_Gold": 400,
    "Ember_Count": 248,
    "Ember_Life_Sec": 2.3,
    "Ember_Rise": 1.26
@@ -6763,7 +6760,6 @@ export const MAPDATA = {
    "Colour": "#b25cff",
    "Value_Mult": 1.3,
    "Yield_Bonus": 0.15,
-   "Bench_Gold": 1000,
    "Ember_Count": 371,
    "Ember_Life_Sec": 2.65,
    "Ember_Rise": 1.44
@@ -6774,7 +6770,6 @@ export const MAPDATA = {
    "Colour": "#ffc83d",
    "Value_Mult": 1.75,
    "Yield_Bonus": 0.2,
-   "Bench_Gold": null,
    "Ember_Count": 557,
    "Ember_Life_Sec": 3,
    "Ember_Rise": 1.62
@@ -6828,9 +6823,170 @@ export const MAPDATA = {
    "Loyalty": 15,
    "XP": 300,
    "Pod_Crate": 12,
-   "Pod_Crate_Level": 1,
    "Grants": "farmhouse",
    "Unlocks": "button:farm tab:seedpods method:irrigated tech:sprinklers"
+  }
+ ],
+ "cropLevels": [
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "loam-grain",
+   "Level": 2,
+   "Node": "crop_loam_grain_2",
+   "Name": "Loam Grain II",
+   "Price": 500,
+   "Unlock": "F1:accepted",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "loam-grain",
+   "Level": 3,
+   "Node": "crop_loam_grain_3",
+   "Name": "Loam Grain III",
+   "Price": 1200,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "loam-grain",
+   "Level": 4,
+   "Node": "crop_loam_grain_4",
+   "Name": "Loam Grain IV",
+   "Price": 2500,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "loam-grain",
+   "Level": 5,
+   "Node": "crop_loam_grain_5",
+   "Name": "Loam Grain V",
+   "Price": 5000,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "heartwood-amber",
+   "Level": 2,
+   "Node": "crop_heartwood_amber_2",
+   "Name": "Heartwood Amber II",
+   "Price": 750,
+   "Unlock": "F1:accepted",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "heartwood-amber",
+   "Level": 3,
+   "Node": "crop_heartwood_amber_3",
+   "Name": "Heartwood Amber III",
+   "Price": 1800,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "heartwood-amber",
+   "Level": 4,
+   "Node": "crop_heartwood_amber_4",
+   "Name": "Heartwood Amber IV",
+   "Price": 3750,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "heartwood-amber",
+   "Level": 5,
+   "Node": "crop_heartwood_amber_5",
+   "Name": "Heartwood Amber V",
+   "Price": 7500,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "rootsong-seeds",
+   "Level": 2,
+   "Node": "crop_rootsong_seeds_2",
+   "Name": "Rootsong Seeds II",
+   "Price": 1000,
+   "Unlock": "F1:accepted",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "rootsong-seeds",
+   "Level": 3,
+   "Node": "crop_rootsong_seeds_3",
+   "Name": "Rootsong Seeds III",
+   "Price": 2400,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "rootsong-seeds",
+   "Level": 4,
+   "Node": "crop_rootsong_seeds_4",
+   "Name": "Rootsong Seeds IV",
+   "Price": 5000,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "rootsong-seeds",
+   "Level": 5,
+   "Node": "crop_rootsong_seeds_5",
+   "Name": "Rootsong Seeds V",
+   "Price": 10000,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "elder-bloom",
+   "Level": 2,
+   "Node": "crop_elder_bloom_2",
+   "Name": "Elder Bloom II",
+   "Price": 1500,
+   "Unlock": "F1:accepted",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "elder-bloom",
+   "Level": 3,
+   "Node": "crop_elder_bloom_3",
+   "Name": "Elder Bloom III",
+   "Price": 3600,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "elder-bloom",
+   "Level": 4,
+   "Node": "crop_elder_bloom_4",
+   "Name": "Elder Bloom IV",
+   "Price": 7500,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
+  },
+  {
+   "Planet_Key": "ground",
+   "Crop_Id": "elder-bloom",
+   "Level": 5,
+   "Node": "crop_elder_bloom_5",
+   "Name": "Elder Bloom V",
+   "Price": 15000,
+   "Unlock": "F1:complete",
+   "Status": "proposed"
   }
  ]
 };
