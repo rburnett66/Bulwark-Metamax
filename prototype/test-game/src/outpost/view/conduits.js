@@ -146,7 +146,8 @@ export function defenseStructures(o, map = null) {
     return {
       id: 'od-' + d.id, kind: d.kind === 'wall' ? 'wall' : 'antiGround', structId: d.kind === 'mg' ? 'STR-MG' : d.kind === 'cannon' ? 'STR-Cannon' : 'STR-Wall',
       tier, cell: { x: at[0], y: at[1] }, pos: { x: at[0] + 0.5, y: at[1] + 0.5 }, footprint: { w: 1, h: 1 },
-      hp: Math.min(d.hp, max), maxHp: max, lifecycle: d.hp < max ? 'Damaged' : 'Active', outpostId: d.id, ...extra,
+      // 0 HP: a wreck (charred, slumped, smoking) until a repair drone restores it [MM-story_mwb8zamf_23]
+      hp: Math.min(d.hp, max), maxHp: max, lifecycle: !(d.hp > 0) ? 'Wrecked' : d.hp < max ? 'Damaged' : 'Active', outpostId: d.id, ...extra,
     };
   };
   const out = [];

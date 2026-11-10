@@ -131,7 +131,7 @@ export function panelModel(o, map, sel, ctx = {}) {
       upgradeDefense: next ? { label: `UPGRADE TO ${ROMAN[d.tier + 1]} · ${fmtGold(next.cost)}`, cost: next.cost, enabled: !upWhy, why: upWhy ? upWhy.replace(/^./, (c) => c.toUpperCase()) : null } : null,
       title: `${KIND_NAME[d.kind]} ${ROMAN[d.tier]}`, sub: `cell ${d.cell[0]}, ${d.cell[1]}`,
       status: d.repair ? (now < d.repair.arrive ? `Repair drone on its way · ${fmtClock((d.repair.arrive - now) / 1000)}` : `Being repaired · ${fmtClock(Math.max(0, d.repair.done - now) / 1000)}`)
-        : off[d.id] ? 'No power' : frac >= 1 ? 'Ready' : frac < 0.4 ? 'Badly worn' : 'Worn',
+        : !(d.hp > 0) ? 'Wrecked · needs repair' : off[d.id] ? 'No power' : frac >= 1 ? 'Ready' : frac < 0.4 ? 'Badly worn' : 'Worn',
       tone: d.repair ? 'busy' : off[d.id] ? 'off' : frac >= 1 ? 'ok' : 'warn',
       stats: [['Armour', `${Math.round(d.hp)} / ${max}`], ...(def.battle.dps ? [['Damage', `${def.battle.dps} / s`]] : []), ['Range', `${def.battle.range || 1} cells`]],
       hp: frac,
