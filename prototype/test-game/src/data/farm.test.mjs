@@ -111,7 +111,7 @@ test('Phase A buildings and Verdance F1', () => {
 
 test('the tuning is all there and numeric', () => {
   for (const k of ['Prep_Gold', 'Prep_Sec', 'Sprout_At', 'Plant_At', 'Fruited_Window', 'Pods_Per_Plot', 'Pod_Price',
-    'Battle_Pod_Units', 'Battle_Pod_Units_Epic', 'Pod_Crate', 'Silo_Hours',
+    'Chest_Units_Per_Pod', 'Pod_Crate', 'Silo_Hours',
     'Breach_Silo_Loss', 'Trample_Fruited_Yield', 'Avatar_Cells', 'Farmhands']) assert.equal(typeof FARM[k], 'number', k);
   assert.ok(FARM.Sprout_At < FARM.Plant_At);
   for (const k of ['Lucky_Chance', 'Lucky_Chance_High', 'Bench_In']) assert.ok(!(k in FARM), k + ' is gone with the bench and the lucky roll (owner rule 9)');

@@ -18,7 +18,9 @@
 import { resourceIconHtml } from '../data/resourceIcons.js';
 import { POD_LEVELS, FARM, FARM_CONTRACTS, MAP_CROP_LEVEL, podLevel, cropOf, growSec, yieldOf } from '../data/farm.js';
 import { RESOURCE_TIERS, PLANETS } from '../data/planets.js';
-import { podCount, podsHeld, buyPods, podPrice, unitsPerPod } from '../farm/pods.js';
+import { podCount, podsHeld, buyPods, podPrice } from '../farm/pods.js';
+import { unitsPerPod, chestsHeld, openChest } from '../farm/chest.js';
+import { chestStripHtml, playChestOpen } from './podChest.js';
 import { unlockProgress } from '../farm/unlock.js';
 import { cropLevel, nextLevelNode, cropTechUnlocked } from '../farm/levels.js';
 import { bankOf } from '../save/save.js';
@@ -58,7 +60,7 @@ function nextHtml(s, c) {
 /** The list: the farm store's bands, each crop a row — pods held, its level now, the next level and its price. */
 export function seedPodsListHtml(bands, s, selected) {
   const legend = `<div class="plegend"><span>Crop level</span>${POD_LEVELS.map((l) => named(l.level)).join('')}<span class="plring">ring = crop tier</span></div>`;
-  return legend + bands.map((b) => {
+  return chestStripHtml(s) + legend + bands.map((b) => {
     const rows = b.resources.map((c) => {
       const n = podCount(s, c.id), L = cropLevel(s, c.id), next = nextHtml(s, c), id = esc(c.id), u = unlockProgress(s, c.id);
       // a crop whose pods are still locked (owner rule 10) shows its count toward the unlock instead of pods held
@@ -79,7 +81,7 @@ export function seedPodsListHtml(bands, s, selected) {
 function sourcesHtml(c) {
   const out = [`Buy them here: <b class="num">${num(podPrice(1))}</b> gold a pod, every crop alike.`];
   if (c.newMaterial) out.push(`Battles: none. ${esc(c.planet)}'s battles carry a different material, so they drop no ${esc(c.name)} pods.`);
-  else out.push(`Battles on ${esc(c.planet)}: one pod per ${num(unitsPerPod(c.tier))} units carried home.`);
+  else out.push(`Pod Reward Chests: win a map on ${esc(c.planet)} and its chest holds one pod per ${num(unitsPerPod())} ${esc(c.name)} delivered, once its pods are unlocked; the rest carries to the next map.`);
   for (const k of FARM_CONTRACTS.filter((x) => x.crop === c.id && x.podCrate)) {
     out.push(`${esc((PLANETS[k.planetKey] || {}).name || k.planetKey)} ${esc(k.code)} contract: a Pod Crate of ${num(k.podCrate)} pods.`);
   }
@@ -171,6 +173,12 @@ export function seedPodsView({ back = 'All crops', onPlant = null } = {}) {
         msg = buyMessage(r, crop);
         if (r.ok) api.changed();
         api.render();
+        return true;
+      }
+      if (d.chestOpen) {   // owner rule 11: open a held Pod Reward Chest (menu/podChest.js plays it)
+        const id = d.chestOpen, chest = chestsHeld(api.load ? api.load() : null).find((c) => c.id === id) || { id, pods: {} };
+        playChestOpen({ doc: t.ownerDocument, chest, open: () => { let r = null; api.update((s) => { r = openChest(s, id); }); if (r) { msg = null; api.changed(); api.render(); } return r; } })
+          .then(() => api.render());
         return true;
       }
       if (d.podPlant) {

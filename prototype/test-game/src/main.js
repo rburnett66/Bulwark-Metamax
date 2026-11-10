@@ -1229,7 +1229,7 @@ export function boot(mountEl, seed) {
           // BATTLE REWARDS (Menu-Progression-Design §2.2–3) [MM-story_mvkhegop_j]: a win banks the leftover gold, every
           // campaign battle earns commander XP; the ledger shows on the result and flies into the menu widget later.
           // Played battles only — a replay re-runs a battle already paid for.
-          let rewards = null, resolvedFavour = null, rareSettled = null;
+          let rewards = null, resolvedFavour = null, rareSettled = null, podChest = null;
           if (mode === 'play' && currentMapId) {
             rewards = grantBattleRewards(saveBefore, { mapId: currentMapId, result: sim.result, finalScore: sim.finalScore,
               waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, xpFor: xpForBattle });
@@ -1237,7 +1237,8 @@ export function boot(mountEl, seed) {
               finalScore: sim.finalScore, mapScore: sim.mapScore, waveStars: sim.waveStars, totalWaves: sim.waves ? sim.waves.total : 8, tally: finishTally(battleTally) });
             updateSave((sv) => {
               rareSettled = settleRareRun(sv, played);   // the RARE contract resolves, win or lose (before the inventory banks)
-              if (missionCatalog) resolvedFavour = resolvedSecondary(sv, settleBattle(sv, played, missionCatalog));
+              played.at = lastBattleAt || Date.now();   // when the Pod Reward Chest was won (farm/chest.js)
+              if (missionCatalog) { const settled = settleBattle(sv, played, missionCatalog); podChest = settled.chest || null; resolvedFavour = resolvedSecondary(sv, settled); }
               else { console.error('[missions] content not loaded: battle counted, missions not advanced'); bankBattle(sv, played); }
               // the planet's battle history (Play page › HISTORY) [MM-story_mw1azvh8_d]
               logBattle(sv, battleEntry({ at: lastBattleAt || Date.now(), planet: played.planet, faction: currentTestFaction, mapId: currentMapId,
@@ -1254,6 +1255,8 @@ export function boot(mountEl, seed) {
           // what the player sees at the end — after the Kill Camera on a defeat [MM-task_mvjng96y_b]
           // what this battle opened or settled beyond the map (Content-Reveal §6): new signals, the rare contract
           const resultNotes = [];
+          // owner rule 11: the won map's Pod Reward Chest, held in STORES › Seed pods until opened [MM-story_mwatmvpt_1k]
+          if (podChest) { const n = Object.values(podChest.pods).reduce((a, k) => a + k, 0); resultNotes.push({ kind: 'chest', head: 'POD REWARD CHEST', text: `${n} seed pod${n === 1 ? '' : 's'} inside. Open it in STORES › Seed pods.` }); }
           if (rareSettled && rareRun.contract) resultNotes.push({ kind: 'contract', head: 'RARE CONTRACT', text: rareResultLine(rareSettled, rareRun.contract.ship, rareRun.contract.rareName) });
           if (mode === 'play' && currentMapId) {
             try {

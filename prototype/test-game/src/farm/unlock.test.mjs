@@ -2,7 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { unlockUnits, cropDelivered, podsUnlocked, recordDelivered, unlockPods, unlockProgress } from './unlock.js';
-import { buyPods, battlePods, grantPodCrate, podCount } from './pods.js';
+import { buyPods, grantPodCrate, podCount } from './pods.js';
+import { deliver } from './chest.js';
 import { defaultSave, migrate } from '../save/save.js';
 
 const rich = () => { const s = defaultSave(); s.carry = { gold: 10000, structures: [] }; s.goldBank = 10000; return s; };
@@ -38,11 +39,11 @@ test('a locked crop cannot be bought; unlocked it can', () => {
   assert.equal(podCount(s, 'heartwood-amber'), 4);
 });
 
-test('battles drop no pods of a locked crop', () => {
+test('a locked crop adds nothing toward a chest', () => {
   const s = defaultSave();
-  assert.deepEqual(battlePods(s, 'Verdance', { uncommon: 400 }), {});
+  assert.deepEqual(deliver(s, { 'heartwood-amber': 400 }).counted, {});
   unlockPods(s, 'heartwood-amber');
-  assert.deepEqual(battlePods(s, 'Verdance', { uncommon: 400 }), { 'heartwood-amber': 2 });
+  assert.deepEqual(deliver(s, { 'heartwood-amber': 400 }).counted, { 'heartwood-amber': 400 });
 });
 
 test('the F1 Pod Crate unlocks its crop so its pods can be planted', () => {
@@ -88,7 +89,7 @@ test('settleBattle counts the whole harvest toward the unlock, not only the surp
   t1.harvested = { common: 300, uncommon: 0, rare: 0, epic: 0 }; t1.kept = { common: 0, uncommon: 0, rare: 0, epic: 0 };
   assert.deepEqual(settleBattle(s, { ...r, tally: t1 }, CATALOG, ctx).podsUnlocked, []);
   assert.equal(cropDelivered(s, 'loam-grain'), 300, 'the quota counts');
-  assert.deepEqual(battlePods(s, 'Verdance', { common: 400 }), {}, 'still locked: no pods');
+  assert.equal(s.podCarry['loam-grain'], undefined, 'still locked: nothing toward a chest');
   const t2 = finishTally(createBattleTally());
   t2.harvested = { common: 200, uncommon: 0, rare: 0, epic: 0 }; t2.kept = { common: 50, uncommon: 0, rare: 0, epic: 0 };
   assert.deepEqual(settleBattle(s, { ...r, tally: t2 }, CATALOG, ctx).podsUnlocked, ['loam-grain'], '300 + 200 = 500 unlocks');

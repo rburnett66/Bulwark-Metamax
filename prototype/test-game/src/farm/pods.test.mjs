@@ -9,7 +9,7 @@ import { battleResult } from '../save/missions.js';
 import { createBattleTally, finishTally } from '../save/battleTally.js';
 import { FARM, farmContractOf } from '../data/farm.js';
 import * as PODS from './pods.js';
-import { podCount, podsHeld, addPods, spendPods, buyPods, podPrice, unitsPerPod, battlePods, grantPodCrate } from './pods.js';
+import { podCount, podsHeld, addPods, spendPods, buyPods, podPrice, grantPodCrate } from './pods.js';
 import { CROPS as ALL_CROPS } from '../data/farm.js';
 // owner rule 10: these tests are about pods, so every crop's pods start unlocked (farm/unlock.test.mjs covers the lock)
 const defaultSave = () => { const s = freshSave(); for (const c of ALL_CROPS) s.podUnlocks[c.id] = true; return s; };
@@ -88,71 +88,9 @@ test('BUY: pods at one fixed price, every crop alike — spends the bank, adds t
   assert.throws(() => buyPods(withGold(1000), 'nope', 4), /unknown crop/);
 });
 
-test('battles bank plain pods: one per 200 units, epic fields one per 100', () => {
-  assert.ok(!('BATTLE_POD_LEVEL' in PODS), 'battle pods have no level (owner rule 9)');
-  assert.equal(unitsPerPod('common'), FARM.Battle_Pod_Units);
-  assert.equal(unitsPerPod('epic'), FARM.Battle_Pod_Units_Epic);
-  const s = defaultSave();
-  const out = battlePods(s, 'Verdance', tiers({ common: 450, uncommon: 199, rare: 200, epic: 250 }));
-  assert.deepEqual(out, { 'loam-grain': 2, 'rootsong-seeds': 1, 'elder-bloom': 2 });
-  assert.equal(podCount(s, 'loam-grain'), 2);
-  assert.equal(podCount(s, 'elder-bloom'), 2);
-  assert.equal(podCount(s, 'heartwood-amber'), 0);
-  assert.deepEqual(s.podCarry, { 'loam-grain': 50, 'heartwood-amber': 199, 'elder-bloom': 50 });
-  assert.deepEqual(battlePods(s, 'ground', tiers({ common: 150 })), { 'loam-grain': 1 }, 'the planet key works too');
-  assert.deepEqual(s.inventory, {}, 'pods never land in the battle inventory');
-});
-
-test('the remainder carries across battles, so nothing is lost', () => {
-  const s = defaultSave();
-  assert.deepEqual(battlePods(s, 'Verdance', tiers({ common: 120 })), {});
-  assert.equal(s.podCarry['loam-grain'], 120);
-  assert.deepEqual(battlePods(s, 'Verdance', tiers({ common: 130 })), { 'loam-grain': 1 });
-  assert.equal(s.podCarry['loam-grain'], 50);
-  assert.deepEqual(battlePods(s, 'Verdance', tiers({ common: 150 })), { 'loam-grain': 1 });
-  assert.equal(s.podCarry['loam-grain'], undefined, 'an exact pod leaves no carry');
-  assert.equal(podCount(s, 'loam-grain'), 2);
-});
-
-test('Lumen\'s uncommon battle resource is Helium-3, not a crop: it yields no pods and no carry', () => {
-  const s = defaultSave();
-  const out = battlePods(s, 'Lumen', tiers({ common: 200, uncommon: 5000, rare: 0, epic: 100 }));
-  assert.deepEqual(out, { regolith: 1, 'void-lens': 1 });
-  assert.equal(podCount(s, 'helium-4'), 0, 'Helium-4 is farm-only');
-  assert.equal(s.podCarry['helium-4'], undefined);
-  assert.equal(s.podCarry['helium-3'], undefined);
-});
-
-test('battlePods takes nothing it cannot use and is plain arithmetic', () => {
-  const s = defaultSave();
-  assert.deepEqual(battlePods(s, null, tiers({ common: 999 })), {});
-  assert.deepEqual(battlePods(s, 'Verdance', null), {});
-  assert.deepEqual(battlePods(s, 'Verdance', tiers({ common: -5, rare: NaN })), {});
-  assert.deepEqual(s.pods, {});
-  const a = defaultSave(), b = defaultSave(), t = tiers({ common: 777, epic: 333 });
-  battlePods(a, 'Verdance', t); battlePods(b, 'Verdance', t);
-  assert.deepEqual(a, b, 'same tally, same pods');
-});
-
-test('settleBattle banks pods beside the harvest; a battle without a tally banks none', () => {
-  const CATALOG = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
-  const stars = Array.from({ length: 8 }, (_, i) => ({ wave: i + 1, stars: 3, flags: [true, true, true, false, false] }));
-  const r = battleResult({ mapId: 1, planet: 'Verdance', faction: 'x', result: 'win', totalWaves: 8, waveStars: stars,
-    finalScore: { kills: 400, goldSpent: 3000, totalSeconds: 300 }, mapScore: { goldFromPrimary: 2000, goldFromPremium: 2000, questRed: 30, questGreen: 30 } });
-  const s = defaultSave(), ctx = flowCtx(s, { allOpen: true, now: 1 });
-  const bare = settleBattle(s, { ...r, tally: undefined }, CATALOG, ctx);
-  assert.deepEqual(bare.pods, {});
-  const tally = finishTally(createBattleTally());
-  tally.harvested = tiers({ common: 250, epic: 100 }); tally.kept = tiers({ common: 250, epic: 100 });
-  const out = settleBattle(s, { ...r, tally }, CATALOG, ctx);
-  assert.deepEqual(out.pods, { 'loam-grain': 1, 'elder-bloom': 1 });
-  assert.equal(s.inventory['loam-grain'], 250, 'the harvest still banks into the inventory as before');
-  assert.equal(podCount(s, 'loam-grain'), 1);
-  // pods count every unit carried home, not only the surplus over the Collective's quota (Farming-Design §9.1)
-  const quota = finishTally(createBattleTally());
-  quota.harvested = tiers({ common: 400 }); quota.kept = tiers({ common: 0 });
-  assert.deepEqual(settleBattle(defaultSave(), { ...r, tally: quota }, CATALOG, ctx).pods, { 'loam-grain': 2 });
-  assert.equal(s.podCarry['loam-grain'], 50);
+test('battles add no pods to the stock directly: they come in the Pod Reward Chest (owner rule 11)', () => {
+  assert.ok(!('BATTLE_POD_LEVEL' in PODS), 'pods have no level (owner rule 9)');
+  assert.ok(!('battlePods' in PODS) && !('unitsPerPod' in PODS), 'the per-200-units drop is gone: farm/chest.js');
 });
 
 test('the F1 Pod Crate: 12 Loam Grain pods, no level', () => {

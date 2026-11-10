@@ -109,7 +109,7 @@ export function createInventoryScreen({ doc, host, source = BATTLE_INVENTORY, ga
   }
   const viewOf = () => (src.view ? src.view(tab) : null);
   // what a tab's own view may do: write the save (save.js updateSave), redraw, tell the menu, close the screen
-  const api = { update: (fn) => updateSave(fn), render: () => render(), changed: () => { if (onChange) onChange(); }, close: () => { if (onClose) onClose(); } };
+  const api = { load: () => loadSave(), update: (fn) => updateSave(fn), render: () => render(), changed: () => { if (onChange) onChange(); }, close: () => { if (onClose) onClose(); } };
   inv.addEventListener('click', (e) => {
     const t = e.target.closest('button'); if (!t) return;
     const v = viewOf();

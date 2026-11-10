@@ -92,7 +92,7 @@ test('the detail panel: pods held, the crop level and the next node, yield and w
   assert.ok(det.includes('Legendary</span></td><td class="num">19</td><td class="num">×1.75 · 1.75 g</td>'), 'yield +20 %, worth 1.75× the battle price');
   assert.ok(det.includes('L3 Rare</span> <small>= battle maps</small>'), 'battle-map crops count as level 3');
   assert.ok(det.includes('Crops from battle maps count as level 3 (Rare).'));
-  assert.ok(det.includes('Battles on Verdance:') && det.includes('one pod per 200 units carried home'));
+  assert.ok(det.includes('Pod Reward Chests: win a map on Verdance') && det.includes('one pod per 100 Loam Grain delivered'));
   assert.ok(det.includes('Verdance F1 contract: a Pod Crate of 12 pods.') && !det.includes('pod bench'));
   assert.ok(det.includes(`<b class="num">${FARM.Pod_Price}</b> gold a pod, every crop alike`));
   assert.ok(det.includes(`data-pod-buy="loam-grain" data-buy-n="${BUY_PODS}">Buy 4 · 100g`));

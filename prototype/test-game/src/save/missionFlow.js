@@ -20,8 +20,8 @@ import { logMission, claim, bankBattle, missionStatus, failMission, alignmentBan
 import { measureOnline, measureOreSold, measureRaidsHeld, contractStepCollected, planetKeyOf } from '../outpost/contract.js';
 import { farmingOpen, measureFarmPlanted, measureCropDelivered, measureMethodsGrowing, farmStepCollected } from '../farm/contract.js';
 import { bankHarvest } from './inventory.js';
-import { battlePods } from '../farm/pods.js';
-import { recordDelivered, battleDelivery } from '../farm/unlock.js';
+import { battleDelivery } from '../farm/unlock.js';
+import { settleChest } from '../farm/chest.js';
 import { levelFromXp } from '../data/progression.js';
 import { techCtxFromSave, planetOpen } from '../menu/techSave.js';
 
@@ -149,11 +149,13 @@ export function recordPlanetMap(s, result) {
 export function settleBattle(s, result, catalog, ctx = flowCtx(s)) {
   const out = bankBattle(s, result, ctx);
   out.harvested = bankHarvest(s, result, catalog);
-  // every unit banked counts toward its crop's seed pod unlock (owner rule 10) [MM-story_mwatmukb_1j]
-  out.podsUnlocked = result.tally ? recordDelivered(s, battleDelivery(result.planet, result.tally.harvested || result.tally.kept)) : [];
-  // Rare seed pods from every unit the harvesters carried home (Farming-Design §9.1: "per 200 units carried"), after
-  // the battle (tech plan §2.3 F9) [MM-story_mwabgh3x_b]. Not just the surplus over the Collective's quota.
-  out.pods = result.tally ? battlePods(s, result.planet, result.tally.harvested || result.tally.kept) : {};
+  // every unit carried home counts toward its crop's seed pod unlock (owner rule 10) [MM-story_mwatmukb_1j], and once
+  // unlocked toward the Pod Reward Chest a won map grants (owner rule 11: one pod per 100 delivered, carried between
+  // maps; the chest is how battle pods arrive) [MM-story_mwatmvpt_1k]. After the battle, so replays are untouched.
+  const delivery = result.tally ? battleDelivery(result.planet, result.tally.harvested || result.tally.kept) : {};
+  const chest = settleChest(s, delivery, { planet: result.planet || null, mapId: result.mapId || null, result: result.result, at: result.at || 0 });
+  out.podsUnlocked = chest.unlocked;
+  out.chest = chest.chest;
   out.arrived = recordPlanetMap(s, result).arrived;
   out.logged = syncMissions(s, catalog, ctx).map((m) => m.id);
   return out;
