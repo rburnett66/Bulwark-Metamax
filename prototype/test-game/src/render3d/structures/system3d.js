@@ -130,7 +130,7 @@ export function planSystem(list, base = null, mounts = null) {
       continue;
     }
     const ry = bx !== null && (x !== bx || z !== bz) ? yawToward(x - bx, z - bz) : 0;
-    items.push({ id: s.id, model, x, y, z, ms, ry, sy: look.sy, tint: look.tint, aim: true });
+    items.push({ id: s.id, model, x, y, z, ms, ry, sy: look.sy, tint: look.tint, aim: look.key !== 'W' });   // a wreck's turret is dead
   }
   return { items, sig: sig.join('|') };
 }
