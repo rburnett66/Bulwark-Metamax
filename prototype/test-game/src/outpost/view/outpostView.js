@@ -41,7 +41,7 @@ import { loadChoice } from '../../render3d/quality.js';
 import { harvestRunning, harvestPlan, surfaceFieldGroups, fieldStock } from '../model.js';
 import { harvestRates } from '../../data/outpost.js';
 import { harvesterUnits } from './harvestDrive.js';
-import { startProbe, probeDelay, probeWear, probeBreached, PROBE_MAX_S } from './visitProbe.js';
+import { startProbe, probeDelay, probeWear, probeCells, probeBreached, PROBE_MAX_S } from './visitProbe.js';
 import { powerGrids } from '../model.js';
 import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
 import { crumb, lastSessionCrashed } from '../../diag/errorLog.js';
@@ -548,10 +548,10 @@ async function openOutpostViewInner(opts, stage) {
   const probeUnitIds = new Set();
   function clearProbeUnits() { for (const id of probeUnitIds) state.units.delete(id); probeUnitIds.clear(); }
   function endProbe() {
-    const breached = probeBreached(probe), wear = probeWear(o, probe);
+    const breached = probeBreached(probe), wear = probeWear(o, probe), cells = o.farm ? probeCells(probe) : [];
     probe = null; probeN++; probeWait = probeDelay(o.seed, probeN);
     clearProbeUnits(); state.projectiles = [];
-    if (wear.length) { const res = session.act({ type: 'probeWear', wear }, clockNow()); if (res.ok) { o = res.outpost; onChange(); } }
+    if (wear.length || cells.length) { const res = session.act({ type: 'probeWear', wear, cells }, clockNow()); if (res.ok) { o = res.outpost; onChange(); } }
     syncDefenses(); refreshHud(true);
     hud.toast(breached ? 'Raiders hit the base and pulled back' : 'Raiders driven off');
     crumb(`outpost: probe ${probeN} ${breached ? 'reached the base' : 'driven off'} · wear ${wear.length}`);
