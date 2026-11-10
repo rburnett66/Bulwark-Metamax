@@ -91,7 +91,10 @@ Rules 10–13 (owner, 2026-11-10, epic **F-E · Earned seed pods** [MM-epic_mwat
     count starts **only once it is unlocked** (owner answer), so the first chest that holds it comes on the map that
     passes 500. The chest replaces the per-200-units battle pod drip (§2.3 F9). Its sequence is Pirate Bash's
     (`pirate-bash/src/model.js openChest`, `src/app.js`): the chest is granted on the result screen and held, tapped to
-    open, and its pods revealed one card at a time. *"This would allow players to learn about farming at the end of map
+    open, and its pods revealed one card at a time. *"The chest is the delivery mechanism for the pod drops"* and
+    *"chests in Bulwark are awarded at the end of each map and are automatically opened with a user click"* (owner,
+    2026-11-10): battles add no pods to the stock directly; the chest plays over the result screen and one tap opens
+    it. One not opened then (the game closed first) waits on the SEED PODS tab. *"This would allow players to learn about farming at the end of map
     1, even before they have an outpost,"* so by the time the outpost opens they want the farm to plant them.
 12. **Mastery opens crop levels 2–5** (E4): *"Planting, harvesting and selling fruit from seed pods increases the
     player's mastery of the pods allowing level 2–5 to be grown."* Each crop has a mastery count; thresholds (data,
@@ -369,7 +372,7 @@ they come back; the owner will detail them first:
 |---|---|---|
 | **E1** Design | rules 10–13 in this plan | — |
 | **E2** Pod unlock at 500 | `s.cropDelivered[crop]` counted at every map's end and every outpost/farm sale; `podsUnlocked(s, crop)` at `Pod_Unlock_Units` (500); BUY, chest and PLANT refuse a locked crop; SEED PODS shows the count toward 500 | F-A |
-| **E3** Pod Reward Chest | at every resource map's end (any stars): `s.podChestCarry[crop]` += delivered units of each unlocked crop, ⌊÷ `Chest_Units_Per_Pod` (100)⌋ pods go in a chest; the chest sequence after Pirate Bash's (granted on the result screen, held, tap to open, one card per crop); replaces `battlePods` | E2 |
+| **E3** Pod Reward Chest | at every won map's end (any stars): `s.podCarry[crop]` += delivered units of each unlocked crop, ⌊÷ `Chest_Units_Per_Pod` (100)⌋ pods go in a chest; it plays over the result screen and one tap opens it (Pirate Bash's reveal, one card per crop); an unopened chest waits on SEED PODS; replaces `battlePods` (built) | E2 |
 | **E4** Crop mastery | `s.mastery[crop]` from plantings, harvests and sales; thresholds (data, proposed) open the L2–L5 nodes in place of the F1 gates; gold still buys | F-A |
 | **E5** Level machinery | at planting: L3 needs the crop's fertilizer (and, for some crops, a method: `Crop_Levels.Method`), L4 agrobots, L5 irrigation (`Crop_Levels.Needs`); the plot grows at the highest level it qualifies for and PLANT names the cap | E4 |
 | **E9** The farm visitors | rule 14: nine new characters, one per faction; unlocked by a crop's 4th harvest with 4 plots of it; they roam the outpost daily; GREET for friend points, GIVE crops for tips | F-A (A8 avatar) |

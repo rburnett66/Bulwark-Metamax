@@ -12,8 +12,9 @@
  * - A WON map (any stars) turns every full FARM.Chest_Units_Per_Pod (100) of each carry into pods and grants one chest
  *   holding them; the rest of each carry waits for the next map. A lost map adds to the carry and grants nothing.
  *   A chest that would hold no pods is not granted.
- * - Chests are held in s.podChests (oldest first) until opened (Pirate Bash's sequence: granted at the result, held,
- *   tapped open, the pods revealed one card at a time: src/menu/podChest.js). openChest puts its pods into s.pods.
+ * - The chest is opened at the end of the map with one tap (owner: "awarded at the end of each map and automatically
+ *   opened with a user click"; src/menu/podChest.js over the result). Until then it is held in s.podChests (oldest
+ *   first), so one not opened (the game closed first) waits on the SEED PODS tab. openChest puts its pods into s.pods.
  *
  * Pure: no DOM, no clock (the caller passes `at`), no randomness: a chest's contents are fixed when it is granted.
  */

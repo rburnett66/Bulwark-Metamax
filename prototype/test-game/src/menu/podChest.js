@@ -1,10 +1,11 @@
 /**
  * src/menu/podChest.js — opening a Pod Reward Chest (owner rule 11, 2026-11-10) [MM-story_mwatmvpt_1k].
  *
- * The sequence is Pirate Bash's (pirate-bash/src/app.js: the hold of chests, "Open chest", the reward cards revealed one
- * every 500 ms): a won map grants the chest (the result screen says so), the SEED PODS tab holds it in a strip at the
- * top, and OPEN plays this overlay: the chest, TAP TO OPEN, the lid lifts, then one card per crop, "+N PODS", one at a
- * time, and COLLECT. The pods are already in the stock when the first card shows (farm/chest.js openChest runs on the
+ * Owner (2026-11-10): "chests in Bulwark are awarded at the end of each map and are automatically opened with a user
+ * click." So main.js plays this overlay over the result screen as soon as a won map awards the chest: the chest, TAP
+ * TO OPEN, the lid lifts, then one card per crop, "+N PODS", every 500 ms (Pirate Bash's reveal, pirate-bash/src/app.js),
+ * and COLLECT. A chest not opened then (the game closed first) waits in a strip at the top of the SEED PODS tab, whose
+ * OPEN plays the same overlay. The pods are already in the stock when the first card shows (farm/chest.js openChest runs on the
  * tap), so closing early loses nothing. Reduced motion: the cards show at once, nothing animates.
  *
  * chestStripHtml and chestCardHtml are pure (strings); playChestOpen needs a document.
@@ -55,6 +56,7 @@ const CSS = `
 .pchov h2{margin:0;font:800 15px/1 system-ui;letter-spacing:.22em;color:#d9a441}
 .pchov .sub{color:#9aa6b4;font-size:12px;letter-spacing:.06em;text-align:center}
 .pchov .tap{border:0;background:none;cursor:pointer;padding:0}
+.pchov button:focus:not(:focus-visible){outline:none}.pchov button:focus-visible{outline:2px solid #f2c96a;outline-offset:4px}
 .pchov .pchest{width:min(34vh,180px);height:auto;filter:drop-shadow(0 10px 30px rgba(217,164,65,.35))}
 .pchov .pchest .lid{transform-origin:60px 40px;transition:transform .45s cubic-bezier(.3,1.6,.5,1)}
 .pchov.open .pchest .lid{transform:translateY(-14px) rotate(-18deg)}

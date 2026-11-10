@@ -9,6 +9,8 @@ import { loadSave, updateSave, recordResult, resetSave, grantBattleRewards } fro
 import { xpForBattle } from './data/progression.js';
 import { battleResult, bankBattle, planetOfFaction, trackedMission, trackerLine } from './save/missions.js';
 import { settleBattle, resolvedSecondary, favourMessage } from './save/missionFlow.js';
+import { openChest } from './farm/chest.js';
+import { playChestOpen } from './menu/podChest.js';
 import { loadMissionCatalog } from './save/missionCatalog.js';
 import { createBattleTally, tallyEvents, noteHarvesters, noteTroopDeployed, finishTally } from './save/battleTally.js';
 import { questClosingDue } from './comm/questBeats.js';
@@ -1256,7 +1258,7 @@ export function boot(mountEl, seed) {
           // what this battle opened or settled beyond the map (Content-Reveal §6): new signals, the rare contract
           const resultNotes = [];
           // owner rule 11: the won map's Pod Reward Chest, held in STORES › Seed pods until opened [MM-story_mwatmvpt_1k]
-          if (podChest) { const n = Object.values(podChest.pods).reduce((a, k) => a + k, 0); resultNotes.push({ kind: 'chest', head: 'POD REWARD CHEST', text: `${n} seed pod${n === 1 ? '' : 's'} inside. Open it in STORES › Seed pods.` }); }
+          if (podChest) { const n = Object.values(podChest.pods).reduce((a, k) => a + k, 0); resultNotes.push({ kind: 'chest', head: 'POD REWARD CHEST', text: `${n} seed pod${n === 1 ? '' : 's'} inside. Tap the chest to open it.` }); }
           if (rareSettled && rareRun.contract) resultNotes.push({ kind: 'contract', head: 'RARE CONTRACT', text: rareResultLine(rareSettled, rareRun.contract.ship, rareRun.contract.rareName) });
           if (mode === 'play' && currentMapId) {
             try {
@@ -1279,11 +1281,19 @@ export function boot(mountEl, seed) {
             // M3/M4 — the final word — DELAYED so the owner's wave-8 order holds:
             // wave star score (banner) -> final map score (overlay) -> PRIMARY dialog -> then, as
             // part of the REWARD FLOW, the SECONDARY grants the star bonus (5-star wave this battle).
+            // owner (2026-11-10): "chests in Bulwark are awarded at the end of each map and are automatically opened with
+            // a user click" — the map's Pod Reward Chest plays over the result, one tap opens it, before the final word
+            // [MM-story_mwatmvpt_1k]. Unopened (the game closed first) it waits in STORES › Seed pods.
+            const openPodChest = podChest ? () => (S !== sim ? null : playChestOpen({ doc: document, chest: podChest,
+              open: () => { let r = null; updateSave((sv) => { r = openChest(sv, podChest.id); }); return r; } })) : null;
+            if (openPodChest && !lastWaveFaction) setTimeout(openPodChest, 1200);
             if (lastWaveFaction) {
               const call = S.result === 'win'
                 ? winCall(voicePacks, lastWaveFaction, S.waves ? S.waves.current : 0, currentSeed, commOutcome(), true)
                 : defeatCall(voicePacks, lastWaveFaction, currentSeed);
               setTimeout(async () => {
+                if (openPodChest) await openPodChest();
+                if (S !== sim) return;
                 // centre stage like every other held dialog (owner 2026-10-18) [MM-task_mveuityu_d]
                 await comm.showCall({ ...call, hold: true, center: true });
                 if (closing && voicePacks) {   // the quest closes: the giver's verdict (copy to be tuned)
@@ -1294,7 +1304,7 @@ export function boot(mountEl, seed) {
                   const grant = tipsCall(voicePacks, rewardFaction, (currentSeed ^ 0x51ab), 'reward');
                   if (grant) comm.showCall({ ...grant, hold: true, center: true });
                 }
-              }, 1500);
+              }, openPodChest ? 1200 : 1500);
             }
           };
           if (!(S.result === 'lose' && startKillCam(presentResult))) presentResult();
