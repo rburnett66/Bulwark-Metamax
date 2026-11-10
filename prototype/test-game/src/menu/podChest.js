@@ -1,11 +1,15 @@
 /**
- * src/menu/podChest.js — opening a Pod Reward Chest (owner rule 11, 2026-11-10) [MM-story_mwatmvpt_1k].
+ * src/menu/podChest.js — opening a Pod Reward Chest (owner rule 11, 2026-11-10) [MM-story_mwatmvpt_1k]
+ * [MM-story_mwayo9y5_1v].
  *
- * The sequence is Pirate Bash's (pirate-bash/src/app.js: the hold of chests, "Open chest", the reward cards revealed one
- * every 500 ms): a won map grants the chest (the result screen says so), the SEED PODS tab holds it in a strip at the
- * top, and OPEN plays this overlay: the chest, TAP TO OPEN, the lid lifts, then one card per crop, "+N PODS", one at a
- * time, and COLLECT. The pods are already in the stock when the first card shows (farm/chest.js openChest runs on the
- * tap), so closing early loses nothing. Reduced motion: the cards show at once, nothing animates.
+ * Owner (2026-11-10): "chests in Bulwark are awarded at the end of each map and are automatically opened with a user
+ * click." So main.js plays this overlay over the result screen as soon as a won map awards the chest, and one tap opens
+ * it. The chest is the 3D one (menu/podChest3d.js, the Blender model content/farm/pod_chest.glb): it arrives in a beam
+ * and is printed into being, hovers, and on the tap charges, bursts open and sends one glowing pod per crop flying to
+ * its card ("+N PODS"); then COLLECT. Without WebGL or the model it is the flat drawn chest, with Pirate Bash's reveal
+ * (one card every 500 ms). A chest not opened then (the game closed first) waits in a strip at the top of the SEED PODS
+ * tab, whose OPEN plays the same overlay. The pods are in the stock from the tap (farm/chest.js openChest), so closing
+ * early loses nothing. Reduced motion: no flight, flash or shake; the cards show at once.
  *
  * chestStripHtml and chestCardHtml are pure (strings); playChestOpen needs a document.
  */
@@ -39,7 +43,7 @@ export function chestCardHtml({ crop, n }) {
    <strong>${esc(c.name)}</strong><small>${TIER_NAME[c.tier] || ''} tier</small><b class="num">+${num(n)} pod${n === 1 ? '' : 's'}</b></article>`;
 }
 
-/** The chest itself: a banded crate, its lid a separate group so it can lift. */
+/** The flat chest (the SEED PODS strip, and the overlay without WebGL): a banded crate, its lid a group that lifts. */
 export function chestIconSvg(cls = 'pchest') {
   return `<svg class="${cls}" viewBox="0 0 120 100" aria-hidden="true">
    <g class="body"><rect x="14" y="44" width="92" height="48" rx="6" fill="#3b2a17" stroke="#d9a441" stroke-width="3"/>
@@ -50,11 +54,17 @@ export function chestIconSvg(cls = 'pchest') {
 }
 
 const CSS = `
-.pchov{position:fixed;inset:0;z-index:4000;display:grid;place-items:center;background:rgba(4,8,10,.86);font:14px/1.4 system-ui,sans-serif;color:#e6ebe3}
-.pchov .pbox{display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px;max-width:min(92vw,760px)}
+.pchov{position:fixed;inset:0;z-index:4000;display:grid;place-items:center;background:rgba(4,8,10,.86);font:14px/1.4 system-ui,sans-serif;color:#e6ebe3;--r-common:#5aa8f0;--r-uncommon:#f2c84a;--r-rare:#e85050;--r-epic:#52c070}
+.pchov .stage{position:absolute;inset:0;z-index:0;overflow:hidden}
+.pchov .pch3d{display:block;width:100%;height:100%;opacity:0;transition:opacity .35s}
+.pchov.three .pch3d{opacity:1}
+.pchov .pch3d-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.pchov .pbox{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px;max-width:min(92vw,760px)}
+.pchov .ph{display:flex;flex-direction:column;align-items:center;gap:8px}
 .pchov h2{margin:0;font:800 15px/1 system-ui;letter-spacing:.22em;color:#d9a441}
 .pchov .sub{color:#9aa6b4;font-size:12px;letter-spacing:.06em;text-align:center}
 .pchov .tap{border:0;background:none;cursor:pointer;padding:0}
+.pchov button:focus:not(:focus-visible){outline:none}.pchov button:focus-visible{outline:2px solid #f2c96a;outline-offset:4px}
 .pchov .pchest{width:min(34vh,180px);height:auto;filter:drop-shadow(0 10px 30px rgba(217,164,65,.35))}
 .pchov .pchest .lid{transform-origin:60px 40px;transition:transform .45s cubic-bezier(.3,1.6,.5,1)}
 .pchov.open .pchest .lid{transform:translateY(-14px) rotate(-18deg)}
@@ -65,60 +75,135 @@ const CSS = `
 .pchov .pcc strong{font-size:12px;text-align:center}.pchov .pcc small{color:#9aa6b4;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
 .pchov .pcc b{color:#f2c96a;font-size:14px}.pchov .pcc .resi{width:44px;height:44px}
 @keyframes pccin{from{opacity:0;transform:translateY(10px) scale(.9)}to{opacity:1;transform:none}}
+.pchov .pcc.wait{visibility:hidden;animation:none}
+.pchov .pcc.pop{animation:pccpop .42s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pccpop{0%{opacity:0;transform:scale(.4)}60%{opacity:1}100%{transform:none}}
 .pchov .go{font:inherit;font-weight:700;letter-spacing:.12em;padding:10px 22px;border:0;border-radius:4px;background:#d9a441;color:#1a1206;cursor:pointer}
 .pchov .go[hidden]{display:none}
-@media (max-height:430px){.pchov .pbox{gap:6px;padding:6px}.pchov .pchest{width:96px}.pchov.open .pchest{width:64px}.pchov .pcc{width:100px;padding:6px;gap:1px}.pchov .pcc .resi{width:34px;height:34px}.pchov .go{padding:8px 20px}}
+.pchov.loading .tap,.pchov.loading .hint{visibility:hidden}
+.pchov.three{background:#03060a}
+.pchov.three .pbox{position:absolute;inset:0;max-width:none;justify-content:space-between;padding:max(16px,4vh) 16px max(16px,5vh);gap:8px;pointer-events:none}
+.pchov.three .pbox>*{pointer-events:auto}
+.pchov.three .ph,.pchov.three .hint{text-shadow:0 2px 12px #000}
+.pchov.three .hint{color:#cfe9f2;min-height:1.4em}
+.pchov.three .tap{flex:1;width:min(70vw,560px);min-height:0}
+.pchov.three .tap .pchest{display:none}
+.pchov.three .go{min-height:0}
+@media (max-height:430px){.pchov .pbox{gap:6px;padding:6px}.pchov .pchest{width:96px}.pchov.open .pchest{width:64px}.pchov .pcc{width:100px;padding:6px;gap:1px}.pchov .pcc .resi{width:34px;height:34px}.pchov .go{padding:8px 20px}
+ .pchov.three .pbox{padding:10px 12px 10px;gap:4px}.pchov.three .ph{gap:4px}}
 @media (prefers-reduced-motion:reduce){.pchov *{animation:none!important;transition:none!important}}`;
 
 function ensureStyle(doc) {
-  if (doc.getElementById('pchov-style')) return;
+  const old = doc.getElementById('pchov-style');
+  if (old && old.textContent === CSS) return;
+  if (old) old.remove();
   const st = doc.createElement('style'); st.id = 'pchov-style'; st.textContent = CSS; doc.head.appendChild(st);
+}
+
+/** The crop tier colours (the menu's --r-* tokens), for the pods in flight. */
+const TIER_HEX = Object.freeze({ common: '#5aa8f0', uncommon: '#f2c84a', rare: '#e85050', epic: '#52c070' });
+export const podColour = (crop) => TIER_HEX[(cropOf(crop) || {}).tier] || '#f2c96a';
+
+/** The quality tier for the 3D chest: a phone-sized screen draws a little lighter. */
+function autoTier(win) {
+  const w = win.innerWidth || 1280, h = win.innerHeight || 720, dpr = win.devicePixelRatio || 1;
+  return Math.min(w, h) < 500 || dpr > 2.5 ? 'standard' : 'high';
 }
 
 /**
  * Play the opening. chest: the held chest (for its title); open(): opens it in the save (farm/chest.js openChest
- * through the menu's updateSave) and returns { draws } or null. → Promise resolving with the open result (or null)
- * when the player collects or closes.
+ * through the menu's updateSave) and returns { draws } or null. opts: reduced (default: the media query), tier
+ * ('high' | 'standard' | 'low'; default by screen), use3d (false: the flat chest only).
+ * → Promise resolving with the open result (or null) when the player collects or closes.
  */
-export function playChestOpen({ doc = document, chest, open, reduced = null } = {}) {
+export function playChestOpen({ doc = document, chest, open, reduced = null, tier = null, use3d = true, timeScale = 1 } = {}) {
   ensureStyle(doc);
   const win = doc.defaultView || {};
   const still = reduced != null ? reduced : !!(win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const ov = doc.createElement('div');
-  ov.className = 'pchov'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Pod Reward Chest');
-  ov.innerHTML = `<div class="pbox"><h2>POD REWARD CHEST</h2>
-   <div class="sub">${chest && chest.planet ? esc(planetName(chest.planet)) + (chest.mapId ? ' · map ' + num(chest.mapId) : '') + ' · ' : ''}${num(chestPodCount(chest))} seed pod${chestPodCount(chest) === 1 ? '' : 's'} inside</div>
+  ov.className = 'pchov' + (use3d ? ' loading' : '');
+  ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Pod Reward Chest');
+  ov.innerHTML = `<div class="stage" aria-hidden="true"></div><div class="pbox"><div class="ph"><h2>POD REWARD CHEST</h2>
+   <div class="sub">${chest && chest.planet ? esc(planetName(chest.planet)) + (chest.mapId ? ' · map ' + num(chest.mapId) : '') + ' · ' : ''}${num(chestPodCount(chest))} seed pod${chestPodCount(chest) === 1 ? '' : 's'} inside</div></div>
    <button class="tap" aria-label="Open the chest">${chestIconSvg()}</button>
    <div class="sub hint">Tap to open</div>
    <div class="cards" role="list"></div>
    <button class="go" hidden>Collect</button></div>`;
   doc.body.appendChild(ov);
   const $ = (q) => ov.querySelector(q);
-  let result = null, timer = null, done;
+  let result = null, done, stage = null, closed = false, tapped = false;
+  const timers = [];
+  const later = (fn, ms) => { timers.push(win.setTimeout(fn, ms)); };
   const finished = new Promise((r) => { done = r; });
-  const close = () => { if (timer) win.clearTimeout(timer); doc.removeEventListener('keydown', onKey, true); ov.remove(); done(result); };
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    for (const t of timers) win.clearTimeout(t);
+    doc.removeEventListener('keydown', onKey, true);
+    if (stage) stage.dispose();
+    ov.remove();
+    done(result);
+  };
   function onKey(e) {
     if (e.key !== 'Escape' && e.key !== 'Enter' && e.key !== ' ') return;
     e.stopPropagation(); e.preventDefault();
-    if (!ov.classList.contains('open')) tap(); else close();
+    if (!tapped) tap(); else close();
   }
+  const showGo = () => { if (closed) return; $('.go').hidden = false; $('.go').focus(); };
+
+  // the 3D chest: load it, then its arrival. No WebGL or no model: the flat chest stays.
+  if (use3d) {
+    import('./podChest3d.js').then((m) => m.createChestStage({ host: $('.stage'), tier: tier || autoTier(win), reduced: still, timeScale }))
+      .then((s) => {
+        if (closed || tapped) { s.dispose(); ov.classList.remove('loading'); return; }   // gone, or opened the flat way
+        stage = s;
+        ov.classList.remove('loading'); ov.classList.add('three');
+        $('.hint').textContent = '';
+        stage.present().then(() => { if (!tapped && !closed) $('.hint').textContent = 'Tap to open'; });
+      })
+      .catch((e) => { console.warn('[pod chest] 3D chest unavailable, drawing the flat one:', e && e.message); ov.classList.remove('loading'); });
+  }
+
   function tap() {
-    if (ov.classList.contains('open')) return;
+    if (tapped) return;
+    tapped = true;
     ov.classList.add('open');
     result = open ? open() : null;
-    $('.hint').textContent = result ? 'Your pods are in SEED PODS.' : 'This chest is already open.';
     const draws = (result && result.draws) || [], cards = $('.cards');
-    const showAll = () => { cards.innerHTML = draws.map(chestCardHtml).join(''); $('.go').hidden = false; $('.go').focus(); };
-    if (still || !draws.length) { showAll(); return; }
+    const said = result ? 'Your pods are in SEED PODS.' : 'This chest is already open.';
+    if (stage) {   // the 3D opening: charge, burst, then each pod flies to its card
+      $('.hint').textContent = '';
+      stage.open().then(() => {
+        if (closed) return;
+        $('.hint').textContent = said;
+        cards.innerHTML = draws.map(chestCardHtml).join('');
+        if (still || !draws.length) { showGo(); return; }
+        const els = [...cards.children];
+        for (const el of els) el.classList.add('wait');
+        let arrived = 0;
+        draws.forEach((d, i) => later(() => {
+          const r = els[i].getBoundingClientRect();
+          stage.releasePod(podColour(d.crop), r.left + r.width / 2, r.top + r.height / 2).then(() => {
+            if (closed) return;
+            els[i].classList.remove('wait'); els[i].classList.add('pop');
+            if (++arrived === draws.length) later(showGo, 250);
+          });
+        }, 250 + i * 380));
+      });
+      return;
+    }
+    $('.hint').textContent = said;   // the flat opening: Pirate Bash's reveal
+    if (still || !draws.length) { cards.innerHTML = draws.map(chestCardHtml).join(''); showGo(); return; }
     let i = 0;
     const next = () => {
-      if (i >= draws.length) { $('.go').hidden = false; $('.go').focus(); return; }
+      if (i >= draws.length) { showGo(); return; }
       cards.insertAdjacentHTML('beforeend', chestCardHtml(draws[i++]));
-      timer = win.setTimeout(next, REVEAL_MS);
+      later(next, REVEAL_MS);
     };
-    timer = win.setTimeout(next, 450);   // the lid lifts first
+    later(next, 450);   // the lid lifts first
   }
   $('.tap').addEventListener('click', tap);
+  $('.stage').addEventListener('click', tap);
   $('.go').addEventListener('click', close);
   doc.addEventListener('keydown', onKey, true);
   $('.tap').focus();

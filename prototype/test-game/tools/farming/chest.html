@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pod Chest Review</title>
+<!-- [MM-story_mwayo9y5_1v] Review page for the 3D Pod Reward Chest: the game's own overlay (src/menu/podChest.js) and
+     3D stage (src/menu/podChest3d.js) with the Blender model (content/farm/pod_chest.glb, tools/blender/farming/
+     pod_chest.py). In memory: no save is touched. Tap the chest to open it; REPLAY plays it again.
+     Query: ?pods=1|3|4 · ?quality=high|standard|low · ?reduced=1 · ?flat=1 · ?slow=0.25 (slow motion) · ?ui=0 hides
+     the bar · ?auto=1 opens it by itself once it has landed. -->
+<style>
+  html, body { margin:0; height:100%; background:#0b1014; color:#e6ebe3; font:14px/1.4 system-ui, sans-serif; overflow:hidden; }
+  .bar { position:fixed; left:8px; top:8px; z-index:5000; display:flex; gap:4px; flex-wrap:wrap; opacity:.4; transition:opacity .2s; }
+  .bar:hover, .bar:focus-within { opacity:1; }
+  .bar button, .bar select { font:600 12px system-ui; padding:6px 9px; background:#111a; color:#cde; border:1px solid #456; border-radius:3px; cursor:pointer; }
+  #note { position:fixed; inset:auto 0 10px; text-align:center; color:#8fa0b3; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="bar" id="bar">
+  <button id="replay">Replay</button>
+  <select id="pods" aria-label="Pods"><option value="1">1 crop</option><option value="3" selected>3 crops</option><option value="4">4 crops</option></select>
+  <select id="quality" aria-label="Quality"><option>high</option><option>standard</option><option>low</option></select>
+  <label><input type="checkbox" id="reduced"> reduced motion</label>
+  <label><input type="checkbox" id="flat"> flat chest</label>
+  <select id="slow" aria-label="Speed"><option value="1">full speed</option><option value="0.5">half speed</option><option value="0.25">quarter speed</option></select>
+</div>
+<p id="note">Pod Reward Chest review: the game's overlay on a sample chest. Collect to see it again.</p>
+<script type="module">
+import { playChestOpen } from '../../src/menu/podChest.js';
+const q = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
+if (q.get('pods')) $('pods').value = q.get('pods');
+if (q.get('quality')) $('quality').value = q.get('quality');
+if (q.get('slow')) $('slow').value = q.get('slow');
+$('reduced').checked = q.get('reduced') === '1';
+$('flat').checked = q.get('flat') === '1';
+if (q.get('ui') === '0') { $('bar').style.display = 'none'; $('note').style.display = 'none'; }
+const MIX = {
+  1: { 'loam-grain': 3 },
+  3: { 'loam-grain': 15, 'heartwood-amber': 2, 'rootsong-seeds': 1 },
+  4: { 'loam-grain': 6, 'heartwood-amber': 3, 'rootsong-seeds': 2, 'elder-bloom': 1 },
+};
+let running = null;
+async function play() {
+  for (const o of document.querySelectorAll('.pchov')) o.remove();
+  const pods = MIX[$('pods').value] || MIX[3];
+  const chest = { id: 'review', planet: 'ground', mapId: 3, at: 0, pods };
+  window.chestDone = false;
+  running = playChestOpen({ chest, tier: $('quality').value, reduced: $('reduced').checked, use3d: !$('flat').checked, timeScale: +$('slow').value || 1,
+    open: () => ({ id: 'review', pods, draws: Object.entries(pods).map(([crop, n]) => ({ crop, n })) }) });
+  if (q.get('auto') === '1') setTimeout(() => { const t = document.querySelector('.pchov .tap'); if (t) t.click(); }, 4200);
+  await running;
+  window.chestDone = true;
+}
+$('replay').onclick = play;
+for (const id of ['pods', 'quality', 'reduced', 'flat', 'slow']) $(id).onchange = play;
+play();
+</script>
+</body>
+</html>
