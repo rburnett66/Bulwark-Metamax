@@ -6,7 +6,8 @@
 <title>Long Ledger rooms</title>
 <!-- [MM-story_mw47laf1_2] [MM-story_mw47lcvv_3] Review page for the room view drawn from primitives: the Long Ledger's
      seven rooms on three decks, crew, the patron at the bar. Serve the game folder and open tools/ship-interior/.
-     ?state=bar (dim the rest, highlight the bar) · ?flash=1 · ?focus=bar · ?reduced=1 · ?standing=arcane:Trusted -->
+     ?state=bar (dim the rest, highlight the bar) · ?flash=1 · ?focus=bar · ?reduced=1 · ?standing=arcane:Trusted
+     ?ship=<faction key> shows that faction's ship: every neutral room plus its own (shipRooms.js) -->
 <style>
   html, body { margin: 0; height: 100%; background: #04060b; color: #e9e2d6; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; }
@@ -29,6 +30,8 @@
 import * as THREE from '../../vendor/three.module.js';
 import { prepareLayout } from '../../src/ship-interior/layout.js';
 import { createRoomView } from '../../src/ship-interior/roomView.js';
+import { factionShipLayout } from '../../src/ship-interior/shipRooms.js';
+import '../../src/data/factions.js';
 
 const q = new URLSearchParams(location.search);
 const reduce = q.get('reduced') === '1' || matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -37,9 +40,11 @@ const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: q.has('shot') });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.info.autoReset = false;
-const L = prepareLayout(await (await fetch('../../content/ships/collective/ship-layout.json')).json());
+const base = await (await fetch('../../content/ships/collective/ship-layout.json')).json(), shipKey = q.get('ship');
+const fac = shipKey && globalThis.BulwarkFactions.find(shipKey);
+const L = prepareLayout(fac ? factionShipLayout(base, fac.key, fac.name) : base);
 if (!L.ok) document.getElementById('info').textContent = 'Layout errors: ' + L.errors.join(' · ');
-const view = createRoomView(THREE, { renderer, layout: L, standing, reduce, patron: { room: 'bar', fac: 'collective', name: 'Factor Mira Valcourt' } });
+const view = createRoomView(THREE, { renderer, layout: L, standing, reduce, patron: fac ? { room: 'helm', fac: fac.key, captain: true } : { room: 'bar', fac: 'collective', name: 'Factor Mira Valcourt' } });
 const resize = () => { renderer.setSize(innerWidth, innerHeight, false); view.resize(innerWidth, innerHeight); };
 addEventListener('resize', resize); resize();
 
