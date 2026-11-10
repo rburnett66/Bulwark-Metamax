@@ -92,8 +92,17 @@
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script>window.FARM_GLB = /*__MODELS__*/;</script>
+<script>window.FARM_GLB = /*__MODELS__*/null;
+// This is the TEMPLATE. make_page.py fills in the models and the crew rig; opened as-is it has neither.
+if (!window.FARM_GLB) document.addEventListener('DOMContentLoaded', () => { document.body.innerHTML =
+  '<div style="font:15px system-ui;color:#fff;background:#14181d;padding:32px;max-width:640px;margin:60px auto;border-radius:10px">' +
+  '<h2 style="margin-top:0">This is the page template, not the prototype</h2>' +
+  '<p>Open <b>prototype/test-game/tools/farming/scale.html</b> (the built page) instead, or build it:</p>' +
+  '<pre style="white-space:pre-wrap;background:#0b0e11;padding:12px;border-radius:6px">python tools/blender/farming/build_farm_models.py -- /tmp/farm_glb\n' +
+  'python tools/blender/farming/make_page.py /tmp/farm_glb tools/blender/farming/scale_template.html prototype/test-game/tools/farming/scale.html</pre></div>'; });
+</script>
 <script type="module">
+if (!window.FARM_GLB) throw new Error('scale_template.html is the unbuilt template: open tools/farming/scale.html');
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';

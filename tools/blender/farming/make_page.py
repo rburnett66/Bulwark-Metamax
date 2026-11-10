@@ -12,6 +12,6 @@ crew = sys.argv[4] if len(sys.argv) > 4 else os.path.join(os.path.dirname(os.pat
 models = {f[:-4]: base64.b64encode(open(os.path.join(glb_dir, f), 'rb').read()).decode()
           for f in sorted(os.listdir(glb_dir)) if f.endswith('.glb')}
 crew_src = re.sub(r'^export ', '', open(crew).read(), flags=re.M)
-html = open(tpl).read().replace('/*__MODELS__*/', json.dumps(models)).replace('/*__CREW__*/', crew_src)
+html = open(tpl).read().replace('/*__MODELS__*/null', json.dumps(models)).replace('/*__CREW__*/', crew_src)
 open(out, 'w').write(html)
 print(out, os.path.getsize(out) // 1024, 'KB')
