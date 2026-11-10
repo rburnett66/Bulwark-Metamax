@@ -142,8 +142,9 @@ export function recordPlanetMap(s, result) {
 export function settleBattle(s, result, catalog, ctx = flowCtx(s)) {
   const out = bankBattle(s, result, ctx);
   out.harvested = bankHarvest(s, result, catalog);
-  // Rare seed pods from the same kept tally, after the battle (Farming tech plan §2.3 F9) [MM-story_mwabgh3x_b]
-  out.pods = result.tally ? battlePods(s, result.planet, result.tally.kept || result.tally.harvested) : {};
+  // Rare seed pods from every unit the harvesters carried home (Farming-Design §9.1: "per 200 units carried"), after
+  // the battle (tech plan §2.3 F9) [MM-story_mwabgh3x_b]. Not just the surplus over the Collective's quota.
+  out.pods = result.tally ? battlePods(s, result.planet, result.tally.harvested || result.tally.kept) : {};
   out.arrived = recordPlanetMap(s, result).arrived;
   out.logged = syncMissions(s, catalog, ctx).map((m) => m.id);
   return out;

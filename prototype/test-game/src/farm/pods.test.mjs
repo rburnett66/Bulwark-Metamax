@@ -151,6 +151,10 @@ test('settleBattle banks Rare pods beside the harvest; a battle without a tally 
   assert.deepEqual(out.pods, { 'loam-grain': 1, 'elder-bloom': 1 });
   assert.equal(s.inventory['loam-grain'], 250, 'the harvest still banks into the inventory as before');
   assert.equal(podCount(s, 'loam-grain', 3), 1);
+  // pods count every unit carried home, not only the surplus over the Collective's quota (Farming-Design §9.1)
+  const quota = finishTally(createBattleTally());
+  quota.harvested = tiers({ common: 400 }); quota.kept = tiers({ common: 0 });
+  assert.deepEqual(settleBattle(defaultSave(), { ...r, tally: quota }, CATALOG, ctx).pods, { 'loam-grain': 2 });
   assert.equal(s.podCarry['loam-grain'], 50);
 });
 
