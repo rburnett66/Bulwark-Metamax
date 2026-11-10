@@ -8,7 +8,7 @@ import { FARM, yieldOf, growSec } from '../data/farm.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
 import {
   ensureFarm, occupied, plotState, placePlot, prep, plant, harvest, harvestAll, placeFarmBuilding, storeCapacity,
-  outputPerHour, farmStatus, farmReportLines, luckyRoll,
+  outputPerHour, farmStatus, farmReportLines, luckyRoll, walkwayHit,
 } from './model.js';
 
 const T0 = Date.UTC(2026, 10, 10, 8, 0, 0), MIN = 60_000, H = 3_600_000;
@@ -18,8 +18,10 @@ function freeSpots(o, n, w = 2, h = 2) {
   const taken = occupied(o, map), out = [];
   for (let y = 0; y + h <= map.height && out.length < n; y += h) {
     for (let x = 0; x + w <= map.width && out.length < n; x += w) {
-      const r = { x, y, w, h };
-      if (!taken.some((t) => r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h)) { out.push(r); taken.push(r); }
+      const r = { x, y, w, h }, g = { x: x - 1, y: y - 1, w: w + 2, h: h + 2 };   // the 1-cell walkway between farm things
+      const farmThing = (t) => !t.what || /^(plot|farmhouse|silo|pump) /.test(t.what);
+      const hit = (q, t) => q.x < t.x + t.w && t.x < q.x + q.w && q.y < t.y + t.h && t.y < q.y + q.h;
+      if (!taken.some((t) => hit(farmThing(t) ? g : r, t))) { out.push(r); taken.push(r); }
     }
   }
   return out;
@@ -195,4 +197,20 @@ test('the away report names what ripened and died; the lucky roll is seeded and 
   let hits = 0;
   for (let c = 0; c < 20000; c++) hits += luckyRoll(11, 'p' + (c % 50), c, 1) ? 1 : 0;
   assert.ok(Math.abs(hits / 20000 - FARM.Lucky_Chance) < 0.01, `rate ${hits / 20000}`);
+});
+
+test('walkways: a plot keeps one clear cell from every other farm thing (owner 2026-11-10, room for the agrobots)', () => {
+  let o = base();
+  const [sp] = freeSpots(o, 1);
+  o = placePlot(o, sp, { map, now: T0 }).outpost;
+  const id = Object.keys(o.farm.plots)[0];
+  assert.deepEqual(walkwayHit(o, { x: sp.x + 2, y: sp.y, w: 2, h: 2 }), { what: 'plot ' + id });       // edge to edge
+  assert.deepEqual(walkwayHit(o, { x: sp.x + 2, y: sp.y + 2, w: 2, h: 2 }), { what: 'plot ' + id });   // corner to corner
+  assert.equal(walkwayHit(o, { x: sp.x + 3, y: sp.y, w: 2, h: 2 }), null);                             // one cell between
+  assert.equal(walkwayHit(o, { x: sp.x + 2, y: sp.y, w: 2, h: 2 }, 0), null);                          // the gap is data
+  // placing touching it is refused (by the walkway, unless that ground is taken or off the map anyway)
+  for (const [dx, dy] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) {
+    const r = placePlot(o, { x: sp.x + dx, y: sp.y + dy }, { map, now: T0 });
+    assert.match(r.error || '', /walkway|taken|off the map/, `touching at ${dx},${dy}`);
+  }
 });

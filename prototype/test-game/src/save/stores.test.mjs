@@ -113,8 +113,9 @@ test('the store screen: 36 tiles, 9 bands, Helium-4 listed, the Crops tab, the d
   assert.equal((html.match(/class="pband/g) || []).length, 9);
   assert.ok(html.includes('Helium-4') && html.includes('data-inv-id="helium-4" aria-selected="true"'));
   assert.ok(html.includes('>184<') && html.includes('Portal: Florael not owned'));
-  assert.deepEqual(STORE_TABS.farm.map((t) => t[0]), ['crops']);
-  assert.deepEqual(FARM_STORE.tabs, [['crops', 'Crops']]);
+  assert.deepEqual(STORE_TABS.farm.map((t) => t[0]), ['crops', 'pods'], 'Seed pods is the second row (story A10)');
+  assert.deepEqual(FARM_STORE.tabs, [['crops', 'Crops'], ['pods', 'Seed pods']]);
+  assert.equal(FARM_STORE.view('crops'), null, 'Crops draws the shared tiles');
   assert.equal(FARM_STORE.title, 'OUTPOST & FARM');
   assert.equal(FARM_STORE.icon, 'i-store');
   const det = storeDetailHtml(bands, 'helium-4');

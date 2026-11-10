@@ -24,6 +24,8 @@ import { createSession, onlineIssues } from './session.js';
 // the FARM tab (story A7 [MM-story_mwabgs3l_f]): the farm on this same view, map, session and build loop (owner rule 7)
 import { createFarmLayer } from '../../farm/view/farmLayer.js';
 import { createFarmEmbers } from '../../farm/view/embers.js';
+// the surface avatar and farmhands (story A8 [MM-story_mwabh0cd_i]): the ship's crew rig on this map's nav grid
+import { createFarmCrew } from '../../farm/view/avatar.js';
 import { farmMenu, FARM_MENU, farmAt, farmPanelModel } from '../../farm/view/farmUi.js';
 import { storeCapacity } from '../../farm/model.js';
 import { statusModel } from './statusReport.js';
@@ -181,6 +183,9 @@ async function openOutpostViewInner(opts, stage) {
   const farm = createFarmLayer(THREE, r, { map, kit, reduced });
   // the harvest effect: embers in the pod level's colour on the battle's particle pool; no idle embers in safe mode (F7)
   const farmFx = createFarmEmbers({ safe });
+  // the avatar lands each farm action through act() when its work is done (one session.act per action); the
+  // farmhands are life only. Safe mode: no farmhands (tech plan §2.3 F7). Created before the board's state is read.
+  const crew = createFarmCrew(THREE, r, { map, board, safe, reduced, land: (a) => landFarm(a), busy: () => !!saleRun });
 
   // ── open: the away catch-up (the only time a long advance runs) ──────────────────────────────────────────────────
   // the away catch-up, one raid window per frame behind the loading line (raids on the battle sim cost time, O7)
@@ -192,6 +197,7 @@ async function openOutpostViewInner(opts, stage) {
   // the tab: OUTPOST or FARM (the menu's FARM button opens this view on FARM); the FARM tab exists once there is a farm
   let tab = opts.tab === 'farm' && o.farm ? 'farm' : 'outpost';
   farm.sync(o, clockNow());
+  crew.sync(o);
   const slugs = new Set(['hub', 'shuttle', 'power', 'storage', ...oresOf(planet).map((x) => `rig_${x.rig}`), 'resourceBay', 'upgradeBay', 'habitat']);
   for (const b of planBuildings(o, map, clockNow())) slugs.add(modelSlug(b.kind, b.tier, b.rigHead));
   step('placing the buildings');
@@ -291,6 +297,7 @@ async function openOutpostViewInner(opts, stage) {
     syncDefenses();
     scene.sync(o, clockNow(), ctxNow());
     farm.sync(o, clockNow());
+    crew.sync(o);
     if (okText) hud.toast(typeof okText === 'function' ? okText(res) : okText);
     if (after) after(res);
     else if (sel) select(sel);
@@ -335,14 +342,26 @@ async function openOutpostViewInner(opts, stage) {
     const pods = (f.pods || []).reduce((a, p) => a + p.n, 0), lucky = (f.pods || []).some((p) => p.lucky);
     return (units ? `Harvested ${units} into the store` : 'Pods recovered') + (pods ? ` · +${pods} pod${pods > 1 ? 's' : ''}` : '') + (lucky ? ' · a lucky pod a level up!' : '') + (f.blocked && f.blocked.length ? ` · ${f.blocked.length} waiting: the Silo is full` : '');
   }
+  // story A8: PREP / PLANT / HARVEST / HARVEST ALL are the avatar's work. The tap queues it (avatar.js, avatarQueue.js);
+  // the avatar walks to the plot, works it, and the action lands here, through act(), once. HARVEST ALL queues every
+  // Fruited and Dead plot as its own harvest (Farming-Design §2.6). Deliver and sell are Farmhouse taps: at once.
+  const AVATAR_WORK = new Set(['prep', 'plant', 'harvest']);
+  function landFarm(action) {
+    return act(action, FARM_TEXT[action.type] || null, (res) => {
+      // a harvest landing (the avatar's work done): embers off each Fruited plot, dust off each dead one (story A9)
+      if (r.impacts && res && res.farm && res.farm.plots) farmFx.harvest(res.farm.plots, o, r.impacts, FXK);
+      if (sel) select(sel);
+    });
+  }
   function farmAct(a, arg) {
     const action = a === 'plant' ? { type: 'plant', plot: sel && sel.plot, pick: arg } : a === 'prep' || a === 'harvest' ? { type: a, plot: arg }
       : a === 'deliver' ? { type: 'deliver', crop: arg } : { type: a };
-    act(action, FARM_TEXT[a] || null, (res) => {
-      // a HARVEST / HARVEST ALL: embers off each Fruited plot, dust off each dead one (farm/view/embers.js)
-      if (r.impacts && res.farm && res.farm.plots) farmFx.harvest(res.farm.plots, o, r.impacts, FXK);
-      if (sel) select(sel);
-    });
+    if (AVATAR_WORK.has(action.type) && action.plot) { crew.enqueue(action); return; }
+    if (action.type === 'harvestAll') {
+      const ids = crew.harvestable(clockNow());
+      if (ids.length) { for (const id of ids) crew.enqueue({ type: 'harvest', plot: id }); hud.toast(`Harvesting ${ids.length} plot${ids.length > 1 ? 's' : ''}`); return; }
+    }
+    landFarm(action);
   }
 
   // ── the BUILD menu (story O17 [MM-story_mw6k9xec_5]): the battle's pick → ghost → build loop ──────────────────────
@@ -696,6 +715,8 @@ async function openOutpostViewInner(opts, stage) {
     }
     scene.sync(o, clockNow(), ctxNow());
     farm.sync(o, clockNow()); farm.update(dt);
+    crew.shelter(!!probe);   // a raid: the avatar and the farmhands wait it out at the Farmhouse (§10); never targets
+    crew.update(dt);
     driveClock += dt;
     syncHarvesters();
     stepProbe(dt);
@@ -752,6 +773,7 @@ async function openOutpostViewInner(opts, stage) {
     try { session.live(clockNow()); } catch (e) { console.warn('[outpost] close', e); }
     scene.dispose();
     farm.dispose();
+    crew.dispose();
     destroyRenderer(r);
     hud.dispose();
     host.remove();
@@ -782,6 +804,8 @@ async function openOutpostViewInner(opts, stage) {
     setTab, farmAct, get tab() { return tab; }, farm,
     /** The harvest effect (review): embers({ plot, kind, level, cycle }[]) plays it on those plots now; its counts. */
     embers: (plots) => (r.impacts ? farmFx.harvest(plots, o, r.impacts, FXK) : null), get emberStats() { return { ...farmFx.stats }; },
+    /** The surface avatar and farmhands (story A8): { avatar: { x, z, pose, height }, queue, idle, landed, sheltering, farmhands, rigs, home }. */
+    get crew() { return crew.info(); }, get safe() { return safe; },
     /** Visit probes (review): bring the next one now; read the one running ({ n, t, raiders, done } or null). */
     probeNow() { if (!probe) probeWait = 0; },
     get probe() { return probe ? { n: probeN + 1, t: probeT, raiders: [...probe.state.units.values()].filter((u) => u.side === 'attacker').length, done: probe.done } : null; },

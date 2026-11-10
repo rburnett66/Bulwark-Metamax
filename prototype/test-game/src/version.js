@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.10-j';
+export const VERSION = 'v2026.11.10-m';
 export const VERSION_NOTE = 'Farming: harvest embers in the pod level colour (white, green, blue, purple, gold), idle embers over Fruited plots, dust off a dead harvest';

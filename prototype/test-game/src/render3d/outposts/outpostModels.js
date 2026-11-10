@@ -4,7 +4,7 @@
  * Factored from the model review page (outposts.html, story O5 [MM-story_mw5oect7_m]) so the outpost view and the
  * review page load, light and animate the GLBs the same way (tech plan docs/tech-plan/Outpost.md §6.2):
  *   - content/outposts/outposts.json + <slug>_lod{0,1,2}.glb (hub, power, power_ii, storage, shuttle, rig_*,
- *     resourceBay, upgradeBay, habitat, habitat_ii);
+ *     resourceBay, upgradeBay, habitat, habitat_ii; the farm's farmhouse, silo, pump);
  *   - materials: `ship_body_v2` the hull (one clone per building so its state can tint it), `outpost_trim` the trim
  *     slot (faction colour, design §8.2; Mk II amber), `ship_glow` the cyan emissive (unlit vertex colour);
  *   - looping glTF clips, one per moving node, on an AnimationMixer: played while the building works, stopped when
@@ -32,6 +32,8 @@ export function modelSlug(kind, tier, rigHead) {
   if (kind === 'resourceBay' || kind === 'harvesterBay') return 'resourceBay';
   if (kind === 'habitat') return tier >= 2 ? 'habitat_ii' : 'habitat';   // Habitat II: the dome and two pods
   if (kind === 'upgradeBay') return kind;
+  // the farm's buildings (Farming-Design §6) are outpost buildings: the same manifest, loader, trim and states
+  if (kind === 'farmhouse' || kind === 'silo' || kind === 'pump') return kind;
   return null;   // harvester: the battle's own miner model (harvestDrive.js)
 }
 
