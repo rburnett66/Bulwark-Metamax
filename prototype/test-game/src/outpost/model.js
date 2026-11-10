@@ -262,13 +262,19 @@ function openTowerTier(o, powered) {
   return Math.max(0, ...Object.entries(o.pads)
     .filter(([id, b]) => b.kind === 'storage' && (!powered || powered.has(id))).map(([, b]) => b.tier));
 }
-const capFor = (o, padId, towerTier, params = OUTPOST) => {
+/** A rig's own bay, in units: Rig_Bay_Min minutes of its shallow output × the Mk II multiplier. */
+const ownBayFor = (o, padId, params = OUTPOST) => {
   const ore = rigOre(o, padId), rig = structureDef('rig', o.pads[padId].tier);
-  if (!ore || !rig) return 0;
-  if (!towerTier) return ore.rate * params.Rig_Bay_Min * rig.capacityMult;
-  const st = structureDef('storage', towerTier);
-  return st ? ore.rate * 60 * st.bayHours * rig.capacityMult : 0;
+  return ore && rig ? ore.rate * params.Rig_Bay_Min * rig.capacityMult : 0;
 };
+/** The open Storage Tower's bay for a rig, in units: Bay_Hours of its shallow output × Mk II; 0 with no open tower. */
+const towerBayFor = (o, padId, towerTier, params = OUTPOST) => {
+  const ore = rigOre(o, padId), rig = structureDef('rig', o.pads[padId].tier), st = towerTier ? structureDef('storage', towerTier) : null;
+  return ore && rig && st ? ore.rate * 60 * st.bayHours * rig.capacityMult : 0;
+};
+// The miner's ore goes on to the Storage Tower each tick; when the tower's bay for it is full the miner keeps running
+// into its own bay, and stops when that is full too (owner 2026-11-09). So a rig holds its tower bay + its own bay.
+const capFor = (o, padId, towerTier, params = OUTPOST) => towerBayFor(o, padId, towerTier, params) + ownBayFor(o, padId, params);
 /**
  * The bay capacity of a rig, in units (design §4.2, owner 2026-11-07). A rig mines into its own bay. Without an open
  * Storage Tower the bay is small: Rig_Bay_Min minutes of its shallow output × the Mk II multiplier. A finished,
@@ -277,6 +283,16 @@ const capFor = (o, padId, towerTier, params = OUTPOST) => {
  */
 export function bayCapacity(o, padId, map, params = OUTPOST) {
   return capFor(o, padId, openTowerTier(o, map ? powerGrids(o, map).powered : null), params);
+}
+/**
+ * Where a rig's ore sits (owner 2026-11-09: "The Miner acquires ore which gets processed to storage on a tick. If
+ * storage fills, the miner can run until it is full"): the Storage Tower takes it first, the miner's own bay holds the
+ * rest. → { tower: { units, cap }, miner: { units, cap } }
+ */
+export function baySplit(o, padId, map, params = OUTPOST) {
+  const tower = towerBayFor(o, padId, openTowerTier(o, map ? powerGrids(o, map).powered : null), params), own = ownBayFor(o, padId, params);
+  const units = bayUnits(o, padId), inTower = Math.min(units, tower);
+  return { tower: { units: inTower, cap: tower }, miner: { units: units - inTower, cap: own } };
 }
 const bayUnits = (o, padId) => Object.values(o.storage[padId] || {}).reduce((a, b) => a + b, 0);
 
@@ -952,7 +968,9 @@ export function buyHarvester(outpost, ctx = {}) {
  * Per-building warning flags for the view's warning icons. → { [padId | defenseId]: ['no_power' | 'storage_full' |
  * 'door_closed', …] }, only for ids with a warning. Finished buildings only.
  *   - no_power: a building (or gun) that draws power and gets none: it does not operate; what it stores is kept;
- *   - storage_full: a rig whose bay is full (it has stopped), and the Storage Tower when every rig's bay is full;
+ *   - storage_full: a rig whose own bay is full too (it has stopped), and the Storage Tower when its bay for any rig
+ *     is full (that rig now fills its own bay) — owner 2026-11-09: "full a miner has to stop there is a warning icon for
+ *     storage full. Storage also has an icon storage full.";
  *   - door_closed: a Storage Tower without power: it takes no new ore (rigs fill only their own small bays).
  */
 export function warnings(o, map, params = OUTPOST) {
@@ -967,7 +985,7 @@ export function warnings(o, map, params = OUTPOST) {
   for (const [id, b] of Object.entries(o.pads)) {
     if (b.kind !== 'storage') continue;
     if (!powered.has(id)) add(id, 'door_closed');
-    else if (rigs.length && rigs.every(fullRig)) add(id, 'storage_full');
+    else if (rigs.some((r) => { const t = towerBayFor(o, r, tower, params); return t > 0 && bayUnits(o, r) >= t - 1e-6; })) add(id, 'storage_full');
   }
   return out;
 }
