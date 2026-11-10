@@ -154,7 +154,7 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
       }
       const capped = choices.find((ch) => ch.capped);
       if (capped) out.note = `Level ${capped.level} — ${capped.why}.`;
-      if (!choices.length) out.note = `No seed pods: ${m.pods} of one crop plant this plot. Buy them at STORES › Seed pods; battles bring pods; F1 grants a crate.`;
+      if (!choices.length) out.note = `No seed pods: ${m.pods} of one crop plant this plot. Buy them at STORES › Seed pods; a won map's Pod Reward Chest brings them; F1 grants a crate.`;
     } else if (st === 'harvested') {
       const c = prepCost(p.method);
       out.actions.push({ act: 'prep', arg: p.id, label: `PREP · ${fmt(c.gold)}g`, enabled: c.gold <= gold, why: c.gold > gold ? `Costs ${fmt(c.gold)} gold` : null });

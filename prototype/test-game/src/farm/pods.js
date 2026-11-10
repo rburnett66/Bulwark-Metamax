@@ -1,5 +1,5 @@
 /**
- * src/farm/pods.js — seed pods: the stock, buying them, pods from battles, the F1 Pod Crate
+ * src/farm/pods.js — seed pods: the stock, buying them, the F1 Pod Crate (battle pods come in a chest: farm/chest.js)
  * [MM-story_mwabgh3x_b], [MM-story_mwai5f8t_1g].
  *
  * Owner rule 9 (2026-11-10): seed pods have NO level. A crop's level comes from the tech tree (src/farm/levels.js
@@ -9,13 +9,13 @@
  * rule 9, §3.1, §3.3.
  *
  * Save (defaulted and migrated in save.js): s.pods = { [cropId]: count } and s.podCarry = { [cropId]: units } (the
- * battle units not yet worth a pod). Pods belong to the OUTPOST & FARM side (owner rule 5): nothing here ever writes
+ * delivered units not yet worth a pod, farm/chest.js). Pods belong to the OUTPOST & FARM side (owner rule 5): nothing here ever writes
  * the battle's s.inventory. Gold is the campaign bank, s.carry.gold (read with bankOf), spent the way save.js's
  * buyTech spends it.
  *
  * Pure: no DOM, no clock, no randomness. Every number comes from src/data/farm.js (proposed defaults, D14).
  */
-import { FARM, cropOf, cropsOf } from '../data/farm.js';
+import { FARM, cropOf } from '../data/farm.js';
 import { bankOf } from '../save/save.js';
 import { podsUnlocked, unlockPods } from './unlock.js';
 
@@ -85,34 +85,7 @@ export function buyPods(s, cropId, n = FARM.Pods_Per_Plot) {
   return { ok: true, crop: cropId, n, gold };
 }
 
-/** Battle units per pod for a crop tier: Battle_Pod_Units, an epic field Battle_Pod_Units_Epic (§2.3 F9). */
-export const unitsPerPod = (tier) => (tier === 'epic' ? FARM.Battle_Pod_Units_Epic : FARM.Battle_Pod_Units);
-
-/**
- * Pods from one finished battle (Farming-Design §9.1, Distribution §4.2): one pod of the field's crop per
- * unitsPerPod(tier) units carried home; the remainder waits in s.podCarry for the next battle on that planet.
- * keptByTier: { common, uncommon, rare, epic } units (the tally bankHarvest banks). planet: the planet's name or key.
- * A tier whose crop is a farm-only new material (Helium-4) yields nothing: the battle carried Helium-3, which is not a
- * crop (owner rule 1). Arithmetic only, after the battle, so the sim and its replays are untouched.
- * → { [cropId]: pods banked } (only crops that gained a pod).
- */
-export function battlePods(s, planet, keptByTier) {
-  const out = {};
-  if (!planet || !keptByTier) return out;
-  const crops = cropsOf(planet);
-  if (!s.podCarry || typeof s.podCarry !== 'object') s.podCarry = {};
-  for (const [tier, units] of Object.entries(keptByTier)) {
-    if (!(units > 0)) continue;
-    const c = crops.find((x) => x.tier === tier);
-    if (!c || c.newMaterial || !podsUnlocked(s, c.id)) continue;   // a locked crop drops no pods (owner rule 10)
-    const per = unitsPerPod(tier), total = (s.podCarry[c.id] || 0) + Math.floor(units);
-    const n = Math.floor(total / per), rest = total - n * per;
-    if (rest) s.podCarry[c.id] = rest;
-    else delete s.podCarry[c.id];
-    if (n) { addPods(s, c.id, n); out[c.id] = n; }
-  }
-  return out;
-}
+/* Pods from battles come in the Pod Reward Chest (owner rule 11: src/farm/chest.js), never straight into the stock. */
 
 /** The F1 Pod Crate: contract.podCrate pods of contract.crop, and that crop's pods unlocked so they can be planted. → { crop, n }. */
 export function grantPodCrate(s, contract) {

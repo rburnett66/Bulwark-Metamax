@@ -30,7 +30,8 @@
  *   battleLog        played campaign battles, newest first, capped (save/battleLog.js) [MM-story_mw1azvh8_d]
  *   pods             { [cropId]: count } seed pods, an OUTPOST & FARM holding (farm/pods.js) [MM-story_mwabgh3x_b]; no level
  *                    (owner rule 9, 2026-11-10: a crop's level is the tech tree's, farm/levels.js) [MM-story_mwai5f8t_1g]
- *   podCarry         { [cropId]: units } battle units not yet worth a pod (farm/pods.js battlePods)
+ *   podCarry         { [cropId]: units } delivered units not yet worth a pod (farm/chest.js, owner rule 11)
+ *   podChests        [{ id, planet, mapId, at, pods }] Pod Reward Chests held, unopened (farm/chest.js); podChestSeq the ids
  *   cropDelivered    { [cropId]: units } every unit of a crop delivered, lifetime; podUnlocks { [cropId]: true } the crops
  *                    whose seed pods are unlocked (owner rule 10: 500 delivered; farm/unlock.js) [MM-story_mwatmukb_1j]
  *
@@ -83,6 +84,8 @@ export function defaultSave() {
     // seed pods (farm/pods.js) [MM-story_mwabgh3x_b]: the farm's stock, never the battle inventory (owner rule 5)
     pods: {},
     podCarry: {},
+    podChests: [],       // owner rule 11 (farm/chest.js): the Pod Reward Chests, held until opened
+    podChestSeq: 0,
     cropDelivered: {},   // owner rule 10 (farm/unlock.js): a crop's pods unlock at 500 delivered
     podUnlocks: {},
   };
@@ -140,6 +143,8 @@ export function migrate(s) {
   // owner rule 10 (2026-11-10): a crop's pods unlock at 500 delivered. A save from before keeps what it already farms:
   // every crop it holds pods of, or has planted, counts as unlocked (nothing it has is stranded).
   if (!s.cropDelivered || typeof s.cropDelivered !== 'object') s.cropDelivered = {};
+  if (!Array.isArray(s.podChests)) s.podChests = [];
+  if (!Number.isInteger(s.podChestSeq)) s.podChestSeq = 0;
   if (!s.podUnlocks || typeof s.podUnlocks !== 'object') {
     s.podUnlocks = {};
     for (const id of Object.keys(s.pods)) s.podUnlocks[id] = true;

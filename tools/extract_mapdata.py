@@ -318,7 +318,7 @@ def raid_problems(data, planets):
 FARM_TIERS = ("common", "uncommon", "rare", "epic")
 FARM_CATEGORIES = {"Grain", "Vegetable", "Fruit", "Materials", "Minerals", "Gems"}
 FARM_PARAMS = ("Prep_Gold", "Prep_Sec", "Sprout_At", "Plant_At", "Fruited_Window", "Pods_Per_Plot", "Pod_Price", "Pod_Unlock_Units",
-               "Battle_Pod_Units", "Battle_Pod_Units_Epic", "Pod_Crate", "Silo_Hours", "Farmhouse_Store_Hours",
+               "Chest_Units_Per_Pod", "Pod_Crate", "Silo_Hours", "Farmhouse_Store_Hours",
                "Plot_Walkway_Cells", "Breach_Silo_Loss", "Trample_Fruited_Yield", "Avatar_Cells", "Farmhands")
 
 
