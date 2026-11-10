@@ -15,7 +15,8 @@ export const outpostMapUrl = (planet, base = import.meta.url) => new URL(`../../
 
 /**
  * A Forge outpost map → the outpost map shape: { id, planet, width, height, pads, deposits, conduits, kitDefenses,
- * terrain, blocking, heights, mesa, spawns, decor, resources, source: 'forge', forge }. `forge` keeps the whole
+ * terrain, blocking, heights, mesa, spawns, decor, resources, farmCells, source: 'forge', forge }. farmCells is the
+ * Forge's farmable-cell layer (src/terrain/farmCells.js; read by src/farm/cells.js), or null on a map without one. `forge` keeps the whole
  * export for the battle loader (buildTerrainMap) when the raid sim runs on it (story O7).
  */
 /**
@@ -42,6 +43,7 @@ export function outpostMapFromForge(forge, planet = forge.planet) {
     pads: forge.pads || [], deposits: forge.deposits || [], conduits: forge.conduits || [], kitDefenses: forge.kitDefenses || [],
     terrain: rim.terrain, blocking: rim.blocking, heights: forge.heights || null, mesa: forge.mesa || null,
     spawns: (forge.spawns || []).filter((s) => (s.lane || 'ground') === 'ground'), decor: forge.decor || [], resources: forge.resources || [],
+    farmCells: forge.farmCells && forge.farmCells.length ? forge.farmCells : null,
     source: 'forge', forge,
   };
 }

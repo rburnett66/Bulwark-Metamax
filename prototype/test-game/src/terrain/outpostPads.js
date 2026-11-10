@@ -72,12 +72,13 @@ const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
  * placeBase): the mesa top becomes flat open stone (rock-border: walkable, buildable, drawn as the stone plateau of the
  * concept art and baked a band above grass) at height 2, ringed by a cliff rim; ramps cut the rim;
  * each ground lane is worn into a 2-cell cart track from its spawn to the nearest ramp's foot; remote pads get a
- * flat clearing. Sets g.heights and g.clear (cells decor and resources must leave open). Mutates g; returns it.
+ * flat clearing. Sets g.heights, g.clear (cells decor and resources must leave open) and g.lanes (the raid lanes'
+ * cart tracks and ramp feet, which the farm-cell layer keeps off: src/terrain/farmCells.js). Mutates g; returns it.
  * layout: { mesa, pads, spawns, kitDefenses }.
  */
 export function stampOutpost(g, layout) {
   const { cols, rows } = g, n = cols * rows, mesa = layout.mesa;
-  const heights = new Uint8Array(n), clear = new Uint8Array(n);
+  const heights = new Uint8Array(n), clear = new Uint8Array(n), lanes = new Uint8Array(n);
   const ok = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows;
   const set = (x, y, t) => { const i = y * cols + x; g.terrain[i] = t; g.blocking[i] = BLOCKING.has(t) ? 1 : 0; };
   const ramps = (mesa && mesa.ramps) || [];
@@ -93,7 +94,7 @@ export function stampOutpost(g, layout) {
     }
     // the foot of each ramp: the lowland cells of its rect, kept open
     for (const r of ramps) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
-      if (ok(x, y) && !inMesa(mesa, x, y)) { set(x, y, TERRAIN.DIRT); clear[y * cols + x] = 1; }
+      if (ok(x, y) && !inMesa(mesa, x, y)) { set(x, y, TERRAIN.DIRT); clear[y * cols + x] = 1; lanes[y * cols + x] = 1; }
     }
   }
   // raid lanes: an L-shaped 2-cell cart track from each ground spawn to its nearest ramp foot
@@ -113,7 +114,7 @@ export function stampOutpost(g, layout) {
     for (const [x, y] of path) for (const [ox, oy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
       const px = x + ox, py = y + oy;
       if (!ok(px, py) || (mesa && inMesa(mesa, px, py))) continue;
-      set(px, py, TERRAIN.DIRT); clear[py * cols + px] = 1;
+      set(px, py, TERRAIN.DIRT); clear[py * cols + px] = 1; lanes[py * cols + px] = 1;
     }
   }
   // remote pads: a flat dirt yard the size of the building's model footprint (MODEL_PAD_SIZE: the half-scale pad sits
@@ -128,7 +129,7 @@ export function stampOutpost(g, layout) {
     }
   }
   for (const d of layout.kitDefenses || []) if (ok(d.cell[0], d.cell[1])) clear[d.cell[1] * cols + d.cell[0]] = 1;
-  g.heights = heights; g.clear = clear;
+  g.heights = heights; g.clear = clear; g.lanes = lanes;
   return g;
 }
 

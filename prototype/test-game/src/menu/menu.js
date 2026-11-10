@@ -14,6 +14,8 @@
  */
 import { openBattleHistory } from './battleHistory.js';
 import { outpostButtonModel } from './outpostButton.js';
+import { farmButtonModel } from './farmButton.js';
+import { farmOffer, farmCard, acceptFarmContract, declineFarmContract } from '../farm/contract.js';
 import { outpostOffer, outpostCard, acceptOutpostContract, declineOutpostContract } from '../outpost/contract.js';
 import { outpostMapFor } from '../outpost/outpostMap.js';
 import { battlesOn } from '../save/battleLog.js';
@@ -27,6 +29,8 @@ import { techCtxFromSave, createGameTechAdapter, planetOpen } from './techSave.j
 import { computeBadges, seenFor, missionChip, inventoryChip } from './badges.js';
 import { inventoryFresh } from '../save/inventory.js';
 import { createInventoryScreen } from './inventoryScreen.js';
+import { createStoreScreen } from './storeScreen.js';
+import { STORES, storeFresh } from '../save/stores.js';
 import { badge as missionBadge } from '../save/missions.js';
 import { createProgressWidget } from './progressWidget.js';
 import { createMissionLog } from './missionLog.js';
@@ -91,6 +95,9 @@ const CSS = `
 .bwm-title span { color:#f2c869; }
 .bwm-sub { margin-top:16px; max-width:420px; color:#8fa0b3; font-size:14px; line-height:1.6; }
 .bwm-menu { margin-left:auto; width:min(340px,42vw); display:flex; flex-direction:column; gap:12px; padding:24px; }
+/* OUTPOST and FARM share one row (Farming-Design §2.3: FARM beside OUTPOST), so the column keeps its height on a phone */
+.bwm-pair { display:flex; gap:8px; } .bwm-pair > .bwm-btn { flex:1 1 0; min-width:0; }
+.bwm-pair > .bwm-btn .hint { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .bwm-btn { display:flex; justify-content:space-between; align-items:center; text-align:left; width:100%;
   background:#1a1f28; border:1px solid #2e3846; color:#e6ecf3; padding:16px 20px; font-size:15px;
   letter-spacing:.14em; font-weight:700; cursor:pointer; transition:border-color .12s, background .12s; }
@@ -383,7 +390,7 @@ export function createMenu(mountEl, cbs) {
   top.appendChild(brand);
   // the PROGRESSION WIDGET (Menu-Progression-Design §2): rank + XP, gold, stars, research — on every menu screen
   const widget = createProgressWidget(doc, { onOpen: (k) => {
-    if (k === 'missions' || k === 'inventory') show(current === k ? 'main' : k);
+    if (OVERLAYS.has(k)) show(current === k ? 'main' : k);
     else if (k === 'gold' || k === 'research') show('techtree');
     else openSurvey(targetKey());
   } });
@@ -394,7 +401,7 @@ export function createMenu(mountEl, cbs) {
   ensureMissionIcons(doc);
   const missionLog = createMissionLog({ doc, host: mlHost, chipPing: () => widget.ping('missions'), gateOpts: () => gateOverride() || {},
     onChange: () => refreshProgress(), onClose: () => show('main'), onCollected: () => { if (cbs.onTechChanged) cbs.onTechChanged(); playPendingRewards(); },
-    onAcceptOutpost: (key) => acceptOutpost(key) });
+    onAcceptOutpost: (key) => acceptOutpost(key), onAcceptFarm: (key) => acceptFarm(key) });
   // ACCEPT on the outpost contract (aboard, or later from the Mission Log) [MM-story_mw5oe8km_k]: the kit is placed on
   // the planet's outpost map; the OUTPOST button lights
   const outpostMap = (key) => outpostMapFor(key);   // the planet's own outpost map (O4), the draft layout until it has one
@@ -403,8 +410,27 @@ export function createMenu(mountEl, cbs) {
     updateSave((s) => { acceptOutpostContract(s, key, { map, now }); });
     missionsChanged();
   }
+  // ACCEPT on a farming contract (Farming A5) [MM-story_mwabgpsa_e]: the Farmhouse beside the outpost's hub, the Pod
+  // Crate, and the FARM button lights
+  async function acceptFarm(key) {
+    const map = await outpostMap(key), now = Date.now();
+    updateSave((s) => { const r = acceptFarmContract(s, key, { map, now }); if (r.error) console.warn('[farm] accept', r.error); });
+    missionsChanged();
+    refreshOutpost();
+  }
+  /** The contract on offer aboard a planet's ship: the outpost's first, then the farm's (one card slot, Farming A5). */
+  function shipOffer(planet) {
+    const s = loadSave();
+    if (outpostOffer(s, planet)) return { cardFor: (ship) => outpostCard(planet, ship), onAccept: (k) => acceptOutpost(k),
+      onDecline: (k) => { updateSave((x) => declineOutpostContract(x, k, { now: Date.now() })); missionsChanged(); } };
+    if (farmOffer(s, planet)) return { cardFor: (ship) => farmCard(planet, ship), onAccept: (k) => acceptFarm(k),
+      onDecline: (k) => { updateSave((x) => declineFarmContract(x, k, { now: Date.now() })); missionsChanged(); } };
+    return null;
+  }
 
   const inventory = createInventoryScreen({ doc, host: mlHost, gateOpts: () => gateOverride() || {}, onChange: () => refreshProgress(), onClose: () => show('main') });
+  // the OUTPOST & FARM inventory: the same screen on the farm store (owner rule 5) [MM-story_mwaf80xq_19]
+  const stores = createStoreScreen({ doc, host: mlHost, gateOpts: () => gateOverride() || {}, onChange: () => refreshProgress(), onClose: () => show('main') });
 
   // ── MAIN screen ──
   const main = el(doc, 'div', 'bwm-main');
@@ -520,7 +546,13 @@ export function createMenu(mountEl, cbs) {
     const m = outpostButtonModel(loadSave(), targetKey());
     if (!m.locked && !outpostOpen) openOutpost(m.planet);
   });
-  async function openOutpost(planet) {
+  // FARM, beside OUTPOST (Farming-Design §2.3, A5): the same outpost view, on its FARM tab (story A7 draws the tab)
+  const farmBtn = mkBtn('FARM', ' ', 'bwm-farm', () => {
+    const m = farmButtonModel(loadSave(), targetKey());
+    if (!m.locked && !outpostOpen) openOutpost(m.planet, 'farm');
+  });
+  { const pair = el(doc, 'div', 'bwm-pair'); menu.insertBefore(pair, outpostBtn); pair.appendChild(outpostBtn); pair.appendChild(farmBtn); }
+  async function openOutpost(planet, tab = 'outpost') {
     outpostOpen = true;
     // the menu's own 3D views (the live globes and capital ship, the tech net) hold GPU contexts too: let them go while
     // the outpost is open (iOS killed the tab two seconds after the outpost opened, owner 2026-11-09 error report);
@@ -533,7 +565,7 @@ export function createMenu(mountEl, cbs) {
     try {
       const V = await import('../outpost/view/outpostView.js');
       const q = (() => { try { return new URLSearchParams(location.search).get('quality'); } catch (e) { return null; } })();
-      const v = await V.openOutpostView({ planet, mount: doc.body, tier: ['high', 'standard', 'low'].includes(q) ? q : null, onChange: () => refreshOutpost() });
+      const v = await V.openOutpostView({ planet, tab, mount: doc.body, tier: ['high', 'standard', 'low'].includes(q) ? q : null, onChange: () => refreshOutpost() });
       if (cbs.onOutpost) cbs.onOutpost(planet);
       await v.closed;
     } catch (e) { console.error('[outpost] the outpost view failed', e); }
@@ -550,6 +582,11 @@ export function createMenu(mountEl, cbs) {
     outpostBtn.disabled = m.locked;
     outpostBtn.querySelector('.hint').textContent = m.hint;
     outpostBtn.dot.classList.toggle('on', !!m.dot);
+    let f;
+    try { f = farmButtonModel(loadSave(), targetKey()); } catch (e) { console.error('[farm] status failed', e); return; }
+    farmBtn.disabled = f.locked;
+    farmBtn.querySelector('.hint').textContent = f.hint;
+    farmBtn.dot.classList.toggle('on', !!f.dot);
   }
   mkBtn('RESET PROGRESS', 'wipe all progress', null, () => {
     if (doc.defaultView && !doc.defaultView.confirm('Reset all progress? Stars, gold, loyalty, tech and faction records are wiped.')) return;
@@ -881,7 +918,7 @@ export function createMenu(mountEl, cbs) {
 
   root.appendChild(el(doc, 'div', 'bwm-foot', 'BULWARK — TEST BUILD'));
 
-  const OVERLAYS = new Set(['missions', 'inventory']);   // these sit over the main screen, which stays behind them dimmed
+  const OVERLAYS = new Set(['missions', 'inventory', 'stores']);   // these sit over the main screen, which stays behind them dimmed
   function show(screen) {
     // leaving the Tech Net: whatever it showed as available counts as seen (incl. upgrades opened by a purchase there)
     if (current === 'techtree' && screen !== 'techtree') { const sv = loadSave(), k = seenFor('techtree', sv, badgeCtx(sv)); markSeen(k[0], k[1]); }
@@ -893,6 +930,7 @@ export function createMenu(mountEl, cbs) {
     widget.setExpanded(overlay ? screen : null);
     if (screen === 'missions') missionLog.open(); else { missionLog.close(); missionLog.sync(); }
     if (screen === 'inventory') inventory.open(); else inventory.close();
+    if (screen === 'stores') stores.open(); else stores.close();
     harv.style.display = screen === 'harvester' ? 'block' : 'none';
     netHost.style.display = screen === 'techtree' ? 'block' : 'none';
     if (screen !== 'techtree' && net) net.stop();
@@ -952,8 +990,9 @@ export function createMenu(mountEl, cbs) {
     refreshOutpost();
     const missions = missionChip(missionBadge(sv));
     const inventory = inventoryChip(inventoryFresh(sv), RESOURCE_COUNT);
-    if (!playingRewards) widget.render({ ...progressValues(sv, bc), techDot: b.techtree, missions, inventory });
-    else widget.render({ techDot: b.techtree, missions, inventory });
+    const storesChip = inventoryChip(storeFresh(sv, 'farm'), STORES.farm.items.length, STORES.farm.noun);
+    if (!playingRewards) widget.render({ ...progressValues(sv, bc), techDot: b.techtree, missions, inventory, stores: storesChip });
+    else widget.render({ techDot: b.techtree, missions, inventory, stores: storesChip });
   }
   let playingRewards = false;
   /** The last battle's rewards fly into the widget — once, when the menu is on screen. */
@@ -1003,9 +1042,7 @@ export function createMenu(mountEl, cbs) {
     // is exploring the ship like any other (the opening can still be replayed from Settings) [MM-task_mw6q0j5r_9].
     if (planet === 'collective' && !collectiveOf(loadSave()).contractAccepted) { openCollectiveIntro(); return; }
     revealing = true; if (stage) stage.pause();
-    const offer = outpostOffer(loadSave(), planet);   // still on offer: boarding makes it again (Vane's lines + card)
-    const outpost = offer ? { cardFor: (ship) => outpostCard(planet, ship), onAccept: (k) => acceptOutpost(k),
-      onDecline: (k) => { updateSave((s) => declineOutpostContract(s, k, { now: Date.now() })); missionsChanged(); } } : null;
+    const outpost = shipOffer(planet);   // still on offer: boarding makes it again (the outpost's, then the farm's)
     import('../reveal/shipReveal.js').then((M) => M.boardShip({ planet, tier: revealTier(), outpost }))
       .catch((e) => console.warn('[menu] board', e))
       .finally(() => { revealing = false; syncStage(); });
@@ -1043,9 +1080,7 @@ export function createMenu(mountEl, cbs) {
         } else {
           const S = await import('../reveal/shipReveal.js');
           if (stage) stage.pause();
-          const offer = outpostOffer(loadSave(), item.planet);
-          const outpost = offer ? { cardFor: (ship) => outpostCard(item.planet, ship), onAccept: (k) => acceptOutpost(k),
-            onDecline: (k) => { updateSave((s) => declineOutpostContract(s, k, { now: Date.now() })); missionsChanged(); } } : null;
+          const outpost = shipOffer(item.planet);
           await S.playShipReveal({ planet: item.planet, firstTime: true, tier: revealTier(), onSeen: (p) => updateSave((s) => markShipSeen(s, p)), onContract: missionsChanged, outpost });
           updateSave((s) => markShipSeen(s, item.planet));
           setTarget(item.planet);                          // back on its planet, the ship at its station

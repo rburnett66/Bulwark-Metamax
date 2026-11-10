@@ -1,6 +1,7 @@
 # Tech Plan — Farming: the third game mode
 
-Status: draft 3 · 2026-11-10: the owner's answers on Helium-4, the Silo and the farm inventory (rules 1, 4, 5) ·
+Status: draft 4 · 2026-11-10: the farm sits on the outpost; advanced farming is future (rules 6, 7) ·
+draft 3 · 2026-11-10: the owner's answers on Helium-4, the Silo and the farm inventory (rules 1, 4, 5) ·
 draft 2 · 2026-11-10: the owner's rules of 2026-11-09 applied (below; they override the rest of this plan) ·
 draft 1 2026-11-09 · Epic *Farming mode design* [MM-epic_mwa8eww2_1] and the four build
 epics in §5
@@ -35,6 +36,13 @@ Repo copy (canonical): `docs/tech-plan/Farming.md` in rburnett66/Bulwark-Metamax
 6. **The outpost map** (owner, 2026-11-10): *"the outpost map should have the same level of detail as the current map
    but more open area for placing structures and crops, and way fewer natural resources to gather."* Story A6 reworks
    the Verdance outpost map to this before its farm cells are painted; C8 does the same for the other eight.
+7. **The farm is built on the outpost, not beside it** (owner, 2026-11-10): *"make sure you do not duplicate any
+   existing systems, we already have an outpost and the farm is a new system on top of the outpost. Mining,
+   hydroponics, and vertical farming will be an advanced farming system we detail later."* So: the farm's state lives
+   inside the outpost record (`s.outposts[planet].farm`), is advanced by the outpost's own `advance()`, builds from the
+   outpost's build list on the outpost's power, reach and raids, and shows in the outpost view as its FARM tab. Nothing
+   the outpost already does is rebuilt for the farm. **Advanced farming** (mining as a farming method, hydroponics,
+   vertical farming, and the grow rooms) is out of current scope and sits under the future epic (§5).
 
 Helium-4 confirmed (owner, 2026-11-10): the battle's uncommon Lumen resource stays Helium-3; Helium-4 is the new
 material that is Lumen's uncommon crop.
@@ -48,7 +56,7 @@ machines that need maintenance. It is built in the designs' four phases (Farming
 | Epic | Phase | What it ships |
 |---|---|---|
 | **F-A · The loop on Verdance** | A | the Rig Mk II gate and Verdance F1; Farmhouse, Silo, Traditional and Irrigated plots on the Verdance outpost map; growth stages, Fruited and Dead; seed pods in five levels and the pod bench; Rare pods from battles; the SEED PODS tab; the surface avatar and farmhands; the ember harvest; raids trample; Helium-4 as a new material (owner rule 1) |
-| **F-B · Environment** | B | the atmosphere model; farming nodes and enhancements in the OUTPOST & FARM tree (owner rule 3); the Vertical farm and Tub. **Future** (owner rule 2): the grow-room view; machines, levels and maintenance; the Hydroponics and Underground rooms and their doorways; gro-bots; Legendary's tech rule and mystery crops |
+| **F-B · Environment** | B | the atmosphere model; farming nodes and enhancements in the OUTPOST & FARM tree (owner rule 3); the Tub. **Future: advanced farming** (owner rules 2 and 7): mining as a method, the Vertical farm, the grow-room view; machines, levels and maintenance; the Hydroponics and Underground rooms and their doorways; gro-bots; Legendary's tech rule and mystery crops |
 | **F-C · Farming across the factions** | C | F1–F3 on all nine planets; faction pod stores and loyalty ranks; the Collective's farm orders and wanted crops; machine blueprints; the remaining six methods; the 36 crop models; gems from the deep seam; the farm layer on the other eight maps |
 | **F-D · Processing** | D | the Refinery, the Fabricator at Farming Research Level 3, the first parts, the recipe book |
 
@@ -123,7 +131,7 @@ Phase 0 (the two designs, `tools/farming/scale.html`, the Blender scripts `tools
 | Module | Pure? | What it holds |
 |---|---|---|
 | `src/data/farm.js` | yes | readers for the farm sheets: `cropOf(id)`, `methodOf(id)`, `podLevel(n)`, `growTime(crop, method)`, `yieldOf(crop, method, level)`, `FARM` params; the 36 crops are the catalogue's resources joined to `Crops` rows |
-| `src/farm/model.js` | yes | `createFarm`, `place` (plots, buildings), `prep`, `plant`, `harvest`, `harvestAll`, `advance` (segments, §2.3 F3), `trample`, `silo` store and warnings; state in `s.farms[planet]` beside `s.outposts[planet]` |
+| `src/farm/model.js` | yes | the farm layer of the outpost (rule 7): `place` (plots, farm buildings), `prep`, `plant`, `harvest`, `harvestAll`, `advanceFarm` (segments, §2.3 F3) called from the outpost's `advance()`, `trample`, the Silo and its warnings; state in `o.farm` inside `s.outposts[planet]` |
 | `src/farm/pods.js` | yes | `s.pods[cropId][level]`, `addPods`, `spendPods`, `benchUpgrade` (3 → 1), `battlePods(tally)` (§2.3 F9), the lucky roll |
 | `src/farm/contract.js` | yes | the gate (`farmingOpen(s, planet)`: a Rig Mk II on that planet's outpost), F1–F3 offers, steps and rewards, on the outpost contract pattern |
 | `src/farm/env.js` | yes | Phase B (in scope): planet ambients, crop needs, `match(crop, where, enhancements)`, the Legendary check |
@@ -159,7 +167,7 @@ Silo, Pump) and Verdance's F1 row; the rest of the sheets come with their epics.
 
 ### 3.3 Save
 
-`s.farms[planet]` (plots, buildings, Silo, the farm's clock `t`, its seed), `s.pods[crop][level]`,
+`s.outposts[planet].farm` (plots, farm buildings, Silo; it shares the outpost's clock `o.t` and seed, rule 7), `s.pods[crop][level]`,
 `s.podCarry[crop]` (the battle pod remainder), `s.farmContracts[planet]` (F1–F3 progress), and the outpost & farm
 inventory `s.stores = { farm: { [planet]: { [cropId]: units } } }` (owner rule 5; `mining` and `parts` join it later).
 The battle's `s.inventory` is untouched: crops harvested on a farm never land in it. New fields default empty on load;
@@ -197,16 +205,29 @@ Stories are tickets on the MetaMax board (the DoD lives there); this table is th
 | **A12** Review page | `tools/farming/farm.html` on seeded saves (every plot state, a raid, the away report), phone frames | A7–A11, A13 |
 | **A13** Outpost & farm inventory | (owner rule 5) a clone of the INVENTORY screen dedicated to outposts and farming: `s.stores.farm` banded by planet, the 36 crops with Helium-4 in Lumen's uncommon slot, held / new counts, the detail panel; its own button; built so mining and parts stores can join later | A1 |
 
+**As built (A6):** the Verdance outpost (`content/maps/forge/ground-outpost.json`) is re-authored through the Forge
+pipeline (`tools/maps/outpost-maps.mjs` → `forge-export.py` → `write` → `bake3d.mjs`): a farmland recipe
+(`VERDANCE_FARMLAND`, the forests thinned: trees 24 → 14 %, rocks 5 → 4 %, cliff 3 → 2 %, impassable 19.7 → 12.8 %, above
+the §1 floor), seed 40 (the search's best that keeps the raid hold counts, 5 and 8), the Forge's new **Resource density**
+knob at 12.5 (54 → 15 resource fields; 48 → 11 harvestable surface cells) and Decor density 100, both carried on the map
+as `resourceDensity` / `decorDensity`. The farm-cell layer is `farmCells` on the map (one code per cell; soil, slope,
+water, grove, collection, plus lane), derived by `src/terrain/farmCells.js` from the stamped grid (stampOutpost now leaves
+its cart tracks as `g.lanes`), written by the Forge on export and shown by its Outpost panel's *Farm cells* toggle;
+`outpostMapFromForge` passes it through and `src/farm/cells.js` reads it (`farmCellAt`, `canPlacePlot`, `plotSpots`,
+`packPlots`). Soil 831 → 1035 cells; 2 × 2 plot spots 460 → 688, 148 → 210 packed side by side. Review:
+`tools/farming/cells.html`. Decor props 145 → 78: every forest cell still carries its trees, there are fewer forests.
+
 ### F-B · Environment
 
 | Story | Builds | Depends on |
 |---|---|---|
 | **B1** Atmosphere | planet ambients, crop needs, `match()`, the take/no-take rule, tests | F-A |
 | **B2** Farming tech in the OUTPOST & FARM tree | (owner rule 3; replaces the FARMING division) farming nodes in SEED PODS and MACHINERY in place of the ghosts, enhancements on the surface, the Research Level count | B1 |
-| **B8** Vertical farm and Tub | the Vertical farm's four floors and the Tub on the surface | B2 |
+| **B8** Tub | the Tub on the surface (the Vertical farm is advanced farming, rule 7) | B2 |
 
-**Future: grow rooms** (owner rule 2). Out of current scope; on the board under *Farming (future): grow rooms*. Kept
-here so the order survives when they come back:
+**Future: advanced farming** (owner rules 2 and 7: the grow rooms, hydroponics, vertical farming and mining as a
+farming method). Out of current scope; on the board under the future epic. Kept here so the order survives when
+they come back; the owner will detail them first:
 
 | Story | Builds | Depends on |
 |---|---|---|
@@ -217,6 +238,8 @@ here so the order survives when they come back:
 | **B7** Gro-bots | the Robot Bay, Gro-bot I and II, their offline rounds | B4 |
 | **B9** Legendary and mystery crops | the Legendary tech check, mystery pods, affinities, the Growth Journal | B2, B5, B6 |
 | **B10** Rooms review page | `tools/farming/rooms.html`: both rooms, nine accents, each equipping stage, machine levels, one overdue | B5–B7 |
+| **B8v** Vertical farm | the Vertical farm's four floors (split from B8, rule 7) | B2 |
+| **C7** Gems from the deep seam | mining as a farming method: the 5% cut-gem chance per load (moved from F-C, rule 7) | — |
 
 ### F-C · Farming across the factions
 
@@ -228,7 +251,6 @@ here so the order survives when they come back:
 | **C4** Machine blueprints | levels 3 and 4 from the specialist factions, Machine Engineering I–III | C1, B4 (future: waits with the grow rooms) |
 | **C5** The six other methods | Terraced, Orchard, Solo, Spatial (§5.5), Hydrofarm, Truffle Hunting and the Hunter Kennel | C1 |
 | **C6** The 36 crop models | living and accreted, every state, LODs | A7 |
-| **C7** Gems from the deep seam | the 5% cut-gem chance per load | — |
 | **C8** The other eight maps | each outpost map reworked as rule 6 (battle-map detail, more open ground, far fewer resources) and its farmable-cell layer | A6 |
 
 ### F-D · Processing
@@ -244,6 +266,8 @@ here so the order survives when they come back:
 - **Node tests** beside each pure module, run by `npm test` locally; no GitHub CI.
 - **Determinism tests**: advancing a farm once over 72 hours equals advancing it in one-minute steps (the outpost's
   closed-form test, applied to the farm), with raids, Fruited windows and Dead plots in the span.
+- **No duplicate systems** (rule 7): the farm model has no clock, power grid, raid schedule or build list of its own;
+  a test drives a farm only through the outpost's `advance()`.
 - **Save tests**: an old save keeps its `helium-3` exactly as it was (no migration); a save with no `farms` opens the
   FARM tab empty; a farm harvest never changes the battle `s.inventory`.
 - **Review pages** outside Claude: `tools/farming/farm.html` (F-A) and `tools/farming/rooms.html` (F-B), each with

@@ -29,7 +29,7 @@ export const STATUS = Object.freeze({
 });
 export const ORDER = Object.freeze({ ready: 0, risk: 1, new: 2, active: 3, locked: 4, failed: 5, done: 6 });
 const GROUP = Object.freeze({ ready: 'Ready to collect', risk: 'Needs attention', new: 'Newly logged', active: 'In progress', locked: 'Locked — next steps' });
-export const TYPE_ICON = Object.freeze({ outpost: 't-haul', campaign: 't-campaign', faction: 't-contract', contract: 't-contract', favour: 't-favour', defend: 't-defend', haul: 't-haul', bounty: 't-bounty', survey: 't-survey' });
+export const TYPE_ICON = Object.freeze({ outpost: 't-haul', farm: 't-haul', campaign: 't-campaign', faction: 't-contract', contract: 't-contract', favour: 't-favour', defend: 't-defend', haul: 't-haul', bounty: 't-bounty', survey: 't-survey' });
 export const REWARD_ICON = Object.freeze({ gold: 'r-gold', xp: 'r-xp', resource: 'r-crystal', tech_unlock: 'r-research', alignment: 'r-stars', loyalty: 'r-loyalty', penalty: 'r-penalty' });
 export const TIER_VAR = Object.freeze({ common: '--r-common', uncommon: '--r-uncommon', rare: '--r-rare', epic: '--r-epic' });
 export const TIER_NAME = Object.freeze({ common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic' });
@@ -140,7 +140,8 @@ export function listHtml(rows, catalog, tab, selectedId) {
 // ── the dossier (design §5, §13) ───────────────────────────────────────────────────────────────────────────────
 const GATE_KIND = Object.freeze({ rank_at_least: 'Level', tech_node: 'Tech node', planet_open: 'Planet', planet_map_unlocked: 'Map', planet_map_beaten: 'Map', planet_map_stars: 'Stars',
   replay_improves: 'Unlocked by', capital_ship_arrived: 'Capital ship', quest_step_collected: 'Quest line', loyalty: 'Loyalty',
-  outpost_online: 'Outpost', ore_sold: 'Delivered', raids_held: 'Raids held', outpost_contract_step: 'Contract' });
+  outpost_online: 'Outpost', ore_sold: 'Delivered', raids_held: 'Raids held', outpost_contract_step: 'Contract',
+  farm_plots_planted: 'Planted', crop_delivered: 'Delivered', farm_methods_growing: 'Methods' });
 
 /** The gates, met or not. A logged mission met them all when it was granted, so only a Locked one is re-judged. */
 export function gateViews(row, s, ctx) {
@@ -215,8 +216,11 @@ export function noteFor(row, s) {
   }
   if (status === 'failed') return `${use('s-failed')}${esc(m.endReason || 'Failed.')}`;
   if (status === 'locked') return `${use('s-locked')}Locked: meet the gates below and it is granted aboard ${esc(m.grantedAt)}.`;
-  if (status === 'new') return `${use('s-new')}Logged just now. Progress counts from your next battle on ${esc(m.planet)}.`;
   if (status === 'done') return `${use('s-done')}Rewards claimed.`;
+  // the outpost and farming contracts run from their own buttons, not from battles (Farming A5)
+  if (m.type === 'farm') return `${use('u-clock')}Updates as you work the farm: FARM on the main menu.`;
+  if (m.type === 'outpost') return `${use('u-clock')}Updates as you run the outpost: OUTPOST on the main menu.`;
+  if (status === 'new') return `${use('s-new')}Logged just now. Progress counts from your next battle on ${esc(m.planet)}.`;
   return `${use('u-clock')}Updates after every battle on ${esc(m.planet)}.`;
 }
 
@@ -254,6 +258,12 @@ export function actionsHtml(row, s, catalog) {
     return s.outposts && s.outposts[key] ? `<div class="shipnote">Run it from <b>OUTPOST</b> on the main menu.</div>`
       : `<button class="btn primary" data-act="accept-outpost" data-planet="${esc(key)}">${use('s-ready')}Accept the outpost contract</button><div class="shipnote">Grants the outpost kit on ${esc(m.planet)}.</div>`;
   }
+  // a farming contract (Farming A5): ACCEPT grants the Farmhouse and the Pod Crate if it was put off aboard; then FARM
+  if (m.type === 'farm') {
+    const key = planetKeyOf(m.planet), fc = (s.farmContracts || {})[key];
+    return fc && fc.state !== 'offered' ? `<div class="shipnote">Run it from <b>FARM</b> on the main menu.</div>`
+      : `<button class="btn primary" data-act="accept-farm" data-planet="${esc(key)}">${use('s-ready')}Accept the farming contract</button><div class="shipnote">Grants the Farmhouse and a Pod Crate on ${esc(m.planet)}.</div>`;
+  }
   return `<button class="btn${m.tracked ? '' : ' primary'}" data-act="track" aria-pressed="${!!m.tracked}">${use('u-pin')}${m.tracked ? 'Tracking in battle' : 'Track in battle'}</button>${m.role === 'primary' ? '' : '<button class="btn ghost" data-act="abandon">Abandon favour</button>'}`;
 }
 
@@ -270,7 +280,7 @@ export function dossierHtml(row, s, catalog, ctx, packs = null) {
   const outcome = st === 'failed' && m.impact.brokenPenalty && !/^Abandoned/.test(m.endReason || '')
     ? [{ icon: REWARD_ICON.penalty, color: 'var(--s-failed)', amount: signed(m.impact.brokenPenalty), label: String(factionOfPlanet(m.planet)).split(' ')[0] + ' loyalty', neg: true }]
     : m.rewards.map((r) => rewardView(r, m, catalog));
-  const where = m.planet + (m.map ? ' · map ' + m.map : m.type === 'outpost' ? ' · outpost' : '') + (m.execute.some((e) => e.cond === 'next_attempt') ? ' · one attempt' : '');
+  const where = m.planet + (m.map ? ' · map ' + m.map : m.type === 'outpost' ? ' · outpost' : m.type === 'farm' ? ' · farm' : '') + (m.execute.some((e) => e.cond === 'next_attempt') ? ' · one attempt' : '');
   const quoted = /"/.test(m.briefing || '');
   return `<button class="dback" data-act="back">${use('u-back')}All missions</button>
  <article class="dossier st-${st}" style="--sc:var(${STATUS[st].v});--fc:${color}">
