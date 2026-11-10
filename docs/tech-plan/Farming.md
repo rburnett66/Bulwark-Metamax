@@ -113,6 +113,11 @@ Rules 10–13 (owner, 2026-11-10, epic **F-E · Earned seed pods** [MM-epic_mwat
     irrigation unit waters up to **4 connected plots** (neighbours across a walkway, rule 8, proposed); a fifth plot
     needs another unit. A watered plot looks different: channels and wet soil between its rows, so the player can see
     which squares are irrigated. This replaces the Pump's 4-cell water reach as the way a plot gets water.
+14. **The farm visitor** (owner, 2026-11-10, E9): *"when you have 4 plots of the same crop, on your 4th harvest you
+    will get a visitor to your farm that walks in and tells you about farming."* Proposed reading: once the player has
+    4 plots planted with one crop, that crop's 4th harvest brings a visitor who walks onto the farm (the crew rig, on
+    the outpost nav grid like the avatar) and talks the player through farming. Once per crop, proposed; who the visitor
+    is and what they say are the owner's to set.
     **Grow-room displays** (E7, with the future rooms): the Vertical farm's roof is a screen that looks like solar
     panels and shows the grow state of every pod inside; hydroponic and underground rooms show a state lamp outside,
     and the player enters to see status and harvest.
@@ -345,6 +350,7 @@ they come back; the owner will detail them first:
 | **E3** Pod Reward Chest | at every resource map's end (any stars): `s.podChestCarry[crop]` += delivered units of each unlocked crop, ⌊÷ `Chest_Units_Per_Pod` (100)⌋ pods go in a chest; the chest sequence after Pirate Bash's (granted on the result screen, held, tap to open, one card per crop); replaces `battlePods` | E2 |
 | **E4** Crop mastery | `s.mastery[crop]` from plantings, harvests and sales; thresholds (data, proposed) open the L2–L5 nodes in place of the F1 gates; gold still buys | F-A |
 | **E5** Level machinery | at planting: L3 needs the crop's fertilizer (and, for some crops, a method: `Crop_Levels.Method`), L4 agrobots, L5 irrigation (`Crop_Levels.Needs`); the plot grows at the highest level it qualifies for and PLANT names the cap | E4 |
+| **E9** The farm visitor | rule 14: with 4 plots of one crop, its 4th harvest brings a visitor who walks onto the farm and talks about farming; once per crop (proposed) | F-A (A8 avatar) |
 | **E8** Irrigation units | an irrigation unit that waters up to 4 connected plots (replacing the Pump's reach); the irrigated plot's look (channels, wet soil between the rows); review page preset | F-A |
 | **E6** Fertilizer recipes | the Fertilizer machine; one recipe mission per crop from its buyer faction, offered aboard that faction's capital ship at Friendly standing | E5 |
 | **E7** Grow-room displays | the Vertical farm's solar-panel roof screen of pod states; the state lamps on hydroponic and underground doorways | the future grow rooms, B8v |
