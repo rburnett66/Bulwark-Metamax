@@ -3,6 +3,10 @@
  * [MM-story_mvkhed1f_h], the game menu's TECH TREE screen. Tech-Tree-Design §11, Menu-Progression-Design §1.
  *
  *   mountTechNet(THREE, addons, host, adapter) → { start(), stop(), refresh(), dispose() }
+ *     Two trees since 2026-11-09 (owner: "The tech tree for outposts and farming will be a new tech tree. Identical design
+ *     ... Player will get to this new tree using two buttons at the top of the tech tree screen."): BATTLE and
+ *     OUTPOST & FARM. Each is drawn by its own view; the two buttons in the header swap one view for the other.
+ *     [MM-story_mwacamm7_15]
  *     addons  = { OrbitControls, EffectComposer, RenderPass, UnrealBloomPass } (vendor/three-addons, three r128)
  *     host    = an element the net fills (the caller sizes it — full screen in the menu)
  *     adapter = { mode: 'game' | 'sandbox', ctx() → techtree status context, buy(id) → bool, refund(id) → '' | reason,
@@ -10,8 +14,8 @@
  *
  * The data and the rules are src/data/techtree.js — this file only draws them. Presentation only: no sim, no save.
  */
-import { DIVISIONS as DIV, DIV_ORDER, GROUPS, STAT_KEYS, STAT_NAMES, TECH_NODES, TECH_BY_ID as BY, BUYABLE, TECH_TOTAL,
-  techPrice, techGates, techStatus, portalsOwned, countOwned } from '../data/techtree.js';
+import { DIVISIONS as DIV, TREES, TREE_ORDER, TREE_TOTAL, treeOf, GROUPS, STAT_KEYS, STAT_NAMES, TECH_NODES as ALL_NODES, TECH_BY_ID as BY, BUYABLE,
+  techPrice, techGates, techStatus, portalsOwned } from '../data/techtree.js';
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap';
 const CSS = `
@@ -42,13 +46,19 @@ const CSS = `
 .tn .brand .tag{font:500 10px 'JetBrains Mono',monospace;color:var(--dim);letter-spacing:.12em;margin-top:3px}
 .tn .chips{display:flex;gap:5px;flex-wrap:nowrap;flex:1;min-width:0;justify-content:center}
 .tn .chip{font:700 11px Orbitron,sans-serif;letter-spacing:.14em;color:var(--c,#cfe9ff);background:rgba(255,255,255,.03);border:1px solid color-mix(in srgb,var(--c,#5ac8ff) 45%,transparent);
-  padding:7px 10px;cursor:pointer;display:flex;gap:8px;align-items:center;transition:.15s}
+  padding:7px 10px;cursor:pointer;display:flex;gap:8px;align-items:center;transition:.15s;white-space:nowrap}
 .tn .chip:hover,.tn .chip.on{background:color-mix(in srgb,var(--c,#5ac8ff) 18%,transparent);box-shadow:0 0 14px color-mix(in srgb,var(--c,#5ac8ff) 40%,transparent)}
 .tn .chip em{font:500 10px 'JetBrains Mono',monospace;font-style:normal;color:#9fb6cc;letter-spacing:0}
 .tn .chip.soon{opacity:.6}
 .tn .chip.soon em{display:none}
 @media (min-width:901px){.tn .chip{padding:7px 8px;letter-spacing:.1em;gap:6px}}
 .tn .hud-r{display:flex;align-items:center;gap:12px}
+.tn .trees{display:flex;flex:none;border:1px solid var(--line2)}
+.tn .tree{font:700 11px Orbitron,sans-serif;letter-spacing:.14em;color:var(--dim);background:transparent;border:0;padding:9px 12px;cursor:pointer;transition:.15s;white-space:nowrap}
+.tn .tree + .tree{border-left:1px solid var(--line2)}
+.tn .tree:hover{color:#cfe9ff;background:rgba(90,200,255,.08)}
+.tn .tree.on{color:#02050c;background:var(--cyan);box-shadow:0 0 16px rgba(52,225,255,.45)}
+.tn .tree:focus-visible,.tn .chip:focus-visible,.tn .btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .tn .bank{display:flex;align-items:center;gap:6px;font:700 18px 'JetBrains Mono',monospace;color:var(--gold);text-shadow:0 0 10px rgba(255,211,74,.5)}
 .tn .bank label{font:700 9px Orbitron,sans-serif;letter-spacing:.2em;color:var(--dim)}
 .tn .btn{font:700 10px Orbitron,sans-serif;letter-spacing:.12em;color:#cfe9ff;background:rgba(90,200,255,.06);border:1px solid var(--line2);padding:7px 9px;cursor:pointer;transition:.15s}
@@ -116,13 +126,15 @@ const CSS = `
 @media (max-width:820px){
   .tn .hud{left:8px;right:8px;top:8px;gap:8px;padding:8px}
   .tn .brand .tag,.tn .addgold{display:none}
-  .tn .chips{order:3;flex-basis:100%;justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap}
+  .tn .trees{order:3;flex-basis:100%}
+  .tn .tree{flex:1;padding:8px 6px;font-size:10px}
+  .tn .chips{order:4;flex-basis:100%;justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap}
   .tn .chip{padding:6px 8px;font-size:10px;flex:none}
   .tn .sub{top:auto;bottom:8px;left:8px;right:8px}
   .tn .search{width:100%}
   .tn .sub .hint,.tn .spent{display:none}
   .tn .legend,.tn .keys{display:none}
-  .tn .panel{left:8px;right:8px;top:auto;bottom:56px;width:auto;max-height:58vh;transform:translateY(130%)}
+  .tn .panel{left:8px;right:8px;top:auto;bottom:56px;width:auto;max-height:52vh;transform:translateY(130%)}
 }`;
 
 const STATUS_TXT = { owned: 'RESEARCHED', ready: 'AVAILABLE', short: 'NEEDS GOLD', locked: 'LOCKED', soon: 'COMING SOON' };
@@ -131,7 +143,32 @@ const KIND_TXT = { core: 'BASE MODEL · EQUIPPED', ult: 'CAPSTONE', tier: 'TOWER
 const R0 = 8, STEP = 5, ULT_Y = 24;
 
 export function mountTechNet(THREE, addons, host, adapter) {
+  let tree = 'battle', view = null, running = false;
+  const show = (k, quick) => {
+    if (view) view.dispose();
+    tree = k;
+    view = mountTree(THREE, addons, host, adapter, k, { quick, onTree: (t) => { if (t !== tree) { show(t, true); if (running) view.start(); } } });
+  };
+  show(tree, false);
+  return {
+    start() { running = true; view.start(); },
+    stop() { running = false; view.stop(); },
+    refresh() { view.refresh(); },
+    /** Selects a node, switching to its tree first. */
+    select(id) { const n = BY[id]; if (n && treeOf(n) !== tree) { show(treeOf(n), true); if (running) view.start(); } view.select(id); },
+    dispose() { view.dispose(); view = null; },
+    get tree() { return tree; },
+    get debug() { return view.debug; },
+  };
+}
+
+/** One tree's view: the whole holographic map for `tree` ('battle' | 'outpost'). */
+function mountTree(THREE, addons, host, adapter, tree, opts) {
   const doc = host.ownerDocument, win = doc.defaultView;
+  const T = TREES[tree], DIV_ORDER = T.divs, CORE = T.core, TECH_TOTAL = TREE_TOTAL[tree];
+  const TECH_NODES = ALL_NODES.filter((n) => treeOf(n) === tree);
+  const INTREE = new Set(TECH_NODES.map((n) => n.id));
+  const countOwned = (owned, div) => BUYABLE.reduce((k, id) => k + (INTREE.has(id) && owned.has(id) && (!div || (BY[id].div === div && BY[id].kind !== 'ult')) ? 1 : 0), 0);
   const sandbox = adapter.mode !== 'game';
   if (!doc.getElementById('tn-style')) { const st = doc.createElement('style'); st.id = 'tn-style'; st.textContent = CSS; doc.head.appendChild(st); }
   if (!doc.getElementById('tn-fonts')) { const l = doc.createElement('link'); l.id = 'tn-fonts'; l.rel = 'stylesheet'; l.href = FONTS; doc.head.appendChild(l); }
@@ -147,7 +184,8 @@ export function mountTechNet(THREE, addons, host, adapter) {
   root.innerHTML = `
     <div class="stage"></div><div class="labels"></div><div class="scan"></div><div class="vig"></div>
     <header class="hud glass">
-      <div class="brand"><div class="logo">BULWARK<span>//</span>TECH NET</div><div class="tag">${sandbox ? 'SANDBOX · ' : ''}57 UPGRADES · 5 DIVISIONS</div></div>
+      <div class="brand"><div class="logo">BULWARK<span>//</span>TECH NET</div><div class="tag">${sandbox ? 'SANDBOX · ' : ''}${TECH_TOTAL} UPGRADES · ${DIV_ORDER.length} DIVISIONS</div></div>
+      <nav class="trees" aria-label="Tech trees">${TREE_ORDER.map((k) => '<button class="tree' + (k === tree ? ' on' : '') + '" data-tree="' + k + '" aria-pressed="' + (k === tree) + '">' + TREES[k].label + '</button>').join('')}</nav>
       <nav class="chips"></nav>
       <div class="hud-r">
         <div class="bank"><label>BANK</label><b data-bank>0</b><span>g</span></div>
@@ -158,7 +196,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
       </div>
     </header>
     <div class="sub glass"><input class="search" list="tn-names" placeholder="Search upgrades…" autocomplete="off"><datalist id="tn-names"></datalist>
-      <span class="spent">SPENT <b>0g</b></span><span class="hint">0 overview · 1–5 divisions · drag to orbit</span></div>
+      <span class="spent">SPENT <b>0g</b></span><span class="hint">0 overview · 1–${DIV_ORDER.length} divisions · drag to orbit</span></div>
     <aside class="panel glass"></aside>
     <div class="tip glass"></div>
     <div class="legend glass">
@@ -230,8 +268,11 @@ export function mountTechNet(THREE, addons, host, adapter) {
     scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 2.2, map: glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })));
   }
   // holographic floor: polar grid, division tints, boundaries, scan pulse
-  const floorU = { uTime: { value: 0 }, uR0: { value: R0 }, uStep: { value: STEP }, uCol: { value: DIV_ORDER.map((k) => col(DIV[k].color)) },
-    uA: { value: [0, DIV.units.a1, DIV.bases.a1, DIV.map.a1, DIV.outpost.a1, 360, 360] } };
+  // the shader takes up to five sectors: pad the colours with the last one and the angles with 360 (empty sectors)
+  const floorCols = DIV_ORDER.map((k) => col(DIV[k].color)), floorA = [0, ...DIV_ORDER.map((k) => DIV[k].a1)];
+  while (floorCols.length < 5) floorCols.push(floorCols[floorCols.length - 1]);
+  while (floorA.length < 7) floorA.push(360);
+  const floorU = { uTime: { value: 0 }, uR0: { value: R0 }, uStep: { value: STEP }, uCol: { value: floorCols }, uA: { value: floorA } };
   {
     const m = new THREE.ShaderMaterial({
       uniforms: floorU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, extensions: { derivatives: true },
@@ -368,13 +409,13 @@ export function mountTechNet(THREE, addons, host, adapter) {
   for (const n of TECH_NODES) {
     if (n.kind === 'core' || n.soon) continue;
     if (n.kind === 'ult') { for (const r of n.req) addEdge(r, n.id, 'ult'); continue; }
-    if (!n.req.length) addEdge('pathfinder', n.id, 'trunk');
+    if (!n.req.length) addEdge(CORE, n.id, 'trunk');
     for (const r of n.req) addEdge(r, n.id, BY[r].div !== n.div ? 'cross' : 'link');
   }
   for (const n of TECH_NODES) if (n.soon) {
-    const curve = curveBetween(vv('pathfinder').pos, vv(n.id).pos, 'trunk');
+    const curve = curveBetween(vv(CORE).pos, vv(n.id).pos, 'trunk');
     const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(40)),
-      new THREE.LineDashedMaterial({ color: col(DIV.outpost.color), dashSize: 0.6, gapSize: 0.5, transparent: true, opacity: 0.35 }));
+      new THREE.LineDashedMaterial({ color: col(DIV[n.div].color), dashSize: 0.6, gapSize: 0.5, transparent: true, opacity: 0.35 }));
     l.computeLineDistances(); scene.add(l);
   }
   const PER = (e) => (e.kind === 'ult' ? 7 : e.kind === 'trunk' ? 2 : 3);
@@ -406,7 +447,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
     const a = THREE.MathUtils.degToRad((dv.a0 + dv.a1) / 2), r = R0 + 6.9 * STEP;
     return { k, el, pos: new THREE.Vector3(r * Math.cos(a), 1, -r * Math.sin(a)) };
   });
-  const GLBL = GROUPS.map((gq) => {
+  const GLBL = GROUPS.filter((gq) => DIV[gq.div].tree === tree).map((gq) => {
     const el = doc.createElement('div'); el.className = 'glabel'; el.style.setProperty('--c', DIV[gq.div].color); el.textContent = gq.text; LBL.appendChild(el);
     return { el, pos: polar(gq.div, gq.lane, 0.15, 0.2) };
   });
@@ -461,6 +502,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
   const setChip = (k) => chips.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.div === k));
   root.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => { adapter.addGold(+b.dataset.add); refresh(); }));
   const rs = $('[data-reset]'); if (rs) rs.addEventListener('click', () => { adapter.reset(); refresh(); });
+  root.querySelectorAll('[data-tree]').forEach((b) => b.addEventListener('click', () => opts.onTree && opts.onTree(b.dataset.tree)));
   const cl = $('[data-close-net]'); if (cl) cl.addEventListener('click', () => adapter.onClose && adapter.onClose());
   $('#tn-names').innerHTML = TECH_NODES.filter((n) => !n.soon).map((n) => '<option value="' + n.name + '">').join('');
   const search = $('.search');
@@ -491,7 +533,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
     if (!selId) { panel.classList.remove('open'); return; }
     const n = BY[selId], st = vv(selId).st, c = n.kind === 'ult' ? '#ffd34a' : DIV[n.div].color;
     panel.style.setProperty('--c', c);
-    let h = '<div class="p-top"><span class="chip" style="--c:' + DIV[n.div].color + ';pointer-events:none">' + DIV[n.div].label + '</span><span class="kind">' + KIND_TXT[n.kind] + '</span><button class="x" data-close aria-label="Close">✕</button></div>';
+    let h = '<div class="p-top"><span class="chip" style="--c:' + DIV[n.div].color + ';pointer-events:none">' + DIV[n.div].label + '</span><span class="kind">' + (n.kind === 'core' && tree === 'outpost' ? 'THE CENTRE' : KIND_TXT[n.kind]) + '</span><button class="x" data-close aria-label="Close">✕</button></div>';
     h += '<h2>' + n.name + '</h2>' + (n.sub ? '<div class="subl">' + n.sub + '</div>' : '');
     const pr = n.soon || n.milestone ? '' : n.free ? 'FREE' : priceOf(n).toLocaleString() + 'g';
     h += '<div class="srow"><span class="badge s-' + st + '">' + STATUS_TXT[st] + '</span><span class="price">' + pr + '</span></div>';
@@ -504,7 +546,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
       const gs = techGates(n, ctx); if (gs.length) h += '<h4>GATES</h4>' + gs.map((gq) => '<div class="gate ' + (gq.ok ? 's-owned' : 's-locked') + '">' + (gq.ok ? '◆' : '◇') + ' ' + gq.txt + '</div>').join('');
     }
     if (n.kids.length) h += '<h4>UNLOCKS</h4>' + n.kids.map(refBtn).join('');
-    if (n.kind === 'core') h += '<h4>BASE MODELS</h4>' + TECH_NODES.filter((m) => m.kind === 'craft').map((m) => refBtn(m.id)).join('');
+    if (n.kind === 'core' && tree === 'battle') h += '<h4>BASE MODELS</h4>' + TECH_NODES.filter((m) => m.kind === 'craft').map((m) => refBtn(m.id)).join('');
     if (!n.soon && !n.start) {
       if (n.milestone) h += sandbox ? '<div class="actions"><button class="act" data-toggle>' + (ctx.owned.has(n.id) ? 'MARK NOT CLEARED' : 'MARK CLEARED') + '</button></div>'
         : '<div class="note">' + (ctx.owned.has(n.id) ? 'Won — the portal codes are open.' : 'Win Map 3 on any planet to open the portal codes.') + '</div>';
@@ -578,7 +620,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
     if (!running || (e.target && e.target.tagName === 'INPUT')) return;
     if (e.key === 'Escape') { if (selId) select(null); else if (adapter.onClose) adapter.onClose(); }
     if (e.key === '0') flyHome();
-    const i = '12345'.indexOf(e.key); if (i >= 0) flyToDiv(DIV_ORDER[i]);
+    const i = '12345'.slice(0, DIV_ORDER.length).indexOf(e.key); if (i >= 0) flyToDiv(DIV_ORDER[i]);
   };
   win.addEventListener('keydown', onKey);
   function pick() { ray.setFromCamera(mouse, camera); const hit = ray.intersectObjects(hitMeshes, false)[0]; return hit ? hit.object.userData.id : null; }
@@ -600,6 +642,7 @@ export function mountTechNet(THREE, addons, host, adapter) {
 
   // ── loop
   const LOCKED_C = col('#2b3c52'), AMBER = col('#ffb340'), WHITE = col('#ffffff'), tc = new THREE.Color();
+  if (opts.quick) { camera.position.copy(HOME.pos); introDone = true; $('.boot').classList.add('gone'); }   // switching trees: no intro
   const introFrom = camera.position.clone();
   refresh();
   bootbar.style.width = '100%';

@@ -2,7 +2,7 @@
 // 7 Outpost nodes of story O10 [MM-story_mw5oem5o_r].
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TECH_NODES, TECH_BY_ID, BUYABLE, TECH_TOTAL, DIVISIONS, startingOwned, techStatus, techPrice, techGates, readyIds,
+import { TECH_NODES, TECH_BY_ID, BUYABLE, TECH_TOTAL, DIVISIONS, TREES, TREE_ORDER, TREE_TOTAL, treeOf, startingOwned, techStatus, techPrice, techGates, readyIds,
   settleFree, refundBlock, portalsOwned, countOwned } from './techtree.js';
 
 const ctx = (owned, bank = 0, extra = {}) => ({ owned: settleFree(new Set([...startingOwned(), ...owned])), bank, paid: {}, ...extra });
@@ -14,10 +14,30 @@ test('64 upgrades: Units 25, Bases 21 (+ capstone), Map 10, Outpost 7 (story O10
   assert.equal(by('units'), DIVISIONS.units.total);
   assert.equal(by('bases'), DIVISIONS.bases.total);
   assert.equal(by('map'), DIVISIONS.map.total);
-  assert.equal(by('outpost'), 7);
-  assert.equal(DIVISIONS.outpost.total, 7);
-  assert.ok(!DIVISIONS.outpost.soon, 'the Outpost division is no longer coming soon');
+  assert.equal(by('structures') + by('mining'), 7);
+  assert.equal(DIVISIONS.structures.total, by('structures'));
+  assert.equal(DIVISIONS.mining.total, by('mining'));
   assert.ok(BUYABLE.includes('apocalypse'));
+});
+
+test('two trees (owner 2026-11-09): the battle tree has no Outpost section; the outpost & farm tree has four', () => {
+  assert.deepEqual(TREE_ORDER, ['battle', 'outpost']);
+  assert.deepEqual([...TREES.battle.divs], ['units', 'bases', 'map', 'ships']);
+  assert.deepEqual([...TREES.outpost.divs], ['seedpods', 'machinery', 'structures', 'mining']);
+  assert.ok(!('outpost' in DIVISIONS), 'Outpost is no longer a division of the battle tree');
+  for (const k of TREE_ORDER) {
+    const divs = TREES[k].divs;
+    assert.equal(DIVISIONS[divs[0]].a0, 0, k + ' starts at 0°');
+    assert.equal(DIVISIONS[divs.at(-1)].a1, 360, k + ' closes the circle');
+    for (let i = 1; i < divs.length; i++) assert.equal(DIVISIONS[divs[i]].a0, DIVISIONS[divs[i - 1]].a1, divs[i] + ' follows ' + divs[i - 1]);
+    for (const d of divs) assert.equal(DIVISIONS[d].tree, k);
+    assert.equal(TECH_BY_ID[TREES[k].core].kind, 'core');
+    assert.equal(BUYABLE.filter((id) => treeOf(TECH_BY_ID[id]) === k).length, TREE_TOTAL[k]);
+  }
+  assert.equal(TREE_TOTAL.battle + TREE_TOTAL.outpost, TECH_TOTAL);
+  for (const n of TECH_NODES) for (const r of n.req) assert.equal(treeOf(TECH_BY_ID[r]), treeOf(n), n.id + ' and its prerequisite ' + r + ' are in one tree');
+  assert.ok(DIVISIONS.seedpods.soon && DIVISIONS.machinery.soon, 'seed pods and machinery are coming soon');
+  assert.ok(startingOwned().has('outpost_hub'), 'the outpost tree\'s centre is owned from the start');
 });
 
 test('the Outpost nodes: every contract tech exists, priced from the workbook, and no ghost is left (story O10)', async () => {
@@ -28,7 +48,7 @@ test('the Outpost nodes: every contract tech exists, priced from the workbook, a
   assert.deepEqual([...named].sort(), ['cargo_shuttle_2', 'deep_drilling_1', 'power_grid_2', 'reinforced_walls', 'rig_mk2', 'sensor_spire', 'supply_depot']);
   for (const id of named) {
     const n = TECH_BY_ID[id], row = MAPDATA.outpostTech.find((r) => r.Node === id);
-    assert.ok(n && n.div === 'outpost' && !n.soon, id + ' is a buyable Outpost node');
+    assert.ok(n && n.outpost && treeOf(n) === 'outpost' && !n.soon, id + ' is a buyable node of the outpost tree');
     assert.ok(row && row.Price > 0 && n.price === row.Price, id + ' is priced from the workbook');
     assert.equal(techStatus(n, ctx([], 0)) !== 'soon', true);
   }

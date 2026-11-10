@@ -17,26 +17,43 @@
  * 'map3' (the Map 3 Victory milestone) counts as owned when the player has won Map 3 — the game puts it in `owned`.
  */
 
+// Two trees (owner 2026-11-09): "The tech tree for outposts and farming will be a new tech tree. Identical design but it
+// will have sections like seed pods, machinery, structures, mining. Player will get to this new tree using two buttons at
+// the top of the tech tree screen. Outposts will be removed as a section from the initial tech tree."
+// Each tree's divisions fill its own circle; every division names its tree.
 export const DIVISIONS = Object.freeze({
-  units:   Object.freeze({ label: 'UNITS',   color: '#ff8a3d', a0: 0,   a1: 130, total: 25 }),
-  bases:   Object.freeze({ label: 'BASES',   color: '#34e1ff', a0: 130, a1: 245, total: 21 }),
-  map:     Object.freeze({ label: 'MAP',     color: '#b67cff', a0: 245, a1: 315, total: 10 }),
-  outpost: Object.freeze({ label: 'OUTPOST', color: '#6f8c9c', a0: 315, a1: 338, total: OUTPOST_TECH.length }),
+  units:      Object.freeze({ tree: 'battle',  label: 'UNITS',      color: '#ff8a3d', a0: 0,   a1: 130, total: 25 }),
+  bases:      Object.freeze({ tree: 'battle',  label: 'BASES',      color: '#34e1ff', a0: 130, a1: 245, total: 21 }),
+  map:        Object.freeze({ tree: 'battle',  label: 'MAP',        color: '#b67cff', a0: 245, a1: 330, total: 10 }),
   // owner 2026-11-02: "We will need to add Ship upgrades for future trade and space combat economies. Ship upgrades should be
   // added to tech tree as coming soon." [MM-story_mvzkubvz_1m]
-  ships:   Object.freeze({ label: 'SHIPS',   color: '#5fb8c9', a0: 338, a1: 360, total: 0, soon: true }),
+  ships:      Object.freeze({ tree: 'battle',  label: 'SHIPS',      color: '#5fb8c9', a0: 330, a1: 360, total: 0, soon: true }),
+  seedpods:   Object.freeze({ tree: 'outpost', label: 'SEED PODS',  color: '#7fdc6a', a0: 0,   a1: 80,  total: 0, soon: true }),
+  machinery:  Object.freeze({ tree: 'outpost', label: 'MACHINERY',  color: '#e0a64a', a0: 80,  a1: 160, total: 0, soon: true }),
+  structures: Object.freeze({ tree: 'outpost', label: 'STRUCTURES', color: '#6f9cc8', a0: 160, a1: 260, total: 5 }),
+  mining:     Object.freeze({ tree: 'outpost', label: 'MINING',     color: '#c87a5a', a0: 260, a1: 360, total: 2 }),
 });
-export const DIV_ORDER = Object.freeze(['units', 'bases', 'map', 'outpost', 'ships']);
+/** The two trees: their label on the switch buttons, divisions in order round the circle, and the node at the centre. */
+export const TREES = Object.freeze({
+  battle:  Object.freeze({ label: 'BATTLE',         divs: Object.freeze(['units', 'bases', 'map', 'ships']), core: 'pathfinder' }),
+  outpost: Object.freeze({ label: 'OUTPOST & FARM', divs: Object.freeze(['seedpods', 'machinery', 'structures', 'mining']), core: 'outpost_hub' }),
+});
+export const TREE_ORDER = Object.freeze(['battle', 'outpost']);
+/** The battle tree's divisions (the tech tree's first screen). */
+export const DIV_ORDER = TREES.battle.divs;
+/** Which tree a node is in. */
+export const treeOf = (n) => (n.kind === 'ult' ? 'battle' : DIVISIONS[n.div].tree);
 /** Floor labels for the groups inside a division. */
 export const GROUPS = Object.freeze([
   { div: 'units', lane: -0.47, text: 'TOWERS' }, { div: 'units', lane: 0.36, text: 'TROOPS' }, { div: 'units', lane: 0.76, text: 'HARVESTERS' },
   { div: 'bases', lane: -0.82, text: 'SUPER-CANNON' }, { div: 'bases', lane: -0.3, text: 'DEFENSE PODS' }, { div: 'bases', lane: 0.52, text: 'BASE MODELS' },
   { div: 'map', lane: -0.2, text: 'PORTALS' }, { div: 'map', lane: 0.84, text: 'INTEL' },
-  { div: 'outpost', lane: -0.5, text: 'MINING' }, { div: 'outpost', lane: 0.55, text: 'OUTPOST' },
 ]);
 export const STAT_KEYS = Object.freeze(['ATK', 'DEF', 'RNG', 'DMG', 'COST', 'H-SPD', 'H-GAT']);
 export const STAT_NAMES = Object.freeze(['Attack', 'Defense', 'Range', 'Damage', 'Upgrade cost', 'Harvester speed', 'Harvester gathering']);
-export const TECH_TOTAL = 57 + OUTPOST_TECH.length;   // 64: the battle tree's 57 and the Outpost division
+export const TECH_TOTAL = 57 + OUTPOST_TECH.length;   // 64: the battle tree's 57 and the outpost tree's 7
+/** Upgrades to buy in each tree. */
+export const TREE_TOTAL = Object.freeze({ battle: 57, outpost: OUTPOST_TECH.length });
 export const PORTAL_BASE_PRICE = 1000, PORTAL_STEP = 500;
 
 import { OUTPOST_TECH } from './outpost.js';
@@ -132,17 +149,29 @@ add({ id: 'ewn', div: 'map', kind: 'item', name: 'Early Warning Net', price: 260
 // ── OUTPOST (Outpost-Design §7, story O10): the 7 nodes that replaced the five ghosts. Data from the workbook
 // (Outpost_Tech); a contract step unlocks each, gold buys it. Defense tiers (Reinforced Walls) are installed in the
 // outpost's Upgrade Bay; the rest apply to every outpost at once.
-const OUTPOST_LAYOUT = {   // [ring, lane] in the 3D view's narrow sector — mining down the left, the outpost down the right
-  deep_drilling_1: [1.4, -0.55], rig_mk2: [2.8, -0.6], supply_depot: [2.1, -0.15], power_grid_2: [1.5, 0.3],
-  reinforced_walls: [2.5, 0.6], sensor_spire: [3.4, 0.25], cargo_shuttle_2: [4.4, -0.2],
+// Since 2026-11-09 they are the OUTPOST & FARM tree: the two mining nodes in MINING, the rest in STRUCTURES.
+const OUTPOST_LAYOUT = {   // [division, ring, lane]
+  deep_drilling_1: ['mining', 1.4, -0.3], rig_mk2: ['mining', 2.8, -0.35],
+  supply_depot: ['structures', 1.6, -0.6], power_grid_2: ['structures', 1.4, 0.1], reinforced_walls: ['structures', 2.5, 0.55],
+  sensor_spire: ['structures', 3.2, -0.1], cargo_shuttle_2: ['structures', 4.2, -0.5],
 };
+add({ id: 'outpost_hub', div: 'structures', kind: 'core', name: 'Outpost Hub', sub: 'Outpost & farm · the centre', free: true, start: true,
+  desc: 'The centre of the outpost and farming tree. Mining, structures, seed pods and machinery grow out from here.' });
 OUTPOST_TECH.forEach((t, i) => {
-  const [d, lane] = OUTPOST_LAYOUT[t.id] || [1.4 + i * 0.6, 0];
-  add({ id: t.id, div: 'outpost', kind: 'item', name: t.name, sub: 'Outpost · ' + t.unlockedBy, price: t.price, d, lane, req: [...t.requires],
+  const [div, d, lane] = OUTPOST_LAYOUT[t.id] || ['structures', 1.4 + i * 0.6, 0];
+  add({ id: t.id, div, kind: 'item', name: t.name, sub: 'Outpost · ' + t.unlockedBy, price: t.price, d, lane, req: [...t.requires],
     unlockBy: 'Outpost ' + t.unlockedBy, outpost: true, applies: t.applies,
     desc: t.effect.replace(/^./, (c) => c.toUpperCase()) + '. Unlocked by the outpost ' + t.unlockedBy + ' on any planet' +
       (t.applies === 'upgradeBay' ? '; installed at an outpost with an Upgrade Bay.' : '; applies to every outpost.') });
 });
+
+// ── SEED PODS and MACHINERY (coming soon): farming (docs/tech-plan/Farming.md); named so players see what is coming
+[['pod_bench', 'Pod Bench', 1.4, -0.4], ['pod_bench2', 'Pod Bench II', 2.6, -0.3], ['pod_store', 'Faction Pod Stores', 2.0, 0.45]]
+  .forEach(([id, nm, d, lane]) => add({ id, div: 'seedpods', kind: 'shipghost', name: nm, sub: 'Coming soon · Farming', d, lane, soon: true,
+    desc: 'Farming is coming soon: seed pods in five levels, planted on your outposts.' }));
+[['mc_irrigation', 'Irrigation', 1.4, -0.4], ['mc_engineering', 'Machine Engineering', 2.6, 0.1], ['mc_grobots', 'Gro-bots', 3.2, 0.5]]
+  .forEach(([id, nm, d, lane]) => add({ id, div: 'machinery', kind: 'shipghost', name: nm, sub: 'Coming soon · Farming', d, lane, soon: true,
+    desc: 'Farm machinery is coming soon.' }));
 
 // ── SHIPS (coming soon) — the landing craft becomes a ship: trade runs and space combat. Named so players see what is
 // coming, but they are never counted, priced or bought.
