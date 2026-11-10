@@ -45,6 +45,9 @@ const CSS = `
 .tn .brand .logo span{color:var(--cyan);margin:0 .35em}
 .tn .brand .tag{font:500 10px 'JetBrains Mono',monospace;color:var(--dim);letter-spacing:.12em;margin-top:3px}
 .tn .chips{display:flex;gap:5px;flex-wrap:nowrap;flex:1;min-width:0;justify-content:center}
+/* the chips scroll inside their row, never over the tree buttons (phone landscape, 821-900 px wide) */
+.tn .chips{overflow-x:auto;scrollbar-width:none;justify-content:flex-start}.tn .chips>:first-child{margin-left:auto}.tn .chips>:last-child{margin-right:auto}.tn .chips::-webkit-scrollbar{display:none}
+@media (max-width:900px){.tn .brand .tag{display:none}.tn .hud{gap:10px}.tn .chip{padding:6px 7px;font-size:10px;letter-spacing:.08em;gap:5px;flex:none}.tn .tree{padding:8px 9px;font-size:10px;letter-spacing:.1em}}
 .tn .chip{font:700 11px Orbitron,sans-serif;letter-spacing:.14em;color:var(--c,#cfe9ff);background:rgba(255,255,255,.03);border:1px solid color-mix(in srgb,var(--c,#5ac8ff) 45%,transparent);
   padding:7px 10px;cursor:pointer;display:flex;gap:8px;align-items:center;transition:.15s;white-space:nowrap}
 .tn .chip:hover,.tn .chip.on{background:color-mix(in srgb,var(--c,#5ac8ff) 18%,transparent);box-shadow:0 0 14px color-mix(in srgb,var(--c,#5ac8ff) 40%,transparent)}
