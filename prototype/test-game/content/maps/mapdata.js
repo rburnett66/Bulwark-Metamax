@@ -6136,6 +6136,7 @@ export const MAPDATA = {
   "Fruited_Window": 1,
   "Pods_Per_Plot": 4,
   "Pod_Price": 25,
+  "Pod_Unlock_Units": 500,
   "Battle_Pod_Units": 200,
   "Battle_Pod_Units_Epic": 100,
   "Pod_Crate": 12,

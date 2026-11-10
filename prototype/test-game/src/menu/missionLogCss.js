@@ -405,6 +405,8 @@ export const MISSION_LOG_CSS = String.raw`
 .bwm-ml .pbp{margin-top:6px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .bwm-ml .pbp b{color:var(--gold)}
 .bwm-ml .pbhave{margin-top:3px;color:var(--dim);font-size:11px}
+.bwm-ml .pmeter{height:6px;margin-top:8px;border-radius:3px;background:color-mix(in srgb,var(--dim) 25%,transparent);overflow:hidden}.bwm-ml .pmeter>i{display:block;height:100%;background:var(--rc,#d9a441)}
+.bwm-ml .plock b{font-size:11px;white-space:nowrap}.bwm-ml .plock b i{font-style:normal;opacity:.55}
 .bwm-ml .pbb{display:flex;gap:8px;margin-top:9px}
 .bwm-ml .pbb .btn{flex:1;height:36px;font-size:11px}
 .bwm-ml .pbb .btn[disabled]{opacity:.4}

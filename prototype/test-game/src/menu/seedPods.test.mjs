@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { defaultSave } from '../save/save.js';
+import { defaultSave as freshSave } from '../save/save.js';
 import { storeBands } from '../save/stores.js';
 import { inventoryBands } from '../save/inventory.js';
 import { POD_LEVELS, FARM } from '../data/farm.js';
@@ -14,6 +14,9 @@ import { storeSource, FARM_STORE, STORE_TABS } from './storeScreen.js';
 import { BATTLE_INVENTORY, inventoryListHtml } from './inventoryScreen.js';
 import { seedPodsListHtml, seedPodsDetailHtml, seedPodsView, podValue, hoursText, BUY_PODS } from './seedPods.js';
 import { cropOf } from '../data/farm.js';
+import { CROPS as ALL_CROPS } from '../data/farm.js';
+// owner rule 10: these tests are about pods, so every crop's pods start unlocked (farm/unlock.test.mjs covers the lock)
+const defaultSave = () => { const s = freshSave(); for (const c of ALL_CROPS) s.podUnlocks[c.id] = true; return s; };
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
 const all = () => true;

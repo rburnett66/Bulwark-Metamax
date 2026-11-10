@@ -17,6 +17,7 @@
  */
 import { FARM, cropOf, cropsOf } from '../data/farm.js';
 import { bankOf } from '../save/save.js';
+import { podsUnlocked, unlockPods } from './unlock.js';
 
 const isCount = (n) => Number.isInteger(n) && n >= 0;
 
@@ -69,10 +70,12 @@ export const podPrice = (n = 1) => FARM.Pod_Price * n;
 
 /**
  * BUY n pods of a crop on the SEED PODS tab, at podPrice(n), from the campaign bank (as the tech tree and the outpost
- * spend it). → { ok: true, crop, n, gold } or { ok: false, reason: 'gold', need, have }. A refusal changes nothing.
+ * spend it). → { ok: true, crop, n, gold }, { ok: false, reason: 'gold', need, have } or { ok: false, reason: 'locked' }
+ * (the crop's pods are not unlocked yet, src/farm/unlock.js). A refusal changes nothing.
  */
 export function buyPods(s, cropId, n = FARM.Pods_Per_Plot) {
   check(cropId, n);
+  if (!podsUnlocked(s, cropId)) return { ok: false, reason: 'locked' };   // owner rule 10: 500 delivered first
   const gold = podPrice(n), bank = bankOf(s);
   if (bank < gold) return { ok: false, reason: 'gold', need: gold, have: bank };
   s.carry = s.carry || { gold: bank, structures: [] };
@@ -101,7 +104,7 @@ export function battlePods(s, planet, keptByTier) {
   for (const [tier, units] of Object.entries(keptByTier)) {
     if (!(units > 0)) continue;
     const c = crops.find((x) => x.tier === tier);
-    if (!c || c.newMaterial) continue;
+    if (!c || c.newMaterial || !podsUnlocked(s, c.id)) continue;   // a locked crop drops no pods (owner rule 10)
     const per = unitsPerPod(tier), total = (s.podCarry[c.id] || 0) + Math.floor(units);
     const n = Math.floor(total / per), rest = total - n * per;
     if (rest) s.podCarry[c.id] = rest;
@@ -111,9 +114,10 @@ export function battlePods(s, planet, keptByTier) {
   return out;
 }
 
-/** The F1 Pod Crate: contract.podCrate pods of contract.crop. → { crop, n }. */
+/** The F1 Pod Crate: contract.podCrate pods of contract.crop, and that crop's pods unlocked so they can be planted. → { crop, n }. */
 export function grantPodCrate(s, contract) {
   const n = contract.podCrate || 0;
+  if (n) unlockPods(s, contract.crop);
   if (n) addPods(s, contract.crop, n);
   return { crop: contract.crop, n };
 }
