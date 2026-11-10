@@ -5914,8 +5914,8 @@ export const MAPDATA = {
   "Harvest_Route_Mult": 1.3,
   "Harvest_Rate_Mult": 1,
   "Surface_Respawn_Mult": 0.05,
-  "Gun_Cap": 3,
-  "Habitat_Guns_Per_Tier": 2
+  "Gun_Cap": 4,
+  "Habitat_Guns_Per_Tier": 4
  },
  "outpostTech": [
   {
