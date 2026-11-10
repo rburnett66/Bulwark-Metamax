@@ -104,6 +104,25 @@ at Rig Mk II**, the outpost's level-2 miner (§2.2); sets **battle quality at po
 faction's crops its own four surface resources** (§9.3). How pods, machine upgrades, missions and crops are spread
 across the nine factions is `Farming-Distribution-Design.md`.
 
+## Owner direction (2026-11-10): earned seed pods
+
+The owner's rules 9–18 (verbatim in `docs/tech-plan/Farming.md`, *Owner rules*) change how pods are earned and levelled.
+They override §8 and §9 where those differ, and those sections now say so:
+
+- **Pods have no level** (rule 9). A crop's level is the player's, not the pod's: farms start at level 1, and each plot
+  keeps the level it was planted at (§8.3).
+- **A crop's pods unlock after 500 of it are delivered** (rule 10, built): access only; the pods still have to be
+  acquired (§9.4).
+- **The Pod Reward Chest delivers the pods** (rule 11, built): awarded at the end of each map, one pod per 100
+  delivered, opened right there with one click (§9.4).
+- **Mastery opens levels 2–5** (rule 12); **each level needs machinery** (rule 13): level 3 a fertilizer, level 4
+  agrobots, level 5 irrigation, and for some crops a planting method at level 3; one irrigation unit waters 4 connected
+  plots and changes their look.
+- **Farm visitors, the farming log, off-world pods, seasonal crops and the crop mastery award** (rules 14–18): a
+  visitor per faction who roams the outpost; tips in a log; pods from other planets give no fruit at levels 1–2 ("Are
+  you sure? I don't think those grow here."); holiday crops; a chest of gold, **gems** (the premium currency; gold is
+  the standard one) and a trophy at level 5.
+
 ## 1. What farming is
 
 Bulwark has two modes today. **Battle** is played in sessions: land, hold eight waves, take what you can carry.
@@ -799,11 +818,12 @@ planets and pays attention.
 
 ### 8.1 Seed pods are what the player collects
 
-A **seed pod** is the item that is planted. It replaces draft 1's "seedling". Each pod is one crop at one level:
-`{ crop, level, count }`, stacked by crop and level. An accreted crop's pod is a **seed core** (Distribution §2.1): the
+A **seed pod** is the item that is planted. It replaces draft 1's "seedling". **A pod has no level** (owner rule 9,
+2026-11-10): the stock is a plain count per crop, `{ [crop]: count }`; the level comes from the player's crop level when
+the pod is planted (§8.3). An accreted crop's pod is a **seed core** (Distribution §2.1): the
 same item, the same rules. **Planting uses one pod per row**: a 4-row plot takes 4 pods, and so do an indoor plot and a
 Vertical farm floor (proposed; §4.4). Other methods use one pod per cell of their footprint (an Orchard's 3 × 3 takes 9,
-a Tub 1). A plot is planted with one crop at one level.
+a Tub 1). A plot is planted with one crop and keeps the level it was planted at until harvest.
 
 ### 8.2 Five levels; battle quality is level 3
 
@@ -829,9 +849,22 @@ names overlap on purpose because the owner chose them; the SEED PODS view always
 not a word, beside the resource's tier ring, so the two never read alike. Machine and Vertical farm levels are numbers,
 never colours. *(See §14 D4.)*
 
-### 8.3 How pods level up (proposed)
+### 8.3 How crop levels rise
 
-The owner fixed the five levels; how a pod moves up is proposed:
+**Superseded (owner rules 9, 12, 13, 2026-11-10).** Pods have no level, so there is no pod bench and no lucky
+level-up. Instead:
+
+- **A crop has a level, 1 to 5; farms start at 1.** The player always plants their best level of that crop; a plot keeps
+  the level it was planted at, so a later upgrade reaches only new plantings. Battle-map crops count as level 3.
+- **Mastery opens the levels** (rule 12): planting, harvesting and selling a crop raise its mastery; thresholds open its
+  `<Crop> II … V` nodes in the OUTPOST & FARM tree, and **gold buys each one** (story E4, next).
+- **Each level needs knowledge and equipment** (rule 13): level 3 the crop's fertilizer (a Fertilizer machine, its
+  recipe from a mission given by the crop's buyer faction at Friendly standing; some crops also need a method such as
+  terracing, vertical farming or hydroponics), level 4 agrobots, level 5 irrigation. A plot grows at the highest level
+  it qualifies for, and PLANT says what caps it.
+- **The level changes yield only**; seed pods always cost the same.
+
+The draft's proposal, kept for the record:
 
 - **Upgrade at the pod bench.** In the Farmhouse, **3 pods of one crop and level make 1 of the next level**, for a
   little gold (Common → Uncommon 50, then 150, 400, 1,000). It is the steady route. Pod Bench II (Verdance F3) halves
@@ -849,17 +882,21 @@ Faction by faction, with prices and loyalty ranks, in Distribution §4. In short
 
 | Source | What |
 |---|---|
-| Battles | **Rare pods** (battle quality) of the field's resource: a harvester brings one back now and then (proposed 1 per 200 units; epic fields 1 per 100). Fighting on a planet is how its pods are collected |
+| Battles | **the Pod Reward Chest** (owner rule 11, built): at the end of each map, one pod per 100 units delivered of each crop whose pods are unlocked, carried between maps (§9.4). Battles never add pods to the stock directly |
+| Buying | the SEED PODS tab, one fixed price for every crop (25 gold, proposed), once the crop's pods are unlocked |
 | Faction ships | each faction sells pods of its own four crops only, Common first, higher levels and rarer crops as loyalty rises; never Epic or Legendary |
 | The Collective | farm orders paying Uncommon pods of another planet's crop |
-| The farm itself | a Fruited harvest returns some pods at the same level (grain 20 %, vegetables 10 % of the pods planted, at least 1 for grain; others none); plus the lucky level-up (§8.3) |
+| The farm itself | a Fruited harvest returns some pods (grain 20 %, vegetables 10 % of the pods planted, at least 1 for grain; others none). No lucky level-up: pods have no level (§8.3) |
 | Dead plants | all the pods planted, back (§5.2) |
-| Contracts | F1's Pod Crate (12 Common pods of the common-tier crop); F2 and F3 pods of the rare-tier and epic-tier crops |
+| Contracts | F1's Pod Crate (12 pods of the common-tier crop; it also unlocks that crop's pods); F2 and F3 pods of the rare-tier and epic-tier crops |
 | Truffle hunting, rare contracts | mystery pods; Epic pods |
 
 ### 9.2 The SEED PODS inventory view
 
-A new tab in the existing INVENTORY screen (MLG-10), next to the resource list:
+*As built (owner rules 5 and 9):* a tab of the OUTPOST & FARM inventory (STORES), not the battle INVENTORY. Each crop is
+one row: its pods held (or, while locked, its count toward 500, §9.4), its crop level as a coloured badge, and the next
+level's node and price. The detail panel shows the level, yield and worth per level, BUY, and where pods come from. The
+draft below is kept for the parts not yet built (filters, the environment chart, enhancements):
 
 - **Grid** of pod cards: icon, name, a level badge in its colour, count. Each crop is a row of five slots, Common to
   Legendary, so the player sees at a glance what they hold and what they are missing. Grouped by planet (four crops
@@ -872,6 +909,43 @@ A new tab in the existing INVENTORY screen (MLG-10), next to the resource list:
   shows *reserved by Room n* on the pods it will use.
 - **UPGRADE** (to the pod bench) and **PLANT** (jumps to the view and room the crop grows best in, with that pod
   selected).
+
+### 9.4 Unlocking pods and the Pod Reward Chest (owner rules 10, 11)
+
+**Unlocking** (rule 10, built): *"After I have collected and sold 500 units of a crop I unlock the crop's seed pods.
+This unlock grants you access to the pods, but you still need to acquire the actual pods."* Every unit of a crop
+delivered counts: everything the harvesters carry home at the end of a map (the Collective's quota and the surplus
+alike) and every farm sale or delivery. At 500 the crop's pods unlock, galaxy-wide and for good. Until then they cannot
+be bought, earned or planted, and the SEED PODS row shows the count, e.g. `320/500`, with a meter in the detail panel.
+F1's Pod Crate unlocks its own crop; a save from before keeps every crop it already holds pods of or has planted.
+
+![SEED PODS: Loam Grain unlocked with 8 pods; Heartwood Amber locked at 320 of 500](farming/seed-pods-locked.png)
+
+**The Pod Reward Chest** (rule 11): *"At the end of delivering a resource contract (full map) at any star level I am
+granted a Pod Reward Chest … one actual seed pod for every 100 resources delivered. These resources accrue between
+battles, so 50 resources from one map, and 50 resources from another will drop 1 seed pod."* *"The chest is the
+delivery mechanism for the pod drops."* And: *"Chests in Bulwark are awarded at the end of each map and are
+automatically opened with a user click."* So:
+
+- Each unlocked crop's delivered units add to a carry. Counting starts at the unlock: on the map that crosses 500, only
+  the units past it count.
+- **A finished map, at any star level, awards one chest** holding one pod per full 100 of each carry, every tier
+  alike; the rest waits for the next map. A lost map adds to the carry but awards no chest (proposed: "at any star
+  level" reads as a map won). A chest that would be empty is not awarded. This lets a player meet farming at the end of
+  map 1, before they have an outpost.
+- **The chest is opened right there, at the end of the map, with one click**: after the result, the chest appears
+  with *Tap to open*; the tap opens it, the lid lifts, then **one card per crop every half second** (its icon, name,
+  tier and "+3 pods"), then COLLECT. This is Pirate Bash's reveal. The pods are in the stock from the tap, so closing
+  early loses nothing. Reduced motion shows every card at once.
+- A chest not opened then (the game closed first) waits at the top of STORES › Seed pods with OPEN, so no pod is lost.
+
+| | |
+|---|---|
+| ![The chest, before the tap](farming/pod-chest-closed.png) | ![The opened chest: one card per crop](farming/pod-chest-open.png) |
+| ![The opened chest on a phone held sideways](farming/pod-chest-open-phone.png) | ![A chest left unopened, waiting on SEED PODS](farming/pod-chest-strip.png) |
+
+The numbers are data (`Farm_Params`: `Pod_Unlock_Units` 500, `Chest_Units_Per_Pod` 100). The chest art is a placeholder
+drawn in code, for a model or icon later. Code: `src/farm/unlock.js`, `src/farm/chest.js`, `src/menu/podChest.js`.
 
 ### 9.3 The crops are the surface resources
 
