@@ -69,9 +69,12 @@ def ore_rows():
 
 
 STRUCT_COLS = ["Kind", "Tier", "Cost", "Value", "Build_Sec", "Power_Draw", "Power_Supply", "Power_Reach",
-               "Bay_Hours", "Rate_Mult", "Capacity_Mult", "Battle_Struct", "Model", "Unlock", "HP"]
+               "Bay_Hours", "Rate_Mult", "Capacity_Mult", "Battle_Struct", "Model", "Unlock", "HP", "Power_Priority"]
 # Cost: the price to build one with the player's own gold. Value: what a repair is priced against (design §6.1).
 # HP: a building's hit points where it has them (the Pylon); blank = 1 (buildings are breached, never shot).
+# Power_Priority (owner 2026-11-11): who a short grid serves first, lower first; blank = last. Same values as
+# patch_power_priority.py PRIORITY (that script adds the column without LibreOffice).
+from patch_power_priority import PRIORITY as POWER_PRIORITY  # noqa: E402
 # Owner 2026-11-07: the contract grants only the hub; the player buys power, the mining station, storage, the Resource
 # Bay, harvesters and the defenses. The first setup (Power I + Rig I + Storage I, 1,500) is sized to the gold a player
 # banks by map 3 at 3 stars and pays back from iron (720 gold an hour) in about two hours (design §6.1).
@@ -186,7 +189,7 @@ def main():
         "everything else is bought. harvester: bought once a Resource Bay is built (battle price x 4). Defenses take "
         "their battle stats from Battle_Struct (STRUCTURES in src/data/tables.js); no anti-air, no long range.",
         "",
-    ], STRUCTS)
+    ], [r + [""] * (len(STRUCT_COLS) - 1 - len(r)) + [POWER_PRIORITY.get(r[0], "")] for r in STRUCTS])
     write_sheet("Outpost_Contracts", CONTRACT_COLS, [
         "Outpost contracts (27) — three steps per planet",
         "Design §2.3 (contract 1, specified) and §2.4 (the ladder; steps 2-3 rewards proposed, tune after play). "

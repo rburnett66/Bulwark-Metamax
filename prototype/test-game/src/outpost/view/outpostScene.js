@@ -97,7 +97,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   let conduits = { on: null, off: null, sig: '' };
   function syncConduits(o) {
     const plan = planConduits(o, map);
-    const sig = plan.map((c) => `${c.from}>${c.to}:${c.powered ? 1 : 0}`).join('|');
+    // the route is in the signature too: a conduit follows the open lanes, so a new wall can move it (conduits.js laneRoute)
+    const sig = plan.map((c) => `${c.from}>${c.to}:${c.powered ? 1 : 0}:${c.points.map((p) => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ')}`).join('|');
     if (sig === conduits.sig) return plan;
     for (const k of ['on', 'off']) if (conduits[k]) { root.remove(conduits[k]); conduits[k].geometry.dispose(); }
     conduits = { on: null, off: null, sig };
@@ -439,12 +440,15 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     if (markerTex[kind]) return markerTex[kind];
     const cv = document.createElement('canvas'); cv.width = cv.height = 128;
     const g = cv.getContext('2d');
-    const ring = kind === 'no_power' ? '#ff4a3a' : '#ffb020';
+    // the bolt kinds: no_power (red ring), power_on (green ring: the power icon of a powered building), power_cut
+    // (amber ring: the building an armed placement would switch off) — one bolt glyph, the ring says the state
+    const ring = { no_power: '#ff4a3a', power_on: '#3ad27a', power_cut: '#ffb43c' }[kind] || '#ffb020';
+    const bolt = kind === 'no_power' || kind === 'power_on' || kind === 'power_cut';
     g.beginPath(); g.arc(64, 64, 54, 0, Math.PI * 2); g.fillStyle = 'rgba(16,20,26,0.92)'; g.fill();
     g.lineWidth = 9; g.strokeStyle = ring; g.stroke();
     g.save(); g.translate(64, 64); g.scale(3.4, 3.4); g.translate(-10, -10);
-    if (kind === 'no_power') {
-      g.fillStyle = '#ffd23a'; g.strokeStyle = '#7a4a00'; g.lineWidth = 0.9; g.lineJoin = 'round';
+    if (bolt) {
+      g.fillStyle = kind === 'power_cut' ? '#ffb43c' : '#ffd23a'; g.strokeStyle = '#7a4a00'; g.lineWidth = 0.9; g.lineJoin = 'round';
       const p = new Path2D('M11.5 1 3.5 11.5h5L7.5 19l9-11.5h-5.2z'); g.fill(p); g.stroke(p);
     } else {
       g.fillStyle = '#d99a22'; g.strokeStyle = '#3a2400'; g.lineWidth = 0.9;
@@ -456,6 +460,17 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     const t = new THREE.CanvasTexture(cv);
     markerTex[kind] = t;
     return t;
+  }
+  /** A marker sprite (screen-sized, drawn over everything): the one sprite every outpost marker and icon is made of. */
+  function markerSprite(kind, size, name) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: markerTexture(kind), depthTest: false, depthWrite: false, transparent: true, sizeAttenuation: false, toneMapped: false }));
+    sp.scale.set(size, size, 1); sp.renderOrder = 20; sp.name = name;
+    return sp;
+  }
+  /** The top of the model standing at a pad (its GLB's height at the pad's scale), for markers floated over it. */
+  function modelHeight(pad) {
+    const e = built.get(pad), rect = rectOf(pad);
+    return (e && e.slug && kit.manifest[e.slug] ? kit.manifest[e.slug].height : 1.6) * (rect ? padModelScale(rect) : 1);
   }
   const markers = new Map();   // pad → { sprite, kind }
   const shutterMat = new THREE.MeshStandardMaterial({ color: 0x2b3036, roughness: 0.7, metalness: 0.4, emissive: 0x3a0806, emissiveIntensity: 0.6 });
@@ -470,10 +485,9 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     for (const [pad, m] of markers) if (want.get(pad) !== m.kind) { root.remove(m.sprite); m.sprite.material.dispose(); markers.delete(pad); }
     for (const [pad, kind] of want) {
       if (markers.has(pad)) continue;
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: markerTexture(kind), depthTest: false, depthWrite: false, transparent: true, sizeAttenuation: false, toneMapped: false }));
-      sp.scale.set(0.058, 0.058, 1); sp.renderOrder = 20; sp.name = `outpost-warning-${pad}`;
+      const sp = markerSprite(kind, 0.058, `outpost-warning-${pad}`);
       const [cx, cz] = centre(rectOf(pad));
-      const e = built.get(pad), h = (e && e.slug && kit.manifest[e.slug] ? kit.manifest[e.slug].height : 1.6) * padModelScale(rectOf(pad));
+      const h = modelHeight(pad);
       sp.userData = { x: cx, y: h + 1.3, z: cz, ph: hash(pad) % 100 / 16 };
       sp.position.set(cx, h + 1.3, cz);
       root.add(sp);
@@ -514,15 +528,48 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       const x = d.cell[0] + 0.5, z = d.cell[1] + 0.5, y = 2.1;
       let sp = defMarks.get(d.id);
       if (!sp) {
-        sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: markerTexture('no_power'), depthTest: false, depthWrite: false, transparent: true, sizeAttenuation: false, toneMapped: false }));
-        sp.scale.set(0.05, 0.05, 1); sp.renderOrder = 20; sp.name = `outpost-defense-no-power-${d.id}`;
+        sp = markerSprite('no_power', 0.05, `outpost-defense-no-power-${d.id}`);
         root.add(sp); defMarks.set(d.id, sp);
       }
       sp.userData = { x, y, z, ph: hash(d.id) % 100 / 16 };
       sp.position.set(x, y, z);
     }
   }
+  // ── POWER ICONS (owner 2026-11-11, #282 answer 1: "buildings have power icons") [MM-subtask_mwco9m19_39]: a small
+  //    bolt over every building and defense that draws power — green ring powered, red ring unpowered, amber ring (and a
+  //    pulse) on the one an armed placement would cut. The plan is conduits.js planPowerIcons / withCuts; the sprites
+  //    are the warning markers' own (markerSprite). Fixed above the model (no bob), smaller than a warning marker.
+  const powerIcons = new Map();   // id → { sprite, state }
+  const ICON_KIND = { on: 'power_on', off: 'no_power', cut: 'power_cut' };
+  const ICON_SIZE = 0.022;   // a warning marker is 0.058: the icon is a status, not an alarm
+  let iconSig = '';
+  /** list: planPowerIcons' answer ([{ id, at: [x, z], defense, state }]), or null to clear. */
+  function setPowerIcons(list) {
+    const sig = (list || []).map((i) => `${i.id}:${i.state}:${i.at[0]},${i.at[1]}`).join('|');
+    if (sig === iconSig) return;
+    iconSig = sig;
+    const want = new Map((list || []).map((i) => [i.id, i]));
+    for (const [id, e] of powerIcons) {
+      if (want.has(id) && want.get(id).state === e.state) continue;
+      root.remove(e.sprite); e.sprite.material.dispose(); powerIcons.delete(id);
+    }
+    for (const i of want.values()) {
+      let e = powerIcons.get(i.id);
+      if (!e) {
+        e = { sprite: markerSprite(ICON_KIND[i.state] || 'no_power', ICON_SIZE, `outpost-power-icon-${i.id}`), state: i.state };
+        root.add(e.sprite); powerIcons.set(i.id, e);
+      }
+      const y = i.defense ? 1.55 : modelHeight(i.id) + 0.45;
+      e.sprite.userData = { ph: hash(i.id) % 100 / 16 };
+      e.sprite.position.set(i.at[0], y, i.at[1]);
+    }
+  }
   function stepMarkers() {
+    for (const e of powerIcons.values()) {
+      if (e.state !== 'cut') continue;
+      const k = ICON_SIZE * (reduced ? 1.25 : 1.1 + 0.25 * (0.5 + 0.5 * Math.sin(clock * 7 + e.sprite.userData.ph)));
+      e.sprite.scale.set(k, k, 1);
+    }
     for (const sprite of defMarks.values()) {
       const u = sprite.userData;
       sprite.position.y = u.y + (reduced ? 0 : Math.sin(clock * 2.4 + u.ph) * 0.18);
@@ -714,12 +761,13 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     playSale, get saling() { return !!sale; },
     /** End the sale now (the view's watchdog: a sale must never leave the outpost locked). */
     cancelSale: endSale,
-    pickBuilding, select, showCells, showReach, showPads, showGhost, setWarnings, setDefenseWarnings, setPreview,
+    pickBuilding, select, showCells, showReach, showPads, showGhost, setWarnings, setDefenseWarnings, setPreview, setPowerIcons,
     /** The preview conduit drawn now (tests / review): its point count, or 0. */
     get previewPoints() { return preview.line ? preview.line.geometry.getAttribute('position').count : 0; },
     /** Is the ghost drawn now (tests / review)? */
     get ghost() { return ghostShown && ghostShown.group && ghostShown.group.visible ? { pad: ghostWant.pad, valid: ghostWant.valid, key: ghostWant.key } : null; },
     get warningMarkers() { return [...markers].map(([pad, m]) => ({ pad, kind: m.kind })); },
+    get powerIcons() { return [...powerIcons].map(([id, e]) => ({ id, state: e.state })); },
     get defenseWarnings() { return [...defMarks.keys()]; },
     /** The world position of a pad's centre (cells), for the camera. */
     padCentre(id) { const p = rectOf(id); return p ? centre(p) : null; },

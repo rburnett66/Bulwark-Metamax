@@ -5259,7 +5259,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "hub",
    "Unlock": "granted",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 0
   },
   {
    "Kind": "power",
@@ -5276,7 +5277,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "power",
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": null
   },
   {
    "Kind": "power",
@@ -5293,7 +5295,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "power_ii",
    "Unlock": "tech:power_grid_2",
-   "HP": null
+   "HP": null,
+   "Power_Priority": null
   },
   {
    "Kind": "rig",
@@ -5310,7 +5313,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "rig",
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 2
   },
   {
    "Kind": "rig",
@@ -5327,7 +5331,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "rig",
    "Unlock": "tech:rig_mk2",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 2
   },
   {
    "Kind": "storage",
@@ -5344,7 +5349,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "storage",
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 1
   },
   {
    "Kind": "storage",
@@ -5361,7 +5367,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "storage",
    "Unlock": "tech:supply_depot",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 1
   },
   {
    "Kind": "resourceBay",
@@ -5378,7 +5385,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "resource_bay",
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 4
   },
   {
    "Kind": "harvester",
@@ -5395,7 +5403,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "harvester",
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": null
   },
   {
    "Kind": "upgradeBay",
@@ -5412,7 +5421,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "upgrade_bay",
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 5
   },
   {
    "Kind": "habitat",
@@ -5429,7 +5439,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "habitat",
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 6
   },
   {
    "Kind": "habitat",
@@ -5446,7 +5457,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": "habitat",
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 6
   },
   {
    "Kind": "mg",
@@ -5463,7 +5475,8 @@ export const MAPDATA = {
    "Battle_Struct": "STR-MG",
    "Model": null,
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 3
   },
   {
    "Kind": "mg",
@@ -5480,7 +5493,8 @@ export const MAPDATA = {
    "Battle_Struct": "STR-MG",
    "Model": null,
    "Unlock": "techtree+upgradeBay",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 3
   },
   {
    "Kind": "mg",
@@ -5497,7 +5511,8 @@ export const MAPDATA = {
    "Battle_Struct": "STR-MG",
    "Model": null,
    "Unlock": "techtree+upgradeBay",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 3
   },
   {
    "Kind": "cannon",
@@ -5514,7 +5529,8 @@ export const MAPDATA = {
    "Battle_Struct": "STR-Cannon",
    "Model": null,
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 3
   },
   {
    "Kind": "cannon",
@@ -5531,7 +5547,8 @@ export const MAPDATA = {
    "Battle_Struct": "STR-Cannon",
    "Model": null,
    "Unlock": "techtree+upgradeBay",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 3
   },
   {
    "Kind": "cannon",
@@ -5548,7 +5565,8 @@ export const MAPDATA = {
    "Battle_Struct": "STR-Cannon",
    "Model": null,
    "Unlock": "techtree+upgradeBay",
-   "HP": null
+   "HP": null,
+   "Power_Priority": 3
   },
   {
    "Kind": "wall",
@@ -5565,7 +5583,8 @@ export const MAPDATA = {
    "Battle_Struct": "STR-Wall",
    "Model": null,
    "Unlock": "contract:1",
-   "HP": null
+   "HP": null,
+   "Power_Priority": null
   },
   {
    "Kind": "wall",
@@ -5582,7 +5601,8 @@ export const MAPDATA = {
    "Battle_Struct": "STR-Wall",
    "Model": null,
    "Unlock": "tech:reinforced_walls",
-   "HP": null
+   "HP": null,
+   "Power_Priority": null
   },
   {
    "Kind": "pylon",
@@ -5599,7 +5619,8 @@ export const MAPDATA = {
    "Battle_Struct": null,
    "Model": null,
    "Unlock": "contract:1",
-   "HP": 300
+   "HP": 300,
+   "Power_Priority": null
   }
  ],
  "outpostContracts": [
@@ -6824,7 +6845,8 @@ export const MAPDATA = {
    "Build_Sec": 0,
    "Power_Draw": 1,
    "Water_Reach": 0,
-   "Unlock": "granted by F1"
+   "Unlock": "granted by F1",
+   "Power_Priority": 7
   },
   {
    "Kind": "silo",
@@ -6835,7 +6857,8 @@ export const MAPDATA = {
    "Build_Sec": 180,
    "Power_Draw": 1,
    "Water_Reach": 0,
-   "Unlock": "F1"
+   "Unlock": "F1",
+   "Power_Priority": 7
   },
   {
    "Kind": "pump",
@@ -6846,7 +6869,8 @@ export const MAPDATA = {
    "Build_Sec": 60,
    "Power_Draw": 2,
    "Water_Reach": 4,
-   "Unlock": "irrigated"
+   "Unlock": "irrigated",
+   "Power_Priority": 8
   }
  ],
  "farmContracts": [
