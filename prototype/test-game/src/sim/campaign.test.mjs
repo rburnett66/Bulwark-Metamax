@@ -40,7 +40,7 @@ function runCampaign(seed) {
     // run until the wave's schedule fully drains, sweeping attackers EVERY tick (an undefended base
     // would otherwise die mid-wave); capture the first ground-spawn position on the way
     let sawSpawn = null;
-    // a wave now runs its whole par + 15 s even once swept (the harvest window [MM-story_mwbd4114_28])
+    // a wave now runs its whole 3-minute window even once swept (the harvest window [MM-story_mwbd4114_28])
     for (let i = 0; i < 30 * 240 && !s.result; i++) {
       const evs = stepSim(s, 1 / 30);
       for (const e of evs) {
