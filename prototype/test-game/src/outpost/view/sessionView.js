@@ -192,6 +192,7 @@ export async function openOutpostSessionView(opts = {}) {
     rep.style.paddingTop = '6px';
     const rows = ['While you were away (' + away.away + ')', ...away.built,
       ...away.raids.map((x) => x.label + ' · ' + x.when + (x.lostText ? ' · ' + x.lostText : '')),
+      ...(away.bounty ? ['+' + away.bounty + ' gold from raid kills'] : []),
       ...away.extracted.slice(0, 4).map((x) => '+' + x.units + ' ' + x.name)];
     rows.forEach((t, i) => { const d = doc.createElement(i ? 'div' : 'b'); d.textContent = t; rep.appendChild(d); });
   }
