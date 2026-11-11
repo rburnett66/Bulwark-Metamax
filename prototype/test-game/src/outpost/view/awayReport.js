@@ -9,7 +9,7 @@ import { oreById } from '../../data/ores.js';
 import { PLANETS } from '../../data/planets.js';
 
 const HOUR = 3_600_000, MIN = 60_000;
-const KIND_NAME = { hub: 'Outpost Hub', power: 'Power Station', rig: 'Mining Station', storage: 'Storage Tower', harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay', habitat: 'Habitat' };
+import { OUTPOST_KIND_NAME as KIND_NAME } from '../../data/outpostStructures.js';   // the one name table
 const TIER_COLOUR = { common: '#5fb8ff', uncommon: '#ffd34a' };   // the battle's blue / yellow crystals
 const ROMAN = ['', 'I', 'II', 'III'];
 

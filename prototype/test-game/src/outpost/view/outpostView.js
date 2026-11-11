@@ -53,6 +53,7 @@ import { powerGrids } from '../model.js';
 import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
 import { crumb, lastSessionCrashed } from '../../diag/errorLog.js';
 import { reportButton } from '../../diag/reportPanel.js';
+import { openOutpostSessionView, sessionViewWanted } from './sessionView.js';
 
 const ROOT = new URL('../../../', import.meta.url).href;   // the game root (prototype/test-game/)
 const LIVE_TICK = 1;   // seconds between live advances of the outpost
@@ -64,6 +65,10 @@ const LIVE_TICK = 1;   // seconds between live advances of the outpost
  * → { closed: Promise, close(), handle } — handle exposes state and hooks for the review page and measurements.
  */
 export async function openOutpostView(opts = {}) {
+  // One Battle UX S2.4a [MM-subtask_mwciiylh_31]: ?outpost=session opens the outpost on the shared battle session
+  // (sessionView.js); this view stays the default until the owner's playtest, then S2.4d deletes it
+  const doc0 = (opts.mount && opts.mount.ownerDocument) || (typeof document !== 'undefined' ? document : null);
+  if (doc0 && doc0.defaultView && sessionViewWanted(doc0.defaultView)) return openOutpostSessionView(opts);
   // never a dead end (owner 2026-11-08, iPhone: stuck on LANDING AT THE OUTPOST…, nothing answered): the loading screen
   // names the step it is on and offers BACK after a while; a failure shows what failed, with BACK
   const stage = { step: 'starting', host: null, loading: null };

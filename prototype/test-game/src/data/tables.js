@@ -1518,6 +1518,16 @@ export function getUnitDef(unitId) {
 // (sim/structures.js) serves the battle and the outpost alike.
 export const OUTPOST_STRUCTURES = buildOutpostStructures(MAPDATA.outpostStructures, STRUCTURES);
 
+/**
+ * The battle tower a structure looks and fires like: an outpost defense ('OUT-mg') is its battle tower ('STR-MG');
+ * everything else is itself. The 3D view and the combat FX key their models and rounds on this, so an outpost gun is
+ * drawn and shoots exactly as the battle's [MM-subtask_mwciiylh_31].
+ */
+export function towerStructId(structId) {
+  const o = OUTPOST_STRUCTURES[structId];
+  return (o && o.battleStruct) || structId;
+}
+
 export function getStructureDef(structId) {
   const def = STRUCTURES[structId] || OUTPOST_STRUCTURES[structId];
   if (!def) throw new Error('tables.getStructureDef: unknown structId "' + structId + '"');

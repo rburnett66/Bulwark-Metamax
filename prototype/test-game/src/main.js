@@ -527,17 +527,13 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   // HUD
   // ---------------------------------------------------------------------
+  // the build rail's pick, deselect and the selection panel's UPGRADE / SELL / REPAIR are the session's (every mode's)
   const hud = session.createHud({
-    onBuildSelect: (structId) => {
-      ui.buildSelection = structId;
-      if (structId !== null) ui.selectedStructureId = null;
-    },
     onStartWave: () => {
       if (interlude) { endInterlude(); return; }
       submit({ type: 'startWave' });
     },
     onNextWave: () => { endInterlude(); },
-    onDeselect: () => { ui.selectedUnitId = null; ui.selectedStructureId = null; },
     // NEXT on the harvester panel: select the next live harvester (owner 2026-11-09)
     onNextHarvester: () => { const id = sim ? nextHarvesterId(sim, ui.selectedUnitId) : null; if (id != null) { ui.selectedUnitId = id; ui.selectedStructureId = null; ui.selectedResourceId = null; } },
     onMainMenu: () => { if (hud && hud.hideResult) hud.hideResult(); menu.open('survey'); },   // back to the Survey: next campaign one click away [MM-story_mvftq4h6_k]
@@ -573,23 +569,6 @@ export function boot(mountEl, seed) {
     },
     onMapSelect: (mapId) => { pendingCarry = null; void selectMap(mapId); },   // hand-picking a map = fresh start
     defaultMapId: DEFAULT_MAP_ID,
-    // SUBJECT→ACTION grammar (owner): a completed action CONSUMES the selection; a failed one keeps
-    // the subject and says why — same rules as the harvester flow (input.js).
-    onUpgrade: (id) => {
-      const res = submit({ type: 'upgrade', id });
-      if (res && res.ok) ui.selectedStructureId = null;
-      else flashMessage(hud, 'Upgrade: ' + ((res && res.reason) || 'unavailable'));
-    },
-    onSell: (id) => {
-      const res = submit({ type: 'sell', id });
-      if (res && res.ok) ui.selectedStructureId = null;
-      else flashMessage(hud, 'Sell: ' + ((res && res.reason) || 'unavailable'));
-    },
-    onRepair: (id) => {
-      const res = submit({ type: 'repair', id });
-      if (res && res.ok) ui.selectedStructureId = null;
-      else flashMessage(hud, 'Repair: ' + ((res && res.reason) || 'unavailable'));
-    },
     onExportLog: () => {
       try {
         if (ended && mode === 'play' && !log.finalHash) log.finalHash = hashState(sim);

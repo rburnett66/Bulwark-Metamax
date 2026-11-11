@@ -19,15 +19,16 @@ import { mountOf } from '../structures/baseMounts.js';
 import { cellToWorld } from '../camera.js';
 import { SYSTEM_MODELS, SYSTEM_SCALE, tierModelKey } from '../structures/systemModels.js';
 import { mergeSystemModel, SYSTEM_KINDS, SYSTEM_STRUCTS } from '../structures/system3d.js';
-import { STRUCTURES } from '../../data/tables.js';
+import { STRUCTURES, towerStructId } from '../../data/tables.js';
 
 const OK = 0x5dff8f, BAD = 0xff4040;
 export const OUTLINE = Object.freeze({ ok: 0x52e8ff, bad: 0xff3a3a, width: 0.14, fill: 0.16 });   // width in model units
 
 /** The System model a structure id builds as (tier 1), or null (mine drone, harvester bay → the block). */
 export function ghostModelKey(structId) {
-  const def = STRUCTURES[structId];
-  const m = SYSTEM_STRUCTS[structId] || (def && SYSTEM_KINDS[def.kind]);
+  const sid = towerStructId(structId);   // an outpost defense's ghost is its battle tower's
+  const def = STRUCTURES[sid];
+  const m = SYSTEM_STRUCTS[sid] || (def && SYSTEM_KINDS[def.kind]);
   return m && SYSTEM_MODELS[m] ? tierModelKey(m, 1) : null;
 }
 
