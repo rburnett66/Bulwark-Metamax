@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.11-a';
-export const VERSION_NOTE = 'The battle view, input and clock live in one shared battle session (no gameplay change)';
+export const VERSION = 'v2026.11.11-b';
+export const VERSION_NOTE = 'Placement keeps a one-cell lane round buildings that ask for it (battle towers unchanged)';
