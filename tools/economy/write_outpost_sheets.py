@@ -151,7 +151,7 @@ PARAMS = [
     ["Harvester_Cap", 1, "count", "harvesters an outpost may own once its Resource Bay is built (owner 2026-11-09: start at 1; outpost land is sparse next to a survey location)"],
     ["Harvester_Max", 2, "count", "the most harvesters an outpost can ever hold (owner 2026-11-09: cap 2; Dock 3 through the Upgrade Bay raises 1 -> 2, O10)"],
     ["Hopper_Hours", 4, "h", "the Resource Bay's hopper holds this many hours of its harvesters' gathering (design 6, O10)"],
-    ["Harvest_Route_Mult", 1.3, "x", "a harvester's drive is the straight line from the Resource Bay to its field times this (the ramps' detour, O10)"],
+    ["Harvest_Route_Mult", 1.16, "x", "a harvester's drive is the straight line from the Resource Bay to its field times this (the ramps' detour, O10)"],
     ["Harvest_Rate_Mult", 1, "x", "outpost harvesters gather at the battle harvest rate times this (1 = the battle's rate, design 6; tune here)"],
     ["Surface_Respawn_Mult", 0.05, "x", "owner 2026-11-07: outpost surface fields regrow at 5% of the battle maps' rate (units per cell / Primary_Respawn_Sec); stock as a battle field (O10)"],
     ["Gun_Cap", 4, "count", "guns (Machine Guns and Cannons; walls do not count) the hub crews without a Habitat (owner 2026-11-09: 4 base)"],

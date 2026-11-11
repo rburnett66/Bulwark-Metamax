@@ -215,6 +215,7 @@ export async function openOutpostSessionView(opts = {}) {
   title.style.font = '900 13px/1.2 Orbitron, sans-serif';
   title.style.letterSpacing = '.14em';
   const status = line('op-s-status');
+  const threatLine = line('op-s-threat');   // raid threat: size · raids/day (hudModel.raidThreat) [MM-story_mwco8she_38]
   const storeLine = line('op-s-store');
   const btn = (label, fn) => {
     const b = doc.createElement('button');
@@ -256,6 +257,7 @@ export async function openOutpostSessionView(opts = {}) {
     const issues = onlineIssues(v, map);
     title.textContent = 'OUTPOST';
     status.textContent = h.online ? (h.raidInbound ? 'Online · raid inbound' : 'Online') : ('Offline — ' + (issues.join('; ') || 'ready to go online'));
+    threatLine.textContent = h.threat.text;
     storeLine.textContent = 'Storage ' + Math.floor(h.storage.units) + ' / ' + Math.floor(h.storage.cap) + ' · ' + (h.loads || 0) + (h.loads === 1 ? ' load' : ' loads') + ' ready';
     onlineBtn.style.display = h.online ? 'none' : '';
     onlineBtn.disabled = issues.length > 0;

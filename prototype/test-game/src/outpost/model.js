@@ -108,6 +108,9 @@ export const windowMs = (params = OUTPOST) => params.Raid_Min_Gap_Hours * HOUR;
  * raided at the base rate. A build or a defense still under way counts once it finishes by `at`; a defense being sold
  * stops counting once its dismantling is done. It counts what stands, not the gold spent, so the player reads it at a
  * glance: every pad filled and every defense placed (walls included) adds one. Pure. [MM-story_mwcfrtu4_2w]
+ * The farm's buildings count too (owner 2026-11-11, on #281: "farm buildings count: yes"): the farm is o.farm on this
+ * same record (farm/model.js), so a Farmhouse, Silo or Pump adds one once its build is done by `at`. Plots do not count:
+ * they are ground, not buildings. Tier does not weigh in (pending the owner). [MM-story_mwco8she_38]
  */
 export function outpostSize(o, at = o.t) {
   let n = 0;
@@ -119,6 +122,7 @@ export function outpostSize(o, at = o.t) {
     if (d.selling && d.selling.done <= at) continue;
     n++;
   }
+  for (const b of Object.values((o.farm && o.farm.buildings) || {})) if (b && b.done <= at) n++;
   return n;
 }
 

@@ -5969,7 +5969,7 @@ export const MAPDATA = {
   "Harvester_Cap": 1,
   "Harvester_Max": 2,
   "Hopper_Hours": 4,
-  "Harvest_Route_Mult": 1.3,
+  "Harvest_Route_Mult": 1.16,
   "Harvest_Rate_Mult": 1,
   "Surface_Respawn_Mult": 0.05,
   "Gun_Cap": 4,

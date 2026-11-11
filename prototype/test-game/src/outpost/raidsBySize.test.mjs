@@ -158,3 +158,36 @@ test('the Sensor Spire\'s forecast reads the same rule: nextRaidAt is the raid a
     assert.equal(at, first ? first.at : null, `seed ${seed}`);
   }
 });
+
+// Owner 2026-11-11 (on #281): farm buildings count toward the base's size [MM-story_mwco8she_38]. The farm is o.farm on
+// the outpost record (farm/model.js), so the same pure rule reads it: a finished Farmhouse / Silo / Pump adds one, a
+// farm building still being built does not, and plots (ground) never do.
+test('outpostSize counts the farm\'s finished buildings, not its plots nor a build still under way', () => {
+  const o = outpost(7);
+  const ref = outpostSize(o, T0);
+  o.farm = {
+    plots: { p1: { id: 'p1', x: 0, y: 0, w: 2, h: 2 } },
+    buildings: {
+      f1: { kind: 'farmhouse', x: 4, y: 4, w: 2, h: 2, tier: 1, done: T0 - HOUR },
+      f2: { kind: 'silo', x: 8, y: 4, w: 1, h: 1, tier: 1, done: T0 + HOUR },
+    },
+    next: 3,
+  };
+  assert.equal(outpostSize(o, T0), ref + 1, 'the Farmhouse stands; the Silo is still being built; the plot is ground');
+  assert.equal(outpostSize(o, T0 + HOUR), ref + 2, 'the Silo is finished');
+  assert.equal(outpostSize({ ...o, farm: undefined }, T0 + HOUR), ref, 'an outpost with no farm is unchanged');
+});
+
+test('farm buildings raise the raid chance in advance() exactly as defenses do (same draws, deterministic)', () => {
+  for (const seed of [5, 19, 333]) {
+    const farmed = outpost(seed);
+    farmed.farm = { plots: {}, buildings: {}, next: 1 };
+    for (let i = 0; i < 6; i++) farmed.farm.buildings[`f${i}`] = { kind: 'pump', x: 2 * i, y: 9, w: 1, h: 1, tier: 1, done: T0 };
+    const walled = outpost(seed, 6);
+    const a = advance(farmed, T0 + 3 * DAY, { map, raid: held }).report.raids.map((r) => r.at);
+    const b = advance(walled, T0 + 3 * DAY, { map, raid: held }).report.raids.map((r) => r.at);
+    assert.deepEqual(a, b, `seed ${seed}: six farm buildings weigh what six walls weigh`);
+    assert.ok(a.length >= advance(outpost(seed), T0 + 3 * DAY, { map, raid: held }).report.raids.length, 'never raided less');
+    assert.deepEqual(advance(farmed, T0 + 3 * DAY, { map, raid: held }).report.raids.map((r) => r.at), a, 'replays the same');
+  }
+});
