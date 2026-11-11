@@ -11,18 +11,23 @@
  *   cost          running total per tier of the rows' Cost (so the battle's upgrade charge = that tier's row price);
  *                 price = the rows' Cost per tier. A defense keeps its battle stats at the outpost's prices.
  *   buildTime     tier 1's Build_Sec;  upgradeTime  tier 2's Build_Sec (0 when there is none)
- *   hp / dps      a defense: its battle tower's; a building: not a combat target (`targetable: false`, hp 1)
- *   footprint     the hub 3×3, every other building 2×2 (the size of its pad on every outpost map); a defense 1×1
+ *   hp / dps      a defense: its battle tower's; a building: not a combat target (`targetable: false`), hp = the
+ *                 rows' HP where the workbook gives one (the Pylon), else 1
+ *   footprint     the hub 3×3, the Pylon 1×1, every other building 2×2 (the size of its pad on every outpost map);
+ *                 a defense 1×1
  *   spacing       1 for buildings (a harvester-wide lane, owner 2026-11-11), 0 for defenses (they pack like towers)
- *   power         { draw, supply, reach } per tier, for the grid (S2b)
+ *   power         { draw, supply, reach } per tier, for the grid (S2b): a node is a kind with reach (a Power Station
+ *                 supplies, a Pylon only links); the coverage overlay draws `reach` as the `power` class
  *
  * These live OUTSIDE tables.STRUCTURES on purpose: the battle's build rail lists STRUCTURES, and the outpost's kinds
  * must not appear in a battle. getStructureDef (tables.js) resolves both. Pure: no imports, so tables.js can call it.
  */
 
 /** The outpost kinds that are buildings (pad kinds today) — everything else with a Battle_Struct is a defense. */
-export const OUTPOST_BUILDING_KINDS = Object.freeze(['hub', 'power', 'rig', 'storage', 'resourceBay', 'upgradeBay', 'habitat']);
-const FOOTPRINT = Object.freeze({ hub: Object.freeze({ w: 3, h: 3 }) });
+export const OUTPOST_BUILDING_KINDS = Object.freeze(['hub', 'power', 'pylon', 'rig', 'storage', 'resourceBay', 'upgradeBay', 'habitat']);
+/** The kinds that are energy-grid NODES (outpost/model.js powerGrids): a Power Station supplies, a Pylon only links. */
+export const POWER_NODE_KINDS = Object.freeze(['power', 'pylon']);
+const FOOTPRINT = Object.freeze({ hub: Object.freeze({ w: 3, h: 3 }), pylon: Object.freeze({ w: 1, h: 1 }) });
 const BUILDING_FOOTPRINT = Object.freeze({ w: 2, h: 2 });
 const UNIT_FOOTPRINT = Object.freeze({ w: 1, h: 1 });
 const num = (v) => (typeof v === 'number' ? v : 0);
@@ -33,7 +38,7 @@ const num = (v) => (typeof v === 'number' ? v : 0);
  * The Harvester Bay is the Resource Bay (owner 2026-11-07); the turret tower is the Cannon Tower.
  */
 export const OUTPOST_KIND_NAME = Object.freeze({
-  hub: 'Outpost Hub', power: 'Power Station', rig: 'Mining Station', storage: 'Storage Tower',
+  hub: 'Outpost Hub', power: 'Power Station', pylon: 'Pylon', rig: 'Mining Station', storage: 'Storage Tower',
   harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay', habitat: 'Habitat', cannon: 'Cannon Tower', mg: 'Machine Gun', wall: 'Wall',
 });
 
@@ -77,7 +82,7 @@ export function buildOutpostStructures(rows, battle) {
         ...common,
         name: OUTPOST_KIND_NAME[kind] || kind, kind: 'building',
         armorClass: 'Structure', damageType: 'Kinetic', canTargetDomains: Object.freeze([]),
-        hp: Object.freeze(tiers.map(() => 1)), dps: Object.freeze(tiers.map(() => 0)), range: 0,
+        hp: Object.freeze(tiers.map((r) => num(r.HP) || 1)), dps: Object.freeze(tiers.map(() => 0)), range: 0,
         targetable: false,                       // raiders breach a building by reaching it; they never shoot it
         sellTime: 0,
         footprint: FOOTPRINT[kind] || BUILDING_FOOTPRINT,

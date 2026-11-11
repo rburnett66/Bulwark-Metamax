@@ -9,6 +9,9 @@
  *     the defensive net and its gaps read at a glance (amber for anti-ground, blue for anti-air);
  *   - while PLACING a tower (build tool armed): the same coverage map plus the ghost's own range at the hover cell,
  *     so the player sees the gap they are filling before they pay;
+ *   - the energy grid's NODES (a Power Station, a Pylon — One Battle UX S2b) are a third class, `power` (cyan), at their
+ *     reach: select one and every live node shows its reach; arm one and the ghost's reach joins the map; arming any
+ *     power-drawing building shows the map too, so the player sees where power reaches before paying;
  *   - while placing a MINE: every armed mine's trigger ring (the minefield's gaps);
  *   - a selected UNIT: a ring on it and a dashed ring at its attack reach.
  * planCoverage is pure (state, ui, def lookup → ring list); createCoverageView draws it as ONE instanced draw.
@@ -16,11 +19,23 @@
 import { cellToWorld } from '../camera.js';
 import { towerRange } from '../../data/tables.js';
 
-export const COVER_COLORS = Object.freeze({ antiGround: [0.88, 0.69, 0.44], antiAir: [0.44, 0.63, 0.88], select: [1, 1, 1], unit: [1, 0.5, 0.5], mine: [0.88, 0.19, 0.19] });
+export const COVER_COLORS = Object.freeze({ antiGround: [0.88, 0.69, 0.44], antiAir: [0.44, 0.63, 0.88], power: [0.3, 0.86, 0.96], select: [1, 1, 1], unit: [1, 0.5, 0.5], mine: [0.88, 0.19, 0.19] });
 const TOWER = new Set(['antiGround', 'antiAir']);
 
-// a placed structure's reach at its tier — upgrades add range (tables.towerRange); build previews are tier 1
-const rangeOf = (getDef, id, tier) => { try { return towerRange(getDef(id), tier); } catch (e) { return 0; } };
+// An energy-grid NODE (One Battle UX S2b): a structure def whose power carries reach — the outpost's Power Station and
+// Pylon (data/outpostStructures.js `power[tier-1].reach`). Its reach is the third coverage class, `power`.
+const tierOf = (list, tier) => list[Math.min(Math.max(1, Math.floor(tier || 1)), list.length) - 1];
+const powerReach = (def, tier) => (def && Array.isArray(def.power) && def.power.length ? (tierOf(def.power, tier) || {}).reach || 0 : 0);
+const drawsPower = (def) => !!(def && Array.isArray(def.power) && def.power.some((p) => p && p.draw > 0));
+/** The coverage class a def belongs to: 'antiGround' | 'antiAir' (towers), 'power' (grid nodes), or null. */
+export function coverClass(def) {
+  if (!def) return null;
+  if (TOWER.has(def.kind)) return def.kind;
+  return Array.isArray(def.power) && def.power.some((p) => p && p.reach > 0) ? 'power' : null;
+}
+// a structure's radius at its tier: a node's reach, else its weapon range — upgrades add range (tables.towerRange)
+const radiusOf = (def, tier) => (coverClass(def) === 'power' ? powerReach(def, tier) : towerRange(def, tier));
+const defOf = (getDef, id) => { try { return getDef(id); } catch (e) { return null; } };
 
 /**
  * → [{ x, z, r | w,h, shape: 'circle'|'square', dash, fill, color: [r,g,b], alpha, primary }]
@@ -31,32 +46,38 @@ export function planCoverage(state, ui, getDef) {
   if (!state || !ui) return out;
   const structures = state.structures ? Array.from(state.structures.values()) : [];
   const centre = (s) => { const fp = s.footprint || { w: 1, h: 1 }; return { x: s.pos.x + fp.w / 2, z: s.pos.y + fp.h / 2, w: fp.w, h: fp.h }; };
-  const coverage = (kind, skipId) => {
+  // every live structure of a coverage class shows its radius as a faint filled ring
+  const coverage = (cls, skipId) => {
     for (const s of structures) {
-      if (s.id === skipId || s.kind !== kind || s.lifecycle === 'Destroyed' || !(s.hp > 0)) continue;
-      const r = rangeOf(getDef, s.structId, s.tier);
+      if (s.id === skipId || s.lifecycle === 'Destroyed' || !(s.hp > 0)) continue;
+      const def = defOf(getDef, s.structId);
+      if (coverClass(def) !== cls) continue;
+      const r = radiusOf(def, s.tier);
       if (r <= 0) continue;
       const c = centre(s);
-      out.push({ shape: 'circle', x: c.x, z: c.z, r, dash: 0, fill: 1, color: COVER_COLORS[kind], alpha: 0.42, primary: false });
+      out.push({ shape: 'circle', x: c.x, z: c.z, r, dash: 0, fill: 1, color: COVER_COLORS[cls], alpha: 0.42, primary: false });
     }
   };
   const sel = ui.selectedStructureId != null && state.structures ? state.structures.get(ui.selectedStructureId) : null;
   if (sel && sel.pos) {
-    const c = centre(sel), r = rangeOf(getDef, sel.structId, sel.tier);
-    if (TOWER.has(sel.kind) && r > 0) coverage(sel.kind, sel.id);
+    const def = defOf(getDef, sel.structId), cls = coverClass(def);
+    const c = centre(sel), r = def ? radiusOf(def, sel.tier) : 0;
+    if (cls && r > 0) coverage(cls, sel.id);
     out.push({ shape: 'square', x: c.x, z: c.z, w: c.w, h: c.h, dash: 0, fill: 0, color: COVER_COLORS.select, alpha: 0.95, primary: true });
     if (r > 0) out.push({ shape: 'circle', x: c.x, z: c.z, r, dash: 1, fill: 0.35, color: COVER_COLORS.select, alpha: 0.85, primary: true });
   }
   if (ui.buildSelection) {
-    let def = null;
-    try { def = getDef(ui.buildSelection); } catch (e) { def = null; }
-    if (def && TOWER.has(def.kind)) {
-      if (!sel) coverage(def.kind, null);
-      if (ui.hoverCell && def.range > 0) {
+    const def = defOf(getDef, ui.buildSelection), cls = coverClass(def);
+    if (cls) {
+      if (!sel) coverage(cls, null);
+      const r = radiusOf(def, 1);
+      if (ui.hoverCell && r > 0) {
         const fp = def.footprint || { w: 1, h: 1 };
-        out.push({ shape: 'circle', x: ui.hoverCell.x + fp.w / 2, z: ui.hoverCell.y + fp.h / 2, r: def.range, dash: 1, fill: 0.35,
+        out.push({ shape: 'circle', x: ui.hoverCell.x + fp.w / 2, z: ui.hoverCell.y + fp.h / 2, r, dash: 1, fill: 0.35,
           color: ui.hoverValid ? COVER_COLORS.select : COVER_COLORS.mine, alpha: 0.8, primary: true });
       }
+    } else if (drawsPower(def)) {
+      if (!sel) coverage('power', null);   // a power-drawing building: where the grid reaches, before the player pays
     } else if (def && def.kind === 'mine' && state.mines) {
       for (const m of state.mines.values()) {
         if (m.state !== 'armed') continue;

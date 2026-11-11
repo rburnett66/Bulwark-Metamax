@@ -424,3 +424,49 @@ test('selling a defense pays now and dismantles it over the battle sellTime', as
   assert.ok(advance(r.outpost, o.t + ms, ctx()).outpost.defenses.every((x) => x.id !== id), 'gone when dismantled');
   assert.ok(sellStructure(o, { defense: id }).outpost.defenses.every((x) => x.id !== id), 'a bare call removes it at once');
 });
+
+// ── the energy grid by proximity (One Battle UX S2b [MM-story_mwc9plas_2h], plan §5.2) — on FREE positions ──────────
+test('energy grid: pylons link a grid across free positions; reach-only nodes, priority unchanged', async () => {
+  const { structureDef } = await import('../data/outpost.js');
+  const P1 = structureDef('power', 1), PY = structureDef('pylon', 1), RIG = structureDef('rig', 1);
+  assert.ok(PY.reach > 0 && PY.supply === 0 && PY.draw === 0, 'a pylon: reach only');
+  const free = { pads: [], deposits: [], conduits: [] };   // no pads: every building carries its own `at`
+  const at = (kind, x, y, w = 2, h = 2, tier = 1) => ({ kind, tier, at: { x, y, w, h } });
+  // a station at the origin (centre 1,1); a rig just beyond its reach
+  const far = P1.reach + 3;
+  const base = { t: 0, defenses: [], pads: { s: at('power', 0, 0), r: at('rig', far, 0) } };
+  assert.equal(powerGrids(base, free).off.r, 'reach', 'beyond the station');
+  // a pylon between them links to the station (within the larger reach) and covers the rig
+  const mid = Math.floor(far / 2);
+  const linked = { ...base, pads: { ...base.pads, y1: at('pylon', mid, 0, 1, 1) } };
+  let g = powerGrids(linked, free);
+  assert.ok(g.powered.has('r'), JSON.stringify(g.off));
+  assert.equal(g.grids.length, 1);
+  assert.deepEqual(g.grids[0].stations, ['s'], 'a pylon is not a station');
+  assert.deepEqual([...g.grids[0].nodes].sort(), ['s', 'y1']);
+  assert.deepEqual([g.grids[0].supply, g.grids[0].draw], [P1.supply, RIG.draw], 'the pylon adds no supply and draws none');
+  assert.equal(g.off.y1, undefined, 'a pylon is never a consumer');
+  // a chain of pylons carries the grid further; pylons alone (no station linked) carry no power
+  const span = PY.reach * 3;
+  const chain = { t: 0, defenses: [], pads: { s: at('power', 0, 0), a: at('pylon', P1.reach, 0, 1, 1), b: at('pylon', P1.reach + PY.reach, 0, 1, 1),
+    r: at('rig', P1.reach + PY.reach * 2 - 1, 0) } };
+  assert.ok(powerGrids(chain, free).powered.has('r'), 'station → pylon → pylon → rig');
+  const island = { t: 0, defenses: [], pads: { s: at('power', 0, 0), a: at('pylon', span + 20, 0, 1, 1), r: at('rig', span + 22, 0) } };
+  g = powerGrids(island, free);
+  assert.equal(g.off.r, 'reach', 'a pylon with no station on its grid has no power to give');
+  assert.equal(g.grids.length, 1, 'the island is not a grid');
+  // short supply: the consumers on the pylon's grid are served in PRIORITY order (storage before rigs)
+  const n = Math.floor(P1.supply / RIG.draw) + 1;       // one rig more than the station feeds
+  const pads = { s: at('power', 0, 0), y: at('pylon', 4, 0, 1, 1), st: at('storage', 0, 4) };
+  for (let i = 0; i < n; i++) pads['r' + i] = at('rig', 3 * i, 7);
+  g = powerGrids({ t: 0, defenses: [], pads }, free);
+  assert.ok(g.powered.has('st'), 'storage first');
+  assert.equal(Object.values(g.off).filter((v) => v === 'supply').length >= 1, true, JSON.stringify(g.off));
+  assert.ok(g.grids[0].draw <= g.grids[0].supply);
+  // a consumer joins the NEAREST covering node: two separate grids both reach the rig; the second one's pylon is nearer
+  const two = { t: 0, defenses: [], pads: { s1: at('power', 0, 0), s2: at('power', 26, 0), y2: at('pylon', 18, 0, 1, 1), r: at('rig', 10, 0) } };
+  g = powerGrids(two, free);
+  assert.equal(g.grids.length, 2);
+  assert.ok(Math.hypot(11 - 1, 0) <= P1.reach && Math.hypot(11 - 18.5, 0.5) <= PY.reach, 'both cover the rig');
+  assert.ok(g.grids.find((x) => x.stations.includes('s2')).powered.includes('r'), 'joined through the nearer pylon');
+});

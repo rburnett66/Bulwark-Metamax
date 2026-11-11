@@ -69,8 +69,9 @@ def ore_rows():
 
 
 STRUCT_COLS = ["Kind", "Tier", "Cost", "Value", "Build_Sec", "Power_Draw", "Power_Supply", "Power_Reach",
-               "Bay_Hours", "Rate_Mult", "Capacity_Mult", "Battle_Struct", "Model", "Unlock"]
+               "Bay_Hours", "Rate_Mult", "Capacity_Mult", "Battle_Struct", "Model", "Unlock", "HP"]
 # Cost: the price to build one with the player's own gold. Value: what a repair is priced against (design §6.1).
+# HP: a building's hit points where it has them (the Pylon); blank = 1 (buildings are breached, never shot).
 # Owner 2026-11-07: the contract grants only the hub; the player buys power, the mining station, storage, the Resource
 # Bay, harvesters and the defenses. The first setup (Power I + Rig I + Storage I, 1,500) is sized to the gold a player
 # banks by map 3 at 3 stars and pays back from iron (720 gold an hour) in about two hours (design §6.1).
@@ -99,6 +100,10 @@ STRUCTS = [
     ["cannon", 3, 6000, 6000, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
     ["wall", 1, 400, 400, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "contract:1"],
     ["wall", 2, 1000, 1000, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "tech:reinforced_walls"],
+    # Pylon (One Battle UX S2b, owner 2026-11-11 "keep it very simple"): a 1x1 grid node with reach only — one tier,
+    # no supply, no draw. Starting numbers for tuning: cheap (a quarter of a Power Station), reach a little short of
+    # Power Station I's 10, HP (the HP column: buildings without one are not combat targets) under a Wall I's 600.
+    ["pylon", 1, 150, 150, 30, 0, 0, 8, "", "", "", "", "", "contract:1", 300],
 ]
 
 CONTRACT_COLS = ["Planet_Key", "Step", "Title", "Ore_Tier", "Deliver", "Raids_Held", "Gold", "Loyalty", "XP", "Unlocks"]
