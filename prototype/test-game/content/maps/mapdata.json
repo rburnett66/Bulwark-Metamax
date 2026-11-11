@@ -5951,7 +5951,9 @@
   "Harvest_Rate_Mult": 1,
   "Surface_Respawn_Mult": 0.05,
   "Gun_Cap": 4,
-  "Habitat_Guns_Per_Tier": 4
+  "Habitat_Guns_Per_Tier": 4,
+  "Raid_Chance_Per_Size": 0.05,
+  "Raid_Chance_Max": 0.9
  },
  "outpostTech": [
   {

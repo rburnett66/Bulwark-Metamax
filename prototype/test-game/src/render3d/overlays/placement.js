@@ -21,8 +21,15 @@ import { SYSTEM_MODELS, SYSTEM_SCALE, tierModelKey } from '../structures/systemM
 import { mergeSystemModel, SYSTEM_KINDS, SYSTEM_STRUCTS } from '../structures/system3d.js';
 import { STRUCTURES, towerStructId, getStructureDef } from '../../data/tables.js';
 
-const OK = 0x5dff8f, BAD = 0xff4040;
-export const OUTLINE = Object.freeze({ ok: 0x52e8ff, bad: 0xff3a3a, width: 0.14, fill: 0.16 });   // width in model units
+const OK = 0x5dff8f, BAD = 0xff4040, WARN = 0xffb43c;
+export const OUTLINE = Object.freeze({ ok: 0x52e8ff, bad: 0xff3a3a, warn: 0xffb43c, width: 0.14, fill: 0.16 });   // width in model units
+
+/**
+ * The ghost's three states [MM-story_mwc9plas_2h] (One Battle UX §5.2): 'bad' when the sim refuses the spot, 'warn'
+ * (amber) when it accepts it with a warning (ui.hoverWarn — the mode's state.placementWarnings, e.g. the outpost's
+ * 'no power in reach'), else 'ok'. Read from the ui only; validity is input.js's.
+ */
+export const ghostState = (ui) => (!ui || !ui.hoverValid ? 'bad' : ui.hoverWarn ? 'warn' : 'ok');
 
 /**
  * The footprint a structure id covers, { w, h } in cells (1 × 1 when unknown) — the block ghost is drawn at this size,
@@ -137,7 +144,7 @@ export function createPlacementGhost(THREE, scene) {
         want.group.visible = true;
         want.group.position.set(x, y, z);
         want.group.scale.setScalar(want.k * (mt ? mt.s : 1));
-        const c = ui.hoverValid ? OUTLINE.ok : OUTLINE.bad;
+        const c = OUTLINE[ghostState(ui)];
         bodyMat.color.setHex(c); hullMat.uniforms.uColor.value.setHex(c);
         return true;
       }
@@ -145,7 +152,7 @@ export function createPlacementGhost(THREE, scene) {
       const fp = ghostFootprint(ui.buildSelection);
       group.position.set(cellToWorld(cell.x + (fp.w - 1) / 2), y, cellToWorld(cell.y + (fp.h - 1) / 2));
       group.scale.set(fp.w, 1, fp.h);
-      const c = ui.hoverValid ? OK : BAD;
+      const c = { ok: OK, warn: WARN, bad: BAD }[ghostState(ui)];
       fillMat.color.setHex(c);
       edgeMat.color.setHex(c);
       return true;

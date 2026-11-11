@@ -32,7 +32,9 @@ import { flashMessage } from '../../render/hud.js';
 import { applyCommand } from '../../sim/core.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../../data/outpostStructures.js';
 import { DEFENSE_KINDS } from '../../data/outpost.js';
+import { getStructureDef } from '../../data/tables.js';
 import { toLiveSim, fromLiveSim, syncHarvestPower } from '../liveSim.js';
+import { ghostPowerOf, powerWarning } from '../placementRules.js';
 import { createVisitRaids } from '../visitRaids.js';
 import { outpostMapFor } from '../outpostMap.js';
 import { outpostBattleMap, bakedSlugFor } from './outpostBoard.js';
@@ -94,6 +96,10 @@ export async function openOutpostSessionView(opts = {}) {
   const catalogue = createCatalogue(outpostCatalogueIds());
   // the live state, (re)built from the save — on arrival and after an outpost-economy action (actOnSave below)
   let t0 = 0, live = null, sim = null, raids = null;
+  // the ghost's power answer (S2b §5.2), from the outpost as last read (`view`, refreshed a few times a second below):
+  // the battle's shared ghost goes amber on its warning, and the preview conduit draws its route
+  let view = null;
+  const ghostOf = ghostPowerOf(() => view, map);
   function rebuild(outpost, gold) {
     // visit raids (S2.4c): the probe count and the countdown carry over a mid-visit rebuild (a sale, going online)
     const carry = raids ? { probes: raids.probes, nextIn: Math.max(0, raids.nextAt - sim.time) } : {};
@@ -101,6 +107,8 @@ export async function openOutpostSessionView(opts = {}) {
     live = toLiveSim(outpost, { map, now: t0, gold });
     sim = live.state;
     sim.placementRules = [...(sim.placementRules || []), lockRule(catalogue)];
+    // legal but unpowered → the shared ghost's amber (sim/structures.js placementWarnings → ui.hoverWarn)
+    sim.placementWarnings = [...(sim.placementWarnings || []), powerWarning(() => view, map, ghostOf)];
     // small raids come while the player is here, once the outpost is online (owner rules §5b) — waves of the live sim
     raids = outpost.online ? createVisitRaids(sim, { planet, seed: outpost.seed, ...carry }) : null;
   }
@@ -111,8 +119,10 @@ export async function openOutpostSessionView(opts = {}) {
   let closed = false;
   let hud = null;
   const submit = (cmd) => {
+    const warn = cmd && cmd.type === 'place' ? ui.hoverWarn : null;
     const res = applyCommand(sim, cmd);
     if (!res.ok && res.reason && hud) flashMessage(hud, res.reason);
+    else if (res.ok && warn && hud) flashMessage(hud, 'Built unpowered · ' + warn);
     return res;
   };
 
@@ -157,7 +167,15 @@ export async function openOutpostSessionView(opts = {}) {
   }
 
   // the outpost's art follows the live state: re-read the save shape a few times a second (cheap), animate each frame
-  let since = 1, view = null, ctx = null, dt = 1 / 60;
+  let since = 1, ctx = null, dt = 1 / 60;
+  /** The preview conduit for the armed build tool: the ghost's route to the node it would join, or nothing. */
+  function previewPlan() {
+    if (!ui.buildSelection || !ui.hoverCell || !ui.hoverValid) return null;
+    let def = null;
+    try { def = getStructureDef(ui.buildSelection); } catch (e) { return null; }
+    const gp = ghostOf(def, ui.hoverCell, ui.buildSelection);
+    return gp && gp.route ? { points: gp.route.points, warn: !!gp.reason } : null;
+  }
   const ctxNow = () => ctx || (ctx = saveSession.ctx(nowOf()));
 
   // ── the outpost's own controls, in the battle HUD (S2.4b) ──────────────────────────────────────────────────
@@ -255,6 +273,7 @@ export async function openOutpostSessionView(opts = {}) {
         try { view = fromLiveSim(sim, live.link, nowOf()).outpost; scene.sync(view, nowOf(), ctxNow()); }
         catch (e) { console.warn('[outpost] scene sync', e); }
       }
+      try { scene.setPreview(previewPlan()); } catch (e) { console.warn('[outpost] preview conduit', e); }
       try { scene.update(dt, view); } catch (e) { console.warn('[outpost] scene update', e); }
     },
   });
