@@ -9,6 +9,9 @@ import { createSim, applyCommand, stepSim, FIXED_DT } from '../sim/core.js';
 import { spacingConflict } from '../sim/structures.js';
 import { outpostPlacementRules } from '../outpost/placementRules.js';
 import { gunCapFor } from '../outpost/model.js';
+import { MAPDATA } from '../../content/maps/mapdata.js';
+
+const rowOf = (kind) => MAPDATA.outpostStructures.find((r) => r.Kind === kind && r.Tier === 1);
 
 const KINDS = [...OUTPOST_BUILDING_KINDS, ...DEFENSE_KINDS];
 
@@ -33,7 +36,7 @@ test('buildings keep a one-cell lane and are not combat targets; defenses are th
     const def = getStructureDef(outpostStructId(kind));
     assert.equal(def.spacing, 1, kind);
     assert.equal(def.targetable, false, kind);
-    assert.deepEqual({ ...def.footprint }, kind === 'hub' ? { w: 3, h: 3 } : { w: 2, h: 2 }, kind);
+    assert.deepEqual({ ...def.footprint }, kind === 'hub' ? { w: 3, h: 3 } : kind === 'pylon' ? { w: 1, h: 1 } : { w: 2, h: 2 }, kind);
   }
   for (const kind of DEFENSE_KINDS) {
     const def = getStructureDef(outpostStructId(kind)), tower = STRUCTURES[structureDef(kind, 1).battleStruct];
@@ -122,4 +125,29 @@ test('the outpost session view offers every buildable outpost kind on the battle
   assert.ok(!ids.includes('OUT-hub'), 'the hub is the base, never built');
   for (const kind of [...OUTPOST_BUILDING_KINDS.filter((k) => k !== 'hub'), ...DEFENSE_KINDS]) assert.ok(ids.includes(outpostStructId(kind)), kind);
   for (const id of ids) assert.ok(getStructureDef(id), id);
+});
+
+// One Battle UX S2b [MM-story_mwc9plas_2h]: the Pylon — 1×1, one tier, reach only; cost, reach and HP are workbook rows.
+test('the Pylon is a one-tier 1×1 grid node with reach only, every number from its Outpost_Structures row', async () => {
+  const { POWER_NODE_KINDS } = await import('./outpostStructures.js');
+  const row = rowOf('pylon'), def = getStructureDef('OUT-pylon');
+  assert.ok(POWER_NODE_KINDS.includes('pylon') && POWER_NODE_KINDS.includes('power'));
+  assert.equal(def.name, 'Pylon');
+  assert.equal(maxTier('pylon'), 1, 'one tier: no upgrade');
+  assert.deepEqual({ ...def.footprint }, { w: 1, h: 1 });
+  assert.equal(def.spacing, 1);
+  assert.deepEqual([...def.cost], [row.Cost]);
+  assert.deepEqual([...def.hp], [row.HP], 'HP is the row');
+  assert.deepEqual({ ...def.power[0] }, { draw: 0, supply: 0, reach: row.Power_Reach }, 'no draw, no supply, reach from the row');
+  assert.ok(row.Power_Reach > 0 && row.Cost > 0 && row.HP > 0);
+  assert.deepEqual([...getStructureDef('OUT-power').hp], [1, 1], 'a building with no HP in its rows keeps hp 1');
+  const { outpostCatalogueIds } = await import('../outpost/view/sessionView.js');
+  assert.ok(outpostCatalogueIds().includes('OUT-pylon'), 'on the outpost build rail');
+  const s = richSim();
+  assert.equal(applyCommand(s, { type: 'place', structId: 'OUT-pylon', cell: { x: 20, y: 6 } }).ok, true);
+  assert.equal(applyCommand(s, { type: 'place', structId: 'OUT-pylon', cell: { x: 21, y: 6 } }).reason, 'spacing', 'keeps the one-cell lane');
+  run(s, def.buildTime + 1);
+  const p = only(s);
+  assert.equal(p.lifecycle, 'Complete');
+  assert.equal(applyCommand(s, { type: 'upgrade', id: p.id }).ok, false, 'no tier 2');
 });

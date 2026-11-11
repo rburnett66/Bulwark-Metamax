@@ -145,7 +145,7 @@ def apply_rework(data):
     return data
 
 
-OUTPOST_KINDS = {"hub", "power", "rig", "storage", "resourceBay", "harvester", "upgradeBay", "habitat", "mg", "cannon", "wall"}
+OUTPOST_KINDS = {"hub", "power", "rig", "storage", "resourceBay", "harvester", "upgradeBay", "habitat", "pylon", "mg", "cannon", "wall"}
 RIG_HEADS = {"auger", "laser", "brine", "crystal", "bore", "shielded"}
 # Owner: outposts have no anti-air and no long range. The battle structures an outpost may use; their stats (range
 # within 5, ground targets) are checked against STRUCTURES by src/data/outpost.test.mjs.

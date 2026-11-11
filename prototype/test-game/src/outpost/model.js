@@ -53,6 +53,7 @@
 import { createRng } from '../sim/rng.js';
 import { ASSUMPTIONS, getStructureDef } from '../data/tables.js';
 import { oresOf, oreById, oreItemId } from '../data/ores.js';
+import { POWER_NODE_KINDS } from '../data/outpostStructures.js';
 import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock } from '../data/outpost.js';
 // the farm is a layer on the outpost (owner rule 7): it grows inside this advance() and its buildings join this power grid
 import { growFarm, farmBuildEvents } from '../farm/grow.js';
@@ -217,32 +218,40 @@ export function collectionRates(o, map, params = OUTPOST) {
 const PRIORITY = { hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, resourceBay: 4, upgradeBay: 5, habitat: 6, farmhouse: 7, silo: 7, pump: 8 };
 
 /**
- * The power grids: stations within reach of each other pool their supply; a consumer joins the grid of the nearest
- * station whose reach covers it, and a grid powers its consumers in priority order until its supply runs out.
- * → { grids: [{ stations, supply, draw, powered }], powered: Set<id>, off: { [id]: 'reach' | 'supply' } }
+ * The power grids, by proximity (One Battle UX S2b, plan §5.2). The NODES are the Power Stations (supply + reach) and
+ * the Pylons (reach only: no supply, no draw — data/outpostStructures.js POWER_NODE_KINDS). Two nodes link when they
+ * are within the larger of their reaches; linked nodes form one grid and pool their supply. A consumer joins the grid
+ * of the nearest node whose reach covers its centre (a node of a pylons-only grid carries no power, so it is no
+ * candidate), and a grid powers its consumers in priority order until its supply runs out. Positions are
+ * buildingRect's, so map pads and free positions answer alike.
+ * → { grids: [{ stations, nodes, supply, draw, powered }], powered: Set<id>, off: { [id]: 'reach' | 'supply' } }
+ * `stations` are a grid's Power Stations, `nodes` all of its nodes (stations and pylons).
  * Ids are pad ids for buildings and defense ids for defenses. Walls draw nothing and are always on. Farm buildings
  * (o.farm.buildings, owner rule 7) are consumers on the same grids once finished at time `t` (default o.t).
  */
 export function powerGrids(o, map, t = o.t) {
-  const stations = Object.entries(o.pads).filter(([, b]) => b.kind === 'power')
-    .map(([id, b]) => ({ id, at: centre(buildingRect(o, map, id)), def: structureDef('power', b.tier) }));
-  // union stations within reach of each other
-  const parent = stations.map((_, i) => i);
+  const nodes = Object.entries(o.pads).filter(([, b]) => POWER_NODE_KINDS.includes(b.kind))
+    .map(([id, b]) => ({ id, kind: b.kind, at: centre(buildingRect(o, map, id)), def: structureDef(b.kind, b.tier) }));
+  // union nodes within reach of each other
+  const parent = nodes.map((_, i) => i);
   const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  for (let i = 0; i < stations.length; i++) {
-    for (let j = i + 1; j < stations.length; j++) {
-      if (dist(stations[i].at, stations[j].at) <= Math.max(stations[i].def.reach, stations[j].def.reach)) parent[find(i)] = find(j);
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      if (dist(nodes[i].at, nodes[j].at) <= Math.max(nodes[i].def.reach, nodes[j].def.reach)) parent[find(i)] = find(j);
     }
   }
   const grids = new Map();
-  stations.forEach((s, i) => {
-    const g = grids.get(find(i)) || { stations: [], supply: 0, draw: 0, powered: [], members: [] };
-    g.stations.push(s.id);
+  nodes.forEach((s, i) => {
+    const g = grids.get(find(i)) || { stations: [], nodes: [], supply: 0, draw: 0, powered: [], members: [] };
+    if (s.kind === 'power') g.stations.push(s.id);
+    g.nodes.push(s.id);
     g.supply += s.def.supply;
     grids.set(find(i), g);
   });
+  // pylons linked to no station have no power to give: they are not a grid
+  for (const [root, g] of grids) if (!g.stations.length) grids.delete(root);
   const consumers = [
-    ...Object.entries(o.pads).filter(([, b]) => b.kind !== 'power')
+    ...Object.entries(o.pads).filter(([, b]) => !POWER_NODE_KINDS.includes(b.kind))
       .map(([id, b]) => ({ id, kind: b.kind, at: centre(buildingRect(o, map, id)), draw: structureDef(b.kind, b.tier).draw })),
     ...o.defenses.map((d) => ({ id: d.id, kind: d.kind, at: cellCentre(d.cell), draw: structureDef(d.kind, d.tier).draw })),
     ...Object.entries((o.farm && o.farm.buildings) || {}).filter(([, b]) => b.done <= t)
@@ -252,9 +261,9 @@ export function powerGrids(o, map, t = o.t) {
   for (const c of consumers) {
     if (!c.draw) { powered.add(c.id); continue; }
     let best = null;
-    stations.forEach((s, i) => {
+    nodes.forEach((s, i) => {
       const d = dist(s.at, c.at);
-      if (d <= s.def.reach && (!best || d < best.d)) best = { d, root: find(i) };
+      if (d <= s.def.reach && grids.has(find(i)) && (!best || d < best.d)) best = { d, root: find(i) };
     });
     if (!best) { off[c.id] = 'reach'; continue; }
     grids.get(best.root).members.push(c);

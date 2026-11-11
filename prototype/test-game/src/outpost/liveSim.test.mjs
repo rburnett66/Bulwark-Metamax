@@ -112,6 +112,21 @@ test('a building placed off the pads is saved at its own spot (S2c) and keeps it
   assert.deepEqual(strip(fromLiveSim(again.state, again.link, job.done + 1).outpost), strip(done));
 });
 
+test('a Pylon placed on the live sim is saved as a 1×1 free building and is a grid node, never a consumer (S2b)', () => {
+  const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
+  const { state, link } = toLiveSim(o, { map, now: T0, gold: 1e6 });
+  const at = placeOffPads(state, 'OUT-pylon');
+  assert.ok(at, 'found an open spot');
+  run(state, structureDef('pylon', 1).buildSec + 1);
+  const { outpost: back } = fromLiveSim(state, link, T0 + (structureDef('pylon', 1).buildSec + 1) * 1000);
+  assert.deepEqual(back.pads.f1, { kind: 'pylon', tier: 1, at: { x: at.x, y: at.y, w: 1, h: 1 } });
+  const g = powerGrids(back, map);
+  assert.equal(g.off.f1, undefined, 'a pylon draws nothing');
+  assert.ok(g.grids.every((x) => !x.stations.includes('f1')), 'and is no station');
+  const again = toLiveSim(back, { map, now: T0 + 60_000, gold: 0 });
+  assert.deepEqual(strip(fromLiveSim(again.state, again.link, T0 + 60_000).outpost), strip(back), 'a second visit loads it back unchanged');
+});
+
 test('the outpost rules read a free building where it stands: power reach, raid blocking and breach', () => {
   const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
   const { state, link } = toLiveSim(o, { map, now: T0, gold: 1e6 });
