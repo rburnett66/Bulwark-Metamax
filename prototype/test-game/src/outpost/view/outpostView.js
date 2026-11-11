@@ -31,7 +31,7 @@ import { storeCapacity } from '../../farm/model.js';
 import { statusModel } from './statusReport.js';
 import { constructionSites, damageSites, createConstructionFx } from './constructionFx.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
-import { hudModel, panelModel, KIND_NAME, fmtGold, rigHeadOf } from './hudModel.js';
+import { hudModel, panelModel, KIND_NAME, fmtGold, fmtClock, rigHeadOf } from './hudModel.js';
 import { buildMenu, placementStep, aimValid, IDLE, MENU, DEFENSE_STRUCT, isResourceBay, kindOf } from './buildMenu.js';
 import { buildingWarnings, markerOf } from './warnings.js';
 import { renderMenuIcons } from './menuIcons.js';
@@ -214,7 +214,7 @@ async function openOutpostViewInner(opts, stage) {
 
   // ── state for the battle renderer: the defenses, the lowland resource fields, no units, no waves ───────────────
   const state = { structures: new Map(), units: new Map(), waves: { active: false, current: 0 }, map: board, resourceNodes: lowlandResources(map), projectiles: [] };
-  const syncDefenses = () => { state.structures = new Map(defenseStructures(o, map).map((s) => [s.id, s])); };
+  const syncDefenses = () => { state.structures = new Map(defenseStructures(o, map, clockNow()).map((s) => [s.id, s])); };
   syncDefenses();
 
   // ── the Resource Bay's harvesters (story O10): the battle's own miner, driven along a route from the bay to its field
