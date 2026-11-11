@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.11-s';
-export const VERSION_NOTE = 'Outpost grid: power icons, dark pylon chains, Power_Priority in the workbook, conduits along the lanes';
+export const VERSION = 'v2026.11.11-t';
+export const VERSION_NOTE = 'Short building names on the build rail';
