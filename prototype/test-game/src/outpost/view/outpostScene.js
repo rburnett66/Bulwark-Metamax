@@ -632,14 +632,22 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       }
     }
     if (t >= tl.duration) {
-      if (shuttle) shuttle.object.visible = false;
-      if (s.hub && s.hub.inst) for (const nd of s.hub.inst.nodesOf('shuttle')) nd.visible = true;
-      crateMesh.count = 0;
-      sale = null;
-      r.lights.invalidateShadows();
+      endSale();
       return { done: true, id: s.id, gold: tl.countAt(t) };
     }
     return { done: false, gold: tl.countAt(t), t };
+  }
+  /** Put the scene back after a sale: the parked shuttle shows, the flying one and the crates go. Safe to call twice. */
+  function endSale() {
+    const s = sale;
+    sale = null;
+    try {
+      if (shuttle) shuttle.object.visible = false;
+      if (shuttleFx) shuttleFx.setIntensity(0);
+      if (s && s.hub && s.hub.inst) for (const nd of s.hub.inst.nodesOf('shuttle')) nd.visible = true;
+      crateMesh.count = 0;
+      r.lights.invalidateShadows();
+    } catch (e) { /* the scene tidy-up must never keep the sale open */ }
   }
 
   // ── picking ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -671,7 +679,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       for (const e of built.values()) if (e.inst) e.inst.update(dt, r.camera);
       if (shuttle) shuttle.update(dt, r.camera);
       if (shuttleFx && shuttle && shuttle.object.visible) shuttleFx.update(dt, r.camera);
-      out.sale = stepSale(dt, out);
+      // a frame of the sale animation that throws ends the sale (gold is already banked) instead of locking the HUD
+      try { out.sale = stepSale(dt, out); } catch (e) { const id = sale && sale.id; endSale(); out.sale = { done: true, id, failed: String(e && e.message || e) }; }
       out.debris = stepDebris(reduced ? dt * 0.5 : dt);
       if (o) stepSparks(o, dt);
       stepMarkers();
@@ -679,6 +688,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       return out;
     },
     playSale, get saling() { return !!sale; },
+    /** End the sale now (the view's watchdog: a sale must never leave the outpost locked). */
+    cancelSale: endSale,
     pickBuilding, select, showCells, showReach, showPads, showGhost, setWarnings, setDefenseWarnings,
     /** Is the ghost drawn now (tests / review)? */
     get ghost() { return ghostShown && ghostShown.group && ghostShown.group.visible ? { pad: ghostWant.pad, valid: ghostWant.valid, key: ghostWant.key } : null; },

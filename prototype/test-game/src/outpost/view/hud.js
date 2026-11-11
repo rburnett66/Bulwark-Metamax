@@ -29,6 +29,8 @@ import { BATTLE_ICON } from './buildMenu.js';
 const FONTS = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap';
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const CH = 'clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px)';
+/** The battle palette's top (render/buildPalette.js .bw-palette top:56px): the outpost rail sits at the same spot. */
+export const RAIL_TOP = 56;
 
 export const HUD_CSS = `
 .op { position:absolute; inset:0; z-index:40; pointer-events:none; overflow:hidden; font-family:Rajdhani,"Segoe UI",system-ui,sans-serif;
@@ -274,7 +276,7 @@ ${SELPANEL_CSS}
 .op .op-sel .op-sbuild { display:flex; flex-direction:column; gap:4px; }
 .op .op-sel .op-sbuild .bw-btn { display:flex; justify-content:space-between; gap:6px; font-size:11px; text-align:left; }
 .op .op-sel .op-tech-st.owned { color:#7ac07a; } .op .op-sel .op-tech-st.buy { color:#5fe0ff; } .op .op-sel .op-tech-st.locked { color:#6d7a8a; }
-.op .bw-palette.op-rail { left:max(6px, env(safe-area-inset-left)); top:var(--rail-top, 70px); z-index:1; }
+.op .bw-palette.op-rail { left:6px; top:var(--rail-top, 56px); z-index:1; }   /* the battle palette's spot (no notch inset: the battle has none) */
 .op .bw-buildbtn { position:relative; }
 .op .bw-bname .op-s { display:none; }
 .op .bw-palette.op-narrow .bw-bname { letter-spacing:.02em; }
@@ -563,9 +565,13 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
     fitRail() {
       const rail = $('rail'), view = doc.defaultView;
       if (!rail.isConnected || !btns.size) return null;
-      const r0 = root.getBoundingClientRect(), top = root.querySelector('.op-top').getBoundingClientRect().bottom - r0.top + 12;
+      // the battle palette's spot (render/buildPalette.js .bw-palette: left 6, top 56, 6 px off the bottom); owner
+      // 2026-11-10 "the exact same placement in outpost that I have in map defense". A taller top bar pushes it down
+      // only as far as the battle's 2 px gap under its own bar.
+      const r0 = root.getBoundingClientRect(), barBottom = root.querySelector('.op-top').getBoundingClientRect().bottom - r0.top;
+      const top = root.dataset.layout === 'portrait' ? barBottom + 12 : Math.max(RAIL_TOP, barBottom + 2);
       root.style.setProperty('--rail-top', Math.round(top) + 'px');
-      let bottom = r0.height - 8;
+      let bottom = r0.height - 6;
       if (root.dataset.layout === 'portrait') bottom = root.querySelector('.op-actions').getBoundingClientRect().top - r0.top - 8;
       const chrome = 12 + 4 + rail.firstChild.getBoundingClientRect().height + 2;
       const f = railFit(bottom - top, btns.size, chrome, view ? view.innerWidth : r0.width);

@@ -77,6 +77,9 @@ export async function openOutpostView(opts = {}) {
   }
 }
 
+/** Seconds past the sale timeline before the watchdog ends a stalled sale (the rail and HUD come back). */
+export const SALE_GRACE = 2;
+
 const SAFE_KEY = 'bulwark.outpostSafe';
 /** Is the outpost in safe mode on this device? A visit cut short (errorLog.lastSessionCrashed) turns it on for good. */
 export function outpostSafeMode(win) {
@@ -355,7 +358,8 @@ async function openOutpostViewInner(opts, stage) {
     const tl = sellTimeline(res.loads, { reduced, goldFrom });
     saleRun = { tl, t: 0, goldTo: res.gold };
     shownGold = goldFrom;
-    scene.playSale(tl, before);
+    // the shuttle model may fail to load (a phone short of memory): the sale plays on without it
+    Promise.resolve(scene.playSale(tl, before)).catch((e) => crumb('outpost: sale shuttle failed · ' + (e && e.message || e)));
     hud.setBusy(true);
     onChange();
   }
@@ -749,6 +753,9 @@ async function openOutpostViewInner(opts, stage) {
     const t0 = performance.now();
     const raw = Math.max(0, t - last), dt = Math.min(0.1, raw / 1000);
     last = t;
+    // the sale clock runs first, before anything that could throw: past its timeline (plus grace) the sale ends no
+    // matter what, so the BUILD rail and the HUD always come back (owner 2026-11-10: iPhone, locked after SELL)
+    if (saleRun) { saleRun.t += dt; if (saleRun.t > saleRun.tl.duration + SALE_GRACE) finishSale('watchdog'); }
     autoFit();
     liveAcc += dt;
     if (liveAcc >= LIVE_TICK && !saleRun) {
@@ -779,10 +786,10 @@ async function openOutpostViewInner(opts, stage) {
       farmFx.step(dt, o, r.impacts, FXK);   // a few embers drifting off each Fruited plot (none in safe mode)
     }
     if (saleRun) {
-      saleRun.t += dt;
-      if (out.sale) shownGold = out.sale.gold;
-      hud.update(hudModel(o, map, { gold: bank(), now: clockNow(), unlocks: ctxNow().unlocks }), shownGold);
-      if (out.sale && out.sale.done) { saleRun = null; shownGold = bank(); hud.setBusy(false); refreshHud(true); }
+      if (out.sale && out.sale.gold != null) shownGold = out.sale.gold;
+      if (out.sale && out.sale.done) finishSale(out.sale.failed ? 'failed: ' + out.sale.failed : null);
+      else if (scene.saling === false && saleRun.t > 0.5) finishSale('scene idle');   // the scene ended it without telling us
+      else hud.update(hudModel(o, map, { gold: bank(), now: clockNow(), unlocks: ctxNow().unlocks }), shownGold);
     }
     if (out.shake) shake = out.shake;
     // the camera: glide toward a focus, shake during the lift
@@ -810,6 +817,15 @@ async function openOutpostViewInner(opts, stage) {
     frames.push(work); if (frames.length > 120) frames.shift();
   }
   let shake = null;
+  /** End the sale: unlock the rail and the HUD. why (null on a normal finish) goes to the error report's crumbs. */
+  function finishSale(why) {
+    if (!saleRun) return;
+    saleRun = null; shake = null;
+    if (why) { crumb('outpost: sale ended early · ' + why); try { scene.cancelSale(); } catch (e) { /* tidy-up only */ } }
+    shownGold = bank();
+    hud.setBusy(false);
+    refreshHud(true);
+  }
 
   function close() {
     if (closed) return;
