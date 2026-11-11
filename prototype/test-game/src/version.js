@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.11-d';
-export const VERSION_NOTE = 'An outpost visit can run as a live battle sim and save back (no visible change yet)';
+export const VERSION = 'v2026.11.11-e';
+export const VERSION_NOTE = 'One build catalogue for the rail and number keys; locked items show a padlock (no battle change)';

@@ -1,5 +1,6 @@
 import { BUILD_ICONS, buildIcon, buildIconUrl } from './buildIcons.js';
-import { SELPANEL_CSS, PALETTE_CSS, STRUCT_ICONS, railFit, applyRailFit } from './buildPalette.js';
+import { createCatalogue } from '../battle/catalogue.js';
+import { SELPANEL_CSS, PALETTE_CSS, STRUCT_ICONS, railFit, applyRailFit, LOCK_SVG } from './buildPalette.js';
 import { STRUCTURES, ASSUMPTIONS, ABILITIES, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
@@ -357,13 +358,18 @@ export function createHud(mountEl, callbacks) {
   const paletteRow = el(doc, 'div', 'bw-palette-row');
   const paletteBtns = {};
   // Harvestor moved to BASE PURCHASE (owner 2026-07-16) — no longer a build-palette entry.
-  const structOrder = Object.keys(STRUCTURES).filter((id) => STRUCTURES[id].kind !== 'harvestorBay');
+  // The rail lists the MODE's catalogue (battle/catalogue.js [MM-task_mwcdvlf8_2t]); the campaign's is every STRUCTURES
+  // entry but the harvester bay, as before. A locked item keeps its place, shows a padlock and says why when tapped.
+  const catalogue = cbs.catalogue || createCatalogue();
+  const structOrder = catalogue.ids;
   const toggleBuild = (structId) => {
+    const locked = catalogue.isLocked(structId);
+    if (locked) { flashMessage(hud, locked); return; }
     const next = (hud.currentBuildSelection === structId) ? null : structId;
     if (cbs.onBuildSelect) cbs.onBuildSelect(next);
   };
   structOrder.forEach((structId, i) => {
-    const def = STRUCTURES[structId];
+    const def = getStructureDef(structId);
     const btn = el(doc, 'button', 'bw-btn bw-buildbtn');
     const key = i + 1;                                      // 1,2,3,4...
     btn.title = (key <= 9 ? '[' + key + '] ' : '') + (def.name || structId);
@@ -733,6 +739,14 @@ export function createHud(mountEl, callbacks) {
     },
     seedEl,
     paletteBtns,
+    catalogue,   // the mode's build list + locks (battle/catalogue.js)
+    /** A mode's own panel (battle/session.js addPanel [MM-task_mwcdvlf8_2t]) — one slot in the battle HUD, created on first use. */
+    addPanel(node) {
+      let slot = root.querySelector('.bw-mode-panels');
+      if (!slot) { slot = el(doc, 'div', 'bw-mode-panels'); root.appendChild(slot); }
+      slot.appendChild(node);
+      return node;
+    },
     selPanel,
     sname,
     sinfo,
@@ -951,9 +965,13 @@ export function updateHud(hud, state, ui) {
   hud.currentBuildSelection = ui ? ui.buildSelection : null;
   for (const structId of Object.keys(hud.paletteBtns)) {
     const btn = hud.paletteBtns[structId];
-    const def = STRUCTURES[structId];
+    const def = getStructureDef(structId);
     const cost = def && def.cost ? def.cost[0] : 0;
     if (money < cost) btn.classList.add('bw-poor'); else btn.classList.remove('bw-poor');
+    const locked = hud.catalogue ? hud.catalogue.isLocked(structId) : null;
+    const pad = btn.querySelector('.bw-lock');
+    if (locked) { btn.classList.add('bw-locked'); btn.dataset.locked = locked; if (!pad) btn.insertAdjacentHTML('beforeend', LOCK_SVG); }
+    else { btn.classList.remove('bw-locked'); delete btn.dataset.locked; if (pad) pad.remove(); }
     if (ui && ui.buildSelection === structId) btn.classList.add('bw-selected'); else btn.classList.remove('bw-selected');
   }
 
