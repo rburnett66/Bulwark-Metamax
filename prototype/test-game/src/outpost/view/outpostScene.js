@@ -32,6 +32,9 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   scene.add(root);
   const debris = createOreDebris(THREE, root, { cap: tier === 'low' ? 160 : 500 });
   const pads = new Map(map.pads.map((p) => [p.id, p]));
+  // where a building stands: a freely placed one's own rectangle (from planBuildings), else its map pad
+  const rects = new Map();
+  const rectOf = (id) => rects.get(id) || pads.get(id);
   const centre = (p) => [p.x + p.w / 2, p.y + p.h / 2];
   let clock = 0, seq = 0;
 
@@ -231,7 +234,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     if (inst) {
       // the model sits in a holder scaled to its pad (half scale, owner 2026-11-08: padModelScale), so the model's own
       // scale stays free for its look (rise) and its anchors still read in world space
-      const p = pads.get(item.pad), [cx, cz] = centre(p), holder = new THREE.Group();
+      const p = rectOf(item.pad), [cx, cz] = centre(p), holder = new THREE.Group();
       holder.position.set(cx, PAD_Y + 0.07, cz);
       holder.scale.setScalar(padModelScale(p));
       holder.userData.pad = item.pad; holder.name = `outpost-building-${item.pad}`;
@@ -246,6 +249,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   let lastLook = new Map();
   function syncBuildings(o, now) {
     const plan = planBuildings(o, map, now), keep = new Set();
+    for (const item of plan) if (item.rect) rects.set(item.pad, item.rect);
     for (const item of plan) {
       keep.add(item.pad);
       const e = built.get(item.pad);
@@ -335,7 +339,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     if (selMesh) { root.remove(selMesh); selMesh.geometry.dispose(); selMesh = null; }
     if (!target) return;
     let x, z, w, d;
-    if (target.pad) { const p = pads.get(target.pad); if (!p) return; [x, z] = centre(p); w = p.w; d = p.h; } else { x = target.cell[0] + 0.5; z = target.cell[1] + 0.5; w = d = 1.2; }
+    if (target.pad) { const p = rectOf(target.pad); if (!p) return; [x, z] = centre(p); w = p.w; d = p.h; } else { x = target.cell[0] + 0.5; z = target.cell[1] + 0.5; w = d = 1.2; }
     const t = 0.1, L = Math.min(w, d) * 0.28, geos = [];
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
       const cx = x + sx * w / 2, cz = z + sz * d / 2;
@@ -354,7 +358,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     if (!ids || !ids.length) return;
     const geos = [];
     for (const id of ids) {
-      const p = pads.get(id); if (!p) continue;
+      const p = rectOf(id); if (!p) continue;
       const [cx, cz] = centre(p), w = p.w - 0.5, d = p.h - 0.5, t = 0.16;
       geos.push(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2).translate(cx, 0.15, cz));
       geos.push(new THREE.BoxGeometry(w, 0.03, t).translate(cx, 0.16, cz - d / 2), new THREE.BoxGeometry(w, 0.03, t).translate(cx, 0.16, cz + d / 2),
@@ -391,7 +395,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     if (ghostShown && ghostShown !== e && ghostShown.group) ghostShown.group.visible = false;
     ghostShown = null;
     if (!want || !e || !e.group) return;
-    const p = pads.get(want.pad); if (!p) return;
+    const p = rectOf(want.pad); if (!p) return;
     const [cx, cz] = centre(p);
     e.group.position.set(cx, PAD_Y + 0.07, cz);
     e.group.scale.setScalar(padModelScale(p));
@@ -448,8 +452,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       if (markers.has(pad)) continue;
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: markerTexture(kind), depthTest: false, depthWrite: false, transparent: true, sizeAttenuation: false, toneMapped: false }));
       sp.scale.set(0.058, 0.058, 1); sp.renderOrder = 20; sp.name = `outpost-warning-${pad}`;
-      const [cx, cz] = centre(pads.get(pad));
-      const e = built.get(pad), h = (e && e.slug && kit.manifest[e.slug] ? kit.manifest[e.slug].height : 1.6) * padModelScale(pads.get(pad));
+      const [cx, cz] = centre(rectOf(pad));
+      const e = built.get(pad), h = (e && e.slug && kit.manifest[e.slug] ? kit.manifest[e.slug].height : 1.6) * padModelScale(rectOf(pad));
       sp.userData = { x: cx, y: h + 1.3, z: cz, ph: hash(pad) % 100 / 16 };
       sp.position.set(cx, h + 1.3, cz);
       root.add(sp);
@@ -462,11 +466,11 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       if (doors.has(pad) || !pads.has(pad)) continue;
       const own = built.get(pad);
       if (own && own.inst && setDoor(own.inst, true)) continue;   // the GLB's own door closes; no shutter
-      const [cx, cz] = centre(pads.get(pad));
+      const [cx, cz] = centre(rectOf(pad));
       const a = (kit.manifest.storage && kit.manifest.storage.anchors && kit.manifest.storage.anchors.door) || [0, 0, 2.3];
       const geos = [new THREE.BoxGeometry(1.5, 1.15, 0.1).translate(0, 0.58, 0)];
       for (let i = 0; i < 3; i++) geos.push(new THREE.BoxGeometry(1.52, 0.08, 0.12).translate(0, 0.25 + i * 0.33, 0.01));
-      const m = new THREE.Mesh(mergeGeos(THREE, geos), shutterMat), ps = padModelScale(pads.get(pad));
+      const m = new THREE.Mesh(mergeGeos(THREE, geos), shutterMat), ps = padModelScale(rectOf(pad));
       m.scale.setScalar(ps);
       m.position.set(cx + a[0] * ps, PAD_Y + 0.07 + a[1] * ps, cz + (a[2] - 0.12) * ps);
       m.name = `outpost-door-shut-${pad}`;
@@ -543,7 +547,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     const plan = planConduits(o, map);
     const a = plan.find((c) => c.to === st), b = plan.find((c) => c.to === hub && a && c.from === a.from);
     if (a && b) return [...a.points.slice().reverse(), ...b.points].map(([x, z]) => [x, z]);
-    return [centre(pads.get(st)), centre(pads.get(hub))];
+    return [centre(rectOf(st)), centre(rectOf(hub))];
   }
   const along = (pts, k) => {
     let total = 0; const seg = [];
@@ -696,7 +700,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     get warningMarkers() { return [...markers].map(([pad, m]) => ({ pad, kind: m.kind })); },
     get defenseWarnings() { return [...defMarks.keys()]; },
     /** The world position of a pad's centre (cells), for the camera. */
-    padCentre(id) { const p = pads.get(id); return p ? centre(p) : null; },
+    padCentre(id) { const p = rectOf(id); return p ? centre(p) : null; },
     buildingCount: () => [...built.values()].filter((e) => e.inst).length,
     ready: () => [...built.values()].every((e) => !e.loading),
     dispose() {

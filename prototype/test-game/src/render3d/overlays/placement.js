@@ -19,10 +19,22 @@ import { mountOf } from '../structures/baseMounts.js';
 import { cellToWorld } from '../camera.js';
 import { SYSTEM_MODELS, SYSTEM_SCALE, tierModelKey } from '../structures/systemModels.js';
 import { mergeSystemModel, SYSTEM_KINDS, SYSTEM_STRUCTS } from '../structures/system3d.js';
-import { STRUCTURES, towerStructId } from '../../data/tables.js';
+import { STRUCTURES, towerStructId, getStructureDef } from '../../data/tables.js';
 
 const OK = 0x5dff8f, BAD = 0xff4040;
 export const OUTLINE = Object.freeze({ ok: 0x52e8ff, bad: 0xff3a3a, width: 0.14, fill: 0.16 });   // width in model units
+
+/**
+ * The footprint a structure id covers, { w, h } in cells (1 × 1 when unknown) — the block ghost is drawn at this size,
+ * so a 2 × 2 outpost building previews as 2 × 2, as it will stand (owner 2026-11-11: "the placement object was 1x1 even
+ * though structures were 2x2"). Battle structures are all 1 × 1.
+ */
+export function ghostFootprint(structId) {
+  let def = null;
+  try { def = getStructureDef(structId); } catch (e) { def = null; }
+  const f = def && def.footprint;
+  return { w: (f && f.w) || 1, h: (f && f.h) || 1 };
+}
 
 /** The System model a structure id builds as (tier 1), or null (mine drone, harvester bay → the block). */
 export function ghostModelKey(structId) {
@@ -129,7 +141,10 @@ export function createPlacementGhost(THREE, scene) {
         bodyMat.color.setHex(c); hullMat.uniforms.uColor.value.setHex(c);
         return true;
       }
-      group.position.set(x, y, z);
+      // the block covers the structure's whole footprint: centred on it, scaled to it (the cell is its top-left)
+      const fp = ghostFootprint(ui.buildSelection);
+      group.position.set(cellToWorld(cell.x + (fp.w - 1) / 2), y, cellToWorld(cell.y + (fp.h - 1) / 2));
+      group.scale.set(fp.w, 1, fp.h);
       const c = ui.hoverValid ? OK : BAD;
       fillMat.color.setHex(c);
       edgeMat.color.setHex(c);

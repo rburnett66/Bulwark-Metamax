@@ -628,7 +628,9 @@ export function renderFrame(r, state, ui, events, dt) {
     const all = Array.from(state.structures.values());
     // System towers / walls draw through system3d; the rest (bays, fallback blocks) stay with the markers
     const sysChanged = r.system ? r.system.setStructures(all) : false;
-    const markersChanged = r.markers.setStructures(r.system ? all.filter((s) => !SYSTEM_KINDS[s.kind]) : all);
+    // the placeholder block draws what has no model of its own — not a System tower (system3d) and not an outpost
+    // building (kind 'building': the outpost scene draws its model) [MM-subtask_mwcij28k_34]
+    const markersChanged = r.markers.setStructures(all.filter((s) => s.kind !== 'building' && !(r.system && SYSTEM_KINDS[s.kind])));
     if (sysChanged || markersChanged) r.lights.invalidateShadows();
   }
   if (r.system) r.system.update(dt, state, r.airLift.drawn);   // turrets track planes where they are drawn (last frame's poses)

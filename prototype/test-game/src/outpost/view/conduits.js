@@ -8,7 +8,7 @@
  *
  * Pure (no three.js): outpostScene.js turns these plans into meshes.
  */
-import { powerGrids, bayCapacity, depositOf, upgradeBayShows } from '../model.js';
+import { powerGrids, bayCapacity, depositOf, upgradeBayShows, buildingRect } from '../model.js';
 import { structureDef } from '../../data/outpost.js';
 import { oresOf } from '../../data/ores.js';
 
@@ -82,12 +82,18 @@ export function planBuildings(o, map, now) {
   const storage = Object.keys(o.pads).find((id) => o.pads[id].kind === 'storage');
   const coreOn = o.online && hub && powered.has(hub) && storage && powered.has(storage);
   const out = [];
-  for (const p of map.pads) {
+  // the map's pads in order, then the buildings placed freely (their own `at` rectangle, model.buildingRect) — every
+  // building gets its model, wherever it stands [MM-subtask_mwcij28k_34] (owner 2026-11-11: placed buildings drew as
+  // low-detail blocks on the shared battle screen)
+  const freeIds = [...new Set([...Object.keys(o.pads), ...o.building.map((x) => x.pad)])]
+    .filter((id) => !map.pads.some((q) => q.id === id) && buildingRect(o, map, id)).sort();
+  const spots = [...map.pads, ...freeIds.map((id) => buildingRect(o, map, id))];
+  for (const p of spots) {
     const b = o.pads[p.id], job = o.building.find((x) => x.pad === p.id);
     if (!b && !job) continue;
     const kind = (b || job).kind;
     const rigHead = kind === 'rig' ? rigHeadFor(o, map, p.id) : null;
-    const item = { pad: p.id, kind, tier: b ? b.tier : job.tier, rigHead, tint: TINT.none, rise: 1, glow: o.online ? 1 : 0.32, working: false, mk2: false };
+    const item = { pad: p.id, rect: { id: p.id, x: p.x, y: p.y, w: p.w, h: p.h }, kind, tier: b ? b.tier : job.tier, rigHead, tint: TINT.none, rise: 1, glow: o.online ? 1 : 0.32, working: false, mk2: false };
     if (!b) {
       const def = structureDef(kind, job.tier), total = Math.max(1, (def ? def.buildSec : 1) * 1000);
       const progress = Math.max(0, Math.min(1, 1 - (job.done - now) / total));
@@ -114,7 +120,8 @@ export function planBuildings(o, map, now) {
 
 /** The rig head (model) for a rig pad, from its deposit's ore. */
 export function rigHeadFor(o, map, pad) {
-  const tier = (o.pads[pad] && o.pads[pad].deposit) || depositOf(map, pad);
+  const job = (o.building || []).find((x) => x.pad === pad);
+  const tier = (o.pads[pad] && o.pads[pad].deposit) || (job && job.deposit) || depositOf(map, pad);
   const ore = oresOf(o.planet).find((x) => x.tier === tier);
   return ore ? ore.rig : 'auger';
 }
