@@ -134,7 +134,7 @@ export function planDeposits(o, map, unlockedTiers = ['common']) {
 }
 
 /** Defense records the battle renderer's structure layer draws (system3d: STR-MG / Cannon / Wall). */
-export function defenseStructures(o, map = null) {
+export function defenseStructures(o, map = null, now = null) {
   // the Upgrade Bay's pad (owner 2026-11-07: "the upgrade pad in the outpost should always show the unit being
   // upgraded"): the defense on the bay stands on its pad, off its cell; an idle bay shows the last unit it upgraded
   const bayId = Object.keys(o.pads || {}).sort().find((id) => o.pads[id].kind === 'upgradeBay');
@@ -146,8 +146,12 @@ export function defenseStructures(o, map = null) {
     return {
       id: 'od-' + d.id, kind: d.kind === 'wall' ? 'wall' : 'antiGround', structId: d.kind === 'mg' ? 'STR-MG' : d.kind === 'cannon' ? 'STR-Cannon' : 'STR-Wall',
       tier, cell: { x: at[0], y: at[1] }, pos: { x: at[0] + 0.5, y: at[1] + 0.5 }, footprint: { w: 1, h: 1 }, showHp: true,   // worn: bar always shown [MM-story_mwb8zbk7_24]
-      // 0 HP: a wreck (charred, slumped, smoking) until a repair drone restores it [MM-story_mwb8zamf_23]
-      hp: Math.min(d.hp, max), maxHp: max, lifecycle: !(d.hp > 0) ? 'Wrecked' : d.hp < max ? 'Damaged' : 'Active', outpostId: d.id, ...extra,
+      // 0 HP: a wreck (charred, slumped, smoking) until a repair drone restores it [MM-story_mwb8zamf_23];
+      // building: the battle's 4-step rise; selling: its grey dismantling look [MM-story_mwb8zdb0_26]
+      hp: Math.min(d.hp, max), maxHp: max, outpostId: d.id,
+      lifecycle: d.selling ? 'Selling' : d.building ? 'Building' : !(d.hp > 0) ? 'Wrecked' : d.hp < max ? 'Damaged' : 'Active',
+      progress: d.building && now != null ? Math.max(0, Math.min(1, (now - d.building.since) / Math.max(1, d.building.done - d.building.since))) : undefined,
+      ...extra,
     };
   };
   const out = [];

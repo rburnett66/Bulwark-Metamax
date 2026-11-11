@@ -281,7 +281,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
       }
       // the Upgrade Bay (story O10): a defense to its next tier, as far as the tech tree's tier
       case 'upgradeDefense': return upgradeDefense(o, a.id, ctx);
-      case 'sellStructure': { const r = sellStructure(o, a.target); return r.error ? r : { outpost: r.outpost, gold: r.refund }; }
+      case 'sellStructure': { const r = sellStructure(o, a.target, ctx); return r.error ? r : { outpost: r.outpost, gold: r.refund }; }
       // the build menu's HARVESTER (story O17): story O16's buyHarvester(o, ctx) → { outpost, cost } | { error }, read
       // optionally so the view works before it lands (the menu keeps the item locked until it is exported)
       case 'buyHarvester': return typeof Model.buyHarvester === 'function' ? Model.buyHarvester(o, ctx) : { error: 'Build a Resource Bay first' };

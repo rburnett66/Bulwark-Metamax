@@ -388,3 +388,39 @@ test('repair with no clock or map (a bare model call) is instant, as before', ()
   const o = raidOutcome(online(), { result: 'held', at: T0, defenses: [{ id: 'd1', hp: 200 }] }).outpost;
   assert.equal(repair(o, 'd1', { gold: 600 }).outpost.defenses.find((x) => x.id === 'd1').hp, 400);
 });
+
+// [MM-story_mwb8zdb0_26] owner 2026-11-10 (tower parity): defenses are built over time and sold over the battle's sellTime
+test('a placed defense is built over its buildSec and does not fight until it is done', async () => {
+  const { structureDef } = await import('../data/outpost.js');
+  let o = online();
+  const r = place(o, { kind: 'mg', cell: [5, 5] }, { map, now: o.t });
+  assert.ok(!r.error, r.error);
+  const d = r.outpost.defenses.find((x) => x.cell[0] === 5 && x.cell[1] === 5);
+  const sec = structureDef('mg', 1).buildSec;
+  assert.deepEqual(d.building, { since: o.t, done: o.t + sec * 1000 });
+  const seen = [];
+  const watch = { map, raid: (f) => { seen.push(f.defenses.map((x) => x.id)); return { result: 'held', defenses: [] }; } };
+  const mid = advance(r.outpost, o.t + sec * 500, watch).outpost;
+  assert.ok(mid.defenses.find((x) => x.id === d.id).building, 'still building halfway');
+  const done = advance(r.outpost, o.t + sec * 1000, ctx());
+  assert.equal(done.outpost.defenses.find((x) => x.id === d.id).building, undefined);
+  assert.ok(done.report.built.some((b) => b.defense === d.id));
+  for (const ids of seen) assert.ok(!ids.includes(d.id), 'a defense under construction never fights');
+  assert.ok(repair(r.outpost, d.id, { gold: 9999, now: o.t, map }).error, 'nothing to repair while building');
+  // a bare call (no clock) still builds at once
+  assert.equal(place(o, { kind: 'mg', cell: [6, 5] }, { map }).outpost.defenses.find((x) => x.cell[0] === 6).building, undefined);
+});
+
+test('selling a defense pays now and dismantles it over the battle sellTime', async () => {
+  const { sellStructure, defenseSellMs } = await import('./model.js');
+  const o = online();
+  const id = o.defenses[0].id, kind = o.defenses[0].kind;
+  const ms = defenseSellMs(kind);
+  assert.ok(ms > 0);
+  const r = sellStructure(o, { defense: id }, { now: o.t });
+  assert.ok(r.refund > 0, 'the refund is paid on the tap');
+  assert.deepEqual(r.outpost.defenses.find((x) => x.id === id).selling, { since: o.t, done: o.t + ms });
+  assert.ok(sellStructure(r.outpost, { defense: id }, { now: o.t }).error, 'sold once');
+  assert.ok(advance(r.outpost, o.t + ms, ctx()).outpost.defenses.every((x) => x.id !== id), 'gone when dismantled');
+  assert.ok(sellStructure(o, { defense: id }).outpost.defenses.every((x) => x.id !== id), 'a bare call removes it at once');
+});
