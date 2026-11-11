@@ -10,32 +10,16 @@
 // The harvester is driven HERE (marchAlong on its own nav path, like repair troops) — stepMovement,
 // separation, and the contact clamp all skip it, so the economy loop never tangles with the crowd sim.
 import { MAPDATA } from '../../content/maps/mapdata.js';
-import { BONUS_NERFS, HARVESTER_UNLOAD_TIME } from '../data/tables.js';
+import { HARVESTER_UNLOAD_TIME } from '../data/tables.js';
+import { harvesterStats, nodeHarvestSec } from './harvestStats.js';
 import { createUnit } from './entities.js';
 import { buildNavGrid, findWalkerPath } from './pathfinding.js';
 import { emitEvent } from './core.js';
 
 const HARVESTER_UNIT = 'GND-Trucks';   // the truck IS the harvester (own stats overridden below)
 
-// Baseline harvester = Factions sheet row 1 (the tuning reference) at upgrade level 1.
-// Faction choice + upgrade levels arrive with the campaign shell story.
-function harvesterStats(state) {
-  const f = (MAPDATA.factions && MAPDATA.factions[0]) || {};
-  // HARVESTER UPGRADES (workbook, levels 1-5): multipliers injected at createSim via
-  // state.harvesterLevel — part of the initial deterministic state, never mid-battle.
-  const lvl = Math.max(1, Math.min(5, (state && state.harvesterLevel) || 1));
-  const up = (MAPDATA.harvesterUpgrades || []).find((u) => u.Level === lvl) || {};
-  // WAVE BONUSES: starting harvester speed −35% (pre-nerf); bonuses 8/9/10 add +20% speed/capacity/hp
-  // to future spawns (the existing fleet is scaled in applyBonus). Persistent run mods live on state.bonuses.
-  const nerf = BONUS_NERFS.harvesterSpeedMult;
-  const b = (state && state.bonuses && state.bonuses.harv) || { speed: 0, capacity: 0, hp: 0 };
-  return {
-    capacity: Math.round((f.Harvester_Base_Capacity || 40) * (up.Capacity_Mult || 1) * (1 + b.capacity)),
-    speed: (f.Harvester_Base_Speed || 3) * (up.Speed_Mult || 1) * nerf * (1 + b.speed),
-    hp: Math.round((f.Harvester_Base_HP || 120) * (up.HP_Mult || 1) * (1 + b.hp)),
-    yieldMult: f.Yield_Mult || 1,
-  };
-}
+// Baseline harvester = Factions sheet row 1 (the tuning reference) at the state's upgrade level: harvestStats.js, the
+// one source the outpost's away closed form reads too (data/outpost.js harvestRates).
 
 // The base keeps 4 harvester DOCKS just outside its 3x3 footprint — top, bottom, left, right
 // (owner spec). Dock order is the build order: a new harvester takes the first open one. Cap = 4.
@@ -65,10 +49,11 @@ function firstOpenDock(state) {
 }
 
 /** Spawn one harvester at the FIRST OPEN DOCK (positions 1-4 around the base). Used at match
- *  start and by a completed Harvestor bay. Returns null at the fleet cap. */
-export function spawnHarvester(state) {
+ *  start and by a completed Harvestor bay. Returns null at the fleet cap. home (optional): the cell
+ *  it docks and unloads at instead of a base dock (an outpost's Resource Bay, outpost/liveSim.js). */
+export function spawnHarvester(state, home = null) {
   if (aliveHarvesters(state).length >= HARVESTER_CAP) return null;
-  const pos = firstOpenDock(state);
+  const pos = home || firstOpenDock(state);
   const s = harvesterStats(state);
   const u = createUnit(state, HARVESTER_UNIT, 1, { x: pos.x, y: pos.y }, 'ground', 'defender');
   if (!state.units.has(u.id)) state.units.set(u.id, u);
@@ -100,14 +85,8 @@ export function initHarvest(state, map) {
   const _bc = (state.base && state.base.pos) || { x: -999, y: -999 };
   const _gapR = (map && map.baseGap) || 2;   // forge maps carry the authored base gap (story-mrmwo8dx6ke)
   const _nearBase = (x, y) => Math.abs(x - _bc.x) <= _gapR && Math.abs(y - _bc.y) <= _gapR;
-  state.resourceNodes = map.resources.filter((r) => !_nearBase(r.x, r.y)).map((r) => ({
-    id: r.id, fieldId: r.fieldId || r.id, type: r.type, role: r.role, wave: r.wave, x: r.x, y: r.y,
-    color: r.color || (r.role === 'primary' ? 'blue' : r.role === 'premium' ? 'yellow' : (hash8(r.id) % 2 ? 'red' : 'green')),
-    units: r.units, remaining: r.units,
-    valuePerUnit: r.valuePerUnit || questGoldValue(r),   // quest nodes now pay gold too
-    respawns: !!r.respawns, respawnAt: null,
-    harvestSec: nodeHarvestSec(r),
-  }));
+  state.resourceNodes = map.resources.filter((r) => !_nearBase(r.x, r.y)).map((r) => resourceNode(r,
+    r.role === 'primary' ? 'blue' : r.role === 'premium' ? 'yellow' : (hash8(r.id) % 2 ? 'red' : 'green')));
   // FIELD IDENTITY IS CONNECTIVITY (owner spec: "all connected resource cells"): when the generator
   // drops separate clusters that happen to ABUT, they read as one big field on the board — so they
   // ARE one field. Re-label by 8-neighbour flood fill over same-role cells; one harvest order works
@@ -146,6 +125,25 @@ export function initHarvest(state, map) {
   spawnHarvester(state);   // the starting harvester docks at position 1
 }
 
+/**
+ * One runtime resource node (a cell of a field) from a map resource { id, fieldId?, type, role, wave, x, y, color?,
+ * units, remaining?, valuePerUnit?, respawns?, regrow? }. color: the colour when the resource names none. regrow
+ * (units / s, optional): the node's share of its FIELD's continuous regrowth (stepHarvest) — an outpost surface field
+ * regrows this way (data/outpost.js surfaceStock); battle nodes leave it out and respawn whole (respawns).
+ */
+export function resourceNode(r, color = 'blue') {
+  const n = {
+    id: r.id, fieldId: r.fieldId || r.id, type: r.type, role: r.role, wave: r.wave, x: r.x, y: r.y,
+    color: r.color || color,
+    units: r.units, remaining: r.remaining ?? r.units,
+    valuePerUnit: r.valuePerUnit || questGoldValue(r),   // quest nodes now pay gold too
+    respawns: !!r.respawns, respawnAt: null,
+    harvestSec: nodeHarvestSec(r),
+  };
+  if (r.regrow > 0) n.regrow = r.regrow;
+  return n;
+}
+
 /** Alive harvesters, pruning the dead from the roster (deterministic — insertion order kept). */
 export function aliveHarvesters(state) {
   if (!state.harvesterIds) return [];
@@ -163,11 +161,6 @@ export function aliveHarvesters(state) {
 function questGoldValue(r) {
   const def = MAPDATA.resources.find((d) => d.Resource === r.type && d.Tier === 'Primary');
   return (def && def.Value_Per_Unit) || 4;
-}
-
-function nodeHarvestSec(r) {
-  const def = MAPDATA.resources.find((d) => d.Resource === r.type && (r.role === 'premium' ? d.Tier === 'Premium' : d.Tier === 'Primary'));
-  return (def && def.Harvest_Sec_Per_Node) || 8;
 }
 
 function nodeRevealed(state, node) {
@@ -194,11 +187,16 @@ function reservedNodes(state, exceptUnit) {
   }
   return taken;
 }
+// FIELD LOCK (outpost harvesters, owner 2026-11-07: "it stays on its field: once the stock is gone it takes only what
+// regrows"): a truck with u.fieldLock never leaves its assigned field — no auto-continue, no idle gather elsewhere — and
+// only drives out for a cell holding a whole unit (a deposit credits whole units), so on a bare field it waits at its
+// dock while the field regrows instead of shuttling slivers. Unlocked (battle) trucks are unchanged.
+const worthPulling = (u, n) => n.remaining > (u.fieldLock ? 1 - 1e-9 : 0);
 // nearest field cell with anything left to pull, skipping cells another truck has claimed
 // (deterministic: distance, then id)
 function nextFieldTarget(state, u) {
   const taken = reservedNodes(state, u);
-  const live = fieldCells(state, u.fieldId).filter((n) => n.remaining > 0 && nodeRevealed(state, n) && !taken.has(n.id));
+  const live = fieldCells(state, u.fieldId).filter((n) => worthPulling(u, n) && nodeRevealed(state, n) && !taken.has(n.id));
   if (!live.length) return null;
   live.sort((a, b) =>
     (Math.hypot(a.x - u.pos.x, a.y - u.pos.y) - Math.hypot(b.x - u.pos.x, b.y - u.pos.y)) || (a.id < b.id ? -1 : 1));
@@ -207,6 +205,7 @@ function nextFieldTarget(state, u) {
 // IDLE AUTO-GATHER (owner 2026-07-16): an idle harvester finds the CLOSEST available resource —
 // any type, any field — revealed, non-empty, unreserved. Trucks only rest when the map is bare.
 function nearestFreeNode(state, u) {
+  if (u.fieldLock) return u.fieldId ? nextFieldTarget(state, u) : null;   // a locked truck gathers only its own field
   const taken = reservedNodes(state, u);
   const live = (state.resourceNodes || []).filter((n) => n.remaining > 0 && nodeRevealed(state, n) && !taken.has(n.id));
   if (!live.length) return null;
@@ -218,7 +217,7 @@ function nearestFreeNode(state, u) {
 // NEAREST revealed field carrying the SAME resource (type + crystal colour) and keeps working.
 // Deterministic: distance, then id. Returns a node in the new field, or null when none exist.
 function nextSameResourceField(state, u) {
-  if (!u.resType) return null;
+  if (!u.resType || u.fieldLock) return null;
   const taken = reservedNodes(state, u);
   const live = (state.resourceNodes || []).filter((n) =>
     n.fieldId !== u.fieldId && n.remaining > 0 && nodeRevealed(state, n) && !taken.has(n.id) &&
@@ -305,6 +304,8 @@ function marchAlong(unit, dt) {
 /** BUY a harvester at the BASE (owner: 'select base to purchase'). Ladder-priced, cap 4.
  *  Returns {ok, reason, cost}. */
 export function cmdBuyHarvester(state) {
+  // a board whose fleet is bought elsewhere (an outpost visit: the Resource Bay's harvesters, outpost/liveSim.js) names why
+  if (state.harvesterBuyRefusal) return { ok: false, reason: state.harvesterBuyRefusal };
   const price = harvesterPrice(state);
   if (price === null) return { ok: false, reason: 'max harvesters' };
   const eco = state.economy;
@@ -379,6 +380,12 @@ export function stepHarvest(state, dt) {
     }
   }
 
+  // FIELD REGROWTH (outpost surface fields, data/outpost.js surfaceStock): a field whose nodes carry `regrow` regrows
+  // continuously at the sum of its cells' rates while it is below its full stock — the away closed form's rule
+  // (outpost/model.js harvestFields), so a live visit and the away accrual regrow alike. The field's regrowth fills
+  // its cells that are below full, in node order (deterministic). Battle nodes carry no `regrow` and skip this.
+  stepFieldRegrowth(nodes, dt);
+
   // HARVESTOR BAY conversion: a completed STR-Harvestor is a purchase, not a building — it turns
   // into a new harvester unit homed on that cell and frees the ground.
   if (state.structures) {
@@ -422,6 +429,24 @@ export function stepHarvest(state, dt) {
   }
 }
 
+function stepFieldRegrowth(nodes, dt) {
+  let fields = null;
+  for (const n of nodes) {
+    if (!(n.regrow > 0)) continue;
+    const f = (fields ||= new Map()).get(n.fieldId);
+    if (f) { f.rate += n.regrow; f.cells.push(n); } else fields.set(n.fieldId, { rate: n.regrow, cells: [n] });
+  }
+  if (!fields) return;
+  for (const f of fields.values()) {
+    let left = f.rate * dt;
+    for (const n of f.cells) {
+      if (left <= 0) break;
+      const add = Math.min(left, n.units - n.remaining);
+      if (add > 0) { n.remaining += add; left -= add; }
+    }
+  }
+}
+
 function stepOneHarvester(state, u, dt) {
   const nodes = state.resourceNodes;
   // structure placed/sold/destroyed since this trip was planned → the old path may now cut
@@ -444,6 +469,8 @@ function stepOneHarvester(state, u, dt) {
     // still override at any time (cmdHarvest retasks regardless of state).
     const pick = nearestFreeNode(state, u);
     if (pick) { u.fieldId = pick.fieldId; routeTo(state, u, pick); }
+  } else if (u.state === 'harvestParked') {
+    // PARKED (an outpost Resource Bay without power, outpost/liveSim.js): no power, no operation — the truck holds its dock
   } else if (u.state === 'harvestGo') {
     const node = nodes.find((n) => n.id === u.harvestNodeId);
     if (!node) { routeHome(state, u); return; }
@@ -481,7 +508,7 @@ function stepOneHarvester(state, u, dt) {
         u.fieldId = hop.fieldId;
         routeTo(state, u, hop);
         emitEvent(state, { type: 'harvestOrder', tick: state.tick, nodeId: hop.id, fieldId: hop.fieldId, unitId: u.id, pos: { x: hop.x, y: hop.y } });
-      } else { u.fieldId = null; routeHome(state, u); }   // no same-resource field left — deliver, await orders
+      } else { if (!u.fieldLock) u.fieldId = null; routeHome(state, u); }   // no same-resource field left — deliver, await orders
     }
   } else if (u.state === 'harvestReturn') {
     if (marchAlong(u, dt)) {
@@ -560,7 +587,7 @@ function creditDeposit(state, u) {
 
 /** Credit one colour of a load: sell it to the contract up to its tier's quota, keep the rest. */
 function creditPart(state, u, color, part) {
-  const units = Math.floor(part.units);
+  const units = Math.floor(part.units + 1e-9);   // a full load summed tick by tick can land a hair under its whole
   if (!(part.units > 0)) return;
   const tier = CARGO_TIER[color] || 'common';
   const role = part.role || 'primary';
@@ -598,7 +625,7 @@ function leaveDock(state, u) {
   }
   if (next) routeTo(state, u, next);
   else {
-    u.fieldId = null;
+    if (!u.fieldLock) u.fieldId = null;   // a locked truck keeps its field and waits for it to regrow
     u.harvestNodeId = null;
     u.state = 'harvestIdle';
   }
