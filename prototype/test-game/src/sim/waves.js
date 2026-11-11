@@ -1,4 +1,4 @@
-import { WAVES, MAP, getUnitDef, WAVE_SPEED_MULT } from '../data/tables.js';
+import { WAVES, MAP, getUnitDef, WAVE_SPEED_MULT, WAVE_HARVEST_EXTRA_SEC } from '../data/tables.js';
 import { raisesPending } from './abilities.js';
 import { MAX_LIVE_3D } from '../data/renderTiers.js';
 import { createUnit, unitRadius } from './entities.js';
@@ -112,6 +112,8 @@ function scoreWave(state, w) {
   const ring = map && map.rings && map.rings.length
     ? map.rings[Math.max(1, Math.min(w.current, map.rings.length)) - 1] : null;
   const ws = w.waveStart || {};
+  // the par star times the fight (start to the last attacker down), not the harvest window after it
+  const fightEnd = w.securedAt != null ? w.securedAt : state.time;
   const hvAlive = (state.harvesterIds || []).reduce((a, id) => {
     const u = state.units.get(id); return a + (u && u.hp > 0 ? 1 : 0);
   }, 0);
@@ -124,14 +126,14 @@ function scoreWave(state, w) {
     ws.harvesters == null || hvAlive >= ws.harvesters,                  // 2 zero harvesters lost
     !common || common.gathered >= common.need,                          // 3 common quota gathered
     !uncommon || uncommon.gathered >= uncommon.need,                    // 4 uncommon quota gathered
-    !(ring && ring.parSec) || (state.time - (ws.time || 0)) <= ring.parSec,   // 5 under par
+    !(ring && ring.parSec) || (fightEnd - (ws.time || 0)) <= ring.parSec,   // 5 under par
   ].map((f) => !!f);
   // WAVE REPORT (owner 2026-11-07: "a proper score with stars at the end of each wave"): the numbers behind each star
   const detail = {
     core: ws.baseHp == null || !state.base ? null : { start: ws.baseHp, end: Math.max(0, state.base.hp), max: ws.baseMaxHp || state.base.maxHp },
     harvesters: ws.harvesters == null ? null : { start: ws.harvesters, alive: hvAlive },
     common, uncommon,
-    time: { sec: Math.round((state.time - (ws.time || 0)) * 10) / 10, par: (ring && ring.parSec) || null },
+    time: { sec: Math.round((fightEnd - (ws.time || 0)) * 10) / 10, par: (ring && ring.parSec) || null },
     gold: state.economy ? Math.round((state.economy.totalEarned || 0) - (ws.earned || 0)) : 0,
   };
   return { wave: w.current, flags, stars: flags.reduce((a, f) => a + (f ? 1 : 0), 0), detail };
@@ -156,7 +158,11 @@ export function startNextWave(state) {
   // the wave's harvest quotas (common, uncommon), sized to the free fleet and the ring's par; the take counts from here
   { const map = state.map, ring = map && map.rings && map.rings.length ? map.rings[Math.min(w.current, map.rings.length) - 1] : null;
     w.quota = state.resourceNodes && ring ? waveQuota(state, w.current, ring.parSec) : null;
-    state.waveTake = { common: 0, uncommon: 0, rare: 0, epic: 0 }; }
+    state.waveTake = { common: 0, uncommon: 0, rare: 0, epic: 0 };
+    // HARVEST WINDOW [MM-story_mwbd4114_28]: a harvest board's wave lasts its par + WAVE_HARVEST_EXTRA_SEC; cleared
+    // sooner, the harvest runs on to endsAt (stepWaves). No par, or no fields to harvest (outpost raids): no window.
+    w.endsAt = state.resourceNodes && ring && ring.parSec > 0 ? state.time + ring.parSec + WAVE_HARVEST_EXTRA_SEC : null;
+    w.securedAt = null; }
   // STAR RUBRIC snapshot (Story 4): the five wave stars are judged against the state at wave start
   w.waveStart = {
     time: state.time,
@@ -380,6 +386,17 @@ export function stepWaves(state, dt) {
 
   // Wave clear detection: all spawns emitted and no live attackers remain.
   if (w.pendingSpawns.length === 0 && !anyAttackersAlive(state) && !raisesPending(state)) {
+    // HARVEST WINDOW [MM-story_mwbd4114_28]: the last attacker is down before the wave's time is up — celebrate
+    // ('secured') and keep the wave running, so the harvest goes on until endsAt. The timer never ends a fight early:
+    // a wave cleared after endsAt ends at once.
+    if (w.securedAt == null) {
+      w.securedAt = state.time;
+      if (w.endsAt != null && state.time < w.endsAt) {
+        emitEvent(state, { type: 'wave', tick: state.tick, phase: 'secured', wave: w.current, total: w.total,
+          endsAt: w.endsAt, left: Math.round((w.endsAt - state.time) * 10) / 10 });
+      }
+    }
+    if (w.endsAt != null && state.time < w.endsAt) return;
     w.active = false;
     w.cleared = true;
 

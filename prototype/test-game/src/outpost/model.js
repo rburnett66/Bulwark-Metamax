@@ -51,7 +51,7 @@
  * `trampled: [{ plot, from, to }]` and `farmLoss` (Breach_Silo_Loss on a breach, else 0) for the farm store (story A11).
  */
 import { createRng } from '../sim/rng.js';
-import { ASSUMPTIONS } from '../data/tables.js';
+import { ASSUMPTIONS, getStructureDef } from '../data/tables.js';
 import { oresOf, oreById, oreItemId } from '../data/ores.js';
 import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock } from '../data/outpost.js';
 // the farm is a layer on the outpost (owner rule 7): it grows inside this advance() and its buildings join this power grid
@@ -528,7 +528,10 @@ export function advance(outpost, toMs, ctx) {
     ...farmBuildEvents(o, o.t, end),
     // a repair drone finishing its work (owner 2026-11-10: drones fly out from the hub) [MM-story_mwb3y511_20]
     ...o.defenses.filter((d) => d.repair && d.repair.done <= end).map((d) => ({ at: Math.max(o.t, d.repair.done), repaired: d.id })),
-  ].sort((a, b) => a.at - b.at || ((a.build || a.upgraded || a.farmBuilt || a.repaired) ? -1 : 1));
+    // a defense finishing its build, or its dismantling (tower parity) [MM-story_mwb8zdb0_26]
+    ...o.defenses.filter((d) => d.building && d.building.done <= end).map((d) => ({ at: Math.max(o.t, d.building.done), defenseBuilt: d.id })),
+    ...o.defenses.filter((d) => d.selling && d.selling.done <= end).map((d) => ({ at: Math.max(o.t, d.selling.done), defenseSold: d.id })),
+  ].sort((a, b) => a.at - b.at || ((a.build || a.upgraded || a.farmBuilt || a.repaired || a.defenseBuilt || a.defenseSold) ? -1 : 1));
 
   let now = o.t;
   const extractTo = (until) => {
@@ -561,6 +564,11 @@ export function advance(outpost, toMs, ctx) {
     } else if (ev.farmBuilt) {
       const b = o.farm.buildings[ev.farmBuilt];
       report.built.push({ farm: ev.farmBuilt, kind: b.kind, tier: b.tier, at: ev.at });
+    } else if (ev.defenseBuilt) {
+      const d = o.defenses.find((x) => x.id === ev.defenseBuilt);
+      if (d && d.building) { delete d.building; report.built.push({ defense: d.id, kind: d.kind, tier: d.tier, at: ev.at }); }
+    } else if (ev.defenseSold) {
+      o.defenses = o.defenses.filter((x) => x.id !== ev.defenseSold);
     } else if (ev.repaired) {
       const d = o.defenses.find((x) => x.id === ev.repaired);
       if (d && d.repair) {
@@ -573,8 +581,10 @@ export function advance(outpost, toMs, ctx) {
       if (d) report.built.push({ defense: d.id, kind: d.kind, tier: d.tier, at: ev.at });
     } else {
       // a defense on the Upgrade Bay is off its cell and does not fight
+      // a defense on the Upgrade Bay, still being built, or being sold is off duty: it does not fight
       const away = o.upgrading ? o.upgrading.id : null;
-      const fighting = away ? { ...o, defenses: o.defenses.filter((d) => d.id !== away) } : o;
+      const offDuty = (d) => d.id === away || !!d.building || !!d.selling;
+      const fighting = o.defenses.some(offDuty) ? { ...o, defenses: o.defenses.filter((d) => !offDuty(d)) } : o;
       const outcome = ctx.raid ? ctx.raid(fighting, { ...ev.raid, powered: powerGrids(o, map).powered }) : { result: 'held', defenses: [] };
       const applied = raidOutcome(o, { ...outcome, at: ev.at }, params);
       Object.assign(o, applied.outpost);
@@ -774,7 +784,11 @@ export function place(outpost, what, ctx) {
     if (o.defenses.some((d) => d.cell[0] === what.cell[0] && d.cell[1] === what.cell[1])) return { error: 'that cell is taken' };
     if (map.pads.some((p) => what.cell[0] >= p.x && what.cell[0] < p.x + p.w && what.cell[1] >= p.y && what.cell[1] < p.y + p.h)) return { error: 'defenses go off the pads' };
     const n = Math.max(0, ...o.defenses.map((d) => +d.id.slice(1) || 0)) + 1;
-    o.defenses.push({ id: `d${n}`, kind, tier: 1, cell: [...what.cell], hp: def.battle.hp });
+    const nd = { id: `d${n}`, kind, tier: 1, cell: [...what.cell], hp: def.battle.hp };
+    // owner 2026-11-10 (tower parity): a defense is built over its buildSec, as a battle tower is; it does not fight a
+    // raid until it is done (advance: d.building) [MM-story_mwb8zdb0_26]. A bare call (no clock) builds at once.
+    if (ctx.now != null && def.buildSec > 0) nd.building = { since: ctx.now, done: ctx.now + def.buildSec * 1000 };
+    o.defenses.push(nd);
     return { outpost: o, cost: def.cost };
   }
   const pad = padOf(map, what.pad);
@@ -838,6 +852,8 @@ export function defenseUpgradeRefusal(o, id, ctx = {}) {
   const next = structureDef(d.kind, d.tier + 1);
   if (!next) return `the ${DEF_NAME[d.kind] || d.kind} is at its top tier`;
   if (d.hp <= 0) return 'repair the wreck first';
+  if (d.building) return 'it is still being built';
+  if (d.selling) return 'it is being sold';
   if (!Object.values(o.pads).some((b) => b.kind === 'upgradeBay')) return 'build the Upgrade Bay first';
   if (o.upgrading) return o.upgrading.id === id ? `the ${DEF_NAME[d.kind] || d.kind} is already on the Upgrade Bay` : `the Upgrade Bay is busy with the ${DEF_NAME[o.upgrading.kind] || o.upgrading.kind}`;
   if (ctx.map && !upgradeBayReady(o, ctx.map)) return 'the Upgrade Bay has no power';
@@ -895,6 +911,7 @@ export function sellStructureQuote(o, target) {
     const d = o.defenses.find((x) => x.id === target.defense);
     if (!d) return { error: `no defense ${target.defense}` };
     if (o.upgrading && o.upgrading.id === d.id) return { error: 'it is on the Upgrade Bay' };
+    if (d.selling) return { error: 'it is being sold' };
     return { refund: Math.floor(investedIn(d.kind, d.tier) * frac) };
   }
   const id = target && target.pad, b = id && o.pads[id];
@@ -905,12 +922,25 @@ export function sellStructureQuote(o, target) {
   if (b.kind === 'rig' && bayUnits(o, id) >= 1) return { error: 'sell the ore in its bay first' };
   return { refund: Math.floor(investedIn(b.kind, b.tier) * frac) };
 }
-/** Sell a building or defense: it is removed and the refund paid. -> { outpost, refund } or { error } */
-export function sellStructure(outpost, target) {
+/** How long a defense takes to sell: the battle tower's sellTime (tables.js), in ms. */
+export function defenseSellMs(kind) {
+  const id = kind === 'mg' ? 'STR-MG' : kind === 'cannon' ? 'STR-Cannon' : 'STR-Wall';
+  try { return Math.round(1000 * (getStructureDef(id).sellTime || 0)); } catch (e) { return 0; }
+}
+/**
+ * Sell a building or defense. The refund is paid now. A defense sold with a clock (ctx.now) is dismantled as a battle
+ * tower is: it stays on its cell for its sellTime (d.selling, the battle's grey Selling look), does not fight, and
+ * advance() removes it [MM-story_mwb8zdb0_26]. Without a clock, or a building, it goes at once.
+ * -> { outpost, refund } or { error }
+ */
+export function sellStructure(outpost, target, ctx = {}) {
   const q = sellStructureQuote(outpost, target);
   if (q.error) return q;
   const o = clone(outpost);
-  if (target.defense != null) o.defenses = o.defenses.filter((d) => d.id !== target.defense);
+  const sd = target.defense != null ? o.defenses.find((d) => d.id === target.defense) : null;
+  const ms = sd ? defenseSellMs(sd.kind) : 0;
+  if (sd && ctx.now != null && ms > 0) { sd.selling = { since: ctx.now, done: ctx.now + ms }; delete sd.repair; }
+  else if (target.defense != null) o.defenses = o.defenses.filter((d) => d.id !== target.defense);
   else { delete o.pads[target.pad]; delete o.storage[target.pad]; }
   return { outpost: o, refund: q.refund };
 }
@@ -951,6 +981,8 @@ export function repair(outpost, id, ctx = {}) {
   const params = P(ctx);
   const d0 = outpost.defenses.find((x) => x.id === id);
   if (d0 && d0.repair) return { error: 'a repair drone is already on its way' };
+  if (d0 && d0.building) return { error: 'it is still being built' };
+  if (d0 && d0.selling) return { error: 'it is being sold' };
   const cost = repairCost(outpost, id, params);
   if (cost == null) return { error: `no defense ${id}` };
   if (cost > (ctx.gold ?? Infinity)) return { error: `costs ${cost} gold` };

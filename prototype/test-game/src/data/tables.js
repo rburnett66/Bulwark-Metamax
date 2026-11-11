@@ -1432,6 +1432,11 @@ export const HARVESTER_UNLOAD_TIME = 3.0;
 // WAVE SPEED (owner 2026-11-07: "we need to reduce the speed of the wave one verdance units by 20%"): a speed multiplier
 // for a faction's attackers in given waves, applied as each one spawns (waves.js). Verdance is the Ground / Powder world.
 export const WAVE_SPEED_MULT = Object.freeze({ 'Ground / Powder': Object.freeze({ 1: 0.8 }) });
+// HARVEST WINDOW (owner 2026-11-10: "when you clear the attack wave, celebrate with a message but let the player continue
+// to harvest resources until time expires. Time on each level should be based on the expected attack duration plus 15
+// seconds"): a campaign wave lasts its par (the workbook's Wave_Par_Sec, the expected attack duration) plus this many
+// seconds. Clearing it early keeps the harvest running to the end of that time (waves.js) [MM-story_mwbd4114_28].
+export const WAVE_HARVEST_EXTRA_SEC = 15;
 // RARE RESOURCES (owner 2026-11-07: "double the amount of rare resources on the map"): each rare (red) node on a
 // battle map gets RARE_NODE_MULT - 1 partners beside it, in the same wave ring (mapgen.buildTerrainMap).
 export const RARE_NODE_MULT = 2;

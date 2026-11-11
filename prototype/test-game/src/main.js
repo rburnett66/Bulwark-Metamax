@@ -29,7 +29,7 @@ import { runPricingReport } from './sim/balanceSim.js';
 import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
 import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
 import { waveQuota } from './sim/harvest.js';
-import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showStarBanner, showWaveReport } from './render/hud.js';
+import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showSecuredBanner, showStarBanner, showWaveReport } from './render/hud.js';
 import { createResourceLedger, feedResources, closeWave, resourceNames, waveResourcesHtml } from './render/resourceSummary.js';
 import { createInput, createUiState, destroyInput, nextHarvesterId } from './input/input.js';
 import { createComm } from './comm/commCard.js';
@@ -1183,6 +1183,12 @@ export function boot(mountEl, seed) {
               killsThisWave = 0;
             }
             if (evs[i].type === 'wave' && evs[i].phase === 'start') musicIntensity('wave');
+            // HARVEST WINDOW [MM-story_mwbd4114_28]: the last attacker fell with time on the clock — celebrate; the sim
+            // keeps running so the harvest goes on until the wave's time is up (then the usual clear below)
+            if (evs[i].type === 'wave' && evs[i].phase === 'secured') {
+              showSecuredBanner(hud, evs[i].wave, evs[i].left);
+              musicIntensity('build');
+            }
             if (evs[i].type === 'wave' && evs[i].phase === 'clear' && evs[i].wave < evs[i].total) musicIntensity('build');
             if (evs[i].type === 'wave' && evs[i].phase === 'start' && evs[i].faction) {
               showWaveBanner(hud, evs[i].faction);

@@ -39,6 +39,13 @@ export function constructionSites(o, map, now) {
     out.push({ id: 'site-' + job.pad, pos: { x: pad.x, y: pad.y }, footprint: { w: pad.w, h: pad.h }, lifecycle: 'Building',
       progress: Math.max(0, Math.min(1, 1 - (job.done - now) / sec)) });
   }
+  // a defense being built (tower parity) [MM-story_mwb8zdb0_26]: the battle's build dust on its cell
+  for (const d of (o && o.defenses) || []) {
+    if (!d.building || !(d.building.done > now) || !d.cell) continue;
+    const span = Math.max(1, d.building.done - d.building.since);
+    out.push({ id: 'dsite-' + d.id, pos: { x: d.cell[0], y: d.cell[1] }, footprint: { w: 1, h: 1 }, lifecycle: 'Building',
+      progress: Math.max(0, Math.min(1, (now - d.building.since) / span)) });
+  }
   // the defense on the Upgrade Bay (owner 2026-11-10, tower parity) [MM-story_mwb8zcgz_25]: the battle's build dust and
   // welding sparks where it stands on the bay's pad (conduits.js defenseStructures: the pad's open right side)
   const u = o && o.upgrading;
