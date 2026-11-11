@@ -67,6 +67,7 @@ const CSS = `
 .tn .btn{font:700 10px Orbitron,sans-serif;letter-spacing:.12em;color:#cfe9ff;background:rgba(90,200,255,.06);border:1px solid var(--line2);padding:7px 9px;cursor:pointer;transition:.15s}
 .tn .btn:hover{background:rgba(90,200,255,.18);box-shadow:0 0 12px rgba(52,225,255,.35)}
 .tn .btn.close{font-size:11px;padding:8px 12px;border-color:var(--cyan);color:#fff}
+.tn .btn.back{flex:none;order:-1}
 .tn .prog{display:flex;align-items:center;gap:8px}
 .tn .prog svg{width:38px;height:38px;transform:rotate(-90deg)}
 .tn .prog b{font:700 15px 'JetBrains Mono',monospace;color:#fff}
@@ -187,6 +188,7 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
   root.innerHTML = `
     <div class="stage"></div><div class="labels"></div><div class="scan"></div><div class="vig"></div>
     <header class="hud glass">
+      ${sandbox ? '' : '<button class="btn close back" data-close-net aria-label="Back to the menu">← MENU</button>'}
       <div class="brand"><div class="logo">BULWARK<span>//</span>TECH NET</div><div class="tag">${sandbox ? 'SANDBOX · ' : ''}${TECH_TOTAL} UPGRADES · ${DIV_ORDER.length} DIVISIONS</div></div>
       <nav class="trees" aria-label="Tech trees">${TREE_ORDER.map((k) => '<button class="tree' + (k === tree ? ' on' : '') + '" data-tree="' + k + '" aria-pressed="' + (k === tree) + '">' + TREES[k].label + '</button>').join('')}</nav>
       <nav class="chips"></nav>
@@ -195,7 +197,7 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
         ${sandbox ? '<button class="btn addgold" data-add="1000">+1K</button><button class="btn addgold" data-add="10000">+10K</button>' : ''}
         <div class="prog"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="rgba(90,200,255,.15)" stroke-width="3"/><circle data-ring cx="20" cy="20" r="16" fill="none" stroke="#34e1ff" stroke-width="3" stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="100.5"/></svg>
           <div><b data-owned>0</b><b style="color:#6f8aa6">/${TECH_TOTAL}</b><label>RESEARCHED</label></div></div>
-        ${sandbox ? '<button class="btn" data-reset>RESET</button>' : '<button class="btn close" data-close-net>← MENU</button>'}
+        ${sandbox ? '<button class="btn" data-reset>RESET</button>' : ''}
       </div>
     </header>
     <div class="sub glass"><input class="search" list="tn-names" placeholder="Search upgrades…" autocomplete="off"><datalist id="tn-names"></datalist>
@@ -507,6 +509,20 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
   const rs = $('[data-reset]'); if (rs) rs.addEventListener('click', () => { adapter.reset(); refresh(); });
   root.querySelectorAll('[data-tree]').forEach((b) => b.addEventListener('click', () => opts.onTree && opts.onTree(b.dataset.tree)));
   const cl = $('[data-close-net]'); if (cl) cl.addEventListener('click', () => adapter.onClose && adapter.onClose());
+  // [MM-story_mwb9pici_27] the bar under the header (search, spent) and the details panel sit below the header's real
+  // bottom: on a narrow screen the header wraps to more rows and used to slide under them
+  const hudEl = $('.hud'), subEl = $('.sub'), panelEl = $('.panel');
+  const placeBelowHud = () => {
+    if (!hudEl || !subEl) return;
+    const bottom = hudEl.offsetTop + hudEl.offsetHeight;
+    const subAtBottom = !!(win.matchMedia && win.matchMedia('(max-width:820px)').matches);   // the phone layout docks the bar at the foot
+    subEl.style.top = subAtBottom ? '' : (bottom + 8) + 'px';
+    if (panelEl) panelEl.style.top = ((subAtBottom ? bottom : bottom + 8 + subEl.offsetHeight) + 8) + 'px';
+  };
+  placeBelowHud();
+  const hudRO = win.ResizeObserver ? new win.ResizeObserver(placeBelowHud) : null;
+  if (hudRO && hudEl) hudRO.observe(hudEl);
+  win.addEventListener('resize', placeBelowHud);
   $('#tn-names').innerHTML = TECH_NODES.filter((n) => !n.soon).map((n) => '<option value="' + n.name + '">').join('');
   const search = $('.search');
   search.addEventListener('change', () => {
@@ -743,7 +759,7 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
     stop() { running = false; controls.enabled = false; if (raf) win.cancelAnimationFrame(raf); raf = 0; selId = null; hovId = null; tip.style.opacity = 0; renderPanel(); },
     refresh,
     select: (id) => select(id, true),
-    dispose() { api.stop(); win.removeEventListener('keydown', onKey); win.removeEventListener('resize', resize); controls.dispose(); renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) { /* already gone */ } root.remove(); },
+    dispose() { api.stop(); win.removeEventListener('keydown', onKey); win.removeEventListener('resize', resize); win.removeEventListener('resize', placeBelowHud); if (hudRO) hudRO.disconnect(); controls.dispose(); renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) { /* already gone */ } root.remove(); },
     debug: { V, BY, BUYABLE, get ctx() { return ctx; } },
   };
   return api;
