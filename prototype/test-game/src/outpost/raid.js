@@ -8,7 +8,9 @@
  * ── The API (the contract with the outpost view, story O6) ──────────────────────────────────────────────────────
  *
  *   runRaid(outpost, raid, { map, step, seed?, units?, bakeTune?, onTick? })
- *     → { result: 'held' | 'breach', defenses: [{ id, hp }], cells, events, ticks, timedOut }
+ *     → { result: 'held' | 'breach', defenses: [{ id, hp }], cells, events, ticks, timedOut, bounty }
+ *     `bounty` is the gold the raid's kills paid: the sum of the battle's grantKillIncome (sim/economy.js) over the
+ *     raiders killed, read from the sim's 'coin' kill events. The away catch-up banks it (outpost/view/session.js).
  *     Runs the raid headless to its end. `cells` are the outpost-map cells a raider stood on during the raid, each once,
  *     as [x, y] in row order (the farm's trampling reads them, src/farm/model.js trample; tech plan Farming §2.3 F5). `raid` is what advance() hands its hook: { at, window?, first?, powered }.
  *     onTick(events, raidObj) is called after every fixed tick (optional; e.g. a progress bar).
@@ -401,7 +403,7 @@ export function createRaid(outpost, raid = {}, opts = {}) {
     }
   };
   const cellList = () => [...stood].sort((a, b) => a - b).map((i) => [i % mc, (i / mc) | 0]);
-  let outcome = null, acc = 0, timedOut = false, breachBy = null;
+  let outcome = null, acc = 0, timedOut = false, breachBy = null, bounty = 0;
 
   const raidify = () => {
     raiderRules(state, { hpMult, dmgMult, breacherId, breacherHp, breacherReach, probing });
@@ -479,7 +481,12 @@ export function createRaid(outpost, raid = {}, opts = {}) {
       raidify();
       const evs = stepSim(state, RAID_DT);
       noteCells();
-      for (const e of evs) if (KEEP_EVENTS.has(e.type)) kept.push(e);
+      for (const e of evs) {
+        if (KEEP_EVENTS.has(e.type)) kept.push(e);
+        // the bounty: what the battle's own grantKillIncome paid for each raider killed (its 'coin' kill events), the
+        // same gold a battle kill pays (owner 2026-11-11); measured only, so the raid itself is unchanged
+        if (e.type === 'coin' && e.op === 'kill' && e.amount > 0) bounty += e.amount;
+      }
       siege();
       const r = decide();
       if (r) {
@@ -492,7 +499,7 @@ export function createRaid(outpost, raid = {}, opts = {}) {
             const hit = placed.find(([id]) => id === d.id);
             return { id: d.id, hp: hit ? Math.max(0, Math.round(hit[1].hp * 1000) / 1000) : d.hp };
           }),
-          cells: cellList(), events: kept, ticks: state.tick, timedOut,
+          cells: cellList(), events: kept, ticks: state.tick, timedOut, bounty: Math.round(bounty * 100) / 100,
         };
       }
       return evs;

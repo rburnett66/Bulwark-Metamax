@@ -17,7 +17,13 @@
  *      online status + GO ONLINE, storage and loads + SELL, REPAIR ALL, the away report, LEAVE. Those are outpost
  *      economy (no battle equivalent), so they run the save session's own rules (session.js act) — the live state is
  *      written back first and rebuilt after, never a second copy of those rules.
- * Still to come on this path: visit raids as waves (S2.4c). The farm joins in S6.
+ *   7. fog of war (S5 [MM-story_mwc9q0yy_2m]): the battle's own — render3d's fog tracker runs on the live state as in a
+ *      battle (fogWindow(state, map)); this view adds no fog code. The outpost has no wave windows, so the whole board
+ *      is the play area and the battle's open-board cloud bank rings the map's edge (no enemy is hidden as a contact).
+ *   8. the rail's pictures: an outpost defense shows its battle tower's baked picture (render/buildIcons.js resolves
+ *      OUT-<kind> through towerStructId); a building shows its GLB rendered by menuIcons.js (the old menu's pictures),
+ *      handed to the battle rail with hud.setBuildPicture — one rail, one picture slot.
+ * The farm joins in S6.
  */
 import { createBattleSession } from '../../battle/session.js';
 import { createCatalogue, lockRule } from '../../battle/catalogue.js';
@@ -33,6 +39,8 @@ import { outpostBattleMap, bakedSlugFor } from './outpostBoard.js';
 import { createOutpostScene } from './outpostScene.js';
 import { planBuildings } from './conduits.js';
 import { createOutpostKit, modelSlug } from '../../render3d/outposts/outpostModels.js';
+import { renderMenuIcons, OUTPOST_GLYPHS } from './menuIcons.js';
+import { oresOf } from '../../data/ores.js';
 import { createSession, onlineIssues, repairAllCost } from './session.js';
 import { hudModel, sellButton, fmtGold } from './hudModel.js';
 import { awayReportModel } from './awayReport.js';
@@ -100,6 +108,7 @@ export async function openOutpostSessionView(opts = {}) {
   // the clock the save sees: the arrival time plus the sim's own time (the sim never reads the wall clock)
   const nowOf = () => t0 + Math.round(sim.time * 1000);
   let ui = createUiState();
+  let closed = false;
   let hud = null;
   const submit = (cmd) => {
     const res = applyCommand(sim, cmd);
@@ -117,19 +126,28 @@ export async function openOutpostSessionView(opts = {}) {
       render3d: { baseUrl: ROOT, craft: false, landing: false, qualityQuery: opts.tier || null } }),
   });
   hud = session.createHud({ onMainMenu: () => close() });
+  // the outpost buildings' glyphs on the battle rail until their GLB pictures are rendered (below)
+  const RAIL_KINDS = OUTPOST_BUILDING_KINDS.filter((k) => k !== 'hub');
+  for (const k of RAIL_KINDS) if (OUTPOST_GLYPHS[k] && hud.setBuildPicture) hud.setBuildPicture(outpostStructId(k), { glyph: OUTPOST_GLYPHS[k] });
   session.setBoard(board, 0);
   await session.mount3D(board, slug);
   const r = session.view3d;
   let scene = null;
   if (r) {
     if (r.markers && r.markers.setBaseVisible) r.markers.setBaseVisible(false);   // the hub model stands on the base
-    r.fog.update = () => ({ win: null });   // no battle fog yet at the outpost (S5)
     const { GLTFLoader } = await import(ROOT + 'vendor/three-addons/loaders/GLTFLoader.js');
     const kit = await createOutpostKit(r.THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader });
     scene = createOutpostScene(r.THREE, r, { map, kit, tier: r.tier.key, reduced });
     const o = fromLiveSim(sim, live.link, nowOf()).outpost;
     const slugs = new Set(planBuildings(o, map, nowOf()).map((b) => modelSlug(b.kind, b.tier, b.rigHead)).filter(Boolean));
     await kit.preload([...slugs]);
+    // the buildings' pictures for the rail, rendered from their GLBs (menuIcons.js, as the old build menu does)
+    const rigHead = (oresOf(planet)[0] || {}).rig;
+    const iconSlug = new Map(RAIL_KINDS.map((k) => [k, modelSlug(k, 1, rigHead)]).filter(([, sl]) => sl && kit.manifest[sl]));
+    renderMenuIcons(r.THREE, r.renderer, kit, [...new Set(iconSlug.values())]).then((pics) => {
+      if (closed) return;
+      for (const [k, sl] of iconSlug) if (pics[sl]) hud.setBuildPicture(outpostStructId(k), { src: pics[sl] });
+    }).catch((e) => console.warn('[outpost] rail pictures', e));
   }
 
   // the outpost's art follows the live state: re-read the save shape a few times a second (cheap), animate each frame
@@ -192,6 +210,7 @@ export async function openOutpostSessionView(opts = {}) {
     rep.style.paddingTop = '6px';
     const rows = ['While you were away (' + away.away + ')', ...away.built,
       ...away.raids.map((x) => x.label + ' · ' + x.when + (x.lostText ? ' · ' + x.lostText : '')),
+      ...(away.bounty ? ['+' + away.bounty + ' gold from raid kills'] : []),
       ...away.extracted.slice(0, 4).map((x) => '+' + x.units + ' ' + x.name)];
     rows.forEach((t, i) => { const d = doc.createElement(i ? 'div' : 'b'); d.textContent = t; rep.appendChild(d); });
   }
@@ -233,7 +252,7 @@ export async function openOutpostSessionView(opts = {}) {
     },
   });
 
-  let closed = false, resolveClosed;
+  let resolveClosed;
   const closedP = new Promise((ok) => { resolveClosed = ok; });
   function close() {
     if (closed) return;

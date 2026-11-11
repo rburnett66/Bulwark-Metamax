@@ -18,7 +18,7 @@
  *     harvesters: n,                                                // bought for the Resource Bay (O16; behaviour O10)
  *     hopper: { common: units, uncommon: units },                   // the Resource Bay's hopper (O10), fractional
  *     fields: { [fieldId]: units },                                 // surface field stock (O10); absent = full
- *     raids: { window, log: [{ at, result, lost, damage }] },
+ *     raids: { window, log: [{ at, result, lost, damage, bounty? }] },
  *     sold: { [oreId]: units } }                                    // lifetime, both grades, for contract steps
  *
  * The contract grants only the hub (owner 2026-11-07, story O16); everything else is bought with place() and
@@ -642,7 +642,7 @@ function lastSettledWindow(seed, end, params) {
  * Apply a raid outcome: defenses take their new HP; a breach loses Breach_Storage_Loss of every bay's ore (owner Q6)
  * and changes no building. The log keeps the last Replay_Keep raids. → { outpost, entry }
  */
-export function raidOutcome(outpost, { result, defenses = [], at }, params = OUTPOST) {
+export function raidOutcome(outpost, { result, defenses = [], at, bounty = 0 }, params = OUTPOST) {
   const o = clone(outpost);
   let damage = 0;
   for (const d of defenses) {
@@ -662,6 +662,9 @@ export function raidOutcome(outpost, { result, defenses = [], at }, params = OUT
     }
   }
   const entry = { at, result, lost, damage };
+  // the kills' gold (raid.js outcome.bounty, the battle's grantKillIncome): carried on the entry for the save to bank
+  // (outpost/view/session.js) and the away report to show; the outpost model holds no gold
+  if (bounty > 0) entry.bounty = bounty;
   o.raids.log = [...o.raids.log, entry].slice(-params.Replay_Keep);
   return { outpost: o, entry };
 }
