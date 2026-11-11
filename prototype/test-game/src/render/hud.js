@@ -385,7 +385,7 @@ export function createHud(mountEl, callbacks) {
     if (key <= 9) icon.appendChild(el(doc, 'b', 'bw-bkey', String(key)));
     const costSpan = el(doc, 'span', 'bw-cost', String(def.cost && def.cost[0] != null ? def.cost[0] : '?') + 'g');
     btn.appendChild(icon);
-    btn.appendChild(el(doc, 'span', 'bw-bname', (buildIcon(structId) || {}).label || String(def.name || structId).toUpperCase()));
+    btn.appendChild(el(doc, 'span', 'bw-bname', (buildIcon(structId) || {}).label || def.label || String(def.name || structId).toUpperCase()));
     btn.appendChild(costSpan);
     btn.addEventListener('click', () => toggleBuild(structId));
     paletteRow.appendChild(btn);

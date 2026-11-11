@@ -42,6 +42,17 @@ export const OUTPOST_KIND_NAME = Object.freeze({
   harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay', habitat: 'Habitat', cannon: 'Cannon Tower', mg: 'Machine Gun', wall: 'Wall',
 });
 
+/**
+ * The short names a build rail shows (owner 2026-11-11: "Building names can be shortened"): the full names overlap on a
+ * phone-width rail. ONE table for every rail — the shared battle rail (render/hud.js reads a def's `label`) and the old
+ * outpost view's narrow rail (outpost/view/hud.js) — so a rename happens once. Farm kinds included for the farm rail.
+ */
+export const RAIL_SHORT_NAME = Object.freeze({
+  power: 'POWER', pylon: 'PYLON', rig: 'MINING', storage: 'STORAGE', resourceBay: 'RES. BAY', harvesterBay: 'RES. BAY',
+  upgradeBay: 'UPGRADE', habitat: 'HABITAT', cannon: 'CANNON',
+  traditional: 'PLOT', irrigated: 'IRRIGATED', silo: 'SILO', pump: 'PUMP',
+});
+
 /** The sim structure id for an outpost kind ('power' → 'OUT-power'). */
 export const outpostStructId = (kind) => 'OUT-' + kind;
 
@@ -80,7 +91,7 @@ export function buildOutpostStructures(rows, battle) {
     } else {
       out[outpostStructId(kind)] = Object.freeze({
         ...common,
-        name: OUTPOST_KIND_NAME[kind] || kind, kind: 'building',
+        name: OUTPOST_KIND_NAME[kind] || kind, label: RAIL_SHORT_NAME[kind], kind: 'building',
         armorClass: 'Structure', damageType: 'Kinetic', canTargetDomains: Object.freeze([]),
         hp: Object.freeze(tiers.map((r) => num(r.HP) || 1)), dps: Object.freeze(tiers.map(() => 0)), range: 0,
         targetable: false,                       // raiders breach a building by reaching it; they never shoot it
