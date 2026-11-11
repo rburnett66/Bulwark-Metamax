@@ -102,17 +102,67 @@ export function outpostSeed(saveId, planet) {
 export const windowMs = (params = OUTPOST) => params.Raid_Min_Gap_Hours * HOUR;
 
 /**
- * The raids in windows [fromWindow, toWindow], in order: [{ window, at }]. A window holds a raid with probability
- * window / Raid_Mean_Hours, at a minute inside it; both are drawn from the seed and the window index only, so the
- * schedule never depends on how often the game is opened (tech plan §4.2).
+ * The outpost's size for the raid rule (owner 2026-11-11: "The bigger the base the more frequent attacks."): the
+ * buildings and defenses it has finished at `at` (ms), the granted hub left out, so a fresh outpost is size 0 and is
+ * raided at the base rate. A build or a defense still under way counts once it finishes by `at`; a defense being sold
+ * stops counting once its dismantling is done. It counts what stands, not the gold spent, so the player reads it at a
+ * glance: every pad filled and every defense placed (walls included) adds one. Pure. [MM-story_mwcfrtu4_2w]
  */
-export function raidSchedule(seed, fromWindow, toWindow, params = OUTPOST) {
-  const w = windowMs(params), chance = params.Raid_Min_Gap_Hours / params.Raid_Mean_Hours, out = [];
+export function outpostSize(o, at = o.t) {
+  let n = 0;
+  const pads = o.pads || {};
+  for (const b of Object.values(pads)) if (b && b.kind && b.kind !== 'hub') n++;
+  for (const b of o.building || []) if (b.done <= at && !(pads[b.pad] && pads[b.pad].kind)) n++;
+  for (const d of o.defenses || []) {
+    if (d.building && d.building.done > at) continue;
+    if (d.selling && d.selling.done <= at) continue;
+    n++;
+  }
+  return n;
+}
+
+/**
+ * The raid chance per window at outpost size `size` (workbook Outpost_Params): the base, window / Raid_Mean_Hours,
+ * grown by Raid_Chance_Per_Size for every unit of size, never above Raid_Chance_Max (nor 1: a window holds at most one
+ * raid). Size 0 is the base chance exactly.
+ */
+export function raidChance(size = 0, params = OUTPOST) {
+  const base = params.Raid_Min_Gap_Hours / params.Raid_Mean_Hours;
+  const grown = base * (1 + (params.Raid_Chance_Per_Size || 0) * Math.max(0, size || 0));
+  return Math.min(grown, params.Raid_Chance_Max ?? 1, 1);
+}
+
+/**
+ * Every window's draw in [fromWindow, toWindow]: [{ window, at, roll }]: the minute a raid would come and the roll it
+ * must beat (roll < raidChance(size): it comes). Drawn from the seed and the window index only, so the schedule never
+ * depends on how often the game is opened (tech plan §4.2), nor on the size: a bigger base turns more of the SAME
+ * draws into raids, so on one seed it is never raided less than a smaller one.
+ */
+function raidDraws(seed, fromWindow, toWindow, params = OUTPOST) {
+  const w = windowMs(params), out = [];
   for (let i = fromWindow; i <= toWindow; i++) {
     const rng = createRng(mix(seed, i));
-    if (rng.next() < chance) out.push({ window: i, at: i * w + Math.floor(rng.next() * (w / MIN)) * MIN });
+    const roll = rng.next();
+    out.push({ window: i, at: i * w + Math.floor(rng.next() * (w / MIN)) * MIN, roll });
   }
   return out;
+}
+
+/**
+ * The raids in windows [fromWindow, toWindow], in order: [{ window, at }], for an outpost of `size` (outpostSize).
+ * A window holds a raid with probability raidChance(size), at a minute inside it. Pure in (seed, windows, params,
+ * size); size 0 is the schedule from before raids grew with the base.
+ */
+export function raidSchedule(seed, fromWindow, toWindow, params = OUTPOST, size = 0) {
+  const chance = raidChance(size, params);
+  return raidDraws(seed, fromWindow, toWindow, params).filter((d) => d.roll < chance).map(({ window, at }) => ({ window, at }));
+}
+
+/** This outpost's raids in windows [fromWindow, toWindow], each judged at the size the outpost has at its minute
+ *  (outpostSize(o, at)): the one rule advance() and the Sensor Spire's forecast both read. */
+function outpostRaids(o, fromWindow, toWindow, params) {
+  return raidDraws(o.seed, fromWindow, toWindow, params).filter((d) => d.roll < raidChance(outpostSize(o, d.at), params))
+    .map(({ window, at }) => ({ window, at }));
 }
 
 // ── creating the outpost (the contract grants the hub) ───────────────────────────────────────────────────────────
@@ -536,7 +586,8 @@ export function advance(outpost, toMs, ctx) {
   if (o.online) {
     const w = windowMs(params);
     const fromW = o.raids.window == null ? Math.floor(o.t / w) : o.raids.window + 1;
-    for (const r of raidSchedule(o.seed, fromW, Math.floor(end / w), params)) {
+    // every window's draw: whether it is a raid is judged when its minute comes, at the outpost's size then
+    for (const r of raidDraws(o.seed, fromW, Math.floor(end / w), params)) {
       if (r.at > o.t && r.at <= end && (o.firstRaidAt == null || r.at > o.firstRaidAt)) raids.push(r);
     }
   }
@@ -600,13 +651,17 @@ export function advance(outpost, toMs, ctx) {
     } else if (ev.upgraded) {
       const d = finishDefenseUpgrade(o);
       if (d) report.built.push({ defense: d.id, kind: d.kind, tier: d.tier, at: ev.at });
+    } else if (ev.raid.roll != null && !(ev.raid.roll < raidChance(outpostSize(o, ev.at), params))) {
+      // this window's draw is no raid at the outpost's size now: the window is settled, quietly
+      o.raids.window = ev.raid.window;
     } else {
       // a defense on the Upgrade Bay is off its cell and does not fight
       // a defense on the Upgrade Bay, still being built, or being sold is off duty: it does not fight
       const away = o.upgrading ? o.upgrading.id : null;
       const offDuty = (d) => d.id === away || !!d.building || !!d.selling;
       const fighting = o.defenses.some(offDuty) ? { ...o, defenses: o.defenses.filter((d) => !offDuty(d)) } : o;
-      const outcome = ctx.raid ? ctx.raid(fighting, { ...ev.raid, powered: powerGrids(o, map).powered }) : { result: 'held', defenses: [] };
+      const { roll: _roll, ...raid } = ev.raid;
+      const outcome = ctx.raid ? ctx.raid(fighting, { ...raid, powered: powerGrids(o, map).powered }) : { result: 'held', defenses: [] };
       const applied = raidOutcome(o, { ...outcome, at: ev.at }, params);
       Object.assign(o, applied.outpost);
       if (o.farm) {
@@ -631,11 +686,11 @@ export function advance(outpost, toMs, ctx) {
   return { outpost: o, report };
 }
 
-/** The last window whose raid (if any) is at or before `end`: the window holding `end` counts only once its raid
- *  has happened, so a raid later in that window is still found by the next advance. */
+/** The last window whose draw is at or before `end`: the window holding `end` counts only once its minute has passed,
+ *  so a raid later in that window is still found, and judged at the outpost's size then, by the next advance. */
 function lastSettledWindow(seed, end, params) {
   const w = Math.floor(end / windowMs(params));
-  return raidSchedule(seed, w, w, params).some((r) => r.at > end) ? w - 1 : w;
+  return raidDraws(seed, w, w, params).some((r) => r.at > end) ? w - 1 : w;
 }
 
 /**
@@ -1116,7 +1171,7 @@ export function nextRaidAt(o, from, { params = OUTPOST, horizonMs = 24 * HOUR } 
   if (o.firstRaidAt != null && o.firstRaidAt > from) return o.firstRaidAt;
   const w = windowMs(params);
   const fromW = Math.max(Math.floor(from / w), o.raids.window == null ? -Infinity : o.raids.window + 1);
-  const r = raidSchedule(o.seed, fromW, Math.floor((from + horizonMs) / w), params).find((x) => x.at > from);
+  const r = outpostRaids(o, fromW, Math.floor((from + horizonMs) / w), params).find((x) => x.at > from);
   return r ? r.at : null;
 }
 /** A raid inbound within ctx.leadMs (the Sensor Spire's 10 minutes): ms until it, or null. Needs the node owned. */
