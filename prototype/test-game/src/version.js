@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.10-zd';
-export const VERSION_NOTE = 'Tech Net: the MENU button is always in the header corner; the search bar no longer hides the header';
+export const VERSION = 'v2026.11.10-ze';
+export const VERSION_NOTE = 'A cleared wave is celebrated and the harvest runs on until its time is up (par + 15 s); the HUD shows the wave clock';

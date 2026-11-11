@@ -177,6 +177,8 @@ ${SELPANEL_CSS}
   text-shadow:0 3px 12px #000, 0 0 26px rgba(255,80,40,0.65); text-transform:uppercase; }
 .bw-wavebanner .bw-sub { font-size:18px; font-weight:700; letter-spacing:3px; color:#ffd6c8;
   text-shadow:0 2px 6px #000; margin-top:6px; }
+.bw-wavebanner.bw-secured .bw-line { color:#ffd76a; text-shadow:0 3px 12px #000, 0 0 26px rgba(255,200,80,0.7); }
+.bw-wavebanner.bw-secured .bw-sub { color:#bff5c8; }
 .bw-rscore { margin:6px 0 10px; text-align:center; }
 .bw-rscore-total { font-size:22px; font-weight:bold; letter-spacing:1px; color:#ffe08a; text-shadow:0 1px 4px #000; }
 .bw-rscore-line { font-size:12px; color:#bbb; margin-top:3px; }
@@ -748,6 +750,7 @@ export function createHud(mountEl, callbacks) {
     toastTimer: null,
     waveBanner,
     waveBannerMain,
+    waveBannerSub,
     waveBannerTimer: null,
     resultEl,
     nextMapBtn,
@@ -939,7 +942,7 @@ export function updateHud(hud, state, ui) {
     if (waves.active) {
       let left = (waves.pendingSpawns ? waves.pendingSpawns.length : 0);
       if (state.units) for (const u of state.units.values()) if (u && u.hp > 0 && u.side === 'attacker') left++;
-      hud.enemiesEl.textContent = '⚔ ' + left + ' left';
+      hud.enemiesEl.textContent = waveClockText(waves, left, state.time);
     } else hud.enemiesEl.textContent = '';
   }
   hud.startWaveBtn.disabled = !!(waves.active || state.result || waves.current >= waves.total);
@@ -1183,10 +1186,42 @@ export function flashMessage(hud, text) {
   }
 }
 
+/** m:ss for a count of seconds (rounded up, so the readout reaches 0:00 as the time runs out). */
+export function fmtWaveClock(sec) {
+  const s = Math.max(0, Math.ceil(sec - 1e-9));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+/**
+ * The HUD's wave readout [MM-story_mwbd4114_28]: while attackers remain, how many and the wave's time left; once the
+ * last is down with time still on the clock, that the wave is secured and how long the harvest runs on.
+ */
+export function waveClockText(waves, left, now) {
+  const timed = waves && waves.endsAt != null;
+  const rest = timed ? waves.endsAt - now : 0;
+  if (timed && waves.securedAt != null && left === 0 && rest > 0) return '✔ Secured · harvest ' + fmtWaveClock(rest);
+  return '⚔ ' + left + ' left' + (timed && rest > 0 ? ' · ' + fmtWaveClock(rest) : '');
+}
+
+/** The celebration when a wave's last attacker falls with time still on its clock [MM-story_mwbd4114_28]. */
+export function showSecuredBanner(hud, wave, secLeft) {
+  if (!hud || !hud.waveBanner) return;
+  hud.waveBanner.classList.add('bw-secured');
+  hud.waveBannerMain.textContent = 'Wave ' + wave + ' cleared!';
+  if (hud.waveBannerSub) hud.waveBannerSub.textContent = 'keep harvesting · ' + fmtWaveClock(secLeft) + ' left';
+  hud.waveBanner.classList.add('bw-show');
+  if (typeof clearTimeout === 'function' && hud.waveBannerTimer) clearTimeout(hud.waveBannerTimer);
+  if (typeof setTimeout === 'function') {
+    hud.waveBannerTimer = setTimeout(() => { hud.waveBanner.classList.remove('bw-show'); }, 3200);
+  }
+}
+
 /** Boldly announce the attacking faction before the wave's enemies appear: "<Faction> Incoming, prepare for
  *  attack!". Fires on the wave-start event; auto-fades after ~3s. */
 export function showWaveBanner(hud, faction) {
   if (!hud || !hud.waveBanner) return;
+  hud.waveBanner.classList.remove('bw-secured');
+  if (hud.waveBannerSub) hud.waveBannerSub.textContent = 'prepare for attack!';
   hud.waveBannerMain.textContent = (faction || 'Enemy') + ' Incoming,';
   hud.waveBanner.classList.add('bw-show');
   if (typeof clearTimeout === 'function' && hud.waveBannerTimer) clearTimeout(hud.waveBannerTimer);
