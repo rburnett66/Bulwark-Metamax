@@ -1,4 +1,4 @@
-import { WAVES, MAP, getUnitDef, WAVE_SPEED_MULT, WAVE_HARVEST_EXTRA_SEC } from '../data/tables.js';
+import { WAVES, MAP, getUnitDef, WAVE_SPEED_MULT, WAVE_WINDOW_SEC } from '../data/tables.js';
 import { raisesPending } from './abilities.js';
 import { MAX_LIVE_3D } from '../data/renderTiers.js';
 import { createUnit, unitRadius } from './entities.js';
@@ -157,11 +157,12 @@ export function startNextWave(state) {
   if (state.resourceNodes) resetFleetForWave(state);   // owner: each wave opens with its free fleet (1, 2, 3, then 3) + healed base
   // the wave's harvest quotas (common, uncommon), sized to the free fleet and the ring's par; the take counts from here
   { const map = state.map, ring = map && map.rings && map.rings.length ? map.rings[Math.min(w.current, map.rings.length) - 1] : null;
-    w.quota = state.resourceNodes && ring ? waveQuota(state, w.current, ring.parSec) : null;
+    // the quota is sized to the time the wave actually has: its par, at most the window [MM-story_mwbkgcmu_2b]
+    w.quota = state.resourceNodes && ring ? waveQuota(state, w.current, Math.min(ring.parSec, WAVE_WINDOW_SEC)) : null;
     state.waveTake = { common: 0, uncommon: 0, rare: 0, epic: 0 };
-    // HARVEST WINDOW [MM-story_mwbd4114_28]: a harvest board's wave lasts its par + WAVE_HARVEST_EXTRA_SEC; cleared
-    // sooner, the harvest runs on to endsAt (stepWaves). No par, or no fields to harvest (outpost raids): no window.
-    w.endsAt = state.resourceNodes && ring && ring.parSec > 0 ? state.time + ring.parSec + WAVE_HARVEST_EXTRA_SEC : null;
+    // HARVEST WINDOW [MM-story_mwbd4114_28, MM-story_mwbkgcmu_2b]: a harvest board's wave lasts WAVE_WINDOW_SEC (3 min);
+    // cleared sooner, the harvest runs on to endsAt (stepWaves). No par, or no fields to harvest (outpost raids): no window.
+    w.endsAt = state.resourceNodes && ring && ring.parSec > 0 ? state.time + WAVE_WINDOW_SEC : null;
     w.securedAt = null; }
   // STAR RUBRIC snapshot (Story 4): the five wave stars are judged against the state at wave start
   w.waveStart = {
