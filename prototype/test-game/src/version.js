@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.10-zh';
+export const VERSION = 'v2026.11.10-zi';
 export const VERSION_NOTE = 'The selected harvester shows its cargo in whole numbers';
