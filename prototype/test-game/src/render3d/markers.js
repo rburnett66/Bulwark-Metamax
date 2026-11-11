@@ -44,15 +44,18 @@ export function createMarkers(THREE, scene) {
     },
     /** Returns true when the static set changed (the caller re-renders the shadow map once). */
     setStructures(list) {
-      const sig = list.map((s) => `${s.id}@${s.cell ? s.cell.x + ',' + s.cell.y : s.pos.x + ',' + s.pos.y}`).join('|');
+      const sig = list.map((s) => `${s.id}@${s.cell ? s.cell.x + ',' + s.cell.y : s.pos.x + ',' + s.pos.y}:${s.footprint ? s.footprint.w + 'x' + s.footprint.h : '1x1'}`).join('|');
       if (sig === structSig) return false;
       structSig = sig;
       let n = 0;
       for (const s of list) {
         if (n >= structs.instanceMatrix.count) break;
         const c = s.cell || s.pos;
-        tmp.position.set(cellToWorld(Math.floor(c.x)), 0, cellToWorld(Math.floor(c.y)));
+        // the block covers the structure's whole footprint (a 2 × 2 outpost building stands 2 × 2; battle towers are 1 × 1)
+        const fw = (s.footprint && s.footprint.w) || 1, fh = (s.footprint && s.footprint.h) || 1;
+        tmp.position.set(cellToWorld(Math.floor(c.x) + (fw - 1) / 2), 0, cellToWorld(Math.floor(c.y) + (fh - 1) / 2));
         tmp.rotation.set(0, 0, 0);
+        tmp.scale.set(fw, 1, fh);
         tmp.updateMatrix();
         structs.setMatrixAt(n++, tmp.matrix);
       }
