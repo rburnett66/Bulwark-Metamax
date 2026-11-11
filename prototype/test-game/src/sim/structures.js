@@ -50,6 +50,32 @@ function occupiedCellSet(state) {
   return set;
 }
 
+/**
+ * BUILD SPACING [MM-story_mwc9p8ee_2f] (tech plan TECH_PLAN::One-Battle-UX.md §5.1). Owner 2026-11-11: spacing "needs to
+ * be the size of the harvester … I want the simplest implementation" — one free cell between buildings. Each structure
+ * def may carry `spacing` (whole cells, default 0); a footprint must stay max(spacingA, spacingB) free cells from every
+ * other live footprint, measured Chebyshev (diagonal neighbours count). The free cells are ordinary open ground, so
+ * harvesters and walkers path through them. Battle towers and walls declare none → they may touch, exactly as before.
+ * Pure: `structures` is a list of live structures ({ structId, pos, footprint }), `getDef` the def lookup.
+ * → true when the placement of `def` at `cell` is too close to one of them.
+ */
+export function spacingConflict(structures, def, cell, getDef = getStructureDef) {
+  const mine = (def && def.spacing) || 0;
+  const w = (def && def.footprint && def.footprint.w) || 1, h = (def && def.footprint && def.footprint.h) || 1;
+  for (const s of structures) {
+    let theirs = 0;
+    try { theirs = getDef(s.structId).spacing || 0; } catch (e) { theirs = 0; }
+    const need = Math.max(mine, theirs);
+    if (need <= 0) continue;
+    const sw = (s.footprint && s.footprint.w) || 1, sh = (s.footprint && s.footprint.h) || 1;
+    // free cells between the two rectangles on each axis (negative = they overlap on that axis)
+    const gapX = Math.max(s.pos.x - (cell.x + w), cell.x - (s.pos.x + sw));
+    const gapY = Math.max(s.pos.y - (cell.y + h), cell.y - (s.pos.y + sh));
+    if (Math.max(gapX, gapY) < need) return true;
+  }
+  return false;
+}
+
 // cell key → why nothing can be built there ('blocked by rocks or trees' | "can't build on water"), cached per map
 // object (validatePlacement runs every frame for the placement ghost). Maps are rebuilt, never edited in place.
 const GROUND_CACHE = new WeakMap();
@@ -131,6 +157,7 @@ export function validatePlacement(state, structId, slotOrCell) {
     if (forbidden.has(cellKey(c))) return { ok: false, reason: 'terrain' };
     if (isForbiddenTerrain(c)) return { ok: false, reason: 'terrain' };
   }
+  if (spacingConflict(liveStructures(state), def, cell)) return { ok: false, reason: 'spacing' };
   if (!canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
 
   // MINE (Land-Mine rev 2): a LAND mine — never in water — capped, and it never blocks (mines live
