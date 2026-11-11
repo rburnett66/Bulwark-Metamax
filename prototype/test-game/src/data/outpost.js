@@ -26,6 +26,16 @@ export const REFERENCE_SET = Object.freeze(['hub', 'power', 'rig', 'storage', 'c
 export const DEFENSE_KINDS = Object.freeze(['mg', 'cannon', 'wall']);
 /** The defenses the hub crews and the gun cap counts (owner 2026-11-07: Machine Guns and Cannons; walls do not count). */
 export const GUN_KINDS = Object.freeze(['mg', 'cannon']);
+/**
+ * Who gets power first when a grid is short (design §4.5, One Battle UX §5.2): lower serves first, so the outpost keeps
+ * its core running. A kind not listed serves last (POWER_PRIORITY_LAST). outpost/model.js powerGrids reads it.
+ * A data constant here, not a workbook column yet: the workbook (Outpost_Structures) would take a Power_Priority
+ * column, but it is owned by another lane this round.
+ */
+export const POWER_PRIORITY = Object.freeze({ hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, resourceBay: 4, upgradeBay: 5, habitat: 6, farmhouse: 7, silo: 7, pump: 8 });
+export const POWER_PRIORITY_LAST = 9;
+/** A kind's power priority (lower is served first). */
+export const powerPriority = (kind) => POWER_PRIORITY[kind] ?? POWER_PRIORITY_LAST;
 /** Old kind names kept readable: the Harvester Bay became the Resource Bay (owner, 2026-11-07). */
 export const KIND_ALIASES = Object.freeze({ harvesterBay: 'resourceBay' });
 /** A kind's current name ('harvesterBay' → 'resourceBay'; anything else unchanged). */

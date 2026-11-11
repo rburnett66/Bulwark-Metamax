@@ -182,7 +182,7 @@ export function validatePlacement(state, structId, slotOrCell) {
     let mines = 0;
     if (state.mines) for (const m of state.mines.values()) if (m.state === 'flying' || m.state === 'armed') mines++;
     if (mines >= (def.cap || 8)) return { ok: false, reason: 'max mines (' + (def.cap || 8) + ')' };
-    return { ok: true, reason: '' };
+    return placementOk(state, def, cell, structId);
   }
 
   // Every structure (towers included, now that they block) must leave the ground lane OPEN — reject any
@@ -213,6 +213,24 @@ export function validatePlacement(state, structId, slotOrCell) {
   // there must not be refused for a seal it did not make. The "before" grid is only built when the "after" one fails.
   if (!path && findWalkerPath(buildNavGrid(map, liveStructures(state)), from, to)) return { ok: false, reason: 'blocksPath' };
 
+  return placementOk(state, def, cell, structId);
+}
+
+/**
+ * An accepted placement, with the mode's WARNING when it has one [MM-story_mwc9plas_2h]: legal, but the player should
+ * know before paying (the shared ghost turns amber, overlays/placement.js). state.placementWarnings: [(state, def,
+ * cell, structId) → a warning string, or null] — the first one that speaks wins. The campaign sets none (→ exactly
+ * { ok: true, reason: '' } as before); the outpost warns 'no power in reach' / 'grid short' (outpost/placementRules.js).
+ * A warning never refuses: placeStructure builds on { ok: true } alone.
+ */
+function placementOk(state, def, cell, structId) {
+  if (state.placementWarnings) {
+    for (const rule of state.placementWarnings) {
+      let warn = null;
+      try { warn = rule(state, def, cell, structId); } catch (e) { warn = null; }   // a broken warning never refuses
+      if (warn) return { ok: true, reason: '', warn };
+    }
+  }
   return { ok: true, reason: '' };
 }
 

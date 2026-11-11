@@ -128,6 +128,26 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     return plan;
   }
 
+  // ── the PREVIEW conduit [MM-story_mwc9plas_2h]: while a power-drawing building is armed, a dashed line from the grid
+  // node it would join to the ghost (cyan: it will be powered; amber: the grid is short). One line, rebuilt on change.
+  const previewMat = new THREE.LineDashedMaterial({ color: C.cyan, dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: 0.95, depthTest: false, toneMapped: false });
+  let preview = { line: null, sig: '' };
+  /** plan: { points: [[x, z], …], warn } (conduits.js ghostPower's route) or null to hide. */
+  function setPreview(plan) {
+    const sig = plan && plan.points ? plan.points.map((p) => p.join(',')).join(';') + (plan.warn ? '!' : '') : '';
+    if (sig === preview.sig) return;
+    if (preview.line) { root.remove(preview.line); preview.line.geometry.dispose(); preview.line = null; }
+    preview.sig = sig;
+    if (!sig) return;
+    const g = new THREE.BufferGeometry().setFromPoints(plan.points.map(([x, z]) => new THREE.Vector3(x, 0.18, z)));
+    previewMat.color.setHex(plan.warn ? 0xffb43c : C.cyan);
+    preview.line = new THREE.Line(g, previewMat);
+    preview.line.computeLineDistances();
+    preview.line.renderOrder = 12;
+    preview.line.name = 'outpost-conduit-preview';
+    root.add(preview.line);
+  }
+
   // ── deposits: outcrops, merged per state ───────────────────────────────────────────────────────────────────────
   const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, flatShading: true });
   const crystalMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.1, flatShading: true, emissive: 0xffffff, emissiveIntensity: 0.12 });
@@ -694,7 +714,9 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     playSale, get saling() { return !!sale; },
     /** End the sale now (the view's watchdog: a sale must never leave the outpost locked). */
     cancelSale: endSale,
-    pickBuilding, select, showCells, showReach, showPads, showGhost, setWarnings, setDefenseWarnings,
+    pickBuilding, select, showCells, showReach, showPads, showGhost, setWarnings, setDefenseWarnings, setPreview,
+    /** The preview conduit drawn now (tests / review): its point count, or 0. */
+    get previewPoints() { return preview.line ? preview.line.geometry.getAttribute('position').count : 0; },
     /** Is the ghost drawn now (tests / review)? */
     get ghost() { return ghostShown && ghostShown.group && ghostShown.group.visible ? { pad: ghostWant.pad, valid: ghostWant.valid, key: ghostWant.key } : null; },
     get warningMarkers() { return [...markers].map(([pad, m]) => ({ pad, kind: m.kind })); },

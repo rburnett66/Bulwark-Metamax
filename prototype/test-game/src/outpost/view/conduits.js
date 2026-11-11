@@ -1,15 +1,17 @@
 /**
  * src/outpost/view/conduits.js — the conduit routes and the outpost's scene plan, as data [MM-story_mw5oeer7_n].
  *
- * Tech plan docs/tech-plan/Outpost.md §6.3: the glowing double lines are generated, not modelled — a path along the
- * map's pad graph (map.conduits, O4) from each station to the buildings it feeds, drawn as two thin emissive tubes
+ * Tech plan docs/tech-plan/Outpost.md §6.3: the glowing double lines are generated, not modelled — derived from the
+ * power grid (One Battle UX §5.2 [MM-story_mwc9plas_2h]: each grid's minimum spanning tree plus a branch to each
+ * building, never the map's authored pad graph), drawn as two thin emissive tubes
  * with a light pulse running toward the building, dark when the building is unpowered; one merged mesh per state.
  * §6.2 states: building (rises in 4 steps, cool tint), upgrading (warm tint), unpowered (emissive off).
  *
  * Pure (no three.js): outpostScene.js turns these plans into meshes.
  */
 import { powerGrids, bayCapacity, depositOf, upgradeBayShows, buildingRect } from '../model.js';
-import { structureDef } from '../../data/outpost.js';
+import { structureDef, DEFENSE_KINDS } from '../../data/outpost.js';
+import { POWER_NODE_KINDS } from '../../data/outpostStructures.js';
 import { oresOf } from '../../data/ores.js';
 
 export const TINT = Object.freeze({ building: [0.78, 0.9, 1.22], upgrading: [1.22, 1.12, 0.78], none: [1, 1, 1], off: [0.82, 0.82, 0.86] });
@@ -47,24 +49,105 @@ export function conduitRoute(from, to) {
 }
 
 /**
- * The conduits to draw now: every map conduit whose station end holds a power station and whose other end holds a
- * building (built or under construction). → [{ from, to, points, length, powered }]. powered: the far end is on.
+ * The grid nodes a consumer could join: every node of a live grid (powerGrids `grids[].nodes`), with its centre and
+ * reach. → [{ id, kind, grid (index into grids), at: [x, z], reach, rect }], sorted by id.
  */
-export function planConduits(o, map) {
-  const pads = new Map(map.pads.map((p) => [p.id, p]));
-  const has = (id) => !!o.pads[id] || o.building.some((b) => b.pad === id);
-  const isStation = (id) => o.pads[id] && o.pads[id].kind === 'power';
-  const { powered } = powerGrids(o, map);
+export function gridNodes(o, map, grids) {
   const out = [];
-  for (const [a, b] of map.conduits || []) {
-    let from = a, to = b;
-    if (!isStation(from) && isStation(to)) [from, to] = [to, from];
-    if (!isStation(from) || !has(to) || !pads.get(from) || !pads.get(to)) continue;
-    const route = conduitRoute(pads.get(from), pads.get(to));
-    const on = isStation(to) ? true : powered.has(to) && !!o.pads[to];
-    out.push({ from, to, ...route, powered: on && !!o.online });
+  grids.forEach((g, gi) => {
+    for (const id of g.nodes) {
+      const b = o.pads[id], rect = buildingRect(o, map, id), def = b && structureDef(b.kind, b.tier);
+      if (!rect || !def) continue;
+      out.push({ id, kind: b.kind, grid: gi, at: centre(rect), reach: def.reach, rect });
+    }
+  });
+  return out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/**
+ * The node a consumer centred at `at` hooks into: the nearest grid node whose reach covers it (ties: the lower id) —
+ * powerGrids' join rule, read back for drawing. → the node, or null (no power in reach).
+ */
+export function joinNode(nodes, at) {
+  let best = null, bestD = Infinity;
+  for (const n of nodes) {
+    const d = Math.hypot(n.at[0] - at[0], n.at[1] - at[1]);
+    if (d <= n.reach && d < bestD) { best = n; bestD = d; }
+  }
+  return best;
+}
+
+/**
+ * The minimum spanning tree of one grid's nodes (Prim, from its first station by id), as [parent, child] pairs in
+ * the order they join — so the pulse runs outward from the station. Ties break on ids: deterministic.
+ */
+export function gridTree(nodes, rootId) {
+  const left = nodes.filter((n) => n.id !== rootId), inTree = nodes.filter((n) => n.id === rootId), out = [];
+  while (left.length && inTree.length) {
+    let best = null;
+    for (const a of inTree) {
+      for (const b of left) {
+        const d = Math.hypot(a.at[0] - b.at[0], a.at[1] - b.at[1]);
+        if (!best || d < best.d - 1e-9 || (Math.abs(d - best.d) <= 1e-9 && (a.id + '|' + b.id) < (best.a.id + '|' + best.b.id))) best = { a, b, d };
+      }
+    }
+    out.push([best.a, best.b]);
+    inTree.push(best.b);
+    left.splice(left.indexOf(best.b), 1);
   }
   return out;
+}
+
+/**
+ * The conduits to draw now, DERIVED from the grid (One Battle UX §5.2: never authored): each grid's minimum spanning
+ * tree over its nodes (stations and pylons), plus one branch from the node each building hooks into to that building
+ * (built or under construction). Positions are buildingRect's, so free-placed buildings get conduits like pad ones.
+ * → [{ from, to, kind: 'link' | 'branch', points, length, powered }] — `from` is always the node end; powered: the
+ * outpost runs and (a branch) the building is built and on. A building no node reaches gets no conduit.
+ */
+export function planConduits(o, map) {
+  const { grids, powered } = powerGrids(o, map);
+  const nodes = gridNodes(o, map, grids);
+  const out = [];
+  grids.forEach((g, gi) => {
+    const mine = nodes.filter((n) => n.grid === gi);
+    const root = [...g.stations].sort()[0];
+    for (const [a, b] of gridTree(mine, root)) out.push({ from: a.id, to: b.id, kind: 'link', ...conduitRoute(a.rect, b.rect), powered: !!o.online });
+  });
+  const built = Object.keys(o.pads).filter((id) => !POWER_NODE_KINDS.includes(o.pads[id].kind));
+  const jobs = (o.building || []).filter((j) => !o.pads[j.pad]).map((j) => j.pad);
+  for (const id of [...new Set([...built, ...jobs])].sort()) {
+    const rect = buildingRect(o, map, id);
+    if (!rect) continue;
+    const n = joinNode(nodes, centre(rect));
+    if (!n) continue;
+    out.push({ from: n.id, to: id, kind: 'branch', ...conduitRoute(n.rect, rect), powered: !!o.online && !!o.pads[id] && powered.has(id) });
+  }
+  return out;
+}
+
+/**
+ * What the grid would give a building of `kind` placed at `rect` ({ x, y, w, h }, cells; top-left = the hover cell):
+ * powerGrids run on the outpost with that building added (so the priority rule decides, not a copy of it).
+ * → null when the kind draws no power, else { reason: null | 'reach' | 'supply', node (the node it would hook into,
+ * or null), rect, cuts (ids on now that it would switch off), route (node → building, conduitRoute) | null }.
+ * 'supply' (grid short): it would go without, or the priority rule would serve it by cutting a building that is on.
+ */
+export const GHOST_ID = '__ghost';
+export function ghostPower(o, map, kind, rect) {
+  const def = structureDef(kind, 1);
+  if (!def || !def.draw || POWER_NODE_KINDS.includes(kind)) return null;
+  const isDefense = DEFENSE_KINDS.includes(kind);
+  const o2 = isDefense
+    ? { ...o, defenses: [...(o.defenses || []), { id: GHOST_ID, kind, tier: 1, cell: [rect.x, rect.y], hp: 1 }] }
+    : { ...o, pads: { ...o.pads, [GHOST_ID]: { kind, tier: 1, at: { x: rect.x, y: rect.y, w: rect.w, h: rect.h } } } };
+  const { grids, off, powered } = powerGrids(o2, map);
+  const node = joinNode(gridNodes(o2, map, grids), centre(rect));
+  // grid short: the building itself goes without, or it is served by cutting a building that is on now
+  const before = powerGrids(o, map).powered;
+  const cuts = [...before].filter((id) => !powered.has(id));
+  const reason = off[GHOST_ID] || (cuts.length ? 'supply' : null);
+  return { reason, node: node ? node.id : null, rect, cuts, route: node ? conduitRoute(node.rect, rect) : null };
 }
 
 /**

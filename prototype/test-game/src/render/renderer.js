@@ -1987,7 +1987,7 @@ export function renderFrame(renderer, state, ui, events, frameDt) {
       if (def && def.footprint) fp = def.footprint;
     } catch (e) { /* unknown struct id: default footprint */ }
     const ok = !!ui.hoverValid;
-    const tint = ok ? 0x40e060 : 0xe04040;
+    const tint = ok ? (ui.hoverWarn ? 0xe0a030 : 0x40e060) : 0xe04040;   // amber: valid but warned (ui.hoverWarn)
     const gx = ui.hoverCell.x * t;
     const gy = ui.hoverCell.y * t;
     gO.beginFill(tint, 0.35);
