@@ -46,6 +46,18 @@ export function constructionSites(o, map, now) {
     out.push({ id: 'dsite-' + d.id, pos: { x: d.cell[0], y: d.cell[1] }, footprint: { w: 1, h: 1 }, lifecycle: 'Building',
       progress: Math.max(0, Math.min(1, (now - d.building.since) / span)) });
   }
+  // the defense on the Upgrade Bay (owner 2026-11-10, tower parity) [MM-story_mwb8zcgz_25]: the battle's build dust and
+  // welding sparks where it stands on the bay's pad (conduits.js defenseStructures: the pad's open right side)
+  const u = o && o.upgrading;
+  if (u && u.done > now) {
+    const bayId = Object.keys(o.pads || {}).sort().find((id) => o.pads[id].kind === 'upgradeBay');
+    const pad = bayId && map && map.pads ? map.pads.find((p) => p.id === bayId) : null;
+    if (pad) {
+      const span = Math.max(1, u.done - (u.since ?? (u.done - 60000)));
+      out.push({ id: 'upgrade-' + u.id, pos: { x: pad.x + pad.w - 1, y: pad.y + Math.floor(pad.h / 2) }, footprint: { w: 1, h: 1 }, lifecycle: 'Building',
+        progress: Math.max(0, Math.min(1, 1 - (u.done - now) / span)) });
+    }
+  }
   return out;
 }
 
@@ -55,10 +67,13 @@ export function damageSites(o) {
   for (const d of (o && o.defenses) || []) {
     const def = structureDef(d.kind, d.tier), max = def && def.battle ? def.battle.hp : 0;
     if (!(max > 0) || !(d.hp < max) || !d.cell) continue;
-    out.push({ id: 'dmg-' + d.id, pos: { x: d.cell[0], y: d.cell[1] }, footprint: { w: 1, h: 1 }, damage: Math.max(0, Math.min(1, 1 - d.hp / max)) });
+    out.push({ id: 'dmg-' + d.id, pos: { x: d.cell[0], y: d.cell[1] }, footprint: { w: 1, h: 1 }, damage: Math.max(0, Math.min(1, 1 - d.hp / max)), wreck: !(d.hp > 0) });
   }
   return out;
 }
+
+/** Smoke puffs a second off a wrecked defense (0 HP). */
+export const WRECK_SMOKE_RATE = 5;
 
 export function createConstructionFx({ seed = 41 } = {}) {
   let a = seed >>> 0;
@@ -121,6 +136,13 @@ export function createConstructionFx({ seed = 41 } = {}) {
         let wd = hurts.get(s.id);
         if (!wd || wd.age >= WELD_CYCLE) { wd = newWeld(s, DAMAGE_HEIGHT); hurts.set(s.id, wd); }
         sparks += sparkFrom(wd, d, DAMAGE_RATE.light + (DAMAGE_RATE.heavy - DAMAGE_RATE.light) * s.damage, SPARK_TINT.damage, emit, K);
+        if (s.wreck) {   // a wreck smokes: a thin dark column off its middle [MM-story_mwb8zamf_23]
+          wd.smoke = (wd.smoke || 0) + WRECK_SMOKE_RATE * d;
+          while (wd.smoke >= 1) {
+            wd.smoke -= 1;
+            emit(K.SMOKE, wd.x + (rnd() - 0.5) * 0.25, wd.y * 0.6, wd.z + (rnd() - 0.5) * 0.25, (rnd() - 0.5) * 0.12, 0.5 + rnd() * 0.4, (rnd() - 0.5) * 0.12, 2.6 + rnd() * 1.2, 0.18 + rnd() * 0.08, 1.2, 0.14);
+          }
+        }
       }
       for (const id of [...hurts.keys()]) if (!live.has(id)) hurts.delete(id);
       return sparks;

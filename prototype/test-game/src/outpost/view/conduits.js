@@ -145,17 +145,19 @@ export function defenseStructures(o, map = null, now = null) {
     const def = structureDef(d.kind, tier), max = def && def.battle ? def.battle.hp : d.hp;
     return {
       id: 'od-' + d.id, kind: d.kind === 'wall' ? 'wall' : 'antiGround', structId: d.kind === 'mg' ? 'STR-MG' : d.kind === 'cannon' ? 'STR-Cannon' : 'STR-Wall',
-      tier, cell: { x: at[0], y: at[1] }, pos: { x: at[0] + 0.5, y: at[1] + 0.5 }, footprint: { w: 1, h: 1 },
+      tier, cell: { x: at[0], y: at[1] }, pos: { x: at[0] + 0.5, y: at[1] + 0.5 }, footprint: { w: 1, h: 1 }, showHp: true,   // worn: bar always shown [MM-story_mwb8zbk7_24]
+      // 0 HP: a wreck (charred, slumped, smoking) until a repair drone restores it [MM-story_mwb8zamf_23];
       // building: the battle's 4-step rise; selling: its grey dismantling look [MM-story_mwb8zdb0_26]
       hp: Math.min(d.hp, max), maxHp: max, outpostId: d.id,
-      lifecycle: d.selling ? 'Selling' : d.building ? 'Building' : d.hp < max ? 'Damaged' : 'Active',
+      lifecycle: d.selling ? 'Selling' : d.building ? 'Building' : !(d.hp > 0) ? 'Wrecked' : d.hp < max ? 'Damaged' : 'Active',
       progress: d.building && now != null ? Math.max(0, Math.min(1, (now - d.building.since) / Math.max(1, d.building.done - d.building.since))) : undefined,
       ...extra,
     };
   };
   const out = [];
   for (const d of o.defenses) {
-    if (shows && shows.working && shows.id === d.id && padSpot) out.push(one(d, d.tier, [padSpot.x, padSpot.y], { onBay: true }));
+    // on the bay it is the battle's 'Upgrading' tower: the warm tint (render3d lifecycleLook) [MM-story_mwb8zcgz_25]
+    if (shows && shows.working && shows.id === d.id && padSpot) out.push(one(d, d.tier, [padSpot.x, padSpot.y], { onBay: true, lifecycle: 'Upgrading' }));
     else out.push(one(d, d.tier, d.cell));
   }
   if (shows && !shows.working && padSpot) {

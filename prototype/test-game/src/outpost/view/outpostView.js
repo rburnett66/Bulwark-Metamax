@@ -31,7 +31,7 @@ import { storeCapacity } from '../../farm/model.js';
 import { statusModel } from './statusReport.js';
 import { constructionSites, damageSites, createConstructionFx } from './constructionFx.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
-import { hudModel, panelModel, KIND_NAME, fmtGold, rigHeadOf } from './hudModel.js';
+import { hudModel, panelModel, KIND_NAME, fmtGold, fmtClock, rigHeadOf } from './hudModel.js';
 import { buildMenu, placementStep, aimValid, IDLE, MENU, DEFENSE_STRUCT, isResourceBay, kindOf } from './buildMenu.js';
 import { buildingWarnings, markerOf } from './warnings.js';
 import { renderMenuIcons } from './menuIcons.js';
