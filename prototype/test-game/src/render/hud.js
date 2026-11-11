@@ -344,14 +344,22 @@ export function createHud(mountEl, callbacks) {
   // the worded list ate a third of the screen. Hotkey badge top-left, live cost underneath.
   // (STRUCT_ICONS: render/buildPalette.js, shared with the outpost build menu [MM-story_mw6k9xec_5])
   // a build button's picture: the item's baked model image; the old SVG glyph if the image can't load [MM-story_mvg3xsca_1x]
+  // (src: a picture URL — the baked one, or one the mode supplies through hud.setBuildPicture; glyph: the SVG fallback)
+  function paintBuildIcon(wrap, src, glyph) {
+    const key = wrap.querySelector('.bw-bkey');   // the hotkey badge survives a repaint
+    const svg = () => { const k = wrap.querySelector('.bw-bkey') || key; wrap.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26">' + (glyph || '<rect x="6" y="6" width="12" height="12" fill="#888"/>') + '</svg>'; if (k) wrap.appendChild(k); };
+    wrap.innerHTML = '';
+    if (!src) { svg(); return wrap; }
+    const img = el(doc, 'img', 'bw-bimg'); img.alt = ''; img.src = src; img.decoding = 'async'; img.draggable = false;
+    img.addEventListener('error', svg, { once: true });
+    wrap.appendChild(img);
+    if (key) wrap.appendChild(key);
+    return wrap;
+  }
   function buildIconEl(icon, def, glyph) {
     const wrap = el(doc, 'span', 'bw-bicon');
-    const svg = () => { wrap.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26">' + (glyph || '<rect x="6" y="6" width="12" height="12" fill="#888"/>') + '</svg>'; };
-    if (!icon) { svg(); return wrap; }
-    const img = el(doc, 'img', 'bw-bimg'); img.alt = ''; img.src = buildIconUrl(icon); img.decoding = 'async'; img.draggable = false;
-    img.addEventListener('error', () => { const k = wrap.querySelector('.bw-bkey'); svg(); if (k) wrap.appendChild(k); });
-    wrap.appendChild(img);
-    return wrap;
+    wrap._glyph = glyph;
+    return paintBuildIcon(wrap, icon ? buildIconUrl(icon) : null, glyph);
   }
   const palette = el(doc, 'div', 'bw-palette bw-panel');
   palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD'));
@@ -383,6 +391,19 @@ export function createHud(mountEl, callbacks) {
     paletteRow.appendChild(btn);
     paletteBtns[structId] = btn;
   });
+  /**
+   * A mode's picture for a rail item that has no baked battle picture (the outpost's buildings: rendered from their
+   * GLBs, outpost/view/menuIcons.js). { src } a picture URL, { glyph } the SVG fallback; either may be given alone.
+   * The same button, the same picture slot — the rail stays the battle's rail.
+   */
+  function setBuildPicture(structId, { src = null, glyph } = {}) {
+    const btn = paletteBtns[structId], wrap = btn && btn.querySelector('.bw-bicon');
+    if (!wrap) return false;
+    if (glyph !== undefined) wrap._glyph = glyph;
+    const cur = wrap.querySelector('.bw-bimg');
+    paintBuildIcon(wrap, src || (cur ? cur.getAttribute('src') : null), wrap._glyph);
+    return true;
+  }
   // HARVESTER buy button (owner: keep it in the list). Bought at the base — clicking this or the
   // base itself purchases the next one (free/500/750/1000, cap 4). Price refreshed by updateHud.
   const harvBtn = el(doc, 'button', 'bw-btn bw-buildbtn bw-harvbtn');
@@ -718,6 +739,7 @@ export function createHud(mountEl, callbacks) {
     resPanel,
     planet: null,                              // the battle planet's name (or a getter) — names the resources on the card
     setPlanet(nameOrGetter) { hud.planet = nameOrGetter || null; },
+    setBuildPicture,                           // a mode's picture for a rail item (see setBuildPicture above)
     /** Where the counter reads 3D numbers: fn() → { calls, triangles, ground, tier } or null. */
     setFpsInfo(fn) { fpsInfo.get = typeof fn === 'function' ? fn : () => null; },
     callbacks: cbs,
