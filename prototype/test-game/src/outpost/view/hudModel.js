@@ -7,7 +7,8 @@
  * DOM lives in hud.js.
  */
 import { harvesterRefusal, powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems, harvestPlan, hopperCap, hopperUnits,
-  gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups , sellStructureQuote } from '../model.js';
+  gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups , sellStructureQuote,
+  outpostSize, raidChance } from '../model.js';
 import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST, OUTPOST_TECH, harvesterDef } from '../../data/outpost.js';
 import { oresOf, oreById } from '../../data/ores.js';
 import { bayKind } from './buildMenu.js';
@@ -38,6 +39,24 @@ export function fmtClock(sec) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
 }
 
+// ── the raid threat (owner 2026-11-11 on #281: "show the threat level: yes") [MM-story_mwco8she_38] ──────────────
+/**
+ * The outpost's raid threat at `at` (ms), for the HUD: its size (model.outpostSize: finished buildings, defenses and
+ * farm buildings, the hub left out) and the raids a day that size draws (model.raidChance per Raid_Min_Gap_Hours
+ * window, so 24 / gap windows a day: 4 a day at size 0, Raid_Chance_Max × 8 = 7.2 at the cap). An offline outpost is
+ * not raided, so it says so instead of a rate. Pure; balance stays in the workbook (params).
+ * → { size, perDay, online, text, short }   text: "Threat: size 11 · 6 raids/day" (a rounded expectation; no "~": the HUD font draws it as a minus) | "Threat: size 3 · no raids offline";
+ *   short (a phone's landscape top bar): "Threat 11 · 6/day" | "Threat 3 · offline"
+ */
+export function raidThreat(o, at = o.t, params = OUTPOST) {
+  const size = outpostSize(o, at);
+  const perDay = raidChance(size, params) * (24 / params.Raid_Min_Gap_Hours);
+  const online = !!o.online;
+  const rate = perDay >= 1 ? String(Math.round(perDay)) : String(+perDay.toFixed(1));
+  return { size, perDay, online, text: `Threat: size ${size} · ${online ? `${rate} raids/day` : 'no raids offline'}`,
+    short: `Threat ${size} · ${online ? `${rate}/day` : 'offline'}` };
+}
+
 // ── the outpost's numbers ────────────────────────────────────────────────────────────────────────────────────────
 const bayUnits = (o, pad) => Object.values(o.storage[pad] || {}).reduce((a, b) => a + b, 0);
 
@@ -51,7 +70,7 @@ export function rigHeadOf(o, map, pad) {
 /**
  * The HUD's numbers. o: the outpost (advanced to now); gold: the bank.
  * → { gold, ores: [{ id, name, colour, units, deep }], storage: { units, cap, frac }, power: { draw, supply, short },
- *     shield: { hp, max, frac, worn }, loads, online, problems, repairCost, building: n }
+ *     shield: { hp, max, frac, worn }, loads, online, problems, repairCost, building: n, threat: raidThreat() }
  */
 export function hudModel(o, map, { gold = 0, now = null, unlocks = null } = {}) {
   const ores = new Map();
@@ -83,6 +102,7 @@ export function hudModel(o, map, { gold = 0, now = null, unlocks = null } = {}) 
     hopper: o.harvesters > 0 || hUnits > 0 ? { units: hUnits, cap: hCap, frac: hCap > 0 ? Math.min(1, hUnits / hCap) : 0, harvesters: o.harvesters || 0 } : null,
     guns: { n: gunCount(o), cap: gunCap(o) },
     raidInbound: warn,
+    threat: raidThreat(o, now != null ? now : o.t),
     ores: [...ores.values()].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)),
     storage: { units, cap, frac: cap > 0 ? Math.min(1, units / cap) : 0 },
     power: { draw, supply, short: Object.values(off).includes('supply'), unpowered: Object.keys(off).length },

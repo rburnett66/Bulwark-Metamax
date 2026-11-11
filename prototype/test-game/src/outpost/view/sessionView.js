@@ -39,7 +39,7 @@ import { createVisitRaids } from '../visitRaids.js';
 import { outpostMapFor } from '../outpostMap.js';
 import { outpostBattleMap, bakedSlugFor } from './outpostBoard.js';
 import { createOutpostScene } from './outpostScene.js';
-import { planBuildings } from './conduits.js';
+import { planBuildings, planPowerIcons, withCuts } from './conduits.js';
 import { createOutpostKit, modelSlug } from '../../render3d/outposts/outpostModels.js';
 import { renderMenuIcons, OUTPOST_GLYPHS } from './menuIcons.js';
 import { oresOf } from '../../data/ores.js';
@@ -169,13 +169,23 @@ export async function openOutpostSessionView(opts = {}) {
 
   // the outpost's art follows the live state: re-read the save shape a few times a second (cheap), animate each frame
   let since = 1, ctx = null, dt = 1 / 60;
-  /** The preview conduit for the armed build tool: the ghost's route to the node it would join, or nothing. */
-  function previewPlan() {
+  /** The armed build tool's power answer at the hover cell (placementRules.js ghostPowerOf, memoised), or null. */
+  function ghostNow() {
     if (!ui.buildSelection || !ui.hoverCell || !ui.hoverValid) return null;
     let def = null;
     try { def = getStructureDef(ui.buildSelection); } catch (e) { return null; }
-    const gp = ghostOf(def, ui.hoverCell, ui.buildSelection);
+    return ghostOf(def, ui.hoverCell, ui.buildSelection);
+  }
+  /** The preview conduit for the armed build tool: the ghost's route to the node it would join, or nothing. */
+  function previewPlan(gp = ghostNow()) {
     return gp && gp.route ? { points: gp.route.points, warn: !!gp.reason } : null;
+  }
+  // the power icons over the buildings (#282 answer 1): planned once per re-read of the outpost; an armed placement's
+  // cuts (the buildings it would switch off) turn theirs to the warning state, every frame, without a grid run
+  let icons = { of: null, list: [] };
+  function powerIconsNow(gp) {
+    if (icons.of !== view) icons = { of: view, list: view ? planPowerIcons(view, map) : [] };
+    return withCuts(icons.list, gp && gp.cuts);
   }
   const ctxNow = () => ctx || (ctx = saveSession.ctx(nowOf()));
 
@@ -206,6 +216,7 @@ export async function openOutpostSessionView(opts = {}) {
   title.style.font = '900 13px/1.2 Orbitron, sans-serif';
   title.style.letterSpacing = '.14em';
   const status = line('op-s-status');
+  const threatLine = line('op-s-threat');   // raid threat: size · raids/day (hudModel.raidThreat) [MM-story_mwco8she_38]
   const storeLine = line('op-s-store');
   const btn = (label, fn) => {
     const b = doc.createElement('button');
@@ -247,6 +258,7 @@ export async function openOutpostSessionView(opts = {}) {
     const issues = onlineIssues(v, map);
     title.textContent = 'OUTPOST';
     status.textContent = h.online ? (h.raidInbound ? 'Online · raid inbound' : 'Online') : ('Offline — ' + (issues.join('; ') || 'ready to go online'));
+    threatLine.textContent = h.threat.text;
     storeLine.textContent = 'Storage ' + Math.floor(h.storage.units) + ' / ' + Math.floor(h.storage.cap) + ' · ' + (h.loads || 0) + (h.loads === 1 ? ' load' : ' loads') + ' ready';
     onlineBtn.style.display = h.online ? 'none' : '';
     onlineBtn.disabled = issues.length > 0;
@@ -283,7 +295,7 @@ export async function openOutpostSessionView(opts = {}) {
         try { view = fromLiveSim(sim, live.link, nowOf()).outpost; scene.sync(view, nowOf(), ctxNow()); }
         catch (e) { console.warn('[outpost] scene sync', e); }
       }
-      try { scene.setPreview(previewPlan()); } catch (e) { console.warn('[outpost] preview conduit', e); }
+      try { const gp = ghostNow(); scene.setPreview(previewPlan(gp)); scene.setPowerIcons(powerIconsNow(gp)); } catch (e) { console.warn('[outpost] preview conduit', e); }
       try { scene.update(dt, view); } catch (e) { console.warn('[outpost] scene update', e); }
     },
   });
@@ -303,5 +315,5 @@ export async function openOutpostSessionView(opts = {}) {
     resolveClosed();
   }
   refreshPanel();
-  return { closed: closedP, close, handle: { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, get raids() { return raids; }, panel, actOnSave } };
+  return { closed: closedP, close, handle: { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, get raids() { return raids; }, get scene() { return scene; }, panel, actOnSave } };
 }

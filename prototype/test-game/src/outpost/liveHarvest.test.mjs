@@ -104,13 +104,12 @@ test('no harvesters without a finished Resource Bay; an unpowered bay parks them
 
 // The full-rate phase (a field with stock for whole loads): the closed form's trip is harvesterRate's
 // 2·d·Harvest_Route_Mult / speed + capacity / pull + unload from the bay's centre; the truck drives its real path from
-// its dock beside the bay. Measured on the Verdance map (mean of the first whole loads): common 20.20 s a load vs the
-// closed form's 21.29 s (5.1 % faster), uncommon 105.25 s vs 107.68 s (2.3 % faster; its pull time dominates).
-// Owner 2026-11-11: the battle trucks are EXPECTED to run ~5 % faster than the closed form until Harvest_Route_Mult is
-// retuned in the workbook (Outpost_Params, after PR #281): the measured drive matches Harvest_Route_Mult ≈ 1.16 (common
-// 1.14, uncommon 1.17) against today's 1.3 (single loads vary: the nearest cells go first). So the live mean may be up to 10 % faster than the closed form and no slower
-// than it by more than 2 %; each single load stays within 15 %.
-test('full-rate loads: the battle truck runs ~5 % faster than the closed form\'s trip (until the route retune)', () => {
+// its dock beside the bay. Owner 2026-11-11 ("battle trucks 5% faster"): the battle trucks set the pace and the away
+// closed form follows them — Harvest_Route_Mult was retuned 1.3 → 1.16 in the workbook (Outpost_Params), the value the
+// measured drives solve to (common 1.14, uncommon 1.17; before it the live trucks ran 5.1 % / 2.3 % faster). So the
+// live mean and the closed form agree within 4 % either way; each single load stays within 15 % (the nearest cells go
+// first).
+test('full-rate loads: the battle truck and the closed-form trip agree (Harvest_Route_Mult retuned to the trucks)', () => {
   const o0 = withBay(), m = bigFields(o0), o = withBay(m);
   const plan = harvestPlan(o, m);
   const { state } = toLiveSim(o, { map: m, now: T0, gold: 0 });
@@ -127,7 +126,7 @@ test('full-rate loads: the battle truck runs ~5 % faster than the closed form\'s
       assert.ok(Math.abs(gap - trip) <= 0.15 * trip, `${h.tier} load ${i}: ${gap.toFixed(1)} s vs closed form ${trip.toFixed(1)} s`);
     }
     const mean = (mine[mine.length - 1].t - mine[0].t) / (mine.length - 1), faster = 1 - mean / trip;
-    assert.ok(faster >= -0.02 && faster <= 0.10, `${h.tier}: live ${mean.toFixed(2)} s vs closed form ${trip.toFixed(2)} s (${(faster * 100).toFixed(1)} % faster)`);
+    assert.ok(Math.abs(faster) <= 0.04, `${h.tier}: live ${mean.toFixed(2)} s vs closed form ${trip.toFixed(2)} s (${(faster * 100).toFixed(1)} % faster)`);
   }
 });
 

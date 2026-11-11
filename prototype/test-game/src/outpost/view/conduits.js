@@ -9,10 +9,11 @@
  *
  * Pure (no three.js): outpostScene.js turns these plans into meshes.
  */
-import { powerGrids, bayCapacity, depositOf, upgradeBayShows, buildingRect } from '../model.js';
+import { powerGrids, unlitChains, bayCapacity, depositOf, upgradeBayShows, buildingRect } from '../model.js';
 import { structureDef, DEFENSE_KINDS } from '../../data/outpost.js';
 import { POWER_NODE_KINDS } from '../../data/outpostStructures.js';
 import { oresOf } from '../../data/ores.js';
+import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
 
 export const TINT = Object.freeze({ building: [0.78, 0.9, 1.22], upgrading: [1.22, 1.12, 0.78], none: [1, 1, 1], off: [0.82, 0.82, 0.86] });
 
@@ -43,9 +44,84 @@ export function conduitRoute(from, to) {
     const sz = az + Math.sign(bz - az) * from.h / 2, ex = bx - Math.sign(bx - ax) * to.w / 2;
     pts.push([ax, sz], [ax, bz], [ex, bz]);
   }
+  return withLength(pts);
+}
+function withLength(pts) {
   let length = 0;
   for (let i = 1; i < pts.length; i++) length += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
   return { points: pts, length };
+}
+
+// ── conduits follow the open lanes (owner 2026-11-11, #282 answer 5) [MM-subtask_mwco9m19_39] ──────────────────────
+// A conduit runs along walkable cells between the buildings: the battle's own walker search (sim/pathfinding.js
+// buildNavGrid + findWalkerPath — the map's blocking cells plus every building's and defense's footprint, 8-connected,
+// string-pulled), from inside one end's footprint to inside the other's. No path (or no grid: a map without cells) →
+// the one-bend conduitRoute. The grid and the routes are memoised per layout (the outpost is re-read a few times a
+// second; the layout changes only when something is built, sold or moved).
+
+/** Every footprint on the outpost: its buildings (built or under construction) and its defenses. → [{ id, x, y, w, h }] */
+function footprints(o, map) {
+  const ids = [...new Set([...Object.keys(o.pads || {}), ...(o.building || []).map((j) => j.pad)])].sort();
+  const out = [];
+  for (const id of ids) { const r = buildingRect(o, map, id); if (r) out.push({ id, x: r.x, y: r.y, w: r.w, h: r.h }); }
+  for (const d of o.defenses || []) if (d.cell) out.push({ id: d.id, x: d.cell[0], y: d.cell[1], w: 1, h: 1 });
+  return out;
+}
+const blockedOf = new WeakMap();   // map → its blocking cells, for buildNavGrid
+function navMapOf(map) {
+  if (!map || !(map.width > 0) || !(map.height > 0)) return null;
+  if (!blockedOf.has(map)) {
+    const cells = [];
+    if (map.blocking) for (let i = 0; i < map.blocking.length; i++) if (map.blocking[i]) cells.push({ x: i % map.width, y: Math.floor(i / map.width) });
+    blockedOf.set(map, { cols: map.width, rows: map.height, blockedCells: cells });
+  }
+  return blockedOf.get(map);
+}
+const LANES_KEEP = 4;              // layouts remembered (the outpost as it stands + the ghost's hypothetical ones)
+const lanesMemo = [];              // [{ map, key, grid, routes: Map }]
+/** The open-cell grid for this layout (memoised). → { grid, routes } or null (the map has no cells). */
+export function laneGrid(o, map) {
+  const nav = navMapOf(map);
+  if (!nav) return null;
+  const fps = footprints(o, map);
+  const key = fps.map((f) => `${f.x},${f.y},${f.w},${f.h}`).join(';');
+  const hit = lanesMemo.find((m) => m.map === map && m.key === key);
+  if (hit) return hit;
+  const grid = buildNavGrid(nav, fps.map((f) => ({ pos: { x: f.x, y: f.y }, footprint: { w: f.w, h: f.h } })));
+  const entry = { map, key, grid, routes: new Map() };
+  lanesMemo.unshift(entry);
+  if (lanesMemo.length > LANES_KEEP) lanesMemo.length = LANES_KEEP;
+  return entry;
+}
+const inside = (r, c) => c.x >= r.x && c.x < r.x + r.w && c.y >= r.y && c.y < r.y + r.h;
+/**
+ * A conduit's route from pad `from` to pad `to` along the open lanes of `lanes` (laneGrid's answer): a polyline of
+ * [x, z] points leaving `from`'s edge and arriving at `to`'s, bending only where the lane does. Falls back to
+ * conduitRoute when there is no grid, an end is off the grid, or no lane joins them. Deterministic. → { points, length }
+ */
+export function laneRoute(lanes, from, to) {
+  if (!lanes) return conduitRoute(from, to);
+  const key = `${from.x},${from.y},${from.w},${from.h}>${to.x},${to.y},${to.w},${to.h}`;
+  if (lanes.routes.has(key)) return lanes.routes.get(key);
+  const res = routeOnGrid(lanes.grid, from, to) || conduitRoute(from, to);
+  lanes.routes.set(key, res);
+  return res;
+}
+function routeOnGrid(grid, from, to) {
+  const { cols, rows } = grid;
+  const onGrid = (r) => r.x >= 0 && r.y >= 0 && r.x + r.w <= cols && r.y + r.h <= rows;
+  if (!onGrid(from) || !onGrid(to)) return null;
+  // the two ends' own footprints are open for this route (it starts and ends inside them)
+  const passable = grid.passable.slice();
+  for (const r of [from, to]) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) passable[y * cols + x] = 1;
+  const cell = (r) => ({ x: r.x + Math.floor((r.w - 1) / 2), y: r.y + Math.floor((r.h - 1) / 2) });
+  const s = cell(from), path = findWalkerPath({ passable, cols, rows }, s, cell(to), null, false);
+  if (!path) return null;
+  const mids = [s, ...path].filter((c) => !inside(from, c) && !inside(to, c)).map((c) => [c.x + 0.5, c.y + 0.5]);
+  const [ax, az] = centre(from), [bx, bz] = centre(to);
+  if (!mids.length) return withLength([edgeToward(from, bx, bz), edgeToward(to, ax, az)]);   // a clear straight lane
+  const first = mids[0], last = mids[mids.length - 1];
+  return withLength([edgeToward(from, first[0], first[1]), ...mids, edgeToward(to, last[0], last[1])]);
 }
 
 /**
@@ -102,18 +178,26 @@ export function gridTree(nodes, rootId) {
  * The conduits to draw now, DERIVED from the grid (One Battle UX §5.2: never authored): each grid's minimum spanning
  * tree over its nodes (stations and pylons), plus one branch from the node each building hooks into to that building
  * (built or under construction). Positions are buildingRect's, so free-placed buildings get conduits like pad ones.
- * → [{ from, to, kind: 'link' | 'branch', points, length, powered }] — `from` is always the node end; powered: the
- * outpost runs and (a branch) the building is built and on. A building no node reaches gets no conduit.
+ * → [{ from, to, kind: 'link' | 'branch', points, length, powered, unlit? }] — `from` is always the node end; powered:
+ * the outpost runs and (a branch) the building is built and on. A building no node reaches gets no conduit.
+ * A pylon chain linked to no station (model.js unlitChains; owner #282 answer 3) gets its tree too, as unlit links
+ * (`unlit: true`, never powered): the player sees the chain stands, and that it carries nothing.
+ * Routes follow the open lanes (laneRoute), falling back to one bend.
  */
 export function planConduits(o, map) {
   const { grids, powered } = powerGrids(o, map);
   const nodes = gridNodes(o, map, grids);
+  const lanes = laneGrid(o, map);
   const out = [];
   grids.forEach((g, gi) => {
     const mine = nodes.filter((n) => n.grid === gi);
     const root = [...g.stations].sort()[0];
-    for (const [a, b] of gridTree(mine, root)) out.push({ from: a.id, to: b.id, kind: 'link', ...conduitRoute(a.rect, b.rect), powered: !!o.online });
+    for (const [a, b] of gridTree(mine, root)) out.push({ from: a.id, to: b.id, kind: 'link', ...laneRoute(lanes, a.rect, b.rect), powered: !!o.online });
   });
+  for (const chain of unlitChains(o, map)) {
+    const mine = gridNodes(o, map, [chain]);
+    for (const [a, b] of gridTree(mine, chain.nodes[0])) out.push({ from: a.id, to: b.id, kind: 'link', ...laneRoute(lanes, a.rect, b.rect), powered: false, unlit: true });
+  }
   const built = Object.keys(o.pads).filter((id) => !POWER_NODE_KINDS.includes(o.pads[id].kind));
   const jobs = (o.building || []).filter((j) => !o.pads[j.pad]).map((j) => j.pad);
   for (const id of [...new Set([...built, ...jobs])].sort()) {
@@ -121,10 +205,47 @@ export function planConduits(o, map) {
     if (!rect) continue;
     const n = joinNode(nodes, centre(rect));
     if (!n) continue;
-    out.push({ from: n.id, to: id, kind: 'branch', ...conduitRoute(n.rect, rect), powered: !!o.online && !!o.pads[id] && powered.has(id) });
+    out.push({ from: n.id, to: id, kind: 'branch', ...laneRoute(lanes, n.rect, rect), powered: !!o.online && !!o.pads[id] && powered.has(id) });
   }
   return out;
 }
+
+/** The ids `before` powers that `after` does not (powerGrids answers), sorted: who a change would cut. */
+export function powerCuts(before, after) {
+  return [...before.powered].filter((id) => !after.powered.has(id)).sort();
+}
+
+/**
+ * The power icon over each building (owner 2026-11-11, #282 answer 1: "buildings have power icons"): every finished
+ * building and defense that draws power, with its grid state — 'on', 'off', or 'cut' (an armed placement would switch
+ * it off: ghostPower's `cuts`). Grid nodes (stations, pylons) and buildings that draw nothing (walls, the Habitat) get
+ * none; nor does a building still under construction.
+ * → [{ id, kind, at: [x, z] (centre, cells), defense, state }], buildings by id, then defenses by id.
+ * opts.cuts: ids an armed placement would cut; opts.grids: a powerGrids answer already to hand.
+ */
+export function planPowerIcons(o, map, { cuts = [], grids = null } = {}) {
+  const { powered } = grids || powerGrids(o, map);
+  const cut = new Set(cuts);
+  const state = (id) => (cut.has(id) ? 'cut' : powered.has(id) ? 'on' : 'off');
+  const out = [];
+  for (const id of Object.keys(o.pads || {}).sort()) {
+    const b = o.pads[id], def = structureDef(b.kind, b.tier), rect = buildingRect(o, map, id);
+    if (!def || !def.draw || POWER_NODE_KINDS.includes(b.kind) || !rect) continue;
+    out.push({ id, kind: b.kind, at: centre(rect), defense: false, state: state(id) });
+  }
+  for (const d of [...(o.defenses || [])].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+    const def = structureDef(d.kind, d.tier);
+    if (!def || !def.draw || d.building || !d.cell) continue;
+    out.push({ id: d.id, kind: d.kind, at: [d.cell[0] + 0.5, d.cell[1] + 0.5], defense: true, state: state(d.id) });
+  }
+  return out;
+}
+/** The same icons with an armed placement's cuts marked (cheap: no grid run). */
+export const withCuts = (icons, cuts) => {
+  if (!cuts || !cuts.length) return icons;
+  const cut = new Set(cuts);
+  return icons.map((i) => (cut.has(i.id) ? { ...i, state: 'cut' } : i));
+};
 
 /**
  * What the grid would give a building of `kind` placed at `rect` ({ x, y, w, h }, cells; top-left = the hover cell):
@@ -141,13 +262,13 @@ export function ghostPower(o, map, kind, rect) {
   const o2 = isDefense
     ? { ...o, defenses: [...(o.defenses || []), { id: GHOST_ID, kind, tier: 1, cell: [rect.x, rect.y], hp: 1 }] }
     : { ...o, pads: { ...o.pads, [GHOST_ID]: { kind, tier: 1, at: { x: rect.x, y: rect.y, w: rect.w, h: rect.h } } } };
-  const { grids, off, powered } = powerGrids(o2, map);
+  const after = powerGrids(o2, map), { grids, off } = after;
   const node = joinNode(gridNodes(o2, map, grids), centre(rect));
-  // grid short: the building itself goes without, or it is served by cutting a building that is on now
-  const before = powerGrids(o, map).powered;
-  const cuts = [...before].filter((id) => !powered.has(id));
+  // grid short: the building itself goes without, or it is served by cutting a building that is on now (powerCuts:
+  // the buildings whose power icon turns to the warning state while this placement is armed)
+  const cuts = powerCuts(powerGrids(o, map), after);
   const reason = off[GHOST_ID] || (cuts.length ? 'supply' : null);
-  return { reason, node: node ? node.id : null, rect, cuts, route: node ? conduitRoute(node.rect, rect) : null };
+  return { reason, node: node ? node.id : null, rect, cuts, route: node ? laneRoute(laneGrid(o2, map), node.rect, rect) : null };
 }
 
 /**
