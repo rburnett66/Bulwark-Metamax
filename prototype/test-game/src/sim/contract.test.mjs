@@ -32,6 +32,19 @@ function deposits(s, n) {
   return out;
 }
 
+test('a full load credits its whole units: 40 summed tick by tick a hair under 40 still credits 40 [MM-story_mwc9pzyd_2l]', () => {
+  const s = board({ common: 1000, uncommon: 0, rare: 0, epic: 0 });
+  const u = s.units.get(s.harvesterIds[0]);
+  const c = 40 - 4e-12;                                    // a full load whose tick-by-tick float sum fell just under 40
+  assert.equal(Math.floor(c), 39, 'a plain floor would credit 39');
+  u.cargo = c; u.cargoValue = c * 4; u.cargoColor = 'blue'; u.cargoRole = 'primary';
+  u.cargoMix = { blue: { units: c, value: c * 4, role: 'primary' } };
+  u.state = 'harvestUnload'; u.unloadTicks = 1; u.path = []; u.pathIdx = 0;
+  const d = deposits(s, 1)[0];
+  assert.equal(d.units, 40);
+  assert.equal(s.contract.sold.common, 40);
+});
+
 test('no contract: every load pays, and everything delivered is kept (the classic board and the harness)', () => {
   assert.equal(initContract(null), null);
   const s = board(null);

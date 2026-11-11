@@ -33,7 +33,7 @@ import { applyCommand } from '../../sim/core.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../../data/outpostStructures.js';
 import { DEFENSE_KINDS } from '../../data/outpost.js';
 import { getStructureDef } from '../../data/tables.js';
-import { toLiveSim, fromLiveSim } from '../liveSim.js';
+import { toLiveSim, fromLiveSim, syncHarvestPower } from '../liveSim.js';
 import { ghostPowerOf, powerWarning } from '../placementRules.js';
 import { createVisitRaids } from '../visitRaids.js';
 import { outpostMapFor } from '../outpostMap.js';
@@ -44,7 +44,7 @@ import { createOutpostKit, modelSlug } from '../../render3d/outposts/outpostMode
 import { renderMenuIcons, OUTPOST_GLYPHS } from './menuIcons.js';
 import { oresOf } from '../../data/ores.js';
 import { createSession, onlineIssues, repairAllCost } from './session.js';
-import { hudModel, sellButton, fmtGold } from './hudModel.js';
+import { hudModel, sellButton, fmtGold, harvesterTile } from './hudModel.js';
 import { awayReportModel } from './awayReport.js';
 import { loadSave, updateSave } from '../../save/save.js';
 import { loadMissionCatalog } from '../../save/missionCatalog.js';
@@ -135,7 +135,13 @@ export async function openOutpostSessionView(opts = {}) {
     mountOptions: () => ({ planet, landing: false, landingHeld: true,
       render3d: { baseUrl: ROOT, craft: false, landing: false, qualityQuery: opts.tier || null } }),
   });
-  hud = session.createHud({ onMainMenu: () => close() });
+  // the battle rail's HARVESTER tile sells the OUTPOST's harvesters (S4 follow-up, owner 2026-11-11): its price and
+  // refusals from the model, the purchase through the save session (act 'buyHarvester'), the live state rebuilt with the truck
+  hud = session.createHud({
+    onMainMenu: () => close(),
+    harvesterTile: () => harvesterTile(view || fromLiveSim(sim, live.link, nowOf()).outpost, ctxNow(), sim.economy.money),
+    onBuyHarvesterUnit: () => { if (actOnSave({ type: 'buyHarvester' }).ok) flashMessage(hud, 'Harvester bought · it docks at the Resource Bay'); },
+  });
   // the outpost buildings' glyphs on the battle rail until their GLB pictures are rendered (below)
   const RAIL_KINDS = OUTPOST_BUILDING_KINDS.filter((k) => k !== 'hub');
   for (const k of RAIL_KINDS) if (OUTPOST_GLYPHS[k] && hud.setBuildPicture) hud.setBuildPicture(outpostStructId(k), { glyph: OUTPOST_GLYPHS[k] });
@@ -254,7 +260,8 @@ export async function openOutpostSessionView(opts = {}) {
   session.start({
     paused: () => false,
     stopped: () => false,
-    afterTick: () => { if (raids) raids.step(); },
+    // power changes during the visit start or park the trucks (S4 follow-up): checked on the sim's tick count, every 15 ticks (half a sim second)
+    afterTick: () => { if (raids) raids.step(); if (sim.tick % 15 === 0) syncHarvestPower(sim, live.link); },
     beforeFrame: (dtMs) => { dt = Math.min(dtMs / 1000, 0.25); },
     beforeHud: () => {
       panelSince += dt;

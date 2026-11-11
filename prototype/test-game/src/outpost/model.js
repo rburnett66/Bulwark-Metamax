@@ -18,6 +18,7 @@
  *     harvesters: n,                                                // bought for the Resource Bay (O16; behaviour O10)
  *     hopper: { common: units, uncommon: units },                   // the Resource Bay's hopper (O10), fractional
  *     fields: { [fieldId]: units },                                 // surface field stock (O10); absent = full
+ *     liveHarvest?: { from, to },                                   // a visit's stretch the battle sim's trucks ran (S4)
  *     raids: { window, log: [{ at, result, lost, damage, bounty? }] },
  *     sold: { [oreId]: units } }                                    // lifetime, both grades, for contract steps
  *
@@ -539,6 +540,18 @@ function harvestFields(o, map, params, dt, running, report, now) {
   }
   for (const f of groups) if (o.fields[f.id] != null && o.fields[f.id] >= f.cap - 1e-9) delete o.fields[f.id];   // full = absent
 }
+/**
+ * The parts of [a, b] outside a live visit's harvest stretch live = { from, to } (ms): while the player was at the
+ * outpost the battle sim's trucks gathered and the fields regrew there (One Battle UX S4 [MM-story_mwc9pzyd_2l]), so the
+ * closed form must not count that stretch a second time. → [[from, to], …] (empty pieces left out)
+ */
+export function outsideLive(live, a, b) {
+  if (!live || !(live.to > live.from) || live.to <= a || live.from >= b) return b > a ? [[a, b]] : [];
+  const out = [];
+  if (live.from > a) out.push([a, live.from]);
+  if (live.to < b) out.push([live.to, b]);
+  return out;
+}
 /** The harvesters at work now: the plan when the Resource Bay is finished AND powered (no power, no operation). */
 export function harvestRunning(o, map, params = OUTPOST, powered = powerGrids(o, map).powered) {
   const bay = resourceBayPad(o);
@@ -616,8 +629,9 @@ export function advance(outpost, toMs, ctx) {
       report.extracted[r.item] = (report.extracted[r.item] || 0) + got;
       if (got >= space - 1e-9) report.full.push({ pad: r.pad, at: now + space / r.rate });
     }
-    // the harvesters and the surface fields (finite stock, 5 % regrowth), into the hopper
-    harvestFields(o, map, params, dt, harvestRunning(o, map, params), report, now);
+    // the harvesters and the surface fields (finite stock, 5 % regrowth), into the hopper — except over a stretch a
+    // live visit already ran on the battle sim's own trucks (o.liveHarvest, outpost/liveSim.js fromLiveSim)
+    for (const [a, b] of outsideLive(o.liveHarvest, now, until)) harvestFields(o, map, params, b - a, harvestRunning(o, map, params), report, a);
     // the farm's plants, at this stretch's power and water (src/farm/grow.js)
     if (o.farm) growFarm(o, map, now, until, powerGrids(o, map, now).powered, report);
     now = until;
@@ -676,6 +690,7 @@ export function advance(outpost, toMs, ctx) {
     }
   }
   extractTo(end);
+  if (o.liveHarvest && end >= o.liveHarvest.to) delete o.liveHarvest;   // the visit's stretch is behind the clock now
   if (o.online) o.raids.window = Math.max(o.raids.window ?? -1, lastSettledWindow(o.seed, end, params));
   o.t = end;
   report.to = end;

@@ -16,6 +16,13 @@
  * the buildings are sim structures here rather than blocked cells. Construction, upgrades and timed sells carry over:
  * the save's wall-clock `done` becomes sim `progress`, and back.
  *
+ * Harvest (S4 [MM-story_mwc9pzyd_2l]): the outpost's surface fields (model.surfaceFieldGroups, the closed form's own list)
+ * are the sim's resource nodes, at their saved stock and regrowing at the closed form's rate; the bought harvesters are
+ * the battle's harvesters (sim/harvest.js), docked beside the Resource Bay, each locked to the field harvestPlan gives it.
+ * The trucks' loads are kept, never sold (a zero-quota Collective contract: the battle's own "kept" path), and on leaving
+ * they land in the hopper; the save then marks the visit's stretch (o.liveHarvest) so the away closed form does not
+ * count it again.
+ *
  * Positions (S2c [MM-story_mwc9pmbn_2i]): a building on a map pad keeps that pad's id; one placed anywhere else is saved
  * under a new id ('f1', 'f2', …) carrying its own `at` rectangle, and model.buildingRect answers for both. Pure: no DOM,
  * no clock (the caller passes `now`).
@@ -25,8 +32,9 @@ import { createStructure } from '../sim/entities.js';
 import { buildNavGrid } from '../sim/pathfinding.js';
 import { getStructureDef } from '../data/tables.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../data/outpostStructures.js';
-import { structureDef } from '../data/outpost.js';
-import { buildingRect } from './model.js';
+import { structureDef, surfaceResource, surfaceStock } from '../data/outpost.js';
+import { buildingRect, surfaceFieldGroups, fieldStock, harvestPlan, resourceBayPad, powerGrids, hopperUnits, hopperCap } from './model.js';
+import { resourceNode, spawnHarvester, initContract } from '../sim/harvest.js';
 import { raidSimMap } from './raid.js';
 import { outpostPlacementRules } from './placementRules.js';
 
@@ -109,7 +117,128 @@ export function toLiveSim(outpost, { map, now, gold = 0 }) {
     ids.set(s.id, { defense: id, extra, building, selling, upgrading: u });
   }
   state.navGrid = buildNavGrid(state.map, Array.from(state.structures.values()));
-  return { state, link: { outpost, map, ids, wrecks, now } };
+  const harvest = seedHarvest(state, outpost, map);
+  return { state, link: { outpost, map, ids, wrecks, now, harvest } };
+}
+
+const TIER_OF_COLOR = { blue: 'common', yellow: 'uncommon' };
+/** Each surface field's stock in the live state: { [fieldId]: units } (the sum of its nodes, in node order). */
+function liveFieldStock(state) {
+  const out = {};
+  for (const n of state.resourceNodes || []) out[n.fieldId] = (out[n.fieldId] || 0) + n.remaining;
+  return out;
+}
+
+/**
+ * The surface fields as sim resource nodes and the harvesters as sim harvesters (S4). A field's saved stock fills its
+ * cells in order; every cell regrows its share of the field's rate (harvest.js stepFieldRegrowth). The trucks run only
+ * when the closed form's would: a finished, powered Resource Bay (u.parked otherwise; syncHarvestPower follows power
+ * changes during the visit) and room in the hopper (state.harvestRoom: loads stop when it is full, nothing overflows).
+ * -> { loaded: { [fieldId]: units }, trucks } for fromLiveSim, or null with no fields.
+ */
+function seedHarvest(state, outpost, map) {
+  const groups = surfaceFieldGroups(map);
+  if (!groups.length) return null;
+  const stock = fieldStock(outpost, map), per = surfaceStock();
+  state.resourceNodes = [];
+  for (const f of groups) {
+    const res = surfaceResource(f.tier), cell = per[f.tier];
+    let left = stock[f.id];
+    for (const [x, y] of f.cells) {
+      const remaining = Math.max(0, Math.min(cell.units, left));
+      left -= remaining;
+      state.resourceNodes.push(resourceNode({ id: `sf:${x},${y}`, fieldId: f.id, type: res.type, role: res.role, color: res.color,
+        wave: 1, x, y, units: cell.units, remaining, regrow: cell.regrow }));
+    }
+  }
+  state.harvesterIds = [];
+  state.mapScore = { goldFromPrimary: 0, goldFromPremium: 0, questUnits: 0, questRed: 0, questGreen: 0 };
+  state.contract = initContract({ common: 0, uncommon: 0, rare: 0, epic: 0 });   // every load is kept, none is sold
+  // the outpost's harvesters are bought for the Resource Bay (model.buyHarvester), not at the base as in a battle
+  state.harvesterBuyRefusal = 'harvesters are bought for the Resource Bay';
+  const loaded = liveFieldStock(state);
+  const plan = harvestPlan(outpost, map), bay = resourceBayPad(outpost);
+  if (!plan.length) return { loaded, trucks: 0 };
+  const powered = powerGrids(outpost, map).powered.has(bay);
+  state.harvestRoom = Math.max(0, hopperCap(outpost, map) - hopperUnits(outpost));   // the hopper's room (owner: stop when full)
+  // the docks: open cells around the bay, each truck taking the free one nearest its field (deterministic: distance, y, x)
+  const r = buildingRect(outpost, map, bay);
+  const nav = buildNavGrid(state.map, Array.from(state.structures.values()), state.base.cells || []);
+  const ring = [];
+  for (let y = r.y - 1; y <= r.y + r.h; y++) for (let x = r.x - 1; x <= r.x + r.w; x++) {
+    const inside = x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+    if (!inside && x >= 0 && y >= 0 && x < nav.cols && y < nav.rows && nav.passable[y * nav.cols + x]) ring.push({ x, y });
+  }
+  const taken = new Set();
+  for (const h of plan) {
+    const d = (c) => Math.hypot(c.x - h.field[0], c.y - h.field[1]);
+    const dock = ring.filter((c) => !taken.has(`${c.x},${c.y}`)).sort((a, b) => d(a) - d(b) || a.y - b.y || a.x - b.x)[0]
+      || { x: r.x, y: r.y + r.h };
+    taken.add(`${dock.x},${dock.y}`);
+    const u = spawnHarvester(state, dock);
+    if (!u) break;
+    u.fieldId = h.fieldId;
+    u.fieldLock = true;                        // the closed form's rule: a harvester stays on its field
+    u.parked = !powered;                       // no power, no operation (the closed form's harvestRunning)
+  }
+  return { loaded, trucks: plan.length };
+}
+
+/**
+ * The visit's harvest into the save (S4): the fields' live stock, and into the hopper what the trucks unloaded (the
+ * contract's kept units) plus what they still carry (it left the fields); the live state kept it within the hopper's room. Nothing changes when
+ * nothing moved, so a visit with no time saves back exactly what was loaded. Mutates o.
+ */
+function saveHarvest(o, state, link, now) {
+  const { loaded } = link.harvest, live = liveFieldStock(state), caps = new Map(surfaceFieldGroups(link.map).map((f) => [f.id, f.cap]));
+  for (const [id, units] of Object.entries(live)) {
+    if (units === loaded[id]) continue;
+    o.fields = o.fields || {};
+    if (units >= caps.get(id) - 1e-9) delete o.fields[id]; else o.fields[id] = Math.max(0, units);
+  }
+  const got = {};
+  const kept = (state.contract && state.contract.kept) || {};
+  for (const t of ['common', 'uncommon']) if (kept[t] > 0) got[t] = kept[t];
+  for (const id of state.harvesterIds || []) {
+    const u = state.units.get(id);
+    if (!u || !(u.cargo > 0)) continue;
+    for (const [color, part] of Object.entries(u.cargoMix || {})) {
+      const t = TIER_OF_COLOR[color];
+      if (t && part.units > 0) got[t] = (got[t] || 0) + part.units;
+    }
+  }
+  if (Object.keys(got).length) {
+    o.hopper = o.hopper || {};
+    // the live state never gathers past the hopper's room (state.harvestRoom), so nothing here is clamped or lost
+    for (const t of ['common', 'uncommon']) {
+      const add = got[t] || 0;
+      if (!(add > 0)) continue;
+      o.hopper[t] = (o.hopper[t] || 0) + add;
+      if (o.lifetime) o.lifetime.harvested[t] = (o.lifetime.harvested[t] || 0) + add;
+    }
+  }
+  if (now > link.now) {
+    const prev = o.liveHarvest;
+    o.liveHarvest = { from: prev ? Math.min(prev.from, link.now) : link.now, to: Math.max(now, prev ? prev.to : now) };
+  }
+}
+
+/**
+ * Power changes during a visit (owner 2026-11-11): park the outpost's trucks when their Resource Bay has no power and
+ * start them again when it has — a station built, sold or upgraded, a pylon placed. Reads the live state as the save
+ * would see it (fromLiveSim → model.powerGrids), so it is the closed form's own power rule. The session calls it on the
+ * sim's tick count (sessionView afterTick), never on the wall clock. → whether the bay is powered (null: no trucks).
+ */
+export function syncHarvestPower(state, link) {
+  if (!link.harvest || !link.harvest.trucks) return null;
+  const o = fromLiveSim(state, link, link.now + Math.round(state.time * 1000)).outpost;
+  const bay = resourceBayPad(o);
+  const powered = !!bay && powerGrids(o, link.map).powered.has(bay);
+  for (const id of state.harvesterIds || []) {
+    const u = state.units.get(id);
+    if (u && u.fieldLock) u.parked = !powered;
+  }
+  return powered;
 }
 
 /**
@@ -201,5 +330,6 @@ export function fromLiveSim(state, link, now) {
   o.defenses.push(...newDefenses);
   o.upgrading = upgrading || null;
   if (before.upgrading == null && upgrading == null && !('upgrading' in before)) delete o.upgrading;
+  if (link.harvest) saveHarvest(o, state, link, now);
   return { outpost: o, gold: state.economy.money };
 }

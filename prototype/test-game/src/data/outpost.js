@@ -8,7 +8,9 @@
  * Pure data; no DOM, no clock.
  */
 import { MAPDATA } from '../../content/maps/mapdata.js';
-import { STRUCTURES, BONUS_NERFS, HARVESTER_UNLOAD_TIME } from './tables.js';
+import { STRUCTURES, HARVESTER_UNLOAD_TIME } from './tables.js';
+// the battle harvester's own numbers: the one source sim/harvest.js drives its trucks with [MM-story_mwc9pzyd_2l]
+import { harvesterStats, resourceRow, nodeHarvestSec } from '../sim/harvestStats.js';
 
 /** The tuning (Outpost_Params), by name: Load_Sec, Store_Hours, Deep_Rate_Mult, … */
 export const OUTPOST = Object.freeze({ ...(MAPDATA.outpostParams || {}) });
@@ -86,16 +88,29 @@ export function harvesterDef() {
  * `capacity` units, × Harvest_Rate_Mult (1 = the battle's rate). → { capacity, speed, unload, pull: { common, uncommon } }
  */
 export function harvestRates() {
-  const f = (MAPDATA.factions && MAPDATA.factions[0]) || {};
-  const row = (type, tier) => (MAPDATA.resources || []).find((r) => r.Resource === type && r.Tier === tier) || {};
-  const pull = (r) => (r.Units_Per_Node || 20) / Math.max(1, r.Harvest_Sec_Per_Node || 8);
+  // read through sim/harvestStats.js, the functions the battle harvester itself runs on (One Battle UX S4): a node pulls
+  // units / harvestSec per second (harvest.js stepOneHarvester), its units being the row's Units_Per_Node
+  const st = harvesterStats(null);
+  const pull = (tier) => { const r = surfaceResource(tier); return cellUnits(tier) / Math.max(1, nodeHarvestSec(r)); };
   return Object.freeze({
-    capacity: f.Harvester_Base_Capacity || 40,
-    speed: (f.Harvester_Base_Speed || 3) * BONUS_NERFS.harvesterSpeedMult,
+    capacity: st.capacity,
+    speed: st.speed,
     unload: HARVESTER_UNLOAD_TIME,
-    pull: Object.freeze({ common: pull(row('Flowers', 'Primary')), uncommon: pull(row(f.Premium_Resource || 'Crystals', 'Premium')) }),
+    pull: Object.freeze({ common: pull('common'), uncommon: pull('uncommon') }),
   });
 }
+
+/**
+ * The battle resource an outpost surface tier is (design §6): common is the Primary Flowers every planet's primary fields
+ * grow, uncommon the reference faction's Premium_Resource at the Premium tier. → { type, role, color } — the node a live
+ * visit seeds (outpost/liveSim.js), whose colour the battle credits at the same tier (blue common, yellow uncommon).
+ */
+export function surfaceResource(tier) {
+  const f = (MAPDATA.factions && MAPDATA.factions[0]) || {};
+  return tier === 'uncommon' ? { type: f.Premium_Resource || 'Crystals', role: 'premium', color: 'yellow' } : { type: 'Flowers', role: 'primary', color: 'blue' };
+}
+/** Units one surface cell of `tier` holds: its battle row's Units_Per_Node (20 when the row is missing). */
+const cellUnits = (tier) => { const r = surfaceResource(tier), row = resourceRow(r.type, r.role); return (row && row.Units_Per_Node) || 20; };
 
 /**
  * An outpost surface field's stock and regrowth per cell (owner 2026-11-07: "Full battle rate but the spawn rate of
@@ -105,11 +120,9 @@ export function harvestRates() {
  * → { common: { units, regrow (units / s) }, uncommon: { … } }
  */
 export function surfaceStock(params = OUTPOST) {
-  const f = (MAPDATA.factions && MAPDATA.factions[0]) || {};
-  const row = (type, tier) => (MAPDATA.resources || []).find((r) => r.Resource === type && r.Tier === tier) || {};
   const respawn = (MAPDATA.globalParams && MAPDATA.globalParams.Primary_Respawn_Sec) || 75;
-  const cell = (r) => { const units = r.Units_Per_Node || 20; return Object.freeze({ units, regrow: (units / respawn) * (params.Surface_Respawn_Mult ?? 1) }); };
-  return Object.freeze({ common: cell(row('Flowers', 'Primary')), uncommon: cell(row(f.Premium_Resource || 'Crystals', 'Premium')), respawnSec: respawn });
+  const cell = (tier) => { const units = cellUnits(tier); return Object.freeze({ units, regrow: (units / respawn) * (params.Surface_Respawn_Mult ?? 1) }); };
+  return Object.freeze({ common: cell('common'), uncommon: cell('uncommon'), respawnSec: respawn });
 }
 
 /** Units per second one harvester brings home from a field `dist` cells (straight line) from the Resource Bay. */
