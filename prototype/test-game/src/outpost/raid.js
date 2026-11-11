@@ -77,7 +77,7 @@ import { startNextWave } from '../sim/waves.js';
 import { createStructure } from '../sim/entities.js';
 import { buildNavGrid, findWalkerPath } from '../sim/pathfinding.js';
 import { getStructureDef, getUnitDef } from '../data/tables.js';
-import { referenceOutpost, powerGrids, windowMs } from './model.js';
+import { referenceOutpost, powerGrids, windowMs, buildingRect } from './model.js';
 import { structureDef, raidFor } from '../data/outpost.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
 import { buildTerrainMap } from '../sim/mapgen.js';
@@ -172,9 +172,12 @@ export const RAID_RANGE_CAP = Math.max(getStructureDef('STR-MG').range, getStruc
 // ── the board ────────────────────────────────────────────────────────────────────────────────────────────────────
 const dims = (map) => ({ cols: map.width ?? map.cols, rows: map.height ?? map.rows });
 
-/** The mesa pads that count as buildings for a breach: finished, not remote. */
+/** The finished buildings that count for a breach (not remote), as rectangles — pad or free spot (model.buildingRect). */
 function buildingPadsOf(outpost, map) {
-  return map.pads.filter((p) => !p.remote && outpost.pads[p.id]);
+  // map-pad order first (as before — raids stay identical on pad-built outposts), then free-placed buildings by id
+  const onPads = map.pads.filter((p) => !p.remote && outpost.pads[p.id] && !outpost.pads[p.id].at);
+  const free = Object.keys(outpost.pads).filter((id) => outpost.pads[id].at).sort().map((id) => buildingRect(outpost, map, id));
+  return [...onPads, ...free];
 }
 
 /**
@@ -213,8 +216,9 @@ export function raidSimMap(outpost, map, opts = {}) {
   const { cols, rows } = m;
   // finished buildings are solid (the hub is the base: its 3 × 3 core stays clear, as in a battle)
   const blocked = new Set(m.blockedCells.filter((c) => !inBase(c.x, c.y)).map((c) => c.y * cols + c.x));
-  for (const p of map.pads) {
-    if (p.role === 'hub' || !outpost.pads[p.id]) continue;
+  for (const id of Object.keys(outpost.pads)) {
+    const p = outpost.pads[id].kind === 'hub' ? null : buildingRect(outpost, map, id);
+    if (!p) continue;
     for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) if (x < cols && y < rows) blocked.add(y * cols + x);
   }
   const ground = (map.spawns || []).filter((s) => (s.lane || 'ground') === 'ground').map((s) => ({ x: s.x, y: s.y }));

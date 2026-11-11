@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { map, T0 } from './view/fixtures.mjs';
-import { referenceOutpost, defaultPads } from './model.js';
+import { referenceOutpost, defaultPads, buildingRect, advance, powerGrids } from './model.js';
+import { raidSimMap } from './raid.js';
 import { structureDef } from '../data/outpost.js';
 import { toLiveSim, fromLiveSim } from './liveSim.js';
 import { applyCommand, stepSim, FIXED_DT } from '../sim/core.js';
@@ -81,17 +82,46 @@ test('a building placed during the visit is saved on its pad; gold moves through
   assert.equal(back.building[0].kind, 'storage');
 });
 
-test('a building on no pad is refused loudly by the pad-based save (until S2c)', () => {
+/** Place a 2×2 building off every map pad (a free spot the old pads never offered). → its cell, or null. */
+function placeOffPads(state, structId) {
+  const near = new Set(map.pads.flatMap((p) => { const c = []; for (let y = p.y - 2; y <= p.y + p.h + 1; y++) for (let x = p.x - 2; x <= p.x + p.w + 1; x++) c.push(`${x},${y}`); return c; }));
+  for (let y = 2; y < state.map.rows - 3; y++) for (let x = 2; x < state.map.cols - 3; x++) {
+    if (near.has(`${x},${y}`) || near.has(`${x + 1},${y + 1}`)) continue;
+    if (applyCommand(state, { type: 'place', structId, cell: { x, y } }).ok) return { x, y };
+  }
+  return null;
+}
+
+test('a building placed off the pads is saved at its own spot (S2c) and keeps it when it finishes', () => {
   const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
   const { state, link } = toLiveSim(o, { map, now: T0, gold: 1e6 });
-  const onPad = new Set(map.pads.flatMap((p) => { const c = []; for (let y = p.y - 1; y <= p.y + p.h; y++) for (let x = p.x - 1; x <= p.x + p.w; x++) c.push(`${x},${y}`); return c; }));
-  let placed = false;
-  for (let y = 2; y < state.map.rows - 3 && !placed; y++) {
-    for (let x = 2; x < state.map.cols - 3 && !placed; x++) {
-      if (onPad.has(`${x},${y}`) || onPad.has(`${x + 1},${y + 1}`)) continue;
-      placed = applyCommand(state, { type: 'place', structId: 'OUT-storage', cell: { x, y } }).ok;
-    }
-  }
-  assert.ok(placed, 'found an open spot off the pads');
-  assert.throws(() => fromLiveSim(state, link, T0), /stands on no pad/);
+  const at = placeOffPads(state, 'OUT-storage');
+  assert.ok(at, 'found an open spot off the pads');
+  const { outpost: back } = fromLiveSim(state, link, T0);
+  const job = back.building.find((j) => j.kind === 'storage');
+  assert.equal(job.pad, 'f1', 'a new free id');
+  assert.deepEqual(job.at, { x: at.x, y: at.y, w: 2, h: 2 }, 'its own rectangle');
+  assert.deepEqual(buildingRect(back, map, 'f1'), { id: 'f1', ...job.at }, 'model.buildingRect answers for it');
+  // the away catch-up finishes it: it stands where it was placed
+  const done = advance(back, job.done + 1, { map, raid: () => ({ result: 'held', defenses: [] }) }).outpost;
+  assert.deepEqual(done.pads.f1, { kind: 'storage', tier: 1, at: job.at });
+  // and a second visit loads it at its spot and saves it back unchanged
+  const again = toLiveSim(done, { map, now: job.done + 1, gold: 0 });
+  const s = [...again.state.structures.values()].find((x) => x.structId === 'OUT-storage' && x.pos.x === at.x);
+  assert.ok(s && s.pos.y === at.y, 'the live sim puts it where it was saved');
+  assert.deepEqual(strip(fromLiveSim(again.state, again.link, job.done + 1).outpost), strip(done));
+});
+
+test('the outpost rules read a free building where it stands: power reach, raid blocking and breach', () => {
+  const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
+  const { state, link } = toLiveSim(o, { map, now: T0, gold: 1e6 });
+  const at = placeOffPads(state, 'OUT-storage');
+  const job = fromLiveSim(state, link, T0).outpost;
+  const built = advance(job, T0 + 3_600_000, { map, raid: () => ({ result: 'held', defenses: [] }) }).outpost;
+  assert.ok(built.pads.f1, 'built');
+  const grids = powerGrids(built, map);
+  assert.ok(grids.powered.has('f1') || grids.off.f1 === 'reach' || grids.off.f1 === 'supply', 'the grid judges it at its own spot');
+  const simMap = raidSimMap(built, map);
+  const blocked = new Set(simMap.blockedCells.map((c) => `${c.x},${c.y}`));
+  assert.ok(blocked.has(`${at.x},${at.y}`) && blocked.has(`${at.x + 1},${at.y + 1}`), 'a raid treats its cells as solid');
 });

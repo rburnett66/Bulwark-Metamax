@@ -16,9 +16,9 @@
  * the buildings are sim structures here rather than blocked cells. Construction, upgrades and timed sells carry over:
  * the save's wall-clock `done` becomes sim `progress`, and back.
  *
- * The save is still PAD-based (model.js). A building placed during a visit is saved on the map pad it stands on; one
- * that stands on no pad cannot be saved in this format and is refused loudly — free placement is saved once S2c moves
- * the save to positions (S2.4, the switch-over, depends on S2c). Pure: no DOM, no clock (the caller passes `now`).
+ * Positions (S2c [MM-story_mwc9pmbn_2i]): a building on a map pad keeps that pad's id; one placed anywhere else is saved
+ * under a new id ('f1', 'f2', …) carrying its own `at` rectangle, and model.buildingRect answers for both. Pure: no DOM,
+ * no clock (the caller passes `now`).
  */
 import { createSim } from '../sim/core.js';
 import { createStructure } from '../sim/entities.js';
@@ -26,6 +26,7 @@ import { buildNavGrid } from '../sim/pathfinding.js';
 import { getStructureDef } from '../data/tables.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../data/outpostStructures.js';
 import { structureDef } from '../data/outpost.js';
+import { buildingRect } from './model.js';
 import { raidSimMap } from './raid.js';
 import { outpostPlacementRules } from './placementRules.js';
 
@@ -65,7 +66,7 @@ export function toLiveSim(outpost, { map, now, gold = 0 }) {
   state.economy.money = gold;
   state.economy.incomePerSec = 0;            // an outpost earns by mining and kills, not a battle's passive income
   state.placementRules = outpostPlacementRules(map, getStructureDef);
-  const padAt = (id) => map.pads.find((p) => p.id === id);
+  const padAt = (id) => buildingRect(outpost, map, id);
   const ids = new Map();                     // sim structure id → { pad, extra } | { defense, extra }
   const byPad = new Map();
 
@@ -122,10 +123,20 @@ export function fromLiveSim(state, link, now) {
   for (const [pad, b] of Object.entries(before.pads)) if (b.kind === 'hub') o.pads[pad] = clone(b);
   const padJobs = [], defenses = new Map(), newDefenses = [];
   let upgrading = null;
-  const padOfStructure = (s, def) => {
-    const p = map.pads.find((q) => q.x === s.pos.x && q.y === s.pos.y && q.w === def.footprint.w && q.h === def.footprint.h);
-    if (!p) throw new Error(`fromLiveSim: ${def.outpostKind} at ${s.pos.x},${s.pos.y} stands on no pad — the save keeps buildings on pads until S2c`);
-    return p.id;
+  // a building placed during the visit: on a free map pad it takes that pad's id; anywhere else a new free id + its rect
+  const taken = new Set([...Object.keys(before.pads), ...(before.building || []).map((j) => j.pad)]);
+  let nextFree = 1 + Math.max(0, ...[...taken].filter((id) => /^f\d+$/.test(id)).map((id) => +id.slice(1)));
+  const placeOf = (s, def) => {
+    const p = map.pads.find((q) => q.x === s.pos.x && q.y === s.pos.y && q.w === def.footprint.w && q.h === def.footprint.h && !taken.has(q.id));
+    if (p) { taken.add(p.id); return { pad: p.id, extra: {} }; }
+    const id = `f${nextFree++}`;
+    taken.add(id);
+    const extra = { at: { x: s.pos.x, y: s.pos.y, w: def.footprint.w, h: def.footprint.h } };
+    if (def.outpostKind === 'rig') {
+      const dep = (map.deposits || []).find((d) => d.x === s.pos.x && d.y === s.pos.y);
+      if (dep) { extra.deposit = dep.tier; extra.deep = false; }
+    }
+    return { pad: id, extra };
   };
   let nextDefense = Math.max(0, ...before.defenses.map((d) => +String(d.id).slice(1) || 0)) + 1;
 
@@ -136,11 +147,12 @@ export function fromLiveSim(state, link, now) {
     const e = ids.get(s.id) || null;
     if (isBuilding(kind)) {
       if (s.lifecycle === 'Selling') continue;  // buildings sell at once
-      const pad = e ? e.pad : padOfStructure(s, def);
-      const extra = e ? e.extra : {};
+      const where = e ? { pad: e.pad, extra: e.extra } : placeOf(s, def);
+      const pad = where.pad, extra = where.extra;
       if (s.lifecycle === 'Building') {
         const ms = structureDef(kind, 1).buildSec * 1000;
-        padJobs.push({ pad, kind, tier: 1, done: Math.round(now + (1 - s.progress) * ms), ...extra });
+        const { deep, ...jobExtra } = extra;   // a job carries its spot and deposit; `deep` belongs to the finished rig
+        padJobs.push({ pad, kind, tier: 1, done: Math.round(now + (1 - s.progress) * ms), ...jobExtra });
         continue;
       }
       o.pads[pad] = { kind, tier: s.tier, ...extra };
