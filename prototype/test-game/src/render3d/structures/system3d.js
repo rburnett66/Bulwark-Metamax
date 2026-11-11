@@ -25,6 +25,7 @@ import { mountOf } from './baseMounts.js';
 import { AIM } from '../fx/combatFxModel.js';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
+import { towerStructId } from '../../data/tables.js';
 import { createRecoil, bodyKick, kickMatrix, BODY_KICK } from '../fx/recoil.js';
 
 /** Sim structure kind → System model. Kinds not listed stay with structures/lowpoly.js. */
@@ -36,7 +37,7 @@ export const SYSTEM_STRUCTS = Object.freeze({ 'STR-Rockets': 'sys_rockets', 'STR
 const BASE_CAP = { sys_cannon: 200, sys_flak: 200, sys_wall: 1200, sys_rockets: 120, sys_missile: 120, sys_mg: 160 };
 export const SYSTEM_CAP = Object.freeze(Object.fromEntries(Object.entries(BASE_CAP).flatMap(([m, c]) =>
   TIERED_MODELS.includes(m) ? [1, 2, 3].map((t) => [tierModelKey(m, t), c]) : [[m, c]])));
-const modelOf = (s) => { const m = SYSTEM_STRUCTS[s.structId] || SYSTEM_KINDS[s.kind]; return m ? tierModelKey(m, s.tier) : m; };
+const modelOf = (s) => { const m = SYSTEM_STRUCTS[towerStructId(s.structId)] || SYSTEM_KINDS[s.kind]; return m ? tierModelKey(m, s.tier) : m; };
 const TURN = 5;   // rad/s a turret slews at
 const DEG = Math.PI / 180;
 const TOWER_REAR = 0.4;   // cells from a tower's centre to the rear edge it rocks on [MM-task_mvfpbbtp_1]

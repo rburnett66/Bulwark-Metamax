@@ -13,10 +13,9 @@ import { oresOf, oreById } from '../../data/ores.js';
 import { bayKind } from './buildMenu.js';
 import { buildingWarnings, warningLines } from './warnings.js';
 
-export const KIND_NAME = Object.freeze({
-  hub: 'Outpost Hub', power: 'Power Station', rig: 'Mining Station', storage: 'Storage Tower',
-  harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay', habitat: 'Habitat', cannon: 'Cannon Tower', mg: 'Machine Gun', wall: 'Wall',
-});   // the Harvester Bay is the Resource Bay (owner 2026-11-07); the turret tower is the Cannon Tower
+// the outpost's kind names live in one table, data/outpostStructures.js (shared with the battle rail and the away report)
+export { OUTPOST_KIND_NAME as KIND_NAME } from '../../data/outpostStructures.js';
+import { OUTPOST_KIND_NAME as KIND_NAME } from '../../data/outpostStructures.js';
 const RIG_NAME = { auger: 'Auger Drill', laser: 'Laser Cutter', brine: 'Brine Pump', crystal: 'Crystal Harvester', bore: 'Deep Bore', shielded: 'Shielded Extractor' };
 export const ROMAN = Object.freeze(['', 'I', 'II', 'III']);
 /** What a pad role can take (model.js ROLE_FITS, read the other way round) — the BUILD menu's choices. */

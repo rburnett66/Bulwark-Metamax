@@ -19,7 +19,7 @@ test('the HUD rail and the number keys both read the catalogue, neither keeps it
     assert.doesNotMatch(code, /Object\.keys\(STRUCTURES\)/, `${name} lists the catalogue, not STRUCTURES`);
     assert.match(code, /createCatalogue/, `${name} falls back to the campaign catalogue`);
   }
-  assert.match(src('./session.js'), /createHud\(mountEl, \{ \.\.\.callbacks, catalogue \}\)/, 'the session hands its catalogue to the HUD');
+  assert.match(src('./session.js'), /createHud\(mountEl, \{[^}]*\.\.\.callbacks, catalogue \}\)/, 'the session hands its catalogue to the HUD');
   assert.match(src('./session.js'), /catalogue \}\)/, 'and to the input');
 });
 

@@ -105,3 +105,21 @@ test('a battle with no mode rules places exactly as before', () => {
   assert.equal(applyCommand(s, { type: 'place', structId: 'STR-Cannon', cell: { x: 20, y: 6 } }).ok, true);
   assert.equal(applyCommand(s, { type: 'place', structId: 'STR-Cannon', cell: { x: 21, y: 6 } }).ok, true, 'towers still touch');
 });
+
+test('one name table for every outpost surface: sim defs, the old HUD and the away report read OUTPOST_KIND_NAME', async () => {
+  const { OUTPOST_KIND_NAME } = await import('./outpostStructures.js');
+  for (const kind of OUTPOST_BUILDING_KINDS) assert.equal(getStructureDef(outpostStructId(kind)).name, OUTPOST_KIND_NAME[kind], kind);
+  const { readFileSync } = await import('node:fs');
+  for (const f of ['../outpost/view/hudModel.js', '../outpost/view/awayReport.js']) {
+    const src = readFileSync(new URL(f, import.meta.url), 'utf8');
+    assert.doesNotMatch(src, /KIND_NAME = (Object\.freeze\()?\{/, `${f} keeps no copy of the names`);
+  }
+});
+
+test('the outpost session view offers every buildable outpost kind on the battle rail, the hub excepted', async () => {
+  const { outpostCatalogueIds } = await import('../outpost/view/sessionView.js');
+  const ids = outpostCatalogueIds();
+  assert.ok(!ids.includes('OUT-hub'), 'the hub is the base, never built');
+  for (const kind of [...OUTPOST_BUILDING_KINDS.filter((k) => k !== 'hub'), ...DEFENSE_KINDS]) assert.ok(ids.includes(outpostStructId(kind)), kind);
+  for (const id of ids) assert.ok(getStructureDef(id), id);
+});

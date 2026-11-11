@@ -259,6 +259,28 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
   function bindInput() { inputHandle = makeInput(); }
 
   // ---------------------------------------------------------------------
+  // The selection panel's actions — every mode's (moved from main.js)
+  // ---------------------------------------------------------------------
+  function panelActions() {
+    // SUBJECT→ACTION grammar (owner): a completed action CONSUMES the selection; a failed one keeps
+    // the subject and says why — same rules as the harvester flow (input.js).
+    const act = (type, label) => (id) => {
+      const res = submit({ type, id });
+      if (res && res.ok) getUi().selectedStructureId = null;
+      else flashMessage(hud, label + ': ' + ((res && res.reason) || 'unavailable'));
+    };
+    return {
+      onBuildSelect: (structId) => {
+        const ui = getUi();
+        ui.buildSelection = structId;
+        if (structId !== null) ui.selectedStructureId = null;
+      },
+      onDeselect: () => { const ui = getUi(); ui.selectedUnitId = null; ui.selectedStructureId = null; },
+      onUpgrade: act('upgrade', 'Upgrade'), onSell: act('sell', 'Sell'), onRepair: act('repair', 'Repair'),
+    };
+  }
+
+  // ---------------------------------------------------------------------
   // The clock: fixed steps, then the frame
   // ---------------------------------------------------------------------
   /**
@@ -310,8 +332,12 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
   }
 
   return {
-    /** Create the battle HUD with the mode's callbacks (render/hud.js createHud); its rail lists the session's catalogue. */
-    createHud(callbacks) { hud = createHud(mountEl, { ...callbacks, catalogue }); return hud; },
+    /**
+     * Create the battle HUD with the mode's callbacks (render/hud.js createHud); its rail lists the session's catalogue.
+     * The build rail's pick, deselect and the selection panel's UPGRADE / SELL / REPAIR are the same in every mode, so
+     * they live here (moved from main.js [MM-subtask_mwciiylh_31]); a mode may still pass its own.
+     */
+    createHud(callbacks) { hud = createHud(mountEl, { ...panelActions(), ...callbacks, catalogue }); return hud; },
     /** The mode's build list + locks (battle/catalogue.js); setLocks updates the rail and the number keys at once. */
     catalogue,
     /** A mode's own HUD panel (the outpost's SELL, GO ONLINE, away report …), placed in the battle HUD's mode slot. */
@@ -330,5 +356,15 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
     resetClock({ events = true } = {}) { accumulator = 0; if (events) pendingEvents = []; },
     /** Replace what the view draws this frame (the Kill Camera's own shots and kills). */
     setPendingEvents(evs) { pendingEvents = evs; },
+    /** Tear the session down (a mode's view closing): the clock stops, the input and both views are released. */
+    destroy() {
+      mount3dSeq++;                                         // a mount in flight gives up
+      unbindInput();
+      try { app.ticker.stop(); } catch (e) { /* already stopped */ }
+      if (renderer3d && render3dMod) { try { render3dMod.destroyRenderer(renderer3d); } catch (e) { /* already gone */ } }
+      renderer3d = null;
+      try { destroyRenderer(renderer); } catch (e) { /* already gone */ }
+      try { app.destroy(true); } catch (e) { /* already gone */ }
+    },
   };
 }

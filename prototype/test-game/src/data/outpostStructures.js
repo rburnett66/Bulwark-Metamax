@@ -27,6 +27,16 @@ const BUILDING_FOOTPRINT = Object.freeze({ w: 2, h: 2 });
 const UNIT_FOOTPRINT = Object.freeze({ w: 1, h: 1 });
 const num = (v) => (typeof v === 'number' ? v : 0);
 
+/**
+ * What the player calls each outpost kind — ONE table for every outpost surface (the battle rail, the selection panel,
+ * the away report, the old outpost HUD) [MM-subtask_mwciiylh_31]; it used to be written twice (hudModel.js, awayReport.js).
+ * The Harvester Bay is the Resource Bay (owner 2026-11-07); the turret tower is the Cannon Tower.
+ */
+export const OUTPOST_KIND_NAME = Object.freeze({
+  hub: 'Outpost Hub', power: 'Power Station', rig: 'Mining Station', storage: 'Storage Tower',
+  harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay', habitat: 'Habitat', cannon: 'Cannon Tower', mg: 'Machine Gun', wall: 'Wall',
+});
+
 /** The sim structure id for an outpost kind ('power' → 'OUT-power'). */
 export const outpostStructId = (kind) => 'OUT-' + kind;
 
@@ -65,7 +75,7 @@ export function buildOutpostStructures(rows, battle) {
     } else {
       out[outpostStructId(kind)] = Object.freeze({
         ...common,
-        name: kind, kind: 'building',
+        name: OUTPOST_KIND_NAME[kind] || kind, kind: 'building',
         armorClass: 'Structure', damageType: 'Kinetic', canTargetDomains: Object.freeze([]),
         hp: Object.freeze(tiers.map(() => 1)), dps: Object.freeze(tiers.map(() => 0)), range: 0,
         targetable: false,                       // raiders breach a building by reaching it; they never shoot it

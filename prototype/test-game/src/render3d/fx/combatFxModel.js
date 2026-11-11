@@ -19,7 +19,7 @@ import { cellToWorld } from '../camera.js';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
 import { BASE_TARGET_ID } from '../../sim/combat.js';
 import { shotFxFor } from '../../render/unitFx.js';
-import { STRUCTURES } from '../../data/tables.js';
+import { STRUCTURES, towerStructId } from '../../data/tables.js';
 import { apexFor, pitchFor } from './elevation.js';
 
 /** Heights (cells) a shot leaves from and arrives at. Structures are 1-cell blocks (markers.js). */
@@ -291,7 +291,8 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
       for (const st of state.structures.values()) {
         if (!st || !st.pos || st.targetId === null || st.targetId === undefined) continue;
         if (st.lifecycle !== 'Complete' && st.lifecycle !== 'Damaged') continue;
-        const base = STRUCT_RECIPES[st.structId] || RECIPES[st.kind];
+        const sid = towerStructId(st.structId);   // an outpost gun fires as its battle tower
+        const base = STRUCT_RECIPES[sid] || RECIPES[st.kind];
         if (!base) continue;
         const to = aimPoint(state, map, st.targetId, opts.flight);
         if (!to) continue;
@@ -300,7 +301,7 @@ export function createCombatFx({ seed = 1, caps = DEFAULT_CAPS } = {}) {
         // the round leaves the barrel tip (System turrets turn to the target), not the tower's centre
         const hx = to.x - cx, hz = to.z - cz, hl = Math.hypot(hx, hz) || 1;
         const from = { x: cx + (hx / hl) * MUZZLE.barrel, y: MUZZLE[st.kind] || MUZZLE.structure, z: cz + (hz / hl) * MUZZLE.barrel };
-        const e = pfx && pfx[st.structId];
+        const e = pfx && pfx[sid];
         const muz = muzzleOf ? (n) => muzzleOf(st.id, n) : null;
         const look = lookFor(e, base, base.kind, base.color, scale, base.big);
         look.tier = st.tier || 1;
