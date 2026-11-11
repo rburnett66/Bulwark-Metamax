@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.11-b';
-export const VERSION_NOTE = 'Placement keeps a one-cell lane round buildings that ask for it (battle towers unchanged)';
+export const VERSION = 'v2026.11.11-c';
+export const VERSION_NOTE = 'Outpost buildings are sim structures on the battle placement path (no visible change yet)';

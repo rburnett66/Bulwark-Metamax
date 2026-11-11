@@ -158,6 +158,15 @@ export function validatePlacement(state, structId, slotOrCell) {
     if (isForbiddenTerrain(c)) return { ok: false, reason: 'terrain' };
   }
   if (spacingConflict(liveStructures(state), def, cell)) return { ok: false, reason: 'spacing' };
+  // MODE RULES [MM-task_mwcdvixz_2r]: a mode adds its own placement checks here instead of keeping a placement copy of its
+  // own (owner 2026-11-11 — one pattern, one implementation). state.placementRules: [(state, def, cell, structId) →
+  // a refusal reason string, or null]. The campaign sets none; the outpost sets outpost/placementRules.js.
+  if (state.placementRules) {
+    for (const rule of state.placementRules) {
+      const why = rule(state, def, cell, structId);
+      if (why) return { ok: false, reason: why };
+    }
+  }
   if (!canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
 
   // MINE (Land-Mine rev 2): a LAND mine — never in water — capped, and it never blocks (mines live
