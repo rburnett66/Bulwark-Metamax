@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.11-q';
-export const VERSION_NOTE = 'Away mining matches the battle trucks (Harvest_Route_Mult 1.3 to 1.16)';
+export const VERSION = 'v2026.11.11-r';
+export const VERSION_NOTE = 'Outpost raid threat shown; farm buildings count toward base size';
