@@ -79,6 +79,7 @@ import { createFlightPaths } from './units/flightPath.js';
 import { buildHeightField, createAirLift, flightFloor } from './obstructions/heightField.js';
 import { createUnitBarrels } from './units/unitBarrels.js';
 import { createBuildFx } from './fx/buildFx.js';
+import { createStructureFx } from './fx/structureFx.js';
 import { createDustTrails } from './fx/dustTrail.js';
 import { createTrackMarks, trackSpecs } from './fx/trackMarks.js';
 import { createTrackMarksView } from './fx/trackMarksView.js';
@@ -240,7 +241,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const unloads = createUnloads(), unloadView = createUnloadView(THREE, scene);   // harvesters unloading at the base
 
   const r = {
-    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, abilityFx, abilityFxView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, wakes: null, wakesView: null, casings: null, casingsView: null, wading: null, killCam: null, baseBlast: null, flashGlows: null,
+    THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, abilityFx, abilityFxView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), structureFx: createStructureFx({ seed: ((map.seed | 0) || 1) + 41 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, wakes: null, wakesView: null, casings: null, casingsView: null, wading: null, killCam: null, baseBlast: null, flashGlows: null,
     quality, tier,
     clock: 0,
     cam: createCameraState(map), viewInsets: typeof opts.viewInsets === 'function' ? opts.viewInsets : null,
@@ -717,6 +718,7 @@ export function renderFrame(r, state, ui, events, dt) {
   r.gold.feed(events, r.map); r.gold.step(Math.max(0, Math.min(0.1, dt || 0)));
   r.repairFx.step(dt, state, events, r.impacts.emit, FXK);   // welding sparks on structures under repair [MM-task_mvcrs0q1_14]
   r.buildFx.step(dt, state, events, r.impacts.emit, FXK, r.impacts.ring, r.tier.key);   // dirt puffs round build sites [MM-story_mvedxrmi_6]
+  r.structureFx.step(dt, state, r.impacts.emit, FXK, r.tier.key);   // welding sparks on build sites; red sparks + smoke off damaged structures [MM-story_mwcrfnyf_3c]
   r.unloads.feed(events, state); r.unloads.step(Math.max(0, Math.min(0.1, dt || 0)), state);
   r.unloadView.sync(r.unloads, Math.max(0, Math.min(0.1, dt || 0)), r.impacts, FXK, r.map.base);
   r.stats.impacts = r.impactsView.sync(r.impacts, true);

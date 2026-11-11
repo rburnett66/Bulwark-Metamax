@@ -20,7 +20,6 @@ import { modelSlug, createOreDebris } from '../../render3d/outposts/outpostModel
 import { createEngineFx } from '../../render3d/ships/engineFx.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
 import { popColour } from './sellTimeline.js';
-import { structureDef } from '../../data/outpost.js';
 import { padModelScale } from '../../terrain/outpostPads.js';
 
 const PAD_Y = 0.05;
@@ -321,16 +320,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   }
   let planDepositsCache = [];
 
-  // ── defense sparks: badly worn defenses spit sparks (design §6.2 states) ─────────────────────────────────────────
-  function stepSparks(o, dt) {
-    if (!r.impacts) return;
-    for (const d of o.defenses) {
-      const max = (structureDef(d.kind, d.tier).battle || {}).hp || d.hp;
-      if (d.hp / max >= 0.4 || debris.rnd() > dt * 2.5) continue;
-      const x = d.cell[0] + 0.5, z = d.cell[1] + 0.5;
-      for (let i = 0; i < 4; i++) r.impacts.emit(FXK.SPARK, x, 0.55, z, (debris.rnd() - 0.5) * 2.4, 1 + debris.rnd() * 1.5, (debris.rnd() - 0.5) * 2.4, 0.4, 0.02);
-    }
-  }
+  // (damaged defenses' sparks and smoke are the shared renderer's: render3d/fx/structureFx.js [MM-story_mwcrfnyf_3c])
 
   // ── overlays: the defense ring while placing, a station's reach ─────────────────────────────────────────────────
   const ringMat = new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: 0.32, depthWrite: false, toneMapped: false });
@@ -753,7 +743,6 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       // a frame of the sale animation that throws ends the sale (gold is already banked) instead of locking the HUD
       try { out.sale = stepSale(dt, out); } catch (e) { const id = sale && sale.id; endSale(); out.sale = { done: true, id, failed: String(e && e.message || e) }; }
       out.debris = stepDebris(reduced ? dt * 0.5 : dt);
-      if (o) stepSparks(o, dt);
       stepMarkers();
       if (ghostShown && ghostShown.inst) ghostShown.inst.update(dt, r.camera);
       return out;

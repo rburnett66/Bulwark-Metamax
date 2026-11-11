@@ -18,8 +18,12 @@ import { cellToWorld } from '../camera.js';
 // Owner 2026-10-19: "construction dust needs to be twice as obvious on construction and on upgrades" — twice the puffs,
 // ~1.4× their size (≈ twice the area each), a stronger break-ground ring; and upgrades now raise the same dust
 // (they had none) [MM-task_mvfjymwc_a]
+// Owner playtest 2026-11-11 [MM-story_mwcrfnyf_3c]: every structure's build dust is now the outpost's construction dust
+// — DUST_MULT (4) times the puffs ("the construction dust should be 4x what you demoed", 2026-11-08) and more opaque
+// ("the dust need to be more opaque"). The welding sparks that go with it are fx/structureFx.js.
+export const DUST_MULT = 4;
 export const BUILD_FX = Object.freeze({
-  rate: 24,             // puffs / s around a 1×1 footprint at progress 0 (× perimeter for bigger footprints)
+  rate: 24 * DUST_MULT, // puffs / s around a 1×1 footprint at progress 0 (× perimeter for bigger footprints)
   ease: 0.75,           // the rate falls by this share as progress → 1
   size: [0.1, 0.17],    // birth size, world units
   grow: 1.2,
@@ -30,8 +34,10 @@ export const BUILD_FX = Object.freeze({
   shade: 0.55,          // with dusty → earthy brown
   // owner 2026-10-19: "construction dust needs to be more opaque 50%" [MM-task_mvfqfakd_6], then once more "needs to
   // be more opaque" [MM-task_mvfr56vi_8] — passed as the particle's `dusty` value, which the smoke batch reads as an
-  // opacity multiplier on its 0.45 dust alpha (impactsView): 2.2 → the batch's full alpha (was 1.5 → 0.675)
-  opacity: 2.2,
+  // opacity multiplier on its 0.45 dust alpha (impactsView): 2.2 → the batch's full alpha (was 1.5 → 0.675). 2.2 was
+  // already at that cap, so 2026-11-11 raised it past it: impactsView smokeAlpha lets a dusty value over the cap HOLD
+  // full alpha longer before the fade — 3.5 keeps a puff fully opaque for its first ~37 % of life (was a linear fade)
+  opacity: 3.5,
   start: 28,            // puffs in the break-ground burst (construction and upgrade start)
   settle: 20,           // puffs in the settling burst (construction and upgrade complete)
   ring: Object.freeze({ grow: 1.1, life: 0.5, col: Object.freeze([0.78, 0.66, 0.5]), a: 1.0 }),   // full strength with the puffs
